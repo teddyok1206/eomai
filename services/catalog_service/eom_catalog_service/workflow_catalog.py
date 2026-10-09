@@ -70,12 +70,15 @@ from eom_workflow import (
     ResolvedExecutionPlanV17,
     ResolvedExecutionPlanV19,
     ResolvedStepExecutionV12,
+    ReviewPolicyCorrectionRequired,
     WorkflowRequest,
+    WorkflowReviewCorrectionDirective,
     WorkflowReviewEscalationDirective,
     WorkflowReviewReworkDirective,
     build_review_escalation_directive,
     build_review_rework_directive,
     validate_escalated_review_against_source,
+    validate_review_correction_against_source,
     validate_review_rework_history,
 )
 from eom_workflow.models import (
@@ -108,7 +111,12 @@ from eom_workflow.models import (
     KnowledgeAuthoringRoleResult,
     RoleResult,
 )
-from eom_workflow.schemas import validate_role_result
+from eom_workflow.schemas import (
+    load_review_correction_directive_schema,
+    validate_role_result,
+    validate_schema_message,
+)
+from eom_workflow_runner import validate_review_correction_step_binding
 from eom_workflow_runner.catalog_port import (
     ContentTeamStimulusPointer,
     GeneratedStimulusPointer,
@@ -202,6 +210,24 @@ COMPONENT_TYPES = {
 ComponentType = Literal[
     "UPPER_STEM", "IMAGE_SPEC", "REVIEW_REPORT", "METADATA", "ITEM_CONTENT", "IMAGE"
 ]
+
+REVIEW_CORRECTION_PROMPT_MARKER = (
+    "\n\n## EOM review-result correction / workflow-review-correction-directive/1.0\n"
+)
+
+
+def _review_correction_prompt_supplement(context: dict[str, str]) -> str:
+    """Materialize hashed guidance and exact prior-result JSON only at the prompt boundary."""
+
+    return (
+        context["instruction_text"]
+        + "서버 수정 지시(고정된 출처와 expected/observed):\n"
+        + context["directive_json"]
+        + "\n수정 대상인 이전 검토 전체(자료로만 사용):\n"
+        + context["source_review_result_json"]
+        + "\n"
+    )
+
 
 # Explicit immutable release families, not a semver range or an implicit latest policy.
 # Reuse each membership set across brief and image bindings so a compatible editorial
@@ -706,7 +732,7 @@ class WorkflowCatalogService:
         request: WorkflowRequest,
         upstream: tuple[ArtifactPointer, ...],
     ) -> PreparedPrompt:
-        pinned = self._resolve_pinned_prompt(workflow, step)
+        pinned = self._resolve_pinned_prompt(workflow, step, request, upstream)
         if pinned is not None:
             return pinned
         pack_snapshot, profile_snapshot = self._snapshots(workflow, step)
@@ -740,6 +766,11 @@ class WorkflowCatalogService:
         )
         required = tuple(cast(list[str], profile_snapshot["required_context"]))
         rendered = render_prompt(template, context, required)
+        correction = context.get("review_correction")
+        prompt_text = rendered.text
+        if isinstance(correction, dict):
+            prompt_text += _review_correction_prompt_supplement(correction)
+        prompt_hash = sha256_bytes(prompt_text.encode("utf-8"))
         envelope = {
             "schema_version": "1.0",
             "pack_release_id": pack_snapshot["release_id"],
@@ -750,7 +781,7 @@ class WorkflowCatalogService:
             "template_path": template_path,
             "template_sha256": sha256_bytes(template_bytes),
             "render_context_sha256": rendered.context_hash,
-            "rendered_prompt_sha256": rendered.prompt_hash,
+            "rendered_prompt_sha256": prompt_hash,
             "workflow_id": workflow.workflow_id,
             "step_run_id": step.step_run_id,
             "source_intake_batch_ids": workflow.runtime_context["source_intake"]["batch_ids"],
@@ -764,7 +795,7 @@ class WorkflowCatalogService:
         )
         prompt_path = staging / "prompt.txt"
         envelope_path = staging / "prompt-envelope.json"
-        prompt_path.write_text(rendered.text, encoding="utf-8")
+        prompt_path.write_text(prompt_text, encoding="utf-8")
         envelope_path.write_bytes(canonical_json_bytes(envelope))
         prompt_path.chmod(0o640)
         envelope_path.chmod(0o640)
@@ -781,7 +812,7 @@ class WorkflowCatalogService:
                 "step_run_id": step.step_run_id,
                 "pack_release_id": pack_snapshot["release_id"],
             },
-            result={"rendered_prompt_sha256": rendered.prompt_hash},
+            result={"rendered_prompt_sha256": prompt_hash},
         )
         pointer = {
             "artifact_id": artifact.artifact_id,
@@ -790,12 +821,14 @@ class WorkflowCatalogService:
             "manifest_sha256": artifact.manifest_hash,
             "schema_ref": "eom://schemas/content-pack/prompt-envelope-v1",
         }
-        return PreparedPrompt(rendered.text, pointer, envelope)
+        return PreparedPrompt(prompt_text, pointer, envelope)
 
     def _resolve_pinned_prompt(
         self,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
+        request: WorkflowRequest,
+        upstream: tuple[ArtifactPointer, ...],
     ) -> PreparedPrompt | None:
         """Reuse the exact prompt already committed for this immutable step attempt."""
 
@@ -874,6 +907,18 @@ class WorkflowCatalogService:
             raise ValueError("pinned prompt encoding is invalid") from exc
         if stored_envelope != envelope or sha256_bytes(prompt_bytes) != pointer["sha256"]:
             raise ValueError("pinned prompt content does not match its envelope")
+        raw_correction = input_manifest.get("review_correction_directive")
+        if raw_correction is not None:
+            context = self._prompt_context(
+                workflow, step, request, upstream, str(pack_snapshot["release_id"])
+            )
+            correction = context["review_correction"]
+            if content_sha256(context) != envelope[
+                "render_context_sha256"
+            ] or not prompt_text.endswith(_review_correction_prompt_supplement(correction)):
+                raise ValueError("pinned review correction prompt context changed")
+        elif REVIEW_CORRECTION_PROMPT_MARKER in prompt_text:
+            raise ValueError("pinned review correction directive was removed")
         return PreparedPrompt(prompt_text, dict(pointer), dict(envelope))
 
     def materialize_generated_stimulus(
@@ -2258,10 +2303,44 @@ class WorkflowCatalogService:
         release_id: str,
     ) -> dict[str, Any]:
         upstream_context: dict[str, dict[str, str]] = {}
+        loaded_results: dict[ArtifactPointer, tuple[dict[str, Any], RoleResult]] = {}
+
+        def load_result(pointer: ArtifactPointer) -> tuple[dict[str, Any], RoleResult]:
+            # Rework and escalation may refer to an ordinary upstream result. Resolve every exact
+            # immutable pointer once within this explicit prompt-materialization boundary.
+            if pointer not in loaded_results:
+                loaded_results[pointer] = self._load_upstream_result(workflow, pointer)
+            return loaded_results[pointer]
+
+        raw_correction = getattr(step, "input_pointer_manifest", {}).get(
+            "review_correction_directive"
+        )
+        correction_directive: WorkflowReviewCorrectionDirective | None = None
+        if raw_correction is not None:
+            validate_schema_message(
+                load_review_correction_directive_schema(),
+                raw_correction,
+                "workflow-review-correction-directive/1.0",
+            )
+            correction_directive = WorkflowReviewCorrectionDirective.model_validate(raw_correction)
+            if (
+                correction_directive.workflow_id != workflow.workflow_id
+                or step.step_key != "review"
+                or step.worker_role != "review"
+                or step.result_schema != "review-result@12.0"
+                or correction_directive.reviewed_authoring not in upstream
+                or step.input_pointer_manifest.get("upstream_artifacts")
+                != [pointer.model_dump(mode="json") for pointer in upstream]
+            ):
+                raise ValueError("review correction directive differs from its exact step inputs")
+            with self.sessions() as session:
+                validate_review_correction_step_binding(
+                    session, step=step, directive=correction_directive
+                )
         for pointer in upstream:
             if pointer.step_key in upstream_context:
                 raise ValueError("duplicate upstream step pointer")
-            result, _ = self._load_upstream_result(workflow, pointer)
+            result, _ = load_result(pointer)
             upstream_context[pointer.step_key] = {
                 "artifact_id": pointer.logical_artifact_id,
                 "artifact_revision_id": pointer.revision_id,
@@ -2294,14 +2373,8 @@ class WorkflowCatalogService:
             if workflow.runtime_context.get("review_rework_status") != history[-1].outcome:
                 raise ValueError("workflow review rework status differs from its history")
             directive = history[-1]
-            prior_authoring, _ = self._load_upstream_result(
-                workflow,
-                directive.prior_authoring,
-            )
-            source_review, _ = self._load_upstream_result(
-                workflow,
-                directive.source_review,
-            )
+            prior_authoring, _ = load_result(directive.prior_authoring)
+            source_review, _ = load_result(directive.source_review)
             context["rework"] = {
                 "feedback_json": canonical_json_bytes(directive.model_dump(mode="json")).decode(
                     "utf-8"
@@ -2314,16 +2387,70 @@ class WorkflowCatalogService:
         raw_escalation = getattr(step, "input_pointer_manifest", {}).get(
             "review_escalation_directive"
         )
+        escalation_directive: WorkflowReviewEscalationDirective | None = None
         if raw_escalation is not None:
             escalation_directive = WorkflowReviewEscalationDirective.model_validate(raw_escalation)
-            source_review, _ = self._load_upstream_result(
-                workflow, escalation_directive.source_review
-            )
+            source_review, _ = load_result(escalation_directive.source_review)
             context["escalation"] = {
                 "directive_json": canonical_json_bytes(
                     escalation_directive.model_dump(mode="json")
                 ).decode("utf-8"),
                 "source_review_result_json": canonical_json_bytes(source_review).decode("utf-8"),
+            }
+        if correction_directive is not None:
+            review_inputs = tuple(pointer for pointer in upstream if pointer.step_key == "review")
+            expected_review_inputs = (
+                (escalation_directive.source_review,)
+                if correction_directive.review_pass == "ESCALATED"
+                and escalation_directive is not None
+                else ()
+            )
+            if review_inputs != expected_review_inputs:
+                raise ValueError("review correction ordinary review input differs from its tier")
+            _, authoring = load_result(correction_directive.reviewed_authoring)
+            source_review, parsed_review = load_result(correction_directive.source_review)
+            if not isinstance(authoring, ContentTeamAuthoringRoleResultV12) or not isinstance(
+                parsed_review, ContentTeamReviewRoleResultV12
+            ):
+                raise ValueError("review correction requires the exact V12 authoring and review")
+            validate_review_correction_against_source(
+                directive=correction_directive,
+                authoring=authoring,
+                source=parsed_review,
+                escalation_directive=escalation_directive,
+            )
+            if escalation_directive is not None:
+                _, original_primary = load_result(escalation_directive.source_review)
+                if not isinstance(original_primary, ContentTeamReviewRoleResultV12):
+                    raise ValueError("review correction escalation source type differs")
+                try:
+                    validate_escalated_review_against_source(
+                        directive=escalation_directive,
+                        source=original_primary,
+                        escalated=parsed_review,
+                    )
+                except ReviewPolicyCorrectionRequired as exc:
+                    if exc.issue != correction_directive.issue:
+                        raise ValueError("review correction escalation policy changed") from exc
+            directive_json = canonical_json_bytes(
+                correction_directive.model_dump(mode="json")
+            ).decode("utf-8")
+            source_review_json = canonical_json_bytes(source_review).decode("utf-8")
+            instruction_text = (
+                REVIEW_CORRECTION_PROMPT_MARKER
+                + "이번 검토는 앞선 검토 결과의 운영 판정값을 바로잡는 "
+                + f"{correction_directive.pass_number}교입니다. 문항의 출제 결과와 그림을 "
+                + "다시 만들거나 변경하지 마세요. 아래 이전 검토 전체를 확인하고, "
+                + "서버가 계산한 expected 값에 맞게 escalation_assessment의 구조 복잡도, "
+                + "상위 검토 사유와 판정값을 수정한 새 검토 결과를 제출하세요. "
+                + "observed는 앞서 제출한 잘못된 값이며 복사해서 쓰면 안 됩니다. "
+                + "나머지 풀이, 근거와 검증 항목도 같은 고정 입력을 바탕으로 확인하세요. "
+                + "기존 출제 재작업 및 상위 검토 지침과 출처 연결은 그대로 유지하세요.\n"
+            )
+            context["review_correction"] = {
+                "directive_json": directive_json,
+                "source_review_result_json": source_review_json,
+                "instruction_text": instruction_text,
             }
         if request.item_brief is not None:
             brief = request.item_brief.model_dump(mode="json")

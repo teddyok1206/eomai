@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/review-correction-directive/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "artifactPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "step_key": {"type": "string"},
+        "attempt": {"type": "integer", "minimum": 1, "maximum": 10},
+        "job_id": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+        "logical_artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "content_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "result_schema": {"type": "string"}
+      },
+      "required": ["step_key", "attempt", "job_id", "logical_artifact_id", "revision_id", "content_hash", "result_schema"]
+    },
+    "authoringPointer": {
+      "allOf": [
+        {"$ref": "#/$defs/artifactPointer"},
+        {"properties": {"step_key": {"const": "authoring"}, "result_schema": {"const": "authoring-result@12.0"}}}
+      ]
+    },
+    "reviewPointer": {
+      "allOf": [
+        {"$ref": "#/$defs/artifactPointer"},
+        {"properties": {"step_key": {"const": "review"}, "result_schema": {"const": "review-result@12.0"}}}
+      ]
+    },
+    "routingValues": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "structural_complexity_score": {"type": "integer", "minimum": 0, "maximum": 10},
+        "reason_codes": {
+          "type": "array", "maxItems": 5, "uniqueItems": true,
+          "items": {"enum": ["CANDIDATE_FINDING_PRESENT", "COMPLEX_ITEM", "EVIDENCE_GAP", "EVIDENCE_UNCERTAINTY", "VISUAL_RISK"]}
+        },
+        "decision": {"enum": ["REQUIRED", "NOT_REQUIRED", "COMPLETED"]}
+      },
+      "required": ["structural_complexity_score", "reason_codes", "decision"]
+    },
+    "correctionIssue": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "code": {"enum": ["REVIEW_STRUCTURAL_COMPLEXITY_MISMATCH", "REVIEW_ESCALATION_REASONS_MISMATCH", "REVIEW_ESCALATION_DECISION_MISMATCH"]},
+        "expected": {"$ref": "#/$defs/routingValues"},
+        "observed": {"$ref": "#/$defs/routingValues"}
+      },
+      "required": ["code", "expected", "observed"]
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "workflow-review-correction-directive/1.0"},
+    "workflow_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+    "reviewed_authoring": {"$ref": "#/$defs/authoringPointer"},
+    "source_review": {"$ref": "#/$defs/reviewPointer"},
+    "review_pass": {"enum": ["PRIMARY", "ESCALATED"]},
+    "pass_number": {"type": "integer", "enum": [2, 3]},
+    "source_attempt": {"type": "integer", "minimum": 1, "maximum": 9},
+    "next_attempt": {"type": "integer", "minimum": 2, "maximum": 10},
+    "issue": {"$ref": "#/$defs/correctionIssue"},
+    "decision_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  },
+  "required": ["schema_version", "workflow_id", "reviewed_authoring", "source_review", "review_pass", "pass_number", "source_attempt", "next_attempt", "issue", "decision_sha256"]
+}

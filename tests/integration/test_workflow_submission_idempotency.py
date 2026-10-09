@@ -30,6 +30,7 @@ from eom_workflow_runner.state_machine import (
     transition_workflow,
 )
 from sqlalchemy import Engine, delete, func, select
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 pytestmark = pytest.mark.integration
@@ -64,14 +65,26 @@ def test_admission_policy_preserves_historical_definition_and_instance(
             db_session,
             compile_definition(Path(path), ROLE_SLOTS),
         )
-    historical, _ = import_workflow_definition(
-        db_session,
-        compile_definition(
-            Path("config/workflows/generic-item-development.v1.yaml"),
-            ROLE_SLOTS,
-        ),
+    compiled_historical = compile_definition(
+        Path("config/workflows/generic-item-development.v1.yaml"),
+        ROLE_SLOTS,
     )
-    historical.active = True  # represent the pre-convergence production registry
+    historical, _ = import_workflow_definition(db_session, compiled_historical)
+    # Admission convergence preserves the exact existing canonical definition and active value.
+    # Its historical identity is denied for new admission independently of the registry flag.
+    original_active = historical.active
+    original_hash = historical.definition_hash
+    original_definition = historical.canonical_definition
+    replay, replay_created = import_workflow_definition(db_session, compiled_historical)
+    assert replay is historical and not replay_created
+    with (
+        pytest.raises(DBAPIError, match="workflow definitions are immutable"),
+        db_session.begin_nested(),
+    ):
+        historical.active = not original_active
+        db_session.flush()
+    db_session.refresh(historical)
+    assert historical.active is original_active
     workflow, created = create_workflow_instance(
         db_session,
         definition=historical,
@@ -96,7 +109,9 @@ def test_admission_policy_preserves_historical_definition_and_instance(
         definition_version="1.8.0",
     )
     assert current is not None
-    assert historical.active is True
+    assert historical.active is original_active
+    assert historical.definition_hash == original_hash == compiled_historical.sha256
+    assert historical.canonical_definition == original_definition == compiled_historical.as_dict()
     assert workflow.definition_id == historical.definition_id
     assert workflow.definition_version == "1.0.0"
 

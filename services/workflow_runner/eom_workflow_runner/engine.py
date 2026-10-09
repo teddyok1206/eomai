@@ -10,7 +10,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from threading import Event, Thread
-from typing import Protocol
+from typing import Literal, Protocol
 from uuid import uuid4
 
 from eom_catalog_contracts import ContentTeamMaterialRequirement
@@ -27,6 +27,7 @@ from eom_orchestrator.models import (
 from eom_orchestrator.orchestrator import Orchestrator
 from eom_protocol import ErrorCode
 from eom_workflow import (
+    MAX_REVIEW_CORRECTION_PASSES,
     AgentStep,
     ArtifactPointer,
     CompiledWorkflowDefinition,
@@ -47,16 +48,21 @@ from eom_workflow import (
     ResolvedExecutionPlanV19,
     ResolvedExecutionPlanV20,
     ResolvedStepExecutionV12,
+    ReviewPolicyCorrection,
+    ReviewPolicyCorrectionRequired,
     TerminalStep,
     WorkerRequest,
     WorkflowRequest,
+    WorkflowReviewCorrectionDirective,
     WorkflowReviewEscalationDirective,
     WorkflowReviewReworkDirective,
     WorkflowReviewReworkDirectiveV2,
     append_review_escalation_directive,
     append_review_rework_directive,
+    build_review_correction_directive,
     compile_definition_data,
     evaluate_decision,
+    load_review_correction_directive_schema,
     load_review_escalation_directive_schema,
     load_review_rework_directive_schema,
     load_review_rework_directive_v2_schema,
@@ -107,6 +113,7 @@ from eom_workflow_runner.repository import (
     renew_command_lease,
     require_command_lease,
 )
+from eom_workflow_runner.review_correction_binding import validate_review_correction_step_binding
 from eom_workflow_runner.settings import WorkflowSettings
 from eom_workflow_runner.state_machine import (
     SUCCESSFUL_TERMINAL_WORKFLOW_STATES,
@@ -874,23 +881,6 @@ class WorkflowRunner:
                 )
             step_run_id = step.step_run_id
             attempt = step.attempt
-            upstream = self._input_upstream_pointers(
-                session,
-                workflow.workflow_id,
-                compiled,
-                definition.key,
-                step,
-            )
-            raw_escalation = step.input_pointer_manifest.get("review_escalation_directive")
-            if raw_escalation is not None:
-                validate_schema_message(
-                    load_review_escalation_directive_schema(),
-                    raw_escalation,
-                    "workflow-review-escalation-directive/1.0",
-                )
-                source_escalation_directive = WorkflowReviewEscalationDirective.model_validate(
-                    raw_escalation
-                )
 
         idempotency_key = _step_job_idempotency_key(
             workflow.workflow_id, definition.key, attempt, workflow.definition_hash
@@ -904,6 +894,30 @@ class WorkflowRunner:
         review_rework_directive: WorkflowReviewReworkDirective | None = None
         review_escalation_directive: WorkflowReviewEscalationDirective | None = None
         try:
+            # Input resolution belongs to the same fail-closed boundary as prompt/result
+            # validation; a malformed correction must not leave an executable orphan step.
+            with self.sessions() as session:
+                input_step = session.get(WorkflowStepRunRecord, step_run_id)
+                assert input_step is not None
+                upstream = self._input_upstream_pointers(
+                    session,
+                    workflow.workflow_id,
+                    compiled,
+                    definition.key,
+                    input_step,
+                )
+                raw_escalation = input_step.input_pointer_manifest.get(
+                    "review_escalation_directive"
+                )
+                if raw_escalation is not None:
+                    validate_schema_message(
+                        load_review_escalation_directive_schema(),
+                        raw_escalation,
+                        "workflow-review-escalation-directive/1.0",
+                    )
+                    source_escalation_directive = WorkflowReviewEscalationDirective.model_validate(
+                        raw_escalation
+                    )
             prompt_text: str | None = None
             if full_request.content_pack is not None:
                 prepared = self.catalog.prepare_prompt(
@@ -1005,25 +1019,54 @@ class WorkflowRunner:
                             workflow=workflow,
                             artifacts=(*upstream, result_pointer),
                         )
-        except Exception as exc:
-            with self._fenced_transaction() as session:
-                failed_step = session.execute(
-                    select(WorkflowStepRunRecord)
-                    .where(WorkflowStepRunRecord.step_run_id == step_run_id)
-                    .with_for_update()
-                ).scalar_one()
-                failed_step.error_code = WorkflowErrorCode.WORKFLOW_STEP_FAILED.value
-                failed_step.error_summary = "platform role execution raised an exception"
-                if failed_step.state == StepState.RUNNING.value:
-                    transition_step(failed_step, StepState.FAILED)
-                self._fail_workflow(
-                    session,
-                    workflow.workflow_id,
-                    command_id,
-                    actor_type,
-                    actor_id,
-                    failed_step.error_code,
+        except ReviewPolicyCorrectionRequired as exc:
+            try:
+                with self._fenced_transaction() as session:
+                    current = session.execute(
+                        select(WorkflowInstanceRecord)
+                        .where(WorkflowInstanceRecord.workflow_id == workflow.workflow_id)
+                        .with_for_update()
+                    ).scalar_one()
+                    correction_step = session.execute(
+                        select(WorkflowStepRunRecord)
+                        .where(WorkflowStepRunRecord.step_run_id == step_run_id)
+                        .with_for_update()
+                    ).scalar_one()
+                    if result_pointer is None:
+                        raise ValueError("review correction has no committed result") from exc
+                    self._schedule_review_correction(
+                        session=session,
+                        workflow=current,
+                        compiled=compiled,
+                        source_step=correction_step,
+                        result_pointer=result_pointer,
+                        upstream=upstream,
+                        issue=exc.issue,
+                        command_id=command_id,
+                    )
+            except (ValueError, WorkflowError) as binding_error:
+                self._record_agent_step_failure(
+                    workflow_id=workflow.workflow_id,
+                    step_run_id=step_run_id,
+                    command_id=command_id,
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                    code=WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
                 )
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                    "review correction source or immutable binding is invalid",
+                ) from binding_error
+            return False
+        except Exception as exc:
+            self._record_agent_step_failure(
+                workflow_id=workflow.workflow_id,
+                step_run_id=step_run_id,
+                command_id=command_id,
+                actor_type=actor_type,
+                actor_id=actor_id,
+                code=WorkflowErrorCode.WORKFLOW_STEP_FAILED,
+            )
             raise WorkflowError(
                 WorkflowErrorCode.WORKFLOW_STEP_FAILED,
                 "platform role execution failed",
@@ -1284,6 +1327,247 @@ class WorkflowRunner:
                     or source.output_pointer_manifest != pointer.model_dump(mode="json")
                 ):
                     raise ValueError("review escalation source pointer cannot be resolved")
+
+    def _record_agent_step_failure(
+        self,
+        *,
+        workflow_id: str,
+        step_run_id: str,
+        command_id: str | None,
+        actor_type: str,
+        actor_id: str,
+        code: WorkflowErrorCode,
+    ) -> None:
+        with self._fenced_transaction() as session:
+            session.execute(
+                select(WorkflowInstanceRecord)
+                .where(WorkflowInstanceRecord.workflow_id == workflow_id)
+                .with_for_update()
+            ).scalar_one()
+            failed_step = session.execute(
+                select(WorkflowStepRunRecord)
+                .where(WorkflowStepRunRecord.step_run_id == step_run_id)
+                .with_for_update()
+            ).scalar_one()
+            if failed_step.state != StepState.RUNNING.value:
+                # A late concurrent command cannot rewrite terminal step history or fail an
+                # already scheduled successor. The owning transition retains its evidence.
+                return
+            failed_step.error_code = code.value
+            failed_step.error_summary = (
+                "platform role execution raised an exception"
+                if code == WorkflowErrorCode.WORKFLOW_STEP_FAILED
+                else "review correction source or immutable binding is invalid"
+            )
+            transition_step(failed_step, StepState.FAILED)
+            self._fail_workflow(session, workflow_id, command_id, actor_type, actor_id, code.value)
+
+    def _schedule_review_correction(
+        self,
+        *,
+        session: Session,
+        workflow: WorkflowInstanceRecord,
+        compiled: CompiledWorkflowDefinition,
+        source_step: WorkflowStepRunRecord,
+        result_pointer: ArtifactPointer,
+        upstream: tuple[ArtifactPointer, ...],
+        issue: ReviewPolicyCorrection,
+        command_id: str | None,
+    ) -> None:
+        """Keep the committed rejected review and schedule at most a second/third proof."""
+
+        if source_step.state == StepState.FAILED.value:
+            if (
+                source_step.output_pointer_manifest != result_pointer.model_dump(mode="json")
+                or source_step.error_code != issue.code
+            ):
+                raise ValueError("review correction replay differs from the rejected result")
+            if source_step.superseded_by_step_run_id is not None:
+                successor = session.get(
+                    WorkflowStepRunRecord, source_step.superseded_by_step_run_id
+                )
+                if successor is None:
+                    raise ValueError("review correction successor pointer is missing")
+                replay = WorkflowReviewCorrectionDirective.model_validate(
+                    successor.input_pointer_manifest.get("review_correction_directive")
+                )
+                if replay.source_review != result_pointer or replay.issue != issue:
+                    raise ValueError("review correction replay changed its exact source or issue")
+                validate_review_correction_step_binding(session, step=successor, directive=replay)
+                return
+            if (
+                workflow.state == WorkflowState.FAILED.value
+                and workflow.failure_code
+                == WorkflowErrorCode.WORKFLOW_REVIEW_CORRECTION_EXHAUSTED.value
+            ):
+                return
+            raise ValueError(
+                "review correction replay has no committed successor or terminal decision"
+            )
+        definition = compiled.steps_by_key.get(source_step.step_key)
+        job = session.get(JobRecord, result_pointer.job_id)
+        revision = session.get(ArtifactRevisionRecord, result_pointer.revision_id)
+        if (
+            not isinstance(definition, AgentStep)
+            or definition.worker_role != "review"
+            or definition.result_schema != "review-result@12.0"
+            or source_step.state != StepState.RUNNING.value
+            or workflow.state != WorkflowState.RUNNING.value
+            or workflow.current_step_key != definition.key
+            or source_step.platform_job_id != result_pointer.job_id
+            or result_pointer.attempt != source_step.attempt
+            or job is None
+            or job.status != "SUCCEEDED"
+            or job.logical_artifact_id != result_pointer.logical_artifact_id
+            or job.revision_id != result_pointer.revision_id
+            or revision is None
+            or revision.logical_artifact_id != result_pointer.logical_artifact_id
+            or revision.content_hash != result_pointer.content_hash
+            or not revision.approved
+            or session.scalar(
+                select(WorkerLeaseRecord.lease_id)
+                .where(
+                    WorkerLeaseRecord.job_id == result_pointer.job_id,
+                    WorkerLeaseRecord.state.in_(("ACTIVE", "RECONCILING")),
+                )
+                .limit(1)
+            )
+            is not None
+        ):
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                "review correction requires an exact committed, lease-free review result",
+            )
+        authoring = tuple(pointer for pointer in upstream if pointer.step_key == "authoring")
+        if len(authoring) != 1:
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                "review correction requires one exact authoring revision",
+            )
+        review_pass: Literal["PRIMARY", "ESCALATED"] = (
+            "ESCALATED"
+            if "review_escalation_directive" in source_step.input_pointer_manifest
+            else "PRIMARY"
+        )
+        previous_raw = source_step.input_pointer_manifest.get("review_correction_directive")
+        pass_number = 1
+        if previous_raw is not None:
+            validate_schema_message(
+                load_review_correction_directive_schema(),
+                previous_raw,
+                "workflow-review-correction-directive/1.0",
+            )
+            previous = WorkflowReviewCorrectionDirective.model_validate(previous_raw)
+            if (
+                validate_review_correction_step_binding(
+                    session,
+                    step=source_step,
+                    directive=previous,
+                )
+                != upstream
+                or previous.reviewed_authoring != authoring[0]
+                or previous.review_pass != review_pass
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                    "review correction proof budget or input pins changed",
+                )
+            pass_number = previous.pass_number
+
+        source_step.output_pointer_manifest = result_pointer.model_dump(mode="json")
+        source_step.error_code = issue.code
+        source_step.error_summary = "review routing metadata requires a corrected proof"
+        transition_step(source_step, StepState.FAILED)
+        if (
+            pass_number >= MAX_REVIEW_CORRECTION_PASSES
+            or source_step.attempt >= compiled.definition.limits.max_step_attempts
+        ):
+            self._fail_workflow(
+                session,
+                workflow.workflow_id,
+                command_id,
+                "system",
+                self.runner_id,
+                WorkflowErrorCode.WORKFLOW_REVIEW_CORRECTION_EXHAUSTED.value,
+            )
+            record_workflow_event(
+                session,
+                workflow.workflow_id,
+                "REVIEW_CORRECTION_EXHAUSTED",
+                actor_type="system",
+                actor_id=self.runner_id,
+                command_id=command_id,
+                step_key=source_step.step_key,
+                payload={
+                    "source_step_run_id": source_step.step_run_id,
+                    "source_review": result_pointer.model_dump(mode="json"),
+                    "pass_number": pass_number,
+                    "issue_code": issue.code,
+                },
+            )
+            return
+        directive = build_review_correction_directive(
+            workflow_id=workflow.workflow_id,
+            reviewed_authoring=authoring[0],
+            source_review=result_pointer,
+            review_pass=review_pass,
+            pass_number=2 if pass_number == 1 else 3,
+            issue=issue,
+        )
+        successor_input: dict[str, object] = {
+            "upstream_artifacts": [pointer.model_dump(mode="json") for pointer in upstream],
+            "review_correction_directive": directive.model_dump(mode="json"),
+        }
+        escalation_raw = source_step.input_pointer_manifest.get("review_escalation_directive")
+        if escalation_raw is not None:
+            validate_schema_message(
+                load_review_escalation_directive_schema(),
+                escalation_raw,
+                "workflow-review-escalation-directive/1.0",
+            )
+            WorkflowReviewEscalationDirective.model_validate(escalation_raw)
+            successor_input["review_escalation_directive"] = escalation_raw
+        successor = create_step_run(
+            session,
+            workflow_id=workflow.workflow_id,
+            step_key=definition.key,
+            step_type=definition.type,
+            worker_role=definition.worker_role,
+            result_schema=definition.result_schema,
+            input_pointer_manifest=successor_input,
+            max_attempts=compiled.definition.limits.max_step_attempts,
+        )
+        source_step.superseded_by_step_run_id = successor.step_run_id
+        correction, _ = enqueue_command(
+            session,
+            workflow_id=workflow.workflow_id,
+            command_type=CommandType.ADVANCE_WORKFLOW,
+            payload={
+                "reason": "REVIEW_POLICY_CORRECTION",
+                "decision_sha256": directive.decision_sha256,
+            },
+            actor_type="system",
+            actor_id=self.runner_id,
+            source="workflow_review_correction",
+            idempotency_key=f"review-correction:{workflow.workflow_id}:{result_pointer.job_id}",
+        )
+        record_workflow_event(
+            session,
+            workflow.workflow_id,
+            "REVIEW_CORRECTION_SCHEDULED",
+            actor_type="system",
+            actor_id=self.runner_id,
+            command_id=command_id,
+            step_key=definition.key,
+            payload={
+                "source_step_run_id": source_step.step_run_id,
+                "next_step_run_id": successor.step_run_id,
+                "pass_number": directive.pass_number,
+                "issue_code": issue.code,
+                "decision_sha256": directive.decision_sha256,
+                "correction_command_id": correction.command_id,
+            },
+        )
 
     def _schedule_review_escalation(
         self,
@@ -1588,6 +1872,20 @@ class WorkflowRunner:
             )
             WorkflowReviewEscalationDirective.model_validate(escalation_directive)
             successor_input_manifest["review_escalation_directive"] = escalation_directive
+        correction_directive = step.input_pointer_manifest.get("review_correction_directive")
+        if correction_directive is not None:
+            validate_schema_message(
+                load_review_correction_directive_schema(),
+                correction_directive,
+                "workflow-review-correction-directive/1.0",
+            )
+            correction = WorkflowReviewCorrectionDirective.model_validate(correction_directive)
+            if (
+                validate_review_correction_step_binding(session, step=step, directive=correction)
+                != upstream
+            ):
+                raise ValueError("pre-commit retry changed review correction inputs")
+            successor_input_manifest["review_correction_directive"] = correction_directive
         transition_step(step, StepState.FAILED)
         successor = create_step_run(
             session,
@@ -2549,6 +2847,41 @@ class WorkflowRunner:
         step: WorkflowStepRunRecord,
     ) -> tuple[ArtifactPointer, ...]:
         """Resolve exact rework inputs or fall back to the active DAG predecessor set."""
+
+        raw_correction = step.input_pointer_manifest.get("review_correction_directive")
+        if raw_correction is not None:
+            validate_schema_message(
+                load_review_correction_directive_schema(),
+                raw_correction,
+                "workflow-review-correction-directive/1.0",
+            )
+            correction = WorkflowReviewCorrectionDirective.model_validate(raw_correction)
+            pointers = validate_review_correction_step_binding(
+                session, step=step, directive=correction
+            )
+            for pointer in pointers:
+                source = session.scalar(
+                    select(WorkflowStepRunRecord).where(
+                        WorkflowStepRunRecord.workflow_id == workflow_id,
+                        WorkflowStepRunRecord.step_key == pointer.step_key,
+                        WorkflowStepRunRecord.attempt == pointer.attempt,
+                    )
+                )
+                expected_state = (
+                    StepState.SUPERSEDED.value
+                    if pointer.step_key == "review"
+                    else StepState.SUCCEEDED.value
+                )
+                if (
+                    source is None
+                    or source.state != expected_state
+                    or source.output_pointer_manifest != pointer.model_dump(mode="json")
+                ):
+                    raise WorkflowError(
+                        WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                        "review correction upstream pointer cannot be resolved exactly",
+                    )
+            return pointers
 
         raw_escalation = step.input_pointer_manifest.get("review_escalation_directive")
         if raw_escalation is not None:

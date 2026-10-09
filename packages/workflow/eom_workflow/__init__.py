@@ -185,6 +185,14 @@ from eom_workflow.models import (
     WorkflowReviewReworkDirective,
     WorkflowReviewReworkDirectiveV2,
 )
+from eom_workflow.review_correction import (
+    MAX_REVIEW_CORRECTION_PASSES,
+    ReviewPolicyCorrection,
+    ReviewPolicyCorrectionRequired,
+    ReviewRoutingPolicyValues,
+    WorkflowReviewCorrectionDirective,
+    build_review_correction_directive,
+)
 from eom_workflow.review_escalation import (
     MAX_REVIEW_ESCALATIONS_PER_WORKFLOW,
     REVIEW_COMPLEXITY_ESCALATION_THRESHOLD,
@@ -194,6 +202,7 @@ from eom_workflow.review_escalation import (
     structural_review_complexity,
     validate_escalated_review_against_source,
     validate_primary_review_escalation_policy,
+    validate_review_correction_against_source,
     validate_review_escalation_history,
 )
 from eom_workflow.review_rework import (
@@ -204,6 +213,7 @@ from eom_workflow.review_rework import (
     validate_review_rework_history,
 )
 from eom_workflow.schemas import (
+    load_review_correction_directive_schema,
     load_review_escalation_directive_schema,
     load_review_rework_directive_schema,
     load_review_rework_directive_v2_schema,
@@ -223,6 +233,7 @@ __all__ = [
     "HUMAN_REQUIRED_REVIEW_FINDING_CODES",
     "LEGACY_SINGLE_DOCUMENT_REVIEW",
     "MANAGED_WORKFLOW_DEFINITION_KEYS",
+    "MAX_REVIEW_CORRECTION_PASSES",
     "MAX_REVIEW_ESCALATIONS_PER_WORKFLOW",
     "REPAIRABLE_REVIEW_FINDING_CODES",
     "REVIEW_COMPLEXITY_ESCALATION_THRESHOLD",
@@ -359,6 +370,9 @@ __all__ = [
     "ReviewEvidenceUsageValidationReceipt",
     "ReviewEvidenceUsageValidationReceiptV2",
     "ReviewEvidenceUsageValidationReceiptV3",
+    "ReviewPolicyCorrection",
+    "ReviewPolicyCorrectionRequired",
+    "ReviewRoutingPolicyValues",
     "RoleWorkerInput",
     "TerminalStep",
     "WorkerCapacityPolicy",
@@ -372,6 +386,7 @@ __all__ = [
     "WorkflowDefinitionError",
     "WorkflowProductionOccurrence",
     "WorkflowRequest",
+    "WorkflowReviewCorrectionDirective",
     "WorkflowReviewEscalationDirective",
     "WorkflowReviewReworkDirective",
     "WorkflowReviewReworkDirectiveV2",
@@ -380,6 +395,7 @@ __all__ = [
     "build_graph_grounded_paired_document_review_request",
     "build_paired_document_review_request",
     "build_pdf_document_review_request",
+    "build_review_correction_directive",
     "build_review_escalation_directive",
     "build_review_rework_directive",
     "compile_definition",
@@ -389,6 +405,7 @@ __all__ = [
     "expected_review_escalation_reasons",
     "load_control_schema",
     "load_pdf_review_preset",
+    "load_review_correction_directive_schema",
     "load_review_escalation_directive_schema",
     "load_review_rework_directive_schema",
     "load_review_rework_directive_v2_schema",
@@ -404,6 +421,7 @@ __all__ = [
     "validate_paired_document_review_v3_output_against_request",
     "validate_pdf_document_review_output_against_request",
     "validate_primary_review_escalation_policy",
+    "validate_review_correction_against_source",
     "validate_review_escalation_history",
     "validate_review_rework_history",
     "validate_schema_message",

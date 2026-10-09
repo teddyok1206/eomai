@@ -138,6 +138,7 @@ Rollback과 검증 범위는 [ADR 0160](../adr/0160-natural-stimulus-presentatio
 | HWPX | `hwpx-content-team/3.0` | Item/Assembly pointer를 projection하며 원본을 수정하지 않음 |
 | 실행 정책 | standard bootstrap `17.0`, knowledge bootstrap `14.0` | preset revision은 별도 immutable identity |
 | Evidence usage | Graph plan `19.0`, ungrounded plan `20.0` | boolean이 아닌 pointer/hash/receipt로 검증; predecessor `17.0`/`18.0` replay 보존 |
+| 검토 결과 교정 | `workflow-review-correction-directive/1.0` | 같은 출제 revision·검토 tier에서 최초 포함 최대 3교; 통신 재시도로 횟수 초기화 금지, 내용 재작업과 구분 |
 | GPU prompt policy | `local-gpu-image-prompt-policy/1.6` | predecessor `1.4` replay 보존 |
 | 자료 형식 | material requirement `2.0`, Item Brief `5.0` | TABLE과 IMAGE를 같은 것으로 취급하지 않음; production V5의 `1.0`/`4.0` pin 보존 |
 | PDF annotation | paired request `3.0` / `catalog/1.22`; single V4 request `4.0` / `catalog/1.23` | 원본 보존, 기존 native-panel output 재사용 |

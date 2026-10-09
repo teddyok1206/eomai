@@ -392,3 +392,93 @@ service configuration. The installed release record is
 Task-local operator/proof logs are temporary materialization at
 `/tmp/eom-presentation-release-20261009.Q2zUUW`; they are not a canonical content store or Git
 payload. Source, installed release, active Pack and documentation commits remain separate identities.
+
+### 2026-10-09 design: bounded review-result correction, before implementation
+
+The next actual request produced a successful authoring Artifact and a successful review Artifact,
+but failed in post-result escalation classification: the reviewer reported structural complexity 2
+for a typed draft with zero visuals and three statements (deterministic score 1). A general exception
+became `WORKFLOW_STEP_FAILED`, bypassing the existing content-feedback loop. The user requests
+correction through second/third proofs rather than an immediate full-workflow failure.
+
+1. **Responsibility/boundary:** Workflow schedules review-result corrections through Catalog and
+   Orchestrator. Workers neither contact one another nor schedule retries. Content rework and
+   stronger-review escalation retain their existing responsibilities.
+2. **Canonical source:** the accepted authoring/image Artifacts and immutable submitted review
+   remain unchanged. The deterministic domain policy computes expected routing metadata; a model
+   cannot authorize or alter that policy. Corrected review output is a new Artifact Revision.
+3. **Identity/revisions:** preserve workflow, authoring/image/Graph/Pack/plan pins. Create only a new
+   review step/job/result identity, with an explicit link to the submitted review being corrected.
+4. **Pointers/checks:** a new additive JSON Schema 2020-12 correction directive precedes behavior.
+   Its typed model carries exact authoring/review pointers, prior/next attempts, bounded proof
+   number, stable error code, expected/observed small policy values and a self-hash. Resolver checks
+   schema, hash, workflow/job identity, approved Artifact and exact content hash before feedback.
+5. **Access patterns:** indexed step/attempt lookup and immutable Artifact resolution; ordered
+   correction chain. No corpus scan, copied Item, new queue, or independent result store.
+6. **Structures/indexes:** reuse the existing step input manifest, append-only Workflow events,
+   unique step attempt and idempotent command keys. A bounded typed directive replaces matching
+   exception strings or storing arbitrary traceback text.
+7. **Complexity/scale:** O(component count) deterministic scoring; at most two correction successors
+   per exact authoring revision/review tier (initial proof + second + third). Existing overall step
+   limits also apply. The released content rule remains maximum three authoring↔review rework
+   cycles; do not silently rewrite its predecessor into a different total-pass contract.
+8. **Concurrency/transaction:** under the existing command lease fence and row locks, retain the
+   submitted result pointer, mark that review step superseded/rejected for workflow use, create its
+   successor and enqueue one advance command atomically. Replay must reuse identities and cannot
+   create an extra model invocation. Same-authoring correction count cannot reset on replay or a
+   proven infrastructure retry.
+9. **Dependencies/ownership:** typed directive/error/domain policy live in Workflow contracts;
+   Catalog owns validated source resolution and feedback prompt materialization; Workflow Runner
+   owns scheduling. Domain imports no SQL/filesystem/Catalog. No new dependency or migration.
+10. **Failure/retry:** catch only declared repairable routing-metadata defects, not general
+    `ValueError`. Pass expected values plus the pinned previous review to the next reviewer, without
+    regenerating a correct authoring result. Hash/permission/foreign identity/evidence-receipt or
+    source-pointer corruption stays fail-closed. After the third incorrect proof, terminate with a
+    specific exhausted correction code and preserve evidence; never loop or publish invalid output.
+11. **Simpler alternative:** silently normalizing the accepted review would overwrite the meaning
+    of its immutable hash; blindly rerunning the existing failed-job path would violate its proven
+    pre-commit-only boundary and omit feedback. Both are rejected. Extend the existing step/command
+    machinery with one narrow correction contract, not a general retry framework.
+
+The new runtime correction supplement is a declared prompt materialization boundary. Original
+team-lead files and released Pack template bytes remain unchanged. Exact feedback and source-result
+pins participate in context/prompt hashes, and pinned prompt replay must preserve the same correction
+directive. Tests must cover exact feedback, successful second/third proof, exhaustion, concurrent
+command/replay, unchanged authoring/image pins, primary/escalated context preservation, no extra
+content-rework count, and fail-closed trust failures. Source implementation, deployment and recovery
+of the already FAILED historical request are separate states; the latter is not silently rewritten.
+
+### Correction implementation and regression evidence — 2026-10-09 (UTC)
+
+Canonical schema is `schemas/workflow/workflow-review-correction-directive-v1.schema.json`;
+the byte-identical `eom_workflow/resources` copy is its explicit installed-wheel materialization.
+The domain owns the closed correction error and independent expected-value calculation. Catalog
+resolves exact rejected sources and appends a declared, context/prompt-hashed feedback supplement.
+Released Pack/template/envelope bytes and the worker role schema bundle remain unchanged.
+
+Runner preserves the rejected Step as `FAILED` with its committed output pointer and stable issue
+code; the platform Job remains `SUCCEEDED`. It creates one successor/advance command transactionally.
+Third-proof exhaustion is `WORKFLOW_REVIEW_CORRECTION_EXHAUSTED`, never a fourth correction.
+Immutable prompt replay, command lease fences, unique attempts and exact-result idempotent adoption
+protect crash/replay and two distinct simultaneous commands. An exact bounded supersession chain
+plus append-only pre-commit retry evidence preserves proof number across infrastructure failures.
+Malformed bindings fail terminally inside the shared error boundary; they do not leave an orphan
+RUNNING Workflow. Already terminal Step error history is never overwritten by a late command.
+
+Source gates: **175 PASS**, including domain/correction prompt/source-pin negatives, unchanged
+predecessor policies, dependency direction and real wheel/resource isolated-import verification.
+Strict mypy on 25 relevant sources and Ruff/format/diff checks PASS. Correction-specific disposable
+PostgreSQL gate: **22 PASS**. These cover second/third success, no fourth proof, unchanged image and
+stronger-review pins, lost command recovery, same/different concurrent commands, proof-budget
+tampering, missing retry evidence and correction→existing authoring feedback. Focused and combined
+runs overlap; their counts are not cumulative distinct acceptance counts.
+
+The combined original Workflow Engine + submission idempotency + correction PostgreSQL suite is
+**66 PASS**, including the correction 22. The first full run exposed an error-summary regression
+and an old test fixture that attempted to UPDATE an immutable historical definition. The original
+sanitized failure summary was restored. The fixture now uses supported exact-definition import /
+replay, preserves its existing canonical bytes/hash/active value, and confirms the DB still rejects
+changing that value. Neither the production immutability guard nor admission policy was weakened.
+
+Runtime installation and an installed read-only replay against the actual incident sources are
+separate following gates. The historical failed request is retained unchanged, not declared resumed.

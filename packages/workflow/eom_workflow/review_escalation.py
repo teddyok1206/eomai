@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import Literal
 
 from eom_identifiers import content_sha256
 
@@ -14,6 +15,13 @@ from eom_workflow.models import (
     IndependentReviewReportV2,
     ReviewEscalationReason,
     WorkflowReviewEscalationDirective,
+)
+from eom_workflow.review_correction import (
+    ReviewCorrectionCode,
+    ReviewPolicyCorrection,
+    ReviewPolicyCorrectionRequired,
+    ReviewRoutingPolicyValues,
+    WorkflowReviewCorrectionDirective,
 )
 
 MAX_REVIEW_ESCALATIONS_PER_WORKFLOW = 4
@@ -78,22 +86,123 @@ def validate_primary_review_escalation_policy(
 ) -> tuple[ReviewEscalationReason, ...]:
     """Recompute complexity and reasons without trusting worker-authored routing fields."""
 
+    if authoring.workflow_id != review.workflow_id:
+        raise ValueError("primary review workflow identity differs from the typed draft")
     assessment = review.output.independent_review_report.escalation_assessment
     if assessment.review_pass != "PRIMARY":
         raise ValueError("primary review classification received an escalated result")
     score = structural_review_complexity(authoring)
-    if assessment.structural_complexity_score != score:
-        raise ValueError("review structural complexity score differs from the typed draft")
     reasons = expected_review_escalation_reasons(
         review.output.independent_review_report,
         structural_complexity_score=score,
     )
-    if assessment.reason_codes != reasons:
-        raise ValueError("review escalation reasons differ from the application policy")
-    expected_decision = "REQUIRED" if reasons else "NOT_REQUIRED"
-    if assessment.decision != expected_decision:
-        raise ValueError("review escalation decision differs from the application policy")
+    expected_decision: Literal["REQUIRED", "NOT_REQUIRED"] = (
+        "REQUIRED" if reasons else "NOT_REQUIRED"
+    )
+    _validate_review_routing_values(
+        expected=ReviewRoutingPolicyValues(
+            structural_complexity_score=score,
+            reason_codes=reasons,
+            decision=expected_decision,
+        ),
+        observed=ReviewRoutingPolicyValues(
+            structural_complexity_score=assessment.structural_complexity_score,
+            reason_codes=assessment.reason_codes,
+            decision=assessment.decision,
+        ),
+    )
     return reasons
+
+
+def _validate_review_routing_values(
+    *,
+    expected: ReviewRoutingPolicyValues,
+    observed: ReviewRoutingPolicyValues,
+) -> None:
+    """Reject only three closed scalar defects as correctable; identities never enter here."""
+
+    code: ReviewCorrectionCode | None = None
+    if observed.structural_complexity_score != expected.structural_complexity_score:
+        code = "REVIEW_STRUCTURAL_COMPLEXITY_MISMATCH"
+    elif observed.reason_codes != expected.reason_codes:
+        code = "REVIEW_ESCALATION_REASONS_MISMATCH"
+    elif observed.decision != expected.decision:
+        code = "REVIEW_ESCALATION_DECISION_MISMATCH"
+    if code is not None:
+        raise ReviewPolicyCorrectionRequired(
+            ReviewPolicyCorrection(code=code, expected=expected, observed=observed)
+        )
+
+
+def validate_review_correction_against_source(
+    *,
+    directive: WorkflowReviewCorrectionDirective,
+    authoring: ContentTeamAuthoringRoleResultV12,
+    source: ContentTeamReviewRoleResultV12,
+    escalation_directive: WorkflowReviewEscalationDirective | None,
+) -> None:
+    """Recompute an issue from validated sources; a self-hash is not policy authority."""
+
+    if (
+        authoring.workflow_id != directive.workflow_id
+        or source.workflow_id != directive.workflow_id
+        or authoring.job_id != directive.reviewed_authoring.job_id
+        or authoring.artifact.logical_artifact_id
+        != directive.reviewed_authoring.logical_artifact_id
+        or authoring.artifact.revision_id != directive.reviewed_authoring.revision_id
+        or source.job_id != directive.source_review.job_id
+        or source.artifact.logical_artifact_id != directive.source_review.logical_artifact_id
+        or source.artifact.revision_id != directive.source_review.revision_id
+    ):
+        raise ValueError("review correction source identities differ")
+    assessment = source.output.independent_review_report.escalation_assessment
+    if assessment.review_pass != directive.review_pass:
+        raise ValueError("review correction source pass differs")
+    if directive.review_pass == "PRIMARY":
+        if escalation_directive is not None:
+            raise ValueError("primary review correction has an escalation directive")
+        try:
+            validate_primary_review_escalation_policy(authoring=authoring, review=source)
+        except ReviewPolicyCorrectionRequired as exc:
+            observed_issue = exc.issue
+        else:
+            raise ValueError("review correction source has no correctable policy defect")
+    else:
+        if (
+            escalation_directive is None
+            or escalation_directive.workflow_id != directive.workflow_id
+            or escalation_directive.reviewed_authoring != directive.reviewed_authoring
+            or escalation_directive.structural_complexity_score
+            != structural_review_complexity(authoring)
+            or assessment.source_review_artifact is None
+            or assessment.source_review_artifact.model_dump(mode="json")
+            != {
+                "logical_artifact_id": escalation_directive.source_review.logical_artifact_id,
+                "revision_id": escalation_directive.source_review.revision_id,
+                "content_hash": escalation_directive.source_review.content_hash,
+                "result_schema": escalation_directive.source_review.result_schema,
+            }
+        ):
+            raise ValueError("escalated review correction source directive differs")
+        try:
+            _validate_review_routing_values(
+                expected=ReviewRoutingPolicyValues(
+                    structural_complexity_score=escalation_directive.structural_complexity_score,
+                    reason_codes=escalation_directive.reason_codes,
+                    decision="COMPLETED",
+                ),
+                observed=ReviewRoutingPolicyValues(
+                    structural_complexity_score=assessment.structural_complexity_score,
+                    reason_codes=assessment.reason_codes,
+                    decision=assessment.decision,
+                ),
+            )
+        except ReviewPolicyCorrectionRequired as exc:
+            observed_issue = exc.issue
+        else:
+            raise ValueError("review correction source has no correctable policy defect")
+    if observed_issue != directive.issue:
+        raise ValueError("review correction issue differs from the independently computed policy")
 
 
 def build_review_escalation_directive(
@@ -150,12 +259,15 @@ def validate_escalated_review_against_source(
     source_assessment = source_report.escalation_assessment
     final_assessment = final_report.escalation_assessment
     if (
-        source_assessment.review_pass != "PRIMARY"
+        source.workflow_id != directive.workflow_id
+        or escalated.workflow_id != directive.workflow_id
+        or source.job_id != directive.source_review.job_id
+        or source.artifact.logical_artifact_id != directive.source_review.logical_artifact_id
+        or source.artifact.revision_id != directive.source_review.revision_id
+        or source_assessment.review_pass != "PRIMARY"
         or source_assessment.reason_codes != directive.reason_codes
         or source_assessment.structural_complexity_score != directive.structural_complexity_score
         or final_assessment.review_pass != "ESCALATED"
-        or final_assessment.reason_codes != directive.reason_codes
-        or final_assessment.structural_complexity_score != directive.structural_complexity_score
         or final_assessment.source_review_artifact is None
         or final_assessment.source_review_artifact.model_dump(mode="json")
         != {
@@ -196,6 +308,21 @@ def validate_escalated_review_against_source(
             raise ValueError("escalated review candidate evidence differs")
         if final_candidate.disposition == "UNCERTAIN":
             raise ValueError("escalated review did not close a candidate")
+
+    # Trust closure precedes correctable metadata: a result with changed evidence must never
+    # enter a correction merely because it also miscounts the draft structure.
+    _validate_review_routing_values(
+        expected=ReviewRoutingPolicyValues(
+            structural_complexity_score=directive.structural_complexity_score,
+            reason_codes=directive.reason_codes,
+            decision="COMPLETED",
+        ),
+        observed=ReviewRoutingPolicyValues(
+            structural_complexity_score=final_assessment.structural_complexity_score,
+            reason_codes=final_assessment.reason_codes,
+            decision=final_assessment.decision,
+        ),
+    )
 
 
 def validate_review_escalation_history(

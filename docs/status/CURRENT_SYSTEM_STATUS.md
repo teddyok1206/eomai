@@ -2,6 +2,22 @@
 
 Latest recorded update: 2026-10-09 (UTC). Older sections retain their observation dates.
 
+## Bounded review-result correction — source candidate, 2026-10-09 (UTC)
+
+The latest failed single-item request had committed authoring and review Artifacts; post-result
+classification rejected reviewer-authored complexity 2 when the typed draft scores 1. The source
+candidate now routes only declared complexity/reason/decision mismatches to a second or third proof,
+with exact prior review and expected/observed feedback. Authoring/image/Graph/Pack pins remain fixed.
+Infrastructure retries cannot reset this budget; content rework and stronger review retain their
+existing policies. Integrity failures remain terminal, not corrections.
+
+Unit/domain/Catalog/dependency and actual wheel-resource gates: 175 PASS. Disposable PostgreSQL
+correction gates: 22 PASS, including separate concurrent commands, crash recovery, third-proof
+exhaustion and unchanged image/tier pins. The combined existing Workflow/submission/correction
+PostgreSQL gate is 66 PASS (including those 22); operational installation is separately pending
+at this source checkpoint. No model/Item/GPU/HWPX execution or historical
+failed-workflow restart is claimed. See [ADR 0160](../adr/0160-natural-stimulus-presentation.md).
+
 ## Natural prose and native table presentation activation — 2026-10-09 14:35 UTC
 
 The shared API/Catalog/Orchestrator release is installed from
