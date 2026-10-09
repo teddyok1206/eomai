@@ -8,6 +8,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from eom_hwpx_contracts import uncropped_image_bounds
 from lxml import etree  # type: ignore[import-untyped]
 from PIL import Image
 
@@ -319,7 +320,16 @@ def _image_paragraph(paragraph_template: etree._Element, image: bytes) -> etree.
     etree.SubElement(rectangle, HC + "pt2", {"x": str(original_width), "y": str(original_height)})
     etree.SubElement(rectangle, HC + "pt3", {"x": "0", "y": str(original_height)})
     etree.SubElement(
-        picture, HP + "imgClip", {"left": "0", "top": "0", "right": "0", "bottom": "0"}
+        picture,
+        HP + "imgClip",
+        {
+            key: str(value)
+            for key, value in zip(
+                ("left", "top", "right", "bottom"),
+                uncropped_image_bounds(original_width, original_height),
+                strict=True,
+            )
+        },
     )
     etree.SubElement(
         picture, HP + "inMargin", {"left": "0", "right": "0", "top": "0", "bottom": "0"}

@@ -96,6 +96,7 @@ from eom_hwpx_contracts.models import (
     content_team_image_slot_projection,
     validate_content_team_image_bindings,
 )
+from eom_hwpx_contracts.picture_geometry import uncropped_image_bounds
 from eom_hwpx_contracts.validation import load_schema, parse_contract_json, validate_contract
 
 __all__ = [
@@ -190,6 +191,7 @@ __all__ = [
     "project_content_team_equation_script",
     "serialize_content_team_markdown",
     "statement_texts",
+    "uncropped_image_bounds",
     "validate_content_team_image_bindings",
     "validate_contract",
 ]

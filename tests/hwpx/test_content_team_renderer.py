@@ -97,6 +97,17 @@ def _assert_separate_png_cells_and_text_label_row(
         assert addresses[0].get("rowAddr") == "0"
         assert addresses[0].get("colAddr") == str(ordinal)
         assert node.get("binaryItemIDRef") == f"eomContentTeamVisual{ordinal}"
+        picture = node.getparent()
+        assert local_name(picture.tag) == "pic"
+        dimensions = next(child for child in picture if local_name(child.tag) == "imgDim")
+        clip = next(child for child in picture if local_name(child.tag) == "imgClip")
+        assert clip.attrib == {
+            "left": "0",
+            "top": "0",
+            "right": dimensions.get("dimwidth"),
+            "bottom": dimensions.get("dimheight"),
+        }
+        assert int(clip.get("right", "0")) > 0 and int(clip.get("bottom", "0")) > 0
 
     if visual_layout == "IMAGE_ONLY":
         assert set(cells) == {("0", "0")}

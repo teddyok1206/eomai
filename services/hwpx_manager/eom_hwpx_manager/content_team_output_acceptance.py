@@ -35,6 +35,7 @@ from eom_hwpx_contracts import (
     ContentTeamOutputAcceptanceV1,
     ContentTeamTable,
     project_content_team_equation_script,
+    uncropped_image_bounds,
     validate_content_team_image_bindings,
 )
 from eom_identifiers import content_sha256
@@ -675,6 +676,35 @@ def _unlabeled_image_material_projection(
     return _output_cell_tokens_outside_nested_tables(cell)
 
 
+def _picture_geometry_values(
+    picture: ElementTree.Element, name: str, attributes: tuple[str, ...]
+) -> tuple[int, ...]:
+    nodes = _direct_children(picture, name)
+    if len(nodes) != 1:
+        _fail("content-team HWPX image geometry is missing or duplicated")
+    try:
+        return tuple(int(nodes[0].attrib[attribute]) for attribute in attributes)
+    except (KeyError, ValueError):
+        _fail("content-team HWPX image geometry is invalid")
+
+
+def _validate_uncropped_image_geometry(picture: ElementTree.Element) -> None:
+    width, height = _picture_geometry_values(picture, "imgdim", ("dimwidth", "dimheight"))
+    try:
+        full_bounds = uncropped_image_bounds(width, height)
+    except ValueError:
+        _fail("content-team HWPX original image dimensions are invalid")
+    # Package membership and PNG hashes alone do not prove the approved image is visible.
+    clip = _picture_geometry_values(picture, "imgclip", ("left", "top", "right", "bottom"))
+    original = _picture_geometry_values(picture, "orgsz", ("width", "height"))
+    current = _picture_geometry_values(picture, "cursz", ("width", "height"))
+    display = _picture_geometry_values(picture, "sz", ("width", "height"))
+    if clip != full_bounds or original != (width, height):
+        _fail("content-team HWPX image clipping hides or changes the approved image")
+    if current != display or any(value <= 0 for value in display):
+        _fail("content-team HWPX image display dimensions are invalid")
+
+
 def _binary_references(
     section: ElementTree.Element,
     manifest_by_id: dict[str, str],
@@ -703,6 +733,11 @@ def _binary_references(
     if not image_nodes:
         return tuple(hashes)
     parent_by_child = {child: parent for parent in section.iter() for child in tuple(parent)}
+    for image_node in image_nodes:
+        picture = parent_by_child.get(image_node)
+        if picture is None or _local_name(picture.tag).casefold() != "pic":
+            _fail("content-team HWPX image reference has no picture geometry")
+        _validate_uncropped_image_geometry(picture)
 
     def ancestor(element: ElementTree.Element, name: str) -> ElementTree.Element:
         current = element
