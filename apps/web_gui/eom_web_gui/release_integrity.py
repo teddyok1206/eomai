@@ -42,6 +42,8 @@ REQUIRED_RUNTIME_FILES = frozenset(
         "static/eom-mark.svg",
         "static/execution-preset-editor.js",
         "static/general-chat.js",
+        "static/guide-content.js",
+        "static/guide-mode.js",
         "static/hwpx-delivery-target.js",
         "static/index.html",
         "static/item-preview.js",

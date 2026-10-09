@@ -85,6 +85,15 @@ code, pre, .id-input, .inspector-list dd, .draft-meta { font-family: "JetBrains 
 .global-search input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--eom-text); }
 .global-search:focus-within { border-color: var(--eom-blue-300); background: white; box-shadow: 0 0 0 3px rgba(79, 70, 229, .11); }
 .global-search input:focus { border: 0 !important; box-shadow: none; }
+.guide-mode-toggle { display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0; white-space: nowrap; }
+.guide-mode-switch { width: 26px; height: 16px; padding: 2px; border-radius: 8px; background: #d2d2d7; transition: background-color .16s ease; }
+.guide-mode-switch::after { content: ""; display: block; width: 12px; height: 12px; border-radius: 50%; background: white; box-shadow: 0 1px 2px rgba(0, 0, 0, .12); transition: transform .16s ease; }
+.button.guide-mode-toggle[aria-checked="true"] { color: var(--eom-blue-800); background: var(--eom-blue-50); }
+.guide-mode-toggle[aria-checked="true"] .guide-mode-switch { background: var(--eom-primary); }
+.guide-mode-toggle[aria-checked="true"] .guide-mode-switch::after { transform: translateX(10px); }
+.guide-tooltip { position: fixed; z-index: 90; width: min(360px, calc(100vw - 24px)); padding: 14px 16px; overflow: auto; border: 1px solid var(--eom-blue-200); border-radius: var(--eom-radius-card); background: var(--eom-surface); color: var(--eom-text); box-shadow: 0 4px 24px rgba(0, 0, 0, .12); font-size: var(--eom-type-label); word-break: keep-all; overflow-wrap: anywhere; }
+.guide-tooltip strong { display: block; font-size: var(--eom-type-body); }
+.guide-tooltip p { margin: 6px 0 0; line-height: 1.65; color: var(--eom-graphite); }
 .mobile-menu { display: none; border: 0; background: transparent; font-size: 22px; }
 .mobile-menu:focus-visible, .nav-item:focus-visible, .button:focus-visible, .brand:focus-visible { outline: 3px solid rgba(79, 70, 229, .3); outline-offset: 2px; }
 
@@ -681,6 +690,9 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 @media (max-width: 700px) {
   .topbar { padding: 8px 12px; }
   .global-search { width: 48vw; }
+  .topbar .command-bar { min-width: 0; flex: 1; }
+  .topbar .global-search { width: 100%; min-width: 0; }
+  .guide-mode-toggle { padding: 6px !important; font-size: var(--eom-type-caption); }
   .command-bar > .button, .user-block span:first-child, #logout { display: none; }
   .main-area { padding: 15px 12px 30px; }
   .page-heading { display: block; }

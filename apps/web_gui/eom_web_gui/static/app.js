@@ -1,4 +1,5 @@
 import {createGeneralChat} from "./general-chat.js";
+import {installGuideMode} from "./guide-mode.js";
 import {
   curriculumAncestors,
   curriculumOptionsForSelection,
@@ -2343,6 +2344,7 @@ function operatorRoleChoices(excluded = []) {
 
 function operatorActionButton(label, permission, handler, danger = false) {
   const button = actionButton(label, handler, !danger);
+  button.dataset.guideKey = permission;
   if (danger) button.classList.add("danger");
   button.disabled = !hasPermission(state.operator, permission);
   return button;
@@ -5720,6 +5722,7 @@ async function logout() {
 }
 
 async function boot() {
+  installGuideMode();
   const initialNavigationVersion = state.navigationVersion;
   const initialRoute = studioRouteFromLocation(window.location);
   await loadPresentationVocabulary();
