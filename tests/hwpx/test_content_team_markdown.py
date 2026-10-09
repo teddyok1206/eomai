@@ -235,6 +235,78 @@ def test_direct_choice_form_from_source_prompt_and_program_round_trips() -> None
 
 
 @pytest.mark.parametrize(
+    "introduction,material,expected_layout,expected_kinds",
+    [
+        (
+            "다음은 두 대상의 측정 결과에 대한 설명이다.",
+            "A의 속력은 $3$이고 동쪽으로 이동한다. B의 속력은 $5$이고 서쪽으로 이동한다.",
+            "NONE",
+            (),
+        ),
+        (
+            "표는 두 대상의 속력과 운동 방향을 나타낸 것이다.",
+            "| 대상 | 속력 | 방향 |\n|---|---:|:---:|\n| A | $3$ | 동 |\n| B | $5$ | 서 |",
+            "TABLE_ONLY",
+            ("TABLE",),
+        ),
+        (
+            "표는 두 실험에서 관찰된 현상을 나타낸 것이다.",
+            "| 실험 | 관찰 결과 |\n|---|---|\n| A | 기포가 발생함 |\n| B | 기포가 발생하지 않음 |",
+            "TABLE_ONLY",
+            ("TABLE",),
+        ),
+        (
+            "그림은 두 대상의 위치를, 표는 대상별 관측 결과를 나타낸 것이다.",
+            "그림\n\n| 대상 | 관측 결과 |\n|---|---|\n"
+            "| A | 변화가 관찰됨 |\n| B | 변화가 관찰되지 않음 |",
+            "IMAGE_TABLE",
+            ("IMAGE", "TABLE"),
+        ),
+        (
+            "표는 대상별 관측 결과를, 그림은 두 대상의 위치를 나타낸 것이다.",
+            "| 대상 | 관측 결과 |\n|---|---|\n"
+            "| A | 변화가 관찰됨 |\n| B | 변화가 관찰되지 않음 |\n\n그림",
+            "TABLE_IMAGE",
+            ("TABLE", "IMAGE"),
+        ),
+    ],
+)
+def test_prose_and_small_qualitative_tables_do_not_imply_a_data_box(
+    introduction: str,
+    material: str,
+    expected_layout: str,
+    expected_kinds: tuple[str, ...],
+) -> None:
+    # Synthetic grammar fixtures, not claims about the educational quality of a generated item.
+    bottom_and_answer = DIRECT_CHOICE_ITEM.split("자료에 대한 설명으로", 1)[1]
+    source = (
+        f"8. {introduction}\n\n{material}\n\n자료에 대한 설명으로{bottom_and_answer}"
+    ).encode()
+    parsed = parse_content_team_markdown(source)
+
+    assert introduction in parsed.stem
+    assert parsed.labeled_blocks == ()
+    assert parsed.visual_layout == expected_layout
+    assert tuple(visual.kind for visual in parsed.visuals) == expected_kinds
+    assert all(visual.label == "" for visual in parsed.visuals)
+    if not expected_kinds:
+        assert material in parsed.stem
+    else:
+        table = next(visual for visual in parsed.visuals if visual.kind == "TABLE")
+        assert table.headers[0] in ("대상", "실험")
+        assert tuple(row[0] for row in table.rows) == ("A", "B")
+        assert len(table.rows) == 2
+
+    materialized = serialize_content_team_markdown(parsed)
+    assert "<자료>".encode() not in materialized
+    assert "[자료]".encode() not in materialized
+    assert "\n표\n".encode() not in materialized
+    assert parse_content_team_markdown(materialized).model_dump(
+        mode="json", exclude={"source_sha256"}
+    ) == parsed.model_dump(mode="json", exclude={"source_sha256"})
+
+
+@pytest.mark.parametrize(
     "source,match",
     [
         (GENERAL_ITEM.replace("1. 그림과", "# 1. 그림과"), "presentation syntax"),

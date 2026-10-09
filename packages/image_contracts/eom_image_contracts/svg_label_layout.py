@@ -6,7 +6,8 @@ import struct
 import xml.etree.ElementTree as ET
 import zlib
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from types import MappingProxyType
 from typing import Annotated, Final, Literal, NamedTuple
 
 from pydantic import Field, model_validator
@@ -26,6 +27,14 @@ SVG_LABEL_LAYOUT_PACK_VERSION: Final = "1.20.14"
 SVG_LABEL_LAYOUT_PACK_BUNDLE_SHA256: Final = (
     "sha256:72150b33965cbd70465cd13738df41eef66d9a9ed51d7a16b84897227c53a391"
 )
+SVG_LABEL_LAYOUT_PACK_BUNDLES: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        SVG_LABEL_LAYOUT_PACK_VERSION: SVG_LABEL_LAYOUT_PACK_BUNDLE_SHA256,
+        # The editorial-only successor retains the exact image profile, prompt, and policy.
+        "1.20.15": "sha256:63785945ceaa226dcb63a278cb08cbc82f8dcf35b0a9e7df9b65dde5810f6f6c",
+    }
+)
+SVG_LABEL_LAYOUT_PACK_BUNDLE_SHA256S: Final = frozenset(SVG_LABEL_LAYOUT_PACK_BUNDLES.values())
 
 
 class SvgLabelLayoutFontSpec(NamedTuple):

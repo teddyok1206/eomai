@@ -42,8 +42,7 @@ from eom_hwpx_contracts import (
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes, sha256_file
 from eom_image_contracts import (
     SVG_ALLOWED_FONT_FAMILIES,
-    SVG_LABEL_LAYOUT_PACK_BUNDLE_SHA256,
-    SVG_LABEL_LAYOUT_PACK_VERSION,
+    SVG_LABEL_LAYOUT_PACK_BUNDLES,
     LocalImageProviderBinding,
     LocalImageProviderBindingV2,
     LocalImageProviderBindingV3,
@@ -204,25 +203,20 @@ ComponentType = Literal[
     "UPPER_STEM", "IMAGE_SPEC", "REVIEW_REPORT", "METADATA", "ITEM_CONTENT", "IMAGE"
 ]
 
-
-def _enforces_svg_label_layout(workflow: WorkflowInstanceRecord) -> bool:
-    """Bind the new semantic rule to one immutable Content Pack release."""
-
-    content_pack = workflow.runtime_context.get("content_pack")
-    return (
-        isinstance(content_pack, dict)
-        and content_pack.get("version") == SVG_LABEL_LAYOUT_PACK_VERSION
-        and content_pack.get("release_sha256") == SVG_LABEL_LAYOUT_PACK_BUNDLE_SHA256
-    )
-
-
-def _local_image_prompt_contract(
-    workflow: WorkflowInstanceRecord,
-) -> LocalGpuPromptContract:
-    """Select only from the immutable Content Pack version pinned at workflow start."""
-
-    content_pack = workflow.runtime_context.get("content_pack")
-    if isinstance(content_pack, dict) and content_pack.get("version") in {
+# Explicit immutable release families, not a semver range or an implicit latest policy.
+# Reuse each membership set across brief and image bindings so a compatible editorial
+# successor cannot acquire a different material schema or lose its image policy.
+CONTENT_TEAM_MATERIAL_V5_PACK_VERSIONS = frozenset({"1.20.12", "1.20.13", "1.20.14", "1.20.15"})
+CONTENT_TEAM_MATERIAL_V4_PACK_VERSIONS = frozenset(
+    {
+        "1.16.0",
+        "1.16.1",
+        "1.17.0",
+        "1.18.0",
+        "1.19.0",
+        "1.20.0",
+        "1.20.1",
+        "1.20.2",
         "1.20.3",
         "1.20.4",
         "1.20.5",
@@ -232,10 +226,59 @@ def _local_image_prompt_contract(
         "1.20.9",
         "1.20.10",
         "1.20.11",
-        "1.20.12",
-        "1.20.13",
-        "1.20.14",
-    }:
+    }
+)
+CONTENT_TEAM_PACK_VERSIONS = (
+    frozenset(
+        {
+            "1.12.0",
+            "1.13.0",
+            "1.14.0",
+            "1.15.0",
+            "1.15.1",
+            "1.15.2",
+            "1.15.3",
+            "1.15.4",
+            "1.15.5",
+            "1.15.6",
+            "1.15.7",
+            "1.15.8",
+            "1.15.9",
+        }
+    )
+    | CONTENT_TEAM_MATERIAL_V4_PACK_VERSIONS
+    | CONTENT_TEAM_MATERIAL_V5_PACK_VERSIONS
+)
+ASSESSMENT_LINE_ART_PACK_VERSIONS = (
+    frozenset({"1.20.5", "1.20.6", "1.20.7", "1.20.8", "1.20.9", "1.20.10", "1.20.11"})
+    | CONTENT_TEAM_MATERIAL_V5_PACK_VERSIONS
+)
+ASSESSMENT_REFERENCE_COMPOSITION_PACK_VERSIONS = (
+    frozenset({"1.20.3", "1.20.4"}) | ASSESSMENT_LINE_ART_PACK_VERSIONS
+)
+
+
+def _enforces_svg_label_layout(workflow: WorkflowInstanceRecord) -> bool:
+    """Bind the semantic rule to exact immutable Content Pack version/hash pairs."""
+
+    content_pack = workflow.runtime_context.get("content_pack")
+    if not isinstance(content_pack, dict):
+        return False
+    version = content_pack.get("version")
+    expected_hash = SVG_LABEL_LAYOUT_PACK_BUNDLES.get(version) if isinstance(version, str) else None
+    return expected_hash is not None and content_pack.get("release_sha256") == expected_hash
+
+
+def _local_image_prompt_contract(
+    workflow: WorkflowInstanceRecord,
+) -> LocalGpuPromptContract:
+    """Select only from the immutable Content Pack version pinned at workflow start."""
+
+    content_pack = workflow.runtime_context.get("content_pack")
+    if (
+        isinstance(content_pack, dict)
+        and content_pack.get("version") in ASSESSMENT_REFERENCE_COMPOSITION_PACK_VERSIONS
+    ):
         return "ASSESSMENT_REFERENCE_COMPOSITION_V3"
     if isinstance(content_pack, dict) and content_pack.get("version") in {"1.20.1", "1.20.2"}:
         return "ASSESSMENT_MINIMAL_LINE_ART_V2"
@@ -261,21 +304,7 @@ def _uses_v1_reference_conditioning(
     return (
         isinstance(provider, LocalImageProviderBinding)
         and isinstance(content_pack, dict)
-        and content_pack.get("version")
-        in {
-            "1.20.3",
-            "1.20.4",
-            "1.20.5",
-            "1.20.6",
-            "1.20.7",
-            "1.20.8",
-            "1.20.9",
-            "1.20.10",
-            "1.20.11",
-            "1.20.12",
-            "1.20.13",
-            "1.20.14",
-        }
+        and content_pack.get("version") in ASSESSMENT_REFERENCE_COMPOSITION_PACK_VERSIONS
     )
 
 
@@ -635,37 +664,21 @@ class WorkflowCatalogService:
                         ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
                         "base-only simplified-reference binding requires Content Pack 1.20.4",
                     )
-                if isinstance(binding, LocalImageProviderBindingV5) and release.version not in {
-                    "1.20.5",
-                    "1.20.6",
-                    "1.20.7",
-                    "1.20.8",
-                    "1.20.9",
-                    "1.20.10",
-                    "1.20.11",
-                    "1.20.12",
-                    "1.20.13",
-                    "1.20.14",
-                }:
+                if (
+                    isinstance(binding, LocalImageProviderBindingV5)
+                    and release.version not in ASSESSMENT_LINE_ART_PACK_VERSIONS
+                ):
                     raise ContentPackError(
                         ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
-                        "assessment-line-art binding requires Content Pack 1.20.5-1.20.14",
+                        "assessment-line-art binding requires a supported Content Pack release",
                     )
-                if isinstance(binding, LocalImageProviderBindingV6) and release.version not in {
-                    "1.20.5",
-                    "1.20.6",
-                    "1.20.7",
-                    "1.20.8",
-                    "1.20.9",
-                    "1.20.10",
-                    "1.20.11",
-                    "1.20.12",
-                    "1.20.13",
-                    "1.20.14",
-                }:
+                if (
+                    isinstance(binding, LocalImageProviderBindingV6)
+                    and release.version not in ASSESSMENT_LINE_ART_PACK_VERSIONS
+                ):
                     raise ContentPackError(
                         ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
-                        "adaptive-reference line-art binding requires Content Pack 1.20.5-1.20.14",
+                        "adaptive-reference line-art binding requires a supported Pack release",
                     )
                 if isinstance(binding, LocalImageProviderBindingV2) and release.version != "1.20.0":
                     raise ContentPackError(
@@ -2069,94 +2082,23 @@ class WorkflowCatalogService:
         is_material_v4 = (
             isinstance(request.item_brief, ContentTeamItemBriefV4) and not is_material_v5
         )
-        expects_content_team = pack_key == "generated-knowledge-item" and release_version in {
-            "1.12.0",
-            "1.13.0",
-            "1.14.0",
-            "1.15.0",
-            "1.15.1",
-            "1.15.2",
-            "1.15.3",
-            "1.15.4",
-            "1.15.5",
-            "1.15.6",
-            "1.15.7",
-            "1.15.8",
-            "1.15.9",
-            "1.16.0",
-            "1.16.1",
-            "1.17.0",
-            "1.18.0",
-            "1.19.0",
-            "1.20.0",
-            "1.20.1",
-            "1.20.2",
-            "1.20.3",
-            "1.20.4",
-            "1.20.5",
-            "1.20.6",
-            "1.20.7",
-            "1.20.8",
-            "1.20.9",
-            "1.20.10",
-            "1.20.11",
-            "1.20.12",
-            "1.20.13",
-            "1.20.14",
-        }
+        expects_content_team = (
+            pack_key == "generated-knowledge-item" and release_version in CONTENT_TEAM_PACK_VERSIONS
+        )
         if expects_content_team:
             if not is_content_team:
                 raise ContentPackError(
                     ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
                     "content-team pack requires a typed content-team item brief",
                 )
-            expects_material_v5 = release_version in {"1.20.12", "1.20.13", "1.20.14"}
-            expects_material_v4 = release_version in {
-                "1.16.0",
-                "1.16.1",
-                "1.17.0",
-                "1.18.0",
-                "1.19.0",
-                "1.20.0",
-                "1.20.1",
-                "1.20.2",
-                "1.20.3",
-                "1.20.4",
-                "1.20.5",
-                "1.20.6",
-                "1.20.7",
-                "1.20.8",
-                "1.20.9",
-                "1.20.10",
-                "1.20.11",
-            }
+            expects_material_v5 = release_version in CONTENT_TEAM_MATERIAL_V5_PACK_VERSIONS
+            expects_material_v4 = release_version in CONTENT_TEAM_MATERIAL_V4_PACK_VERSIONS
             if expects_material_v5 != is_material_v5 or expects_material_v4 != is_material_v4:
                 raise ContentPackError(
                     ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
                     "Content Pack release and material-aware item brief differ",
                 )
-            if release_version in {
-                "1.16.0",
-                "1.16.1",
-                "1.17.0",
-                "1.18.0",
-                "1.19.0",
-                "1.20.0",
-                "1.20.1",
-                "1.20.2",
-                "1.20.3",
-                "1.20.4",
-                "1.20.5",
-                "1.20.6",
-                "1.20.7",
-                "1.20.8",
-                "1.20.9",
-                "1.20.10",
-                "1.20.11",
-                "1.20.12",
-                "1.20.13",
-                "1.20.14",
-            }:
+            if expects_material_v5 or expects_material_v4:
                 assert isinstance(request.item_brief, ContentTeamItemBriefV4)
                 expected_image_mode = request.item_brief.material_requirement.image_mode
                 expected_image_profile = (

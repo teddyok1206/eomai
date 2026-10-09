@@ -14,7 +14,7 @@ from typing import Final, cast
 from eom_identifiers import content_sha256
 from eom_image_contracts import (
     SVG_LABEL_LAYOUT_FONT_SPECS,
-    SVG_LABEL_LAYOUT_PACK_BUNDLE_SHA256,
+    SVG_LABEL_LAYOUT_PACK_BUNDLE_SHA256S,
     SVG_LABEL_LAYOUT_RENDERER_PATH,
     SvgLabelLayoutValidationError,
     SvgLabelLayoutValidationReceipt,
@@ -41,13 +41,15 @@ def validate_image_result_svg_label_layout(
     result_schema: str,
     plan_document: dict[str, object] | None,
 ) -> tuple[dict[str, object], ...]:
-    """Return per-drawing receipts only for the immutable enforcing Content Pack."""
+    """Return per-drawing receipts only for exact, immutable enforcing Pack identities."""
 
+    pack_sha256 = plan_document.get("content_pack_sha256") if plan_document is not None else None
     if (
         result_schema != "image-result@12.0"
         or not isinstance(result, ContentTeamImageRoleResultV12)
         or plan_document is None
-        or plan_document.get("content_pack_sha256") != SVG_LABEL_LAYOUT_PACK_BUNDLE_SHA256
+        or not isinstance(pack_sha256, str)
+        or pack_sha256 not in SVG_LABEL_LAYOUT_PACK_BUNDLE_SHA256S
     ):
         return ()
     try:

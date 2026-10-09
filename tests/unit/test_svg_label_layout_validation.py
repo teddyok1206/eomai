@@ -11,7 +11,7 @@ import pytest
 from eom_catalog_service.vector_stimulus import validate_vector_drawing_label_layout
 from eom_catalog_service.workflow_catalog import _enforces_svg_label_layout
 from eom_image_contracts import (
-    SVG_LABEL_LAYOUT_PACK_BUNDLE_SHA256,
+    SVG_LABEL_LAYOUT_PACK_BUNDLES,
     SvgLabelLayoutValidationError,
     SvgLabelLayoutValidationReceipt,
     load_schema,
@@ -200,7 +200,10 @@ def test_uniform_light_fill_axis_label_and_korean_label_are_not_false_positives(
     assert tuple(label.text for label in receipt.labels) == ("time", "용액")
 
 
-def test_predecessor_pack_is_not_reinterpreted_but_successor_is_enforced() -> None:
+@pytest.mark.parametrize("bundle_sha256", tuple(SVG_LABEL_LAYOUT_PACK_BUNDLES.values()))
+def test_predecessor_pack_is_not_reinterpreted_but_successor_is_enforced(
+    bundle_sha256: str,
+) -> None:
     result = _result(_drawing(_safe_svg()))
     predecessor = {"content_pack_sha256": "sha256:" + "b" * 64}
     assert (
@@ -215,7 +218,7 @@ def test_predecessor_pack_is_not_reinterpreted_but_successor_is_enforced() -> No
     receipts = validate_image_result_svg_label_layout(
         result=result,
         result_schema="image-result@12.0",
-        plan_document={"content_pack_sha256": SVG_LABEL_LAYOUT_PACK_BUNDLE_SHA256},
+        plan_document={"content_pack_sha256": bundle_sha256},
     )
     assert len(receipts) == 1
     assert receipts[0]["visual_ordinal"] == 0
@@ -238,19 +241,23 @@ def test_orchestrator_validates_layout_before_staging_and_commits_receipt_atomic
     ) < atomic_commit.index("transition_job(")
 
 
-def test_catalog_repeats_validation_only_for_exact_successor_pack_identity() -> None:
+@pytest.mark.parametrize("version,bundle_sha256", tuple(SVG_LABEL_LAYOUT_PACK_BUNDLES.items()))
+def test_catalog_repeats_validation_only_for_exact_successor_pack_identity(
+    version: str,
+    bundle_sha256: str,
+) -> None:
     exact = SimpleNamespace(
         runtime_context={
             "content_pack": {
-                "version": "1.20.14",
-                "release_sha256": SVG_LABEL_LAYOUT_PACK_BUNDLE_SHA256,
+                "version": version,
+                "release_sha256": bundle_sha256,
             }
         }
     )
     stale = SimpleNamespace(
         runtime_context={
             "content_pack": {
-                "version": "1.20.14",
+                "version": version,
                 "release_sha256": "sha256:" + "b" * 64,
             }
         }
