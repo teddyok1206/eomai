@@ -99,10 +99,10 @@ INTEGRATED_SCIENCE_OUTLINE_SHA256 = (
     "sha256:f11389c8ab26c2bd5b93acf66fe92d30fea9c1d0bc7e6b91a6b6751fdccb5108"
 )
 INTEGRATED_SCIENCE_CORPUS_KEY = "integrated-science-textbooks"
-# Grounding revalidates pinned Artifact/Graph permissions through the owner's
-# bounded 45-second RPC. Leave 5 seconds for HTTP overhead; ordinary reads keep
+# Owner operations revalidate pinned evidence and use a bounded 45-second RPC.
+# Leave 5 seconds for HTTP overhead; Catalog searches and other API requests keep
 # their configured deadline. A timeout does not replay or regenerate a turn.
-CHAT_GROUNDING_READ_TIMEOUT_SECONDS = 50.0
+CHAT_OWNER_HTTP_TIMEOUT_SECONDS = 50.0
 
 
 def _document_review_view(value: object) -> DocumentReviewView:
@@ -871,7 +871,12 @@ class HttpApplicationGateway:
             raise GatewayError(status=502, code="CHAT_KNOWLEDGE_RESPONSE_INVALID") from exc
 
     async def general_chat_slot(self, session: WebSession) -> ChatSlot:
-        response = await self._authorized(session, "GET", "/api/v1/general-chat/slot")
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/general-chat/slot",
+            timeout=CHAT_OWNER_HTTP_TIMEOUT_SECONDS,
+        )
         try:
             return ChatSlot.model_validate(response.json())
         except ValueError as exc:
@@ -879,7 +884,11 @@ class HttpApplicationGateway:
 
     async def general_chat_list(self, session: WebSession, cursor: str | None) -> ChatList:
         response = await self._authorized(
-            session, "GET", "/api/v1/general-chat/conversations", params={"cursor": cursor}
+            session,
+            "GET",
+            "/api/v1/general-chat/conversations",
+            params={"cursor": cursor},
+            timeout=CHAT_OWNER_HTTP_TIMEOUT_SECONDS,
         )
         try:
             return ChatList.model_validate(response.json())
@@ -895,6 +904,7 @@ class HttpApplicationGateway:
             "/api/v1/general-chat/conversations",
             json=value.model_dump(mode="json", exclude={"idempotency_key"}),
             headers={"Idempotency-Key": value.idempotency_key},
+            timeout=CHAT_OWNER_HTTP_TIMEOUT_SECONDS,
         )
         try:
             return ChatConversation.model_validate(response.json())
@@ -909,6 +919,7 @@ class HttpApplicationGateway:
             "GET",
             f"/api/v1/general-chat/conversations/{conversation_id}",
             params={"cursor": cursor},
+            timeout=CHAT_OWNER_HTTP_TIMEOUT_SECONDS,
         )
         try:
             return ChatConversation.model_validate(response.json())
@@ -924,6 +935,7 @@ class HttpApplicationGateway:
             f"/api/v1/general-chat/conversations/{conversation_id}/turns",
             json=value.model_dump(mode="json", exclude={"idempotency_key"}),
             headers={"Idempotency-Key": value.idempotency_key},
+            timeout=CHAT_OWNER_HTTP_TIMEOUT_SECONDS,
         )
         try:
             return ChatConversation.model_validate(response.json())
@@ -939,6 +951,7 @@ class HttpApplicationGateway:
             f"/api/v1/general-chat/conversations/{conversation_id}/grounded-turns",
             json=value.model_dump(mode="json", exclude={"idempotency_key"}),
             headers={"Idempotency-Key": value.idempotency_key},
+            timeout=CHAT_OWNER_HTTP_TIMEOUT_SECONDS,
         )
         try:
             return ChatConversation.model_validate(response.json())
@@ -953,7 +966,7 @@ class HttpApplicationGateway:
             "POST",
             f"/api/v1/general-chat/conversations/{conversation_id}/grounding",
             json=value.model_dump(mode="json"),
-            timeout=CHAT_GROUNDING_READ_TIMEOUT_SECONDS,
+            timeout=CHAT_OWNER_HTTP_TIMEOUT_SECONDS,
         )
         try:
             result = ChatGroundingViewsV2.model_validate(response.json())

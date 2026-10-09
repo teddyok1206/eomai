@@ -104,3 +104,24 @@ timeout. Full Web regression: **283 PASS**, mypy 1 PASS, Ruff/format/diff checks
 PASS. This Web-only change does not invalidate the preceding disposable-DB
 52 PASS; there is no persistence change. Live source-card read and same-evidence
 follow-up still need acceptance.
+
+The read-only Web successor `71e2aaf6db19c4f43624e5cb7d30e8c9acf590d9`
+was installed and its 44-file RECORD verified. Actual HTTPS source cards and
+Markdown then displayed successfully. The single planned follow-up exposed the
+same deadline at submission: the browser returned 503 while turn
+`chatturn_0fe3fba3de794bafda5ef3db8cc2af87` was already admitted and subsequently
+COMPLETED. A read-only lookup of the same conversation found exactly the original
+and follow-up turns. There was **no resubmission or new identity**.
+
+The adapter therefore assigns the same finite deadline to its seven supported
+Orchestrator-owner operations (slot/list/create/read/submit/grounded-submit/
+grounding), not just the source-card symptom. Catalog knowledge search and all
+other API calls keep their ordinary configured limits. The existing authoritative
+owner RPC still limits actual work to 45 seconds. No timeout is interpreted as
+proof of nonprocessing; idempotency and error semantics are unchanged. Subsequent
+acceptance is read-only recovery/display of these two already-completed turns,
+not another inference cycle.
+
+All seven owner-operation deadline/no-replay cases and the ordinary-request
+deadline guard pass. Full Web successor suite: **289 PASS**, mypy 1 PASS,
+Ruff/format/diff PASS. There is no API/owner/schema/persistence change.

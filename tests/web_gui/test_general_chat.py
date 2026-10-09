@@ -137,7 +137,10 @@ async def test_grounding_read_deadline_covers_owner_rpc_without_widening_other_r
                     ],
                 },
             )
-        assert request.extensions["timeout"]["read"] == 5
+        if request.url.path.endswith("/logout"):
+            assert request.extensions["timeout"]["read"] == 5
+            return httpx.Response(200, json={})
+        assert request.extensions["timeout"]["read"] == 50
         return httpx.Response(200, json=ChatSlot(state="READY").model_dump(mode="json"))
 
     gateway = HttpApplicationGateway(
@@ -153,20 +156,26 @@ async def test_grounding_read_deadline_covers_owner_rpc_without_widening_other_r
         )
         assert view.values[0].turn_id == "chatturn_" + "1" * 32
         assert (await gateway.general_chat_slot(_session())).state == "READY"
-        assert len(calls) == 2
+        await gateway.logout(_session())
+        assert len(calls) == 3
     finally:
         await gateway.close()
 
 
 @pytest.mark.anyio
-async def test_grounding_deadline_failure_does_not_replay_or_submit_generation():
-    from eom_web_gui.chat_grounding_contracts import ChatGroundingSubmission
+@pytest.mark.parametrize(
+    "operation", ["slot", "list", "create", "get", "submit", "grounded_submit", "grounding"]
+)
+async def test_owner_deadline_failure_does_not_replay_or_submit_generation(operation):
+    from eom_web_gui.chat_grounding_contracts import (
+        ChatGroundedTurnSubmission,
+        ChatGroundingSubmission,
+    )
 
     calls = []
 
     def handler(request):
         calls.append(request)
-        assert request.url.path.endswith("/grounding")
         assert request.extensions["timeout"]["read"] == 50
         raise httpx.ReadTimeout("private upstream detail", request=request)
 
@@ -178,10 +187,33 @@ async def test_grounding_deadline_failure_does_not_replay_or_submit_generation()
         transport=httpx.MockTransport(handler),
     )
     try:
+        session = _session()
+        intent = "studio:chat:test-0001"
+        actions = {
+            "slot": lambda: gateway.general_chat_slot(session),
+            "list": lambda: gateway.general_chat_list(session, None),
+            "create": lambda: gateway.general_chat_create(
+                session, ChatCreateSubmission(title="새 대화", idempotency_key=intent)
+            ),
+            "get": lambda: gateway.general_chat_get(session, CHAT_ID, None),
+            "submit": lambda: gateway.general_chat_submit(
+                session,
+                CHAT_ID,
+                ChatTurnSubmission(text="질문", expected_version=1, idempotency_key=intent),
+            ),
+            "grounded_submit": lambda: gateway.general_chat_grounded_submit(
+                session,
+                CHAT_ID,
+                ChatGroundedTurnSubmission(
+                    text="질문", expected_version=1, selection=None, idempotency_key=intent
+                ),
+            ),
+            "grounding": lambda: gateway.general_chat_grounding(
+                session, CHAT_ID, ChatGroundingSubmission(turn_ids=("chatturn_" + "1" * 32,))
+            ),
+        }
         with pytest.raises(GatewayError) as failure:
-            await gateway.general_chat_grounding(
-                _session(), CHAT_ID, ChatGroundingSubmission(turn_ids=("chatturn_" + "1" * 32,))
-            )
+            await actions[operation]()
         assert failure.value.code == "APPLICATION_API_UNAVAILABLE"
         assert len(calls) == 1
     finally:
