@@ -21,6 +21,7 @@ from eom_protocol.general_chat_grounding import (
 from eom_protocol.general_chat_tools import (
     TOOL_RECORD_SCHEMA,
     ChatReadCommand,
+    ChatSearchCommand,
     ChatToolOutcome,
     ChatToolRecord,
     ChatToolReply,
@@ -33,6 +34,43 @@ from eom_protocol.general_chat_worker_messages import ChatWorkerTicket
 from eom_orchestrator.general_chat_artifacts import ChatEvidencePort
 from eom_orchestrator.general_chat_knowledge import ChatKnowledgePort
 from eom_orchestrator.general_chat_state import ChatError
+
+
+def resolve_item_tool(
+    *,
+    command: ChatReadCommand | ChatSearchCommand,
+    snapshot: ChatKnowledgeSnapshot | None,
+    actor_id: str,
+    knowledge: ChatKnowledgePort,
+) -> ChatToolOutcome:
+    """One existing Item materialization boundary shared by V3 and V4 brokers."""
+    try:
+        if isinstance(command, ChatReadCommand):
+            selection = ChatKnowledgeSelection(
+                references=command.arguments.references, snapshot=snapshot
+            )
+            resolved = knowledge.resolve(
+                actor_id=actor_id, selection=selection, purpose="MATERIALIZE"
+            )
+            if resolved.context is None or resolved.context.selection != selection:
+                raise ChatError("GENERAL_CHAT_POINTER_INVALID")
+            return ChatToolOutcome(
+                status="SUCCEEDED",
+                cards=(),
+                snapshot=selection.snapshot,
+                truncated=False,
+                context=resolved.context,
+                error_code=None,
+            )
+        return knowledge.search(actor_id=actor_id, arguments=command.arguments, snapshot=snapshot)
+    except ChatError as exc:
+        return failed_tool(
+            "CHAT_KNOWLEDGE_FORBIDDEN"
+            if exc.code == "GENERAL_CHAT_FORBIDDEN"
+            else "CHAT_KNOWLEDGE_POINTER_INVALID"
+            if exc.code == "GENERAL_CHAT_POINTER_INVALID"
+            else "CHAT_KNOWLEDGE_UNAVAILABLE"
+        )
 
 
 class ChatToolBroker:
@@ -62,39 +100,12 @@ class ChatToolBroker:
         if error is not None:
             outcome = failed_tool(error)
         else:
-            try:
-                if isinstance(request.command, ChatReadCommand):
-                    selection = ChatKnowledgeSelection(
-                        references=request.command.arguments.references,
-                        snapshot=self.transcript.snapshot,
-                    )
-                    resolved = self.knowledge.resolve(
-                        actor_id=actor_id, selection=selection, purpose="MATERIALIZE"
-                    )
-                    if resolved.context is None:
-                        raise ChatError("GENERAL_CHAT_POINTER_INVALID")
-                    outcome = ChatToolOutcome(
-                        status="SUCCEEDED",
-                        cards=(),
-                        snapshot=selection.snapshot,
-                        truncated=False,
-                        context=resolved.context,
-                        error_code=None,
-                    )
-                else:
-                    outcome = self.knowledge.search(
-                        actor_id=actor_id,
-                        arguments=request.command.arguments,
-                        snapshot=self.transcript.snapshot,
-                    )
-            except ChatError as exc:
-                outcome = failed_tool(
-                    "CHAT_KNOWLEDGE_FORBIDDEN"
-                    if exc.code == "GENERAL_CHAT_FORBIDDEN"
-                    else "CHAT_KNOWLEDGE_POINTER_INVALID"
-                    if exc.code == "GENERAL_CHAT_POINTER_INVALID"
-                    else "CHAT_KNOWLEDGE_UNAVAILABLE"
-                )
+            outcome = resolve_item_tool(
+                command=request.command,
+                snapshot=self.transcript.snapshot,
+                actor_id=actor_id,
+                knowledge=self.knowledge,
+            )
         self.actor_guard()
         record = read_agent(
             "Record",

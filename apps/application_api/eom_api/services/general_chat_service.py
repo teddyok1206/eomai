@@ -21,6 +21,7 @@ from eom_protocol.general_chat_owner_messages import (
 from eom_protocol.general_chat_owner_messages import (
     ChatOwnerPort as GeneralChatOwner,
 )
+from eom_protocol.general_chat_rag_turn import ChatGroundingViewsV2
 
 from eom_api.errors import ApiError
 
@@ -123,7 +124,7 @@ class GeneralChatApplicationService:
 
     def grounding(
         self, *, actor_id: str, conversation_id: str, turn_ids: tuple[str, ...]
-    ) -> ChatGroundingViews:
+    ) -> ChatGroundingViews | ChatGroundingViewsV2:
         return self._call(
             lambda owner: owner.grounding(
                 actor_id=actor_id, conversation_id=conversation_id, turn_ids=turn_ids

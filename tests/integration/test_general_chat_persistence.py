@@ -81,6 +81,202 @@ class AgentKnowledge(SyntheticKnowledge):
         return super().resolve(actor_id=actor_id, selection=selection, purpose=purpose)
 
 
+class RagKnowledge(AgentKnowledge):
+    """Synthetic Catalog port; real claim/Artifact/database admission only."""
+
+    def __init__(self):
+        super().__init__()
+        self.rag_calls = []
+        self.rag_failure = None
+
+    def rag(self, query):
+        from eom_protocol.general_chat_rag_knowledge import (
+            ChatRagAuthorizeCommand,
+            ChatRagCatalogReply,
+            ChatRagPrepareCommand,
+        )
+
+        from tests.unit.general_chat_rag_fixtures import context, scope
+
+        self.rag_calls.append(query)
+        if self.rag_failure:
+            return ChatRagCatalogReply(
+                status="FAILED", scope=None, context=None, error_code=self.rag_failure
+            )
+        command = query.command
+        value = (
+            None
+            if isinstance(command, ChatRagPrepareCommand)
+            else (command.context if isinstance(command, ChatRagAuthorizeCommand) else context())
+        )
+        return ChatRagCatalogReply(
+            status="SUCCEEDED",
+            scope=scope() if value is None else value.scope,
+            context=value,
+            error_code=None,
+        )
+
+
+def rag_execution(chat):
+    from eom_orchestrator.general_chat_native_worker import source_chat_worker_policy
+
+    from tests.unit.general_chat_rag_fixtures import scope
+
+    knowledge = RagKnowledge()
+    chat.owner.knowledge = chat.execution.knowledge = knowledge
+    chat.owner.rag_knowledge = chat.execution.rag_knowledge = knowledge
+    chat.execution.rag_policy = scope().policy
+    identity = ChatExecutionIdentity(
+        boot_id=BOOT, policy=source_chat_worker_policy(model="synthetic-model", protocol=4)
+    )
+    return knowledge, identity
+
+
+def rag_tools(chat, claim, prepared, identity):
+    from eom_orchestrator.general_chat_rag_native import NativeRagChatTools
+    from eom_protocol.general_chat_rag_tools import ChatToolRequestV2
+    from eom_protocol.general_chat_worker_messages import ChatWorkerExecute, ChatWorkerRequest
+
+    envelope = ChatWorkerRequest(
+        schema_version="general-chat-worker-request/4.0",
+        request_id="chatwrpc_" + uuid4().hex,
+        policy_sha256=identity.policy.sha256,
+        command=ChatWorkerExecute(boot_id=identity.boot_id, turn=prepared),
+    )
+    broker = chat.execution.tool_broker(envelope)
+
+    class Port:
+        sequence = 0
+
+        def call(self, command):
+            self.sequence += 1
+            return broker.execute(
+                ChatToolRequestV2(
+                    rpc_request_id=envelope.request_id,
+                    ticket=chat_worker_ticket(prepared, policy_sha256=identity.policy.sha256),
+                    sequence=self.sequence,
+                    command=command,
+                )
+            )
+
+    return NativeRagChatTools(prepared, Port())
+
+
+def test_rag_v4_canonical_admission_history_and_exact_followup_are_idempotent(chat):
+    from eom_protocol.general_chat_rag_turn import ChatGroundingViewsV2, RagChatTurnInput
+
+    from tests.unit.general_chat_rag_fixtures import context, scope
+    from tests.unit.test_general_chat_rag_native import answer
+
+    knowledge, identity = rag_execution(chat)
+    conversation = chat.create()
+    chat.submit(conversation, message="교과서 근거를 찾아 설명해 주세요.")
+    claim = chat.claim()
+    prepared = chat.execution.prepare(claim, identity=identity)
+    assert isinstance(prepared, RagChatTurnInput) and prepared.rag_knowledge is None
+    assert prepared.rag_scope == scope()
+    tools = rag_tools(chat, claim, prepared, identity)
+    tools.call("retrieve_eom_knowledge", {"terms": ["에너지"], "source_classes": ["TEXTBOOK"]})
+    completed = tools.result(reply=answer(), failure=None)
+    chat.execution.complete(claim, completed)
+    chat.execution.complete(claim, completed)
+    assert chat.execution.active_claim() is None
+    receipt = chat.execution.execution_receipt(claim)
+    assert receipt.schema_version == "general-chat-dispatch/4.0"
+    assert receipt.identity == identity
+    view = chat.owner.conversation(
+        actor_id=chat.actors[0], conversation_id=conversation.conversation_id, cursor=None
+    )
+    assert view.messages[-1].text == completed.reply
+    grounding = chat.owner.grounding(
+        actor_id=chat.actors[0],
+        conversation_id=conversation.conversation_id,
+        turn_ids=(claim.turn_id,),
+    )
+    assert isinstance(grounding, ChatGroundingViewsV2)
+    assert grounding.values[0].sources[0].reference == context().sources[0].reference
+    assert grounding.values[0].receipt.verified_rag_references == (context().sources[0].reference,)
+    assert not grounding.values[0].receipt.verified_references
+    assert not hasattr(grounding.values[0].sources[0], "item")
+    assert {query.actor_id for query in knowledge.rag_calls} == {chat.actors[0]}
+    chat.execution.rag_policy = scope().policy.model_copy(update={"sha256": "sha256:" + "b" * 64})
+    chat.submit(view, message="그 근거를 이어서 설명해 주세요.")
+    following_claim = chat.claim()
+    following = chat.execution.prepare(following_claim, identity=identity)
+    assert following.rag_knowledge == context() and following.rag_scope == scope()
+    no_new = rag_tools(chat, following_claim, following, identity)
+    next_answer = no_new.result(reply=answer(), failure=None)
+    assert next_answer.tool_records == ()
+    chat.execution.complete(following_claim, next_answer)
+    assert [query.command.action for query in knowledge.rag_calls].count("PREPARE_CHAT_RAG") == 1
+    assert [query.command.action for query in knowledge.rag_calls].count("RETRIEVE_CHAT_RAG") == 1
+    with pytest.raises(ChatError, match="GENERAL_CHAT_NOT_FOUND"):
+        chat.owner.conversation(
+            actor_id=chat.actors[1], conversation_id=conversation.conversation_id, cursor=None
+        )
+    knowledge.rag_failure = "CHAT_KNOWLEDGE_FORBIDDEN"
+    with pytest.raises(ChatError, match="GENERAL_CHAT_FORBIDDEN"):
+        chat.owner.conversation(
+            actor_id=chat.actors[0], conversation_id=conversation.conversation_id, cursor=None
+        )
+
+
+def test_rag_revoked_after_read_cannot_commit_success_but_failure_receipt_is_preserved(chat):
+    from tests.unit.test_general_chat_rag_native import answer
+
+    knowledge, identity = rag_execution(chat)
+    conversation = chat.create()
+    chat.submit(conversation)
+    claim = chat.claim()
+    prepared = chat.execution.prepare(claim, identity=identity)
+    tools = rag_tools(chat, claim, prepared, identity)
+    tools.call("retrieve_eom_knowledge", {"terms": ["에너지"], "source_classes": ["TEXTBOOK"]})
+    completed = tools.result(reply=answer(), failure=None)
+    knowledge.rag_failure = "CHAT_KNOWLEDGE_FORBIDDEN"
+    with pytest.raises(ChatError, match="GENERAL_CHAT_FORBIDDEN"):
+        chat.execution.complete(claim, completed)
+    assert chat.execution.active_claim() == claim
+    failed = tools.result(reply=None, failure="CODEX_TURN_FAILED")
+    chat.execution.complete(claim, failed)
+    assert chat.execution.active_claim() is None
+    assert len(failed.tool_records) == 1 and failed.answer is None
+    with chat.repository.read_snapshot() as session:
+        row = chat.repository.turn(session, claim.turn_id)
+        assert row.state == "FAILED" and row.failure_code == "CODEX_TURN_FAILED"
+
+
+def test_rag_initial_permission_denial_keeps_plain_answer_available_without_fake_sources(chat):
+    from eom_protocol.general_chat_rag_turn import RagChatTurnInput
+
+    knowledge, identity = rag_execution(chat)
+    knowledge.rag_failure = "CHAT_KNOWLEDGE_FORBIDDEN"
+    conversation = chat.create()
+    chat.submit(conversation)
+    claim = chat.claim()
+    prepared = chat.execution.prepare(claim, identity=identity)
+    assert isinstance(prepared, RagChatTurnInput) and prepared.rag_scope is None
+    tools = rag_tools(chat, claim, prepared, identity)
+    plain = {
+        "answer_sections": [
+            {
+                "section_id": "section_1",
+                "markdown": "일반 지식 답변",
+                "support_kind": "GENERAL_KNOWLEDGE",
+                "citation_keys": [],
+            }
+        ],
+        "limitations": ["내부 교과서 근거 접근 권한이 없습니다."],
+    }
+    completed = tools.result(reply=canonical_json_bytes(plain).decode(), failure=None)
+    chat.execution.complete(claim, completed)
+    view = chat.owner.grounding(
+        actor_id=chat.actors[0],
+        conversation_id=conversation.conversation_id,
+        turn_ids=(claim.turn_id,),
+    )
+    assert view.values[0].sources == () and view.values[0].receipt.used_source_keys == ()
+
+
 def test_agent_tools_persist_once_and_followup_reuses_exact_pinned_context(chat):
     from eom_orchestrator.general_chat_agent_native import NativeChatTools
     from eom_orchestrator.general_chat_native_worker import source_chat_worker_policy

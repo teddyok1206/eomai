@@ -139,4 +139,35 @@ const createDocument = () => {
   controller.close();
 }
 
-console.log("CHAT_BROWSER_STATE=PASS uncertain-replay/stale-selection/owner-reset/unavailable/markdown-cache");
+// R sources are honest document cards, not invented Item Preview links.
+{
+  const document = createDocument();
+  const item = {item_id: "item_one", item_revision_id: "itemrev_one", manifest_sha256: "pinned"};
+  const view = {...conversation(first, "첫 번째"), messages: [
+    {turn_id: "turn-one", sequence: 1, role: "user", state: "COMPLETED", text: "교과서와 기출 근거"},
+    {turn_id: "turn-one", sequence: 2, role: "assistant", state: "COMPLETED", text: "답변"},
+  ]};
+  const sources = [
+    {key: "R1", kind: "RAG_ANALYSIS", display_name: "<svg onload=bad>", location: "PDF 10-11쪽", approval: "APPROVED", reference: {source: {source_class: "TEXTBOOK"}}},
+    {key: "S1", kind: "ITEM_CONTENT", display_name: "기출 문항", approval: "APPROVED", item},
+  ];
+  const opened = [];
+  const api = async path => path.endsWith("/slot") ? {state: "READY"}
+    : path.endsWith("/grounding") ? {conversation_id: first, values: [{turn_id: "turn-one", sources}]}
+    : path.endsWith(first) ? view : {values: summaries, next_cursor: null};
+  const controller = createGeneralChat({document, api, errorMessage: error => error.message, openItem: ref => opened.push(ref)});
+  controller.install(); controller.setOwner("owner-one"); await controller.open();
+  await document.getElementById("chat-conversations").children[0].fire("click");
+  await tick();
+  const links = document.getElementById("chat-messages").children[1].children.filter(e => e.className === "chat-source-link" || e.className === "button quiet chat-source-link");
+  assert.equal(links.length, 2);
+  assert.equal(links[0].tagName, "span");
+  assert.equal(links[0].textContent, "[R1] <svg onload=bad> · 교과서 · PDF 10-11쪽 · 승인 분석");
+  assert.equal(links[0].handlers.has("click"), false);
+  assert.equal(links[1].tagName, "button");
+  await links[1].fire("click");
+  assert.deepEqual(opened, [item]);
+  controller.close();
+}
+
+console.log("CHAT_BROWSER_STATE=PASS uncertain-replay/stale-selection/owner-reset/unavailable/markdown-cache/rag-source-card");

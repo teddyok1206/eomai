@@ -10,7 +10,7 @@ from time import monotonic
 from typing import Self
 
 from eom_identifiers import canonical_json_bytes
-from eom_protocol.general_chat_grounding import ChatGroundingQuery
+from eom_protocol.general_chat_grounding import ChatGroundingQuery, ChatGroundingViews
 from eom_protocol.general_chat_owner_messages import (
     ChatCreateCommand,
     ChatListQuery,
@@ -25,6 +25,7 @@ from eom_protocol.general_chat_owner_messages import (
     read_chat_owner_reply,
     read_chat_owner_request,
 )
+from eom_protocol.general_chat_rag_turn import ChatGroundingViewsV2
 from jsonschema import ValidationError as SchemaError
 
 from eom_orchestrator.general_chat_socket import (
@@ -68,10 +69,14 @@ class GeneralChatOwnerRpcServer:
     def execute(self, request: ChatOwnerRequest) -> ChatOwnerReply:
         try:
             value = self._execute(request)
+            if request.schema_version.endswith("/4.0") and isinstance(value, ChatGroundingViews):
+                value = ChatGroundingViewsV2.model_validate(value.model_dump(mode="json"))
+            elif not request.schema_version.endswith("/4.0") and isinstance(
+                value, ChatGroundingViewsV2
+            ):
+                raise ChatError("GENERAL_CHAT_PROTOCOL_INVALID")
             reply = ChatOwnerReply(
-                schema_version="general-chat-owner-reply/2.0"
-                if request.schema_version.endswith("/2.0")
-                else "general-chat-owner-reply/1.0",
+                schema_version=request.reply_version,
                 request_id=request.request_id,
                 action=request.command.action,
                 status="SUCCEEDED",
@@ -84,9 +89,7 @@ class GeneralChatOwnerRpcServer:
             except ValueError:
                 code = ChatOwnerErrorCode.UNAVAILABLE
             reply = ChatOwnerReply(
-                schema_version="general-chat-owner-reply/2.0"
-                if request.schema_version.endswith("/2.0")
-                else "general-chat-owner-reply/1.0",
+                schema_version=request.reply_version,
                 request_id=request.request_id,
                 action=request.command.action,
                 status="FAILED",
@@ -144,9 +147,7 @@ class GeneralChatOwnerRpcServer:
                     # No raw SQL, filesystem, native output or user content in the
                     # wire error. The unknown outcome may already be committed.
                     reply = ChatOwnerReply(
-                        schema_version="general-chat-owner-reply/2.0"
-                        if request.schema_version.endswith("/2.0")
-                        else "general-chat-owner-reply/1.0",
+                        schema_version=request.reply_version,
                         request_id=request.request_id,
                         action=request.command.action,
                         status="FAILED",

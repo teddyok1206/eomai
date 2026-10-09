@@ -13,6 +13,7 @@ from eom_protocol.general_chat_grounding import (
     ChatGroundingViews,
     GroundedChatSubmission,
 )
+from eom_protocol.general_chat_rag_turn import ChatGroundingViewsV2
 from eom_protocol.general_chat_schema_family import validate_chat_envelope
 from eom_protocol.general_chat_views import (
     GeneralChatConversation,
@@ -90,26 +91,71 @@ ChatOwnerCommand = Annotated[
     | ChatGroundingQuery,
     Field(discriminator="action"),
 ]
-ChatOwnerValue = GeneralChatSlot | GeneralChatList | GeneralChatConversation | ChatGroundingViews
+ChatOwnerValue = (
+    GeneralChatSlot
+    | GeneralChatList
+    | GeneralChatConversation
+    | ChatGroundingViews
+    | ChatGroundingViewsV2
+)
 
 
 class ChatOwnerRequest(ChatBoundaryValue):
-    schema_version: Literal["general-chat-owner-request/1.0", "general-chat-owner-request/2.0"] = (
-        "general-chat-owner-request/1.0"
-    )
+    schema_version: Literal[
+        "general-chat-owner-request/1.0",
+        "general-chat-owner-request/2.0",
+        "general-chat-owner-request/4.0",
+    ] = "general-chat-owner-request/1.0"
     request_id: str = Field(pattern=r"^chatrpc_[0-9a-f]{32}$")
     command: ChatOwnerCommand
 
+    @property
+    def reply_version(
+        self,
+    ) -> Literal[
+        "general-chat-owner-reply/1.0",
+        "general-chat-owner-reply/2.0",
+        "general-chat-owner-reply/4.0",
+    ]:
+        return (
+            "general-chat-owner-reply/4.0"
+            if self.schema_version.endswith("/4.0")
+            else "general-chat-owner-reply/2.0"
+            if self.schema_version.endswith("/2.0")
+            else "general-chat-owner-reply/1.0"
+        )
+
 
 class ChatOwnerReply(ChatBoundaryValue):
-    schema_version: Literal["general-chat-owner-reply/1.0", "general-chat-owner-reply/2.0"] = (
-        "general-chat-owner-reply/1.0"
-    )
+    schema_version: Literal[
+        "general-chat-owner-reply/1.0",
+        "general-chat-owner-reply/2.0",
+        "general-chat-owner-reply/4.0",
+    ] = "general-chat-owner-reply/1.0"
     request_id: str = Field(pattern=r"^chatrpc_[0-9a-f]{32}$")
     action: OwnerAction
     status: Literal["SUCCEEDED", "FAILED"]
     value: ChatOwnerValue | None
     error_code: ChatOwnerErrorCode | None
+
+    @model_validator(mode="before")
+    @classmethod
+    def exact_grounding_family(cls, value: object) -> object:
+        # An empty/source-free view is structurally valid in both families.
+        # The envelope, not union guessing, selects its promised wire meaning.
+        if (
+            isinstance(value, dict)
+            and value.get("action") == "READ_GROUNDING"
+            and value.get("status") == "SUCCEEDED"
+            and isinstance(value.get("value"), dict)
+        ):
+            view_type = (
+                ChatGroundingViewsV2
+                if value.get("schema_version") == "general-chat-owner-reply/4.0"
+                else ChatGroundingViews
+            )
+            return {**value, "value": view_type.model_validate(value["value"])}
+        return value
 
     @model_validator(mode="after")
     def truthful_typed_outcome(self) -> ChatOwnerReply:
@@ -125,7 +171,9 @@ class ChatOwnerReply(ChatBoundaryValue):
             else (GeneralChatList if self.action == "LIST" else GeneralChatConversation)
         )
         if self.action == "READ_GROUNDING":
-            expected = ChatGroundingViews
+            expected = (
+                ChatGroundingViewsV2 if self.schema_version.endswith("/4.0") else ChatGroundingViews
+            )
         if not isinstance(self.value, expected):
             raise ValueError("owner reply action and projection differ")
         return self
@@ -139,7 +187,11 @@ def read_chat_owner_request(document: object) -> ChatOwnerRequest:
 def read_chat_owner_reply(document: object, *, request: ChatOwnerRequest) -> ChatOwnerReply:
     validate_chat_envelope("owner-reply", document)
     reply = ChatOwnerReply.model_validate(document)
-    if (reply.request_id, reply.action) != (request.request_id, request.command.action):
+    if (reply.request_id, reply.action, reply.schema_version) != (
+        request.request_id,
+        request.command.action,
+        request.reply_version,
+    ):
         raise ValueError("chat owner reply identity mismatch")
     return reply
 
@@ -147,7 +199,7 @@ def read_chat_owner_reply(document: object, *, request: ChatOwnerRequest) -> Cha
 class ChatOwnerPort(Protocol):
     def grounding(
         self, *, actor_id: str, conversation_id: str, turn_ids: tuple[str, ...]
-    ) -> ChatGroundingViews: ...
+    ) -> ChatGroundingViews | ChatGroundingViewsV2: ...
     def slot(self) -> GeneralChatSlot: ...
     def conversations(self, *, actor_id: str, cursor: str | None) -> GeneralChatList: ...
     def create(

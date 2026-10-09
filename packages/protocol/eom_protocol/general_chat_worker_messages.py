@@ -16,16 +16,17 @@ from referencing import Registry, Resource
 from eom_protocol.general_chat import (
     ChatBoundaryValue,
 )
-from eom_protocol.general_chat_grounding import (
+from eom_protocol.general_chat_schema_family import validate_chat_envelope
+from eom_protocol.general_chat_ticket import ChatWorkerTicket as ChatWorkerTicket
+from eom_protocol.general_chat_ticket import WorkerHash
+from eom_protocol.general_chat_turn_contracts import (
     ChatInputContract,
     ChatResultContract,
     read_chat_input,
     read_chat_result,
 )
-from eom_protocol.general_chat_schema_family import validate_chat_envelope
 
 WorkerBootId = Annotated[str, Field(pattern=r"^chatboot_[0-9a-f]{32}$")]
-WorkerHash = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
 WorkerAction = Literal["PROBE", "EXECUTE", "RESULT"]
 
 
@@ -47,6 +48,7 @@ class ChatWorkerPolicy(ChatBoundaryValue):
         "general-chat-worker-policy/1.0",
         "general-chat-worker-policy/2.0",
         "general-chat-worker-policy/3.0",
+        "general-chat-worker-policy/4.0",
     ] = "general-chat-worker-policy/1.0"
     model: str = Field(min_length=1, max_length=128, pattern=r"^[a-zA-Z0-9._-]+$")
     native_profile: Literal["codex-app-server/0.160.0/environment-free/1.0"]
@@ -54,6 +56,7 @@ class ChatWorkerPolicy(ChatBoundaryValue):
     prompt_sha256: WorkerHash
     grounded_prompt_sha256: WorkerHash | None = None
     agent_prompt_sha256: WorkerHash | None = None
+    rag_prompt_sha256: WorkerHash | None = None
 
     @model_serializer(mode="wrap")
     def serialize_policy(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
@@ -62,22 +65,18 @@ class ChatWorkerPolicy(ChatBoundaryValue):
             raise ValueError("policy serializer must return an object")
         if self.schema_version == "general-chat-worker-policy/1.0":
             value.pop("grounded_prompt_sha256", None)
-        if self.schema_version != "general-chat-worker-policy/3.0":
+        if self.schema_version not in {
+            "general-chat-worker-policy/3.0",
+            "general-chat-worker-policy/4.0",
+        }:
             value.pop("agent_prompt_sha256", None)
+        if self.schema_version != "general-chat-worker-policy/4.0":
+            value.pop("rag_prompt_sha256", None)
         return value
 
     @property
     def sha256(self) -> str:
         return sha256_bytes(canonical_json_bytes(self.model_dump(mode="json")))
-
-
-class ChatWorkerTicket(ChatBoundaryValue):
-    schema_version: Literal["general-chat-worker-ticket/1.0"] = "general-chat-worker-ticket/1.0"
-    conversation_id: str = Field(pattern=r"^chat_[0-9a-f]{32}$")
-    turn_id: str = Field(pattern=r"^chatturn_[0-9a-f]{32}$")
-    claim_id: str = Field(pattern=r"^chatclaim_[0-9a-f]{32}$")
-    request_sha256: WorkerHash
-    policy_sha256: WorkerHash
 
 
 def chat_worker_ticket(turn: ChatInputContract, *, policy_sha256: str) -> ChatWorkerTicket:
@@ -116,6 +115,7 @@ class ChatWorkerRequest(ChatBoundaryValue):
         "general-chat-worker-request/1.0",
         "general-chat-worker-request/2.0",
         "general-chat-worker-request/3.0",
+        "general-chat-worker-request/4.0",
     ] = "general-chat-worker-request/1.0"
     request_id: str = Field(pattern=r"^chatwrpc_[0-9a-f]{32}$")
     policy_sha256: WorkerHash
@@ -151,6 +151,7 @@ class ChatWorkerReply(ChatBoundaryValue):
         "general-chat-worker-reply/1.0",
         "general-chat-worker-reply/2.0",
         "general-chat-worker-reply/3.0",
+        "general-chat-worker-reply/4.0",
     ] = "general-chat-worker-reply/1.0"
     request_id: str = Field(pattern=r"^chatwrpc_[0-9a-f]{32}$")
     boot_id: WorkerBootId
@@ -227,6 +228,8 @@ def require_chat_ticket_result(ticket: ChatWorkerTicket, result: ChatResultContr
 def read_chat_worker_reply(document: object, *, request: ChatWorkerRequest) -> ChatWorkerReply:
     validate_chat_envelope("worker-reply", document)
     reply = ChatWorkerReply.model_validate(document)
+    if reply.schema_version.replace("worker-reply", "worker-request") != request.schema_version:
+        raise ValueError("worker reply protocol family mismatch")
     if (reply.request_id, reply.action) != (request.request_id, request.command.action):
         raise ValueError("worker reply identity/action mismatch")
     if reply.status == "SUCCEEDED":

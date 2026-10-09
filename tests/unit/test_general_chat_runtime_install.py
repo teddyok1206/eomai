@@ -91,6 +91,75 @@ def test_configuration_is_fixed_small_nonsecret_values():
     assert all(b"API_KEY" not in value and b"TOKEN" not in value for value in values.values())
 
 
+def test_rag_configuration_pins_shared_protocol_and_exact_policy_without_credentials():
+    from tests.unit.general_chat_rag_fixtures import scope
+
+    values = installation.configuration_payloads(COMMIT, MODEL, rag_policy=scope().policy)
+    payload = values[installation.CONFIG_ROOT / "general-chat-model.env"]
+    assert payload.decode().splitlines() == [
+        "EOM_GENERAL_CHAT_MODEL=synthetic-model",
+        "EOM_GENERAL_CHAT_PROTOCOL_VERSION=4",
+        f"EOM_GENERAL_CHAT_RAG_POLICY_REVISION_ID={scope().policy.access_policy_revision_id}",
+        f"EOM_GENERAL_CHAT_RAG_POLICY_SHA256={scope().policy.sha256}",
+    ]
+    assert set(values) == set(installation.configuration_payloads(COMMIT, MODEL))
+
+
+@pytest.mark.parametrize("kind", ["model", "unit"])
+def test_prepared_configuration_update_checks_exact_predecessor_before_atomic_replace(
+    monkeypatch, tmp_path, kind
+):
+    from eom_identifiers import sha256_bytes
+
+    monkeypatch.setattr(installation, "CONFIG_ROOT", tmp_path)
+    monkeypatch.setattr(installation, "UNIT_ROOT", tmp_path)
+    target = tmp_path / ("general-chat-model.env" if kind == "model" else installation.UNITS[0])
+    mode = 0o600 if kind == "model" else 0o644
+    old, new = b"nonsecret-old\n", b"nonsecret-new\n"
+    target.write_bytes(old)
+    target.chmod(mode)
+    original_read, original_install = (
+        installation.read_chat_preparation_file,
+        installation.install_chat_environment,
+    )
+    monkeypatch.setattr(
+        installation,
+        "read_chat_preparation_file",
+        lambda path, **kw: original_read(
+            path, uid=target.stat().st_uid, gid=target.stat().st_gid, mode=kw["mode"]
+        ),
+    )
+    monkeypatch.setattr(
+        installation,
+        "install_chat_environment",
+        lambda path, payload, **kw: original_install(
+            path, payload, uid=target.stat().st_uid, gid=target.stat().st_gid
+        ),
+    )
+    with pytest.raises(ChatError, match="TARGET_CONFLICT"):
+        installation.update_prepared_configuration(
+            target, new, digest="sha256:" + "b" * 64, mode=mode
+        )
+    assert target.read_bytes() == old and list(tmp_path.iterdir()) == [target]
+    installation.update_prepared_configuration(target, new, digest=sha256_bytes(old), mode=mode)
+    assert target.read_bytes() == new and stat.S_IMODE(target.stat().st_mode) == mode
+    assert list(tmp_path.iterdir()) == [target]
+
+
+def test_predecessor_update_cannot_replace_credentials_or_arbitrary_files(monkeypatch, tmp_path):
+    monkeypatch.setattr(installation, "CONFIG_ROOT", tmp_path)
+    monkeypatch.setattr(
+        installation,
+        "read_chat_preparation_file",
+        lambda *_a, **_kw: pytest.fail("must reject target before reading"),
+    )
+    for name in ("secrets/general-chat.env", "other.env", "general-chat-release.env"):
+        with pytest.raises(ChatError, match="TARGET_CONFLICT"):
+            installation.require_configuration_predecessor(
+                tmp_path / name, digest="sha256:" + "a" * 64, mode=0o600
+            )
+
+
 @pytest.mark.parametrize("previous", ["main", COMMIT])
 def test_release_update_never_resolves_an_unpinned_or_same_predecessor(monkeypatch, previous):
     monkeypatch.setattr(installation, "require_replay", lambda *a, **k: pytest.fail("no lookup"))

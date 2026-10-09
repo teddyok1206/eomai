@@ -17,16 +17,17 @@ from eom_protocol.general_chat_rag_knowledge import (
     RagError,
     validate_rag_extension,
 )
+from eom_protocol.general_chat_ticket import ChatWorkerTicket
 from eom_protocol.general_chat_tools import (
     ChatDiscoveryCard,
     ChatReadCommand,
     ChatSearchCommand,
     ChatToolOutcome,
+    ChatToolPort,
     ChatToolRecord,
     ChatToolRequest,
     ChatToolTranscript,
 )
-from eom_protocol.general_chat_worker_messages import ChatWorkerTicket
 
 RAG_TOOL_RECORD_SCHEMA = "eom://schemas/general-chat/tool-record/2.0"
 
@@ -137,6 +138,9 @@ class ChatToolReplyV2(ChatBoundaryValue):
 
 class ChatRagToolPort(Protocol):
     def call(self, command: object) -> ChatToolReplyV2: ...
+
+
+ChatNativeToolPort = ChatToolPort | ChatRagToolPort
 
 
 class ChatRagToolTranscript:

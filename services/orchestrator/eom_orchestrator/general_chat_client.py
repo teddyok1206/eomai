@@ -8,7 +8,6 @@ from uuid import uuid4
 
 from eom_protocol.general_chat_grounding import (
     ChatGroundingQuery,
-    ChatGroundingViews,
     GroundedChatSubmission,
 )
 from eom_protocol.general_chat_owner_messages import (
@@ -25,6 +24,7 @@ from eom_protocol.general_chat_owner_messages import (
     read_chat_owner_reply,
     read_chat_owner_request,
 )
+from eom_protocol.general_chat_rag_turn import ChatGroundingViewsV2
 from eom_protocol.general_chat_views import (
     GeneralChatConversation,
     GeneralChatCreate,
@@ -65,9 +65,10 @@ class GeneralChatOwnerClient:
 
     def _request(self, command: ChatOwnerCommand) -> ChatOwnerValue:
         request = ChatOwnerRequest(
-            schema_version="general-chat-owner-request/2.0"
+            schema_version="general-chat-owner-request/4.0"
             if isinstance(command, ChatGroundingQuery)
-            or (
+            else "general-chat-owner-request/2.0"
+            if (
                 isinstance(command, ChatSubmitCommand)
                 and isinstance(command.request, GroundedChatSubmission)
             )
@@ -107,13 +108,13 @@ class GeneralChatOwnerClient:
 
     def grounding(
         self, *, actor_id: str, conversation_id: str, turn_ids: tuple[str, ...]
-    ) -> ChatGroundingViews:
+    ) -> ChatGroundingViewsV2:
         value = self._request(
             ChatGroundingQuery(
                 actor_id=actor_id, conversation_id=conversation_id, turn_ids=turn_ids
             )
         )
-        assert isinstance(value, ChatGroundingViews)
+        assert isinstance(value, ChatGroundingViewsV2)
         return value
 
     def conversations(self, *, actor_id: str, cursor: str | None) -> GeneralChatList:

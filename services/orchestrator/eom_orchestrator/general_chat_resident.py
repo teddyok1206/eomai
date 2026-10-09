@@ -14,16 +14,16 @@ from threading import Event, Lock, Thread
 from typing import Protocol
 
 from eom_protocol.general_chat_dispatch import ChatExecutionIdentity
-from eom_protocol.general_chat_grounding import (
+from eom_protocol.general_chat_turn_contracts import (
     ChatInputContract as ChatTurnInput,
 )
-from eom_protocol.general_chat_grounding import (
+from eom_protocol.general_chat_turn_contracts import (
     ChatResultContract as ChatTurnResult,
 )
-from eom_protocol.general_chat_grounding import (
+from eom_protocol.general_chat_turn_contracts import (
     read_chat_input as read_chat_turn_input,
 )
-from eom_protocol.general_chat_grounding import (
+from eom_protocol.general_chat_turn_contracts import (
     read_chat_result as read_chat_turn_result,
 )
 

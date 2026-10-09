@@ -138,6 +138,7 @@ def sandbox_properties(source: str, component: str) -> dict[str, str]:
             {
                 "HOME=/srv/eom/worker-homes/eom-cdx-chat",
                 "CODEX_HOME=/srv/eom/worker-homes/eom-cdx-chat/.codex",
+                "EOM_GENERAL_CHAT_PROTOCOL_VERSION=3",
             }
         )
     if set(shlex.split(values.get("Environment", ""))) != environment:

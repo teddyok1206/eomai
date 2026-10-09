@@ -83,6 +83,9 @@ def native_chat_tools() -> list[dict[str, object]]:
 
 
 class NativeChatTools:
+    tool_names = frozenset({"search_eom_items", "read_eom_items"})
+    max_calls = 5
+
     def __init__(self, request: AgentChatTurnInput, port: ChatToolPort) -> None:
         self.request, self.port = request, port
         self.transcript = ChatToolTranscript()

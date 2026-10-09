@@ -16,9 +16,9 @@ import httpx
 from eom_web_gui.chat_grounding_contracts import (
     ChatGroundedTurnSubmission,
     ChatGroundingSubmission,
-    ChatGroundingViews,
 )
 from eom_web_gui.chat_knowledge_contracts import ChatKnowledgeRequest, ChatKnowledgeSelection
+from eom_web_gui.chat_rag_contracts import ChatGroundingViewsV2
 from eom_web_gui.contracts import (
     AssessmentLearningBatchStatus,
     AssessmentLearningCorpusStatusV2,
@@ -374,7 +374,7 @@ class ApplicationGateway(Protocol):
 
     async def general_chat_grounding(
         self, session: WebSession, conversation_id: str, value: ChatGroundingSubmission
-    ) -> ChatGroundingViews: ...
+    ) -> ChatGroundingViewsV2: ...
     async def health(self) -> dict[str, str]: ...
 
     async def login(self, username: str, password: str) -> LoginResult: ...
@@ -943,7 +943,7 @@ class HttpApplicationGateway:
 
     async def general_chat_grounding(
         self, session: WebSession, conversation_id: str, value: ChatGroundingSubmission
-    ) -> ChatGroundingViews:
+    ) -> ChatGroundingViewsV2:
         response = await self._authorized(
             session,
             "POST",
@@ -951,7 +951,7 @@ class HttpApplicationGateway:
             json=value.model_dump(mode="json"),
         )
         try:
-            result = ChatGroundingViews.model_validate(response.json())
+            result = ChatGroundingViewsV2.model_validate(response.json())
             if result.conversation_id != conversation_id or {
                 v.turn_id for v in result.values
             } != set(value.turn_ids):

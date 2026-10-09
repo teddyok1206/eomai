@@ -11,6 +11,9 @@ from typing import Self
 
 from eom_identifiers import canonical_json_bytes
 from eom_protocol.general_chat_grounding import read_agent
+from eom_protocol.general_chat_rag_knowledge import read_rag
+from eom_protocol.general_chat_rag_tools import ChatToolReplyV2, ChatToolRequestV2
+from eom_protocol.general_chat_rag_turn import RagChatTurnInput
 from eom_protocol.general_chat_tools import ChatToolReply, ChatToolRequest
 from eom_protocol.general_chat_worker_messages import (
     ChatWorkerError,
@@ -69,6 +72,39 @@ class WorkerToolConnection:
         return reply
 
 
+class WorkerRagToolConnection:
+    """V2 intents on the same owner-initiated connection, not a Catalog capability."""
+
+    def __init__(self, connection: socket.socket, request: ChatWorkerRequest, deadline: float):
+        if not isinstance(request.command, ChatWorkerExecute) or not isinstance(
+            request.command.turn, RagChatTurnInput
+        ):
+            raise ValueError("RAG tools require an executing V4 turn")
+        self.connection, self.request, self.deadline = connection, request, deadline
+        self.ticket = chat_worker_ticket(request.command.turn, policy_sha256=request.policy_sha256)
+        self.sequence = 0
+
+    def call(self, command: object) -> ChatToolReplyV2:
+        self.sequence += 1
+        request = read_rag(
+            "Request",
+            {
+                "schema_version": "general-chat-tool-request/2.0",
+                "rpc_request_id": self.request.request_id,
+                "ticket": self.ticket.model_dump(mode="json"),
+                "sequence": self.sequence,
+                "command": command,
+            },
+            ChatToolRequestV2,
+        )
+        send_chat_stream(self.connection, request.model_dump(mode="json"), deadline=self.deadline)
+        value = receive_chat_stream(self.connection, deadline=self.deadline)
+        reply = read_rag("Reply", value, ChatToolReplyV2)
+        if reply.record.request != request:
+            raise ChatTransportError("INVALID")
+        return reply
+
+
 class ChatWorkerRpcServer:
     def __init__(
         self, worker: ChatWorkerApplication, *, endpoint: ChatSocketEndpoint, owner_uid: int
@@ -95,7 +131,7 @@ class ChatWorkerRpcServer:
                     connection, deadline=monotonic() + WORKER_PROBE_TIMEOUT
                 )
                 request = read_chat_worker_request(document)
-                if stream != request.schema_version.endswith("/3.0"):
+                if stream != request.schema_version.endswith(("/3.0", "/4.0")):
                     raise ChatTransportError("INVALID")
                 deadline = monotonic() + (
                     WORKER_EXECUTE_TIMEOUT
@@ -105,7 +141,10 @@ class ChatWorkerRpcServer:
                 try:
                     reply = (
                         self.worker.handle(
-                            request, tools=WorkerToolConnection(connection, request, deadline)
+                            request,
+                            tools=WorkerRagToolConnection(connection, request, deadline)
+                            if isinstance(request.command.turn, RagChatTurnInput)
+                            else WorkerToolConnection(connection, request, deadline),
                         )
                         if stream and isinstance(request.command, ChatWorkerExecute)
                         else self.worker.handle(request)

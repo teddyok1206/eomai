@@ -6,6 +6,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import TypedDict
 from uuid import uuid4
 
 from eom_identifiers import canonical_json_bytes, sha256_bytes
@@ -28,10 +29,21 @@ from eom_protocol.general_chat_grounding import (
     GROUNDED_RESULT_SCHEMA,
     AgentChatTurnInput,
     AgentChatTurnResult,
-    ChatInputContract,
-    ChatResultContract,
+    ChatAgentState,
+    ChatKnowledgeContext,
     GroundedChatTurnInput,
     StoredGroundedChatMessage,
+)
+from eom_protocol.general_chat_rag_knowledge import ChatRagPolicy, ChatRagScope
+from eom_protocol.general_chat_rag_turn import (
+    RAG_INPUT_SCHEMA,
+    RAG_RESULT_SCHEMA,
+    RagChatTurnInput,
+    RagChatTurnResult,
+)
+from eom_protocol.general_chat_turn_contracts import (
+    ChatInputContract,
+    ChatResultContract,
     read_chat_input,
     read_chat_result,
 )
@@ -48,11 +60,12 @@ from eom_orchestrator.general_chat_evidence import (
     dispatch_evidence,
     request_evidence,
     require_evidence,
-    user_evidence,
 )
-from eom_orchestrator.general_chat_knowledge import ChatKnowledgePort
+from eom_orchestrator.general_chat_knowledge import ChatKnowledgePort, ChatRagKnowledgePort
 from eom_orchestrator.general_chat_models import GeneralChatCapacityRecord, GeneralChatTurnRecord
 from eom_orchestrator.general_chat_owner import GeneralChatConversationOwner, chat_now
+from eom_orchestrator.general_chat_rag_access import authorize_rag_context, prepare_rag_scope
+from eom_orchestrator.general_chat_rag_broker import ChatRagToolBroker, rag_tool_knowledge
 from eom_orchestrator.general_chat_repository import GeneralChatRepository
 from eom_orchestrator.general_chat_state import (
     CHAT_HEARTBEAT_TTL,
@@ -75,6 +88,16 @@ class ChatPreparationRejected(ChatError):
     """Exact claim was terminated before any worker dispatch became admissible."""
 
 
+class _PreparedChatFields(TypedDict):
+    conversation_id: str
+    turn_id: str
+    claim_id: str
+    messages: tuple[ChatContextMessage, ...]
+    context_sha256: str
+    knowledge: ChatKnowledgeContext | None
+    agent_state: ChatAgentState | None
+
+
 class GeneralChatExecutionService:
     def __init__(
         self,
@@ -83,16 +106,20 @@ class GeneralChatExecutionService:
         *,
         clock: Callable[[], datetime] = chat_now,
         knowledge: ChatKnowledgePort | None = None,
+        rag_knowledge: ChatRagKnowledgePort | None = None,
+        rag_policy: ChatRagPolicy | None = None,
     ) -> None:
         self.repository = repository
         self.evidence = evidence
         self.clock = clock
         self.knowledge = knowledge
+        self.rag_knowledge = rag_knowledge
+        self.rag_policy = rag_policy
 
-    def tool_broker(self, command: ChatWorkerRequest) -> ChatToolBroker:
+    def tool_broker(self, command: ChatWorkerRequest) -> ChatToolBroker | ChatRagToolBroker:
         if (
             not isinstance(command.command, ChatWorkerExecute)
-            or not isinstance(command.command.turn, AgentChatTurnInput)
+            or not isinstance(command.command.turn, (AgentChatTurnInput, RagChatTurnInput))
             or self.knowledge is None
         ):
             raise ChatError("GENERAL_CHAT_PROTOCOL_INVALID")
@@ -122,6 +149,18 @@ class GeneralChatExecutionService:
                 return conversation.owner_id
 
         require_scope()
+        if isinstance(prepared, RagChatTurnInput):
+            if self.rag_knowledge is None:
+                raise ChatError("GENERAL_CHAT_NOT_READY")
+            return ChatRagToolBroker(
+                rpc_request_id=command.request_id,
+                ticket=ticket,
+                prepared=prepared,
+                actor_guard=require_scope,
+                knowledge=self.knowledge,
+                rag_knowledge=self.rag_knowledge,
+                evidence=self.evidence,
+            )
         return ChatToolBroker(
             rpc_request_id=command.request_id,
             ticket=ticket,
@@ -356,7 +395,11 @@ class GeneralChatExecutionService:
             return request
         assert context is not None
         owner = GeneralChatConversationOwner(
-            self.repository, self.evidence, clock=self.clock, knowledge=self.knowledge
+            self.repository,
+            self.evidence,
+            clock=self.clock,
+            knowledge=self.knowledge,
+            rag_knowledge=self.rag_knowledge,
         )
         resolved_turns = owner.resolved_turns(claim.conversation_id, context, actor_id=actor_id)
         projected = owner.project_messages(
@@ -380,61 +423,29 @@ class GeneralChatExecutionService:
         if identity.policy.schema_version in {
             "general-chat-worker-policy/2.0",
             "general-chat-worker-policy/3.0",
+            "general-chat-worker-policy/4.0",
         }:
             if self.knowledge is None:
                 raise ChatError("GENERAL_CHAT_NOT_READY")
-            user_pointer = self.evidence.resolve_family(
-                (
-                    chat_pointer(
-                        turn.input_artifact_id,
-                        turn.input_revision_id,
-                        turn.input_sha256,
-                        "eom://schemas/general-chat/message/1.0",
-                    ),
-                )
-            )[0]
-            user = user_evidence(
-                self.evidence.read((user_pointer,))[0],
-                conversation_id=claim.conversation_id,
-                turn_id=claim.turn_id,
-            )
+            user = resolved_turns[turn.turn_id].user
             selection = user.selection if isinstance(user, StoredGroundedChatMessage) else None
-            if selection is None and identity.policy.schema_version.endswith("/3.0"):
+            if selection is None and identity.policy.schema_version.endswith(("/3.0", "/4.0")):
                 for previous in reversed(context[:-1]):
-                    prepared_knowledge = resolved_turns[previous.turn_id][3]
+                    prepared_knowledge = resolved_turns[previous.turn_id].item
                     if prepared_knowledge is not None:
                         selection = prepared_knowledge.selection
                         break
             # Follow-up questions reuse the last explicit pinned selection, never latest.
             if selection is None and not isinstance(user, StoredGroundedChatMessage):
-                hints = self.evidence.resolve_family(
-                    tuple(
-                        chat_pointer(
-                            t.input_artifact_id,
-                            t.input_revision_id,
-                            t.input_sha256,
-                            "eom://schemas/general-chat/message/1.0",
-                        )
-                        for t in context[:-1]
-                    )
-                )
-                prior = self.evidence.read(hints)
-                for t, payload in reversed(tuple(zip(context[:-1], prior, strict=True))):
-                    message = user_evidence(
-                        payload, conversation_id=claim.conversation_id, turn_id=t.turn_id
-                    )
+                for t in reversed(context[:-1]):
+                    message = resolved_turns[t.turn_id].user
                     if isinstance(message, StoredGroundedChatMessage):
                         selection = message.selection
                         break
             resolved_knowledge = self.knowledge.resolve(
                 actor_id=actor_id, selection=selection, purpose="MATERIALIZE"
             )
-            input_type = (
-                AgentChatTurnInput
-                if identity.policy.schema_version.endswith("/3.0")
-                else GroundedChatTurnInput
-            )
-            request = input_type(
+            prepared_values = _PreparedChatFields(
                 conversation_id=claim.conversation_id,
                 turn_id=claim.turn_id,
                 claim_id=claim.claim_id,
@@ -443,13 +454,54 @@ class GeneralChatExecutionService:
                 knowledge=resolved_knowledge.context,
                 agent_state=resolved_knowledge.agent_state,
             )
+            if identity.policy.schema_version.endswith("/4.0"):
+                if self.rag_knowledge is None or self.rag_policy is None:
+                    raise ChatError("GENERAL_CHAT_NOT_READY")
+                prior_rag = None
+                prior_scope = None
+                for previous in reversed(context[:-1]):
+                    history_value = resolved_turns[previous.turn_id]
+                    if isinstance(history_value.request, RagChatTurnInput):
+                        prior_rag = history_value.rag
+                        prior_scope = history_value.request.rag_scope
+                        break
+                snapshot = None if selection is None else selection.snapshot
+                if prior_scope is not None:
+                    if snapshot is not None and snapshot != prior_scope.snapshot:
+                        raise ChatError("GENERAL_CHAT_POINTER_INVALID")
+                    snapshot = prior_scope.snapshot
+                rag_scope: ChatRagScope | None
+                if prior_rag is not None:
+                    authorize_rag_context(self.rag_knowledge, actor_id=actor_id, context=prior_rag)
+                    rag_scope = prior_rag.scope
+                else:
+                    rag_scope = prepare_rag_scope(
+                        self.rag_knowledge,
+                        actor_id=actor_id,
+                        policy=self.rag_policy if prior_scope is None else prior_scope.policy,
+                        snapshot=snapshot,
+                    )
+                request = RagChatTurnInput(
+                    **prepared_values, rag_scope=rag_scope, rag_knowledge=prior_rag
+                )
+            else:
+                input_type = (
+                    AgentChatTurnInput
+                    if identity.policy.schema_version.endswith("/3.0")
+                    else GroundedChatTurnInput
+                )
+                request = input_type(**prepared_values)
             input_schema = (
-                AGENT_INPUT_SCHEMA
+                RAG_INPUT_SCHEMA
+                if isinstance(request, RagChatTurnInput)
+                else AGENT_INPUT_SCHEMA
                 if isinstance(request, AgentChatTurnInput)
                 else GROUNDED_INPUT_SCHEMA
             )
             dispatch_schema = (
-                "eom://schemas/general-chat/dispatch/3.0"
+                "eom://schemas/general-chat/dispatch/4.0"
+                if isinstance(request, RagChatTurnInput)
+                else "eom://schemas/general-chat/dispatch/3.0"
                 if isinstance(request, AgentChatTurnInput)
                 else "eom://schemas/general-chat/dispatch/2.0"
             )
@@ -472,7 +524,9 @@ class GeneralChatExecutionService:
         require_evidence(pointer, payload, schema_ref=input_schema)
         dispatch = read_chat_dispatch(
             ChatDispatchReceipt(
-                schema_version="general-chat-dispatch/3.0"
+                schema_version="general-chat-dispatch/4.0"
+                if isinstance(request, RagChatTurnInput)
+                else "general-chat-dispatch/3.0"
                 if isinstance(request, AgentChatTurnInput)
                 else "general-chat-dispatch/2.0"
                 if isinstance(request, GroundedChatTurnInput)
@@ -531,12 +585,31 @@ class GeneralChatExecutionService:
             turn = self.repository.turn(session, claim.turn_id)
             if (turn.conversation_id, turn.claim_id) != (claim.conversation_id, claim.claim_id):
                 raise ChatError("GENERAL_CHAT_CLAIM_MISMATCH")
+            actor_id = self.repository.conversation_record(session, claim.conversation_id).owner_id
         request, _ = self._execution(turn, claim)
         read_chat_result(result.model_dump(mode="json"), request=request)
         if isinstance(request, AgentChatTurnInput) and isinstance(result, AgentChatTurnResult):
             agent_tool_knowledge(request, result, self.evidence)
+        elif isinstance(request, RagChatTurnInput) and isinstance(result, RagChatTurnResult):
+            resolved = rag_tool_knowledge(request, result, self.evidence)
+            if result.status == "SUCCEEDED":
+                with self.repository.read_snapshot() as session:
+                    self.repository.require_actor(session, actor_id)
+                if resolved.selections and self.knowledge is None:
+                    raise ChatError("GENERAL_CHAT_FORBIDDEN")
+                for selection in resolved.selections:
+                    assert self.knowledge is not None
+                    self.knowledge.resolve(
+                        actor_id=actor_id, selection=selection, purpose="AUTHORIZE"
+                    )
+                for rag_context in resolved.rag_contexts:
+                    authorize_rag_context(
+                        self.rag_knowledge, actor_id=actor_id, context=rag_context
+                    )
         result_schema = (
-            AGENT_RESULT_SCHEMA
+            RAG_RESULT_SCHEMA
+            if isinstance(request, RagChatTurnInput)
+            else AGENT_RESULT_SCHEMA
             if isinstance(request, AgentChatTurnInput)
             else GROUNDED_RESULT_SCHEMA
             if isinstance(request, GroundedChatTurnInput)
@@ -552,6 +625,8 @@ class GeneralChatExecutionService:
                     raise ChatError("GENERAL_CHAT_RESULT_CONFLICT")
                 return
             _, turn = guard(session, claim)
+            if isinstance(request, RagChatTurnInput) and result.status == "SUCCEEDED":
+                self.repository.require_actor(session, actor_id)
             if turn.state == "COMMITTING":
                 if turn.result_sha256 != digest:
                     raise ChatError("GENERAL_CHAT_RESULT_CONFLICT")
@@ -581,6 +656,8 @@ class GeneralChatExecutionService:
                     raise ChatError("GENERAL_CHAT_RESULT_CONFLICT")
                 return
             capacity, turn = guard(session, claim)
+            if isinstance(request, RagChatTurnInput) and result.status == "SUCCEEDED":
+                self.repository.require_actor(session, actor_id)
             target = (
                 ChatTurnState.COMPLETED if result.status == "SUCCEEDED" else ChatTurnState.FAILED
             )

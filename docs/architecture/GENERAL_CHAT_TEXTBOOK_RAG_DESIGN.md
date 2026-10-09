@@ -1,8 +1,9 @@
 # CHAT-RAG-2: textbook evidence in conversational answers
 
-Status: contracts and Catalog read path implemented, 2026-10-09 UTC. User authorized implementation
-and requested a goal including operational connection. Catalog/native/UI activation
-and actual textbook conversation evidence remain pending. This is not live acceptance.
+Status: contracts, Catalog read path, native/owner/history and Web/BFF source implemented,
+2026-10-09 UTC. User authorized implementation and requested a goal including operational
+connection. Compatible installation/activation and actual textbook conversation evidence
+remain pending. This is not live acceptance.
 
 ## Design boundary (required design procedure)
 
@@ -122,6 +123,41 @@ grant or service restart occurred. Detailed evidence and remaining gates:
 `docs/status/GENERAL_CHAT_RAG_CATALOG_CHECKPOINT_2026-10-09.md`.
 
 ## Verification/rollout
+
+### Owner admission and history resolution
+
+The existing owner resolves each turn into one frozen value (user message,
+prepared request, admitted answer, resolved Item context and resolved RAG context).
+This replaces positional history tuples rather than adding a second history
+store. Canonical inputs/results and all tool records are materialized in bounded
+batches; maps keyed by immutable snapshot/revision or context hash deduplicate
+authorization. Every distinct RAG context is reauthorized through Catalog before
+history display, follow-up preparation and successful final admission. A revoked
+historical source is an explicit error, not a silently shortened conversation.
+
+V4 is opt-in through an exact released access-policy revision/hash in the owner
+configuration and an explicit worker protocol selection. Without this setting,
+V3 remains the default. Initial RAG permission denial may leave ordinary chat and
+Item tools available, but an invalid requested pin or revoked prepared evidence
+must not be downgraded to a fresh/latest scope. Follow-up uses its prior Graph and
+policy even when the current configured policy changes. No DB schema, history
+backfill, new message Artifact family or role grants are required.
+
+The supported V1–V4 readers live in `general_chat_turn_contracts`; legacy V1–V3
+readers retain their original semantics. The unchanged ticket value is extracted
+into `general_chat_ticket`, explicitly reexported by the old module, so the new
+turn/tool/envelope dependency graph stays acyclic. Native V4 uses the existing
+duplex worker transport and canonical handoff/recovery mechanism. New R source
+cards pass through typed owner/API/BFF contracts and render as document-analysis
+cards, never fabricated Item links. The Web mirror contains only presentation
+fields and bounds; Catalog remains the authority for provenance and access rules.
+
+Staging keeps both chat services stopped. Activation uses an exact policy and
+worker protocol pin; nonsecret model configuration advances only from its supplied
+predecessor hash, and changed units only from the named predecessor source bytes.
+Protected credentials, worker authentication and conversation history are untouched.
+Source/disposable evidence and the remaining live gates are recorded in
+`docs/status/GENERAL_CHAT_RAG_NATIVE_CHECKPOINT_2026-10-09.md`.
 
 - Define JSON Schema 2020-12 before runtime behavior; mirror bundled schemas and
   frozen Pydantic contracts. Test released V1–V3 byte preservation.

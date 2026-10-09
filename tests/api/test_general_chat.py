@@ -188,6 +188,57 @@ def test_grounded_routes_reject_missing_permissions():
         services.engine.dispose()
 
 
+def test_textbook_grounding_is_a_document_reference_not_a_fake_item_link(monkeypatch):
+    from eom_protocol.general_chat_rag_turn import (
+        ChatGroundingViewsV2,
+        ChatRagSourceCard,
+        ChatTurnGroundingViewV2,
+        validate_rag_citations,
+    )
+
+    from tests.unit.general_chat_rag_fixtures import context, request, result
+
+    value, services, owner = client(enabled=True)
+    prepared = request(knowledge=context())
+    receipt = validate_rag_citations(prepared, result(prepared), item=None, rag=context())
+    view = ChatGroundingViewsV2(
+        conversation_id=CHAT_ID,
+        values=(
+            ChatTurnGroundingViewV2(
+                turn_id="chatturn_" + "1" * 32,
+                sources=(
+                    ChatRagSourceCard.model_validate(
+                        context().sources[0].model_dump(mode="json", exclude={"text"})
+                    ),
+                ),
+                receipt=receipt,
+                observed_at=None,
+            ),
+        ),
+    )
+
+    def projected(*, actor_id, **_):
+        owner.actors.append(actor_id)
+        return view
+
+    monkeypatch.setattr(owner, "grounding", projected)
+    try:
+        with value:
+            response = value.post(
+                f"/api/v1/general-chat/conversations/{CHAT_ID}/grounding",
+                json={"turn_ids": ["chatturn_" + "1" * 32]},
+            )
+            assert response.status_code == 200
+            assert response.json() == view.model_dump(mode="json")
+            card = response.json()["values"][0]["sources"][0]
+            assert card["kind"] == "RAG_ANALYSIS" and "item" not in card
+            assert card["reference"]["source"]["source_class"] == "TEXTBOOK"
+            assert card["text_kind"] == "APPROVED_ANALYSIS_NOT_VERBATIM_SOURCE"
+            assert owner.actors == [_authentication().operator.operator_id]
+    finally:
+        services.engine.dispose()
+
+
 def test_all_routes_use_authenticated_operator_and_have_separate_permissions():
     value, services, owner = client(enabled=True)
     try:

@@ -19,6 +19,7 @@ from eom_protocol.general_chat_grounding import (
     GroundedChatSubmission,
     read_grounding,
 )
+from eom_protocol.general_chat_rag_turn import ChatGroundingViewsV2
 from fastapi import APIRouter, Depends, Path, Query, Request
 
 from eom_api.dependencies import Auth, IdempotencyKey, get_services, require_permission
@@ -56,7 +57,7 @@ def grounded_submit(
 @router.post(
     "/conversations/{conversation_id}/grounding",
     operation_id="general_chat_grounding_read",
-    response_model=ChatGroundingViews,
+    response_model=ChatGroundingViews | ChatGroundingViewsV2,
     dependencies=[Depends(require_permission(PermissionKey.GENERAL_CHAT_READ))],
     openapi_extra={"x-eom-read-only": True},
 )
@@ -65,7 +66,7 @@ def grounding_read(
     conversation_id: Annotated[str, Path(pattern=r"^chat_[0-9a-f]{32}$")],
     body: ChatGroundingSubmission,
     authentication: Auth,
-) -> ChatGroundingViews:
+) -> ChatGroundingViews | ChatGroundingViewsV2:
     read_grounding("ViewSubmission", body.model_dump(mode="json"), ChatGroundingSubmission)
     return (
         get_services(request)

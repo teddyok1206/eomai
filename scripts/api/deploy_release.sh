@@ -1314,6 +1314,10 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eomctl/legacy_assessment.py",
     }
     catalog_staging_runtime = {
+        "eom_catalog_service/chat_knowledge_discovery.py",
+        "eom_catalog_service/chat_knowledge_resolution.py",
+        "eom_catalog_service/chat_knowledge_search.py",
+        "eom_catalog_service/chat_rag_resolution.py",
         "eom_image_contracts/models.py",
         "eom_image_contracts/safe_svg.py",
         "eom_image_contracts/svg_label_layout.py",

@@ -16,14 +16,25 @@ from eom_protocol.general_chat_grounding import (
     read_agent,
     read_grounding,
 )
+from eom_protocol.general_chat_rag_knowledge import (
+    ChatRagCatalogReply,
+    ChatRagCatalogRequest,
+    read_rag,
+    read_rag_catalog_reply,
+)
 from eom_protocol.general_chat_tools import (
     ChatSearchArguments,
     ChatSearchCatalogReply,
     ChatSearchCatalogRequest,
     ChatToolOutcome,
 )
+from jsonschema import ValidationError as SchemaError
 
-from eom_orchestrator.general_chat_socket import ChatSocketEndpoint, exchange_chat_frame
+from eom_orchestrator.general_chat_socket import (
+    ChatSocketEndpoint,
+    ChatTransportError,
+    exchange_chat_frame,
+)
 from eom_orchestrator.general_chat_state import ChatError
 
 
@@ -40,7 +51,39 @@ class ChatKnowledgePort(Protocol):
     ) -> ChatKnowledgeCatalogReply: ...
 
 
+class ChatRagKnowledgePort(Protocol):
+    def rag(self, request: ChatRagCatalogRequest) -> ChatRagCatalogReply: ...
+
+
 class CatalogChatKnowledgeClient:
+    def rag(self, request: ChatRagCatalogRequest) -> ChatRagCatalogReply:
+        document = request.model_dump(mode="json")
+        read_rag("CatalogRequest", document, ChatRagCatalogRequest)
+        try:
+            value = exchange_chat_frame(
+                ChatSocketEndpoint(
+                    Path(CATALOG_APPLICATION_SOCKET_PATH),
+                    pwd.getpwnam("eom-catalog-manager").pw_uid,
+                    grp.getgrnam("eom-api").gr_gid,
+                ),
+                document,
+                request_limit=64000,
+                reply_limit=64000,
+                timeout=20,
+            )
+        except ChatTransportError as exc:
+            raise ChatError(
+                "GENERAL_CHAT_POINTER_INVALID"
+                if exc.kind == "INVALID"
+                else "GENERAL_CHAT_APPLICATION_UNAVAILABLE"
+            ) from None
+        except Exception:
+            raise ChatError("GENERAL_CHAT_APPLICATION_UNAVAILABLE") from None
+        try:
+            return read_rag_catalog_reply(value, request=request)
+        except (ValueError, SchemaError):
+            raise ChatError("GENERAL_CHAT_POINTER_INVALID") from None
+
     def search(
         self,
         *,

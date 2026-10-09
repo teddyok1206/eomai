@@ -198,3 +198,89 @@ def test_chat_browser_races_and_uncertain_send_replay(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert "CHAT_BROWSER_STATE=PASS" in result.stdout
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "source_kind", ["DOCUMENT_REVISION", "CONTENT_INTAKE_FILE", "APPROVED_ITEM_REVISION"]
+)
+async def test_rag_gateway_preserves_exact_provenance_without_worker_dependencies(source_kind):
+    from eom_protocol.general_chat_rag_knowledge import (
+        ChatRagIntakeReference,
+        ChatRagItemReference,
+        chat_rag_context,
+    )
+    from eom_protocol.general_chat_rag_turn import (
+        ChatGroundingViewsV2,
+        ChatRagSourceCard,
+        ChatTurnGroundingViewV2,
+        validate_rag_citations,
+    )
+    from eom_web_gui.chat_grounding_contracts import ChatGroundingSubmission
+
+    from tests.unit.general_chat_rag_fixtures import context, request, result, source
+
+    reference = source().reference
+    original = reference.source.artifact_member
+    if source_kind == "CONTENT_INTAKE_FILE":
+        source_pointer = ChatRagIntakeReference(
+            source_file_id="sourcefile_" + "1" * 32,
+            source_class="PAST_EXAM",
+            artifact_member=original,
+        )
+        reference = reference.model_copy(update={"source": source_pointer})
+    elif source_kind == "APPROVED_ITEM_REVISION":
+        source_pointer = ChatRagItemReference(
+            source_class="APPROVED_ITEM",
+            item_id="item_" + "1" * 32,
+            item_revision_id="itemrev_" + "2" * 32,
+            artifact_member=original.model_copy(
+                update={"media_type": "application/json", "schema_ref": None}
+            ),
+        )
+        reference = reference.model_copy(update={"source": source_pointer})
+    rag = chat_rag_context(
+        scope=context().scope,
+        sources=(source().model_copy(update={"reference": reference}),),
+        limitations=context().limitations,
+    )
+    prepared = request(knowledge=rag)
+    view = ChatGroundingViewsV2(
+        conversation_id=CHAT_ID,
+        values=(
+            ChatTurnGroundingViewV2(
+                turn_id=prepared.turn_id,
+                sources=(
+                    ChatRagSourceCard.model_validate(
+                        rag.sources[0].model_dump(mode="json", exclude={"text"})
+                    ),
+                ),
+                receipt=validate_rag_citations(prepared, result(prepared), item=None, rag=rag),
+                observed_at=None,
+            ),
+        ),
+    )
+    wire = view.model_dump(mode="json")
+    calls = []
+
+    def handler(req):
+        calls.append(req)
+        return httpx.Response(200, json=wire)
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://testserver",
+        observability_url="http://observe",
+        timeout=5,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        submission = ChatGroundingSubmission(turn_ids=(prepared.turn_id,))
+        mirrored = await gateway.general_chat_grounding(_session(), CHAT_ID, submission)
+        assert mirrored.model_dump(mode="json") == wire
+        assert "actor_id" not in json.loads(calls[-1].content)
+        wire["values"][0]["sources"][0]["reference"]["analysis_member"]["member_path"] = "../escape"
+        with pytest.raises(GatewayError, match="GENERAL_CHAT_RESPONSE_INVALID"):
+            await gateway.general_chat_grounding(_session(), CHAT_ID, submission)
+    finally:
+        await gateway.close()

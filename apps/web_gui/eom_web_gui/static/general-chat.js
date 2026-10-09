@@ -105,6 +105,14 @@ export function createGeneralChat({document, api, errorMessage, openItem}) {
         const view = grounding.get(`${selected.conversation_id}:${message.turn_id}`);
         const renderedEpoch = epoch;
         for (const source of view?.sources || []) {
+          if (source.kind === "RAG_ANALYSIS") {
+            const card = document.createElement("span"); card.className = "chat-source-link";
+            const labels = {TEXTBOOK: "교과서", PAST_EXAM: "기출", APPROVED_ITEM: "등록 문항"};
+            card.textContent = `[${source.key}] ${source.display_name} · ${labels[source.reference.source.source_class] || "내부 자료"} · ${source.location} · 승인 분석`;
+            card.title = "원문 인용이 아니라 승인된 분석 기록을 참고했습니다.";
+            bubble.append(card);
+            continue;
+          }
           const button = document.createElement("button"); button.type = "button"; button.className = "button quiet chat-source-link";
           button.textContent = `[${source.key}] ${source.display_name} · ${source.kind === "SOLUTION_REPORT" ? "승인 풀이보고서" : "정본 문항"}${source.approval === "PENDING" ? " · 승인 대기" : ""}`;
           button.addEventListener("click", () => { if (current(renderedEpoch) && openItem) openItem(source.item); });

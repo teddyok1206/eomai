@@ -16,12 +16,14 @@ from eom_protocol.general_chat import (
 )
 from eom_protocol.general_chat_dispatch import ChatDispatchReceipt, read_chat_dispatch
 from eom_protocol.general_chat_grounding import (
+    StoredGroundedChatMessage,
+    read_grounding,
+)
+from eom_protocol.general_chat_turn_contracts import (
     ChatInputContract,
     ChatResultContract,
-    StoredGroundedChatMessage,
     read_chat_input,
     read_chat_result_document,
-    read_grounding,
 )
 from eom_protocol.general_chat_worker_messages import chat_worker_ticket
 

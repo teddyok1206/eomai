@@ -23,14 +23,20 @@ from eom_protocol.general_chat import (
 from eom_protocol.general_chat_grounding import (
     AgentChatTurnInput,
     AgentChatTurnResult,
-    ChatInputContract,
-    ChatResultContract,
     GroundedChatTurnInput,
     GroundedChatTurnResult,
-    read_chat_input,
     read_grounded_chat_input,
 )
+from eom_protocol.general_chat_rag_knowledge import read_rag
+from eom_protocol.general_chat_rag_tools import ChatRagToolPort
+from eom_protocol.general_chat_rag_turn import RagChatTurnInput, RagChatTurnResult
 from eom_protocol.general_chat_tools import ChatToolPort
+from eom_protocol.general_chat_turn_contracts import (
+    ChatInputContract,
+    ChatResultContract,
+    read_chat_input,
+)
+from jsonschema import ValidationError as SchemaError
 
 from eom_orchestrator.general_chat_agent_native import (
     AGENT_CHAT_INSTRUCTIONS,
@@ -43,6 +49,16 @@ from eom_orchestrator.general_chat_grounded_prompt import (
     grounded_chat_result,
     grounded_chat_text,
 )
+from eom_orchestrator.general_chat_rag_native import (
+    RAG_CHAT_INSTRUCTIONS,
+    NativeRagChatTools,
+    native_rag_tools,
+    rag_chat_output_schema,
+    rag_chat_text,
+)
+
+NativeChatInput = ChatInputContract
+NativeChatResult = ChatResultContract
 
 NATIVE_PROFILE = "codex-app-server/0.160.0/environment-free/1.0"
 MAX_EVENT_BYTES = 1048576
@@ -207,7 +223,7 @@ class CodexChatSession:
         self._events = 0
         self._deadline = 0.0
         self._retired_threads: set[str] = set()
-        self._tools: NativeChatTools | None = None
+        self._tools: NativeChatTools | NativeRagChatTools | None = None
         self._tool_items: dict[str, tuple[str, object]] = {}
         self._answered_tools: set[str] = set()
         self._server_request_ids: set[str | int] = set()
@@ -315,7 +331,7 @@ class CodexChatSession:
                 raise NativeChatError()
         self._pending.clear()
 
-    def _start_thread(self, request: ChatInputContract) -> str:
+    def _start_thread(self, request: NativeChatInput) -> str:
         response = self._rpc(
             "thread/start",
             {
@@ -326,13 +342,17 @@ class CodexChatSession:
                 "sandbox": "read-only",
                 "ephemeral": True,
                 "environments": [],
-                "dynamicTools": native_chat_tools()
+                "dynamicTools": native_rag_tools()
+                if isinstance(request, RagChatTurnInput)
+                else native_chat_tools()
                 if isinstance(request, AgentChatTurnInput)
                 else [],
                 "runtimeWorkspaceRoots": [],
                 "selectedCapabilityRoots": [],
                 "allowProviderModelFallback": False,
-                "baseInstructions": AGENT_CHAT_INSTRUCTIONS
+                "baseInstructions": RAG_CHAT_INSTRUCTIONS
+                if isinstance(request, RagChatTurnInput)
+                else AGENT_CHAT_INSTRUCTIONS
                 if isinstance(request, AgentChatTurnInput)
                 else GROUNDED_CHAT_INSTRUCTIONS
                 if isinstance(request, GroundedChatTurnInput)
@@ -383,18 +403,26 @@ class CodexChatSession:
         self, request: AgentChatTurnInput, *, tools: ChatToolPort
     ) -> AgentChatTurnResult: ...
 
+    @overload
+    def answer(self, request: RagChatTurnInput, *, tools: ChatRagToolPort) -> RagChatTurnResult: ...
+
     def answer(
-        self, request: ChatInputContract, *, tools: ChatToolPort | None = None
-    ) -> ChatResultContract:
+        self, request: NativeChatInput, *, tools: ChatToolPort | ChatRagToolPort | None = None
+    ) -> NativeChatResult:
         self._tools = None
         self._tool_items.clear()
         self._answered_tools.clear()
         self._server_request_ids.clear()
-        if isinstance(request, AgentChatTurnInput):
+        if isinstance(request, RagChatTurnInput):
+            read_rag("Input", request.model_dump(mode="json"), RagChatTurnInput)
+            if tools is None:
+                raise NativeChatError("CHAT_ISOLATION_NOT_READY")
+            self._tools = NativeRagChatTools(request, cast(ChatRagToolPort, tools))
+        elif isinstance(request, AgentChatTurnInput):
             read_chat_input(request.model_dump(mode="json"))
             if tools is None:
                 raise NativeChatError("CHAT_ISOLATION_NOT_READY")
-            self._tools = NativeChatTools(request, tools)
+            self._tools = NativeChatTools(request, cast(ChatToolPort, tools))
         elif isinstance(request, GroundedChatTurnInput):
             read_grounded_chat_input(request.model_dump(mode="json"))
         else:
@@ -409,7 +437,9 @@ class CodexChatSession:
                 "input": [
                     {
                         "type": "text",
-                        "text": grounded_chat_text(request)
+                        "text": rag_chat_text(request)
+                        if isinstance(request, RagChatTurnInput)
+                        else grounded_chat_text(request)
                         if isinstance(request, (GroundedChatTurnInput, AgentChatTurnInput))
                         else request.messages[-1].text,
                         "textElements": [],
@@ -419,7 +449,9 @@ class CodexChatSession:
                 "sandboxPolicy": {"type": "readOnly", "networkAccess": False},
                 "environments": [],
             }
-            if isinstance(request, (GroundedChatTurnInput, AgentChatTurnInput)):
+            if isinstance(request, RagChatTurnInput):
+                turn_parameters["outputSchema"] = rag_chat_output_schema()
+            elif isinstance(request, (GroundedChatTurnInput, AgentChatTurnInput)):
                 turn_parameters["outputSchema"] = grounded_chat_output_schema(request)
             response = self._rpc(
                 "turn/start",
@@ -449,7 +481,7 @@ class CodexChatSession:
             failure = "CODEX_TIMEOUT"
         except OSError:
             failure = "CODEX_UNAVAILABLE"
-        except (ValueError, NativeChatError) as exc:
+        except (ValueError, SchemaError, NativeChatError) as exc:
             failure = exc.code if isinstance(exc, NativeChatError) else "CODEX_PROTOCOL_INVALID"
         # Protocol method names are bounded metadata, not frame contents. Never
         # export model text, tool arguments, account data or raw error bodies.
@@ -598,7 +630,7 @@ class CodexChatSession:
             return
         if kind == "dynamicToolCall" and self._tools is not None:
             tool = _handle(item.get("tool"))
-            if tool not in {"search_eom_items", "read_eom_items"}:
+            if tool not in self._tools.tool_names:
                 raise NativeChatError("CHAT_ISOLATION_NOT_READY")
             value = (tool, item.get("arguments"))
             if item_id in self._tool_items and self._tool_items[item_id] != value:
@@ -611,7 +643,7 @@ class CodexChatSession:
             if not completed and item.get("status") != "inProgress":
                 raise NativeChatError()
             self._tool_items[item_id] = value
-            if len(self._tool_items) > 5:
+            if len(self._tool_items) > self._tools.max_calls:
                 raise NativeChatError()
             return
         if kind != "agentMessage":
@@ -636,10 +668,14 @@ class CodexChatSession:
             raise NativeChatError()
 
     def _result(
-        self, request: ChatInputContract, *, reply: str, failure: str | None
-    ) -> ChatResultContract:
+        self, request: NativeChatInput, *, reply: str, failure: str | None
+    ) -> NativeChatResult:
+        if isinstance(request, RagChatTurnInput):
+            if not isinstance(self._tools, NativeRagChatTools):
+                raise NativeChatError("CHAT_ISOLATION_NOT_READY")
+            return self._tools.result(reply=reply, failure=failure)
         if isinstance(request, AgentChatTurnInput):
-            if self._tools is None:
+            if not isinstance(self._tools, NativeChatTools):
                 raise NativeChatError("CHAT_ISOLATION_NOT_READY")
             return self._tools.result(reply=reply, failure=failure)
         if isinstance(request, GroundedChatTurnInput):

@@ -8,6 +8,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from eom_protocol.general_chat_rag_knowledge import ChatRagPolicy
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.engine import URL, make_url
 
@@ -33,6 +34,7 @@ class ChatOwnerConfiguration:
     database_url: URL
     source_commit: str
     model: str
+    rag_policy: ChatRagPolicy | None = None
 
     @classmethod
     def from_environment(cls, values: Mapping[str, str]) -> ChatOwnerConfiguration:
@@ -41,6 +43,16 @@ class ChatOwnerConfiguration:
             url = make_url(values["EOM_GENERAL_CHAT_DATABASE_URL"])
             commit = values["EOM_RUNTIME_SOURCE_COMMIT"]
             model = values["EOM_GENERAL_CHAT_MODEL"]
+            protocol = values.get("EOM_GENERAL_CHAT_PROTOCOL_VERSION", "3")
+            revision = values.get("EOM_GENERAL_CHAT_RAG_POLICY_REVISION_ID")
+            digest = values.get("EOM_GENERAL_CHAT_RAG_POLICY_SHA256")
+            rag_policy = None
+            if protocol == "4":
+                rag_policy = ChatRagPolicy.model_validate(
+                    {"access_policy_revision_id": revision, "sha256": digest}
+                )
+            elif protocol != "3" or revision is not None or digest is not None:
+                raise ValueError()
             if (
                 url.drivername != "postgresql+psycopg"
                 or url.username != OWNER_DATABASE_ROLE
@@ -53,7 +65,7 @@ class ChatOwnerConfiguration:
                 or re.fullmatch(r"[A-Za-z0-9._-]{1,128}", model) is None
             ):
                 raise ValueError()
-            return cls(url, commit, model)
+            return cls(url, commit, model, rag_policy)
         except (KeyError, ValueError):
             raise ChatError("GENERAL_CHAT_OWNER_CONFIGURATION_INVALID") from None
 

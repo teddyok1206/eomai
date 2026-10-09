@@ -58,15 +58,25 @@ def main() -> int:
         )
         repository = GeneralChatRepository(metadata)
         knowledge = CatalogChatKnowledgeClient()
-        execution = GeneralChatExecutionService(repository, evidence, knowledge=knowledge)
-        policy = source_chat_worker_policy(model=config.model)
+        execution = GeneralChatExecutionService(
+            repository,
+            evidence,
+            knowledge=knowledge,
+            rag_knowledge=knowledge,
+            rag_policy=config.rag_policy,
+        )
+        policy = source_chat_worker_policy(
+            model=config.model, protocol=4 if config.rag_policy is not None else 3
+        )
         endpoint = ChatSocketEndpoint(
             Path("/run/eom-general-chat-worker/worker.sock"),
             worker.pw_uid,
             worker.pw_gid,
         )
         server = GeneralChatOwnerRpcServer(
-            GeneralChatConversationOwner(repository, evidence, knowledge=knowledge),
+            GeneralChatConversationOwner(
+                repository, evidence, knowledge=knowledge, rag_knowledge=knowledge
+            ),
             endpoint=ChatSocketEndpoint(OWNER_SOCKET, owner.pw_uid, api_group.gr_gid),
             allowed_uids=frozenset({api.pw_uid}),
         )

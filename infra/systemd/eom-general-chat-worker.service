@@ -13,6 +13,7 @@ WorkingDirectory=/srv/eom/workspaces/general-chat/native
 Environment=HOME=/srv/eom/worker-homes/eom-cdx-chat
 Environment=CODEX_HOME=/srv/eom/worker-homes/eom-cdx-chat/.codex
 Environment=LANG=C.UTF-8
+Environment=EOM_GENERAL_CHAT_PROTOCOL_VERSION=3
 # Non-secret explicit model pin; never an API key or auth copy.
 EnvironmentFile=/etc/eom/general-chat-model.env
 RuntimeDirectory=eom-general-chat-worker
@@ -21,7 +22,7 @@ RuntimeDirectoryMode=0750
 StateDirectory=eom-general-chat-worker
 StateDirectoryMode=0700
 ExecStartPre=/usr/bin/install -d -m 0700 /var/lib/eom-general-chat-worker/handoff /run/eom-general-chat-worker/native-logs
-ExecStart=/srv/eom/conda/envs/eom-api/bin/python -I -m eom_orchestrator.general_chat_worker_main --model ${EOM_GENERAL_CHAT_MODEL}
+ExecStart=/srv/eom/conda/envs/eom-api/bin/python -I -m eom_orchestrator.general_chat_worker_main --model ${EOM_GENERAL_CHAT_MODEL} --protocol ${EOM_GENERAL_CHAT_PROTOCOL_VERSION}
 
 NoNewPrivileges=true
 PrivateTmp=true

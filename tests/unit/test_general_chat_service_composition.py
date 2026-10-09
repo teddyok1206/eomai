@@ -33,6 +33,33 @@ def test_owner_configuration_is_explicit_frozen_and_does_not_render_password():
         config.model = "other"
 
 
+def test_rag_configuration_requires_explicit_protocol_and_both_immutable_policy_pins():
+    from tests.unit.general_chat_rag_fixtures import scope
+
+    pins = {
+        "EOM_GENERAL_CHAT_PROTOCOL_VERSION": "4",
+        "EOM_GENERAL_CHAT_RAG_POLICY_REVISION_ID": scope().policy.access_policy_revision_id,
+        "EOM_GENERAL_CHAT_RAG_POLICY_SHA256": scope().policy.sha256,
+    }
+    assert (
+        runtime.ChatOwnerConfiguration.from_environment(VALUES | pins).rag_policy == scope().policy
+    )
+    assert runtime.ChatOwnerConfiguration.from_environment(VALUES).rag_policy is None
+    for key in pins:
+        missing = dict(pins)
+        del missing[key]
+        with pytest.raises(ChatError, match="CONFIGURATION_INVALID"):
+            runtime.ChatOwnerConfiguration.from_environment(VALUES | missing)
+    for invalid in (
+        {"EOM_GENERAL_CHAT_PROTOCOL_VERSION": "5"},
+        {"EOM_GENERAL_CHAT_PROTOCOL_VERSION": "3"},
+        {"EOM_GENERAL_CHAT_RAG_POLICY_REVISION_ID": "latest"},
+        {"EOM_GENERAL_CHAT_RAG_POLICY_SHA256": "bad"},
+    ):
+        with pytest.raises(ChatError, match="CONFIGURATION_INVALID"):
+            runtime.ChatOwnerConfiguration.from_environment(VALUES | pins | invalid)
+
+
 @pytest.mark.parametrize(
     "key,value",
     [

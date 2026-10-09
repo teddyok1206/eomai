@@ -13,7 +13,7 @@ from eom_protocol.general_chat_grounding import (
     ChatKnowledgeItem,
     ChatKnowledgeSnapshot,
 )
-from eom_protocol.general_chat_worker_messages import ChatWorkerTicket
+from eom_protocol.general_chat_ticket import ChatWorkerTicket
 
 TOOL_RECORD_SCHEMA = "eom://schemas/general-chat/tool-record/1.0"
 

@@ -9,10 +9,13 @@ from time import monotonic
 from uuid import uuid4
 
 from eom_protocol.general_chat_dispatch import ChatExecutionIdentity
-from eom_protocol.general_chat_grounding import ChatInputContract as ChatTurnInput
-from eom_protocol.general_chat_grounding import ChatResultContract as ChatTurnResult
 from eom_protocol.general_chat_grounding import read_agent
+from eom_protocol.general_chat_rag_knowledge import read_rag
+from eom_protocol.general_chat_rag_tools import ChatToolRequestV2
+from eom_protocol.general_chat_rag_turn import RagChatTurnInput
 from eom_protocol.general_chat_tools import ChatToolRequest
+from eom_protocol.general_chat_turn_contracts import ChatInputContract as ChatTurnInput
+from eom_protocol.general_chat_turn_contracts import ChatResultContract as ChatTurnResult
 from eom_protocol.general_chat_worker_messages import (
     ChatWorkerAdmission,
     ChatWorkerCommand,
@@ -31,6 +34,7 @@ from eom_protocol.general_chat_worker_messages import (
 )
 from jsonschema import ValidationError as SchemaError
 
+from eom_orchestrator.general_chat_rag_broker import ChatRagToolBroker
 from eom_orchestrator.general_chat_socket import (
     WORKER_EXECUTE_TIMEOUT,
     WORKER_FRAME_LIMIT,
@@ -52,7 +56,7 @@ class ChatWorkerClient:
         *,
         endpoint: ChatSocketEndpoint,
         policy: ChatWorkerPolicy,
-        tools: Callable[[ChatWorkerRequest], ChatToolBroker] | None = None,
+        tools: Callable[[ChatWorkerRequest], ChatToolBroker | ChatRagToolBroker] | None = None,
     ) -> None:
         self.endpoint = endpoint
         self.policy = read_chat_worker_policy(policy.model_dump(mode="json"))
@@ -80,11 +84,23 @@ class ChatWorkerClient:
                 if chat_peer_uid(connection) != self.endpoint.owner_uid:
                     raise ChatTransportError("INVALID")
                 send_chat_stream(connection, request.model_dump(mode="json"), deadline=deadline)
-                for _ in range(6):
+                rag = isinstance(request.command, ChatWorkerExecute) and isinstance(
+                    request.command.turn, RagChatTurnInput
+                )
+                for _ in range(8 if rag else 6):
                     document = receive_chat_stream(connection, deadline=deadline)
+                    if document.get("schema_version") == "general-chat-tool-request/2.0":
+                        if not rag or not isinstance(broker, ChatRagToolBroker):
+                            raise ChatTransportError("INVALID")
+                        intent_v2 = read_rag("Request", document, ChatToolRequestV2)
+                        reply_v2 = broker.execute(intent_v2)
+                        send_chat_stream(
+                            connection, reply_v2.model_dump(mode="json"), deadline=deadline
+                        )
+                        continue
                     if document.get("schema_version") != "general-chat-tool-request/1.0":
                         return document
-                    if broker is None:
+                    if rag or not isinstance(broker, ChatToolBroker):
                         raise ChatTransportError("INVALID")
                     intent = read_agent("Request", document, ChatToolRequest)
                     reply = broker.execute(intent)
@@ -95,7 +111,9 @@ class ChatWorkerClient:
 
     def _call(self, command: ChatWorkerCommand) -> ChatWorkerReply:
         request = ChatWorkerRequest(
-            schema_version="general-chat-worker-request/3.0"
+            schema_version="general-chat-worker-request/4.0"
+            if self.policy.schema_version.endswith("/4.0")
+            else "general-chat-worker-request/3.0"
             if self.policy.schema_version.endswith("/3.0")
             else "general-chat-worker-request/2.0"
             if self.policy.schema_version.endswith("/2.0")
@@ -111,7 +129,7 @@ class ChatWorkerClient:
         try:
             reply_document = (
                 self._stream(request)
-                if request.schema_version.endswith("/3.0")
+                if request.schema_version.endswith(("/3.0", "/4.0"))
                 else exchange_chat_frame(
                     self.endpoint,
                     document,

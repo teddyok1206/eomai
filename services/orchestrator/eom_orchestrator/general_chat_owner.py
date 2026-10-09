@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Literal
@@ -21,22 +22,33 @@ from eom_protocol.general_chat_grounding import (
     AgentChatTurnInput,
     AgentChatTurnResult,
     ChatGroundingViews,
-    ChatInputContract,
     ChatKnowledgeContext,
     ChatKnowledgeItem,
     ChatKnowledgeSelection,
     ChatKnowledgeSnapshot,
     ChatKnowledgeSourceCard,
-    ChatResultContract,
     ChatTurnGroundingView,
     GroundedChatSubmission,
     GroundedChatTurnInput,
     GroundedChatTurnResult,
     StoredGroundedChatMessage,
-    read_chat_result,
     read_grounding,
     validate_agent_citations,
     validate_chat_citations,
+)
+from eom_protocol.general_chat_rag_knowledge import ChatRagContext, read_rag
+from eom_protocol.general_chat_rag_turn import (
+    ChatGroundingViewsV2,
+    ChatRagSourceCard,
+    ChatTurnGroundingViewV2,
+    RagChatTurnInput,
+    RagChatTurnResult,
+    validate_rag_citations,
+)
+from eom_protocol.general_chat_turn_contracts import (
+    ChatInputContract,
+    ChatResultContract,
+    read_chat_result,
 )
 from eom_protocol.general_chat_views import (
     GeneralChatConversation,
@@ -58,21 +70,25 @@ from eom_orchestrator.general_chat_evidence import (
     result_evidence,
     user_evidence,
 )
-from eom_orchestrator.general_chat_knowledge import ChatKnowledgePort
+from eom_orchestrator.general_chat_knowledge import ChatKnowledgePort, ChatRagKnowledgePort
 from eom_orchestrator.general_chat_models import (
     GeneralChatConversationRecord,
     GeneralChatTurnRecord,
 )
+from eom_orchestrator.general_chat_rag_access import authorize_rag_context
+from eom_orchestrator.general_chat_rag_broker import rag_tool_knowledge
 from eom_orchestrator.general_chat_repository import GeneralChatRepository
 from eom_orchestrator.general_chat_state import ChatError, chat_runtime_available, public_chat_state
 from eom_orchestrator.general_chat_tool_broker import agent_tool_knowledge
 
-type ResolvedChatTurn = tuple[
-    StoredChatMessage | StoredGroundedChatMessage,
-    ChatInputContract | None,
-    ChatResultContract | None,
-    ChatKnowledgeContext | None,
-]
+
+@dataclass(frozen=True, slots=True)
+class ResolvedChatTurn:
+    user: StoredChatMessage | StoredGroundedChatMessage
+    request: ChatInputContract | None
+    answer: ChatResultContract | None
+    item: ChatKnowledgeContext | None
+    rag: ChatRagContext | None = None
 
 
 def chat_now() -> datetime:
@@ -144,11 +160,13 @@ class GeneralChatConversationOwner:
         *,
         clock: Callable[[], datetime] = chat_now,
         knowledge: ChatKnowledgePort | None = None,
+        rag_knowledge: ChatRagKnowledgePort | None = None,
     ) -> None:
         self.repository = repository
         self.evidence = evidence
         self.clock = clock
         self.knowledge = knowledge
+        self.rag_knowledge = rag_knowledge
 
     def slot(self) -> GeneralChatSlot:
         now = self.clock()
@@ -403,8 +421,9 @@ class GeneralChatConversationOwner:
         if len(materialized) != len(pointers):
             raise ChatError("GENERAL_CHAT_POINTER_INVALID")
         payloads = iter(zip(pointers, materialized, strict=True))
-        result = {}
+        result: dict[str, ResolvedChatTurn] = {}
         groups: dict[ChatKnowledgeSnapshot | None, dict[str, ChatKnowledgeItem]] = {}
+        rag_contexts: dict[str, ChatRagContext] = {}
         for turn in turns:
             pointer, payload = next(payloads)
             require_evidence(pointer, payload, schema_ref=pointer.schema_ref)
@@ -437,7 +456,9 @@ class GeneralChatConversationOwner:
                 )
                 read_chat_result(answer.model_dump(mode="json"), request=request)
                 if (
-                    isinstance(request, (GroundedChatTurnInput, AgentChatTurnInput))
+                    isinstance(
+                        request, (GroundedChatTurnInput, AgentChatTurnInput, RagChatTurnInput)
+                    )
                     and request.knowledge is not None
                 ):
                     selections.append(request.knowledge.selection)
@@ -448,13 +469,16 @@ class GeneralChatConversationOwner:
                     if existing is not None and existing != ref:
                         raise ChatError("GENERAL_CHAT_POINTER_INVALID")
                     group[ref.item_revision_id] = ref
-            result[turn.turn_id] = (
-                user,
-                request,
-                answer,
-                request.knowledge
-                if isinstance(request, (GroundedChatTurnInput, AgentChatTurnInput))
+            result[turn.turn_id] = ResolvedChatTurn(
+                user=user,
+                request=request,
+                answer=answer,
+                item=request.knowledge
+                if isinstance(
+                    request, (GroundedChatTurnInput, AgentChatTurnInput, RagChatTurnInput)
+                )
                 else None,
+                rag=request.rag_knowledge if isinstance(request, RagChatTurnInput) else None,
             )
         if next(payloads, None) is not None:
             raise ChatError("GENERAL_CHAT_POINTER_INVALID")
@@ -462,13 +486,15 @@ class GeneralChatConversationOwner:
         tool_pointers = tuple(
             dict.fromkeys(
                 p
-                for _, _, answer, _ in result.values()
-                if isinstance(answer, AgentChatTurnResult)
-                for p in answer.tool_records
+                for value in result.values()
+                if isinstance(value.answer, (AgentChatTurnResult, RagChatTurnResult))
+                for p in value.answer.tool_records
             )
         )
         tool_payloads = dict(zip(tool_pointers, self.evidence.read(tool_pointers), strict=True))
-        for turn_id, (user, request, answer, _prepared) in tuple(result.items()):
+        for turn_id, value in tuple(result.items()):
+            request, answer = value.request, value.answer
+            tool_selections: tuple[ChatKnowledgeSelection, ...] = ()
             if isinstance(request, AgentChatTurnInput) and isinstance(answer, AgentChatTurnResult):
                 resolved = agent_tool_knowledge(
                     request,
@@ -476,14 +502,31 @@ class GeneralChatConversationOwner:
                     self.evidence,
                     payloads=tuple(tool_payloads[p] for p in answer.tool_records),
                 )
-                result[turn_id] = (user, request, answer, resolved.context)
-                for selection in resolved.selections:
-                    group = groups.setdefault(selection.snapshot, {})
-                    for ref in selection.references:
-                        prior = group.get(ref.item_revision_id)
-                        if prior is not None and prior != ref:
-                            raise ChatError("GENERAL_CHAT_POINTER_INVALID")
-                        group[ref.item_revision_id] = ref
+                result[turn_id] = ResolvedChatTurn(value.user, request, answer, resolved.context)
+                tool_selections = resolved.selections
+            elif isinstance(request, RagChatTurnInput) and isinstance(answer, RagChatTurnResult):
+                rag_resolved = rag_tool_knowledge(
+                    request,
+                    answer,
+                    self.evidence,
+                    payloads=tuple(tool_payloads[p] for p in answer.tool_records),
+                )
+                result[turn_id] = ResolvedChatTurn(
+                    value.user, request, answer, rag_resolved.item, rag_resolved.rag
+                )
+                tool_selections = rag_resolved.selections
+                for rag_context in rag_resolved.rag_contexts:
+                    prior_context = rag_contexts.get(rag_context.context_sha256)
+                    if prior_context is not None and prior_context != rag_context:
+                        raise ChatError("GENERAL_CHAT_POINTER_INVALID")
+                    rag_contexts[rag_context.context_sha256] = rag_context
+            for selection in tool_selections:
+                group = groups.setdefault(selection.snapshot, {})
+                for ref in selection.references:
+                    prior = group.get(ref.item_revision_id)
+                    if prior is not None and prior != ref:
+                        raise ChatError("GENERAL_CHAT_POINTER_INVALID")
+                    group[ref.item_revision_id] = ref
         for snapshot, group in groups.items():
             if self.knowledge is None or actor_id is None:
                 raise ChatError("GENERAL_CHAT_FORBIDDEN")
@@ -496,6 +539,8 @@ class GeneralChatConversationOwner:
                     ),
                     purpose="AUTHORIZE",
                 )
+        for rag_context in rag_contexts.values():
+            authorize_rag_context(self.rag_knowledge, actor_id=actor_id, context=rag_context)
         return result
 
     def project_messages(
@@ -513,7 +558,8 @@ class GeneralChatConversationOwner:
         )
         messages = []
         for turn in turns:
-            user, _, answer, _ = resolved[turn.turn_id]
+            value = resolved[turn.turn_id]
+            user, answer = value.user, value.answer
             state = public_chat_state(turn.state)
             messages.append(
                 GeneralChatMessage(
@@ -539,7 +585,7 @@ class GeneralChatConversationOwner:
 
     def grounding(
         self, *, actor_id: str, conversation_id: str, turn_ids: tuple[str, ...]
-    ) -> ChatGroundingViews:
+    ) -> ChatGroundingViews | ChatGroundingViewsV2:
         if not 1 <= len(turn_ids) <= 50 or len(set(turn_ids)) != len(turn_ids):
             raise ChatError("GENERAL_CHAT_PROTOCOL_INVALID")
         from sqlalchemy import select
@@ -560,9 +606,44 @@ class GeneralChatConversationOwner:
         if {row.turn_id for row in rows} != set(turn_ids):
             raise ChatError("GENERAL_CHAT_NOT_FOUND")
         resolved = self.resolved_turns(conversation_id, rows, actor_id=actor_id)
-        values = []
+        values: list[ChatTurnGroundingView | ChatTurnGroundingViewV2] = []
+        has_rag = False
         for row in rows:
-            _, request, answer, knowledge = resolved[row.turn_id]
+            value = resolved[row.turn_id]
+            request, answer, knowledge = value.request, value.answer, value.item
+            if isinstance(request, RagChatTurnInput) and isinstance(answer, RagChatTurnResult):
+                has_rag = True
+                rag_receipt = validate_rag_citations(request, answer, item=knowledge, rag=value.rag)
+                item_sources = () if knowledge is None else knowledge.sources
+                rag_sources = () if value.rag is None else value.rag.sources
+                cards = tuple(
+                    ChatKnowledgeSourceCard.model_validate(
+                        source.model_dump(
+                            mode="json",
+                            include={"key", "item", "display_name", "kind", "approval", "location"},
+                        )
+                    )
+                    for source in item_sources
+                    if source.key in rag_receipt.used_source_keys
+                )
+                rag_cards = tuple(
+                    ChatRagSourceCard.model_validate(
+                        source.model_dump(mode="json", exclude={"text"})
+                    )
+                    for source in rag_sources
+                    if source.key in rag_receipt.used_source_keys
+                )
+                values.append(
+                    ChatTurnGroundingViewV2(
+                        turn_id=row.turn_id,
+                        sources=(*cards, *rag_cards),
+                        receipt=rag_receipt,
+                        observed_at=None
+                        if request.agent_state is None
+                        else request.agent_state.observed_at,
+                    )
+                )
+                continue
             sources: tuple[ChatKnowledgeSourceCard, ...] = ()
             receipt = None
             observed = None
@@ -598,10 +679,25 @@ class GeneralChatConversationOwner:
                     turn_id=row.turn_id, sources=sources, receipt=receipt, observed_at=observed
                 )
             )
+        if has_rag:
+            return read_rag(
+                "Views",
+                ChatGroundingViewsV2(
+                    conversation_id=conversation_id,
+                    values=tuple(
+                        ChatTurnGroundingViewV2.model_validate(v.model_dump(mode="json"))
+                        for v in values
+                    ),
+                ).model_dump(mode="json"),
+                ChatGroundingViewsV2,
+            )
         return read_grounding(
             "Views",
-            ChatGroundingViews(conversation_id=conversation_id, values=tuple(values)).model_dump(
-                mode="json"
-            ),
+            ChatGroundingViews(
+                conversation_id=conversation_id,
+                values=tuple(
+                    ChatTurnGroundingView.model_validate(v.model_dump(mode="json")) for v in values
+                ),
+            ).model_dump(mode="json"),
             ChatGroundingViews,
         )

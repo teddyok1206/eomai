@@ -32,6 +32,7 @@ WORKER_SOCKET = Path("/run/eom-general-chat-worker/worker.sock")
 def main() -> int:
     parser = argparse.ArgumentParser(description="EOM isolated dedicated chat worker")
     parser.add_argument("--model", required=True, help="Explicit installed model pin; no fallback")
+    parser.add_argument("--protocol", choices=(3, 4), type=int, default=3)
     args = parser.parse_args()
     native: IsolatedCodexChatWorker | None = None
     try:
@@ -42,7 +43,9 @@ def main() -> int:
         stop = Event()
         for number in (signal.SIGINT, signal.SIGTERM):
             signal.signal(number, lambda *_: stop.set())
-        selected = source_chat_worker_policy(model=args.model)
+        selected = source_chat_worker_policy(
+            model=args.model, protocol=4 if args.protocol == 4 else 3
+        )
         with ChatLocalHandoff(HANDOFF_DIRECTORY, worker_uid=worker.pw_uid) as handoff:
             native = IsolatedCodexChatWorker(policy=selected)
             application = ChatWorkerApplication(
