@@ -1,9 +1,12 @@
 # CHAT-RAG-2: textbook evidence in conversational answers
 
-Status: contracts, Catalog read path, native/owner/history and Web/BFF source implemented,
-2026-10-09 UTC. User authorized implementation and requested a goal including operational
-connection. Compatible installation/activation and actual textbook conversation evidence
-remain pending. This is not live acceptance.
+Status: compatible operational connection and bounded actual HTTPS/native/canonical
+acceptance PASS, 2026-10-09 UTC. Textbook analysis informed an initial answer and
+an exact-evidence follow-up; source cards and prior completed history were verified.
+Installed pins, failures, call accounting and limits are in the
+[live acceptance](../status/GENERAL_CHAT_TEXTBOOK_RAG_ACCEPTANCE_2026-10-09.md).
+The checkpoints below preserve their original narrower evidence, not a claim of
+educational-quality approval or access expansion.
 
 ## Design boundary (required design procedure)
 
@@ -90,7 +93,8 @@ not copied into another search or state-machine framework. Offline validators
 share one immutable parsed schema registry; a counted-read regression checks that
 the five schema resources are parsed once, not once per definition.
 
-`AGENTS.md` records supported RAG use, installed-tool availability, exact-pinned
+At this historical contract-foundation checkpoint, `AGENTS.md` records supported
+RAG use, installed-tool availability, exact-pinned
 follow-up and honest source classification. It does not grant access or turn on a
 planned native tool. Actual Catalog actor/source authorization, read-only retrieval,
 native duplex integration, source-card rendering, disposable persistence tests,
@@ -156,8 +160,15 @@ Staging keeps both chat services stopped. Activation uses an exact policy and
 worker protocol pin; nonsecret model configuration advances only from its supplied
 predecessor hash, and changed units only from the named predecessor source bytes.
 Protected credentials, worker authentication and conversation history are untouched.
-Source/disposable evidence and the remaining live gates are recorded in
+Source/disposable evidence and the then-pending live gates are recorded in
 `docs/status/GENERAL_CHAT_RAG_NATIVE_CHECKPOINT_2026-10-09.md`.
+
+The current HTTP owner boundary has one finite 50-second deadline for all seven
+chat-owner operations, covering the existing authoritative 45-second RPC. Other
+API and Catalog-search limits stay unchanged. A timed-out write is not proof of
+nonprocessing: use the same conversation/request identity for supported lookup or
+idempotent replay, never a replacement generation. The accepted follow-up's lost
+HTTP response was recovered by read-only display of its already-completed turn.
 
 - Define JSON Schema 2020-12 before runtime behavior; mirror bundled schemas and
   frozen Pydantic contracts. Test released V1–V3 byte preservation.

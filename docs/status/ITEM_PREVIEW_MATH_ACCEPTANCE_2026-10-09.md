@@ -51,3 +51,14 @@ Design, dependency rationale and safety limits:
 [Item Preview math presentation](../architecture/ITEM_PREVIEW_MATH_PRESENTATION.md).
 The independent textbook GraphRAG goal remains active; this fix does not claim its
 native tool connection or operational acceptance is complete.
+
+## Final compatible Web regression
+
+After the independent RAG rollout, final installed Web source
+`c0558ecfe534e40c3ee91ea4fd9b099afa14ec34` was checked again through actual
+authenticated HTTPS. The same Item Revision/Preview digest still yields 43
+MathML expressions, zero fallback/page errors/mutations, visible content and
+loading-area height 0. Full Web successor regression is 289 PASS; installed
+44-file RECORD PASS. No Item or HWPX regeneration occurred.
+The independent RAG connection is now technically accepted in
+[its bounded live record](GENERAL_CHAT_TEXTBOOK_RAG_ACCEPTANCE_2026-10-09.md).
