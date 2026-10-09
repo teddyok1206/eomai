@@ -74,14 +74,14 @@ readiness가 정본입니다.
 | --- | --- |
 | 단일 문항 Workflow | `generic-item-development@1.16.0` |
 | 역할 protocol / 결과 | `workflow-role/1.24.0` / `authoring·image·review·registration-result@12.0` |
-| Content Pack | `generated-knowledge-item@1.20.14` |
+| Content Pack | `generated-knowledge-item@1.20.15` |
 | 표준 / RAG 실행 정책 | `standard-control-bootstrap/17.0` / `knowledge-item-control-bootstrap/14.0` |
 | 단일 문항 실행 계획 | Graph `resolved-execution-plan/19.0` / ungrounded `20.0` |
 | Canonical Item | `assessment-item-content/3.0`, Catalog protocol `catalog/1.13` |
 | HWPX | `hwpx-content-team/3.0` |
 | 로컬 GPU prompt policy | `local-gpu-image-prompt-policy/1.6` (`1.4` replay 보존) |
 | 기출 풀이보고서 Workflow | `knowledge-analysis@10.0.0`, result `@10.0` |
-| 자료 형식 | `content-team-material-requirement/1.0`, Item Brief `4.0` |
+| 자료 형식 | `content-team-material-requirement/2.0`, Item Brief `5.0` (25문항 V5는 이전 pin 유지) |
 | 25문항 생산 | `mock-exam-production-plan/5.0`, execution `5.0` |
 | 제품 내 고객지원 | `customer-support@1.0.0`, role `workflow-role/1.22.0` |
 | 교육 문서 검토 | `pdf-document-review@1.2.0`, role `workflow-role/1.27.0`, result `@3.0`, plan `15.0` |
@@ -478,9 +478,16 @@ worker는 세 파일을 순서대로 모두 읽고 authoring 결과의 실제 `v
 | IMAGE 2개 | 서로 다른 PNG 2개 | 서로 다른 표 칸에 배치하고 `(가)/(나)`는 편집 가능한 텍스트 행 |
 | IMAGE + TABLE | IMAGE slot에만 PNG 1개 | 실제 요소 순서를 유지하고 두 요소 모두 panel label 없음 |
 
-즉 `<자료>`가 그림 없이 표 하나인 문항은 정상적인 독립 형식입니다. `TABLE_ONLY`는 정확히
+그림 없이 표 하나인 문항도 정상적인 독립 형식입니다. `TABLE_ONLY`는 정확히
 `PNG 0개 + native 표 1개 + panel label 0개 + 이미지 placeholder 0개`이며 Image worker를
 실행하지 않습니다. 표를 이미지로 바꾸거나 빈 1행 2열 이미지 틀을 만드는 것은 계약 위반입니다.
+
+Pack `1.20.15`는 일반 설명을 자연스럽게 윗발문에 제시하고, 불필요한 `<자료>` 제목·박스를
+추가하지 않도록 출제·검토 지침을 함께 보강합니다. 이것은 줄글 우선 규칙이 아닙니다. 적은
+수치, 미지수, 현상의 예와 설명 문장도 비교 관계에 맞으면 편집 가능한 native 표에 담습니다.
+명시적으로 요청된 자료 형식과 실제 조건·탐구 박스는 보존합니다. 새 단일 문항 요청의 운영
+활성화와 실제 등록된 프롬프트 검증은 [ADR 0160](docs/adr/0160-natural-stimulus-presentation.md)에
+기록했습니다. 기존 실행·문항 및 25문항 생산의 고정 버전은 변경하지 않습니다.
 
 `A`, `B`, `P`, `Q`, 축, 수치 같은 과학적 표시는 panel label과 다릅니다. 이 값은 GPU 픽셀이
 아니라 sanitizer를 통과한 결정론적 SVG overlay가 담당합니다. 로컬 GPU에는 worker가 작성한 짧은

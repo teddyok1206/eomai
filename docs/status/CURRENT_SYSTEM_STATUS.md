@@ -1,6 +1,25 @@
 # Current System Status
 
-Latest recorded update: 2026-10-08 (UTC). Older sections retain their observation dates.
+Latest recorded update: 2026-10-09 (UTC). Older sections retain their observation dates.
+
+## Natural prose and native table presentation activation — 2026-10-09 14:35 UTC
+
+The shared API/Catalog/Orchestrator release is installed from
+`578ddd9a8f23a1a3aa9be3ee6e256344230d98aa`. New single-item requests resolve released
+`generated-knowledge-item@1.20.15` in the existing development activation environment.
+Authoring and review both receive the same pinned Handoff V2 excerpt: ordinary explanation does
+not automatically become a labeled DATA box, while small numerical or qualitative comparisons
+can remain native tables. Explicit material requirements, original team-lead files, predecessor
+executions and the 25-item production contract are preserved.
+
+Authenticated API smoke, installed release/RECORD verification, isolation and readiness PASS.
+A read-only check against the registered Pack Artifact verified the exact bundle hash,
+Brief V5 compatibility and both rendered profile `12.2.1` prompts. All relevant services remain
+active; Web and the separate chat activation were not redeployed. No new migration, model/GPU
+invocation, Item generation or HWPX rebuild was performed. Actual generated editorial quality is
+not newly evaluated. Exact pins, evidence and rollback are in
+[ADR 0160](../adr/0160-natural-stimulus-presentation.md) and the
+[version matrix](../architecture/ACTIVE_RUNTIME_VERSION_MATRIX.md).
 
 ## Conversational internal search CHAT-READTOOLS-1 — 2026-10-08 19:02 UTC
 

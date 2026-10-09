@@ -321,3 +321,74 @@ provider model, GPU prompt, SVG policy revision, or image result schema is chang
 - Operational publication/activation/deployment: **NOT_PERFORMED**. Model/GPU/HWPX delivery runs:
   **0**. DB/NAS canonical data, existing Items, approved revisions and historical outputs:
   **UNCHANGED**. No claim of live editorial behavior or educational quality acceptance is made.
+
+### Operational activation at 2026-10-09 14:35 UTC
+
+The user explicitly authorized deployment/activation after the source checkpoint above. This
+follow-up supersedes its NOT_PERFORMED operational status, not its historical test scope.
+
+- Source commit: `578ddd9a8f23a1a3aa9be3ee6e256344230d98aa`; source tree:
+  `ea2438c17a7b20fb86a40c3b0584a3b9a5be9915`.
+- Installed source archive SHA:
+  `sha256:949b96c4eb9fb0aff23414b1ecc448ca0d987ede06b63b33dc3f576cd8e78882`.
+- Shared platform deployment: `scripts/api/deploy_release.sh --install`, run as the repository
+  operator using the authenticated `EOM:5` pane. Sudo's timestamp is terminal-scoped; no credential
+  was copied, exposed or supplied in chat to make another terminal inherit it.
+- Current worker-lease preflight: **0**. Mock-exam deployment admission: **READY**, 17 terminal
+  executions. The supported installer reran admission before package replacement.
+- Schema migration remains `20261008_0049`; no new migration/control/preset/Graph publication.
+- Wheel RECORD, installed imports, dependency check, runtime isolation, authenticated
+  login/me/refresh/logout smoke, live/ready health and post-install `--verify`: **PASS**.
+- API, Catalog application runner, Workflow runner/maintenance and HWPX application runner were
+  refreshed by the supported installer and are **ACTIVE**. Existing worker units/auth/model and
+  the six-slot configuration were not reinstalled. Web source
+  `67fafe99fec99e1f9bcd2293fe970c9ed18d8449` remains installed and **ACTIVE**.
+- Dedicated chat remains **ACTIVE** with its separate release pin
+  `d32f3ba75bc7a0b34305204d3dba43a009e99617`; no chat activation/restart was claimed. Its unchanged
+  code and existing pin are distinct from the newly installed shared environment's wheel source.
+
+The installed `eomctl` used the existing local operator composition and supported import → exact
+hash inspection → release → activate operations. Actor
+`operator_b205356d5b08052e981f4972c0befff6` was verified ACTIVE/ADMIN with release/activate
+permissions. The Studio's existing pack-key/environment selection requires no extra default file.
+
+| Identity | Committed value |
+| --- | --- |
+| Pack | `generated-knowledge-item@1.20.15`, **RELEASED** |
+| Release | `packrel_8dde7e96f50542e4932f55c8e76b8083` |
+| Activation | `activation_88c2e332a784425fa17d3c7702756839`, environment `development` |
+| Bundle Artifact / Revision | `artifact_26e457e0bdc44d98bf6afb33ddf795c1` / `rev_c685d933dd3e4ba6afc508de4d474653` |
+| Bundle SHA | `sha256:63785945ceaa226dcb63a278cb08cbc82f8dcf35b0a9e7df9b65dde5810f6f6c` |
+| Pack source-tree SHA | `sha256:e511a1361ee2b6b23957011703fa3d18031b100493d38eee6b7233d759b8d040` |
+| Pack manifest SHA | `sha256:5066344a005740dbb0523daeb176fd834fd2170e0270f35943419560d0e3c0aa` |
+
+Publication uses the Catalog application and its existing Orchestrator Artifact commit adapter,
+not direct row updates or NAS copies. Only the new activation pointer changes; existing Items,
+executions, production plans and historical result pins remain unchanged.
+
+Installed read-only proof ran under `python -I` with PostgreSQL transaction-read-only enforcement:
+`ContentPackService.resolve/inspect` → `WorkflowCatalogService.bind_request` →
+`PackResourceResolver.read` → public `render_prompt`. It read the committed Pack, not this
+checkout's prompt files. Brief V5 binding, exact bundle/SVG-policy map, authoring/review profile
+`12.2.1`, one V2 section each, its complete source SHA and resolved template variables all **PASS**.
+Template SHAs:
+
+- Authoring: `sha256:7e886718642a8493d8515cf2ccd9cd64ebbac5f4de8d7450f33cc3eb4c992bdc`.
+- Review: `sha256:0a15f38ea807a51d731e2b97decfbe3e0f14e45024cfdd6f9582ab16eb4351b3`.
+
+This was a synthetic-context rendering check, with **0 new model/Item/GPU/HWPX executions**;
+`prepare_prompt` and worker dispatch were not invoked. There is no new claim of educational
+quality, table-choice quality, Hancom visual acceptance or whole-exam acceptance. The original
+113 source PASS and independent 102 regression PASS are overlapping checks, not a summed count
+of distinct tests. The deployment turn also reran the 52 focused presentation tests successfully.
+
+Rollback for new requests reactivates predecessor
+`packrel_752cb927d929471eaefa374a1f581580` using the same supported CLI; do not delete new or old
+history. If runtime rollback is necessary, first restore the eligible predecessor activation and
+reinstall the three byte-verified wheels retained at
+`/tmp/eom-api-build/d32f3ba75bc7a0b34305204d3dba43a009e99617.u0uqpR/dist`, preserving compatible
+service configuration. The installed release record is
+`/var/lib/eom-api/deployments/578ddd9a8f23a1a3aa9be3ee6e256344230d98aa.json`.
+Task-local operator/proof logs are temporary materialization at
+`/tmp/eom-presentation-release-20261009.Q2zUUW`; they are not a canonical content store or Git
+payload. Source, installed release, active Pack and documentation commits remain separate identities.

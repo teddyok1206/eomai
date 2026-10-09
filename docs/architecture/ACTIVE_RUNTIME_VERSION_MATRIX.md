@@ -27,7 +27,7 @@ result schema를 기준으로 정리한다.
 
 | 제품 경로 | Workflow definition | Role protocol | 결과 계약 | 관련 selector |
 | --- | --- | --- | --- | --- |
-| 단일 문항 | `generic-item-development@1.16.0` | `workflow-role/1.24.0` | authoring/image/review/registration `@12.0` | Pack `generated-knowledge-item@1.20.14`; Graph plan `19.0`; ungrounded plan `20.0` |
+| 단일 문항 | `generic-item-development@1.16.0` | `workflow-role/1.24.0` | authoring/image/review/registration `@12.0` | Pack `generated-knowledge-item@1.20.15`; Graph plan `19.0`; ungrounded plan `20.0` |
 | 풀이보고서 | `knowledge-analysis@10.0.0` | `workflow-role/1.21.0` | proposal `@10.0` | accepted knowledge analysis `10.0` |
 | 고객지원 | `customer-support@1.0.0` | `workflow-role/1.22.0` | customer support `@1.0` | customer-support preset |
 | 문제지·해설지 검토 V3 | `pdf-document-review@1.2.0` | `workflow-role/1.27.0` | PDF document review `@3.0` | plan `15.0`, control bootstrap `6.0` (5.0 historical) |
@@ -52,7 +52,7 @@ result schema를 기준으로 정리한다.
 | Item Brief / material requirement | `4.0` / `1.0` |
 | Review publication family | production V5가 선언한 exact review decision/publication/eligibility |
 
-단일 문항 selector가 1.16/1.20.14로 올라가도 V5 생산을 묵시적으로 변경하지 않는다. 새 묶음이
+단일 문항 selector가 1.16/1.20.15로 올라가도 V5 생산을 묵시적으로 변경하지 않는다. 새 묶음이
 필요하면 predecessor bytes를 수정하지 않고 successor production contract를 먼저 추가한다.
 
 ## 코드가 허용하는 새 Workflow 조합
@@ -108,6 +108,28 @@ read-only plan/schema preflight는 PASS이나, 이번 release의 신규 모델 �
 정확한 pins와 rollback은 [ADR 0179](../adr/0179-single-document-review-target-aware-status.md)에
 기록했다.
 
+### 단일 문항 제시 형식 후속 운영 확인 — 2026-10-09 14:35 UTC
+
+앞선 날짜의 snapshot은 보존한다. API/Catalog/Orchestrator 공용 설치 source는
+`578ddd9a8f23a1a3aa9be3ee6e256344230d98aa`이며, 새 단일 문항 요청은 development activation
+`activation_88c2e332a784425fa17d3c7702756839`의 `generated-knowledge-item@1.20.15`를 사용한다.
+Release는 `packrel_8dde7e96f50542e4932f55c8e76b8083`, bundle은
+`sha256:63785945ceaa226dcb63a278cb08cbc82f8dcf35b0a9e7df9b65dde5810f6f6c`이다.
+Workflow/role/control/preset/Graph/25문항 production pins는 이번 배포로 변경하지 않았다.
+기존 1.20.14와 다른 predecessor는 historical replay/진행 중 실행의 불변 pin으로 유지한다.
+
+인증 API smoke, installed wheel/RECORD, 권한 격리, 서비스 readiness와 배포 후 verify는 PASS다.
+실제 등록된 Pack Artifact를 읽기 전용으로 resolve해 Brief V5 binding 및 출제·검토 profile
+`12.2.1` 렌더링에 동일한 V2 지침·원문 SHA가 포함됨을 확인했다. 이미지 policy와 SVG 라벨
+검증 정책은 변경하지 않았으며, 새 bundle의 정확한 hash에도 기존 label-clearance gate가
+적용된다. 새 모델/문항/GPU/HWPX 실행은 0건이므로 교육·편집 품질 평가를 새로 PASS한 것은 아니다.
+
+Web 설치 source `67fafe99fec99e1f9bcd2293fe970c9ed18d8449`는 변경하지 않았다.
+독립 일반 채팅 서비스의 release pin은 `d32f3ba75bc7a0b34305204d3dba43a009e99617`로
+유지했다. 이 기능의 코드는 이번 diff에서 변경되지 않았으며, 채팅을 새 release로 재활성화했다고
+보고하지 않는다. 공용 환경의 설치 wheel source와 개별 서비스의 activation pin은 구분한다.
+Rollback과 검증 범위는 [ADR 0160](../adr/0160-natural-stimulus-presentation.md)에 기록했다.
+
 ## 주요 독립 계약 namespace
 
 | 책임 | 현재 저장소의 latest/additive 계약 | 주의사항 |
@@ -117,7 +139,7 @@ read-only plan/schema preflight는 PASS이나, 이번 release의 신규 모델 �
 | 실행 정책 | standard bootstrap `17.0`, knowledge bootstrap `14.0` | preset revision은 별도 immutable identity |
 | Evidence usage | Graph plan `19.0`, ungrounded plan `20.0` | boolean이 아닌 pointer/hash/receipt로 검증; predecessor `17.0`/`18.0` replay 보존 |
 | GPU prompt policy | `local-gpu-image-prompt-policy/1.6` | predecessor `1.4` replay 보존 |
-| 자료 형식 | material requirement `1.0`, Item Brief `4.0` | TABLE과 IMAGE를 같은 것으로 취급하지 않음 |
+| 자료 형식 | material requirement `2.0`, Item Brief `5.0` | TABLE과 IMAGE를 같은 것으로 취급하지 않음; production V5의 `1.0`/`4.0` pin 보존 |
 | PDF annotation | paired request `3.0` / `catalog/1.22`; single V4 request `4.0` / `catalog/1.23` | 원본 보존, 기존 native-panel output 재사용 |
 | HWPX correction | single V4 request·plan `2.0` / `catalog/1.24` | 기존 correction output 재사용; predecessor 의미 보존 |
 | Human quality workbench | command/workbench `1.0` | released Assembly와 immutable Item Revision pointer만 평가; runtime migration/activation 별도 |
