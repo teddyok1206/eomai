@@ -480,5 +480,42 @@ sanitized failure summary was restored. The fixture now uses supported exact-def
 replay, preserves its existing canonical bytes/hash/active value, and confirms the DB still rejects
 changing that value. Neither the production immutability guard nor admission policy was weakened.
 
-Runtime installation and an installed read-only replay against the actual incident sources are
-separate following gates. The historical failed request is retained unchanged, not declared resumed.
+### Correction operational installation — 2026-10-09 15:29 UTC
+
+Installed shared API/Catalog/Orchestrator source:
+`2bf5dd75b1356384f5748d4c396c0af4926816ee`; tree
+`3645ddb4395b28d3ccbef1fdcd5f84f875ab6ae0`; archive SHA
+`sha256:f70ff3357da2d16cf668493466a26736626e57ddf63cebf752c9ee8005c60d1a`.
+Build timestamp is `2026-10-09T15:26:14Z`, not the observation timestamp above.
+
+Supported `scripts/api/deploy_release.sh --install` completed with wheel/RECORD/pip checks,
+migration-owner preflight (no migration beyond `20261008_0049`), isolation, authenticated API smoke
+and post-install `--verify` PASS. Active worker lease preflight was zero. API, Catalog, Workflow
+runner/maintenance, HWPX manager, Web and both general-chat units are active. The first task-local
+shell wrapper invocation failed before invoking the installer (line continuation); it changed no
+runtime state. The corrected wrapper performed one actual supported installation successfully.
+
+An installed `python -I` proof enforced PostgreSQL transaction-read-only and resolved the exact
+authoring/review incident sources through public Catalog Artifact resolution (identity, approved
+revision, member, media/storage boundary and SHA checks). The new domain returns
+`REVIEW_STRUCTURAL_COMPLEXITY_MISMATCH`, expected 1 / observed 2, builds a schema/self-hashed 2교
+directive, and independently validates that directive against both exact source results. The
+historical Workflow remains FAILED / `WORKFLOW_STEP_FAILED`, rework count zero. This is read-only
+installed-boundary evidence, not a new model run or a historical recovery claim.
+
+Pack release `packrel_8dde7e96f50542e4932f55c8e76b8083` / version `1.20.15` and bundle SHA
+`sha256:63785945ceaa226dcb63a278cb08cbc82f8dcf35b0a9e7df9b65dde5810f6f6c` remain unchanged.
+Web and the separate chat activation retain their preceding source pins; neither was redeployed.
+Model/Item/GPU/HWPX executions: zero. Full live corrected-review dispatch remains NOT_RUN.
+The task-owned disposable DB and credential directory were removed via guarded cleanup after all
+test processes ended. Production data, accepted Artifacts and failed histories were not removed.
+
+Release record:
+`/var/lib/eom-api/deployments/2bf5dd75b1356384f5748d4c396c0af4926816ee.json`.
+Task-local materialization/evidence is `/tmp/eom-presentation-release-20261009.Q2zUUW`:
+`install-review-correction-run2.log`, `review-correction-verify.log`,
+`verify-review-correction.py` and `review-correction-testdb-cleanup.log`.
+Runtime rollback restores the immediately preceding compatible `578ddd9a` wheels at
+`/tmp/eom-api-build/578ddd9a8f23a1a3aa9be3ee6e256344230d98aa.wpTTGb/dist`, without deleting
+new correction history or changing Pack activation. Installed release and later documentation
+commit identities remain separate.

@@ -130,6 +130,21 @@ Web 설치 source `67fafe99fec99e1f9bcd2293fe970c9ed18d8449`는 변경하지 않
 보고하지 않는다. 공용 환경의 설치 wheel source와 개별 서비스의 activation pin은 구분한다.
 Rollback과 검증 범위는 [ADR 0160](../adr/0160-natural-stimulus-presentation.md)에 기록했다.
 
+## 검토 판정값 교정 운영 후속 — 2026-10-09 15:29 UTC
+
+공유 API/Catalog/Orchestrator의 최신 설치 source는
+`2bf5dd75b1356384f5748d4c396c0af4926816ee`이다. 앞선 14:35 배포의 Pack
+`generated-knowledge-item@1.20.15` release/bundle/activation과 Workflow/role/Graph/control/
+production pins는 그대로 유지한다. 추가 계약 `workflow-review-correction-directive/1.0`은
+검토자가 제출한 복잡도·상위 검토 사유·판정값 오류만 고정된 출제/그림 입력으로 최대 3교까지
+교정하며, 기존 내용 재작업·강화 검토 및 무결성 보호는 변경하지 않는다.
+
+Source gate 175 PASS, disposable PostgreSQL gate 66 PASS, 실제 wheel/RECORD·권한 격리·인증 API
+smoke·배포 후 verify PASS. Installed read-only incident-source proof는 2교 수정 지시 및 원본
+실패 이력 보존을 확인했다. 새 worker 실행으로 검토 3교를 live canary한 것은 아니다.
+DB head는 `20261008_0049`, Web과 독립 chat activation은 변경 없음.
+상세 증거/rollback은 [ADR 0160](../adr/0160-natural-stimulus-presentation.md)에 기록했다.
+
 ## 주요 독립 계약 namespace
 
 | 책임 | 현재 저장소의 latest/additive 계약 | 주의사항 |

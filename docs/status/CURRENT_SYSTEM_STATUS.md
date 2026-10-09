@@ -2,11 +2,11 @@
 
 Latest recorded update: 2026-10-09 (UTC). Older sections retain their observation dates.
 
-## Bounded review-result correction — source candidate, 2026-10-09 (UTC)
+## Bounded review-result correction — installed, 2026-10-09 15:29 UTC
 
-The latest failed single-item request had committed authoring and review Artifacts; post-result
-classification rejected reviewer-authored complexity 2 when the typed draft scores 1. The source
-candidate now routes only declared complexity/reason/decision mismatches to a second or third proof,
+The preceding failed single-item request had committed authoring and review Artifacts; post-result
+classification rejected reviewer-authored complexity 2 when the typed draft scores 1. The installed
+runtime now routes only declared complexity/reason/decision mismatches to a second or third proof,
 with exact prior review and expected/observed feedback. Authoring/image/Graph/Pack pins remain fixed.
 Infrastructure retries cannot reset this budget; content rework and stronger review retain their
 existing policies. Integrity failures remain terminal, not corrections.
@@ -14,9 +14,18 @@ existing policies. Integrity failures remain terminal, not corrections.
 Unit/domain/Catalog/dependency and actual wheel-resource gates: 175 PASS. Disposable PostgreSQL
 correction gates: 22 PASS, including separate concurrent commands, crash recovery, third-proof
 exhaustion and unchanged image/tier pins. The combined existing Workflow/submission/correction
-PostgreSQL gate is 66 PASS (including those 22); operational installation is separately pending
-at this source checkpoint. No model/Item/GPU/HWPX execution or historical
-failed-workflow restart is claimed. See [ADR 0160](../adr/0160-natural-stimulus-presentation.md).
+PostgreSQL gate is 66 PASS (including those 22).
+
+Shared API/Catalog/Orchestrator source `2bf5dd75b1356384f5748d4c396c0af4926816ee` is installed.
+Release wheel/RECORD, migration preflight (unchanged `20261008_0049`), runtime isolation,
+authenticated API smoke and post-install verification PASS; all eight relevant services are active.
+An installed `python -I`, transaction-read-only proof resolved the exact incident Artifacts by
+identity/hash and classified score 2 versus expected 1 as a typed second-proof correction. The
+original Workflow remains FAILED with its original failure code; no DB state was repaired directly.
+Pack `1.20.15` release/hash, Web and the separate chat activation remain unchanged. No new
+model/Item/GPU/HWPX execution or full live corrected-worker canary is claimed. The disposable test
+DB and its task-owned credential directory were removed through guarded cleanup. Exact evidence
+and rollback are in [ADR 0160](../adr/0160-natural-stimulus-presentation.md).
 
 ## Natural prose and native table presentation activation — 2026-10-09 14:35 UTC
 
