@@ -16,7 +16,7 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
         assert shell.status_code == 200
         for marker in (
             "문항 제작 진행",
-            "문항 요청 초안",
+            "출제 요구",
             "완성 문항",
             "Graph 문항은행",
             "시험지 ↔ 문항 ↔ 교육과정 Graph",
@@ -32,7 +32,7 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
             "대단원 선택",
             "중단원 선택",
             "소단원 목록 준비 중",
-            "자연어 출제 요구",
+            "어떤 문항을 만들까요?",
             "지식 연결 준비 중",
             "고급 실행 정책",
             "새 설정 초안 생성 전 확인",
@@ -221,16 +221,29 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert "curriculum_small_unit_key.disabled = !smallAvailable" in javascript
     assert "curriculumOptionsForSelection" in javascript
     assert "state.draft === null" not in javascript
-    assert "pendingCurriculumSelection" in javascript
-    assert "fillDraft(draft, pendingCurriculumSelection)" in javascript
     assert "curriculum_selected_unit_key: selectedUnitKey" in javascript
-    assert "state.draft.draft_spec_sha256}`" in javascript
+    assert "draft.draft_spec_sha256}`" in javascript
     assert "draft_spec_sha256.slice" not in javascript
-    assert "draftSubmissionPending: false" in javascript
+    assert "draftAction: null" in javascript
+    assert "draftEditorRevision: 0" in javascript
     assert "function syncDraftControls()" in javascript
-    assert "if (state.draftAnalysisPending || state.draftSubmissionPending" in javascript
-    assert 'state.draftSubmissionPending ? "제작 요청 중…"' in javascript
-    assert "먼저 요청 내용을 적고" in javascript
+    assert "async function persistDraft(" in javascript
+    assert 'id="draft-analyze"' not in html
+    assert "async function analyzeDraft()" not in javascript
+    assert html.count('name="authoring_guidance"') == 1
+    assert html.count('id="request-text"') == 1
+    request_html = html.split('data-view="request"', 1)[1].split(
+        '<section class="view" data-view="item"', 1
+    )[0]
+    request_javascript = javascript[
+        javascript.index("function installRequestDraft()") : javascript.index(
+            "function installWorkflow()"
+        )
+    ]
+    for removed_field in ("language", "subject", "choice_count", "equation_required"):
+        assert f'name="{removed_field}"' not in request_html
+        assert f"form.elements.{removed_field}" not in request_javascript
+    assert "EOM 템플릿 필수 요소" not in html
     assert 'failure.code === "API_IDEMPOTENCY_IN_PROGRESS"' in javascript
     assert "analysisBatchEta" in javascript
     assert 'id="hwpx-delivery-guide"' in html

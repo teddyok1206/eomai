@@ -19,7 +19,8 @@ logical Item
 
 ## 지금 할 수 있는 일
 
-- Scientific Studio에서 통합과학 단일 문항을 요청하고 진행 상태 확인
+- Scientific Studio에서 출제 요구를 한 곳에 적고 단원·난이도·자료 구성을 골라 바로 제작 시작
+  (별도 요청 분석 단계 없음; 한국어·5지선다는 고정, 초안 저장과 새 요청도 지원)
 - Authoring → Image(조건부) → Review → 최대 3회 bounded 개선 → Registration → HWPX Review →
   Human Approval 실행
 - 검증된 기출 PDF Graph를 검색해 Evidence Bundle을 만들고, 인용한 evidence·anchor·문항 적용

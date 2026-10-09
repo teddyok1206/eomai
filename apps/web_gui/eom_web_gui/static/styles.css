@@ -80,7 +80,7 @@ code, pre, .id-input, .inspector-list dd, .draft-meta { font-family: "JetBrains 
 
 .app-frame { min-width: 0; }
 .topbar { position: sticky; top: 0; z-index: 20; min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 10px 24px; background: rgba(251, 251, 253, .82); border-bottom: 1px solid rgba(0, 0, 0, .08); -webkit-backdrop-filter: saturate(180%) blur(18px); backdrop-filter: saturate(180%) blur(18px); }
-.command-bar, .topbar-status, .heading-actions, .stream-state, .form-actions, .composer-footer { display: flex; align-items: center; gap: 9px; }
+.command-bar, .topbar-status, .heading-actions, .stream-state, .form-actions { display: flex; align-items: center; gap: 9px; }
 .global-search { width: min(420px, 36vw); min-height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid transparent; border-radius: var(--eom-radius-control); background: rgba(118, 118, 128, .09); color: var(--eom-text-muted); }
 .global-search input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--eom-text); }
 .global-search:focus-within { border-color: var(--eom-blue-300); background: white; box-shadow: 0 0 0 3px rgba(79, 70, 229, .11); }
@@ -209,13 +209,12 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .inline-technical-details summary { padding: 9px 11px; }
 .inline-technical-details .inspector-list { padding: 10px 11px; }
 
-.request-layout { display: grid; grid-template-columns: minmax(310px, .8fr) minmax(520px, 1.2fr); gap: 16px; align-items: start; }
-.request-composer textarea { width: 100%; resize: vertical; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-control); padding: 16px; color: var(--eom-text); font-size: 16px; line-height: 1.7; }
-.composer-footer { justify-content: flex-end; margin-top: 13px; }
+.request-layout { display: grid; grid-template-columns: minmax(0, 1fr); max-width: 960px; margin-inline: auto; }
 .draft-form { padding: 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
 .draft-form label, .explorer-filters label { display: grid; gap: 6px; color: #405570; font-size: var(--eom-type-label); font-weight: 700; }
 .draft-form input, .draft-form select, .draft-form textarea, .explorer-filters input, .explorer-filters select { width: 100%; min-height: 42px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-control); padding: 8px 11px; background: white; color: var(--eom-text); }
 .draft-form textarea { line-height: 1.55; resize: vertical; }
+.draft-form #request-text { padding: 14px; font-size: 16px; line-height: 1.7; }
 .draft-form .wide { grid-column: 1 / -1; }
 .draft-form fieldset { margin: 0; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-control); }
 .draft-form legend { color: #405570; font-size: var(--eom-type-label); font-weight: 700; }

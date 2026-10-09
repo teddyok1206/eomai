@@ -130,6 +130,34 @@ IDs remain available as technical hover/detail metadata while the primary label 
 was pinned. When no managed evidence is attached, the strip explicitly says that the structured
 request and worker's general science knowledge were used.
 
+### Request editor
+
+The request surface has one authoring-instruction textarea, curriculum selection, and editable
+production options. Language, subject, five-choice count, and the legacy equation-required flag are
+not user decisions here. Korean and existing fixed draft values remain unchanged; subject comes from
+the supported curriculum outline. Optional topic defaults to the selected unit label or the first
+160 characters of normalized instructions. The deterministic draft normalizer is not presented as
+AI analysis or a separate user step.
+
+Both Save and Start capture an immutable small input snapshot and use the existing draft create/update
+operations. Start then submits the saved draft ID and full spec hash through the existing idempotency
+boundary. Original-request provenance and editable authoring guidance remain distinct backend fields,
+even though the editor has one instruction input. Existing worker/Workflow contracts and validation
+remain authoritative; this change adds no schema, DB migration, model call, or dependency.
+
+One in-flight action prevents overlapping save, start, or source-selection operations. Editor revision
+checks prevent a delayed draft preparation from starting an outdated request or replacing newly edited
+input. Failed saves retain an already created draft ID; retries do not create replacement identities.
+Saved responses update identity metadata only, not current form values. A pinned variation source belongs
+to the current editor selection and must not be restored from an older response after the user clears it.
+Operations are O(n) in the bounded instruction/checkbox input; unit lookup uses the existing keyed map.
+Transactions, permission checks, evidence resolution, and workflow dispatch remain application-owned.
+An explicit New Request action clears only the editor and draft identity, never historical work. It is
+disabled while an action is pending. Successful submission retains its exact identity for safe replay;
+only a deliberate new request starts a fresh identity, including when its instructions are unchanged.
+Conceptual is the initial task-type selection, so removing normalization does not default all requests
+to calculation. Users may select calculation or data interpretation explicitly.
+
 ### Technical disclosure
 
 Exact IDs, ETags, schema versions, hashes, and raw diagnostic codes remain available, but secondary

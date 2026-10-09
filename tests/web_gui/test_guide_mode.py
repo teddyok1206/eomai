@@ -71,6 +71,16 @@ assert.match(context.views.get('hwpx').description,/별개/);
 assert.match(context.controls.get('mock-exam-hwpx-submit').description,/하나의 한글 파일/);
 assert.match(context.controls.get('pdf-review-correction-submit').description,
  /PDF 원본을 직접 고치는 기능은 아닙니다/);
+assert.match(context.views.get('request').description,/문항 제작 시작/);
+assert.doesNotMatch(context.views.get('request').description,/요청 분석/);
+assert.doesNotMatch(context.controls.get('request-text').description,/요청 분석/);
+assert.equal(context.controls.has('draft-analyze'),false);
+assert.equal(context.controls.get('draft-save').title,'초안 저장');
+assert.match(context.controls.get('draft-save').description,/저장만으로 문항 제작이 시작되지는/);
+for(const removed of ['subject','language','choice_count','equation_required']){
+ assert.equal(context.fields.get('draft-form').has(removed),false,
+  'removed request field still has help: '+removed);
+}
 const values=[...context.views.values(),...context.controls.values(),
  ...context.actions.values(),...context.lists.values(),...context.formActions.values(),
  ...[...context.fields.values()].flatMap(group=>[...group.values()])];

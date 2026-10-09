@@ -44,8 +44,8 @@ const state = {
   csrf: "",
   operator: null,
   draft: null,
-  draftAnalysisPending: false,
-  draftSubmissionPending: false,
+  draftAction: null,
+  draftEditorRevision: 0,
   variationSourceEntry: null,
   workflow: null,
   workflowRequestSequence: 0,
@@ -678,7 +678,7 @@ function curriculumDisplayLabel(key) {
 }
 
 function installRequestDraft() {
-  $("#draft-analyze").addEventListener("click", analyzeDraft);
+  $("#draft-new").addEventListener("click", resetDraftEditor);
   $("#draft-save").addEventListener("click", saveDraft);
   $("#draft-submit").addEventListener("click", submitDraft);
   $("#draft-form").addEventListener("submit", (event) => {
@@ -686,12 +686,19 @@ function installRequestDraft() {
     submitDraft();
   });
   $("#past-exam-variation-clear").addEventListener("click", () => {
+    state.draftEditorRevision += 1;
     state.variationSourceEntry = null;
-    if (state.draft) state.draft = {...state.draft, past_exam_variation: null};
     syncPastExamVariation(null);
+    setStatus($("#draft-state"), "neutral", "■", "작성 중");
     showMessage($("#draft-message"), "일반 신규 문항 출제로 전환했습니다.", "success");
   });
   const form = $("#draft-form");
+  const markDraftEdited = () => {
+    state.draftEditorRevision += 1;
+    setStatus($("#draft-state"), "neutral", "■", "작성 중");
+  };
+  form.addEventListener("input", markDraftEdited);
+  form.addEventListener("change", markDraftEdited);
   form.elements.material_form.addEventListener("change", syncMaterialPanelCount);
   form.elements.curriculum_large_unit_key.addEventListener("change", (event) => {
     changeCurriculumSelection("LARGE", event.target.value);
@@ -704,14 +711,32 @@ function installRequestDraft() {
   });
 }
 
+function resetDraftEditor() {
+  if (state.draftAction || !hasPermission(state.operator, "workflow:start")) return;
+  state.draftEditorRevision += 1;
+  state.draft = null;
+  state.variationSourceEntry = null;
+  $("#draft-form").reset();
+  setCurriculumSelection({large: "", middle: "", small: ""});
+  syncMaterialPanelCount();
+  syncGraphGroundingCapability();
+  syncPastExamVariation(null);
+  $("#draft-id").textContent = "-";
+  $("#draft-sha").textContent = "-";
+  setStatus($("#draft-state"), "neutral", "■", "작성 중");
+  showMessage($("#draft-message"), "");
+  syncDraftControls();
+  $("#request-text").focus();
+}
+
 function syncDraftControls() {
   const allowed = hasPermission(state.operator, "workflow:start");
-  const busy = state.draftAnalysisPending || state.draftSubmissionPending;
-  $("#draft-analyze").disabled = !allowed || busy;
-  $("#draft-analyze").textContent = state.draftAnalysisPending ? "요청 분석 중…" : "요청 분석";
-  $("#draft-save").disabled = !allowed || busy || !state.draft;
-  $("#draft-submit").disabled = !allowed || busy || !state.draft;
-  $("#draft-submit").textContent = state.draftSubmissionPending ? "제작 요청 중…" : "문항 제작 시작";
+  const busy = state.draftAction !== null;
+  $("#draft-new").disabled = !allowed || busy;
+  $("#draft-save").disabled = !allowed || busy;
+  $("#draft-submit").disabled = !allowed || busy;
+  $("#draft-save").textContent = state.draftAction === "SAVE" ? "저장 중…" : "초안 저장";
+  $("#draft-submit").textContent = state.draftAction === "SUBMIT" ? "제작 요청 중…" : "문항 제작 시작";
 }
 
 function syncMaterialPanelCount() {
@@ -731,45 +756,12 @@ function syncMaterialPanelCount() {
   if (materialForm !== "IMAGE") form.elements.image_supporting_data.value = "NONE";
 }
 
-async function analyzeDraft() {
-  if (state.draftAnalysisPending || state.draftSubmissionPending
-    || !hasPermission(state.operator, "workflow:start")) return;
-  const message = $("#draft-message");
-  const text = normalizeAuthoringGuidance($("#request-text").value);
-  if (text.length < 10 || text.length > 2000) {
-    showMessage(message, "만들고 싶은 문항의 내용을 10~2,000자로 적어주세요.", "error");
-    $("#request-text").focus();
-    return;
-  }
-  const pendingCurriculumSelection = {...state.curriculumSelection};
-  state.draftAnalysisPending = true;
-  syncDraftControls();
-  showMessage(message, "요청을 구조화하고 있습니다.");
-  try {
-    state.variationSourceEntry = null;
-    const draft = await api("/request-drafts", {
-      method: "POST",
-      mutation: true,
-      body: {original_request_text: text},
-    });
-    state.draft = draft;
-    fillDraft(draft, pendingCurriculumSelection);
-    setStatus($("#draft-state"), "success", "✓", "검토 가능");
-    showMessage(message, "문항 요청 초안을 검토하세요. 참고 자료 묶음 없이 일반 지식 모드로 바로 제출할 수 있습니다.", "success");
-  } catch (failure) {
-    showMessage(message, `요청 분석 실패: ${failure.message}`, "error");
-  } finally {
-    state.draftAnalysisPending = false;
-    syncDraftControls();
-  }
-}
-
 function fillDraft(draft, fallbackCurriculumSelection = {large: "", middle: "", small: ""}) {
+  state.draftEditorRevision += 1;
   const form = $("#draft-form");
-  for (const key of ["subject", "topic", "item_format", "task_type", "difficulty", "choice_count"]) {
+  for (const key of ["topic", "item_format", "task_type", "difficulty"]) {
     form.elements[key].value = draft[key];
   }
-  form.elements.equation_required.checked = draft.equation_required;
   form.elements.material_form.value = draft.material_requirement.form;
   form.elements.material_panel_count.value = String(draft.material_requirement.panel_count || 1);
   form.elements.image_supporting_data.value = draft.material_requirement.image_supporting_data
@@ -790,6 +782,10 @@ function fillDraft(draft, fallbackCurriculumSelection = {large: "", middle: "", 
       ? curriculumAncestors(state.curriculumOutline.units, selectedKey)
       : fallbackCurriculumSelection,
   );
+  renderDraftIdentity(draft);
+}
+
+function renderDraftIdentity(draft) {
   $("#draft-id").textContent = draft.request_draft_id;
   $("#draft-sha").textContent = draft.draft_spec_sha256;
 }
@@ -800,6 +796,10 @@ function normalizeAuthoringGuidance(value) {
 
 function draftUpdateBody() {
   const form = $("#draft-form");
+  const guidance = normalizeAuthoringGuidance(form.elements.authoring_guidance.value);
+  if (guidance.length < 10 || guidance.length > 2000) {
+    throw new Error("만들고 싶은 문항의 내용을 10~2,000자로 적어주세요.");
+  }
   const selectedUnitKey = deepestCurriculumUnitKey(state.curriculumSelection) || null;
   if (form.elements.knowledge_grounding.checked && selectedUnitKey === null) {
     throw new Error("교육 지식 근거를 사용하려면 대단원 또는 중단원을 선택하세요.");
@@ -811,18 +811,20 @@ function draftUpdateBody() {
   const variationAxes = Array.from(form.querySelectorAll('input[name="variation_axis"]:checked'))
     .map((input) => input.value)
     .sort();
-  const variation = state.variationSourceEntry || state.draft?.past_exam_variation;
+  // The current editor selection owns variation intent, not an older saved response.
+  const variation = state.variationSourceEntry;
   if (variation && variationAxes.length === 0) {
     throw new Error("1:1 기출변형은 하나 이상의 변형 축을 선택해야 합니다.");
   }
   return {
-    subject: form.elements.subject.value.trim(),
-    topic: form.elements.topic.value.trim(),
+    subject: state.curriculumOutline?.subject_label || "통합과학",
+    topic: form.elements.topic.value.trim()
+      || state.curriculumUnitsByKey.get(selectedUnitKey)?.label || guidance.slice(0, 160),
     item_format: form.elements.item_format.value,
     task_type: form.elements.task_type.value,
     difficulty: form.elements.difficulty.value,
-    choice_count: Number(form.elements.choice_count.value),
-    equation_required: form.elements.equation_required.checked,
+    choice_count: 5,
+    equation_required: true,
     material_requirement: {
       schema_version: "content-team-material-requirement/2.0",
       form: materialForm,
@@ -833,7 +835,7 @@ function draftUpdateBody() {
     },
     quality_profile: form.elements.quality_profile.value,
     source_intake_batch_id: form.elements.source_intake_batch_id.value || null,
-    authoring_guidance: normalizeAuthoringGuidance(form.elements.authoring_guidance.value),
+    authoring_guidance: guidance,
     knowledge_grounding: form.elements.knowledge_grounding.checked,
     curriculum_selected_unit_key: selectedUnitKey,
     past_exam_variation: variation ? {
@@ -847,85 +849,125 @@ function syncPastExamVariation(variation) {
   const field = $("#past-exam-variation-field");
   const source = state.variationSourceEntry;
   field.hidden = !variation;
+  const selected = new Set(variation?.variation_axes || []);
+  for (const input of field.querySelectorAll('input[name="variation_axis"]')) {
+    input.checked = selected.has(input.value);
+  }
   if (!variation) return;
   $("#past-exam-variation-source").textContent = source
     ? `${source.occurrence_display_label} · ${source.item_number}번을 원본으로 고정`
     : `고정 원본 문항 버전 ${variation.source_item_revision_id}`;
-  const selected = new Set(variation.variation_axes || []);
-  for (const input of field.querySelectorAll('input[name="variation_axis"]')) {
-    input.checked = selected.has(input.value);
-  }
 }
 
 async function beginPastExamVariation(entry) {
+  if (state.draftAction) throw new Error("요청 처리 중입니다. 완료된 뒤 기출을 선택해주세요.");
   if (state.curriculumOutline?.graph_grounding_available !== true) {
     throw new Error("검증된 기출 근거 연결이 활성화된 경우에만 변형할 수 있습니다.");
   }
   const unit = entry.curriculum_units.find((candidate) =>
     /^eom\.is\.(?:large\.[1-6]|middle\.[1-6]-[1-7])$/u.test(candidate.unit_key));
   if (!unit) throw new Error("지원되는 대단원·중단원이 연결된 기출만 변형할 수 있습니다.");
-  const sourceMaterial = await api(
-    `/items/${encodeURIComponent(entry.item_id)}/revisions/${encodeURIComponent(entry.item_revision_id)}/material-requirement`,
-  );
-  const requestText = `${entry.occurrence_display_label} ${entry.item_number}번의 핵심 개념과 평가 목표를 유지한 1:1 기출변형 문항을 출제해줘.`;
-  const draft = await api("/request-drafts", {
-    method: "POST",
-    mutation: true,
-    body: {original_request_text: requestText},
-  });
-  state.variationSourceEntry = entry;
-  state.draft = draft;
-  $("#request-text").value = requestText;
-  fillDraft(draft, curriculumAncestors(state.curriculumOutline?.units || [], unit.unit_key));
-  const form = $("#draft-form");
-  form.elements.material_form.value = sourceMaterial.form;
-  form.elements.material_panel_count.value = String(sourceMaterial.panel_count || 1);
-  form.elements.image_supporting_data.value = sourceMaterial.image_supporting_data || "NONE";
-  syncMaterialPanelCount();
-  form.elements.knowledge_grounding.checked = true;
-  const variation = {
-    source_item_revision_id: entry.item_revision_id,
-    variation_axes: ["CONTEXT", "DISTRACTORS", "REASONING_PATH", "VALUES"],
-  };
-  syncPastExamVariation(variation);
-  state.draft = {...draft, material_requirement: sourceMaterial, past_exam_variation: variation};
-  $("#draft-save").disabled = false;
-  $("#draft-submit").disabled = false;
-  showView("request");
-  showMessage($("#draft-message"), "원본 기출과 변형 축을 확인한 뒤 문항 제작을 시작하세요.", "success");
+  const editorRevision = state.draftEditorRevision;
+  state.draftAction = "VARIATION";
+  syncDraftControls();
+  try {
+    const sourceMaterial = await api(
+      `/items/${encodeURIComponent(entry.item_id)}/revisions/${encodeURIComponent(entry.item_revision_id)}/material-requirement`,
+    );
+    if (editorRevision !== state.draftEditorRevision) {
+      throw new Error("기출을 준비하는 동안 초안이 변경되었습니다. 내용을 확인한 뒤 다시 선택해주세요.");
+    }
+    const requestText = `${entry.occurrence_display_label} ${entry.item_number}번의 핵심 개념과 평가 목표를 유지한 1:1 기출변형 문항을 출제해줘.`;
+    const draft = await api("/request-drafts", {
+      method: "POST",
+      mutation: true,
+      body: {original_request_text: requestText},
+    });
+    if (editorRevision !== state.draftEditorRevision) {
+      throw new Error("기출을 준비하는 동안 초안이 변경되었습니다. 내용을 확인한 뒤 다시 선택해주세요.");
+    }
+    state.variationSourceEntry = entry;
+    state.draft = draft;
+    fillDraft(draft, curriculumAncestors(state.curriculumOutline?.units || [], unit.unit_key));
+    const form = $("#draft-form");
+    form.elements.material_form.value = sourceMaterial.form;
+    form.elements.material_panel_count.value = String(sourceMaterial.panel_count || 1);
+    form.elements.image_supporting_data.value = sourceMaterial.image_supporting_data || "NONE";
+    syncMaterialPanelCount();
+    form.elements.knowledge_grounding.checked = true;
+    const variation = {
+      source_item_revision_id: entry.item_revision_id,
+      variation_axes: ["CONTEXT", "DISTRACTORS", "REASONING_PATH", "VALUES"],
+    };
+    syncPastExamVariation(variation);
+    state.draft = {...draft, material_requirement: sourceMaterial, past_exam_variation: variation};
+    setStatus($("#draft-state"), "neutral", "■", "작성 중");
+    showView("request");
+    showMessage($("#draft-message"), "원본 기출과 변형 축을 확인한 뒤 문항 제작을 시작하세요.", "success");
+  } finally {
+    state.draftAction = null;
+    syncDraftControls();
+  }
 }
 
 async function saveDraft() {
-  if (!state.draft) return false;
+  if (state.draftAction || !hasPermission(state.operator, "workflow:start")) return false;
+  if (!$("#draft-form").reportValidity()) return false;
+  state.draftAction = "SAVE";
+  syncDraftControls();
   try {
-    state.draft = await api(`/request-drafts/${encodeURIComponent(state.draft.request_draft_id)}`, {
-      method: "PUT", mutation: true, body: draftUpdateBody(),
-    });
-    fillDraft(state.draft);
-    showMessage($("#draft-message"), "문항 요청 초안이 저장되었습니다.", "success");
-    syncDraftControls();
+    const snapshot = draftUpdateBody();
+    const editorRevision = state.draftEditorRevision;
+    await persistDraft(snapshot);
+    const edited = editorRevision !== state.draftEditorRevision;
+    setStatus($("#draft-state"), edited ? "neutral" : "success", edited ? "■" : "✓", edited ? "작성 중" : "저장됨");
+    showMessage($("#draft-message"), edited
+      ? "저장을 누른 시점의 초안이 저장되었습니다. 이후 수정한 내용은 다시 저장해주세요."
+      : "문항 요청 초안이 저장되었습니다.", "success");
     return true;
   } catch (failure) {
     showMessage($("#draft-message"), `초안 저장 실패: ${failure.message}`, "error");
     return false;
+  } finally {
+    state.draftAction = null;
+    syncDraftControls();
   }
 }
 
-async function submitDraft() {
+async function persistDraft(snapshot) {
   if (!state.draft) {
-    showMessage($("#draft-message"), "먼저 요청 내용을 적고 ‘요청 분석’을 눌러 초안을 준비하세요.");
-    $("#request-text").focus();
-    return;
+    state.draft = await api("/request-drafts", {
+      method: "POST", mutation: true,
+      body: {original_request_text: snapshot.authoring_guidance},
+    });
+    renderDraftIdentity(state.draft);
   }
-  if (state.draftAnalysisPending || state.draftSubmissionPending
-    || !hasPermission(state.operator, "workflow:start")) return;
-  state.draftSubmissionPending = true;
+  state.draft = await api(`/request-drafts/${encodeURIComponent(state.draft.request_draft_id)}`, {
+    method: "PUT", mutation: true, body: snapshot,
+  });
+  // Only saved identity changes here; an asynchronous response must not overwrite the editor.
+  renderDraftIdentity(state.draft);
+  return state.draft;
+}
+
+async function submitDraft() {
+  if (state.draftAction || !hasPermission(state.operator, "workflow:start")) return;
+  if (!$("#draft-form").reportValidity()) return;
+  state.draftAction = "SUBMIT";
   syncDraftControls();
   try {
-    if (!(await saveDraft())) return;
-    const key = `studio:${state.draft.request_draft_id}:${state.draft.draft_spec_sha256}`;
+    const snapshot = draftUpdateBody();
+    const editorRevision = state.draftEditorRevision;
+    const draft = await persistDraft(snapshot);
+    if (editorRevision !== state.draftEditorRevision) {
+      setStatus($("#draft-state"), "neutral", "■", "작성 중");
+      showMessage($("#draft-message"), "요청을 준비하는 동안 내용이 변경되어 제작을 시작하지 않았습니다. 내용을 확인한 뒤 다시 시작해주세요.");
+      return;
+    }
+    setStatus($("#draft-state"), "success", "✓", "저장됨");
+    const key = `studio:${draft.request_draft_id}:${draft.draft_spec_sha256}`;
     showMessage($("#draft-message"), "원본 근거와 실행 설정을 확인하고 있습니다.");
-    const result = await api(`/request-drafts/${encodeURIComponent(state.draft.request_draft_id)}/submissions`, {
+    const result = await api(`/request-drafts/${encodeURIComponent(draft.request_draft_id)}/submissions`, {
       method: "POST", mutation: true, body: {idempotency_key: key},
     });
     const workflowId = result.command && result.command.resource_id;
@@ -942,7 +984,7 @@ async function submitDraft() {
       showMessage($("#draft-message"), `문항 제작 시작 실패: ${failure.message}`, "error");
     }
   } finally {
-    state.draftSubmissionPending = false;
+    state.draftAction = null;
     syncDraftControls();
   }
 }

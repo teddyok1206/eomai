@@ -28,7 +28,10 @@ try {
   await page.evaluate(() => {
     document.querySelector('[data-view="request"]').classList.add("active");
     window.clicks = 0; window.submits = 0;
-    document.querySelector("#draft-analyze").addEventListener("click", () => {window.clicks++;});
+    const save = document.querySelector("#draft-save");
+    // This fixture installs only help, not authenticated application handlers.
+    save.disabled = false;
+    save.addEventListener("click", () => {window.clicks++;});
     document.querySelector("#draft-form").addEventListener("submit", event => {event.preventDefault();window.submits++;});
     document.querySelector("#draft-form").noValidate = true;
     const submit = document.createElement("button");submit.type="submit";
@@ -37,31 +40,37 @@ try {
   });
   const popup = page.locator("#guide-tooltip");
   const toggle = page.locator("#guide-mode-toggle");
-  const box = () => page.locator("#request-text").boundingBox();
+  const box = () => page.locator("#request-text").evaluate(node => {
+    const rect = node.getBoundingClientRect();
+    // Focusing a lower form action may legitimately scroll without changing layout.
+    return {x: rect.x + scrollX, y: rect.y + scrollY, width: rect.width, height: rect.height};
+  });
   const before = await box();
-  const controlMarkup = await page.locator("#draft-analyze").evaluate(node => node.outerHTML);
+  const controlMarkup = await page.locator("#draft-save").evaluate(node => node.outerHTML);
   assert.equal(await toggle.getAttribute("aria-checked"), "false");
   for (const id of ["global-load", "logout"]){
     assert.equal(await page.locator('#'+id).evaluate(node=>getComputedStyle(node).whiteSpace),"nowrap");
   }
-  await page.locator("#draft-analyze").hover();
+  await page.locator("#draft-save").hover();
   await page.locator("#request-text").focus();
   assert.equal(await popup.isVisible(), false);
   assert.equal(await page.locator("#request-text").getAttribute("aria-describedby"), null);
   await toggle.click();
   assert.equal(await toggle.getAttribute("aria-checked"), "true");
-  await page.locator("#draft-analyze").hover();
+  await page.locator("#draft-save").scrollIntoViewIfNeeded();
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await page.locator("#draft-save").hover();
   await popup.waitFor({state: "visible"});
-  assert.equal(await page.locator("#guide-tooltip-title").textContent(), "요청 분석");
-  assert.match(await popup.textContent(), /아직 문항을 만드는 단계는 아닙니다/);
-  assert.equal(await page.locator("#draft-analyze").getAttribute("aria-describedby"), "guide-tooltip");
+  assert.equal(await page.locator("#guide-tooltip-title").textContent(), "초안 저장");
+  assert.match(await popup.textContent(), /저장만으로 문항 제작이 시작되지는/);
+  assert.equal(await page.locator("#draft-save").getAttribute("aria-describedby"), "guide-tooltip");
   assert.deepEqual(await box(), before, "help must not shift the form");
   await popup.hover();
   await page.waitForTimeout(150);
   assert.equal(await popup.isVisible(), true, "tooltip must be hoverable");
   await page.keyboard.press("Escape");
   assert.equal(await popup.isVisible(), false);
-  await page.locator("#draft-analyze").click();
+  await page.locator("#draft-save").click();
   assert.equal(await page.evaluate(() => window.clicks), 1, "mode must not intercept the action");
 
   // Existing ARIA and disabled-control semantics are preserved.
@@ -136,10 +145,10 @@ try {
   assert.equal(await popup.isVisible(), false);
   assert.equal(await page.locator("#guide-tooltip-description").textContent(), "");
   assert.equal(await page.locator('[aria-describedby~="guide-tooltip"]').count(), 0);
-  assert.equal(await page.locator("#draft-analyze").evaluate(node => node.outerHTML), controlMarkup);
+  assert.equal(await page.locator("#draft-save").evaluate(node => node.outerHTML), controlMarkup);
   await page.evaluate(() => window.scrollTo(0, 0));
   assert.deepEqual(await box(), before);
-  await page.locator("#draft-analyze").click();
+  await page.locator("#draft-save").click();
   assert.equal(await page.evaluate(() => window.clicks), 2);
   await page.locator("#native-guide-test-submit").click();
   assert.equal(await page.evaluate(() => window.submits), 2);
@@ -158,7 +167,9 @@ try {
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= 320));
   await page.locator("#request-text").dispatchEvent("pointerover", {pointerType:"touch"});
   assert.equal(await popup.isVisible(), false, "touch must not simulate a sticky hover");
-  await page.locator("#draft-analyze").focus();
+  await page.locator("#draft-save").scrollIntoViewIfNeeded();
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await page.locator("#draft-save").focus();
   await popup.waitFor({state: "visible"});
   await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
   assert.equal(await popup.isVisible(), false);
