@@ -231,21 +231,36 @@ class ChatAnswerSection(ChatBoundaryValue):
 
     @model_validator(mode="after")
     def truthful_support(self) -> ChatAnswerSection:
-        # Citation markers are an owner-rendered projection of structured keys,
-        # not free-form model text that could claim an unverified source.
-        if "\x00" in self.markdown or re.search(r"\[S[0-9]+\]", self.markdown):
-            raise ValueError("citation markers must use structured citation keys")
-        if len(self.citation_keys) != len(set(self.citation_keys)) or any(
-            key not in {f"S{i}" for i in range(1, 10)} for key in self.citation_keys
-        ):
-            raise ValueError("invalid citation keys")
-        if (self.support_kind == "SOURCE_SUPPORTED" and not self.citation_keys) or (
-            self.support_kind
-            in {"GENERAL_KNOWLEDGE", "INSUFFICIENT_EVIDENCE", "SYSTEM_OBSERVATION"}
-            and self.citation_keys
-        ):
-            raise ValueError("section support and citations differ")
+        validate_section_support(
+            markdown=self.markdown,
+            support_kind=self.support_kind,
+            citation_keys=self.citation_keys,
+            allowed_keys=frozenset(f"S{i}" for i in range(1, 10)),
+        )
         return self
+
+
+def validate_section_support(
+    *,
+    markdown: str,
+    support_kind: str,
+    citation_keys: tuple[str, ...],
+    allowed_keys: frozenset[str],
+) -> None:
+    # Citation markers are an owner-rendered projection of structured keys,
+    # not free-form model text that could claim an unverified source.
+    prefixes = "".join(sorted({key[0] for key in allowed_keys}))
+    if "\x00" in markdown or re.search(r"\[" + f"[{prefixes}]" + r"[0-9]+\]", markdown):
+        raise ValueError("citation markers must use structured citation keys")
+    if len(citation_keys) != len(set(citation_keys)) or any(
+        key not in allowed_keys for key in citation_keys
+    ):
+        raise ValueError("invalid citation keys")
+    if (support_kind == "SOURCE_SUPPORTED" and not citation_keys) or (
+        support_kind in {"GENERAL_KNOWLEDGE", "INSUFFICIENT_EVIDENCE", "SYSTEM_OBSERVATION"}
+        and citation_keys
+    ):
+        raise ValueError("section support and citations differ")
 
 
 class ChatGroundedAnswer(ChatBoundaryValue):

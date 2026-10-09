@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/general-chat/dispatch/4.0",
+  "title": "CanonicalGeneralChatDispatch",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "runtime_id",
+    "identity",
+    "ticket",
+    "input"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "general-chat-dispatch/4.0"
+    },
+    "runtime_id": {
+      "type": "string",
+      "pattern": "^chatrt_[0-9a-f]{32}$"
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "boot_id",
+        "policy"
+      ],
+      "properties": {
+        "boot_id": {
+          "type": "string",
+          "pattern": "^chatboot_[0-9a-f]{32}$"
+        },
+        "policy": {
+          "$ref": "eom://schemas/general-chat/worker-policy/4.0"
+        }
+      }
+    },
+    "ticket": {
+      "$ref": "eom://schemas/general-chat/worker-ticket/1.0"
+    },
+    "input": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/artifact-member/1.0"
+        },
+        {
+          "properties": {
+            "member_path": {
+              "const": "chat/evidence.json"
+            },
+            "schema_ref": {
+              "enum": [
+                "eom://schemas/general-chat/turn-input/1.0",
+                "eom://schemas/general-chat/turn-input/2.0",
+                "eom://schemas/general-chat/turn-input/3.0",
+                "eom://schemas/general-chat/turn-input/4.0"
+              ]
+            },
+            "media_type": {
+              "const": "application/json"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -35,6 +35,29 @@ These rules apply to all future Codex and automation work in `/home/eom/EOM`.
 - Keep routine reporting milestone-based and avoid excessive messages.
 - Report `BLOCKED` and `COMPLETED` milestones immediately.
 
+## Using EOM System RAG
+
+- For textbook, past-exam and registered Item answers, use the installed supported
+  Catalog/Orchestrator retrieval and read contracts, not a parallel search engine or
+  direct worker access to PostgreSQL/NAS. Use the same official GraphRAG source-resolution
+  boundary as item authoring.
+- In conversational workers, use only read tools actually exposed by the installed
+  runtime: `search_eom_items` / `read_eom_items`, and `retrieve_eom_knowledge` when available.
+  These names are not a permission grant or proof that a planned tool is activated.
+- Retrieval must enforce the actual operator's permissions and the pinned released
+  access policy. Never impersonate WORKER/ADMIN, accept model-supplied authority, or
+  broaden a policy to make a query succeed.
+- Pin Graph, policy, source and accepted-analysis revisions/hashes. Follow-up answers
+  reuse and reauthorize those exact references; never silently use latest.
+- Cite only materialized, validated evidence. Distinguish approved analysis text,
+  original-page quotations, model inference and general knowledge. Text-only access
+  does not justify claiming to have inspected PDF/PNG pixels.
+- A missing tool, empty result, revoked source or failed resolution is an explicit
+  limitation, not permission to invent internal evidence or bypass the service boundary.
+- Guidance here does not replace the versioned worker prompt or activate a release.
+  Durable design and current implementation/activation scope:
+  `docs/architecture/GENERAL_CHAT_TEXTBOOK_RAG_DESIGN.md`.
+
 ## Pointer-Oriented Data and Artifact Design
 
 In these rules, a pointer is a validated identity or reference. It is not a C or C++ raw memory

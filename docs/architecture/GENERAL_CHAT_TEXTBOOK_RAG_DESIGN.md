@@ -1,7 +1,8 @@
 # CHAT-RAG-2: textbook evidence in conversational answers
 
-Status: implementation plan, 2026-10-09 UTC. User authorized implementation and
-requested a goal including operational connection. This is not live acceptance.
+Status: contract foundation implemented, 2026-10-09 UTC. User authorized implementation
+and requested a goal including operational connection. Catalog/native/UI activation
+and actual textbook conversation evidence remain pending. This is not live acceptance.
 
 ## Design boundary (required design procedure)
 
@@ -66,6 +67,33 @@ analysis identities internally. New grounding views render document references
 without routing them to Item Preview. Existing S buttons continue to open exact
 Item revisions. Cite only sources actually read in this turn or explicitly pinned
 for its follow-up. A model inference and general knowledge remain separately marked.
+
+Each subsequent RAG read extends the exact existing R-source prefix. It cannot
+retarget R1, remove its limitation or silently switch Graph/policy. The same domain
+rule validates Catalog replies and canonical transcript replay. Intake references
+retain source-file and Artifact revision identity without exposing internal batch
+identity in source cards. Context metadata is bounded to 32,000 bytes, source text
+to 8,000 UTF-8 bytes (4,000 existing estimated tokens); combined prepared Item/RAG
+materialization is bounded to 128,000 bytes.
+
+## Contract foundation checkpoint
+
+JSON Schema 2020-12 was defined independently of runtime models, through
+`scripts/contracts/generate_general_chat_rag_schemas.py`, then mirrored into the
+protocol wheel resources. Frozen Pydantic source/context, V4 turn/result, mixed
+Item/RAG tool transcript, citation receipt and view models now enforce the rules.
+All 28 predecessor schema bytes remain unchanged (aggregate SHA
+`cadfcf5b94725568a201b1f1627f0d0ee8c3abb519d00b4e1232f27398a3cb6e`).
+The existing Item offered-reference rule and section support rule are reused,
+not copied into another search or state-machine framework. Offline validators
+share one immutable parsed schema registry; a counted-read regression checks that
+the five schema resources are parsed once, not once per definition.
+
+`AGENTS.md` records supported RAG use, installed-tool availability, exact-pinned
+follow-up and honest source classification. It does not grant access or turn on a
+planned native tool. Actual Catalog actor/source authorization, read-only retrieval,
+native duplex integration, source-card rendering, disposable persistence tests,
+compatible installation and live textbook answers are **not yet accepted**.
 
 ## Verification/rollout
 

@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/general-chat/owner-reply/4.0",
+  "title": "Private general chat owner reply",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "action",
+    "status",
+    "value",
+    "error_code"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "general-chat-owner-reply/4.0"
+    },
+    "request_id": {
+      "type": "string",
+      "pattern": "^chatrpc_[0-9a-f]{32}$"
+    },
+    "action": {
+      "enum": [
+        "SLOT",
+        "LIST",
+        "CREATE",
+        "READ",
+        "SUBMIT",
+        "READ_GROUNDING"
+      ]
+    },
+    "status": {
+      "enum": [
+        "SUCCEEDED",
+        "FAILED"
+      ]
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "eom://schemas/api/v1/general-chat/1.0#/$defs/GeneralChatSlot"
+        },
+        {
+          "$ref": "eom://schemas/api/v1/general-chat/1.0#/$defs/GeneralChatList"
+        },
+        {
+          "$ref": "eom://schemas/api/v1/general-chat/1.0#/$defs/GeneralChatConversation"
+        },
+        {
+          "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Views"
+        }
+      ]
+    },
+    "error_code": {
+      "enum": [
+        null,
+        "GENERAL_CHAT_NOT_READY",
+        "GENERAL_CHAT_FORBIDDEN",
+        "GENERAL_CHAT_NOT_FOUND",
+        "GENERAL_CHAT_IDEMPOTENCY_INVALID",
+        "GENERAL_CHAT_IDEMPOTENCY_CONFLICT",
+        "GENERAL_CHAT_STALE_REVISION",
+        "GENERAL_CHAT_TURN_IN_PROGRESS",
+        "GENERAL_CHAT_CURSOR_INVALID",
+        "GENERAL_CHAT_POINTER_INVALID",
+        "GENERAL_CHAT_APPLICATION_UNAVAILABLE",
+        "GENERAL_CHAT_PROTOCOL_INVALID"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "FAILED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "value": {
+            "type": "null"
+          },
+          "error_code": {
+            "type": "string"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "error_code": {
+            "type": "null"
+          },
+          "value": {
+            "not": {
+              "type": "null"
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "SUCCEEDED"
+          },
+          "action": {
+            "const": "SLOT"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "value": {
+            "$ref": "eom://schemas/api/v1/general-chat/1.0#/$defs/GeneralChatSlot"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "SUCCEEDED"
+          },
+          "action": {
+            "const": "LIST"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "value": {
+            "$ref": "eom://schemas/api/v1/general-chat/1.0#/$defs/GeneralChatList"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "SUCCEEDED"
+          },
+          "action": {
+            "enum": [
+              "CREATE",
+              "READ",
+              "SUBMIT"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "value": {
+            "$ref": "eom://schemas/api/v1/general-chat/1.0#/$defs/GeneralChatConversation"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "SUCCEEDED"
+          },
+          "action": {
+            "const": "READ_GROUNDING"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "value": {
+            "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Views"
+          }
+        }
+      }
+    }
+  ]
+}

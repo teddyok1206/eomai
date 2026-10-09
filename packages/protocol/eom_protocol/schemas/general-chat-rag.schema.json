@@ -1,0 +1,1476 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/general-chat/rag/1.0",
+  "title": "CHAT-RAG-2 immutable textbook/Item evidence and bounded native read contracts",
+  "$defs": {
+    "Policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "access_policy_revision_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^accessrev_[0-9a-f]{32}$"
+        },
+        "sha256": {
+          "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Hash"
+        }
+      },
+      "required": [
+        "access_policy_revision_id",
+        "sha256"
+      ]
+    },
+    "Scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "snapshot": {
+          "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Snapshot"
+        },
+        "policy": {
+          "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Policy"
+        }
+      },
+      "required": [
+        "snapshot",
+        "policy"
+      ]
+    },
+    "OriginalPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\u0000)[^/]+(?:/[^/]+)*$"
+        },
+        "sha256": {
+          "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Hash"
+        },
+        "schema_ref": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "media_type": {
+          "enum": [
+            "application/pdf",
+            "application/json"
+          ]
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1073741824
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "sha256",
+        "schema_ref",
+        "media_type",
+        "bytes"
+      ]
+    },
+    "DocumentReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_kind": {
+          "const": "DOCUMENT_REVISION"
+        },
+        "source_class": {
+          "const": "TEXTBOOK"
+        },
+        "document_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^edudoc_[0-9a-f]{32}$"
+        },
+        "document_revision_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^edudocrev_[0-9a-f]{32}$"
+        },
+        "artifact_member": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/OriginalPointer"
+            },
+            {
+              "properties": {
+                "media_type": {
+                  "const": "application/pdf"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/educational-document/pdf-source/1.0"
+                }
+              }
+            }
+          ]
+        },
+        "first_physical_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "last_physical_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        }
+      },
+      "required": [
+        "source_kind",
+        "source_class",
+        "document_id",
+        "document_revision_id",
+        "artifact_member",
+        "first_physical_page",
+        "last_physical_page"
+      ]
+    },
+    "IntakeReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_kind": {
+          "const": "CONTENT_INTAKE_FILE"
+        },
+        "source_class": {
+          "enum": [
+            "TEXTBOOK",
+            "PAST_EXAM"
+          ]
+        },
+        "source_file_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^sourcefile_[0-9a-f]{32}$"
+        },
+        "artifact_member": {
+          "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/OriginalPointer"
+        }
+      },
+      "required": [
+        "source_kind",
+        "source_class",
+        "source_file_id",
+        "artifact_member"
+      ]
+    },
+    "ItemReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_kind": {
+          "const": "APPROVED_ITEM_REVISION"
+        },
+        "source_class": {
+          "enum": [
+            "PAST_EXAM",
+            "APPROVED_ITEM"
+          ]
+        },
+        "item_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^item_[0-9a-f]{32}$"
+        },
+        "item_revision_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^itemrev_[0-9a-f]{32}$"
+        },
+        "artifact_member": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/OriginalPointer"
+            },
+            {
+              "properties": {
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "source_kind",
+        "source_class",
+        "item_id",
+        "item_revision_id",
+        "artifact_member"
+      ]
+    },
+    "SourceReference": {
+      "oneOf": [
+        {
+          "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/DocumentReference"
+        },
+        {
+          "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/IntakeReference"
+        },
+        {
+          "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/ItemReference"
+        }
+      ]
+    },
+    "Anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "anchor_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 96
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\u0000)[^/]+(?:/[^/]+)*$"
+        },
+        "locator": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "excerpt_sha256": {
+          "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Hash"
+        }
+      },
+      "required": [
+        "anchor_id",
+        "artifact_revision_id",
+        "member_path",
+        "locator",
+        "excerpt_sha256"
+      ]
+    },
+    "Reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/SourceReference"
+        },
+        "analysis_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^analysisrun_[0-9a-f]{32}$"
+        },
+        "accepted_result": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/artifact-member/1.0"
+            },
+            {
+              "properties": {
+                "media_type": {
+                  "const": "application/json"
+                },
+                "member_path": {
+                  "const": "evidence/accepted-result.json"
+                },
+                "schema_ref": {
+                  "pattern": "^eom://schemas/knowledge/knowledge-analysis-result/(?:[2-9]|10)\\.0$"
+                }
+              }
+            }
+          ]
+        },
+        "analysis_member": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/artifact-member/1.0"
+            },
+            {
+              "properties": {
+                "media_type": {
+                  "const": "text/markdown"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/knowledge/normalized-markdown/1.0"
+                }
+              }
+            }
+          ]
+        },
+        "anchors": {
+          "type": "array",
+          "items": {
+            "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Anchor"
+          },
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "graph_node_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 72
+          },
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "source",
+        "analysis_run_id",
+        "accepted_result",
+        "analysis_member",
+        "anchors",
+        "graph_node_ids"
+      ]
+    },
+    "Source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^R[1-3]$"
+        },
+        "reference": {
+          "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Reference"
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "location": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "text_kind": {
+          "const": "APPROVED_ANALYSIS_NOT_VERBATIM_SOURCE"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 6000,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "key",
+        "reference",
+        "display_name",
+        "location",
+        "text_kind",
+        "text"
+      ]
+    },
+    "Context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "chat-rag-context/1.0"
+        },
+        "scope": {
+          "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Scope"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Source"
+          },
+          "minItems": 1,
+          "maxItems": 3
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "minItems": 0,
+          "maxItems": 12,
+          "uniqueItems": true
+        },
+        "context_sha256": {
+          "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Hash"
+        }
+      },
+      "required": [
+        "schema_version",
+        "scope",
+        "sources",
+        "limitations",
+        "context_sha256"
+      ]
+    },
+    "Arguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "terms": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 128,
+            "pattern": "^[a-z0-9가-힣_]+$"
+          },
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true
+        },
+        "source_classes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "TEXTBOOK",
+              "PAST_EXAM",
+              "APPROVED_ITEM"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "terms",
+        "source_classes"
+      ]
+    },
+    "CatalogRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "chat-rag-catalog-request/1.0"
+        },
+        "operation": {
+          "const": "CHAT_RAG"
+        },
+        "actor_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "command": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "const": "PREPARE_CHAT_RAG"
+                },
+                "snapshot": {
+                  "anyOf": [
+                    {
+                      "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Snapshot"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "policy": {
+                  "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Policy"
+                }
+              },
+              "required": [
+                "action",
+                "snapshot",
+                "policy"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "const": "RETRIEVE_CHAT_RAG"
+                },
+                "scope": {
+                  "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Scope"
+                },
+                "arguments": {
+                  "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Arguments"
+                },
+                "prior_context": {
+                  "anyOf": [
+                    {
+                      "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Context"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "action",
+                "scope",
+                "arguments",
+                "prior_context"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "const": "AUTHORIZE_CHAT_RAG"
+                },
+                "context": {
+                  "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Context"
+                }
+              },
+              "required": [
+                "action",
+                "context"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "actor_id",
+        "command"
+      ]
+    },
+    "Error": {
+      "enum": [
+        "CHAT_KNOWLEDGE_FORBIDDEN",
+        "CHAT_KNOWLEDGE_UNAVAILABLE",
+        "CHAT_KNOWLEDGE_POINTER_INVALID",
+        "CHAT_KNOWLEDGE_QUERY_INVALID",
+        "CHAT_KNOWLEDGE_READ_LIMIT",
+        "CHAT_KNOWLEDGE_NOT_OFFERED"
+      ]
+    },
+    "CatalogReply": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "chat-rag-catalog-reply/1.0"
+        },
+        "operation": {
+          "const": "CHAT_RAG"
+        },
+        "status": {
+          "enum": [
+            "SUCCEEDED",
+            "EMPTY",
+            "FAILED"
+          ]
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Scope"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "context": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Context"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Error"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "status",
+        "scope",
+        "context",
+        "error_code"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "FAILED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "scope": {
+                "type": "null"
+              },
+              "context": {
+                "type": "null"
+              },
+              "error_code": {
+                "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Error"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "scope": {
+                "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Scope"
+              },
+              "error_code": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "EMPTY"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "context": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "general-chat-tool-request/2.0"
+        },
+        "rpc_request_id": {
+          "type": "string",
+          "pattern": "^chatwrpc_[0-9a-f]{32}$"
+        },
+        "ticket": {
+          "$ref": "eom://schemas/general-chat/worker-ticket/1.0"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 7
+        },
+        "command": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "const": "SEARCH"
+                },
+                "arguments": {
+                  "$ref": "eom://schemas/general-chat/agent-search/1.0#/$defs/SearchArguments"
+                }
+              },
+              "required": [
+                "action",
+                "arguments"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "const": "READ"
+                },
+                "arguments": {
+                  "$ref": "eom://schemas/general-chat/agent-search/1.0#/$defs/ReadArguments"
+                }
+              },
+              "required": [
+                "action",
+                "arguments"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "const": "RAG"
+                },
+                "arguments": {
+                  "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Arguments"
+                }
+              },
+              "required": [
+                "action",
+                "arguments"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "rpc_request_id",
+        "ticket",
+        "sequence",
+        "command"
+      ]
+    },
+    "Outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "SUCCEEDED",
+            "EMPTY",
+            "FAILED"
+          ]
+        },
+        "cards": {
+          "type": "array",
+          "items": {
+            "$ref": "eom://schemas/general-chat/agent-search/1.0#/$defs/Card"
+          },
+          "maxItems": 6
+        },
+        "snapshot": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Snapshot"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "context": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Context"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "CHAT_KNOWLEDGE_FORBIDDEN",
+                "CHAT_KNOWLEDGE_UNAVAILABLE",
+                "CHAT_KNOWLEDGE_POINTER_INVALID",
+                "CHAT_KNOWLEDGE_QUERY_INVALID",
+                "CHAT_KNOWLEDGE_READ_LIMIT",
+                "CHAT_KNOWLEDGE_NOT_OFFERED"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rag_context": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Context"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "cards",
+        "snapshot",
+        "truncated",
+        "context",
+        "error_code",
+        "rag_context"
+      ]
+    },
+    "Record": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "general-chat-tool-record/2.0"
+        },
+        "request": {
+          "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Request"
+        },
+        "outcome": {
+          "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Outcome"
+        }
+      },
+      "required": [
+        "schema_version",
+        "request",
+        "outcome"
+      ]
+    },
+    "Reply": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "general-chat-tool-reply/2.0"
+        },
+        "record": {
+          "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Record"
+        },
+        "pointer": {
+          "$ref": "eom://schemas/artifact-member/1.0"
+        }
+      },
+      "required": [
+        "schema_version",
+        "record",
+        "pointer"
+      ]
+    },
+    "Section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "section_id",
+        "markdown",
+        "support_kind",
+        "citation_keys"
+      ],
+      "properties": {
+        "section_id": {
+          "type": "string",
+          "pattern": "^section_[1-9][0-9]?$"
+        },
+        "markdown": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000,
+          "pattern": "\\S"
+        },
+        "support_kind": {
+          "enum": [
+            "SOURCE_SUPPORTED",
+            "MODEL_INFERENCE",
+            "GENERAL_KNOWLEDGE",
+            "INSUFFICIENT_EVIDENCE",
+            "SYSTEM_OBSERVATION"
+          ]
+        },
+        "citation_keys": {
+          "type": "array",
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^(S[1-9]|R[1-3])$"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "support_kind": {
+                "const": "SOURCE_SUPPORTED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "citation_keys": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "support_kind": {
+                "enum": [
+                  "GENERAL_KNOWLEDGE",
+                  "INSUFFICIENT_EVIDENCE",
+                  "SYSTEM_OBSERVATION"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "citation_keys": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "answer_sections",
+        "limitations"
+      ],
+      "properties": {
+        "answer_sections": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": {
+            "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Section"
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        }
+      }
+    },
+    "Input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "conversation_id",
+        "turn_id",
+        "claim_id",
+        "prompt_revision",
+        "context_sha256",
+        "messages",
+        "knowledge",
+        "agent_state",
+        "rag_scope",
+        "rag_knowledge"
+      ],
+      "properties": {
+        "protocol_version": {
+          "const": "general-chat-turn/4.0"
+        },
+        "conversation_id": {
+          "type": "string",
+          "pattern": "^chat_[0-9a-f]{32}$"
+        },
+        "turn_id": {
+          "type": "string",
+          "pattern": "^chatturn_[0-9a-f]{32}$"
+        },
+        "claim_id": {
+          "type": "string",
+          "pattern": "^chatclaim_[0-9a-f]{32}$"
+        },
+        "prompt_revision": {
+          "const": "general-chat-rag-agent/1.0.0"
+        },
+        "context_sha256": {
+          "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Hash"
+        },
+        "messages": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 40,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "role",
+              "text"
+            ],
+            "properties": {
+              "role": {
+                "enum": [
+                  "user",
+                  "assistant"
+                ]
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32000,
+                "pattern": "\\S"
+              }
+            }
+          }
+        },
+        "knowledge": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Context"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "agent_state": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/AgentState"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rag_scope": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Scope"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rag_knowledge": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Context"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "Result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "conversation_id",
+        "turn_id",
+        "claim_id",
+        "prompt_revision",
+        "request_sha256",
+        "knowledge_sha256",
+        "status",
+        "answer",
+        "failure_code",
+        "agent_state_sha256",
+        "tool_records"
+      ],
+      "properties": {
+        "protocol_version": {
+          "const": "general-chat-turn/4.0"
+        },
+        "conversation_id": {
+          "type": "string",
+          "pattern": "^chat_[0-9a-f]{32}$"
+        },
+        "turn_id": {
+          "type": "string",
+          "pattern": "^chatturn_[0-9a-f]{32}$"
+        },
+        "claim_id": {
+          "type": "string",
+          "pattern": "^chatclaim_[0-9a-f]{32}$"
+        },
+        "prompt_revision": {
+          "const": "general-chat-rag-agent/1.0.0"
+        },
+        "request_sha256": {
+          "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Hash"
+        },
+        "knowledge_sha256": {
+          "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Hash"
+        },
+        "status": {
+          "enum": [
+            "SUCCEEDED",
+            "FAILED"
+          ]
+        },
+        "answer": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Answer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "failure_code": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            null,
+            "CODEX_UNAVAILABLE",
+            "CODEX_AUTH_REQUIRED",
+            "CODEX_TIMEOUT",
+            "CODEX_PROTOCOL_INVALID",
+            "CODEX_TURN_FAILED",
+            "CHAT_ISOLATION_NOT_READY"
+          ]
+        },
+        "agent_state_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "tool_records": {
+          "type": "array",
+          "items": {
+            "allOf": [
+              {
+                "$ref": "eom://schemas/artifact-member/1.0"
+              },
+              {
+                "properties": {
+                  "schema_ref": {
+                    "const": "eom://schemas/general-chat/tool-record/2.0"
+                  },
+                  "member_path": {
+                    "const": "chat/evidence.json"
+                  },
+                  "media_type": {
+                    "const": "application/json"
+                  }
+                }
+              }
+            ]
+          },
+          "minItems": 0,
+          "maxItems": 7,
+          "uniqueItems": true
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "SUCCEEDED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "answer": {
+                "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Answer"
+              },
+              "failure_code": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "answer": {
+                "type": "null"
+              },
+              "failure_code": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "request_sha256",
+        "result_sha256",
+        "context_sha256",
+        "used_source_keys",
+        "verified_references",
+        "meaning",
+        "verified_rag_references"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "chat-knowledge-citation-receipt/2.0"
+        },
+        "request_sha256": {
+          "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Hash"
+        },
+        "result_sha256": {
+          "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Hash"
+        },
+        "context_sha256": {
+          "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Hash"
+        },
+        "used_source_keys": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^(S[1-9]|R[1-3])$"
+          },
+          "minItems": 0,
+          "maxItems": 12,
+          "uniqueItems": true
+        },
+        "verified_references": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Item"
+          }
+        },
+        "meaning": {
+          "const": "CITATION_LINK_INTEGRITY_NOT_SCIENTIFIC_APPROVAL"
+        },
+        "verified_rag_references": {
+          "type": "array",
+          "items": {
+            "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Reference"
+          },
+          "minItems": 0,
+          "maxItems": 3,
+          "uniqueItems": true
+        }
+      }
+    },
+    "SourceCard": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "key",
+            "item",
+            "display_name",
+            "kind",
+            "approval",
+            "location"
+          ],
+          "properties": {
+            "key": {
+              "type": "string",
+              "pattern": "^S[1-9]$"
+            },
+            "item": {
+              "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Item"
+            },
+            "display_name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "kind": {
+              "enum": [
+                "REGISTRY_DIRECT",
+                "GRAPH_ANALYSIS",
+                "SOLUTION_REPORT"
+              ]
+            },
+            "approval": {
+              "enum": [
+                "APPROVED",
+                "PENDING"
+              ]
+            },
+            "location": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "key": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^R[1-3]$"
+            },
+            "reference": {
+              "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Reference"
+            },
+            "display_name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "kind": {
+              "const": "RAG_ANALYSIS"
+            },
+            "approval": {
+              "const": "APPROVED"
+            },
+            "location": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "text_kind": {
+              "const": "APPROVED_ANALYSIS_NOT_VERBATIM_SOURCE"
+            }
+          },
+          "required": [
+            "key",
+            "reference",
+            "display_name",
+            "kind",
+            "approval",
+            "location",
+            "text_kind"
+          ]
+        }
+      ]
+    },
+    "TurnView": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "turn_id",
+        "sources",
+        "receipt",
+        "observed_at"
+      ],
+      "properties": {
+        "turn_id": {
+          "type": "string",
+          "pattern": "^chatturn_[0-9a-f]{32}$"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/SourceCard"
+          },
+          "minItems": 0,
+          "maxItems": 12
+        },
+        "receipt": {
+          "anyOf": [
+            {
+              "oneOf": [
+                {
+                  "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Receipt"
+                },
+                {
+                  "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/Receipt"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observed_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      }
+    },
+    "Views": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "conversation_id",
+        "values"
+      ],
+      "properties": {
+        "conversation_id": {
+          "type": "string",
+          "pattern": "^chat_[0-9a-f]{32}$"
+        },
+        "values": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "$ref": "eom://schemas/general-chat/rag/1.0#/$defs/TurnView"
+          }
+        }
+      }
+    }
+  }
+}
