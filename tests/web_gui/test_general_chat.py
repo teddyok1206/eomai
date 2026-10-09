@@ -113,6 +113,82 @@ def anyio_backend():
 
 
 @pytest.mark.anyio
+async def test_grounding_read_deadline_covers_owner_rpc_without_widening_other_requests():
+    from eom_web_gui.chat_grounding_contracts import ChatGroundingSubmission
+
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        if request.url.path.endswith("/grounding"):
+            assert request.extensions["timeout"]["read"] == 50
+            assert "Idempotency-Key" not in request.headers
+            return httpx.Response(
+                200,
+                json={
+                    "conversation_id": CHAT_ID,
+                    "values": [
+                        {
+                            "turn_id": "chatturn_" + "1" * 32,
+                            "sources": [],
+                            "receipt": None,
+                            "observed_at": None,
+                        }
+                    ],
+                },
+            )
+        assert request.extensions["timeout"]["read"] == 5
+        return httpx.Response(200, json=ChatSlot(state="READY").model_dump(mode="json"))
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://testserver",
+        observability_url="http://observe",
+        timeout=5,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        view = await gateway.general_chat_grounding(
+            _session(), CHAT_ID, ChatGroundingSubmission(turn_ids=("chatturn_" + "1" * 32,))
+        )
+        assert view.values[0].turn_id == "chatturn_" + "1" * 32
+        assert (await gateway.general_chat_slot(_session())).state == "READY"
+        assert len(calls) == 2
+    finally:
+        await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_grounding_deadline_failure_does_not_replay_or_submit_generation():
+    from eom_web_gui.chat_grounding_contracts import ChatGroundingSubmission
+
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        assert request.url.path.endswith("/grounding")
+        assert request.extensions["timeout"]["read"] == 50
+        raise httpx.ReadTimeout("private upstream detail", request=request)
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://testserver",
+        observability_url="http://observe",
+        timeout=5,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(GatewayError) as failure:
+            await gateway.general_chat_grounding(
+                _session(), CHAT_ID, ChatGroundingSubmission(turn_ids=("chatturn_" + "1" * 32,))
+            )
+        assert failure.value.code == "APPLICATION_API_UNAVAILABLE"
+        assert len(calls) == 1
+    finally:
+        await gateway.close()
+
+
+@pytest.mark.anyio
 async def test_gateway_chat_validates_response_and_proxies_idempotency_without_actor():
     calls = []
 

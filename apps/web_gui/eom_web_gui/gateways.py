@@ -99,6 +99,10 @@ INTEGRATED_SCIENCE_OUTLINE_SHA256 = (
     "sha256:f11389c8ab26c2bd5b93acf66fe92d30fea9c1d0bc7e6b91a6b6751fdccb5108"
 )
 INTEGRATED_SCIENCE_CORPUS_KEY = "integrated-science-textbooks"
+# Grounding revalidates pinned Artifact/Graph permissions through the owner's
+# bounded 45-second RPC. Leave 5 seconds for HTTP overhead; ordinary reads keep
+# their configured deadline. A timeout does not replay or regenerate a turn.
+CHAT_GROUNDING_READ_TIMEOUT_SECONDS = 50.0
 
 
 def _document_review_view(value: object) -> DocumentReviewView:
@@ -949,6 +953,7 @@ class HttpApplicationGateway:
             "POST",
             f"/api/v1/general-chat/conversations/{conversation_id}/grounding",
             json=value.model_dump(mode="json"),
+            timeout=CHAT_GROUNDING_READ_TIMEOUT_SECONDS,
         )
         try:
             result = ChatGroundingViewsV2.model_validate(response.json())

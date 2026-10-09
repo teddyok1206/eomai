@@ -76,3 +76,31 @@ tested prompt successor. Total native submissions so far: **2 failed canaries**;
 browser admission checks, reads and service restarts are counted separately.
 If that minimal successor canary fails, inspect its known receipt before any
 further generation. No educational correctness approval is implied.
+
+## Successful answer and read-only deadline mismatch
+
+The prompt successor `1ec04c62f092d02e350395690d5a6291ec7b1352`
+passed 1,071 source/release tests and is installed in API/Catalog/chat. Web
+`e473878e1b2ada1b8963ece798ca3df9430e619c` is contract-compatible.
+Turn `chatturn_7a59a8a5d0e635ca8d8d74ee9a7ead51` completed with one successful
+RAG retrieval and three textbook sources; its canonical result validates and
+the preceding 18 completed receipt identities/hashes are preserved.
+
+The answer is not regenerated. Its source-card read exposed an HTTP deadline
+mismatch: seven safe API completion events measured **5,491–5,928 ms**, exceeding
+the BFF's ordinary 5-second limit. Installed owner RPC under the actual API UID
+returned three source cards in 2.620 seconds; its separate client profile spent
+2.609 of 2.659 seconds waiting on the owner, not parsing JSON Schema. This is not
+a missing source or permission bypass and does not justify removing validation.
+
+The existing grounding HTTP adapter alone now uses a finite 50-second deadline,
+covering the owner's existing 45-second RPC plus 5 seconds of HTTP overhead.
+All other request deadlines, the 50-turn query bound, source permissions, pinned
+hash checks, response identity validation and stable errors remain unchanged.
+No retry, new generation, cache, dependency, schema, migration or worker behavior
+is introduced. Two transport regressions failed before the change; they require
+the scoped deadline, unchanged ordinary deadline, and exactly one request on
+timeout. Full Web regression: **283 PASS**, mypy 1 PASS, Ruff/format/diff checks
+PASS. This Web-only change does not invalidate the preceding disposable-DB
+52 PASS; there is no persistence change. Live source-card read and same-evidence
+follow-up still need acceptance.
