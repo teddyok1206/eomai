@@ -1,40 +1,90 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPOSITORY_ROOT="/home/eom/EOM"
+CANONICAL_REPOSITORY_ROOT="/home/eom/EOM"
+REPOSITORY_ROOT="$CANONICAL_REPOSITORY_ROOT"
 PYTHON="/srv/eom/conda/envs/eom-hwpx/bin/python"
 NODE="/srv/eom/conda/envs/eom-hwpx/bin/node"
 NPM="/srv/eom/conda/envs/eom-hwpx/bin/npm"
-KORDOC_SOURCE="$REPOSITORY_ROOT/services/hwpx_builder/kordoc_runtime"
 KORDOC_TARGET="/srv/eom/conda/envs/eom-hwpx/share/eom-kordoc"
-PYTHON_LAYOUT_HELPER="$REPOSITORY_ROOT/scripts/hwpx/python_runtime_layout.py"
 MODE="install"
+MODE_SELECTED=false
+SOURCE_SELECTED=false
 
 usage() {
-  printf 'Usage: %s [--build-only|--install|--verify|--normalize-python-layout|--normalize-node-layout|--normalize-node-libraries|--dry-run]\n' "$0"
+  printf 'Usage: %s [--build-only|--install|--verify|--normalize-python-layout|--normalize-node-layout|--normalize-node-libraries|--dry-run] [--source-root PATH]\n' "$0"
 }
 
-if [[ $# -gt 1 ]]; then
-  usage >&2
-  exit 2
-fi
-if [[ $# -eq 1 ]]; then
+while [[ $# -gt 0 ]]; do
   case "$1" in
-    --build-only) MODE="build" ;;
-    --install) MODE="install" ;;
-    --verify) MODE="verify" ;;
-    --normalize-python-layout) MODE="normalize-python-layout" ;;
-    --normalize-node-layout) MODE="normalize-node-layout" ;;
-    --normalize-node-libraries) MODE="normalize-node-libraries" ;;
-    --dry-run) MODE="dry-run" ;;
+    --source-root)
+      if [[ "$SOURCE_SELECTED" = true || $# -lt 2 ]]; then
+        usage >&2
+        exit 2
+      fi
+      REPOSITORY_ROOT="$2"
+      SOURCE_SELECTED=true
+      shift 2
+      ;;
+    --build-only|--install|--verify|--normalize-python-layout|--normalize-node-layout|--normalize-node-libraries|--dry-run)
+      if [[ "$MODE_SELECTED" = true ]]; then
+        usage >&2
+        exit 2
+      fi
+      MODE_SELECTED=true
+      case "$1" in
+        --build-only) MODE="build" ;;
+        --install) MODE="install" ;;
+        --verify) MODE="verify" ;;
+        --normalize-python-layout) MODE="normalize-python-layout" ;;
+        --normalize-node-layout) MODE="normalize-node-layout" ;;
+        --normalize-node-libraries) MODE="normalize-node-libraries" ;;
+        --dry-run) MODE="dry-run" ;;
+      esac
+      shift
+      ;;
     *) usage >&2; exit 2 ;;
   esac
-fi
+done
 
-test "$(git -C "$REPOSITORY_ROOT" rev-parse --show-toplevel)" = "$REPOSITORY_ROOT"
-test "$(id -un)" = "eom"
+fail() {
+  printf '%s\n' "$1" >&2
+  exit 1
+}
+
+# An inherited Git selector must not replace either repository identity.
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE
+unset GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
+
+validate_source_root() {
+  [[ "$REPOSITORY_ROOT" = /* && "$REPOSITORY_ROOT" != / ]] || \
+    fail 'HWPX source root must be an absolute non-root directory.'
+  [[ ! "$REPOSITORY_ROOT" =~ [[:cntrl:]] ]] || fail 'HWPX source root contains control characters.'
+  [[ -d "$REPOSITORY_ROOT" && ! -L "$REPOSITORY_ROOT" ]] || fail 'HWPX source root is unsafe.'
+  [[ "$(realpath -e -- "$REPOSITORY_ROOT")" = "$REPOSITORY_ROOT" ]] || \
+    fail 'HWPX source root must be canonical and contain no symbolic links.'
+  [[ "$(stat -c '%U' -- "$REPOSITORY_ROOT")" = eom ]] || fail 'HWPX source root must be owned by eom.'
+  [[ "$(id -un)" = eom ]] || fail 'HWPX deployment must run as eom.'
+  [[ "$(git -C "$REPOSITORY_ROOT" rev-parse --show-toplevel)" = "$REPOSITORY_ROOT" ]] || \
+    fail 'HWPX source root must be an exact Git worktree root.'
+  local expected_common selected_common
+  expected_common="$(git -C "$CANONICAL_REPOSITORY_ROOT" rev-parse --path-format=absolute --git-common-dir)"
+  selected_common="$(git -C "$REPOSITORY_ROOT" rev-parse --path-format=absolute --git-common-dir)"
+  [[ "$(realpath -e -- "$selected_common")" = "$(realpath -e -- "$expected_common")" ]] || \
+    fail 'HWPX source worktree must belong to the canonical EOM repository.'
+  COMMIT="$(git -C "$REPOSITORY_ROOT" rev-parse --verify 'HEAD^{commit}')"
+  [[ "$COMMIT" =~ ^[a-f0-9]{40}$ ]] || fail 'HWPX source commit must be a full 40-character SHA.'
+  if [[ "$MODE" = install || "$MODE" = build || "$MODE" = dry-run || "$SOURCE_SELECTED" = true ]]; then
+    [[ -z "$(git -C "$REPOSITORY_ROOT" status --porcelain --untracked-files=all)" ]] || \
+      fail 'Working tree must be clean for an HWPX builder release.'
+  fi
+}
+
+validate_source_root
 test -x "$PYTHON"
-COMMIT="$(git -C "$REPOSITORY_ROOT" rev-parse HEAD)"
+KORDOC_SOURCE="$REPOSITORY_ROOT/services/hwpx_builder/kordoc_runtime"
+PYTHON_LAYOUT_HELPER="$REPOSITORY_ROOT/scripts/hwpx/python_runtime_layout.py"
+VERIFY_SOURCE_ROOT="$REPOSITORY_ROOT"
 BUILD_ROOT=""
 WHEEL_DIR=""
 WORK_ROOT=""
@@ -91,7 +141,7 @@ for module in (eom_hwpx_builder, eom_hwpx_contracts):
         raise SystemExit(f"source checkout import detected: {path}")
 print("NON_EDITABLE_IMPORT=PASS")
 PY
-  "$PYTHON" - "$REPOSITORY_ROOT" <<'PY'
+  "$PYTHON" - "$VERIFY_SOURCE_ROOT" <<'PY'
 import hashlib
 import json
 from pathlib import Path
@@ -119,6 +169,22 @@ source_pairs = (
     (
         installed_contracts / "models.py",
         repository / "packages/hwpx_contracts/eom_hwpx_contracts/models.py",
+    ),
+    (
+        installed_contracts / "__init__.py",
+        repository / "packages/hwpx_contracts/eom_hwpx_contracts/__init__.py",
+    ),
+    (
+        installed_builder / "content_team_images.py",
+        repository / "services/hwpx_builder/eom_hwpx_builder/content_team_images.py",
+    ),
+    (
+        installed_builder / "reference.py",
+        repository / "services/hwpx_builder/eom_hwpx_builder/reference.py",
+    ),
+    (
+        installed_contracts / "picture_geometry.py",
+        repository / "packages/hwpx_contracts/eom_hwpx_contracts/picture_geometry.py",
     ),
     (
         installed_contracts / "schemas/hwpx-content-team-exam-render-request-v3.schema.json",
@@ -203,6 +269,8 @@ PY
   "$PYTHON" -m eom_hwpx_builder kordoc-capabilities >/dev/null
 }
 
+# Legacy verification/normalization compares the selected checkout, not release evidence.
+# Only build/install below materializes the immutable commit for installation and verification.
 if [[ "$MODE" = "verify" ]]; then
   verify_install
   exit 0
@@ -230,10 +298,6 @@ if [[ "$MODE" = "dry-run" ]]; then
   exit 0
 fi
 
-if [[ -n "$(git -C "$REPOSITORY_ROOT" status --porcelain)" ]]; then
-  printf 'Working tree must be clean for an HWPX builder release.\n' >&2
-  exit 1
-fi
 if [[ "$MODE" = "install" ]] && ! sudo -n true; then
   printf 'HWPX builder installation requires noninteractive operator authorization.\n' >&2
   exit 1
@@ -242,6 +306,14 @@ fi
 BUILD_ROOT="$(mktemp -d "/tmp/eom-hwpx-build.${COMMIT}.XXXXXXXX")"
 WHEEL_DIR="$BUILD_ROOT/wheels"
 mkdir -p "$WHEEL_DIR"
+# Materialize only the pinned commit, not ignored files or a changing checkout.
+WORK_ROOT="$(mktemp -d /tmp/eom-hwpx-wheel-source.XXXXXX)"
+git -C "$REPOSITORY_ROOT" archive --format=tar "$COMMIT" \
+  packages/hwpx_contracts services/hwpx_builder schemas/hwpx \
+  scripts/hwpx/python_runtime_layout.py | tar --extract --directory="$WORK_ROOT" --no-same-owner
+VERIFY_SOURCE_ROOT="$WORK_ROOT"
+KORDOC_SOURCE="$WORK_ROOT/services/hwpx_builder/kordoc_runtime"
+PYTHON_LAYOUT_HELPER="$WORK_ROOT/scripts/hwpx/python_runtime_layout.py"
 test -x "$NODE"
 test -x "$NPM"
 test "$($NODE -p 'Number(process.versions.node.split(".")[0]) === 22')" = true
@@ -271,17 +343,10 @@ const runtime = process.env.EOM_KORDOC_RUNTIME
 const manifest = require(`${runtime}/node_modules/kordoc/package.json`)
 if (manifest.version !== "4.9.0") process.exit(1)
 JS
-WORK_ROOT="$(mktemp -d /tmp/eom-hwpx-wheel-source.XXXXXX)"
-mkdir -p "$WORK_ROOT/contracts" "$WORK_ROOT/builder"
-cp -a "$REPOSITORY_ROOT/packages/hwpx_contracts/." "$WORK_ROOT/contracts/"
-cp -a "$REPOSITORY_ROOT/services/hwpx_builder/." "$WORK_ROOT/builder/"
-find "$WORK_ROOT" -depth \
-  \( -path '*/build/*' -o -name build -o -path '*/*.egg-info/*' -o -name '*.egg-info' \
-     -o -path '*/__pycache__/*' -o -name __pycache__ \) -delete
 "$PYTHON" -m build --wheel --no-isolation \
-  --outdir "$WHEEL_DIR" "$WORK_ROOT/contracts"
+  --outdir "$WHEEL_DIR" "$WORK_ROOT/packages/hwpx_contracts"
 "$PYTHON" -m build --wheel --no-isolation \
-  --outdir "$WHEEL_DIR" "$WORK_ROOT/builder"
+  --outdir "$WHEEL_DIR" "$WORK_ROOT/services/hwpx_builder"
 
 "$PYTHON" - "$WHEEL_DIR" <<'PY'
 import sys
@@ -295,6 +360,7 @@ if len(wheels) != 2:
 required = {
     "eom_hwpx_contracts": {
         "eom_hwpx_contracts/__init__.py",
+        "eom_hwpx_contracts/picture_geometry.py",
         "eom_hwpx_contracts/schemas/hwpx-item-document-v1.schema.json",
         "eom_hwpx_contracts/schemas/hwpx-build-result-v1.schema.json",
         "eom_hwpx_contracts/schemas/hwpx-render-request-v1.schema.json",
