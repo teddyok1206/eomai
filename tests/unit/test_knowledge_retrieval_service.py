@@ -942,11 +942,13 @@ def test_past_exam_resolution_cache_preserves_artifact_settings_port(
         artifacts: Any,
         item_revision_id: str,
         source_class: str,
+        past_exam_cache: Any,
     ) -> ApprovedPastExamItemKnowledgeSourceV3:
         # Corrected legacy media resolution dereferences this exact storage boundary.
         assert artifacts.settings is delegate.settings
         assert item_revision_id == source.item_revision_id
         assert source_class == "PAST_EXAM"
+        assert past_exam_cache is cache.past_exam_provenance
         return source
 
     monkeypatch.setattr(

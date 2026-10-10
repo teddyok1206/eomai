@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
-from typing import Any, Literal, NoReturn, cast
+from typing import Literal, cast
 
 from eom_catalog_contracts import (
     ASSESSMENT_ITEM_CONTENT_MEDIA_TYPE,
@@ -15,7 +15,6 @@ from eom_catalog_contracts import (
     ApprovedItemKnowledgeSourceV2,
     ApprovedPastExamItemKnowledgeSourceV3,
     AssessmentArtifactMemberPointer,
-    AssessmentLayoutObservation,
     ContentIntakeKnowledgeSourceV2,
     EducationalDocumentKnowledgeSourceV3,
     EducationalDocumentKnowledgeSourceV4,
@@ -25,9 +24,6 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisDocumentMaterializationMemberV4,
     KnowledgeAnalysisOriginalSourceMemberV3,
     KnowledgeAnalysisSourceArtifactMemberV2,
-    LegacyItemExtractionAcceptance,
-    LegacyItemExtractionBatchManifestV2,
-    LegacyItemExtractionResult,
     TextbookAnalysisBundleManifest,
     TextbookAnalysisBundleManifestV2,
     TextbookPageAnalysisV2,
@@ -60,6 +56,10 @@ from eom_catalog_service.models import (
     EducationalDocumentRevisionRecord,
     ItemComponentRecord,
     ItemRevisionRecord,
+)
+from eom_catalog_service.past_exam_source_provenance import (
+    PastExamProvenanceMember,
+    PastExamSourceResolutionCache,
 )
 
 MAX_SOURCE_BYTES = 100 * 1024 * 1024
@@ -198,6 +198,7 @@ def _resolve_item_source(
     item_revision_id: str,
     source_class: Literal["APPROVED_ITEM", "PAST_EXAM"],
     eligible_revision_states: frozenset[str],
+    past_exam_cache: PastExamSourceResolutionCache | None = None,
 ) -> ApprovedItemKnowledgeSourceV2 | ApprovedPastExamItemKnowledgeSourceV3:
     revision = session.get(ItemRevisionRecord, item_revision_id)
     if revision is None:
@@ -295,6 +296,7 @@ def _resolve_item_source(
             artifacts=artifacts,
             revision=revision,
             artifact_member=artifact_member,
+            cache=past_exam_cache,
         )
     try:
         return ApprovedItemKnowledgeSourceV2(
@@ -315,6 +317,7 @@ def _resolve_past_exam_item_source(
     artifacts: CatalogArtifactReader,
     revision: ItemRevisionRecord,
     artifact_member: KnowledgeAnalysisSourceArtifactMemberV2,
+    cache: PastExamSourceResolutionCache | None = None,
 ) -> ApprovedPastExamItemKnowledgeSourceV3:
     """Resolve one promoted Item back to its exact extraction request and PNG evidence."""
 
@@ -413,50 +416,55 @@ def _resolve_past_exam_item_source(
             "past-exam Item batch or bundle revision is stale",
         )
 
+    # Standalone resolutions keep their uncached lifetime; retrieval supplies
+    # one bounded cache for its actual owner transaction only.
+    provenance = cache if cache is not None else PastExamSourceResolutionCache(max_members=0)
     try:
-        manifest_value = _read_json_member(
+        decoded_batch = provenance.batch(
             artifacts,
-            artifact_id=batch.manifest_artifact_id,
-            revision_id=batch.manifest_artifact_revision_id,
-            member_path=batch.manifest_artifact_member_path,
-            sha256=batch.manifest_artifact_sha256,
-            media_type=batch.manifest_artifact_media_type,
-            schema_ref=batch.manifest_artifact_schema_ref,
+            PastExamProvenanceMember(
+                artifact_id=batch.manifest_artifact_id,
+                artifact_revision_id=batch.manifest_artifact_revision_id,
+                member_path=batch.manifest_artifact_member_path,
+                sha256=batch.manifest_artifact_sha256,
+                media_type=batch.manifest_artifact_media_type,
+                schema_ref=batch.manifest_artifact_schema_ref,
+                max_bytes=MAX_DOCUMENT_JSON_BYTES,
+            ),
         )
-        validate_contract("legacy-item-extraction-batch-v2", manifest_value)
-        batch_manifest = LegacyItemExtractionBatchManifestV2.model_validate(manifest_value)
-        manifest_units = tuple(
-            unit
-            for unit in batch_manifest.work_units
-            if unit.work_unit_id == work_unit.work_unit_id
-        )
+        batch_manifest = decoded_batch.value
+        manifest_units = decoded_batch.work_units_by_id.get(work_unit.work_unit_id, ())
         if len(manifest_units) != 1:
             raise ValueError("work unit is absent from its immutable batch manifest")
         request = manifest_units[0].request
 
-        acceptance_value = _read_json_member(
+        decoded_acceptance = provenance.acceptance(
             artifacts,
-            artifact_id=acceptance_record.acceptance_artifact_id,
-            revision_id=acceptance_record.acceptance_artifact_revision_id,
-            member_path=acceptance_record.acceptance_artifact_member_path,
-            sha256=acceptance_record.acceptance_artifact_sha256,
-            media_type=acceptance_record.acceptance_artifact_media_type,
-            schema_ref=acceptance_record.acceptance_artifact_schema_ref,
+            PastExamProvenanceMember(
+                artifact_id=acceptance_record.acceptance_artifact_id,
+                artifact_revision_id=acceptance_record.acceptance_artifact_revision_id,
+                member_path=acceptance_record.acceptance_artifact_member_path,
+                sha256=acceptance_record.acceptance_artifact_sha256,
+                media_type=acceptance_record.acceptance_artifact_media_type,
+                schema_ref=acceptance_record.acceptance_artifact_schema_ref,
+                max_bytes=MAX_DOCUMENT_JSON_BYTES,
+            ),
         )
-        validate_contract("legacy-item-extraction-acceptance", acceptance_value)
-        acceptance = LegacyItemExtractionAcceptance.model_validate(acceptance_value)
+        acceptance = decoded_acceptance.value
 
-        result_value = _read_json_member(
+        decoded_result = provenance.result(
             artifacts,
-            artifact_id=acceptance_record.result_artifact_id,
-            revision_id=acceptance_record.result_artifact_revision_id,
-            member_path=acceptance_record.result_artifact_member_path,
-            sha256=acceptance_record.result_artifact_sha256,
-            media_type=acceptance_record.result_artifact_media_type,
-            schema_ref=acceptance_record.result_artifact_schema_ref,
+            PastExamProvenanceMember(
+                artifact_id=acceptance_record.result_artifact_id,
+                artifact_revision_id=acceptance_record.result_artifact_revision_id,
+                member_path=acceptance_record.result_artifact_member_path,
+                sha256=acceptance_record.result_artifact_sha256,
+                media_type=acceptance_record.result_artifact_media_type,
+                schema_ref=acceptance_record.result_artifact_schema_ref,
+                max_bytes=MAX_DOCUMENT_JSON_BYTES,
+            ),
         )
-        validate_contract("legacy-item-extraction-result", result_value)
-        result = LegacyItemExtractionResult.model_validate(result_value)
+        result = decoded_result.value
 
         layout_record = session.get(
             AssessmentLayoutObservationRecord,
@@ -464,33 +472,27 @@ def _resolve_past_exam_item_source(
         )
         if layout_record is None:
             raise ValueError("layout observation record is absent")
-        layout_value = _read_json_member(
+        decoded_layout = provenance.layout(
             artifacts,
-            artifact_id=layout_record.artifact_id,
-            revision_id=layout_record.artifact_revision_id,
-            member_path=layout_record.artifact_member_path,
-            sha256=layout_record.artifact_sha256,
-            media_type=layout_record.artifact_media_type,
-            schema_ref=layout_record.artifact_schema_ref,
+            PastExamProvenanceMember(
+                artifact_id=layout_record.artifact_id,
+                artifact_revision_id=layout_record.artifact_revision_id,
+                member_path=layout_record.artifact_member_path,
+                sha256=layout_record.artifact_sha256,
+                media_type=layout_record.artifact_media_type,
+                schema_ref=layout_record.artifact_schema_ref,
+                max_bytes=MAX_DOCUMENT_JSON_BYTES,
+            ),
         )
-        validate_contract("assessment-layout-observation", layout_value)
-        layout = AssessmentLayoutObservation.model_validate(layout_value)
+        layout = decoded_layout.value
     except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
         raise KnowledgeAnalysisSourceError(
             "KNOWLEDGE_ANALYSIS_SOURCE_HASH_MISMATCH",
             "past-exam Item extraction evidence bytes are invalid",
         ) from exc
 
-    decision_models = tuple(
-        value
-        for value in acceptance.item_decisions
-        if value.item_proposal_id == item_proposal_id and value.item_number == item_number
-    )
-    proposals = tuple(
-        value
-        for value in result.items
-        if value.item_proposal_id == item_proposal_id and value.item_number == item_number
-    )
+    decision_models = decoded_acceptance.decisions_by_item.get((item_proposal_id, item_number), ())
+    proposals = decoded_result.proposals_by_item.get((item_proposal_id, item_number), ())
     expected_result_pointer = AssessmentArtifactMemberPointer(
         artifact_id=acceptance_record.result_artifact_id,
         artifact_revision_id=acceptance_record.result_artifact_revision_id,
@@ -565,13 +567,9 @@ def _resolve_past_exam_item_source(
             "KNOWLEDGE_ANALYSIS_SOURCE_STALE",
             "promoted Item content differs from its extraction proposal",
         )
-    page_by_id = {page.page.page_input_id: page.page for page in layout.pages}
-    page_by_position = {
-        (page.page.source_role, page.page.physical_page): page.page for page in layout.pages
-    }
-    boundaries = tuple(
-        value for value in layout.item_boundaries if value.item_number == item_number
-    )
+    page_by_id = decoded_layout.pages_by_id
+    page_by_position = decoded_layout.pages_by_position
+    boundaries = decoded_layout.boundaries_by_item.get(item_number, ())
     if len(boundaries) != 1:
         raise KnowledgeAnalysisSourceError(
             "KNOWLEDGE_ANALYSIS_SOURCE_STALE", "past-exam Item layout boundary is ambiguous"
@@ -669,54 +667,13 @@ def _resolve_past_exam_item_source(
         ) from exc
 
 
-def _reject_json_constant(_value: str) -> NoReturn:
-    raise ValueError("non-finite JSON value")
-
-
-def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    value: dict[str, Any] = {}
-    for key, member in pairs:
-        if key in value:
-            raise ValueError("duplicate JSON key")
-        value[key] = member
-    return value
-
-
-def _read_json_member(
-    artifacts: CatalogArtifactReader,
-    *,
-    artifact_id: str,
-    revision_id: str,
-    member_path: str,
-    sha256: str,
-    media_type: str,
-    schema_ref: str,
-) -> dict[str, Any]:
-    raw = artifacts.read_member(
-        artifact_id=artifact_id,
-        revision_id=revision_id,
-        member_path=member_path,
-        sha256=sha256,
-        media_type=media_type,
-        schema_ref=schema_ref,
-        max_bytes=MAX_DOCUMENT_JSON_BYTES,
-    )
-    value = json.loads(
-        raw,
-        object_pairs_hook=_unique_json_object,
-        parse_constant=_reject_json_constant,
-    )
-    if not isinstance(value, dict):
-        raise ValueError("Artifact member is not a JSON object")
-    return value
-
-
 def resolve_approved_item_source(
     session: Session,
     *,
     artifacts: CatalogArtifactReader | None = None,
     item_revision_id: str,
     source_class: Literal["APPROVED_ITEM", "PAST_EXAM"],
+    past_exam_cache: PastExamSourceResolutionCache | None = None,
 ) -> ApprovedItemKnowledgeSourceV2 | ApprovedPastExamItemKnowledgeSourceV3:
     """Resolve a currently approved Item Revision for a new analysis request."""
 
@@ -726,6 +683,7 @@ def resolve_approved_item_source(
         item_revision_id=item_revision_id,
         source_class=source_class,
         eligible_revision_states=frozenset({"APPROVED"}),
+        past_exam_cache=past_exam_cache,
     )
 
 
@@ -735,6 +693,7 @@ def resolve_historically_approved_item_source(
     artifacts: CatalogArtifactReader | None = None,
     item_revision_id: str,
     source_class: Literal["APPROVED_ITEM", "PAST_EXAM"],
+    past_exam_cache: PastExamSourceResolutionCache | None = None,
 ) -> ApprovedItemKnowledgeSourceV2 | ApprovedPastExamItemKnowledgeSourceV3:
     """Re-resolve an immutable published source without substituting its current revision."""
 
@@ -744,6 +703,7 @@ def resolve_historically_approved_item_source(
         item_revision_id=item_revision_id,
         source_class=source_class,
         eligible_revision_states=frozenset({"APPROVED", "SUPERSEDED", "RETIRED"}),
+        past_exam_cache=past_exam_cache,
     )
 
 

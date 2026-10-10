@@ -93,6 +93,7 @@ from eom_catalog_service.knowledge_graph_models import (
 )
 from eom_catalog_service.knowledge_graph_projection import knowledge_node_terms
 from eom_catalog_service.models import ItemRecord, ItemRevisionRecord
+from eom_catalog_service.past_exam_source_provenance import PastExamSourceResolutionCache
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.solution_evidence_resolution import (
     ResolvedSolutionEvidence,
@@ -476,6 +477,9 @@ class _SnapshotSourceResolutionCache:
     artifacts: _RequestScopedArtifactValidationCache
     educational_documents: EducationalDocumentSourceResolutionCache = field(
         default_factory=EducationalDocumentSourceResolutionCache
+    )
+    past_exam_provenance: PastExamSourceResolutionCache = field(
+        default_factory=PastExamSourceResolutionCache
     )
     declared_sources_by_run_id: dict[str, _ResolvedKnowledgeSource] = field(default_factory=dict)
     resolved_sources_by_run_id: dict[str, _ResolvedKnowledgeSource] = field(default_factory=dict)
@@ -1817,6 +1821,7 @@ class KnowledgeRetrievalApplicationService:
                 artifacts=cache.artifacts,
                 item_revision_id=source.item_revision_id,
                 source_class=source.source_class,
+                past_exam_cache=cache.past_exam_provenance,
             )
         if isinstance(
             source,
@@ -1844,6 +1849,7 @@ class KnowledgeRetrievalApplicationService:
             artifacts=cache.artifacts,
             item_revision_id=source.item_revision_id,
             source_class=source.source_class,
+            past_exam_cache=cache.past_exam_provenance,
         )
 
     @staticmethod

@@ -1415,6 +1415,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_catalog_service/knowledge_analysis_batch_service.py",
         "eom_catalog_service/knowledge_analysis_service.py",
         "eom_catalog_service/knowledge_analysis_sources.py",
+        "eom_catalog_service/past_exam_source_provenance.py",
         "eom_catalog_service/knowledge_graph_models.py",
         "eom_catalog_service/knowledge_graph_publication_service.py",
         "eom_catalog_service/knowledge_stimulus.py",

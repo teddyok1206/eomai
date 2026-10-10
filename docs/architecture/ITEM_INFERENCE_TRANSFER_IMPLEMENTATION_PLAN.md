@@ -92,3 +92,45 @@ HTTP replay/목적 전용 결과 resolution 및 아직 남은 실제 운영 호�
 3. 동일한 authorized target 집합에서 lexical/Graph, content-only, concrete-facet, metadata 보조의 후보 집합을 비교한다. 사람 label이 없으면 recall/quality PASS를 만들지 않는다.
 4. compatible exact-purpose support plan·instruction·runtime/policy release를 준비하고 기존 Orchestrator를 통한 bounded pair comparison을 수행한다. 기존 support/PDF preset의 purpose를 바꾸거나 worker를 직접 실행하지 않는다.
 5. 검증 가능한 대응·차이와 사람용 전이 평가 묶음을 제공한다. human gate와 필요한 운영 승인만 분리해 보고한다.
+
+## 실제 snapshot 비용 발견과 요청범위 재사용 설계 — 2026-10-10
+
+실제 original corpus 520/520 조회와 metadata 확인은 성공했다. 다음 query-free snapshot
+PREPARE는 API request `req_9044d63519bde9fb1eef0c6c4762baa8`에서 120,107.849 ms 후
+종료됐다. CPU 실행과 입력 receipt 작성 전이다. Catalog의 동기 handler는 소켓 timeout으로
+취소되지 않으므로, 관측 실패만으로 재제출하거나 새 identity를 만들지 않는다.
+
+source inspection에서 기존 request-scoped Artifact cache는 raw bytes와 exact PDF/PNG
+hash 검사만 재사용한다. 같은 extraction batch의 manifest/acceptance/result/layout에 대한
+JSON Schema·Pydantic 전체 검증과 item/work-unit/decision 목록 탐색은 문항마다 반복된다.
+이는 batch의 문항 수 B에 대해 O(B²) 반복이 될 수 있다. live 병목의 정확한 비중은 아직
+측정하지 않았으며 전체 Graph 반복 파싱이나 PDF 520회 재hash로 해석하지 않는다.
+
+1. **책임/경계:** 기존 Catalog source resolver에서 immutable extraction provenance의
+   typed decode/index 비용만 줄인다. snapshot·검색·worker·권한 경계는 그대로다.
+2. **정본:** 등록된 exact Artifact member bytes와 released schema가 정본이며 cached
+   typed value/index는 조회 한 번의 파생물이다. DB·NAS·원문은 수정하지 않는다.
+3. **identity/revision:** Artifact ID, revision ID, member, raw SHA, schema, media, byte bound를
+   key로 분리한다. path나 extraction batch logical ID만으로 검증 결과를 재사용하지 않는다.
+4. **resolution:** cache miss는 기존 raw-member resolution, hash, JSON Schema 및 Pydantic
+   검증을 모두 수행한다. hit도 문항별 현재 lifecycle/approval/decision/source-chain 대조를
+   생략하지 않는다. cache는 권한 증거가 아니며 다른 요청·actor와 공유하지 않는다.
+5. **access pattern:** 동일 exact member의 반복 decode와 work-unit/item/decision key lookup.
+   전체 batch 재검증·선형 탐색을 unique-member decode와 keyed lookup으로 바꾼다.
+6. **구조/index:** 요청범위 typed cache와 dict index를 사용한다. 기존 duplicate/cardinality
+   검사 의미를 보존한다. byte/entry budget은 명시적으로 제한하고 budget 밖은 uncached
+   기존 검증으로 fallback한다. 전역 cache, 새 DB/index, durable permission cache는 없다.
+7. **복잡도/규모:** B개의 Item과 D개의 공유 member에 대해 decode/index build는 각 member
+   한 번, Item lookup은 평균 O(1)을 목표로 한다. 메모리는 bounded typed dependencies에
+   비례한다. synthetic shared-batch 검사에서 parse/validation 횟수와 scaling을 기록한다.
+8. **transaction/concurrency:** 기존 단일 capture/request의 lifetime에서만 재사용한다.
+   현재 actor와 source 관계는 기존 transaction에서 계속 확인한다. 다음 capture는 새 cache다.
+9. **dependency/ownership:** typed provenance decoding/index를 이름이 분명한 기존 Catalog
+   책임 아래 둔다. domain/contracts에서 SQL·filesystem·cache adapter를 import하지 않는다.
+10. **failure/retry:** 실패 결과는 cache하지 않는다. stale revision/hash/schema mismatch,
+    duplicate/ambiguous provenance는 기존 stable error로 실패한다. 구현 수정 후 replay는
+    기존 read contract와 exact source pins로 수행하고 이전 timeout 증거를 보존한다.
+11. **대안/검증:** timeout 확대나 source 수 축소는 반복 비용을 해결하지 못한다. 새 검색
+    framework 없이 existing request cache/resolver를 확장한다. exact output equivalence,
+    cache key 분리, live-state 재확인, 요청 간 격리, budget fallback, repeated-batch 비용,
+    기존 source/retrieval/snapshot 회귀를 검증한다. released schema/migration 변경은 없다.

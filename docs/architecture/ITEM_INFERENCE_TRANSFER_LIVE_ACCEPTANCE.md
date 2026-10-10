@@ -293,13 +293,83 @@ private auth 테이블을 읽어서 실제 사용자 인증을 우회하지 않�
 `guiadmin`의 실제 브라우저 로그인 가능 여부를 확인 중이며 해당 답변 없이는 추가 로그인이나
 코퍼스/모델 실행을 시작하지 않는다.
 
+이후 사용자는 이전 입력이 잘못된 비밀번호였다고 직접 확인했다. 이것은 사용자 피드백이며
+과거 API 응답의 상세 상태나 실제 로그인 성공을 새로 증명하지 않는다. 해당 확인 뒤 같은
+보호된 진단 코드와 private 입력 경계로 새 입력 창을 한 번 열었고, 실제 foreground 실행이
+PASSWORD_PROMPT에 도달한 것을 확인했다. 비밀번호 자동 입력, 계정 변경, model forward,
+새 CPU execution identity 생성은 하지 않았다. 실제 인증 성공은 새 입력 이후의 native
+current-principal/corpus read 증거로 별도 확인한다.
+
+### 실제 재입력 인증과 original corpus 조회
+
+16:31:19 UTC 재입력 이후 native `login_guiadmin`과 명시적 current-principal read가
+RETURNED에 도달했고, 공식 `/assessment-learning-corpus`와 `/execution-presets` 조회가
+완료됐다. 이는 이전 거절 기록과 별개의 실제 인증 성공 증거다.
+
+- original occurrence-backed approved Item count: **520**.
+- original target solution report: **520/520**.
+- Graph revision: `graphrev_c0e78b4e4ce6588de3d3b6c6f25fb3d9`.
+- Graph semantic SHA-256:
+  `sha256:da76258a650dcb66c3303f579ec1502215bda6cb75f05808414809d7076bf645`.
+- 조회된 ACTIVE `knowledge-grounded-item` preset:
+  `execpreset_ae1ba40431514551ba86e8148c985f9c`.
+- 해당 RELEASED current revision:
+  `execpresetrev_8dcefbb3518c4d7d8b3289d7f154414c`.
+- preset content SHA-256:
+  `sha256:bdb3772ce54c86dbc7d5a5a190395b35970fdc15d8dfcb5472607002c91a1c26`.
+
+같은 실제 session으로 exact Graph/policy metadata를 확인하고 query-free inventory 조회를
+시작했다. 이 경로는 기존 출제 preset의 retrieval scope만 pin하며 그 preset을 비교 worker
+실행 목적으로 바꾸지 않는다. inventory·고정 query·입력 receipt·CPU 실행 결과는 각각 실제
+반환과 검증 이후 기록한다. 이 시점의 corpus 완료 수는 profile encodability나 비교 품질,
+model forward 실행의 증거가 아니다.
+
+16:34:11.711 UTC snapshot POST `req_9044d63519bde9fb1eef0c6c4762baa8`가
+120,107.849 ms에 종료됐고 콘솔은 INVENTORY_READ의 `OWNER_CONSOLE_BOUNDARY_FAILED`로
+terminal 종료했다. 기존 API→Catalog snapshot socket과 owner HTTP 경계는 각각 120초다.
+이는 해당 timeout 경계와 일치하는 증거이며 모델 실패나 로그인 실패로 재분류하지 않는다.
+동기 Catalog handler가 실제로 완료됐는지는 클라이언트 종료만으로 증명하지 않는다.
+입력 stage/CPU launcher에 도달하지 않았고 자동 재제출은 하지 않았다. source inspection의
+공유 extraction provenance 반복 검증 비용과 요청범위 재사용 설계는 구현 계획에 기록했다.
+성능 개선 효과와 실제 520개 snapshot 재조회는 수정·검증 이후 별도 증거가 필요하다.
+
+16:39:08 UTC Catalog의 MainPID 298424와 OS thread 목록을 조회했다. 남은 두 thread는
+각각 16:07:43, 16:07:45 시작으로 해당 16:32 snapshot 요청보다 먼저 존재했다. 당시
+ThreadingMixIn의 요청별 handler thread는 관측되지 않았다. 이는 그 timeout 요청이 계속
+실행 중이라는 증거가 없다는 확인이며 전체 Workflow queue/lease의 quiescence는 아니다.
+
+후속 source 수정은 `past_exam_source_provenance.py`의 요청범위 typed provenance와 immutable
+index를 기존 source resolver/cache에 연결한다. exact member key는 Artifact/revision/member/
+raw SHA/schema/media/byte bound와 decoder kind를 포함한다. 보존 상한은 source JSON 64 MiB,
+member 1,024개, index row 100,000개다. 상한 초과 시 전체 검증한 값을 반환하되 캐시에
+보존하지 않는다. 실패는 캐시하지 않고 현재 Item 승인·decision·revision·lineage 검사를
+생략하지 않는다. 전역 cache, 새 schema/migration/dependency, 원문 수정은 없다.
+
+- 변경 경계의 focused source/source-resolution/retrieval/snapshot 검사: **154 PASS**.
+- root 재검사에서 동일 suite와 dependency-boundary 검사를 함께 실행해 **160 PASS**;
+  unused decoder 제거와 새 leaf의 필수 wheel inventory 반영 후 source/deployment 경계
+  검사 **93 PASS**. 이들은 겹치는 suite이므로 합산한 고유 test 수로 보고하지 않는다.
+- 소스 3개 strict mypy PASS, 새 unit test strict mypy PASS, 수정 Python 5개 Ruff/format PASS.
+- 합성 520회 공유-member 조회에서 manifest/acceptance/result/layout의 전체 검증은 각각
+  1회였다. 8/64 work-unit fixture에서도 full-batch validation 각각 1회를 확인했다.
+  이것은 반복 비용의 복잡도 개선 증거이지 실제 520개 latency 측정은 아니다.
+- 기존 inventory 실패의 native `SnapshotReadFailure`만 stable code로 표시하도록 one-off
+  presentation successor를 준비했다. 원래 identity/auth/pins/budget/RUN 동작은 AST 대조로
+  보존했다. 53개 secret-safe 합성 검사와 Ruff/strict 타입검사 PASS. 원래 코드·진단 코드와
+  실패 관측은 덮지 않는다. successor SHA-256:
+  `0595863d1b26be7c1c204fad52fc0a64beab2576233c9356b20a815c9988150b`.
+
+이 source 수정의 wheel 검사·운영 설치·동일 공식 snapshot 재조회는 아직 PENDING이다.
+격리 CPU 수치/launcher closure와 새 Catalog leaf는 겹치지 않으므로 이 수정만으로 CPU
+환경을 재설치하거나 이미 승인된 no-forward probe를 반복하지 않는다.
+
 이것은 임시 operator presentation이며 새 worker protocol, auth grant, HTTP status 관측이나
 production search 활성화가 아니다. 원인 분류 이후 임시 진단 호출부를 회수하고 검증 기록은
 보존한다. 실제 로그인·corpus/모델 실행 PASS를 대신하지 않는다.
 
 - 격리 no-forward probe PASS: **PASS_AFTER_ONE_APPROVED_RETRY / FIRST_FAILURE_PRESERVED**.
 - compatible shared release / migration 0051 / 일곱 callback / service 복원: **PASS**.
-- 실제 `guiadmin` 인증·metadata·corpus read: **PENDING**.
+- 실제 `guiadmin` 인증·metadata·original corpus read: **PASS**; profile inventory 별도.
 - 명시적 비교 owner PREPARE/RELEASE 및 초기 protocol/control 발행: **PENDING**.
 - 고정 4-query, top-k 8, batch 4, threads 4 CPU 실험: **NOT_RUN**.
 - 최대 2개 selected pair의 지원된 Orchestrator/Codex 비교: **NOT_RUN**.
