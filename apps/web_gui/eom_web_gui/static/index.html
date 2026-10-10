@@ -262,9 +262,9 @@
             <section class="panel account-admin-panel"><div class="panel-heading"><h2>사용자 계정</h2><span id="operator-count" class="status-badge tone-neutral"><span class="status-icon">■</span> 확인 전</span></div><div class="account-admin-layout"><form id="operator-create-form" class="form-grid account-create-form"><label>로그인 ID<input id="operator-create-username" required minlength="3" maxlength="64" pattern="[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*" autocomplete="off" spellcheck="false"></label><label>표시 이름<input id="operator-create-display-name" required maxlength="128" autocomplete="off"></label><label>임시 비밀번호<input id="operator-create-password" type="password" required maxlength="128" autocomplete="new-password"></label><fieldset class="wide"><legend>초기 역할</legend><div class="role-choice-grid"><label class="check"><input type="checkbox" name="operator-create-role" value="VIEWER" checked> 조회</label><label class="check"><input type="checkbox" name="operator-create-role" value="AUTHOR"> 출제</label><label class="check"><input type="checkbox" name="operator-create-role" value="REVIEWER"> 검토</label><label class="check"><input type="checkbox" name="operator-create-role" value="EDITOR"> 편집</label><label class="check"><input type="checkbox" name="operator-create-role" value="ADMIN"> 관리자</label></div></fieldset><div class="form-actions wide"><button class="button primary" type="submit" data-required-permission="operator:create">계정 만들기</button></div></form><div><div id="operator-list" class="control-list operator-list"><p class="empty-state">계정 목록을 불러오세요.</p></div><p id="operator-message" class="form-message" aria-live="polite"></p></div></div></section>
             <section class="panel"><div class="panel-heading"><h2>실행 설정</h2><span class="status-badge tone-primary"><span class="status-icon">◆</span> 고정 정책</span></div><div id="execution-preset-list" class="control-list"><p class="empty-state">실행 설정을 불러오세요.</p></div><p id="execution-preset-message" class="form-message" aria-live="polite"></p></section>
             <details id="advanced-preset-policy" class="panel admin-preset-panel advanced-policy">
-              <summary><strong>고급 실행 정책</strong><span class="status-badge tone-warning"><span class="status-icon">◆</span> 관리자 검토 필요</span></summary>
+              <summary><strong>출제·검토 모델 설정</strong><span class="status-badge tone-warning"><span class="status-icon">◆</span> 관리자 설정</span></summary>
               <div class="panel-body">
-                <p class="policy-notice">일반적인 문항 제작과 교과서 분석에는 기존 실행 설정을 그대로 사용하세요. 이 화면의 변경은 새 작업에 적용될 고정 정책 버전을 만듭니다.</p>
+                <p class="policy-notice">설정을 확인한 뒤 새 작업에 적용합니다. 진행 중인 작업은 바뀌지 않습니다.</p>
                 <form id="preset-guided-form" class="guided-policy-form">
                   <div class="guided-policy-grid">
                     <label>기준 실행 설정<select id="preset-base-select"><option value="">사용 중인 실행 설정 선택</option></select></label>
@@ -286,11 +286,12 @@
                   <div class="form-actions"><button id="preset-review-cancel" class="button quiet" type="button">취소</button><button id="preset-draft-submit" class="button primary" type="button" disabled>설정 초안 생성</button></div>
                 </section>
                 <section id="preset-release-panel" class="policy-review release-review" aria-labelledby="preset-release-title" hidden>
-                  <h3 id="preset-release-title">설정 초안 사용 전환 검토</h3>
-                  <p>설정 초안을 사용 가능으로 전환하면 이후 새 작업이 이 고정 정책 버전을 선택할 수 있습니다.</p>
+                  <h3 id="preset-release-title">설정 확인 및 적용</h3>
+                  <p id="preset-validation-status" class="form-message" aria-live="polite">확인 전</p>
                   <dl id="preset-release-summary" class="summary-grid"></dl>
-                  <label class="check"><input id="preset-release-confirm" type="checkbox"> 정책 내용 검증값과 역할별 모델·추론 설정을 검토했습니다.</label>
-                  <div class="form-actions"><button id="preset-release-cancel" class="button quiet" type="button">취소</button><button id="preset-release-submit" class="button primary" type="button" disabled>검토한 설정 사용 가능 전환</button></div>
+                  <div class="form-actions"><button id="preset-validation-submit" class="button secondary" type="button" disabled>설정 확인</button><button id="preset-validation-refresh" class="button quiet" type="button" disabled>상태 확인</button></div>
+                  <label class="check"><input id="preset-release-confirm" type="checkbox" disabled> 확인한 설정을 새 작업에 적용합니다.</label>
+                  <div class="form-actions"><button id="preset-release-cancel" class="button quiet" type="button">닫기</button><button id="preset-release-submit" class="button primary" type="button" disabled>새 작업에 적용</button></div>
                 </section>
                 <p id="preset-draft-message" class="form-message" aria-live="polite"></p>
               </div>

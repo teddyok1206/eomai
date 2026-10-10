@@ -16,13 +16,19 @@ import subprocess
 import sys
 import tempfile
 from contextlib import suppress
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from time import monotonic
 from typing import Any
 
 from eom_identifiers import canonical_json_bytes, content_sha256
-from eom_workflow import CodexUsageObservation, validate_control_contract
+from eom_workflow import (
+    CodexModelCatalogSnapshot,
+    CodexNativeModelMetadata,
+    CodexUsageObservation,
+    CodexUsageObservationV2,
+    validate_control_contract,
+)
 
 CODEX_BINARY = Path("/usr/local/bin/codex")
 PATH_VALUE = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -54,6 +60,11 @@ APP_SERVER_TIMEOUT_SECONDS = 45
 USAGE_INVALID_EXIT = 40
 USAGE_AUTH_REQUIRED_EXIT = 41
 USAGE_TIMEOUT_EXIT = 42
+MAX_CATALOG_PAGES = 4
+MAX_CATALOG_MODELS = 64
+MAX_CATALOG_BYTES = 48 * 1024
+CATALOG_PAGE_SIZE = 20
+CATALOG_TTL = timedelta(hours=1)
 
 
 def _validate_identity(slot_id: str) -> tuple[Path, Path, Path]:
@@ -121,20 +132,25 @@ def _write_request(process: subprocess.Popen[bytes], document: dict[str, object]
 
 
 def _read_responses(
-    process: subprocess.Popen[bytes], expected_ids: frozenset[int]
+    process: subprocess.Popen[bytes],
+    expected_ids: frozenset[int],
+    *,
+    deadline: float | None = None,
 ) -> dict[int, Any]:
     if process.stdout is None:
         raise OSError("Codex App Server output pipe is unavailable")
     selector = selectors.DefaultSelector()
     selector.register(process.stdout, selectors.EVENT_READ)
-    started = monotonic()
+    request_deadline = monotonic() + APP_SERVER_TIMEOUT_SECONDS
+    if deadline is not None:
+        request_deadline = min(request_deadline, deadline)
     pending = set(expected_ids)
     responses: dict[int, Any] = {}
     buffered = bytearray()
     total = 0
     try:
         while pending:
-            if monotonic() - started > APP_SERVER_TIMEOUT_SECONDS:
+            if monotonic() > request_deadline:
                 raise TimeoutError("Codex App Server response timed out")
             if process.poll() is not None and not buffered:
                 raise ValueError("Codex App Server stopped before completing usage observation")
@@ -146,6 +162,8 @@ def _read_responses(
                 if total > MAX_TOTAL_BYTES:
                     raise ValueError("Codex App Server response is too large")
                 buffered.extend(chunk)
+                if b"\n" not in buffered and len(buffered) > MAX_LINE_BYTES:
+                    raise ValueError("Codex App Server response line is too large")
                 while b"\n" in buffered:
                     raw, _, remainder = buffered.partition(b"\n")
                     buffered = bytearray(remainder)
@@ -157,7 +175,11 @@ def _read_responses(
                     if not isinstance(value, dict):
                         raise ValueError("Codex App Server response is not an object")
                     response_id = value.get("id")
-                    if response_id not in pending:
+                    if (
+                        not isinstance(response_id, int)
+                        or isinstance(response_id, bool)
+                        or response_id not in pending
+                    ):
                         continue
                     if "error" in value or "result" not in value:
                         raise ValueError("Codex App Server returned an error")
@@ -262,8 +284,150 @@ def _normalized_windows(result: object) -> tuple[dict[str, object], ...]:
     return tuple(windows)
 
 
+def _codex_cli_version(environment: dict[str, str]) -> str:
+    result = subprocess.run(
+        (str(CODEX_BINARY), "--version"),
+        env=environment,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        timeout=5,
+    )
+    if result.returncode != 0 or len(result.stdout) > 128:
+        raise ValueError("Codex CLI version observation is invalid")
+    match = re.fullmatch(rb"codex-cli ([0-9]+\.[0-9]+\.[0-9]+)\s*", result.stdout)
+    if match is None:
+        raise ValueError("Codex CLI version observation is invalid")
+    return match.group(1).decode("ascii")
+
+
+def _normalized_model(raw: object) -> CodexNativeModelMetadata:
+    if not isinstance(raw, dict):
+        raise ValueError("native model catalog entry is not an object")
+    efforts = raw.get("supportedReasoningEfforts")
+    modalities = raw.get("inputModalities")
+    if (
+        not isinstance(efforts, list)
+        or not 1 <= len(efforts) <= 16
+        or not all(isinstance(effort, dict) for effort in efforts)
+        or not isinstance(modalities, list)
+        or not 1 <= len(modalities) <= 8
+    ):
+        raise ValueError("native model catalog support metadata is invalid")
+    display_name = _safe_name(raw.get("displayName"))
+    if display_name is None:
+        raise ValueError("native model catalog display name is missing")
+    return CodexNativeModelMetadata.model_validate(
+        {
+            "id": raw.get("id"),
+            "model": raw.get("model"),
+            "display_name": display_name,
+            "hidden": raw.get("hidden"),
+            "is_default": raw.get("isDefault"),
+            "default_reasoning_effort": raw.get("defaultReasoningEffort"),
+            "supported_reasoning_efforts": tuple(
+                effort.get("reasoningEffort") for effort in efforts
+            ),
+            "input_modalities": tuple(modalities),
+        },
+        strict=True,
+    )
+
+
+def _catalog_snapshot(
+    *,
+    cli_version: str,
+    models: tuple[CodexNativeModelMetadata, ...],
+    reason_code: str | None,
+) -> CodexModelCatalogSnapshot:
+    observed_at = datetime.now(UTC)
+    document: dict[str, object] = {
+        "source": "APP_SERVER_MODEL_LIST",
+        "codex_cli_version": cli_version,
+        "state": "OBSERVED" if reason_code is None else "UNAVAILABLE",
+        "reason_code": reason_code,
+        "models": tuple(model.model_dump(mode="json") for model in models),
+        "observed_at": observed_at.isoformat().replace("+00:00", "Z"),
+        "valid_until": (observed_at + CATALOG_TTL).isoformat().replace("+00:00", "Z"),
+    }
+    document["catalog_sha256"] = content_sha256(document)
+    return CodexModelCatalogSnapshot.model_validate(document)
+
+
+def _read_model_catalog(
+    process: subprocess.Popen[bytes], *, cli_version: str, deadline: float
+) -> CodexModelCatalogSnapshot:
+    """Read only the native catalog; never claim incomplete pages as supported models."""
+
+    models: dict[str, CodexNativeModelMetadata] = {}
+    cursors: set[str] = set()
+    cursor: str | None = None
+    try:
+        for page in range(MAX_CATALOG_PAGES):
+            request_id = 3 + page
+            params: dict[str, object] = {"limit": CATALOG_PAGE_SIZE, "includeHidden": False}
+            if cursor is not None:
+                params["cursor"] = cursor
+            _write_request(
+                process,
+                {"id": request_id, "method": "model/list", "params": params},
+            )
+            result = _read_responses(process, frozenset({request_id}), deadline=deadline)[
+                request_id
+            ]
+            if not isinstance(result, dict) or not isinstance(result.get("data"), list):
+                raise ValueError("native model catalog response is invalid")
+            if len(result["data"]) > CATALOG_PAGE_SIZE:
+                raise ValueError("native model catalog page exceeds requested limit")
+            for raw in result["data"]:
+                model = _normalized_model(raw)
+                if model.id in models:
+                    raise ValueError("native model catalog IDs are duplicated")
+                models[model.id] = model
+                if len(models) > MAX_CATALOG_MODELS:
+                    raise ValueError("native model catalog is too large")
+            if (
+                len(
+                    canonical_json_bytes(
+                        tuple(model.model_dump(mode="json") for model in models.values())
+                    )
+                )
+                > MAX_CATALOG_BYTES
+            ):
+                raise ValueError("native model catalog metadata is too large")
+            cursor = result.get("nextCursor")
+            if cursor is None:
+                return _catalog_snapshot(
+                    cli_version=cli_version,
+                    models=tuple(models[key] for key in sorted(models)),
+                    reason_code=None,
+                )
+            if (
+                not isinstance(cursor, str)
+                or not 1 <= len(cursor) <= 512
+                or any(ord(character) < 32 or ord(character) == 127 for character in cursor)
+                or cursor in cursors
+            ):
+                raise ValueError("native model catalog cursor is invalid")
+            cursors.add(cursor)
+        raise ValueError("native model catalog pagination exceeds the limit")
+    except TimeoutError:
+        reason_code = "CODEX_MODEL_CATALOG_TIMEOUT"
+    except (TypeError, ValueError, json.JSONDecodeError):
+        reason_code = "CODEX_MODEL_CATALOG_INVALID"
+    except OSError:
+        reason_code = "CODEX_MODEL_CATALOG_UNAVAILABLE"
+    return _catalog_snapshot(cli_version=cli_version, models=(), reason_code=reason_code)
+
+
 def _observation_document(
-    *, command_id: str, binding_id: str, slot_id: str, account_result: object, usage_result: object
+    *,
+    command_id: str,
+    binding_id: str,
+    slot_id: str,
+    account_result: object,
+    usage_result: object,
+    model_catalog: CodexModelCatalogSnapshot | None = None,
 ) -> dict[str, object]:
     if not isinstance(account_result, dict):
         raise ValueError("Codex account response is not an object")
@@ -274,7 +438,11 @@ def _observation_document(
     if not isinstance(plan_type, str) or plan_type not in PLAN_TYPES:
         raise ValueError("Codex account plan is invalid")
     document: dict[str, object] = {
-        "schema_version": "codex-usage-observation/1.0",
+        "schema_version": (
+            "codex-usage-observation/1.1"
+            if model_catalog is not None
+            else "codex-usage-observation/1.0"
+        ),
         "command_id": command_id,
         "binding_id": binding_id,
         "slot_key": f"slot{slot_id}",
@@ -284,11 +452,17 @@ def _observation_document(
         "observed_at": datetime.now(UTC),
         "observation_sha256": "sha256:" + "0" * 64,
     }
-    normalized = CodexUsageObservation.model_validate(document).model_dump(mode="json")
+    observation_type: type[CodexUsageObservation | CodexUsageObservationV2] = CodexUsageObservation
+    schema_name = "codex-usage-observation"
+    if model_catalog is not None:
+        document["model_catalog"] = model_catalog.model_dump(mode="json")
+        observation_type = CodexUsageObservationV2
+        schema_name = "codex-usage-observation-v2"
+    normalized = observation_type.model_validate(document).model_dump(mode="json")
     normalized["observation_sha256"] = content_sha256(
         {key: value for key, value in normalized.items() if key != "observation_sha256"}
     )
-    validate_control_contract("codex-usage-observation", normalized)
+    validate_control_contract(schema_name, normalized)
     return normalized
 
 
@@ -315,7 +489,6 @@ def execute(slot_id: str, command_id: str, binding_id: str) -> int:
     handoff = runtime / f"{command_id}.json"
     if handoff.exists() or handoff.is_symlink():
         raise FileExistsError("usage handoff already exists")
-    log_directory = Path(tempfile.mkdtemp(prefix="eom-codex-usage-"))
     environment = {
         "CODEX_HOME": str(codex_home),
         "HOME": str(home),
@@ -324,6 +497,8 @@ def execute(slot_id: str, command_id: str, binding_id: str) -> int:
         "RUST_LOG": "off",
         "NO_COLOR": "1",
     }
+    cli_version = _codex_cli_version(environment)
+    log_directory = Path(tempfile.mkdtemp(prefix="eom-codex-usage-"))
     escaped_log_directory = str(log_directory).replace("\\", "\\\\").replace('"', '\\"')
     process = subprocess.Popen(
         (
@@ -344,6 +519,7 @@ def execute(slot_id: str, command_id: str, binding_id: str) -> int:
         start_new_session=True,
     )
     try:
+        deadline = monotonic() + APP_SERVER_TIMEOUT_SECONDS
         _write_request(
             process,
             {
@@ -355,20 +531,22 @@ def execute(slot_id: str, command_id: str, binding_id: str) -> int:
                 },
             },
         )
-        _read_responses(process, frozenset({0}))
+        _read_responses(process, frozenset({0}), deadline=deadline)
         _write_request(process, {"method": "initialized"})
         _write_request(
             process,
             {"id": 1, "method": "account/read", "params": {"refreshToken": False}},
         )
         _write_request(process, {"id": 2, "method": "account/rateLimits/read"})
-        responses = _read_responses(process, frozenset({1, 2}))
+        responses = _read_responses(process, frozenset({1, 2}), deadline=deadline)
+        model_catalog = _read_model_catalog(process, cli_version=cli_version, deadline=deadline)
         document = _observation_document(
             command_id=command_id,
             binding_id=binding_id,
             slot_id=slot_id,
             account_result=responses[1],
             usage_result=responses[2],
+            model_catalog=model_catalog,
         )
         _write_exclusive(handoff, document)
     finally:

@@ -52,6 +52,11 @@ def test_runtime_role_bootstrap_revokes_drift_before_exact_grants() -> None:
         "workflow_commands": ("processed_at", "state"),
     }
     assert set(dict(UPDATE_COLUMN_PRIVILEGES)).isdisjoint(UPDATE_TABLES)
+    assert "execution_preset_validations" in READ_TABLES
+    assert "execution_preset_validations" in INSERT_TABLES
+    assert "execution_preset_validations" not in UPDATE_TABLES
+    assert "execution_preset_validations" not in dict(UPDATE_COLUMN_PRIVILEGES)
+    assert {"jobs", "protocol_versions", "execution_preset_evaluations"}.isdisjoint(INSERT_TABLES)
     assert "hwpx_application_builds" in READ_TABLES
     assert "hwpx_application_builds" in INSERT_TABLES
     assert "hwpx_application_builds" in UPDATE_TABLES

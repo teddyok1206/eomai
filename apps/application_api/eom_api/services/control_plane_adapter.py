@@ -11,9 +11,11 @@ from eom_api_contracts.control_plane import (
     CodexAccountCommandRequest,
     CodexAccountView,
     CodexAuthEnrollmentView,
+    CodexCapabilitySnapshotView,
     CodexCapabilityView,
     CodexControlCommandView,
     CodexDeviceChallengeView,
+    CodexModelCatalogView,
     CodexUsageObservationView,
     CodexUsageWindowView,
     ExecutionPresetDraftRequest,
@@ -58,7 +60,12 @@ from eom_orchestrator.preset_lifecycle import (
     deprecate_execution_preset,
     release_execution_preset,
 )
-from eom_workflow import CodexControlCommandResultV2
+from eom_workflow import (
+    CodexCapabilitySnapshot,
+    CodexControlCommandResultV2,
+    CodexControlCommandResultV3,
+    validate_control_contract,
+)
 from sqlalchemy import Engine, func, select
 
 from eom_api.errors import ApiError
@@ -84,6 +91,7 @@ class ControlPlaneAdapter:
             if not bindings:
                 return ()
             binding_ids = [row.binding_id for row in bindings]
+            slot_keys_by_binding = {row.binding_id: f"slot{row.worker_slot_id}" for row in bindings}
             ranked_snapshots = (
                 select(
                     CodexCapabilitySnapshotRecord.capability_snapshot_id.label("snapshot_id"),
@@ -110,6 +118,16 @@ class ControlPlaneAdapter:
                 ).all()
             }
             snapshot_ids = tuple(latest.values())
+            snapshot_views: dict[str, CodexCapabilitySnapshotView] = {}
+            if snapshot_ids:
+                for snapshot in session.scalars(
+                    select(CodexCapabilitySnapshotRecord).where(
+                        CodexCapabilitySnapshotRecord.capability_snapshot_id.in_(snapshot_ids)
+                    )
+                ):
+                    snapshot_views[snapshot.capability_snapshot_id] = self._capability_snapshot(
+                        snapshot
+                    )
             capabilities: dict[str, list[CodexCapabilityView]] = defaultdict(list)
             if snapshot_ids:
                 for entry in session.scalars(
@@ -169,8 +187,9 @@ class ControlPlaneAdapter:
                     CodexControlCommandRecord.binding_id.in_(binding_ids),
                     CodexControlCommandRecord.command_type == "OBSERVE",
                     CodexControlCommandRecord.state == "SUCCEEDED",
-                    CodexControlCommandRecord.result_document["schema_version"].as_string()
-                    == "codex-control-command-result/1.1",
+                    CodexControlCommandRecord.result_document["schema_version"]
+                    .as_string()
+                    .in_(("codex-control-command-result/1.1", "codex-control-command-result/1.2")),
                 )
                 .subquery()
             )
@@ -181,15 +200,23 @@ class ControlPlaneAdapter:
                 )
             )
             usage_by_binding: dict[str, CodexUsageObservationView] = {}
+            catalog_by_binding: dict[str, CodexModelCatalogView] = {}
             if latest_usage_ids:
                 for usage_command in session.scalars(
                     select(CodexControlCommandRecord).where(
                         CodexControlCommandRecord.command_id.in_(latest_usage_ids)
                     )
                 ):
-                    usage = self._usage_from_result(usage_command.result_document)
+                    usage, catalog = self._observation_views(
+                        usage_command.result_document,
+                        expected_command_id=usage_command.command_id,
+                        expected_binding_id=usage_command.binding_id,
+                        expected_slot_key=slot_keys_by_binding[usage_command.binding_id],
+                    )
                     if usage is not None:
                         usage_by_binding[usage_command.binding_id] = usage
+                    if catalog is not None:
+                        catalog_by_binding[usage_command.binding_id] = catalog
             slot_ids = [row.worker_slot_id for row in bindings]
             ranked_jobs = (
                 select(
@@ -224,6 +251,8 @@ class ControlPlaneAdapter:
                     last_successful_job_id=last_jobs.get(binding.worker_slot_id),
                     active_auth_enrollment=active_enrollments.get(binding.binding_id),
                     usage_observation=usage_by_binding.get(binding.binding_id),
+                    model_catalog=catalog_by_binding.get(binding.binding_id),
+                    capability_snapshot=snapshot_views.get(latest.get(binding.binding_id, "")),
                 )
                 for binding in bindings
             )
@@ -566,6 +595,8 @@ class ControlPlaneAdapter:
         last_successful_job_id: str | None,
         active_auth_enrollment: tuple[str, str] | None,
         usage_observation: CodexUsageObservationView | None,
+        model_catalog: CodexModelCatalogView | None = None,
+        capability_snapshot: CodexCapabilitySnapshotView | None = None,
     ) -> CodexAccountView:
         return CodexAccountView(
             binding_id=row.binding_id,
@@ -598,10 +629,17 @@ class ControlPlaneAdapter:
                 else None
             ),
             usage_observation=usage_observation,
+            model_catalog=model_catalog,
+            capability_snapshot=capability_snapshot,
         )
 
     @staticmethod
     def _command(row: CodexControlCommandRecord) -> CodexControlCommandView:
+        usage, catalog = ControlPlaneAdapter._observation_views(
+            row.result_document,
+            expected_command_id=row.command_id,
+            expected_binding_id=row.binding_id,
+        )
         return CodexControlCommandView(
             command_id=row.command_id,
             command_type=row.command_type,
@@ -612,24 +650,55 @@ class ControlPlaneAdapter:
             error_code=row.error_code,
             requested_at=row.requested_at,
             processed_at=row.processed_at,
-            usage_observation=ControlPlaneAdapter._usage_from_result(row.result_document),
+            usage_observation=usage,
+            model_catalog=catalog,
         )
 
     @staticmethod
     def _usage_from_result(
         document: dict[str, object] | None,
     ) -> CodexUsageObservationView | None:
-        if document is None or document.get("schema_version") != "codex-control-command-result/1.1":
-            return None
-        result = CodexControlCommandResultV2.model_validate(document)
+        usage, _catalog = ControlPlaneAdapter._observation_views(document)
+        return usage
+
+    @staticmethod
+    def _observation_views(
+        document: dict[str, object] | None,
+        *,
+        expected_command_id: str | None = None,
+        expected_binding_id: str | None = None,
+        expected_slot_key: str | None = None,
+    ) -> tuple[CodexUsageObservationView | None, CodexModelCatalogView | None]:
+        if document is None:
+            return None, None
+        schema_version = document.get("schema_version")
+        if schema_version == "codex-control-command-result/1.2":
+            validate_control_contract("codex-control-command-result-v3", document)
+            result: CodexControlCommandResultV2 = CodexControlCommandResultV3.model_validate(
+                document
+            )
+        elif schema_version == "codex-control-command-result/1.1":
+            validate_control_contract("codex-control-command-result-v2", document)
+            result = CodexControlCommandResultV2.model_validate(document)
+        else:
+            return None, None
         if result.result_sha256 != compute_control_document_hash(document, "result_sha256"):
             raise ValueError("Codex usage result hash differs")
+        if (
+            (expected_command_id is not None and result.command_id != expected_command_id)
+            or (expected_binding_id is not None and result.binding_id != expected_binding_id)
+            or (
+                expected_slot_key is not None
+                and result.usage_observation.slot_key != expected_slot_key
+            )
+        ):
+            raise ValueError("Codex usage result identity differs")
         usage_document = result.usage_observation.model_dump(mode="json")
         if result.usage_observation.observation_sha256 != compute_control_document_hash(
             usage_document, "observation_sha256"
         ):
             raise ValueError("Codex usage observation hash differs")
-        return CodexUsageObservationView(
+        usage = CodexUsageObservationView(
             plan_type=result.usage_observation.plan_type,
             observed_at=result.usage_observation.observed_at,
             windows=tuple(
@@ -643,6 +712,39 @@ class ControlPlaneAdapter:
                 )
                 for window in result.usage_observation.windows
             ),
+        )
+        catalog = (
+            CodexModelCatalogView.model_validate(
+                result.usage_observation.model_catalog.model_dump(mode="json")
+            )
+            if isinstance(result, CodexControlCommandResultV3)
+            else None
+        )
+        return usage, catalog
+
+    @staticmethod
+    def _capability_snapshot(row: CodexCapabilitySnapshotRecord) -> CodexCapabilitySnapshotView:
+        validate_control_contract("codex-capability-snapshot", row.canonical_document)
+        snapshot = CodexCapabilitySnapshot.model_validate(row.canonical_document)
+        if (
+            snapshot.snapshot_sha256
+            != compute_control_document_hash(row.canonical_document, "snapshot_sha256")
+            or snapshot.capability_snapshot_id != row.capability_snapshot_id
+            or snapshot.binding_id != row.binding_id
+            or snapshot.codex_cli_version != row.codex_cli_version
+            or snapshot.source != row.source
+            or snapshot.observed_at != row.observed_at
+            or snapshot.valid_until != row.valid_until
+            or snapshot.snapshot_sha256 != row.snapshot_sha256
+        ):
+            raise ValueError("Codex capability snapshot identity differs")
+        return CodexCapabilitySnapshotView(
+            capability_snapshot_id=snapshot.capability_snapshot_id,
+            source=snapshot.source,
+            codex_cli_version=snapshot.codex_cli_version,
+            observed_at=snapshot.observed_at,
+            valid_until=snapshot.valid_until,
+            snapshot_sha256=snapshot.snapshot_sha256,
         )
 
     @staticmethod
@@ -736,6 +838,8 @@ class ControlPlaneAdapter:
             "CONTROL_REVISION_CONFLICT",
             "CONTROL_PRESET_RETIRED",
             "CONTROL_PRESET_EVALUATION_REQUIRED",
+            "CONTROL_PRESET_BASE_STALE",
+            "CONTROL_PRESET_MODEL_CATALOG_REQUIRED",
         }
         unavailable_codes = {"CODEX_AUTH_BROKER_UNAVAILABLE"}
         status = (
@@ -750,6 +854,6 @@ class ControlPlaneAdapter:
 
 
 def _policy_hash(row: ExecutionPresetRevisionRecord) -> str:
-    from eom_orchestrator.preset_lifecycle import execution_preset_policy_sha256
+    from eom_orchestrator.preset_policy import execution_preset_policy_sha256
 
     return execution_preset_policy_sha256(row.canonical_document)

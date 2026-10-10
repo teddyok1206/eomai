@@ -45,6 +45,8 @@ from eom_web_gui.contracts import (
     DocumentReviewSetView,
     DocumentReviewView,
     EducationalQualityCommandSubmission,
+    ExecutionPresetModelOptions,
+    ExecutionPresetValidationView,
     ExplorerEntity,
     ExplorerQuery,
     ExplorerResult,
@@ -761,6 +763,24 @@ class ApplicationGateway(Protocol):
     async def create_execution_preset_draft(
         self, session: WebSession, payload: dict[str, Any], idempotency_key: str
     ) -> dict[str, Any]: ...
+
+    async def execution_preset_model_options(
+        self, session: WebSession, preset_id: str
+    ) -> ExecutionPresetModelOptions: ...
+
+    async def evaluate_execution_preset(
+        self,
+        session: WebSession,
+        draft_revision_id: str,
+        *,
+        base_revision_id: str,
+        resource_version: int,
+        idempotency_key: str,
+    ) -> dict[str, Any]: ...
+
+    async def execution_preset_validation(
+        self, session: WebSession, validation_id: str
+    ) -> ExecutionPresetValidationView: ...
 
     async def release_execution_preset(
         self,
@@ -2208,6 +2228,53 @@ class HttpApplicationGateway:
     async def execution_presets(self, session: WebSession) -> tuple[dict[str, Any], ...]:
         response = await self._authorized(session, "GET", "/api/v1/execution-presets")
         return tuple(sanitize_mapping(item) for item in self._list_data(response))
+
+    async def execution_preset_model_options(
+        self, session: WebSession, preset_id: str
+    ) -> ExecutionPresetModelOptions:
+        _require_id(preset_id, "execpreset_")
+        response = await self._authorized(
+            session, "GET", f"/api/v1/execution-presets/{preset_id}/model-options"
+        )
+        try:
+            return ExecutionPresetModelOptions.model_validate(self._data(response))
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def evaluate_execution_preset(
+        self,
+        session: WebSession,
+        draft_revision_id: str,
+        *,
+        base_revision_id: str,
+        resource_version: int,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        _require_id(draft_revision_id, "execpresetrev_")
+        _require_id(base_revision_id, "execpresetrev_")
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/execution-preset-revisions/{draft_revision_id}/evaluations",
+            json={"base_revision_id": base_revision_id},
+            headers={
+                "If-Match": f'"v{resource_version}"',
+                "Idempotency-Key": idempotency_key,
+            },
+        )
+        return sanitize_mapping(self._data(response))
+
+    async def execution_preset_validation(
+        self, session: WebSession, validation_id: str
+    ) -> ExecutionPresetValidationView:
+        _require_id(validation_id, "job_")
+        response = await self._authorized(
+            session, "GET", f"/api/v1/execution-preset-validations/{validation_id}"
+        )
+        try:
+            return ExecutionPresetValidationView.model_validate(self._data(response))
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
     async def create_execution_preset_draft(
         self, session: WebSession, payload: dict[str, Any], idempotency_key: str

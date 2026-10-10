@@ -164,6 +164,25 @@ def test_runtime_privilege_matrix_covers_exact_mock_exam_retirement_dml() -> Non
     assert set(dict(UPDATE_COLUMN_PRIVILEGES)).isdisjoint(UPDATE_TABLES)
 
 
+def test_preset_validation_enqueue_does_not_broaden_job_or_artifact_ownership() -> None:
+    assert "execution_preset_validations" in READ_TABLES
+    assert "execution_preset_validations" in INSERT_TABLES
+    assert "execution_preset_validations" not in UPDATE_TABLES
+    assert "execution_preset_validations" not in dict(UPDATE_COLUMN_PRIVILEGES)
+    for table in (
+        "jobs",
+        "protocol_versions",
+        "artifacts",
+        "artifact_revisions",
+        "execution_preset_evaluations",
+    ):
+        assert table in READ_TABLES
+        assert table not in INSERT_TABLES
+        assert table not in UPDATE_TABLES
+    assert "protocol_versions" not in dict(UPDATE_COLUMN_PRIVILEGES)
+    assert "execution_preset_evaluations" not in dict(UPDATE_COLUMN_PRIVILEGES)
+
+
 def test_runtime_privilege_readiness_uses_one_read_only_matrix_query() -> None:
     connection = Mock(spec=Connection)
     connection.scalar.return_value = True

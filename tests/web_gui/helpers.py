@@ -24,6 +24,8 @@ from eom_web_gui.contracts import (
     DocumentReviewCorrectionEligibilityView,
     DocumentReviewCorrectionSubmission,
     DocumentReviewCorrectionView,
+    ExecutionPresetModelOptions,
+    ExecutionPresetValidationView,
     ExplorerQuery,
     ExplorerResult,
     HwpxBuildRequest,
@@ -1674,6 +1676,57 @@ class FakeGateway:
         del session, resource_version, idempotency_key
         self.preset_mutation_calls += 1
         return {"resource_id": draft_revision_id, "status": "COMPLETED"}
+
+    async def execution_preset_model_options(
+        self, session: WebSession, preset_id: str
+    ) -> ExecutionPresetModelOptions:
+        del session, preset_id
+        return ExecutionPresetModelOptions.model_validate(
+            {
+                "preset_revision_id": "execpresetrev_" + "5" * 32,
+                "roles": [
+                    {
+                        "role": "authoring",
+                        "worker_pool_key": "item-workers",
+                        "candidates": [{"model": "test-model", "reasoning_effort": "high"}],
+                    }
+                ],
+                "catalog_is_entitlement": False,
+            }
+        )
+
+    async def evaluate_execution_preset(
+        self,
+        session: WebSession,
+        draft_revision_id: str,
+        *,
+        base_revision_id: str,
+        resource_version: int,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        del session, draft_revision_id, base_revision_id, resource_version, idempotency_key
+        self.preset_mutation_calls += 1
+        return {"resource_id": "job_" + "7" * 32, "status": "ACCEPTED"}
+
+    async def execution_preset_validation(
+        self, session: WebSession, validation_id: str
+    ) -> ExecutionPresetValidationView:
+        del session
+        return ExecutionPresetValidationView.model_validate(
+            {
+                "validation_id": validation_id,
+                "preset_revision_id": "execpresetrev_" + "6" * 32,
+                "base_revision_id": "execpresetrev_" + "5" * 32,
+                "preset_policy_sha256": "sha256:" + "8" * 64,
+                "status": "SUCCEEDED",
+                "scope": "NON_LIVE",
+                "evaluation_id": "preseteval_" + "9" * 32,
+                "quality_evaluated": False,
+                "cases_total": 12,
+                "cases_passed": 12,
+                "completed_at": NOW.isoformat(),
+            }
+        )
 
     async def deprecate_execution_preset(
         self,

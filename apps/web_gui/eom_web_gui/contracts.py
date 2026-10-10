@@ -2035,6 +2035,37 @@ class CodexUsageStatusView(WebModel):
     observed_at: UtcDatetime
 
 
+class CodexCapabilitySnapshotStatusView(WebModel):
+    capability_snapshot_id: str = Field(pattern=r"^capsnap_[0-9a-f]{32}$")
+    source: Literal["LOCAL_OBSERVATION", "OPERATOR_ASSERTED"]
+    codex_cli_version: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
+    observed_at: UtcDatetime
+    valid_until: UtcDatetime
+    snapshot_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+
+class CodexNativeModelStatusView(WebModel):
+    id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+    model: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+    display_name: str = Field(min_length=1, max_length=128)
+    hidden: bool
+    is_default: bool
+    default_reasoning_effort: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,31}$")
+    supported_reasoning_efforts: tuple[str, ...] = Field(min_length=1, max_length=16)
+    input_modalities: tuple[str, ...] = Field(min_length=1, max_length=8)
+
+
+class CodexModelCatalogStatusView(WebModel):
+    source: Literal["APP_SERVER_MODEL_LIST"]
+    codex_cli_version: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$", max_length=32)
+    state: Literal["OBSERVED", "UNAVAILABLE"]
+    reason_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    models: tuple[CodexNativeModelStatusView, ...] = Field(max_length=64)
+    observed_at: UtcDatetime
+    valid_until: UtcDatetime
+    catalog_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+
 class CodexAccountStatusView(WebModel):
     """Credential-free account projection accepted from the Application API."""
 
@@ -2053,6 +2084,8 @@ class CodexAccountStatusView(WebModel):
     active_auth_enrollment_id: str | None = Field(default=None, pattern=r"^authflow_[0-9a-f]{32}$")
     active_auth_enrollment_state: str | None = Field(default=None, min_length=1, max_length=64)
     usage_observation: CodexUsageStatusView | None = None
+    model_catalog: CodexModelCatalogStatusView | None = None
+    capability_snapshot: CodexCapabilitySnapshotStatusView | None = None
 
     @model_validator(mode="after")
     def coherent_active_enrollment(self) -> CodexAccountStatusView:
@@ -2072,6 +2105,7 @@ class CodexControlCommandStatusView(WebModel):
     requested_at: UtcDatetime
     processed_at: UtcDatetime | None
     usage_observation: CodexUsageStatusView | None = None
+    model_catalog: CodexModelCatalogStatusView | None = None
 
 
 class CodexAuthEnrollmentStart(WebModel):
@@ -2187,15 +2221,50 @@ class PresetRolePolicyDraft(WebModel):
     timeout_seconds: int = Field(ge=30, le=7200)
     sandbox: Literal["read-only"] = "read-only"
     network: Literal["disabled"] = "disabled"
+    evidence_access: Literal["NONE", "EVIDENCE_CONTEXT"] | None = None
+
+
+class PresetEvidenceBudgetDraft(WebModel):
+    max_documents: int = Field(ge=1, le=32)
+    max_item_revisions: int = Field(ge=0, le=64)
+    max_graph_nodes: int = Field(ge=1, le=256)
+    max_claims: int = Field(ge=1, le=128)
+    max_context_tokens: int = Field(ge=1000, le=32000)
+
+
+class PresetRetrievalPolicyDraft(WebModel):
+    access_policy_revision_id: str = Field(pattern=r"^accessrev_[0-9a-f]{32}$")
+    access_policy_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    allowed_corpus_keys: tuple[Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]{1,63}$")], ...] = (
+        Field(min_length=1, max_length=16)
+    )
+    allowed_query_kinds: tuple[
+        Literal["CURRICULUM_COMPONENTS", "APPROVED_ITEM_STRUCTURE", "ITEM_PREPARATION"], ...
+    ] = Field(min_length=1, max_length=3)
+    allowed_source_classes: tuple[
+        Literal["CURRICULUM", "TEXTBOOK", "APPROVED_ITEM", "PAST_EXAM", "INTERNAL_GUIDE"], ...
+    ] = Field(min_length=1, max_length=5)
+    maximum_budget: PresetEvidenceBudgetDraft
+
+    @model_validator(mode="after")
+    def deterministic_policy(self) -> PresetRetrievalPolicyDraft:
+        for values in (
+            self.allowed_corpus_keys,
+            self.allowed_query_kinds,
+            self.allowed_source_classes,
+        ):
+            if tuple(sorted(values)) != values or len(values) != len(set(values)):
+                raise ValueError("retrieval policy collections must be sorted and unique")
+        return self
 
 
 class ExecutionPresetDraftSubmission(WebModel):
     schema_version: Literal["execution-preset-draft-request/1.0"] = (
         "execution-preset-draft-request/1.0"
     )
-    target_revision_schema_version: Literal["execution-preset-revision/1.0"] = (
-        "execution-preset-revision/1.0"
-    )
+    target_revision_schema_version: Literal[
+        "execution-preset-revision/1.0", "execution-preset-revision/2.0"
+    ] = "execution-preset-revision/1.0"
     preset_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
     display_name: str = Field(min_length=1, max_length=128)
     description: str = Field(min_length=1, max_length=1000)
@@ -2203,12 +2272,90 @@ class ExecutionPresetDraftSubmission(WebModel):
     capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
     general_knowledge_policy: Literal["DENY", "ALLOW_WITH_PROVENANCE"]
     compatible_workflow_protocols: tuple[str, ...] = Field(min_length=1, max_length=16)
+    retrieval_policy: PresetRetrievalPolicyDraft | None = None
     idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
+
+    @model_validator(mode="after")
+    def exact_revision_family(self) -> ExecutionPresetDraftSubmission:
+        is_v2 = self.target_revision_schema_version == "execution-preset-revision/2.0"
+        if is_v2 != (self.retrieval_policy is not None):
+            raise ValueError("V2 preset drafts require exactly one retrieval policy")
+        for role in self.role_policies:
+            if is_v2 != (role.evidence_access is not None):
+                raise ValueError("role evidence access must match the revision family")
+        if len({role.role for role in self.role_policies}) != len(self.role_policies):
+            raise ValueError("preset role policies must be unique")
+        return self
 
 
 class ExecutionPresetLifecycleCommand(WebModel):
     resource_version: int = Field(ge=1)
     idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
+
+
+class ExecutionPresetValidationSubmission(ExecutionPresetLifecycleCommand):
+    base_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+
+
+class ExecutionPresetRoleModelOptions(WebModel):
+    role: Literal["authoring", "image", "review", "item_management", "support"]
+    worker_pool_key: str = Field(pattern=r"^[a-z][a-z0-9_-]{1,63}$")
+    candidates: tuple[PresetModelCandidateDraft, ...] = Field(max_length=320)
+
+    @model_validator(mode="after")
+    def unique_candidates(self) -> ExecutionPresetRoleModelOptions:
+        pairs = {(candidate.model, candidate.reasoning_effort) for candidate in self.candidates}
+        if len(pairs) != len(self.candidates):
+            raise ValueError("model option pairs must be unique")
+        return self
+
+
+class ExecutionPresetModelOptions(WebModel):
+    preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    roles: tuple[ExecutionPresetRoleModelOptions, ...] = Field(min_length=1, max_length=5)
+    catalog_is_entitlement: Literal[False]
+
+    @model_validator(mode="after")
+    def unique_roles(self) -> ExecutionPresetModelOptions:
+        if len({role.role for role in self.roles}) != len(self.roles):
+            raise ValueError("model option roles must be unique")
+        return self
+
+
+class ExecutionPresetValidationView(WebModel):
+    validation_id: str = Field(pattern=r"^job_[0-9a-f]{32}$")
+    preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    base_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    preset_policy_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    status: Literal["QUEUED", "RUNNING", "SUCCEEDED", "FAILED"]
+    scope: Literal["NON_LIVE"]
+    error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{0,95}$")
+    evaluation_id: str | None = Field(default=None, pattern=r"^preseteval_[0-9a-f]{32}$")
+    quality_evaluated: Literal[False]
+    cases_total: int = Field(default=0, ge=0, le=10000)
+    cases_passed: int = Field(default=0, ge=0, le=10000)
+    completed_at: UtcDatetime | None = None
+
+    @model_validator(mode="after")
+    def coherent_validation(self) -> ExecutionPresetValidationView:
+        terminal = self.status in {"SUCCEEDED", "FAILED"}
+        if terminal != (self.completed_at is not None) or self.cases_passed > self.cases_total:
+            raise ValueError("validation completion and case counts must match state")
+        if not terminal and (self.cases_total != 0 or self.cases_passed != 0):
+            raise ValueError("unfinished validation cannot claim completed cases")
+        if self.status == "SUCCEEDED":
+            if (
+                self.error_code is not None
+                or self.evaluation_id is None
+                or self.cases_total < 1
+                or self.cases_passed != self.cases_total
+            ):
+                raise ValueError("successful validation requires exact passing evidence")
+        elif self.evaluation_id is not None or (self.status == "FAILED") != (
+            self.error_code is not None
+        ):
+            raise ValueError("only success has evaluation evidence and only failure has an error")
+        return self
 
 
 class TimelineEvent(WebModel):

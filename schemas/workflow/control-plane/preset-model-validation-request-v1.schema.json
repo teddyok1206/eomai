@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/preset-model-validation-request/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "preset_revision_id", "preset_content_sha256", "preset_policy_sha256", "base_revision_id", "base_content_sha256", "requested_by", "requested_at"],
+  "properties": {
+    "schema_version": {"const": "preset-model-validation-request/1.0"},
+    "preset_revision_id": {"type": "string", "pattern": "^execpresetrev_[0-9a-f]{32}$"},
+    "base_revision_id": {"type": "string", "pattern": "^execpresetrev_[0-9a-f]{32}$"},
+    "preset_content_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "preset_policy_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "base_content_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "requested_by": {"type": "string", "minLength": 1, "maxLength": 128},
+    "requested_at": {"type": "string", "format": "date-time", "pattern": "Z$"}
+  }
+}

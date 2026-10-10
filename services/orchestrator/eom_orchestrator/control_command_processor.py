@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from eom_workflow import CodexUsageObservationV2
 from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -275,6 +276,14 @@ class CodexControlCommandProcessor:
                 command_id=command_id,
                 binding_id=binding_id,
             )
+            if (
+                isinstance(usage_observation, CodexUsageObservationV2)
+                and collected.cli is not None
+                and usage_observation.model_catalog.codex_cli_version != collected.cli[0]
+            ):
+                raise ControlPlaneError(
+                    "CODEX_USAGE_INVALID", "native model catalog CLI identity differs"
+                )
 
         with transaction(self.sessions) as session:
             _locked_binding(

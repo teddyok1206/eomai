@@ -247,6 +247,11 @@ def _application_api_operations() -> set[tuple[str, str]]:
 def test_every_frontend_api_call_has_a_method_matching_bff_route() -> None:
     source = APP_JS.read_text(encoding="utf-8")
     frontend = _frontend_api_calls(source)
+    frontend.update(
+        _frontend_api_calls(
+            (STATIC_ROOT / "execution-preset-controller.js").read_text(encoding="utf-8")
+        )
+    )
     frontend.add(("POST", "/admin/execution-presets/{}/deprecations"))
     frontend.add(("POST", "/session"))
 
@@ -297,6 +302,7 @@ def test_browser_dom_references_and_static_module_graph_are_closed() -> None:
     javascript = APP_JS.read_text(encoding="utf-8")
     parser = _StaticHtmlInventory()
     parser.feed(INDEX_HTML.read_text(encoding="utf-8"))
+    javascript += (STATIC_ROOT / "execution-preset-controller.js").read_text(encoding="utf-8")
     referenced_ids = set(re.findall(r'\$\(\s*["\']#([A-Za-z0-9_-]+)["\']\s*\)', javascript))
 
     assert len(parser.identifiers) == len(set(parser.identifiers))

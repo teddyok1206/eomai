@@ -33,6 +33,15 @@ logical Item
 
 ## 현재 저장소 릴리스 선
 
+관리자 설정의 실행 설정에서 **출제·일반 검토·강화 검토 모델과 추론 강도**를 각각 선택하는
+후보를 구현했습니다. 실제 슬롯의 Codex 모델 목록과 검토된 실행 정책의 교집합만 표시하며,
+초안 저장 → 실행 전달 검증 → 관리자 적용 순서로 불변 successor를 만듭니다. 기존 작업의
+모델·RAG·프롬프트·실행 pin은 바꾸지 않습니다. 현재 검토된 정책은 `gpt-5.6-terra`의
+`medium/high/xhigh`이며, 다른 모델을 목록에서 발견했다고 자동 허용하지 않습니다.
+외부 LLM API나 API-key 과금 연결은 없습니다. 이 구현은 아직 **운영 배포 전 후보**입니다.
+[실행 설정 설계·검증](docs/architecture/CODEX_CONTROL_PLANE_MVP_APPLICATION.md#13-administrator-model-selection-2026-10-09-utc),
+[네이티브 모델 목록 경계](docs/architecture/CODEX_NATIVE_MODEL_CATALOG_OBSERVATION.md)를 참고하세요.
+
 일반 대화(`일반 → ChatGPT`)는 별도 상주 `chat` 슬롯으로 운영되고 있습니다.
 기존 작업 슬롯01–06과 분리한 로컬 Codex에서 계정별 기록·이어 묻기·안전한 Markdown 표시를
 제공합니다. 실제 답변·사용자 격리·재시작 기록 보존을 검증했으며 사용자도 동작을 확인했습니다.

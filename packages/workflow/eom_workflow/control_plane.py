@@ -1810,6 +1810,91 @@ class CodexControlCommandResultV2(FrozenModel):
         return self
 
 
+class CodexNativeModelMetadata(FrozenModel):
+    """Provider catalog metadata, not execution admission or compatibility evidence."""
+
+    id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+    model: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+    display_name: str = Field(min_length=1, max_length=128, pattern=r"^[^\x00-\x1f\x7f]+$")
+    hidden: bool
+    is_default: bool
+    default_reasoning_effort: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,31}$")
+    supported_reasoning_efforts: tuple[
+        Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]{0,31}$")], ...
+    ] = Field(min_length=1, max_length=16)
+    input_modalities: tuple[Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]{0,31}$")], ...] = Field(
+        min_length=1, max_length=8
+    )
+
+    @model_validator(mode="after")
+    def unique_metadata_values(self) -> CodexNativeModelMetadata:
+        if (
+            len(set(self.supported_reasoning_efforts)) != len(self.supported_reasoning_efforts)
+            or len(set(self.input_modalities)) != len(self.input_modalities)
+            or self.default_reasoning_effort not in self.supported_reasoning_efforts
+        ):
+            raise ValueError("native model catalog values are inconsistent")
+        return self
+
+
+class CodexModelCatalogSnapshot(FrozenModel):
+    """Bounded, hashed native observation kept separate from reviewed capabilities."""
+
+    source: Literal["APP_SERVER_MODEL_LIST"] = "APP_SERVER_MODEL_LIST"
+    codex_cli_version: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$", max_length=32)
+    state: Literal["OBSERVED", "UNAVAILABLE"]
+    reason_code: (
+        Literal[
+            "CODEX_MODEL_CATALOG_UNAVAILABLE",
+            "CODEX_MODEL_CATALOG_INVALID",
+            "CODEX_MODEL_CATALOG_TIMEOUT",
+        ]
+        | None
+    )
+    models: tuple[CodexNativeModelMetadata, ...] = Field(max_length=64)
+    observed_at: UtcDatetime
+    valid_until: UtcDatetime
+    catalog_sha256: Sha256
+
+    @model_validator(mode="after")
+    def coherent_catalog(self) -> CodexModelCatalogSnapshot:
+        if self.state == "OBSERVED":
+            if self.reason_code is not None:
+                raise ValueError("observed native catalog cannot claim a failure")
+        elif self.reason_code is None or self.models:
+            raise ValueError("unavailable native catalog cannot expose partial models")
+        ids = tuple(model.id for model in self.models)
+        if ids != tuple(sorted(ids)) or len(ids) != len(set(ids)):
+            raise ValueError("native model catalog IDs must be sorted and unique")
+        if not timedelta(0) < self.valid_until - self.observed_at <= timedelta(hours=1):
+            raise ValueError("native catalog validity must be positive and at most one hour")
+        if self.catalog_sha256 != content_sha256(
+            self.model_dump(mode="json", exclude={"catalog_sha256"})
+        ):
+            raise ValueError("native model catalog hash differs")
+        return self
+
+
+class CodexUsageObservationV2(CodexUsageObservation):
+    """Usage and native model metadata from the same fixed-slot read observation."""
+
+    schema_version: Literal["codex-usage-observation/1.1"] = "codex-usage-observation/1.1"  # type: ignore[assignment]
+    model_catalog: CodexModelCatalogSnapshot
+
+    @model_validator(mode="after")
+    def exact_catalog_observation_time(self) -> CodexUsageObservationV2:
+        if self.model_catalog.observed_at > self.observed_at:
+            raise ValueError("native model catalog was observed after its enclosing observation")
+        return self
+
+
+class CodexControlCommandResultV3(CodexControlCommandResultV2):
+    """Successful OBSERVE result carrying the additive native catalog observation."""
+
+    schema_version: Literal["codex-control-command-result/1.2"] = "codex-control-command-result/1.2"  # type: ignore[assignment]
+    usage_observation: CodexUsageObservationV2
+
+
 class ExecutionPresetEvaluationReport(FrozenModel):
     """Bounded report metadata; detailed evidence remains an Artifact Revision."""
 

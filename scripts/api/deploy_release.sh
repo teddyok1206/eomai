@@ -1206,6 +1206,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         "eom_api_contracts/item_bank.py",
         "eom_api_contracts/mock_exam_execution.py",
         "eom_api_contracts/mock_exam_retirement.py",
+        "eom_api_contracts/preset_model_selection.py",
         "eom_api_contracts/system.py",
         "eom_api_contracts/workflows.py",
     }
@@ -1297,9 +1298,16 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_orchestrator/legacy_item_editorial_compatibility_artifact.py",
         "eom_orchestrator/legacy_item_editorial_compatibility_bootstrap.py",
         "eom_orchestrator/preset_lifecycle.py",
+        "eom_orchestrator/preset_model_evidence.py",
+        "eom_orchestrator/preset_model_release.py",
+        "eom_orchestrator/preset_model_selection.py",
+        "eom_orchestrator/preset_model_validation.py",
+        "eom_orchestrator/preset_model_validation_processor.py",
+        "eom_orchestrator/preset_policy.py",
         "eom_orchestrator/svg_label_layout_validation.py",
         "eom_workflow/control_plane.py",
         "eom_workflow/control_schemas.py",
+        "eom_workflow/preset_model_validation.py",
         "eom_workflow/models.py",
         "eom_workflow_runner/composition.py",
         "eom_workflow_runner/engine.py",
@@ -2196,7 +2204,7 @@ if any(
     )
 ):
     raise SystemExit("mock-exam retirement contract package exports are incomplete")
-if CURRENT_MIGRATION_REVISION != "20261008_0049":
+if CURRENT_MIGRATION_REVISION != "20261009_0050":
     raise SystemExit("installed runtime migration admission head mismatch")
 settings = Settings.from_environment()
 if settings.worker_config != Path(worker_config).resolve():
@@ -2709,6 +2717,8 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 
+from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
+
 dist = Path(os.environ["DIST_DIR"])
 wheels = {}
 for path in sorted(dist.glob("*.whl")):
@@ -2716,12 +2726,16 @@ for path in sorted(dist.glob("*.whl")):
 payload = {
     "deployed_at_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     "source_commit": os.environ["COMMIT"],
+    "migration_head": CURRENT_MIGRATION_REVISION,
     "workflow_runner_held_inactive": os.environ["WORKFLOW_RUNNER_HELD"] == "true",
     "package_version": os.environ["VERSION"],
     "wheels": wheels,
     "rollback": (
-        "Reinstall the three retained wheels for the prior source commit, restore the prior "
-        "unit if it changed, then run deploy_release.sh --verify."
+        "First verify schema-head and installed-release compatibility. Immutable validation "
+        "history forbids blind schema downgrade; old wheels alone may fail exact-head readiness. "
+        "Withdraw the new UI entrypoint using a compatible retained Web release while keeping "
+        "the new platform/schema and history, or use a separately reviewed compatible release "
+        "set. Restore only verified nonsecret configuration/unit predecessors, then verify."
     ),
 }
 Path(os.environ["RECORD"]).write_text(json.dumps(payload, indent=2) + "\n", encoding="ascii")

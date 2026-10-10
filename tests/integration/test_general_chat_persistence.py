@@ -30,6 +30,7 @@ from eom_orchestrator.general_chat_state import ChatError
 from eom_orchestrator.general_chat_worker import ChatWorkerApplication
 from eom_orchestrator.general_chat_worker_client import ChatWorkerClient
 from eom_orchestrator.general_chat_worker_server import ChatWorkerRpcServer
+from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from eom_orchestrator.models import WorkerSlotRecord
 from eom_protocol.general_chat import CHAT_RESULT_SCHEMA, ChatTurnInput, ChatTurnResult
 from eom_protocol.general_chat_dispatch import CHAT_DISPATCH_SCHEMA, ChatExecutionIdentity
@@ -489,7 +490,7 @@ def test_chat_migration_matches_authoritative_metadata(chat: ChatFixture) -> Non
     with chat.engine.connect() as connection:
         assert (
             connection.scalar(text("SELECT version_num FROM app.alembic_version"))
-            == "20261008_0049"
+            == CURRENT_MIGRATION_REVISION
         )
 
 

@@ -44,6 +44,28 @@ def test_embedded_release_inspector_has_no_undefined_names() -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_model_selection_runtime_is_required_in_release_wheel_inventory() -> None:
+    assignments = {
+        node.targets[0].id: ast.literal_eval(node.value)
+        for node in ast.walk(ast.parse(release_inspector_source()))
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id in {"required_contract_runtime", "control_plane_runtime"}
+        and isinstance(node.value, ast.Set)
+    }
+    assert "eom_api_contracts/preset_model_selection.py" in assignments["required_contract_runtime"]
+    assert {
+        "eom_orchestrator/preset_model_evidence.py",
+        "eom_orchestrator/preset_model_release.py",
+        "eom_orchestrator/preset_model_selection.py",
+        "eom_orchestrator/preset_model_validation.py",
+        "eom_orchestrator/preset_model_validation_processor.py",
+        "eom_orchestrator/preset_policy.py",
+        "eom_workflow/preset_model_validation.py",
+    } <= assignments["control_plane_runtime"]
+
+
 def test_installed_review_admission_covers_materialized_workflow_contracts() -> None:
     outer = ast.parse(release_inspector_source())
     staged = {

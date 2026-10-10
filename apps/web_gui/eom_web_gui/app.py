@@ -32,6 +32,7 @@ from eom_web_gui.contracts import (
     EducationalQualityCommandSubmission,
     ExecutionPresetDraftSubmission,
     ExecutionPresetLifecycleCommand,
+    ExecutionPresetValidationSubmission,
     ExplorerQuery,
     HwpxBuildRequest,
     HwpxBuildView,
@@ -1261,6 +1262,30 @@ def create_app(
         session: Annotated[WebSession, Depends(require_csrf)],
     ) -> dict[str, Any]:
         return await actual.create_execution_preset_draft(session, value)
+
+    @app.get(f"{API_PREFIX}/admin/execution-presets/{{preset_id}}/model-options")
+    async def execution_preset_model_options(
+        preset_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, Any]:
+        result = await actual.execution_preset_model_options(session, preset_id)
+        return result.model_dump(mode="json")
+
+    @app.post(f"{API_PREFIX}/admin/execution-preset-revisions/{{draft_revision_id}}/evaluations")
+    async def evaluate_execution_preset(
+        draft_revision_id: str,
+        value: ExecutionPresetValidationSubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        return await actual.evaluate_execution_preset(session, draft_revision_id, value)
+
+    @app.get(f"{API_PREFIX}/admin/execution-preset-validations/{{validation_id}}")
+    async def execution_preset_validation(
+        validation_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, Any]:
+        result = await actual.execution_preset_validation(session, validation_id)
+        return result.model_dump(mode="json")
 
     @app.post(f"{API_PREFIX}/admin/execution-preset-revisions/{{draft_revision_id}}/releases")
     async def release_execution_preset(

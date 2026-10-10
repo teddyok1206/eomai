@@ -47,6 +47,7 @@ from eom_api.services.paired_document_review_service import (
 )
 from eom_api.services.pdf_document_review_service import PdfDocumentReviewApplicationService
 from eom_api.services.pdf_upload_stager import PdfUploadStager
+from eom_api.services.preset_model_selection_adapter import PresetModelSelectionAdapter
 from eom_api.services.query_adapter import QueryAdapter
 from eom_api.settings import ApiSecrets, ApiSettings, load_secrets, load_settings
 
@@ -114,6 +115,7 @@ class AppServices:
             queries=self.queries,
         )
         self.control_plane = ControlPlaneAdapter(engine)
+        self.preset_models = PresetModelSelectionAdapter(engine)
         self.idempotency = IdempotencyService(engine, token_key)
         self.audit = AuditService(engine)
         self.general_chat = GeneralChatApplicationService(GeneralChatOwnerClient())

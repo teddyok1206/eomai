@@ -11,6 +11,7 @@ from eom_orchestrator.auth_enrollment_processor import CodexAuthEnrollmentProces
 from eom_orchestrator.control_command_processor import CodexControlCommandProcessor
 from eom_orchestrator.database import build_engine, build_session_factory
 from eom_orchestrator.orchestrator import Orchestrator
+from eom_orchestrator.preset_model_validation_processor import PresetModelValidationProcessor
 from eom_orchestrator.runtime_configuration import resolve_worker_configuration
 from eom_orchestrator.settings import Settings
 from sqlalchemy import Engine
@@ -93,6 +94,7 @@ def build_workflow_runtime(
         readiness=readiness,
         available_roles=available_roles,
         control_processor=control_processor,
+        preset_validator=PresetModelValidationProcessor(actual_engine, actual_platform_settings),
         capacity_reconciler=orchestrator.capacity,
         runner_id=runner_id,
     )

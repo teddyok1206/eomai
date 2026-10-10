@@ -6,7 +6,6 @@ from datetime import datetime
 from typing import Any
 
 from eom_identifiers import (
-    content_sha256,
     new_execution_preset_evaluation_id,
     new_execution_preset_id,
     new_execution_preset_revision_id,
@@ -14,8 +13,6 @@ from eom_identifiers import (
 from eom_workflow import (
     ControlArtifactPointer,
     ExecutionPresetEvaluationReport,
-    ExecutionPresetRevision,
-    ExecutionPresetRevisionV2,
     validate_control_contract,
 )
 from jsonschema import ValidationError as JsonSchemaValidationError
@@ -35,37 +32,13 @@ from eom_orchestrator.control_service import (
     record_execution_preset_revision,
     resolve_control_artifact_pointer,
 )
+from eom_orchestrator.preset_model_release import require_current_model_acceptance
+from eom_orchestrator.preset_policy import (
+    execution_preset_policy_sha256 as execution_preset_policy_sha256,
+)
 
 EVALUATION_SCHEMA_REF = "eom://schemas/workflow/execution-preset-evaluation-report/1.0"
 EVALUATION_MEDIA_TYPE = "application/json"
-
-
-def execution_preset_policy_sha256(
-    document: dict[str, Any] | ExecutionPresetRevision | ExecutionPresetRevisionV2,
-) -> str:
-    """Hash only executable policy, independent of revision lifecycle metadata."""
-
-    try:
-        if isinstance(document, (ExecutionPresetRevision, ExecutionPresetRevisionV2)):
-            preset = document
-        elif document.get("schema_version") == "execution-preset-revision/2.0":
-            preset = ExecutionPresetRevisionV2.model_validate(document)
-        else:
-            preset = ExecutionPresetRevision.model_validate(document)
-    except PydanticValidationError as exc:
-        raise ControlPlaneError(
-            "CONTROL_PRESET_DOCUMENT_INVALID", "preset policy document is invalid"
-        ) from exc
-    normalized = preset.model_dump(mode="json")
-    policy = {
-        "capacity_policy_revision_id": normalized["capacity_policy_revision_id"],
-        "compatible_workflow_protocols": normalized["compatible_workflow_protocols"],
-        "general_knowledge_policy": normalized["general_knowledge_policy"],
-        "role_policies": normalized["role_policies"],
-    }
-    if isinstance(preset, ExecutionPresetRevisionV2):
-        policy["retrieval_policy"] = normalized["retrieval_policy"]
-    return content_sha256(policy)
 
 
 def create_execution_preset_draft(
@@ -304,6 +277,13 @@ def release_execution_preset(
             and execution_preset_policy_sha256(current.canonical_document) == policy_sha256
         ):
             return current
+    require_current_model_acceptance(
+        session,
+        logical=logical,
+        draft=draft,
+        evaluation=accepted_evaluation,
+        observed_at=released_at,
+    )
     highest = session.scalar(
         select(func.max(ExecutionPresetRevisionRecord.revision_number)).where(
             ExecutionPresetRevisionRecord.preset_id == draft.preset_id

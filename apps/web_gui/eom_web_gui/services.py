@@ -36,6 +36,9 @@ from eom_web_gui.contracts import (
     DocumentReviewView,
     ExecutionPresetDraftSubmission,
     ExecutionPresetLifecycleCommand,
+    ExecutionPresetModelOptions,
+    ExecutionPresetValidationSubmission,
+    ExecutionPresetValidationView,
     ExplorerQuery,
     ExplorerResult,
     HwpxBuildRequest,
@@ -660,6 +663,33 @@ class WebServices:
             resource_version=value.resource_version,
             idempotency_key=value.idempotency_key,
         )
+
+    async def execution_preset_model_options(
+        self, session: WebSession, preset_id: str
+    ) -> ExecutionPresetModelOptions:
+        _require_admin(session)
+        return await self.gateway.execution_preset_model_options(session, preset_id)
+
+    async def evaluate_execution_preset(
+        self,
+        session: WebSession,
+        draft_revision_id: str,
+        value: ExecutionPresetValidationSubmission,
+    ) -> dict[str, Any]:
+        _require_admin(session)
+        return await self.gateway.evaluate_execution_preset(
+            session,
+            draft_revision_id,
+            base_revision_id=value.base_revision_id,
+            resource_version=value.resource_version,
+            idempotency_key=value.idempotency_key,
+        )
+
+    async def execution_preset_validation(
+        self, session: WebSession, validation_id: str
+    ) -> ExecutionPresetValidationView:
+        _require_admin(session)
+        return await self.gateway.execution_preset_validation(session, validation_id)
 
     async def deprecate_execution_preset(
         self,

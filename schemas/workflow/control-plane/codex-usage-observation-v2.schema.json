@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/codex-usage-observation/1.1",
+  "title": "Codex Usage and Native Model Catalog Observation V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "command_id", "binding_id", "slot_key", "account_type", "plan_type", "windows", "observed_at", "model_catalog", "observation_sha256"],
+  "properties": {
+    "schema_version": {"const": "codex-usage-observation/1.1"},
+    "command_id": {"type": "string", "pattern": "^codexcmd_[0-9a-f]{32}$"},
+    "binding_id": {"type": "string", "pattern": "^authbinding_[0-9a-f]{32}$"},
+    "slot_key": {"type": "string", "pattern": "^slot0[1-6]$"},
+    "account_type": {"const": "chatgpt"},
+    "plan_type": {"$ref": "eom://schemas/workflow/codex-usage-observation/1.0#/properties/plan_type"},
+    "windows": {"$ref": "eom://schemas/workflow/codex-usage-observation/1.0#/properties/windows"},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "model_catalog": {"$ref": "#/$defs/catalog"},
+    "observation_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "effort": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,31}$"},
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "model", "display_name", "hidden", "is_default", "default_reasoning_effort", "supported_reasoning_efforts", "input_modalities"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+        "model": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+        "display_name": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[^\\u0000-\\u001f\\u007f]+$"},
+        "hidden": {"type": "boolean"},
+        "is_default": {"type": "boolean"},
+        "default_reasoning_effort": {"$ref": "#/$defs/effort"},
+        "supported_reasoning_efforts": {"type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": {"$ref": "#/$defs/effort"}},
+        "input_modalities": {"type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,31}$"}}
+      }
+    },
+    "catalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "codex_cli_version", "state", "reason_code", "models", "observed_at", "valid_until", "catalog_sha256"],
+      "properties": {
+        "source": {"const": "APP_SERVER_MODEL_LIST"},
+        "codex_cli_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$", "maxLength": 32},
+        "state": {"enum": ["OBSERVED", "UNAVAILABLE"]},
+        "reason_code": {"oneOf": [{"enum": ["CODEX_MODEL_CATALOG_UNAVAILABLE", "CODEX_MODEL_CATALOG_INVALID", "CODEX_MODEL_CATALOG_TIMEOUT"]}, {"type": "null"}]},
+        "models": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/model"}},
+        "observed_at": {"type": "string", "format": "date-time"},
+        "valid_until": {"type": "string", "format": "date-time"},
+        "catalog_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      },
+      "allOf": [
+        {"if": {"properties": {"state": {"const": "OBSERVED"}}}, "then": {"properties": {"reason_code": {"type": "null"}}}},
+        {"if": {"properties": {"state": {"const": "UNAVAILABLE"}}}, "then": {"properties": {"models": {"maxItems": 0}, "reason_code": {"type": "string"}}}}
+      ]
+    }
+  }
+}

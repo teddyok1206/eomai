@@ -417,6 +417,75 @@ class ExecutionPresetEvaluationRecord(Base):
     )
 
 
+class ExecutionPresetValidationRecord(Base):
+    """Small immutable API intent; only the Orchestrator owns processing state."""
+
+    __tablename__ = "execution_preset_validations"
+    __table_args__ = (
+        CheckConstraint(
+            "validation_id ~ '^job_[0-9a-f]{32}$'",
+            name="ck_preset_validation_id",
+        ),
+        CheckConstraint(
+            "request_sha256 ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_preset_validation_request_hash",
+        ),
+        CheckConstraint(
+            "state IN ('PENDING','PROCESSING','SUCCEEDED','FAILED')",
+            name="ck_preset_validation_state",
+        ),
+        CheckConstraint(
+            "((state IN ('PENDING','PROCESSING') AND completed_at IS NULL "
+            "AND error_code IS NULL) OR (state = 'SUCCEEDED' AND completed_at IS NOT NULL "
+            "AND error_code IS NULL) OR (state = 'FAILED' AND completed_at IS NOT NULL "
+            "AND error_code IS NOT NULL)) AND "
+            "(completed_at IS NULL OR completed_at >= requested_at)",
+            name="ck_preset_validation_lifecycle",
+        ),
+        CheckConstraint(
+            "error_code IS NULL OR error_code ~ '^[A-Z][A-Z0-9_]{0,95}$'",
+            name="ck_preset_validation_error_code",
+        ),
+        CheckConstraint(
+            "(jsonb_typeof(canonical_request) = 'object' AND "
+            "canonical_request ->> 'schema_version' = 'preset-model-validation-request/1.0' "
+            "AND canonical_request ->> 'preset_revision_id' = preset_revision_id "
+            "AND canonical_request ->> 'base_revision_id' = base_revision_id "
+            "AND canonical_request ->> 'requested_by' = requested_by) IS TRUE "
+            "AND octet_length(canonical_request::text) <= 8192",
+            name="ck_preset_validation_request_identity",
+        ),
+        UniqueConstraint("idempotency_key", name="uq_preset_validation_idempotency"),
+        Index(
+            "ix_preset_validation_pending",
+            "requested_at",
+            "validation_id",
+            postgresql_where=text("state IN ('PENDING','PROCESSING')"),
+        ),
+    )
+
+    # This reserves the eventual Job identity, but enqueue precedes Job creation.
+    validation_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    preset_revision_id: Mapped[str] = mapped_column(
+        ForeignKey("execution_preset_revisions.preset_revision_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    base_revision_id: Mapped[str] = mapped_column(
+        ForeignKey("execution_preset_revisions.preset_revision_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    requested_by: Mapped[str] = mapped_column(
+        ForeignKey("operators.operator_id", ondelete="RESTRICT"), nullable=False
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(96), nullable=False)
+    request_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    canonical_request: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING")
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(96), nullable=True)
+
+
 class ResolvedExecutionPlanRecord(Base):
     __tablename__ = "resolved_execution_plans"
     __table_args__ = (

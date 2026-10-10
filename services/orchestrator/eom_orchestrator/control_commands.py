@@ -12,7 +12,9 @@ from eom_workflow import (
     CodexControlCommand,
     CodexControlCommandResult,
     CodexControlCommandResultV2,
+    CodexControlCommandResultV3,
     CodexUsageObservation,
+    CodexUsageObservationV2,
     validate_control_contract,
 )
 from jsonschema import ValidationError as JsonSchemaValidationError
@@ -251,12 +253,21 @@ def _terminalize_record(
     processed_at: datetime,
     usage_observation: CodexUsageObservation | None = None,
 ) -> None:
+    result_type: type[CodexControlCommandResult | CodexControlCommandResultV2]
+    if isinstance(usage_observation, CodexUsageObservationV2):
+        schema_version = "codex-control-command-result/1.2"
+        result_type = CodexControlCommandResultV3
+        schema_name = "codex-control-command-result-v3"
+    elif usage_observation is not None:
+        schema_version = "codex-control-command-result/1.1"
+        result_type = CodexControlCommandResultV2
+        schema_name = "codex-control-command-result-v2"
+    else:
+        schema_version = "codex-control-command-result/1.0"
+        result_type = CodexControlCommandResult
+        schema_name = "codex-control-command-result"
     result: dict[str, object] = {
-        "schema_version": (
-            "codex-control-command-result/1.1"
-            if usage_observation is not None
-            else "codex-control-command-result/1.0"
-        ),
+        "schema_version": schema_version,
         "command_id": record.command_id,
         "command_type": record.command_type,
         "binding_id": record.binding_id,
@@ -269,14 +280,6 @@ def _terminalize_record(
     }
     if usage_observation is not None:
         result["usage_observation"] = usage_observation.model_dump(mode="json")
-    result_type = (
-        CodexControlCommandResultV2 if usage_observation is not None else CodexControlCommandResult
-    )
-    schema_name = (
-        "codex-control-command-result-v2"
-        if usage_observation is not None
-        else "codex-control-command-result"
-    )
     normalized = result_type.model_validate(result).model_dump(mode="json")
     normalized["result_sha256"] = compute_control_document_hash(normalized, "result_sha256")
     try:

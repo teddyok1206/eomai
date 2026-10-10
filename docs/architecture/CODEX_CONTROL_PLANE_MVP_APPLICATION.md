@@ -204,3 +204,133 @@ the internet-facing service authority and bypasses the orchestrator. Reusing ses
 reduce startup work, but it makes item independence and reproducibility unverifiable. The selected
 design adds only the persistence and queue boundaries required by these current, demonstrated use
 cases; it does not introduce a generic plugin or scheduler framework.
+
+## 13. Administrator model selection (2026-10-09 UTC)
+
+Extend the existing preset lifecycle, not the item request or worker protocol. Administrators edit
+authoring, ordinary review and enhanced review model/effort pairs independently. Preserve all
+instruction/reference pointers, pool/capacity, isolation, protocol and V2 retrieval/evidence
+policies from the pinned released baseline. Existing execution plans remain immutable.
+
+The native per-slot `model/list` catalog is discovery metadata, never proof of entitlement or an
+operator allowlist. Observe it through the existing Orchestrator-owned OBSERVE worker handoff.
+Keep its source, observation/expiry, CLI version and hash separate from reviewed capability
+snapshots. Offer only current reviewed role/pool combinations for execution. Unsupported efforts,
+including `max` and `ultra`, remain excluded; missing catalog data is explicit, not a fallback to
+the root account. No external LLM API, credential transfer, new dependency or inference is needed
+for discovery.
+
+The canonical configuration remains the immutable preset revision. Dominant operations are keyed
+revision lookup, set membership of model/effort pairs, ordered candidate iteration and idempotent
+validation. Execution chains remain bounded by six slots/five roles/four candidates per role.
+Native discovery is separately bounded to 64 models; a role options projection has at most 320
+model/effort pairs. Use indexed IDs and maps; do not perform one query per candidate or copy
+bundles/content into a new registry.
+
+Validation binds an exact draft, released baseline, policy SHA and evaluator release. Check
+baseline preservation, schema/self-hash, released pointer resolution, role/capacity policy and
+fresh reviewed capabilities. Non-live invocation acceptance additionally executes the production
+CLI argument builder against positive/negative deterministic cases, checking model, effort,
+isolation, schema-output and independent-session pins. It consumes no model generation and does
+not claim scientific quality, account entitlement or successful inference. Report the exact
+executed cases; never turn a few static checks or a browser assertion into a fabricated live
+acceptance. Quality remains NOT_EVALUATED.
+
+The API inserts a bounded, immutable `execution_preset_validations` metadata command only; its
+reserved `job_` identity becomes the existing structured Job identity when the Orchestrator claims
+it. Reuse the existing control-command pattern rather than granting API INSERT on `jobs` or
+`protocol_versions`, adding a privileged SQL function, or launching workers from HTTP. API grants
+are SELECT/INSERT only on this relation. The Orchestrator owns state, Job/event creation, non-live
+cases and canonical Artifact commit. Actor/key transaction advisory locks plus the unique key
+serialize concurrent replay; FIFO partial `(requested_at, validation_id)` indexing and one
+processor advisory lock protect claiming. The metadata is bounded to 8 KiB per command; the
+report and a separately hashed executed-case member live in one canonical Artifact Revision.
+Small immutable event checkpoints permit identical-byte recovery, not a second result store.
+Runtime evaluator source identity, request, baseline, draft, policy and case hashes are checked
+before publication and replay. An uncertain COMMITTING boundary retains its identity and staged
+evidence with bounded recovery backoff; it is never reinterpreted as failed or resubmitted.
+Release still requires matching approved NON_LIVE/LIVE_ONE_SHOT evidence and creates a successor
+revision atomically. Missing/stale pointers, unrelated evidence, altered fixed fields and failed
+cases fail closed. Only explicit administrator release advances the current pointer.
+For this new validation lineage, release checks the exact baseline under the existing logical
+row lock, fresh role/catalog admission and both report/cases member pins. Historical evaluation
+families keep their existing meaning; new provenance requirements are not retroactive.
+
+The GUI uses separate model/effort controls, V1/V2-safe cloning, server-owned validation results,
+CSRF/role checks, stable per-intent idempotency and stale-response cancellation. A changed base or
+unsaved edit clears prior validation/release targets. Rollback disables the new entry point and
+leaves preset, job and Artifact history intact. A dropdown directly forwarded to a worker is
+simpler but bypasses provenance, evaluation and permission boundaries and is therefore unsuitable.
+
+### Candidate verification and coordinated activation
+
+Implementation state as of 2026-10-09 UTC is a **source candidate**, not an active model change.
+The request schema identity remains `preset-model-validation-request/1.0`; the existing Job
+envelope protocol is the separate, column-bounded `preset-model-validation/1.0`. Migration
+`20261009_0050` adds only the immutable small-command relation and its pending keyset index.
+The API still cannot insert Jobs, protocol versions, Artifacts or evaluations.
+
+Verification used explicit source paths/Conda interpreters, not accidentally older installed
+modules: core/API focused 414 PASS, Web 341 PASS including actual Chromium, and marker-guarded
+disposable PostgreSQL 14 PASS. The latter covers concurrent transport replay, two Orchestrators,
+actual restricted API enqueue, immutable/terminal guards, native metadata fixtures through the
+real validation/report/release pipeline, unchanged existing plans, identical-identity uncertain
+commit recovery, permanent rejection without deleting candidate bytes and indexed queue lookup.
+Empty disposable migration upgrade/downgrade/upgrade and exact table/column grants also passed.
+No production migration, deployment, preset activation or model generation was performed.
+
+Deployment must coordinate the platform/runner/API/Web packages, migration and narrow runtime
+grants, plus the hash-verified fixed worker observation helper. Afterwards use existing account
+OBSERVE controls for every required role/slot (current item presets include authoring, image,
+review and item_management; support only when present). Auth refresh/rebinding and expiry require
+a new catalog observation before model selection, validation or release; an empty list means
+UNKNOWN/re-observation needed, not proof that the current model cannot run. Do not relax this
+guard, auto-launch inference or adopt a model solely because native discovery advertised it.
+The current reviewed allowlist remains authoritative and unchanged.
+
+The independent `generated-knowledge-item@1.20.16` candidate clarifies review evidence union,
+subset and purpose rules without weakening validation or editing released `1.20.15`/team-lead
+originals. It is not activated by saving or releasing a model preset. The investigated recent
+workflow completed normally after protocol-output retries, so no duplicate item/retry was made.
+
+### Completion audit — 2026-10-10 UTC
+
+The resumed implementation remains a source candidate until the coordinated rollout below is
+recorded. Independent audits corrected empty native catalogs to UNKNOWN/re-observation required,
+and reject logical Artifact or revision drift in acceptance evidence at release. UI regression
+coverage now includes exact preserved fixed-role admission, late responses after navigation or
+logout, out-of-order refresh, malformed release acknowledgements, and timeout-after-commit replay
+with the same intent identity. No policy allowlist or existing preset current pointer changed.
+
+Explicit Conda/source-path verification: core 340 PASS; full non-live API 757 PASS (18 opt-in cases
+deselected); Web 346 PASS including real Chromium. Do not add overlapping focused-suite counts.
+An initial broad API collection omitted the Web source root; the corrected invocation completed
+the full suite. A new marker-guarded disposable PostgreSQL database passed empty-schema upgrade /
+downgrade / upgrade to `20261009_0050`, narrow runtime grant reconciliation, and 14 persistence /
+restricted-role tests. Production DB pytest is forbidden and was not used. Schema-generator
+check, OpenAPI export parity, Ruff formatting/lint and focused strict mypy are required before the
+release commit. The existing Starlette/httpx deprecation warning is not a failed test or a reason
+to add an unrelated dependency.
+
+Administrator operation: choose a released item preset in **관리자 설정 → 실행 설정**, select the
+authoring / ordinary review / enhanced review pairs, inspect and save the draft, run its
+non-generating validation, then explicitly apply it. "실행 전달 검증" proves the actual CLI argument
+builder and control/pointer invariants, not subscription entitlement, inference or educational
+quality. A missing/expired list requires the supported account OBSERVE action; refresh may
+invalidate an unsaved choice. The reviewed allowlist currently contains only `gpt-5.6-terra`
+`medium/high/xhigh`. Other discovered models require a separately reviewed admission decision;
+the feature must never quietly widen the policy to populate a dropdown.
+
+Rollout must preserve current Pack `1.20.15`, preset and workflow pins and the recently verified
+HWPX literal internal-member references. Coordinate API/platform/runner and Web, the additive
+`0050` migration and narrow grants, plus the hash-pinned native observation helper. The shared
+API interpreter also hosts chat owner/worker and the auth broker: check executable work before
+stopping those resident consumers, replace the compatible wheels while they are stopped, and
+advance only their exact executable-release pin using the supported installer while preserving
+the model, protocol and RAG-policy pins. Preserve rollback wheels and configuration. Once `0050`
+contains immutable validation history, fallback disables the new entrypoint/restores a compatible
+Web release while retaining the new platform/schema; old `0049` wheels alone are not a safe full
+rollback. Re-observe
+required slots through Orchestrator commands, check HTTPS role-protected model options and one
+inactive draft validation, and verify no preset or Pack activation changed. No new item, HWPX,
+GPU output or model generation is needed for this rollout acceptance.

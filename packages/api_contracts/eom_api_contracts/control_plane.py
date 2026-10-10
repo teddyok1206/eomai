@@ -226,6 +226,41 @@ class CodexUsageObservationView(ApiModel):
     observed_at: UtcDatetime
 
 
+class CodexCapabilitySnapshotView(ApiModel):
+    """Reviewed admission-policy evidence, not native model entitlement."""
+
+    capability_snapshot_id: str = Field(pattern=r"^capsnap_[0-9a-f]{32}$")
+    source: Literal["LOCAL_OBSERVATION", "OPERATOR_ASSERTED"]
+    codex_cli_version: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
+    observed_at: UtcDatetime
+    valid_until: UtcDatetime
+    snapshot_sha256: Sha256
+
+
+class CodexNativeModelView(ApiModel):
+    id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+    model: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+    display_name: str = Field(min_length=1, max_length=128)
+    hidden: bool
+    is_default: bool
+    default_reasoning_effort: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,31}$")
+    supported_reasoning_efforts: tuple[str, ...] = Field(min_length=1, max_length=16)
+    input_modalities: tuple[str, ...] = Field(min_length=1, max_length=8)
+
+
+class CodexModelCatalogView(ApiModel):
+    """The actual native catalog snapshot; OBSERVED does not grant execution permission."""
+
+    source: Literal["APP_SERVER_MODEL_LIST"]
+    codex_cli_version: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$", max_length=32)
+    state: Literal["OBSERVED", "UNAVAILABLE"]
+    reason_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    models: tuple[CodexNativeModelView, ...] = Field(max_length=64)
+    observed_at: UtcDatetime
+    valid_until: UtcDatetime
+    catalog_sha256: Sha256
+
+
 class CodexAccountView(ApiModel):
     binding_id: OpaqueId
     slot_key: str
@@ -251,6 +286,8 @@ class CodexAccountView(ApiModel):
         | None
     ) = None
     usage_observation: CodexUsageObservationView | None = None
+    model_catalog: CodexModelCatalogView | None = None
+    capability_snapshot: CodexCapabilitySnapshotView | None = None
 
     @model_validator(mode="after")
     def coherent_active_enrollment(self) -> CodexAccountView:
@@ -270,6 +307,7 @@ class CodexControlCommandView(ApiModel):
     requested_at: UtcDatetime
     processed_at: UtcDatetime | None
     usage_observation: CodexUsageObservationView | None = None
+    model_catalog: CodexModelCatalogView | None = None
 
 
 class ExecutionPresetEvaluationView(ApiModel):

@@ -41,6 +41,7 @@ REQUIRED_RUNTIME_FILES = frozenset(
         "static/curriculum-selector.js",
         "static/eom-mark.svg",
         "static/execution-preset-editor.js",
+        "static/execution-preset-controller.js",
         "static/general-chat.js",
         "static/guide-content.js",
         "static/guide-mode.js",

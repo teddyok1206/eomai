@@ -1,0 +1,97 @@
+{
+  "$defs": {
+    "ModelCandidateInput": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Model",
+          "type": "string"
+        },
+        "reasoning_effort": {
+          "enum": [
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ],
+          "title": "Reasoning Effort",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model",
+        "reasoning_effort"
+      ],
+      "title": "ModelCandidateInput",
+      "type": "object"
+    },
+    "PresetRoleModelOptions": {
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "enum": [
+            "authoring",
+            "image",
+            "review",
+            "item_management",
+            "support"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "worker_pool_key": {
+          "title": "Worker Pool Key",
+          "type": "string"
+        },
+        "candidates": {
+          "items": {
+            "$ref": "#/$defs/ModelCandidateInput"
+          },
+          "maxItems": 320,
+          "title": "Candidates",
+          "type": "array"
+        }
+      },
+      "required": [
+        "role",
+        "worker_pool_key",
+        "candidates"
+      ],
+      "title": "PresetRoleModelOptions",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "preset_revision_id": {
+      "pattern": "^execpresetrev_[0-9a-f]{32}$",
+      "title": "Preset Revision Id",
+      "type": "string"
+    },
+    "roles": {
+      "items": {
+        "$ref": "#/$defs/PresetRoleModelOptions"
+      },
+      "maxItems": 5,
+      "minItems": 1,
+      "title": "Roles",
+      "type": "array"
+    },
+    "catalog_is_entitlement": {
+      "const": false,
+      "default": false,
+      "title": "Catalog Is Entitlement",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "preset_revision_id",
+    "roles"
+  ],
+  "title": "PresetModelOptionsView",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/api/v1/preset-model-options-view-v1.schema.json"
+}

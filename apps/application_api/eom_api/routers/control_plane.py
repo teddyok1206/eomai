@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from eom_api_contracts import CommandResult, ListResponse, SingleResponse
 from eom_api_contracts.common import EmptyRequest
 from eom_api_contracts.control_plane import (
@@ -14,8 +16,13 @@ from eom_api_contracts.control_plane import (
     ExecutionPresetDraftRequest,
     ExecutionPresetView,
 )
+from eom_api_contracts.preset_model_selection import (
+    PresetModelEvaluationRequest,
+    PresetModelOptionsView,
+    PresetModelValidationView,
+)
 from eom_operator_identity import PermissionKey
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Path, Request, Response
 
 from eom_api.dependencies import (
     Auth,
@@ -27,6 +34,97 @@ from eom_api.dependencies import (
 from eom_api.routers.common import many, one, run_command
 
 router = APIRouter(tags=["codex-control-plane"])
+
+
+@router.get(
+    "/execution-presets/{preset_id}/model-options",
+    operation_id="execution_preset_model_options_get",
+    response_model=SingleResponse[PresetModelOptionsView],
+    dependencies=[
+        Depends(
+            require_permission(PermissionKey.EXECUTION_PRESET_READ, fresh=True, admin_only=True)
+        )
+    ],
+)
+def execution_preset_model_options(
+    request: Request,
+    preset_id: Annotated[str, Path(pattern=r"^execpreset_[0-9a-f]{32}$")],
+) -> SingleResponse[PresetModelOptionsView]:
+    return one(request, request.app.state.services.preset_models.options(preset_id))
+
+
+@router.post(
+    "/execution-preset-revisions/{draft_revision_id}/evaluations",
+    operation_id="execution_preset_model_evaluation_create",
+    status_code=202,
+    response_model=SingleResponse[CommandResult],
+    dependencies=[
+        Depends(
+            require_permission(PermissionKey.EXECUTION_PRESET_MANAGE, fresh=True, admin_only=True)
+        )
+    ],
+)
+def create_execution_preset_model_evaluation(
+    request: Request,
+    draft_revision_id: Annotated[str, Path(pattern=r"^execpresetrev_[0-9a-f]{32}$")],
+    body: PresetModelEvaluationRequest,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+    expected_version: ExpectedVersion,
+) -> SingleResponse[CommandResult]:
+    del authentication
+
+    def execute() -> CommandResult:
+        actor = request.state.request_context.actor()
+        submission_key = request.app.state.services.idempotency.submission_key(
+            operator_id=actor.actor_id,
+            endpoint_key="execution_preset_model_evaluation_create",
+            raw_key=idempotency_key,
+        )
+        value = request.app.state.services.preset_models.enqueue(
+            draft_revision_id=draft_revision_id,
+            body=body,
+            actor=actor,
+            expected_version=expected_version,
+            idempotency_key=submission_key,
+        )
+        return CommandResult(
+            command_id=value.validation_id,
+            resource_type="execution_preset_validation",
+            resource_id=value.validation_id,
+            status="ACCEPTED",
+            resource_version=expected_version,
+            status_url=f"/api/v1/execution-preset-validations/{value.validation_id}",
+        )
+
+    return one(
+        request,
+        run_command(
+            request,
+            raw_key=idempotency_key,
+            body={**body.model_dump(mode="json"), "expected_version": expected_version},
+            resource_type="execution_preset_validation",
+            callback=execute,
+            response_status=202,
+        ),
+    )
+
+
+@router.get(
+    "/execution-preset-validations/{validation_id}",
+    operation_id="execution_preset_model_validation_get",
+    response_model=SingleResponse[PresetModelValidationView],
+    dependencies=[
+        Depends(
+            require_permission(PermissionKey.EXECUTION_PRESET_READ, fresh=True, admin_only=True)
+        )
+    ],
+)
+def execution_preset_model_validation(
+    request: Request,
+    validation_id: Annotated[str, Path(pattern=r"^job_[0-9a-f]{32}$")],
+) -> SingleResponse[PresetModelValidationView]:
+    return one(request, request.app.state.services.preset_models.status(validation_id))
 
 
 @router.get(

@@ -172,7 +172,7 @@ def test_non_actionable_identifiers_are_hidden_without_removing_exact_id_paths()
 
 def test_execution_preset_mutation_is_guided_and_separately_reviewed() -> None:
     assert '<details id="advanced-preset-policy"' in HTML
-    assert "고급 실행 정책" in HTML
+    assert "출제·검토 모델 설정" in HTML
     assert 'id="preset-base-select"' in HTML
     assert 'id="preset-review-panel"' in HTML
     assert 'id="preset-review-confirm"' in HTML
@@ -180,9 +180,12 @@ def test_execution_preset_mutation_is_guided_and_separately_reviewed() -> None:
     assert 'id="preset-release-confirm"' in HTML
     assert 'id="preset-draft-json"' not in HTML
     assert 'JSON.parse($("#preset-draft-json")' not in JAVASCRIPT
-    assert 'actionButton("사용 가능 전환 검토"' in JAVASCRIPT
-    assert "state.reviewedPresetDraft" in JAVASCRIPT
-    assert "state.presetReleaseCandidate" in JAVASCRIPT
+    assert 'actionButton("초안 확인·적용"' in JAVASCRIPT
+    assert "createExecutionPresetEditor" in JAVASCRIPT
+    controller = (STATIC / "execution-preset-controller.js").read_text(encoding="utf-8")
+    assert "presetValidationSucceeded(validation, target)" in controller
+    assert 'id="preset-validation-submit"' in HTML
+    assert 'id="preset-validation-refresh"' in HTML
 
 
 def test_execution_settings_have_a_separate_admin_view() -> None:

@@ -39,6 +39,21 @@ def test_disposable_runtime_role_allows_dml_and_denies_schema_changes() -> None:
                     (f"app.{table_name}", privilege),
                 )
                 assert cursor.fetchone() == (True,)
+        for table_name, privilege in (
+            ("execution_preset_validations", "UPDATE"),
+            ("execution_preset_validations", "DELETE"),
+            ("execution_preset_validations", "TRUNCATE"),
+            ("jobs", "INSERT"),
+            ("protocol_versions", "INSERT"),
+            ("execution_preset_evaluations", "INSERT"),
+            ("artifacts", "INSERT"),
+            ("artifact_revisions", "INSERT"),
+        ):
+            cursor.execute(
+                "SELECT has_table_privilege(current_user, %s, %s)",
+                (f"app.{table_name}", privilege),
+            )
+            assert cursor.fetchone() == (False,)
         cursor.execute("SELECT workflow_id FROM app.workflow_instances WHERE false FOR UPDATE")
         cursor.execute("SELECT annotation_id FROM app.document_review_pdf_annotations WHERE false")
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
@@ -110,6 +125,8 @@ def test_disposable_runtime_role_allows_dml_and_denies_schema_changes() -> None:
             "UPDATE app.workflow_commands SET payload = payload WHERE false",
             "UPDATE app.workflow_events SET payload = payload WHERE false",
             "UPDATE app.workflow_step_runs SET platform_job_id = platform_job_id WHERE false",
+            "UPDATE app.execution_preset_validations SET state = state WHERE false",
+            "DELETE FROM app.execution_preset_validations WHERE false",
         ):
             with pytest.raises(psycopg.errors.InsufficientPrivilege):
                 cursor.execute(statement)

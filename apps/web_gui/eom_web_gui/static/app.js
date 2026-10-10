@@ -6,12 +6,7 @@ import {
   deepestCurriculumUnitKey,
   reconcileCurriculumSelection,
 } from "./curriculum-selector.js";
-import {
-  candidateFromOptionValue,
-  candidateOptionValue,
-  guidedPresetBases,
-  reviewedPresetDraft,
-} from "./execution-preset-editor.js";
+import {createExecutionPresetEditor} from "./execution-preset-controller.js";
 import {
   hwpxTargetFromAdminRevision,
   hwpxTargetFromBuild,
@@ -83,10 +78,7 @@ const state = {
   codexAccountPollTimer: null,
   codexAccountRequestSequence: 0,
   executionPresets: [],
-  presetEditorBases: [],
-  presetDraftBase: null,
-  reviewedPresetDraft: null,
-  presetReleaseCandidate: null,
+  adminSettingsRequestSequence: 0,
   knowledgeAnalysisBatches: [],
   knowledgeQualityReport: null,
   analysisBatchPollTimer: null,
@@ -144,6 +136,10 @@ const generalChat = createGeneralChat({
   errorMessage: (error) => error instanceof StudioApiError
     ? error.message : errorMessage(error?.code || "APPLICATION_API_REQUEST_FAILED"),
 });
+const presetEditor = createExecutionPresetEditor({
+  document, api, isAdmin: hasAdminRole, refresh: loadAdminSettings,
+  showMessage, addDetail: addControlDetail,
+});
 const UI_MODE_BY_VIEW = Object.freeze({
   chat: "human",
   workflow: "engine",
@@ -179,6 +175,8 @@ async function api(path, options = {}) {
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
   if (response.status === 401) {
+    state.adminSettingsRequestSequence += 1;
+    presetEditor.reset();
     window.location.replace("/studio/login");
     throw new StudioApiError("AUTH_REAUTHENTICATION_REQUIRED");
   }
@@ -383,6 +381,7 @@ function showView(name, {history = true, replace = false, route = null} = {}) {
   }
   if (name === "control" && hasAdminRole()) loadCodexControlPlane();
   if (name === "admin-settings" && hasAdminRole()) loadAdminSettings();
+  else presetEditor.stopPolling();
   if (name === "account") renderOwnAccount();
   if (name === "learning" && hasAdminRole()) loadAssessmentLearning();
   if (name === "support") loadCustomerSupportCases();
@@ -2634,16 +2633,7 @@ function hasAdminRole() {
 function installControlPlane() {
   $("#control-refresh").addEventListener("click", loadCodexControlPlane);
   $("#admin-settings-refresh").addEventListener("click", loadAdminSettings);
-  $("#preset-base-select").addEventListener("change", loadPresetEditorBase);
-  $("#preset-guided-form").addEventListener("input", invalidatePresetDraftReview);
-  $("#preset-guided-form").addEventListener("change", invalidatePresetDraftReview);
-  $("#preset-review-open").addEventListener("click", openPresetDraftReview);
-  $("#preset-review-confirm").addEventListener("change", syncPresetReviewActions);
-  $("#preset-review-cancel").addEventListener("click", clearPresetDraftReview);
-  $("#preset-draft-submit").addEventListener("click", createPresetDraft);
-  $("#preset-release-confirm").addEventListener("change", syncPresetReviewActions);
-  $("#preset-release-cancel").addEventListener("click", clearPresetReleaseReview);
-  $("#preset-release-submit").addEventListener("click", releaseReviewedPreset);
+  presetEditor.install();
   $("#codex-reauth-form").addEventListener("submit", startCodexReauthentication);
   $("#codex-reauth-close").addEventListener("click", closeCodexReauthentication);
   $("#codex-reauth-progress-close").addEventListener("click", closeCodexReauthentication);
@@ -2918,16 +2908,22 @@ async function loadCodexControlPlane() {
 
 async function loadAdminSettings() {
   if (!hasAdminRole() || !$('[data-view="admin-settings"].active')) return;
+  const requestSequence = ++state.adminSettingsRequestSequence;
+  const navigationVersion = state.navigationVersion;
   try {
     const [presets] = await Promise.all([
       api("/admin/execution-presets"),
       loadOperatorAccounts(),
     ]);
+    if (requestSequence !== state.adminSettingsRequestSequence
+      || navigationVersion !== state.navigationVersion || !hasAdminRole()) return;
     state.executionPresets = presets;
     renderExecutionPresets(presets);
-    renderPresetEditorChoices(presets);
+    presetEditor.setPresets(presets);
     showMessage($("#execution-preset-message"), `${presets.length}개 실행 설정 · 고정 버전`, "success");
   } catch (failure) {
+    if (requestSequence !== state.adminSettingsRequestSequence
+      || navigationVersion !== state.navigationVersion || !hasAdminRole()) return;
     showMessage($("#execution-preset-message"), `실행 설정 조회 실패: ${failure.message}`, "error");
   }
 }
@@ -3330,218 +3326,6 @@ function renderCodexUsage(usage) {
   return section;
 }
 
-function presetCapabilityOptions(draft, role) {
-  const options = new Map();
-  const add = (candidate) => {
-    try {
-      const value = candidateOptionValue(candidate.model, candidate.reasoning_effort);
-      options.set(value, {...candidate, value});
-    } catch (_) {
-      // Malformed observations never become selectable execution policy.
-    }
-  };
-  for (const source of [draft, ...state.presetEditorBases.map((base) => base.draft)]) {
-    for (const policy of source.role_policies) {
-      if (policy.role !== role) continue;
-      for (const candidate of policy.model_candidates) add(candidate);
-    }
-  }
-  return [...options.values()].sort((left, right) => (
-    `${left.model}/${left.reasoning_effort}`.localeCompare(`${right.model}/${right.reasoning_effort}`)
-  ));
-}
-
-function resetPresetEditor() {
-  state.presetDraftBase = null;
-  state.reviewedPresetDraft = null;
-  $("#preset-base-revision").value = "-";
-  $("#preset-display-name").value = "";
-  $("#preset-description").value = "";
-  $("#preset-capacity-revision").value = "-";
-  $("#preset-protocols").value = "-";
-  $("#preset-display-name").disabled = true;
-  $("#preset-description").disabled = true;
-  $("#preset-general-knowledge").disabled = true;
-  $("#preset-review-open").disabled = true;
-  const empty = document.createElement("p");
-  empty.className = "empty-state";
-  empty.textContent = "기준 실행 설정을 선택하면 역할별 설정이 표시됩니다.";
-  $("#preset-role-editors").replaceChildren(empty);
-  clearPresetDraftReview();
-}
-
-function renderPresetEditorChoices(presets) {
-  const selected = $("#preset-base-select").value;
-  state.presetEditorBases = guidedPresetBases(presets);
-  const selector = $("#preset-base-select");
-  selector.replaceChildren();
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = state.presetEditorBases.length
-    ? "사용 중인 실행 설정 선택"
-    : "화면에서 편집 가능한 실행 설정 없음";
-  selector.append(placeholder);
-  for (const base of state.presetEditorBases) {
-    const option = document.createElement("option");
-    option.value = base.preset_revision_id;
-    option.textContent = `${base.draft.display_name} · 버전 ${base.revision_number}`;
-    selector.append(option);
-  }
-  selector.disabled = state.presetEditorBases.length === 0;
-  if (selected && state.presetEditorBases.some((base) => base.preset_revision_id === selected)) {
-    selector.value = selected;
-    return;
-  }
-  resetPresetEditor();
-}
-
-function loadPresetEditorBase() {
-  const revisionId = $("#preset-base-select").value;
-  const base = state.presetEditorBases.find((item) => item.preset_revision_id === revisionId);
-  resetPresetEditor();
-  if (!base) return;
-  state.presetDraftBase = base;
-  $("#preset-base-revision").value = base.preset_revision_id;
-  $("#preset-display-name").value = base.draft.display_name;
-  $("#preset-description").value = base.draft.description;
-  $("#preset-general-knowledge").value = base.draft.general_knowledge_policy;
-  $("#preset-capacity-revision").value = base.draft.capacity_policy_revision_id;
-  $("#preset-protocols").value = base.draft.compatible_workflow_protocols.join(", ");
-  $("#preset-display-name").disabled = false;
-  $("#preset-description").disabled = false;
-  $("#preset-general-knowledge").disabled = false;
-  $("#preset-review-open").disabled = false;
-  renderPresetRoleEditors(base.draft);
-  showMessage($("#preset-draft-message"), "기준 버전의 고정 지시 자료와 격리 정책을 유지한 채 모델·추론·제한 시간을 조정할 수 있습니다.");
-}
-
-function renderPresetRoleEditors(draft) {
-  const root = $("#preset-role-editors");
-  root.replaceChildren();
-  draft.role_policies.forEach((policy, roleIndex) => {
-    const capabilities = presetCapabilityOptions(draft, policy.role);
-    const card = document.createElement("section");
-    card.className = "policy-role-card";
-    const header = document.createElement("header");
-    const heading = document.createElement("h3");
-    heading.textContent = presetRoleLabel(policy.role);
-    const pool = document.createElement("span");
-    pool.textContent = termLabel("worker_slot", "작업 슬롯");
-    header.append(heading, pool);
-
-    const fields = document.createElement("div");
-    fields.className = "policy-role-fields";
-    const candidates = document.createElement("div");
-    candidates.className = "policy-candidate-list";
-    policy.model_candidates.forEach((candidate, candidateIndex) => {
-      const label = document.createElement("label");
-      label.textContent = `모델·추론 후보 ${candidateIndex + 1}`;
-      const select = document.createElement("select");
-      select.dataset.roleIndex = String(roleIndex);
-      select.dataset.candidateIndex = String(candidateIndex);
-      select.dataset.presetCandidate = "true";
-      const currentValue = candidateOptionValue(candidate.model, candidate.reasoning_effort);
-      for (const capability of capabilities) {
-        const option = document.createElement("option");
-        option.value = capability.value;
-        option.textContent = `${capability.model} · ${capability.reasoning_effort}`;
-        option.selected = capability.value === currentValue;
-        select.append(option);
-      }
-      label.append(select);
-      candidates.append(label);
-    });
-    const timeoutLabel = document.createElement("label");
-    timeoutLabel.textContent = "제한 시간(초)";
-    const timeout = document.createElement("input");
-    timeout.type = "number";
-    timeout.min = "30";
-    timeout.max = "7200";
-    timeout.step = "1";
-    timeout.value = String(policy.timeout_seconds);
-    timeout.dataset.roleIndex = String(roleIndex);
-    timeout.dataset.presetTimeout = "true";
-    timeoutLabel.append(timeout);
-    fields.append(candidates, timeoutLabel);
-
-    const pointers = document.createElement("details");
-    pointers.className = "policy-pointer-details";
-    const pointerSummary = document.createElement("summary");
-    pointerSummary.textContent = "고정 지시 자료·격리 정보";
-    const pointerList = document.createElement("dl");
-    pointerList.className = "summary-grid";
-    addControlDetail(pointerList, "작업 지시 자료", policy.instruction_bundle.bundle_revision_id);
-    addControlDetail(pointerList, "참고 자료", policy.reference_bundle?.bundle_revision_id || "없음");
-    addControlDetail(pointerList, "지시 자료 검증값", policy.instruction_bundle.manifest_sha256);
-    addControlDetail(pointerList, "격리 정책", `${policy.sandbox} · 네트워크 ${policy.network}`);
-    pointers.append(pointerSummary, pointerList);
-    card.append(header, fields, pointers);
-    root.append(card);
-  });
-}
-
-function collectPresetEditorEdits() {
-  const base = state.presetDraftBase;
-  if (!base) throw new Error("PRESET_BASE_NOT_SELECTED");
-  return {
-    display_name: $("#preset-display-name").value,
-    description: $("#preset-description").value,
-    general_knowledge_policy: $("#preset-general-knowledge").value,
-    role_policies: base.draft.role_policies.map((policy, roleIndex) => ({
-      role: policy.role,
-      model_candidates: policy.model_candidates.map((_, candidateIndex) => {
-        const selector = `[data-preset-candidate="true"][data-role-index="${roleIndex}"][data-candidate-index="${candidateIndex}"]`;
-        return candidateFromOptionValue($(selector).value);
-      }),
-      timeout_seconds: Number.parseInt($(`[data-preset-timeout="true"][data-role-index="${roleIndex}"]`).value, 10),
-    })),
-  };
-}
-
-function openPresetDraftReview() {
-  try {
-    const base = state.presetDraftBase;
-    if (!base) throw new Error("PRESET_BASE_NOT_SELECTED");
-    state.reviewedPresetDraft = reviewedPresetDraft(base.draft, collectPresetEditorEdits());
-    const summary = $("#preset-review-summary");
-    summary.replaceChildren();
-    addControlDetail(summary, "실행 설정", state.reviewedPresetDraft.display_name);
-    addControlDetail(summary, "기준 버전", base.preset_revision_id);
-    addControlDetail(summary, "표시 이름", state.reviewedPresetDraft.display_name);
-    addControlDetail(summary, "일반 지식", state.reviewedPresetDraft.general_knowledge_policy);
-    addControlDetail(summary, "호환 규약", state.reviewedPresetDraft.compatible_workflow_protocols.join(", "));
-    addControlDetail(summary, "역할 정책", state.reviewedPresetDraft.role_policies.map((policy) => (
-      `${presetRoleLabel(policy.role)}: ${policy.model_candidates.map((candidate) => `${candidate.model}/${candidate.reasoning_effort}`).join(" → ")} · ${policy.timeout_seconds}초`
-    )).join(" | "));
-    $("#preset-review-confirm").checked = false;
-    $("#preset-review-panel").hidden = false;
-    syncPresetReviewActions();
-    showMessage($("#preset-draft-message"), "설정 초안 생성 전 요약을 확인하세요.");
-  } catch (failure) {
-    const code = failure instanceof Error ? failure.message : "PRESET_DRAFT_INVALID";
-    showMessage($("#preset-draft-message"), `변경사항 검토 실패: ${code}`, "error");
-  }
-}
-
-function invalidatePresetDraftReview() {
-  if (!state.reviewedPresetDraft) return;
-  clearPresetDraftReview();
-  showMessage($("#preset-draft-message"), "입력이 변경되어 기존 검토가 취소되었습니다. 변경사항을 다시 검토하세요.");
-}
-
-function clearPresetDraftReview() {
-  state.reviewedPresetDraft = null;
-  $("#preset-review-confirm").checked = false;
-  $("#preset-review-panel").hidden = true;
-  $("#preset-review-summary").replaceChildren();
-  syncPresetReviewActions();
-}
-
-function syncPresetReviewActions() {
-  $("#preset-draft-submit").disabled = !state.reviewedPresetDraft || !$("#preset-review-confirm").checked;
-  $("#preset-release-submit").disabled = !state.presetReleaseCandidate || !$("#preset-release-confirm").checked;
-}
-
 function renderCodexAccounts(accounts) {
   const root = $("#codex-account-list");
   const openBindings = new Set(
@@ -3580,7 +3364,15 @@ function renderCodexAccounts(accounts) {
     addControlDetail(facts, "계정 상태", statePresentation("codex_account", account.state).label);
     addControlDetail(facts, "계정 연결 ID", account.binding_id);
     addControlDetail(facts, "Codex 버전", account.codex_cli_version);
-    addControlDetail(facts, "사용 가능 모델", capabilities);
+    addControlDetail(facts, "확인된 실행 조합", capabilities);
+    if (account.model_catalog) {
+      const catalog = account.model_catalog;
+      const visibleModels = catalog.models.filter((model) => !model.hidden);
+      addControlDetail(facts, "발견된 모델 · 참고용", catalog.state === "OBSERVED"
+        ? visibleModels.map((model) => model.display_name).join(", ") || "없음"
+        : "목록 확인 불가");
+      addControlDetail(facts, "모델 목록 확인 시각", formatSeoulDateTime(catalog.observed_at));
+    }
     addControlDetail(facts, "진행 중인 작업", account.active_lease_count);
     addControlDetail(facts, "최근 성공 작업", account.last_successful_job_id);
     addControlDetail(facts, "확인 시각", account.observed_at);
@@ -3840,7 +3632,7 @@ function renderExecutionPresets(presets) {
     }));
     const actions = document.createElement("div");
     actions.className = "form-actions";
-    if (latest && latest.state === "DRAFT") actions.append(actionButton("사용 가능 전환 검토", () => openPresetReleaseReview(preset, latest)));
+    if (latest && latest.state === "DRAFT") actions.append(actionButton("초안 확인·적용", () => presetEditor.inspectDraft(preset, latest)));
     if (current && preset.state === "ACTIVE") actions.append(actionButton("사용 중단", () => deprecatePreset(preset.preset_id, current.revision_number), true));
     card.append(actions);
     root.append(card);
@@ -3859,78 +3651,6 @@ async function deprecatePreset(identifier, resourceVersion) {
     await loadAdminSettings();
   } catch (failure) {
     showMessage($("#execution-preset-message"), `사용 중단 실패: ${failure.message}`, "error");
-  }
-}
-
-async function createPresetDraft() {
-  const value = state.reviewedPresetDraft;
-  if (!value || !$("#preset-review-confirm").checked) {
-    return showMessage($("#preset-draft-message"), "검토 확인 후 설정 초안을 생성하세요.", "error");
-  }
-  try {
-    await api("/admin/execution-presets", {
-      method: "POST",
-      mutation: true,
-      body: {...value, idempotency_key: `studio:preset:draft:${crypto.randomUUID()}`},
-    });
-    showMessage($("#preset-draft-message"), "새 실행 설정 초안을 생성했습니다.", "success");
-    clearPresetDraftReview();
-    await loadAdminSettings();
-  } catch (failure) {
-    showMessage($("#preset-draft-message"), `설정 초안 생성 실패: ${failure.message}`, "error");
-  }
-}
-
-function openPresetReleaseReview(preset, revision) {
-  clearPresetDraftReview();
-  state.presetReleaseCandidate = {
-    preset_id: preset.preset_id,
-    preset_key: preset.preset_key,
-    preset_revision_id: revision.preset_revision_id,
-    revision_number: revision.revision_number,
-  };
-  const summary = $("#preset-release-summary");
-  summary.replaceChildren();
-  addControlDetail(summary, "실행 설정", revision.display_name || preset.preset_key);
-  addControlDetail(summary, "설정 초안 버전", revision.preset_revision_id);
-  addControlDetail(summary, "정책 내용 검증값", revision.content_sha256);
-  addControlDetail(summary, "역할 정책", revision.role_policies.map((policy) => (
-    `${presetRoleLabel(policy.role)}: ${policy.model_candidates.map((candidate) => `${candidate.model}/${candidate.reasoning_effort}`).join(" → ")} · ${policy.timeout_seconds}초`
-  )).join(" | "));
-  $("#preset-release-confirm").checked = false;
-  $("#preset-release-panel").hidden = false;
-  $("#advanced-preset-policy").open = true;
-  syncPresetReviewActions();
-  $("#preset-release-panel").scrollIntoView({block: "nearest"});
-}
-
-function clearPresetReleaseReview() {
-  state.presetReleaseCandidate = null;
-  $("#preset-release-confirm").checked = false;
-  $("#preset-release-panel").hidden = true;
-  $("#preset-release-summary").replaceChildren();
-  syncPresetReviewActions();
-}
-
-async function releaseReviewedPreset() {
-  const candidate = state.presetReleaseCandidate;
-  if (!candidate || !$("#preset-release-confirm").checked) {
-    return showMessage($("#execution-preset-message"), "사용 가능 전환 검토 확인이 필요합니다.", "error");
-  }
-  try {
-    await api(`/admin/execution-preset-revisions/${encodeURIComponent(candidate.preset_revision_id)}/releases`, {
-      method: "POST",
-      mutation: true,
-      body: {
-        resource_version: candidate.revision_number,
-        idempotency_key: `studio:preset:release:${candidate.preset_revision_id}:${crypto.randomUUID()}`,
-      },
-    });
-    showMessage($("#execution-preset-message"), "검토한 실행 설정을 사용할 수 있습니다.", "success");
-    clearPresetReleaseReview();
-    await loadAdminSettings();
-  } catch (failure) {
-    showMessage($("#execution-preset-message"), `사용 가능 전환 실패: ${failure.message}`, "error");
   }
 }
 
@@ -5759,6 +5479,8 @@ function installPdfDocumentReview() {
 }
 
 async function logout() {
+  state.adminSettingsRequestSequence += 1;
+  presetEditor.reset();
   generalChat.setOwner(null);
   try { await api("/logout", {method: "POST", mutation: true, body: {}}); } finally { window.location.replace("/studio/login"); }
 }

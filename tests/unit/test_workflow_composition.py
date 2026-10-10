@@ -10,6 +10,7 @@ import pytest
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
 from eom_orchestrator.orchestrator import RETRYABLE_CONTROL_ADMISSION_ERRORS
+from eom_orchestrator.preset_model_validation_processor import PresetModelValidationProcessor
 from eom_orchestrator.settings import Settings, WorkerConfigSource
 from eom_workflow_runner import cli
 from eom_workflow_runner.actor_authorization import (
@@ -91,11 +92,14 @@ def test_production_composition_supplies_catalog_adapter(tmp_path: Path) -> None
     )
     assert runtime.runner.executor.orchestrator.settings == _platform_settings(tmp_path)
     assert runtime.runner.capacity_reconciler is runtime.runner.executor.orchestrator.capacity
+    assert isinstance(runtime.runner.preset_validator, PresetModelValidationProcessor)
+    assert runtime.runner.preset_validator.settings == runtime.platform_settings
     engine.dispose()
 
 
+@pytest.mark.parametrize("with_validation", [False, True])
 def test_serve_reconciles_capacity_before_polling(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, with_validation: bool
 ) -> None:
     engine = create_engine("sqlite://")
     observed: list[str] = []
@@ -113,6 +117,10 @@ def test_serve_reconciles_capacity_before_polling(
         def process_once(self) -> None:
             observed.append("control")
 
+    class Validator:
+        def process_once(self) -> None:
+            observed.append("validation")
+
     runner = WorkflowRunner(
         engine,
         _workflow_settings(tmp_path),
@@ -121,6 +129,7 @@ def test_serve_reconciles_capacity_before_polling(
         readiness=cast(WorkflowExecutionReadiness, object()),
         available_roles=frozenset({"authoring"}),
         control_processor=Processor(),
+        preset_validator=Validator() if with_validation else None,
         capacity_reconciler=Reconciler(),
     )
 
@@ -137,7 +146,14 @@ def test_serve_reconciles_capacity_before_polling(
     with pytest.raises(RuntimeError, match="stop-loop"):
         runner.serve()
 
-    assert observed == ["capacity", "maintenance", "control", "workflow", "sleep"]
+    assert observed == [
+        "capacity",
+        "maintenance",
+        "control",
+        *(["validation"] if with_validation else []),
+        "workflow",
+        "sleep",
+    ]
     engine.dispose()
 
 
@@ -160,6 +176,10 @@ def test_maintenance_service_never_claims_commands(
         def process_once(self) -> None:
             raise AssertionError("maintenance service claimed a control command")
 
+    class Validator:
+        def process_once(self) -> None:
+            raise AssertionError("maintenance service claimed a preset validation")
+
     runner = WorkflowRunner(
         engine,
         _workflow_settings(tmp_path),
@@ -168,6 +188,7 @@ def test_maintenance_service_never_claims_commands(
         readiness=cast(WorkflowExecutionReadiness, object()),
         available_roles=frozenset({"authoring"}),
         control_processor=Processor(),
+        preset_validator=Validator(),
         capacity_reconciler=Reconciler(),
     )
 

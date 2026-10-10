@@ -1,0 +1,211 @@
+{
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "else": {
+        "properties": {
+          "completed_at": {
+            "type": "null"
+          },
+          "cases_total": {
+            "const": 0
+          },
+          "cases_passed": {
+            "const": 0
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "SUCCEEDED",
+              "FAILED"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "completed_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "completed_at"
+        ]
+      }
+    },
+    {
+      "else": {
+        "properties": {
+          "evaluation_id": {
+            "type": "null"
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "status": {
+            "const": "SUCCEEDED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evaluation_id": {
+            "type": "string"
+          },
+          "error_code": {
+            "type": "null"
+          },
+          "cases_total": {
+            "minimum": 1
+          },
+          "cases_passed": {
+            "minimum": 1
+          }
+        },
+        "required": [
+          "evaluation_id",
+          "cases_total",
+          "cases_passed"
+        ]
+      }
+    },
+    {
+      "else": {
+        "properties": {
+          "error_code": {
+            "type": "null"
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "status": {
+            "const": "FAILED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "error_code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error_code"
+        ]
+      }
+    }
+  ],
+  "properties": {
+    "validation_id": {
+      "pattern": "^job_[0-9a-f]{32}$",
+      "title": "Validation Id",
+      "type": "string"
+    },
+    "preset_revision_id": {
+      "pattern": "^execpresetrev_[0-9a-f]{32}$",
+      "title": "Preset Revision Id",
+      "type": "string"
+    },
+    "base_revision_id": {
+      "pattern": "^execpresetrev_[0-9a-f]{32}$",
+      "title": "Base Revision Id",
+      "type": "string"
+    },
+    "preset_policy_sha256": {
+      "pattern": "^(?:sha256:)?[0-9a-f]{64}$",
+      "title": "Preset Policy Sha256",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "QUEUED",
+        "RUNNING",
+        "SUCCEEDED",
+        "FAILED"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "scope": {
+      "const": "NON_LIVE",
+      "default": "NON_LIVE",
+      "title": "Scope",
+      "type": "string"
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Z][A-Z0-9_]{0,95}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error Code"
+    },
+    "evaluation_id": {
+      "anyOf": [
+        {
+          "pattern": "^preseteval_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Evaluation Id"
+    },
+    "quality_evaluated": {
+      "const": false,
+      "default": false,
+      "title": "Quality Evaluated",
+      "type": "boolean"
+    },
+    "cases_total": {
+      "default": 0,
+      "maximum": 10000,
+      "minimum": 0,
+      "title": "Cases Total",
+      "type": "integer"
+    },
+    "cases_passed": {
+      "default": 0,
+      "maximum": 10000,
+      "minimum": 0,
+      "title": "Cases Passed",
+      "type": "integer"
+    },
+    "completed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Completed At"
+    }
+  },
+  "required": [
+    "validation_id",
+    "preset_revision_id",
+    "base_revision_id",
+    "preset_policy_sha256",
+    "status"
+  ],
+  "title": "PresetModelValidationView",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/api/v1/preset-model-validation-view-v1.schema.json"
+}

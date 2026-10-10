@@ -8,6 +8,8 @@ import eom_catalog_service.models  # noqa: F401
 import eom_hwpx_manager.models  # noqa: F401
 import eom_workflow_runner.models  # noqa: F401
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from eom_catalog_service import (  # noqa: F401
     item_origin_models,
     knowledge_graph_models,
@@ -28,6 +30,11 @@ from eom_orchestrator.control_service import (
 from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from eom_orchestrator.models import Base
 from sqlalchemy import LargeBinary
+
+
+def test_declared_current_head_matches_the_single_migration_chain() -> None:
+    scripts = ScriptDirectory.from_config(Config("alembic.ini"))
+    assert scripts.get_heads() == [CURRENT_MIGRATION_REVISION]
 
 
 def test_control_document_hash_omits_only_declared_digest() -> None:
@@ -78,6 +85,7 @@ def test_control_tables_have_no_binary_or_secret_storage_columns() -> None:
         "execution_preset_revisions",
         "execution_preset_role_policies",
         "execution_preset_evaluations",
+        "execution_preset_validations",
         "resolved_execution_plans",
         "resolved_execution_plan_steps",
         "codex_auth_bindings",
@@ -135,7 +143,6 @@ def test_mvp_control_plane_migration_is_additive_and_fail_closed() -> None:
         encoding="utf-8"
     )
     assert 'down_revision: str | Sequence[str] | None = "20260823_0009"' in source
-    assert CURRENT_MIGRATION_REVISION == "20261003_0046"
     assert "execution_preset_evaluations" in source
     assert "codex_control_commands" in source
     assert "BEFORE UPDATE OR DELETE ON codex_control_commands" in source
@@ -158,7 +165,6 @@ def test_multimodal_batch_migration_is_additive_and_keeps_legacy_pointers() -> N
         encoding="utf-8"
     )
     assert 'down_revision: str | None = "20260826_0018"' in source
-    assert CURRENT_MIGRATION_REVISION == "20261003_0046"
     assert "textbook-analysis-bundle-manifest/1.0" in source
     assert "textbook-analysis-bundle-manifest/2.0" in source
     assert "drop_table" not in source
@@ -170,7 +176,6 @@ def test_codex_device_reauthentication_migration_is_additive_and_credential_free
         "migrations/versions/20260827_0020_codex_gui_device_reauthentication.py"
     ).read_text(encoding="utf-8")
     assert 'down_revision: str | None = "20260827_0019"' in source
-    assert CURRENT_MIGRATION_REVISION == "20261003_0046"
     assert "codex_auth_enrollments" in source
     assert "codex_auth_assignment_revisions" in source
     assert "codex_auth_assignment_revisions_immutable" in source
@@ -188,7 +193,6 @@ def test_knowledge_analysis_continue_collect_migration_preserves_legacy_batches(
         "migrations/versions/20260828_0021_knowledge_analysis_continue_collect.py"
     ).read_text(encoding="utf-8")
     assert 'down_revision: str | None = "20260827_0020"' in source
-    assert CURRENT_MIGRATION_REVISION == "20261003_0046"
     assert 'server_default="STOP_ON_FIRST_FAILURE"' in source
     assert "CONTINUE_AND_COLLECT" in source
     assert "DELETE FROM" not in source
@@ -200,7 +204,6 @@ def test_bounded_parallel_capacity_migration_preserves_serial_history() -> None:
         "migrations/versions/20260828_0022_bounded_parallel_knowledge_capacity.py"
     ).read_text(encoding="utf-8")
     assert 'down_revision: str | None = "20260828_0021"' in source
-    assert CURRENT_MIGRATION_REVISION == "20261003_0046"
     assert 'server_default="SERIAL"' in source
     assert 'server_default="1"' in source
     assert "max_active_knowledge_analysis BETWEEN 1 AND 2" in source
@@ -215,7 +218,6 @@ def test_graph_source_pointer_migration_pins_exact_analysis_runs() -> None:
         encoding="utf-8"
     )
     assert 'down_revision: str | None = "20260828_0022"' in source
-    assert CURRENT_MIGRATION_REVISION == "20261003_0046"
     assert "analysis_run_id" in source
     assert "fk_knowledge_node_source_analysis" in source
     assert "fk_knowledge_edge_source_analysis" in source
@@ -536,7 +538,6 @@ def test_additive_solution_analysis_has_one_accepted_successor_per_base() -> Non
         encoding="utf-8"
     )
     assert 'down_revision: str | None = "20260912_0034"' in source
-    assert CURRENT_MIGRATION_REVISION == "20261003_0046"
     assert "uq_knowledge_analysis_accepted_solution_predecessor" in source
     assert "knowledge-analysis-request/10.0" in source
     assert "DELETE FROM" not in source

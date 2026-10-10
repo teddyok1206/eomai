@@ -358,6 +358,10 @@ class CapacityReconciler(Protocol):
     def reconcile_expired(self, *, observed_at: datetime) -> tuple[object, ...]: ...
 
 
+class PresetValidationProcessor(Protocol):
+    def process_once(self) -> str | None: ...
+
+
 class PlatformRoleJobExecutor:
     def __init__(
         self,
@@ -475,6 +479,7 @@ class WorkflowRunner:
         readiness: WorkflowExecutionReadiness,
         available_roles: frozenset[str],
         control_processor: ControlCommandProcessor | None = None,
+        preset_validator: PresetValidationProcessor | None = None,
         capacity_reconciler: CapacityReconciler | None = None,
         runner_id: str | None = None,
     ) -> None:
@@ -495,6 +500,7 @@ class WorkflowRunner:
         self.readiness = readiness
         self.runner_id = runner_id or f"runner-{uuid4().hex}"
         self.control_processor = control_processor
+        self.preset_validator = preset_validator
         self.capacity_reconciler = capacity_reconciler
 
     def run_once(self, workflow_id: str | None = None) -> WorkflowCommandRecord | None:
@@ -580,11 +586,19 @@ class WorkflowRunner:
                 if self.control_processor is not None
                 else None
             )
+            validation_result = (
+                self.preset_validator.process_once() if self.preset_validator is not None else None
+            )
             try:
                 result = self.run_once()
             except WorkflowRuntimeNotReady:
                 result = None
-            if result is None and maintenance_result is None and control_result is None:
+            if (
+                result is None
+                and maintenance_result is None
+                and control_result is None
+                and validation_result is None
+            ):
                 time.sleep(self.runner_config.poll_interval_seconds)
 
     def maintain_once(self) -> object | None:

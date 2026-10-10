@@ -31,6 +31,7 @@ MIGRATION_MODULES = (
     "migrations.versions.20261007_0047_general_chat_rbac",
     "migrations.versions.20261007_0048_general_chat_history",
     "migrations.versions.20261008_0049_general_chat_dispatch",
+    "migrations.versions.20261009_0050_preset_model_validation_queue",
 )
 
 

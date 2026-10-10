@@ -6,9 +6,10 @@ import json
 import os
 import pwd
 import stat
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from eom_workflow import CodexUsageObservation, validate_control_contract
+from eom_workflow import CodexUsageObservation, CodexUsageObservationV2, validate_control_contract
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError as PydanticValidationError
 
@@ -150,13 +151,22 @@ def _read_handoff(*, slot: WorkerSlot, path: Path, missing_ok: bool) -> object |
 
 
 def _validate_observation(
-    value: object, *, slot: WorkerSlot, command_id: str, binding_id: str
+    value: object,
+    *,
+    slot: WorkerSlot,
+    command_id: str,
+    binding_id: str,
+    as_of: datetime | None = None,
 ) -> CodexUsageObservation:
     try:
         if not isinstance(value, dict):
             raise ValueError("usage handoff is not an object")
-        validate_control_contract("codex-usage-observation", value)
-        observation = CodexUsageObservation.model_validate(value)
+        if value.get("schema_version") == "codex-usage-observation/1.1":
+            validate_control_contract("codex-usage-observation-v2", value)
+            observation: CodexUsageObservation = CodexUsageObservationV2.model_validate(value)
+        else:
+            validate_control_contract("codex-usage-observation", value)
+            observation = CodexUsageObservation.model_validate(value)
     except (JsonSchemaValidationError, PydanticValidationError, ValueError) as exc:
         raise ControlPlaneError("CODEX_USAGE_INVALID", "Codex usage handoff is invalid") from exc
     if (
@@ -167,4 +177,12 @@ def _validate_observation(
         != compute_control_document_hash(observation.model_dump(mode="json"), "observation_sha256")
     ):
         raise ControlPlaneError("CODEX_USAGE_INVALID", "Codex usage identity differs")
+    if isinstance(observation, CodexUsageObservationV2):
+        observed_now = datetime.now(UTC) if as_of is None else as_of
+        if (
+            observation.model_catalog.observed_at > observed_now + timedelta(seconds=5)
+            or observation.observed_at > observed_now + timedelta(seconds=5)
+            or observation.model_catalog.valid_until <= observed_now
+        ):
+            raise ControlPlaneError("CODEX_USAGE_INVALID", "Codex native catalog is stale")
     return observation

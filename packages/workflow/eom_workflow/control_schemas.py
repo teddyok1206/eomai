@@ -29,6 +29,18 @@ class ControlSchemaResource:
 
 CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType(
     {
+        "preset-model-acceptance-cases": ControlSchemaResource(
+            "schemas/workflow/control-plane/preset-model-acceptance-cases-v1.schema.json",
+            "resources/control-plane/preset-model-acceptance-cases-v1.schema.json",
+            "1.0",
+            "sha256:7a8d939a109c403153beca585ea73751314e8e917be2935aaa9ea2fbc5b143c4",
+        ),
+        "preset-model-validation-request": ControlSchemaResource(
+            "schemas/workflow/control-plane/preset-model-validation-request-v1.schema.json",
+            "resources/control-plane/preset-model-validation-request-v1.schema.json",
+            "1.0",
+            "sha256:d2e2a78ee6fac5d9ae47a400b0bbf4f2ea615f3a3ea2a8e690e04e448cea7d54",
+        ),
         "control-plane-types": ControlSchemaResource(
             "schemas/workflow/control-plane/control-plane-types-v1.schema.json",
             "resources/control-plane/control-plane-types-v1.schema.json",
@@ -583,6 +595,18 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "resources/control-plane/codex-control-command-result-v2.schema.json",
             "1.1",
             "sha256:b85c9fea99884c35a22516e532b774d0f2d0840ed7bed37fb7e228b55b0b140f",
+        ),
+        "codex-usage-observation-v2": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-usage-observation-v2.schema.json",
+            "resources/control-plane/codex-usage-observation-v2.schema.json",
+            "1.1",
+            "sha256:b59739cbd38475abee173861c2675bd73b5e8b373d8010c4d6a0876cdd775835",
+        ),
+        "codex-control-command-result-v3": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-control-command-result-v3.schema.json",
+            "resources/control-plane/codex-control-command-result-v3.schema.json",
+            "1.2",
+            "sha256:1237bcf1d3497a3531b222b48ac1417db0249695468cd0ff0ec3aae0a0551f39",
         ),
         "codex-capability-snapshot": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-capability-snapshot-v1.schema.json",
