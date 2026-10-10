@@ -359,16 +359,55 @@ member 1,024개, index row 100,000개다. 상한 초과 시 전체 검증한 값
   실패 관측은 덮지 않는다. successor SHA-256:
   `0595863d1b26be7c1c204fad52fc0a64beab2576233c9356b20a815c9988150b`.
 
-이 source 수정의 wheel 검사·운영 설치·동일 공식 snapshot 재조회는 아직 PENDING이다.
+이 source 수정의 실제 runtime 검증은 다음 후속 관측에 기록한다. 동일 공식 snapshot
+재조회는 fresh 인증 전까지 PENDING이다.
 격리 CPU 수치/launcher closure와 새 Catalog leaf는 겹치지 않으므로 이 수정만으로 CPU
 환경을 재설치하거나 이미 승인된 no-forward probe를 반복하지 않는다.
+
+### 요청범위 source 비용 수정의 실제 compatible 설치
+
+16:50:32.991392 UTC 정상 배포 record와 실제 API UID의 installed build 조회로 다음을
+확인했다. 최초 ad3 설치·실패·인증·timeout 기록과 별개의 successor다.
+
+- installed source: `7383d1c60efcd1fdd80d0cf49e644bcc55b0c62b`.
+- installed tree: `e4858223947ac7f1fdb4871384c70a9d079080c1`.
+- migration head: `20261010_0051` 그대로; 새 migration/upgrade 없음.
+- normal install wheel directory:
+  `/tmp/eom-api-build/7383d1c60efcd1fdd80d0cf49e644bcc55b0c62b.sD8kJI/dist`.
+- installed wheel SHA-256:
+  - API contracts: `e317ba3f2bbc066158ffe4c44ff899cd46223701f5e6c1596a65055233f82b15`.
+  - Application API: `0d9a37b34097e21041217a535efbaa79c98b0adf98eaf20d16f7901a2248aec6`.
+  - Platform: `04f3113d88f01dfc522dce5a77085086e4361677165351428f86af1e76a8d5de`.
+- source archive: `sha256:25600ef02c0aa25c4c20564793282be7f4628ecef39e2a19d6e97d9b7f8c98ad`.
+- protected operator data stage: `/var/lib/eom-release-operator-stage.7383d1c6-Pt46NV`;
+  context SHA `059665712883923013e03c235f0ca2c6a97d2fbefb314763ecbe3df3c24157c2`;
+  source snapshot SHA `6d9bc6d783589b957e7f77cded0204e975cd581e943300bead6e553f6e90edde`.
+  기존 ad3 보호 libexec와 CPU runtime을 그대로 재사용하고 새 context ADMIT를 통과했다.
+- normal deployment의 6개 callback(PDF runtime, migration verify, API role, Catalog role,
+  HWPX role, API isolation) 모두 실제 PASS; deployment admission READY.
+- 별도 Chat release pin은 기존 보호 adapter의 atomic predecessor update로 갱신했다.
+  auth/model/secret/unit bytes는 변경하지 않았다. 16:51:42 UTC 8개 서비스 모두
+  active/running/enabled/positive MainPID, API live/ready smoke PASS.
+- 최초 Pt46NV stage wheel과 normal sD8kJI wheel은 raw SHA가 별개다. 두 빌드 RECORD PASS;
+  Platform 1,362개·API contracts 99개 payload 전부 동일, API 104개 중 build timestamp와
+  해당 RECORD만 달랐다. 최초 stage identity를 설치 identity로 덮지 않는다.
+- source resolver를 사용하는 Chat/pair-authority 추가 회귀 **76 PASS**. 앞선 suite와
+  합산한 고유 test 수나 실제 사용자 기능/비교 품질 PASS로 해석하지 않는다.
+- snapshot 진단 successor를 새 candidate libexec에 보호 복사했다. 원래 콘솔·old diagnostic
+  보존; private copy `/var/lib/eom-inference-console-snapshot-diag-ay17euhl`.
+- actual owner UID metadata 검사에서 같은 `owner-input-s9vek0xd`의 4개 output receipt는
+  모두 ABSENT였다. 이전 timeout을 우회하는 새 CPU execution identity는 만들지 않았다.
+
+원래 인증 session은 timeout으로 콘솔이 terminal 종료되면서 소멸했다. fresh guiadmin TTY
+로그인 이후 같은 private 입력 경계에서 공식 snapshot 재조회를 진행한다. 아직 snapshot
+latency 개선, 고정 corpus embedding, pair worker, human transfer quality는 확인하지 않았다.
 
 이것은 임시 operator presentation이며 새 worker protocol, auth grant, HTTP status 관측이나
 production search 활성화가 아니다. 원인 분류 이후 임시 진단 호출부를 회수하고 검증 기록은
 보존한다. 실제 로그인·corpus/모델 실행 PASS를 대신하지 않는다.
 
 - 격리 no-forward probe PASS: **PASS_AFTER_ONE_APPROVED_RETRY / FIRST_FAILURE_PRESERVED**.
-- compatible shared release / migration 0051 / 일곱 callback / service 복원: **PASS**.
+- compatible shared release: **7383d1c6 PASS**; migration 0051 unchanged, service 복원 PASS.
 - 실제 `guiadmin` 인증·metadata·original corpus read: **PASS**; profile inventory 별도.
 - 명시적 비교 owner PREPARE/RELEASE 및 초기 protocol/control 발행: **PENDING**.
 - 고정 4-query, top-k 8, batch 4, threads 4 CPU 실험: **NOT_RUN**.

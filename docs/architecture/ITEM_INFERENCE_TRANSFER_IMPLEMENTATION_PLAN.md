@@ -87,7 +87,7 @@ HTTP replay/목적 전용 결과 resolution 및 아직 남은 실제 운영 호�
 그 이후 실제 설치 component map, no-forward 실패/권한 수정 및 남은 운영 gate는
 [live acceptance 기록](ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)에서 확인한다.
 
-1. compatible shared release는 `ad3ed8ca`로 설치 완료했다. 다음은 실제 `guiadmin` session의 현재 권한으로 exact Graph/policy metadata와 original occurrence-backed corpus scope를 확인한다. 기존 V2 검색·활성 preset을 바꾸지 않는 opt-in 경로로 제한한다.
+1. compatible shared release는 `7383d1c6`로 successor 설치했다. 실제 `guiadmin` original corpus 520/520과 exact Graph/preset metadata는 확인했다. query-free snapshot timeout의 source 반복 비용을 요청범위 provenance로 개선하고, fresh 인증 이후 같은 공식 경로의 실제 latency를 확인한다. 기존 V2 검색·활성 preset을 바꾸지 않는 opt-in 경로로 제한한다.
 2. 실제 corpus의 deterministic profile 길이·E5 token overflow 비율·source resolution query/file-read 비용부터 측정한다. 긴 조건을 버려 성공시키지 않는다. 필요한 facet/chunk successor는 측정 후 별도 설계한다.
 3. 동일한 authorized target 집합에서 lexical/Graph, content-only, concrete-facet, metadata 보조의 후보 집합을 비교한다. 사람 label이 없으면 recall/quality PASS를 만들지 않는다.
 4. compatible exact-purpose support plan·instruction·runtime/policy release를 준비하고 기존 Orchestrator를 통한 bounded pair comparison을 수행한다. 기존 support/PDF preset의 purpose를 바꾸거나 worker를 직접 실행하지 않는다.
