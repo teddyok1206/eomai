@@ -51,11 +51,30 @@
 
 TestClient의 기존 httpx deprecation warning 1건은 남아 있으며 새 dependency는 추가하지 않았다.
 OpenAPI/resource/inventory도 함께 갱신했다. 이전 3종 wheel build PASS를 이번 변경의 build PASS로
-옮겨 적지 않는다. 이번 source 후보의 실제 build-only 결과는 후속 evidence로 구분한다.
+옮겨 적지 않는다. 이번 source 후보의 실제 build-only 결과는 아래 별도 evidence다.
 
 독립 read-only 검토에서도 제출 전 현재 권한 확인, 최초 permission provenance 보존,
 Workflow/V21/START 원자적 기록, historical plan closure 및 정본 결과 조회에 재현 가능한
 추가 결함은 발견하지 못했다. 이것은 실제 인증·운영 실행·교육 품질 승인 증거가 아니다.
+
+### 이번 후보의 실제 build-only
+
+2026-10-10 11:12 UTC에 기존 `scripts/api/deploy_release.sh --build-only`를 실행해 성공했다.
+운영 설치·서비스 restart·control activation·운영 migration은 실행하지 않았다.
+
+- source commit: `992df006cb2b4a1f49d1a1fed904ce8c5f72ff3f`
+- source tree: `f607b255cd84fc04863f64a03f2c4d2dd4f20558`
+- wheel directory: `/tmp/eom-api-build/992df006cb2b4a1f49d1a1fed904ce8c5f72ff3f.D4c8fj/dist`
+- installed-layout inspection 및 wheel RECORD 검증: PASS
+
+| Wheel | SHA-256 |
+|---|---|
+| `eom_api_contracts-0.1.0-py3-none-any.whl` | `730fa41629c50e9c54f53226372340b8c10dc83fdf4ab7e8793c60ba4d099b7b` |
+| `eom_application_api-0.1.0-py3-none-any.whl` | `3b87b58bbd9940d7ef694b1f06b46e00b39b6e2150340ecc5d5c8195dc4fd115` |
+| `eom_platform-0.1.0-py3-none-any.whl` | `f00e4283ae999fc868aded7e27c45a9c527e806fbacbc184063bae49344b4312` |
+
+이 기록을 추가한 후속 문서 commit과 위 build source commit은 다른 identity다. 임시 build
+경로는 정본 runtime 설치나 NAS Artifact를 뜻하지 않는다.
 
 ### 실패 이력과 수정
 
