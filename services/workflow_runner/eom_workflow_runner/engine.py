@@ -7,7 +7,6 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from threading import Event, Thread
 from typing import Literal, Protocol
@@ -70,6 +69,11 @@ from eom_workflow import (
     validate_review_rework_history,
     validate_schema_message,
 )
+from eom_workflow.inference_transfer import (
+    TRANSFER_PAIR_RESULT_SCHEMA,
+    TRANSFER_PAIR_WORKFLOW_KEY,
+)
+from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -85,6 +89,7 @@ from eom_workflow_runner.catalog_port import (
     WorkflowCatalogPort,
 )
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
+from eom_workflow_runner.inference_transfer_execution_port import InferenceTransferRoleJobExecutor
 from eom_workflow_runner.logging import log_workflow_event
 from eom_workflow_runner.models import (
     ApprovalRequestRecord,
@@ -109,11 +114,17 @@ from eom_workflow_runner.repository import (
     enqueue_command,
     link_superseded_attempts,
     list_step_runs,
+    load_persisted_inference_transfer_workflow_request,
     load_persisted_workflow_request,
     renew_command_lease,
     require_command_lease,
 )
 from eom_workflow_runner.review_correction_binding import validate_review_correction_step_binding
+from eom_workflow_runner.role_execution_binding import (
+    bind_platform_role_job,
+    read_platform_role_result,
+)
+from eom_workflow_runner.role_execution_port import RoleExecutionResult
 from eom_workflow_runner.settings import WorkflowSettings
 from eom_workflow_runner.state_machine import (
     SUCCESSFUL_TERMINAL_WORKFLOW_STATES,
@@ -314,17 +325,6 @@ def _authoring_material_requirement(
     return request.item_brief.material_requirement
 
 
-@dataclass(frozen=True)
-class RoleExecutionResult:
-    job_id: str
-    status: str
-    worker_slot: str | None
-    logical_artifact_id: str
-    revision_id: str
-    content_hash: str | None
-    error_code: str | None
-
-
 class RoleJobExecutor(Protocol):
     def execute(
         self,
@@ -407,24 +407,15 @@ class PlatformRoleJobExecutor:
 
         def bind_platform_job(job_id: str) -> None:
             with _command_fenced_transaction(self.sessions) as session:
-                current = session.execute(
-                    select(WorkflowStepRunRecord)
-                    .where(WorkflowStepRunRecord.step_run_id == step.step_run_id)
-                    .with_for_update()
-                ).scalar_one()
-                if (
-                    current.workflow_id != workflow.workflow_id
-                    or current.step_key != step.step_key
-                    or current.attempt != step.attempt
-                    or current.worker_role != step.worker_role
-                    or current.state != StepState.RUNNING.value
-                    or current.platform_job_id not in {None, job_id}
-                ):
-                    raise WorkflowError(
-                        WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
-                        "platform job does not match the running workflow step",
-                    )
-                current.platform_job_id = job_id
+                bind_platform_role_job(
+                    session,
+                    workflow_id=workflow.workflow_id,
+                    step_run_id=step.step_run_id,
+                    step_key=step.step_key,
+                    attempt=step.attempt,
+                    worker_role=step.worker_role,
+                    job_id=job_id,
+                )
 
         job = self.orchestrator.submit_workflow_role(
             workflow_id=workflow.workflow_id,
@@ -446,25 +437,8 @@ class PlatformRoleJobExecutor:
                 else "PRIMARY"
             ),
         )
-        content_hash: str | None = None
-        if job.status == "SUCCEEDED":
-            with self.sessions() as session:
-                revision = session.get(ArtifactRevisionRecord, job.revision_id)
-                if revision is None:
-                    raise WorkflowError(
-                        WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
-                        "platform job succeeded without artifact revision",
-                    )
-                content_hash = revision.content_hash
-        return RoleExecutionResult(
-            job_id=job.job_id,
-            status=job.status,
-            worker_slot=job.worker_slot_id,
-            logical_artifact_id=job.logical_artifact_id,
-            revision_id=job.revision_id,
-            content_hash=content_hash,
-            error_code=job.error_code,
-        )
+        with self.sessions() as session:
+            return read_platform_role_result(session, job)
 
 
 class WorkflowRunner:
@@ -481,6 +455,7 @@ class WorkflowRunner:
         control_processor: ControlCommandProcessor | None = None,
         preset_validator: PresetValidationProcessor | None = None,
         capacity_reconciler: CapacityReconciler | None = None,
+        inference_transfer_executor: InferenceTransferRoleJobExecutor | None = None,
         runner_id: str | None = None,
     ) -> None:
         if catalog is None:
@@ -502,6 +477,7 @@ class WorkflowRunner:
         self.control_processor = control_processor
         self.preset_validator = preset_validator
         self.capacity_reconciler = capacity_reconciler
+        self.inference_transfer_executor = inference_transfer_executor
 
     def run_once(self, workflow_id: str | None = None) -> WorkflowCommandRecord | None:
         with self.sessions() as session:
@@ -782,6 +758,14 @@ class WorkflowRunner:
         actor_type: str,
         actor_id: str,
     ) -> bool:
+        if (
+            workflow.definition_key == TRANSFER_PAIR_WORKFLOW_KEY
+            and self.inference_transfer_executor is None
+        ):
+            raise WorkflowError(
+                WorkflowErrorCode.INFERENCE_TRANSFER_EXECUTION_UNAVAILABLE,
+                "comparison purpose execution adapter is not installed",
+            )
         source_escalation_directive: WorkflowReviewEscalationDirective | None = None
         with self._fenced_transaction() as session:
             current = session.get(WorkflowInstanceRecord, workflow.workflow_id)
@@ -900,7 +884,6 @@ class WorkflowRunner:
             workflow.workflow_id, definition.key, attempt, workflow.definition_hash
         )
         self._renew_command_lease(command_id)
-        full_request = load_persisted_workflow_request(workflow.initial_request)
         registration: RegistrationOutcome | None = None
         generated_stimulus: GeneratedStimulusPointer | None = None
         content_team_stimuli: tuple[ContentTeamStimulusPointer, ...] | None = None
@@ -908,6 +891,11 @@ class WorkflowRunner:
         review_rework_directive: WorkflowReviewReworkDirective | None = None
         review_escalation_directive: WorkflowReviewEscalationDirective | None = None
         try:
+            full_request = (
+                load_persisted_inference_transfer_workflow_request(workflow.initial_request)
+                if workflow.definition_key == TRANSFER_PAIR_WORKFLOW_KEY
+                else load_persisted_workflow_request(workflow.initial_request)
+            )
             # Input resolution belongs to the same fail-closed boundary as prompt/result
             # validation; a malformed correction must not leave an executable orphan step.
             with self.sessions() as session:
@@ -933,54 +921,70 @@ class WorkflowRunner:
                         raw_escalation
                     )
             prompt_text: str | None = None
-            if full_request.content_pack is not None:
-                prepared = self.catalog.prepare_prompt(
+            if isinstance(full_request, InferenceTransferWorkflowRequest):
+                assert self.inference_transfer_executor is not None
+                if upstream:
+                    raise WorkflowError(
+                        WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                        "comparison purpose accepts no upstream role results",
+                    )
+                execution = self.inference_transfer_executor.execute(
                     workflow=workflow,
                     step=self._detached_step(step_run_id),
                     request=full_request,
-                    upstream=upstream,
+                    idempotency_key=idempotency_key,
+                    fenced_transaction=self._fenced_transaction,
                 )
-                prompt_text = prepared.text
-                with self._fenced_transaction() as session:
-                    prepared_step = session.execute(
-                        select(WorkflowStepRunRecord)
-                        .where(WorkflowStepRunRecord.step_run_id == step_run_id)
-                        .with_for_update()
-                    ).scalar_one()
-                    input_manifest = dict(prepared_step.input_pointer_manifest)
-                    input_manifest["prompt"] = prepared.pointer
-                    input_manifest["prompt_envelope"] = prepared.envelope
-                    prepared_step.input_pointer_manifest = input_manifest
-                    current = session.get(WorkflowInstanceRecord, workflow.workflow_id)
-                    assert current is not None
-                    context = dict(current.runtime_context)
-                    prompt_artifacts = list(context.get("prompt_artifacts", []))
-                    if not any(
-                        item.get("step_key") == definition.key and item.get("attempt") == attempt
-                        for item in prompt_artifacts
-                        if isinstance(item, dict)
-                    ):
-                        prompt_artifacts.append(
-                            {
-                                "step_key": definition.key,
-                                "attempt": attempt,
-                                **prepared.pointer,
-                            }
-                        )
-                    context["prompt_artifacts"] = prompt_artifacts
-                    current.runtime_context = context
-            execution = self.executor.execute(
-                workflow=workflow,
-                step=self._detached_step(step_run_id),
-                request=full_request.worker_request(),
-                upstream=upstream,
-                idempotency_key=idempotency_key,
-                prompt_text=prompt_text,
-                material_requirement=_authoring_material_requirement(
-                    full_request,
-                    worker_role=definition.worker_role,
-                ),
-            )
+            else:
+                if full_request.content_pack is not None:
+                    prepared = self.catalog.prepare_prompt(
+                        workflow=workflow,
+                        step=self._detached_step(step_run_id),
+                        request=full_request,
+                        upstream=upstream,
+                    )
+                    prompt_text = prepared.text
+                    with self._fenced_transaction() as session:
+                        prepared_step = session.execute(
+                            select(WorkflowStepRunRecord)
+                            .where(WorkflowStepRunRecord.step_run_id == step_run_id)
+                            .with_for_update()
+                        ).scalar_one()
+                        input_manifest = dict(prepared_step.input_pointer_manifest)
+                        input_manifest["prompt"] = prepared.pointer
+                        input_manifest["prompt_envelope"] = prepared.envelope
+                        prepared_step.input_pointer_manifest = input_manifest
+                        current = session.get(WorkflowInstanceRecord, workflow.workflow_id)
+                        assert current is not None
+                        context = dict(current.runtime_context)
+                        prompt_artifacts = list(context.get("prompt_artifacts", []))
+                        if not any(
+                            item.get("step_key") == definition.key
+                            and item.get("attempt") == attempt
+                            for item in prompt_artifacts
+                            if isinstance(item, dict)
+                        ):
+                            prompt_artifacts.append(
+                                {
+                                    "step_key": definition.key,
+                                    "attempt": attempt,
+                                    **prepared.pointer,
+                                }
+                            )
+                        context["prompt_artifacts"] = prompt_artifacts
+                        current.runtime_context = context
+                execution = self.executor.execute(
+                    workflow=workflow,
+                    step=self._detached_step(step_run_id),
+                    request=full_request.worker_request(),
+                    upstream=upstream,
+                    idempotency_key=idempotency_key,
+                    prompt_text=prompt_text,
+                    material_requirement=_authoring_material_requirement(
+                        full_request,
+                        worker_role=definition.worker_role,
+                    ),
+                )
             if execution.status == "SUCCEEDED" and execution.content_hash is not None:
                 result_pointer = ArtifactPointer(
                     step_key=definition.key,
@@ -992,7 +996,11 @@ class WorkflowRunner:
                     result_schema=definition.result_schema,
                 )
                 rework_policy = compiled.definition.automatic_review_rework
-                if rework_policy is not None and definition.key == rework_policy.source_review_step:
+                if (
+                    isinstance(full_request, WorkflowRequest)
+                    and rework_policy is not None
+                    and definition.key == rework_policy.source_review_step
+                ):
                     if definition.result_schema == "review-result@12.0":
                         review_escalation_directive = self.catalog.classify_review_escalation(
                             workflow=workflow,
@@ -1012,7 +1020,10 @@ class WorkflowRunner:
                             observed_rework_cycle_count=workflow.rework_cycle_count,
                             max_rework_cycles=compiled.definition.limits.max_rework_cycles,
                         )
-                if definition.worker_role == "item_management":
+                if (
+                    isinstance(full_request, WorkflowRequest)
+                    and definition.worker_role == "item_management"
+                ):
                     registration = self.catalog.register_workflow(
                         workflow=workflow,
                         step=self._detached_step(step_run_id),
@@ -1021,6 +1032,7 @@ class WorkflowRunner:
                     )
                 elif (
                     definition.worker_role == "image"
+                    and isinstance(full_request, WorkflowRequest)
                     and full_request.request_name == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
                 ):
                     if _is_content_team_image_result_schema(definition.result_schema):
@@ -2679,7 +2691,9 @@ class WorkflowRunner:
                 "artifact_pointers": pointers,
                 "registration": (
                     pointers[-1]
-                    if pointers and workflow.definition_key != "knowledge-analysis"
+                    if pointers
+                    and workflow.definition_key
+                    not in {"knowledge-analysis", TRANSFER_PAIR_WORKFLOW_KEY}
                     else None
                 ),
                 "analysis_proposal": (
@@ -2690,6 +2704,24 @@ class WorkflowRunner:
                 "item_registration": context.get("item_registration"),
                 "content_pack": context.get("content_pack"),
             }
+            if workflow.definition_key == TRANSFER_PAIR_WORKFLOW_KEY:
+                if len(pointers) != 1:
+                    raise WorkflowError(
+                        WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                        "comparison terminal requires its single result pointer",
+                    )
+                comparison_result = ArtifactPointer.model_validate(pointers[0])
+                if (
+                    comparison_result.step_key != "compare_pair"
+                    or comparison_result.result_schema != TRANSFER_PAIR_RESULT_SCHEMA
+                ):
+                    raise WorkflowError(
+                        WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                        "comparison terminal result purpose differs",
+                    )
+                context["final_pointer_manifest"]["comparison_result"] = (
+                    comparison_result.model_dump(mode="json")
+                )
             workflow_record.runtime_context = context
             transition_stage(
                 session,

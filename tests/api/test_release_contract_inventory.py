@@ -66,6 +66,52 @@ def test_model_selection_runtime_is_required_in_release_wheel_inventory() -> Non
     } <= assignments["control_plane_runtime"]
 
 
+def test_transfer_source_candidate_is_complete_in_release_runtime_inventory() -> None:
+    assignments = {
+        node.targets[0].id: ast.literal_eval(node.value)
+        for node in ast.walk(ast.parse(release_inspector_source()))
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id in {"required", "control_plane_runtime", "catalog_staging_runtime"}
+        and isinstance(node.value, ast.Set)
+    }
+    assert {
+        "eom_api/routers/inference_transfer.py",
+        "eom_api/services/inference_transfer_snapshot.py",
+        "eom_api/services/inference_transfer_snapshot_port.py",
+        "eom_api/services/inference_transfer_snapshot_client.py",
+    } <= assignments["required"]
+    for package, source_root, inventory in (
+        ("eom_workflow", "packages/workflow/eom_workflow", "control_plane_runtime"),
+        (
+            "eom_workflow_runner",
+            "services/workflow_runner/eom_workflow_runner",
+            "control_plane_runtime",
+        ),
+        ("eom_orchestrator", "services/orchestrator/eom_orchestrator", "control_plane_runtime"),
+        (
+            "eom_catalog_contracts",
+            "packages/catalog_contracts/eom_catalog_contracts",
+            "catalog_staging_runtime",
+        ),
+        (
+            "eom_catalog_service",
+            "services/catalog_service/eom_catalog_service",
+            "catalog_staging_runtime",
+        ),
+    ):
+        expected = {
+            f"{package}/{path.name}"
+            for path in (ROOT / source_root).glob("*inference_transfer*.py")
+        }
+        assert expected and expected <= assignments[inventory]
+    assert {
+        "eom_workflow_runner/role_execution_port.py",
+        "eom_workflow_runner/role_execution_binding.py",
+    } <= assignments["control_plane_runtime"]
+
+
 def test_installed_review_admission_covers_materialized_workflow_contracts() -> None:
     outer = ast.parse(release_inspector_source())
     staged = {

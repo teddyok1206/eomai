@@ -41,6 +41,10 @@ from eom_api.services.hwpx_item_revision_resolver import (
     CatalogBackedHwpxItemRevisionResolver,
 )
 from eom_api.services.idempotency_service import IdempotencyService
+from eom_api.services.inference_transfer_snapshot import InferenceTransferSnapshotApplicationService
+from eom_api.services.inference_transfer_snapshot_client import (
+    CatalogInferenceTransferSnapshotClient,
+)
 from eom_api.services.item_approval_service import ItemApprovalApplicationService
 from eom_api.services.paired_document_review_service import (
     PairedDocumentReviewApplicationService,
@@ -79,6 +83,9 @@ class AppServices:
         )
         self.operators = OperatorService(engine)
         self.catalog_application = CatalogApplicationClient()
+        self.inference_transfer_snapshots = InferenceTransferSnapshotApplicationService(
+            CatalogInferenceTransferSnapshotClient()
+        )
         self.queries = QueryAdapter(
             engine,
             fingerprint_key,

@@ -32,7 +32,7 @@ from eom_workflow import (
     WorkerLeaseView,
     validate_control_contract,
 )
-from eom_workflow.control_plane import WorkerRole
+from eom_workflow.control_plane import BundleRevisionPointer, WorkerRole
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import and_, exists, func, select
@@ -678,6 +678,53 @@ def _validate_bundle_pointer(
         )
     _validate_artifact_pointer(session, pointer.manifest_artifact)
     return record
+
+
+def resolve_released_instruction_bundle(
+    session: Session, pointer: BundleRevisionPointer
+) -> InstructionBundleManifest:
+    """Resolve released control metadata; actual member bytes remain a staging check.
+
+    This does not authorize a worker or an Item source. Both comparison-plan
+    resolution and protected materialization use this exact immutable control
+    boundary, without following a mutable bundle current pointer.
+    """
+
+    try:
+        checked = BundleRevisionPointer.model_validate(pointer.model_dump(mode="json"))
+    except ValueError as exc:
+        raise ControlPlaneError(
+            "CONTROL_BUNDLE_POINTER_INVALID", "instruction bundle pointer is invalid"
+        ) from exc
+    if checked.manifest_artifact.schema_ref != (
+        "eom://schemas/workflow/instruction-bundle-manifest/1.0"
+    ):
+        raise ControlPlaneError("CONTROL_POINTER_SCHEMA_MISMATCH", "instruction schema differs")
+    if checked.manifest_artifact.media_type != "application/json":
+        raise ControlPlaneError("CONTROL_POINTER_MEDIA_MISMATCH", "instruction media differs")
+    record = _validate_bundle_pointer(session, checked, expected_kind="INSTRUCTION")
+    try:
+        validate_control_contract("instruction-bundle-manifest", record.canonical_document)
+        manifest = InstructionBundleManifest.model_validate(record.canonical_document)
+    except (ValueError, JsonSchemaValidationError) as exc:
+        raise ControlPlaneError(
+            "CONTROL_INSTRUCTION_DOCUMENT_INVALID", "instruction bundle document is invalid"
+        ) from exc
+    if (
+        manifest.bundle_id != checked.bundle_id
+        or manifest.bundle_revision_id != checked.bundle_revision_id
+        or manifest.bundle_revision_id != record.bundle_revision_id
+        or manifest.revision_number != record.revision_number
+        or manifest.schema_version != record.schema_version
+        or manifest.state != "RELEASED"
+        or manifest.content_sha256 != record.content_sha256
+        or manifest.content_sha256
+        != compute_control_document_hash(record.canonical_document, "content_sha256")
+    ):
+        raise ControlPlaneError(
+            "CONTROL_INSTRUCTION_HASH_MISMATCH", "instruction bundle identity or hash differs"
+        )
+    return manifest
 
 
 def record_execution_preset_revision(

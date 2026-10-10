@@ -266,6 +266,15 @@ from eom_catalog_contracts.inference_transfer_experiment import (
     InferenceTransferExperimentRequest,
     InferenceTransferExperimentResult,
 )
+from eom_catalog_contracts.inference_transfer_snapshot import (
+    InferenceTransferSnapshotPrepareRequest,
+    InferenceTransferSnapshotReadRequest,
+    InferenceTransferSnapshotAuthorizeRequest,
+)
+from eom_catalog_contracts.inference_transfer_snapshot_binding import (
+    parse_binding_request,
+    parse_binding_reply,
+)
 from eom_catalog_contracts.validation import load_schema as load_catalog_schema
 from eom_catalog_service.inference_transfer_experiment import (
     run_staged_inference_transfer_experiment,
@@ -274,17 +283,46 @@ from eom_catalog_service.inference_transfer_worker_preparation import (
     prepare_inference_transfer_worker_comparison,
 )
 from eom_workflow.inference_transfer_control import ResolvedExecutionPlanV21
+from eom_workflow.inference_transfer_bootstrap_contract import (
+    InferenceTransferBootstrapManifest,
+    validate_inference_transfer_reviewed_instruction,
+)
 from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
 from eom_workflow.inference_transfer_materialization import (
     InferenceTransferMaterializationContext,
     validate_inference_transfer_workflow_plan,
 )
 from eom_catalog_service.inference_transfer_item_projection import project_staged_item_entry
+from eom_catalog_service.inference_transfer_snapshot_service import (
+    InferenceTransferSnapshotApplicationService,
+)
+from eom_catalog_service.inference_transfer_snapshot_catalog_adapter import (
+    CatalogInferenceTransferSnapshotSourceAdapter,
+)
+from eom_catalog_service.inference_transfer_snapshot_dispatch import (
+    dispatch_snapshot_frame,
+)
 from eom_workflow_runner.inference_transfer_admission import InferenceTransferSubmissionContext
 from eom_orchestrator.execution_materializer import preflight_inference_transfer_materialization
+from eom_orchestrator.inference_transfer_resolution import (
+    resolve_inference_transfer_execution_plan,
+)
+from eom_orchestrator.inference_transfer_bootstrap import (
+    prepare_inference_transfer_controls,
+    release_inference_transfer_controls,
+)
+from eom_orchestrator.inference_transfer_snapshot_staging import (
+    stage_snapshot_experiment,
+    reauthorize_staged_experiment,
+)
+from eom_workflow_runner.inference_transfer_executor import PlatformInferenceTransferExecutor
+from eom_workflow_runner.role_execution_port import RoleExecutionResult
+from eom_workflow_runner.role_execution_binding import bind_platform_role_job
 load_inference_transfer_workflow_request_schema()
 load_catalog_schema("item-inference-transfer")
 load_catalog_schema("item-inference-transfer-experiment")
+load_catalog_schema("item-inference-transfer-snapshot")
+load_catalog_schema("item-inference-transfer-snapshot-binding")
 assert "torch" not in sys.modules and "transformers" not in sys.modules
 for name, _ in control_schema_inventory():
     load_control_schema(name)

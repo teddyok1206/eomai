@@ -29,6 +29,12 @@ class ControlSchemaResource:
 
 CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType(
     {
+        "inference-transfer-control-bootstrap": ControlSchemaResource(
+            "schemas/workflow/control-plane/inference-transfer-control-bootstrap-v1.schema.json",
+            "resources/control-plane/inference-transfer-control-bootstrap-v1.schema.json",
+            "1.0",
+            "sha256:4c8ee179d519bf05f8264528dde76bb839bbf49e38737c12a0bb1f253282dd5b",
+        ),
         "codex-compatibility-matrix": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-compatibility-matrix-v1.schema.json",
             "resources/control-plane/codex-compatibility-matrix-v1.schema.json",

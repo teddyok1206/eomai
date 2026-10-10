@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Literal
+
 from eom_catalog_contracts import (
     ApprovedItemKnowledgeSourceV2,
     CreateEvidenceBundleCommand,
     KnowledgeAnalysisResultV10,
+    KnowledgeAnalysisSolutionReport,
     KnowledgeGraphSnapshotPointer,
 )
 from eom_catalog_contracts.item_inference_transfer import (
@@ -22,6 +26,7 @@ from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.inference_transfer_projection import project_accepted_solution_report
+from eom_catalog_service.inference_transfer_scope import InferenceTransferPopulationScope
 from eom_catalog_service.inference_transfer_service import (
     AdmittedInferenceTransferCorpus,
     AdmittedInferenceTransferSource,
@@ -43,6 +48,32 @@ from eom_catalog_service.solution_evidence_resolution import (
 )
 
 
+@dataclass(frozen=True, slots=True)
+class InferenceTransferCorpusReadCommand:
+    """Internal actual-principal scope for reads that have no search query.
+
+    No fabricated query Item is needed to prepare a corpus. This value never
+    comes from a worker or public wire and cannot override current role checks.
+    """
+
+    actor_id: str
+    graph_snapshot: KnowledgeGraphSnapshotPointer
+    access_policy_revision_id: str
+    access_policy_sha256: str
+    source_classes: tuple[Literal["APPROVED_ITEM", "PAST_EXAM"], ...]
+    maximum_candidates: int
+    population_scope: InferenceTransferPopulationScope
+    top_k: int = 1
+
+
+@dataclass(frozen=True, slots=True)
+class AcceptedInferenceTransferProfileInput:
+    """One already resolved accepted report with its canonical UTC projection."""
+
+    profile: InferenceTransferProfile
+    report: KnowledgeAnalysisSolutionReport
+
+
 class CatalogInferenceTransferSourceAdapter:
     """Real supported read-only Catalog boundary; no worker DB/NAS access."""
 
@@ -53,7 +84,7 @@ class CatalogInferenceTransferSourceAdapter:
     def _scope(
         self,
         session: Session,
-        command: InferenceTransferSearchCommand,
+        command: InferenceTransferSearchCommand | InferenceTransferCorpusReadCommand,
         *,
         analysis_run_ids: tuple[str, ...] = (),
     ) -> ReadOnlyCandidatePoolScope:
@@ -126,11 +157,11 @@ class CatalogInferenceTransferSourceAdapter:
             source=source, graph_snapshot=graph, solution_evidence=solution.pointer
         )
 
-    def _project_profiles(
+    def _resolve_profile_inputs(
         self,
         session: Session,
         pool: ReadOnlyKnowledgeCandidatePool,
-    ) -> tuple[tuple[InferenceTransferProfile, ...], int]:
+    ) -> tuple[tuple[AcceptedInferenceTransferProfileInput, ...], int]:
         """One authoritative accepted-report/UTC-timestamp projection boundary."""
         try:
             solutions = resolve_solution_evidence_by_base_run(
@@ -155,7 +186,7 @@ class CatalogInferenceTransferSourceAdapter:
                 )
             )
         }
-        profiles: list[InferenceTransferProfile] = []
+        profiles: list[AcceptedInferenceTransferProfileInput] = []
         missing = 0
         for candidate in pool.candidates:
             solution = solutions.get(candidate.analysis_run_id)
@@ -169,10 +200,13 @@ class CatalogInferenceTransferSourceAdapter:
             try:
                 accepted = KnowledgeAnalysisResultV10.model_validate(revision.result)
                 profiles.append(
-                    project_accepted_solution_report(
-                        source_basis=self._basis(candidate, solution, pool.graph_snapshot),
-                        report=solution.report,
-                        created_at=accepted.accepted_at,
+                    AcceptedInferenceTransferProfileInput(
+                        project_accepted_solution_report(
+                            source_basis=self._basis(candidate, solution, pool.graph_snapshot),
+                            report=solution.report,
+                            created_at=accepted.accepted_at,
+                        ),
+                        solution.report,
                     )
                 )
             except ValueError as exc:
@@ -180,6 +214,14 @@ class CatalogInferenceTransferSourceAdapter:
                     "INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH"
                 ) from exc
         return tuple(profiles), missing
+
+    def _project_profiles(
+        self,
+        session: Session,
+        pool: ReadOnlyKnowledgeCandidatePool,
+    ) -> tuple[tuple[InferenceTransferProfile, ...], int]:
+        inputs, missing = self._resolve_profile_inputs(session, pool)
+        return tuple(value.profile for value in inputs), missing
 
     def load(self, command: InferenceTransferSearchCommand) -> AdmittedInferenceTransferCorpus:
         with self.sessions() as session, session.begin():

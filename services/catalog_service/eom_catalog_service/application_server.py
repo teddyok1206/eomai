@@ -123,6 +123,10 @@ from eom_catalog_service.document_review_pdf_annotation_service import (
     DocumentReviewPdfAnnotationServiceError,
 )
 from eom_catalog_service.errors import CatalogError
+from eom_catalog_service.inference_transfer_snapshot_dispatch import dispatch_snapshot_frame
+from eom_catalog_service.inference_transfer_snapshot_service import (
+    InferenceTransferSnapshotApplicationService,
+)
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
 from eom_catalog_service.knowledge_analysis_batch_service import (
     KnowledgeAnalysisBatchService,
@@ -187,6 +191,12 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 raise ValueError
             raw_operation = value.get("operation")
             if not self.server.peer_can_operate(self.request, raw_operation):
+                return
+            if raw_operation == "INFERENCE_TRANSFER_SNAPSHOT":
+                self.wfile.write(
+                    dispatch_snapshot_frame(self.server.inference_transfer_snapshot, raw)
+                )
+                self.wfile.flush()
                 return
             if raw_operation == "CHAT_RAG":
                 try:
@@ -1228,6 +1238,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         document_review_evidence: DocumentReviewEvidenceService | None = None,
         chat_knowledge: ChatKnowledgeResolutionService | None = None,
         chat_rag: ChatRagResolutionService | None = None,
+        inference_transfer_snapshot: InferenceTransferSnapshotApplicationService | None = None,
         chat_owner_uid: int | None = None,
         socket_path: Path = CATALOG_APPLICATION_SOCKET,
         allowed_uid: int | None = None,
@@ -1249,6 +1260,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.document_review_evidence = document_review_evidence
         self.chat_knowledge = chat_knowledge
         self.chat_rag = chat_rag
+        self.inference_transfer_snapshot = inference_transfer_snapshot
         self.chat_search = (
             None if chat_knowledge is None else ChatKnowledgeSearchService(chat_knowledge.engine)
         )

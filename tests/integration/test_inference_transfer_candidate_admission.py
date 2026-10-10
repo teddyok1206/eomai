@@ -16,6 +16,7 @@ from unittest.mock import Mock
 from urllib.parse import unquote, urlsplit
 
 import pytest
+from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.inference_transfer_catalog_adapter import (
     CatalogInferenceTransferSourceAdapter,
 )
@@ -26,6 +27,12 @@ from eom_catalog_service.inference_transfer_service import (
     InferenceTransferSearchCommand,
     InferenceTransferServiceError,
 )
+from eom_catalog_service.inference_transfer_snapshot_catalog_adapter import (
+    CatalogInferenceTransferSnapshotSourceAdapter,
+)
+from eom_catalog_service.inference_transfer_snapshot_service import (
+    InferenceTransferSnapshotApplicationService,
+)
 from eom_catalog_service.knowledge_retrieval_service import KnowledgeRetrievalApplicationService
 from eom_orchestrator.database import build_engine
 from sqlalchemy import text
@@ -34,6 +41,7 @@ from sqlalchemy.orm import Session
 from scripts.api.testdb_guard import TestDatabaseManifest as DisposableManifest
 from scripts.api.testdb_guard import validate_state_directory
 from tests.unit.inference_transfer_fixtures import profile
+from tests.unit.inference_transfer_snapshot_fixtures import snapshot_prepare, snapshot_read_request
 from tests.unit.test_inference_transfer_candidate_admission import admission_scope
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
@@ -384,3 +392,81 @@ def test_real_postgres_final_reauthorization_reuses_scope_and_rejects_membership
     with pytest.raises(InferenceTransferServiceError, match="SOURCE_PIN_MISMATCH"):
         adapter.reauthorize(request, frozen)
     assert observed_scopes == [InferenceTransferPopulationScope.OCCURRENCE_BACKED_PAST_EXAM]
+
+
+def snapshot_owner(pool_database, monkeypatch):
+    """Actual admission SQL/report absence, synthetic authority/source metadata only."""
+    scope = occurrence_scope()
+    retrieval = service(scope)
+    # The SQL-only predecessor fixture bypasses __init__. Snapshot admission
+    # also runs the real accepted-report resolver; its empty result must not
+    # fail because the fixture omitted the normal Artifact owner adapter.
+    retrieval.artifacts = CatalogArtifactService(pool_database.get_bind())
+    synthetic = profile().source_basis.source
+
+    def source(_session, _snapshot_id, source_pointer, **_kwargs):
+        suffix = source_pointer.analysis_run_id.removeprefix("analysisrun_")
+        return synthetic.model_copy(
+            update={"item_id": "item_" + suffix, "item_revision_id": "itemrev_" + suffix}
+        )
+
+    monkeypatch.setattr(retrieval, "_resolve_snapshot_source", source)
+    owner = object.__new__(CatalogInferenceTransferSnapshotSourceAdapter)
+    owner.engine = pool_database.get_bind()
+    owner.sources = object.__new__(CatalogInferenceTransferSourceAdapter)
+    owner.sources.retrieval = retrieval
+    owner.sources.sessions = lambda: Session(bind=pool_database.get_bind())
+    monkeypatch.setattr(
+        owner.sources,
+        "_scope",
+        lambda _session, command: replace(
+            scope,
+            requested_by=command.actor_id,
+            maximum_candidates=command.maximum_candidates,
+            population_scope=command.population_scope,
+        ),
+    )
+    return InferenceTransferSnapshotApplicationService(owner)
+
+
+def test_real_postgres_snapshot_preserves_full_missing_report_denominator(
+    pool_database,
+    monkeypatch,
+):
+    owner = snapshot_owner(pool_database, monkeypatch)
+    prepared = owner.prepare("synthetic-operator", snapshot_prepare(query_item_revision_ids=()))
+    assert (
+        prepared.header.source_count,
+        prepared.header.profile_count,
+        prepared.header.missing_report_count,
+    ) == (2, 0, 2)
+    assert tuple(row.base_analysis_run_id for row in prepared.index) == tuple(
+        "analysisrun_" + str(i).zfill(32) for i in (6, 7)
+    )
+    read = owner.read("synthetic-operator", snapshot_read_request(prepared))
+    assert all(row.staged_entry is None for row in read.records)
+    assert read.baselines == ()
+
+
+def test_real_postgres_snapshot_rejects_nonselected_occurrence_drift_before_read(
+    pool_database,
+    monkeypatch,
+):
+    owner = snapshot_owner(pool_database, monkeypatch)
+    prepared = owner.prepare("synthetic-operator", snapshot_prepare(query_item_revision_ids=()))
+    pool_database.execute(
+        text(
+            "UPDATE pg_temp.assessment_item_occurrence_references "
+            "SET item_revision_id=:other WHERE placement_node_id='placement_7'"
+        ),
+        {"other": "itemrev_" + "8".zfill(32)},
+    )
+    pool_database.commit()
+    with pytest.raises(InferenceTransferServiceError, match="SNAPSHOT_CHANGED"):
+        owner.read(
+            "synthetic-operator",
+            snapshot_read_request(
+                prepared,
+                selected_index_entries=prepared.index[:1],
+            ),
+        )

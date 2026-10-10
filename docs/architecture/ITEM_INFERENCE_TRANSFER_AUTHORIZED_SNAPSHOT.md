@@ -1,6 +1,9 @@
 # Inference-transfer authorized corpus snapshot
 
-Status: **DESIGN_ONLY**. This document does not add a socket/API operation,
+Status: **SOURCE_ONLY_BINDING**. The bounded snapshot contracts, Catalog owner
+application/producer, fixed private-socket successor and authenticated API
+composition are implemented in source, not installed or activated.
+This document does not add a socket/API operation,
 install a release, authenticate an operator, export a production corpus, run a
 model, or authorize a deployment. The staged experiment contract and local
 harness exist in source; their provenance labels are not access credentials.
@@ -171,7 +174,10 @@ labeled block contents, ordered native table contents/visual captions where
 available, statements and choices; omit `answer` and `explanations`. The
 aggregate `equation_sources` field is not blindly included because it can mix
 question and explanation equations; preserve the inline question equations
-instead. Image-slot presence can support structural metadata, not invented
+instead. V2/V3 inline formulas are not separately extracted as `FORMULA`
+metadata, and the projection records this limitation. Inquiry `kind` (`탐구` or
+`실험`) is preserved as exact `MATERIAL_FORM` metadata; it does not add section
+caption prose to `CONTENT_ONLY`. Image-slot presence can support structural metadata, not invented
 descriptions of the pixels. Unsupported original Item content schema is an
 explicit unavailable view, not permission to fall back to the answer-inclusive
 chat representation.
@@ -189,7 +195,12 @@ Use the existing owner `topic_keys_for_terms` and `retrieve_read_only` with the
 same exact Graph/policy and actual actor authority. The query term recipe is a
 versioned bounded deterministic selection from authorized candidate-visible
 question text/available metadata, not a model's claimed Graph IDs. Record the
-actual typed command hash, result hash and ordered exact source/profile mapping.
+actual typed command hash and ordered exact source/profile mapping. The current
+`SuppliedGraphBaseline.result_sha256` is the canonical hash of the **derived
+baseline value** (query pointer, command hash, provenance and filtered ordered
+profile pointers), not a hash of the raw official retrieval response and not an
+Evidence Bundle verification receipt. The current contract does not store those
+raw response bytes/receipt hashes; do not claim it proves their identity.
 Filter the resulting sources into the frozen authorized profile set; do not
 invent Graph placement or reinterpret cosine as Graph relevance.
 
@@ -230,6 +241,90 @@ rendering and answer-leak negatives; native table/units/negation preservation;
 metadata field origin; unsupported schema/oversize rejection; exact official
 baseline mapping; safe local staging; and no worker direct NAS/DB dependency.
 
+## Authenticated read connection — eleven decisions
+
+This successor is **SOURCE_ONLY_BINDING**. The source implementation below does
+not install or activate these endpoints, private peer permissions or staging.
+
+1. **Responsibility/boundary.** Reuse the authenticated Application API and
+   fixed private Catalog application socket. Add a dedicated read-only use case
+   for the three snapshot phases, not a worker tool, shell `--actor` option or
+   parallel socket service. A bounded API endpoint may accept the existing
+   `InferenceTransferSnapshotRequest` discriminated phase directly. The proposed
+   route is `/knowledge/inference-transfer/snapshot`; its exact route/operation
+   identifier is a successor contract decision, not an installed fact.
+2. **Canonical authority.** `get_authentication` supplies the current operator
+   identity and session. API-side permission requirements reuse Item read,
+   Graph retrieve, analysis read and (when needed) content-intake read. Catalog
+   independently checks the current operator, policy role, answer-bearing
+   permission, source lifecycle, exact Graph and occurrence membership. An
+   authenticated API session alone does not waive Catalog policy.
+3. **Identity/revisions.** Reuse the existing snapshot header/index/phase hashes;
+   add no database entity, export job or persistent snapshot cache. The public
+   request has no actor/role/permission fields. A small **private typed envelope**
+   carries the API-derived operator ID plus the existing phase request. This
+   envelope is not exposed as client-selectable authority. Header actor is
+   server-captured audit/identity data and must equal the current authenticated
+   operator in READ and AUTHORIZE.
+4. **Resolution checks.** JSON Schema 2020-12 plus Pydantic validate the public
+   phase and private envelope before dispatch; results pass both schema and
+   contextual request/result checks. Installed Catalog captures the actual
+   operator on every call, resolves the full source/report set and compares the
+   exact frozen header before materializing selected Item members. Client hashes
+   and `AUTHORIZED_CURRENT_READ` are not access credentials.
+5. **Access patterns.** One PREPARE freezes an index; READ uses exact selected
+   index entries, bounded ordered iteration and request-scoped maps; AUTHORIZE
+   regenerates the full entry and official baseline sets. Replays reuse exact
+   requests with fresh authentication. No raw Artifact/path endpoint is added.
+6. **Structures/indexes.** Extend existing private operation dispatch/typed
+   supported-client composition only. The fixed API UID may invoke this
+   operation; the conversational chat-owner peer and worker UIDs may not.
+   Preserve all prior peer operations. Reuse Catalog's indexed admission,
+   occurrence EXISTS and accepted-report batches; no new index/migration follows
+   merely from exposing the use case.
+7. **Bounds/scale.** Preserve the existing **4 MiB private envelope** transport
+   ceiling and enforce the snapshot body's/chunk's stricter **actual 3 MiB**
+   encoded budget (including any lower caller-selected chunk limit). Wrapper
+   fields do not consume the canonical snapshot body's budget. Do not
+   concatenate the full corpus into one response. Canonical member reads have
+   16 MiB/item, 128-member and 128 MiB/batch ceilings; project each returned batch
+   immediately and discard raw bytes before reading the next. Request-scoped
+   pointer maps deduplicate shared members. Derived views still obey their own
+   bounds; large source data is never silently truncated.
+8. **Transactions/concurrency.** Each owner call remains repeatable-read and
+   read-only. There is no distributed transaction across API reads, staging and
+   CPU execution. Frozen equality bridges reads; fresh final AUTHORIZE is
+   required before any authorized result publication. Future staging is owned
+   by existing Orchestrator local workspace/Artifact commit boundaries and does
+   not grant API or worker writes to NAS.
+9. **Dependency/ownership.** Public contracts depend on values only; API route
+   calls its application service/private client; Catalog server composes the
+   existing owner producer. Orchestrator consumes the supported client/owner
+   port. CLI/harness remain local-input consumers. Do not import Catalog private
+   helpers into API, Orchestrator or workers, and do not introduce a second DB
+   credential or source-reader route.
+10. **Failure/retry/idempotency.** Stable transport errors distinguish operation
+    unavailable, forbidden/expired session, stale Graph/policy/profile/source,
+    population drift, truncated scope and oversize chunk. The route is explicitly
+    read-only; replay does not create rows, generate models or commit Artifacts.
+    Unsupported mixed release sets fail unavailable. Final current-read approval
+    is not cached as durable permission. Capture no cookies/secrets/full content
+    in access logs or milestone reports.
+11. **Simpler alternative.** An ordinary existing chat read would avoid a new
+    private operation, but it cannot provide full canonical three-view content,
+    the complete original denominator or final set/hash reauthorization. A
+    checkout script with production credentials or user-selected actor would
+    violate the existing authority boundary. The additive authenticated endpoint
+    and existing fixed socket are the minimum connection; no separate export
+    platform or general worker filesystem access is justified.
+
+Before installing this successor, require authenticated API principal-injection
+tests, forbidden public actor fields, fixed-peer negative tests (chat/worker),
+request/result/frame bounds, current rights revocation, same-actor replay and
+exact header/context closure. Installed wheel/RECORD and compatible API/Catalog
+release identity must then be verified separately. No production canary, model
+execution or export is authorized by this design subsection.
+
 ## Source reference map
 
 - API principal: `apps/application_api/eom_api/dependencies.py` and
@@ -245,6 +340,13 @@ baseline mapping; safe local staging; and no worker direct NAS/DB dependency.
 - Canonical validation/render inputs: `item_content_contract.py`,
   `packages/catalog_contracts/eom_catalog_contracts/assessment_item.py`,
   `packages/hwpx_contracts/eom_hwpx_contracts/models.py`.
+- Bounded snapshot values/binding: `inference_transfer_snapshot.py` and
+  `inference_transfer_snapshot_binding.py` in Catalog contracts; source owner
+  production/assembly: `inference_transfer_snapshot_catalog_adapter.py`,
+  `inference_transfer_snapshot_service.py` and `inference_transfer_snapshot_dispatch.py`.
+- Authenticated API successor: `routers/inference_transfer.py` and
+  `services/inference_transfer_snapshot.py`, `inference_transfer_snapshot_port.py`,
+  `inference_transfer_snapshot_client.py` in `apps/application_api/eom_api`.
 - Owner materialization/staging: `services/orchestrator/eom_orchestrator/control_artifact_resolution.py`,
   `execution_materializer.py` and `worker.py`.
 - Staged experiment: `packages/catalog_contracts/eom_catalog_contracts/inference_transfer_experiment.py`,

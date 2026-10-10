@@ -5,6 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import uuid4
 
+from eom_catalog_service.inference_transfer_catalog_adapter import (
+    CatalogInferenceTransferSourceAdapter,
+)
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
 from eom_orchestrator.auth_enrollment_processor import CodexAuthEnrollmentProcessor
@@ -23,6 +26,7 @@ from eom_workflow_runner.actor_authorization_adapters import (
     StaticWorkflowActorAuthorizer,
 )
 from eom_workflow_runner.engine import PlatformRoleJobExecutor, WorkflowRunner
+from eom_workflow_runner.inference_transfer_executor import PlatformInferenceTransferExecutor
 from eom_workflow_runner.readiness import WorkflowRuntimeReadiness
 from eom_workflow_runner.settings import WorkflowSettings
 
@@ -96,6 +100,11 @@ def build_workflow_runtime(
         control_processor=control_processor,
         preset_validator=PresetModelValidationProcessor(actual_engine, actual_platform_settings),
         capacity_reconciler=orchestrator.capacity,
+        inference_transfer_executor=PlatformInferenceTransferExecutor(
+            orchestrator=orchestrator,
+            source=CatalogInferenceTransferSourceAdapter(actual_engine, actual_catalog_settings),
+            actor_authorizer=actor_authorizer,
+        ),
         runner_id=runner_id,
     )
     return WorkflowRuntime(

@@ -90,6 +90,7 @@ from eom_orchestrator.control_service import (
     ControlPlaneError,
     compute_control_document_hash,
     resolve_control_artifact_pointer,
+    resolve_released_instruction_bundle,
 )
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 
@@ -1009,14 +1010,11 @@ def _validate_transfer_instruction(
 def _resolved_transfer_instruction(
     session: Session, plan: ResolvedExecutionPlanV21, *, authorized: frozenset[str]
 ) -> InstructionBundleManifest:
-    try:
-        instruction = _instruction_manifest(
-            session, plan.steps[0], authorized_artifact_revision_ids=authorized
-        )
-    except ValueError as exc:
+    if plan.steps[0].instruction_bundle.manifest_artifact.artifact_revision_id not in authorized:
         raise ControlPlaneError(
-            "CONTROL_TRANSFER_RUBRIC_INVALID", "comparison instruction document is invalid"
-        ) from exc
+            "CONTROL_POINTER_PERMISSION_DENIED", "instruction manifest is not authorized"
+        )
+    instruction = resolve_released_instruction_bundle(session, plan.steps[0].instruction_bundle)
     _validate_transfer_instruction(plan, instruction)
     return instruction
 

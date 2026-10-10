@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/item-inference-transfer-snapshot-binding/1.0",
+  "title": "EOM principal-injected private Catalog snapshot binding V1",
+  "description": "Only the authenticated API composition supplies actor_id. This closed private envelope does not grant permission, represent a worker tool or replace fresh Catalog owner authorization.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "inference-transfer-snapshot-binding-request/1.0"
+        },
+        "operation": {
+          "const": "INFERENCE_TRANSFER_SNAPSHOT"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+        },
+        "request": {
+          "oneOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-snapshot/1.0#/$defs/prepareRequest"
+            },
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-snapshot/1.0#/$defs/readRequest"
+            },
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-snapshot/1.0#/$defs/authorizeRequest"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "actor_id",
+        "request"
+      ]
+    },
+    "reply": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "inference-transfer-snapshot-binding-reply/1.0"
+        },
+        "operation": {
+          "const": "INFERENCE_TRANSFER_SNAPSHOT"
+        },
+        "status": {
+          "enum": [
+            "SUCCESS",
+            "FAILED"
+          ]
+        },
+        "result": {
+          "anyOf": [
+            {
+              "oneOf": [
+                {
+                  "$ref": "eom://schemas/knowledge/item-inference-transfer-snapshot/1.0#/$defs/prepareResult"
+                },
+                {
+                  "$ref": "eom://schemas/knowledge/item-inference-transfer-snapshot/1.0#/$defs/readResult"
+                },
+                {
+                  "$ref": "eom://schemas/knowledge/item-inference-transfer-snapshot/1.0#/$defs/authorizeResult"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "INFERENCE_TRANSFER_FORBIDDEN",
+                "INFERENCE_TRANSFER_SNAPSHOT_CHANGED",
+                "INFERENCE_TRANSFER_SNAPSHOT_POPULATION_TRUNCATED",
+                "INFERENCE_TRANSFER_SNAPSHOT_SELECTION_INVALID",
+                "INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH",
+                "INFERENCE_TRANSFER_SNAPSHOT_REQUEST_INVALID",
+                "INFERENCE_TRANSFER_SNAPSHOT_UNAVAILABLE",
+                "INFERENCE_TRANSFER_SNAPSHOT_BUDGET_EXCEEDED"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "SUCCESS"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "result": {
+                "oneOf": [
+                  {
+                    "$ref": "eom://schemas/knowledge/item-inference-transfer-snapshot/1.0#/$defs/prepareResult"
+                  },
+                  {
+                    "$ref": "eom://schemas/knowledge/item-inference-transfer-snapshot/1.0#/$defs/readResult"
+                  },
+                  {
+                    "$ref": "eom://schemas/knowledge/item-inference-transfer-snapshot/1.0#/$defs/authorizeResult"
+                  }
+                ]
+              },
+              "error_code": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "result": {
+                "type": "null"
+              },
+              "error_code": {
+                "enum": [
+                  "INFERENCE_TRANSFER_FORBIDDEN",
+                  "INFERENCE_TRANSFER_SNAPSHOT_CHANGED",
+                  "INFERENCE_TRANSFER_SNAPSHOT_POPULATION_TRUNCATED",
+                  "INFERENCE_TRANSFER_SNAPSHOT_SELECTION_INVALID",
+                  "INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH",
+                  "INFERENCE_TRANSFER_SNAPSHOT_REQUEST_INVALID",
+                  "INFERENCE_TRANSFER_SNAPSHOT_UNAVAILABLE",
+                  "INFERENCE_TRANSFER_SNAPSHOT_BUDGET_EXCEEDED"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/reply"
+    }
+  ]
+}

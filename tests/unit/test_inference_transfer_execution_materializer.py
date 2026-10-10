@@ -144,9 +144,13 @@ def fixture(tmp_path: Path) -> SimpleNamespace:
     plan_record = SimpleNamespace(canonical_document=plan, plan_sha256=plan["plan_sha256"])
     bundle_record = SimpleNamespace(
         bundle_id=bundle["bundle_id"],
+        bundle_revision_id=bundle["bundle_revision_id"],
+        revision_number=instruction["revision_number"],
+        schema_version=instruction["schema_version"],
         bundle_kind="INSTRUCTION",
         state="RELEASED",
         manifest_sha256=manifest.sha256,
+        manifest_artifact_id=manifest.artifact_id,
         manifest_artifact_revision_id=manifest.artifact_revision_id,
         content_sha256=instruction["content_sha256"],
         canonical_document=instruction,

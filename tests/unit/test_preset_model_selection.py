@@ -17,6 +17,7 @@ from eom_orchestrator.control_models import (
 )
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.preset_model_selection import (
+    capacity_pool_model_options,
     non_live_invocation_cases,
     preset_model_options,
     require_model_only_successor,
@@ -491,3 +492,66 @@ def test_native_support_without_reviewed_admission_is_not_a_valid_new_candidate(
     with pytest.raises(ControlPlaneError) as exc:
         validate_model_selection(session, base, draft, observed_at=NOW)  # type: ignore[arg-type]
     assert exc.value.code == "CONTROL_PRESET_MODEL_UNAVAILABLE"
+
+
+def test_prepublication_options_share_the_legacy_authoritative_intersection() -> None:
+    session = _OptionSession()
+    existing = preset_model_options(session, _preset(), observed_at=NOW)  # type: ignore[arg-type]
+    options = capacity_pool_model_options(
+        session,  # type: ignore[arg-type]
+        capacity_policy_revision_id=session.capacity.capacity_policy_revision_id,
+        role="authoring",
+        worker_pool_key="authoring",
+        observed_at=NOW,
+    )
+    assert options == existing["authoring"] and options
+    session.binding.valid_until = NOW
+    assert (
+        capacity_pool_model_options(
+            session,  # type: ignore[arg-type]
+            capacity_policy_revision_id=session.capacity.capacity_policy_revision_id,
+            role="authoring",
+            worker_pool_key="authoring",
+            observed_at=NOW,
+        )
+        == ()
+    )
+
+
+def test_prepublication_options_do_not_broaden_to_an_unadmitted_role_pool() -> None:
+    session = _OptionSession()
+    with pytest.raises(ControlPlaneError, match="not admitted"):
+        capacity_pool_model_options(
+            session,  # type: ignore[arg-type]
+            capacity_policy_revision_id=session.capacity.capacity_policy_revision_id,
+            role="support",
+            worker_pool_key="customer-support",
+            observed_at=NOW,
+        )
+
+
+def test_prepublication_options_reject_native_capacity_schema_column_drift() -> None:
+    session = _OptionSession()
+    session.capacity.schema_version = "worker-capacity-policy/1.3"
+    with pytest.raises(ControlPlaneError) as exc:
+        capacity_pool_model_options(
+            session,  # type: ignore[arg-type]
+            capacity_policy_revision_id=session.capacity.capacity_policy_revision_id,
+            role="authoring",
+            worker_pool_key="authoring",
+            observed_at=NOW,
+        )
+    assert exc.value.code == "CONTROL_CAPACITY_POINTER_INVALID"
+
+
+def test_prepublication_options_reject_foreign_exact_capacity_revision() -> None:
+    session = _OptionSession()
+    with pytest.raises(ControlPlaneError) as exc:
+        capacity_pool_model_options(
+            session,  # type: ignore[arg-type]
+            capacity_policy_revision_id="capacityrev_" + "f" * 32,
+            role="authoring",
+            worker_pool_key="authoring",
+            observed_at=NOW,
+        )
+    assert exc.value.code == "CONTROL_CAPACITY_POINTER_INVALID"

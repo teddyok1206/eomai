@@ -27,6 +27,12 @@ from eom_catalog_service.document_review_hwpx_correction_service import (
 from eom_catalog_service.document_review_pdf_annotation_service import (
     DocumentReviewPdfAnnotationService,
 )
+from eom_catalog_service.inference_transfer_snapshot_catalog_adapter import (
+    CatalogInferenceTransferSnapshotSourceAdapter,
+)
+from eom_catalog_service.inference_transfer_snapshot_service import (
+    InferenceTransferSnapshotApplicationService,
+)
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
 from eom_catalog_service.knowledge_analysis_batch_models import (
     KnowledgeAnalysisBatchRangeRecord,
@@ -251,6 +257,9 @@ def serve() -> int:
             knowledge_retrieval,
             chat_knowledge=ChatKnowledgeResolutionService(engine),
             chat_rag=ChatRagResolutionService(engine),
+            inference_transfer_snapshot=InferenceTransferSnapshotApplicationService(
+                CatalogInferenceTransferSnapshotSourceAdapter(engine),
+            ),
             approved_item_graph_publication=ApprovedItemGraphPublicationService(engine),
             mock_exam_item_reviews=MockExamItemReviewPublicationService(engine),
             mock_exam_assemblies=MockExamAssemblyService(engine),

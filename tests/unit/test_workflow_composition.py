@@ -7,6 +7,9 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
+from eom_catalog_service.inference_transfer_catalog_adapter import (
+    CatalogInferenceTransferSourceAdapter,
+)
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
 from eom_orchestrator.orchestrator import RETRYABLE_CONTROL_ADMISSION_ERRORS
@@ -20,6 +23,7 @@ from eom_workflow_runner.actor_authorization import (
 from eom_workflow_runner.catalog_port import WorkflowCatalogPort
 from eom_workflow_runner.composition import build_workflow_runtime
 from eom_workflow_runner.engine import PlatformRoleJobExecutor, WorkflowRunner
+from eom_workflow_runner.inference_transfer_executor import PlatformInferenceTransferExecutor
 from eom_workflow_runner.readiness import (
     ReadinessStatus,
     RuntimeReadinessCheck,
@@ -85,6 +89,18 @@ def test_production_composition_supplies_catalog_adapter(tmp_path: Path) -> None
     assert isinstance(runtime.runner.catalog, WorkflowCatalogService)
     assert runtime.catalog is runtime.runner.catalog
     assert isinstance(runtime.runner.executor, PlatformRoleJobExecutor)
+    assert isinstance(runtime.runner.inference_transfer_executor, PlatformInferenceTransferExecutor)
+    assert (
+        runtime.runner.inference_transfer_executor.orchestrator
+        is runtime.runner.executor.orchestrator
+    )
+    assert (
+        runtime.runner.inference_transfer_executor.actor_authorizer
+        is runtime.runner.actor_authorizer
+    )
+    assert isinstance(
+        runtime.runner.inference_transfer_executor.source, CatalogInferenceTransferSourceAdapter
+    )
     assert runtime.runner.readiness is runtime.readiness
     assert isinstance(runtime.runner.actor_authorizer, CompositeWorkflowActorAuthorizer)
     assert runtime.runner.available_roles == frozenset(

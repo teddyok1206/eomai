@@ -1,0 +1,240 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/inference-transfer-control-bootstrap/1.0",
+  "title": "EOM reviewed inference-transfer control bootstrap manifest V1",
+  "description": "Reviewed metadata is not a release authorization, capacity grant, availability observation or fabricated publication Artifact identity.",
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository_key": {
+          "const": "EOM"
+        },
+        "source_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "source_tree": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "reviewed_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        }
+      },
+      "required": [
+        "repository_key",
+        "source_commit",
+        "source_tree",
+        "reviewed_at"
+      ]
+    },
+    "capacityPin": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "capacity_policy_id": {
+          "type": "string",
+          "pattern": "^capacity_[0-9a-f]{32}$"
+        },
+        "capacity_policy_revision_id": {
+          "type": "string",
+          "pattern": "^capacityrev_[0-9a-f]{32}$"
+        },
+        "schema_version": {
+          "enum": [
+            "worker-capacity-policy/1.0",
+            "worker-capacity-policy/1.1",
+            "worker-capacity-policy/1.2",
+            "worker-capacity-policy/1.3"
+          ]
+        },
+        "content_sha256": {
+          "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+        }
+      },
+      "required": [
+        "capacity_policy_id",
+        "capacity_policy_revision_id",
+        "schema_version",
+        "content_sha256"
+      ]
+    },
+    "instructionMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "layer": {
+          "enum": [
+            "PLATFORM",
+            "ROLE"
+          ]
+        },
+        "relative_path": {
+          "enum": [
+            "instructions/platform.md",
+            "instructions/transfer-rubric.md"
+          ]
+        },
+        "logical_name": {
+          "enum": [
+            "instructions/platform.md",
+            "instructions/transfer-rubric.md"
+          ]
+        },
+        "schema_ref": {
+          "const": "eom://schemas/workflow/instruction-member/1.0"
+        },
+        "media_type": {
+          "const": "text/markdown"
+        },
+        "sha256": {
+          "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 262144
+        }
+      },
+      "required": [
+        "layer",
+        "relative_path",
+        "logical_name",
+        "schema_ref",
+        "media_type",
+        "sha256",
+        "size_bytes"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "layer": {
+                "const": "PLATFORM"
+              }
+            },
+            "required": [
+              "layer"
+            ]
+          },
+          "then": {
+            "properties": {
+              "relative_path": {
+                "const": "instructions/platform.md"
+              },
+              "logical_name": {
+                "const": "instructions/platform.md"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "relative_path": {
+                "const": "instructions/transfer-rubric.md"
+              },
+              "logical_name": {
+                "const": "instructions/transfer-rubric.md"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "inference-transfer-control-bootstrap/1.0"
+    },
+    "workflow_definition_key": {
+      "const": "item-inference-transfer-comparison"
+    },
+    "workflow_definition_version": {
+      "const": "1.0.0"
+    },
+    "workflow_definition_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "workflow_role_schema_version": {
+      "const": "workflow-role/1.29.0"
+    },
+    "result_schema": {
+      "const": "item-inference-transfer-pair-result@1.0"
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "capacity": {
+      "$ref": "#/$defs/capacityPin"
+    },
+    "rubric": {
+      "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/rubricPointer"
+    },
+    "platform_instruction": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/instructionMember"
+        },
+        {
+          "properties": {
+            "layer": {
+              "const": "PLATFORM"
+            }
+          },
+          "required": [
+            "layer"
+          ]
+        }
+      ]
+    },
+    "rubric_instruction": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/instructionMember"
+        },
+        {
+          "properties": {
+            "layer": {
+              "const": "ROLE"
+            }
+          },
+          "required": [
+            "layer"
+          ]
+        }
+      ]
+    },
+    "model_candidate": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/modelCandidate"
+    },
+    "timeout_seconds": {
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 900
+    },
+    "manifest_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    }
+  },
+  "required": [
+    "schema_version",
+    "workflow_definition_key",
+    "workflow_definition_version",
+    "workflow_definition_sha256",
+    "workflow_role_schema_version",
+    "result_schema",
+    "source",
+    "capacity",
+    "rubric",
+    "platform_instruction",
+    "rubric_instruction",
+    "model_candidate",
+    "timeout_seconds",
+    "manifest_sha256"
+  ]
+}

@@ -1,0 +1,615 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/item-inference-transfer-snapshot/1.0",
+  "title": "EOM owner-revalidated inference-transfer snapshot V1",
+  "description": "Frozen derived values do not grant authorization. Catalog must independently reauthorize the actual principal and exact source population on every phase.",
+  "$defs": {
+    "chunkBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_entries": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "max_encoded_bytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 3145728
+        }
+      },
+      "required": [
+        "max_entries",
+        "max_encoded_bytes"
+      ]
+    },
+    "prepareRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "inference-transfer-snapshot-prepare/1.0"
+        },
+        "operation": {
+          "const": "INFERENCE_TRANSFER_SNAPSHOT"
+        },
+        "phase": {
+          "const": "PREPARE"
+        },
+        "graph_snapshot": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"
+        },
+        "access_policy_revision_id": {
+          "type": "string",
+          "pattern": "^accessrev_[0-9a-f]{32}$"
+        },
+        "access_policy_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "population_scope": {
+          "enum": [
+            "ALL_ADMITTED_GRAPH_ITEMS",
+            "OCCURRENCE_BACKED_PAST_EXAM"
+          ]
+        },
+        "source_classes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "APPROVED_ITEM",
+              "PAST_EXAM"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "recipe": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/recipe"
+        },
+        "baseline_recipe": {
+          "const": "canonical-question-lexical-terms/1.0"
+        },
+        "projection_version": {
+          "const": "accepted-solution-comparison/1.0"
+        },
+        "max_sources": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
+        },
+        "query_item_revision_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^itemrev_[0-9a-f]{32}$"
+          },
+          "minItems": 0,
+          "maxItems": 16,
+          "uniqueItems": true
+        },
+        "chunk_budget": {
+          "$ref": "#/$defs/chunkBudget"
+        },
+        "prepare_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "phase",
+        "graph_snapshot",
+        "access_policy_revision_id",
+        "access_policy_sha256",
+        "population_scope",
+        "source_classes",
+        "recipe",
+        "baseline_recipe",
+        "projection_version",
+        "max_sources",
+        "query_item_revision_ids",
+        "chunk_budget",
+        "prepare_sha256"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "population_scope": {
+                "const": "OCCURRENCE_BACKED_PAST_EXAM"
+              }
+            },
+            "required": [
+              "population_scope"
+            ]
+          },
+          "then": {
+            "properties": {
+              "source_classes": {
+                "const": [
+                  "PAST_EXAM"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "header": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "inference-transfer-snapshot-header/1.0"
+        },
+        "prepare": {
+          "$ref": "#/$defs/prepareRequest"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+        },
+        "source_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1024
+        },
+        "profile_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1024
+        },
+        "missing_report_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1024
+        },
+        "population_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "eligible_profile_set_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "index_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "header_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "schema_version",
+        "prepare",
+        "actor_id",
+        "source_count",
+        "profile_count",
+        "missing_report_count",
+        "population_sha256",
+        "eligible_profile_set_sha256",
+        "index_sha256",
+        "header_sha256"
+      ]
+    },
+    "indexEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "base_analysis_run_id": {
+          "type": "string",
+          "pattern": "^analysisrun_[0-9a-f]{32}$"
+        },
+        "source_item_id": {
+          "type": "string",
+          "pattern": "^item_[0-9a-f]{32}$"
+        },
+        "source_item_revision_id": {
+          "type": "string",
+          "pattern": "^itemrev_[0-9a-f]{32}$"
+        },
+        "source_value_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "profile": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profilePointer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "solution_evidence_pointer_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "base_analysis_run_id",
+        "source_item_id",
+        "source_item_revision_id",
+        "source_value_sha256",
+        "profile",
+        "solution_evidence_pointer_sha256"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "profile": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "profile"
+            ]
+          },
+          "then": {
+            "properties": {
+              "solution_evidence_pointer_sha256": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "solution_evidence_pointer_sha256": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "prepareResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "inference-transfer-snapshot-prepare-result/1.0"
+        },
+        "operation": {
+          "const": "INFERENCE_TRANSFER_SNAPSHOT"
+        },
+        "phase": {
+          "const": "PREPARE"
+        },
+        "header": {
+          "$ref": "#/$defs/header"
+        },
+        "index": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/indexEntry"
+          },
+          "minItems": 0,
+          "maxItems": 1024,
+          "uniqueItems": true
+        },
+        "result_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "phase",
+        "header",
+        "index",
+        "result_sha256"
+      ]
+    },
+    "readRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "inference-transfer-snapshot-read/1.0"
+        },
+        "operation": {
+          "const": "INFERENCE_TRANSFER_SNAPSHOT"
+        },
+        "phase": {
+          "const": "READ"
+        },
+        "header": {
+          "$ref": "#/$defs/header"
+        },
+        "selected_index_entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/indexEntry"
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "read_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "phase",
+        "header",
+        "selected_index_entries",
+        "read_sha256"
+      ]
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "index_entry": {
+          "$ref": "#/$defs/indexEntry"
+        },
+        "source": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/source"
+        },
+        "staged_entry": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/entry"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "index_entry",
+        "source",
+        "staged_entry"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "index_entry": {
+                "properties": {
+                  "profile": {
+                    "type": "null"
+                  }
+                },
+                "required": [
+                  "profile"
+                ]
+              }
+            },
+            "required": [
+              "index_entry"
+            ]
+          },
+          "then": {
+            "properties": {
+              "staged_entry": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "staged_entry": {
+                "$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/entry"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "readResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "inference-transfer-snapshot-read-result/1.0"
+        },
+        "operation": {
+          "const": "INFERENCE_TRANSFER_SNAPSHOT"
+        },
+        "phase": {
+          "const": "READ"
+        },
+        "header_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "read_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/record"
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "baselines": {
+          "type": "array",
+          "items": {
+            "$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/baseline"
+          },
+          "minItems": 0,
+          "maxItems": 16,
+          "uniqueItems": true
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "minItems": 0,
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "result_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "phase",
+        "header_sha256",
+        "read_sha256",
+        "records",
+        "baselines",
+        "limitations",
+        "result_sha256"
+      ]
+    },
+    "authorizeRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "inference-transfer-snapshot-authorize/1.0"
+        },
+        "operation": {
+          "const": "INFERENCE_TRANSFER_SNAPSHOT"
+        },
+        "phase": {
+          "const": "AUTHORIZE"
+        },
+        "header": {
+          "$ref": "#/$defs/header"
+        },
+        "staged_entry_set_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "staged_baseline_set_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "authorization_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "phase",
+        "header",
+        "staged_entry_set_sha256",
+        "staged_baseline_set_sha256",
+        "authorization_sha256"
+      ]
+    },
+    "authorizeResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "inference-transfer-snapshot-authorize-result/1.0"
+        },
+        "operation": {
+          "const": "INFERENCE_TRANSFER_SNAPSHOT"
+        },
+        "phase": {
+          "const": "AUTHORIZE"
+        },
+        "header_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "authorization_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "source_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1024
+        },
+        "profile_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1024
+        },
+        "missing_report_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1024
+        },
+        "staged_entry_set_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "staged_baseline_set_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "status": {
+          "const": "AUTHORIZED_CURRENT_READ"
+        },
+        "result_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "phase",
+        "header_sha256",
+        "authorization_sha256",
+        "source_count",
+        "profile_count",
+        "missing_report_count",
+        "staged_entry_set_sha256",
+        "staged_baseline_set_sha256",
+        "status",
+        "result_sha256"
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/prepareRequest"
+    },
+    {
+      "$ref": "#/$defs/prepareResult"
+    },
+    {
+      "$ref": "#/$defs/readRequest"
+    },
+    {
+      "$ref": "#/$defs/readResult"
+    },
+    {
+      "$ref": "#/$defs/authorizeRequest"
+    },
+    {
+      "$ref": "#/$defs/authorizeResult"
+    }
+  ]
+}

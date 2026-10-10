@@ -25,7 +25,11 @@ AUTH_MUTATIONS = {
     # lost response must not be reconstructed by an idempotency replay.
     "codex_auth_challenge_reveal",
 }
-READ_ONLY_POSTS = {"general_chat_knowledge_search", "general_chat_grounding_read"}
+READ_ONLY_POSTS = {
+    "general_chat_knowledge_search",
+    "general_chat_grounding_read",
+    "inference_transfer_snapshot_read",
+}
 
 
 def _operations(schema: dict[str, object]):

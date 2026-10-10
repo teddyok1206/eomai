@@ -129,7 +129,40 @@ def preset_model_options(
     return options
 
 
-def _validated_capacity(row: WorkerCapacityPolicyRevisionRecord, preset: Preset) -> Capacity:
+def capacity_pool_model_options(
+    session: Session,
+    *,
+    capacity_policy_revision_id: str,
+    role: str,
+    worker_pool_key: str,
+    observed_at: datetime,
+) -> tuple[ModelCandidate, ...]:
+    """Read fresh native ∩ reviewed options without inventing a preset or bundle.
+
+    This exposes availability only. It neither grants operator authority nor
+    reserves capacity, refreshes observations or changes a released policy.
+    """
+
+    capacity = _load_capacity(session, capacity_policy_revision_id)
+    scope = (worker_pool_key, role)
+    if scope not in {
+        (pool.pool_key, str(value)) for pool in capacity.pools for value in pool.roles
+    }:
+        raise ControlPlaneError("CONTROL_PRESET_POOL_INVALID", "role is not admitted by its pool")
+    options, _observed = _available_capacity_models(session, capacity, observed_at=observed_at)
+    return options.get(scope, ())
+
+
+def _load_capacity(session: Session, revision_id: str) -> Capacity:
+    row = session.get(WorkerCapacityPolicyRevisionRecord, revision_id)
+    if row is None:
+        raise ControlPlaneError(
+            "CONTROL_CAPACITY_POINTER_INVALID", "capacity policy is unavailable"
+        )
+    return _validated_capacity(row, revision_id)
+
+
+def _validated_capacity(row: WorkerCapacityPolicyRevisionRecord, revision_id: str) -> Capacity:
     if not isinstance(row.canonical_document, dict):
         raise ControlPlaneError("CONTROL_CAPACITY_POINTER_INVALID", "capacity policy is invalid")
     try:
@@ -141,10 +174,11 @@ def _validated_capacity(row: WorkerCapacityPolicyRevisionRecord, preset: Preset)
             "CONTROL_CAPACITY_POINTER_INVALID", "capacity policy is invalid"
         ) from exc
     if (
-        capacity.capacity_policy_revision_id != preset.capacity_policy_revision_id
+        capacity.capacity_policy_revision_id != revision_id
         or capacity.capacity_policy_revision_id != row.capacity_policy_revision_id
         or capacity.capacity_policy_id != row.capacity_policy_id
         or capacity.revision_number != row.revision_number
+        or capacity.schema_version != row.schema_version
         or capacity.state != "RELEASED"
         or row.state != "RELEASED"
         or capacity.content_sha256 != row.content_sha256
@@ -258,26 +292,39 @@ def _available_role_models(
 ) -> tuple[dict[str, tuple[ModelCandidate, ...]], frozenset[str]]:
     """Batch six slots and immutable snapshots; sets give O(metadata) intersections."""
 
-    capacity = session.get(WorkerCapacityPolicyRevisionRecord, preset.capacity_policy_revision_id)
-    if capacity is None:
-        raise ControlPlaneError(
-            "CONTROL_CAPACITY_POINTER_INVALID", "capacity policy is unavailable"
-        )
-    capacity_model = _validated_capacity(capacity, preset)
+    capacity = _load_capacity(session, preset.capacity_policy_revision_id)
+    eligible, observed_pools = _available_capacity_models(
+        session, capacity, observed_at=observed_at
+    )
+    options = {
+        str(policy.role): eligible.get((policy.worker_pool_key, str(policy.role)), ())
+        for policy in preset.role_policies
+    }
+    return options, frozenset(
+        str(policy.role)
+        for policy in preset.role_policies
+        if (policy.worker_pool_key, str(policy.role)) not in observed_pools
+    )
+
+
+def _available_capacity_models(
+    session: Session, capacity_model: Capacity, *, observed_at: datetime
+) -> tuple[dict[tuple[str, str], tuple[ModelCandidate, ...]], frozenset[tuple[str, str]]]:
+    """One authoritative engine for existing presets and prepublication admission."""
+
+    revision_id = capacity_model.capacity_policy_revision_id
     pool_roles = {
         (row.pool_key, row.role)
         for row in session.scalars(
             select(WorkerCapacityPoolRoleRecord).where(
-                WorkerCapacityPoolRoleRecord.capacity_policy_revision_id
-                == preset.capacity_policy_revision_id
+                WorkerCapacityPoolRoleRecord.capacity_policy_revision_id == revision_id
             )
         )
     }
     memberships: dict[str, set[str]] = {}
     for row in session.scalars(
         select(WorkerCapacityPoolSlotRecord).where(
-            WorkerCapacityPoolSlotRecord.capacity_policy_revision_id
-            == preset.capacity_policy_revision_id
+            WorkerCapacityPoolSlotRecord.capacity_policy_revision_id == revision_id
         )
     ):
         memberships.setdefault(row.pool_key, set()).add(row.slot_id)
@@ -369,18 +416,14 @@ def _available_role_models(
             if slot.slot_id in members and (pool_key, slot.role) in pool_roles:
                 eligible.setdefault((pool_key, slot.role), set()).update(pairs)
                 observed_pools.add((pool_key, str(slot.role)))
-    options: dict[str, tuple[ModelCandidate, ...]] = {
-        str(policy.role): tuple(
+    options = {
+        scope: tuple(
             ModelCandidate.model_validate({"model": model, "reasoning_effort": effort})
-            for model, effort in sorted(eligible.get((policy.worker_pool_key, policy.role), set()))
+            for model, effort in sorted(pairs)
         )
-        for policy in preset.role_policies
+        for scope, pairs in eligible.items()
     }
-    return options, frozenset(
-        str(policy.role)
-        for policy in preset.role_policies
-        if (policy.worker_pool_key, str(policy.role)) not in observed_pools
-    )
+    return options, frozenset(observed_pools)
 
 
 def non_live_invocation_cases(preset: Preset) -> tuple[str, ...]:
