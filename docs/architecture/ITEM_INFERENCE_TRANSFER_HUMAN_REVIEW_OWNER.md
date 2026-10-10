@@ -91,3 +91,20 @@ permission 회수, source/hash/Graph/policy 변경, exact 재게시/충돌, 게�
 이는 source/fake-port 검증이며 실제 DB/NAS 게시나 사람 평가 증거가 아니다. 새로운
 migration·모델/GPU/worker 호출은 없다. 기존 `7383d1c6` 운영 설치와 새 human leaf 후보는
 구분한다. 실제 bounded corpus/pair 실행과 이 leaf의 설치/실제 label 기록은 후속 gate다.
+
+## Build-only checkpoint — 2026-10-10 UTC
+
+위 source 검증 후보는 `60ed76675e2a7ad242ba90e52c8fc599885545b1`, Git tree는
+`b1ba2b6705cfcc0c645f4dff7fda23fadd224bf5`다. 기존
+`scripts/api/deploy_release.sh --build-only`로 wheel을 만들고 RECORD 검증을 통과했다.
+패키지 버전은 모두 `0.1.0`이며 실제 wheel SHA-256은 다음과 같다.
+
+- `eom_api_contracts`: `88cecc033b41f72ff8ca996dae4dedf95ba7d0979e4ff086c2784618ca435f10`
+- `eom_application_api`: `a9257770ad2a1ff4d05c941ffc735442b90bb90604991812b60e230898e38ff8`
+- `eom_platform`: `ae93166ba891b824e9a1c80653abf27a08b7520f90a4eb6fabf96ac93dbfe4af`
+
+`HUMAN_REVIEW_OWNER_SOURCE=PASS`, `HUMAN_REVIEW_OWNER_INSTALLED=NO`,
+`HUMAN_TRANSFER_REVIEW=NOT_EVALUATED`다. 운영 설치는 `7383d1c6`를 유지한다.
+그 설치 identity에 고정해 로그인 대기 중인 기존 corpus 실험을 방해하지 않도록 새
+후보를 재배포하지 않았다. 실제 사람 평가나 DB/NAS 게시를 build PASS로 대체하지 않는다.
+이 checkpoint를 기록하는 문서 commit도 이미 빌드한 후보의 identity를 바꾸지 않는다.
