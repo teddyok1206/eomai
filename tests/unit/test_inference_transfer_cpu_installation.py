@@ -274,6 +274,61 @@ def test_source_installer_independent_hash_precedes_first_interpreter_and_no_sys
     )
 
 
+def run_fingerprint_function(
+    tmp_path: Path, *, define_only: bool = False
+) -> subprocess.CompletedProcess[str]:
+    """Exercise real non-root Bash parsing/behavior without fixed-prefix/privileged mutation."""
+    if os.geteuid() == 0:
+        pytest.skip("non-root fingerprint regression requires an unprivileged test process")
+    source = (ROOT / "scripts/embedding/install_experiment_runtime.sh").read_text()
+    function = source[source.index("tree_digest() {") : source.index("\nmode=${1:-}")]
+    invocation = "declare -F tree_digest >/dev/null" if define_only else 'tree_digest "$1"'
+    script = (
+        'set -euo pipefail\nfail() { printf "%s\\n" "$1" >&2; exit 1; }\n'
+        + function
+        + "\n"
+        + invocation
+    )
+    return subprocess.run(
+        ("/bin/bash", "-c", script, "fingerprint-test", str(tmp_path)),
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+        env={"PATH": "/usr/bin:/bin", "LC_ALL": "C", "TZ": "UTC"},
+    )
+
+
+def test_real_nonroot_bash_fingerprint_definition_has_no_output(tmp_path: Path) -> None:
+    result = run_fingerprint_function(tmp_path, define_only=True)
+    assert result.returncode == 0 and result.stdout == "" and result.stderr == ""
+
+
+def test_real_nonroot_bash_fingerprint_matches_sorted_independent_records(tmp_path: Path) -> None:
+    (tmp_path / "dir").mkdir()
+    (tmp_path / "dir/file").write_bytes(b"reviewed data")
+    (tmp_path / "link").symlink_to("dir/file")
+    digest = hashlib.sha256(b"reviewed data").hexdigest().encode("ascii")
+    expected = hashlib.sha256(
+        b"D\0./dir\0F\0./dir/file\0" + digest + b"\0L\0./link\0dir/file\0"
+    ).hexdigest()
+    result = run_fingerprint_function(tmp_path)
+    assert result.returncode == 0 and result.stdout == expected + "\n" and result.stderr == ""
+
+
+@pytest.mark.parametrize("kind", ["fifo", "hardlink", "control_name"])
+def test_real_nonroot_bash_fingerprint_rejects_untrusted_fixture(tmp_path: Path, kind: str) -> None:
+    if kind == "fifo":
+        os.mkfifo(tmp_path / "fifo", 0o600)
+    elif kind == "hardlink":
+        (tmp_path / "file").write_bytes(b"shared inode")
+        os.link(tmp_path / "file", tmp_path / "link")
+    else:
+        (tmp_path / "bad\nname").write_bytes(b"invalid name")
+    result = run_fingerprint_function(tmp_path)
+    assert result.returncode != 0 and "EMBEDDING_RUNTIME_" in result.stderr
+
+
 def test_installer_fixed_reviewed_model_pins_match_acquisition_module() -> None:
     helper = snapshot_helper()
     spec = importlib.util.spec_from_file_location(

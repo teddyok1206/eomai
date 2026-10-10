@@ -1,6 +1,7 @@
 # Fixed isolated CPU experiment runtime
 
-Status: SOURCE IMPLEMENTED / PRIVILEGED INSTALLATION AND ISOLATION NOT_RUN, 2026-10-10 UTC.
+Status: SOURCE IMPLEMENTED / ENVIRONMENT PREPARATION STARTED / PRIVILEGED PUBLICATION AND
+ISOLATION NOT_RUN, 2026-10-10 UTC.
 This runbook does not approve installation or infer a live PASS from source tests.
 The owner design remains [the invocation design](../architecture/ITEM_INFERENCE_TRANSFER_OWNER_INVOCATION_DESIGN.md).
 
@@ -84,6 +85,19 @@ checked; the full-byte digest is compared on the root-only copy before any inter
 
 Source copy commands have fixed timeouts. A timeout creates preserved partial materialization,
 not permission to retry a model execution. No model runs or units start during installation.
+
+### Preparation checkpoint and corrected fingerprint
+
+The operator reported fixed-prefix preparation and explicit Conda cloning complete before publish.
+The first actual developer fingerprint exposed a Bash definition error: a pipeline outside the
+function body defined the function only in a subshell and printed an empty-stream digest. Publication
+was not attempted. The corrected function contains its pipeline inside braces; real non-root Bash
+regressions verify definition produces no output, a known directory/file/link fixture matches an
+independently calculated record SHA, and FIFO/hardlink/control-name fixtures fail. `bash -n` alone
+did not cover this runtime semantic defect. Discard the old installer admission SHA and use only
+the newly reviewed private copy. A digest from a nonzero fingerprint exit is never an approval pin.
+The newly installed platform wheel also revealed PyMuPDF missing in the cloned prefix; the operator
+is resolving that existing declared dependency before final `pip check` and tree-SHA admission.
 
 ## No-forward privileged smoke
 

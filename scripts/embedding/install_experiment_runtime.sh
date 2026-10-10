@@ -31,24 +31,26 @@ fixed_parents() {
 
 # This byte-tree digest has no reliance on the staged runtime interpreter/RECORD.
 # Stable sorted NUL-delimited D/F/L records; paths/link targets cannot contain controls.
-tree_digest() (
-  cd -- "$1"
-  while IFS= read -r -d '' member; do
-    [[ ! "$member" =~ [[:cntrl:]] ]] || fail EMBEDDING_RUNTIME_MEMBER_INVALID
-    if [[ -L "$member" ]]; then
-      target=$(readlink -- "$member")
-      [[ ! "$target" =~ [[:cntrl:]] ]] || fail EMBEDDING_RUNTIME_LINK_INVALID
-      printf 'L\0%s\0%s\0' "$member" "$target"
-    elif [[ -d "$member" ]]; then
-      printf 'D\0%s\0' "$member"
-    elif [[ -f "$member" ]]; then
-      [[ "$(stat -c %h "$member")" == 1 ]] || fail EMBEDDING_RUNTIME_HARDLINK_INVALID
-      digest=$(sha256sum -- "$member")
-      printf 'F\0%s\0%s\0' "$member" "${digest:0:64}"
-    else fail EMBEDDING_RUNTIME_MEMBER_INVALID
-    fi
-  done < <(find -P . -mindepth 1 -print0 | sort -z)
-) | sha256sum | cut -c 1-64
+tree_digest() {
+  (
+    cd -- "$1"
+    while IFS= read -r -d '' member; do
+      [[ ! "$member" =~ [[:cntrl:]] ]] || fail EMBEDDING_RUNTIME_MEMBER_INVALID
+      if [[ -L "$member" ]]; then
+        target=$(readlink -- "$member")
+        [[ ! "$target" =~ [[:cntrl:]] ]] || fail EMBEDDING_RUNTIME_LINK_INVALID
+        printf 'L\0%s\0%s\0' "$member" "$target"
+      elif [[ -d "$member" ]]; then
+        printf 'D\0%s\0' "$member"
+      elif [[ -f "$member" ]]; then
+        [[ "$(stat -c %h "$member")" == 1 ]] || fail EMBEDDING_RUNTIME_HARDLINK_INVALID
+        digest=$(sha256sum -- "$member")
+        printf 'F\0%s\0%s\0' "$member" "${digest:0:64}"
+      else fail EMBEDDING_RUNTIME_MEMBER_INVALID
+      fi
+    done < <(find -P . -mindepth 1 -print0 | sort -z)
+  ) | sha256sum | cut -c 1-64
+}
 
 mode=${1:-}; shift || true
 case "$mode" in
