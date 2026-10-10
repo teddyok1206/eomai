@@ -346,3 +346,37 @@ def maintenance_preflight(
         _operation_failed(exc)
     finally:
         engine.dispose()
+
+
+@codex_runtime_app.command("restoration-preflight")
+def restoration_preflight(
+    request_file: Path = REQUEST_FILE_OPTION,
+    source_commit: str = SOURCE_COMMIT_OPTION,
+) -> None:
+    """Confirm no fixed native worker survives before the operator restores producers."""
+
+    source_commit = _source_commit(source_commit)
+    request = read_compatibility_request_file(request_file)
+    _command_settings(source_commit)
+    if request.source_commit != source_commit:
+        _operation_failed(
+            ControlPlaneError(
+                "CONTROL_COMPATIBILITY_RELEASE_MISMATCH", "request source identity differs"
+            )
+        )
+    try:
+        # No TTL/binding/DB reauthorization: this is restoration evidence, not
+        # permission to launch another model after a failed or expired request.
+        assert_codex_workers_quiescent()
+    except (ControlPlaneError, OSError, ValueError) as exc:
+        _operation_failed(exc)
+    _emit(
+        {
+            "status": "QUIESCENT",
+            "run_id": request.run_id,
+            "source_commit": source_commit,
+            "model_calls": 0,
+            "services_changed": False,
+            "restoration_safe": True,
+        }
+    )

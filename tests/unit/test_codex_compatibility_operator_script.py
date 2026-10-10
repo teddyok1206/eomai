@@ -26,6 +26,9 @@ def _isolated_script(
     preflight_failure: bool = False,
     verify_failure: bool = False,
     stop_failure: bool = False,
+    restoration_failure: bool = False,
+    verify_signal: bool = False,
+    source_drift: bool = False,
     inactive: str | None = None,
 ) -> tuple[Path, Path, Path]:
     events = tmp_path / "events.jsonl"
@@ -37,6 +40,9 @@ def _isolated_script(
                 "preflight_failure": preflight_failure,
                 "verify_failure": verify_failure,
                 "stop_failure": stop_failure,
+                "restoration_failure": restoration_failure,
+                "verify_signal": verify_signal,
+                "source_drift": source_drift,
                 "inactive": inactive,
             }
         )
@@ -54,7 +60,7 @@ if name == "git-stub":
     if "rev-parse" in args:
         print({COMMIT!r})
 elif name == "python-stub":
-    print({COMMIT!r})
+    print("b" * 40 if c["source_drift"] and Path(c["events"]).exists() else {COMMIT!r})
 elif name == "stat-stub":
     if args[1] == "%U:%G:%a:%h":
         print("eom-workflow-runner:eom:600:1")
@@ -70,10 +76,19 @@ elif name == "systemctl-stub":
         if c["stop_failure"] and args[0] == "stop" and args[-1].endswith("worker.service"):
             sys.exit(7)
 elif name == "runuser-stub":
-    command = "maintenance-preflight" if "maintenance-preflight" in args else "verify"
+    command = next(
+        value for value in ("maintenance-preflight", "restoration-preflight", "verify")
+        if value in args
+    )
     record([command])
+    if command == "verify" and c["verify_signal"]:
+        import os
+        import signal
+        os.kill(os.getppid(), signal.SIGTERM)
     if (command == "maintenance-preflight" and c["preflight_failure"]) or (
         command == "verify" and c["verify_failure"]
+    ) or (
+        command == "restoration-preflight" and c["restoration_failure"]
     ):
         sys.exit(9)
 else:
@@ -127,6 +142,9 @@ def test_original_wrapper_has_fixed_source_identity_and_no_automatic_install() -
     assert "trap restore_units EXIT" in source
     assert "trap 'exit 130' INT" in source
     assert "trap 'exit 143' TERM" in source
+    assert source.index("run_installed restoration-preflight") < source.index(
+        '"${SYSTEMCTL}" start'
+    )
     assert "\nsource " not in source and "\n. " not in source
     assert "npm " not in source and "codex update" not in source
     assert "enable " not in source and "disable " not in source
@@ -167,6 +185,7 @@ def test_success_and_failures_restore_only_previously_active_units_in_dependency
         assert ["verify"] not in observed
     else:
         assert ["verify"] in observed
+    assert ["restoration-preflight"] in observed
     started = [event[1] for event in observed if event[0] == "start"]
     assert started == [
         "eom-codex-auth-broker.service",
@@ -184,3 +203,52 @@ def test_inconsistent_chat_wants_state_refuses_before_any_stop(tmp_path: Path) -
     )
     assert result.returncode == 1
     assert _events(events) == [["maintenance-preflight"]]
+
+
+@pytest.mark.parametrize("verify_failure", [False, True])
+def test_busy_or_unconfirmed_worker_leaves_all_producers_stopped(
+    verify_failure: bool, tmp_path: Path
+) -> None:
+    script, request, events = _isolated_script(
+        tmp_path, verify_failure=verify_failure, restoration_failure=True
+    )
+    result = subprocess.run(
+        ["/bin/bash", str(script), COMMIT, str(request)], capture_output=True, check=False
+    )
+    assert result.returncode == 1
+    observed = _events(events)
+    assert ["verify"] in observed
+    assert observed[-1] == ["restoration-preflight"]
+    assert all(event[0] != "start" for event in observed)
+    assert b"CODEX_COMPATIBILITY_RESTORATION_UNCONFIRMED" in result.stderr
+
+
+def test_interrupted_owner_with_surviving_worker_never_restores_producers(tmp_path: Path) -> None:
+    script, request, events = _isolated_script(
+        tmp_path, verify_signal=True, restoration_failure=True
+    )
+    result = subprocess.run(
+        ["/bin/bash", str(script), COMMIT, str(request)],
+        capture_output=True,
+        check=False,
+        timeout=10,
+    )
+    assert result.returncode == 1
+    observed = _events(events)
+    assert ["verify"] in observed
+    assert observed[-1] == ["restoration-preflight"]
+    assert all(event[0] != "start" for event in observed)
+
+
+def test_changed_installed_source_blocks_every_restore_before_worker_preflight(
+    tmp_path: Path,
+) -> None:
+    script, request, events = _isolated_script(tmp_path, source_drift=True)
+    result = subprocess.run(
+        ["/bin/bash", str(script), COMMIT, str(request)], capture_output=True, check=False
+    )
+    assert result.returncode == 1
+    observed = _events(events)
+    assert observed[-1] == ["verify"]
+    assert all(event[0] != "start" for event in observed)
+    assert b"CODEX_COMPATIBILITY_RESTORATION_UNCONFIRMED" in result.stderr

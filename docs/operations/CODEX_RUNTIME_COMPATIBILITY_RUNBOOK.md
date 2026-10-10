@@ -26,10 +26,19 @@ No item, HWPX, corpus or Content Pack is generated or activated.
    `scripts/workflow/run_codex_compatibility.sh COMMIT REQUEST_PATH` root wrapper. Its
    read-only preflight precedes any service stop. Busy work refuses the operation. It
    stops only the fixed Codex producer/auth services and restores the previously active
-   set on success or failure. It never clears jobs/leases or stops an active model call.
+   set on success or failure only after fixed-worker quiescence is confirmed. It never
+   clears jobs/leases or force-stops an active model call.
    The pre-stop observation is not a reservation: new work arriving before service stop
    makes the subsequent locked DB/worker recheck refuse all probes and restore services.
    Use the approved quiet window; no new admission queue or global hold is created.
+   After an interruption or timeout, a native unit may survive the owner's DB fence.
+   `restoration-preflight` checks fixed-worker units before any producer restart, without
+   requiring fresh bindings, request expiry or PostgreSQL availability. If evidence is
+   busy/unavailable or the installed source differs, the wrapper withholds every restart
+   and reports `CODEX_COMPATIBILITY_RESTORATION_UNCONFIRMED`. A partial stop failure can
+   leave a partially stopped producer set. An operator must inspect actual unit states, the
+   exact surviving unit and uncertain execution; do not force-stop or automatically retry
+   it, bypass the preflight, or restart producers with unaccounted capacity.
 5. Record actual calls, PASS/FAIL/NOT_RUN, runtime/contract pins, and the new canonical
    report Artifact/member pointer. First failure stops new calls within that request.
    The CLI `report_pointer` object is the exact existing `ArtifactMemberPointer` shape,

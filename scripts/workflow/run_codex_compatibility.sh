@@ -32,10 +32,25 @@ fail() {
   exit 1
 }
 
+installed_source_matches() {
+  local installed_source
+  installed_source=$("${PYTHON}" -I -c \
+    'from eom_api.build_info import get_build_info; print(get_build_info().source_commit)') || return 1
+  [[ ${installed_source} == "${EXPECTED_COMMIT}" ]]
+}
+
 restore_units() {
   local status=$? unit restore_failed=0
   trap - EXIT INT TERM
   if [[ ${WINDOW_STARTED} -eq 1 ]]; then
+    # An interrupted owner can release its DB fence while the fixed native unit
+    # still runs without an ordinary lease. Do not restore unaccounted producers.
+    if ! installed_source_matches || ! run_installed restoration-preflight; then
+      printf '%s\n' \
+        'CODEX_COMPATIBILITY_RESTORATION_UNCONFIRMED: operator action required; producer restart withheld' \
+        >&2
+      exit 1
+    fi
     for unit in "${RESTORE_UNITS[@]}"; do
       if [[ ${PREVIOUSLY_ACTIVE[${unit}]:-0} -eq 1 ]]; then
         "${SYSTEMCTL}" start "${unit}" || restore_failed=1
@@ -78,9 +93,7 @@ REQUEST_PATH=$2
   fail 'source commit differs'
 [[ -z "$(git -C "${REPOSITORY}" status --porcelain=v1)" ]] || \
   fail 'source working tree is not clean'
-[[ "$("${PYTHON}" -I -c \
-  'from eom_api.build_info import get_build_info; print(get_build_info().source_commit)')" \
-  == "${EXPECTED_COMMIT}" ]] || fail 'installed release differs from requested source'
+installed_source_matches || fail 'installed release differs from requested source'
 
 require_regular "${POSTGRES_ENV}" root:eom:640
 require_regular "${WORKER_CONFIG}" root:eom:640

@@ -31,7 +31,13 @@ RUNNER = CliRunner()
 def test_supported_cli_hierarchy_exposes_maintenance_without_running_it() -> None:
     result = RUNNER.invoke(app, ["control-plane", "codex-runtime", "--help"])
     assert result.exit_code == 0, result.output
-    for command in ("check-update", "prepare-compatibility", "maintenance-preflight", "verify"):
+    for command in (
+        "check-update",
+        "prepare-compatibility",
+        "maintenance-preflight",
+        "restoration-preflight",
+        "verify",
+    ):
         assert command in result.output
 
 
@@ -378,3 +384,60 @@ def test_expired_preflight_stops_before_database_work_checks(
     assert "private content" not in result.output
     database.assert_not_called()
     engine.dispose.assert_called_once()
+
+
+def test_restoration_preflight_accepts_expired_request_without_database_or_binding_checks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        Settings, "from_environment", lambda: Settings(runtime_source_commit=COMMIT)
+    )
+    document = _request().model_dump(mode="json")
+    now = datetime.now(UTC)
+    document["created_at"] = (now - timedelta(hours=6)).isoformat().replace("+00:00", "Z")
+    document["expires_at"] = (now - timedelta(hours=5)).isoformat().replace("+00:00", "Z")
+    path = tmp_path / "expired-request.json"
+    cli._write_request_file(path, load_compatibility_request(document))
+    database = Mock(side_effect=AssertionError("restoration must not need PostgreSQL"))
+    bindings = Mock(side_effect=AssertionError("restoration must not need fresh bindings/TTL"))
+    workers = Mock()
+    monkeypatch.setattr(cli, "build_engine", database)
+    monkeypatch.setattr(cli, "validate_codex_compatibility_preflight", bindings)
+    monkeypatch.setattr(cli, "assert_codex_workers_quiescent", workers)
+    result = RUNNER.invoke(cli.codex_runtime_app, _arguments("restoration-preflight", path))
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["restoration_safe"] is True
+    assert json.loads(result.output)["model_calls"] == 0
+    database.assert_not_called()
+    bindings.assert_not_called()
+    workers.assert_called_once()
+
+
+def test_restoration_preflight_busy_worker_fails_with_only_stable_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _database(monkeypatch)
+    path = _file(tmp_path)
+    workers = Mock(
+        side_effect=ControlPlaneError("CODEX_COMPATIBILITY_WORKER_BUSY", "private worker log")
+    )
+    monkeypatch.setattr(cli, "assert_codex_workers_quiescent", workers)
+    result = RUNNER.invoke(cli.codex_runtime_app, _arguments("restoration-preflight", path))
+    assert result.exit_code == 1
+    assert json.loads(result.output)["error_code"] == "CODEX_COMPATIBILITY_WORKER_BUSY"
+    assert "private worker log" not in result.output
+
+
+def test_restoration_source_mismatch_does_not_claim_quiescence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = _file(tmp_path)
+    monkeypatch.setattr(
+        Settings, "from_environment", lambda: Settings(runtime_source_commit="b" * 40)
+    )
+    workers = Mock()
+    monkeypatch.setattr(cli, "assert_codex_workers_quiescent", workers)
+    result = RUNNER.invoke(cli.codex_runtime_app, _arguments("restoration-preflight", path))
+    assert result.exit_code == 1
+    assert json.loads(result.output)["error_code"] == "CONTROL_COMPATIBILITY_RELEASE_MISMATCH"
+    workers.assert_not_called()
