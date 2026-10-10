@@ -474,16 +474,8 @@ def test_child_group_timeout_is_unknown_state_not_automatic_retry(
     assert child.call_count == 1
 
 
-@pytest.mark.parametrize("action", ("unchanged", "symlink", "parent-replaced"))
-def test_native_api_file_comparison_is_data_only_and_rechecks_parent_path_epoch(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, action: str
-) -> None:
-    prefix = tmp_path / "api"
-    prefix.mkdir()
-    target = prefix / "native.so"
-    target.write_bytes(b"known admitted reference payload")
-    target.chmod(0o644)
-    monkeypatch.setattr(operator, "API_PREFIX", prefix)
+def _pretend_root_regular_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Synthetic local metadata only, not a root/installed filesystem acceptance.
     original_fstat, original_stat = os.fstat, os.stat
 
     def root_file(value: os.stat_result) -> os.stat_result:
@@ -508,6 +500,19 @@ def test_native_api_file_comparison_is_data_only_and_rechecks_parent_path_epoch(
     monkeypatch.setattr(
         os, "stat", lambda *args, **kwargs: root_file(original_stat(*args, **kwargs))
     )
+
+
+@pytest.mark.parametrize("action", ("unchanged", "symlink", "parent-replaced"))
+def test_native_api_file_comparison_is_data_only_and_rechecks_parent_path_epoch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, action: str
+) -> None:
+    prefix = tmp_path / "api"
+    prefix.mkdir()
+    target = prefix / "native.so"
+    target.write_bytes(b"known admitted reference payload")
+    target.chmod(0o644)
+    monkeypatch.setattr(operator, "API_PREFIX", prefix)
+    _pretend_root_regular_metadata(monkeypatch)
     if action == "unchanged":
         assert operator.read_api_native_data(target, maximum=100) == target.read_bytes()
     elif action == "symlink":
@@ -526,6 +531,68 @@ def test_native_api_file_comparison_is_data_only_and_rechecks_parent_path_epoch(
             return payload
 
         monkeypatch.setattr(os, "read", changing_read)
+        with pytest.raises(operator.OperatorRuntimeError, match="PDF_RUNTIME_INVALID"):
+            operator.read_api_native_data(target, maximum=100)
+
+
+@pytest.mark.parametrize(
+    ("member", "mode", "accepted"),
+    (
+        ("lib/python3.12/site-packages/pymupdf/_extra.so", 0o644, True),
+        ("lib/python3.12/site-packages/pymupdf/_extra.so", 0o755, True),
+        ("lib/python3.12/site-packages/pymupdf/_extra.so", 0o664, False),
+        ("lib/python3.12/site-packages/pymupdf/_extra.so", 0o775, False),
+        ("lib/python3.12/site-packages/pymupdf/_extra.so", 0o777, False),
+        ("lib/python3.12/site-packages/pymupdf/_extra.so", 0o4755, False),
+        ("lib/python3.12/site-packages/pymupdf/__init__.py", 0o644, True),
+        ("lib/python3.12/site-packages/pymupdf/__init__.py", 0o755, False),
+        ("lib/python3.12/site-packages/pymupdf/__init__.py", 0o664, False),
+        ("lib/python3.12/site-packages/other/_extra.so", 0o755, False),
+        ("lib/python3.12/site-packages/pymupdf/_extra.backup.so", 0o755, False),
+    ),
+)
+def test_native_data_reader_allows_755_only_for_exact_nonwritable_native_member(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    member: str,
+    mode: int,
+    accepted: bool,
+) -> None:
+    prefix = tmp_path / "api"
+    target = prefix / member
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"synthetic native/text comparison bytes")
+    target.chmod(mode)
+    monkeypatch.setattr(operator, "API_PREFIX", prefix)
+    _pretend_root_regular_metadata(monkeypatch)
+    if accepted:
+        assert operator.read_api_native_data(target, maximum=100) == target.read_bytes()
+    else:
+        with pytest.raises(operator.OperatorRuntimeError, match="PDF_RUNTIME_INVALID"):
+            operator.read_api_native_data(target, maximum=100)
+
+
+@pytest.mark.parametrize("alias", ("symlink", "hardlink"))
+def test_native_755_exception_does_not_allow_aliases_or_multiple_links(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, alias: str
+) -> None:
+    prefix = tmp_path / "api"
+    target = prefix / "lib/python3.12/site-packages/pymupdf/_extra.so"
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"synthetic fixed native bytes")
+    target.chmod(0o755)
+    other = target.with_name("other.so")
+    if alias == "symlink":
+        target.rename(other)
+        target.symlink_to(other)
+    else:
+        os.link(target, other)
+    monkeypatch.setattr(operator, "API_PREFIX", prefix)
+    _pretend_root_regular_metadata(monkeypatch)
+    if alias == "symlink":
+        with pytest.raises(OSError):
+            operator.read_api_native_data(target, maximum=100)
+    else:
         with pytest.raises(operator.OperatorRuntimeError, match="PDF_RUNTIME_INVALID"):
             operator.read_api_native_data(target, maximum=100)
 

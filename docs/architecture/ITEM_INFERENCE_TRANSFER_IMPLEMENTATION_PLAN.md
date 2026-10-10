@@ -32,7 +32,7 @@
 | F3 | Catalog opt-in authorized candidate read use case | actual actor/policy/Graph admission 재사용, 별도 후보 예산·provenance, 기본 retrieval 무변경 | source·격리 PostgreSQL SQL 검증 완료; 실제 corpus 비용 미측정 |
 | F4 | Orchestrator 경유 bounded Codex pair comparison | exact A/B, condition+decisive mapping, 차이/새 추론, unsupported/insufficient 처리, schema validation | source public selected-pair 제출·current 권한 재인가·atomic V21/START·canonical 결과 조회 및 인증 owner PREPARE/RELEASE CLI 구현; 실제 발행·worker·compatible release 대기 |
 | F5 | 기존 검색 대비 bounded 실험·human scorecard | lexical/content-only/crux/metadata ablation, recall·latency·memory, 사람이 전이 위치를 평가 | staged 계약·encode-once harness·실모델 3-view 합성 smoke 완료; 실제 corpus/Graph 비교·human 평가 대기 |
-| F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 교육 판정은 독립 gate | 인증 snapshot API/private Catalog·Runner·제출/결과 source 및 disposable DB 검증; 보호 CPU 설치·격리 PASS 및 최종 source 2,587 PASS; 호환 공유 release·실제 인증·발행 gate 대기 |
+| F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 교육 판정은 독립 gate | 인증 snapshot API/private Catalog·Runner·제출/결과 source 및 disposable DB 검증; 보호 CPU 설치·격리 PASS 및 최종 source 2,609 PASS; 보호 operator 실제 admission PASS, native mode/초기 protocol 등록 source 보강; 호환 공유 release·실제 인증·발행 gate 대기 |
 
 ## 비교 표현과 판정
 

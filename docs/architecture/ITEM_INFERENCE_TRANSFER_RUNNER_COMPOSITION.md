@@ -224,6 +224,28 @@ An eventual CLI is a thin explicit wrapper. It must not silently run bootstrap
 when a comparison request encounters `CONTROL_PRESET_NOT_PUBLISHED`, and must
 not publish or activate a draft just because source unit tests passed.
 
+### Initial protocol registration in authorized PREPARE
+
+An initial deployment may publish the comparison Workflow definition without a
+`ProtocolVersionRecord` for `workflow-role/1.29.0`. PREPARE now registers this
+exact installed schema bundle through the existing `ensure_protocol_version`
+repository boundary, not through raw SQL or an implicit comparison-request
+fallback. The reviewed manifest and Markdown bytes are validated first, then
+the actual operator's current authorization is rechecked inside the existing
+control transaction and advisory lock. Published definition, capacity, fresh
+candidate and exact initial-control history admission all pass before protocol
+registration. The same transaction flushes and runs the authoritative full
+preflight; any conflicting existing schema hash is an explicit failure, never
+an update. Exact PREPARE replay reuses the existing immutable protocol row.
+
+RELEASE still requires an already registered exact protocol and never repairs a
+missing row. The initial protocol transaction precedes independent immutable
+Artifact publication. If later publication fails, the accepted protocol remains
+for exact recovery; this is not a distributed rollback. Source/fake-session
+regressions cover absent-to-initial registration, unchanged replay, hash
+conflict, invalid admission/authorization with zero registration and missing
+protocol rejection at RELEASE. They do not establish a live DB or model PASS.
+
 ## Verification and remaining gates
 
 Source/fake-session tests: exact first-plan pins; actual wrapper policy/permission

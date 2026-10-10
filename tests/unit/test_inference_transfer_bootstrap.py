@@ -51,6 +51,8 @@ class FakeSession:
         self.revisions: list[Any] = []
         self.definition: Any = None
         self.statements: list[Any] = []
+        self.protocol_additions: list[ProtocolVersionRecord] = []
+        self.flushes = 0
 
     def get(self, model: type[object], key: str) -> Any:
         return self.artifacts.get((model, key), self.records.get((model, key)))
@@ -72,6 +74,16 @@ class FakeSession:
     def execute(self, statement: Any) -> None:
         self.statements.append(statement)
         assert "pg_advisory_xact_lock" in str(statement)
+
+    def add(self, record: ProtocolVersionRecord) -> None:
+        assert isinstance(record, ProtocolVersionRecord)
+        key = (ProtocolVersionRecord, record.version)
+        assert key not in self.records
+        self.records[key] = record
+        self.protocol_additions.append(record)
+
+    def flush(self) -> None:
+        self.flushes += 1
 
 
 class FakeSessions:
@@ -369,6 +381,118 @@ def test_exact_prepare_replay_keeps_ids_and_publisher_history(
     assert len(value.publisher.history) == 4
 
 
+def test_authorized_initial_prepare_registers_exact_protocol_once_then_replays(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    value = fixture(monkeypatch)
+    key = (ProtocolVersionRecord, value.manifest.workflow_role_schema_version)
+    del value.session.records[key]
+    original = bootstrap.ensure_protocol_version
+    observations: list[tuple[int, int]] = []
+
+    def ensure(session: Any, version: str, digest: str) -> None:
+        assert session is value.session
+        assert version == value.manifest.workflow_role_schema_version
+        assert digest == role_schema_bundle_hash(version)
+        assert value.authorizations[-1] == (value.operator, "PREPARE")
+        assert value.observations and value.session.statements
+        observations.append((len(value.authorizations), len(value.publisher.history)))
+        original(session, version, digest)
+
+    monkeypatch.setattr(bootstrap, "ensure_protocol_version", ensure)
+    first = prepare(value)
+    record = value.session.records[key]
+    assert record.schema_sha256 == role_schema_bundle_hash(
+        value.manifest.workflow_role_schema_version
+    )
+    assert len(value.session.protocol_additions) == 1
+    second = prepare(value)
+    assert second == first and value.session.records[key] is record
+    assert len(value.session.protocol_additions) == 1 and len(observations) == 2
+    assert observations[0][1] == 0 and observations[1][1] == 4
+    assert value.session.flushes == 2 and value.draft_creations == 1
+
+
+@pytest.mark.parametrize(
+    "failure", ["candidate", "definition", "capacity", "history", "authorization"]
+)
+def test_missing_protocol_is_not_registered_after_invalid_prepare_admission(
+    monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    value = fixture(monkeypatch)
+    key = (ProtocolVersionRecord, value.manifest.workflow_role_schema_version)
+    del value.session.records[key]
+    if failure == "candidate":
+        value.available = False
+    elif failure == "definition":
+        value.session.definition.definition_hash = "sha256:" + "f" * 64
+    elif failure == "capacity":
+        value.session.records[
+            (WorkerCapacityPolicyRecord, value.manifest.capacity.capacity_policy_id)
+        ].current_revision_id = "capacityrev_" + "f" * 32
+    elif failure == "history":
+        value.session.logical = SimpleNamespace(state="RETIRED")
+    else:
+        value.revoked = True
+    with pytest.raises(ControlPlaneError):
+        prepare(value)
+    assert key not in value.session.records
+    assert not value.session.protocol_additions and value.session.flushes == 0
+    assert not value.publisher.calls and value.draft_creations == 0
+
+
+def test_conflicting_existing_protocol_hash_is_rejected_without_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    value = fixture(monkeypatch)
+    key = (ProtocolVersionRecord, value.manifest.workflow_role_schema_version)
+    value.session.records[key].schema_sha256 = "sha256:" + "f" * 64
+    with pytest.raises(ControlPlaneError) as error:
+        prepare(value)
+    assert error.value.code == "CONTROL_PROTOCOL_POINTER_MISSING"
+    assert value.session.records[key].schema_sha256 == "sha256:" + "f" * 64
+    assert not value.session.protocol_additions and value.session.flushes == 0
+    assert not value.publisher.calls and value.draft_creations == 0
+
+
+def test_release_does_not_repair_a_missing_protocol(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    value = fixture(monkeypatch)
+    prepared = prepare(value)
+    key = (ProtocolVersionRecord, value.manifest.workflow_role_schema_version)
+    del value.session.records[key]
+    with pytest.raises(ControlPlaneError) as error:
+        release(value, prepared)
+    assert error.value.code == "CONTROL_PROTOCOL_POINTER_MISSING"
+    assert key not in value.session.records and not value.session.protocol_additions
+    assert value.release_calls == 0 and not value.evaluations
+    assert len(value.publisher.history) == 4
+
+
+def test_initial_prepare_reauthorizes_inside_transaction_before_protocol_registration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    value = fixture(monkeypatch)
+    key = (ProtocolVersionRecord, value.manifest.workflow_role_schema_version)
+    del value.session.records[key]
+    calls = 0
+
+    def revoked_at_transaction(operator: str, action: str) -> None:
+        nonlocal calls
+        calls += 1
+        assert operator == value.operator and action == "PREPARE"
+        if calls == 2:
+            raise ControlPlaneError("CONTROL_OPERATOR_FORBIDDEN", "synthetic revoked operator")
+
+    with pytest.raises(ControlPlaneError) as error:
+        prepare(value, authorize_control_change=revoked_at_transaction)
+    assert error.value.code == "CONTROL_OPERATOR_FORBIDDEN" and calls == 2
+    assert key not in value.session.records
+    assert not value.session.protocol_additions and not value.session.statements
+    assert not value.publisher.calls and value.sessions.rollbacks == 1
+
+
 @pytest.mark.parametrize("stage", [1, 2, 3, 4])
 def test_partial_artifact_commit_recovers_exact_history_without_deleted_artifacts(
     monkeypatch: pytest.MonkeyPatch, stage: int
@@ -530,6 +654,8 @@ def test_untrusted_bootstrap_inputs_fail_before_protected_lookup_or_publication(
     monkeypatch: pytest.MonkeyPatch, failure: str
 ) -> None:
     value = fixture(monkeypatch)
+    key = (ProtocolVersionRecord, value.manifest.workflow_role_schema_version)
+    del value.session.records[key]
     overrides: dict[str, Any] = {}
     if failure == "schema_copy":
         overrides["manifest"] = value.manifest.model_copy(
@@ -544,6 +670,7 @@ def test_untrusted_bootstrap_inputs_fail_before_protected_lookup_or_publication(
     with pytest.raises(ControlPlaneError):
         prepare(value, **overrides)
     assert not value.session.statements and not value.publisher.calls
+    assert key not in value.session.records and not value.session.protocol_additions
 
 
 @pytest.mark.parametrize("failure", ["authorization", "candidate"])

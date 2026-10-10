@@ -28,6 +28,7 @@ MAX_CONTEXT_BYTES = 32 * 1024
 MIGRATION_REVISION = "20261010_0051"
 POSTGRES_ENV = "/etc/eom/secrets/postgres.env"
 API_PREFIX = Path("/srv/eom/conda/envs/eom-api")
+API_NATIVE_MEMBER = Path("lib/python3.12/site-packages/pymupdf/_extra.so")
 _CLEAN_ENV = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"}
 _CLEAN_ENV.update(
     PYTHONSAFEPATH="1",
@@ -377,11 +378,15 @@ def read_api_native_data(path: Path, *, maximum: int) -> bytes:
     """Read fixed API native files as data, never execute their mutable-parent interpreter.
 
     Parent directories may retain existing eom ownership. Every path component is
-    opened without following links, and only a root:root 0644 single-link target
-    is accepted. Equality to the admitted reference bytes is checked by the caller.
+    opened without following links. Targets stay root:root/single-link and 0644;
+    only the fixed native member also accepts its standard non-writable 0755.
+    Equality to the admitted reference bytes is checked by the caller.
     """
     if not path.is_relative_to(API_PREFIX) or ".." in path.parts:
         raise OperatorRuntimeError("RELEASE_OPERATOR_PDF_RUNTIME_INVALID")
+    allowed_modes = (
+        (0o644, 0o755) if path.relative_to(API_PREFIX) == API_NATIVE_MEMBER else (0o644,)
+    )
     parent = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
     descriptor = -1
     directory_pins = [identity(os.fstat(parent))[:5]]
@@ -399,8 +404,8 @@ def read_api_native_data(path: Path, *, maximum: int) -> bytes:
         before = os.fstat(descriptor)
         if (
             not stat.S_ISREG(before.st_mode)
-            or (before.st_uid, before.st_gid, stat.S_IMODE(before.st_mode), before.st_nlink)
-            != (0, 0, 0o644, 1)
+            or (before.st_uid, before.st_gid, before.st_nlink) != (0, 0, 1)
+            or stat.S_IMODE(before.st_mode) not in allowed_modes
             or not 0 < before.st_size <= maximum
         ):
             raise OperatorRuntimeError("RELEASE_OPERATOR_PDF_RUNTIME_INVALID")

@@ -123,12 +123,16 @@ model load/forward 0이다. 첫 실패 journal과 위 receipt를 보존하며 �
 
 ## 현재 source 회귀 검증
 
-최종 동결 source에 대해 94개 test 파일 **2,587 PASS / 89.38초**, Ruff check/format
-46개 파일 PASS, strict mypy production 25개 파일 PASS, Bash syntax/diff 검사 PASS다.
+최종 동결 source에 대해 94개 test 파일 **2,609 PASS / 90.30초**, Ruff check/format
+기존 46개 및 후속 변경 파일 PASS, strict mypy production 26개 파일 PASS,
+Bash syntax/diff 검사 PASS다.
 최초 통합 실행은 동시 source/test guard 정렬 중 이전 assertions 두 개가 실패했다
 (2,578 PASS / 2 FAIL). 전체 동결 뒤 다시 실행한 결과를 위 최종 gate로 기록한다.
 이후 닫힌 API 격리 callback을 추가하는 과정의 이전 six-callback 기대값 하나는
-2,586 PASS / 1 FAIL로 확인해 갱신하고, 같은 94개 파일을 전부 다시 실행했다.
+2,586 PASS / 1 FAIL로 확인해 갱신하고, 같은 94개 파일을 전부 다시 실행해 2,587 PASS였다.
+native 0755와 protocol 초기 등록 후속 회귀에서는 이전 all-0644 source assertion 하나가
+2,608 PASS / 1 FAIL이었다. metadata predicate/실제 mode·alias behavior 회귀를 정렬한 뒤
+같은 94개 파일을 다시 실행한 최종 결과가 위 2,609 PASS다.
 앞선 2,582 PASS 및 overlapping focused suite 수를 합산해 고유 테스트 수로 과장하지 않는다.
 
 ## 운영 변경 경계
@@ -152,6 +156,38 @@ service 권한은 바꾸지 않는다. 변경 가능한 API console entrypoint�
 기존 배포 경로는 사용하지 않는다.
 
 ## 남은 실제 실험과 사람 검토
+
+### 배포 전 실제 operator admission과 발견한 차이
+
+`4fa29774f527a960e7b15f2d84f8044b388fab2b`의 source archive/3 wheels를
+fresh root-private `/var/lib/eom-release-operator-stage.4fa29774-nTZ4k7`에 준비했다.
+setuptools 중간 파일이 생긴 build `source/`는 복사하지 않고 exact `source.tar`를
+검증·추출했다. context SHA는 `8955cbd48c444f1e202f3ee97d86c9d5a2d1fdc73be8669583de2ae99b746514`,
+source snapshot SHA는 `a20184ca74f79c9de3411b858077398c57ddf3f112fcc3afc4d9e9f5d232bbb0`이다.
+보호 interpreter/source/wheel의 실제 `ADMIT_PASS`를 확인했다. admission은 운영 배포가 아니다.
+
+그 뒤 `PDF_RUNTIME_VERIFY`가 `RELEASE_OPERATOR_PDF_RUNTIME_INVALID`로 실패했다.
+API와 보호 CPU의 `pymupdf/__init__.py`는 root:root:0644, `_extra.so`는 root:root:0755이며
+양쪽 bytes/hash가 각각 일치했다. native SHA는
+`218b6076f130f2a5d159e64909f5ffe8b966719e177c908af3db1305f8cb1dc1`이다.
+정상 배포 native의 비쓰기 0755를 data-only reader가 0644로만 제한한 현재 source 결함이다.
+exact `_extra.so`에만 0644/0755를 허용하고 다른 executable/writable/alias는 거부하는
+source 회귀 86 PASS로 수정했다. 설치 파일 권한을 바꾸지 않았다. 기존 실패 stage/admission은
+보존하며 수정 후보는 새로운 commit/build/context로 준비한다. 기존 no-forward probe를 다시
+실행하는 작업이 아니다.
+
+owner의 읽기 전용 조회에서 비교 protocol `workflow-role/1.29.0`의 초기 등록이 없음을
+확인했다. PREPARE의 초기 등록은 기존 Orchestrator protocol registration 경계에서
+실제 현재 관리자 인가·정확 released schema hash·definition/capacity/candidate 입장을 검증한
+뒤 처리해야 한다. 직접 SQL 삽입이나 RELEASE 중 누락 복구는 사용하지 않는다.
+
+현재 공유 runtime은 여전히 `83884224651d8b9516a7a54370077757138c518c`, DB head는 0050이다.
+그 release record의 3 wheel SHA와 보존된 rollback 입력의 SHA/RECORD가 일치한다.
+0051 이후 옛 0050 platform으로 blind downgrade할 수 있다는 뜻은 아니다.
+실제 chat nonsecret source pin도 같은 838842이며, 교체 뒤에는 기존 supported atomic
+pin-update로 provenance를 맞춰야 한다. API/일반 chat/worker/broker와 HWPX builder,
+kordoc, content-team을 포함한 quiescence 및 8개 service 복원은 운영 배포 gate다.
+아직 service stop/migration/package replacement/model forward는 하지 않았다.
 
 - 격리 no-forward probe PASS: **PASS_AFTER_ONE_APPROVED_RETRY / FIRST_FAILURE_PRESERVED**.
 - compatible shared release / 실제 `guiadmin` 인증·metadata·corpus read: **PENDING**.

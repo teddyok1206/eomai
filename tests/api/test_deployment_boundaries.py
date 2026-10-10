@@ -1012,7 +1012,10 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert 'importlib.metadata.version("PyMuPDF") != "1.26.7"' in operator
     assert 'str(pymupdf.__version__) != "1.26.7"' in operator
     assert "read_api_native_data(" in operator
-    assert "!= (0, 0, 0o644, 1)" in operator
+    # Exact native 0755 is a safe distribution mode; the focused operator tests
+    # exercise modes/aliases rather than freezing the former all-0644 predicate.
+    assert "(before.st_uid, before.st_gid, before.st_nlink) != (0, 0, 1)" in operator
+    assert "stat.S_IMODE(before.st_mode) not in allowed_modes" in operator
     assert "reference.relative_to(context.runtime_prefix)" in operator
     assert "native_pdf_annotation_runtime=READY" not in deployment
 

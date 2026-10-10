@@ -73,6 +73,7 @@ from eom_orchestrator.preset_model_selection import (
     validated_preset,
 )
 from eom_orchestrator.preset_policy import execution_preset_policy_sha256
+from eom_orchestrator.repository import ensure_protocol_version
 
 PRESET_KEY = "item-inference-transfer-comparison"
 INSTRUCTION_BUNDLE_KEY = "item-inference-transfer-comparison-instructions"
@@ -133,8 +134,24 @@ def prepare_inference_transfer_controls(
         ) from exc
     _authorize(operator_id, "PREPARE", authorize_control_change)
     with transaction(sessions) as session:
-        _preflight(session, checked, observed_at)
+        _authorize(operator_id, "PREPARE", authorize_control_change)
+        session.execute(select(func.pg_advisory_xact_lock(LEGACY_ITEM_LEARNING_CONTROL_LOCK_ID)))
+        # Admission and existing history must pass before initial protocol
+        # registration. RELEASE and ordinary comparison requests never repair it.
+        _preflight_admission(session, checked, observed_at)
         _require_initial_history(session, checked)
+        try:
+            ensure_protocol_version(
+                session,
+                checked.workflow_role_schema_version,
+                role_schema_bundle_hash(checked.workflow_role_schema_version),
+            )
+        except RuntimeError as exc:
+            raise ControlPlaneError(
+                "CONTROL_PROTOCOL_POINTER_MISSING", "exact comparison protocol is unavailable"
+            ) from exc
+        session.flush()
+        _preflight(session, checked, observed_at)
 
     bootstrap = _publish(
         sessions,
@@ -362,6 +379,14 @@ def _preflight(
         raise ControlPlaneError(
             "CONTROL_PROTOCOL_POINTER_MISSING", "exact comparison protocol is unavailable"
         )
+    _preflight_admission(session, manifest, observed_at)
+
+
+def _preflight_admission(
+    session: Session, manifest: InferenceTransferBootstrapManifest, observed_at: datetime
+) -> None:
+    """One authoritative read-only definition/capacity/model admission boundary."""
+
     try:
         definition = admitted_workflow_definition(
             session,

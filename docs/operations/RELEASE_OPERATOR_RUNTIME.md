@@ -136,8 +136,13 @@ an immutable source admission.
 
 `PDF_RUNTIME_VERIFY` imports PyMuPDF only from the admitted protected interpreter.
 It compares its `pymupdf` and native `_extra` member bytes to the existing fixed API
-files using bounded nofollow FDs, root:root 0644/single-link checks, name and parent
-epoch checks. Existing developer-owned API parents are not changed. This is a
+files using bounded nofollow FDs, root:root/single-link checks, name and parent
+epoch checks. Text files remain exactly 0644. Only the fixed CPython 3.12 member
+`lib/python3.12/site-packages/pymupdf/_extra.so` may be 0644 or the distribution's
+standard non-writable 0755; other executable names, writable modes, aliases and
+links remain rejected. The identical API/CPU native bytes are still checked; this
+does not execute the API file or change installed ownership/modes. Existing
+developer-owned API parents are not changed. This is a
 data-only equivalence check, not privileged execution or ownership admission of
 the legacy API interpreter.
 
