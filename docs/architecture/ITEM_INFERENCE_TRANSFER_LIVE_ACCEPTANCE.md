@@ -218,7 +218,7 @@ forward를 하지 않았으며, 이후 완료된 공유 배포는 다음 기록�
 - 일반 chat의 nonsecret runtime pin: `ad3ed8ca`; 전용 slot: READY.
 - 실제 authenticated metadata/corpus read, CPU forward, selected pair 제출: 아직 수행하지 않음.
 - 보호된 owner console과 UID 990 private 입력 경계 준비 완료; 실제 `guiadmin` TTY 로그인
-  프롬프트에서 사용자 입력 대기. 프롬프트 준비는 인증 성공 증거가 아님.
+  프롬프트 준비는 인증 성공 증거가 아님. 후속 종료 관측은 아래와 구분한다.
 
 처음 admission한 build는
 `/tmp/eom-api-build/ad3ed8caf43f3a4ece5abce25b9b59801451803e.CJ7YAJ`다.
@@ -246,6 +246,21 @@ RECORD만 다르다. 세 wheel의 exhaustive RECORD 검증은 양쪽 모두 PASS
 이 결과는 설치·migration·격리·service 복원의 실제 증거다. 새 비교 목적의 protocol 초기
 등록·control PREPARE/RELEASE, `guiadmin` 실제 session, corpus snapshot과 embedding/Codex
 실험은 아직 PASS로 승격하지 않는다. 기존 no-forward 실패와 4fa stage/admission도 보존한다.
+
+### 최초 실제 owner 로그인 시도의 종료
+
+16:14:44.529 UTC API journal에는 `/auth/login` POST 한 건
+(`req_a3cc8526dd2207154f92ff37812f31d2`)이 기록됐다. 콘솔은
+`OWNER_CONSOLE_BOUNDARY_FAILED`로 종료했고, 실제 pane foreground가 bash로 복귀한 것을
+확인했다. 이 관측 구간에 `/me`나 corpus read 요청은 보이지 않았다. 기존 request-completed
+log에는 HTTP status가 없고 콘솔은 상세 예외를 의도적으로 출력하지 않으므로, 이 증거만으로
+잘못된 비밀번호·현재 권한·응답 계약 중 어느 원인이라고 단정하지 않는다.
+
+실제 owner UID의 metadata-only 검사에서 `owner-input-s9vek0xd` 아래 입력·prepare·query·
+result receipt 네 개가 모두 ABSENT였다. 고정 콘솔은 이 receipt와 explicit RUN_EXPERIMENT
+이후에만 CPU launcher를 호출하므로, 이 시도는 모델 실행이나 Artifact 발행 단계에 도달하지
+않았다. 실패한 원래 코드·보호 복사본·private 입력 경계는 보존한다. 자동 relaunch나 새 CPU
+identity 우회는 없으며, 사용자 입력 확인과 secret-safe phase/code 진단은 별도 후속 단계다.
 
 - 격리 no-forward probe PASS: **PASS_AFTER_ONE_APPROVED_RETRY / FIRST_FAILURE_PRESERVED**.
 - compatible shared release / migration 0051 / 일곱 callback / service 복원: **PASS**.
