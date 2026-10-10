@@ -257,8 +257,9 @@ def test_encoded_result_budget_is_actual_bytes_not_just_entry_count():
         ),
     )
     request = snapshot_read_request(prepared, selected_index_entries=prepared.index[:1])
-    with pytest.raises(ValueError, match=r"encoded|frame|budget"):
+    with pytest.raises(InferenceTransferServiceError) as error:
         service.read(ACTOR, request)
+    assert error.value.code == "INFERENCE_TRANSFER_SNAPSHOT_BUDGET_EXCEEDED"
 
 
 def test_final_authorization_regenerates_staged_text_hash_not_only_source_header():

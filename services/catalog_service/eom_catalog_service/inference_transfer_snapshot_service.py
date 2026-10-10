@@ -16,6 +16,7 @@ from eom_catalog_contracts.inference_transfer_experiment import (
     profile_set_sha256,
 )
 from eom_catalog_contracts.inference_transfer_snapshot import (
+    MAX_SNAPSHOT_FRAME_BYTES,
     InferenceTransferSnapshotAuthorizeRequest,
     InferenceTransferSnapshotAuthorizeResult,
     InferenceTransferSnapshotHeader,
@@ -38,7 +39,7 @@ from eom_catalog_contracts.item_inference_transfer import (
     InferenceTransferProfilePointer,
 )
 from eom_catalog_contracts.models import FrozenModel
-from eom_identifiers import content_sha256
+from eom_identifiers import canonical_json_bytes, content_sha256
 
 from eom_catalog_service.inference_transfer_service import (
     AdmittedInferenceTransferCorpus,
@@ -75,10 +76,17 @@ class InferenceTransferSnapshotSourcePort(Protocol):
         ...
 
 
+def _hashed_snapshot_body[T: FrozenModel](
+    model: type[T], field: str, **values: Any
+) -> dict[str, Any]:
+    """Construct canonical bytes without mistaking a transport budget for bad input."""
+    body = model.model_construct(**values).model_dump(mode="json", exclude={field})
+    return body | {field: content_sha256(body)}
+
+
 def hashed_snapshot_value[T: FrozenModel](model: type[T], field: str, **values: Any) -> T:
     """Construct one small canonical value; Pydantic revalidates all nested inputs."""
-    body = model.model_construct(**values).model_dump(mode="json", exclude={field})
-    return model.model_validate(body | {field: content_sha256(body)})
+    return model.model_validate(_hashed_snapshot_body(model, field, **values))
 
 
 def prepare_snapshot_value(
@@ -225,7 +233,7 @@ class InferenceTransferSnapshotApplicationService:
         )
         current = prepare_snapshot_value(actor_id, request.header.prepare, capture.corpus)
         validate_snapshot_selection(current, request.header, request.selected_index_entries)
-        result = hashed_snapshot_value(
+        body = _hashed_snapshot_body(
             InferenceTransferSnapshotReadResult,
             "result_sha256",
             header_sha256=request.header.header_sha256,
@@ -234,6 +242,15 @@ class InferenceTransferSnapshotApplicationService:
             baselines=capture.baselines,
             limitations=capture.limitations,
         )
+        # Frozen result validation raises a generic ValueError for frame overflow.
+        # Classify bytes here so the existing consumer can split the exact chunk,
+        # instead of interpreting a valid large response as an invalid request.
+        maximum = min(
+            MAX_SNAPSHOT_FRAME_BYTES, request.header.prepare.chunk_budget.max_encoded_bytes
+        )
+        if len(canonical_json_bytes(body)) > maximum:
+            raise InferenceTransferServiceError("INFERENCE_TRANSFER_SNAPSHOT_BUDGET_EXCEEDED")
+        result = InferenceTransferSnapshotReadResult.model_validate(body)
         validate_snapshot_read_result(request, result, index=current.index)
         return result
 

@@ -422,3 +422,70 @@ E5의 512-token 범위를 넘는 자료를 자르거나 성공한 subset을 전�
 사람에게 최종적으로 모아줄 검토는 exact pair·자료 pins·후보 근거·대응하는 조건과
 착상·대응하지 않는 부분·새 추론·rubric이다. model 출력으로 사람 평가나 교육 품질 PASS를
 만들지 않는다. 사용자의 추가 선택이 필요한 successor 정책은 별도 gate로 남긴다.
+
+### Fresh 인증과 실제 520개 inventory — 2026-10-10 17:38–17:42 UTC
+
+새 실제 owner 콘솔에서 native 로그인/current-principal 조회가 RETURNED에 도달했다.
+공식 original corpus는 520개, 풀이보고서는 520/520이며 앞서 기록한 Graph와
+`execpresetrev_8dcefbb3518c4d7d8b3289d7f154414c`의 revision/hash가 그대로였다.
+query-free snapshot PREPARE `req_4aa7b2e4ba22125e059a52be3bb1be00`는
+17:41:27.352284 UTC, **79,325.809 ms**에 반환됐다. source/profile 각각 520개,
+missing report 0, header SHA는
+`sha256:04bf1b4b9d10d4f7273abbcb98049c838cc0cb3eb794714d50fb780883bf9fb8`다.
+이것은 이전 120초 timeout 이력과 별개의 실제 성공이며, 같은 환경에서 완료된 이전
+baseline 시간이 없으므로 개선율이나 충분한 운영 응답성 PASS를 계산하지 않는다.
+
+canonical index의 첫 네 profile-present revision을 고정했다. 질의 선정은 토큰 길이·
+검색 성적을 보고 바꾸지 않았으며 품질 대표표본이 아니다.
+
+- `itemrev_3fc12f67ee35469b8f45fdd9ded1506c`
+- `itemrev_367073d3afc741ad842bb46078db50a7`
+- `itemrev_7dce2140909f4194aaa9a12a551a1752`
+- `itemrev_ca382cd4bd86455d914c38daea3d1b38`
+
+기존 private owner 경계에서 입력을 O_EXCL로 보존한 뒤 명시 RUN_EXPERIMENT에 진입했다.
+실행은 `embeddingexecution_125fe45683e34a2ea188e8ea65a990b0`, 실험은
+`embeddingexperiment_c79e37d2c816471f9ea9554521cef987`, revision은
+`embeddingexperimentrev_dd0f2293c1a54ab6b1b7a0078e471c74`다. 입력 receipt raw SHA는
+`sha256:7dd0fba98ac3cf61d32a5bdf47f48a72e6c9132dd19ab33adefd387ff0d2a775`다.
+예산은 queries 4/top-k 8/batch 4/threads 4/encoded texts 최대 3,072 그대로다.
+17:43:35.940292 UTC 같은 실행의 query-bearing PREPARE
+`req_a64d9314e71433850894a53e8cc41338`도 **78,910.796 ms**에 완료됐다.
+
+이 시점은 staging이며 CPU launch·정본 결과·측정 coverage·사람 판정 완료가 아니다.
+설치는 `7383d1c6` 그대로이며 `60ed7667` human-owner 후보는 build-only다.
+전체 승인 자료를 부분 READ마다 다시 입장·해석하는 비용은 실제 READ 완료/실패와
+함께 후속으로 분류한다. timeout 확대, 질의 교체, 승인/출처 검증 생략이나 자동 CPU
+재실행으로 성공을 만들지 않는다.
+
+### 실제 첫 READ 실패와 목적 한정 보완
+
+첫 READ `req_9a829a533935374769c4868a2c5ed9cd`는 17:45:12.022501 UTC,
+**95,670.972 ms** 뒤 `INFERENCE_TRANSFER_SNAPSHOT_REQUEST_INVALID`로 종료됐다.
+owner 콘솔은 terminal FAILED이며 Catalog 요청 thread도 종료된 것을 확인했다.
+staging이 완료되기 전이므로 코드 경로상 CPU launch/workspace preparation/publication에
+도달하지 않았다. 결과 Artifact나 model quality PASS는 없고 원래 입력 receipt/identity를
+덮거나 다른 execution identity로 우회하지 않는다.
+
+source 검토와 유효한 합성 3-record/4,635,472-byte 재현에서 응답 byte-budget 초과가
+일반 ValueError에 흡수되어 REQUEST_INVALID로 잘못 반환되는 결함을 확인했다.
+기존 staging의 같은 chunk 분할은 BUDGET_EXCEEDED에만 동작한다. 실제 실패 요청의
+동일 원인 여부는 현재 진단이 없어 UNKNOWN이며 합성 재현을 actual 원인으로 단정하지 않는다.
+
+보완 경계는 기존 Catalog READ application/transport다. 정본 typed records의 canonical
+응답 bytes를 frozen 모델 생성 전에 계산하고, 기존 global frame/요청 chunk 중 작은
+한도를 넘으면 이미 released enum인 BUDGET_EXCEEDED로 반환한다. 동일 header/index/
+질의/자료를 유지하는 기존 split만 복구하며 원문 절단·더 큰 bound·새 schema enum·
+새 queue/DB/cache·비인가 재사용을 추가하지 않는다. 그 외 hash/ref/schema 오류는
+일반 invalid로 보존한다. transport에는 고정 phase/검증 단계/오류 종류만 기존 logger로
+기록하며 오류 메시지·input·context·traceback·문항 내용은 기록하지 않는다.
+
+후속 source 회귀는 frozen 변경 기준으로 snapshot budget/diagnostic/service/staging/
+transport/execution/design-boundary/reporter 8파일 **237 PASS / 18.63초**다.
+추가 계약/binding/Catalog adapter/profile/comparison/human contract·owner/experiment
+8파일 **323 PASS / 12.40초**이며 앞선 역사적 suite와 합산하지 않는다.
+Ruff check/format 7파일, strict mypy 5파일 및 diff 검사는 PASS다.
+합성 overflow의 기존 split과 exact canonical bytes/hash 보존, singleton에서
+workspace/CPU/commit 0, 비크기 오류·권한 철회 시 중단, logger 장애가 기존 safe reply를
+바꾸지 않는 것을 검사했다. 새 source는 아직 설치하지 않았으며 실제 READ 원인과
+자료 전체 staging·CPU 결과를 확인한 증거가 아니다.
