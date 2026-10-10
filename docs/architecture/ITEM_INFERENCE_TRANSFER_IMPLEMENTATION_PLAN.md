@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 구현·검증 계획
 
-상태 기준: 2026-10-10, `7383d1c6`의 16:50 UTC 배포와 이후 실제 관측. 이 문서는 구현 계획과 단계별 상태 요약이다.
+상태 기준: 2026-10-10, `f12fb971`의 18:11 UTC 배포와 이후 실제 관측. 이 문서는 구현 계획과 단계별 상태 요약이다.
 실제 설치 증거는 [live acceptance 기록](ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)과
 정본 deployment record로 확인하며, 설치·service health를 비교 실행·교육 품질 PASS로 확대하지 않는다.
 
@@ -31,10 +31,10 @@
 | F0 | 답변 원문 보존·goal·기존 경계 점검 | 원문 read-back/hash, 기존 경계와 제한 기록 | 완료 |
 | F1 | additive JSON Schema 2020-12 → frozen 모델 → grounded deterministic profile | exact refs/hash/closure/uncertainty tests, predecessor bytes 불변 | source 구현·검증 완료 |
 | F2 | pinned offline local embedding adapter와 exact ranking | dependency isolation, malformed vectors·ties·permission-prefilter tests; 실제 CPU benchmark 별도 | source·CPU toy 실행 및 보호 CPU/model 발행 완료; 실패 기록 보존 후 승인된 no-forward 격리 검증 1회 PASS; 실제 corpus benchmark 대기 |
-| F3 | Catalog opt-in authorized candidate read use case | actual actor/policy/Graph admission 재사용, 별도 후보 예산·provenance, 기본 retrieval 무변경 | source·격리 PostgreSQL SQL 검증 및 호환 공유 경계 설치 완료; 실제 `guiadmin` original corpus 520/520·metadata와 520-profile PREPARE PASS; 첫 READ terminal 실패, source에서 재현한 응답 크기 분류 보완과 실제 원인 확인 대기 |
+| F3 | Catalog opt-in authorized candidate read use case | actual actor/policy/Graph admission 재사용, 별도 후보 예산·provenance, 기본 retrieval 무변경 | source·격리 PostgreSQL SQL 검증 및 호환 공유 경계 설치 완료; 이전 runtime의 실제 `guiadmin` original corpus 520/520·metadata와 520-profile PREPARE PASS; 첫 READ terminal 실패, 재현한 응답 크기 분류 보완은 `f12fb971`에 설치 완료; 실제 첫 요청의 원인 확인 대기 |
 | F4 | Orchestrator 경유 bounded Codex pair comparison | exact A/B, condition+decisive mapping, 차이/새 추론, unsupported/insufficient 처리, schema validation | selected-pair 제출·current 권한 재인가·atomic V21/START·canonical 결과 조회·인증 owner PREPARE/RELEASE source와 호환 공유 release 설치 완료; 실제 초기 protocol/control 발행·worker 비교 대기 |
-| F5 | 기존 검색 대비 bounded 실험·human scorecard | lexical/content-only/crux/metadata ablation, recall·latency·memory, 사람이 전이 위치를 평가 | staged 계약·encode-once harness·실모델 3-view 합성 smoke·사람 label 계약/pure metrics 완료; exact 검토 묶음·인가된 label 게시/조회 owner와 CLI source 보완; 실제 corpus/Graph 비교·해당 leaf 설치·사람 label 및 실제 정본 기록 대기 |
-| F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 교육 판정은 독립 gate | 기존 source 2,609 PASS와 변경 경계 회귀/정적/wheel 검사 PASS; 보호 CPU 설치·격리 PASS; `7383d1c6` successor 배포·migration 0051 unchanged·6 callback·API ready·8 service 복원 PASS; fresh 인증/corpus/520-profile PREPARE PASS, READ 보완·control 발행·비교 실행·human gate와 최종 원문 대조 대기 |
+| F5 | 기존 검색 대비 bounded 실험·human scorecard | lexical/content-only/crux/metadata ablation, recall·latency·memory, 사람이 전이 위치를 평가 | staged 계약·encode-once harness·실모델 3-view 합성 smoke·사람 label 계약/pure metrics 완료; exact 검토 묶음·인가된 label 게시/조회 owner와 CLI는 `f12fb971`에 설치 완료; 실제 corpus/Graph 비교·사람 label 및 실제 정본 기록 대기 |
+| F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 교육 판정은 독립 gate | 기존 source 2,609 PASS와 변경 경계 회귀/정적/wheel 검사 PASS; 보호 CPU 설치·격리 PASS; `f12fb971` successor 배포·migration 0051 unchanged·6 callback·API ready·8 service 및 chat READY 복원 PASS; 이전 fresh 인증/corpus/PREPARE 성공 보존; 수정본 READ·control 발행·비교 실행·human gate와 최종 원문 대조 대기 |
 
 ## 비교 표현과 판정
 
@@ -126,7 +126,7 @@ HTTP replay/목적 전용 결과 resolution 및 아직 남은 실제 운영 호�
 그 이후 실제 설치 component map, no-forward 실패/권한 수정 및 남은 운영 gate는
 [live acceptance 기록](ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)에서 확인한다.
 
-1. compatible shared release는 `7383d1c6`로 successor 설치했다. 실제 `guiadmin` original corpus 520/520과 exact Graph/preset metadata 및 query-free PREPARE 79,325.809 ms 완료를 확인했다. 실제 첫 READ는 terminal 실패했고 CPU forward는 실행하지 않았다. 응답 크기 분류의 재현 가능한 source 결함을 보완하되 실제 요청의 동일 원인 여부는 UNKNOWN으로 유지한다. 같은 공식 경로·exact pins·입력 receipt를 보존하며 기존 V2 검색·활성 preset은 바꾸지 않는다.
+1. compatible shared release는 READ 응답 크기 분류 보완을 포함한 `f12fb971`로 successor 설치했다. 이전 `7383d1c6` 실행에서 실제 `guiadmin` original corpus 520/520과 exact Graph/preset metadata 및 query-free PREPARE 79,325.809 ms 완료를 확인했다. 실제 첫 READ는 terminal 실패했고 CPU forward는 실행하지 않았다. 실제 요청의 동일 overflow 원인 여부는 UNKNOWN으로 유지한다. 같은 공식 경로·exact pins·입력 receipt를 보존하며 기존 V2 검색·활성 preset은 바꾸지 않는다. 새 실제-principal 최소 READ 진단 뒤 같은 execution의 복구를 판단한다.
 2. 실제 corpus의 deterministic profile 길이·E5 token overflow 비율·source resolution query/file-read 비용부터 측정한다. 긴 조건을 버려 성공시키지 않는다. 필요한 facet/chunk successor는 측정 후 별도 설계한다.
 3. 동일한 authorized target 집합에서 lexical/Graph, content-only, concrete-facet, metadata 보조의 후보 집합을 비교한다. 사람 label이 없으면 recall/quality PASS를 만들지 않는다.
 4. compatible exact-purpose support plan·instruction·runtime/policy release를 준비하고 기존 Orchestrator를 통한 bounded pair comparison을 수행한다. 기존 support/PDF preset의 purpose를 바꾸거나 worker를 직접 실행하지 않는다.

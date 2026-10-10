@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-10 16:12 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-10 18:14 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
 
 ## 보존하는 설계와 범위
@@ -18,11 +18,11 @@
 
 | Component | 실제 상태 | 한계 |
 |---|---|---|
-| 공유 API/platform | 설치 source `ad3ed8caf43f3a4ece5abce25b9b59801451803e`, tree `a974e0754aaa8125cf8d481eda7d3c5cdc29b794`; 16:07:55 UTC 배포 완료 | 비교 owner 경계 설치와 실제 `guiadmin` 인증·자료 조회·비교 실행은 별도 증거 |
+| 공유 API/platform | 설치 source `f12fb9710823bccc30c78a61bf1b2d784b7b4929`, tree `a67bc6a69c10c31521eebabce01d210d06a3c3e4`; 18:11:32 UTC 배포 완료 | 아래 이전 corpus/PREPARE 관측은 `7383d1c6` 실행이다. 수정본의 실제 READ·CPU·비교·사람 검토는 별도 gate |
 | 운영 PostgreSQL | `20261010_0051` migration 및 exact-head 검증 PASS | 새 비교 Workflow stage CHECK 적용이지 비교 control 발행이나 worker 실행이 아님 |
 | 별도 CPU Conda | `/opt/eom/conda/envs/eom-embedding-experiment` 보호 snapshot 발행·승인된 격리 probe PASS | 실제 corpus 실험은 별도 gate |
 | CPU platform | `06134fcd91413a957ac3133db062dbcdd525ee15` wheel에서 비편집 설치 | d291 candidate와 1,361개 payload member가 일치함; source 표기는 원래 설치값 유지 |
-| 최초 API build-only 후보 | `d2917ba448f21b86e7731d8477e802c658c2e106` | 역사적 후보로 보존; 후속 공유 배포는 위 `ad3ed8ca` release |
+| 최초 API build-only 후보 | `d2917ba448f21b86e7731d8477e802c658c2e106` | 역사적 후보로 보존; 후속 공유 배포는 위 `f12fb971` release |
 
 Component들이 같은 commit이어야 한다고 가정하지 않는다. 실제 파일·wheel·contract
 호환성과 설치 provenance를 따로 기록한다. build-only 결과를 live release로 부르지 않는다.
@@ -487,5 +487,55 @@ transport/execution/design-boundary/reporter 8파일 **237 PASS / 18.63초**다.
 Ruff check/format 7파일, strict mypy 5파일 및 diff 검사는 PASS다.
 합성 overflow의 기존 split과 exact canonical bytes/hash 보존, singleton에서
 workspace/CPU/commit 0, 비크기 오류·권한 철회 시 중단, logger 장애가 기존 safe reply를
-바꾸지 않는 것을 검사했다. 새 source는 아직 설치하지 않았으며 실제 READ 원인과
-자료 전체 staging·CPU 결과를 확인한 증거가 아니다.
+바꾸지 않는 것을 검사했다. 이 source 검증 시점에는 아직 설치하지 않았으며 실제 READ
+원인과 자료 전체 staging·CPU 결과를 확인한 증거가 아니다. 이후 설치는 다음과 구별한다.
+
+### `f12fb971` 실제 수정본 배포와 서비스 복구
+
+2026-10-10 **18:11:32.257955 UTC**, source
+`f12fb9710823bccc30c78a61bf1b2d784b7b4929`, tree
+`a67bc6a69c10c31521eebabce01d210d06a3c3e4`의 정상 공유 배포를 완료했다.
+사용자가 이미 인증한 `EOM:2 inference-transfer` TTY의 sudo를 그대로 사용했다.
+다른 비TTY 실행의 인증 실패를 사용자의 인증 실패로 해석하지 않았다.
+
+- 기존 보호 interpreter, 기존 closed operator adapter를 재사용했다. CPU 설치·model
+  bytes·worker 인증·queue·DB schema를 새로 변경하지 않았다.
+- fresh data-only stage: `/var/lib/eom-release-operator-stage.f12fb971-J3RSLX`.
+- context SHA-256: `e3ccc3efdb4e34421a042a9ccd2df94b01cb915e01918a3039cfbc985dfc5219`.
+- source snapshot SHA-256: `f353b4cdb55939122b17ae718dea62b967c63169abda2a71fd72d29c5aeb4120`.
+- 실제 `ADMIT_PASS`와 **여섯 EXECUTE callback** PASS: PDF runtime, migration verify,
+  API role, Catalog role, HWPX role, API isolation. 기존 migration `20261010_0051`
+  그대로이며 `MIGRATION_UPGRADE_0051`은 이번 배포에서 실행하지 않았다.
+- 실제 지원된 작업·lease·채팅 quiescence 검사 PASS, workflow command/API processing
+  각각 0. HWPX runtime role로 별도 조회한 item/exam active build도 각각 0이다.
+  Orchestrator role의 HWPX 조회 권한 거부는 우회하거나 grant로 해결하지 않았다.
+- 원래 active/enabled인 관련 8개 service를 정지하고 실제 inactive/dead/PID 0과
+  정지 뒤 작업 검사 PASS를 확인했다. 정상 install은 개발 사용자로 실행했다.
+- 정상 배포는 같은 source의 별도 `G9uItf` wheel build를 설치했다. 처음 admitted
+  `J3RSLX` ZIP hashes와 설치 ZIP hashes를 같다고 보고하지 않는다.
+- 정본 설치 record:
+  `/var/lib/eom-api/deployments/f12fb9710823bccc30c78a61bf1b2d784b7b4929.json`.
+
+| 실제 설치 wheel | Raw SHA-256 |
+|---|---|
+| API contracts | `716a73d24368bcb8d03f9b1092171cacb2a376098ad5ee228d75ceaf1eb18a0a` |
+| Application API | `9bd20d36f7087c1b87b83a16da02eaec24091bfbdba94735adf5282ea0c8b377` |
+| Platform | `7c19596877dbf1bb515f75915f0c70133027574d8c2ca763b2249c5025106dc6` |
+
+같은 admitted source의 기존 `update_release_pin()`만 보호 interpreter에서 호출해
+채팅의 정확한 nonsecret predecessor `7383d1c6` → `f12fb971`을 atomic advance했다.
+auth/model/RAG 설정과 대화 기록은 바꾸지 않았다. 별도 broker/chat worker/chat owner를
+복구한 뒤 **관련 8개 service 모두 active/running/enabled/positive PID**, API health
+smoke PASS, API UID의 공식 chat slot read **READY**, 실제 installed build commit/tree
+일치를 확인했다. human-review owner leaf도 공유 wheel에 포함되지만 실제 사람 label
+게시·교육 품질 판단을 수행했다는 뜻은 아니다.
+
+이 배포에서 실제 model/CPU forward, 새 비교 job, 문항/풀이보고서 재생성은 **0**이다.
+원래 failed READ, private 입력 receipt/실험 identity를 그대로 보존한다. 수정본에서
+actual-principal PREPARE/첫 READ를 최소 범위로 진단하는 다음 gate가 남아 있다.
+일반 source tests나 service health로 그 READ 원인·성능을 확정하지 않는다.
+
+18:13 UTC Slack `devreport_29bf2d655f2e4a7985e1a65dc5bab872`의 처음 callback 수
+표기는 7이었으나 실제 log는 위 6개와 별도 ADMIT다. 원 보고를 지우지 않고
+`devreport_810773308b08422fa90153c57a593085`에서 한국어 첫 문장으로 정정했다.
+중간 정정 보고의 비한국어 summary도 한국어 reporting 규칙 준수로 간주하지 않는다.
