@@ -71,6 +71,23 @@ execution `embeddingexecution_125fe45683e34a2ea188e8ea65a990b0`는 그대로 보
 현재 보호된 console은 fresh `guiadmin` 인증 대기다. 실제 READ/CPU/controls/pair submission은
 아직 실행하지 않았으며 자동 재시도·새 execution·DB 상태 초기화·사람 점수표는 없다.
 
+### 후속 V11 입력의 소스 핀 확인 — 인증 전 읽기 전용
+
+설치된 `ab1d5b8c`와 아래 config bytes가 동일함을 Git revision diff로 확인했다.
+공개 compiler의 definition canonical SHA는
+`a9c7e38151b7f0a0004069d23e60f8601c9717173bb672022ae075566844260e`다.
+`platform.md` raw SHA는
+`0c0c01042bc357514b547dea323d53f9111bf0d062da3cfbbdf029ebe0f6fcc9` / 2,103 bytes,
+`transfer-rubric.md`는
+`e6fff04f7803c7858d62ea9d1013e4cced62f6551fbac4ab6d5ec87614dcacea` / 4,692 bytes다.
+YAML 원시 SHA를 definition canonical SHA 대신 쓰지 않는다.
+
+기존 검토된 SUPPORT config의 모델 후보는 `gpt-5.6-terra / medium`이다.
+이는 역사적 candidate value이며 현재 사용 가능·구독 자격·새 comparison 목적의
+모델 admission 증거는 아니다. 공식 V11 PREPARE의 실제 capacity/model freshness
+검증이 필요한 상태로 둔다. 이 확인에서 새 manifest·rubric/control identity 발급,
+control 발행·모델 호출·CPU 재실행은 하지 않았다.
+
 ## 보호 CPU 설치의 실제 증거
 
 2026-10-10 15:08 UTC경 보호 snapshot·model·고정 unit·polkit 설치가 완료됐다.
