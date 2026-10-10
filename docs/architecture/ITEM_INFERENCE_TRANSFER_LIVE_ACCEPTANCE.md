@@ -273,8 +273,25 @@ allowlisted stable error code만 추가한 one-off 진단 presentation을 준비
 - 독립 focused 합성 검사 38 PASS, Ruff check/format PASS, strict mypy 2 files PASS.
 - 진단 statements를 제거한 AST는 원래 identity/auth/input/hash/model/budget/explicit
   RUN_EXPERIMENT 동작과 동일하다. 예외 message·token·password·응답 본문은 출력하지 않는다.
-- 실제 identity/private-input 검증 뒤 PASSWORD_PROMPT에서 사용자 재입력 대기다.
+- 실제 identity/private-input 검증 뒤 PASSWORD_PROMPT에 도달했고, 사용자 재입력 후
+  16:24:36.529 UTC `/auth/login` POST
+  (`req_0965aa9a67f11a5c25df3fb16f73e07e`)가 기록됐다. 진단 콘솔은 LOGIN 단계에서
+  `CONTROL_AUTHORIZATION_REQUIRED`로 종료했다. `login_guiadmin=ENTERED`, 별도의
+  current-principal read는 NOT_ENTERED이고 이 관측 구간에 `/auth/me` 요청도 없었다.
+  따라서 corpus·권한별 자료 조회·CPU 실행 전의 로그인 거절로 분류한다. native transport는
+  login HTTP 401/403/429를 같은 stable code로 표현하고 journal은 HTTP status를 기록하지
+  않으므로, 비밀번호 불일치·계정 잠금/비활성·rate limit 중 어느 하나로 단정하지 않는다.
+  자동 재로그인, credential reset, auth 경계 완화는 하지 않았다.
   이전과 같은 private 입력 경계를 사용하며 새 CPU execution identity를 만들지 않았다.
+
+source-only 독립 진단에서 지원된 다음 조회는 기존 실제 브라우저 session의
+`/api/v1/auth/account`와 fresh ADMIN `OPERATOR_READ`의 `/api/v1/operators`다.
+표시 이름 `GUI admin`은 로그인 username `guiadmin`의 alias가 아니며 현재 username은
+사용자가 변경했을 수 있다. Operator 조회에는 상태·역할·실제 username이 있지만 credential
+hash나 잠금 상태는 없다. public ApiAuditEvent read 계약도 확인되지 않았으므로, root 권한으로
+private auth 테이블을 읽어서 실제 사용자 인증을 우회하지 않는다. 현재 사용자에게
+`guiadmin`의 실제 브라우저 로그인 가능 여부를 확인 중이며 해당 답변 없이는 추가 로그인이나
+코퍼스/모델 실행을 시작하지 않는다.
 
 이것은 임시 operator presentation이며 새 worker protocol, auth grant, HTTP status 관측이나
 production search 활성화가 아니다. 원인 분류 이후 임시 진단 호출부를 회수하고 검증 기록은
