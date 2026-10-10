@@ -411,7 +411,7 @@ def _codex_invocation() -> dict[str, object]:
 
 def test_control_schema_resources_are_immutable_and_packaged() -> None:
     entries = control_schema_inventory()
-    assert len(entries) == 111
+    assert len(entries) == 112
     assert len({name for name, _ in entries}) == len(entries)
     assert {
         "codex-compatibility-request",
@@ -425,6 +425,7 @@ def test_control_schema_resources_are_immutable_and_packaged() -> None:
         "execution-preset-revision-v2",
         "resolved-execution-plan-v21",
         "inference-transfer-control-bootstrap",
+        "inference-transfer-control-invocation",
         "knowledge-item-control-bootstrap",
         "knowledge-item-control-bootstrap-v2",
         "knowledge-item-control-bootstrap-v3",

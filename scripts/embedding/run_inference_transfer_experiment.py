@@ -7,7 +7,6 @@ import argparse
 import json
 import os
 import re
-import resource
 import stat
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,11 +20,9 @@ from eom_catalog_contracts.inference_transfer_experiment import (
     validate_experiment_result,
 )
 from eom_catalog_contracts.validation import validate_contract
-from eom_catalog_service.inference_transfer_experiment import (
-    run_staged_inference_transfer_experiment,
-)
+from eom_catalog_service.inference_transfer_cpu_stdio import measure_cpu_experiment
 from eom_catalog_service.local_embedding_adapter import OfflineTransformersEmbeddingBackend
-from eom_identifiers import canonical_json_bytes, content_sha256
+from eom_identifiers import canonical_json_bytes
 from jsonschema.exceptions import ValidationError as SchemaValidationError
 
 _MAXIMUM_INPUT_BYTES = 64 * 1024**2
@@ -188,17 +185,12 @@ def main() -> None:
         batch_size=request.budget.batch_size,
         threads=request.budget.threads,
     )
-    result = run_staged_inference_transfer_experiment(
+    result = measure_cpu_experiment(
         request,
         backend,
         execution_id=args.execution_id or "embeddingexecution_" + uuid4().hex,
         created_at=datetime.now(UTC),
         model_load_milliseconds=round(1000 * (perf_counter() - started)),
-    )
-    body = result.model_dump(mode="json", exclude={"result_sha256"})
-    body["measurements"]["peak_rss_kib_linux"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    result = InferenceTransferExperimentResult.model_validate(
-        body | {"result_sha256": content_sha256(body)}
     )
     validate_experiment_result(request, result)
     write_result(args.workspace, args.output, result)

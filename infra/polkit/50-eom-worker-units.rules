@@ -27,6 +27,7 @@ polkit.addRule(function(action, subject) {
     var localImageCropLocatorUnit = /^eom-image-crop-locator@imgcroplocator_[0-9a-f]{32}\.service$/;
     var localImageScienceVisualPilotUnit = /^eom-image-science-visual-pilot@imgscivisattempt_[0-9a-f]{32}\.service$/;
     var officeConverterUnit = /^eom-office-converter@officeconv_[0-9a-f]{32}\.service$/;
+    var embeddingExperimentUnit = /^eom-embedding-experiment@embeddingexecution_[0-9a-f]{32}\.service$/;
 
     if (action.id !== "org.freedesktop.systemd1.manage-units") {
         return polkit.Result.NOT_HANDLED;
@@ -52,7 +53,8 @@ polkit.addRule(function(action, subject) {
             || localImageScienceSubjectBenchmarkUnit.test(unit)
             || localImageScienceSubjectMultiseedUnit.test(unit)
             || localImageCropLocatorUnit.test(unit)
-            || localImageScienceVisualPilotUnit.test(unit))) {
+            || localImageScienceVisualPilotUnit.test(unit)
+            || embeddingExperimentUnit.test(unit))) {
         return polkit.Result.YES;
     }
     if (verb === "start" && subject.user === "eom-hwpx-manager"
@@ -68,7 +70,8 @@ polkit.addRule(function(action, subject) {
         && (probeUnit.test(unit) || authUnit.test(unit))) {
         return polkit.Result.YES;
     }
-    if (["eom", "eom-workflow-runner", "eom-hwpx-manager", "eom-catalog-manager"]
+    if (["eom", "eom-workflow-runner", "eom-hwpx-manager", "eom-catalog-manager",
+         "eom-embedding-experiment"]
         .indexOf(subject.user) !== -1) {
         return polkit.Result.NO;
     }

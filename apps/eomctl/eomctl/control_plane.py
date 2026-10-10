@@ -28,9 +28,11 @@ from eom_orchestrator.pdf_document_review_bootstrap import (
 from eom_orchestrator.settings import Settings
 
 from eomctl.codex_runtime import codex_runtime_app
+from eomctl.inference_transfer_controls import inference_transfer_control_app
 
 control_plane_app = typer.Typer(no_args_is_help=True)
 control_plane_app.add_typer(codex_runtime_app, name="codex-runtime")
+control_plane_app.add_typer(inference_transfer_control_app, name="inference-transfer")
 STANDARD_CONFIG_DIRECTORY_OPTION = typer.Option(
     ...,
     "--config-directory",

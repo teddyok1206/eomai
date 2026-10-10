@@ -23,6 +23,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+inference-transfer = [
+  # Protected owner authentication reuses the compatible API contracts wheel;
+  # ordinary platform and isolated CPU execution do not require this adapter.
+  "eom-api-contracts==0.1.0",
+]
 dev = [
   "mypy>=1.17,<2",
   "pytest>=8.4,<9",

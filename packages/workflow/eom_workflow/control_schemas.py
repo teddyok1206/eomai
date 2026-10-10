@@ -29,6 +29,12 @@ class ControlSchemaResource:
 
 CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType(
     {
+        "inference-transfer-control-invocation": ControlSchemaResource(
+            "schemas/workflow/control-plane/inference-transfer-control-invocation-v1.schema.json",
+            "resources/control-plane/inference-transfer-control-invocation-v1.schema.json",
+            "1.0",
+            "sha256:14cd3aca06371c5cb7a5b6140e56a1e81b19789937a10e04a93eb1c81f12dd0c",
+        ),
         "inference-transfer-control-bootstrap": ControlSchemaResource(
             "schemas/workflow/control-plane/inference-transfer-control-bootstrap-v1.schema.json",
             "resources/control-plane/inference-transfer-control-bootstrap-v1.schema.json",

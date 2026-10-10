@@ -1,7 +1,7 @@
 # 핵심 착상 전이: 제출·결과 조회·보호된 실험 source 연결
 
 상태 시각: 2026-10-10 UTC. **SOURCE_VERIFIED / NOT_LIVE**.
-전체 goal은 ACTIVE이며 완료하지 않았다. 실제 corpus 비교·worker canary·사람의 전이 판단을
+전체 goal은 완료하지 않았다. 실제 corpus 비교·worker canary·사람의 전이 판단을
 합성 입력이나 계약 테스트로 대신하지 않는다.
 
 ## 이번 구현
@@ -115,12 +115,50 @@ package 파일/RECORD를 확인했다. 저장소 import/PYTHONPATH, 자격 증�
 5. 일부 최초 개발 invocation의 source path/파일명 오타와 Ruff/static typing 오류는 로컬에서
    보정·재실행했다. 이를 운영 장애나 권한 완화 사유로 분류하지 않았다.
 
+## 고정 CPU 실행·인증 owner 호출부의 후속 source 검증
+
+2026-10-10 UTC. 실제 운영 승인·인증을 기다리는 동안 남아 있던 두 소스 경계를 구현했다.
+
+- 고정 root staging unit은 owner-private input을 FD/소유권/모드/단일 링크/크기/동일 inode로
+  검증한 뒤 root-owned 임시 handoff를 만든다. 별도 unprivileged CPU unit은 inherited FD만
+  사용한다. Owner-private 검사를 완화하거나 CPU worker에게 DB/NAS/owner group 권한을 주지 않는다.
+- 종료한 exact 두 unit과 입력·결과의 identity를 확인한 뒤 기존 private workspace에 결과를
+  materialize한다. 불명확한 종료는 UNCERTAIN이며 새 key나 자동 재실행으로 우회하지 않는다.
+- polkit은 기존 Orchestrator OS owner의 exact main unit `start`만 허용한다. 다른 identity,
+  직접 staging 실행, stop/restart, 잘못된 execution ID는 허용하지 않는다.
+- 공식 `/api/v1/auth/me`를 사용한 보호 owner PREPARE/별도 NON_LIVE RELEASE CLI를 추가했다.
+  Token은 FD로만 받으며 헤더 전송 전에 fixed loopback의 exact reverse TCP peer UID를 확인한다.
+  실제 principal/session을 고정하고 publication/최종 transaction에서 API와 DB 현재 권한을 재확인한다.
+- 새 closed invocation schema와 receipt/hash를 정의했다. Bootstrap Artifact의 raw byte SHA는
+  실제 `canonical JSON + LF`의 해시다. 의미 해시나 LF 없는 해시로 대체하지 않는다.
+- 기존 API contracts wheel은 optional extra로만 추가하고 CLI에서 지연 로딩한다. 의존성 이유와
+  기존 최상위 CLI의 별도 packaging 한계는 owner 설계에 기록했다. 외부 model dependency는 없다.
+
+| Gate | 결과 | 실제 범위 |
+|---|---|---|
+| 최종 통합 회귀 | **2,024 PASS / 82.18 s** | 이전 63개 + release 회귀 7개 + 신규 focused/worker 8개, 총 78개 파일. 실제 auth/model/privileged 실행은 포함하지 않음 |
+| 변경 production strict mypy | **11 files PASS** | follow-imports=silent; 기존 전체 codebase 타입 검증으로 확대하지 않음 |
+| 변경 Python Ruff/format | **23 files PASS** | 신규·수정 파일 |
+| 독립 source review | PASS | 재현 가능한 추가 결함 없음; 실제 인증/설치/발행 증거가 아님 |
+| 원문·unit/schema bytes | PASS | 원문 SHA 보존, 두 고정 unit hash와 packaged/canonical schema 일치 |
+| 운영 DB/서비스/NAS/control/model 변경 | **NONE** | 실제 UID/namespace/권한·메모리 적정성·control 발행·corpus 실험은 NOT_RUN |
+
+기존 TestClient/httpx deprecation warning 한 건은 유지된다. 이번 wrapper/adapter 변경은
+persistence rule이나 migration을 바꾸지 않아 위의 disposable PostgreSQL 증거를 보존한다.
+Source 검사 결과를 이전 또는 아직 설치되지 않은 release의 live PASS로 옮기지 않는다.
+
+첫 통합 실행은 2,022 PASS / 2 FAIL이었다. 새 control schema로 inventory가 111→112가 되어
+기대 개수·membership을 갱신했고 기존 schema hash 검사는 유지했다. 다른 실패는 강화된 파일
+권한 검증에 맞춰 fixture의 0644를 명시하지 않은 문제였다. 수정한 소스를 동결한 뒤 전체
+78개 파일을 다시 실행한 결과가 위의 최종 PASS다. 생산 권한 검사는 완화하지 않았다.
+
 ## 남은 경계
 
 1. 실제 인증 operator의 installed snapshot API 호출과 권한 범위 확정.
 2. 검토된 bootstrap bytes를 실제 control authorizer/publisher로 PREPARE하고, 별도 NON_LIVE
-   RELEASE를 통과시키는 운영 composition. 기존 support/PDF/출제 preset은 바꾸지 않는다.
-3. pinned protected model과 명시적인 설치·격리 CPU launcher. 소스의 CPU port는 unsandboxed
+   RELEASE를 통과시키는 실제 owner invocation. CLI source는 구현했지만 발행하지 않았다.
+   기존 support/PDF/출제 preset은 바꾸지 않는다.
+3. pinned protected model과 고정 launcher의 실제 설치·격리 검증. 소스의 CPU port는 unsandboxed
    subprocess나 ambient Python으로 자동 대체하지 않는다.
 4. 실제 target의 길이·token overflow·resolution 비용과 동일 집합의 lexical/Graph/세 표현 비교.
 5. 기존 Orchestrator를 통한 제한된 pair canary와 사람 검토 묶음.

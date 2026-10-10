@@ -1,0 +1,282 @@
+"""Fixed prepare/main units implement the removable local CPU execution port."""
+
+from __future__ import annotations
+
+import hashlib
+import os
+import re
+import stat
+import subprocess
+from dataclasses import dataclass
+from pathlib import Path
+
+from eom_orchestrator.inference_transfer_cpu_handoff import (
+    OWNER_ROOT,
+    CpuHandoffError,
+    fixed_owner_identity,
+    materialize_cpu_output,
+    validate_cpu_execution_id,
+)
+from eom_orchestrator.inference_transfer_experiment_ports import (
+    CpuExperimentRunError,
+    LocalExperimentInput,
+)
+from eom_orchestrator.worker_systemd import FixedUnitStatus, parse_unit_status
+
+SYSTEMCTL = "/usr/bin/systemctl"
+UNIT_ROOT = Path("/etc/systemd/system")
+CPU_PYTHON = Path("/srv/eom/conda/envs/eom-embedding-experiment/bin/python")
+PREPARE_PYTHON = Path("/srv/eom/conda/envs/eom-api/bin/python")
+CPU_TIMEOUT_SECONDS = 1800
+CPU_CLIENT_GUARD_SECONDS = 30
+PREPARE_TEMPLATE = "eom-embedding-experiment-prepare@.service"
+CPU_TEMPLATE = "eom-embedding-experiment@.service"
+PREPARE_TEMPLATE_SHA256 = "c6e03aec4f38f91c4622182452788631213668c23a082f7e4a5253b7167cb908"
+CPU_TEMPLATE_SHA256 = "901490e677fcea763c581ec1fce79c2a3e82063a163cbfd250a8a0c1979d2eb7"
+_ROOT_UID = 0
+_ENVIRONMENT = {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"}
+_PROPERTIES = (
+    "LoadState",
+    "ActiveState",
+    "SubState",
+    "Result",
+    "ExecMainCode",
+    "ExecMainStatus",
+    "ExecMainStartTimestampMonotonic",
+    "ExecMainExitTimestampMonotonic",
+    "NeedDaemonReload",
+    "MainPID",
+    "InvocationID",
+    "FragmentPath",
+    "DropInPaths",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class CpuUnitObservation:
+    status: FixedUnitStatus
+    main_pid: int
+    exited_monotonic: int
+    invocation_id: str
+    fragment_path: str
+    drop_in_paths: str
+
+    @property
+    def fresh(self) -> bool:
+        return (
+            self.status.active_state == "inactive"
+            and self.status.sub_state == "dead"
+            and self.status.result == "success"
+            and self.status.exec_main_code == 0
+            and self.status.exec_main_status == 0
+            and not self.status.process_started
+            and self.main_pid == 0
+            and self.exited_monotonic == 0
+            and not self.invocation_id
+        )
+
+    @property
+    def succeeded(self) -> bool:
+        # RemainAfterExit intentionally remains active; no process may still be running.
+        return (
+            self.status.active_state == "active"
+            and self.status.sub_state == "exited"
+            and self.main_pid == 0
+            and self.status.result == "success"
+            and self.status.exec_main_code == 1
+            and self.status.exec_main_status == 0
+            and self.status.exec_main_started_monotonic > 0
+            and self.exited_monotonic >= self.status.exec_main_started_monotonic
+            and re.fullmatch(r"[0-9a-f]{32}", self.invocation_id) is not None
+        )
+
+    @property
+    def failed(self) -> bool:
+        return (
+            self.status.active_state == "failed"
+            and self.status.sub_state == "failed"
+            and self.main_pid == 0
+            and self.status.result not in {"", "success", "timeout"}
+            and self.status.exec_main_code > 0
+            and self.status.exec_main_started_monotonic > 0
+            and self.exited_monotonic >= self.status.exec_main_started_monotonic
+            and re.fullmatch(r"[0-9a-f]{32}", self.invocation_id) is not None
+        )
+
+
+def cpu_unit_names(execution_id: str) -> tuple[str, str]:
+    identity = validate_cpu_execution_id(execution_id)
+    return (
+        f"eom-embedding-experiment-prepare@{identity}.service",
+        f"eom-embedding-experiment@{identity}.service",
+    )
+
+
+def _root_path(path: Path, *, allow_final_symlink: bool = False) -> Path:
+    for member in (path, *path.parents):
+        value = member.lstat()
+        if (
+            value.st_uid != _ROOT_UID
+            or (stat.S_ISLNK(value.st_mode) and not (member == path and allow_final_symlink))
+            or (not stat.S_ISLNK(value.st_mode) and value.st_mode & 0o022)
+        ):
+            raise ValueError("INFERENCE_CPU_INSTALLED_PATH_INVALID")
+    resolved = path.resolve(strict=True)
+    if resolved != path:
+        _root_path(resolved)
+    return resolved
+
+
+def _require_template(name: str, expected_sha256: str) -> None:
+    path = _root_path(UNIT_ROOT / name)
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        initial = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(initial.st_mode)
+            or initial.st_uid != _ROOT_UID
+            or initial.st_mode & 0o022
+            or initial.st_nlink != 1
+            or not 0 < initial.st_size <= 128 * 1024
+        ):
+            raise ValueError("INFERENCE_CPU_TEMPLATE_INVALID")
+        payload = os.read(descriptor, initial.st_size + 1)
+        final = os.fstat(descriptor)
+        named = path.lstat()
+        if (
+            _template_epoch(initial) != _template_epoch(final)
+            or _template_epoch(final) != _template_epoch(named)
+            or len(payload) != initial.st_size
+            or hashlib.sha256(payload).hexdigest() != expected_sha256
+        ):
+            raise ValueError("INFERENCE_CPU_TEMPLATE_INVALID")
+    finally:
+        os.close(descriptor)
+
+
+def _template_epoch(value: os.stat_result) -> tuple[int, int, int, int, int, int, int, int, int]:
+    return (
+        value.st_dev,
+        value.st_ino,
+        value.st_mode,
+        value.st_uid,
+        value.st_gid,
+        value.st_nlink,
+        value.st_size,
+        value.st_mtime_ns,
+        value.st_ctime_ns,
+    )
+
+
+def require_cpu_runtime() -> None:
+    """Installed fixed files only; absence never falls back to a repo/ambient interpreter."""
+    _require_template(PREPARE_TEMPLATE, PREPARE_TEMPLATE_SHA256)
+    _require_template(CPU_TEMPLATE, CPU_TEMPLATE_SHA256)
+    for path in (PREPARE_PYTHON, CPU_PYTHON):
+        value = _root_path(path, allow_final_symlink=True).stat()
+        if not stat.S_ISREG(value.st_mode) or not value.st_mode & 0o111:
+            raise ValueError("INFERENCE_CPU_INTERPRETER_INVALID")
+
+
+def inspect_cpu_unit(unit_name: str, *, template: str) -> CpuUnitObservation:
+    result = subprocess.run(
+        (
+            SYSTEMCTL,
+            "--no-pager",
+            "show",
+            unit_name,
+            *(f"--property={name}" for name in _PROPERTIES),
+        ),
+        capture_output=True,
+        check=False,
+        timeout=15,
+        env=_ENVIRONMENT,
+    )
+    if result.returncode != 0 or len(result.stdout) > 16 * 1024 or len(result.stderr) > 16 * 1024:
+        raise ValueError("INFERENCE_CPU_STATUS_UNAVAILABLE")
+    output = result.stdout.decode("utf-8", errors="strict")
+    values: dict[str, str] = {}
+    for line in output.splitlines():
+        key, separator, value = line.partition("=")
+        if not separator or key in values or key not in _PROPERTIES:
+            raise ValueError("INFERENCE_CPU_STATUS_INVALID")
+        values[key] = value
+    if set(values) != set(_PROPERTIES):
+        raise ValueError("INFERENCE_CPU_STATUS_INVALID")
+    status = parse_unit_status(output)
+    observation = CpuUnitObservation(
+        status,
+        int(values["MainPID"]),
+        int(values["ExecMainExitTimestampMonotonic"] or "0"),
+        values["InvocationID"],
+        values["FragmentPath"],
+        values["DropInPaths"],
+    )
+    if (
+        status.load_state != "loaded"
+        or status.need_daemon_reload
+        or values["NeedDaemonReload"] != "no"
+        or observation.fragment_path != str(UNIT_ROOT / template)
+        or observation.drop_in_paths
+        or min(
+            observation.main_pid, observation.exited_monotonic, status.exec_main_started_monotonic
+        )
+        < 0
+    ):
+        raise ValueError("INFERENCE_CPU_STATUS_INVALID")
+    return observation
+
+
+class FixedCpuExperimentLauncher:
+    """No submission retry: a return requires both exact fixed units to have terminated."""
+
+    def run(self, prepared: LocalExperimentInput) -> None:
+        try:
+            owner = fixed_owner_identity()
+            if (
+                os.geteuid() != owner.owner_uid
+                or prepared.workspace != OWNER_ROOT / prepared.execution_id
+            ):
+                raise ValueError("INFERENCE_CPU_OWNER_IDENTITY_INVALID")
+            prepare_unit, main_unit = cpu_unit_names(prepared.execution_id)
+            require_cpu_runtime()
+        except (CpuHandoffError, OSError, ValueError, KeyError) as exc:
+            raise CpuExperimentRunError("KNOWN_FAILED") from exc
+        try:
+            before = (
+                inspect_cpu_unit(prepare_unit, template=PREPARE_TEMPLATE),
+                inspect_cpu_unit(main_unit, template=CPU_TEMPLATE),
+            )
+            if any(not value.fresh for value in before):
+                raise CpuExperimentRunError("UNCERTAIN")
+            # --wait waits for deactivation, which RemainAfterExit intentionally prevents.
+            # Normal start waits for completion of both oneshot start jobs instead.
+            started = subprocess.run(
+                (SYSTEMCTL, "--no-ask-password", "start", main_unit),
+                capture_output=True,
+                check=False,
+                timeout=CPU_TIMEOUT_SECONDS + CPU_CLIENT_GUARD_SECONDS,
+                env=_ENVIRONMENT,
+            )
+            after = (
+                inspect_cpu_unit(prepare_unit, template=PREPARE_TEMPLATE),
+                inspect_cpu_unit(main_unit, template=CPU_TEMPLATE),
+            )
+            if all(value.succeeded for value in after):
+                materialize_cpu_output(prepared)
+                final = (
+                    inspect_cpu_unit(prepare_unit, template=PREPARE_TEMPLATE),
+                    inspect_cpu_unit(main_unit, template=CPU_TEMPLATE),
+                )
+                if final != after:
+                    raise CpuExperimentRunError("UNCERTAIN")
+                return
+            if after[1].failed or (after[0].failed and not after[1].status.process_started):
+                raise CpuExperimentRunError("KNOWN_FAILED")
+            # Start return code alone cannot prove whether the model process ran.
+            _ = started.returncode
+            raise CpuExperimentRunError("UNCERTAIN")
+        except CpuExperimentRunError:
+            raise
+        except (OSError, ValueError, CpuHandoffError, subprocess.SubprocessError) as exc:
+            raise CpuExperimentRunError("UNCERTAIN") from exc

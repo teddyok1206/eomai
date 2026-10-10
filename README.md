@@ -119,8 +119,9 @@ RAG 출처는 3건으로 제한합니다. 실제 HTTPS에서 교과서 답변·�
 Catalog owner·전용 resolver/Runner는 소스에서 연결됐습니다.
 [후속 제출·결과·보호된 실험](docs/architecture/ITEM_INFERENCE_TRANSFER_FIFTH_CHECKPOINT.md)에서
 현재 권한 재인가, atomic Workflow/V21/START, canonical 결과 조회 및 optional CPU/Artifact
-owner 호출부를 검증했습니다. 설치된 격리 CPU launcher/control 운영 composition,
-실제 사용자 권한의 corpus 실험·운영 활성화·사람 평가는 별도 후속 gate입니다.
+owner 호출부를 검증했습니다. 고정 격리 CPU launcher와 인증 owner PREPARE/별도 RELEASE CLI도
+소스에 추가했습니다. 실제 설치·OS 격리·설정 발행, 사용자 권한의 corpus 실험·운영 활성화·
+사람 평가는 별도 후속 gate입니다.
 
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스

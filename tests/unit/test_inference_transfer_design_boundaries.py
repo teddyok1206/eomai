@@ -16,6 +16,7 @@ PURE_MODULES = (
     "packages/workflow/eom_workflow/inference_transfer.py",
     "packages/workflow/eom_workflow/inference_transfer_control.py",
     "packages/workflow/eom_workflow/inference_transfer_bootstrap_contract.py",
+    "packages/workflow/eom_workflow/inference_transfer_control_invocation.py",
     "packages/workflow/eom_workflow/inference_transfer_materialization.py",
     "packages/workflow/eom_workflow/inference_transfer_workflow.py",
     "services/catalog_service/eom_catalog_service/inference_transfer_comparison.py",

@@ -284,6 +284,10 @@ class ProtectedExperimentWorkspace:
     def failed(self, prepared: LocalExperimentInput) -> None:
         self._write(self._path(prepared), ".launch-failed", b"")
 
+    def materialize_cpu_result(self, prepared: LocalExperimentInput, payload: bytes) -> None:
+        """One explicit temporary worker-output boundary, not validation or publication."""
+        self._write(self._path(prepared), "result.json", payload)
+
     def validate_result(
         self,
         prepared: LocalExperimentInput,

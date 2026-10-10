@@ -1295,6 +1295,10 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_orchestrator/control_bootstrap.py",
         "eom_orchestrator/customer_support_bootstrap.py",
         "eom_orchestrator/inference_transfer_bootstrap.py",
+        "eom_orchestrator/inference_transfer_control_auth.py",
+        "eom_orchestrator/inference_transfer_control_invocation.py",
+        "eom_orchestrator/inference_transfer_cpu_handoff.py",
+        "eom_orchestrator/inference_transfer_cpu_systemd.py",
         "eom_orchestrator/inference_transfer_resolution.py",
         "eom_orchestrator/inference_transfer_snapshot_staging.py",
         "eom_orchestrator/inference_transfer_experiment_ports.py",
@@ -1328,6 +1332,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_workflow/inference_transfer.py",
         "eom_workflow/inference_transfer_control.py",
         "eom_workflow/inference_transfer_bootstrap_contract.py",
+        "eom_workflow/inference_transfer_control_invocation.py",
         "eom_workflow/inference_transfer_materialization.py",
         "eom_workflow/inference_transfer_workflow.py",
         "eom_workflow/models.py",
@@ -1345,6 +1350,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_workflow_runner/systemd_retirement_quiescence.py",
         "eomctl/cli.py",
         "eomctl/control_plane.py",
+        "eomctl/inference_transfer_controls.py",
         "eomctl/knowledge.py",
         "eomctl/legacy_assessment.py",
     }
@@ -1404,6 +1410,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_catalog_service/generated_stimulus.py",
         "eom_catalog_service/inference_transfer_catalog_adapter.py",
         "eom_catalog_service/inference_transfer_comparison.py",
+        "eom_catalog_service/inference_transfer_cpu_stdio.py",
         "eom_catalog_service/inference_transfer_evaluation.py",
         "eom_catalog_service/inference_transfer_experiment.py",
         "eom_catalog_service/inference_transfer_item_projection.py",
@@ -2344,6 +2351,8 @@ for schema_id in RESULT_SCHEMA_FILES:
     load_codex_result_schema(schema_id)
 control_schema_names = {name for name, _ in control_schema_inventory()}
 if not {
+    "inference-transfer-control-bootstrap",
+    "inference-transfer-control-invocation",
     "standard-control-bootstrap-v10",
     "knowledge-item-control-bootstrap-v7",
     "standard-control-bootstrap-v11",

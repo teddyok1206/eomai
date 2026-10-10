@@ -12,11 +12,12 @@ queue, search engine, framework 또는 일반 사용자 UI를 이 단계에서 �
 
 1. 인증된 snapshot client → pure staging port와 명시적 오류 매핑: **source 구현·검증 완료**.
 2. staging → 보호된 local input → CPU port → 최종 source 재인가 → owner Artifact commit:
-   **source 연결·검증 완료**, 실제 설치·격리 CPU launcher는 아직 없음.
+   **source 연결·검증 완료**, 고정 staging/main CPU unit과 launcher도 소스에 추가했다.
+   실제 설치·privileged 격리 검증은 미실행이다.
 3. 선택된 두 profile → 실제 principal의 Workflow 제출 및 목적 전용 결과 조회:
    **source 구현·검증 완료**, authenticated installed 실행은 미실행.
 4. 검토된 bootstrap 입력 → 실제 control-permission authorizer/publisher → 명시적 PREPARE/RELEASE:
-   실제 owner 호출·운영 composition은 계속 **대기**.
+   인증된 보호 owner CLI composition을 소스에 추가했다. 실제 인증·발행·RELEASE는 **대기**다.
 
 검증 결과와 잔여 한계는 [다섯 번째 checkpoint](ITEM_INFERENCE_TRANSFER_FIFTH_CHECKPOINT.md)에
 기록한다. 소스 연결을 모델 실행·NAS publication·운영 활성화로 해석하지 않는다.
@@ -118,7 +119,8 @@ bounded input/output, secret-safe failure, 기존 출제/support/PDF/Graph 의�
 
 ## 실제 운영 호출부의 추가 점검
 
-2026-10-10 UTC 읽기 전용 inventory 결과다. 아래 모듈의 존재는 설치·인증·실행 증거가 아니다.
+2026-10-10 UTC 최초 읽기 전용 inventory와 그에 따른 설계 입력이다. 아래의 당시 누락은
+후속 소스 결정으로 보강했지만 실제 설치·인증·실행을 완료했다는 뜻은 아니다.
 
 - Bootstrap은 `ControlArtifactPublisher.publish_bytes`를 사용하고 CPU 실험 결과는
   `ControlFileSetPublisher`를 사용한다. 서로의 manifest/permission 의미로 대체하지 않는다.
@@ -142,3 +144,69 @@ bounded input/output, secret-safe failure, 기존 출제/support/PDF/Graph 의�
 관련: [구현 계획](ITEM_INFERENCE_TRANSFER_IMPLEMENTATION_PLAN.md),
 [네 번째 checkpoint](ITEM_INFERENCE_TRANSFER_FOURTH_CHECKPOINT.md).
 이 문서에는 운영 자료·자격 증명·worker 내용·실제 품질 판정이 없다.
+
+## 남은 소스 경계의 최소 구현 결정
+
+2026-10-10 UTC. 아래는 설치·실행 승인이 아니라 소스 구현 결정이다.
+
+1. **책임·경계:** CPU 입력 전달은 고정된 privileged staging unit, 모델 forward는 별도
+   unprivileged CPU unit, 결과 수용·재인가·publication은 기존 Orchestrator가 담당한다.
+   Control bootstrap은 기존 보호된 Orchestrator owner CLI에서 수행한다. Catalog에 control
+   쓰기 권한을 추가하거나 API의 NAS 격리를 풀지 않는다.
+2. **정본:** root runtime handoff는 임시 복사다. 기존 owner-private request와 검증된 owner
+   result/publication만 기존 Artifact commit에 전달한다. Control 입력은 이미 정의된 reviewed
+   bootstrap manifest/원문 bytes, 출력은 기존 published control pointers와 exact preset이다.
+3. **identity·revision:** 두 고정 unit은 같은 `embeddingexecution_…`를 사용한다. Local markers는
+   여전히 임시 실행 관측일 뿐 durable queue가 아니다. Bootstrap PREPARE receipt는 새 closed
+   schema로 manifest와 기존 exact prepared pointers/preset 및 receipt hash를 묶는다.
+4. **resolution:** root staging은 고정 owner root만 dir-FD/O_NOFOLLOW로 열고 owner UID,
+   0700/0600, regular/single-link, byte bound와 named inode를 확인한다. Root-owned runtime
+   parent에만 O_EXCL로 input/output를 만들며 PID1은 그 경로만 연다. CPU는 inherited stdin/stdout만
+   사용한다. Owner는 confirmed terminal observation 뒤 root-owned output를 bounded FD read하고
+   자기 private `result.json`을 O_EXCL600으로 materialize한다. 이전 workspace 검사 완화는 없다.
+5. **access pattern:** exact execution lookup, ordered bounded byte transfer, 현재 auth 조회,
+   exact receipt replay다. FIFO/새 registry/새 queue는 없다. 기존 publisher의 indexed publication
+   idempotency와 control transaction lock을 유지한다.
+6. **자료구조·index:** 고정 unit name과 frozen typed observations, 기존 typed experiment request/result,
+   prepared receipt를 사용한다. Filesystem handoff는 execution별 directory와 고정 member 두 개다.
+   DB index/migration/신규 grant는 필요 없다.
+7. **규모·복잡도:** 기존 input/result 64 MiB bound를 유지한다. Byte transfer와 hash는 O(B),
+   metadata lookup은 O(1), bounded materialization 공간 O(B)다. 파일 한 번씩 전달은 명시적
+   trust/materialization boundary이며 추가 canonical copy나 cache가 아니다.
+8. **transaction·concurrency:** owner의 exclusive launch marker와 기존 publication boundary를
+   사용한다. Staging/main units는 exact identity에 대해 RemainAfterExit를 유지해 종료 후
+   재시작으로 같은 forward를 반복하지 않는다. 이는 distributed exactly-once 증명이 아니다.
+   Source 권한 확인, local execution, Artifact publication은 별도 관측/commit 경계다.
+9. **의존성·adapter:** installed `-I -m` CPU harness와 고정 systemd adapter만 추가한다. 기존
+   experiment JSON schema를 재사용하며 새 CPU worker protocol은 없다. Control owner는 existing
+   API `/api/v1/auth/me` typed contract를 fixed loopback/no-proxy/no-redirect/bounded read로 호출하고
+   실제 operator/session을 얻는다. 토큰은 별도 FD로 받고 argv/env/receipt/log에 넣지 않는다.
+   연결 뒤 token을 보내기 **전에** Linux exact reverse four-tuple peer socket UID를 확인해
+   설치된 `eom-api` UID에 묶는다. Listener나 HTTP 200만으로 서버 identity를 추정하지 않는다.
+   이 검사가 불가능하면 닫으며 API secret을 읽는 fallback은 없다.
+   외부 dependency는 추가하지 않는다. 실제 owner auth adapter는 기존 별도
+   `eom-api-contracts==0.1.0` wheel을 optional `inference-transfer` extra로 명시한다.
+   이유는 공식 CurrentOperator/SingleResponse 계약을 복제하지 않고 재사용하기 위해서다.
+   같은 package version만으로 호환성을 증명하지 않으며 release set의 source/wheel SHA를 pin한다.
+   Core와 CPU adapter에는 이 의존성을 강제하지 않고 새 CLI command에서만 지연 로딩한다.
+10. **failure·retry·auth:** CPU timeout/불명확한 terminal 상태는 UNCERTAIN이며 자동 재실행하지 않는다.
+    Partial handoff는 덮어쓰지 않는다. Control 호출은 실제 auth가 유효한지 각 publication/최종
+    transaction 전에 재확인하고 현재 ACTIVE/ADMIN/EXECUTION_PRESET_MANAGE를 재조회한다.
+    Principal/session 교체·만료·password-change-required는 거부한다. PREPARE와 RELEASE는 별도
+    명령이며 caller-supplied actor/time/authority와 auto release는 없다. 실패 publication history는 보존한다.
+11. **더 단순한 대안과 배제 이유:** owner-writable path를 `StandardInput=file:`로 PID1에 직접
+    넘기면 privileged open의 symlink 우회가 가능하다. systemd v255는 O_NOFOLLOW를 적용하지
+    않으므로 두 fixed unit이 필요하다. Worker에 owner group/DB/NAS 권한을 주거나 소유 검사를
+    완화하는 대안은 배제한다. Bootstrap을 Catalog에서 실행하면 불필요한 control DB grant가
+    필요하므로 기존 owner와 실제 auth read를 결합한다. 임의 `--actor-id` 조회는 인증이 아니다.
+
+두 unit/CPU environment/protected entrypoint 설치, polkit 제한 start grant, 실제 auth와 control
+publication 및 OS negative smoke는 별도 운영 gate다. Source/fake tests를 LIVE PASS로 쓰지 않는다.
+
+### 기존 CLI 의존성의 별도 한계
+
+API contracts가 없는 fresh interpreter에서 기존 control-plane/codex-runtime help와 새 command의
+안전한 거부를 검증한다. 그러나 기존 최상위 `eomctl.cli → legacy_assessment → eom_api.build_info`
+경로는 원래 API contracts에 의존한다. 이번 optional adapter 변경으로 그 기존 문제까지
+해결했다고 주장하지 않으며 관련 코드는 변경하지 않는다. 운영 owner에는 검증된 호환 API
+contracts wheel이 필요하다.

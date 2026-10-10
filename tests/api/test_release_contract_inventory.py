@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 from eom_catalog_contracts import catalog_schema_inventory
@@ -121,7 +122,14 @@ def test_transfer_source_candidate_is_complete_in_release_runtime_inventory() ->
     assert {
         "eom_workflow_runner/role_execution_port.py",
         "eom_workflow_runner/role_execution_binding.py",
+        "eomctl/inference_transfer_controls.py",
     } <= assignments["control_plane_runtime"]
+
+
+def test_transfer_owner_api_contract_dependency_is_optional() -> None:
+    metadata = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
+    assert metadata["optional-dependencies"]["inference-transfer"] == ["eom-api-contracts==0.1.0"]
+    assert not any(name.startswith("eom-api-contracts") for name in metadata["dependencies"])
 
 
 def test_installed_support_admission_covers_materialized_workflow_contracts() -> None:

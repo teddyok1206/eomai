@@ -60,6 +60,7 @@ from eom_protocol import ErrorCode
 ROOT = Path(__file__).resolve().parents[2]
 JOB_ID = "job_0123456789abcdef0123456789abcdef"
 PROBE_UNIT = "eom-worker-probe-01@probe_0123456789abcdef0123456789abcdef.service"
+EMBEDDING_UNIT = "eom-embedding-experiment@embeddingexecution_" + "a" * 32 + ".service"
 
 
 def _slot(index: int = 1) -> WorkerSlot:
@@ -1409,6 +1410,71 @@ def test_polkit_rule_has_no_external_execution_or_cached_authorization() -> None
 @pytest.mark.parametrize(
     ("user", "action_id", "unit", "verb", "expected"),
     (
+        (
+            "eom-workflow-runner",
+            "org.freedesktop.systemd1.manage-units",
+            EMBEDDING_UNIT,
+            "start",
+            "yes",
+        ),
+        ("eom", "org.freedesktop.systemd1.manage-units", EMBEDDING_UNIT, "start", "no"),
+        ("eom-api", "org.freedesktop.systemd1.manage-units", EMBEDDING_UNIT, "start", None),
+        (
+            "eom-catalog-manager",
+            "org.freedesktop.systemd1.manage-units",
+            EMBEDDING_UNIT,
+            "start",
+            "no",
+        ),
+        (
+            "eom-embedding-experiment",
+            "org.freedesktop.systemd1.manage-units",
+            EMBEDDING_UNIT,
+            "start",
+            "no",
+        ),
+        (
+            "eom-workflow-runner",
+            "org.freedesktop.systemd1.manage-units",
+            EMBEDDING_UNIT,
+            "stop",
+            "no",
+        ),
+        (
+            "eom-workflow-runner",
+            "org.freedesktop.systemd1.manage-units",
+            EMBEDDING_UNIT,
+            "restart",
+            "no",
+        ),
+        (
+            "eom-workflow-runner",
+            "org.freedesktop.systemd1.manage-units",
+            EMBEDDING_UNIT.replace("experiment@", "experiment-prepare@"),
+            "start",
+            "no",
+        ),
+        (
+            "eom-workflow-runner",
+            "org.freedesktop.systemd1.manage-units",
+            EMBEDDING_UNIT.replace("embeddingexecution_", "job_"),
+            "start",
+            "no",
+        ),
+        (
+            "eom-workflow-runner",
+            "org.freedesktop.systemd1.manage-units",
+            EMBEDDING_UNIT.replace(".service", "x.service"),
+            "start",
+            "no",
+        ),
+        (
+            "eom-workflow-runner",
+            "org.freedesktop.systemd1.manage-units",
+            "eom-embedding-experiment@../../secret.service",
+            "start",
+            "no",
+        ),
         (
             "eom-workflow-runner",
             "org.freedesktop.systemd1.manage-units",
