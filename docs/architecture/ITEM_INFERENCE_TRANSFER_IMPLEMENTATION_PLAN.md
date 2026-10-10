@@ -31,10 +31,10 @@
 | F0 | 답변 원문 보존·goal·기존 경계 점검 | 원문 read-back/hash, 기존 경계와 제한 기록 | 완료 |
 | F1 | additive JSON Schema 2020-12 → frozen 모델 → grounded deterministic profile | exact refs/hash/closure/uncertainty tests, predecessor bytes 불변 | source 구현·검증 완료 |
 | F2 | pinned offline local embedding adapter와 exact ranking | dependency isolation, malformed vectors·ties·permission-prefilter tests; 실제 CPU benchmark 별도 | source·CPU toy 실행 및 보호 CPU/model 발행 완료; 실패 기록 보존 후 승인된 no-forward 격리 검증 1회 PASS; 실제 corpus benchmark 대기 |
-| F3 | Catalog opt-in authorized candidate read use case | actual actor/policy/Graph admission 재사용, 별도 후보 예산·provenance, 기본 retrieval 무변경 | source·격리 PostgreSQL SQL 검증 및 호환 공유 경계 설치 완료; 실제 `guiadmin` original corpus 520/520·metadata PASS; snapshot timeout 개선은 설치했고 실제 재측정 대기 |
+| F3 | Catalog opt-in authorized candidate read use case | actual actor/policy/Graph admission 재사용, 별도 후보 예산·provenance, 기본 retrieval 무변경 | source·격리 PostgreSQL SQL 검증 및 호환 공유 경계 설치 완료; 실제 `guiadmin` original corpus 520/520·metadata와 520-profile PREPARE PASS; 첫 READ terminal 실패, source에서 재현한 응답 크기 분류 보완과 실제 원인 확인 대기 |
 | F4 | Orchestrator 경유 bounded Codex pair comparison | exact A/B, condition+decisive mapping, 차이/새 추론, unsupported/insufficient 처리, schema validation | selected-pair 제출·current 권한 재인가·atomic V21/START·canonical 결과 조회·인증 owner PREPARE/RELEASE source와 호환 공유 release 설치 완료; 실제 초기 protocol/control 발행·worker 비교 대기 |
 | F5 | 기존 검색 대비 bounded 실험·human scorecard | lexical/content-only/crux/metadata ablation, recall·latency·memory, 사람이 전이 위치를 평가 | staged 계약·encode-once harness·실모델 3-view 합성 smoke·사람 label 계약/pure metrics 완료; exact 검토 묶음·인가된 label 게시/조회 owner와 CLI source 보완; 실제 corpus/Graph 비교·해당 leaf 설치·사람 label 및 실제 정본 기록 대기 |
-| F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 교육 판정은 독립 gate | 기존 source 2,609 PASS와 변경 경계 회귀/정적/wheel 검사 PASS; 보호 CPU 설치·격리 PASS; `7383d1c6` successor 배포·migration 0051 unchanged·6 callback·API ready·8 service 복원 PASS; 원래 인증/corpus PASS, fresh snapshot·control 발행·비교 실행 및 human gate 대기 |
+| F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 교육 판정은 독립 gate | 기존 source 2,609 PASS와 변경 경계 회귀/정적/wheel 검사 PASS; 보호 CPU 설치·격리 PASS; `7383d1c6` successor 배포·migration 0051 unchanged·6 callback·API ready·8 service 복원 PASS; fresh 인증/corpus/520-profile PREPARE PASS, READ 보완·control 발행·비교 실행·human gate와 최종 원문 대조 대기 |
 
 ## 비교 표현과 판정
 
@@ -63,6 +63,36 @@
 4. A를 푼 사람이 B를 풀 때 느끼는 도움이 모델 제안과 일치하는가.
 
 위 사항은 자동 기술 검증과 분리해 최종 검토 묶음에 모은다. 사람 평가 전에는 `HUMAN_TRANSFER_REVIEW=NOT_EVALUATED`다.
+
+## 최종 설계 대조 검토 — 사용자 요청 반영
+
+2026-10-10 사용자는 작업 마무리 시 최초 기획한 설계대로 유사도 기능이 구현됐는지
+확인하도록 요청했다. 이는 새 기능이나 acceptance 재실행 요구가 아니라 기존 목표의
+최종 적합성 검토다. 위 원문과 SHA-256을 기준으로 아래 요구를 실제 구현·테스트·운영
+증거에 연결한다. 원문은 변경하지 않으며 후속 장애 수정으로 목표를 축소하지 않는다.
+
+| 원문 요구 | 마무리 때 확인할 내용 |
+|---|---|
+| 핵심 착상 전이 | 같은 소재·개념·공식 또는 일반 풀이 단계의 유사성과 결정적 착상의 전이를 구분하는가 |
+| 조건의 역할 | 주어진 조건·숨은 관계·결정적 추론·질문·오개념을 정본 풀이보고서와 정확한 참조로 연결하는가 |
+| 후보와 판정 분리 | 로컬 임베딩은 후보를 찾고, 점수만으로 대응·정확성·승인·표절을 확정하지 않는가 |
+| 조건 대응과 차이 | Codex 쌍 비교가 A→B의 조건·추론 대응, 적용되지 않는 부분과 추가 추론을 근거와 함께 남기는가 |
+| 개념·소재·착상 구분 | facet과 메타데이터를 구분하며 content-only·착상·메타데이터 보조를 동일한 인가 모집단에서 비교하는가 |
+| 기존 시스템 활용 | GraphRAG와 승인된 문항·풀이보고서를 대체하지 않고 실제 사용자 권한·pin·해시·Orchestrator 경계를 유지하는가 |
+| 사람의 풀이 전이 평가 | 정확한 pair에 대해 도움이 되는 부분과 전이 label을 사람이 기록할 수 있고 모델 가설과 분리하는가 |
+| 실험과 제한 | 기존 검색 대비 결과·실행 예산·실패·미검증 항목을 재현 가능하게 보존하며 자동으로 성공을 꾸미지 않는가 |
+
+최종 보고에는 각 요구의 코드/계약 위치, 관련 테스트, 실제 설치·실행 증거 및 남은
+차이를 대조표로 남긴다. `SOURCE_VERIFIED`, `LIVE_VERIFIED`, `HUMAN_NOT_EVALUATED`,
+`GAP`을 구분하고, 구현 누락은 기존 범위 안에서 보완한다. 실제 사람 판단이나 운영 권한이
+필요한 항목은 별도 gate로 명시하며 source PASS를 전체 설계·교육 품질 PASS로 확대하지 않는다.
+
+현재 읽기 전용 사전 대조에서는 profile → 후보 → 근거 연결 A→B 비교 → 별도 사람 평가의
+소스 경로를 확인했다. 그러나 첫 실제 READ 실패로 corpus 후보 성능·worker 비교·사람
+label은 아직 확인하지 못했다. 최종 대조에서는 소재·개념·착상별 설명이 실제 결과에
+구분되는지, 차이/추가 추론의 빈 배열이 정말 해당 없음인지, 메타데이터의 실제 활용 범위가
+구조·수식·승인 보고서 summary로 한정된다는 점도 명시적으로 확인한다. 합성 테스트의
+순위나 모델 가설을 사용자의 실제 풀이 전이 평가로 대체하지 않는다.
 
 현재 `HumanTransferEvaluation`은 exact pair/rubric/reviewer/UTC와 전이 위치를 검증하는
 frozen 계약이고 `evaluate_transfer_ranking`은 이미 인가·해결된 입력의 순수 지표 함수다.
@@ -96,7 +126,7 @@ HTTP replay/목적 전용 결과 resolution 및 아직 남은 실제 운영 호�
 그 이후 실제 설치 component map, no-forward 실패/권한 수정 및 남은 운영 gate는
 [live acceptance 기록](ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)에서 확인한다.
 
-1. compatible shared release는 `7383d1c6`로 successor 설치했다. 실제 `guiadmin` original corpus 520/520과 exact Graph/preset metadata는 확인했다. query-free snapshot timeout의 source 반복 비용을 요청범위 provenance로 개선하고, fresh 인증 이후 같은 공식 경로의 실제 latency를 확인한다. 기존 V2 검색·활성 preset을 바꾸지 않는 opt-in 경로로 제한한다.
+1. compatible shared release는 `7383d1c6`로 successor 설치했다. 실제 `guiadmin` original corpus 520/520과 exact Graph/preset metadata 및 query-free PREPARE 79,325.809 ms 완료를 확인했다. 실제 첫 READ는 terminal 실패했고 CPU forward는 실행하지 않았다. 응답 크기 분류의 재현 가능한 source 결함을 보완하되 실제 요청의 동일 원인 여부는 UNKNOWN으로 유지한다. 같은 공식 경로·exact pins·입력 receipt를 보존하며 기존 V2 검색·활성 preset은 바꾸지 않는다.
 2. 실제 corpus의 deterministic profile 길이·E5 token overflow 비율·source resolution query/file-read 비용부터 측정한다. 긴 조건을 버려 성공시키지 않는다. 필요한 facet/chunk successor는 측정 후 별도 설계한다.
 3. 동일한 authorized target 집합에서 lexical/Graph, content-only, concrete-facet, metadata 보조의 후보 집합을 비교한다. 사람 label이 없으면 recall/quality PASS를 만들지 않는다.
 4. compatible exact-purpose support plan·instruction·runtime/policy release를 준비하고 기존 Orchestrator를 통한 bounded pair comparison을 수행한다. 기존 support/PDF preset의 purpose를 바꾸거나 worker를 직접 실행하지 않는다.

@@ -135,12 +135,38 @@ def test_secret_and_webhook_redaction_is_recursive() -> None:
 
 
 def test_renderer_has_fallback_text_and_blocks_without_sensitive_value() -> None:
-    payload = render_payload(_report(summary=f"configured at {WEBHOOK}"))
+    payload = render_payload(_report(summary=f"보고 설정을 확인했고 주소 {WEBHOOK}는 숨겼습니다."))
     encoded = json.dumps(payload)
-    assert payload["text"].startswith("[EOM")
+    assert payload["text"].startswith(f"보고 설정을 확인했고 주소 {REDACTED}")
+    assert payload["blocks"][0]["text"]["text"].startswith(f"보고 설정을 확인했고 주소 {REDACTED}")
     assert payload["blocks"]
     assert WEBHOOK not in encoded
     assert "secret-value" not in encoded
+
+
+@pytest.mark.parametrize("status", list(ReportStatus))
+def test_renderer_starts_with_summary_before_status_and_metadata(status: ReportStatus) -> None:
+    summary = "요청한 기능 구현과 검증을 완료했습니다."
+    payload = render_payload(_report(status=status, summary=summary))
+
+    assert payload["text"].startswith(f"{summary}\n[EOM 개발 보고]")
+    assert payload["blocks"][0] == {
+        "type": "section",
+        "text": {"type": "mrkdwn", "text": summary},
+    }
+    assert payload["blocks"][1]["type"] == "header"
+    assert payload["blocks"][1]["text"]["text"].endswith(str(status))
+    sections = [block["text"]["text"] for block in payload["blocks"] if block["type"] == "section"]
+    assert sum(summary in text for text in sections) == 1
+    assert sections[1].startswith("*Phase*\n")
+
+
+def test_renderer_escapes_summary_without_a_leading_section_label() -> None:
+    payload = render_payload(_report(summary="표와 그림 <검증>을 완료했고 A&B를 확인했습니다."))
+
+    assert payload["blocks"][0]["text"]["text"] == (
+        "표와 그림 &lt;검증&gt;을 완료했고 A&amp;B를 확인했습니다."
+    )
 
 
 def test_disabled_and_missing_reporter_configuration(

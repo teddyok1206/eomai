@@ -15,10 +15,9 @@ def render_payload(report: DevelopmentProgressReport) -> dict[str, Any]:
     validate_report(report)
     clean = DevelopmentProgressReport.model_validate(redact_value(report.model_dump(mode="json")))
     title = f"[EOM 개발 보고] Workflow Engine V0 - {clean.status}"
-    fallback = _truncate(f"{title} | {clean.phase} | {clean.summary}", 500)
+    fallback = _truncate(f"{clean.summary}\n{title} | {clean.phase}", 500)
     sections = [
         _section("Phase", [clean.phase]),
-        _section("Summary", [clean.summary]),
         _section("Completed", clean.completed),
         _section("In progress", clean.in_progress),
         _section("Next", clean.next),
@@ -38,6 +37,13 @@ def render_payload(report: DevelopmentProgressReport) -> dict[str, Any]:
     return {
         "text": fallback,
         "blocks": [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": _escape(_truncate(clean.summary, MAX_ITEM_LENGTH)),
+                },
+            },
             {"type": "header", "text": {"type": "plain_text", "text": title[:150]}},
             *(section for section in sections if section is not None),
         ],
