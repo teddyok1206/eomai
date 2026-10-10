@@ -29,6 +29,18 @@ class ControlSchemaResource:
 
 CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType(
     {
+        "codex-compatibility-matrix": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-compatibility-matrix-v1.schema.json",
+            "resources/control-plane/codex-compatibility-matrix-v1.schema.json",
+            "1.0",
+            "sha256:630ba5b81de41ddb43cd03d8cf2e180936a1c5895468250d782f058c663ad549",
+        ),
+        "codex-reviewed-capability-policy-v3": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-reviewed-capability-policy-v3.schema.json",
+            "resources/control-plane/codex-reviewed-capability-policy-v3.schema.json",
+            "3.0",
+            "sha256:b10fe16f2b5730fd6e1b38dda484cae891cadbf427a09a91fc71e8d7e8928a95",
+        ),
         "codex-reviewed-capability-policy-v2": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-reviewed-capability-policy-v2.schema.json",
             "resources/control-plane/codex-reviewed-capability-policy-v2.schema.json",

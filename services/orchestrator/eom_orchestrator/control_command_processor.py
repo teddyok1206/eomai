@@ -351,7 +351,7 @@ class CodexControlCommandProcessor:
                         "CONTROL_CAPABILITY_POLICY_MISMATCH",
                         "reviewed capability policy differs from CLI",
                     )
-                if policy.version == 2:
+                if policy.version in {2, 3}:
                     # Fail closed before automatic maintenance persists READY; the writer
                     # repeats this exact runtime/assignment guard in its final transaction.
                     with self.sessions() as session:

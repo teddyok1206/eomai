@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import os
 import stat
+from collections.abc import Mapping
 from pathlib import Path
+from types import MappingProxyType
 from typing import Literal
 
 import yaml
@@ -15,7 +17,20 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from eom_orchestrator.errors import PlatformError
 
-FIXED_WORKER_SLOT_IDS = ("01", "02", "03", "04", "05", "06")
+FIXED_WORKER_LAYOUT: Mapping[str, tuple[str, str, bool]] = MappingProxyType(
+    {
+        "01": ("eom-cdx-01", "authoring", False),
+        "02": ("eom-cdx-02", "review", False),
+        "03": ("eom-cdx-03", "image", True),
+        "04": ("eom-cdx-04", "item_management", False),
+        "05": ("eom-cdx-05", "support", False),
+        "06": ("eom-cdx-06", "support", False),
+    }
+)
+FIXED_WORKER_SLOT_IDS = tuple(FIXED_WORKER_LAYOUT)
+FIXED_WORKER_SLOT_ROLES: Mapping[str, str] = MappingProxyType(
+    {slot: layout[1] for slot, layout in FIXED_WORKER_LAYOUT.items()}
+)
 
 
 class SlotLimits(BaseModel):
@@ -68,17 +83,9 @@ class WorkerSlotConfig(BaseModel):
         if self.version == 1 and any(slot.slot_id == "06" for slot in self.slots):
             raise ValueError("worker inventory V1 cannot contain slot 06")
         if self.version == 2:
-            expected = {
-                "01": ("eom-cdx-01", "authoring", False),
-                "02": ("eom-cdx-02", "review", False),
-                "03": ("eom-cdx-03", "image", True),
-                "04": ("eom-cdx-04", "item_management", False),
-                "05": ("eom-cdx-05", "support", False),
-                "06": ("eom-cdx-06", "support", False),
-            }
             actual = {slot.slot_id: (slot.linux_user, slot.role, slot.gpu) for slot in self.slots}
             if (
-                actual != expected
+                actual != FIXED_WORKER_LAYOUT
                 or self.limits.global_codex_concurrency != 3
                 or self.limits.gpu_concurrency != 1
             ):

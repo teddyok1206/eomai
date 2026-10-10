@@ -18,6 +18,7 @@ from eom_orchestrator.codex_compatibility_maintenance import (
 )
 from eom_orchestrator.codex_distribution_update import check_codex_distribution_update
 from eom_orchestrator.codex_runtime_compatibility import (
+    prepare_codex_compatibility_matrix_request,
     prepare_codex_compatibility_request,
     run_codex_compatibility,
     validate_codex_compatibility_preflight,
@@ -32,6 +33,7 @@ from eom_workflow.codex_compatibility import (
     compatibility_request_sha256,
     load_compatibility_request,
 )
+from eom_workflow.codex_compatibility_matrix import CompatibilityMatrix, load_compatibility_matrix
 from eom_workflow.control_plane import ReasoningEffort
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from sqlalchemy import Engine
@@ -39,10 +41,12 @@ from sqlalchemy.exc import SQLAlchemyError
 
 codex_runtime_app = typer.Typer(no_args_is_help=True)
 _MAX_REQUEST_BYTES = 1024 * 1024
+_MAX_MATRIX_BYTES = 64 * 1024
 _SOURCE_COMMIT_PATTERN = re.compile(r"^[0-9a-f]{40}$", re.ASCII)
-MODEL_OPTION = typer.Option(..., "--model")
-EFFORT_OPTION = typer.Option([ReasoningEffort.MEDIUM], "--effort")
-SLOT_OPTION = typer.Option(["01", "02"], "--slot")
+MODEL_OPTION = typer.Option(None, "--model")
+EFFORT_OPTION = typer.Option(None, "--effort")
+SLOT_OPTION = typer.Option(None, "--slot")
+MATRIX_FILE_OPTION = typer.Option(None, "--matrix-file", exists=True, dir_okay=False)
 SOURCE_COMMIT_OPTION = typer.Option(..., "--source-commit")
 OUTPUT_FILE_OPTION = typer.Option(..., "--output-file", dir_okay=False)
 REQUEST_FILE_OPTION = typer.Option(..., "--request-file", exists=True, dir_okay=False)
@@ -71,11 +75,11 @@ def _reject_constant(value: str) -> None:
     raise ValueError("non-JSON constant")
 
 
-def read_compatibility_request_file(path: Path) -> CodexCompatibilityRequest:
+def _read_private_compatibility_json_file(path: Path, *, maximum_bytes: int) -> object:
     """Read untrusted presentation input without following links or exposing its content."""
 
     if not path.is_absolute():
-        raise typer.BadParameter("request file must use an absolute path")
+        raise typer.BadParameter("compatibility input file must use an absolute path")
     try:
         descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
         with os.fdopen(descriptor, "rb") as stream:
@@ -85,14 +89,14 @@ def read_compatibility_request_file(path: Path) -> CodexCompatibilityRequest:
                 or before.st_uid != os.geteuid()
                 or before.st_nlink != 1
                 or stat.S_IMODE(before.st_mode) != 0o600
-                or not 0 < before.st_size <= _MAX_REQUEST_BYTES
+                or not 0 < before.st_size <= maximum_bytes
             ):
                 raise ValueError("request file boundary differs")
-            payload = stream.read(_MAX_REQUEST_BYTES + 1)
+            payload = stream.read(maximum_bytes + 1)
             after = os.fstat(stream.fileno())
             if (
                 len(payload) != before.st_size
-                or len(payload) > _MAX_REQUEST_BYTES
+                or len(payload) > maximum_bytes
                 or (
                     before.st_dev,
                     before.st_ino,
@@ -110,12 +114,30 @@ def read_compatibility_request_file(path: Path) -> CodexCompatibilityRequest:
             object_pairs_hook=_unique_json_object,
             parse_constant=_reject_constant,
         )
-        return load_compatibility_request(raw)
+        return raw
     except (OSError, ValueError, JsonSchemaValidationError, RecursionError) as exc:
         raise typer.BadParameter(
-            "request must be valid bounded compatibility JSON in an invoking-user-owned "
+            "input must be valid bounded compatibility JSON in an invoking-user-owned "
             "single-link regular file with mode 0600"
         ) from exc
+
+
+def read_compatibility_request_file(path: Path) -> CodexCompatibilityRequest:
+    try:
+        return load_compatibility_request(
+            _read_private_compatibility_json_file(path, maximum_bytes=_MAX_REQUEST_BYTES)
+        )
+    except (ValueError, JsonSchemaValidationError) as exc:
+        raise typer.BadParameter("request must satisfy the bounded compatibility contract") from exc
+
+
+def read_compatibility_matrix_file(path: Path) -> CompatibilityMatrix:
+    try:
+        return load_compatibility_matrix(
+            _read_private_compatibility_json_file(path, maximum_bytes=_MAX_MATRIX_BYTES)
+        )
+    except (ValueError, JsonSchemaValidationError) as exc:
+        raise typer.BadParameter("matrix must satisfy the bounded compatibility contract") from exc
 
 
 def _write_request_file(path: Path, request: CodexCompatibilityRequest) -> None:
@@ -200,25 +222,42 @@ def check_update() -> None:
 
 @codex_runtime_app.command("prepare-compatibility")
 def prepare_compatibility(
-    model: list[str] = MODEL_OPTION,
-    effort: list[ReasoningEffort] = EFFORT_OPTION,
-    slot: list[str] = SLOT_OPTION,
+    model: list[str] | None = MODEL_OPTION,
+    effort: list[ReasoningEffort] | None = EFFORT_OPTION,
+    slot: list[str] | None = SLOT_OPTION,
+    matrix_file: Path | None = MATRIX_FILE_OPTION,
     source_commit: str = SOURCE_COMMIT_OPTION,
     output_file: Path = OUTPUT_FILE_OPTION,
 ) -> None:
     """Stage an exact bounded diagnostic request; this command does not execute models."""
 
     source_commit = _source_commit(source_commit)
+    matrix = None
+    if matrix_file is not None:
+        if model is not None or effort is not None or slot is not None:
+            raise typer.BadParameter(
+                "--matrix-file cannot be combined with --model/--effort/--slot"
+            )
+        matrix = read_compatibility_matrix_file(matrix_file)
+    elif not model:
+        raise typer.BadParameter("provide --model or --matrix-file")
     engine = _command_engine()
     try:
-        request = prepare_codex_compatibility_request(
-            engine,
-            models=tuple(model),
-            reasoning_efforts=tuple(effort),
-            slot_ids=tuple(slot),
-            source_commit=source_commit,
-            now=datetime.now(UTC),
-        )
+        if matrix is not None:
+            request = prepare_codex_compatibility_matrix_request(
+                engine, matrix=matrix, source_commit=source_commit, now=datetime.now(UTC)
+            )
+        else:
+            request = prepare_codex_compatibility_request(
+                engine,
+                models=tuple(model or ()),
+                reasoning_efforts=tuple(effort)
+                if effort is not None
+                else (ReasoningEffort.MEDIUM,),
+                slot_ids=tuple(slot) if slot is not None else ("01", "02"),
+                source_commit=source_commit,
+                now=datetime.now(UTC),
+            )
         _write_request_file(output_file, request)
         _emit(
             {

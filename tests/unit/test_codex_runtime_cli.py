@@ -18,6 +18,7 @@ from eom_orchestrator.settings import Settings, SettingsError
 from eom_protocol import ErrorCode
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.codex_compatibility import CodexCompatibilityRequest, load_compatibility_request
+from eom_workflow.codex_compatibility_matrix import load_compatibility_matrix
 from eom_workflow.control_plane import ReasoningEffort
 from eomctl import codex_runtime as cli
 from eomctl.cli import app
@@ -177,6 +178,176 @@ def test_prepare_repeated_explicit_choices_do_not_include_defaults(
         ReasoningEffort.XHIGH,
     )
     assert prepare.call_args.kwargs["slot_ids"] == ("03",)
+
+
+def _matrix_file(tmp_path: Path) -> Path:
+    path = tmp_path / "matrix.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": "codex-compatibility-matrix/1.0",
+                "selections": [
+                    {"slot_id": "02", "model": "candidate-model", "reasoning_effort": "medium"},
+                    {"slot_id": "06", "model": "gpt-5.6-terra", "reasoning_effort": "xhigh"},
+                    {"slot_id": "01", "model": "candidate-model", "reasoning_effort": "high"},
+                ],
+            }
+        )
+    )
+    path.chmod(0o600)
+    return path
+
+
+def test_prepare_matrix_file_preserves_exact_selection_without_cartesian_defaults(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = _database(monkeypatch)
+    path = _matrix_file(tmp_path)
+    expected = load_compatibility_matrix(json.loads(path.read_bytes()))
+    request = _request()
+    prepare = Mock(return_value=request)
+    cartesian = Mock(side_effect=AssertionError("matrix must not expand into Cartesian defaults"))
+    monkeypatch.setattr(cli, "prepare_codex_compatibility_matrix_request", prepare)
+    monkeypatch.setattr(cli, "prepare_codex_compatibility_request", cartesian)
+    output = tmp_path / "prepared.json"
+    result = RUNNER.invoke(
+        cli.codex_runtime_app,
+        [
+            "prepare-compatibility",
+            "--matrix-file",
+            str(path),
+            "--source-commit",
+            COMMIT,
+            "--output-file",
+            str(output),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert prepare.call_args.args == (engine,)
+    assert prepare.call_args.kwargs["matrix"] == expected
+    assert prepare.call_args.kwargs["source_commit"] == COMMIT
+    assert cli.read_compatibility_request_file(output) == request
+    assert output.stat().st_mode & 0o777 == 0o600
+    assert json.loads(result.output)["model_calls"] == 0
+    cartesian.assert_not_called()
+    engine.dispose.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "flag", [("--model", "candidate-model"), ("--effort", "medium"), ("--slot", "01")]
+)
+def test_matrix_cannot_mix_even_explicit_default_cartesian_flags_before_database(
+    flag: tuple[str, str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = _matrix_file(tmp_path)
+    database = Mock(side_effect=AssertionError("mixed presentation must not query database"))
+    monkeypatch.setattr(cli, "build_engine", database)
+    result = RUNNER.invoke(
+        cli.codex_runtime_app,
+        [
+            "prepare-compatibility",
+            "--matrix-file",
+            str(path),
+            *flag,
+            "--source-commit",
+            COMMIT,
+            "--output-file",
+            str(tmp_path / "prepared.json"),
+        ],
+    )
+    assert result.exit_code == 2
+    assert "cannot be combined" in result.output
+    database.assert_not_called()
+
+
+def test_missing_model_and_matrix_refuses_before_database(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database = Mock(side_effect=AssertionError("missing selection must not query database"))
+    monkeypatch.setattr(cli, "build_engine", database)
+    result = RUNNER.invoke(
+        cli.codex_runtime_app,
+        [
+            "prepare-compatibility",
+            "--source-commit",
+            COMMIT,
+            "--output-file",
+            str(tmp_path / "prepared.json"),
+        ],
+    )
+    assert result.exit_code == 2
+    assert "provide --model or --matrix-file" in result.output
+    database.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "boundary", ["relative", "symlink", "hardlink", "mode", "large", "fifo", "owner"]
+)
+def test_matrix_files_reuse_private_bounded_nofollow_boundary(
+    boundary: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = _matrix_file(tmp_path)
+    if boundary == "relative":
+        path = Path("matrix.json")
+    elif boundary == "symlink":
+        link = tmp_path / "link.json"
+        link.symlink_to(path)
+        path = link
+    elif boundary == "hardlink":
+        os.link(path, tmp_path / "hard.json")
+    elif boundary == "mode":
+        path.chmod(0o640)
+    elif boundary == "large":
+        path.write_bytes(b" " * (cli._MAX_MATRIX_BYTES + 1))
+    elif boundary == "fifo":
+        path = tmp_path / "fifo"
+        os.mkfifo(path, 0o600)
+    else:
+        monkeypatch.setattr(cli.os, "geteuid", lambda: path.stat().st_uid + 1)
+    with pytest.raises(typer.BadParameter):
+        cli.read_compatibility_matrix_file(path)
+
+
+@pytest.mark.parametrize(
+    "bad_kind", ["duplicate-json", "nan", "authority", "duplicate-triple", "over-budget"]
+)
+def test_invalid_matrix_stops_before_database_and_does_not_expose_input(
+    bad_kind: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = _matrix_file(tmp_path)
+    document = json.loads(path.read_bytes())
+    if bad_kind == "duplicate-json":
+        path.write_bytes(b'{"selections":[],"selections":[]}')
+    elif bad_kind == "nan":
+        path.write_bytes(b'{"selections":NaN}')
+    else:
+        if bad_kind == "authority":
+            document["selections"][0]["binding_id"] = "private-untrusted-authority"
+        elif bad_kind == "duplicate-triple":
+            document["selections"].append(document["selections"][0])
+        else:
+            document["selections"] = [
+                {"slot_id": "01", "model": f"candidate-{index}", "reasoning_effort": "medium"}
+                for index in range(65)
+            ]
+        path.write_text(json.dumps(document))
+    database = Mock(side_effect=AssertionError("invalid matrix must not query database"))
+    monkeypatch.setattr(cli, "build_engine", database)
+    result = RUNNER.invoke(
+        cli.codex_runtime_app,
+        [
+            "prepare-compatibility",
+            "--matrix-file",
+            str(path),
+            "--source-commit",
+            COMMIT,
+            "--output-file",
+            str(tmp_path / "prepared.json"),
+        ],
+    )
+    assert result.exit_code == 2
+    assert "private-untrusted-authority" not in result.output
+    database.assert_not_called()
 
 
 @pytest.mark.parametrize("effort", ["ultra", "default", "HIGH"])

@@ -24,9 +24,12 @@ from eom_orchestrator.control_service import (
     compute_control_document_hash,
     record_capability_snapshot,
 )
+from eom_orchestrator.models import WorkerSlotRecord
 from eom_orchestrator.worker_auth import CLI_ENVIRONMENT, CODEX_BINARY, observe_codex_cli_version
+from eom_orchestrator.worker_registry import FIXED_WORKER_SLOT_ROLES
 
 MAX_POLICY_BYTES = 64 * 1024
+COMPATIBILITY_SLOT_ROLES = FIXED_WORKER_SLOT_ROLES
 REQUIRED_EXEC_HELP_FLAGS = frozenset(
     {
         "--model",
@@ -46,12 +49,23 @@ class ReviewedCapabilityBinding(BaseModel):
     assignment_revision_id: str | None = Field(pattern=r"^authassignrev_[0-9a-f]{32}$")
 
 
+class ReviewedCapabilityBindingV3(ReviewedCapabilityBinding):
+    slot_id: Literal["01", "02", "03", "04", "05", "06"]
+    role: Literal["authoring", "review", "image", "item_management", "support"]
+
+    @model_validator(mode="after")
+    def fixed_slot_role(self) -> ReviewedCapabilityBindingV3:
+        if self.role != COMPATIBILITY_SLOT_ROLES[self.slot_id]:
+            raise ValueError("V3 capability binding role must match its fixed slot")
+        return self
+
+
 class ReviewedModelCapability(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, use_enum_values=True)
 
     model: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
     reasoning_efforts: tuple[ReasoningEffort, ...] = Field(min_length=1, max_length=5)
-    bindings: tuple[ReviewedCapabilityBinding, ...] | None = Field(
+    bindings: tuple[ReviewedCapabilityBinding | ReviewedCapabilityBindingV3, ...] | None = Field(
         default=None, min_length=1, max_length=6
     )
 
@@ -64,13 +78,19 @@ class ReviewedModelCapability(BaseModel):
             or self.bindings != tuple(sorted(self.bindings, key=lambda item: item.binding_id))
         ):
             raise ValueError("reviewed binding scopes must be unique and sorted")
+        if self.bindings is not None:
+            slots = [
+                pin.slot_id for pin in self.bindings if isinstance(pin, ReviewedCapabilityBindingV3)
+            ]
+            if len(slots) != len(set(slots)):
+                raise ValueError("V3 capability scope must have unique slots")
         return self
 
 
 class ReviewedCapabilityPolicy(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    version: Literal[1, 2]
+    version: Literal[1, 2, 3]
     expected_codex_cli_version: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
     models: tuple[ReviewedModelCapability, ...] = Field(min_length=1, max_length=32)
     compatibility_runtime: CodexCompatibilityRuntime | None = None
@@ -98,7 +118,15 @@ class ReviewedCapabilityPolicy(BaseModel):
             or self.compatibility_runtime.cli_version != self.expected_codex_cli_version
             or len({(item.model, item.bindings) for item in self.models}) != len(self.models)
         ):
-            raise ValueError("V2 reviewed policy requires exact runtime and unique model scopes")
+            raise ValueError(
+                "scoped reviewed policy requires exact runtime and unique model scopes"
+            )
+        if self.version in {2, 3} and any(
+            isinstance(pin, ReviewedCapabilityBindingV3) != (self.version == 3)
+            for item in self.models
+            for pin in item.bindings or ()
+        ):
+            raise ValueError("reviewed binding shape must match its policy version")
         return self
 
 
@@ -129,8 +157,10 @@ def load_reviewed_capability_policy(
             "CONTROL_CAPABILITY_POLICY_INVALID", "reviewed capability policy is unavailable"
         ) from exc
     try:
-        if isinstance(value, dict) and value.get("version") == 2:
-            validate_control_contract("codex-reviewed-capability-policy-v2", value)
+        if isinstance(value, dict) and value.get("version") in {2, 3}:
+            validate_control_contract(
+                f"codex-reviewed-capability-policy-v{value['version']}", value
+            )
         return ReviewedCapabilityPolicy.model_validate(value)
     except (ValueError, JsonSchemaValidationError) as exc:
         raise ControlPlaneError(
@@ -184,7 +214,7 @@ def reviewed_capabilities_for_binding(
         raise ControlPlaneError(
             "CONTROL_CAPABILITY_POLICY_MISMATCH", "reviewed capability policy differs from CLI"
         )
-    if policy.version == 2:
+    if policy.version in {2, 3}:
         # A same-version binary/helper replacement also invalidates scoped live admission.
         from eom_orchestrator.codex_compatibility_runtime import observe_compatibility_runtime
 
@@ -192,11 +222,36 @@ def reviewed_capabilities_for_binding(
             raise ControlPlaneError(
                 "CONTROL_CAPABILITY_POLICY_MISMATCH", "compatibility runtime identity differs"
             )
-    binding = session.get(CodexAuthBindingRecord, binding_id) if policy.version == 2 else None
-    if policy.version == 2 and binding is None:
+    binding = session.get(CodexAuthBindingRecord, binding_id) if policy.version in {2, 3} else None
+    if policy.version in {2, 3} and binding is None:
         raise ControlPlaneError("CONTROL_BINDING_NOT_FOUND", "Codex binding is unavailable")
+    slot = None
+    if policy.version == 3 and binding is not None:
+        slot = session.get(WorkerSlotRecord, binding.worker_slot_id)
+        if (
+            slot is None
+            or not slot.enabled
+            or slot.role != COMPATIBILITY_SLOT_ROLES.get(slot.slot_id)
+        ):
+            raise ControlPlaneError(
+                "CONTROL_CAPABILITY_BINDING_UNVERIFIED", "current binding slot role is unverified"
+            )
     admitted: dict[str, set[ReasoningEffort]] = {}
     for item in policy.models:
+        if (
+            policy.version == 3
+            and binding is not None
+            and slot is not None
+            and any(
+                isinstance(pin, ReviewedCapabilityBindingV3)
+                and pin.binding_id == binding_id
+                and (pin.slot_id != binding.worker_slot_id or pin.role != slot.role)
+                for pin in item.bindings or ()
+            )
+        ):
+            raise ControlPlaneError(
+                "CONTROL_CAPABILITY_BINDING_UNVERIFIED", "reviewed binding slot or role differs"
+            )
         if item.bindings is None or any(
             pin.binding_id == binding_id
             and binding is not None

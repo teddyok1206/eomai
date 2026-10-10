@@ -22,6 +22,7 @@ from eom_workflow.codex_compatibility import (
     CodexCompatibilityRequest,
     CodexCompatibilityRuntime,
 )
+from eom_workflow.codex_compatibility_matrix import CompatibilityMatrix, CompatibilitySelection
 from eom_workflow.control_plane import ReasoningEffort
 from sqlalchemy import Engine
 
@@ -612,6 +613,139 @@ def test_prepare_request_pins_exact_non_null_account_assignment(harness: _Harnes
     )
 
     assert tuple(case.assignment_revision_id for case in request.cases) == (assignment, None)
+
+
+def test_cartesian_preparation_delegates_to_one_matrix_use_case(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: list[CompatibilityMatrix] = []
+
+    def prepare(
+        _engine: Engine, *, matrix: CompatibilityMatrix, source_commit: str, now: datetime
+    ) -> CodexCompatibilityRequest:
+        captured.append(matrix)
+        assert source_commit == COMMIT and now == NOW
+        return harness.request
+
+    monkeypatch.setattr(application, "prepare_codex_compatibility_matrix_request", prepare)
+
+    assert (
+        application.prepare_codex_compatibility_request(
+            harness.engine,
+            models=("first-model", "second-model"),
+            reasoning_efforts=(ReasoningEffort.HIGH, ReasoningEffort.MEDIUM),
+            slot_ids=("02", "01"),
+            source_commit=COMMIT,
+            now=NOW,
+        )
+        == harness.request
+    )
+    assert len(captured) == 1
+    assert [
+        (selection.model, selection.reasoning_effort, selection.slot_id)
+        for selection in captured[0].selections
+    ] == [
+        (model, effort, slot)
+        for model in ("first-model", "second-model")
+        for effort in ("high", "medium")
+        for slot in ("02", "01")
+    ]
+
+
+def test_nonrectangular_54_case_matrix_pins_current_accounts_once_without_inference(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    selections = tuple(
+        CompatibilitySelection(slot_id=slot, model=f"candidate-{index}", reasoning_effort=effort)
+        for index in range(7)
+        for effort in (ReasoningEffort.MEDIUM, ReasoningEffort.HIGH, ReasoningEffort.XHIGH)
+        for slot in ("01", "02")
+    ) + tuple(
+        CompatibilitySelection(slot_id=slot, model="gpt-5.6-terra", reasoning_effort=effort)
+        for effort in (ReasoningEffort.MEDIUM, ReasoningEffort.HIGH, ReasoningEffort.XHIGH)
+        for slot in ("03", "04", "05", "06")
+    )
+    matrix = CompatibilityMatrix(selections=selections)
+    for index in range(3, 7):
+        slot = f"{index:02d}"
+        binding_id = "authbinding_" + f"{index:032x}"
+        harness.bindings[binding_id] = SimpleNamespace(
+            binding_id=binding_id,
+            worker_slot_id=slot,
+            current_assignment_revision_id="authassignrev_" + f"{index:032x}",
+            resource_version=index,
+            state="DEGRADED",
+        )
+    queries: list[object] = []
+
+    def scalars(session: _Session, query: object) -> tuple[Any, ...]:
+        queries.append(query)
+        return tuple(session.harness.bindings.values())
+
+    monkeypatch.setattr(_Session, "scalars", scalars)
+    request = application.prepare_codex_compatibility_matrix_request(
+        harness.engine, matrix=matrix, source_commit=COMMIT, now=NOW
+    )
+
+    assert request.max_model_calls == len(request.cases) == 54
+    assert len(queries) == 1
+    assert request.source_commit == COMMIT
+    assert request.created_at == NOW and request.expires_at == NOW + timedelta(hours=2)
+    assert [(case.slot_id, case.model, case.reasoning_effort) for case in request.cases] == [
+        (selection.slot_id, selection.model, selection.reasoning_effort)
+        for selection in matrix.selections
+    ]
+    assert len({case.case_id for case in request.cases}) == 54
+    for case in request.cases:
+        binding = harness.bindings[case.binding_id]
+        assert case.assignment_revision_id == binding.current_assignment_revision_id
+        assert case.expected_resource_version == binding.resource_version
+    assert not harness.worker.calls and not harness.publications
+
+
+@pytest.mark.parametrize("bad_kind", ["missing", "disabled", "draining"])
+def test_matrix_preparation_refuses_unavailable_selected_binding(
+    harness: _Harness, bad_kind: str
+) -> None:
+    matrix = CompatibilityMatrix(
+        selections=tuple(
+            CompatibilitySelection(
+                slot_id=case.slot_id, model=case.model, reasoning_effort=case.reasoning_effort
+            )
+            for case in harness.request.cases
+        )
+    )
+    binding_id = harness.request.cases[1].binding_id
+    if bad_kind == "missing":
+        harness.bindings.pop(binding_id)
+    else:
+        harness.bindings[binding_id].state = bad_kind.upper()
+    with pytest.raises(ControlPlaneError) as error:
+        application.prepare_codex_compatibility_matrix_request(
+            harness.engine, matrix=matrix, source_commit=COMMIT, now=NOW
+        )
+    assert error.value.code == "CONTROL_COMPATIBILITY_BINDING_INVALID"
+    assert not harness.worker.calls
+
+
+def test_cartesian_over_budget_fails_before_binding_query(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        application,
+        "build_session_factory",
+        lambda _engine: pytest.fail("over-budget Cartesian input must not query bindings"),
+    )
+    with pytest.raises(ControlPlaneError) as error:
+        application.prepare_codex_compatibility_request(
+            harness.engine,
+            models=tuple(f"candidate-{index}" for index in range(7)),
+            reasoning_efforts=(ReasoningEffort.MEDIUM, ReasoningEffort.HIGH, ReasoningEffort.XHIGH),
+            slot_ids=("01", "02", "03", "04", "05", "06"),
+            source_commit=COMMIT,
+            now=NOW,
+        )
+    assert error.value.code == "CONTROL_COMPATIBILITY_REQUEST_INVALID"
 
 
 @pytest.mark.parametrize("bad_kind", ["duplicate", "missing", "disabled"])

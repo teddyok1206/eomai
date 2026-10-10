@@ -21,7 +21,8 @@ from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from sqlalchemy import Engine, select
 
 from eom_orchestrator.capability_observer import (
-    ReviewedCapabilityBinding,
+    COMPATIBILITY_SLOT_ROLES,
+    ReviewedCapabilityBindingV3,
     ReviewedCapabilityPolicy,
     ReviewedModelCapability,
 )
@@ -53,7 +54,6 @@ COMPATIBILITY_RESULT_SCHEMA = "eom://schemas/workflow/codex-compatibility-probe-
 COMPATIBILITY_MANIFEST_VERSION = "codex-compatibility-file-set/1.0"
 MAX_REPORT_BYTES = 128 * 1024
 MAX_REPORT_AGE = timedelta(hours=24)
-_REQUIRED_ROLES = {"01": "authoring", "02": "review"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -264,7 +264,7 @@ def load_committed_compatibility_report(
 def current_admission_bindings(
     engine: Engine, *, runtime: CodexCompatibilityRuntime, now: datetime
 ) -> tuple[CompatibilityAdmissionBinding, ...]:
-    """Two indexed slot/binding lookups in one query; no authentication impersonation."""
+    """Six indexed slot/binding lookups in one query; no authentication impersonation."""
 
     with build_session_factory(engine)() as session:
         rows = session.execute(
@@ -272,13 +272,13 @@ def current_admission_bindings(
             .join(
                 WorkerSlotRecord, WorkerSlotRecord.slot_id == CodexAuthBindingRecord.worker_slot_id
             )
-            .where(WorkerSlotRecord.slot_id.in_(tuple(_REQUIRED_ROLES)))
+            .where(WorkerSlotRecord.slot_id.in_(tuple(COMPATIBILITY_SLOT_ROLES)))
         ).all()
         values = []
         for binding, slot in rows:
             if (
                 not slot.enabled
-                or slot.role != _REQUIRED_ROLES[slot.slot_id]
+                or slot.role != COMPATIBILITY_SLOT_ROLES[slot.slot_id]
                 or binding.state in {"DISABLED", "DRAINING"}
             ):
                 raise _invalid("required compatibility binding is disabled or has the wrong role")
@@ -290,8 +290,8 @@ def current_admission_bindings(
                     binding.resource_version,
                 )
             )
-    if {value.slot_id for value in values} != set(_REQUIRED_ROLES):
-        raise _invalid("both required compatibility bindings must exist")
+    if len(values) != 6 or {value.slot_id for value in values} != set(COMPATIBILITY_SLOT_ROLES):
+        raise _invalid("all six current compatibility bindings must exist")
     return tuple(sorted(values, key=lambda value: value.slot_id))
 
 
@@ -303,9 +303,10 @@ def render_compatibility_policy(
     bindings: tuple[CompatibilityAdmissionBinding, ...],
     now: datetime,
 ) -> ReviewedCapabilityPolicy:
-    """Keep runtime-compatible global pairs, add the current assignments' passing intersection.
+    """Keep compatible globals and admit exact passing pairs by current role binding.
 
-    Keyed sets keep time/space O(cases + entries), with at most 64 cases/32 entries.
+    Keyed sets keep aggregation/storage O(cases + entries); canonical sorting is
+    O(entries log entries), with at most 64 cases/32 emitted entries.
     Previous scoped claims are not a fresh report and are never silently carried forward.
     """
 
@@ -318,15 +319,13 @@ def render_compatibility_policy(
     ):
         raise _invalid("compatibility report is stale or its runtime differs")
     by_slot = {binding.slot_id: binding for binding in bindings}
-    if len(bindings) != 2 or set(by_slot) != set(_REQUIRED_ROLES):
-        raise _invalid("compatibility admission requires exactly slots 01 and 02")
-    if len({binding.binding_id for binding in bindings}) != 2:
+    if len(bindings) != 6 or set(by_slot) != set(COMPATIBILITY_SLOT_ROLES):
+        raise _invalid("compatibility admission requires exactly slots 01 through 06")
+    if len({binding.binding_id for binding in bindings}) != 6:
         raise _invalid("compatibility admission requires distinct bindings")
-    passed: dict[str, set[tuple[str, str]]] = {slot: set() for slot in _REQUIRED_ROLES}
+    passed: dict[str, set[tuple[str, str]]] = {slot: set() for slot in COMPATIBILITY_SLOT_ROLES}
     for case in report.cases:
-        binding = by_slot.get(case.slot_id)
-        if binding is None:
-            continue
+        binding = by_slot[case.slot_id]
         if (
             case.binding_id != binding.binding_id
             or case.assignment_revision_id != binding.assignment_revision_id
@@ -338,6 +337,8 @@ def render_compatibility_policy(
     intersection = passed["01"] & passed["02"]
     if not intersection:
         raise _invalid("no exact model/effort pair passed both required bindings")
+    passed["01"] = intersection
+    passed["02"] = intersection
     retain_baseline = (
         baseline_policy.expected_codex_cli_version == current_runtime.cli_version
         and (
@@ -352,27 +353,43 @@ def render_compatibility_policy(
     global_pairs = {
         (item.model, str(effort)) for item in baseline for effort in item.reasoning_efforts
     }
-    scoped: dict[str, set[str]] = {}
-    for model, effort in sorted(intersection - global_pairs):
-        scoped.setdefault(model, set()).add(effort)
-    scope = tuple(
-        ReviewedCapabilityBinding(
-            binding_id=binding.binding_id,
-            assignment_revision_id=binding.assignment_revision_id,
-        )
-        for binding in sorted(bindings, key=lambda binding: binding.binding_id)
-    )
+    # Group only observed pair/slot memberships. Grouping just by model would
+    # accidentally authorize another slot's untested reasoning effort.
+    pair_slots: dict[tuple[str, str], set[str]] = {}
+    for slot_id, pairs in passed.items():
+        for pair in pairs - global_pairs:
+            pair_slots.setdefault(pair, set()).add(slot_id)
+    scoped: dict[tuple[str, tuple[str, ...]], set[str]] = {}
+    for (model, effort), slots in pair_slots.items():
+        scope_slots = tuple(sorted(slots, key=lambda slot: by_slot[slot].binding_id))
+        scoped.setdefault((model, scope_slots), set()).add(effort)
     additions = tuple(
         ReviewedModelCapability.model_validate(
-            {"model": model, "reasoning_efforts": sorted(efforts), "bindings": scope}
+            {
+                "model": model,
+                "reasoning_efforts": sorted(efforts),
+                "bindings": [
+                    ReviewedCapabilityBindingV3.model_validate(
+                        {
+                            "binding_id": by_slot[slot_id].binding_id,
+                            "assignment_revision_id": by_slot[slot_id].assignment_revision_id,
+                            "slot_id": slot_id,
+                            "role": COMPATIBILITY_SLOT_ROLES[slot_id],
+                        }
+                    )
+                    for slot_id in scope_slots
+                ],
+            }
         )
-        for model, efforts in sorted(scoped.items())
+        for (model, scope_slots), efforts in sorted(scoped.items())
     )
+    if len(baseline) + len(additions) > 32:
+        raise _invalid("passing compatibility scopes exceed the bounded policy entries")
     policy = ReviewedCapabilityPolicy(
-        version=2,
+        version=3,
         expected_codex_cli_version=current_runtime.cli_version,
         compatibility_runtime=current_runtime,
         models=(*baseline, *additions),
     )
-    validate_control_contract("codex-reviewed-capability-policy-v2", policy.model_dump(mode="json"))
+    validate_control_contract("codex-reviewed-capability-policy-v3", policy.model_dump(mode="json"))
     return policy

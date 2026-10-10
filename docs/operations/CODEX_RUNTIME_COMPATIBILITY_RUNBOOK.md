@@ -16,7 +16,8 @@ No item, HWPX, corpus or Content Pack is generated or activated.
 1. Read the installed/source compatible release and exact current worker helper identity.
 2. Run `eomctl control-plane codex-runtime check-update`. Review any candidate CLI update
    separately. There is no automatic update or implied installation approval.
-3. Prepare a request with explicit repeated `--model`, `--effort`, and `--slot` selections,
+3. Prepare a request with explicit repeated `--model`, `--effort`, and `--slot` selections
+   or an explicit `--matrix-file` (never both),
    the installed `--source-commit`, and a private `--output-file`. The matrix is bounded to
    64 calls and expires after two hours. Select only the existing EOM effort enum; native
    max/ultra advertisement does not extend that enum. Run preparation as
@@ -82,6 +83,56 @@ reuse its existing supplementary groups, including the fixed worker-private grou
 do not add account privileges. Do not add `-g eom` alone to `runuser`: it suppresses those
 supplementary groups and workspace preparation then fails before native execution. The
 root wrapper verifies the primary group before stopping any service.
+
+### Explicit nonrectangular matrix
+
+For different model/effort selections by slot, prepare an absolute runner-owned mode-0600,
+single-link regular JSON matrix outside Git. It is bounded to 64 KiB and 64 unique triples;
+only slot, model and the existing effort enum are allowed. For example, the shape is:
+
+```json
+{
+  "schema_version": "codex-compatibility-matrix/1.0",
+  "selections": [
+    {"slot_id": "01", "model": "gpt-6.1-sol", "reasoning_effort": "medium"},
+    {"slot_id": "02", "model": "gpt-6.1-sol", "reasoning_effort": "medium"},
+    {"slot_id": "03", "model": "gpt-5.6-terra", "reasoning_effort": "high"}
+  ]
+}
+```
+
+These illustrative names are not admission evidence. Under the same fixed sanitized
+runner identity shown above, replace the repeated selection flags with:
+
+```text
+control-plane codex-runtime prepare-compatibility
+  --source-commit COMMIT
+  --matrix-file /var/lib/eom-workflow-runner/codex-compatibility-matrix.json
+  --output-file /var/lib/eom-workflow-runner/codex-compatibility-request-new.json
+```
+
+The server resolves exact current bindings/assignments/resource versions in one query;
+never add those authority fields to the matrix. The same wrapper verifies the resulting
+request. A reviewed 54-case recipe can use seven models × three selected efforts on 01/02
+(42), then only baseline Terra × three efforts on 03–06 (12), rather than 126 calls across
+all models/all six slots. Select the actual required default pairs and keep the budget
+explicit. Do not execute both a 42-case request and a duplicate 54-case request by accident.
+
+### V3 policy scope and future CLI updates
+
+New root installations render policy V3. Each scoped entry pins binding, immutable
+assignment, fixed slot and role. Slots 01/02 require the same model/effort to PASS on both;
+slots 03–06 admit only their own actual PASS pairs. Failed, unexecuted or stale binding
+cases do not become new scoped permissions. V1/V2 protected policy inputs remain readable
+with their original meaning and schema bytes.
+
+On an unchanged compatible runtime the existing global legacy Terra baseline may remain;
+on a changed runtime it is dropped. A 01/02-only report is therefore not evidence that
+registration (04), image (03), knowledge analysis (05) or PDF/support (06) is ready on a
+new CLI. Include their required default pairs and review actual per-binding admission.
+Never claim full workflow readiness from advertised models, a synthetic probe count, or
+retained legacy globals. The separate General Chat app-server/account execution path is
+not tested or admitted by this maintenance operation.
 
 ## Updates and failure handling
 

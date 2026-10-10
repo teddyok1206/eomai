@@ -81,6 +81,67 @@ The previous policy is recoverably retained; no raw DB UPDATE or historical rewr
 Admission reauthorizes the exact immutable assignment; a normal observation may advance
 the mutable resource version, but cannot transfer evidence to another account assignment.
 
+## Six-slot admission successor V3 (2026-10-10)
+
+Responsibility remains Orchestrator evidence admission and the protected root policy
+installer. V2 admitted only slots 01/02; even explicit successful 03–06 probes could not
+authorize those roles after a CLI change. Merely running more probes or retaining stale
+global pairs is insufficient. V3 is a new policy contract, not a reinterpretation of V2.
+The existing Worker Registry owns one immutable fixed-host layout; inventory validation
+and V3 policy role checks use that same public role map. Schema mirror parity tests protect
+the necessarily repeated wire enum/role constraints without changing inventory V2 bytes.
+
+The canonical source is the existing committed report V1 Artifact/member. Logical binding
+and immutable assignment revision remain distinct from slot identity and mutable resource
+version. V3 scoped pins add the exact fixed slot and role to binding/assignment pins:
+01 authoring, 02 review, 03 image, 04 item_management, 05/06 support. Report/request V1 and
+released policy V1/V2 bytes remain unchanged. Existing approved member resolution validates
+publication, lifecycle, schema, media, hashes, runtime and freshness before rendering.
+
+Dominant access patterns are six indexed slot/binding lookups in one query, set intersection
+for author/review pairs, and keyed aggregation of per-binding successful pairs. Every
+requested case must resolve to its current exact binding/assignment and a non-regressed
+resource version; mismatches are errors, not silently discarded rows. Slots 01/02 retain
+their paired-PASS candidate invariant. Slots 03–06 admit only their own actual PASS pairs.
+Model/effort pairs sharing the same binding scope are grouped deterministically without
+introducing an untested model/effort/binding Cartesian product. Aggregation/storage is
+O(cases + entries), with O(entries log entries) canonical sorting, bounded by 64 cases,
+six slots and 32 policy entries; no DB schema, index or cache is added.
+
+Snapshot observation reauthorizes V3 binding slot, role and assignment, and repeats exact
+runtime checks before writing. Its automatic refresh preflight uses the same rule before
+persisting READY. V1/V2 loader and snapshot meanings stay intact. Existing final transaction
+and root install-time pointer/runtime rechecks remain the concurrency boundary. An
+observation-only resource-version advance is allowed; reassignment does not inherit proof.
+The compatible unchanged-runtime legacy global baseline may remain, but a changed runtime
+drops global baseline pairs, and old scoped entries are never carried forward as fresh
+evidence. Failures preserve predecessor policies and immutable reports; identical evidence
+renders identical bytes and root installation retains existing replay/rollback behavior.
+
+The CLI remains presentation-only and calls application services; policy/schema types do
+not add worker orchestration, a queue, direct NAS access or a new authority source. Actual
+execution budget and source/runtime pins remain explicit. Coverage of all requested six
+slots is not full product acceptance: active role/default pairs must actually be admitted,
+the probe checks are synthetic, and the separate General Chat app-server/account path is
+not tested by this operation. Neither CLI updates nor model/default changes are automatic.
+
+### Explicit bounded selection matrix
+
+`codex-compatibility-matrix/1.0` is an additive presentation contract containing only
+ordered slot/model/existing-effort selections. A frozen tuple preserves selected order;
+a set rejects duplicate triples in O(n), with at most 64 selections. It contains no
+operator, account, binding, assignment, revision, hash or execution authority. Preparation
+resolves all selected current bindings in one indexed query and produces the unchanged
+immutable request V1 with server-owned pins. Inference, replay, maintenance and publication
+continue through the existing use case. Matrix bytes are untrusted bounded private input,
+not an admission receipt, copied report, new queue or database aggregate.
+
+A deliberately nonrectangular matrix can test seven models × three efforts on authoring
+and review (42 cases), plus only the actual baseline Terra × three efforts on slots 03–06
+(12 cases), totalling 54 instead of a 126-case full Cartesian product. This is a budget
+example, not a claim of actual PASS or an automatic production default change. Actual
+approved selections and their report pins define scope; General Chat remains separate.
+
 ## Update checking and rollout
 
 Distribution discovery is a bounded, fixed HTTPS request to official `@openai/codex` npm

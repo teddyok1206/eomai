@@ -8,6 +8,7 @@ import stat
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from itertools import islice, product
 from pathlib import Path
 from uuid import uuid4
 
@@ -22,6 +23,11 @@ from eom_workflow.codex_compatibility import (
     compatibility_request_sha256,
     load_compatibility_report,
     load_compatibility_request,
+)
+from eom_workflow.codex_compatibility_matrix import (
+    CompatibilityMatrix,
+    CompatibilitySelection,
+    load_compatibility_matrix,
 )
 from eom_workflow.control_plane import FrozenModel, ReasoningEffort, UtcDatetime
 from eom_workflow.control_schemas import validate_control_contract
@@ -83,18 +89,45 @@ def prepare_codex_compatibility_request(
     source_commit: str,
     now: datetime,
 ) -> CodexCompatibilityRequest:
-    """Pin explicit operator-selected pairs; discovery never grants production admission."""
+    """Preserve Cartesian presentation while delegating authoritative matrix preparation."""
 
-    if (
-        not models
-        or not reasoning_efforts
-        or not slot_ids
-        or len(set(models)) != len(models)
-        or len(set(reasoning_efforts)) != len(reasoning_efforts)
-        or len(set(slot_ids)) != len(slot_ids)
-        or not 1 <= len(models) * len(reasoning_efforts) * len(slot_ids) <= 64
-    ):
-        raise ControlPlaneError("CONTROL_COMPATIBILITY_REQUEST_INVALID", "invalid bounded case set")
+    try:
+        # Materialize at most one over the contract limit, even for a large product.
+        matrix = CompatibilityMatrix(
+            selections=tuple(
+                CompatibilitySelection(
+                    slot_id=slot,  # type: ignore[arg-type]
+                    model=model,
+                    reasoning_effort=effort,
+                )
+                for model, effort, slot in islice(product(models, reasoning_efforts, slot_ids), 65)
+            )
+        )
+    except ValueError as exc:
+        raise ControlPlaneError(
+            "CONTROL_COMPATIBILITY_REQUEST_INVALID", "invalid bounded case set"
+        ) from exc
+    return prepare_codex_compatibility_matrix_request(
+        engine, matrix=matrix, source_commit=source_commit, now=now
+    )
+
+
+def prepare_codex_compatibility_matrix_request(
+    engine: Engine,
+    *,
+    matrix: CompatibilityMatrix,
+    source_commit: str,
+    now: datetime,
+) -> CodexCompatibilityRequest:
+    """Pin server-owned bindings once for a bounded ordered operator selection set."""
+
+    try:
+        matrix = load_compatibility_matrix(matrix.model_dump(mode="json"))
+    except (ValueError, JsonSchemaValidationError) as exc:
+        raise ControlPlaneError(
+            "CONTROL_COMPATIBILITY_REQUEST_INVALID", "invalid bounded case set"
+        ) from exc
+    slot_ids = {selection.slot_id for selection in matrix.selections}
     sessions = build_session_factory(engine)
     with sessions() as session:
         bindings = {
@@ -105,7 +138,7 @@ def prepare_codex_compatibility_request(
                 )
             )
         }
-        if set(bindings) != set(slot_ids) or any(
+        if set(bindings) != slot_ids or any(
             binding.state in {"DISABLED", "DRAINING"} for binding in bindings.values()
         ):
             raise ControlPlaneError(
@@ -114,16 +147,14 @@ def prepare_codex_compatibility_request(
         cases = tuple(
             CodexCompatibilityCase(
                 case_id="compatcase_" + uuid4().hex,
-                slot_id=slot,  # type: ignore[arg-type]
-                binding_id=bindings[slot].binding_id,
-                assignment_revision_id=bindings[slot].current_assignment_revision_id,
-                expected_resource_version=bindings[slot].resource_version,
-                model=model,
-                reasoning_effort=effort,
+                slot_id=selection.slot_id,
+                binding_id=bindings[selection.slot_id].binding_id,
+                assignment_revision_id=bindings[selection.slot_id].current_assignment_revision_id,
+                expected_resource_version=bindings[selection.slot_id].resource_version,
+                model=selection.model,
+                reasoning_effort=selection.reasoning_effort,
             )
-            for model in models
-            for effort in reasoning_efforts
-            for slot in slot_ids
+            for selection in matrix.selections
         )
     request = CodexCompatibilityRequest(
         run_id="codexcompat_" + uuid4().hex,

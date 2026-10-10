@@ -19,6 +19,7 @@ from eom_orchestrator import codex_compatibility_policy as admission
 from eom_orchestrator import control_artifact_resolution as resolution
 from eom_orchestrator import control_command_processor as processor_module
 from eom_orchestrator.capability_observer import (
+    COMPATIBILITY_SLOT_ROLES,
     REQUIRED_EXEC_HELP_FLAGS,
     ReviewedCapabilityPolicy,
     load_reviewed_capability_policy,
@@ -69,14 +70,15 @@ def _baseline(version: str = "0.147.0") -> ReviewedCapabilityPolicy:
 
 
 def _bindings(document: dict[str, Any]) -> tuple[CompatibilityAdmissionBinding, ...]:
+    cases = {case["slot_id"]: case for case in document["request"]["cases"]}
     return tuple(
         CompatibilityAdmissionBinding(
-            case["slot_id"],
-            case["binding_id"],
-            case["assignment_revision_id"],
-            case["expected_resource_version"],
+            slot_id,
+            cases[slot_id]["binding_id"] if slot_id in cases else "authbinding_" + digit * 32,
+            cases[slot_id]["assignment_revision_id"] if slot_id in cases else None,
+            cases[slot_id]["expected_resource_version"] if slot_id in cases else 7,
         )
-        for case in document["request"]["cases"][:2]
+        for slot_id, digit in zip(COMPATIBILITY_SLOT_ROLES, "234567", strict=True)
     )
 
 
@@ -95,16 +97,16 @@ def _render(document: dict[str, Any] | None = None, **options: Any) -> ReviewedC
 
 def test_policy_retains_baseline_and_scopes_only_live_passed_intersection() -> None:
     policy = _render()
-    assert policy.version == 2
+    assert policy.version == 3
     assert policy.models[0] == _baseline().models[0]
     scoped = policy.models[1]
     assert scoped.model == "synthetic-model"
     assert scoped.reasoning_efforts == ("medium",)
     assert scoped.bindings is not None
     assert [(pin.binding_id, pin.assignment_revision_id) for pin in scoped.bindings] == [
-        (binding.binding_id, None) for binding in _bindings(report_document())
+        (binding.binding_id, None) for binding in _bindings(report_document())[:2]
     ]
-    validate_control_contract("codex-reviewed-capability-policy-v2", policy.model_dump(mode="json"))
+    validate_control_contract("codex-reviewed-capability-policy-v3", policy.model_dump(mode="json"))
 
 
 def test_new_cli_drops_every_untested_global_pair() -> None:
@@ -282,8 +284,19 @@ def _snapshot(
         "record_capability_snapshot",
         lambda _session, *, document: captured.update(document) or document,
     )
+    slots = {
+        "authbinding_" + digit * 32: slot
+        for digit, slot in zip("234567", COMPATIBILITY_SLOT_ROLES, strict=True)
+    }
+    slot_id = slots.get(binding_id, "06")
     session = SimpleNamespace(
-        get=lambda *_args: SimpleNamespace(current_assignment_revision_id=assignment)
+        get=lambda model, *_args: (
+            SimpleNamespace(current_assignment_revision_id=assignment, worker_slot_id=slot_id)
+            if model is CodexAuthBindingRecord
+            else SimpleNamespace(
+                slot_id=slot_id, role=COMPATIBILITY_SLOT_ROLES[slot_id], enabled=True
+            )
+        )
     )
     record_reviewed_capability_snapshot(
         session,
@@ -429,7 +442,7 @@ def test_current_binding_lookup_allows_old_degraded_observation_but_not_disabled
     rows = [
         (
             SimpleNamespace(
-                binding_id=case["binding_id"],
+                binding_id=pin.binding_id,
                 current_assignment_revision_id=ASSIGNMENT,
                 resource_version=7,
                 state="DEGRADED",
@@ -437,9 +450,11 @@ def test_current_binding_lookup_allows_old_degraded_observation_but_not_disabled
                 observed_at=None,
                 valid_until=None,
             ),
-            SimpleNamespace(slot_id=case["slot_id"], role=role, enabled=True),
+            SimpleNamespace(
+                slot_id=pin.slot_id, role=COMPATIBILITY_SLOT_ROLES[pin.slot_id], enabled=True
+            ),
         )
-        for case, role in zip(request_document()["cases"], ("authoring", "review"), strict=True)
+        for pin in _bindings(report_document())
     ]
 
     @contextmanager
@@ -449,17 +464,26 @@ def test_current_binding_lookup_allows_old_degraded_observation_but_not_disabled
     monkeypatch.setattr(admission, "build_session_factory", lambda _engine: session)
     report = load_compatibility_report(report_document())
     bindings = current_admission_bindings(SimpleNamespace(), runtime=report.runtime, now=NOW)
-    assert [pin.assignment_revision_id for pin in bindings] == [ASSIGNMENT, ASSIGNMENT]
+    assert [pin.assignment_revision_id for pin in bindings] == [ASSIGNMENT] * 6
     rows[0][0].state = "DISABLED"
     with pytest.raises(ControlPlaneError):
         current_admission_bindings(SimpleNamespace(), runtime=report.runtime, now=NOW)
 
 
 @pytest.mark.parametrize("unverified", ("untested", "reassigned", "runtime_changed"))
+@pytest.mark.parametrize("policy_version", (2, 3))
 def test_automatic_refresh_degrades_unverified_v2_without_crashing_or_writing_snapshot(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, unverified: str
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, unverified: str, policy_version: int
 ) -> None:
     policy = _render(baseline_policy=_baseline("0.146.0"))
+    if policy_version == 2:
+        document = policy.model_dump(mode="json")
+        document["version"] = 2
+        for item in document["models"]:
+            for pin in item["bindings"] or ():
+                del pin["slot_id"]
+                del pin["role"]
+        policy = ReviewedCapabilityPolicy.model_validate(document)
     runtime = policy.compatibility_runtime
     assert runtime is not None
     binding_id = "authbinding_" + ("6" if unverified == "untested" else "2") * 32
@@ -491,7 +515,9 @@ def test_automatic_refresh_degrades_unverified_v2_without_crashing_or_writing_sn
     )
     session = SimpleNamespace(
         get=lambda model, *_args, **_kwargs: (
-            binding if model is CodexAuthBindingRecord else SimpleNamespace(enabled=True)
+            binding
+            if model is CodexAuthBindingRecord
+            else SimpleNamespace(enabled=True, slot_id="01", role="authoring")
         )
     )
 
