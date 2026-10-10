@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/codex-compatibility-probe-result/1.0",
+  "title": "EOM Codex Compatibility Probe Result V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "case_id",
+    "request_sha256",
+    "arithmetic_sum",
+    "rectangle_count",
+    "outline_circle_count",
+    "left_shape",
+    "right_shape"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "codex-compatibility-probe-result/1.0"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^codexcompat_[0-9a-f]{32}$"
+    },
+    "case_id": {
+      "type": "string",
+      "pattern": "^compatcase_[0-9a-f]{32}$"
+    },
+    "request_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "arithmetic_sum": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000
+    },
+    "rectangle_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "outline_circle_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "left_shape": {
+      "enum": [
+        "square",
+        "circle",
+        "triangle"
+      ]
+    },
+    "right_shape": {
+      "enum": [
+        "square",
+        "circle",
+        "triangle"
+      ]
+    }
+  }
+}

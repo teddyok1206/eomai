@@ -36,8 +36,9 @@ logical Item
 관리자 설정의 실행 설정에서 **출제·일반 검토·강화 검토 모델과 추론 강도**를 각각 선택하는
 기능을 운영 배포했습니다. 실제 슬롯의 Codex 모델 목록과 검토된 실행 정책의 교집합만 표시하며,
 초안 저장 → 실행 전달 검증 → 관리자 적용 순서로 불변 successor를 만듭니다. 기존 작업의
-모델·RAG·프롬프트·실행 pin은 바꾸지 않습니다. 현재 검토된 정책은 `gpt-5.6-terra`의
-`medium/high/xhigh`이며, 다른 모델을 목록에서 발견했다고 자동 허용하지 않습니다.
+모델·RAG·프롬프트·실행 pin은 바꾸지 않습니다. `d265a0d0`의 최초 검토 정책은
+`gpt-5.6-terra`의 `medium/high/xhigh`였습니다. 현재 허용 범위는 보호된 정책과 실제
+슬롯의 검증 결과에서 조회하며, 다른 모델을 목록에서 발견했다고 자동 허용하지 않습니다.
 외부 LLM API나 API-key 과금 연결은 없습니다. 운영 릴리스 `d265a0d0`은 실제 HTTPS에서
 발견한 실행 설정 목록의 중첩 정보 누락도 수정한 호환 API/Web 릴리스입니다.
 앞선 `7de886f1`에서 미적용 초안의 실행 전달 검증 35개를 통과했습니다. 운영 기본값은 그대로이며, 이 검증은
@@ -47,6 +48,15 @@ logical Item
 새 요청이 예전 설정으로 완료된 결과를 잘못 재사용하지 않도록 임시 DB 동시성 검증도 추가했습니다.
 [실행 설정 설계·검증](docs/architecture/CODEX_CONTROL_PLANE_MVP_APPLICATION.md#13-administrator-model-selection-2026-10-09-utc),
 [네이티브 모델 목록 경계](docs/architecture/CODEX_NATIVE_MODEL_CATALOG_OBSERVATION.md)를 참고하세요.
+
+Codex 업데이트 확인과 실제 실행 호환성 검증은 기존 Orchestrator의 독립된 유지보수
+기능으로 분리합니다. 공식 배포 메타데이터 조회는 설치를 수행하지 않으며, 실제 검증은
+운영 작업이 없는 점검 시간에 짧은 구조화 응답·PNG 입력으로 순차 실행합니다. 보고서는
+CLI·실행 파일·계정 배정·모델·추론 강도를 고정한 Artifact입니다. 새 모델의 허용 범위는
+통과한 계정 배정으로 제한하고, 기존 실행 설정·기본값·프롬프트·RAG pin은 유지합니다.
+소스 테스트와 실제 모델 실행, 문항 품질 검증은 각각 별도 결과입니다.
+[호환성 설계](docs/architecture/CODEX_RUNTIME_COMPATIBILITY.md),
+[운영 점검 절차](docs/operations/CODEX_RUNTIME_COMPATIBILITY_RUNBOOK.md)를 참고하세요.
 
 검토 근거의 연결 규칙을 명확히 한 `generated-knowledge-item@1.20.16`은 별도의 저장소
 후보입니다. 운영 활성 버전은 `generated-knowledge-item@1.20.15`로 유지되며, 모델 설정 기능

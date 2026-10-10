@@ -40,6 +40,8 @@ PLAN_ID_PATTERN = re.compile(r"\Aexecplan_[0-9a-f]{32}\Z", re.ASCII)
 STEP_KEY_PATTERN = re.compile(r"\A[a-z][a-z0-9_]{1,63}\Z", re.ASCII)
 MODEL_PATTERN = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\Z", re.ASCII)
 SHA256_PATTERN = re.compile(r"\Asha256:[0-9a-f]{64}\Z", re.ASCII)
+COMPATIBILITY_RUN_PATTERN = re.compile(r"\Acodexcompat_[0-9a-f]{32}\Z", re.ASCII)
+COMPATIBILITY_CASE_PATTERN = re.compile(r"\Acompatcase_[0-9a-f]{32}\Z", re.ASCII)
 IMAGE_PATH_PATTERN = re.compile(r"\Asource/document/images/page-([0-9]{6})\.png\Z", re.ASCII)
 ASSESSMENT_IMAGE_PATH_PATTERN = re.compile(
     r"\Asource/pages/(assessmentpage_[0-9a-f]{32})\.png\Z", re.ASCII
@@ -199,6 +201,76 @@ def _load_invocation(path: Path, *, workspace: Path, group_id: int) -> dict[str,
     if "sha256:" + hashlib.sha256(canonical).hexdigest() != invocation["invocation_sha256"]:
         raise ValueError("Codex invocation hash differs")
     return invocation
+
+
+def _load_compatibility_invocation(
+    path: Path, *, workspace: Path, group_id: int, job_id: str
+) -> tuple[dict[str, str], tuple[Path, ...]]:
+    """Separate maintenance authority; never fabricate a resolved production plan."""
+
+    with _open_input(path, workspace=workspace, group_id=group_id) as stream:
+        raw = stream.read(MAX_INPUT_BYTES + 1)
+    if len(raw) > MAX_INPUT_BYTES:
+        raise ValueError("compatibility invocation exceeds size limit")
+
+    def unique_fields(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        document: dict[str, object] = {}
+        for key, value in pairs:
+            if key in document:
+                raise ValueError("duplicate compatibility invocation field")
+            document[key] = value
+        return document
+
+    document = json.loads(raw.decode("utf-8"), object_pairs_hook=unique_fields)
+    fields = {
+        "schema_version",
+        "run_id",
+        "case_id",
+        "request_sha256",
+        "job_id",
+        "model",
+        "reasoning_effort",
+        "image_sha256",
+        "invocation_sha256",
+    }
+    if (
+        not isinstance(document, dict)
+        or set(document) != fields
+        or not all(isinstance(document[key], str) for key in fields)
+        or document["schema_version"] != "codex-compatibility-invocation/1.0"
+        or COMPATIBILITY_RUN_PATTERN.fullmatch(document["run_id"]) is None
+        or COMPATIBILITY_CASE_PATTERN.fullmatch(document["case_id"]) is None
+        or document["job_id"] != job_id
+        or MODEL_PATTERN.fullmatch(document["model"]) is None
+        or document["reasoning_effort"] not in REASONING_EFFORTS
+        or any(
+            SHA256_PATTERN.fullmatch(document[key]) is None
+            for key in ("request_sha256", "image_sha256", "invocation_sha256")
+        )
+    ):
+        raise ValueError("compatibility invocation contract is invalid")
+    hashed = {key: value for key, value in document.items() if key != "invocation_sha256"}
+    canonical = json.dumps(
+        hashed, ensure_ascii=False, allow_nan=False, separators=(",", ":"), sort_keys=True
+    ).encode("utf-8")
+    if "sha256:" + hashlib.sha256(canonical).hexdigest() != document["invocation_sha256"]:
+        raise ValueError("compatibility invocation hash differs")
+    image_path = workspace / "compatibility-input.png"
+    with _open_input(image_path, workspace=workspace, group_id=group_id) as stream:
+        metadata = os.fstat(stream.fileno())
+        image = stream.read(MAX_INPUT_BYTES + 1)
+    if (
+        metadata.st_nlink != 1
+        or len(image) > MAX_INPUT_BYTES
+        or len(image) < 24
+        or image[:8] != b"\x89PNG\r\n\x1a\n"
+        or image[12:16] != b"IHDR"
+        or int.from_bytes(image[16:20], "big") != 128
+        or int.from_bytes(image[20:24], "big") != 96
+        or "sha256:" + hashlib.sha256(image).hexdigest() != document["image_sha256"]
+    ):
+        raise ValueError("compatibility image differs from its pinned input")
+    return {key: document[key] for key in fields}, (image_path,)
 
 
 def _load_image_inputs(
@@ -503,9 +575,24 @@ def execute(slot_id: str, job_id: str) -> int:
     with _open_input(workspace / "worker-input.json", workspace=workspace, group_id=group_id):
         pass
     invocation_path = workspace / "codex-invocation.json"
+    compatibility_path = workspace / "codex-compatibility-invocation.json"
     invocation: dict[str, str] | None = None
     image_paths: tuple[Path, ...] = ()
-    if invocation_path.exists() or invocation_path.is_symlink():
+    has_invocation = invocation_path.exists() or invocation_path.is_symlink()
+    has_compatibility = compatibility_path.exists() or compatibility_path.is_symlink()
+    if has_invocation and has_compatibility:
+        raise ValueError("worker cannot mix production and maintenance invocation authorities")
+    if has_compatibility:
+        if (workspace / "codex-image-inputs.json").exists() or (
+            workspace / "codex-image-inputs.json"
+        ).is_symlink():
+            raise ValueError("maintenance probe cannot accept production image inputs")
+        invocation, image_paths = _load_compatibility_invocation(
+            compatibility_path, workspace=workspace, group_id=group_id, job_id=job_id
+        )
+        with _open_input(workspace / "AGENTS.md", workspace=workspace, group_id=group_id):
+            pass
+    elif has_invocation:
         invocation = _load_invocation(invocation_path, workspace=workspace, group_id=group_id)
         with _open_input(workspace / "AGENTS.md", workspace=workspace, group_id=group_id):
             pass

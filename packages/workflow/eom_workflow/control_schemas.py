@@ -29,6 +29,36 @@ class ControlSchemaResource:
 
 CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType(
     {
+        "codex-reviewed-capability-policy-v2": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-reviewed-capability-policy-v2.schema.json",
+            "resources/control-plane/codex-reviewed-capability-policy-v2.schema.json",
+            "2.0",
+            "sha256:96af2acafd0c19dc4220761ee54e4e8094cc78b4542949f3cb43c4540cc69c69",
+        ),
+        "codex-compatibility-request": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-compatibility-request-v1.schema.json",
+            "resources/control-plane/codex-compatibility-request-v1.schema.json",
+            "1.0",
+            "sha256:0a2ad833791fd522a347e26b63b2b9ddd01975f90980b1ed39684a7ee5f9d4a9",
+        ),
+        "codex-compatibility-report": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-compatibility-report-v1.schema.json",
+            "resources/control-plane/codex-compatibility-report-v1.schema.json",
+            "1.0",
+            "sha256:551101ca8dffa54362b09aed07e01d6b2790113ef8ef3ee643322585afe96c3f",
+        ),
+        "codex-compatibility-invocation": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-compatibility-invocation-v1.schema.json",
+            "resources/control-plane/codex-compatibility-invocation-v1.schema.json",
+            "1.0",
+            "sha256:92503c2d3dc8b1a6634c456f75f49f1e540136da917d094f1bd600383da7ccea",
+        ),
+        "codex-compatibility-probe-result": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-compatibility-probe-result-v1.schema.json",
+            "resources/control-plane/codex-compatibility-probe-result-v1.schema.json",
+            "1.0",
+            "sha256:87de6755b663a41591c987c02bdd5004d7f487133d47b014bceb2e73d8e342ed",
+        ),
         "preset-model-acceptance-cases": ControlSchemaResource(
             "schemas/workflow/control-plane/preset-model-acceptance-cases-v1.schema.json",
             "resources/control-plane/preset-model-acceptance-cases-v1.schema.json",

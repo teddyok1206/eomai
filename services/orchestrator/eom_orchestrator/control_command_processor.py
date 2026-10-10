@@ -17,6 +17,7 @@ from eom_orchestrator.capability_observer import (
     load_reviewed_capability_policy,
     observe_codex_cli_surface,
     record_reviewed_capability_snapshot,
+    reviewed_capabilities_for_binding,
 )
 from eom_orchestrator.capacity_controller import set_auth_binding_operational_state
 from eom_orchestrator.control_commands import (
@@ -350,6 +351,16 @@ class CodexControlCommandProcessor:
                         "CONTROL_CAPABILITY_POLICY_MISMATCH",
                         "reviewed capability policy differs from CLI",
                     )
+                if policy.version == 2:
+                    # Fail closed before automatic maintenance persists READY; the writer
+                    # repeats this exact runtime/assignment guard in its final transaction.
+                    with self.sessions() as session:
+                        reviewed_capabilities_for_binding(
+                            session,
+                            binding_id=target.binding_id,
+                            policy=policy,
+                            cli_observation=cli_observation,
+                        )
             except ControlPlaneError:
                 observation = replace(
                     observation,

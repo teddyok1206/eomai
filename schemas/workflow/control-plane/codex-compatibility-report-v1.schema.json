@@ -1,0 +1,297 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/codex-compatibility-report/1.0",
+  "title": "EOM Codex Compatibility Report V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request",
+    "request_sha256",
+    "scope",
+    "quality_evaluated",
+    "started_at",
+    "completed_at",
+    "runtime",
+    "model_calls",
+    "cases"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "codex-compatibility-report/1.0"
+    },
+    "request": {
+      "$ref": "eom://schemas/workflow/codex-compatibility-request/1.0"
+    },
+    "request_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "scope": {
+      "const": "LIVE_EXECUTION_SMOKE"
+    },
+    "quality_evaluated": {
+      "const": false
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cli_version",
+        "cli_launcher_sha256",
+        "cli_binary_sha256",
+        "worker_exec_sha256",
+        "contract_sha256"
+      ],
+      "properties": {
+        "cli_version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "cli_binary_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "cli_launcher_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "worker_exec_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "contract_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "model_calls": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 64
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "case_id",
+          "slot_id",
+          "binding_id",
+          "expected_resource_version",
+          "model",
+          "reasoning_effort",
+          "job_id",
+          "status",
+          "error_code",
+          "invocation_sha256",
+          "result_sha256",
+          "elapsed_ms",
+          "assignment_revision_id"
+        ],
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "pattern": "^compatcase_[0-9a-f]{32}$"
+          },
+          "slot_id": {
+            "enum": [
+              "01",
+              "02",
+              "03",
+              "04",
+              "05",
+              "06"
+            ]
+          },
+          "binding_id": {
+            "type": "string",
+            "pattern": "^authbinding_[0-9a-f]{32}$"
+          },
+          "expected_resource_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "model": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+          },
+          "reasoning_effort": {
+            "enum": [
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          },
+          "job_id": {
+            "type": "string",
+            "pattern": "^job_[0-9a-f]{32}$"
+          },
+          "status": {
+            "enum": [
+              "PASS",
+              "FAIL",
+              "NOT_RUN"
+            ]
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "enum": [
+                  "WORKER_EXEC_FAILED",
+                  "WORKER_RESULT_INVALID",
+                  "RESULT_CONTENT_MISMATCH",
+                  "PREVIOUS_FAILURE",
+                  "MAINTENANCE_LOST",
+                  "RUNTIME_CHANGED",
+                  "REQUEST_EXPIRED",
+                  "UNCERTAIN_EXECUTION",
+                  "LOCAL_PREPARATION_FAILED"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "invocation_sha256": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "result_sha256": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "elapsed_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "assignment_revision_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^authassignrev_[0-9a-f]{32}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "PASS"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "error_code": {
+                  "type": "null"
+                },
+                "invocation_sha256": {
+                  "type": "string",
+                  "pattern": "^sha256:[0-9a-f]{64}$"
+                },
+                "result_sha256": {
+                  "type": "string",
+                  "pattern": "^sha256:[0-9a-f]{64}$"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "FAIL"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "error_code": {
+                  "enum": [
+                    "WORKER_EXEC_FAILED",
+                    "WORKER_RESULT_INVALID",
+                    "RESULT_CONTENT_MISMATCH"
+                  ]
+                },
+                "invocation_sha256": {
+                  "type": "string",
+                  "pattern": "^sha256:[0-9a-f]{64}$"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "NOT_RUN"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "error_code": {
+                  "enum": [
+                    "PREVIOUS_FAILURE",
+                    "MAINTENANCE_LOST",
+                    "RUNTIME_CHANGED",
+                    "REQUEST_EXPIRED",
+                    "UNCERTAIN_EXECUTION",
+                    "LOCAL_PREPARATION_FAILED"
+                  ]
+                },
+                "invocation_sha256": {
+                  "type": "null"
+                },
+                "result_sha256": {
+                  "type": "null"
+                },
+                "elapsed_ms": {
+                  "const": 0
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

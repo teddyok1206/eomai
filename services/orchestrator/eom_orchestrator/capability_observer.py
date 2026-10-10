@@ -11,11 +11,14 @@ from typing import Literal
 
 import yaml
 from eom_identifiers import new_capability_snapshot_id
+from eom_workflow.codex_compatibility import CodexCompatibilityRuntime
 from eom_workflow.control_plane import CodexCapabilitySnapshot, ModelCapability, ReasoningEffort
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from eom_workflow.control_schemas import validate_control_contract
+from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 
-from eom_orchestrator.control_models import CodexCapabilitySnapshotRecord
+from eom_orchestrator.control_models import CodexAuthBindingRecord, CodexCapabilitySnapshotRecord
 from eom_orchestrator.control_service import (
     ControlPlaneError,
     compute_control_document_hash,
@@ -36,31 +39,66 @@ REQUIRED_EXEC_HELP_FLAGS = frozenset(
 )
 
 
+class ReviewedCapabilityBinding(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    binding_id: str = Field(pattern=r"^authbinding_[0-9a-f]{32}$")
+    assignment_revision_id: str | None = Field(pattern=r"^authassignrev_[0-9a-f]{32}$")
+
+
 class ReviewedModelCapability(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, use_enum_values=True)
 
     model: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
     reasoning_efforts: tuple[ReasoningEffort, ...] = Field(min_length=1, max_length=5)
+    bindings: tuple[ReviewedCapabilityBinding, ...] | None = Field(
+        default=None, min_length=1, max_length=6
+    )
 
     @model_validator(mode="after")
     def unique_efforts(self) -> ReviewedModelCapability:
         if len(self.reasoning_efforts) != len(set(self.reasoning_efforts)):
             raise ValueError("reviewed reasoning efforts must be unique")
+        if self.bindings is not None and (
+            len({item.binding_id for item in self.bindings}) != len(self.bindings)
+            or self.bindings != tuple(sorted(self.bindings, key=lambda item: item.binding_id))
+        ):
+            raise ValueError("reviewed binding scopes must be unique and sorted")
         return self
 
 
 class ReviewedCapabilityPolicy(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    version: int = Field(ge=1, le=1)
+    version: Literal[1, 2]
     expected_codex_cli_version: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
-    models: tuple[ReviewedModelCapability, ...] = Field(min_length=1, max_length=16)
+    models: tuple[ReviewedModelCapability, ...] = Field(min_length=1, max_length=32)
+    compatibility_runtime: CodexCompatibilityRuntime | None = None
+
+    @field_validator("version", mode="before")
+    @classmethod
+    def integer_policy_version(cls, value: object) -> object:
+        if type(value) is not int:
+            raise ValueError("reviewed policy version must be an integer")
+        return value
 
     @model_validator(mode="after")
     def unique_models(self) -> ReviewedCapabilityPolicy:
-        names = [item.model for item in self.models]
-        if len(names) != len(set(names)):
-            raise ValueError("reviewed capability models must be unique")
+        if self.version == 1:
+            names = [item.model for item in self.models]
+            if (
+                len(self.models) > 16
+                or len(names) != len(set(names))
+                or self.compatibility_runtime is not None
+                or any(item.bindings is not None for item in self.models)
+            ):
+                raise ValueError("V1 reviewed models must be unique, global and runtime-unscoped")
+        elif (
+            self.compatibility_runtime is None
+            or self.compatibility_runtime.cli_version != self.expected_codex_cli_version
+            or len({(item.model, item.bindings) for item in self.models}) != len(self.models)
+        ):
+            raise ValueError("V2 reviewed policy requires exact runtime and unique model scopes")
         return self
 
 
@@ -91,8 +129,10 @@ def load_reviewed_capability_policy(
             "CONTROL_CAPABILITY_POLICY_INVALID", "reviewed capability policy is unavailable"
         ) from exc
     try:
+        if isinstance(value, dict) and value.get("version") == 2:
+            validate_control_contract("codex-reviewed-capability-policy-v2", value)
         return ReviewedCapabilityPolicy.model_validate(value)
-    except ValueError as exc:
+    except (ValueError, JsonSchemaValidationError) as exc:
         raise ControlPlaneError(
             "CONTROL_CAPABILITY_POLICY_INVALID", "reviewed capability policy is invalid"
         ) from exc
@@ -130,6 +170,66 @@ def observe_codex_cli_surface() -> tuple[str, frozenset[str]]:
     return version, flags
 
 
+def reviewed_capabilities_for_binding(
+    session: Session,
+    *,
+    binding_id: str,
+    policy: ReviewedCapabilityPolicy,
+    cli_observation: tuple[str, frozenset[str]],
+) -> tuple[ModelCapability, ...]:
+    """Read-only admission preflight, repeated at the final snapshot write boundary."""
+
+    cli_version, flags = cli_observation
+    if cli_version != policy.expected_codex_cli_version or flags != REQUIRED_EXEC_HELP_FLAGS:
+        raise ControlPlaneError(
+            "CONTROL_CAPABILITY_POLICY_MISMATCH", "reviewed capability policy differs from CLI"
+        )
+    if policy.version == 2:
+        # A same-version binary/helper replacement also invalidates scoped live admission.
+        from eom_orchestrator.codex_compatibility_runtime import observe_compatibility_runtime
+
+        if observe_compatibility_runtime() != policy.compatibility_runtime:
+            raise ControlPlaneError(
+                "CONTROL_CAPABILITY_POLICY_MISMATCH", "compatibility runtime identity differs"
+            )
+    binding = session.get(CodexAuthBindingRecord, binding_id) if policy.version == 2 else None
+    if policy.version == 2 and binding is None:
+        raise ControlPlaneError("CONTROL_BINDING_NOT_FOUND", "Codex binding is unavailable")
+    admitted: dict[str, set[ReasoningEffort]] = {}
+    for item in policy.models:
+        if item.bindings is None or any(
+            pin.binding_id == binding_id
+            and binding is not None
+            and pin.assignment_revision_id == binding.current_assignment_revision_id
+            for pin in item.bindings
+        ):
+            admitted.setdefault(item.model, set()).update(item.reasoning_efforts)
+    capabilities = tuple(
+        ModelCapability(
+            model=model,
+            reasoning_efforts=tuple(sorted(efforts)),
+            state="AVAILABLE",
+        )
+        for model, efforts in sorted(admitted.items())
+    )
+    if not capabilities:
+        raise ControlPlaneError(
+            "CONTROL_CAPABILITY_BINDING_UNVERIFIED",
+            "no reviewed model capability is admitted for this binding assignment",
+        )
+    if policy.version == 1:
+        # Keep legacy policy ordering and snapshot hashes unchanged.
+        capabilities = tuple(
+            ModelCapability(
+                model=item.model,
+                reasoning_efforts=item.reasoning_efforts,
+                state="AVAILABLE",
+            )
+            for item in policy.models
+        )
+    return capabilities
+
+
 def record_reviewed_capability_snapshot(
     session: Session,
     *,
@@ -144,26 +244,16 @@ def record_reviewed_capability_snapshot(
 
     if ttl <= timedelta(0) or ttl > timedelta(hours=1):
         raise ValueError("capability snapshot TTL is outside the reviewed bound")
-    cli_version, flags = cli_observation
-    if cli_version != policy.expected_codex_cli_version or flags != REQUIRED_EXEC_HELP_FLAGS:
-        raise ControlPlaneError(
-            "CONTROL_CAPABILITY_POLICY_MISMATCH", "reviewed capability policy differs from CLI"
-        )
-    capabilities = [
-        ModelCapability(
-            model=item.model,
-            reasoning_efforts=item.reasoning_efforts,
-            state="AVAILABLE",
-        ).model_dump(mode="json")
-        for item in policy.models
-    ]
+    capabilities = reviewed_capabilities_for_binding(
+        session, binding_id=binding_id, policy=policy, cli_observation=cli_observation
+    )
     document: dict[str, object] = {
         "schema_version": "codex-capability-snapshot/1.0",
         "capability_snapshot_id": new_capability_snapshot_id(),
         "binding_id": binding_id,
-        "codex_cli_version": cli_version,
+        "codex_cli_version": cli_observation[0],
         "source": source,
-        "capabilities": capabilities,
+        "capabilities": [item.model_dump(mode="json") for item in capabilities],
         "observed_at": observed_at,
         "valid_until": observed_at + ttl,
         "snapshot_sha256": "sha256:" + "0" * 64,
