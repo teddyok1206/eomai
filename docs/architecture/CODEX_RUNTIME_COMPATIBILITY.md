@@ -151,8 +151,26 @@ Never invoke `codex update` as a supposed check-only operation: it can install a
 
 An operator installs an approved CLI release during normal maintenance, runs this same
 compatibility operation, and admits passed pairs. A changed CLI or worker hash invalidates
-old admission evidence; existing expected-version mismatch remains fail-closed. This is
+old admission evidence; exact-runtime mismatch remains fail-closed. This is
 on-demand maintenance, not a background auto-updater or a replacement for release rollout.
+
+The shared installation also serves the independently enrolled General Chat app-server.
+Its additive policy/dispatch V5 pins the explicitly selected CLI version and launcher/native
+hashes using the existing protected chat model environment. The version-neutral adapter
+profile maps to unchanged protocol-4 transport/turn/tool/result contracts; it does not
+rewrite V1–V4, widen RAG policy, enroll an account, or change production defaults.
+The shared protected CLI identity adapter hashes once per startup epoch and checks metadata
+before subsequent launches/admission. Runtime selection and byte observation are separate;
+startup cannot automatically adopt a changed executable, even at the same version.
+
+Six-worker report/V3 admission does not substitute for actual authenticated chat text and
+official-RAG-tool canaries. A shared package replacement therefore keeps producers stopped
+through exact-runtime proof and admission, then restores only the approved originally active
+capacity. Compatible future CLI releases require new explicit pins and fresh checks, not a
+source-level version-number edit; changed native behavior requires reviewed successor work.
+See [General Chat runtime evolution](GENERAL_CHAT_CODEX_RUNTIME_EVOLUTION.md) and the
+[coordinated upgrade runbook](../operations/CODEX_RUNTIME_COMPATIBILITY_RUNBOOK.md#coordinated-shared-cli-upgrade).
+These are source/operation contracts; live acceptance must record actual runtime evidence.
 
 ## Simpler alternatives rejected
 

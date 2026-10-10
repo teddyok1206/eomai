@@ -63,6 +63,7 @@ NativeChatInput = ChatInputContract
 NativeChatResult = ChatResultContract
 
 NATIVE_PROFILE = "codex-app-server/0.160.0/environment-free/1.0"
+SELECTED_NATIVE_PROFILE = "codex-app-server/environment-free/2.0"
 MAX_EVENT_BYTES = 1048576
 MAX_TURN_BYTES = 32 * 1048576
 MAX_TURN_EVENTS = 50000

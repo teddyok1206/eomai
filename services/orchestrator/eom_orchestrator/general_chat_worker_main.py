@@ -19,6 +19,7 @@ from eom_orchestrator.general_chat_native_worker import (
     IsolatedCodexChatWorker,
     source_chat_worker_policy,
 )
+from eom_orchestrator.general_chat_runtime_selection import native_runtime_from_environment
 from eom_orchestrator.general_chat_socket import ChatSocketEndpoint
 from eom_orchestrator.general_chat_stdio import CHAT_USER, require_native_chat_identity
 from eom_orchestrator.general_chat_worker import ChatWorkerApplication
@@ -44,7 +45,9 @@ def main() -> int:
         for number in (signal.SIGINT, signal.SIGTERM):
             signal.signal(number, lambda *_: stop.set())
         selected = source_chat_worker_policy(
-            model=args.model, protocol=4 if args.protocol == 4 else 3
+            model=args.model,
+            protocol=4 if args.protocol == 4 else 3,
+            native_runtime=native_runtime_from_environment(os.environ),
         )
         with ChatLocalHandoff(HANDOFF_DIRECTORY, worker_uid=worker.pw_uid) as handoff:
             native = IsolatedCodexChatWorker(policy=selected)

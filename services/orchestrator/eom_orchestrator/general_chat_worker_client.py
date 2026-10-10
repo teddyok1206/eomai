@@ -28,6 +28,7 @@ from eom_protocol.general_chat_worker_messages import (
     ChatWorkerReply,
     ChatWorkerRequest,
     ChatWorkerTicket,
+    chat_worker_protocol_version,
     read_chat_worker_policy,
     read_chat_worker_reply,
     read_chat_worker_request,
@@ -110,13 +111,14 @@ class ChatWorkerClient:
             raise ChatTransportError("UNAVAILABLE") from None
 
     def _call(self, command: ChatWorkerCommand) -> ChatWorkerReply:
+        protocol = chat_worker_protocol_version(self.policy)
         request = ChatWorkerRequest(
             schema_version="general-chat-worker-request/4.0"
-            if self.policy.schema_version.endswith("/4.0")
+            if protocol == 4
             else "general-chat-worker-request/3.0"
-            if self.policy.schema_version.endswith("/3.0")
+            if protocol == 3
             else "general-chat-worker-request/2.0"
-            if self.policy.schema_version.endswith("/2.0")
+            if protocol == 2
             else "general-chat-worker-request/1.0",
             request_id="chatwrpc_" + uuid4().hex,
             policy_sha256=command.ticket.policy_sha256

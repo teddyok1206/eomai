@@ -106,7 +106,9 @@ def test_schema_first_mirrors_and_predecessor_bytes_are_preserved() -> None:
     paths = sorted(
         p
         for p in BASE.glob("*.json")
-        if "-v4." not in p.name and p.name != "general-chat-rag.schema.json"
+        if "-v4." not in p.name
+        and "-v5." not in p.name
+        and p.name != "general-chat-rag.schema.json"
     )
     assert len(paths) == 28
     assert hashlib.sha256(

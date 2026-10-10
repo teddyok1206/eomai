@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from enum import StrEnum
 from functools import lru_cache
 from importlib.resources import files
+from types import MappingProxyType
 from typing import Annotated, Any, Literal
 
 from eom_identifiers import canonical_json_bytes, sha256_bytes
@@ -43,40 +45,94 @@ class ChatWorkerFault(RuntimeError):
         super().__init__(code.value)
 
 
+class CodexCliIdentity(ChatBoundaryValue):
+    """Explicit selected executable identity, not a current-version fallback."""
+
+    cli_version: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
+    cli_launcher_sha256: WorkerHash = Field(min_length=71, max_length=71)
+    cli_binary_sha256: WorkerHash = Field(min_length=71, max_length=71)
+
+
 class ChatWorkerPolicy(ChatBoundaryValue):
     schema_version: Literal[
         "general-chat-worker-policy/1.0",
         "general-chat-worker-policy/2.0",
         "general-chat-worker-policy/3.0",
         "general-chat-worker-policy/4.0",
+        "general-chat-worker-policy/5.0",
     ] = "general-chat-worker-policy/1.0"
     model: str = Field(min_length=1, max_length=128, pattern=r"^[a-zA-Z0-9._-]+$")
-    native_profile: Literal["codex-app-server/0.160.0/environment-free/1.0"]
+    native_profile: Literal[
+        "codex-app-server/0.160.0/environment-free/1.0",
+        "codex-app-server/environment-free/2.0",
+    ]
+    native_runtime: CodexCliIdentity | None = None
     prompt_revision: Literal["general-chat/1.0.0"] = "general-chat/1.0.0"
     prompt_sha256: WorkerHash
     grounded_prompt_sha256: WorkerHash | None = None
     agent_prompt_sha256: WorkerHash | None = None
     rag_prompt_sha256: WorkerHash | None = None
 
+    @model_validator(mode="after")
+    def selected_runtime_policy(self) -> ChatWorkerPolicy:
+        if self.schema_version == "general-chat-worker-policy/5.0":
+            if (
+                self.native_profile != "codex-app-server/environment-free/2.0"
+                or self.native_runtime is None
+                or self.grounded_prompt_sha256 is None
+                or self.agent_prompt_sha256 is None
+                or self.rag_prompt_sha256 is None
+            ):
+                raise ValueError("V5 policy requires selected runtime and V4 prompt pins")
+        elif (
+            self.native_profile != "codex-app-server/0.160.0/environment-free/1.0"
+            or self.native_runtime is not None
+        ):
+            raise ValueError("legacy policy cannot adopt a selected native runtime")
+        return self
+
     @model_serializer(mode="wrap")
     def serialize_policy(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
         value = handler(self)
         if not isinstance(value, dict):
             raise ValueError("policy serializer must return an object")
+        if self.schema_version != "general-chat-worker-policy/5.0":
+            value.pop("native_runtime", None)
         if self.schema_version == "general-chat-worker-policy/1.0":
             value.pop("grounded_prompt_sha256", None)
         if self.schema_version not in {
             "general-chat-worker-policy/3.0",
             "general-chat-worker-policy/4.0",
+            "general-chat-worker-policy/5.0",
         }:
             value.pop("agent_prompt_sha256", None)
-        if self.schema_version != "general-chat-worker-policy/4.0":
+        if self.schema_version not in {
+            "general-chat-worker-policy/4.0",
+            "general-chat-worker-policy/5.0",
+        }:
             value.pop("rag_prompt_sha256", None)
         return value
 
     @property
     def sha256(self) -> str:
         return sha256_bytes(canonical_json_bytes(self.model_dump(mode="json")))
+
+
+_CHAT_POLICY_PROTOCOLS: Mapping[str, Literal[1, 2, 3, 4]] = MappingProxyType(
+    {
+        "general-chat-worker-policy/1.0": 1,
+        "general-chat-worker-policy/2.0": 2,
+        "general-chat-worker-policy/3.0": 3,
+        "general-chat-worker-policy/4.0": 4,
+        "general-chat-worker-policy/5.0": 4,
+    }
+)
+
+
+def chat_worker_protocol_version(policy: ChatWorkerPolicy) -> Literal[1, 2, 3, 4]:
+    """Policy revisions and supported turn/RPC capabilities are separate identities."""
+
+    return _CHAT_POLICY_PROTOCOLS[policy.schema_version]
 
 
 def chat_worker_ticket(turn: ChatInputContract, *, policy_sha256: str) -> ChatWorkerTicket:

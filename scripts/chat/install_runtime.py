@@ -20,6 +20,10 @@ import tempfile
 from pathlib import Path
 
 from eom_identifiers import sha256_bytes
+from eom_orchestrator.codex_cli_identity import (
+    CodexCliIdentityGuard,
+    capture_codex_cli_identity,
+)
 from eom_orchestrator.general_chat_owner_runtime import (
     ChatOwnerConfiguration,
     chat_owner_engine,
@@ -30,8 +34,10 @@ from eom_orchestrator.general_chat_protected_environment import (
     read_chat_environment,
     read_chat_preparation_file,
 )
+from eom_orchestrator.general_chat_runtime_selection import RUNTIME_ENVIRONMENT_KEYS
 from eom_orchestrator.general_chat_state import ChatError, safe_chat_error_code
 from eom_protocol.general_chat_rag_knowledge import ChatRagPolicy
+from eom_protocol.general_chat_worker_messages import CodexCliIdentity
 
 REPOSITORY = Path("/home/eom/EOM")
 PYTHON = "/srv/eom/conda/envs/eom-api/bin/python"
@@ -40,6 +46,8 @@ UNIT_ROOT = Path("/etc/systemd/system")
 CONFIG_ROOT = Path("/etc/eom")
 SECRET = CONFIG_ROOT / "secrets/general-chat.env"
 AUTH = Path("/srv/eom/worker-homes/eom-cdx-chat/.codex/auth.json")
+CODEX_BINARY = Path("/usr/local/bin/codex")
+NATIVE_RUNTIME_KEYS = tuple(RUNTIME_ENVIRONMENT_KEYS.values())
 
 
 def output(arguments: list[str]) -> str:
@@ -71,6 +79,10 @@ def require_source(commit: str, model: str) -> None:
         or output(["git", "--no-optional-locks", "-C", str(REPOSITORY), "status", "--porcelain"])
     ):
         raise ChatError("GENERAL_CHAT_INSTALL_SOURCE_MISMATCH")
+    require_chat_services_stopped()
+
+
+def require_chat_services_stopped() -> None:
     for unit in UNITS:
         state = output(["systemctl", "show", unit, "--property=ActiveState", "--value"])
         pid = output(["systemctl", "show", unit, "--property=MainPID", "--value"])
@@ -110,7 +122,11 @@ for module in (general_chat_owner_main, general_chat_worker_main):
 
 
 def configuration_payloads(
-    commit: str, model: str, *, rag_policy: ChatRagPolicy | None = None
+    commit: str,
+    model: str,
+    *,
+    rag_policy: ChatRagPolicy | None = None,
+    native_runtime: CodexCliIdentity | None = None,
 ) -> dict[Path, bytes]:
     model_value = f"EOM_GENERAL_CHAT_MODEL={model}\n"
     if rag_policy is not None:
@@ -121,10 +137,48 @@ def configuration_payloads(
             f"EOM_GENERAL_CHAT_RAG_POLICY_REVISION_ID={rag_policy.access_policy_revision_id}\n"
             f"EOM_GENERAL_CHAT_RAG_POLICY_SHA256={rag_policy.sha256}\n"
         )
+    if native_runtime is not None:
+        if rag_policy is None:
+            raise ChatError("GENERAL_CHAT_OWNER_CONFIGURATION_INVALID")
+        native_runtime = CodexCliIdentity.model_validate(native_runtime.model_dump(mode="json"))
+        runtime_values = native_runtime.model_dump(mode="json")
+        model_value += "".join(
+            f"{key}={runtime_values[field]}\n" for field, key in RUNTIME_ENVIRONMENT_KEYS.items()
+        )
     return {
         CONFIG_ROOT / "general-chat-model.env": model_value.encode(),
         CONFIG_ROOT / "general-chat-release.env": f"EOM_RUNTIME_SOURCE_COMMIT={commit}\n".encode(),
     }
+
+
+def require_pinned_model_selection(
+    model: str,
+    *,
+    rag_policy: ChatRagPolicy | None,
+    secret: dict[str, str],
+    source_commit: str,
+) -> ChatRagPolicy:
+    """Pin-only selection preserves the existing released model and RAG authority."""
+    values = read_chat_environment(CONFIG_ROOT / "general-chat-model.env", uid=0, gid=0, mode=0o600)
+    allowed = {
+        "EOM_GENERAL_CHAT_MODEL",
+        "EOM_GENERAL_CHAT_PROTOCOL_VERSION",
+        "EOM_GENERAL_CHAT_RAG_POLICY_REVISION_ID",
+        "EOM_GENERAL_CHAT_RAG_POLICY_SHA256",
+        *NATIVE_RUNTIME_KEYS,
+    }
+    if set(values) - allowed:
+        raise ChatError("GENERAL_CHAT_OWNER_CONFIGURATION_INVALID")
+    current = ChatOwnerConfiguration.from_environment(
+        secret | {"EOM_RUNTIME_SOURCE_COMMIT": source_commit} | values
+    )
+    if (
+        current.model != model
+        or current.rag_policy is None
+        or (rag_policy is not None and rag_policy != current.rag_policy)
+    ):
+        raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
+    return current.rag_policy
 
 
 def require_compatible_runtime(commit: str, runtime_commit: str) -> None:
@@ -212,6 +266,7 @@ def stage(
     previous_runtime_commit: str | None = None,
     rag_policy: ChatRagPolicy | None = None,
     previous_model_config_sha256: str | None = None,
+    pin_codex_runtime: bool = False,
 ) -> None:
     require_source(commit, model)
     selected = runtime_commit or commit
@@ -232,7 +287,18 @@ def stage(
     secret = read_chat_environment(SECRET, uid=0, gid=0, mode=0o600)
     if set(secret) != {"EOM_GENERAL_CHAT_DATABASE_URL"}:
         raise ChatError("GENERAL_CHAT_OWNER_CONFIGURATION_INVALID")
-    configs = configuration_payloads(selected, model, rag_policy=rag_policy)
+    native_guard: CodexCliIdentityGuard | None = None
+    if pin_codex_runtime:
+        rag_policy = require_pinned_model_selection(
+            model, rag_policy=rag_policy, secret=secret, source_commit=selected
+        )
+        native_guard = capture_codex_cli_identity(CODEX_BINARY)
+    configs = configuration_payloads(
+        selected,
+        model,
+        rag_policy=rag_policy,
+        native_runtime=native_guard.identity if native_guard is not None else None,
+    )
     model_settings = dict(
         line.split("=", 1)
         for line in configs[CONFIG_ROOT / "general-chat-model.env"].decode("ascii").splitlines()
@@ -258,17 +324,34 @@ def stage(
     release_target = CONFIG_ROOT / "general-chat-release.env"
     updates: dict[Path, tuple[str, int]] = {}
     if previous_model_config_sha256 is not None:
-        if previous_runtime_commit is None:
+        if re.fullmatch(r"sha256:[0-9a-f]{64}", previous_model_config_sha256) is None or (
+            previous_runtime_commit is None and not pin_codex_runtime
+        ):
             raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
         model_target = CONFIG_ROOT / "general-chat-model.env"
-        require_configuration_predecessor(
-            model_target, digest=previous_model_config_sha256, mode=0o600
-        )
-        updates[model_target] = (previous_model_config_sha256, 0o600)
+        if not (
+            pin_codex_runtime
+            and read_chat_preparation_file(model_target, uid=0, gid=0, mode=0o600)
+            == configs[model_target]
+        ):
+            require_configuration_predecessor(
+                model_target, digest=previous_model_config_sha256, mode=0o600
+            )
+            updates[model_target] = (previous_model_config_sha256, 0o600)
+    advance_release = previous_runtime_commit is not None and not (
+        pin_codex_runtime and previous_runtime_commit == selected
+    )
     existing_configs = {}
     for target, payload in configs.items():
-        if target == release_target and previous_runtime_commit is not None:
-            require_release_update(target, previous=previous_runtime_commit, selected=selected)
+        if target == release_target and advance_release:
+            assert previous_runtime_commit is not None
+            if (
+                pin_codex_runtime
+                and read_chat_preparation_file(target, uid=0, gid=0, mode=0o600) == payload
+            ):
+                advance_release = False
+            else:
+                require_release_update(target, previous=previous_runtime_commit, selected=selected)
             existing_configs[target] = True
         elif target in updates:
             existing_configs[target] = True
@@ -276,6 +359,12 @@ def stage(
             existing_configs[target] = require_replay(target, payload, mode=0o600)
     existing_units = {}
     for target, payload in unit_payloads.items():
+        if (
+            pin_codex_runtime
+            and read_chat_preparation_file(target, uid=0, gid=0, mode=0o644) == payload
+        ):
+            existing_units[target] = True
+            continue
         if previous_runtime_commit is not None:
             prior = subprocess.check_output(
                 [
@@ -293,6 +382,18 @@ def stage(
                 existing_units[target] = True
                 continue
         existing_units[target] = require_replay(target, payload, mode=0o644)
+    if native_guard is not None:
+        # Capture is not permission to race service startup or a CLI replacement.
+        # Recheck the same file epoch and stopped services before any mutation.
+        native_guard.assert_unchanged()
+        require_chat_services_stopped()
+        if (
+            all(existing_configs.values())
+            and all(existing_units.values())
+            and not updates
+            and not advance_release
+        ):
+            return
     for target, payload in configs.items():
         if not existing_configs[target]:
             install_chat_environment(target, payload, uid=0, gid=0)
@@ -305,6 +406,9 @@ def stage(
                 check=True,
             )
     for target, (digest, mode) in updates.items():
+        if native_guard is not None:
+            native_guard.assert_unchanged()
+            require_chat_services_stopped()
         update_prepared_configuration(
             target,
             configs[target] if target in configs else unit_payloads[target],
@@ -313,7 +417,11 @@ def stage(
         )
     for target, payload in unit_payloads.items():
         require_replay(target, payload, mode=0o644)
-    if previous_runtime_commit is not None:
+    if advance_release:
+        assert previous_runtime_commit is not None
+        if native_guard is not None:
+            native_guard.assert_unchanged()
+            require_chat_services_stopped()
         update_release_pin(
             release_target,
             configs[release_target],
@@ -368,6 +476,11 @@ def main() -> int:
     parser.add_argument("--rag-policy-revision-id")
     parser.add_argument("--rag-policy-sha256")
     parser.add_argument("--previous-model-config-sha256")
+    parser.add_argument(
+        "--pin-codex-runtime",
+        action="store_true",
+        help="Pin the protected installed CLI while preserving the existing protocol-4 model/RAG",
+    )
     args = parser.parse_args()
     try:
         rag_policy = None
@@ -385,6 +498,7 @@ def main() -> int:
             previous_runtime_commit=args.previous_runtime_commit,
             rag_policy=rag_policy,
             previous_model_config_sha256=args.previous_model_config_sha256,
+            pin_codex_runtime=args.pin_codex_runtime,
         )
         if args.action == "activate":
             activate()

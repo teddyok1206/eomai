@@ -55,7 +55,12 @@ Codex 업데이트 확인과 실제 실행 호환성 검증은 기존 Orchestrat
 CLI·실행 파일·계정 배정·모델·추론 강도를 고정한 Artifact입니다. 새 모델의 허용 범위는
 통과한 계정 배정으로 제한하고, 기존 실행 설정·기본값·프롬프트·RAG pin은 유지합니다.
 소스 테스트와 실제 모델 실행, 문항 품질 검증은 각각 별도 결과입니다.
+공용 Codex 설치를 업데이트할 때는 작업 슬롯01–06뿐 아니라 일반 대화의 전용 슬롯도
+별도로 검증합니다. 일반 대화의 새 계약은 선택한 CLI 버전·실행 파일 해시를 고정하며,
+호환되는 다음 버전은 코드의 버전 번호를 바꾸지 않고 새 pin과 실제 검증으로 적용합니다.
+이 계약만으로 새 버전이 운영 활성화됐거나 모든 미래 버전이 호환된다고 주장하지 않습니다.
 [호환성 설계](docs/architecture/CODEX_RUNTIME_COMPATIBILITY.md),
+[일반 대화 런타임 계약](docs/architecture/GENERAL_CHAT_CODEX_RUNTIME_EVOLUTION.md),
 [운영 점검 절차](docs/operations/CODEX_RUNTIME_COMPATIBILITY_RUNBOOK.md)를 참고하세요.
 
 검토 근거의 연결 규칙을 명확히 한 `generated-knowledge-item@1.20.16`은 별도의 저장소

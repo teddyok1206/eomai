@@ -96,6 +96,7 @@ class GeneralChatArtifactStore:
             RAG_INPUT_SCHEMA,
             RAG_RESULT_SCHEMA,
             "eom://schemas/general-chat/dispatch/4.0",
+            "eom://schemas/general-chat/dispatch/5.0",
             RAG_TOOL_RECORD_SCHEMA,
         }:
             raise ValueError("unsupported chat evidence schema")
@@ -164,6 +165,7 @@ class GeneralChatArtifactStore:
                 "eom://schemas/general-chat/dispatch/2.0",
                 "eom://schemas/general-chat/dispatch/3.0",
                 "eom://schemas/general-chat/dispatch/4.0",
+                "eom://schemas/general-chat/dispatch/5.0",
             },
         }
         keys = {(p.artifact_id, p.artifact_revision_id) for p in pointers}

@@ -66,7 +66,9 @@ def main() -> int:
             rag_policy=config.rag_policy,
         )
         policy = source_chat_worker_policy(
-            model=config.model, protocol=4 if config.rag_policy is not None else 3
+            model=config.model,
+            protocol=4 if config.rag_policy is not None else 3,
+            native_runtime=config.native_runtime,
         )
         endpoint = ChatSocketEndpoint(
             Path("/run/eom-general-chat-worker/worker.sock"),

@@ -22,7 +22,12 @@ from time import monotonic
 from typing import cast
 
 from eom_identifiers import canonical_json_bytes
+from eom_protocol.general_chat_worker_messages import CodexCliIdentity
 
+from eom_orchestrator.codex_cli_identity import (
+    CodexCliIdentityGuard,
+    capture_codex_cli_identity,
+)
 from eom_orchestrator.general_chat_native import (
     DISABLED_CHAT_FEATURES,
     MAX_EVENT_BYTES,
@@ -148,19 +153,33 @@ def require_native_chat_identity() -> None:
         raise NativeChatError("CHAT_ISOLATION_NOT_READY") from exc
 
 
-def require_native_chat_capability(*, command: list[str], environment: dict[str, str]) -> None:
+def require_native_chat_capability(
+    *,
+    command: list[str],
+    environment: dict[str, str],
+    native_runtime: CodexCliIdentity | None = None,
+) -> CodexCliIdentityGuard | None:
     """No inference: validate installed CLI and effective disabled feature inventory."""
-    version = subprocess.run(
-        [str(CODEX_BINARY), "--version"],
-        env=environment,
-        cwd=CHAT_WORKSPACE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        timeout=10,
-        check=False,
-    )
-    if version.returncode != 0 or version.stdout.strip() != EXPECTED_VERSION.encode("ascii"):
-        raise NativeChatError("CHAT_ISOLATION_NOT_READY")
+    guard: CodexCliIdentityGuard | None = None
+    if native_runtime is None:
+        version = subprocess.run(
+            [str(CODEX_BINARY), "--version"],
+            env=environment,
+            cwd=CHAT_WORKSPACE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+            check=False,
+        )
+        if version.returncode != 0 or version.stdout.strip() != EXPECTED_VERSION.encode("ascii"):
+            raise NativeChatError("CHAT_ISOLATION_NOT_READY")
+    else:
+        try:
+            guard = capture_codex_cli_identity(CODEX_BINARY)
+            if guard.identity != native_runtime:
+                raise ValueError("installed CLI does not match explicit runtime selection")
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            raise NativeChatError("CHAT_ISOLATION_NOT_READY") from exc
     # Preserve the same pinned overrides but do not start a native server here.
     if command[-3:] != ["app-server", "--strict-config", "--stdio"]:
         raise NativeChatError("CHAT_ISOLATION_NOT_READY")
@@ -184,6 +203,12 @@ def require_native_chat_capability(*, command: list[str], environment: dict[str,
         states[words[0]] = words[-1] == "true"
     if any(states.get(feature) is not False for feature in DISABLED_CHAT_FEATURES):
         raise NativeChatError("CHAT_ISOLATION_NOT_READY")
+    if guard is not None:
+        try:
+            guard.assert_unchanged()
+        except (OSError, ValueError) as exc:
+            raise NativeChatError("CHAT_ISOLATION_NOT_READY") from exc
+    return guard
 
 
 def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -207,10 +232,16 @@ def _finite_float(value: str) -> float:
 
 
 class CodexChatStdio:
-    def __init__(self, process: subprocess.Popen[bytes]) -> None:
+    def __init__(
+        self,
+        process: subprocess.Popen[bytes],
+        *,
+        runtime_guard: CodexCliIdentityGuard | None = None,
+    ) -> None:
         if process.stdin is None or process.stdout is None:
             raise ValueError("native stdio pipes are required")
         self.process = process
+        self.runtime_guard = runtime_guard
         self.reader = selectors.DefaultSelector()
         self.writer = selectors.DefaultSelector()
         self.reader.register(process.stdout, selectors.EVENT_READ)
@@ -221,11 +252,13 @@ class CodexChatStdio:
         self.closed = False
 
     @classmethod
-    def start(cls, *, model: str) -> CodexChatStdio:
+    def start(cls, *, model: str, native_runtime: CodexCliIdentity | None = None) -> CodexChatStdio:
         require_native_chat_identity()
         command = native_chat_command(model=model)
         environment = native_chat_environment()
-        require_native_chat_capability(command=command, environment=environment)
+        guard = require_native_chat_capability(
+            command=command, environment=environment, native_runtime=native_runtime
+        )
         process = subprocess.Popen(
             command,
             stdin=subprocess.PIPE,
@@ -236,7 +269,15 @@ class CodexChatStdio:
             start_new_session=True,
             bufsize=0,
         )
-        return cls(process)
+        return cls(process, runtime_guard=guard)
+
+    def assert_runtime_unchanged(self) -> None:
+        if self.runtime_guard is None:
+            raise NativeChatError("CHAT_ISOLATION_NOT_READY")
+        try:
+            self.runtime_guard.assert_unchanged()
+        except (OSError, ValueError) as exc:
+            raise NativeChatError("CHAT_ISOLATION_NOT_READY") from exc
 
     def send(self, document: Mapping[str, object]) -> None:
         payload = canonical_json_bytes(document) + b"\n"

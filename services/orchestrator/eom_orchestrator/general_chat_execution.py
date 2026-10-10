@@ -50,6 +50,7 @@ from eom_protocol.general_chat_turn_contracts import (
 from eom_protocol.general_chat_worker_messages import (
     ChatWorkerExecute,
     ChatWorkerRequest,
+    chat_worker_protocol_version,
     chat_worker_ticket,
 )
 from sqlalchemy.orm import Session
@@ -420,16 +421,13 @@ class GeneralChatExecutionService:
         )
         input_schema = CHAT_INPUT_SCHEMA
         dispatch_schema = CHAT_DISPATCH_SCHEMA
-        if identity.policy.schema_version in {
-            "general-chat-worker-policy/2.0",
-            "general-chat-worker-policy/3.0",
-            "general-chat-worker-policy/4.0",
-        }:
+        policy_protocol = chat_worker_protocol_version(identity.policy)
+        if policy_protocol in {2, 3, 4}:
             if self.knowledge is None:
                 raise ChatError("GENERAL_CHAT_NOT_READY")
             user = resolved_turns[turn.turn_id].user
             selection = user.selection if isinstance(user, StoredGroundedChatMessage) else None
-            if selection is None and identity.policy.schema_version.endswith(("/3.0", "/4.0")):
+            if selection is None and policy_protocol in {3, 4}:
                 for previous in reversed(context[:-1]):
                     prepared_knowledge = resolved_turns[previous.turn_id].item
                     if prepared_knowledge is not None:
@@ -454,7 +452,7 @@ class GeneralChatExecutionService:
                 knowledge=resolved_knowledge.context,
                 agent_state=resolved_knowledge.agent_state,
             )
-            if identity.policy.schema_version.endswith("/4.0"):
+            if policy_protocol == 4:
                 if self.rag_knowledge is None or self.rag_policy is None:
                     raise ChatError("GENERAL_CHAT_NOT_READY")
                 prior_rag = None
@@ -485,11 +483,7 @@ class GeneralChatExecutionService:
                     **prepared_values, rag_scope=rag_scope, rag_knowledge=prior_rag
                 )
             else:
-                input_type = (
-                    AgentChatTurnInput
-                    if identity.policy.schema_version.endswith("/3.0")
-                    else GroundedChatTurnInput
-                )
+                input_type = AgentChatTurnInput if policy_protocol == 3 else GroundedChatTurnInput
                 request = input_type(**prepared_values)
             input_schema = (
                 RAG_INPUT_SCHEMA
@@ -499,7 +493,9 @@ class GeneralChatExecutionService:
                 else GROUNDED_INPUT_SCHEMA
             )
             dispatch_schema = (
-                "eom://schemas/general-chat/dispatch/4.0"
+                "eom://schemas/general-chat/dispatch/5.0"
+                if identity.policy.schema_version == "general-chat-worker-policy/5.0"
+                else "eom://schemas/general-chat/dispatch/4.0"
                 if isinstance(request, RagChatTurnInput)
                 else "eom://schemas/general-chat/dispatch/3.0"
                 if isinstance(request, AgentChatTurnInput)
@@ -524,7 +520,9 @@ class GeneralChatExecutionService:
         require_evidence(pointer, payload, schema_ref=input_schema)
         dispatch = read_chat_dispatch(
             ChatDispatchReceipt(
-                schema_version="general-chat-dispatch/4.0"
+                schema_version="general-chat-dispatch/5.0"
+                if identity.policy.schema_version == "general-chat-worker-policy/5.0"
+                else "general-chat-dispatch/4.0"
                 if isinstance(request, RagChatTurnInput)
                 else "general-chat-dispatch/3.0"
                 if isinstance(request, AgentChatTurnInput)

@@ -9,10 +9,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from eom_protocol.general_chat_rag_knowledge import ChatRagPolicy
+from eom_protocol.general_chat_worker_messages import CodexCliIdentity
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.engine import URL, make_url
 
 from eom_orchestrator.general_chat_privileges import chat_privileges_ready, chat_role_boundary_ready
+from eom_orchestrator.general_chat_runtime_selection import native_runtime_from_environment
 from eom_orchestrator.general_chat_state import ChatError
 from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 
@@ -35,6 +37,7 @@ class ChatOwnerConfiguration:
     source_commit: str
     model: str
     rag_policy: ChatRagPolicy | None = None
+    native_runtime: CodexCliIdentity | None = None
 
     @classmethod
     def from_environment(cls, values: Mapping[str, str]) -> ChatOwnerConfiguration:
@@ -53,6 +56,7 @@ class ChatOwnerConfiguration:
                 )
             elif protocol != "3" or revision is not None or digest is not None:
                 raise ValueError()
+            native_runtime = native_runtime_from_environment(values)
             if (
                 url.drivername != "postgresql+psycopg"
                 or url.username != OWNER_DATABASE_ROLE
@@ -65,7 +69,7 @@ class ChatOwnerConfiguration:
                 or re.fullmatch(r"[A-Za-z0-9._-]{1,128}", model) is None
             ):
                 raise ValueError()
-            return cls(url, commit, model, rag_policy)
+            return cls(url, commit, model, rag_policy, native_runtime)
         except (KeyError, ValueError):
             raise ChatError("GENERAL_CHAT_OWNER_CONFIGURATION_INVALID") from None
 

@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import os
-import platform
-import stat
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -15,86 +11,30 @@ from eom_workflow.codex_compatibility import (
 )
 
 from eom_orchestrator.capability_observer import observe_codex_cli_surface
+from eom_orchestrator.codex_cli_identity import (
+    native_binary_path,
+    protected_launcher_target,
+)
+from eom_orchestrator.codex_cli_identity import (
+    protected_file_hash as _protected_hash,
+)
+from eom_orchestrator.codex_cli_identity import (
+    protected_file_identity as _identity,
+)
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.worker_auth import CODEX_BINARY
 from eom_orchestrator.worker_systemd import WORKER_EXECUTABLE, WORKER_EXECUTABLE_SHA256
 
 _DISTRIBUTION_ROOT = Path("/usr/local/lib/node_modules/@openai/codex")
-_NATIVE_PACKAGES = {
-    "x86_64": ("codex-linux-x64", "x86_64-unknown-linux-musl"),
-    "aarch64": ("codex-linux-arm64", "aarch64-unknown-linux-musl"),
-}
-_MAX_EXECUTABLE_BYTES = 512 * 1024 * 1024
 
 
 def _native_binary() -> Path:
     try:
-        package, triple = _NATIVE_PACKAGES[platform.machine()]
-    except KeyError as exc:
+        return native_binary_path(_DISTRIBUTION_ROOT)
+    except ValueError as exc:
         raise ControlPlaneError(
             "CONTROL_COMPATIBILITY_RUNTIME_INVALID", "unsupported Codex installation layout"
         ) from exc
-    return (
-        _DISTRIBUTION_ROOT
-        / "node_modules"
-        / "@openai"
-        / package
-        / "vendor"
-        / triple
-        / "bin"
-        / "codex"
-    )
-
-
-def _assert_protected_ancestors(path: Path) -> None:
-    for parent in path.parents:
-        parent_stat = parent.lstat()
-        if (
-            not stat.S_ISDIR(parent_stat.st_mode)
-            or parent_stat.st_uid != 0
-            or parent_stat.st_gid != 0
-            or stat.S_IMODE(parent_stat.st_mode) & 0o022
-        ):
-            raise ValueError("unsafe protected executable ancestor")
-
-
-def _identity(path: Path) -> tuple[int, int, int, int, int, int]:
-    metadata = path.lstat()
-    if (
-        not stat.S_ISREG(metadata.st_mode)
-        or metadata.st_uid != 0
-        or metadata.st_gid != 0
-        or stat.S_IMODE(metadata.st_mode) & 0o022
-        or not 0 < metadata.st_size <= _MAX_EXECUTABLE_BYTES
-        or metadata.st_nlink != 1
-    ):
-        raise ValueError("unsafe protected executable")
-    _assert_protected_ancestors(path)
-    return (
-        metadata.st_dev,
-        metadata.st_ino,
-        metadata.st_size,
-        metadata.st_mtime_ns,
-        metadata.st_ctime_ns,
-        metadata.st_mode,
-    )
-
-
-def _protected_hash(path: Path) -> str:
-    before = _identity(path)
-    descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
-    try:
-        metadata = os.fstat(descriptor)
-        if (metadata.st_dev, metadata.st_ino) != before[:2]:
-            raise ValueError("protected executable changed before read")
-        digest = hashlib.sha256()
-        while chunk := os.read(descriptor, 1024 * 1024):
-            digest.update(chunk)
-        if _identity(path) != before:
-            raise ValueError("protected executable changed during read")
-        return "sha256:" + digest.hexdigest()
-    finally:
-        os.close(descriptor)
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,12 +48,8 @@ class CodexCompatibilityRuntimeGuard:
 
     def assert_current(self) -> None:
         try:
-            _assert_protected_ancestors(CODEX_BINARY)
-            link = CODEX_BINARY.lstat()
             if (
-                link.st_uid != 0
-                or link.st_gid != 0
-                or CODEX_BINARY.resolve(strict=True) != self.launcher
+                protected_launcher_target(CODEX_BINARY) != self.launcher
                 or tuple(
                     _identity(path)
                     for path in (self.launcher, self.native_binary, WORKER_EXECUTABLE)
@@ -129,11 +65,7 @@ class CodexCompatibilityRuntimeGuard:
 
 def observe_compatibility_runtime_guard() -> CodexCompatibilityRuntimeGuard:
     try:
-        _assert_protected_ancestors(CODEX_BINARY)
-        link_metadata = CODEX_BINARY.lstat()
-        if link_metadata.st_uid != 0 or link_metadata.st_gid != 0:
-            raise ValueError("unsafe protected Codex launcher reference")
-        launcher = CODEX_BINARY.resolve(strict=True)
+        launcher = protected_launcher_target(CODEX_BINARY)
         binary = _native_binary()
         paths = (launcher, binary, WORKER_EXECUTABLE)
         before = tuple(_identity(path) for path in paths)

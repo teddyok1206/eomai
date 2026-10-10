@@ -27,6 +27,7 @@ class ChatDispatchReceipt(ChatBoundaryValue):
         "general-chat-dispatch/2.0",
         "general-chat-dispatch/3.0",
         "general-chat-dispatch/4.0",
+        "general-chat-dispatch/5.0",
     ] = "general-chat-dispatch/1.0"
     runtime_id: str = Field(pattern=r"^chatrt_[0-9a-f]{32}$")
     identity: ChatExecutionIdentity
@@ -37,10 +38,17 @@ class ChatDispatchReceipt(ChatBoundaryValue):
     def exact_input_and_policy(self) -> ChatDispatchReceipt:
         if self.identity.policy.sha256 != self.ticket.policy_sha256:
             raise ValueError("dispatch policy differs from exact ticket")
+        if (self.schema_version == "general-chat-dispatch/5.0") != (
+            self.identity.policy.schema_version == "general-chat-worker-policy/5.0"
+        ):
+            raise ValueError("dispatch successor must pin its exact policy family")
         expected_schema = (
             RAG_INPUT_SCHEMA
-            if self.schema_version == "general-chat-dispatch/4.0"
-            and self.input.schema_ref == RAG_INPUT_SCHEMA
+            if self.schema_version == "general-chat-dispatch/5.0"
+            or (
+                self.schema_version == "general-chat-dispatch/4.0"
+                and self.input.schema_ref == RAG_INPUT_SCHEMA
+            )
             else AGENT_INPUT_SCHEMA
             if self.schema_version == "general-chat-dispatch/3.0"
             and self.input.schema_ref == AGENT_INPUT_SCHEMA

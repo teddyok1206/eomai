@@ -1365,6 +1365,144 @@ def test_context_budget_drops_only_complete_old_exchanges(chat: ChatFixture) -> 
     assert len(request.messages) < 7
 
 
+def selected_rag_identity() -> ChatExecutionIdentity:
+    from eom_orchestrator.general_chat_native_worker import source_chat_worker_policy
+    from eom_protocol.general_chat_worker_messages import CodexCliIdentity
+
+    return ChatExecutionIdentity(
+        boot_id="chatboot_" + "e" * 32,
+        policy=source_chat_worker_policy(
+            model="synthetic-model",
+            protocol=4,
+            native_runtime=CodexCliIdentity(
+                cli_version="0.162.1",
+                cli_launcher_sha256="sha256:" + "b" * 64,
+                cli_binary_sha256="sha256:" + "c" * 64,
+            ),
+        ),
+    )
+
+
+def test_selected_v5_policy_publishes_exact_dispatch_and_keeps_v4_rag_history(chat):
+    from eom_orchestrator.general_chat_evidence import chat_pointer
+    from eom_protocol.general_chat_rag_turn import RAG_INPUT_SCHEMA, RagChatTurnInput
+
+    from tests.unit.test_general_chat_rag_native import answer
+
+    rag_execution(chat)
+    identity = selected_rag_identity()
+    conversation = chat.create()
+    chat.submit(conversation, message="교과서 근거를 찾아 설명해 주세요.")
+    claim = chat.claim()
+    prepared = chat.execution.prepare(claim, identity=identity)
+    assert isinstance(prepared, RagChatTurnInput)
+    assert chat.execution.prepare(claim, identity=identity) == prepared
+    receipt = chat.execution.execution_receipt(claim)
+    assert receipt.schema_version == "general-chat-dispatch/5.0"
+    assert receipt.identity == identity and receipt.input.schema_ref == RAG_INPUT_SCHEMA
+    with chat.repository.sessions.begin() as session:
+        turn = chat.repository.turn(session, claim.turn_id)
+        pointer = chat_pointer(
+            turn.dispatch_artifact_id,
+            turn.dispatch_revision_id,
+            turn.dispatch_sha256,
+            CHAT_DISPATCH_SCHEMA,
+        )
+    registered = chat.evidence.resolve_family((pointer,))[0]
+    assert registered.schema_ref == "eom://schemas/general-chat/dispatch/5.0"
+    published = chat.evidence.read((registered,))[0]
+    assert published == canonical_json_bytes(receipt.model_dump(mode="json"))
+    tools = rag_tools(chat, claim, prepared, identity)
+    tools.call("retrieve_eom_knowledge", {"terms": ["에너지"], "source_classes": ["TEXTBOOK"]})
+    completed = tools.result(reply=answer(), failure=None)
+    chat.execution.complete(claim, completed)
+    chat.execution.complete(claim, completed)
+    assert completed.protocol_version == "general-chat-turn/4.0"
+    assert chat.execution.active_claim() is None
+    assert chat.execution.execution_receipt(claim) == receipt
+    assert chat.evidence.read((registered,))[0] == published
+    view = chat.owner.conversation(
+        actor_id=chat.actors[0], conversation_id=conversation.conversation_id, cursor=None
+    )
+    assert view.messages[-1].text == completed.reply and view.messages[-1].state == "COMPLETED"
+
+
+def test_selected_v5_worker_recovers_historical_v4_dispatch_without_native_or_rewrite(
+    chat, tmp_path: Path
+):
+    from eom_orchestrator.general_chat_evidence import chat_pointer
+
+    from tests.unit.test_general_chat_rag_native import answer
+
+    _, historical = rag_execution(chat)
+    conversation = chat.submit(chat.create())
+    claim = chat.claim()
+    prepared = chat.execution.prepare(claim, identity=historical)
+    receipt = chat.execution.execution_receipt(claim)
+    tools = rag_tools(chat, claim, prepared, historical)
+    tools.call("retrieve_eom_knowledge", {"terms": ["에너지"], "source_classes": ["TEXTBOOK"]})
+    completed = tools.result(reply=answer(), failure=None)
+    with chat.repository.sessions.begin() as session:
+        turn = chat.repository.turn(session, claim.turn_id)
+        pointer = chat_pointer(
+            turn.dispatch_artifact_id,
+            turn.dispatch_revision_id,
+            turn.dispatch_sha256,
+            CHAT_DISPATCH_SCHEMA,
+        )
+        pinned = (turn.dispatch_artifact_id, turn.dispatch_revision_id, turn.dispatch_sha256)
+    registered = chat.evidence.resolve_family((pointer,))[0]
+    published = chat.evidence.read((registered,))[0]
+    current = selected_rag_identity()
+    assert (
+        current.policy.sha256 != historical.policy.sha256 and current.boot_id != historical.boot_id
+    )
+    directory = tmp_path / "selected-worker"
+    directory.mkdir(mode=0o700)
+    socket_directory = tmp_path / "selected-rpc"
+    socket_directory.mkdir(mode=0o750)
+    socket_directory.chmod(0o750)
+    endpoint = ChatSocketEndpoint(socket_directory / "worker.sock", os.getuid(), os.getgid())
+    native = SyntheticNative()
+    native.ready = False
+    with ChatLocalHandoff(directory, worker_uid=os.getuid()) as local:
+        assert local.reserve(receipt.ticket)
+        local.publish(receipt.ticket, completed)
+        worker = ChatWorkerApplication(
+            native, local, policy=current.policy, boot_id=current.boot_id
+        )
+        with ChatWorkerRpcServer(worker, endpoint=endpoint, owner_uid=os.getuid()) as server:
+            thread = Thread(target=server.serve)
+            thread.start()
+            try:
+                client = ChatWorkerClient(endpoint=endpoint, policy=current.policy)
+                chat.now += timedelta(minutes=31)
+                chat.execution.withdraw(runtime_id=RUNTIME)
+                assert recover_known_chat_turn(chat.execution, client) == claim
+                assert client.lookup(receipt.ticket).result == completed
+                assert recover_known_chat_turn(chat.execution, client) is None
+            finally:
+                server.stop()
+                thread.join(2)
+                assert not thread.is_alive()
+    assert native.calls == [] and chat.execution.active_claim() is None
+    assert chat.execution.execution_receipt(claim) == receipt
+    assert registered.schema_ref == "eom://schemas/general-chat/dispatch/4.0"
+    assert chat.evidence.read((registered,))[0] == published
+    with chat.repository.sessions.begin() as session:
+        turn = chat.repository.turn(session, claim.turn_id)
+        assert (
+            turn.dispatch_artifact_id,
+            turn.dispatch_revision_id,
+            turn.dispatch_sha256,
+        ) == pinned
+        assert turn.state == "COMPLETED"
+    view = chat.owner.conversation(
+        actor_id=chat.actors[0], conversation_id=conversation.conversation_id, cursor=None
+    )
+    assert view.messages[-1].text == completed.reply
+
+
 def test_corrupted_artifact_bytes_fail_closed_at_owner_projection(
     chat: ChatFixture, monkeypatch
 ) -> None:

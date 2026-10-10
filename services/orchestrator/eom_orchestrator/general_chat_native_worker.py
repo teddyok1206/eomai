@@ -21,6 +21,8 @@ from eom_protocol.general_chat_worker_messages import (
     ChatWorkerError,
     ChatWorkerFault,
     ChatWorkerPolicy,
+    CodexCliIdentity,
+    chat_worker_protocol_version,
     read_chat_worker_policy,
 )
 
@@ -29,6 +31,7 @@ from eom_orchestrator.general_chat_grounded_prompt import GROUNDED_CHAT_INSTRUCT
 from eom_orchestrator.general_chat_native import (
     CHAT_INSTRUCTIONS,
     NATIVE_PROFILE,
+    SELECTED_NATIVE_PROFILE,
     CodexChatSession,
 )
 from eom_orchestrator.general_chat_rag_native import RAG_CHAT_INSTRUCTIONS
@@ -39,18 +42,24 @@ from eom_orchestrator.general_chat_stdio import (
 )
 
 
-def source_chat_worker_policy(*, model: str, protocol: Literal[3, 4] = 3) -> ChatWorkerPolicy:
-    value = {
-        "schema_version": f"general-chat-worker-policy/{protocol}.0",
+def source_chat_worker_policy(
+    *, model: str, protocol: Literal[3, 4] = 3, native_runtime: CodexCliIdentity | None = None
+) -> ChatWorkerPolicy:
+    if native_runtime is not None and protocol != 4:
+        raise ValueError("selected chat CLI requires existing RAG-capable transport")
+    value: dict[str, object] = {
+        "schema_version": f"general-chat-worker-policy/{5 if native_runtime else protocol}.0",
         "agent_prompt_sha256": sha256_bytes(AGENT_CHAT_INSTRUCTIONS.encode("utf-8")),
         "grounded_prompt_sha256": sha256_bytes(GROUNDED_CHAT_INSTRUCTIONS.encode("utf-8")),
         "model": model,
-        "native_profile": NATIVE_PROFILE,
+        "native_profile": SELECTED_NATIVE_PROFILE if native_runtime else NATIVE_PROFILE,
         "prompt_revision": "general-chat/1.0.0",
         "prompt_sha256": sha256_bytes(CHAT_INSTRUCTIONS.encode("utf-8")),
     }
     if protocol == 4:
         value["rag_prompt_sha256"] = sha256_bytes(RAG_CHAT_INSTRUCTIONS.encode("utf-8"))
+    if native_runtime is not None:
+        value["native_runtime"] = native_runtime.model_dump(mode="json")
     return read_chat_worker_policy(value)
 
 
@@ -59,14 +68,20 @@ class IsolatedCodexChatWorker:
         self.policy = read_chat_worker_policy(policy.model_dump(mode="json"))
         if self.policy != source_chat_worker_policy(
             model=self.policy.model,
-            protocol=4 if self.policy.schema_version.endswith("/4.0") else 3,
+            protocol=4 if chat_worker_protocol_version(self.policy) == 4 else 3,
+            native_runtime=self.policy.native_runtime,
         ):
             raise ChatWorkerFault(ChatWorkerError.NOT_READY)
         # Stdio.start checks fixed UID/private home, effective CLI capabilities,
         # pinned root-owned config mounted read-only and a cleared environment.
         channel: CodexChatStdio | None = None
         try:
-            channel = CodexChatStdio.start(model=self.policy.model)
+            if self.policy.native_runtime is None:
+                channel = CodexChatStdio.start(model=self.policy.model)
+            else:
+                channel = CodexChatStdio.start(
+                    model=self.policy.model, native_runtime=self.policy.native_runtime
+                )
             session = CodexChatSession(channel, model=self.policy.model, cwd=str(CHAT_WORKSPACE))
             session.initialize()
         except Exception:
@@ -90,6 +105,8 @@ class IsolatedCodexChatWorker:
             # Safe during an answer: OS/config/liveness only, no native RPC on the
             # shared stdio channel, generation, login or token refresh here.
             require_native_chat_identity()
+            if self.policy.native_runtime is not None:
+                self.channel.assert_runtime_unchanged()
         except Exception:
             raise ChatWorkerFault(ChatWorkerError.NOT_READY) from None
 
