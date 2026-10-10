@@ -104,6 +104,19 @@ class InferenceTransferBootstrapManifest(FrozenModel):
         return self
 
 
+class InferenceTransferBootstrapManifestV11(InferenceTransferBootstrapManifest):
+    """Explicit three-axis successor; reviewed value and byte rules are unchanged."""
+
+    schema_version: Literal["inference-transfer-control-bootstrap/1.1"] = (
+        "inference-transfer-control-bootstrap/1.1"  # type: ignore[assignment]
+    )
+    workflow_definition_version: Literal["1.1.0"] = "1.1.0"  # type: ignore[assignment]
+    workflow_role_schema_version: Literal["workflow-role/1.30.0"] = "workflow-role/1.30.0"  # type: ignore[assignment]
+    result_schema: Literal["item-inference-transfer-pair-result@1.1"] = (
+        "item-inference-transfer-pair-result@1.1"  # type: ignore[assignment]
+    )
+
+
 def validate_inference_transfer_bootstrap_manifest(
     value: object,
 ) -> InferenceTransferBootstrapManifest:
@@ -114,6 +127,16 @@ def validate_inference_transfer_bootstrap_manifest(
     return InferenceTransferBootstrapManifest.model_validate(value)
 
 
+def validate_inference_transfer_bootstrap_manifest_v11(
+    value: object,
+) -> InferenceTransferBootstrapManifestV11:
+    """Validate only the explicitly selected successor; never upgrade V1 inputs."""
+    if not isinstance(value, dict):
+        raise ValueError("bootstrap manifest must be a JSON object")
+    validate_control_contract("inference-transfer-control-bootstrap-v1.1", value)
+    return InferenceTransferBootstrapManifestV11.model_validate(value)
+
+
 def validate_inference_transfer_reviewed_instruction(
     manifest: InferenceTransferBootstrapManifest,
     *,
@@ -121,7 +144,11 @@ def validate_inference_transfer_reviewed_instruction(
     payload: bytes,
 ) -> None:
     """Check bounded already-materialized bytes; no file reads or publication occur."""
-    checked = InferenceTransferBootstrapManifest.model_validate(manifest.model_dump(mode="json"))
+    checked = (
+        validate_inference_transfer_bootstrap_manifest_v11(manifest.model_dump(mode="json"))
+        if isinstance(manifest, InferenceTransferBootstrapManifestV11)
+        else validate_inference_transfer_bootstrap_manifest(manifest.model_dump(mode="json"))
+    )
     if layer not in {"PLATFORM", "ROLE"}:
         raise ValueError("bootstrap instruction layer is unsupported")
     member = checked.platform_instruction if layer == "PLATFORM" else checked.rubric_instruction

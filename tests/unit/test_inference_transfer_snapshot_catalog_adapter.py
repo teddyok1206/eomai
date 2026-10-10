@@ -10,7 +10,10 @@ import eom_catalog_service.inference_transfer_snapshot_catalog_adapter as module
 import pytest
 from eom_catalog_contracts import EvidenceBudget
 from eom_catalog_contracts.inference_transfer_experiment import CanonicalExperimentItemText
-from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfile
+from eom_catalog_contracts.item_inference_transfer import (
+    InferenceTransferProfile,
+    InferenceTransferProfilePointer,
+)
 from eom_catalog_service.inference_transfer_catalog_adapter import (
     AcceptedInferenceTransferProfileInput,
     CatalogInferenceTransferSourceAdapter,
@@ -177,6 +180,103 @@ def test_read_only_selected_bytes_but_admits_whole_population_first(owner):
     assert command.requested_by == "real-test-operator"
     assert command.requester_role == "EDITOR"
     assert command.evidence_budget == owner.scope.evidence_budget
+
+
+@pytest.mark.parametrize("population_size", (64, 65, 67))
+def test_official_baseline_prefix_is_explicit_and_preserves_population(
+    owner: SimpleNamespace, population_size: int
+) -> None:
+    """Reproduce the producer/consumer bound mismatch without a live Catalog.
+
+    Official read-only retrieval can return 256 raw candidates before authoring
+    materialization applies its policy budget. The frozen baseline permits 64.
+    A 67-source fixture formerly escaped with SuppliedGraphBaseline/too_long.
+    The bounded projection retains the official prefix with an explicit limit;
+    neither source membership nor the official retrieval algorithm is changed.
+    """
+    rows = []
+    for index in range(1, population_size + 1):
+        original, candidate, payload = owner_input("a")
+        body = original.profile.model_dump(mode="json", exclude={"profile_sha256"})
+        identity = f"{index:032x}"
+        source = body["source_basis"]["source"]
+        source.update(item_id="item_" + identity, item_revision_id="itemrev_" + identity)
+        source["artifact_member"].update(
+            artifact_id="artifact_" + identity, artifact_revision_id="rev_" + identity
+        )
+        solution = body["source_basis"]["solution_evidence"]
+        solution["base_analysis_run_id"] = "analysisrun_" + identity
+        solution.pop("pointer_sha256")
+        solution["pointer_sha256"] = content_sha256(solution)
+        profile = InferenceTransferProfile.model_validate(
+            body | {"profile_sha256": content_sha256(body)}
+        )
+        profile = project_accepted_solution_report(
+            source_basis=profile.source_basis,
+            report=original.report,
+            created_at=NOW,
+        )
+        rows.append(
+            (
+                AcceptedInferenceTransferProfileInput(profile, original.report),
+                replace(
+                    candidate,
+                    analysis_run_id=solution["base_analysis_run_id"],
+                    source=profile.source_basis.source,
+                ),
+                payload,
+            )
+        )
+    candidates = tuple(row[1] for row in rows)
+    owner.adapter.sources.retrieval.admit_read_only_candidate_pool.return_value = replace(
+        owner.pool, candidates=candidates
+    )
+    owner.adapter.sources._resolve_profile_inputs.return_value = (
+        tuple(row[0] for row in rows),
+        0,
+    )
+    owner.adapter.sources.retrieval.retrieve_read_only.return_value = SimpleNamespace(
+        candidates=tuple(reversed(candidates))
+    )
+    owner.payloads.update(
+        {row[0].profile.source_basis.source.artifact_member.artifact_id: row[2] for row in rows}
+    )
+    request = snapshot_prepare(
+        query_item_revision_ids=(rows[0][0].profile.source_basis.source.item_revision_id,)
+    )
+    service = InferenceTransferSnapshotApplicationService(owner.adapter)
+    prepared = service.prepare("real-test-operator", request)
+    assert prepared.header.source_count == population_size
+    assert len(prepared.index) == population_size
+    result = service.read(
+        "real-test-operator",
+        snapshot_read_request(prepared, selected_index_entries=prepared.index[:1]),
+    )
+    baseline = result.baselines[0]
+    full_order = tuple(
+        InferenceTransferProfilePointer.from_profile(row[0].profile) for row in reversed(rows[1:])
+    )
+    assert baseline.ordered_candidates == full_order[:64]
+    bounded_limitation = (
+        "Official read-only Graph candidate order has 66 eligible comparisons; "
+        "this bounded baseline retains the first 64 in unchanged order. "
+        "Remaining candidates are not recorded in this baseline; it is not the "
+        "final authoring Evidence selection."
+    )
+    if len(full_order) <= 64:
+        original_body = baseline.model_dump(mode="json", exclude={"result_sha256"})
+        original_body["ordered_candidates"] = [
+            pointer.model_dump(mode="json") for pointer in full_order
+        ]
+        assert baseline.result_sha256 == content_sha256(original_body)
+        assert not any("bounded baseline retains" in text for text in result.limitations)
+    else:
+        assert bounded_limitation in result.limitations
+    assert len(owner.reader.call_args.args[1]) == 1
+    assert (
+        len(owner.adapter.sources.retrieval.retrieve_read_only.return_value.candidates)
+        == population_size
+    )
 
 
 def test_current_permission_failure_precedes_any_bytes(owner):

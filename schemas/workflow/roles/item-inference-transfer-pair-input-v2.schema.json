@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/workflow/roles/item-inference-transfer-pair-input-v2.schema.json",
+  "title": "EOM Item Inference Transfer Pair Worker Input V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "protocol_version",
+    "job_id",
+    "workflow_id",
+    "step_run_id",
+    "attempt",
+    "role",
+    "request",
+    "upstream_artifacts",
+    "artifact"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "protocol_version": {
+      "const": "workflow-role/1.30.0"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^job_[0-9a-f]{32}$"
+    },
+    "workflow_id": {
+      "type": "string",
+      "pattern": "^workflow_[0-9a-f]{32}$"
+    },
+    "step_run_id": {
+      "type": "string",
+      "pattern": "^steprun_[0-9a-f]{32}$"
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10
+    },
+    "role": {
+      "const": "support"
+    },
+    "request": {
+      "$ref": "#/$defs/request"
+    },
+    "upstream_artifacts": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "artifact": {
+      "$ref": "#/$defs/artifact"
+    }
+  },
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_name",
+        "comparison",
+        "left_profile",
+        "right_profile"
+      ],
+      "properties": {
+        "request_name": {
+          "const": "ITEM_INFERENCE_TRANSFER_PAIR_REQUEST_V11"
+        },
+        "comparison": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/pairRequest"
+        },
+        "left_profile": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profile"
+        },
+        "right_profile": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profile"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "logical_artifact_id",
+        "revision_id",
+        "file_name",
+        "media_type"
+      ],
+      "properties": {
+        "logical_artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "file_name": {
+          "const": "result.json"
+        },
+        "media_type": {
+          "const": "application/json"
+        }
+      }
+    }
+  }
+}

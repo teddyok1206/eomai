@@ -59,20 +59,28 @@ from eom_workflow.document_review import (
 )
 from eom_workflow.inference_transfer import (
     InferenceTransferPairWorkerRequest,
+    InferenceTransferPairWorkerRequestV11,
     validate_inference_transfer_worker_result,
+    validate_inference_transfer_worker_result_v11,
 )
 from eom_workflow.inference_transfer_control import ResolvedExecutionPlanV21
 from eom_workflow.inference_transfer_materialization import (
     InferenceTransferMaterializationContext,
+    InferenceTransferMaterializationContextV11,
     validate_inference_transfer_workflow_plan,
+    validate_inference_transfer_workflow_plan_v11,
 )
-from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
+from eom_workflow.inference_transfer_workflow import (
+    InferenceTransferWorkflowRequest,
+    InferenceTransferWorkflowRequestV11,
+)
 from eom_workflow.models import (
     ArtifactPointer,
     ContentTeamImageRoleResultV12,
     CustomerSupportWorkerRequest,
     GeneratedVectorDrawingV6,
     InferenceTransferPairRoleResult,
+    InferenceTransferPairRoleResultV11,
     KnowledgeAnalysisProposalRoleResult,
     KnowledgeAnalysisProposalRoleResultV2,
     KnowledgeAnalysisProposalRoleResultV3,
@@ -574,14 +582,25 @@ class Orchestrator:
             try:
                 if workflow_request.worker_request() != request:
                     raise ValueError("inference-transfer workflow/worker request mismatch")
-                plan = validate_inference_transfer_workflow_plan(
-                    document,
-                    workflow_request=workflow_request,
-                    workflow_id=workflow_id,
-                    step_key=cast(Literal["compare_pair"], step_key),
-                    core_prompt_sha256=core_prompt_sha256,
-                    prompt_sha256=sha256_bytes(prompt_text.encode("utf-8")),
-                )
+                plan: ResolvedExecutionPlanV21
+                if isinstance(workflow_request, InferenceTransferWorkflowRequestV11):
+                    plan = validate_inference_transfer_workflow_plan_v11(
+                        document,
+                        workflow_request=workflow_request,
+                        workflow_id=workflow_id,
+                        step_key=cast(Literal["compare_pair"], step_key),
+                        core_prompt_sha256=core_prompt_sha256,
+                        prompt_sha256=sha256_bytes(prompt_text.encode("utf-8")),
+                    )
+                else:
+                    plan = validate_inference_transfer_workflow_plan(
+                        document,
+                        workflow_request=workflow_request,
+                        workflow_id=workflow_id,
+                        step_key=cast(Literal["compare_pair"], step_key),
+                        core_prompt_sha256=core_prompt_sha256,
+                        prompt_sha256=sha256_bytes(prompt_text.encode("utf-8")),
+                    )
                 if record is None or (
                     record.plan_id,
                     record.workflow_id,
@@ -664,9 +683,12 @@ class Orchestrator:
             )
         if isinstance(request, InferenceTransferPairWorkerRequest):
             assert reauthorize_transfer_sources is not None
-            request = InferenceTransferPairWorkerRequest.model_validate(
-                request.model_dump(mode="json")
+            model = (
+                InferenceTransferPairWorkerRequestV11
+                if isinstance(request, InferenceTransferPairWorkerRequestV11)
+                else InferenceTransferPairWorkerRequest
             )
+            request = model.model_validate(request.model_dump(mode="json"))
             if transfer_core_prompt_sha256 is None:
                 raise ControlPlaneError(
                     "CONTROL_TRANSFER_PROMPT_REQUIRED",
@@ -750,7 +772,12 @@ class Orchestrator:
             assert transfer_workflow_request is not None
             assert transfer_core_prompt_sha256 is not None
             try:
-                transfer_materialization_context = InferenceTransferMaterializationContext(
+                context_model: type[InferenceTransferMaterializationContext] = (
+                    InferenceTransferMaterializationContextV11
+                    if isinstance(transfer_workflow_request, InferenceTransferWorkflowRequestV11)
+                    else InferenceTransferMaterializationContext
+                )
+                transfer_materialization_context = context_model(
                     workflow_id=workflow_id,
                     step_key=cast(Literal["compare_pair"], step_key),
                     workflow_request=transfer_workflow_request,
@@ -1042,14 +1069,31 @@ class Orchestrator:
                     ErrorCode.WORKER_RESULT_INVALID,
                     "workflow worker result identifiers do not match input",
                 )
-            if isinstance(result, InferenceTransferPairRoleResult):
+            if isinstance(
+                result, (InferenceTransferPairRoleResult, InferenceTransferPairRoleResultV11)
+            ):
                 if not isinstance(worker_input.request, InferenceTransferPairWorkerRequest):
                     raise PlatformError(
                         ErrorCode.WORKER_RESULT_INVALID,
                         "inference-transfer result has no typed immutable request",
                     )
                 try:
-                    validate_inference_transfer_worker_result(worker_input.request, result.output)
+                    if isinstance(result, InferenceTransferPairRoleResultV11):
+                        if not isinstance(
+                            worker_input.request, InferenceTransferPairWorkerRequestV11
+                        ):
+                            raise ValueError(
+                                "three-axis result requires its exact successor request"
+                            )
+                        validate_inference_transfer_worker_result_v11(
+                            worker_input.request, result.output
+                        )
+                    else:
+                        if isinstance(worker_input.request, InferenceTransferPairWorkerRequestV11):
+                            raise ValueError("three-axis request cannot admit a legacy result")
+                        validate_inference_transfer_worker_result(
+                            worker_input.request, result.output
+                        )
                 except ValueError as exc:
                     raise PlatformError(
                         ErrorCode.WORKER_RESULT_INVALID,

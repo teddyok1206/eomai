@@ -9,11 +9,18 @@ from eom_catalog_contracts.item_inference_transfer import (
     PairComparisonRequest,
 )
 from eom_identifiers import canonical_json_bytes, sha256_bytes
-from eom_workflow.inference_transfer import InferenceTransferPairWorkerRequest
+from eom_workflow.inference_transfer import (
+    InferenceTransferPairWorkerRequest,
+    InferenceTransferPairWorkerRequestV11,
+)
 
-from eom_catalog_service.inference_transfer_comparison import prepare_pair_comparison
+from eom_catalog_service.inference_transfer_comparison import (
+    prepare_pair_comparison,
+    prepare_pair_comparison_v11,
+)
 
 WORKER_PROMPT_VERSION = "item-inference-transfer-worker-envelope/1.0"
+WORKER_PROMPT_VERSION_V11 = "item-inference-transfer-worker-envelope/1.1"
 _ENVELOPE_INSTRUCTIONS = """
 이번 실행에서는 앞서 지정한 PairComparisonResult를 output으로 넣은
 workflow-role/1.29.0 support RoleResult JSON 하나만 반환한다.
@@ -37,6 +44,16 @@ class PreparedTransferWorkerComparison:
     context_bytes: int
 
 
+@dataclass(frozen=True)
+class PreparedTransferWorkerComparisonV11:
+    request: InferenceTransferPairWorkerRequestV11
+    prompt_version: str
+    core_prompt_sha256: str
+    prompt_text: str
+    prompt_sha256: str
+    context_bytes: int
+
+
 def prepare_inference_transfer_worker_comparison(
     comparison: PairComparisonRequest,
     *,
@@ -53,6 +70,29 @@ def prepare_inference_transfer_worker_comparison(
     return PreparedTransferWorkerComparison(
         request=request,
         prompt_version=WORKER_PROMPT_VERSION,
+        core_prompt_sha256=core.prompt_sha256,
+        prompt_text=prompt,
+        prompt_sha256=sha256_bytes(prompt.encode("utf-8")),
+        context_bytes=len(canonical_json_bytes(request.model_dump(mode="json"))),
+    )
+
+
+def prepare_inference_transfer_worker_comparison_v11(
+    comparison: PairComparisonRequest,
+    *,
+    left: InferenceTransferProfile,
+    right: InferenceTransferProfile,
+) -> PreparedTransferWorkerComparisonV11:
+    """Bind the new three-axis prompt to the explicit workflow-role/1.30 envelope."""
+    request = InferenceTransferPairWorkerRequestV11(
+        comparison=comparison, left_profile=left, right_profile=right
+    )
+    core = prepare_pair_comparison_v11(comparison, left=left, right=right)
+    envelope = _ENVELOPE_INSTRUCTIONS.replace("workflow-role/1.29.0", "workflow-role/1.30.0")
+    prompt = core.prompt_text + envelope
+    return PreparedTransferWorkerComparisonV11(
+        request=request,
+        prompt_version=WORKER_PROMPT_VERSION_V11,
         core_prompt_sha256=core.prompt_sha256,
         prompt_text=prompt,
         prompt_sha256=sha256_bytes(prompt.encode("utf-8")),

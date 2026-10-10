@@ -529,8 +529,8 @@ def test_only_known_unique_workflow_conflict_is_classified_without_repair(
         assert error.value.code == "CONTROL_PLAN_CONFLICT"
         assert error.value.__cause__ is failure
     else:
-        with pytest.raises(IntegrityError) as error:
+        with pytest.raises(IntegrityError) as integrity_error:
             resolve(data)
-        assert error.value is failure
+        assert integrity_error.value is failure
     assert not data.session.step_rows
     assert len(data.session.added) == 1

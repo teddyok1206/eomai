@@ -182,7 +182,10 @@ def test_dedicated_definition_admission_is_exact_and_workflow_wrapper_still_unsu
     admission = workflow_admission("item-inference-transfer-comparison", "1.0.0")
     assert admission is not None
     assert admission.role_protocol_version == "workflow-role/1.29.0"
-    assert workflow_admission("item-inference-transfer-comparison", "1.1.0") is None
+    successor = workflow_admission("item-inference-transfer-comparison", "1.1.0")
+    assert successor is not None
+    assert successor.role_protocol_version == "workflow-role/1.30.0"
+    assert workflow_admission("item-inference-transfer-comparison", "1.2.0") is None
     with pytest.raises(ValidationError):
         WorkflowRequest.model_validate({"request_name": "ITEM_INFERENCE_TRANSFER_PAIR_REQUEST"})
 

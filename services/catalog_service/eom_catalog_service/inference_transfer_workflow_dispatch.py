@@ -15,6 +15,9 @@ from eom_orchestrator.general_chat_socket import ChatTransportError, decode_chat
 from jsonschema import ValidationError as SchemaError
 
 from eom_catalog_service.inference_transfer_service import InferenceTransferServiceError
+from eom_catalog_service.inference_transfer_workflow_dispatch_v11 import (
+    dispatch_inference_transfer_workflow_frame_v11,
+)
 from eom_catalog_service.inference_transfer_workflow_read import (
     CatalogInferenceTransferWorkflowReadService,
 )
@@ -44,7 +47,10 @@ def dispatch_inference_transfer_workflow_frame(
     try:
         if not raw.endswith(b"\n") or b"\n" in raw[:-1]:
             raise ValueError("invalid comparison read frame")
-        request = parse_workflow_binding_request(decode_chat_frame(raw[:-1]))
+        document = decode_chat_frame(raw[:-1])
+        if document.get("schema_version") == "inference-transfer-workflow-binding-request/1.1":
+            return dispatch_inference_transfer_workflow_frame_v11(service, raw)
+        request = parse_workflow_binding_request(document)
     except (ValueError, SchemaError, ChatTransportError, RecursionError):
         return _failed("INFERENCE_TRANSFER_WORKFLOW_REQUEST_INVALID")
     if service is None:

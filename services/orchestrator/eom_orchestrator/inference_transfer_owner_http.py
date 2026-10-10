@@ -7,7 +7,7 @@ import json
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from eom_api_contracts.assessment_learning import AssessmentLearningCorpusViewV2
 from eom_api_contracts.auth import CurrentOperator, LoginRequest, TokenPair
@@ -21,6 +21,15 @@ from eom_catalog_contracts.inference_transfer_invocation import (
     parse_workflow_read_request,
     parse_workflow_read_result,
     validate_workflow_read_result_context,
+)
+from eom_catalog_contracts.inference_transfer_invocation_v11 import (
+    InferenceTransferPairSubmitRequestV11,
+    InferenceTransferWorkflowReadRequestV11,
+    InferenceTransferWorkflowReadResultV11,
+    parse_pair_submit_request_v11,
+    parse_workflow_read_request_v11,
+    parse_workflow_read_result_v11,
+    validate_workflow_read_result_context_v11,
 )
 from eom_catalog_contracts.inference_transfer_metadata import (
     METADATA_ERRORS,
@@ -65,10 +74,16 @@ _METADATA = "/api/v1/knowledge/inference-transfer/metadata"
 _ORIGINAL_CORPUS = "/api/v1/assessment-learning-corpus"
 _EXECUTION_PRESETS = "/api/v1/execution-presets"
 _COMPARISONS = "/api/v1/knowledge/inference-transfer/comparisons"
+_COMPARISONS_V11 = _COMPARISONS + "/v1.1"
 _COMPARISON_WORKFLOWS = "/api/v1/knowledge/inference-transfer/workflows/"
 _COMPARISON_READ_TARGET = re.compile(
     re.escape(_COMPARISON_WORKFLOWS)
     + r"workflow_[0-9a-f]{32}\?mode=(?:STATUS_ONLY|CANONICAL_RESULT)",
+    re.ASCII,
+)
+_COMPARISON_READ_TARGET_V11 = re.compile(
+    re.escape(_COMPARISON_WORKFLOWS)
+    + r"workflow_[0-9a-f]{32}/v1\.1\?mode=(?:STATUS_ONLY|CANONICAL_RESULT)",
     re.ASCII,
 )
 _IDEMPOTENCY_KEY = re.compile(r"[!-~]{16,128}", re.ASCII)
@@ -80,6 +95,7 @@ _REQUEST_TARGETS = frozenset(
         ("POST", _SNAPSHOT),
         ("POST", _METADATA),
         ("POST", _COMPARISONS),
+        ("POST", _COMPARISONS_V11),
         ("GET", _ORIGINAL_CORPUS),
         ("GET", _EXECUTION_PRESETS),
     }
@@ -112,6 +128,10 @@ _PAIR_SUBMIT_VALIDATOR = Draft202012Validator(
 _COMPARISON_READ_RESPONSE = SingleResponse[InferenceTransferWorkflowReadResult]
 _COMPARISON_READ_VALIDATOR = Draft202012Validator(
     _COMPARISON_READ_RESPONSE.model_json_schema(), format_checker=FormatChecker()
+)
+_COMPARISON_READ_RESPONSE_V11 = SingleResponse[InferenceTransferWorkflowReadResultV11]
+_COMPARISON_READ_VALIDATOR_V11 = Draft202012Validator(
+    _COMPARISON_READ_RESPONSE_V11.model_json_schema(), format_checker=FormatChecker()
 )
 _COMPARISON_ERRORS = frozenset(
     {
@@ -170,9 +190,13 @@ def _request(
     idempotency_key: str | None = None,
 ) -> tuple[int, object]:
     fixed_target = (method, path) in _REQUEST_TARGETS or (
-        method == "GET" and _COMPARISON_READ_TARGET.fullmatch(path) is not None
+        method == "GET"
+        and (
+            _COMPARISON_READ_TARGET.fullmatch(path) is not None
+            or _COMPARISON_READ_TARGET_V11.fullmatch(path) is not None
+        )
     )
-    is_submission = method == "POST" and path == _COMPARISONS
+    is_submission = method == "POST" and path in {_COMPARISONS, _COMPARISONS_V11}
     if (
         not fixed_target
         or (method == "GET" and body is not None)
@@ -371,7 +395,9 @@ class AuthenticatedInferenceTransferHttpSession:
             ) from None
 
     def _comparison_principal(
-        self, permission: PermissionKey, selection: InferenceTransferPairSubmitRequest
+        self,
+        permission: PermissionKey,
+        selection: InferenceTransferPairSubmitRequest | InferenceTransferPairSubmitRequestV11,
     ) -> CurrentOperator:
         principal = self.read()
         required = {
@@ -401,6 +427,27 @@ class AuthenticatedInferenceTransferHttpSession:
     def submit_pair(
         self, selection: InferenceTransferPairSubmitRequest, *, idempotency_key: str
     ) -> CommandResult:
+        if not isinstance(selection, InferenceTransferPairSubmitRequest):
+            raise ControlPlaneError(
+                "INFERENCE_TRANSFER_SUBMISSION_INVALID", "exact comparison generation required"
+            )
+        return self._submit_pair(selection, idempotency_key=idempotency_key)
+
+    def submit_pair_v11(
+        self, selection: InferenceTransferPairSubmitRequestV11, *, idempotency_key: str
+    ) -> CommandResult:
+        if not isinstance(selection, InferenceTransferPairSubmitRequestV11):
+            raise ControlPlaneError(
+                "INFERENCE_TRANSFER_SUBMISSION_INVALID", "exact comparison generation required"
+            )
+        return self._submit_pair(selection, idempotency_key=idempotency_key)
+
+    def _submit_pair(
+        self,
+        selection: InferenceTransferPairSubmitRequest | InferenceTransferPairSubmitRequestV11,
+        *,
+        idempotency_key: str,
+    ) -> CommandResult:
         """Submit once with the caller's retained key; never automatically retry a POST.
 
         UNCERTAIN means the server may have committed. The caller must retain
@@ -408,7 +455,11 @@ class AuthenticatedInferenceTransferHttpSession:
         key or this client-side successful receipt never grants source authority.
         """
         try:
-            selection = parse_pair_submit_request(selection.model_dump(mode="json"))
+            selection = (
+                parse_pair_submit_request_v11(selection.model_dump(mode="json"))
+                if isinstance(selection, InferenceTransferPairSubmitRequestV11)
+                else parse_pair_submit_request(selection.model_dump(mode="json"))
+            )
             if _IDEMPOTENCY_KEY.fullmatch(idempotency_key) is None:
                 raise ValueError("invalid idempotency header")
         except Exception:
@@ -419,7 +470,9 @@ class AuthenticatedInferenceTransferHttpSession:
         try:
             status, raw = _request(
                 "POST",
-                _COMPARISONS,
+                _COMPARISONS_V11
+                if isinstance(selection, InferenceTransferPairSubmitRequestV11)
+                else _COMPARISONS,
                 canonical_json_bytes(selection.model_dump(mode="json")),
                 bearer=self._bearer,
                 idempotency_key=idempotency_key,
@@ -439,7 +492,16 @@ class AuthenticatedInferenceTransferHttpSession:
                 or result.status != "ACCEPTED"
                 or _WORKFLOW_ID.fullmatch(result.resource_id) is None
                 or _COMMAND_ID.fullmatch(result.command_id) is None
-                or result.status_url != _COMPARISON_WORKFLOWS + result.resource_id
+                or result.status_url
+                != (
+                    _COMPARISON_WORKFLOWS
+                    + result.resource_id
+                    + (
+                        "/v1.1"
+                        if isinstance(selection, InferenceTransferPairSubmitRequestV11)
+                        else ""
+                    )
+                )
             ):
                 raise ValueError("comparison command lineage differs")
         except Exception:
@@ -460,6 +522,37 @@ class AuthenticatedInferenceTransferHttpSession:
         *,
         selection: InferenceTransferPairSubmitRequest,
     ) -> InferenceTransferWorkflowReadResult:
+        if not isinstance(query, InferenceTransferWorkflowReadRequest):
+            raise ControlPlaneError(
+                "INFERENCE_TRANSFER_WORKFLOW_REQUEST_INVALID",
+                "exact comparison generation required",
+            )
+        return cast(
+            InferenceTransferWorkflowReadResult, self._read_comparison(query, selection=selection)
+        )
+
+    def read_comparison_v11(
+        self,
+        query: InferenceTransferWorkflowReadRequestV11,
+        *,
+        selection: InferenceTransferPairSubmitRequestV11,
+    ) -> InferenceTransferWorkflowReadResultV11:
+        if not isinstance(query, InferenceTransferWorkflowReadRequestV11):
+            raise ControlPlaneError(
+                "INFERENCE_TRANSFER_WORKFLOW_REQUEST_INVALID",
+                "exact comparison generation required",
+            )
+        return cast(
+            InferenceTransferWorkflowReadResultV11,
+            self._read_comparison(query, selection=selection),
+        )
+
+    def _read_comparison(
+        self,
+        query: InferenceTransferWorkflowReadRequest | InferenceTransferWorkflowReadRequestV11,
+        *,
+        selection: InferenceTransferPairSubmitRequest | InferenceTransferPairSubmitRequestV11,
+    ) -> InferenceTransferWorkflowReadResult | InferenceTransferWorkflowReadResultV11:
         """Read one exact Workflow/mode and bind it to the original selection's pins.
 
         Pending and pointer-only are preserved. Only the owner-verified canonical
@@ -467,25 +560,45 @@ class AuthenticatedInferenceTransferHttpSession:
         interpret metadata JSON as the canonical outer result Artifact member.
         """
         try:
-            query = parse_workflow_read_request(query.model_dump(mode="json"))
-            selection = parse_pair_submit_request(selection.model_dump(mode="json"))
+            if isinstance(query, InferenceTransferWorkflowReadRequestV11):
+                if not isinstance(selection, InferenceTransferPairSubmitRequestV11):
+                    raise ValueError("read generation differs from selection")
+                query = parse_workflow_read_request_v11(query.model_dump(mode="json"))
+                selection = parse_pair_submit_request_v11(selection.model_dump(mode="json"))
+            else:
+                if isinstance(selection, InferenceTransferPairSubmitRequestV11):
+                    raise ValueError("read generation differs from selection")
+                query = parse_workflow_read_request(query.model_dump(mode="json"))
+                selection = parse_pair_submit_request(selection.model_dump(mode="json"))
         except Exception:
             raise ControlPlaneError(
                 "INFERENCE_TRANSFER_WORKFLOW_REQUEST_INVALID", "exact comparison read required"
             ) from None
         principal = self._comparison_principal(PermissionKey.WORKFLOW_READ, selection)
         status, raw = _get(
-            _COMPARISON_WORKFLOWS + query.workflow_id + "?mode=" + query.mode,
+            _COMPARISON_WORKFLOWS
+            + query.workflow_id
+            + ("/v1.1" if isinstance(query, InferenceTransferWorkflowReadRequestV11) else "")
+            + "?mode="
+            + query.mode,
             bearer=self._bearer,
         )
         if status != 200:
             self._comparison_failure(status, raw, "INFERENCE_TRANSFER_WORKFLOW_UNAVAILABLE")
         try:
-            _COMPARISON_READ_VALIDATOR.validate(raw)
-            result = parse_workflow_read_result(
-                _COMPARISON_READ_RESPONSE.model_validate(raw).data.model_dump(mode="json")
-            )
-            validate_workflow_read_result_context(query, result)
+            result: InferenceTransferWorkflowReadResult | InferenceTransferWorkflowReadResultV11
+            if isinstance(query, InferenceTransferWorkflowReadRequestV11):
+                _COMPARISON_READ_VALIDATOR_V11.validate(raw)
+                result = parse_workflow_read_result_v11(
+                    _COMPARISON_READ_RESPONSE_V11.model_validate(raw).data.model_dump(mode="json")
+                )
+                validate_workflow_read_result_context_v11(query, result)
+            else:
+                _COMPARISON_READ_VALIDATOR.validate(raw)
+                result = parse_workflow_read_result(
+                    _COMPARISON_READ_RESPONSE.model_validate(raw).data.model_dump(mode="json")
+                )
+                validate_workflow_read_result_context(query, result)
             prepare = selection.snapshot_prepare
             if (
                 result.comparison != selection.comparison

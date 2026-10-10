@@ -9,6 +9,10 @@ from eom_catalog_contracts.inference_transfer_invocation import (
     InferenceTransferPairSubmitRequest,
     parse_pair_submit_request,
 )
+from eom_catalog_contracts.inference_transfer_invocation_v11 import (
+    InferenceTransferPairSubmitRequestV11,
+    parse_pair_submit_request_v11,
+)
 from eom_catalog_contracts.inference_transfer_snapshot import (
     InferenceTransferSnapshotPrepareResult,
     InferenceTransferSnapshotReadRequest,
@@ -22,7 +26,10 @@ from eom_catalog_contracts.item_inference_transfer import (
 from eom_identifiers import content_sha256
 from eom_identity_service.tokens import AccessAuthentication
 from eom_operator_identity import ActorContext, ActorSource, ActorType, PermissionKey
-from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
+from eom_workflow.inference_transfer_workflow import (
+    InferenceTransferWorkflowRequest,
+    InferenceTransferWorkflowRequestV11,
+)
 from jsonschema.exceptions import ValidationError as SchemaError
 
 from eom_api.errors import ApiError
@@ -34,7 +41,7 @@ class AuthorizedInferenceTransferSubmission:
     """Server-only context; the initial permission digest is provenance, not a grant."""
 
     operator_id: str
-    selection: InferenceTransferPairSubmitRequest
+    selection: InferenceTransferPairSubmitRequest | InferenceTransferPairSubmitRequestV11
     workflow_request: InferenceTransferWorkflowRequest
 
 
@@ -60,7 +67,7 @@ class InferenceTransferSubmissionApplicationService:
     def authorize_submission(
         self,
         authentication: AccessAuthentication,
-        request: InferenceTransferPairSubmitRequest,
+        request: InferenceTransferPairSubmitRequest | InferenceTransferPairSubmitRequestV11,
     ) -> AuthorizedInferenceTransferSubmission:
         """Resolve exact two pointers through the existing authenticated owner reads."""
         if (
@@ -71,7 +78,11 @@ class InferenceTransferSubmissionApplicationService:
         ):
             raise ApiError(403, "PERMISSION_DENIED", "Permission denied", "Workflow start denied.")
         try:
-            request = parse_pair_submit_request(request.model_dump(mode="json"))
+            request = (
+                parse_pair_submit_request_v11(request.model_dump(mode="json"))
+                if isinstance(request, InferenceTransferPairSubmitRequestV11)
+                else parse_pair_submit_request(request.model_dump(mode="json"))
+            )
         except (ValueError, SchemaError) as exc:
             raise ApiError(
                 422,
@@ -174,9 +185,21 @@ class InferenceTransferSubmissionApplicationService:
             ):
                 raise ValueError("resolved pair differs")
             wrapper = {
-                "schema_version": "inference-transfer-workflow-request/1.0",
-                "request_name": "ITEM_INFERENCE_TRANSFER_PAIR_REQUEST",
-                "execution_preset_key": "item-inference-transfer-comparison",
+                "schema_version": (
+                    "inference-transfer-workflow-request/1.1"
+                    if isinstance(request, InferenceTransferPairSubmitRequestV11)
+                    else "inference-transfer-workflow-request/1.0"
+                ),
+                "request_name": (
+                    "ITEM_INFERENCE_TRANSFER_PAIR_REQUEST_V11"
+                    if isinstance(request, InferenceTransferPairSubmitRequestV11)
+                    else "ITEM_INFERENCE_TRANSFER_PAIR_REQUEST"
+                ),
+                "execution_preset_key": (
+                    "item-inference-transfer-comparison-axes"
+                    if isinstance(request, InferenceTransferPairSubmitRequestV11)
+                    else "item-inference-transfer-comparison"
+                ),
                 "comparison": request.comparison.model_dump(mode="json"),
                 "left_profile": left.model_dump(mode="json"),
                 "right_profile": right.model_dump(mode="json"),
@@ -186,8 +209,14 @@ class InferenceTransferSubmissionApplicationService:
                     sorted(permission.value for permission in authentication.permissions)
                 ),
             }
-            workflow_request = InferenceTransferWorkflowRequest.model_validate(
-                wrapper | {"request_sha256": content_sha256(wrapper)}
+            workflow_request = (
+                InferenceTransferWorkflowRequestV11.model_validate(
+                    wrapper | {"request_sha256": content_sha256(wrapper)}
+                )
+                if isinstance(request, InferenceTransferPairSubmitRequestV11)
+                else InferenceTransferWorkflowRequest.model_validate(
+                    wrapper | {"request_sha256": content_sha256(wrapper)}
+                )
             )
         except (ValueError, KeyError, SchemaError) as exc:
             raise ApiError(

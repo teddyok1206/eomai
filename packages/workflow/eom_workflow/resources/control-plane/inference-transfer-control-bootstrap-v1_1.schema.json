@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/inference-transfer-control-bootstrap/1.1",
+  "title": "EOM reviewed three-axis inference-transfer bootstrap manifest V1.1",
+  "description": "Exact successor inputs, not authentication, availability, scientific evaluation or human approval. Released V1 bytes remain unchanged.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "inference-transfer-control-bootstrap/1.1"},
+    "workflow_definition_key": {"const": "item-inference-transfer-comparison"},
+    "workflow_definition_version": {"const": "1.1.0"},
+    "workflow_definition_sha256": {"$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"},
+    "workflow_role_schema_version": {"const": "workflow-role/1.30.0"},
+    "result_schema": {"const": "item-inference-transfer-pair-result@1.1"},
+    "source": {"$ref": "eom://schemas/workflow/inference-transfer-control-bootstrap/1.0#/$defs/source"},
+    "capacity": {"$ref": "eom://schemas/workflow/inference-transfer-control-bootstrap/1.0#/$defs/capacityPin"},
+    "rubric": {"$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/rubricPointer"},
+    "platform_instruction": {"allOf": [
+      {"$ref": "eom://schemas/workflow/inference-transfer-control-bootstrap/1.0#/$defs/instructionMember"},
+      {"properties": {"layer": {"const": "PLATFORM"}}, "required": ["layer"]}
+    ]},
+    "rubric_instruction": {"allOf": [
+      {"$ref": "eom://schemas/workflow/inference-transfer-control-bootstrap/1.0#/$defs/instructionMember"},
+      {"properties": {"layer": {"const": "ROLE"}}, "required": ["layer"]}
+    ]},
+    "model_candidate": {"$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/modelCandidate"},
+    "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 900},
+    "manifest_sha256": {"$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"}
+  },
+  "required": ["schema_version", "workflow_definition_key", "workflow_definition_version", "workflow_definition_sha256", "workflow_role_schema_version", "result_schema", "source", "capacity", "rubric", "platform_instruction", "rubric_instruction", "model_candidate", "timeout_seconds", "manifest_sha256"]
+}

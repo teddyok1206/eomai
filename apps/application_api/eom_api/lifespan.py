@@ -60,6 +60,7 @@ from eom_api.services.inference_transfer_workflow_client import (
 )
 from eom_api.services.inference_transfer_workflow_read import (
     InferenceTransferWorkflowReadApplicationService,
+    InferenceTransferWorkflowReadApplicationServiceV11,
 )
 from eom_api.services.item_approval_service import ItemApprovalApplicationService
 from eom_api.services.paired_document_review_service import (
@@ -110,6 +111,11 @@ class AppServices:
         )
         self.inference_transfer_workflow_reads = InferenceTransferWorkflowReadApplicationService(
             CatalogInferenceTransferWorkflowClient()
+        )
+        self.inference_transfer_workflow_reads_v11 = (
+            InferenceTransferWorkflowReadApplicationServiceV11(
+                CatalogInferenceTransferWorkflowClient()
+            )
         )
         self.queries = QueryAdapter(
             engine,

@@ -7,8 +7,11 @@ from typing import Annotated
 from eom_api_contracts import CommandResult, SingleResponse
 from eom_api_contracts.inference_transfer import (
     InferenceTransferPairSubmitRequest,
+    InferenceTransferPairSubmitRequestV11,
     InferenceTransferWorkflowReadRequest,
+    InferenceTransferWorkflowReadRequestV11,
     InferenceTransferWorkflowReadResult,
+    InferenceTransferWorkflowReadResultV11,
 )
 from eom_catalog_contracts.inference_transfer_invocation import InferenceTransferWorkflowReadMode
 from eom_catalog_contracts.inference_transfer_metadata import (
@@ -110,6 +113,39 @@ def submit_pair(
     authentication: Auth,
     idempotency_key: IdempotencyKey,
 ) -> SingleResponse[CommandResult]:
+    return _submit_pair(request, body, authentication, idempotency_key)
+
+
+@router.post(
+    "/knowledge/inference-transfer/comparisons/v1.1",
+    operation_id="inference_transfer_pair_submit_v11",
+    status_code=202,
+    response_model=SingleResponse[CommandResult],
+    dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_START))],
+    openapi_extra={
+        "x-eom-additional-permissions": [
+            PermissionKey.ITEM_READ.value,
+            PermissionKey.KNOWLEDGE_GRAPH_RETRIEVE.value,
+            PermissionKey.KNOWLEDGE_ANALYSIS_READ.value,
+        ],
+        "x-eom-conditional-permissions": {"PAST_EXAM": [PermissionKey.CONTENT_INTAKE_READ.value]},
+    },
+)
+def submit_pair_v11(
+    request: Request,
+    body: InferenceTransferPairSubmitRequestV11,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+) -> SingleResponse[CommandResult]:
+    return _submit_pair(request, body, authentication, idempotency_key)
+
+
+def _submit_pair(
+    request: Request,
+    body: InferenceTransferPairSubmitRequest | InferenceTransferPairSubmitRequestV11,
+    authentication: Auth,
+    idempotency_key: str,
+) -> SingleResponse[CommandResult]:
     services = request.app.state.services
     # run_command returns cached success before its callback. Current source
     # resolution must therefore precede the HTTP claim/replay boundary.
@@ -119,7 +155,11 @@ def submit_pair(
         actor = request.state.request_context.actor()
         key = services.idempotency.submission_key(
             operator_id=actor.actor_id,
-            endpoint_key="inference_transfer_pair_submit",
+            endpoint_key=(
+                "inference_transfer_pair_submit_v11"
+                if isinstance(body, InferenceTransferPairSubmitRequestV11)
+                else "inference_transfer_pair_submit"
+            ),
             raw_key=idempotency_key,
         )
         command_id, workflow_id, version = services.inference_transfer_submissions.start(
@@ -133,7 +173,11 @@ def submit_pair(
             resource_id=workflow_id,
             status="ACCEPTED",
             resource_version=version,
-            status_url=f"/api/v1/knowledge/inference-transfer/workflows/{workflow_id}",
+            status_url=(
+                f"/api/v1/knowledge/inference-transfer/workflows/{workflow_id}/v1.1"
+                if isinstance(body, InferenceTransferPairSubmitRequestV11)
+                else f"/api/v1/knowledge/inference-transfer/workflows/{workflow_id}"
+            ),
         )
 
     return one(
@@ -191,5 +235,50 @@ def read_comparison(
         request.app.state.services.inference_transfer_workflow_reads.execute(
             authentication,
             query,
+        ),
+    )
+
+
+@router.get(
+    "/knowledge/inference-transfer/workflows/{workflow_id}/v1.1",
+    operation_id="inference_transfer_workflow_read_v11",
+    response_model=SingleResponse[InferenceTransferWorkflowReadResultV11],
+    dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_READ))],
+    openapi_extra={
+        "x-eom-read-only": True,
+        "x-eom-additional-permissions": [
+            PermissionKey.ITEM_READ.value,
+            PermissionKey.KNOWLEDGE_GRAPH_RETRIEVE.value,
+            PermissionKey.KNOWLEDGE_ANALYSIS_READ.value,
+        ],
+        "x-eom-conditional-permissions": {"PAST_EXAM": [PermissionKey.CONTENT_INTAKE_READ.value]},
+    },
+)
+def read_comparison_v11(
+    request: Request,
+    workflow_id: str,
+    authentication: Auth,
+    mode: Annotated[InferenceTransferWorkflowReadMode, Query()] = "STATUS_ONLY",
+) -> SingleResponse[InferenceTransferWorkflowReadResultV11]:
+    body = {
+        "schema_version": "inference-transfer-workflow-read-request/1.1",
+        "workflow_id": workflow_id,
+        "mode": mode,
+    }
+    try:
+        query = InferenceTransferWorkflowReadRequestV11.model_validate(
+            body | {"read_sha256": content_sha256(body)}
+        )
+    except ValidationError as exc:
+        raise ApiError(
+            422,
+            "INFERENCE_TRANSFER_WORKFLOW_REQUEST_INVALID",
+            "Invalid comparison read",
+            "An exact Workflow identity is required.",
+        ) from exc
+    return one(
+        request,
+        request.app.state.services.inference_transfer_workflow_reads_v11.execute(
+            authentication, query
         ),
     )

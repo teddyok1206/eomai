@@ -8,20 +8,35 @@ from typing import Literal, cast
 from eom_catalog_service.inference_transfer_service import InferenceTransferSearchCommand
 from eom_catalog_service.inference_transfer_worker_preparation import (
     prepare_inference_transfer_worker_comparison,
+    prepare_inference_transfer_worker_comparison_v11,
 )
 from eom_operator_identity import PermissionKey
-from eom_orchestrator.inference_transfer_resolution import resolve_inference_transfer_execution_plan
+from eom_orchestrator.inference_transfer_resolution import (
+    resolve_inference_transfer_execution_plan,
+    resolve_inference_transfer_execution_plan_v11,
+)
 from eom_orchestrator.orchestrator import Orchestrator
 from eom_workflow import AgentStep, compile_definition_data
 from eom_workflow.inference_transfer import (
     TRANSFER_PAIR_PROTOCOL,
+    TRANSFER_PAIR_PROTOCOL_V11,
     TRANSFER_PAIR_RESULT_SCHEMA,
+    TRANSFER_PAIR_RESULT_SCHEMA_V11,
     TRANSFER_PAIR_WORKFLOW_KEY,
     TRANSFER_PAIR_WORKFLOW_VERSION,
+    TRANSFER_PAIR_WORKFLOW_VERSION_V11,
     InferenceTransferPairWorkerRequest,
+    InferenceTransferPairWorkerRequestV11,
 )
-from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
-from eom_workflow.schemas import validate_inference_transfer_workflow_request
+from eom_workflow.inference_transfer_control import ResolvedExecutionPlanV21
+from eom_workflow.inference_transfer_workflow import (
+    InferenceTransferWorkflowRequest,
+    InferenceTransferWorkflowRequestV11,
+)
+from eom_workflow.schemas import (
+    validate_inference_transfer_workflow_request,
+    validate_inference_transfer_workflow_request_v11,
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -116,20 +131,40 @@ class PlatformInferenceTransferExecutor:
                 top_k=2,
             )
             self.source.authorize_pair(command, checked.left_profile, checked.right_profile)
-            prepared = prepare_inference_transfer_worker_comparison(
-                checked.comparison, left=checked.left_profile, right=checked.right_profile
+            prepared = (
+                prepare_inference_transfer_worker_comparison_v11(
+                    checked.comparison, left=checked.left_profile, right=checked.right_profile
+                )
+                if isinstance(checked, InferenceTransferWorkflowRequestV11)
+                else prepare_inference_transfer_worker_comparison(
+                    checked.comparison, left=checked.left_profile, right=checked.right_profile
+                )
             )
-            plan = resolve_inference_transfer_execution_plan(
-                session,
-                workflow_id=actual.workflow_id,
-                workflow_definition_version=actual.definition_version,
-                workflow_definition_sha256=actual.definition_hash,
-                workflow_role_schema_version=actual.role_schema_version,
-                workflow_request=checked,
-                core_prompt_sha256=prepared.core_prompt_sha256,
-                prompt_sha256=prepared.prompt_sha256,
-                resolved_at=datetime.now(UTC),
-            )
+            plan: ResolvedExecutionPlanV21
+            if isinstance(checked, InferenceTransferWorkflowRequestV11):
+                plan = resolve_inference_transfer_execution_plan_v11(
+                    session,
+                    workflow_id=actual.workflow_id,
+                    workflow_definition_version=actual.definition_version,
+                    workflow_definition_sha256=actual.definition_hash,
+                    workflow_role_schema_version=actual.role_schema_version,
+                    workflow_request=checked,
+                    core_prompt_sha256=prepared.core_prompt_sha256,
+                    prompt_sha256=prepared.prompt_sha256,
+                    resolved_at=datetime.now(UTC),
+                )
+            else:
+                plan = resolve_inference_transfer_execution_plan(
+                    session,
+                    workflow_id=actual.workflow_id,
+                    workflow_definition_version=actual.definition_version,
+                    workflow_definition_sha256=actual.definition_hash,
+                    workflow_role_schema_version=actual.role_schema_version,
+                    workflow_request=checked,
+                    core_prompt_sha256=prepared.core_prompt_sha256,
+                    prompt_sha256=prepared.prompt_sha256,
+                    resolved_at=datetime.now(UTC),
+                )
             plan_pin = {
                 "plan_id": plan.plan_id,
                 "plan_sha256": plan.plan_sha256,
@@ -160,8 +195,14 @@ class PlatformInferenceTransferExecutor:
             actual_step.input_pointer_manifest = inputs
 
         def reauthorize_sources(worker_request: InferenceTransferPairWorkerRequest) -> None:
-            candidate = InferenceTransferPairWorkerRequest.model_validate(
-                worker_request.model_dump(mode="json")
+            candidate = (
+                InferenceTransferPairWorkerRequestV11.model_validate(
+                    worker_request.model_dump(mode="json")
+                )
+                if isinstance(prepared.request, InferenceTransferPairWorkerRequestV11)
+                else InferenceTransferPairWorkerRequest.model_validate(
+                    worker_request.model_dump(mode="json")
+                )
             )
             if candidate != prepared.request:
                 raise ValueError("comparison reauthorization request differs")
@@ -193,7 +234,11 @@ class PlatformInferenceTransferExecutor:
             role="support",
             request=prepared.request,
             upstream_artifacts=(),
-            result_schema=TRANSFER_PAIR_RESULT_SCHEMA,
+            result_schema=(
+                TRANSFER_PAIR_RESULT_SCHEMA_V11
+                if isinstance(checked, InferenceTransferWorkflowRequestV11)
+                else TRANSFER_PAIR_RESULT_SCHEMA
+            ),
             idempotency_key=idempotency_key,
             prompt_text=prepared.prompt_text,
             before_execute=bind,
@@ -225,7 +270,11 @@ def _stored_execution_context(
     if actual is None or actual_step is None:
         raise WorkflowError(WorkflowErrorCode.WORKFLOW_NOT_FOUND, "comparison context is missing")
     checked = load_persisted_inference_transfer_workflow_request(actual.initial_request)
-    supplied = validate_inference_transfer_workflow_request(request.model_dump(mode="json"))
+    supplied = (
+        validate_inference_transfer_workflow_request_v11(request.model_dump(mode="json"))
+        if isinstance(request, InferenceTransferWorkflowRequestV11)
+        else validate_inference_transfer_workflow_request(request.model_dump(mode="json"))
+    )
     definition = session.get(WorkflowDefinitionRecord, actual.definition_id)
     if definition is None:
         raise WorkflowError(
@@ -235,10 +284,13 @@ def _stored_execution_context(
         definition.canonical_definition, definition.source_path, {"support"}
     )
     comparison_step = compiled.steps_by_key.get("compare_pair")
+    successor = isinstance(checked, InferenceTransferWorkflowRequestV11)
     if (
         actual.definition_key != TRANSFER_PAIR_WORKFLOW_KEY
-        or actual.definition_version != TRANSFER_PAIR_WORKFLOW_VERSION
-        or actual.role_schema_version != TRANSFER_PAIR_PROTOCOL
+        or actual.definition_version
+        != (TRANSFER_PAIR_WORKFLOW_VERSION_V11 if successor else TRANSFER_PAIR_WORKFLOW_VERSION)
+        or actual.role_schema_version
+        != (TRANSFER_PAIR_PROTOCOL_V11 if successor else TRANSFER_PAIR_PROTOCOL)
         or actual.definition_hash != definition.definition_hash
         or actual.definition_hash != compiled.sha256
         or compiled.definition.definition_key != actual.definition_key
@@ -251,7 +303,8 @@ def _stored_execution_context(
         or actual.current_step_key != "compare_pair"
         or not isinstance(comparison_step, AgentStep)
         or comparison_step.worker_role != "support"
-        or comparison_step.result_schema != TRANSFER_PAIR_RESULT_SCHEMA
+        or comparison_step.result_schema
+        != (TRANSFER_PAIR_RESULT_SCHEMA_V11 if successor else TRANSFER_PAIR_RESULT_SCHEMA)
         or checked != supplied
         or actual.request_payload != checked.model_dump(mode="json")
         or actual_step.workflow_id != actual.workflow_id
@@ -261,7 +314,8 @@ def _stored_execution_context(
         or actual_step.attempt != step.attempt
         or actual_step.worker_role != "support"
         or actual_step.worker_role != step.worker_role
-        or actual_step.result_schema != TRANSFER_PAIR_RESULT_SCHEMA
+        or actual_step.result_schema
+        != (TRANSFER_PAIR_RESULT_SCHEMA_V11 if successor else TRANSFER_PAIR_RESULT_SCHEMA)
         or actual_step.result_schema != step.result_schema
         or actual_step.state != StepState.RUNNING.value
         or actual_step.input_pointer_manifest.get("upstream_artifacts") != []

@@ -6,20 +6,27 @@ from datetime import UTC, datetime
 
 from eom_catalog_service.inference_transfer_worker_preparation import (
     prepare_inference_transfer_worker_comparison,
+    prepare_inference_transfer_worker_comparison_v11,
 )
 from eom_operator_identity import ActorContext
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.inference_transfer_resolution import (
     read_inference_transfer_execution_plan,
+    read_inference_transfer_execution_plan_v11,
     resolve_inference_transfer_execution_plan,
+    resolve_inference_transfer_execution_plan_v11,
 )
 from eom_workflow import compile_definition_data
 from eom_workflow.inference_transfer import (
     TRANSFER_PAIR_PROTOCOL,
+    TRANSFER_PAIR_PROTOCOL_V11,
     TRANSFER_PAIR_WORKFLOW_KEY,
     TRANSFER_PAIR_WORKFLOW_VERSION,
+    TRANSFER_PAIR_WORKFLOW_VERSION_V11,
 )
+from eom_workflow.inference_transfer_control import ResolvedExecutionPlanV21
+from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequestV11
 from eom_workflow_runner.inference_transfer_admission import InferenceTransferSubmissionContext
 from eom_workflow_runner.models import (
     WorkflowCommandRecord,
@@ -74,7 +81,11 @@ class InferenceTransferStartAdapter:
             definition = admitted_workflow_definition(
                 session,
                 definition_key=TRANSFER_PAIR_WORKFLOW_KEY,
-                definition_version=TRANSFER_PAIR_WORKFLOW_VERSION,
+                definition_version=(
+                    TRANSFER_PAIR_WORKFLOW_VERSION_V11
+                    if isinstance(submission.workflow_request, InferenceTransferWorkflowRequestV11)
+                    else TRANSFER_PAIR_WORKFLOW_VERSION
+                ),
             )
             if definition is None:
                 raise ApiError(
@@ -83,7 +94,14 @@ class InferenceTransferStartAdapter:
                     "Comparison unavailable",
                     "The purpose-specific Workflow is not admitted.",
                 )
-            _check_definition(definition)
+            _check_definition(
+                definition,
+                version=(
+                    TRANSFER_PAIR_WORKFLOW_VERSION_V11
+                    if isinstance(submission.workflow_request, InferenceTransferWorkflowRequestV11)
+                    else TRANSFER_PAIR_WORKFLOW_VERSION
+                ),
+            )
             wrapper = submission.workflow_request
             workflow, created = create_workflow_instance(
                 session,
@@ -106,21 +124,41 @@ class InferenceTransferStartAdapter:
             if not created:
                 _checked_replay(session, workflow, submission)
                 return _start_identity(session, workflow)
-            prepared = prepare_inference_transfer_worker_comparison(
-                wrapper.comparison, left=wrapper.left_profile, right=wrapper.right_profile
+            prepared = (
+                prepare_inference_transfer_worker_comparison_v11(
+                    wrapper.comparison, left=wrapper.left_profile, right=wrapper.right_profile
+                )
+                if isinstance(wrapper, InferenceTransferWorkflowRequestV11)
+                else prepare_inference_transfer_worker_comparison(
+                    wrapper.comparison, left=wrapper.left_profile, right=wrapper.right_profile
+                )
             )
             try:
-                plan = resolve_inference_transfer_execution_plan(
-                    session,
-                    workflow_id=workflow.workflow_id,
-                    workflow_definition_version=definition.definition_version,
-                    workflow_definition_sha256=definition.definition_hash,
-                    workflow_role_schema_version=workflow.role_schema_version,
-                    workflow_request=wrapper,
-                    core_prompt_sha256=prepared.core_prompt_sha256,
-                    prompt_sha256=prepared.prompt_sha256,
-                    resolved_at=datetime.now(UTC),
-                )
+                plan: ResolvedExecutionPlanV21
+                if isinstance(wrapper, InferenceTransferWorkflowRequestV11):
+                    plan = resolve_inference_transfer_execution_plan_v11(
+                        session,
+                        workflow_id=workflow.workflow_id,
+                        workflow_definition_version=definition.definition_version,
+                        workflow_definition_sha256=definition.definition_hash,
+                        workflow_role_schema_version=workflow.role_schema_version,
+                        workflow_request=wrapper,
+                        core_prompt_sha256=prepared.core_prompt_sha256,
+                        prompt_sha256=prepared.prompt_sha256,
+                        resolved_at=datetime.now(UTC),
+                    )
+                else:
+                    plan = resolve_inference_transfer_execution_plan(
+                        session,
+                        workflow_id=workflow.workflow_id,
+                        workflow_definition_version=definition.definition_version,
+                        workflow_definition_sha256=definition.definition_hash,
+                        workflow_role_schema_version=workflow.role_schema_version,
+                        workflow_request=wrapper,
+                        core_prompt_sha256=prepared.core_prompt_sha256,
+                        prompt_sha256=prepared.prompt_sha256,
+                        resolved_at=datetime.now(UTC),
+                    )
             except ControlPlaneError as exc:
                 # Caller transaction rolls back Workflow, plan and START together.
                 raise ApiError(
@@ -150,14 +188,16 @@ class InferenceTransferStartAdapter:
             return command.command_id, workflow.workflow_id, workflow.lock_version
 
 
-def _check_definition(definition: WorkflowDefinitionRecord) -> None:
+def _check_definition(
+    definition: WorkflowDefinitionRecord, *, version: str = TRANSFER_PAIR_WORKFLOW_VERSION
+) -> None:
     compiled = compile_definition_data(
         definition.canonical_definition, definition.source_path, {"support"}
     )
     if (
         compiled.sha256 != definition.definition_hash
         or compiled.definition.definition_key != TRANSFER_PAIR_WORKFLOW_KEY
-        or compiled.definition.definition_version != TRANSFER_PAIR_WORKFLOW_VERSION
+        or compiled.definition.definition_version != version
     ):
         raise ApiError(
             503,
@@ -180,7 +220,9 @@ def _checked_replay(
             "Comparison replay conflict",
             "The original comparison definition is missing.",
         )
-    _check_definition(definition)
+    successor = isinstance(submission.workflow_request, InferenceTransferWorkflowRequestV11)
+    version = TRANSFER_PAIR_WORKFLOW_VERSION_V11 if successor else TRANSFER_PAIR_WORKFLOW_VERSION
+    _check_definition(definition, version=version)
     original = load_persisted_inference_transfer_workflow_request(workflow.initial_request)
     metadata = workflow.runtime_context.get("inference_transfer_submission")
     expected = {
@@ -193,9 +235,10 @@ def _checked_replay(
         workflow.created_actor_type != "human"
         or workflow.created_actor_id != submission.operator_id
         or workflow.definition_key != TRANSFER_PAIR_WORKFLOW_KEY
-        or workflow.definition_version != TRANSFER_PAIR_WORKFLOW_VERSION
+        or workflow.definition_version != version
         or workflow.protocol_version != "1.0.1"
-        or workflow.role_schema_version != TRANSFER_PAIR_PROTOCOL
+        or workflow.role_schema_version
+        != (TRANSFER_PAIR_PROTOCOL_V11 if successor else TRANSFER_PAIR_PROTOCOL)
         or workflow.definition_hash != definition.definition_hash
         or workflow.request_hash
         != inference_transfer_business_fingerprint(
@@ -216,8 +259,14 @@ def _checked_replay(
             "Comparison replay conflict",
             "The existing immutable comparison differs from this exact submission.",
         )
-    prepared = prepare_inference_transfer_worker_comparison(
-        original.comparison, left=original.left_profile, right=original.right_profile
+    prepared = (
+        prepare_inference_transfer_worker_comparison_v11(
+            original.comparison, left=original.left_profile, right=original.right_profile
+        )
+        if isinstance(original, InferenceTransferWorkflowRequestV11)
+        else prepare_inference_transfer_worker_comparison(
+            original.comparison, left=original.left_profile, right=original.right_profile
+        )
     )
     pin = workflow.runtime_context.get("execution_plan")
     if not isinstance(pin, dict) or not isinstance(pin.get("plan_id"), str):
@@ -228,15 +277,27 @@ def _checked_replay(
             "The original comparison execution pin is missing.",
         )
     try:
-        plan = read_inference_transfer_execution_plan(
-            session,
-            plan_id=pin["plan_id"],
-            workflow_id=workflow.workflow_id,
-            workflow_definition_sha256=workflow.definition_hash,
-            workflow_request=original,
-            core_prompt_sha256=prepared.core_prompt_sha256,
-            prompt_sha256=prepared.prompt_sha256,
-        )
+        plan: ResolvedExecutionPlanV21
+        if isinstance(original, InferenceTransferWorkflowRequestV11):
+            plan = read_inference_transfer_execution_plan_v11(
+                session,
+                plan_id=pin["plan_id"],
+                workflow_id=workflow.workflow_id,
+                workflow_definition_sha256=workflow.definition_hash,
+                workflow_request=original,
+                core_prompt_sha256=prepared.core_prompt_sha256,
+                prompt_sha256=prepared.prompt_sha256,
+            )
+        else:
+            plan = read_inference_transfer_execution_plan(
+                session,
+                plan_id=pin["plan_id"],
+                workflow_id=workflow.workflow_id,
+                workflow_definition_sha256=workflow.definition_hash,
+                workflow_request=original,
+                core_prompt_sha256=prepared.core_prompt_sha256,
+                prompt_sha256=prepared.prompt_sha256,
+            )
     except ControlPlaneError as exc:
         raise ApiError(
             409,

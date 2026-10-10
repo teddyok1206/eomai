@@ -26,6 +26,7 @@ from eom_orchestrator.control_models import (
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, ProtocolVersionRecord
 from eom_orchestrator.preset_lifecycle import create_execution_preset_draft
+from eom_orchestrator.repository import ensure_protocol_version
 from eom_workflow import compile_definition
 from eom_workflow.control_plane import (
     ControlArtifactPointer,
@@ -387,7 +388,7 @@ def test_authorized_initial_prepare_registers_exact_protocol_once_then_replays(
     value = fixture(monkeypatch)
     key = (ProtocolVersionRecord, value.manifest.workflow_role_schema_version)
     del value.session.records[key]
-    original = bootstrap.ensure_protocol_version
+    original = ensure_protocol_version
     observations: list[tuple[int, int]] = []
 
     def ensure(session: Any, version: str, digest: str) -> None:

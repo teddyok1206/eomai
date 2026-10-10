@@ -15,6 +15,7 @@ from pydantic import Field, model_validator
 from eom_workflow.inference_transfer import (
     MAX_TRANSFER_WORKER_CONTEXT_BYTES,
     InferenceTransferPairWorkerRequest,
+    InferenceTransferPairWorkerRequestV11,
 )
 
 
@@ -59,6 +60,30 @@ class InferenceTransferWorkflowRequest(FrozenModel):
         """Materialize only the bounded worker value; audit pins grant no access."""
 
         return InferenceTransferPairWorkerRequest.model_validate(
+            {
+                "request_name": self.request_name,
+                "comparison": self.comparison.model_dump(mode="json"),
+                "left_profile": self.left_profile.model_dump(mode="json"),
+                "right_profile": self.right_profile.model_dump(mode="json"),
+            }
+        )
+
+
+class InferenceTransferWorkflowRequestV11(InferenceTransferWorkflowRequest):
+    """Choose new meaning explicitly, without silently upgrading a saved request."""
+
+    schema_version: Literal["inference-transfer-workflow-request/1.1"] = (
+        "inference-transfer-workflow-request/1.1"  # type: ignore[assignment]
+    )
+    request_name: Literal["ITEM_INFERENCE_TRANSFER_PAIR_REQUEST_V11"] = (
+        "ITEM_INFERENCE_TRANSFER_PAIR_REQUEST_V11"  # type: ignore[assignment]
+    )
+    execution_preset_key: Literal["item-inference-transfer-comparison-axes"] = (
+        "item-inference-transfer-comparison-axes"  # type: ignore[assignment]
+    )
+
+    def worker_request(self) -> InferenceTransferPairWorkerRequestV11:
+        return InferenceTransferPairWorkerRequestV11.model_validate(
             {
                 "request_name": self.request_name,
                 "comparison": self.comparison.model_dump(mode="json"),

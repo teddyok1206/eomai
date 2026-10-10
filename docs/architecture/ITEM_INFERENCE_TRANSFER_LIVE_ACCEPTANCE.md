@@ -539,3 +539,40 @@ actual-principal PREPARE/첫 READ를 최소 범위로 진단하는 다음 gate�
 표기는 7이었으나 실제 log는 위 6개와 별도 ADMIT다. 원 보고를 지우지 않고
 `devreport_810773308b08422fa90153c57a593085`에서 한국어 첫 문장으로 정정했다.
 중간 정정 보고의 비한국어 summary도 한국어 reporting 규칙 준수로 간주하지 않는다.
+
+### `f12fb971` 실제 첫 READ 진단 — 실패 보존
+
+2026-10-10 **18:33:41 UTC**, fresh `guiadmin` 인증과 원래 보호된 입력 receipt를
+사용한 one-off READ-only probe가 종료됐다. PREPARE는 source 520과 expected
+header/index 일치를 확인했으며 **80,305 ms**였다. 첫 16-entry READ는 **95,710 ms**
+뒤 `INFERENCE_TRANSFER_SNAPSHOT_REQUEST_INVALID`로 실패했다. 실제 API request는
+`req_ae39720cd6dd694ad04bb144457b9236`이며 Catalog의 안전한 진단은 다음과 같다.
+
+```text
+phase=READ
+validation_stage=OWNER_SERVICE
+error_kind=FROZEN_MODEL
+attempted_first_read_calls=1
+cpu_launch_count=0
+no_auto_retry=true
+original_input_rewritten=false
+```
+
+실제 header는 `sha256:54825b8c7b34e943e0cd0309053d04f73ddddb4fd8eb80abbfb012f32eecdb70`,
+index는 `sha256:a01015a9992b3cb2d1601fdf86dd4f262de22dd27b2eaa8b16237c37f8ae7220`,
+PREPARE는 `sha256:9e6d065811b61c5d40c7b6cc9bfdca380dd964b34982a7c539447aedbf09b5db`,
+READ는 `sha256:046c41300539385d5498d06a81d6377518a0bb370733494af33f33d417fed843`이다.
+같은 `embeddingexecution_125fe45683e34a2ea188e8ea65a990b0`와 기존 raw input
+`sha256:7dd0fba98ac3cf61d32a5bdf47f48a72e6c9132dd19ab33adefd387ff0d2a775`를 유지한다.
+
+이 결과는 합성 overflow 수정이 해당 실제 오류를 해결했다는 증거가 아니다. 입력 frame
+파싱이 아닌 owner 내부 frozen-model 검증 실패로 범위를 좁혔지만, 구체적 모델/field
+또는 실제 크기 초과 여부는 아직 확정하지 않는다. CPU/model forward, control 발행,
+비교 job과 결과 Artifact commit은 수행하지 않았다. 실패 기록을 성공으로 고치거나
+새 execution으로 우회하지 않는다. 구체적인 source 결함을 먼저 재현한다.
+
+이후 사용자의 “사람 평가는 없다고 생각해” 지시에 따라 사람 평가는 현 완료의
+조건이 아니다. 기존 human owner/계약/기록은 보존하며
+`HUMAN_TRANSFER_REVIEW=NOT_EVALUATED / NOT_REQUIRED_FOR_CURRENT_COMPLETION`로 둔다.
+Slack `devreport_68fb3bdba72a40f8b7eaac696955b5aa`는 이 범위 변경과 READ 진단을
+한국어 첫 문장으로 보고했다. 새 사람 scorecard/context/GUI는 구현하지 않는다.

@@ -53,6 +53,7 @@ from eom_catalog_contracts import (
     validate_item_reference_contract,
     validate_reviewed_authoring_guidance,
 )
+from eom_catalog_contracts.inference_transfer_pair_result_v11 import PairComparisonResultV11
 from eom_catalog_contracts.item_inference_transfer import PairComparisonResult
 from eom_catalog_contracts.mock_exam_production_plan import ContentTeamMockExamSlotV1
 from eom_identifiers import content_sha256
@@ -78,7 +79,10 @@ from eom_workflow.document_review import (
     PdfDocumentReviewRequest,
     PdfDocumentReviewWorkerRequest,
 )
-from eom_workflow.inference_transfer import InferenceTransferPairWorkerRequest
+from eom_workflow.inference_transfer import (
+    InferenceTransferPairWorkerRequest,
+    InferenceTransferPairWorkerRequestV11,
+)
 
 
 def _require_utc(value: datetime) -> datetime:
@@ -1024,6 +1028,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.27.0",
         "workflow-role/1.28.0",
         "workflow-role/1.29.0",
+        "workflow-role/1.30.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -1040,6 +1045,7 @@ class RoleWorkerInput(FrozenModel):
         | PairedDocumentReviewWorkerRequestV2
         | PairedDocumentReviewWorkerRequest
         | InferenceTransferPairWorkerRequest
+        | InferenceTransferPairWorkerRequestV11
     )
     upstream_artifacts: tuple[ArtifactPointer, ...]
     artifact: ArtifactSpec
@@ -1058,6 +1064,7 @@ class RoleWorkerInput(FrozenModel):
         | PairedDocumentReviewWorkerRequestV2
         | PairedDocumentReviewWorkerRequest
         | InferenceTransferPairWorkerRequest
+        | InferenceTransferPairWorkerRequestV11
     ):
         if isinstance(value, BaseModel):
             value = value.model_dump(mode="json")
@@ -1073,6 +1080,8 @@ class RoleWorkerInput(FrozenModel):
             return CustomerSupportWorkerRequest.model_validate(value)
         if value.get("request_name") == "ITEM_INFERENCE_TRANSFER_PAIR_REQUEST":
             return InferenceTransferPairWorkerRequest.model_validate(value)
+        if value.get("request_name") == "ITEM_INFERENCE_TRANSFER_PAIR_REQUEST_V11":
+            return InferenceTransferPairWorkerRequestV11.model_validate(value)
         if value.get("request_name") == "PDF_DOCUMENT_REVIEW_REQUEST":
             return PdfDocumentReviewWorkerRequest.model_validate(value)
         if value.get("request_name") == "PAIRED_DOCUMENT_REVIEW_REQUEST":
@@ -1089,7 +1098,15 @@ class RoleWorkerInput(FrozenModel):
     @model_validator(mode="after")
     def inference_transfer_purpose_matches_protocol(self) -> RoleWorkerInput:
         is_transfer = isinstance(self.request, InferenceTransferPairWorkerRequest)
-        if is_transfer != (self.protocol_version == "workflow-role/1.29.0"):
+        expected_protocol = (
+            "workflow-role/1.30.0"
+            if isinstance(self.request, InferenceTransferPairWorkerRequestV11)
+            else "workflow-role/1.29.0"
+        )
+        if (is_transfer and self.protocol_version != expected_protocol) or (
+            not is_transfer
+            and self.protocol_version in {"workflow-role/1.29.0", "workflow-role/1.30.0"}
+        ):
             raise ValueError(
                 "inference-transfer requests require their isolated protocol successor"
             )
@@ -1173,6 +1190,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.27.0",
         "workflow-role/1.28.0",
         "workflow-role/1.29.0",
+        "workflow-role/1.30.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -2829,6 +2847,12 @@ class InferenceTransferPairRoleResult(RoleResultBase):
     output: PairComparisonResult
 
 
+class InferenceTransferPairRoleResultV11(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.30.0"] = "workflow-role/1.30.0"
+    role: Literal["support"] = "support"
+    output: PairComparisonResultV11
+
+
 class PdfDocumentReviewRoleResult(RoleResultBase):
     protocol_version: Literal["workflow-role/1.25.0"] = "workflow-role/1.25.0"
     role: Literal["support"] = "support"
@@ -2914,6 +2938,7 @@ RoleResult = (
     | LegacyItemEditorialCompatibilityRoleResult
     | CustomerSupportRoleResult
     | InferenceTransferPairRoleResult
+    | InferenceTransferPairRoleResultV11
     | PdfDocumentReviewRoleResult
     | PdfDocumentReviewRoleResultV4
     | PairedDocumentReviewRoleResult

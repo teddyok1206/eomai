@@ -30,6 +30,24 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "item-inference-transfer-invocation-v1.1": CatalogSchemaResource(
+            "schemas/knowledge/item-inference-transfer-invocation-v1_1.schema.json",
+            "resources/knowledge/item-inference-transfer-invocation-v1_1.schema.json",
+            "1.1",
+            "sha256:2f42643229b653368415855eaa06121f3f99e28b221f21aca4db8c25eb566e56",
+        ),
+        "item-inference-transfer-workflow-binding-v1.1": CatalogSchemaResource(
+            "schemas/knowledge/item-inference-transfer-workflow-binding-v1_1.schema.json",
+            "resources/knowledge/item-inference-transfer-workflow-binding-v1_1.schema.json",
+            "1.1",
+            "sha256:33aa41423e63ad3d9ba56761029df72c2be9c637c38a784d4b499d4f5930b302",
+        ),
+        "item-inference-transfer-pair-result-v1.1": CatalogSchemaResource(
+            "schemas/knowledge/item-inference-transfer-pair-result-v1_1.schema.json",
+            "resources/knowledge/item-inference-transfer-pair-result-v1_1.schema.json",
+            "1.1",
+            "sha256:5dd12768a41eef7d91edfbeb9effc399f2ad7525306f213bb945c3c7a3ec1451",
+        ),
         "item-inference-transfer-human-review": CatalogSchemaResource(
             "schemas/knowledge/item-inference-transfer-human-review-v1.schema.json",
             "resources/knowledge/item-inference-transfer-human-review-v1.schema.json",

@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/item-inference-transfer-invocation/1.1",
+  "title": "EOM selected inference-transfer pair submission and Workflow read V1.1",
+  "description": "Public values contain no principal or permission grant. MEMBER_VERIFIED is a current owner assertion after canonical result.json resolution, not a scientific or human quality approval.",
+  "oneOf": [
+    {"$ref": "#/$defs/submitRequest"},
+    {"$ref": "#/$defs/readRequest"},
+    {"$ref": "#/$defs/readResult"}
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "workflowId": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+    "submitRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "comparison", "snapshot_prepare", "expected_header_sha256", "submission_sha256"],
+      "properties": {
+        "schema_version": {"const": "inference-transfer-pair-submit/1.1"},
+        "comparison": {"$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/pairRequest"},
+        "snapshot_prepare": {"$ref": "eom://schemas/knowledge/item-inference-transfer-snapshot/1.0#/$defs/prepareRequest"},
+        "expected_header_sha256": {"$ref": "#/$defs/sha256"},
+        "submission_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "readRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "workflow_id", "mode", "read_sha256"],
+      "properties": {
+        "schema_version": {"const": "inference-transfer-workflow-read-request/1.1"},
+        "workflow_id": {"$ref": "#/$defs/workflowId"},
+        "mode": {"enum": ["STATUS_ONLY", "CANONICAL_RESULT"]},
+        "read_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "resultArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "artifact_revision_id", "member_path", "schema_ref", "media_type", "sha256"],
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {"const": "result.json"},
+        "schema_ref": {"const": "https://eom.local/schemas/workflow/roles/item-inference-transfer-pair-result-v2.schema.json"},
+        "media_type": {"const": "application/json"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "readResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "workflow_id", "workflow_state", "resource_version", "comparison", "graph_snapshot", "access_policy_revision_id", "access_policy_sha256", "result_state", "result_artifact", "result", "failure_code", "result_sha256"],
+      "properties": {
+        "schema_version": {"const": "inference-transfer-workflow-read-result/1.1"},
+        "workflow_id": {"$ref": "#/$defs/workflowId"},
+        "workflow_state": {"enum": ["REQUESTED", "RUNNING", "COMPLETED", "FAILED", "CANCELLED"]},
+        "resource_version": {"type": "integer", "minimum": 1},
+        "comparison": {"$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/pairRequest"},
+        "graph_snapshot": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"},
+        "access_policy_revision_id": {"type": "string", "pattern": "^accessrev_[0-9a-f]{32}$"},
+        "access_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "result_state": {"enum": ["PENDING", "NO_RESULT", "POINTER_ONLY", "MEMBER_VERIFIED"]},
+        "result_artifact": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/resultArtifact"}]},
+        "result": {"oneOf": [{"type": "null"}, {"$ref": "eom://schemas/knowledge/item-inference-transfer-pair-result/1.1"}]},
+        "failure_code": {"type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9_]{1,63}$", "maxLength": 64},
+        "result_sha256": {"$ref": "#/$defs/sha256"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"workflow_state": {"enum": ["REQUESTED", "RUNNING"]}}, "required": ["workflow_state"]},
+          "then": {"properties": {"result_state": {"const": "PENDING"}, "result_artifact": {"type": "null"}, "result": {"type": "null"}, "failure_code": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {"workflow_state": {"enum": ["FAILED", "CANCELLED"]}}, "required": ["workflow_state"]},
+          "then": {"properties": {"result_state": {"const": "NO_RESULT"}, "result_artifact": {"type": "null"}, "result": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {"workflow_state": {"const": "COMPLETED"}}, "required": ["workflow_state"]},
+          "then": {"properties": {"result_state": {"enum": ["POINTER_ONLY", "MEMBER_VERIFIED"]}, "result_artifact": {"$ref": "#/$defs/resultArtifact"}, "failure_code": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {"result_state": {"const": "POINTER_ONLY"}}, "required": ["result_state"]},
+          "then": {"properties": {"result": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {"result_state": {"const": "MEMBER_VERIFIED"}}, "required": ["result_state"]},
+          "then": {"properties": {"result": {"$ref": "eom://schemas/knowledge/item-inference-transfer-pair-result/1.1"}}}
+        }
+      ]
+    }
+  }
+}

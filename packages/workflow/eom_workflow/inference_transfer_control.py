@@ -90,8 +90,27 @@ class ResolvedExecutionPlanV21(FrozenModel):
         return self
 
 
+class ResolvedExecutionPlanV22(ResolvedExecutionPlanV21):
+    """Same pinned source boundary, explicit three-axis comparison successor."""
+
+    schema_version: Literal["resolved-execution-plan/22.0"] = "resolved-execution-plan/22.0"  # type: ignore[assignment]
+    workflow_definition_version: Literal["1.1.0"] = "1.1.0"  # type: ignore[assignment]
+    resolver_version: Literal["22.0.0"] = "22.0.0"  # type: ignore[assignment]
+
+
+def _checked_plan(
+    plan: ResolvedExecutionPlanV21 | ResolvedExecutionPlanV22,
+) -> ResolvedExecutionPlanV21:
+    model = (
+        ResolvedExecutionPlanV22
+        if isinstance(plan, ResolvedExecutionPlanV22)
+        else ResolvedExecutionPlanV21
+    )
+    return model.model_validate(plan.model_dump(mode="json"))
+
+
 def validate_inference_transfer_plan_context(
-    plan: ResolvedExecutionPlanV21,
+    plan: ResolvedExecutionPlanV21 | ResolvedExecutionPlanV22,
     *,
     comparison: PairComparisonRequest,
     left_profile: InferenceTransferProfile,
@@ -103,7 +122,7 @@ def validate_inference_transfer_plan_context(
     """Check exact small-value closure; the owner must independently authorize sources."""
 
     # A copied frozen value is not proof that its validators actually ran.
-    checked = ResolvedExecutionPlanV21.model_validate(plan.model_dump(mode="json"))
+    checked = _checked_plan(plan)
     validate_pair_comparison_request_references(comparison, left_profile, right_profile)
     if (
         checked.workflow_id != workflow_id
@@ -120,11 +139,12 @@ def validate_inference_transfer_plan_context(
 
 
 def validate_inference_transfer_rubric_instruction(
-    plan: ResolvedExecutionPlanV21, instruction: InstructionBundleManifest
+    plan: ResolvedExecutionPlanV21 | ResolvedExecutionPlanV22,
+    instruction: InstructionBundleManifest,
 ) -> None:
     """Require the exact rubric member in the already resolved released instruction bundle."""
 
-    checked = ResolvedExecutionPlanV21.model_validate(plan.model_dump(mode="json"))
+    checked = _checked_plan(plan)
     pointer = checked.steps[0].instruction_bundle
     if (
         instruction.bundle_id != pointer.bundle_id

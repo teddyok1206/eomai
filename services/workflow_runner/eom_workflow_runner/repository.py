@@ -30,6 +30,7 @@ from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRe
 from eom_workflow.schemas import (
     result_schema_protocol,
     validate_inference_transfer_workflow_request,
+    validate_inference_transfer_workflow_request_v11,
 )
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -404,6 +405,8 @@ def load_persisted_inference_transfer_workflow_request(
 ) -> InferenceTransferWorkflowRequest:
     """Read the exact successor snapshot; never repair nulls or replace source pins."""
 
+    if document.get("schema_version") == "inference-transfer-workflow-request/1.1":
+        return validate_inference_transfer_workflow_request_v11(document)
     return validate_inference_transfer_workflow_request(document)
 
 

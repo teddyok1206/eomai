@@ -9,13 +9,25 @@ from pydantic import model_validator
 from eom_workflow.control_plane import FrozenModel, Sha256, WorkflowId
 from eom_workflow.inference_transfer import (
     TRANSFER_PAIR_PROTOCOL,
+    TRANSFER_PAIR_PROTOCOL_V11,
     InferenceTransferPairWorkerRequest,
     validate_inference_transfer_execution_plan,
+    validate_inference_transfer_execution_plan_v11,
 )
-from eom_workflow.inference_transfer_control import ResolvedExecutionPlanV21
-from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
+from eom_workflow.inference_transfer_control import (
+    ResolvedExecutionPlanV21,
+    ResolvedExecutionPlanV22,
+)
+from eom_workflow.inference_transfer_workflow import (
+    InferenceTransferWorkflowRequest,
+    InferenceTransferWorkflowRequestV11,
+)
 from eom_workflow.models import RoleWorkerInput
-from eom_workflow.schemas import validate_inference_transfer_workflow_request, validate_role_input
+from eom_workflow.schemas import (
+    validate_inference_transfer_workflow_request,
+    validate_inference_transfer_workflow_request_v11,
+    validate_role_input,
+)
 
 
 class InferenceTransferMaterializationContext(FrozenModel):
@@ -33,19 +45,39 @@ class InferenceTransferMaterializationContext(FrozenModel):
         request = validate_inference_transfer_workflow_request(
             self.workflow_request.model_dump(mode="json")
         )
-        document = self.worker_input.model_dump(mode="json")
-        validate_role_input(document, "support", TRANSFER_PAIR_PROTOCOL)
-        worker_input = RoleWorkerInput.model_validate(document)
-        if (
-            worker_input.workflow_id != self.workflow_id
-            or worker_input.protocol_version != TRANSFER_PAIR_PROTOCOL
-            or worker_input.role != "support"
-            or worker_input.upstream_artifacts
-            or not isinstance(worker_input.request, InferenceTransferPairWorkerRequest)
-            or worker_input.request != request.worker_request()
-        ):
-            raise ValueError("inference-transfer materialization role input differs")
+        _validate_role_context(self, request, TRANSFER_PAIR_PROTOCOL)
         return self
+
+
+class InferenceTransferMaterializationContextV11(InferenceTransferMaterializationContext):
+    workflow_request: InferenceTransferWorkflowRequestV11
+
+    @model_validator(mode="after")
+    def exact_workflow_and_role_input(self) -> InferenceTransferMaterializationContextV11:
+        request = validate_inference_transfer_workflow_request_v11(
+            self.workflow_request.model_dump(mode="json")
+        )
+        _validate_role_context(self, request, TRANSFER_PAIR_PROTOCOL_V11)
+        return self
+
+
+def _validate_role_context(
+    context: InferenceTransferMaterializationContext,
+    request: InferenceTransferWorkflowRequest,
+    protocol: str,
+) -> None:
+    document = context.worker_input.model_dump(mode="json")
+    validate_role_input(document, "support", protocol)
+    worker_input = RoleWorkerInput.model_validate(document)
+    if (
+        worker_input.workflow_id != context.workflow_id
+        or worker_input.protocol_version != protocol
+        or worker_input.role != "support"
+        or worker_input.upstream_artifacts
+        or not isinstance(worker_input.request, InferenceTransferPairWorkerRequest)
+        or worker_input.request != request.worker_request()
+    ):
+        raise ValueError("inference-transfer materialization role input differs")
 
 
 def validate_inference_transfer_materialization_plan(
@@ -93,3 +125,48 @@ def validate_inference_transfer_workflow_plan(
     ):
         raise ValueError("inference-transfer materialization policy or permissions differ")
     return plan
+
+
+def validate_inference_transfer_workflow_plan_v11(
+    document: object,
+    *,
+    workflow_request: InferenceTransferWorkflowRequestV11,
+    workflow_id: str,
+    step_key: str,
+    core_prompt_sha256: str,
+    prompt_sha256: str,
+) -> ResolvedExecutionPlanV22:
+    request = validate_inference_transfer_workflow_request_v11(
+        workflow_request.model_dump(mode="json")
+    )
+    plan = validate_inference_transfer_execution_plan_v11(
+        document,
+        request=request.worker_request(),
+        workflow_id=workflow_id,
+        step_key=step_key,
+        core_prompt_sha256=core_prompt_sha256,
+        prompt_sha256=prompt_sha256,
+    )
+    if (
+        plan.access_policy_revision_id != request.access_policy_revision_id
+        or plan.access_policy_sha256 != request.access_policy_sha256
+        or plan.requester_permissions_sha256 != request.requester_permissions_sha256
+    ):
+        raise ValueError("inference-transfer materialization policy or permissions differ")
+    return plan
+
+
+def validate_inference_transfer_materialization_plan_v11(
+    document: object, *, context: InferenceTransferMaterializationContextV11
+) -> ResolvedExecutionPlanV22:
+    checked = InferenceTransferMaterializationContextV11.model_validate(
+        context.model_dump(mode="json")
+    )
+    return validate_inference_transfer_workflow_plan_v11(
+        document,
+        workflow_request=checked.workflow_request,
+        workflow_id=checked.workflow_id,
+        step_key=checked.step_key,
+        core_prompt_sha256=checked.core_prompt_sha256,
+        prompt_sha256=checked.prompt_sha256,
+    )

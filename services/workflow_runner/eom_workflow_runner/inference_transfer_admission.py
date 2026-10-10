@@ -5,14 +5,20 @@ from __future__ import annotations
 from eom_catalog_contracts.models import FrozenModel, Sha256
 from eom_workflow.inference_transfer import (
     TRANSFER_PAIR_PROTOCOL,
+    TRANSFER_PAIR_PROTOCOL_V11,
     TRANSFER_PAIR_WORKFLOW_KEY,
     TRANSFER_PAIR_WORKFLOW_VERSION,
+    TRANSFER_PAIR_WORKFLOW_VERSION_V11,
 )
-from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
+from eom_workflow.inference_transfer_workflow import (
+    InferenceTransferWorkflowRequest,
+    InferenceTransferWorkflowRequestV11,
+)
 from eom_workflow.models import WorkflowRequest
 from eom_workflow.schemas import (
     WorkflowSchemaError,
     validate_inference_transfer_workflow_request,
+    validate_inference_transfer_workflow_request_v11,
 )
 from pydantic import Field, ValidationError
 
@@ -47,10 +53,12 @@ def admit_inference_transfer_workflow_request(
         )
     if not is_transfer:
         return request
-    if (
-        definition_version != TRANSFER_PAIR_WORKFLOW_VERSION
-        or role_protocol_version != TRANSFER_PAIR_PROTOCOL
-    ):
+    is_v11 = isinstance(request, InferenceTransferWorkflowRequestV11)
+    expected_version = (
+        TRANSFER_PAIR_WORKFLOW_VERSION_V11 if is_v11 else TRANSFER_PAIR_WORKFLOW_VERSION
+    )
+    expected_protocol = TRANSFER_PAIR_PROTOCOL_V11 if is_v11 else TRANSFER_PAIR_PROTOCOL
+    if definition_version != expected_version or role_protocol_version != expected_protocol:
         raise WorkflowError(
             WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
             "comparison workflow definition version or protocol differs",
@@ -61,7 +69,11 @@ def admit_inference_transfer_workflow_request(
             "comparison requires an explicit server-owned operator context",
         )
     try:
-        checked = validate_inference_transfer_workflow_request(request.model_dump(mode="json"))
+        checked = (
+            validate_inference_transfer_workflow_request_v11(request.model_dump(mode="json"))
+            if is_v11
+            else validate_inference_transfer_workflow_request(request.model_dump(mode="json"))
+        )
         context = InferenceTransferSubmissionContext.model_validate(
             submission_context.model_dump(mode="json")
         )

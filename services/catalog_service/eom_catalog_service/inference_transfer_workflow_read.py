@@ -22,6 +22,17 @@ from eom_catalog_contracts.inference_transfer_invocation import (
     parse_workflow_read_result,
     validate_workflow_read_result_context,
 )
+from eom_catalog_contracts.inference_transfer_invocation_v11 import (
+    TRANSFER_RESULT_MEMBER_SCHEMA as TRANSFER_RESULT_MEMBER_SCHEMA_V11,
+)
+from eom_catalog_contracts.inference_transfer_invocation_v11 import (
+    InferenceTransferWorkflowReadRequestV11,
+    InferenceTransferWorkflowReadResultV11,
+    parse_workflow_read_request_v11,
+    parse_workflow_read_result_v11,
+    validate_workflow_read_result_context_v11,
+)
+from eom_catalog_contracts.inference_transfer_pair_result_v11 import PairComparisonResultV11
 from eom_catalog_contracts.item_inference_transfer import (
     InferenceTransferProfile,
     PairComparisonResult,
@@ -31,7 +42,10 @@ from eom_identity_service.repository import effective_permissions
 from eom_operator_identity import PermissionKey
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.database import build_session_factory
-from eom_orchestrator.inference_transfer_resolution import read_inference_transfer_execution_plan
+from eom_orchestrator.inference_transfer_resolution import (
+    read_inference_transfer_execution_plan,
+    read_inference_transfer_execution_plan_v11,
+)
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_protocol.models import ArtifactManifest
@@ -39,15 +53,29 @@ from eom_protocol.validation import validate_message
 from eom_workflow import AgentStep, compile_definition_data
 from eom_workflow.inference_transfer import (
     TRANSFER_PAIR_PROTOCOL,
+    TRANSFER_PAIR_PROTOCOL_V11,
     TRANSFER_PAIR_RESULT_SCHEMA,
+    TRANSFER_PAIR_RESULT_SCHEMA_V11,
     TRANSFER_PAIR_WORKFLOW_KEY,
     TRANSFER_PAIR_WORKFLOW_VERSION,
+    TRANSFER_PAIR_WORKFLOW_VERSION_V11,
     validate_inference_transfer_worker_result,
+    validate_inference_transfer_worker_result_v11,
 )
-from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
-from eom_workflow.models import ArtifactPointer, InferenceTransferPairRoleResult, RoleWorkerInput
+from eom_workflow.inference_transfer_control import ResolvedExecutionPlanV21
+from eom_workflow.inference_transfer_workflow import (
+    InferenceTransferWorkflowRequest,
+    InferenceTransferWorkflowRequestV11,
+)
+from eom_workflow.models import (
+    ArtifactPointer,
+    InferenceTransferPairRoleResult,
+    InferenceTransferPairRoleResultV11,
+    RoleWorkerInput,
+)
 from eom_workflow.schemas import (
     validate_inference_transfer_workflow_request,
+    validate_inference_transfer_workflow_request_v11,
     validate_role_input,
     validate_role_result,
 )
@@ -71,6 +99,7 @@ from eom_catalog_service.inference_transfer_service import (
 )
 from eom_catalog_service.inference_transfer_worker_preparation import (
     prepare_inference_transfer_worker_comparison,
+    prepare_inference_transfer_worker_comparison_v11,
 )
 from eom_catalog_service.settings import CatalogSettings
 
@@ -125,8 +154,28 @@ class CatalogInferenceTransferWorkflowReadService:
     def read(
         self, actor_id: str, request: InferenceTransferWorkflowReadRequest
     ) -> InferenceTransferWorkflowReadResult:
+        if not isinstance(request, InferenceTransferWorkflowReadRequest):
+            raise InferenceTransferServiceError("INFERENCE_TRANSFER_WORKFLOW_REQUEST_INVALID")
+        return cast(InferenceTransferWorkflowReadResult, self._read(actor_id, request))
+
+    def read_v11(
+        self, actor_id: str, request: InferenceTransferWorkflowReadRequestV11
+    ) -> InferenceTransferWorkflowReadResultV11:
+        if not isinstance(request, InferenceTransferWorkflowReadRequestV11):
+            raise InferenceTransferServiceError("INFERENCE_TRANSFER_WORKFLOW_REQUEST_INVALID")
+        return cast(InferenceTransferWorkflowReadResultV11, self._read(actor_id, request))
+
+    def _read(
+        self,
+        actor_id: str,
+        request: InferenceTransferWorkflowReadRequest | InferenceTransferWorkflowReadRequestV11,
+    ) -> InferenceTransferWorkflowReadResult | InferenceTransferWorkflowReadResultV11:
         try:
-            request = parse_workflow_read_request(request.model_dump(mode="json"))
+            request = (
+                parse_workflow_read_request_v11(request.model_dump(mode="json"))
+                if isinstance(request, InferenceTransferWorkflowReadRequestV11)
+                else parse_workflow_read_request(request.model_dump(mode="json"))
+            )
         except (ValueError, SchemaError) as exc:
             raise InferenceTransferServiceError(
                 "INFERENCE_TRANSFER_WORKFLOW_REQUEST_INVALID"
@@ -135,6 +184,10 @@ class CatalogInferenceTransferWorkflowReadService:
             if re.fullmatch(r"operator_[0-9a-f]{32}", actor_id) is None:
                 raise InferenceTransferServiceError("INFERENCE_TRANSFER_FORBIDDEN")
             context = self._read_context(actor_id, request.workflow_id)
+            if isinstance(context.request, InferenceTransferWorkflowRequestV11) != isinstance(
+                request, InferenceTransferWorkflowReadRequestV11
+            ):
+                raise InferenceTransferServiceError("INFERENCE_TRANSFER_WORKFLOW_REQUEST_INVALID")
             self._authorize_sources(actor_id, context.request)
             result = None
             if context.workflow_state == "COMPLETED" and request.mode == "CANONICAL_RESULT":
@@ -147,7 +200,11 @@ class CatalogInferenceTransferWorkflowReadService:
             self._authorize_sources(actor_id, context.request)
             graph = context.request.left_profile.source_basis.graph_snapshot
             body = {
-                "schema_version": "inference-transfer-workflow-read-result/1.0",
+                "schema_version": (
+                    "inference-transfer-workflow-read-result/1.1"
+                    if isinstance(request, InferenceTransferWorkflowReadRequestV11)
+                    else "inference-transfer-workflow-read-result/1.0"
+                ),
                 "workflow_id": context.workflow_id,
                 "workflow_state": context.workflow_state,
                 "resource_version": context.resource_version,
@@ -180,6 +237,12 @@ class CatalogInferenceTransferWorkflowReadService:
                     else None
                 ),
             }
+            if isinstance(request, InferenceTransferWorkflowReadRequestV11):
+                successor = parse_workflow_read_result_v11(
+                    body | {"result_sha256": content_sha256(body)}
+                )
+                validate_workflow_read_result_context_v11(request, successor)
+                return successor
             response = parse_workflow_read_result(body | {"result_sha256": content_sha256(body)})
             validate_workflow_read_result_context(request, response)
             return response
@@ -221,7 +284,12 @@ class CatalogInferenceTransferWorkflowReadService:
                 raise InferenceTransferServiceError("INFERENCE_TRANSFER_WORKFLOW_NOT_FOUND")
             if workflow.created_actor_type != "human" or workflow.created_actor_id != actor_id:
                 raise InferenceTransferServiceError("INFERENCE_TRANSFER_FORBIDDEN")
-            request = validate_inference_transfer_workflow_request(workflow.initial_request)
+            request = (
+                validate_inference_transfer_workflow_request_v11(workflow.initial_request)
+                if workflow.initial_request.get("schema_version")
+                == "inference-transfer-workflow-request/1.1"
+                else validate_inference_transfer_workflow_request(workflow.initial_request)
+            )
             _validate_workflow(session, workflow, request)
             state = cast(
                 Literal["REQUESTED", "RUNNING", "COMPLETED", "FAILED", "CANCELLED"],
@@ -234,7 +302,9 @@ class CatalogInferenceTransferWorkflowReadService:
                 return context
             return _completed_context(session, workflow, context)
 
-    def _load_result(self, context: _ComparisonReadContext) -> PairComparisonResult:
+    def _load_result(
+        self, context: _ComparisonReadContext
+    ) -> PairComparisonResult | PairComparisonResultV11:
         member, worker = context.result_member, context.worker_input
         if member is None or worker is None:
             raise InferenceTransferServiceError("INFERENCE_TRANSFER_RESULT_INVALID")
@@ -247,17 +317,34 @@ class CatalogInferenceTransferWorkflowReadService:
         encoded = canonical_json_bytes(document)
         if len(encoded) != context.content_bytes or content_sha256(document) != member.sha256:
             raise InferenceTransferServiceError("INFERENCE_TRANSFER_RESULT_INVALID")
-        role_result = validate_role_result(document, "support", TRANSFER_PAIR_RESULT_SCHEMA)
-        if not isinstance(role_result, InferenceTransferPairRoleResult) or (
+        successor = isinstance(context.request, InferenceTransferWorkflowRequestV11)
+        role_result = validate_role_result(
+            document,
+            "support",
+            TRANSFER_PAIR_RESULT_SCHEMA_V11 if successor else TRANSFER_PAIR_RESULT_SCHEMA,
+        )
+        expected_model = (
+            InferenceTransferPairRoleResultV11 if successor else InferenceTransferPairRoleResult
+        )
+        if not isinstance(role_result, expected_model) or (
             role_result.job_id != worker.job_id
             or role_result.workflow_id != worker.workflow_id
             or role_result.step_run_id != worker.step_run_id
             or role_result.artifact != worker.artifact
         ):
             raise InferenceTransferServiceError("INFERENCE_TRANSFER_RESULT_INVALID")
-        validate_inference_transfer_worker_result(
-            context.request.worker_request(), role_result.output
-        )
+        if isinstance(context.request, InferenceTransferWorkflowRequestV11):
+            if not isinstance(role_result, InferenceTransferPairRoleResultV11):
+                raise InferenceTransferServiceError("INFERENCE_TRANSFER_RESULT_INVALID")
+            validate_inference_transfer_worker_result_v11(
+                context.request.worker_request(), role_result.output
+            )
+        else:
+            if not isinstance(role_result, InferenceTransferPairRoleResult):
+                raise InferenceTransferServiceError("INFERENCE_TRANSFER_RESULT_INVALID")
+            validate_inference_transfer_worker_result(
+                context.request.worker_request(), role_result.output
+            )
         return role_result.output
 
 
@@ -276,11 +363,14 @@ def _validate_workflow(
     expected_request_hash = inference_transfer_business_fingerprint(
         definition, request, actor_type="human", actor_id=workflow.created_actor_id
     )
+    successor = isinstance(request, InferenceTransferWorkflowRequestV11)
     if (
         workflow.definition_key != TRANSFER_PAIR_WORKFLOW_KEY
-        or workflow.definition_version != TRANSFER_PAIR_WORKFLOW_VERSION
+        or workflow.definition_version
+        != (TRANSFER_PAIR_WORKFLOW_VERSION_V11 if successor else TRANSFER_PAIR_WORKFLOW_VERSION)
         or workflow.protocol_version != "1.0.1"
-        or workflow.role_schema_version != TRANSFER_PAIR_PROTOCOL
+        or workflow.role_schema_version
+        != (TRANSFER_PAIR_PROTOCOL_V11 if successor else TRANSFER_PAIR_PROTOCOL)
         or definition.definition_key != workflow.definition_key
         or definition.definition_version != workflow.definition_version
         or compiled.definition.definition_key != workflow.definition_key
@@ -291,7 +381,8 @@ def _validate_workflow(
         or workflow.request_hash != expected_request_hash
         or not isinstance(step, AgentStep)
         or step.worker_role != "support"
-        or step.result_schema != TRANSFER_PAIR_RESULT_SCHEMA
+        or step.result_schema
+        != (TRANSFER_PAIR_RESULT_SCHEMA_V11 if successor else TRANSFER_PAIR_RESULT_SCHEMA)
         or compiled.definition.limits.max_step_attempts != 1
         or compiled.definition.limits.max_rework_cycles != 0
         or workflow.state not in {"REQUESTED", "RUNNING", "COMPLETED", "FAILED", "CANCELLED"}
@@ -332,12 +423,15 @@ def _completed_context(
     if len(steps) != 1:
         raise InferenceTransferServiceError("INFERENCE_TRANSFER_RESULT_INVALID")
     step = steps[0]
+    successor = isinstance(context.request, InferenceTransferWorkflowRequestV11)
+    result_schema = TRANSFER_PAIR_RESULT_SCHEMA_V11 if successor else TRANSFER_PAIR_RESULT_SCHEMA
+    protocol = TRANSFER_PAIR_PROTOCOL_V11 if successor else TRANSFER_PAIR_PROTOCOL
     pointer = ArtifactPointer.model_validate(step.output_pointer_manifest)
     if (
         step.attempt != 1
         or step.step_type != "agent"
         or step.worker_role != "support"
-        or step.result_schema != TRANSFER_PAIR_RESULT_SCHEMA
+        or step.result_schema != result_schema
         or step.state != "SUCCEEDED"
         or step.superseded_by_step_run_id is not None
         or step.platform_job_id != pointer.job_id
@@ -363,11 +457,11 @@ def _completed_context(
     if job is None:
         raise InferenceTransferServiceError("INFERENCE_TRANSFER_RESULT_INVALID")
     worker = RoleWorkerInput.model_validate(job.request)
-    validate_role_input(job.request, "support", TRANSFER_PAIR_PROTOCOL)
+    validate_role_input(job.request, "support", protocol)
     if (
         job.status != "SUCCEEDED"
         or job.task_type != "workflow_support"
-        or job.protocol_version != TRANSFER_PAIR_PROTOCOL
+        or job.protocol_version != protocol
         or job.job_id != worker.job_id
         or job.job_id != pointer.job_id
         or job.logical_artifact_id != pointer.logical_artifact_id
@@ -426,7 +520,9 @@ def _completed_context(
             artifact_id=pointer.logical_artifact_id,
             artifact_revision_id=pointer.revision_id,
             member_path="result.json",
-            schema_ref=TRANSFER_RESULT_MEMBER_SCHEMA,
+            schema_ref=(
+                TRANSFER_RESULT_MEMBER_SCHEMA_V11 if successor else TRANSFER_RESULT_MEMBER_SCHEMA
+            ),
             media_type="application/json",
             sha256=pointer.content_hash,
         ),
@@ -442,8 +538,14 @@ def _validate_execution_plan(
     step: WorkflowStepRunRecord | None,
     request: InferenceTransferWorkflowRequest,
 ) -> None:
-    prepared = prepare_inference_transfer_worker_comparison(
-        request.comparison, left=request.left_profile, right=request.right_profile
+    prepared = (
+        prepare_inference_transfer_worker_comparison_v11(
+            request.comparison, left=request.left_profile, right=request.right_profile
+        )
+        if isinstance(request, InferenceTransferWorkflowRequestV11)
+        else prepare_inference_transfer_worker_comparison(
+            request.comparison, left=request.left_profile, right=request.right_profile
+        )
     )
     prompt_pin = {
         "prompt_version": prepared.prompt_version,
@@ -460,15 +562,27 @@ def _validate_execution_plan(
     ):
         raise InferenceTransferServiceError("INFERENCE_TRANSFER_RESULT_INVALID")
     try:
-        plan = read_inference_transfer_execution_plan(
-            session,
-            plan_id=stored_pin["plan_id"],
-            workflow_id=workflow.workflow_id,
-            workflow_definition_sha256=workflow.definition_hash,
-            workflow_request=request,
-            core_prompt_sha256=prepared.core_prompt_sha256,
-            prompt_sha256=prepared.prompt_sha256,
-        )
+        plan: ResolvedExecutionPlanV21
+        if isinstance(request, InferenceTransferWorkflowRequestV11):
+            plan = read_inference_transfer_execution_plan_v11(
+                session,
+                plan_id=stored_pin["plan_id"],
+                workflow_id=workflow.workflow_id,
+                workflow_definition_sha256=workflow.definition_hash,
+                workflow_request=request,
+                core_prompt_sha256=prepared.core_prompt_sha256,
+                prompt_sha256=prepared.prompt_sha256,
+            )
+        else:
+            plan = read_inference_transfer_execution_plan(
+                session,
+                plan_id=stored_pin["plan_id"],
+                workflow_id=workflow.workflow_id,
+                workflow_definition_sha256=workflow.definition_hash,
+                workflow_request=request,
+                core_prompt_sha256=prepared.core_prompt_sha256,
+                prompt_sha256=prepared.prompt_sha256,
+            )
     except ControlPlaneError as exc:
         raise InferenceTransferServiceError("INFERENCE_TRANSFER_RESULT_INVALID") from exc
     if stored_pin != {

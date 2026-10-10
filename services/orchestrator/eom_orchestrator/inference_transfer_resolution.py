@@ -12,17 +12,25 @@ from eom_workflow.control_plane import (
     RoleExecutionPolicy,
     UtcDatetime,
 )
-from eom_workflow.inference_transfer import TRANSFER_PAIR_PROTOCOL
+from eom_workflow.inference_transfer import TRANSFER_PAIR_PROTOCOL, TRANSFER_PAIR_PROTOCOL_V11
 from eom_workflow.inference_transfer_control import (
     TRANSFER_RUBRIC_MEMBER,
     ResolvedExecutionPlanV21,
+    ResolvedExecutionPlanV22,
     validate_inference_transfer_rubric_instruction,
 )
 from eom_workflow.inference_transfer_materialization import (
     validate_inference_transfer_workflow_plan,
+    validate_inference_transfer_workflow_plan_v11,
 )
-from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
-from eom_workflow.schemas import validate_inference_transfer_workflow_request
+from eom_workflow.inference_transfer_workflow import (
+    InferenceTransferWorkflowRequest,
+    InferenceTransferWorkflowRequestV11,
+)
+from eom_workflow.schemas import (
+    validate_inference_transfer_workflow_request,
+    validate_inference_transfer_workflow_request_v11,
+)
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import TypeAdapter
 from sqlalchemy import select
@@ -46,6 +54,7 @@ from eom_orchestrator.models import ProtocolVersionRecord
 from eom_orchestrator.preset_model_selection import preset_model_options, validated_preset
 
 PRESET_KEY = "item-inference-transfer-comparison"
+AXES_PRESET_KEY = "item-inference-transfer-comparison-axes"
 
 
 def read_inference_transfer_execution_plan(
@@ -63,6 +72,57 @@ def read_inference_transfer_execution_plan(
     This does not authorize sources, select latest controls, write a plan or
     admit execution. Replay and result readers share the owner closure rule.
     """
+    if isinstance(workflow_request, InferenceTransferWorkflowRequestV11):
+        raise ControlPlaneError("CONTROL_TRANSFER_CONTEXT_INVALID", "explicit V1 request required")
+    return _read_plan(
+        session,
+        plan_id=plan_id,
+        workflow_id=workflow_id,
+        workflow_definition_sha256=workflow_definition_sha256,
+        workflow_request=workflow_request,
+        core_prompt_sha256=core_prompt_sha256,
+        prompt_sha256=prompt_sha256,
+    )
+
+
+def read_inference_transfer_execution_plan_v11(
+    session: Session,
+    *,
+    plan_id: str,
+    workflow_id: str,
+    workflow_definition_sha256: str,
+    workflow_request: InferenceTransferWorkflowRequestV11,
+    core_prompt_sha256: str,
+    prompt_sha256: str,
+) -> ResolvedExecutionPlanV22:
+    if not isinstance(workflow_request, InferenceTransferWorkflowRequestV11):
+        raise ControlPlaneError(
+            "CONTROL_TRANSFER_CONTEXT_INVALID", "explicit V1.1 request required"
+        )
+    plan = _read_plan(
+        session,
+        plan_id=plan_id,
+        workflow_id=workflow_id,
+        workflow_definition_sha256=workflow_definition_sha256,
+        workflow_request=workflow_request,
+        core_prompt_sha256=core_prompt_sha256,
+        prompt_sha256=prompt_sha256,
+    )
+    if not isinstance(plan, ResolvedExecutionPlanV22):
+        raise ControlPlaneError("CONTROL_TRANSFER_CONTEXT_INVALID", "successor plan differs")
+    return plan
+
+
+def _read_plan(
+    session: Session,
+    *,
+    plan_id: str,
+    workflow_id: str,
+    workflow_definition_sha256: str,
+    workflow_request: InferenceTransferWorkflowRequest,
+    core_prompt_sha256: str,
+    prompt_sha256: str,
+) -> ResolvedExecutionPlanV21:
     record = session.get(ResolvedExecutionPlanRecord, plan_id)
     if record is None:
         raise ControlPlaneError("CONTROL_PLAN_CONFLICT", "pinned comparison plan is missing")
@@ -99,13 +159,81 @@ def resolve_inference_transfer_execution_plan(
     original plan time while rechecking the selected candidate's availability.
     """
 
+    if isinstance(workflow_request, InferenceTransferWorkflowRequestV11):
+        raise ControlPlaneError("CONTROL_TRANSFER_CONTEXT_INVALID", "explicit V1 request required")
+    return _resolve_plan(
+        session,
+        workflow_id=workflow_id,
+        workflow_definition_version=workflow_definition_version,
+        workflow_definition_sha256=workflow_definition_sha256,
+        workflow_role_schema_version=workflow_role_schema_version,
+        workflow_request=workflow_request,
+        core_prompt_sha256=core_prompt_sha256,
+        prompt_sha256=prompt_sha256,
+        resolved_at=resolved_at,
+    )
+
+
+def resolve_inference_transfer_execution_plan_v11(
+    session: Session,
+    *,
+    workflow_id: str,
+    workflow_definition_version: str,
+    workflow_definition_sha256: str,
+    workflow_role_schema_version: str,
+    workflow_request: InferenceTransferWorkflowRequestV11,
+    core_prompt_sha256: str,
+    prompt_sha256: str,
+    resolved_at: datetime,
+) -> ResolvedExecutionPlanV22:
+    if not isinstance(workflow_request, InferenceTransferWorkflowRequestV11):
+        raise ControlPlaneError(
+            "CONTROL_TRANSFER_CONTEXT_INVALID", "explicit V1.1 request required"
+        )
+    plan = _resolve_plan(
+        session,
+        workflow_id=workflow_id,
+        workflow_definition_version=workflow_definition_version,
+        workflow_definition_sha256=workflow_definition_sha256,
+        workflow_role_schema_version=workflow_role_schema_version,
+        workflow_request=workflow_request,
+        core_prompt_sha256=core_prompt_sha256,
+        prompt_sha256=prompt_sha256,
+        resolved_at=resolved_at,
+    )
+    if not isinstance(plan, ResolvedExecutionPlanV22):
+        raise ControlPlaneError("CONTROL_TRANSFER_CONTEXT_INVALID", "successor plan differs")
+    return plan
+
+
+def _resolve_plan(
+    session: Session,
+    *,
+    workflow_id: str,
+    workflow_definition_version: str,
+    workflow_definition_sha256: str,
+    workflow_role_schema_version: str,
+    workflow_request: InferenceTransferWorkflowRequest,
+    core_prompt_sha256: str,
+    prompt_sha256: str,
+    resolved_at: datetime,
+) -> ResolvedExecutionPlanV21:
+    successor = isinstance(workflow_request, InferenceTransferWorkflowRequestV11)
     try:
-        request = validate_inference_transfer_workflow_request(
-            workflow_request.model_dump(mode="json")
+        request = (
+            validate_inference_transfer_workflow_request_v11(
+                workflow_request.model_dump(mode="json")
+            )
+            if successor
+            else validate_inference_transfer_workflow_request(
+                workflow_request.model_dump(mode="json")
+            )
         )
         observed_at = TypeAdapter(UtcDatetime).validate_python(resolved_at)
-        if workflow_definition_version != "1.0.0" or workflow_role_schema_version != (
-            TRANSFER_PAIR_PROTOCOL
+        if workflow_definition_version != (
+            "1.1.0" if successor else "1.0.0"
+        ) or workflow_role_schema_version != (
+            TRANSFER_PAIR_PROTOCOL_V11 if successor else TRANSFER_PAIR_PROTOCOL
         ):
             raise ValueError("comparison definition or protocol differs")
     except (ValueError, JsonSchemaValidationError) as exc:
@@ -137,7 +265,7 @@ def resolve_inference_transfer_execution_plan(
     else:
         preset = lock_current_execution_preset(
             session,
-            preset_key=PRESET_KEY,
+            preset_key=request.execution_preset_key,
             workflow_role_schema_version=workflow_role_schema_version,
         )
         # Reparse the row through the same public schema/hash/identity boundary
@@ -164,7 +292,9 @@ def resolve_inference_transfer_execution_plan(
                 "CONTROL_TRANSFER_RUBRIC_INVALID", "comparison rubric member is missing"
             )
         body: dict[str, Any] = {
-            "schema_version": "resolved-execution-plan/21.0",
+            "schema_version": "resolved-execution-plan/22.0"
+            if successor
+            else "resolved-execution-plan/21.0",
             "plan_id": new_execution_plan_id(),
             "workflow_id": workflow_id,
             "preset_id": preset.preset_id,
@@ -193,7 +323,7 @@ def resolve_inference_transfer_execution_plan(
             workload_class="CODEX",
             workflow_definition_key=PRESET_KEY,
             workflow_definition_version=workflow_definition_version,
-            resolver_version="21.0.0",
+            resolver_version="22.0.0" if successor else "21.0.0",
         )
         body["plan_sha256"] = content_sha256(body)
         plan = _checked_context(
@@ -222,14 +352,25 @@ def _checked_context(
     prompt_sha256: str,
 ) -> ResolvedExecutionPlanV21:
     try:
-        plan = validate_inference_transfer_workflow_plan(
-            document,
-            workflow_request=request,
-            workflow_id=workflow_id,
-            step_key="compare_pair",
-            core_prompt_sha256=core_prompt_sha256,
-            prompt_sha256=prompt_sha256,
-        )
+        plan: ResolvedExecutionPlanV21
+        if isinstance(request, InferenceTransferWorkflowRequestV11):
+            plan = validate_inference_transfer_workflow_plan_v11(
+                document,
+                workflow_request=request,
+                workflow_id=workflow_id,
+                step_key="compare_pair",
+                core_prompt_sha256=core_prompt_sha256,
+                prompt_sha256=prompt_sha256,
+            )
+        else:
+            plan = validate_inference_transfer_workflow_plan(
+                document,
+                workflow_request=request,
+                workflow_id=workflow_id,
+                step_key="compare_pair",
+                core_prompt_sha256=core_prompt_sha256,
+                prompt_sha256=prompt_sha256,
+            )
         if plan.workflow_definition_sha256 != workflow_definition_sha256:
             raise ValueError("comparison Workflow definition pin differs")
     except (ValueError, JsonSchemaValidationError) as exc:
@@ -240,11 +381,12 @@ def _checked_context(
 
 
 def _pinned_preset(session: Session, plan: ResolvedExecutionPlanV21) -> ExecutionPresetRevision:
+    successor = isinstance(plan, ResolvedExecutionPlanV22)
     logical = session.get(ExecutionPresetRecord, plan.preset_id)
     row = session.get(ExecutionPresetRevisionRecord, plan.preset_revision_id)
     if (
         logical is None
-        or logical.preset_key != PRESET_KEY
+        or logical.preset_key != (AXES_PRESET_KEY if successor else PRESET_KEY)
         or logical.state != "ACTIVE"
         or row is None
     ):
@@ -256,7 +398,8 @@ def _pinned_preset(session: Session, plan: ResolvedExecutionPlanV21) -> Executio
         or preset.preset_revision_id != plan.preset_revision_id
         or preset.content_sha256 != plan.preset_sha256
         or preset.state != "RELEASED"
-        or TRANSFER_PAIR_PROTOCOL not in preset.compatible_workflow_protocols
+        or (TRANSFER_PAIR_PROTOCOL_V11 if successor else TRANSFER_PAIR_PROTOCOL)
+        not in preset.compatible_workflow_protocols
         or tuple(row.compatible_workflow_protocols) != preset.compatible_workflow_protocols
         or row.capacity_policy_revision_id != preset.capacity_policy_revision_id
     ):

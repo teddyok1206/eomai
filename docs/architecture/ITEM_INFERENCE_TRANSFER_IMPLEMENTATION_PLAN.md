@@ -6,6 +6,16 @@
 
 ## 보존한 설계와 목표
 
+### 이후 사용자 범위 변경 — 사람 평가 없음
+
+2026-10-10 사용자가 “사람 평가는 없다고 생각해”라고 지시했다. 원문은 그대로 보존하되
+현 구현 목표의 완료 조건에서는 실제 사람 평가를 제외한다. 기존 human 계약/owner와
+평가 기록은 유지하고 새 사람 점수표나 필수 수동 평가 절차를 추가하지 않는다.
+`HUMAN_TRANSFER_REVIEW=NOT_EVALUATED`는 한계 표시이지 현 완료의 blocker가 아니다.
+자동 모델 판정을 사람 label로 저장하거나, label 없이 precision/recall/실제 학습 효과를
+만들지 않는다. 자동 검증은 source/pointer/grounding closure, 독립 개념·소재·착상 설명,
+기존 검색 대비 bounded 후보 실험과 coverage/latency/resource 재현 증거에 집중한다.
+
 사용자가 승인한 직전 답변은 [설계 원문](ITEM_INFERENCE_TRANSFER_DESIGN_ORIGINAL.md)에 그대로 보존했다. 원문 파일 SHA-256은 `f4adc8c7cf8197f3d310f8bb3463b79b54229dae6e2257b0b1c39005c7632e4a`다. 설명용 용수철·저항 예시는 실제 corpus 관측으로 취급하지 않는다.
 
 구현 목표는 **A의 풀이에서 배운 결정적 착상이 B에 어디서 통하는지**를 찾고, 그 대응·차이·추가 추론을 정확한 근거와 연결하는 것이다. 같은 소재·개념·공식·정답·일반적인 풀이 단계만으로 전이를 확정하지 않는다. 후보 검색, 모델의 구조 대응 제안, 사람의 체감 전이 평가는 다른 단계다.
@@ -31,10 +41,10 @@
 | F0 | 답변 원문 보존·goal·기존 경계 점검 | 원문 read-back/hash, 기존 경계와 제한 기록 | 완료 |
 | F1 | additive JSON Schema 2020-12 → frozen 모델 → grounded deterministic profile | exact refs/hash/closure/uncertainty tests, predecessor bytes 불변 | source 구현·검증 완료 |
 | F2 | pinned offline local embedding adapter와 exact ranking | dependency isolation, malformed vectors·ties·permission-prefilter tests; 실제 CPU benchmark 별도 | source·CPU toy 실행 및 보호 CPU/model 발행 완료; 실패 기록 보존 후 승인된 no-forward 격리 검증 1회 PASS; 실제 corpus benchmark 대기 |
-| F3 | Catalog opt-in authorized candidate read use case | actual actor/policy/Graph admission 재사용, 별도 후보 예산·provenance, 기본 retrieval 무변경 | source·격리 PostgreSQL SQL 검증 및 호환 공유 경계 설치 완료; 이전 runtime의 실제 `guiadmin` original corpus 520/520·metadata와 520-profile PREPARE PASS; 첫 READ terminal 실패, 재현한 응답 크기 분류 보완은 `f12fb971`에 설치 완료; 실제 첫 요청의 원인 확인 대기 |
+| F3 | Catalog opt-in authorized candidate read use case | actual actor/policy/Graph admission 재사용, 별도 후보 예산·provenance, 기본 retrieval 무변경 | source·격리 PostgreSQL SQL 검증 및 호환 공유 경계 설치 완료; 실제 `guiadmin` original corpus 520/520·metadata 및 PREPARE PASS; `f12fb971` 실제 첫 READ도 terminal 실패, 안전한 진단은 READ/OWNER_SERVICE/FROZEN_MODEL; 구체적 원인 확인 중, CPU 실행 0 |
 | F4 | Orchestrator 경유 bounded Codex pair comparison | exact A/B, condition+decisive mapping, 차이/새 추론, unsupported/insufficient 처리, schema validation | selected-pair 제출·current 권한 재인가·atomic V21/START·canonical 결과 조회·인증 owner PREPARE/RELEASE source와 호환 공유 release 설치 완료; 실제 초기 protocol/control 발행·worker 비교 대기 |
-| F5 | 기존 검색 대비 bounded 실험·human scorecard | lexical/content-only/crux/metadata ablation, recall·latency·memory, 사람이 전이 위치를 평가 | staged 계약·encode-once harness·실모델 3-view 합성 smoke·사람 label 계약/pure metrics 완료; exact 검토 묶음·인가된 label 게시/조회 owner와 CLI는 `f12fb971`에 설치 완료; 실제 corpus/Graph 비교·사람 label 및 실제 정본 기록 대기 |
-| F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 교육 판정은 독립 gate | 기존 source 2,609 PASS와 변경 경계 회귀/정적/wheel 검사 PASS; 보호 CPU 설치·격리 PASS; `f12fb971` successor 배포·migration 0051 unchanged·6 callback·API ready·8 service 및 chat READY 복원 PASS; 이전 fresh 인증/corpus/PREPARE 성공 보존; 수정본 READ·control 발행·비교 실행·human gate와 최종 원문 대조 대기 |
+| F5 | 기존 검색 대비 bounded 자동 실험 | lexical/content-only/crux/metadata의 후보·순위·공통 모집단·coverage·latency·memory; label 없는 정확도나 교육 효과 주장 금지 | staged 계약·encode-once harness·실모델 3-view 합성 smoke 완료; 기존 human 계약/owner는 보존하지만 평가와 신규 scorecard는 현 완료에 필요 없음; 실제 corpus/Graph 비교와 정본 실험 기록 대기 |
+| F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 사람 평가 불필요, 자동 검증과 실제 교육 효과 구별 | 기존 source 2,609 PASS와 변경 경계 회귀/정적/wheel 검사 PASS; 보호 CPU 설치·격리 PASS; `f12fb971` successor 배포·migration 0051 unchanged·6 callback·API ready·8 service 및 chat READY 복원 PASS; 새 3축 successor source 검증 중; READ 정상화·control 발행·실제 비교와 최종 원문 대조 대기 |
 
 ## 비교 표현과 판정
 
@@ -42,7 +52,7 @@
 
 쌍 비교는 A→B 방향, 각각의 조건·추론 refs, 공유되는 착상, 대응하지 않는 조건, 필요한 새 추론을 필수로 한다. 모델의 `STRUCTURAL_ANALOGY`나 `NEAR_IDENTICAL_CANDIDATE`는 과학적 타당성·사람의 체감·표절 판정·승인 상태가 아니다. 부족한 자료는 `INSUFFICIENT`다.
 
-사람에게는 “A를 풀고 얻은 핵심 아이디어가 B의 어느 부분에 도움이 되는가?”를 묻는다. label은 `표현만 유사 / 같은 개념 다른 착상 / 착상 전이 / 사실상 동일 / 판정 불가`다. exact pair·rubric·reviewer·UTC 판단·도움이 된 부분을 별도 기록한다. synthetic expected label이나 model 출력으로 human PASS를 만들지 않는다.
+기존 설계의 optional 사람 label은 `표현만 유사 / 같은 개념 다른 착상 / 착상 전이 / 사실상 동일 / 판정 불가`다. 기존 exact pair·rubric·reviewer·UTC 기록 계약은 보존한다. 사용자 범위 변경에 따라 사람 평가를 요청하거나 새 scorecard를 구현하지 않는다. synthetic expected label이나 model 출력으로 human PASS를 만들지 않는다.
 
 ## 실행 예산·검증과 활성화
 
@@ -55,14 +65,14 @@
 - formatter/linter/mypy/focused regressions와 released schema hash inventory를 확인한다. runtime/model files, vectors, 긴 결과·로그·평가 Artifact는 Git에 넣지 않는다.
 - Slack은 F1/F3 구현·검증, 실제 실행 gate, 실험 발견/범위 변경, BLOCKED/완료 등 중요한 milestone만 보고한다. 원문 프롬프트·문항·worker 결과·full log·secret은 보내지 않는다.
 
-## 사람에게 모아둘 확인 사항
+## 사람 평가로만 확인 가능한 미측정 사항 — 현 완료 조건 아님
 
 1. 실제 서로 다른 소재지만 조건·착상이 대응하는 pair가 유용하게 검색되는가.
 2. 같은 소재·공식인데 착상이 다른 pair를 구별하는가.
 3. “착상이 연결됨” 설명에 실제 대응 조건과 새 추론이 나오는가.
 4. A를 푼 사람이 B를 풀 때 느끼는 도움이 모델 제안과 일치하는가.
 
-위 사항은 자동 기술 검증과 분리해 최종 검토 묶음에 모은다. 사람 평가 전에는 `HUMAN_TRANSFER_REVIEW=NOT_EVALUATED`다.
+위 사항은 자동 기술 검증의 한계로만 기록한다. 현 목표에서 사람 검토 묶음이나 점수표를 추가 생성하지 않는다. `HUMAN_TRANSFER_REVIEW=NOT_EVALUATED / NOT_REQUIRED_FOR_CURRENT_COMPLETION`이다.
 
 ## 최종 설계 대조 검토 — 사용자 요청 반영
 

@@ -50,8 +50,14 @@ from eom_workflow.document_review import (
     PairedDocumentReviewWorkerRequestV2,
     PdfDocumentReviewWorkerRequest,
 )
-from eom_workflow.inference_transfer import InferenceTransferPairWorkerRequest
-from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
+from eom_workflow.inference_transfer import (
+    InferenceTransferPairWorkerRequest,
+    InferenceTransferPairWorkerRequestV11,
+)
+from eom_workflow.inference_transfer_workflow import (
+    InferenceTransferWorkflowRequest,
+    InferenceTransferWorkflowRequestV11,
+)
 from eom_workflow.models import (
     AuthoringRoleResult,
     ContentTeamAuthoringRoleResultV7,
@@ -96,6 +102,7 @@ from eom_workflow.models import (
     GeneratedReviewRoleResultV6,
     ImageRoleResult,
     InferenceTransferPairRoleResult,
+    InferenceTransferPairRoleResultV11,
     KnowledgeAnalysisProposalRoleResult,
     KnowledgeAnalysisProposalRoleResultV2,
     KnowledgeAnalysisProposalRoleResultV3,
@@ -226,6 +233,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "pdf-document-review-result@3.0",
             "pdf-document-review-result@4.0",
             "item-inference-transfer-pair-result@1.0",
+            "item-inference-transfer-pair-result@1.1",
         }
     ),
 }
@@ -299,6 +307,7 @@ RESULT_SCHEMA_FILES = {
     "pdf-document-review-result@3.0": "paired-document-review-result-v3.schema.json",
     "pdf-document-review-result@4.0": "pdf-document-review-result-v4.schema.json",
     "item-inference-transfer-pair-result@1.0": "item-inference-transfer-pair-result-v1.schema.json",
+    "item-inference-transfer-pair-result@1.1": "item-inference-transfer-pair-result-v2.schema.json",
 }
 INPUT_SCHEMA_FILES = {
     "authoring": "authoring-input.schema.json",
@@ -335,6 +344,7 @@ INPUT_SCHEMA_FILES_V1_26 = {"support": "paired-document-review-input-v2.schema.j
 INPUT_SCHEMA_FILES_V1_27 = {"support": "paired-document-review-input-v3.schema.json"}
 INPUT_SCHEMA_FILES_V1_28 = {"support": "pdf-document-review-input-v4.schema.json"}
 INPUT_SCHEMA_FILES_V1_29 = {"support": "item-inference-transfer-pair-input-v1.schema.json"}
+INPUT_SCHEMA_FILES_V1_30 = {"support": "item-inference-transfer-pair-input-v2.schema.json"}
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -368,6 +378,7 @@ RESULT_SCHEMA_PROTOCOLS = {
     "pdf-document-review-result@3.0": "workflow-role/1.27.0",
     "pdf-document-review-result@4.0": "workflow-role/1.28.0",
     "item-inference-transfer-pair-result@1.0": "workflow-role/1.29.0",
+    "item-inference-transfer-pair-result@1.1": "workflow-role/1.30.0",
     "authoring-result@5.0": "workflow-role/1.12.0",
     "image-result@5.0": "workflow-role/1.12.0",
     "review-result@5.0": "workflow-role/1.12.0",
@@ -433,6 +444,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.27.0": INPUT_SCHEMA_FILES_V1_27,
     "workflow-role/1.28.0": INPUT_SCHEMA_FILES_V1_28,
     "workflow-role/1.29.0": INPUT_SCHEMA_FILES_V1_29,
+    "workflow-role/1.30.0": INPUT_SCHEMA_FILES_V1_30,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -465,6 +477,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.27.0",
     "workflow-role/1.28.0",
     "workflow-role/1.29.0",
+    "workflow-role/1.30.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -495,6 +508,7 @@ ROLE_SCHEMA_FILES = tuple(
             *INPUT_SCHEMA_FILES_V1_27.values(),
             *INPUT_SCHEMA_FILES_V1_28.values(),
             *INPUT_SCHEMA_FILES_V1_29.values(),
+            *INPUT_SCHEMA_FILES_V1_30.values(),
         }
     )
 )
@@ -545,6 +559,30 @@ def validate_inference_transfer_workflow_request(value: object) -> InferenceTran
         return InferenceTransferWorkflowRequest.model_validate(value)
     except ValidationError as exc:
         raise WorkflowSchemaError("inference-transfer-workflow failed typed validation") from exc
+
+
+@cache
+def _inference_transfer_workflow_request_schema_v11() -> dict[str, Any]:
+    name = "inference-transfer-workflow-request-v1_1.schema.json"
+    return load_json_schema(WORKFLOW_RESOURCE_ROOT.joinpath(name), name)
+
+
+def load_inference_transfer_workflow_request_schema_v11() -> dict[str, Any]:
+    return copy.deepcopy(_inference_transfer_workflow_request_schema_v11())
+
+
+def validate_inference_transfer_workflow_request_v11(
+    value: object,
+) -> InferenceTransferWorkflowRequestV11:
+    validate_schema_message(
+        _inference_transfer_workflow_request_schema_v11(), value, "inference-transfer-workflow-v1.1"
+    )
+    try:
+        return InferenceTransferWorkflowRequestV11.model_validate(value)
+    except ValidationError as exc:
+        raise WorkflowSchemaError(
+            "three-axis inference-transfer Workflow failed typed validation"
+        ) from exc
 
 
 def load_review_rework_directive_schema() -> dict[str, Any]:
@@ -683,6 +721,7 @@ def _role_input_schema(role: str, protocol_version: str = "workflow-role/1.0.1")
             "workflow-role/1.18.0",
             "workflow-role/1.21.0",
             "workflow-role/1.29.0",
+            "workflow-role/1.30.0",
         },
     )
 
@@ -715,6 +754,7 @@ def _role_result_schema(schema_id: str) -> dict[str, Any]:
             "legacy-item-extraction-result@1.0",
             "legacy-item-editorial-compatibility-result@1.0",
             "item-inference-transfer-pair-result@1.0",
+            "item-inference-transfer-pair-result@1.1",
         },
     )
 
@@ -1108,6 +1148,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return CustomerSupportRoleResult.model_validate(canonical_value)
         if schema_id == "item-inference-transfer-pair-result@1.0" and role == "support":
             return InferenceTransferPairRoleResult.model_validate(canonical_value)
+        if schema_id == "item-inference-transfer-pair-result@1.1" and role == "support":
+            return InferenceTransferPairRoleResultV11.model_validate(canonical_value)
         if schema_id == "pdf-document-review-result@1.0" and role == "support":
             return PdfDocumentReviewRoleResult.model_validate(canonical_value)
         if schema_id == "pdf-document-review-result@4.0" and role == "support":
@@ -1849,11 +1891,22 @@ def constrained_result_schema(
         resolved_evidence_plan=resolved_evidence_plan,
         material_requirement=material_requirement,
     )
-    if schema_id == "item-inference-transfer-pair-result@1.0":
+    if schema_id in {
+        "item-inference-transfer-pair-result@1.0",
+        "item-inference-transfer-pair-result@1.1",
+    }:
         if not isinstance(worker_input.request, InferenceTransferPairWorkerRequest):
             raise WorkflowSchemaError("inference-transfer result requires its typed request")
+        is_v11 = schema_id == "item-inference-transfer-pair-result@1.1"
+        if is_v11 != isinstance(worker_input.request, InferenceTransferPairWorkerRequestV11):
+            raise WorkflowSchemaError(
+                "inference-transfer result purpose differs from its exact request"
+            )
         comparison = worker_input.request.comparison
-        output = _mapping(definitions, "InferenceTransfer_pairResult")
+        output = _mapping(
+            definitions,
+            "InferenceTransferPairResultV11" if is_v11 else "InferenceTransfer_pairResult",
+        )
         output_properties = _mapping(output, "properties")
         for key, value in (
             ("request_id", comparison.request_id),
@@ -1883,6 +1936,21 @@ def constrained_result_schema(
                 ("right_claim_ids", comparison.right_claim_ids),
             ):
                 field = _mapping(reference_properties, key)
+                if claim_ids:
+                    field["items"] = {"type": "string", "enum": list(claim_ids)}
+                else:
+                    field["maxItems"] = 0
+        if is_v11:
+            axis = _mapping(
+                _mapping(definitions, "InferenceTransferPairResultV11_axisAssessment"), "properties"
+            )
+            for key, claim_ids in (
+                ("left_claim_ids", comparison.left_claim_ids),
+                ("right_claim_ids", comparison.right_claim_ids),
+            ):
+                field = axis[key] = copy.deepcopy(
+                    _mapping(definitions, "InferenceTransferPairResultV11_claimRefs")
+                )
                 if claim_ids:
                     field["items"] = {"type": "string", "enum": list(claim_ids)}
                 else:
@@ -3121,6 +3189,31 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
             "mappings plus shared_idea. INSUFFICIENT requires limitations. Every difference has "
             "at least one source claim. SHA-256 hashes the canonical body excluding result_sha256."
         )
+    if schema_id == "item-inference-transfer-pair-result@1.1":
+        _prune_unreferenced_definitions(schema)
+        definitions = _mapping(schema, "$defs")
+        # Only the generation projection relaxes unsupported conditional/tuple
+        # keywords. Canonical JSON Schema, frozen models and ref admission retain
+        # exact three-axis order and the positive CRUX coherence invariant.
+        output = _mapping(definitions, "InferenceTransferPairResultV11")
+        output.pop("allOf", None)
+        _mapping(definitions, "InferenceTransfer_difference").pop("allOf", None)
+        _mapping(definitions, "InferenceTransferPairResultV11_axisAssessment").pop("allOf", None)
+        axes = _mapping(_mapping(output, "properties"), "axes")
+        axes.pop("prefixItems", None)
+        axes["items"] = {"$ref": "#/$defs/InferenceTransferPairResultV11_axisAssessment"}
+        axes["description"] = (
+            "Exactly three independent axes in CONCEPT, MATERIAL, CRUX order. "
+            "Non-INSUFFICIENT judgments require actual selected claims from both sides. "
+            "CRUX claims must be DECISIVE_INFERENCE; positive overall judgments require "
+            "CRUX SAME/PARTIAL. Insufficient evidence is not similarity."
+        )
+        output["description"] = (
+            "Machine hypotheses only. Preserve exact request/profile/rubric pins and "
+            "selected claim references. Condition and decisive mappings plus shared_idea "
+            "are required for positive overall judgments; INSUFFICIENT requires limitations. "
+            "Hash the canonical body including axes, excluding result_sha256."
+        )
     if schema_id in {
         "pdf-document-review-result@1.0",
         "pdf-document-review-result@2.0",
@@ -3751,6 +3844,11 @@ def _inline_catalog_schema(
     else:
         bundled = _inline_assessment_item_schema(schema, reference)
     knowledge_contracts = (
+        (
+            "eom://schemas/knowledge/item-inference-transfer-pair-result/1.1",
+            "item-inference-transfer-pair-result-v1.1",
+            "InferenceTransferPairResultV11",
+        ),
         (
             "eom://schemas/knowledge/item-inference-transfer/1.0",
             "item-inference-transfer",

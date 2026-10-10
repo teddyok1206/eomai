@@ -140,6 +140,9 @@ def experiment_view_text(entry: StagedExperimentEntry, view: ExperimentView) -> 
     raise ValueError("INFERENCE_EXPERIMENT_VIEW_INVALID")
 
 
+MAX_GRAPH_BASELINE_CANDIDATES = 64
+
+
 class SuppliedGraphBaseline(FrozenModel):
     query: InferenceTransferProfilePointer
     command_sha256: Sha256
@@ -147,7 +150,9 @@ class SuppliedGraphBaseline(FrozenModel):
     provenance: Literal["SUPPORTED_GRAPH_LEXICAL_SUPPLIED_BY_PRODUCER"] = (
         "SUPPORTED_GRAPH_LEXICAL_SUPPLIED_BY_PRODUCER"
     )
-    ordered_candidates: tuple[InferenceTransferProfilePointer, ...] = Field(max_length=64)
+    ordered_candidates: tuple[InferenceTransferProfilePointer, ...] = Field(
+        max_length=MAX_GRAPH_BASELINE_CANDIDATES
+    )
 
     @model_validator(mode="after")
     def canonical(self) -> SuppliedGraphBaseline:

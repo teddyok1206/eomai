@@ -71,6 +71,7 @@ from eom_workflow import (
 )
 from eom_workflow.inference_transfer import (
     TRANSFER_PAIR_RESULT_SCHEMA,
+    TRANSFER_PAIR_RESULT_SCHEMA_V11,
     TRANSFER_PAIR_WORKFLOW_KEY,
 )
 from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
@@ -2711,9 +2712,14 @@ class WorkflowRunner:
                         "comparison terminal requires its single result pointer",
                     )
                 comparison_result = ArtifactPointer.model_validate(pointers[0])
+                expected_result_schema = (
+                    TRANSFER_PAIR_RESULT_SCHEMA_V11
+                    if workflow.definition_version == "1.1.0"
+                    else TRANSFER_PAIR_RESULT_SCHEMA
+                )
                 if (
                     comparison_result.step_key != "compare_pair"
-                    or comparison_result.result_schema != TRANSFER_PAIR_RESULT_SCHEMA
+                    or comparison_result.result_schema != expected_result_schema
                 ):
                     raise WorkflowError(
                         WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,

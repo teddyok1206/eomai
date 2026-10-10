@@ -39,6 +39,7 @@ _ADMISSIONS = (
     WorkflowAdmission("pdf-document-review", "1.2.0", "workflow-role/1.27.0"),
     WorkflowAdmission("pdf-document-review", "1.3.0", "workflow-role/1.28.0"),
     WorkflowAdmission("item-inference-transfer-comparison", "1.0.0", "workflow-role/1.29.0"),
+    WorkflowAdmission("item-inference-transfer-comparison", "1.1.0", "workflow-role/1.30.0"),
     WorkflowAdmission("legacy-item-extraction", "1.0.0", "workflow-role/1.14.0"),
     WorkflowAdmission(
         "legacy-item-editorial-compatibility",

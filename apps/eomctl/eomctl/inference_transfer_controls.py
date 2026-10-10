@@ -686,6 +686,72 @@ def release_controls(
             engine.dispose()
 
 
+@inference_transfer_control_app.command("prepare-axes")
+def prepare_axes_controls(
+    manifest_file: Annotated[Path, typer.Option("--manifest-file")],
+    platform_file: Annotated[Path, typer.Option("--platform-file")],
+    rubric_file: Annotated[Path, typer.Option("--rubric-file")],
+    access_token_fd: Annotated[int | None, typer.Option("--access-token-fd", min=3)] = None,
+) -> None:
+    """Explicit three-axis successor DRAFT, without changing historical V1 controls."""
+    engine: Engine | None = None
+    try:
+        require_inference_transfer_control_owner()
+        from eom_workflow.inference_transfer_bootstrap_contract import (
+            validate_inference_transfer_bootstrap_manifest_v11,
+        )
+
+        manifest = validate_inference_transfer_bootstrap_manifest_v11(
+            _read_json(manifest_file, MAX_TRANSFER_BOOTSTRAP_BYTES)
+        )
+        platform = _read_local_input(platform_file, MAX_TRANSFER_INSTRUCTION_BYTES)
+        rubric = _read_local_input(rubric_file, MAX_TRANSFER_INSTRUCTION_BYTES)
+        engine, owner = _owner(access_token_fd)
+        receipt = owner.prepare_v11(manifest, platform_payload=platform, rubric_payload=rubric)
+        typer.echo(canonical_json_bytes(receipt.model_dump(mode="json")).decode())
+    except Exception as exc:
+        _failure(exc)
+        raise typer.Exit(1) from None
+    finally:
+        if engine is not None:
+            engine.dispose()
+
+
+@inference_transfer_control_app.command("release-axes")
+def release_axes_controls(
+    receipt_file: Annotated[Path, typer.Option("--receipt-file")],
+    access_token_fd: Annotated[int | None, typer.Option("--access-token-fd", min=3)] = None,
+) -> None:
+    """Explicit technical NON_LIVE release for V1.1, not model quality approval."""
+    engine: Engine | None = None
+    try:
+        require_inference_transfer_control_owner()
+        from eom_workflow.inference_transfer_control_invocation import (
+            parse_inference_transfer_prepared_receipt_v11,
+            parse_inference_transfer_release_request_v11,
+        )
+
+        receipt = parse_inference_transfer_prepared_receipt_v11(
+            _read_json(receipt_file, MAX_TRANSFER_CONTROL_INVOCATION_BYTES)
+        )
+        body = {
+            "schema_version": "inference-transfer-control-release-request/1.1",
+            "receipt": receipt.model_dump(mode="json"),
+        }
+        request = parse_inference_transfer_release_request_v11(
+            body | {"request_sha256": content_sha256(body)}
+        )
+        engine, owner = _owner(access_token_fd)
+        result = owner.release_v11(request)
+        typer.echo(canonical_json_bytes(result.model_dump(mode="json")).decode())
+    except Exception as exc:
+        _failure(exc)
+        raise typer.Exit(1) from None
+    finally:
+        if engine is not None:
+            engine.dispose()
+
+
 @inference_transfer_control_app.command("capacity")
 def read_capacity_pin(
     capacity_revision_id: Annotated[str, typer.Option("--capacity-revision-id")],

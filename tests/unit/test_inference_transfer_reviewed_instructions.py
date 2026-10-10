@@ -10,6 +10,9 @@ from eom_workflow.inference_transfer_bootstrap_contract import (
 
 _ROOT = Path(__file__).resolve().parents[2]
 _INSTRUCTIONS = _ROOT / "config/control-plane/item-inference-transfer-comparison-v1/instructions"
+_AXES_INSTRUCTIONS = (
+    _ROOT / "config/control-plane/item-inference-transfer-comparison-v1_1/instructions"
+)
 
 
 def test_reviewed_members_have_the_exact_bootstrap_purpose() -> None:
@@ -65,3 +68,25 @@ def test_platform_preserves_worker_isolation_and_real_hash_calculation() -> None
         "실제 UTC",
     ):
         assert required in text
+
+
+def test_axes_successor_has_exact_protocol_and_independent_evidence_rules() -> None:
+    platform = (_AXES_INSTRUCTIONS / "platform.md").read_text(encoding="utf-8")
+    assert "workflow-role/1.30.0" in platform
+    assert "item-inference-transfer-pair-result/1.1" in platform
+    assert "workflow-role/1.29.0" not in platform
+    assert "item-inference-transfer-pair-result/1.0" not in platform
+    rubric = (_AXES_INSTRUCTIONS / "transfer-rubric.md").read_text(encoding="utf-8")
+    for required in (
+        "CONCEPT, MATERIAL, CRUX",
+        "SAME, DIFFERENT, PARTIAL, INSUFFICIENT",
+        "양쪽 selected claim ID",
+        "DECISIVE_INFERENCE selected claim",
+        "differences, new_reasoning",
+        "item-inference-transfer-pair-result/1.1",
+        "MACHINE_HYPOTHESIS_NOT_HUMAN_VERIFICATION",
+        "사람 점수나 실제 교육 효과의",
+    ):
+        assert required in rubric
+    for name in ("platform.md", "transfer-rubric.md"):
+        assert 0 < (_AXES_INSTRUCTIONS / name).stat().st_size <= MAX_TRANSFER_INSTRUCTION_BYTES

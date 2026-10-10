@@ -68,14 +68,15 @@ from eom_workflow.control_plane import (
     ControlArtifactPointer,
     ResolvedStepExecution,
 )
-from eom_workflow.inference_transfer import TRANSFER_PAIR_PROTOCOL
 from eom_workflow.inference_transfer_control import (
     ResolvedExecutionPlanV21,
     validate_inference_transfer_rubric_instruction,
 )
 from eom_workflow.inference_transfer_materialization import (
     InferenceTransferMaterializationContext,
+    InferenceTransferMaterializationContextV11,
     validate_inference_transfer_materialization_plan,
+    validate_inference_transfer_materialization_plan_v11,
 )
 from eom_workflow.models import RoleWorkerInput
 from eom_workflow.schemas import validate_role_input
@@ -264,7 +265,7 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV19.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/20.0":
         plan = ResolvedExecutionPlanV20.model_validate(plan_record.canonical_document)
-    elif plan_schema_version == "resolved-execution-plan/21.0":
+    elif plan_schema_version in {"resolved-execution-plan/21.0", "resolved-execution-plan/22.0"}:
         plan = _validated_transfer_materialization_plan(
             plan_record.canonical_document,
             context=inference_transfer_context,
@@ -821,7 +822,10 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV19.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/20.0":
         plan = ResolvedExecutionPlanV20.model_validate(plan_record.canonical_document)
-    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/21.0":
+    elif plan_record.canonical_document.get("schema_version") in {
+        "resolved-execution-plan/21.0",
+        "resolved-execution-plan/22.0",
+    }:
         plan = _validated_transfer_materialization_plan(
             plan_record.canonical_document,
             context=inference_transfer_context,
@@ -962,9 +966,15 @@ def preflight_inference_transfer_materialization(
     record = session.get(ResolvedExecutionPlanRecord, plan_id)
     if record is None:
         raise ControlPlaneError("CONTROL_PLAN_MISSING", "resolved execution plan is missing")
-    if record.canonical_document.get("schema_version") != "resolved-execution-plan/21.0":
+    expected_version = (
+        "resolved-execution-plan/22.0"
+        if isinstance(context, InferenceTransferMaterializationContextV11)
+        else "resolved-execution-plan/21.0"
+    )
+    if record.canonical_document.get("schema_version") != expected_version:
         raise ControlPlaneError(
-            "CONTROL_TRANSFER_PLAN_UNAVAILABLE", "comparison materialization requires V21"
+            "CONTROL_TRANSFER_PLAN_UNAVAILABLE",
+            "comparison materialization requires its exact purpose plan",
         )
     return authorized_execution_artifact_revisions(
         session,
@@ -985,8 +995,13 @@ def _validated_transfer_materialization_plan(
             "CONTROL_TRANSFER_CONTEXT_REQUIRED", "comparison materialization context is missing"
         )
     try:
-        validate_control_contract("resolved-execution-plan-v21", document)
-        plan = validate_inference_transfer_materialization_plan(document, context=context)
+        plan: ResolvedExecutionPlanV21
+        if isinstance(context, InferenceTransferMaterializationContextV11):
+            validate_control_contract("resolved-execution-plan-v22", document)
+            plan = validate_inference_transfer_materialization_plan_v11(document, context=context)
+        else:
+            validate_control_contract("resolved-execution-plan-v21", document)
+            plan = validate_inference_transfer_materialization_plan(document, context=context)
         if context.step_key != step_key:
             raise ValueError("comparison materialization step differs")
     except (ValueError, JsonSchemaValidationError) as exc:
@@ -1099,12 +1114,15 @@ def _validate_transfer_workspace_inputs(
     workspace: Path, *, context: InferenceTransferMaterializationContext, group_id: int
 ) -> None:
     try:
-        checked = InferenceTransferMaterializationContext.model_validate(
-            context.model_dump(mode="json")
+        model = (
+            InferenceTransferMaterializationContextV11
+            if isinstance(context, InferenceTransferMaterializationContextV11)
+            else InferenceTransferMaterializationContext
         )
+        checked = model.model_validate(context.model_dump(mode="json"))
         payload = _read_transfer_workspace_file(workspace, "worker-input.json", group_id=group_id)
         document = json.loads(payload, object_pairs_hook=_unique_transfer_json_members)
-        validate_role_input(document, "support", TRANSFER_PAIR_PROTOCOL)
+        validate_role_input(document, "support", checked.worker_input.protocol_version)
         staged = RoleWorkerInput.model_validate(document)
         if staged != checked.worker_input or document != checked.worker_input.model_dump(
             mode="json"

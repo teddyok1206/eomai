@@ -29,6 +29,24 @@ class ControlSchemaResource:
 
 CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType(
     {
+        "resolved-execution-plan-v22": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v22.schema.json",
+            "resources/control-plane/resolved-execution-plan-v22.schema.json",
+            "22.0",
+            "sha256:bce10d2d6d08305a3d064884e4fb2beb4f972c82ba1f2b28376d82085110e909",
+        ),
+        "inference-transfer-control-bootstrap-v1.1": ControlSchemaResource(
+            "schemas/workflow/control-plane/inference-transfer-control-bootstrap-v1_1.schema.json",
+            "resources/control-plane/inference-transfer-control-bootstrap-v1_1.schema.json",
+            "1.1",
+            "sha256:7d0c56f0225118dcd6cd14e0718090c891293e8a1b4f743626c28aa8922ac4c5",
+        ),
+        "inference-transfer-control-invocation-v1.1": ControlSchemaResource(
+            "schemas/workflow/control-plane/inference-transfer-control-invocation-v1_1.schema.json",
+            "resources/control-plane/inference-transfer-control-invocation-v1_1.schema.json",
+            "1.1",
+            "sha256:ed29bd9c14c87b7474ba65c5e4cc0c73428a9ede15b68f320bf334eb2dd4b98e",
+        ),
         "inference-transfer-control-invocation": ControlSchemaResource(
             "schemas/workflow/control-plane/inference-transfer-control-invocation-v1.schema.json",
             "resources/control-plane/inference-transfer-control-invocation-v1.schema.json",

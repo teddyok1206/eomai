@@ -3,7 +3,8 @@
 This dormant leaf does not bootstrap on a failed comparison request. The caller
 must supply an actual authenticated owner's current-permission authorizer; a
 reviewed timestamp, actor string or this module is not a release grant. Only the
-initial v1 policy and its exact replay are supported, not automatic successors.
+explicitly selected initial V1 or three-axis V1.1 policies and exact replay are
+supported. A V1 request is never automatically upgraded.
 
 Artifact publication commits independently through the existing publisher.
 Later control-transaction failure therefore retains immutable publication
@@ -34,7 +35,9 @@ from eom_workflow.control_plane import (
 )
 from eom_workflow.inference_transfer_bootstrap_contract import (
     InferenceTransferBootstrapManifest,
+    InferenceTransferBootstrapManifestV11,
     validate_inference_transfer_bootstrap_manifest,
+    validate_inference_transfer_bootstrap_manifest_v11,
     validate_inference_transfer_reviewed_instruction,
 )
 from eom_workflow.schemas import role_schema_bundle_hash
@@ -77,6 +80,8 @@ from eom_orchestrator.repository import ensure_protocol_version
 
 PRESET_KEY = "item-inference-transfer-comparison"
 INSTRUCTION_BUNDLE_KEY = "item-inference-transfer-comparison-instructions"
+AXES_PRESET_KEY = "item-inference-transfer-comparison-axes"
+AXES_INSTRUCTION_BUNDLE_KEY = "item-inference-transfer-comparison-axes-instructions"
 _BUNDLE_ID = "instrbundle_" + uuid5(NAMESPACE_URL, f"eom://controls/{INSTRUCTION_BUNDLE_KEY}").hex
 _BUNDLE_REVISION_ID = (
     "instrrev_" + uuid5(NAMESPACE_URL, f"eom://controls/{INSTRUCTION_BUNDLE_KEY}/initial-v1").hex
@@ -85,6 +90,46 @@ _BOOTSTRAP_SCHEMA = "eom://schemas/workflow/inference-transfer-control-bootstrap
 _INSTRUCTION_SCHEMA = "eom://schemas/workflow/instruction-bundle-manifest/1.0"
 _EVALUATION_SCHEMA = "eom://schemas/workflow/execution-preset-evaluation-report/1.0"
 ControlChangeAuthorizer = Callable[[str, Literal["PREPARE", "RELEASE"]], None]
+
+
+@dataclass(frozen=True, slots=True)
+class _BootstrapPurpose:
+    preset_key: str
+    instruction_bundle_key: str
+    bootstrap_schema: str
+    initial_revision: str
+
+    @property
+    def bundle_id(self) -> str:
+        return (
+            "instrbundle_"
+            + uuid5(NAMESPACE_URL, f"eom://controls/{self.instruction_bundle_key}").hex
+        )
+
+    @property
+    def bundle_revision_id(self) -> str:
+        return (
+            "instrrev_"
+            + uuid5(
+                NAMESPACE_URL,
+                f"eom://controls/{self.instruction_bundle_key}/{self.initial_revision}",
+            ).hex
+        )
+
+
+_V1_PURPOSE = _BootstrapPurpose(PRESET_KEY, INSTRUCTION_BUNDLE_KEY, _BOOTSTRAP_SCHEMA, "initial-v1")
+_V11_PURPOSE = _BootstrapPurpose(
+    AXES_PRESET_KEY,
+    AXES_INSTRUCTION_BUNDLE_KEY,
+    "eom://schemas/workflow/inference-transfer-control-bootstrap/1.1",
+    "initial-v1.1",
+)
+
+
+def _purpose(manifest: InferenceTransferBootstrapManifest) -> _BootstrapPurpose:
+    return (
+        _V11_PURPOSE if isinstance(manifest, InferenceTransferBootstrapManifestV11) else _V1_PURPOSE
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,7 +165,60 @@ def prepare_inference_transfer_controls(
 ) -> PreparedInferenceTransferControls:
     """Publish reviewed immutable inputs and an exact DRAFT, never release it."""
 
+    if isinstance(manifest, InferenceTransferBootstrapManifestV11):
+        raise ControlPlaneError("CONTROL_BOOTSTRAP_INVALID", "explicit V1 bootstrap required")
+    return _prepare_controls(
+        sessions,
+        publisher,
+        manifest=manifest,
+        platform_payload=platform_payload,
+        rubric_payload=rubric_payload,
+        operator_id=operator_id,
+        observed_at=observed_at,
+        authorize_control_change=authorize_control_change,
+    )
+
+
+def prepare_inference_transfer_controls_v11(
+    sessions: sessionmaker[Session],
+    publisher: ControlArtifactPublisher,
+    *,
+    manifest: InferenceTransferBootstrapManifestV11,
+    platform_payload: bytes,
+    rubric_payload: bytes,
+    operator_id: str,
+    observed_at: datetime,
+    authorize_control_change: ControlChangeAuthorizer,
+) -> PreparedInferenceTransferControls:
+    """Explicit separate initial three-axis control history, with the same owners."""
+    if not isinstance(manifest, InferenceTransferBootstrapManifestV11):
+        raise ControlPlaneError("CONTROL_BOOTSTRAP_INVALID", "explicit V1.1 bootstrap required")
+    return _prepare_controls(
+        sessions,
+        publisher,
+        manifest=manifest,
+        platform_payload=platform_payload,
+        rubric_payload=rubric_payload,
+        operator_id=operator_id,
+        observed_at=observed_at,
+        authorize_control_change=authorize_control_change,
+    )
+
+
+def _prepare_controls(
+    sessions: sessionmaker[Session],
+    publisher: ControlArtifactPublisher,
+    *,
+    manifest: InferenceTransferBootstrapManifest,
+    platform_payload: bytes,
+    rubric_payload: bytes,
+    operator_id: str,
+    observed_at: datetime,
+    authorize_control_change: ControlChangeAuthorizer,
+) -> PreparedInferenceTransferControls:
+
     checked = _checked_inputs(manifest, observed_at)
+    purpose = _purpose(checked)
     try:
         validate_inference_transfer_reviewed_instruction(
             checked, layer="PLATFORM", payload=platform_payload
@@ -159,7 +257,7 @@ def prepare_inference_transfer_controls(
         manifest=checked,
         payload=_json_bytes(checked),
         logical_name="inference-transfer-bootstrap.json",
-        schema_ref=_BOOTSTRAP_SCHEMA,
+        schema_ref=purpose.bootstrap_schema,
         artifact_type="control_inference_transfer_bootstrap",
         component_key="bootstrap",
         operator_id=operator_id,
@@ -193,8 +291,8 @@ def prepare_inference_transfer_controls(
         )
     instruction_body = {
         "schema_version": "instruction-bundle-manifest/1.0",
-        "bundle_id": _BUNDLE_ID,
-        "bundle_revision_id": _BUNDLE_REVISION_ID,
+        "bundle_id": purpose.bundle_id,
+        "bundle_revision_id": purpose.bundle_revision_id,
         "revision_number": 1,
         "state": "RELEASED",
         "components": members,
@@ -229,7 +327,7 @@ def prepare_inference_transfer_controls(
         _require_initial_history(session, checked)
         record_bundle_revision(
             session,
-            bundle_key=INSTRUCTION_BUNDLE_KEY,
+            bundle_key=purpose.instruction_bundle_key,
             manifest_artifact=instruction_artifact,
             document=instruction.model_dump(mode="json"),
             created_by=operator_id,
@@ -260,6 +358,48 @@ def release_inference_transfer_controls(
     admission and may record a new technical report; it never rewrites history.
     """
 
+    if isinstance(prepared.manifest, InferenceTransferBootstrapManifestV11):
+        raise ControlPlaneError("CONTROL_BOOTSTRAP_INVALID", "explicit V1 bootstrap required")
+    return _release_controls(
+        sessions,
+        publisher,
+        prepared=prepared,
+        operator_id=operator_id,
+        released_at=released_at,
+        authorize_control_change=authorize_control_change,
+    )
+
+
+def release_inference_transfer_controls_v11(
+    sessions: sessionmaker[Session],
+    publisher: ControlArtifactPublisher,
+    *,
+    prepared: PreparedInferenceTransferControls,
+    operator_id: str,
+    released_at: datetime,
+    authorize_control_change: ControlChangeAuthorizer,
+) -> ReleasedInferenceTransferControls:
+    if not isinstance(prepared.manifest, InferenceTransferBootstrapManifestV11):
+        raise ControlPlaneError("CONTROL_BOOTSTRAP_INVALID", "explicit V1.1 bootstrap required")
+    return _release_controls(
+        sessions,
+        publisher,
+        prepared=prepared,
+        operator_id=operator_id,
+        released_at=released_at,
+        authorize_control_change=authorize_control_change,
+    )
+
+
+def _release_controls(
+    sessions: sessionmaker[Session],
+    publisher: ControlArtifactPublisher,
+    *,
+    prepared: PreparedInferenceTransferControls,
+    operator_id: str,
+    released_at: datetime,
+    authorize_control_change: ControlChangeAuthorizer,
+) -> ReleasedInferenceTransferControls:
     checked = _checked_inputs(prepared.manifest, released_at)
     _authorize(operator_id, "RELEASE", authorize_control_change)
     with transaction(sessions) as session:
@@ -346,7 +486,11 @@ def _checked_inputs(
     observed_at: datetime,
 ) -> InferenceTransferBootstrapManifest:
     try:
-        checked = validate_inference_transfer_bootstrap_manifest(manifest.model_dump(mode="json"))
+        checked = (
+            validate_inference_transfer_bootstrap_manifest_v11(manifest.model_dump(mode="json"))
+            if isinstance(manifest, InferenceTransferBootstrapManifestV11)
+            else validate_inference_transfer_bootstrap_manifest(manifest.model_dump(mode="json"))
+        )
         now = TypeAdapter(UtcDatetime).validate_python(observed_at)
         if checked.source.reviewed_at > now:
             raise ValueError("reviewed source is in the future")
@@ -449,9 +593,10 @@ def _description(manifest: InferenceTransferBootstrapManifest) -> str:
 def _require_initial_history(
     session: Session, manifest: InferenceTransferBootstrapManifest
 ) -> tuple[ExecutionPresetRevision, ...]:
+    purpose = _purpose(manifest)
     logical = session.scalar(
         select(ExecutionPresetRecord)
-        .where(ExecutionPresetRecord.preset_key == PRESET_KEY)
+        .where(ExecutionPresetRecord.preset_key == purpose.preset_key)
         .with_for_update()
     )
     if logical is None:
@@ -482,8 +627,8 @@ def _require_initial_history(
         policy = value.role_policies[0]
         if (
             len(value.role_policies) != 1
-            or policy.instruction_bundle.bundle_id != _BUNDLE_ID
-            or policy.instruction_bundle.bundle_revision_id != _BUNDLE_REVISION_ID
+            or policy.instruction_bundle.bundle_id != purpose.bundle_id
+            or policy.instruction_bundle.bundle_revision_id != purpose.bundle_revision_id
             or value.role_policies != (_role_policy(manifest, policy.instruction_bundle),)
             or value.capacity_policy_revision_id != manifest.capacity.capacity_policy_revision_id
             or value.compatible_workflow_protocols != (manifest.workflow_role_schema_version,)
@@ -548,7 +693,7 @@ def _find_or_create_draft(
         created = validated_preset(
             create_execution_preset_draft(
                 session,
-                preset_key=PRESET_KEY,
+                preset_key=_purpose(manifest).preset_key,
                 display_name="문항 풀이 전이 비교",
                 description=_description(manifest),
                 role_policies=[_role_policy(manifest, bundle).model_dump(mode="json")],
@@ -581,15 +726,15 @@ def _check_exact_preparation(
         bootstrap,
         payload=_json_bytes(manifest),
         logical_name="inference-transfer-bootstrap.json",
-        schema_ref=_BOOTSTRAP_SCHEMA,
+        schema_ref=_purpose(manifest).bootstrap_schema,
         manifest=manifest,
         created_at=manifest.source.reviewed_at,
     )
     checked_bundle = BundleRevisionPointer.model_validate(bundle.model_dump(mode="json"))
     instruction = resolve_released_instruction_bundle(session, checked_bundle)
     if (
-        instruction.bundle_id != _BUNDLE_ID
-        or instruction.bundle_revision_id != _BUNDLE_REVISION_ID
+        instruction.bundle_id != _purpose(manifest).bundle_id
+        or instruction.bundle_revision_id != _purpose(manifest).bundle_revision_id
         or instruction.revision_number != 1
         or instruction.created_at != manifest.source.reviewed_at
         or len(instruction.components) != 2

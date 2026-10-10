@@ -45,6 +45,79 @@ class _ValidationStage(StrEnum):
 
 _LOGGER = logging.getLogger(__name__)
 
+# Error titles/locations can be attacker-controlled. Only closed categories may
+# cross the logging boundary; neither exception prose nor source values do.
+_MODEL_CATEGORIES = {
+    "InferenceTransferSnapshotReadResult": "READ_RESULT",
+    "InferenceTransferSnapshotRecord": "SOURCE_RECORD",
+    "CreateEvidenceBundleCommand": "BASELINE_COMMAND",
+    "SuppliedGraphBaseline": "BASELINE_RESULT",
+    "EducationRetrievalRequestV2": "GRAPH_REQUEST",
+    "InferenceTransferSnapshotPrepareResult": "PREPARE_RESULT",
+    "InferenceTransferSnapshotHeader": "PREPARE_HEADER",
+    "InferenceTransferSnapshotReadRequest": "READ_REQUEST",
+}
+_FIELD_CATEGORIES = {
+    "header": "HEADER",
+    "index": "INDEX",
+    "index_entry": "INDEX_ENTRY",
+    "source": "SOURCE",
+    "staged_entry": "STAGED_ENTRY",
+    "records": "RECORDS",
+    "baselines": "BASELINES",
+    "limitations": "LIMITATIONS",
+    "query": "QUERY",
+    "ordered_candidates": "CANDIDATES",
+    "topic_keys": "TOPIC_KEYS",
+    "evidence_budget": "EVIDENCE_BUDGET",
+    "requester_permission_keys": "PERMISSIONS",
+    "requester_role": "ROLE",
+    "requested_by": "ACTOR",
+    "source_classes": "SOURCE_CLASSES",
+    "header_sha256": "HEADER_HASH",
+    "read_sha256": "READ_HASH",
+    "result_sha256": "RESULT_HASH",
+    "submission_sha256": "COMMAND_HASH",
+}
+_VALIDATION_CATEGORIES = {
+    "value_error": "VALUE_INVARIANT",
+    "too_long": "SIZE_OR_COUNT",
+    "too_short": "SIZE_OR_COUNT",
+    "string_too_long": "TEXT_SIZE",
+    "string_too_short": "TEXT_SIZE",
+    "extra_forbidden": "CLOSED_FIELDS",
+    "literal_error": "VERSION_OR_ENUM",
+    "enum": "VERSION_OR_ENUM",
+    "string_pattern_mismatch": "FORMAT",
+    "int_parsing": "TYPE",
+    "int_type": "TYPE",
+    "string_type": "TYPE",
+    "tuple_type": "TYPE",
+    "model_type": "TYPE",
+    "missing": "MISSING",
+}
+
+
+def _model_failure_categories(error: ModelError) -> dict[str, object]:
+    fields: set[str] = set()
+    categories: set[str] = set()
+    for detail in error.errors(include_input=False, include_context=False, include_url=False)[:16]:
+        location = detail["loc"]
+        field = location[0] if location else None
+        fields.add(
+            "ROOT"
+            if field is None
+            else _FIELD_CATEGORIES.get(field, "OTHER")
+            if isinstance(field, str)
+            else "OTHER"
+        )
+        categories.add(_VALIDATION_CATEGORIES.get(detail["type"], "OTHER"))
+    return {
+        "model_category": _MODEL_CATEGORIES.get(error.title, "OTHER"),
+        "field_categories": sorted(fields),
+        "validation_categories": sorted(categories),
+    }
+
 
 def _record_validation_failure(
     stage: _ValidationStage, phase: str, error: Exception, *, code: str
@@ -61,20 +134,20 @@ def _record_validation_failure(
         if isinstance(error, ValueError)
         else "UNEXPECTED"
     )
-    message = canonical_json_bytes(
-        {
+    # Diagnostics are optional; handler failure must not replace the safe reply.
+    with suppress(Exception):
+        diagnostic: dict[str, object] = {
             "event": "SNAPSHOT_VALIDATION_FAILED",
             "phase": phase if phase in {"PREPARE", "READ", "AUTHORIZE"} else "UNKNOWN",
             "validation_stage": stage.value,
             "error_kind": kind,
         }
-    ).decode("utf-8")
-    # Diagnostics are optional; handler failure must not replace the safe reply.
-    with suppress(Exception):
+        if isinstance(error, ModelError):
+            diagnostic.update(_model_failure_categories(error))
         log_event(
             _LOGGER,
             logging.WARNING,
-            message,
+            canonical_json_bytes(diagnostic).decode("utf-8"),
             job_id=None,
             worker_slot=None,
             component="catalog_snapshot",

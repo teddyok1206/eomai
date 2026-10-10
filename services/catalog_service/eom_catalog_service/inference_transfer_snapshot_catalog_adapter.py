@@ -11,6 +11,7 @@ from typing import Any, cast
 
 from eom_catalog_contracts import ApprovedItemKnowledgeSourceV2, CreateEvidenceBundleCommand
 from eom_catalog_contracts.inference_transfer_experiment import (
+    MAX_GRAPH_BASELINE_CANDIDATES,
     StagedExperimentEntry,
     SuppliedGraphBaseline,
     profile_key,
@@ -276,6 +277,19 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
                 limitations.add(
                     "A materialized official baseline has zero eligible comparison candidates."
                 )
+            if len(ordered) > MAX_GRAPH_BASELINE_CANDIDATES:
+                # The supported read-only Graph port returns its candidate pool,
+                # not the final published Evidence selection. This bounded
+                # experiment records a declared prefix, never a complete-pool
+                # claim or a second implementation of authoring budget rules.
+                limitations.add(
+                    f"Official read-only Graph candidate order has {len(ordered)} eligible "
+                    f"comparisons; this bounded baseline retains the first "
+                    f"{MAX_GRAPH_BASELINE_CANDIDATES} in unchanged order. Remaining "
+                    "candidates are not recorded in this baseline; it is not the "
+                    "final authoring Evidence selection."
+                )
+                ordered = ordered[:MAX_GRAPH_BASELINE_CANDIDATES]
             baselines.append(
                 hashed_snapshot_value(
                     SuppliedGraphBaseline,

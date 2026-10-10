@@ -21,6 +21,7 @@ from eom_workflow.schemas import (
     load_content_team_material_requirement_v2_schema,
     load_definition_schema,
     load_inference_transfer_workflow_request_schema,
+    load_inference_transfer_workflow_request_schema_v11,
     load_json_schema,
     load_knowledge_item_brief_schema,
     load_knowledge_item_brief_v2_schema,
@@ -76,6 +77,9 @@ def test_workflow_schemas_load_from_package_resources() -> None:
     assert load_definition_schema()["$id"].endswith("/workflow-definition.schema.json")
     assert load_inference_transfer_workflow_request_schema()["$id"] == (
         "eom://schemas/workflow/inference-transfer-workflow-request/1.0"
+    )
+    assert load_inference_transfer_workflow_request_schema_v11()["$id"] == (
+        "eom://schemas/workflow/inference-transfer-workflow-request/1.1"
     )
     assert load_knowledge_item_brief_schema()["$id"].endswith("knowledge-item-brief-v1")
     assert load_knowledge_item_brief_v2_schema()["$id"].endswith("knowledge-item-brief-v2")
@@ -226,6 +230,12 @@ def test_installed_wheel_loads_schemas_without_source_checkout(
             REPOSITORY_ROOT / "config/workflows/item-inference-transfer-comparison.v1.yaml"
         ).read_bytes()
     )
+    axes_definition = tmp_path / "item-inference-transfer-comparison.v1_1.yaml"
+    axes_definition.write_bytes(
+        (
+            REPOSITORY_ROOT / "config/workflows/item-inference-transfer-comparison.v1_1.yaml"
+        ).read_bytes()
+    )
     script = """
 from __future__ import annotations
 import importlib.util
@@ -236,16 +246,21 @@ installed_root = Path(sys.argv[1]).resolve()
 repository = sys.argv[2]
 definition_path = Path(sys.argv[3])
 transfer_definition_path = Path(sys.argv[4])
+axes_definition_path = Path(sys.argv[5])
 sys.path.insert(0, str(installed_root))
 
 from eom_workflow.compiler import compile_definition
 from eom_workflow.control_schemas import control_schema_inventory, load_control_schema
-from eom_workflow.inference_transfer import TRANSFER_PAIR_PROTOCOL, TRANSFER_PAIR_RESULT_SCHEMA
+from eom_workflow.inference_transfer import (
+    TRANSFER_PAIR_PROTOCOL, TRANSFER_PAIR_RESULT_SCHEMA,
+    TRANSFER_PAIR_PROTOCOL_V11, TRANSFER_PAIR_RESULT_SCHEMA_V11,
+)
 from eom_workflow.schemas import (
     INPUT_SCHEMA_FILES,
     RESULT_SCHEMA_FILES,
     load_definition_schema,
     load_inference_transfer_workflow_request_schema,
+    load_inference_transfer_workflow_request_schema_v11,
     load_role_input_schema,
     load_role_result_schema,
 )
@@ -261,6 +276,19 @@ for schema_id in RESULT_SCHEMA_FILES:
     load_role_result_schema(schema_id)
 load_role_input_schema("support", TRANSFER_PAIR_PROTOCOL)
 load_role_result_schema(TRANSFER_PAIR_RESULT_SCHEMA)
+load_role_input_schema("support", TRANSFER_PAIR_PROTOCOL_V11)
+load_role_result_schema(TRANSFER_PAIR_RESULT_SCHEMA_V11)
+from eom_catalog_contracts.inference_transfer_pair_result_v11 import PairComparisonResultV11
+from eom_catalog_contracts.inference_transfer_invocation_v11 import (
+    InferenceTransferPairSubmitRequestV11,
+    InferenceTransferWorkflowReadResultV11,
+)
+from eom_catalog_contracts.inference_transfer_workflow_binding_v11 import (
+    parse_workflow_binding_request_v11,
+)
+from eom_catalog_service.inference_transfer_workflow_dispatch_v11 import (
+    dispatch_inference_transfer_workflow_frame_v11,
+)
 from eom_catalog_service.inference_transfer_service import InferenceTransferApplicationService
 from eom_catalog_contracts.inference_transfer_experiment import (
     InferenceTransferExperimentRequest,
@@ -319,10 +347,14 @@ from eom_workflow_runner.inference_transfer_executor import PlatformInferenceTra
 from eom_workflow_runner.role_execution_port import RoleExecutionResult
 from eom_workflow_runner.role_execution_binding import bind_platform_role_job
 load_inference_transfer_workflow_request_schema()
+load_inference_transfer_workflow_request_schema_v11()
 load_catalog_schema("item-inference-transfer")
 load_catalog_schema("item-inference-transfer-experiment")
 load_catalog_schema("item-inference-transfer-snapshot")
 load_catalog_schema("item-inference-transfer-snapshot-binding")
+load_catalog_schema("item-inference-transfer-pair-result-v1.1")
+load_catalog_schema("item-inference-transfer-invocation-v1.1")
+load_catalog_schema("item-inference-transfer-workflow-binding-v1.1")
 assert "torch" not in sys.modules and "transformers" not in sys.modules
 for name, _ in control_schema_inventory():
     load_control_schema(name)
@@ -335,6 +367,9 @@ assert compiled.definition.definition_version == "1.1.0"
 transfer = compile_definition(transfer_definition_path, {"support"})
 assert transfer.definition.definition_key == "item-inference-transfer-comparison"
 assert transfer.definition.definition_version == "1.0.0"
+axes = compile_definition(axes_definition_path, {"support"})
+assert axes.definition.definition_key == "item-inference-transfer-comparison"
+assert axes.definition.definition_version == "1.1.0"
 print("installed_workflow_wheel_resources=PASS")
 """
     result = subprocess.run(
@@ -347,6 +382,7 @@ print("installed_workflow_wheel_resources=PASS")
             str(REPOSITORY_ROOT),
             str(definition),
             str(transfer_definition),
+            str(axes_definition),
         ],
         cwd=tmp_path,
         check=True,

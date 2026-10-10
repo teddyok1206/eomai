@@ -23,17 +23,26 @@ from eom_operator_identity import PermissionKey, RoleKey
 from eom_workflow.inference_transfer_bootstrap_contract import (
     InferenceTransferBootstrapCapacityPin,
     InferenceTransferBootstrapManifest,
+    InferenceTransferBootstrapManifestV11,
     validate_inference_transfer_bootstrap_manifest,
+    validate_inference_transfer_bootstrap_manifest_v11,
     validate_inference_transfer_reviewed_instruction,
 )
 from eom_workflow.inference_transfer_control_invocation import (
     InferenceTransferControlReleaseRequest,
+    InferenceTransferControlReleaseRequestV11,
     InferenceTransferControlReleaseResult,
+    InferenceTransferControlReleaseResultV11,
     InferenceTransferPreparedReceipt,
+    InferenceTransferPreparedReceiptV11,
     parse_inference_transfer_prepared_receipt,
+    parse_inference_transfer_prepared_receipt_v11,
     parse_inference_transfer_release_request,
+    parse_inference_transfer_release_request_v11,
     parse_inference_transfer_release_result,
+    parse_inference_transfer_release_result_v11,
     validate_inference_transfer_release_result_context,
+    validate_inference_transfer_release_result_context_v11,
 )
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -42,7 +51,9 @@ from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.inference_transfer_bootstrap import (
     PreparedInferenceTransferControls,
     prepare_inference_transfer_controls,
+    prepare_inference_transfer_controls_v11,
     release_inference_transfer_controls,
+    release_inference_transfer_controls_v11,
 )
 from eom_orchestrator.preset_model_selection import resolve_released_capacity_policy
 
@@ -178,6 +189,34 @@ class AuthenticatedInferenceTransferControlOwner:
         rubric_payload: bytes,
     ) -> InferenceTransferPreparedReceipt:
         checked = validate_inference_transfer_bootstrap_manifest(manifest.model_dump(mode="json"))
+        return self._prepare_checked(
+            checked, platform_payload=platform_payload, rubric_payload=rubric_payload
+        )
+
+    def prepare_v11(
+        self,
+        manifest: InferenceTransferBootstrapManifestV11,
+        *,
+        platform_payload: bytes,
+        rubric_payload: bytes,
+    ) -> InferenceTransferPreparedReceiptV11:
+        checked = validate_inference_transfer_bootstrap_manifest_v11(
+            manifest.model_dump(mode="json")
+        )
+        receipt = self._prepare_checked(
+            checked, platform_payload=platform_payload, rubric_payload=rubric_payload
+        )
+        if not isinstance(receipt, InferenceTransferPreparedReceiptV11):
+            raise ControlPlaneError("CONTROL_BOOTSTRAP_INVALID", "successor receipt differs")
+        return receipt
+
+    def _prepare_checked(
+        self,
+        checked: InferenceTransferBootstrapManifest,
+        *,
+        platform_payload: bytes,
+        rubric_payload: bytes,
+    ) -> InferenceTransferPreparedReceipt:
         validate_inference_transfer_reviewed_instruction(
             checked, layer="PLATFORM", payload=platform_payload
         )
@@ -185,34 +224,72 @@ class AuthenticatedInferenceTransferControlOwner:
             checked, layer="ROLE", payload=rubric_payload
         )
         principal = self._current_principal()
-        prepared = prepare_inference_transfer_controls(
-            self.sessions,
-            self.publisher,
-            manifest=checked,
-            platform_payload=platform_payload,
-            rubric_payload=rubric_payload,
-            operator_id=principal.operator_id,
-            observed_at=self._clock(),
-            authorize_control_change=self._authorize,
-        )
+        if isinstance(checked, InferenceTransferBootstrapManifestV11):
+            prepared = prepare_inference_transfer_controls_v11(
+                self.sessions,
+                self.publisher,
+                manifest=checked,
+                platform_payload=platform_payload,
+                rubric_payload=rubric_payload,
+                operator_id=principal.operator_id,
+                observed_at=self._clock(),
+                authorize_control_change=self._authorize,
+            )
+        else:
+            prepared = prepare_inference_transfer_controls(
+                self.sessions,
+                self.publisher,
+                manifest=checked,
+                platform_payload=platform_payload,
+                rubric_payload=rubric_payload,
+                operator_id=principal.operator_id,
+                observed_at=self._clock(),
+                authorize_control_change=self._authorize,
+            )
         body = {
-            "schema_version": "inference-transfer-prepared-receipt/1.0",
+            "schema_version": (
+                "inference-transfer-prepared-receipt/1.1"
+                if isinstance(checked, InferenceTransferBootstrapManifestV11)
+                else "inference-transfer-prepared-receipt/1.0"
+            ),
             "manifest": prepared.manifest.model_dump(mode="json"),
             "bootstrap_artifact": prepared.bootstrap_artifact.model_dump(mode="json"),
             "instruction_bundle": prepared.instruction_bundle.model_dump(mode="json"),
             "draft": prepared.draft.model_dump(mode="json"),
         }
-        return parse_inference_transfer_prepared_receipt(
-            body | {"receipt_sha256": content_sha256(body)}
+        parser = (
+            parse_inference_transfer_prepared_receipt_v11
+            if isinstance(checked, InferenceTransferBootstrapManifestV11)
+            else parse_inference_transfer_prepared_receipt
         )
+        return parser(body | {"receipt_sha256": content_sha256(body)})
 
     def release(
         self, request: InferenceTransferControlReleaseRequest
     ) -> InferenceTransferControlReleaseResult:
         checked = parse_inference_transfer_release_request(request.model_dump(mode="json"))
+        return self._release_checked(checked)
+
+    def release_v11(
+        self, request: InferenceTransferControlReleaseRequestV11
+    ) -> InferenceTransferControlReleaseResultV11:
+        checked = parse_inference_transfer_release_request_v11(request.model_dump(mode="json"))
+        result = self._release_checked(checked)
+        if not isinstance(result, InferenceTransferControlReleaseResultV11):
+            raise ControlPlaneError("CONTROL_BOOTSTRAP_INVALID", "successor release result differs")
+        return result
+
+    def _release_checked(
+        self, checked: InferenceTransferControlReleaseRequest
+    ) -> InferenceTransferControlReleaseResult:
         principal = self._current_principal()
         receipt = checked.receipt
-        released = release_inference_transfer_controls(
+        release = (
+            release_inference_transfer_controls_v11
+            if isinstance(checked, InferenceTransferControlReleaseRequestV11)
+            else release_inference_transfer_controls
+        )
+        released = release(
             self.sessions,
             self.publisher,
             prepared=PreparedInferenceTransferControls(
@@ -226,7 +303,11 @@ class AuthenticatedInferenceTransferControlOwner:
             authorize_control_change=self._authorize,
         )
         body = {
-            "schema_version": "inference-transfer-control-release-result/1.0",
+            "schema_version": (
+                "inference-transfer-control-release-result/1.1"
+                if isinstance(checked, InferenceTransferControlReleaseRequestV11)
+                else "inference-transfer-control-release-result/1.0"
+            ),
             "prepared_receipt_sha256": receipt.receipt_sha256,
             "preset": released.preset.model_dump(mode="json"),
             "evaluation_id": released.evaluation_id,
@@ -236,8 +317,15 @@ class AuthenticatedInferenceTransferControlOwner:
             "scientific_evaluation": released.scientific_evaluation,
             "human_transfer_evaluation": released.human_transfer_evaluation,
         }
-        result = parse_inference_transfer_release_result(
-            body | {"result_sha256": content_sha256(body)}
-        )
-        validate_inference_transfer_release_result_context(checked, result)
+        result: InferenceTransferControlReleaseResult
+        if isinstance(checked, InferenceTransferControlReleaseRequestV11):
+            result = parse_inference_transfer_release_result_v11(
+                body | {"result_sha256": content_sha256(body)}
+            )
+            validate_inference_transfer_release_result_context_v11(checked, result)
+        else:
+            result = parse_inference_transfer_release_result(
+                body | {"result_sha256": content_sha256(body)}
+            )
+            validate_inference_transfer_release_result_context(checked, result)
         return result

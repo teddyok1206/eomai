@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/item-inference-transfer-pair-result/1.1",
+  "title": "EOM machine pair comparison with three independently grounded axes V1.1",
+  "description": "Additive machine hypotheses, not scores, human labels, source authorization or proof of semantic correctness. Existing pair-result/1.0 remains immutable.",
+  "$defs": {
+    "claimRefs": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^transferclaim_[a-z0-9][a-z0-9_-]{0,63}$"},
+      "maxItems": 16,
+      "uniqueItems": true
+    },
+    "axisAssessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "axis": {"enum": ["CONCEPT", "MATERIAL", "CRUX"]},
+        "judgement": {"enum": ["SAME", "DIFFERENT", "PARTIAL", "INSUFFICIENT"]},
+        "explanation": {"type": "string", "minLength": 1, "maxLength": 2000, "pattern": "\\S"},
+        "left_claim_ids": {"$ref": "#/$defs/claimRefs"},
+        "right_claim_ids": {"$ref": "#/$defs/claimRefs"}
+      },
+      "required": ["axis", "judgement", "explanation", "left_claim_ids", "right_claim_ids"],
+      "allOf": [
+        {
+          "if": {"properties": {"judgement": {"enum": ["SAME", "DIFFERENT", "PARTIAL"]}}, "required": ["judgement"]},
+          "then": {"properties": {"left_claim_ids": {"minItems": 1}, "right_claim_ids": {"minItems": 1}}}
+        }
+      ]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "item-inference-transfer-pair-result/1.1"},
+    "request_id": {"type": "string", "pattern": "^transferrequest_[0-9a-f]{32}$"},
+    "request_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"},
+    "left_profile": {"$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profilePointer"},
+    "right_profile": {"$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profilePointer"},
+    "direction": {"const": "A_TO_B"},
+    "rubric": {"$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/rubricPointer"},
+    "judgement": {"enum": ["INSUFFICIENT", "NO_TRANSFER", "STRUCTURAL_ANALOGY", "NEAR_IDENTICAL_CANDIDATE"]},
+    "mappings": {
+      "type": "array",
+      "items": {"$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/mapping"},
+      "maxItems": 64,
+      "uniqueItems": true
+    },
+    "shared_idea": {
+      "anyOf": [{"type": "string", "minLength": 1, "maxLength": 2000}, {"type": "null"}]
+    },
+    "differences": {
+      "type": "array",
+      "items": {"$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/difference"},
+      "maxItems": 32,
+      "uniqueItems": true
+    },
+    "new_reasoning": {
+      "type": "array",
+      "items": {"$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/difference"},
+      "maxItems": 32,
+      "uniqueItems": true
+    },
+    "limitations": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1, "maxLength": 1000},
+      "maxItems": 32,
+      "uniqueItems": true
+    },
+    "assessment_kind": {"const": "MACHINE_HYPOTHESIS_NOT_HUMAN_VERIFICATION"},
+    "axes": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [
+        {"allOf": [{"$ref": "#/$defs/axisAssessment"}, {"properties": {"axis": {"const": "CONCEPT"}}}]},
+        {"allOf": [{"$ref": "#/$defs/axisAssessment"}, {"properties": {"axis": {"const": "MATERIAL"}}}]},
+        {"allOf": [{"$ref": "#/$defs/axisAssessment"}, {"properties": {"axis": {"const": "CRUX"}}}]}
+      ],
+      "items": false
+    },
+    "result_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"}
+  },
+  "required": [
+    "schema_version", "request_id", "request_sha256", "left_profile", "right_profile", "direction", "rubric",
+    "judgement", "mappings", "shared_idea", "differences", "new_reasoning", "limitations", "assessment_kind",
+    "axes", "result_sha256"
+  ],
+  "allOf": [
+    {
+      "if": {"properties": {"judgement": {"enum": ["STRUCTURAL_ANALOGY", "NEAR_IDENTICAL_CANDIDATE"]}}, "required": ["judgement"]},
+      "then": {
+        "properties": {
+          "shared_idea": {"type": "string", "minLength": 1, "maxLength": 2000},
+          "mappings": {
+            "minItems": 2,
+            "allOf": [
+              {"contains": {"properties": {"facet": {"const": "GIVEN_CONDITION"}}, "required": ["facet"]}},
+              {"contains": {"properties": {"facet": {"const": "DECISIVE_INFERENCE"}}, "required": ["facet"]}}
+            ]
+          },
+          "axes": {
+            "prefixItems": [
+              {},
+              {},
+              {"properties": {"judgement": {"enum": ["SAME", "PARTIAL"]}}, "required": ["judgement"]}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"judgement": {"const": "INSUFFICIENT"}}, "required": ["judgement"]},
+      "then": {"properties": {"limitations": {"minItems": 1}}}
+    }
+  ]
+}

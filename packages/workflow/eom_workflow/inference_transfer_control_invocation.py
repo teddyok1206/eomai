@@ -24,7 +24,9 @@ from eom_workflow.control_plane import (
 from eom_workflow.control_schemas import validate_control_contract
 from eom_workflow.inference_transfer_bootstrap_contract import (
     InferenceTransferBootstrapManifest,
+    InferenceTransferBootstrapManifestV11,
     validate_inference_transfer_bootstrap_manifest,
+    validate_inference_transfer_bootstrap_manifest_v11,
 )
 
 MAX_TRANSFER_CONTROL_INVOCATION_BYTES = 256 * 1024
@@ -42,7 +44,12 @@ def _canonical_hash(value: FrozenModel, hash_field: str) -> None:
         raise ValueError("control invocation exceeds its encoded byte budget")
 
 
-def _preset(value: ExecutionPresetRevision, *, state: RevisionState) -> ExecutionPresetRevision:
+def _preset(
+    value: ExecutionPresetRevision,
+    *,
+    state: RevisionState,
+    protocol: str = "workflow-role/1.29.0",
+) -> ExecutionPresetRevision:
     body = value.model_dump(mode="json")
     validate_control_contract("execution-preset-revision", body)
     checked = ExecutionPresetRevision.model_validate(body)
@@ -51,7 +58,7 @@ def _preset(value: ExecutionPresetRevision, *, state: RevisionState) -> Executio
         checked.state != state
         or checked.revision_number != (1 if state == RevisionState.DRAFT else 2)
         or checked.general_knowledge_policy != "DENY"
-        or checked.compatible_workflow_protocols != ("workflow-role/1.29.0",)
+        or checked.compatible_workflow_protocols != (protocol,)
         or len(checked.role_policies) != 1
     ):
         raise ValueError("control invocation requires the exact initial dedicated preset")
@@ -91,12 +98,22 @@ class InferenceTransferPreparedReceipt(FrozenModel):
 
     @model_validator(mode="after")
     def exact_preparation(self) -> InferenceTransferPreparedReceipt:
-        manifest = validate_inference_transfer_bootstrap_manifest(
-            self.manifest.model_dump(mode="json")
+        manifest = (
+            validate_inference_transfer_bootstrap_manifest_v11(
+                self.manifest.model_dump(mode="json")
+            )
+            if isinstance(self.manifest, InferenceTransferBootstrapManifestV11)
+            else validate_inference_transfer_bootstrap_manifest(
+                self.manifest.model_dump(mode="json")
+            )
         )
         _artifact(
             self.bootstrap_artifact,
-            schema_ref="eom://schemas/workflow/inference-transfer-control-bootstrap/1.0",
+            schema_ref=(
+                "eom://schemas/workflow/inference-transfer-control-bootstrap/1.1"
+                if isinstance(manifest, InferenceTransferBootstrapManifestV11)
+                else "eom://schemas/workflow/inference-transfer-control-bootstrap/1.0"
+            ),
             logical_name="inference-transfer-bootstrap.json",
         )
         # The publisher commits canonical JSON plus LF, not the manifest's
@@ -118,7 +135,9 @@ class InferenceTransferPreparedReceipt(FrozenModel):
             or bundle.manifest_sha256 != bundle.manifest_artifact.sha256
         ):
             raise ValueError("prepared instruction bundle family or manifest hash differs")
-        draft = _preset(self.draft, state=RevisionState.DRAFT)
+        draft = _preset(
+            self.draft, state=RevisionState.DRAFT, protocol=manifest.workflow_role_schema_version
+        )
         policy = draft.role_policies[0]
         if (
             draft.capacity_policy_revision_id != manifest.capacity.capacity_policy_revision_id
@@ -132,6 +151,13 @@ class InferenceTransferPreparedReceipt(FrozenModel):
         return self
 
 
+class InferenceTransferPreparedReceiptV11(InferenceTransferPreparedReceipt):
+    schema_version: Literal["inference-transfer-prepared-receipt/1.1"] = (
+        "inference-transfer-prepared-receipt/1.1"  # type: ignore[assignment]
+    )
+    manifest: InferenceTransferBootstrapManifestV11
+
+
 class InferenceTransferControlReleaseRequest(FrozenModel):
     schema_version: Literal["inference-transfer-control-release-request/1.0"] = (
         "inference-transfer-control-release-request/1.0"
@@ -141,9 +167,19 @@ class InferenceTransferControlReleaseRequest(FrozenModel):
 
     @model_validator(mode="after")
     def exact_request(self) -> InferenceTransferControlReleaseRequest:
-        parse_inference_transfer_prepared_receipt(self.receipt.model_dump(mode="json"))
+        if isinstance(self.receipt, InferenceTransferPreparedReceiptV11):
+            parse_inference_transfer_prepared_receipt_v11(self.receipt.model_dump(mode="json"))
+        else:
+            parse_inference_transfer_prepared_receipt(self.receipt.model_dump(mode="json"))
         _canonical_hash(self, "request_sha256")
         return self
+
+
+class InferenceTransferControlReleaseRequestV11(InferenceTransferControlReleaseRequest):
+    schema_version: Literal["inference-transfer-control-release-request/1.1"] = (
+        "inference-transfer-control-release-request/1.1"  # type: ignore[assignment]
+    )
+    receipt: InferenceTransferPreparedReceiptV11
 
 
 class InferenceTransferControlReleaseResult(FrozenModel):
@@ -166,7 +202,12 @@ class InferenceTransferControlReleaseResult(FrozenModel):
 
     @model_validator(mode="after")
     def exact_result(self) -> InferenceTransferControlReleaseResult:
-        _preset(self.preset, state=RevisionState.RELEASED)
+        protocol = (
+            "workflow-role/1.30.0"
+            if isinstance(self, InferenceTransferControlReleaseResultV11)
+            else "workflow-role/1.29.0"
+        )
+        _preset(self.preset, state=RevisionState.RELEASED, protocol=protocol)
         _artifact(
             self.evaluation_artifact,
             schema_ref="eom://schemas/workflow/execution-preset-evaluation-report/1.0",
@@ -178,11 +219,42 @@ class InferenceTransferControlReleaseResult(FrozenModel):
         return self
 
 
+class InferenceTransferControlReleaseResultV11(InferenceTransferControlReleaseResult):
+    schema_version: Literal["inference-transfer-control-release-result/1.1"] = (
+        "inference-transfer-control-release-result/1.1"  # type: ignore[assignment]
+    )
+
+
 def _parse[T: FrozenModel](value: object, model: type[T]) -> T:
     if not isinstance(value, dict):
         raise ValueError("control invocation must be a JSON object")
     validate_control_contract(_FAMILY, value)
     return model.model_validate(value)
+
+
+def _parse_v11[T: FrozenModel](value: object, model: type[T]) -> T:
+    if not isinstance(value, dict):
+        raise ValueError("control invocation must be a JSON object")
+    validate_control_contract("inference-transfer-control-invocation-v1.1", value)
+    return model.model_validate(value)
+
+
+def parse_inference_transfer_prepared_receipt_v11(
+    value: object,
+) -> InferenceTransferPreparedReceiptV11:
+    return _parse_v11(value, InferenceTransferPreparedReceiptV11)
+
+
+def parse_inference_transfer_release_request_v11(
+    value: object,
+) -> InferenceTransferControlReleaseRequestV11:
+    return _parse_v11(value, InferenceTransferControlReleaseRequestV11)
+
+
+def parse_inference_transfer_release_result_v11(
+    value: object,
+) -> InferenceTransferControlReleaseResultV11:
+    return _parse_v11(value, InferenceTransferControlReleaseResultV11)
 
 
 def parse_inference_transfer_prepared_receipt(value: object) -> InferenceTransferPreparedReceipt:
@@ -206,6 +278,22 @@ def validate_inference_transfer_release_result_context(
     """Exact preparation→release closure only; actual current authorization is owner-owned."""
     request = parse_inference_transfer_release_request(request.model_dump(mode="json"))
     result = parse_inference_transfer_release_result(result.model_dump(mode="json"))
+    _validate_release_context(request, result)
+
+
+def validate_inference_transfer_release_result_context_v11(
+    request: InferenceTransferControlReleaseRequestV11,
+    result: InferenceTransferControlReleaseResultV11,
+) -> None:
+    request = parse_inference_transfer_release_request_v11(request.model_dump(mode="json"))
+    result = parse_inference_transfer_release_result_v11(result.model_dump(mode="json"))
+    _validate_release_context(request, result)
+
+
+def _validate_release_context(
+    request: InferenceTransferControlReleaseRequest,
+    result: InferenceTransferControlReleaseResult,
+) -> None:
     draft = request.receipt.draft
     mutable_lifecycle = {
         "preset_revision_id",
