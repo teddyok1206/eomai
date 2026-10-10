@@ -158,13 +158,18 @@ DB head는 `20261008_0049`, Web과 독립 chat activation은 변경 없음.
 | --- | --- | --- |
 | 비교 값 | `item-inference-transfer/1.0` schema family: profile, pair request/result, human evaluation, model spec | JSON Schema/Pydantic/source reference 검증 |
 | Support worker | `workflow-role/1.29.0`, `item-inference-transfer-pair-result@1.0` | source-only binding; 이전 support purpose에 적용하지 않음 |
-| 실행 계획 | exact purpose `item-inference-transfer-comparison@1.0.0` guard | 아직 compatible definition/Pack/instruction/preset activation 없음 |
+| 실행 계획 | `resolved-execution-plan/21.0`, definition `item-inference-transfer-comparison@1.0.0`, stage `INFERENCE_TRANSFER` | source 후보; 전용 wrapper/resolver/materializer/instruction/preset 운영 연결 대기. 이 purpose는 authoring Content Pack을 요구하지 않음 |
+| 모집단·인가 | `OCCURRENCE_BACKED_PAST_EXAM` opt-in scope와 exact 두 profile 재생성 검증 | default 기존 scope 유지; 실제 operator/policy/Graph/report admission만 사용 |
+| CPU 실험 | `item-inference-transfer-experiment/1.0` standalone family | source 및 실제 모델 합성 입력 3-view smoke; 실제 corpus·human gate 미실행 |
 | 로컬 모델 | pinned `multilingual-e5-small`, CPU toy probe | 개발 임시 환경; protected production 모델 설치 아님 |
 
 정본 설계·단계별 상태는 [구현 계획](ITEM_INFERENCE_TRANSFER_IMPLEMENTATION_PLAN.md),
 실제 테스트와 미검증 범위는 [첫 checkpoint](ITEM_INFERENCE_TRANSFER_FIRST_CHECKPOINT.md)에 기록한다.
 벡터 점수·구조 대응 가설·사람의 풀이 전이 판단은 서로 다른 값이며 어느 것도 Item 승인이나
 과학적 정확성의 자동 증명이 아니다.
+source migration head는 additive `20261010_0051`이며, disposable DB에서 실제
+upgrade/downgrade/upgrade와 stage CHECK/downgrade 거부를 검증했다. 이 후보 작업으로
+운영 migration 또는 서비스 release를 적용하지 않았다. 설치 runtime의 head와 혼동하지 않는다.
 
 | 책임 | 현재 저장소의 latest/additive 계약 | 주의사항 |
 | --- | --- | --- |

@@ -167,7 +167,8 @@ if [[ "${action}" == "chat-knowledge-tests" ]]; then
   "${PYTHON}" -m pytest -q \
     tests/integration/test_chat_knowledge_search.py \
     tests/integration/test_chat_knowledge_runtime_privileges.py \
-    tests/integration/test_inference_transfer_candidate_admission.py
+    tests/integration/test_inference_transfer_candidate_admission.py \
+    tests/integration/test_inference_transfer_stage_migration.py
   printf 'Disposable model-free chat knowledge query/plan tests passed.\n'
   exit 0
 fi

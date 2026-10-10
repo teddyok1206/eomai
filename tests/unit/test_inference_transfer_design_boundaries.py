@@ -9,12 +9,18 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 PURE_MODULES = (
     "packages/catalog_contracts/eom_catalog_contracts/item_inference_transfer.py",
+    "packages/catalog_contracts/eom_catalog_contracts/inference_transfer_experiment.py",
+    "packages/catalog_contracts/eom_catalog_contracts/inference_transfer_text.py",
     "packages/workflow/eom_workflow/inference_transfer.py",
+    "packages/workflow/eom_workflow/inference_transfer_control.py",
     "services/catalog_service/eom_catalog_service/inference_transfer_comparison.py",
     "services/catalog_service/eom_catalog_service/inference_transfer_evaluation.py",
+    "services/catalog_service/eom_catalog_service/inference_transfer_experiment.py",
     "services/catalog_service/eom_catalog_service/inference_transfer_ports.py",
     "services/catalog_service/eom_catalog_service/inference_transfer_projection.py",
     "services/catalog_service/eom_catalog_service/inference_transfer_service.py",
+    "services/catalog_service/eom_catalog_service/inference_transfer_scope.py",
+    "services/catalog_service/eom_catalog_service/inference_transfer_vectors.py",
 )
 
 

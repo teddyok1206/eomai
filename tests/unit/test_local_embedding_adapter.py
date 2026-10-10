@@ -269,7 +269,11 @@ def _fake_loader(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         observed["model_load"] = (path, kwargs)
         return Model()
 
-    torch = SimpleNamespace(float32="float32", inference_mode=nullcontext)
+    torch = SimpleNamespace(
+        float32="float32",
+        inference_mode=nullcontext,
+        set_num_threads=lambda value: observed.update(threads=value),
+    )
     transformers = SimpleNamespace(
         AutoTokenizer=SimpleNamespace(from_pretrained=tokenizer_load),
         AutoModel=SimpleNamespace(from_pretrained=model_load),
@@ -303,6 +307,7 @@ def test_offline_loader_uses_pinned_safe_cpu_recipe_and_bounded_batching(
     assert len(vectors) == 3
     assert all(len(vector) == 384 for vector in vectors)
     assert observed["device"] == "cpu" and observed["eval"]
+    assert observed["threads"] == 4
     assert observed["model_load"][0] == str(root)
     assert observed["model_load"][1] == {
         "local_files_only": True,
@@ -321,6 +326,37 @@ def test_offline_loader_uses_pinned_safe_cpu_recipe_and_bounded_batching(
         ("query: 마찰이 없다 36 km/h", "query: 전류는 2 A"),
         {"truncation": False, "padding": False},
     )
+
+
+def test_token_measurement_uses_exact_prefix_recipe_without_forward_or_truncation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _root, spec = _model_tree(tmp_path)
+    observed = _fake_loader(monkeypatch)
+    backend = OfflineTransformersEmbeddingBackend(
+        tmp_path, spec, expected_owner_uid=os.geteuid(), batch_size=2, threads=2
+    )
+    text = "에너지는 보존되지 않는다. " * 600
+    count = backend.token_lengths(("속력 36 km/h", text), purpose="DOCUMENT")
+    assert count == (6, 1803)
+    assert observed["model_calls"] == 0
+    assert observed["threads"] == 2
+    assert observed["texts"] == [
+        (("query: 속력 36 km/h", "query: " + text), {"truncation": False, "padding": False})
+    ]
+    with pytest.raises(LocalEmbeddingError, match="INPUT_TOO_LONG"):
+        backend.encode((text,), purpose="DOCUMENT")
+    assert observed["model_calls"] == 0
+
+
+@pytest.mark.parametrize("threads", [0, 17, True, 1.5, "4", None])
+def test_invalid_thread_budget_fails_before_any_optional_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, threads: Any
+) -> None:
+    observed = _fake_loader(monkeypatch)
+    with pytest.raises(LocalEmbeddingError, match="INPUT_INVALID"):
+        OfflineTransformersEmbeddingBackend(tmp_path, embedding_model(), threads=threads)
+    assert observed["imports"] == []
 
 
 @pytest.mark.parametrize("batch_size", [0, 17, True, 1.5, "4", None])

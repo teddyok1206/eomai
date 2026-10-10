@@ -1,0 +1,728 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0",
+  "title": "EOM staged inference transfer CPU experiment V1",
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "source": {
+      "oneOf": [
+        {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/approvedItemSource"
+        },
+        {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-request/9.0#/properties/source"
+        }
+      ]
+    },
+    "recipe": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "inference-transfer-view-recipe/1.0"
+        },
+        "content": {
+          "const": "CANONICAL_ITEM_TEXT_NO_SOLUTION"
+        },
+        "facets": {
+          "const": "EXACT_PROFILE_CLAIMS"
+        },
+        "metadata": {
+          "const": "SORTED_ACCEPTED_FIELDS"
+        },
+        "overflow": {
+          "const": "REJECT_OVERFLOW"
+        },
+        "maximum_text_bytes": {
+          "const": 262144
+        },
+        "ranking": {
+          "const": "EXACT_FLOAT64_COSINE_REF_TIES"
+        },
+        "recipe_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "schema_version",
+        "content",
+        "facets",
+        "metadata",
+        "overflow",
+        "maximum_text_bytes",
+        "ranking",
+        "recipe_sha256"
+      ]
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "enum": [
+            "SCIENCE_DOMAIN",
+            "CONCEPT",
+            "OBSERVABLE",
+            "FORMULA",
+            "ASSESSMENT_PATTERN",
+            "MATERIAL_FORM",
+            "CURRICULUM_UNIT",
+            "DIFFICULTY"
+          ]
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "basis": {
+          "enum": [
+            "ORIGINAL_ITEM",
+            "ACCEPTED_SOLUTION"
+          ]
+        },
+        "source_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "key",
+        "value",
+        "basis",
+        "source_sha256"
+      ]
+    },
+    "content": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 262144
+        },
+        "original_source": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/sourceArtifactMember"
+        },
+        "renderer_version": {
+          "const": "canonical-item-text-no-solution/1.0"
+        },
+        "text_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "text",
+        "original_source",
+        "renderer_version",
+        "text_sha256"
+      ]
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profile"
+        },
+        "content": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/content"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "metadata": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/metadata"
+          },
+          "minItems": 0,
+          "maxItems": 32
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "minItems": 0,
+          "maxItems": 32
+        }
+      },
+      "required": [
+        "profile",
+        "content",
+        "metadata",
+        "limitations"
+      ]
+    },
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profilePointer"
+        },
+        "command_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "result_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "provenance": {
+          "const": "SUPPORTED_GRAPH_LEXICAL_SUPPLIED_BY_PRODUCER"
+        },
+        "ordered_candidates": {
+          "type": "array",
+          "items": {
+            "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profilePointer"
+          },
+          "minItems": 0,
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "query",
+        "command_sha256",
+        "result_sha256",
+        "provenance",
+        "ordered_candidates"
+      ]
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maximum_profiles": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
+        },
+        "maximum_queries": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "top_k": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "minimum_common_candidates": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1023
+        },
+        "maximum_input_bytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 67108864
+        },
+        "maximum_encoded_texts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3072
+        },
+        "batch_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "threads": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        }
+      },
+      "required": [
+        "maximum_profiles",
+        "maximum_queries",
+        "top_k",
+        "minimum_common_candidates",
+        "maximum_input_bytes",
+        "maximum_encoded_texts",
+        "batch_size",
+        "threads"
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "actor_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+        },
+        "graph_snapshot": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"
+        },
+        "policy_revision_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^accessrev_[0-9a-f]{32}$"
+        },
+        "population_scope": {
+          "enum": [
+            "ALL_ADMITTED_GRAPH_ITEMS",
+            "OCCURRENCE_BACKED_PAST_EXAM"
+          ]
+        },
+        "policy_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "projection_version": {
+          "const": "accepted-solution-comparison/1.0"
+        },
+        "population_sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/source"
+          },
+          "minItems": 1,
+          "maxItems": 1024
+        },
+        "population_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "eligible_profile_set_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "producer_admission": {
+          "enum": [
+            "CATALOG_AUTHORIZED_SNAPSHOT",
+            "SYNTHETIC_NON_AUTHORITATIVE"
+          ]
+        },
+        "data_provenance": {
+          "enum": [
+            "AUTHORIZED_CORPUS_SNAPSHOT",
+            "TEST_ONLY_SYNTHETIC"
+          ]
+        }
+      },
+      "required": [
+        "actor_id",
+        "graph_snapshot",
+        "policy_revision_id",
+        "population_scope",
+        "policy_sha256",
+        "projection_version",
+        "population_sources",
+        "population_sha256",
+        "eligible_profile_set_sha256",
+        "producer_admission",
+        "data_provenance"
+      ]
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "inference-transfer-experiment-request/1.0"
+        },
+        "experiment_id": {
+          "type": "string",
+          "pattern": "^embeddingexperiment_[0-9a-f]{32}$"
+        },
+        "experiment_revision_id": {
+          "type": "string",
+          "pattern": "^embeddingexperimentrev_[0-9a-f]{32}$"
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "model_spec": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/localEmbeddingModel"
+        },
+        "recipe": {
+          "$ref": "#/$defs/recipe"
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/entry"
+          },
+          "minItems": 1,
+          "maxItems": 1024
+        },
+        "queries": {
+          "type": "array",
+          "items": {
+            "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profilePointer"
+          },
+          "minItems": 1,
+          "maxItems": 16
+        },
+        "baselines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/baseline"
+          },
+          "minItems": 0,
+          "maxItems": 16
+        },
+        "budget": {
+          "$ref": "#/$defs/budget"
+        },
+        "request_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "schema_version",
+        "experiment_id",
+        "experiment_revision_id",
+        "scope",
+        "model_spec",
+        "recipe",
+        "entries",
+        "queries",
+        "baselines",
+        "budget",
+        "request_sha256"
+      ]
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profilePointer"
+        },
+        "view": {
+          "enum": [
+            "CONTENT_ONLY",
+            "CONCRETE_FACETS",
+            "METADATA_ONLY"
+          ]
+        },
+        "text_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "utf8_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4194304
+        },
+        "token_count": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4194304
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "enum": [
+            "ENCODABLE",
+            "TOKEN_OVERFLOW",
+            "BYTE_LIMIT_EXCEEDED",
+            "EMPTY",
+            "MISSING_SOURCE_VIEW"
+          ]
+        }
+      },
+      "required": [
+        "profile",
+        "view",
+        "text_sha256",
+        "utf8_bytes",
+        "token_count",
+        "status"
+      ]
+    },
+    "rank": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profilePointer"
+        },
+        "rank": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "cosine_millionths": {
+          "type": "integer",
+          "minimum": -1000000,
+          "maximum": 1000000
+        }
+      },
+      "required": [
+        "profile",
+        "rank",
+        "cosine_millionths"
+      ]
+    },
+    "queryResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profilePointer"
+        },
+        "view": {
+          "enum": [
+            "CONTENT_ONLY",
+            "CONCRETE_FACETS",
+            "METADATA_ONLY"
+          ]
+        },
+        "ranks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rank"
+          },
+          "minItems": 0,
+          "maxItems": 64
+        },
+        "ranking_milliseconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000
+        }
+      },
+      "required": [
+        "query",
+        "view",
+        "ranks",
+        "ranking_milliseconds"
+      ]
+    },
+    "measurements": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model_load_milliseconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000
+        },
+        "token_measurement_milliseconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000
+        },
+        "encoding_milliseconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000
+        },
+        "peak_rss_kib_linux": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483648
+        },
+        "encoding_requests_started": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3072
+        },
+        "encoding_requests_completed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3072
+        },
+        "requested_text_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3072
+        },
+        "encoded_text_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3072
+        }
+      },
+      "required": [
+        "model_load_milliseconds",
+        "token_measurement_milliseconds",
+        "encoding_milliseconds",
+        "peak_rss_kib_linux",
+        "encoding_requests_started",
+        "encoding_requests_completed",
+        "requested_text_count",
+        "encoded_text_count"
+      ]
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "inference-transfer-experiment-result/1.0"
+        },
+        "execution_id": {
+          "type": "string",
+          "pattern": "^embeddingexecution_[0-9a-f]{32}$"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "request_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "input_profile_set_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "model_manifest_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "actual_model_manifest_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "view_recipe_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "status": {
+          "enum": [
+            "MEASURED",
+            "INSUFFICIENT_ENCODING_COVERAGE"
+          ]
+        },
+        "common_profiles": {
+          "type": "array",
+          "items": {
+            "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profilePointer"
+          },
+          "minItems": 0,
+          "maxItems": 1024
+        },
+        "common_profile_set_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "coverage": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/coverage"
+          },
+          "minItems": 3,
+          "maxItems": 3072
+        },
+        "query_results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/queryResult"
+          },
+          "minItems": 0,
+          "maxItems": 48
+        },
+        "baseline_status": {
+          "enum": [
+            "NOT_MATERIALIZED",
+            "SUPPLIED_NOT_REEXECUTED"
+          ]
+        },
+        "measurements": {
+          "$ref": "#/$defs/measurements"
+        },
+        "backend_kind": {
+          "enum": [
+            "PINNED_MODEL",
+            "TEST_ONLY"
+          ]
+        },
+        "current_authorization": {
+          "const": "NOT_VERIFIED_BY_HARNESS"
+        },
+        "human_transfer_review": {
+          "const": "NOT_EVALUATED"
+        },
+        "production_activation": {
+          "const": "NOT_PERFORMED"
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "minItems": 0,
+          "maxItems": 32
+        },
+        "result_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "data_provenance": {
+          "enum": [
+            "AUTHORIZED_CORPUS_SNAPSHOT",
+            "TEST_ONLY_SYNTHETIC"
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "execution_id",
+        "created_at",
+        "request_sha256",
+        "input_profile_set_sha256",
+        "model_manifest_sha256",
+        "actual_model_manifest_sha256",
+        "view_recipe_sha256",
+        "status",
+        "common_profiles",
+        "common_profile_set_sha256",
+        "coverage",
+        "query_results",
+        "baseline_status",
+        "measurements",
+        "backend_kind",
+        "current_authorization",
+        "human_transfer_review",
+        "production_activation",
+        "limitations",
+        "result_sha256",
+        "data_provenance"
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/result"
+    }
+  ]
+}

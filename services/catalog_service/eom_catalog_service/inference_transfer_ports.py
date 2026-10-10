@@ -73,3 +73,11 @@ class LocalTextEmbeddingBackend(Protocol):
     ) -> tuple[tuple[float, ...], ...]:
         """Return bounded vectors in input order; errors never produce substitute vectors."""
         ...
+
+
+class TokenMeasuredEmbeddingBackend(LocalTextEmbeddingBackend, Protocol):
+    def token_lengths(
+        self, texts: tuple[str, ...], *, purpose: Literal["QUERY", "DOCUMENT"]
+    ) -> tuple[int, ...]:
+        """Measure encode's exact prefix/special-token recipe, without truncation."""
+        ...

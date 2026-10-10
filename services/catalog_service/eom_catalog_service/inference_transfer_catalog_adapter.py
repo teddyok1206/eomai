@@ -33,10 +33,12 @@ from eom_catalog_service.knowledge_retrieval_service import (
     KnowledgeRetrievalCandidate,
     KnowledgeRetrievalServiceError,
     ReadOnlyCandidatePoolScope,
+    ReadOnlyKnowledgeCandidatePool,
 )
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.solution_evidence_resolution import (
     ResolvedSolutionEvidence,
+    SolutionEvidenceResolutionError,
     resolve_solution_evidence_by_base_run,
 )
 
@@ -102,6 +104,7 @@ class CatalogInferenceTransferSourceAdapter:
             evidence_budget=policy.maximum_budget,
             maximum_candidates=command.maximum_candidates,
             analysis_run_ids=analysis_run_ids,
+            population_scope=command.population_scope,
         )
 
     @staticmethod
@@ -123,12 +126,13 @@ class CatalogInferenceTransferSourceAdapter:
             source=source, graph_snapshot=graph, solution_evidence=solution.pointer
         )
 
-    def load(self, command: InferenceTransferSearchCommand) -> AdmittedInferenceTransferCorpus:
-        with self.sessions() as session, session.begin():
-            session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
-            session.execute(text("SET TRANSACTION READ ONLY"))
-            scope = self._scope(session, command)
-            pool = self.retrieval.admit_read_only_candidate_pool(session, scope)
+    def _project_profiles(
+        self,
+        session: Session,
+        pool: ReadOnlyKnowledgeCandidatePool,
+    ) -> tuple[tuple[InferenceTransferProfile, ...], int]:
+        """One authoritative accepted-report/UTC-timestamp projection boundary."""
+        try:
             solutions = resolve_solution_evidence_by_base_run(
                 session,
                 self.retrieval.artifacts,
@@ -136,30 +140,33 @@ class CatalogInferenceTransferSourceAdapter:
                     candidate.analysis_run_id for candidate in pool.candidates
                 ),
             )
-            revisions = {
-                row.revision_id: row
-                for row in session.scalars(
-                    select(ArtifactRevisionRecord).where(
-                        ArtifactRevisionRecord.revision_id.in_(
-                            tuple(
-                                value.pointer.accepted_result_artifact.artifact_revision_id
-                                for value in solutions.values()
-                            )
+        except SolutionEvidenceResolutionError as exc:
+            raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH") from exc
+        revisions = {
+            row.revision_id: row
+            for row in session.scalars(
+                select(ArtifactRevisionRecord).where(
+                    ArtifactRevisionRecord.revision_id.in_(
+                        tuple(
+                            value.pointer.accepted_result_artifact.artifact_revision_id
+                            for value in solutions.values()
                         )
                     )
                 )
-            }
-            profiles: list[InferenceTransferProfile] = []
-            missing = 0
-            for candidate in pool.candidates:
-                solution = solutions.get(candidate.analysis_run_id)
-                if solution is None:
-                    missing += 1
-                    continue
-                accepted_pointer = solution.pointer.accepted_result_artifact
-                revision = revisions.get(accepted_pointer.artifact_revision_id)
-                if revision is None or revision.content_hash != accepted_pointer.sha256:
-                    raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH")
+            )
+        }
+        profiles: list[InferenceTransferProfile] = []
+        missing = 0
+        for candidate in pool.candidates:
+            solution = solutions.get(candidate.analysis_run_id)
+            if solution is None:
+                missing += 1
+                continue
+            accepted_pointer = solution.pointer.accepted_result_artifact
+            revision = revisions.get(accepted_pointer.artifact_revision_id)
+            if revision is None or revision.content_hash != accepted_pointer.sha256:
+                raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH")
+            try:
                 accepted = KnowledgeAnalysisResultV10.model_validate(revision.result)
                 profiles.append(
                     project_accepted_solution_report(
@@ -168,6 +175,19 @@ class CatalogInferenceTransferSourceAdapter:
                         created_at=accepted.accepted_at,
                     )
                 )
+            except ValueError as exc:
+                raise InferenceTransferServiceError(
+                    "INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH"
+                ) from exc
+        return tuple(profiles), missing
+
+    def load(self, command: InferenceTransferSearchCommand) -> AdmittedInferenceTransferCorpus:
+        with self.sessions() as session, session.begin():
+            session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+            session.execute(text("SET TRANSACTION READ ONLY"))
+            scope = self._scope(session, command)
+            pool = self.retrieval.admit_read_only_candidate_pool(session, scope)
+            profiles, missing = self._project_profiles(session, pool)
             graph_scores: dict[str, int] = {}
             if command.topic_keys:
                 body = {
@@ -213,12 +233,56 @@ class CatalogInferenceTransferSourceAdapter:
                     AdmittedInferenceTransferSource(candidate.analysis_run_id, candidate.source)
                 )
             return AdmittedInferenceTransferCorpus(
-                tuple(profiles),
+                profiles,
                 tuple(sorted(graph_scores.items())),
                 pool.truncated,
                 missing,
                 tuple(admitted_sources),
             )
+
+    def authorize_pair(
+        self,
+        command: InferenceTransferSearchCommand,
+        left_profile: InferenceTransferProfile,
+        right_profile: InferenceTransferProfile,
+    ) -> None:
+        """Authorize two exact deterministic profiles, never a claimed approval/hash."""
+        profiles = tuple(
+            InferenceTransferProfile.model_validate(value.model_dump(mode="json"))
+            for value in (left_profile, right_profile)
+        )
+        if any(value.extraction.method != "DETERMINISTIC_REPORT_PROJECTION" for value in profiles):
+            raise InferenceTransferServiceError("INFERENCE_TRANSFER_PROFILE_PRODUCER_UNAVAILABLE")
+        if any(value.source_basis.graph_snapshot != command.graph_snapshot for value in profiles):
+            raise InferenceTransferServiceError("INFERENCE_TRANSFER_GRAPH_PIN_MISMATCH")
+        run_ids = tuple(
+            sorted(
+                {value.source_basis.solution_evidence.base_analysis_run_id for value in profiles}
+            )
+        )
+        if len(run_ids) != 2 or command.maximum_candidates < 2:
+            raise InferenceTransferServiceError("INFERENCE_TRANSFER_PAIR_SOURCE_INVALID")
+        with self.sessions() as session, session.begin():
+            session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+            session.execute(text("SET TRANSACTION READ ONLY"))
+            scope = self._scope(session, command, analysis_run_ids=run_ids)
+            pool = self.retrieval.admit_read_only_candidate_pool(session, scope)
+            if (
+                pool.truncated
+                or len(pool.candidates) != 2
+                or {candidate.analysis_run_id for candidate in pool.candidates} != set(run_ids)
+            ):
+                raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH")
+            rebuilt, missing = self._project_profiles(session, pool)
+            by_run = {
+                value.source_basis.solution_evidence.base_analysis_run_id: value
+                for value in rebuilt
+            }
+            if missing or any(
+                by_run.get(value.source_basis.solution_evidence.base_analysis_run_id) != value
+                for value in profiles
+            ):
+                raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH")
 
     def reauthorize(
         self,

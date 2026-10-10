@@ -34,6 +34,7 @@ ADMITTED_DEFINITIONS = {
     ("pdf-document-review", "1.1.0"): "pdf-document-review.v1.1.yaml",
     ("pdf-document-review", "1.2.0"): "pdf-document-review.v1.2.yaml",
     ("pdf-document-review", "1.3.0"): "pdf-document-review.v1.3.yaml",
+    ("item-inference-transfer-comparison", "1.0.0"): ("item-inference-transfer-comparison.v1.yaml"),
     ("generic-item-development", "1.8.0"): "generic-item-development.v1.8.yaml",
     ("generic-item-development", "1.9.0"): "generic-item-development.v1.9.yaml",
     ("generic-item-development", "1.10.0"): "generic-item-development.v1.10.yaml",

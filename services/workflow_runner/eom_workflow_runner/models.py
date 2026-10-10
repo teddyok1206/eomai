@@ -95,6 +95,7 @@ class WorkflowInstanceRecord(Base):
         ),
         CheckConstraint(
             "stage IN ('KNOWLEDGE_ANALYSIS','CUSTOMER_SUPPORT','DOCUMENT_REVIEW',"
+            "'INFERENCE_TRANSFER',"
             "'AUTHORING','IMAGE_REQUIRED',"
             "'IMAGE_SKIPPED',"
             "'REVIEWING','AWAITING_HUMAN_APPROVAL','REGISTERING','COMPLETED','FAILED',"

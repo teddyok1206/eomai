@@ -30,8 +30,8 @@
 | F1 | additive JSON Schema 2020-12 → frozen 모델 → grounded deterministic profile | exact refs/hash/closure/uncertainty tests, predecessor bytes 불변 | source 구현·검증 완료 |
 | F2 | pinned offline local embedding adapter와 exact ranking | dependency isolation, malformed vectors·ties·permission-prefilter tests; 실제 CPU benchmark 별도 | source 및 실제 CPU toy 실행 완료; production 설치·격리 미검증 |
 | F3 | Catalog opt-in authorized candidate read use case | actual actor/policy/Graph admission 재사용, 별도 후보 예산·provenance, 기본 retrieval 무변경 | source·격리 PostgreSQL SQL 검증 완료; 실제 corpus 비용 미측정 |
-| F4 | Orchestrator 경유 bounded Codex pair comparison | exact A/B, condition+decisive mapping, 차이/새 추론, unsupported/insufficient 처리, schema validation | source binding·replay 검증 완료; 실제 worker 실행은 compatible release 대기 |
-| F5 | 기존 검색 대비 bounded 실험·human scorecard | lexical/content-only/crux/metadata ablation, recall·latency·memory, 사람이 전이 위치를 평가 | 대기 |
+| F4 | Orchestrator 경유 bounded Codex pair comparison | exact A/B, condition+decisive mapping, 차이/새 추론, unsupported/insufficient 처리, schema validation | source binding·replay·V21 전용 목적과 pair 재인가 검증; 실제 worker 실행은 전용 application wrapper 및 compatible release 대기 |
+| F5 | 기존 검색 대비 bounded 실험·human scorecard | lexical/content-only/crux/metadata ablation, recall·latency·memory, 사람이 전이 위치를 평가 | staged 계약·encode-once harness·실모델 3-view 합성 smoke 완료; 실제 corpus/Graph 비교·human 평가 대기 |
 | F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 교육 판정은 독립 gate | 대기 |
 
 ## 비교 표현과 판정
@@ -66,6 +66,9 @@
 
 [첫 구현·실험 기록](ITEM_INFERENCE_TRANSFER_FIRST_CHECKPOINT.md)과
 [worker binding 설계](ITEM_INFERENCE_TRANSFER_WORKER_BINDING.md)에 실행 범위와 미검증 항목을 기록했다.
+[모집단·쌍 재인가](ITEM_INFERENCE_TRANSFER_CORPUS_SCOPE.md),
+[전용 실행 목적](ITEM_INFERENCE_TRANSFER_EXECUTION_PURPOSE.md),
+[staged 실험](ITEM_INFERENCE_TRANSFER_EXPERIMENT.md)은 추가 설계·검증 경계다.
 F1–F4 source 구현 완료를 F5–F6 또는 전체 goal 완료로 해석하지 않는다.
 
 1. 실제 actor의 supported Catalog read 경계를 사용할 수 있는 compatible release와 exact Graph/policy scope를 준비한다. 기존 V2 검색·활성 preset을 바꾸지 않는 opt-in 경로로 제한한다.

@@ -64,6 +64,7 @@ class WorkflowStage(StrEnum):
     KNOWLEDGE_ANALYSIS = "KNOWLEDGE_ANALYSIS"
     CUSTOMER_SUPPORT = "CUSTOMER_SUPPORT"
     DOCUMENT_REVIEW = "DOCUMENT_REVIEW"
+    INFERENCE_TRANSFER = "INFERENCE_TRANSFER"
     AUTHORING = "AUTHORING"
     IMAGE_REQUIRED = "IMAGE_REQUIRED"
     IMAGE_SKIPPED = "IMAGE_SKIPPED"
@@ -142,6 +143,9 @@ STAGE_TRANSITIONS: dict[WorkflowStage, frozenset[WorkflowStage]] = {
         {WorkflowStage.COMPLETED, WorkflowStage.FAILED, WorkflowStage.CANCELLED}
     ),
     WorkflowStage.DOCUMENT_REVIEW: frozenset(
+        {WorkflowStage.COMPLETED, WorkflowStage.FAILED, WorkflowStage.CANCELLED}
+    ),
+    WorkflowStage.INFERENCE_TRANSFER: frozenset(
         {WorkflowStage.COMPLETED, WorkflowStage.FAILED, WorkflowStage.CANCELLED}
     ),
     WorkflowStage.AUTHORING: frozenset(

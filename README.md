@@ -106,9 +106,14 @@ RAG 출처는 3건으로 제한합니다. 실제 HTTPS에서 교과서 답변·�
 로컬 임베딩으로 후보를 찾은 뒤 Orchestrator의 bounded Codex 쌍 비교에서 조건·추론의 대응과
 차이를 검증합니다. 사람의 전이 평가와 모델 가설은 별도입니다. 기존 RAG·출제·승인 경로를
 대체하지 않으며, 실제 corpus 품질·compatible runtime 활성화는 아직 대기 상태입니다.
+원래 기출만의 범위·쌍별 재인가·전용 실행 계획을 검증하고, 같은 후보 집합에서 본문·풀이 근거·
+메타데이터를 비교하는 로컬 CPU 실험 경로도 구현했습니다. 실제 모델의 합성 입력 시험은
+실제 기출 품질 평가와 구분합니다.
 [보존한 설계 원문](docs/architecture/ITEM_INFERENCE_TRANSFER_DESIGN_ORIGINAL.md),
 [구현 계획](docs/architecture/ITEM_INFERENCE_TRANSFER_IMPLEMENTATION_PLAN.md),
 [첫 구현·CPU 실험·검증 기록](docs/architecture/ITEM_INFERENCE_TRANSFER_FIRST_CHECKPOINT.md)을 참고하세요.
+[실험 계약](docs/architecture/ITEM_INFERENCE_TRANSFER_EXPERIMENT.md)과
+[전용 실행 목적](docs/architecture/ITEM_INFERENCE_TRANSFER_EXECUTION_PURPOSE.md)에 후속 경계를 기록합니다.
 
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스

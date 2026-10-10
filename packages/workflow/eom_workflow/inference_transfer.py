@@ -12,10 +12,13 @@ from eom_catalog_contracts.item_inference_transfer import (
     validate_pair_comparison_request_references,
 )
 from eom_catalog_contracts.models import FrozenModel
-from eom_identifiers import canonical_json_bytes, content_sha256
+from eom_identifiers import canonical_json_bytes
 from pydantic import model_validator
 
-from eom_workflow.control_plane import ResolvedExecutionPlan
+from eom_workflow.inference_transfer_control import (
+    ResolvedExecutionPlanV21,
+    validate_inference_transfer_plan_context,
+)
 
 TRANSFER_PAIR_PROTOCOL: Literal["workflow-role/1.29.0"] = "workflow-role/1.29.0"
 TRANSFER_PAIR_RESULT_SCHEMA = "item-inference-transfer-pair-result@1.0"
@@ -34,12 +37,18 @@ class InferenceTransferPairWorkerRequest(FrozenModel):
 
     @model_validator(mode="after")
     def exact_bounded_context(self) -> InferenceTransferPairWorkerRequest:
-        validate_inference_transfer_worker_request(self)
+        _validate_worker_request_references(self)
         return self
 
 
 def validate_inference_transfer_worker_request(request: InferenceTransferPairWorkerRequest) -> None:
-    """Revalidate hashes and bounds even for a copied or recovered frozen input."""
+    """Reparse the complete closed schema, including copied Literal fields."""
+
+    InferenceTransferPairWorkerRequest.model_validate(request.model_dump(mode="json"))
+
+
+def _validate_worker_request_references(request: InferenceTransferPairWorkerRequest) -> None:
+    """One reference/size invariant, called after the closed field schema runs."""
 
     validate_pair_comparison_request_references(
         request.comparison, request.left_profile, request.right_profile
@@ -71,33 +80,31 @@ def validate_inference_transfer_execution_plan(
     request: InferenceTransferPairWorkerRequest,
     workflow_id: str,
     step_key: str,
-) -> ResolvedExecutionPlan:
-    """Admit only a purpose-pinned V1 plan; never reuse an unrelated support preset."""
+    core_prompt_sha256: str,
+    prompt_sha256: str,
+) -> ResolvedExecutionPlanV21:
+    """Admit only V21 with exact source and prompt pins, never a generic Pack plan."""
 
-    plan = ResolvedExecutionPlan.model_validate(document)
-    if content_sha256(plan.model_dump(mode="json", exclude={"plan_sha256"})) != plan.plan_sha256:
-        raise ValueError("inference-transfer execution plan hash differs")
+    if not isinstance(document, dict) or document.get("schema_version") != (
+        "resolved-execution-plan/21.0"
+    ):
+        raise ValueError("inference-transfer requires its dedicated V21 purpose plan")
     if (
-        plan.workflow_id != workflow_id
-        or plan.workflow_definition_key != TRANSFER_PAIR_WORKFLOW_KEY
-        or plan.workflow_definition_version != TRANSFER_PAIR_WORKFLOW_VERSION
+        document.get("workflow_definition_key") != TRANSFER_PAIR_WORKFLOW_KEY
+        or document.get("workflow_definition_version") != TRANSFER_PAIR_WORKFLOW_VERSION
     ):
         raise ValueError("inference-transfer execution plan purpose differs")
-    if len(plan.steps) != 1:
-        raise ValueError("inference-transfer execution plan must have one bounded support step")
-    step = plan.steps[0]
-    if (
-        step.step_key != step_key
-        or step.role != "support"
-        or step.general_knowledge_mode != "DENIED"
-    ):
+    plan = ResolvedExecutionPlanV21.model_validate(document)
+    if plan.steps[0].step_key != step_key:
         raise ValueError("inference-transfer execution step differs")
-    left_graph = request.left_profile.source_basis.graph_snapshot
-    right_graph = request.right_profile.source_basis.graph_snapshot
-    if (
-        left_graph != right_graph
-        or plan.graph_snapshot_revision_id != left_graph.graph_snapshot_revision_id
-    ):
-        raise ValueError("inference-transfer execution plan Graph pin differs")
     validate_inference_transfer_worker_request(request)
+    validate_inference_transfer_plan_context(
+        plan,
+        comparison=request.comparison,
+        left_profile=request.left_profile,
+        right_profile=request.right_profile,
+        workflow_id=workflow_id,
+        core_prompt_sha256=core_prompt_sha256,
+        prompt_sha256=prompt_sha256,
+    )
     return plan

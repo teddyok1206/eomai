@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from collections import deque
+from dataclasses import replace
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import Mock
 
 import pytest
 from eom_catalog_contracts import EvidenceBudget
+from eom_catalog_service.inference_transfer_scope import InferenceTransferPopulationScope
 from eom_catalog_service.knowledge_retrieval_service import (
     KnowledgeRetrievalApplicationService,
     KnowledgeRetrievalServiceError,
@@ -20,7 +22,14 @@ from sqlalchemy.orm import Session
 from tests.unit.inference_transfer_fixtures import profile, sha
 
 
-def admission_scope(*, maximum: int = 2, role: str = "ADMIN") -> ReadOnlyCandidatePoolScope:
+def admission_scope(
+    *,
+    maximum: int = 2,
+    role: str = "ADMIN",
+    population_scope: InferenceTransferPopulationScope = (
+        InferenceTransferPopulationScope.ALL_ADMITTED_GRAPH_ITEMS
+    ),
+) -> ReadOnlyCandidatePoolScope:
     return ReadOnlyCandidatePoolScope(
         graph_snapshot=profile().source_basis.graph_snapshot,
         access_policy_revision_id="accessrev_" + "a" * 32,
@@ -37,6 +46,7 @@ def admission_scope(*, maximum: int = 2, role: str = "ADMIN") -> ReadOnlyCandida
             max_context_tokens=8000,
         ),
         maximum_candidates=maximum,
+        population_scope=population_scope,
     )
 
 
@@ -113,6 +123,65 @@ def test_source_class_lifecycle_answer_bearing_filter_precedes_grouped_limit() -
     assert "knowledge_analysis_runs.state = 'ACCEPTED'" in sql
     assert "GROUP BY knowledge_snapshot_analyses.analysis_run_id" in sql
     assert sql.index("WHERE") < sql.index("GROUP BY") < sql.index("LIMIT 3")
+    assert "assessment_item_occurrence_references" not in sql
+
+
+def test_occurrence_membership_is_exact_and_prelimit_without_waiving_authority() -> None:
+    scope = admission_scope(
+        role="EDITOR",
+        population_scope=InferenceTransferPopulationScope.OCCURRENCE_BACKED_PAST_EXAM,
+    )
+    session = AdmissionSession((), ())
+    service = admission_service(scope)
+    service.admit_read_only_candidate_pool(cast(Session, session), scope)
+    cast(Any, service)._authorize.assert_called_once()
+    sql = str(
+        session.statements[0].compile(
+            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+        )
+    )
+    assert "EXISTS (SELECT assessment_item_occurrence_references.analysis_run_id" in sql
+    assert (
+        "assessment_item_occurrence_references.graph_snapshot_revision_id = "
+        "knowledge_snapshot_analyses.graph_snapshot_revision_id"
+    ) in sql
+    assert (
+        "assessment_item_occurrence_references.analysis_run_id = "
+        "knowledge_snapshot_analyses.analysis_run_id"
+    ) in sql
+    assert (
+        "assessment_item_occurrence_references.item_revision_id = "
+        "knowledge_snapshot_analyses.source_revision_id"
+    ) in sql
+    assert "assessment_item_occurrence_references.item_id = item_revisions.item_id" in sql
+    assert "knowledge_nodes.answer_bearing IS false" in sql
+    assert "knowledge_node_source_pointers.source_class = 'PAST_EXAM'" in sql
+    assert sql.index("EXISTS") < sql.index("GROUP BY") < sql.index("LIMIT 3")
+    assert "current_revision_id" not in sql
+
+
+def test_occurrence_scope_also_restricts_materialized_pointer_classes() -> None:
+    scope = replace(
+        admission_scope(
+            population_scope=InferenceTransferPopulationScope.OCCURRENCE_BACKED_PAST_EXAM
+        ),
+        source_classes=("APPROVED_ITEM", "PAST_EXAM"),
+    )
+    run_id = "analysisrun_" + "a" * 32
+    session = AdmissionSession((run_id,), source_rows(run_id))
+    admission_service(scope).admit_read_only_candidate_pool(cast(Session, session), scope)
+    detail_sql = str(
+        session.statements[1].compile(
+            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+        )
+    )
+    assert "knowledge_node_source_pointers.source_class = 'PAST_EXAM'" in detail_sql
+
+
+@pytest.mark.parametrize("invalid_scope", ("OCCURRENCE_BACKED_PAST_EXAM", "ALL", None))
+def test_population_scope_rejects_untyped_or_unknown_values(invalid_scope: Any) -> None:
+    with pytest.raises(ValueError, match="population scope"):
+        replace(admission_scope(), population_scope=invalid_scope)
 
 
 def test_graph_and_policy_hashes_are_exact_not_current_references() -> None:

@@ -65,6 +65,7 @@ from eom_catalog_service.artifacts import (
     CatalogArtifactReader,
     CatalogArtifactService,
 )
+from eom_catalog_service.inference_transfer_scope import InferenceTransferPopulationScope
 from eom_catalog_service.knowledge_analysis_sources import (
     EducationalDocumentSourceResolutionCache,
     KnowledgeAnalysisSourceError,
@@ -282,8 +283,13 @@ class ReadOnlyCandidatePoolScope:
     maximum_candidates: int = 1024
     analysis_run_ids: tuple[str, ...] = ()
     query_kind: Literal["ITEM_PREPARATION"] = "ITEM_PREPARATION"
+    population_scope: InferenceTransferPopulationScope = (
+        InferenceTransferPopulationScope.ALL_ADMITTED_GRAPH_ITEMS
+    )
 
     def __post_init__(self) -> None:
+        if not isinstance(self.population_scope, InferenceTransferPopulationScope):
+            raise ValueError("candidate pool population scope must be a typed value")
         if type(self.maximum_candidates) is not int or not 1 <= self.maximum_candidates <= 1024:
             raise ValueError("candidate pool limit must be between 1 and 1024")
         for values in (self.source_classes, self.requester_permission_keys):
@@ -1028,8 +1034,8 @@ class KnowledgeRetrievalApplicationService:
         """Admit bounded exact Item sources without requiring lexical overlap.
 
         The distinct *analysis* limit is applied after source-class, lifecycle,
-        and answer-bearing filters. Pointer-row limits never silently truncate
-        the source population: an overlarge source raises a bounded-read error.
+        occurrence-scope and answer-bearing filters. Pointer-row limits never
+        silently truncate the source population: an overlarge source raises a bounded-read error.
         Canonical source resolution remains the existing Catalog boundary.
         """
         snapshot_id = scope.graph_snapshot.graph_snapshot_revision_id
@@ -1080,6 +1086,25 @@ class KnowledgeRetrievalApplicationService:
             statement = statement.where(node.answer_bearing.is_(False))
         if scope.analysis_run_ids:
             statement = statement.where(association.analysis_run_id.in_(scope.analysis_run_ids))
+        occurrence_scoped = (
+            scope.population_scope == InferenceTransferPopulationScope.OCCURRENCE_BACKED_PAST_EXAM
+        )
+        if occurrence_scoped:
+            occurrence = AssessmentItemOccurrenceReferenceRecord
+            exact_occurrence = (
+                select(occurrence.analysis_run_id)
+                .where(
+                    occurrence.graph_snapshot_revision_id == association.graph_snapshot_revision_id,
+                    occurrence.analysis_run_id == association.analysis_run_id,
+                    occurrence.item_revision_id == association.source_revision_id,
+                    occurrence.item_id == ItemRevisionRecord.item_id,
+                )
+                .correlate(association, ItemRevisionRecord)
+                .exists()
+            )
+            # EXISTS restricts the original population before LIMIT without
+            # duplicate placements multiplying sources or waiving authority.
+            statement = statement.where(pointer.source_class == "PAST_EXAM", exact_occurrence)
         selected = tuple(str(value) for value in session.scalars(statement))
         truncated = len(selected) > scope.maximum_candidates
         run_ids = selected[: scope.maximum_candidates]
@@ -1103,6 +1128,8 @@ class KnowledgeRetrievalApplicationService:
         )
         if scope.requester_role not in policy.answer_bearing_roles:
             detail = detail.where(node.answer_bearing.is_(False))
+        if occurrence_scoped:
+            detail = detail.where(pointer.source_class == "PAST_EXAM")
         rows = tuple(session.execute(detail))
         if len(rows) > maximum_pointer_rows:
             raise KnowledgeRetrievalServiceError(

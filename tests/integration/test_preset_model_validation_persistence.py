@@ -35,6 +35,7 @@ from eom_orchestrator.control_service import (
     record_execution_preset_revision,
 )
 from eom_orchestrator.database import build_engine
+from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from eom_orchestrator.models import ArtifactRevisionRecord, JobEventRecord, JobRecord
 from eom_orchestrator.preset_lifecycle import (
     create_execution_preset_draft,
@@ -102,7 +103,7 @@ def guarded_engine(integration_engine: Engine) -> Engine:
         )
         assert (
             connection.scalar(text("SELECT version_num FROM app.alembic_version"))
-            == "20261009_0050"
+            == CURRENT_MIGRATION_REVISION
         )
     return integration_engine
 

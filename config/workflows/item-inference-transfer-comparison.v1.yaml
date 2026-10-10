@@ -1,0 +1,19 @@
+schema_version: "1.0"
+definition_key: "item-inference-transfer-comparison"
+definition_version: "1.0.0"
+start_step: "compare_pair"
+
+limits:
+  max_rework_cycles: 0
+  max_step_attempts: 1
+
+steps:
+  - key: "compare_pair"
+    type: "agent"
+    worker_role: "support"
+    result_schema: "item-inference-transfer-pair-result@1.0"
+    on_success: "complete"
+
+  - key: "complete"
+    type: "terminal"
+    terminal_status: "COMPLETED"

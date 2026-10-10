@@ -21,6 +21,7 @@ from eom_catalog_service.inference_transfer_ports import (
     EmbeddingRankerProvenance,
     ScoredInferenceTransferProfile,
 )
+from eom_catalog_service.inference_transfer_scope import InferenceTransferPopulationScope
 from eom_catalog_service.inference_transfer_service import (
     AdmittedInferenceTransferCorpus,
     AdmittedInferenceTransferSource,
@@ -275,6 +276,29 @@ def test_output_union_is_bounded_and_does_not_evict_graph_channel_with_cosine_sc
     assert result.candidates[1].profile == InferenceTransferProfilePointer.from_profile(d)
 
 
+def test_out_of_scope_graph_score_cannot_consume_admitted_channel_budget() -> None:
+    a, b, canary = (exact_profile(seed) for seed in "abc")
+    sources = Sources(
+        corpus(
+            a,
+            b,
+            graph_scores=(
+                (canary.source_basis.source.item_revision_id, 999),
+                (b.source_basis.source.item_revision_id, 800),
+            ),
+        )
+    )
+    result = InferenceTransferApplicationService(sources).search(
+        command(
+            top_k=1, population_scope=InferenceTransferPopulationScope.OCCURRENCE_BACKED_PAST_EXAM
+        )
+    )
+    assert len(result.candidates) == 1
+    assert result.candidates[0].profile == InferenceTransferProfilePointer.from_profile(b)
+    assert result.candidates[0].provenance == ("GRAPH_LEXICAL",)
+    assert sources.authorizations == [sources.corpus]
+
+
 @pytest.mark.parametrize("missing_report", (False, True))
 def test_unranked_or_unreported_source_revocation_blocks_population_counts(
     missing_report: bool,
@@ -316,9 +340,23 @@ def test_catalog_reauthorization_rejects_revoked_unreported_source_before_counts
     resolution = Mock()
     monkeypatch.setattr(adapter_module, "resolve_solution_evidence_by_base_run", resolution)
     with pytest.raises(InferenceTransferServiceError, match="SOURCE_PIN_MISMATCH"):
-        adapter.reauthorize(command(), value)
+        scoped_command = command(
+            population_scope=InferenceTransferPopulationScope.OCCURRENCE_BACKED_PAST_EXAM
+        )
+        adapter.reauthorize(scoped_command, value)
     resolution.assert_not_called()
     assert adapter._scope.call_args.kwargs == {}
+    assert adapter._scope.call_args.args[1] is scoped_command
+    assert (
+        adapter._scope.call_args.args[1].population_scope
+        == InferenceTransferPopulationScope.OCCURRENCE_BACKED_PAST_EXAM
+    )
+
+
+def test_default_population_is_unchanged_and_scope_rejects_untyped_values() -> None:
+    assert command().population_scope == InferenceTransferPopulationScope.ALL_ADMITTED_GRAPH_ITEMS
+    with pytest.raises(ValueError, match="population scope"):
+        command(population_scope="OCCURRENCE_BACKED_PAST_EXAM")
 
 
 def test_population_cannot_include_unadmitted_sources_without_reports() -> None:
@@ -437,15 +475,19 @@ def test_authority_uses_actual_actor_permissions_and_roles_not_injected_claims(
             max_context_tokens=8000,
         ),
     )
-    scope = adapter._scope(cast(Session, session), command())
+    scoped_command = command(
+        population_scope=InferenceTransferPopulationScope.OCCURRENCE_BACKED_PAST_EXAM
+    )
+    scope = adapter._scope(cast(Session, session), scoped_command)
     assert scope.requester_role == "REVIEWER" and scope.requested_by == command().actor_id
     assert scope.requester_permission_keys == tuple(
         sorted(permission.value for permission in permissions)
     )
     assert "WORKER" not in scope.requester_permission_keys
+    assert scope.population_scope == scoped_command.population_scope
     monkeypatch.setattr(adapter_module, "effective_permissions", Mock(return_value=frozenset()))
     with pytest.raises(InferenceTransferServiceError, match="FORBIDDEN"):
-        adapter._scope(cast(Session, session), command())
+        adapter._scope(cast(Session, session), scoped_command)
 
 
 @pytest.mark.parametrize(

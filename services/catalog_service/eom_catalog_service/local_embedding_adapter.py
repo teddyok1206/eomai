@@ -6,13 +6,13 @@ import hashlib
 import importlib
 import importlib.metadata
 import json
-import math
 import os
 import stat
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from eom_catalog_contracts.inference_transfer_text import concrete_profile_text
 from eom_catalog_contracts.item_inference_transfer import (
     InferenceTransferProfile,
     InferenceTransferProfilePointer,
@@ -24,6 +24,10 @@ from eom_catalog_service.inference_transfer_ports import (
     EmbeddingRankerProvenance,
     LocalTextEmbeddingBackend,
     ScoredInferenceTransferProfile,
+)
+from eom_catalog_service.inference_transfer_vectors import (
+    normalized_vector,
+    rank_normalized_vectors,
 )
 
 _MAX_PROFILE_BYTES = 256 * 1024
@@ -53,25 +57,17 @@ class LocalEmbeddingError(ValueError):
 def profile_embedding_text(profile: InferenceTransferProfile) -> str:
     """Preserve concrete statements, including negation/units, without embedding internal IDs."""
 
-    text = "\n".join(f"{claim.facet}: {claim.text}" for claim in profile.claims)
+    text = concrete_profile_text(profile)
     if not text.strip() or len(text.encode("utf-8")) > _MAX_PROFILE_BYTES:
         raise LocalEmbeddingError("LOCAL_EMBEDDING_INPUT_INVALID")
     return text
 
 
 def _normalized(vector: tuple[float, ...], dimension: int) -> tuple[float, ...]:
-    if len(vector) != dimension or any(
-        isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value)
-        for value in vector
-    ):
-        raise LocalEmbeddingError("LOCAL_EMBEDDING_VECTOR_INVALID")
-    norm = math.hypot(*vector)
-    if norm == 0 or not math.isfinite(norm):
-        raise LocalEmbeddingError("LOCAL_EMBEDDING_VECTOR_INVALID")
-    result = tuple(value / norm for value in vector)
-    if any(not math.isfinite(value) for value in result):
-        raise LocalEmbeddingError("LOCAL_EMBEDDING_VECTOR_INVALID")
-    return result
+    try:
+        return normalized_vector(vector, dimension)
+    except ValueError as exc:
+        raise LocalEmbeddingError("LOCAL_EMBEDDING_VECTOR_INVALID") from exc
 
 
 class ExactLocalEmbeddingRanker:
@@ -135,24 +131,13 @@ class ExactLocalEmbeddingRanker:
         if len(query_vectors) != 1 or len(vectors) != len(references):
             raise LocalEmbeddingError("LOCAL_EMBEDDING_VECTOR_INVALID")
         query = _normalized(query_vectors[0], self._dimension)
-        scores = []
-        for reference, vector in zip(references, vectors, strict=True):
-            normalized = _normalized(vector, self._dimension)
-            score = math.fsum(a * b for a, b in zip(query, normalized, strict=True))
-            scores.append(ScoredInferenceTransferProfile(reference, max(-1.0, min(1.0, score))))
+        candidates = tuple(
+            (reference, _normalized(vector, self._dimension))
+            for reference, vector in zip(references, vectors, strict=True)
+        )
         if self.provenance != before:
             raise LocalEmbeddingError("LOCAL_EMBEDDING_MODEL_CHANGED")
-        return tuple(
-            sorted(
-                scores,
-                key=lambda score: (
-                    -score.cosine_similarity,
-                    score.profile.profile_id,
-                    score.profile.profile_revision_id,
-                    score.profile.profile_sha256,
-                ),
-            )[:top_k]
-        )
+        return rank_normalized_vectors(query, candidates, top_k=top_k)
 
 
 @dataclass(frozen=True)
@@ -239,8 +224,14 @@ class OfflineTransformersEmbeddingBackend:
         *,
         expected_owner_uid: int = 0,
         batch_size: int = 4,
+        threads: int = 4,
     ) -> None:
-        if type(batch_size) is not int or not 1 <= batch_size <= 16:
+        if (
+            type(batch_size) is not int
+            or not 1 <= batch_size <= 16
+            or type(threads) is not int
+            or not 1 <= threads <= 16
+        ):
             raise LocalEmbeddingError("LOCAL_EMBEDDING_INPUT_INVALID")
         self._spec = spec
         self._owner_uid = expected_owner_uid
@@ -256,6 +247,7 @@ class OfflineTransformersEmbeddingBackend:
                 if importlib.metadata.version(requirement.name) != requirement.version:
                     raise LocalEmbeddingError("LOCAL_EMBEDDING_RUNTIME_UNSUPPORTED")
             self._torch = importlib.import_module("torch")
+            self._torch.set_num_threads(threads)
             transformers = importlib.import_module("transformers")
             self._tokenizer = transformers.AutoTokenizer.from_pretrained(
                 str(self._root), local_files_only=True, trust_remote_code=False, use_fast=True
@@ -360,9 +352,9 @@ class OfflineTransformersEmbeddingBackend:
         except OSError as exc:
             raise LocalEmbeddingError("LOCAL_EMBEDDING_MODEL_CHANGED") from exc
 
-    def encode(
-        self, texts: tuple[str, ...], *, purpose: Literal["QUERY", "DOCUMENT"]
-    ) -> tuple[tuple[float, ...], ...]:
+    def _validate_texts(
+        self, texts: tuple[str, ...], purpose: Literal["QUERY", "DOCUMENT"]
+    ) -> None:
         if (
             not isinstance(texts, tuple)
             or purpose not in {"QUERY", "DOCUMENT"}
@@ -376,12 +368,39 @@ class OfflineTransformersEmbeddingBackend:
         ):
             raise LocalEmbeddingError("LOCAL_EMBEDDING_INPUT_INVALID")
         self._assert_unchanged()
+
+    def _tokenize(self, texts: tuple[str, ...], purpose: Literal["QUERY", "DOCUMENT"]) -> Any:
         prefix = self._spec.query_prefix if purpose == "QUERY" else self._spec.document_prefix
+        return self._tokenizer(
+            tuple(prefix + text for text in texts), truncation=False, padding=False
+        )
+
+    def token_lengths(
+        self, texts: tuple[str, ...], *, purpose: Literal["QUERY", "DOCUMENT"]
+    ) -> tuple[int, ...]:
+        self._validate_texts(texts, purpose)
+        lengths: list[int] = []
+        try:
+            for index in range(0, len(texts), self._batch_size):
+                tokens = self._tokenize(texts[index : index + self._batch_size], purpose)
+                lengths.extend(len(ids) for ids in tokens["input_ids"])
+            if len(lengths) != len(texts):
+                raise LocalEmbeddingError("LOCAL_EMBEDDING_INFERENCE_FAILED")
+            self._assert_unchanged()
+        except LocalEmbeddingError:
+            raise
+        except (OSError, ValueError, TypeError, KeyError, RuntimeError) as exc:
+            raise LocalEmbeddingError("LOCAL_EMBEDDING_INFERENCE_FAILED") from exc
+        return tuple(lengths)
+
+    def encode(
+        self, texts: tuple[str, ...], *, purpose: Literal["QUERY", "DOCUMENT"]
+    ) -> tuple[tuple[float, ...], ...]:
+        self._validate_texts(texts, purpose)
         output: list[tuple[float, ...]] = []
         try:
             for index in range(0, len(texts), self._batch_size):
-                selected = tuple(prefix + text for text in texts[index : index + self._batch_size])
-                tokens = self._tokenizer(selected, truncation=False, padding=False)
+                tokens = self._tokenize(texts[index : index + self._batch_size], purpose)
                 if any(len(ids) > self._spec.maximum_tokens for ids in tokens["input_ids"]):
                     raise LocalEmbeddingError("LOCAL_EMBEDDING_INPUT_TOO_LONG")
                 padded = self._tokenizer.pad(tokens, padding=True, return_tensors="pt")
@@ -399,6 +418,6 @@ class OfflineTransformersEmbeddingBackend:
             self._assert_unchanged()
         except LocalEmbeddingError:
             raise
-        except (OSError, ValueError, TypeError, RuntimeError) as exc:
+        except (OSError, ValueError, TypeError, KeyError, RuntimeError) as exc:
             raise LocalEmbeddingError("LOCAL_EMBEDDING_INFERENCE_FAILED") from exc
         return tuple(output)

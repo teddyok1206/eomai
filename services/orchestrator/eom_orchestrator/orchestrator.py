@@ -11,7 +11,13 @@ from typing import Literal, cast
 from uuid import uuid4
 
 from eom_catalog_contracts import ContentTeamMaterialRequirement
-from eom_identifiers import content_sha256, new_job_id, new_logical_artifact_id, new_revision_id
+from eom_identifiers import (
+    content_sha256,
+    new_job_id,
+    new_logical_artifact_id,
+    new_revision_id,
+    sha256_bytes,
+)
 from eom_image_contracts import (
     LocalImageVisualReferencePublicationReceipt,
     SvgLabelLayoutValidationError,
@@ -56,6 +62,7 @@ from eom_workflow.inference_transfer import (
     validate_inference_transfer_execution_plan,
     validate_inference_transfer_worker_result,
 )
+from eom_workflow.inference_transfer_control import ResolvedExecutionPlanV21
 from eom_workflow.models import (
     ArtifactPointer,
     ContentTeamImageRoleResultV12,
@@ -541,6 +548,81 @@ class Orchestrator:
         )
         return {"visual_reference_publication_receipt": receipt_document}
 
+    def _validated_inference_transfer_plan(
+        self,
+        *,
+        request: InferenceTransferPairWorkerRequest,
+        workflow_id: str,
+        step_key: str,
+        core_prompt_sha256: str,
+        prompt_text: str,
+    ) -> ResolvedExecutionPlanV21:
+        """Resolve exact purpose/prompt pins for new work and historical replay alike."""
+        with self.sessions() as session:
+            record = session.scalar(
+                select(ResolvedExecutionPlanRecord).where(
+                    ResolvedExecutionPlanRecord.workflow_id == workflow_id
+                )
+            )
+            document = None if record is None else record.canonical_document
+            try:
+                plan = validate_inference_transfer_execution_plan(
+                    document,
+                    request=request,
+                    workflow_id=workflow_id,
+                    step_key=step_key,
+                    core_prompt_sha256=core_prompt_sha256,
+                    prompt_sha256=sha256_bytes(prompt_text.encode("utf-8")),
+                )
+                if record is None or (
+                    record.plan_id,
+                    record.workflow_id,
+                    record.preset_id,
+                    record.preset_revision_id,
+                    record.capacity_policy_revision_id,
+                    record.graph_snapshot_revision_id,
+                    record.evidence_bundle_revision_id,
+                    record.plan_sha256,
+                    record.resolver_version,
+                    record.resolved_at,
+                ) != (
+                    plan.plan_id,
+                    plan.workflow_id,
+                    plan.preset_id,
+                    plan.preset_revision_id,
+                    plan.capacity_policy_revision_id,
+                    plan.graph_snapshot.graph_snapshot_revision_id,
+                    None,
+                    plan.plan_sha256,
+                    plan.resolver_version,
+                    plan.resolved_at,
+                ):
+                    # Terminal replay skips execution materialization, so it must
+                    # independently bind canonical bytes to their persisted identity.
+                    raise ValueError("inference-transfer plan row/document mismatch")
+            except ValueError as exc:
+                raise ControlPlaneError(
+                    "CONTROL_TRANSFER_PLAN_UNAVAILABLE",
+                    "a compatible purpose-pinned inference-transfer plan is required",
+                ) from exc
+        return plan
+
+    @staticmethod
+    def _reauthorize_inference_transfer_sources(
+        request: InferenceTransferPairWorkerRequest,
+        owner: Callable[[InferenceTransferPairWorkerRequest], None],
+    ) -> None:
+        """Normalize owner validation failures without importing Catalog adapters."""
+        try:
+            owner(request)
+        except ValueError as exc:
+            # Catalog validation exceptions are not runtime programming grants;
+            # keep the safe owner error inside the existing job-failure boundary.
+            raise ControlPlaneError(
+                "CONTROL_TRANSFER_AUTHORIZATION_FAILED",
+                "inference-transfer source authorization failed",
+            ) from exc
+
     def submit_workflow_role(
         self,
         *,
@@ -557,15 +639,42 @@ class Orchestrator:
         prompt_text: str | None = None,
         material_requirement: ContentTeamMaterialRequirement | None = None,
         before_execute: Callable[[str], None] | None = None,
+        reauthorize_transfer_sources: Callable[[InferenceTransferPairWorkerRequest], None]
+        | None = None,
+        transfer_core_prompt_sha256: str | None = None,
         execution_tier: Literal["PRIMARY", "ESCALATED"] = "PRIMARY",
     ) -> JobRecord:
         if (prompt_path is None) == (prompt_text is None):
             raise ValueError("exactly one workflow prompt source is required")
         is_transfer = isinstance(request, InferenceTransferPairWorkerRequest)
-        if is_transfer and before_execute is None:
+        transfer_plan: ResolvedExecutionPlanV21 | None = None
+        if is_transfer and reauthorize_transfer_sources is None:
             raise ControlPlaneError(
                 "CONTROL_TRANSFER_AUTHORIZATION_REQUIRED",
                 "inference-transfer execution requires owner reauthorization",
+            )
+        if isinstance(request, InferenceTransferPairWorkerRequest):
+            assert reauthorize_transfer_sources is not None
+            request = InferenceTransferPairWorkerRequest.model_validate(
+                request.model_dump(mode="json")
+            )
+            if transfer_core_prompt_sha256 is None:
+                raise ControlPlaneError(
+                    "CONTROL_TRANSFER_PROMPT_REQUIRED",
+                    "inference-transfer requires its prepared core prompt hash",
+                )
+            # Job/step binding is not source authorization. The Catalog owner
+            # supplies a separate port pinned to the real actor and read scope.
+            self._reauthorize_inference_transfer_sources(request, reauthorize_transfer_sources)
+            if prompt_text is None:
+                assert prompt_path is not None
+                prompt_text = prompt_path.read_text(encoding="utf-8")
+            transfer_plan = self._validated_inference_transfer_plan(
+                request=request,
+                workflow_id=workflow_id,
+                step_key=step_key,
+                core_prompt_sha256=transfer_core_prompt_sha256,
+                prompt_text=prompt_text,
             )
         existing = self._job_by_idempotency_key(idempotency_key)
         recovery_state: JobState | None = None
@@ -584,9 +693,10 @@ class Orchestrator:
             artifact = worker_input.artifact
             protocol_version = worker_input.protocol_version
             if is_transfer:
-                assert before_execute is not None
+                assert reauthorize_transfer_sources is not None
+                assert isinstance(request, InferenceTransferPairWorkerRequest)
                 # Exact history is immutable, but replay does not preserve a revoked permission.
-                before_execute(job_id)
+                self._reauthorize_inference_transfer_sources(request, reauthorize_transfer_sources)
             existing_state = self._resume_pre_execution_job(job_id)
             existing = self.get_job(job_id)
             if existing_state in TERMINAL_STATES:
@@ -638,8 +748,11 @@ class Orchestrator:
                 )
             if not created:
                 if is_transfer:
-                    assert before_execute is not None
-                    before_execute(job.job_id)
+                    assert reauthorize_transfer_sources is not None
+                    assert isinstance(request, InferenceTransferPairWorkerRequest)
+                    self._reauthorize_inference_transfer_sources(
+                        request, reauthorize_transfer_sources
+                    )
                 return self.get_job(job.job_id)
             self._transition(job_id, JobState.VALIDATED, "REQUEST_VALIDATED")
             self._transition(job_id, JobState.QUEUED, "JOB_QUEUED")
@@ -665,31 +778,27 @@ class Orchestrator:
             before_execute(job_id)
 
         try:
+            if isinstance(request, InferenceTransferPairWorkerRequest):
+                assert reauthorize_transfer_sources is not None
+                # This check is after job creation: owner failure must preserve
+                # failed history rather than strand an executable QUEUED job.
+                self._reauthorize_inference_transfer_sources(request, reauthorize_transfer_sources)
             with self.sessions() as session:
-                plan_record = session.scalar(
-                    select(ResolvedExecutionPlanRecord).where(
-                        ResolvedExecutionPlanRecord.workflow_id == workflow_id
-                    )
-                )
-                if plan_record is not None:
-                    plan_document = plan_record.canonical_document
-                    plan_id = plan_record.plan_id
+                if transfer_plan is not None:
+                    plan_document = transfer_plan.model_dump(mode="json")
+                    plan_id = transfer_plan.plan_id
                 else:
-                    plan_document = None
-                    plan_id = None
-                if isinstance(request, InferenceTransferPairWorkerRequest):
-                    try:
-                        validate_inference_transfer_execution_plan(
-                            plan_document,
-                            request=request,
-                            workflow_id=workflow_id,
-                            step_key=step_key,
+                    plan_record = session.scalar(
+                        select(ResolvedExecutionPlanRecord).where(
+                            ResolvedExecutionPlanRecord.workflow_id == workflow_id
                         )
-                    except ValueError as exc:
-                        raise ControlPlaneError(
-                            "CONTROL_TRANSFER_PLAN_UNAVAILABLE",
-                            "a compatible purpose-pinned inference-transfer plan is required",
-                        ) from exc
+                    )
+                    if plan_record is not None:
+                        plan_document = plan_record.canonical_document
+                        plan_id = plan_record.plan_id
+                    else:
+                        plan_document = None
+                        plan_id = None
                 if recovered_run is not None:
                     assert slot is not None
                     held_lease = session.scalar(
@@ -872,9 +981,11 @@ class Orchestrator:
                         ErrorCode.WORKER_RESULT_INVALID,
                         "inference-transfer result differs from its immutable request",
                     ) from exc
-                assert before_execute is not None
+                assert reauthorize_transfer_sources is not None
                 # Reauthorize exact sources after execution as well, before committing bytes.
-                before_execute(job_id)
+                self._reauthorize_inference_transfer_sources(
+                    worker_input.request, reauthorize_transfer_sources
+                )
             if isinstance(result, PdfDocumentReviewRoleResult):
                 if not isinstance(worker_input.request, PdfDocumentReviewWorkerRequest):
                     raise PlatformError(

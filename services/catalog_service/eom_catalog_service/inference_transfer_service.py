@@ -17,6 +17,7 @@ from eom_catalog_service.inference_transfer_ports import (
     EmbeddingRankerProvenance,
     InferenceTransferCandidateRanker,
 )
+from eom_catalog_service.inference_transfer_scope import InferenceTransferPopulationScope
 
 
 class InferenceTransferServiceError(ValueError):
@@ -38,8 +39,13 @@ class InferenceTransferSearchCommand:
     topic_keys: tuple[str, ...] = ()
     maximum_candidates: int = 1024
     top_k: int = 8
+    population_scope: InferenceTransferPopulationScope = (
+        InferenceTransferPopulationScope.ALL_ADMITTED_GRAPH_ITEMS
+    )
 
     def __post_init__(self) -> None:
+        if not isinstance(self.population_scope, InferenceTransferPopulationScope):
+            raise ValueError("inference transfer population scope must be a typed value")
         if type(self.top_k) is not int or type(self.maximum_candidates) is not int:
             raise ValueError("inference transfer budgets must be integer values")
         if not 1 <= self.top_k <= 64 or not self.top_k <= self.maximum_candidates <= 1024:
@@ -227,7 +233,7 @@ class InferenceTransferApplicationService:
         graph_rows = tuple(
             (revision, score)
             for revision, score in corpus.graph_scores
-            if revision != command.query_item_revision_id
+            if revision != command.query_item_revision_id and revision in by_revision
         )
         graph = dict(graph_rows)
         if len(graph) != len(graph_rows):

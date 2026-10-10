@@ -503,6 +503,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "20.0",
             "sha256:f36cab0ec52d1c0f4069f972cb4f793a6b338b7e6470c5885673435da3b9d8f5",
         ),
+        "resolved-execution-plan-v21": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v21.schema.json",
+            "resources/control-plane/resolved-execution-plan-v21.schema.json",
+            "21.0",
+            "sha256:b61f33da7c85feff248103d54a249c07bd8e6987e45c34dd0c9948a3e569cc2f",
+        ),
         "document-review-evidence-validation-receipt": ControlSchemaResource(
             (
                 "schemas/workflow/control-plane/"
@@ -789,6 +795,7 @@ def _control_schema_registry() -> Registry[Any]:
         "past-exam-variation-request",
         "educational-retrieval-requirement",
         "educational-retrieval-requirement-v2",
+        "item-inference-transfer",
     ):
         schema = load_schema(name)
         identifier = schema.get("$id")

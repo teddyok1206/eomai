@@ -216,6 +216,12 @@ def test_installed_wheel_loads_schemas_without_source_checkout(
     definition.write_bytes(
         (REPOSITORY_ROOT / "config/workflows/generic-item-development.v1.1.yaml").read_bytes()
     )
+    transfer_definition = tmp_path / "item-inference-transfer-comparison.v1.yaml"
+    transfer_definition.write_bytes(
+        (
+            REPOSITORY_ROOT / "config/workflows/item-inference-transfer-comparison.v1.yaml"
+        ).read_bytes()
+    )
     script = """
 from __future__ import annotations
 import importlib.util
@@ -225,6 +231,7 @@ from pathlib import Path
 installed_root = Path(sys.argv[1]).resolve()
 repository = sys.argv[2]
 definition_path = Path(sys.argv[3])
+transfer_definition_path = Path(sys.argv[4])
 sys.path.insert(0, str(installed_root))
 
 from eom_workflow.compiler import compile_definition
@@ -250,9 +257,20 @@ for schema_id in RESULT_SCHEMA_FILES:
 load_role_input_schema("support", TRANSFER_PAIR_PROTOCOL)
 load_role_result_schema(TRANSFER_PAIR_RESULT_SCHEMA)
 from eom_catalog_service.inference_transfer_service import InferenceTransferApplicationService
+from eom_catalog_contracts.inference_transfer_experiment import (
+    InferenceTransferExperimentRequest,
+    InferenceTransferExperimentResult,
+)
+from eom_catalog_contracts.validation import load_schema as load_catalog_schema
+from eom_catalog_service.inference_transfer_experiment import (
+    run_staged_inference_transfer_experiment,
+)
 from eom_catalog_service.inference_transfer_worker_preparation import (
     prepare_inference_transfer_worker_comparison,
 )
+from eom_workflow.inference_transfer_control import ResolvedExecutionPlanV21
+load_catalog_schema("item-inference-transfer")
+load_catalog_schema("item-inference-transfer-experiment")
 assert "torch" not in sys.modules and "transformers" not in sys.modules
 for name, _ in control_schema_inventory():
     load_control_schema(name)
@@ -262,6 +280,9 @@ compiled = compile_definition(
 )
 assert compiled.definition.definition_key == "generic-item-development"
 assert compiled.definition.definition_version == "1.1.0"
+transfer = compile_definition(transfer_definition_path, {"support"})
+assert transfer.definition.definition_key == "item-inference-transfer-comparison"
+assert transfer.definition.definition_version == "1.0.0"
 print("installed_workflow_wheel_resources=PASS")
 """
     result = subprocess.run(
@@ -273,6 +294,7 @@ print("installed_workflow_wheel_resources=PASS")
             str(installed_platform),
             str(REPOSITORY_ROOT),
             str(definition),
+            str(transfer_definition),
         ],
         cwd=tmp_path,
         check=True,

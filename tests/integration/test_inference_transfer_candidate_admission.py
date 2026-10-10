@@ -8,6 +8,7 @@ pre-LIMIT policy/lifecycle/answer-bearing queries in real PostgreSQL.
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -15,6 +16,16 @@ from unittest.mock import Mock
 from urllib.parse import unquote, urlsplit
 
 import pytest
+from eom_catalog_service.inference_transfer_catalog_adapter import (
+    CatalogInferenceTransferSourceAdapter,
+)
+from eom_catalog_service.inference_transfer_scope import InferenceTransferPopulationScope
+from eom_catalog_service.inference_transfer_service import (
+    AdmittedInferenceTransferCorpus,
+    AdmittedInferenceTransferSource,
+    InferenceTransferSearchCommand,
+    InferenceTransferServiceError,
+)
 from eom_catalog_service.knowledge_retrieval_service import KnowledgeRetrievalApplicationService
 from eom_orchestrator.database import build_engine
 from sqlalchemy import text
@@ -33,6 +44,7 @@ TABLES = (
     "knowledge_snapshot_analyses",
     "knowledge_nodes",
     "knowledge_node_source_pointers",
+    "assessment_item_occurrence_references",
 )
 
 
@@ -70,6 +82,12 @@ def pool_database():
         )
         connection.execute(
             text("""
+            INSERT INTO pg_temp.item_revisions(item_revision_id,item_id,revision_state)
+            VALUES ('itemrev_'||lpad('9',32,'0'),'item_'||lpad('8',32,'0'),'APPROVED')
+        """)
+        )
+        connection.execute(
+            text("""
             INSERT INTO pg_temp.knowledge_analysis_runs(analysis_run_id,state)
             SELECT 'analysisrun_'||lpad(i::text,32,'0'),
                    CASE WHEN i=5 THEN 'FAILED' ELSE 'ACCEPTED' END
@@ -86,6 +104,31 @@ def pool_database():
             FROM generate_series(1,8) i
         """),
             {"snapshot": admission_scope().graph_snapshot.graph_snapshot_revision_id},
+        )
+        connection.execute(
+            text("""
+            INSERT INTO pg_temp.assessment_item_occurrence_references(
+                graph_snapshot_revision_id,placement_node_id,
+                analysis_run_id,item_id,item_revision_id)
+            SELECT :snapshot,'placement_'||i,'analysisrun_'||lpad(i::text,32,'0'),
+                'item_'||lpad(i::text,32,'0'),
+                'itemrev_'||lpad((CASE WHEN i=8 THEN 9 ELSE i END)::text,32,'0')
+            FROM generate_series(1,8) i WHERE i<>2
+        """),
+            {"snapshot": admission_scope().graph_snapshot.graph_snapshot_revision_id},
+        )
+        # Temp shadows lose production indexes/constraints. Preserve the lookup
+        # shape for EXPLAIN; a nonunique fixture index also lets EXISTS prove
+        # robustness against duplicate placements that production rejects.
+        connection.exec_driver_sql(
+            "CREATE INDEX inference_transfer_occurrence_analysis ON "
+            "pg_temp.assessment_item_occurrence_references"
+            "(graph_snapshot_revision_id,analysis_run_id)"
+        )
+        connection.exec_driver_sql(
+            "CREATE INDEX inference_transfer_occurrence_revision ON "
+            "pg_temp.assessment_item_occurrence_references"
+            "(graph_snapshot_revision_id,item_revision_id)"
         )
         connection.execute(
             text("""
@@ -151,3 +194,193 @@ def test_real_postgres_answer_authority_and_exact_history_scope(pool_database):
     )
     assert not result.truncated
     assert result.candidates[0].answer_bearing
+
+
+def occurrence_scope(*, maximum: int = 8, role: str = "ADMIN"):
+    return admission_scope(
+        maximum=maximum,
+        role=role,
+        population_scope=InferenceTransferPopulationScope.OCCURRENCE_BACKED_PAST_EXAM,
+    )
+
+
+def test_real_postgres_occurrence_scope_excludes_canary_and_wrong_historical_revision(
+    pool_database,
+):
+    scope = occurrence_scope()
+    result = service(scope).admit_read_only_candidate_pool(pool_database, scope)
+    assert tuple(candidate.analysis_run_id for candidate in result.candidates) == tuple(
+        "analysisrun_" + str(i).zfill(32) for i in (6, 7)
+    )
+    assert not result.truncated
+    # #2 is a valid accepted answer-bearing canary but has no occurrence.
+    # #8 has an occurrence of another exact historical Item revision.
+
+
+def test_real_postgres_occurrence_scope_uses_exact_superseded_revision_not_current(pool_database):
+    pool_database.execute(
+        text(
+            "UPDATE pg_temp.assessment_item_occurrence_references "
+            "SET item_revision_id=:exact WHERE placement_node_id='placement_8'"
+        ),
+        {"exact": "itemrev_" + "8".zfill(32)},
+    )
+    scope = occurrence_scope()
+    result = service(scope).admit_read_only_candidate_pool(pool_database, scope)
+    assert tuple(candidate.analysis_run_id for candidate in result.candidates) == tuple(
+        "analysisrun_" + str(i).zfill(32) for i in (6, 7, 8)
+    )
+    assert not result.truncated
+
+
+def test_real_postgres_occurrence_filter_precedes_limit_and_does_not_waive_answer_policy(
+    pool_database,
+):
+    pool_database.execute(
+        text("""
+        INSERT INTO pg_temp.assessment_item_occurrence_references(
+            graph_snapshot_revision_id,placement_node_id,analysis_run_id,item_id,item_revision_id)
+        VALUES (:snapshot,'placement_2',:run,:item,:revision)
+        """),
+        {
+            "snapshot": admission_scope().graph_snapshot.graph_snapshot_revision_id,
+            "run": "analysisrun_" + "2".zfill(32),
+            "item": "item_" + "2".zfill(32),
+            "revision": "itemrev_" + "2".zfill(32),
+        },
+    )
+    scope = occurrence_scope(maximum=1, role="EDITOR")
+    result = service(scope).admit_read_only_candidate_pool(pool_database, scope)
+    assert tuple(candidate.analysis_run_id for candidate in result.candidates) == (
+        "analysisrun_" + "6".zfill(32),
+    )
+    assert result.truncated  # #7, not the unauthorized #2, consumes the lookahead
+    assert not result.candidates[0].answer_bearing
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    (
+        ("graph_snapshot_revision_id", "graphrev_" + "f" * 32),
+        ("analysis_run_id", "analysisrun_" + "8".zfill(32)),
+        ("item_id", "item_" + "7".zfill(32)),
+        ("item_revision_id", "itemrev_" + "7".zfill(32)),
+    ),
+)
+def test_real_postgres_occurrence_must_match_all_exact_source_identities(
+    pool_database, field, value
+):
+    # The parameterized field names are a fixed fixture allowlist, not input.
+    pool_database.execute(
+        text(
+            f"UPDATE pg_temp.assessment_item_occurrence_references SET {field}=:value "
+            "WHERE placement_node_id='placement_6'"
+        ),
+        {"value": value},
+    )
+    scope = occurrence_scope()
+    result = service(scope).admit_read_only_candidate_pool(pool_database, scope)
+    assert tuple(candidate.analysis_run_id for candidate in result.candidates) == (
+        "analysisrun_" + "7".zfill(32),
+    )
+
+
+def test_real_postgres_duplicate_placements_do_not_duplicate_or_truncate_sources(pool_database):
+    pool_database.execute(
+        text("""
+        INSERT INTO pg_temp.assessment_item_occurrence_references(
+            graph_snapshot_revision_id,placement_node_id,analysis_run_id,item_id,item_revision_id)
+        SELECT graph_snapshot_revision_id,placement_node_id||'_duplicate_'||i,
+            analysis_run_id,item_id,item_revision_id
+        FROM pg_temp.assessment_item_occurrence_references
+        CROSS JOIN generate_series(1,4) i
+        WHERE placement_node_id='placement_6'
+        """)
+    )
+    scope = occurrence_scope(maximum=2)
+    result = service(scope).admit_read_only_candidate_pool(pool_database, scope)
+    assert len(result.candidates) == 2 and not result.truncated
+    assert len({candidate.analysis_run_id for candidate in result.candidates}) == 2
+
+
+def test_real_postgres_pair_exact_run_filter_does_not_substitute_other_eligible_sources(
+    pool_database,
+):
+    requested = tuple("analysisrun_" + str(i).zfill(32) for i in (2, 6))
+    scope = replace(occurrence_scope(maximum=2), analysis_run_ids=requested)
+    result = service(scope).admit_read_only_candidate_pool(pool_database, scope)
+    assert tuple(candidate.analysis_run_id for candidate in result.candidates) == (requested[1],)
+    assert not result.truncated
+    # Missing occurrence for requested canary #2 must not be filled by valid #7.
+
+
+def test_real_postgres_occurrence_membership_uses_existing_index_shape(pool_database):
+    scope = occurrence_scope()
+    pool_database.execute(text("SET LOCAL enable_seqscan=off"))
+    # Execute the owner's actual admission statement, then EXPLAIN the same
+    # compiled query; do not substitute a more convenient probe query.
+    statements: list[Any] = []
+    original_scalars = pool_database.scalars
+
+    def capture(statement, *args, **kwargs):
+        statements.append(statement)
+        return original_scalars(statement, *args, **kwargs)
+
+    pool_database.scalars = capture
+    try:
+        service(scope).admit_read_only_candidate_pool(pool_database, scope)
+    finally:
+        pool_database.scalars = original_scalars
+    compiled = statements[0].compile(
+        dialect=pool_database.get_bind().dialect, compile_kwargs={"literal_binds": True}
+    )
+    plan = "\n".join(pool_database.scalars(text("EXPLAIN (COSTS OFF) " + str(compiled))).all())
+    assert "inference_transfer_occurrence_" in plan
+
+
+def test_real_postgres_final_reauthorization_reuses_scope_and_rejects_membership_drift(
+    pool_database, monkeypatch
+):
+    scope = occurrence_scope()
+    retrieval = service(scope)
+    initial = retrieval.admit_read_only_candidate_pool(pool_database, scope)
+    frozen = AdmittedInferenceTransferCorpus(
+        profiles=(),
+        graph_scores=(),
+        truncated=initial.truncated,
+        missing_solution_reports=len(initial.candidates),
+        sources=tuple(
+            AdmittedInferenceTransferSource(candidate.analysis_run_id, candidate.source)
+            for candidate in initial.candidates
+        ),
+    )
+    pool_database.execute(
+        text(
+            "UPDATE pg_temp.assessment_item_occurrence_references "
+            "SET item_revision_id=:other WHERE placement_node_id='placement_6'"
+        ),
+        {"other": "itemrev_" + "7".zfill(32)},
+    )
+    pool_database.commit()
+    adapter = object.__new__(CatalogInferenceTransferSourceAdapter)
+    adapter.retrieval = retrieval
+    adapter.sessions = lambda: Session(bind=pool_database.get_bind())
+    observed_scopes = []
+
+    def actual_scope(_session, request):
+        observed_scopes.append(request.population_scope)
+        return replace(scope, population_scope=request.population_scope)
+
+    monkeypatch.setattr(adapter, "_scope", actual_scope)
+    request = InferenceTransferSearchCommand(
+        actor_id=scope.requested_by,
+        graph_snapshot=scope.graph_snapshot,
+        access_policy_revision_id=scope.access_policy_revision_id,
+        access_policy_sha256=scope.access_policy_sha256,
+        query_item_revision_id="itemrev_" + "6".zfill(32),
+        top_k=2,
+        population_scope=scope.population_scope,
+    )
+    with pytest.raises(InferenceTransferServiceError, match="SOURCE_PIN_MISMATCH"):
+        adapter.reauthorize(request, frozen)
+    assert observed_scopes == [InferenceTransferPopulationScope.OCCURRENCE_BACKED_PAST_EXAM]
