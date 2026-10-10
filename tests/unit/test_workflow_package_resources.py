@@ -20,6 +20,7 @@ from eom_workflow.schemas import (
     load_content_team_material_requirement_schema,
     load_content_team_material_requirement_v2_schema,
     load_definition_schema,
+    load_inference_transfer_workflow_request_schema,
     load_json_schema,
     load_knowledge_item_brief_schema,
     load_knowledge_item_brief_v2_schema,
@@ -73,6 +74,9 @@ def test_workflow_schema_resources_match_canonical_sources() -> None:
 
 def test_workflow_schemas_load_from_package_resources() -> None:
     assert load_definition_schema()["$id"].endswith("/workflow-definition.schema.json")
+    assert load_inference_transfer_workflow_request_schema()["$id"] == (
+        "eom://schemas/workflow/inference-transfer-workflow-request/1.0"
+    )
     assert load_knowledge_item_brief_schema()["$id"].endswith("knowledge-item-brief-v1")
     assert load_knowledge_item_brief_v2_schema()["$id"].endswith("knowledge-item-brief-v2")
     assert load_knowledge_item_brief_v3_schema()["$id"].endswith("knowledge-item-brief-v3")
@@ -241,6 +245,7 @@ from eom_workflow.schemas import (
     INPUT_SCHEMA_FILES,
     RESULT_SCHEMA_FILES,
     load_definition_schema,
+    load_inference_transfer_workflow_request_schema,
     load_role_input_schema,
     load_role_result_schema,
 )
@@ -269,6 +274,15 @@ from eom_catalog_service.inference_transfer_worker_preparation import (
     prepare_inference_transfer_worker_comparison,
 )
 from eom_workflow.inference_transfer_control import ResolvedExecutionPlanV21
+from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
+from eom_workflow.inference_transfer_materialization import (
+    InferenceTransferMaterializationContext,
+    validate_inference_transfer_workflow_plan,
+)
+from eom_catalog_service.inference_transfer_item_projection import project_staged_item_entry
+from eom_workflow_runner.inference_transfer_admission import InferenceTransferSubmissionContext
+from eom_orchestrator.execution_materializer import preflight_inference_transfer_materialization
+load_inference_transfer_workflow_request_schema()
 load_catalog_schema("item-inference-transfer")
 load_catalog_schema("item-inference-transfer-experiment")
 assert "torch" not in sys.modules and "transformers" not in sys.modules

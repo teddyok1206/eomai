@@ -17,6 +17,7 @@ from eom_orchestrator.orchestrator import Orchestrator
 from eom_protocol import ErrorCode
 from eom_workflow.inference_transfer import InferenceTransferPairWorkerRequest
 from eom_workflow.inference_transfer_control import validate_inference_transfer_plan_context
+from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
 
 from tests.unit.inference_transfer_execution_fixtures import transfer_plan
 from tests.unit.inference_transfer_fixtures import profile, request, sha
@@ -57,6 +58,20 @@ def test_revocation_after_job_creation_terminalizes_exact_job_without_worker_or_
         core_prompt_sha256=sha("5"),
         prompt_sha256=sha256_bytes(prompt_text.encode("utf-8")),
     )
+    workflow_body = {
+        "schema_version": "inference-transfer-workflow-request/1.0",
+        "request_name": "ITEM_INFERENCE_TRANSFER_PAIR_REQUEST",
+        "execution_preset_key": "item-inference-transfer-comparison",
+        "comparison": query.model_dump(mode="json"),
+        "left_profile": left.model_dump(mode="json"),
+        "right_profile": right.model_dump(mode="json"),
+        "access_policy_revision_id": "accessrev_" + "1" * 32,
+        "access_policy_sha256": sha("3"),
+        "requester_permissions_sha256": sha("4"),
+    }
+    workflow_request = InferenceTransferWorkflowRequest.model_validate(
+        workflow_body | {"request_sha256": content_sha256(workflow_body)}
+    )
 
     orchestrator = Orchestrator.__new__(Orchestrator)
     monkeypatch.setattr(
@@ -65,7 +80,8 @@ def test_revocation_after_job_creation_terminalizes_exact_job_without_worker_or_
         SimpleNamespace(staging_root=tmp_path / "staging"),
         raising=False,
     )
-    monkeypatch.setattr(orchestrator, "sessions", Mock(), raising=False)
+    monkeypatch.setattr(orchestrator, "sessions", lambda: nullcontext(Mock()), raising=False)
+    monkeypatch.setattr(owner_module, "preflight_inference_transfer_materialization", Mock())
     capacity, worker = Mock(), Mock()
     monkeypatch.setattr(orchestrator, "capacity", capacity, raising=False)
     monkeypatch.setattr(orchestrator, "worker_adapter", worker, raising=False)
@@ -138,6 +154,7 @@ def test_revocation_after_job_creation_terminalizes_exact_job_without_worker_or_
         idempotency_key="synthetic-revocation-after-owner-created-job",
         prompt_text=prompt_text,
         transfer_core_prompt_sha256=sha("5"),
+        transfer_workflow_request=workflow_request,
         reauthorize_transfer_sources=reauthorize,
     )
 

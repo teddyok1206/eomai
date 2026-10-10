@@ -1,6 +1,6 @@
 # Inference-transfer Workflow request and admission foundation
 
-Status: proposed source-only design; implementation follows boundary approval.
+Status: source-only foundation implemented after boundary approval on 2026-10-10.
 This is the next foundation after
 `ITEM_INFERENCE_TRANSFER_EXECUTION_PURPOSE.md`. It does not activate a resolver,
 materializer, preset, worker, endpoint or UI.
@@ -148,9 +148,13 @@ Repository changes remain additive:
 
 ## Ownership, tests and remaining activation boundary
 
-Intended implementation files:
+Implemented files:
 
-- New request schema + package mirror and installed schema registry entry.
+- `schemas/workflow/inference-transfer-workflow-request-v1.schema.json`, its
+  identical installed package mirror, and the public loader/validator in
+  `eom_workflow.schemas`. The installed immutable schema is parsed once per
+  process; public reads return isolated copies. Its file SHA-256 is
+  `08fb3b9eef4488c0831ac826fe346541976b41dc4637df17dcb9f17847f9a2a0`.
 - New `eom_workflow.inference_transfer_workflow` public contract module.
 - New `eom_workflow_runner.inference_transfer_admission` pure application rule.
 - Existing Runner repository storage/fingerprint/create boundary, narrowly
@@ -158,11 +162,26 @@ Intended implementation files:
 - Focused wrapper/hash/null/purpose/actor/idempotency tests. Existing legacy
   storage/fingerprint and submission suites must continue to pass unchanged.
 
-Tests must prove copied-model rejection before callback/query/write, preserved
+Tests prove copied-model rejection before query/write, preserved
 legacy fingerprints, exact new null-bearing snapshots, actor-local active
 deduplication, cross-actor idempotency conflict, exact purpose/protocol guards
 and no new queue/table or runtime Git dependency. Disposable PG concurrency
 tests remain explicitly opt-in and are separate from pure source tests.
+
+Source regression on 2026-10-10: 173 focused tests PASS across the new wrapper,
+legacy persistence/fingerprint/start/admission, worker/V21/preparation and
+dependency suites; strict mypy for the nine changed/new source and test files,
+Ruff and diff checks PASS. One broad invocation initially used a nonexistent
+test filename, collected no tests, and was corrected before this PASS report.
+The new disposable PostgreSQL test file is
+`tests/integration/test_inference_transfer_workflow_admission.py`: actor-local
+coexistence/replay, global-key conflict, actual unique constraints and two-worker
+same-key creation. It requires the existing database/user/schema/head marker
+guard and never falls back to an ambient database. Ordinary fixtures use outer
+rollback; the concurrency seed/results are explicitly disposable-only committed
+metadata and remain until the entire guarded database is removed. Its live test
+execution evidence is recorded by the owning test runner, not inferred here
+from unit PASS or unconfigured opt-in SKIP.
 
 Not connected by this task: API/GUI/CLI comparison submission, actual Catalog
 identity/permission snapshot composition, V21 resolver, preset/bootstrap,

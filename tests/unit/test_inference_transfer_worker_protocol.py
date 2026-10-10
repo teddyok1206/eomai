@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 from eom_identifiers import content_sha256, sha256_bytes
@@ -25,6 +26,10 @@ from eom_workflow.inference_transfer import (
     validate_inference_transfer_worker_request,
     validate_inference_transfer_worker_result,
 )
+from eom_workflow.inference_transfer_materialization import (
+    validate_inference_transfer_workflow_plan,
+)
+from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
 from eom_workflow.models import ArtifactSpec, InferenceTransferPairRoleResult, RoleWorkerInput
 from eom_workflow.schemas import (
     WorkflowSchemaError,
@@ -73,6 +78,23 @@ def _input() -> RoleWorkerInput:
         artifact=ArtifactSpec(
             logical_artifact_id="artifact_" + "4" * 32, revision_id="rev_" + "5" * 32
         ),
+    )
+
+
+def _workflow_request() -> InferenceTransferWorkflowRequest:
+    body = {
+        "schema_version": "inference-transfer-workflow-request/1.0",
+        "request_name": "ITEM_INFERENCE_TRANSFER_PAIR_REQUEST",
+        "execution_preset_key": "item-inference-transfer-comparison",
+        "comparison": _request().comparison.model_dump(mode="json"),
+        "left_profile": _request().left_profile.model_dump(mode="json"),
+        "right_profile": _request().right_profile.model_dump(mode="json"),
+        "access_policy_revision_id": "accessrev_" + "b" * 32,
+        "access_policy_sha256": sha("b"),
+        "requester_permissions_sha256": sha("c"),
+    }
+    return InferenceTransferWorkflowRequest.model_validate(
+        body | {"request_sha256": content_sha256(body)}
     )
 
 
@@ -500,9 +522,9 @@ def test_terminal_replay_reauthorizes_without_executing_or_reinterpreting_histor
     monkeypatch.setattr(
         orchestrator,
         "_validated_inference_transfer_plan",
-        lambda **arguments: validate_inference_transfer_execution_plan(
+        lambda **arguments: validate_inference_transfer_workflow_plan(
             _plan(),
-            request=arguments["request"],
+            workflow_request=arguments["workflow_request"],
             workflow_id=arguments["workflow_id"],
             step_key=arguments["step_key"],
             core_prompt_sha256=arguments["core_prompt_sha256"],
@@ -534,6 +556,7 @@ def test_terminal_replay_reauthorizes_without_executing_or_reinterpreting_histor
         "before_execute": bindings.append,
         "reauthorize_transfer_sources": reauthorize,
         "transfer_core_prompt_sha256": CORE_PROMPT_SHA256,
+        "transfer_workflow_request": _workflow_request(),
     }
     if revoked:
         with pytest.raises(ControlPlaneError, match="source revoked"):
@@ -606,6 +629,7 @@ def test_changed_prompt_replay_fails_before_job_lookup_or_history_mutation(
         "idempotency_key": "synthetic-replay-prompt-drift",
         "prompt_text": "synthetic prompt",
         "transfer_core_prompt_sha256": CORE_PROMPT_SHA256,
+        "transfer_workflow_request": _workflow_request(),
         "reauthorize_transfer_sources": calls.append,
     }
     arguments[changed_field] = (
@@ -644,6 +668,7 @@ def test_plan_record_mismatch_fails_before_terminal_replay(
     with pytest.raises(ControlPlaneError, match="purpose-pinned"):
         orchestrator._validated_inference_transfer_plan(
             request=_request(),
+            workflow_request=_workflow_request(),
             workflow_id=WORKFLOW,
             step_key="compare_pair",
             core_prompt_sha256=CORE_PROMPT_SHA256,
@@ -668,6 +693,7 @@ def test_plan_record_is_validated_with_one_indexed_lookup(
     monkeypatch.setattr(orchestrator, "sessions", sessions, raising=False)
     plan = orchestrator._validated_inference_transfer_plan(
         request=_request(),
+        workflow_request=_workflow_request(),
         workflow_id=WORKFLOW,
         step_key="compare_pair",
         core_prompt_sha256=CORE_PROMPT_SHA256,
@@ -675,3 +701,64 @@ def test_plan_record_is_validated_with_one_indexed_lookup(
     )
     assert plan.model_dump(mode="json") == _plan()
     assert len(statements) == 1
+
+
+def test_missing_workflow_context_rejects_before_source_or_job_access() -> None:
+    orchestrator = Orchestrator.__new__(Orchestrator)
+    calls: list[InferenceTransferPairWorkerRequest] = []
+    with pytest.raises(ControlPlaneError, match="application-prepared workflow context"):
+        orchestrator.submit_workflow_role(
+            workflow_id=WORKFLOW,
+            step_run_id=STEP,
+            step_key="compare_pair",
+            attempt=1,
+            role="support",
+            request=_request(),
+            upstream_artifacts=(),
+            result_schema=TRANSFER_PAIR_RESULT_SCHEMA,
+            idempotency_key="synthetic-no-wrapper",
+            prompt_text="synthetic prompt",
+            reauthorize_transfer_sources=calls.append,
+            transfer_core_prompt_sha256=CORE_PROMPT_SHA256,
+        )
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "field", ["access_policy_revision_id", "access_policy_sha256", "requester_permissions_sha256"]
+)
+def test_workflow_policy_drift_rejects_before_job_lookup(
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+) -> None:
+    body = _workflow_request().model_dump(mode="json", exclude={"request_sha256"})
+    body[field] = "accessrev_" + "0" * 32 if field.endswith("revision_id") else sha("0")
+    changed = InferenceTransferWorkflowRequest.model_validate(
+        body | {"request_sha256": content_sha256(body)}
+    )
+    orchestrator = Orchestrator.__new__(Orchestrator)
+
+    @contextmanager
+    def sessions():  # type: ignore[no-untyped-def]
+        yield SimpleNamespace(scalar=lambda statement: _plan_record())
+
+    monkeypatch.setattr(orchestrator, "sessions", sessions, raising=False)
+    lookup = Mock()
+    monkeypatch.setattr(orchestrator, "_job_by_idempotency_key", lookup)
+    with pytest.raises(ControlPlaneError, match="purpose-pinned"):
+        orchestrator.submit_workflow_role(
+            workflow_id=WORKFLOW,
+            step_run_id=STEP,
+            step_key="compare_pair",
+            attempt=1,
+            role="support",
+            request=_request(),
+            upstream_artifacts=(),
+            result_schema=TRANSFER_PAIR_RESULT_SCHEMA,
+            idempotency_key="synthetic-policy-drift",
+            prompt_text="synthetic prompt",
+            reauthorize_transfer_sources=lambda request: None,
+            transfer_core_prompt_sha256=CORE_PROMPT_SHA256,
+            transfer_workflow_request=changed,
+        )
+    lookup.assert_not_called()

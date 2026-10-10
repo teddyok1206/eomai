@@ -25,13 +25,22 @@ from eom_workflow.identifiers import (
     new_step_run_id,
     new_workflow_id,
 )
-from eom_workflow.schemas import result_schema_protocol
+from eom_workflow.inference_transfer import TRANSFER_PAIR_WORKFLOW_KEY
+from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
+from eom_workflow.schemas import (
+    result_schema_protocol,
+    validate_inference_transfer_workflow_request,
+)
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
+from eom_workflow_runner.inference_transfer_admission import (
+    InferenceTransferSubmissionContext,
+    admit_inference_transfer_workflow_request,
+)
 from eom_workflow_runner.models import (
     ApprovalRequestRecord,
     WorkflowCommandRecord,
@@ -268,8 +277,14 @@ def workflow_business_fingerprint(
     )
 
 
-def workflow_request_storage_document(request: WorkflowRequest) -> dict[str, Any]:
+def workflow_request_storage_document(
+    request: WorkflowRequest | InferenceTransferWorkflowRequest,
+) -> dict[str, Any]:
     """Serialize a request without dropping schema-required nullable values."""
+    if isinstance(request, InferenceTransferWorkflowRequest):
+        # Profiles' canonical hashes include explicit extraction/source nulls. This
+        # bounded application snapshot is not the legacy exclude_none projection.
+        return request.model_dump(mode="json")
     document = request.model_dump(mode="json", exclude_none=True)
     if request.analysis_request is not None:
         document["analysis_request"] = request.analysis_request.model_dump(mode="json")
@@ -384,6 +399,35 @@ def load_persisted_workflow_request(document: dict[str, Any]) -> WorkflowRequest
     return WorkflowRequest.model_validate(normalized)
 
 
+def load_persisted_inference_transfer_workflow_request(
+    document: dict[str, Any],
+) -> InferenceTransferWorkflowRequest:
+    """Read the exact successor snapshot; never repair nulls or replace source pins."""
+
+    return validate_inference_transfer_workflow_request(document)
+
+
+def _inference_transfer_business_fingerprint(
+    definition: WorkflowDefinitionRecord,
+    request: InferenceTransferWorkflowRequest,
+    *,
+    actor_type: str,
+    actor_id: str,
+) -> str:
+    # Active equivalence is indexed only by request_hash. Including the actual
+    # actor in this new purpose prevents cross-user reuse without changing the
+    # released legacy fingerprint or adding a second queue/uniqueness rule.
+    return content_sha256(
+        {
+            "definition_key": definition.definition_key,
+            "definition_version": definition.definition_version,
+            "definition_hash": definition.definition_hash,
+            "request": request.model_dump(mode="json"),
+            "actor": {"actor_type": actor_type, "actor_id": actor_id},
+        }
+    )
+
+
 def _matching_submission(
     session: Session, *, idempotency_key: str, request_hash: str
 ) -> WorkflowInstanceRecord | None:
@@ -452,15 +496,36 @@ def create_workflow_instance(
     session: Session,
     *,
     definition: WorkflowDefinitionRecord,
-    request: WorkflowRequest,
+    request: WorkflowRequest | InferenceTransferWorkflowRequest,
     idempotency_key: str,
     actor_type: str,
     actor_id: str,
     runtime_context: dict[str, Any] | None = None,
     completed_preset_revision_id: str | None = None,
+    inference_transfer_context: InferenceTransferSubmissionContext | None = None,
 ) -> tuple[WorkflowInstanceRecord, bool]:
+    request = admit_inference_transfer_workflow_request(
+        definition_key=definition.definition_key,
+        definition_version=definition.definition_version,
+        role_protocol_version=(
+            _stored_role_protocol(definition)
+            if definition.definition_key == TRANSFER_PAIR_WORKFLOW_KEY
+            and isinstance(request, InferenceTransferWorkflowRequest)
+            else None
+        ),
+        request=request,
+        actor_type=actor_type,
+        actor_id=actor_id,
+        submission_context=inference_transfer_context,
+    )
     request_data = workflow_request_storage_document(request)
-    request_hash = workflow_business_fingerprint(definition, request)
+    request_hash = (
+        _inference_transfer_business_fingerprint(
+            definition, request, actor_type=actor_type, actor_id=actor_id
+        )
+        if isinstance(request, InferenceTransferWorkflowRequest)
+        else workflow_business_fingerprint(definition, request)
+    )
     existing = _matching_submission(
         session, idempotency_key=idempotency_key, request_hash=request_hash
     )
@@ -508,7 +573,9 @@ def create_workflow_instance(
         role_schema_version=role_schema_version,
         state=WorkflowState.REQUESTED.value,
         stage=(
-            WorkflowStage.DOCUMENT_REVIEW.value
+            WorkflowStage.INFERENCE_TRANSFER.value
+            if isinstance(request, InferenceTransferWorkflowRequest)
+            else WorkflowStage.DOCUMENT_REVIEW.value
             if request.request_name
             in {"PDF_DOCUMENT_REVIEW_REQUEST", "PAIRED_DOCUMENT_REVIEW_REQUEST"}
             else WorkflowStage.CUSTOMER_SUPPORT.value

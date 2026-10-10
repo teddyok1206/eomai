@@ -30,7 +30,7 @@
 | F1 | additive JSON Schema 2020-12 → frozen 모델 → grounded deterministic profile | exact refs/hash/closure/uncertainty tests, predecessor bytes 불변 | source 구현·검증 완료 |
 | F2 | pinned offline local embedding adapter와 exact ranking | dependency isolation, malformed vectors·ties·permission-prefilter tests; 실제 CPU benchmark 별도 | source 및 실제 CPU toy 실행 완료; production 설치·격리 미검증 |
 | F3 | Catalog opt-in authorized candidate read use case | actual actor/policy/Graph admission 재사용, 별도 후보 예산·provenance, 기본 retrieval 무변경 | source·격리 PostgreSQL SQL 검증 완료; 실제 corpus 비용 미측정 |
-| F4 | Orchestrator 경유 bounded Codex pair comparison | exact A/B, condition+decisive mapping, 차이/새 추론, unsupported/insufficient 처리, schema validation | source binding·replay·V21 전용 목적과 pair 재인가 검증; 실제 worker 실행은 전용 application wrapper 및 compatible release 대기 |
+| F4 | Orchestrator 경유 bounded Codex pair comparison | exact A/B, condition+decisive mapping, 차이/새 추론, unsupported/insufficient 처리, schema validation | source wrapper·사용자별 제출·V21 준비/실행 경계 검증; 실제 worker 실행은 전용 resolver/Runner 및 compatible release 대기 |
 | F5 | 기존 검색 대비 bounded 실험·human scorecard | lexical/content-only/crux/metadata ablation, recall·latency·memory, 사람이 전이 위치를 평가 | staged 계약·encode-once harness·실모델 3-view 합성 smoke 완료; 실제 corpus/Graph 비교·human 평가 대기 |
 | F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 교육 판정은 독립 gate | 대기 |
 
@@ -66,6 +66,8 @@
 
 [첫 구현·실험 기록](ITEM_INFERENCE_TRANSFER_FIRST_CHECKPOINT.md)과
 [worker binding 설계](ITEM_INFERENCE_TRANSFER_WORKER_BINDING.md)에 실행 범위와 미검증 항목을 기록했다.
+[제출·준비·실행 검증](ITEM_INFERENCE_TRANSFER_THIRD_CHECKPOINT.md)은 새 source 경계와
+임시 PostgreSQL 동시성 검증을 기록하며, 실제 자료/worker/운영 품질 승인은 포함하지 않는다.
 [모집단·쌍 재인가](ITEM_INFERENCE_TRANSFER_CORPUS_SCOPE.md),
 [전용 실행 목적](ITEM_INFERENCE_TRANSFER_EXECUTION_PURPOSE.md),
 [staged 실험](ITEM_INFERENCE_TRANSFER_EXPERIMENT.md)은 추가 설계·검증 경계다.

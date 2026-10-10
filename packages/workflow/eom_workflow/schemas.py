@@ -51,6 +51,7 @@ from eom_workflow.document_review import (
     PdfDocumentReviewWorkerRequest,
 )
 from eom_workflow.inference_transfer import InferenceTransferPairWorkerRequest
+from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
 from eom_workflow.models import (
     AuthoringRoleResult,
     ContentTeamAuthoringRoleResultV7,
@@ -520,6 +521,30 @@ def load_json_schema(resource: Traversable, logical_name: str) -> dict[str, Any]
 def load_definition_schema() -> dict[str, Any]:
     logical_name = "workflow-definition.schema.json"
     return load_json_schema(WORKFLOW_RESOURCE_ROOT.joinpath(logical_name), logical_name)
+
+
+@cache
+def _inference_transfer_workflow_request_schema() -> dict[str, Any]:
+    logical_name = "inference-transfer-workflow-request-v1.schema.json"
+    return load_json_schema(WORKFLOW_RESOURCE_ROOT.joinpath(logical_name), logical_name)
+
+
+def load_inference_transfer_workflow_request_schema() -> dict[str, Any]:
+    """Return an isolated copy of the process-pinned installed schema resource."""
+
+    return copy.deepcopy(_inference_transfer_workflow_request_schema())
+
+
+def validate_inference_transfer_workflow_request(value: object) -> InferenceTransferWorkflowRequest:
+    """Validate the installed closed schema and exact bounded typed pair context."""
+
+    validate_schema_message(
+        _inference_transfer_workflow_request_schema(), value, "inference-transfer-workflow"
+    )
+    try:
+        return InferenceTransferWorkflowRequest.model_validate(value)
+    except ValidationError as exc:
+        raise WorkflowSchemaError("inference-transfer-workflow failed typed validation") from exc
 
 
 def load_review_rework_directive_schema() -> dict[str, Any]:

@@ -66,7 +66,7 @@ comparison is a hypothesis, not a human-confirmed transfer label.
     no worker slot and commits no new result.
 11. **Simpler alternative.** Reusing customer-support/PDF plans or constructing
     a fake authoring Pack would be smaller in lines but would falsely describe
-    purpose, provenance and permissions. A standalone V21 plan and two-step
+    purpose, provenance and permissions. A standalone V21 plan and single-step
     definition are the smallest semantically correct extension. A generic new
     framework or separate queue is unnecessary.
 
@@ -112,3 +112,137 @@ Follow-on, separately verified before activation:
 
 No UI, deployment, published preset/Pack change, operating DB migration, model
 invocation or human quality acceptance is implied by this foundation.
+
+## Source-only materialization implementation
+
+The V21 materializer and application context are implemented and verified with
+synthetic protected-file fixtures. Both
+`authorized_execution_artifact_revisions` and `materialize_execution_step`
+dispatch V21 explicitly; they no longer attempt V1 parsing for that purpose.
+This is not installed-runtime or live Artifact evidence. Dedicated resolver/
+Runner execution composition, installed compatibility and activation still need
+their own gates. `UNSUPPORTED_PENDING_COMPATIBLE_RELEASE` remains the runtime
+status.
+
+### Ownership and exact inputs
+
+- Keep the existing Runner application, Orchestrator, control resolver and
+  `CodexWorkerAdapter`. Do not create an inference-transfer executor, queue,
+  cache, capability-boolean framework or Content Pack wrapper.
+- The materializer's supported frozen plan union and both exact schema dispatch
+  sites include `ResolvedExecutionPlanV21`; V1–V20 behavior is preserved. An
+  unknown schema does not become a permissive V21 or latest-version fallback.
+- The public `eom_workflow.inference_transfer_materialization` module owns
+  `InferenceTransferMaterializationContext`: the actual validated
+  `InferenceTransferWorkflowRequest`, exact complete `RoleWorkerInput`,
+  Workflow/step identity and the prepared core/full prompt hashes.
+  This is a small command value for an existing adapter boundary, not a new
+  independently persisted entity. Its full prompt hash is over the exact UTF-8
+  text passed to `prepare_structured_workspace`, without an added newline.
+- `validate_inference_transfer_workflow_plan` is the public pre-job pure
+  validator: it needs the actual Workflow request and prepared prompt pins, not
+  an ephemeral job or output Artifact identity. It reuses the existing execution
+  plan/context helpers and independently compares policy revision/hash and
+  requester-permissions SHA from that request, never from the plan itself.
+  `validate_inference_transfer_materialization_plan` additionally revalidates
+  the frozen context, support/protocol/no-upstream rules and exact role input.
+  Copied frozen models are reparsed; a caller's nominal type or matching
+  self-hash is not enough. Retain the existing persisted
+  plan-row/document checks, including Workflow, preset, capacity and resolver
+  pins. Terminal replay uses those checks even when no materializer runs.
+- The separate source-authorization callback remains mandatory before
+  execution, replay and commit. It must be composed with the actual Catalog
+  actor/policy/source resolver. Callback presence, a worker-supplied actor or
+  successful control-artifact resolution is not evidence of Item permission.
+
+### Protected instruction and rubric resolution
+
+Derive the artifact-revision allowlist only from the pinned released instruction
+bundle. V21 has no reference bundle, PDF/image members, authoring evidence bundle
+or Content Pack to stage. Do not add `rubric_artifact.artifact_revision_id` to the
+allowlist merely because the plan mentions it.
+
+Use the existing bundle record/manifest checks and
+`resolve_control_artifact_pointer` to check exact identity, approved lifecycle,
+revision owner, schema/media and manifest/member hash. After the protected
+instruction manifest has been resolved, call
+`validate_inference_transfer_rubric_instruction(plan, instruction)`. This helper
+adds the V21-specific check: the exact `ROLE` component at
+`instructions/transfer-rubric.md` equals the entire planned rubric artifact
+pointer, and its SHA equals the rubric SHA. The helper does not replace the
+control resolver, bundle manifest pointer or allowlist checks.
+
+Stage that component through the existing `_materialize_member` boundary. It
+already verifies the allowed revision, canonical Artifact location, bounded
+regular-file bytes, exact SHA and UTF-8 Markdown before a private exclusive
+workspace write. The actual JSON instruction manifest is read through the same
+verified Artifact-file boundary and compared to the protected manifest document;
+matching typed-record metadata alone is insufficient. Compose `AGENTS.md` using
+the existing ordered instruction
+composition; the rubric is included once as its `ROLE` member, not appended a
+second time. Verify the actual staged `prompt.txt` bytes against the full prompt
+pin. Keep the core prompt hash separate: it is bound by the prepared prompt
+context, not reconstructed from the concatenated instruction bundle.
+
+The existing `MaterializedExecution` receipt can retain the plan SHA, instruction
+SHA, `AGENTS.md` SHA and invocation SHA: the immutable V21 plan already contains
+the purpose-specific pins. A new generic receipt registry or duplicated profile
+payload is unnecessary. Any additive receipt field must be justified by an
+actual consumer, rather than repeating every plan field.
+
+### Preflight, materialization and launch ordering
+
+Pure schema/context and released-control metadata checks belong in the existing
+Runner/Orchestrator admission boundary before submitting a job or claiming
+capacity when those inputs are already available. They must produce a stable
+`ControlPlaneError` for an unsupported/stale/invalid V21 plan, not leak a raw
+Pydantic exception. Admission is not a reusable authorization grant: exact
+source authorization and protected control checks are repeated at their
+existing execution/commit boundaries.
+
+Actual filesystem bytes can only be verified at the explicit staging boundary.
+The adapter already exposes the necessary public split:
+
+```text
+prepare_structured_workspace -> materialize_execution_step -> run_prepared
+         no unit started             no unit started          launch boundary
+```
+
+Use that split in the existing application composition. Set
+`worker_start_attempted` only immediately before `run_prepared`, after all
+preparation/materialization checks and receipt construction succeed. Merely
+entering `run_resolved_structured` is not a launch attempt: that convenience
+method prepares and materializes before calling `run_prepared`. Keep its frozen
+`PreparedWorkerWorkspace`/`ResolvedWorkerRun` values and generic callback
+boundary; it does not need a second plan parser or untyped V21 payload API.
+
+A preparation/materialization failure after job creation is recorded through
+the existing terminal failure transition, preserves its audit history, commits
+no comparison result and releases a lease whose worker was never started. It
+must not be classified as an uncertain external process. Errors after the real
+launch boundary retain the existing uncertain-process reconciliation rules;
+do not release a possibly live worker merely because an exception occurred.
+No direct row correction, duplicate job identity or automatic policy widening
+is permitted.
+
+### Source-only verification and remaining installed activation
+
+The focused source suites pass 77 tests: 16 pure context tests, 35 V21 protected
+materialization tests and 26 existing materializer regression tests. They cover
+V21 in both dispatch sites; absent/wrong-layer/wrong-path/
+wrong-member rubric; a matching self-hash with mismatched request/profile/
+Graph/policy/core/full prompt; stale persisted row; unapproved or disallowed
+artifact revision; actual Markdown/prompt byte mismatch; and an unexpected
+reference bundle. Assert that each prelaunch failure starts no worker unit,
+commits no Artifact, and uses the existing classified failure/lease boundary.
+The Orchestrator owner separately verifies that the source callback is distinct
+from job binding, exact Catalog authorization is required for replay and commit,
+and the launch flag is not set by workspace preparation alone. These source
+checks do not claim that a live worker or installed protected Artifact ran.
+
+Access remains indexed plan/bundle lookup and bounded ordered member iteration,
+with a set for revision membership: O(members + context bytes), not a corpus
+scan. The materializer/context source task adds no DB migration, new schema family,
+model invocation, NAS access or runtime activation. Installed compatibility,
+actual protected-artifact materialization and disposable-DB concurrency remain
+separate opt-in release evidence; unit fixtures do not claim those gates PASS.

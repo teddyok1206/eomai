@@ -68,6 +68,17 @@ from eom_workflow.control_plane import (
     ControlArtifactPointer,
     ResolvedStepExecution,
 )
+from eom_workflow.inference_transfer import TRANSFER_PAIR_PROTOCOL
+from eom_workflow.inference_transfer_control import (
+    ResolvedExecutionPlanV21,
+    validate_inference_transfer_rubric_instruction,
+)
+from eom_workflow.inference_transfer_materialization import (
+    InferenceTransferMaterializationContext,
+    validate_inference_transfer_materialization_plan,
+)
+from eom_workflow.models import RoleWorkerInput
+from eom_workflow.schemas import validate_role_input
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from sqlalchemy.orm import Session
 
@@ -169,6 +180,7 @@ def materialize_execution_step(
     worker_group_id: int,
     authorized_artifact_revision_ids: frozenset[str],
     execution_tier: Literal["PRIMARY", "ESCALATED"] = "PRIMARY",
+    inference_transfer_context: InferenceTransferMaterializationContext | None = None,
 ) -> MaterializedExecution:
     """Materialize one exact plan step without resolving any mutable current pointer."""
 
@@ -210,6 +222,8 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV17
         | ResolvedExecutionPlanV19
         | ResolvedExecutionPlanV18
+        | ResolvedExecutionPlanV20
+        | ResolvedExecutionPlanV21
     )
     if plan_schema_version == "resolved-execution-plan/2.0":
         plan = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
@@ -249,6 +263,12 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV19.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/20.0":
         plan = ResolvedExecutionPlanV20.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/21.0":
+        plan = _validated_transfer_materialization_plan(
+            plan_record.canonical_document,
+            context=inference_transfer_context,
+            step_key=step_key,
+        )
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if plan.plan_sha256 != plan_record.plan_sha256:
@@ -257,6 +277,11 @@ def materialize_execution_step(
     if len(matching) != 1:
         raise ControlPlaneError("CONTROL_PLAN_STEP_MISSING", "resolved execution step is missing")
     step = matching[0]
+    if isinstance(plan, ResolvedExecutionPlanV21):
+        assert inference_transfer_context is not None
+        _validate_transfer_workspace_inputs(
+            workspace, context=inference_transfer_context, group_id=worker_group_id
+        )
     execution_model = step.model
     execution_reasoning_effort = step.reasoning_effort
     if execution_tier == "ESCALATED":
@@ -273,11 +298,19 @@ def materialize_execution_step(
         execution_model = step.escalation_candidate.model
         execution_reasoning_effort = step.escalation_candidate.reasoning_effort
 
-    instruction = _instruction_manifest(
-        session,
-        step,
-        authorized_artifact_revision_ids=authorized_artifact_revision_ids,
-    )
+    if isinstance(plan, ResolvedExecutionPlanV21):
+        instruction = _resolved_transfer_instruction(
+            session, plan, authorized=authorized_artifact_revision_ids
+        )
+        _validate_transfer_instruction_bytes(
+            session, plan, instruction=instruction, artifact_root=artifact_root
+        )
+    else:
+        instruction = _instruction_manifest(
+            session,
+            step,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+        )
     reference = _reference_manifest(
         session,
         step,
@@ -716,7 +749,11 @@ def materialize_execution_step(
 
 
 def authorized_execution_artifact_revisions(
-    session: Session, *, plan_id: str, step_key: str
+    session: Session,
+    *,
+    plan_id: str,
+    step_key: str,
+    inference_transfer_context: InferenceTransferMaterializationContext | None = None,
 ) -> frozenset[str]:
     """Derive the exact materialization allowlist from one immutable plan and its manifests."""
 
@@ -743,6 +780,9 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV16
             | ResolvedExecutionPlanV17
             | ResolvedExecutionPlanV18
+            | ResolvedExecutionPlanV19
+            | ResolvedExecutionPlanV20
+            | ResolvedExecutionPlanV21
         ) = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/3.0":
         plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
@@ -780,6 +820,12 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV19.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/20.0":
         plan = ResolvedExecutionPlanV20.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/21.0":
+        plan = _validated_transfer_materialization_plan(
+            plan_record.canonical_document,
+            context=inference_transfer_context,
+            step_key=step_key,
+        )
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if (
@@ -792,6 +838,8 @@ def authorized_execution_artifact_revisions(
     if len(matches) != 1:
         raise ControlPlaneError("CONTROL_PLAN_STEP_MISSING", "resolved execution step is missing")
     step = matches[0]
+    if isinstance(plan, ResolvedExecutionPlanV21):
+        return _authorized_transfer_control_revisions(session, plan)
     revision_ids: set[str] = set()
     if isinstance(plan, ResolvedExecutionPlanV2):
         revision_ids.add(plan.source_artifact_revision_id)
@@ -899,6 +947,260 @@ def authorized_execution_artifact_revisions(
                 entry.artifact.artifact_revision_id for entry in reference_manifest.entries
             )
     return frozenset(revision_ids)
+
+
+def preflight_inference_transfer_materialization(
+    session: Session,
+    *,
+    plan_id: str,
+    step_key: str,
+    context: InferenceTransferMaterializationContext,
+) -> frozenset[str]:
+    """Check exact controls before claiming capacity; this grants no Item permission."""
+
+    record = session.get(ResolvedExecutionPlanRecord, plan_id)
+    if record is None:
+        raise ControlPlaneError("CONTROL_PLAN_MISSING", "resolved execution plan is missing")
+    if record.canonical_document.get("schema_version") != "resolved-execution-plan/21.0":
+        raise ControlPlaneError(
+            "CONTROL_TRANSFER_PLAN_UNAVAILABLE", "comparison materialization requires V21"
+        )
+    return authorized_execution_artifact_revisions(
+        session,
+        plan_id=plan_id,
+        step_key=step_key,
+        inference_transfer_context=context,
+    )
+
+
+def _validated_transfer_materialization_plan(
+    document: object,
+    *,
+    context: InferenceTransferMaterializationContext | None,
+    step_key: str,
+) -> ResolvedExecutionPlanV21:
+    if context is None:
+        raise ControlPlaneError(
+            "CONTROL_TRANSFER_CONTEXT_REQUIRED", "comparison materialization context is missing"
+        )
+    try:
+        validate_control_contract("resolved-execution-plan-v21", document)
+        plan = validate_inference_transfer_materialization_plan(document, context=context)
+        if context.step_key != step_key:
+            raise ValueError("comparison materialization step differs")
+    except (ValueError, JsonSchemaValidationError) as exc:
+        raise ControlPlaneError(
+            "CONTROL_TRANSFER_CONTEXT_INVALID", "comparison materialization pins differ"
+        ) from exc
+    return plan
+
+
+def _validate_transfer_instruction(
+    plan: ResolvedExecutionPlanV21, instruction: InstructionBundleManifest
+) -> None:
+    try:
+        validate_inference_transfer_rubric_instruction(plan, instruction)
+    except ValueError as exc:
+        raise ControlPlaneError(
+            "CONTROL_TRANSFER_RUBRIC_INVALID", "comparison rubric membership differs"
+        ) from exc
+
+
+def _resolved_transfer_instruction(
+    session: Session, plan: ResolvedExecutionPlanV21, *, authorized: frozenset[str]
+) -> InstructionBundleManifest:
+    try:
+        instruction = _instruction_manifest(
+            session, plan.steps[0], authorized_artifact_revision_ids=authorized
+        )
+    except ValueError as exc:
+        raise ControlPlaneError(
+            "CONTROL_TRANSFER_RUBRIC_INVALID", "comparison instruction document is invalid"
+        ) from exc
+    _validate_transfer_instruction(plan, instruction)
+    return instruction
+
+
+def _authorized_transfer_control_revisions(
+    session: Session, plan: ResolvedExecutionPlanV21
+) -> frozenset[str]:
+    pointer = plan.steps[0].instruction_bundle
+    record = session.get(ExecutionBundleRevisionRecord, pointer.bundle_revision_id)
+    if (
+        record is None
+        or record.manifest_artifact_revision_id != pointer.manifest_artifact.artifact_revision_id
+    ):
+        raise ControlPlaneError(
+            "CONTROL_BUNDLE_POINTER_INVALID", "resolved instruction manifest revision is stale"
+        )
+    revision_ids = {pointer.manifest_artifact.artifact_revision_id}
+    instruction = _resolved_transfer_instruction(session, plan, authorized=frozenset(revision_ids))
+    # Permission comes from released membership, not the rubric pointer itself.
+    for component in instruction.components:
+        resolve_control_artifact_pointer(
+            session, component.artifact, expected_media_type="text/markdown"
+        )
+        revision_ids.add(component.artifact.artifact_revision_id)
+    return frozenset(revision_ids)
+
+
+def _validate_transfer_instruction_bytes(
+    session: Session,
+    plan: ResolvedExecutionPlanV21,
+    *,
+    instruction: InstructionBundleManifest,
+    artifact_root: Path,
+) -> None:
+    """Bind the protected manifest document to actual immutable member bytes once."""
+
+    pointer = plan.steps[0].instruction_bundle.manifest_artifact
+    revision = resolve_control_artifact_pointer(
+        session,
+        pointer,
+        expected_schema_ref="eom://schemas/workflow/instruction-bundle-manifest/1.0",
+        expected_media_type="application/json",
+    )
+    stored_root = Path(revision.nas_path)
+    if stored_root != artifact_root / pointer.artifact_id / pointer.artifact_revision_id:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_STORAGE_MISMATCH", "instruction manifest storage is not canonical"
+        )
+    entry = _manifest_entry(revision.manifest, pointer.logical_name)
+    size = entry.get("bytes")
+    if type(size) is not int or not 0 < size <= MAX_MARKDOWN_MEMBER_BYTES:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_SIZE_INVALID", "instruction manifest size is invalid"
+        )
+    payload = _read_verified_source(
+        stored_root / pointer.logical_name,
+        canonical_root=artifact_root,
+        expected_sha256=pointer.sha256,
+        expected_bytes=size,
+    )
+    try:
+        document = json.loads(payload, object_pairs_hook=_unique_transfer_json_members)
+        validate_control_contract("instruction-bundle-manifest", document)
+        if document != instruction.model_dump(mode="json"):
+            raise ValueError("instruction manifest bytes differ from the protected document")
+    except (ValueError, JsonSchemaValidationError, UnicodeError) as exc:
+        raise ControlPlaneError(
+            "CONTROL_TRANSFER_RUBRIC_INVALID", "comparison instruction manifest bytes differ"
+        ) from exc
+
+
+def _unique_transfer_json_members(values: list[tuple[str, object]]) -> dict[str, object]:
+    members: dict[str, object] = {}
+    for key, value in values:
+        if key in members:
+            raise ValueError("comparison staging JSON contains duplicate members")
+        members[key] = value
+    return members
+
+
+def _validate_transfer_workspace_inputs(
+    workspace: Path, *, context: InferenceTransferMaterializationContext, group_id: int
+) -> None:
+    try:
+        checked = InferenceTransferMaterializationContext.model_validate(
+            context.model_dump(mode="json")
+        )
+        payload = _read_transfer_workspace_file(workspace, "worker-input.json", group_id=group_id)
+        document = json.loads(payload, object_pairs_hook=_unique_transfer_json_members)
+        validate_role_input(document, "support", TRANSFER_PAIR_PROTOCOL)
+        staged = RoleWorkerInput.model_validate(document)
+        if staged != checked.worker_input or document != checked.worker_input.model_dump(
+            mode="json"
+        ):
+            raise ValueError("comparison staged worker input differs")
+        prompt = _read_transfer_workspace_file(workspace, "prompt.txt", group_id=group_id)
+        prompt.decode("utf-8")
+        if sha256_bytes(prompt) != checked.prompt_sha256:
+            raise ValueError("comparison staged prompt bytes differ")
+    except (ValueError, JsonSchemaValidationError, UnicodeError) as exc:
+        raise ControlPlaneError(
+            "CONTROL_TRANSFER_STAGED_INPUT_INVALID", "comparison staged inputs differ"
+        ) from exc
+
+
+def _read_transfer_workspace_file(workspace: Path, name: str, *, group_id: int) -> bytes:
+    """Read one adapter-owned regular input under the existing private workspace boundary."""
+
+    directory_descriptor: int | None = None
+    file_descriptor: int | None = None
+    try:
+        _canonical_root(workspace)
+        directory_descriptor = os.open(
+            workspace,
+            os.O_RDONLY
+            | getattr(os, "O_DIRECTORY", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0),
+        )
+        directory = os.fstat(directory_descriptor)
+        if (
+            not stat.S_ISDIR(directory.st_mode)
+            or directory.st_uid != os.geteuid()
+            or directory.st_gid != group_id
+            or stat.S_IMODE(directory.st_mode) != WORKSPACE_MODE
+        ):
+            raise ValueError("comparison workspace owner or mode differs")
+        file_descriptor = os.open(
+            name,
+            os.O_RDONLY
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_NONBLOCK", 0),
+            dir_fd=directory_descriptor,
+        )
+        before = os.fstat(file_descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_nlink != 1
+            or before.st_uid != os.geteuid()
+            or before.st_gid != group_id
+            or stat.S_IMODE(before.st_mode) != MATERIALIZED_FILE_MODE
+            or not 0 < before.st_size <= MAX_MARKDOWN_MEMBER_BYTES
+        ):
+            raise ValueError("comparison staged file metadata differs")
+        chunks: list[bytes] = []
+        total = 0
+        while chunk := os.read(file_descriptor, min(COPY_BUFFER_BYTES, before.st_size + 1 - total)):
+            total += len(chunk)
+            if total > before.st_size:
+                raise ValueError("comparison staged file grew while reading")
+            chunks.append(chunk)
+        after = os.fstat(file_descriptor)
+        named_file = os.stat(name, dir_fd=directory_descriptor, follow_symlinks=False)
+        final_directory = workspace.lstat()
+        if (
+            total != before.st_size
+            or (
+                before.st_dev,
+                before.st_ino,
+                before.st_size,
+                before.st_mtime_ns,
+                before.st_ctime_ns,
+            )
+            != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns)
+            or (after.st_dev, after.st_ino) != (named_file.st_dev, named_file.st_ino)
+            or (directory.st_dev, directory.st_ino)
+            != (final_directory.st_dev, final_directory.st_ino)
+            or final_directory.st_uid != os.geteuid()
+            or final_directory.st_gid != group_id
+            or stat.S_IMODE(final_directory.st_mode) != WORKSPACE_MODE
+        ):
+            raise ValueError("comparison staged file changed while reading")
+        return b"".join(chunks)
+    except (OSError, ValueError) as exc:
+        raise ControlPlaneError(
+            "CONTROL_TRANSFER_STAGED_INPUT_INVALID",
+            "comparison staged file is unsafe or unreadable",
+        ) from exc
+    finally:
+        if file_descriptor is not None:
+            os.close(file_descriptor)
+        if directory_descriptor is not None:
+            os.close(directory_descriptor)
 
 
 def _instruction_manifest(

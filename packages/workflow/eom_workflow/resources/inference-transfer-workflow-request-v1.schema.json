@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/inference-transfer-workflow-request/1.0",
+  "title": "EOM inference-transfer application Workflow request V1",
+  "description": "Bounded exact pair context. Permission hash is an initial server-captured audit snapshot, not an authority grant.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_name",
+    "execution_preset_key",
+    "comparison",
+    "left_profile",
+    "right_profile",
+    "access_policy_revision_id",
+    "access_policy_sha256",
+    "requester_permissions_sha256",
+    "request_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "inference-transfer-workflow-request/1.0"
+    },
+    "request_name": {
+      "const": "ITEM_INFERENCE_TRANSFER_PAIR_REQUEST"
+    },
+    "execution_preset_key": {
+      "const": "item-inference-transfer-comparison"
+    },
+    "comparison": {
+      "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/pairRequest"
+    },
+    "left_profile": {
+      "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profile"
+    },
+    "right_profile": {
+      "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profile"
+    },
+    "access_policy_revision_id": {
+      "type": "string",
+      "pattern": "^accessrev_[0-9a-f]{32}$"
+    },
+    "access_policy_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "requester_permissions_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "request_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

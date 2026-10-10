@@ -59,10 +59,14 @@ from eom_workflow.document_review import (
 )
 from eom_workflow.inference_transfer import (
     InferenceTransferPairWorkerRequest,
-    validate_inference_transfer_execution_plan,
     validate_inference_transfer_worker_result,
 )
 from eom_workflow.inference_transfer_control import ResolvedExecutionPlanV21
+from eom_workflow.inference_transfer_materialization import (
+    InferenceTransferMaterializationContext,
+    validate_inference_transfer_workflow_plan,
+)
+from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
 from eom_workflow.models import (
     ArtifactPointer,
     ContentTeamImageRoleResultV12,
@@ -127,6 +131,7 @@ from eom_orchestrator.execution_materializer import (
     MaterializedExecution,
     authorized_execution_artifact_revisions,
     materialize_execution_step,
+    preflight_inference_transfer_materialization,
 )
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.knowledge_analysis_artifact import stage_knowledge_analysis_proposal
@@ -552,6 +557,7 @@ class Orchestrator:
         self,
         *,
         request: InferenceTransferPairWorkerRequest,
+        workflow_request: InferenceTransferWorkflowRequest,
         workflow_id: str,
         step_key: str,
         core_prompt_sha256: str,
@@ -566,11 +572,13 @@ class Orchestrator:
             )
             document = None if record is None else record.canonical_document
             try:
-                plan = validate_inference_transfer_execution_plan(
+                if workflow_request.worker_request() != request:
+                    raise ValueError("inference-transfer workflow/worker request mismatch")
+                plan = validate_inference_transfer_workflow_plan(
                     document,
-                    request=request,
+                    workflow_request=workflow_request,
                     workflow_id=workflow_id,
-                    step_key=step_key,
+                    step_key=cast(Literal["compare_pair"], step_key),
                     core_prompt_sha256=core_prompt_sha256,
                     prompt_sha256=sha256_bytes(prompt_text.encode("utf-8")),
                 )
@@ -642,6 +650,7 @@ class Orchestrator:
         reauthorize_transfer_sources: Callable[[InferenceTransferPairWorkerRequest], None]
         | None = None,
         transfer_core_prompt_sha256: str | None = None,
+        transfer_workflow_request: InferenceTransferWorkflowRequest | None = None,
         execution_tier: Literal["PRIMARY", "ESCALATED"] = "PRIMARY",
     ) -> JobRecord:
         if (prompt_path is None) == (prompt_text is None):
@@ -663,6 +672,11 @@ class Orchestrator:
                     "CONTROL_TRANSFER_PROMPT_REQUIRED",
                     "inference-transfer requires its prepared core prompt hash",
                 )
+            if transfer_workflow_request is None:
+                raise ControlPlaneError(
+                    "CONTROL_TRANSFER_WORKFLOW_CONTEXT_REQUIRED",
+                    "inference-transfer requires its application-prepared workflow context",
+                )
             # Job/step binding is not source authorization. The Catalog owner
             # supplies a separate port pinned to the real actor and read scope.
             self._reauthorize_inference_transfer_sources(request, reauthorize_transfer_sources)
@@ -671,6 +685,7 @@ class Orchestrator:
                 prompt_text = prompt_path.read_text(encoding="utf-8")
             transfer_plan = self._validated_inference_transfer_plan(
                 request=request,
+                workflow_request=transfer_workflow_request,
                 workflow_id=workflow_id,
                 step_key=step_key,
                 core_prompt_sha256=transfer_core_prompt_sha256,
@@ -730,6 +745,32 @@ class Orchestrator:
         if prompt_text is None:
             assert prompt_path is not None
             prompt_text = prompt_path.read_text(encoding="utf-8")
+        transfer_materialization_context: InferenceTransferMaterializationContext | None = None
+        if is_transfer:
+            assert transfer_workflow_request is not None
+            assert transfer_core_prompt_sha256 is not None
+            try:
+                transfer_materialization_context = InferenceTransferMaterializationContext(
+                    workflow_id=workflow_id,
+                    step_key=cast(Literal["compare_pair"], step_key),
+                    workflow_request=transfer_workflow_request,
+                    worker_input=worker_input,
+                    core_prompt_sha256=transfer_core_prompt_sha256,
+                    prompt_sha256=sha256_bytes(prompt_text.encode("utf-8")),
+                )
+            except ValueError as exc:
+                raise ControlPlaneError(
+                    "CONTROL_TRANSFER_WORKFLOW_CONTEXT_INVALID",
+                    "inference-transfer workflow and worker context differ",
+                ) from exc
+            assert transfer_plan is not None
+            with self.sessions() as session:
+                preflight_inference_transfer_materialization(
+                    session,
+                    plan_id=transfer_plan.plan_id,
+                    step_key=step_key,
+                    context=transfer_materialization_context,
+                )
         if existing is None:
             with transaction(self.sessions) as session:
                 self._sync_registry(session)
@@ -908,6 +949,7 @@ class Orchestrator:
                                 materialization_session,
                                 plan_id=plan_id,
                                 step_key=str(plan_step["step_key"]),
+                                inference_transfer_context=transfer_materialization_context,
                             )
                             evidence = materialize_execution_step(
                                 materialization_session,
@@ -918,29 +960,61 @@ class Orchestrator:
                                 worker_group_id=private_group.gr_gid,
                                 authorized_artifact_revision_ids=authorized,
                                 execution_tier=execution_tier,
+                                inference_transfer_context=transfer_materialization_context,
                             )
                         event_data: dict[str, object] = dict(evidence.event_data())
+                        if not is_transfer:
+                            self._transition(
+                                job_id,
+                                JobState.RUNNING,
+                                "RESOLVED_WORKER_STARTED",
+                                data=event_data,
+                            )
+                        return evidence
+
+                    if is_transfer:
+                        # Preparation and materialization cannot have started a process.
+                        # Only the actual launch boundary may retain an uncertain lease.
+                        prepared_workspace = self.worker_adapter.prepare_structured_workspace(
+                            job_id=job_id,
+                            input_document=input_document,
+                            output_schema=output_schema,
+                            prompt_text=prompt_text,
+                            slot=slot,
+                        )
+                        evidence = materialize(prepared_workspace.workspace)
+                        assert reauthorize_transfer_sources is not None
+                        assert isinstance(request, InferenceTransferPairWorkerRequest)
+                        self._reauthorize_inference_transfer_sources(
+                            request, reauthorize_transfer_sources
+                        )
                         self._transition(
                             job_id,
                             JobState.RUNNING,
                             "RESOLVED_WORKER_STARTED",
-                            data=event_data,
+                            data=dict(evidence.event_data()),
                         )
-                        return evidence
-
-                    worker_start_attempted = True
-                    resolved_run = self.worker_adapter.run_resolved_structured(
-                        job_id=job_id,
-                        input_document=input_document,
-                        output_schema=output_schema,
-                        prompt_text=prompt_text,
-                        slot=slot,
-                        staging=staging,
-                        materialize=materialize,
-                        timeout_seconds=int(plan_step["timeout_seconds"]),
-                    )
+                        worker_start_attempted = True
+                        run = self.worker_adapter.run_prepared(
+                            prepared=prepared_workspace,
+                            slot=slot,
+                            staging=staging,
+                            timeout_seconds=int(plan_step["timeout_seconds"]),
+                        )
+                    else:
+                        worker_start_attempted = True
+                        resolved_run = self.worker_adapter.run_resolved_structured(
+                            job_id=job_id,
+                            input_document=input_document,
+                            output_schema=output_schema,
+                            prompt_text=prompt_text,
+                            slot=slot,
+                            staging=staging,
+                            materialize=materialize,
+                            timeout_seconds=int(plan_step["timeout_seconds"]),
+                        )
+                        run = resolved_run.run
                     worker_terminal_confirmed = True
-                    run = resolved_run.run
             assert slot is not None
             with transaction(self.sessions) as session:
                 running = session.get(JobRecord, job_id)
