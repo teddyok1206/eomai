@@ -215,6 +215,13 @@ forward를 하지 않았으며, 이후 완료된 공유 배포는 다음 기록�
 `/tmp/eom-api-build/ad3ed8caf43f3a4ece5abce25b9b59801451803e.BrDlZ9/dist`에서 왔다.
 source commit/tree가 같아도 두 build의 raw ZIP SHA를 동일하다고 취급하지 않는다.
 
+두 build의 data-only 비교에서도 source archive SHA가
+`98155a371c03604d8eea9c04e797e004146ab6feb8ba66203329c054fb89b2c4`로 일치했다.
+Platform 1,361개 및 API-contracts 99개 member의 payload/RECORD/order는 동일하다.
+API 104개 member에서는 `build-info.json`의 `build_timestamp_utc` 한 필드와 이를 반영한
+RECORD만 다르다. 세 wheel의 exhaustive RECORD 검증은 양쪽 모두 PASS다. raw ZIP의 시각
+차이를 source/policy/protocol drift나 동일 Artifact identity로 해석하지 않는다.
+
 실제 API identity로 읽어 검증한 정본 deployment record는
 `/var/lib/eom-api/deployments/ad3ed8caf43f3a4ece5abce25b9b59801451803e.json`이다.
 설치 wheel SHA-256은 이 record의 값이며, 최초 operator stage의 wheel SHA와 별개다.
