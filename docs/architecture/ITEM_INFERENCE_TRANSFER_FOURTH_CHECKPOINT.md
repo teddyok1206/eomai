@@ -33,7 +33,7 @@
 
 Suite 파일 목록과 작은 결과는 별도로 재현 가능하다. Source suite와 추가 suite는 서로 다른 파일 집합이며, 중간의 겹치는 실행을 합산하지 않는다. 기존 Starlette TestClient의 httpx deprecation warning 한 건은 남아 있다. 이 작업에서 dependency를 임의로 업그레이드하지 않았다.
 
-Installed-wheel unit 검사는 checkout 밖의 임시 설치에서 새 package imports와 resources를 확인한다. 전체 supported `--build-only` release 검사는 이 기록 작성 시 별도 후속 검사이며, installed production identity·역할별 권한 격리·authenticated live smoke와 동일하지 않다.
+Installed-wheel unit 검사는 checkout 밖의 임시 설치에서 새 package imports와 resources를 확인한다. 전체 supported `--build-only` release 검사는 아래 후속에서 별도로 실행했으며, installed production identity·역할별 권한 격리·authenticated live smoke와 동일하지 않다.
 
 ### 발견한 실패와 수정
 
@@ -43,6 +43,26 @@ Installed-wheel unit 검사는 checkout 밖의 임시 설치에서 새 package i
 4. PostgreSQL immutable trigger 4분기 테스트가 `IntegrityError`를 기대했으나 실제 보호는 `ProgrammingError → RaiseException / P0001`로 작동했다. 정확한 SQLSTATE·메시지와 실패 후 row/hash 보존을 검사하도록 테스트만 보정했다. Trigger/schema를 바꾸지 않았다.
 5. 실행 뒤 Identity 권한 철회 오류가 owner callback 밖으로 새어 job을 실행 중으로 남길 수 있는 경계를 보강했다. 해당 Identity 오류만 기존 owner 실패 경계로 정규화한다. 임의 programming exception을 권한 오류로 삼키지 않는다.
 6. 후속 실제 3종 wheel `--build-only` 검사에서 새 comparison definition이 검증용 staged 정의 목록에 빠져 admission equality가 실패했다. Equality를 약화하지 않고 exact comparison YAML/인자를 포함하고, 기존 PDF-only inventory 회귀를 모든 fixed support family에 적용하도록 보강했다. RECORD는 최초 실행에서도 PASS였으며 운영 설치 전 실패였다. 수정 후 전체 build 재실행 결과는 별도 release evidence로 남긴다.
+
+### 실제 release build 후속 — 2026-10-10 10:44 UTC
+
+위 누락 보정 후 release 회귀 102개가 다시 PASS했다. Source commit
+`f0257659bfc95124400d28cb111c97ceb26a1390`, tree
+`f4499c2d0ca431eb734a9d748cf5f68747442a38`에서 기존 지원 스크립트의
+`--build-only`를 재실행해 **3종 wheel/RECORD/resource/import/정의 admission/checkout 밖 설치 모의
+검사 PASS**를 확인했다. `--install`은 실행하지 않았다. 뒤이은 문서-only commit을 이 wheel의
+source identity로 바꿔 표시하지 않는다.
+
+개발 중간 build 위치는
+`/tmp/eom-api-build/f0257659bfc95124400d28cb111c97ceb26a1390.oEzqws/dist`다. 이는 정본 Artifact
+등록이나 운영 release가 아니라 설치 전 검증 대상이며, wheel 파일을 Git에 넣지 않았다.
+지원 RECORD verifier로 다시 읽은 exact raw wheel SHA는 다음과 같다.
+
+| Wheel | SHA-256 |
+|---|---|
+| `eom_api_contracts-0.1.0-py3-none-any.whl` | `9ac3f9e830ef0df2ea52e1053484b1cd67a41842dd9b837f246e8c51e6e6de99` |
+| `eom_application_api-0.1.0-py3-none-any.whl` | `183f34b42f55abd52a38f0807e1bfefefc951b3a597985dc3278770a961e9847` |
+| `eom_platform-0.1.0-py3-none-any.whl` | `b08b1210620f601b1700315d5a175e2225b2be531213215d1e97de8090490aa6` |
 
 실패 이력을 성공으로 다시 표시하거나 운영 DB 행을 수정하지 않았다. 임시 fixture의 availability/control metadata는 합성값이고 actual published control admission 증거가 아니다.
 
