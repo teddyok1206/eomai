@@ -101,11 +101,13 @@ RAG 출처는 3건으로 제한합니다. 실제 HTTPS에서 교과서 답변·�
 [교과서 RAG 운영 검증](docs/status/GENERAL_CHAT_TEXTBOOK_RAG_ACCEPTANCE_2026-10-09.md),
 [설계와 지원 경계](docs/architecture/GENERAL_CHAT_TEXTBOOK_RAG_DESIGN.md)를 참고하세요.
 
-문항의 **핵심 착상이 다른 문항 풀이에 어디서 통하는지** 찾는 기능은 별도 source 후보로
-구현했습니다. 기존 승인 풀이보고서와 exact Graph/Item 근거로 비교 표현을 만들고, 제거 가능한
+문항의 **핵심 착상이 다른 문항 풀이에 어디서 통하는지** 찾는 opt-in 경계를 구현하고,
+호환 API/platform component를 `ad3ed8ca` release로 배포했습니다. 기존 승인 풀이보고서와
+exact Graph/Item 근거로 비교 표현을 만들고, 제거 가능한
 로컬 임베딩으로 후보를 찾은 뒤 Orchestrator의 bounded Codex 쌍 비교에서 조건·추론의 대응과
 차이를 검증합니다. 사람의 전이 평가와 모델 가설은 별도입니다. 기존 RAG·출제·승인 경로를
-대체하지 않으며, 실제 corpus 품질·compatible runtime 활성화는 아직 대기 상태입니다.
+대체하지 않으며, 실제 사용자 인증·corpus 실험·비교 control 발행·쌍 비교·사람 평가는 아직
+대기 상태입니다. Component 설치나 service health가 전체 기능·교육 품질 PASS는 아닙니다.
 원래 기출만의 범위·쌍별 재인가·전용 실행 계획을 검증하고, 같은 후보 집합에서 본문·풀이 근거·
 메타데이터를 비교하는 로컬 CPU 실험 경로도 구현했습니다. 실제 모델의 합성 입력 시험은
 실제 기출 품질 평가와 구분합니다.
@@ -119,9 +121,12 @@ RAG 출처는 3건으로 제한합니다. 실제 HTTPS에서 교과서 답변·�
 Catalog owner·전용 resolver/Runner는 소스에서 연결됐습니다.
 [후속 제출·결과·보호된 실험](docs/architecture/ITEM_INFERENCE_TRANSFER_FIFTH_CHECKPOINT.md)에서
 현재 권한 재인가, atomic Workflow/V21/START, canonical 결과 조회 및 optional CPU/Artifact
-owner 호출부를 검증했습니다. 고정 격리 CPU launcher와 인증 owner PREPARE/별도 RELEASE CLI도
-소스에 추가했습니다. 실제 설치·OS 격리·설정 발행, 사용자 권한의 corpus 실험·운영 활성화·
-사람 평가는 별도 후속 gate입니다.
+owner 호출부를 검증했습니다. 고정 격리 CPU runtime/model 설치와 승인된 no-forward 격리 검증,
+호환 공유 release·migration 0051·일곱 보호 callback·API ready·8개 service 복원은 PASS입니다.
+최종 source 회귀는 2,609 PASS입니다. 실제 사용자 권한의 자료 조회와 명시적 owner
+PREPARE/RELEASE, CPU corpus 실험·쌍 비교·사람 평가는 별도 후속 gate입니다.
+설치 component와 역사적 실패·남은 gate는
+[실제 운영 검증 기록](docs/architecture/ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)에 구분합니다.
 
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스

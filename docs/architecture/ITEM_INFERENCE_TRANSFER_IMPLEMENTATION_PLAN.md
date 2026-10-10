@@ -1,6 +1,8 @@
 # 문항 핵심 착상 전이: 구현·검증 계획
 
-상태 시각: 2026-10-10 UTC. 이 문서는 구현 계획이며 운영 활성화·교육 품질 PASS 증거가 아니다.
+상태 시각: 2026-10-10 16:12 UTC. 이 문서는 구현 계획과 단계별 상태 요약이다.
+실제 설치 증거는 [live acceptance 기록](ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)과
+정본 deployment record로 확인하며, 설치·service health를 비교 실행·교육 품질 PASS로 확대하지 않는다.
 
 ## 보존한 설계와 목표
 
@@ -29,10 +31,10 @@
 | F0 | 답변 원문 보존·goal·기존 경계 점검 | 원문 read-back/hash, 기존 경계와 제한 기록 | 완료 |
 | F1 | additive JSON Schema 2020-12 → frozen 모델 → grounded deterministic profile | exact refs/hash/closure/uncertainty tests, predecessor bytes 불변 | source 구현·검증 완료 |
 | F2 | pinned offline local embedding adapter와 exact ranking | dependency isolation, malformed vectors·ties·permission-prefilter tests; 실제 CPU benchmark 별도 | source·CPU toy 실행 및 보호 CPU/model 발행 완료; 실패 기록 보존 후 승인된 no-forward 격리 검증 1회 PASS; 실제 corpus benchmark 대기 |
-| F3 | Catalog opt-in authorized candidate read use case | actual actor/policy/Graph admission 재사용, 별도 후보 예산·provenance, 기본 retrieval 무변경 | source·격리 PostgreSQL SQL 검증 완료; 실제 corpus 비용 미측정 |
-| F4 | Orchestrator 경유 bounded Codex pair comparison | exact A/B, condition+decisive mapping, 차이/새 추론, unsupported/insufficient 처리, schema validation | source public selected-pair 제출·current 권한 재인가·atomic V21/START·canonical 결과 조회 및 인증 owner PREPARE/RELEASE CLI 구현; 실제 발행·worker·compatible release 대기 |
+| F3 | Catalog opt-in authorized candidate read use case | actual actor/policy/Graph admission 재사용, 별도 후보 예산·provenance, 기본 retrieval 무변경 | source·격리 PostgreSQL SQL 검증 및 호환 공유 경계 설치 완료; 실제 `guiadmin` corpus read·비용 미측정 |
+| F4 | Orchestrator 경유 bounded Codex pair comparison | exact A/B, condition+decisive mapping, 차이/새 추론, unsupported/insufficient 처리, schema validation | selected-pair 제출·current 권한 재인가·atomic V21/START·canonical 결과 조회·인증 owner PREPARE/RELEASE source와 호환 공유 release 설치 완료; 실제 초기 protocol/control 발행·worker 비교 대기 |
 | F5 | 기존 검색 대비 bounded 실험·human scorecard | lexical/content-only/crux/metadata ablation, recall·latency·memory, 사람이 전이 위치를 평가 | staged 계약·encode-once harness·실모델 3-view 합성 smoke 완료; 실제 corpus/Graph 비교·human 평가 대기 |
-| F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 교육 판정은 독립 gate | 인증 snapshot API/private Catalog·Runner·제출/결과 source 및 disposable DB 검증; 보호 CPU 설치·격리 PASS 및 최종 source 2,609 PASS; 보호 operator 실제 admission PASS, native mode/초기 protocol 등록 source 보강; 호환 공유 release·실제 인증·발행 gate 대기 |
+| F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 교육 판정은 독립 gate | 최종 source 2,609 PASS; 보호 CPU 설치·격리 PASS; `ad3ed8ca` 호환 공유 배포·migration 0051·일곱 callback·API ready·8 service 복원 PASS; 실제 사용자 인증·corpus·control 발행·비교 실행 및 human gate 대기 |
 
 ## 비교 표현과 판정
 
@@ -78,13 +80,14 @@ F1–F4 source 구현 완료를 F5–F6 또는 전체 goal 완료로 해석하�
 HTTP replay/목적 전용 결과 resolution 및 아직 남은 실제 운영 호출부의 설계는
 [owner 호출부 후속 설계](ITEM_INFERENCE_TRANSFER_OWNER_INVOCATION_DESIGN.md)에 기록한다.
 후속 source 구현·검증은 [다섯 번째 checkpoint](ITEM_INFERENCE_TRANSFER_FIFTH_CHECKPOINT.md)에
-기록한다. 설치된 격리 CPU launcher/control owner 운영 composition·실제 corpus/human gate는 대기다.
+기록한다. 그 checkpoint의 source 검증과 이후 실제 공유 release를 구분하며,
+설치된 격리 CPU launcher/control owner의 실제 corpus·control 발행·human gate는 대기다.
 실제 guiadmin 승인 이후 인증 owner 호출과 독립 CPU 설치 경계는
 [여섯 번째 checkpoint](ITEM_INFERENCE_TRANSFER_SIXTH_CHECKPOINT.md)에 구분해서 기록한다.
 그 이후 실제 설치 component map, no-forward 실패/권한 수정 및 남은 운영 gate는
 [live acceptance 기록](ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)에서 확인한다.
 
-1. 실제 actor의 supported Catalog read 경계를 사용할 수 있는 compatible release와 exact Graph/policy scope를 준비한다. 기존 V2 검색·활성 preset을 바꾸지 않는 opt-in 경로로 제한한다.
+1. compatible shared release는 `ad3ed8ca`로 설치 완료했다. 다음은 실제 `guiadmin` session의 현재 권한으로 exact Graph/policy metadata와 original occurrence-backed corpus scope를 확인한다. 기존 V2 검색·활성 preset을 바꾸지 않는 opt-in 경로로 제한한다.
 2. 실제 corpus의 deterministic profile 길이·E5 token overflow 비율·source resolution query/file-read 비용부터 측정한다. 긴 조건을 버려 성공시키지 않는다. 필요한 facet/chunk successor는 측정 후 별도 설계한다.
 3. 동일한 authorized target 집합에서 lexical/Graph, content-only, concrete-facet, metadata 보조의 후보 집합을 비교한다. 사람 label이 없으면 recall/quality PASS를 만들지 않는다.
 4. compatible exact-purpose support plan·instruction·runtime/policy release를 준비하고 기존 Orchestrator를 통한 bounded pair comparison을 수행한다. 기존 support/PDF preset의 purpose를 바꾸거나 worker를 직접 실행하지 않는다.

@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-10 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-10 16:12 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
 
 ## 보존하는 설계와 범위
@@ -18,11 +18,11 @@
 
 | Component | 실제 상태 | 한계 |
 |---|---|---|
-| 기존 공유 API/platform | 설치 source `83884224651d8b9516a7a54370077757138c518c` | 새 비교 owner API는 아직 이 설치에 활성화하지 않음 |
-| 운영 PostgreSQL | 마지막 read-only head `20261009_0050` | source의 `20261010_0051` 적용 전 |
+| 공유 API/platform | 설치 source `ad3ed8caf43f3a4ece5abce25b9b59801451803e`, tree `a974e0754aaa8125cf8d481eda7d3c5cdc29b794`; 16:07:55 UTC 배포 완료 | 비교 owner 경계 설치와 실제 `guiadmin` 인증·자료 조회·비교 실행은 별도 증거 |
+| 운영 PostgreSQL | `20261010_0051` migration 및 exact-head 검증 PASS | 새 비교 Workflow stage CHECK 적용이지 비교 control 발행이나 worker 실행이 아님 |
 | 별도 CPU Conda | `/opt/eom/conda/envs/eom-embedding-experiment` 보호 snapshot 발행·승인된 격리 probe PASS | 실제 corpus 실험은 별도 gate |
 | CPU platform | `06134fcd91413a957ac3133db062dbcdd525ee15` wheel에서 비편집 설치 | d291 candidate와 1,361개 payload member가 일치함; source 표기는 원래 설치값 유지 |
-| 최초 API build-only 후보 | `d2917ba448f21b86e7731d8477e802c658c2e106` | 후속 source 수정 이력; 아직 공유 운영 설치하지 않음 |
+| 최초 API build-only 후보 | `d2917ba448f21b86e7731d8477e802c658c2e106` | 역사적 후보로 보존; 후속 공유 배포는 위 `ad3ed8ca` release |
 
 Component들이 같은 commit이어야 한다고 가정하지 않는다. 실제 파일·wheel·contract
 호환성과 설치 provenance를 따로 기록한다. build-only 결과를 live release로 부르지 않는다.
@@ -145,8 +145,9 @@ quiescence를 다시 확인한다. historical failed/terminal row와 실제 실�
 발견해 [고정 release-operator adapter](../operations/RELEASE_OPERATOR_RUNTIME.md)로 좁혔다.
 이 adapter는 기존 Alembic/role bootstrap을 재사용한다. 새 service/queue/worker protocol은
 만들지 않는다. root-private reviewed source/wheels/context와 보호 interpreter를 먼저 입장시키고,
-exact `20261010_0051` 및 기존 role reconciliation만 허용한다. 아직 실제 DB migration이나
-공유 service 중지·교체를 수행하지 않았다.
+exact `20261010_0051` 및 기존 role reconciliation만 허용한다. 이 경계로 후속 `ad3ed8ca`
+공유 release의 실제 migration·설치·검증을 완료했다. 배포 전 baseline과 실패한 admission은
+아래에 역사적 증거로 보존한다.
 
 마지막 배포 검사도 기존 API verifier의 public `verify_runtime_isolation()`을 보호된
 interpreter와 admitted wheel에서 호출하도록 같은 adapter의 닫힌 callback에 연결했다.
@@ -172,25 +173,66 @@ API와 보호 CPU의 `pymupdf/__init__.py`는 root:root:0644, `_extra.so`는 roo
 `218b6076f130f2a5d159e64909f5ffe8b966719e177c908af3db1305f8cb1dc1`이다.
 정상 배포 native의 비쓰기 0755를 data-only reader가 0644로만 제한한 현재 source 결함이다.
 exact `_extra.so`에만 0644/0755를 허용하고 다른 executable/writable/alias는 거부하는
-source 회귀 86 PASS로 수정했다. 설치 파일 권한을 바꾸지 않았다. 기존 실패 stage/admission은
-보존하며 수정 후보는 새로운 commit/build/context로 준비한다. 기존 no-forward probe를 다시
-실행하는 작업이 아니다.
+source 회귀 86 PASS로 수정했다. 설치 파일 권한을 바꾸지 않았다. 기존 실패 stage/admission을
+보존하고 수정 후보 `ad3ed8ca`를 새로운 build/context로 준비해 배포했다. 기존 no-forward
+probe를 다시 실행하는 작업이 아니다.
 
 owner의 읽기 전용 조회에서 비교 protocol `workflow-role/1.29.0`의 초기 등록이 없음을
 확인했다. PREPARE의 초기 등록은 기존 Orchestrator protocol registration 경계에서
 실제 현재 관리자 인가·정확 released schema hash·definition/capacity/candidate 입장을 검증한
-뒤 처리해야 한다. 직접 SQL 삽입이나 RELEASE 중 누락 복구는 사용하지 않는다.
+뒤 처리하도록 후속 source를 보강했다. 직접 SQL 삽입이나 RELEASE 중 누락 복구는 사용하지
+않는다. 실제 명시적 owner PREPARE는 아직 실행하지 않았으므로 초기 protocol/control 발행
+gate는 계속 PENDING이다.
 
-현재 공유 runtime은 여전히 `83884224651d8b9516a7a54370077757138c518c`, DB head는 0050이다.
-그 release record의 3 wheel SHA와 보존된 rollback 입력의 SHA/RECORD가 일치한다.
+배포 전 공유 runtime baseline은 `83884224651d8b9516a7a54370077757138c518c`, DB head는
+0050이었다. 그 release record의 3 wheel SHA와 보존된 rollback 입력의 SHA/RECORD가 일치했다.
 0051 이후 옛 0050 platform으로 blind downgrade할 수 있다는 뜻은 아니다.
-실제 chat nonsecret source pin도 같은 838842이며, 교체 뒤에는 기존 supported atomic
-pin-update로 provenance를 맞춰야 한다. API/일반 chat/worker/broker와 HWPX builder,
-kordoc, content-team을 포함한 quiescence 및 8개 service 복원은 운영 배포 gate다.
-아직 service stop/migration/package replacement/model forward는 하지 않았다.
+당시 chat nonsecret source pin도 같은 838842였다. 후속 배포에서 기존 supported atomic
+pin-update로 `ad3ed8ca`에 정렬했다. API/일반 chat/worker/broker와 HWPX builder,
+kordoc, content-team을 포함한 quiescence와 service 복원은 모델 실험과 별도의 운영 배포
+gate다. 이 배포 전 baseline·실패 시점에는 service stop/migration/package replacement/model
+forward를 하지 않았으며, 이후 완료된 공유 배포는 다음 기록과 구별한다.
+
+### `ad3ed8ca` 실제 호환 공유 배포
+
+2026-10-10 **16:07:55 UTC**에 source
+`ad3ed8caf43f3a4ece5abce25b9b59801451803e`, tree
+`a974e0754aaa8125cf8d481eda7d3c5cdc29b794`의 공유 release를 완료했다.
+
+- fresh operator stage: `/var/lib/eom-release-operator-stage.ad3ed8ca-CJ7YAJ`.
+- context SHA-256: `3cb2b8e14aa0d6b0e5074ffa77de68a5c8469193bc9e37870f812f9df3ee833d`.
+- source snapshot SHA-256: `d805c8330f4ff368c6f47b44452d14d5359a49901abc782197c418bec100b4b7`.
+- 보호 runtime/context `ADMIT`, migration 0051, 일곱 closed callback, API ready 검증: PASS.
+- **16:10–16:11 UTC경** 최종 조회: 관련 8개 service 모두 active·enabled·positive PID.
+- 일반 chat의 nonsecret runtime pin: `ad3ed8ca`; 전용 slot: READY.
+- 실제 authenticated metadata/corpus read, CPU forward, selected pair 제출: 아직 수행하지 않음.
+- 보호된 owner console과 UID 990 private 입력 경계 준비 완료; 실제 `guiadmin` TTY 로그인
+  프롬프트에서 사용자 입력 대기. 프롬프트 준비는 인증 성공 증거가 아님.
+
+처음 admission한 build는
+`/tmp/eom-api-build/ad3ed8caf43f3a4ece5abce25b9b59801451803e.CJ7YAJ`다.
+기존 deploy는 같은 commit을 다시 build하므로 실제 설치된 wheel은
+`/tmp/eom-api-build/ad3ed8caf43f3a4ece5abce25b9b59801451803e.BrDlZ9/dist`에서 왔다.
+source commit/tree가 같아도 두 build의 raw ZIP SHA를 동일하다고 취급하지 않는다.
+
+실제 API identity로 읽어 검증한 정본 deployment record는
+`/var/lib/eom-api/deployments/ad3ed8caf43f3a4ece5abce25b9b59801451803e.json`이다.
+설치 wheel SHA-256은 이 record의 값이며, 최초 operator stage의 wheel SHA와 별개다.
+
+| 설치 component | 정본 deployment record의 wheel SHA-256 |
+|---|---|
+| API contracts | `dfed170bf5b55a3db92192cc2fcb465ee8b35ea61b99e735c859fb6cd6ed80c5` |
+| Application API | `ddd2dc4f340102e7519200d11195d2667343bb6f23211f32ec5e453802e9f7fd` |
+| Platform | `ffb8ac66b31d134e2143a8efb534be274c313840cf90a478168cd32bc68351ed` |
+
+이 결과는 설치·migration·격리·service 복원의 실제 증거다. 새 비교 목적의 protocol 초기
+등록·control PREPARE/RELEASE, `guiadmin` 실제 session, corpus snapshot과 embedding/Codex
+실험은 아직 PASS로 승격하지 않는다. 기존 no-forward 실패와 4fa stage/admission도 보존한다.
 
 - 격리 no-forward probe PASS: **PASS_AFTER_ONE_APPROVED_RETRY / FIRST_FAILURE_PRESERVED**.
-- compatible shared release / 실제 `guiadmin` 인증·metadata·corpus read: **PENDING**.
+- compatible shared release / migration 0051 / 일곱 callback / service 복원: **PASS**.
+- 실제 `guiadmin` 인증·metadata·corpus read: **PENDING**.
+- 명시적 비교 owner PREPARE/RELEASE 및 초기 protocol/control 발행: **PENDING**.
 - 고정 4-query, top-k 8, batch 4, threads 4 CPU 실험: **NOT_RUN**.
 - 최대 2개 selected pair의 지원된 Orchestrator/Codex 비교: **NOT_RUN**.
 - 사람의 풀이 전이 품질: **NOT_EVALUATED**.

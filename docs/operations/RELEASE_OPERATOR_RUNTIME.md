@@ -1,7 +1,10 @@
 # Protected release-operator adapter
 
-Status: source implementation and synthetic/source tests completed; not installed
-or operational acceptance.
+Status as of 2026-10-10 16:12 UTC: source and synthetic/source validation completed;
+the protected operator adapter and compatible shared release were exercised for
+`ad3ed8caf43f3a4ece5abce25b9b59801451803e`. Exact migration 0051, all seven closed
+callbacks, API readiness and restoration of eight services passed. This is not
+authenticated corpus, embedding, pair-comparison or human-quality acceptance.
 This removable adapter covers the exact `20261010_0051` release migration, existing
 runtime-role reconciliation and fixed API isolation verification. It is not a worker runtime, a new migration engine, or a
 permission grant. Build-only release behavior remains unchanged.
@@ -197,3 +200,29 @@ This patch does not assert that every historical privileged shell/metadata helpe
 in the release script has been redesigned. The root-private launcher is the new
 boundary for these seven callbacks only; existing release checks and service
 installation still need their established reviewed operator execution context.
+
+## Recorded operational application
+
+The 2026-10-10 release completed at 16:07:55 UTC for commit
+`ad3ed8caf43f3a4ece5abce25b9b59801451803e`, Git tree
+`a974e0754aaa8125cf8d481eda7d3c5cdc29b794`. Fresh admission used
+`/var/lib/eom-release-operator-stage.ad3ed8ca-CJ7YAJ`, context SHA-256
+`3cb2b8e14aa0d6b0e5074ffa77de68a5c8469193bc9e37870f812f9df3ee833d`, and source
+snapshot SHA-256 `d805c8330f4ff368c6f47b44452d14d5359a49901abc782197c418bec100b4b7`.
+The protected runtime retained its admitted byte-tree SHA-256
+`d0dcd26e841ef583ead382b19269f559a3263a35ce809d34c6308bfe0399ed73`; no mutable API
+interpreter was executed as root for these callbacks.
+
+The normal deploy rebuilt the same source commit in a separate `BrDlZ9` build.
+Its raw wheel SHA values therefore differ from the initially admitted `CJ7YAJ`
+stage. Do not replace the admission context with installed-wheel hashes or claim
+the two raw ZIP revisions are identical. The canonical installed set is recorded
+in `/var/lib/eom-api/deployments/ad3ed8caf43f3a4ece5abce25b9b59801451803e.json`.
+Full hashes, preserved prior admission/failure evidence and remaining gates are in
+the [live acceptance record](../architecture/ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md).
+
+The final observation at approximately 16:10–16:11 UTC had eight related services
+active, enabled and with positive PIDs, plus the general-chat nonsecret runtime pin aligned to `ad3ed8ca`
+and its dedicated slot READY. No actual `guiadmin` authentication/corpus read,
+CPU forward, selected-pair submission or explicit comparison-control PREPARE/RELEASE
+had yet been performed at this observation. These remain separate opt-in gates.
