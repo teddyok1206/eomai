@@ -50,6 +50,7 @@ from eom_workflow.document_review import (
     PairedDocumentReviewWorkerRequestV2,
     PdfDocumentReviewWorkerRequest,
 )
+from eom_workflow.inference_transfer import InferenceTransferPairWorkerRequest
 from eom_workflow.models import (
     AuthoringRoleResult,
     ContentTeamAuthoringRoleResultV7,
@@ -93,6 +94,7 @@ from eom_workflow.models import (
     GeneratedReviewRoleResultV5,
     GeneratedReviewRoleResultV6,
     ImageRoleResult,
+    InferenceTransferPairRoleResult,
     KnowledgeAnalysisProposalRoleResult,
     KnowledgeAnalysisProposalRoleResultV2,
     KnowledgeAnalysisProposalRoleResultV3,
@@ -222,6 +224,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "pdf-document-review-result@2.0",
             "pdf-document-review-result@3.0",
             "pdf-document-review-result@4.0",
+            "item-inference-transfer-pair-result@1.0",
         }
     ),
 }
@@ -294,6 +297,7 @@ RESULT_SCHEMA_FILES = {
     "pdf-document-review-result@2.0": "paired-document-review-result-v2.schema.json",
     "pdf-document-review-result@3.0": "paired-document-review-result-v3.schema.json",
     "pdf-document-review-result@4.0": "pdf-document-review-result-v4.schema.json",
+    "item-inference-transfer-pair-result@1.0": "item-inference-transfer-pair-result-v1.schema.json",
 }
 INPUT_SCHEMA_FILES = {
     "authoring": "authoring-input.schema.json",
@@ -329,6 +333,7 @@ INPUT_SCHEMA_FILES_V1_25 = {"support": "pdf-document-review-input-v1.schema.json
 INPUT_SCHEMA_FILES_V1_26 = {"support": "paired-document-review-input-v2.schema.json"}
 INPUT_SCHEMA_FILES_V1_27 = {"support": "paired-document-review-input-v3.schema.json"}
 INPUT_SCHEMA_FILES_V1_28 = {"support": "pdf-document-review-input-v4.schema.json"}
+INPUT_SCHEMA_FILES_V1_29 = {"support": "item-inference-transfer-pair-input-v1.schema.json"}
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -361,6 +366,7 @@ RESULT_SCHEMA_PROTOCOLS = {
     "pdf-document-review-result@2.0": "workflow-role/1.26.0",
     "pdf-document-review-result@3.0": "workflow-role/1.27.0",
     "pdf-document-review-result@4.0": "workflow-role/1.28.0",
+    "item-inference-transfer-pair-result@1.0": "workflow-role/1.29.0",
     "authoring-result@5.0": "workflow-role/1.12.0",
     "image-result@5.0": "workflow-role/1.12.0",
     "review-result@5.0": "workflow-role/1.12.0",
@@ -425,6 +431,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.26.0": INPUT_SCHEMA_FILES_V1_26,
     "workflow-role/1.27.0": INPUT_SCHEMA_FILES_V1_27,
     "workflow-role/1.28.0": INPUT_SCHEMA_FILES_V1_28,
+    "workflow-role/1.29.0": INPUT_SCHEMA_FILES_V1_29,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -456,6 +463,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.26.0",
     "workflow-role/1.27.0",
     "workflow-role/1.28.0",
+    "workflow-role/1.29.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -485,6 +493,7 @@ ROLE_SCHEMA_FILES = tuple(
             *INPUT_SCHEMA_FILES_V1_26.values(),
             *INPUT_SCHEMA_FILES_V1_27.values(),
             *INPUT_SCHEMA_FILES_V1_28.values(),
+            *INPUT_SCHEMA_FILES_V1_29.values(),
         }
     )
 )
@@ -648,6 +657,7 @@ def _role_input_schema(role: str, protocol_version: str = "workflow-role/1.0.1")
             "workflow-role/1.16.0",
             "workflow-role/1.18.0",
             "workflow-role/1.21.0",
+            "workflow-role/1.29.0",
         },
     )
 
@@ -679,6 +689,7 @@ def _role_result_schema(schema_id: str) -> dict[str, Any]:
             "knowledge-analysis-proposal-result@10.0",
             "legacy-item-extraction-result@1.0",
             "legacy-item-editorial-compatibility-result@1.0",
+            "item-inference-transfer-pair-result@1.0",
         },
     )
 
@@ -1070,6 +1081,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return LegacyItemEditorialCompatibilityRoleResult.model_validate(canonical_value)
         if schema_id == "customer-support-result@1.0" and role == "support":
             return CustomerSupportRoleResult.model_validate(canonical_value)
+        if schema_id == "item-inference-transfer-pair-result@1.0" and role == "support":
+            return InferenceTransferPairRoleResult.model_validate(canonical_value)
         if schema_id == "pdf-document-review-result@1.0" and role == "support":
             return PdfDocumentReviewRoleResult.model_validate(canonical_value)
         if schema_id == "pdf-document-review-result@4.0" and role == "support":
@@ -1811,6 +1824,45 @@ def constrained_result_schema(
         resolved_evidence_plan=resolved_evidence_plan,
         material_requirement=material_requirement,
     )
+    if schema_id == "item-inference-transfer-pair-result@1.0":
+        if not isinstance(worker_input.request, InferenceTransferPairWorkerRequest):
+            raise WorkflowSchemaError("inference-transfer result requires its typed request")
+        comparison = worker_input.request.comparison
+        output = _mapping(definitions, "InferenceTransfer_pairResult")
+        output_properties = _mapping(output, "properties")
+        for key, value in (
+            ("request_id", comparison.request_id),
+            ("request_sha256", comparison.request_sha256),
+        ):
+            _bind_result_string_const(schema, _mapping(output_properties, key), value)
+        for key, identity_pointer in (
+            ("left_profile", comparison.left_profile),
+            ("right_profile", comparison.right_profile),
+            ("rubric", comparison.rubric),
+        ):
+            field = _mapping(output_properties, key)
+            reference = field.get("$ref")
+            if not isinstance(reference, str) or not reference.startswith("#/$defs/"):
+                raise WorkflowSchemaError("inference-transfer identity reference is invalid")
+            resolved = copy.deepcopy(_mapping(definitions, reference.removeprefix("#/$defs/")))
+            identity_properties = _mapping(resolved, "properties")
+            for identity_key, identity_value in identity_pointer.model_dump(mode="json").items():
+                _bind_result_string_const(
+                    schema, _mapping(identity_properties, identity_key), str(identity_value)
+                )
+            output_properties[key] = resolved
+        for name in ("InferenceTransfer_mapping", "InferenceTransfer_difference"):
+            reference_properties = _mapping(_mapping(definitions, name), "properties")
+            for key, claim_ids in (
+                ("left_claim_ids", comparison.left_claim_ids),
+                ("right_claim_ids", comparison.right_claim_ids),
+            ):
+                field = _mapping(reference_properties, key)
+                if claim_ids:
+                    field["items"] = {"type": "string", "enum": list(claim_ids)}
+                else:
+                    field["maxItems"] = 0
+        _prune_unreferenced_definitions(schema)
     if schema_id in {
         "knowledge-analysis-proposal-result@1.0",
         "knowledge-analysis-proposal-result@2.0",
@@ -3032,6 +3084,18 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
     if schema_id == "customer-support-result@1.0":
         output = _mapping(_mapping(schema, "$defs"), "output")
         output.pop("allOf", None)
+    if schema_id == "item-inference-transfer-pair-result@1.0":
+        _prune_unreferenced_definitions(schema)
+        definitions = _mapping(schema, "$defs")
+        # Only generation drops conditional operators; canonical/Pydantic admission retains them.
+        for name in ("InferenceTransfer_pairResult", "InferenceTransfer_difference"):
+            node = _mapping(definitions, name)
+            node.pop("allOf", None)
+        _mapping(definitions, "InferenceTransfer_pairResult")["description"] = (
+            "Structural/near-identical hypotheses require GIVEN_CONDITION and DECISIVE_INFERENCE "
+            "mappings plus shared_idea. INSUFFICIENT requires limitations. Every difference has "
+            "at least one source claim. SHA-256 hashes the canonical body excluding result_sha256."
+        )
     if schema_id in {
         "pdf-document-review-result@1.0",
         "pdf-document-review-result@2.0",
@@ -3663,6 +3727,11 @@ def _inline_catalog_schema(
         bundled = _inline_assessment_item_schema(schema, reference)
     knowledge_contracts = (
         (
+            "eom://schemas/knowledge/item-inference-transfer/1.0",
+            "item-inference-transfer",
+            "InferenceTransfer",
+        ),
+        (
             "eom://schemas/knowledge/knowledge-analysis-request/2.0",
             "knowledge-analysis-request-v2",
             "KnowledgeAnalysisRequestV2",
@@ -3904,6 +3973,7 @@ def _inline_knowledge_contract(
 
     root = copy.deepcopy(load_schema(catalog_name))
     solution_types_v1 = copy.deepcopy(load_schema("knowledge-analysis-solution-types-v1"))
+    evidence_v5 = copy.deepcopy(load_schema("evidence-bundle-manifest-v5"))
     types_v5 = copy.deepcopy(load_schema("knowledge-analysis-types-v5"))
     types_v4 = copy.deepcopy(load_schema("knowledge-analysis-types-v4"))
     types_v3 = copy.deepcopy(load_schema("knowledge-analysis-types-v3"))
@@ -3923,6 +3993,7 @@ def _inline_knowledge_contract(
     solution_types_reference = (
         "eom://schemas/knowledge/knowledge-analysis-solution-types/1.0#/$defs/"
     )
+    evidence_v5_reference = "eom://schemas/knowledge/evidence-bundle-manifest/5.0#/$defs/"
 
     def rewrite(value: object, *, local_prefix: str | None = None) -> object:
         if isinstance(value, dict):
@@ -3931,6 +4002,10 @@ def _inline_knowledge_contract(
                 if key == "$ref" and isinstance(item, str):
                     if item == reference:
                         rewritten[key] = f"#/$defs/{definition_name}"
+                    elif item.startswith(reference + "#/$defs/"):
+                        rewritten[key] = f"#/$defs/{definition_name}_" + item.removeprefix(
+                            reference + "#/$defs/"
+                        )
                     elif item.startswith(v5_reference):
                         rewritten[key] = "#/$defs/AnalysisV5_" + item.removeprefix(v5_reference)
                     elif item.startswith(v4_reference):
@@ -3952,6 +4027,10 @@ def _inline_knowledge_contract(
                     elif item.startswith(solution_types_reference):
                         rewritten[key] = "#/$defs/SolutionV1_" + item.removeprefix(
                             solution_types_reference
+                        )
+                    elif item.startswith(evidence_v5_reference):
+                        rewritten[key] = "#/$defs/EvidenceV5_" + item.removeprefix(
+                            evidence_v5_reference
                         )
                     elif local_prefix is not None and item.startswith("#/$defs/"):
                         rewritten[key] = f"#/$defs/{local_prefix}_" + item.removeprefix("#/$defs/")
@@ -3998,6 +4077,7 @@ def _inline_knowledge_contract(
             (legacy_assessment_reference, "LegacyAssessment", legacy_assessment_types),
             (item_origin_reference, "ItemOrigin", item_origin_types),
             (solution_types_reference, "SolutionV1", solution_types_v1),
+            (evidence_v5_reference, "EvidenceV5", evidence_v5),
         )
         selected_prefixes: set[str] = set()
         pending: list[dict[str, Any]] = [root]

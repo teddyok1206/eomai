@@ -30,6 +30,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "item-inference-transfer": CatalogSchemaResource(
+            "schemas/knowledge/item-inference-transfer-v1.schema.json",
+            "resources/knowledge/item-inference-transfer-v1.schema.json",
+            "1.0",
+            "sha256:79e197f598d5fadea0ef757208bd01f05783e83499317680ee804f43600fdff2",
+        ),
         "mock-exam-assembly-cohort": CatalogSchemaResource(
             "schemas/assessment-assembly/mock-exam-assembly-cohort-v1.schema.json",
             "resources/assessment-assembly/mock-exam-assembly-cohort-v1.schema.json",

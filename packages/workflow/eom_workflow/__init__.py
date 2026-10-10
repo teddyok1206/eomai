@@ -151,6 +151,10 @@ from eom_workflow.document_review_presets import (
     load_pdf_review_preset,
     pdf_review_preset_keys,
 )
+from eom_workflow.inference_transfer import (
+    InferenceTransferPairWorkerRequest,
+    validate_inference_transfer_worker_result,
+)
 from eom_workflow.models import (
     AgentStep,
     ArtifactPointer,
@@ -165,6 +169,7 @@ from eom_workflow.models import (
     DecisionStep,
     ExpectedWorkflowResolution,
     HumanGateStep,
+    InferenceTransferPairRoleResult,
     ItemBrief,
     ItemBriefV2,
     KnowledgeAnalysisProposalRoleResult,
@@ -306,6 +311,8 @@ __all__ = [
     "ExecutionPresetRevisionV2",
     "ExpectedWorkflowResolution",
     "HumanGateStep",
+    "InferenceTransferPairRoleResult",
+    "InferenceTransferPairWorkerRequest",
     "InstructionBundleManifest",
     "ItemBrief",
     "ItemBriefV2",
@@ -425,6 +432,7 @@ __all__ = [
     "structural_review_complexity",
     "validate_control_contract",
     "validate_escalated_review_against_source",
+    "validate_inference_transfer_worker_result",
     "validate_paired_document_review_output_against_request",
     "validate_paired_document_review_v3_output_against_request",
     "validate_pdf_document_review_output_against_request",

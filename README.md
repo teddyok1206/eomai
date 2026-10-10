@@ -101,6 +101,15 @@ RAG 출처는 3건으로 제한합니다. 실제 HTTPS에서 교과서 답변·�
 [교과서 RAG 운영 검증](docs/status/GENERAL_CHAT_TEXTBOOK_RAG_ACCEPTANCE_2026-10-09.md),
 [설계와 지원 경계](docs/architecture/GENERAL_CHAT_TEXTBOOK_RAG_DESIGN.md)를 참고하세요.
 
+문항의 **핵심 착상이 다른 문항 풀이에 어디서 통하는지** 찾는 기능은 별도 source 후보로
+구현했습니다. 기존 승인 풀이보고서와 exact Graph/Item 근거로 비교 표현을 만들고, 제거 가능한
+로컬 임베딩으로 후보를 찾은 뒤 Orchestrator의 bounded Codex 쌍 비교에서 조건·추론의 대응과
+차이를 검증합니다. 사람의 전이 평가와 모델 가설은 별도입니다. 기존 RAG·출제·승인 경로를
+대체하지 않으며, 실제 corpus 품질·compatible runtime 활성화는 아직 대기 상태입니다.
+[보존한 설계 원문](docs/architecture/ITEM_INFERENCE_TRANSFER_DESIGN_ORIGINAL.md),
+[구현 계획](docs/architecture/ITEM_INFERENCE_TRANSFER_IMPLEMENTATION_PLAN.md),
+[첫 구현·CPU 실험·검증 기록](docs/architecture/ITEM_INFERENCE_TRANSFER_FIRST_CHECKPOINT.md)을 참고하세요.
+
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스
 readiness가 정본입니다.

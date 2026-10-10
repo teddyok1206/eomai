@@ -51,11 +51,17 @@ from eom_workflow.document_review import (
     validate_paired_document_review_v3_output_against_request,
     validate_pdf_document_review_output_against_request,
 )
+from eom_workflow.inference_transfer import (
+    InferenceTransferPairWorkerRequest,
+    validate_inference_transfer_execution_plan,
+    validate_inference_transfer_worker_result,
+)
 from eom_workflow.models import (
     ArtifactPointer,
     ContentTeamImageRoleResultV12,
     CustomerSupportWorkerRequest,
     GeneratedVectorDrawingV6,
+    InferenceTransferPairRoleResult,
     KnowledgeAnalysisProposalRoleResult,
     KnowledgeAnalysisProposalRoleResultV2,
     KnowledgeAnalysisProposalRoleResultV3,
@@ -180,6 +186,7 @@ WorkflowRoleRequest = (
     | PairedDocumentReviewWorkerRequest
     | PairedDocumentReviewWorkerRequestV2
     | PdfDocumentReviewWorkerRequest
+    | InferenceTransferPairWorkerRequest
 )
 
 
@@ -554,6 +561,12 @@ class Orchestrator:
     ) -> JobRecord:
         if (prompt_path is None) == (prompt_text is None):
             raise ValueError("exactly one workflow prompt source is required")
+        is_transfer = isinstance(request, InferenceTransferPairWorkerRequest)
+        if is_transfer and before_execute is None:
+            raise ControlPlaneError(
+                "CONTROL_TRANSFER_AUTHORIZATION_REQUIRED",
+                "inference-transfer execution requires owner reauthorization",
+            )
         existing = self._job_by_idempotency_key(idempotency_key)
         recovery_state: JobState | None = None
         if existing is not None:
@@ -570,6 +583,10 @@ class Orchestrator:
             job_id = existing.job_id
             artifact = worker_input.artifact
             protocol_version = worker_input.protocol_version
+            if is_transfer:
+                assert before_execute is not None
+                # Exact history is immutable, but replay does not preserve a revoked permission.
+                before_execute(job_id)
             existing_state = self._resume_pre_execution_job(job_id)
             existing = self.get_job(job_id)
             if existing_state in TERMINAL_STATES:
@@ -620,6 +637,9 @@ class Orchestrator:
                     revision_id=artifact.revision_id,
                 )
             if not created:
+                if is_transfer:
+                    assert before_execute is not None
+                    before_execute(job.job_id)
                 return self.get_job(job.job_id)
             self._transition(job_id, JobState.VALIDATED, "REQUEST_VALIDATED")
             self._transition(job_id, JobState.QUEUED, "JOB_QUEUED")
@@ -657,6 +677,19 @@ class Orchestrator:
                 else:
                     plan_document = None
                     plan_id = None
+                if isinstance(request, InferenceTransferPairWorkerRequest):
+                    try:
+                        validate_inference_transfer_execution_plan(
+                            plan_document,
+                            request=request,
+                            workflow_id=workflow_id,
+                            step_key=step_key,
+                        )
+                    except ValueError as exc:
+                        raise ControlPlaneError(
+                            "CONTROL_TRANSFER_PLAN_UNAVAILABLE",
+                            "a compatible purpose-pinned inference-transfer plan is required",
+                        ) from exc
                 if recovered_run is not None:
                     assert slot is not None
                     held_lease = session.scalar(
@@ -826,6 +859,22 @@ class Orchestrator:
                     ErrorCode.WORKER_RESULT_INVALID,
                     "workflow worker result identifiers do not match input",
                 )
+            if isinstance(result, InferenceTransferPairRoleResult):
+                if not isinstance(worker_input.request, InferenceTransferPairWorkerRequest):
+                    raise PlatformError(
+                        ErrorCode.WORKER_RESULT_INVALID,
+                        "inference-transfer result has no typed immutable request",
+                    )
+                try:
+                    validate_inference_transfer_worker_result(worker_input.request, result.output)
+                except ValueError as exc:
+                    raise PlatformError(
+                        ErrorCode.WORKER_RESULT_INVALID,
+                        "inference-transfer result differs from its immutable request",
+                    ) from exc
+                assert before_execute is not None
+                # Reauthorize exact sources after execution as well, before committing bytes.
+                before_execute(job_id)
             if isinstance(result, PdfDocumentReviewRoleResult):
                 if not isinstance(worker_input.request, PdfDocumentReviewWorkerRequest):
                     raise PlatformError(

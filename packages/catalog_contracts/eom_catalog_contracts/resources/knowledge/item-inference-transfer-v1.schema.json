@@ -1,0 +1,1222 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/item-inference-transfer/1.0",
+  "title": "EOM additive item inference-transfer contracts V1",
+  "$defs": {
+    "sourceBasis": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/approvedItemSource"
+        },
+        "graph_snapshot": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"
+        },
+        "solution_evidence": {
+          "$ref": "eom://schemas/knowledge/evidence-bundle-manifest/5.0#/$defs/solutionEvidence"
+        }
+      },
+      "required": [
+        "source",
+        "graph_snapshot",
+        "solution_evidence"
+      ]
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "type": "string",
+          "pattern": "^transferclaim_[a-z0-9][a-z0-9_-]{0,63}$"
+        },
+        "facet": {
+          "enum": [
+            "GIVEN_CONDITION",
+            "INTERMEDIATE_RELATION",
+            "DECISIVE_INFERENCE",
+            "ASKED_JUDGEMENT",
+            "MISCONCEPTION"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "reasoning_step_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^solutionstep_[a-z0-9][a-z0-9_-]{0,47}$"
+          },
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "node_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^knode_[a-z0-9][a-z0-9_-]{0,63}$"
+          },
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "anchor_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+          },
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "inferred": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "claim_id",
+        "facet",
+        "text",
+        "reasoning_step_ids",
+        "node_ids",
+        "anchor_ids",
+        "inferred"
+      ]
+    },
+    "extraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "enum": [
+            "DETERMINISTIC_REPORT_PROJECTION",
+            "CODEX_DERIVED"
+          ]
+        },
+        "extractor_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "prompt_sha256": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "runtime_sha256": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "method",
+        "extractor_version",
+        "prompt_sha256",
+        "model_id",
+        "runtime_sha256"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "const": "DETERMINISTIC_REPORT_PROJECTION"
+              }
+            },
+            "required": [
+              "method"
+            ]
+          },
+          "then": {
+            "properties": {
+              "prompt_sha256": {
+                "type": "null"
+              },
+              "model_id": {
+                "type": "null"
+              },
+              "runtime_sha256": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "prompt_sha256": {
+                "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+              },
+              "model_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "runtime_sha256": {
+                "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "profilePointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "pattern": "^inferenceprofile_[0-9a-f]{32}$"
+        },
+        "profile_revision_id": {
+          "type": "string",
+          "pattern": "^inferenceprofilerev_[0-9a-f]{32}$"
+        },
+        "profile_sha256": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/knowledge/item-inference-transfer/1.0"
+        }
+      },
+      "required": [
+        "profile_id",
+        "profile_revision_id",
+        "profile_sha256",
+        "schema_ref"
+      ]
+    },
+    "rubricPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rubric_id": {
+          "type": "string",
+          "pattern": "^transferrubric_[0-9a-f]{32}$"
+        },
+        "rubric_revision_id": {
+          "type": "string",
+          "pattern": "^transferrubricrev_[0-9a-f]{32}$"
+        },
+        "rubric_sha256": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+        }
+      },
+      "required": [
+        "rubric_id",
+        "rubric_revision_id",
+        "rubric_sha256"
+      ]
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "item-inference-transfer-profile/1.0"
+        },
+        "profile_id": {
+          "type": "string",
+          "pattern": "^inferenceprofile_[0-9a-f]{32}$"
+        },
+        "profile_revision_id": {
+          "type": "string",
+          "pattern": "^inferenceprofilerev_[0-9a-f]{32}$"
+        },
+        "source_basis": {
+          "$ref": "#/$defs/sourceBasis"
+        },
+        "claims": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/claim"
+          },
+          "minItems": 0,
+          "maxItems": 128,
+          "uniqueItems": true
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "minItems": 0,
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "extraction": {
+          "$ref": "#/$defs/extraction"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "profile_sha256": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+        }
+      },
+      "required": [
+        "schema_version",
+        "profile_id",
+        "profile_revision_id",
+        "source_basis",
+        "claims",
+        "limitations",
+        "extraction",
+        "created_at",
+        "profile_sha256"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "claims": {
+                "maxItems": 0
+              }
+            },
+            "required": [
+              "claims"
+            ]
+          },
+          "then": {
+            "properties": {
+              "limitations": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "claims": {
+                "contains": {
+                  "properties": {
+                    "inferred": {
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "inferred"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "claims"
+            ]
+          },
+          "then": {
+            "properties": {
+              "limitations": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "pairRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "item-inference-transfer-pair-request/1.0"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^transferrequest_[0-9a-f]{32}$"
+        },
+        "left_profile": {
+          "$ref": "#/$defs/profilePointer"
+        },
+        "right_profile": {
+          "$ref": "#/$defs/profilePointer"
+        },
+        "direction": {
+          "const": "A_TO_B"
+        },
+        "rubric": {
+          "$ref": "#/$defs/rubricPointer"
+        },
+        "left_claim_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^transferclaim_[a-z0-9][a-z0-9_-]{0,63}$"
+          },
+          "minItems": 0,
+          "maxItems": 128,
+          "uniqueItems": true
+        },
+        "right_claim_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^transferclaim_[a-z0-9][a-z0-9_-]{0,63}$"
+          },
+          "minItems": 0,
+          "maxItems": 128,
+          "uniqueItems": true
+        },
+        "request_sha256": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+        }
+      },
+      "required": [
+        "schema_version",
+        "request_id",
+        "left_profile",
+        "right_profile",
+        "direction",
+        "rubric",
+        "left_claim_ids",
+        "right_claim_ids",
+        "request_sha256"
+      ]
+    },
+    "mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mapping_id": {
+          "type": "string",
+          "pattern": "^transfermapping_[a-z0-9][a-z0-9_-]{0,63}$"
+        },
+        "facet": {
+          "enum": [
+            "GIVEN_CONDITION",
+            "INTERMEDIATE_RELATION",
+            "DECISIVE_INFERENCE",
+            "ASKED_JUDGEMENT",
+            "MISCONCEPTION"
+          ]
+        },
+        "left_claim_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^transferclaim_[a-z0-9][a-z0-9_-]{0,63}$"
+          },
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true
+        },
+        "right_claim_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^transferclaim_[a-z0-9][a-z0-9_-]{0,63}$"
+          },
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true
+        },
+        "explanation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      },
+      "required": [
+        "mapping_id",
+        "facet",
+        "left_claim_ids",
+        "right_claim_ids",
+        "explanation"
+      ]
+    },
+    "difference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "left_claim_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^transferclaim_[a-z0-9][a-z0-9_-]{0,63}$"
+          },
+          "minItems": 0,
+          "maxItems": 16,
+          "uniqueItems": true
+        },
+        "right_claim_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^transferclaim_[a-z0-9][a-z0-9_-]{0,63}$"
+          },
+          "minItems": 0,
+          "maxItems": 16,
+          "uniqueItems": true
+        },
+        "explanation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      },
+      "required": [
+        "left_claim_ids",
+        "right_claim_ids",
+        "explanation"
+      ],
+      "allOf": [
+        {
+          "anyOf": [
+            {
+              "properties": {
+                "left_claim_ids": {
+                  "minItems": 1
+                }
+              }
+            },
+            {
+              "properties": {
+                "right_claim_ids": {
+                  "minItems": 1
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "pairResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "item-inference-transfer-pair-result/1.0"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^transferrequest_[0-9a-f]{32}$"
+        },
+        "request_sha256": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+        },
+        "left_profile": {
+          "$ref": "#/$defs/profilePointer"
+        },
+        "right_profile": {
+          "$ref": "#/$defs/profilePointer"
+        },
+        "direction": {
+          "const": "A_TO_B"
+        },
+        "rubric": {
+          "$ref": "#/$defs/rubricPointer"
+        },
+        "judgement": {
+          "enum": [
+            "INSUFFICIENT",
+            "NO_TRANSFER",
+            "STRUCTURAL_ANALOGY",
+            "NEAR_IDENTICAL_CANDIDATE"
+          ]
+        },
+        "mappings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mapping"
+          },
+          "minItems": 0,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "shared_idea": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "differences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/difference"
+          },
+          "minItems": 0,
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "new_reasoning": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/difference"
+          },
+          "minItems": 0,
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "minItems": 0,
+          "maxItems": 32,
+          "uniqueItems": true
+        },
+        "assessment_kind": {
+          "const": "MACHINE_HYPOTHESIS_NOT_HUMAN_VERIFICATION"
+        },
+        "result_sha256": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+        }
+      },
+      "required": [
+        "schema_version",
+        "request_id",
+        "request_sha256",
+        "left_profile",
+        "right_profile",
+        "direction",
+        "rubric",
+        "judgement",
+        "mappings",
+        "shared_idea",
+        "differences",
+        "new_reasoning",
+        "limitations",
+        "assessment_kind",
+        "result_sha256"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "judgement": {
+                "enum": [
+                  "STRUCTURAL_ANALOGY",
+                  "NEAR_IDENTICAL_CANDIDATE"
+                ]
+              }
+            },
+            "required": [
+              "judgement"
+            ]
+          },
+          "then": {
+            "properties": {
+              "shared_idea": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "mappings": {
+                "minItems": 2,
+                "allOf": [
+                  {
+                    "contains": {
+                      "properties": {
+                        "facet": {
+                          "const": "GIVEN_CONDITION"
+                        }
+                      },
+                      "required": [
+                        "facet"
+                      ]
+                    }
+                  },
+                  {
+                    "contains": {
+                      "properties": {
+                        "facet": {
+                          "const": "DECISIVE_INFERENCE"
+                        }
+                      },
+                      "required": [
+                        "facet"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "judgement": {
+                "const": "INSUFFICIENT"
+              }
+            },
+            "required": [
+              "judgement"
+            ]
+          },
+          "then": {
+            "properties": {
+              "limitations": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "humanEvaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "item-inference-transfer-human-evaluation/1.0"
+        },
+        "evaluation_id": {
+          "type": "string",
+          "pattern": "^transferevaluation_[0-9a-f]{32}$"
+        },
+        "evaluation_revision_id": {
+          "type": "string",
+          "pattern": "^transferevaluationrev_[0-9a-f]{32}$"
+        },
+        "left_profile": {
+          "$ref": "#/$defs/profilePointer"
+        },
+        "right_profile": {
+          "$ref": "#/$defs/profilePointer"
+        },
+        "direction": {
+          "const": "A_TO_B"
+        },
+        "rubric": {
+          "$ref": "#/$defs/rubricPointer"
+        },
+        "reviewer_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+        },
+        "label": {
+          "enum": [
+            "SURFACE_ONLY",
+            "SAME_CONCEPT_DIFFERENT_CRUX",
+            "CRUX_TRANSFERS",
+            "NEAR_IDENTICAL",
+            "UNDETERMINED"
+          ]
+        },
+        "where_helped": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "minItems": 0,
+          "maxItems": 16,
+          "uniqueItems": true
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "evaluated_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "evaluation_sha256": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+        }
+      },
+      "required": [
+        "schema_version",
+        "evaluation_id",
+        "evaluation_revision_id",
+        "left_profile",
+        "right_profile",
+        "direction",
+        "rubric",
+        "reviewer_id",
+        "label",
+        "where_helped",
+        "reason",
+        "evaluated_at",
+        "evaluation_sha256"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "label": {
+                "const": "CRUX_TRANSFERS"
+              }
+            },
+            "required": [
+              "label"
+            ]
+          },
+          "then": {
+            "properties": {
+              "where_helped": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "embeddingFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "member_path": {
+          "enum": [
+            "config.json",
+            "model.safetensors",
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "special_tokens_map.json",
+            "sentencepiece.bpe.model",
+            "README.md",
+            "LICENSE",
+            "1_Pooling/config.json"
+          ]
+        },
+        "sha256": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8589934592
+        }
+      },
+      "required": [
+        "member_path",
+        "sha256",
+        "size_bytes"
+      ]
+    },
+    "runtimeVersion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "enum": [
+            "torch",
+            "transformers",
+            "safetensors",
+            "tokenizers"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9][A-Za-z0-9.+_-]{0,95}$"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ]
+    },
+    "localEmbeddingModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "item-local-embedding-model-spec/1.0"
+        },
+        "model_id": {
+          "type": "string",
+          "pattern": "^embeddingmodel_[0-9a-f]{32}$"
+        },
+        "model_revision_id": {
+          "type": "string",
+          "pattern": "^embeddingmodelrev_[0-9a-f]{32}$"
+        },
+        "provider_family": {
+          "const": "transformers-local-dense/1.0"
+        },
+        "upstream_repo": {
+          "enum": [
+            "BAAI/bge-m3",
+            "intfloat/multilingual-e5-small",
+            "intfloat/multilingual-e5-base"
+          ]
+        },
+        "upstream_revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "license_id": {
+          "const": "MIT"
+        },
+        "dimension": {
+          "enum": [
+            384,
+            768,
+            1024
+          ]
+        },
+        "maximum_tokens": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 8192
+        },
+        "pooling": {
+          "enum": [
+            "CLS",
+            "MEAN"
+          ]
+        },
+        "normalization": {
+          "const": "L2"
+        },
+        "dtype": {
+          "const": "float32"
+        },
+        "query_prefix": {
+          "enum": [
+            "",
+            "query: "
+          ]
+        },
+        "document_prefix": {
+          "enum": [
+            "",
+            "query: "
+          ]
+        },
+        "truncation": {
+          "const": "REJECT_OVERFLOW"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/embeddingFile"
+          },
+          "minItems": 5,
+          "maxItems": 9,
+          "uniqueItems": true
+        },
+        "runtime_versions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/runtimeVersion"
+          },
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "manifest_sha256": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+        }
+      },
+      "required": [
+        "schema_version",
+        "model_id",
+        "model_revision_id",
+        "provider_family",
+        "upstream_repo",
+        "upstream_revision",
+        "license_id",
+        "dimension",
+        "maximum_tokens",
+        "pooling",
+        "normalization",
+        "dtype",
+        "query_prefix",
+        "document_prefix",
+        "truncation",
+        "files",
+        "runtime_versions",
+        "manifest_sha256"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "upstream_repo": {
+                "const": "BAAI/bge-m3"
+              }
+            },
+            "required": [
+              "upstream_repo"
+            ]
+          },
+          "then": {
+            "properties": {
+              "dimension": {
+                "const": 1024
+              },
+              "pooling": {
+                "const": "CLS"
+              },
+              "query_prefix": {
+                "const": ""
+              },
+              "document_prefix": {
+                "const": ""
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "upstream_repo": {
+                "const": "intfloat/multilingual-e5-small"
+              }
+            },
+            "required": [
+              "upstream_repo"
+            ]
+          },
+          "then": {
+            "properties": {
+              "dimension": {
+                "const": 384
+              },
+              "pooling": {
+                "const": "MEAN"
+              },
+              "maximum_tokens": {
+                "maximum": 512
+              },
+              "query_prefix": {
+                "const": "query: "
+              },
+              "document_prefix": {
+                "const": "query: "
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "upstream_repo": {
+                "const": "intfloat/multilingual-e5-base"
+              }
+            },
+            "required": [
+              "upstream_repo"
+            ]
+          },
+          "then": {
+            "properties": {
+              "dimension": {
+                "const": 768
+              },
+              "pooling": {
+                "const": "MEAN"
+              },
+              "maximum_tokens": {
+                "maximum": 512
+              },
+              "query_prefix": {
+                "const": "query: "
+              },
+              "document_prefix": {
+                "const": "query: "
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "files": {
+              "contains": {
+                "properties": {
+                  "member_path": {
+                    "const": "config.json"
+                  }
+                },
+                "required": [
+                  "member_path"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "files": {
+              "contains": {
+                "properties": {
+                  "member_path": {
+                    "const": "model.safetensors"
+                  }
+                },
+                "required": [
+                  "member_path"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "files": {
+              "contains": {
+                "properties": {
+                  "member_path": {
+                    "const": "tokenizer.json"
+                  }
+                },
+                "required": [
+                  "member_path"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "files": {
+              "contains": {
+                "properties": {
+                  "member_path": {
+                    "const": "tokenizer_config.json"
+                  }
+                },
+                "required": [
+                  "member_path"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "files": {
+              "contains": {
+                "properties": {
+                  "member_path": {
+                    "const": "special_tokens_map.json"
+                  }
+                },
+                "required": [
+                  "member_path"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "runtime_versions": {
+              "contains": {
+                "properties": {
+                  "name": {
+                    "const": "torch"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "runtime_versions": {
+              "contains": {
+                "properties": {
+                  "name": {
+                    "const": "transformers"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "runtime_versions": {
+              "contains": {
+                "properties": {
+                  "name": {
+                    "const": "safetensors"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "runtime_versions": {
+              "contains": {
+                "properties": {
+                  "name": {
+                    "const": "tokenizers"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/profile"
+    },
+    {
+      "$ref": "#/$defs/pairRequest"
+    },
+    {
+      "$ref": "#/$defs/pairResult"
+    },
+    {
+      "$ref": "#/$defs/humanEvaluation"
+    },
+    {
+      "$ref": "#/$defs/localEmbeddingModel"
+    }
+  ]
+}

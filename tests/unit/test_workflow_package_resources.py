@@ -229,6 +229,7 @@ sys.path.insert(0, str(installed_root))
 
 from eom_workflow.compiler import compile_definition
 from eom_workflow.control_schemas import control_schema_inventory, load_control_schema
+from eom_workflow.inference_transfer import TRANSFER_PAIR_PROTOCOL, TRANSFER_PAIR_RESULT_SCHEMA
 from eom_workflow.schemas import (
     INPUT_SCHEMA_FILES,
     RESULT_SCHEMA_FILES,
@@ -246,6 +247,13 @@ for role in INPUT_SCHEMA_FILES:
     load_role_input_schema(role)
 for schema_id in RESULT_SCHEMA_FILES:
     load_role_result_schema(schema_id)
+load_role_input_schema("support", TRANSFER_PAIR_PROTOCOL)
+load_role_result_schema(TRANSFER_PAIR_RESULT_SCHEMA)
+from eom_catalog_service.inference_transfer_service import InferenceTransferApplicationService
+from eom_catalog_service.inference_transfer_worker_preparation import (
+    prepare_inference_transfer_worker_comparison,
+)
+assert "torch" not in sys.modules and "transformers" not in sys.modules
 for name, _ in control_schema_inventory():
     load_control_schema(name)
 compiled = compile_definition(

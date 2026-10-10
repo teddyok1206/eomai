@@ -156,10 +156,19 @@ def _prompt_envelope() -> dict[str, object]:
 
 def test_catalog_schema_resources_match_canonical_sources() -> None:
     entries = catalog_schema_inventory()
-    assert len(entries) == 281
+    # Completeness is a relationship, not a counter that becomes stale on additions.
+    resource_directory = (
+        REPOSITORY_ROOT / "packages/catalog_contracts/eom_catalog_contracts/resources"
+    )
+    schema_members = {
+        "resources/" + path.relative_to(resource_directory).as_posix()
+        for path in resource_directory.rglob("*.schema.json")
+    }
+    assert {entry.resource_path for _, entry in entries} == schema_members
     assert len({name for name, _ in entries}) == len(entries)
     assert len({entry.resource_path for _, entry in entries}) == len(entries)
     assert {
+        "item-inference-transfer",
         "educational-document-types",
         "legacy-item-extraction-batch",
         "legacy-item-extraction-batch-v2",

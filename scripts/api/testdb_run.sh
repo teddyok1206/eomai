@@ -166,7 +166,8 @@ if [[ "${action}" == "chat-knowledge-tests" ]]; then
   export EOM_CHAT_KNOWLEDGE_TEST_STATE="${state_directory}"
   "${PYTHON}" -m pytest -q \
     tests/integration/test_chat_knowledge_search.py \
-    tests/integration/test_chat_knowledge_runtime_privileges.py
+    tests/integration/test_chat_knowledge_runtime_privileges.py \
+    tests/integration/test_inference_transfer_candidate_admission.py
   printf 'Disposable model-free chat knowledge query/plan tests passed.\n'
   exit 0
 fi

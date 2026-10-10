@@ -1,0 +1,38 @@
+# Optional Linux x86_64 / CPython 3.12 CPU inference; no external LLM API or CUDA dependency.
+# The official PyTorch wheel URL+SHA pins the CPU variant without a competing package index.
+torch @ https://download-r2.pytorch.org/whl/cpu/torch-2.7.1%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl#sha256=8f8b3cfc53010a4b4a3c7ecb88c212e9decc4f5eeb6af75c3c803937d2d60947
+transformers==4.56.2
+safetensors==0.6.2
+tokenizers==0.22.2
+numpy==2.4.6
+# Exact model-library transitive requirements; never install Transformers optional extras.
+huggingface-hub==0.35.3
+hf-xet==1.7.0
+filelock==3.32.3
+fsspec==2026.7.0
+Jinja2==3.1.6
+MarkupSafe==3.0.3
+mpmath==1.3.0
+networkx==3.6.1
+packaging==26.2
+PyYAML==6.0.3
+regex==2026.9.3
+requests==2.34.2
+certifi==2026.7.22
+charset-normalizer==3.5.1
+idna==3.19
+urllib3==2.7.0
+setuptools==83.0.0
+sympy==1.14.0
+tqdm==4.70.0
+# Existing protocol validation dependencies, not production persistence/application packages.
+annotated-types==0.8.0
+attrs==26.1.0
+jsonschema==4.26.0
+jsonschema-specifications==2025.9.1
+pydantic==2.13.4
+pydantic_core==2.46.4
+referencing==0.37.0
+rpds-py==2026.6.3
+typing-inspection==0.4.4
+typing_extensions==4.16.0

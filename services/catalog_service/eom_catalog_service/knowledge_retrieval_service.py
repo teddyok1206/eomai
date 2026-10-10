@@ -22,6 +22,7 @@ from eom_catalog_contracts import (
     EducationalDocumentKnowledgeSourceV4,
     EducationRetrievalAccessPolicy,
     EducationRetrievalRequestV2,
+    EvidenceBudget,
     EvidenceBundleManifestV2,
     EvidenceBundleManifestV3,
     EvidenceBundleManifestV4,
@@ -90,6 +91,7 @@ from eom_catalog_service.knowledge_graph_models import (
     KnowledgeSnapshotAnalysisRecord,
 )
 from eom_catalog_service.knowledge_graph_projection import knowledge_node_terms
+from eom_catalog_service.models import ItemRecord, ItemRevisionRecord
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.solution_evidence_resolution import (
     ResolvedSolutionEvidence,
@@ -258,6 +260,49 @@ _Candidate = KnowledgeRetrievalCandidate
 class ReadOnlyKnowledgeSelection:
     request: EducationRetrievalRequestV2
     candidates: tuple[KnowledgeRetrievalCandidate, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ReadOnlyCandidatePoolScope:
+    """Trusted application scope, never model-supplied authority or a V2 request.
+
+    The actor and effective permission/role values are injected by the Catalog
+    application use case. Candidate admission does not publish a retrieval or
+    replace the released lexical/multihop retrieval algorithm.
+    """
+
+    graph_snapshot: KnowledgeGraphSnapshotPointer
+    access_policy_revision_id: str
+    access_policy_sha256: str
+    requested_by: str
+    requester_role: Literal["ADMIN", "EDITOR", "REVIEWER", "WORKER"]
+    requester_permission_keys: tuple[str, ...]
+    source_classes: tuple[Literal["APPROVED_ITEM", "PAST_EXAM"], ...]
+    evidence_budget: EvidenceBudget
+    maximum_candidates: int = 1024
+    analysis_run_ids: tuple[str, ...] = ()
+    query_kind: Literal["ITEM_PREPARATION"] = "ITEM_PREPARATION"
+
+    def __post_init__(self) -> None:
+        if type(self.maximum_candidates) is not int or not 1 <= self.maximum_candidates <= 1024:
+            raise ValueError("candidate pool limit must be between 1 and 1024")
+        for values in (self.source_classes, self.requester_permission_keys):
+            if not values or values != tuple(sorted(set(values))):
+                raise ValueError("candidate pool authority/sources must be sorted and unique")
+        if not set(self.source_classes).issubset({"APPROVED_ITEM", "PAST_EXAM"}):
+            raise ValueError("candidate pool supports only approved Item source classes")
+        if (
+            self.analysis_run_ids != tuple(sorted(set(self.analysis_run_ids)))
+            or len(self.analysis_run_ids) > self.maximum_candidates
+        ):
+            raise ValueError("candidate pool exact analysis selection is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class ReadOnlyKnowledgeCandidatePool:
+    graph_snapshot: KnowledgeGraphSnapshotPointer
+    candidates: tuple[KnowledgeRetrievalCandidate, ...]
+    truncated: bool
 
 
 type _ResolvedKnowledgeSource = (
@@ -977,6 +1022,139 @@ class KnowledgeRetrievalApplicationService:
         # algorithm. The conversational projection applies its smaller text budget.
         return ReadOnlyKnowledgeSelection(request=request, candidates=candidates)
 
+    def admit_read_only_candidate_pool(
+        self, session: Session, scope: ReadOnlyCandidatePoolScope
+    ) -> ReadOnlyKnowledgeCandidatePool:
+        """Admit bounded exact Item sources without requiring lexical overlap.
+
+        The distinct *analysis* limit is applied after source-class, lifecycle,
+        and answer-bearing filters. Pointer-row limits never silently truncate
+        the source population: an overlarge source raises a bounded-read error.
+        Canonical source resolution remains the existing Catalog boundary.
+        """
+        snapshot_id = scope.graph_snapshot.graph_snapshot_revision_id
+        snapshot = self.resolve_snapshot_pointer(session, snapshot_id)
+        if snapshot != scope.graph_snapshot:
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_SNAPSHOT_STALE", "candidate pool Graph pin differs"
+            )
+        policy = self.resolve_access_policy(
+            session, scope.access_policy_revision_id, sha256=scope.access_policy_sha256
+        )
+        self._authorize(session, scope, policy)
+        association = KnowledgeSnapshotAnalysisRecord
+        pointer = KnowledgeNodeSourcePointerRecord
+        node = KnowledgeNodeRecord
+        run = KnowledgeAnalysisRunRecord
+        statement = (
+            select(association.analysis_run_id)
+            .join(
+                pointer,
+                (pointer.graph_snapshot_revision_id == association.graph_snapshot_revision_id)
+                & (pointer.analysis_run_id == association.analysis_run_id),
+            )
+            .join(
+                node,
+                (node.graph_snapshot_revision_id == pointer.graph_snapshot_revision_id)
+                & (node.node_id == pointer.node_id),
+            )
+            .join(run, run.analysis_run_id == association.analysis_run_id)
+            .join(
+                ItemRevisionRecord,
+                ItemRevisionRecord.item_revision_id == association.source_revision_id,
+            )
+            .join(ItemRecord, ItemRecord.item_id == ItemRevisionRecord.item_id)
+            .where(
+                association.graph_snapshot_revision_id == snapshot_id,
+                association.source_kind == "APPROVED_ITEM_REVISION",
+                pointer.source_class.in_(scope.source_classes),
+                run.state == "ACCEPTED",
+                ItemRecord.lifecycle_state == "ACTIVE",
+                ItemRevisionRecord.revision_state.in_(("APPROVED", "SUPERSEDED", "RETIRED")),
+            )
+            .group_by(association.analysis_run_id)
+            .order_by(association.analysis_run_id)
+            .limit(scope.maximum_candidates + 1)
+        )
+        if scope.requester_role not in policy.answer_bearing_roles:
+            statement = statement.where(node.answer_bearing.is_(False))
+        if scope.analysis_run_ids:
+            statement = statement.where(association.analysis_run_id.in_(scope.analysis_run_ids))
+        selected = tuple(str(value) for value in session.scalars(statement))
+        truncated = len(selected) > scope.maximum_candidates
+        run_ids = selected[: scope.maximum_candidates]
+        if not run_ids:
+            return ReadOnlyKnowledgeCandidatePool(snapshot, (), truncated=False)
+        maximum_pointer_rows = scope.maximum_candidates * MAX_RETRIEVAL_CANDIDATES
+        detail = (
+            select(pointer, node)
+            .join(
+                node,
+                (node.graph_snapshot_revision_id == pointer.graph_snapshot_revision_id)
+                & (node.node_id == pointer.node_id),
+            )
+            .where(
+                pointer.graph_snapshot_revision_id == snapshot_id,
+                pointer.analysis_run_id.in_(run_ids),
+                pointer.source_class.in_(scope.source_classes),
+            )
+            .order_by(pointer.analysis_run_id, pointer.node_id, pointer.anchor_id)
+            .limit(maximum_pointer_rows + 1)
+        )
+        if scope.requester_role not in policy.answer_bearing_roles:
+            detail = detail.where(node.answer_bearing.is_(False))
+        rows = tuple(session.execute(detail))
+        if len(rows) > maximum_pointer_rows:
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_CANDIDATE_POOL_BUDGET_EXCEEDED",
+                "candidate pool pointer budget was exceeded; no partial pool was returned",
+            )
+        by_run: dict[str, list[tuple[KnowledgeNodeSourcePointerRecord, KnowledgeNodeRecord]]] = (
+            defaultdict(list)
+        )
+        for source_pointer, source_node in rows:
+            by_run[source_pointer.analysis_run_id].append((source_pointer, source_node))
+        cache = self._snapshot_source_resolution_cache(
+            session, snapshot_id, tuple(values[0][0] for values in by_run.values())
+        )
+        admitted: list[KnowledgeRetrievalCandidate] = []
+        for run_id in run_ids:
+            entries = by_run.get(run_id)
+            if not entries:
+                raise KnowledgeRetrievalServiceError(
+                    "KNOWLEDGE_RETRIEVAL_SOURCE_POINTER_INVALID",
+                    "candidate analysis lost its Graph source pointers",
+                )
+            source = self._resolve_snapshot_source(session, snapshot_id, entries[0][0], cache=cache)
+            if not isinstance(source, ApprovedItemKnowledgeSourceV2):
+                raise KnowledgeRetrievalServiceError(
+                    "KNOWLEDGE_RETRIEVAL_SOURCE_POINTER_INVALID", "candidate source is not an Item"
+                )
+            for source_pointer, _node in entries:
+                if (
+                    self._resolve_snapshot_source(session, snapshot_id, source_pointer, cache=cache)
+                    != source
+                ):
+                    raise KnowledgeRetrievalServiceError(
+                        "KNOWLEDGE_RETRIEVAL_SOURCE_POINTER_INVALID",
+                        "candidate source identity differs",
+                    )
+            nodes_by_id = {value.node_id: value for _pointer, value in entries}
+            node_ids = tuple(sorted(nodes_by_id))[:16]
+            admitted.append(
+                KnowledgeRetrievalCandidate(
+                    analysis_run_id=run_id,
+                    source=source,
+                    node_ids=node_ids,
+                    anchor_ids=tuple(sorted({p.anchor_id for p, _n in entries}))[:32],
+                    node_labels=tuple(nodes_by_id[node_id].label for node_id in node_ids),
+                    node_types=tuple(nodes_by_id[node_id].node_type for node_id in node_ids),
+                    relevance_milli=0,
+                    answer_bearing=any(value.answer_bearing for value in nodes_by_id.values()),
+                )
+            )
+        return ReadOnlyKnowledgeCandidatePool(snapshot, tuple(admitted), truncated=truncated)
+
     def _snapshot_pointer(
         self, session: Session, graph_snapshot_revision_id: str
     ) -> KnowledgeGraphSnapshotPointer:
@@ -1062,7 +1240,7 @@ class KnowledgeRetrievalApplicationService:
     @staticmethod
     def _authorize(
         session: Session,
-        command: CreateEvidenceBundleCommand,
+        command: CreateEvidenceBundleCommand | ReadOnlyCandidatePoolScope,
         policy: EducationRetrievalAccessPolicy,
     ) -> None:
         operator = session.get(OperatorRecord, command.requested_by)

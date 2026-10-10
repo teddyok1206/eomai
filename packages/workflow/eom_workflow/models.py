@@ -53,6 +53,7 @@ from eom_catalog_contracts import (
     validate_item_reference_contract,
     validate_reviewed_authoring_guidance,
 )
+from eom_catalog_contracts.item_inference_transfer import PairComparisonResult
 from eom_catalog_contracts.mock_exam_production_plan import ContentTeamMockExamSlotV1
 from eom_identifiers import content_sha256
 from eom_image_contracts import sanitize_svg_overlay
@@ -77,6 +78,7 @@ from eom_workflow.document_review import (
     PdfDocumentReviewRequest,
     PdfDocumentReviewWorkerRequest,
 )
+from eom_workflow.inference_transfer import InferenceTransferPairWorkerRequest
 
 
 def _require_utc(value: datetime) -> datetime:
@@ -1021,6 +1023,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.26.0",
         "workflow-role/1.27.0",
         "workflow-role/1.28.0",
+        "workflow-role/1.29.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -1036,6 +1039,7 @@ class RoleWorkerInput(FrozenModel):
         | PdfDocumentReviewWorkerRequest
         | PairedDocumentReviewWorkerRequestV2
         | PairedDocumentReviewWorkerRequest
+        | InferenceTransferPairWorkerRequest
     )
     upstream_artifacts: tuple[ArtifactPointer, ...]
     artifact: ArtifactSpec
@@ -1053,6 +1057,7 @@ class RoleWorkerInput(FrozenModel):
         | PdfDocumentReviewWorkerRequest
         | PairedDocumentReviewWorkerRequestV2
         | PairedDocumentReviewWorkerRequest
+        | InferenceTransferPairWorkerRequest
     ):
         if isinstance(value, BaseModel):
             value = value.model_dump(mode="json")
@@ -1066,6 +1071,8 @@ class RoleWorkerInput(FrozenModel):
             return LegacyItemEditorialCompatibilityWorkerRequest.model_validate(value)
         if value.get("request_name") == "CUSTOMER_SUPPORT_REQUEST":
             return CustomerSupportWorkerRequest.model_validate(value)
+        if value.get("request_name") == "ITEM_INFERENCE_TRANSFER_PAIR_REQUEST":
+            return InferenceTransferPairWorkerRequest.model_validate(value)
         if value.get("request_name") == "PDF_DOCUMENT_REVIEW_REQUEST":
             return PdfDocumentReviewWorkerRequest.model_validate(value)
         if value.get("request_name") == "PAIRED_DOCUMENT_REVIEW_REQUEST":
@@ -1078,6 +1085,17 @@ class RoleWorkerInput(FrozenModel):
         return WorkerRequest.model_validate(
             {"request_name": value.get("request_name"), "image_mode": value.get("image_mode")}
         )
+
+    @model_validator(mode="after")
+    def inference_transfer_purpose_matches_protocol(self) -> RoleWorkerInput:
+        is_transfer = isinstance(self.request, InferenceTransferPairWorkerRequest)
+        if is_transfer != (self.protocol_version == "workflow-role/1.29.0"):
+            raise ValueError(
+                "inference-transfer requests require their isolated protocol successor"
+            )
+        if is_transfer and (self.role != "support" or self.upstream_artifacts):
+            raise ValueError("inference-transfer input requires support with no upstream artifacts")
+        return self
 
 
 class AuthoringDraft(FrozenModel):
@@ -1154,6 +1172,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.26.0",
         "workflow-role/1.27.0",
         "workflow-role/1.28.0",
+        "workflow-role/1.29.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -2804,6 +2823,12 @@ class CustomerSupportRoleResult(RoleResultBase):
     output: CustomerSupportOutput
 
 
+class InferenceTransferPairRoleResult(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.29.0"] = "workflow-role/1.29.0"
+    role: Literal["support"] = "support"
+    output: PairComparisonResult
+
+
 class PdfDocumentReviewRoleResult(RoleResultBase):
     protocol_version: Literal["workflow-role/1.25.0"] = "workflow-role/1.25.0"
     role: Literal["support"] = "support"
@@ -2888,6 +2913,7 @@ RoleResult = (
     | LegacyItemExtractionRoleResult
     | LegacyItemEditorialCompatibilityRoleResult
     | CustomerSupportRoleResult
+    | InferenceTransferPairRoleResult
     | PdfDocumentReviewRoleResult
     | PdfDocumentReviewRoleResultV4
     | PairedDocumentReviewRoleResult

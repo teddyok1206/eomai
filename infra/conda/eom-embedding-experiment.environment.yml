@@ -1,0 +1,11 @@
+name: eom-embedding-experiment
+channels:
+  - defaults
+dependencies:
+  - python=3.12.13
+  - pip
+
+# Optional, CPU-only experiment. EOM Catalog contracts use Python 3.12 syntax; the existing
+# Python 3.11 image/trainer environments cannot import them and must not be upgraded in place.
+# Install the adjacent exact requirements lock into an explicitly selected isolated prefix.
+# This environment is not an API, worker, image runtime, production service or activation.

@@ -147,6 +147,25 @@ DB head는 `20261008_0049`, Web과 독립 chat activation은 변경 없음.
 
 ## 주요 독립 계약 namespace
 
+### 핵심 착상 전이 source 후보 — 2026-10-10 UTC
+
+이 후보는 위 새 작업 selector/admission 또는 live activation 목록에 추가된 제품 경로가 아니다.
+기존 Item/accepted V10/Graph/Evidence·Pack·production pins와 29개 predecessor role bundle hash는
+유지한다. 새 지원은 opt-in source implementation이며 compatible exact-purpose release 없이는
+실행을 거부한다. 실제 corpus 품질·worker canary·운영 설치는 미검증이다.
+
+| 경계 | 별도 후보 | 상태 |
+| --- | --- | --- |
+| 비교 값 | `item-inference-transfer/1.0` schema family: profile, pair request/result, human evaluation, model spec | JSON Schema/Pydantic/source reference 검증 |
+| Support worker | `workflow-role/1.29.0`, `item-inference-transfer-pair-result@1.0` | source-only binding; 이전 support purpose에 적용하지 않음 |
+| 실행 계획 | exact purpose `item-inference-transfer-comparison@1.0.0` guard | 아직 compatible definition/Pack/instruction/preset activation 없음 |
+| 로컬 모델 | pinned `multilingual-e5-small`, CPU toy probe | 개발 임시 환경; protected production 모델 설치 아님 |
+
+정본 설계·단계별 상태는 [구현 계획](ITEM_INFERENCE_TRANSFER_IMPLEMENTATION_PLAN.md),
+실제 테스트와 미검증 범위는 [첫 checkpoint](ITEM_INFERENCE_TRANSFER_FIRST_CHECKPOINT.md)에 기록한다.
+벡터 점수·구조 대응 가설·사람의 풀이 전이 판단은 서로 다른 값이며 어느 것도 Item 승인이나
+과학적 정확성의 자동 증명이 아니다.
+
 | 책임 | 현재 저장소의 latest/additive 계약 | 주의사항 |
 | --- | --- | --- |
 | Canonical Item | `assessment-item-content/3.0`, Catalog `catalog/1.13` | logical Item과 immutable revision/hash 분리 |
