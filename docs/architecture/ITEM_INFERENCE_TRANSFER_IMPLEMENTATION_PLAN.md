@@ -75,6 +75,9 @@ Catalog owner, pure staging, bootstrap, V21 resolver와 Runner의 후속 검증 
 [전용 실행 목적](ITEM_INFERENCE_TRANSFER_EXECUTION_PURPOSE.md),
 [staged 실험](ITEM_INFERENCE_TRANSFER_EXPERIMENT.md)은 추가 설계·검증 경계다.
 F1–F4 source 구현 완료를 F5–F6 또는 전체 goal 완료로 해석하지 않는다.
+아직 없는 실제 호출부와 HTTP replay/목적 전용 결과 resolution의 설계는
+[owner 호출부 후속 설계](ITEM_INFERENCE_TRANSFER_OWNER_INVOCATION_DESIGN.md)에 기록한다.
+해당 문서는 source 구현·운영 활성화가 아닌 후속 protocol-first 설계다.
 
 1. 실제 actor의 supported Catalog read 경계를 사용할 수 있는 compatible release와 exact Graph/policy scope를 준비한다. 기존 V2 검색·활성 preset을 바꾸지 않는 opt-in 경로로 제한한다.
 2. 실제 corpus의 deterministic profile 길이·E5 token overflow 비율·source resolution query/file-read 비용부터 측정한다. 긴 조건을 버려 성공시키지 않는다. 필요한 facet/chunk successor는 측정 후 별도 설계한다.
