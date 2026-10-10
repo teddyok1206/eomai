@@ -6,13 +6,14 @@ import subprocess
 from collections.abc import Callable
 from types import TracebackType
 
-from sqlalchemy import Connection, Engine, exists, func, select, text
+from sqlalchemy import Connection, Engine, and_, exists, func, or_, select, text
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.sql.selectable import Exists
 
 from eom_orchestrator.control_models import CodexControlCommandRecord, WorkerLeaseRecord
 from eom_orchestrator.control_service import WORKER_HOST_CAPACITY_LOCK_ID, ControlPlaneError
 from eom_orchestrator.general_chat_models import GeneralChatCapacityRecord, GeneralChatTurnRecord
-from eom_orchestrator.models import JobRecord
+from eom_orchestrator.models import Base, JobRecord
 from eom_orchestrator.worker_systemd import SYSTEMCTL, SYSTEMCTL_ENV
 
 CODEX_PRODUCER_UNITS = (
@@ -36,6 +37,9 @@ _EXECUTABLE_JOB_STATES = (
     "VALIDATING_RESULT",
     "COMMITTING",
 )
+# A narrow read projection, not a transition/recovery rule. Failed QUEUED attempts
+# remain busy because the workflow application supports capacity-queued recovery.
+_UNSUCCESSFUL_TERMINAL_STATES = ("FAILED", "CANCELLED")
 _LOCK_OWNERSHIP_QUERY = text(
     "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'advisory' "
     "AND pid = pg_backend_pid() AND granted AND objsubid = 1 "
@@ -146,6 +150,55 @@ def assert_codex_workers_quiescent() -> None:
         )
 
 
+def _executable_jobs_exist() -> Exists:
+    jobs = JobRecord.__table__
+    steps = Base.metadata.tables.get("workflow_step_runs")
+    workflows = Base.metadata.tables.get("workflow_instances")
+    commands = Base.metadata.tables.get("workflow_commands")
+    if steps is None or workflows is None or commands is None:
+        # In an incomplete composition no historical exception can be proven.
+        return exists().where(jobs.c.status.in_(_EXECUTABLE_JOB_STATES))
+    linked = steps.alias("maintenance_linked_steps")
+    parent = workflows.alias("maintenance_parent")
+    command = commands.alias("maintenance_parent_command")
+    exact_link = exists().where(
+        linked.c.platform_job_id == jobs.c.job_id,
+        linked.c.workflow_id == jobs.c.request["workflow_id"].astext,
+        linked.c.step_run_id == jobs.c.request["step_run_id"].astext,
+    )
+    unsafe_link = (
+        select(linked.c.step_run_id)
+        .select_from(linked.outerjoin(parent, parent.c.workflow_id == linked.c.workflow_id))
+        .where(
+            linked.c.platform_job_id == jobs.c.job_id,
+            or_(
+                linked.c.state.not_in(_UNSUCCESSFUL_TERMINAL_STATES),
+                parent.c.workflow_id.is_(None),
+                parent.c.state.not_in(_UNSUCCESSFUL_TERMINAL_STATES),
+                linked.c.workflow_id != jobs.c.request["workflow_id"].astext,
+                linked.c.step_run_id != jobs.c.request["step_run_id"].astext,
+            ),
+        )
+        .exists()
+    )
+    active_parent_command = (
+        select(command.c.command_id)
+        .select_from(command.join(linked, command.c.workflow_id == linked.c.workflow_id))
+        .where(
+            linked.c.platform_job_id == jobs.c.job_id,
+            command.c.state.in_(("PENDING", "LEASED", "PROCESSING")),
+        )
+        .exists()
+    )
+    historical_terminal_child = and_(
+        jobs.c.status.in_(("CLAIMED", "RUNNING")),
+        exact_link,
+        ~unsafe_link,
+        ~active_parent_command,
+    )
+    return exists().where(jobs.c.status.in_(_EXECUTABLE_JOB_STATES), ~historical_terminal_child)
+
+
 def _assert_existing_work_absent(connection: Connection) -> None:
     checks = (
         (
@@ -157,7 +210,7 @@ def _assert_existing_work_absent(connection: Connection) -> None:
             "CODEX_COMPATIBILITY_CONTROL_BUSY",
         ),
         (
-            exists().where(JobRecord.status.in_(_EXECUTABLE_JOB_STATES)),
+            _executable_jobs_exist(),
             "CODEX_COMPATIBILITY_JOB_BUSY",
         ),
         (

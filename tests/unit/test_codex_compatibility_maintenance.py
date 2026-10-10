@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Callable
 from contextlib import nullcontext
 from types import SimpleNamespace
 from typing import cast
@@ -11,8 +12,11 @@ from unittest.mock import Mock
 import pytest
 from eom_orchestrator import codex_compatibility_maintenance as maintenance
 from eom_orchestrator.control_service import WORKER_HOST_CAPACITY_LOCK_ID, ControlPlaneError
+from eom_orchestrator.models import Base
 from eom_orchestrator.worker_systemd import SYSTEMCTL_ENV
 from sqlalchemy import Connection, Engine
+from sqlalchemy.dialects.postgresql import dialect
+from sqlalchemy.engine import Dialect
 from sqlalchemy.exc import SQLAlchemyError
 
 
@@ -124,6 +128,41 @@ def test_workers_only_pre_stop_check_does_not_require_idle_producers(
     maintenance.assert_codex_workers_quiescent()
     run.assert_called_once()
     assert run.call_args.args[0][1] == "list-units"
+
+
+def test_historical_projection_uses_indexed_canonical_links_without_runner_import() -> None:
+    # Composition owns model registration; this test registers that adapter, not the fence.
+    from eom_workflow_runner import models as workflow_models
+    from sqlalchemy import select
+
+    statement = str(
+        select(maintenance._executable_jobs_exist()).compile(
+            dialect=cast(Callable[[], Dialect], dialect)(), compile_kwargs={"literal_binds": True}
+        )
+    )
+    assert "jobs.status IN ('CLAIMED', 'RUNNING')" in statement
+    assert "jobs.request ->> 'workflow_id'" in statement
+    assert "jobs.request ->> 'step_run_id'" in statement
+    assert "LEFT OUTER JOIN workflow_instances" in statement
+    assert "maintenance_parent.workflow_id IS NULL" in statement
+    assert "maintenance_parent_command.state IN ('PENDING', 'LEASED', 'PROCESSING')" in statement
+    assert workflow_models.WorkflowStepRunRecord.__table__.c.platform_job_id.index is True
+    assert workflow_models.WorkflowCommandRecord.__table__.c.workflow_id.index is True
+
+
+def test_incomplete_composition_cannot_prove_a_historical_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sqlalchemy import select
+
+    monkeypatch.setattr(Base, "metadata", SimpleNamespace(tables={}))
+    statement = str(
+        select(maintenance._executable_jobs_exist()).compile(
+            dialect=cast(Callable[[], Dialect], dialect)(), compile_kwargs={"literal_binds": True}
+        )
+    )
+    assert "'QUEUED', 'CLAIMED', 'RUNNING'" in statement
+    assert "workflow_step_runs" not in statement
 
 
 def test_busy_host_lock_never_observes_or_launches_workers() -> None:

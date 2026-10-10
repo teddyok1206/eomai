@@ -109,3 +109,27 @@ uncertain-launch rejection, bounded update discovery, Artifact resolution/admiss
 installed-wheel/helper identity tests are required. Actual inference is opt-in and has its
 own explicit call count; no source test consumes model usage. Runtime PASS and any future
 educational evaluation are reported independently.
+
+## Historical child-job quiescence (2026-10-10)
+
+Live preflight found two CLAIMED/RUNNING child Job records whose canonical step and parent
+were already FAILED/CANCELLED. They are not successful executions and their rows/events
+must remain unchanged. Age, known IDs, and missing leases alone are not quiescence proof.
+The Workflow owner exits on those unsuccessful terminal parents; its special untouched
+QUEUED recovery is still executable and must always block diagnostics.
+
+The maintenance adapter may classify only CLAIMED/RUNNING records as sealed history when
+an exact request workflow/step pointer resolves, every linked step and parent is
+FAILED/CANCELLED, and no linked parent has a PENDING/LEASED/PROCESSING command. A missing,
+dangling, successful, or mixed link remains busy. The global held-lease and fixed-unit
+absence checks remain mandatory, and all producers are stopped under the same host lock
+before inference. Classification is read-only, not a reconciliation or state transition.
+
+Use the already composed SQLAlchemy table registry, as the existing lease boundary does;
+do not import Workflow Runner implementation into Orchestrator. Correlated EXISTS/NOT
+EXISTS use the existing platform_job_id and workflow_id B-tree indexes rather than one
+query per Job. Scale and storage are unchanged; no migration, cache, duplicate state enum,
+or job repair queue is introduced. The simpler status-only filter incorrectly blocks
+sealed historical children; ignoring all children of terminal parents would incorrectly
+admit recoverable QUEUED work. Tests preserve original rows and cover every negative link,
+active command, worker/lease guard, and the QUEUED recovery boundary.

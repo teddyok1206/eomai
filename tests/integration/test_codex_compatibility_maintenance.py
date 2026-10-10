@@ -7,7 +7,10 @@ from uuid import uuid4
 
 import pytest
 from eom_identity_service.models import OperatorRecord
-from eom_orchestrator.codex_compatibility_maintenance import CodexCompatibilityMaintenance
+from eom_orchestrator.codex_compatibility_maintenance import (
+    CodexCompatibilityMaintenance,
+    assert_codex_compatibility_database_quiescent,
+)
 from eom_orchestrator.control_commands import (
     build_codex_control_command,
     claim_next_codex_control_command,
@@ -22,8 +25,15 @@ from eom_orchestrator.control_service import (
     begin_worker_lease_reconciliation,
     terminalize_worker_lease,
 )
-from eom_orchestrator.models import JobRecord
+from eom_orchestrator.models import JobEventRecord, JobRecord
 from eom_orchestrator.state_machine import JobState, transition_job
+from eom_workflow_runner.models import (
+    WorkflowCommandRecord,
+    WorkflowInstanceRecord,
+    WorkflowStepRunRecord,
+)
+from eom_workflow_runner.repository import CommandType, enqueue_command
+from eom_workflow_runner.state_machine import CommandState, transition_command
 from sqlalchemy import Engine, func, select, text
 from sqlalchemy.orm import Session
 
@@ -151,6 +161,200 @@ def test_nonexecuting_and_terminal_history_does_not_block_maintenance(
         _finish_fixture_job(guarded_engine, job_id)
 
 
+def _historical_child(
+    engine: Engine,
+    workflow_id: str,
+    *,
+    job_state: str = "RUNNING",
+    parent_state: str = "FAILED",
+    step_state: str = "FAILED",
+) -> str:
+    """Create an isolated historical lifecycle shape, never repair a runtime row."""
+
+    with Session(engine) as session, session.begin():
+        job = control_fixture._job(session, workflow_id=workflow_id)
+        job.status = job_state
+        workflow = session.get(WorkflowInstanceRecord, workflow_id)
+        step = session.get(WorkflowStepRunRecord, job.request["step_run_id"])
+        assert workflow is not None and step is not None
+        workflow.state = parent_state
+        step.state = step_state
+        return job.job_id
+
+
+@pytest.mark.parametrize("job_state", ["CLAIMED", "RUNNING"])
+@pytest.mark.parametrize("parent_state", ["FAILED", "CANCELLED"])
+@pytest.mark.parametrize("step_state", ["FAILED", "CANCELLED"])
+def test_unsuccessful_terminal_child_history_is_quiet_and_preserved(
+    guarded_engine: Engine,
+    control_seed: tuple[str, str],
+    job_state: str,
+    parent_state: str,
+    step_state: str,
+) -> None:
+    job_id = _historical_child(
+        guarded_engine,
+        control_seed[1],
+        job_state=job_state,
+        parent_state=parent_state,
+        step_state=step_state,
+    )
+    query = select(
+        JobRecord.status, JobRecord.request, JobRecord.request_hash, JobRecord.updated_at
+    )
+    query = query.where(JobRecord.job_id == job_id)
+    try:
+        with Session(guarded_engine) as session:
+            before = session.execute(query).one()
+            event_count = session.scalar(
+                select(func.count())
+                .select_from(JobEventRecord)
+                .where(JobEventRecord.job_id == job_id)
+            )
+        assert_codex_compatibility_database_quiescent(guarded_engine)
+        with CodexCompatibilityMaintenance(guarded_engine, host_reader=_no_host_mutations) as fence:
+            fence.assert_quiescent()
+        with Session(guarded_engine) as session:
+            assert session.execute(query).one() == before
+            assert (
+                session.scalar(
+                    select(func.count())
+                    .select_from(JobEventRecord)
+                    .where(JobEventRecord.job_id == job_id)
+                )
+                == event_count
+            )
+            workflow = session.get(WorkflowInstanceRecord, control_seed[1])
+            assert workflow is not None and workflow.state == parent_state
+            step = session.get(WorkflowStepRunRecord, before.request["step_run_id"])
+            assert step is not None and step.state == step_state
+    finally:
+        _finish_fixture_job(guarded_engine, job_id)
+
+
+@pytest.mark.parametrize(
+    ("job_state", "parent_state", "step_state"),
+    [
+        ("QUEUED", "FAILED", "FAILED"),
+        ("VALIDATED", "FAILED", "FAILED"),
+        ("VALIDATING_RESULT", "FAILED", "FAILED"),
+        ("COMMITTING", "FAILED", "FAILED"),
+        ("RUNNING", "RUNNING", "FAILED"),
+        ("RUNNING", "COMPLETED", "FAILED"),
+        ("RUNNING", "FAILED", "RUNNING"),
+        ("RUNNING", "FAILED", "SUCCEEDED"),
+        ("RUNNING", "FAILED", "SUPERSEDED"),
+    ],
+)
+def test_recoverable_or_unproven_child_history_still_blocks(
+    guarded_engine: Engine,
+    control_seed: tuple[str, str],
+    job_state: str,
+    parent_state: str,
+    step_state: str,
+) -> None:
+    job_id = _historical_child(
+        guarded_engine,
+        control_seed[1],
+        job_state=job_state,
+        parent_state=parent_state,
+        step_state=step_state,
+    )
+    try:
+        with pytest.raises(ControlPlaneError) as error:
+            assert_codex_compatibility_database_quiescent(guarded_engine)
+        assert error.value.code == "CODEX_COMPATIBILITY_JOB_BUSY"
+    finally:
+        _finish_fixture_job(guarded_engine, job_id)
+
+
+@pytest.mark.parametrize("broken", ["workflow", "step", "missing-link"])
+def test_nonresolving_historical_request_pointers_cannot_be_hidden(
+    guarded_engine: Engine, control_seed: tuple[str, str], broken: str
+) -> None:
+    job_id = _historical_child(guarded_engine, control_seed[1])
+    with Session(guarded_engine) as session, session.begin():
+        job = session.get(JobRecord, job_id)
+        assert job is not None
+        if broken == "missing-link":
+            step = session.get(WorkflowStepRunRecord, job.request["step_run_id"])
+            assert step is not None
+            step.platform_job_id = None
+        else:
+            key = "workflow_id" if broken == "workflow" else "step_run_id"
+            job.request = {**job.request, key: "nonexistent"}
+    try:
+        with pytest.raises(ControlPlaneError) as error:
+            assert_codex_compatibility_database_quiescent(guarded_engine)
+        assert error.value.code == "CODEX_COMPATIBILITY_JOB_BUSY"
+    finally:
+        _finish_fixture_job(guarded_engine, job_id)
+
+
+@pytest.mark.parametrize("other_parent_state", ["RUNNING", "FAILED"])
+def test_duplicate_mixed_or_foreign_job_links_do_not_use_one_convenient_terminal_parent(
+    guarded_engine: Engine, control_seed: tuple[str, str], other_parent_state: str
+) -> None:
+    job_id = _historical_child(guarded_engine, control_seed[1])
+    with Session(guarded_engine) as session, session.begin():
+        foreign = control_fixture._workflow(session)
+        foreign.state = other_parent_state
+        session.add(
+            WorkflowStepRunRecord(
+                step_run_id="steprun_" + uuid4().hex,
+                workflow_id=foreign.workflow_id,
+                step_key="authoring",
+                attempt=1,
+                step_type="agent",
+                worker_role="authoring",
+                result_schema="authoring-result@4.0",
+                state="FAILED",
+                platform_job_id=job_id,
+                input_pointer_manifest={},
+                output_pointer_manifest=None,
+            )
+        )
+    try:
+        with pytest.raises(ControlPlaneError) as error:
+            assert_codex_compatibility_database_quiescent(guarded_engine)
+        assert error.value.code == "CODEX_COMPATIBILITY_JOB_BUSY"
+    finally:
+        _finish_fixture_job(guarded_engine, job_id)
+
+
+@pytest.mark.parametrize("command_state", ["PENDING", "LEASED", "PROCESSING"])
+def test_terminal_parent_with_active_command_cannot_be_classified_as_sealed_history(
+    guarded_engine: Engine, control_seed: tuple[str, str], command_state: str
+) -> None:
+    job_id = _historical_child(guarded_engine, control_seed[1])
+    with Session(guarded_engine) as session, session.begin():
+        command, _ = enqueue_command(
+            session,
+            workflow_id=control_seed[1],
+            command_type=CommandType.RECONCILE_WORKFLOW,
+            payload={},
+            actor_type="system",
+            actor_id="disposable-fence-fixture",
+            source="disposable-fence-fixture",
+            idempotency_key="disposable-fence-" + uuid4().hex,
+        )
+        command.state = command_state
+        command_id = command.command_id
+    try:
+        with pytest.raises(ControlPlaneError) as error:
+            assert_codex_compatibility_database_quiescent(guarded_engine)
+        assert error.value.code == "CODEX_COMPATIBILITY_JOB_BUSY"
+    finally:
+        with Session(guarded_engine) as session, session.begin():
+            finished_command = session.get(WorkflowCommandRecord, command_id)
+            assert finished_command is not None
+            transition_command(
+                finished_command,
+                CommandState.FAILED if command_state == "PROCESSING" else CommandState.CANCELLED,
+            )
+        _finish_fixture_job(guarded_engine, job_id)
+
+
 @pytest.mark.parametrize("reconciling", [False, True])
 def test_held_or_uncertain_worker_lease_always_blocks_diagnostics(
     guarded_engine: Engine, control_seed: tuple[str, str], reconciling: bool
@@ -177,6 +381,13 @@ def test_held_or_uncertain_worker_lease_always_blocks_diagnostics(
                 observed_at=acquired_at + timedelta(seconds=1),
                 reason_code="PROCESS_TERMINAL_UNCONFIRMED",
             )
+        # Even a proven terminal parent/step cannot relax the independent host lease guard.
+        job.status = "RUNNING"
+        parent = session.get(WorkflowInstanceRecord, control_seed[1])
+        step = session.get(WorkflowStepRunRecord, job.request["step_run_id"])
+        assert parent is not None and step is not None
+        parent.state = "FAILED"
+        step.state = "FAILED"
     try:
         with (
             pytest.raises(ControlPlaneError) as error,
