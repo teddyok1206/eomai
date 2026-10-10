@@ -232,7 +232,9 @@ def _review_correction_prompt_supplement(context: dict[str, str]) -> str:
 # Explicit immutable release families, not a semver range or an implicit latest policy.
 # Reuse each membership set across brief and image bindings so a compatible editorial
 # successor cannot acquire a different material schema or lose its image policy.
-CONTENT_TEAM_MATERIAL_V5_PACK_VERSIONS = frozenset({"1.20.12", "1.20.13", "1.20.14", "1.20.15"})
+CONTENT_TEAM_MATERIAL_V5_PACK_VERSIONS = frozenset(
+    {"1.20.12", "1.20.13", "1.20.14", "1.20.15", "1.20.16"}
+)
 CONTENT_TEAM_MATERIAL_V4_PACK_VERSIONS = frozenset(
     {
         "1.16.0",
