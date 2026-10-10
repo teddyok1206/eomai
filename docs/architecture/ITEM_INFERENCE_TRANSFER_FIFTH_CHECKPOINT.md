@@ -76,6 +76,29 @@ Workflow/V21/START 원자적 기록, historical plan closure 및 정본 결과 �
 이 기록을 추가한 후속 문서 commit과 위 build source commit은 다른 identity다. 임시 build
 경로는 정본 runtime 설치나 NAS Artifact를 뜻하지 않는다.
 
+### 실제 설치 상태의 read-only preflight
+
+2026-10-10 11:24–11:25 UTC에 실제 서비스 상태, `python -I`의 설치 metadata 및 선택된
+package 파일/RECORD를 확인했다. 저장소 import/PYTHONPATH, 자격 증명·환경 파일·DB·NAS·사용자
+문서 접근이나 모델 실행·설치·서비스 변경은 하지 않았다.
+
+| 확인 | 실제 결과 | 해석 |
+|---|---|---|
+| API·Catalog·Runner | `active/running`, `NeedDaemonReload=no` | 기존 서비스 process 정상; 신규 기능 PASS가 아님 |
+| 설치 API build source | `83884224651d8b9516a7a54370077757138c518c`, tree `0731b36ab54ea89c4126cb8b94b6c422a534810f` | 후보 `992df006…`는 미설치 |
+| 신규 purpose 파일·schema | 필수 18개가 설치 파일과 RECORD 양쪽에 없음 | `INSTALLED_PURPOSE_SUPPORT=UNAVAILABLE_NOT_INSTALLED` |
+| 기존 owner 파일 | 선택 7개 존재 및 RECORD SHA 일치 | 전체 wheel 무결성이나 기능 검증으로 확대하지 않음 |
+| API health smoke | PASS | 인증·Graph·신규 pair 실행 검증이 아님 |
+| 고정 CPU 환경·libexec·unit | 없음; unit `LoadState=not-found` | 격리 CPU launcher 사용 불가 |
+| 이전 임시 CPU 환경 | `/tmp/eom-inference-transfer-runtime.T3lA5o/env` 존재; Python `3.12.13`, torch `2.7.1+cpu`, transformers `4.56.2`, safetensors `0.6.2`, tokenizers `0.22.2`; UID/GID `1000/1000` | 개발용 수치 환경일 뿐 보호된 운영 설치가 아님 |
+| 관련 worker/image/HWPX transient unit | 관측 시각의 active/activating/deactivating 목록 없음 | DB queue·claim·lease quiescence는 UNKNOWN; 재제출/배포 근거로 대체하지 않음 |
+| active controls·Graph·policy·actual operator corpus | UNKNOWN / NOT_READ | 인증 및 운영 승인 경계 유지 |
+
+최초 실제 호출의 선행조건은 **호환 release 설치 승인 + 실제 operator 인증**이다. 로그인 ID
+만으로 현 미설치 runtime에서 실험할 수 있다고 해석하지 않는다. Bootstrap PREPARE/별도 RELEASE,
+격리 CPU 설치·handoff·실행 및 human review는 이후에도 각각 별도 gate로 남는다. 이번 점검은
+새로운 권한·서비스를 승인하거나 old controls/Workflow를 최신 후보로 대체하지 않는다.
+
 ### 실패 이력과 수정
 
 1. 유효한 max_entries=1 selection에 두 profile READ를 한 번에 만들면 constructor가 실패하는
