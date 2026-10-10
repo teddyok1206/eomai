@@ -172,5 +172,17 @@ to the independently rendered href-only positive control, not merely the same PN
 Item Revision/hash, original PNG, clipping/display geometry, pending human approval and previous
 builds are preserved. The user's staged failed download remains intact.
 
-`HWPX_VISIBILITY_AUTOMATED=PASS`; user confirmation in the actual Hancom client is still pending.
-Do not mark this six-hour repair goal complete until that final display check is recorded.
+At release verification, `HWPX_VISIBILITY_AUTOMATED=PASS` and user display confirmation was pending.
+That pending gate is superseded by the user confirmation below, not by an inferred renderer PASS.
+
+### User-Reported Image Visibility Confirmation — 2026-10-10 01:29 UTC
+
+The user confirmed that the image is now visible, responding to the request to open the fresh
+official HWPX linked above. `USER_REPORTED_HWPX_IMAGE_DISPLAY=PASS` closes the final display gate,
+so `HWPX_VISIBILITY_GOAL=COMPLETE`. The application/version was not supplied; this confirmation
+does not assert complete layout, editing quality or compatibility with every Hancom version.
+
+The technical repair, deployment and official delivery verification finished at 18:48 UTC,
+within the six-hour target. The user confirmation was recorded after that target window; do not
+claim that the full user-confirmed completion occurred within six hours. No additional render,
+generation, approval change or historical-output rewrite was needed to close this goal.
