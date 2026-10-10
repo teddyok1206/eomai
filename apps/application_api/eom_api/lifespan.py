@@ -45,6 +45,16 @@ from eom_api.services.inference_transfer_snapshot import InferenceTransferSnapsh
 from eom_api.services.inference_transfer_snapshot_client import (
     CatalogInferenceTransferSnapshotClient,
 )
+from eom_api.services.inference_transfer_start_adapter import InferenceTransferStartAdapter
+from eom_api.services.inference_transfer_submission import (
+    InferenceTransferSubmissionApplicationService,
+)
+from eom_api.services.inference_transfer_workflow_client import (
+    CatalogInferenceTransferWorkflowClient,
+)
+from eom_api.services.inference_transfer_workflow_read import (
+    InferenceTransferWorkflowReadApplicationService,
+)
 from eom_api.services.item_approval_service import ItemApprovalApplicationService
 from eom_api.services.paired_document_review_service import (
     PairedDocumentReviewApplicationService,
@@ -85,6 +95,12 @@ class AppServices:
         self.catalog_application = CatalogApplicationClient()
         self.inference_transfer_snapshots = InferenceTransferSnapshotApplicationService(
             CatalogInferenceTransferSnapshotClient()
+        )
+        self.inference_transfer_submissions = InferenceTransferSubmissionApplicationService(
+            self.inference_transfer_snapshots, InferenceTransferStartAdapter(engine)
+        )
+        self.inference_transfer_workflow_reads = InferenceTransferWorkflowReadApplicationService(
+            CatalogInferenceTransferWorkflowClient()
         )
         self.queries = QueryAdapter(
             engine,

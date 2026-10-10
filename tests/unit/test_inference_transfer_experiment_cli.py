@@ -172,3 +172,68 @@ def test_cli_smoke_with_explicit_fake_adapter_never_claims_real_model_or_corpus(
     assert result.human_transfer_review == "NOT_EVALUATED"
     assert observed["kwargs"] == {"expected_owner_uid": 0, "batch_size": 4, "threads": 4}
     assert "EXPERIMENT_STATUS=MEASURED" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("identity", ["embeddingexecution_" + "a" * 32, None])
+def test_optional_owner_execution_id_retains_default_random_standalone_behavior(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, identity: str | None
+) -> None:
+    _path, expected = staged(tmp_path)
+    monkeypatch.setattr(
+        cli, "OfflineTransformersEmbeddingBackend", lambda *_a, **_k: FakeMeasuredBackend()
+    )
+    argv = [
+        "experiment",
+        "--workspace",
+        str(tmp_path),
+        "--request-sha256",
+        expected,
+        "--model-store",
+        str(tmp_path / "unused-fake-model"),
+    ]
+    if identity is not None:
+        argv += ["--execution-id", identity]
+    monkeypatch.setattr(sys, "argv", argv)
+    cli.main()
+    result = InferenceTransferExperimentResult.model_validate_json(
+        (tmp_path / "result.json").read_bytes()
+    )
+    assert (
+        result.execution_id == identity
+        if identity is not None
+        else result.execution_id.startswith("embeddingexecution_")
+    )
+
+
+@pytest.mark.parametrize(
+    "identity",
+    [
+        "",
+        "a" * 32,
+        "embeddingexecution_" + "A" * 32,
+        "embeddingexecution_" + "a" * 31,
+        "../execution",
+    ],
+)
+def test_invalid_owner_execution_identity_fails_before_input_or_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, identity: str
+) -> None:
+    monkeypatch.setattr(cli, "read_request", lambda *_a, **_k: pytest.fail("must not read input"))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "experiment",
+            "--workspace",
+            str(tmp_path),
+            "--request-sha256",
+            sha(),
+            "--model-store",
+            str(tmp_path / "unused"),
+            "--execution-id",
+            identity,
+        ],
+    )
+    with pytest.raises(SystemExit) as observed:
+        cli.main()
+    assert observed.value.code == 2

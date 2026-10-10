@@ -30,9 +30,9 @@
 | F1 | additive JSON Schema 2020-12 → frozen 모델 → grounded deterministic profile | exact refs/hash/closure/uncertainty tests, predecessor bytes 불변 | source 구현·검증 완료 |
 | F2 | pinned offline local embedding adapter와 exact ranking | dependency isolation, malformed vectors·ties·permission-prefilter tests; 실제 CPU benchmark 별도 | source 및 실제 CPU toy 실행 완료; production 설치·격리 미검증 |
 | F3 | Catalog opt-in authorized candidate read use case | actual actor/policy/Graph admission 재사용, 별도 후보 예산·provenance, 기본 retrieval 무변경 | source·격리 PostgreSQL SQL 검증 완료; 실제 corpus 비용 미측정 |
-| F4 | Orchestrator 경유 bounded Codex pair comparison | exact A/B, condition+decisive mapping, 차이/새 추론, unsupported/insufficient 처리, schema validation | source wrapper·사용자별 제출·V21 resolver·Runner composition 검증; bootstrap owner 호출·실제 worker·compatible release 대기 |
+| F4 | Orchestrator 경유 bounded Codex pair comparison | exact A/B, condition+decisive mapping, 차이/새 추론, unsupported/insufficient 처리, schema validation | source public selected-pair 제출·current 권한 재인가·atomic V21/START·canonical 결과 조회 검증; bootstrap owner 호출·실제 worker·compatible release 대기 |
 | F5 | 기존 검색 대비 bounded 실험·human scorecard | lexical/content-only/crux/metadata ablation, recall·latency·memory, 사람이 전이 위치를 평가 | staged 계약·encode-once harness·실모델 3-view 합성 smoke 완료; 실제 corpus/Graph 비교·human 평가 대기 |
-| F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 교육 판정은 독립 gate | 인증 snapshot API/private Catalog 및 Runner source 연결·임시 설치/DB 검증; 실제 호출부·설치·인증 운영 gate 대기 |
+| F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 교육 판정은 독립 gate | 인증 snapshot API/private Catalog·Runner·제출/결과 source 연결 및 disposable DB 검증; 실제 launcher/control owner·설치·인증 운영 gate 대기 |
 
 ## 비교 표현과 판정
 
@@ -75,9 +75,10 @@ Catalog owner, pure staging, bootstrap, V21 resolver와 Runner의 후속 검증 
 [전용 실행 목적](ITEM_INFERENCE_TRANSFER_EXECUTION_PURPOSE.md),
 [staged 실험](ITEM_INFERENCE_TRANSFER_EXPERIMENT.md)은 추가 설계·검증 경계다.
 F1–F4 source 구현 완료를 F5–F6 또는 전체 goal 완료로 해석하지 않는다.
-아직 없는 실제 호출부와 HTTP replay/목적 전용 결과 resolution의 설계는
+HTTP replay/목적 전용 결과 resolution 및 아직 남은 실제 운영 호출부의 설계는
 [owner 호출부 후속 설계](ITEM_INFERENCE_TRANSFER_OWNER_INVOCATION_DESIGN.md)에 기록한다.
-해당 문서는 source 구현·운영 활성화가 아닌 후속 protocol-first 설계다.
+후속 source 구현·검증은 [다섯 번째 checkpoint](ITEM_INFERENCE_TRANSFER_FIFTH_CHECKPOINT.md)에
+기록한다. 설치된 격리 CPU launcher/control owner 운영 composition·실제 corpus/human gate는 대기다.
 
 1. 실제 actor의 supported Catalog read 경계를 사용할 수 있는 compatible release와 exact Graph/policy scope를 준비한다. 기존 V2 검색·활성 preset을 바꾸지 않는 opt-in 경로로 제한한다.
 2. 실제 corpus의 deterministic profile 길이·E5 token overflow 비율·source resolution query/file-read 비용부터 측정한다. 긴 조건을 버려 성공시키지 않는다. 필요한 facet/chunk successor는 측정 후 별도 설계한다.

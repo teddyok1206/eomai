@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/item-inference-transfer-workflow-binding/1.0",
+  "title": "EOM API peer inference-transfer Workflow read V1",
+  "description": "Only the trusted API peer supplies the actual principal. Request/reply hashes establish identity, not a durable source authorization token.",
+  "oneOf": [{"$ref": "#/$defs/request"}, {"$ref": "#/$defs/reply"}],
+  "$defs": {
+    "actorId": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "error": {"enum": ["INFERENCE_TRANSFER_FORBIDDEN", "INFERENCE_TRANSFER_WORKFLOW_NOT_FOUND", "INFERENCE_TRANSFER_WORKFLOW_REQUEST_INVALID", "INFERENCE_TRANSFER_WORKFLOW_CHANGED", "INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH", "INFERENCE_TRANSFER_WORKFLOW_UNAVAILABLE", "INFERENCE_TRANSFER_RESULT_INVALID", "INFERENCE_TRANSFER_WORKFLOW_BUDGET_EXCEEDED"]},
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation", "actor_id", "request", "binding_sha256"],
+      "properties": {
+        "schema_version": {"const": "inference-transfer-workflow-binding-request/1.0"},
+        "operation": {"const": "INFERENCE_TRANSFER_WORKFLOW_READ"},
+        "actor_id": {"$ref": "#/$defs/actorId"},
+        "request": {"$ref": "eom://schemas/knowledge/item-inference-transfer-invocation/1.0#/$defs/readRequest"},
+        "binding_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "reply": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation", "actor_id", "request_binding_sha256", "status", "result", "error_code", "reply_sha256"],
+      "properties": {
+        "schema_version": {"const": "inference-transfer-workflow-binding-reply/1.0"},
+        "operation": {"const": "INFERENCE_TRANSFER_WORKFLOW_READ"},
+        "actor_id": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/actorId"}]},
+        "request_binding_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "status": {"enum": ["SUCCESS", "FAILED"]},
+        "result": {"oneOf": [{"type": "null"}, {"$ref": "eom://schemas/knowledge/item-inference-transfer-invocation/1.0#/$defs/readResult"}]},
+        "error_code": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/error"}]},
+        "reply_sha256": {"$ref": "#/$defs/sha256"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "SUCCESS"}}, "required": ["status"]},
+          "then": {"properties": {"actor_id": {"$ref": "#/$defs/actorId"}, "request_binding_sha256": {"$ref": "#/$defs/sha256"}, "result": {"$ref": "eom://schemas/knowledge/item-inference-transfer-invocation/1.0#/$defs/readResult"}, "error_code": {"type": "null"}}},
+          "else": {"properties": {"result": {"type": "null"}, "error_code": {"$ref": "#/$defs/error"}}}
+        },
+        {
+          "if": {"properties": {"actor_id": {"type": "null"}}, "required": ["actor_id"]},
+          "then": {"properties": {"request_binding_sha256": {"type": "null"}}},
+          "else": {"properties": {"request_binding_sha256": {"$ref": "#/$defs/sha256"}}}
+        }
+      ]
+    }
+  }
+}

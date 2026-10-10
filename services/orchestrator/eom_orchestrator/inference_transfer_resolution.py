@@ -48,6 +48,36 @@ from eom_orchestrator.preset_model_selection import preset_model_options, valida
 PRESET_KEY = "item-inference-transfer-comparison"
 
 
+def read_inference_transfer_execution_plan(
+    session: Session,
+    *,
+    plan_id: str,
+    workflow_id: str,
+    workflow_definition_sha256: str,
+    workflow_request: InferenceTransferWorkflowRequest,
+    core_prompt_sha256: str,
+    prompt_sha256: str,
+) -> ResolvedExecutionPlanV21:
+    """Read exact historical plan/projections, without requiring a runnable model.
+
+    This does not authorize sources, select latest controls, write a plan or
+    admit execution. Replay and result readers share the owner closure rule.
+    """
+    record = session.get(ResolvedExecutionPlanRecord, plan_id)
+    if record is None:
+        raise ControlPlaneError("CONTROL_PLAN_CONFLICT", "pinned comparison plan is missing")
+    plan = _checked_context(
+        record.canonical_document,
+        request=workflow_request,
+        workflow_id=workflow_id,
+        workflow_definition_sha256=workflow_definition_sha256,
+        core_prompt_sha256=core_prompt_sha256,
+        prompt_sha256=prompt_sha256,
+    )
+    _require_record_closure(session, record, plan)
+    return plan
+
+
 def resolve_inference_transfer_execution_plan(
     session: Session,
     *,
@@ -372,9 +402,9 @@ def _require_record_closure(
         raise ControlPlaneError("CONTROL_PLAN_CONFLICT", "stored comparison plan identity differs")
     rows = tuple(
         session.scalars(
-            select(ResolvedExecutionPlanStepRecord).where(
-                ResolvedExecutionPlanStepRecord.plan_id == plan.plan_id
-            )
+            select(ResolvedExecutionPlanStepRecord)
+            .where(ResolvedExecutionPlanStepRecord.plan_id == plan.plan_id)
+            .limit(2)
         )
     )
     if len(rows) != 1 or any(

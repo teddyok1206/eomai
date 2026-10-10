@@ -407,7 +407,7 @@ def load_persisted_inference_transfer_workflow_request(
     return validate_inference_transfer_workflow_request(document)
 
 
-def _inference_transfer_business_fingerprint(
+def inference_transfer_business_fingerprint(
     definition: WorkflowDefinitionRecord,
     request: InferenceTransferWorkflowRequest,
     *,
@@ -520,7 +520,7 @@ def create_workflow_instance(
     )
     request_data = workflow_request_storage_document(request)
     request_hash = (
-        _inference_transfer_business_fingerprint(
+        inference_transfer_business_fingerprint(
             definition, request, actor_type=actor_type, actor_id=actor_id
         )
         if isinstance(request, InferenceTransferWorkflowRequest)

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import resource
 import stat
 from datetime import UTC, datetime
@@ -28,6 +29,12 @@ from eom_identifiers import canonical_json_bytes, content_sha256
 from jsonschema.exceptions import ValidationError as SchemaValidationError
 
 _MAXIMUM_INPUT_BYTES = 64 * 1024**2
+
+
+def execution_id(value: str) -> str:
+    if re.fullmatch(r"embeddingexecution_[0-9a-f]{32}", value) is None:
+        raise argparse.ArgumentTypeError("INFERENCE_EXPERIMENT_EXECUTION_ID_INVALID")
+    return value
 
 
 def _workspace(path: Path) -> Path:
@@ -162,6 +169,11 @@ def main() -> None:
     )
     parser.add_argument("--model-store", type=Path, required=True)
     parser.add_argument("--model-owner-uid", type=int, default=0)
+    parser.add_argument(
+        "--execution-id",
+        type=execution_id,
+        help="owner-pinned identity; omitted standalone invocations retain a new random identity",
+    )
     args = parser.parse_args()
     request = read_request(args.workspace, args.request, args.request_sha256)
     _member(_workspace(args.workspace), args.output)
@@ -179,7 +191,7 @@ def main() -> None:
     result = run_staged_inference_transfer_experiment(
         request,
         backend,
-        execution_id="embeddingexecution_" + uuid4().hex,
+        execution_id=args.execution_id or "embeddingexecution_" + uuid4().hex,
         created_at=datetime.now(UTC),
         model_load_milliseconds=round(1000 * (perf_counter() - started)),
     )

@@ -127,6 +127,12 @@ from eom_catalog_service.inference_transfer_snapshot_dispatch import dispatch_sn
 from eom_catalog_service.inference_transfer_snapshot_service import (
     InferenceTransferSnapshotApplicationService,
 )
+from eom_catalog_service.inference_transfer_workflow_dispatch import (
+    dispatch_inference_transfer_workflow_frame,
+)
+from eom_catalog_service.inference_transfer_workflow_read import (
+    CatalogInferenceTransferWorkflowReadService,
+)
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
 from eom_catalog_service.knowledge_analysis_batch_service import (
     KnowledgeAnalysisBatchService,
@@ -195,6 +201,14 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             if raw_operation == "INFERENCE_TRANSFER_SNAPSHOT":
                 self.wfile.write(
                     dispatch_snapshot_frame(self.server.inference_transfer_snapshot, raw)
+                )
+                self.wfile.flush()
+                return
+            if raw_operation == "INFERENCE_TRANSFER_WORKFLOW_READ":
+                self.wfile.write(
+                    dispatch_inference_transfer_workflow_frame(
+                        self.server.inference_transfer_workflow_reads, raw
+                    )
                 )
                 self.wfile.flush()
                 return
@@ -1239,6 +1253,8 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         chat_knowledge: ChatKnowledgeResolutionService | None = None,
         chat_rag: ChatRagResolutionService | None = None,
         inference_transfer_snapshot: InferenceTransferSnapshotApplicationService | None = None,
+        inference_transfer_workflow_reads: CatalogInferenceTransferWorkflowReadService
+        | None = None,
         chat_owner_uid: int | None = None,
         socket_path: Path = CATALOG_APPLICATION_SOCKET,
         allowed_uid: int | None = None,
@@ -1261,6 +1277,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.chat_knowledge = chat_knowledge
         self.chat_rag = chat_rag
         self.inference_transfer_snapshot = inference_transfer_snapshot
+        self.inference_transfer_workflow_reads = inference_transfer_workflow_reads
         self.chat_search = (
             None if chat_knowledge is None else ChatKnowledgeSearchService(chat_knowledge.engine)
         )

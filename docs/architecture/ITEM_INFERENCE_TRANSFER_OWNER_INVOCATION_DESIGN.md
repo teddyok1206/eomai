@@ -1,19 +1,25 @@
 # 문항 핵심 착상 전이 — 후속 owner 호출부 설계
 
-상태: **PROPOSED / NOT_IMPLEMENTED**. 2026-10-10 UTC.
+상태: **PARTIALLY_SOURCE_IMPLEMENTED / NOT_LIVE**. 2026-10-10 UTC.
 네 번째 checkpoint의 소스 연결을 실제 bounded 실험에 잇기 위한 설계다. 이 문서는 새 API,
 private operation, 권한, control release, 모델 실행 또는 배포를 활성화하지 않는다.
 
 ## 현재 경계
 
 인증 snapshot API/private Catalog producer와 전용 Runner executor는 소스에서 연결됐다.
-다음 네 호출부는 아직 없다. 기존 owner를 연결하는 최소 구현만 추가하고, 별도 registry,
+다음 네 호출부가 후속 범위다. 기존 owner를 연결하는 최소 구현만 추가하고, 별도 registry,
 queue, search engine, framework 또는 일반 사용자 UI를 이 단계에서 만들지 않는다.
 
-1. 인증된 snapshot client → pure staging port와 명시적 오류 매핑.
-2. staging → 보호된 local input → 기존 offline harness → 최종 source 재인가 → owner Artifact commit.
-3. 선택된 두 profile → 실제 principal의 Workflow 제출 및 목적 전용 결과 조회.
-4. 검토된 bootstrap 입력 → 실제 control-permission authorizer/publisher → 명시적 PREPARE/RELEASE.
+1. 인증된 snapshot client → pure staging port와 명시적 오류 매핑: **source 구현·검증 완료**.
+2. staging → 보호된 local input → CPU port → 최종 source 재인가 → owner Artifact commit:
+   **source 연결·검증 완료**, 실제 설치·격리 CPU launcher는 아직 없음.
+3. 선택된 두 profile → 실제 principal의 Workflow 제출 및 목적 전용 결과 조회:
+   **source 구현·검증 완료**, authenticated installed 실행은 미실행.
+4. 검토된 bootstrap 입력 → 실제 control-permission authorizer/publisher → 명시적 PREPARE/RELEASE:
+   실제 owner 호출·운영 composition은 계속 **대기**.
+
+검증 결과와 잔여 한계는 [다섯 번째 checkpoint](ITEM_INFERENCE_TRANSFER_FIFTH_CHECKPOINT.md)에
+기록한다. 소스 연결을 모델 실행·NAS publication·운영 활성화로 해석하지 않는다.
 
 ## 필수 설계 결정
 
@@ -45,7 +51,9 @@ queue, search engine, framework 또는 일반 사용자 UI를 이 단계에서 �
    CPU/model/worker/read/replay 횟수를 분리한다. Worker 호출 수와 compatible runtime/권한 범위는
    live 실행 직전 명시한다. 새 문항 생성·기출 재학습·HWPX 생성은 이 실험 범위가 아니다.
 8. **transaction·concurrency:** 기존 transaction에서 Workflow 생성과 START_WORKFLOW command를
-   함께 기록한다. 기존 unique constraint/savepoint/replay/Runner fence를 재사용한다. HTTP read,
+   함께 기록한다. 실제 구현은 같은 transaction에서 V21도 고정한다. 현재 permission digest가
+   바뀐 concurrent replay를 안전하게 처리하는 기존 PostgreSQL transaction advisory lock을
+   요청 key 하나에만 적용하며, unique constraint/savepoint/replay/Runner fence를 재사용한다. HTTP read,
    local model 실행과 NAS commit을 하나의 distributed transaction이라고 부르지 않는다.
    최종 source 재인가 직후 기존 commit owner가 출력을 검증·등록하며 partial publication과
    failed history는 보존한다.

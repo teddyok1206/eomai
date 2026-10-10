@@ -163,13 +163,16 @@ DB head는 `20261008_0049`, Web과 독립 chat activation은 변경 없음.
 | CPU 실험 | `item-inference-transfer-experiment/1.0` standalone family | source 및 실제 모델 합성 입력 3-view smoke; 실제 corpus·human gate 미실행 |
 | 인증 snapshot | `item-inference-transfer-snapshot/1.0` standalone family | authenticated API/private Catalog owner source 연결; staged 호출·installed/live 검증 대기 |
 | Private snapshot transport | `item-inference-transfer-snapshot-binding/1.0` standalone family | API peer 전용, 기존 private socket 재사용; worker/chat peer 거부 |
+| Public pair submit/read | `item-inference-transfer-invocation/1.0` standalone family | source selected-pair·atomic V21/START·cached replay 이전 current-source 재인가 검증; installed/live 미실행 |
+| Private canonical result read | `item-inference-transfer-workflow-binding/1.0` standalone family | API-peer own-creator/current-source/Workflow·Step·Job·V21·outer member hash closure source 검증 |
 | Control bootstrap | `inference-transfer-control-bootstrap/1.0` | reviewed bytes/capacity/model pins; PREPARE DRAFT와 명시적 NON_LIVE RELEASE source 구현, 실제 publisher 호출·activation 미실행 |
 | 로컬 모델 | pinned `multilingual-e5-small`, CPU toy probe | 개발 임시 환경; protected production 모델 설치 아님 |
 
 정본 설계·단계별 상태는 [구현 계획](ITEM_INFERENCE_TRANSFER_IMPLEMENTATION_PLAN.md),
 첫 CPU 실행은 [첫 checkpoint](ITEM_INFERENCE_TRANSFER_FIRST_CHECKPOINT.md),
 최신 source 연결 검증과 남은 운영 경계는
-[네 번째 checkpoint](ITEM_INFERENCE_TRANSFER_FOURTH_CHECKPOINT.md)에 기록한다.
+[네 번째 checkpoint](ITEM_INFERENCE_TRANSFER_FOURTH_CHECKPOINT.md) 및
+[후속 호출부 checkpoint](ITEM_INFERENCE_TRANSFER_FIFTH_CHECKPOINT.md)에 기록한다.
 벡터 점수·구조 대응 가설·사람의 풀이 전이 판단은 서로 다른 값이며 어느 것도 Item 승인이나
 과학적 정확성의 자동 증명이 아니다.
 source migration head는 additive `20261010_0051`이며, disposable DB에서 실제

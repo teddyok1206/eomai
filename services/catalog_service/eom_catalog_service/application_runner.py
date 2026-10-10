@@ -33,6 +33,9 @@ from eom_catalog_service.inference_transfer_snapshot_catalog_adapter import (
 from eom_catalog_service.inference_transfer_snapshot_service import (
     InferenceTransferSnapshotApplicationService,
 )
+from eom_catalog_service.inference_transfer_workflow_read import (
+    CatalogInferenceTransferWorkflowReadService,
+)
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
 from eom_catalog_service.knowledge_analysis_batch_models import (
     KnowledgeAnalysisBatchRangeRecord,
@@ -260,6 +263,7 @@ def serve() -> int:
             inference_transfer_snapshot=InferenceTransferSnapshotApplicationService(
                 CatalogInferenceTransferSnapshotSourceAdapter(engine),
             ),
+            inference_transfer_workflow_reads=CatalogInferenceTransferWorkflowReadService(engine),
             approved_item_graph_publication=ApprovedItemGraphPublicationService(engine),
             mock_exam_item_reviews=MockExamItemReviewPublicationService(engine),
             mock_exam_assemblies=MockExamAssemblyService(engine),

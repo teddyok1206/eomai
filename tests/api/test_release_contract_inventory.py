@@ -73,7 +73,13 @@ def test_transfer_source_candidate_is_complete_in_release_runtime_inventory() ->
         if isinstance(node, ast.Assign)
         and len(node.targets) == 1
         and isinstance(node.targets[0], ast.Name)
-        and node.targets[0].id in {"required", "control_plane_runtime", "catalog_staging_runtime"}
+        and node.targets[0].id
+        in {
+            "required",
+            "required_contract_runtime",
+            "control_plane_runtime",
+            "catalog_staging_runtime",
+        }
         and isinstance(node.value, ast.Set)
     }
     assert {
@@ -81,7 +87,13 @@ def test_transfer_source_candidate_is_complete_in_release_runtime_inventory() ->
         "eom_api/services/inference_transfer_snapshot.py",
         "eom_api/services/inference_transfer_snapshot_port.py",
         "eom_api/services/inference_transfer_snapshot_client.py",
+        "eom_api/services/inference_transfer_snapshot_staging.py",
+        "eom_api/services/inference_transfer_submission.py",
+        "eom_api/services/inference_transfer_start_adapter.py",
+        "eom_api/services/inference_transfer_workflow_client.py",
+        "eom_api/services/inference_transfer_workflow_read.py",
     } <= assignments["required"]
+    assert "eom_api_contracts/inference_transfer.py" in assignments["required_contract_runtime"]
     for package, source_root, inventory in (
         ("eom_workflow", "packages/workflow/eom_workflow", "control_plane_runtime"),
         (

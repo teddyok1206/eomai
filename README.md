@@ -116,8 +116,11 @@ RAG 출처는 3건으로 제한합니다. 실제 HTTPS에서 교과서 답변·�
 [전용 실행 목적](docs/architecture/ITEM_INFERENCE_TRANSFER_EXECUTION_PURPOSE.md)에 후속 경계를 기록합니다.
 [인증 자료 조회·전용 실행 연결](docs/architecture/ITEM_INFERENCE_TRANSFER_FOURTH_CHECKPOINT.md)은
 1,241개 통합 source 검사, 추가 회귀와 임시 PostgreSQL 52개 검증을 기록합니다. 인증 API와
-Catalog owner·전용 resolver/Runner는 소스에서 연결됐습니다. 실제 실험의 준비·제출·결과 저장
-호출부, 실제 사용자 권한의 corpus 실험·운영 활성화·사람 평가는 별도 후속 gate입니다.
+Catalog owner·전용 resolver/Runner는 소스에서 연결됐습니다.
+[후속 제출·결과·보호된 실험](docs/architecture/ITEM_INFERENCE_TRANSFER_FIFTH_CHECKPOINT.md)에서
+현재 권한 재인가, atomic Workflow/V21/START, canonical 결과 조회 및 optional CPU/Artifact
+owner 호출부를 검증했습니다. 설치된 격리 CPU launcher/control 운영 composition,
+실제 사용자 권한의 corpus 실험·운영 활성화·사람 평가는 별도 후속 gate입니다.
 
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스
