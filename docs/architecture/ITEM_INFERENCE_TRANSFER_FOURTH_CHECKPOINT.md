@@ -42,6 +42,7 @@ Installed-wheel unit 검사는 checkout 밖의 임시 설치에서 새 package i
 3. Snapshot SQL fixture의 부분 생성 서비스에 실제 Artifact adapter가 없었다. 테스트 fixture에 정식 adapter를 구성했다. 운영 생성자는 이미 구성하고 있었으며 production 동작을 우회하지 않았다.
 4. PostgreSQL immutable trigger 4분기 테스트가 `IntegrityError`를 기대했으나 실제 보호는 `ProgrammingError → RaiseException / P0001`로 작동했다. 정확한 SQLSTATE·메시지와 실패 후 row/hash 보존을 검사하도록 테스트만 보정했다. Trigger/schema를 바꾸지 않았다.
 5. 실행 뒤 Identity 권한 철회 오류가 owner callback 밖으로 새어 job을 실행 중으로 남길 수 있는 경계를 보강했다. 해당 Identity 오류만 기존 owner 실패 경계로 정규화한다. 임의 programming exception을 권한 오류로 삼키지 않는다.
+6. 후속 실제 3종 wheel `--build-only` 검사에서 새 comparison definition이 검증용 staged 정의 목록에 빠져 admission equality가 실패했다. Equality를 약화하지 않고 exact comparison YAML/인자를 포함하고, 기존 PDF-only inventory 회귀를 모든 fixed support family에 적용하도록 보강했다. RECORD는 최초 실행에서도 PASS였으며 운영 설치 전 실패였다. 수정 후 전체 build 재실행 결과는 별도 release evidence로 남긴다.
 
 실패 이력을 성공으로 다시 표시하거나 운영 DB 행을 수정하지 않았다. 임시 fixture의 availability/control metadata는 합성값이고 actual published control admission 증거가 아니다.
 

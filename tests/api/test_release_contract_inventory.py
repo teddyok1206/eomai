@@ -112,8 +112,16 @@ def test_transfer_source_candidate_is_complete_in_release_runtime_inventory() ->
     } <= assignments["control_plane_runtime"]
 
 
-def test_installed_review_admission_covers_materialized_workflow_contracts() -> None:
+def test_installed_support_admission_covers_materialized_workflow_contracts() -> None:
     outer = ast.parse(release_inspector_source())
+    fixed_families = {
+        "pdf-document-review",
+        "legacy-item-extraction",
+        "legacy-item-editorial-compatibility",
+        "customer-support",
+        "item-inference-transfer-comparison",
+    }
+    fixed_prefixes = tuple(f"{name}." for name in sorted(fixed_families))
     staged = {
         assignment.targets[0].id: ROOT / "config/workflows" / assignment.value.right.value
         for assignment in ast.walk(outer)
@@ -122,7 +130,7 @@ def test_installed_review_admission_covers_materialized_workflow_contracts() -> 
         and isinstance(assignment.value, ast.BinOp)
         and isinstance(assignment.value.right, ast.Constant)
         and isinstance(assignment.value.right.value, str)
-        and assignment.value.right.value.startswith("pdf-document-review.")
+        and assignment.value.right.value.startswith(fixed_prefixes)
     }
     check = next(
         assignment.value.value
@@ -175,7 +183,7 @@ def test_installed_review_admission_covers_materialized_workflow_contracts() -> 
     expected = {
         identity: admission.role_protocol_version
         for identity, admission in WORKFLOW_ADMISSION_BY_IDENTITY.items()
-        if identity[0] == "pdf-document-review"
+        if identity[0] in fixed_families
     }
     assert actual == expected
 
