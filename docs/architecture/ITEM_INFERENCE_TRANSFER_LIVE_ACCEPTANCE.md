@@ -262,6 +262,24 @@ result receipt 네 개가 모두 ABSENT였다. 고정 콘솔은 이 receipt와 e
 않았다. 실패한 원래 코드·보호 복사본·private 입력 경계는 보존한다. 자동 relaunch나 새 CPU
 identity 우회는 없으며, 사용자 입력 확인과 secret-safe phase/code 진단은 별도 후속 단계다.
 
+사용자는 입력한 비밀번호가 실제 Studio 로그인 비밀번호였다고 확인했다. 따라서 잘못된
+비밀번호라고 추정해서 계정·권한·비밀번호를 바꾸지 않는다. 원래 코드를 보존하고 단계명과
+allowlisted stable error code만 추가한 one-off 진단 presentation을 준비했다.
+
+- 진단 코드 SHA-256:
+  `8c3a2d53043e9d2285a72d9e86f38730229c2bc1091eace9debfcb8da7fb37a7`.
+- 보호 복사본: 원래 libexec의 `owner-diagnostic.py`; root:root:0644, 새 single-link inode.
+- private 증거: `/var/lib/eom-inference-console-diag-kd1ob7jb/owner-diagnostic.py`.
+- 독립 focused 합성 검사 38 PASS, Ruff check/format PASS, strict mypy 2 files PASS.
+- 진단 statements를 제거한 AST는 원래 identity/auth/input/hash/model/budget/explicit
+  RUN_EXPERIMENT 동작과 동일하다. 예외 message·token·password·응답 본문은 출력하지 않는다.
+- 실제 identity/private-input 검증 뒤 PASSWORD_PROMPT에서 사용자 재입력 대기다.
+  이전과 같은 private 입력 경계를 사용하며 새 CPU execution identity를 만들지 않았다.
+
+이것은 임시 operator presentation이며 새 worker protocol, auth grant, HTTP status 관측이나
+production search 활성화가 아니다. 원인 분류 이후 임시 진단 호출부를 회수하고 검증 기록은
+보존한다. 실제 로그인·corpus/모델 실행 PASS를 대신하지 않는다.
+
 - 격리 no-forward probe PASS: **PASS_AFTER_ONE_APPROVED_RETRY / FIRST_FAILURE_PRESERVED**.
 - compatible shared release / migration 0051 / 일곱 callback / service 복원: **PASS**.
 - 실제 `guiadmin` 인증·metadata·corpus read: **PENDING**.
