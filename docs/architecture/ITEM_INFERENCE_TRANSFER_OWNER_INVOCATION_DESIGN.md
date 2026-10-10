@@ -116,6 +116,29 @@ bounded input/output, secret-safe failure, 기존 출제/support/PDF/Graph 의�
 - Catalog `CatalogArtifactService.load_json_revision`
 - Orchestrator `prepare_inference_transfer_controls`, `release_inference_transfer_controls`
 
+## 실제 운영 호출부의 추가 점검
+
+2026-10-10 UTC 읽기 전용 inventory 결과다. 아래 모듈의 존재는 설치·인증·실행 증거가 아니다.
+
+- Bootstrap은 `ControlArtifactPublisher.publish_bytes`를 사용하고 CPU 실험 결과는
+  `ControlFileSetPublisher`를 사용한다. 서로의 manifest/permission 의미로 대체하지 않는다.
+- 현재 control 권한은 기존 `SqlAlchemyOperatorActorSource.load`와
+  `OperatorIdentityWorkflowActorAuthorizer.authorize(..., EXECUTION_PRESET_MANAGE)`로 재확인할 수
+  있다. 하지만 ID 조회는 인증이 아니므로 실제 로그인 경계에서 얻은 principal만 연결한다.
+  기존 CLI의 임의 `--actor-id`나 전권 ActorContext 생성은 권한 증명으로 재사용하지 않는다.
+- API의 `/mnt/nas` 격리는 유지한다. Bootstrap 호출을 연결하려고 API에서 publisher를 실행하거나
+  account OBSERVE/ENABLE/DRAIN/DISABLE queue에 bootstrap을 숨겨 넣지 않는다. 전용 호출부 및
+  검토된 최초 bootstrap config는 아직 없다.
+- CPU launcher는 기존 `worker_systemd.py`, `source_pdf_crop_processing.py`,
+  `sdxl_probe_workspace.py`의 고정 unit·interpreter·clean environment·uncertain 판별 패턴을
+  참고할 수 있다. GPU/PDF launcher를 다른 목적·UID·환경의 embedding 실행으로 위장하지 않는다.
+- 현재 owner workspace와 offline CLI는 자기 EUID 소유를 요구한다. 별도 unprivileged CPU UID를
+  연결하기 전에 worker input/output handoff를 명시적으로 설계하고 검증해야 한다. Owner-private
+  workspace의 소유권 검사를 완화하거나 worker output을 곧바로 정본 owner 파일로 간주하지 않는다.
+  별도 handoff는 임시 materialization이며 canonical publication은 계속 기존 owner가 수행한다.
+- 실제 전용 CPU 환경·libexec·sandbox unit·제한된 시작 권한 경로는 아직 확정하지 않았다.
+  모델/runtime 설치 및 OS 격리 negative 검증은 source 테스트나 임시 toy 실행으로 승인하지 않는다.
+
 관련: [구현 계획](ITEM_INFERENCE_TRANSFER_IMPLEMENTATION_PLAN.md),
 [네 번째 checkpoint](ITEM_INFERENCE_TRANSFER_FOURTH_CHECKPOINT.md).
 이 문서에는 운영 자료·자격 증명·worker 내용·실제 품질 판정이 없다.
