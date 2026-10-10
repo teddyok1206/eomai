@@ -6,8 +6,11 @@ import ast
 import subprocess
 import sys
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
+import pytest
 from eom_catalog_contracts import catalog_schema_inventory
 from eom_workflow import WORKFLOW_ADMISSION_BY_IDENTITY, AgentStep
 from eom_workflow.compiler import compile_definition
@@ -22,6 +25,19 @@ def release_inspector_source() -> str:
     python_start = script.index("<<'PY'\n", start) + len("<<'PY'\n")
     python_end = script.index("\nPY\n", python_start)
     return script[python_start:python_end]
+
+
+def installed_workflow_inspector_source() -> str:
+    value = next(
+        node.value.value
+        for node in ast.walk(ast.parse(release_inspector_source()))
+        if isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "check"
+        and isinstance(node.value, ast.Constant)
+    )
+    assert isinstance(value, str)
+    return value
 
 
 def test_embedded_release_inspector_has_no_undefined_names() -> None:
@@ -152,14 +168,7 @@ def test_installed_support_admission_covers_materialized_workflow_contracts() ->
         and isinstance(assignment.value.right.value, str)
         and assignment.value.right.value.startswith(fixed_prefixes)
     }
-    check = next(
-        assignment.value.value
-        for assignment in ast.walk(outer)
-        if isinstance(assignment, ast.Assign)
-        and isinstance(assignment.targets[0], ast.Name)
-        and assignment.targets[0].id == "check"
-        and isinstance(assignment.value, ast.Constant)
-    )
+    check = installed_workflow_inspector_source()
     inner = ast.parse(check)
     admitted = next(
         assignment.value
@@ -209,17 +218,170 @@ def test_installed_support_admission_covers_materialized_workflow_contracts() ->
 
 
 def test_wheel_catalog_resource_inventory_matches_canonical_contracts() -> None:
-    script = (ROOT / "scripts/api/deploy_release.sh").read_text()
-    start = script.index("catalog_resources = {")
-    end = script.index("\n}\n", start) + len("\n}")
-    assignment = ast.parse(script[start:end]).body[0]
-    assert isinstance(assignment, ast.Assign)
-    actual = ast.literal_eval(assignment.value)
+    registry = ROOT / "packages/catalog_contracts/eom_catalog_contracts/validation.py"
+    actual = catalog_inventory_reader()(registry.read_text())
     expected = {
         resource.resource_path.removeprefix("resources/"): resource.canonical_path
         for _, resource in catalog_schema_inventory()
     }
     assert actual == expected
+    assert {
+        "knowledge/item-inference-transfer-invocation-v1_1.schema.json",
+        "knowledge/item-inference-transfer-pair-result-v1_1.schema.json",
+        "knowledge/item-inference-transfer-workflow-binding-v1_1.schema.json",
+    } <= actual.keys()
+
+
+def catalog_inventory_reader() -> Callable[[str], dict[str, str]]:
+    function = next(
+        node
+        for node in ast.parse(release_inspector_source()).body
+        if isinstance(node, ast.FunctionDef) and node.name == "catalog_resources_from_registry"
+    )
+    namespace: dict[str, object] = {"ast": ast}
+    exec(
+        compile(ast.Module(body=[function], type_ignores=[]), "Catalog inventory", "exec"),
+        namespace,
+    )
+    return cast(Callable[[str], dict[str, str]], namespace[function.name])
+
+
+def test_catalog_inventory_reads_only_registry_data_and_accepts_additive_resources() -> None:
+    source = """
+raise RuntimeError("source module must never execute")
+CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType({
+    "successor": CatalogSchemaResource(
+        "schemas/knowledge/successor.schema.json",
+        "resources/knowledge/successor.schema.json", "2.0", "sha256:synthetic"
+    ),
+})
+"""
+    assert catalog_inventory_reader()(source) == {
+        "knowledge/successor.schema.json": "schemas/knowledge/successor.schema.json"
+    }
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
+        "CATALOG_SCHEMA_RESOURCES = {}",
+        "CATALOG_SCHEMA_RESOURCES: object = mutable_registry()",
+        "CATALOG_SCHEMA_RESOURCES: object = MappingProxyType([])",
+        "CATALOG_SCHEMA_RESOURCES: object = MappingProxyType({**other_registry})",
+        "CATALOG_SCHEMA_RESOURCES: object = MappingProxyType({'x': arbitrary_resource()})",
+        "CATALOG_SCHEMA_RESOURCES: object = MappingProxyType({'x': "
+        "CatalogSchemaResource('../bad', 'resources/good', '1', 'hash')})",
+        "CATALOG_SCHEMA_RESOURCES: object = MappingProxyType({'x': "
+        "CatalogSchemaResource('schemas/good', '../bad', '1', 'hash')})",
+        "CATALOG_SCHEMA_RESOURCES: object = MappingProxyType({'x': "
+        "CatalogSchemaResource('schemas/../../bad', 'resources/good', '1', 'hash')})",
+        "CATALOG_SCHEMA_RESOURCES: object = MappingProxyType({'x': "
+        "CatalogSchemaResource('schemas/good', 'resources/../bad', '1', 'hash')})",
+    ),
+)
+def test_catalog_inventory_rejects_nonliteral_or_missing_source_registry(source: str) -> None:
+    with pytest.raises(SystemExit, match="Catalog Contract source"):
+        catalog_inventory_reader()(source)
+
+
+def test_catalog_inventory_never_executes_resource_expressions(tmp_path: Path) -> None:
+    marker = tmp_path / "must-not-be-created"
+    source = (
+        "CATALOG_SCHEMA_RESOURCES: object = MappingProxyType({'x': CatalogSchemaResource("
+        f"__import__('pathlib').Path({str(marker)!r}).touch(), "
+        "'resources/good', '1', 'hash')})"
+    )
+    with pytest.raises(ValueError, match="malformed node"):
+        catalog_inventory_reader()(source)
+    assert not marker.exists()
+
+
+def test_catalog_inventory_rejects_duplicate_family_and_conflicting_resource_identity() -> None:
+    resource = "CatalogSchemaResource('schemas/good', 'resources/good', '1', 'hash')"
+    duplicate = (
+        f"CATALOG_SCHEMA_RESOURCES: object = MappingProxyType({{'x': {resource}, 'x': {resource}}})"
+    )
+    with pytest.raises(SystemExit, match="family identity"):
+        catalog_inventory_reader()(duplicate)
+    conflict = (
+        "CATALOG_SCHEMA_RESOURCES: object = MappingProxyType({"
+        f"'x': {resource}, "
+        "'y': CatalogSchemaResource('schemas/other', 'resources/good', '1', 'hash')})"
+    )
+    with pytest.raises(SystemExit, match="resource identity conflicts"):
+        catalog_inventory_reader()(conflict)
+    alias = (
+        f"CATALOG_SCHEMA_RESOURCES: object = MappingProxyType({{'x': {resource}, 'y': {resource}}})"
+    )
+    assert catalog_inventory_reader()(alias) == {"good": "schemas/good"}
+
+
+def test_installed_catalog_inventory_is_compared_with_the_authoritative_source() -> None:
+    check = installed_workflow_inspector_source()
+    inner = ast.parse(check)
+    assignment = next(
+        node
+        for node in inner.body
+        if isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "installed_catalog_resources"
+    )
+    expression = compile(ast.Expression(assignment.value), "installed Catalog inventory", "eval")
+    actual = eval(expression, {"catalog_schema_inventory": catalog_schema_inventory})
+    registry = ROOT / "packages/catalog_contracts/eom_catalog_contracts/validation.py"
+    assert actual == catalog_inventory_reader()(registry.read_text())
+    assert "installed_catalog_resources != json.loads(expected_catalog_resources_json)" in check
+    assert "expected_catalog_resources_json" in ast.unparse(inner)
+    required = next(
+        ast.literal_eval(node)
+        for node in ast.walk(inner)
+        if isinstance(node, ast.Set)
+        and any(
+            isinstance(value, ast.Constant)
+            and value.value == "item-inference-transfer-pair-result-v1.1"
+            for value in node.elts
+        )
+    )
+    assert {
+        "item-inference-transfer",
+        "item-inference-transfer-invocation",
+        "item-inference-transfer-workflow-binding",
+        "item-inference-transfer-invocation-v1.1",
+        "item-inference-transfer-pair-result-v1.1",
+        "item-inference-transfer-workflow-binding-v1.1",
+    } <= required
+
+
+def test_installed_transfer_successor_loads_exact_protocol_and_control_families() -> None:
+    check = installed_workflow_inspector_source()
+    inner = ast.parse(check)
+    loaded = {
+        tuple(ast.literal_eval(arg) for arg in node.args)
+        for node in ast.walk(inner)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "load_role_input_schema"
+        and all(isinstance(arg, ast.Constant) for arg in node.args)
+    }
+    assert {("support", "workflow-role/1.29.0"), ("support", "workflow-role/1.30.0")} <= loaded
+    required = next(
+        ast.literal_eval(node)
+        for node in ast.walk(inner)
+        if isinstance(node, ast.Set)
+        and any(
+            isinstance(value, ast.Constant)
+            and value.value == "inference-transfer-control-bootstrap"
+            for value in node.elts
+        )
+    )
+    assert {
+        "inference-transfer-control-bootstrap",
+        "inference-transfer-control-bootstrap-v1.1",
+        "inference-transfer-control-invocation",
+        "inference-transfer-control-invocation-v1.1",
+        "resolved-execution-plan-v21",
+        "resolved-execution-plan-v22",
+    } <= required
 
 
 def test_wheel_api_schema_inventory_has_one_canonical_source(tmp_path: Path) -> None:

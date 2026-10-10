@@ -990,6 +990,7 @@ inspect_release() {
     "${API_PYTHON}" - <<'PY'
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import os
@@ -1369,7 +1370,10 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_catalog_contracts/inference_transfer_snapshot.py",
         "eom_catalog_contracts/inference_transfer_snapshot_binding.py",
         "eom_catalog_contracts/inference_transfer_invocation.py",
+        "eom_catalog_contracts/inference_transfer_invocation_v11.py",
+        "eom_catalog_contracts/inference_transfer_pair_result_v11.py",
         "eom_catalog_contracts/inference_transfer_workflow_binding.py",
+        "eom_catalog_contracts/inference_transfer_workflow_binding_v11.py",
         "eom_catalog_contracts/inference_transfer_text.py",
         "eom_catalog_contracts/inference_transfer_metadata.py",
         "eom_catalog_contracts/knowledge_analysis_batch.py",
@@ -1409,6 +1413,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_catalog_service/inference_transfer_vectors.py",
         "eom_catalog_service/inference_transfer_worker_preparation.py",
         "eom_catalog_service/inference_transfer_workflow_dispatch.py",
+        "eom_catalog_service/inference_transfer_workflow_dispatch_v11.py",
         "eom_catalog_service/inference_transfer_workflow_read.py",
         "eom_catalog_service/item_content_import.py",
         "eom_catalog_service/item_origin_models.py",
@@ -1595,300 +1600,68 @@ with zipfile.ZipFile(platform_wheel) as archive:
             raise SystemExit(f"workflow schema resource missing from RECORD: {logical_name}")
 
 catalog_prefix = "eom_catalog_contracts/resources/"
-catalog_resources = {
-    "assessment-assembly/mock-exam-assembly-cohort-v1.schema.json": "schemas/assessment-assembly/mock-exam-assembly-cohort-v1.schema.json",
-    "assessment-assembly/mock-exam-assembly-manifest-v1.schema.json": "schemas/assessment-assembly/mock-exam-assembly-manifest-v1.schema.json",
-    "assessment-assembly/mock-exam-assembly-manifest-v2.schema.json": "schemas/assessment-assembly/mock-exam-assembly-manifest-v2.schema.json",
-    "assessment-assembly/mock-exam-assembly-manifest-v3.schema.json": "schemas/assessment-assembly/mock-exam-assembly-manifest-v3.schema.json",
-    "assessment-assembly/mock-exam-assembly-plan-v1.schema.json": "schemas/assessment-assembly/mock-exam-assembly-plan-v1.schema.json",
-    "assessment-assembly/mock-exam-assembly-plan-v2.schema.json": "schemas/assessment-assembly/mock-exam-assembly-plan-v2.schema.json",
-    "assessment-assembly/mock-exam-assembly-policy-v1.schema.json": "schemas/assessment-assembly/mock-exam-assembly-policy-v1.schema.json",
-    "assessment-assembly/mock-exam-layout-policy-v1.schema.json": "schemas/assessment-assembly/mock-exam-layout-policy-v1.schema.json",
-    "assessment-assembly/mock-exam-rating-policy-v1.schema.json": "schemas/assessment-assembly/mock-exam-rating-policy-v1.schema.json",
-    "assessment-assembly/mock-exam-item-review-decision-v1.schema.json": "schemas/assessment-assembly/mock-exam-item-review-decision-v1.schema.json",
-    "assessment-assembly/mock-exam-item-review-decision-v2.schema.json": "schemas/assessment-assembly/mock-exam-item-review-decision-v2.schema.json",
-    "assessment-assembly/mock-exam-item-review-decision-v3.schema.json": "schemas/assessment-assembly/mock-exam-item-review-decision-v3.schema.json",
-    "assessment-assembly/mock-exam-item-review-publication-command-v1.schema.json": "schemas/assessment-assembly/mock-exam-item-review-publication-command-v1.schema.json",
-    "assessment-assembly/mock-exam-item-review-publication-result-v1.schema.json": "schemas/assessment-assembly/mock-exam-item-review-publication-result-v1.schema.json",
-    "assessment-assembly/mock-exam-item-review-publication-result-v2.schema.json": "schemas/assessment-assembly/mock-exam-item-review-publication-result-v2.schema.json",
-    "assessment-assembly/mock-exam-item-review-publication-result-v3.schema.json": "schemas/assessment-assembly/mock-exam-item-review-publication-result-v3.schema.json",
-    "assessment-assembly/mock-exam-production-plan-v1.schema.json": "schemas/assessment-assembly/mock-exam-production-plan-v1.schema.json",
-    "assessment-assembly/mock-exam-production-plan-v2.schema.json": "schemas/assessment-assembly/mock-exam-production-plan-v2.schema.json",
-    "assessment-assembly/mock-exam-production-plan-v3.schema.json": "schemas/assessment-assembly/mock-exam-production-plan-v3.schema.json",
-    "assessment-assembly/mock-exam-production-plan-v4.schema.json": "schemas/assessment-assembly/mock-exam-production-plan-v4.schema.json",
-    "assessment-assembly/mock-exam-production-plan-v5.schema.json": "schemas/assessment-assembly/mock-exam-production-plan-v5.schema.json",
-    "assessment-assembly/mock-exam-review-eligibility-query-v1.schema.json": "schemas/assessment-assembly/mock-exam-review-eligibility-query-v1.schema.json",
-    "assessment-assembly/mock-exam-review-eligibility-result-v1.schema.json": "schemas/assessment-assembly/mock-exam-review-eligibility-result-v1.schema.json",
-    "assessment-assembly/mock-exam-review-eligibility-result-v2.schema.json": "schemas/assessment-assembly/mock-exam-review-eligibility-result-v2.schema.json",
-    "assessment-assembly/mock-exam-review-eligibility-result-v3.schema.json": "schemas/assessment-assembly/mock-exam-review-eligibility-result-v3.schema.json",
-    "catalog-application/catalog-application-request-v1.schema.json": "schemas/catalog-application/catalog-application-request-v1.schema.json",
-    "catalog-application/catalog-application-response-v1.schema.json": "schemas/catalog-application/catalog-application-response-v1.schema.json",
-    "catalog-application/catalog-application-request-v2.schema.json": "schemas/catalog-application/catalog-application-request-v2.schema.json",
-    "catalog-application/catalog-application-response-v2.schema.json": "schemas/catalog-application/catalog-application-response-v2.schema.json",
-    "catalog-application/catalog-application-request-v3.schema.json": "schemas/catalog-application/catalog-application-request-v3.schema.json",
-    "catalog-application/catalog-application-response-v3.schema.json": "schemas/catalog-application/catalog-application-response-v3.schema.json",
-    "catalog-application/catalog-application-request-v4.schema.json": "schemas/catalog-application/catalog-application-request-v4.schema.json",
-    "catalog-application/catalog-application-response-v4.schema.json": "schemas/catalog-application/catalog-application-response-v4.schema.json",
-    "catalog-application/catalog-application-request-v5.schema.json": "schemas/catalog-application/catalog-application-request-v5.schema.json",
-    "catalog-application/catalog-application-response-v5.schema.json": "schemas/catalog-application/catalog-application-response-v5.schema.json",
-    "catalog-application/catalog-application-response-v6.schema.json": "schemas/catalog-application/catalog-application-response-v6.schema.json",
-    "catalog-application/catalog-application-request-v6.schema.json": "schemas/catalog-application/catalog-application-request-v6.schema.json",
-    "catalog-application/catalog-application-request-v7.schema.json": "schemas/catalog-application/catalog-application-request-v7.schema.json",
-    "catalog-application/catalog-application-request-v8.schema.json": "schemas/catalog-application/catalog-application-request-v8.schema.json",
-    "catalog-application/catalog-application-request-v9.schema.json": "schemas/catalog-application/catalog-application-request-v9.schema.json",
-    "catalog-application/catalog-application-request-v10.schema.json": "schemas/catalog-application/catalog-application-request-v10.schema.json",
-    "catalog-application/catalog-application-response-v7.schema.json": "schemas/catalog-application/catalog-application-response-v7.schema.json",
-    "catalog-application/catalog-application-response-v8.schema.json": "schemas/catalog-application/catalog-application-response-v8.schema.json",
-    "catalog-application/catalog-application-response-v9.schema.json": "schemas/catalog-application/catalog-application-response-v9.schema.json",
-    "catalog-application/catalog-application-response-v10.schema.json": "schemas/catalog-application/catalog-application-response-v10.schema.json",
-    "catalog-application/catalog-application-request-v11.schema.json": "schemas/catalog-application/catalog-application-request-v11.schema.json",
-    "catalog-application/catalog-application-response-v11.schema.json": "schemas/catalog-application/catalog-application-response-v11.schema.json",
-    "catalog-application/catalog-application-request-v12.schema.json": "schemas/catalog-application/catalog-application-request-v12.schema.json",
-    "catalog-application/catalog-application-response-v12.schema.json": "schemas/catalog-application/catalog-application-response-v12.schema.json",
-    "catalog-application/catalog-application-request-v13.schema.json": "schemas/catalog-application/catalog-application-request-v13.schema.json",
-    "catalog-application/catalog-application-response-v13.schema.json": "schemas/catalog-application/catalog-application-response-v13.schema.json",
-    "catalog-application/catalog-application-request-v14.schema.json": "schemas/catalog-application/catalog-application-request-v14.schema.json",
-    "catalog-application/catalog-application-response-v14.schema.json": "schemas/catalog-application/catalog-application-response-v14.schema.json",
-    "catalog-application/catalog-application-response-v15.schema.json": "schemas/catalog-application/catalog-application-response-v15.schema.json",
-    "catalog-application/catalog-application-request-v15.schema.json": "schemas/catalog-application/catalog-application-request-v15.schema.json",
-    "catalog-application/catalog-application-request-v16.schema.json": "schemas/catalog-application/catalog-application-request-v16.schema.json",
-    "catalog-application/catalog-application-request-v17.schema.json": "schemas/catalog-application/catalog-application-request-v17.schema.json",
-    "catalog-application/catalog-application-response-v16.schema.json": "schemas/catalog-application/catalog-application-response-v16.schema.json",
-    "catalog-application/catalog-application-request-v18.schema.json": "schemas/catalog-application/catalog-application-request-v18.schema.json",
-    "catalog-application/catalog-application-response-v17.schema.json": "schemas/catalog-application/catalog-application-response-v17.schema.json",
-    "catalog-application/catalog-application-request-v19.schema.json": "schemas/catalog-application/catalog-application-request-v19.schema.json",
-    "catalog-application/catalog-application-response-v18.schema.json": "schemas/catalog-application/catalog-application-response-v18.schema.json",
-    "catalog-application/catalog-item-media-request-v1.schema.json": "schemas/catalog-application/catalog-item-media-request-v1.schema.json",
-    "catalog-application/catalog-item-media-response-v1.schema.json": "schemas/catalog-application/catalog-item-media-response-v1.schema.json",
-    "catalog-application/catalog-item-component-media-request-v1.schema.json": "schemas/catalog-application/catalog-item-component-media-request-v1.schema.json",
-    "catalog-application/catalog-item-component-media-response-v1.schema.json": "schemas/catalog-application/catalog-item-component-media-response-v1.schema.json",
-    "catalog-application/catalog-assessment-page-list-request-v1.schema.json": "schemas/catalog-application/catalog-assessment-page-list-request-v1.schema.json",
-    "catalog-application/catalog-assessment-page-list-response-v1.schema.json": "schemas/catalog-application/catalog-assessment-page-list-response-v1.schema.json",
-    "catalog-application/catalog-assessment-page-media-request-v1.schema.json": "schemas/catalog-application/catalog-assessment-page-media-request-v1.schema.json",
-    "catalog-application/catalog-assessment-page-media-response-v1.schema.json": "schemas/catalog-application/catalog-assessment-page-media-response-v1.schema.json",
-    "catalog-application/pdf-document-review-intake-request-v1.schema.json": "schemas/catalog/catalog-application/pdf-document-review-intake-request-v1.schema.json",
-    "catalog-application/pdf-document-review-intake-response-v1.schema.json": "schemas/catalog/catalog-application/pdf-document-review-intake-response-v1.schema.json",
-    "catalog-application/pdf-document-review-page-media-request-v1.schema.json": "schemas/catalog/catalog-application/pdf-document-review-page-media-request-v1.schema.json",
-    "catalog-application/pdf-document-review-page-media-response-v1.schema.json": "schemas/catalog/catalog-application/pdf-document-review-page-media-response-v1.schema.json",
-    "document-review/pdf-document-review-intake-manifest-v1.schema.json": "schemas/document-review/pdf-document-review-intake-manifest-v1.schema.json",
-    "catalog-application/document-review-intake-request-v2.schema.json": "schemas/catalog/catalog-application/document-review-intake-request-v2.schema.json",
-    "catalog-application/document-review-intake-response-v2.schema.json": "schemas/catalog/catalog-application/document-review-intake-response-v2.schema.json",
-    "document-review/document-review-intake-manifest-v2.schema.json": "schemas/document-review/document-review-intake-manifest-v2.schema.json",
-    "catalog-application/document-review-intake-request-v3.schema.json": "schemas/catalog/catalog-application/document-review-intake-request-v3.schema.json",
-    "catalog-application/document-review-intake-response-v3.schema.json": "schemas/catalog/catalog-application/document-review-intake-response-v3.schema.json",
-    "document-review/document-review-source-upload-manifest-v1.schema.json": "schemas/document-review/document-review-source-upload-manifest-v1.schema.json",
-    "document-review/document-review-intake-manifest-v3.schema.json": "schemas/document-review/document-review-intake-manifest-v3.schema.json",
-    "document-review/office-document-conversion-outcome-v1.schema.json": "schemas/document-review/office-document-conversion-outcome-v1.schema.json",
-    "catalog-application/document-review-hwpx-correction-request-v1.schema.json": "schemas/catalog/catalog-application/document-review-hwpx-correction-request-v1.schema.json",
-    "catalog-application/document-review-hwpx-correction-request-v2.schema.json": "schemas/catalog/catalog-application/document-review-hwpx-correction-request-v2.schema.json",
-    "catalog-application/document-review-hwpx-correction-response-v1.schema.json": "schemas/catalog/catalog-application/document-review-hwpx-correction-response-v1.schema.json",
-    "catalog-application/document-review-hwpx-correction-media-request-v1.schema.json": "schemas/catalog/catalog-application/document-review-hwpx-correction-media-request-v1.schema.json",
-    "catalog-application/document-review-hwpx-correction-media-response-v1.schema.json": "schemas/catalog/catalog-application/document-review-hwpx-correction-media-response-v1.schema.json",
-    "document-review/document-review-hwpx-correction-plan-v1.schema.json": "schemas/document-review/document-review-hwpx-correction-plan-v1.schema.json",
-    "document-review/document-review-hwpx-correction-plan-v2.schema.json": "schemas/document-review/document-review-hwpx-correction-plan-v2.schema.json",
-    "document-review/document-review-hwpx-correction-result-v1.schema.json": "schemas/document-review/document-review-hwpx-correction-result-v1.schema.json",
-    "catalog-application/document-review-pdf-annotation-request-v1.schema.json": "schemas/catalog/catalog-application/document-review-pdf-annotation-request-v1.schema.json",
-    "catalog-application/document-review-pdf-annotation-request-v2.schema.json": "schemas/catalog/catalog-application/document-review-pdf-annotation-request-v2.schema.json",
-    "catalog-application/document-review-pdf-annotation-request-v3.schema.json": "schemas/catalog/catalog-application/document-review-pdf-annotation-request-v3.schema.json",
-    "catalog-application/document-review-pdf-annotation-request-v4.schema.json": "schemas/catalog/catalog-application/document-review-pdf-annotation-request-v4.schema.json",
-    "catalog-application/document-review-pdf-annotation-response-v1.schema.json": "schemas/catalog/catalog-application/document-review-pdf-annotation-response-v1.schema.json",
-    "catalog-application/document-review-pdf-annotation-response-v2.schema.json": "schemas/catalog/catalog-application/document-review-pdf-annotation-response-v2.schema.json",
-    "catalog-application/document-review-pdf-annotation-media-request-v1.schema.json": "schemas/catalog/catalog-application/document-review-pdf-annotation-media-request-v1.schema.json",
-    "catalog-application/document-review-pdf-annotation-media-response-v1.schema.json": "schemas/catalog/catalog-application/document-review-pdf-annotation-media-response-v1.schema.json",
-    "document-review/document-review-pdf-annotation-manifest-v1.schema.json": "schemas/document-review/document-review-pdf-annotation-manifest-v1.schema.json",
-    "document-review/document-review-pdf-annotation-manifest-v2.schema.json": "schemas/document-review/document-review-pdf-annotation-manifest-v2.schema.json",
-    "document-review/document-review-pdf-annotation-result-v1.schema.json": "schemas/document-review/document-review-pdf-annotation-result-v1.schema.json",
-    "document-review/document-review-pdf-annotation-result-v2.schema.json": "schemas/document-review/document-review-pdf-annotation-result-v2.schema.json",
-    "catalog-application/document-review-evidence-request-v1.schema.json": "schemas/catalog-application/document-review-evidence-request-v1.schema.json",
-    "catalog-application/document-review-evidence-response-v1.schema.json": "schemas/catalog-application/document-review-evidence-response-v1.schema.json",
-    "document-review/document-review-evidence-plan-v1.schema.json": "schemas/document-review/document-review-evidence-plan-v1.schema.json",
-    "knowledge/knowledge-analysis-batch-request-v1.schema.json": "schemas/knowledge/knowledge-analysis-batch-request-v1.schema.json",
-    "knowledge/knowledge-analysis-batch-request-v2.schema.json": "schemas/knowledge/knowledge-analysis-batch-request-v2.schema.json",
-    "knowledge/knowledge-analysis-batch-request-v3.schema.json": "schemas/knowledge/knowledge-analysis-batch-request-v3.schema.json",
-    "knowledge/knowledge-analysis-batch-request-v4.schema.json": "schemas/knowledge/knowledge-analysis-batch-request-v4.schema.json",
-    "knowledge/approved-item-graph-publication-command-v1.schema.json": "schemas/knowledge/approved-item-graph-publication-command-v1.schema.json",
-    "knowledge/approved-item-graph-publication-result-v1.schema.json": "schemas/knowledge/approved-item-graph-publication-result-v1.schema.json",
-    "knowledge/item-inference-transfer-v1.schema.json": "schemas/knowledge/item-inference-transfer-v1.schema.json",
-    "knowledge/item-inference-transfer-human-review-v1.schema.json": "schemas/knowledge/item-inference-transfer-human-review-v1.schema.json",
-    "knowledge/item-inference-transfer-experiment-v1.schema.json": "schemas/knowledge/item-inference-transfer-experiment-v1.schema.json",
-    "knowledge/item-inference-transfer-snapshot-v1.schema.json": "schemas/knowledge/item-inference-transfer-snapshot-v1.schema.json",
-    "knowledge/item-inference-transfer-metadata-v1.schema.json": "schemas/knowledge/item-inference-transfer-metadata-v1.schema.json",
-    "knowledge/item-inference-transfer-snapshot-binding-v1.schema.json": "schemas/knowledge/item-inference-transfer-snapshot-binding-v1.schema.json",
-    "knowledge/item-inference-transfer-invocation-v1.schema.json": "schemas/knowledge/item-inference-transfer-invocation-v1.schema.json",
-    "knowledge/item-inference-transfer-workflow-binding-v1.schema.json": "schemas/knowledge/item-inference-transfer-workflow-binding-v1.schema.json",
-    "content-intake/intake-manifest-v1.schema.json": "schemas/content-intake/intake-manifest-v1.schema.json",
-    "content-intake/mapping-proposal-v1.schema.json": "schemas/content-intake/mapping-proposal-v1.schema.json",
-    "content-intake/uncertainties-v1.schema.json": "schemas/content-intake/uncertainties-v1.schema.json",
-    "content-intake/human-decision-v1.schema.json": "schemas/content-intake/human-decision-v1.schema.json",
-    "content-pack/content-pack-v1.schema.json": "schemas/content-pack/content-pack-v1.schema.json",
-    "content-pack/content-pack-v2.schema.json": "schemas/content-pack/content-pack-v2.schema.json",
-    "content-pack/profile-v1.schema.json": "schemas/content-pack/profile-v1.schema.json",
-    "content-pack/prompt-envelope-v1.schema.json": "schemas/content-pack/prompt-envelope-v1.schema.json",
-    "curriculum/integrated-science-editorial-outline-v1.schema.json": "schemas/curriculum/integrated-science-editorial-outline-v1.schema.json",
-    "guidance/eom-guidance-markdown-control-v1.schema.json": "schemas/guidance/eom-guidance-markdown-control-v1.schema.json",
-    "educational-document/educational-document-registration-receipt-v1.schema.json": "schemas/educational-document/educational-document-registration-receipt-v1.schema.json",
-    "educational-document/educational-document-registration-receipt-v2.schema.json": "schemas/educational-document/educational-document-registration-receipt-v2.schema.json",
-    "educational-document/educational-document-registration-request-v1.schema.json": "schemas/educational-document/educational-document-registration-request-v1.schema.json",
-    "educational-document/educational-document-registration-request-v2.schema.json": "schemas/educational-document/educational-document-registration-request-v2.schema.json",
-    "educational-document/educational-document-revision-manifest-v1.schema.json": "schemas/educational-document/educational-document-revision-manifest-v1.schema.json",
-    "educational-document/educational-document-revision-manifest-v2.schema.json": "schemas/educational-document/educational-document-revision-manifest-v2.schema.json",
-    "educational-document/educational-document-rights-attestation-v1.schema.json": "schemas/educational-document/educational-document-rights-attestation-v1.schema.json",
-    "educational-document/educational-document-types-v1.schema.json": "schemas/educational-document/educational-document-types-v1.schema.json",
-    "item-registry/assessment-item-content-v1.schema.json": "schemas/item-registry/assessment-item-content-v1.schema.json",
-    "item-registry/assessment-item-content-v2.schema.json": "schemas/item-registry/assessment-item-content-v2.schema.json",
-    "item-registry/assessment-item-content-v3.schema.json": "schemas/item-registry/assessment-item-content-v3.schema.json",
-    "item-registry/item-revision-manifest-v1.schema.json": "schemas/item-registry/item-revision-manifest-v1.schema.json",
-    "item-registry/item-revision-manifest-v2.schema.json": "schemas/item-registry/item-revision-manifest-v2.schema.json",
-    "item-registry/item-revision-approval-receipt-v1.schema.json": "schemas/item-registry/item-revision-approval-receipt-v1.schema.json",
-    "item-registry/item-revision-hwpx-eligibility-v1.schema.json": "schemas/item-registry/item-revision-hwpx-eligibility-v1.schema.json",
-    "item-origin/item-origin-types-v1.schema.json": "schemas/item-origin/item-origin-types-v1.schema.json",
-    "item-origin/organization-revision-v1.schema.json": "schemas/item-origin/organization-revision-v1.schema.json",
-    "item-origin/assessment-occurrence-revision-v1.schema.json": "schemas/item-origin/assessment-occurrence-revision-v1.schema.json",
-    "item-origin/assessment-occurrence-revision-v2.schema.json": "schemas/item-origin/assessment-occurrence-revision-v2.schema.json",
-    "item-origin/item-origin-profile-v1.schema.json": "schemas/item-origin/item-origin-profile-v1.schema.json",
-    "legacy-assessment/legacy-assessment-types-v1.schema.json": "schemas/legacy-assessment/legacy-assessment-types-v1.schema.json",
-    "legacy-assessment/assessment-source-bundle-proposal-v1.schema.json": "schemas/legacy-assessment/assessment-source-bundle-proposal-v1.schema.json",
-    "legacy-assessment/assessment-source-bundle-v1.schema.json": "schemas/legacy-assessment/assessment-source-bundle-v1.schema.json",
-    "legacy-assessment/assessment-layout-observation-v1.schema.json": "schemas/legacy-assessment/assessment-layout-observation-v1.schema.json",
-    "legacy-assessment/legacy-item-extraction-request-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-request-v1.schema.json",
-    "legacy-assessment/legacy-item-extraction-receipt-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-receipt-v1.schema.json",
-    "legacy-assessment/legacy-item-extraction-result-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-result-v1.schema.json",
-    "legacy-assessment/legacy-item-media-pointer-compatibility-policy-v1.schema.json": "schemas/legacy-assessment/legacy-item-media-pointer-compatibility-policy-v1.schema.json",
-    "legacy-assessment/legacy-item-extraction-validation-recovery-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-validation-recovery-v1.schema.json",
-    "legacy-assessment/legacy-item-extraction-acceptance-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-acceptance-v1.schema.json",
-    "legacy-assessment/legacy-item-extraction-batch-v1.schema.json": "schemas/legacy-assessment/legacy-item-extraction-batch-v1.schema.json",
-    "legacy-assessment/legacy-item-extraction-batch-v2.schema.json": "schemas/legacy-assessment/legacy-item-extraction-batch-v2.schema.json",
-    "legacy-assessment/science-assessment-metadata-resolution-v1.schema.json": "schemas/legacy-assessment/science-assessment-metadata-resolution-v1.schema.json",
-    "legacy-assessment/science-assessment-web-acquisition-v1.schema.json": "schemas/legacy-assessment/science-assessment-web-acquisition-v1.schema.json",
-    "legacy-assessment/science-assessment-web-corpus-manifest-v1.schema.json": "schemas/legacy-assessment/science-assessment-web-corpus-manifest-v1.schema.json",
-    "legacy-assessment/science-assessment-web-corpus-manifest-v2.schema.json": "schemas/legacy-assessment/science-assessment-web-corpus-manifest-v2.schema.json",
-    "legacy-assessment/science-assessment-web-corpus-plan-v1.schema.json": "schemas/legacy-assessment/science-assessment-web-corpus-plan-v1.schema.json",
-    "legacy-assessment/legacy-extraction-result-identity-collisions-v1.schema.json": "schemas/legacy-assessment/legacy-extraction-result-identity-collisions-v1.schema.json",
-    "legacy-assessment/legacy-item-corpus-completion-command-v1.schema.json": "schemas/legacy-assessment/legacy-item-corpus-completion-command-v1.schema.json",
-    "legacy-assessment/legacy-item-corpus-completion-command-v2.schema.json": "schemas/legacy-assessment/legacy-item-corpus-completion-command-v2.schema.json",
-    "legacy-assessment/legacy-item-corpus-completion-receipt-v1.schema.json": "schemas/legacy-assessment/legacy-item-corpus-completion-receipt-v1.schema.json",
-    "legacy-assessment/legacy-item-corpus-completion-receipt-v2.schema.json": "schemas/legacy-assessment/legacy-item-corpus-completion-receipt-v2.schema.json",
-    "legacy-assessment/legacy-item-corpus-coverage-v1.schema.json": "schemas/legacy-assessment/legacy-item-corpus-coverage-v1.schema.json",
-    "legacy-assessment/pdf-learning-completion-v1.schema.json": "schemas/legacy-assessment/pdf-learning-completion-v1.schema.json",
-    "legacy-assessment/pdf-learning-completion-v2.schema.json": "schemas/legacy-assessment/pdf-learning-completion-v2.schema.json",
-    "legacy-assessment/pdf-learning-completion-v3.schema.json": "schemas/legacy-assessment/pdf-learning-completion-v3.schema.json",
-    "legacy-assessment/pdf-learning-item-completion-shard-v1.schema.json": "schemas/legacy-assessment/pdf-learning-item-completion-shard-v1.schema.json",
-    "legacy-assessment/legacy-item-promotion-request-v1.schema.json": "schemas/legacy-assessment/legacy-item-promotion-request-v1.schema.json",
-    "legacy-assessment/legacy-item-editorial-compatibility-policy-v1.schema.json": "schemas/legacy-assessment/legacy-item-editorial-compatibility-policy-v1.schema.json",
-    "legacy-assessment/legacy-item-editorial-compatibility-request-v1.schema.json": "schemas/legacy-assessment/legacy-item-editorial-compatibility-request-v1.schema.json",
-    "legacy-assessment/legacy-item-editorial-compatibility-proposal-v1.schema.json": "schemas/legacy-assessment/legacy-item-editorial-compatibility-proposal-v1.schema.json",
-    "legacy-assessment/legacy-item-editorial-compatibility-result-v1.schema.json": "schemas/legacy-assessment/legacy-item-editorial-compatibility-result-v1.schema.json",
-    "knowledge/knowledge-types-v1.schema.json": "schemas/knowledge/knowledge-types-v1.schema.json",
-    "knowledge/knowledge-types-v2.schema.json": "schemas/knowledge/knowledge-types-v2.schema.json",
-    "knowledge/knowledge-analysis-request-v1.schema.json": "schemas/knowledge/knowledge-analysis-request-v1.schema.json",
-    "knowledge/knowledge-analysis-result-v1.schema.json": "schemas/knowledge/knowledge-analysis-result-v1.schema.json",
-    "knowledge/knowledge-analysis-types-v2.schema.json": "schemas/knowledge/knowledge-analysis-types-v2.schema.json",
-    "knowledge/knowledge-analysis-request-v2.schema.json": "schemas/knowledge/knowledge-analysis-request-v2.schema.json",
-    "knowledge/knowledge-analysis-worker-proposal-v1.schema.json": "schemas/knowledge/knowledge-analysis-worker-proposal-v1.schema.json",
-    "knowledge/knowledge-analysis-proposal-receipt-v1.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v1.schema.json",
-    "knowledge/knowledge-analysis-risk-policy-v1.schema.json": "schemas/knowledge/knowledge-analysis-risk-policy-v1.schema.json",
-    "knowledge/knowledge-analysis-review-decision-v1.schema.json": "schemas/knowledge/knowledge-analysis-review-decision-v1.schema.json",
-    "knowledge/knowledge-analysis-result-v2.schema.json": "schemas/knowledge/knowledge-analysis-result-v2.schema.json",
-    "knowledge/knowledge-analysis-types-v3.schema.json": "schemas/knowledge/knowledge-analysis-types-v3.schema.json",
-    "knowledge/knowledge-analysis-types-v4.schema.json": "schemas/knowledge/knowledge-analysis-types-v4.schema.json",
-    "knowledge/knowledge-analysis-types-v5.schema.json": "schemas/knowledge/knowledge-analysis-types-v5.schema.json",
-    "knowledge/knowledge-assessment-page-image-observation-v2.schema.json": "schemas/knowledge/knowledge-assessment-page-image-observation-v2.schema.json",
-    "knowledge/knowledge-analysis-request-v3.schema.json": "schemas/knowledge/knowledge-analysis-request-v3.schema.json",
-    "knowledge/knowledge-analysis-request-v4.schema.json": "schemas/knowledge/knowledge-analysis-request-v4.schema.json",
-    "knowledge/knowledge-analysis-request-v5.schema.json": "schemas/knowledge/knowledge-analysis-request-v5.schema.json",
-    "knowledge/knowledge-analysis-request-v6.schema.json": "schemas/knowledge/knowledge-analysis-request-v6.schema.json",
-    "knowledge/knowledge-analysis-request-v7.schema.json": "schemas/knowledge/knowledge-analysis-request-v7.schema.json",
-    "knowledge/knowledge-analysis-request-v8.schema.json": "schemas/knowledge/knowledge-analysis-request-v8.schema.json",
-    "knowledge/knowledge-analysis-request-v9.schema.json": "schemas/knowledge/knowledge-analysis-request-v9.schema.json",
-    "knowledge/knowledge-analysis-request-v10.schema.json": "schemas/knowledge/knowledge-analysis-request-v10.schema.json",
-    "knowledge/knowledge-analysis-proposal-receipt-v2.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v2.schema.json",
-    "knowledge/knowledge-analysis-proposal-receipt-v3.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v3.schema.json",
-    "knowledge/knowledge-analysis-proposal-receipt-v4.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v4.schema.json",
-    "knowledge/knowledge-analysis-proposal-receipt-v5.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v5.schema.json",
-    "knowledge/knowledge-analysis-proposal-receipt-v6.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v6.schema.json",
-    "knowledge/knowledge-analysis-proposal-receipt-v7.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v7.schema.json",
-    "knowledge/knowledge-analysis-proposal-receipt-v8.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v8.schema.json",
-    "knowledge/knowledge-analysis-proposal-receipt-v9.schema.json": "schemas/knowledge/knowledge-analysis-proposal-receipt-v9.schema.json",
-    "knowledge/knowledge-analysis-result-v3.schema.json": "schemas/knowledge/knowledge-analysis-result-v3.schema.json",
-    "knowledge/knowledge-analysis-result-v4.schema.json": "schemas/knowledge/knowledge-analysis-result-v4.schema.json",
-    "knowledge/knowledge-analysis-result-v5.schema.json": "schemas/knowledge/knowledge-analysis-result-v5.schema.json",
-    "knowledge/knowledge-analysis-result-v6.schema.json": "schemas/knowledge/knowledge-analysis-result-v6.schema.json",
-    "knowledge/knowledge-analysis-result-v7.schema.json": "schemas/knowledge/knowledge-analysis-result-v7.schema.json",
-    "knowledge/knowledge-analysis-result-v8.schema.json": "schemas/knowledge/knowledge-analysis-result-v8.schema.json",
-    "knowledge/knowledge-analysis-result-v9.schema.json": "schemas/knowledge/knowledge-analysis-result-v9.schema.json",
-    "knowledge/knowledge-analysis-result-v10.schema.json": "schemas/knowledge/knowledge-analysis-result-v10.schema.json",
-    "knowledge/knowledge-analysis-worker-proposal-v2.schema.json": "schemas/knowledge/knowledge-analysis-worker-proposal-v2.schema.json",
-    "knowledge/knowledge-analysis-worker-proposal-v3.schema.json": "schemas/knowledge/knowledge-analysis-worker-proposal-v3.schema.json",
-    "knowledge/knowledge-analysis-worker-proposal-v4.schema.json": "schemas/knowledge/knowledge-analysis-worker-proposal-v4.schema.json",
-    "knowledge/knowledge-analysis-worker-proposal-v5.schema.json": "schemas/knowledge/knowledge-analysis-worker-proposal-v5.schema.json",
-    "knowledge/knowledge-analysis-worker-proposal-v6.schema.json": "schemas/knowledge/knowledge-analysis-worker-proposal-v6.schema.json",
-    "knowledge/knowledge-analysis-worker-proposal-v7.schema.json": "schemas/knowledge/knowledge-analysis-worker-proposal-v7.schema.json",
-    "knowledge/knowledge-analysis-worker-proposal-v8.schema.json": "schemas/knowledge/knowledge-analysis-worker-proposal-v8.schema.json",
-    "knowledge/knowledge-analysis-solution-types-v1.schema.json": "schemas/knowledge/knowledge-analysis-solution-types-v1.schema.json",
-    "knowledge/knowledge-analysis-solution-report-v1.schema.json": "schemas/knowledge/knowledge-analysis-solution-report-v1.schema.json",
-    "knowledge/knowledge-analysis-proposed-node-v3.schema.json": "schemas/knowledge/knowledge-analysis-proposed-node-v3.schema.json",
-    "knowledge/knowledge-analysis-proposed-node-v4.schema.json": "schemas/knowledge/knowledge-analysis-proposed-node-v4.schema.json",
-    "knowledge/knowledge-analysis-proposed-edge-v4.schema.json": "schemas/knowledge/knowledge-analysis-proposed-edge-v4.schema.json",
-    "knowledge/knowledge-graph-projection-v1.schema.json": "schemas/knowledge/knowledge-graph-projection-v1.schema.json",
-    "knowledge/knowledge-graph-projection-v2.schema.json": "schemas/knowledge/knowledge-graph-projection-v2.schema.json",
-    "knowledge/knowledge-graph-projection-v3.schema.json": "schemas/knowledge/knowledge-graph-projection-v3.schema.json",
-    "knowledge/knowledge-graph-projection-v4.schema.json": "schemas/knowledge/knowledge-graph-projection-v4.schema.json",
-    "knowledge/knowledge-graph-publication-result-v1.schema.json": "schemas/knowledge/knowledge-graph-publication-result-v1.schema.json",
-    "knowledge/knowledge-graph-publication-v1.schema.json": "schemas/knowledge/knowledge-graph-publication-v1.schema.json",
-    "knowledge/knowledge-graph-publication-v2.schema.json": "schemas/knowledge/knowledge-graph-publication-v2.schema.json",
-    "knowledge/knowledge-graph-publication-v3.schema.json": "schemas/knowledge/knowledge-graph-publication-v3.schema.json",
-    "knowledge/knowledge-graph-publication-v4.schema.json": "schemas/knowledge/knowledge-graph-publication-v4.schema.json",
-    "knowledge/knowledge-graph-publication-v5.schema.json": "schemas/knowledge/knowledge-graph-publication-v5.schema.json",
-    "knowledge/knowledge-graph-publication-v6.schema.json": "schemas/knowledge/knowledge-graph-publication-v6.schema.json",
-    "knowledge/knowledge-graph-snapshot-manifest-v1.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v1.schema.json",
-    "knowledge/knowledge-graph-snapshot-manifest-v2.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v2.schema.json",
-    "knowledge/knowledge-graph-snapshot-manifest-v3.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v3.schema.json",
-    "knowledge/knowledge-graph-snapshot-manifest-v4.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v4.schema.json",
-    "knowledge/knowledge-graph-snapshot-manifest-v5.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v5.schema.json",
-    "knowledge/knowledge-graph-snapshot-manifest-v6.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v6.schema.json",
-    "knowledge/knowledge-graph-snapshot-manifest-v7.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v7.schema.json",
-    "knowledge/knowledge-graph-snapshot-manifest-v8.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v8.schema.json",
-    "knowledge/knowledge-graph-snapshot-manifest-v9.schema.json": "schemas/knowledge/knowledge-graph-snapshot-manifest-v9.schema.json",
-    "knowledge/knowledge-graph-structure-manifest-v1.schema.json": "schemas/knowledge/knowledge-graph-structure-manifest-v1.schema.json",
-    "knowledge/knowledge-graph-structure-manifest-v2.schema.json": "schemas/knowledge/knowledge-graph-structure-manifest-v2.schema.json",
-    "knowledge/knowledge-graph-structure-manifest-v3.schema.json": "schemas/knowledge/knowledge-graph-structure-manifest-v3.schema.json",
-    "knowledge/knowledge-graph-structure-manifest-v4.schema.json": "schemas/knowledge/knowledge-graph-structure-manifest-v4.schema.json",
-    "knowledge/knowledge-graph-structure-manifest-v5.schema.json": "schemas/knowledge/knowledge-graph-structure-manifest-v5.schema.json",
-    "knowledge/knowledge-graph-structure-manifest-v6.schema.json": "schemas/knowledge/knowledge-graph-structure-manifest-v6.schema.json",
-    "knowledge/automatic-item-curriculum-alignment-v2.schema.json": "schemas/knowledge/automatic-item-curriculum-alignment-v2.schema.json",
-    "knowledge/education-retrieval-access-policy-v1.schema.json": "schemas/knowledge/education-retrieval-access-policy-v1.schema.json",
-    "knowledge/education-retrieval-request-v1.schema.json": "schemas/knowledge/education-retrieval-request-v1.schema.json",
-    "knowledge/education-retrieval-request-v2.schema.json": "schemas/knowledge/education-retrieval-request-v2.schema.json",
-    "knowledge/evidence-bundle-manifest-v1.schema.json": "schemas/knowledge/evidence-bundle-manifest-v1.schema.json",
-    "knowledge/evidence-bundle-manifest-v2.schema.json": "schemas/knowledge/evidence-bundle-manifest-v2.schema.json",
-    "knowledge/evidence-bundle-manifest-v3.schema.json": "schemas/knowledge/evidence-bundle-manifest-v3.schema.json",
-    "knowledge/evidence-bundle-manifest-v4.schema.json": "schemas/knowledge/evidence-bundle-manifest-v4.schema.json",
-    "knowledge/evidence-bundle-manifest-v5.schema.json": "schemas/knowledge/evidence-bundle-manifest-v5.schema.json",
-    "knowledge/evidence-bundle-publication-result-v1.schema.json": "schemas/knowledge/evidence-bundle-publication-result-v1.schema.json",
-    "knowledge/educational-retrieval-requirement-v1.schema.json": "schemas/knowledge/educational-retrieval-requirement-v1.schema.json",
-    "knowledge/educational-retrieval-requirement-v2.schema.json": "schemas/knowledge/educational-retrieval-requirement-v2.schema.json",
-    "knowledge/past-exam-variation-request-v1.schema.json": "schemas/knowledge/past-exam-variation-request-v1.schema.json",
-    "knowledge/evidence-bundle-publication-result-v2.schema.json": "schemas/knowledge/evidence-bundle-publication-result-v2.schema.json",
-    "knowledge/evidence-bundle-publication-result-v3.schema.json": "schemas/knowledge/evidence-bundle-publication-result-v3.schema.json",
-    "knowledge/evidence-bundle-publication-result-v4.schema.json": "schemas/knowledge/evidence-bundle-publication-result-v4.schema.json",
-    "knowledge/evidence-bundle-publication-result-v5.schema.json": "schemas/knowledge/evidence-bundle-publication-result-v5.schema.json",
-    "legacy-knowledge/legacy-source-inventory-v1.schema.json": "schemas/legacy-knowledge/legacy-source-inventory-v1.schema.json",
-    "legacy-knowledge/legacy-source-inventory-policy-v1.schema.json": "schemas/legacy-knowledge/legacy-source-inventory-policy-v1.schema.json",
-    "legacy-knowledge/legacy-source-inventory-v2.schema.json": "schemas/legacy-knowledge/legacy-source-inventory-v2.schema.json",
-    "legacy-knowledge/legacy-source-relation-manifest-v1.schema.json": "schemas/legacy-knowledge/legacy-source-relation-manifest-v1.schema.json",
-    "legacy-knowledge/legacy-source-rights-review-v1.schema.json": "schemas/legacy-knowledge/legacy-source-rights-review-v1.schema.json",
-    "legacy-knowledge/legacy-source-rights-review-v2.schema.json": "schemas/legacy-knowledge/legacy-source-rights-review-v2.schema.json",
-    "legacy-knowledge/legacy-source-selection-v1.schema.json": "schemas/legacy-knowledge/legacy-source-selection-v1.schema.json",
-    "legacy-knowledge/legacy-source-selection-v2.schema.json": "schemas/legacy-knowledge/legacy-source-selection-v2.schema.json",
-    "legacy-knowledge/pdf-page-range-materialization-manifest-v1.schema.json": "schemas/legacy-knowledge/pdf-page-range-materialization-manifest-v1.schema.json",
-    "legacy-knowledge/textbook-analysis-bundle-manifest-v1.schema.json": "schemas/legacy-knowledge/textbook-analysis-bundle-manifest-v1.schema.json",
-    "legacy-knowledge/textbook-analysis-bundle-manifest-v2.schema.json": "schemas/legacy-knowledge/textbook-analysis-bundle-manifest-v2.schema.json",
-    "legacy-usage/assessment-assembly-manifest-v1.schema.json": "schemas/legacy-usage/assessment-assembly-manifest-v1.schema.json",
-    "legacy-usage/legacy-usage-import-manifest-v1.schema.json": "schemas/legacy-usage/legacy-usage-import-manifest-v1.schema.json",
-    "legacy-usage/legacy-usage-mapping-contract-v1.schema.json": "schemas/legacy-usage/legacy-usage-mapping-contract-v1.schema.json",
-    "legacy-usage/legacy-usage-row-proposal-v1.schema.json": "schemas/legacy-usage/legacy-usage-row-proposal-v1.schema.json",
-    "legacy-usage/product-usage-graph-projection-v1.schema.json": "schemas/legacy-usage/product-usage-graph-projection-v1.schema.json",
-}
+# Read the authoritative frozen registry as data without importing source packages.
+# The isolated installed-wheel check below independently verifies its public inventory.
+def catalog_resources_from_registry(source: str) -> dict[str, str]:
+    assignments = [
+        node
+        for node in ast.parse(source).body
+        if isinstance(node, ast.AnnAssign)
+        and isinstance(node.target, ast.Name)
+        and node.target.id == "CATALOG_SCHEMA_RESOURCES"
+    ]
+    if len(assignments) != 1:
+        raise SystemExit("Catalog Contract source registry is unavailable")
+    wrapper = assignments[0].value
+    if (
+        not isinstance(wrapper, ast.Call)
+        or not isinstance(wrapper.func, ast.Name)
+        or wrapper.func.id != "MappingProxyType"
+        or len(wrapper.args) != 1
+        or wrapper.keywords
+        or not isinstance(wrapper.args[0], ast.Dict)
+    ):
+        raise SystemExit("Catalog Contract source registry is not frozen literal data")
+    result: dict[str, str] = {}
+    families: set[str] = set()
+    for family_node, resource in zip(wrapper.args[0].keys, wrapper.args[0].values, strict=True):
+        if family_node is None:
+            raise SystemExit("Catalog Contract source family identity is invalid")
+        family = ast.literal_eval(family_node)
+        if not isinstance(family, str) or not family or family in families:
+            raise SystemExit("Catalog Contract source family identity is invalid")
+        families.add(family)
+        if (
+            not isinstance(resource, ast.Call)
+            or not isinstance(resource.func, ast.Name)
+            or resource.func.id != "CatalogSchemaResource"
+            or len(resource.args) != 4
+            or resource.keywords
+        ):
+            raise SystemExit("Catalog Contract source resource is not literal data")
+        canonical, packaged = (ast.literal_eval(value) for value in resource.args[:2])
+        if (
+            not isinstance(canonical, str)
+            or not canonical.startswith("schemas/")
+            or not isinstance(packaged, str)
+            or not packaged.startswith("resources/")
+            or any(part in {"", ".", ".."} for part in canonical.split("/"))
+            or any(part in {"", ".", ".."} for part in packaged.split("/"))
+        ):
+            raise SystemExit("Catalog Contract source resource path is invalid")
+        resource_name = packaged.removeprefix("resources/")
+        if resource_name in result and result[resource_name] != canonical:
+            raise SystemExit("Catalog Contract source resource identity conflicts")
+        result[resource_name] = canonical
+    return result
+
+
+catalog_resources = catalog_resources_from_registry(
+    (
+        Path(os.environ["REPOSITORY_ROOT"])
+        / "packages/catalog_contracts/eom_catalog_contracts/validation.py"
+    ).read_text(encoding="utf-8")
+)
 with zipfile.ZipFile(platform_wheel) as archive:
     names = set(archive.namelist())
     packaged = {
@@ -1900,7 +1673,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
     if packaged != expected:
         raise SystemExit(
             "Catalog Contract schema wheel resources mismatch: "
-            f"expected={sorted(expected)} actual={sorted(packaged)}"
+            f"missing={sorted(expected - packaged)} extra={sorted(packaged - expected)}"
         )
     record_name = next(name for name in names if name.endswith(".dist-info/RECORD"))
     record = archive.read(record_name).decode("utf-8")
@@ -2049,6 +1822,13 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
             / "config/workflows/item-inference-transfer-comparison.v1.yaml"
         ).read_bytes()
     )
+    inference_transfer_definition_v1_1 = root / "item-inference-transfer-comparison.v1_1.yaml"
+    inference_transfer_definition_v1_1.write_bytes(
+        (
+            Path(os.environ["REPOSITORY_ROOT"])
+            / "config/workflows/item-inference-transfer-comparison.v1_1.yaml"
+        ).read_bytes()
+    )
     worker_config = root / "worker-slots.yaml"
     worker_config.write_bytes(
         (Path(os.environ["REPOSITORY_ROOT"]) / "config/worker-slots.example.yaml").read_bytes()
@@ -2092,13 +1872,14 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
             raise SystemExit(f"installed simulation mode mismatch: {path.name}")
     check = r'''
 import importlib.util
+import json
 import os
 import sys
 from pathlib import Path
 from pydantic import TypeAdapter
 
 installed_root = Path(sys.argv[1]).resolve()
-repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, definition_v1_11, definition_v1_12, definition_v1_13, definition_v1_14, definition_v1_15, definition_v1_16, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, legacy_definition, editorial_definition, customer_support_definition, pdf_document_review_definition_v1, pdf_document_review_definition_v1_1, pdf_document_review_definition_v1_2, pdf_document_review_definition_v1_3, inference_transfer_definition, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256 = sys.argv[2:]
+repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, definition_v1_11, definition_v1_12, definition_v1_13, definition_v1_14, definition_v1_15, definition_v1_16, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, legacy_definition, editorial_definition, customer_support_definition, pdf_document_review_definition_v1, pdf_document_review_definition_v1_1, pdf_document_review_definition_v1_2, pdf_document_review_definition_v1_3, inference_transfer_definition, inference_transfer_definition_v1_1, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256, expected_catalog_resources_json = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
 os.environ["EOM_STAGING_ROOT"] = staging
@@ -2318,6 +2099,8 @@ load_role_input_schema("support", "workflow-role/1.25.0")
 load_role_input_schema("support", "workflow-role/1.26.0")
 load_role_input_schema("support", "workflow-role/1.27.0")
 load_role_input_schema("support", "workflow-role/1.28.0")
+load_role_input_schema("support", "workflow-role/1.29.0")
+load_role_input_schema("support", "workflow-role/1.30.0")
 load_role_input_schema("authoring", "workflow-role/1.19.0")
 load_role_input_schema("image", "workflow-role/1.19.0")
 load_role_input_schema("review", "workflow-role/1.19.0")
@@ -2340,7 +2123,11 @@ for schema_id in RESULT_SCHEMA_FILES:
 control_schema_names = {name for name, _ in control_schema_inventory()}
 if not {
     "inference-transfer-control-bootstrap",
+    "inference-transfer-control-bootstrap-v1.1",
     "inference-transfer-control-invocation",
+    "inference-transfer-control-invocation-v1.1",
+    "resolved-execution-plan-v21",
+    "resolved-execution-plan-v22",
     "standard-control-bootstrap-v10",
     "knowledge-item-control-bootstrap-v7",
     "standard-control-bootstrap-v11",
@@ -2468,6 +2255,7 @@ admitted_definitions = (
     compile_definition(Path(pdf_document_review_definition_v1_2), {"support"}),
     compile_definition(Path(pdf_document_review_definition_v1_3), {"support"}),
     compile_definition(Path(inference_transfer_definition), {"support"}),
+    compile_definition(Path(inference_transfer_definition_v1_1), {"support"}),
 )
 if {
     (compiled.definition.definition_key, compiled.definition.definition_version): next(iter({
@@ -2481,6 +2269,22 @@ if {
     for identity, admission in WORKFLOW_ADMISSION_BY_IDENTITY.items()
 }:
     raise SystemExit("workflow admission policy does not match the installed definitions")
+installed_catalog_resources = {
+    resource.resource_path.removeprefix("resources/"): resource.canonical_path
+    for _, resource in catalog_schema_inventory()
+}
+if installed_catalog_resources != json.loads(expected_catalog_resources_json):
+    raise SystemExit("installed Catalog Contract inventory differs from the canonical registry")
+catalog_schema_names = {name for name, _ in catalog_schema_inventory()}
+if not {
+    "item-inference-transfer",
+    "item-inference-transfer-invocation",
+    "item-inference-transfer-workflow-binding",
+    "item-inference-transfer-invocation-v1.1",
+    "item-inference-transfer-pair-result-v1.1",
+    "item-inference-transfer-workflow-binding-v1.1",
+}.issubset(catalog_schema_names):
+    raise SystemExit("Catalog comparison predecessor/successor schema inventory is incomplete")
 for name, _ in catalog_schema_inventory():
     load_schema(name)
 validate_contract(
@@ -2520,6 +2324,7 @@ validate_contract(
             str(pdf_document_review_definition_v1_2),
             str(pdf_document_review_definition_v1_3),
             str(inference_transfer_definition),
+            str(inference_transfer_definition_v1_1),
             str(worker_config),
             str(staging),
             str(workspace_root),
@@ -2527,6 +2332,7 @@ validate_contract(
             os.environ["EXPECTED_COMMIT"],
             os.environ["EXPECTED_SOURCE_TREE"],
             os.environ["EXPECTED_SOURCE_ARCHIVE_SHA256"],
+            json.dumps(catalog_resources, sort_keys=True, separators=(",", ":")),
         ],
         cwd=root,
         check=True,

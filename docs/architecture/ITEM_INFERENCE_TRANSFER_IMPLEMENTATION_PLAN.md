@@ -89,13 +89,14 @@
 | 조건 대응과 차이 | Codex 쌍 비교가 A→B의 조건·추론 대응, 적용되지 않는 부분과 추가 추론을 근거와 함께 남기는가 |
 | 개념·소재·착상 구분 | facet과 메타데이터를 구분하며 content-only·착상·메타데이터 보조를 동일한 인가 모집단에서 비교하는가 |
 | 기존 시스템 활용 | GraphRAG와 승인된 문항·풀이보고서를 대체하지 않고 실제 사용자 권한·pin·해시·Orchestrator 경계를 유지하는가 |
-| 사람의 풀이 전이 평가 | 정확한 pair에 대해 도움이 되는 부분과 전이 label을 사람이 기록할 수 있고 모델 가설과 분리하는가 |
+| 사람의 풀이 전이 평가 | 기존 optional 계약·owner·기록과 모델 가설의 분리를 보존하는가; 이후 사용자 지시에 따라 신규 평가·점수표는 완료 조건이 아님 |
 | 실험과 제한 | 기존 검색 대비 결과·실행 예산·실패·미검증 항목을 재현 가능하게 보존하며 자동으로 성공을 꾸미지 않는가 |
 
 최종 보고에는 각 요구의 코드/계약 위치, 관련 테스트, 실제 설치·실행 증거 및 남은
 차이를 대조표로 남긴다. `SOURCE_VERIFIED`, `LIVE_VERIFIED`, `HUMAN_NOT_EVALUATED`,
-`GAP`을 구분하고, 구현 누락은 기존 범위 안에서 보완한다. 실제 사람 판단이나 운영 권한이
-필요한 항목은 별도 gate로 명시하며 source PASS를 전체 설계·교육 품질 PASS로 확대하지 않는다.
+`GAP`을 구분하고, 구현 누락은 기존 범위 안에서 보완한다. 필요한 운영 인증·권한과
+실행 gate만 구분하며 사람 평가를 완료의 선행 조건으로 다시 추가하지 않는다.
+source PASS를 전체 설계·교육 품질 PASS로 확대하지 않는다.
 
 현재 읽기 전용 사전 대조에서는 profile → 후보 → 근거 연결 A→B 비교 → 별도 사람 평가의
 소스 경로를 확인했다. 그러나 첫 실제 READ 실패로 corpus 후보 성능·worker 비교·사람
@@ -140,7 +141,7 @@ HTTP replay/목적 전용 결과 resolution 및 아직 남은 실제 운영 호�
 2. 실제 corpus의 deterministic profile 길이·E5 token overflow 비율·source resolution query/file-read 비용부터 측정한다. 긴 조건을 버려 성공시키지 않는다. 필요한 facet/chunk successor는 측정 후 별도 설계한다.
 3. 동일한 authorized target 집합에서 lexical/Graph, content-only, concrete-facet, metadata 보조의 후보 집합을 비교한다. 사람 label이 없으면 recall/quality PASS를 만들지 않는다.
 4. compatible exact-purpose support plan·instruction·runtime/policy release를 준비하고 기존 Orchestrator를 통한 bounded pair comparison을 수행한다. 기존 support/PDF preset의 purpose를 바꾸거나 worker를 직접 실행하지 않는다.
-5. 검증 가능한 대응·차이와 사람용 전이 평가 묶음을 제공한다. human gate와 필요한 운영 승인만 분리해 보고한다.
+5. 검증 가능한 대응·차이와 독립 개념·소재·착상 설명의 canonical 결과를 제공한다. 필요한 운영 인증·권한과 미측정 교육 효과는 구분한다. 사람 평가 묶음·점수표·human gate는 추가하지 않는다.
 
 ## 실제 snapshot 비용 발견과 요청범위 재사용 설계 — 2026-10-10
 

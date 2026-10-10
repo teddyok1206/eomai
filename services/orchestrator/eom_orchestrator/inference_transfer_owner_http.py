@@ -1,4 +1,4 @@
-"""Official guiadmin reads and explicit pair submissions; no refresh or source bypass."""
+"""Official guiadmin session rotation, reads and explicit non-retried submissions."""
 
 from __future__ import annotations
 
@@ -6,11 +6,11 @@ import http.client
 import json
 import re
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, cast
 
 from eom_api_contracts.assessment_learning import AssessmentLearningCorpusViewV2
-from eom_api_contracts.auth import CurrentOperator, LoginRequest, TokenPair
+from eom_api_contracts.auth import CurrentOperator, LoginRequest, RefreshRequest, TokenPair
 from eom_api_contracts.common import CommandResult, ListResponse, SingleResponse
 from eom_api_contracts.control_plane import ExecutionPresetView
 from eom_catalog_contracts.inference_transfer_invocation import (
@@ -69,6 +69,8 @@ from eom_orchestrator.inference_transfer_snapshot_staging import SnapshotReadFai
 
 _HOST, _PORT = "127.0.0.1", 8765
 _LOGIN = "/api/v1/auth/login"
+_REFRESH = "/api/v1/auth/refresh"
+_REFRESH_MARGIN = timedelta(seconds=180)
 _SNAPSHOT = "/api/v1/knowledge/inference-transfer/snapshot"
 _METADATA = "/api/v1/knowledge/inference-transfer/metadata"
 _ORIGINAL_CORPUS = "/api/v1/assessment-learning-corpus"
@@ -92,6 +94,7 @@ _COMMAND_ID = re.compile(r"wfcmd_[0-9a-f]{32}", re.ASCII)
 _REQUEST_TARGETS = frozenset(
     {
         ("POST", _LOGIN),
+        ("POST", _REFRESH),
         ("POST", _SNAPSHOT),
         ("POST", _METADATA),
         ("POST", _COMPARISONS),
@@ -265,6 +268,9 @@ class AuthenticatedInferenceTransferHttpSession:
         self._bearer, self._refresh = bearer, refresh
         self._operator_id: str | None = None
         self._session_id: str | None = None
+        self._authenticated_at: datetime | None = None
+        self._access_expires_at: datetime | None = None
+        self._refresh_failed = False
 
     @classmethod
     def login_guiadmin(cls, password: SecretStr) -> AuthenticatedInferenceTransferHttpSession:
@@ -310,23 +316,101 @@ class AuthenticatedInferenceTransferHttpSession:
         value.read()
         return value
 
-    def read(self) -> CurrentOperator:
+    def _validated_principal(self, raw: CurrentOperator) -> CurrentOperator:
+        value = CurrentOperator.model_validate(raw.model_dump(mode="json"))
+        now = datetime.now(UTC)
+        if (
+            value.username != "guiadmin"
+            or _ACTOR.fullmatch(value.operator_id) is None
+            or _SESSION.fullmatch(value.session_id) is None
+            or value.password_change_required
+            or value.access_expires_at <= now
+            or value.authenticated_at > now
+            or (self._operator_id is not None and value.operator_id != self._operator_id)
+            or (self._session_id is not None and value.session_id != self._session_id)
+            or (
+                self._authenticated_at is not None
+                and value.authenticated_at != self._authenticated_at
+            )
+        ):
+            raise ValueError("actual session changed or unavailable")
+        return value
+
+    def _refresh_if_due(self) -> CurrentOperator | None:
+        if self._refresh_failed:
+            raise ControlPlaneError(
+                "CONTROL_AUTHORIZATION_REQUIRED", "session renewal requires a new login"
+            )
+        if (
+            self._refresh is None
+            or self._access_expires_at is None
+            or self._access_expires_at - datetime.now(UTC) > _REFRESH_MARGIN
+        ):
+            return None
+
+        # Consumption may commit even when HTTP times out. Never reuse this token
+        # after an unknown outcome or install new secrets before independent /me.
+        self._refresh_failed = True
         try:
-            value = CurrentOperator.model_validate(self._reader.read().model_dump(mode="json"))
+            request = RefreshRequest(refresh_token=self._refresh)
+
+            def refresh_body() -> bytes:
+                return canonical_json_bytes(
+                    {"refresh_token": request.refresh_token.get_secret_value()}
+                )
+
+            status, raw = _post(_REFRESH, refresh_body)
+            if status in {401, 403, 429}:
+                raise ControlPlaneError(
+                    "CONTROL_AUTHORIZATION_REQUIRED", "actual session renewal denied"
+                )
+            if status != 200:
+                raise ValueError("session renewal unavailable")
+            _LOGIN_VALIDATOR.validate(raw)
+            tokens = _LOGIN_RESPONSE.model_validate(raw).data
             now = datetime.now(UTC)
             if (
-                value.username != "guiadmin"
-                or _ACTOR.fullmatch(value.operator_id) is None
-                or _SESSION.fullmatch(value.session_id) is None
-                or value.password_change_required
-                or value.access_expires_at <= now
-                or value.authenticated_at > now
-                or (self._operator_id is not None and value.operator_id != self._operator_id)
-                or (self._session_id is not None and value.session_id != self._session_id)
+                tokens.session_id != self._session_id
+                or tokens.password_change_required
+                or tokens.access_expires_at - now <= _REFRESH_MARGIN
+                or tokens.refresh_expires_at <= now
+                or tokens.access_token == self._bearer.get_secret_value()
+                or tokens.refresh_token == self._refresh.get_secret_value()
             ):
-                raise ValueError("actual session changed or unavailable")
+                raise ValueError("renewed session differs or expires too soon")
+            bearer, refresh = SecretStr(tokens.access_token), SecretStr(tokens.refresh_token)
+            # Validate the next refresh request before committing its credential.
+            RefreshRequest(refresh_token=refresh)
+            reader = FixedApiControlPrincipalReader(bearer)
+            principal = self._validated_principal(reader.read())
+            if principal.access_expires_at != tokens.access_expires_at:
+                raise ValueError("renewed bearer expiry differs")
+            self._reader, self._bearer, self._refresh = reader, bearer, refresh
+            self._access_expires_at = principal.access_expires_at
+            self._refresh_failed = False
+            return principal
+        except ControlPlaneError as exc:
+            raise ControlPlaneError(
+                exc.code
+                if exc.code
+                in {"CONTROL_AUTHORIZATION_REQUIRED", "CONTROL_AUTH_SERVICE_UNAVAILABLE"}
+                else "CONTROL_AUTH_SERVICE_UNAVAILABLE",
+                "official session renewal unavailable",
+            ) from None
+        except Exception:
+            raise ControlPlaneError(
+                "CONTROL_AUTH_SERVICE_UNAVAILABLE", "official session renewal reply invalid"
+            ) from None
+
+    def read(self) -> CurrentOperator:
+        try:
+            value = self._refresh_if_due()
+            if value is None:
+                value = self._validated_principal(self._reader.read())
             if self._operator_id is None:
                 self._operator_id, self._session_id = value.operator_id, value.session_id
+                self._authenticated_at = value.authenticated_at
+            self._access_expires_at = value.access_expires_at
             return value
         except ControlPlaneError as exc:
             raise ControlPlaneError(

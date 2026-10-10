@@ -15,6 +15,7 @@ from eom_catalog_contracts.inference_transfer_snapshot import (
     InferenceTransferSnapshotAuthorizeResult,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256
+from eom_operator_identity import PermissionKey
 from eom_orchestrator import inference_transfer_owner_http as http
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.inference_transfer_snapshot_staging import SnapshotReadFailure
@@ -34,6 +35,10 @@ from tests.unit.inference_transfer_snapshot_fixtures import (
 ACTOR = "operator_" + "a" * 32
 SESSION = "apisession_" + "b" * 32
 TOKEN = "eom_at_" + "x" * 64
+AUTHENTICATED_AT = datetime.now(UTC) - timedelta(minutes=1)
+REFRESH_TOKEN = "eom_rt_" + "r" * 22 + "." + "r" * 43
+NEXT_TOKEN = "eom_at_" + "n" * 22 + "." + "n" * 43
+NEXT_REFRESH = "eom_rt_" + "s" * 22 + "." + "s" * 43
 
 
 def principal(**changes: Any) -> CurrentOperator:
@@ -46,7 +51,7 @@ def principal(**changes: Any) -> CurrentOperator:
             "roles": ["ADMIN"],
             "effective_permissions": ["item:read"],
             "session_id": SESSION,
-            "authenticated_at": now - timedelta(minutes=1),
+            "authenticated_at": AUTHENTICATED_AT,
             "access_expires_at": now + timedelta(minutes=30),
             "password_change_required": False,
         }
@@ -181,7 +186,7 @@ def test_actual_login_password_is_not_masked_and_tokens_are_secretstr(
     reply = wrapper(
         {
             "access_token": TOKEN,
-            "refresh_token": "eom_rt_" + "r" * 64,
+            "refresh_token": REFRESH_TOKEN,
             "token_type": "bearer",
             "access_expires_at": (now + timedelta(minutes=30)).isoformat(),
             "refresh_expires_at": (now + timedelta(days=1)).isoformat(),
@@ -404,3 +409,270 @@ def test_metadata_error_closed_allowlist_no_retry_or_secret_echo(
         value.resolve_metadata(metadata_request())
     assert caught.value.code == expected and len(wire.requests) == 1
     assert "secret" not in str(caught.value)
+
+
+def refresh_session(
+    monkeypatch: pytest.MonkeyPatch, *, remaining_seconds: int = 179
+) -> tuple[http.AuthenticatedInferenceTransferHttpSession, dict[str, datetime]]:
+    clock = {"now": datetime.now(UTC)}
+    monkeypatch.setattr(http, "datetime", SimpleNamespace(now=lambda _tz: clock["now"]))
+    initial = principal(access_expires_at=clock["now"] + timedelta(seconds=remaining_seconds))
+    monkeypatch.setattr(
+        http, "FixedApiControlPrincipalReader", lambda *_args: SimpleNamespace(read=lambda: initial)
+    )
+    value = http.AuthenticatedInferenceTransferHttpSession(
+        SecretStr(TOKEN), refresh=SecretStr(REFRESH_TOKEN)
+    )
+    assert value.read() == initial
+    return value, clock
+
+
+def refresh_reply(now: datetime, **changes: Any) -> dict[str, Any]:
+    return wrapper(
+        {
+            "access_token": NEXT_TOKEN,
+            "refresh_token": NEXT_REFRESH,
+            "token_type": "bearer",
+            "access_expires_at": (now + timedelta(minutes=30)).isoformat(),
+            "refresh_expires_at": (now + timedelta(days=1)).isoformat(),
+            "session_id": SESSION,
+            "password_change_required": False,
+        }
+        | changes
+    )
+
+
+@pytest.mark.parametrize("expired", [False, True])
+def test_proactive_rotation_validates_new_bearer_before_installing_same_session(
+    monkeypatch: pytest.MonkeyPatch, expired: bool
+) -> None:
+    value, clock = refresh_session(monkeypatch)
+    if expired:
+        clock["now"] += timedelta(seconds=180)
+    expiry = clock["now"] + timedelta(minutes=30)
+    expected = principal(
+        access_expires_at=expiry,
+        effective_permissions=["item:read", "knowledge:analysis:read"],
+    )
+    events: list[str] = []
+
+    def refresh(path: str, body: Any, **kwargs: Any) -> tuple[int, object]:
+        assert path == http._REFRESH and kwargs == {}
+        assert json.loads(body()) == {"refresh_token": REFRESH_TOKEN}
+        assert value._bearer.get_secret_value() == TOKEN
+        events.append("REFRESH")
+        return 200, refresh_reply(clock["now"])
+
+    def reader(bearer: SecretStr) -> Any:
+        assert bearer.get_secret_value() == NEXT_TOKEN
+
+        def read() -> CurrentOperator:
+            if not events or events[-1] == "REFRESH":
+                assert value._bearer.get_secret_value() == TOKEN
+            events.append("NEW_ME")
+            return expected
+
+        return SimpleNamespace(read=read)
+
+    monkeypatch.setattr(http, "_post", refresh)
+    monkeypatch.setattr(http, "FixedApiControlPrincipalReader", reader)
+    assert value.read() == expected
+    assert events == ["REFRESH", "NEW_ME"]
+    assert value._bearer.get_secret_value() == NEXT_TOKEN
+    assert value._refresh is not None and value._refresh.get_secret_value() == NEXT_REFRESH
+    assert value._authenticated_at == AUTHENTICATED_AT
+    assert value._operator_id == ACTOR and value._session_id == SESSION
+    assert value.read() == expected
+    assert events == ["REFRESH", "NEW_ME", "NEW_ME"]
+
+
+def test_long_lived_access_and_bearer_only_session_do_not_refresh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    value, clock = refresh_session(monkeypatch, remaining_seconds=181)
+    monkeypatch.setattr(http, "_post", lambda *_args, **_kw: pytest.fail("unexpected renewal"))
+    value.read()
+    bearer_only = session(monkeypatch)
+    monkeypatch.setattr(
+        bearer_only,
+        "_reader",
+        SimpleNamespace(read=lambda: principal(access_expires_at=clock["now"])),
+    )
+    with pytest.raises(ControlPlaneError) as caught:
+        bearer_only.read()
+    assert caught.value.code == "CONTROL_AUTHORIZATION_REQUIRED"
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"session_id": "apisession_" + "c" * 32},
+        {"operator_id": "operator_" + "c" * 32},
+        {"username": "other-user"},
+        {"authenticated_at": AUTHENTICATED_AT + timedelta(seconds=1)},
+        {"password_change_required": True},
+        {"access_expires_at": datetime(2100, 1, 1, tzinfo=UTC)},
+    ],
+)
+def test_rotated_me_identity_or_expiry_drift_never_installs_new_tokens(
+    monkeypatch: pytest.MonkeyPatch, changes: dict[str, Any]
+) -> None:
+    value, clock = refresh_session(monkeypatch)
+    posts: list[str] = []
+
+    def refresh(*_args: Any, **_kw: Any) -> tuple[int, object]:
+        posts.append("REFRESH")
+        return 200, refresh_reply(clock["now"])
+
+    changed = principal(**({"access_expires_at": clock["now"] + timedelta(minutes=30)} | changes))
+    monkeypatch.setattr(http, "_post", refresh)
+    monkeypatch.setattr(
+        http, "FixedApiControlPrincipalReader", lambda *_args: SimpleNamespace(read=lambda: changed)
+    )
+    for _attempt in range(2):
+        with pytest.raises(ControlPlaneError):
+            value.read()
+    assert posts == ["REFRESH"]
+    assert value._bearer.get_secret_value() == TOKEN and value._refresh_failed
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"session_id": "apisession_" + "c" * 32},
+        {"password_change_required": True},
+        {"access_token": TOKEN},
+        {"refresh_token": REFRESH_TOKEN},
+        {"refresh_token": "eom_rt_short"},
+        {"access_expires_at": "invalid-expiry"},
+        {"access_expires_at": datetime(2000, 1, 1, tzinfo=UTC).isoformat()},
+        {"refresh_expires_at": datetime(2000, 1, 1, tzinfo=UTC).isoformat()},
+    ],
+)
+def test_invalid_rotated_token_pair_is_terminal_before_new_reader(
+    monkeypatch: pytest.MonkeyPatch, changes: dict[str, Any]
+) -> None:
+    value, clock = refresh_session(monkeypatch)
+    posts: list[str] = []
+
+    def refresh(*_args: Any, **_kw: Any) -> tuple[int, object]:
+        posts.append("REFRESH")
+        return 200, refresh_reply(clock["now"], **changes)
+
+    monkeypatch.setattr(http, "_post", refresh)
+    monkeypatch.setattr(
+        http, "FixedApiControlPrincipalReader", lambda *_args: pytest.fail("reader called")
+    )
+    for _attempt in range(2):
+        with pytest.raises(ControlPlaneError):
+            value.read()
+    assert posts == ["REFRESH"] and value._bearer.get_secret_value() == TOKEN
+
+
+def test_rotated_access_ttl_must_exceed_pre_request_safety_margin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    value, clock = refresh_session(monkeypatch, remaining_seconds=180)
+    monkeypatch.setattr(
+        http,
+        "_post",
+        lambda *_args, **_kw: (
+            200,
+            refresh_reply(
+                clock["now"],
+                access_expires_at=(clock["now"] + timedelta(seconds=180)).isoformat(),
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        http, "FixedApiControlPrincipalReader", lambda *_args: pytest.fail("reader called")
+    )
+    with pytest.raises(ControlPlaneError):
+        value.read()
+    assert value._refresh_failed and value._bearer.get_secret_value() == TOKEN
+
+
+@pytest.mark.parametrize("status", [401, 403, 429, 500])
+def test_refresh_denied_or_server_failure_cannot_repeat_consumed_token(
+    monkeypatch: pytest.MonkeyPatch, status: int
+) -> None:
+    value, _clock = refresh_session(monkeypatch)
+    posts: list[str] = []
+
+    def refresh(*_args: Any, **_kw: Any) -> tuple[int, object]:
+        posts.append("REFRESH")
+        return status, {"error_code": REFRESH_TOKEN}
+
+    monkeypatch.setattr(http, "_post", refresh)
+    for _attempt in range(2):
+        with pytest.raises(ControlPlaneError) as caught:
+            value.read()
+        assert REFRESH_TOKEN not in str(caught.value) and caught.value.__cause__ is None
+    assert posts == ["REFRESH"]
+
+
+def test_unknown_refresh_network_outcome_poisoned_without_replaying_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    value, _clock = refresh_session(monkeypatch)
+    paths: list[str] = []
+
+    def uncertain(path: str, *_args: Any, **_kw: Any) -> tuple[int, object]:
+        paths.append(path)
+        raise ControlPlaneError("CONTROL_AUTH_SERVICE_UNAVAILABLE", REFRESH_TOKEN)
+
+    monkeypatch.setattr(http, "_post", uncertain)
+    for _attempt in range(2):
+        with pytest.raises(SnapshotReadFailure):
+            value.execute(ACTOR, snapshot_prepare())
+    assert paths == [http._REFRESH]
+
+
+def test_new_me_revocation_blocks_operation_and_never_installs_replacement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    value, clock = refresh_session(monkeypatch)
+    monkeypatch.setattr(http, "_post", lambda *_args, **_kw: (200, refresh_reply(clock["now"])))
+
+    def denied() -> CurrentOperator:
+        raise ControlPlaneError("CONTROL_AUTHORIZATION_REQUIRED", NEXT_TOKEN)
+
+    monkeypatch.setattr(
+        http, "FixedApiControlPrincipalReader", lambda *_args: SimpleNamespace(read=denied)
+    )
+    with pytest.raises(ControlPlaneError) as caught:
+        value.read()
+    assert caught.value.code == "CONTROL_AUTHORIZATION_REQUIRED"
+    assert NEXT_TOKEN not in str(caught.value) and value._bearer.get_secret_value() == TOKEN
+
+
+def test_refreshed_permissions_not_old_permission_cache_authorize_next_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    value, clock = refresh_session(monkeypatch)
+    refreshed = principal(access_expires_at=clock["now"] + timedelta(minutes=30))
+    monkeypatch.setattr(http, "_post", lambda *_args, **_kw: (200, refresh_reply(clock["now"])))
+    monkeypatch.setattr(
+        http,
+        "FixedApiControlPrincipalReader",
+        lambda *_args: SimpleNamespace(read=lambda: refreshed),
+    )
+    monkeypatch.setattr(http, "_get", lambda *_args, **_kw: pytest.fail("forbidden read"))
+    with pytest.raises(ControlPlaneError) as caught:
+        value._require_read_permission(PermissionKey.KNOWLEDGE_ANALYSIS_READ)
+    assert caught.value.code == "CONTROL_AUTHORIZATION_REQUIRED"
+    assert value._bearer.get_secret_value() == NEXT_TOKEN
+
+
+def test_refresh_fixed_peer_precedes_unmasking_refresh_secret(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transport = connection(monkeypatch, b"{}")
+    monkeypatch.setattr(
+        http,
+        "require_fixed_api_peer_socket",
+        lambda _sock: (_ for _ in ()).throw(ValueError("bad")),
+    )
+    with pytest.raises(ControlPlaneError):
+        http._post(http._REFRESH, lambda: pytest.fail("refresh secret materialized"))
+    assert transport.requests == [] and transport.events == ["FACTORY", "CONNECT", "CLOSE"]

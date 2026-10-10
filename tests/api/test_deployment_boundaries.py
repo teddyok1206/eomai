@@ -4,6 +4,7 @@ import ast
 import os
 import re
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -16,6 +17,25 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 def _source(relative: str) -> str:
     return (REPOSITORY_ROOT / relative).read_text(encoding="utf-8")
+
+
+def _catalog_resource_inventory(source: str) -> dict[str, str]:
+    start = source.index("inspect_release() {")
+    start = source.index("<<'PY'\n", start) + len("<<'PY'\n")
+    end = source.index("\nPY\n", start)
+    function = next(
+        node
+        for node in ast.parse(source[start:end]).body
+        if isinstance(node, ast.FunctionDef) and node.name == "catalog_resources_from_registry"
+    )
+    # Run only the pure data reader, never imports or the deployment entrypoint.
+    namespace: dict[str, object] = {"ast": ast}
+    exec(
+        compile(ast.Module(body=[function], type_ignores=[]), "Catalog inventory", "exec"),
+        namespace,
+    )
+    reader = cast(Callable[[str], dict[str, str]], namespace[function.name])
+    return reader(_source("packages/catalog_contracts/eom_catalog_contracts/validation.py"))
 
 
 def _image_resource_inventory(source: str) -> dict[str, str]:
@@ -102,10 +122,10 @@ def test_deploy_release_uses_only_noninteractive_sudo() -> None:
     assert "eom-codex-auth identity must be deployed before the API unit" in source
     assert 'source "${RELEASE_OPERATOR_LIBRARY}"' in source
     assert 'run_release_operator MIGRATION_VERIFY "${COMMIT}"' in source
-    assert (
-        '"legacy-assessment/legacy-item-extraction-batch-v2.schema.json": '
-        '"schemas/legacy-assessment/legacy-item-extraction-batch-v2.schema.json"'
-    ) in source
+    catalog = _catalog_resource_inventory(source)
+    assert catalog["legacy-assessment/legacy-item-extraction-batch-v2.schema.json"] == (
+        "schemas/legacy-assessment/legacy-item-extraction-batch-v2.schema.json"
+    )
     for resource in (
         "science-assessment-metadata-resolution-v1.schema.json",
         "science-assessment-web-acquisition-v1.schema.json",
@@ -113,8 +133,7 @@ def test_deploy_release_uses_only_noninteractive_sudo() -> None:
         "science-assessment-web-corpus-manifest-v2.schema.json",
         "science-assessment-web-corpus-plan-v1.schema.json",
     ):
-        assert f'"legacy-assessment/{resource}": ' in source
-        assert f'"schemas/legacy-assessment/{resource}"' in source
+        assert catalog[f"legacy-assessment/{resource}"] == f"schemas/legacy-assessment/{resource}"
     # Run only the build-time, side-effect-free resource expression. This checks
     # the actual inventory rather than requiring duplicated literal map entries.
     inventory = _image_resource_inventory(source)
@@ -218,6 +237,7 @@ def test_openapi_export_uses_repository_source_not_installed_runtime() -> None:
 
 def test_api_release_verifies_knowledge_contract_resources() -> None:
     source = _source("scripts/api/deploy_release.sh")
+    catalog = _catalog_resource_inventory(source)
 
     for required in (
         "eom_catalog_contracts/knowledge.py",
@@ -355,7 +375,10 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "legacy-usage/legacy-usage-row-proposal-v1.schema.json",
         "legacy-usage/product-usage-graph-projection-v1.schema.json",
     ):
-        assert required in source
+        if required.endswith(".schema.json"):
+            assert required in catalog
+        else:
+            assert required in source
     for required in (
         "eom_api/routers/knowledge_analysis.py",
         "eom_api/services/catalog_application_client.py",
@@ -776,6 +799,7 @@ def test_release_verifies_emergency_admin_recovery_installed_wheel_boundary() ->
 
 def test_release_verifies_educational_document_schema_resources() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
+    catalog = _catalog_resource_inventory(deployment)
 
     for resource in (
         "educational-document-registration-receipt-v1.schema.json",
@@ -784,20 +808,22 @@ def test_release_verifies_educational_document_schema_resources() -> None:
         "educational-document-rights-attestation-v1.schema.json",
         "educational-document-types-v1.schema.json",
     ):
-        assert f'"educational-document/{resource}": ' in deployment
-        assert f'"schemas/educational-document/{resource}"' in deployment
+        assert catalog[f"educational-document/{resource}"] == (
+            f"schemas/educational-document/{resource}"
+        )
 
 
 def test_release_verifies_curriculum_schema_resources() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
+    catalog = _catalog_resource_inventory(deployment)
     resource = "integrated-science-editorial-outline-v1.schema.json"
 
-    assert f'"curriculum/{resource}": ' in deployment
-    assert f'"schemas/curriculum/{resource}"' in deployment
+    assert catalog[f"curriculum/{resource}"] == (f"schemas/curriculum/{resource}")
 
 
 def test_release_verifies_mock_exam_assembly_protocol_and_policy_resources() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
+    catalog = _catalog_resource_inventory(deployment)
 
     for resource in (
         "mock-exam-assembly-cohort-v1.schema.json",
@@ -814,8 +840,9 @@ def test_release_verifies_mock_exam_assembly_protocol_and_policy_resources() -> 
         "mock-exam-layout-policy-v1.schema.json",
         "mock-exam-rating-policy-v1.schema.json",
     ):
-        assert f'"assessment-assembly/{resource}": ' in deployment
-        assert f'"schemas/assessment-assembly/{resource}"' in deployment
+        assert catalog[f"assessment-assembly/{resource}"] == (
+            f"schemas/assessment-assembly/{resource}"
+        )
     assert "integrated-science-mock-exam-assembly-v1.json" in deployment
     assert "integrated-science-mock-exam-layout-v1.json" in deployment
     assert "integrated-science-item-rating-v1.json" in deployment
@@ -845,6 +872,7 @@ def test_release_verifies_mock_exam_assembly_protocol_and_policy_resources() -> 
 
 def test_release_verifies_mock_exam_production_protocol_resources() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
+    catalog = _catalog_resource_inventory(deployment)
 
     assert '"pdf-document-review-control-bootstrap-v3"' in deployment
     assert '"pdf-document-review-control-bootstrap-v4"' in deployment
@@ -869,14 +897,14 @@ def test_release_verifies_mock_exam_production_protocol_resources() -> None:
         "mock-exam-review-eligibility-result-v2.schema.json",
         "mock-exam-review-eligibility-result-v3.schema.json",
     ):
-        assert f'"assessment-assembly/{resource}": ' in deployment
-        assert f'"schemas/assessment-assembly/{resource}"' in deployment
+        assert catalog[f"assessment-assembly/{resource}"] == (
+            f"schemas/assessment-assembly/{resource}"
+        )
     for resource in (
         "approved-item-graph-publication-command-v1.schema.json",
         "approved-item-graph-publication-result-v1.schema.json",
     ):
-        assert f'"knowledge/{resource}": ' in deployment
-        assert f'"schemas/knowledge/{resource}"' in deployment
+        assert catalog[f"knowledge/{resource}"] == (f"schemas/knowledge/{resource}")
     for resource in (
         "catalog-application-request-v11.schema.json",
         "catalog-application-response-v11.schema.json",
@@ -892,8 +920,9 @@ def test_release_verifies_mock_exam_production_protocol_resources() -> None:
         "catalog-application-request-v19.schema.json",
         "catalog-application-response-v18.schema.json",
     ):
-        assert f'"catalog-application/{resource}": ' in deployment
-        assert f'"schemas/catalog-application/{resource}"' in deployment
+        assert catalog[f"catalog-application/{resource}"] == (
+            f"schemas/catalog-application/{resource}"
+        )
 
     for resource in (
         "pdf-document-review-intake-request-v1.schema.json",
@@ -901,11 +930,11 @@ def test_release_verifies_mock_exam_production_protocol_resources() -> None:
         "pdf-document-review-page-media-request-v1.schema.json",
         "pdf-document-review-page-media-response-v1.schema.json",
     ):
-        assert f'"catalog-application/{resource}": ' in deployment
-        assert f'"schemas/catalog/catalog-application/{resource}"' in deployment
-    assert '"document-review/pdf-document-review-intake-manifest-v1.schema.json": ' in deployment
-    assert (
-        '"schemas/document-review/pdf-document-review-intake-manifest-v1.schema.json"' in deployment
+        assert catalog[f"catalog-application/{resource}"] == (
+            f"schemas/catalog/catalog-application/{resource}"
+        )
+    assert catalog["document-review/pdf-document-review-intake-manifest-v1.schema.json"] == (
+        "schemas/document-review/pdf-document-review-intake-manifest-v1.schema.json"
     )
     for runtime in (
         "eom_catalog_contracts/document_review.py",
@@ -928,8 +957,9 @@ def test_release_verifies_mock_exam_production_protocol_resources() -> None:
         "document-review-hwpx-correction-media-request-v1.schema.json",
         "document-review-hwpx-correction-media-response-v1.schema.json",
     ):
-        assert f'"catalog-application/{resource}": ' in deployment
-        assert f'"schemas/catalog/catalog-application/{resource}"' in deployment
+        assert catalog[f"catalog-application/{resource}"] == (
+            f"schemas/catalog/catalog-application/{resource}"
+        )
     for resource in (
         "document-review-intake-manifest-v2.schema.json",
         "document-review-source-upload-manifest-v1.schema.json",
@@ -938,16 +968,17 @@ def test_release_verifies_mock_exam_production_protocol_resources() -> None:
         "document-review-hwpx-correction-plan-v1.schema.json",
         "document-review-hwpx-correction-result-v1.schema.json",
     ):
-        assert f'"document-review/{resource}": ' in deployment
-        assert f'"schemas/document-review/{resource}"' in deployment
+        assert catalog[f"document-review/{resource}"] == (f"schemas/document-review/{resource}")
 
     recovery_resource = "legacy-item-extraction-validation-recovery-v1.schema.json"
-    assert f'"legacy-assessment/{recovery_resource}": ' in deployment
-    assert f'"schemas/legacy-assessment/{recovery_resource}"' in deployment
+    assert catalog[f"legacy-assessment/{recovery_resource}"] == (
+        f"schemas/legacy-assessment/{recovery_resource}"
+    )
 
 
 def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
+    catalog = _catalog_resource_inventory(deployment)
     # The release gate now derives its inventory from canonical schemas. A
     # hard-coded count/literal list was stale before this feature and cannot
     # protect additive resources or missing packaged predecessors.
@@ -993,21 +1024,17 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert "document-review-annotation-v2.schema.json" in expected
     assert '"eom_catalog_service/document_review_pdf_annotation.py"' in deployment
     assert '"eom_catalog_service/document_review_pdf_annotation_service.py"' in deployment
-    assert '"document-review/document-review-pdf-annotation-manifest-v1.schema.json"' in deployment
-    assert '"document-review/document-review-pdf-annotation-manifest-v2.schema.json"' in deployment
-    assert '"document-review/document-review-pdf-annotation-result-v1.schema.json"' in deployment
-    assert '"document-review/document-review-pdf-annotation-result-v2.schema.json"' in deployment
-    assert (
-        '"catalog-application/document-review-pdf-annotation-request-v2.schema.json"' in deployment
-    )
-    assert (
-        '"catalog-application/document-review-pdf-annotation-request-v3.schema.json"' in deployment
-    )
-    assert (
-        '"catalog-application/document-review-pdf-annotation-response-v2.schema.json"' in deployment
-    )
-    assert '"catalog-application/document-review-evidence-request-v1.schema.json"' in deployment
-    assert '"document-review/document-review-evidence-plan-v1.schema.json"' in deployment
+    assert {
+        "document-review/document-review-pdf-annotation-manifest-v1.schema.json",
+        "document-review/document-review-pdf-annotation-manifest-v2.schema.json",
+        "document-review/document-review-pdf-annotation-result-v1.schema.json",
+        "document-review/document-review-pdf-annotation-result-v2.schema.json",
+        "catalog-application/document-review-pdf-annotation-request-v2.schema.json",
+        "catalog-application/document-review-pdf-annotation-request-v3.schema.json",
+        "catalog-application/document-review-pdf-annotation-response-v2.schema.json",
+        "catalog-application/document-review-evidence-request-v1.schema.json",
+        "document-review/document-review-evidence-plan-v1.schema.json",
+    } <= catalog.keys()
     operator = _source("scripts/api/release_operator_runtime.py")
     assert 'run_release_operator PDF_RUNTIME_VERIFY "${COMMIT}"' in deployment
     assert 'importlib.metadata.version("PyMuPDF") != "1.26.7"' in operator
@@ -1023,6 +1050,7 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
 
 def test_release_verifies_assessment_occurrence_graph_schema_resources() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
+    catalog = _catalog_resource_inventory(deployment)
 
     for resource in (
         "item-origin/assessment-occurrence-revision-v2.schema.json",
@@ -1032,16 +1060,15 @@ def test_release_verifies_assessment_occurrence_graph_schema_resources() -> None
         "knowledge/knowledge-graph-snapshot-manifest-v8.schema.json",
         "knowledge/knowledge-graph-structure-manifest-v5.schema.json",
     ):
-        assert f'"{resource}": ' in deployment
-        assert f'"schemas/{resource}"' in deployment
+        assert catalog[resource] == f"schemas/{resource}"
 
 
 def test_release_verifies_guidance_schema_resources() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
+    catalog = _catalog_resource_inventory(deployment)
     resource = "eom-guidance-markdown-control-v1.schema.json"
 
-    assert f'"guidance/{resource}": ' in deployment
-    assert f'"schemas/guidance/{resource}"' in deployment
+    assert catalog[f"guidance/{resource}"] == (f"schemas/guidance/{resource}")
 
 
 def test_release_isolated_verifier_compiles_all_knowledge_analysis_definitions() -> None:
@@ -1138,6 +1165,7 @@ def test_release_verifies_content_team_v3_installed_wheel_boundary() -> None:
 
 def test_release_verifies_legacy_item_extraction_runtime_and_contracts() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
+    catalog = _catalog_resource_inventory(deployment)
 
     for runtime_member in (
         "eom_orchestrator/legacy_item_extraction_artifact.py",
@@ -1188,8 +1216,7 @@ def test_release_verifies_legacy_item_extraction_runtime_and_contracts() -> None
         "legacy-assessment/legacy-item-editorial-compatibility-proposal-v1.schema.json",
         "legacy-assessment/legacy-item-editorial-compatibility-result-v1.schema.json",
     ):
-        assert f'"{resource}"' in deployment
-        assert f'"schemas/{resource}"' in deployment
+        assert catalog[resource] == f"schemas/{resource}"
     assert '"config/workflows/legacy-item-extraction.v1.yaml"' in deployment
     assert '"config/workflows/legacy-item-editorial-compatibility.v1.yaml"' in deployment
     assert 'load_role_input_schema("support", "workflow-role/1.14.0")' in deployment

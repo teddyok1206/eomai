@@ -202,3 +202,32 @@ strict PASS다. 사람 점수표/context/GUI 추가 구현은 0이다.
 SOURCE_CANDIDATE=VERIFIED, LIVE_SUCCESSOR=NOT_INSTALLED,
 ACTUAL_READ_AFTER_FIX=PENDING, CORPUS_CPU_FORWARD=NOT_EXECUTED,
 BOUNDED_CODEX_PAIR=NOT_EXECUTED, HUMAN_TRANSFER_REVIEW=NOT_EVALUATED/NOT_REQUIRED다.
+
+### 정상 release build의 추가 검증
+
+source `64f5f31e7382f1875d1744c89bb4268d3d96672b`를 GitHub에 반영한 뒤 정상
+`deploy_release.sh --build-only`를 실행했다. wheel RECORD 검증은 PASS였으나 독립
+installer의 Catalog schema 수기 inventory가 새 invocation/pair-result/workflow-binding
+1.1 리소스 세 개를 누락해 build 검사가 거부됐다. 실패한 build
+`/tmp/eom-api-build/64f5f31e7382f1875d1744c89bb4268d3d96672b.afpg7Z`는 보존한다.
+이 실행은 build-only이며 admission·package install·service 변경·DB 변경·모델 실행은 0이다.
+앞의 source suite PASS를 정상 installer PASS로 확대하지 않는다. 기존 authoritative
+inventory와 독립 설치 simulation을 일치시킨 successor에서 정상 build를 다시 검증한다.
+
+### Installer inventory와 장시간 owner session 보완
+
+수기 Catalog 목록을 기존 frozen registry의 데이터만 AST로 읽는 exact inventory로
+대체했다. source 코드를 import/실행하지 않으며 wheel member 집합·canonical bytes·RECORD,
+격리 설치의 public inventory equality와 old/new workflow family 검증을 유지한다.
+독립 읽기 검토에서 구체적 차단 결함은 발견되지 않았다.
+
+실측 첫 READ 약 96초와 16개 단위 520개 조회는 access token 기본 TTL 1,800초를
+넘길 수 있다. [owner session refresh 설계](ITEM_INFERENCE_TRANSFER_SESSION_REFRESH.md)에
+따라 기존 공식 refresh와 `/me`를 재사용했다. 같은 operator/session/authenticated_at을
+검증하고 실제 현재 권한을 다시 읽으며, unknown refresh 결과나 snapshot POST를 자동
+재전송하지 않는다. TTL·fresh-auth·DB·권한·worker protocol은 바꾸지 않는다.
+
+두 변경을 포함한 fresh 통합 focused 검증은 **291 PASS / 5.09초**다. 처음 잘못된
+test 파일명을 지정한 invocation은 collection 0으로 종료했고, 존재하는 일곱 파일로
+바로잡아 실행했다. 하위 suite 숫자와 합산하지 않는다. 운영 설치·실제 READ·CPU와
+pair 완료는 이 source 결과와 별개다. 사용자 지시에 따라 사람 평가는 요구하지 않는다.
