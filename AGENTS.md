@@ -28,6 +28,8 @@ These rules apply to all future Codex and automation work in `/home/eom/EOM`.
 
 ## Development Progress Reporting
 
+- Every Slack development report must start with a one-sentence Korean summary of that report,
+  before any status, phase, technical details, or other metadata.
 - When the development reporter is enabled, send reports only at important milestones.
 - The Slack development reporter is not a production runtime feature.
 - Slack failure must not block development, tests, commits, or runtime workflows.
