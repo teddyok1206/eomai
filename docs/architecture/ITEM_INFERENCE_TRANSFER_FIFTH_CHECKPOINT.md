@@ -152,6 +152,29 @@ Source 검사 결과를 이전 또는 아직 설치되지 않은 release의 live
 권한 검증에 맞춰 fixture의 0644를 명시하지 않은 문제였다. 수정한 소스를 동결한 뒤 전체
 78개 파일을 다시 실행한 결과가 위의 최종 PASS다. 생산 권한 검사는 완화하지 않았다.
 
+### 후속 후보의 실제 build-only
+
+2026-10-10 11:52 UTC, 기존 `scripts/api/deploy_release.sh --build-only` PASS.
+신규 owner/CPU runtime 파일·invocation schema inventory, installed-layout 및 wheel RECORD 검증을
+통과했다. 아래 build source 뒤에 이 evidence를 추가하는 문서 commit은 별도 identity다.
+
+- source commit: `d0522b60f637c2998e79e2fa7a05fe4499614413`
+- source tree: `3e7e92644cbe117eb64cc4f8ebe6e8cf746bebbb`
+- wheel directory: `/tmp/eom-api-build/d0522b60f637c2998e79e2fa7a05fe4499614413.UqiSnh/dist`
+- 실제 wheel METADATA: `Provides-Extra: inference-transfer`,
+  `Requires-Dist: eom-api-contracts==0.1.0; extra == "inference-transfer"` 확인.
+
+| Wheel | SHA-256 |
+|---|---|
+| `eom_api_contracts-0.1.0-py3-none-any.whl` | `0950af0f9a5c4905bc153db80f46e5f803ac770a04ed50c4d0640c46addd2b50` |
+| `eom_application_api-0.1.0-py3-none-any.whl` | `82ca4dd9222d1fde4074315663b318dcab093b7ecab8ccd861dfff89473e5b00` |
+| `eom_platform-0.1.0-py3-none-any.whl` | `04ae0b5e601124b48fbe89ba0b1777e9f6bb706d391dedc62ca1833efa0ce0c9` |
+
+Build는 보호 CPU environment/user/unit/runtime 디렉터리 설치나 현재 API/Catalog/Runner 교체가
+아니다. 실제 설치·인증·PREPARE/별도 RELEASE·corpus 비용/Graph 비교·bounded worker/human 평가에
+필요한 운영 승인과 actual operator 인증이 계속 남는다. 승인 대기를 source 성공이나 overall
+goal 완료로 바꾸지 않는다.
+
 ## 남은 경계
 
 1. 실제 인증 operator의 installed snapshot API 호출과 권한 범위 확정.
