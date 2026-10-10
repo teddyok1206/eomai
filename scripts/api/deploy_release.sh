@@ -2922,7 +2922,7 @@ install_service() {
   verify_workflow_runner_deployment_hold
   wait_for_health
   printf 'runtime_isolation_verifier_invocation=START\n'
-  sudo -n "${RUNTIME_VERIFIER_TARGET}"
+  run_release_operator API_ISOLATION_VERIFY "${COMMIT}"
   record_release
   if [[ "${PRESERVE_WORKFLOW_RUNNER_INACTIVE}" == true ]]; then
     printf '%s\n' "Authenticated smoke deferred while the Workflow runner hold is active."

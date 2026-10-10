@@ -2,8 +2,8 @@
 
 Status: source implementation and synthetic/source tests completed; not installed
 or operational acceptance.
-This removable adapter covers the exact `20261010_0051` release migration and existing
-runtime-role reconciliation. It is not a worker runtime, a new migration engine, or a
+This removable adapter covers the exact `20261010_0051` release migration, existing
+runtime-role reconciliation and fixed API isolation verification. It is not a worker runtime, a new migration engine, or a
 permission grant. Build-only release behavior remains unchanged.
 
 ## Required design (eleven points)
@@ -29,7 +29,7 @@ permission grant. Build-only release behavior remains unchanged.
    and duplicate rejection. No new database table/index is needed.
 7. **Complexity/scale.** Initial admission is O(B+N), hashing immutable runtime/source
    bytes once. Subsequent callbacks perform O(N) ownership/mode/link checks plus
-   bounded context/receipt and installed RECORD checks, not six O(B) runtime hashes.
+   bounded context/receipt and installed RECORD checks, not seven O(B) runtime hashes.
    This avoids repeating the measured approximately 79-second runtime fingerprint.
    GNU `find` checks UID/type/mode/link-count in one native traversal; regular
    members do not fork multiple `stat` processes. Only the much smaller symlink
@@ -60,7 +60,8 @@ permission grant. Build-only release behavior remains unchanged.
 ## Closed invocation surface
 
 Callbacks are `MIGRATION_VERIFY`, `MIGRATION_UPGRADE_0051`, `API_ROLE_BOOTSTRAP`,
-`CATALOG_ROLE_RECONCILE`, `HWPX_ROLE_RECONCILE`, and `PDF_RUNTIME_VERIFY`.
+`CATALOG_ROLE_RECONCILE`, `HWPX_ROLE_RECONCILE`, `PDF_RUNTIME_VERIFY`, and
+`API_ISOLATION_VERIFY`.
 Only `ADMIT` may hash/publish the operator receipt. No callback accepts a command,
 actor, database URL, secret filename, migration revision or arbitrary source root.
 
@@ -140,6 +141,20 @@ epoch checks. Existing developer-owned API parents are not changed. This is a
 data-only equivalence check, not privileged execution or ownership admission of
 the legacy API interpreter.
 
+`API_ISOLATION_VERIFY` closes the existing default deploy's last root invocation
+of the developer-owned API Python entry point. It calls the already public
+`eom_api.runtime_isolation_verifier.verify_runtime_isolation()` from the admitted
+interpreter and exact staged API wheel. The unchanged verifier owns its pidfd,
+fixed service/namespace identity, probe inventory and result validation. Its fixed
+child enters the pinned mount namespace and drops UID, GID and capabilities with
+`setpriv` before executing the API interpreter. The callback accepts no service,
+PID, child command or probe override, does not read PostgreSQL configuration, and
+does not treat the protected parent's UID as the service's access permission.
+Any verifier exception or invalid return becomes a bounded fail-closed code.
+This adds one closed callback, not a new verifier or supervisor. Installing the
+legacy standalone shell remains compatible, but default deployment no longer
+executes that shell's mutable interpreter as root.
+
 Callbacks have a 180-second process limit (TERM, ten seconds before KILL). Fixed
 libpq limits apply to every callback connection: connect 15 seconds, DDL lock five
 seconds and statement 120 seconds. The unchanged native Alembic environment opens
@@ -175,5 +190,5 @@ quality, human transfer quality, authenticated API activation or a complete rele
 
 This patch does not assert that every historical privileged shell/metadata helper
 in the release script has been redesigned. The root-private launcher is the new
-boundary for these six callbacks only; existing release checks and service
+boundary for these seven callbacks only; existing release checks and service
 installation still need their established reviewed operator execution context.

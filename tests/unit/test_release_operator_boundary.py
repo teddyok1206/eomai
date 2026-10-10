@@ -126,6 +126,8 @@ def test_callback_surface_changes_neither_migration_meaning_nor_default_build_pa
     assert boundary.index("/usr/bin/sha256sum") < boundary.index("/usr/bin/sudo")
     assert "RELEASE_OPERATOR_TIMEOUT_STATE_UNKNOWN" in boundary
     assert "API_PYTHON" not in boundary and "PYTHONPATH" not in boundary
+    assert 'run_release_operator API_ISOLATION_VERIFY "${COMMIT}"' in deployment
+    assert 'sudo -n "${RUNTIME_VERIFIER_TARGET}"' not in deployment
 
 
 def test_all_changed_shells_parse_without_execution() -> None:

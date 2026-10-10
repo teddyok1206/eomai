@@ -20,9 +20,9 @@
 |---|---|---|
 | 기존 공유 API/platform | 설치 source `83884224651d8b9516a7a54370077757138c518c` | 새 비교 owner API는 아직 이 설치에 활성화하지 않음 |
 | 운영 PostgreSQL | 마지막 read-only head `20261009_0050` | source의 `20261010_0051` 적용 전 |
-| 별도 CPU Conda | `/opt/eom/conda/envs/eom-embedding-experiment` 보호 snapshot 발행 완료 | 격리 probe와 실제 corpus 실험은 별도 gate |
+| 별도 CPU Conda | `/opt/eom/conda/envs/eom-embedding-experiment` 보호 snapshot 발행·승인된 격리 probe PASS | 실제 corpus 실험은 별도 gate |
 | CPU platform | `06134fcd91413a957ac3133db062dbcdd525ee15` wheel에서 비편집 설치 | d291 candidate와 1,361개 payload member가 일치함; source 표기는 원래 설치값 유지 |
-| 현재 API build-only 후보 | `d2917ba448f21b86e7731d8477e802c658c2e106` | 후속 source 수정 중; 아직 공유 운영 설치하지 않음 |
+| 최초 API build-only 후보 | `d2917ba448f21b86e7731d8477e802c658c2e106` | 후속 source 수정 이력; 아직 공유 운영 설치하지 않음 |
 
 Component들이 같은 commit이어야 한다고 가정하지 않는다. 실제 파일·wheel·contract
 호환성과 설치 provenance를 따로 기록한다. build-only 결과를 live release로 부르지 않는다.
@@ -103,13 +103,33 @@ garbage collection 뒤 fresh 상태를 확인하고 동일 reviewed driver의 �
 일치와 설치/RECORD/model hash, 실제 identity/network/file/socket negative 검증이 통과했다.
 model load/forward 0이다. 첫 실패 journal과 위 receipt를 보존하며 자동 재실행은 없다.
 
+실제 journal에서도 `IDENTITY=PASS`, `RUNTIME_RECORD=PASS`, `NETWORK=PASS`,
+`MODEL_SNAPSHOT=PASS`, `nas=DENIED`, `repository=DENIED`,
+`postgres=ABSENT_IN_SANDBOX`, `docker=DENIED`, `MODEL_FORWARD_COUNT=0`을 확인했다.
+
+### 보호 CPU와 후속 후보의 byte 호환성
+
+`16798a34d9ab2b38844724a645645377f2e9f1f4`의 build-only wheel을 실제 설치 CPU와
+읽기 전용으로 비교했다. 수치 계산·정적 EOM import closure와 Catalog schema resources
+345/345, handoff/launch closure 118/118, owner execution/invocation/staging/artifacts
+4/4 member가 일치했다. 수치 group의 sorted member/hash/equality canonical JSON hash는
+`0d240e8bfaf7dc6933348212c51bcf417f456450f2a16f2913bc6700cca2c65b`, handoff group은
+`72f70fe6cc4e29ddce09ebf22c9474fbf3b6ee969a0ca1b0cb103b323784bd61`이다.
+
+후속 owner HTTP 비교 제출/조회, verifier의 추가 진단, installation preflight 세 모듈은
+다르다. 전체 CPU platform이 최신이라고 주장하지 않는다. 실제 HTTP/control/비교 owner는
+새 호환 공유 runtime을 사용하고 CPU는 동일한 수치/handoff 경계만 사용한다. 이 검사는
+모델·service·probe를 실행하지 않았다.
+
 ## 현재 source 회귀 검증
 
-최종 동결 source에 대해 94개 test 파일 **2,582 PASS / 89.50초**, Ruff check/format
+최종 동결 source에 대해 94개 test 파일 **2,587 PASS / 89.38초**, Ruff check/format
 46개 파일 PASS, strict mypy production 25개 파일 PASS, Bash syntax/diff 검사 PASS다.
 최초 통합 실행은 동시 source/test guard 정렬 중 이전 assertions 두 개가 실패했다
 (2,578 PASS / 2 FAIL). 전체 동결 뒤 다시 실행한 결과를 위 최종 gate로 기록한다.
-앞선 overlapping focused suite 수를 합산해 고유 테스트 수로 과장하지 않는다.
+이후 닫힌 API 격리 callback을 추가하는 과정의 이전 six-callback 기대값 하나는
+2,586 PASS / 1 FAIL로 확인해 갱신하고, 같은 94개 파일을 전부 다시 실행했다.
+앞선 2,582 PASS 및 overlapping focused suite 수를 합산해 고유 테스트 수로 과장하지 않는다.
 
 ## 운영 변경 경계
 
@@ -123,6 +143,13 @@ quiescence를 다시 확인한다. historical failed/terminal row와 실제 실�
 만들지 않는다. root-private reviewed source/wheels/context와 보호 interpreter를 먼저 입장시키고,
 exact `20261010_0051` 및 기존 role reconciliation만 허용한다. 아직 실제 DB migration이나
 공유 service 중지·교체를 수행하지 않았다.
+
+마지막 배포 검사도 기존 API verifier의 public `verify_runtime_isolation()`을 보호된
+interpreter와 admitted wheel에서 호출하도록 같은 adapter의 닫힌 callback에 연결했다.
+이 검사는 DB secret을 읽지 않는다. 기존 fixed child는 service namespace 입장 후
+`setpriv`로 실제 API UID에 내려간 **뒤** API interpreter를 실행한다. 격리 기준이나
+service 권한은 바꾸지 않는다. 변경 가능한 API console entrypoint를 root로 실행하는
+기존 배포 경로는 사용하지 않는다.
 
 ## 남은 실제 실험과 사람 검토
 

@@ -569,6 +569,7 @@ def test_release_operator_boundary_requires_explicit_pins_without_unsafe_fallbac
         "CATALOG_ROLE_RECONCILE",
         "HWPX_ROLE_RECONCILE",
         "PDF_RUNTIME_VERIFY",
+        "API_ISOLATION_VERIFY",
     }
     assert admitted_callbacks == set(
         callback.partition('case "$callback" in')[2].partition(") ;;")[0].strip().split("|")
@@ -733,11 +734,12 @@ def test_release_installs_runtime_verifier_and_packages_fixed_helper() -> None:
         in deployment
     )
     assert '"${RUNTIME_VERIFIER_SOURCE}" "${RUNTIME_VERIFIER_TARGET}"' in deployment
-    assert 'sudo -n "${RUNTIME_VERIFIER_TARGET}"' in deployment
+    assert 'sudo -n "${RUNTIME_VERIFIER_TARGET}"' not in deployment
+    assert 'run_release_operator API_ISOLATION_VERIFY "${COMMIT}"' in deployment
     invocation_marker = "runtime_isolation_verifier_invocation=START"
     assert invocation_marker in deployment
     assert deployment.index(invocation_marker) < deployment.index(
-        'sudo -n "${RUNTIME_VERIFIER_TARGET}"'
+        'run_release_operator API_ISOLATION_VERIFY "${COMMIT}"'
     )
     assert '"eom_api/runtime_isolation_verifier.py"' in deployment
     assert '"eom_api/runtime_isolation_pidfd.py"' in deployment

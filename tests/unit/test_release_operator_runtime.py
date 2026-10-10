@@ -8,6 +8,7 @@ import json
 import os
 import stat
 import subprocess
+import sys
 import tarfile
 import zipfile
 from collections.abc import Iterator
@@ -537,6 +538,7 @@ def test_closed_callback_enum_and_bootstrap_relative_source_are_not_generic_fram
         "CATALOG_ROLE_RECONCILE",
         "HWPX_ROLE_RECONCILE",
         "PDF_RUNTIME_VERIFY",
+        "API_ISOLATION_VERIFY",
     }
     for relative in (
         "scripts/catalog/bootstrap_runtime_role.py",
@@ -557,3 +559,85 @@ def test_metadata_scan_uses_one_native_predicate_pass_not_per_member_stat_forks(
     assert "stat " not in metadata_scan
     assert 'find -P "$PREFIX" -type l -print0' in metadata_scan
     assert "/usr/bin/timeout --signal=TERM --kill-after=10s 180s" in source
+
+
+@pytest.mark.parametrize("outcome", ("pass", "native-failure", "invalid-return", "build-drift"))
+def test_api_isolation_uses_public_staged_verifier_without_database_or_root_api_child(
+    synthetic_stage: tuple[Path, operator.OperatorContext, str],
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: str,
+) -> None:
+    from eom_api import build_info, runtime_isolation_verifier
+    from eom_orchestrator import database
+
+    path, context, _digest = synthetic_stage
+    monkeypatch.setattr(
+        build_info,
+        "get_build_info",
+        lambda: SimpleNamespace(
+            source_commit="f" * 40 if outcome == "build-drift" else context.source_commit,
+            source_tree=context.source_tree,
+            source_archive_sha256=context.source_archive_sha256,
+        ),
+    )
+    forbidden_secret_read = Mock(side_effect=AssertionError("no database secret read"))
+    forbidden_engine = Mock(side_effect=AssertionError("no database connection"))
+    forbidden_child = Mock(side_effect=AssertionError("no mutable root interpreter"))
+    monkeypatch.setattr(operator, "check_postgres_environment", forbidden_secret_read)
+    monkeypatch.setattr(database, "build_engine", forbidden_engine)
+    monkeypatch.setattr(subprocess, "run", forbidden_child)
+    verifier = Mock(
+        return_value=(
+            object()
+            if outcome == "invalid-return"
+            else runtime_isolation_verifier.VerificationReport(())
+        ),
+    )
+    if outcome == "native-failure":
+        verifier.side_effect = RuntimeError("uncontrolled native exception must not escape")
+    monkeypatch.setattr(runtime_isolation_verifier, "verify_runtime_isolation", verifier)
+    if outcome == "pass":
+        operator.run_callback(path.parent, context, operator.Callback.API_ISOLATION_VERIFY)
+    else:
+        code = "BUILD_MISMATCH" if outcome == "build-drift" else "API_ISOLATION_INVALID"
+        with pytest.raises(operator.OperatorRuntimeError, match=code):
+            operator.run_callback(path.parent, context, operator.Callback.API_ISOLATION_VERIFY)
+    assert sys.path[0] == str(path.parent / "site-packages")
+    if outcome == "build-drift":
+        verifier.assert_not_called()
+    else:
+        verifier.assert_called_once_with()
+    forbidden_secret_read.assert_not_called()
+    forbidden_engine.assert_not_called()
+    forbidden_child.assert_not_called()
+
+
+def test_api_isolation_callback_sanitizes_uncontrolled_failure_output(
+    synthetic_stage: tuple[Path, operator.OperatorContext, str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path, context, digest = synthetic_stage
+    monkeypatch.setattr(operator, "verify_admission", lambda *_args: None)
+    monkeypatch.setattr(sys, "prefix", str(context.runtime_prefix))
+
+    def fail(*_args: object) -> None:
+        raise operator.OperatorRuntimeError("RELEASE_OPERATOR_API_ISOLATION_INVALID") from (
+            RuntimeError("uncontrolled child/native failure payload")
+        )
+
+    monkeypatch.setattr(operator, "run_callback", fail)
+    result = operator.main(
+        [
+            "EXECUTE",
+            str(context.runtime_prefix),
+            context.runtime_tree_sha256,
+            str(path),
+            digest,
+            "API_ISOLATION_VERIFY",
+            context.source_commit,
+        ]
+    )
+    output = capsys.readouterr()
+    assert result == 1 and output.out == ""
+    assert output.err == "RELEASE_OPERATOR_API_ISOLATION_INVALID\n"

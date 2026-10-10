@@ -68,6 +68,7 @@ ERROR_CODES = frozenset(
         "RELEASE_OPERATOR_RUNTIME_MISMATCH",
         "RELEASE_OPERATOR_TIMEOUT_STATE_UNKNOWN",
         "RELEASE_OPERATOR_POSTGRES_ENVIRONMENT_INVALID",
+        "RELEASE_OPERATOR_API_ISOLATION_INVALID",
     }
 )
 
@@ -83,6 +84,7 @@ class Callback(StrEnum):
     CATALOG_ROLE_RECONCILE = "CATALOG_ROLE_RECONCILE"
     HWPX_ROLE_RECONCILE = "HWPX_ROLE_RECONCILE"
     PDF_RUNTIME_VERIFY = "PDF_RUNTIME_VERIFY"
+    API_ISOLATION_VERIFY = "API_ISOLATION_VERIFY"
 
 
 @dataclass(frozen=True)
@@ -523,7 +525,7 @@ def run_callback(stage: Path, context: OperatorContext, callback: Callback) -> N
     ):
         raise OperatorRuntimeError("RELEASE_OPERATOR_BUILD_MISMATCH")
     source = stage / "source"
-    if callback != Callback.PDF_RUNTIME_VERIFY:
+    if callback not in (Callback.PDF_RUNTIME_VERIFY, Callback.API_ISOLATION_VERIFY):
         check_postgres_environment()
     # Fixed libpq limits reach both the owner preflight and native Alembic's
     # separately created connection; no DB/session setting or role is persisted.
@@ -612,6 +614,20 @@ def run_callback(stage: Path, context: OperatorContext, callback: Callback) -> N
                 target, maximum=128 * 1024**2
             ):
                 raise OperatorRuntimeError("RELEASE_OPERATOR_PDF_RUNTIME_INVALID")
+    elif callback == Callback.API_ISOLATION_VERIFY:
+        from eom_api.runtime_isolation_verifier import (
+            VerificationReport,
+            verify_runtime_isolation,
+        )
+
+        # The public verifier owns exact pidfd/namespace/probe validation. Its
+        # fixed child drops to the service UID before touching the API Python.
+        try:
+            report = verify_runtime_isolation()
+        except Exception as exc:
+            raise OperatorRuntimeError("RELEASE_OPERATOR_API_ISOLATION_INVALID") from exc
+        if not isinstance(report, VerificationReport):
+            raise OperatorRuntimeError("RELEASE_OPERATOR_API_ISOLATION_INVALID")
     else:
         raise OperatorRuntimeError("RELEASE_OPERATOR_CALLBACK_INVALID")
 
