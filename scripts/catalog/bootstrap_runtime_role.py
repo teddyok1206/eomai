@@ -17,7 +17,8 @@ from urllib.parse import quote, unquote, urlsplit
 import psycopg
 from psycopg import sql
 
-REPOSITORY = Path("/home/eom/EOM")
+# The same reviewed script may run from an exact protected release-source snapshot.
+REPOSITORY = Path(__file__).resolve().parents[2]
 POSTGRES_ENV = Path("/etc/eom/secrets/postgres.env")
 TARGET_ENV = Path("/etc/eom/secrets/catalog-manager.env")
 ROLE = "eom_catalog_manager_runtime"

@@ -37,6 +37,7 @@ OFFICE_CONVERTER_INSTALLER="${REPOSITORY_ROOT}/scripts/catalog/install_office_do
 MOCK_EXAM_DEPLOYMENT_ADMISSION_SOURCE="${REPOSITORY_ROOT}/scripts/api/verify_mock_exam_deployment_admission.py"
 MOCK_EXAM_DEPLOYMENT_ADMISSION_TARGET="/usr/local/libexec/eom-api/verify-mock-exam-deployment-admission"
 WORKFLOW_RUNNER_HOLD_LIBRARY="${REPOSITORY_ROOT}/scripts/api/workflow_runner_deployment_hold.sh"
+RELEASE_OPERATOR_LIBRARY="${REPOSITORY_ROOT}/scripts/api/release_operator_boundary.sh"
 WORKFLOW_RUNNER_HOLD_SOURCE="${REPOSITORY_ROOT}/infra/systemd/zzzz-eom-workflow-runner-deployment-hold.conf"
 WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SOURCE="${REPOSITORY_ROOT}/scripts/api/verify_workflow_runner_hold_release.py"
 WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_ROOT="/usr/local/libexec/eom-api"
@@ -120,6 +121,7 @@ fail() {
 [[ -r "${WORKFLOW_RUNNER_HOLD_LIBRARY}" ]] || fail "workflow runner hold helper is unavailable"
 # shellcheck source=scripts/api/workflow_runner_deployment_hold.sh
 source "${WORKFLOW_RUNNER_HOLD_LIBRARY}"
+source "${RELEASE_OPERATOR_LIBRARY}"
 
 activate_workflow_runner_deployment_hold() {
   local activation_identity_before activation_identity_after runtime_mask_state staged_hold
@@ -784,39 +786,12 @@ verify_mock_exam_deployment_admission() {
 prepare_runtime_dependencies() {
   getent group eom-codex-auth >/dev/null || \
     fail "eom-codex-auth identity must be deployed before the API unit"
-  sudo -n /usr/bin/bash "${REPOSITORY_ROOT}/scripts/api/migrate_release.sh" \
-    --verify "${COMMIT}"
-  sudo -n /usr/bin/bash "${REPOSITORY_ROOT}/scripts/api/bootstrap_runtime_role.sh"
+  run_release_operator MIGRATION_VERIFY "${COMMIT}"
+  run_release_operator API_ROLE_BOOTSTRAP "${COMMIT}"
 }
 
 verify_native_pdf_annotation_runtime() {
-  sudo -n "${API_PYTHON}" -I - <<'PY'
-from __future__ import annotations
-
-import importlib.metadata
-import stat
-from importlib import import_module
-from pathlib import Path
-
-if importlib.metadata.version("PyMuPDF") != "1.26.7":
-    raise SystemExit("PyMuPDF 1.26.7 is required by the native PDF annotation renderer")
-pymupdf = import_module("pymupdf")
-native = import_module("pymupdf._extra")
-if str(pymupdf.__version__) != "1.26.7":
-    raise SystemExit("PyMuPDF runtime version differs from its installed distribution")
-for value in (pymupdf.__file__, native.__file__):
-    path = Path(str(value)).resolve(strict=True)
-    metadata = path.stat()
-    if (
-        not stat.S_ISREG(metadata.st_mode)
-        or metadata.st_uid != 0
-        or metadata.st_gid != 0
-        or metadata.st_nlink != 1
-        or metadata.st_mode & 0o022
-    ):
-        raise SystemExit("PyMuPDF runtime file metadata is unsafe")
-print("native_pdf_annotation_runtime=READY")
-PY
+  run_release_operator PDF_RUNTIME_VERIFY "${COMMIT}"
 }
 
 reconcile_installed_catalog_runtime_privileges() {
@@ -824,15 +799,13 @@ reconcile_installed_catalog_runtime_privileges() {
   # the platform wheel. Reconcile it after installing the wheel so a release
   # that introduces new pointer-only tables cannot restart Catalog against the
   # preceding release's grant set.
-  sudo -n "${API_PYTHON}" \
-    "${REPOSITORY_ROOT}/scripts/catalog/bootstrap_runtime_role.py"
+  run_release_operator CATALOG_ROLE_RECONCILE "${COMMIT}"
 }
 
 reconcile_installed_hwpx_manager_runtime_privileges() {
   # The HWPX manager owns its build queues through a dedicated DB role. Keep
   # its closed privilege matrix synchronized after migrations add a new queue.
-  sudo -n "${API_PYTHON}" \
-    "${REPOSITORY_ROOT}/scripts/hwpx/bootstrap_manager_runtime_role.py"
+  run_release_operator HWPX_ROLE_RECONCILE "${COMMIT}"
 }
 
 cleanup() {

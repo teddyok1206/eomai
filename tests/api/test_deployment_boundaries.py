@@ -6,6 +6,7 @@ import re
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
@@ -23,9 +24,15 @@ def _image_resource_inventory(source: str) -> dict[str, str]:
     assignment = ast.parse(source[start:end]).body[0]
     assert isinstance(assignment, ast.Assign) and isinstance(assignment.value, ast.DictComp)
     # Only the reviewed, side-effect-free expression runs; deployment does not.
-    return eval(
-        compile(ast.Expression(assignment.value), "<image-resource-inventory>", "eval"),
-        {"Path": Path, "os": SimpleNamespace(environ={"REPOSITORY_ROOT": str(REPOSITORY_ROOT)})},
+    return cast(
+        dict[str, str],
+        eval(
+            compile(ast.Expression(assignment.value), "<image-resource-inventory>", "eval"),
+            {
+                "Path": Path,
+                "os": SimpleNamespace(environ={"REPOSITORY_ROOT": str(REPOSITORY_ROOT)}),
+            },
+        ),
     )
 
 
@@ -93,8 +100,8 @@ def test_deploy_release_uses_only_noninteractive_sudo() -> None:
     assert 'EXPECTED_BRANCHES=("main"' in source
     assert "prepare_runtime_dependencies\n    build_release" in source
     assert "eom-codex-auth identity must be deployed before the API unit" in source
-    assert 'scripts/api/migrate_release.sh"' in source
-    assert '--verify "${COMMIT}"' in source
+    assert 'source "${RELEASE_OPERATOR_LIBRARY}"' in source
+    assert 'run_release_operator MIGRATION_VERIFY "${COMMIT}"' in source
     assert (
         '"legacy-assessment/legacy-item-extraction-batch-v2.schema.json": '
         '"schemas/legacy-assessment/legacy-item-extraction-batch-v2.schema.json"'
@@ -120,9 +127,12 @@ def test_deploy_release_uses_only_noninteractive_sudo() -> None:
     assert set(inventory) == {path.name for path in packaged.glob("*.schema.json")}
     for name, canonical in inventory.items():
         assert (REPOSITORY_ROOT / canonical).read_bytes() == (packaged / name).read_bytes()
-    assert 'scripts/api/bootstrap_runtime_role.sh"' in source
-    assert 'scripts/catalog/bootstrap_runtime_role.py"' in source
-    assert 'scripts/hwpx/bootstrap_manager_runtime_role.py"' in source
+    for callback in (
+        "API_ROLE_BOOTSTRAP",
+        "CATALOG_ROLE_RECONCILE",
+        "HWPX_ROLE_RECONCILE",
+    ):
+        assert f'run_release_operator {callback} "${{COMMIT}}"' in source
     assert (
         'MOCK_EXAM_DEPLOYMENT_ADMISSION_TARGET="/usr/local/libexec/eom-api/'
         'verify-mock-exam-deployment-admission"'
@@ -486,17 +496,158 @@ def test_content_team_font_installer_pins_exact_files_and_never_depends_on_eomis
 
 def test_release_migration_wrapper_pins_source_and_database_owner() -> None:
     source = _source("scripts/api/migrate_release.sh")
+    operator = _source("scripts/api/release_operator_runtime.py")
 
-    assert "env -u EOM_DATABASE_URL" in source
-    assert 'EOM_POSTGRES_ENV="${POSTGRES_ENV}"' in source
-    assert "PYTHONDONTWRITEBYTECODE=1" in source
-    assert "PYTHONSAFEPATH=1" in source
     assert "working tree must be clean" in source
     assert "source commit mismatch" in source
-    assert "database_user != schema_owner" in source
-    assert '"app" not in search_path' in source
-    assert "run_reviewed_python -m alembic upgrade head" in source
-    assert "CURRENT_MIGRATION_REVISION" in source
+    # The presentation wrapper may inspect developer Git/config only as the
+    # developer. All owner credentials and DB checks remain in the root helper.
+    root_rejection = source.index('"$EUID" -ne 0')
+    assert root_rejection < source.index('$(git -C "${REPOSITORY_ROOT}"')
+    assert root_rejection < source.index(
+        'source "${REPOSITORY_ROOT}/scripts/api/release_operator_boundary.sh"'
+    )
+    assert "standalone migration preflight must run without root" in source
+    assert "POSTGRES_ENV" not in source
+    assert "/etc/eom/secrets" not in source
+    assert 'source "${REPOSITORY_ROOT}/scripts/api/release_operator_boundary.sh"' in source
+    assert 'run_release_operator MIGRATION_VERIFY "${EXPECTED_COMMIT}"' in source
+    assert 'run_release_operator MIGRATION_UPGRADE_0051 "${EXPECTED_COMMIT}"' in source
+    # Root migration must never reopen the mutable API interpreter or checkout
+    # imports; exact source admission belongs to the protected operator adapter.
+    for removed in ("run_reviewed_python", "SOURCE_PATHS", "PYTHONPATH", "alembic upgrade head"):
+        assert removed not in source
+    assert "/srv/eom/conda/envs/eom-api/bin/python" not in source
+    assert 'os.environ.pop("EOM_DATABASE_URL", None)' in operator
+    assert 'os.environ["EOM_POSTGRES_ENV"] = POSTGRES_ENV' in operator
+    assert 'POSTGRES_ENV = "/etc/eom/secrets/postgres.env"' in operator
+    owner_secret_guard = operator.partition("def check_postgres_environment()")[2].partition(
+        "\ndef main("
+    )[0]
+    assert owner_secret_guard.index("require_root()") < owner_secret_guard.index(
+        "protected_path(path)"
+    )
+    assert "not stat.S_ISREG(value.st_mode)" in owner_secret_guard
+    assert "value.st_uid != 0" in owner_secret_guard
+    assert "value.st_nlink != 1" in owner_secret_guard
+    assert "stat.S_IMODE(value.st_mode) not in (0o600, 0o640)" in owner_secret_guard
+    assert operator.index("check_postgres_environment()\n") < operator.index(
+        "engine = build_engine()"
+    )
+    assert 'MIGRATION_REVISION = "20261010_0051"' in operator
+    assert CURRENT_MIGRATION_REVISION == "20261010_0051"
+    assert "CURRENT_MIGRATION_REVISION != MIGRATION_REVISION" in operator
+    assert 'owner[0] != owner[1] or owner[2] is not True or "app" not in owner[3]' in operator
+    assert 'current == "20261009_0050"' in operator
+    assert "command.upgrade(configuration, MIGRATION_REVISION)" in operator
+    assert "current != MIGRATION_REVISION" in operator
+    assert 'command.upgrade(configuration, "head")' not in operator
+
+
+def test_release_operator_boundary_requires_explicit_pins_without_unsafe_fallback() -> None:
+    deployment = _source("scripts/api/deploy_release.sh")
+    boundary = _source("scripts/api/release_operator_boundary.sh")
+    operator = _source("scripts/api/release_operator_runtime.py")
+    callback = boundary.partition("run_release_operator() {")[2]
+    callback_enum = next(
+        node
+        for node in ast.parse(operator).body
+        if isinstance(node, ast.ClassDef) and node.name == "Callback"
+    )
+    admitted_callbacks = {
+        node.value.value
+        for node in callback_enum.body
+        if isinstance(node, ast.Assign)
+        and isinstance(node.value, ast.Constant)
+        and isinstance(node.value.value, str)
+    }
+
+    assert admitted_callbacks == {
+        "MIGRATION_VERIFY",
+        "MIGRATION_UPGRADE_0051",
+        "API_ROLE_BOOTSTRAP",
+        "CATALOG_ROLE_RECONCILE",
+        "HWPX_ROLE_RECONCILE",
+        "PDF_RUNTIME_VERIFY",
+    }
+    assert admitted_callbacks == set(
+        callback.partition('case "$callback" in')[2].partition(") ;;")[0].strip().split("|")
+    )
+
+    for setting in (
+        "EOM_RELEASE_OPERATOR_LAUNCHER",
+        "EOM_RELEASE_OPERATOR_RUNTIME_PREFIX",
+        "EOM_RELEASE_OPERATOR_RUNTIME_SHA256",
+        "EOM_RELEASE_OPERATOR_CONTEXT",
+        "EOM_RELEASE_OPERATOR_CONTEXT_SHA256",
+        "EOM_RELEASE_OPERATOR_LAUNCHER_SHA256",
+        "EOM_RELEASE_OPERATOR_HELPER_SHA256",
+    ):
+        assert setting in callback
+    assert '[[ -n "${!member:-}" ]]' in callback
+    assert "*) _release_operator_fail; return 1;;" in callback
+    assert '[[ "$expected_commit" =~ ^[0-9a-f]{40}$ ]]' in callback
+    privileged_start = callback.index("if /usr/bin/sudo -n /usr/bin/env -i")
+    assert callback.index("metadata=$(/usr/bin/stat -c") < privileged_start
+    assert callback.index('actual=$(/usr/bin/sha256sum -- "$launcher")') < privileged_start
+    assert callback.index('"$EOM_RELEASE_OPERATOR_LAUNCHER_SHA256"') < privileged_start
+    assert '/usr/bin/bash "$launcher" EXECUTE' in callback
+    assert "RELEASE_OPERATOR_TIMEOUT_STATE_UNKNOWN" in callback
+    assert "REPOSITORY_ROOT" not in boundary
+    assert "API_PYTHON" not in boundary
+    assert "eval " not in boundary
+    assert 'sudo -n "${API_PYTHON}"' not in deployment
+    assert 'sudo -n /usr/bin/bash "${REPOSITORY_ROOT}/scripts/api/migrate_release.sh"' not in (
+        deployment
+    )
+
+
+def test_release_operator_launcher_checks_protected_runtime_before_python() -> None:
+    launcher = _source("scripts/api/release_operator_runtime.sh")
+    operator = _source("scripts/api/release_operator_runtime.py")
+    launch = launcher.index('"$PREFIX/bin/python" -I -B "$HELPER"')
+
+    assert '[[ "$EUID" == 0 && $# == 9 ]]' in launcher
+    assert "unset PYTHONPATH PYTHONHOME LD_PRELOAD LD_LIBRARY_PATH BASH_ENV ENV" in launcher
+    for target in ("LAUNCHER", "HELPER", "CONTEXT", "PREFIX"):
+        assert launcher.index(f'protected_path "${target}"') < launch
+    for target in ("LAUNCHER", "HELPER", "CONTEXT"):
+        assert launcher.index(f'"sha256:$(sha256sum -- "${target}"') < launch
+    assert launcher.index('[[ -z "$invalid" ]]') < launch
+    assert launcher.index('[[ "$MODE" == ADMIT ]]') < launch
+    assert "--signal=TERM --kill-after=10s 180s" in launcher
+    assert "API_PYTHON" not in launcher
+    assert "/home/eom/EOM" not in launcher
+    # A non-root helper invocation fails before opening any protected context or
+    # secret; the top-level error boundary emits only a closed, redacted code.
+    entry = operator.partition("def main(argv:")[2]
+    assert entry.index("require_root()") < entry.index("load_context(")
+    root_guard = operator.partition("def require_root()")[2].partition("\ndef identity(")[0]
+    assert "os.geteuid() != 0" in root_guard
+    assert "RELEASE_OPERATOR_ROOT_REQUIRED" in root_guard
+    assert "code in ERROR_CODES" in entry
+    assert 'print("RELEASE_OPERATOR_RUNTIME_REJECTED", file=sys.stderr)' in entry
+
+
+def test_api_role_bootstrap_exec_preserves_timeout_process_identity() -> None:
+    bootstrap = _source("scripts/api/bootstrap_runtime_role.sh")
+    operator = _source("scripts/api/release_operator_runtime.py")
+
+    # The fixed root child becomes its DB Python rather than leaving a detached
+    # subprocess behind when subprocess.run or the outer group timeout expires.
+    assert "exec \"${PYTHON}\" <<'PY'" in bootstrap
+    assert 'print("Runtime database role and protected environment file are reconciled.")' in (
+        bootstrap
+    )
+    assert "printf 'Runtime database role" not in bootstrap
+    child = operator.partition("elif callback == Callback.API_ROLE_BOOTSTRAP:")[2].partition(
+        "elif callback in (Callback.CATALOG_ROLE_RECONCILE"
+    )[0]
+    assert '"/usr/bin/bash", str(source / "scripts/api/bootstrap_runtime_role.sh")' in child
+    assert "timeout=150" in child
+    assert "/usr/bin/timeout" not in child
+    assert "subprocess.TimeoutExpired" in child
+    assert "RELEASE_OPERATOR_TIMEOUT_STATE_UNKNOWN" in child
 
 
 def test_privileged_metadata_verifier_is_root_only_and_secret_safe() -> None:
@@ -854,8 +1005,14 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     )
     assert '"catalog-application/document-review-evidence-request-v1.schema.json"' in deployment
     assert '"document-review/document-review-evidence-plan-v1.schema.json"' in deployment
-    assert 'importlib.metadata.version("PyMuPDF") != "1.26.7"' in deployment
-    assert 'print("native_pdf_annotation_runtime=READY")' in deployment
+    operator = _source("scripts/api/release_operator_runtime.py")
+    assert 'run_release_operator PDF_RUNTIME_VERIFY "${COMMIT}"' in deployment
+    assert 'importlib.metadata.version("PyMuPDF") != "1.26.7"' in operator
+    assert 'str(pymupdf.__version__) != "1.26.7"' in operator
+    assert "read_api_native_data(" in operator
+    assert "!= (0, 0, 0o644, 1)" in operator
+    assert "reference.relative_to(context.runtime_prefix)" in operator
+    assert "native_pdf_annotation_runtime=READY" not in deployment
 
 
 def test_release_verifies_assessment_occurrence_graph_schema_resources() -> None:
@@ -1109,8 +1266,11 @@ def test_shared_platform_release_fences_transient_consumers_before_install() -> 
     "relative",
     [
         "scripts/api/bootstrap_service_user.sh",
+        "scripts/api/bootstrap_runtime_role.sh",
         "scripts/api/deploy_release.sh",
         "scripts/api/migrate_release.sh",
+        "scripts/api/release_operator_boundary.sh",
+        "scripts/api/release_operator_runtime.sh",
         "scripts/api/verify_deployment_metadata.sh",
         "scripts/api/verify_runtime_isolation.sh",
         "scripts/api/workflow_runner_deployment_hold.sh",

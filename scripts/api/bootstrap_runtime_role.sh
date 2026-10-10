@@ -71,7 +71,8 @@ export EOM_API_RUNTIME_ROLE="${RUNTIME_ROLE}"
 export EOM_API_TEST_MODE="${TEST_MODE}"
 export EOM_REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 
-"${PYTHON}" <<'PY'
+# Replace Bash with its DB Python: timeout/termination must not leave that child behind.
+exec "${PYTHON}" <<'PY'
 from __future__ import annotations
 
 import grp
@@ -495,6 +496,5 @@ os.chown(
 )
 os.chmod(temporary, ENV_MODE)
 temporary.replace(target)
+print("Runtime database role and protected environment file are reconciled.")
 PY
-
-printf 'Runtime database role and protected environment file are reconciled.\n'

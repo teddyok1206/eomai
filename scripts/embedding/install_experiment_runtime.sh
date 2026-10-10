@@ -121,8 +121,8 @@ done
 timeout --signal=KILL 30 install -m 0600 -- "$REPOSITORY/infra/polkit/50-eom-worker-units.rules" "$PRIVATE/polkit.rules"
 [[ "$(sha256sum "$PRIVATE/polkit.rules" | cut -c 1-64)" == "$POLKIT_SHA" ]] || fail EMBEDDING_POLKIT_HASH_MISMATCH
 
-getent group "$CPU_USER" >/dev/null || groupadd --system "$CPU_USER"
-getent passwd "$CPU_USER" >/dev/null || useradd --system --gid "$CPU_USER" --home-dir /nonexistent --no-create-home --shell /usr/sbin/nologin "$CPU_USER"
+getent group "$CPU_USER" >/dev/null || /usr/sbin/groupadd --system "$CPU_USER"
+getent passwd "$CPU_USER" >/dev/null || /usr/sbin/useradd --system --gid "$CPU_USER" --home-dir /nonexistent --no-create-home --shell /usr/sbin/nologin "$CPU_USER"
 [[ "$(id -gn "$CPU_USER")" == "$CPU_USER" && "$(id -nG "$CPU_USER")" == "$CPU_USER" ]] || fail EMBEDDING_CPU_IDENTITY_OVERPRIVILEGED
 [[ "$(getent passwd "$CPU_USER" | cut -d: -f6-7)" == /nonexistent:/usr/sbin/nologin ]] || fail EMBEDDING_CPU_IDENTITY_INVALID
 if [[ ! -e "$MODEL_STORE" && ! -L "$MODEL_STORE" ]]; then install -d -o root -g "$CPU_USER" -m 0750 "$MODEL_STORE"; fi

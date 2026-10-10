@@ -1,9 +1,11 @@
 # Fixed isolated CPU experiment runtime
 
-Status: SOURCE IMPLEMENTED / ENVIRONMENT PREPARATION STARTED / PRIVILEGED PUBLICATION AND
-ISOLATION NOT_RUN, 2026-10-10 UTC.
+Status: PROTECTED PUBLICATION COMPLETED / CPU ISOLATION PROBE PASS AFTER ONE EXPLICITLY
+APPROVED RETRY / FIRST FAILED RECEIPT PRESERVED / MODEL FORWARD COUNT 0, 2026-10-10 UTC.
 This runbook does not approve installation or infer a live PASS from source tests.
 The owner design remains [the invocation design](../architecture/ITEM_INFERENCE_TRANSFER_OWNER_INVOCATION_DESIGN.md).
+Actual component identities, failed invocation and remaining gates are recorded in
+[the live acceptance record](../architecture/ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md).
 
 ## Fixed boundaries
 
@@ -97,7 +99,18 @@ independently calculated record SHA, and FIFO/hardlink/control-name fixtures fai
 did not cover this runtime semantic defect. Discard the old installer admission SHA and use only
 the newly reviewed private copy. A digest from a nonzero fingerprint exit is never an approval pin.
 The newly installed platform wheel also revealed PyMuPDF missing in the cloned prefix; the operator
-is resolving that existing declared dependency before final `pip check` and tree-SHA admission.
+resolved that existing declared dependency before final `pip check` and tree-SHA admission.
+The final runtime tree was published on 2026-10-10. The historical preparation failures and original
+mutable backup remain recorded; none is reinterpreted as a successful earlier publication.
+
+The first real no-forward probe found a separate installer mode error: the root installer's umask
+077 changed `mkdir(mode=0750)` for the model logical-ID parent to 0700. The revision/file modes were
+correct but the CPU private group could not traverse the parent. Root and actual CPU UID read-only
+checks classified this as model access, not model quality or a worker failure. After independently
+checking model bytes, the operator reconciled only that exact parent's mode using its retained FD.
+The source now explicitly chmods a newly created parent and rejects mismatched existing metadata.
+An actual umask-077 filesystem regression protects this boundary. The failed probe remains recorded;
+mode repair and outside-sandbox model read PASS are not a replacement for isolation probe PASS.
 
 ## No-forward privileged smoke
 
@@ -114,6 +127,34 @@ same main sandbox except its entrypoint/stdin/stdout. Root prepare has separatel
 capabilities and the one writable handoff root. Actual pkcheck subject processes verify main-only
 owner start permission and denial of direct prepare/probe, malformed identities, restart and CPU
 unit-control access. No generic/transient unit or arbitrary command is exposed.
+
+The first installed driver preflight found all six unprivileged `pkcheck --detail` calls rejected
+because polkit accepts action details only from a trusted caller; the probe remained fresh and had
+not started. The corrected driver calls `pkcheck` **as root**, targeting a separate fixed `runuser`
+child whose PID, parent, kernel UID and start-time are independently checked before/after each call.
+It passes the exact `PID,starttime,UID`, not root's identity or a caller-supplied role. The subject is
+only a fixed `cat` waiting for stdin EOF, never a model/secret reader or StartUnit caller. PID output
+is bounded and select-time-limited; cleanup closes its owned pipe and waits, and only the Popen-owned
+wrapper can be killed on a cleanup timeout. Policy bytes, permissions and probe/CPU units stay
+unchanged. Return 0 means allowed, 1 denied; 127/other errors are not mistaken for a denial PASS.
+
+The next prelaunch check exposed a `systemctl show` presentation difference: empty structured
+`ExecStartPre` and `ExecStartPost` arrays may be omitted, even with `--all`. After the existing
+pinned installed-template checks, the driver normalizes **only these two** missing properties to
+empty, only for its three fixed unit identities with the exact FragmentPath, no drop-ins and no
+pending daemon reload. Other missing properties, duplicates, unknown keys and malformed output
+still reject. No installed unit or policy is changed. The driver now reports a literal allowlisted
+`ERROR_CODE` beside `CPU_ISOLATION_PROBE=REJECTED`; unexpected exceptions are redacted to a fixed
+code, never raw paths, document content or tracebacks. This source correction is not evidence that
+the actual no-forward probe has run or passed.
+
+The next source verifier adds a fixed `STAGE` and an allowlisted `ERROR_CODE` to its rejection
+line. Runtime metadata, imports, platform RECORD and pip requirements are distinguished; identity,
+network, model specification/snapshot and file/socket negatives have separate fixed stages.
+Permission, absence, dependency, timeout and resource errors map to static codes. Raw exceptions,
+paths, item content, library output and tracebacks remain suppressed. It emits no partial PASS on
+failure and still makes zero model forwards. This source improvement is **not installed** in the
+original protected CPU snapshot and does not reclassify or retry a historical failed probe.
 
 Only a fresh `eom-embedding-experiment-probe.service` is started. Confirmed terminal/success,
 stable InvocationID and post-run policy are required. The CPU process checks actual UID/GID/groups,

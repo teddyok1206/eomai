@@ -53,6 +53,99 @@ DENIED_SOCKETS = (
     ("systemd", "/run/systemd/private"),
     ("dbus", "/run/dbus/system_bus_socket"),
 )
+_STAGES = frozenset(
+    {
+        "PROBE",
+        "IDENTITY",
+        "RUNTIME_METADATA",
+        "RUNTIME_IMPORTS",
+        "RUNTIME_RECORD",
+        "RUNTIME_REQUIREMENTS",
+        "NETWORK",
+        "MODEL_SPEC",
+        "MODEL_SNAPSHOT",
+        "FILE_DENIAL",
+        "SOCKET_DENIAL",
+    }
+)
+_FAILURE_CODES = frozenset(
+    {
+        "INFERENCE_CPU_PROBE_IDENTITY_INVALID",
+        "INFERENCE_CPU_PROBE_PRIVILEGE_INVALID",
+        "INFERENCE_CPU_PROBE_RUNTIME_UNPROTECTED",
+        "INFERENCE_CPU_PROBE_RUNTIME_MISMATCH",
+        "INFERENCE_CPU_PROBE_IMPORT_INVALID",
+        "INFERENCE_CPU_PROBE_EDITABLE_FORBIDDEN",
+        "INFERENCE_CPU_PROBE_RECORD_INVALID",
+        "INFERENCE_CPU_PROBE_REQUIREMENTS_BROKEN",
+        "INFERENCE_CPU_PROBE_FORBIDDEN_ACCESS",
+        "INFERENCE_CPU_PROBE_FORBIDDEN_SOCKET",
+        "INFERENCE_CPU_PROBE_NETWORK_NAMESPACE_INVALID",
+        "INFERENCE_CPU_PROBE_NETWORK_CHECK_FAILED",
+        "INFERENCE_CPU_PROBE_NETWORK_FAMILY_ALLOWED",
+        "INFERENCE_CPU_PROBE_MODEL_MISMATCH",
+        "LOCAL_EMBEDDING_MODEL_INVALID",
+        "LOCAL_EMBEDDING_MODEL_CHANGED",
+        "INFERENCE_CPU_PROBE_ACCESS_DENIED",
+        "INFERENCE_CPU_PROBE_INPUT_ABSENT",
+        "INFERENCE_CPU_PROBE_DEPENDENCY_UNAVAILABLE",
+        "INFERENCE_CPU_PROBE_SUBPROCESS_TIMEOUT",
+        "INFERENCE_CPU_PROBE_RESOURCE_UNAVAILABLE",
+        "INFERENCE_CPU_PROBE_OS_UNAVAILABLE",
+        "INFERENCE_CPU_PROBE_UNEXPECTED_FAILURE",
+    }
+)
+
+
+class CpuProbeFailure(ValueError):
+    """Only static stage/code labels may cross the probe's journal boundary."""
+
+    def __init__(self, stage: str, code: str) -> None:
+        if (
+            type(stage) is not str
+            or type(code) is not str
+            or stage not in _STAGES
+            or code not in _FAILURE_CODES
+        ):
+            raise ValueError("INFERENCE_CPU_PROBE_UNEXPECTED_FAILURE")
+        super().__init__(code)
+        self.stage = stage
+        self.code = code
+
+
+def _failure(stage: str, exc: Exception) -> CpuProbeFailure:
+    if isinstance(exc, CpuProbeFailure):
+        if (
+            type(exc.stage) is str
+            and type(exc.code) is str
+            and exc.stage in _STAGES
+            and exc.code in _FAILURE_CODES
+        ):
+            return exc
+        return CpuProbeFailure(stage, "INFERENCE_CPU_PROBE_UNEXPECTED_FAILURE")
+    code = "INFERENCE_CPU_PROBE_UNEXPECTED_FAILURE"
+    if (
+        isinstance(exc, ValueError)
+        and len(exc.args) == 1
+        and isinstance(exc.args[0], str)
+        and exc.args[0] in _FAILURE_CODES
+    ):
+        code = exc.args[0]
+    elif isinstance(exc, PermissionError):
+        code = "INFERENCE_CPU_PROBE_ACCESS_DENIED"
+    elif isinstance(exc, FileNotFoundError):
+        code = "INFERENCE_CPU_PROBE_INPUT_ABSENT"
+    elif isinstance(exc, ImportError):
+        code = "INFERENCE_CPU_PROBE_DEPENDENCY_UNAVAILABLE"
+    elif isinstance(exc, subprocess.TimeoutExpired):
+        code = "INFERENCE_CPU_PROBE_SUBPROCESS_TIMEOUT"
+    elif isinstance(exc, OSError):
+        code = (
+            "INFERENCE_CPU_PROBE_RESOURCE_UNAVAILABLE"
+            if exc.errno in {errno.EAGAIN, errno.ENOMEM, errno.EMFILE, errno.ENFILE}
+            else "INFERENCE_CPU_PROBE_OS_UNAVAILABLE"
+        )
+    return CpuProbeFailure(stage, code)
 
 
 def require_cpu_identity() -> None:
@@ -93,13 +186,16 @@ def _protected(path: Path, *, allow_link: bool = False) -> Path:
     return resolved
 
 
-def verify_installed_runtime() -> None:
+def _verify_runtime_metadata() -> None:
     if sys.version_info[:3] != (3, 12, 13) or Path(sys.prefix) != PREFIX:
         raise ValueError("INFERENCE_CPU_PROBE_RUNTIME_MISMATCH")
     _protected(Path(sys.executable), allow_link=True)
     for name, expected in RUNTIME_VERSIONS.items():
         if importlib.metadata.version(name) != expected:
             raise ValueError("INFERENCE_CPU_PROBE_RUNTIME_MISMATCH")
+
+
+def _verify_runtime_imports() -> None:
     # Imports verify actual module availability, not numerical inference or quality.
     for name in (
         "torch",
@@ -114,6 +210,9 @@ def verify_installed_runtime() -> None:
         if origin is None or not Path(origin).is_relative_to(PREFIX):
             raise ValueError("INFERENCE_CPU_PROBE_IMPORT_INVALID")
         _protected(Path(origin))
+
+
+def _verify_runtime_record() -> None:
     distribution = importlib.metadata.distribution("eom-platform")
     direct = distribution.read_text("direct_url.json")
     if direct and json.loads(direct).get("dir_info", {}).get("editable"):
@@ -138,6 +237,9 @@ def verify_installed_runtime() -> None:
                 raise ValueError("INFERENCE_CPU_PROBE_RECORD_INVALID")
         elif not (row[0].endswith("/RECORD") or row[0].endswith(".pyc")):
             raise ValueError("INFERENCE_CPU_PROBE_RECORD_INVALID")
+
+
+def _verify_runtime_requirements() -> None:
     check = subprocess.run(
         [str(PREFIX / "bin/python"), "-I", "-m", "pip", "check"],
         env={"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"},
@@ -148,6 +250,21 @@ def verify_installed_runtime() -> None:
     )
     if check.returncode:
         raise ValueError("INFERENCE_CPU_PROBE_REQUIREMENTS_BROKEN")
+
+
+def verify_installed_runtime() -> None:
+    # Keep the existing public read-only check; distinguish actual import/RECORD/pip failures
+    # without allowing library diagnostics, paths or raw exception messages into the journal.
+    for stage, check in (
+        ("RUNTIME_METADATA", _verify_runtime_metadata),
+        ("RUNTIME_IMPORTS", _verify_runtime_imports),
+        ("RUNTIME_RECORD", _verify_runtime_record),
+        ("RUNTIME_REQUIREMENTS", _verify_runtime_requirements),
+    ):
+        try:
+            check()
+        except Exception as exc:
+            raise _failure(stage, exc) from None
 
 
 def denied_file(path: Path) -> str:
@@ -230,19 +347,29 @@ def read_cpu_model_spec(root: Path) -> LocalEmbeddingModelSpec:
 
 
 def run_probe() -> tuple[str, ...]:
-    require_cpu_identity()
-    verify_installed_runtime()
-    verify_no_network()
-    root = MODEL_STORE / MODEL_ID / MODEL_REVISION
-    spec = read_cpu_model_spec(root)
-    if spec.manifest_sha256 != MODEL_MANIFEST:
-        raise ValueError("INFERENCE_CPU_PROBE_MODEL_MISMATCH")
-    verify_local_embedding_model_snapshot(MODEL_STORE, spec)
-    results = ["IDENTITY=PASS", "RUNTIME_RECORD=PASS", "NETWORK=PASS", "MODEL_SNAPSHOT=PASS"]
-    results.extend(f"{label}={denied_file(path)}" for label, path in DENIED_FILES)
-    results.extend(f"{label}={denied_socket(path)}" for label, path in DENIED_SOCKETS)
-    results.append("MODEL_FORWARD_COUNT=0")
-    return tuple(results)
+    stage = "IDENTITY"
+    try:
+        require_cpu_identity()
+        stage = "RUNTIME_METADATA"
+        verify_installed_runtime()
+        stage = "NETWORK"
+        verify_no_network()
+        stage = "MODEL_SPEC"
+        root = MODEL_STORE / MODEL_ID / MODEL_REVISION
+        spec = read_cpu_model_spec(root)
+        if spec.manifest_sha256 != MODEL_MANIFEST:
+            raise ValueError("INFERENCE_CPU_PROBE_MODEL_MISMATCH")
+        stage = "MODEL_SNAPSHOT"
+        verify_local_embedding_model_snapshot(MODEL_STORE, spec)
+        results = ["IDENTITY=PASS", "RUNTIME_RECORD=PASS", "NETWORK=PASS", "MODEL_SNAPSHOT=PASS"]
+        stage = "FILE_DENIAL"
+        results.extend(f"{label}={denied_file(path)}" for label, path in DENIED_FILES)
+        stage = "SOCKET_DENIAL"
+        results.extend(f"{label}={denied_socket(path)}" for label, path in DENIED_SOCKETS)
+        results.append("MODEL_FORWARD_COUNT=0")
+        return tuple(results)
+    except Exception as exc:
+        raise _failure(stage, exc) from None
 
 
 def main() -> int:
@@ -261,8 +388,12 @@ def main() -> int:
         for result in results:
             print(result)
         return 0
-    except Exception:
-        print("INFERENCE_CPU_ISOLATION_PROBE_REJECTED")
+    except Exception as exc:
+        failure = _failure("PROBE", exc)
+        print(
+            "INFERENCE_CPU_ISOLATION_PROBE_REJECTED "
+            f"STAGE={failure.stage} ERROR_CODE={failure.code}"
+        )
         return 1
 
 

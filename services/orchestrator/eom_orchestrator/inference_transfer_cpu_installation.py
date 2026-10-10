@@ -3,9 +3,16 @@
 from __future__ import annotations
 
 import os
+import pwd
+import re
+import selectors
 import subprocess
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
+from time import monotonic
 
 from eom_orchestrator.inference_transfer_cpu_systemd import (
     CPU_TEMPLATE,
@@ -21,6 +28,29 @@ POLKIT = Path("/etc/polkit-1/rules.d/50-eom-worker-units.rules")
 POLKIT_SHA256 = "fc63581550983bdfe9742556d8f1331ac51925ffa962302c9b3c38ffed72b08a"
 _ENV = {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"}
 _INSTANCE = "embeddingexecution_" + "0" * 32
+_OMITTED_EMPTY_EXEC = frozenset({"ExecStartPre", "ExecStartPost"})
+_SAFE_FAILURE_CODES = frozenset(
+    {
+        "INFERENCE_CPU_PROBE_INSTALLED_FILE_INVALID",
+        "INFERENCE_CPU_PROBE_POLICY_UNAVAILABLE",
+        "INFERENCE_CPU_PROBE_POLICY_INVALID",
+        "INFERENCE_CPU_PROBE_POLICY_MISMATCH",
+        "INFERENCE_CPU_PREPARE_POLICY_INVALID",
+        "INFERENCE_CPU_PROBE_SUBJECT_UNAVAILABLE",
+        "INFERENCE_CPU_PROBE_SUBJECT_INVALID",
+        "INFERENCE_CPU_PROBE_SUBJECT_CHANGED",
+        "INFERENCE_CPU_PROBE_POLKIT_SCOPE_INVALID",
+        "INFERENCE_CPU_PROBE_ROOT_REQUIRED",
+        "INFERENCE_CPU_PROBE_HISTORY_REQUIRES_REVIEW",
+        "INFERENCE_CPU_PROBE_UNCERTAIN_OR_FAILED",
+        "INFERENCE_CPU_INSTALLED_PATH_INVALID",
+        "INFERENCE_CPU_TEMPLATE_INVALID",
+        "INFERENCE_CPU_INTERPRETER_INVALID",
+        "INFERENCE_CPU_STATUS_UNAVAILABLE",
+        "INFERENCE_CPU_STATUS_INVALID",
+        "INFERENCE_CPU_OWNER_IDENTITY_INVALID",
+    }
+)
 _SANDBOX = (
     "User",
     "Group",
@@ -111,6 +141,13 @@ def _checked_file(path: Path, expected: str) -> None:
 
 
 def _properties(unit: str) -> dict[str, str]:
+    templates = {
+        "eom-embedding-experiment@" + _INSTANCE + ".service": CPU_TEMPLATE,
+        PROBE: PROBE,
+        "eom-embedding-experiment-prepare@" + _INSTANCE + ".service": PREPARE_TEMPLATE,
+    }
+    if unit not in templates:
+        raise ValueError("INFERENCE_CPU_PROBE_POLICY_INVALID")
     response = subprocess.run(
         (SYSTEMCTL, "--no-pager", "show", unit, *(f"--property={key}" for key in _SANDBOX)),
         capture_output=True,
@@ -126,8 +163,18 @@ def _properties(unit: str) -> dict[str, str]:
         if not separator or key in result or key not in _SANDBOX:
             raise ValueError("INFERENCE_CPU_PROBE_POLICY_INVALID")
         result[key] = value
-    if set(result) != set(_SANDBOX):
+    missing = set(_SANDBOX) - result.keys()
+    # The caller verifies pinned installed template bytes before this read. systemctl show omits
+    # empty structured Exec arrays; only these two may be normalized, with no effective override.
+    if missing and (
+        missing - _OMITTED_EMPTY_EXEC
+        or result.get("FragmentPath") != "/etc/systemd/system/" + templates[unit]
+        or result.get("DropInPaths") != ""
+        or result.get("NeedDaemonReload") != "no"
+    ):
         raise ValueError("INFERENCE_CPU_PROBE_POLICY_INVALID")
+    for key in missing:
+        result[key] = ""
     return result
 
 
@@ -172,7 +219,124 @@ def validate_effective_policies(
         raise ValueError("INFERENCE_CPU_PREPARE_POLICY_INVALID")
 
 
+@dataclass(frozen=True, slots=True)
+class PolkitSubject:
+    pid: int
+    start_time: int
+    uid: int
+    parent_pid: int
+
+    @property
+    def process_argument(self) -> str:
+        return f"{self.pid},{self.start_time},{self.uid}"
+
+
+def _read_subject_pid(stream: int) -> int:
+    deadline = monotonic() + 5
+    payload = bytearray()
+    with selectors.DefaultSelector() as ready:
+        ready.register(stream, selectors.EVENT_READ)
+        while b"\n" not in payload:
+            remaining = deadline - monotonic()
+            if remaining <= 0 or not ready.select(remaining):
+                raise ValueError("INFERENCE_CPU_PROBE_SUBJECT_UNAVAILABLE")
+            chunk = os.read(stream, 65 - len(payload))
+            if not chunk or len(payload) + len(chunk) > 64:
+                raise ValueError("INFERENCE_CPU_PROBE_SUBJECT_INVALID")
+            payload.extend(chunk)
+    if re.fullmatch(rb"[1-9][0-9]{0,9}\n", payload) is None:
+        raise ValueError("INFERENCE_CPU_PROBE_SUBJECT_INVALID")
+    return int(payload)
+
+
+def _kernel_subject(pid: int, *, uid: int, parent_pid: int) -> PolkitSubject:
+    if min(pid, uid, parent_pid) <= 0 or max(pid, parent_pid) > 2**31 - 1:
+        raise ValueError("INFERENCE_CPU_PROBE_SUBJECT_INVALID")
+    stat_text = Path(f"/proc/{pid}/stat").read_text(encoding="ascii")
+    status_text = Path(f"/proc/{pid}/status").read_text(encoding="ascii")
+    if len(stat_text) > 4096 or len(status_text) > 16 * 1024:
+        raise ValueError("INFERENCE_CPU_PROBE_SUBJECT_INVALID")
+    opening, separator, rest = stat_text.rpartition(")")
+    fields = rest.split()
+    uid_rows = [
+        line.partition(":")[2].split()
+        for line in status_text.splitlines()
+        if line.startswith("Uid:")
+    ]
+    try:
+        observed_pid = int(opening.split("(", 1)[0].strip())
+        observed_parent = int(fields[1])
+        start_time = int(fields[19])
+        observed_uids = tuple(int(value) for value in uid_rows[0])
+    except (IndexError, ValueError) as exc:
+        raise ValueError("INFERENCE_CPU_PROBE_SUBJECT_INVALID") from exc
+    if (
+        not separator
+        or observed_pid != pid
+        or observed_parent != parent_pid
+        or start_time <= 0
+        or len(uid_rows) != 1
+        or observed_uids != (uid, uid, uid, uid)
+    ):
+        raise ValueError("INFERENCE_CPU_PROBE_SUBJECT_INVALID")
+    return PolkitSubject(pid, start_time, uid, parent_pid)
+
+
+def _close_owned_subject(process: subprocess.Popen[bytes]) -> None:
+    # EOF terminates the fixed cat. Only the Popen-owned wrapper may be killed on cleanup timeout;
+    # never send a signal to a PID reported over stdout or to an arbitrary process group.
+    if process.stdin is not None and not process.stdin.closed:
+        process.stdin.close()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
+    finally:
+        if process.stdout is not None:
+            process.stdout.close()
+
+
+@contextmanager
+def _temporary_polkit_subject(user: str) -> Iterator[PolkitSubject]:
+    if os.geteuid() != 0 or user not in {"eom-workflow-runner", "eom-embedding-experiment"}:
+        raise ValueError("INFERENCE_CPU_PROBE_SUBJECT_INVALID")
+    uid = pwd.getpwnam(user).pw_uid
+    process = subprocess.Popen(
+        (
+            "/usr/sbin/runuser",
+            "-u",
+            user,
+            "--",
+            "/bin/sh",
+            "-c",
+            'printf "%s\\n" "$$"; exec /bin/cat',
+        ),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        env=_ENV,
+    )
+    try:
+        if process.stdout is None:
+            raise ValueError("INFERENCE_CPU_PROBE_SUBJECT_INVALID")
+        pid = _read_subject_pid(process.stdout.fileno())
+        before = _kernel_subject(pid, uid=uid, parent_pid=process.pid)
+        if process.poll() is not None:
+            raise ValueError("INFERENCE_CPU_PROBE_SUBJECT_UNAVAILABLE")
+        yield before
+        if (
+            process.poll() is not None
+            or _kernel_subject(pid, uid=uid, parent_pid=process.pid) != before
+        ):
+            raise ValueError("INFERENCE_CPU_PROBE_SUBJECT_CHANGED")
+    finally:
+        _close_owned_subject(process)
+
+
 def verify_polkit_scope() -> None:
+    if os.geteuid() != 0:
+        raise ValueError("INFERENCE_CPU_PROBE_ROOT_REQUIRED")
     allowed_unit = "eom-embedding-experiment@" + _INSTANCE + ".service"
     cases = (
         ("eom-workflow-runner", allowed_unit, "start", True),
@@ -188,21 +352,31 @@ def verify_polkit_scope() -> None:
         ("eom-embedding-experiment", allowed_unit, "start", False),
     )
     for user, unit, verb, expected in cases:
-        # $$ is the actual subject process; no unit starts and no caller authority fields.
-        command = (
-            "exec /usr/bin/pkcheck --action-id org.freedesktop.systemd1.manage-units "
-            '--process "$$" --detail unit "$1" --detail verb "$2"'
-        )
-        result = subprocess.run(
-            ("/usr/sbin/runuser", "-u", user, "--", "/bin/sh", "-c", command, "probe", unit, verb),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=15,
-            check=False,
-            env=_ENV,
-        )
-        if result.returncode != (0 if expected else 1):
-            raise ValueError("INFERENCE_CPU_PROBE_POLKIT_SCOPE_INVALID")
+        # Action details require a trusted root caller. Authority is evaluated for the separately
+        # kernel-validated target UID/PID/starttime, never for the root caller or a supplied actor.
+        with _temporary_polkit_subject(user) as subject:
+            result = subprocess.run(
+                (
+                    "/usr/bin/pkcheck",
+                    "--action-id",
+                    "org.freedesktop.systemd1.manage-units",
+                    "--process",
+                    subject.process_argument,
+                    "--detail",
+                    "unit",
+                    unit,
+                    "--detail",
+                    "verb",
+                    verb,
+                ),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=15,
+                check=False,
+                env=_ENV,
+            )
+            if result.returncode != (0 if expected else 1):
+                raise ValueError("INFERENCE_CPU_PROBE_POLKIT_SCOPE_INVALID")
 
 
 def verify_fixed_cpu_installation() -> None:
@@ -237,8 +411,20 @@ def main() -> int:
         verify_fixed_cpu_installation()
         print("CPU_ISOLATION_PROBE=PASS MODEL_FORWARD_COUNT=0")
         return 0
-    except Exception:
-        print("CPU_ISOLATION_PROBE=REJECTED", file=sys.stderr)
+    except Exception as exc:
+        code = "INFERENCE_CPU_PROBE_UNEXPECTED_FAILURE"
+        if (
+            isinstance(exc, ValueError)
+            and len(exc.args) == 1
+            and isinstance(exc.args[0], str)
+            and exc.args[0] in _SAFE_FAILURE_CODES
+        ):
+            code = exc.args[0]
+        elif isinstance(exc, subprocess.TimeoutExpired):
+            code = "INFERENCE_CPU_PROBE_SUBPROCESS_TIMEOUT"
+        elif isinstance(exc, OSError):
+            code = "INFERENCE_CPU_PROBE_OS_UNAVAILABLE"
+        print(f"CPU_ISOLATION_PROBE=REJECTED ERROR_CODE={code}", file=sys.stderr)
         return 1
 
 

@@ -18,7 +18,8 @@ from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from psycopg import sql
 from sqlalchemy import create_engine
 
-REPOSITORY = Path("/home/eom/EOM")
+# The same reviewed script may run from an exact protected release-source snapshot.
+REPOSITORY = Path(__file__).resolve().parents[2]
 POSTGRES_ENV = Path("/etc/eom/secrets/postgres.env")
 API_ENV = Path("/etc/eom/secrets/api.env")
 TARGET = Path("/etc/eom/secrets/hwpx-manager.env")

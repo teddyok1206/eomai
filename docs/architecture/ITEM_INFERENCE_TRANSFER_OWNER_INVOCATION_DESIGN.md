@@ -298,3 +298,17 @@ Catalog access policy에는 preset의 `retrieval_policy.allowed_corpus_keys` 필
 않는 policy 필드를 추정하지 않고, 비교 Workflow 제출·실행의 기존 exact preset 검사는
 해당 Orchestrator/Runner 경계에 남긴다. Capacity 조회도 현재 실제 control permission으로
 existing native revision을 읽는 별도 owner leaf이며 slot 예약·관측 갱신·발행은 하지 않는다.
+
+### 동일 owner session의 selected-pair 호출 adapter
+
+최초 두 쌍 비교를 위해 같은 인증 session의 `submit_pair(selection, idempotency_key=...)`와
+`read_comparison(query, selection=...)`를 기존 공식 comparison API 계약에 연결한다. 신규
+wire schema·권한·queue·실행 framework는 없다. Peer UID 확인 전에 bearer/key를 보내지 않으며,
+공개 입력에는 actor/role/permission/preset을 추가하지 않는다. GET URL은 검증된 Workflow ID와
+두 기존 mode만으로 구성하고 반환된 comparison·Graph·policy는 원래 selection과 같아야 한다.
+현재 principal/session과 필요한 실제 permission을 호출 앞뒤 재확인하고 pending/pointer-only/
+member-verified 상태를 보존한다. POST는 한 번만 보내며 timeout 또는 무효 accepted reply는
+`INFERENCE_TRANSFER_SUBMISSION_UNCERTAIN`이다. 서버 미처리로 추정하거나 새 key를 만들지 않고,
+보존한 exact input/key로 명시적 현재 권한 재검증 replay만 허용한다. API/Catalog가 canonical
+member와 현재 source 권한을 검증하며 adapter는 NAS/DB를 직접 읽거나 결과를 snapshot READ에
+숨기지 않는다. Source 연결은 설치·실제 로그인·모델 실행 증거가 아니다.

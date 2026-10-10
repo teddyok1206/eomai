@@ -373,6 +373,29 @@ def ensure_owner_workspace() -> None:
         os.close(descriptor)
 
 
+def _prepare_model_parent(cpu_gid: int) -> Path:
+    require_root_path(MODEL_STORE)
+    parent = MODEL_STORE / MODEL_ID
+    try:
+        parent.mkdir(mode=0o750)
+    except FileExistsError:
+        pass
+    else:
+        os.chown(parent, 0, cpu_gid)
+        # The root installer uses umask 077: mkdir(0750) alone becomes 0700 and prevents the
+        # dedicated CPU group traversing the otherwise correctly exposed immutable revision.
+        os.chmod(parent, 0o750)
+    value = parent.lstat()
+    if (
+        not stat.S_ISDIR(value.st_mode)
+        or value.st_uid != 0
+        or value.st_gid != cpu_gid
+        or stat.S_IMODE(value.st_mode) != 0o750
+    ):
+        raise SnapshotInstallError("EMBEDDING_MODEL_PARENT_INVALID")
+    return parent
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runtime", type=Path, required=True)
@@ -387,11 +410,7 @@ def main() -> int:
             raise SnapshotInstallError("EMBEDDING_INSTALL_CONTEXT_INVALID")
         validate_runtime_tree(args.runtime)
         verify_platform_wheel(args.runtime, args.wheel, args.wheel_sha256)
-        require_root_path(MODEL_STORE)
-        model_parent = MODEL_STORE / MODEL_ID
-        if not model_parent.exists():
-            model_parent.mkdir(mode=0o750)
-            os.chown(model_parent, 0, args.cpu_gid)
+        model_parent = _prepare_model_parent(args.cpu_gid)
         copy_reviewed_model(
             args.model_source,
             model_parent / MODEL_REVISION,

@@ -1,4 +1,4 @@
-"""Official guiadmin session and read-only snapshot transport; no refresh or source bypass."""
+"""Official guiadmin reads and explicit pair submissions; no refresh or source bypass."""
 
 from __future__ import annotations
 
@@ -11,8 +11,17 @@ from typing import Any, Literal
 
 from eom_api_contracts.assessment_learning import AssessmentLearningCorpusViewV2
 from eom_api_contracts.auth import CurrentOperator, LoginRequest, TokenPair
-from eom_api_contracts.common import ListResponse, SingleResponse
+from eom_api_contracts.common import CommandResult, ListResponse, SingleResponse
 from eom_api_contracts.control_plane import ExecutionPresetView
+from eom_catalog_contracts.inference_transfer_invocation import (
+    InferenceTransferPairSubmitRequest,
+    InferenceTransferWorkflowReadRequest,
+    InferenceTransferWorkflowReadResult,
+    parse_pair_submit_request,
+    parse_workflow_read_request,
+    parse_workflow_read_result,
+    validate_workflow_read_result_context,
+)
 from eom_catalog_contracts.inference_transfer_metadata import (
     METADATA_ERRORS,
     InferenceTransferMetadataResolveRequest,
@@ -55,11 +64,22 @@ _SNAPSHOT = "/api/v1/knowledge/inference-transfer/snapshot"
 _METADATA = "/api/v1/knowledge/inference-transfer/metadata"
 _ORIGINAL_CORPUS = "/api/v1/assessment-learning-corpus"
 _EXECUTION_PRESETS = "/api/v1/execution-presets"
+_COMPARISONS = "/api/v1/knowledge/inference-transfer/comparisons"
+_COMPARISON_WORKFLOWS = "/api/v1/knowledge/inference-transfer/workflows/"
+_COMPARISON_READ_TARGET = re.compile(
+    re.escape(_COMPARISON_WORKFLOWS)
+    + r"workflow_[0-9a-f]{32}\?mode=(?:STATUS_ONLY|CANONICAL_RESULT)",
+    re.ASCII,
+)
+_IDEMPOTENCY_KEY = re.compile(r"[!-~]{16,128}", re.ASCII)
+_WORKFLOW_ID = re.compile(r"workflow_[0-9a-f]{32}", re.ASCII)
+_COMMAND_ID = re.compile(r"wfcmd_[0-9a-f]{32}", re.ASCII)
 _REQUEST_TARGETS = frozenset(
     {
         ("POST", _LOGIN),
         ("POST", _SNAPSHOT),
         ("POST", _METADATA),
+        ("POST", _COMPARISONS),
         ("GET", _ORIGINAL_CORPUS),
         ("GET", _EXECUTION_PRESETS),
     }
@@ -85,6 +105,45 @@ _EXECUTION_PRESETS_RESPONSE = ListResponse[ExecutionPresetView]
 _EXECUTION_PRESETS_VALIDATOR = Draft202012Validator(
     _EXECUTION_PRESETS_RESPONSE.model_json_schema(), format_checker=FormatChecker()
 )
+_PAIR_SUBMIT_RESPONSE = SingleResponse[CommandResult]
+_PAIR_SUBMIT_VALIDATOR = Draft202012Validator(
+    _PAIR_SUBMIT_RESPONSE.model_json_schema(), format_checker=FormatChecker()
+)
+_COMPARISON_READ_RESPONSE = SingleResponse[InferenceTransferWorkflowReadResult]
+_COMPARISON_READ_VALIDATOR = Draft202012Validator(
+    _COMPARISON_READ_RESPONSE.model_json_schema(), format_checker=FormatChecker()
+)
+_COMPARISON_ERRORS = frozenset(
+    {
+        "API_IDEMPOTENCY_IN_PROGRESS",
+        "API_IDEMPOTENCY_CONFLICT",
+        "API_REQUEST_INVALID",
+        "INFERENCE_TRANSFER_FORBIDDEN",
+        "INFERENCE_TRANSFER_SUBMISSION_INVALID",
+        "INFERENCE_TRANSFER_SUBMISSION_CONFLICT",
+        "INFERENCE_TRANSFER_NOT_READY",
+        "INFERENCE_TRANSFER_CONTRACT_INVALID",
+        "INFERENCE_TRANSFER_SNAPSHOT_REPLY_INVALID",
+        "INFERENCE_TRANSFER_SNAPSHOT_CHANGED",
+        "INFERENCE_TRANSFER_SNAPSHOT_SELECTION_INVALID",
+        "INFERENCE_TRANSFER_SNAPSHOT_BUDGET_EXCEEDED",
+        "INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH",
+        "INFERENCE_TRANSFER_WORKFLOW_NOT_FOUND",
+        "INFERENCE_TRANSFER_WORKFLOW_REQUEST_INVALID",
+        "INFERENCE_TRANSFER_WORKFLOW_CHANGED",
+        "INFERENCE_TRANSFER_WORKFLOW_UNAVAILABLE",
+        "INFERENCE_TRANSFER_RESULT_INVALID",
+        "INFERENCE_TRANSFER_WORKFLOW_BUDGET_EXCEEDED",
+        "CONTROL_PRESET_NOT_PUBLISHED",
+        "CONTROL_PRESET_POINTER_INVALID",
+        "CONTROL_PRESET_MODEL_UNAVAILABLE",
+        "CONTROL_PROTOCOL_MISSING",
+        "CONTROL_PLAN_CONFLICT",
+        "CONTROL_PLAN_POLICY_MISMATCH",
+        "CONTROL_TRANSFER_CONTEXT_INVALID",
+        "CONTROL_TRANSFER_RUBRIC_INVALID",
+    }
+)
 _ACTOR = re.compile(r"operator_[0-9a-f]{32}", re.ASCII)
 _SESSION = re.compile(r"apisession_[0-9a-f]{32}", re.ASCII)
 
@@ -108,8 +167,19 @@ def _request(
     body: bytes | Callable[[], bytes] | None,
     *,
     bearer: SecretStr | None = None,
+    idempotency_key: str | None = None,
 ) -> tuple[int, object]:
-    if (method, path) not in _REQUEST_TARGETS or (method == "GET" and body is not None):
+    fixed_target = (method, path) in _REQUEST_TARGETS or (
+        method == "GET" and _COMPARISON_READ_TARGET.fullmatch(path) is not None
+    )
+    is_submission = method == "POST" and path == _COMPARISONS
+    if (
+        not fixed_target
+        or (method == "GET" and body is not None)
+        or (is_submission and (bearer is None or idempotency_key is None))
+        or (not is_submission and idempotency_key is not None)
+        or (idempotency_key is not None and _IDEMPOTENCY_KEY.fullmatch(idempotency_key) is None)
+    ):
         raise ControlPlaneError("CONTROL_AUTH_SERVICE_UNAVAILABLE", "fixed request unavailable")
     connection = http.client.HTTPConnection(_HOST, _PORT, timeout=120.0)
     try:
@@ -128,6 +198,8 @@ def _request(
             headers["Content-Type"] = "application/json"
         if bearer is not None:
             headers["Authorization"] = "Bearer " + bearer.get_secret_value()
+        if idempotency_key is not None:
+            headers["Idempotency-Key"] = idempotency_key
         connection.request(method, path, body=payload, headers=headers)
         response = connection.getresponse()
         if response.getheader("Content-Type", "").split(";")[0].strip().lower() not in {
@@ -297,6 +369,141 @@ class AuthenticatedInferenceTransferHttpSession:
             raise ControlPlaneError(
                 "CONTROL_AUTH_SERVICE_UNAVAILABLE", "official execution preset reply invalid"
             ) from None
+
+    def _comparison_principal(
+        self, permission: PermissionKey, selection: InferenceTransferPairSubmitRequest
+    ) -> CurrentOperator:
+        principal = self.read()
+        required = {
+            permission.value,
+            PermissionKey.ITEM_READ.value,
+            PermissionKey.KNOWLEDGE_GRAPH_RETRIEVE.value,
+            PermissionKey.KNOWLEDGE_ANALYSIS_READ.value,
+        }
+        if "PAST_EXAM" in selection.snapshot_prepare.source_classes:
+            required.add(PermissionKey.CONTENT_INTAKE_READ.value)
+        if not required.issubset(principal.effective_permissions):
+            raise ControlPlaneError(
+                "CONTROL_AUTHORIZATION_REQUIRED", "current comparison permission required"
+            )
+        return principal
+
+    @staticmethod
+    def _comparison_failure(status: int, raw: object, fallback: str) -> None:
+        if status in {401, 403}:
+            raise ControlPlaneError("CONTROL_AUTHORIZATION_REQUIRED", "comparison denied")
+        code = raw.get("error_code") if isinstance(raw, dict) else None
+        raise ControlPlaneError(
+            code if isinstance(code, str) and code in _COMPARISON_ERRORS else fallback,
+            "official comparison operation unavailable",
+        )
+
+    def submit_pair(
+        self, selection: InferenceTransferPairSubmitRequest, *, idempotency_key: str
+    ) -> CommandResult:
+        """Submit once with the caller's retained key; never automatically retry a POST.
+
+        UNCERTAIN means the server may have committed. The caller must retain
+        this exact selection/key for explicit current-authorized replay; a new
+        key or this client-side successful receipt never grants source authority.
+        """
+        try:
+            selection = parse_pair_submit_request(selection.model_dump(mode="json"))
+            if _IDEMPOTENCY_KEY.fullmatch(idempotency_key) is None:
+                raise ValueError("invalid idempotency header")
+        except Exception:
+            raise ControlPlaneError(
+                "INFERENCE_TRANSFER_SUBMISSION_INVALID", "exact comparison submission required"
+            ) from None
+        principal = self._comparison_principal(PermissionKey.WORKFLOW_START, selection)
+        try:
+            status, raw = _request(
+                "POST",
+                _COMPARISONS,
+                canonical_json_bytes(selection.model_dump(mode="json")),
+                bearer=self._bearer,
+                idempotency_key=idempotency_key,
+            )
+        except ControlPlaneError:
+            raise ControlPlaneError(
+                "INFERENCE_TRANSFER_SUBMISSION_UNCERTAIN",
+                "submission outcome unknown; retain exact input and key",
+            ) from None
+        if status != 202:
+            self._comparison_failure(status, raw, "INFERENCE_TRANSFER_SUBMISSION_UNCERTAIN")
+        try:
+            _PAIR_SUBMIT_VALIDATOR.validate(raw)
+            result = _PAIR_SUBMIT_RESPONSE.model_validate(raw).data
+            if (
+                result.resource_type != "workflow"
+                or result.status != "ACCEPTED"
+                or _WORKFLOW_ID.fullmatch(result.resource_id) is None
+                or _COMMAND_ID.fullmatch(result.command_id) is None
+                or result.status_url != _COMPARISON_WORKFLOWS + result.resource_id
+            ):
+                raise ValueError("comparison command lineage differs")
+        except Exception:
+            raise ControlPlaneError(
+                "INFERENCE_TRANSFER_SUBMISSION_UNCERTAIN",
+                "submission reply invalid; retain exact input and key",
+            ) from None
+        current = self._comparison_principal(PermissionKey.WORKFLOW_START, selection)
+        if set(current.roles) != set(principal.roles):
+            raise ControlPlaneError(
+                "CONTROL_AUTHORIZATION_REQUIRED", "current comparison role context changed"
+            )
+        return result
+
+    def read_comparison(
+        self,
+        query: InferenceTransferWorkflowReadRequest,
+        *,
+        selection: InferenceTransferPairSubmitRequest,
+    ) -> InferenceTransferWorkflowReadResult:
+        """Read one exact Workflow/mode and bind it to the original selection's pins.
+
+        Pending and pointer-only are preserved. Only the owner-verified canonical
+        mode can return comparison content; this adapter does not read NAS or
+        interpret metadata JSON as the canonical outer result Artifact member.
+        """
+        try:
+            query = parse_workflow_read_request(query.model_dump(mode="json"))
+            selection = parse_pair_submit_request(selection.model_dump(mode="json"))
+        except Exception:
+            raise ControlPlaneError(
+                "INFERENCE_TRANSFER_WORKFLOW_REQUEST_INVALID", "exact comparison read required"
+            ) from None
+        principal = self._comparison_principal(PermissionKey.WORKFLOW_READ, selection)
+        status, raw = _get(
+            _COMPARISON_WORKFLOWS + query.workflow_id + "?mode=" + query.mode,
+            bearer=self._bearer,
+        )
+        if status != 200:
+            self._comparison_failure(status, raw, "INFERENCE_TRANSFER_WORKFLOW_UNAVAILABLE")
+        try:
+            _COMPARISON_READ_VALIDATOR.validate(raw)
+            result = parse_workflow_read_result(
+                _COMPARISON_READ_RESPONSE.model_validate(raw).data.model_dump(mode="json")
+            )
+            validate_workflow_read_result_context(query, result)
+            prepare = selection.snapshot_prepare
+            if (
+                result.comparison != selection.comparison
+                or result.graph_snapshot != prepare.graph_snapshot
+                or result.access_policy_revision_id != prepare.access_policy_revision_id
+                or result.access_policy_sha256 != prepare.access_policy_sha256
+            ):
+                raise ValueError("comparison result changed exact selection pins")
+        except Exception:
+            raise ControlPlaneError(
+                "INFERENCE_TRANSFER_RESULT_INVALID", "exact comparison reply invalid"
+            ) from None
+        current = self._comparison_principal(PermissionKey.WORKFLOW_READ, selection)
+        if set(current.roles) != set(principal.roles):
+            raise ControlPlaneError(
+                "CONTROL_AUTHORIZATION_REQUIRED", "current comparison role context changed"
+            )
+        return result
 
     def execute(
         self, actor_id: str, request: InferenceTransferSnapshotRequest
