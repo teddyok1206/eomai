@@ -13,6 +13,7 @@ PURE_MODULES = (
     "packages/catalog_contracts/eom_catalog_contracts/inference_transfer_snapshot.py",
     "packages/catalog_contracts/eom_catalog_contracts/inference_transfer_snapshot_binding.py",
     "packages/catalog_contracts/eom_catalog_contracts/inference_transfer_metadata.py",
+    "packages/catalog_contracts/eom_catalog_contracts/inference_transfer_human_review.py",
     "packages/catalog_contracts/eom_catalog_contracts/inference_transfer_text.py",
     "packages/workflow/eom_workflow/inference_transfer.py",
     "packages/workflow/eom_workflow/inference_transfer_control.py",
@@ -29,6 +30,7 @@ PURE_MODULES = (
     "services/catalog_service/eom_catalog_service/inference_transfer_service.py",
     "services/catalog_service/eom_catalog_service/inference_transfer_snapshot_service.py",
     "services/orchestrator/eom_orchestrator/inference_transfer_snapshot_staging.py",
+    "services/orchestrator/eom_orchestrator/inference_transfer_human_review.py",
     "services/catalog_service/eom_catalog_service/inference_transfer_scope.py",
     "services/catalog_service/eom_catalog_service/inference_transfer_vectors.py",
 )

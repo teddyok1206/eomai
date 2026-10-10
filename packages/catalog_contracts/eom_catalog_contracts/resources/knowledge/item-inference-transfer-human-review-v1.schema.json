@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/item-inference-transfer-human-review/1.0",
+  "title": "EOM exact selected-pair human review bundle and record V1",
+  "description": "Bounded owner materializations and human labels, not reusable authorization tokens or model-generated human approval. Canonical encoded commands are limited to 64 KiB and published documents to 2 MiB by the typed boundary.",
+  "oneOf": [
+    {"$ref": "#/$defs/bundleCommand"},
+    {"$ref": "#/$defs/bundle"},
+    {"$ref": "#/$defs/recordCommand"},
+    {"$ref": "#/$defs/record"}
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "actorId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"},
+    "utcDatetime": {"type": "string", "format": "date-time", "pattern": "(?:Z|\\+00:00)$"},
+    "bundlePointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "artifact_revision_id", "member_path", "schema_ref", "media_type", "sha256"],
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {"const": "result.json"},
+        "schema_ref": {"const": "eom://schemas/knowledge/item-inference-transfer-human-review-bundle/1.0"},
+        "media_type": {"const": "application/json"},
+        "sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-human-review/1.0#/$defs/sha256"}
+      }
+    },
+    "bundleCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "bundle_id", "bundle_revision_id", "created_at", "selection", "workflow_id", "command_sha256"],
+      "properties": {
+        "schema_version": {"const": "item-inference-transfer-human-bundle-command/1.0"},
+        "bundle_id": {"type": "string", "pattern": "^transferreviewbundle_[0-9a-f]{32}$"},
+        "bundle_revision_id": {"type": "string", "pattern": "^transferreviewbundlerev_[0-9a-f]{32}$"},
+        "created_at": {"$ref": "eom://schemas/knowledge/item-inference-transfer-human-review/1.0#/$defs/utcDatetime"},
+        "selection": {"$ref": "eom://schemas/knowledge/item-inference-transfer-invocation/1.0#/$defs/submitRequest"},
+        "workflow_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+        "command_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-human-review/1.0#/$defs/sha256"}
+      }
+    },
+    "verifiedComparison": {
+      "allOf": [
+        {"$ref": "eom://schemas/knowledge/item-inference-transfer-invocation/1.0#/$defs/readResult"},
+        {"properties": {"workflow_state": {"const": "COMPLETED"}, "result_state": {"const": "MEMBER_VERIFIED"}}}
+      ]
+    },
+    "materializedSource": {
+      "allOf": [
+        {"$ref": "eom://schemas/knowledge/item-inference-transfer-snapshot/1.0#/$defs/record"},
+        {
+          "properties": {
+            "staged_entry": {
+              "allOf": [
+                {"$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/entry"},
+                {"properties": {"content": {"$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/content"}}}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "bundle": {
+      "$id": "eom://schemas/knowledge/item-inference-transfer-human-review-bundle/1.0",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "command", "prepared_by", "comparison", "sources", "bundle_sha256"],
+      "properties": {
+        "schema_version": {"const": "item-inference-transfer-human-review-bundle/1.0"},
+        "command": {"$ref": "eom://schemas/knowledge/item-inference-transfer-human-review/1.0#/$defs/bundleCommand"},
+        "prepared_by": {"$ref": "eom://schemas/knowledge/item-inference-transfer-human-review/1.0#/$defs/actorId"},
+        "comparison": {"$ref": "eom://schemas/knowledge/item-inference-transfer-human-review/1.0#/$defs/verifiedComparison"},
+        "sources": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"$ref": "eom://schemas/knowledge/item-inference-transfer-human-review/1.0#/$defs/materializedSource"}},
+        "bundle_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-human-review/1.0#/$defs/sha256"}
+      }
+    },
+    "recordCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "bundle", "evaluation", "command_sha256"],
+      "properties": {
+        "schema_version": {"const": "item-inference-transfer-human-record-command/1.0"},
+        "bundle": {"$ref": "eom://schemas/knowledge/item-inference-transfer-human-review/1.0#/$defs/bundlePointer"},
+        "evaluation": {"$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/humanEvaluation"},
+        "command_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-human-review/1.0#/$defs/sha256"}
+      }
+    },
+    "record": {
+      "$id": "eom://schemas/knowledge/item-inference-transfer-human-review-record/1.0",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "bundle", "evaluation", "record_sha256"],
+      "properties": {
+        "schema_version": {"const": "item-inference-transfer-human-review-record/1.0"},
+        "bundle": {"$ref": "eom://schemas/knowledge/item-inference-transfer-human-review/1.0#/$defs/bundlePointer"},
+        "evaluation": {"$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/humanEvaluation"},
+        "record_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-human-review/1.0#/$defs/sha256"}
+      }
+    }
+  }
+}

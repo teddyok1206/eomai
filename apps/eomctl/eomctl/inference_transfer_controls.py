@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 import typer
 from eom_identifiers import canonical_json_bytes, content_sha256
-from eom_orchestrator.control_artifacts import ControlArtifactPublisher
+from eom_orchestrator.control_artifacts import ControlArtifactPublisher, PublishedControlArtifact
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.database import build_engine, build_session_factory
 from eom_orchestrator.settings import Settings
@@ -32,6 +32,9 @@ from sqlalchemy import Engine
 if TYPE_CHECKING:
     from eom_orchestrator.inference_transfer_control_invocation import (
         AuthenticatedInferenceTransferControlOwner,
+    )
+    from eom_orchestrator.inference_transfer_human_review import (
+        AuthenticatedInferenceTransferHumanReviewOwner,
     )
     from eom_orchestrator.inference_transfer_owner_http import (
         AuthenticatedInferenceTransferHttpSession,
@@ -112,6 +115,19 @@ _EXPERIMENT_FAILURE_CODES = frozenset(
     }
 )
 _RUNTIME_IDENTITY = Path("/etc/eom/workflow-runtime.env")
+_HUMAN_FAILURE_CODES = frozenset(
+    {
+        "INFERENCE_TRANSFER_HUMAN_AUTHORIZATION_REQUIRED",
+        "INFERENCE_TRANSFER_HUMAN_CLOCK_INVALID",
+        "INFERENCE_TRANSFER_HUMAN_INPUT_INVALID",
+        "INFERENCE_TRANSFER_HUMAN_SOURCE_CHANGED",
+        "INFERENCE_TRANSFER_HUMAN_BUNDLE_MISMATCH",
+        "INFERENCE_TRANSFER_HUMAN_EVALUATION_INVALID",
+        "INFERENCE_TRANSFER_HUMAN_ARTIFACT_INVALID",
+        "INFERENCE_TRANSFER_HUMAN_PUBLICATION_INVALID",
+        "INFERENCE_TRANSFER_HUMAN_UNAVAILABLE",
+    }
+)
 
 
 def _identity(value: os.stat_result) -> tuple[int, ...]:
@@ -301,6 +317,176 @@ def _installed_source_commit() -> str:
         return installed.source_commit
     finally:
         os.close(descriptor)
+
+
+def _human_owner(
+    descriptor: int | None,
+) -> tuple[Engine, AuthenticatedInferenceTransferHumanReviewOwner, str]:
+    require_inference_transfer_control_owner()
+    from eom_orchestrator.inference_transfer_human_review import (
+        AuthenticatedInferenceTransferHumanReviewOwner,
+    )
+    from eom_orchestrator.inference_transfer_human_review_artifacts import OwnedHumanReviewArtifacts
+
+    source_commit = _installed_source_commit()
+    settings = Settings.from_environment()
+    if settings.runtime_source_commit not in {None, source_commit}:
+        raise ControlPlaneError(
+            "INFERENCE_TRANSFER_HUMAN_INPUT_INVALID", "installed runtime identity differs"
+        )
+    session = _session(descriptor)
+    engine = build_engine()
+    try:
+        owner = AuthenticatedInferenceTransferHumanReviewOwner(
+            principal=session,
+            snapshots=session,
+            comparisons=session,
+            artifacts=OwnedHumanReviewArtifacts(engine),
+            publisher=ControlArtifactPublisher(engine, settings),
+        )
+        return engine, owner, source_commit
+    except Exception:
+        engine.dispose()
+        raise
+
+
+def _human_failure(error: Exception) -> None:
+    code = "INFERENCE_TRANSFER_HUMAN_UNAVAILABLE"
+    if isinstance(error, ControlPlaneError) and error.code in (
+        _HUMAN_FAILURE_CODES | _PUBLIC_FAILURE_CODES
+    ):
+        code = error.code
+    typer.echo(json.dumps({"status": "FAILED", "error_code": code}, sort_keys=True))
+
+
+def _human_publication(result: PublishedControlArtifact) -> None:
+    from eom_protocol.artifact_members import ArtifactMemberPointer
+
+    pointer = result.pointer
+    member = ArtifactMemberPointer(
+        artifact_id=pointer.artifact_id,
+        artifact_revision_id=pointer.artifact_revision_id,
+        member_path=pointer.logical_name,
+        schema_ref=pointer.schema_ref,
+        media_type=pointer.media_type,
+        sha256=pointer.sha256,
+    )
+    typer.echo(
+        canonical_json_bytes(
+            {
+                "status": "COMMITTED",
+                "job_id": result.job_id,
+                "artifact": member.model_dump(mode="json"),
+                "manifest_sha256": result.manifest_sha256,
+            }
+        ).decode()
+    )
+
+
+@inference_transfer_control_app.command("human-bundle")
+def publish_human_bundle(
+    command_file: Annotated[Path, typer.Option("--command-file")],
+    access_token_fd: Annotated[int | None, typer.Option("--access-token-fd", min=3)] = None,
+) -> None:
+    """Publish two exact authorized sources and model hypotheses for human review."""
+    engine: Engine | None = None
+    try:
+        require_inference_transfer_control_owner()
+        from eom_catalog_contracts.inference_transfer_human_review import (
+            MAX_HUMAN_COMMAND_BYTES,
+            parse_human_bundle_command,
+        )
+
+        try:
+            command = parse_human_bundle_command(_read_json(command_file, MAX_HUMAN_COMMAND_BYTES))
+        except Exception:
+            raise ControlPlaneError(
+                "INFERENCE_TRANSFER_HUMAN_INPUT_INVALID", "closed human bundle command required"
+            ) from None
+        engine, owner, source_commit = _human_owner(access_token_fd)
+        _human_publication(owner.publish_bundle(command, source_commit=source_commit))
+    except Exception as exc:
+        _human_failure(exc)
+        raise typer.Exit(1) from None
+    finally:
+        if engine is not None:
+            engine.dispose()
+
+
+@inference_transfer_control_app.command("human-evaluate")
+def publish_human_evaluation(
+    command_file: Annotated[Path, typer.Option("--command-file")],
+    access_token_fd: Annotated[int | None, typer.Option("--access-token-fd", min=3)] = None,
+) -> None:
+    """Publish an explicit person's judgment; never generate human labels."""
+    engine: Engine | None = None
+    try:
+        require_inference_transfer_control_owner()
+        from eom_catalog_contracts.inference_transfer_human_review import (
+            MAX_HUMAN_COMMAND_BYTES,
+            parse_human_record_command,
+        )
+
+        try:
+            command = parse_human_record_command(_read_json(command_file, MAX_HUMAN_COMMAND_BYTES))
+        except Exception:
+            raise ControlPlaneError(
+                "INFERENCE_TRANSFER_HUMAN_INPUT_INVALID", "closed human evaluation command required"
+            ) from None
+        engine, owner, source_commit = _human_owner(access_token_fd)
+        _human_publication(owner.publish_evaluation(command, source_commit=source_commit))
+    except Exception as exc:
+        _human_failure(exc)
+        raise typer.Exit(1) from None
+    finally:
+        if engine is not None:
+            engine.dispose()
+
+
+@inference_transfer_control_app.command("human-read")
+def read_human_review(
+    pointer_file: Annotated[Path, typer.Option("--pointer-file")],
+    access_token_fd: Annotated[int | None, typer.Option("--access-token-fd", min=3)] = None,
+) -> None:
+    """Read an exact human bundle or record only after current owner authorization."""
+    engine: Engine | None = None
+    try:
+        require_inference_transfer_control_owner()
+        from eom_catalog_contracts.inference_transfer_human_review import (
+            HUMAN_REVIEW_BUNDLE_SCHEMA_REF,
+            HUMAN_REVIEW_RECORD_SCHEMA_REF,
+            MAX_HUMAN_COMMAND_BYTES,
+        )
+        from eom_protocol.artifact_members import ArtifactMemberPointer
+
+        try:
+            pointer = ArtifactMemberPointer.model_validate(
+                _read_json(pointer_file, MAX_HUMAN_COMMAND_BYTES)
+            )
+            if (
+                pointer.schema_ref
+                not in {HUMAN_REVIEW_BUNDLE_SCHEMA_REF, HUMAN_REVIEW_RECORD_SCHEMA_REF}
+                or pointer.member_path != "result.json"
+                or pointer.media_type != "application/json"
+            ):
+                raise ValueError("human review pointer discriminator differs")
+        except Exception:
+            raise ControlPlaneError(
+                "INFERENCE_TRANSFER_HUMAN_INPUT_INVALID", "closed human review pointer required"
+            ) from None
+        engine, owner, _source_commit = _human_owner(access_token_fd)
+        document = (
+            owner.read_bundle(pointer)
+            if pointer.schema_ref == HUMAN_REVIEW_BUNDLE_SCHEMA_REF
+            else owner.read_evaluation(pointer)
+        )
+        typer.echo(canonical_json_bytes(document.model_dump(mode="json")).decode())
+    except Exception as exc:
+        _human_failure(exc)
+        raise typer.Exit(1) from None
+    finally:
+        if engine is not None:
+            engine.dispose()
 
 
 @inference_transfer_control_app.command("inventory")
