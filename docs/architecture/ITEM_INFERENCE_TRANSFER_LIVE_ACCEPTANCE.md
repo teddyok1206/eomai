@@ -1,7 +1,12 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-10 18:14 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-10 19:12 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
+
+사용자 최신 지시에 따라 **사람 평가는 현 목표의 완료 조건에서 제외**한다.
+`HUMAN_TRANSFER_REVIEW=NOT_EVALUATED / NOT_REQUIRED_FOR_CURRENT_COMPLETION`이다.
+기존 optional 계약과 이력은 보존하며 자동 모델 판단을 사람 label로 기록하지 않는다.
+아래 과거 실행의 human gate 표현은 당시 이력이지 현재 필수 조건이 아니다.
 
 ## 보존하는 설계와 범위
 
@@ -18,7 +23,7 @@
 
 | Component | 실제 상태 | 한계 |
 |---|---|---|
-| 공유 API/platform | 설치 source `f12fb9710823bccc30c78a61bf1b2d784b7b4929`, tree `a67bc6a69c10c31521eebabce01d210d06a3c3e4`; 18:11:32 UTC 배포 완료 | 아래 이전 corpus/PREPARE 관측은 `7383d1c6` 실행이다. 수정본의 실제 READ·CPU·비교·사람 검토는 별도 gate |
+| 공유 API/platform | 설치 source `ab1d5b8c3205b1fcad63e6b1e72246b490936f0a`, tree `f134dea41f5d8dfeb6e95c855958f2f0fea11a85`; 19:12:08 UTC 배포 완료 | 세 축 1.1·READ producer·owner refresh를 포함한 설치. 실제 동일-input READ·CPU·비교는 별도 gate; 사람 평가는 불필요 |
 | 운영 PostgreSQL | `20261010_0051` migration 및 exact-head 검증 PASS | 새 비교 Workflow stage CHECK 적용이지 비교 control 발행이나 worker 실행이 아님 |
 | 별도 CPU Conda | `/opt/eom/conda/envs/eom-embedding-experiment` 보호 snapshot 발행·승인된 격리 probe PASS | 실제 corpus 실험은 별도 gate |
 | CPU platform | `06134fcd91413a957ac3133db062dbcdd525ee15` wheel에서 비편집 설치 | d291 candidate와 1,361개 payload member가 일치함; source 표기는 원래 설치값 유지 |
@@ -26,6 +31,45 @@
 
 Component들이 같은 commit이어야 한다고 가정하지 않는다. 실제 파일·wheel·contract
 호환성과 설치 provenance를 따로 기록한다. build-only 결과를 live release로 부르지 않는다.
+
+### 세 축 비교와 owner refresh의 실제 공유 배포 — 19:12 UTC
+
+- GitHub에 `64f5f31e` 및 후속 `ab1d5b8c`를 반영했다. 앞 후보의 수기 Catalog inventory
+  누락으로 거절된 정상 build는 보존하며, successor의 정상 build-only는 PASS다.
+- 실제 source/tree는 위 Component 표의 `ab1d5b8c`/`f134dea4`다. source archive SHA는
+  `831f3570eac07a13cd7dac02d2e67925678fd3590eddbb6263c1f4bae127a5e8`,
+  보호 source snapshot SHA는
+  `a68ab45e1b2fef8bdac2be4bb19ca786be37bbb1b1ae16ea32ea49d67288848d`다.
+- data-only stage와 별도 ADMIT을 검증한 뒤 기존 closed release operator를 사용했다.
+  context SHA는 `69656ed72e08be42f917594528a73554710e8ff4173e011b194a8a0b38ab224d`다.
+  보호 runtime byte-tree와 launcher/helper는 이전 승인값 그대로다.
+- 배포 전 및 8개 shared consumer stop 뒤 지원된 worker/DB quiescence PASS,
+  workflow command/API processing/HWPX item/exam active count 모두 0이었다.
+  callback은 PDF_RUNTIME_VERIFY, MIGRATION_VERIFY, API_ROLE_BOOTSTRAP,
+  CATALOG_ROLE_RECONCILE, HWPX_ROLE_RECONCILE, API_ISOLATION_VERIFY의 여섯 개 모두 PASS다.
+  migration `20261010_0051`은 변경하지 않았다.
+- 정본 배포 record는
+  `/var/lib/eom-api/deployments/ab1d5b8c3205b1fcad63e6b1e72246b490936f0a.json`이며
+  시각은 `2026-10-10T19:12:08.407502Z`다. 정상 installer가 다시 만든 설치 wheel raw SHA는
+  platform `971d549e5c07a6b68544e1e2a8ca38c33015189582150d65647a94e33e569b3d`,
+  API contracts `d31d6dec8e632cb73ab0de8d3205c0e1560c7e6683d2a69b9c1bdc4b4f08f89f`,
+  API `4ed3d470932e433b0969489868f9d2d72da8413c6f4ec1d7126e9a7a1fd7aa08`다.
+  build-only ZIP raw SHA와 실제 설치 wheel SHA를 동일시하지 않는다.
+- 기존 public chat release-pin adapter로 정확한 predecessor `f12fb971`에서만
+  nonsecret pin을 변경했다. worker 인증·모델·RAG 정책·unit·대화 이력은 그대로다.
+  API/Catalog/maintenance/workflow/HWPX/auth broker/chat worker/chat owner 8개 모두
+  active/running/enabled로 복구했고 API LIVE/READY, installed source/tree, Catalog 295개
+  public inventory, 전용 기존 chat slot READY를 확인했다. smoke 중 모델 호출은 0이다.
+- 후속 source 경계는 291 PASS, strict 6파일/Ruff/format/Bash/diff PASS다. 같은 원본 입력을
+  재개하는 일회성 도구는 합성 51 PASS와 전체 독립 읽기 검토 PASS이며 root-protected
+  사본 SHA `82ab1c567eac053e9e1c26fe03207cd5cc2e02111829e03894d7a9d4e60f2fac`를 확인했다.
+  V11 pair-completion 도구는 actual resume provenance shape를 맞춘 뒤 합성 45 PASS,
+  strict/Ruff/format과 두 독립 검토 PASS다. 이런 합성 결과를 actual model PASS로 부르지 않는다.
+
+원래 private input raw SHA `7dd0fba98ac3cf61d32a5bdf47f48a72e6c9132dd19ab33adefd387ff0d2a775`,
+execution `embeddingexecution_125fe45683e34a2ea188e8ea65a990b0`는 그대로 보존한다.
+현재 보호된 console은 fresh `guiadmin` 인증 대기다. 실제 READ/CPU/controls/pair submission은
+아직 실행하지 않았으며 자동 재시도·새 execution·DB 상태 초기화·사람 점수표는 없다.
 
 ## 보호 CPU 설치의 실제 증거
 

@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 구현·검증 계획
 
-상태 기준: 2026-10-10, `f12fb971`의 18:11 UTC 배포와 이후 실제 관측. 이 문서는 구현 계획과 단계별 상태 요약이다.
+상태 기준: 2026-10-10, `ab1d5b8c`의 19:12 UTC 배포와 이후 실제 관측. 이 문서는 구현 계획과 단계별 상태 요약이다.
 실제 설치 증거는 [live acceptance 기록](ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)과
 정본 deployment record로 확인하며, 설치·service health를 비교 실행·교육 품질 PASS로 확대하지 않는다.
 
@@ -44,7 +44,7 @@
 | F3 | Catalog opt-in authorized candidate read use case | actual actor/policy/Graph admission 재사용, 별도 후보 예산·provenance, 기본 retrieval 무변경 | source·격리 PostgreSQL SQL 검증 및 호환 공유 경계 설치 완료; 실제 `guiadmin` original corpus 520/520·metadata 및 PREPARE PASS; `f12fb971` 실제 첫 READ도 terminal 실패, 안전한 진단은 READ/OWNER_SERVICE/FROZEN_MODEL; 구체적 원인 확인 중, CPU 실행 0 |
 | F4 | Orchestrator 경유 bounded Codex pair comparison | exact A/B, condition+decisive mapping, 차이/새 추론, unsupported/insufficient 처리, schema validation | selected-pair 제출·current 권한 재인가·atomic V21/START·canonical 결과 조회·인증 owner PREPARE/RELEASE source와 호환 공유 release 설치 완료; 실제 초기 protocol/control 발행·worker 비교 대기 |
 | F5 | 기존 검색 대비 bounded 자동 실험 | lexical/content-only/crux/metadata의 후보·순위·공통 모집단·coverage·latency·memory; label 없는 정확도나 교육 효과 주장 금지 | staged 계약·encode-once harness·실모델 3-view 합성 smoke 완료; 기존 human 계약/owner는 보존하지만 평가와 신규 scorecard는 현 완료에 필요 없음; 실제 corpus/Graph 비교와 정본 실험 기록 대기 |
-| F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 사람 평가 불필요, 자동 검증과 실제 교육 효과 구별 | 기존 source 2,609 PASS와 변경 경계 회귀/정적/wheel 검사 PASS; 보호 CPU 설치·격리 PASS; `f12fb971` successor 배포·migration 0051 unchanged·6 callback·API ready·8 service 및 chat READY 복원 PASS; 새 3축 successor source 검증 중; READ 정상화·control 발행·실제 비교와 최종 원문 대조 대기 |
+| F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 사람 평가 불필요, 자동 검증과 실제 교육 효과 구별 | 보호 CPU 설치·격리 PASS; 세 축 successor source 2,497 PASS 및 후속 변경 경계 291 PASS; 정상 build·`ab1d5b8c` 배포·migration 0051 unchanged·6 callback·API ready·8 service 및 chat READY 복원 PASS; 실제 READ·CPU·control 발행·최대 두 쌍 비교와 최종 원문 대조 대기 |
 
 ## 비교 표현과 판정
 
