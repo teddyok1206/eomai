@@ -79,6 +79,10 @@ def compatibility_output_schema(invocation: CodexCompatibilityInvocation) -> dic
     """Pin identities, while leaving task answers unconstrained by the schema."""
 
     schema = deepcopy(load_control_schema("codex-compatibility-probe-result"))
+    # Native strict output requires an explicit type even when const/enum already
+    # restricts every accepted value to a string. Preserve the released wire schema.
+    for key in ("schema_version", "left_shape", "right_shape"):
+        schema["properties"][key]["type"] = "string"
     for key in ("run_id", "case_id", "request_sha256"):
         schema["properties"][key]["const"] = getattr(invocation, key)
     return schema

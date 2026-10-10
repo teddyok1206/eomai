@@ -6,6 +6,7 @@ import json
 import stat
 import struct
 import zlib
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -92,6 +93,56 @@ def test_each_output_schema_uses_its_own_nonce_without_mutating_another() -> Non
     Draft202012Validator(second_schema).validate(_result(second))
     with pytest.raises(ValidationError, match="expected"):
         Draft202012Validator(first_schema).validate(_result(second))
+
+
+def test_native_output_projection_has_explicit_types_and_preserves_canonical_contract() -> None:
+    invocation = _invocation()
+    canonical = load_control_schema("codex-compatibility-probe-result")
+    before = content_sha256(canonical)
+    expected = deepcopy(canonical)
+    for name in ("schema_version", "left_shape", "right_shape"):
+        assert "type" not in canonical["properties"][name]
+        expected["properties"][name]["type"] = "string"
+    for name in ("run_id", "case_id", "request_sha256"):
+        expected["properties"][name]["const"] = getattr(invocation, name)
+
+    native = compatibility_output_schema(invocation)
+
+    assert native == expected
+    assert native["type"] == "object" and native["additionalProperties"] is False
+    assert set(native["required"]) == set(native["properties"])
+    assert all("type" in value for value in native["properties"].values())
+    assert content_sha256(load_control_schema("codex-compatibility-probe-result")) == before
+    # The projection supplies task types, not task answers: even wrong facts still
+    # require application validation after schema-constrained generation.
+    wrong_facts = {**_result(invocation), "arithmetic_sum": 44, "left_shape": "triangle"}
+    Draft202012Validator(canonical).validate(wrong_facts)
+    Draft202012Validator(native).validate(wrong_facts)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("schema_version", "another-result/1.0"),
+        ("schema_version", None),
+        ("left_shape", "ellipse"),
+        ("left_shape", 1),
+        ("right_shape", "ellipse"),
+        ("right_shape", None),
+    ],
+)
+def test_native_string_projection_preserves_wire_const_and_enum_rejections(
+    field: str, value: object
+) -> None:
+    invocation = _invocation()
+    document = {**_result(invocation), field: value}
+
+    for schema in (
+        load_control_schema("codex-compatibility-probe-result"),
+        compatibility_output_schema(invocation),
+    ):
+        with pytest.raises(ValidationError):
+            Draft202012Validator(schema).validate(document)
 
 
 def test_png_is_deterministic_valid_binary_with_expected_dimensions_and_pixels() -> None:

@@ -110,6 +110,22 @@ installed-wheel/helper identity tests are required. Actual inference is opt-in a
 own explicit call count; no source test consumes model usage. Runtime PASS and any future
 educational evaluation are reported independently.
 
+## Native output-schema projection (2026-10-10)
+
+The first native diagnostic rejected the generated output schema because `schema_version`
+had no explicit `type`. The released V1 contract already requires every field and restricts
+that value by a string constant, and the two shape fields by string enums. The generation
+adapter adds `type: string` to only those three fields in a copied schema, alongside the
+existing per-case identity constants. This is an equivalent string restriction, not a
+canonical contract change or a supplied task answer. Released V1 bytes/hashes, the worker
+helper and canonical result validation remain unchanged; no general conversion layer is
+introduced.
+
+The failed run and its attempted-call/NOT_RUN ledger remain immutable. After releasing the
+adapter fix, a separately approved new bounded request is required; the old failed case
+must not be replayed as a new model call. Source tests cover explicit native types, complete
+required-field coverage, canonical immutability and unchanged constant/enum rejection.
+
 ## Historical child-job quiescence (2026-10-10)
 
 Live preflight found two CLAIMED/RUNNING child Job records whose canonical step and parent
