@@ -461,3 +461,45 @@ privileges. Canonical request hashes, prior payloads and old completed/active/re
 are asserted unchanged. Ruff format/lint, strict type checks and diff whitespace checks passed.
 One initial unit-test invocation referenced two nonexistent test filenames; the corrected service
 test paths produced the 81 PASS above. No production pytest or new model/HWPX generation occurred.
+
+### Coordinated correction release, 2026-10-10 UTC
+
+API/platform, Web, runner observation helper and the unchanged chat model/policy executable
+were installed from `d265a0d04c7298f9223d9828cccc191ea5f180d6`, tree
+`bf91e49358bf590a5b7817b22ff6a19400b9671a`. API three-wheel RECORD and installed service identity
+checks, runtime isolation and Web's 47-file inventory/RECORD checks passed. All nine existing
+services are active. Receipt:
+`/var/lib/eom-api/deployments/d265a0d04c7298f9223d9828cccc191ea5f180d6.json`.
+Migration remains `20261009_0050`; no new migration ran. Pre/postflight confirms exact preset
+and Pack pointers, chat model `gpt-6.1-sol`, protocol 4 and its RAG policy revision/hash are
+unchanged. Both protected request entrance services were stopped before rechecking executable
+work quiescence; pending preset validations and all nonterminal HWPX rendering states were
+included. No in-flight request was reconfigured.
+
+The initial follow-up API options check returned no authoring/review candidates under the
+fresh-observation guard. Four supported metadata-only OBSERVE commands refreshed slots01–04:
+`codexcmd_c72b5b2f7d7a4075baac2e9ad38ac7bf`,
+`codexcmd_c762b2c4291540c79ea14731a1fb0a83`,
+`codexcmd_58a91d19c4c04eb69f1b0ee05be93dee`,
+`codexcmd_9f21a64207b94462bbf84b6aaf4a6581`. All succeeded; no stale observation fallback,
+manual DB update, policy broadening or model inference was used. Subsequent installed API checks
+passed: exact current pointers, Terra medium/high/xhigh role options, existing inactive
+35/35 NON_LIVE validation, health LIVE/READY and unchanged accepted HWPX download SHA.
+The second marker-guarded disposable database was removed through its supported cleanup command;
+production data and canonical artifacts were not deleted. Prior compatible 0050 wheels remain
+available for rollback; this release does not authorize a downgrade of immutable DB history.
+
+Final actual HTTPS Chromium acceptance passed on this installed release: seven presets retain
+their nested revisions (29 for knowledge-grounded), exact released base and capacity pointers
+are visible, and 출제/기본 검토/강화 검토 expose Terra medium/high/xhigh. Baseline high/high/xhigh
+remains unchanged. The changed-effort review was client-only: confirmation unchecked, draft
+submission disabled, no preset/model/generation writes. Request quality/preset/revision selectors
+are absent. Both 320px and 390px layouts fit without horizontal overflow; navigation, console,
+page errors, HTTP reads and explicit logout passed. The first browser harness incorrectly
+required login HTTP 200 instead of the documented successful 201; its corrected replacement
+session passed without changing runtime code or authentication policy. Sanitized admin-only
+screenshot was visually inspected; no credentials or item content were retained in it.
+
+Final read-only postflight again found executable work quiescent and all preset/Pack/chat pins
+preserved. Model submissions, GPU submissions and new Item/HWPX builds across both installations
+remain zero. Documentary commits after `d265a0d0` are not a second executable deployment.
