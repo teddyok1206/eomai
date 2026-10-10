@@ -13,7 +13,7 @@ Environment=TZ=UTC
 Environment=LANG=C.UTF-8
 Environment=PATH=/usr/bin:/bin
 Environment=PYTHONNOUSERSITE=1
-ExecStart=/srv/eom/conda/envs/eom-api/bin/python -I -m eom_orchestrator.inference_transfer_cpu_handoff --execution-id %i
+ExecStart=/opt/eom/conda/envs/eom-embedding-experiment/bin/python -I -m eom_orchestrator.inference_transfer_cpu_handoff --execution-id %i
 
 NoNewPrivileges=yes
 PrivateTmp=yes
@@ -35,11 +35,11 @@ CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_CHOWN
 AmbientCapabilities=
 RestrictAddressFamilies=AF_UNIX
 SystemCallArchitectures=native
-ReadOnlyPaths=/srv/eom/conda/envs/eom-api
+ReadOnlyPaths=/opt/eom/conda/envs/eom-embedding-experiment
 ReadOnlyPaths=/var/lib/eom-workflow-runner/inference-transfer-experiments
 ReadWritePaths=/run/eom-embedding-experiments
 InaccessiblePaths=/mnt/nas /home/eom/EOM /home/eom/EOMIS /etc/eom
-InaccessiblePaths=/root/.codex /srv/eom/worker-homes /srv/eom/models
+InaccessiblePaths=/root/.codex /srv/eom/worker-homes /srv/eom/models /opt/eom/embedding-models
 InaccessiblePaths=-/var/run/docker.sock -/run/postgresql -/var/run/postgresql
 InaccessiblePaths=-/run/dbus -/run/systemd/private
 

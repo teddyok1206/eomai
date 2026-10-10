@@ -25,14 +25,14 @@ from eom_orchestrator.worker_systemd import FixedUnitStatus, parse_unit_status
 
 SYSTEMCTL = "/usr/bin/systemctl"
 UNIT_ROOT = Path("/etc/systemd/system")
-CPU_PYTHON = Path("/srv/eom/conda/envs/eom-embedding-experiment/bin/python")
-PREPARE_PYTHON = Path("/srv/eom/conda/envs/eom-api/bin/python")
+CPU_PYTHON = Path("/opt/eom/conda/envs/eom-embedding-experiment/bin/python")
+PREPARE_PYTHON = CPU_PYTHON
 CPU_TIMEOUT_SECONDS = 1800
 CPU_CLIENT_GUARD_SECONDS = 30
 PREPARE_TEMPLATE = "eom-embedding-experiment-prepare@.service"
 CPU_TEMPLATE = "eom-embedding-experiment@.service"
-PREPARE_TEMPLATE_SHA256 = "c6e03aec4f38f91c4622182452788631213668c23a082f7e4a5253b7167cb908"
-CPU_TEMPLATE_SHA256 = "901490e677fcea763c581ec1fce79c2a3e82063a163cbfd250a8a0c1979d2eb7"
+PREPARE_TEMPLATE_SHA256 = "432f8d2cd0a9997f01edec6c559217c3a2bb5956a3341bde76d420722b7c9a4b"
+CPU_TEMPLATE_SHA256 = "1097b66b9ac385e0f9b6ae28e2c45b33ca6fb497532a6e80245fb24c110ff832"
 _ROOT_UID = 0
 _ENVIRONMENT = {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"}
 _PROPERTIES = (

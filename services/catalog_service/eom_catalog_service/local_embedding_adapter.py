@@ -169,7 +169,7 @@ def _require_safe_path(path: Path, *, expected_owner_uid: int) -> None:
 def _read_verified_file(
     path: Path, *, owner_uid: int, maximum_bytes: int, retain_bytes: bool
 ) -> tuple[bytes, str, _FileEpoch]:
-    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC)
     try:
         value = os.fstat(descriptor)
         if (
@@ -233,6 +233,7 @@ class OfflineTransformersEmbeddingBackend:
             or not 1 <= threads <= 16
         ):
             raise LocalEmbeddingError("LOCAL_EMBEDDING_INPUT_INVALID")
+        spec = LocalEmbeddingModelSpec.model_validate(spec.model_dump(mode="json"))
         self._spec = spec
         self._owner_uid = expected_owner_uid
         self._batch_size = batch_size
@@ -292,56 +293,7 @@ class OfflineTransformersEmbeddingBackend:
         return spec
 
     def _resolve(self, model_store_root: Path, owner_uid: int) -> None:
-        _require_safe_path(model_store_root, expected_owner_uid=owner_uid)
-        _require_safe_path(self._root.parent, expected_owner_uid=owner_uid)
-        _require_safe_path(self._root, expected_owner_uid=owner_uid)
-        raw, _sha, manifest_epoch = _read_verified_file(
-            self._root / "manifest.json",
-            owner_uid=owner_uid,
-            maximum_bytes=_MAX_MANIFEST_BYTES,
-            retain_bytes=True,
-        )
-        manifest = LocalEmbeddingModelSpec.model_validate_json(raw)
-        if manifest != self._spec or raw not in (
-            canonical_json_bytes(manifest.model_dump(mode="json")),
-            canonical_json_bytes(manifest.model_dump(mode="json")) + b"\n",
-        ):
-            raise LocalEmbeddingError("LOCAL_EMBEDDING_MODEL_INVALID")
-        expected = {file.member_path for file in manifest.files}
-        observed: set[str] = set()
-        directories_to_guard = [model_store_root, self._root.parent, self._root]
-        for parent, directories, files in os.walk(self._root, followlinks=False):
-            for name in directories:
-                directory = Path(parent) / name
-                _require_safe_path(directory, expected_owner_uid=owner_uid)
-                directories_to_guard.append(directory)
-            observed.update(
-                (Path(parent) / name).relative_to(self._root).as_posix() for name in files
-            )
-        if not expected <= _SAFE_FILES or observed != expected | {"manifest.json"}:
-            raise LocalEmbeddingError("LOCAL_EMBEDDING_MODEL_INVALID")
-        epochs = [
-            *(
-                _FileEpoch(directory, _file_identity(directory.lstat()))
-                for directory in directories_to_guard
-            ),
-            manifest_epoch,
-        ]
-        for member in manifest.files:
-            retain = member.member_path in {"config.json", "tokenizer_config.json"}
-            maximum = min(member.size_bytes, 128 * 1024) if retain else member.size_bytes
-            payload, sha, epoch = _read_verified_file(
-                self._root / member.member_path,
-                owner_uid=owner_uid,
-                maximum_bytes=maximum,
-                retain_bytes=retain,
-            )
-            if epoch.identity[2] != member.size_bytes or sha != member.sha256:
-                raise LocalEmbeddingError("LOCAL_EMBEDDING_HASH_MISMATCH")
-            if retain:
-                _reject_remote_configuration(json.loads(payload))
-            epochs.append(epoch)
-        self._epochs = tuple(epochs)
+        self._epochs = _resolve_embedding_snapshot(model_store_root, self._spec, owner_uid)
 
     def _assert_unchanged(self) -> None:
         try:
@@ -421,3 +373,76 @@ class OfflineTransformersEmbeddingBackend:
         except (OSError, ValueError, TypeError, KeyError, RuntimeError) as exc:
             raise LocalEmbeddingError("LOCAL_EMBEDDING_INFERENCE_FAILED") from exc
         return tuple(output)
+
+
+def _resolve_embedding_snapshot(
+    model_store_root: Path, spec: LocalEmbeddingModelSpec, owner_uid: int
+) -> tuple[_FileEpoch, ...]:
+    root = model_store_root / spec.model_id / spec.model_revision_id
+    _require_safe_path(model_store_root, expected_owner_uid=owner_uid)
+    _require_safe_path(root.parent, expected_owner_uid=owner_uid)
+    _require_safe_path(root, expected_owner_uid=owner_uid)
+    raw, _sha, manifest_epoch = _read_verified_file(
+        root / "manifest.json",
+        owner_uid=owner_uid,
+        maximum_bytes=_MAX_MANIFEST_BYTES,
+        retain_bytes=True,
+    )
+    manifest = LocalEmbeddingModelSpec.model_validate_json(raw)
+    if manifest != spec or raw not in (
+        canonical_json_bytes(manifest.model_dump(mode="json")),
+        canonical_json_bytes(manifest.model_dump(mode="json")) + b"\n",
+    ):
+        raise LocalEmbeddingError("LOCAL_EMBEDDING_MODEL_INVALID")
+    expected = {file.member_path for file in manifest.files}
+    observed: set[str] = set()
+    directories = [model_store_root, root.parent, root]
+    for parent, names, files in os.walk(root, followlinks=False):
+        for name in names:
+            directory = Path(parent) / name
+            _require_safe_path(directory, expected_owner_uid=owner_uid)
+            directories.append(directory)
+        observed.update((Path(parent) / name).relative_to(root).as_posix() for name in files)
+    if not expected <= _SAFE_FILES or observed != expected | {"manifest.json"}:
+        raise LocalEmbeddingError("LOCAL_EMBEDDING_MODEL_INVALID")
+    epochs = [*(_FileEpoch(path, _file_identity(path.lstat())) for path in directories)]
+    epochs.append(manifest_epoch)
+    for member in manifest.files:
+        retain = member.member_path in {"config.json", "tokenizer_config.json"}
+        maximum = min(member.size_bytes, 128 * 1024) if retain else member.size_bytes
+        payload, sha, epoch = _read_verified_file(
+            root / member.member_path,
+            owner_uid=owner_uid,
+            maximum_bytes=maximum,
+            retain_bytes=retain,
+        )
+        if epoch.identity[2] != member.size_bytes or sha != member.sha256:
+            raise LocalEmbeddingError("LOCAL_EMBEDDING_HASH_MISMATCH")
+        if retain:
+            _reject_remote_configuration(json.loads(payload))
+        epochs.append(epoch)
+    for epoch in epochs:
+        if _file_identity(epoch.path.lstat()) != epoch.identity:
+            raise LocalEmbeddingError("LOCAL_EMBEDDING_MODEL_CHANGED")
+    return tuple(epochs)
+
+
+def verify_local_embedding_model_snapshot(
+    model_store_root: Path,
+    spec: LocalEmbeddingModelSpec,
+    *,
+    expected_owner_uid: int = 0,
+) -> LocalEmbeddingModelSpec:
+    """Validate the exact offline snapshot without importing libraries or loading a model.
+
+    This is filesystem/hash verification, not an authorization or inference-quality proof.
+    The numerical adapter and installed negative probe share this authoritative resolver.
+    """
+    try:
+        validated = LocalEmbeddingModelSpec.model_validate(spec.model_dump(mode="json"))
+        _resolve_embedding_snapshot(model_store_root, validated, expected_owner_uid)
+        return validated
+    except LocalEmbeddingError:
+        raise
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        raise LocalEmbeddingError("LOCAL_EMBEDDING_MODEL_INVALID") from exc

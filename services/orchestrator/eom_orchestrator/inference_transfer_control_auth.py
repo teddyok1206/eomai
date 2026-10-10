@@ -158,6 +158,11 @@ def _require_api_peer_socket(connection: socket.socket) -> None:
         ) from exc
 
 
+def require_fixed_api_peer_socket(connection: socket.socket) -> None:
+    """Supported peer proof for the fixed official API, before any secret bytes."""
+    _require_api_peer_socket(connection)
+
+
 def _json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     value: dict[str, Any] = {}
     for key, member in pairs:

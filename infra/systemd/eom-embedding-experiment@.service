@@ -19,7 +19,7 @@ Environment=HF_HUB_OFFLINE=1
 Environment=TRANSFORMERS_OFFLINE=1
 Environment=HF_HUB_DISABLE_TELEMETRY=1
 Environment=CUDA_VISIBLE_DEVICES=
-ExecStart=/srv/eom/conda/envs/eom-embedding-experiment/bin/python -I -m eom_catalog_service.inference_transfer_cpu_stdio --execution-id %i
+ExecStart=/opt/eom/conda/envs/eom-embedding-experiment/bin/python -I -m eom_catalog_service.inference_transfer_cpu_stdio --execution-id %i
 
 NoNewPrivileges=yes
 PrivateTmp=yes
@@ -40,8 +40,8 @@ CapabilityBoundingSet=
 AmbientCapabilities=
 RestrictAddressFamilies=AF_UNIX
 SystemCallArchitectures=native
-ReadOnlyPaths=/srv/eom/conda/envs/eom-embedding-experiment
-ReadOnlyPaths=/srv/eom/models/embedding
+ReadOnlyPaths=/opt/eom/conda/envs/eom-embedding-experiment
+ReadOnlyPaths=/opt/eom/embedding-models
 # PID1 opens only immutable root-staged files before this private mount namespace.
 # The worker cannot reopen them, alter names, or access owner markers/publication.
 InaccessiblePaths=/run/eom-embedding-experiments

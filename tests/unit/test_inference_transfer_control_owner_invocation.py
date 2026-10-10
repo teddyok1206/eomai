@@ -135,6 +135,66 @@ def test_prepare_calls_existing_draft_leaf_and_reauthenticates_every_boundary(
     assert session.calls == 3
 
 
+def test_capacity_read_uses_exact_owner_pin_without_publication(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    owner, reader, session = _owner(monkeypatch)
+    pin = prepared_receipt().manifest.capacity
+    calls: list[str] = []
+
+    def resolve(actual_session: Any, revision_id: str) -> Any:
+        assert actual_session is session
+        calls.append(revision_id)
+        return pin
+
+    monkeypatch.setattr(invocation, "resolve_released_capacity_policy", resolve)
+    monkeypatch.setattr(
+        invocation, "prepare_inference_transfer_controls", lambda *_args, **_kwargs: pytest.fail()
+    )
+    monkeypatch.setattr(
+        invocation, "release_inference_transfer_controls", lambda *_args, **_kwargs: pytest.fail()
+    )
+    assert owner.read_capacity_pin(pin.capacity_policy_revision_id) == pin
+    assert calls == [pin.capacity_policy_revision_id]
+    assert reader.calls == 3 and session.calls == 2
+
+
+@pytest.mark.parametrize("revision_id", ["latest", "capacityrev_abc", "../capacityrev", ""])
+def test_capacity_read_rejects_nonexact_revision_before_authentication(
+    monkeypatch: pytest.MonkeyPatch, revision_id: str
+) -> None:
+    owner, reader, session = _owner(monkeypatch)
+    with pytest.raises(ControlPlaneError) as caught:
+        owner.read_capacity_pin(revision_id)
+    assert caught.value.code == "CONTROL_CAPACITY_POINTER_INVALID"
+    assert reader.calls == session.calls == 0
+
+
+def test_capacity_read_does_not_return_metadata_after_session_drift(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reader = _Reader([_principal(), _principal(), _principal(session_id="apisession_" + "f" * 32)])
+    owner, _, _ = _owner(monkeypatch, reader)
+    pin = prepared_receipt().manifest.capacity
+    monkeypatch.setattr(invocation, "resolve_released_capacity_policy", lambda *_args: pin)
+    with pytest.raises(ControlPlaneError) as caught:
+        owner.read_capacity_pin(pin.capacity_policy_revision_id)
+    assert caught.value.code == "CONTROL_AUTHORIZATION_REQUIRED"
+
+
+def test_capacity_read_denies_revoked_current_database_permission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    owner, _, _ = _owner(monkeypatch)
+    monkeypatch.setattr(invocation, "effective_permissions", lambda *_args: frozenset())
+    monkeypatch.setattr(
+        invocation, "resolve_released_capacity_policy", lambda *_args: pytest.fail()
+    )
+    with pytest.raises(ControlPlaneError) as caught:
+        owner.read_capacity_pin(prepared_receipt().manifest.capacity.capacity_policy_revision_id)
+    assert caught.value.code == "CONTROL_AUTHORIZATION_REQUIRED"
+
+
 def test_explicit_release_calls_leaf_once_and_returns_only_non_live_quality_metadata(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

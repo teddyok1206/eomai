@@ -79,6 +79,8 @@ HTTP replay/목적 전용 결과 resolution 및 아직 남은 실제 운영 호�
 [owner 호출부 후속 설계](ITEM_INFERENCE_TRANSFER_OWNER_INVOCATION_DESIGN.md)에 기록한다.
 후속 source 구현·검증은 [다섯 번째 checkpoint](ITEM_INFERENCE_TRANSFER_FIFTH_CHECKPOINT.md)에
 기록한다. 설치된 격리 CPU launcher/control owner 운영 composition·실제 corpus/human gate는 대기다.
+실제 guiadmin 승인 이후 인증 owner 호출과 독립 CPU 설치 경계는
+[여섯 번째 checkpoint](ITEM_INFERENCE_TRANSFER_SIXTH_CHECKPOINT.md)에 구분해서 기록한다.
 
 1. 실제 actor의 supported Catalog read 경계를 사용할 수 있는 compatible release와 exact Graph/policy scope를 준비한다. 기존 V2 검색·활성 preset을 바꾸지 않는 opt-in 경로로 제한한다.
 2. 실제 corpus의 deterministic profile 길이·E5 token overflow 비율·source resolution query/file-read 비용부터 측정한다. 긴 조건을 버려 성공시키지 않는다. 필요한 facet/chunk successor는 측정 후 별도 설계한다.

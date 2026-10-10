@@ -123,6 +123,10 @@ from eom_catalog_service.document_review_pdf_annotation_service import (
     DocumentReviewPdfAnnotationServiceError,
 )
 from eom_catalog_service.errors import CatalogError
+from eom_catalog_service.inference_transfer_metadata_dispatch import dispatch_metadata_frame
+from eom_catalog_service.inference_transfer_metadata_service import (
+    CatalogInferenceTransferMetadataService,
+)
 from eom_catalog_service.inference_transfer_snapshot_dispatch import dispatch_snapshot_frame
 from eom_catalog_service.inference_transfer_snapshot_service import (
     InferenceTransferSnapshotApplicationService,
@@ -197,6 +201,12 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 raise ValueError
             raw_operation = value.get("operation")
             if not self.server.peer_can_operate(self.request, raw_operation):
+                return
+            if raw_operation == "INFERENCE_TRANSFER_METADATA_RESOLVE":
+                self.wfile.write(
+                    dispatch_metadata_frame(self.server.inference_transfer_metadata, raw)
+                )
+                self.wfile.flush()
                 return
             if raw_operation == "INFERENCE_TRANSFER_SNAPSHOT":
                 self.wfile.write(
@@ -1252,6 +1262,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         document_review_evidence: DocumentReviewEvidenceService | None = None,
         chat_knowledge: ChatKnowledgeResolutionService | None = None,
         chat_rag: ChatRagResolutionService | None = None,
+        inference_transfer_metadata: CatalogInferenceTransferMetadataService | None = None,
         inference_transfer_snapshot: InferenceTransferSnapshotApplicationService | None = None,
         inference_transfer_workflow_reads: CatalogInferenceTransferWorkflowReadService
         | None = None,
@@ -1276,6 +1287,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.document_review_evidence = document_review_evidence
         self.chat_knowledge = chat_knowledge
         self.chat_rag = chat_rag
+        self.inference_transfer_metadata = inference_transfer_metadata
         self.inference_transfer_snapshot = inference_transfer_snapshot
         self.inference_transfer_workflow_reads = inference_transfer_workflow_reads
         self.chat_search = (

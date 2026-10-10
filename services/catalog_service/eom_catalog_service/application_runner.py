@@ -27,6 +27,9 @@ from eom_catalog_service.document_review_hwpx_correction_service import (
 from eom_catalog_service.document_review_pdf_annotation_service import (
     DocumentReviewPdfAnnotationService,
 )
+from eom_catalog_service.inference_transfer_metadata_service import (
+    CatalogInferenceTransferMetadataService,
+)
 from eom_catalog_service.inference_transfer_snapshot_catalog_adapter import (
     CatalogInferenceTransferSnapshotSourceAdapter,
 )
@@ -260,6 +263,7 @@ def serve() -> int:
             knowledge_retrieval,
             chat_knowledge=ChatKnowledgeResolutionService(engine),
             chat_rag=ChatRagResolutionService(engine),
+            inference_transfer_metadata=CatalogInferenceTransferMetadataService(engine),
             inference_transfer_snapshot=InferenceTransferSnapshotApplicationService(
                 CatalogInferenceTransferSnapshotSourceAdapter(engine),
             ),

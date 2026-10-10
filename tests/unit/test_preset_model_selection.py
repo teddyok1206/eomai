@@ -21,6 +21,7 @@ from eom_orchestrator.preset_model_selection import (
     non_live_invocation_cases,
     preset_model_options,
     require_model_only_successor,
+    resolve_released_capacity_policy,
     validate_model_selection,
     validated_preset,
 )
@@ -555,3 +556,34 @@ def test_prepublication_options_reject_foreign_exact_capacity_revision() -> None
             observed_at=NOW,
         )
     assert exc.value.code == "CONTROL_CAPACITY_POINTER_INVALID"
+
+
+def test_public_capacity_resolution_reuses_exact_native_document() -> None:
+    session = _OptionSession()
+    before = deepcopy(session.capacity.canonical_document)
+    policy = resolve_released_capacity_policy(
+        session,  # type: ignore[arg-type]
+        session.capacity.capacity_policy_revision_id,
+    )
+    assert policy.model_dump(mode="json") == before
+    assert session.capacity.canonical_document == before
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("state", "DRAFT"),
+        ("content_sha256", "sha256:" + "f" * 64),
+        ("capacity_policy_id", "capacity_" + "f" * 32),
+        ("schema_version", "worker-capacity-policy/1.3"),
+    ],
+)
+def test_public_capacity_resolution_rejects_current_identity_drift(field: str, value: str) -> None:
+    session = _OptionSession()
+    setattr(session.capacity, field, value)
+    with pytest.raises(ControlPlaneError) as caught:
+        resolve_released_capacity_policy(
+            session,  # type: ignore[arg-type]
+            session.capacity.capacity_policy_revision_id,
+        )
+    assert caught.value.code == "CONTROL_CAPACITY_POINTER_INVALID"

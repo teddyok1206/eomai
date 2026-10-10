@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이 — 후속 owner 호출부 설계
 
-상태: **PARTIALLY_SOURCE_IMPLEMENTED / NOT_LIVE**. 2026-10-10 UTC.
+상태: **SOURCE_IMPLEMENTED / LIVE_ACCEPTANCE_PENDING**. 2026-10-10 UTC.
 네 번째 checkpoint의 소스 연결을 실제 bounded 실험에 잇기 위한 설계다. 이 문서는 새 API,
 private operation, 권한, control release, 모델 실행 또는 배포를 활성화하지 않는다.
 
@@ -21,6 +21,8 @@ queue, search engine, framework 또는 일반 사용자 UI를 이 단계에서 �
 
 검증 결과와 잔여 한계는 [다섯 번째 checkpoint](ITEM_INFERENCE_TRANSFER_FIFTH_CHECKPOINT.md)에
 기록한다. 소스 연결을 모델 실행·NAS publication·운영 활성화로 해석하지 않는다.
+실제 guiadmin 승인 이후 인증 HTTP/owner CLI·CPU 설치 경계와 운영 관측은
+[여섯 번째 checkpoint](ITEM_INFERENCE_TRANSFER_SIXTH_CHECKPOINT.md)에 구분해서 기록한다.
 
 ## 필수 설계 결정
 
@@ -210,3 +212,89 @@ API contracts가 없는 fresh interpreter에서 기존 control-plane/codex-runti
 경로는 원래 API contracts에 의존한다. 이번 optional adapter 변경으로 그 기존 문제까지
 해결했다고 주장하지 않으며 관련 코드는 변경하지 않는다. 운영 owner에는 검증된 호환 API
 contracts wheel이 필요하다.
+
+## guiadmin 승인 이후 실제 호출 연결
+
+2026-10-10 UTC. 사용자는 `guiadmin`으로 운영 설치와 제한된 비교 실험 진행을 승인했다.
+이는 계정 사칭·비밀번호 추측·브라우저 session token 추출을 허용하지 않는다. 최초 운영
+점검에서 interactive login과 authenticated HTTP snapshot→protected owner 호출부가 아직
+없음을 확인했다. 아래 최소 연결을 구현한 후 검증된 새 release identity로 설치한다.
+
+1. **책임:** console은 실제 비표시 비밀번호 입력과 typed command 전달만 한다. 공식 API가
+   로그인·현재 사용자·snapshot source 권한을 확인한다. 보호된 Orchestrator application이
+   기존 execution composition/CPU launcher/Artifact publisher를 호출한다.
+2. **정본:** 기존 accepted source/Graph/policy와 owner commit이 그대로 정본이다. 실제 user
+   login은 API session이며 로컬 username/actor 문자열이나 OS UID로 대체하지 않는다.
+3. **identity:** 실제 operator/session, reviewed command/execution, exact model/Graph/policy와
+   Artifact hashes를 분리한다. 동일 실행의 완료 output은 새로운 로그인 후에도 같은 operator의
+   현재 권한으로 재인가해야 하며 CPU를 다시 호출하지 않는다.
+4. **resolution:** 기존 fixed loopback의 TCP peer UID 검사를 secret 전송 전에 재사용한다.
+   `/auth/login`, `/auth/me`, snapshot의 기존 JSON Schema/Pydantic 계약과 bounded body/context를
+   검증한다. Password/token은 memory·inherited FD만 사용하며 argv/env/file/log에 저장하지 않는다.
+5. **access pattern:** exact principal·request·source lookup, bounded ordered snapshot 읽기,
+   encode-once, exact replay/append-only receipt다. 새로운 queue/search/session store는 없다.
+6. **구조:** 기존 frozen StageCommand/model/budget/request/result와 작은 session adapter를
+   재사용한다. 전역 mutable token registry나 duplicate source cache는 만들지 않는다.
+7. **규모:** 최초 actual original past-exam 모집단은 최대 1,024 sources, 질의 최대 4개,
+   top-K 8, batch/thread 4, 입력 64 MiB, snapshot frame 3 MiB로 제한한다. 최초 Codex 비교는
+   최대 2쌍이다. 실제 source/encoding coverage가 부족하면 축소·요약으로 PASS를 만들지 않는다.
+8. **transaction:** 공식 login, typed read, CPU 실행과 Artifact commit은 별도 경계다. 기존
+   prepare/claim/lease/unique/commit을 사용한다. HTTP timeout 뒤 state-changing 요청을 자동
+   재전송하지 않는다. UI/worker 기존 활성 설정이나 역사적 실행은 바꾸지 않는다.
+9. **dependency:** optional API contracts와 표준 HTTP adapter만 추가 연결한다. CLI→application
+   →기존 ports/composition 방향을 유지한다. Worker는 staged local bytes만 사용한다.
+10. **failure/retry:** 만료/회수/다른 principal/uncertain refresh는 명시적으로 멈춘다. 자동
+    refresh/relogin/새 execution 우회는 없다. 완료 workspace를 보존하고 실제 재로그인 후 같은
+    identity의 supported replay를 사용한다. Fresh control 승인 15분과 API token/CPU time은
+    서로 다른 경계다. Secret-bearing traceback은 출력하지 않는다.
+11. **대안:** server-only AccessAuthentication adapter를 owner에 가져오려면 API secrets나
+    server 내부 권한을 복제해야 하므로 배제한다. Root DB로 source pointer를 만들거나 브라우저
+    token을 읽는 우회 대신 기존 공식 HTTP 계약과 owner composition의 작은 연결을 사용한다.
+
+Full Graph pointer/정책 핀은 이미 승인된 official resolver/read 경계에서만 얻는다. 아직 없는
+discovery API를 있다고 가정하거나 revision/hash로 Artifact pointer를 합성하지 않는다. Protected
+CPU 설치는 exact reviewed model/runtime, 별도 worker UID, no NAS/DB/network/GPU 및 privilege
+negative smoke를 확인해야 한다. 실제 품질·human label은 계속 별도 gate다.
+
+### 최초 설치 점검에서 확인한 환경 경계
+
+기존 `/srv/eom/conda/envs`는 개발 계정 소유이므로 privileged launcher의 root-owned
+ancestor 검사를 만족하지 않는다. 이를 맞추려고 기존 서비스 환경의 소유권이나 검사 규칙을
+바꾸지 않는다. 전용 prefix는 `/opt/eom/conda/envs/eom-embedding-experiment`, 모델 저장소는
+`/opt/eom/embedding-models`로 분리한다. Prepare와 CPU는 검증된 같은 전용 Conda Python을
+쓰되 서로 다른 OS identity와 sandbox를 유지한다. 설치용 bootstrap과 실제 실행 환경의
+검증은 구분하며, mutable 개발 환경의 interpreter를 root로 실행하지 않는다.
+
+### Exact metadata resolution의 최소 추가 계약
+
+기존 공개 API는 Graph revision/semantic snapshot hash를 표시하지만 안전한 resolution에
+필요한 full Artifact pointer는 반환하지 않는다. 알려진 exact pin을 해석하는 작은 read-only
+leaf를 추가한다. 임의 latest discovery, source content 공개 또는 권한 발급 기능이 아니다.
+
+1. **책임:** 인증 API principal → 기존 fixed Catalog socket → Catalog Graph/policy owner다.
+2. **정본:** published Graph record와 approved manifest Artifact, released access policy다.
+3. **identity:** Graph logical/revision/semantic hash와 Artifact revision/raw manifest hash를
+   구분하고 정확히 같은 값을 응답에서 검증한다.
+4. **resolution:** actor 없는 입력은 known Graph revision + expected semantic snapshot SHA,
+   access-policy revision/SHA와 source classes뿐이다. Actual ACTIVE operator의 ITEM_READ,
+   GRAPH_RETRIEVE, ANALYSIS_READ, 필요 시 INTAKE_READ와 Catalog policy의 role/query-kind/
+   source-class, active corpus와 exact published corpus revision의 연결을 owner가 재확인한다.
+   Pointer 결과는 source 권한 증명이 아니며 후속 PREPARE/READ/AUTHORIZE도
+   기존 검사를 다시 수행한다.
+5. **access pattern:** exact indexed Graph/policy lookup과 bounded metadata read다.
+6. **자료구조:** 작은 frozen typed DTO와 existing indexes/socket을 사용한다. 새 table/queue는 없다.
+7. **규모:** request/reply 각 64 KiB 이하, 기존 indexed lookup 비용을 유지한다.
+8. **transaction:** 읽기 전용 owner transaction이다. control/Artifact publication과 합치지 않는다.
+9. **의존성:** JSON Schema 먼저, contracts → application ports → existing socket adapters다.
+   API와 worker가 Catalog DB/NAS를 직접 읽지 않는다. Capacity는 Orchestrator 책임으로 남긴다.
+10. **실패:** missing/stale/hash/policy/permission 오류는 명시적으로 반환한다. latest 대체,
+    policy 확장 또는 source authority 합성은 없다.
+11. **대안:** revision/hash만으로 Artifact pointer를 만들면 실제 member/schema/media/hash를
+    검증할 수 없다. Root DB lookup이나 parallel discovery 대신 공식 owner resolver를 연결하는
+    한 read leaf가 필요한 최소 구현이다.
+
+Catalog access policy에는 preset의 `retrieval_policy.allowed_corpus_keys` 필드가 없다.
+이 leaf가 그 별도 실행 설정의 권한을 발급하거나 검증했다고 주장하지 않는다. 존재하지
+않는 policy 필드를 추정하지 않고, 비교 Workflow 제출·실행의 기존 exact preset 검사는
+해당 Orchestrator/Runner 경계에 남긴다. Capacity 조회도 현재 실제 control permission으로
+existing native revision을 읽는 별도 owner leaf이며 slot 예약·관측 갱신·발행은 하지 않는다.

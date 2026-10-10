@@ -11,6 +11,11 @@ from eom_api_contracts.inference_transfer import (
     InferenceTransferWorkflowReadResult,
 )
 from eom_catalog_contracts.inference_transfer_invocation import InferenceTransferWorkflowReadMode
+from eom_catalog_contracts.inference_transfer_metadata import (
+    MAX_METADATA_FRAME_BYTES,
+    InferenceTransferMetadataResolveRequest,
+    InferenceTransferMetadataResolveResult,
+)
 from eom_catalog_contracts.inference_transfer_snapshot import (
     InferenceTransferSnapshotRequest,
     InferenceTransferSnapshotResult,
@@ -25,6 +30,38 @@ from eom_api.errors import ApiError
 from eom_api.routers.common import one, run_command
 
 router = APIRouter(tags=["inference-transfer"])
+
+
+@router.post(
+    "/knowledge/inference-transfer/metadata",
+    operation_id="inference_transfer_metadata_resolve",
+    response_model=SingleResponse[InferenceTransferMetadataResolveResult],
+    dependencies=[Depends(require_permission(PermissionKey.KNOWLEDGE_GRAPH_RETRIEVE))],
+    openapi_extra={
+        "x-eom-read-only": True,
+        "x-eom-additional-permissions": [
+            PermissionKey.ITEM_READ.value,
+            PermissionKey.KNOWLEDGE_ANALYSIS_READ.value,
+        ],
+        "x-eom-conditional-permissions": {"PAST_EXAM": [PermissionKey.CONTENT_INTAKE_READ.value]},
+    },
+)
+async def resolve_metadata(
+    request: Request,
+    body: InferenceTransferMetadataResolveRequest,
+    authentication: Auth,
+) -> SingleResponse[InferenceTransferMetadataResolveResult]:
+    if len(await request.body()) > MAX_METADATA_FRAME_BYTES:
+        raise ApiError(
+            422,
+            "INFERENCE_TRANSFER_METADATA_BUDGET_EXCEEDED",
+            "Metadata request too large",
+            "The exact metadata read request exceeds its fixed byte budget.",
+        )
+    return one(
+        request,
+        request.app.state.services.inference_transfer_metadata.resolve(authentication, body),
+    )
 
 
 @router.post(

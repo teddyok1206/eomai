@@ -1,0 +1,63 @@
+[Unit]
+Description=EOM fixed no-forward CPU isolation verification
+StartLimitIntervalSec=infinity
+StartLimitBurst=1
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=eom-embedding-experiment
+Group=eom-embedding-experiment
+WorkingDirectory=/
+Environment=TZ=UTC
+Environment=LANG=C.UTF-8
+Environment=PATH=/usr/bin:/bin
+Environment=PYTHONNOUSERSITE=1
+Environment=HF_HUB_OFFLINE=1
+Environment=TRANSFORMERS_OFFLINE=1
+Environment=HF_HUB_DISABLE_TELEMETRY=1
+Environment=CUDA_VISIBLE_DEVICES=
+ExecStart=/opt/eom/conda/envs/eom-embedding-experiment/bin/python -I -m eom_catalog_service.inference_transfer_cpu_verifier
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX
+SystemCallArchitectures=native
+ReadOnlyPaths=/opt/eom/conda/envs/eom-embedding-experiment
+ReadOnlyPaths=/opt/eom/embedding-models
+InaccessiblePaths=/run/eom-embedding-experiments
+InaccessiblePaths=/var/lib/eom-workflow-runner
+InaccessiblePaths=/mnt/nas /home/eom/EOM /home/eom/EOMIS /etc/eom
+InaccessiblePaths=/root/.codex /srv/eom/worker-homes /srv/eom/models/image
+InaccessiblePaths=/srv/eom/conda/envs/eom-api
+InaccessiblePaths=-/var/run/docker.sock -/run/postgresql -/var/run/postgresql
+InaccessiblePaths=-/run/dbus -/run/systemd/private
+
+UMask=0077
+MemoryMax=2G
+CPUQuota=400%
+TasksMax=64
+TimeoutStartSec=1800
+TimeoutStopSec=5
+KillMode=control-group
+Restart=no
+LimitFSIZE=64M
+LimitCORE=0
+StandardInput=null
+StandardOutput=journal
+StandardError=null

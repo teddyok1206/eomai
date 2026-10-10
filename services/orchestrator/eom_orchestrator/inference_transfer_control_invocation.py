@@ -21,6 +21,7 @@ from eom_identity_service.models import OperatorRecord
 from eom_identity_service.repository import active_role_assignments, effective_permissions
 from eom_operator_identity import PermissionKey, RoleKey
 from eom_workflow.inference_transfer_bootstrap_contract import (
+    InferenceTransferBootstrapCapacityPin,
     InferenceTransferBootstrapManifest,
     validate_inference_transfer_bootstrap_manifest,
     validate_inference_transfer_reviewed_instruction,
@@ -43,6 +44,7 @@ from eom_orchestrator.inference_transfer_bootstrap import (
     prepare_inference_transfer_controls,
     release_inference_transfer_controls,
 )
+from eom_orchestrator.preset_model_selection import resolve_released_capacity_policy
 
 _FRESH_AUTH_AGE = timedelta(minutes=15)
 _OPERATOR = re.compile(r"operator_[0-9a-f]{32}", re.ASCII)
@@ -125,6 +127,9 @@ class AuthenticatedInferenceTransferControlOwner:
     def _authorize(self, operator_id: str, action: Literal["PREPARE", "RELEASE"]) -> None:
         if action not in {"PREPARE", "RELEASE"}:
             raise ControlPlaneError("CONTROL_AUTHORIZATION_REQUIRED", "unsupported control action")
+        self._authorize_current_principal(operator_id)
+
+    def _authorize_current_principal(self, operator_id: str) -> None:
         principal = self._current_principal()
         if operator_id != principal.operator_id:
             raise ControlPlaneError("CONTROL_AUTHORIZATION_REQUIRED", "control principal differs")
@@ -145,6 +150,25 @@ class AuthenticatedInferenceTransferControlOwner:
                 raise ControlPlaneError(
                     "CONTROL_AUTHORIZATION_REQUIRED", "current owner identity authorization denied"
                 )
+
+    def read_capacity_pin(self, revision_id: str) -> InferenceTransferBootstrapCapacityPin:
+        """Read exact native metadata; no publication, reservation or activation."""
+        if re.fullmatch(r"capacityrev_[0-9a-f]{32}", revision_id, re.ASCII) is None:
+            raise ControlPlaneError(
+                "CONTROL_CAPACITY_POINTER_INVALID", "capacity revision identity is invalid"
+            )
+        principal = self._current_principal()
+        self._authorize_current_principal(principal.operator_id)
+        with self.sessions() as session:
+            capacity = resolve_released_capacity_policy(session, revision_id)
+            result = InferenceTransferBootstrapCapacityPin(
+                capacity_policy_id=capacity.capacity_policy_id,
+                capacity_policy_revision_id=capacity.capacity_policy_revision_id,
+                schema_version=capacity.schema_version,
+                content_sha256=capacity.content_sha256,
+            )
+        self._authorize_current_principal(principal.operator_id)
+        return result
 
     def prepare(
         self,

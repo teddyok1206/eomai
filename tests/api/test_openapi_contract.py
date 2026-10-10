@@ -29,6 +29,7 @@ READ_ONLY_POSTS = {
     "general_chat_knowledge_search",
     "general_chat_grounding_read",
     "inference_transfer_snapshot_read",
+    "inference_transfer_metadata_resolve",
 }
 
 

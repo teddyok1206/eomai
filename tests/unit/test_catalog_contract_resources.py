@@ -169,6 +169,7 @@ def test_catalog_schema_resources_match_canonical_sources() -> None:
     assert len({entry.resource_path for _, entry in entries}) == len(entries)
     assert {
         "item-inference-transfer",
+        "item-inference-transfer-metadata",
         "educational-document-types",
         "legacy-item-extraction-batch",
         "legacy-item-extraction-batch-v2",

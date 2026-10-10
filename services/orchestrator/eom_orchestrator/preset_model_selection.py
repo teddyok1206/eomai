@@ -162,6 +162,15 @@ def _load_capacity(session: Session, revision_id: str) -> Capacity:
     return _validated_capacity(row, revision_id)
 
 
+def resolve_released_capacity_policy(session: Session, revision_id: str) -> Capacity:
+    """Resolve an exact native pin, without refreshing observations or granting access.
+
+    The protected owner must separately authorize the current operator. The same
+    canonical schema/hash/lifecycle rule used by execution remains authoritative.
+    """
+    return _load_capacity(session, revision_id)
+
+
 def _validated_capacity(row: WorkerCapacityPolicyRevisionRecord, revision_id: str) -> Capacity:
     if not isinstance(row.canonical_document, dict):
         raise ControlPlaneError("CONTROL_CAPACITY_POINTER_INVALID", "capacity policy is invalid")

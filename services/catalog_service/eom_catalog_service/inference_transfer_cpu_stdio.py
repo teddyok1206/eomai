@@ -32,7 +32,7 @@ from eom_catalog_service.inference_transfer_experiment import (
 from eom_catalog_service.inference_transfer_ports import TokenMeasuredEmbeddingBackend
 from eom_catalog_service.local_embedding_adapter import OfflineTransformersEmbeddingBackend
 
-MODEL_STORE = Path("/srv/eom/models/embedding")
+MODEL_STORE = Path("/opt/eom/embedding-models")
 WORKER_USER = "eom-embedding-experiment"
 MAXIMUM_MEMBER_BYTES = 64 * 1024**2
 _ROOT_UID = 0

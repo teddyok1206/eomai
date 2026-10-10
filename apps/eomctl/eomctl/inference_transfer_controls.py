@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import getpass
 import json
 import os
 import stat
+import sys
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -29,6 +32,9 @@ from sqlalchemy import Engine
 if TYPE_CHECKING:
     from eom_orchestrator.inference_transfer_control_invocation import (
         AuthenticatedInferenceTransferControlOwner,
+    )
+    from eom_orchestrator.inference_transfer_owner_http import (
+        AuthenticatedInferenceTransferHttpSession,
     )
 
 inference_transfer_control_app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
@@ -70,8 +76,42 @@ _PUBLIC_FAILURE_CODES = frozenset(
         "CONTROL_EVALUATION_HASH_MISMATCH",
         "CONTROL_EVALUATION_POLICY_MISMATCH",
         "CONTROL_EVALUATION_CONFLICT",
+        "INFERENCE_TRANSFER_FORBIDDEN",
+        "INFERENCE_TRANSFER_METADATA_NOT_FOUND",
+        "INFERENCE_TRANSFER_METADATA_PIN_MISMATCH",
+        "INFERENCE_TRANSFER_METADATA_POLICY_INVALID",
+        "INFERENCE_TRANSFER_METADATA_REQUEST_INVALID",
+        "INFERENCE_TRANSFER_METADATA_UNAVAILABLE",
+        "INFERENCE_TRANSFER_METADATA_BUDGET_EXCEEDED",
     }
 )
+_EXPERIMENT_FAILURE_CODES = frozenset(
+    {
+        "INFERENCE_TRANSFER_FORBIDDEN",
+        "INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH",
+        "INFERENCE_TRANSFER_SNAPSHOT_CHANGED",
+        "INFERENCE_TRANSFER_SNAPSHOT_POPULATION_TRUNCATED",
+        "INFERENCE_TRANSFER_SNAPSHOT_POPULATION_INVALID",
+        "INFERENCE_TRANSFER_SNAPSHOT_SELECTION_INVALID",
+        "INFERENCE_TRANSFER_SNAPSHOT_BASELINE_INVALID",
+        "INFERENCE_TRANSFER_SNAPSHOT_REQUEST_INVALID",
+        "INFERENCE_TRANSFER_SNAPSHOT_BUDGET_EXCEEDED",
+        "INFERENCE_TRANSFER_SNAPSHOT_UNAVAILABLE",
+        "INFERENCE_TRANSFER_STAGING_UNAVAILABLE",
+        "INFERENCE_TRANSFER_STAGING_REPLY_INVALID",
+        "INFERENCE_TRANSFER_STAGING_BUDGET_EXCEEDED",
+        "INFERENCE_TRANSFER_STAGING_QUERY_UNAVAILABLE",
+        "INFERENCE_TRANSFER_STAGING_REQUEST_INVALID",
+        "INFERENCE_TRANSFER_STAGING_INPUT_OR_REPLY_INVALID",
+        "INFERENCE_EXPERIMENT_EXECUTION_UNAVAILABLE",
+        "INFERENCE_EXPERIMENT_EXECUTION_KNOWN_FAILED",
+        "INFERENCE_EXPERIMENT_EXECUTION_UNCERTAIN",
+        "INFERENCE_EXPERIMENT_RESULT_INVALID",
+        "INFERENCE_EXPERIMENT_COMMIT_UNCERTAIN",
+        "INFERENCE_EXPERIMENT_COMMIT_RECEIPT_INVALID",
+    }
+)
+_RUNTIME_IDENTITY = Path("/etc/eom/workflow-runtime.env")
 
 
 def _identity(value: os.stat_result) -> tuple[int, ...]:
@@ -155,7 +195,7 @@ def require_inference_transfer_control_owner() -> None:
     require_owner()
 
 
-def _owner(descriptor: int) -> tuple[Engine, AuthenticatedInferenceTransferControlOwner]:
+def _owner(descriptor: int | None) -> tuple[Engine, AuthenticatedInferenceTransferControlOwner]:
     require_inference_transfer_control_owner()
     from eom_orchestrator.inference_transfer_control_auth import (
         FixedApiControlPrincipalReader,
@@ -165,14 +205,18 @@ def _owner(descriptor: int) -> tuple[Engine, AuthenticatedInferenceTransferContr
         AuthenticatedInferenceTransferControlOwner,
     )
 
-    bearer = read_control_bearer_fd(descriptor)
+    principal_reader = (
+        _session(None)
+        if descriptor is None
+        else FixedApiControlPrincipalReader(read_control_bearer_fd(descriptor))
+    )
     engine = build_engine()
     try:
         settings = Settings.from_environment()
         return engine, AuthenticatedInferenceTransferControlOwner(
             build_session_factory(engine),
             ControlArtifactPublisher(engine, settings),
-            FixedApiControlPrincipalReader(bearer),
+            principal_reader,
         )
     except Exception:
         engine.dispose()
@@ -186,14 +230,227 @@ def _failure(error: Exception) -> None:
     typer.echo(json.dumps({"status": "FAILED", "error_code": code}, sort_keys=True))
 
 
+def _experiment_failure(error: Exception) -> None:
+    # Optional types are imported only while executing these new commands.
+    from eom_orchestrator.inference_transfer_experiment_execution import ExperimentExecutionError
+    from eom_orchestrator.inference_transfer_snapshot_staging import (
+        SnapshotReadFailure,
+        SnapshotStagingError,
+    )
+
+    if isinstance(error, (ExperimentExecutionError, SnapshotReadFailure, SnapshotStagingError)):
+        code = (
+            error.code
+            if error.code in _EXPERIMENT_FAILURE_CODES
+            else "CONTROL_BOOTSTRAP_UNAVAILABLE"
+        )
+        typer.echo(json.dumps({"status": "FAILED", "error_code": code}, sort_keys=True))
+    else:
+        _failure(error)
+
+
+def _session(descriptor: int | None) -> AuthenticatedInferenceTransferHttpSession:
+    require_inference_transfer_control_owner()
+    from eom_orchestrator.inference_transfer_control_auth import read_control_bearer_fd
+    from eom_orchestrator.inference_transfer_owner_http import (
+        AuthenticatedInferenceTransferHttpSession,
+    )
+    from pydantic import SecretStr
+
+    if descriptor is not None:
+        return AuthenticatedInferenceTransferHttpSession.from_bearer(
+            read_control_bearer_fd(descriptor)
+        )
+    # Never permit getpass's echoing stdin fallback in an unattended command.
+    if not sys.stdin.isatty() or not sys.stderr.isatty():
+        raise ControlPlaneError("CONTROL_AUTHORIZATION_REQUIRED", "interactive TTY login required")
+    with warnings.catch_warnings():
+        # getpass must fail closed rather than use its echoing fallback.
+        warnings.simplefilter("error", getpass.GetPassWarning)
+        password = SecretStr(getpass.getpass("guiadmin 비밀번호: "))
+    return AuthenticatedInferenceTransferHttpSession.login_guiadmin(password)
+
+
+def _installed_source_commit() -> str:
+    """Embedded wheel identity must match the fixed root-owned runtime record."""
+    from eom_api.build_info import get_build_info
+
+    installed = get_build_info()
+    descriptor = os.open(
+        _RUNTIME_IDENTITY, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK
+    )
+    try:
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_uid != 0
+            or before.st_gid != 0
+            or before.st_nlink != 1
+            or stat.S_IMODE(before.st_mode) != 0o644
+            or not 0 < before.st_size <= 128
+        ):
+            raise ValueError("protected installed identity metadata differs")
+        payload = os.read(descriptor, 129)
+        if (
+            len(payload) != before.st_size
+            or _identity(before) != _identity(os.fstat(descriptor))
+            or _identity(before) != _identity(os.stat(_RUNTIME_IDENTITY, follow_symlinks=False))
+            or payload != f"EOM_RUNTIME_SOURCE_COMMIT={installed.source_commit}\n".encode("ascii")
+        ):
+            raise ValueError("protected installed identity differs")
+        return installed.source_commit
+    finally:
+        os.close(descriptor)
+
+
+@inference_transfer_control_app.command("inventory")
+def inventory_experiment(
+    prepare_file: Annotated[Path, typer.Option("--prepare-file")],
+    access_token_fd: Annotated[int | None, typer.Option("--access-token-fd", min=3)] = None,
+) -> None:
+    """Read the actual original-corpus index; no model, workspace or publication."""
+    try:
+        require_inference_transfer_control_owner()
+        from eom_catalog_contracts.inference_transfer_snapshot import (
+            MAX_SNAPSHOT_FRAME_BYTES,
+            InferenceTransferSnapshotPrepareRequest,
+            parse_snapshot_request,
+        )
+        from eom_orchestrator.inference_transfer_experiment_invocation import (
+            AuthenticatedInferenceTransferExperimentOwner,
+        )
+
+        request = parse_snapshot_request(_read_json(prepare_file, MAX_SNAPSHOT_FRAME_BYTES))
+        if not isinstance(request, InferenceTransferSnapshotPrepareRequest):
+            raise ValueError("inventory requires PREPARE")
+        result = AuthenticatedInferenceTransferExperimentOwner(_session(access_token_fd)).inventory(
+            request
+        )
+        typer.echo(canonical_json_bytes(result.model_dump(mode="json")).decode())
+    except Exception as exc:
+        _experiment_failure(exc)
+        raise typer.Exit(1) from None
+
+
+@inference_transfer_control_app.command("metadata")
+def resolve_experiment_metadata(
+    request_file: Annotated[Path, typer.Option("--request-file")],
+    access_token_fd: Annotated[int | None, typer.Option("--access-token-fd", min=3)] = None,
+) -> None:
+    """Resolve a full Graph pointer from exact known pins using official authenticated HTTP."""
+    try:
+        require_inference_transfer_control_owner()
+        from eom_catalog_contracts.inference_transfer_metadata import (
+            MAX_METADATA_FRAME_BYTES,
+            parse_metadata_request,
+        )
+
+        request = parse_metadata_request(_read_json(request_file, MAX_METADATA_FRAME_BYTES))
+        result = _session(access_token_fd).resolve_metadata(request)
+        typer.echo(canonical_json_bytes(result.model_dump(mode="json")).decode())
+    except Exception as exc:
+        _failure(exc)
+        raise typer.Exit(1) from None
+
+
+@inference_transfer_control_app.command("experiment")
+def run_experiment(
+    prepare_file: Annotated[Path, typer.Option("--prepare-file")],
+    model_spec_file: Annotated[Path, typer.Option("--model-spec-file")],
+    experiment_id: Annotated[str, typer.Option("--experiment-id")],
+    experiment_revision_id: Annotated[str, typer.Option("--experiment-revision-id")],
+    execution_id: Annotated[str, typer.Option("--execution-id")],
+    access_token_fd: Annotated[int | None, typer.Option("--access-token-fd", min=3)] = None,
+) -> None:
+    """One bounded CPU experiment; completed workspace replay never relaunches CPU."""
+    engine: Engine | None = None
+    try:
+        require_inference_transfer_control_owner()
+        from eom_catalog_contracts.inference_transfer_experiment import ExperimentBudget
+        from eom_catalog_contracts.inference_transfer_snapshot import (
+            MAX_SNAPSHOT_FRAME_BYTES,
+            InferenceTransferSnapshotPrepareRequest,
+            parse_snapshot_request,
+        )
+        from eom_catalog_contracts.item_inference_transfer import LocalEmbeddingModelSpec
+        from eom_catalog_contracts.validation import validate_contract
+        from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
+        from eom_orchestrator.inference_transfer_cpu_handoff import OWNER_ROOT
+        from eom_orchestrator.inference_transfer_cpu_systemd import FixedCpuExperimentLauncher
+        from eom_orchestrator.inference_transfer_experiment_artifacts import (
+            compose_inference_transfer_experiment,
+        )
+        from eom_orchestrator.inference_transfer_experiment_invocation import (
+            AuthenticatedInferenceTransferExperimentOwner,
+        )
+        from eom_orchestrator.inference_transfer_snapshot_staging import (
+            SnapshotExperimentStageCommand,
+        )
+
+        prepare = parse_snapshot_request(_read_json(prepare_file, MAX_SNAPSHOT_FRAME_BYTES))
+        if not isinstance(prepare, InferenceTransferSnapshotPrepareRequest):
+            raise ValueError("experiment requires PREPARE")
+        raw_model = _read_json(model_spec_file, MAX_SNAPSHOT_FRAME_BYTES)
+        if not isinstance(raw_model, dict):
+            raise ValueError("model specification must be a closed object")
+        validate_contract("item-inference-transfer", raw_model)
+        model = LocalEmbeddingModelSpec.model_validate(raw_model)
+        command = SnapshotExperimentStageCommand(
+            prepare,
+            experiment_id,
+            experiment_revision_id,
+            model,
+            ExperimentBudget(maximum_queries=4, top_k=8, batch_size=4, threads=4),
+        )
+        session = _session(access_token_fd)
+        source_commit = _installed_source_commit()
+        settings = Settings.from_environment()
+        if settings.runtime_source_commit not in {None, source_commit}:
+            raise ValueError("runtime source identity differs from installed wheel")
+        engine = build_engine()
+        execution = compose_inference_transfer_experiment(
+            snapshot=session,
+            cpu=FixedCpuExperimentLauncher(),
+            publisher=ControlFileSetPublisher(engine, settings),
+            workspace_root=OWNER_ROOT,
+            source_commit=source_commit,
+        )
+        result = AuthenticatedInferenceTransferExperimentOwner(session, execution).execute(
+            command,
+            execution_id=execution_id,
+        )
+        typer.echo(
+            canonical_json_bytes(
+                {
+                    "status": "COMMITTED",
+                    "execution_id": result.execution_id,
+                    "request_sha256": result.request_sha256,
+                    "result_sha256": result.result_sha256,
+                    "job_id": result.published.job_id,
+                    "artifact": result.published.result.model_dump(mode="json"),
+                    "manifest_sha256": result.published.manifest_sha256,
+                    "cpu_launch_count": result.cpu_launch_count,
+                    "scientific_evaluation": "NOT_EVALUATED",
+                    "human_transfer_evaluation": "NOT_EVALUATED",
+                }
+            ).decode()
+        )
+    except Exception as exc:
+        _experiment_failure(exc)
+        raise typer.Exit(1) from None
+    finally:
+        if engine is not None:
+            engine.dispose()
+
+
 @inference_transfer_control_app.command("prepare")
 def prepare_controls(
     manifest_file: Annotated[Path, typer.Option("--manifest-file")],
     platform_file: Annotated[Path, typer.Option("--platform-file")],
     rubric_file: Annotated[Path, typer.Option("--rubric-file")],
-    access_token_fd: Annotated[int, typer.Option("--access-token-fd", min=3)],
+    access_token_fd: Annotated[int | None, typer.Option("--access-token-fd", min=3)] = None,
 ) -> None:
-    """Publish exact reviewed inputs and DRAFT only. Token is read from an inherited FD."""
+    """Publish exact reviewed inputs and DRAFT only. TTY login or inherited bearer FD."""
     engine: Engine | None = None
     try:
         require_inference_transfer_control_owner()
@@ -216,7 +473,7 @@ def prepare_controls(
 @inference_transfer_control_app.command("release")
 def release_controls(
     receipt_file: Annotated[Path, typer.Option("--receipt-file")],
-    access_token_fd: Annotated[int, typer.Option("--access-token-fd", min=3)],
+    access_token_fd: Annotated[int | None, typer.Option("--access-token-fd", min=3)] = None,
 ) -> None:
     """Explicit NON_LIVE release. Never retry an uncertain publication automatically."""
     engine: Engine | None = None
@@ -235,6 +492,26 @@ def release_controls(
         engine, owner = _owner(access_token_fd)
         result = owner.release(request)
         typer.echo(canonical_json_bytes(result.model_dump(mode="json")).decode())
+    except Exception as exc:
+        _failure(exc)
+        raise typer.Exit(1) from None
+    finally:
+        if engine is not None:
+            engine.dispose()
+
+
+@inference_transfer_control_app.command("capacity")
+def read_capacity_pin(
+    capacity_revision_id: Annotated[str, typer.Option("--capacity-revision-id")],
+    access_token_fd: Annotated[int | None, typer.Option("--access-token-fd", min=3)] = None,
+) -> None:
+    """Read one exact released capacity pin using current authenticated control authority."""
+    engine: Engine | None = None
+    try:
+        require_inference_transfer_control_owner()
+        engine, owner = _owner(access_token_fd)
+        pin = owner.read_capacity_pin(capacity_revision_id)
+        typer.echo(canonical_json_bytes(pin.model_dump(mode="json")).decode())
     except Exception as exc:
         _failure(exc)
         raise typer.Exit(1) from None

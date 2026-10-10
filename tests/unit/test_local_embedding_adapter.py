@@ -19,6 +19,7 @@ from eom_catalog_service.local_embedding_adapter import (
     LocalEmbeddingError,
     OfflineTransformersEmbeddingBackend,
     profile_embedding_text,
+    verify_local_embedding_model_snapshot,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 
@@ -195,6 +196,38 @@ def _model_tree(tmp_path: Path) -> tuple[Path, LocalEmbeddingModelSpec]:
     (root / "manifest.json").write_bytes(canonical_json_bytes(spec.model_dump(mode="json")))
     (root / "manifest.json").chmod(0o600)
     return root, spec
+
+
+def test_public_snapshot_verifier_has_no_numerical_import_or_model_execution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, spec = _model_tree(tmp_path)
+    monkeypatch.setattr(
+        importlib, "import_module", lambda *_a, **_k: pytest.fail("no numerical import")
+    )
+    assert (
+        verify_local_embedding_model_snapshot(tmp_path, spec, expected_owner_uid=os.geteuid())
+        == spec
+    )
+    (root / "model.safetensors").write_bytes(b"changed bytes")
+    with pytest.raises(LocalEmbeddingError):
+        verify_local_embedding_model_snapshot(tmp_path, spec, expected_owner_uid=os.geteuid())
+
+
+def test_public_snapshot_verifier_rejects_forged_frozen_spec(tmp_path: Path) -> None:
+    _root, spec = _model_tree(tmp_path)
+    forged = spec.model_copy(update={"manifest_sha256": "sha256:" + "0" * 64})
+    with pytest.raises(LocalEmbeddingError, match="MODEL_INVALID"):
+        verify_local_embedding_model_snapshot(tmp_path, forged, expected_owner_uid=os.geteuid())
+
+
+def test_public_snapshot_fifo_is_explicit_error_not_blocked_open(tmp_path: Path) -> None:
+    root, spec = _model_tree(tmp_path)
+    path = root / "model.safetensors"
+    path.unlink()
+    os.mkfifo(path, 0o600)
+    with pytest.raises(LocalEmbeddingError, match="MODEL_INVALID"):
+        verify_local_embedding_model_snapshot(tmp_path, spec, expected_owner_uid=os.geteuid())
 
 
 class FakeMask:
