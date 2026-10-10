@@ -121,6 +121,17 @@ model load/forward 0이다. 첫 실패 journal과 위 receipt를 보존하며 �
 새 호환 공유 runtime을 사용하고 CPU는 동일한 수치/handoff 경계만 사용한다. 이 검사는
 모델·service·probe를 실행하지 않았다.
 
+최종 `ad3ed8ca` 후보도 원래 보호 CPU `06134fcd` 설치와 data-only로 다시 대조했다.
+정적 AST EOM import와 Catalog JSON resource를 포함한 수치 경계는 345/345,
+launch/handoff 경계는 118/118 member 일치이며 missing/diff는 모두 0이다.
+새 explicit recipe는 member 순으로 정렬한
+`{member,candidate_sha256,installed_sha256,equal}` rows를 JSON `sort_keys=True`,
+separators `(',', ':')`, UTF-8로 hash한다. 수치 경계 manifest SHA는
+`0c4fd662de7c651ae1413c5411d3d6850969b146e1bdc1e463fe7899adf280a1`,
+launch 경계는 `7c086848862e8ca638f95eb8cb0916e12e12ad3605e9ba3ca98b18b7889f71e8`이다.
+이 recipe의 hash를 위 이전 관측 recipe의 hash와 동일시하지 않는다.
+CPU 전체 package의 최신화·실제 추론·실제 권한 인가를 증명하는 검사는 아니다.
+
 ## 현재 source 회귀 검증
 
 최종 동결 source에 대해 94개 test 파일 **2,609 PASS / 90.30초**, Ruff check/format
