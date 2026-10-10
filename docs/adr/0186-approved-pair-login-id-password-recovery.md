@@ -44,3 +44,21 @@ changes follow the unchanged installed authentication path. Remove the local exc
 when this recovery need is retired; ordinary authentication does not depend on it. Direct SQL,
 granting ADMIN to the targets or globally allowing username/password equality would bypass the
 approved boundary and is rejected.
+
+## Executed recovery — 2026-10-10 01:54 UTC
+
+The reviewed source `83bcaa34` was executed once from a clean pinned local CLI worktree using
+the explicit API Conda interpreter and existing protected database configuration. No API/Web wheel,
+worker configuration, migration or runtime service was replaced. Both approved accounts remained
+ACTIVE VIEWER accounts; their resource and password versions advanced from 1 to 2 in one
+transaction. The result forced password change for both, with zero existing sessions to revoke,
+and recorded request `cli_d374dd4e7816c5875ef593ba` in append-only identity events.
+
+The focused policy/recovery/CLI/existing ADMIN recovery suite passed 91 tests; formatter, linter
+and focused type checks passed. Verification through the installed API confirmed successful
+temporary login, exact target identity, the forced-change flag and
+`AUTH_PASSWORD_CHANGE_REQUIRED` denial of ordinary operations for both accounts. Verification
+sessions were logged out without changing the temporary passwords. Other accounts' resource
+versions, status, roles and forced-change metadata were unchanged. No password, login name, hash
+or token was emitted or added to this record. The immutable original version pins are now stale,
+so the one-use exception cannot reset either account again or accept another pair.
