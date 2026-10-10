@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 구현·검증 계획
 
-상태 시각: 2026-10-10 16:12 UTC. 이 문서는 구현 계획과 단계별 상태 요약이다.
+상태 기준: 2026-10-10, `7383d1c6`의 16:50 UTC 배포와 이후 실제 관측. 이 문서는 구현 계획과 단계별 상태 요약이다.
 실제 설치 증거는 [live acceptance 기록](ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)과
 정본 deployment record로 확인하며, 설치·service health를 비교 실행·교육 품질 PASS로 확대하지 않는다.
 
@@ -31,10 +31,10 @@
 | F0 | 답변 원문 보존·goal·기존 경계 점검 | 원문 read-back/hash, 기존 경계와 제한 기록 | 완료 |
 | F1 | additive JSON Schema 2020-12 → frozen 모델 → grounded deterministic profile | exact refs/hash/closure/uncertainty tests, predecessor bytes 불변 | source 구현·검증 완료 |
 | F2 | pinned offline local embedding adapter와 exact ranking | dependency isolation, malformed vectors·ties·permission-prefilter tests; 실제 CPU benchmark 별도 | source·CPU toy 실행 및 보호 CPU/model 발행 완료; 실패 기록 보존 후 승인된 no-forward 격리 검증 1회 PASS; 실제 corpus benchmark 대기 |
-| F3 | Catalog opt-in authorized candidate read use case | actual actor/policy/Graph admission 재사용, 별도 후보 예산·provenance, 기본 retrieval 무변경 | source·격리 PostgreSQL SQL 검증 및 호환 공유 경계 설치 완료; 실제 `guiadmin` corpus read·비용 미측정 |
+| F3 | Catalog opt-in authorized candidate read use case | actual actor/policy/Graph admission 재사용, 별도 후보 예산·provenance, 기본 retrieval 무변경 | source·격리 PostgreSQL SQL 검증 및 호환 공유 경계 설치 완료; 실제 `guiadmin` original corpus 520/520·metadata PASS; snapshot timeout 개선은 설치했고 실제 재측정 대기 |
 | F4 | Orchestrator 경유 bounded Codex pair comparison | exact A/B, condition+decisive mapping, 차이/새 추론, unsupported/insufficient 처리, schema validation | selected-pair 제출·current 권한 재인가·atomic V21/START·canonical 결과 조회·인증 owner PREPARE/RELEASE source와 호환 공유 release 설치 완료; 실제 초기 protocol/control 발행·worker 비교 대기 |
-| F5 | 기존 검색 대비 bounded 실험·human scorecard | lexical/content-only/crux/metadata ablation, recall·latency·memory, 사람이 전이 위치를 평가 | staged 계약·encode-once harness·실모델 3-view 합성 smoke 완료; 실제 corpus/Graph 비교·human 평가 대기 |
-| F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 교육 판정은 독립 gate | 최종 source 2,609 PASS; 보호 CPU 설치·격리 PASS; `ad3ed8ca` 호환 공유 배포·migration 0051·일곱 callback·API ready·8 service 복원 PASS; 실제 사용자 인증·corpus·control 발행·비교 실행 및 human gate 대기 |
+| F5 | 기존 검색 대비 bounded 실험·human scorecard | lexical/content-only/crux/metadata ablation, recall·latency·memory, 사람이 전이 위치를 평가 | staged 계약·encode-once harness·실모델 3-view 합성 smoke·사람 label 계약/pure metrics 완료; 실제 corpus/Graph 비교·사람 label과 정본 평가 기록/검토묶음 전달 대기 |
+| F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 교육 판정은 독립 gate | 기존 source 2,609 PASS와 변경 경계 회귀/정적/wheel 검사 PASS; 보호 CPU 설치·격리 PASS; `7383d1c6` successor 배포·migration 0051 unchanged·6 callback·API ready·8 service 복원 PASS; 원래 인증/corpus PASS, fresh snapshot·control 발행·비교 실행 및 human gate 대기 |
 
 ## 비교 표현과 판정
 
@@ -63,6 +63,13 @@
 4. A를 푼 사람이 B를 풀 때 느끼는 도움이 모델 제안과 일치하는가.
 
 위 사항은 자동 기술 검증과 분리해 최종 검토 묶음에 모은다. 사람 평가 전에는 `HUMAN_TRANSFER_REVIEW=NOT_EVALUATED`다.
+
+현재 `HumanTransferEvaluation`은 exact pair/rubric/reviewer/UTC와 전이 위치를 검증하는
+frozen 계약이고 `evaluate_transfer_ranking`은 이미 인가·해결된 입력의 순수 지표 함수다.
+전용 사람 label 등록 API/CLI나 publication owner가 구현됐다는 뜻은 아니다. 별도 평가 GUI를
+사후 필수 조건으로 추가하지 않되, 실제 pair 결과에서 사람용 검토 묶음을 제공하고 사람
+판단과 정본 기록을 확인하거나 해당 human gate를 명시적으로 남긴다. schema/pure metric/
+모델 가설만으로 사람 평가 또는 전체 goal 완료를 선언하지 않는다.
 
 ## 첫 구현 checkpoint와 후속 순서
 
