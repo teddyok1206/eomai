@@ -37,18 +37,25 @@ class PasswordService:
         self._dummy_hash = self._hasher.hash(secrets.token_urlsafe(32))
 
     def validate(self, password: str, *, username: str, display_name: str) -> None:
-        encoded = password.encode("utf-8")
-        normalized = unicodedata.normalize("NFKC", password).casefold()
+        normalized = self._validate_non_identity(password)
         identities = {
             unicodedata.normalize("NFKC", username).casefold(),
             unicodedata.normalize("NFKC", display_name).casefold(),
         }
+        if normalized in identities:
+            raise IdentityError(
+                IdentityErrorCode.AUTH_PASSWORD_POLICY_FAILED,
+                "password does not satisfy policy",
+            )
+
+    def _validate_non_identity(self, password: str) -> str:
+        encoded = password.encode("utf-8")
+        normalized = unicodedata.normalize("NFKC", password).casefold()
         invalid = (
             not password
             or "\x00" in password
             or len(password) > self.policy.maximum_characters
             or len(encoded) > self.policy.maximum_encoded_bytes
-            or normalized in identities
             or normalized in COMMON_PASSWORDS
         )
         if invalid:
@@ -56,10 +63,21 @@ class PasswordService:
                 IdentityErrorCode.AUTH_PASSWORD_POLICY_FAILED,
                 "password does not satisfy policy",
             )
+        return normalized
 
     def hash_password(self, password: str, *, username: str, display_name: str) -> str:
         self.validate(password, username=username, display_name=display_name)
         return self._hasher.hash(password)
+
+    def hash_temporary_login_id_password(self, *, username: str) -> str:
+        """Hash a canonical login ID only after the scoped recovery use case authorizes it.
+
+        The caller owns exact-target authorization and forced-change lifecycle. Ordinary
+        creation and credential updates must continue to use ``hash_password``.
+        """
+
+        self._validate_non_identity(username)
+        return self._hasher.hash(username)
 
     def verify(self, password: str, password_hash: str) -> bool:
         try:

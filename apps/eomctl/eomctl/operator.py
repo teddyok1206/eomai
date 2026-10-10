@@ -11,6 +11,11 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from eom_identity_service.approved_login_id_recovery import (
+    ApprovedLoginIdPasswordRecoveryService,
+    ApprovedLoginIdPasswordResetCommand,
+    ApprovedRecoveryTarget,
+)
 from eom_identity_service.local_admin_recovery import (
     EmergencyAdminPasswordResetCommand,
     EmergencyAdminPasswordResetReason,
@@ -88,7 +93,7 @@ class _PosixEomRecoveryAuthorizer:
         )
 
 
-def _emergency_recovery_service() -> LocalAdminPasswordRecoveryService:
+def _local_recovery_authorizer() -> _PosixEomRecoveryAuthorizer:
     authorizer = _PosixEomRecoveryAuthorizer()
     # Reject an untrusted process before opening the database or reading credential bytes.
     if not isinstance(authorizer.authorize(), LocalAdminRecoveryAuthorization):
@@ -96,6 +101,11 @@ def _emergency_recovery_service() -> LocalAdminPasswordRecoveryService:
             IdentityErrorCode.EMERGENCY_RESET_UNAUTHORIZED,
             "local recovery authorization adapter returned an invalid result",
         )
+    return authorizer
+
+
+def _emergency_recovery_service() -> LocalAdminPasswordRecoveryService:
+    authorizer = _local_recovery_authorizer()
     return LocalAdminPasswordRecoveryService(build_engine(), authorizer)
 
 
@@ -357,5 +367,60 @@ def emergency_reset_admin_password(
             "revoked_sessions": result.revoked_sessions,
             "reset_at": result.reset_at,
             "must_change_password": result.must_change_password,
+        }
+    )
+
+
+@operator_app.command("approved-reset-login-id-passwords")
+def approved_reset_login_id_passwords(
+    approved_targets: Annotated[
+        list[str], typer.Option("--approved-target", help="Exactly two Operator ID:version pins")
+    ],
+    confirmed_ids: Annotated[list[str], typer.Option("--confirm-operator-id")],
+) -> None:
+    """Reset the approved pair with forced change, without accepting or printing passwords."""
+
+    try:
+        targets = []
+        for value in approved_targets:
+            operator_id, separator, version = value.partition(":")
+            if not separator or not version.isascii() or not version.isdecimal():
+                raise ValueError("approved target must be an exact Operator ID:version pin")
+            targets.append(ApprovedRecoveryTarget(operator_id, int(version)))
+        if len(targets) != 2:
+            raise ValueError("exactly two approved targets are required")
+        if (
+            len(confirmed_ids) != 2
+            or len(set(confirmed_ids)) != 2
+            or set(confirmed_ids) != {target.operator_id for target in targets}
+        ):
+            raise ValueError("confirmed Operator IDs must match the exact approved pair")
+        command = ApprovedLoginIdPasswordResetCommand(
+            targets=(targets[0], targets[1]),
+            request_id=f"cli_{os.urandom(12).hex()}",
+        )
+        authorizer = _local_recovery_authorizer()
+        result = ApprovedLoginIdPasswordRecoveryService(
+            build_engine(), authorizer
+        ).reset_approved_pair(command)
+    except IdentityError as exc:
+        _identity_error(exc)
+        return
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit(
+        {
+            "request_id": command.request_id,
+            "results": [
+                {
+                    "operator_id": value.operator_id,
+                    "resource_version": value.resource_version,
+                    "password_version": value.password_version,
+                    "revoked_sessions": value.revoked_sessions,
+                    "reset_at": value.reset_at,
+                    "must_change_password": value.must_change_password,
+                }
+                for value in result
+            ],
         }
     )
