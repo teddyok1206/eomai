@@ -6,22 +6,173 @@ from typing import Any
 
 import httpx
 import pytest
+from eom_api_contracts.control_plane import ExecutionPresetView
 from eom_web_gui.contracts import (
     CodexAccountStatusView,
     ExecutionPresetDraftSubmission,
+    ExecutionPresetStatusView,
     ExecutionPresetValidationView,
 )
 from eom_web_gui.gateways import GatewayError, HttpApplicationGateway
+from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
 from tests.web_gui.helpers import FakeGateway, login, make_client
-from tests.web_gui.test_execution_preset_editor import _grounded_preset
-from tests.web_gui.test_gateway import NOW, _session, _single
+from tests.web_gui.test_execution_preset_editor import _grounded_preset, _preset
+from tests.web_gui.test_gateway import NOW, _list, _session, _single
 
 PRESET = "execpreset_" + "4" * 32
 BASE = "execpresetrev_" + "5" * 32
 DRAFT = "execpresetrev_" + "6" * 32
 JOB = "job_" + "7" * 32
+
+
+def _wire_preset(*, family: str = "v2") -> dict[str, Any]:
+    """A released API-view fixture, not the smaller direct-controller test fixture."""
+
+    value = _grounded_preset() if family == "v2" else _preset()
+    value["preset_key"] = "knowledge-grounded-item" if family == "v2" else "standard-item"
+    value["created_at"] = NOW.isoformat()
+    value["updated_at"] = NOW.isoformat()
+    revision = value["revisions"][0]
+    revision.pop("server_only_value")
+    revision["preset_id"] = value["preset_id"]
+    revision["state"] = "RELEASED"
+    revision["created_at"] = NOW.isoformat()
+    revision["evaluations"] = [
+        {
+            "evaluation_id": "preseteval_" + "e" * 32,
+            "evaluated_preset_revision_id": revision["preset_revision_id"],
+            "evaluated_policy_sha256": "sha256:" + "a" * 64,
+            "scope": "NON_LIVE",
+            "outcome": "PASS",
+            "summary_code": "FAKE_ADAPTER_ACCEPTANCE",
+            "cases_total": 12,
+            "cases_passed": 12,
+            "quality_score_permille": 0,
+            "report_artifact_id": "artifact_" + "b" * 32,
+            "report_artifact_revision_id": "rev_" + "c" * 32,
+            "report_content_sha256": "sha256:" + "d" * 64,
+            "completed_at": NOW.isoformat(),
+        }
+    ]
+    # Reuse the public API read contract as the authoritative wire-shape oracle in tests.
+    return ExecutionPresetView.model_validate(value).model_dump(mode="json")
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("family", ["v1", "v1_missing_optional", "v2"])
+async def test_preset_gateway_preserves_the_released_nested_wire_projection(family: str) -> None:
+    raw = _wire_preset(family=family)
+    raw["revisions"][0]["description"] = "정책" * 350
+    if family == "v1_missing_optional":
+        raw["revisions"][0].pop("retrieval_policy")
+        for policy in raw["revisions"][0]["role_policies"]:
+            policy.pop("evidence_access")
+        raw["revisions"][0]["evaluations"][0].pop("quality_score_permille")
+    expected = ExecutionPresetView.model_validate(raw).model_dump(mode="json")
+    schema = ExecutionPresetStatusView.model_json_schema()
+    Draft202012Validator.check_schema(schema)
+    Draft202012Validator(schema).validate(raw)
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        observability_access_token=None,
+        timeout=1,
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, json=_list([raw]))),
+    )
+    try:
+        assert await gateway.execution_presets(_session()) == (expected,)
+    finally:
+        await gateway.close()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        "unknown_top",
+        "unknown_revision",
+        "unknown_role",
+        "missing_history",
+        "missing_current",
+        "stale_current",
+        "revision_owner",
+        "duplicate_revision",
+        "duplicate_role",
+        "duplicate_candidate",
+        "duplicate_evaluation",
+        "evaluation_owner",
+        "hash",
+        "pointer",
+        "v1_mixed_policy",
+        "v2_missing_evidence",
+        "quality_bounds",
+        "case_counts",
+        "revisions_bound",
+        "evaluations_bound",
+        "credential_description",
+    ],
+)
+async def test_preset_gateway_rejects_invalid_or_unbounded_wire_projection(invalid: str) -> None:
+    raw = _wire_preset()
+    revision = raw["revisions"][0]
+    policy = revision["role_policies"][0]
+    evaluation = revision["evaluations"][0]
+    if invalid == "unknown_top":
+        raw["password"] = "TEST_ONLY secret"
+    elif invalid == "unknown_revision":
+        revision["worker_prompt"] = "TEST_ONLY prompt"
+    elif invalid == "unknown_role":
+        policy["auth_token"] = "TEST_ONLY token"
+    elif invalid == "missing_history":
+        raw.pop("revisions")
+    elif invalid == "missing_current":
+        raw.pop("current_revision_id")
+    elif invalid == "stale_current":
+        raw["current_revision_id"] = "execpresetrev_" + "f" * 32
+    elif invalid == "revision_owner":
+        revision["preset_id"] = "execpreset_" + "f" * 32
+    elif invalid == "duplicate_revision":
+        raw["revisions"].append(deepcopy(revision))
+    elif invalid == "duplicate_role":
+        revision["role_policies"].append(deepcopy(policy))
+    elif invalid == "duplicate_candidate":
+        policy["model_candidates"].append(deepcopy(policy["model_candidates"][0]))
+    elif invalid == "duplicate_evaluation":
+        revision["evaluations"].append(deepcopy(evaluation))
+    elif invalid == "evaluation_owner":
+        evaluation["evaluated_preset_revision_id"] = "execpresetrev_" + "f" * 32
+    elif invalid == "hash":
+        revision["content_sha256"] = "sha256:invalid"
+    elif invalid == "pointer":
+        policy["instruction_bundle"]["manifest_artifact"]["sha256"] = "invalid"
+    elif invalid == "v1_mixed_policy":
+        revision["schema_version"] = "execution-preset-revision/1.0"
+    elif invalid == "v2_missing_evidence":
+        policy["evidence_access"] = None
+    elif invalid == "quality_bounds":
+        evaluation["quality_score_permille"] = 1001
+    elif invalid == "case_counts":
+        evaluation["cases_passed"] = 13
+    elif invalid == "revisions_bound":
+        raw["revisions"] = [deepcopy(revision) for _ in range(1001)]
+    elif invalid == "evaluations_bound":
+        revision["evaluations"] = [deepcopy(evaluation) for _ in range(1001)]
+    else:
+        revision["description"] = "Bearer TEST_ONLY credentials"
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        observability_access_token=None,
+        timeout=1,
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, json=_list([raw]))),
+    )
+    try:
+        with pytest.raises(GatewayError, match="APPLICATION_API_RESPONSE_INVALID"):
+            await gateway.execution_presets(_session())
+    finally:
+        await gateway.close()
 
 
 def _submission() -> dict[str, Any]:

@@ -240,7 +240,13 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
             "function installWorkflow()"
         )
     ]
-    for removed_field in ("language", "subject", "choice_count", "equation_required"):
+    for removed_field in (
+        "language",
+        "subject",
+        "choice_count",
+        "equation_required",
+        "quality_profile",
+    ):
         assert f'name="{removed_field}"' not in request_html
         assert f"form.elements.{removed_field}" not in request_javascript
     assert "EOM 템플릿 필수 요소" not in html

@@ -125,7 +125,7 @@ try {
 
   assert.equal(await form.locator("textarea").count(), 1);
   assert.equal(await page.locator("#draft-analyze").count(), 0);
-  for (const field of ["language", "subject", "choice_count", "equation_required"]) {
+  for (const field of ["language", "subject", "choice_count", "equation_required", "quality_profile"]) {
     assert.equal(await form.locator(`[name="${field}"]`).count(), 0);
   }
   assert.equal(await form.locator('[name="task_type"]').inputValue(), "conceptual");

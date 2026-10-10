@@ -286,6 +286,8 @@ def test_v18_plan_pins_ungrounded_primary_and_escalated_review_candidates(
     revision = SimpleNamespace(
         preset_id=preset["preset_id"],
         state="RELEASED",
+        content_sha256=preset["content_sha256"],
+        compatible_workflow_protocols=preset["compatible_workflow_protocols"],
         canonical_document=preset,
     )
     dependencies = ResolvedPlanDependencyEvidence(
@@ -353,7 +355,11 @@ def test_v18_plan_rejects_missing_review_escalation_candidate(
         preset_id=preset["preset_id"],
     )
     revision = SimpleNamespace(
-        preset_id=preset["preset_id"], state="RELEASED", canonical_document=preset
+        preset_id=preset["preset_id"],
+        state="RELEASED",
+        content_sha256=preset["content_sha256"],
+        compatible_workflow_protocols=preset["compatible_workflow_protocols"],
+        canonical_document=preset,
     )
     dependencies = ResolvedPlanDependencyEvidence(
         workflow_id="workflow_" + "c" * 32,

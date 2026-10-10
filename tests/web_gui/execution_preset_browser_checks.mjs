@@ -7,6 +7,8 @@ const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const staticRoot = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
 const names = ["index.html", "styles.css", "execution-preset-controller.js", "execution-preset-editor.js", "eom-mark.svg"];
 const assets = new Map(await Promise.all(names.map(async name => [name, await readFile(new URL(name, staticRoot), "utf8")])));
+const projectedPresets = process.env.EOM_WEB_PRESET_FIXTURE_PATH
+  ? JSON.parse(await readFile(process.env.EOM_WEB_PRESET_FIXTURE_PATH, "utf8")) : null;
 
 // Only the service adapter is mocked. No real application, worker or model is called.
 const fixtureApp = `
@@ -20,14 +22,16 @@ const role = (name, candidates) => ({role:name,model_candidates:candidates,instr
  reference_bundle:bundle('ref','4'),worker_pool_key:'item-workers',timeout_seconds:1800,sandbox:'read-only',network:'disabled',
  evidence_access:name==='image'?'NONE':'EVIDENCE_CONTEXT'});
 const pair = (model,reasoning_effort) => ({model,reasoning_effort});
-const revision = {schema_version:'execution-preset-revision/2.0',preset_revision_id:id('execpresetrev_','2'),state:'RELEASED',
+const syntheticRevision = {schema_version:'execution-preset-revision/2.0',preset_revision_id:id('execpresetrev_','2'),state:'RELEASED',
  revision_number:1,display_name:'합성 출제 설정',description:'합성 정책',capacity_policy_revision_id:id('capacityrev_','5'),
  general_knowledge_policy:'ALLOW_WITH_PROVENANCE',compatible_workflow_protocols:['workflow-role/1.35.0'],
  role_policies:[role('authoring',[pair('model-a','high')]),role('review',[pair('model-a','medium'),pair('model-b','xhigh')]),role('image',[pair('model-a','high')])],
  retrieval_policy:{access_policy_revision_id:id('accessrev_','6'),access_policy_sha256:'sha256:'+'7'.repeat(64),
  allowed_corpus_keys:['exam_corpus'],allowed_query_kinds:['ITEM_PREPARATION'],allowed_source_classes:['PAST_EXAM','TEXTBOOK'],
  maximum_budget:{max_documents:8,max_item_revisions:8,max_graph_nodes:32,max_claims:16,max_context_tokens:4000}}};
-const preset = {preset_id:id('execpreset_','1'),preset_key:'knowledge-grounded-item',current_revision_id:revision.preset_revision_id,state:'ACTIVE',revisions:[revision]};
+const projectedPresets = ${JSON.stringify(projectedPresets)};
+const preset = projectedPresets?.[0] || {preset_id:id('execpreset_','1'),preset_key:'knowledge-grounded-item',current_revision_id:syntheticRevision.preset_revision_id,state:'ACTIVE',revisions:[syntheticRevision]};
+const revision = preset.revisions.find(value=>value.preset_revision_id===preset.current_revision_id);
 const alternatePreset = {...structuredClone(preset),preset_id:id('execpreset_','d'),preset_key:'alternate-item',
  current_revision_id:id('execpresetrev_','f')};
 alternatePreset.revisions[0].preset_revision_id=alternatePreset.current_revision_id;
@@ -57,7 +61,7 @@ async function api(path, request = {}) {
   const key=request.body.idempotency_key;
   if (!results.has(key)) {
    fixture.created++; const draft={...structuredClone(request.body),state:'DRAFT',
-    schema_version:request.body.target_revision_schema_version,preset_revision_id:id('execpresetrev_','8'),revision_number:2};
+    schema_version:request.body.target_revision_schema_version,preset_revision_id:id('execpresetrev_','8'),revision_number:revision.revision_number+1};
    delete draft.idempotency_key;delete draft.target_revision_schema_version;
    preset.revisions.push(draft);results.set(key,{resource_id:draft.preset_revision_id,status:'COMPLETED'});
   }

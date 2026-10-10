@@ -16,6 +16,7 @@ from eom_web_gui.draft_integrity import (
     draft_spec_sha256,
     normalize_authoring_guidance,
 )
+from eom_web_gui.redaction import TOKEN_VALUE
 
 
 def _utc(value: datetime) -> datetime:
@@ -2285,6 +2286,113 @@ class ExecutionPresetDraftSubmission(WebModel):
                 raise ValueError("role evidence access must match the revision family")
         if len({role.role for role in self.role_policies}) != len(self.role_policies):
             raise ValueError("preset role policies must be unique")
+        return self
+
+
+class ExecutionPresetEvaluationStatusView(WebModel):
+    """The released API's bounded evaluation metadata, never the report contents."""
+
+    evaluation_id: str = Field(pattern=r"^preseteval_[0-9a-f]{32}$")
+    evaluated_preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    evaluated_policy_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    scope: Literal["STATIC", "NON_LIVE", "LIVE_ONE_SHOT"]
+    outcome: Literal["PASS", "FAIL"]
+    summary_code: str = Field(min_length=1, max_length=128)
+    cases_total: int = Field(ge=1, le=10000)
+    cases_passed: int = Field(ge=0, le=10000)
+    quality_score_permille: int | None = Field(default=None, ge=0, le=1000)
+    report_artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    report_artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    report_content_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    completed_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def exact_case_counts(self) -> ExecutionPresetEvaluationStatusView:
+        if self.cases_passed > self.cases_total or (self.outcome == "PASS") != (
+            self.cases_passed == self.cases_total
+        ):
+            raise ValueError("evaluation outcome must match exact executed case counts")
+        return self
+
+
+class ExecutionPresetRevisionStatusView(WebModel):
+    """Preserve only released preset metadata and immutable component pointers."""
+
+    schema_version: Literal["execution-preset-revision/1.0", "execution-preset-revision/2.0"]
+    preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    preset_id: str = Field(pattern=r"^execpreset_[0-9a-f]{32}$")
+    revision_number: int = Field(ge=1)
+    state: Literal["DRAFT", "RELEASED", "DEPRECATED"]
+    display_name: str = Field(min_length=1, max_length=128)
+    description: str = Field(min_length=1, max_length=1000)
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    general_knowledge_policy: Literal["DENY", "ALLOW_WITH_PROVENANCE"]
+    compatible_workflow_protocols: tuple[str, ...] = Field(min_length=1, max_length=16)
+    content_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    created_at: UtcDatetime
+    role_policies: tuple[PresetRolePolicyDraft, ...] = Field(min_length=1, max_length=5)
+    retrieval_policy: PresetRetrievalPolicyDraft | None = None
+    evaluations: tuple[ExecutionPresetEvaluationStatusView, ...] = Field(max_length=1000)
+
+    @field_validator("display_name", "description")
+    @classmethod
+    def credential_free_descriptions(cls, value: str) -> str:
+        if TOKEN_VALUE.search(value):
+            raise ValueError("preset descriptions must not contain credentials")
+        return value
+
+    @model_validator(mode="after")
+    def exact_revision_projection(self) -> ExecutionPresetRevisionStatusView:
+        is_v2 = self.schema_version == "execution-preset-revision/2.0"
+        if is_v2 != (self.retrieval_policy is not None):
+            raise ValueError("retrieval policy must match the released revision family")
+        if len({policy.role for policy in self.role_policies}) != len(self.role_policies):
+            raise ValueError("preset revision roles must be unique")
+        for policy in self.role_policies:
+            if is_v2 != (policy.evidence_access is not None):
+                raise ValueError("evidence access must match the released revision family")
+            pairs = {(value.model, value.reasoning_effort) for value in policy.model_candidates}
+            if len(pairs) != len(policy.model_candidates):
+                raise ValueError("preset model candidates must be unique")
+        evaluation_ids: set[str] = set()
+        for evaluation in self.evaluations:
+            if evaluation.evaluated_preset_revision_id != self.preset_revision_id:
+                raise ValueError("evaluation must pin its owning revision")
+            if evaluation.evaluation_id in evaluation_ids:
+                raise ValueError("preset evaluations must be unique")
+            evaluation_ids.add(evaluation.evaluation_id)
+        return self
+
+
+class ExecutionPresetStatusView(WebModel):
+    """The existing ExecutionPresetView wire shape at the isolated Web boundary."""
+
+    preset_id: str = Field(pattern=r"^execpreset_[0-9a-f]{32}$")
+    preset_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
+    current_revision_id: str | None = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    state: Literal["ACTIVE", "RETIRED"]
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
+    revisions: tuple[ExecutionPresetRevisionStatusView, ...] = Field(max_length=1000)
+
+    @model_validator(mode="after")
+    def exact_owned_history(self) -> ExecutionPresetStatusView:
+        revisions: dict[str, ExecutionPresetRevisionStatusView] = {}
+        revision_numbers: set[int] = set()
+        for revision in self.revisions:
+            if revision.preset_id != self.preset_id:
+                raise ValueError("preset revision must belong to its logical preset")
+            if (
+                revision.preset_revision_id in revisions
+                or revision.revision_number in revision_numbers
+            ):
+                raise ValueError("preset revision identities and numbers must be unique")
+            revisions[revision.preset_revision_id] = revision
+            revision_numbers.add(revision.revision_number)
+        if self.current_revision_id is not None:
+            current = revisions.get(self.current_revision_id)
+            if current is None or current.state not in {"RELEASED", "DEPRECATED"}:
+                raise ValueError("current preset revision must resolve to its immutable history")
         return self
 
 

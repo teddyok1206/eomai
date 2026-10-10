@@ -415,9 +415,14 @@ def _active_equivalent(session: Session, request_hash: str) -> WorkflowInstanceR
 
 
 def _successful_equivalent(
-    session: Session, request_hash: str, *, actor_type: str, actor_id: str
+    session: Session,
+    request_hash: str,
+    *,
+    actor_type: str,
+    actor_id: str,
+    completed_preset_revision_id: str | None = None,
 ) -> WorkflowInstanceRecord | None:
-    return session.scalar(
+    query = (
         select(WorkflowInstanceRecord)
         .where(
             WorkflowInstanceRecord.request_hash == request_hash,
@@ -431,6 +436,16 @@ def _successful_equivalent(
         )
         .limit(1)
     )
+    if completed_preset_revision_id is not None:
+        # Keep the canonical request hash unchanged: only completed-result reuse depends on
+        # the admission's selected preset. Missing historical pointers cannot match this pin.
+        query = query.where(
+            WorkflowInstanceRecord.runtime_context["execution_plan"][
+                "preset_revision_id"
+            ].as_string()
+            == completed_preset_revision_id
+        )
+    return session.scalar(query)
 
 
 def create_workflow_instance(
@@ -442,6 +457,7 @@ def create_workflow_instance(
     actor_type: str,
     actor_id: str,
     runtime_context: dict[str, Any] | None = None,
+    completed_preset_revision_id: str | None = None,
 ) -> tuple[WorkflowInstanceRecord, bool]:
     request_data = workflow_request_storage_document(request)
     request_hash = workflow_business_fingerprint(definition, request)
@@ -454,7 +470,11 @@ def create_workflow_instance(
     if active is not None:
         return active, False
     successful = _successful_equivalent(
-        session, request_hash, actor_type=actor_type, actor_id=actor_id
+        session,
+        request_hash,
+        actor_type=actor_type,
+        actor_id=actor_id,
+        completed_preset_revision_id=completed_preset_revision_id,
     )
     if successful is not None:
         return successful, False

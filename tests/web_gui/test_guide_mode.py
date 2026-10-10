@@ -77,7 +77,7 @@ assert.doesNotMatch(context.controls.get('request-text').description,/요청 분
 assert.equal(context.controls.has('draft-analyze'),false);
 assert.equal(context.controls.get('draft-save').title,'초안 저장');
 assert.match(context.controls.get('draft-save').description,/저장만으로 문항 제작이 시작되지는/);
-for(const removed of ['subject','language','choice_count','equation_required']){
+for(const removed of ['subject','language','choice_count','equation_required','quality_profile']){
  assert.equal(context.fields.get('draft-form').has(removed),false,
   'removed request field still has help: '+removed);
 }

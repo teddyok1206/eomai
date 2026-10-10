@@ -52,6 +52,7 @@ from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.execution_resolver import (
     ExecutionStepRequirement,
     current_knowledge_backed_preset,
+    lock_current_execution_preset,
     pinned_knowledge_backed_preset,
     resolve_customer_support_plan,
     resolve_execution_plan,
@@ -288,6 +289,7 @@ class CommandAdapter:
         past_exam_source_material_requirement: ContentTeamMaterialRequirementV2 | None = None
         knowledge_preset = None
         knowledge_evidence = None
+        compiled_item_definition = None
         preflight_definition_hash: str | None = None
         if workflow_request.educational_retrieval is not None:
             with self.sessions() as preflight_session:
@@ -310,6 +312,7 @@ class CommandAdapter:
                     preflight_definition.source_path,
                     {"authoring", "image", "review", "item_management"},
                 )
+                compiled_item_definition = compiled_preflight
                 role_protocols = {
                     result_schema_protocol(step.result_schema)
                     for step in compiled_preflight.definition.steps
@@ -435,6 +438,7 @@ class CommandAdapter:
                     definition.source_path,
                     {"authoring", "image", "review", "item_management"},
                 )
+                compiled_item_definition = compiled_resolution
                 resolution_protocols = {
                     result_schema_protocol(step.result_schema)
                     for step in compiled_resolution.definition.steps
@@ -494,6 +498,45 @@ class CommandAdapter:
                     "execution_preset_key": expected.execution_preset_key,
                     "execution_preset_content_sha256": transaction_preset.content_sha256,
                 }
+            completed_preset_revision_id = None
+            if (
+                workflow_request.execution_preset_key is not None
+                and workflow_request.expected_resolution is None
+            ):
+                if knowledge_preset is not None:
+                    completed_preset_revision_id = knowledge_preset.preset_revision_id
+                else:
+                    compiled_item_definition = compile_definition_data(
+                        definition.canonical_definition,
+                        definition.source_path,
+                        {"authoring", "image", "review", "item_management"},
+                    )
+                    role_protocols = {
+                        result_schema_protocol(step.result_schema)
+                        for step in compiled_item_definition.definition.steps
+                        if isinstance(step, AgentStep)
+                    }
+                    if len(role_protocols) != 1:
+                        raise ApiError(
+                            409,
+                            "WORKFLOW_DEFINITION_INVALID",
+                            "Workflow definition invalid",
+                            "The workflow definition has inconsistent role protocols.",
+                        )
+                    try:
+                        current_preset = lock_current_execution_preset(
+                            session,
+                            preset_key=workflow_request.execution_preset_key,
+                            workflow_role_schema_version=str(next(iter(role_protocols))),
+                        )
+                    except ControlPlaneError as exc:
+                        raise ApiError(
+                            409,
+                            exc.code,
+                            "Execution preset unavailable",
+                            "The current execution preset is not published for this workflow.",
+                        ) from exc
+                    completed_preset_revision_id = current_preset.preset_revision_id
             workflow, created = create_workflow_instance(
                 session,
                 definition=definition,
@@ -502,6 +545,7 @@ class CommandAdapter:
                 actor_type="human",
                 actor_id=actor.actor_id,
                 runtime_context=runtime_context,
+                completed_preset_revision_id=completed_preset_revision_id,
             )
             command: WorkflowCommandRecord | None
             if created:
@@ -513,7 +557,7 @@ class CommandAdapter:
                             "Execution plan context missing",
                             "The preset-backed request has no pinned Content Pack context.",
                         )
-                    compiled = compile_definition_data(
+                    compiled = compiled_item_definition or compile_definition_data(
                         definition.canonical_definition,
                         definition.source_path,
                         {"authoring", "image", "review", "item_management"},

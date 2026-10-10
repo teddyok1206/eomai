@@ -102,6 +102,55 @@ class ExecutionStepRequirement:
     role: WorkerRole
 
 
+def lock_current_execution_preset(
+    session: Session,
+    *,
+    preset_key: str,
+    workflow_role_schema_version: str,
+) -> ExecutionPresetRevision:
+    """Select the standard current pin and hold it stable through workflow admission."""
+
+    logical = session.scalar(
+        select(ExecutionPresetRecord)
+        .where(ExecutionPresetRecord.preset_key == preset_key)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if logical is None or logical.state != "ACTIVE" or logical.current_revision_id is None:
+        raise ControlPlaneError(
+            "CONTROL_PRESET_NOT_PUBLISHED", "execution preset has no published revision"
+        )
+    revision = session.get(ExecutionPresetRevisionRecord, logical.current_revision_id)
+    if (
+        revision is None
+        or revision.preset_id != logical.preset_id
+        or revision.state != "RELEASED"
+        or workflow_role_schema_version not in revision.compatible_workflow_protocols
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PRESET_POINTER_INVALID", "published execution preset is stale"
+        )
+    try:
+        preset = ExecutionPresetRevision.model_validate(revision.canonical_document)
+    except ValueError as exc:
+        raise ControlPlaneError(
+            "CONTROL_PRESET_POLICY_INVALID", "standard request requires a V1 preset"
+        ) from exc
+    if (
+        preset.preset_id != logical.preset_id
+        or preset.preset_revision_id != logical.current_revision_id
+        or preset.content_sha256 != revision.content_sha256
+        or preset.content_sha256
+        != compute_control_document_hash(revision.canonical_document, "content_sha256")
+        or preset.state != "RELEASED"
+        or workflow_role_schema_version not in preset.compatible_workflow_protocols
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PRESET_POINTER_INVALID", "published preset document differs from its record"
+        )
+    return preset
+
+
 def current_knowledge_backed_preset(
     session: Session,
     *,
@@ -516,19 +565,11 @@ def resolve_execution_plan(
             return ResolvedExecutionPlanV18.model_validate(existing.canonical_document)
         return ResolvedExecutionPlan.model_validate(existing.canonical_document)
 
-    logical = session.scalar(
-        select(ExecutionPresetRecord).where(ExecutionPresetRecord.preset_key == preset_key)
+    preset = lock_current_execution_preset(
+        session,
+        preset_key=preset_key,
+        workflow_role_schema_version=dependencies.workflow_role_schema_version,
     )
-    if logical is None or logical.state != "ACTIVE" or logical.current_revision_id is None:
-        raise ControlPlaneError(
-            "CONTROL_PRESET_NOT_PUBLISHED", "execution preset has no published revision"
-        )
-    revision = session.get(ExecutionPresetRevisionRecord, logical.current_revision_id)
-    if revision is None or revision.preset_id != logical.preset_id or revision.state != "RELEASED":
-        raise ControlPlaneError(
-            "CONTROL_PRESET_POINTER_INVALID", "published execution preset is stale"
-        )
-    preset = ExecutionPresetRevision.model_validate(revision.canonical_document)
     policies = {policy.role: policy for policy in preset.role_policies}
     if len(policies) != len(preset.role_policies):
         raise ControlPlaneError(

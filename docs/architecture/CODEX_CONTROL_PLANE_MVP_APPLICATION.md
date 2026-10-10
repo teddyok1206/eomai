@@ -393,3 +393,71 @@ failed; the installed compatible API interpreter ran the corrected checks. Neith
 required runtime changes. Authenticated smoke should reuse one session: successful admin
 logins also count against the existing five-per-900-second limit. No limiter was reset or
 relaxed for this deployment.
+
+### HTTPS browser discovery and bounded read-projection correction
+
+After natural login-throttle expiry, the real HTTPS session successfully initialized ADMIN,
+but the preset selector remained empty. The existing HTTP BFF adapter applied scalar-only
+`sanitize_mapping` to the preset list and therefore removed its nested `revisions`. Source UI
+fixtures supplied complete preset objects directly and did not exercise this adapter, so their
+PASS was insufficient to establish this installed boundary. This is not a reason to recursively
+relax redaction or copy arbitrary API dictionaries into the browser.
+
+The correction belongs to the existing Application API HTTP adapter: validate and project the
+released preset read contract using typed nested revision, role-policy, bundle-pointer, retrieval
+and evaluation values. Reuse the Web's existing small pointer/policy models; add no platform import
+or dependency to the isolated Web runtime. Canonical presets and all bytes/hashes remain owned
+by the API/Orchestrator. Ordered revision iteration and keyed current-revision lookup are linear
+in the bounded response, with no DB writes, duplicate artifacts, cache or new queue. Unknown or
+malformed nested input fails explicitly rather than silently dropping fields or selecting latest.
+Fake-gateway UI tests remain useful but must be supplemented with the real HTTP projection and
+actual HTTPS browser. The read-projection correction itself is Web-only; the accompanying
+current-default admission correction below requires a coordinated API/platform/Web successor.
+Retain migration `0050` and all active pins. No new model validation or generation is needed.
+
+### Request-only selector removal and current-default admission
+
+The request form's former "검증된 실행 설정" field was a legacy quality-profile choice, not a
+released-revision selector. Remove that presentation control and its help entry, preserving
+saved-draft quality metadata internally for existing integrity/replay contracts. The existing
+BFF continues to select its supported logical default (`standard-item` or
+`knowledge-grounded-item`); browser users cannot supply a model or revision. "Latest" means the
+logical preset's **current RELEASED pointer**, never the largest revision or an inactive draft.
+
+The responsibility for default resolution remains in API admission and the supported
+Orchestrator resolver; completed-occurrence reuse remains in the workflow repository. Canonical
+request bytes and `workflow_business_fingerprint` are unchanged, because Catalog publication
+recomputes that exact hash. The selected preset revision and the accepted execution plan are
+separate immutable identities. After an administrator applies a new current revision, a fresh
+transport submission must not reuse a completed occurrence carrying the old preset revision.
+Add only an optional exact revision constraint to completed-equivalent lookup for auto-current
+item admission. Legacy calls retain their existing meaning. Missing plan pointers do not qualify
+as matching completed work; do not repair or overwrite the old row.
+
+Choose the standard current pointer under the existing logical-preset row lock before occurrence
+lookup, and resolve the new execution plan under that same transaction/lock. The knowledge path
+retains its already selected, validated preflight revision. The existing request-hash B-tree
+restricts completed candidates before the small execution-plan pointer predicate; candidate lookup
+is `O(log N + k)`, with up to `O(k log k)` ordering for the small matching history, not a full scan.
+The existing active partial unique index
+still forbids concurrent duplicate execution. No DB migration, hash reinterpretation, binary
+copy, new schema family, cache, queue or worker protocol is required. Existing public resolver
+and repository boundaries own their adapters; domain code gains no SQL, NAS or HTTP access.
+
+Exact transport replay remains the first check and returns the original receipt even after
+activation changes. An in-flight business-equivalent occurrence also retains its original pin
+and is not forked or reconfigured. Same-current completed work remains reusable. Tests must
+cover changed-current completed work, same-current reuse, absent/mismatched old pins, immutable
+transport replay and concurrent admission. Always reusing completed work is simpler but defeats
+an explicitly changed default; changing the stored business hash is unnecessary and would break
+the existing Catalog integrity contract. No live generation is required to verify this boundary.
+
+Follow-up source validation: API 762 PASS, one explicitly opt-in real-systemd skip and 17
+integration/live deselections; Web 379 PASS including real Chromium and the real HTTP projection;
+execution/admission/publication boundary unit suite 81 PASS. Disposable PostgreSQL workflow
+submission regressions passed 12/12; all three concurrency cases passed five additional rounds.
+The same restricted API runtime grants permit the new standard-preset row lock without broader
+privileges. Canonical request hashes, prior payloads and old completed/active/replay histories
+are asserted unchanged. Ruff format/lint, strict type checks and diff whitespace checks passed.
+One initial unit-test invocation referenced two nonexistent test filenames; the corrected service
+test paths produced the 81 PASS above. No production pytest or new model/HWPX generation occurred.

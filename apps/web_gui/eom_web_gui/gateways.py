@@ -46,6 +46,7 @@ from eom_web_gui.contracts import (
     DocumentReviewView,
     EducationalQualityCommandSubmission,
     ExecutionPresetModelOptions,
+    ExecutionPresetStatusView,
     ExecutionPresetValidationView,
     ExplorerEntity,
     ExplorerQuery,
@@ -2227,7 +2228,15 @@ class HttpApplicationGateway:
 
     async def execution_presets(self, session: WebSession) -> tuple[dict[str, Any], ...]:
         response = await self._authorized(session, "GET", "/api/v1/execution-presets")
-        return tuple(sanitize_mapping(item) for item in self._list_data(response))
+        try:
+            # Scalar summary redaction discards revisions and their pinned pointers.  This
+            # explicit wire contract retains approved metadata while rejecting arbitrary payloads.
+            return tuple(
+                ExecutionPresetStatusView.model_validate(item).model_dump(mode="json")
+                for item in self._list_data(response)
+            )
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
     async def execution_preset_model_options(
         self, session: WebSession, preset_id: str

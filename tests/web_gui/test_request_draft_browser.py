@@ -38,7 +38,7 @@ const formFields = {
   item_format: field('multiple_choice'), task_type: field('conceptual'),
   difficulty: field('medium'), material_form: field('AUTO'),
   material_panel_count: field('1'), image_supporting_data: field('NONE'),
-  quality_profile: field('balanced'), source_intake_batch_id: field(),
+  source_intake_batch_id: field(),
   knowledge_grounding: field(),
   curriculum_large_unit_key: field('eom.is.large.3'),
   curriculum_middle_unit_key: field('eom.is.middle.3-2'),
@@ -66,7 +66,6 @@ const form = {
     formFields.material_form.value = 'AUTO';
     formFields.material_panel_count.value = '1';
     formFields.image_supporting_data.value = 'NONE';
-    formFields.quality_profile.value = 'balanced';
     for (const input of axisInputs) input.checked = false;
   },
 };
@@ -103,6 +102,7 @@ const context = {
   hasPermission: (operator, permission) =>
     operator?.effective_permissions?.includes(permission) === true,
   deepestCurriculumUnitKey: selection => selection.small || selection.middle || selection.large,
+  curriculumAncestors: (units, key) => ({large: 'eom.is.large.3', middle: key, small: ''}),
   setCurriculumSelection: selection => {state.curriculumSelection = {...selection};},
   syncCurriculumSelectorAvailability() {}, syncGraphGroundingCapability() {},
   showMessage: (node, text) => {node.textContent = text;},
@@ -166,6 +166,14 @@ assert.equal(calls[1].options.body.authoring_guidance, normalizedGuidance);
 assert.equal(calls[1].options.body.subject, '통합과학');
 assert.equal(calls[1].options.body.choice_count, 5);
 assert.equal(calls[1].options.body.equation_required, true);
+assert.equal(calls[1].options.body.quality_profile, 'balanced');
+assert.equal('quality_profile' in formFields, false);
+const presetFields = ['execution_preset_key', 'execution_preset_revision_id',
+  'model', 'reasoning_effort'];
+for (const field of presetFields) {
+  assert.equal(field in calls[1].options.body, false);
+  assert.equal(field in calls[2].options.body, false);
+}
 assert.equal(calls[1].options.body.curriculum_selected_unit_key, unit.key);
 assert.equal(calls[1].options.body.topic, '전류와 전압');
 assert.equal(calls[1].options.body.material_requirement.form, 'AUTO');
@@ -177,6 +185,31 @@ assert.equal(state.draftAction, null);
 assert.equal(nodes.get('#draft-submit').disabled, false);
 // Server defaults must not overwrite the user's only instruction editor.
 assert.equal(formFields.authoring_guidance.value, guidance);
+"""
+    )
+
+
+def test_resumed_draft_retains_legacy_metadata_without_a_preset_control() -> None:
+    _run_browser_checks(
+        r"""
+await context.saveDraft();
+state.draft = {...state.draft, quality_profile: 'deep'};
+const savedId = state.draft.request_draft_id;
+const savedSourceHash = state.draft.original_request_sha256;
+context.fillDraft(state.draft);
+assert.equal('quality_profile' in formFields, false);
+assert.equal(context.draftUpdateBody().quality_profile, 'deep');
+await context.submitDraft();
+assert.equal(state.draft.request_draft_id, savedId);
+assert.equal(state.draft.original_request_sha256, savedSourceHash);
+const savedUpdate = calls.filter(call => call.options.method === 'PUT').at(-1);
+assert.equal(savedUpdate.options.body.quality_profile, 'deep');
+assert.deepEqual(plain(submissionCalls()[0].options.body), {
+  idempotency_key: `studio:${savedId}:${specHash}`,
+});
+context.resetDraftEditor();
+formFields.authoring_guidance.value = normalizedGuidance;
+assert.equal(context.draftUpdateBody().quality_profile, 'balanced');
 """
     )
 

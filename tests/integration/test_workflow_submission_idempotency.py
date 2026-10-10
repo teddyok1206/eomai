@@ -121,6 +121,9 @@ def _submit(
     definition: WorkflowDefinitionRecord,
     request: WorkflowRequest,
     key: str,
+    *,
+    runtime_context: dict[str, object] | None = None,
+    completed_preset_revision_id: str | None = None,
 ) -> tuple[WorkflowInstanceRecord, bool, str | None]:
     workflow, created = create_workflow_instance(
         session,
@@ -129,6 +132,8 @@ def _submit(
         idempotency_key=key,
         actor_type="human",
         actor_id="author_01",
+        runtime_context=runtime_context,
+        completed_preset_revision_id=completed_preset_revision_id,
     )
     command_id = None
     if created:
@@ -173,6 +178,25 @@ def _terminate(session: Session, workflow_id: str, target: WorkflowState) -> Non
         command_id=None,
         step_key=workflow.current_step_key,
     )
+
+
+def _complete(session: Session, workflow_id: str) -> None:
+    for target in (
+        WorkflowState.RUNNING,
+        WorkflowState.AWAITING_HUMAN_APPROVAL,
+        WorkflowState.APPROVED,
+        WorkflowState.REGISTERING,
+        WorkflowState.COMPLETED,
+    ):
+        transition_workflow(
+            session,
+            workflow_id,
+            target,
+            f"TEST_{target.value}",
+            actor_type="system",
+            actor_id="test",
+            command_id=None,
+        )
 
 
 def _cleanup(engine: Engine, definition_id: str) -> None:
@@ -310,22 +334,7 @@ def test_active_and_completed_equivalents_preserve_v0_deduplication(
             )
             assert not active_created and active.workflow_id == first_id
         with transaction(sessions) as session:
-            for target in (
-                WorkflowState.RUNNING,
-                WorkflowState.AWAITING_HUMAN_APPROVAL,
-                WorkflowState.APPROVED,
-                WorkflowState.REGISTERING,
-                WorkflowState.COMPLETED,
-            ):
-                transition_workflow(
-                    session,
-                    first_id,
-                    target,
-                    f"TEST_{target.value}",
-                    actor_type="system",
-                    actor_id="test",
-                    command_id=None,
-                )
+            _complete(session, first_id)
         with transaction(sessions) as session:
             stored_definition = session.get(WorkflowDefinitionRecord, definition_id)
             assert stored_definition is not None
@@ -417,6 +426,253 @@ def test_concurrent_equivalent_submissions_create_one_active_occurrence(
                 stored_prior = session.get(WorkflowInstanceRecord, prior_id)
                 assert stored_prior is not None
                 assert stored_prior.state == WorkflowState.FAILED.value
+    finally:
+        if definition_id:
+            _cleanup(integration_engine, definition_id)
+
+
+def _pinned_context(preset_revision_id: str | None) -> dict[str, object]:
+    return (
+        {"execution_plan": {"preset_revision_id": preset_revision_id}}
+        if preset_revision_id is not None
+        else {}
+    )
+
+
+def _history_snapshot(session: Session, workflow_id: str) -> tuple[object, ...]:
+    workflow = session.get(WorkflowInstanceRecord, workflow_id)
+    assert workflow is not None
+    return (
+        workflow.workflow_id,
+        workflow.definition_id,
+        workflow.definition_hash,
+        workflow.state,
+        workflow.stage,
+        workflow.created_at,
+        workflow.completed_at,
+        workflow.idempotency_key,
+        workflow.request_hash,
+        workflow.initial_request,
+        workflow.request_payload,
+        workflow.runtime_context,
+        session.scalar(
+            select(func.count())
+            .select_from(WorkflowEventRecord)
+            .where(WorkflowEventRecord.workflow_id == workflow_id)
+        ),
+        session.scalar(
+            select(func.count())
+            .select_from(WorkflowCommandRecord)
+            .where(WorkflowCommandRecord.workflow_id == workflow_id)
+        ),
+    )
+
+
+@pytest.mark.parametrize("prior_pin", ("same", "changed", "missing", "foreign"))
+def test_completed_reuse_requires_current_pin_and_preserves_exact_transport_replay(
+    integration_engine: Engine, prior_pin: str
+) -> None:
+    sessions = build_session_factory(integration_engine)
+    suffix = uuid4().hex
+    current_pin = f"execpresetrev_{uuid4().hex}"
+    old_pin = {
+        "same": current_pin,
+        "changed": f"execpresetrev_{uuid4().hex}",
+        "missing": None,
+        "foreign": f"execpresetrev_{uuid4().hex}",
+    }[prior_pin]
+    request = WorkflowRequest(request_name="PLACEHOLDER_REQUEST", image_mode="skip")
+    definition_id = ""
+    try:
+        with transaction(sessions) as session:
+            definition = _definition(session, suffix)
+            definition_id = definition.definition_id
+            old, created, command_id = _submit(
+                session,
+                definition,
+                request,
+                f"completed-pin-old-{suffix}",
+                runtime_context=_pinned_context(old_pin),
+            )
+            assert created and command_id is not None
+            old_id = old.workflow_id
+            request_hash = workflow_business_fingerprint(definition, request)
+            assert old.request_hash == request_hash
+        with transaction(sessions) as session:
+            _complete(session, old_id)
+        with sessions() as session:
+            old_snapshot = _history_snapshot(session, old_id)
+
+        with transaction(sessions) as session:
+            stored_definition = session.get(WorkflowDefinitionRecord, definition_id)
+            assert stored_definition is not None
+            selected, created, command_id = _submit(
+                session,
+                stored_definition,
+                request,
+                f"completed-pin-new-{suffix}",
+                runtime_context=_pinned_context(current_pin),
+                completed_preset_revision_id=current_pin,
+            )
+            assert created is (prior_pin != "same")
+            assert (command_id is not None) is created
+            assert (selected.workflow_id == old_id) is (prior_pin == "same")
+            assert selected.request_hash == request_hash
+            assert selected.initial_request == old_snapshot[9]
+            assert selected.request_payload == old_snapshot[10]
+            assert selected.runtime_context["execution_plan"]["preset_revision_id"] == current_pin
+
+        # Exact transport replay wins even if a new current-pinned occurrence now exists.
+        with transaction(sessions) as session:
+            stored_definition = session.get(WorkflowDefinitionRecord, definition_id)
+            assert stored_definition is not None
+            replay, created, command_id = _submit(
+                session,
+                stored_definition,
+                request,
+                f"completed-pin-old-{suffix}",
+                runtime_context=_pinned_context(current_pin),
+                completed_preset_revision_id=current_pin,
+            )
+            assert not created and command_id is None
+            assert replay.workflow_id == old_id
+            assert _history_snapshot(session, old_id) == old_snapshot
+            assert session.scalar(
+                select(func.count())
+                .select_from(WorkflowInstanceRecord)
+                .where(WorkflowInstanceRecord.request_hash == request_hash)
+            ) == (1 if prior_pin == "same" else 2)
+    finally:
+        if definition_id:
+            _cleanup(integration_engine, definition_id)
+
+
+def test_active_equivalent_keeps_old_pin_after_current_changes(
+    integration_engine: Engine,
+) -> None:
+    sessions = build_session_factory(integration_engine)
+    suffix = uuid4().hex
+    old_pin = f"execpresetrev_{uuid4().hex}"
+    current_pin = f"execpresetrev_{uuid4().hex}"
+    request = WorkflowRequest(request_name="PLACEHOLDER_REQUEST", image_mode="skip")
+    definition_id = ""
+    try:
+        with transaction(sessions) as session:
+            definition = _definition(session, suffix)
+            definition_id = definition.definition_id
+            old, created, _ = _submit(
+                session,
+                definition,
+                request,
+                f"active-pin-old-{suffix}",
+                runtime_context=_pinned_context(old_pin),
+                completed_preset_revision_id=old_pin,
+            )
+            assert created
+            old_id = old.workflow_id
+        with sessions() as session:
+            old_snapshot = _history_snapshot(session, old_id)
+        with transaction(sessions) as session:
+            stored_definition = session.get(WorkflowDefinitionRecord, definition_id)
+            assert stored_definition is not None
+            equivalent, created, command_id = _submit(
+                session,
+                stored_definition,
+                request,
+                f"active-pin-new-{suffix}",
+                runtime_context=_pinned_context(current_pin),
+                completed_preset_revision_id=current_pin,
+            )
+            assert not created and command_id is None
+            assert equivalent.workflow_id == old_id
+            assert equivalent.runtime_context["execution_plan"]["preset_revision_id"] == old_pin
+            assert _history_snapshot(session, old_id) == old_snapshot
+    finally:
+        if definition_id:
+            _cleanup(integration_engine, definition_id)
+
+
+def test_concurrent_current_pin_submissions_after_old_completion_create_one_new_occurrence(
+    integration_engine: Engine,
+) -> None:
+    sessions = build_session_factory(integration_engine)
+    suffix = uuid4().hex
+    old_pin = f"execpresetrev_{uuid4().hex}"
+    current_pin = f"execpresetrev_{uuid4().hex}"
+    request = WorkflowRequest(request_name="PLACEHOLDER_REQUEST", image_mode="skip")
+    definition_id = ""
+    try:
+        with transaction(sessions) as session:
+            definition = _definition(session, suffix)
+            definition_id = definition.definition_id
+            old, created, _ = _submit(
+                session,
+                definition,
+                request,
+                f"concurrent-pin-old-{suffix}",
+                runtime_context=_pinned_context(old_pin),
+            )
+            assert created
+            old_id = old.workflow_id
+            request_hash = workflow_business_fingerprint(definition, request)
+        with transaction(sessions) as session:
+            _complete(session, old_id)
+        with sessions() as session:
+            old_snapshot = _history_snapshot(session, old_id)
+
+        barrier = Barrier(2)
+
+        def submit(number: int) -> tuple[str, bool]:
+            barrier.wait(timeout=5)
+            with transaction(sessions) as session:
+                definition = session.get(WorkflowDefinitionRecord, definition_id)
+                assert definition is not None
+                workflow, created, _ = _submit(
+                    session,
+                    definition,
+                    request,
+                    f"concurrent-pin-new-{number}-{suffix}",
+                    runtime_context=_pinned_context(current_pin),
+                    completed_preset_revision_id=current_pin,
+                )
+                assert workflow.request_hash == request_hash
+                assert (
+                    workflow.runtime_context["execution_plan"]["preset_revision_id"] == current_pin
+                )
+                return workflow.workflow_id, created
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            outcomes = list(executor.map(submit, range(2)))
+        assert len({workflow_id for workflow_id, _created in outcomes}) == 1
+        assert sum(created for _workflow_id, created in outcomes) == 1
+        new_id = outcomes[0][0]
+        assert new_id != old_id
+        with sessions() as session:
+            assert _history_snapshot(session, old_id) == old_snapshot
+            stored_old = session.get(WorkflowInstanceRecord, old_id)
+            stored_new = session.get(WorkflowInstanceRecord, new_id)
+            assert stored_old is not None and stored_new is not None
+            assert stored_old.state == WorkflowState.COMPLETED.value
+            assert stored_new.state == WorkflowState.REQUESTED.value
+            assert stored_old.request_hash == stored_new.request_hash == request_hash
+            assert stored_old.initial_request == stored_new.initial_request
+            assert stored_old.request_payload == stored_new.request_payload
+            assert (
+                session.scalar(
+                    select(func.count())
+                    .select_from(WorkflowInstanceRecord)
+                    .where(WorkflowInstanceRecord.request_hash == request_hash)
+                )
+                == 2
+            )
+            assert (
+                session.scalar(
+                    select(func.count())
+                    .select_from(WorkflowCommandRecord)
+                    .where(WorkflowCommandRecord.workflow_id == new_id)
+                )
+                == 1
+            )
     finally:
         if definition_id:
             _cleanup(integration_engine, definition_id)

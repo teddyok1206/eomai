@@ -13,6 +13,7 @@ from eom_orchestrator.control_service import (
 )
 from eom_orchestrator.execution_resolver import (
     ExecutionStepRequirement,
+    lock_current_execution_preset,
     resolve_execution_plan,
 )
 from eom_workflow.control_plane import WorkerRole
@@ -96,6 +97,111 @@ def _dependencies() -> ResolvedPlanDependencyEvidence:
     )
 
 
+def _current_preset_session() -> tuple[FakeSession, SimpleNamespace, SimpleNamespace]:
+    preset = _preset()
+    logical = SimpleNamespace(
+        state="ACTIVE",
+        current_revision_id=preset["preset_revision_id"],
+        preset_id=preset["preset_id"],
+    )
+    revision = SimpleNamespace(
+        preset_id=preset["preset_id"],
+        state="RELEASED",
+        content_sha256=preset["content_sha256"],
+        compatible_workflow_protocols=preset["compatible_workflow_protocols"],
+        canonical_document=preset,
+    )
+    return FakeSession([logical], revision), logical, revision
+
+
+def test_current_standard_preset_holds_logical_row_lock_and_validates_exact_document() -> None:
+    session, _logical, revision = _current_preset_session()
+    statements: list[Any] = []
+    original_scalar = session.scalar
+
+    def scalar(statement: object) -> object | None:
+        statements.append(statement)
+        return original_scalar(statement)
+
+    session.scalar = scalar  # type: ignore[method-assign]
+    preset = lock_current_execution_preset(
+        session,  # type: ignore[arg-type]
+        preset_key="standard-item",
+        workflow_role_schema_version="workflow-role/1.3.0",
+    )
+
+    assert statements[0]._for_update_arg is not None
+    assert statements[0].get_execution_options()["populate_existing"] is True
+    assert preset.model_dump(mode="json") == revision.canonical_document
+
+
+@pytest.mark.parametrize(
+    "drift",
+    (
+        "logical_state",
+        "revision_state",
+        "record_owner",
+        "record_hash",
+        "record_protocol",
+        "document_identity",
+        "document_hash",
+        "document_schema",
+    ),
+)
+def test_current_standard_preset_rejects_pointer_and_policy_drift(drift: str) -> None:
+    session, logical, revision = _current_preset_session()
+    if drift == "logical_state":
+        logical.state = "RETIRED"
+    elif drift == "revision_state":
+        revision.state = "DRAFT"
+    elif drift == "record_owner":
+        revision.preset_id = "execpreset_" + "f" * 32
+    elif drift == "record_hash":
+        revision.content_sha256 = "sha256:" + "f" * 64
+    elif drift == "record_protocol":
+        revision.compatible_workflow_protocols = ["workflow-role/9.0.0"]
+    elif drift == "document_identity":
+        revision.canonical_document["preset_revision_id"] = "execpresetrev_" + "f" * 32
+    elif drift == "document_hash":
+        revision.canonical_document["display_name"] = "Modified after publication"
+    else:
+        revision.canonical_document["schema_version"] = "execution-preset-revision/2.0"
+
+    with pytest.raises(ControlPlaneError):
+        lock_current_execution_preset(
+            session,  # type: ignore[arg-type]
+            preset_key="standard-item",
+            workflow_role_schema_version="workflow-role/1.3.0",
+        )
+
+
+@pytest.mark.parametrize("logical_exists", (False, True))
+def test_current_standard_preset_rejects_absent_current_pointer(logical_exists: bool) -> None:
+    logical = SimpleNamespace(state="ACTIVE", current_revision_id=None)
+    session = FakeSession([logical if logical_exists else None], None)
+
+    with pytest.raises(ControlPlaneError, match="no published revision"):
+        lock_current_execution_preset(
+            session,  # type: ignore[arg-type]
+            preset_key="standard-item",
+            workflow_role_schema_version="workflow-role/1.3.0",
+        )
+
+
+def test_current_standard_preset_distinguishes_dangling_current_revision() -> None:
+    logical = SimpleNamespace(state="ACTIVE", current_revision_id="execpresetrev_" + "f" * 32)
+    session = FakeSession([logical], None)
+
+    with pytest.raises(ControlPlaneError) as raised:
+        lock_current_execution_preset(
+            session,  # type: ignore[arg-type]
+            preset_key="standard-item",
+            workflow_role_schema_version="workflow-role/1.3.0",
+        )
+
+    assert raised.value.code == "CONTROL_PRESET_POINTER_INVALID"
+
+
 def test_resolver_selects_only_the_ordered_primary_candidate_and_records_exact_hash(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -108,6 +214,8 @@ def test_resolver_selects_only_the_ordered_primary_candidate_and_records_exact_h
     revision = SimpleNamespace(
         preset_id=preset["preset_id"],
         state="RELEASED",
+        content_sha256=preset["content_sha256"],
+        compatible_workflow_protocols=preset["compatible_workflow_protocols"],
         canonical_document=preset,
     )
     session = FakeSession([None, logical], revision)
@@ -150,6 +258,8 @@ def test_resolver_fails_closed_when_required_role_is_absent(
     revision = SimpleNamespace(
         preset_id=preset["preset_id"],
         state="RELEASED",
+        content_sha256=preset["content_sha256"],
+        compatible_workflow_protocols=preset["compatible_workflow_protocols"],
         canonical_document=preset,
     )
     session = FakeSession([None, logical], revision)
@@ -187,6 +297,8 @@ def test_resolver_returns_existing_plan_without_consulting_current_preset(
     revision = SimpleNamespace(
         preset_id=preset["preset_id"],
         state="RELEASED",
+        content_sha256=preset["content_sha256"],
+        compatible_workflow_protocols=preset["compatible_workflow_protocols"],
         canonical_document=preset,
     )
     creating = FakeSession([None, logical], revision)

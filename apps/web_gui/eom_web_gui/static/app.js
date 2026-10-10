@@ -767,7 +767,6 @@ function fillDraft(draft, fallbackCurriculumSelection = {large: "", middle: "", 
     || (draft.material_requirement.schema_version === "content-team-material-requirement/1.0"
       && draft.material_requirement.form === "IMAGE" ? "LABELED_DATA" : "NONE");
   syncMaterialPanelCount();
-  form.elements.quality_profile.value = draft.quality_profile;
   form.elements.source_intake_batch_id.value = draft.source_intake_batch_id || "";
   form.elements.authoring_guidance.value = draft.authoring_guidance;
   const graphGroundingAvailable = state.curriculumOutline?.graph_grounding_available === true;
@@ -832,7 +831,9 @@ function draftUpdateBody() {
         ? form.elements.image_supporting_data.value
         : null,
     },
-    quality_profile: form.elements.quality_profile.value,
+    // Retain legacy draft metadata without exposing execution-policy selection.
+    // The API resolves and pins the released default only when a request is submitted.
+    quality_profile: state.draft?.quality_profile ?? "balanced",
     source_intake_batch_id: form.elements.source_intake_batch_id.value || null,
     authoring_guidance: guidance,
     knowledge_grounding: form.elements.knowledge_grounding.checked,
