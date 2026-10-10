@@ -30,6 +30,7 @@ def _isolated_script(
     verify_signal: bool = False,
     source_drift: bool = False,
     inactive: str | None = None,
+    runner_primary_group: str = "eom",
 ) -> tuple[Path, Path, Path]:
     events = tmp_path / "events.jsonl"
     configuration = tmp_path / "commands.json"
@@ -44,6 +45,7 @@ def _isolated_script(
                 "verify_signal": verify_signal,
                 "source_drift": source_drift,
                 "inactive": inactive,
+                "runner_primary_group": runner_primary_group,
             }
         )
     )
@@ -61,6 +63,9 @@ if name == "git-stub":
         print({COMMIT!r})
 elif name == "python-stub":
     print("b" * 40 if c["source_drift"] and Path(c["events"]).exists() else {COMMIT!r})
+elif name == "id-stub":
+    assert args == ["-gn", "eom-workflow-runner"]
+    print(c["runner_primary_group"])
 elif name == "stat-stub":
     if args[1] == "%U:%G:%a:%h":
         print("eom-workflow-runner:eom:600:1")
@@ -76,6 +81,7 @@ elif name == "systemctl-stub":
         if c["stop_failure"] and args[0] == "stop" and args[-1].endswith("worker.service"):
             sys.exit(7)
 elif name == "runuser-stub":
+    assert args[:3] == ["-u", "eom-workflow-runner", "--"]
     command = next(
         value for value in ("maintenance-preflight", "restoration-preflight", "verify")
         if value in args
@@ -95,7 +101,7 @@ else:
     raise AssertionError("unexpected temporary command")
 """
     paths: dict[str, Path] = {}
-    for name in ("git", "python", "stat", "systemctl", "runuser"):
+    for name in ("git", "python", "id", "stat", "systemctl", "runuser"):
         path = tmp_path / f"{name}-stub"
         path.write_text(command_source)
         path.chmod(0o700)
@@ -118,6 +124,7 @@ else:
             f"CAPABILITY_POLICY={tmp_path / 'policy'}"
         ),
         "git -C": f"{paths['git']} -C",
+        "/usr/bin/id -gn": f"{paths['id']} -gn",
         "$(stat -c": f"$({paths['stat']} -c",
     }
     for original, replacement in substitutions.items():
@@ -137,6 +144,9 @@ def test_original_wrapper_has_fixed_source_identity_and_no_automatic_install() -
     assert "get_build_info().source_commit" in source
     assert "git -C" in source and "status --porcelain=v1" in source
     assert "runuser" in source and "/usr/bin/env -i" in source
+    assert '"${RUNUSER}" -u eom-workflow-runner --' in source
+    assert '"${RUNUSER}" -u eom-workflow-runner -g' not in source
+    assert "/usr/bin/id -gn eom-workflow-runner" in source
     assert '"${PYTHON}" -I -m eomctl.cli control-plane codex-runtime' in source
     assert source.index("run_installed maintenance-preflight") < source.index("WINDOW_STARTED=1")
     assert "trap restore_units EXIT" in source
@@ -160,6 +170,18 @@ def test_preflight_failure_does_not_stop_or_start_any_unit(tmp_path: Path) -> No
     )
     assert result.returncode == 1
     assert _events(events) == [["maintenance-preflight"]]
+
+
+def test_changed_runner_primary_group_refuses_before_application_or_service_changes(
+    tmp_path: Path,
+) -> None:
+    script, request, events = _isolated_script(tmp_path, runner_primary_group="unexpected")
+    result = subprocess.run(
+        ["/bin/bash", str(script), COMMIT, str(request)], capture_output=True, check=False
+    )
+    assert result.returncode == 1
+    assert _events(events) == []
+    assert b"runner primary group differs" in result.stderr
 
 
 @pytest.mark.parametrize("failure", [None, "verify", "stop"])

@@ -62,7 +62,7 @@ the explicitly approved model/effort matrix. The existing private runner directo
 request materialization boundary; this creates a new file only, never overwrites a request.
 
 ```bash
-sudo /usr/sbin/runuser -u eom-workflow-runner -g eom -- \
+sudo /usr/sbin/runuser -u eom-workflow-runner -- \
   /usr/bin/env -i HOME=/var/lib/eom-workflow-runner \
   USER=eom-workflow-runner LOGNAME=eom-workflow-runner TZ=UTC LANG=C.UTF-8 \
   PATH=/srv/eom/conda/envs/eom-api/bin:/usr/bin:/bin \
@@ -77,6 +77,11 @@ The model above is an example, not current admission proof or a production-defau
 No model executes during preparation. The root wrapper receives this exact request path
 and commit; its fixed sanitized environment reads protected configuration through existing
 adapters rather than sourcing any operator-provided environment file.
+The runner account's primary group must remain `eom`. Both preparation and verification
+reuse its existing supplementary groups, including the fixed worker-private groups; they
+do not add account privileges. Do not add `-g eom` alone to `runuser`: it suppresses those
+supplementary groups and workspace preparation then fails before native execution. The
+root wrapper verifies the primary group before stopping any service.
 
 ## Updates and failure handling
 

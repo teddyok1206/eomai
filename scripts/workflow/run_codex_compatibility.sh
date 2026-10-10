@@ -72,7 +72,9 @@ require_regular() {
 }
 
 run_installed() {
-  "${RUNUSER}" -u eom-workflow-runner -g eom -- \
+  # -g without -G discards existing supplementary groups, preventing access to
+  # worker-private workspaces. Use the account's existing groups, not new grants.
+  "${RUNUSER}" -u eom-workflow-runner -- \
     /usr/bin/env -i HOME=/var/lib/eom-workflow-runner \
     USER=eom-workflow-runner LOGNAME=eom-workflow-runner TZ=UTC LANG=C.UTF-8 \
     PATH=/srv/eom/conda/envs/eom-api/bin:/usr/bin:/bin \
@@ -98,6 +100,8 @@ installed_source_matches || fail 'installed release differs from requested sourc
 require_regular "${POSTGRES_ENV}" root:eom:640
 require_regular "${WORKER_CONFIG}" root:eom:640
 require_regular "${CAPABILITY_POLICY}" root:root:644
+[[ "$(/usr/bin/id -gn eom-workflow-runner)" == eom ]] || \
+  fail 'runner primary group differs from the installed service identity'
 [[ "$(readlink -e -- "${REQUEST_PATH}")" == "${REQUEST_PATH}" && \
   -f "${REQUEST_PATH}" && ! -L "${REQUEST_PATH}" && \
   "$(stat -c '%U:%G:%a:%h' -- "${REQUEST_PATH}")" == 'eom-workflow-runner:eom:600:1' ]] || \
