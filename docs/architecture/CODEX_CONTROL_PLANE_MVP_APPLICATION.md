@@ -334,3 +334,62 @@ rollback. Re-observe
 required slots through Orchestrator commands, check HTTPS role-protected model options and one
 inactive draft validation, and verify no preset or Pack activation changed. No new item, HWPX,
 GPU output or model generation is needed for this rollout acceptance.
+
+### Installed rollout acceptance — 2026-10-10 UTC
+
+The coordinated executable release is
+`7de886f19b6ad41886b1e03bc7cc06513bfeb027`, source tree
+`282f7f65acd76816781e5d3bbca8b726af5056e0`. API/platform consumers, the fixed worker
+observation helper and Web were installed as a compatible set. Production migration advanced
+from `20261008_0049` to `20261009_0050` through the supported migration command; narrow runtime
+grants and installed wheel RECORD/isolation checks passed. The exact predecessor migration
+identity is retained in the deployment baseline rather than inferred from its numeric suffix.
+The deployment receipt is
+`/var/lib/eom-api/deployments/7de886f19b6ad41886b1e03bc7cc06513bfeb027.json`;
+the temporary sanitized operation record is
+`/tmp/eom-model-selection-release.ac9SHpsb/deployment.log`.
+
+Subsequent authenticated application acceptance checks, separate from the installer log,
+used supported OBSERVE commands to refresh slots 01–04 after helper installation. Each native catalog
+was OBSERVED with seven advertised models, CLI `0.160.0`, a pinned hash and one-hour expiry.
+The four commands were `codexcmd_a381a6b0601f45b599290b25c7601aa6`,
+`codexcmd_de55448c5f3b48ddacecc5cadb8f529d`,
+`codexcmd_45346ff4e0314b1f9fafec05ea83723d`, and
+`codexcmd_021c73fddc024dc9a76d6f724b647833`. Native discovery advertised
+`gpt-5.6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-6-astra`, `gpt-6-luna`,
+`gpt-6-sol`, and `gpt-6.1-sol`. Discovery does not admit those models: the installed role-option
+endpoint correctly returned only the reviewed Terra medium/high/xhigh pairs for each required
+role. Unsupported metadata efforts such as max/ultra were not forwarded into execution presets.
+
+One application canary cloned the exact knowledge-grounded released V2 baseline, changed only
+authoring high to medium, and saved **an inactive draft**. The installed API enqueued validation
+`job_749c06ae499b43649cc115f960bdcc58`, which the installed Orchestrator completed at
+`2026-10-10T02:43:32.981399Z`: NON_LIVE, 35/35 PASS, quality_evaluated=false. Its immutable
+draft is `execpresetrev_c764a753c90e48ce87d7774194c419c9`, evaluation
+`preseteval_42aea34dfbca4535b813780b7681b5ca`, policy SHA-256
+`d0b5dbc2738f6e0388dd2bd3a486cbd29c9b9ef6f29c1449b3a850a44f8e3430`, and report pointer
+`artifact_f32591744ae9441e8839fdfd53f9cb32` /
+`rev_fea8435690c0454c91c9b3b0d7c7b07e` /
+`5bdc5c4e7da5db415a5c99c920d80828311c59374270a12d2c84202d164c7380`.
+No release/application command was sent. The exact current baseline remained
+`execpresetrev_8dcefbb3518c4d7d8b3289d7f154414c`; the canary remains DRAFT. This exercises
+the non-generating invocation builder and result/Artifact boundary, not live model inference.
+
+All seven preset current pointers and all four active Content Pack activation pointers matched the
+pre-deployment baseline. Pack `1.20.15` remains active; `1.20.16` is an inactive source candidate.
+Chat retained model `gpt-6.1-sol`, protocol 4 and its exact retrieval-policy revision/hash while
+only its executable release advanced. API liveness returned LIVE; API readiness, chat slot and
+HWPX capability returned READY. The previously accepted HWPX was still securely downloadable with SHA-256
+`b229ba6d0c7941d036686adcfab285543f9b013a5124184288c5dd6e1f32fe57`.
+Model/GPU submissions and new Item/HWPX builds for this acceptance: **zero**. The marker-guarded
+test database was removed through its supported cleanup command. Documentary commits after
+this executable commit do not mean runtime source advanced again.
+
+Final documentation parity checks exposed the missing full `generated-knowledge-item@1.20.16`
+candidate identity in README after the independent successor commit. It is now explicitly
+separated from active `1.20.15`; runtime-version documentation tests passed 3/3. An initial
+documentation-test invocation used the core interpreter without its source path, so collection
+failed; the installed compatible API interpreter ran the corrected checks. Neither issue
+required runtime changes. Authenticated smoke should reuse one session: successful admin
+logins also count against the existing five-per-900-second limit. No limiter was reset or
+relaxed for this deployment.
