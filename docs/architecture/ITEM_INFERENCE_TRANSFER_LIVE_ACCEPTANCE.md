@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-11 08:33 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-11 08:58 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
 
 사용자 최신 지시에 따라 **사람 평가는 현 목표의 완료 조건에서 제외**한다.
@@ -96,6 +96,37 @@ definition import 실패나 모델 실행이 아니다.
 사용자 source 권한, CPU/Job/Artifact 결과를 대체하지 않는다. 해당 gate는 실제 사용자
 인증과 기존 owner 경계에서 수행한다. PID `1045079`의 원래-input console은 08:33 UTC에
 살아 있으며 `guiadmin` getpass 대기다. 원래 실험·입력·실패 기록은 변경하지 않았다.
+
+### 동일 입력의 실제 재개와 비교 replay 도구 보완 — 2026-10-11 08:58 UTC
+
+사용자의 실제 인증 뒤 installed `68a648c2`/`e9d3b88b`와 원래 input/execution을
+확인하고 08:44:54 UTC에 `RUN_RETAINED_EXPERIMENT`를 **한 번** 실행했다.
+08:55:54 UTC의 owner PID `1045079`는 살아 있었고 API의 공식 snapshot 경로에
+해당 실행 이후 완료된 HTTP 요청 7건을 확인했다. 이때 고정 CPU unit은
+inactive/dead, MainPID 0, InvocationID empty였다. 중간 HTTP 종료 기록을 전체
+READ·AUTHORIZE·CPU 성공이나 phase별 최종 receipt로 확대하지 않는다.
+실행이 진행 중이므로 동일 입력을 재제출하거나 서비스를 재배포하지 않았다.
+
+실제 비교 전 검증 도구에서 별도 결함을 합성 재현했다. frozen V11 도구의
+REPLAY 메뉴는 성공한 제출이 이미 저장한 `pair-N.command.json` 때문에 HTTP
+호출 전에 거부됐다. 이는 운영의 idempotency 실패나 실제 모델 비교 실패가 아니다.
+원본 도구 SHA `1844ac71bfe94695652fcc013dccf8ab22bb73285b75016d914938c9d37b6601`은
+보존한다. 일회성 successor의 SHA는
+`c3160ed80ef0e0c6e5e9cdb3891e8ada46ea1293c4958deba7325f7d16e9be46`이다.
+
+보완은 명시적인 known-success replay leaf에 한정된다. 기존 selection/key와
+저장 command를 검증하고 공식 endpoint를 동일 key로 정확히 한 번 호출한다.
+반환된 immutable command가 기존 값과 완전히 같아야 하며 원본 bytes를 다시
+확인하고 별도 witness를 O_EXCL로 저장한다. command 파일이 실제 없는 uncertain
+submission만 기존 경로를 사용한다. 인증·검증·transport 실패에서 자동 retry,
+새 identity, 기존 receipt overwrite를 하지 않는다. 기존 일반 제출·control·
+source read·승인 경계와 runtime/protocol은 변경하지 않았다.
+
+root fresh 합성 회귀는 frozen 45개와 successor 35개를 함께 실행한 **80 PASS /
+7.03초**다. strict mypy/Ruff/format 두 파일과 두 독립 diff 검토도 PASS다. 이 도구는 아직
+보호 staging·actual 실행 전이다. 합성 replay PASS를 실제 worker 결과나 운영
+replay PASS로 표시하지 않는다. 최초 설계의 실제 CPU/두 쌍 비교·최종 대조 gate는
+계속 남으며, 사람 평가·추가 GUI는 새 완료 조건이 아니다.
 
 ### 세 축 비교와 owner refresh의 실제 공유 배포 — 19:12 UTC
 
