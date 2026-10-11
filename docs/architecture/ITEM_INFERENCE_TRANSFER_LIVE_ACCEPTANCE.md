@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-11 18:28 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-11 19:08 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
 
 사용자 최신 지시에 따라 **사람 평가는 현 목표의 완료 조건에서 제외**한다.
@@ -20,6 +20,28 @@
   제외한다. 기존 풀이보고서 520개를 다시 생성하지 않는다.
 
 ## Component 상태
+
+### 최신 비교 입장 관측 — 2026-10-11 18:45 UTC
+
+사용자가 다시 입력한 실제 guiadmin 로그인과 `manifest.capacity-v4.json`의 native
+capacity metadata equality는 통과했다. 명시적 PREPARE는
+`CONTROL_PRESET_MODEL_UNAVAILABLE`로 거부됐으며 console은 종료했다.
+비교 제출/RELEASE/새 CPU 실행은 모두 0이다. 모델 실패나 busy lease로 해석하지 않는다.
+계정/native catalog의 현재 만료·binding·CLI·resource version 및 model/effort 교집합은
+아직 조회하지 않았으므로 실제 원인은 미확정이다. PREPARE의 재검증은 게시 후에도
+실행될 수 있어 오류 코드만으로 모든 publication side effect가 0이라고 단정하지 않는다.
+기존 Artifact/receipt/실패는 보존한다. 다음은 기존 authenticated owner adapter의
+공식 typed 조회 경계를 연결하는 것이다. Slack: `devreport_42f40cb1a3e041bfab5c0b0e9358c133`.
+
+최소 연결의 소스 검증은 556 PASS/30.35초, 변경한 소스·테스트 4개 strict mypy,
+Ruff format/lint 및 diff check PASS다. 기존 account read/OBSERVE DTO와 native
+`capacity_pool_model_options`를 재사용한다. 새 모델·정책·DB migration·외부 API는 없다.
+보호된 console 후보의 35개 테스트는 위 556개에 포함되며, 독립 재검토에서 observation
+receipt closure와 불명 POST/부분 저장의 무재제출을 확인했다. 후보 SHA-256은
+`a015432b0ebef3d2a912d7988bcca0558aa1a3023f8b12900424f57b8647a73b`이다.
+이는 SOURCE_PASS이며 아직 운영 배포·계정 관측·쌍 비교 PASS가 아니다. 잘못된
+`--follow-imports=skip` 검사와 동결 전 테스트 fixture 실패는 올바른 import 분석·fixture
+수정 후 재실행했으며 운영 실패를 성공으로 바꾸지 않았다. 원래 설계 문서의 SHA는 유지됐다.
 
 | Component | 실제 상태 | 한계 |
 |---|---|---|

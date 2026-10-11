@@ -121,6 +121,38 @@ bounded input/output, secret-safe failure, 기존 출제/support/PDF/Graph 의�
 
 ## 실제 운영 호출부의 추가 점검
 
+### 같은 인증에서 비교 입장을 진단하는 최소 연결
+
+2026-10-11 실제 로그인은 통과했으나 V4 비교 PREPARE가
+`CONTROL_PRESET_MODEL_UNAVAILABLE`로 거부됐다. 이 코드는 native/reviewed 모델
+교집합의 거부이지 비교 실행 실패나 단순 busy lease의 증거가 아니다.
+
+- 책임은 기존 authenticated owner HTTP adapter의 고정 endpoint 호출이다. 기존
+  계정 조회/OBSERVE/명령 조회 API와 JSON Schema 2020-12/Pydantic DTO를 재사용한다.
+  새 wire schema, DB, queue, credential store, UI, 모델 정책은 만들지 않는다.
+- 정본은 API가 반환하는 exact binding/resource version, immutable 관측 및 기존
+  native capacity/model admission이다. 계정 DTO의 표시 결과를 실행 허가로 쓰지 않는다.
+  실제 principal과 권한을 확인한 public leaf만 노출하며 private bearer를 꺼내지 않는다.
+- 지배 연산은 고정 여섯 계정의 bounded ordered read와 exact binding/command lookup이다.
+  기존 tuple/ID/hash/index를 재사용하며 O(S), S <= 6의 조회에 별도 캐시를 두지 않는다.
+- 명시 OBSERVE는 slot06에서 읽은 binding/version에 `If-Match`와 retained idempotency
+  key를 붙여 한 번 제출한다. API와 Runner가 기존 transaction/queue를 소유한다.
+  응답 불명 시 새 key를 만들거나 자동 POST 재시도하지 않는다. 같은 command ID만 조회한다.
+  다른 slot, command type, 임의 URL, CLI 직접 호출, 권한 확대는 허용하지 않는다.
+- 인증은 메모리에만 두고 기존 official refresh/same operator/session을 유지한다.
+  Refresh는 15분 fresh-auth를 연장하지 않는다. 만료·회수·불명 refresh는 fail-closed다.
+- PREPARE admission 코드는 Artifact 게시 후 재검증에서도 발생할 수 있다. 오류 코드만으로
+  zero-write라고 단정하거나 다시 PREPARE하지 않는다. 같은 세션을 유지하더라도 mutation은
+  차단하고 현재 조회·기존 receipt 진단만 허용한다. Release/비교에는 원래 명시적 gate가 남는다.
+- 더 단순한 기존 console 재로그인은 불일치 내용을 조회하지 못한 채 세션을 버리므로
+  충분하지 않다. 기존 adapter의 작은 typed leaf 확장이 최소 대안이다. 별도 HTTP client,
+  토큰 파일, 임의 actor, 정책 TTL 확대나 새 authentication framework는 불필요하다.
+
+필수 검증은 fixed peer 검증 후 secret materialization, route/body/If-Match/key closure,
+202 command identity/status URL, schema/중복 JSON/bounded bytes, 현재 permission 회수,
+same-session refresh, timeout/unknown submission 무재시도 및 기존 comparison 회귀다.
+소스 PASS와 실제 계정 관측/입장 PASS는 별도로 기록한다.
+
 ### 비교 bootstrap의 capacity 입력 검토
 
 2026-10-11 운영 입력 오류에서 확인한 구분이다. Standard preset이 과거 fixed-host V1에

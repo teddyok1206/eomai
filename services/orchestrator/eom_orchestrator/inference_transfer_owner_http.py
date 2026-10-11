@@ -12,7 +12,12 @@ from typing import Any, Literal, cast
 from eom_api_contracts.assessment_learning import AssessmentLearningCorpusViewV2
 from eom_api_contracts.auth import CurrentOperator, LoginRequest, RefreshRequest, TokenPair
 from eom_api_contracts.common import CommandResult, ListResponse, SingleResponse
-from eom_api_contracts.control_plane import ExecutionPresetView
+from eom_api_contracts.control_plane import (
+    CodexAccountCommandRequest,
+    CodexAccountView,
+    CodexControlCommandView,
+    ExecutionPresetView,
+)
 from eom_catalog_contracts.inference_transfer_invocation import (
     InferenceTransferPairSubmitRequest,
     InferenceTransferWorkflowReadRequest,
@@ -80,6 +85,19 @@ _SNAPSHOT = "/api/v1/knowledge/inference-transfer/snapshot"
 _METADATA = "/api/v1/knowledge/inference-transfer/metadata"
 _ORIGINAL_CORPUS = "/api/v1/assessment-learning-corpus"
 _EXECUTION_PRESETS = "/api/v1/execution-presets"
+_CODEX_ACCOUNTS = "/api/v1/codex-accounts"
+_CODEX_CONTROL_COMMANDS = "/api/v1/codex-control-commands/"
+_CODEX_ACCOUNT_TARGET = re.compile(
+    re.escape(_CODEX_ACCOUNTS) + r"/authbinding_[0-9a-f]{32}", re.ASCII
+)
+_CODEX_OBSERVE_TARGET = re.compile(
+    re.escape(_CODEX_ACCOUNTS) + r"/authbinding_[0-9a-f]{32}/commands", re.ASCII
+)
+_CODEX_CONTROL_COMMAND_TARGET = re.compile(
+    re.escape(_CODEX_CONTROL_COMMANDS) + r"codexcmd_[0-9a-f]{32}", re.ASCII
+)
+_CODEX_BINDING_ID = re.compile(r"authbinding_[0-9a-f]{32}", re.ASCII)
+_CODEX_COMMAND_ID = re.compile(r"codexcmd_[0-9a-f]{32}", re.ASCII)
 _COMPARISONS = "/api/v1/knowledge/inference-transfer/comparisons"
 _COMPARISONS_V11 = _COMPARISONS + "/v1.1"
 _COMPARISON_WORKFLOWS = "/api/v1/knowledge/inference-transfer/workflows/"
@@ -106,6 +124,7 @@ _REQUEST_TARGETS = frozenset(
         ("POST", _COMPARISONS_V11),
         ("GET", _ORIGINAL_CORPUS),
         ("GET", _EXECUTION_PRESETS),
+        ("GET", _CODEX_ACCOUNTS),
     }
 )
 _MAX_ENVELOPE_BYTES = 4 * 1024**2
@@ -128,6 +147,34 @@ _ORIGINAL_CORPUS_VALIDATOR = Draft202012Validator(
 _EXECUTION_PRESETS_RESPONSE = ListResponse[ExecutionPresetView]
 _EXECUTION_PRESETS_VALIDATOR = Draft202012Validator(
     _EXECUTION_PRESETS_RESPONSE.model_json_schema(), format_checker=FormatChecker()
+)
+_CODEX_ACCOUNTS_RESPONSE = ListResponse[CodexAccountView]
+_CODEX_ACCOUNTS_VALIDATOR = Draft202012Validator(
+    _CODEX_ACCOUNTS_RESPONSE.model_json_schema(), format_checker=FormatChecker()
+)
+_CODEX_ACCOUNT_RESPONSE = SingleResponse[CodexAccountView]
+_CODEX_ACCOUNT_VALIDATOR = Draft202012Validator(
+    _CODEX_ACCOUNT_RESPONSE.model_json_schema(), format_checker=FormatChecker()
+)
+_CODEX_OBSERVE_REQUEST_VALIDATOR = Draft202012Validator(
+    CodexAccountCommandRequest.model_json_schema(), format_checker=FormatChecker()
+)
+_CODEX_CONTROL_COMMAND_RESPONSE = SingleResponse[CodexControlCommandView]
+_CODEX_CONTROL_COMMAND_VALIDATOR = Draft202012Validator(
+    _CODEX_CONTROL_COMMAND_RESPONSE.model_json_schema(), format_checker=FormatChecker()
+)
+_CODEX_OBSERVE_ERRORS = frozenset(
+    {
+        "API_IDEMPOTENCY_IN_PROGRESS",
+        "API_IDEMPOTENCY_CONFLICT",
+        "API_REQUEST_INVALID",
+        "API_PRECONDITION_REQUIRED",
+        "API_PRECONDITION_FAILED",
+        "CONTROL_RESOURCE_VERSION_CONFLICT",
+        "CONTROL_IDEMPOTENCY_CONFLICT",
+        "CONTROL_AUTH_BINDING_MISSING",
+        "CONTROL_COMMAND_INVALID",
+    }
 )
 _PAIR_SUBMIT_RESPONSE = SingleResponse[CommandResult]
 _PAIR_SUBMIT_VALIDATOR = Draft202012Validator(
@@ -189,6 +236,14 @@ def _reject_constant(_value: str) -> None:
     raise ValueError("non-JSON response")
 
 
+def _codex_observe_request(value: object) -> CodexAccountCommandRequest:
+    _CODEX_OBSERVE_REQUEST_VALIDATOR.validate(value)
+    request = CodexAccountCommandRequest.model_validate(value)
+    if request.command_type != "OBSERVE":
+        raise ValueError("only explicit account observation is supported")
+    return request
+
+
 def _request(
     method: Literal["GET", "POST"],
     path: str,
@@ -196,21 +251,34 @@ def _request(
     *,
     bearer: SecretStr | None = None,
     idempotency_key: str | None = None,
+    expected_resource_version: int | None = None,
     snapshot_phase: SnapshotPhase | None = None,
 ) -> tuple[int, object]:
-    fixed_target = (method, path) in _REQUEST_TARGETS or (
-        method == "GET"
-        and (
-            _COMPARISON_READ_TARGET.fullmatch(path) is not None
-            or _COMPARISON_READ_TARGET_V11.fullmatch(path) is not None
+    fixed_target = (
+        (method, path) in _REQUEST_TARGETS
+        or (
+            method == "GET"
+            and (
+                _COMPARISON_READ_TARGET.fullmatch(path) is not None
+                or _COMPARISON_READ_TARGET_V11.fullmatch(path) is not None
+                or _CODEX_ACCOUNT_TARGET.fullmatch(path) is not None
+                or _CODEX_CONTROL_COMMAND_TARGET.fullmatch(path) is not None
+            )
         )
+        or (method == "POST" and _CODEX_OBSERVE_TARGET.fullmatch(path) is not None)
     )
     is_submission = method == "POST" and path in {_COMPARISONS, _COMPARISONS_V11}
+    is_observation = method == "POST" and _CODEX_OBSERVE_TARGET.fullmatch(path) is not None
     if (
         not fixed_target
         or (method == "GET" and body is not None)
-        or (is_submission and (bearer is None or idempotency_key is None))
-        or (not is_submission and idempotency_key is not None)
+        or ((is_submission or is_observation) and (bearer is None or idempotency_key is None))
+        or (not (is_submission or is_observation) and idempotency_key is not None)
+        or (
+            is_observation
+            and (type(expected_resource_version) is not int or expected_resource_version <= 0)
+        )
+        or (not is_observation and expected_resource_version is not None)
         or (snapshot_phase is not None and (method, path) != ("POST", _SNAPSHOT))
         or (idempotency_key is not None and _IDEMPOTENCY_KEY.fullmatch(idempotency_key) is None)
     ):
@@ -239,11 +307,19 @@ def _request(
         if method == "POST":
             if payload is None or not 0 < len(payload) <= MAX_SNAPSHOT_FRAME_BYTES:
                 raise ValueError("fixed request exceeds bound")
+            if is_observation:
+                _codex_observe_request(
+                    json.loads(
+                        payload, object_pairs_hook=_unique_object, parse_constant=_reject_constant
+                    )
+                )
             headers["Content-Type"] = "application/json"
         if bearer is not None:
             headers["Authorization"] = "Bearer " + bearer.get_secret_value()
         if idempotency_key is not None:
             headers["Idempotency-Key"] = idempotency_key
+        if expected_resource_version is not None:
+            headers["If-Match"] = f'"v{expected_resource_version}"'
         connection.request(method, path, body=payload, headers=headers)
         response = connection.getresponse()
         if response.getheader("Content-Type", "").split(";")[0].strip().lower() not in {
@@ -497,6 +573,165 @@ class AuthenticatedInferenceTransferHttpSession:
         except Exception:
             raise ControlPlaneError(
                 "CONTROL_AUTH_SERVICE_UNAVAILABLE", "official execution preset reply invalid"
+            ) from None
+
+    def read_codex_accounts(self) -> ListResponse[CodexAccountView]:
+        """Preserve official account metadata; observation is not execution admission."""
+        try:
+            raw = self._read_official(_CODEX_ACCOUNTS, PermissionKey.CODEX_ACCOUNT_READ)
+            _CODEX_ACCOUNTS_VALIDATOR.validate(raw)
+            result = _CODEX_ACCOUNTS_RESPONSE.model_validate(raw)
+            binding_ids = {value.binding_id for value in result.data}
+            if len(binding_ids) != len(result.data) or any(
+                _CODEX_BINDING_ID.fullmatch(value) is None for value in binding_ids
+            ):
+                raise ValueError("account identities differ")
+            self._require_read_permission(PermissionKey.CODEX_ACCOUNT_READ)
+            return result
+        except ControlPlaneError:
+            raise
+        except Exception:
+            raise ControlPlaneError(
+                "CONTROL_AUTH_SERVICE_UNAVAILABLE", "official account listing reply invalid"
+            ) from None
+
+    def read_codex_account(self, binding_id: str) -> CodexAccountView:
+        if not isinstance(binding_id, str) or _CODEX_BINDING_ID.fullmatch(binding_id) is None:
+            raise ControlPlaneError(
+                "CONTROL_ACCOUNT_REQUEST_INVALID", "exact account binding required"
+            )
+        try:
+            raw = self._read_official(
+                _CODEX_ACCOUNTS + "/" + binding_id, PermissionKey.CODEX_ACCOUNT_READ
+            )
+            _CODEX_ACCOUNT_VALIDATOR.validate(raw)
+            result = _CODEX_ACCOUNT_RESPONSE.model_validate(raw).data
+            if result.binding_id != binding_id:
+                raise ValueError("account binding differs")
+            self._require_read_permission(PermissionKey.CODEX_ACCOUNT_READ)
+            return result
+        except ControlPlaneError:
+            raise
+        except Exception:
+            raise ControlPlaneError(
+                "CONTROL_AUTH_SERVICE_UNAVAILABLE", "official account reply invalid"
+            ) from None
+
+    def observe_codex_account(
+        self,
+        binding_id: str,
+        request: CodexAccountCommandRequest,
+        *,
+        expected_resource_version: int,
+        idempotency_key: str,
+    ) -> CommandResult:
+        """Submit one OBSERVE with the caller's exact retained version/body/key.
+
+        A timeout or invalid accepted reply does not prove that the server did
+        nothing. This transport neither retries nor substitutes a new key or
+        resource version. The caller may only perform an explicit authorized
+        replay or poll an already verified command identity.
+        """
+        try:
+            if (
+                not isinstance(binding_id, str)
+                or _CODEX_BINDING_ID.fullmatch(binding_id) is None
+                or not isinstance(request, CodexAccountCommandRequest)
+                or type(expected_resource_version) is not int
+                or expected_resource_version <= 0
+                or not isinstance(idempotency_key, str)
+                or _IDEMPOTENCY_KEY.fullmatch(idempotency_key) is None
+            ):
+                raise ValueError("exact account observation required")
+            request = _codex_observe_request(request.model_dump(mode="json"))
+            payload = canonical_json_bytes(request.model_dump(mode="json"))
+        except Exception:
+            raise ControlPlaneError(
+                "CONTROL_ACCOUNT_REQUEST_INVALID", "exact account observation required"
+            ) from None
+        self._require_read_permission(PermissionKey.CODEX_ACCOUNT_MANAGE)
+        try:
+            status, raw = _request(
+                "POST",
+                _CODEX_ACCOUNTS + "/" + binding_id + "/commands",
+                payload,
+                bearer=self._bearer,
+                idempotency_key=idempotency_key,
+                expected_resource_version=expected_resource_version,
+            )
+        except ControlPlaneError:
+            raise ControlPlaneError(
+                "CONTROL_ACCOUNT_OBSERVATION_UNCERTAIN",
+                "observation outcome unknown; retain exact input version and key",
+            ) from None
+        if status in {401, 403}:
+            raise ControlPlaneError("CONTROL_AUTHORIZATION_REQUIRED", "account observation denied")
+        if status != 202:
+            code = raw.get("error_code") if isinstance(raw, dict) else None
+            raise ControlPlaneError(
+                code
+                if status in {400, 409, 412, 422, 428}
+                and isinstance(code, str)
+                and code in _CODEX_OBSERVE_ERRORS
+                else "CONTROL_ACCOUNT_OBSERVATION_UNCERTAIN",
+                "official account observation unavailable; retain exact input version and key",
+            )
+        try:
+            _PAIR_SUBMIT_VALIDATOR.validate(raw)
+            result = _PAIR_SUBMIT_RESPONSE.model_validate(raw).data
+            if (
+                _CODEX_COMMAND_ID.fullmatch(result.command_id) is None
+                or result.resource_type != "codex_control_command"
+                or result.resource_id != result.command_id
+                or result.status != "ACCEPTED"
+                or result.resource_version != expected_resource_version
+                or result.status_url != _CODEX_CONTROL_COMMANDS + result.command_id
+            ):
+                raise ValueError("observation command lineage differs")
+        except Exception:
+            raise ControlPlaneError(
+                "CONTROL_ACCOUNT_OBSERVATION_UNCERTAIN",
+                "observation reply invalid; retain exact input version and key",
+            ) from None
+        self._require_read_permission(PermissionKey.CODEX_ACCOUNT_MANAGE)
+        return result
+
+    def read_codex_control_command(
+        self, command_id: str, *, binding_id: str
+    ) -> CodexControlCommandView:
+        if (
+            not isinstance(command_id, str)
+            or _CODEX_COMMAND_ID.fullmatch(command_id) is None
+            or not isinstance(binding_id, str)
+            or _CODEX_BINDING_ID.fullmatch(binding_id) is None
+        ):
+            raise ControlPlaneError(
+                "CONTROL_ACCOUNT_REQUEST_INVALID", "exact observation command and binding required"
+            )
+        try:
+            raw = self._read_official(
+                _CODEX_CONTROL_COMMANDS + command_id, PermissionKey.CODEX_ACCOUNT_READ
+            )
+            _CODEX_CONTROL_COMMAND_VALIDATOR.validate(raw)
+            result = _CODEX_CONTROL_COMMAND_RESPONSE.model_validate(raw).data
+            if (
+                result.command_id != command_id
+                or result.binding_id != binding_id
+                or result.command_type != "OBSERVE"
+                or result.state not in {"PENDING", "PROCESSING", "SUCCEEDED", "FAILED"}
+                or (
+                    result.result_resource_version is not None
+                    and result.result_resource_version <= 0
+                )
+            ):
+                raise ValueError("observation command identity differs")
+            self._require_read_permission(PermissionKey.CODEX_ACCOUNT_READ)
+            return result
+        except ControlPlaneError:
+            raise
+        except Exception:
+            raise ControlPlaneError(
+                "CONTROL_AUTH_SERVICE_UNAVAILABLE", "official observation command reply invalid"
             ) from None
 
     def _comparison_principal(

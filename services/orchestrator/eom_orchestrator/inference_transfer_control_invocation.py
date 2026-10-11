@@ -20,6 +20,7 @@ from eom_identifiers import content_sha256
 from eom_identity_service.models import OperatorRecord
 from eom_identity_service.repository import active_role_assignments, effective_permissions
 from eom_operator_identity import PermissionKey, RoleKey
+from eom_workflow.control_plane import ModelCandidate, WorkerRole
 from eom_workflow.inference_transfer_bootstrap_contract import (
     InferenceTransferBootstrapCapacityPin,
     InferenceTransferBootstrapManifest,
@@ -55,7 +56,10 @@ from eom_orchestrator.inference_transfer_bootstrap import (
     release_inference_transfer_controls,
     release_inference_transfer_controls_v11,
 )
-from eom_orchestrator.preset_model_selection import resolve_released_capacity_policy
+from eom_orchestrator.preset_model_selection import (
+    capacity_pool_model_options,
+    resolve_released_capacity_policy,
+)
 
 _FRESH_AUTH_AGE = timedelta(minutes=15)
 _OPERATOR = re.compile(r"operator_[0-9a-f]{32}", re.ASCII)
@@ -180,6 +184,31 @@ class AuthenticatedInferenceTransferControlOwner:
             )
         self._authorize_current_principal(principal.operator_id)
         return result
+
+    def read_model_options(
+        self, capacity: InferenceTransferBootstrapCapacityPin
+    ) -> tuple[ModelCandidate, ...]:
+        """Read exact fresh native/reviewed SUPPORT options for customer-support.
+
+        Metadata does not prove logical-current activation or reserve capacity.
+        No publication, observation refresh, policy change or execution occurs.
+        """
+        if self.read_capacity_pin(capacity.capacity_policy_revision_id) != capacity:
+            raise ControlPlaneError(
+                "CONTROL_CAPACITY_POINTER_INVALID", "reviewed capacity pin differs"
+            )
+        principal = self._current_principal()
+        self._authorize_current_principal(principal.operator_id)
+        with self.sessions() as session:
+            options = capacity_pool_model_options(
+                session,
+                capacity_policy_revision_id=capacity.capacity_policy_revision_id,
+                role=WorkerRole.SUPPORT,
+                worker_pool_key="customer-support",
+                observed_at=self._clock(),
+            )
+        self._authorize_current_principal(principal.operator_id)
+        return options
 
     def prepare(
         self,
