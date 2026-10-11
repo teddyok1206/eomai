@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-11 13:56 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-11 17:08 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
 
 사용자 최신 지시에 따라 **사람 평가는 현 목표의 완료 조건에서 제외**한다.
@@ -116,6 +116,42 @@ semantic SHA는 `933e2c729c6ad2fd1c777eb10421de6e99b119db0bec5e70d7b11be1ca92aae
 fresh guiadmin 인증 후 공식 PREPARE/RELEASE와 최대 두 쌍의 실제 V11 비교,
 MEMBER_VERIFIED 및 같은 key replay가 남아 있다. 근거 대응 가설과 교육 효과는 구분한다.
 Slack milestone: `devreport_a95bc44d4e154b53b3158742fb84e09b`.
+
+### V11 사전 점검 종료와 일회성 입력의 capacity schema 불일치 — 2026-10-11 17:05 UTC
+
+기존 console의 로그인 거부와 이후 종료를 보존한다. 사용자 재입력 후 owner
+PID1404179는 17:01 UTC에 `OWNER_COMPLETION_BOUNDARY_FAILED`로 종료했다.
+공식 API는 `/auth/login` 1회와 `/auth/me` 5회 완료를 기록했다. PREPARE/RELEASE 메뉴의
+사전 점검 완료 출력은 없었으며 control 게시·pair 요청·새 CPU 실행은 0이다.
+generic 오류만으로 SQL·권한·실제 capacity 값을 단정하지 않는다.
+
+독립 source 대조에서 **일회성 builder 입력의 명시적인 불일치**를 찾았다.
+`capacity_2b2e003348f6759d4f780b4283dec6cd` /
+`capacityrev_335b8a238f3755b9dc14d902598ee520`와 `sha256:6bac3c91…ba59cd3`는
+`fixed-host:v1`이다. 기존 native producer와 bootstrap 회귀는 이 exact revision의
+schema가 `worker-capacity-policy/1.0`임을 보여준다. 그러나 local draft에는 `1.3`을
+기재했다. 이는 최신 정책을 선택해야 할 이유나 기존 guard를 완화할 근거가 아니다.
+
+최소 수정은 **같은 ID/revision/hash에 맞는 schema 표기**를 별도의
+`manifest.capacity-v1.json`에 기록하는 것이다. 이전 manifest·frozen console·실패
+기록을 덮지 않는다. 모델·runtime·Graph·자료·recipe·두 쌍 예산은 그대로이며 새
+DB/schema/queue나 core 배포가 필요하지 않다. O_EXCL/FD/SHA와 기존 owner의 exact
+capacity/native model admission을 유지한다. 새 입력 생성·현재 실제 capacity 일치·
+control 발행·pair 실행 여부는 각각 후속 실제 증거로 판정한다.
+
+수정 builder는 raw SHA `ec542ab55b5d8e934627e06d43330c5fb1e2161301700b4348f6f35237770078`,
+10,591 bytes다. schema와 별도 basename·설명 이외 AST는 보존됐다. root fresh 합성
+테스트 6 PASS/3.77초, 기존 native pin·owner authorization·bootstrap 81 PASS/3.06초,
+Ruff/format PASS이며 strict mypy 2파일 PASS도 확인했다. 기존 manifest 보존,
+symlink/중복/race 거부·부분 실패 보존을 검증했다. 새 runtime/core 배포는 없다.
+
+17:08 UTC에 기존 보호된 data-stage helper의 FD/SHA/O_EXCL 경계로 새 builder만
+root 소유 0644 leaf에 복사하고 UID990가 새 private manifest를 생성했다. 이전 입력과
+console은 변경하지 않았다. 새 raw SHA는
+`81570550ce4ad16bc5cb08701243d6970f518be842f58c1adbb0d5d42621e8d6`, semantic SHA는
+`9a8e990d21cd4a325b6f6b0ea85a98fc134de4f89c25f9ecfa96c9088f213f81`이다.
+`DRAFT_DATA_ONLY_NOT_AUTHORITY`, publication/model 0이며 새 UID990 console PID1418086은
+fresh Studio 로그인 입력 대기다. 실제 native equality/PREPARE/RELEASE/pair는 아직 미실행이다.
 
 ### 요청범위 불변 provenance 재사용의 실제 공유 배포 — 2026-10-11 08:23 UTC
 
