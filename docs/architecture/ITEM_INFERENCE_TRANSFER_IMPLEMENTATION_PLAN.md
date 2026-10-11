@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 구현·검증 계획
 
-상태 기준: 2026-10-11 10:49 UTC, `c8b29f67` 설치·BGE-only 90분 profile 및 합성 18 text의 실제 MEASURED 관측. 원래 520개 E5 실험의 INSUFFICIENT 기록은 보존한다. 이 문서는 구현 계획과 단계별 상태 요약이다.
+상태 기준: 2026-10-11 14:04 UTC, `c8b29f67` 설치와 전체 520개 BGE successor의 실제 `COMMITTED / MEASURED` 확인. 원래 E5 INSUFFICIENT 기록은 동일-key 정본 복구 후에도 보존한다. V11 control 발행·두 쌍·replay와 최종 대조는 대기다. 이 문서는 구현 계획과 단계별 상태 요약이다.
 실제 설치 증거는 [live acceptance 기록](ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)과
 정본 deployment record로 확인하며, 설치·service health를 비교 실행·교육 품질 PASS로 확대하지 않는다.
 
@@ -40,18 +40,19 @@
 |---|---|---|---|
 | F0 | 답변 원문 보존·goal·기존 경계 점검 | 원문 read-back/hash, 기존 경계와 제한 기록 | 완료 |
 | F1 | additive JSON Schema 2020-12 → frozen 모델 → grounded deterministic profile | exact refs/hash/closure/uncertainty tests, predecessor bytes 불변 | source 구현·검증 완료 |
-| F2 | pinned offline local embedding adapter와 exact ranking | dependency isolation, malformed vectors·ties·permission-prefilter tests; 실제 CPU benchmark 별도 | source·CPU toy·보호 CPU/model 발행 완료. 원래 실제 corpus는 E5 512-token에서 INSUFFICIENT: 착상 view 517/520 overflow, forward 0. 내용을 보존하는 긴 입력 모델의 fit 보완 필요 |
-| F3 | Catalog opt-in authorized candidate read use case | actual actor/policy/Graph admission 재사용, 별도 후보 예산·provenance, 기본 retrieval 무변경 | 공유 `68a648c2`와 실제 guiadmin 520 population의 PREPARE 1/READ 33/전체 AUTHORIZE 1 완료. 기본 retrieval 불변. 이전 실패 이력 보존; publisher staging caller 설정 누락의 동일-key 복구 대기 |
+| F2 | pinned offline local embedding adapter와 exact ranking | dependency isolation, malformed vectors·ties·permission-prefilter tests; 실제 CPU benchmark 별도 | source·CPU toy·보호 CPU/model 발행 및 BGE actual 520개/3-view fit 완료. 원래 E5 착상 view 517/520 overflow·forward 0 이력은 보존 |
+| F3 | Catalog opt-in authorized candidate read use case | actual actor/policy/Graph admission 재사용, 별도 후보 예산·provenance, 기본 retrieval 무변경 | 실제 guiadmin의 exact 520 population 조회·전체 재인가 확인. 원래 retained E5 결과의 동일 Job/key 게시 복구 완료, CPU 재실행 0. 기본 retrieval와 원래 실패 이력 불변 |
 | F4 | Orchestrator 경유 bounded Codex pair comparison | exact A/B, condition+decisive mapping, 차이/새 추론, unsupported/insufficient 처리, schema validation | V11 세 축 source·호환 공유 경계·운영 definition 등록 완료. 실제 native protocol/control PREPARE·RELEASE 및 최대 두 쌍 MEMBER_VERIFIED/replay는 대기 |
-| F5 | 기존 검색 대비 bounded 자동 실험 | lexical/content-only/crux/metadata의 후보·순위·공통 모집단·coverage·latency·memory; label 없는 정확도나 교육 효과 주장 금지 | 실제 520/4-query/3-view token coverage·CPU load/RSS 관측 완료. common pool 3/queries 제외로 순위는 0이며 MEASURED 아님. 원래 결과 게시와 적합한 모델의 명시적 successor 실험 대기. 사람 평가는 불필요 |
-| F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 사람 평가 불필요, 자동 검증과 실제 교육 효과 구별 | `68a648c2` 설치·migration 0051 unchanged·6 callback·8 service/chat READY 확인. 변경 경계 559 PASS와 원문/계약/adapter fresh 124 PASS. 실패 모델 결과를 성공으로 바꾸지 않으며 실제 successor CPU·control·두 쌍·최종 대조 gate는 남음 |
+| F5 | 기존 검색 대비 bounded 자동 실험 | lexical/content-only/crux/metadata의 후보·순위·공통 모집단·coverage·latency·memory; label 없는 정확도나 교육 효과 주장 금지 | 원래 E5 common3/forward0 보존. 별도 BGE는 common520/encoded1560, 4-query/3-view 실제 순위와 저장된 Graph baseline 입력을 가진 MEASURED·COMMITTED. 최종 순위 대조 보고는 대기, 사람 label·품질 판정 없음 |
+| F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 사람 평가 불필요, 자동 검증과 실제 교육 효과 구별 | 현재 `c8b29f67` 공유 설치·migration0051 unchanged·6 callback·8 service READY와 전체 BGE CPU 완료. 각 변경 경계 회귀는 live 기록에서 구분. control·두 쌍·replay·최종 원문 대조는 남음 |
 
-위 F2–F6의 원래 corpus 관측은 역사적 68a648c2 실행이다. 후속 실제 설치는 c8b29f67이며
+원래 E5 corpus 관측은 역사적 68a648c2 실행이다. 후속 실제 설치는 c8b29f67이며
 6개 release callback/8개 서비스·API LIVE/READY PASS, migration0051/CPU06134는 그대로다.
 BGE 합성 18 text는 무절단 MEASURED(encoding44,325ms/RSS2,486,848KiB)이고,
 520×3 text 단순 환산 proxy 약64분에 근거해 BGE만 90분으로 조정했다.
-이는 전체520개 fit이나 후보 품질 PASS가 아니다. 원래 동일-key 게시 복구와 새520개
-BGE/두V11쌍·replay는 실제 사용자 재인증 후 수행할 PENDING이다.
+위 toy는 당시 전체520개 fit 증거가 아니었다. 이후 원래 동일-key 게시 복구와 별도
+BGE successor common520/encoded1560/encoding1,559,484ms의 MEASURED·COMMITTED를 확인했다.
+입력 길이 적합성과 순위 관측이지 후보 품질 PASS가 아니다. 두 V11쌍·replay는 PENDING이다.
 원문 요구별 독립 source 대조에서 추가 필수 구현 누락은 찾지 못했으며,
 [최종 대조 기록](ITEM_INFERENCE_TRANSFER_FINAL_CONFORMANCE_GAPS.md)의 실제 종료 조건은 유지한다.
 
@@ -112,9 +113,10 @@ embedding recipe나 평가 GUI를 추가하지 않는다.
 실행 gate만 구분하며 사람 평가를 완료의 선행 조건으로 다시 추가하지 않는다.
 source PASS를 전체 설계·교육 품질 PASS로 확대하지 않는다.
 
-현재 읽기 전용 사전 대조에서는 profile → 후보 → 근거 연결 A→B 비교 → 별도 사람 평가의
-소스 경로를 확인했다. 그러나 첫 실제 READ 실패로 corpus 후보 성능·worker 비교·사람
-label은 아직 확인하지 못했다. 최종 대조에서는 소재·개념·착상별 설명이 실제 결과에
+초기 읽기 전용 사전 대조에서는 profile → 후보 → 근거 연결 A→B 비교 → 별도 사람 평가의
+소스 경로만 확인했고 첫 실제 READ는 실패했다. 현재는 전체 BGE corpus의 CPU·순위를
+관측했으며 실제 worker 세 축 설명은 대기다. 사람 label은 현 완료 조건이 아니다.
+최종 대조에서는 소재·개념·착상별 설명이 실제 결과에
 구분되는지, 차이/추가 추론의 빈 배열이 정말 해당 없음인지, 메타데이터의 실제 활용 범위가
 구조·수식·승인 보고서 summary로 한정된다는 점도 명시적으로 확인한다. 합성 테스트의
 순위나 모델 가설을 사용자의 실제 풀이 전이 평가로 대체하지 않는다.
@@ -145,11 +147,15 @@ HTTP replay/목적 전용 결과 resolution 및 아직 남은 실제 운영 호�
 [owner 호출부 후속 설계](ITEM_INFERENCE_TRANSFER_OWNER_INVOCATION_DESIGN.md)에 기록한다.
 후속 source 구현·검증은 [다섯 번째 checkpoint](ITEM_INFERENCE_TRANSFER_FIFTH_CHECKPOINT.md)에
 기록한다. 그 checkpoint의 source 검증과 이후 실제 공유 release를 구분하며,
-설치된 격리 CPU launcher/control owner의 실제 corpus·control 발행·human gate는 대기다.
+후속 실제 격리 CPU corpus는 완료했고 control 발행·pair는 대기다. 사람 평가는
+NOT_EVALUATED/NOT_REQUIRED이며 현 완료 gate에 추가하지 않는다.
 실제 guiadmin 승인 이후 인증 owner 호출과 독립 CPU 설치 경계는
 [여섯 번째 checkpoint](ITEM_INFERENCE_TRANSFER_SIXTH_CHECKPOINT.md)에 구분해서 기록한다.
 그 이후 실제 설치 component map, no-forward 실패/권한 수정 및 남은 운영 gate는
 [live acceptance 기록](ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)에서 확인한다.
+
+아래는 이전 checkpoint에서 정한 순서이며 당시 실패·UNKNOWN은 보존한다. 현재 actual
+완료·대기는 위 단계 표와 live acceptance의 시각별 후속 기록을 따른다.
 
 1. compatible shared release는 READ 응답 크기 분류 보완을 포함한 `f12fb971`로 successor 설치했다. 이전 `7383d1c6` 실행에서 실제 `guiadmin` original corpus 520/520과 exact Graph/preset metadata 및 query-free PREPARE 79,325.809 ms 완료를 확인했다. 실제 첫 READ는 terminal 실패했고 CPU forward는 실행하지 않았다. 실제 요청의 동일 overflow 원인 여부는 UNKNOWN으로 유지한다. 같은 공식 경로·exact pins·입력 receipt를 보존하며 기존 V2 검색·활성 preset은 바꾸지 않는다. 새 실제-principal 최소 READ 진단 뒤 같은 execution의 복구를 판단한다.
 2. 실제 corpus의 deterministic profile 길이·E5 token overflow 비율·source resolution query/file-read 비용부터 측정한다. 긴 조건을 버려 성공시키지 않는다. 필요한 facet/chunk successor는 측정 후 별도 설계한다.
@@ -278,5 +284,6 @@ revision·lineage 변경을 거부했다. key 분리·실패 비보존·상한 f
 인가나 latency PASS를 대신하지 않는다.
 
 기존 wire schema/definition/instruction bytes, 원래 input/execution과 설계 원문 SHA는
-변경하지 않았다. 실제 compatible 배포·동일 입력 조회·CPU·최대 두 pair 및 replay는
-source 검증과 별도 gate이며 아직 PENDING이다. 사람 평가는 필요하지 않다.
+변경하지 않았다. 실제 compatible c8b29f67 배포·동일 520개 입력 조회·BGE CPU는
+후속 live 기록에서 완료됐다. 최대 두 pair·replay와 최종 대조는 source 검증과
+별도 gate이며 아직 PENDING이다. 사람 평가는 필요하지 않다.

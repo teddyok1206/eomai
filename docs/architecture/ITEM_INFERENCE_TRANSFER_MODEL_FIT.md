@@ -1,8 +1,9 @@
 # 착상 비교 입력 길이에 맞는 로컬 모델 보완
 
-상태: 2026-10-11 10:38 UTC. 실제 E5 실패 측정을 바탕으로 한 구현 설계와 모델
-acquisition/admission 및 합성 CPU 벡터 실측 기록이다. 전체 corpus·품질 PASS가 아니며
-원문과 이전 실행은 보존한다.
+상태: 2026-10-11 14:04 UTC. 실제 E5 입력 길이 부족과 합성 CPU 관측을 보존하며,
+같은 520개·4 query·3 view의 BGE successor `COMMITTED / MEASURED`까지 확인했다.
+실제 V11 두 쌍·replay는 대기다. 이 입력 집합의 fit 성공이지 교육 품질이나 향후 모든
+corpus의 적합성 PASS가 아니며 원문과 이전 실행은 보존한다.
 
 ## 필요한 이유와 보존할 범위
 
@@ -152,3 +153,26 @@ E5 1800초·과거 toy55c7 증거·CPU06134/model snapshot·migration0051·polki
 9783bfaa0b4da8470af822efb68ad9449f10cbd4231c76d09f227dfe99f6f783이다.
 정확한 경로/시간/실행 구분은 live acceptance 기록에 있다. 전체520개 BGE 및 실제
 V11 쌍 비교는 아직 PENDING이며 합성 vector 성공을 corpus나 교육 품질로 확대하지 않는다.
+
+### 실제 전체 corpus CPU 결과 — 2026-10-11 13:55 UTC
+
+원래 E5 결과는 13:20 UTC에 현재 재인가·동일 Job/key로 정본 게시를 복구했다.
+CPU 재실행은 0이며 원래 `INSUFFICIENT_ENCODING_COVERAGE`와 실패 이력을 유지했다.
+별도 BGE successor `embeddingexecution_d6b62c2fd7864efabf9f16c3aa947f9b`는
+13:26:58–13:53:10 UTC에 실행돼 실제 `COMMITTED / MEASURED`다. 세 view 모두 같은
+520개를 절단 없이 처리했고, encoded text는 1,560개이며 네 query의 view별 순위를 보존했다.
+
+- Encoding: 1,559,484 ms, 약 26분. 앞의 합성 proxy 64분과 별개의 실제 측정이다.
+- Process Linux peak RSS: 2,753,684 KiB.
+- systemd cgroup MemoryPeak: 759,586,816 bytes. 측정 범위가 다른 위 RSS와 합산하거나
+  같은 지표로 대체하지 않는다.
+- Request semantic SHA: `a246be6a722e82d0169ac3abb99a5fcff7dd559245a1fb1145fdef94b15a6b03`.
+- Result semantic SHA: `83f48dded66c6241b955f6ffc15ea504b5f9685b13fad63b50ce3a6833e4cb05`.
+- Artifact: `artifact_0b04fa4b8c134853b65da0caf07c1785`, revision
+  `rev_42e5834f068846e8acf891f767df6a3d`, member `result.json`.
+- Member raw SHA: `030a0e83923841341539ac9a9d93cc64ba98c834b1f09ab013a2cc942244b8a5`.
+
+실제 owner/CPU 실행·게시 횟수와 source/model/resource closure는
+[운영 검증 기록](ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)에 있다. 임베딩은 후보
+관측이며 과학적 정답·착상 전이·표절·출판 승인 증명이 아니다. V11 control 발행,
+두 쌍의 정본 근거 설명과 같은-key replay가 남아 있다. 사람 평가는 현 완료 조건이 아니다.
