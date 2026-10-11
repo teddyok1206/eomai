@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-11 17:15 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-11 18:28 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
 
 사용자 최신 지시에 따라 **사람 평가는 현 목표의 완료 조건에서 제외**한다.
@@ -192,6 +192,51 @@ in-memory session 재사용 경로는 있으나 현재 제공된 재사용 crede
 `SUPPLIED_NOT_REEXECUTED`, 교육 효과 `NOT_EVALUATED`를 유지한다. 실제 V11
 PREPARE/RELEASE, 두 쌍의 CONCEPT/MATERIAL/CRUX 근거 설명·`MEMBER_VERIFIED`와
 same-key replay는 미실행으로 남는다. 원문·520개 정본·Graph 경계와 실패 이력은 보존한다.
+
+### 정상 인증 후 PREPARE의 과거 capacity 참조 거부 — 2026-10-11 18:21 UTC
+
+사용자가 다시 한 번 인증하기로 선택했고 실제 UID990 console PID1449217에서
+로그인과 exact native capacity/schema equality가 통과했다.
+`EXACT_INPUT_SCHEMA_AND_CURRENT_CAPACITY_PASS`는 역사적인 RELEASED revision의
+exact read/equality 관측이다. 전체 bootstrap admission이 통과했다는 뜻은 아니다.
+
+명시적 `PREPARE`는 `CONTROL_CAPACITY_POINTER_INVALID`로 거부됐다. 이 실패를
+비밀번호 오류나 worker 실패로 분류하지 않는다. 기존 console은 실패를 보존하고
+종료했으며 메모리 session은 재사용할 수 없게 됐다. pair/새 embedding 실행은 0이다.
+
+source의 두 검증 경계가 달랐다. `read_capacity_pin`은 exact RELEASED revision을
+읽지만 bootstrap은 logical ACTIVE/current revision도 요구하고, 이어서 SUPPORT의
+`customer-support` pool과 fresh native model admission을 확인한다. 과거 fixed-host
+V1에는 그 pool이 없다. 따라서 V1의 schema 표기를 고친 것만으로 비교 실행에 맞는
+정책을 선택한 것은 아니었다. 이는 일회성 입력의 오류이며 guard를 완화할 이유가 아니다.
+
+공식 V4 producer가 사용하는 exact 후보는 다음과 같다. source상 적합한 **검토 후보**이며
+실제 현재 policy·모델 사용 가능성의 PASS가 아니다.
+
+- policy: `capacity_2b2e003348f6759d4f780b4283dec6cd`.
+- revision: `capacityrev_7bf8e36f42b1a7b495a6858a5ea827b9`.
+- schema: `worker-capacity-policy/1.3`.
+- semantic SHA-256: `8b90252a79240a90e4cd8452960732ea14f4602ad70fc80dee9b7cc281d04035`.
+- SUPPORT/customer-support/slot06; 기존 global max_active_codex 3을 유지한다.
+
+V4 참조는 별도 data-only manifest로 검토하고 이전 V1 입력·실패를 덮지 않는다.
+새 정책 발행·current pointer rollback·DB row 변경·capacity 증가는 하지 않는다.
+기존 admission/owner/contract 회귀는 root 실행 116 PASS/6.30초다. 특히 stale capacity는
+protocol 등록·Artifact publish·draft 생성 이전에 거부됨을 합성 회귀로 확인했다.
+실제 V11 PREPARE/RELEASE, 두 쌍 비교 및 replay는 여전히 미완료다.
+Slack failure milestone: `devreport_83720022c70e4cb3a094f3a25cdc6cd9`.
+
+18:28 UTC에 별도 V4 builder를 검토·보호된 root leaf에 FD/SHA/O_EXCL로 stage하고
+UID990가 `manifest.capacity-v4.json`만 생성했다. builder raw SHA는
+`72cb191a7ac3683d6418e229197bf41b3ffb1244e2ab57c45bcf3a3831000b7b`, 10,670 bytes다.
+새 manifest raw SHA는 `855cdad3e68a7d5437f73680e47662e1703275e2dc97848e5ecbfe7677096a6a`,
+semantic SHA는 `cd0db4a397fda2974490325168f7491f6f81748b1c89ca28ad0042cc1408ae10`이다.
+기존 입력·console·runtime은 변경하지 않았다. root focused tests 6 PASS/3.77초,
+Ruff/format PASS, agent strict mypy 2파일 PASS다. 합성 검증에서 공식 V4 문서·해시·
+pool/slot topology와 허용된 상수 외 AST 동일성, O_EXCL/기존 파일 보존을 확인했다.
+이 생성은 `DRAFT_DATA_ONLY_NOT_AUTHORITY`, model/publication 0이며 실제 current/model
+admission과 PREPARE/RELEASE PASS를 뜻하지 않는다. 사용자 추가 인증 선택을 기다리며
+새 로그인창이나 자동 재제출을 시작하지 않았다.
 
 ### 요청범위 불변 provenance 재사용의 실제 공유 배포 — 2026-10-11 08:23 UTC
 

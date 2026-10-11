@@ -121,6 +121,21 @@ bounded input/output, secret-safe failure, 기존 출제/support/PDF/Graph 의�
 
 ## 실제 운영 호출부의 추가 점검
 
+### 비교 bootstrap의 capacity 입력 검토
+
+2026-10-11 운영 입력 오류에서 확인한 구분이다. Standard preset이 과거 fixed-host V1에
+pin돼 있다는 사실은 새 비교 bootstrap도 그 revision을 써야 한다는 뜻이 아니다.
+비교는 SUPPORT/`customer-support` pool을 사용한다. 공식 fixed-host V4는 이 pool을
+slot06에 제공하지만 V1은 제공하지 않는다. 검토 manifest는 목적에 맞는 exact
+policy/revision/schema/hash를 명시하고 native current 및 model admission을 통과해야 한다.
+다른 preset의 참조를 복사하거나 schema만 바꾸거나 current를 V1으로 되돌리지 않는다.
+
+`read_capacity_pin`의 RELEASED metadata equality는 전체 PREPARE admission의 대체물이
+아니다. logical ACTIVE/current, pool/role 및 fresh model/slot 검증은 기존 bootstrap이
+권위 있게 담당한다. source에서 계산한 V4 hash나 과거 rollout 문서는 현 runtime PASS가
+아니다. 과거 manifest/실패는 보존하고 새 data-only 입력을 별도 identity/hash로 검토한다.
+이 정정은 새 DB/protocol/policy 발행이나 authoring/PDF/support capacity 변경을 요구하지 않는다.
+
 2026-10-10 UTC 최초 읽기 전용 inventory와 그에 따른 설계 입력이다. 아래의 당시 누락은
 후속 소스 결정으로 보강했지만 실제 설치·인증·실행을 완료했다는 뜻은 아니다.
 
