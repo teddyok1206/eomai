@@ -17,6 +17,10 @@ V22/role 1.30의 전용 purpose 연결을 확인했다. 새 필수 source 누락
 모든 query가 공통 pool 밖이어서 실제 embedding forward는 0이었다. 정본 게시도
 일회성 caller의 staging 설정 누락으로 COMMIT_UNCERTAIN 상태다. 이 실행은
 MEASURED가 아니며 실패를 보존한다. 상세 metadata는 live acceptance 기록에 있다.
+2026-10-11 13:20 UTC에 현재 인증·전체 재인가와 같은 Job/key로 retained 결과의
+canonical 게시를 복구했다. CPU 재실행은 0이며 원래 부족 판정과 실패 이력은 그대로다.
+따라서 아래 1번 중 **원래 결과의 정본 보존만 완료**했고, BGE successor의 실제
+`MEASURED` 결과와 나머지 종료 조건은 아직 완료되지 않았다.
 
 다음 네 가지는 아직 actual evidence가 필요한 종료 조건이다.
 

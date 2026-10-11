@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-11 10:49 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-11 13:20 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
 
 사용자 최신 지시에 따라 **사람 평가는 현 목표의 완료 조건에서 제외**한다.
@@ -31,6 +31,34 @@
 
 Component들이 같은 commit이어야 한다고 가정하지 않는다. 실제 파일·wheel·contract
 호환성과 설치 provenance를 따로 기록한다. build-only 결과를 live release로 부르지 않는다.
+
+### 원래 E5 결과의 same-key 게시 복구 — 2026-10-11 13:20 UTC
+
+현재 `guiadmin` 인증으로 PREPARE/전체 AUTHORIZE/current-principal 검사를 거친 뒤,
+기존 publisher가 원래 Job과 Artifact identity에 retained 결과를 게시했다.
+`COMMITTED` receipt를 확인했으며 CPU/model 실행은 **0회**, 게시 호출은 **1회**다.
+
+- execution: `embeddingexecution_125fe45683e34a2ea188e8ea65a990b0`.
+- Job: `job_84bc2e74b708442580be243a5bb4f301`; 같은 idempotency key를 유지했다.
+- Artifact: `artifact_7cdc94580e1a48b8ac22cefebab135e2`, revision
+  `rev_fb45f587396e4c3a82cf656a5d8dcaf5`, member `result.json`.
+- member raw SHA-256:
+  `da68f546ab9cc9723463b4cbc785edafe9aec292a3d65bc8f5c309e5a3db649a`.
+- result semantic SHA-256:
+  `cc79373fb671bbe903ba9be602ae3ce6c42307c4355f5a178debf72c6206a664`.
+- canonical manifest SHA-256:
+  `66203d9895350fe36641bd1dde390720da583c37abb787123abac3e86f13b68b`.
+- private recovery receipt: 기존 `owner-input-s9vek0xd/output.json`, raw SHA-256
+  `daf23c1b3278f655749043a60da0a928a332662e2c3adeb9f7ce882b90c3894d`.
+- 원래 publication source `68a648c2`와 현재 caller runtime `c8b29f67`을 분리했다.
+  원래 input·result·실패 이력을 수정하지 않았다.
+
+결과는 여전히 `INSUFFICIENT_ENCODING_COVERAGE`, benchmark `NOT_MEASURED`,
+pair eligibility `BLOCKED_INSUFFICIENT_ENCODING_COVERAGE`다. 게시 복구를 원래 실행의
+성공이나 실험 품질 PASS로 재해석하지 않는다. 긴 입력을 지원하는 BGE의 별도 successor
+console을 준비했으며, 같은 520개·4 query·3 view의 실제 실행은 새 인증 대기다.
+V11 control 발행·최대 두 쌍의 member 검증/replay와 최종 원문 대조는 아직 남아 있다.
+Slack milestone: `devreport_f285775c8f7349919ea5e544dbbe5f81`.
 
 ### 요청범위 불변 provenance 재사용의 실제 공유 배포 — 2026-10-11 08:23 UTC
 
