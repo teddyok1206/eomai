@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-11 08:24 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-11 08:33 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
 
 사용자 최신 지시에 따라 **사람 평가는 현 목표의 완료 조건에서 제외**한다.
@@ -67,6 +67,35 @@ Component들이 같은 commit이어야 한다고 가정하지 않는다. 실제 
   유지한다. 08:24 UTC 현재 새 console은 fresh `guiadmin` 인증 대기다.
   실제 READ 성능·CPU embedding·최대 두 쌍 V11 비교/replay는 여전히 PENDING이다.
   이전 timeout을 성공으로 바꾸거나 새 execution으로 우회하지 않는다.
+
+### V11 실행 정의의 별도 운영 등록 — 2026-10-11 08:32 UTC
+
+배포의 config compile은 DB definition admission이 아니다. 기존 installed
+`eomctl workflow definition admission`과 `list`를 read-only/10초 statement budget으로
+조회한 결과 comparison 1.0/1.1 정의가 모두 없었다. 검토된 1.1 YAML만 기존
+`eomctl workflow definition import`로 **한 번** 등록했다. 실행 주체는 기존 OS 운영자
+`eom`(UID 1000)와 기존 credential/CLI 경계다. 새 grant나 root/worker identity 변경은
+없고, `guiadmin` 인증·RBAC·사람 actor 감사가 수행됐다고 표현하지 않는다.
+
+- definition: `wfdef_ff105c9d4997430b93b0788b54fcf5f9`.
+- key/version: `item-inference-transfer-comparison@1.1.0`.
+- canonical SHA: `a9c7e38151b7f0a0004069d23e60f8601c9717173bb672022ae075566844260e`.
+- imported UTC: `2026-10-11T08:32:24.621383Z`.
+- 별도 post-register admission 조회: protocol `workflow-role/1.30.0`,
+  stored_active/admitted/accepts_new_work 모두 true, protocol error 없음,
+  historical_instance_count 0.
+- 이전 1.0은 미등록 그대로다. 전체 admission inventory가 consistent라고 주장하거나
+  미사용 1.0을 새로 등록하지 않는다. released 1.0 schema/definition bytes는 보존한다.
+
+처음 로컬 확인의 step 기대값은 agent 한 개만 세어 assertion이 실패했다. CLI의
+`steps`는 agent와 terminal을 모두 센다. 기대값을 2로 바로잡아 fresh validation에서
+정확한 key/version/hash와 compile PASS를 확인했다. 이는 무상태 검증기의 기대 오류이며
+definition import 실패나 모델 실행이 아니다.
+
+이 등록은 control PREPARE/RELEASE, native protocol 발행, 현재 capacity/model admission,
+사용자 source 권한, CPU/Job/Artifact 결과를 대체하지 않는다. 해당 gate는 실제 사용자
+인증과 기존 owner 경계에서 수행한다. PID `1045079`의 원래-input console은 08:33 UTC에
+살아 있으며 `guiadmin` getpass 대기다. 원래 실험·입력·실패 기록은 변경하지 않았다.
 
 ### 세 축 비교와 owner refresh의 실제 공유 배포 — 19:12 UTC
 

@@ -3,6 +3,28 @@
 상태: 2026-10-10 UTC, source 감사에 따른 구현 설계. 실제 corpus/model 실행,
 사람 평가 또는 운영 활성화의 성공 기록이 아니다. 설계 원문과 기존 실험 입력은 변경하지 않는다.
 
+## 2026-10-11 현재 설계 대조의 종료 조건
+
+후속 독립 source 감사에서 원문 SHA와 파생 profile, 세 embedding view/common pool,
+condition/inference mappings, differences/new_reasoning, V11 독립 세 축,
+V22/role 1.30의 전용 purpose 연결을 확인했다. 새 필수 source 누락은 발견되지 않았다.
+이는 전체 목표의 완료 증거가 아니다. 실제 설치는 `68a648c2`이며 V11 실행 정의는
+기존 운영 CLI로 별도 등록했다. 정확한 identity/hash/시각과 권한 구분은
+[운영 검증 기록](ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)에 있다.
+
+다음 네 가지는 아직 actual evidence가 필요한 종료 조건이다.
+
+1. 원래 input/execution으로 전체 READ와 현재 재인가 → CPU `MEASURED` 정본 Artifact.
+2. 등록된 V11 정의와 실제 native protocol/capacity/model의 검증 → 명시 owner
+   PREPARE/RELEASE. config compile/DB 정의 등록을 control 발행으로 확대하지 않는다.
+3. 승인된 두 쌍의 실제 V11 비교 → `MEMBER_VERIFIED`, 독립 CONCEPT/MATERIAL/CRUX
+   설명과 양측 claim/decisive refs, 같은 key replay. 모델 가설을 실제 풀이 전이의
+   증명으로 표현하지 않는다.
+4. 최초 원문 요구별 정본 pointer·자동 관측·미평가 한계를 최종 보고한다.
+
+사람 평가/precision·recall·새 scorecard/GUI/ANN/embedding recipe는 사용자 후속 지시에
+따라 추가 완료 조건이 아니다. 기존 optional 계약/기록은 보존한다.
+
 ## 이후 사용자 지시 — 사람 평가 없음
 
 2026-10-10 사용자는 “사람 평가는 없다고 생각해”라고 지시했다. 아래 초기 감사에서
