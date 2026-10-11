@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-11 13:27 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-11 13:56 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
 
 사용자 최신 지시에 따라 **사람 평가는 현 목표의 완료 조건에서 제외**한다.
@@ -23,9 +23,9 @@
 
 | Component | 실제 상태 | 한계 |
 |---|---|---|
-| 공유 API/platform | 설치 source `c8b29f67b523744049c56a12bcdef376b7aef5f5`, tree `0679c159eebe02a07e156d90aa57cc735e677191`; 2026-10-11 10:45 UTC 복구·검증 완료 | AUTHORIZE 전용 내부 300초/외부 330초, BGE-only 6 GiB/5400초 profile 포함. 실제 corpus BGE·쌍 비교는 별도 gate; 사람 평가는 불필요 |
+| 공유 API/platform | 설치 source `c8b29f67b523744049c56a12bcdef376b7aef5f5`, tree `0679c159eebe02a07e156d90aa57cc735e677191`; 2026-10-11 10:45 UTC 복구·검증 완료 | AUTHORIZE 전용 내부 300초/외부 330초, BGE-only 6 GiB/5400초 profile 포함. 전체 520개 BGE MEASURED/COMMITTED; 실제 V11 쌍 비교는 별도 gate; 사람 평가는 불필요 |
 | 운영 PostgreSQL | `20261010_0051` migration 및 exact-head 검증 PASS | 새 비교 Workflow stage CHECK 적용이지 비교 control 발행이나 worker 실행이 아님 |
-| 별도 CPU Conda | `/opt/eom/conda/envs/eom-embedding-experiment` 보호 snapshot 발행·승인된 격리 probe PASS | 실제 corpus 실험은 별도 gate |
+| 별도 CPU Conda | `/opt/eom/conda/envs/eom-embedding-experiment` 보호 snapshot 발행·승인된 격리 probe 및 전체 BGE 실험 PASS | 임베딩 성공은 풀이 전이·교육 품질의 증명이 아님 |
 | CPU platform | `06134fcd91413a957ac3133db062dbcdd525ee15` wheel에서 비편집 설치 | d291 candidate와 1,361개 payload member가 일치함; source 표기는 원래 설치값 유지 |
 | 최초 API build-only 후보 | `d2917ba448f21b86e7731d8477e802c658c2e106` | 역사적 후보로 보존; 현재 공유 배포와 동일시하지 않음 |
 
@@ -77,6 +77,45 @@ Slack milestone: `devreport_f285775c8f7349919ea5e544dbbe5f81`.
   실제 `MEASURED` 여부·정본 게시·V11 비교는 아직 PENDING이다.
 - 원래 E5 부족 판정과 실패 이력은 보존한다. 문항/풀이보고서 재생성이나 자동 재시도는 없다.
   변경 없는 장기 실행 점검은 30분 간격이다.
+
+### BGE 전체 실험 MEASURED / COMMITTED — 2026-10-11 13:55 UTC
+
+같은 owner 대기 핸들의 종료 신호를 받고 실제 unit·parent·정식 게시 receipt를
+확인했다. 임의 timeout을 실패로 보거나 새 실행을 재제출하지 않았다.
+
+- execution: 위 `embeddingexecution_d6b62c2fd7864efabf9f16c3aa947f9b`.
+- 실제 unit 종료: `2026-10-11 13:53:10 UTC`, `active/exited`, MainPID 0,
+  Result success, ExecMainStatus 0, NRestarts 0. owner PID 1309462도 종료했다.
+- `status=COMMITTED`, `result_status=MEASURED`, common profile **520/520**,
+  encoded text **1560**. 기존 4 query·3 view와 원래 모집단/recipe/Graph/policy pin을 유지했다.
+- 실측 encoding **1,559,484 ms**(25분 59.484초), process peak RSS **2,753,684 KiB**.
+  별도 cgroup MemoryPeak는 759,586,816 bytes, CPUUsage는 5,841,114,674,000 ns다.
+  process RSS와 cgroup accounting을 같은 메모리 지표로 해석하지 않는다.
+- owner audit: PREPARE 1회/79,064 ms, 전체 AUTHORIZE 2회/237,032 ms,
+  새 전체 READ 0회. 이 audit는 관측 metadata이며 영속 권한 증표가 아니다.
+- CPU adapter/launch 각각 **1회**, publication **1회**. 무절단·무자동재시도이며
+  원래 E5 부족 판정과 별도 toy 증거를 성공 결과로 덮어쓰지 않았다.
+- request semantic SHA-256:
+  `a246be6a722e82d0169ac3abb99a5fcff7dd559245a1fb1145fdef94b15a6b03`.
+- result semantic SHA-256:
+  `83f48dded66c6241b955f6ffc15ea504b5f9685b13fad63b50ce3a6833e4cb05`.
+- Job: `job_6a03b3aac33b46b4ae82b66d05da2978`.
+- Artifact: `artifact_0b04fa4b8c134853b65da0caf07c1785`, revision
+  `rev_42e5834f068846e8acf891f767df6a3d`, member `result.json`, raw SHA-256
+  `030a0e83923841341539ac9a9d93cc64ba98c834b1f09ab013a2cc942244b8a5`.
+- canonical manifest SHA-256:
+  `1da3494cb4d46010fd4b090ef61ec53cd1b40a470ab2b2fdae2ed67a9326a86f`.
+- private successor input/output receipt raw SHA-256:
+  `afd7563e4c60357fa300a89ca736862177523a21c5d831c5b6903afc8c4efec4` /
+  `6946c7a06fd1e8f1a3b2d684b45904d11adca068e51cea0655bb8e4b0c80772c`.
+
+V11 입력을 기존 보호된 도구·UID990 FD/O_EXCL 경계로 준비했다. local `manifest.json`
+raw SHA는 `953c1bb2f0331096a52f2d795062081d0b60a0ac49f68e040344016e5c646c71`,
+semantic SHA는 `933e2c729c6ad2fd1c777eb10421de6e99b119db0bec5e70d7b11be1ca92aaed`다.
+이것은 **DRAFT_DATA_ONLY_NOT_AUTHORITY**이며 control 발행·모델 비교 완료 증거가 아니다.
+fresh guiadmin 인증 후 공식 PREPARE/RELEASE와 최대 두 쌍의 실제 V11 비교,
+MEMBER_VERIFIED 및 같은 key replay가 남아 있다. 근거 대응 가설과 교육 효과는 구분한다.
+Slack milestone: `devreport_a95bc44d4e154b53b3158742fb84e09b`.
 
 ### 요청범위 불변 provenance 재사용의 실제 공유 배포 — 2026-10-11 08:23 UTC
 

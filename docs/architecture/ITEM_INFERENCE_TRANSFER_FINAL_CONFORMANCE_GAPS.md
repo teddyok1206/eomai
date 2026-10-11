@@ -19,8 +19,10 @@ V22/role 1.30의 전용 purpose 연결을 확인했다. 새 필수 source 누락
 MEASURED가 아니며 실패를 보존한다. 상세 metadata는 live acceptance 기록에 있다.
 2026-10-11 13:20 UTC에 현재 인증·전체 재인가와 같은 Job/key로 retained 결과의
 canonical 게시를 복구했다. CPU 재실행은 0이며 원래 부족 판정과 실패 이력은 그대로다.
-따라서 아래 1번 중 **원래 결과의 정본 보존만 완료**했고, BGE successor의 실제
-`MEASURED` 결과와 나머지 종료 조건은 아직 완료되지 않았다.
+당시 아래 1번 중 원래 결과의 정본 보존만 완료했다. 이어서 2026-10-11 13:55 UTC에
+같은 520개·4 query·3 view의 BGE successor가 common profile 520/520, encoded text 1560의
+실제 `MEASURED / COMMITTED` 결과를 남겼다. 아래 **1번 종료 조건은 이제 완료**이며,
+2번 control 발행·3번 두 쌍 비교/replay·4번 최종 원문 대조는 아직 완료되지 않았다.
 
 다음 네 가지는 아직 actual evidence가 필요한 종료 조건이다.
 
