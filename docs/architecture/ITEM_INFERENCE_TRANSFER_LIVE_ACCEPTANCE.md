@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-11 08:06 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-11 08:24 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
 
 사용자 최신 지시에 따라 **사람 평가는 현 목표의 완료 조건에서 제외**한다.
@@ -23,20 +23,56 @@
 
 | Component | 실제 상태 | 한계 |
 |---|---|---|
-| 공유 API/platform | 설치 source `ab1d5b8c3205b1fcad63e6b1e72246b490936f0a`, tree `f134dea41f5d8dfeb6e95c855958f2f0fea11a85`; 19:12:08 UTC 배포 완료 | 세 축 1.1·READ producer·owner refresh를 포함한 설치. 실제 동일-input READ·CPU·비교는 별도 gate; 사람 평가는 불필요 |
+| 공유 API/platform | 설치 source `68a648c293c2a0a0df441ba8607b1d58a02d08de`, tree `e9d3b88bd75cf88d6a75a73cd7acc43277d703ec`; 2026-10-11 08:23:12 UTC 배포 완료 | 세 축 1.1·READ producer·owner refresh와 transaction-local immutable provenance reuse를 포함한 설치. 실제 동일-input READ·CPU·비교는 별도 gate; 사람 평가는 불필요 |
 | 운영 PostgreSQL | `20261010_0051` migration 및 exact-head 검증 PASS | 새 비교 Workflow stage CHECK 적용이지 비교 control 발행이나 worker 실행이 아님 |
 | 별도 CPU Conda | `/opt/eom/conda/envs/eom-embedding-experiment` 보호 snapshot 발행·승인된 격리 probe PASS | 실제 corpus 실험은 별도 gate |
 | CPU platform | `06134fcd91413a957ac3133db062dbcdd525ee15` wheel에서 비편집 설치 | d291 candidate와 1,361개 payload member가 일치함; source 표기는 원래 설치값 유지 |
-| 최초 API build-only 후보 | `d2917ba448f21b86e7731d8477e802c658c2e106` | 역사적 후보로 보존; 후속 공유 배포는 위 `f12fb971` release |
+| 최초 API build-only 후보 | `d2917ba448f21b86e7731d8477e802c658c2e106` | 역사적 후보로 보존; 현재 공유 배포와 동일시하지 않음 |
 
 Component들이 같은 commit이어야 한다고 가정하지 않는다. 실제 파일·wheel·contract
 호환성과 설치 provenance를 따로 기록한다. build-only 결과를 live release로 부르지 않는다.
+
+### 요청범위 불변 provenance 재사용의 실제 공유 배포 — 2026-10-11 08:23 UTC
+
+- source `68a648c2`와 위 tree를 GitHub main에 반영했다. 새 source 경계는
+  **559 PASS / 26.22초**, strict mypy 3파일, Ruff/format 5파일 및 diff 검사 PASS다.
+  owner transaction-local reuse의 독립 검토도 PASS다. 같은 SQL transaction 안의
+  성공한 불변 Artifact member와 PastExam decode만 재사용하며, 권한·Graph/policy·
+  current source/lifecycle/lineage는 각 호출에서 다시 검증한다. 새 wire/DB migration/
+  queue/dependency/timeout/retry 변경은 없다.
+- 정상 build-only, fresh root-protected data stage, 별도 ADMIT을 각각 확인했다.
+  stage는 `/var/lib/eom-release-operator-stage.68a648c2-W5QQur`다.
+  context SHA는 `017752602263d5a095f44245cf2bcc26237a4f28c30c2d30a4d8ab1d247504ce`,
+  protected source snapshot SHA는
+  `8897a9e8afbe12ecc012de0cb36c48f078349e7513ae93e925c3126d64d01ca4`다.
+  source archive SHA는
+  `a372603d87f2dd53081f77d7801dcdc148c9c10598b6fb84a52842464dcce9dd`다.
+- 배포 전 및 기존 8개 공유 서비스 정지 후 공식 worker/DB 및 HWPX owner
+  quiescence를 확인했다. 기존 closed release operator의 PDF runtime, migration verify,
+  API role, Catalog role, HWPX role, API isolation 여섯 callback이 모두 PASS다.
+  migration `20261010_0051`, 보호 CPU runtime/model, worker 인증과 기존 queue는 유지한다.
+- 정본 deployment record는
+  `/var/lib/eom-api/deployments/68a648c293c2a0a0df441ba8607b1d58a02d08de.json`이며
+  실제 배포 시각은 `2026-10-11T08:23:12.047329Z`다. installer가 재빌드한 실제 wheel
+  raw SHA는 platform `b529b138ea5d99f0aa0306125f6e64878c2b47de66356b694d81f87a3f87b387`,
+  API contracts `5c5cdce94f1996a9487c96ca91e5af2817a5127608013b01719b9aee6e04a255`,
+  API `368d8ca3464f499011252bd4f018982d64055f5fda432e12c64d5b45605ed2c6`다.
+  build-only의 ZIP raw SHA와 혼동하지 않는다.
+- 기존 chat pin adapter로 exact predecessor `ab1d5b8c`에서만 새 pin으로 이동했다.
+  API/Catalog/maintenance/workflow/HWPX/auth broker/chat worker/chat owner 8개 모두
+  active/running/enabled/positive PID, API LIVE/READY, installed source/tree,
+  Catalog inventory 295와 기존 chat slot READY를 확인했다. 새 모델 smoke는 없다.
+- 같은 원래 private input/raw SHA와 execution ID를 받는 root-protected resume
+  도구는 기존 SHA `82ab1c567eac053e9e1c26fe03207cd5cc2e02111829e03894d7a9d4e60f2fac`를
+  유지한다. 08:24 UTC 현재 새 console은 fresh `guiadmin` 인증 대기다.
+  실제 READ 성능·CPU embedding·최대 두 쌍 V11 비교/replay는 여전히 PENDING이다.
+  이전 timeout을 성공으로 바꾸거나 새 execution으로 우회하지 않는다.
 
 ### 세 축 비교와 owner refresh의 실제 공유 배포 — 19:12 UTC
 
 - GitHub에 `64f5f31e` 및 후속 `ab1d5b8c`를 반영했다. 앞 후보의 수기 Catalog inventory
   누락으로 거절된 정상 build는 보존하며, successor의 정상 build-only는 PASS다.
-- 실제 source/tree는 위 Component 표의 `ab1d5b8c`/`f134dea4`다. source archive SHA는
+- 당시 실제 source/tree는 `ab1d5b8c`/`f134dea4`다. source archive SHA는
   `831f3570eac07a13cd7dac02d2e67925678fd3590eddbb6263c1f4bae127a5e8`,
   보호 source snapshot SHA는
   `a68ab45e1b2fef8bdac2be4bb19ca786be37bbb1b1ae16ea32ea49d67288848d`다.
