@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 구현·검증 계획
 
-상태 기준: 2026-10-10, `ab1d5b8c`의 19:12 UTC 배포와 이후 실제 관측. 이 문서는 구현 계획과 단계별 상태 요약이다.
+상태 기준: 2026-10-11, `ab1d5b8c` 배포와 동일 입력 READ timeout 이후의 실제 관측. 이 문서는 구현 계획과 단계별 상태 요약이다.
 실제 설치 증거는 [live acceptance 기록](ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)과
 정본 deployment record로 확인하며, 설치·service health를 비교 실행·교육 품질 PASS로 확대하지 않는다.
 
@@ -184,3 +184,85 @@ JSON Schema·Pydantic 전체 검증과 item/work-unit/decision 목록 탐색은 
     framework 없이 existing request cache/resolver를 확장한다. exact output equivalence,
     cache key 분리, live-state 재확인, 요청 간 격리, budget fallback, repeated-batch 비용,
     기존 source/retrieval/snapshot 회귀를 검증한다. released schema/migration 변경은 없다.
+
+## Admission과 공식 Graph 조회의 단일 transaction 재사용 — 2026-10-11
+
+실제 같은 입력의 PREPARE는 85,908 ms에 완료됐지만 첫 READ는 120,090 ms에
+UNAVAILABLE로 종료됐다. CPU launch는 0이다. 이번 조회의 지배적 병목과 실제 응답
+크기는 아직 UNKNOWN이다. 소스에서는 full-population admission과 각 query의 공식
+retrieval이 별도 immutable provenance cache를 만들어 같은 member를 반복 검증한다.
+이는 이전 문항별 공유-batch 최적화와 다른 호출 경계다.
+
+1. **책임/경계:** 기존 `KnowledgeRetrievalApplicationService`가 owner-local
+   `ReadOnlyKnowledgeReuseContext`를 만들고, snapshot adapter는 공개 context만 전달한다.
+   `create_read_only_reuse_context(session, scope)`, 기존 pool/retrieve의 optional keyword
+   `reuse_context`를 사용한다. 새 wire schema·DB·queue·dependency는 필요하지 않다.
+2. **정본:** 기존 immutable Artifact member와 typed provenance가 정본이다. cache는
+   같은 owner read transaction의 성공한 byte/decode/index 검사를 재사용하는 파생물이다.
+3. **identity/revision:** service/Artifact reader·Session·실제 transaction identity와 exact
+   Graph pointer·policy revision/hash·actual actor/role/permissions·source classes·query kind·
+   evidence budget을 bind한다. Artifact cache key와 provenance decoder key는 유지한다.
+4. **resolution:** 각 public call의 Graph/policy/authorization, association/run SQL,
+   Item lifecycle/approval/decision/lineage 및 exact source-pointer 검사는 그대로 실행한다.
+   이들의 결과·권한·ranking·whole resolved-source maps는 context에 캐시하지 않는다.
+5. **access pattern:** pool 및 최대 네 query 사이에서 같은 exact Artifact/provenance의
+   반복 read/hash/decode/index를 재사용한다. 새로운 source는 기존 resolver로 확인한다.
+6. **구조/index:** 기존 bounded Artifact cache와 PastExam typed provenance cache만 공유한다.
+   association/run/declared/resolved/pointer maps는 매 call 새로 만든다. 현재 Item-only scope에
+   불필요한 EducationalDocument cache나 전역 registry는 공유하지 않는다.
+7. **복잡도/규모:** Q개 overlapping 조회의 공유 immutable member 검증은 O(Q·D)에서
+   보존 상한 내 O(D)로 줄인다. source별 현재 검사는 유지한다. Artifact 64 MiB와 provenance
+   64 MiB/1,024 members/100,000 index rows 상한 및 uncached fallback은 불변이다.
+   Artifact 검증 key 보존도 4,096개로 제한한다. 초과 member는 기존 전체 검증을 수행하며
+   보존만 하지 않는다. 이는 source/query/result 상한을 줄이는 변경이 아니다.
+8. **transaction/concurrency:** snapshot의 단일 REPEATABLE READ / READ ONLY transaction
+   안에서만 context를 생성·사용한다. 다른 Session/service/scope/transaction 또는 종료된
+   transaction 사용은 거부한다. 다음 READ는 새 context다. thread/global/영속 cache는 없다.
+9. **dependency/ownership:** context/cache/resolver는 Catalog infrastructure/application 책임이다.
+   snapshot은 private cache에 접근하지 않는다. domain/contract는 SQL·filesystem을 import하지 않는다.
+10. **failure/retry:** 실패 검사는 캐시하지 않는다. 기존 오류·timeout·adaptive split 의미는
+    바꾸지 않으며 자동 retry나 execution identity 변경은 없다. source 수정은 실패 이력과 별개다.
+11. **대안/검증:** timeout 확대·source 축소·새 async framework는 중복 비용을 해결하지 못한다.
+    작은 context 재사용으로 한정한다. exact output/order 동등성, 매 call authorization/lifecycle,
+    session/transaction/scope 격리, 실패 비보존, key 분리, 상한 fallback, 520+4 overlap의
+    synthetic 검증 횟수와 기존 source/retrieval/snapshot 회귀를 확인한다. 합성 complexity
+    증거는 실제 latency PASS로 확대하지 않는다.
+
+### 스키마 초기화 비용과 문서 검증 비용의 분리
+
+소스 합성 fixture를 같은 구조로 520회씩 세 표본 반복했다. root 재실행 중앙값은
+전체 295 schema cold registry 구성 1.622초(프로세스 최초 1회), warm validator 구성
+0.387초, fake reader의 V10 evidence row 전체 검증 2.907초, 64단계/64개 연결 report의
+JSON Schema 검증 5.563초다. warm public 검증 10,920회 동안 registry 재구성은 0회였다.
+따라서 매 row마다 전체 registry를 재구성한다는 가정으로 새 전역 validator cache를
+추가하지 않는다. 기존 bounded provenance fixture의 네 member는 repeated hit에도
+총 read 4회였다. 이는 실제 기출 520개의 DB/NAS/보고서 길이·지연을 측정한 값이 아니다.
+운영 조회·인증·모델 호출은 모두 0이다.
+
+재현 도구는 `/tmp/eom-catalog-schema-cost-diagnostic.py`, SHA-256
+`bb532c241c994fd71529e862ffbbeaf14390d99fc0aa08060af044f341c64e1d`이며,
+explicit `eom-core` interpreter와 source PYTHONPATH를 사용했다. 긴 결과나 실제 문항
+payload는 Git/Slack에 넣지 않는다. 측정 결과로 deadline 확대·권한 생략을 정당화하지 않는다.
+
+### 변경 경계의 source 동결 검증
+
+root fresh 회귀는 Catalog source/provenance/retrieval/ChatRAG/pair authorization,
+snapshot producer/service/transport/staging/binding/diagnostics, V11 service, API snapshot,
+release inventory/wheel 및 dependency boundary를 함께 실행해 **559 PASS / 26.22초**다.
+소스 2개와 새 context 테스트 strict mypy 3파일 PASS, 수정 Python 5파일 Ruff/format 및
+diff 검사 PASS다. Starlette의 기존 httpx TestClient deprecation warning 1개는 유지한다.
+선행 overlapping suite와 합산하지 않는다. 초기 fixture의 새 필수 keyword 누락과
+작성 중 test-only typing/lint 오류는 바로잡고 위 fresh 실행으로 확인했다.
+
+합성 admission 520개와 네 query의 64개씩 source 검사에서 권한 확인 5회,
+현재 source 확인 776회는 동일했다. 공유 member read는 20→4회, 각 provenance schema
+검증은 5→1회이며 반환된 pool/query fixture와 순서는 정확히 같았다. 다른 session/
+service/reader/thread/scope/Graph/policy/transaction 및 종료·nested transaction을 거부한다.
+따뜻한 decoder cache에서도 실제 pure source resolver의 decision·coverage·Artifact 승인·
+revision·lineage 변경을 거부했다. key 분리·실패 비보존·상한 fallback·다음 transaction
+재검증도 확인했다. authority/SQL/ranking 일부는 명시적인 fake port이며 실제 운영
+인가나 latency PASS를 대신하지 않는다.
+
+기존 wire schema/definition/instruction bytes, 원래 input/execution과 설계 원문 SHA는
+변경하지 않았다. 실제 compatible 배포·동일 입력 조회·CPU·최대 두 pair 및 replay는
+source 검증과 별도 gate이며 아직 PENDING이다. 사람 평가는 필요하지 않다.

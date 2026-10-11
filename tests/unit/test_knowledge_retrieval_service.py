@@ -1004,6 +1004,30 @@ def test_artifact_validation_cache_is_exact_success_only_and_request_scoped() ->
     assert delegate.read_count == 4
 
 
+@pytest.mark.parametrize("member_cap", (0, 1))
+def test_artifact_member_count_cap_is_retention_only(
+    monkeypatch: pytest.MonkeyPatch, member_cap: int
+) -> None:
+    assert retrieval_module.MAX_REQUEST_ARTIFACT_CACHE_MEMBERS == 4096
+    monkeypatch.setattr(retrieval_module, "MAX_REQUEST_ARTIFACT_CACHE_MEMBERS", member_cap)
+    delegate = _CountingArtifactService()
+    cache = _RequestScopedArtifactValidationCache(cast(Any, delegate))
+    arguments = _artifact_member_arguments()
+    other = arguments | {"max_bytes": 2048}
+
+    assert cache.read_member(**arguments) == b'{"validated":true}'  # type: ignore[arg-type]
+    assert cache.read_member(**other) == b'{"validated":true}'  # type: ignore[arg-type]
+    assert cache.read_member(**other) == b'{"validated":true}'  # type: ignore[arg-type]
+    cache.verify_member(**other)  # type: ignore[arg-type]
+    cache.verify_member(**other)  # type: ignore[arg-type]
+    assert delegate.read_count == 3
+    assert delegate.verify_count == 2
+    assert len(cache._verified_members) == member_cap
+    assert len(cache._member_bytes) == member_cap
+    assert cache.read_member(**arguments) == b'{"validated":true}'  # type: ignore[arg-type]
+    assert delegate.read_count == (4 if member_cap == 0 else 3)
+
+
 def _content_intake_analysis_request(
     source: ContentIntakeKnowledgeSourceV2,
 ) -> KnowledgeAnalysisRequestV2:

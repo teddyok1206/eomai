@@ -9,6 +9,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import get_ident
 from typing import Any, Literal
 
 from eom_catalog_contracts import (
@@ -58,7 +59,7 @@ from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 from pydantic import ValidationError
 from sqlalchemy import Engine, distinct, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, SessionTransaction
 
 from eom_catalog_service.artifacts import (
     CatalogArtifact,
@@ -199,6 +200,8 @@ MAX_RETRIEVAL_CANDIDATES = 256
 MAX_POINTER_ROWS_PER_NODE = 32
 MAX_CONTEXT_BYTES = 64 * 1024
 MAX_REQUEST_ARTIFACT_CACHE_BYTES = 64 * 1024 * 1024
+# Retention bound only: members beyond it still receive the full original validation.
+MAX_REQUEST_ARTIFACT_CACHE_MEMBERS = 4096
 
 
 class KnowledgeRetrievalServiceError(RuntimeError):
@@ -428,8 +431,12 @@ class _RequestScopedArtifactValidationCache:
             schema_ref=schema_ref,
             max_bytes=max_bytes,
         )
-        self._verified_members.add(key)
-        if self._member_bytes_total + len(value) <= MAX_REQUEST_ARTIFACT_CACHE_BYTES:
+        if len(self._verified_members) < MAX_REQUEST_ARTIFACT_CACHE_MEMBERS:
+            self._verified_members.add(key)
+        if (
+            key in self._verified_members
+            and self._member_bytes_total + len(value) <= MAX_REQUEST_ARTIFACT_CACHE_BYTES
+        ):
             self._member_bytes[key] = value
             self._member_bytes_total += len(value)
         return value
@@ -465,7 +472,111 @@ class _RequestScopedArtifactValidationCache:
             schema_ref=schema_ref,
             max_bytes=max_bytes,
         )
-        self._verified_members.add(key)
+        if len(self._verified_members) < MAX_REQUEST_ARTIFACT_CACHE_MEMBERS:
+            self._verified_members.add(key)
+
+
+@dataclass(frozen=True, slots=True)
+class _ReadOnlyKnowledgeReuseScope:
+    graph_snapshot: KnowledgeGraphSnapshotPointer
+    policy_revision_id: str
+    policy_sha256: str
+    actor_id: str
+    role: str
+    permissions: tuple[str, ...]
+    source_classes: tuple[str, ...]
+    query_kind: str
+    evidence_budget: tuple[int, ...]
+
+    @classmethod
+    def from_command(
+        cls,
+        command: CreateEvidenceBundleCommand | ReadOnlyCandidatePoolScope,
+        *,
+        graph_snapshot: KnowledgeGraphSnapshotPointer,
+        policy_sha256: str,
+    ) -> _ReadOnlyKnowledgeReuseScope:
+        budget = command.evidence_budget
+        return cls(
+            graph_snapshot=graph_snapshot,
+            policy_revision_id=command.access_policy_revision_id,
+            policy_sha256=policy_sha256,
+            actor_id=command.requested_by,
+            role=command.requester_role,
+            permissions=tuple(command.requester_permission_keys),
+            source_classes=tuple(command.source_classes),
+            query_kind=command.query_kind,
+            evidence_budget=(
+                budget.max_documents,
+                budget.max_item_revisions,
+                budget.max_graph_nodes,
+                budget.max_claims,
+                budget.max_context_tokens,
+            ),
+        )
+
+
+def _active_root_transaction(session: Session) -> SessionTransaction:
+    current = session.get_transaction()
+    if current is None or not current.is_active or session.get_nested_transaction() is not None:
+        raise KnowledgeRetrievalServiceError(
+            "KNOWLEDGE_RETRIEVAL_REUSE_CONTEXT_INVALID",
+            "immutable read reuse requires one active root transaction",
+        )
+    return current
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class ReadOnlyKnowledgeReuseContext:
+    """Opaque owner-local decoding reuse, never authorization or a durable cache.
+
+    Create through the retrieval service inside the caller-owned read transaction.
+    Each public call reauthorizes and reloads current source relations before using
+    these bounded exact immutable member/provenance caches. No resolved-source or
+    association/run maps, EducationalDocument values, or query ranking are shared.
+    """
+
+    _service: KnowledgeRetrievalApplicationService = field(repr=False)
+    _reader: CatalogArtifactReader = field(repr=False)
+    _session: Session = field(repr=False)
+    _transaction: SessionTransaction = field(repr=False)
+    _thread_id: int = field(repr=False)
+    _scope: _ReadOnlyKnowledgeReuseScope = field(repr=False)
+    _artifacts: _RequestScopedArtifactValidationCache = field(repr=False)
+    _past_exam: PastExamSourceResolutionCache = field(repr=False)
+
+    def _require_owner(
+        self, service: KnowledgeRetrievalApplicationService, session: Session
+    ) -> None:
+        if (
+            self._service is not service
+            or self._reader is not service.artifacts
+            or self._session is not session
+            or self._thread_id != get_ident()
+            or self._transaction is not _active_root_transaction(session)
+        ):
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_REUSE_CONTEXT_INVALID",
+                "immutable read reuse does not belong to the actual owner transaction",
+            )
+
+    def _require(
+        self,
+        service: KnowledgeRetrievalApplicationService,
+        session: Session,
+        command: CreateEvidenceBundleCommand | ReadOnlyCandidatePoolScope,
+        *,
+        graph_snapshot: KnowledgeGraphSnapshotPointer,
+        policy_sha256: str,
+    ) -> None:
+        self._require_owner(service, session)
+        if self._scope != _ReadOnlyKnowledgeReuseScope.from_command(
+            command, graph_snapshot=graph_snapshot, policy_sha256=policy_sha256
+        ):
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_REUSE_CONTEXT_INVALID",
+                "immutable read reuse does not belong to the actual transaction and scope",
+            )
 
 
 @dataclass
@@ -530,6 +641,30 @@ class KnowledgeRetrievalApplicationService:
         self.settings = settings or CatalogSettings.from_environment()
         self.sessions = build_session_factory(engine)
         self.artifacts = CatalogArtifactService(engine, self.settings)
+
+    def create_read_only_reuse_context(
+        self, session: Session, scope: ReadOnlyCandidatePoolScope
+    ) -> ReadOnlyKnowledgeReuseContext:
+        """Bind empty decoding caches, without granting or memoizing authority.
+
+        The snapshot owner sets REPEATABLE READ / READ ONLY before calling this.
+        The first and every subsequent public operation still resolves Graph and
+        policy, authorizes the actual actor, and checks the bound values.
+        """
+        return ReadOnlyKnowledgeReuseContext(
+            _service=self,
+            _reader=self.artifacts,
+            _session=session,
+            _transaction=_active_root_transaction(session),
+            _thread_id=get_ident(),
+            _scope=_ReadOnlyKnowledgeReuseScope.from_command(
+                scope,
+                graph_snapshot=scope.graph_snapshot,
+                policy_sha256=scope.access_policy_sha256,
+            ),
+            _artifacts=_RequestScopedArtifactValidationCache(self.artifacts),
+            _past_exam=PastExamSourceResolutionCache(),
+        )
 
     def create_item_production(
         self, command: CreateItemProductionEvidenceCommand
@@ -1010,7 +1145,11 @@ class KnowledgeRetrievalApplicationService:
         )
 
     def retrieve_read_only(
-        self, session: Session, command: CreateEvidenceBundleCommand
+        self,
+        session: Session,
+        command: CreateEvidenceBundleCommand,
+        *,
+        reuse_context: ReadOnlyKnowledgeReuseContext | None = None,
     ) -> ReadOnlyKnowledgeSelection:
         """Reuse authoring authorization/ranking/source checks without publishing anything.
 
@@ -1020,6 +1159,14 @@ class KnowledgeRetrievalApplicationService:
         snapshot = self._snapshot_pointer(session, command.graph_snapshot_revision_id)
         policy = self._policy(session, command.access_policy_revision_id)
         self._authorize(session, command, policy)
+        if reuse_context is not None:
+            reuse_context._require(
+                self,
+                session,
+                command,
+                graph_snapshot=snapshot,
+                policy_sha256=policy.content_sha256,
+            )
         request = self._request(
             command,
             snapshot_pointer=snapshot,
@@ -1027,13 +1174,23 @@ class KnowledgeRetrievalApplicationService:
             retrieval_request_id=_typed_id("retrieval_", {"read_only": command.submission_sha256}),
             created_at=datetime.now(UTC),
         )
-        candidates = self._candidates(session, command, policy, include_solution_evidence=False)
+        candidates = self._candidates(
+            session,
+            command,
+            policy,
+            include_solution_evidence=False,
+            reuse_context=reuse_context,
+        )
         # Candidate order and source resolution are the exact existing authoring
         # algorithm. The conversational projection applies its smaller text budget.
         return ReadOnlyKnowledgeSelection(request=request, candidates=candidates)
 
     def admit_read_only_candidate_pool(
-        self, session: Session, scope: ReadOnlyCandidatePoolScope
+        self,
+        session: Session,
+        scope: ReadOnlyCandidatePoolScope,
+        *,
+        reuse_context: ReadOnlyKnowledgeReuseContext | None = None,
     ) -> ReadOnlyKnowledgeCandidatePool:
         """Admit bounded exact Item sources without requiring lexical overlap.
 
@@ -1052,6 +1209,14 @@ class KnowledgeRetrievalApplicationService:
             session, scope.access_policy_revision_id, sha256=scope.access_policy_sha256
         )
         self._authorize(session, scope, policy)
+        if reuse_context is not None:
+            reuse_context._require(
+                self,
+                session,
+                scope,
+                graph_snapshot=snapshot,
+                policy_sha256=policy.content_sha256,
+            )
         association = KnowledgeSnapshotAnalysisRecord
         pointer = KnowledgeNodeSourcePointerRecord
         node = KnowledgeNodeRecord
@@ -1146,7 +1311,10 @@ class KnowledgeRetrievalApplicationService:
         for source_pointer, source_node in rows:
             by_run[source_pointer.analysis_run_id].append((source_pointer, source_node))
         cache = self._snapshot_source_resolution_cache(
-            session, snapshot_id, tuple(values[0][0] for values in by_run.values())
+            session,
+            snapshot_id,
+            tuple(values[0][0] for values in by_run.values()),
+            reuse_context=reuse_context,
         )
         admitted: list[KnowledgeRetrievalCandidate] = []
         for run_id in run_ids:
@@ -1366,6 +1534,7 @@ class KnowledgeRetrievalApplicationService:
         policy: EducationRetrievalAccessPolicy,
         *,
         include_solution_evidence: bool = True,
+        reuse_context: ReadOnlyKnowledgeReuseContext | None = None,
     ) -> tuple[_Candidate, ...]:
         snapshot_id = command.graph_snapshot_revision_id
         max_nodes = min(command.evidence_budget.max_graph_nodes, MAX_RETRIEVAL_CANDIDATES)
@@ -1573,6 +1742,7 @@ class KnowledgeRetrievalApplicationService:
             session,
             snapshot_id,
             tuple(pointers[0] for pointers in grouped.values()),
+            reuse_context=reuse_context,
         )
         values: list[_Candidate] = []
         for _key, pointers in sorted(
@@ -1665,13 +1835,27 @@ class KnowledgeRetrievalApplicationService:
         session: Session,
         snapshot_id: str,
         pointers: tuple[KnowledgeNodeSourcePointerRecord, ...],
+        *,
+        reuse_context: ReadOnlyKnowledgeReuseContext | None = None,
     ) -> _SnapshotSourceResolutionCache:
+        if reuse_context is not None:
+            reuse_context._require_owner(self, session)
+            if reuse_context._scope.graph_snapshot.graph_snapshot_revision_id != snapshot_id:
+                raise KnowledgeRetrievalServiceError(
+                    "KNOWLEDGE_RETRIEVAL_REUSE_CONTEXT_INVALID",
+                    "immutable source decoding reuse belongs to a different Graph revision",
+                )
         analysis_run_ids = tuple(sorted({pointer.analysis_run_id for pointer in pointers}))
         if not analysis_run_ids:
             return _SnapshotSourceResolutionCache(
                 associations_by_run_id={},
                 runs_by_id={},
-                artifacts=_RequestScopedArtifactValidationCache(self.artifacts),
+                artifacts=reuse_context._artifacts
+                if reuse_context is not None
+                else _RequestScopedArtifactValidationCache(self.artifacts),
+                past_exam_provenance=reuse_context._past_exam
+                if reuse_context is not None
+                else PastExamSourceResolutionCache(),
             )
         associations = tuple(
             session.scalars(
@@ -1707,7 +1891,12 @@ class KnowledgeRetrievalApplicationService:
         return _SnapshotSourceResolutionCache(
             associations_by_run_id=associations_by_run_id,
             runs_by_id=runs_by_id,
-            artifacts=_RequestScopedArtifactValidationCache(self.artifacts),
+            artifacts=reuse_context._artifacts
+            if reuse_context is not None
+            else _RequestScopedArtifactValidationCache(self.artifacts),
+            past_exam_provenance=reuse_context._past_exam
+            if reuse_context is not None
+            else PastExamSourceResolutionCache(),
         )
 
     def _resolve_snapshot_source(

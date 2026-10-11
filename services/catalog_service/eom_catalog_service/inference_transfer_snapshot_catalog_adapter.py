@@ -56,6 +56,7 @@ from eom_catalog_service.knowledge_graph_projection import knowledge_node_terms
 from eom_catalog_service.knowledge_retrieval_service import (
     KnowledgeRetrievalServiceError,
     ReadOnlyCandidatePoolScope,
+    ReadOnlyKnowledgeReuseContext,
 )
 from eom_catalog_service.settings import CatalogSettings
 
@@ -185,6 +186,8 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
         entries: dict[str, StagedExperimentEntry],
         eligible_inputs: tuple[AcceptedInferenceTransferProfileInput, ...],
         admitted_sources: tuple[AdmittedInferenceTransferSource, ...],
+        *,
+        reuse_context: ReadOnlyKnowledgeReuseContext,
     ) -> tuple[tuple[SuppliedGraphBaseline, ...], tuple[str, ...]]:
         profiles_by_run = {}
         for row in eligible_inputs:
@@ -248,7 +251,9 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
                 }
             )
             try:
-                selection = self.sources.retrieval.retrieve_read_only(session, command)
+                selection = self.sources.retrieval.retrieve_read_only(
+                    session, command, reuse_context=reuse_context
+                )
             except KnowledgeRetrievalServiceError as exc:
                 if exc.code != "KNOWLEDGE_RETRIEVAL_INSUFFICIENT_EVIDENCE":
                     raise
@@ -328,7 +333,10 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
             session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
             session.execute(text("SET TRANSACTION READ ONLY"))
             scope = self.sources._scope(session, command)
-            pool = self.sources.retrieval.admit_read_only_candidate_pool(session, scope)
+            reuse_context = self.sources.retrieval.create_read_only_reuse_context(session, scope)
+            pool = self.sources.retrieval.admit_read_only_candidate_pool(
+                session, scope, reuse_context=reuse_context
+            )
             inputs, missing = self.sources._resolve_profile_inputs(session, pool)
             admitted = []
             for value in pool.candidates:
@@ -374,6 +382,7 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
                 entries,
                 inputs,
                 corpus.sources,
+                reuse_context=reuse_context,
             )
             limitations = set(limits)
             if any(

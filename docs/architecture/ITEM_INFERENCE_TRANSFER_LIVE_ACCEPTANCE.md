@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-10 19:12 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-11 08:06 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
 
 사용자 최신 지시에 따라 **사람 평가는 현 목표의 완료 조건에서 제외**한다.
@@ -68,8 +68,40 @@ Component들이 같은 commit이어야 한다고 가정하지 않는다. 실제 
 
 원래 private input raw SHA `7dd0fba98ac3cf61d32a5bdf47f48a72e6c9132dd19ab33adefd387ff0d2a775`,
 execution `embeddingexecution_125fe45683e34a2ea188e8ea65a990b0`는 그대로 보존한다.
-현재 보호된 console은 fresh `guiadmin` 인증 대기다. 실제 READ/CPU/controls/pair submission은
-아직 실행하지 않았으며 자동 재시도·새 execution·DB 상태 초기화·사람 점수표는 없다.
+위 19:12 배포 관측 당시 보호된 console은 fresh `guiadmin` 인증 대기였다.
+그 이후의 실제 조회는 아래 별도 실행 관측에 기록한다. 자동 재시도·새 execution·
+DB 상태 초기화·사람 점수표는 없다.
+
+### 동일 입력의 실제 재개와 첫 READ timeout — 2026-10-11
+
+사용자 인증 뒤 실제 `/me`와 installed `ab1d5b8c`/`f134dea4`를 확인하고,
+07:56:14 UTC에 `RUN_RETAINED_EXPERIMENT`를 정확히 한 번 실행했다.
+원래 input SHA·execution·experiment·Graph/policy·520 모집단·4 query·예산은 불변이다.
+
+- 공식 PREPARE 1회: owner 관측 85,908 ms. API request
+  `req_7c3f3e1139407128e92d21f25f5b0242`는 07:57:39.640282 UTC에
+  85,614.423 ms로 종료됐다.
+- 공식 READ 1회: owner 관측 120,090 ms. API request
+  `req_5cd57042262745f4e19809bde4b08995`는 07:59:40.203297 UTC에
+  120,074.701 ms로 종료됐다. console은 `SUPPORTED_EXECUTION` / `READ`의
+  `INFERENCE_TRANSFER_SNAPSHOT_UNAVAILABLE`로 terminal 실패했다.
+- AUTHORIZE 0회, CPU adapter 호출 0회, CPU launch 0회, pair submission 0회다.
+  새 execution 생성·원래 입력 재작성·자동 retry는 없으며 실패 이력은 보존한다.
+- 성공적으로 반환된 PREPARE canonical response는 374,467 bytes다. READ의 실제
+  응답 크기·내부 성공 여부는 UNKNOWN이다. 기존 f12 READ의 `FROZEN_MODEL` 오류와
+  이번 timeout을 동일 원인이라고 단정하지 않는다.
+- 08:00경과 08:06경 Catalog의 동일 MainPID `644380`과 두 기존 thread를 확인했다.
+  두 thread 시작은 각각 2026-10-10 19:12:01/19:12:03 UTC다. 동기 요청별 handler가
+  남아 있지 않은 `SERVER_READ_NOT_ACTIVE` 증거이지, 해당 READ 성공이나 전체
+  Workflow/lease quiescence를 증명하는 것은 아니다.
+- 고정 `eom-embedding-experiment@embeddingexecution_125fe45683e34a2ea188e8ea65a990b0`
+  unit은 loaded / inactive / dead, MainPID 0, InvocationID empty였다.
+
+기존 adaptive split은 `INFERENCE_TRANSFER_SNAPSHOT_BUDGET_EXCEEDED`에서만 동작한다.
+이번 UNAVAILABLE를 split 신호나 서버 미처리로 재해석하지 않는다. timeout 확대나
+재제출보다 기존 공식 source-resolution의 요청범위 중복 비용을 먼저 점검한다.
+실제 CPU embedding·세 축 pair·replay 증거는 여전히 PENDING이며, 사람 평가는
+현재 완료 조건이 아니다.
 
 ### 후속 V11 입력의 소스 핀 확인 — 인증 전 읽기 전용
 

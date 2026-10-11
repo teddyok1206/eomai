@@ -96,6 +96,11 @@ def owner(monkeypatch):
     adapter.engine = Mock()
     adapter.sources = object.__new__(CatalogInferenceTransferSourceAdapter)
     adapter.sources.retrieval = Mock()
+
+    def fresh_context(_session: object, _scope: object) -> object:
+        return object()
+
+    adapter.sources.retrieval.create_read_only_reuse_context.side_effect = fresh_context
     session, context = MagicMock(), MagicMock()
     context.__enter__.return_value = session
     adapter.sources.sessions = Mock(return_value=context)
@@ -180,6 +185,43 @@ def test_read_only_selected_bytes_but_admits_whole_population_first(owner):
     assert command.requested_by == "real-test-operator"
     assert command.requester_role == "EDITOR"
     assert command.evidence_budget == owner.scope.evidence_budget
+
+
+def test_capture_shares_only_one_public_reuse_context_and_next_read_starts_fresh(
+    owner: SimpleNamespace,
+) -> None:
+    service = InferenceTransferSnapshotApplicationService(owner.adapter)
+    request = snapshot_prepare(
+        query_item_revision_ids=tuple(
+            sorted(row[0].profile.source_basis.source.item_revision_id for row in owner.rows)
+        )
+    )
+    prepared = service.prepare("real-test-operator", request)
+    read = snapshot_read_request(prepared, selected_index_entries=prepared.index)
+    first = service.read("real-test-operator", read)
+    second = service.read("real-test-operator", read)
+    retrieval = owner.adapter.sources.retrieval
+
+    assert retrieval.create_read_only_reuse_context.call_count == 3
+    pool_contexts = tuple(
+        call.kwargs["reuse_context"]
+        for call in retrieval.admit_read_only_candidate_pool.call_args_list
+    )
+    assert len({id(value) for value in pool_contexts}) == 3
+    assert retrieval.retrieve_read_only.call_count == 6
+    assert all(
+        call.kwargs["reuse_context"] is pool_contexts[1]
+        for call in retrieval.retrieve_read_only.call_args_list[:3]
+    )
+    assert all(
+        call.kwargs["reuse_context"] is pool_contexts[2]
+        for call in retrieval.retrieve_read_only.call_args_list[3:]
+    )
+    assert all(
+        call.args == (owner.session, owner.scope)
+        for call in retrieval.create_read_only_reuse_context.call_args_list
+    )
+    assert first == second
 
 
 @pytest.mark.parametrize("population_size", (64, 65, 67))
@@ -369,6 +411,9 @@ def test_lexical_seed_cap_is_explicit_and_does_not_truncate_question_tail(owner)
         {supplied.profile.source_basis.solution_evidence.base_analysis_run_id: entry},
         tuple(row[0] for row in owner.rows),
         sources,
+        reuse_context=owner.adapter.sources.retrieval.create_read_only_reuse_context(
+            owner.session, owner.scope
+        ),
     )
     terms = owner.adapter.sources.retrieval.topic_keys_for_terms.call_args.kwargs["terms"]
     assert len(terms) == 128 and terms == tuple(sorted(set(terms)))
