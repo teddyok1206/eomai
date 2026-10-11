@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-11 19:08 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-11 19:09 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
 
 사용자 최신 지시에 따라 **사람 평가는 현 목표의 완료 조건에서 제외**한다.
@@ -43,9 +43,38 @@ receipt closure와 불명 POST/부분 저장의 무재제출을 확인했다. �
 `--follow-imports=skip` 검사와 동결 전 테스트 fixture 실패는 올바른 import 분석·fixture
 수정 후 재실행했으며 운영 실패를 성공으로 바꾸지 않았다. 원래 설계 문서의 SHA는 유지됐다.
 
+### 같은 인증의 진단 연결: 운영 배포 — 2026-10-11 19:08 UTC
+
+source `b59b3bac018312c486cd9b3ea48515a30defd368`, tree
+`d695b9fa403b43b9403c0fabb83a22ee325f958c`를 normal unprivileged installer와 기존
+protected seven-callback adapter로 설치했다. PRESTOP/POSTSTOP의 기존 native
+job/worker/chat/command projection, workflow/API request 0, HWPX item/exam build 0을
+확인했다. 8개 서비스는 모두 이전 active 상태로 복원됐고 API `/api/v1/health/ready`
+READY, installed supported read/model-options import 및 wheel RECORD 검사 PASS다.
+새 migration은 없으며 exact `20261010_0051` VERIFY를 수행했다. 채팅 pin은 기존
+supported adapter로 exact c8 → b59를 전진시켰다. 인증 자료·slot·모델·정책은 바꾸지 않았다.
+
+root-private stage는 `/var/lib/eom-release-operator-stage.b59b3bac-PJXlkw`이며 context
+SHA `761ddc16295756b7a5d9ddab7201e16e047792f9e5b760e477d6140e84542d5f`, source snapshot
+SHA `8775fe66b26b05f273e40aab4421b76dead3882dbe811be0f69fba198b838c63`다. archive SHA는
+`2df752d1b0c8bff0dd4ae106afb61113ae1ee615032f7e5a30d8bc40f900add0`다. normal install의
+별도 kgTnyG wheel raw SHA는 platform `63e328faca30c2738033e0d253245c251bf3ac3e97c0cde9939267b7275e7cf4`,
+contracts `6c49631579515fc52433ae39eec55255124734b5d3c22f8d5fa5abcedde3ea2a`, API
+`4550f9523e3a8165e6039cca94ce27b77780732b88b88d2683dddaf7413a1822`다. admission의
+PJXlkw raw wheels와 동일 ZIP bytes라고 주장하지 않는다. 공식 rollback/deployment record는
+`/var/lib/eom-api/deployments/b59b3bac018312c486cd9b3ea48515a30defd368.json`이다.
+
+기존 실패 V4 manifest는 보존하고 새 data-only `manifest.capacity-v4-admission.json`을
+만들었다. raw SHA `9d8726b658f9f4609c74615306b1ac6f65c407000172b4bd75b9498888af439a`,
+semantic SHA `d8fa68b17c646229d0e66e770c34876c6e3787a502dcc3417237aa947db8a342`다.
+후보 모델·V4 capacity 핀은 그대로이며 새 PREPARE/RELEASE나 모델 입장 허가가 아니다.
+520개 BGE 정본·c8 실행 provenance는 그대로다. 새 console은 UID990/no-echo TTY 로그인
+입력에서 대기한다. 현 관측의 모델 비교 제출·새 CPU 실행은 0이다. 실제 계정 관측과
+두 쌍 MEMBER_VERIFIED/replay는 아직 PENDING이며 전체 목표를 완료로 표시하지 않는다.
+
 | Component | 실제 상태 | 한계 |
 |---|---|---|
-| 공유 API/platform | 설치 source `c8b29f67b523744049c56a12bcdef376b7aef5f5`, tree `0679c159eebe02a07e156d90aa57cc735e677191`; 2026-10-11 10:45 UTC 복구·검증 완료 | AUTHORIZE 전용 내부 300초/외부 330초, BGE-only 6 GiB/5400초 profile 포함. 전체 520개 BGE MEASURED/COMMITTED; 실제 V11 쌍 비교는 별도 gate; 사람 평가는 불필요 |
+| 공유 API/platform | 설치 source `b59b3bac018312c486cd9b3ea48515a30defd368`, tree `d695b9fa403b43b9403c0fabb83a22ee325f958c`; 2026-10-11 19:08 UTC 최소 admission 조회 연결 배포·검증 완료 | c8에서 수행한 전체 520개 BGE MEASURED/COMMITTED 정본 보존. 실제 V11 쌍 비교는 별도 gate; 사람 평가는 불필요 |
 | 운영 PostgreSQL | `20261010_0051` migration 및 exact-head 검증 PASS | 새 비교 Workflow stage CHECK 적용이지 비교 control 발행이나 worker 실행이 아님 |
 | 별도 CPU Conda | `/opt/eom/conda/envs/eom-embedding-experiment` 보호 snapshot 발행·승인된 격리 probe 및 전체 BGE 실험 PASS | 임베딩 성공은 풀이 전이·교육 품질의 증명이 아님 |
 | CPU platform | `06134fcd91413a957ac3133db062dbcdd525ee15` wheel에서 비편집 설치 | d291 candidate와 1,361개 payload member가 일치함; source 표기는 원래 설치값 유지 |

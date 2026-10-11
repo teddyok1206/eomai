@@ -8,7 +8,7 @@
 후속 독립 source 감사에서 원문 SHA와 파생 profile, 세 embedding view/common pool,
 condition/inference mappings, differences/new_reasoning, V11 독립 세 축,
 V22/role 1.30의 전용 purpose 연결을 확인했다. 새 필수 source 누락은 발견되지 않았다.
-이는 전체 목표의 완료 증거가 아니다. 실제 설치는 `c8b29f67`이며 V11 실행 정의는
+이는 전체 목표의 완료 증거가 아니다. 당시 설치는 `c8b29f67`이며 V11 실행 정의는
 기존 운영 CLI로 별도 등록했다. 정확한 identity/hash/시각과 권한 구분은
 [운영 검증 기록](ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)에 있다.
 
@@ -33,6 +33,11 @@ Top-8과 원래 Graph 후보 목록을 비교했다. 원문 변경, 새 조회·
 상세 수치와 미평가 한계는 위 운영 검증 기록에 남겼다.
 
 다음 네 가지가 종료 조건이며, 완료된 1번을 다시 실행하지 않는다.
+
+2026-10-11 19:08 UTC에 기존 typed account/model-options 진단 leaf만 추가한
+`b59b3bac` compatible release를 설치·검증했다. 기존 520개 BGE 실행과 실패 기록은
+보존하며, native model admission·V11 PREPARE/RELEASE·두 쌍 비교/replay는 여전히
+현재 실제 인증·실행의 별도 gate다. 이 배포로 종료 조건 2–4를 통과했다고 표시하지 않는다.
 
 ### 2026-10-11 10:49 UTC 독립 source 대조
 
