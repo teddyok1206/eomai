@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-11 13:20 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-11 13:27 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
 
 사용자 최신 지시에 따라 **사람 평가는 현 목표의 완료 조건에서 제외**한다.
@@ -59,6 +59,24 @@ pair eligibility `BLOCKED_INSUFFICIENT_ENCODING_COVERAGE`다. 게시 복구를 �
 console을 준비했으며, 같은 520개·4 query·3 view의 실제 실행은 새 인증 대기다.
 V11 control 발행·최대 두 쌍의 member 검증/replay와 최종 원문 대조는 아직 남아 있다.
 Slack milestone: `devreport_f285775c8f7349919ea5e544dbbe5f81`.
+
+### BGE 전체 520개 successor 실제 시작 — 2026-10-11 13:27 UTC
+
+첫 BGE console 로그인은 `CONTROL_AUTHORIZATION_REQUIRED`로 종료됐다. 그 호출의
+새 execution/CPU/게시 횟수는 모두 0이다. 새 실제 `guiadmin` 로그인은 통과했고,
+명시적 `RUN_BGE_SUCCESSOR_EXPERIMENT` 후 현재 PREPARE/전체 AUTHORIZE를 거쳐
+별도 실행 `embeddingexecution_d6b62c2fd7864efabf9f16c3aa947f9b`가 시작됐다.
+
+- 실제 systemd 시작: `2026-10-11 13:26:58 UTC`; 확인 시 `activating/start`,
+  MainPID `1312350`, InvocationID `bf89cd0d01624dc7aeb0aad150705f57`, NRestarts 0.
+- 전용 `eom-embedding-experiment` identity, CPU quota 400%, MemoryMax 6 GiB,
+  TimeoutStart 5400초. 현재 owner PID는 `1309462`(UID 990)다.
+- 기존 520개 population·4 query·3 view·Graph/policy/recipe pin을 유지한다.
+  모델은 승인된 BGE manifest, batch 1/threads 4로 명시적으로 분리했다.
+- toy 기반 예상 3,845,894 ms(약 64.1분)는 추정값이며 전체 처리 실측이 아니다.
+  실제 `MEASURED` 여부·정본 게시·V11 비교는 아직 PENDING이다.
+- 원래 E5 부족 판정과 실패 이력은 보존한다. 문항/풀이보고서 재생성이나 자동 재시도는 없다.
+  변경 없는 장기 실행 점검은 30분 간격이다.
 
 ### 요청범위 불변 provenance 재사용의 실제 공유 배포 — 2026-10-11 08:23 UTC
 
