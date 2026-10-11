@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 구현·검증 계획
 
-상태 기준: 2026-10-11 09:44 UTC, `68a648c2` 설치와 원래 520개 실험의 실제 token coverage 관측. 이 문서는 구현 계획과 단계별 상태 요약이다.
+상태 기준: 2026-10-11 10:49 UTC, `c8b29f67` 설치·BGE-only 90분 profile 및 합성 18 text의 실제 MEASURED 관측. 원래 520개 E5 실험의 INSUFFICIENT 기록은 보존한다. 이 문서는 구현 계획과 단계별 상태 요약이다.
 실제 설치 증거는 [live acceptance 기록](ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)과
 정본 deployment record로 확인하며, 설치·service health를 비교 실행·교육 품질 PASS로 확대하지 않는다.
 
@@ -45,6 +45,15 @@
 | F4 | Orchestrator 경유 bounded Codex pair comparison | exact A/B, condition+decisive mapping, 차이/새 추론, unsupported/insufficient 처리, schema validation | V11 세 축 source·호환 공유 경계·운영 definition 등록 완료. 실제 native protocol/control PREPARE·RELEASE 및 최대 두 쌍 MEMBER_VERIFIED/replay는 대기 |
 | F5 | 기존 검색 대비 bounded 자동 실험 | lexical/content-only/crux/metadata의 후보·순위·공통 모집단·coverage·latency·memory; label 없는 정확도나 교육 효과 주장 금지 | 실제 520/4-query/3-view token coverage·CPU load/RSS 관측 완료. common pool 3/queries 제외로 순위는 0이며 MEASURED 아님. 원래 결과 게시와 적합한 모델의 명시적 successor 실험 대기. 사람 평가는 불필요 |
 | F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 사람 평가 불필요, 자동 검증과 실제 교육 효과 구별 | `68a648c2` 설치·migration 0051 unchanged·6 callback·8 service/chat READY 확인. 변경 경계 559 PASS와 원문/계약/adapter fresh 124 PASS. 실패 모델 결과를 성공으로 바꾸지 않으며 실제 successor CPU·control·두 쌍·최종 대조 gate는 남음 |
+
+위 F2–F6의 원래 corpus 관측은 역사적 68a648c2 실행이다. 후속 실제 설치는 c8b29f67이며
+6개 release callback/8개 서비스·API LIVE/READY PASS, migration0051/CPU06134는 그대로다.
+BGE 합성 18 text는 무절단 MEASURED(encoding44,325ms/RSS2,486,848KiB)이고,
+520×3 text 단순 환산 proxy 약64분에 근거해 BGE만 90분으로 조정했다.
+이는 전체520개 fit이나 후보 품질 PASS가 아니다. 원래 동일-key 게시 복구와 새520개
+BGE/두V11쌍·replay는 실제 사용자 재인증 후 수행할 PENDING이다.
+원문 요구별 독립 source 대조에서 추가 필수 구현 누락은 찾지 못했으며,
+[최종 대조 기록](ITEM_INFERENCE_TRANSFER_FINAL_CONFORMANCE_GAPS.md)의 실제 종료 조건은 유지한다.
 
 ## 비교 표현과 판정
 

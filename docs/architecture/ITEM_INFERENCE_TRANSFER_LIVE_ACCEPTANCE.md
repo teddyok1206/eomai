@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-11 10:38 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-11 10:49 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
 
 사용자 최신 지시에 따라 **사람 평가는 현 목표의 완료 조건에서 제외**한다.
@@ -23,7 +23,7 @@
 
 | Component | 실제 상태 | 한계 |
 |---|---|---|
-| 공유 API/platform | 설치 source `72f01147c4a3bb8c79e73bed24dc893ac69672a1`, tree `97563e346cb950a548036a403acdd96c66bb7442`; 2026-10-11 10:27 UTC 복구·검증 완료 | AUTHORIZE 전용 내부 300초/외부 330초, BGE 고정 resource profile 포함. 실제 corpus BGE·쌍 비교는 별도 gate; 사람 평가는 불필요 |
+| 공유 API/platform | 설치 source `c8b29f67b523744049c56a12bcdef376b7aef5f5`, tree `0679c159eebe02a07e156d90aa57cc735e677191`; 2026-10-11 10:45 UTC 복구·검증 완료 | AUTHORIZE 전용 내부 300초/외부 330초, BGE-only 6 GiB/5400초 profile 포함. 실제 corpus BGE·쌍 비교는 별도 gate; 사람 평가는 불필요 |
 | 운영 PostgreSQL | `20261010_0051` migration 및 exact-head 검증 PASS | 새 비교 Workflow stage CHECK 적용이지 비교 control 발행이나 worker 실행이 아님 |
 | 별도 CPU Conda | `/opt/eom/conda/envs/eom-embedding-experiment` 보호 snapshot 발행·승인된 격리 probe PASS | 실제 corpus 실험은 별도 gate |
 | CPU platform | `06134fcd91413a957ac3133db062dbcdd525ee15` wheel에서 비편집 설치 | d291 candidate와 1,361개 payload member가 일치함; source 표기는 원래 설치값 유지 |
@@ -295,6 +295,41 @@ PASS다. 첫 source PYTHONPATH 누락의 3 collection error는 설정을 바로�
 소스 검증이며 아직 운영 적용 전이다. 과거 toy의 30분/55c7 pin·bytes·result는
 그대로 두고, 미래 successor execution의 새 resource pin과 분리한다.
 원래 동일-key 게시 복구, 실제 520개 BGE 실험, 최대 두 쌍 V11/replay·최종 설계 대조는 PENDING이다.
+
+### BGE-only 90분 profile의 실제 호환 배포 — 2026-10-11 10:45 UTC
+
+- source `c8b29f67`/위 tree를 GitHub에 반영한 clean 후보에서 정상 build-only PASS,
+  fresh root-private data-only stage 및 별도 ADMIT PASS를 확인했다.
+  stage `/var/lib/eom-release-operator-stage.c8b29f67-S3sryf`, context SHA
+  `fd5039c56c053ac013e1eda1868c1040ac0bc65ceabcc6326cd657f04f5efaec`,
+  source snapshot SHA `013fc01b7ffc47891d749f2ddaac6307dd85deda5b2e0a2648df7a6d20dbdee0`,
+  archive SHA `cc88f9f654a4f61cd3b038aaaef4153c12ce1bc2b2a600d09aa6fff58cf05478`.
+- 배포 전 및 8개 서비스 정지 후 이전 source72 owner별 quiescence PASS다.
+  정상 installer/verify의 기존 여섯 release callback과 installed source/tree PASS,
+  migration `20261010_0051`은 유지했다. 정본 설치 기록은
+  `/var/lib/eom-api/deployments/c8b29f67b523744049c56a12bcdef376b7aef5f5.json`이다.
+- 기존 chat source pin adapter의 exact predecessor72→c8만 갱신했다.
+  8개 서비스 복구 PASS, 10:45:27 UTC API LIVE/READY PASS다.
+  worker 인증·모델·RAG policy·queue·CPU06134 runtime·GPU 권한은 바꾸지 않았다.
+- 과거 BGE template55c7를 root-private rollback member로 보존한 뒤 새 d54b75 template만
+  설치하고 daemon-reload했다. updated protected verifier의 effective BGE 90분/
+  E5·probe 30분/prepare 30초/sandbox PASS다. 원 E5 InvocationID7377와 과거 toy650a는
+  그대로이며 MainPID0이다. 과거 실행을 재시작/reset하거나 새 timeout으로 재해석하지 않았다.
+- 실제 toy request/result만 읽은 presentation prerequisite는
+  `.../embeddingexecution_321ec70a88c947ddb2e859d8c0935763/bge-probe.json`, raw SHA
+  `9783bfaa0b4da8470af822efb68ad9449f10cbd4231c76d09f227dfe99f6f783`으로 O_EXCL 저장했다.
+  모델/인가/DB/NAS 호출 0이며 권한 토큰이나 전체 corpus PASS가 아니다.
+  원 30분 proof와 미래 90분 execution resource metadata는 별개다.
+- 추가 일회성 materializer·현재 caller용 same-key recovery·predecessor quiescence의
+  root fresh fake regressions 39 PASS/11.84초다. 기존 도구·receipt bytes는 보존했다.
+  10:46 UTC 새 protected recovery caller는 실제 `guiadmin` getpass 대기다.
+  원래 결과 게시·520 BGE successor·두 쌍 V11/replay는 아직 PENDING이다.
+- BGE successor의 batch1/원래 입력 pointer를 기존 V11 presentation에 연결하는 별도
+  일회성 도구를 source 검증했다. 원래 V11/replay 도구와 BGE receipt는 변경하지 않고,
+  same520 scope/entries/query4/Graph baseline/recipe·원/새 결과 hash·actual actor·
+  정본 member closure를 확인한다. 공식 control/source authorization/submission/replay
+  함수는 불변이다. root fresh 27 fake PASS/24.03초, strict2/Ruff/format PASS다.
+  실제 보호 staging·control 발행·비교 제출은 아직 하지 않았다.
 
 ### 세 축 비교와 owner refresh의 실제 공유 배포 — 19:12 UTC
 

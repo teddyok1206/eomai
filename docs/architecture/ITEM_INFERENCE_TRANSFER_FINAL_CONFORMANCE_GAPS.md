@@ -8,7 +8,7 @@
 후속 독립 source 감사에서 원문 SHA와 파생 profile, 세 embedding view/common pool,
 condition/inference mappings, differences/new_reasoning, V11 독립 세 축,
 V22/role 1.30의 전용 purpose 연결을 확인했다. 새 필수 source 누락은 발견되지 않았다.
-이는 전체 목표의 완료 증거가 아니다. 실제 설치는 `68a648c2`이며 V11 실행 정의는
+이는 전체 목표의 완료 증거가 아니다. 실제 설치는 `c8b29f67`이며 V11 실행 정의는
 기존 운영 CLI로 별도 등록했다. 정확한 identity/hash/시각과 권한 구분은
 [운영 검증 기록](ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)에 있다.
 
@@ -19,6 +19,27 @@ V22/role 1.30의 전용 purpose 연결을 확인했다. 새 필수 source 누락
 MEASURED가 아니며 실패를 보존한다. 상세 metadata는 live acceptance 기록에 있다.
 
 다음 네 가지는 아직 actual evidence가 필요한 종료 조건이다.
+
+### 2026-10-11 10:49 UTC 독립 source 대조
+
+원문·구현 계획·현재 계약/코드/테스트를 read-only로 다시 대조했다. 원문 SHA는
+위 보존값과 동일하며 추가 필수 구현 누락은 발견하지 못했다. 다음은 source 매핑이지
+전체 corpus·실제 비교 결과나 교육적 효과의 PASS가 아니다.
+
+| 원문 요구 | 구현/계약 | 관련 회귀 |
+|---|---|---|
+| 조건 역할·관계·판단·오개념 | `inference_transfer_projection.py`, `item_inference_transfer.py`; 승인 report의 step/node/anchor refs | `test_inference_transfer_projection.py`의 다른 조건·근거 없음·부정·오개념 |
+| 승인 풀이보고서+원문+메타데이터 | `inference_transfer_catalog_adapter.py`, `inference_transfer_item_projection.py`; accepted V10와 원문 질문·구조/수식/승인 summary 분리 | `test_inference_transfer_item_projection.py`의 source closure/정답 배제/metadata |
+| 후보 검색만 담당하는 벡터 | `local_embedding_adapter.py`, `inference_transfer_experiment.py`; offline exact pins·무절단·3-view 공통pool·view당 encoding 재사용 | `test_inference_transfer_experiment.py`의 공통pool/권한/순위/overflow |
+| 조건·추론 대응과 차이·추가 추론 | `inference_transfer_comparison.py`, current Catalog source resolution; selected A/B refs와 방향/rubric closure | `test_inference_transfer_comparison.py`, `test_inference_transfer_pair_source_authorization.py` |
+| 개념·소재·착상 세 축 | `inference_transfer_pair_result_v11.py`; 축별 설명·양쪽 refs·독립 INSUFFICIENT, 충분한 CRUX는 결정적 추론 refs | `test_inference_transfer_pair_result_v11.py`; released1.0 보존, role1.30/V22/explicit1.1 |
+| 비동기·claim/lease·same-key replay | `inference_transfer_executor.py`, existing Runner repository/Orchestrator; actual creator/current auth·indexed claim·unique race | workflow_v11/runner_v11/worker_protocol 및 기존 disposable PostgreSQL 회귀 |
+| 현재 권한·immutable pointer·정본 결과 | submission/router/workflow_read; cached replay 전 현재 source auth, Artifact/member/schema/hash/Job/Workflow/Step/pair closure | API v11/workflow read의 권한 거부·POINTER_ONLY/MEMBER_VERIFIED |
+| 사람의 체감 전이 | 기존 optional HumanTransferEvaluation/owner/history 보존 | 사용자 지시에 따라 NOT_EVALUATED/NOT_REQUIRED; 새 사람평가·GUI·정확도 지표를 추가하지 않음 |
+
+DECISIVE의 deterministic 후보나 합법 ref/hash만으로 과학적 정답·교육적 crux를
+증명하지 않는다. 실제 metadata 활용은 기존 구조·수식·승인 summary 범위이며 임의
+개념/난이도 분류나 PDF 픽셀 관찰을 발명하지 않는다. 아래 actual 종료 조건은 그대로다.
 
 1. 원래 input/execution의 INSUFFICIENT 결과를 같은 key와 현재 재인가로 보존한다.
    그다음 실제 길이에 맞는 안전한 local model을 admission한 명시적 successor에서

@@ -143,3 +143,12 @@ Linux peak RSS 2,486,848KiB, 호출 3/3 완료다. 기존 6GiB 메모리 ceiling
 effective systemd timeout과 exact template SHA도 검증한다. 측정 DTO/schema의 기존
 24시간 상한 안이므로 released 계약은 수정하지 않는다. source 293 PASS/strict/Ruff/
 format PASS이고, 이 시각 새 90분 profile 운영 적용·전체 520개·V11 쌍 비교는 미실행이다.
+
+### 후속 실제 운영 적용 — 2026-10-11 10:45 UTC
+
+c8b29f67의 호환 공유 배포와 BGE fixed 5400초 template/effective sandbox 검증이 PASS다.
+E5 1800초·과거 toy55c7 증거·CPU06134/model snapshot·migration0051·polkit는 유지한다.
+실제 toy를 새로 돌리지 않고 검증한 prerequisite raw SHA는
+9783bfaa0b4da8470af822efb68ad9449f10cbd4231c76d09f227dfe99f6f783이다.
+정확한 경로/시간/실행 구분은 live acceptance 기록에 있다. 전체520개 BGE 및 실제
+V11 쌍 비교는 아직 PENDING이며 합성 vector 성공을 corpus나 교육 품질로 확대하지 않는다.
