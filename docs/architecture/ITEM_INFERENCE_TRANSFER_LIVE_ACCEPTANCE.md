@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-11 17:08 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-11 17:15 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
 
 사용자 최신 지시에 따라 **사람 평가는 현 목표의 완료 조건에서 제외**한다.
@@ -152,6 +152,46 @@ console은 변경하지 않았다. 새 raw SHA는
 `9a8e990d21cd4a325b6f6b0ea85a98fc134de4f89c25f9ecfa96c9088f213f81`이다.
 `DRAFT_DATA_ONLY_NOT_AUTHORITY`, publication/model 0이며 새 UID990 console PID1418086은
 fresh Studio 로그인 입력 대기다. 실제 native equality/PREPARE/RELEASE/pair는 아직 미실행이다.
+
+### 반복 로그인 요청 중단과 저장된 실험 결과의 관찰 — 2026-10-11 17:15 UTC
+
+사용자가 반복 로그인 요청을 중단하도록 지시했다. 17:12 UTC에 입력 대기 중인
+PID1418086을 중단했고 종료·TTY idle을 확인했다. 새 로그인 입력창, credential reset,
+권한 대행이나 자동 로그인은 시작하지 않는다. 17:01 UTC의 실제 로그인 성공은
+보존하지만 그 owner가 종료되면서 메모리의 인증 세션도 소멸했다. 지원된 bearer-FD/
+in-memory session 재사용 경로는 있으나 현재 제공된 재사용 credential은 확인되지 않았다.
+이는 사용자가 다시 잘못 입력했다는 판정이 아니다.
+
+이미 인증·게시된 BGE 실험의 보존 request/result를 보호된 기존 parser와 UID990,
+설치된 isolated interpreter로 검증하고 **작은 관측 metadata만** 집계했다.
+새 corpus 조회·Graph 검색·모델 실행·control 게시·pair 제출은 각각 0회다.
+관측은 `VALIDATED_RETAINED_METADATA_ONLY_NO_NEW_AUTHORIZATION`이며 결과의
+`current_authorization=NOT_VERIFIED_BY_HARNESS`를 변경하지 않는다.
+
+- 520개 모두 세 view에서 `ENCODABLE`; common pool 520, query 4, query/view 결과 12.
+- 각 query에서 자기 자신을 제외한 후보 519개를 비교했고 저장된 순위는 view별 Top-8이다.
+- encoding 1,559,484 ms, model load 3,493 ms, token measurement 536 ms.
+  encoding requests started/completed 3/3, encoded texts 1,560이다.
+- 새 임베딩을 돌리지 않고 저장된 Top-8과 **원래 request의** Graph 후보 순서를 대조했다.
+  Graph 후보 목록은 query별 최대 64개이며 전체 519개 Graph 순위가 아니다.
+
+| Query ordinal | 보존 Graph 후보 수 | Graph Top-8과 내용 view 중복 | 핵심 조건·추론 view 중복 | 메타데이터 view 중복 | 세 view Top-8 합집합 |
+|---|---:|---:|---:|---:|---:|
+| 1 | 64 | 2 | 1 | 2 | 14 |
+| 2 | 46 | 4 | 2 | 2 | 15 |
+| 3 | 55 | 2 | 0 | 1 | 19 |
+| 4 | 63 | 1 | 2 | 1 | 18 |
+
+내용/핵심 조건·추론, 내용/메타데이터, 핵심 조건·추론/메타데이터의 Top-8 중복 수는
+각 query에서 순서대로 `5/4/4`, `4/4/5`, `1/3/2`, `2/2/3`이다.
+관측 근거는 위 BGE request semantic SHA `a246be6a…a6b03`, result semantic SHA
+`83f48dde…cb05`, canonical member raw SHA `030a0e83…44b8a5`의 exact closure다.
+
+이는 **표현을 나누면 다른 후보가 나온다**는 제한적 관측이다. 4 query만의 결과이며,
+서로 다른 후보가 실제로 유용하거나 임베딩이 Graph보다 우수하다는 증거는 아니다.
+`SUPPLIED_NOT_REEXECUTED`, 교육 효과 `NOT_EVALUATED`를 유지한다. 실제 V11
+PREPARE/RELEASE, 두 쌍의 CONCEPT/MATERIAL/CRUX 근거 설명·`MEMBER_VERIFIED`와
+same-key replay는 미실행으로 남는다. 원문·520개 정본·Graph 경계와 실패 이력은 보존한다.
 
 ### 요청범위 불변 provenance 재사용의 실제 공유 배포 — 2026-10-11 08:23 UTC
 
