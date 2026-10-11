@@ -14,6 +14,7 @@ from eom_catalog_contracts.inference_transfer_snapshot import (
     InferenceTransferSnapshotAuthorizeRequest,
     InferenceTransferSnapshotAuthorizeResult,
 )
+from eom_catalog_contracts.inference_transfer_snapshot_timing import snapshot_phase_deadlines
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_operator_identity import PermissionKey
 from eom_orchestrator import inference_transfer_owner_http as http
@@ -110,12 +111,13 @@ def connection(
     *,
     status: int = 200,
     media: str = "application/json",
+    expected_timeout: float = 120.0,
 ) -> Connection:
     events: list[str] = []
     value = Connection(Response(payload, status, media), events)
 
     def factory(host: str, port: int, *, timeout: float) -> Connection:
-        assert (host, port, timeout) == ("127.0.0.1", 8765, 120.0)
+        assert (host, port, timeout) == ("127.0.0.1", 8765, expected_timeout)
         events.append("FACTORY")
         return value
 
@@ -297,7 +299,11 @@ def test_each_snapshot_phase_revalidates_actual_principal_and_exact_context(
         (read_request, read_reply),
         (authorize, authorized),
     ):
-        wire = connection(monkeypatch, canonical_json_bytes(wrapper(reply)))
+        wire = connection(
+            monkeypatch,
+            canonical_json_bytes(wrapper(reply)),
+            expected_timeout=snapshot_phase_deadlines(request.phase).owner_http_seconds,
+        )
         assert value.execute(ACTOR, request) == reply
         assert wire.requests[0][1] == http._SNAPSHOT
     assert reads == ["ME", "ME", "ME"]

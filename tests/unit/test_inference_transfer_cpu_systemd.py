@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 from eom_orchestrator import inference_transfer_cpu_systemd as cpu
-from eom_orchestrator.inference_transfer_cpu_handoff import CpuHandoffIdentity
+from eom_orchestrator.inference_transfer_cpu_handoff import OWNER_ROOT, CpuHandoffIdentity
 from eom_orchestrator.inference_transfer_experiment_ports import (
     CpuExperimentRunError,
     LocalExperimentInput,
@@ -58,7 +58,7 @@ def fake_launcher(
     monkeypatch.setattr(
         cpu, "fixed_owner_identity", lambda: CpuHandoffIdentity(os.geteuid(), os.getegid())
     )
-    monkeypatch.setattr(cpu, "require_cpu_runtime", lambda: None)
+    monkeypatch.setattr(cpu, "require_cpu_runtime", lambda **_kwargs: None)
     monkeypatch.setattr(cpu, "inspect_cpu_unit", lambda *_a, **_k: next(values))
     monkeypatch.setattr(cpu, "materialize_cpu_output", copied.append)
 
@@ -66,9 +66,9 @@ def fake_launcher(
         calls.append((argv, kwargs))
         return subprocess.CompletedProcess(argv, 0, b"", b"")
 
-    monkeypatch.setattr(cpu.subprocess, "run", start)
+    monkeypatch.setattr(subprocess, "run", start)
     return (
-        LocalExperimentInput(cpu.OWNER_ROOT / EXECUTION, EXECUTION, NOW, sha(), 100),
+        LocalExperimentInput(OWNER_ROOT / EXECUTION, EXECUTION, NOW, sha(), 100),
         calls,
         copied,
     )
@@ -141,7 +141,7 @@ def test_timeout_is_uncertain_and_never_materializes_or_retries(
         calls += 1
         raise subprocess.TimeoutExpired("fixed-start", 1830)
 
-    monkeypatch.setattr(cpu.subprocess, "run", timeout)
+    monkeypatch.setattr(subprocess, "run", timeout)
     with pytest.raises(CpuExperimentRunError, match="UNCERTAIN"):
         cpu.FixedCpuExperimentLauncher().run(prepared)
     assert calls == 1 and copied == []
@@ -171,7 +171,7 @@ def test_missing_installed_runtime_has_no_ambient_fallback_or_start(
 ) -> None:
     prepared, calls, copied = fake_launcher(monkeypatch, [])
 
-    def missing() -> None:
+    def missing(**_kwargs: Any) -> None:
         raise FileNotFoundError("fixed CPU interpreter missing")
 
     monkeypatch.setattr(cpu, "require_cpu_runtime", missing)
@@ -216,7 +216,7 @@ def test_status_rejects_wrong_release_dropin_reload_and_negative_fields(
     monkeypatch: pytest.MonkeyPatch, changes: dict[str, str]
 ) -> None:
     monkeypatch.setattr(
-        cpu.subprocess,
+        subprocess,
         "run",
         lambda *_a, **_k: subprocess.CompletedProcess([], 0, status_document(**changes), b""),
     )
@@ -240,7 +240,7 @@ def test_status_wire_is_closed_bounded_and_unique(
     else:
         payload += b"\xff"
     monkeypatch.setattr(
-        cpu.subprocess, "run", lambda *_a, **_k: subprocess.CompletedProcess([], 0, payload, b"")
+        subprocess, "run", lambda *_a, **_k: subprocess.CompletedProcess([], 0, payload, b"")
     )
     with pytest.raises(ValueError):
         cpu.inspect_cpu_unit(cpu.cpu_unit_names(EXECUTION)[1], template=cpu.CPU_TEMPLATE)
@@ -288,7 +288,7 @@ def test_unit_file_identity_ignores_atime_only(
         ] += 1
         return SimpleNamespace(**fields)
 
-    monkeypatch.setattr(cpu.os, "fstat", changed)
+    monkeypatch.setattr(os, "fstat", changed)
     if change == "atime":
         cpu._require_template(template.name, hashlib.sha256(payload).hexdigest())
     else:

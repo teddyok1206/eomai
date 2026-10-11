@@ -55,6 +55,11 @@ from eom_catalog_contracts.inference_transfer_snapshot import (
     validate_snapshot_prepare_result,
     validate_snapshot_read_result_context,
 )
+from eom_catalog_contracts.inference_transfer_snapshot_timing import (
+    DEFAULT_SNAPSHOT_TIMEOUT_SECONDS,
+    SnapshotPhase,
+    snapshot_phase_deadlines,
+)
 from eom_identifiers import canonical_json_bytes
 from eom_operator_identity import PermissionKey, RoleKey
 from jsonschema import Draft202012Validator, FormatChecker
@@ -191,6 +196,7 @@ def _request(
     *,
     bearer: SecretStr | None = None,
     idempotency_key: str | None = None,
+    snapshot_phase: SnapshotPhase | None = None,
 ) -> tuple[int, object]:
     fixed_target = (method, path) in _REQUEST_TARGETS or (
         method == "GET"
@@ -205,10 +211,21 @@ def _request(
         or (method == "GET" and body is not None)
         or (is_submission and (bearer is None or idempotency_key is None))
         or (not is_submission and idempotency_key is not None)
+        or (snapshot_phase is not None and (method, path) != ("POST", _SNAPSHOT))
         or (idempotency_key is not None and _IDEMPOTENCY_KEY.fullmatch(idempotency_key) is None)
     ):
         raise ControlPlaneError("CONTROL_AUTH_SERVICE_UNAVAILABLE", "fixed request unavailable")
-    connection = http.client.HTTPConnection(_HOST, _PORT, timeout=120.0)
+    try:
+        timeout = (
+            DEFAULT_SNAPSHOT_TIMEOUT_SECONDS
+            if snapshot_phase is None
+            else snapshot_phase_deadlines(snapshot_phase).owner_http_seconds
+        )
+    except ValueError:
+        raise ControlPlaneError(
+            "CONTROL_AUTH_SERVICE_UNAVAILABLE", "fixed snapshot phase unavailable"
+        ) from None
+    connection = http.client.HTTPConnection(_HOST, _PORT, timeout=timeout)
     try:
         connection.connect()
         if connection.sock is None:
@@ -251,9 +268,13 @@ def _request(
 
 
 def _post(
-    path: str, body: bytes | Callable[[], bytes], *, bearer: SecretStr | None = None
+    path: str,
+    body: bytes | Callable[[], bytes],
+    *,
+    bearer: SecretStr | None = None,
+    snapshot_phase: SnapshotPhase | None = None,
 ) -> tuple[int, object]:
-    return _request("POST", path, body, bearer=bearer)
+    return _request("POST", path, body, bearer=bearer, snapshot_phase=snapshot_phase)
 
 
 def _get(path: str, *, bearer: SecretStr) -> tuple[int, object]:
@@ -717,6 +738,7 @@ class AuthenticatedInferenceTransferHttpSession:
                 _SNAPSHOT,
                 canonical_json_bytes(request.model_dump(mode="json")),
                 bearer=self._bearer,
+                snapshot_phase=request.phase,
             )
             if status in {401, 403}:
                 raise SnapshotReadFailure("INFERENCE_TRANSFER_FORBIDDEN")

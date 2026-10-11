@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import base64
 import csv
+import grp
 import hashlib
 import io
 import json
@@ -19,6 +20,7 @@ import stat
 import sys
 import zipfile
 from pathlib import Path
+from typing import Final
 
 PREFIX = Path("/opt/eom/conda/envs/eom-embedding-experiment")
 MODEL_STORE = Path("/opt/eom/embedding-models")
@@ -52,6 +54,102 @@ MODEL_MEMBERS: dict[str, tuple[int, str]] = {
         443,
         "a1d6bc8734a6f635dc158508bef000f8e2e5a759c7d92f984b2c86e5ff53425b",
     ),
+}
+
+# SFconvertbot's unmerged PR #130 is a reviewed experiment candidate, not a
+# maintainer release. Root admission uses these independent pins, never the
+# runtime versions or file inventory declared by an untrusted source manifest.
+BGE_REPOSITORY: Final = "BAAI/bge-m3"
+BGE_UPSTREAM_REVISION = "9a0624b896d81da7492a910ffa53731274b6cf3d"
+BGE_RUNTIME_VERSIONS = (
+    ("safetensors", "0.6.2"),
+    ("tokenizers", "0.22.2"),
+    ("torch", "2.7.1+cpu"),
+    ("transformers", "4.56.2"),
+)
+BGE_FILES = (
+    (
+        "1_Pooling/config.json",
+        191,
+        "e54c164a07274f2eb45bb724f54a79d1efcc90c41573887cd9a29aeee0597352",
+    ),
+    ("config.json", 687, "26159e7ad065073448460117eb24b7a4572f6f4e78eadff65dc0a11c052449fa"),
+    (
+        "model.safetensors",
+        2271064456,
+        "993b2248881724788dcab8c644a91dfd63584b6e5604ff2037cb5541e1e38e7e",
+    ),
+    (
+        "sentencepiece.bpe.model",
+        5069051,
+        "cfc8146abe2a0488e9e2a0c56de7952f7c11ab059eca145a0a727afce0db2865",
+    ),
+    (
+        "special_tokens_map.json",
+        964,
+        "8c785abebea9ae3257b61681b4e6fd8365ceafde980c21970d001e834cf10835",
+    ),
+    (
+        "tokenizer.json",
+        17098108,
+        "21106b6d7dab2952c1d496fb21d5dc9db75c28ed361a05f5020bbba27810dd08",
+    ),
+    (
+        "tokenizer_config.json",
+        444,
+        "a62b2b6784f990259fddef5f16388693a8043be4f69179e6a5257eeb3f9abac4",
+    ),
+)
+
+
+def _canonical(value: object) -> bytes:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+
+
+def _content_sha256(value: object) -> str:
+    return "sha256:" + hashlib.sha256(_canonical(value)).hexdigest()
+
+
+def reviewed_bge_model_spec() -> dict[str, object]:
+    """The existing model-spec/1.0 recipe, reproducible without third-party imports."""
+    recipe = {
+        "schema_version": "item-local-embedding-model-spec/1.0",
+        "provider_family": "transformers-local-dense/1.0",
+        "upstream_repo": BGE_REPOSITORY,
+        "upstream_revision": BGE_UPSTREAM_REVISION,
+        "license_id": "MIT",
+        "dimension": 1024,
+        "maximum_tokens": 2048,
+        "pooling": "CLS",
+        "normalization": "L2",
+        "dtype": "float32",
+        "query_prefix": "",
+        "document_prefix": "",
+        "truncation": "REJECT_OVERFLOW",
+        "files": [
+            {"member_path": name, "size_bytes": size, "sha256": "sha256:" + digest}
+            for name, size, digest in BGE_FILES
+        ],
+        "runtime_versions": [
+            {"name": name, "version": version} for name, version in BGE_RUNTIME_VERSIONS
+        ],
+    }
+    body = {
+        **recipe,
+        "model_id": "embeddingmodel_" + _content_sha256(BGE_REPOSITORY)[7:39],
+        "model_revision_id": "embeddingmodelrev_" + _content_sha256(recipe)[7:39],
+    }
+    return {**body, "manifest_sha256": _content_sha256(body)}
+
+
+BGE_SPEC = reviewed_bge_model_spec()
+BGE_MODEL_ID = str(BGE_SPEC["model_id"])
+BGE_MODEL_REVISION = str(BGE_SPEC["model_revision_id"])
+BGE_MANIFEST_BYTES = _canonical(BGE_SPEC)
+BGE_MANIFEST_RAW_SHA256 = hashlib.sha256(BGE_MANIFEST_BYTES).hexdigest()
+BGE_MEMBERS: dict[str, tuple[int, str]] = {
+    "manifest.json": (len(BGE_MANIFEST_BYTES), BGE_MANIFEST_RAW_SHA256),
+    **{name: (size, digest) for name, size, digest in BGE_FILES},
 }
 
 
@@ -223,8 +321,53 @@ def _open_source_directory(path: Path) -> list[tuple[int, Path, tuple[int, ...]]
 
 
 def copy_reviewed_model(source: Path, target: Path, *, source_uid: int, cpu_gid: int) -> None:
+    """Preserve the existing E5 full-installation entry and independently reviewed pins."""
+    copy_reviewed_model_snapshot(
+        source,
+        target,
+        model_id=MODEL_ID,
+        model_revision=MODEL_REVISION,
+        members=MODEL_MEMBERS,
+        source_uid=source_uid,
+        cpu_gid=cpu_gid,
+    )
+
+
+def copy_reviewed_model_snapshot(
+    source: Path,
+    target: Path,
+    *,
+    model_id: str,
+    model_revision: str,
+    members: dict[str, tuple[int, str]],
+    source_uid: int,
+    cpu_gid: int,
+) -> None:
     """Strict source FD copy to root-only target, using independent fixed upstream pins."""
-    if source.name != MODEL_REVISION or source.parent.name != MODEL_ID:
+    allowed_members = {
+        "manifest.json",
+        "1_Pooling/config.json",
+        "config.json",
+        "model.safetensors",
+        "sentencepiece.bpe.model",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+    }
+    if (
+        re.fullmatch(r"embeddingmodel_[0-9a-f]{32}", model_id) is None
+        or re.fullmatch(r"embeddingmodelrev_[0-9a-f]{32}", model_revision) is None
+        or not {"manifest.json", "1_Pooling/config.json"} <= members.keys() <= allowed_members
+        or any(
+            isinstance(size, bool)
+            or not 0 < size <= 4 * 1024**3
+            or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+            for size, digest in members.values()
+        )
+        or source.name != model_revision
+        or source.parent.name != model_id
+        or target.name != model_revision
+    ):
         raise SnapshotInstallError("EMBEDDING_MODEL_SOURCE_INVALID")
     require_root_path(target.parent)
     if target.exists() or target.is_symlink():
@@ -238,12 +381,12 @@ def copy_reviewed_model(source: Path, target: Path, *, source_uid: int, cpu_gid:
                 raise SnapshotInstallError("EMBEDDING_MODEL_SOURCE_INVALID")
         if set(os.listdir(source_fd)) != {
             "1_Pooling",
-            *(name for name in MODEL_MEMBERS if "/" not in name),
+            *(name for name in members if "/" not in name),
         }:
             raise SnapshotInstallError("EMBEDDING_MODEL_MEMBERS_INVALID")
         target.mkdir(mode=0o700)
         (target / "1_Pooling").mkdir(mode=0o700)
-        for member, (size, expected) in MODEL_MEMBERS.items():
+        for member, (size, expected) in members.items():
             parent_fd = source_fd
             sub_fd = None
             if "/" in member:
@@ -373,9 +516,11 @@ def ensure_owner_workspace() -> None:
         os.close(descriptor)
 
 
-def _prepare_model_parent(cpu_gid: int) -> Path:
+def prepare_model_snapshot_parent(model_id: str, cpu_gid: int) -> Path:
+    if re.fullmatch(r"embeddingmodel_[0-9a-f]{32}", model_id) is None:
+        raise SnapshotInstallError("EMBEDDING_MODEL_PARENT_INVALID")
     require_root_path(MODEL_STORE)
-    parent = MODEL_STORE / MODEL_ID
+    parent = MODEL_STORE / model_id
     try:
         parent.mkdir(mode=0o750)
     except FileExistsError:
@@ -394,6 +539,55 @@ def _prepare_model_parent(cpu_gid: int) -> Path:
     ):
         raise SnapshotInstallError("EMBEDDING_MODEL_PARENT_INVALID")
     return parent
+
+
+def _prepare_model_parent(cpu_gid: int) -> Path:
+    return prepare_model_snapshot_parent(MODEL_ID, cpu_gid)
+
+
+def model_only_main() -> int:
+    """Add the one reviewed BGE snapshot; never reinstall runtime or reset CPU history."""
+    parser = argparse.ArgumentParser(description="No-clobber reviewed BGE model-only admission")
+    parser.add_argument("--model-source", type=Path, required=True)
+    parser.add_argument("--manifest-raw-sha256", required=True)
+    args = parser.parse_args()
+    try:
+        executable = Path(sys.executable)
+        if (
+            os.geteuid() != 0
+            or not sys.flags.isolated
+            or not sys.flags.no_site
+            or executable not in (PREFIX / "bin/python", PREFIX / "bin/python3.12")
+            or not executable.resolve(strict=True).is_relative_to(PREFIX)
+            or args.manifest_raw_sha256 != BGE_MANIFEST_RAW_SHA256
+        ):
+            raise SnapshotInstallError("EMBEDDING_INSTALL_CONTEXT_INVALID")
+        # The caller separately verifies this root-private helper SHA. These
+        # checks never execute an interpreter, site package, post-link or model.
+        require_root_path(executable.resolve(strict=True), directory=False)
+        require_root_path(Path(__file__).resolve(strict=True), directory=False)
+        cpu_gid = grp.getgrnam("eom-embedding-experiment").gr_gid
+        source_uid = pwd.getpwnam("eom").pw_uid
+        require_root_path(MODEL_STORE)
+        store = MODEL_STORE.lstat()
+        if store.st_gid != cpu_gid or stat.S_IMODE(store.st_mode) != 0o750:
+            raise SnapshotInstallError("EMBEDDING_MODEL_PARENT_INVALID")
+        model_parent = prepare_model_snapshot_parent(BGE_MODEL_ID, cpu_gid)
+        copy_reviewed_model_snapshot(
+            args.model_source,
+            model_parent / BGE_MODEL_REVISION,
+            model_id=BGE_MODEL_ID,
+            model_revision=BGE_MODEL_REVISION,
+            members=BGE_MEMBERS,
+            source_uid=source_uid,
+            cpu_gid=cpu_gid,
+        )
+        print("EMBEDDING_MODEL_ONLY_ADMISSION=PASS")
+        print("RUNTIME_AND_HISTORY=UNCHANGED")
+        return 0
+    except Exception:
+        print("EMBEDDING_MODEL_ONLY_ADMISSION_REJECTED", file=sys.stderr)
+        return 1
 
 
 def main() -> int:
@@ -425,4 +619,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["model-only"]:
+        del sys.argv[1]
+        raise SystemExit(model_only_main())
     raise SystemExit(main())

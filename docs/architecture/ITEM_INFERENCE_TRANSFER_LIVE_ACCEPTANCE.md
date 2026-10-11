@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-11 08:58 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-11 10:15 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
 
 사용자 최신 지시에 따라 **사람 평가는 현 목표의 완료 조건에서 제외**한다.
@@ -127,6 +127,111 @@ root fresh 합성 회귀는 frozen 45개와 successor 35개를 함께 실행한 
 보호 staging·actual 실행 전이다. 합성 replay PASS를 실제 worker 결과나 운영
 replay PASS로 표시하지 않는다. 최초 설계의 실제 CPU/두 쌍 비교·최종 대조 gate는
 계속 남으며, 사람 평가·추가 GUI는 새 완료 조건이 아니다.
+
+### 원래 실행의 terminal 관측과 실제 모델 적합성 — 2026-10-11 09:44 UTC
+
+08:44:54 UTC에 시작한 동일 실행의 owner는 09:33 UTC경 종료됐다. 정식 게시
+경계에서 `INFERENCE_EXPERIMENT_COMMIT_UNCERTAIN`가 반환됐으며, CPU unit의
+exit 0을 벡터 계산 성공이나 정본 Artifact commit으로 해석하지 않는다.
+
+- 최종 snapshot audit: PREPARE 1회 / 83,887 ms, READ 33회 / 2,668,388 ms,
+  AUTHORIZE 1회 / 119,212 ms. 누적 canonical response는 11,325,674 bytes다.
+  audit chain SHA는 `35b19779d9f7691ec9caa44375e90e7505e3dc62e33c85b3239ed29a4f681978`이다.
+- 고정 CPU unit의 InvocationID는 `737787b8259347d6862e26d058c24d20`이며,
+  09:31:11 UTC에 active/exited 상태가 됐다. Result success, ExecMainStatus 0,
+  MainPID 0, NRestarts 0을 별도로 확인했다. owner의 CPU adapter 호출은 1회다.
+- 기존 Orchestrator 소유 DB의 read-only exact-key 조회에서는
+  `job_84bc2e74b708442580be243a5bb4f301`이 CREATED였다. planned Artifact는
+  `artifact_7cdc94580e1a48b8ac22cefebab135e2` /
+  `rev_fb45f587396e4c3a82cf656a5d8dcaf5`이고, 정본 Artifact/Revision row는 없었다.
+  DB row를 수정하거나 실패를 성공으로 바꾸지 않았다.
+- 일회성 caller가 `env -i`에서 `EOM_STAGING_ROOT`를 전달하지 않아 publisher의
+  기본 `/srv/eom/staging`을 선택했다. 이 경로는 eom:eom 0750이고 실제 caller
+  UID 990/GID 1000에는 쓰기 권한이 없다. 기존 운영 runner의 지원된 설정인
+  `/var/lib/eom-workflow-runner/orchestrator-staging`은 실제 caller가 쓸 수 있다.
+  공유 staging 권한을 넓히거나 runtime/state-machine을 변경하지 않는다.
+
+09:42–09:44 UTC에 보호된 installed Python `-I -B`, 실제 UID 990으로 **읽기만**
+수행해 원래 input SHA와 exact request/result/schema/canonical SHA, 모델·Graph·policy·
+520 population·4 queries·recipe·budget 및 local completion/publication bytes를 확인했다.
+이 진단의 CPU/DB/NAS 호출은 모두 0이다. completion marker는 로컬 검증 증거이며
+정본 commit 영수증이 아니다.
+
+실제 결과는 **INSUFFICIENT_ENCODING_COVERAGE**다.
+
+| View | ENCODABLE | TOKEN_OVERFLOW | token median | p95 | maximum |
+|---|---:|---:|---:|---:|---:|
+| CONTENT_ONLY | 519 | 1 | 186 | 342 | 571 |
+| CONCRETE_FACETS | 3 | 517 | 844 | 1,081 | 1,330 |
+| METADATA_ONLY | 519 | 1 | 207 | 353 | 536 |
+
+- 세 view의 공통 profile은 3개뿐이고 선택한 4 query는 모두 공통 집합 밖이었다.
+  query result는 0개다. 모델 loading 2,612 ms, token measurement 225 ms,
+  peak RSS 874,008 KiB; encoding requests/texts와 encoding time은 모두 0이다.
+  따라서 **tokenizer/model load는 실행됐지만 실제 embedding forward는 실행되지 않았다**.
+- request SHA: `cadf64d4a91aad119f4492846db08bfd633fa7c5984fc7a2a46af9aeff20bbe2`.
+  result semantic SHA: `cc79373fb671bbe903ba9be602ae3ce6c42307c4355f5a178debf72c6206a664`.
+  canonical publication raw SHA:
+  `da68f546ab9cc9723463b4cbc785edafe9aec292a3d65bc8f5c309e5a3db649a`, 757,224 bytes.
+  원래 result.created_at은 `2026-10-11T09:31:07.848194Z`다.
+
+원래 execution/model/spec/request/result/실패 이력은 보존한다. 새 최소 복구는
+완료된 로컬 결과 검증 → fresh 실제 사용자 PREPARE와 exact header/index 대조 →
+기존 `reauthorize_staged_experiment`의 전체 현재 population AUTHORIZE → 동일 key,
+같은 source commit/생성 시각/member로 기존 publisher를 통한 게시다. CPU 재호출,
+33 READ 반복, 새 identity로 기존 실패 우회, DB 직접 UPDATE는 하지 않는다.
+게시가 성공해도 결과의 INSUFFICIENT를 MEASURED로 바꾸지 않는다.
+
+이 발견 때문에 실제 벡터 후보와 두 쌍의 착상 비교는 여전히 미완료다. 현재 E5의
+512-token pin을 늘려 표시하거나 조건·단위·부정을 잘라 통과시키지 않는다.
+원래 설계의 내용을 보존하는 모델 적합성 보완이 필요하다. 이미 계약이 지원하는
+긴 입력용 로컬 모델의 안전한 snapshot과 resource fit을 조사하되, 조사만으로
+설치/활성화/후속 실험 PASS를 주장하지 않는다. 의미 있는 모델 변경은 별도 successor
+실험이지 원래 실행의 retry가 아니며, 같은 520/4-query/3-view recipe를 유지한다.
+새 framework·검색 엔진·ANN·GUI·사람 평가를 추가하지 않는다.
+
+### 모델 successor 준비 — 2026-10-11 10:03 UTC
+
+기존 입력을 자르지 않는 BGE-M3 후보의 고정 upstream 7개 파일을 비root 전용
+acquisition으로 받아 member SHA/bytes와 manifest를 검증했다. process exit 0이다.
+정확한 revision·member pins·manifest·runtime versions는
+[모델 fit 기록](ITEM_INFERENCE_TRANSFER_MODEL_FIT.md)에 있다. 이는 보호 snapshot
+입장이나 모델 load/forward, 실제 corpus MEASURED 판정이 아니다.
+
+원래 INSUFFICIENT 결과의 동일-key 게시 복구는 34개 fresh fake tests와 독립 source
+리뷰를 통과했으며 보호된 UID 990 콘솔을 준비했다. 첫 로그인은
+CONTROL_AUTHORIZATION_REQUIRED로 거부됐다. publication/CPU 호출은 0이고 DB 상태나
+실패 이력은 변경하지 않았다. 이후 실제 인증과 결과는 아래 별도 기록으로 구분한다.
+
+### 동일-key 게시 복구의 인가 시간 제한 — 2026-10-11 10:08 UTC
+
+두 번째 fresh guiadmin 로그인은 정상 통과했다. 원래 Job의 CREATED 상태와 로컬
+request/result pins를 확인한 뒤 10:05:15 UTC에 RECOVER_RETAINED_PUBLICATION을
+명시적으로 한 번 선택했다. PREPARE `req_7b57014b89f8738039db197454a533d5`는
+10:06:41.390111 UTC에 80,167.603 ms로 완료됐고 원래 header/index와 일치했다.
+전체 현재 population AUTHORIZE `req_56b00dbc0f3bc1bb834bd2ea45c91432`는
+10:08:44.316434 UTC에 120,109.795 ms 뒤
+INFERENCE_TRANSFER_SNAPSHOT_UNAVAILABLE로 종료됐다. 게시와 CPU 호출은 0이며
+기존 failed/INSUFFICIENT 기록은 보존했다. 인증 실패로 재분류하지 않는다.
+
+기존 Catalog response budget와 owner HTTP timeout이 모두 120초이며 앞선 동일
+AUTHORIZE는 119,212 ms였다는 사실을 확인했다. 현재 실패의 내부 예외를 직접
+관측하지는 않았으므로 deadline cliff와 강하게 일치하는 측정으로만 기록한다.
+기존 경계 안의 작은 보완은 검증된 typed phase로만 선택하는 고정 timing map이다.
+AUTHORIZE는 Catalog 300초/외부 HTTP 330초로 분리하고 PREPARE/READ/일반 HTTP는
+기존 120초를 유지한다. 권한·wire/schema·출처 검증·자동 retry는 바꾸지 않는다.
+fake 125초 응답 재현과 관련 8 suite 310 PASS, strict 5파일/Ruff/format/diff 및
+독립 source 리뷰 PASS다. 이 시점은 source 검증이며 실제 배포나 복구 PASS가 아니다.
+
+### 보호 모델 입장 — 2026-10-11 10:12 UTC
+
+독립 검토된 model-only helper를 root 소유 0400으로 staging하고 SHA
+fb8db49658483c0efcc325b0c4c8f150234ec51b2c2893066bf42c104e1180bb를 확인했다.
+보호된 CPU interpreter의 -I -S -B 실행으로 exact BGE member/manifest를
+no-clobber admission했다. 실제 EMBEDDING_MODEL_ONLY_ADMISSION=PASS,
+RUNTIME_AND_HISTORY=UNCHANGED를 확인했다. 기존 CPU wheel 06134fcd9, E5 snapshot,
+실행 이력과 인증은 유지했다. BGE unit/polkit 설치, 실제 load/forward/성능 측정,
+520개 successor와 V11 pair는 아직 실행하지 않았다.
 
 ### 세 축 비교와 owner refresh의 실제 공유 배포 — 19:12 UTC
 

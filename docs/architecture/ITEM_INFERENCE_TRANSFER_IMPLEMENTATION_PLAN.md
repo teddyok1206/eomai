@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 구현·검증 계획
 
-상태 기준: 2026-10-11, `ab1d5b8c` 배포와 동일 입력 READ timeout 이후의 실제 관측. 이 문서는 구현 계획과 단계별 상태 요약이다.
+상태 기준: 2026-10-11 09:44 UTC, `68a648c2` 설치와 원래 520개 실험의 실제 token coverage 관측. 이 문서는 구현 계획과 단계별 상태 요약이다.
 실제 설치 증거는 [live acceptance 기록](ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)과
 정본 deployment record로 확인하며, 설치·service health를 비교 실행·교육 품질 PASS로 확대하지 않는다.
 
@@ -40,13 +40,18 @@
 |---|---|---|---|
 | F0 | 답변 원문 보존·goal·기존 경계 점검 | 원문 read-back/hash, 기존 경계와 제한 기록 | 완료 |
 | F1 | additive JSON Schema 2020-12 → frozen 모델 → grounded deterministic profile | exact refs/hash/closure/uncertainty tests, predecessor bytes 불변 | source 구현·검증 완료 |
-| F2 | pinned offline local embedding adapter와 exact ranking | dependency isolation, malformed vectors·ties·permission-prefilter tests; 실제 CPU benchmark 별도 | source·CPU toy 실행 및 보호 CPU/model 발행 완료; 실패 기록 보존 후 승인된 no-forward 격리 검증 1회 PASS; 실제 corpus benchmark 대기 |
-| F3 | Catalog opt-in authorized candidate read use case | actual actor/policy/Graph admission 재사용, 별도 후보 예산·provenance, 기본 retrieval 무변경 | source·격리 PostgreSQL SQL 검증 및 호환 공유 경계 설치 완료; 실제 `guiadmin` original corpus 520/520·metadata 및 PREPARE PASS; `f12fb971` 실제 첫 READ도 terminal 실패, 안전한 진단은 READ/OWNER_SERVICE/FROZEN_MODEL; 구체적 원인 확인 중, CPU 실행 0 |
-| F4 | Orchestrator 경유 bounded Codex pair comparison | exact A/B, condition+decisive mapping, 차이/새 추론, unsupported/insufficient 처리, schema validation | selected-pair 제출·current 권한 재인가·atomic V21/START·canonical 결과 조회·인증 owner PREPARE/RELEASE source와 호환 공유 release 설치 완료; 실제 초기 protocol/control 발행·worker 비교 대기 |
-| F5 | 기존 검색 대비 bounded 자동 실험 | lexical/content-only/crux/metadata의 후보·순위·공통 모집단·coverage·latency·memory; label 없는 정확도나 교육 효과 주장 금지 | staged 계약·encode-once harness·실모델 3-view 합성 smoke 완료; 기존 human 계약/owner는 보존하지만 평가와 신규 scorecard는 현 완료에 필요 없음; 실제 corpus/Graph 비교와 정본 실험 기록 대기 |
-| F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 사람 평가 불필요, 자동 검증과 실제 교육 효과 구별 | 보호 CPU 설치·격리 PASS; 세 축 successor source 2,497 PASS 및 후속 변경 경계 291 PASS; 정상 build·`ab1d5b8c` 배포·migration 0051 unchanged·6 callback·API ready·8 service 및 chat READY 복원 PASS; 실제 READ·CPU·control 발행·최대 두 쌍 비교와 최종 원문 대조 대기 |
+| F2 | pinned offline local embedding adapter와 exact ranking | dependency isolation, malformed vectors·ties·permission-prefilter tests; 실제 CPU benchmark 별도 | source·CPU toy·보호 CPU/model 발행 완료. 원래 실제 corpus는 E5 512-token에서 INSUFFICIENT: 착상 view 517/520 overflow, forward 0. 내용을 보존하는 긴 입력 모델의 fit 보완 필요 |
+| F3 | Catalog opt-in authorized candidate read use case | actual actor/policy/Graph admission 재사용, 별도 후보 예산·provenance, 기본 retrieval 무변경 | 공유 `68a648c2`와 실제 guiadmin 520 population의 PREPARE 1/READ 33/전체 AUTHORIZE 1 완료. 기본 retrieval 불변. 이전 실패 이력 보존; publisher staging caller 설정 누락의 동일-key 복구 대기 |
+| F4 | Orchestrator 경유 bounded Codex pair comparison | exact A/B, condition+decisive mapping, 차이/새 추론, unsupported/insufficient 처리, schema validation | V11 세 축 source·호환 공유 경계·운영 definition 등록 완료. 실제 native protocol/control PREPARE·RELEASE 및 최대 두 쌍 MEMBER_VERIFIED/replay는 대기 |
+| F5 | 기존 검색 대비 bounded 자동 실험 | lexical/content-only/crux/metadata의 후보·순위·공통 모집단·coverage·latency·memory; label 없는 정확도나 교육 효과 주장 금지 | 실제 520/4-query/3-view token coverage·CPU load/RSS 관측 완료. common pool 3/queries 제외로 순위는 0이며 MEASURED 아님. 원래 결과 게시와 적합한 모델의 명시적 successor 실험 대기. 사람 평가는 불필요 |
+| F6 | 문서·회귀·supported 운영 연결 | 설치 package 검증·compatible release·opt-in activation; 사람 평가 불필요, 자동 검증과 실제 교육 효과 구별 | `68a648c2` 설치·migration 0051 unchanged·6 callback·8 service/chat READY 확인. 변경 경계 559 PASS와 원문/계약/adapter fresh 124 PASS. 실패 모델 결과를 성공으로 바꾸지 않으며 실제 successor CPU·control·두 쌍·최종 대조 gate는 남음 |
 
 ## 비교 표현과 판정
+
+실제 모델의 입력 적합성 누락과 최소 보완은
+[모델 fit 설계](ITEM_INFERENCE_TRANSFER_MODEL_FIT.md)에 기록했다. 이는 기존 착상
+표현·원문·인가를 유지하면서 실제 벡터 후보를 만들기 위한 변경이다. 새 검색 플랫폼,
+embedding recipe나 평가 GUI를 추가하지 않는다.
 
 비교 facet은 given condition, intermediate relation, decisive inference, asked judgement, misconception으로 나눈다. deterministic profile은 기존 report 문구와 explicit concept-assessment role을 배열한 **비교용 자료**이며, 새 숨은 조건이나 결정적 착상을 발견했다고 주장하지 않는다. 의미를 새로 추출한 Codex profile은 원문과 구분하고 model/prompt/request/result pins 및 참조를 남긴다.
 

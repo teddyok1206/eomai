@@ -28,6 +28,7 @@ polkit.addRule(function(action, subject) {
     var localImageScienceVisualPilotUnit = /^eom-image-science-visual-pilot@imgscivisattempt_[0-9a-f]{32}\.service$/;
     var officeConverterUnit = /^eom-office-converter@officeconv_[0-9a-f]{32}\.service$/;
     var embeddingExperimentUnit = /^eom-embedding-experiment@embeddingexecution_[0-9a-f]{32}\.service$/;
+    var embeddingBgeExperimentUnit = /^eom-embedding-experiment-bge@embeddingexecution_[0-9a-f]{32}\.service$/;
 
     if (action.id !== "org.freedesktop.systemd1.manage-units") {
         return polkit.Result.NOT_HANDLED;
@@ -54,7 +55,7 @@ polkit.addRule(function(action, subject) {
             || localImageScienceSubjectMultiseedUnit.test(unit)
             || localImageCropLocatorUnit.test(unit)
             || localImageScienceVisualPilotUnit.test(unit)
-            || embeddingExperimentUnit.test(unit))) {
+            || embeddingExperimentUnit.test(unit) || embeddingBgeExperimentUnit.test(unit))) {
         return polkit.Result.YES;
     }
     if (verb === "start" && subject.user === "eom-hwpx-manager"

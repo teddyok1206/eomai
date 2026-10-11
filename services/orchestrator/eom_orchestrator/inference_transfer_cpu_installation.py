@@ -15,8 +15,12 @@ from pathlib import Path
 from time import monotonic
 
 from eom_orchestrator.inference_transfer_cpu_systemd import (
+    BGE_CPU_TEMPLATE,
     CPU_TEMPLATE,
     PREPARE_TEMPLATE,
+    CpuResourceProfile,
+    cpu_resource_limits,
+    cpu_unit_names,
     inspect_cpu_unit,
     require_cpu_runtime,
 )
@@ -25,7 +29,7 @@ SYSTEMCTL = "/usr/bin/systemctl"
 PROBE = "eom-embedding-experiment-probe.service"
 PROBE_SHA256 = "310fdb4e8d49dd89c19edcb3db08a352f6facf405ddb9a4fc7d59db430ae1dfb"
 POLKIT = Path("/etc/polkit-1/rules.d/50-eom-worker-units.rules")
-POLKIT_SHA256 = "fc63581550983bdfe9742556d8f1331ac51925ffa962302c9b3c38ffed72b08a"
+POLKIT_SHA256 = "589f0c9258bacf17e4d3cefe3aba49c313c6733299dde196aaccf1662c7f985c"
 _ENV = {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"}
 _INSTANCE = "embeddingexecution_" + "0" * 32
 _OMITTED_EMPTY_EXEC = frozenset({"ExecStartPre", "ExecStartPost"})
@@ -143,6 +147,7 @@ def _checked_file(path: Path, expected: str) -> None:
 def _properties(unit: str) -> dict[str, str]:
     templates = {
         "eom-embedding-experiment@" + _INSTANCE + ".service": CPU_TEMPLATE,
+        "eom-embedding-experiment-bge@" + _INSTANCE + ".service": BGE_CPU_TEMPLATE,
         PROBE: PROBE,
         "eom-embedding-experiment-prepare@" + _INSTANCE + ".service": PREPARE_TEMPLATE,
     }
@@ -217,6 +222,28 @@ def validate_effective_policies(
         or prepare["ReadWritePaths"] != "/run/eom-embedding-experiments"
     ):
         raise ValueError("INFERENCE_CPU_PREPARE_POLICY_INVALID")
+
+
+def validate_bge_effective_policies(
+    main: dict[str, str],
+    bge: dict[str, str],
+    probe: dict[str, str],
+    prepare: dict[str, str],
+) -> None:
+    """The fixed BGE resource change is not permission to change the existing CPU sandbox."""
+    validate_effective_policies(main, probe, prepare)
+    if (
+        set(bge) != set(_SANDBOX)
+        or bge["FragmentPath"] != "/etc/systemd/system/" + BGE_CPU_TEMPLATE
+        or bge["DropInPaths"]
+        or bge["NeedDaemonReload"] != "no"
+        or main["MemoryMax"] != str(cpu_resource_limits().memory_max_bytes)
+        or bge["MemoryMax"] != str(cpu_resource_limits(CpuResourceProfile.BGE).memory_max_bytes)
+    ):
+        raise ValueError("INFERENCE_CPU_PROBE_POLICY_INVALID")
+    for key in set(_SANDBOX) - {"FragmentPath", "MemoryMax"}:
+        if bge[key] != main[key]:
+            raise ValueError("INFERENCE_CPU_PROBE_POLICY_MISMATCH")
 
 
 @dataclass(frozen=True, slots=True)
@@ -334,10 +361,11 @@ def _temporary_polkit_subject(user: str) -> Iterator[PolkitSubject]:
         _close_owned_subject(process)
 
 
-def verify_polkit_scope() -> None:
+def verify_polkit_scope(*, profile: CpuResourceProfile = CpuResourceProfile.E5) -> None:
     if os.geteuid() != 0:
         raise ValueError("INFERENCE_CPU_PROBE_ROOT_REQUIRED")
-    allowed_unit = "eom-embedding-experiment@" + _INSTANCE + ".service"
+    allowed_unit = cpu_unit_names(_INSTANCE, profile=profile)[1]
+    invalid_unit = cpu_resource_limits(profile).template.replace("@.service", "@invalid.service")
     cases = (
         ("eom-workflow-runner", allowed_unit, "start", True),
         (
@@ -348,7 +376,7 @@ def verify_polkit_scope() -> None:
         ),
         ("eom-workflow-runner", PROBE, "start", False),
         ("eom-workflow-runner", allowed_unit, "restart", False),
-        ("eom-workflow-runner", "eom-embedding-experiment@invalid.service", "start", False),
+        ("eom-workflow-runner", invalid_unit, "start", False),
         ("eom-embedding-experiment", allowed_unit, "start", False),
     )
     for user, unit, verb, expected in cases:
@@ -377,6 +405,22 @@ def verify_polkit_scope() -> None:
             )
             if result.returncode != (0 if expected else 1):
                 raise ValueError("INFERENCE_CPU_PROBE_POLKIT_SCOPE_INVALID")
+
+
+def verify_bge_cpu_resource_profile() -> None:
+    """Read installed BGE policy/authority only; this does not run a model or a probe unit."""
+    if os.geteuid() != 0:
+        raise ValueError("INFERENCE_CPU_PROBE_ROOT_REQUIRED")
+    require_cpu_runtime()
+    require_cpu_runtime(profile=CpuResourceProfile.BGE)
+    _checked_file(Path("/etc/systemd/system") / PROBE, PROBE_SHA256)
+    _checked_file(POLKIT, POLKIT_SHA256)
+    prepare, main = cpu_unit_names(_INSTANCE)
+    bge = cpu_unit_names(_INSTANCE, profile=CpuResourceProfile.BGE)[1]
+    validate_bge_effective_policies(
+        _properties(main), _properties(bge), _properties(PROBE), _properties(prepare)
+    )
+    verify_polkit_scope(profile=CpuResourceProfile.BGE)
 
 
 def verify_fixed_cpu_installation() -> None:

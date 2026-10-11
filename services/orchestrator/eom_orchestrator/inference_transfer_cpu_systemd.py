@@ -8,7 +8,9 @@ import re
 import stat
 import subprocess
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
+from types import MappingProxyType
 
 from eom_orchestrator.inference_transfer_cpu_handoff import (
     OWNER_ROOT,
@@ -33,6 +35,8 @@ PREPARE_TEMPLATE = "eom-embedding-experiment-prepare@.service"
 CPU_TEMPLATE = "eom-embedding-experiment@.service"
 PREPARE_TEMPLATE_SHA256 = "432f8d2cd0a9997f01edec6c559217c3a2bb5956a3341bde76d420722b7c9a4b"
 CPU_TEMPLATE_SHA256 = "1097b66b9ac385e0f9b6ae28e2c45b33ca6fb497532a6e80245fb24c110ff832"
+BGE_CPU_TEMPLATE = "eom-embedding-experiment-bge@.service"
+BGE_CPU_TEMPLATE_SHA256 = "55c70d9b3f115c7c6c3b869e1730922edf69d1d45d905a5e5053a268fea315a3"
 _ROOT_UID = 0
 _ENVIRONMENT = {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"}
 _PROPERTIES = (
@@ -50,6 +54,38 @@ _PROPERTIES = (
     "FragmentPath",
     "DropInPaths",
 )
+
+
+class CpuResourceProfile(StrEnum):
+    E5 = "E5"
+    BGE = "BGE"
+
+
+@dataclass(frozen=True, slots=True)
+class CpuResourceLimits:
+    template: str
+    template_sha256: str
+    memory_max_bytes: int
+    timeout_seconds: int
+
+
+# Two reviewed real resource cases, not a runtime registry or a caller-supplied unit override.
+_RESOURCE_LIMITS = MappingProxyType(
+    {
+        CpuResourceProfile.E5: CpuResourceLimits(
+            CPU_TEMPLATE, CPU_TEMPLATE_SHA256, 2 * 1024**3, CPU_TIMEOUT_SECONDS
+        ),
+        CpuResourceProfile.BGE: CpuResourceLimits(
+            BGE_CPU_TEMPLATE, BGE_CPU_TEMPLATE_SHA256, 6 * 1024**3, CPU_TIMEOUT_SECONDS
+        ),
+    }
+)
+
+
+def cpu_resource_limits(profile: CpuResourceProfile = CpuResourceProfile.E5) -> CpuResourceLimits:
+    if not isinstance(profile, CpuResourceProfile):
+        raise ValueError("INFERENCE_CPU_RESOURCE_PROFILE_INVALID")
+    return _RESOURCE_LIMITS[profile]
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,11 +140,14 @@ class CpuUnitObservation:
         )
 
 
-def cpu_unit_names(execution_id: str) -> tuple[str, str]:
+def cpu_unit_names(
+    execution_id: str, *, profile: CpuResourceProfile = CpuResourceProfile.E5
+) -> tuple[str, str]:
     identity = validate_cpu_execution_id(execution_id)
+    limits = cpu_resource_limits(profile)
     return (
         f"eom-embedding-experiment-prepare@{identity}.service",
-        f"eom-embedding-experiment@{identity}.service",
+        limits.template.replace("@.service", f"@{identity}.service"),
     )
 
 
@@ -168,10 +207,11 @@ def _template_epoch(value: os.stat_result) -> tuple[int, int, int, int, int, int
     )
 
 
-def require_cpu_runtime() -> None:
+def require_cpu_runtime(*, profile: CpuResourceProfile = CpuResourceProfile.E5) -> None:
     """Installed fixed files only; absence never falls back to a repo/ambient interpreter."""
+    limits = cpu_resource_limits(profile)
     _require_template(PREPARE_TEMPLATE, PREPARE_TEMPLATE_SHA256)
-    _require_template(CPU_TEMPLATE, CPU_TEMPLATE_SHA256)
+    _require_template(limits.template, limits.template_sha256)
     for path in (PREPARE_PYTHON, CPU_PYTHON):
         value = _root_path(path, allow_final_symlink=True).stat()
         if not stat.S_ISREG(value.st_mode) or not value.st_mode & 0o111:
@@ -227,25 +267,32 @@ def inspect_cpu_unit(unit_name: str, *, template: str) -> CpuUnitObservation:
     return observation
 
 
+@dataclass(frozen=True, slots=True)
 class FixedCpuExperimentLauncher:
     """No submission retry: a return requires both exact fixed units to have terminated."""
 
+    profile: CpuResourceProfile = CpuResourceProfile.E5
+
+    def __post_init__(self) -> None:
+        cpu_resource_limits(self.profile)
+
     def run(self, prepared: LocalExperimentInput) -> None:
         try:
+            limits = cpu_resource_limits(self.profile)
             owner = fixed_owner_identity()
             if (
                 os.geteuid() != owner.owner_uid
                 or prepared.workspace != OWNER_ROOT / prepared.execution_id
             ):
                 raise ValueError("INFERENCE_CPU_OWNER_IDENTITY_INVALID")
-            prepare_unit, main_unit = cpu_unit_names(prepared.execution_id)
-            require_cpu_runtime()
+            prepare_unit, main_unit = cpu_unit_names(prepared.execution_id, profile=self.profile)
+            require_cpu_runtime(profile=self.profile)
         except (CpuHandoffError, OSError, ValueError, KeyError) as exc:
             raise CpuExperimentRunError("KNOWN_FAILED") from exc
         try:
             before = (
                 inspect_cpu_unit(prepare_unit, template=PREPARE_TEMPLATE),
-                inspect_cpu_unit(main_unit, template=CPU_TEMPLATE),
+                inspect_cpu_unit(main_unit, template=limits.template),
             )
             if any(not value.fresh for value in before):
                 raise CpuExperimentRunError("UNCERTAIN")
@@ -255,18 +302,18 @@ class FixedCpuExperimentLauncher:
                 (SYSTEMCTL, "--no-ask-password", "start", main_unit),
                 capture_output=True,
                 check=False,
-                timeout=CPU_TIMEOUT_SECONDS + CPU_CLIENT_GUARD_SECONDS,
+                timeout=limits.timeout_seconds + CPU_CLIENT_GUARD_SECONDS,
                 env=_ENVIRONMENT,
             )
             after = (
                 inspect_cpu_unit(prepare_unit, template=PREPARE_TEMPLATE),
-                inspect_cpu_unit(main_unit, template=CPU_TEMPLATE),
+                inspect_cpu_unit(main_unit, template=limits.template),
             )
             if all(value.succeeded for value in after):
                 materialize_cpu_output(prepared)
                 final = (
                     inspect_cpu_unit(prepare_unit, template=PREPARE_TEMPLATE),
-                    inspect_cpu_unit(main_unit, template=CPU_TEMPLATE),
+                    inspect_cpu_unit(main_unit, template=limits.template),
                 )
                 if final != after:
                     raise CpuExperimentRunError("UNCERTAIN")

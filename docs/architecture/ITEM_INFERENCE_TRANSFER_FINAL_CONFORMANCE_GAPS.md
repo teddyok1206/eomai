@@ -12,9 +12,18 @@ V22/role 1.30의 전용 purpose 연결을 확인했다. 새 필수 source 누락
 기존 운영 CLI로 별도 등록했다. 정확한 identity/hash/시각과 권한 구분은
 [운영 검증 기록](ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)에 있다.
 
+2026-10-11 09:44 UTC의 원래 실행에서 전체 READ와 CPU tokenizer coverage를
+실제로 확인했다. 그러나 E5 512-token 한도를 CONCRETE_FACETS 517/520개가 넘었고,
+모든 query가 공통 pool 밖이어서 실제 embedding forward는 0이었다. 정본 게시도
+일회성 caller의 staging 설정 누락으로 COMMIT_UNCERTAIN 상태다. 이 실행은
+MEASURED가 아니며 실패를 보존한다. 상세 metadata는 live acceptance 기록에 있다.
+
 다음 네 가지는 아직 actual evidence가 필요한 종료 조건이다.
 
-1. 원래 input/execution으로 전체 READ와 현재 재인가 → CPU `MEASURED` 정본 Artifact.
+1. 원래 input/execution의 INSUFFICIENT 결과를 같은 key와 현재 재인가로 보존한다.
+   그다음 실제 길이에 맞는 안전한 local model을 admission한 명시적 successor에서
+   같은 520/4 queries/3 views의 CPU `MEASURED` 정본 Artifact를 검증한다. 원래 모델의
+   길이 pin이나 원문·조건·부정을 바꾸지 않고 실패를 새 성공으로 재해석하지 않는다.
 2. 등록된 V11 정의와 실제 native protocol/capacity/model의 검증 → 명시 owner
    PREPARE/RELEASE. config compile/DB 정의 등록을 control 발행으로 확대하지 않는다.
 3. 승인된 두 쌍의 실제 V11 비교 → `MEMBER_VERIFIED`, 독립 CONCEPT/MATERIAL/CRUX
@@ -22,8 +31,9 @@ V22/role 1.30의 전용 purpose 연결을 확인했다. 새 필수 source 누락
    증명으로 표현하지 않는다.
 4. 최초 원문 요구별 정본 pointer·자동 관측·미평가 한계를 최종 보고한다.
 
-사람 평가/precision·recall·새 scorecard/GUI/ANN/embedding recipe는 사용자 후속 지시에
-따라 추가 완료 조건이 아니다. 기존 optional 계약/기록은 보존한다.
+사람 평가/precision·recall·새 scorecard/GUI/ANN/embedding recipe는 추가 완료 조건이
+아니다. 실제로 부적합하다고 측정된 모델의 fit 보완은 원래 벡터 후보 기능을 끝내기
+위한 작업이며 기존 optional 계약/기록은 보존한다.
 
 ## 이후 사용자 지시 — 사람 평가 없음
 

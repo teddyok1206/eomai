@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.metadata
 import io
 from pathlib import Path
 
 import pytest
+from eom_identifiers import canonical_json_bytes
 
 from scripts.embedding import acquire_e5_small_probe as acquisition
 
@@ -17,7 +19,7 @@ def pinned_runtime_versions(monkeypatch: pytest.MonkeyPatch) -> None:
         "torch": "2.7.1+cpu",
         "transformers": "4.56.2",
     }
-    monkeypatch.setattr(acquisition.importlib.metadata, "version", versions.__getitem__)
+    monkeypatch.setattr(importlib.metadata, "version", versions.__getitem__)
 
 
 def test_official_probe_recipe_has_exact_safe_byte_inventory(pinned_runtime_versions: None) -> None:
@@ -28,6 +30,14 @@ def test_official_probe_recipe_has_exact_safe_byte_inventory(pinned_runtime_vers
     assert spec.pooling == "MEAN" and spec.dimension == 384
     assert spec.truncation == "REJECT_OVERFLOW"
     assert all(not member.member_path.endswith(".bin") for member in spec.files)
+    assert spec.manifest_sha256 == (
+        "sha256:f106f8df1ca01062a3900fa65f4c235d278294c34a113efe1cc1934432d0d9eb"
+    )
+    raw = canonical_json_bytes(spec.model_dump(mode="json"))
+    assert len(raw) == 1812
+    assert hashlib.sha256(raw).hexdigest() == (
+        "0f0c2c7c1a3b525cc41163e417ce632adb5bbd60327e007e15ccd09a03a8ad8e"
+    )
 
 
 def test_relative_or_symlink_store_is_rejected_before_acquisition(

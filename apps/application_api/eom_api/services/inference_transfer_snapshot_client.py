@@ -19,6 +19,10 @@ from eom_catalog_contracts.inference_transfer_snapshot_binding import (
     parse_binding_request,
     validate_binding_reply,
 )
+from eom_catalog_contracts.inference_transfer_snapshot_timing import (
+    DEFAULT_SNAPSHOT_TIMEOUT_SECONDS,
+    snapshot_phase_deadlines,
+)
 from eom_orchestrator.general_chat_socket import (
     ChatSocketEndpoint,
     ChatTransportError,
@@ -28,7 +32,8 @@ from jsonschema import ValidationError as SchemaError
 
 from eom_api.services.inference_transfer_snapshot_port import InferenceTransferSnapshotReadError
 
-SNAPSHOT_RESPONSE_TIMEOUT_SECONDS = 120.0
+# Preserve the existing adapter import; per-phase rules have one shared owner.
+SNAPSHOT_RESPONSE_TIMEOUT_SECONDS = DEFAULT_SNAPSHOT_TIMEOUT_SECONDS
 
 
 class InferenceTransferSnapshotClientError(InferenceTransferSnapshotReadError):
@@ -65,7 +70,7 @@ class CatalogInferenceTransferSnapshotClient:
                 document,
                 request_limit=MAX_PRIVATE_SNAPSHOT_FRAME_BYTES,
                 reply_limit=MAX_PRIVATE_SNAPSHOT_FRAME_BYTES,
-                timeout=SNAPSHOT_RESPONSE_TIMEOUT_SECONDS,
+                timeout=snapshot_phase_deadlines(binding.request.phase).catalog_response_seconds,
             )
             if any(
                 value.get(field)
