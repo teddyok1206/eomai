@@ -1,7 +1,8 @@
 # 착상 비교 입력 길이에 맞는 로컬 모델 보완
 
-상태: 2026-10-11 10:15 UTC. 실제 E5 실패 측정을 바탕으로 한 구현 설계와 모델
-acquisition/admission 기록이다. BGE 추론·품질 PASS가 아니며 원문과 이전 실행은 보존한다.
+상태: 2026-10-11 10:38 UTC. 실제 E5 실패 측정을 바탕으로 한 구현 설계와 모델
+acquisition/admission 및 합성 CPU 벡터 실측 기록이다. 전체 corpus·품질 PASS가 아니며
+원문과 이전 실행은 보존한다.
 
 ## 필요한 이유와 보존할 범위
 
@@ -88,7 +89,8 @@ BGE tokenizer로 같은 520개를 측정하기 전에는 전 corpus fit을 주�
 2. 기존 E5/runtime/unit 이력을 유지한 model-only no-clobber admission을 검증한다.
    developer-owned prefix와 CPU history 없음이 전제인 전체 installer는 재실행하지 않는다.
 3. BGE 전용 고정 CPU resource profile 후보는 MemoryMax 6 GiB, batch 1/threads 4,
-   CPUQuota 400%, TimeoutStartSec 1800, Restart no다. 이전 E5의 2 GiB template,
+   CPUQuota 400%, TimeoutStartSec 5400, Restart no다. 최초 실제 합성 시험은 1800초였고,
+   실측에 근거한 BGE-only 5400초 후속 source 보완은 아래에 구분한다. 이전 E5의 2 GiB/1800초 template,
    launcher default와 probe는 유지한다. 공통 prepare/handoff/stdio는 재사용한다.
    임의 drop-in·unit·권한 확대 없이 exact template/hash와 기존 polkit scope를 검증한다.
 4. 보호 model snapshot 및 load/tokenization/RSS/time 검증을 수행한다. resource ceiling
@@ -126,3 +128,18 @@ Ruff/format/diff PASS를 별도 source 증거로 기록한다.
 BGE resource unit/polkit 설치·load/forward·실제 token fit·성능·successor CPU·pair
 실행은 미실행이며 production activation도 하지 않았다. 합성 입력의 짧음/중간/긴
 부하를 먼저 동일 고정 CPU adapter에서 측정해 6 GiB/1800초 예산 적합성을 확인한다.
+
+### 실제 합성 CPU 시험과 BGE-only 종료 시한 — 2026-10-11 10:38 UTC
+
+고정 BGE CPU unit 설치 후 합성 6 profile/18 text가 실제 MEASURED다.
+최대 1,599토큰도 절단 없이 변환했다. load 3,527ms/token 10ms/encode 44,325ms,
+Linux peak RSS 2,486,848KiB, 호출 3/3 완료다. 기존 6GiB 메모리 ceiling 내에 있지만
+520×3 text 단순 환산 proxy 3,845,894ms(64분)는 이전 1800초에 맞지 않는다.
+이를 full-corpus throughput/fit 보장으로 확대하지 않는다. 실제 execution/result/hash
+및 역사적 30분 template pin은 [운영 검증 기록](ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)에 있다.
+
+입력 절단·목표 축소·GPU 권한 확대 대신 BGE만 fixed 5400초, launcher guard 5430초로
+조정한다. E5 1800초, 6GiB/400%/4 threads/재시작 금지와 기존 경계는 유지한다.
+effective systemd timeout과 exact template SHA도 검증한다. 측정 DTO/schema의 기존
+24시간 상한 안이므로 released 계약은 수정하지 않는다. source 293 PASS/strict/Ruff/
+format PASS이고, 이 시각 새 90분 profile 운영 적용·전체 520개·V11 쌍 비교는 미실행이다.

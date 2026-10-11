@@ -83,6 +83,7 @@ _SANDBOX = (
     "UMask",
     "MemoryMax",
     "TasksMax",
+    "TimeoutStartUSec",
     "LimitFSIZE",
     "LimitCORE",
     "KillMode",
@@ -208,6 +209,7 @@ def validate_effective_policies(
         or main["PrivateDevices"] != "yes"
         or main["ProtectSystem"] != "strict"
         or main["RestrictAddressFamilies"] != "AF_UNIX"
+        or main["TimeoutStartUSec"] != "30min"
     ):
         raise ValueError("INFERENCE_CPU_PROBE_POLICY_INVALID")
     if (
@@ -220,6 +222,7 @@ def validate_effective_policies(
         or prepare["PrivateNetwork"] != "yes"
         or prepare["PrivateDevices"] != "yes"
         or prepare["ReadWritePaths"] != "/run/eom-embedding-experiments"
+        or prepare["TimeoutStartUSec"] != "30s"
     ):
         raise ValueError("INFERENCE_CPU_PREPARE_POLICY_INVALID")
 
@@ -239,9 +242,10 @@ def validate_bge_effective_policies(
         or bge["NeedDaemonReload"] != "no"
         or main["MemoryMax"] != str(cpu_resource_limits().memory_max_bytes)
         or bge["MemoryMax"] != str(cpu_resource_limits(CpuResourceProfile.BGE).memory_max_bytes)
+        or bge["TimeoutStartUSec"] != "1h 30min"
     ):
         raise ValueError("INFERENCE_CPU_PROBE_POLICY_INVALID")
-    for key in set(_SANDBOX) - {"FragmentPath", "MemoryMax"}:
+    for key in set(_SANDBOX) - {"FragmentPath", "MemoryMax", "TimeoutStartUSec"}:
         if bge[key] != main[key]:
             raise ValueError("INFERENCE_CPU_PROBE_POLICY_MISMATCH")
 

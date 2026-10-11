@@ -13,6 +13,8 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from eom_catalog_contracts.inference_transfer_experiment import ExperimentMeasurements
+from eom_catalog_contracts.validation import load_schema
 from eom_orchestrator import inference_transfer_cpu_installation as installation
 from eom_orchestrator import inference_transfer_cpu_systemd as cpu
 from eom_orchestrator.inference_transfer_cpu_handoff import OWNER_ROOT, CpuHandoffIdentity
@@ -20,6 +22,9 @@ from eom_orchestrator.inference_transfer_experiment_ports import (
     CpuExperimentRunError,
     LocalExperimentInput,
 )
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import ValidationError as SchemaValidationError
+from pydantic import ValidationError
 
 from tests.unit.inference_transfer_fixtures import NOW, sha
 from tests.unit.test_inference_transfer_cpu_installation import properties
@@ -31,6 +36,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_existing_e5_defaults_and_pinned_files_remain_unchanged() -> None:
     assert cpu.cpu_resource_limits().template == cpu.CPU_TEMPLATE
     assert cpu.cpu_resource_limits().memory_max_bytes == 2 * 1024**3
+    assert cpu.cpu_resource_limits().timeout_seconds == 1800
     assert cpu.FixedCpuExperimentLauncher().profile is cpu.CpuResourceProfile.E5
     assert cpu.cpu_unit_names(EXECUTION) == (
         f"eom-embedding-experiment-prepare@{EXECUTION}.service",
@@ -47,16 +53,25 @@ def test_existing_e5_defaults_and_pinned_files_remain_unchanged() -> None:
         assert hashlib.sha256((ROOT / "infra/systemd" / name).read_bytes()).hexdigest() == expected
 
 
-def test_bge_template_changes_only_description_and_fixed_memory_ceiling() -> None:
+def test_bge_template_changes_only_description_fixed_memory_and_timeout() -> None:
     original = (ROOT / "infra/systemd" / cpu.CPU_TEMPLATE).read_text()
     bge = (ROOT / "infra/systemd" / cpu.BGE_CPU_TEMPLATE).read_text()
     assert (
-        bge.replace("isolated BGE CPU", "isolated CPU").replace("MemoryMax=6G", "MemoryMax=2G")
+        bge.replace("isolated BGE CPU", "isolated CPU")
+        .replace("MemoryMax=6G", "MemoryMax=2G")
+        .replace("TimeoutStartSec=5400", "TimeoutStartSec=1800")
         == original
     )
     limits = cpu.cpu_resource_limits(cpu.CpuResourceProfile.BGE)
     assert limits.template_sha256 == hashlib.sha256(bge.encode()).hexdigest()
-    assert limits.memory_max_bytes == 6 * 1024**3 and limits.timeout_seconds == 1800
+    assert limits.memory_max_bytes == 6 * 1024**3 and limits.timeout_seconds == 5400
+    # The measured pilot remains reproducible from its original 30-minute template bytes.
+    assert (
+        hashlib.sha256(
+            bge.replace("TimeoutStartSec=5400", "TimeoutStartSec=1800").encode()
+        ).hexdigest()
+        == "55c70d9b3f115c7c6c3b869e1730922edf69d1d45d905a5e5053a268fea315a3"
+    )
     assert "CPUQuota=400%" in bge and "Restart=no" in bge
     assert "StartLimitBurst=1" in bge and "PrivateNetwork=yes" in bge
     assert cpu.cpu_unit_names(EXECUTION, profile=cpu.CpuResourceProfile.BGE) == (
@@ -181,7 +196,7 @@ def test_explicit_bge_profile_starts_one_fixed_unit_after_selected_protection_ch
         "start",
         cpu.cpu_unit_names(EXECUTION, profile=cpu.CpuResourceProfile.BGE)[1],
     )
-    assert calls[0][1]["timeout"] == 1830 and calls[0][1]["env"] == cpu._ENVIRONMENT
+    assert calls[0][1]["timeout"] == 5430 and calls[0][1]["env"] == cpu._ENVIRONMENT
 
 
 @pytest.mark.parametrize("state", ["success", "running", "failed", "timeout"])
@@ -207,7 +222,7 @@ def test_bge_timeout_keeps_uncertainty_and_has_no_second_start(
     def timeout(*_args: Any, **_kwargs: Any) -> Any:
         nonlocal attempts
         attempts += 1
-        raise subprocess.TimeoutExpired("fixed-bge-start", 1830)
+        raise subprocess.TimeoutExpired("fixed-bge-start", 5430)
 
     monkeypatch.setattr(subprocess, "run", timeout)
     with pytest.raises(CpuExperimentRunError, match="UNCERTAIN"):
@@ -257,7 +272,7 @@ def profile_policies() -> tuple[dict[str, str], dict[str, str], dict[str, str], 
     return main, bge, probe, prepare
 
 
-def test_bge_effective_policy_preserves_every_old_sandbox_property_except_fixed_memory() -> None:
+def test_bge_effective_policy_changes_only_fixed_memory_and_timeout() -> None:
     installation.validate_bge_effective_policies(*profile_policies())
 
 
@@ -274,6 +289,53 @@ def test_bge_effective_policy_cannot_reinterpret_changed_e5_memory() -> None:
     main["MemoryMax"] = probe["MemoryMax"] = str(6 * 1024**3)
     with pytest.raises(ValueError, match="POLICY_INVALID"):
         installation.validate_bge_effective_policies(main, bge, probe, prepare)
+
+
+@pytest.mark.parametrize("timeout", ["30min", "infinity", "5400", "", "2h"])
+def test_bge_effective_timeout_must_match_its_fixed_profile(timeout: str) -> None:
+    main, bge, probe, prepare = profile_policies()
+    bge["TimeoutStartUSec"] = timeout
+    with pytest.raises(ValueError, match="POLICY_INVALID"):
+        installation.validate_bge_effective_policies(main, bge, probe, prepare)
+
+
+def test_e5_and_probe_cannot_both_acquire_the_bge_deadline() -> None:
+    main, bge, probe, prepare = profile_policies()
+    main["TimeoutStartUSec"] = probe["TimeoutStartUSec"] = "1h 30min"
+    with pytest.raises(ValueError, match="POLICY_INVALID"):
+        installation.validate_bge_effective_policies(main, bge, probe, prepare)
+
+
+def test_root_prepare_retains_its_30_second_deadline() -> None:
+    main, bge, probe, prepare = profile_policies()
+    prepare["TimeoutStartUSec"] = "1h 30min"
+    with pytest.raises(ValueError, match="PREPARE_POLICY_INVALID"):
+        installation.validate_bge_effective_policies(main, bge, probe, prepare)
+
+
+@pytest.mark.parametrize("encoding_milliseconds", [3_845_894, 5_400_000, 86_400_000])
+def test_bge_deadline_fits_existing_measurement_schema_and_model(
+    encoding_milliseconds: int,
+) -> None:
+    value = dict.fromkeys(ExperimentMeasurements.model_fields, 0)
+    value["encoding_milliseconds"] = encoding_milliseconds
+    assert (
+        ExperimentMeasurements.model_validate(value).encoding_milliseconds == encoding_milliseconds
+    )
+    Draft202012Validator(
+        load_schema("item-inference-transfer-experiment")["$defs"]["measurements"]
+    ).validate(value)
+
+
+def test_existing_measurement_bound_is_not_broadened_for_the_bge_deadline() -> None:
+    value = dict.fromkeys(ExperimentMeasurements.model_fields, 0)
+    value["encoding_milliseconds"] = 86_400_001
+    with pytest.raises(ValidationError):
+        ExperimentMeasurements.model_validate(value)
+    with pytest.raises(SchemaValidationError):
+        Draft202012Validator(
+            load_schema("item-inference-transfer-experiment")["$defs"]["measurements"]
+        ).validate(value)
 
 
 def test_bge_public_profile_check_reads_policy_after_exact_bytes_and_never_launches(

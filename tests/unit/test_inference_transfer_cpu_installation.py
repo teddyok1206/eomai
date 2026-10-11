@@ -47,6 +47,9 @@ def properties(template: str, *, root: bool = False) -> dict[str, str]:
             "PrivateDevices": "yes",
             "ProtectSystem": "strict",
             "RestrictAddressFamilies": "AF_UNIX",
+            "TimeoutStartUSec": (
+                "30s" if root else "1h 30min" if template == cpu.BGE_CPU_TEMPLATE else "30min"
+            ),
         }
     )
     if root:

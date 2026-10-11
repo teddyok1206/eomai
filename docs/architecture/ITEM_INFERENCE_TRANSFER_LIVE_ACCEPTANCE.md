@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-11 10:15 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-11 10:38 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
 
 사용자 최신 지시에 따라 **사람 평가는 현 목표의 완료 조건에서 제외**한다.
@@ -23,7 +23,7 @@
 
 | Component | 실제 상태 | 한계 |
 |---|---|---|
-| 공유 API/platform | 설치 source `68a648c293c2a0a0df441ba8607b1d58a02d08de`, tree `e9d3b88bd75cf88d6a75a73cd7acc43277d703ec`; 2026-10-11 08:23:12 UTC 배포 완료 | 세 축 1.1·READ producer·owner refresh와 transaction-local immutable provenance reuse를 포함한 설치. 실제 동일-input READ·CPU·비교는 별도 gate; 사람 평가는 불필요 |
+| 공유 API/platform | 설치 source `72f01147c4a3bb8c79e73bed24dc893ac69672a1`, tree `97563e346cb950a548036a403acdd96c66bb7442`; 2026-10-11 10:27 UTC 복구·검증 완료 | AUTHORIZE 전용 내부 300초/외부 330초, BGE 고정 resource profile 포함. 실제 corpus BGE·쌍 비교는 별도 gate; 사람 평가는 불필요 |
 | 운영 PostgreSQL | `20261010_0051` migration 및 exact-head 검증 PASS | 새 비교 Workflow stage CHECK 적용이지 비교 control 발행이나 worker 실행이 아님 |
 | 별도 CPU Conda | `/opt/eom/conda/envs/eom-embedding-experiment` 보호 snapshot 발행·승인된 격리 probe PASS | 실제 corpus 실험은 별도 gate |
 | CPU platform | `06134fcd91413a957ac3133db062dbcdd525ee15` wheel에서 비편집 설치 | d291 candidate와 1,361개 payload member가 일치함; source 표기는 원래 설치값 유지 |
@@ -232,6 +232,69 @@ no-clobber admission했다. 실제 EMBEDDING_MODEL_ONLY_ADMISSION=PASS,
 RUNTIME_AND_HISTORY=UNCHANGED를 확인했다. 기존 CPU wheel 06134fcd9, E5 snapshot,
 실행 이력과 인증은 유지했다. BGE unit/polkit 설치, 실제 load/forward/성능 측정,
 520개 successor와 V11 pair는 아직 실행하지 않았다.
+
+### 긴 입력 모델 경계와 인가 timing의 실제 공유 배포 — 2026-10-11 10:27 UTC
+
+- source `72f01147`/위 tree의 정상 build-only → root-private data stage → 별도 ADMIT →
+  정상 installer/verify를 각각 확인했다. stage는
+  `/var/lib/eom-release-operator-stage.72f01147-60bmG5`, context SHA는
+  `38cb51a005101b67216511b85a6bce4c71acab70b7dd5a4242f8dadd2b7e4fce`,
+  보호 source snapshot SHA는
+  `0078a1591fd2a70ccc0e576af23be469031a17a29f07268b3362764597fe2a58`다.
+- 배포 전 및 8개 공유 서비스 정지 후 공식 owner별 quiescence PASS다. 여섯 기존
+  release callback PASS, migration `20261010_0051` 유지. 옛 API 프로세스 종료는
+  실제 PID 0으로 확인했으며 이전 read-only AUTHORIZE가 완주했다고 추측하지 않는다.
+- 정본 deployment record는
+  `/var/lib/eom-api/deployments/72f01147c4a3bb8c79e73bed24dc893ac69672a1.json`이다.
+  installer가 다시 만든 실제 wheel raw SHA: platform
+  `440cf5e29de91a4f52b04fc7b7592b4142bc4cb4ce1daa264935bdcdbb5bc076`,
+  API contracts `09b87c2f983b054af2e0a797f685cf06912b58628ae2790a85aead4708ff1e9e`,
+  API `efc60085648107d5862c23914071bd47b624768548666ca251a03ab7d459b930`.
+  build-only ZIP SHA와 구별한다. 기존 chat pin adapter로 exact 68a648c2 predecessor만
+  갱신했다. 10:27:11 UTC에 8개 서비스와 API LIVE/READY·installed source/tree PASS다.
+- BGE fixed unit의 6 GiB/1800초 template SHA
+  `55c70d9b3f115c7c6c3b869e1730922edf69d1d45d905a5e5053a268fea315a3` 및
+  고정 polkit SHA `589f0c9258bacf17e4d3cefe3aba49c313c6733299dde196aaccf1662c7f985c`
+  설치·effective sandbox 검증 PASS다. E5/probe/prepare bytes와 원래 실행 InvocationID,
+  보호 CPU source 06134fcd9·model snapshot·실패/Job 이력은 보존했다.
+- root fresh 관련 9 suite 443 PASS, strict/Ruff/format PASS다. 첫 pytest invocation의
+  PYTHONPATH 누락 9 collection error를 바로잡은 후 위 결과를 얻었다. 일회성 도구의
+  fake tests와 source PASS를 실제 게시·전체 corpus·V11 성공으로 확대하지 않는다.
+
+### 실제 짧은 CPU 벡터 실측과 전체 처리시간 보완 — 2026-10-11 10:29 UTC
+
+공식 UID 990 owner → 고정 격리 CPU adapter를 통해 합성 6 profile/3 view/3 query를
+한 번 실행했다. 자료 권한이나 corpus 적합성 증거를 만들기 위한 입력이 아니다.
+
+- Execution: `embeddingexecution_321ec70a88c947ddb2e859d8c0935763`.
+  InvocationID `650a32436e9140838857fdc41a34b40c`, terminal active/exited,
+  MainPID 0, Result success/ExecMainStatus 0, retry 0.
+- 실제 result `MEASURED`, common profiles 6, requested/encoded texts 18,
+  encoding requests started/completed 3/3, query result 3.
+  모든 입력이 ENCODABLE이며 token 범위 51–1,599다.
+- 모델 load 3,527 ms, token measurement 10 ms, encoding 44,325 ms,
+  Linux peak RSS 2,486,848 KiB, owner launcher 52,912 ms다.
+  cgroup MemoryPeak 1,222,045,696 bytes는 Linux process RSS와 다른 측정이다.
+- request semantic SHA `00038b74b8dad142715e55bfdb78a4915f23cec1ea058b0fd59e6f9aeb46cc08`,
+  result semantic SHA `d7004a00f91714836f57115cc22ce5df5e0625a4318d8fdcbf4d41fcb61377a4`,
+  canonical member raw SHA `166e7c60467485ca2f96f7b06c1df7d7c4d1e59e89a4280de56555f79a97209f`.
+  로컬 결과는 기존 owner workspace의 해당 execution `publication-result.json`이다.
+  정본 NAS 게시·corpus fit·교육 품질·production activation은 NOT_PERFORMED/NOT_EVALUATED다.
+- 18개 실측을 520×3=1,560 text로 단순 환산한 proxy는
+  `3527 + ceil((44325+10)×1560/18) = 3,845,894 ms`(약 64분)다.
+  전체 실제 소요시간이나 deadline 통과를 보장하는 예측은 아니다.
+  기존 30분 한도에는 맞지 않으므로 새 입력을 자르거나 목표를 줄이지 않는다.
+
+이에 BGE에만 fixed 5,400초(90분)를 적용하는 최소 source 보완을 검증했다.
+E5 1,800초, BGE 6 GiB/400%/4 threads/재시작 금지는 유지한다. 새 template SHA는
+`d54b75b04619490b095f529086b3c2169c87901016871152df52cab5f4183454`이며,
+effective TimeoutStartUSec도 검증한다. 기존 측정 계약의 24시간 상한을 변경하지 않는다.
+root fresh CPU 3 suite와 새 console 회귀는 319 PASS/4.21초, strict 3파일/Ruff/format/diff
+PASS다. 첫 source PYTHONPATH 누락의 3 collection error는 설정을 바로잡고 재검증했다.
+이 시각은 새 90분 profile의
+소스 검증이며 아직 운영 적용 전이다. 과거 toy의 30분/55c7 pin·bytes·result는
+그대로 두고, 미래 successor execution의 새 resource pin과 분리한다.
+원래 동일-key 게시 복구, 실제 520개 BGE 실험, 최대 두 쌍 V11/replay·최종 설계 대조는 PENDING이다.
 
 ### 세 축 비교와 owner refresh의 실제 공유 배포 — 19:12 UTC
 

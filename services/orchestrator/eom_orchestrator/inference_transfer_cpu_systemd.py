@@ -30,13 +30,16 @@ UNIT_ROOT = Path("/etc/systemd/system")
 CPU_PYTHON = Path("/opt/eom/conda/envs/eom-embedding-experiment/bin/python")
 PREPARE_PYTHON = CPU_PYTHON
 CPU_TIMEOUT_SECONDS = 1800
+# The measured 18-text BGE pilot projects roughly 64 minutes for 520 x 3 views;
+# this bounded ceiling accommodates that projection without changing CPU, memory or retry policy.
+BGE_CPU_TIMEOUT_SECONDS = 5400
 CPU_CLIENT_GUARD_SECONDS = 30
 PREPARE_TEMPLATE = "eom-embedding-experiment-prepare@.service"
 CPU_TEMPLATE = "eom-embedding-experiment@.service"
 PREPARE_TEMPLATE_SHA256 = "432f8d2cd0a9997f01edec6c559217c3a2bb5956a3341bde76d420722b7c9a4b"
 CPU_TEMPLATE_SHA256 = "1097b66b9ac385e0f9b6ae28e2c45b33ca6fb497532a6e80245fb24c110ff832"
 BGE_CPU_TEMPLATE = "eom-embedding-experiment-bge@.service"
-BGE_CPU_TEMPLATE_SHA256 = "55c70d9b3f115c7c6c3b869e1730922edf69d1d45d905a5e5053a268fea315a3"
+BGE_CPU_TEMPLATE_SHA256 = "d54b75b04619490b095f529086b3c2169c87901016871152df52cab5f4183454"
 _ROOT_UID = 0
 _ENVIRONMENT = {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"}
 _PROPERTIES = (
@@ -76,7 +79,7 @@ _RESOURCE_LIMITS = MappingProxyType(
             CPU_TEMPLATE, CPU_TEMPLATE_SHA256, 2 * 1024**3, CPU_TIMEOUT_SECONDS
         ),
         CpuResourceProfile.BGE: CpuResourceLimits(
-            BGE_CPU_TEMPLATE, BGE_CPU_TEMPLATE_SHA256, 6 * 1024**3, CPU_TIMEOUT_SECONDS
+            BGE_CPU_TEMPLATE, BGE_CPU_TEMPLATE_SHA256, 6 * 1024**3, BGE_CPU_TIMEOUT_SECONDS
         ),
     }
 )
