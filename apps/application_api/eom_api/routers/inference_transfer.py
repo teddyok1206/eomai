@@ -6,6 +6,7 @@ from typing import Annotated
 
 from eom_api_contracts import CommandResult, SingleResponse
 from eom_api_contracts.inference_transfer import (
+    InferenceTransferPairRetryRequestV1,
     InferenceTransferPairSubmitRequest,
     InferenceTransferPairSubmitRequestV11,
     InferenceTransferWorkflowReadRequest,
@@ -25,10 +26,10 @@ from eom_catalog_contracts.inference_transfer_snapshot import (
 )
 from eom_identifiers import content_sha256
 from eom_operator_identity import PermissionKey
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Path, Query, Request
 from pydantic import ValidationError
 
-from eom_api.dependencies import Auth, IdempotencyKey, require_permission
+from eom_api.dependencies import Auth, ExpectedVersion, IdempotencyKey, require_permission
 from eom_api.errors import ApiError
 from eom_api.routers.common import one, run_command
 
@@ -186,6 +187,72 @@ def _submit_pair(
             request,
             raw_key=idempotency_key,
             body=body.model_dump(mode="json"),
+            resource_type="workflow",
+            callback=execute,
+            response_status=202,
+        ),
+    )
+
+
+@router.post(
+    "/knowledge/inference-transfer/workflows/{workflow_id}/retries/v1.1",
+    operation_id="inference_transfer_pair_retry_v11",
+    status_code=202,
+    response_model=SingleResponse[CommandResult],
+    dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_START))],
+    openapi_extra={
+        "x-eom-additional-permissions": [
+            PermissionKey.WORKFLOW_READ.value,
+            PermissionKey.ITEM_READ.value,
+            PermissionKey.KNOWLEDGE_GRAPH_RETRIEVE.value,
+            PermissionKey.KNOWLEDGE_ANALYSIS_READ.value,
+        ],
+        "x-eom-conditional-permissions": {"PAST_EXAM": [PermissionKey.CONTENT_INTAKE_READ.value]},
+    },
+)
+def retry_pair_v11(
+    request: Request,
+    workflow_id: Annotated[str, Path(pattern=r"^workflow_[0-9a-f]{32}$")],
+    body: InferenceTransferPairRetryRequestV1,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+    expected_version: ExpectedVersion,
+) -> SingleResponse[CommandResult]:
+    services = request.app.state.services
+    # A cached accepted reply is not current creator/source authorization.
+    authorized = services.inference_transfer_retries.authorize_retry(
+        authentication, workflow_id, body
+    )
+
+    def execute() -> CommandResult:
+        actor = request.state.request_context.actor()
+        key = services.idempotency.submission_key(
+            operator_id=actor.actor_id,
+            endpoint_key="inference_transfer_pair_retry_v11",
+            raw_key=idempotency_key,
+        )
+        command_id, child_workflow_id, version = services.inference_transfer_retries.retry(
+            authorized, actor, expected_version=expected_version, idempotency_key=key
+        )
+        return CommandResult(
+            command_id=command_id,
+            resource_type="workflow",
+            resource_id=child_workflow_id,
+            status="ACCEPTED",
+            resource_version=version,
+            status_url=f"/api/v1/knowledge/inference-transfer/workflows/{child_workflow_id}/v1.1",
+        )
+
+    return one(
+        request,
+        run_command(
+            request,
+            raw_key=idempotency_key,
+            body={
+                "parent_workflow_id": workflow_id,
+                "expected_resource_version": expected_version,
+                "retry_request": body.model_dump(mode="json"),
+            },
             resource_type="workflow",
             callback=execute,
             response_status=202,

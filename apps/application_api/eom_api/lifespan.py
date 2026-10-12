@@ -47,6 +47,8 @@ from eom_api.services.inference_transfer_metadata import (
 from eom_api.services.inference_transfer_metadata_client import (
     CatalogInferenceTransferMetadataClient,
 )
+from eom_api.services.inference_transfer_retry import InferenceTransferRetryApplicationService
+from eom_api.services.inference_transfer_retry_adapter import InferenceTransferRetryAdapter
 from eom_api.services.inference_transfer_snapshot import InferenceTransferSnapshotApplicationService
 from eom_api.services.inference_transfer_snapshot_client import (
     CatalogInferenceTransferSnapshotClient,
@@ -116,6 +118,11 @@ class AppServices:
             InferenceTransferWorkflowReadApplicationServiceV11(
                 CatalogInferenceTransferWorkflowClient()
             )
+        )
+        self.inference_transfer_retries = InferenceTransferRetryApplicationService(
+            self.inference_transfer_submissions,
+            self.inference_transfer_workflow_reads_v11,
+            InferenceTransferRetryAdapter(engine),
         )
         self.queries = QueryAdapter(
             engine,

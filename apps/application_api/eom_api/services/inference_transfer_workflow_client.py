@@ -16,6 +16,9 @@ from eom_catalog_contracts.inference_transfer_invocation_v11 import (
     InferenceTransferWorkflowReadRequestV11,
     InferenceTransferWorkflowReadResultV11,
 )
+from eom_catalog_contracts.inference_transfer_snapshot_timing import (
+    COMPARISON_WORKFLOW_READ_TIMEOUT_SECONDS,
+)
 from eom_catalog_contracts.inference_transfer_workflow_binding import (
     MAX_PRIVATE_TRANSFER_WORKFLOW_BYTES,
     InferenceTransferWorkflowBindingReply,
@@ -92,7 +95,7 @@ class CatalogInferenceTransferWorkflowClient:
                 body,
                 request_limit=MAX_PRIVATE_TRANSFER_WORKFLOW_BYTES,
                 reply_limit=MAX_PRIVATE_TRANSFER_WORKFLOW_BYTES,
-                timeout=120.0,
+                timeout=COMPARISON_WORKFLOW_READ_TIMEOUT_SECONDS,
             )
             if (
                 value.get("operation") != binding.operation

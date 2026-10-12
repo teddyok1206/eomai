@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-12 09:07 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-12 10:00 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
 
 사용자 최신 지시에 따라 **사람 평가는 현 목표의 완료 조건에서 제외**한다.
@@ -20,6 +20,33 @@
   제외한다. 기존 풀이보고서 520개를 다시 생성하지 않는다.
 
 ## Component 상태
+
+### 승인된 동일 pair successor — source 검증 완료, 실제 실행 대기
+
+사용자는 추가 승인 요청 없이 목표를 달성하도록 진행을 지시했다. 읽기 전용 대조에서
+released definition1.1.0의 `max_step_attempts=1`과 Catalog의 attempt1 검증을 확인했다.
+따라서 처음 제안했던 같은 Workflow의 attempt2 대신, 원 FAILED Workflow/Step/Job을
+그대로 두고 같은 comparison에 연결된 **명시적 successor Workflow**를 구현했다.
+이는 새 comparison/selection을 만들거나 original pair key를 바꿔 실패를 숨기는 우회가
+아니다. 원 key replay는 계속 원 실패를 반환하고 retry operation의 고정 key가 child를
+반환한다. 별도 RETRY_STEP state machine/queue/schema migration은 만들지 않았다.
+
+설계/경계/수치의 상세 근거는 [실패 보존형 재실행 설계](ITEM_INFERENCE_TRANSFER_RETRY_DESIGN.md)다.
+현재 source 회귀 **2,952 PASS**, 추가 기존 API160 PASS, strict21파일/Ruff/format/diff
+PASS다. 실제 marker-guarded disposable DB에서는 새4cases와 기존 START/plan 회귀
+**25 PASS**를 확인했고 준비한 DB/roles/private env를 정리했다. old295 schema resources,
+role bundle·definition 및 최초 원문 SHA는 그대로다. 신규 retry POST만 own-creator read와
+기존 source reads의 합성 budget510을 쓰며 originalPOST390/GET120/OBSERVE/TTL은 유지한다.
+
+후속 실행은 parent lock 아래 같은 transaction의 child/동일 control pins/START/lineage
+event로 생성한다. 원 상태·step·job·실패 코드는 변경하지 않는다. same-key replay는 같은
+child, 다른 key/재귀 child retry/active lease/committed result/stale version은 거부한다.
+현재 source 권한은 HTTP cached reply 앞과 실제 worker execution에서 다시 확인한다.
+
+이 시점의 실제 설치는 아래 `f093bf85`이고, 새 successor leaf의 운영 설치·실제 인증
+read/worker/두 MEMBER_VERIFIED·original/retry key replay는 아직 대기다. 추가 실제 모델
+실행은 0이며 종료 조건3·4와 전체 목표 완료를 선언하지 않는다. 이미 완료한 BGE520개
+실험·control PREPARE/RELEASE·풀이보고서·문항/HWPX는 다시 실행하지 않는다.
 
 ### 최소 transport/hash 보완의 실제 배포 — 2026-10-12 09:03 UTC
 

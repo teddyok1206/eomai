@@ -18,6 +18,7 @@ from eom_api_contracts.control_plane import (
     CodexControlCommandView,
     ExecutionPresetView,
 )
+from eom_api_contracts.workflows import WorkflowStepView
 from eom_catalog_contracts.inference_transfer_invocation import (
     InferenceTransferPairSubmitRequest,
     InferenceTransferWorkflowReadRequest,
@@ -44,6 +45,11 @@ from eom_catalog_contracts.inference_transfer_metadata import (
     parse_metadata_result,
     validate_metadata_result,
 )
+from eom_catalog_contracts.inference_transfer_retry import (
+    MAX_TRANSFER_RETRY_BYTES,
+    InferenceTransferPairRetryRequestV1,
+    parse_pair_retry_request_v1,
+)
 from eom_catalog_contracts.inference_transfer_snapshot import (
     MAX_SNAPSHOT_FRAME_BYTES,
     InferenceTransferSnapshotAuthorizeRequest,
@@ -61,6 +67,7 @@ from eom_catalog_contracts.inference_transfer_snapshot import (
     validate_snapshot_read_result_context,
 )
 from eom_catalog_contracts.inference_transfer_snapshot_timing import (
+    COMPARISON_RETRY_HTTP_TIMEOUT_SECONDS,
     COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS,
     DEFAULT_SNAPSHOT_TIMEOUT_SECONDS,
     SnapshotPhase,
@@ -102,6 +109,10 @@ _CODEX_COMMAND_ID = re.compile(r"codexcmd_[0-9a-f]{32}", re.ASCII)
 _COMPARISONS = "/api/v1/knowledge/inference-transfer/comparisons"
 _COMPARISONS_V11 = _COMPARISONS + "/v1.1"
 _COMPARISON_WORKFLOWS = "/api/v1/knowledge/inference-transfer/workflows/"
+_WORKFLOW_STEPS_TARGET = re.compile(r"/api/v1/workflows/workflow_[0-9a-f]{32}/steps", re.ASCII)
+_COMPARISON_RETRY_TARGET = re.compile(
+    re.escape(_COMPARISON_WORKFLOWS) + r"workflow_[0-9a-f]{32}/retries/v1\.1", re.ASCII
+)
 _COMPARISON_READ_TARGET = re.compile(
     re.escape(_COMPARISON_WORKFLOWS)
     + r"workflow_[0-9a-f]{32}\?mode=(?:STATUS_ONLY|CANONICAL_RESULT)",
@@ -164,6 +175,10 @@ _CODEX_CONTROL_COMMAND_RESPONSE = SingleResponse[CodexControlCommandView]
 _CODEX_CONTROL_COMMAND_VALIDATOR = Draft202012Validator(
     _CODEX_CONTROL_COMMAND_RESPONSE.model_json_schema(), format_checker=FormatChecker()
 )
+_WORKFLOW_STEPS_RESPONSE = ListResponse[WorkflowStepView]
+_WORKFLOW_STEPS_VALIDATOR = Draft202012Validator(
+    _WORKFLOW_STEPS_RESPONSE.model_json_schema(), format_checker=FormatChecker()
+)
 _CODEX_OBSERVE_ERRORS = frozenset(
     {
         "API_IDEMPOTENCY_IN_PROGRESS",
@@ -194,6 +209,11 @@ _COMPARISON_ERRORS = frozenset(
         "API_IDEMPOTENCY_IN_PROGRESS",
         "API_IDEMPOTENCY_CONFLICT",
         "API_REQUEST_INVALID",
+        "API_PRECONDITION_FAILED",
+        "API_PRECONDITION_REQUIRED",
+        "INFERENCE_TRANSFER_RETRY_INVALID",
+        "INFERENCE_TRANSFER_RETRY_CONFLICT",
+        "INFERENCE_TRANSFER_RETRY_INELIGIBLE",
         "INFERENCE_TRANSFER_FORBIDDEN",
         "INFERENCE_TRANSFER_SUBMISSION_INVALID",
         "INFERENCE_TRANSFER_SUBMISSION_CONFLICT",
@@ -264,11 +284,14 @@ def _request(
                 or _COMPARISON_READ_TARGET_V11.fullmatch(path) is not None
                 or _CODEX_ACCOUNT_TARGET.fullmatch(path) is not None
                 or _CODEX_CONTROL_COMMAND_TARGET.fullmatch(path) is not None
+                or _WORKFLOW_STEPS_TARGET.fullmatch(path) is not None
             )
         )
         or (method == "POST" and _CODEX_OBSERVE_TARGET.fullmatch(path) is not None)
     )
-    is_submission = method == "POST" and path in {_COMPARISONS, _COMPARISONS_V11}
+    is_retry = method == "POST" and _COMPARISON_RETRY_TARGET.fullmatch(path) is not None
+    fixed_target = fixed_target or is_retry
+    is_submission = method == "POST" and (path in {_COMPARISONS, _COMPARISONS_V11} or is_retry)
     is_observation = method == "POST" and _CODEX_OBSERVE_TARGET.fullmatch(path) is not None
     if (
         not fixed_target
@@ -276,16 +299,18 @@ def _request(
         or ((is_submission or is_observation) and (bearer is None or idempotency_key is None))
         or (not (is_submission or is_observation) and idempotency_key is not None)
         or (
-            is_observation
+            (is_observation or is_retry)
             and (type(expected_resource_version) is not int or expected_resource_version <= 0)
         )
-        or (not is_observation and expected_resource_version is not None)
+        or (not (is_observation or is_retry) and expected_resource_version is not None)
         or (snapshot_phase is not None and (method, path) != ("POST", _SNAPSHOT))
         or (idempotency_key is not None and _IDEMPOTENCY_KEY.fullmatch(idempotency_key) is None)
     ):
         raise ControlPlaneError("CONTROL_AUTH_SERVICE_UNAVAILABLE", "fixed request unavailable")
     try:
-        if is_submission:
+        if is_retry:
+            timeout = COMPARISON_RETRY_HTTP_TIMEOUT_SECONDS
+        elif is_submission:
             timeout = COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS
         elif snapshot_phase is not None:
             timeout = snapshot_phase_deadlines(snapshot_phase).owner_http_seconds
@@ -311,6 +336,14 @@ def _request(
                 raise ValueError("fixed request exceeds bound")
             if is_observation:
                 _codex_observe_request(
+                    json.loads(
+                        payload, object_pairs_hook=_unique_object, parse_constant=_reject_constant
+                    )
+                )
+            if is_retry:
+                if len(payload) > MAX_TRANSFER_RETRY_BYTES:
+                    raise ValueError("retry request exceeds its fixed bound")
+                parse_pair_retry_request_v1(
                     json.loads(
                         payload, object_pairs_hook=_unique_object, parse_constant=_reject_constant
                     )
@@ -577,6 +610,34 @@ class AuthenticatedInferenceTransferHttpSession:
                 "CONTROL_AUTH_SERVICE_UNAVAILABLE", "official execution preset reply invalid"
             ) from None
 
+    def get_workflow_steps(self, workflow_id: str) -> ListResponse[WorkflowStepView]:
+        """Read exact existing step metadata; this does not authorize a retry or result."""
+        if not isinstance(workflow_id, str) or _WORKFLOW_ID.fullmatch(workflow_id) is None:
+            raise ControlPlaneError(
+                "INFERENCE_TRANSFER_WORKFLOW_REQUEST_INVALID", "exact Workflow identity required"
+            )
+        try:
+            raw = self._read_official(
+                "/api/v1/workflows/" + workflow_id + "/steps", PermissionKey.WORKFLOW_READ
+            )
+            _WORKFLOW_STEPS_VALIDATOR.validate(raw)
+            result = _WORKFLOW_STEPS_RESPONSE.model_validate(raw)
+            steps = {value.step_run_id for value in result.data}
+            if len(steps) != len(result.data) or any(
+                value.workflow_id != workflow_id
+                or re.fullmatch(r"steprun_[0-9a-f]{32}", value.step_run_id, re.ASCII) is None
+                for value in result.data
+            ):
+                raise ValueError("step identity differs")
+            self._require_read_permission(PermissionKey.WORKFLOW_READ)
+            return result
+        except ControlPlaneError:
+            raise
+        except Exception:
+            raise ControlPlaneError(
+                "CONTROL_AUTH_SERVICE_UNAVAILABLE", "official Workflow steps reply invalid"
+            ) from None
+
     def read_codex_accounts(self) -> ListResponse[CodexAccountView]:
         """Preserve official account metadata; observation is not execution admission."""
         try:
@@ -783,6 +844,85 @@ class AuthenticatedInferenceTransferHttpSession:
                 "INFERENCE_TRANSFER_SUBMISSION_INVALID", "exact comparison generation required"
             )
         return self._submit_pair(selection, idempotency_key=idempotency_key)
+
+    def _retry_principal(self, selection: InferenceTransferPairSubmitRequestV11) -> CurrentOperator:
+        principal = self._comparison_principal(PermissionKey.WORKFLOW_START, selection)
+        if PermissionKey.WORKFLOW_READ.value not in principal.effective_permissions:
+            raise ControlPlaneError(
+                "CONTROL_AUTHORIZATION_REQUIRED", "current retry parent read permission required"
+            )
+        return principal
+
+    def retry_comparison_v11(
+        self,
+        parent_workflow_id: str,
+        request: InferenceTransferPairRetryRequestV1,
+        *,
+        expected_version: int,
+        idempotency_key: str,
+    ) -> CommandResult:
+        """Explicit successor only; preserve the failed parent and submit once.
+
+        An unknown response may already have committed a child. Only the exact
+        original retry body/version/key may be explicitly replayed; this method
+        never retries, changes an attempt or chooses a newer parent/version.
+        """
+        try:
+            if (
+                not isinstance(parent_workflow_id, str)
+                or _WORKFLOW_ID.fullmatch(parent_workflow_id) is None
+                or not isinstance(request, InferenceTransferPairRetryRequestV1)
+                or type(expected_version) is not int
+                or expected_version <= 0
+                or not isinstance(idempotency_key, str)
+                or _IDEMPOTENCY_KEY.fullmatch(idempotency_key) is None
+            ):
+                raise ValueError("exact bounded retry required")
+            request = parse_pair_retry_request_v1(request.model_dump(mode="json"))
+        except Exception:
+            raise ControlPlaneError(
+                "INFERENCE_TRANSFER_RETRY_INVALID", "exact bounded successor retry required"
+            ) from None
+        principal = self._retry_principal(request.selection)
+        try:
+            status, raw = _request(
+                "POST",
+                _COMPARISON_WORKFLOWS + parent_workflow_id + "/retries/v1.1",
+                canonical_json_bytes(request.model_dump(mode="json")),
+                bearer=self._bearer,
+                expected_resource_version=expected_version,
+                idempotency_key=idempotency_key,
+            )
+        except ControlPlaneError:
+            raise ControlPlaneError(
+                "INFERENCE_TRANSFER_SUBMISSION_UNCERTAIN",
+                "retry outcome unknown; retain exact parent input version and key",
+            ) from None
+        if status != 202:
+            self._comparison_failure(status, raw, "INFERENCE_TRANSFER_SUBMISSION_UNCERTAIN")
+        try:
+            _PAIR_SUBMIT_VALIDATOR.validate(raw)
+            result = _PAIR_SUBMIT_RESPONSE.model_validate(raw).data
+            if (
+                result.resource_type != "workflow"
+                or result.status != "ACCEPTED"
+                or _WORKFLOW_ID.fullmatch(result.resource_id) is None
+                or result.resource_id == parent_workflow_id
+                or _COMMAND_ID.fullmatch(result.command_id) is None
+                or result.status_url != _COMPARISON_WORKFLOWS + result.resource_id + "/v1.1"
+            ):
+                raise ValueError("successor command lineage differs")
+        except Exception:
+            raise ControlPlaneError(
+                "INFERENCE_TRANSFER_SUBMISSION_UNCERTAIN",
+                "retry reply invalid; retain exact parent input version and key",
+            ) from None
+        current = self._retry_principal(request.selection)
+        if set(current.roles) != set(principal.roles):
+            raise ControlPlaneError(
+                "CONTROL_AUTHORIZATION_REQUIRED", "current retry role context changed"
+            )
+        return result
 
     def _submit_pair(
         self,

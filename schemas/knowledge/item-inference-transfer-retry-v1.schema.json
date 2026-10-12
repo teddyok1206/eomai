@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/item-inference-transfer-retry/1.0",
+  "title": "Explicit same-comparison successor execution after a failed V1.1 Workflow",
+  "description": "No actor or authority supplied. The original FAILED Workflow and its one-attempt definition remain unchanged. The owner reauthorizes pinned sources and atomically allows at most one successor.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "failed_step_run_id", "failed_attempt", "selection", "reason", "retry_sha256"],
+  "properties": {
+    "schema_version": {"const": "inference-transfer-pair-retry/1.0"},
+    "failed_step_run_id": {"type": "string", "pattern": "^steprun_[0-9a-f]{32}$"},
+    "failed_attempt": {"const": 1},
+    "selection": {"$ref": "eom://schemas/knowledge/item-inference-transfer-invocation/1.1#/$defs/submitRequest"},
+    "reason": {"type": "string", "minLength": 1, "maxLength": 512, "allOf": [{"pattern": "\\S"}, {"not": {"pattern": "[\u0000-\u0008\u000b\u000c\u000e-\u001f]"}}]},
+    "retry_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

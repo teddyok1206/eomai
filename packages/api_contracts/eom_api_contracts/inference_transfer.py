@@ -14,8 +14,10 @@ from eom_catalog_contracts.inference_transfer_invocation_v11 import (
     InferenceTransferWorkflowReadRequestV11,
     InferenceTransferWorkflowReadResultV11,
 )
+from eom_catalog_contracts.inference_transfer_retry import InferenceTransferPairRetryRequestV1
 
 __all__ = [
+    "InferenceTransferPairRetryRequestV1",
     "InferenceTransferPairSubmitRequest",
     "InferenceTransferPairSubmitRequestV11",
     "InferenceTransferWorkflowReadRequest",

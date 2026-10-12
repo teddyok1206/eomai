@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Any
 
 from eom_catalog_service.inference_transfer_worker_preparation import (
     prepare_inference_transfer_worker_comparison,
@@ -26,7 +28,10 @@ from eom_workflow.inference_transfer import (
     TRANSFER_PAIR_WORKFLOW_VERSION_V11,
 )
 from eom_workflow.inference_transfer_control import ResolvedExecutionPlanV21
-from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequestV11
+from eom_workflow.inference_transfer_workflow import (
+    InferenceTransferWorkflowRequest,
+    InferenceTransferWorkflowRequestV11,
+)
 from eom_workflow_runner.inference_transfer_admission import InferenceTransferSubmissionContext
 from eom_workflow_runner.models import (
     WorkflowCommandRecord,
@@ -76,8 +81,8 @@ class InferenceTransferStartAdapter:
                 )
             )
             if existing is not None:
-                _checked_replay(session, existing, submission)
-                return _start_identity(session, existing)
+                validate_inference_transfer_start_replay(session, existing, submission)
+                return inference_transfer_start_identity(session, existing)
             definition = admitted_workflow_definition(
                 session,
                 definition_key=TRANSFER_PAIR_WORKFLOW_KEY,
@@ -102,90 +107,139 @@ class InferenceTransferStartAdapter:
                     else TRANSFER_PAIR_WORKFLOW_VERSION
                 ),
             )
-            wrapper = submission.workflow_request
-            workflow, created = create_workflow_instance(
+
+            def resolve_plan(
+                actual: Session,
+                workflow: WorkflowInstanceRecord,
+                core_prompt_sha256: str,
+                prompt_sha256: str,
+            ) -> ResolvedExecutionPlanV21:
+                return _resolve_initial_plan(
+                    actual,
+                    workflow=workflow,
+                    definition=definition,
+                    wrapper=submission.workflow_request,
+                    core_prompt_sha256=core_prompt_sha256,
+                    prompt_sha256=prompt_sha256,
+                )
+
+            return start_inference_transfer_in_session(
                 session,
                 definition=definition,
-                request=wrapper,
+                submission=submission,
+                actor=actor,
                 idempotency_key=idempotency_key,
-                actor_type="human",
-                actor_id=actor.actor_id,
-                runtime_context={
-                    "inference_transfer_submission": {
-                        "submission_sha256": submission.selection.submission_sha256,
-                        "snapshot_header_sha256": submission.selection.expected_header_sha256,
-                    }
-                },
-                inference_transfer_context=InferenceTransferSubmissionContext(
-                    operator_id=actor.actor_id,
-                    requester_permissions_sha256=wrapper.requester_permissions_sha256,
-                ),
+                resolve_plan=resolve_plan,
             )
-            if not created:
-                _checked_replay(session, workflow, submission)
-                return _start_identity(session, workflow)
-            prepared = (
-                prepare_inference_transfer_worker_comparison_v11(
-                    wrapper.comparison, left=wrapper.left_profile, right=wrapper.right_profile
-                )
-                if isinstance(wrapper, InferenceTransferWorkflowRequestV11)
-                else prepare_inference_transfer_worker_comparison(
-                    wrapper.comparison, left=wrapper.left_profile, right=wrapper.right_profile
-                )
-            )
-            try:
-                plan: ResolvedExecutionPlanV21
-                if isinstance(wrapper, InferenceTransferWorkflowRequestV11):
-                    plan = resolve_inference_transfer_execution_plan_v11(
-                        session,
-                        workflow_id=workflow.workflow_id,
-                        workflow_definition_version=definition.definition_version,
-                        workflow_definition_sha256=definition.definition_hash,
-                        workflow_role_schema_version=workflow.role_schema_version,
-                        workflow_request=wrapper,
-                        core_prompt_sha256=prepared.core_prompt_sha256,
-                        prompt_sha256=prepared.prompt_sha256,
-                        resolved_at=datetime.now(UTC),
-                    )
-                else:
-                    plan = resolve_inference_transfer_execution_plan(
-                        session,
-                        workflow_id=workflow.workflow_id,
-                        workflow_definition_version=definition.definition_version,
-                        workflow_definition_sha256=definition.definition_hash,
-                        workflow_role_schema_version=workflow.role_schema_version,
-                        workflow_request=wrapper,
-                        core_prompt_sha256=prepared.core_prompt_sha256,
-                        prompt_sha256=prepared.prompt_sha256,
-                        resolved_at=datetime.now(UTC),
-                    )
-            except ControlPlaneError as exc:
-                # Caller transaction rolls back Workflow, plan and START together.
-                raise ApiError(
-                    409,
-                    exc.code,
-                    "Comparison controls unavailable",
-                    "The exact comparison controls are not released and compatible.",
-                ) from exc
-            context = dict(workflow.runtime_context)
-            context["execution_plan"] = {
-                "plan_id": plan.plan_id,
-                "plan_sha256": plan.plan_sha256,
-                "preset_id": plan.preset_id,
-                "preset_revision_id": plan.preset_revision_id,
-            }
-            workflow.runtime_context = context
-            command, _ = enqueue_command(
-                session,
-                workflow_id=workflow.workflow_id,
-                command_type=CommandType.START_WORKFLOW,
-                payload={},
-                actor_type="human",
-                actor_id=actor.actor_id,
-                source="application_api",
-                idempotency_key=f"start:{workflow.workflow_id}",
-            )
-            return command.command_id, workflow.workflow_id, workflow.lock_version
+
+
+def _resolve_initial_plan(
+    session: Session,
+    *,
+    workflow: WorkflowInstanceRecord,
+    definition: WorkflowDefinitionRecord,
+    wrapper: object,
+    core_prompt_sha256: str,
+    prompt_sha256: str,
+) -> ResolvedExecutionPlanV21:
+    if isinstance(wrapper, InferenceTransferWorkflowRequestV11):
+        return resolve_inference_transfer_execution_plan_v11(
+            session,
+            workflow_id=workflow.workflow_id,
+            workflow_definition_version=definition.definition_version,
+            workflow_definition_sha256=definition.definition_hash,
+            workflow_role_schema_version=workflow.role_schema_version,
+            workflow_request=wrapper,
+            core_prompt_sha256=core_prompt_sha256,
+            prompt_sha256=prompt_sha256,
+            resolved_at=datetime.now(UTC),
+        )
+    if not isinstance(wrapper, InferenceTransferWorkflowRequest):
+        raise ValueError("typed comparison wrapper required")
+    return resolve_inference_transfer_execution_plan(
+        session,
+        workflow_id=workflow.workflow_id,
+        workflow_definition_version=definition.definition_version,
+        workflow_definition_sha256=definition.definition_hash,
+        workflow_role_schema_version=workflow.role_schema_version,
+        workflow_request=wrapper,
+        core_prompt_sha256=core_prompt_sha256,
+        prompt_sha256=prompt_sha256,
+        resolved_at=datetime.now(UTC),
+    )
+
+
+def start_inference_transfer_in_session(
+    session: Session,
+    *,
+    definition: WorkflowDefinitionRecord,
+    submission: AuthorizedInferenceTransferSubmission,
+    actor: ActorContext,
+    idempotency_key: str,
+    resolve_plan: Callable[[Session, WorkflowInstanceRecord, str, str], ResolvedExecutionPlanV21],
+    runtime_context: dict[str, Any] | None = None,
+) -> tuple[str, str, int]:
+    """Reuse atomic START materialization; the caller owns locks and transaction."""
+    wrapper = submission.workflow_request
+    context = dict(runtime_context or {})
+    context["inference_transfer_submission"] = {
+        "submission_sha256": submission.selection.submission_sha256,
+        "snapshot_header_sha256": submission.selection.expected_header_sha256,
+    }
+    workflow, created = create_workflow_instance(
+        session,
+        definition=definition,
+        request=wrapper,
+        idempotency_key=idempotency_key,
+        actor_type="human",
+        actor_id=actor.actor_id,
+        runtime_context=context,
+        inference_transfer_context=InferenceTransferSubmissionContext(
+            operator_id=actor.actor_id,
+            requester_permissions_sha256=wrapper.requester_permissions_sha256,
+        ),
+    )
+    if not created:
+        validate_inference_transfer_start_replay(session, workflow, submission)
+        return inference_transfer_start_identity(session, workflow)
+    prepared = (
+        prepare_inference_transfer_worker_comparison_v11(
+            wrapper.comparison, left=wrapper.left_profile, right=wrapper.right_profile
+        )
+        if isinstance(wrapper, InferenceTransferWorkflowRequestV11)
+        else prepare_inference_transfer_worker_comparison(
+            wrapper.comparison, left=wrapper.left_profile, right=wrapper.right_profile
+        )
+    )
+    try:
+        plan = resolve_plan(session, workflow, prepared.core_prompt_sha256, prepared.prompt_sha256)
+    except ControlPlaneError as exc:
+        # Caller transaction rolls back Workflow, plan and START together.
+        raise ApiError(
+            409,
+            exc.code,
+            "Comparison controls unavailable",
+            "The exact comparison controls are not released and compatible.",
+        ) from exc
+    context = dict(workflow.runtime_context)
+    context["execution_plan"] = {
+        "plan_id": plan.plan_id,
+        "plan_sha256": plan.plan_sha256,
+        "preset_id": plan.preset_id,
+        "preset_revision_id": plan.preset_revision_id,
+    }
+    workflow.runtime_context = context
+    command, _ = enqueue_command(
+        session,
+        workflow_id=workflow.workflow_id,
+        command_type=CommandType.START_WORKFLOW,
+        payload={},
+        actor_type="human",
+        actor_id=actor.actor_id,
+        source="application_api",
+        idempotency_key=f"start:{workflow.workflow_id}",
+    )
+    return command.command_id, workflow.workflow_id, workflow.lock_version
 
 
 def _check_definition(
@@ -207,11 +261,11 @@ def _check_definition(
         )
 
 
-def _checked_replay(
+def validate_inference_transfer_start_replay(
     session: Session,
     workflow: WorkflowInstanceRecord,
     submission: AuthorizedInferenceTransferSubmission,
-) -> None:
+) -> ResolvedExecutionPlanV21:
     definition = session.get(WorkflowDefinitionRecord, workflow.definition_id)
     if definition is None:
         raise ApiError(
@@ -318,8 +372,12 @@ def _checked_replay(
             "The original comparison execution pin differs.",
         )
 
+    return plan
 
-def _start_identity(session: Session, workflow: WorkflowInstanceRecord) -> tuple[str, str, int]:
+
+def inference_transfer_start_identity(
+    session: Session, workflow: WorkflowInstanceRecord
+) -> tuple[str, str, int]:
     command = session.scalar(
         select(WorkflowCommandRecord)
         .where(

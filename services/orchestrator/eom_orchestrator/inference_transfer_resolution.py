@@ -206,6 +206,110 @@ def resolve_inference_transfer_execution_plan_v11(
     return plan
 
 
+def resolve_inference_transfer_retry_execution_plan_v11(
+    session: Session,
+    *,
+    parent_plan_id: str,
+    parent_workflow_id: str,
+    parent_workflow_request: InferenceTransferWorkflowRequestV11,
+    workflow_id: str,
+    workflow_definition_sha256: str,
+    workflow_request: InferenceTransferWorkflowRequestV11,
+    core_prompt_sha256: str,
+    prompt_sha256: str,
+    resolved_at: datetime,
+) -> ResolvedExecutionPlanV22:
+    """Derive an exact-control successor in the caller's existing transaction.
+
+    The API owns failed-parent/creator/retry-lineage admission. This owner leaf
+    validates the historical plan and admits its exact controls, never latest.
+    Parent plan bytes and the one-attempt Workflow definition remain unchanged.
+    """
+    try:
+        parent_request = validate_inference_transfer_workflow_request_v11(
+            parent_workflow_request.model_dump(mode="json")
+        )
+        request = validate_inference_transfer_workflow_request_v11(
+            workflow_request.model_dump(mode="json")
+        )
+        observed_at = TypeAdapter(UtcDatetime).validate_python(resolved_at)
+        if workflow_id == parent_workflow_id or parent_request.model_dump(
+            mode="json", exclude={"request_sha256", "requester_permissions_sha256"}
+        ) != request.model_dump(
+            mode="json", exclude={"request_sha256", "requester_permissions_sha256"}
+        ):
+            raise ValueError("retry must derive the exact pair in a new execution")
+    except (ValueError, JsonSchemaValidationError) as exc:
+        raise ControlPlaneError(
+            "CONTROL_TRANSFER_CONTEXT_INVALID", "retry parent/child context differs"
+        ) from exc
+    if session.get(ProtocolVersionRecord, TRANSFER_PAIR_PROTOCOL_V11) is None:
+        raise ControlPlaneError("CONTROL_PROTOCOL_MISSING", "comparison protocol is not registered")
+    parent = read_inference_transfer_execution_plan_v11(
+        session,
+        plan_id=parent_plan_id,
+        workflow_id=parent_workflow_id,
+        workflow_definition_sha256=workflow_definition_sha256,
+        workflow_request=parent_request,
+        core_prompt_sha256=core_prompt_sha256,
+        prompt_sha256=prompt_sha256,
+    )
+    preset = _pinned_preset(session, parent)
+    instruction = resolve_released_instruction_bundle(
+        session, _single_policy(preset).instruction_bundle
+    )
+    existing = session.scalar(
+        select(ResolvedExecutionPlanRecord).where(
+            ResolvedExecutionPlanRecord.workflow_id == workflow_id
+        )
+    )
+    body = parent.model_dump(mode="json")
+    body.update(
+        workflow_id=workflow_id,
+        requester_permissions_sha256=request.requester_permissions_sha256,
+    )
+    if existing is None:
+        body.update(
+            plan_id=new_execution_plan_id(),
+            resolved_at=observed_at.isoformat().replace("+00:00", "Z"),
+        )
+    else:
+        # Preserve the exact already-recorded successor identity/time on replay.
+        retained = _checked_context(
+            existing.canonical_document,
+            request=request,
+            workflow_id=workflow_id,
+            workflow_definition_sha256=workflow_definition_sha256,
+            core_prompt_sha256=core_prompt_sha256,
+            prompt_sha256=prompt_sha256,
+        )
+        body.update(
+            plan_id=retained.plan_id,
+            resolved_at=retained.model_dump(mode="json")["resolved_at"],
+        )
+    body["plan_sha256"] = content_sha256(
+        {key: value for key, value in body.items() if key != "plan_sha256"}
+    )
+    plan = _checked_context(
+        body,
+        request=request,
+        workflow_id=workflow_id,
+        workflow_definition_sha256=workflow_definition_sha256,
+        core_prompt_sha256=core_prompt_sha256,
+        prompt_sha256=prompt_sha256,
+    )
+    if not isinstance(plan, ResolvedExecutionPlanV22):
+        raise ControlPlaneError("CONTROL_TRANSFER_CONTEXT_INVALID", "retry plan family differs")
+    if existing is not None:
+        _require_record_closure(session, existing, plan)
+    _admit_exact_controls(
+        session, preset=preset, plan=plan, instruction=instruction, observed_at=observed_at
+    )
+    if existing is None:
+        _record_validated_inference_transfer_plan(session, plan)
+    return plan
+
+
 def _resolve_plan(
     session: Session,
     *,

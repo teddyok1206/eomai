@@ -56,6 +56,13 @@ capacity-only reconcile로 실제 worker-result 실패를 복구하지 않는다
 별도 승인 대기다. 운영 설치 PASS를 두 쌍 비교·replay PASS로 확대하지 않으며
 **종료 조건3·4는 여전히 미완료**다. 실제 배포 identity/hash는 운영 검증 기록에 있다.
 
+이후 사용자는 목표 달성까지 추가 승인 요청 없이 진행하도록 지시했다. released1회
+제약을 변경하지 않기 위해 같은 Workflow의 attempt2가 아니라 같은 pair의 명시적
+successor START를 선택했다. source2,952 PASS/추가API160 PASS, disposable PostgreSQL
+25 PASS와 old295 resource/definition/role 불변 확인은 완료했으나 새 leaf의 실제
+배포·successor 결과·두 pair/retry key replay는 아직 대기다. 별도 사람 평가나520개
+재임베딩은 추가하지 않는다. 원 실패·원 요청/key·원 source/control pins는 보존한다.
+
 ### 2026-10-11 10:49 UTC 독립 source 대조
 
 원문·구현 계획·현재 계약/코드/테스트를 read-only로 다시 대조했다. 원문 SHA는

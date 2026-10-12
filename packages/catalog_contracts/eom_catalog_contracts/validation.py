@@ -30,6 +30,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "item-inference-transfer-retry": CatalogSchemaResource(
+            "schemas/knowledge/item-inference-transfer-retry-v1.schema.json",
+            "resources/knowledge/item-inference-transfer-retry-v1.schema.json",
+            "1.0",
+            "sha256:1198bbd9071ec67b4e7a0a60f47149b7496ebbaba3686117c4420e58646f7f1b",
+        ),
         "item-inference-transfer-invocation-v1.1": CatalogSchemaResource(
             "schemas/knowledge/item-inference-transfer-invocation-v1_1.schema.json",
             "resources/knowledge/item-inference-transfer-invocation-v1_1.schema.json",

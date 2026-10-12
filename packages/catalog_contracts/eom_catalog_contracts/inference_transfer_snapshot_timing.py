@@ -17,6 +17,7 @@ from typing import Final, Literal
 type SnapshotPhase = Literal["PREPARE", "READ", "AUTHORIZE"]
 
 DEFAULT_SNAPSHOT_TIMEOUT_SECONDS: Final = 120.0
+COMPARISON_WORKFLOW_READ_TIMEOUT_SECONDS: Final = 120.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +40,12 @@ COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS: Final = (
     _PHASE_DEADLINES["PREPARE"].catalog_response_seconds
     + 2 * _PHASE_DEADLINES["READ"].catalog_response_seconds
     + 30.0
+)
+
+# Explicit retry first performs a current own-creator Workflow/source read,
+# then the exact original submission's PREPARE/READ composition.
+COMPARISON_RETRY_HTTP_TIMEOUT_SECONDS: Final = (
+    COMPARISON_WORKFLOW_READ_TIMEOUT_SECONDS + COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS
 )
 
 
