@@ -344,3 +344,21 @@ Catalog에 IAM UPDATE 권한을 주거나 기존 advisory lock만으로 password
 dependency와 named/FD epochs를 확인했다. 이전 receipt/source hash를 새 코드 PASS로
 덮지 않았다. exact receipt/hash는 CUDA package-lock 문서 §10에 기록한다.
 이 결과는 실제 설치·전체 RECORD·GPU 권한·추론/default activation의 증거가 아니다.
+
+## Numerical compressed-tag 호환성·dependency 준비 — 2026-10-12 UTC
+
+실제 safetensors archive의 compressed WHEEL tag와 filename은 같은 두 tag의 표현이다.
+이전 observer의 raw-line 비교를 bounded Cartesian expansion 후 exact-set 비교로 수정했다.
+subset/architecture 변환이나 PEP600 alias 추측은 하지 않는다. count·길이·component·aggregate
+상한은 product 할당 전에 검증한다. 원 archive·schema·dependency·설치 이력은 변경하지 않았다.
+
+root 동일 observer/resolver/backend/codec/historical suite **488 PASS (7.42s)**,
+strict mypy2·Ruff/format2 PASS다. agent의 broader520/source117 gate와 합산하지 않는다.
+실제 numerical5 archive 진단의 원 receipt는 pre-tag-fix evidence로 그대로 보존하며,
+설치 proof나 GPU/CPU 모델 실행 PASS로 재분류하지 않는다.
+
+reviewed shared lock의 나머지41 dependency archive **48,245,185 bytes**도 private mutable
+prefetch에서 exact inventory/raw SHA/leaf epoch를 독립 확인했다. 기존 CUDA/common9 파일을
+중복 다운로드·정본 복사하지 않았다. 이 결과는 root quarantine, 전체 RECORD closure,
+protected interpreter 또는 설치 admission이 아니다. 이후 owner가 독립 재검증해야 한다.
+운영 migration/설치·model/GPU 실행0, default activation은 여전히 NOT_ACTIVE다.

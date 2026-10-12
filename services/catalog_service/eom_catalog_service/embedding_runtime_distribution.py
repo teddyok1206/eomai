@@ -257,6 +257,39 @@ def _torch_constants(raw: bytes) -> tuple[str, str | None]:
     return version, values["cuda"]
 
 
+def _expanded_wheel_tags(values: tuple[str, ...]) -> set[str]:
+    """PEP 425 compressed triples, bounded before either Cartesian expansion."""
+    _require(0 < len(values) <= 64, "WHEEL_TAG_LIMIT_EXCEEDED")
+    prepared: list[tuple[tuple[str, ...], ...]] = []
+    seen_raw: set[str] = set()
+    aggregate = 0
+    for value in values:
+        _require(isinstance(value, str) and 0 < len(value) <= 255, "WHEEL_TAG_LIMIT_EXCEEDED")
+        _require(value not in seen_raw, "WHEEL_TAG_DUPLICATE")
+        seen_raw.add(value)
+        parts = value.split("-")
+        _require(len(parts) == 3, "WHEEL_TAG_INVALID")
+        dimensions = tuple(tuple(part.split(".")) for part in parts)
+        product_size = 1
+        for dimension in dimensions:
+            _require(0 < len(dimension) <= 16, "WHEEL_TAG_LIMIT_EXCEEDED")
+            _require(
+                all(re.fullmatch(r"[a-z0-9_]{1,64}", atom) is not None for atom in dimension),
+                "WHEEL_TAG_INVALID",
+            )
+            _require(len(dimension) == len(set(dimension)), "WHEEL_TAG_DUPLICATE")
+            product_size *= len(dimension)
+        aggregate += product_size
+        _require(aggregate <= 128, "WHEEL_TAG_LIMIT_EXCEEDED")
+        prepared.append(dimensions)
+    result: set[str] = set()
+    for dimensions in prepared:
+        expanded = {"-".join(tag) for tag in itertools.product(*dimensions)}
+        _require(result.isdisjoint(expanded), "WHEEL_TAG_DUPLICATE")
+        result.update(expanded)
+    return result
+
+
 def _validate_wheel_identity(
     library: InstalledNumericLibraryProof, dist_info: str, metadata: Any
 ) -> None:
@@ -268,10 +301,14 @@ def _validate_wheel_identity(
         and dist_info == f"{parts[0]}-{parts[1]}.dist-info",
         "WHEEL_FILENAME_IDENTITY_INVALID",
     )
-    tags = {"-".join(tag) for tag in itertools.product(*(part.split(".") for part in parts[2:]))}
-    _require(set(metadata.get_all("Tag", [])) == tags, "WHEEL_TAG_IDENTITY_INVALID")
+    tags = _expanded_wheel_tags(("-".join(parts[2:]),))
+    _require(
+        _expanded_wheel_tags(tuple(metadata.get_all("Tag", []))) == tags,
+        "WHEEL_TAG_IDENTITY_INVALID",
+    )
     compatible = False
-    for python, abi, platform_tag in itertools.product(*(part.split(".") for part in parts[2:])):
+    for tag in tags:
+        python, abi, platform_tag = tag.split("-")
         platform_ok = platform_tag == "any" or (
             platform_tag.endswith("_x86_64") and platform_tag.startswith(("manylinux", "linux"))
         )

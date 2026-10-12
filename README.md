@@ -173,7 +173,8 @@ CUDA wheel25개의 다운로드·독립 raw-hash/ZIP 검증과 공유 GPU mutex/
 후속 작업입니다. **GPU 실제 비교·기본값 전환 및 영속 운영 인덱스는 아직 미활성**이며,
 소스/합성 테스트를 운영·모델 실행 증거로 해석하지 않습니다.
 실제 CUDA archive 점검의 Torch/Triton directory layout 차이는 좁은 호환성 수정과 실제
-25개 archive 재검사로 확인했습니다. numerical observer/backend source461 PASS와
+25개 archive 재검사로 확인했습니다. compressed WHEEL tag의 bounded exact-set 호환성을
+수정한 numerical observer/backend root source488 PASS와
 current-source·report·Artifact owner 연결177 PASS는 설치·실행 PASS가 아닙니다.
 실제 IAM fence·native launcher·protected prefix와 공통 소비자 운영 연결은 아직 pending입니다.
 

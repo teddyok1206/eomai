@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import io
+import itertools
 import os
 import stat
 import struct
 import zipfile
+from collections.abc import Iterator
 from contextlib import nullcontext
 from pathlib import Path
 
@@ -34,16 +36,17 @@ def _numpy_archive_members(staged: StagedSyntheticRuntime) -> dict[str, bytes]:
 
 
 def _repacked_numpy_library(
-    staged: StagedSyntheticRuntime, payload: bytes
+    staged: StagedSyntheticRuntime, payload: bytes, *, wheel_filename: str | None = None
 ) -> InstalledNumericLibraryProof:
     original = staged.proof.numeric_libraries[0]
     digest = sha256_bytes(payload)
-    target = staged.archive_root / digest[7:] / original.archive.wheel_filename
+    filename = wheel_filename or original.archive.wheel_filename
+    target = staged.archive_root / digest[7:] / filename
     target.parent.mkdir(mode=0o700)
     target.write_bytes(payload)
     target.chmod(0o600)
     body = original.model_dump(mode="json")
-    body["archive"].update(sha256=digest, size_bytes=len(payload))
+    body["archive"].update(sha256=digest, size_bytes=len(payload), wheel_filename=filename)
     return InstalledNumericLibraryProof.model_validate(body)
 
 
@@ -207,6 +210,188 @@ def test_directory_compatibility_does_not_relax_paths_types_or_record_closure(
     with pytest.warns(UserWarning) if fault == "duplicate" else nullcontext():
         payload = _wheel_with_directories(members, entries)
     library = _repacked_numpy_library(staged, payload)
+    with pytest.raises(InstalledRuntimeProofError, match=code):
+        verify_installed_numeric_distribution(
+            library,
+            prefix=staged.prefix,
+            archive_root=staged.archive_root,
+            files=NumericalRuntimeFileSnapshots(os.geteuid()),
+        )
+
+
+_TWO_PLATFORM_TAGS = "cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64"
+
+
+def _tagged_numpy_library(
+    staged: StagedSyntheticRuntime,
+    fields: tuple[str, ...],
+    *,
+    filename_tag: str = _TWO_PLATFORM_TAGS,
+) -> InstalledNumericLibraryProof:
+    members = _numpy_archive_members(staged)
+    record_name = "numpy-2.4.6.dist-info/RECORD"
+    wheel_name = "numpy-2.4.6.dist-info/WHEEL"
+    members[wheel_name] = (
+        "Wheel-Version: 1.0\nRoot-Is-Purelib: false\n"
+        + "".join(f"Tag: {field}\n" for field in fields)
+        + "\n"
+    ).encode()
+    members.pop(record_name)
+    members[record_name] = synthetic_record(members, record_name)
+    library = _repacked_numpy_library(
+        staged, synthetic_wheel(members), wheel_filename=f"numpy-2.4.6-{filename_tag}.whl"
+    )
+    site = staged.prefix / "lib/python3.12/site-packages"
+    (site / wheel_name).write_bytes(members[wheel_name])
+    installed = {name: raw for name, raw in members.items() if name != record_name}
+    installed["numpy-2.4.6.dist-info/INSTALLER"] = b"pip\n"
+    record = synthetic_record(installed, record_name)
+    (site / record_name).write_bytes(record)
+    body = library.model_dump(mode="json")
+    body["installed_record"].update(sha256=sha256_bytes(record), size_bytes=len(record))
+    return InstalledNumericLibraryProof.model_validate(body)
+
+
+@pytest.mark.parametrize(
+    "filename_tag,fields",
+    [
+        (_TWO_PLATFORM_TAGS, (_TWO_PLATFORM_TAGS,)),
+        (
+            "cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64",
+            ("cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64",),
+        ),
+        (
+            _TWO_PLATFORM_TAGS,
+            ("cp312-cp312-manylinux_2_17_x86_64", "cp312-cp312-manylinux2014_x86_64"),
+        ),
+        ("py3.py312-none-any", ("py3.py312-none-any",)),
+        (
+            "py3.py312-none-manylinux_2_17_x86_64.manylinux2014_x86_64",
+            ("py3.py312-none-manylinux_2_17_x86_64", "py3.py312-none-manylinux2014_x86_64"),
+        ),
+        ("cp312-none.cp312-manylinux_2_17_x86_64", ("cp312-none.cp312-manylinux_2_17_x86_64",)),
+    ],
+)
+def test_compressed_and_expanded_wheel_triples_require_the_same_exact_tag_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, filename_tag: str, fields: tuple[str, ...]
+) -> None:
+    staged = staged_runtime(tmp_path, monkeypatch)
+    library = _tagged_numpy_library(staged, fields, filename_tag=filename_tag)
+    result = verify_installed_numeric_distribution(
+        library,
+        prefix=staged.prefix,
+        archive_root=staged.archive_root,
+        files=NumericalRuntimeFileSnapshots(os.geteuid()),
+    )
+    assert result.pin.distribution_sha256 == library.archive.sha256
+
+
+@pytest.mark.parametrize(
+    "fields,code",
+    [
+        (("",), "WHEEL_TAG_LIMIT_EXCEEDED"),
+        ((), "WHEEL_METADATA_INVALID"),
+        (("cp312-none",), "WHEEL_TAG_INVALID"),
+        (("cp312-none-any-extra",), "WHEEL_TAG_INVALID"),
+        (("cp312--any",), "WHEEL_TAG_INVALID"),
+        (("cp312.-none-any",), "WHEEL_TAG_INVALID"),
+        (("cp312-none-any ",), "WHEEL_TAG_INVALID"),
+        (("CP312-none-any",), "WHEEL_TAG_INVALID"),
+        ((_TWO_PLATFORM_TAGS, _TWO_PLATFORM_TAGS), "WHEEL_TAG_DUPLICATE"),
+        (("cp312.cp312-cp312-manylinux_2_17_x86_64",), "WHEEL_TAG_DUPLICATE"),
+        (
+            (_TWO_PLATFORM_TAGS, "cp312-cp312-manylinux_2_17_x86_64"),
+            "WHEEL_TAG_DUPLICATE",
+        ),
+        (("cp312-cp312-manylinux_2_17_x86_64",), "WHEEL_TAG_IDENTITY_INVALID"),
+        (
+            ("cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64",),
+            "WHEEL_TAG_IDENTITY_INVALID",
+        ),
+    ],
+)
+def test_wheel_tag_expansion_rejects_malformed_duplicate_subset_or_foreign_architecture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fields: tuple[str, ...], code: str
+) -> None:
+    staged = staged_runtime(tmp_path, monkeypatch)
+    library = _tagged_numpy_library(staged, fields)
+    with pytest.raises(InstalledRuntimeProofError, match=code):
+        verify_installed_numeric_distribution(
+            library,
+            prefix=staged.prefix,
+            archive_root=staged.archive_root,
+            files=NumericalRuntimeFileSnapshots(os.geteuid()),
+        )
+
+
+@pytest.mark.parametrize("fault", ["fields", "string", "component", "atom", "product", "aggregate"])
+def test_wheel_tag_limits_are_checked_before_any_metadata_cartesian_allocation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    staged = staged_runtime(tmp_path, monkeypatch)
+    fields: tuple[str, ...]
+    if fault == "fields":
+        fields = tuple(f"cp{index}-none-any" for index in range(65))
+    elif fault == "string":
+        fields = ("x" * 256,)
+    elif fault == "component":
+        fields = (".".join(f"py{index}" for index in range(17)) + "-none-any",)
+    elif fault == "atom":
+        fields = ("x" * 65 + "-none-any",)
+    elif fault == "product":
+        fields = (
+            ".".join(f"py{index}" for index in range(16))
+            + "-"
+            + ".".join(f"abi{index}" for index in range(16))
+            + "-any",
+        )
+    else:
+        fields = tuple(
+            f"py3.py312-none-manylinux_2_17_x86_64_{index}.manylinux2014_x86_64_{index}"
+            for index in range(33)
+        )
+    library = _tagged_numpy_library(staged, fields)
+    original = itertools.product
+    product_calls: list[tuple[int, ...]] = []
+
+    def observed_product(*dimensions: tuple[str, ...]) -> Iterator[tuple[str, ...]]:
+        product_calls.append(tuple(len(dimension) for dimension in dimensions))
+        return original(*dimensions)
+
+    monkeypatch.setattr(itertools, "product", observed_product)
+    code = "WHEEL_TAG_INVALID" if fault == "atom" else "WHEEL_TAG_LIMIT_EXCEEDED"
+    with pytest.raises(InstalledRuntimeProofError, match=code):
+        verify_installed_numeric_distribution(
+            library,
+            prefix=staged.prefix,
+            archive_root=staged.archive_root,
+            files=NumericalRuntimeFileSnapshots(os.geteuid()),
+        )
+    assert product_calls == [(1, 1, 2)]
+
+
+@pytest.mark.parametrize("fault", ["duplicate", "product"])
+def test_filename_tag_bounds_and_duplicate_variants_precede_cartesian_allocation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    staged = staged_runtime(tmp_path, monkeypatch)
+    filename = (
+        "py3.py3-none-any"
+        if fault == "duplicate"
+        else (
+            ".".join(f"py{index}" for index in range(16))
+            + "-"
+            + ".".join(f"abi{index}" for index in range(16))
+            + "-any"
+        )
+    )
+    library = _tagged_numpy_library(staged, (_TWO_PLATFORM_TAGS,), filename_tag=filename)
+
+    def deny_product(*dimensions: tuple[str, ...]) -> Iterator[tuple[str, ...]]:
+        pytest.fail("Filename tag variants were expanded before bounds/duplicate checks")
+
+    monkeypatch.setattr(itertools, "product", deny_product)
+    code = "WHEEL_TAG_DUPLICATE" if fault == "duplicate" else "WHEEL_TAG_LIMIT_EXCEEDED"
     with pytest.raises(InstalledRuntimeProofError, match=code):
         verify_installed_numeric_distribution(
             library,

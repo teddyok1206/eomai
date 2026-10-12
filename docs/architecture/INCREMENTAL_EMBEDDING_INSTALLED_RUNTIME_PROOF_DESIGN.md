@@ -28,6 +28,7 @@ No prefix, archive, proof, device capture or permission described here is instal
    Verify JSON Schema 2020-12, frozen Pydantic closure, canonical bytes/raw/semantic SHA,
    profile, exact numerical library set, metadata identity, archive ZIP/RECORD closure,
    distinct canonical zero-byte real ZIP directories that are ancestors of regular files,
+   bounded compressed WHEEL/filename tag expansion with exact expanded-set equality,
    installed RECORD/member bytes, no editable source, protected ownership/modes/links,
    named/FD ancestor identity and actual Python/prefix/OS/hardware/driver/build read-back.
    A proof's configured raw pin is admission input, not a self-authenticating JSON claim.
@@ -115,6 +116,13 @@ of actual regular archive files. Directory links, nonzero bytes, duplicate norma
 file/directory collisions and unrelated/empty directories fail closed. RECORD may omit those
 directory entries only: its exact regular-file set, self-row and every non-self SHA/size remain
 unchanged. Directory entries never become installed payload/hash allowances or extracted files.
+WHEEL `Tag` values and the filename use the same
+[PEP 425 compressed-tag-set spelling](https://peps.python.org/pep-0425/#compressed-tag-sets).
+Expand each valid three-part dot-separated value with the same stdlib Cartesian product, then
+require exact expanded-set equality; never accept an arbitrary subset or normalize architecture
+or platform aliases. Before expansion, cap 64 fields, 255 characters per field, 16 alternatives
+per component, 64 characters per atom and 128 aggregate expanded tags. Empty/malformed/duplicate
+atoms, raw fields or overlapping expanded fields fail closed. No wire schema or dependency changes.
 
 Site-packages payload maps by exact wheel relative name. Unsupported `.data` relocation fails
 closed rather than inventing a target mapping. Actual accepted numeric archives must demonstrate
@@ -183,6 +191,8 @@ Focused synthetic recipes before any live gate:
   link/type rejection, permission/owner/ancestor/FD replacement, missing/stale archive;
 - zero-byte canonical file-ancestor directories with unchanged exact file RECORD closure;
   duplicate/link/nonzero/noncanonical/unrelated directories and file/directory collisions;
+- equivalent compressed versus expanded WHEEL tags, exact-set subset/architecture rejection,
+  malformed/duplicate variants and string/component/aggregate bounds before Cartesian allocation;
 - legal INSTALLER/REQUESTED/direct-URL/derived wrappers; unknown generated files, arbitrary
   script names/targets/statements, editable source, wrong URL/archive hash and pyc rejection;
 - one initial streaming verification then epoch-only re-observation; file/path/code drift;
@@ -250,3 +260,31 @@ This receipt is diagnostic evidence, not root installation authority or an insta
 The narrow unreleased source compatibility change preserves proof schema 1.0 and exact file
 closure; it permits only the canonical ancestor directories demonstrated above. No archive,
 installed prefix, wrapper, protocol authority or device admission is changed by this source work.
+
+## Shared numerical/CPU Torch archive follow-up — pre-tag-fix diagnostic
+
+The read-only actual common4 plus CPU Torch5 diagnostic matches five exact raw archive pins:
+207,848,097 bytes (shared numerical archives 32,014,410 and CPU Torch 175,833,687). Its private
+mode-0600 receipt `/tmp/eom-embedding-common-layout.zT2tpuxQ/layout-report.json` is 6,703 bytes,
+raw SHA `034d2544de1625974e426f207f34d6da0955a2dd944a37bb46044df859a23305`. Preserve it as the
+pre-tag-fix diagnostic; it is not relabeled as source/installed/runtime PASS.
+Every regular-file RECORD hash/size and METADATA identity matches. NumPy has 118 and CPU Torch
+492 zero-byte S_IFDIR/CRC-zero ancestor directories with no collision or unrelated directory;
+the approved narrow directory rule covers those shapes. NumPy f2py/numpy-config, both
+Transformers CLI and CPU torchrun module targets are present; CPU torchfrtrace has the same
+unused absent upstream `tools.flight_recorder.fr_trace` target. Actual CLI/wrapper execution and
+installation remain unverified. The five archives have disjoint numerical namespace roots.
+
+`safetensors-0.6.2-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl` has one WHEEL line:
+`Tag: cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64`. This is a compressed triple, not a
+semantic platform-alias mismatch: both spellings expand to exactly
+`cp38-abi3-manylinux_2_17_x86_64` and `cp38-abi3-manylinux2014_x86_64`. The unreleased observer
+previously compared raw WHEEL lines with expanded filename tags. The narrow source correction
+expands both equally under the bounds above, preserving exact target/identity closure. Do not
+change the public wheel, infer its raw SHA from a version, or substitute a different archive.
+
+Compressed-tag source gates: **117 focused proof/observer/distribution tests PASS** and
+**520 embedding source regression tests PASS**; scoped Ruff lint/format and explicit API/core
+strict mypy on the changed module/tests pass. Source tests are synthetic and include the actual
+safetensors compressed `cp38-abi3` spelling plus bounded before-product rejection. No new
+dependency, schema byte change, installed runtime test or numerical execution is implied.
