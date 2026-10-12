@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/local-embedding-source-plan/1.0",
+  "title": "EOM immutable bounded source encoding plan, without source/report/text bytes",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "corpus_id",
+    "graph_snapshot",
+    "access_policy_revision_id",
+    "access_policy_sha256",
+    "namespace",
+    "space",
+    "recipe",
+    "sources",
+    "demands",
+    "missing_solution_report_revision_ids",
+    "unavailable_views",
+    "source_set_sha256",
+    "encoding_set_sha256",
+    "plan_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-embedding-source-plan/1.0"
+    },
+    "corpus_id": {
+      "type": "string",
+      "pattern": "^corpus_[0-9a-f]{32}$"
+    },
+    "graph_snapshot": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"
+    },
+    "access_policy_revision_id": {
+      "type": "string",
+      "pattern": "^accessrev_[0-9a-f]{32}$"
+    },
+    "access_policy_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "namespace": {
+      "$ref": "eom://schemas/knowledge/embedding-registry/1.0#/$defs/namespace"
+    },
+    "space": {
+      "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/space"
+    },
+    "recipe": {
+      "$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/recipe"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/source"
+      },
+      "minItems": 1,
+      "maxItems": 1024,
+      "uniqueItems": true
+    },
+    "demands": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/demand"
+      },
+      "minItems": 0,
+      "maxItems": 1024,
+      "uniqueItems": true
+    },
+    "missing_solution_report_revision_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^itemrev_[0-9a-f]{32}$"
+      },
+      "minItems": 0,
+      "maxItems": 1024,
+      "uniqueItems": true
+    },
+    "unavailable_views": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/unavailableView"
+      },
+      "minItems": 0,
+      "maxItems": 1024,
+      "uniqueItems": true
+    },
+    "source_set_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "encoding_set_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "plan_sha256": {
+      "$ref": "#/$defs/hash"
+    }
+  },
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "demand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_revision_id",
+        "profile",
+        "solution_evidence",
+        "encoding"
+      ],
+      "properties": {
+        "source_revision_id": {
+          "type": "string",
+          "pattern": "^itemrev_[0-9a-f]{32}$"
+        },
+        "profile": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profilePointer"
+        },
+        "solution_evidence": {
+          "$ref": "eom://schemas/knowledge/evidence-bundle-manifest/5.0#/$defs/solutionEvidence"
+        },
+        "encoding": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/encoding"
+        }
+      }
+    },
+    "unavailableView": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_revision_id",
+        "reason"
+      ],
+      "properties": {
+        "source_revision_id": {
+          "type": "string",
+          "pattern": "^itemrev_[0-9a-f]{32}$"
+        },
+        "reason": {
+          "enum": [
+            "VIEW_NOT_MATERIALIZED",
+            "EMPTY_VIEW"
+          ]
+        }
+      }
+    }
+  }
+}

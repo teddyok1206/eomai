@@ -1,0 +1,482 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/embedding-encoding-job/1.0",
+  "title": "EOM per-encoding computational Job and pointer-only owner events; no worker authority",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/launchAssociation"
+    },
+    {
+      "$ref": "#/$defs/attached"
+    },
+    {
+      "$ref": "#/$defs/completed"
+    },
+    {
+      "$ref": "#/$defs/readResult"
+    }
+  ],
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "record_type",
+        "purpose",
+        "space",
+        "encoding",
+        "request_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-encoding-job/1.0"
+        },
+        "record_type": {
+          "const": "REQUEST"
+        },
+        "purpose": {
+          "const": "LOCAL_EMBEDDING"
+        },
+        "space": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/space"
+        },
+        "encoding": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/encoding"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "jobReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_id",
+        "request_sha256",
+        "allocated_artifact_id",
+        "allocated_artifact_revision_id"
+      ],
+      "properties": {
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9a-f]{32}$"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "allocated_artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "allocated_artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        }
+      }
+    },
+    "launchIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workflow_id",
+        "step_run_id",
+        "step_key",
+        "attempt",
+        "native_launch_job_id",
+        "workflow_request_sha256",
+        "source_plan",
+        "source_plan_sha256",
+        "resource_profile_sha256",
+        "command_id",
+        "runner_id",
+        "lease_generation",
+        "intent_sha256"
+      ],
+      "properties": {
+        "workflow_id": {
+          "type": "string",
+          "pattern": "^workflow_[0-9a-f]{32}$"
+        },
+        "step_run_id": {
+          "type": "string",
+          "pattern": "^steprun_[0-9a-f]{32}$"
+        },
+        "step_key": {
+          "const": "encode_batch"
+        },
+        "attempt": {
+          "type": "integer",
+          "const": 1
+        },
+        "native_launch_job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9a-f]{32}$"
+        },
+        "workflow_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "source_plan": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            },
+            {
+              "properties": {
+                "member_path": {
+                  "const": "source-plan.json"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/workflow/local-embedding-source-plan/1.0"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "source_plan_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "resource_profile_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "command_id": {
+          "type": "string",
+          "pattern": "^wfcmd_[0-9a-f]{32}$"
+        },
+        "runner_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "lease_generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "intent_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "ownedJob": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_reference",
+        "request"
+      ],
+      "properties": {
+        "job_reference": {
+          "$ref": "#/$defs/jobReference"
+        },
+        "request": {
+          "$ref": "#/$defs/request"
+        }
+      }
+    },
+    "sharedRowReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "native_launch_job_id",
+        "result_manifest",
+        "result_sha256",
+        "shard_manifest",
+        "shard_sha256",
+        "binary_member",
+        "row_ref",
+        "receipt_sha256"
+      ],
+      "properties": {
+        "native_launch_job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9a-f]{32}$"
+        },
+        "result_manifest": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            },
+            {
+              "properties": {
+                "member_path": {
+                  "const": "result.json"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/knowledge/incremental-embedding-result/1.0"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "result_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "shard_manifest": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            },
+            {
+              "properties": {
+                "member_path": {
+                  "const": "shard.json"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/knowledge/embedding-vector-shard/1.0"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "shard_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "binary_member": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            },
+            {
+              "properties": {
+                "member_path": {
+                  "const": "vectors.f32"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/knowledge/embedding-f32le-l2-row-major/1.0"
+                },
+                "media_type": {
+                  "const": "application/octet-stream"
+                }
+              }
+            }
+          ]
+        },
+        "row_ref": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/rowRef"
+        },
+        "receipt_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "launchAssociation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "record_type",
+        "intent",
+        "owned_jobs",
+        "owned_input",
+        "owned_input_request_sha256",
+        "owned_input_set_sha256",
+        "association_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-encoding-job/1.0"
+        },
+        "record_type": {
+          "const": "LAUNCH_ASSOCIATION"
+        },
+        "intent": {
+          "$ref": "#/$defs/launchIntent"
+        },
+        "owned_jobs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ownedJob"
+          },
+          "minItems": 1,
+          "maxItems": 1024,
+          "uniqueItems": true
+        },
+        "owned_input": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            },
+            {
+              "properties": {
+                "member_path": {
+                  "const": "input.json"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/knowledge/incremental-embedding-input/1.0"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "owned_input_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "owned_input_set_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "association_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "attached": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "record_type",
+        "owned_job",
+        "intent",
+        "event_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-encoding-job/1.0"
+        },
+        "record_type": {
+          "const": "ATTACHED"
+        },
+        "owned_job": {
+          "$ref": "#/$defs/ownedJob"
+        },
+        "intent": {
+          "$ref": "#/$defs/launchIntent"
+        },
+        "event_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "completed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "record_type",
+        "owned_job",
+        "intent",
+        "launch_association_sha256",
+        "receipt",
+        "event_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-encoding-job/1.0"
+        },
+        "record_type": {
+          "const": "COMPLETED"
+        },
+        "owned_job": {
+          "$ref": "#/$defs/ownedJob"
+        },
+        "intent": {
+          "$ref": "#/$defs/launchIntent"
+        },
+        "launch_association_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "receipt": {
+          "$ref": "#/$defs/sharedRowReceipt"
+        },
+        "event_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "readResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "record_type",
+        "owned_job",
+        "owner_intent",
+        "status",
+        "completion",
+        "read_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-encoding-job/1.0"
+        },
+        "record_type": {
+          "const": "READ_RESULT"
+        },
+        "owned_job": {
+          "$ref": "#/$defs/ownedJob"
+        },
+        "owner_intent": {
+          "$ref": "#/$defs/launchIntent"
+        },
+        "status": {
+          "enum": [
+            "OWNED",
+            "BORROWED",
+            "COMPLETED",
+            "FAILED",
+            "CANCELLED",
+            "UNCERTAIN"
+          ]
+        },
+        "completion": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/completed"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "read_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "COMPLETED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "completion": {
+                "$ref": "#/$defs/completed"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "completion": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

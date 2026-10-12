@@ -362,3 +362,19 @@ prefetch에서 exact inventory/raw SHA/leaf epoch를 독립 확인했다. 기존
 중복 다운로드·정본 복사하지 않았다. 이 결과는 root quarantine, 전체 RECORD closure,
 protected interpreter 또는 설치 admission이 아니다. 이후 owner가 독립 재검증해야 한다.
 운영 migration/설치·model/GPU 실행0, default activation은 여전히 NOT_ACTIVE다.
+
+## Native admission protocol 정본·독립 root 검증 — 2026-10-12 UTC
+
+request1.1/source-plan1.0/encoding-job1.0/execution-policy1.0의 additive JSON Schema2020-12와
+byte-identical packaged mirrors, frozen Pydantic 및 public validation/owner-port를 검토했다.
+released request1.0·role/definition/execution protocol bytes는 보존한다. wire에 source/vector
+bytes나 worker authority/lease secret을 넣지 않고, computational encoding key와 original
+Workflow/plan·owned subset·shared committed row pointer를 구분한다. 서비스 audit는 읽을 수
+있지만 실제 background grant는 여전히 명시적으로 unavailable이다.
+
+root 독립 native/legacy8-suite **475 PASS (15.94s)**, no-install package-resource **5 PASS
+(4 deselected,4.40s)**, strict mypy8·Ruff/format8 PASS다. metadata-only zero-demand coverage는
+fake empty native Job/Artifact를 만들지 않는다. copied/constructed bool-integer bypass,
+exact coverage/pins, overlap computational key와 raw/semantic hash 경계를 검증했다.
+이는 DB 동시성·Runner claim/launch·현재 사용자 인증·IAM fence·GPU 실행 증거가 아니다.
+해당 behavior와 compatible release/GPU 비교는 다음 단계이며 전체 goal은 ACTIVE다.

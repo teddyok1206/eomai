@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/local-embedding-execution-policy/1.0",
+  "title": "EOM fixed native local embedding execution policy; not a release or authority grant",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "purpose",
+    "admission_mode",
+    "workflow_definition_sha256",
+    "profiles",
+    "default_device",
+    "gpu_busy",
+    "created_at",
+    "policy_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-embedding-execution-policy/1.0"
+    },
+    "purpose": {
+      "const": "LOCAL_EMBEDDING"
+    },
+    "admission_mode": {
+      "const": "OPERATOR_SEED_ONLY"
+    },
+    "workflow_definition_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "profiles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/runtimeProfile"
+      },
+      "minItems": 1,
+      "maxItems": 2,
+      "uniqueItems": true
+    },
+    "default_device": {
+      "enum": [
+        "CPU",
+        "CUDA"
+      ]
+    },
+    "gpu_busy": {
+      "const": "WAIT"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "policy_sha256": {
+      "$ref": "#/$defs/hash"
+    }
+  },
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "resourceProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "device",
+        "threads",
+        "batch_size",
+        "memory_max_bytes",
+        "gpu_vram_max_bytes",
+        "cpu_quota_percent",
+        "timeout_seconds",
+        "tasks_max",
+        "output_max_bytes",
+        "maximum_active_launches",
+        "physical_gpu_lease",
+        "network",
+        "resource_profile_sha256"
+      ],
+      "properties": {
+        "device": {
+          "enum": [
+            "CPU",
+            "CUDA"
+          ]
+        },
+        "threads": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "batch_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "memory_max_bytes": {
+          "type": "integer",
+          "minimum": 268435456,
+          "maximum": 34359738368
+        },
+        "gpu_vram_max_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8589934592
+        },
+        "cpu_quota_percent": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 1600
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 1800
+        },
+        "tasks_max": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "output_max_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        },
+        "maximum_active_launches": {
+          "type": "integer",
+          "const": 1
+        },
+        "physical_gpu_lease": {
+          "enum": [
+            "NONE",
+            "SHARED_GPU0"
+          ]
+        },
+        "network": {
+          "const": "DISABLED"
+        },
+        "resource_profile_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "device": {
+                "const": "CPU"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "physical_gpu_lease": {
+                "const": "NONE"
+              },
+              "gpu_vram_max_bytes": {
+                "const": 0
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "physical_gpu_lease": {
+                "const": "SHARED_GPU0"
+              },
+              "gpu_vram_max_bytes": {
+                "minimum": 4
+              }
+            }
+          }
+        }
+      ]
+    },
+    "runtimeProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "space",
+        "runtime_bundle",
+        "resource_profile"
+      ],
+      "properties": {
+        "space": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/space"
+        },
+        "runtime_bundle": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/bundlePointer"
+        },
+        "resource_profile": {
+          "$ref": "#/$defs/resourceProfile"
+        }
+      }
+    }
+  }
+}

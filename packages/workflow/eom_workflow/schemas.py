@@ -6,6 +6,7 @@ import copy
 import json
 import re
 from contextlib import suppress
+from datetime import datetime
 from functools import cache, lru_cache
 from importlib import metadata, resources
 from importlib.resources.abc import Traversable
@@ -27,6 +28,7 @@ from eom_catalog_contracts import (
     validate_worker_knowledge_edge_endpoint_types,
 )
 from eom_catalog_contracts.item_inference_transfer import ClaimId
+from eom_catalog_contracts.models import FrozenModel
 from eom_hwpx_contracts import (
     ContentTeamLabeledBlock,
     ContentTeamMarkdownError,
@@ -40,10 +42,11 @@ from eom_hwpx_contracts import (
     normalize_content_team_stem,
     serialize_content_team_markdown,
 )
-from eom_identifiers import content_sha256
+from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import SchemaError
-from pydantic import TypeAdapter, ValidationError
+from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError, model_validator
+from referencing import Registry, Resource
 
 from eom_workflow.control_plane import ResolvedExecutionPlanV3
 from eom_workflow.document_review import (
@@ -517,6 +520,146 @@ ROLE_SCHEMA_FILES = tuple(
 
 class WorkflowSchemaError(ValueError):
     pass
+
+
+LOCAL_EMBEDDING_SCHEMA_RESOURCES = (
+    (
+        "request",
+        "local-embedding-workflow-request-v1_1.schema.json",
+        "eom://schemas/workflow/local-embedding-workflow-request/1.1",
+        "sha256:042c77c73507eca65d58223186117c456e6171eb0ed2abfd1ad55c908a36bee1",
+    ),
+    (
+        "source-plan",
+        "local-embedding-source-plan-v1.schema.json",
+        "eom://schemas/workflow/local-embedding-source-plan/1.0",
+        "sha256:8ba4b285504c2c0c4ad668def7b276c71d900bf889a498c7cb6d6c24d822372e",
+    ),
+    (
+        "encoding-job",
+        "embedding-encoding-job-v1.schema.json",
+        "eom://schemas/workflow/embedding-encoding-job/1.0",
+        "sha256:8ee755604333e84772d62c037d2487ead6f6f4b25a71eb92fa05c12bda748549",
+    ),
+    (
+        "execution-policy",
+        "local-embedding-execution-policy-v1.schema.json",
+        "eom://schemas/workflow/local-embedding-execution-policy/1.0",
+        "sha256:07f1a6abc3635a927900149f949ade9dad28690b3948a0a7370bfc291c6d0963",
+    ),
+)
+type LocalEmbeddingSchemaName = Literal[
+    "request", "source-plan", "encoding-job", "execution-policy"
+]
+
+
+class LocalEmbeddingAdmissionContractError(ValueError):
+    """Content-free protocol error; not an authorization or runtime readiness result."""
+
+
+def _native_contract_values(value: object, depth: int = 0) -> Any:
+    # A serializer can coerce a model_copy bool into its declared int. Reparse
+    # the actual value tree instead of accepting that lossy serialization.
+    if depth > 32:
+        raise ValueError("native contract value nesting exceeds its bound")
+    if isinstance(value, BaseModel):
+        return _native_contract_values(value.__dict__, depth + 1)
+    if isinstance(value, dict):
+        if len(value) > 64 or not all(isinstance(key, str) for key in value):
+            raise ValueError("native contract object frame exceeds its bound")
+        return {key: _native_contract_values(item, depth + 1) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        if len(value) > 1024:
+            raise ValueError("native contract collection exceeds its bound")
+        return [_native_contract_values(item, depth + 1) for item in value]
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if value is None or isinstance(value, (str, int, bool)):
+        return value
+    raise ValueError("native contract values must be integer-only JSON or UTC timestamps")
+
+
+class NativeEmbeddingContract(FrozenModel):
+    """Reparse nested values, including unvalidated model_copy/construct instances."""
+
+    model_config = ConfigDict(revalidate_instances="always")
+
+    @model_validator(mode="before")
+    @classmethod
+    def reparse_native_values(cls, value: object) -> Any:
+        return _native_contract_values(value)
+
+
+@cache
+def _local_embedding_admission_schema(name: LocalEmbeddingSchemaName) -> dict[str, Any]:
+    try:
+        _, filename, schema_id, expected = next(
+            entry for entry in LOCAL_EMBEDDING_SCHEMA_RESOURCES if entry[0] == name
+        )
+        with WORKFLOW_RESOURCE_ROOT.joinpath(filename).open("rb") as stream:
+            payload = stream.read(64 * 1024 + 1)
+        if not 0 < len(payload) <= 64 * 1024 or sha256_bytes(payload) != expected:
+            raise ValueError("native installed schema identity differs")
+        raw = json.loads(payload)
+        if not isinstance(raw, dict) or raw.get("$id") != schema_id:
+            raise ValueError("native installed schema root differs")
+        Draft202012Validator.check_schema(raw)
+        return raw
+    except Exception:
+        raise LocalEmbeddingAdmissionContractError("LOCAL_EMBEDDING_SCHEMA_UNAVAILABLE") from None
+
+
+def load_local_embedding_admission_schema(name: LocalEmbeddingSchemaName) -> dict[str, Any]:
+    """Only the four pinned native resources; no role inventory or legacy hash change."""
+    return copy.deepcopy(_local_embedding_admission_schema(name))
+
+
+@cache
+def _local_embedding_admission_schema_registry() -> Registry[Any]:
+    """Extend the existing public Catalog reference boundary, never fetch remote schemas."""
+    return catalog_schema_registry().with_resources(
+        (
+            schema_id,
+            Resource.from_contents(
+                _local_embedding_admission_schema(cast(LocalEmbeddingSchemaName, name))
+            ),
+        )
+        for name, _, schema_id, _ in LOCAL_EMBEDDING_SCHEMA_RESOURCES
+    )
+
+
+def local_embedding_admission_schema_registry() -> Registry[Any]:
+    """Return isolated native resources; a caller cannot mutate parser-pinned schemas."""
+    return catalog_schema_registry().with_resources(
+        (
+            schema_id,
+            Resource.from_contents(
+                load_local_embedding_admission_schema(cast(LocalEmbeddingSchemaName, name))
+            ),
+        )
+        for name, _, schema_id, _ in LOCAL_EMBEDDING_SCHEMA_RESOURCES
+    )
+
+
+def validate_local_embedding_admission_message(
+    name: LocalEmbeddingSchemaName, value: object
+) -> None:
+    """Closed frame and integer-only byte bound before typed semantic validation."""
+    try:
+        maximum = 64 * 1024 if name in {"request", "execution-policy"} else 64 * 1024**2
+        if len(canonical_json_bytes(value)) > maximum:
+            raise ValueError("native contract byte bound differs")
+        validator = Draft202012Validator(
+            _local_embedding_admission_schema(name),
+            registry=_local_embedding_admission_schema_registry(),
+            format_checker=FormatChecker(),
+        )
+        if not validator.is_valid(value):
+            raise ValueError("native contract closed schema differs")
+    except LocalEmbeddingAdmissionContractError:
+        raise
+    except Exception:
+        raise LocalEmbeddingAdmissionContractError("LOCAL_EMBEDDING_CONTRACT_INVALID") from None
 
 
 def load_json_schema(resource: Traversable, logical_name: str) -> dict[str, Any]:
