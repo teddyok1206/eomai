@@ -190,6 +190,13 @@ reservation source **237 PASS**도 실제 모델 속도 측정과 구분합니�
 [native launcher 설계](docs/architecture/INCREMENTAL_EMBEDDING_NATIVE_LAUNCHER_PROPOSAL.md)는
 CUDA의 shared lease뿐 아니라 잔류 GPU process와 종료 후 정리까지 별도 검증하도록 명시합니다.
 
+후속 source에는 native Workflow의 pointer-only 완료 receipt, 같은 입력 CPU/CUDA 비교의
+bounded checkpoint/ACK channel과 실제 pip console-wrapper 호환성이 추가됐습니다.
+독립 회귀 gate는 각각390/304/185 PASS이며 서로 겹치는 테스트 수를 합산하지 않습니다.
+실제 모델 연결·설치 admission·속도 측정은 아직 남아 있습니다. 보호된 기존 interpreter가
+새 실행 환경을 먼저 검증하도록 [설치 admission 경계](docs/architecture/INCREMENTAL_EMBEDDING_RUNTIME_ADMISSION_PROPOSAL.md)를
+명시했으며, 문서/합성 PASS만으로 GPU 기본값을 전환하지 않습니다.
+
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스
 readiness가 정본입니다.
