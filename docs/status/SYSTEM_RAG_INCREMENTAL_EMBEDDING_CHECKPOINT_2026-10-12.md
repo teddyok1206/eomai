@@ -447,3 +447,13 @@ transaction에서 row-fence/refresh하고, private weak root witness만 실제 n
 root 독립9-suite **471 PASS (15.96s)**, strict mypy10·Ruff/format10 PASS다. subset184 및 기존367
 결과와 겹치므로 합산하지 않는다. prepared limited-role integration6은 source/collection만
 준비되었으며 실제 DB 실행·routine 설치·권한 grant·migration·운영 활성화는 아직 없다.
+
+## 후속 guarded DB baseline — 2026-10-12 21:21 UTC
+
+새 disposable DB `/tmp/eom-api-testdb-20261012212033_1dde6544`에서 기존0052
+up/down/up·control-plane gate와 ordinary unique runtime reconciliation이 PASS다.
+같은 isolated DB의 기존 model-free Artifact/index/registry/application suite는
+**16 PASS (23.01s)**다. 이전16 PASS와 중복되므로 합산하지 않는다. 운영 DB/migration에는
+변경이 없으며, native encoding 독립-process 경쟁과 limited Identity fence6은 아직 실행 전이다.
+이 state는 후속 테스트에만 사용하며 cleanup은 **PENDING**이다. cleanup 전 결과를 전체
+cleanup PASS 또는 운영 IAM 설치 PASS로 확대하지 않는다.
