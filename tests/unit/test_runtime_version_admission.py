@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import MutableMapping
 from pathlib import Path
+from typing import cast
 from unittest.mock import Mock
 
 import pytest
@@ -16,6 +18,7 @@ from eom_workflow import (
     compile_definition_data,
     workflow_definition_is_admitted,
 )
+from eom_workflow.definition_execution_protocol import definition_execution_protocol
 from eom_workflow.schemas import result_schema_protocol
 from eom_workflow_runner.errors import WorkflowError
 from eom_workflow_runner.models import WorkflowDefinitionRecord
@@ -58,8 +61,17 @@ ADMITTED_DEFINITIONS = {
 
 
 def test_admission_matrix_matches_exact_checked_in_definition_protocols() -> None:
-    assert set(WORKFLOW_ADMISSION_BY_IDENTITY) == set(ADMITTED_DEFINITIONS)
-    for identity, file_name in ADMITTED_DEFINITIONS.items():
+    # Preserve the legacy matrix; explicit source successors do not rewrite its entries.
+    successors = {
+        ("item-inference-transfer-comparison", "1.1.0"): (
+            "item-inference-transfer-comparison.v1_1.yaml"
+        )
+    }
+    native_identity = ("local-embedding-index", "1.0.0")
+    assert set(WORKFLOW_ADMISSION_BY_IDENTITY) == (
+        set(ADMITTED_DEFINITIONS) | set(successors) | {native_identity}
+    )
+    for identity, file_name in (ADMITTED_DEFINITIONS | successors).items():
         compiled = compile_definition(ROOT / "config" / "workflows" / file_name, ROLES)
         protocols = {
             result_schema_protocol(step.result_schema)
@@ -72,6 +84,33 @@ def test_admission_matrix_matches_exact_checked_in_definition_protocols() -> Non
             compiled.definition.definition_version,
         )
         assert protocols == {admission.role_protocol_version}
+    assert WORKFLOW_ADMISSION_BY_IDENTITY[native_identity].role_protocol_version == (
+        "local-embedding/1.0"
+    )
+    native = compile_definition_data(
+        {
+            "schema_version": "1.1",
+            "definition_key": native_identity[0],
+            "definition_version": native_identity[1],
+            "start_step": "encode_batch",
+            "limits": {"max_rework_cycles": 0, "max_step_attempts": 1},
+            "steps": [
+                {
+                    "key": "encode_batch",
+                    "type": "application",
+                    "operation": "BUILD_LOCAL_EMBEDDINGS",
+                    "result_schema": "incremental-embedding-result@1.0",
+                    "on_success": "complete",
+                },
+                {"key": "complete", "type": "terminal", "terminal_status": "COMPLETED"},
+            ],
+        },
+        "synthetic-native-admission-only",
+        set(),
+    )
+    assert definition_execution_protocol(native.definition) == (
+        WORKFLOW_ADMISSION_BY_IDENTITY[native_identity].role_protocol_version
+    )
 
 
 @pytest.mark.parametrize(
@@ -355,6 +394,6 @@ def test_catalog_socket_operation_schema_routes_are_total_and_immutable() -> Non
     with pytest.raises(ValueError, match="unsupported"):
         catalog_application_schema_route("UNKNOWN")
     with pytest.raises(TypeError):
-        CATALOG_APPLICATION_SCHEMA_ROUTES["UNKNOWN"] = catalog_application_schema_route(
-            "GET_ITEM_CONTENT"
+        cast(MutableMapping[str, object], CATALOG_APPLICATION_SCHEMA_ROUTES)["UNKNOWN"] = (
+            catalog_application_schema_route("GET_ITEM_CONTENT")
         )

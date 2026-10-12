@@ -1,7 +1,8 @@
 # Fixed native embedding Runner implementation boundary
 
-2026-10-12 UTC. **SOURCE_PROTOCOL_ONLY** for the two receipt contracts; all Runner, publisher,
-admission, migration and runtime behavior below remains proposed and unimplemented by this phase.
+2026-10-12 UTC. **SOURCE_PROTOCOL_ONLY** for the two receipt contracts and **SOURCE_GUARD_ONLY**
+for the first Runner migration/model/admission/interface phase. Actual Runner dispatch, publisher,
+current authority, migration execution and runtime activation remain unimplemented/unadmitted here.
 This advances the approved
 [admission proposal](INCREMENTAL_EMBEDDING_RUNNER_ADMISSION_PROPOSAL.md), not a service grant or
 runtime activation. Per-encoding owner source is committed at `bc973084`; root subsequently ran
@@ -116,11 +117,12 @@ Artifact leaves are not permission or production-composition substitutes.
 | `services/workflow_runner/eom_workflow_runner/engine.py` | Purpose readiness + exact candidate claim, fixed native step/terminal/reconcile guards, existing heartbeat/fence/state/event reuse. |
 | `services/workflow_runner/eom_workflow_runner/composition.py`, `__init__.py`, `errors.py` | Explicit paired injection/public exports/content-free native-unavailable errors; no implicit concrete/default owner. |
 | `services/workflow_runner/eom_workflow_runner/models.py`, `state_machine.py` | Native stage and total-boolean step guards only. No new state/command/lease tables. |
-| `migrations/versions/<root-assigned-next>_local_embedding_stage.py` | Next post-0052 migration, exact revision assigned by root only after approval. |
+| `migrations/versions/20261012_0053_local_embedding_stage.py` | Exact post-0052 revision assigned by root after protocol approval; source only here. |
 | `services/orchestrator/eom_orchestrator/embedding_artifact_store.py` | Separately reviewed owner leaf publishes sole fixed `receipt.json` through existing `ControlFileSetPublisher`; no second publisher or DTO-approved Job. |
 
 Migration **is necessary**: `ck_workflow_instances_stage` excludes `LOCAL_EMBEDDING`; the last stage
-DDL is `20261010_0051`, and current source head is `20261012_0052`. Native SQL would otherwise fail.
+DDL before this phase was `20261010_0051`, and source head at initial review was `20261012_0052`.
+Native SQL would otherwise fail. Root now owns the coordinated exact0053 head/release successor.
 `workflow_step_runs.step_type` is `String(32)` with **no enum CHECK**, while role/schema already permit
 NULL; there is no type enum to widen. Add stage literal and exactly:
 
@@ -136,8 +138,8 @@ history (including COMPLETED whose current stage no longer identifies the purpos
 old constraints; never deletes history. Existing attempts, Job FK, command enums/indexes and states
 need no migration. Advancing source head also requires a separately root-reviewed exact release
 callback/context successor; do not edit historical0051/0052 callback semantics or dynamic “head”.
-Read-only source search currently finds no0053 revision, and the native/backend agent owns no
-migration. Root still assigns the exact revision after protocol review; no DDL source is added now.
+At protocol review, read-only source search found no0053 and the native/backend agent owned no
+migration; root subsequently assigned the source revision below. No migration is executed here.
 
 ## Resolved carrier, reader and claim closure
 
@@ -275,3 +277,44 @@ then canonical byte/schema checks. No new walker or change to the old four-famil
 was made. Eight direct-call tests prove depth>32, cycles, object>64 and collection>1,024 fail before
 serialization (instrumented serializer call count zero). Final follow-up: **95 focused PASS in24.46s**,
 **390 eight-file regression PASS in47.15s**, Ruff/format/strict typing on all5 Python files PASS.
+
+## Approved first Runner guard phase (not dispatch)
+
+Root assigned source migration `20261012_0053`, predecessor `20261012_0052`, after committing the
+receipt protocol at `36041ea5`. Scope is only the native stage/one combined total-boolean step CHECK,
+one enum/terminal-map entry, exact definition admission, required typed owner/executor interfaces
+and pure request/control/audit validation. Downgrade preflight recognizes exact native definition,
+stage/protocol/request-schema and application/result-schema markers before any DDL; any such history
+refuses downgrade without deletion. No current actor/session/source permission is provided by a
+resolved metadata value or static definition admission. Ports have no default implementation.
+
+This phase does **not** edit engine, repository, composition, public publisher, source head, release
+callbacks, credentials, DB roles, protected runtime or installer. Root owns the explicit release0053
+context/callback/deploy/head successor; no migration is executed here. State-machine scope is one
+`LOCAL_EMBEDDING` stage with only COMPLETED/FAILED/CANCELLED targets; old transitions remain exact.
+The later exact-candidate/native dispatcher and actual session/service/Artifact composition remain
+required subsequent gates, not activated by these source guards.
+
+First-phase freeze: new0053 source +Runner model CHECK/stage +minimal state-map addition +exact
+Workflow admission +`local_embedding_admission.py`/`local_embedding_execution_port.py` interfaces
+and pure guards are implemented. `ResolvedLocalEmbeddingAdmission` revalidates controls and denies
+future service audit; `validate_local_embedding_runner_admission` recompiles exact native definition,
+checks canonical/typed/hash/control/operator-audit closure, and rejects zero-demand native starts.
+This is not authentication: actual root-session current authority remains the required owner port.
+`resolve_claim` takes the actual refreshed locked command/Workflow rows and typed request, not a new
+candidate/grant DTO; the immutable peek header remains next-phase repository work. Internal pending
+reads are bounded/sorted/unique existing encoding-job values; FAILED/CANCELLED cannot hide as pending,
+while completed computation can still wait for real registration. No executor implementation exists.
+
+Source regression: **430 PASS in45.19s** across the12 listed native/legacy test files; Ruff/format and
+strict mypy including unit/integration tests: **11 files PASS**. Guarded migration integration:
+**18 collected, NOT_EXECUTED** here (existing official disposable-owner fixture). Root owns actual
+up/down/up, current constraints and nonempty native-history checks. The pre-edit legacy source matrix
+was1 FAIL because transfer1.1 was omitted; old mapping remains intact with explicit successor/native
+additions. First WIP guard run had10 failures from passing a typed model to the old wire-only parser;
+the new adapter now revalidates the raw typed tree before its canonical wire projection, without
+changing that released parser. No rows, history, schema bytes or production state were repaired.
+
+No engine/repository/composition, publisher, Orchestrator head, release callbacks, DB/runtime/NAS,
+model/GPU, install or Git changes were performed by this agent in the guard phase. Root's separately
+owned head/release source work is not a production migration or native/service activation claim.

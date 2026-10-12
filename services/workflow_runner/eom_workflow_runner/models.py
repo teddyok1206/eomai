@@ -39,6 +39,7 @@ WORKFLOW_STAGES = (
     "KNOWLEDGE_ANALYSIS",
     "CUSTOMER_SUPPORT",
     "DOCUMENT_REVIEW",
+    "LOCAL_EMBEDDING",
     "AUTHORING",
     "IMAGE_REQUIRED",
     "IMAGE_SKIPPED",
@@ -96,6 +97,7 @@ class WorkflowInstanceRecord(Base):
         CheckConstraint(
             "stage IN ('KNOWLEDGE_ANALYSIS','CUSTOMER_SUPPORT','DOCUMENT_REVIEW',"
             "'INFERENCE_TRANSFER',"
+            "'LOCAL_EMBEDDING',"
             "'AUTHORING','IMAGE_REQUIRED',"
             "'IMAGE_SKIPPED',"
             "'REVIEWING','AWAITING_HUMAN_APPROVAL','REGISTERING','COMPLETED','FAILED',"
@@ -172,6 +174,13 @@ class WorkflowStepRunRecord(Base):
             "state IN ('PENDING','READY','RUNNING','SUCCEEDED','SKIPPED',"
             "'WAITING_FOR_HUMAN','FAILED','CANCELLED','SUPERSEDED')",
             name="ck_workflow_step_runs_state",
+        ),
+        CheckConstraint(
+            "(step_type = 'application') = "
+            "(result_schema IS NOT DISTINCT FROM 'incremental-embedding-result@1.0') "
+            "AND (step_type <> 'application' OR "
+            "(worker_role IS NULL AND step_key = 'encode_batch'))",
+            name="ck_workflow_step_runs_local_embedding",
         ),
     )
 

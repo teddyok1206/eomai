@@ -83,8 +83,8 @@ def test_native_compiler_preserves_fixed_snapshot_and_requires_no_codex_role() -
     replay = compile_definition_data(compiled.as_dict(), compiled.source_path, set())
     assert replay.canonical_bytes == compiled.canonical_bytes
     assert replay.sha256 == compiled.sha256
-    # Compiler support cannot activate repository admission or an installed executor.
-    assert not workflow_definition_is_admitted("local-embedding-index", "1.0.0")
+    # Exact source admission still cannot activate a repository/runtime executor.
+    assert workflow_definition_is_admitted("local-embedding-index", "1.0.0")
 
 
 @pytest.mark.parametrize(("name", "expected"), tuple(_PRECHANGE_HASHES.items()))

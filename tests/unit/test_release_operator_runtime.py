@@ -607,6 +607,8 @@ def test_closed_callback_enum_and_bootstrap_relative_source_are_not_generic_fram
         "MIGRATION_UPGRADE_0051",
         "MIGRATION_VERIFY_0052",
         "MIGRATION_UPGRADE_0052",
+        "MIGRATION_VERIFY_0053",
+        "MIGRATION_UPGRADE_0053",
         "API_ROLE_BOOTSTRAP",
         "CATALOG_ROLE_RECONCILE",
         "HWPX_ROLE_RECONCILE",

@@ -168,7 +168,7 @@ def test_frozen_migration_matches_current_ddl_without_runtime_model_imports() ->
 
 def test_source_head_and_migration_import_registration() -> None:
     scripts = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
-    assert scripts.get_heads() == [CURRENT_MIGRATION_REVISION] == ["20261012_0052"]
+    assert scripts.get_heads() == [CURRENT_MIGRATION_REVISION] == ["20261012_0053"]
     assert (
         "import eom_catalog_service.embedding_registry_models"
         in (ROOT / "migrations/env.py").read_text()

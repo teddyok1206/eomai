@@ -10,7 +10,7 @@ fail() {
   exit 1
 }
 
-# Both guarded purposes use the same current source dependency closure, never old installed leaves.
+# Guarded purposes use the same current source dependency closure, never old installed leaves.
 SOURCE_PATHS=(
   packages/protocol packages/identifiers packages/workflow services/orchestrator
   services/workflow_runner packages/hwpx_contracts services/hwpx_manager
@@ -35,11 +35,12 @@ fi
 if (($# != 2)) || \
   [[ "$1" != "verify" && "$1" != "migrate" && "$1" != "hwpx-tests" && \
     "$1" != "embedding-tests" && "$1" != "embedding-encoding-tests" && \
+    "$1" != "embedding-stage-tests" && \
     "$1" != "pdf-review-tests" && \
     "$1" != "quality-review-tests" && "$1" != "chat-tests" && \
     "$1" != "chat-role-tests" && "$1" != "chat-knowledge-tests" && "$1" != "tests" ]]; then
   printf '%s\n' \
-    "usage: $0 {verify|migrate|hwpx-tests|embedding-tests|embedding-encoding-tests|pdf-review-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
+    "usage: $0 {verify|migrate|hwpx-tests|embedding-tests|embedding-encoding-tests|embedding-stage-tests|pdf-review-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
   exit 2
 fi
 [[ "$(id -un)" == "eom" ]] || fail "test database execution must run as eom"
@@ -163,6 +164,15 @@ PY
   printf 'Disposable API test database migration cycle passed.\n'
   printf 'Next privileged phase: scripts/api/testdb_prepare.sh --reconcile %s\n' \
     "${state_directory}"
+  exit 0
+fi
+
+if [[ "${action}" == "embedding-stage-tests" ]]; then
+  export EOM_RUN_API_INTEGRATION=1
+  # Reuse the existing official stage-owner fixture and its exact disposable guards.
+  export EOM_CHAT_KNOWLEDGE_TEST_STATE="${state_directory}"
+  "${PYTHON}" -m pytest -q tests/integration/test_local_embedding_stage_migration.py
+  printf 'Disposable model-free native embedding stage migration tests passed.\n'
   exit 0
 fi
 
