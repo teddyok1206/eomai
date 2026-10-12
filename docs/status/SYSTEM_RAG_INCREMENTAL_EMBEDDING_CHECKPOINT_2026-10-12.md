@@ -540,3 +540,21 @@ observer/resolver의 추가 source fixture가 포함되어 있으며, 각 미완
 actual31 archive와 현재 prefix의 읽기 전용 진단은 설치 admission이 아니며,
 정상 canonical bytecode를 blanket 삭제하거나 기존 실험 환경을 변경하지 않는다.
 이 전체 admission·실제 CPU/CUDA 측정·CUDA 기본 활성화는 아직 PENDING이다.
+
+## CPU/CUDA 비교의 bounded checkpoint/ACK channel — 2026-10-12 UTC
+
+기존 benchmark1.0의 고정1/21-phase 계약을 변경하지 않고, canonical JSON·4-byte 길이·
+64KiB 상한과 단일 absolute deadline을 적용하는 Unix socket adapter를 구현했다.
+실제 peer PID/UID/GID와 socket inode를 관측하고 호출자가 제공하는 필수 peer/unit fence와
+fresh source/authority/vector continuation fence를 ACK 전에 실행한다. 이 callback의 실제
+운영 composition은 별도 필수 gate이며 synthetic fixture의 성공은 권한 증거가 아니다.
+
+독립 peer 검토에서 positive Python socket timeout이 `MSG_DONTWAIT`에도 내부 pre-select를
+실행하여40ms 제한을253.7ms로 넘길 수 있음을 재현했다. timeout `None` 또는 `0.0`만 허용하고
+callback/IO 전후 다시 검사하도록 수정했다. descriptor 교체·권한 취소·oversize header·
+partial frame·EOF·잘못된 hash/order와 실제 독립 unprivileged process 연결도 source로 검증했다.
+
+최종 root benchmark/channel/ranking/기존 native3FD **304 PASS (9.50s)**,
+strict mypy4·Ruff/format4 PASS다. 독립 peer channel **53 PASS (6.69s)**는 그 subset이므로
+합산하지 않는다. 최초 추가 gate는 잘못된 test filename으로0개 실행됐고 올바른 고정 목록의
+위304개를 다시 실행했다. 모델/GPU 실행0, 실제 benchmark/기본 활성화 PENDING을 유지한다.

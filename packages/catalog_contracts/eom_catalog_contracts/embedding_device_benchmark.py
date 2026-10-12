@@ -1134,6 +1134,74 @@ class BenchmarkAck(_BenchmarkContract):
         return self
 
 
+def _checkpoint_ack_identity(checkpoint: BenchmarkCheckpoint, ack: BenchmarkAck) -> None:
+    names = (
+        "execution_id",
+        "invocation_sha256",
+        "sequence",
+        "phase",
+        "query_ordinal",
+        "query_repetition",
+        "checkpoint_sha256",
+    )
+    if any(getattr(checkpoint, name) != getattr(ack, name) for name in names):
+        raise ValueError("benchmark session missing/reordered/foreign or mismatched ACK")
+
+
+def benchmark_checkpoint_count(invocation: BenchmarkWorkerInvocation) -> int:
+    """Fixed source protocol count only; it does not admit a live child or channel."""
+    checked = BenchmarkWorkerInvocation.model_validate(invocation)
+    return 21 if checked.launch_ordinal in (1, 2) else 1
+
+
+def validate_benchmark_checkpoint(
+    invocation: BenchmarkWorkerInvocation,
+    checkpoint: BenchmarkCheckpoint,
+    expected_sequence: int,
+) -> None:
+    """Check one exact child/phase/purpose-space association before accepting a frame."""
+    checked = BenchmarkWorkerInvocation.model_validate(invocation)
+    value = BenchmarkCheckpoint.model_validate(checkpoint)
+    count = 21 if checked.launch_ordinal in (1, 2) else 1
+    if (
+        type(expected_sequence) is not int
+        or not 1 <= expected_sequence <= count
+        or value.sequence != expected_sequence
+        or value.execution_id != checked.execution_id
+        or value.invocation_sha256 != checked.invocation_sha256
+    ):
+        raise ValueError("benchmark checkpoint differs from exact invocation/sequence")
+    if value.vector is not None:
+        space = (
+            checked.runtime.spaces.document
+            if value.phase == "COLD_READY"
+            else checked.runtime.spaces.query
+        )
+        if value.vector.space_sha256 != space.space_sha256:
+            raise ValueError("benchmark checkpoint differs from invocation purpose-space")
+
+
+def validate_benchmark_ack(checkpoint: BenchmarkCheckpoint, ack: BenchmarkAck) -> None:
+    """Shared exact phase/hash rule; actual owner peer and fresh authority are separate."""
+    checkpoint = BenchmarkCheckpoint.model_validate(checkpoint)
+    ack = BenchmarkAck.model_validate(ack)
+    _checkpoint_ack_identity(checkpoint, ack)
+
+
+def benchmark_ack_for_checkpoint(checkpoint: BenchmarkCheckpoint) -> BenchmarkAck:
+    """Build a pure value, not a grant; only the admitted owner may send continuation."""
+    value = BenchmarkCheckpoint.model_validate(checkpoint)
+    return BenchmarkAck(
+        execution_id=value.execution_id,
+        invocation_sha256=value.invocation_sha256,
+        sequence=value.sequence,
+        phase=value.phase,
+        query_ordinal=value.query_ordinal,
+        query_repetition=value.query_repetition,
+        checkpoint_sha256=value.checkpoint_sha256,
+    )
+
+
 class BenchmarkSession(_BenchmarkContract):
     schema_version: Literal["embedding-device-benchmark-session/1.0"] = (
         "embedding-device-benchmark-session/1.0"
@@ -1153,16 +1221,13 @@ class BenchmarkSession(_BenchmarkContract):
         for expected, (checkpoint, ack) in enumerate(
             zip(self.checkpoints, self.acks, strict=True), 1
         ):
-            identity = checkpoint.model_dump(
-                mode="json", exclude={"schema_version", "kind", "vector", "encode_duration_ns"}
-            )
             if (
                 checkpoint.sequence != expected
                 or checkpoint.execution_id != self.execution_id
                 or checkpoint.invocation_sha256 != self.invocation_sha256
-                or ack.model_dump(mode="json", exclude={"schema_version", "kind"}) != identity
             ):
                 raise ValueError("benchmark session missing/reordered/foreign or mismatched ACK")
+            _checkpoint_ack_identity(checkpoint, ack)
         _hash(self, "session_sha256")
         return self
 
