@@ -144,3 +144,18 @@ read-only `nvidia-smi`는 RTX5080/driver580.126.09/VRAM16303MiB/사용2MiB/util0
 public nondestructive `assert_valid()`를 추가했다. close도 같은 규칙을 재사용하며 lease/권한을
 새로 취득하는 함수가 아니다. closed/drift 및 경합 유지 두 케이스를 포함한 동일 gate는
 **171 PASS (32.27s)**, strict mypy6/Ruff PASS다. 앞선169 결과와 합산하지 않는다.
+
+## standalone lease wheel의 local build/import — 2026-10-12 17:57 UTC
+
+게시된 `cdb8cb8362809d86a8a855498d717d9e30375876`의 정확한 package archive에서만
+`eom_gpu_lease-0.1.0-py3-none-any.whl`를 offline/no-deps/no-build-isolation으로 만들었다.
+소스 worktree와 운영 prefix에는 build/install하지 않았다. wheel의6개 member, dependency0,
+Python3.11/3.12 bound, raw SHA와 모든 RECORD digest/count를 검사하고 별도 임시 site에
+offline/no-deps/no-compile 설치한 뒤 isolated import를 확인했다. Torch/Transformers/image
+service import와 production lock claim은 없었다.
+
+build 위치: `/tmp/eom-gpu-lease-wheel.jvzfDpXy`.
+wheel raw SHA: `5d7ee6850447871dec556c21e1a16f3822e0748fa4ab6052a19cbd3184fbef89`.
+이는 developer-owned private temporary 설치 simulation이며 immutable root quarantine·실제
+runtime 설치/권한·shared physical migration을 통과했다는 뜻이 아니다. source build/archive와
+생성된 wheel을 구분하고, 운영 시 exact wheel/source closure를 다시 검증해야 한다.
