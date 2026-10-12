@@ -299,6 +299,25 @@ mypy with `--follow-imports=silent --explicit-package-bases` PASS. These tests u
 synthetic wheels/prefixes and never execute a wrapper or installed ML/runtime/model/GPU.
 The broader admission leaf/pre-execution gate/Conda-loader receipt remains design-only.
 
+## First mechanical source phase
+
+Root accepted this proposal and approved a four-path source-only extraction after the
+wrapper correction commit. The existing wheel/RECORD/member/wrapper rule now lives in
+public `embedding_runtime_wheel_closure.py`; the numeric adapter delegates and retains
+its typed API/error/results. Five small frozen local pin/result values do not define a
+new protocol or authority DTO; direct core inputs are type/hash/name/bounds checked again.
+The core imports only stdlib and the real existing protected-file adapter, permitting
+the planned old-interpreter `-I -S -B` owner audit without unadmitted third-party imports.
+Source gate:241 focused tests PASS (185 current numeric/proof/observer +56 new direct
+core cases),515 eleven-suite model-free embedding regression tests PASS, scoped Ruff
+lint/format3 and strict mypy3 PASS. The actual explicit API `-I -S -B` subprocess imported
+the real updated protected-file adapter and core, not stubs, with no Pydantic/schema/
+Identifiers/ML modules imported. Original distribution test/fixture bytes were unchanged.
+An initial in-progress doubled-backslash filename-regex mistake caused fixture rejection;
+it was corrected to the exact existing contract pattern, not a flavor/bounds relaxation.
+No proof/config/installer/host/Conda or protected-prefix behavior is implemented by this
+phase; the mandatory pre-successor gate and all real admission/benchmark actions remain pending.
+
 ## Fixed OS captures and deriving the real numerical proof
 
 The admitted helper accepts only closed modes/profile/pinned owner input identities, not

@@ -590,3 +590,16 @@ shared mechanical adapter도 포함한 겹치는 gate이므로 이전198/515/304
 병행 extraction 중 중간76개 실패는 wrapper filename regex의 잘못된 escaping으로 분류되어
 수정 후 위 고정 목록을 다시 실행했다. live 장애·installed acceptance로 재해석하지 않는다.
 실제 unit/DAC/source session/whole-prefix admission·모델/GPU 측정·기본값 전환은 PENDING이다.
+
+## 보호된 초기 검증에 재사용할 stdlib wheel closure — 2026-10-12 UTC
+
+기존 typed numerical adapter의 wheel/RECORD/member/wrapper 검증을 하나의 purpose-named
+stdlib core로 분리했다. numerical API·오류·결과는 같은 adapter가 유지하며 두 검증기를
+복제하지 않는다. 작은 frozen pin은 직접 호출에서도 type/hash/name/bounds/order를 다시
+검증한다. 새 core는 기존 file adapter 외에 Pydantic/schema/ML 패키지를 import하지 않는다.
+
+위 root17-suite **961 PASS (16.77s)**에 새 direct-core56개와 실제 `-I -S -B` child import가
+포함되어 있다. 해당 source3-file strict mypy·Ruff/format도 독립 PASS다. 기존 initializer/
+test fixture를 대체한 stub import가 아니라 실제 file adapter를 사용했다. 이는 새 prefix
+전체의 Conda/ELF/host/first-instruction admission 또는 실제 임베딩 실험 PASS가 아니다.
+실제 owner admission leaf를 이 같은 검증기로 연결하는 다음 단계는 아직 PENDING이다.
