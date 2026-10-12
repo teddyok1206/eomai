@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-12 11:02 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-12 12:03 UTC. 이 문서는 실제 설치·실행 증거와 gate의 이력을
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
 
 사용자 최신 지시에 따라 **사람 평가는 현 목표의 완료 조건에서 제외**한다.
@@ -21,7 +21,74 @@
 
 ## Component 상태
 
-### 최종 실제 검증에서 발견한 두 경계 보완 — source 검증, 후속 배포 대기
+### 최종 실제 결과와 최초 설계 대조 — 완료
+
+두 successor는 **COMPLETED / MEMBER_VERIFIED**다. 원 key 두 건·retry key 두 건의
+실제 replay가 같은 Workflow/command를 반환했다. 같은 actual guiadmin memory session을
+끝까지 사용했고 원 FAILED 두 건·원 key·source/control pins를 보존했다. 추가 로그인,
+새 pair selection, 원520개 forward·원 보고서/문항/HWPX 재처리는 없었다.
+
+| 쌍 | successor Workflow | 정본 Artifact / Revision | 세 축 / machine judgement |
+|---|---|---|---|
+| 1 | `workflow_3695af7cacd6487c9a848c9063daaf51` | `artifact_99061ff1fb6448a39754a90fd8c9a4e1` / `rev_ed67574c473d4d7296fe3f94a5fcb683` | PARTIAL / PARTIAL / INSUFFICIENT; overall INSUFFICIENT |
+| 2 | `workflow_82da094abdf4461a85bc5488730f0747` | `artifact_333ecc84f63b49808767420d3580cc79` / `rev_d144df53663c42d59d33e125b4065a9b` | SAME / PARTIAL / INSUFFICIENT; overall INSUFFICIENT |
+
+쌍1 member raw SHA `0a5aabc003d6d2eae1d734153ad72a78d76a96ede327f9b65a998f1f95b13f79`,
+inner comparison SHA `a7916e7a8513d3090f848a67b95c38b2c5e58eaca4c53ecebccc1bfbdf9ae754`,
+owner read SHA `a9bf204e50a2647fd622512e6182d1e86171e94d503cbadbff8ea6fa65c0e37f`다.
+쌍2는 각각 `a84bb09cf38ebfd09b9b94f5ca31de264799a6e9a6d553611ff1fb193d077055`,
+`e0857501740b06fe9b1ae461211cd88c1357bc091341ce9ae7fad00a29ec8879`,
+`652bfbcacf1cf661798bcc5575b76df2dcde7af808d760ef43384abd5a0c74c1`다.
+서로 다른 bytes/typed values의 SHA를 같은 해시로 취급하지 않는다.
+
+pair1 retry command `wfcmd_1b4f99ff030949529dbcb409fd584225`, pair2
+`wfcmd_8f86f95d601243d89363adfbfe2db747`를 재전송해 같은 child임을 확인했다.
+쌍1은 mapping2/difference2/new_reasoning1, 쌍2는1/1/1이다. 모든 참조는 exact selected
+profile closure로 검증했지만 그 검증을 과학적 정답의 증명으로 확대하지 않는다.
+
+보존된 canonical request의520개 profile을 모델 실행 없이 집계해 decisive 후보
+있음425/없음95를 확인했다. 쌍1 A full/selected 후보0, B2/2; 쌍2 A3/3, B0/0이다.
+두 INSUFFICIENT는 pipeline failure나 NO_TRANSFER가 아니며 비교 표현의 근거 부족이다.
+쌍1의 원 질문 텍스트와 기존 profile에는 기호 대응 정합성 위험도 있다. 비교 모델이
+새로 만든 배정은 아니지만 원본 픽셀을 보지 않아 어느 원본/분석 표현이 잘못됐는지
+확정하지 않았다. 이 자료를 과학적 정확성 PASS로 표시하지 않는다.
+
+처음 보존한 설계 SHA는 불변이며 종료 조건1–4의 기술적 완료를 확인했다. 사람의 체감
+전이·precision/recall·전 corpus 과학적 정확성은 NOT_EVALUATED다.
+[최종 설계 대조와 부족 판정 설명](../status/ITEM_INFERENCE_TRANSFER_FINAL_ACCEPTANCE_2026-10-12.md)에
+완료 범위·한계와 정식 PNG Artifact를 구분했다. 이후 아래 문단은 이전 checkpoint의 이력이다.
+
+### 두 경계 보완의 실제 배포 — 후속 검증 직전 checkpoint
+
+source `8e36e6de7440f979c43423c28b84a145dab526fa`, tree
+`85645fb6329b0fcb304b51b9b2fd5b38269d5268`을 normal installer와 기존 protected
+operator adapter로 설치했다. 11:17 UTC installed build-info/source/tree/archive,
+public retry DTO/method·POST390/510·pip check·API READY와8 active services를 확인했다.
+PRESTOP/POSTSTOP job/worker/chat/Workflow command/API idempotency 및 별도 HWPX
+projection quiescence PASS, ADMIT·여섯 EXECUTE callbacks·RECORD·runtime isolation
+검사 PASS다. migration0051·API privilege matrix·Web·CPU runtime·b59 비교 control은
+유지했고 stopped chat의 exact fae→8e pin만 supported adapter로 갱신했다.
+
+- protected stage: `/var/lib/eom-release-operator-stage.8e36e6de-ApaWLz`.
+- context SHA: `05c9222d51364ce355a12a9e8e38b4db594f5f3be9191a2cc01dbc3810ccf8c9`.
+- source snapshot SHA: `67c22414748379c94071396ed9d43f51a06c0b26fd4410d58c491caf8e55781d`.
+- source archive SHA: `c7836cd27a279109c90ccb7acd0f3501eed1d57e3359774a48acc921bac48b5f`.
+- installed build time: `2026-10-12T11:16:09Z`.
+- deployment/rollback record:
+  `/var/lib/eom-api/deployments/8e36e6de7440f979c43423c28b84a145dab526fa.json`.
+
+Build-only wheel bytes와 normal installer의 별도 installed wheel bytes는 구분한다.
+새 helper 세 개는 선행 fae helper와 행동 AST가 같고 허용 상수만 바뀌었으며, 실제
+archive/3wheel hash와 API build-info는 독립 검토 PASS다. 첫 ADMIT 호출은0644 launcher를
+직접 실행해 시작되지 않았다. 기존 adapter처럼 verified root-owned launcher를 Bash로
+호출해 ADMIT_PASS를 확인했다. 권한·mode를 바꾸거나 callbacks를 중복 실행하지 않았다.
+
+앞선 console의 memory session은 종료됐고 안전한 handoff가 없어 배포 후 actual
+guiadmin을 새로 인증했다. 11:20 UTC actual session/current operator closure PASS다.
+새 보호 console SHA `9504f880e1b2c862de85dfede81094a0a3ac16772ca674e12fbf3b0e4d06c4db`,
+49 synthetic tests/strict mypy/Ruff PASS. 기존 v2 observation과 실패/selection/receipt는
+보존하고 새 v3 native 관측 및 두 exact-parent successor 검증을 진행한다. 사람 평가·
+원 임베딩 재실행·control 재발행·문항/HWPX 생성은 하지 않는다.
 
 같은 actual session에서 원 pair1 command를 정확히 복구했고, 원 key 두 건의 replay는
 각각 원 Workflow/command/selection을 반환했다. 이는 요청 접수 replay PASS이지
@@ -49,13 +116,13 @@ worker 결과의 성공이 아니다. pair1은 원 FAILED 그대로이며 pair2�
 
 Fresh 전체 관련 회귀는83파일/2,899 PASS, 변경5파일 strict mypy/Ruff/format PASS다.
 actual privilege matrix의 native26 PASS 후 임시 DB·roles/private env를 정리했다.
-최종 두 쌍 console의 기존34+새12=46 합성 tests와 strict mypy/Ruff도 PASS다.
+최종 두 쌍 console의 기존34+새15=49 합성 tests와 strict mypy/Ruff도 PASS다.
 첫 pair의 이미 보존된 retry body/version/key는 유지하고, 새 second retry만 별도
 operation key/부모/선택 closure로 기록한다. 모델 비교 제출은 이 테스트들의 일부가 아니다.
 
-현재 실제 설치는 fae이며 위 최소 수정본은 아직 설치하지 않았다. 두 후속 결과의
-MEMBER_VERIFIED와 retry key witness는 미완료다. 종료 조건3·4와 전체 완료를 선언하지
-않는다. 520개 임베딩, control PREPARE/RELEASE, 풀이보고서·문항/HWPX 재실행은 0이다.
+이 checkpoint 당시 실제 설치는 위8e였으며 두 후속 결과의
+MEMBER_VERIFIED와 retry key witness는 미완료였다. 이후 위 최종 검증에서 종료 조건3·4를
+닫았다. 520개 임베딩, control PREPARE/RELEASE, 풀이보고서·문항/HWPX 재실행은 0이다.
 Slack discovery: `devreport_5e445d2b591e4dc0a9b04ef956ea9b55`.
 
 ### 승인된 동일 pair successor — 운영 설치 완료, 실제 결과 검증 진행
@@ -256,7 +323,7 @@ semantic SHA `d8fa68b17c646229d0e66e770c34876c6e3787a502dcc3417237aa947db8a342`�
 
 | Component | 실제 상태 | 한계 |
 |---|---|---|
-| 공유 API/platform | 설치 source `fae10babfaa353a9fbc8af09b24baea996039310`, tree `fed473d2c82576b2866db702e58543de1ad9197b`; 2026-10-12 10:10 UTC 실패 보존형 동일 pair retry leaf 배포·검증 완료 | 전체 520개 BGE MEASURED/COMMITTED 정본과 b59 control 핀 보존. 첫 비교 FAILED 보존, 최종 두 쌍 member 검증/replay 진행; 사람 평가는 불필요 |
+| 공유 API/platform | 설치 source `8e36e6de7440f979c43423c28b84a145dab526fa`, tree `85645fb6329b0fcb304b51b9b2fd5b38269d5268`; 2026-10-12 11:17 UTC terminal-read grant·generation ref-set 직렬화 보완 배포·검증 완료 | 전체 520개 BGE MEASURED/COMMITTED 정본과 b59 control 핀 보존. 두 원 비교 FAILED와 원 key replay 보존, 후속 member/retry key 검증 진행; 사람 평가는 불필요 |
 | 운영 PostgreSQL | `20261010_0051` migration 및 exact-head 검증 PASS | 새 비교 Workflow stage CHECK 적용이지 비교 control 발행이나 worker 실행이 아님 |
 | 별도 CPU Conda | `/opt/eom/conda/envs/eom-embedding-experiment` 보호 snapshot 발행·승인된 격리 probe 및 전체 BGE 실험 PASS | 임베딩 성공은 풀이 전이·교육 품질의 증명이 아님 |
 | CPU platform | `06134fcd91413a957ac3133db062dbcdd525ee15` wheel에서 비편집 설치 | d291 candidate와 1,361개 payload member가 일치함; source 표기는 원래 설치값 유지 |

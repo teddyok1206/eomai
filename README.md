@@ -102,7 +102,7 @@ RAG 출처는 3건으로 제한합니다. 실제 HTTPS에서 교과서 답변·�
 [설계와 지원 경계](docs/architecture/GENERAL_CHAT_TEXTBOOK_RAG_DESIGN.md)를 참고하세요.
 
 문항의 **핵심 착상이 다른 문항 풀이에 어디서 통하는지** 찾는 opt-in 경계를 구현하고,
-호환 API/platform component의 현재 설치는 `fae10bab` release입니다. 기존 승인 풀이보고서와
+호환 API/platform component의 현재 설치는 `8e36e6de` release입니다. 기존 승인 풀이보고서와
 exact Graph/Item 근거로 비교 표현을 만들고, 제거 가능한
 로컬 임베딩으로 후보를 찾은 뒤 Orchestrator의 bounded Codex 쌍 비교에서 조건·추론의 대응과
 차이를 검증합니다. 사람의 전이 평가와 모델 가설은 별도이며, 사용자 지시에 따라 사람
@@ -110,11 +110,13 @@ exact Graph/Item 근거로 비교 표현을 만들고, 제거 가능한
 실제 `guiadmin` 인증과 original 기출 모집단 520개의 BGE-M3 로컬 CPU 실험에서
 **520/520 profile, 1,560개 표현의 MEASURED/COMMITTED**를 확인했습니다. 기존 E5의
 길이 부족 결과는 별도 이력으로 보존합니다. V11 비교 control도 공식 PREPARE/RELEASE를
-완료했습니다. 첫 쌍의 worker 결과 self-hash 실패는 보존하고, 동일 입력·핀의 명시적
-successor 비교와 두 쌍의 정본 결과/replay 검증을 진행합니다. 원 key replay 두 건은 PASS이며,
+완료했습니다. 두 고정 쌍의 명시적 successor는 **COMPLETED/MEMBER_VERIFIED**이며,
+원 key 두 건과 retry key 두 건의 replay가 모두 PASS입니다. 원 실패는 그대로 보존하며,
 실제 운영에서 추가 확인한 terminal-step 잠금 권한과 unique 참조 배열 정렬의 최소 보완을
-검증하고 있습니다. 실패 결과를 성공으로 바꾸거나 권한을 확대하지 않습니다. 설치나 health만으로
-전체 기능·교육 품질 PASS를 주장하지 않습니다.
+운영에 반영했습니다. 두 실제 machine 판정은 **INSUFFICIENT**입니다. 개념·소재의
+유사성은 설명했지만 각 쌍의 한쪽에 핵심 추론 후보가 없어 전이를 단정하지 않았습니다.
+보존된520개 profile 중 후보 있음425/없음95이며 이 카운트는 교육적 정확도 지표가 아닙니다.
+실패 결과를 성공으로 바꾸거나 권한을 확대하지 않았으며 교육 품질 PASS를 주장하지 않습니다.
 원래 기출만의 범위·쌍별 재인가·전용 실행 계획을 검증하고, 같은 후보 집합에서 본문·풀이 근거·
 메타데이터를 비교하는 로컬 CPU 실험 경로도 구현했습니다. 실제 모델의 합성 입력 시험은
 실제 기출 품질 평가와 구분합니다.
@@ -135,14 +137,17 @@ owner 호출부를 검증했습니다. 고정 격리 CPU runtime/model 설치와
 기존 family와 prompt bytes를 보존합니다. 실제 READ의 내부 모델 검증 실패를 진단하고,
 Graph 후보 pool과 bounded 64개 baseline의 상한 불일치를 합성 자료로 재현해 보완했습니다.
 원문·모집단은 보존하고 baseline prefix 제한을 명시하며, 최종 출제 Evidence와 구분합니다.
-실제 READ·owner PREPARE/RELEASE·CPU corpus 실험은 완료했고, 최종 쌍 비교/replay는
-진행 중입니다. 실패 보존형 retry는 released attempt1 제약을 변경하지 않고 기존 START
-queue에서 같은 logical pair의 successor를 생성합니다. 새 회귀 2,952 PASS, 추가 API
-160 PASS, disposable PostgreSQL 25 PASS이며 DB migration·새 queue는 없습니다.
+실제 READ·owner PREPARE/RELEASE·CPU corpus 실험·최종 두 쌍 비교/replay와 최초 설계
+대조를 완료했습니다. 실패 보존형 retry는 released attempt1 제약을 변경하지 않고 기존
+START queue에서 같은 logical pair의 successor를 생성합니다. 최신 source 회귀는2,899 PASS,
+actual API privilege matrix의 disposable PostgreSQL26 PASS, 최종 console49 PASS입니다.
+DB migration·새 queue·권한 확대는 없습니다. 역사적 suite와 이 수치를 합산하지 않습니다.
 사람 평가 미실시는 blocker나 자동 성공이 아닙니다.
 [최초 설계 대조와 자동 검증 범위](docs/architecture/ITEM_INFERENCE_TRANSFER_FINAL_CONFORMANCE_GAPS.md),
 설치 component와 역사적 실패·남은 gate는
 [실제 운영 검증 기록](docs/architecture/ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)에 구분합니다.
+[최종 설계 대조·부족 판정의 의미·실제 PNG 샘플](docs/status/ITEM_INFERENCE_TRANSFER_FINAL_ACCEPTANCE_2026-10-12.md)도
+참고하세요. 샘플은 실제 조회한 문항 텍스트의 비교본이며 원본 페이지 그림이 아닙니다.
 
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스

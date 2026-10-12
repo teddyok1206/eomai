@@ -20,7 +20,7 @@ Step `steprun_d4e141a7067a4a61b9bf464c2e5141d9`, Job
 - generation raw SHA: `6f071b4f7fb04b857168317e00a3e6a3d32802014ac8af507091a3bc11be905d`.
 - input raw SHA: `58ddfef722544f1265d980f0f913f1de0a2a8fdfaa2e6fd03e02c3375c8dc08f`.
 
-別도 memory-only 진단에서 refs 순서만 정렬한 사본은 기존 strict typed 결과와
+별도 memory-only 진단에서 refs 순서만 정렬한 사본은 기존 strict typed 결과와
 exact selected-request ref/facet closure를 통과했다. 실제 파일 쓰기·게시·모델 실행은
 모두0이고 원 FAILED는 그대로다. 이 관측을 실제 successor 결과나 의미 정확성 PASS로
 확대하지 않는다.

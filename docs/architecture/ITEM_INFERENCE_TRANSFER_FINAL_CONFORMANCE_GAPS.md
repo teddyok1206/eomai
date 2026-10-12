@@ -1,7 +1,24 @@
 # 최초 설계 대조에서 발견한 비교 설명·평가 연결 보완
 
-상태: 2026-10-10 UTC, source 감사에 따른 구현 설계. 실제 corpus/model 실행,
-사람 평가 또는 운영 활성화의 성공 기록이 아니다. 설계 원문과 기존 실험 입력은 변경하지 않는다.
+상태: 2026-10-12 12:03 UTC, 아래 초기 감사·후속 변경의 이력을 보존한다.
+설계 원문과 기존 실험 입력은 변경하지 않았다.
+
+## 현재 종료 판정 — 기술적 구현·운영 검증 완료
+
+원문 요구를 source·정본 pointer·실제 관측에 대조했다. 종료 조건1(E5 실패 보존/BGE520개
+MEASURED·COMMITTED), 2(실제 native admission/owner PREPARE·RELEASE),
+3(고정 두 쌍 MEMBER_VERIFIED/original·retry key replay), 4(최종 원문 대조/한계 기록)를
+완료했다. 설치 API/platform은8e이며 released predecessor family·권한·실패 이력은 보존한다.
+이전 문단들의 설치·둘째 POST·retry 대기 상태는 당시 checkpoint이며 현재 상태가 아니다.
+
+두 실제 machine 결과는 INSUFFICIENT다. 데이터/참조 검증 PASS를 착상 전이 성공이나
+과학적 정확성 PASS로 바꾸지 않는다. 고정520개 profile의 후보 있음425/없음95와 실제
+두 쌍에서 한쪽 후보0을 확인했다. 쌍1의 원 질문 표현/기존 profile 기호 정합성 위험도
+별도 기록했다. 사람 평가는 사용자 지시에 따라 NOT_EVALUATED/NOT_REQUIRED다.
+
+[최종 설계 대조·실제 부족 판정·PNG 샘플](../status/ITEM_INFERENCE_TRANSFER_FINAL_ACCEPTANCE_2026-10-12.md),
+[정확한 운영 pointer/hash와 실패 이력](ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)을 참고한다.
+새 GUI·ANN·검색 engine·report 재처리·520 재임베딩·HWPX/25문항 생성은 수행하지 않았다.
 
 ## 2026-10-11 현재 설계 대조의 종료 조건
 
