@@ -324,6 +324,7 @@ def test_disposable_embedding_persistence_requires_owner_guards_but_no_runtime_r
         in branch
     )
     assert "tests/integration/test_embedding_registry_persistence.py" in branch
+    assert "tests/integration/test_embedding_index_artifact_persistence.py" in branch
     assert "tests/integration/test_embedding_registry_application.py" in branch
     assert "exit 0" in branch
     assert "runtime.env" not in branch

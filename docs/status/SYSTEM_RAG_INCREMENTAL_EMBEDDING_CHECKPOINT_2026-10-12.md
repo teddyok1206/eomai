@@ -229,3 +229,37 @@ chosen installed B-tree/table/key 및 exact10 predicates와 composite unique ind
 다음은 official current-operator source/Artifact verifier 연결, installed numerical observer와
 image standalone dependency closure → scoped native admission/launcher → CPU/CUDA 실제 비교·
 기본값 결정·seed/delta/공통 소비자 연결이다. 전체 goal은 계속 ACTIVE다.
+
+## Index Artifact 게시·복구 및 실제 CUDA layout 확인 — 2026-10-12 UTC
+
+기존 `EmbeddingArtifactStore`와 `ControlFileSetPublisher`에 단일 `index.json` 게시를 연결했다.
+logical index/revision과 Artifact/revision/raw hash는 분리하며, 같은 index/revision key의
+body 변경은 충돌이다. exact Graph/policy/shard/predecessor와 순서·space·row 참조를 검사한다.
+vector/source/report를 복제하지 않으며 approved control Artifact를 원문·Item 승인으로
+해석하지 않는다. 현재 사용자/source 재인가와 최종 Catalog 검증은 별도 필수 경계다.
+
+root 독립 source 검증 **230 PASS (6.09s)**, 관련 strict mypy4·Ruff5·format5·bash parsing
+PASS다. marker-guarded 새 disposable DB의0052 up/down/up와 prerequisite PASS 후 combined
+**16 PASS (21.68s)**: 기존 Artifact2 + 새 index3 + registry5 + application6. 서로 다른
+process의 동일 key 생성은 한 canonical Artifact로 수렴했고, file commit 후 중단된
+COMMITTING job은 supported replay로 기존 inode/Artifact를 유지하며 복구했다.
+
+같은 operator sudo pane의 guarded cleanup으로 재생성 가능한 해당 테스트 DB/owner/state를
+제거했다. cleanup exit0이며 원 corpus·운영 DB·NAS·모델·historical acceptance는 보존했다.
+구체적 테스트 경로·실행 결과는 기존 API disposable database 문서와 index publication note에
+기록한다. 이전296/13 gate와 새230/16 gate를 합산하지 않는다.
+
+별도 numerical observer/resolver/encoder/codec/historical contract root source gate는
+**442 PASS (6.95s)**다. 이는 합성 fixture 검증이며 actual installed proof가 아니다.
+실제 다운로드 archive25개는 lock raw SHA와 일치하지만 numerical16개 점검에서 Torch의
+492개, Triton의33개 zero-byte directory member가 RECORD에 생략되는 정상 layout을 발견했다.
+regular file hash/size closure는 일치하며 현재 observer는 directory member를 거부한다.
+미출시 검사기의 이 좁은 호환성만 보정한다. 누락된 CPU/base wheel은 설치 완료로 간주하지
+않는다. Torch의 upstream `torchfrtrace` entrypoint target은 archive에 없으며 임베딩에서는
+사용하지 않고 동작을 주장하지 않는다. 운영 설치·migration·추론·기본값 변경은 아직0이다.
+
+native Runner의 source-plan과 실제 owned-subset launch 입력을 분리하는 protocol-first
+후속안을 검토했다. 기존 queue/claim/Job을 재사용하고 Codex 슬롯·role·인증을 흉내 내지
+않는다. operator seed와 향후 background service 권한은 분리하며 실제 service policy가
+없으면 자동 실행을 활성화하지 않는다. GPU 비교와 우수할 경우 기본값 전환은 전체 목표의
+필수 작업으로 유지한다.

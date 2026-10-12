@@ -332,6 +332,7 @@ def test_store_source_has_no_parallel_database_network_process_or_git_boundary()
         "typing",
         "eom_catalog_contracts.embedding_vector_binary",
         "eom_catalog_contracts.inference_transfer_embedding",
+        "eom_catalog_contracts.knowledge",
         "eom_catalog_contracts.models",
         "eom_identifiers",
         "eom_protocol.artifact_members",

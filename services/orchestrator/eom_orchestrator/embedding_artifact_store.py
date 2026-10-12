@@ -1,4 +1,4 @@
-"""Validate one local native result; only the existing publisher commits its file set."""
+"""Validate native encoding or index metadata; commit only through the existing owner."""
 
 from __future__ import annotations
 
@@ -11,18 +11,25 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from eom_catalog_contracts.embedding_vector_binary import read_unit_vectors
 from eom_catalog_contracts.inference_transfer_embedding import (
+    INDEX_SCHEMA_REF,
     MAX_EMBEDDING_INPUT_BYTES,
+    MAX_EMBEDDING_ROWS,
     RESULT_SCHEMA_REF,
     SHARD_SCHEMA_REF,
+    EmbeddingIndexManifest,
+    EmbeddingVectorShardManifest,
     IncrementalEmbeddingInput,
+    parse_embedding_index,
     parse_incremental_embedding_input,
     parse_incremental_embedding_result,
+    validate_embedding_index_references,
     validate_incremental_embedding_result,
 )
+from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
 from eom_catalog_contracts.models import Sha256, UtcDatetime
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
@@ -31,14 +38,19 @@ from eom_workflow.local_embedding_workflow import (
     LocalEmbeddingWorkflowRequest,
     parse_local_embedding_workflow_request,
 )
-from pydantic import TypeAdapter
+from pydantic import Field, TypeAdapter
 
 from eom_orchestrator.file_set_control_artifacts import (
+    CONTROL_FILE_SET_PROTOCOL,
     ControlFileSetMember,
     ControlFileSetPublisher,
 )
 
-_MEMBERS = frozenset({"result.json", "shard.json", "vectors.f32"})
+EMBEDDING_INDEX_ARTIFACT_TYPE = "control_embedding_index"
+EMBEDDING_INDEX_MANIFEST_VERSION = CONTROL_FILE_SET_PROTOCOL
+EMBEDDING_INDEX_PRIMARY_MEMBER = "index.json"
+EMBEDDING_INDEX_MEMBER_NAMES = (EMBEDDING_INDEX_PRIMARY_MEMBER,)
+_MEMBERS = frozenset({"result.json", "shard.json", "vectors.f32", EMBEDDING_INDEX_PRIMARY_MEMBER})
 _MAX_BINARY_BYTES = 16 * 1024**2
 _BINARY_SCHEMA_REF = "eom://schemas/knowledge/embedding-f32le-l2-row-major/1.0"
 
@@ -58,6 +70,25 @@ class PublishedEmbeddingArtifacts:
     result: ArtifactMemberPointer
     shard: ArtifactMemberPointer
     binary: ArtifactMemberPointer
+    manifest_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class EmbeddingIndexPublicationScope:
+    """Expected immutable metadata only; the official caller owns current authorization."""
+
+    graph_snapshot: KnowledgeGraphSnapshotPointer
+    policy_revision_id: str
+    policy_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class PublishedEmbeddingIndexArtifacts:
+    owner_job_id: str
+    index_id: str
+    index_revision_id: str
+    index_manifest: ArtifactMemberPointer
+    index_sha256: str
     manifest_sha256: str
 
 
@@ -166,12 +197,14 @@ def _member(directory: int, name: str, maximum_bytes: int) -> Iterator[bytes]:
             os.close(descriptor)
 
 
-def _materialize_shard(directory: int, payload: bytes) -> None:
+def _materialize_manifest(directory: int, name: str, payload: bytes) -> None:
     """Create once; a partial or conflicting preexisting file is never overwritten."""
+    if name not in {"shard.json", EMBEDDING_INDEX_PRIMARY_MEMBER}:
+        raise EmbeddingArtifactStoreError("EMBEDDING_ARTIFACT_MEMBER_INVALID")
     descriptor: int | None = None
     try:
         descriptor = os.open(
-            "shard.json",
+            name,
             os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
             0o600,
             dir_fd=directory,
@@ -191,7 +224,7 @@ def _materialize_shard(directory: int, payload: bytes) -> None:
             or stat.S_IMODE(current.st_mode) != 0o600
             or current.st_size != len(payload)
             or _file_identity(current)
-            != _file_identity(os.stat("shard.json", dir_fd=directory, follow_symlinks=False))
+            != _file_identity(os.stat(name, dir_fd=directory, follow_symlinks=False))
         ):
             raise EmbeddingArtifactStoreError("EMBEDDING_ARTIFACT_MEMBER_CHANGED")
         os.fsync(directory)
@@ -221,6 +254,102 @@ class EmbeddingArtifactStore:
             raise EmbeddingArtifactStoreError("EMBEDDING_ARTIFACT_SOURCE_INVALID")
         self.publisher = publisher
         self.source_commit = source_commit
+
+    def publish_index(
+        self,
+        *,
+        index: EmbeddingIndexManifest,
+        shards: tuple[tuple[ArtifactMemberPointer, EmbeddingVectorShardManifest], ...],
+        previous: tuple[ArtifactMemberPointer, EmbeddingIndexManifest] | None,
+        scope: EmbeddingIndexPublicationScope,
+        workspace: Path,
+    ) -> PublishedEmbeddingIndexArtifacts:
+        """Commit one pinned metadata index; no source access, vectors or head mutation."""
+        try:
+            index = parse_embedding_index(index.model_dump(mode="json"))
+            graph = TypeAdapter(KnowledgeGraphSnapshotPointer).validate_python(
+                scope.graph_snapshot.model_dump(mode="json")
+            )
+            policy_revision_id: str = TypeAdapter(
+                Annotated[str, Field(pattern=r"^accessrev_[0-9a-f]{32}$")]
+            ).validate_python(scope.policy_revision_id)
+            policy_sha256 = TypeAdapter(Sha256).validate_python(scope.policy_sha256)
+            if (
+                graph.manifest_artifact.sha256 != graph.manifest_sha256
+                or not isinstance(shards, tuple)
+                or not 1 <= len(shards) <= MAX_EMBEDDING_ROWS
+                or any(not isinstance(value, tuple) or len(value) != 2 for value in shards)
+                or (
+                    previous is not None and (not isinstance(previous, tuple) or len(previous) != 2)
+                )
+                or any(
+                    binding.graph_snapshot != graph
+                    or binding.policy_revision_id != policy_revision_id
+                    or binding.policy_sha256 != policy_sha256
+                    for binding in index.bindings
+                )
+            ):
+                raise ValueError("index publication frame or pinned scope differs")
+            validate_embedding_index_references(index, shards, previous)
+            timestamp = TypeAdapter(UtcDatetime).validate_python(index.created_at)
+            payload = canonical_json_bytes(index.model_dump(mode="json"))
+        except Exception:
+            raise EmbeddingArtifactStoreError("EMBEDDING_INDEX_CONTEXT_INVALID") from None
+
+        # Content belongs to the immutable request, not to a second same-revision key.
+        key = "embedding-index-artifact:" + content_sha256(
+            {"index_id": index.index_id, "index_revision_id": index.index_revision_id}
+        ).removeprefix("sha256:")
+        with _directory(workspace) as directory:
+            _materialize_manifest(directory, EMBEDDING_INDEX_PRIMARY_MEMBER, payload)
+            with _member(
+                directory, EMBEDDING_INDEX_PRIMARY_MEMBER, MAX_EMBEDDING_INPUT_BYTES
+            ) as saved:
+                if saved != payload:
+                    raise EmbeddingArtifactStoreError("EMBEDDING_INDEX_MEMBER_CONFLICT")
+                member = ControlFileSetMember(
+                    EMBEDDING_INDEX_PRIMARY_MEMBER,
+                    workspace / EMBEDDING_INDEX_PRIMARY_MEMBER,
+                    sha256_bytes(saved),
+                    len(saved),
+                    INDEX_SCHEMA_REF,
+                    "application/json",
+                )
+                receipt = self.publisher.publish(
+                    members=(member,),
+                    primary_file=EMBEDDING_INDEX_PRIMARY_MEMBER,
+                    artifact_type=EMBEDDING_INDEX_ARTIFACT_TYPE,
+                    manifest_version=EMBEDDING_INDEX_MANIFEST_VERSION,
+                    idempotency_key=key,
+                    source_commit=self.source_commit,
+                    created_at=timestamp,
+                )
+                try:
+                    owner_job_id = TypeAdapter(JobId).validate_python(receipt.job_id)
+                    manifest_sha256 = TypeAdapter(Sha256).validate_python(receipt.manifest_sha256)
+                    if (
+                        receipt.primary_file != EMBEDDING_INDEX_PRIMARY_MEMBER
+                        or receipt.primary_sha256 != member.sha256
+                    ):
+                        raise ValueError("index owner receipt differs")
+                    pointer = ArtifactMemberPointer(
+                        artifact_id=receipt.artifact_id,
+                        artifact_revision_id=receipt.artifact_revision_id,
+                        member_path=EMBEDDING_INDEX_PRIMARY_MEMBER,
+                        schema_ref=INDEX_SCHEMA_REF,
+                        media_type="application/json",
+                        sha256=member.sha256,
+                    )
+                    return PublishedEmbeddingIndexArtifacts(
+                        owner_job_id,
+                        index.index_id,
+                        index.index_revision_id,
+                        pointer,
+                        index.index_sha256,
+                        manifest_sha256,
+                    )
+                except Exception:
+                    raise EmbeddingArtifactStoreError("EMBEDDING_INDEX_RECEIPT_INVALID") from None
 
     def publish(
         self,
@@ -275,7 +404,7 @@ class EmbeddingArtifactStore:
                 expected_sha256=shard.binary.sha256,
             )
             shard_bytes = canonical_json_bytes(shard.model_dump(mode="json"))
-            _materialize_shard(directory, shard_bytes)
+            _materialize_manifest(directory, "shard.json", shard_bytes)
             with _member(directory, "shard.json", MAX_EMBEDDING_INPUT_BYTES) as saved_shard:
                 if saved_shard != shard_bytes:
                     raise EmbeddingArtifactStoreError("EMBEDDING_ARTIFACT_SHARD_CONFLICT")

@@ -161,9 +161,10 @@ GPU 기본값 활성화가 완료됐다는 뜻은 아닙니다.
 
 증분 임베딩 후보에는 native 입력·결과/float32 shard, pointer-only Catalog registry와
 migration0052, 동일 payload의 CPU/CUDA bundle·encoder, Orchestrator Artifact 게시 경로가
-있습니다. 최신 저장·재전송·descriptor 경계 소스 회귀 **296 PASS**, 임시 PostgreSQL의
-게시·등록·독립 프로세스 경합/CAS **13 PASS** 및0052 up/down/up PASS입니다. 과거 gate와
-합산하지 않으며, 세부 증거와 아직 없는 연결은
+있습니다. 저장·재전송·descriptor 경계 소스 회귀296 PASS 이후 인덱스 Artifact 게시·복구와
+testdb harness의 독립 검증은 **230 PASS**입니다. 최신 임시 PostgreSQL combined gate는
+**16 PASS**(Artifact·index·registry·application),0052 up/down/up와 cleanup PASS입니다.
+서로 겹치는 소스 gate를 합산하지 않으며, 세부 증거와 아직 없는 연결은
 [증분 임베딩 checkpoint](docs/status/SYSTEM_RAG_INCREMENTAL_EMBEDDING_CHECKPOINT_2026-10-12.md)에
 기록합니다. 기존 source·report·Graph·정책과 현재 사용자 권한은 대체하지 않습니다.
 
@@ -171,6 +172,9 @@ CUDA wheel25개의 다운로드·독립 raw-hash/ZIP 검증과 공유 GPU mutex/
 준비했습니다. 실제 설치·현재 권한 연결·native Runner·자동 증분·공통 소비자 연결은
 후속 작업입니다. **GPU 실제 비교·기본값 전환 및 영속 운영 인덱스는 아직 미활성**이며,
 소스/합성 테스트를 운영·모델 실행 증거로 해석하지 않습니다.
+실제 CUDA archive 점검에서는 Torch/Triton의 정상적인 directory member가 현재 설치 증명
+검사기의 허용 layout과 달라 호환성 보정 중입니다. archive hash 일치는 설치·실행 PASS가
+아니며, 모델/GPU 실행 없이 이 차이를 먼저 검증합니다.
 
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스

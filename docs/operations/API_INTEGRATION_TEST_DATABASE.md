@@ -46,6 +46,9 @@ use rollback-only synthetic metadata; FK/constraint PASS is not source eligibili
 Application fixtures use a test-only verification port, not a production permission grant. Independent
 spawned processes repeat the disposable owner/schema guards before racing registration; SAVEPOINT
 failure and index-head locking are checked without model execution or runtime-role changes.
+Index publication cases also use the existing Orchestrator owner and temporary local artifact root.
+They check same-revision replay/conflict, independent-process identity and interrupted file-commit
+recovery, not live source permission or a production NAS/index-head update.
 
 Prepare creates only `eom_api_test_*` names and records
 `EOM_API_DISPOSABLE_TEST_DB:<ID>` comments. Migration runs as the isolated database owner. Runtime
