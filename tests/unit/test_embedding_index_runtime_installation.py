@@ -9,11 +9,12 @@ import io
 import os
 import re
 import subprocess
+import sys
 import tarfile
 import tempfile
 import zipfile
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import cast
 
 import pytest
@@ -77,6 +78,158 @@ def test_retain_raw_archive_once_and_replay_never_reads_mutable_source(
             helper, "_index_source", lambda _source: pytest.fail("second source read")
         )
         assert helper.retain_index_archive(source, digest, source.name, maximum=1024) == retained
+
+
+def test_shared_wheelhouse_map_rejects_unknown_duplicates_links_and_bounds(
+    helper: ModuleType, tmp_path: Path
+) -> None:
+    first, second = tmp_path / "first", tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    (first / "fixture.whl").write_bytes(b"fixture")
+    assert helper._index_wheelhouse_sources([first], {"fixture.whl"}) == {
+        "fixture.whl": first / "fixture.whl"
+    }
+    for directories, known in [
+        ([], {"fixture.whl"}),
+        ([first] * 5, {"fixture.whl"}),
+        ([first, first], {"fixture.whl"}),
+        ([first], {"foreign.whl"}),
+    ]:
+        with pytest.raises(helper.SnapshotInstallError):
+            helper._index_wheelhouse_sources(directories, known)
+    (second / "fixture.whl").write_bytes(b"fixture")
+    with pytest.raises(helper.SnapshotInstallError, match="INVENTORY_INVALID"):
+        helper._index_wheelhouse_sources([first, second], {"fixture.whl"})
+    linked = tmp_path / "linked"
+    linked.symlink_to(first, target_is_directory=True)
+    with pytest.raises(helper.SnapshotInstallError, match="WHEELHOUSE_INVALID"):
+        helper._index_wheelhouse_sources([linked], {"fixture.whl"})
+
+
+def test_new_public_archive_root_is_readable_under_private_bootstrap_umask(
+    helper: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    archive = tmp_path / "new-archives"
+    monkeypatch.setattr(helper, "_INDEX_ARCHIVE_ROOT", archive)
+    previous = os.umask(0o077)
+    try:
+        helper._prepare_index_archive_root()
+    finally:
+        os.umask(previous)
+    assert archive.stat().st_mode & 0o777 == 0o755
+    helper._prepare_index_archive_root()
+
+
+def test_existing_private_archive_root_is_not_silently_repaired(
+    helper: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    archive = tmp_path / "old-archives"
+    archive.mkdir(mode=0o700)
+    monkeypatch.setattr(helper, "_INDEX_ARCHIVE_ROOT", archive)
+    with pytest.raises(helper.SnapshotInstallError, match="ARCHIVE_ROOT_MODE_INVALID"):
+        helper._prepare_index_archive_root()
+    assert archive.stat().st_mode & 0o777 == 0o700
+
+
+@pytest.mark.parametrize("failure", ["nonroot", "mutable_api", "new_prefix", "site", "version"])
+def test_public_retention_context_refuses_before_lock_source_or_any_write(
+    helper: ModuleType, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    executable = "/opt/eom/conda/envs/eom-embedding-experiment/bin/python3.12"
+    if failure == "mutable_api":
+        executable = "/srv/eom/conda/envs/eom-api/bin/python3.12"
+    elif failure == "new_prefix":
+        executable = "/opt/eom/conda/envs/eom-embedding-index-cpu/bin/python3.12"
+    monkeypatch.setattr(
+        helper,
+        "sys",
+        SimpleNamespace(
+            argv=[
+                "bootstrap.py",
+                "--profile",
+                "CPU_INDEX_FP32",
+                "--lock-directory",
+                "/tmp/eom-fixture/locks",
+                "--wheelhouse",
+                "/tmp/eom-fixture/wheels",
+            ],
+            flags=SimpleNamespace(
+                isolated=True, no_site=failure != "site", dont_write_bytecode=True
+            ),
+            executable=executable,
+            version_info=(3, 12, 12) if failure == "version" else (3, 12, 13),
+            platform="linux",
+            stderr=sys.stderr,
+        ),
+    )
+    monkeypatch.setattr(helper.os, "geteuid", lambda: 1000 if failure == "nonroot" else 0)
+    monkeypatch.setattr(
+        helper, "index_runtime_locks", lambda *args: pytest.fail("read before context admission")
+    )
+    monkeypatch.setattr(
+        helper, "retain_index_archive", lambda *args, **kwargs: pytest.fail("archive write")
+    )
+    assert helper.index_public_archives_main() == 1
+
+
+def test_public_retention_uses_only_selected_profile_and_retained_not_installed_status(
+    helper: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    wheels = tmp_path / "wheels"
+    wheels.mkdir()
+    cpu = wheels / "cpu.whl"
+    cpu.write_bytes(b"public CPU fixture")
+    cuda = wheels / "cuda.whl"
+    cuda.write_bytes(b"public CUDA fixture")
+    cpu_sha, cuda_sha = (hashlib.sha256(path.read_bytes()).hexdigest() for path in (cpu, cuda))
+    monkeypatch.setattr(
+        helper,
+        "sys",
+        SimpleNamespace(
+            argv=[
+                "bootstrap.py",
+                "--profile",
+                "CPU_INDEX_FP32",
+                "--lock-directory",
+                str(tmp_path / "locks"),
+                "--wheelhouse",
+                str(wheels),
+            ],
+            flags=SimpleNamespace(isolated=True, no_site=True, dont_write_bytecode=True),
+            executable="/opt/eom/conda/envs/eom-embedding-experiment/bin/python3.12",
+            version_info=(3, 12, 13),
+            platform="linux",
+            stderr=sys.stderr,
+        ),
+    )
+    monkeypatch.setattr(helper.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(helper, "require_root_path", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        helper,
+        "index_runtime_locks",
+        lambda _directory, profile: {
+            "fixture": ("1", cpu.name, cpu_sha)
+            if profile == "CPU_INDEX_FP32"
+            else ("1", cuda.name, cuda_sha)
+        },
+    )
+    monkeypatch.setattr(helper, "_INDEX_PUBLIC_BYTES", {"CPU_INDEX_FP32": cpu.stat().st_size})
+    retained: list[Path] = []
+
+    def retain(source: Path, _sha: str, _basename: str, *, maximum: int) -> Path:
+        assert maximum == 2 * 1024**3
+        retained.append(source)
+        return source
+
+    monkeypatch.setattr(helper, "retain_index_archive", retain)
+    assert helper.index_public_archives_main() == 0
+    assert retained == [cpu]
+    output = capsys.readouterr().out
+    assert "RETAINED_NOT_INSTALLED" in output and "ACTIVE" not in output
 
 
 @pytest.mark.parametrize("failure", ["hash", "growth", "write", "symlink", "hardlink"])

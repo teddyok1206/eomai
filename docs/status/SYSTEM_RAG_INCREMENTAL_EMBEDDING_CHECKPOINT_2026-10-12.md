@@ -395,6 +395,27 @@ numerical proof·full-prefix/ABI·worker 권한·launcher는 독립 후속 gate�
 실제 fixed Conda base31 **56,222,902 bytes**의 raw SHA와 leaf epochs를 확인했다. 승인된 기존
 sudo 인증을 재사용해 reviewed shell hash의 root-private copy로 새 두 빈0700 developer prefix만
 준비했다. CPU base는 non-root explicit/offline/copy assembly exit0, Python3.12.13 read-back이다.
-CUDA base도 같은 exact local archive manifest로 non-root assembly를 진행한다. private platform/
+CUDA base도 같은 exact local archive manifest로 non-root assembly exit0과 Python3.12.13을 확인했다. private platform/
 numeric wheels·protected publication·model/worker/GPU 실행은 이 단계에 없으며 기존 prefix와
 모델을 덮거나 복사하지 않았다. base assembly는 protected runtime 설치/입장 PASS가 아니다.
+
+## Public archive prerequisite와 첫 실제 실행 보존 — 2026-10-12 UTC
+
+후속 non-root wheel assembly의 `direct_url.json`이 처음부터 canonical retained archive URI를
+가리키도록 기존 snapshot helper에 fixed public-retention entry를 추가했다. 실행은 이미
+보호된 기존 CPU experiment Python3.12.13의 isolated/no-site/no-bytecode stdlib만 사용하며,
+mutable API Python이나 새 developer prefix interpreter를 root로 실행하지 않는다.
+공유 bounded filename map에서 exact CPU55/CUDA70만 선택하고 solver/network/model은 없다.
+
+첫 실제 CPU retention은 임시 source child directory가 group-writable775여서 안전 검사에서
+거부됐다. CUDA 단계는 실행하지 않았고 archive payload를 게시하지 않았다. 실패한 root-private
+helper와 로그, 최초 empty SHA reservation은 보존한다. 원 archive bytes/hash는 그대로 유지한
+채 해당 eom-owned input child만0700으로 제한했다. 별도로 root umask077에서 신규 cache root가
+0700으로 생성되는 버그를 재현/수정했다: 신규 root만 명시적0755로 게시하고 기존 wrong-mode
+root/incomplete reservation은 자동 복구하지 않는다. 재실행 전 exact empty reservation의
+복구 가능한 이동과 cache mode 검증을 별도 기록한다.
+
+root focused bootstrap/legacy/CUDA preallocation source gate **303 PASS (2.35s)**,
+strict mypy2·Ruff/format2 PASS다. 이전 gate와 중복되어 합산하지 않는다. 실제 public retention,
+numeric/private wheel installation, protected snapshot/proof, 모델·GPU 실행과 default activation은
+이 기록 시점에는 아직 PASS가 아니다.

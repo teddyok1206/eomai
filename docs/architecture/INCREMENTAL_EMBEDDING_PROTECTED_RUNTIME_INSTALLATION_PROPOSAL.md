@@ -317,6 +317,40 @@ prefix is a source/service/GPU permission grant.
 
 ## Exact Conda-base candidate — declared metadata, not raw acceptance
 
+### Owner public-archive retention before wheel assembly
+
+Actual phase-order review found that canonical `direct_url.json` requires retained public
+archive URIs before non-root pip assembly; post-snapshot retention alone cannot supply them.
+The narrow additional `index-public-archives` helper entry is reviewed for this prerequisite:
+
+1. Responsibility: retain only the same fixed CPU55/CUDA70 public archives before assembly;
+   not package installation, source authority, native admission or numerical proof.
+2. Canonical source: one existing raw archive per SHA/basename; never duplicate it per prefix.
+3. Identity: exact profile, fixed five-lock hashes and raw archive hashes remain separate.
+4. Resolution: reuse no-follow/held FD/owner/epoch/size/hash/no-clobber retention checks;
+   no executable, model, private-wheel, URI or include selection from a worker.
+5. Access: one bounded dependency-name map plus sorted archive iteration, no solver/network.
+6. Structure: reuse the existing lock and retention functions; one shared wheelhouse-map
+   function serves pre-assembly retention and final snapshot verification.
+7. Cost: O(archive bytes + fixed inventory), CPU266,514,328/CUDA3,929,095,329 bytes.
+8. Transaction: no DB; incomplete raw-copy reservations remain private/refused on replay.
+9. Ownership: root invokes a raw-pinned root-private helper with the already protected
+   `/opt/eom/conda/envs/eom-embedding-experiment/bin/python3.12 -I -S -B`,
+   CPython3.12.13/Linux/x86_64, read-only; no legacy environment/model/unit changes.
+   It cannot execute a still-developer-owned indexing interpreter or import installed ML.
+10. Failure: wrong context, lock/source/inventory/hash drift or partial reservation fails;
+    no download/repair, identity reset, model/default change or installation PASS.
+11. Simpler alternative: installing from /tmp then editing direct-URL evidence would forge
+    provenance. Reusing this small bootstrap leaf is smaller than a second archive manager.
+
+The final snapshot branch remains independent and retains/rechecks the same raw archives.
+New public-cache ancestry is explicitly published0755 after creation under root's private
+umask077. An existing wrong-mode root or incomplete SHA reservation fails without repair;
+reviewed operational recovery preserves the failed reservation before a bounded retry.
+Private current-source wheel acceptance, full-prefix/ABI, actual numerical observer and
+runtime/device/source gates remain required. Public retention is not archive-member/RECORD
+acceptance or protected runtime installation.
+
 Read-only historical conda-meta contains31 exact records. Python3.12.13 build
 hc5f7cf0_3 requires pip; pip26.1.2 build pyhc872135_0 requires setuptools and wheel;
 wheel0.47.0 Conda requires packaging>=26.0. Shared public54 therefore includes exact

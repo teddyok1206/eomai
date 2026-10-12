@@ -1076,6 +1076,81 @@ def _index_inventory(prefix: Path, expected: dict[str, str]) -> None:
         raise SnapshotInstallError("EMBEDDING_INDEX_DISTRIBUTION_CLOSURE_INVALID")
 
 
+def _index_wheelhouse_sources(directories: list[Path], known: set[str]) -> dict[str, Path]:
+    """One bounded inventory for both bootstrap phases, never an archive resolver."""
+    if not 1 <= len(directories) <= 4 or len(set(directories)) != len(directories):
+        raise SnapshotInstallError("EMBEDDING_INDEX_WHEELHOUSE_INVALID")
+    # The exact known union supports one shared prefetch across CPU/CUDA. Only
+    # the selected profile's archive bytes will be dereferenced/retained.
+    sources: dict[str, Path] = {}
+    for directory in directories:
+        if not directory.is_absolute() or directory.is_symlink():
+            raise SnapshotInstallError("EMBEDDING_INDEX_WHEELHOUSE_INVALID")
+        for name in os.listdir(directory):
+            if name not in known or name in sources:
+                raise SnapshotInstallError("EMBEDDING_INDEX_WHEELHOUSE_INVENTORY_INVALID")
+            sources[name] = directory / name
+    return sources
+
+
+def _prepare_index_archive_root() -> None:
+    """Publish new cache ancestry despite a restrictive root umask; never repair old state."""
+    require_root_path(_INDEX_ARCHIVE_ROOT.parent)
+    try:
+        _INDEX_ARCHIVE_ROOT.mkdir(mode=0o755)
+    except FileExistsError:
+        pass
+    else:
+        os.chmod(_INDEX_ARCHIVE_ROOT, 0o755)
+    require_root_path(_INDEX_ARCHIVE_ROOT)
+    if stat.S_IMODE(_INDEX_ARCHIVE_ROOT.stat().st_mode) != 0o755:
+        raise SnapshotInstallError("EMBEDDING_INDEX_ARCHIVE_ROOT_MODE_INVALID")
+
+
+def index_public_archives_main() -> int:
+    """Fixed public-cache prerequisite; read-only use of the existing protected CPU interpreter."""
+    parser = argparse.ArgumentParser(description="Retain exact public indexing archives")
+    parser.add_argument("--profile", choices=tuple(_INDEX_PREFIXES), required=True)
+    parser.add_argument("--lock-directory", type=Path, required=True)
+    parser.add_argument("--wheelhouse", type=Path, action="append", required=True)
+    args = parser.parse_args(sys.argv[1:])
+    try:
+        if (
+            os.geteuid() != 0
+            or not sys.flags.isolated
+            or not sys.flags.no_site
+            or not sys.flags.dont_write_bytecode
+            or Path(sys.executable)
+            != Path("/opt/eom/conda/envs/eom-embedding-experiment/bin/python3.12")
+            or sys.version_info[:3] != (3, 12, 13)
+            or sys.platform != "linux"
+            or os.uname().machine != "x86_64"
+        ):
+            raise SnapshotInstallError("EMBEDDING_INDEX_ARCHIVE_CONTEXT_INVALID")
+        require_root_path(Path(__file__).resolve(strict=True), directory=False)
+        require_root_path(Path(sys.executable), directory=False)
+        cpu = index_runtime_locks(args.lock_directory, "CPU_INDEX_FP32")
+        cuda = index_runtime_locks(args.lock_directory, "CUDA_INDEX_FP32")
+        selected = cpu if args.profile == "CPU_INDEX_FP32" else cuda
+        sources = _index_wheelhouse_sources(
+            args.wheelhouse, {row[1] for row in (*cpu.values(), *cuda.values())}
+        )
+        if not {row[1] for row in selected.values()}.issubset(sources):
+            raise SnapshotInstallError("EMBEDDING_INDEX_WHEELHOUSE_INCOMPLETE")
+        _prepare_index_archive_root()
+        count = 0
+        for _version, basename, sha in sorted(selected.values(), key=lambda row: row[1]):
+            retained = retain_index_archive(sources[basename], sha, basename, maximum=2 * 1024**3)
+            count += retained.stat().st_size
+        if count != _INDEX_PUBLIC_BYTES[args.profile]:
+            raise SnapshotInstallError("EMBEDDING_INDEX_PUBLIC_BYTES_MISMATCH")
+        print("EMBEDDING_INDEX_PUBLIC_ARCHIVES=RETAINED_NOT_INSTALLED")
+        return 0
+    except Exception:
+        print("EMBEDDING_INDEX_PUBLIC_ARCHIVES_REJECTED", file=sys.stderr)
+        return 1
+
+
 def index_runtime_main() -> int:
     """No model/unit/factory/proof construction; installation is not authority."""
     parser = argparse.ArgumentParser(description="Fixed protected indexing snapshot bootstrap")
@@ -1107,15 +1182,9 @@ def index_runtime_main() -> int:
         selected = index_runtime_locks(args.lock_directory, args.profile)
         cpu = index_runtime_locks(args.lock_directory, "CPU_INDEX_FP32")
         cuda = index_runtime_locks(args.lock_directory, "CUDA_INDEX_FP32")
-        known = {row[1] for row in (*cpu.values(), *cuda.values())}
-        if not 1 <= len(args.wheelhouse) <= 4 or len(set(args.wheelhouse)) != len(args.wheelhouse):
-            raise SnapshotInstallError("EMBEDDING_INDEX_WHEELHOUSE_INVALID")
-        sources = {}
-        for directory in args.wheelhouse:
-            for name in os.listdir(directory):
-                if name not in known or name in sources:
-                    raise SnapshotInstallError("EMBEDDING_INDEX_WHEELHOUSE_INVENTORY_INVALID")
-                sources[name] = directory / name
+        sources = _index_wheelhouse_sources(
+            args.wheelhouse, {row[1] for row in (*cpu.values(), *cuda.values())}
+        )
         if not {row[1] for row in selected.values()}.issubset(sources):
             raise SnapshotInstallError("EMBEDDING_INDEX_WHEELHOUSE_INCOMPLETE")
         required = (
@@ -1187,6 +1256,9 @@ def index_runtime_main() -> int:
 
 
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["index-public-archives"]:
+        del sys.argv[1]
+        raise SystemExit(index_public_archives_main())
     if sys.argv[1:2] == ["index-runtime"]:
         del sys.argv[1]
         raise SystemExit(index_runtime_main())
