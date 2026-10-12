@@ -174,6 +174,11 @@ CUDA Torch의 고정25개 wheel은 다운로드·해시 검사만 완료했으�
 기본값 전환은 아직 진행 전입니다. 신규 registry의 권한·자동 실행·공통 소비자도 미활성이므로
 이 후보를 운영 기능 완료로 판단하지 않습니다.
 
+CUDA wheel25개의 독립 raw-hash·ZIP/metadata 검사도 통과했고, 기존0051 계약을 보존하는
+고정0052 release-operator successor를 추가했습니다(관련 소스167 PASS). 보호 runtime 설치,
+실제 CPU/GPU 비교와 기본값 전환은 아직 미실행입니다. 새 공유 GPU lease와 native encoder는
+후속 연결 중이며, source 검증을 운영 활성화로 해석하지 않습니다.
+
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스
 readiness가 정본입니다.

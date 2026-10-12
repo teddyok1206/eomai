@@ -20,12 +20,14 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from jsonschema import Draft202012Validator
 
 MAX_CONTEXT_BYTES = 32 * 1024
 MIGRATION_REVISION = "20261010_0051"
+MIGRATION_REVISION_0052 = "20261012_0052"
 POSTGRES_ENV = "/etc/eom/secrets/postgres.env"
 API_PREFIX = Path("/srv/eom/conda/envs/eom-api")
 API_NATIVE_MEMBER = Path("lib/python3.12/site-packages/pymupdf/_extra.so")
@@ -38,6 +40,7 @@ _CLEAN_ENV.update(
     PGOPTIONS="-c lock_timeout=5000 -c statement_timeout=120000",
 )
 _SCHEMA_SHA256 = "sha256:5a60d4ec278f4d1200abfff99525cea4654bdbbcba0f86e801de669637e33c8a"
+_SCHEMA_V1_1_SHA256 = "sha256:3fbe06b5c74a74f46f98fb14813c48d1ede8e95be786061510eb0956ddce5eba"
 ERROR_CODES = frozenset(
     {
         "RELEASE_OPERATOR_ROOT_REQUIRED",
@@ -81,11 +84,23 @@ class OperatorRuntimeError(ValueError):
 class Callback(StrEnum):
     MIGRATION_VERIFY = "MIGRATION_VERIFY"
     MIGRATION_UPGRADE_0051 = "MIGRATION_UPGRADE_0051"
+    MIGRATION_VERIFY_0052 = "MIGRATION_VERIFY_0052"
+    MIGRATION_UPGRADE_0052 = "MIGRATION_UPGRADE_0052"
     API_ROLE_BOOTSTRAP = "API_ROLE_BOOTSTRAP"
     CATALOG_ROLE_RECONCILE = "CATALOG_ROLE_RECONCILE"
     HWPX_ROLE_RECONCILE = "HWPX_ROLE_RECONCILE"
     PDF_RUNTIME_VERIFY = "PDF_RUNTIME_VERIFY"
     API_ISOLATION_VERIFY = "API_ISOLATION_VERIFY"
+
+
+_MIGRATION_CALLBACKS = MappingProxyType(
+    {
+        Callback.MIGRATION_VERIFY: (MIGRATION_REVISION, None),
+        Callback.MIGRATION_UPGRADE_0051: (MIGRATION_REVISION, "20261009_0050"),
+        Callback.MIGRATION_VERIFY_0052: (MIGRATION_REVISION_0052, None),
+        Callback.MIGRATION_UPGRADE_0052: (MIGRATION_REVISION_0052, MIGRATION_REVISION),
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -103,6 +118,8 @@ class OperatorContext:
     runtime_prefix: Path
     runtime_tree_sha256: str
     wheels: tuple[WheelPin, WheelPin, WheelPin]
+    schema_version: str = "release-operator-context/1.0"
+    migration_revision: str = MIGRATION_REVISION
 
 
 def require_root() -> None:
@@ -182,10 +199,18 @@ def _json(raw: bytes) -> dict[str, Any]:
         raise OperatorRuntimeError("RELEASE_OPERATOR_JSON_INVALID") from exc
     if not isinstance(value, dict):
         raise OperatorRuntimeError("RELEASE_OPERATOR_JSON_INVALID")
-    schema_bytes = read_protected(
-        Path(__file__).with_name("release_operator_context.schema.json"), maximum=16 * 1024
-    )
-    if _sha(schema_bytes) != _SCHEMA_SHA256:
+    version = value.get("schema_version")
+    if version in ("release-operator-context/1.0", "release-operator-admission/1.0"):
+        schema_name, expected_schema_sha = "release_operator_context.schema.json", _SCHEMA_SHA256
+    elif version in ("release-operator-context/1.1", "release-operator-admission/1.1"):
+        schema_name, expected_schema_sha = (
+            "release_operator_context_v1_1.schema.json",
+            _SCHEMA_V1_1_SHA256,
+        )
+    else:
+        raise OperatorRuntimeError("RELEASE_OPERATOR_JSON_INVALID")
+    schema_bytes = read_protected(Path(__file__).with_name(schema_name), maximum=16 * 1024)
+    if _sha(schema_bytes) != expected_schema_sha:
         raise OperatorRuntimeError("RELEASE_OPERATOR_SCHEMA_CHANGED")
     schema = json.loads(schema_bytes)
     validator = Draft202012Validator(schema)
@@ -206,7 +231,8 @@ def load_context(path: Path, expected_sha256: str, expected_commit: str) -> Oper
         raise OperatorRuntimeError("RELEASE_OPERATOR_CONTEXT_CHANGED")
     value = _json(raw)
     if (
-        value["schema_version"] != "release-operator-context/1.0"
+        value["schema_version"]
+        not in ("release-operator-context/1.0", "release-operator-context/1.1")
         or value["source_commit"] != expected_commit
     ):
         raise OperatorRuntimeError("RELEASE_OPERATOR_SOURCE_MISMATCH")
@@ -227,7 +253,46 @@ def load_context(path: Path, expected_sha256: str, expected_commit: str) -> Oper
         runtime_prefix=Path(value["runtime_prefix"]),
         runtime_tree_sha256=value["runtime_tree_sha256"],
         wheels=(wheels[0], wheels[1], wheels[2]),
+        schema_version=value["schema_version"],
+        migration_revision=(
+            MIGRATION_REVISION
+            if value["schema_version"] == "release-operator-context/1.0"
+            else value["migration_revision"]
+        ),
     )
+
+
+def _context_migration_revision(context: OperatorContext) -> str:
+    if (context.schema_version, context.migration_revision) == (
+        "release-operator-context/1.0",
+        MIGRATION_REVISION,
+    ):
+        return MIGRATION_REVISION
+    if (context.schema_version, context.migration_revision) == (
+        "release-operator-context/1.1",
+        MIGRATION_REVISION_0052,
+    ):
+        return MIGRATION_REVISION_0052
+    raise OperatorRuntimeError("RELEASE_OPERATOR_CONTEXT_INVALID")
+
+
+def _admission_document(
+    path: Path, context: OperatorContext, context_sha256: str
+) -> dict[str, Any]:
+    revision = _context_migration_revision(context)
+    document = {
+        "schema_version": "release-operator-admission/1.0",
+        "context_sha256": context_sha256,
+        "runtime_prefix": str(context.runtime_prefix),
+        "runtime_tree_sha256": context.runtime_tree_sha256,
+        "source_snapshot_sha256": context.source_snapshot_sha256,
+        "context_identity": list(identity(path.lstat())),
+        "interpreter_identity": list(identity(_interpreter(context).lstat())),
+    }
+    if revision == MIGRATION_REVISION_0052:
+        document["schema_version"] = "release-operator-admission/1.1"
+        document["migration_revision"] = MIGRATION_REVISION_0052
+    return document
 
 
 def check_tree(root: Path) -> None:
@@ -454,15 +519,7 @@ def admit(path: Path, context: OperatorContext, context_sha256: str) -> None:
         raise OperatorRuntimeError("RELEASE_OPERATOR_SOURCE_CHANGED")
     verify_source_archive(stage, context)
     verify_wheels(stage, context)
-    body = {
-        "schema_version": "release-operator-admission/1.0",
-        "context_sha256": context_sha256,
-        "runtime_prefix": str(context.runtime_prefix),
-        "runtime_tree_sha256": context.runtime_tree_sha256,
-        "source_snapshot_sha256": context.source_snapshot_sha256,
-        "context_identity": identity(path.lstat()),
-        "interpreter_identity": identity(_interpreter(context).lstat()),
-    }
+    body = _admission_document(path, context, context_sha256)
     raw = json.dumps(body, sort_keys=True, separators=(",", ":")).encode() + b"\n"
     target = stage / "operator-admission.json"
     descriptor = os.open(
@@ -481,15 +538,7 @@ def verify_admission(path: Path, context: OperatorContext, context_sha256: str) 
     value = _json(
         read_protected(path.parent / "operator-admission.json", maximum=MAX_CONTEXT_BYTES)
     )
-    expected = {
-        "schema_version": "release-operator-admission/1.0",
-        "context_sha256": context_sha256,
-        "runtime_prefix": str(context.runtime_prefix),
-        "runtime_tree_sha256": context.runtime_tree_sha256,
-        "source_snapshot_sha256": context.source_snapshot_sha256,
-        "context_identity": list(identity(path.lstat())),
-        "interpreter_identity": list(identity(_interpreter(context).lstat())),
-    }
+    expected = _admission_document(path, context, context_sha256)
     if value != expected:
         raise OperatorRuntimeError("RELEASE_OPERATOR_ADMISSION_CHANGED")
     check_tree(path.parent / "source")
@@ -521,6 +570,7 @@ def run_callback(stage: Path, context: OperatorContext, callback: Callback) -> N
     require_root()
     sys.path.insert(0, str(stage / "site-packages"))
     from eom_api.build_info import get_build_info
+    from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 
     build = get_build_info()
     if (build.source_commit, build.source_tree, build.source_archive_sha256) != (
@@ -529,6 +579,13 @@ def run_callback(stage: Path, context: OperatorContext, callback: Callback) -> N
         context.source_archive_sha256,
     ):
         raise OperatorRuntimeError("RELEASE_OPERATOR_BUILD_MISMATCH")
+    target_revision = _context_migration_revision(context)
+    if callback in _MIGRATION_CALLBACKS:
+        callback_revision, _ = _MIGRATION_CALLBACKS[callback]
+        if callback_revision != target_revision:
+            raise OperatorRuntimeError("RELEASE_OPERATOR_REVISION_UNSUPPORTED")
+    if target_revision != CURRENT_MIGRATION_REVISION:
+        raise OperatorRuntimeError("RELEASE_OPERATOR_REVISION_UNSUPPORTED")
     source = stage / "source"
     if callback not in (Callback.PDF_RUNTIME_VERIFY, Callback.API_ISOLATION_VERIFY):
         check_postgres_environment()
@@ -538,14 +595,12 @@ def run_callback(stage: Path, context: OperatorContext, callback: Callback) -> N
     os.environ["EOM_POSTGRES_ENV"] = POSTGRES_ENV
     os.environ["PGCONNECT_TIMEOUT"] = _CLEAN_ENV["PGCONNECT_TIMEOUT"]
     os.environ["PGOPTIONS"] = _CLEAN_ENV["PGOPTIONS"]
-    if callback in (Callback.MIGRATION_VERIFY, Callback.MIGRATION_UPGRADE_0051):
+    if callback in _MIGRATION_CALLBACKS:
         from alembic import command
         from alembic.config import Config
         from eom_orchestrator.database import build_engine
-        from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 
-        if CURRENT_MIGRATION_REVISION != MIGRATION_REVISION:
-            raise OperatorRuntimeError("RELEASE_OPERATOR_REVISION_UNSUPPORTED")
+        _, allowed_predecessor = _MIGRATION_CALLBACKS[callback]
         engine = build_engine()
         try:
             with engine.connect() as connection:
@@ -559,16 +614,16 @@ def run_callback(stage: Path, context: OperatorContext, callback: Callback) -> N
                 ).scalar_one()
             if owner[0] != owner[1] or owner[2] is not True or "app" not in owner[3]:
                 raise OperatorRuntimeError("RELEASE_OPERATOR_DATABASE_OWNER_INVALID")
-            if callback == Callback.MIGRATION_UPGRADE_0051 and current == "20261009_0050":
+            if allowed_predecessor is not None and current == allowed_predecessor:
                 configuration = Config(str(source / "alembic.ini"))
                 configuration.set_main_option("script_location", str(source / "migrations"))
                 configuration.set_main_option("prepend_sys_path", "")
-                command.upgrade(configuration, MIGRATION_REVISION)
+                command.upgrade(configuration, target_revision)
                 with engine.connect() as connection:
                     current = connection.exec_driver_sql(
                         "SELECT version_num FROM app.alembic_version"
                     ).scalar_one()
-            if current != MIGRATION_REVISION:
+            if current != target_revision:
                 raise OperatorRuntimeError("RELEASE_OPERATOR_MIGRATION_HEAD_MISMATCH")
         finally:
             engine.dispose()

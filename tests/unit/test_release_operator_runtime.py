@@ -109,6 +109,10 @@ def synthetic_stage(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> tuple[Path, operator.OperatorContext, str]:
     # This fixture admits synthetic input for function tests only. It cannot prove root protection.
+    # The 1.0 context models an archived 0051 wheel, not the current source head.
+    from eom_orchestrator import migration
+
+    monkeypatch.setattr(migration, "CURRENT_MIGRATION_REVISION", "20261010_0051")
     monkeypatch.setattr(operator, "require_root", lambda: None)
     monkeypatch.setattr(operator, "protected_path", lambda _path: None)
     monkeypatch.setattr(operator, "check_tree", lambda _path: None)
@@ -601,6 +605,8 @@ def test_closed_callback_enum_and_bootstrap_relative_source_are_not_generic_fram
     assert {member.value for member in operator.Callback} == {
         "MIGRATION_VERIFY",
         "MIGRATION_UPGRADE_0051",
+        "MIGRATION_VERIFY_0052",
+        "MIGRATION_UPGRADE_0052",
         "API_ROLE_BOOTSTRAP",
         "CATALOG_ROLE_RECONCILE",
         "HWPX_ROLE_RECONCILE",

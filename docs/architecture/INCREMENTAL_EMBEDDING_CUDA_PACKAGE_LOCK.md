@@ -277,6 +277,10 @@ The sanitized generated report is outside Git at
 UID-owned 0700 directory with report mode 0600. It contains only expected package
 identities, hashes, byte counts, metadata/tags/closure summaries and explicit pending
 gate flags, not package code/descriptions, credentials or model inputs.
+Report SHA-256 is
+`89f5c90bea36aa9859fa7905d69f39307672e935430d94d3a3126e9898f1ff17`;
+the inspected verifier source SHA-256 is
+`2cab46bc21ad888ca1bf0f27437e0ab0b96fe9e7eb595ed93018e2362e2498d6`.
 
 Source verification of the helper's synthetic-only test suite is **53 PASS**, with
 Ruff formatting/lint and strict mypy PASS. Tests cover traversal, duplicate/NUL
@@ -290,3 +294,9 @@ This closes only this mutable prefetch batch's raw-hash/structure/small-metadata
 gate. **Immutable root quarantine, installation, installed RECORD/pip check,
 runtime-bundle/model pointer registration, GPU/driver/lease/sandbox acceptance,
 encoding/benchmarking and activation remain NOT_VERIFIED/NOT_ACTIVE.**
+
+The subsequent source review adds immediate FD cleanup registration before
+directory `fstat`, and attempts every remaining close even if one close fails.
+Its synthetic suite is now **55 PASS**, including injected stat/cleanup failures.
+The earlier actual inspection receipt/source hash above is preserved as that
+execution's evidence; it is not relabeled as execution of the later helper bytes.

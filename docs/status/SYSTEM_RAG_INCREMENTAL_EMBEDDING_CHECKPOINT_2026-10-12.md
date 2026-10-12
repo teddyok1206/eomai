@@ -96,3 +96,24 @@ activation의 증거가 아니다. 독립 archive/FD 검사와 별도 보호 sta
 historical0051 의미를 보존하는 compatible successor/release gate가 필요하며, 현재 후보가
 기존 배포 callback으로 자동 설치된다고 주장하지 않는다. consumer·service authority·paging
 미구현 상태와 전체 goal 진행 상태는 위 표와 동일하다.
+
+## CUDA prefetch·closed release successor — 2026-10-12 17:48 UTC
+
+앞 단계 registry/runtime-bundle source는 `7928df34`에서 게시했다. 이후 read-only offline
+inspector가25개 wheel의 raw SHA·정확한 filename/byte count·metadata/tag·dependency closure와
+bounded ZIP 구조/held FD epoch를 독립 검증했다. 실제 receipt·source SHA 및 mutable prefetch
+한계는 [package-lock 증거](../architecture/INCREMENTAL_EMBEDDING_CUDA_PACKAGE_LOCK.md#8-later-authorized-prefetch-exact-raw-hashes-and-offline-structure-pass)에
+기록한다. weights/runtime 설치나 GPU 실행은 하지 않았다.
+
+historical0051 context/schema/callback을 변경하지 않는 별도 release-operator1.1 context와
+`MIGRATION_VERIFY_0052` / `MIGRATION_UPGRADE_0052` literal callback을 추가했다.
+target은0052, 허용 upgrade predecessor는0051에만 고정하며 `head`나 arbitrary command는 없다.
+source/context/receipt/head mismatch는 DB construction 전에 거부한다.
+[0052 successor note](../architecture/RELEASE_OPERATOR_MIGRATION_0052_SUCCESSOR.md)를 참조한다.
+이것은 보호 operator context admission·운영 migration·role/bootstrap·배포의 실행 증거가 아니다.
+
+새 inspector55개와 exact release successor/legacy boundary 회귀를 함께 실행하여
+**167 PASS (2.16s)**, 관련5개 strict mypy 및 Ruff/format/bash parsing PASS다.
+기존720개 suite와 겹치므로 합산하지 않는다. 잘못 지정한 nonexistent test path와 초기 mypy
+module-name invocation 오류는 source 수정 없이 올바른 경로/explicit package bases로 재실행했다.
+whole goal과 GPU 기본값은 여전히 IN_PROGRESS / NOT_ACTIVE다.
