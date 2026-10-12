@@ -6,6 +6,7 @@ import ast
 import hashlib
 import os
 import stat
+import struct
 import sys
 import zipfile
 from dataclasses import dataclass
@@ -424,3 +425,122 @@ def test_source_imports_only_stdlib_and_has_no_network_or_extraction_boundary() 
     assert "urllib.request" not in imports
     assert "extractall" not in source and "extract(" not in source
     assert "import torch" not in source and "pip" not in imports
+
+
+def _central_member(*, name: bytes = b"x", extra: bytes = b"", comment: bytes = b"") -> bytes:
+    header = bytearray(46)
+    header[:4] = b"PK\x01\x02"
+    struct.pack_into("<H", header, 6, 20)
+    struct.pack_into("<3H", header, 28, len(name), len(extra), len(comment))
+    return bytes(header) + name + extra + comment
+
+
+@pytest.mark.parametrize(
+    "fault,code",
+    [
+        ("declared_count", "ZIP_ENTRY_LIMIT"),
+        ("actual_count", "ZIP_ENTRY_LIMIT"),
+        ("forged_count", "ZIP_DIRECTORY_COUNT_MISMATCH"),
+        ("central_bytes", "ZIP_CENTRAL_LIMIT"),
+        ("zip64_count", "ZIP64_UNSUPPORTED"),
+        ("zip64_size", "ZIP64_UNSUPPORTED"),
+        ("zip64_extra", "ZIP64_UNSUPPORTED"),
+        ("zip64_version", "ZIP64_UNSUPPORTED"),
+        ("zip64_locator", "ZIP64_UNSUPPORTED"),
+        ("disk", "ZIP_MULTIDISK_UNSUPPORTED"),
+        ("member_disk", "ZIP_MULTIDISK_UNSUPPORTED"),
+        ("comment", "ZIP_COMMENT_UNSUPPORTED"),
+        ("member_comment", "ZIP_COMMENT_UNSUPPORTED"),
+        ("name_bound", "ZIP_DIRECTORY_INVALID"),
+        ("extra_bound", "ZIP_DIRECTORY_INVALID"),
+        ("trailing_central", "ZIP_DIRECTORY_INVALID"),
+        ("truncated_extra", "ZIP_DIRECTORY_INVALID"),
+        ("trailing_archive", "ZIP_DIRECTORY_INVALID"),
+    ],
+)
+def test_central_limits_precede_zipfile_allocation_and_close_all_fds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str, code: str
+) -> None:
+    value = prepared(tmp_path)
+    central, count, size, disk, comment = _central_member(), 1, 47, 0, b""
+    if fault == "declared_count":
+        count = verifier.MAX_ZIP_ENTRIES + 1
+    elif fault == "actual_count":
+        central *= verifier.MAX_ZIP_ENTRIES + 1
+    elif fault == "forged_count":
+        count = 2
+    elif fault == "central_bytes":
+        size = verifier.MAX_CENTRAL_BYTES + 1
+    elif fault == "zip64_count":
+        count = 0xFFFF
+    elif fault == "zip64_size":
+        size = 0xFFFFFFFF
+    elif fault == "zip64_extra":
+        central = _central_member(extra=struct.pack("<2H", 1, 0))
+    elif fault == "zip64_version":
+        central = central[:6] + struct.pack("<H", 45) + central[8:]
+    elif fault == "zip64_locator":
+        central += b"PK\x06\x07" + b"\x00" * 16
+    elif fault == "disk":
+        disk = 1
+    elif fault == "member_disk":
+        central = central[:34] + struct.pack("<H", 1) + central[36:]
+    elif fault == "comment":
+        comment = b"unsupported"
+    elif fault == "member_comment":
+        central = _central_member(comment=b"unsupported")
+    elif fault == "name_bound":
+        central = _central_member(name=b"x" * 513)
+    elif fault == "extra_bound":
+        central = _central_member(extra=bytes(4097))
+    elif fault == "trailing_central":
+        central += b"trailing"
+    elif fault == "truncated_extra":
+        central = _central_member(extra=struct.pack("<2H", 2, 5))
+    if fault not in {"central_bytes", "zip64_size"}:
+        size = len(central)
+    payload = (
+        central
+        + struct.pack("<4s4H2IH", b"PK\x05\x06", disk, 0, count, count, size, 0, len(comment))
+        + comment
+    )
+    if fault == "trailing_archive":
+        payload += b"trailing"
+    value.wheel.write_bytes(payload)
+    value.seal()
+    original_open, original_dup, original_pread = os.open, os.dup, os.pread
+    descriptors: set[int] = set()
+    pread_descriptors: set[int] = set()
+    reads: list[int] = []
+
+    def observed_open(path: Any, flags: int, **kwargs: Any) -> int:
+        descriptor = original_open(path, flags, **kwargs)
+        descriptors.add(descriptor)
+        return descriptor
+
+    def observed_dup(descriptor: int) -> int:
+        duplicate = original_dup(descriptor)
+        descriptors.add(duplicate)
+        return duplicate
+
+    def observed_pread(descriptor: int, size: int, offset: int) -> bytes:
+        pread_descriptors.add(descriptor)
+        reads.append(size)
+        return original_pread(descriptor, size, offset)
+
+    def deny_zipfile(*args: object, **kwargs: object) -> None:
+        pytest.fail("ZipFile allocated before bounded central bytes and actual count admission")
+
+    monkeypatch.setattr(os, "open", observed_open)
+    monkeypatch.setattr(os, "dup", observed_dup)
+    monkeypatch.setattr(os, "pread", observed_pread)
+    monkeypatch.setattr(zipfile, "ZipFile", deny_zipfile)
+    rejects(value, code)
+    assert len(pread_descriptors) == 1
+    assert max(reads) <= verifier.MAX_CENTRAL_BYTES
+    if fault == "central_bytes":
+        assert max(reads) <= 65557
+    assert descriptors
+    for descriptor in descriptors:
+        with pytest.raises(OSError):
+            os.fstat(descriptor)

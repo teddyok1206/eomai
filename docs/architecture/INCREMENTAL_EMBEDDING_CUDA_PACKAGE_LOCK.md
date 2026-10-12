@@ -300,3 +300,76 @@ directory `fstat`, and attempts every remaining close even if one close fails.
 Its synthetic suite is now **55 PASS**, including injected stat/cleanup failures.
 The earlier actual inspection receipt/source hash above is preserved as that
 execution's evidence; it is not relabeled as execution of the later helper bytes.
+
+## 9. Shared numerical wheel pins for the CPU/CUDA successor
+
+The [common numerical download lock](../../scripts/embedding/common-numeric-runtime-wheels.lock)
+adds the four exact existing CPU numerical versions, without replacing either Torch-flavor lock
+or changing the legacy installed environment. These archives are shared by reference between
+successor profiles; model weights/tokenizer payloads remain the separate canonical model snapshot.
+This is not yet a complete runtime dependency lock or permission to import/install a prefix.
+
+At 2026-10-12 UTC the explicit API CPython3.12.13 interpreter selected a compatible non-yanked
+wheel from each official version-specific PyPI JSON record. The fetched small wheel metadata
+was byte-identical to the existing protected CPU METADATA in all four cases. Raw public archive
+hashes are advertised pins until the later bounded prefetch independently hashes actual bytes.
+No model/package code was imported and no target environment was mutated by this metadata check.
+
+| Numerical library | Official metadata source | Archive bytes | Small METADATA raw SHA-256 |
+|---|---|---:|---|
+| NumPy2.4.6 | [PyPI](https://pypi.org/pypi/numpy/2.4.6/json) | 16,645,538 | `b082c52ccbe3b880bae177c35171b52ed6c947f3ad71e3762f2723f60a411de0` |
+| safetensors0.6.2 | [PyPI](https://pypi.org/pypi/safetensors/0.6.2/json) | 485,835 | `8768f97439fd846ac9bec48a5e4cba450b268142529db527ce4681d29833a736` |
+| tokenizers0.22.2 | [PyPI](https://pypi.org/pypi/tokenizers/0.22.2/json) | 3,274,982 | `15a5ddaf489f592b77e0a934c0eeb46b51130a94064ca129232afdb0a3868efc` |
+| Transformers4.56.2 | [PyPI](https://pypi.org/pypi/transformers/4.56.2/json) | 11,608,055 | `3a56597c5ab3b01a627f7034264c7b0d5e44abb59a7fc36789d65234c852122b` |
+
+The bounded common archive budget is32,014,410 bytes. Their dependency versions are still those
+in the existing CPU requirements lock; unrequested extras, arbitrary latest resolution, driver
+updates and external model calls are not admitted. The primary CPU Torch archive remains pinned
+to the exact existing `2.7.1+cpu` URL/SHA, not CPU mode of the CUDA wheel.
+
+Actual numeric CUDA inspection separately found safe zero-byte directory members in Torch492
+and Triton33 that are absent only from RECORD; all regular-file RECORD hashes/sizes match. This
+is an unreleased observer-layout incompatibility to correct and test, not a reason to weaken
+file closure, mutate the upstream wheel or claim installed readiness. The upstream CUDA Torch
+`torchfrtrace` module target is absent from wheel/RECORD and is not used by native embedding;
+its console wrapper must not be reported as a working CLI. Original diagnostic evidence is
+retained outside Git, separate from source test and eventual installed proof.
+
+## 10. Source checkpoint: bound ZIP allocation before inspection
+
+This separately reviewed local correction keeps section 7's read-only/stdlb-only prefetch
+boundary, exact lock/raw SHA identities, private directory and held named/FD epochs unchanged.
+The existing held wheel FD and verified size now bound the final EOCD tail (≤65,557 bytes)
+and central directory (≤16 MiB), and count actual central headers (≤20,000) before `ZipFile`
+can allocate member objects. Actual count must equal the declared count; central member names
+are ≤512 bytes, extra fields ≤4,096 bytes and comments unsupported. ZIP64, multidisk,
+malformed/trailing central bytes or unsupported metadata fail closed before ZIP allocation.
+This reuses the script's own stdlib `struct`/FD ownership, not private Catalog/image helpers
+or a generic verifier framework. Reads retain O(total raw bytes + central bytes + entries)
+time and O(current bounded central bytes + entries) space; no archive extraction is added.
+
+Focused synthetic tests must prove rejection before `ZipFile` on forged count/byte bounds,
+ZIP64/comments/malformed structure, and held-FD/ancestor cleanup on failure. Exact private
+inventory, raw hashes, metadata/dependency closure and later named/FD epochs remain required.
+The source gates and any subsequent actual read-only reinspection are recorded below only
+after passing; neither changes installation, GPU permissions, inference or activation.
+
+Section 8's earlier receipt and source SHA remain historical evidence from that execution.
+They are not relabeled as proof that the preallocation correction ran on the actual archives.
+
+The corrected source helper SHA-256 is
+`05ee5ba42dc077b970265c13cb2ddfb67e160f22cfb606dc9b9e2b2d61ebdac2`.
+Explicit API Conda focused source tests are **73 PASS** (the earlier 55 plus eighteen
+preallocation/cleanup cases); scoped Ruff formatting/lint and explicit API/core strict mypy
+both pass. The approved numerical observer directory compatibility independently passes
+the 493-test embedding source regression, preserving exact regular-file closure and schema 1.0.
+
+At **2026-10-12T19:49:42.126874Z**, the corrected helper ran with the explicit API
+interpreter `-I -B` against the same actual twenty-five-wheel private prefetch. Exact lock,
+raw SHA, 3,848,835,734-byte inventory, preallocation/structure/small metadata/dependency
+closure and final held/named FD epochs pass. Declared expansion remains 6,605,396,372 bytes.
+The new private mode-0600 receipt is
+`/tmp/eom-embedding-cuda-verification.4pL4pfU3/receipt.json` (13,952 bytes), raw SHA-256
+`0cfd1e7157a8acc32d0e515d94902b0ce5882f0d6d980d0fd51b6b90c24f76aa`.
+Previous receipt/source pins and wheel bytes/modes are untouched. No installed RECORD, CUDA,
+root quarantine, interpreter/driver execution, inference or activation gate is claimed.

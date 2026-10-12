@@ -29,6 +29,7 @@ WHEEL_COUNT = 25
 TOTAL_BYTES = 3_848_835_734
 MAX_WHEEL_BYTES = 2 * 1024**3
 MAX_ZIP_ENTRIES = 20_000
+MAX_CENTRAL_BYTES = 16 * 1024**2
 MAX_MEMBER_BYTES = 2 * 1024**3
 MAX_EXPANDED_WHEEL_BYTES = 4 * 1024**3
 MAX_EXPANDED_TOTAL_BYTES = 8 * 1024**3
@@ -289,12 +290,86 @@ def _lock(payload: bytes, expected_sha256: str, expected_count: int) -> tuple[Wh
     return tuple(sorted(pins.values(), key=lambda pin: pin.filename))
 
 
+def _bounded_zip_directory(descriptor: int, size: int) -> int:
+    """Count bounded ZIP32 central headers on the held FD before ZipInfo allocation."""
+    tail_size = min(size, 65557)
+    tail = os.pread(descriptor, tail_size, size - tail_size)
+    _require(len(tail) == tail_size, "ZIP_DIRECTORY_INVALID")
+    position = tail.rfind(b"PK\x05\x06")
+    _require(position >= 0 and position + 22 <= len(tail), "ZIP_DIRECTORY_INVALID")
+    _, disk, central_disk, disk_count, count, central_size, central_offset, comment = (
+        struct.unpack_from("<4s4H2IH", tail, position)
+    )
+    _require(comment == 0, "ZIP_COMMENT_UNSUPPORTED")
+    _require(position + 22 == len(tail), "ZIP_DIRECTORY_INVALID")
+    eocd_offset = size - tail_size + position
+    _require(
+        disk_count != 0xFFFF
+        and count != 0xFFFF
+        and central_size != 0xFFFFFFFF
+        and central_offset != 0xFFFFFFFF,
+        "ZIP64_UNSUPPORTED",
+    )
+    _require(
+        eocd_offset < 20 or os.pread(descriptor, 4, eocd_offset - 20) != b"PK\x06\x07",
+        "ZIP64_UNSUPPORTED",
+    )
+    _require(disk == central_disk == 0 and disk_count == count, "ZIP_MULTIDISK_UNSUPPORTED")
+    _require(0 < count <= MAX_ZIP_ENTRIES, "ZIP_ENTRY_LIMIT")
+    _require(0 < central_size <= MAX_CENTRAL_BYTES, "ZIP_CENTRAL_LIMIT")
+    _require(central_offset + central_size == eocd_offset, "ZIP_DIRECTORY_INVALID")
+    central = os.pread(descriptor, central_size, central_offset)
+    _require(len(central) == central_size, "ZIP_DIRECTORY_INVALID")
+    position, actual_count = 0, 0
+    while position < len(central):
+        _require(
+            position + 46 <= len(central) and central[position : position + 4] == b"PK\x01\x02",
+            "ZIP_DIRECTORY_INVALID",
+        )
+        actual_count += 1
+        _require(actual_count <= MAX_ZIP_ENTRIES, "ZIP_ENTRY_LIMIT")
+        needed = struct.unpack_from("<H", central, position + 6)[0]
+        compression = struct.unpack_from("<H", central, position + 10)[0]
+        _require(
+            compression in {zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED},
+            "ZIP_COMPRESSION_INVALID",
+        )
+        compressed, expanded = struct.unpack_from("<2I", central, position + 20)
+        name_size, extra_size, member_comment, member_disk = struct.unpack_from(
+            "<4H", central, position + 28
+        )
+        local_offset = struct.unpack_from("<I", central, position + 42)[0]
+        _require(
+            needed < 45
+            and compressed != 0xFFFFFFFF
+            and expanded != 0xFFFFFFFF
+            and local_offset != 0xFFFFFFFF,
+            "ZIP64_UNSUPPORTED",
+        )
+        _require(member_disk == 0, "ZIP_MULTIDISK_UNSUPPORTED")
+        _require(member_comment == 0, "ZIP_COMMENT_UNSUPPORTED")
+        _require(0 < name_size <= 512 and extra_size <= 4096, "ZIP_DIRECTORY_INVALID")
+        end = position + 46 + name_size + extra_size
+        _require(end <= len(central), "ZIP_DIRECTORY_INVALID")
+        extra_position = position + 46 + name_size
+        while extra_position < end:
+            _require(extra_position + 4 <= end, "ZIP_DIRECTORY_INVALID")
+            kind, length = struct.unpack_from("<2H", central, extra_position)
+            _require(kind != 1, "ZIP64_UNSUPPORTED")
+            extra_position += 4 + length
+            _require(extra_position <= end, "ZIP_DIRECTORY_INVALID")
+        position = end
+    _require(actual_count == count, "ZIP_DIRECTORY_COUNT_MISMATCH")
+    return actual_count
+
+
 def _archive(
-    stream: BinaryIO, pin: WheelPin
+    stream: BinaryIO, pin: WheelPin, size: int
 ) -> tuple[dict[str, object], tuple[tuple[str, str], ...]]:
+    member_count = _bounded_zip_directory(stream.fileno(), size)
     with zipfile.ZipFile(stream) as archive:
         members = archive.infolist()
-        _require(1 <= len(members) <= MAX_ZIP_ENTRIES, "ZIP_ENTRY_LIMIT")
+        _require(len(members) == member_count, "ZIP_ENTRY_LIMIT")
         names: dict[str, zipfile.ZipInfo] = {}
         ranges = []
         expanded = 0
@@ -467,7 +542,7 @@ def verify_wheelhouse(
                 _require(read_bytes == initial.st_size, "WHEEL_EPOCH_CHANGED")
                 _require(digest.hexdigest() == pin.sha256, "WHEEL_HASH_MISMATCH")
                 with os.fdopen(os.dup(fd), "rb") as stream:
-                    inspection, requirements = _archive(stream, pin)
+                    inspection, requirements = _archive(stream, pin, initial.st_size)
                 for name, specification in requirements:
                     _require(name in by_name, "DEPENDENCY_MISSING")
                     _require(
