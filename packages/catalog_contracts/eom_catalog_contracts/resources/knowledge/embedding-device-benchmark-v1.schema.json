@@ -1,0 +1,3307 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/embedding-device-benchmark/1.0",
+  "title": "Fixed bounded native CPU/CUDA device benchmark contracts V1",
+  "description": "Source-only values. No authority, admission, installation or benchmark activation follows from validation. Genuine QUERY and DOCUMENT remain separate device spaces; external binary bytes and current permissions require owner validation.",
+  "$defs": {
+    "sha": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "benchmarkId": {
+      "type": "string",
+      "pattern": "^embeddingbenchmark_[0-9a-f]{32}$"
+    },
+    "benchmarkRevisionId": {
+      "type": "string",
+      "pattern": "^embeddingbenchmarkrev_[0-9a-f]{32}$"
+    },
+    "executionId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "jobId": {
+      "type": "string",
+      "pattern": "^job_[0-9a-f]{32}$"
+    },
+    "member": {
+      "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+    },
+    "profile": {
+      "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profilePointer"
+    },
+    "space": {
+      "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/space"
+    },
+    "ns": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000000000000000
+    },
+    "us": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000000000000
+    },
+    "tokenId": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2147483647
+    },
+    "tokenStratum": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimum_tokens",
+        "maximum_tokens",
+        "profile_count"
+      ],
+      "properties": {
+        "minimum_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2048
+        },
+        "maximum_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2048
+        },
+        "profile_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
+        }
+      }
+    },
+    "recipe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "cold_sequence",
+        "cold_repeats",
+        "warm_repeats",
+        "query_repeats",
+        "synthetic_cases",
+        "maximum_tokens",
+        "maximum_batch_size",
+        "threads",
+        "token_strata",
+        "near_tie_rule",
+        "gate_microseconds",
+        "recipe_sha256",
+        "public_fixture_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-recipe/1.0"
+        },
+        "cold_sequence": {
+          "const": [
+            "CPU",
+            "CUDA",
+            "CUDA",
+            "CPU",
+            "CPU",
+            "CUDA"
+          ]
+        },
+        "cold_repeats": {
+          "const": 3
+        },
+        "warm_repeats": {
+          "const": 5
+        },
+        "query_repeats": {
+          "const": 5
+        },
+        "synthetic_cases": {
+          "const": 8
+        },
+        "maximum_tokens": {
+          "const": 2048
+        },
+        "maximum_batch_size": {
+          "const": 4
+        },
+        "threads": {
+          "const": 4
+        },
+        "token_strata": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "$ref": "#/$defs/tokenStratum"
+          }
+        },
+        "near_tie_rule": {
+          "const": "CPU_COMPLETE_SPAN_4E-5_STABLE_REAL_ROW/1.0"
+        },
+        "gate_microseconds": {
+          "const": "CPU_FLOOR_CUDA_CEIL_FROM_NS/1.0"
+        },
+        "recipe_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "public_fixture_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "family": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "model",
+        "implementations",
+        "recipe",
+        "family_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-family/1.0"
+        },
+        "model": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/localEmbeddingModel"
+        },
+        "implementations": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/implementationPin"
+          }
+        },
+        "recipe": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/numericalRecipe"
+        },
+        "family_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      },
+      "allOf": [
+        {
+          "properties": {
+            "model": {
+              "properties": {
+                "upstream_repo": {
+                  "const": "BAAI/bge-m3"
+                },
+                "upstream_revision": {
+                  "const": "9a0624b896d81da7492a910ffa53731274b6cf3d"
+                },
+                "dimension": {
+                  "const": 1024
+                },
+                "maximum_tokens": {
+                  "const": 2048
+                }
+              }
+            },
+            "recipe": {
+              "properties": {
+                "batch_size": {
+                  "const": 4
+                },
+                "threads": {
+                  "const": 4
+                },
+                "cublas_workspace": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "spaces": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document",
+        "query"
+      ],
+      "properties": {
+        "document": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/space"
+            },
+            {
+              "properties": {
+                "purpose": {
+                  "const": "DOCUMENT"
+                }
+              }
+            }
+          ]
+        },
+        "query": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/space"
+            },
+            {
+              "properties": {
+                "purpose": {
+                  "const": "QUERY"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "bundle",
+        "installed_proof",
+        "numerical_runtime",
+        "spaces"
+      ],
+      "properties": {
+        "profile": {
+          "enum": [
+            "CPU_INDEX_FP32",
+            "CUDA_INDEX_FP32"
+          ]
+        },
+        "bundle": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/bundlePointer"
+        },
+        "installed_proof": {
+          "$ref": "eom://schemas/knowledge/embedding-installed-runtime-proof/1.0#/$defs/pointer"
+        },
+        "numerical_runtime": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/numericalRuntime"
+        },
+        "spaces": {
+          "$ref": "#/$defs/spaces"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "profile": {
+                "const": "CPU_INDEX_FP32"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "installed_proof": {
+                "properties": {
+                  "profile": {
+                    "const": "CPU_INDEX_FP32"
+                  }
+                }
+              },
+              "numerical_runtime": {
+                "properties": {
+                  "device": {
+                    "properties": {
+                      "kind": {
+                        "const": "CPU"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "installed_proof": {
+                "properties": {
+                  "profile": {
+                    "const": "CUDA_INDEX_FP32"
+                  }
+                }
+              },
+              "numerical_runtime": {
+                "properties": {
+                  "device": {
+                    "properties": {
+                      "kind": {
+                        "const": "CUDA"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "sourceSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "source",
+        "solution_evidence",
+        "selection_view",
+        "selection_token_count"
+      ],
+      "properties": {
+        "profile": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profilePointer"
+        },
+        "source": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/source"
+        },
+        "solution_evidence": {
+          "$ref": "eom://schemas/knowledge/evidence-bundle-manifest/5.0#/$defs/solutionEvidence"
+        },
+        "selection_view": {
+          "enum": [
+            "CONTENT_ONLY",
+            "CONCRETE_FACETS",
+            "METADATA_ONLY"
+          ]
+        },
+        "selection_token_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2048
+        }
+      }
+    },
+    "rowRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "view",
+        "purpose",
+        "input_text_sha256",
+        "row_sha256"
+      ],
+      "properties": {
+        "profile": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profilePointer"
+        },
+        "view": {
+          "enum": [
+            "CONTENT_ONLY",
+            "CONCRETE_FACETS",
+            "METADATA_ONLY"
+          ]
+        },
+        "purpose": {
+          "enum": [
+            "DOCUMENT",
+            "QUERY"
+          ]
+        },
+        "input_text_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "row_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "textRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "row",
+        "text",
+        "token_count",
+        "token_ids_sha256"
+      ],
+      "properties": {
+        "row": {
+          "$ref": "#/$defs/rowRef"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 262144,
+          "allOf": [
+            {
+              "pattern": "\\S"
+            },
+            {
+              "not": {
+                "pattern": "[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f]"
+              }
+            }
+          ]
+        },
+        "token_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2048
+        },
+        "token_ids_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "stagedInputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "benchmark_id",
+        "benchmark_revision_id",
+        "view_recipe",
+        "documents",
+        "queries",
+        "input_set_sha256",
+        "synthetic_cases",
+        "capacity",
+        "public_fixture_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-inputs/1.0"
+        },
+        "benchmark_id": {
+          "$ref": "#/$defs/benchmarkId"
+        },
+        "benchmark_revision_id": {
+          "$ref": "#/$defs/benchmarkRevisionId"
+        },
+        "view_recipe": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/recipe"
+        },
+        "documents": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 18,
+          "uniqueItems": true,
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/textRow"
+              },
+              {
+                "properties": {
+                  "row": {
+                    "properties": {
+                      "purpose": {
+                        "const": "DOCUMENT"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "queries": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/textRow"
+              },
+              {
+                "properties": {
+                  "row": {
+                    "properties": {
+                      "purpose": {
+                        "const": "QUERY"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "input_set_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "synthetic_cases": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/syntheticCase"
+          }
+        },
+        "capacity": {
+          "$ref": "#/$defs/capacityInput"
+        },
+        "public_fixture_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "localInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "member_name",
+        "sha256",
+        "byte_count"
+      ],
+      "properties": {
+        "member_name": {
+          "const": "benchmark-inputs.json"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "byte_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "purpose",
+        "policy_id",
+        "policy_revision_id",
+        "timeout_seconds",
+        "cpu_quota_percent",
+        "tasks_max",
+        "rss_limit_bytes",
+        "gpu_limit_bytes",
+        "maximum_envelope_bytes",
+        "maximum_staged_bytes",
+        "maximum_output_bytes",
+        "maximum_output_members",
+        "policy_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-policy/1.0"
+        },
+        "purpose": {
+          "const": "LOCAL_EMBEDDING_DEVICE_BENCHMARK"
+        },
+        "policy_id": {
+          "type": "string",
+          "pattern": "^embeddingbenchmarkpolicy_[0-9a-f]{32}$"
+        },
+        "policy_revision_id": {
+          "type": "string",
+          "pattern": "^embeddingbenchmarkpolicyrev_[0-9a-f]{32}$"
+        },
+        "timeout_seconds": {
+          "const": 180
+        },
+        "cpu_quota_percent": {
+          "const": 400
+        },
+        "tasks_max": {
+          "const": 64
+        },
+        "rss_limit_bytes": {
+          "const": 6442450944
+        },
+        "gpu_limit_bytes": {
+          "const": 8589934592
+        },
+        "maximum_envelope_bytes": {
+          "const": 65536
+        },
+        "maximum_staged_bytes": {
+          "const": 67108864
+        },
+        "maximum_output_bytes": {
+          "const": 16777216
+        },
+        "maximum_output_members": {
+          "const": 64
+        },
+        "policy_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "kind",
+        "purpose",
+        "benchmark_id",
+        "benchmark_revision_id",
+        "operator_audit_id",
+        "graph_snapshot",
+        "policy_revision_id",
+        "policy_sha256",
+        "sources",
+        "document_rows",
+        "query_rows",
+        "input_manifest",
+        "input_set_sha256",
+        "view_recipe",
+        "family",
+        "cpu",
+        "cuda",
+        "recipe",
+        "execution_policy",
+        "request_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-request/1.0"
+        },
+        "kind": {
+          "const": "OWNER_REQUEST"
+        },
+        "purpose": {
+          "const": "LOCAL_EMBEDDING_DEVICE_BENCHMARK"
+        },
+        "benchmark_id": {
+          "$ref": "#/$defs/benchmarkId"
+        },
+        "benchmark_revision_id": {
+          "$ref": "#/$defs/benchmarkRevisionId"
+        },
+        "operator_audit_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+        },
+        "graph_snapshot": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"
+        },
+        "policy_revision_id": {
+          "type": "string",
+          "pattern": "^accessrev_[0-9a-f]{32}$"
+        },
+        "policy_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sourceSelection"
+          }
+        },
+        "document_rows": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 18,
+          "uniqueItems": true,
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/rowRef"
+              },
+              {
+                "properties": {
+                  "purpose": {
+                    "const": "DOCUMENT"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "query_rows": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/rowRef"
+              },
+              {
+                "properties": {
+                  "purpose": {
+                    "const": "QUERY"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "input_manifest": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+        },
+        "input_set_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "view_recipe": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/recipe"
+        },
+        "family": {
+          "$ref": "#/$defs/family"
+        },
+        "cpu": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/runtime"
+            },
+            {
+              "properties": {
+                "profile": {
+                  "const": "CPU_INDEX_FP32"
+                }
+              }
+            }
+          ]
+        },
+        "cuda": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/runtime"
+            },
+            {
+              "properties": {
+                "profile": {
+                  "const": "CUDA_INDEX_FP32"
+                }
+              }
+            }
+          ]
+        },
+        "recipe": {
+          "$ref": "#/$defs/recipe"
+        },
+        "execution_policy": {
+          "$ref": "#/$defs/policy"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "invocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "kind",
+        "purpose",
+        "benchmark_id",
+        "benchmark_revision_id",
+        "job_id",
+        "execution_id",
+        "owner_request_sha256",
+        "launch_ordinal",
+        "device",
+        "local_input",
+        "input_set_sha256",
+        "family",
+        "runtime",
+        "recipe",
+        "execution_policy",
+        "invocation_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-invocation/1.0"
+        },
+        "kind": {
+          "const": "WORKER_INVOCATION"
+        },
+        "purpose": {
+          "const": "LOCAL_EMBEDDING_DEVICE_BENCHMARK"
+        },
+        "benchmark_id": {
+          "$ref": "#/$defs/benchmarkId"
+        },
+        "benchmark_revision_id": {
+          "$ref": "#/$defs/benchmarkRevisionId"
+        },
+        "job_id": {
+          "$ref": "#/$defs/jobId"
+        },
+        "execution_id": {
+          "$ref": "#/$defs/executionId"
+        },
+        "owner_request_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "launch_ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 6
+        },
+        "device": {
+          "enum": [
+            "CPU",
+            "CUDA"
+          ]
+        },
+        "local_input": {
+          "$ref": "#/$defs/localInput"
+        },
+        "input_set_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "family": {
+          "$ref": "#/$defs/family"
+        },
+        "runtime": {
+          "$ref": "#/$defs/runtime"
+        },
+        "recipe": {
+          "$ref": "#/$defs/recipe"
+        },
+        "execution_policy": {
+          "$ref": "#/$defs/policy"
+        },
+        "invocation_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "localBinary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "member_name",
+        "sha256",
+        "byte_count",
+        "dtype",
+        "byte_order",
+        "layout"
+      ],
+      "properties": {
+        "member_name": {
+          "enum": [
+            "cold-documents.f32",
+            "supplementary-documents.f32",
+            "query-1-1.f32",
+            "query-1-2.f32",
+            "query-1-3.f32",
+            "query-1-4.f32",
+            "query-1-5.f32",
+            "query-2-1.f32",
+            "query-2-2.f32",
+            "query-2-3.f32",
+            "query-2-4.f32",
+            "query-2-5.f32"
+          ]
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "byte_count": {
+          "type": "integer",
+          "minimum": 4096,
+          "maximum": 16777216
+        },
+        "dtype": {
+          "const": "FLOAT32"
+        },
+        "byte_order": {
+          "const": "LITTLE_ENDIAN"
+        },
+        "layout": {
+          "const": "ROW_MAJOR"
+        }
+      }
+    },
+    "localJson": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "member_name",
+        "sha256",
+        "byte_count",
+        "schema_ref"
+      ],
+      "properties": {
+        "member_name": {
+          "enum": [
+            "token-witness.json",
+            "timings.json",
+            "resources.json",
+            "worker-result.json"
+          ]
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "byte_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        },
+        "schema_ref": {
+          "type": "string",
+          "enum": [
+            "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/tokenWitness",
+            "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/invocationTimings",
+            "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/resources",
+            "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/workerResult"
+          ]
+        }
+      }
+    },
+    "sampleKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "repetition",
+        "query_ordinal",
+        "synthetic_case",
+        "batch_size"
+      ],
+      "properties": {
+        "phase": {
+          "enum": [
+            "COLD_DOCUMENT",
+            "WARM_DOCUMENT",
+            "QUERY",
+            "CAPACITY",
+            "SYNTHETIC"
+          ]
+        },
+        "repetition": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            }
+          ]
+        },
+        "query_ordinal": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2
+            }
+          ]
+        },
+        "synthetic_case": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 6
+            }
+          ]
+        },
+        "batch_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "phase": {
+              "const": "COLD_DOCUMENT"
+            },
+            "repetition": {
+              "type": "null"
+            },
+            "query_ordinal": {
+              "type": "null"
+            },
+            "synthetic_case": {
+              "type": "null"
+            },
+            "batch_size": {
+              "const": 4
+            }
+          }
+        },
+        {
+          "properties": {
+            "phase": {
+              "const": "WARM_DOCUMENT"
+            },
+            "repetition": {
+              "type": "integer"
+            },
+            "query_ordinal": {
+              "type": "null"
+            },
+            "synthetic_case": {
+              "type": "null"
+            },
+            "batch_size": {
+              "const": 4
+            }
+          }
+        },
+        {
+          "properties": {
+            "phase": {
+              "const": "QUERY"
+            },
+            "repetition": {
+              "type": "integer"
+            },
+            "query_ordinal": {
+              "type": "integer"
+            },
+            "synthetic_case": {
+              "type": "null"
+            },
+            "batch_size": {
+              "const": 1
+            }
+          }
+        },
+        {
+          "properties": {
+            "phase": {
+              "const": "CAPACITY"
+            },
+            "repetition": {
+              "type": "null"
+            },
+            "query_ordinal": {
+              "type": "null"
+            },
+            "synthetic_case": {
+              "type": "null"
+            },
+            "batch_size": {
+              "enum": [
+                1,
+                4
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "phase": {
+              "const": "SYNTHETIC"
+            },
+            "repetition": {
+              "type": "null"
+            },
+            "query_ordinal": {
+              "type": "null"
+            },
+            "synthetic_case": {
+              "type": "integer"
+            },
+            "batch_size": {
+              "enum": [
+                1,
+                4
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "vectorSample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "purpose",
+        "space_sha256",
+        "ordered_rows",
+        "binary",
+        "byte_offset",
+        "byte_count",
+        "row_count",
+        "dimension",
+        "sample_sha256"
+      ],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/sampleKey"
+        },
+        "purpose": {
+          "enum": [
+            "DOCUMENT",
+            "QUERY"
+          ]
+        },
+        "space_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "ordered_rows": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 18,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sha"
+          }
+        },
+        "binary": {
+          "$ref": "#/$defs/localBinary"
+        },
+        "byte_offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16773120
+        },
+        "byte_count": {
+          "type": "integer",
+          "minimum": 4096,
+          "maximum": 73728
+        },
+        "row_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 18
+        },
+        "dimension": {
+          "const": 1024
+        },
+        "sample_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "tokenRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "row_sha256",
+        "input_ids",
+        "attention_mask",
+        "token_type_ids",
+        "token_count",
+        "token_ids_sha256"
+      ],
+      "properties": {
+        "row_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "input_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2048,
+          "items": {
+            "$ref": "#/$defs/tokenId"
+          }
+        },
+        "attention_mask": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2048,
+          "items": {
+            "enum": [
+              0,
+              1
+            ]
+          }
+        },
+        "token_type_ids": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 2048,
+              "items": {
+                "$ref": "#/$defs/tokenId"
+              }
+            }
+          ]
+        },
+        "token_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2048
+        },
+        "token_ids_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "tokenBatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "purpose",
+        "pad_token_id",
+        "rows",
+        "batch_sha256"
+      ],
+      "properties": {
+        "purpose": {
+          "enum": [
+            "DOCUMENT",
+            "QUERY"
+          ]
+        },
+        "pad_token_id": {
+          "$ref": "#/$defs/tokenId"
+        },
+        "rows": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/tokenRow"
+          }
+        },
+        "batch_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "tokenWitness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "invocation_sha256",
+        "samples",
+        "witness_sha256",
+        "launch_ordinal"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-token-witness/1.0"
+        },
+        "invocation_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "samples": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "key",
+              "batches",
+              "sample_sha256"
+            ],
+            "properties": {
+              "key": {
+                "$ref": "#/$defs/sampleKey"
+              },
+              "batches": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 5,
+                "items": {
+                  "$ref": "#/$defs/tokenBatch"
+                }
+              },
+              "sample_sha256": {
+                "$ref": "#/$defs/sha"
+              }
+            }
+          }
+        },
+        "witness_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "launch_ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 6
+        }
+      }
+    },
+    "localVector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "member_name",
+        "sha256",
+        "byte_count",
+        "row_count",
+        "dimension",
+        "purpose",
+        "space_sha256"
+      ],
+      "properties": {
+        "member_name": {
+          "enum": [
+            "cold-documents.f32",
+            "query-1-1.f32",
+            "query-1-2.f32",
+            "query-1-3.f32",
+            "query-1-4.f32",
+            "query-1-5.f32",
+            "query-2-1.f32",
+            "query-2-2.f32",
+            "query-2-3.f32",
+            "query-2-4.f32",
+            "query-2-5.f32"
+          ]
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "byte_count": {
+          "type": "integer",
+          "minimum": 4096,
+          "maximum": 73728
+        },
+        "row_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 18
+        },
+        "dimension": {
+          "const": 1024
+        },
+        "purpose": {
+          "enum": [
+            "DOCUMENT",
+            "QUERY"
+          ]
+        },
+        "space_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "kind",
+        "execution_id",
+        "invocation_sha256",
+        "sequence",
+        "phase",
+        "query_ordinal",
+        "query_repetition",
+        "vector",
+        "encode_duration_ns",
+        "checkpoint_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-checkpoint/1.0"
+        },
+        "kind": {
+          "const": "LOCAL_CHECKPOINT"
+        },
+        "execution_id": {
+          "$ref": "#/$defs/executionId"
+        },
+        "invocation_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 21
+        },
+        "phase": {
+          "enum": [
+            "COLD_READY",
+            "QUERY_PREPARED",
+            "QUERY_READY"
+          ]
+        },
+        "query_ordinal": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2
+            }
+          ]
+        },
+        "query_repetition": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            }
+          ]
+        },
+        "vector": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/localVector"
+            }
+          ]
+        },
+        "encode_duration_ns": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/ns"
+            }
+          ]
+        },
+        "checkpoint_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "phase": {
+              "const": "COLD_READY"
+            },
+            "sequence": {
+              "const": 1
+            },
+            "query_ordinal": {
+              "type": "null"
+            },
+            "query_repetition": {
+              "type": "null"
+            },
+            "vector": {
+              "type": "object",
+              "properties": {
+                "member_name": {
+                  "const": "cold-documents.f32"
+                },
+                "purpose": {
+                  "const": "DOCUMENT"
+                }
+              }
+            },
+            "encode_duration_ns": {
+              "type": "integer"
+            }
+          }
+        },
+        {
+          "properties": {
+            "phase": {
+              "const": "QUERY_PREPARED"
+            },
+            "sequence": {
+              "enum": [
+                2,
+                4,
+                6,
+                8,
+                10,
+                12,
+                14,
+                16,
+                18,
+                20
+              ]
+            },
+            "query_ordinal": {
+              "type": "integer"
+            },
+            "query_repetition": {
+              "type": "integer"
+            },
+            "vector": {
+              "type": "null"
+            },
+            "encode_duration_ns": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "phase": {
+              "const": "QUERY_READY"
+            },
+            "sequence": {
+              "enum": [
+                3,
+                5,
+                7,
+                9,
+                11,
+                13,
+                15,
+                17,
+                19,
+                21
+              ]
+            },
+            "query_ordinal": {
+              "type": "integer"
+            },
+            "query_repetition": {
+              "type": "integer"
+            },
+            "vector": {
+              "type": "object",
+              "properties": {
+                "member_name": {
+                  "not": {
+                    "const": "cold-documents.f32"
+                  }
+                },
+                "purpose": {
+                  "const": "QUERY"
+                },
+                "row_count": {
+                  "const": 1
+                }
+              }
+            },
+            "encode_duration_ns": {
+              "type": "integer"
+            }
+          }
+        }
+      ]
+    },
+    "ack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "kind",
+        "execution_id",
+        "invocation_sha256",
+        "sequence",
+        "phase",
+        "query_ordinal",
+        "query_repetition",
+        "checkpoint_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-ack/1.0"
+        },
+        "kind": {
+          "const": "OWNER_CONTINUE"
+        },
+        "execution_id": {
+          "$ref": "#/$defs/executionId"
+        },
+        "invocation_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 21
+        },
+        "phase": {
+          "enum": [
+            "COLD_READY",
+            "QUERY_PREPARED",
+            "QUERY_READY"
+          ]
+        },
+        "query_ordinal": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2
+            }
+          ]
+        },
+        "query_repetition": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            }
+          ]
+        },
+        "checkpoint_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "phase": {
+              "const": "COLD_READY"
+            },
+            "sequence": {
+              "const": 1
+            },
+            "query_ordinal": {
+              "type": "null"
+            },
+            "query_repetition": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "phase": {
+              "const": "QUERY_PREPARED"
+            },
+            "sequence": {
+              "enum": [
+                2,
+                4,
+                6,
+                8,
+                10,
+                12,
+                14,
+                16,
+                18,
+                20
+              ]
+            },
+            "query_ordinal": {
+              "type": "integer"
+            },
+            "query_repetition": {
+              "type": "integer"
+            }
+          }
+        },
+        {
+          "properties": {
+            "phase": {
+              "const": "QUERY_READY"
+            },
+            "sequence": {
+              "enum": [
+                3,
+                5,
+                7,
+                9,
+                11,
+                13,
+                15,
+                17,
+                19,
+                21
+              ]
+            },
+            "query_ordinal": {
+              "type": "integer"
+            },
+            "query_repetition": {
+              "type": "integer"
+            }
+          }
+        }
+      ]
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "execution_id",
+        "invocation_sha256",
+        "launch_ordinal",
+        "checkpoints",
+        "acks",
+        "session_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-session/1.0"
+        },
+        "execution_id": {
+          "$ref": "#/$defs/executionId"
+        },
+        "invocation_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "launch_ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 6
+        },
+        "checkpoints": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 21,
+          "items": {
+            "$ref": "#/$defs/checkpoint"
+          }
+        },
+        "acks": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 21,
+          "items": {
+            "$ref": "#/$defs/ack"
+          }
+        },
+        "session_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "queryTiming": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_ordinal",
+        "repetition",
+        "encode_ns",
+        "authorization_ns",
+        "end_to_end_ns"
+      ],
+      "properties": {
+        "query_ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        },
+        "repetition": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "encode_ns": {
+          "$ref": "#/$defs/ns"
+        },
+        "authorization_ns": {
+          "$ref": "#/$defs/ns"
+        },
+        "end_to_end_ns": {
+          "$ref": "#/$defs/ns"
+        }
+      }
+    },
+    "coldTiming": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "launch_ordinal",
+        "end_to_end_ns",
+        "startup_ns",
+        "load_hash_ns",
+        "encode_ns"
+      ],
+      "properties": {
+        "launch_ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 6
+        },
+        "end_to_end_ns": {
+          "$ref": "#/$defs/ns"
+        },
+        "startup_ns": {
+          "$ref": "#/$defs/ns"
+        },
+        "load_hash_ns": {
+          "$ref": "#/$defs/ns"
+        },
+        "encode_ns": {
+          "$ref": "#/$defs/ns"
+        }
+      }
+    },
+    "invocationTimings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "invocation_sha256",
+        "launch_ordinal",
+        "device",
+        "startup_ns",
+        "load_hash_ns",
+        "cold_encode_ns",
+        "warm_encode_ns",
+        "query_encode_ns",
+        "timing_sha256",
+        "warmup_count"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-invocation-timings/1.0"
+        },
+        "invocation_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "launch_ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 6
+        },
+        "device": {
+          "enum": [
+            "CPU",
+            "CUDA"
+          ]
+        },
+        "startup_ns": {
+          "$ref": "#/$defs/ns"
+        },
+        "load_hash_ns": {
+          "$ref": "#/$defs/ns"
+        },
+        "cold_encode_ns": {
+          "$ref": "#/$defs/ns"
+        },
+        "warm_encode_ns": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 5,
+          "items": {
+            "$ref": "#/$defs/ns"
+          }
+        },
+        "query_encode_ns": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "query_ordinal",
+              "repetition",
+              "encode_ns"
+            ],
+            "properties": {
+              "query_ordinal": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 2
+              },
+              "repetition": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 5
+              },
+              "encode_ns": {
+                "$ref": "#/$defs/ns"
+              }
+            }
+          }
+        },
+        "timing_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "warmup_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "deviceTimings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "device",
+        "cold_end_to_end_us",
+        "warm_batch_encode_us",
+        "query_encode_us",
+        "query_end_to_end_us"
+      ],
+      "properties": {
+        "device": {
+          "enum": [
+            "CPU",
+            "CUDA"
+          ]
+        },
+        "cold_end_to_end_us": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "$ref": "#/$defs/us"
+          }
+        },
+        "warm_batch_encode_us": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "items": {
+            "$ref": "#/$defs/us"
+          }
+        },
+        "query_encode_us": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "array",
+            "minItems": 5,
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/$defs/us"
+            }
+          }
+        },
+        "query_end_to_end_us": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "array",
+            "minItems": 5,
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/$defs/us"
+            }
+          }
+        }
+      }
+    },
+    "timingEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "device",
+        "cold",
+        "warm_encode_ns",
+        "queries",
+        "gate_timings",
+        "timing_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-timing-evidence/1.0"
+        },
+        "device": {
+          "enum": [
+            "CPU",
+            "CUDA"
+          ]
+        },
+        "cold": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "$ref": "#/$defs/coldTiming"
+          }
+        },
+        "warm_encode_ns": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "items": {
+            "$ref": "#/$defs/ns"
+          }
+        },
+        "queries": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 10,
+          "items": {
+            "$ref": "#/$defs/queryTiming"
+          }
+        },
+        "gate_timings": {
+          "$ref": "#/$defs/deviceTimings"
+        },
+        "timing_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "capacitySample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "batch_size",
+        "maximum_tokens",
+        "input_text_sha256",
+        "token_ids_sha256",
+        "peak_rss_bytes",
+        "peak_allocated_gpu_bytes",
+        "peak_reserved_gpu_bytes",
+        "peak_whole_process_gpu_bytes"
+      ],
+      "properties": {
+        "batch_size": {
+          "enum": [
+            1,
+            4
+          ]
+        },
+        "maximum_tokens": {
+          "const": 2048
+        },
+        "input_text_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "token_ids_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "peak_rss_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 68719476736
+        },
+        "peak_allocated_gpu_bytes": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 68719476736
+            }
+          ]
+        },
+        "peak_reserved_gpu_bytes": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 68719476736
+            }
+          ]
+        },
+        "peak_whole_process_gpu_bytes": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 68719476736
+            }
+          ]
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "invocation_sha256",
+        "launch_ordinal",
+        "device",
+        "peak_rss_bytes",
+        "peak_allocated_gpu_bytes",
+        "peak_reserved_gpu_bytes",
+        "peak_whole_process_gpu_bytes",
+        "peak_whole_device_gpu_bytes",
+        "owner_observation_count",
+        "oom_count",
+        "other_consumer_overlap_count",
+        "capacity_samples",
+        "resource_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-resources/1.0"
+        },
+        "invocation_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "launch_ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 6
+        },
+        "device": {
+          "enum": [
+            "CPU",
+            "CUDA"
+          ]
+        },
+        "peak_rss_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 68719476736
+        },
+        "peak_allocated_gpu_bytes": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 68719476736
+            }
+          ]
+        },
+        "peak_reserved_gpu_bytes": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 68719476736
+            }
+          ]
+        },
+        "peak_whole_process_gpu_bytes": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 68719476736
+            }
+          ]
+        },
+        "peak_whole_device_gpu_bytes": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 68719476736
+            }
+          ]
+        },
+        "owner_observation_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "oom_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 64
+        },
+        "other_consumer_overlap_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "capacity_samples": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/capacitySample"
+          }
+        },
+        "resource_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "workerResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "kind",
+        "execution_id",
+        "invocation_sha256",
+        "launch_ordinal",
+        "device",
+        "status",
+        "reason_codes",
+        "vectors",
+        "token_witness",
+        "timings",
+        "resources",
+        "result_sha256",
+        "synthetic_rejections"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-worker-result/1.0"
+        },
+        "kind": {
+          "const": "WORKER_RESULT"
+        },
+        "execution_id": {
+          "$ref": "#/$defs/executionId"
+        },
+        "invocation_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "launch_ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 6
+        },
+        "device": {
+          "enum": [
+            "CPU",
+            "CUDA"
+          ]
+        },
+        "status": {
+          "enum": [
+            "COMPLETED",
+            "FAILED"
+          ]
+        },
+        "reason_codes": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+          }
+        },
+        "vectors": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/vectorSample"
+          }
+        },
+        "token_witness": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/localJson"
+            }
+          ]
+        },
+        "timings": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/invocationTimings"
+            }
+          ]
+        },
+        "resources": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/resources"
+            }
+          ]
+        },
+        "result_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "synthetic_rejections": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/syntheticRejection"
+          }
+        }
+      }
+    },
+    "launchReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "job_id",
+        "execution_id",
+        "launch_ordinal",
+        "device",
+        "invocation_sha256",
+        "observed_runtime_sha256",
+        "worker_result",
+        "session",
+        "cleanup",
+        "evidence",
+        "receipt_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-launch-receipt/1.0"
+        },
+        "job_id": {
+          "$ref": "#/$defs/jobId"
+        },
+        "execution_id": {
+          "$ref": "#/$defs/executionId"
+        },
+        "launch_ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 6
+        },
+        "device": {
+          "enum": [
+            "CPU",
+            "CUDA"
+          ]
+        },
+        "invocation_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "observed_runtime_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "worker_result": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+        },
+        "session": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+        },
+        "cleanup": {
+          "enum": [
+            "CONFIRMED",
+            "UNCERTAIN"
+          ]
+        },
+        "evidence": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+        },
+        "receipt_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "deviceResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "device",
+        "spaces",
+        "document_vectors",
+        "query_vectors",
+        "token_witness",
+        "timing_evidence",
+        "resource_evidence",
+        "timings",
+        "launch_receipts"
+      ],
+      "properties": {
+        "device": {
+          "enum": [
+            "CPU",
+            "CUDA"
+          ]
+        },
+        "spaces": {
+          "$ref": "#/$defs/spaces"
+        },
+        "document_vectors": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+        },
+        "query_vectors": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+        },
+        "token_witness": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+        },
+        "timing_evidence": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+        },
+        "resource_evidence": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+          }
+        },
+        "timings": {
+          "$ref": "#/$defs/deviceTimings"
+        },
+        "launch_receipts": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+          }
+        }
+      }
+    },
+    "scoreBinary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256",
+        "byte_count",
+        "dtype",
+        "byte_order"
+      ],
+      "properties": {
+        "member_path": {
+          "const": "rank-evidence.f64"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/knowledge/embedding-benchmark-scores-f64le/1.0"
+        },
+        "media_type": {
+          "const": "application/octet-stream"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "byte_count": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 1048576
+        },
+        "dtype": {
+          "const": "FLOAT64"
+        },
+        "byte_order": {
+          "const": "LITTLE_ENDIAN"
+        }
+      }
+    },
+    "rankDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_ordinal",
+        "repetition",
+        "left_row_sha256",
+        "right_row_sha256",
+        "cpu_left_offset",
+        "cpu_right_offset",
+        "cuda_left_offset",
+        "cuda_right_offset",
+        "gap_class",
+        "order_preserved",
+        "top5_same_cluster"
+      ],
+      "properties": {
+        "query_ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        },
+        "repetition": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "left_row_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "right_row_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "cpu_left_offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1048568
+        },
+        "cpu_right_offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1048568
+        },
+        "cuda_left_offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1048568
+        },
+        "cuda_right_offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1048568
+        },
+        "gap_class": {
+          "enum": [
+            "WIDE_GAP",
+            "NEAR_TIE",
+            "EXACT_TIE"
+          ]
+        },
+        "order_preserved": {
+          "type": "boolean"
+        },
+        "top5_same_cluster": {
+          "type": "boolean"
+        }
+      }
+    },
+    "numericalEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "input_set_sha256",
+        "family_sha256",
+        "score_binary",
+        "near_tie_reference",
+        "norm_failures",
+        "cosine_failures",
+        "component_failures",
+        "query_score_failures",
+        "wide_gap_order_failures",
+        "cluster_order_failures",
+        "top5_boundary_failures",
+        "same_device_failures",
+        "decisions",
+        "numerical_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-numerical-evidence/1.0"
+        },
+        "input_set_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "family_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "score_binary": {
+          "$ref": "#/$defs/scoreBinary"
+        },
+        "near_tie_reference": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+        },
+        "norm_failures": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "cosine_failures": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "component_failures": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "query_score_failures": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "wide_gap_order_failures": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "cluster_order_failures": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "top5_boundary_failures": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "same_device_failures": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "decisions": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 4096,
+          "items": {
+            "$ref": "#/$defs/rankDecision"
+          }
+        },
+        "numerical_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate",
+        "status",
+        "reason_codes",
+        "evidence"
+      ],
+      "properties": {
+        "gate": {
+          "enum": [
+            "SOURCE_AUTHORIZATION",
+            "RUNTIME",
+            "NUMERICAL",
+            "PERFORMANCE",
+            "CAPACITY",
+            "SANDBOX",
+            "GPU_LEASE",
+            "CLEANUP",
+            "IMAGE_TRAINER_REGRESSION"
+          ]
+        },
+        "status": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "NOT_RUN"
+          ]
+        },
+        "reason_codes": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+          }
+        },
+        "evidence": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            }
+          ]
+        }
+      }
+    },
+    "ownerGateEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "request_sha256",
+        "gates",
+        "evidence_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-owner-gate-evidence/1.0"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "gates": {
+          "type": "array",
+          "minItems": 9,
+          "maxItems": 9,
+          "items": {
+            "$ref": "#/$defs/gate"
+          }
+        },
+        "evidence_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "kind",
+        "purpose",
+        "benchmark_id",
+        "benchmark_revision_id",
+        "request_sha256",
+        "status",
+        "reason_codes",
+        "cpu",
+        "cuda",
+        "numerical_evidence",
+        "near_tie_reference",
+        "owner_gate_evidence",
+        "result_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-result/1.0"
+        },
+        "kind": {
+          "const": "OWNER_RESULT"
+        },
+        "purpose": {
+          "const": "LOCAL_EMBEDDING_DEVICE_BENCHMARK"
+        },
+        "benchmark_id": {
+          "$ref": "#/$defs/benchmarkId"
+        },
+        "benchmark_revision_id": {
+          "$ref": "#/$defs/benchmarkRevisionId"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "status": {
+          "enum": [
+            "MEASURED",
+            "INSUFFICIENT",
+            "FAILED",
+            "UNCERTAIN",
+            "WAIT_FOR_GPU"
+          ]
+        },
+        "reason_codes": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+          }
+        },
+        "cpu": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/deviceResult"
+            }
+          ]
+        },
+        "cuda": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/deviceResult"
+            }
+          ]
+        },
+        "numerical_evidence": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            }
+          ]
+        },
+        "near_tie_reference": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            }
+          ]
+        },
+        "owner_gate_evidence": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+        },
+        "result_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "MEASURED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "cpu": {
+                "type": "object",
+                "properties": {
+                  "device": {
+                    "const": "CPU"
+                  }
+                }
+              },
+              "cuda": {
+                "type": "object",
+                "properties": {
+                  "device": {
+                    "const": "CUDA"
+                  }
+                }
+              },
+              "numerical_evidence": {
+                "type": "object"
+              },
+              "near_tie_reference": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "syntheticRejection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "synthetic_case",
+        "batch_size",
+        "reason"
+      ],
+      "properties": {
+        "synthetic_case": {
+          "enum": [
+            7,
+            8
+          ]
+        },
+        "batch_size": {
+          "enum": [
+            1,
+            4
+          ]
+        },
+        "reason": {
+          "enum": [
+            "EMPTY_REJECTED",
+            "OVERFLOW_REJECTED"
+          ]
+        }
+      }
+    },
+    "publishedVectorSample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "launch_ordinal",
+        "sample",
+        "binary_member"
+      ],
+      "properties": {
+        "launch_ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 6
+        },
+        "sample": {
+          "$ref": "#/$defs/vectorSample"
+        },
+        "binary_member": {
+          "$ref": "#/$defs/member"
+        }
+      }
+    },
+    "vectorEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "device",
+        "purpose",
+        "space",
+        "samples",
+        "evidence_sha256",
+        "rows"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-vector-evidence/1.0"
+        },
+        "device": {
+          "enum": [
+            "CPU",
+            "CUDA"
+          ]
+        },
+        "purpose": {
+          "enum": [
+            "DOCUMENT",
+            "QUERY"
+          ]
+        },
+        "space": {
+          "$ref": "#/$defs/space"
+        },
+        "samples": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/publishedVectorSample"
+          }
+        },
+        "evidence_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "rows": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 18,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/rowRef"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "purpose": {
+                "const": "QUERY"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "rows": {
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "rows": {
+                "minItems": 6,
+                "maxItems": 18
+              }
+            }
+          }
+        }
+      ]
+    },
+    "nearTieCluster": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cluster_ordinal",
+        "row_sha256",
+        "cpu_score_offsets"
+      ],
+      "properties": {
+        "cluster_ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 18
+        },
+        "row_sha256": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 18,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sha"
+          }
+        },
+        "cpu_score_offsets": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 18,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1048568
+          }
+        }
+      }
+    },
+    "nearTieQuery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_ordinal",
+        "query_row",
+        "ordered_candidates",
+        "clusters"
+      ],
+      "properties": {
+        "query_ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        },
+        "query_row": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/rowRef"
+            },
+            {
+              "properties": {
+                "purpose": {
+                  "const": "QUERY"
+                }
+              }
+            }
+          ]
+        },
+        "ordered_candidates": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 17,
+          "uniqueItems": true,
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/rowRef"
+              },
+              {
+                "properties": {
+                  "purpose": {
+                    "const": "DOCUMENT"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "clusters": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 17,
+          "items": {
+            "$ref": "#/$defs/nearTieCluster"
+          }
+        }
+      }
+    },
+    "nearTieReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "request_sha256",
+        "input_set_sha256",
+        "family_sha256",
+        "cpu_document_space_sha256",
+        "cpu_query_space_sha256",
+        "score_binary",
+        "queries",
+        "reference_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-near-tie-reference/1.0"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "input_set_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "family_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "cpu_document_space_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "cpu_query_space_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "score_binary": {
+          "$ref": "#/$defs/member"
+        },
+        "queries": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/nearTieQuery"
+          }
+        },
+        "reference_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "syntheticCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_ordinal",
+        "text",
+        "input_text_sha256",
+        "token_count",
+        "token_ids_sha256",
+        "expected"
+      ],
+      "properties": {
+        "case_ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 262144,
+          "not": {
+            "pattern": "[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f]"
+          }
+        },
+        "input_text_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "token_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "token_ids_sha256": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/sha"
+            }
+          ]
+        },
+        "expected": {
+          "enum": [
+            "VALID",
+            "EMPTY_REJECTED",
+            "OVERFLOW_REJECTED"
+          ]
+        }
+      }
+    },
+    "capacityInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "input_text_sha256",
+        "token_count",
+        "token_ids_sha256"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxLength": 262144,
+          "not": {
+            "pattern": "[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f]"
+          },
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "input_text_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "token_count": {
+          "const": 2048
+        },
+        "token_ids_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/recipe"
+    },
+    {
+      "$ref": "#/$defs/family"
+    },
+    {
+      "$ref": "#/$defs/stagedInputs"
+    },
+    {
+      "$ref": "#/$defs/policy"
+    },
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/invocation"
+    },
+    {
+      "$ref": "#/$defs/tokenWitness"
+    },
+    {
+      "$ref": "#/$defs/checkpoint"
+    },
+    {
+      "$ref": "#/$defs/ack"
+    },
+    {
+      "$ref": "#/$defs/session"
+    },
+    {
+      "$ref": "#/$defs/invocationTimings"
+    },
+    {
+      "$ref": "#/$defs/timingEvidence"
+    },
+    {
+      "$ref": "#/$defs/resources"
+    },
+    {
+      "$ref": "#/$defs/workerResult"
+    },
+    {
+      "$ref": "#/$defs/launchReceipt"
+    },
+    {
+      "$ref": "#/$defs/numericalEvidence"
+    },
+    {
+      "$ref": "#/$defs/ownerGateEvidence"
+    },
+    {
+      "$ref": "#/$defs/result"
+    },
+    {
+      "$ref": "#/$defs/vectorEvidence"
+    },
+    {
+      "$ref": "#/$defs/nearTieReference"
+    }
+  ]
+}

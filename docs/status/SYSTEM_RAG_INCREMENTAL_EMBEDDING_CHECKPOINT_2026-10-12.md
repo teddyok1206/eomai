@@ -457,3 +457,17 @@ up/down/up·control-plane gate와 ordinary unique runtime reconciliation이 PASS
 변경이 없으며, native encoding 독립-process 경쟁과 limited Identity fence6은 아직 실행 전이다.
 이 state는 후속 테스트에만 사용하며 cleanup은 **PENDING**이다. cleanup 전 결과를 전체
 cleanup PASS 또는 운영 IAM 설치 PASS로 확대하지 않는다.
+
+## CPU/CUDA 비교 protocol과 encoding reservation source — 2026-10-12 UTC
+
+독립 root 검토에서 benchmark schema/mirror, frozen models, canonical serializers 및
+원본 resource freeze를 확인했다. root regression **681 PASS (13.10s)**,
+strict mypy6·Ruff/format6 PASS다. 실제 같은 입력의 CPU/CUDA cold/warm/genuine QUERY
+측정과 승인된 numerical/performance 조건을 표현하는 계약이지, 측정 결과가 아니다.
+
+encoding 별 기존 Job unique-key reservation, immutable whole-owned-set launch/completion,
+fresh scoped replay/read와 선형 batch 검증도 root **237 PASS (19.86s)**,
+strict mypy8·Ruff/format8 PASS다. 실제 source/authority/binary verification adapter는
+필수 주입 경계이며 자동 service grant를 만들지 않는다. guarded DB 경쟁8은 아직 실행 전이다.
+두 suite는 기존 suite와 겹치므로 합산하지 않는다. 모델·GPU 실행0, CUDA default NOT_ACTIVE,
+전체 목표 ACTIVE를 유지한다.

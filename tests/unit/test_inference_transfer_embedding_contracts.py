@@ -98,6 +98,7 @@ def test_all_preexisting_schema_registry_metadata_and_resource_bytes_are_frozen(
             "embedding-registry",
             "embedding-runtime-bundle",
             "embedding-installed-runtime-proof",
+            "embedding-device-benchmark",
         }
     }
     assert len(resources) == 296
