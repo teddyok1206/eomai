@@ -314,7 +314,11 @@ def test_generation_relaxation_does_not_relax_canonical_admission() -> None:
         body["output"]["axes"][0],
     )
     body["output"] = rehash(body["output"], "result_sha256")
-    Draft202012Validator(load_codex_result_schema(TRANSFER_PAIR_RESULT_SCHEMA_V11)).validate(body)
+    generated = copy.deepcopy(body)
+    del generated["output"]["result_sha256"]
+    Draft202012Validator(load_codex_result_schema(TRANSFER_PAIR_RESULT_SCHEMA_V11)).validate(
+        generated
+    )
     with pytest.raises(WorkflowSchemaError):
         validate_role_result(body, "support", TRANSFER_PAIR_RESULT_SCHEMA_V11)
     with pytest.raises(ValidationError):
@@ -337,7 +341,9 @@ def test_generation_schema_has_only_local_resolvable_references() -> None:
             pending.extend(value.values())
         elif isinstance(value, list):
             pending.extend(value)
-    Draft202012Validator(schema).validate(_result().model_dump(mode="json"))
+    generated = _result().model_dump(mode="json")
+    del generated["output"]["result_sha256"]
+    Draft202012Validator(schema).validate(generated)
 
 
 @pytest.mark.parametrize(
@@ -359,6 +365,7 @@ def test_constrained_schema_binds_outer_and_inner_exact_pins(
 ) -> None:
     schema = constrained_result_schema(TRANSFER_PAIR_RESULT_SCHEMA_V11, _context().worker_input)
     body = _result().model_dump(mode="json")
+    del body["output"]["result_sha256"]
     target = body
     for segment in path[:-1]:
         target = target[segment]
@@ -372,6 +379,7 @@ def test_constrained_schema_binds_outer_and_inner_exact_pins(
 def test_constrained_generation_rejects_unselected_axis_refs(axis_index: int, side: str) -> None:
     schema = constrained_result_schema(TRANSFER_PAIR_RESULT_SCHEMA_V11, _context().worker_input)
     body = _result().model_dump(mode="json")
+    del body["output"]["result_sha256"]
     body["output"]["axes"][axis_index][side] = ["transferclaim_absent"]
     with pytest.raises(SchemaValidationError):
         Draft202012Validator(schema).validate(body)

@@ -61,6 +61,7 @@ from eom_catalog_contracts.inference_transfer_snapshot import (
     validate_snapshot_read_result_context,
 )
 from eom_catalog_contracts.inference_transfer_snapshot_timing import (
+    COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS,
     DEFAULT_SNAPSHOT_TIMEOUT_SECONDS,
     SnapshotPhase,
     snapshot_phase_deadlines,
@@ -284,11 +285,12 @@ def _request(
     ):
         raise ControlPlaneError("CONTROL_AUTH_SERVICE_UNAVAILABLE", "fixed request unavailable")
     try:
-        timeout = (
-            DEFAULT_SNAPSHOT_TIMEOUT_SECONDS
-            if snapshot_phase is None
-            else snapshot_phase_deadlines(snapshot_phase).owner_http_seconds
-        )
+        if is_submission:
+            timeout = COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS
+        elif snapshot_phase is not None:
+            timeout = snapshot_phase_deadlines(snapshot_phase).owner_http_seconds
+        else:
+            timeout = DEFAULT_SNAPSHOT_TIMEOUT_SECONDS
     except ValueError:
         raise ControlPlaneError(
             "CONTROL_AUTH_SERVICE_UNAVAILABLE", "fixed snapshot phase unavailable"

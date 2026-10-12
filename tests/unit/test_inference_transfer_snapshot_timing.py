@@ -12,6 +12,7 @@ from unittest.mock import Mock
 
 import pytest
 from eom_api.services import inference_transfer_snapshot_client as client_module
+from eom_catalog_contracts.inference_transfer_invocation_v11 import parse_pair_submit_request_v11
 from eom_catalog_contracts.inference_transfer_snapshot import (
     InferenceTransferSnapshotAuthorizeRequest,
     InferenceTransferSnapshotAuthorizeResult,
@@ -23,6 +24,7 @@ from eom_catalog_contracts.inference_transfer_snapshot_binding import (
     InferenceTransferSnapshotBindingReply,
 )
 from eom_catalog_contracts.inference_transfer_snapshot_timing import (
+    COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS,
     DEFAULT_SNAPSHOT_TIMEOUT_SECONDS,
     SnapshotPhase,
     snapshot_phase_deadlines,
@@ -32,7 +34,9 @@ from eom_orchestrator import inference_transfer_owner_http as owner_http
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.general_chat_socket import ChatSocketEndpoint, ChatTransportError
 from eom_orchestrator.inference_transfer_snapshot_staging import SnapshotReadFailure
+from pydantic import SecretStr
 
+from tests.unit.inference_transfer_invocation_fixtures import rehash, submit_request
 from tests.unit.inference_transfer_snapshot_fixtures import (
     hashed,
     snapshot_header,
@@ -48,6 +52,13 @@ from tests.unit.test_inference_transfer_owner_http import (
     connection,
     session,
     wrapper,
+)
+from tests.unit.test_inference_transfer_owner_http_comparisons import (
+    KEY,
+    command,
+)
+from tests.unit.test_inference_transfer_owner_http_comparisons import (
+    session as comparison_session,
 )
 
 
@@ -102,7 +113,7 @@ def test_fixed_phase_budgets_are_finite_immutable_and_authorize_has_outer_margin
         assert http_seconds - catalog_seconds == 30.0
 
 
-@pytest.mark.parametrize("phase", [None, "", "UNKNOWN", 300, math.inf, []])
+@pytest.mark.parametrize("phase", [None, "", "UNKNOWN", "SUBMIT", 300, math.inf, []])
 def test_untrusted_numeric_timeout_or_unknown_phase_is_not_a_supported_override(phase: Any) -> None:
     with pytest.raises(ValueError, match="unsupported snapshot phase"):
         snapshot_phase_deadlines(phase)
@@ -260,3 +271,115 @@ def test_phase_policy_has_no_optional_adapter_or_infrastructure_dependency() -> 
         for alias in node.names
     }
     assert imports <= {"__future__", "dataclasses", "types", "typing"}
+
+
+def test_comparison_submit_budget_composes_existing_owner_reads_with_one_outer_margin() -> None:
+    assert (
+        COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS
+        == (
+            snapshot_phase_deadlines("PREPARE").catalog_response_seconds
+            + 2 * snapshot_phase_deadlines("READ").catalog_response_seconds
+            + 30.0
+        )
+        == 390.0
+    )
+    assert math.isfinite(COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS)
+    assert DEFAULT_SNAPSHOT_TIMEOUT_SECONDS == 120.0
+    assert snapshot_phase_deadlines("READ").owner_http_seconds == 120.0
+
+
+@pytest.mark.parametrize("successor", [False, True])
+@pytest.mark.parametrize("times_out", [False, True])
+def test_actual_submit_both_generations_select_390_only_and_preserve_no_retry(
+    monkeypatch: pytest.MonkeyPatch, successor: bool, times_out: bool
+) -> None:
+    value, calls = comparison_session(monkeypatch)
+    legacy = submit_request()
+    selected = (
+        parse_pair_submit_request_v11(
+            rehash(
+                legacy.model_dump(mode="json")
+                | {"schema_version": "inference-transfer-pair-submit/1.1"},
+                "submission_sha256",
+            )
+        )
+        if successor
+        else legacy
+    )
+    expected = command()
+    if successor:
+        expected = command(status_url=expected.status_url + "/v1.1")
+    transport = connection(
+        monkeypatch,
+        canonical_json_bytes(wrapper(expected)),
+        status=202,
+        expected_timeout=390.0,
+    )
+    if times_out:
+        monkeypatch.setattr(transport, "getresponse", Mock(side_effect=TimeoutError(TOKEN)))
+        with pytest.raises(ControlPlaneError) as caught:
+            if successor:
+                value.submit_pair_v11(cast(Any, selected), idempotency_key=KEY)
+            else:
+                value.submit_pair(cast(Any, selected), idempotency_key=KEY)
+        assert caught.value.code == "INFERENCE_TRANSFER_SUBMISSION_UNCERTAIN"
+        assert TOKEN not in str(caught.value) and caught.value.__cause__ is None
+        assert calls == ["ME", "ME"]
+    else:
+        actual = (
+            value.submit_pair_v11(cast(Any, selected), idempotency_key=KEY)
+            if successor
+            else value.submit_pair(cast(Any, selected), idempotency_key=KEY)
+        )
+        assert actual == expected and calls == ["ME", "ME", "ME"]
+    assert len(transport.requests) == 1
+    assert transport.requests[0][:2] == (
+        "POST",
+        owner_http._COMPARISONS_V11 if successor else owner_http._COMPARISONS,
+    )
+    assert transport.requests[0][2] == canonical_json_bytes(selected.model_dump(mode="json"))
+    assert transport.requests[0][3]["Idempotency-Key"] == KEY
+    assert transport.events.count("FACTORY") == 1
+
+
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("POST", owner_http._LOGIN),
+        ("POST", owner_http._REFRESH),
+        ("POST", owner_http._METADATA),
+        ("GET", owner_http._ORIGINAL_CORPUS),
+        ("GET", owner_http._EXECUTION_PRESETS),
+        ("GET", owner_http._COMPARISON_WORKFLOWS + "workflow_" + "a" * 32 + "?mode=STATUS_ONLY"),
+        (
+            "GET",
+            owner_http._COMPARISON_WORKFLOWS + "workflow_" + "a" * 32 + "/v1.1?mode=STATUS_ONLY",
+        ),
+    ],
+)
+def test_other_fixed_http_operations_keep_their_existing_120_budget(
+    monkeypatch: pytest.MonkeyPatch, method: Any, path: str
+) -> None:
+    transport = connection(monkeypatch, b"{}", expected_timeout=120.0)
+    assert owner_http._request(
+        method, path, b"{}" if method == "POST" else None, bearer=SecretStr(TOKEN)
+    ) == (200, {})
+    assert len(transport.requests) == 1
+
+
+@pytest.mark.parametrize("path", [owner_http._COMPARISONS, owner_http._COMPARISONS_V11])
+def test_snapshot_phase_override_cannot_change_comparison_submit_budget(
+    monkeypatch: pytest.MonkeyPatch, path: str
+) -> None:
+    factory = Mock(side_effect=AssertionError("connection must not be created"))
+    monkeypatch.setattr(http_client, "HTTPConnection", factory)
+    with pytest.raises(ControlPlaneError):
+        owner_http._request(
+            "POST",
+            path,
+            b"{}",
+            bearer=SecretStr(TOKEN),
+            idempotency_key=KEY,
+            snapshot_phase="AUTHORIZE",
+        )
+    factory.assert_not_called()

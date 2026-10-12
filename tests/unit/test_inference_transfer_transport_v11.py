@@ -16,6 +16,9 @@ from eom_catalog_contracts.inference_transfer_invocation_v11 import (
     parse_workflow_read_request_v11,
     parse_workflow_read_result_v11,
 )
+from eom_catalog_contracts.inference_transfer_snapshot_timing import (
+    COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS,
+)
 from eom_catalog_contracts.inference_transfer_workflow_binding_v11 import (
     parse_workflow_binding_reply_v11,
     parse_workflow_binding_request_v11,
@@ -181,7 +184,12 @@ def test_http_submit_uses_new_route_retains_same_key_and_pre_post_current_princi
 ) -> None:
     value, calls = session(monkeypatch)
     expected = command(status_url=http._COMPARISON_WORKFLOWS + WORKFLOW_ID + "/v1.1")
-    transport = connection(monkeypatch, canonical_json_bytes(wrapper(expected)), status=202)
+    transport = connection(
+        monkeypatch,
+        canonical_json_bytes(wrapper(expected)),
+        status=202,
+        expected_timeout=COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS,
+    )
     assert value.submit_pair_v11(selection_v11(), idempotency_key=KEY) == expected
     method, target, body, headers = transport.requests[0]
     assert (method, target) == ("POST", http._COMPARISONS + "/v1.1")
@@ -220,7 +228,12 @@ def test_new_post_uncertainty_never_retries_or_leaks_transport_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     value, _ = session(monkeypatch)
-    transport = connection(monkeypatch, b"{}", status=202)
+    transport = connection(
+        monkeypatch,
+        b"{}",
+        status=202,
+        expected_timeout=COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS,
+    )
     monkeypatch.setattr(transport, "getresponse", Mock(side_effect=TimeoutError(TOKEN)))
     with pytest.raises(ControlPlaneError) as caught:
         value.submit_pair_v11(selection_v11(), idempotency_key=KEY)

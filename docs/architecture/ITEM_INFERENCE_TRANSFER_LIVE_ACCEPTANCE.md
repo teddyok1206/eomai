@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-11 19:09 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-12 08:51 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
 
 사용자 최신 지시에 따라 **사람 평가는 현 목표의 완료 조건에서 제외**한다.
@@ -20,6 +20,57 @@
   제외한다. 기존 풀이보고서 520개를 다시 생성하지 않는다.
 
 ## Component 상태
+
+### 실제 V11 입장과 첫 비교 관측 — 2026-10-12 UTC
+
+- 같은 actual guiadmin 인증으로 slot06을 조회했다. capability는 fresh였으나 native
+  catalog는 2026-10-10 08:47 UTC에 만료돼 model options가 비어 있었다. 기존 OBSERVE
+  `codexcmd_db453c286f0749bb9f3c8da46d6ffa1f`는 SUCCEEDED/2248→2249이며 fresh catalog
+  SHA `e51db5d30ce50cf60cd7a9cd7b25c92bf8c61219579fbd414b1ab474eacb7e5b`로 Terra/medium을
+  실제 재검증했다. 모델·정책·TTL은 변경하지 않았다.
+- owner PREPARE/RELEASE PASS. prepared receipt SHA
+  `827fb0014760a40ce0792c2cadfc82b2f98ab74ee8de9cfecdda6a6955e1050b`, preset
+  `execpreset_18565ce6a5764ba7ba64a397fb129818` /
+  `execpresetrev_318233ff3e3d46be80bc94428e383a7a`다. 메타데이터 equality와 달리 실제
+  release use case를 수행했다. 교육 품질은 NOT_EVALUATED다.
+- 보존된 BGE FACETS top1의 두 쌍(option32/48)을 선택했다. 양쪽 selection/key를 먼저
+  저장했고 첫 POST만 수행했다. caller는 약08:14 UTC에 UNCERTAIN으로 종료했지만
+  서버08:16:32 UTC audit/HTTP202/idempotency COMPLETED로 접수됐다. Workflow
+  `workflow_bd31d099e3b2437392cd7cedbf7c06bc`, command
+  `wfcmd_2ad157d682dc490c8c49ec21da6f9672`다. 첫 요청을 미처리로 가정하지 않았다.
+- Job `job_0c03ef42201545dfbb0522546db77bcf`는 08:19:04 UTC에 FAILED /
+  `WORKER_RESULT_INVALID`로 종료했다. 두 번째 POST·새 pair·새 CPU 실행은 0이다.
+  실패 후보 raw SHA `dfecd7b41db86f7458a14320b8904f02f10826bcea50de2b658fc04cf5712b94`,
+  staged input SHA `7e491a5ebfc4d6d43f150fe377c24c4411f5af2f6f9ec43f91f8b5fb3a2f0fd1`다.
+  읽기 전용 진단에서 supplied self-hash만 불일치했고 hash-only memory diagnostic의
+  schema/identity/selected refs는 PASS였다. 원 파일·FAILED history는 그대로이며
+  publication/model execution/history rewrite는 진단에서 모두 0이다.
+- 최소 source 보완은 비교 POST만 PREPARE120 + READ120×2 + margin30=390초로
+  정렬하고, generation self-hash를 absent-only owner 계산으로 분리하는 것이다.
+  global120·GET·OBSERVE·auth TTL·schema/refs/권한·520 정본·실패 이력은 유지한다.
+  transport 관련 fresh 회귀는 597 PASS/30.17초, strict4/Ruff/diff PASS다. 이는 source
+  검증이며 아직 새 release·두 MEMBER_VERIFIED/replay·전체 목표 완료가 아니다.
+  추가 첫 pair model 재시도는 승인 대기이며 자동으로 실행하지 않는다.
+  Slack: 입장 `devreport_3de7945fb8cf4c048827641b81d15931`, uncertain
+  `devreport_ba25e9c1e15146fbbd7054f26893ac4f`.
+
+최소 transport/generation 보완의 fresh 전체 관련 unit 회귀는 **2,705 PASS /65.85초**,
+변경 Python8개 strict mypy/Ruff/format/diff PASS다. 처음 전체 실행에서 V11 transport의
+옛 fake120 기대2개가 실패했고, 해당 POST fixture만 실제390 기대에 정렬해 재실행했다.
+generation fixture는 canonical hash 포함 결과 대신 generation-only 사본에서 hash만
+제거했으며 기존 pin/ref 거부 검사의 목적을 유지했다. canonical V1.1/role schema bytes와
+V1.30/V1.29 bundle hash 불변, wrong/null supplied hash 거부, 입력 불변을 확인했다.
+다른 목적의 hash·임베딩·Graph·source·권한 의미는 바뀌지 않았다.
+
+비교 console의 UNCERTAIN는 기존 같은 session에서 exact-pair recovery만 허용하도록
+보완했다. 다음 pair 자동 제출·새 selection/key는 차단하고 command 미기록을 미처리로
+표시하지 않는다. 이미 발행된 b59 control source와 새 compatible installed runtime은
+별도로 pin하며, 다른 source는 기존 released receipt와 양쪽 saved selection/CPU-result
+closure를 로그인 전에 검증한 resume에만 허용한다. 원 manifest·receipt를 latest로
+재작성하지 않는다. 보호 후보 SHA
+`6e3d5ca1b122a2bcfca27a81eb74db6e34d7141a67d55df40953bee63830a6eb`, 별도 focused92 PASS다.
+이 source 검증은 실제 두 쌍 MEMBER_VERIFIED/replay의 성공이 아니며, 첫 FAILED와
+추가 model 실행 승인 gate는 그대로다.
 
 ### 최신 비교 입장 관측 — 2026-10-11 18:45 UTC
 

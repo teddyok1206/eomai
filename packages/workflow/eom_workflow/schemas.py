@@ -1001,6 +1001,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
         canonical_value = _canonicalize_legacy_item_extraction_result(value)
     elif schema_id == "legacy-item-editorial-compatibility-result@1.0" and role == "support":
         canonical_value = _canonicalize_legacy_editorial_compatibility_result(value)
+    elif schema_id == "item-inference-transfer-pair-result@1.1" and role == "support":
+        canonical_value = _canonicalize_inference_transfer_pair_result_v11(value)
     elif (
         schema_id
         in {
@@ -1561,6 +1563,26 @@ def _canonicalize_legacy_editorial_compatibility_result(value: object) -> object
     canonical_proposal["proposal_sha256"] = content_sha256(
         {key: item for key, item in canonical_proposal.items() if key != "proposal_sha256"}
     )
+    return canonical
+
+
+def _canonicalize_inference_transfer_pair_result_v11(value: object) -> object:
+    """Derive only an omitted inner self-hash, never repair a supplied digest.
+
+    The worker owns the exact comparison content and axes; the Orchestrator owns its canonical
+    serialization hash. Supplied values remain accountable to the unchanged strict boundary.
+    """
+
+    if not isinstance(value, dict):
+        return value
+    output = value.get("output")
+    if not isinstance(output, dict) or "result_sha256" in output:
+        return value
+
+    canonical = value.copy()
+    canonical_output = output.copy()
+    canonical["output"] = canonical_output
+    canonical_output["result_sha256"] = content_sha256(canonical_output)
     return canonical
 
 
@@ -3196,6 +3218,13 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
         # keywords. Canonical JSON Schema, frozen models and ref admission retain
         # exact three-axis order and the positive CRUX coherence invariant.
         output = _mapping(definitions, "InferenceTransferPairResultV11")
+        output_properties = _mapping(output, "properties")
+        if output_properties.pop("result_sha256", None) is None:
+            raise WorkflowSchemaError("three-axis result hash is not projectable")
+        output_required = output.get("required")
+        if not isinstance(output_required, list) or "result_sha256" not in output_required:
+            raise WorkflowSchemaError("three-axis result hash requirement is invalid")
+        output_required.remove("result_sha256")
         output.pop("allOf", None)
         _mapping(definitions, "InferenceTransfer_difference").pop("allOf", None)
         _mapping(definitions, "InferenceTransferPairResultV11_axisAssessment").pop("allOf", None)
@@ -3212,7 +3241,8 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
             "Machine hypotheses only. Preserve exact request/profile/rubric pins and "
             "selected claim references. Condition and decisive mappings plus shared_idea "
             "are required for positive overall judgments; INSUFFICIENT requires limitations. "
-            "Hash the canonical body including axes, excluding result_sha256."
+            "Do not output result_sha256: the Orchestrator derives the omitted hash of the exact "
+            "canonical body including axes at validation. Supplied incorrect hashes are rejected."
         )
     if schema_id in {
         "pdf-document-review-result@1.0",

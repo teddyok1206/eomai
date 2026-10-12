@@ -7,6 +7,9 @@ from typing import Any, Literal
 
 import pytest
 from eom_api_contracts.common import CommandResult
+from eom_catalog_contracts.inference_transfer_snapshot_timing import (
+    COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS,
+)
 from eom_identifiers import canonical_json_bytes
 from eom_operator_identity import PermissionKey
 from eom_orchestrator import inference_transfer_owner_http as http
@@ -78,7 +81,12 @@ def test_submission_preserves_exact_body_key_command_and_pre_post_principal(
 ) -> None:
     value, calls = session(monkeypatch)
     selection, expected = submit_request(), command()
-    transport = connection(monkeypatch, canonical_json_bytes(wrapper(expected)), status=202)
+    transport = connection(
+        monkeypatch,
+        canonical_json_bytes(wrapper(expected)),
+        status=202,
+        expected_timeout=COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS,
+    )
     assert value.submit_pair(selection, idempotency_key=KEY) == expected
     method, path, payload, headers = transport.requests[0]
     assert (method, path) == ("POST", http._COMPARISONS)
@@ -90,7 +98,9 @@ def test_submission_preserves_exact_body_key_command_and_pre_post_principal(
 
 def test_wrong_submission_peer_never_sends_key_or_bearer(monkeypatch: pytest.MonkeyPatch) -> None:
     value, _ = session(monkeypatch)
-    transport = connection(monkeypatch, b"{}", status=202)
+    transport = connection(
+        monkeypatch, b"{}", status=202, expected_timeout=COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS
+    )
     monkeypatch.setattr(
         http,
         "require_fixed_api_peer_socket",
@@ -108,7 +118,9 @@ def test_invalid_key_rejected_before_http_and_no_secret_context(
     monkeypatch: pytest.MonkeyPatch, key: str
 ) -> None:
     value, calls = session(monkeypatch)
-    transport = connection(monkeypatch, b"{}", status=202)
+    transport = connection(
+        monkeypatch, b"{}", status=202, expected_timeout=COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS
+    )
     with pytest.raises(ControlPlaneError) as caught:
         value.submit_pair(submit_request(), idempotency_key=key)
     assert caught.value.code == "INFERENCE_TRANSFER_SUBMISSION_INVALID"
@@ -119,7 +131,9 @@ def test_schema_model_copy_bypass_is_revalidated_before_submission(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     value, calls = session(monkeypatch)
-    transport = connection(monkeypatch, b"{}", status=202)
+    transport = connection(
+        monkeypatch, b"{}", status=202, expected_timeout=COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS
+    )
     selection = submit_request().model_copy(update={"submission_sha256": "sha256:" + "f" * 64})
     with pytest.raises(ControlPlaneError) as caught:
         value.submit_pair(selection, idempotency_key=KEY)
@@ -129,7 +143,9 @@ def test_schema_model_copy_bypass_is_revalidated_before_submission(
 
 def test_timeout_is_uncertain_once_and_does_not_retry_post(monkeypatch: pytest.MonkeyPatch) -> None:
     value, calls = session(monkeypatch)
-    transport = connection(monkeypatch, b"{}", status=202)
+    transport = connection(
+        monkeypatch, b"{}", status=202, expected_timeout=COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS
+    )
     original = transport.request
 
     def send(*args: Any, **kwargs: Any) -> None:
@@ -148,7 +164,12 @@ def test_explicit_exact_replay_keeps_same_key_body_and_rechecks_principal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     value, calls = session(monkeypatch)
-    transport = connection(monkeypatch, canonical_json_bytes(wrapper(command())), status=202)
+    transport = connection(
+        monkeypatch,
+        canonical_json_bytes(wrapper(command())),
+        status=202,
+        expected_timeout=COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS,
+    )
     selection = submit_request()
     first = value.submit_pair(selection, idempotency_key=KEY)
     second = value.submit_pair(selection, idempotency_key=KEY)
@@ -161,7 +182,12 @@ def test_previous_command_receipt_does_not_authorize_replay_after_revocation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     value, _ = session(monkeypatch)
-    transport = connection(monkeypatch, canonical_json_bytes(wrapper(command())), status=202)
+    transport = connection(
+        monkeypatch,
+        canonical_json_bytes(wrapper(command())),
+        status=202,
+        expected_timeout=COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS,
+    )
     selection = submit_request()
     assert value.submit_pair(selection, idempotency_key=KEY) == command()
     monkeypatch.setattr(
@@ -188,7 +214,12 @@ def test_accepted_response_must_be_exact_comparison_command(
     monkeypatch: pytest.MonkeyPatch, changes: dict[str, Any]
 ) -> None:
     value, _ = session(monkeypatch)
-    connection(monkeypatch, canonical_json_bytes(wrapper(command(**changes))), status=202)
+    connection(
+        monkeypatch,
+        canonical_json_bytes(wrapper(command(**changes))),
+        status=202,
+        expected_timeout=COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS,
+    )
     with pytest.raises(ControlPlaneError) as caught:
         value.submit_pair(submit_request(), idempotency_key=KEY)
     assert caught.value.code == "INFERENCE_TRANSFER_SUBMISSION_UNCERTAIN"
@@ -211,7 +242,10 @@ def test_submission_status_error_is_closed_secret_safe_and_no_retry(
 ) -> None:
     value, _ = session(monkeypatch)
     transport = connection(
-        monkeypatch, canonical_json_bytes({"error_code": code, "detail": TOKEN}), status=status
+        monkeypatch,
+        canonical_json_bytes({"error_code": code, "detail": TOKEN}),
+        status=status,
+        expected_timeout=COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS,
     )
     with pytest.raises(ControlPlaneError) as caught:
         value.submit_pair(submit_request(), idempotency_key=KEY)
@@ -307,6 +341,9 @@ def test_post_response_revocation_or_replacement_rejects_even_successful_reply(
         monkeypatch,
         canonical_json_bytes(wrapper(reply)),
         status=202 if operation == "submit_pair" else 200,
+        expected_timeout=COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS
+        if operation == "submit_pair"
+        else 120.0,
     )
     with pytest.raises(ControlPlaneError) as caught:
         if operation == "submit_pair":

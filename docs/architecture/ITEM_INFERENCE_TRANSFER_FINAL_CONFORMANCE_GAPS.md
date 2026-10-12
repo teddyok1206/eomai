@@ -39,6 +39,14 @@ Top-8과 원래 Graph 후보 목록을 비교했다. 원문 변경, 새 조회·
 보존하며, native model admission·V11 PREPARE/RELEASE·두 쌍 비교/replay는 여전히
 현재 실제 인증·실행의 별도 gate다. 이 배포로 종료 조건 2–4를 통과했다고 표시하지 않는다.
 
+2026-10-12 실제 native 관측과 owner PREPARE/RELEASE를 통과해 **종료 조건2는 완료**했다.
+첫 selected pair는 202/Workflow 접수 후 self-hash 불일치로 FAILED다. 둘째는 selection만
+보존됐고 POST하지 않았다. 현재 strict source 보완은 canonical 계약을 바꾸지 않는
+generation absent-only hash 계산과 해당 POST의 순차 transport budget 정렬이며
+2,705 unit tests PASS다. 첫 실패를 수정·재해석하거나 새 key로 우회하지 않는다.
+추가 첫 pair model 실행 승인은 별도 gate이고 **종료 조건3·4는 여전히 미완료**다.
+520개 embedding은 다시 실행하지 않으며 사람 평가는 완료 조건에 추가하지 않는다.
+
 ### 2026-10-11 10:49 UTC 독립 source 대조
 
 원문·구현 계획·현재 계약/코드/테스트를 read-only로 다시 대조했다. 원문 SHA는

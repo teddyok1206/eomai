@@ -153,6 +153,56 @@ bounded input/output, secret-safe failure, 기존 출제/support/PDF/Graph 의�
 same-session refresh, timeout/unknown submission 무재시도 및 기존 comparison 회귀다.
 소스 PASS와 실제 계정 관측/입장 PASS는 별도로 기록한다.
 
+### 순차 source 검증과 비교 제출의 시간 예산
+
+2026-10-12 같은 인증의 계정 조회에서 만료 native catalog를 확인했고, 명시적 기존
+OBSERVE의 성공 후 exact Terra/medium admission과 owner PREPARE/RELEASE를 통과했다.
+첫 비교 POST의 caller는 08:14 UTC에 UNCERTAIN으로 종료했지만, 실제 API audit와
+idempotency에는 08:16:32 UTC의 202/COMPLETED 및 Workflow START가 남았다.
+이는 미처리나 모델 실패가 아니라 순차 source 검증의 총 시간과 outer HTTP120의
+불일치를 보여준다. 각 내부 PREPARE/READ가 실패했다는 증거는 아니다.
+
+책임은 기존 owner HTTP의 고정 비교 POST transport다. 정본 입력은 보존된 두
+selection과 원래 idempotency key, 정본 상태는 기존 API/Workflow/Artifact 기록이다.
+API는 현재 source authorization을 cached replay 전에 수행하고 그 순서·권한·hash를
+바꾸지 않는다. 지배 연산은 정확한 두 profile 조회이며 기존 indexed lookup/tuple을
+사용한다. API의 PREPARE1 + READ2의 fixed budget을 합산한 360초에 outer margin30초를
+붙여 해당 POST만 390초로 정렬한다. 이는 SQL/runtime 완료 보장이 아니라 transport
+예산이며, global120·snapshot AUTHORIZE300/330·비교 GET·계정 OBSERVE·auth TTL은 그대로다.
+새 DB/schema/queue/cache/임베딩 recipe나 임의 timeout 옵션은 만들지 않는다.
+
+UNCERTAIN 후 console은 새 key/selection을 만들거나 다음 pair를 자동 제출하지 않는다.
+같은 session에서 명시적 recovery만 남기고, known command는 그대로 조회하며 command
+미기록을 서버 미처리로 해석하지 않는다. 기존 exact-key replay를 재사용하고 auth·hash·
+부분 파일·conflicting response 오류는 STOP이다. 원래 transaction/lease 경계가 유일하게
+처리를 소유한다. 더 단순한 전역 timeout 확대는 무관한 요청까지 영향을 주고, cached
+response를 source reauthorization 없이 반환하거나 API 내부 읽기를 우회하면 권한
+불변성이 깨진다. 기존 timing leaf의 제한된 값과 기존 console의 좁은 recovery 처리가
+가장 작은 보완이다. 시간이 길다고 같은 요청을 새 identity로 만드는 것은 금지한다.
+
+### 모델 내용과 시스템 self-hash의 책임 분리
+
+첫 Job은 08:19:04 UTC에 `WORKER_RESULT_INVALID`로 종료했다. local failed candidate를
+읽기 전용으로 확인했으며 canonical three-axis self-hash의 불일치를 재현했다. 메모리의
+진단 사본에서 self-hash만 계산했을 때 나머지 schema·job/workflow/step/artifact identity와
+selected claim/ref 검사는 통과했다. 이는 진단일 뿐 원래 실패 결과의 승인·게시가 아니다.
+
+기존 PDF quote-hash의 absent-only owner 계산 방식을 재사용한다. worker-only `@1.1`
+generation schema에서 inner `output.result_sha256`만 제외하고, 기존 RoleResult validation
+경계에서 **키가 없는 경우에만** body/axes의 canonical hash를 도출한다. 모델은 내용·
+축·대응·차이·근거를 소유하며, Orchestrator는 결과 직렬화 identity를 계산한다. 제공된
+wrong/null/empty hash는 덮지 않고 기존 strict schema/Pydantic이 계속 거부한다.
+canonical V1.1 schema·모델·bundle hash·출처/참조/권한 검증, V1.0과 다른 purpose는
+바꾸지 않는다. 새 DB/schema/queue/worker 통신이나 전역 hash repair는 없다.
+
+dominant access는 bounded result의 한 번 canonical serialization이며 시간·공간은
+문서 크기에 선형이다. nested 내용은 변경하지 않고 outer/output dict의 작은 사본만
+만든다. Catalog 직접 parser는 hash 누락도 계속 거부하며 canonical commit 전 정상
+hash를 포함한 결과를 다시 엄격히 검증한다. 원 Job/Workflow/파일은 FAILED로 보존한다.
+새 실행은 새 installed source/generation provenance를 기록하고, 기존 frozen source와
+이미 발행된 control revision을 혼동하지 않는다. 실패를 성공으로 UPDATE하거나 원래
+model candidate를 수동 수정해 재게시하지 않는다. 추가 model 실행은 별도의 명시적 gate다.
+
 ### 비교 bootstrap의 capacity 입력 검토
 
 2026-10-11 운영 입력 오류에서 확인한 구분이다. Standard preset이 과거 fixed-host V1에

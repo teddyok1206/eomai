@@ -3,7 +3,9 @@
 Full-population AUTHORIZE previously completed in 119.2 seconds against a
 120-second Catalog deadline and an identical owner HTTP timeout. Its bounded
 300-second owner-read budget needs a separate 30-second outer transport margin.
-PREPARE, READ and all non-snapshot HTTP behavior retain their existing limits.
+Comparison submission performs one PREPARE and two READ calls before returning
+its command receipt. Only that exact POST composition has a separate outer
+deadline; PREPARE, READ and other non-snapshot HTTP limits remain unchanged.
 """
 
 from __future__ import annotations
@@ -29,6 +31,14 @@ _PHASE_DEADLINES: Final = MappingProxyType(
         "READ": SnapshotPhaseDeadlines(120.0, 120.0),
         "AUTHORIZE": SnapshotPhaseDeadlines(300.0, 330.0),
     }
+)
+
+# This is a transport budget, not a hard upper bound on database lock waits,
+# session freshness, authorization or model execution. A timeout remains unknown.
+COMPARISON_SUBMISSION_HTTP_TIMEOUT_SECONDS: Final = (
+    _PHASE_DEADLINES["PREPARE"].catalog_response_seconds
+    + 2 * _PHASE_DEADLINES["READ"].catalog_response_seconds
+    + 30.0
 )
 
 
