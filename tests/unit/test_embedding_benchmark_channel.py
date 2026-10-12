@@ -18,6 +18,7 @@ import pytest
 from eom_catalog_contracts.embedding_device_benchmark import (
     BenchmarkAck,
     BenchmarkCheckpoint,
+    BenchmarkResourceEvidence,
     benchmark_ack_for_checkpoint,
     benchmark_checkpoint_count,
     embedding_device_benchmark_bytes,
@@ -31,7 +32,7 @@ from eom_catalog_service.embedding_benchmark_channel import (
     BenchmarkWorkerChannel,
 )
 
-from tests.unit.embedding_device_benchmark_fixtures import session, worker_invocation
+from tests.unit.embedding_device_benchmark_fixtures import resources, session, worker_invocation
 from tests.unit.inference_transfer_embedding_fixtures import seal
 
 
@@ -45,6 +46,392 @@ def synthetic_peer_fence(value: BenchmarkUnixPeer) -> None:
 
 def synthetic_continuation(value: BenchmarkCheckpoint) -> None:
     assert value.kind == "LOCAL_CHECKPOINT"
+
+
+def local_resources(ordinal: int) -> BenchmarkResourceEvidence:
+    body = resources(ordinal).model_dump(mode="json")
+    body.update(
+        peak_whole_process_gpu_bytes=None,
+        peak_whole_device_gpu_bytes=None,
+        owner_observation_count=0,
+        other_consumer_overlap_count=0,
+    )
+    for sample in body["capacity_samples"]:
+        sample["peak_whole_process_gpu_bytes"] = None
+    return BenchmarkResourceEvidence.model_validate(seal(body, "resource_sha256"))
+
+
+def complete_checkpoints(
+    worker: BenchmarkWorkerChannel, owner: BenchmarkOwnerChannel, ordinal: int
+) -> None:
+    for checkpoint in session(ordinal).checkpoints:
+        worker.send_checkpoint(checkpoint)
+        assert owner.receive_checkpoint() == checkpoint
+        owner.acknowledge()
+        worker.receive_ack()
+
+
+@pytest.mark.parametrize("ordinal", range(1, 7))
+def test_one_terminal_resource_roundtrip_preserves_historical_checkpoint_program(
+    ordinal: int,
+) -> None:
+    results: list[BenchmarkResourceEvidence] = []
+    calls: list[BenchmarkResourceEvidence] = []
+    with endpoints(ordinal) as (worker, owner):
+        complete_checkpoints(worker, owner, ordinal)
+        before = worker.transcript()
+        local, finalized = local_resources(ordinal), resources(ordinal)
+
+        def exchange() -> None:
+            results.append(worker.exchange_resources(local))
+
+        def synthetic_finalizer(value: BenchmarkResourceEvidence) -> BenchmarkResourceEvidence:
+            assert value == local
+            calls.append(value)
+            return finalized
+
+        thread = threading.Thread(target=exchange)
+        thread.start()
+        try:
+            assert owner.finalize_resources(finalizer=synthetic_finalizer) == finalized
+        finally:
+            thread.join(timeout=2)
+        assert not thread.is_alive() and results == [finalized] and calls == [local]
+        assert worker.transcript() == owner.transcript() == before == session(ordinal)
+        actions: tuple[
+            tuple[
+                BenchmarkWorkerChannel | BenchmarkOwnerChannel,
+                Callable[[], BenchmarkResourceEvidence],
+            ],
+            ...,
+        ] = (
+            (worker, lambda: worker.exchange_resources(local)),
+            (owner, lambda: owner.finalize_resources(finalizer=synthetic_finalizer)),
+        )
+        for channel, action in actions:
+            with pytest.raises(BenchmarkChannelError, match="RESOURCE"):
+                action()
+            # History is not evidence that repeated resource finalization was admitted.
+            assert channel.transcript() == before
+        assert len(calls) == 1
+
+
+@pytest.mark.parametrize("side", ("worker", "owner"))
+def test_terminal_resources_cannot_start_before_exact_checkpoint_completion(side: str) -> None:
+    with endpoints(3) as (worker, owner):
+        with pytest.raises(BenchmarkChannelError, match="RESOURCE"):
+            if side == "worker":
+                worker.exchange_resources(local_resources(3))
+            else:
+                owner.finalize_resources(finalizer=lambda value: value)
+        with pytest.raises(BenchmarkChannelError, match="INCOMPLETE"):
+            (worker if side == "worker" else owner).transcript()
+
+
+@pytest.mark.parametrize(
+    "case",
+    (
+        "missing",
+        "raises",
+        "wrong_type",
+        "local_rss",
+        "mutate_alias",
+        "capacity_bound",
+        "count",
+        "invocation",
+        "device",
+        "bool",
+    ),
+)
+def test_missing_or_malicious_finalizer_closes_both_sides_without_resource_success(
+    case: str,
+) -> None:
+    errors: list[str] = []
+    with endpoints(2) as (worker, owner):
+        complete_checkpoints(worker, owner, 2)
+        historical = worker.transcript()
+        local = local_resources(2)
+
+        def exchange() -> None:
+            try:
+                worker.exchange_resources(local)
+            except BenchmarkChannelError as exc:
+                errors.append(exc.code)
+
+        def synthetic(value: BenchmarkResourceEvidence) -> Any:
+            if case == "raises":
+                raise RuntimeError("synthetic late fence failure")
+            if case == "wrong_type":
+                return True
+            body = resources(2).model_dump(mode="json")
+            if case in {"local_rss", "mutate_alias"}:
+                body["peak_rss_bytes"] += 1
+                if case == "mutate_alias":
+                    object.__setattr__(value, "peak_rss_bytes", body["peak_rss_bytes"])
+            elif case == "capacity_bound":
+                body["capacity_samples"][0]["peak_whole_process_gpu_bytes"] = 1
+            elif case == "count":
+                body["owner_observation_count"] = 0
+            elif case == "invocation":
+                body["invocation_sha256"] = "sha256:" + "f" * 64
+            elif case == "device":
+                return resources(1)
+            result = BenchmarkResourceEvidence.model_validate(seal(body, "resource_sha256"))
+            return (
+                result.model_copy(update={"owner_observation_count": True})
+                if case == "bool"
+                else result
+            )
+
+        thread = threading.Thread(target=exchange)
+        thread.start()
+        try:
+            with pytest.raises(BenchmarkChannelError, match="FINALIZATION_FAILED"):
+                candidate: Any = None if case == "missing" else synthetic
+                owner.finalize_resources(finalizer=candidate)
+        finally:
+            thread.join(timeout=2)
+        assert not thread.is_alive() and errors == ["EMBEDDING_BENCHMARK_RESOURCE_EXCHANGE_FAILED"]
+        assert local == local_resources(2)
+        assert worker.transcript() == owner.transcript() == historical
+
+
+@pytest.mark.parametrize("side", ("worker", "owner"))
+@pytest.mark.parametrize("case", ("noncanonical", "wrong_kind", "foreign", "copied_bool", "eof"))
+def test_untrusted_terminal_resource_frames_are_rejected_on_both_endpoints(
+    side: str, case: str
+) -> None:
+    left, right = socket.socketpair()
+    deadline = time.monotonic_ns() + 2 * 10**9
+    invocation = worker_invocation(3)
+    worker = BenchmarkWorkerChannel(
+        left, invocation, expected_peer=peer(), peer_fence=synthetic_peer_fence, expires_ns=deadline
+    )
+    owner = BenchmarkOwnerChannel(
+        right,
+        invocation,
+        expected_peer=peer(),
+        peer_fence=synthetic_peer_fence,
+        continuation_fence=synthetic_continuation,
+        expires_ns=deadline,
+    )
+    try:
+        complete_checkpoints(worker, owner, 3)
+        raw = embedding_device_benchmark_bytes(local_resources(3))
+        if case == "noncanonical":
+            raw += b"\n"
+        elif case == "wrong_kind":
+            raw = embedding_device_benchmark_bytes(session(3).acks[0])
+        elif case == "foreign":
+            body = local_resources(3).model_dump(mode="json")
+            body["invocation_sha256"] = "sha256:" + "f" * 64
+            raw = embedding_device_benchmark_bytes(
+                BenchmarkResourceEvidence.model_validate(seal(body, "resource_sha256"))
+            )
+        elif case == "copied_bool":
+            raw = raw.replace(b'"owner_observation_count":0', b'"owner_observation_count":true')
+        sender = right if side == "worker" else left
+        if case == "eof":
+            sender.shutdown(socket.SHUT_WR)
+        else:
+            sender.sendall(struct.pack("!I", len(raw)) + raw)
+        with pytest.raises(BenchmarkChannelError, match="RESOURCE"):
+            if side == "worker":
+                worker.exchange_resources(local_resources(3))
+            else:
+                owner.finalize_resources(finalizer=lambda value: value)
+        # CP program is complete, not resource success or current authority.
+        assert (worker if side == "worker" else owner).transcript() == session(3)
+    finally:
+        worker.close()
+        owner.close()
+
+
+@pytest.mark.parametrize("case", ("peer", "deadline", "fd"))
+def test_late_finalizer_rechecks_same_peer_fd_and_absolute_deadline(case: str) -> None:
+    left, right = socket.socketpair()
+    other_left, other_right = socket.socketpair()
+    revoked = False
+    now = time.monotonic_ns()
+    clock = [now]
+
+    def synthetic_peer(value: BenchmarkUnixPeer) -> None:
+        assert value == peer()
+        if revoked:
+            raise RuntimeError("synthetic peer revoked")
+
+    worker = BenchmarkWorkerChannel(
+        left,
+        worker_invocation(3),
+        expected_peer=peer(),
+        peer_fence=synthetic_peer_fence,
+        expires_ns=now + 10**9,
+    )
+    owner = BenchmarkOwnerChannel(
+        right,
+        worker_invocation(3),
+        expected_peer=peer(),
+        peer_fence=synthetic_peer,
+        continuation_fence=synthetic_continuation,
+        expires_ns=now + 10**9,
+    )
+    errors: list[str] = []
+
+    def exchange() -> None:
+        try:
+            worker.exchange_resources(local_resources(3))
+        except BenchmarkChannelError as exc:
+            errors.append(exc.code)
+
+    def synthetic_finalizer(value: BenchmarkResourceEvidence) -> BenchmarkResourceEvidence:
+        nonlocal revoked
+        if case == "peer":
+            revoked = True
+        elif case == "deadline":
+            clock[0] += 10**9
+        else:
+            os.dup2(other_right.fileno(), right.fileno(), inheritable=False)
+        return value
+
+    try:
+        complete_checkpoints(worker, owner, 3)
+        with pytest.MonkeyPatch.context() as patch:
+            if case == "deadline":
+                patch.setattr(time, "monotonic_ns", lambda: clock[0])
+            thread = threading.Thread(target=exchange)
+            thread.start()
+            try:
+                with pytest.raises(BenchmarkChannelError, match="FINALIZATION_FAILED"):
+                    owner.finalize_resources(finalizer=synthetic_finalizer)
+            finally:
+                thread.join(timeout=2)
+            assert not thread.is_alive() and errors
+        assert owner.transcript() == session(3)
+    finally:
+        worker.close()
+        owner.close()
+        other_left.close()
+        other_right.close()
+
+
+def test_resource_on_ordinary_checkpoint_route_is_not_admitted_early() -> None:
+    sender, receiver = socket.socketpair()
+    owner = BenchmarkOwnerChannel(
+        receiver,
+        worker_invocation(3),
+        expected_peer=peer(),
+        peer_fence=synthetic_peer_fence,
+        continuation_fence=synthetic_continuation,
+        expires_ns=time.monotonic_ns() + 10**9,
+    )
+    try:
+        raw = embedding_device_benchmark_bytes(local_resources(3))
+        sender.sendall(struct.pack("!I", len(raw)) + raw)
+        with pytest.raises(BenchmarkChannelError, match="CHECKPOINT_RECEIVE_FAILED"):
+            owner.receive_checkpoint()
+        assert receiver.fileno() == -1
+    finally:
+        owner.close()
+        sender.close()
+
+
+@pytest.mark.parametrize("size", (0, 65537, 2**32 - 1))
+def test_terminal_announcement_is_bounded_before_payload_or_json_allocation(
+    size: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from eom_catalog_service import embedding_benchmark_channel as module
+
+    left, right = socket.socketpair()
+    deadline = time.monotonic_ns() + 10**9
+    worker = BenchmarkWorkerChannel(
+        left,
+        worker_invocation(3),
+        expected_peer=peer(),
+        peer_fence=synthetic_peer_fence,
+        expires_ns=deadline,
+    )
+    owner = BenchmarkOwnerChannel(
+        right,
+        worker_invocation(3),
+        expected_peer=peer(),
+        peer_fence=synthetic_peer_fence,
+        continuation_fence=synthetic_continuation,
+        expires_ns=deadline,
+    )
+
+    def forbidden(*args: object, **kwargs: object) -> Any:
+        raise AssertionError("oversized terminal frame must not parse")
+
+    try:
+        complete_checkpoints(worker, owner, 3)
+        monkeypatch.setattr(module, "parse_embedding_device_benchmark_bytes", forbidden)
+        left.sendall(struct.pack("!I", size))
+        with pytest.raises(BenchmarkChannelError, match="FINALIZATION_FAILED"):
+            owner.finalize_resources(finalizer=lambda value: value)
+        assert right.fileno() == -1 and owner.transcript() == session(3)
+    finally:
+        worker.close()
+        owner.close()
+
+
+def test_terminal_absolute_deadline_is_not_reset_by_partial_progress() -> None:
+    left, right = socket.socketpair()
+    deadline = time.monotonic_ns() + 2 * 10**9
+    clock = [deadline - 40_000_000]
+    worker = BenchmarkWorkerChannel(
+        left,
+        worker_invocation(3),
+        expected_peer=peer(),
+        peer_fence=synthetic_peer_fence,
+        expires_ns=deadline,
+    )
+    owner = BenchmarkOwnerChannel(
+        right,
+        worker_invocation(3),
+        expected_peer=peer(),
+        peer_fence=synthetic_peer_fence,
+        continuation_fence=synthetic_continuation,
+        expires_ns=deadline,
+    )
+    try:
+        complete_checkpoints(worker, owner, 3)
+        left.sendall(b"\x00")
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(time, "monotonic_ns", lambda: clock[0])
+            started = time.perf_counter()
+            with pytest.raises(BenchmarkChannelError, match="FINALIZATION_FAILED"):
+                owner.finalize_resources(finalizer=lambda value: value)
+            elapsed = time.perf_counter() - started
+        assert elapsed < 0.5 and right.fileno() == -1
+        assert owner.transcript() == session(3)
+    finally:
+        worker.close()
+        owner.close()
+
+
+def test_worker_resource_wait_uses_immutable_local_snapshot_not_caller_alias() -> None:
+    local = local_resources(3)
+    original = resources(3)
+    results: list[BenchmarkResourceEvidence] = []
+    with endpoints(3) as (worker, owner):
+        complete_checkpoints(worker, owner, 3)
+
+        def exchange() -> None:
+            results.append(worker.exchange_resources(local))
+
+        def synthetic(value: BenchmarkResourceEvidence) -> BenchmarkResourceEvidence:
+            assert value.peak_rss_bytes == 1024
+            object.__setattr__(local, "peak_rss_bytes", 2048)
+            return original
+
+        thread = threading.Thread(target=exchange)
+        thread.start()
+        try:
+            owner.finalize_resources(finalizer=synthetic)
+        finally:
+            thread.join(timeout=2)
+        assert not thread.is_alive() and results == [original]
+        assert local.peak_rss_bytes == 2048 and results[0].peak_rss_bytes == 1024
 
 
 @contextmanager

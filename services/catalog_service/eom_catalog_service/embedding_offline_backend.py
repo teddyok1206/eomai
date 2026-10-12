@@ -33,6 +33,11 @@ from eom_catalog_service.embedding_execution_ports import (
     CudaEmbeddingOwnership,
     InstalledEmbeddingRuntimeObservation,
     InstalledEmbeddingRuntimeObserver,
+    NativeAllocatorPeaks,
+    NativeObservedEncoding,
+    NativeTokenBatchObservation,
+    NativeTokenRejection,
+    NativeTokenRowObservation,
 )
 from eom_catalog_service.inference_transfer_ports import EmbeddingRankerProvenance
 from eom_catalog_service.inference_transfer_vectors import normalized_vector
@@ -52,9 +57,10 @@ _MAX_TEXTS = 1024
 
 
 class NativeEmbeddingBackendError(ValueError):
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, *, token_rejection: NativeTokenRejection | None = None) -> None:
         super().__init__(code)
         self.code = code
+        self.token_rejection = token_rejection
 
 
 @dataclass(frozen=True, slots=True)
@@ -445,7 +451,7 @@ class OfflineNativeEmbeddingBackend:
             raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_TOKENIZER_INVALID")
         return tokens
 
-    def _require_exact_padding(self, tokens: Any, padded: Any) -> None:
+    def _require_exact_padding(self, tokens: Any, padded: Any) -> tuple[Any, Any, Any]:
         """Read actual padded IDs/masks back before device transfer; never truncate silently."""
         ids = tokens["input_ids"]
         maximum = max(len(row) for row in ids)
@@ -466,13 +472,54 @@ class OfflineNativeEmbeddingBackend:
                 expected_types.append(
                     mask_padding + types if side == "left" else types + mask_padding
                 )
+        actual_ids = padded["input_ids"].tolist()
+        actual_masks = padded["attention_mask"].tolist()
+        actual_types = (
+            padded["token_type_ids"].tolist()
+            if token_types is not None and "token_type_ids" in padded
+            else None
+        )
         if (
-            padded["input_ids"].tolist() != expected_ids
-            or padded["attention_mask"].tolist() != expected_masks
+            actual_ids != expected_ids
+            or actual_masks != expected_masks
             or ("token_type_ids" in padded) != (token_types is not None)
-            or (token_types is not None and padded["token_type_ids"].tolist() != expected_types)
+            or (token_types is not None and actual_types != expected_types)
         ):
             raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_TOKENIZER_INVALID")
+        return actual_ids, actual_masks, actual_types
+
+    def _token_observation(
+        self,
+        texts: tuple[str, ...],
+        purpose: Literal["QUERY", "DOCUMENT"],
+        tokens: Any,
+        actual: tuple[Any, Any, Any],
+    ) -> NativeTokenBatchObservation:
+        ids, masks, types = actual
+        unpadded_types = tokens.get("token_type_ids")
+        return NativeTokenBatchObservation(
+            purpose=purpose,
+            pad_token_id=self._tokenizer.pad_token_id,
+            padding_side=self._tokenizer.padding_side,
+            rows=tuple(
+                NativeTokenRowObservation(
+                    input_text_sha256=content_sha256(text),
+                    input_ids=tuple(ids[index]),
+                    attention_mask=tuple(masks[index]),
+                    token_type_ids=tuple(types[index]) if types is not None else None,
+                    unpadded_token_count=len(tokens["input_ids"][index]),
+                    token_ids_sha256=content_sha256(
+                        {
+                            "input_ids": tokens["input_ids"][index],
+                            "token_type_ids": (
+                                unpadded_types[index] if unpadded_types is not None else None
+                            ),
+                        }
+                    ),
+                )
+                for index, text in enumerate(texts)
+            ),
+        )
 
     def token_lengths(
         self, texts: tuple[str, ...], *, purpose: Literal["QUERY", "DOCUMENT"]
@@ -495,6 +542,39 @@ class OfflineNativeEmbeddingBackend:
     def encode(
         self, texts: tuple[str, ...], *, purpose: Literal["QUERY", "DOCUMENT"]
     ) -> tuple[tuple[float, ...], ...]:
+        return self._encode(texts, purpose=purpose, observations=None)
+
+    def encode_observed(
+        self, texts: tuple[str, ...], *, purpose: Literal["QUERY", "DOCUMENT"]
+    ) -> NativeObservedEncoding:
+        """Same encoder, bounded token read-back only for an explicit observed call."""
+        if type(texts) is not tuple or not 1 <= len(texts) <= 18:
+            raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_INPUT_INVALID")
+        # Empty rejection precedes tokenizer; never fabricate count0/empty-ID evidence.
+        if (
+            purpose in ("QUERY", "DOCUMENT")
+            and len(texts) <= 4
+            and all(type(text) is str and not text.strip() for text in texts)
+            and all(len(text.encode("utf-8")) <= _MAX_TEXT_BYTES for text in texts)
+        ):
+            self._assert_runtime()
+            raise NativeEmbeddingBackendError(
+                "NATIVE_EMBEDDING_INPUT_INVALID",
+                token_rejection=NativeTokenRejection(
+                    "EMPTY", tuple(content_sha256(text) for text in texts), None, None
+                ),
+            )
+        observations: list[NativeTokenBatchObservation] = []
+        vectors = self._encode(texts, purpose=purpose, observations=observations)
+        return NativeObservedEncoding(vectors, tuple(observations))
+
+    def _encode(
+        self,
+        texts: tuple[str, ...],
+        *,
+        purpose: Literal["QUERY", "DOCUMENT"],
+        observations: list[NativeTokenBatchObservation] | None,
+    ) -> tuple[tuple[float, ...], ...]:
         self._validate_texts(texts, purpose)
         output: list[tuple[float, ...]] = []
         try:
@@ -503,7 +583,40 @@ class OfflineNativeEmbeddingBackend:
                 batch = texts[offset : offset + self._expected.recipe.batch_size]
                 tokens = self._tokens(batch, purpose)
                 if any(len(row) > self._spec.maximum_tokens for row in tokens["input_ids"]):
-                    raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_INPUT_TOO_LONG")
+                    if observations is not None and any(
+                        value >= 2**31
+                        for rows in (tokens["input_ids"], tokens.get("token_type_ids") or ())
+                        for row in rows
+                        for value in row
+                    ):
+                        raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_TOKENIZER_INVALID")
+                    rejection = None
+                    if (
+                        observations is not None
+                        and self._spec.maximum_tokens == 2048
+                        and all(len(row) <= 4096 for row in tokens["input_ids"])
+                    ):
+                        types = tokens.get("token_type_ids")
+                        rejection = NativeTokenRejection(
+                            "OVERFLOW",
+                            tuple(content_sha256(text) for text in batch),
+                            tuple(len(row) for row in tokens["input_ids"]),
+                            tuple(
+                                content_sha256(
+                                    {
+                                        "input_ids": row,
+                                        "token_type_ids": types[index]
+                                        if types is not None
+                                        else None,
+                                    }
+                                )
+                                for index, row in enumerate(tokens["input_ids"])
+                            ),
+                        )
+                    self._assert_runtime()
+                    raise NativeEmbeddingBackendError(
+                        "NATIVE_EMBEDDING_INPUT_TOO_LONG", token_rejection=rejection
+                    )
                 padded = self._tokenizer.pad(tokens, padding=True, return_tensors="pt")
                 if set(padded) - {"input_ids", "attention_mask", "token_type_ids"}:
                     raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_TOKENIZER_INVALID")
@@ -512,7 +625,12 @@ class OfflineNativeEmbeddingBackend:
                     for tensor in padded.values()
                 ):
                     raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_TOKENIZER_INVALID")
-                self._require_exact_padding(tokens, padded)
+                actual = self._require_exact_padding(tokens, padded)
+                observation = (
+                    self._token_observation(batch, purpose, tokens, actual)
+                    if observations is not None
+                    else None
+                )
                 tensors = {key: tensor.to(device=self._placement) for key, tensor in padded.items()}
                 for tensor in tensors.values():
                     self._assert_tensor_device(tensor)
@@ -554,6 +672,9 @@ class OfflineNativeEmbeddingBackend:
                     output.extend(normalized_vector(tuple(row), self.dimension) for row in rows)
                 self._synchronize()
                 self._assert_runtime()
+                if observations is not None:
+                    assert observation is not None
+                    observations.append(observation)
             self._assert_runtime()
             return tuple(output)
         except NativeEmbeddingBackendError:
@@ -565,6 +686,38 @@ class OfflineNativeEmbeddingBackend:
         if self._device == "CUDA":
             self._require_owned()
             self._torch.cuda.synchronize(0)
+
+    def synchronize(self) -> None:
+        """Measured-span device fence; no lease release or optional runtime bypass."""
+        try:
+            self._assert_runtime()
+            self._synchronize()
+            self._assert_runtime()
+        except NativeEmbeddingBackendError:
+            raise
+        except (OSError, ValueError, TypeError, KeyError, AttributeError, RuntimeError) as exc:
+            raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_INFERENCE_FAILED") from exc
+
+    def allocator_peaks(self) -> NativeAllocatorPeaks:
+        """Read actual cumulative local peaks, including constructor; never reset them."""
+        try:
+            self._assert_runtime()
+            if self._device == "CPU":
+                peaks = NativeAllocatorPeaks(None, None)
+            else:
+                self._synchronize()
+                peaks = NativeAllocatorPeaks(
+                    self._torch.cuda.max_memory_allocated(0),
+                    self._torch.cuda.max_memory_reserved(0),
+                )
+                if peaks.allocated_bytes is None:
+                    raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_NUMERICS_MISMATCH")
+            self._assert_runtime()
+            return peaks
+        except NativeEmbeddingBackendError:
+            raise
+        except (OSError, ValueError, TypeError, KeyError, AttributeError, RuntimeError) as exc:
+            raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_INFERENCE_FAILED") from exc
 
     def _discard_failed_model(self) -> None:
         # Never release the owner's lease on uncertain initialization/kernel failure.

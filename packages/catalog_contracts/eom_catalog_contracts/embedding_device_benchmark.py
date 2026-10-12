@@ -898,6 +898,13 @@ def _sample_program(ordinal: int) -> tuple[BenchmarkSampleKey, ...]:
     )
 
 
+def benchmark_sample_program(launch_ordinal: int) -> tuple[BenchmarkSampleKey, ...]:
+    """Expose the authoritative fixed sample order; not a caller-selected recipe."""
+    if type(launch_ordinal) is not int or not 1 <= launch_ordinal <= 6:
+        raise ValueError("benchmark launch ordinal must be an exact integer1..6")
+    return _sample_program(launch_ordinal)
+
+
 class BenchmarkVectorSample(_BenchmarkContract):
     """Closed ranges in immutable local members; byte/norm verification belongs to owner."""
 
@@ -1448,6 +1455,72 @@ class BenchmarkResourceEvidence(_BenchmarkContract):
             raise ValueError("CPU benchmark cannot assert GPU observations")
         _hash(self, "resource_sha256")
         return self
+
+
+def validate_benchmark_local_resources(
+    invocation: BenchmarkWorkerInvocation, resources: BenchmarkResourceEvidence
+) -> None:
+    """Validate local claims before the terminal exchange; never attest observations."""
+    _integer_json(invocation)
+    _integer_json(resources)
+    invocation = BenchmarkWorkerInvocation.model_validate(invocation)
+    resources = BenchmarkResourceEvidence.model_validate(resources)
+    if (
+        resources.invocation_sha256 != invocation.invocation_sha256
+        or resources.launch_ordinal != invocation.launch_ordinal
+        or resources.device != invocation.device
+        or resources.owner_observation_count != 0
+        or resources.other_consumer_overlap_count != 0
+        or resources.peak_whole_process_gpu_bytes is not None
+        or resources.peak_whole_device_gpu_bytes is not None
+        or any(
+            sample.peak_whole_process_gpu_bytes is not None for sample in resources.capacity_samples
+        )
+    ):
+        raise ValueError("benchmark local resources differ or assert independent owner evidence")
+
+
+def validate_benchmark_resource_finalization(
+    invocation: BenchmarkWorkerInvocation,
+    local: BenchmarkResourceEvidence,
+    finalized: BenchmarkResourceEvidence,
+) -> None:
+    """Only independent owner fields may change; actual monitoring is an owner adapter."""
+    _integer_json(invocation)
+    _integer_json(local)
+    _integer_json(finalized)
+    validate_benchmark_local_resources(invocation, local)
+    invocation = BenchmarkWorkerInvocation.model_validate(invocation)
+    local = BenchmarkResourceEvidence.model_validate(local)
+    finalized = BenchmarkResourceEvidence.model_validate(finalized)
+    allowed = {
+        "peak_whole_process_gpu_bytes",
+        "peak_whole_device_gpu_bytes",
+        "owner_observation_count",
+        "other_consumer_overlap_count",
+        "capacity_samples",
+        "resource_sha256",
+    }
+    if local.model_dump(mode="json", exclude=allowed) != finalized.model_dump(
+        mode="json", exclude=allowed
+    ) or tuple(
+        sample.model_dump(mode="json", exclude={"peak_whole_process_gpu_bytes"})
+        for sample in local.capacity_samples
+    ) != tuple(
+        sample.model_dump(mode="json", exclude={"peak_whole_process_gpu_bytes"})
+        for sample in finalized.capacity_samples
+    ):
+        raise ValueError("benchmark owner changed local resource measurements/identity")
+    if invocation.device == "CUDA" and (
+        finalized.owner_observation_count == 0
+        or finalized.peak_whole_process_gpu_bytes is None
+        or finalized.peak_whole_device_gpu_bytes is None
+        or any(
+            sample.peak_whole_process_gpu_bytes != finalized.peak_whole_process_gpu_bytes
+            for sample in finalized.capacity_samples
+        )
+    ):
+        raise ValueError("benchmark CUDA finalization lacks whole-invocation owner observations")
 
 
 class BenchmarkSyntheticRejection(_BenchmarkContract):

@@ -201,6 +201,9 @@ native stage/step DB guard의 새 source head는0053이며 exact release context
 native/legacy/release source579 PASS 이후 guarded disposable PostgreSQL에서 새18 DB 사례도
 **18 PASS (0.35s)**,0053 up/down/up·control-plane gate와 cleanup PASS를 확인했습니다.
 현재 운영 DB/설치본을 자동으로0053으로 바꾸거나 native 실행이 활성화됐다고 해석하지 않습니다.
+실측용 실제 token/padding·누적 allocator 관측과 단 한 번의 owner resource 응답을 추가했고,
+기존 encoder/index 의미를 보존한 독립 source 회귀는825 PASS입니다. GPU 속도·전체 device
+관측·기본값 활성화 증거가 아니며, 실제 worker와 설치·권한 연결은 여전히 후속 gate입니다.
 
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스

@@ -1,4 +1,4 @@
-"""Fixed local checkpoint/ACK exchange; no launch, source grant, inference or cleanup.
+"""Fixed local checkpoint/ACK and terminal resources; no launch/grant/inference/cleanup.
 
 Endpoints take ownership of one already-admitted Unix socket. Required peer and
 continuation fences come from installed owners, never worker input or default callbacks.
@@ -19,6 +19,7 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     MAX_BENCHMARK_ENVELOPE_BYTES,
     BenchmarkAck,
     BenchmarkCheckpoint,
+    BenchmarkResourceEvidence,
     BenchmarkSession,
     BenchmarkWorkerInvocation,
     benchmark_ack_for_checkpoint,
@@ -27,6 +28,8 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     parse_embedding_device_benchmark_bytes,
     validate_benchmark_ack,
     validate_benchmark_checkpoint,
+    validate_benchmark_local_resources,
+    validate_benchmark_resource_finalization,
 )
 from eom_identifiers import content_sha256
 
@@ -62,6 +65,7 @@ class BenchmarkUnixPeer:
 
 PeerFence = Callable[[BenchmarkUnixPeer], None]
 ContinuationFence = Callable[[BenchmarkCheckpoint], None]
+ResourceFinalizer = Callable[[BenchmarkResourceEvidence], BenchmarkResourceEvidence]
 
 
 class _Frames:
@@ -169,19 +173,31 @@ class _Frames:
         self.check()
         return b"".join(parts)
 
-    def receive(self) -> BenchmarkCheckpoint | BenchmarkAck:
+    def _receive_message(self) -> BenchmarkCheckpoint | BenchmarkAck | BenchmarkResourceEvidence:
         count = _LENGTH.unpack(self.read(_LENGTH.size))[0]
         if not 1 <= count <= MAX_BENCHMARK_ENVELOPE_BYTES:
             raise BenchmarkChannelError("EMBEDDING_BENCHMARK_FRAME_SIZE_INVALID")
         raw = self.read(count)
         message = parse_embedding_device_benchmark_bytes(raw)
         if not isinstance(
-            message, (BenchmarkCheckpoint, BenchmarkAck)
+            message, (BenchmarkCheckpoint, BenchmarkAck, BenchmarkResourceEvidence)
         ) or raw != embedding_device_benchmark_bytes(message):
             raise BenchmarkChannelError("EMBEDDING_BENCHMARK_FRAME_INVALID")
         return message
 
-    def send(self, message: BenchmarkCheckpoint | BenchmarkAck) -> None:
+    def receive(self) -> BenchmarkCheckpoint | BenchmarkAck:
+        message = self._receive_message()
+        if not isinstance(message, (BenchmarkCheckpoint, BenchmarkAck)):
+            raise BenchmarkChannelError("EMBEDDING_BENCHMARK_FRAME_INVALID")
+        return message
+
+    def receive_resources(self) -> BenchmarkResourceEvidence:
+        message = self._receive_message()
+        if not isinstance(message, BenchmarkResourceEvidence):
+            raise BenchmarkChannelError("EMBEDDING_BENCHMARK_FRAME_INVALID")
+        return message
+
+    def send(self, message: BenchmarkCheckpoint | BenchmarkAck | BenchmarkResourceEvidence) -> None:
         raw = embedding_device_benchmark_bytes(message)
         if not 1 <= len(raw) <= MAX_BENCHMARK_ENVELOPE_BYTES:
             raise BenchmarkChannelError("EMBEDDING_BENCHMARK_FRAME_SIZE_INVALID")
@@ -212,6 +228,8 @@ class _Exchange:
         self.pending: BenchmarkCheckpoint | None = None
         self.checkpoints: list[BenchmarkCheckpoint] = []
         self.acks: list[BenchmarkAck] = []
+        self.completed_session: BenchmarkSession | None = None
+        self.resources_started = False
 
     def fail(self) -> None:
         self.frames.invalidate()
@@ -232,8 +250,24 @@ class _Exchange:
         self.acks.append(BenchmarkAck.model_validate(ack))
         self.pending = None
         self.sequence += 1
+        if self.sequence == self.count + 1:
+            self.completed_session = self.transcript()
+
+    def begin_resources(self) -> None:
+        if (
+            self.frames.failed
+            or self.completed_session is None
+            or self.resources_started
+            or self.pending is not None
+        ):
+            raise BenchmarkChannelError("EMBEDDING_BENCHMARK_RESOURCE_ORDER_INVALID")
+        self.frames.check()
+        self.resources_started = True
 
     def transcript(self) -> BenchmarkSession:
+        if self.completed_session is not None:
+            # Historical CP evidence survives a later terminal-resource failure, never a grant.
+            return self.completed_session
         if self.frames.failed or self.pending is not None or self.sequence != self.count + 1:
             raise BenchmarkChannelError("EMBEDDING_BENCHMARK_SESSION_INCOMPLETE")
         body = {
@@ -287,6 +321,23 @@ class BenchmarkWorkerChannel:
     def transcript(self) -> BenchmarkSession:
         return self._exchange.transcript()
 
+    def exchange_resources(self, local: BenchmarkResourceEvidence) -> BenchmarkResourceEvidence:
+        """One terminal roundtrip; independent owner claims cannot alter local measurements."""
+        try:
+            self._exchange.begin_resources()
+            validate_benchmark_local_resources(self._exchange.invocation, local)
+            raw_local = embedding_device_benchmark_bytes(local)
+            self._exchange.frames.send(local)
+            finalized = self._exchange.frames.receive_resources()
+            baseline = parse_embedding_device_benchmark_bytes(raw_local)
+            assert isinstance(baseline, BenchmarkResourceEvidence)
+            validate_benchmark_resource_finalization(self._exchange.invocation, baseline, finalized)
+            self._exchange.frames.check()
+            return finalized
+        except Exception:
+            self._exchange.fail()
+            raise BenchmarkChannelError("EMBEDDING_BENCHMARK_RESOURCE_EXCHANGE_FAILED") from None
+
     def close(self) -> None:
         self._exchange.frames.close()
 
@@ -339,6 +390,31 @@ class BenchmarkOwnerChannel:
 
     def transcript(self) -> BenchmarkSession:
         return self._exchange.transcript()
+
+    def finalize_resources(self, *, finalizer: ResourceFinalizer) -> BenchmarkResourceEvidence:
+        """Require the installed owner's late observation/fence adapter; no default provider."""
+        try:
+            self._exchange.begin_resources()
+            if not callable(finalizer):
+                raise BenchmarkChannelError("EMBEDDING_BENCHMARK_RESOURCE_FINALIZER_REQUIRED")
+            local = self._exchange.frames.receive_resources()
+            validate_benchmark_local_resources(self._exchange.invocation, local)
+            raw_local = embedding_device_benchmark_bytes(local)
+            self._exchange.frames.check()
+            finalized = finalizer(local)
+            self._exchange.frames.check()
+            if not isinstance(finalized, BenchmarkResourceEvidence):
+                raise BenchmarkChannelError("EMBEDDING_BENCHMARK_RESOURCE_FINALIZER_INVALID")
+            baseline = parse_embedding_device_benchmark_bytes(raw_local)
+            assert isinstance(baseline, BenchmarkResourceEvidence)
+            validate_benchmark_resource_finalization(self._exchange.invocation, baseline, finalized)
+            self._exchange.frames.send(finalized)
+            return finalized
+        except Exception:
+            self._exchange.fail()
+            raise BenchmarkChannelError(
+                "EMBEDDING_BENCHMARK_RESOURCE_FINALIZATION_FAILED"
+            ) from None
 
     def close(self) -> None:
         self._exchange.frames.close()

@@ -642,3 +642,30 @@ prepare/cleanup의 비밀값 없는 기록은 외부 임시 evidence 디렉터�
 설치 admission·실제 CPU/CUDA 속도 측정·GPU 기본값 활성화 PASS가 아니다. 새 모델/GPU 실행0,
 기본값 NOT_ACTIVE, 전체 목표 ACTIVE다. 이전 source579/961과 DB16/8/6은 서로 다른 gate로
 보존하고 겹치는 테스트 수를 합산하지 않는다.
+
+## 실측용 actual token·resource source seam — 2026-10-12 23:21 UTC
+
+기존 encoder의 tokenizer/padding/forward/host-L2 경로를 공유하는 명시적 observed API를 추가했다.
+bounded actual batch/used IDs·mask·types와 input/token hash를 반환하지만, 일반 index encode에는
+관측 tuple 생성·hash 비용을 추가하지 않는다. EMPTY는 tokenizer 전 거부하여 token 증거를
+꾸며내지 않으며, 고정2048 ceiling의 OVERFLOW만 actual≤4096 count/hash 요약을 제공한다.
+CUDA의 누적 allocator peak는 실제 device 읽기와 runtime/lease fence 전후 검사이며,
+constructor 이후 peak를 초기화하거나 whole-process/device 관측이라고 주장하지 않는다.
+
+기존 resources1.0 메시지로 완료된1/21 checkpoint 뒤 단 한 번의 owner finalization을 처리한다.
+peer/FD/absolute deadline과 immutable canonical local baseline을 유지하고, owner가 worker의
+RSS/allocator/OOM/capacity/input/token 수치를 바꿀 수 없도록 검증한다. terminal exchange가
+실패해도 완료된 checkpoint는 역사적 증거로만 남으며 resource/admission 성공이 아니다.
+actual monitor와 source/session/command continuation 구현은 이 seam의 필수 후속 adapter다.
+
+root independent nine-suite **825 PASS (22.22s)**, strict mypy8·Ruff/format8 PASS다. raw nested
+bool 재검증·false overflow·CUDA absent allocator를 root review 후 보강했다. 최초 root test
+invocation의 잘못된 legacy filename으로0개 실행됐고, 실제 파일 목록을 확인한 뒤 위 고정
+nine-suite만 PASS로 기록한다. agent의 중간812 PASS/1 FAIL은 ordinal3 CUDA fixture가 preliminary
+resource를 finalized로 반환한 오류로 분류하여 fixture만 수정했다. source gate를 live 장애나
+model 실행으로 재해석하지 않는다.
+
+기존 wire schema·수치 recipe·성능 threshold는 그대로다. 관련 encoder module bytes가 바뀌었으므로
+실제 release 이후 implementation/runtime pin을 새로 관측해야 하며 old proof를 재사용 승인하지
+않는다. worker leaf/files·실제 설치 admission·CPU/CUDA 모델 실측·GPU 기본값 활성화는 아직
+PENDING, 새 모델/GPU 실행0이다. 이전 source 결과와 겹치는 수를 합산하지 않는다.

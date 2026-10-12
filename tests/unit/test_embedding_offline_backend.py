@@ -24,12 +24,19 @@ from eom_catalog_service.embedding_encoder_adapter import (
     IncrementalEmbeddingEncodeError,
     encode_incremental_batch,
 )
+from eom_catalog_service.embedding_execution_ports import (
+    NativeAllocatorPeaks,
+    NativeObservedEncoding,
+    NativeTokenBatchObservation,
+    NativeTokenRejection,
+    NativeTokenRowObservation,
+)
 from eom_catalog_service.embedding_offline_backend import (
     NativeEmbeddingBackendError,
     OfflineNativeEmbeddingBackend,
     observed_embedding_implementation_pins,
 )
-from eom_identifiers import sha256_bytes
+from eom_identifiers import content_sha256, sha256_bytes
 
 from tests.unit.embedding_native_backend_fixtures import (
     FakeObserver,
@@ -41,6 +48,297 @@ from tests.unit.embedding_native_backend_fixtures import (
 from tests.unit.inference_transfer_embedding_fixtures import embedding_input, seal
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.mark.parametrize("purpose", ("QUERY", "DOCUMENT"))
+@pytest.mark.parametrize("side", ("left", "right"))
+def test_observed_encode_reads_actual_ordered_padded_tokens_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    purpose: Literal["QUERY", "DOCUMENT"],
+    side: str,
+) -> None:
+    configured, bundle, _, _ = configured_bundle(tmp_path)
+    state = fake_libraries(monkeypatch, bundle)
+    backend = OfflineNativeEmbeddingBackend(
+        configured, device="CPU", runtime_observer=FakeObserver(bundle)
+    )
+    state["tokenizer"].padding_side = side
+    state["token_ids"] = [[11, 12, 13], [21, 22]]
+    state["token_type_ids"] = [[0, 1, 1], [2, 2]]
+    observed = backend.encode_observed(("first", "second"), purpose=purpose)
+    assert observed.vectors == ((0.6, 0.8) + (0.0,) * 382,) * 2
+    batch = observed.batches[0]
+    assert batch.purpose == purpose and batch.padding_side == side and batch.pad_token_id == 0
+    assert batch.rows[0].input_ids == (11, 12, 13)
+    second = batch.rows[1]
+    assert second.input_ids == ((0, 21, 22) if side == "left" else (21, 22, 0))
+    assert second.attention_mask == ((0, 1, 1) if side == "left" else (1, 1, 0))
+    assert second.token_type_ids == ((0, 2, 2) if side == "left" else (2, 2, 0))
+    assert second.unpadded_token_count == 2
+    assert second.input_text_sha256 == content_sha256("second")
+    assert second.token_ids_sha256 == content_sha256(
+        {"input_ids": [21, 22], "token_type_ids": [2, 2]}
+    )
+    assert len(state["padding_reads"]) == 3 and state["forwards"] == 1
+    state["token_ids"][1][0] = 999
+    assert second.input_ids == ((0, 21, 22) if side == "left" else (21, 22, 0))
+    backend.close()
+
+
+def test_normal_encode_has_no_observation_copies_and_keeps_original_batches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    configured, bundle, _, _ = configured_bundle(tmp_path)
+    state = fake_libraries(monkeypatch, bundle)
+    backend = OfflineNativeEmbeddingBackend(
+        configured, device="CPU", runtime_observer=FakeObserver(bundle)
+    )
+
+    def forbidden(*args: object, **kwargs: object) -> Any:
+        raise AssertionError("normal encode must not construct/hash token observations")
+
+    monkeypatch.setattr(backend, "_token_observation", forbidden)
+    texts = tuple(f"row {index}" for index in range(5))
+    assert len(backend.encode(texts, purpose="DOCUMENT")) == 5
+    assert state["forwards"] == 2 and len(state["padding_reads"]) == 4
+    assert backend.encode((), purpose="DOCUMENT") == ()
+    backend.close()
+
+
+def test_observed_encode_fixed_batch4_and_input_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    configured, bundle, _, _ = configured_bundle(tmp_path)
+    state = fake_libraries(monkeypatch, bundle)
+    backend = OfflineNativeEmbeddingBackend(
+        configured, device="CPU", runtime_observer=FakeObserver(bundle)
+    )
+    texts = tuple(f"row {index}" for index in range(18))
+    observed = backend.encode_observed(texts, purpose="DOCUMENT")
+    assert tuple(len(batch.rows) for batch in observed.batches) == (4, 4, 4, 4, 2)
+    assert tuple(
+        row.input_text_sha256 for batch in observed.batches for row in batch.rows
+    ) == tuple(content_sha256(text) for text in texts)
+    assert state["forwards"] == 5 and len(state["padding_reads"]) == 10
+    with pytest.raises(NativeEmbeddingBackendError, match="INPUT_INVALID"):
+        backend.encode_observed((*texts, "nineteenth"), purpose="DOCUMENT")
+    backend.close()
+
+
+@pytest.mark.parametrize("batch", (1, 4))
+def test_empty_rejection_is_before_tokenizer_with_absent_token_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, batch: int
+) -> None:
+    configured, bundle, _, _ = configured_bundle(tmp_path)
+    state = fake_libraries(monkeypatch, bundle)
+    backend = OfflineNativeEmbeddingBackend(
+        configured, device="CPU", runtime_observer=FakeObserver(bundle)
+    )
+    with pytest.raises(NativeEmbeddingBackendError, match="INPUT_INVALID") as caught:
+        backend.encode_observed(("",) * batch, purpose="DOCUMENT")
+    assert caught.value.token_rejection == NativeTokenRejection(
+        "EMPTY", (content_sha256(""),) * batch, None, None
+    )
+    assert state["tokenized"] == [] and state["forwards"] == 0
+    with pytest.raises(NativeEmbeddingBackendError) as mixed:
+        backend.encode_observed(("", "valid text"), purpose="DOCUMENT")
+    assert mixed.value.token_rejection is None
+    backend.close()
+
+
+@pytest.mark.parametrize("count", (2048, 2049, 4096, 4097))
+@pytest.mark.parametrize("batch", (1, 4))
+def test_actual_capacity_and_bounded_overflow_summary_never_export_long_arrays(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, count: int, batch: int
+) -> None:
+    configured, bundle, _, _ = configured_bundle(tmp_path, pooling="CLS")
+    state = fake_libraries(monkeypatch, bundle)
+    backend = OfflineNativeEmbeddingBackend(
+        configured, device="CPU", runtime_observer=FakeObserver(bundle)
+    )
+    state["token_ids"] = [list(range(count)) for _ in range(batch)]
+    if count == 2048:
+        observed = backend.encode_observed(("actual capacity",) * batch, purpose="DOCUMENT")
+        assert all(len(row.input_ids) == 2048 for row in observed.batches[0].rows)
+        assert state["forwards"] == 1
+    else:
+        with pytest.raises(NativeEmbeddingBackendError, match="TOO_LONG") as caught:
+            backend.encode_observed(("actual overflow",) * batch, purpose="DOCUMENT")
+        rejection = caught.value.token_rejection
+        if count <= 4096:
+            assert rejection is not None and rejection.reason == "OVERFLOW"
+            assert rejection.token_counts == (count,) * batch
+            assert (
+                rejection.token_ids_sha256
+                == (content_sha256({"input_ids": list(range(count)), "token_type_ids": None}),)
+                * batch
+            )
+        else:
+            assert rejection is None
+        assert state["forwards"] == 0 and state["padding_reads"] == []
+    backend.close()
+
+
+@pytest.mark.parametrize("fault", ("mask", "types", "runtime"))
+def test_observed_method_does_not_turn_invalid_tokens_or_runtime_into_rejection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    configured, bundle, _, _ = configured_bundle(tmp_path)
+    state = fake_libraries(monkeypatch, bundle)
+    backend = OfflineNativeEmbeddingBackend(
+        configured, device="CPU", runtime_observer=FakeObserver(bundle)
+    )
+    state["token_ids"] = [[1, 2, 3]]
+    state["token_type_ids"] = [[0, 1, 1]]
+    if fault == "runtime":
+        state["on_forward"] = lambda: state.update(threads=3)
+    else:
+        state[f"bad_{fault}"] = True
+    with pytest.raises(NativeEmbeddingBackendError) as caught:
+        backend.encode_observed(("a row",), purpose="QUERY")
+    assert caught.value.token_rejection is None
+
+
+def test_observed_inference_failure_is_not_claimed_empty_overflow_or_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    configured, bundle, _, _ = configured_bundle(tmp_path)
+    state = fake_libraries(monkeypatch, bundle)
+    backend = OfflineNativeEmbeddingBackend(
+        configured, device="CPU", runtime_observer=FakeObserver(bundle)
+    )
+
+    def failed() -> None:
+        raise RuntimeError("synthetic allocator/kernel failure")
+
+    state["on_forward"] = failed
+    with pytest.raises(NativeEmbeddingBackendError, match="INFERENCE_FAILED") as caught:
+        backend.encode_observed(("actual nonempty row",), purpose="DOCUMENT")
+    assert caught.value.token_rejection is None and state["forwards"] == 1
+    backend.close()
+
+
+@pytest.mark.parametrize("device", ("CPU", "CUDA"))
+def test_public_device_fence_and_cumulative_allocator_peaks_never_reset_load(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, device: Literal["CPU", "CUDA"]
+) -> None:
+    configured, bundle, _, _ = configured_bundle(tmp_path, device)
+    state = fake_libraries(monkeypatch, bundle)
+    backend = OfflineNativeEmbeddingBackend(
+        configured,
+        device=device,
+        runtime_observer=FakeObserver(bundle),
+        cuda_ownership=FakeOwnership() if device == "CUDA" else None,
+    )
+    backend.synchronize()
+    assert state["syncs"] == (1 if device == "CUDA" else 0)
+    assert backend.allocator_peaks() == (
+        NativeAllocatorPeaks(100, 200) if device == "CUDA" else NativeAllocatorPeaks(None, None)
+    )
+    state.update(allocated_peak=300, reserved_peak=400)
+    assert backend.allocator_peaks() == (
+        NativeAllocatorPeaks(300, 400) if device == "CUDA" else NativeAllocatorPeaks(None, None)
+    )
+    assert state["allocator_reads"] == (
+        [("allocated", 0), ("reserved", 0)] * 2 if device == "CUDA" else []
+    )
+    backend.close()
+    for method in (backend.synchronize, backend.allocator_peaks):
+        with pytest.raises(NativeEmbeddingBackendError, match="CLOSED"):
+            method()
+
+
+@pytest.mark.parametrize(
+    "fault", ("bool", "float", "negative", "overflow", "none", "lease", "runtime")
+)
+def test_allocator_readback_invalid_or_drift_is_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    configured, bundle, _, _ = configured_bundle(tmp_path, "CUDA")
+    state = fake_libraries(monkeypatch, bundle)
+    ownership = FakeOwnership()
+    backend = OfflineNativeEmbeddingBackend(
+        configured, device="CUDA", runtime_observer=FakeObserver(bundle), cuda_ownership=ownership
+    )
+    if fault == "none":
+        state.update(allocated_peak=None, reserved_peak=None)
+    elif fault in {"bool", "float", "negative", "overflow"}:
+        state["allocated_peak"] = {
+            "bool": True,
+            "float": 1.0,
+            "negative": -1,
+            "overflow": 65 * 1024**3,
+        }[fault]
+    elif fault == "lease":
+        state["on_allocator_read"] = lambda: setattr(ownership, "valid", False)
+    else:
+        state["on_allocator_read"] = lambda: state.update(threads=3)
+    with pytest.raises(NativeEmbeddingBackendError):
+        backend.allocator_peaks()
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    (
+        ("input_ids", (True,)),
+        ("unpadded_token_count", True),
+        ("attention_mask", (True,)),
+        ("token_type_ids", (False,)),
+    ),
+)
+def test_native_observation_raw_bool_and_bounds_are_not_integer_values(
+    field: str, value: Any
+) -> None:
+    row = NativeTokenRowObservation(content_sha256("a"), (1,), (1,), None, 1, content_sha256([1]))
+    with pytest.raises(ValueError):
+        replace(row, **{field: value})
+    with pytest.raises(ValueError):
+        NativeTokenBatchObservation("DOCUMENT", True, "right", (row,))
+    with pytest.raises(ValueError):
+        NativeTokenBatchObservation("QUERY", 0, "right", (row,) * 5)
+    with pytest.raises(ValueError):
+        NativeTokenRejection("EMPTY", (content_sha256(""),), (0,), (content_sha256([]),))
+
+
+@pytest.mark.parametrize(
+    "target,field,value",
+    (
+        ("row", "unpadded_token_count", True),
+        ("row", "attention_mask", (True,)),
+        ("batch", "purpose", True),
+        ("batch", "rows", (object(),)),
+    ),
+)
+def test_observed_encoding_revalidates_raw_nested_values_before_access(
+    target: str, field: str, value: Any
+) -> None:
+    row = NativeTokenRowObservation(content_sha256("a"), (1,), (1,), None, 1, content_sha256([1]))
+    batch = NativeTokenBatchObservation("DOCUMENT", 0, "right", (row,))
+    object.__setattr__(row if target == "row" else batch, field, value)
+    with pytest.raises(ValueError):
+        NativeObservedEncoding(((1.0,),), (batch,))
+
+
+@pytest.mark.parametrize("count", (1, 2048, True, 4097))
+def test_false_or_unbounded_overflow_is_not_a_token_rejection(count: Any) -> None:
+    with pytest.raises(ValueError):
+        NativeTokenRejection("OVERFLOW", (content_sha256("a"),), (count,), (content_sha256([1]),))
+
+
+def test_nonbenchmark_model_ceiling_does_not_mint_false_2048_overflow(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    configured, bundle, _, _ = configured_bundle(tmp_path)
+    state = fake_libraries(monkeypatch, bundle)
+    backend = OfflineNativeEmbeddingBackend(
+        configured, device="CPU", runtime_observer=FakeObserver(bundle)
+    )
+    state["token_ids"] = [list(range(bundle.execution_model_spec.maximum_tokens + 1))]
+    with pytest.raises(NativeEmbeddingBackendError, match="TOO_LONG") as caught:
+        backend.encode_observed(("generic model overflow",), purpose="DOCUMENT")
+    assert caught.value.token_rejection is None and state["forwards"] == 0
+    backend.close()
 
 
 def test_pre_resolved_backend_does_not_repeat_payload_audit(

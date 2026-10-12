@@ -237,6 +237,14 @@ def fake_libraries(
         "output_dtype": "float32",
         "output_device": None,
         "bad_padding": False,
+        "bad_mask": False,
+        "bad_types": False,
+        "token_type_ids": None,
+        "padding_reads": [],
+        "allocator_reads": [],
+        "allocated_peak": 100,
+        "reserved_peak": 200,
+        "on_allocator_read": lambda: None,
         "token_ids": None,
         "token_vector": lambda _index: [3.0, 4.0],
     }
@@ -249,7 +257,10 @@ def fake_libraries(
             assert kwargs == {"truncation": False, "padding": False}
             state["tokenized"].append(texts)
             ids = state["token_ids"] or [list(range(len(text.split()) + 2)) for text in texts]
-            return {"input_ids": ids, "attention_mask": [[1] * len(row) for row in ids]}
+            tokens = {"input_ids": ids, "attention_mask": [[1] * len(row) for row in ids]}
+            if state["token_type_ids"] is not None:
+                tokens["token_type_ids"] = state["token_type_ids"]
+            return tokens
 
         def pad(self, tokens: Any, **kwargs: Any) -> dict[str, Any]:
             assert kwargs == {"padding": True, "return_tensors": "pt"}
@@ -259,10 +270,32 @@ def fake_libraries(
             masks = [[1] * len(row) + [0] * (maximum - len(row)) for row in ids]
             if state["bad_padding"]:
                 padded[0] = [999] * len(padded[0])
-            return {
-                "input_ids": FakeTensor(padded, dtype="int64"),
-                "attention_mask": FakeTensor(masks, dtype="int64"),
+            types = tokens.get("token_type_ids")
+            padded_types = (
+                [row + [0] * (maximum - len(row)) for row in types] if types is not None else None
+            )
+            if self.padding_side == "left":
+                padded = [[0] * (maximum - len(row)) + row for row in ids]
+                masks = [[0] * (maximum - len(row)) + [1] * len(row) for row in ids]
+                if types is not None:
+                    padded_types = [[0] * (maximum - len(row)) + row for row in types]
+            if state["bad_mask"]:
+                masks[0] = [0] * maximum
+            if state["bad_types"] and padded_types is not None:
+                padded_types[0] = [999] * maximum
+
+            class PaddedTensor(FakeTensor):
+                def tolist(self) -> Any:
+                    state["padding_reads"].append(self.data)
+                    return self.data
+
+            tensors = {
+                "input_ids": PaddedTensor(padded, dtype="int64"),
+                "attention_mask": PaddedTensor(masks, dtype="int64"),
             }
+            if padded_types is not None:
+                tensors["token_type_ids"] = PaddedTensor(padded_types, dtype="int64")
+            return tensors
 
     class Model:
         config = SimpleNamespace(
@@ -338,6 +371,13 @@ def fake_libraries(
     def deterministic(value: bool, *, warn_only: bool) -> None:
         state["deterministic"], state["warn_only"] = value, warn_only
 
+    def allocator_peak(kind: str, device: int) -> int:
+        assert device == 0
+        state["allocator_reads"].append((kind, device))
+        state["on_allocator_read"]()
+        value: int = state[f"{kind}_peak"]
+        return value
+
     torch = SimpleNamespace(
         __version__=versions["torch"],
         float32="float32",
@@ -369,6 +409,8 @@ def fake_libraries(
                 bundle.numerical_runtime.device.compute_capability
             ),
             synchronize=lambda _device: state.update(syncs=state["syncs"] + 1),
+            max_memory_allocated=lambda device: allocator_peak("allocated", device),
+            max_memory_reserved=lambda device: allocator_peak("reserved", device),
         ),
     )
     transformers = SimpleNamespace(

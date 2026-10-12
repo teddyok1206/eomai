@@ -7,6 +7,7 @@ import copy
 import json
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 from eom_catalog_contracts import embedding_device_benchmark as contracts
@@ -33,10 +34,13 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     BenchmarkWorkerInvocation,
     BenchmarkWorkerResult,
     benchmark_model_family_sha256,
+    benchmark_sample_program,
     embedding_device_benchmark_bytes,
     parse_embedding_device_benchmark,
     parse_embedding_device_benchmark_bytes,
     validate_benchmark_invocation,
+    validate_benchmark_local_resources,
+    validate_benchmark_resource_finalization,
     validate_benchmark_staged_inputs,
 )
 from eom_catalog_contracts.embedding_runtime_bundle import EmbeddingNumericalRecipe
@@ -78,6 +82,180 @@ from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.inference_transfer_fixtures import sha
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def local_resources(ordinal: int) -> BenchmarkResourceEvidence:
+    body = resources(ordinal).model_dump(mode="json")
+    body.update(
+        peak_whole_process_gpu_bytes=None,
+        peak_whole_device_gpu_bytes=None,
+        owner_observation_count=0,
+        other_consumer_overlap_count=0,
+    )
+    for sample in body["capacity_samples"]:
+        sample["peak_whole_process_gpu_bytes"] = None
+    return BenchmarkResourceEvidence.model_validate(seal(body, "resource_sha256"))
+
+
+@pytest.mark.parametrize("ordinal", range(1, 7))
+def test_public_sample_program_is_exact_existing_witness_and_vector_order(ordinal: int) -> None:
+    program = benchmark_sample_program(ordinal)
+    assert isinstance(program, tuple)
+    assert program == tuple(sample.key for sample in vector_samples(ordinal))
+    assert len(program) == (30 if ordinal in (1, 2) else 1)
+    assert tuple(
+        (key.query_ordinal, key.repetition) for key in program if key.phase == "QUERY"
+    ) == (
+        tuple((query, repetition) for query in (1, 2) for repetition in range(1, 6))
+        if ordinal in (1, 2)
+        else ()
+    )
+
+
+@pytest.mark.parametrize("ordinal", (0, 7, True, 1.0, "1", None))
+def test_public_sample_program_rejects_nonexact_ordinals(ordinal: Any) -> None:
+    with pytest.raises(ValueError):
+        benchmark_sample_program(ordinal)
+
+
+@pytest.mark.parametrize("ordinal", range(1, 7))
+def test_terminal_resource_claims_preserve_every_local_value(ordinal: int) -> None:
+    invocation, local, finalized = (
+        worker_invocation(ordinal),
+        local_resources(ordinal),
+        resources(ordinal),
+    )
+    validate_benchmark_local_resources(invocation, local)
+    validate_benchmark_resource_finalization(invocation, local, finalized)
+    assert local.owner_observation_count == 0
+    if invocation.device == "CPU":
+        assert local == finalized
+
+
+@pytest.mark.parametrize(
+    "field",
+    (
+        "invocation_sha256",
+        "launch_ordinal",
+        "device",
+        "owner_observation_count",
+        "peak_whole_process_gpu_bytes",
+        "peak_whole_device_gpu_bytes",
+        "other_consumer_overlap_count",
+        "capacity_whole",
+    ),
+)
+def test_local_resources_cannot_claim_owner_measurements_or_foreign_invocation(field: str) -> None:
+    body = local_resources(2).model_dump(mode="json")
+    if field == "capacity_whole":
+        body["capacity_samples"][0]["peak_whole_process_gpu_bytes"] = 1
+        body["peak_whole_process_gpu_bytes"] = 1
+    elif field == "invocation_sha256":
+        body[field] = "sha256:" + "f" * 64
+    elif field == "device":
+        body = local_resources(1).model_dump(mode="json")
+    elif field == "launch_ordinal":
+        body = local_resources(3).model_dump(mode="json")
+    else:
+        body[field] = 1
+    value = BenchmarkResourceEvidence.model_validate(seal(body, "resource_sha256"))
+    with pytest.raises(ValueError):
+        validate_benchmark_local_resources(worker_invocation(2), value)
+
+
+@pytest.mark.parametrize(
+    "field",
+    (
+        "invocation_sha256",
+        "peak_rss_bytes",
+        "peak_allocated_gpu_bytes",
+        "peak_reserved_gpu_bytes",
+        "oom_count",
+        "capacity_count",
+        "capacity_rss",
+        "capacity_allocated",
+        "capacity_text",
+        "capacity_tokens",
+        "capacity_bound",
+        "owner_observation_count",
+        "peak_whole_process_gpu_bytes",
+        "peak_whole_device_gpu_bytes",
+    ),
+)
+def test_owner_finalization_cannot_rewrite_local_observations_or_fake_missing_peaks(
+    field: str,
+) -> None:
+    body = resources(2).model_dump(mode="json")
+    if field == "capacity_count":
+        body["capacity_samples"] = []
+    elif field.startswith("capacity_"):
+        key = {
+            "capacity_rss": "peak_rss_bytes",
+            "capacity_allocated": "peak_allocated_gpu_bytes",
+            "capacity_text": "input_text_sha256",
+            "capacity_tokens": "token_ids_sha256",
+            "capacity_bound": "peak_whole_process_gpu_bytes",
+        }[field]
+        body["capacity_samples"][0][key] = (
+            "sha256:" + "f" * 64 if field in {"capacity_text", "capacity_tokens"} else 1
+        )
+    elif field == "invocation_sha256":
+        body[field] = "sha256:" + "f" * 64
+    elif field == "owner_observation_count":
+        body[field] = 0
+    elif field in {"peak_whole_process_gpu_bytes", "peak_whole_device_gpu_bytes"}:
+        body[field] = None
+        if field == "peak_whole_process_gpu_bytes":
+            for sample in body["capacity_samples"]:
+                sample[field] = None
+    else:
+        body[field] += 1
+    value = BenchmarkResourceEvidence.model_validate(seal(body, "resource_sha256"))
+    with pytest.raises(ValueError):
+        validate_benchmark_resource_finalization(worker_invocation(2), local_resources(2), value)
+
+
+def test_resource_finalization_retains_schema_valid_failures_not_performance_admission() -> None:
+    local_body = local_resources(2).model_dump(mode="json")
+    local_body.update(peak_rss_bytes=7 * 1024**3, oom_count=1)
+    local = BenchmarkResourceEvidence.model_validate(seal(local_body, "resource_sha256"))
+    final_body = local.model_dump(mode="json")
+    final_body.update(
+        peak_whole_process_gpu_bytes=9 * 1024**3,
+        peak_whole_device_gpu_bytes=10 * 1024**3,
+        owner_observation_count=3,
+        other_consumer_overlap_count=1,
+    )
+    for sample in final_body["capacity_samples"]:
+        sample["peak_whole_process_gpu_bytes"] = 9 * 1024**3
+    finalized = BenchmarkResourceEvidence.model_validate(seal(final_body, "resource_sha256"))
+    validate_benchmark_resource_finalization(worker_invocation(2), local, finalized)
+
+
+@pytest.mark.parametrize("helper", ("local", "final_local", "final_result", "invocation"))
+def test_resource_helpers_raw_copy_bool_denied_before_dump(
+    helper: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    local = local_resources(2)
+    finalized = resources(2)
+    invocation = worker_invocation(2)
+    bad = local.model_copy(update={"owner_observation_count": True})
+
+    def forbidden(*args: object, **kwargs: object) -> object:
+        raise AssertionError("copied raw bool must not serialize")
+
+    monkeypatch.setattr(BenchmarkResourceEvidence, "model_dump", forbidden)
+    with pytest.raises(ValueError):
+        if helper == "local":
+            validate_benchmark_local_resources(invocation, bad)
+        elif helper == "final_local":
+            validate_benchmark_resource_finalization(invocation, bad, finalized)
+        elif helper == "final_result":
+            validate_benchmark_resource_finalization(invocation, local, bad)
+        else:
+            validate_benchmark_resource_finalization(
+                invocation.model_copy(update={"launch_ordinal": True}), local, finalized
+            )
 
 
 def test_single_schema_mirror_raw_pin_and_all_references_resolve_locally() -> None:
