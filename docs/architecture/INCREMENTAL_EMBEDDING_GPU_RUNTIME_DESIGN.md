@@ -322,3 +322,46 @@ live model/privilege/GPU/image tests는 명시적으로 marked opt-in이며 unit
 작은 공유 OS adapter와 기존 owner queue/fixed unit을 확장하는 것이 새 scheduler나 GPU service보다
 작은 변경이다. 승인·호환 release·검증 가능한 같은 인코딩 모델을 유지할 수 없는 gate에서
 멈추고 실제 limitation을 기록한다.
+
+## 10. 첫 protocol-only checkpoint — source 계약, runtime 미구현
+
+첫 additive source 계약은 `schemas/knowledge/embedding-runtime-bundle-v1.schema.json`과
+동일 packaged mirror, `packages/catalog_contracts/eom_catalog_contracts/embedding_runtime_bundle.py`다.
+JSON Schema2020-12를 먼저 작성하고 frozen 값·순서/중복/hash/closure 검증을 구현했다.
+이 checkpoint는 filesystem resolver, CUDA backend, runtime 설치·lease migration·benchmark나
+default activation을 구현하지 않는다. 기존 released model/spec/EmbeddingSpace/input bytes는
+변경하지 않는다.
+
+`EmbeddingRuntimeBundle/1.0`은 기존 `payload_model_spec`와 typed `payload_pointer`를 참조하고,
+같은 logical model/upstream/file set/weights/tokenizer/모델 recipe를 갖는 별도의 flat
+`execution_model_spec` revision을 담는다. 실행 revision/runtime pins/manifest hash만 달라질
+수 있다. 큰 weights bytes나 filesystem path/actor 권한은 포함하지 않는다. 작은 metadata
+manifest 두 개는 기존 flat ModelSpec compatibility와 exact closure를 위한 값이며 payload
+canonical 파일을 복제한다는 뜻이 아니다.
+
+`EmbeddingNumericalRuntimeDescriptor/1.0`은 encoder/host-L2/f32-codec 구현 pin, numeric library
+distribution pins, Python/device architecture·CUDA capability/driver/build, FP32/eager/무절단·
+precision/deterministic flags, batch/thread recipe를 고정한다. sorted unique tuples와 작은 frozen
+값을 사용하며 hash에는 무관한 Git/platform release/경로/worker authority를 넣을 수 없다.
+직렬화에는 floating JSON number를 쓰지 않는다. 실제 installed code·library·device·flag의
+일치는 **다음 trusted adapter stage**가 검증한다. 모델이 보낸 descriptor를 신뢰하지 않는다.
+
+flat execution ModelSpec1.0은 구조상 기존 EmbeddingSpace1.0에 넣을 수 있으므로 이를 위해
+released space/input schema를 고쳐야 하는 것은 아니다. 하지만 trusted native adapter가
+**owner가 구성한 exact bundle**, 기존 payload manifest와 file hashes, actual runtime descriptor,
+space model/device/runtime hash 및 batch/thread recipe를 함께 검증한 뒤에만 사용할 수 있다.
+현재 legacy directory resolver의 `manifest == spec` 규칙은 그대로다. flat successor를 legacy
+directory에 전달해 그 검사를 무시하거나 runtime mismatch override를 추가하지 않는다.
+
+bundle의 `bundle_sha256`은 자기 필드를 제외한 semantic hash이며 `bundle_raw_sha256`는
+canonical manifest 전체 bytes의 hash다. committed `manifest_member.sha256`는 바로 그 bytes를
+참조하므로 raw hash와 같아야 한다. 두 field의 의미가 다른 것과 같은 bytes에 대한 raw/member
+hash가 같다는 사실을 구분한다. model revision, model manifest semantic/raw SHA와 file-set SHA도
+별개다. payload의 기존 canonical/newline flavor는 exact raw pin으로만 인정하며 자동 정규화하지
+않는다. pure helper는 작은 manifest bytes만 검증하고 존재·permission/lifecycle·설치 상태를
+검증한 것으로 보고하지 않는다.
+
+synthetic 회귀는 immutable legacy SHA, bundle/model/hash 분리, 관련 numeric 변경의 fingerprint
+변화, source release 필드 거부, 동일 payload successor, missing/duplicate numeric pins,
+dtype/TF32/compile/overflow tricks·bool/float integer coercion·stale pointer·raw/hash/schema/media
+오류와 frozen instance bypass를 다룬다. 실제 weights/GPU/network/DB/NAS를 실행·해석하지 않는다.

@@ -77,7 +77,6 @@ def stage_owner_connection() -> Iterator[Connection]:
             assert (
                 connection.scalar(text("SELECT version_num FROM app.alembic_version"))
                 == CURRENT_MIGRATION_REVISION
-                == "20261010_0051"
             )
             yield connection
             outer.rollback()

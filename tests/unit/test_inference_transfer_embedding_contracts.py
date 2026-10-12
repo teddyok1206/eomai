@@ -90,7 +90,9 @@ def test_schema_first_package_mirror_raw_hash_and_draft_are_exact() -> None:
 
 def test_all_preexisting_schema_registry_metadata_and_resource_bytes_are_frozen() -> None:
     resources = {
-        name: resource for name, resource in CATALOG_SCHEMA_RESOURCES.items() if name != SCHEMA_NAME
+        name: resource
+        for name, resource in CATALOG_SCHEMA_RESOURCES.items()
+        if name not in {SCHEMA_NAME, "embedding-registry", "embedding-runtime-bundle"}
     }
     assert len(resources) == 296
     # Recorded from the pre-embedding registry, independently compared with HEAD's AST literals.

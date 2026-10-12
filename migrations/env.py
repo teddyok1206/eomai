@@ -4,6 +4,7 @@ from logging.config import fileConfig
 
 import eom_api.educational_quality_models
 import eom_api.pdf_document_review_models  # noqa: F401
+import eom_catalog_service.embedding_registry_models
 import eom_catalog_service.item_origin_models
 import eom_catalog_service.knowledge_analysis_batch_models
 import eom_catalog_service.knowledge_graph_models

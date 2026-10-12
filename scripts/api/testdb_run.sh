@@ -160,8 +160,9 @@ fi
 if [[ "${action}" == "embedding-tests" ]]; then
   export EOM_RUN_INTEGRATION=1
   export EOM_API_TEST_STATE="${state_directory}"
-  "${PYTHON}" -m pytest -q tests/integration/test_embedding_artifact_persistence.py
-  printf 'Disposable model-free embedding artifact persistence tests passed.\n'
+  "${PYTHON}" -m pytest -q tests/integration/test_embedding_artifact_persistence.py \
+    tests/integration/test_embedding_registry_persistence.py
+  printf 'Disposable model-free embedding artifact and registry persistence tests passed.\n'
   exit 0
 fi
 

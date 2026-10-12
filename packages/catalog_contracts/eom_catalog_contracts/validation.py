@@ -30,6 +30,18 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "embedding-runtime-bundle": CatalogSchemaResource(
+            "schemas/knowledge/embedding-runtime-bundle-v1.schema.json",
+            "resources/knowledge/embedding-runtime-bundle-v1.schema.json",
+            "1.0",
+            "sha256:221d99c694efd24224b69ae8de31df72b21057683cdc4dc05fff072d754da932",
+        ),
+        "embedding-registry": CatalogSchemaResource(
+            "schemas/knowledge/embedding-registry-v1.schema.json",
+            "resources/knowledge/embedding-registry-v1.schema.json",
+            "1.0",
+            "sha256:443d6c2bac150de275c8d69bf7bc3e01bf720002115564fae1002c77e3fb47a5",
+        ),
         "item-inference-transfer-embedding": CatalogSchemaResource(
             "schemas/knowledge/item-inference-transfer-embedding-v1.schema.json",
             "resources/knowledge/item-inference-transfer-embedding-v1.schema.json",

@@ -1,0 +1,415 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/embedding-runtime-bundle/1.0",
+  "title": "Embedding runtime bundle and numerical descriptor 1.0",
+  "description": "Metadata-only payload/execution closure. This contract grants no authority and verifies no installed runtime.",
+  "oneOf": [
+    {
+      "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/bundle"
+    },
+    {
+      "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/bundlePointer"
+    },
+    {
+      "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/numericalRuntime"
+    }
+  ],
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "payloadPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_id",
+        "model_revision_id",
+        "schema_ref",
+        "manifest_sha256",
+        "manifest_raw_sha256",
+        "file_set_sha256"
+      ],
+      "properties": {
+        "model_id": {
+          "type": "string",
+          "pattern": "^embeddingmodel_[0-9a-f]{32}$"
+        },
+        "model_revision_id": {
+          "type": "string",
+          "pattern": "^embeddingmodelrev_[0-9a-f]{32}$"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/localEmbeddingModel"
+        },
+        "manifest_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/hash"
+        },
+        "manifest_raw_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/hash"
+        },
+        "file_set_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/hash"
+        }
+      }
+    },
+    "implementationPin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "component",
+        "recipe_version",
+        "sha256"
+      ],
+      "properties": {
+        "component": {
+          "enum": [
+            "FLOAT32_CODEC",
+            "HOST_L2",
+            "OFFLINE_ENCODER"
+          ]
+        },
+        "recipe_version": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,95}$"
+        },
+        "sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/hash"
+        }
+      }
+    },
+    "libraryPin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "distribution_sha256"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9][A-Za-z0-9.+_-]{0,95}$"
+        },
+        "distribution_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/hash"
+        }
+      }
+    },
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "platform",
+        "hardware_model",
+        "compute_capability",
+        "driver_version"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "CPU",
+            "CUDA"
+          ]
+        },
+        "platform": {
+          "const": "LINUX_X86_64"
+        },
+        "hardware_model": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._()+-]{0,127}$"
+        },
+        "compute_capability": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 99
+              }
+            }
+          ]
+        },
+        "driver_version": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[0-9][A-Za-z0-9.+_-]{0,95}$"
+            }
+          ]
+        }
+      }
+    },
+    "numericalRecipe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "precision",
+        "execution_mode",
+        "attention",
+        "padding",
+        "truncation",
+        "pooling_transfer",
+        "normalization",
+        "matmul_precision",
+        "matmul_tf32",
+        "cudnn_tf32",
+        "autocast",
+        "compile",
+        "deterministic_algorithms",
+        "cudnn_benchmark",
+        "cublas_workspace",
+        "batch_size",
+        "threads"
+      ],
+      "properties": {
+        "precision": {
+          "const": "FLOAT32"
+        },
+        "execution_mode": {
+          "const": "EVAL_INFERENCE"
+        },
+        "attention": {
+          "const": "EAGER"
+        },
+        "padding": {
+          "const": "LONGEST_WITHIN_BATCH"
+        },
+        "truncation": {
+          "const": "REJECT_OVERFLOW"
+        },
+        "pooling_transfer": {
+          "const": "HOST_AFTER_POOLING"
+        },
+        "normalization": {
+          "const": "PINNED_HOST_L2"
+        },
+        "matmul_precision": {
+          "const": "HIGHEST"
+        },
+        "matmul_tf32": {
+          "const": "DISABLED"
+        },
+        "cudnn_tf32": {
+          "const": "DISABLED"
+        },
+        "autocast": {
+          "const": "DISABLED"
+        },
+        "compile": {
+          "const": "DISABLED"
+        },
+        "deterministic_algorithms": {
+          "const": "REQUIRED"
+        },
+        "cudnn_benchmark": {
+          "const": "DISABLED"
+        },
+        "cublas_workspace": {
+          "enum": [
+            null,
+            ":4096:8"
+          ]
+        },
+        "batch_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "threads": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        }
+      }
+    },
+    "numericalRuntime": {
+      "$id": "eom://schemas/knowledge/embedding-numerical-runtime/1.0",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "python_version",
+        "implementations",
+        "libraries",
+        "device",
+        "recipe",
+        "torch_build_cuda_version",
+        "runtime_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-numerical-runtime/1.0"
+        },
+        "python_version": {
+          "type": "string",
+          "pattern": "^[0-9][A-Za-z0-9.+_-]{0,95}$"
+        },
+        "implementations": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/implementationPin"
+          }
+        },
+        "libraries": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 32,
+          "items": {
+            "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/libraryPin"
+          }
+        },
+        "device": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/device"
+        },
+        "recipe": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/numericalRecipe"
+        },
+        "torch_build_cuda_version": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[0-9][A-Za-z0-9.+_-]{0,95}$"
+            }
+          ]
+        },
+        "runtime_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/hash"
+        }
+      }
+    },
+    "bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "bundle_id",
+        "bundle_revision_id",
+        "payload_pointer",
+        "payload_model_spec",
+        "execution_model_spec",
+        "numerical_runtime",
+        "bundle_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-runtime-bundle/1.0"
+        },
+        "bundle_id": {
+          "type": "string",
+          "pattern": "^embeddingbundle_[0-9a-f]{32}$"
+        },
+        "bundle_revision_id": {
+          "type": "string",
+          "pattern": "^embeddingbundlerev_[0-9a-f]{32}$"
+        },
+        "payload_pointer": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/payloadPointer"
+        },
+        "payload_model_spec": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/localEmbeddingModel"
+        },
+        "execution_model_spec": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/localEmbeddingModel"
+        },
+        "numerical_runtime": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/numericalRuntime"
+        },
+        "bundle_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/hash"
+        }
+      }
+    },
+    "bundleMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "const": "bundle.json"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/knowledge/embedding-runtime-bundle/1.0"
+        },
+        "media_type": {
+          "const": "application/json"
+        },
+        "sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/hash"
+        }
+      }
+    },
+    "bundlePointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "bundle_id",
+        "bundle_revision_id",
+        "schema_ref",
+        "bundle_sha256",
+        "bundle_raw_sha256",
+        "manifest_member"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-runtime-bundle-pointer/1.0"
+        },
+        "bundle_id": {
+          "type": "string",
+          "pattern": "^embeddingbundle_[0-9a-f]{32}$"
+        },
+        "bundle_revision_id": {
+          "type": "string",
+          "pattern": "^embeddingbundlerev_[0-9a-f]{32}$"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/knowledge/embedding-runtime-bundle/1.0"
+        },
+        "bundle_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/hash"
+        },
+        "bundle_raw_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/hash"
+        },
+        "manifest_member": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/bundleMember"
+        }
+      }
+    }
+  }
+}

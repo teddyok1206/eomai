@@ -62,3 +62,37 @@ GPU가 정확성·성능·격리·image/trainer resource gate에서 우수하면
 다음: schema-first registry/registration → supported native work/source admission → 실제
 seed/delta/replay → 공통 후보 소비자 연결·GPU 비교/선택 → compatible release/live 검증.
 교과서 chunk/PDF matching/ANN/대화 삭제 부록은 별도 후속 범위다.
+
+## 후속 source checkpoint — 2026-10-12 17:20 UTC
+
+등록 command/result와 exact receipt closure, pointer-only Catalog 관계4개, source migration
+`20261012_0052`, payload를 복제하지 않는 runtime-bundle/numerical descriptor 계약을 추가했다.
+이는 registration application/native Runner/현재 source authority/CUDA backend를 활성화하지 않는다.
+이 후속 source 전체 gate는 **720 PASS (18.15s)**, 새 파일8개 strict mypy PASS,
+Ruff format/lint 및 diff check PASS다. 기존598 PASS와 합산하지 않는다.
+
+새 별도 marker-guarded DB에서0052 up/down/up 및 combined Artifact/registry **7 PASS (7.10s)**.
+registry5개는 encoding/source binding/index head/revision의 happy relation, unique·composite FK,
+append-only guards·fenced head CAS와 nonempty downgrade 거부를 실제 PostgreSQL에서 검증했다.
+DRAFT Item/REQUESTED analysis를 사용하는 합성 FK fixture는 DB 관계 존재가 승인/eligibility를
+보장하지 않는 것을 명시한다. source/member authorization과 registry use case의 동시 생성·
+query-plan/limited-role gate를 완료했다고 보고하지 않는다. 해당 임시 DB와 상태도 guarded
+cleanup으로 제거했다. 운영 DB migration은 실행하지 않았다.
+
+첫 실행은3 PASS/4 FAIL: protocol fixture가 Job보다 먼저 flush되지 않은 FK 오류였다.
+test fixture의 저장 순서만 수정한 뒤 위7 PASS를 얻었다. 기존 immutable history를 고치거나
+production state machine을 수정하지 않았다. 통합 source 첫 실행의719 PASS/1 FAIL도
+새 additive schema2개가 frozen predecessor inventory에 포함된 test 분류 문제였다.
+기존295/296 resource count/hash/bytes 기대값은 그대로 보존하고 새 successor만 분리했다.
+
+GPU 준비: [공식 metadata·고정 download lock](../architecture/INCREMENTAL_EMBEDDING_CUDA_PACKAGE_LOCK.md)의
+25개 exact wheel을 별도 private local wheelhouse에 `pip download --no-index --no-deps
+--only-binary=:all: --require-hashes`로 준비했다. advertised byte budget은3,848,835,734이고
+다운로드 exit0로 요구한 raw wheel hashes가 확인됐다. CPU 환경·모델 payload는 변경하지 않았다.
+이것은 full model/protocol runtime 설치·RECORD 검증·CUDA import/추론/benchmark/lease/default
+activation의 증거가 아니다. 독립 archive/FD 검사와 별도 보호 staging·offline 설치가 다음 gate다.
+
+기존 operator deployment callback은0051에 명시 고정되어 있다.0052 운영 배포 전에는
+historical0051 의미를 보존하는 compatible successor/release gate가 필요하며, 현재 후보가
+기존 배포 callback으로 자동 설치된다고 주장하지 않는다. consumer·service authority·paging
+미구현 상태와 전체 goal 진행 상태는 위 표와 동일하다.

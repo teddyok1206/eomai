@@ -167,6 +167,13 @@ GPU 기본값 활성화가 완료됐다는 뜻은 아닙니다.
 [증분 임베딩 checkpoint](docs/status/SYSTEM_RAG_INCREMENTAL_EMBEDDING_CHECKPOINT_2026-10-12.md)에
 구분합니다. 기존 source·report·Graph·정책과 권한 경계를 대체하지 않습니다.
 
+후속 소스에서는 pointer-only 인덱스 등록 계약·Catalog 관계4개·migration0052와, 같은 model
+payload를 참조하는 CPU/CUDA runtime-bundle 계약을 추가했습니다. 최신 통합 소스720 PASS,
+disposable PostgreSQL의 Artifact/registry7 PASS와 migration0052 up/down/up PASS입니다.
+CUDA Torch의 고정25개 wheel은 다운로드·해시 검사만 완료했으며 설치·실제 GPU 비교·
+기본값 전환은 아직 진행 전입니다. 신규 registry의 권한·자동 실행·공통 소비자도 미활성이므로
+이 후보를 운영 기능 완료로 판단하지 않습니다.
+
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스
 readiness가 정본입니다.
