@@ -169,14 +169,23 @@ testdb harness의 독립 검증은 **230 PASS**입니다. 최신 임시 PostgreS
 기록합니다. 기존 source·report·Graph·정책과 현재 사용자 권한은 대체하지 않습니다.
 
 CUDA wheel25개의 다운로드·독립 raw-hash/ZIP 검증과 공유 GPU mutex/성능 판정 소스는
-준비했습니다. 실제 설치·현재 권한 연결·native Runner·자동 증분·공통 소비자 연결은
-후속 작업입니다. **GPU 실제 비교·기본값 전환 및 영속 운영 인덱스는 아직 미활성**이며,
+준비했습니다. 별도 CPU/GPU 환경에서 fixed Conda base31과 public wheels55/70의
+non-root/offline/raw-hash-pinned 설치까지 실제로 완료했습니다. archive는 SHA별 한 정본을
+참조하며, 최초 권한 검사 실패의 기록과 빈 reservation도 보존합니다. 이는 보호된 최종
+runtime·private release·실제 모델 실행 승인과는 다릅니다. 현재 권한 연결·native Runner·
+자동 증분·공통 소비자 연결은 후속 작업입니다. **GPU 실제 비교·기본값 전환 및 영속 운영 인덱스는 아직 미활성**이며,
 소스/합성 테스트를 운영·모델 실행 증거로 해석하지 않습니다.
 실제 CUDA archive 점검의 Torch/Triton directory layout 차이는 좁은 호환성 수정과 실제
 25개 archive 재검사로 확인했습니다. compressed WHEEL tag의 bounded exact-set 호환성을
 수정한 numerical observer/backend root source488 PASS와
 current-source·report·Artifact owner 연결177 PASS는 설치·실행 PASS가 아닙니다.
-실제 IAM fence·native launcher·protected prefix와 공통 소비자 운영 연결은 아직 pending입니다.
+Identity-owned current operator fence와 Catalog savepoint 배치 source는 root9-suite471 PASS,
+strict type/lint/format PASS입니다. savepoint rollback이 최초 권한 row fence를 풀지 않도록
+같은 root transaction에서 먼저 확보하지만, 이 기록이나 저장된 operator ID는 로그인 권한이
+아닙니다. 실제 IAM routine/limited-role DB 검증·native launcher·protected prefix와 공통
+소비자 운영 연결은 아직 pending입니다. 고정
+[native launcher 설계](docs/architecture/INCREMENTAL_EMBEDDING_NATIVE_LAUNCHER_PROPOSAL.md)는
+CUDA의 shared lease뿐 아니라 잔류 GPU process와 종료 후 정리까지 별도 검증하도록 명시합니다.
 
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스
