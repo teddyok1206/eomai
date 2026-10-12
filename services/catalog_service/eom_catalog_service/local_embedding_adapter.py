@@ -146,6 +146,45 @@ class _FileEpoch:
     identity: tuple[int, int, int, int, int]
 
 
+@dataclass(frozen=True)
+class ProtectedEmbeddingManifest:
+    """Small verified metadata bytes; no weights or permission grant are materialized."""
+
+    path: Path
+    raw: bytes
+    sha256: str
+    _owner_uid: int
+    _epochs: tuple[_FileEpoch, ...]
+
+    def assert_unchanged(self) -> None:
+        _assert_snapshot_unchanged(self.path.parent, self._owner_uid, self._epochs)
+
+
+@dataclass(frozen=True)
+class ResolvedLocalEmbeddingPayload:
+    """Supported immutable payload seam shared by legacy verification and successors."""
+
+    root: Path
+    model_spec: LocalEmbeddingModelSpec
+    manifest: ProtectedEmbeddingManifest
+    _owner_uid: int
+    _epochs: tuple[_FileEpoch, ...]
+
+    def assert_unchanged(self) -> None:
+        _assert_snapshot_unchanged(self.root, self._owner_uid, self._epochs)
+        self.manifest.assert_unchanged()
+
+
+def _assert_snapshot_unchanged(root: Path, owner_uid: int, epochs: tuple[_FileEpoch, ...]) -> None:
+    try:
+        _require_safe_path(root, expected_owner_uid=owner_uid)
+        for epoch in epochs:
+            if _file_identity(epoch.path.lstat()) != epoch.identity:
+                raise LocalEmbeddingError("LOCAL_EMBEDDING_MODEL_CHANGED")
+    except OSError as exc:
+        raise LocalEmbeddingError("LOCAL_EMBEDDING_MODEL_CHANGED") from exc
+
+
 def _file_identity(value: os.stat_result) -> tuple[int, int, int, int, int]:
     return value.st_dev, value.st_ino, value.st_size, value.st_mtime_ns, value.st_ctime_ns
 
@@ -442,6 +481,66 @@ def verify_local_embedding_model_snapshot(
         validated = LocalEmbeddingModelSpec.model_validate(spec.model_dump(mode="json"))
         _resolve_embedding_snapshot(model_store_root, validated, expected_owner_uid)
         return validated
+    except LocalEmbeddingError:
+        raise
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        raise LocalEmbeddingError("LOCAL_EMBEDDING_MODEL_INVALID") from exc
+
+
+def read_protected_embedding_manifest(
+    path: Path,
+    *,
+    expected_owner_uid: int = 0,
+    maximum_bytes: int = _MAX_MANIFEST_BYTES,
+) -> ProtectedEmbeddingManifest:
+    """Read bounded owner-configured metadata using the authoritative protected-file checks.
+
+    Locations come from trusted adapter configuration, never a worker-supplied path.
+    Exact schema/hash/lifecycle/authority closure belongs to its resolver/owner.
+    """
+    try:
+        if type(maximum_bytes) is not int or not 1 <= maximum_bytes <= _MAX_MANIFEST_BYTES:
+            raise LocalEmbeddingError("LOCAL_EMBEDDING_MODEL_INVALID")
+        _require_safe_path(path.parent, expected_owner_uid=expected_owner_uid)
+        directory_epochs = (_FileEpoch(path.parent, _file_identity(path.parent.lstat())),)
+        raw, sha, epoch = _read_verified_file(
+            path,
+            owner_uid=expected_owner_uid,
+            maximum_bytes=maximum_bytes,
+            retain_bytes=True,
+        )
+        result = ProtectedEmbeddingManifest(
+            path, raw, sha, expected_owner_uid, (*directory_epochs, epoch)
+        )
+        result.assert_unchanged()
+        return result
+    except LocalEmbeddingError:
+        raise
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        raise LocalEmbeddingError("LOCAL_EMBEDDING_MODEL_INVALID") from exc
+
+
+def resolve_local_embedding_payload(
+    model_store_root: Path,
+    spec: LocalEmbeddingModelSpec,
+    *,
+    expected_owner_uid: int = 0,
+) -> ResolvedLocalEmbeddingPayload:
+    """Resolve the exact legacy payload once, retaining only small metadata and stat epochs.
+
+    Successors do not reinterpret the legacy runtime pins or pass their flat spec into
+    the legacy manifest check. Member hashes are streamed by the unchanged resolver.
+    """
+    try:
+        checked = LocalEmbeddingModelSpec.model_validate(spec.model_dump(mode="json"))
+        epochs = _resolve_embedding_snapshot(model_store_root, checked, expected_owner_uid)
+        root = model_store_root / checked.model_id / checked.model_revision_id
+        manifest = read_protected_embedding_manifest(
+            root / "manifest.json", expected_owner_uid=expected_owner_uid
+        )
+        result = ResolvedLocalEmbeddingPayload(root, checked, manifest, expected_owner_uid, epochs)
+        result.assert_unchanged()
+        return result
     except LocalEmbeddingError:
         raise
     except (OSError, ValueError, TypeError, KeyError) as exc:

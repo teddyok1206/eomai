@@ -43,6 +43,14 @@ def _require_actual_backend(
         raise IncrementalEmbeddingEncodeError("INCREMENTAL_EMBEDDING_MODEL_MISMATCH")
     if actual_runtime != request.space.runtime:
         raise IncrementalEmbeddingEncodeError("INCREMENTAL_EMBEDDING_RUNTIME_MISMATCH")
+    batch_size, threads = backend.batch_size, backend.threads
+    if (
+        type(batch_size) is not int
+        or type(threads) is not int
+        or batch_size != request.batch_size
+        or threads != request.threads
+    ):
+        raise IncrementalEmbeddingEncodeError("INCREMENTAL_EMBEDDING_RECIPE_MISMATCH")
 
 
 def encode_incremental_batch(

@@ -183,6 +183,10 @@ CUDA wheel25개의 독립 raw-hash·ZIP/metadata 검사도 통과했고, 기존0
 추가하고 기존 이미지 회귀를 포함한171개를 통과했습니다. 실제 공유 lock·unit 이행과
 보호 encoder 설치/CPU·GPU 측정은 별도 gate이며 아직 실행하지 않았습니다.
 
+같은 canonical payload를 읽는 native CPU/CUDA encoder와 요청/실행 recipe 대조도 추가했습니다
+(관련 새·legacy·계약 회귀371 PASS). 실제 보호 runtime observer·launcher·권한 연결은 미완성이므로,
+이 테스트 결과를 실제 GPU 인코딩이나 운영 활성화로 해석하지 않습니다.
+
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스
 readiness가 정본입니다.

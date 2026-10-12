@@ -159,3 +159,28 @@ wheel raw SHA: `5d7ee6850447871dec556c21e1a16f3822e0748fa4ab6052a19cbd3184fbef89
 이는 developer-owned private temporary 설치 simulation이며 immutable root quarantine·실제
 runtime 설치/권한·shared physical migration을 통과했다는 뜻이 아니다. source build/archive와
 생성된 wheel을 구분하고, 운영 시 exact wheel/source closure를 다시 검증해야 한다.
+
+## native bundle resolver·CPU/CUDA encoder source — 2026-10-12 18:16 UTC
+
+owner가 구성한 exact bundle과 canonical legacy payload를 재사용하는 작은 resolver, lazy
+CPU/CUDA FP32/eager encoder를 추가했다. 기존 CPU resolver·released manifest와 payload bytes는
+변경하지 않았다. module-level ML import·다운로드·DB/NAS 접근이 없으며 같은 weights를 새
+model revision directory에 복제하지 않는다. protected implementation 파일은 bounded nofollow
+read로 한 번 hash하고 이후 immutable epoch만 확인한다.
+
+actual Python/import version·device/precision/determinism/thread/model/tensor와 tokenizer
+IDs/masks/padding/overflow, host-L2/f32 및 동기화 경계를 검사한다. request의 batch/thread도
+actual backend와 실행 전후 비교하여 runtime SHA만 맞춘 다른 recipe를 거부한다.
+trusted installed-distribution observer와 CUDA ownership이 없으면 입장하지 않는다.
+현재 그것들의 실제 설치 구현·stdio/launcher/권한/admission은 pending이므로 fake observer
+PASS를 설치·GPU 실행·활성화 PASS로 보고하지 않는다.
+
+새 resolver/backend·기존 CPU·계약·codec·injected encoder 회귀 **371 PASS (5.77s)**,
+strict core mypy9파일 및 Ruff/format9파일 PASS다. 첫 schema exception은 stable error wrapping으로
+수정했고, root strict tests에서 발견한6개 fixture typing 오류는 checked non-None path와 typed
+local로 수정했다. blanket ignore나 runtime workaround는 추가하지 않았다. 전체 설정의 optional
+image dependency/기존 SDXL type 오류를 이 범위의 PASS로 확대하거나 임의 수정하지 않았다.
+
+Catalog application 동시성 테스트용 새 marker-guarded DB의0052 up/down/up와 prerequisite
+검사는 PASS다. 아직 application test 완료 증거가 아니며 해당 임시 DB는 검증 후 guarded
+cleanup해야 한다. 운영 DB/schema/payload/default에는 변경이 없다.

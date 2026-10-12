@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import pytest
 from eom_catalog_contracts.embedding_vector_binary import (
@@ -34,6 +34,8 @@ from tests.unit.inference_transfer_embedding_fixtures import (
 
 class SyntheticNativeBackend:
     def __init__(self, space: EmbeddingSpace) -> None:
+        self.batch_size = 2
+        self.threads = 1
         self.dimension: int = space.model_spec.dimension
         self.provenance = EmbeddingRankerProvenance("PINNED_MODEL", space.model_spec)
         self.execution_runtime: EmbeddingExecutionRuntime = space.runtime
@@ -53,6 +55,41 @@ class SyntheticNativeBackend:
             tuple(1.0 if column == row else 0.0 for column in range(self.dimension))
             for row in range(len(texts))
         )
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("batch_size", True),
+        ("batch_size", 3),
+        ("batch_size", 2.0),
+        ("threads", True),
+        ("threads", 2),
+        ("threads", 1.0),
+    ],
+)
+@pytest.mark.parametrize("stage", ["BEFORE", "AFTER"])
+def test_exact_batch_and_thread_recipe_checked_before_and_after_encoding(
+    monkeypatch: pytest.MonkeyPatch, field: str, value: Any, stage: str
+) -> None:
+    request = embedding_input()
+    backend = SyntheticNativeBackend(request.space)
+    if stage == "BEFORE":
+        setattr(backend, field, value)
+    else:
+        original_encode = backend.encode
+
+        def changed_recipe(
+            texts: tuple[str, ...], *, purpose: Literal["QUERY", "DOCUMENT"]
+        ) -> tuple[tuple[float, ...], ...]:
+            vectors = original_encode(texts, purpose=purpose)
+            setattr(backend, field, value)
+            return vectors
+
+        monkeypatch.setattr(backend, "encode", changed_recipe)
+    with pytest.raises(IncrementalEmbeddingEncodeError, match="RECIPE_MISMATCH"):
+        encode_incremental_batch(request, backend)
+    assert len(backend.calls) == (0 if stage == "BEFORE" else 1)
 
 
 @pytest.mark.parametrize("device", ["CPU", "CUDA"])
