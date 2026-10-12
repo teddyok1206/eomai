@@ -311,6 +311,10 @@ GPU 사용 가능성을 실제 설치된 모델·CUDA runtime·격리 launcher·
 
 - 동일한 승인 입력·view recipe·모델 revision·float32/L2/무절단 조건으로 CPU/GPU를 비교한다.
   dtype·TF32·truncation을 몰래 바꿔 속도 향상으로 보고하지 않는다.
+  현재 설치된 CPU 환경은 `torch 2.7.1+cpu`이므로 CUDA 실행은 별도 보호 runtime이 필요하다.
+  CPU/CUDA package flavor 때문에 model-bundle runtime pin이 달라질 경우 bundle revision은
+  명시적 successor로 구분하되, 비교하는 weights/tokenizer의 upstream revision과 모든 파일
+  SHA는 동일하게 유지한다. 기존 CPU manifest·격리 환경을 바꾸지 않는다.
 - 작은 synthetic 입력의 shape/finite/norm 검증 후, 승인된 bounded corpus 입력으로 batch
   인코딩과 query 경로를 실측한다. 최초 seed 전체를 두 번 무작정 재실행하지 않는다.
 - 모델 로드 포함 cold latency, warm encode latency, end-to-end 시간, texts/s, CPU RAM,

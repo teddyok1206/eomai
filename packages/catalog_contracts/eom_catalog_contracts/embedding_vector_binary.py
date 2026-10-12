@@ -1,4 +1,4 @@
-"""Bounded float32-LE serialization, separate from source authority and persistence."""
+"""Pure float32-LE format checks shared by native encoders and Artifact owners."""
 
 from __future__ import annotations
 

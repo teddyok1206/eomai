@@ -11,8 +11,19 @@ import yaml
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from pydantic import ValidationError
 
+from eom_workflow.definition_execution_protocol import (
+    DefinitionExecutionProtocolError,
+    ExecutionWorkflowDefinition,
+    definition_execution_protocol,
+)
+from eom_workflow.local_embedding_workflow import (
+    LocalEmbeddingStep,
+    LocalEmbeddingWorkflowDefinition,
+    parse_local_embedding_workflow_definition,
+)
 from eom_workflow.models import (
     AgentStep,
+    AutomaticReviewReworkPolicy,
     DecisionStep,
     HumanGateStep,
     TerminalStep,
@@ -49,7 +60,7 @@ class WorkflowDefinitionError(ValueError):
 
 @dataclass(frozen=True)
 class CompiledWorkflowDefinition:
-    definition: WorkflowDefinition
+    definition: ExecutionWorkflowDefinition
     canonical_bytes: bytes
     sha256: str
     source_path: str
@@ -61,8 +72,18 @@ class CompiledWorkflowDefinition:
         return value
 
     @property
-    def steps_by_key(self) -> dict[str, AgentStep | DecisionStep | HumanGateStep | TerminalStep]:
+    def steps_by_key(
+        self,
+    ) -> dict[str, AgentStep | DecisionStep | HumanGateStep | TerminalStep | LocalEmbeddingStep]:
         return {step.key: step for step in self.definition.steps}
+
+    @property
+    def automatic_review_rework(self) -> AutomaticReviewReworkPolicy | None:
+        """Preserve legacy review policy; the fixed native purpose has no review loop."""
+
+        if isinstance(self.definition, WorkflowDefinition):
+            return self.definition.automatic_review_rework
+        return None
 
 
 def compile_definition(path: Path, available_worker_roles: set[str]) -> CompiledWorkflowDefinition:
@@ -80,11 +101,23 @@ def compile_definition_data(
         raise WorkflowDefinitionError("workflow definition must be an object")
     _reject_unsafe_keys(raw)
     try:
-        validate_schema_message(load_definition_schema(), raw, "workflow-definition")
-        definition = WorkflowDefinition.model_validate(raw)
+        definition: ExecutionWorkflowDefinition
+        if raw.get("schema_version") == "1.1":
+            definition = parse_local_embedding_workflow_definition(raw)
+        else:
+            validate_schema_message(load_definition_schema(), raw, "workflow-definition")
+            definition = WorkflowDefinition.model_validate(raw)
     except (ValidationError, ValueError) as exc:
         raise WorkflowDefinitionError("workflow definition failed schema validation") from exc
-    _validate_semantics(definition, available_worker_roles)
+    if isinstance(definition, LocalEmbeddingWorkflowDefinition):
+        # The native contract fixes both ordered steps, their transition and
+        # purpose. It neither needs a Codex slot nor activates a runtime adapter.
+        try:
+            definition_execution_protocol(definition)
+        except DefinitionExecutionProtocolError as exc:
+            raise WorkflowDefinitionError(str(exc)) from exc
+    else:
+        _validate_semantics(definition, available_worker_roles)
     # Optional fields forbidden by a discriminated schema branch must remain
     # absent in the persisted canonical snapshot.  Pydantic's default dump
     # would otherwise materialize them as ``null`` and make the snapshot fail
@@ -108,13 +141,10 @@ def _validate_semantics(definition: WorkflowDefinition, available_worker_roles: 
     terminals = [step for step in definition.steps if isinstance(step, TerminalStep)]
     if not terminals:
         raise WorkflowDefinitionError("workflow definition requires a terminal step")
-    role_protocols = {
-        result_schema_protocol(step.result_schema)
-        for step in definition.steps
-        if isinstance(step, AgentStep)
-    }
-    if len(role_protocols) != 1:
-        raise WorkflowDefinitionError("agent steps must use one role protocol version")
+    try:
+        definition_execution_protocol(definition)
+    except DefinitionExecutionProtocolError as exc:
+        raise WorkflowDefinitionError(str(exc)) from exc
 
     forward: dict[str, tuple[str, ...]] = {}
     for step in definition.steps:

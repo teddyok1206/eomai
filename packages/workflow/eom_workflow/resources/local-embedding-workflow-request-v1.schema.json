@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/local-embedding-workflow-request/1.0",
+  "title": "EOM pointer-only native local embedding Workflow request",
+  "description": "Captured operator and permission digest are audit pins, not authority. Catalog source admission and protected runtime activation are independent required boundaries. No text, model-supplied roles, Pack or Codex settings.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_name",
+    "workflow_definition_key",
+    "workflow_definition_version",
+    "requested_by_operator_id",
+    "requester_permissions_sha256",
+    "graph_snapshot",
+    "access_policy_revision_id",
+    "access_policy_sha256",
+    "space",
+    "input_artifact",
+    "input_set_sha256",
+    "request_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-embedding-workflow-request/1.0"
+    },
+    "request_name": {
+      "const": "LOCAL_EMBEDDING_WORKFLOW_REQUEST"
+    },
+    "workflow_definition_key": {
+      "const": "local-embedding-index"
+    },
+    "workflow_definition_version": {
+      "const": "1.0.0"
+    },
+    "requested_by_operator_id": {
+      "type": "string",
+      "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "requester_permissions_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "graph_snapshot": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"
+    },
+    "access_policy_revision_id": {
+      "type": "string",
+      "pattern": "^accessrev_[0-9a-f]{32}$"
+    },
+    "access_policy_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "space": {
+      "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/space"
+    },
+    "input_artifact": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "member_path": {
+              "const": "input.json"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/knowledge/incremental-embedding-input/1.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            }
+          }
+        }
+      ]
+    },
+    "input_set_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "request_sha256": {
+      "$ref": "#/$defs/hash"
+    }
+  },
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

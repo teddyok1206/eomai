@@ -5,7 +5,7 @@ import struct
 from typing import Any
 
 import pytest
-from eom_catalog_service.embedding_vector_binary import (
+from eom_catalog_contracts.embedding_vector_binary import (
     MAX_VECTOR_DIMENSION,
     MAX_VECTOR_ROWS,
     EmbeddingVectorBinaryError,

@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0",
+  "title": "Bounded immutable Item embedding contracts V1",
+  "description": "Numerical identity is independent of source authorization. Binary vectors are not JSON numbers. No worker authority, arbitrary paths or runtime activation is supplied by these values.",
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "partition": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"},
+    "view": {"enum": ["CONTENT_ONLY", "CONCRETE_FACETS", "METADATA_ONLY"]},
+    "artifactMember": {
+      "description": "The existing protocol ArtifactMemberPointer shape, inlined because the Catalog registry does not own the protocol schema URI.",
+      "type": "object", "additionalProperties": false,
+      "required": ["artifact_id", "artifact_revision_id", "member_path", "schema_ref", "media_type", "sha256"],
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\u0000)[^/]+(?:/[^/]+)*$"},
+        "schema_ref": {"type": "string", "minLength": 1, "maxLength": 256},
+        "media_type": {"type": "string", "minLength": 1, "maxLength": 128},
+        "sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"}
+      }
+    },
+    "runtime": {
+      "description": "Owner-verified execution fingerprint pins installed libraries/build, encoder implementation and CPU or CUDA/driver/device environment; this value grants no admission.",
+      "type": "object", "additionalProperties": false,
+      "required": ["device", "precision", "tf32_enabled", "execution_runtime_sha256"],
+      "properties": {
+        "device": {"enum": ["CPU", "CUDA"]},
+        "precision": {"const": "FLOAT32"},
+        "tf32_enabled": {"type": "boolean", "const": false},
+        "execution_runtime_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"}
+      }
+    },
+    "space": {
+      "type": "object", "additionalProperties": false,
+      "required": ["model_spec", "purpose", "runtime", "space_sha256"],
+      "properties": {
+        "model_spec": {"$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/localEmbeddingModel"},
+        "purpose": {"enum": ["QUERY", "DOCUMENT"]},
+        "runtime": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/runtime"},
+        "space_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"}
+      }
+    },
+    "encoding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["storage_partition", "space_sha256", "input_text_sha256", "encoding_sha256"],
+      "properties": {
+        "storage_partition": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/partition"},
+        "space_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"},
+        "input_text_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"},
+        "encoding_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"}
+      }
+    },
+    "binary": {
+      "description": "A precommit same-file-set descriptor, not a self-referential Artifact pointer. The schema_ref labels a binary codec, not JSON Schema validation of binary bytes.",
+      "type": "object", "additionalProperties": false,
+      "required": ["member_path", "schema_ref", "media_type", "sha256", "byte_count", "dtype", "byte_order", "layout"],
+      "properties": {
+        "member_path": {"const": "vectors.f32"},
+        "schema_ref": {"const": "eom://schemas/knowledge/embedding-f32le-l2-row-major/1.0"},
+        "media_type": {"const": "application/octet-stream"},
+        "sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"},
+        "byte_count": {"type": "integer", "minimum": 4, "maximum": 16777216},
+        "dtype": {"const": "FLOAT32"},
+        "byte_order": {"const": "LITTLE_ENDIAN"},
+        "layout": {"const": "ROW_MAJOR"}
+      }
+    },
+    "shard": {
+      "$id": "eom://schemas/knowledge/embedding-vector-shard/1.0",
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "space", "rows", "input_set_sha256", "binary", "dimension", "row_count", "shard_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-vector-shard/1.0"},
+        "space": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/space"},
+        "rows": {"type": "array", "minItems": 1, "maxItems": 1024, "uniqueItems": true, "items": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/encoding"}},
+        "input_set_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"},
+        "binary": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/binary"},
+        "dimension": {"type": "integer", "minimum": 1, "maximum": 4096},
+        "row_count": {"type": "integer", "minimum": 1, "maximum": 1024},
+        "shard_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"}
+      }
+    },
+    "rowRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["shard_manifest", "row_index", "encoding_sha256"],
+      "properties": {
+        "shard_manifest": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"},
+        "row_index": {"type": "integer", "minimum": 0, "maximum": 1023},
+        "encoding_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"}
+      }
+    },
+    "binding": {
+      "$id": "eom://schemas/knowledge/embedding-source-binding/1.0",
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "source", "profile", "solution_evidence", "graph_snapshot", "policy_revision_id", "policy_sha256", "recipe", "view", "projection_version", "encoding", "row_ref", "binding_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-source-binding/1.0"},
+        "source": {"$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/source"},
+        "profile": {"$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profilePointer"},
+        "solution_evidence": {"$ref": "eom://schemas/knowledge/evidence-bundle-manifest/5.0#/$defs/solutionEvidence"},
+        "graph_snapshot": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"},
+        "policy_revision_id": {"type": "string", "pattern": "^accessrev_[0-9a-f]{32}$"},
+        "policy_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"},
+        "recipe": {"$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/recipe"},
+        "view": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/view"},
+        "projection_version": {"const": "accepted-solution-comparison/1.0"},
+        "encoding": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/encoding"},
+        "row_ref": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/rowRef"},
+        "binding_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"}
+      }
+    },
+    "index": {
+      "$id": "eom://schemas/knowledge/embedding-index-manifest/1.0",
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "index_id", "index_revision_id", "previous_manifest", "storage_partition", "space", "view", "recipe", "shards", "bindings", "created_at", "index_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-index-manifest/1.0"},
+        "index_id": {"type": "string", "pattern": "^embeddingindex_[0-9a-f]{32}$"},
+        "index_revision_id": {"type": "string", "pattern": "^embeddingindexrev_[0-9a-f]{32}$"},
+        "previous_manifest": {"oneOf": [{"type": "null"}, {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"}]},
+        "storage_partition": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/partition"},
+        "space": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/space"},
+        "view": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/view"},
+        "recipe": {"$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/recipe"},
+        "shards": {"type": "array", "minItems": 1, "maxItems": 1024, "uniqueItems": true, "items": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"}},
+        "bindings": {"type": "array", "minItems": 1, "maxItems": 1024, "uniqueItems": true, "items": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/binding"}},
+        "created_at": {"type": "string", "format": "date-time", "pattern": "Z$"},
+        "index_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"}
+      }
+    },
+    "inputRow": {
+      "type": "object", "additionalProperties": false,
+      "required": ["encoding", "text"],
+      "properties": {
+        "encoding": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/encoding"},
+        "text": {"type": "string", "minLength": 1, "maxLength": 262144, "allOf": [{"pattern": "\\S"}, {"not": {"pattern": "[\u0000-\u0008\u000b\u000c\u000e-\u001f]"}}]}
+      }
+    },
+    "input": {
+      "$id": "eom://schemas/knowledge/incremental-embedding-input/1.0",
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "job_id", "space", "rows", "batch_size", "threads", "input_set_sha256", "request_sha256"],
+      "properties": {
+        "schema_version": {"const": "incremental-embedding-input/1.0"},
+        "job_id": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+        "space": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/space"},
+        "rows": {"type": "array", "minItems": 1, "maxItems": 1024, "uniqueItems": true, "items": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/inputRow"}},
+        "batch_size": {"type": "integer", "minimum": 1, "maximum": 16},
+        "threads": {"type": "integer", "minimum": 1, "maximum": 16},
+        "input_set_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"},
+        "request_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"}
+      }
+    },
+    "result": {
+      "$id": "eom://schemas/knowledge/incremental-embedding-result/1.0",
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "job_id", "request_sha256", "input_set_sha256", "shard", "result_sha256"],
+      "properties": {
+        "schema_version": {"const": "incremental-embedding-result/1.0"},
+        "job_id": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+        "request_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"},
+        "input_set_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"},
+        "shard": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/shard"},
+        "result_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"}
+      }
+    }
+  },
+  "oneOf": [
+    {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/shard"}, {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/binding"},
+    {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/index"}, {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/input"}, {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/result"}
+  ]
+}

@@ -109,7 +109,9 @@ def test_new_schema_is_registered_mirrored_hash_bound_2020_12() -> None:
 
 
 def test_all_preexisting_catalog_resources_retain_metadata_and_exact_bytes() -> None:
-    old = {name: entry for name, entry in CATALOG_SCHEMA_RESOURCES.items() if name != SCHEMA_NAME}
+    # These successors are not part of the frozen pre-retry resource inventory.
+    additions = {SCHEMA_NAME, "item-inference-transfer-embedding"}
+    old = {name: entry for name, entry in CATALOG_SCHEMA_RESOURCES.items() if name not in additions}
     assert len(old) == OLD_RESOURCE_COUNT
     # Compare the complete old identity snapshot before dereferencing any path.
     assert content_sha256({name: asdict(entry) for name, entry in old.items()}) == (

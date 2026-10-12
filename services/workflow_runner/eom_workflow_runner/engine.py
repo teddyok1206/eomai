@@ -996,7 +996,7 @@ class WorkflowRunner:
                     content_hash=execution.content_hash,
                     result_schema=definition.result_schema,
                 )
-                rework_policy = compiled.definition.automatic_review_rework
+                rework_policy = compiled.automatic_review_rework
                 if (
                     isinstance(full_request, WorkflowRequest)
                     and rework_policy is not None
@@ -1701,7 +1701,7 @@ class WorkflowRunner:
     ) -> None:
         """Atomically supersede one reviewed attempt and enter its next authoring cycle."""
 
-        policy = compiled.definition.automatic_review_rework
+        policy = compiled.automatic_review_rework
         if policy is None or directive.outcome != "REWORK_AUTHORING":
             raise WorkflowError(
                 WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
@@ -3008,8 +3008,8 @@ class WorkflowRunner:
         if raw_directive is None:
             return self._upstream_pointers(session, workflow_id, compiled, current_step_key)
         if current_step_key != (
-            compiled.definition.automatic_review_rework.target_authoring_step
-            if compiled.definition.automatic_review_rework is not None
+            compiled.automatic_review_rework.target_authoring_step
+            if compiled.automatic_review_rework is not None
             else None
         ):
             raise WorkflowError(
