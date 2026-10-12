@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-12 08:51 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-12 09:07 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
 
 사용자 최신 지시에 따라 **사람 평가는 현 목표의 완료 조건에서 제외**한다.
@@ -20,6 +20,58 @@
   제외한다. 기존 풀이보고서 520개를 다시 생성하지 않는다.
 
 ## Component 상태
+
+### 최소 transport/hash 보완의 실제 배포 — 2026-10-12 09:03 UTC
+
+source `f093bf853e5bbf9094ff4e65c731d13569d60a91`, tree
+`d8b5b9c82b56080e5d605a7d4fe2efba0583076b`를 기존 정상 installer와 보호된
+operator adapter로 배포했다. 실제 deployment record 시각은
+`2026-10-12T09:03:42.804175Z`다. PRESTOP/POSTSTOP의 지원된 작업·lease·채팅
+quiescence 및 별도 HWPX role 검사를 통과한 뒤 원래 active였던 8개 서비스를
+정지·복구했다. ADMIT와 여섯 EXECUTE callback, wheel RECORD·의존성·runtime
+isolation·설치 metadata 검사 PASS다. migration은 `20261010_0051` 그대로이며
+새 migration, 임베딩/문항/비교 모델 실행, DB row 직접 수정은 0이다.
+
+- data-only stage: `/var/lib/eom-release-operator-stage.f093bf85-lZLNHk`.
+- context SHA: `4f68033ff7534ea29a6e109f814e2e70e2dba90657698eb0aab1cd3f25fa3621`.
+- source snapshot SHA: `32e8f0f23e30e3d1f2f20d3bd01b3f2cdc6e90874ce0b7c458d480097111452e`.
+- archive SHA: `05edc8cf4863fccd5a05274d8714f4eb6619307e86adc825bae8a58ad429f77d`.
+- actual deployment/rollback record:
+  `/var/lib/eom-api/deployments/f093bf853e5bbf9094ff4e65c731d13569d60a91.json`.
+- normal installer는 같은 source의 별도 wheel build를 설치했다. 실제 설치 raw SHA는
+  contracts `8c6f8753e9d48b0a715b0396acde260218de04c1415808a65c96da1b703bbbb3`,
+  API `686c1ed4ea847fdeb0e67d3fe8047e984d60bf5205615bd82690ca63348c9f23`,
+  platform `ba316d1353ded0a0880ece9636597a9f0e03982709620822aef9f25224d35859`다.
+  admitted build-only wheel bytes와 동일하다고 주장하지 않는다.
+
+09:04 UTC의 8개 service는 모두 active/positive PID/NeedDaemonReload=no이고
+`/api/v1/health/ready`는 READY였다. installed public `get_build_info()`로 위
+source/tree를 확인하고 비교 POST timeout390을 확인했다. 채팅의 기존 supported
+pin adapter는 정확한 b59→f093만 전진시켰다. 이미 발행된 비교 control manifest,
+preset/definition/Graph/policy/source 핀은 b59 provenance 그대로 보존한다.
+보호된 resume console의 설치는 데이터 복사일 뿐 새 session·pair 제출 증거가 아니다.
+배포 후 authenticated pair read/replay는 아직 수행하지 않았다.
+
+별도 읽기 전용 source 감사에서 중요한 실행 경계 누락을 확인했다. `RETRY_STEP`은
+`CommandType`과 DB CHECK에만 있고 Runner handler·공개 route/DTO/권한은 없다.
+따라서 이를 이미 지원된 재시도라고 부르지 않는다. 기존 capacity reconcile는
+worker를 시작하지 않은 QUEUED job만 복구하므로 실제 첫 worker-result FAILED에
+사용하지 않는다. 원 pair key replay는 원래 Workflow를 반환할 뿐 모델을 재실행하지 않는다.
+
+후속 제안은 별도 승인 후 schema-first로 기존 command queue의 retry leaf를 구현해
+관측한 최신 failed step/attempt와 resource version, 활성 lease·committed 결과 없음,
+현재 실제 actor 권한, 고정된 operation idempotency를 검증하는 것이다. 기존 FAILED
+Step/Job은 유지하고 같은 Workflow에 새 attempt를 append하며 명시적 복구 event를
+남겨야 한다. 원 logical pair/key와 모든 입력 핀을 유지한다. 이는 현재 구현 사실이
+아니며 첫 pair 추가 모델 실행1회도 승인 대기다. 종료 조건3·4와 전체 목표는 미완료다.
+520개 BGE 정본과 설계 원문의 SHA는 변하지 않았다.
+09:08 UTC Slack `devreport_276ee2e7826146ba901268d1c6ee0246`는 위 실제 배포와
+미구현 재시도 경계·추가 모델 실행 승인 gate를 한국어 첫 문장으로 보고했다.
+
+배포 후 read-only metadata 검사 첫 호출의 불필요한 비공개 symbol import와
+TTY metadata 명령의 줄바꿈 escaping 오류는 실행 도구 호출 오류였다. 각각 제거·취소
+후 공식 `get_build_info()`와 동일 deployment record의 정상 읽기로 확인했다.
+운영 실패·모델 실패를 성공으로 재해석하거나 배포를 중복 실행한 것이 아니다.
 
 ### 실제 V11 입장과 첫 비교 관측 — 2026-10-12 UTC
 
@@ -125,7 +177,7 @@ semantic SHA `d8fa68b17c646229d0e66e770c34876c6e3787a502dcc3417237aa947db8a342`�
 
 | Component | 실제 상태 | 한계 |
 |---|---|---|
-| 공유 API/platform | 설치 source `b59b3bac018312c486cd9b3ea48515a30defd368`, tree `d695b9fa403b43b9403c0fabb83a22ee325f958c`; 2026-10-11 19:08 UTC 최소 admission 조회 연결 배포·검증 완료 | c8에서 수행한 전체 520개 BGE MEASURED/COMMITTED 정본 보존. 실제 V11 쌍 비교는 별도 gate; 사람 평가는 불필요 |
+| 공유 API/platform | 설치 source `f093bf853e5bbf9094ff4e65c731d13569d60a91`, tree `d8b5b9c82b56080e5d605a7d4fe2efba0583076b`; 2026-10-12 09:03 UTC 최소 transport/generation-hash 보완 배포·검증 완료 | c8에서 수행한 전체 520개 BGE MEASURED/COMMITTED 정본과 b59 control 핀 보존. 첫 비교 FAILED, 두 쌍 member 검증/replay는 별도 gate; 사람 평가는 불필요 |
 | 운영 PostgreSQL | `20261010_0051` migration 및 exact-head 검증 PASS | 새 비교 Workflow stage CHECK 적용이지 비교 control 발행이나 worker 실행이 아님 |
 | 별도 CPU Conda | `/opt/eom/conda/envs/eom-embedding-experiment` 보호 snapshot 발행·승인된 격리 probe 및 전체 BGE 실험 PASS | 임베딩 성공은 풀이 전이·교육 품질의 증명이 아님 |
 | CPU platform | `06134fcd91413a957ac3133db062dbcdd525ee15` wheel에서 비편집 설치 | d291 candidate와 1,361개 payload member가 일치함; source 표기는 원래 설치값 유지 |

@@ -47,6 +47,15 @@ generation absent-only hash 계산과 해당 POST의 순차 transport budget 정
 추가 첫 pair model 실행 승인은 별도 gate이고 **종료 조건3·4는 여전히 미완료**다.
 520개 embedding은 다시 실행하지 않으며 사람 평가는 완료 조건에 추가하지 않는다.
 
+2026-10-12 09:03 UTC에 위 최소 보완 `f093bf853e5bbf9094ff4e65c731d13569d60a91`을
+실제 배포했고 8개 service/READY/installed source-tree/timeout390을 확인했다.
+이미 발행된 b59 control과 첫 FAILED history는 보존한다. 읽기 전용 감사에서
+`RETRY_STEP`이 enum/DB CHECK뿐이며 handler·공개 API가 없음을 확인했다. 기존
+capacity-only reconcile로 실제 worker-result 실패를 복구하지 않는다. 같은 Workflow의
+실패 Step/Job을 보존하고 새 attempt만 추가하는 최소 지원 경계와 첫 추가 모델 실행1회는
+별도 승인 대기다. 운영 설치 PASS를 두 쌍 비교·replay PASS로 확대하지 않으며
+**종료 조건3·4는 여전히 미완료**다. 실제 배포 identity/hash는 운영 검증 기록에 있다.
+
 ### 2026-10-11 10:49 UTC 독립 source 대조
 
 원문·구현 계획·현재 계약/코드/테스트를 read-only로 다시 대조했다. 원문 SHA는
