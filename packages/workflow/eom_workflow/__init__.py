@@ -171,6 +171,7 @@ from eom_workflow.local_embedding_encoding_job import (
     LocalEmbeddingOwnedJob,
     parse_embedding_encoding_job_message,
     validate_embedding_encoding_completion,
+    validate_embedding_encoding_completions,
     validate_local_embedding_launch_association,
 )
 from eom_workflow.local_embedding_execution_policy import (
@@ -520,6 +521,7 @@ __all__ = [
     "structural_review_complexity",
     "validate_control_contract",
     "validate_embedding_encoding_completion",
+    "validate_embedding_encoding_completions",
     "validate_escalated_review_against_source",
     "validate_inference_transfer_worker_result",
     "validate_local_embedding_admission_message",

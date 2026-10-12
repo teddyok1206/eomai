@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Annotated, Literal, Protocol
 
 from eom_catalog_contracts.inference_transfer_embedding import (
@@ -348,6 +349,73 @@ def validate_local_embedding_launch_association(
         )
 
 
+@dataclass(frozen=True, slots=True)
+class _CompletionContext:
+    association: LocalEmbeddingLaunchAssociation
+    owned_input: IncrementalEmbeddingInput
+    result: IncrementalEmbeddingResult
+    by_encoding: dict[str, LocalEmbeddingOwnedJob]
+    input_raw_sha256: str
+    result_raw_sha256: str
+    shard_raw_sha256: str
+
+
+def _completion_context(
+    association: LocalEmbeddingLaunchAssociation,
+    owned_input: IncrementalEmbeddingInput,
+    result: IncrementalEmbeddingResult,
+) -> _CompletionContext:
+    association = LocalEmbeddingLaunchAssociation.model_validate(association)
+    owned_input = parse_incremental_embedding_input(owned_input.model_dump(mode="json"))
+    result = parse_incremental_embedding_result(result.model_dump(mode="json"))
+    # Preserve the existing public Catalog rule and its constant-two parse pipeline.
+    # A batch runs this once, not once for each row in the same immutable file set.
+    validate_incremental_embedding_result(owned_input, result)
+    if tuple(job.request.encoding for job in association.owned_jobs) != tuple(
+        row.encoding for row in owned_input.rows
+    ):
+        raise ValueError(
+            "encoding completion differs from exact launch, owned request or shared row"
+        )
+    return _CompletionContext(
+        association=association,
+        owned_input=owned_input,
+        result=result,
+        by_encoding={job.request.encoding.encoding_sha256: job for job in association.owned_jobs},
+        input_raw_sha256=sha256_bytes(canonical_json_bytes(owned_input.model_dump(mode="json"))),
+        result_raw_sha256=sha256_bytes(canonical_json_bytes(result.model_dump(mode="json"))),
+        shard_raw_sha256=sha256_bytes(canonical_json_bytes(result.shard.model_dump(mode="json"))),
+    )
+
+
+def _validate_completion_event(
+    event: EmbeddingEncodingCompletedEvent,
+    context: _CompletionContext,
+) -> None:
+    association, owned_input, result = context.association, context.owned_input, context.result
+    receipt = event.receipt
+    if (
+        event.intent != association.intent
+        or event.launch_association_sha256 != association.association_sha256
+        or context.by_encoding.get(event.owned_job.request.encoding.encoding_sha256)
+        != event.owned_job
+        or association.owned_input_request_sha256 != owned_input.request_sha256
+        or association.owned_input_set_sha256 != owned_input.input_set_sha256
+        or association.intent.native_launch_job_id != result.job_id
+        or receipt.result_sha256 != result.result_sha256
+        or receipt.result_manifest.sha256 != context.result_raw_sha256
+        or receipt.shard_sha256 != result.shard.shard_sha256
+        or receipt.shard_manifest.sha256 != context.shard_raw_sha256
+        or receipt.binary_member.sha256 != result.shard.binary.sha256
+        or receipt.row_ref.row_index >= len(result.shard.rows)
+        or result.shard.rows[receipt.row_ref.row_index] != event.owned_job.request.encoding
+        or association.owned_input.sha256 != context.input_raw_sha256
+    ):
+        raise ValueError(
+            "encoding completion differs from exact launch, owned request or shared row"
+        )
+
+
 def validate_embedding_encoding_completion(
     event: EmbeddingEncodingCompletedEvent,
     association: LocalEmbeddingLaunchAssociation,
@@ -356,33 +424,26 @@ def validate_embedding_encoding_completion(
 ) -> None:
     """Pure known-output closure; actual binary/lifecycle/authority remain owner gates."""
     event = EmbeddingEncodingCompletedEvent.model_validate(event)
-    association = LocalEmbeddingLaunchAssociation.model_validate(association)
-    owned_input = parse_incremental_embedding_input(owned_input.model_dump(mode="json"))
-    result = parse_incremental_embedding_result(result.model_dump(mode="json"))
-    validate_incremental_embedding_result(owned_input, result)
-    receipt = event.receipt
-    by_encoding = {job.request.encoding.encoding_sha256: job for job in association.owned_jobs}
-    if (
-        event.intent != association.intent
-        or event.launch_association_sha256 != association.association_sha256
-        or by_encoding.get(event.owned_job.request.encoding.encoding_sha256) != event.owned_job
-        or association.owned_input_request_sha256 != owned_input.request_sha256
-        or association.owned_input_set_sha256 != owned_input.input_set_sha256
-        or association.intent.native_launch_job_id != result.job_id
-        or receipt.result_sha256 != result.result_sha256
-        or receipt.result_manifest.sha256
-        != sha256_bytes(canonical_json_bytes(result.model_dump(mode="json")))
-        or receipt.shard_sha256 != result.shard.shard_sha256
-        or receipt.shard_manifest.sha256
-        != sha256_bytes(canonical_json_bytes(result.shard.model_dump(mode="json")))
-        or receipt.binary_member.sha256 != result.shard.binary.sha256
-        or receipt.row_ref.row_index >= len(result.shard.rows)
-        or result.shard.rows[receipt.row_ref.row_index] != event.owned_job.request.encoding
-        or tuple(job.request.encoding for job in association.owned_jobs)
-        != tuple(row.encoding for row in owned_input.rows)
-        or association.owned_input.sha256
-        != sha256_bytes(canonical_json_bytes(owned_input.model_dump(mode="json")))
-    ):
+    _validate_completion_event(event, _completion_context(association, owned_input, result))
+
+
+def validate_embedding_encoding_completions(
+    events: tuple[EmbeddingEncodingCompletedEvent, ...],
+    association: LocalEmbeddingLaunchAssociation,
+    owned_input: IncrementalEmbeddingInput,
+    result: IncrementalEmbeddingResult,
+) -> None:
+    """Exact whole owned set with one O(n+bytes) pipeline, never an authority grant."""
+    if type(events) is not tuple or not 1 <= len(events) <= 1024:
         raise ValueError(
             "encoding completion differs from exact launch, owned request or shared row"
         )
+    events = tuple(EmbeddingEncodingCompletedEvent.model_validate(event) for event in events)
+    context = _completion_context(association, owned_input, result)
+    keys = tuple(event.owned_job.request.encoding.encoding_sha256 for event in events)
+    if keys != tuple(sorted(set(keys))) or keys != tuple(context.by_encoding):
+        raise ValueError(
+            "encoding completion differs from exact launch, owned request or shared row"
+        )
+    for event in events:
+        _validate_completion_event(event, context)
