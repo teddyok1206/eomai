@@ -571,3 +571,22 @@ root는 직접 schema 검증에도 기존 depth/object/collection guard를 직�
 보강했다. 최종 독립 eight-suite **390 PASS (46.84s)**, strict mypy5·Ruff/format5 PASS다.
 이전382/95와 겹치므로 합산하지 않는다. 이는 protocol source gate이며 Runner dispatcher,
 실제 receipt 게시·session continuation·migration0053·model/GPU 실행은 아직 후속 범위다.
+
+## 고정 native factory와 모델 파일 재사용 source — 2026-10-12 UTC
+
+필수 installed-admission과 exact config raw pin을 받는 no-argument scope를 기존 numerical
+observer/bundle resolver/backend에 연결했다. 실제 admission 구현·root-installed capture는
+아직 없으며, boolean/설정 파일만으로 실행을 허용하지 않는다. CUDA는 관측 전에 실제
+ownership handle을 요구하고 factory가 owner lease를 닫지 않는다. stdout/stderr는 null로
+전환하고 기존 root-owned3FD index leaf만 재사용한다.
+
+큰 payload는 한 번만 검증하고 동일 원본 snapshot을 재사용한다. root 검토에서 stronger
+ancestor epoch가 payload 읽기 **이후**에만 관측되던 순서 차이를 확인해, resolver의 작은
+metadata observer seam으로 읽기 전 관측과 읽기 후 재검증을 추가했다. 같은 bytes의 manifest/
+ancestor 교체와 구성된 가짜 snapshot은 ML import 전에 거부한다. 예전 constructor는 유지한다.
+
+root 독립 seventeen-suite **961 PASS (16.77s)**와 native11-file strict mypy·Ruff/format PASS다.
+shared mechanical adapter도 포함한 겹치는 gate이므로 이전198/515/304 등과 합산하지 않는다.
+병행 extraction 중 중간76개 실패는 wrapper filename regex의 잘못된 escaping으로 분류되어
+수정 후 위 고정 목록을 다시 실행했다. live 장애·installed acceptance로 재해석하지 않는다.
+실제 unit/DAC/source session/whole-prefix admission·모델/GPU 측정·기본값 전환은 PENDING이다.

@@ -9,6 +9,7 @@ from types import MappingProxyType
 
 from eom_catalog_contracts.embedding_installed_runtime_proof import (
     MAX_INSTALLED_RUNTIME_PROOF_BYTES,
+    EmbeddingInstalledRuntimeProof,
     EmbeddingInstalledRuntimeProofPointer,
     parse_installed_runtime_proof,
     validate_installed_runtime_proof_pointer,
@@ -21,6 +22,7 @@ from eom_catalog_service.embedding_execution_ports import (
 )
 from eom_catalog_service.embedding_runtime_distribution import verify_installed_numeric_distribution
 from eom_catalog_service.embedding_runtime_files import (
+    NATIVE_EMBEDDING_PROFILES,
     InstalledRuntimeProofError,
     NumericalRuntimeFileSnapshots,
 )
@@ -33,10 +35,7 @@ from eom_catalog_service.embedding_runtime_os_identity import (
 )
 
 _PROFILE_PREFIXES = MappingProxyType(
-    {
-        "CPU_INDEX_FP32": Path("/opt/eom/conda/envs/eom-embedding-index-cpu"),
-        "CUDA_INDEX_FP32": Path("/opt/eom/conda/envs/eom-embedding-cuda"),
-    }
+    {name: profile.prefix for name, profile in NATIVE_EMBEDDING_PROFILES.items()}
 )
 _PROOF_ROOT = Path("/opt/eom/embedding-runtime-proofs")
 _ARCHIVE_ROOT = Path("/opt/eom/embedding-runtime-archives")
@@ -49,6 +48,14 @@ class ConfiguredInstalledRuntimeProof:
     """Trusted owner admission pointer, never constructed from a worker request."""
 
     pointer: EmbeddingInstalledRuntimeProofPointer
+
+
+@dataclass(frozen=True, slots=True)
+class VerifiedInstalledRuntimeProofMetadata:
+    """Read-only initial numerical proof bytes, not whole-prefix acceptance or authority."""
+
+    proof: EmbeddingInstalledRuntimeProof
+    raw: bytes
 
 
 class ProtectedInstalledEmbeddingRuntimeObserver:
@@ -80,6 +87,7 @@ class ProtectedInstalledEmbeddingRuntimeObserver:
                 maximum=MAX_INSTALLED_RUNTIME_PROOF_BYTES,
             )
             self._proof = parse_installed_runtime_proof(json.loads(raw))
+            self._proof_raw = raw
             validate_installed_runtime_proof_pointer(self._proof, self._pointer, raw)
             self._python = require_native_runtime_interpreter(self._prefix)
             self._files.observe_protected_interpreter(self._prefix / "bin/python3.12")
@@ -147,3 +155,8 @@ class ProtectedInstalledEmbeddingRuntimeObserver:
             raise
         except (OSError, ValueError, TypeError, KeyError, AttributeError, UnicodeError) as exc:
             raise InstalledRuntimeProofError("INSTALLED_RUNTIME_OBSERVATION_INVALID") from exc
+
+    @property
+    def verified_proof_metadata(self) -> VerifiedInstalledRuntimeProofMetadata:
+        self.observe()
+        return VerifiedInstalledRuntimeProofMetadata(self._proof, self._proof_raw)

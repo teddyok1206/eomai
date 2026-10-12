@@ -25,7 +25,9 @@ from eom_identifiers import content_sha256
 from eom_catalog_service.embedding_bundle_resolver import (
     ConfiguredEmbeddingBundle,
     EmbeddingBundleResolutionError,
+    ResolvedEmbeddingBundle,
     resolve_configured_embedding_bundle,
+    validate_resolved_embedding_bundle,
 )
 from eom_catalog_service.embedding_execution_ports import (
     CudaEmbeddingOwnership,
@@ -123,6 +125,7 @@ class OfflineNativeEmbeddingBackend:
         device: Literal["CPU", "CUDA"],
         runtime_observer: InstalledEmbeddingRuntimeObserver | None,
         cuda_ownership: CudaEmbeddingOwnership | None = None,
+        resolved_bundle: ResolvedEmbeddingBundle | None = None,
     ) -> None:
         self._torch: Any = None
         self._model: Any = None
@@ -139,7 +142,11 @@ class OfflineNativeEmbeddingBackend:
         if device == "CPU" and cuda_ownership is not None:
             raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_DEVICE_MISMATCH")
         try:
-            self._resolved = resolve_configured_embedding_bundle(configured)
+            if resolved_bundle is None:
+                self._resolved = resolve_configured_embedding_bundle(configured)
+            else:
+                validate_resolved_embedding_bundle(configured, resolved_bundle)
+                self._resolved = resolved_bundle
             self._spec = self._resolved.bundle.execution_model_spec
             self._expected = self._resolved.bundle.numerical_runtime
             if self._expected.device.kind != device:

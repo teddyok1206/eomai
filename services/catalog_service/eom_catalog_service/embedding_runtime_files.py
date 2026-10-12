@@ -9,6 +9,41 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
+from typing import Literal
+
+
+@dataclass(frozen=True, slots=True)
+class FixedNativeEmbeddingProfile:
+    profile: Literal["CPU_INDEX_FP32", "CUDA_INDEX_FP32"]
+    prefix: Path
+    worker_user: str
+    supplementary_group: str | None
+
+
+NATIVE_EMBEDDING_PROFILES = MappingProxyType(
+    {
+        "CPU_INDEX_FP32": FixedNativeEmbeddingProfile(
+            "CPU_INDEX_FP32",
+            Path("/opt/eom/conda/envs/eom-embedding-index-cpu"),
+            "eom-embedding-index-cpu",
+            None,
+        ),
+        "CUDA_INDEX_FP32": FixedNativeEmbeddingProfile(
+            "CUDA_INDEX_FP32",
+            Path("/opt/eom/conda/envs/eom-embedding-cuda"),
+            "eom-embedding-cuda",
+            "eom-gpu-lease",
+        ),
+    }
+)
+
+
+def fixed_native_embedding_profile(profile: str) -> FixedNativeEmbeddingProfile:
+    """One stdlib-only closed installation/identity mapping; no availability selector."""
+    if type(profile) is not str or profile not in NATIVE_EMBEDDING_PROFILES:
+        raise InstalledRuntimeProofError("INSTALLED_RUNTIME_PROFILE_INVALID")
+    return NATIVE_EMBEDDING_PROFILES[profile]
 
 
 class InstalledRuntimeProofError(ValueError):
@@ -132,6 +167,13 @@ class NumericalRuntimeFileSnapshots:
 
     def observe_protected_interpreter(self, path: Path) -> None:
         """Protect actual executable identity; full interpreter bytes belong to launch audit."""
+        self.observe_protected_member_identity(path)
+
+    def observe_protected_member_identity(self, path: Path) -> None:
+        """Retain protected file/ancestor epochs without claiming or repeating a byte hash."""
+        if path in self._epochs:
+            self._epochs[path].assert_unchanged()
+            return
         with _protected_open(path, self.owner_uid) as (descriptor, ancestors):
             epoch = RuntimeFileEpoch(path, _identity(os.fstat(descriptor)), ancestors, "")
         epoch.assert_unchanged()

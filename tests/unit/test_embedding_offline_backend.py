@@ -16,6 +16,10 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingSpace,
     IncrementalEmbeddingInput,
 )
+from eom_catalog_service.embedding_bundle_resolver import (
+    ResolvedEmbeddingBundle,
+    resolve_configured_embedding_bundle,
+)
 from eom_catalog_service.embedding_encoder_adapter import (
     IncrementalEmbeddingEncodeError,
     encode_incremental_batch,
@@ -37,6 +41,51 @@ from tests.unit.embedding_native_backend_fixtures import (
 from tests.unit.inference_transfer_embedding_fixtures import embedding_input, seal
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_pre_resolved_backend_does_not_repeat_payload_audit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    configured, bundle, _, _ = configured_bundle(tmp_path)
+    resolved = resolve_configured_embedding_bundle(configured)
+    state = fake_libraries(monkeypatch, bundle)
+    monkeypatch.setattr(
+        "eom_catalog_service.embedding_offline_backend.resolve_configured_embedding_bundle",
+        lambda *_args: pytest.fail("second large payload read"),
+    )
+    backend = OfflineNativeEmbeddingBackend(
+        configured, device="CPU", runtime_observer=FakeObserver(bundle), resolved_bundle=resolved
+    )
+    assert state["loads"] and backend.execution_runtime.device == "CPU"
+    backend.close()
+
+
+@pytest.mark.parametrize("fault", ("forged", "payload_copy", "manifest_copy", "root", "changed"))
+def test_untrusted_resolved_snapshot_denies_before_observation_or_ml(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    configured, bundle, root, _ = configured_bundle(tmp_path)
+    original = resolve_configured_embedding_bundle(configured)
+    resolved = original
+    if fault == "forged":
+        resolved = ResolvedEmbeddingBundle(original.bundle, original.payload, original.manifest)
+    elif fault == "payload_copy":
+        resolved = replace(original, payload=replace(original.payload))
+    elif fault == "manifest_copy":
+        resolved = replace(original, manifest=replace(original.manifest))
+    elif fault == "root":
+        configured = replace(configured, payload_store_root=tmp_path / "different")
+    else:
+        (root / "model.safetensors").write_bytes(b"changed")
+    observer = FakeObserver(bundle)
+    monkeypatch.setattr(
+        importlib, "import_module", lambda *_args, **_kwargs: pytest.fail("no ML import")
+    )
+    with pytest.raises(NativeEmbeddingBackendError):
+        OfflineNativeEmbeddingBackend(
+            configured, device="CPU", runtime_observer=observer, resolved_bundle=resolved
+        )
+    assert observer.calls == 0
 
 
 @pytest.fixture(autouse=True)

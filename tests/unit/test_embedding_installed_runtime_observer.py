@@ -11,6 +11,7 @@ import io
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 import pytest
 from eom_catalog_contracts.embedding_installed_runtime_proof import (
@@ -43,6 +44,61 @@ def _observer(staged: StagedSyntheticRuntime) -> ProtectedInstalledEmbeddingRunt
         ConfiguredInstalledRuntimeProof(proof_pointer(staged.proof)),
         cuda_ownership=FakeOwnership() if staged.proof.profile == "CUDA_INDEX_FP32" else None,
     )
+
+
+def test_verified_proof_metadata_accessor_rechecks_and_reuses_one_initial_byte_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    staged = staged_runtime(tmp_path, monkeypatch)
+    actual_read = NumericalRuntimeFileSnapshots.read
+    reads = 0
+
+    def counted(self: NumericalRuntimeFileSnapshots, path: Path, **kwargs: Any) -> bytes:
+        nonlocal reads
+        if path == staged.proof_path:
+            reads += 1
+        return actual_read(self, path, **kwargs)
+
+    monkeypatch.setattr(NumericalRuntimeFileSnapshots, "read", counted)
+    observer = _observer(staged)
+    first = observer.verified_proof_metadata
+    second = observer.verified_proof_metadata
+    assert first.proof == staged.proof and first.raw == installed_runtime_proof_bytes(staged.proof)
+    assert first.raw is second.raw and first.proof is second.proof and reads == 1
+    staged.proof_path.write_bytes(first.raw)
+    with pytest.raises(InstalledRuntimeProofError):
+        _ = observer.verified_proof_metadata
+    assert reads == 1
+
+
+@pytest.mark.parametrize("fault", ("mode", "replace", "symlink", "missing", "ancestor"))
+def test_metadata_only_member_observation_captures_strong_epoch_without_hash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    member = tmp_path / "member"
+    member.write_bytes(b"synthetic immutable bytes")
+    member.chmod(0o600)
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    monkeypatch.setattr(os, "pread", lambda *_args: pytest.fail("metadata cannot repeat bytes"))
+    files.observe_protected_member_identity(member)
+    files.observe_protected_member_identity(member)
+    files.assert_unchanged()
+    if fault == "mode":
+        member.chmod(0o660)
+    elif fault == "missing":
+        member.unlink()
+    elif fault == "replace":
+        replacement = tmp_path / "replacement"
+        replacement.write_bytes(b"synthetic immutable bytes")
+        replacement.chmod(0o600)
+        replacement.replace(member)
+    elif fault == "symlink":
+        member.unlink()
+        member.symlink_to(tmp_path / "absent")
+    else:
+        tmp_path.chmod(0o770)
+    with pytest.raises(InstalledRuntimeProofError):
+        files.assert_unchanged()
 
 
 @pytest.mark.parametrize("profile", ["CPU_INDEX_FP32", "CUDA_INDEX_FP32"])

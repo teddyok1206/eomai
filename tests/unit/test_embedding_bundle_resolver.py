@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import importlib
 import os
+from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
+from shutil import copytree
 
 import pytest
 from eom_catalog_contracts.embedding_runtime_bundle import (
@@ -12,8 +14,11 @@ from eom_catalog_contracts.embedding_runtime_bundle import (
 )
 from eom_catalog_service.embedding_bundle_resolver import (
     EmbeddingBundleResolutionError,
+    ResolvedEmbeddingBundle,
     resolve_configured_embedding_bundle,
+    validate_resolved_embedding_bundle,
 )
+from eom_catalog_service.embedding_runtime_files import NumericalRuntimeFileSnapshots
 from eom_catalog_service.local_embedding_adapter import verify_local_embedding_model_snapshot
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 
@@ -157,6 +162,95 @@ def test_resolved_snapshot_detects_file_and_path_replacement(tmp_path: Path, tar
         replacement.replace(path)
     with pytest.raises(EmbeddingBundleResolutionError, match="BUNDLE_CHANGED"):
         resolved.assert_unchanged()
+
+
+@pytest.mark.parametrize(
+    "fault",
+    ("forged", "payload", "manifest", "empty_epochs", "bundle", "root", "pointer", "deepcopy"),
+)
+def test_reuse_requires_original_audited_objects_and_exact_configured_closure(
+    tmp_path: Path, fault: str
+) -> None:
+    configured, _, _, _ = configured_bundle(tmp_path)
+    original = resolve_configured_embedding_bundle(configured)
+    if fault == "forged":
+        resolved = ResolvedEmbeddingBundle(original.bundle, original.payload, original.manifest)
+    elif fault == "payload":
+        resolved = replace(original, payload=replace(original.payload))
+    elif fault == "manifest":
+        resolved = replace(original, manifest=replace(original.manifest))
+    elif fault == "empty_epochs":
+        resolved = replace(original, payload=replace(original.payload, _epochs=()))
+    elif fault == "bundle":
+        resolved = replace(original, bundle=original.bundle.model_copy())
+    elif fault == "deepcopy":
+        resolved = deepcopy(original)
+    else:
+        resolved = original
+        if fault == "root":
+            configured = replace(configured, payload_store_root=tmp_path / "other")
+        else:
+            configured = replace(
+                configured,
+                pointer=configured.pointer.model_copy(
+                    update={"bundle_raw_sha256": "sha256:" + "0" * 64}
+                ),
+            )
+    with pytest.raises(EmbeddingBundleResolutionError):
+        validate_resolved_embedding_bundle(configured, resolved)
+
+
+def test_unchanged_copy_can_reuse_same_original_objects_without_payload_byte_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    configured, _, _, _ = configured_bundle(tmp_path)
+    original = resolve_configured_embedding_bundle(configured)
+    import eom_catalog_service.local_embedding_adapter as legacy
+
+    monkeypatch.setattr(
+        legacy,
+        "resolve_local_embedding_payload",
+        lambda *_args, **_kwargs: pytest.fail("no repeated payload hash"),
+    )
+    validate_resolved_embedding_bundle(configured, replace(original))
+
+
+@pytest.mark.parametrize("fault", ("manifest", "ancestor"))
+def test_identity_observation_precedes_payload_audit_and_detects_fresh_resolution_swap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    configured, bundle, root, bundle_path = configured_bundle(tmp_path)
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    expected = (
+        bundle_path,
+        root / "manifest.json",
+        *(root / pin.member_path for pin in bundle.payload_model_spec.files),
+    )
+    observed: list[Path] = []
+
+    def observe(path: Path) -> None:
+        files.observe_protected_member_identity(path)
+        observed.append(path)
+        if path == expected[-1]:
+            if fault == "manifest":
+                replacement = root / "replacement"
+                replacement.write_bytes((root / "manifest.json").read_bytes())
+                replacement.chmod(0o600)
+                replacement.replace(root / "manifest.json")
+            else:
+                moved = configured.payload_store_root.with_name("original-payload-evidence")
+                configured.payload_store_root.rename(moved)
+                # Only tiny synthetic fixture bytes are copied at this test race boundary.
+                copytree(moved, configured.payload_store_root)
+
+    monkeypatch.setattr(
+        importlib, "import_module", lambda *_args, **_kwargs: pytest.fail("no ML import")
+    )
+    resolved = resolve_configured_embedding_bundle(configured, observe_member_identity=observe)
+    assert tuple(observed) == expected
+    resolved.assert_unchanged()  # Legacy leaf epochs captured after the race are insufficient.
+    with pytest.raises(ValueError):
+        files.assert_unchanged()
 
 
 def test_execution_successor_cannot_be_passed_to_legacy_exact_resolver(tmp_path: Path) -> None:
