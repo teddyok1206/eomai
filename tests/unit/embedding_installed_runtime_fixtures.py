@@ -13,7 +13,7 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 from eom_catalog_contracts.embedding_installed_runtime_proof import (
@@ -129,12 +129,43 @@ def synthetic_wheel(members: dict[str, bytes]) -> bytes:
     return result.getvalue()
 
 
+def synthetic_console_wrapper(
+    prefix: Path,
+    entry: tuple[str, str],
+    recipe: Literal["legacy", "modern", "removesuffix"],
+) -> bytes:
+    module, function = entry
+    first = function.split(".", 1)[0]
+    head = f"#!{prefix / 'bin/python3.12'}\n"
+    if recipe == "legacy":
+        body = (
+            "# -*- coding: utf-8 -*-\nimport re\nimport sys\n"
+            f"from {module} import {first}\n"
+            "if __name__ == '__main__':\n"
+            "    sys.argv[0] = re.sub(r'(-script\\.pyw?|\\.exe)?$', '', sys.argv[0])\n"
+        )
+    elif recipe == "modern":
+        body = (
+            f"import sys\nfrom {module} import {first}\n"
+            "if __name__ == '__main__':\n    if sys.argv[0].endswith('.exe'):\n"
+            "        sys.argv[0] = sys.argv[0][:-4]\n"
+        )
+    else:
+        body = (
+            f"import sys\nfrom {module} import {first}\n"
+            "if __name__ == '__main__':\n"
+            "    sys.argv[0] = sys.argv[0].removesuffix('.exe')\n"
+        )
+    return (head + body + f"    sys.exit({function}())\n").encode()
+
+
 def staged_runtime(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     profile: EmbeddingRuntimeProfile = "CPU_INDEX_FP32",
     *,
     with_generated: bool = False,
+    console_recipe: Literal["legacy", "modern", "removesuffix"] = "modern",
 ) -> StagedSyntheticRuntime:
     import eom_catalog_service.embedding_installed_runtime_observer as observer
 
@@ -179,11 +210,7 @@ def staged_runtime(
             installed[dist + "/direct_url.json"] = url_raw
             library["requested"] = True
             library["direct_url"] = {"sha256": sha256_bytes(url_raw), "size_bytes": len(url_raw)}
-            wrapper = (
-                f"#!{prefix / 'bin/python3.12'}\nimport sys\nfrom numpy.fake import main\n"
-                "if __name__ == '__main__':\n    if sys.argv[0].endswith('.exe'):\n"
-                "        sys.argv[0] = sys.argv[0][:-4]\n    sys.exit(main())\n"
-            ).encode()
+            wrapper = synthetic_console_wrapper(prefix, ("numpy.fake", "main"), console_recipe)
             installed["../../../bin/synthetic-numeric"] = wrapper
             library["console_scripts"] = [
                 {

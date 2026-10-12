@@ -522,3 +522,21 @@ root는 direct raw validator의 immutable bytes 확인과 negative3을 추가했
 겹치므로 합산하지 않는다. schema/mirror raw SHA는
 `f48da8820d2452fe62cfaa8b3401f42abac2f43b94eaf1a18968e5f8492bef5e`다.
 실제 model/GPU 실행·새 runtime admission/default activation은 아직0/미완료다.
+
+## 실제 pip wrapper 호환 source와 전체 설치 admission 경계 — 2026-10-12 UTC
+
+실제 pip26.1.2가 생성한 `removesuffix('.exe')` wrapper를 확인하고 기존 두 exact byte
+recipe에 세 번째 recipe만 추가했다. shebang·archive entry module/callable·추가 코드 금지와
+기존 오류/API를 유지하며, 설치된 wrapper/RECORD를 수정하거나 실행하지 않았다.
+
+root 독립 proof/observer/distribution suite **185 PASS (4.17s)** 및 관련 ten-suite
+**456 PASS (6.83s)**, strict mypy3·Ruff/format3 PASS다. 이 회귀 수에는 병행 개발 중인
+observer/resolver의 추가 source fixture가 포함되어 있으며, 각 미완료 기능의 운영 PASS를
+뜻하지 않는다. 원 wrapper 변경의 독립62-case coverage와 구분하고 겹치는 수를 합산하지 않는다.
+
+전체 설치 admission 설계는 exact31 Conda 원본·재배치·canonical Python cache·host ELF와
+고정 도구를 별도로 검증하도록 기록했다. 기존 new-profile publisher의 새 interpreter
+첫 호출 전에 **기존 보호된 interpreter의 필수 검증**을 넣는 후속 범위를 명시했다.
+actual31 archive와 현재 prefix의 읽기 전용 진단은 설치 admission이 아니며,
+정상 canonical bytecode를 blanket 삭제하거나 기존 실험 환경을 변경하지 않는다.
+이 전체 admission·실제 CPU/CUDA 측정·CUDA 기본 활성화는 아직 PENDING이다.

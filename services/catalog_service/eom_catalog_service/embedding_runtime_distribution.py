@@ -192,7 +192,7 @@ def _entries(raw: bytes) -> dict[str, tuple[str, str]]:
 
 
 def validate_numeric_console_wrapper(raw: bytes, prefix: Path, entry: tuple[str, str]) -> None:
-    """Two fixed distlib wrapper recipes; no arbitrary AST statements or execution."""
+    """Three fixed distlib wrapper recipes; no arbitrary AST statements or execution."""
     module, function = entry
     first = function.split(".", 1)[0]
     head = f"#!{prefix / 'bin/python3.12'}\n"
@@ -212,7 +212,17 @@ def validate_numeric_console_wrapper(raw: bytes, prefix: Path, entry: tuple[str,
         + "        sys.argv[0] = sys.argv[0][:-4]\n"
         + f"    sys.exit({function}())\n"
     )
-    _require(raw in (legacy.encode(), modern.encode()), "CONSOLE_WRAPPER_INVALID")
+    removesuffix = (
+        head
+        + "import sys\n"
+        + f"from {module} import {first}\n"
+        + "if __name__ == '__main__':\n"
+        + "    sys.argv[0] = sys.argv[0].removesuffix('.exe')\n"
+        + f"    sys.exit({function}())\n"
+    )
+    _require(
+        raw in (legacy.encode(), modern.encode(), removesuffix.encode()), "CONSOLE_WRAPPER_INVALID"
+    )
 
 
 def _unique_json(pairs: list[tuple[str, Any]]) -> dict[str, Any]:

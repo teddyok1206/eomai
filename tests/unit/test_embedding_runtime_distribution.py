@@ -9,9 +9,13 @@ import zipfile
 from collections.abc import Iterator
 from contextlib import nullcontext
 from pathlib import Path
+from typing import Literal
 
 import pytest
-from eom_catalog_contracts.embedding_installed_runtime_proof import InstalledNumericLibraryProof
+from eom_catalog_contracts.embedding_installed_runtime_proof import (
+    EmbeddingRuntimeProfile,
+    InstalledNumericLibraryProof,
+)
 from eom_catalog_service.embedding_runtime_distribution import (
     validate_numeric_console_wrapper,
     verify_installed_numeric_distribution,
@@ -20,11 +24,12 @@ from eom_catalog_service.embedding_runtime_files import (
     InstalledRuntimeProofError,
     NumericalRuntimeFileSnapshots,
 )
-from eom_identifiers import sha256_bytes
+from eom_identifiers import canonical_json_bytes, sha256_bytes
 
 from tests.unit.embedding_installed_runtime_fixtures import (
     StagedSyntheticRuntime,
     staged_runtime,
+    synthetic_console_wrapper,
     synthetic_record,
     synthetic_wheel,
 )
@@ -511,4 +516,158 @@ def test_console_script_name_does_not_authorize_arbitrary_code_or_shebang(tmp_pa
     with pytest.raises(InstalledRuntimeProofError, match="CONSOLE_WRAPPER_INVALID"):
         validate_numeric_console_wrapper(
             legitimate + b"import os\nos.system('bad')\n", prefix, ("numpy.fake", "main")
+        )
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        Path("/opt/eom/conda/envs/eom-embedding-index-cpu"),
+        Path("/opt/eom/conda/envs/eom-embedding-cuda"),
+    ],
+)
+@pytest.mark.parametrize("recipe", ["legacy", "modern", "removesuffix"])
+@pytest.mark.parametrize("entry", [("torch.distributed.run", "main"), ("numpy.fake", "Main.run")])
+def test_three_exact_console_recipes_bind_cpu_cuda_prefix_and_archive_callable(
+    prefix: Path,
+    recipe: Literal["legacy", "modern", "removesuffix"],
+    entry: tuple[str, str],
+) -> None:
+    validate_numeric_console_wrapper(
+        synthetic_console_wrapper(prefix, entry, recipe), prefix, entry
+    )
+
+
+@pytest.mark.parametrize("recipe", ["legacy", "modern", "removesuffix"])
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "prefix",
+        "module",
+        "import_callable",
+        "callable",
+        "argument",
+        "extra_statement",
+        "shebang",
+        "python_version",
+        "missing_newline",
+        "extra_newline",
+        "crlf",
+    ],
+)
+def test_closed_console_recipes_deny_code_and_identity_mutations(
+    recipe: Literal["legacy", "modern", "removesuffix"], fault: str
+) -> None:
+    prefix = Path("/opt/eom/conda/envs/eom-embedding-index-cpu")
+    entry = "torch.distributed.run", "main"
+    original = synthetic_console_wrapper(prefix, entry, recipe)
+    variants = {
+        "prefix": original.replace(b"eom-embedding-index-cpu", b"eom-embedding-cuda"),
+        "module": original.replace(b"from torch.distributed.run", b"from torch.distributed.other"),
+        "import_callable": original.replace(b"import main", b"import other"),
+        "callable": original.replace(b"sys.exit(main())", b"sys.exit(other())"),
+        "argument": original.replace(b"sys.exit(main())", b"sys.exit(main(sys.argv))"),
+        "extra_statement": original + b"import os\nos.system('bad')\n",
+        "shebang": original.replace(
+            str(prefix / "bin/python3.12").encode(), b"/usr/bin/env python"
+        ),
+        "python_version": original.replace(b"bin/python3.12", b"bin/python3.13"),
+        "missing_newline": original[:-1],
+        "extra_newline": original + b"\n",
+        "crlf": original.replace(b"\n", b"\r\n"),
+    }
+    altered = variants[fault]
+    assert altered != original
+    with pytest.raises(InstalledRuntimeProofError, match="CONSOLE_WRAPPER_INVALID"):
+        validate_numeric_console_wrapper(altered, prefix, entry)
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    [
+        b"removesuffix('.EXE')",
+        b"removesuffix('.exe.exe')",
+        b"removesuffix(sys.argv[1])",
+        b"replace('.exe', '')",
+        b"rstrip('.exe')",
+    ],
+)
+def test_removesuffix_console_recipe_does_not_admit_other_argument_or_function(
+    replacement: bytes,
+) -> None:
+    prefix = Path("/opt/eom/conda/envs/eom-embedding-cuda")
+    entry = "triton.profiler.proton", "main"
+    original = synthetic_console_wrapper(prefix, entry, "removesuffix")
+    altered = original.replace(b"removesuffix('.exe')", replacement)
+    with pytest.raises(InstalledRuntimeProofError, match="CONSOLE_WRAPPER_INVALID"):
+        validate_numeric_console_wrapper(altered, prefix, entry)
+
+
+@pytest.mark.parametrize("profile", ["CPU_INDEX_FP32", "CUDA_INDEX_FP32"])
+@pytest.mark.parametrize("recipe", ["legacy", "modern", "removesuffix"])
+def test_full_distribution_closure_accepts_three_derived_console_recipes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    profile: EmbeddingRuntimeProfile,
+    recipe: Literal["legacy", "modern", "removesuffix"],
+) -> None:
+    staged = staged_runtime(
+        tmp_path, monkeypatch, profile, with_generated=True, console_recipe=recipe
+    )
+    library = next(item for item in staged.proof.numeric_libraries if item.name == "numpy")
+    verified = verify_installed_numeric_distribution(
+        library,
+        prefix=staged.prefix,
+        archive_root=staged.archive_root,
+        files=NumericalRuntimeFileSnapshots(os.geteuid()),
+    )
+    assert verified.pin.distribution_sha256 == library.archive.sha256
+
+
+@pytest.mark.parametrize("recipe", ["legacy", "modern", "removesuffix"])
+@pytest.mark.parametrize("entry", ["numpy.other:main", "numpy.fake:other"])
+def test_repinned_archive_entry_metadata_still_controls_console_module_and_callable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    recipe: Literal["legacy", "modern", "removesuffix"],
+    entry: str,
+) -> None:
+    staged = staged_runtime(tmp_path, monkeypatch, with_generated=True, console_recipe=recipe)
+    members = _numpy_archive_members(staged)
+    dist = "numpy-2.4.6.dist-info"
+    record_name = dist + "/RECORD"
+    members.pop(record_name)
+    members[dist + "/entry_points.txt"] = (
+        "[console_scripts]\nsynthetic-numeric=" + entry + "\n"
+    ).encode()
+    payload = synthetic_wheel(members | {record_name: synthetic_record(members, record_name)})
+    library = _repacked_numpy_library(staged, payload)
+    archive = staged.archive_root / library.archive.sha256[7:] / library.archive.wheel_filename
+    site = staged.prefix / "lib/python3.12/site-packages"
+    (site / dist / "entry_points.txt").write_bytes(members[dist + "/entry_points.txt"])
+    direct = canonical_json_bytes(
+        {
+            "url": archive.as_uri(),
+            "archive_info": {"hashes": {"sha256": library.archive.sha256[7:]}},
+        }
+    )
+    (site / dist / "direct_url.json").write_bytes(direct)
+    installed = members | {
+        dist + "/INSTALLER": b"pip\n",
+        dist + "/REQUESTED": b"",
+        dist + "/direct_url.json": direct,
+        "../../../bin/synthetic-numeric": (staged.prefix / "bin/synthetic-numeric").read_bytes(),
+    }
+    record = synthetic_record(installed, record_name)
+    (site / record_name).write_bytes(record)
+    body = library.model_dump(mode="json")
+    body["installed_record"].update(sha256=sha256_bytes(record), size_bytes=len(record))
+    body["direct_url"].update(sha256=sha256_bytes(direct), size_bytes=len(direct))
+    library = InstalledNumericLibraryProof.model_validate(body)
+    with pytest.raises(InstalledRuntimeProofError, match="CONSOLE_WRAPPER_INVALID"):
+        verify_installed_numeric_distribution(
+            library,
+            prefix=staged.prefix,
+            archive_root=staged.archive_root,
+            files=NumericalRuntimeFileSnapshots(os.geteuid()),
         )
