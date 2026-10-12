@@ -365,3 +365,18 @@ synthetic 회귀는 immutable legacy SHA, bundle/model/hash 분리, 관련 numer
 변화, source release 필드 거부, 동일 payload successor, missing/duplicate numeric pins,
 dtype/TF32/compile/overflow tricks·bool/float integer coercion·stale pointer·raw/hash/schema/media
 오류와 frozen instance bypass를 다룬다. 실제 weights/GPU/network/DB/NAS를 실행·해석하지 않는다.
+
+## 11. 내부 성능 판정 값 — activation이나 worker wire contract가 아님
+
+`embedding_device_comparison.py`는 §6–7의 고정 성능 기준만 계산하는 pure application 값이다.
+canonical source는 owner가 측정한 cold3/warm5/query2×5 구간이며, 독립 lifecycle/Artifact인 척
+하지 않는 frozen 내부 값으로 받는다. ordered tuples와 constant-size median/cross multiplication을
+사용하므로 시간/공간 O(1)이다. float ratio 반올림으로 threshold를 통과시키지 않는다.
+각 query의 median을 별도로 비교하여 한 질문의 회귀를 다른 질문의 개선으로 숨기지 않는다.
+
+이 함수는 DB/파일/모델/권한/등록/트랜잭션·retry를 다루지 않고 numerical correctness나 resource
+PASS를 추정하지 않는다. 입력 tag/count/type mismatch는 실패다. 실패 reason과 실제 median을
+반환하며 `CUDA_PERFORMANCE_SUPERIOR`도 device 활성화 명령이나 전체 gate PASS가 아니다.
+미래 benchmark worker 메시지는 §6의 JSON Schema를 먼저 정의하고 이 내부 값을 owner가
+materialize해야 한다. 현재 primitive는 wire JSON을 수신하거나 benchmark를 실행하지 않는다.
+단순히 warm 처리시간 하나만 비교하는 대안은 cold/query 비용과 tail 회귀를 놓치므로 부족하다.

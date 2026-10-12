@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eom-gpu-lease"
+version = "0.1.0"
+description = "Fixed stdlib-only physical GPU flock boundary shared by native EOM runtimes"
+requires-python = ">=3.11,<3.13"
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["eom_gpu_lease*"]

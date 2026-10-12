@@ -14,6 +14,8 @@ dependencies = [
   "bitsandbytes==0.47.0",
   # Provides the exact SSD-1B/SDXL scheduler, UNet, VAE, and LoRA serialization APIs.
   "diffusers==0.35.2",
+  # Uses the same fixed physical-GPU mutex as provider and native embedding.
+  "eom-gpu-lease==0.1.0",
   "eom-image-contracts==0.1.0",
   # Reuses the existing immutable SSD-1B model resolver instead of duplicating it.
   "eom-local-image-provider==0.1.0",

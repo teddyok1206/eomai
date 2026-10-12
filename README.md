@@ -179,6 +179,10 @@ CUDA wheel25개의 독립 raw-hash·ZIP/metadata 검사도 통과했고, 기존0
 실제 CPU/GPU 비교와 기본값 전환은 아직 미실행입니다. 새 공유 GPU lease와 native encoder는
 후속 연결 중이며, source 검증을 운영 활성화로 해석하지 않습니다.
 
+이미지 provider/trainer와 임베딩이 사용할 작은 공유 GPU mutex의 source와 고정 성능 판정을
+추가하고 기존 이미지 회귀를 포함한171개를 통과했습니다. 실제 공유 lock·unit 이행과
+보호 encoder 설치/CPU·GPU 측정은 별도 gate이며 아직 실행하지 않았습니다.
+
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스
 readiness가 정본입니다.

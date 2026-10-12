@@ -11,6 +11,8 @@ dependencies = [
   # Separate Blackwell/CUDA runtime; never install these into API, Web, or HWPX environments.
   "accelerate==1.10.1",
   "diffusers==0.35.2",
+  # Shared fixed stdlib physical-GPU mutex; no trainer or platform service import.
+  "eom-gpu-lease==0.1.0",
   "eom-image-contracts==0.1.0",
   "huggingface-hub==0.35.3",
   # Diffusers delegates immutable LoRA adapter loading to PEFT on the reference-style route.

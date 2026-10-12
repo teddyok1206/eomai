@@ -122,7 +122,19 @@ class StyleReferenceImageBackend(Protocol):
 
 @contextmanager
 def acquire_gpu_lease(lock_path: Path) -> Iterator[None]:
-    """Hold the one reviewed physical-GPU lease for the unit lifetime."""
+    """Hold one reviewed physical-GPU mutex for the caller-owned execution scope."""
+
+    if lock_path == Path("/run/eom-gpu-lease/gpu0.lock"):
+        try:
+            from eom_gpu_lease import SharedGpuLeaseError, shared_gpu_lease
+        except ImportError as exc:
+            raise ProviderError("LOCAL_IMAGE_GPU_UNAVAILABLE") from exc
+        try:
+            with shared_gpu_lease():
+                yield
+        except SharedGpuLeaseError as exc:
+            raise ProviderError("LOCAL_IMAGE_GPU_UNAVAILABLE") from exc
+        return
 
     _require_absolute_no_symlink_components(lock_path.parent)
     _require_directory(lock_path.parent, mode=0o700, current_owner=True)

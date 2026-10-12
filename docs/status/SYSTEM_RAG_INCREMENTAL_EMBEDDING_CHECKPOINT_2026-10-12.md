@@ -117,3 +117,30 @@ source/context/receipt/head mismatch는 DB construction 전에 거부한다.
 기존720개 suite와 겹치므로 합산하지 않는다. 잘못 지정한 nonexistent test path와 초기 mypy
 module-name invocation 오류는 source 수정 없이 올바른 경로/explicit package bases로 재실행했다.
 whole goal과 GPU 기본값은 여전히 IN_PROGRESS / NOT_ACTIVE다.
+
+## 공유 physical-GPU adapter·성능 판정 — 2026-10-12 17:54 UTC
+
+small stdlib `eom-gpu-lease` adapter와 provider/trainer exactshared branch를 구현했다.
+root-provisioned tmpfs readonly inode만 claim하며 create/write/chmod나 기존 private directory의
+권한 확대가 없다. independent-process contention, last-dup-close, process death, inode/mode
+drift, 잘못된 group/mount 및 모든 FD cleanup을 합성 경로에서 검증했다. 기존 legacy lock와
+optional module 부재 시 import는 유지하며 shared 선택은 fail-closed다.
+source 검증은 실제 group/unit provisioning, cgroup/driver cleanup 또는 whole-unit ownership
+증거가 아니다. 이미지 배포의 standalone wheel closure·전체 entrypoint drain/migration은 후속이다.
+
+pure 성능 판정은 사전 고정한 cold3/warm5/query2×5 integer microseconds를 별도로 비교한다.
+정수 cross multiplication으로 boundary rounding을 피하고 두 질문의 회귀를 평균으로 숨기지 않는다.
+성능 PASS를 correctness/권한/자원/활성화 PASS로 바꾸지 않는다. 미래 benchmark wire schema와
+실제 protected-runtime 측정은 아직 pending이다.
+
+기존 provider/trainer와 새 lease/performance gate를 함께 실행해 **169 PASS (32.28s)**.
+strict image-test mypy6파일/Ruff/format/diff PASS다. source-path 없는 초기 mypy invocation은
+정확한 경로로 수정·재실행했으며 production/source workaround를 추가하지 않았다.
+read-only `nvidia-smi`는 RTX5080/driver580.126.09/VRAM16303MiB/사용2MiB/util0%를 보고했다.
+이는 관측 시점 상태이며 CUDA 실행·capacity admission/성능증거가 아니다. 현재 모델/GPU
+추론은0회, 운영 기본값·legacy CPU 환경·model payload는 그대로다.
+
+그 뒤 native owner가 private 구현에 접근하지 않고 실행 전후 lease metadata를 확인하도록
+public nondestructive `assert_valid()`를 추가했다. close도 같은 규칙을 재사용하며 lease/권한을
+새로 취득하는 함수가 아니다. closed/drift 및 경합 유지 두 케이스를 포함한 동일 gate는
+**171 PASS (32.27s)**, strict mypy6/Ruff PASS다. 앞선169 결과와 합산하지 않는다.

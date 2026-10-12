@@ -7,7 +7,10 @@ import fcntl
 import os
 import signal
 import stat
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from eom_image_provider.provider import verify_model_revision
 
@@ -87,6 +90,9 @@ from eom_image_trainer.sdxl_training_target_runner import (
     run_sdxl_training_target_command,
 )
 
+if TYPE_CHECKING:
+    from eom_gpu_lease import SharedGpuLease
+
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
@@ -158,7 +164,21 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _lock_gpu(path: Path) -> int:
+def _lock_gpu(path: Path) -> int | SharedGpuLease:
+    if path == Path("/run/eom-gpu-lease/gpu0.lock"):
+        try:
+            from eom_gpu_lease import SharedGpuLeaseError, acquire_shared_gpu_lease
+        except ImportError as exc:
+            raise TrainingRunnerError("IMAGE_TRAINING_GPU_LOCK_INVALID") from exc
+        try:
+            return acquire_shared_gpu_lease()
+        except SharedGpuLeaseError as exc:
+            code = (
+                "IMAGE_TRAINING_GPU_BUSY"
+                if exc.code == "BUSY"
+                else "IMAGE_TRAINING_GPU_LOCK_INVALID"
+            )
+            raise TrainingRunnerError(code) from exc
     if not path.is_absolute():
         raise TrainingRunnerError("IMAGE_TRAINING_GPU_LOCK_INVALID")
     try:
@@ -204,28 +224,47 @@ def _lock_gpu(path: Path) -> int:
         raise TrainingRunnerError("IMAGE_TRAINING_GPU_LOCK_INVALID") from exc
 
 
+def _close_gpu_lock(lock: int | SharedGpuLease) -> None:
+    if isinstance(lock, int):
+        os.close(lock)
+    else:
+        try:
+            lock.close()
+        except RuntimeError as exc:
+            raise TrainingRunnerError("IMAGE_TRAINING_GPU_LOCK_INVALID") from exc
+
+
+@contextmanager
+def _sigterm_gpu_lock(path: Path, handler: Callable[[int, object], None]) -> Iterator[None]:
+    lock = _lock_gpu(path)
+    try:
+        previous = signal.getsignal(signal.SIGTERM)
+        try:
+            signal.signal(signal.SIGTERM, handler)
+            yield
+        finally:
+            signal.signal(signal.SIGTERM, previous)
+    finally:
+        # Handler lookup/install/restore failures must not suppress physical-lease release.
+        _close_gpu_lock(lock)
+
+
 def main() -> None:
     args = _parser().parse_args()
     if args.operation == "sdxl-native-lora":
         try:
             native_command = load_sdxl_native_lora_command(args.workspace, args.command)
-            lock_descriptor = _lock_gpu(args.gpu_lock)
-            previous_sigterm = signal.getsignal(signal.SIGTERM)
 
             def _cancel_native_lora(_signum: int, _frame: object) -> None:
                 raise KeyboardInterrupt
 
-            try:
-                signal.signal(signal.SIGTERM, _cancel_native_lora)
+            with _sigterm_gpu_lock(args.gpu_lock, _cancel_native_lora):
                 native_result = run_sdxl_native_lora_command(
                     workspace=args.workspace,
                     model_store_root=args.model_store_root,
                     command=native_command,
                     backend=SdxlNativeLoraBackend(),
                 )
-            finally:
-                signal.signal(signal.SIGTERM, previous_sigterm)
-                os.close(lock_descriptor)
         except (TrainingRunnerError, SdxlNativeLoraRunnerError) as exc:
             raise SystemExit(exc.code) from exc
         if native_result.status != "SUCCEEDED":
@@ -234,23 +273,17 @@ def main() -> None:
     if args.operation == "sdxl-micro-probe":
         try:
             sdxl_command = load_sdxl_micro_command(args.workspace, args.command)
-            lock_descriptor = _lock_gpu(args.gpu_lock)
-            previous_sigterm = signal.getsignal(signal.SIGTERM)
 
             def _cancel_sdxl_micro(_signum: int, _frame: object) -> None:
                 raise KeyboardInterrupt
 
-            try:
-                signal.signal(signal.SIGTERM, _cancel_sdxl_micro)
+            with _sigterm_gpu_lock(args.gpu_lock, _cancel_sdxl_micro):
                 sdxl_result = run_sdxl_micro_command(
                     workspace=args.workspace,
                     model_store_root=args.model_store_root,
                     command=sdxl_command,
                     backend=SdxlMicroLoraBackend(),
                 )
-            finally:
-                signal.signal(signal.SIGTERM, previous_sigterm)
-                os.close(lock_descriptor)
         except (TrainingRunnerError, SdxlMicroRunnerError) as exc:
             raise SystemExit(exc.code) from exc
         if sdxl_result.status != "SUCCEEDED":
@@ -273,7 +306,7 @@ def main() -> None:
                     model_resolver=verify_model_revision,
                 )
             finally:
-                os.close(lock_descriptor)
+                _close_gpu_lock(lock_descriptor)
         except (TrainingRunnerError, ScienceSubjectMultiseedRunnerError) as exc:
             raise SystemExit(exc.code) from exc
         if multiseed_result.status != "SUCCEEDED":
@@ -296,7 +329,7 @@ def main() -> None:
                     model_resolver=verify_model_revision,
                 )
             finally:
-                os.close(lock_descriptor)
+                _close_gpu_lock(lock_descriptor)
         except (TrainingRunnerError, ScienceSubjectBenchmarkRunnerError) as exc:
             raise SystemExit(exc.code) from exc
         if subject_result.status != "SUCCEEDED":
@@ -357,7 +390,7 @@ def main() -> None:
         except (TrainingRunnerError, MicroEvaluationRunnerError) as exc:
             raise SystemExit(exc.code) from exc
         finally:
-            os.close(lock_descriptor)
+            _close_gpu_lock(lock_descriptor)
         if evaluation_result.status != "SUCCEEDED":
             raise SystemExit(evaluation_result.error_code or "IMAGE_EVALUATION_EXEC_FAILED")
         return
@@ -377,7 +410,7 @@ def main() -> None:
         except (TrainingRunnerError, ScienceMicroEvaluationRunnerError) as exc:
             raise SystemExit(exc.code) from exc
         finally:
-            os.close(lock_descriptor)
+            _close_gpu_lock(lock_descriptor)
         if science_evaluation_result.status != "SUCCEEDED":
             raise SystemExit(science_evaluation_result.error_code or "IMAGE_EVALUATION_EXEC_FAILED")
         return
@@ -397,7 +430,7 @@ def main() -> None:
         except (TrainingRunnerError, ScienceCampaignMicroEvaluationRunnerError) as exc:
             raise SystemExit(exc.code) from exc
         finally:
-            os.close(lock_descriptor)
+            _close_gpu_lock(lock_descriptor)
         if campaign_evaluation_result.status != "SUCCEEDED":
             raise SystemExit(
                 campaign_evaluation_result.error_code or "IMAGE_EVALUATION_EXEC_FAILED"
@@ -407,26 +440,21 @@ def main() -> None:
         micro_command = load_micro_probe_command(args.command)
         if args.workspace.name != micro_command.training_run_id:
             raise SystemExit("IMAGE_TRAINING_WORKSPACE_ID_MISMATCH")
-        lock_descriptor = _lock_gpu(args.gpu_lock)
-        previous_sigterm = signal.getsignal(signal.SIGTERM)
 
         def _cancel_micro(_signum: int, _frame: object) -> None:
             raise KeyboardInterrupt
 
-        signal.signal(signal.SIGTERM, _cancel_micro)
-        try:
-            micro_result = run_micro_probe_command(
-                workspace=args.workspace,
-                model_store_root=args.model_store_root,
-                command=micro_command,
-                backend=Ssd1bLoraBackend(),
-                model_resolver=verify_model_revision,
-            )
-        except (TrainingRunnerError, MicroProbeRunnerError) as exc:
-            raise SystemExit(exc.code) from exc
-        finally:
-            signal.signal(signal.SIGTERM, previous_sigterm)
-            os.close(lock_descriptor)
+        with _sigterm_gpu_lock(args.gpu_lock, _cancel_micro):
+            try:
+                micro_result = run_micro_probe_command(
+                    workspace=args.workspace,
+                    model_store_root=args.model_store_root,
+                    command=micro_command,
+                    backend=Ssd1bLoraBackend(),
+                    model_resolver=verify_model_revision,
+                )
+            except (TrainingRunnerError, MicroProbeRunnerError) as exc:
+                raise SystemExit(exc.code) from exc
         if micro_result.status != "SUCCEEDED":
             raise SystemExit(micro_result.error_code or "IMAGE_TRAINING_EXEC_FAILED")
         return
@@ -434,26 +462,21 @@ def main() -> None:
         science_command = load_science_micro_probe_command(args.command)
         if args.workspace.name != science_command.training_run_id:
             raise SystemExit("IMAGE_TRAINING_WORKSPACE_ID_MISMATCH")
-        lock_descriptor = _lock_gpu(args.gpu_lock)
-        previous_sigterm = signal.getsignal(signal.SIGTERM)
 
         def _cancel_science_micro(_signum: int, _frame: object) -> None:
             raise KeyboardInterrupt
 
-        signal.signal(signal.SIGTERM, _cancel_science_micro)
-        try:
-            science_result = run_science_micro_probe_command(
-                workspace=args.workspace,
-                model_store_root=args.model_store_root,
-                command=science_command,
-                backend=Ssd1bLoraBackend(),
-                model_resolver=verify_model_revision,
-            )
-        except (TrainingRunnerError, ScienceMicroProbeRunnerError) as exc:
-            raise SystemExit(exc.code) from exc
-        finally:
-            signal.signal(signal.SIGTERM, previous_sigterm)
-            os.close(lock_descriptor)
+        with _sigterm_gpu_lock(args.gpu_lock, _cancel_science_micro):
+            try:
+                science_result = run_science_micro_probe_command(
+                    workspace=args.workspace,
+                    model_store_root=args.model_store_root,
+                    command=science_command,
+                    backend=Ssd1bLoraBackend(),
+                    model_resolver=verify_model_revision,
+                )
+            except (TrainingRunnerError, ScienceMicroProbeRunnerError) as exc:
+                raise SystemExit(exc.code) from exc
         if science_result.status != "SUCCEEDED":
             raise SystemExit(science_result.error_code or "IMAGE_TRAINING_EXEC_FAILED")
         return
@@ -461,52 +484,42 @@ def main() -> None:
         campaign_command = load_science_campaign_micro_probe_command(args.command)
         if args.workspace.name != campaign_command.training_run_id:
             raise SystemExit("IMAGE_TRAINING_WORKSPACE_ID_MISMATCH")
-        lock_descriptor = _lock_gpu(args.gpu_lock)
-        previous_sigterm = signal.getsignal(signal.SIGTERM)
 
         def _cancel_science_campaign_micro(_signum: int, _frame: object) -> None:
             raise KeyboardInterrupt
 
-        signal.signal(signal.SIGTERM, _cancel_science_campaign_micro)
-        try:
-            campaign_result = run_science_campaign_micro_probe_command(
-                workspace=args.workspace,
-                model_store_root=args.model_store_root,
-                command=campaign_command,
-                backend=Ssd1bLoraBackend(),
-                model_resolver=verify_model_revision,
-            )
-        except (TrainingRunnerError, ScienceCampaignMicroProbeRunnerError) as exc:
-            raise SystemExit(exc.code) from exc
-        finally:
-            signal.signal(signal.SIGTERM, previous_sigterm)
-            os.close(lock_descriptor)
+        with _sigterm_gpu_lock(args.gpu_lock, _cancel_science_campaign_micro):
+            try:
+                campaign_result = run_science_campaign_micro_probe_command(
+                    workspace=args.workspace,
+                    model_store_root=args.model_store_root,
+                    command=campaign_command,
+                    backend=Ssd1bLoraBackend(),
+                    model_resolver=verify_model_revision,
+                )
+            except (TrainingRunnerError, ScienceCampaignMicroProbeRunnerError) as exc:
+                raise SystemExit(exc.code) from exc
         if campaign_result.status != "SUCCEEDED":
             raise SystemExit(campaign_result.error_code or "IMAGE_TRAINING_EXEC_FAILED")
         return
     training_command = load_training_command(args.command)
     if args.workspace.name != training_command.training_run_id:
         raise SystemExit("IMAGE_TRAINING_WORKSPACE_ID_MISMATCH")
-    lock_descriptor = _lock_gpu(args.gpu_lock)
-    previous_sigterm = signal.getsignal(signal.SIGTERM)
 
     def _cancel(_signum: int, _frame: object) -> None:
         raise KeyboardInterrupt
 
-    signal.signal(signal.SIGTERM, _cancel)
-    try:
-        training_result = run_training_command(
-            workspace=args.workspace,
-            model_store_root=args.model_store_root,
-            command=training_command,
-            backend=Ssd1bLoraBackend(),
-            model_resolver=verify_model_revision,
-        )
-    except TrainingRunnerError as exc:
-        raise SystemExit(exc.code) from exc
-    finally:
-        signal.signal(signal.SIGTERM, previous_sigterm)
-        os.close(lock_descriptor)
+    with _sigterm_gpu_lock(args.gpu_lock, _cancel):
+        try:
+            training_result = run_training_command(
+                workspace=args.workspace,
+                model_store_root=args.model_store_root,
+                command=training_command,
+                backend=Ssd1bLoraBackend(),
+                model_resolver=verify_model_revision,
+            )
+        except TrainingRunnerError as exc:
+            raise SystemExit(exc.code) from exc
     if training_result.status != "SUCCEEDED":
         raise SystemExit(training_result.error_code or "IMAGE_TRAINING_EXEC_FAILED")
 
