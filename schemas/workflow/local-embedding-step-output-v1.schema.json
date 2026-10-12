@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/local-embedding-step-output/1.0",
+  "title": "Fixed native Workflow completion pointer carrier 1.0",
+  "description": "Pointer-only native step carrier. The execution result schema remains worker semantics; the separate receipt schema pins historical completion provenance, never authority or a current head.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "purpose",
+    "workflow_id",
+    "step_run_id",
+    "step_key",
+    "attempt",
+    "receipt_owner_job_id",
+    "execution_result_schema",
+    "receipt_schema",
+    "receipt",
+    "receipt_sha256",
+    "output_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-embedding-step-output/1.0"
+    },
+    "purpose": {
+      "const": "LOCAL_EMBEDDING"
+    },
+    "workflow_id": {
+      "type": "string",
+      "pattern": "^workflow_[0-9a-f]{32}$"
+    },
+    "step_run_id": {
+      "type": "string",
+      "pattern": "^steprun_[0-9a-f]{32}$"
+    },
+    "step_key": {
+      "const": "encode_batch"
+    },
+    "attempt": {
+      "type": "integer",
+      "const": 1
+    },
+    "receipt_owner_job_id": {
+      "type": "string",
+      "pattern": "^job_[0-9a-f]{32}$"
+    },
+    "execution_result_schema": {
+      "const": "incremental-embedding-result@1.0"
+    },
+    "receipt_schema": {
+      "const": "eom://schemas/workflow/local-embedding-workflow-receipt/1.0"
+    },
+    "receipt": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+        },
+        {
+          "properties": {
+            "member_path": {
+              "const": "receipt.json"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/workflow/local-embedding-workflow-receipt/1.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            }
+          }
+        }
+      ]
+    },
+    "receipt_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "output_sha256": {
+      "$ref": "#/$defs/hash"
+    }
+  },
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

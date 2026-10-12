@@ -558,3 +558,16 @@ partial frame·EOF·잘못된 hash/order와 실제 독립 unprivileged process �
 strict mypy4·Ruff/format4 PASS다. 독립 peer channel **53 PASS (6.69s)**는 그 subset이므로
 합산하지 않는다. 최초 추가 gate는 잘못된 test filename으로0개 실행됐고 올바른 고정 목록의
 위304개를 다시 실행했다. 모델/GPU 실행0, 실제 benchmark/기본 활성화 PENDING을 유지한다.
+
+## native Workflow 완료 receipt protocol — 2026-10-12 UTC
+
+새 step-output과 Workflow receipt의 두 closed2020-12 schema를 먼저 추가한 뒤 frozen
+models/parser를 구현했다. step은8KiB pointer carrier만 보관하고,64KiB registration receipt는
+별도 owner Artifact를 참조한다. Workflow/step/owner Job·source-plan·등록 command/result·
+raw/semantic hash를 구분하며, 과거 receipt의 as-of 관측을 현재 권한/인덱스 상태로 취급하지 않는다.
+Codex 역할 결과 union이나 기존 네 admission schema의 bytes/hash는 변경하지 않았다.
+
+root는 직접 schema 검증에도 기존 depth/object/collection guard를 직렬화 전에 적용하도록
+보강했다. 최종 독립 eight-suite **390 PASS (46.84s)**, strict mypy5·Ruff/format5 PASS다.
+이전382/95와 겹치므로 합산하지 않는다. 이는 protocol source gate이며 Runner dispatcher,
+실제 receipt 게시·session continuation·migration0053·model/GPU 실행은 아직 후속 범위다.

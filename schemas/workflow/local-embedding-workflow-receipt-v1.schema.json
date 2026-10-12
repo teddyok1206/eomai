@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/local-embedding-workflow-receipt/1.0",
+  "title": "Fixed native Workflow historical registration receipt 1.0",
+  "description": "One bounded canonical receipt Artifact, not an incremental worker result or transferable grant. Registration current/replay observations are historical as of registration_observed_at; original launch association is not current recovery authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "purpose",
+    "workflow_id",
+    "workflow_definition_sha256",
+    "workflow_request_sha256",
+    "source_plan",
+    "source_plan_sha256",
+    "step_run_id",
+    "step_key",
+    "attempt",
+    "receipt_owner_job_id",
+    "execution_result_schema",
+    "native_launch_job_id",
+    "launch_association_sha256",
+    "registration_command",
+    "registration_result",
+    "registration_observed_at",
+    "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-embedding-workflow-receipt/1.0"
+    },
+    "purpose": {
+      "const": "LOCAL_EMBEDDING"
+    },
+    "workflow_id": {
+      "type": "string",
+      "pattern": "^workflow_[0-9a-f]{32}$"
+    },
+    "workflow_definition_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "workflow_request_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "source_plan": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+        },
+        {
+          "properties": {
+            "member_path": {
+              "const": "source-plan.json"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/workflow/local-embedding-source-plan/1.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            }
+          }
+        }
+      ]
+    },
+    "source_plan_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "step_run_id": {
+      "type": "string",
+      "pattern": "^steprun_[0-9a-f]{32}$"
+    },
+    "step_key": {
+      "const": "encode_batch"
+    },
+    "attempt": {
+      "type": "integer",
+      "const": 1
+    },
+    "receipt_owner_job_id": {
+      "type": "string",
+      "pattern": "^job_[0-9a-f]{32}$"
+    },
+    "execution_result_schema": {
+      "const": "incremental-embedding-result@1.0"
+    },
+    "native_launch_job_id": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^job_[0-9a-f]{32}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "launch_association_sha256": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "registration_command": {
+      "$ref": "eom://schemas/knowledge/embedding-registry/1.0#/$defs/command"
+    },
+    "registration_result": {
+      "$ref": "eom://schemas/knowledge/embedding-registry/1.0#/$defs/result"
+    },
+    "registration_observed_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$|\\+00:00$"
+    },
+    "receipt_sha256": {
+      "$ref": "#/$defs/hash"
+    }
+  },
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "native_launch_job_id": {
+            "type": "null"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "launch_association_sha256": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "launch_association_sha256": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  ]
+}

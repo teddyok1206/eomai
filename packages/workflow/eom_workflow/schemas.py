@@ -662,6 +662,95 @@ def validate_local_embedding_admission_message(
         raise LocalEmbeddingAdmissionContractError("LOCAL_EMBEDDING_CONTRACT_INVALID") from None
 
 
+LOCAL_EMBEDDING_RECEIPT_SCHEMA_RESOURCES = (
+    (
+        "step-output",
+        "local-embedding-step-output-v1.schema.json",
+        "eom://schemas/workflow/local-embedding-step-output/1.0",
+        "sha256:369ac4f4d72a55b7b19483f3a2dc8b52ad37bf35c590aaf0487dd50154d8a772",
+    ),
+    (
+        "workflow-receipt",
+        "local-embedding-workflow-receipt-v1.schema.json",
+        "eom://schemas/workflow/local-embedding-workflow-receipt/1.0",
+        "sha256:16a18269d60ef05e2868b96682af48d9ea0c4a54a766c49dea46f9750fb3bdc3",
+    ),
+)
+type LocalEmbeddingReceiptSchemaName = Literal["step-output", "workflow-receipt"]
+
+
+@cache
+def _local_embedding_receipt_schema(name: LocalEmbeddingReceiptSchemaName) -> dict[str, Any]:
+    try:
+        _, filename, schema_id, expected = next(
+            entry for entry in LOCAL_EMBEDDING_RECEIPT_SCHEMA_RESOURCES if entry[0] == name
+        )
+        with WORKFLOW_RESOURCE_ROOT.joinpath(filename).open("rb") as stream:
+            payload = stream.read(64 * 1024 + 1)
+        if not 0 < len(payload) <= 64 * 1024 or sha256_bytes(payload) != expected:
+            raise ValueError("native receipt installed schema identity differs")
+        raw = json.loads(payload)
+        if not isinstance(raw, dict) or raw.get("$id") != schema_id:
+            raise ValueError("native receipt installed schema root differs")
+        Draft202012Validator.check_schema(raw)
+        return raw
+    except Exception:
+        raise LocalEmbeddingAdmissionContractError("LOCAL_EMBEDDING_SCHEMA_UNAVAILABLE") from None
+
+
+def load_local_embedding_receipt_schema(name: LocalEmbeddingReceiptSchemaName) -> dict[str, Any]:
+    """Two separate receipt resources; released four-family/role inventories are unchanged."""
+    return copy.deepcopy(_local_embedding_receipt_schema(name))
+
+
+@cache
+def _local_embedding_receipt_schema_registry() -> Registry[Any]:
+    return _local_embedding_admission_schema_registry().with_resources(
+        (
+            schema_id,
+            Resource.from_contents(
+                _local_embedding_receipt_schema(cast(LocalEmbeddingReceiptSchemaName, name))
+            ),
+        )
+        for name, _, schema_id, _ in LOCAL_EMBEDDING_RECEIPT_SCHEMA_RESOURCES
+    )
+
+
+def local_embedding_receipt_schema_registry() -> Registry[Any]:
+    """Public isolated reference registry, with no remote schema retrieval."""
+    return local_embedding_admission_schema_registry().with_resources(
+        (
+            schema_id,
+            Resource.from_contents(
+                load_local_embedding_receipt_schema(cast(LocalEmbeddingReceiptSchemaName, name))
+            ),
+        )
+        for name, _, schema_id, _ in LOCAL_EMBEDDING_RECEIPT_SCHEMA_RESOURCES
+    )
+
+
+def validate_local_embedding_receipt_message(
+    name: LocalEmbeddingReceiptSchemaName, value: object
+) -> None:
+    """Closed integer-only frame and fixed carrier/receipt cap, never owner admission."""
+    try:
+        document = _native_contract_values(value)
+        maximum = 8 * 1024 if name == "step-output" else 64 * 1024
+        if len(canonical_json_bytes(document)) > maximum:
+            raise ValueError("native receipt byte bound differs")
+        validator = Draft202012Validator(
+            _local_embedding_receipt_schema(name),
+            registry=_local_embedding_receipt_schema_registry(),
+            format_checker=FormatChecker(),
+        )
+        if not validator.is_valid(document):
+            raise ValueError("native receipt closed schema differs")
+    except LocalEmbeddingAdmissionContractError:
+        raise
+    except Exception:
+        raise LocalEmbeddingAdmissionContractError("LOCAL_EMBEDDING_CONTRACT_INVALID") from None
+
+
 def load_json_schema(resource: Traversable, logical_name: str) -> dict[str, Any]:
     try:
         raw: object = json.loads(resource.read_text(encoding="utf-8"))
