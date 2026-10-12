@@ -495,3 +495,17 @@ production routine·role·operator·schema에는 변경이 없다.
 앞의21:21 기록의 cleanup PENDING은 이 후속 evidence로 닫힌다. 이전16/8/6/source suite는
 역할을 구분하며 중복 source PASS와 합산하지 않는다. 모델·GPU 실행0, protected runtime/
 native launcher/default activation PENDING, 전체 목표 ACTIVE다.
+
+## 실제 비교에 사용할 bounded row-ranking source — 2026-10-12 UTC
+
+기존 scalar cosine/`math.fsum`/clamp를 같은 public 함수로 공유하고, actual profile/view/text
+ref를 유지하는 별도 ≤18-row ranking seam을 검토했다. query의 모든 view를 제외하고
+exact6→5 profile coverage, stable unrounded order와 CPU complete-span≤4e-5 cluster를 검증한다.
+transitive close-score chain으로 큰 순위 차이를 허용하지 않는다. raw vector/hash/space,
+실제 CPU receipt의 pre-CUDA sealing과 전체 numerical 비교는 후속 owner 경계다.
+
+root source/legacy6-suite **408 PASS (8.36s)**, strict mypy3·Ruff/format3 PASS,
+독립 peer read-only review도 완료했다. 첫 test collection의 잘못된 `profile_key` import와
+fixture implicit re-export strict 오류를 수정한 뒤 이 최종 source gate를 실행했다.
+이는 추가 모델·GPU·Artifact 실행이나 default 활성화가 아니며 기존 installed HOST_L2
+bytes/proof를 변경하지 않는다. 새 runtime의 관련 source SHA는 실제 설치 후 별도 관측한다.

@@ -4,7 +4,8 @@
 This is the next concrete route to the requested actual benchmark and, if CUDA is superior and
 all other gates pass, actual default activation. A proposal or performance verdict is not completion.
 Only the additive schema/mirror/frozen values/registration and synthetic contract tests now exist.
-No worker/owner/ranker, migration, install, model/GPU invocation or runtime change is made here.
+No worker/owner, migration, install, model/GPU invocation or runtime change is made here.
+The small source-only real-row ranking seam below is now implemented; it is not an executed benchmark.
 
 Authoritative criteria are [GPU runtime design §§6–8](INCREMENTAL_EMBEDDING_GPU_RUNTIME_DESIGN.md#6-실행-전에-pin하는-작은-benchmark-protocol)
 and the existing pure `embedding_device_comparison.compare_embedding_device_performance`.
@@ -348,3 +349,27 @@ and integer-only decisions, duplicate/nonfinite/huge-integer JSON, pre-allocatio
 and copied/constructed raw bool/extra/cycle/depth/container/node rejection before serialization,
 including direct exported-hash/projection/serializer helper pre-dump guards.
 All fixtures are synthetic metadata; no real source grant, installed proof, model or device was used.
+
+### Shared scalar and real-row ranking source seam
+
+`eom_catalog_service.inference_transfer_vectors.normalized_cosine_similarity` now owns the exact
+existing `math.fsum`/clamp scalar rule. The historical profile ranker calls this same expression;
+its normalization, profile ordering and returned shape are unchanged. New
+`embedding_benchmark_ranking.rank_benchmark_rows` validates at most18 real DOCUMENT refs/vectors,
+excludes all views of the exact QUERY profile and retains all15 maximum remaining rows, not fake
+profile IDs or a top-K-only shortcut. Stable ties add view/text hash after the unchanged profile key.
+
+The query and candidate vectors must already be finite, 1024-dimensional unit vectors; this leaf
+does not repair them. Raw f32 SHA/bytes and space/provenance remain the Artifact owner's mandatory
+input-resolution checks. Exactly six distinct profile identities before self exclusion and five
+after it are required. Maps/sets protect row/view uniqueness in O(N); exact scoring is O(Nd),
+sorting O(N log N). `cluster_cpu_benchmark_rows` groups descending scores by each cluster's full
+max-minus-min span≤4e-5, never a transitive close-score chain. Exact ties retain the stable row key.
+
+These are frozen local values, not new lifecycle entities, cross-service grants or JSON float
+evidence. The owner must still seal the actual CPU float64 score/cluster receipt before CUDA and
+validate all repetitions, rank decisions, timings, resource/isolation/cleanup gates. No new
+dependency, DB/index, worker transport, model run, Artifact or default activation is introduced.
+The HOST_L2 module's source SHA changes in a successor runtime descriptor; historical installed
+bytes/proofs are not edited or silently treated as the new proof. This is a narrow supported reuse
+seam, not a second encoder/ranking implementation or completed device comparator.

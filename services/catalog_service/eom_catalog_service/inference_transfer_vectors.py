@@ -30,6 +30,11 @@ def normalized_vector(vector: tuple[float, ...], dimension: int) -> tuple[float,
     return result
 
 
+def normalized_cosine_similarity(query: tuple[float, ...], vector: tuple[float, ...]) -> float:
+    """One exact scalar rule; callers validate and normalize at their input boundary."""
+    return max(-1.0, min(1.0, math.fsum(a * b for a, b in zip(query, vector, strict=True))))
+
+
 def rank_normalized_vectors(
     query: tuple[float, ...],
     candidates: tuple[tuple[InferenceTransferProfilePointer, tuple[float, ...]], ...],
@@ -40,7 +45,7 @@ def rank_normalized_vectors(
     scores = tuple(
         ScoredInferenceTransferProfile(
             pointer,
-            max(-1.0, min(1.0, math.fsum(a * b for a, b in zip(query, vector, strict=True)))),
+            normalized_cosine_similarity(query, vector),
         )
         for pointer, vector in candidates
     )
