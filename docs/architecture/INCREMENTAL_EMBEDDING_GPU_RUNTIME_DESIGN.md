@@ -1,0 +1,324 @@
+# 증분 임베딩의 CPU/GPU 비교·격리 runtime·기본 device 전환
+
+작성일: 2026-10-12 UTC. 조사 기준 source: `165b0214a8c8812fe5e4d24e5a8b266ea345dbb6`.
+상태: **구현 설계 / NOT_INSTALLED / NOT_ACTIVE / NOT_EVALUATED**.
+이 문서는 모델·wheel 설치, 실제 인코딩, 운영 권한·DB 변경이나 GPU 활성화의 증거가 아니다.
+[상위 설계 §8.1](SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md#81-cpugpu-비교와-기본-device-결정--사용자-추가-요청)과
+[native 실행 경계](INCREMENTAL_EMBEDDING_EXECUTION_BOUNDARY.md)를 구체화한다.
+GPU가 동일 입력 비교에서 우수하고 모든 gate를 통과하면 **기본 활성화까지가 목표**다.
+비교만 완료한 상태를 요청 전체 완료로 보고하지 않는다.
+
+## 1. 현재 근거와 변경하지 않을 경계
+
+읽기 전용 inventory에서 전달된 장치는 RTX 5080, VRAM 16,303 MiB, driver 580.126.09이며
+관측 시점에는 idle이었다. 이 수치는 계획 입력이지 CUDA 호환성·전용 capacity 승인 증거가
+아니다. 실제 실행 직전에 UUID/PCI identity, compute capability, driver, 장치 node 및 현재
+점유를 다시 확인한다. `nvidia-smi`의 CUDA 표시는 설치된 PyTorch CUDA build를 증명하지 않는다.
+
+| 현재 source 경계 | 확인한 동작 | GPU 구현의 책임 |
+|---|---|---|
+| `services/catalog_service/eom_catalog_service/local_embedding_adapter.py` | exact runtime versions 확인, CPU FP32/eager/eval/inference mode, 무절단, CPU pooling 및 host L2 | 별도 admitted CUDA 분기; 현재 CPU 의미 보존 |
+| `packages/catalog_contracts/eom_catalog_contracts/inference_transfer_embedding.py` | `CPU/CUDA`, `FLOAT32`, TF32 false, execution-runtime hash가 space에 포함됨 | installed runtime과 hash를 실제 owner가 검증; DTO만으로 활성화 금지 |
+| `services/orchestrator/eom_orchestrator/inference_transfer_cpu_handoff.py` | root staging, ancestor FD, O_EXCL/O_NOFOLLOW, owner marker, canonical input | indexing/GPU successor의 고정 branch와 별도 staging root |
+| `services/orchestrator/eom_orchestrator/inference_transfer_cpu_systemd.py` | exact unit/interpreter, no override/drop-in, invocation/종료 확인, uncertain guard | 동일한 고정 launcher pattern의 새 native CUDA leaf |
+| `services/catalog_service/eom_catalog_service/inference_transfer_cpu_verifier.py` 및 `services/orchestrator/eom_orchestrator/inference_transfer_cpu_installation.py` | runtime 보호·RECORD/pip check·UID/capability·파일/소켓/network denial | CUDA unit의 별도 verifier와 실제 device allow/deny probe |
+| `services/image_provider/eom_image_provider/provider.py:acquire_gpu_lease()` | same-UID parent 0700/file 0600, nonblocking flock | 아래 공유 physical lease로 명시적 successor |
+| `services/image_trainer/eom_image_trainer/cli.py:_lock_gpu()` | 별도의 same-UID image flock 진입점 | provider와 함께 같은 physical inode로 전환 |
+
+2026-10-12의 read-only `getent`와 installed fixed-template instance의 `systemctl show`에서도
+provider/trainer의 실제 User/Group은 `eom-image`, SupplementaryGroups/DropInPaths는 empty,
+FragmentPath는 각각 `/etc/systemd/system/eom-image-provider@.service`와
+`/etc/systemd/system/eom-image-trainer@.service`였다. 이는 두 entry의 identity 관측이며
+전체 GPU unit inventory·privilege acceptance 완료는 아니다.
+
+다음은 immutable baseline/history로 보존한다.
+
+- `/opt/eom/conda/envs/eom-embedding-experiment`, 기존 CPU worker 계정·unit·verifier·manifest.
+- 기존 E5/BGE weights, tokenizer와 모든 member SHA, upstream revision, CPU 결과와 실패 이력.
+- API/core, Python 3.11 image/trainer runtime. 이들을 업그레이드하거나 CUDA embedding을
+  실행하기 위해 Catalog/core ML dependency를 추가하지 않는다.
+- CPU experiment 1.0은 ranking 실험이며 vector output 계약이 아니다. GPU indexing을
+  기존 experiment 입력에 가짜 query/candidate로 포장하지 않는다.
+
+## 2. 패키지 선택: 같은 PyTorch release의 명시적 CUDA build
+
+후보는 **Python 3.12.13 / Linux x86_64 / `torch 2.7.1+cu128`**다. CPU baseline의
+`2.7.1+cpu`와 upstream PyTorch release를 맞추고, 모델·tokenizer library version은 그대로
+유지한다. 임의 최신 버전이나 image runtime의 Python 3.11 interpreter를 재사용하지 않는다.
+PyTorch의 2.7 발표는 Blackwell과 CUDA 12.8 wheel 지원을 명시하고, 공식 이전 버전 안내는
+2.7.1의 cu128 build를 제공한다. 이는 후보 선택의 근거이며 이 host의 실행 PASS는 아니다.
+[PyTorch 2.7 발표](https://pytorch.org/blog/pytorch-2-7/),
+[공식 이전 버전](https://pytorch.org/get-started/previous-versions/).
+
+공식 stable [cu128 wheel index](https://download.pytorch.org/whl/cu128/torch/)에서 확인한 pin:
+
+```text
+torch-2.7.1+cu128-cp312-cp312-manylinux_2_28_x86_64.whl
+https://download-r2.pytorch.org/whl/cu128/torch-2.7.1%2Bcu128-cp312-cp312-manylinux_2_28_x86_64.whl
+SHA-256 0b64f7d0a6f2a739ed052ba959f7b67c677028c9566ce51997f9f90fe573ddaa
+```
+
+small wheel metadata의 SHA는
+`e41a1ec38ccc8170c228b57b1432cc7ae03718dd69bb0a72d1fc32707dde1765`다.
+[공식 wheel metadata](https://download-r2.pytorch.org/whl/cu128/torch-2.7.1%2Bcu128-cp312-cp312-manylinux_2_28_x86_64.whl.metadata)는
+CUDA runtime 12.8.57, NVRTC/NVJITLINK 12.8.61, cuBLAS 12.8.3.14, cuDNN 9.7.1.26,
+Triton 3.3.1 등 exact transitive 요구를 명시한다. 설치 단계에서는 **모든** 해당 dependency의
+exact version·wheel URL·SHA를 별도 lock으로 고정하고 `pip check`/RECORD를 검증한다.
+이 문서는 dependency wheel의 hash를 조사·승인했다고 주장하지 않는다.
+
+`transformers==4.56.2`, `safetensors==0.6.2`, `tokenizers==0.22.2`와 기존 CPU lock의
+일반 transitive pin을 유지한다. Torch CUDA dependency는 장치 실행의 필수 library라는
+이유를 lock에 기록하며, vision/audio/Diffusers/Accelerate/SentenceTransformers나 compile
+extras는 추가하지 않는다. wheel이 Triton을 요구하는 것과 `torch.compile` 사용은 별개다.
+설치 전 ABI/GLIBC·disk/RAM·driver 및 실제 build arch list를 검증한다. 드라이버 변경,
+package flavor 자동 변경이나 toolkit system-wide 설치로 실패를 우회하지 않는다.
+
+## 3. 모델 payload는 하나, runtime bundle과 numerical space는 별개
+
+현재 BGE pin의 authoritative source는 `scripts/embedding/_install_experiment_snapshot.py`의
+`reviewed_bge_model_spec()`이다. 이 코드의 upstream revision은
+`9a0624b896d81da7492a910ffa53731274b6cf3d`, maximum tokens는 **2048**이다.
+초기 후보 문서의 다른 upstream revision이나 모델 광고 상한8192로 바꾸지 않는다.
+실행 시 installed manifest를 이 source pin과 공식 resolver로 재검증한다.
+
+`LocalEmbeddingModelSpec/1.0`에는 CPU package flavor가 포함되고, 현 resolver는 모델 revision
+directory의 `manifest.json == spec`를 요구한다. 따라서 `2.7.1+cpu` manifest로 cu128 실행을
+성공 처리하거나 기존 manifest를 수정해서는 안 된다. 단순 CUDA spec을 새 directory에
+복제하는 방법도 canonical weights를 중복시키며 hardlink는 현재 nlink=1 invariant에 어긋난다.
+
+최소 successor는 **작은 runtime bundle manifest가 기존 immutable model payload를 참조**하게
+하는 것이다. JSON Schema2020-12를 먼저 정의한 뒤 frozen Pydantic/owner resolver를 추가한다.
+
+- logical model ID, legacy payload revision/manifest SHA, 새 runtime-bundle revision/manifest SHA를
+  구분한다. successor는 legacy bundle predecessor와 `model payload pointer`를 pin한다.
+- payload pointer에는 source model ID/revision, schema/version, expected manifest/file-set SHA가
+  있으며 owner 설정으로 storage location을 해석한다. 모델 입력에 filesystem path를 받지 않는다.
+- legacy snapshot의 파일 list·upstream/config/tokenizer/weights SHA를 정확히 검증하고 CUDA
+  bundle도 같은 list를 참조한다. bytes를 복사하거나 두 canonical payload를 만들지 않는다.
+- library pins는 새 bundle에 cu128로 명시한다. legacy CPU resolver/1.0 contract는 보존하며
+  GPU payload-resolution branch는 exact successor로만 입장시킨다.
+- 현재 EmbeddingSpace1.0의 CPU/CUDA enum만으로 이 payload-pointer successor가 지원된다고
+  주장하지 않는다. bundle/schema closure가 달라지면 이를 참조하는 space/input의 최소
+  compatible successor도 먼저 정의하고, released1.0 bytes·CPU 이력을 재해석하지 않는다.
+
+`execution_runtime_sha256`는 canonical typed numerical descriptor의 hash다. descriptor는
+encoder 구현/host L2 recipe의 관련 installed file SHA, Python/architecture, torch wheel/build
+SHA 및 CUDA/cuDNN·관련 numeric library versions/hashes, Transformers/tokenizers/safetensors/
+NumPy pins, device model/compute capability와 driver pin, eager attention·FP32·precision flags,
+deterministic/CUBLAS 설정, batch/padding/thread recipe를 포함한다. GPU UUID/PCI identity는
+resource admission에 별도로 pin한다. 모델 payload·prefix/pooling/차원/정규화/overflow는
+model/space에서 pin한다. **전체 EOM Git commit·전체 platform wheel hash·무관한 GUI/Slack
+변경은 numerical fingerprint에 포함하지 않는다.** source/installed release audit는 별도다.
+같은 descriptor를 공유하는 unrelated release로 모든 vector를 재인코딩하지 않는다.
+
+## 4. 최소 공유 physical-GPU lease와 image migration
+
+기존 `/var/lib/eom-image/gpu0.lock`을 CUDA embedding 계정에 그대로 전달하면 same-UID
+검증과 parent0700에서 실패한다. image private directory를 group-writable하게 만들거나
+embedding을 `eom-image` UID로 실행하면 모델/workspace 경계가 무너진다. root supervisor만
+legacy flock를 잡는 안도 supervisor crash 시 GPU child가 살아 있는데 lock가 해제될 수 있어
+단순 wrapper로 채택하지 않는다.
+
+선택안은 기존 nonblocking flock를 **한 root-provisioned local inode**로 옮기는 작은
+physical-lease adapter다. 새 broker/daemon/DB queue/GPU registry는 만들지 않는다.
+
+```text
+/run/eom-gpu-lease/            root:eom-gpu-lease 0750, local tmpfs only
+/run/eom-gpu-lease/gpu0.lock   root:eom-gpu-lease 0640, regular/nlink=1
+```
+
+- root installer가 한 번 생성한다. 실행 중 unlink/replace/recreate하지 않는다. GPU0은
+  admitted physical UUID/PCI mapping의 고정 resource이며 caller/model이 lock path를 고르지 않는다.
+- GPU unit에만 `SupplementaryGroups=eom-gpu-lease`를 고정한다. 계정의 global group membership,
+  sudo/Docker/`eom` group은 추가하지 않는다. CPU historical unit/계정에는 아무 변경도 없다.
+  이 좁은 per-unit read/lock 자격도 **설치·privilege-review gate**이며 이 문서의 권한 부여가 아니다.
+- adapter는 root-owned non-writable ancestors, exact parent/file UID/GID/mode, regular/nlink=1,
+  named/FD inode identity 및 local filesystem을 검증한다. O_RDONLY|O_NOFOLLOW|O_CLOEXEC로
+  기존 파일만 열고 `LOCK_EX|LOCK_NB`를 잡는다. worker O_CREAT/fchmod/write 권한은 없다.
+  Linux local flock는 read-only FD에도 exclusive lock를 허용한다. NFS/SMB는 제외한다.
+  [Linux flock API](https://man7.org/linux/man-pages/man2/flock.2.html).
+- 이 공용 OS adapter는 Python3.11/3.12에서 사용 가능한 stdlib-only 작은 infrastructure
+  package로 추출한다. image provider의 public `acquire_gpu_lease()`는 exception-label wrapper로
+  유지하고 trainer의 `_lock_gpu()`도 같은 adapter를 사용한다. embedding은 image service나
+  domain private module을 import하지 않는다. 실제 image/trainer/embedding 세 소비자가 있으므로
+  이 추출은 공통 boundary이며 범용 plugin/handler framework가 아니다.
+- lease는 CUDA 초기화/model load 전에 취득하고 kernels 동기화·모델/tensor teardown과 unit
+  종료까지 유지한다. 긴 GPU batch를 preempt하지 않으며 lease 중 다시 owner queue를 기다리지
+  않는다. guard FD는 main unit lifecycle에 묶고 GPU-using descendant가 살아 있는 동안 닫거나
+  LOCK_UN 하지 않는다. 비정상 종료/남은 cgroup/driver cleanup은 owner가 uncertain으로 fence하고
+  종료·GPU resource 회수를 확인하기 전 image/embedding 재입장을 허용하지 않는다.
+- native embedding은 CUDA를 쓰는 subprocess/daemon을 만들지 않는 single-process leaf다.
+  CPU tokenizer thread와 CUDA GPU-using descendant를 구분한다. fork/dup는 같은 flock open-file
+  description을 공유하지만 O_CLOEXEC FD는 exec 뒤 남지 않으므로, exec child가 GPU를 계속
+  쓸 수 있는 구조는 이 profile에 허용하지 않는다. 이미지/trainer의 실제 subprocess 여부도
+  조사하고 해당 lifecycle의 FD retention·cgroup cleanup을 검증한 뒤 전환한다.
+- flock는 물리적 상호배제일 뿐 권한·FIFO·priority·VRAM hard quota가 아니다. 작업은 여전히
+  Orchestrator admission/기존 queue를 거친다. 실제 image production task를 먼저 입장시키고
+  embedding은 concurrency1, 작은 batch, bounded 비선점 lease를 사용한다. Codex Worker slot이나
+  `CodexCapacityController`의 image-role GPU flag로 native embedding 권한을 가장하지 않는다.
+
+**migration gate:** provider CLI, pair/native-geometry/extraction entry, trainer CLI와 모든 설치된
+GPU template/drop-in/direct operator entry를 inventory한다. 입장을 drain하고 active/uncertain
+unit 및 legacy lock holder가 없음을 확인한 상태에서 adapter/units/lock policy를 함께 전환한다.
+source-only unit 수정이나 서로 다른 두 lock를 혼용한 배포는 불합격이다. legacy0700/0600
+branch와 old inode는 이력/rollback용으로 보존하되 active profile은 shared 하나만 허용한다.
+trainer/provider/embedding의 상호 경합, 프로세스 crash/timeout/잔존 child, inode 교체·symlink·
+metadata mismatch 및 old entry 거부를 회귀한다. 이 gate가 닫히기 전 GPU 기본값은 금지다.
+
+## 5. 별도 protected CUDA 실행 leaf
+
+제안 prefix는 `/opt/eom/conda/envs/eom-embedding-cuda`, worker는 `eom-embedding-cuda`,
+staging은 `/run/eom-incremental-embeddings`다. 이름은 새 fixed runtime 설계이며 현재 존재나
+activation의 주장이 아니다. 기존 CPU prepare/stdio와 같은 root-staged regular FD 입력/출력,
+O_EXCL/immutable invocation·uncertain 규칙을 재사용하고 indexing의 exact 계약만 허용한다.
+
+CUDA unit은 `NoNewPrivileges=yes`, capability/ambient empty, private network/tmp,
+ProtectSystem=strict/ProtectHome, AF_UNIX only, read-only runtime/model pointer mounts,
+DB/NAS/repository/auth/other worker homes/image models/owner staging/systemd/Docker socket denial을
+유지한다. CPU의 `PrivateDevices=yes`를 몰래 수정하지 않는다. 새 CUDA unit만
+`PrivateDevices=no`, `DevicePolicy=closed`와 `/dev/nvidia0`, `/dev/nvidiactl`,
+`/dev/nvidia-uvm`, `/dev/nvidia-uvm-tools`의 exact rw allow를 사용한다. 다른 GPU/render/device를
+막고 character node identity와 실제 DAC open을 검사한다. node access에 필요한 권한을 확인하지
+않고 video/render/eom group을 추가하지 않는다. GPU-visible environment는 owner의 pinned
+UUID→cuda:0 mapping이며 `cuda.is_available()`는 fallback selector가 아니다.
+
+초기 BGE resource profile 제안은 CPUQuota400%, threads4, TasksMax64, RAM6GiB,
+VRAM measured cap8GiB, single batch-size4, one invocation180s다. VRAM8GiB는 admission/측정
+gate이지 systemd MemoryMax로 강제되는 GPU quota라고 주장하지 않는다. 공개 source의 2048-token
+상한까지 별도 long-input capacity probe를 통과해야 이 전체 bound를 활성화할 수 있다.
+OOM/driver failure로 batch·dtype·token ceiling을 자동 축소하지 않는다.
+
+CUDA backend는 legacy와 동일한 FP32 parameter/buffer, eager attention, eval/inference mode,
+exact tokenizer IDs/mask/padding, pooling을 사용한다. batch tensor만 cuda:0로 옮기고 pooled
+FP32 결과를 host로 가져와 기존 host L2 recipe와 f32 codec을 적용한다. autocast/fp16/bf16,
+TF32, quantization, Flash/SDPA, torch.compile, token truncation은 없다.
+`set_float32_matmul_precision("highest")`, matmul/cuDNN TF32 false, cuDNN benchmark false,
+deterministic algorithms true와 `CUBLAS_WORKSPACE_CONFIG=:4096:8`을 고정·read-back한다.
+지원되지 않는 deterministic kernel은 실패이며 warn-only로 우회하지 않는다.
+[PyTorch precision](https://docs.pytorch.org/docs/2.7/notes/cuda.html#tensorfloat-32-tf32-on-ampere-and-later-devices),
+[deterministic 설정](https://docs.pytorch.org/docs/2.7/generated/torch.use_deterministic_algorithms.html).
+
+## 6. 실행 전에 pin하는 작은 benchmark protocol
+
+benchmark JSON Schema2020-12/frozen request·result를 먼저 정의한다. actor 권한은 owner가
+설정하며 worker가 role/DB URI/원본 path를 받거나 정본 eligibility를 추정하지 않는다.
+성능 gate를 아래 값으로 사전 고정하고 result를 본 뒤 기준/표본/반복을 바꾸지 않는다.
+변경이 필요하면 새 benchmark recipe revision과 승인으로 재시작하며 원 실패를 보존한다.
+
+| 구분 | 고정 workload/반복 | 측정과 통과 조건 |
+|---|---|---|
+| synthetic | public synthetic 8행: 짧은 한국어/수식·단위·부정/동일문장 duplicate/빈·overflow negative; valid batch1/4 | tokenizer IDs·length/mask 동일, overflow reject, ordered finite dimension/norm |
+| 실제 bounded input | 공식 Catalog/Orchestrator로 현재 승인·재인가한 정확한 6 profile×available3 view 최대18 document와 exact2 query; token-length 층화 후 안정 ID 순서; 최대20 valid text | source/report/Graph/policy/model/recipe/input-set SHA를 실행 전에 pin; 부족하면 INSUFFICIENT, 무단 대체 없음 |
+| cold process | device별 독립 fresh invocation3회, 순서 CPU→CUDA→CUDA→CPU→CPU→CUDA | owner admission→staging→load/hash/tokenize/encode→f32 validate→local result 검증까지; startup/load/encode 구간 분리 |
+| warm encode | cold 첫 invocation 내부에서 unmeasured warm-up1회 후 같은 full batch5회; CPU/GPU 같은 반복 | 실제 같은 process/model instance일 때만 warm; production warm cache로 해석 금지 |
+| query/ranking | 그 warm instance에서 query2개 각각 batch1 5회; fixed document matrix로 기존 exact rank; self exclusion·duplicate/tie fixture | query encode 및 full retrieval end-to-end 별도; 아래 수치/순위 gate |
+| capacity | synthetic bounded long input 최대 token2048, batch1/4 각1회; 위 실측 중 peak 관측 | RSS≤6GiB, peak reserved 및 whole-process GPU usage≤8GiB, OOM0, 다른 GPU consumer와 중첩0 |
+
+실제 입력은 corpus 내용이나 IDs를 외부 검색/Slack/Git에 보내지 않고 staged local manifest만
+worker에 전달한다. benchmark output/긴 log/수치 member는 Orchestrator 검증 후 공식 Artifact
+commit 경계로 보관하고 Git에는 코드·recipe·작은 aggregate pointer 요약만 둔다.
+기존520개/1560 view 전체를 CPU/GPU 각각 재실행하는 benchmark가 아니다.
+
+CPU primary baseline은 immutable historical `2.7.1+cpu` stack의 **동일 encoder recipe**다.
+vector benchmark 계약을 historical env에 추가 설치하지 않는다. 필요한 CPU benchmark/indexing
+stdio는 별도 protected CPU successor prefix에 동일 CPU wheel/library pins로 설치한다.
+cu128 wheel의 CPU mode는 optional controlled diagnostic이며 primary CPU baseline을 대체하지
+않는다. 양쪽 weights/tokenizer upstream+모든 file SHA 및 실제 tokenized input은 같아야 한다.
+
+CUDA wall-clock은 구간 전후 `torch.cuda.synchronize()`로 측정하고 CPU transfer/host L2까지
+포함한다. CUDA event kernel 시간은 보조값이다. `perf_counter_ns`, integer microseconds,
+texts/s의 numerator/denominator, process peak RSS와 max allocated/reserved VRAM, owner의
+bounded `nvidia-smi` process/whole-device 관측을 구분한다. cache·driver memory가 allocated
+tensor 수치와 다르므로 allocated만으로 capacity PASS하지 않는다.
+여기서 cold는 fresh process/model load이며 OS page-cache cold나 machine reboot 상태를 뜻하지
+않는다. host cache drop을 수행하지 않고 위 교대 순서와 cache 상태 한계를 기록한다.
+[CUDA timing과 memory 의미](https://docs.pytorch.org/docs/2.7/notes/cuda.html).
+
+## 7. 사전 correctness·성능·resource gate
+
+- 출력 rows/order/차원, float finite·비영 norm, binary length/hash와 f32 L2 norm absolute error
+  `≤1e-5`는 양쪽 각각 필수다. original exact input/token IDs가 달라지면 비교 자체 불합격이다.
+- CPU/GPU 대응 vector의 cosine `≥0.99999`, normalized component 최대 absolute difference
+  `≤1e-4`, 모든 측정 query-document cosine absolute difference `≤2e-5`를 요구한다.
+  device 간 raw-vector SHA 일치는 요구하지 않는다. numerical space는 항상 별개다.
+- CPU score gap `>4e-5`인 모든 candidate pair의 상대 순서는 같아야 한다. 그 이하 gap은
+  predeclared near-tie cluster로 처리하며 cluster 간 순서는 같고 exact tie는 기존 stable-ID
+  tie-break를 따른다. top5 boundary에서 다른 멤버는 그 동일 near-tie cluster 안에만 허용한다.
+  모든 swap과 gap을 기록하며 임의 top-K overlap 비율로 실패를 숨기지 않는다.
+- same-device 반복에서도 위 tolerance와 순위 gate를 통과하고 worker input/hash drift가 없어야
+  한다. determinism 설정이 CPU/CUDA bit-identical을 보장한다고 주장하지 않는다.
+  [PyTorch 재현성의 한계](https://docs.pytorch.org/docs/2.7/notes/randomness.html).
+- **GPU superior**는 warm full-batch encode median `≤CPU median×0.80`, fresh cold end-to-end
+  median `≤CPU median×0.90`, single-query encode 및 query end-to-end median 각각
+  `≤CPU median×1.10`을 모두 만족하는 것이다. cold3회의 max와 warm/query5회의 max도 기록하고
+  어느 fresh GPU 실행도 CPU cold max의1.20배를 넘지 않아야 한다. 작은 표본의 p95를
+  통계적 SLA로 주장하지 않는다. hash/load/serialization 포함 개선과 kernel-only 개선을 분리한다.
+- 모든 sandbox denial, exact physical lease/cgroup termination, capacity 상한 및 image/trainer
+  경합 회귀가 PASS여야 한다. staged image synthetic/canary는 gate용 별도 승인된 opt-in
+  실행이며 production 이미지 생성이나 모델 학습을 benchmark에 몰래 추가하지 않는다.
+- 비교 recipe/token ceiling 또는 batch가 installed capacity와 다르면 자동 확대하지 않는다.
+  warm만 빠르고 cold/query가 위 gate를 실패하면 CPU를 유지하고 원인을 기록한다.
+  GPU가 올바르고 빠른 것을 교육적 품질·recall·과학적 정확성 PASS로 해석하지 않는다.
+
+## 8. 기본 GPU 전환·fallback·rollback
+
+correctness/performance/resource/isolation/image regression을 모두 통과하면 compatible released
+bundle/runtime/schema/launcher/owner admission policy를 설치·검증한다. bounded GPU delta를
+공식 Artifact owner로 commit하고 CUDA space만 포함하는 index revision을 검증한 뒤 expected
+version CAS로 current를 전환한다. source coverage·권한 재인가·query route를 같은 GPU space로
+pin하고 native execution policy의 `default_device=CUDA`를 실제 활성화한다. CPU vectors와 CUDA
+vectors를 같은 index에 혼합하거나 CPU query vector를 CUDA document index에 사용하지 않는다.
+query/document purpose space의 명시적 compatible family closure도 검증한다.
+
+GPU busy/unavailable은 실행 전 명시적 `WAIT_FOR_GPU`가 기본이다. GPU admission 실패만
+사전 released policy가 허용하는 경우 **완전한 별도 CPU space/index**로 fallback하고 선택 device,
+reason, policy revision을 기록한다. CPU index가 없으면 partial/unavailable이지 implicit latest가
+아니다. hash/permission/schema/finite 오류, OOM 후 uncertain 실행이나 lease expiry를 CPU retry로
+성공 처리하지 않는다. owner는 동일 workflow/attempt/input-set operation key를 reconcile한다.
+공유 physical lease·전체 image entrypoint migration을 구축할 수 없다면 기본 CPU를 유지하며
+CUDA shadow/benchmark도 미입장 처리한다. 좁은 lease-group gate를 우회하거나 보호 CPU 환경을
+바꾸지 않는다. 그때 CPU-only native successor를 먼저 검증·활성화할 수 있으나 GPU 비교·기본
+전환 요청은 명시적으로 미완료다.
+
+이전 CPU index/current policy와 model/runtime pointer를 보존한다. rollback은 새 admission을
+drain하고 active GPU 작업 종료를 확인한 뒤 policy와 current pointer를 compatible CPU cohort로
+함께 되돌린다. CUDA Artifact·실패·revision은 삭제하지 않는다. 보고는 `SOURCE_PASS / INSTALLED /
+ACTIVE / LIVE_VERIFIED`를 구분하며, 실제 default policy read-back·delta/replay·권한 재인가·
+GPU query provenance·CPU rollback 증거가 없으면 완료가 아니다.
+
+## 9. access pattern·transaction·테스트·구현 순서
+
+primary operation은 exact runtime/payload key lookup, immutable descriptor hash, single-resource
+nonblocking claim, bounded ordered encode, O(Nd) exact cosine, append-only execution evidence다.
+small frozen descriptor/tuple, member map/set, 한 local flock와 기존 indexed queue를 사용한다.
+lease claim은 O(1), model hash는 admitted immutable payload당 한 번 streaming O(bytes), batch
+output은 O(Nd)이며 각 text마다 weights를 다시 hash하지 않는다. GPU memory는 token length와
+batch를 포함해 실측한다. 새 vector DB/large binary column/lease DB table/전역 cache는 없다.
+
+source/permission/Workflow claim transaction과 GPU 실행을 분리한다. DB transaction을 inference
+동안 열어두지 않고 source 재인가→Artifact commit→binding/index CAS는 기존 receipt/idempotency
+reconcile을 사용한다. 모델/code/runtime drift, stale pointer, 권한 철회, shared lock mismatch는
+explicit stable failure다. 결과가 commit됐으나 metadata가 실패하면 같은 Artifact pointer로
+재등록하고 재인코딩하지 않는다. uncertain launch는 새 execution ID로 우회하지 않는다.
+
+구현 순서는 (1) bundle/runtime/benchmark JSON Schema와 frozen model 및 closure negative tests,
+(2) stdlib physical lease adapter와 provider/trainer regression·drained installed migration,
+(3) 별도 CPU/CUDA protected runtime/stdio/verifier와 FP32 backend,
+(4) synthetic→bounded 실제 CPU/GPU benchmark,
+(5) 우수 시 CUDA index successor·default policy 활성화·delta/query/rollback 검증이다.
+각 단계는 formatter/linter/strict type checker와 focused tests를 통과해야 다음 gate로 간다.
+
+필수 테스트: legacy CPU1.0 bytes/behavior 불변, payload 누락·stale/hash/schema/media/lifecycle·
+permission mismatch, bundle successor/동일 weights file-set, no model byte duplication,
+runtime fingerprint의 관련 numeric 변경 반영/무관 commit 불변, CPU/CUDA space 혼합 거부,
+exact token/overflow/pooling/L2, false TF32와 eager/FP32 read-back, CUDA async timing,
+lease 양방향 contention·trainer 참여·wrong inode/mode/GID·no worker create/write,
+SIGTERM/SIGKILL/timeout/잔존 cgroup·uncertain/replay, device allow/deny·DB/NAS/network/auth denial,
+default activation/fallback reason/compatible rollback, no core ML import/ambient Python/runtime Git.
+live model/privilege/GPU/image tests는 명시적으로 marked opt-in이며 unit fake PASS를 대체하지 않는다.
+
+단순 `.to("cuda")`나 CPU env의 pip upgrade는 immutable history·runtime proof·physical capacity를
+깨고, root wrapper만은 crash fence를 닫지 못한다. 이미 두 native image lock 진입점이 있으므로
+작은 공유 OS adapter와 기존 owner queue/fixed unit을 확장하는 것이 새 scheduler나 GPU service보다
+작은 변경이다. 승인·호환 release·검증 가능한 같은 인코딩 모델을 유지할 수 없는 gate에서
+멈추고 실제 limitation을 기록한다.

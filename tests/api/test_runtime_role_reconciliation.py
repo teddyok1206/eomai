@@ -307,6 +307,28 @@ def test_disposable_database_runs_hwpx_persistence_without_runtime_reconciliatio
     assert '"${PYTHON}" -m pytest -q tests/integration/test_hwpx_persistence.py' in branch
 
 
+def test_disposable_embedding_persistence_requires_owner_guards_but_no_runtime_role() -> None:
+    source = (REPOSITORY_ROOT / "scripts/api/testdb_run.sh").read_text(encoding="utf-8")
+
+    begin = source.index('if [[ "${action}" == "embedding-tests" ]]')
+    branch = source[begin : source.index("\nfi", begin)]
+    assert '"$1" != "embedding-tests"' in source[:begin]
+    assert source.index('source "${state_directory}/owner.env"') < begin
+    assert source.index('manifest = TestDatabaseManifest.load(state / "manifest.json")') < begin
+    assert source.index("validate_application_schema_metadata(\n") < begin
+    assert begin < source.index('runtime_environment="${state_directory}/runtime.env"')
+    assert "export EOM_RUN_INTEGRATION=1" in branch
+    assert 'export EOM_API_TEST_STATE="${state_directory}"' in branch
+    assert (
+        '"${PYTHON}" -m pytest -q tests/integration/test_embedding_artifact_persistence.py'
+        in branch
+    )
+    assert "exit 0" in branch
+    assert "runtime.env" not in branch
+    assert "EOM_API_TEST_RUNTIME_ENV" not in branch
+    assert "EOM_RUN_API_INTEGRATION" not in branch
+
+
 def test_disposable_database_runs_pdf_review_persistence_after_runtime_reconciliation() -> None:
     source = (REPOSITORY_ROOT / "scripts/api/testdb_run.sh").read_text(encoding="utf-8")
 
@@ -350,6 +372,7 @@ def test_disposable_modes_include_separate_opt_in_chat_role_suite() -> None:
         "verify",
         "migrate",
         "hwpx-tests",
+        "embedding-tests",
         "pdf-review-tests",
         "quality-review-tests",
         "chat-tests",

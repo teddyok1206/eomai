@@ -159,6 +159,14 @@ DB migration·새 queue·권한 확대는 없습니다. 역사적 suite와 이 �
 격리·자원 경합 검증을 통과하면 운영 기본값 전환까지 진행합니다. 아직 비교 결과나
 GPU 기본값 활성화가 완료됐다는 뜻은 아닙니다.
 
+첫 구현 후보 `165b0214`에서 native 입력·결과/float32 shard 계약, exact-text 중복 제거 delta
+계획과 기존 Orchestrator Artifact owner를 이용한 게시 경로를 추가했습니다. 소스 회귀598개와
+임시 PostgreSQL의 실제 게시·재전송·독립 두 프로세스 동시성 검증2개를 통과했습니다.
+이는 **영속 인덱스·자동 증분 실행·GPU 기본값의 운영 활성화 완료가 아닙니다**.
+현재 구현/검증과 남은 연결은
+[증분 임베딩 checkpoint](docs/status/SYSTEM_RAG_INCREMENTAL_EMBEDDING_CHECKPOINT_2026-10-12.md)에
+구분합니다. 기존 source·report·Graph·정책과 권한 경계를 대체하지 않습니다.
+
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스
 readiness가 정본입니다.

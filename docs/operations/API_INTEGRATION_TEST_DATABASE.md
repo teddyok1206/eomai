@@ -13,6 +13,7 @@ sudo -k
 scripts/api/testdb_run.sh verify /tmp/eom-api-testdb-<ID>
 scripts/api/testdb_run.sh migrate /tmp/eom-api-testdb-<ID>
 scripts/api/testdb_run.sh hwpx-tests /tmp/eom-api-testdb-<ID>
+scripts/api/testdb_run.sh embedding-tests /tmp/eom-api-testdb-<ID>
 
 sudo -v
 sudo -n scripts/api/testdb_prepare.sh --reconcile /tmp/eom-api-testdb-<ID>
@@ -32,6 +33,14 @@ outside the runner.
 The optional `hwpx-tests` action runs only the six HWPX persistence integration tests as the
 disposable migration owner. It runs after the migration cycle and before runtime-role reconciliation,
 uses the same guarded owner URL validation, and never falls back to production credentials.
+
+The optional `embedding-tests` action runs the two synthetic native embedding Artifact persistence
+tests as the disposable migration owner after migrations. It uses the same manifest, owner URL and
+application schema guards, sets `EOM_RUN_INTEGRATION=1` and `EOM_API_TEST_STATE`, and does not require
+runtime-role reconciliation or `runtime.env`. Real `ControlFileSetPublisher` publication uses only
+pytest temporary local staging/artifact/workspace paths, never production NAS; no model execution,
+GPU access, external LLM call or source authorization is performed. Approved Artifact rows remain
+immutable until guarded final database cleanup removes the disposable database.
 
 Prepare creates only `eom_api_test_*` names and records
 `EOM_API_DISPOSABLE_TEST_DB:<ID>` comments. Migration runs as the isolated database owner. Runtime

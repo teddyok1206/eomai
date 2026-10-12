@@ -215,9 +215,11 @@ recipe·입력 hash를 pin하고 source 개정/폐기 시 association 갱신 규
 ### 7.1.1 A단계의 수치 member 포맷
 
 기존 canonical JSON serializer는 float를 허용하지 않는다. 이 규칙을 완화하거나 DB의
-JSON 배열에 벡터를 넣지 않는다. 같은 file-set Artifact의 primary `shard.json`과 secondary
-`vectors.f32`로 나누며, 기존 `ControlFileSetPublisher`만 commit한다. 기존 단일 JSON
-ArtifactManifest의 의미도 바꾸지 않는다.
+JSON 배열에 벡터를 넣지 않는다. 구현된 native 실행 결과는 같은 file-set Artifact의 primary
+`result.json`(실행 기록), 재사용 component `shard.json`(행·수치 member의 manifest),
+`vectors.f32`(유일한 수치 bytes)로 나누며, 기존 `ControlFileSetPublisher`만 commit한다.
+bounded shard metadata가 실행 기록에 포함되는 것은 명시적인 검증·게시 경계다. 벡터 bytes나
+원문을 중복 보관하지 않으며 기존 단일 JSON ArtifactManifest의 의미도 바꾸지 않는다.
 
 수치 member는 header 없는 row-major float32 little-endian이다. JSON에는 정수 행 번호·
 차원·바이트 수, exact 입력 및 encoding identity, raw member SHA만 기록한다. 외부
@@ -430,6 +432,12 @@ NOT_IMPLEMENTED / NOT_EVALUATED`를 구분한다. 기존 corpus의 학습 완료
 
 - [증분 임베딩의 non-Codex 실행 경계](INCREMENTAL_EMBEDDING_EXECUTION_BOUNDARY.md):
   기존 queue를 재사용하는 전용 실행 목적·DB/owner 변경과 CPU/GPU admission 설계.
+- [검증된 첫 소스·임시 DB checkpoint](../status/SYSTEM_RAG_INCREMENTAL_EMBEDDING_CHECKPOINT_2026-10-12.md):
+  구현·실행한 gate와 아직 없는 운영 연결을 구분한다.
+- [영속 registry 설계](INCREMENTAL_EMBEDDING_REGISTRY_DESIGN.md): pointer-only 관계와
+  exact-key reservation·등록/CAS·현재 미구현 service authority·paging 경계.
+- [CPU/GPU runtime·기본값 전환 설계](INCREMENTAL_EMBEDDING_GPU_RUNTIME_DESIGN.md):
+  동일 payload, 별도 보호 runtime과 physical lease, 사전 benchmark·활성화·rollback 기준.
 - `services/catalog_service/eom_catalog_service/knowledge_analysis_service.py`: 승인 분석·이벤트 transaction.
 - `services/catalog_service/eom_catalog_service/registry_service.py`: Item 승인·소유된 상태 변경.
 - `services/catalog_service/eom_catalog_service/knowledge_graph_publication_service.py`: source membership·Graph 출판 transaction.
