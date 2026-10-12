@@ -356,6 +356,19 @@ def validate_embedding_source_binding(
     shard = parse_embedding_shard(shard.model_dump(mode="json"))
     shard_pointer = ArtifactMemberPointer.model_validate(shard_pointer.model_dump(mode="json"))
     _manifest_pointer(shard_pointer, SHARD_SCHEMA_REF, "shard.json")
+    _validate_binding_source_and_row(
+        binding, entry, shard_pointer, shard, content_sha256(shard.model_dump(mode="json"))
+    )
+
+
+def _validate_binding_source_and_row(
+    binding: EmbeddingSourceBinding,
+    entry: StagedExperimentEntry,
+    shard_pointer: ArtifactMemberPointer,
+    shard: EmbeddingVectorShardManifest,
+    shard_member_sha256: str,
+) -> None:
+    """One semantic leaf, called only after public validators revalidate each input."""
     basis = entry.profile.source_basis
     core = (
         "source_kind",
@@ -383,13 +396,67 @@ def validate_embedding_source_binding(
         raise ValueError("binding differs from its exact available source text view")
     if (
         shard_pointer != binding.row_ref.shard_manifest
-        or shard_pointer.sha256 != content_sha256(shard.model_dump(mode="json"))
+        or shard_pointer.sha256 != shard_member_sha256
         or binding.encoding.space_sha256 != shard.space.space_sha256
         or shard.space.purpose != "DOCUMENT"
         or binding.row_ref.row_index >= len(shard.rows)
         or shard.rows[binding.row_ref.row_index] != binding.encoding
     ):
         raise ValueError("binding has a foreign shard, row, space or encoding identity")
+
+
+def validate_embedding_source_bindings(
+    bindings: tuple[EmbeddingSourceBinding, ...],
+    entries: tuple[StagedExperimentEntry, ...],
+    shards: tuple[tuple[ArtifactMemberPointer, EmbeddingVectorShardManifest], ...],
+) -> None:
+    """Validate a bounded exact capture in linear work; this never grants access.
+
+    Each unique shard is parsed and hashed once, even when many bindings share it.
+    The owner still resolves/authorizes current sources and committed Artifact bytes.
+    Unused entries are permitted for a bounded verified population capture. Shards
+    are the exact sorted binding closure; unexpected/duplicate/missing pins fail.
+    """
+    if any(len(values) > MAX_EMBEDDING_ROWS for values in (bindings, entries, shards)):
+        raise ValueError("embedding source-binding capture exceeds its row budget")
+    by_source: dict[str, StagedExperimentEntry] = {}
+    for original_entry in entries:
+        entry = StagedExperimentEntry.model_validate(original_entry.model_dump(mode="json"))
+        revision = entry.profile.source_basis.source.item_revision_id
+        if revision in by_source:
+            raise ValueError("binding entries contain duplicate source revisions")
+        by_source[revision] = entry
+    by_pointer: dict[ArtifactMemberPointer, tuple[EmbeddingVectorShardManifest, str]] = {}
+    pointer_keys = tuple(_pointer_key(pointer) for pointer, _ in shards)
+    if pointer_keys != tuple(sorted(set(pointer_keys))):
+        raise ValueError("index shard pointers must be sorted and unique")
+    for original_pointer, original_shard in shards:
+        pointer = ArtifactMemberPointer.model_validate(original_pointer.model_dump(mode="json"))
+        _manifest_pointer(pointer, SHARD_SCHEMA_REF, "shard.json")
+        if pointer in by_pointer:
+            raise ValueError("index references duplicate, foreign or changed shard content")
+        shard = parse_embedding_shard(original_shard.model_dump(mode="json"))
+        by_pointer[pointer] = shard, content_sha256(shard.model_dump(mode="json"))
+    seen_bindings: set[str] = set()
+    referenced_pointers: set[ArtifactMemberPointer] = set()
+    for original_binding in bindings:
+        binding = parse_embedding_binding(original_binding.model_dump(mode="json"))
+        if binding.binding_sha256 in seen_bindings:
+            raise ValueError("binding capture contains duplicate source bindings")
+        seen_bindings.add(binding.binding_sha256)
+        referenced_pointers.add(binding.row_ref.shard_manifest)
+        selected_entry = by_source.get(binding.source.item_revision_id)
+        if selected_entry is None:
+            raise ValueError("binding differs from its exact approved profile and source basis")
+        selected = by_pointer.get(binding.row_ref.shard_manifest)
+        if selected is None:
+            raise ValueError("binding has a foreign shard, row, space or encoding identity")
+        shard, member_sha256 = selected
+        _validate_binding_source_and_row(
+            binding, selected_entry, binding.row_ref.shard_manifest, shard, member_sha256
+        )
+    if referenced_pointers != set(by_pointer):
+        raise ValueError("referenced index shard set is missing or differs")
 
 
 def validate_embedding_index_references(

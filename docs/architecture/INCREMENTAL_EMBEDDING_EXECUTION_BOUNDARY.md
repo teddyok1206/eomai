@@ -1,9 +1,10 @@
 # 증분 임베딩의 non-Codex 실행 경계
 
-작성: 2026-10-12 UTC. 상태: **설계 제안 / 미구현·미활성**.
+작성: 2026-10-12 UTC. 상태: **계약·일부 source leaf 구현 / 운영 실행 연결 미활성**.
 상위 설계: [GraphRAG·문항 유사도 통합과 증분 임베딩](SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md).
 이 문서는 기존 queue를 재사용하는 최소 실행 경계를 정한다. 운영 변경·DB migration·모델
-실행의 승인이나 완료 증거가 아니다. 아래 신규 이름은 제안이며 등록된 계약이 아니다.
+실행의 승인이나 완료 증거가 아니다. source 계약 등록은 runtime activation과 다르며,
+현재 실제 검증/미구현 상태는 상위 설계가 연결하는 checkpoint에 기록한다.
 
 ## 1. 책임과 경계
 
@@ -166,8 +167,9 @@ compiler/repository의 현재 agent-only protocol 계산은 하나의 public def
 Runner에는 전용 `LocalEmbeddingStep` 분기와 주입된 indexing executor 한 개만 연결한다.
 adapter가 없으면 Job/claim 전에 명시적 unavailable이며 Codex executor로 fallback하지 않는다.
 
-새 Catalog query/register port, Runner indexing admission/executor, CPU stdio 계약 분기와
-composition은 **아직 없다**. 초기 내부 owner invocation부터 검증한다. GUI/API endpoint 추가는
+Catalog의 bounded registry query/register source port와 application, 아래 native descriptor
+leaf는 존재한다. 실제 official-source verifier, Runner indexing admission/executor와 보호
+launcher composition은 **아직 없다**. 초기 내부 owner invocation부터 검증한다. GUI/API endpoint 추가는
 별도 successor이며 일반 문항 start API의 authority/body를 넓히지 않는다. 보호 CPU runtime은
 새 계약 code를 실제 설치·검증하기 전 운영 지원이라고 보고하지 않는다. 신규 dependency 기본값은 없다.
 
@@ -196,3 +198,47 @@ uncertain launch, commit 후 등록 실패, 경쟁 CAS를 negative로 포함한�
 CPU experiment bytes/의미·원 학습 성공을 회귀한다. 운영 gate는 보호 runtime 설치·새 purpose
 admission·현재 authority·compatible release와 실제 delta 확인이며 unit PASS로 대체하지 않는다.
 GPU가 개선되면 비교 기록만으로 끝내지 않고 위 기본 전환 gate의 실제 활성 상태까지 보고한다.
+
+## 12. Native indexing local descriptor handoff — source-only leaf
+
+The native worker reads one canonical `incremental-embedding-input/1.0` from an inherited,
+root-owned 0600 read-only regular descriptor. It writes `vectors.f32` to an empty inherited
+root-owned 0640 write-only regular descriptor, fsyncs it, then writes the canonical
+`incremental-embedding-result/1.0` completion member to a separate descriptor with the same
+output protections. No worker-chosen path, Artifact identity, source authority or NAS write is
+introduced. Input, result and binary must be three distinct single-link inodes at offset zero.
+The installed owner launcher supplies the descriptors; this source leaf does not launch a unit.
+
+Canonical source is the admitted input and independently verified backend. Existing job,
+request/input-set hashes, encoder-space and row identities remain unchanged. The backend is
+constructed through a no-argument owner-configured context only after all descriptor/input
+checks. It retains device ownership through encoding and output synchronization; context exit
+does not prove that the owner's unit/cgroup cleanup finished. Actual runtime/recipe/model pins
+are still checked by the existing encoder adapter. Worker JSON is not an authority grant.
+
+Dominant operations are bounded ordered input reading, canonical validation and O(Nd) binary
+verification/writing. Frozen descriptor/epoch values and memoryviews avoid copying output slices;
+the existing bounded codec verifies the packed numerical rows before writing. Existing 64 MiB
+input and native row/dimension limits apply;
+no index, queue, DB row, cache or new dependency is needed. The owner later materializes the
+validated local output once at its staging boundary and existing Artifact publication produces
+`shard.json` from the result; the worker does not duplicate a separate shard manifest.
+
+Validate access flags, ownership, mode, nlink, type, lengths and descriptor epochs before
+construction and before writing; validate final output identities/sizes/offsets and unchanged
+input. Missing/replaced/changed/aliased descriptors, malformed/duplicate/noncanonical JSON,
+runtime/result/shape/hash mismatch, short or failed writes and changed input fail explicitly.
+Never truncate, reopen, repair, retry encoding or overwrite partial output. The existing owner
+claim/lease/uncertain recovery boundary must preserve an incomplete output and decide recovery.
+Binary completion alone is not a successful result; valid JSON alone is not a committed Artifact.
+
+This Catalog infrastructure leaf depends on contracts and the native encoder interface; neither
+contracts nor the worker acquire DB/NAS access. Tests use synthetic backends and temporary local
+descriptors with a test-only expected UID substitution, not real root/device/runtime acceptance.
+They cover no backend construction on invalid handoff, partial writes, failures between members,
+input/output drift, binary/hash validation, exact ordering and no automatic second inference.
+The simpler generic stdout JSON channel cannot safely transport reusable binary vectors;
+returning file paths would make the worker select a location. Fixed inherited regular descriptors
+extend the already used protected CPU stdio pattern without changing historical experiment 1.0.
+This source leaf grants no service authority and remains NOT_INSTALLED / NOT_ACTIVE until the
+fixed launcher, installed runtime observer and owner admission are independently connected.

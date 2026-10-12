@@ -184,3 +184,48 @@ image dependency/기존 SDXL type 오류를 이 범위의 PASS로 확대하거�
 Catalog application 동시성 테스트용 새 marker-guarded DB의0052 up/down/up와 prerequisite
 검사는 PASS다. 아직 application test 완료 증거가 아니며 해당 임시 DB는 검증 후 guarded
 cleanup해야 한다. 운영 DB/schema/payload/default에는 변경이 없다.
+
+## Catalog application·native descriptor gate — 2026-10-12 18:46 UTC
+
+source registration/replay/CAS application과 bounded missing-binding anti-join을 추가했다.
+동일 operation의 immutable 결과를 재사용하며 현재 head는 잠금 뒤 새로 읽는다. CAS 실패는
+savepoint 전체를 되돌려 부분 metadata가 남지 않는다. Graph-only association은 재검증하되
+같은 numerical space/text는 기존 encoding을 재사용한다. 검증 port가 없으면 DB 존재나
+FK를 승인 근거로 쓰지 않고 거부한다. 현재 port의 production source/Artifact owner 구현과
+background 목적 권한은 아직 연결되지 않았다.
+
+batch contract validator는 기존 scalar 의미/schema bytes를 보존한다.1,024 bindings가 한
+shard를 공유하는 operation-count 검증에서 binding/entry 각1,024회, shard parse1회,
+full-shard hash2회다. 기존 scalar 반복의 O(B*R) 경로를 O(B+E+R)로 정리했으며 caller의
+"already validated" 주장이나 영속 eligibility cache는 없다.
+
+native descriptor leaf는 root-created regular input/result/vector FD를 별도로 검증한다.
+입력 검증 전에는 backend를 만들지 않고, binary fsync 후 canonical completion JSON을
+기록한다. alias/mode/owner/flags/offset/epoch/hash/result drift와 partial write·context exit
+실패는 성공이나 재인코딩으로 처리하지 않는다. 결과의`shard.json`은 기존 Artifact owner가
+한 번 물리화한다. 이 source leaf에는 실제 fixed launcher/worker identity/runtime composition이
+없으며, 합성48케이스는 설치·GPU/CPU 모델 실행이나 cgroup 정리 증거가 아니다.
+
+root 통합 source gate는 **296 PASS (14.41s)**, 관련10파일 strict mypy 및11파일 Ruff/format,
+testdb runner bash parsing PASS다. earlier suite와 합산하지 않는다. 최초 source invocation의
+누락 PYTHONPATH는 invocation만 수정했고, 새 proof schema로 달라진 inventory는 historical
+296개 bytes/count/hash를 보존한 채 새 schema만 분리했다.
+
+같은 guarded disposable DB에서0052 up/down/up/prerequisite와 combined gate
+**13 PASS (17.60s)**: Artifact2+registry5+application6. 실제 독립 process들의 same-key first
+creation은 한 revision, competing successor는 한 CAS advance로 수렴했다. stale Session
+identity-map 재전송·savepoint rollback·3-statement bounded lookup도 검증했다.
+
+앞선 full run 두 번은12 PASS/1 FAIL(17.75s/17.67s), diagnostic 한 번은1 FAIL/12 deselected
+(3.16s)였다. 모두 composite index 이름을 추측한 테스트 오류다. 실제 DB는 tiny fixture에서
+`ix_embedding_binding_encoding`의 indexed equality와 나머지9 equality filters를 선택했다.
+chosen installed B-tree/table/key 및 exact10 predicates와 composite unique index availability를
+분리해 검증하도록 수정했으며 production planner 선호/성능을 주장하지 않는다.
+
+검증 후 같은 operator sudo pane의 guarded cleanup으로 정확한 임시 DB/owner/state를 제거했다.
+제거 대상은 재생성 가능한 테스트 자료뿐이며 원 corpus·운영 DB·NAS·모델·historical acceptance는
+보존했다. 운영 migration/배포·GPU inference는0이며 기존 기본 device도 그대로다.
+
+다음은 official current-operator source/Artifact verifier 연결, installed numerical observer와
+image standalone dependency closure → scoped native admission/launcher → CPU/CUDA 실제 비교·
+기본값 결정·seed/delta/공통 소비자 연결이다. 전체 goal은 계속 ACTIVE다.

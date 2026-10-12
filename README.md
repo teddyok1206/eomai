@@ -159,33 +159,18 @@ DB migration·새 queue·권한 확대는 없습니다. 역사적 suite와 이 �
 격리·자원 경합 검증을 통과하면 운영 기본값 전환까지 진행합니다. 아직 비교 결과나
 GPU 기본값 활성화가 완료됐다는 뜻은 아닙니다.
 
-첫 구현 후보 `165b0214`에서 native 입력·결과/float32 shard 계약, exact-text 중복 제거 delta
-계획과 기존 Orchestrator Artifact owner를 이용한 게시 경로를 추가했습니다. 소스 회귀598개와
-임시 PostgreSQL의 실제 게시·재전송·독립 두 프로세스 동시성 검증2개를 통과했습니다.
-이는 **영속 인덱스·자동 증분 실행·GPU 기본값의 운영 활성화 완료가 아닙니다**.
-현재 구현/검증과 남은 연결은
+증분 임베딩 후보에는 native 입력·결과/float32 shard, pointer-only Catalog registry와
+migration0052, 동일 payload의 CPU/CUDA bundle·encoder, Orchestrator Artifact 게시 경로가
+있습니다. 최신 저장·재전송·descriptor 경계 소스 회귀 **296 PASS**, 임시 PostgreSQL의
+게시·등록·독립 프로세스 경합/CAS **13 PASS** 및0052 up/down/up PASS입니다. 과거 gate와
+합산하지 않으며, 세부 증거와 아직 없는 연결은
 [증분 임베딩 checkpoint](docs/status/SYSTEM_RAG_INCREMENTAL_EMBEDDING_CHECKPOINT_2026-10-12.md)에
-구분합니다. 기존 source·report·Graph·정책과 권한 경계를 대체하지 않습니다.
+기록합니다. 기존 source·report·Graph·정책과 현재 사용자 권한은 대체하지 않습니다.
 
-후속 소스에서는 pointer-only 인덱스 등록 계약·Catalog 관계4개·migration0052와, 같은 model
-payload를 참조하는 CPU/CUDA runtime-bundle 계약을 추가했습니다. 최신 통합 소스720 PASS,
-disposable PostgreSQL의 Artifact/registry7 PASS와 migration0052 up/down/up PASS입니다.
-CUDA Torch의 고정25개 wheel은 다운로드·해시 검사만 완료했으며 설치·실제 GPU 비교·
-기본값 전환은 아직 진행 전입니다. 신규 registry의 권한·자동 실행·공통 소비자도 미활성이므로
-이 후보를 운영 기능 완료로 판단하지 않습니다.
-
-CUDA wheel25개의 독립 raw-hash·ZIP/metadata 검사도 통과했고, 기존0051 계약을 보존하는
-고정0052 release-operator successor를 추가했습니다(관련 소스167 PASS). 보호 runtime 설치,
-실제 CPU/GPU 비교와 기본값 전환은 아직 미실행입니다. 새 공유 GPU lease와 native encoder는
-후속 연결 중이며, source 검증을 운영 활성화로 해석하지 않습니다.
-
-이미지 provider/trainer와 임베딩이 사용할 작은 공유 GPU mutex의 source와 고정 성능 판정을
-추가하고 기존 이미지 회귀를 포함한171개를 통과했습니다. 실제 공유 lock·unit 이행과
-보호 encoder 설치/CPU·GPU 측정은 별도 gate이며 아직 실행하지 않았습니다.
-
-같은 canonical payload를 읽는 native CPU/CUDA encoder와 요청/실행 recipe 대조도 추가했습니다
-(관련 새·legacy·계약 회귀371 PASS). 실제 보호 runtime observer·launcher·권한 연결은 미완성이므로,
-이 테스트 결과를 실제 GPU 인코딩이나 운영 활성화로 해석하지 않습니다.
+CUDA wheel25개의 다운로드·독립 raw-hash/ZIP 검증과 공유 GPU mutex/성능 판정 소스는
+준비했습니다. 실제 설치·현재 권한 연결·native Runner·자동 증분·공통 소비자 연결은
+후속 작업입니다. **GPU 실제 비교·기본값 전환 및 영속 운영 인덱스는 아직 미활성**이며,
+소스/합성 테스트를 운영·모델 실행 증거로 해석하지 않습니다.
 
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스
