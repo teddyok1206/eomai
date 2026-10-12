@@ -376,6 +376,7 @@ def test_disposable_modes_include_separate_opt_in_chat_role_suite() -> None:
         "migrate",
         "hwpx-tests",
         "embedding-tests",
+        "embedding-encoding-tests",
         "pdf-review-tests",
         "quality-review-tests",
         "chat-tests",

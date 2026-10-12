@@ -198,3 +198,60 @@ Do not edit `testdb_guard.py`, production bootstrap/grants, frozen Identity file
 existing role matrix, launcher/runtime/source snapshot or WIP for this proposal. Source implementation
 requires root review of this exact setup/ACK/transaction/run/cleanup sequence first. No new behavior
 or source test was executed by this design-only note.
+
+## Approved source-only implementation checkpoint
+
+Root reviewed the 200-line proposal before behavior. The implementation owns only
+`scripts/api/testdb_operator_fence.py`, the additive early branches in `testdb_run.sh`,
+`tests/unit/test_operator_fence_testdb_profile.py` and this checkpoint. Frozen Identity seven
+files, production bootstrap, guard/model/migration/role matrix, native launcher and root WIP remain
+unchanged. Root separately owns the single existing API usage-test whitelist addition.
+
+The helper is eom/disposable-owner-only and never reads administrator secrets. It retains actual
+state/manifest/environment FDs, their metadata epochs and raw hashes. Fresh per-write guards pin
+database/schema/role and all nine IAM table OIDs; source statements use the public exact routine
+CREATE/REVOKE and only the manifest runtime EXECUTE/TEMP target. Non-IAM privilege preservation
+includes PostgreSQL18 MAINTAIN; the current EOM PostgreSQL18 profile is the target, not a new generic
+database portability layer. No existing Artifact/Job data is changed or read by preparation.
+
+Started/receipt files are O_EXCL and sanitized; no URL/key/password/body is recorded. A transaction
+failure preserves STARTED, commit uncertainty creates no success receipt, and post-commit receipt
+failure is PREPARED_WITHOUT_RECEIPT. Replay verifies actual current security plus exact raw input/
+OID/non-IAM receipts and performs no privilege/routine repair. The one per-state mutex remains held
+through verification and the fixed test run. A90s owned-connection cancellation bounds the initial
+catalog reads as well as later work, with existing stricter positive owner GUC limits preserved.
+The180s test runner uses its own private process session and kills only that owned/unreaped group
+on timeout/exception; it does not signal a database-reported PID or arbitrary process group.
+
+One full existing shell SOURCE_PATHS construction now precedes both early and legacy branches;
+no incomplete source7/old installed-contract substitute is used by the early helper import. An
+actual unprivileged invalid-environment CLI fixture verifies this import closure and rejects shell
+injection **before DB access**. Root additionally approved the ordinary two-argument
+`embedding-encoding-tests <exact_state>` action, using the old guard/owner/source paths and only
+`tests/integration/test_embedding_encoding_reservations.py` with explicit integration flags. It is
+not a limited-profile preparation action and requires no profile ACK or new grants.
+
+Source gate: **222 PASS**, including89 new synthetic profile/harness cases,101 frozen Identity
+cases,29 API role/CLI regressions and3 chat preparation regressions. SQL positives use an inert
+fixture; only synthetic private files and independent-process flock contention were exercised.
+Ruff lint/format2 PASS, explicit core strict mypy2 PASS and bash syntax PASS. The authoritative
+same-gate test list is:
+
+```text
+tests/unit/test_operator_fence_testdb_profile.py
+tests/unit/test_operator_authorization_fence.py
+tests/unit/test_operator_authorization_fence_sql.py
+tests/api/test_runtime_role_reconciliation.py
+tests/unit/test_general_chat_role_preparation_cli.py
+```
+
+Run pytest with explicit `/srv/eom/conda/envs/eom-api/bin/python` and current repository/source
+roots; strict checker is `/srv/eom/conda/envs/eom-core/bin/python -m mypy --strict
+--follow-imports=silent --explicit-package-bases` on the new helper/test. The last option resolves
+the existing scripts namespace once; without it mypy reports the same file under two module names.
+No blanket ignores or new stubs/dependencies were introduced.
+
+No agent DB/root/DDL/secret/Git/model/GPU operation was performed. These gates are not the actual
+eight encoding-reservation or six operator-fence DB cases; root owns their fresh guarded execution
+and full cleanup separately. Source readiness does not imply production routine/privilege/native
+purpose, benchmark or default-device activation.
