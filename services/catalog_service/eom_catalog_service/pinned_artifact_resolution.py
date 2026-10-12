@@ -7,10 +7,13 @@ import stat
 from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Literal
+from threading import get_ident
+from typing import Literal, cast
 
 from eom_identifiers import content_sha256, sha256_bytes, sha256_file
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
+from eom_protocol.artifact_members import ArtifactMemberPointer
+from sqlalchemy import select, tuple_
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.settings import CatalogSettings
@@ -37,7 +40,46 @@ class PinnedArtifactResolutionError(ValueError):
     """The pinned Artifact identity, provenance, manifest, or bytes did not resolve."""
 
 
-def resolve_pinned_artifact_member(
+@dataclass(frozen=True)
+class _CapturedArtifactMetadata:
+    logical: ArtifactRecord
+    revision: ArtifactRevisionRecord
+    job: JobRecord | None
+    manifest: dict[str, object]
+    manifest_hash: str
+    entry_count: int
+    members: dict[str, tuple[dict[str, object], ...]]
+
+
+def _capture_metadata(
+    logical: ArtifactRecord, revision: ArtifactRevisionRecord, job: JobRecord | None
+) -> _CapturedArtifactMetadata:
+    manifest = revision.manifest
+    files = manifest.get("files")
+    if not isinstance(files, list):
+        raise PinnedArtifactResolutionError("pinned Artifact manifest does not resolve")
+    groups: dict[str, list[dict[str, object]]] = {}
+    entries = tuple(value for value in files if isinstance(value, dict))
+    for entry in entries:
+        name = entry.get("file_name")
+        if isinstance(name, str):
+            groups.setdefault(name, []).append(entry)
+    try:
+        manifest_hash = content_sha256(manifest)
+    except (TypeError, ValueError) as exc:
+        raise PinnedArtifactResolutionError("pinned Artifact manifest does not resolve") from exc
+    return _CapturedArtifactMetadata(
+        logical,
+        revision,
+        job,
+        manifest,
+        manifest_hash,
+        len(entries),
+        {name: tuple(values) for name, values in groups.items()},
+    )
+
+
+def _resolve_pinned_artifact_member(
     session: Session,
     settings: CatalogSettings,
     *,
@@ -53,6 +95,8 @@ def resolve_pinned_artifact_member(
     expected_manifest_artifact_types: Collection[str] | None = None,
     historical_metadata_compatibility: bool = False,
     allow_empty: bool = False,
+    captured: _CapturedArtifactMetadata | None = None,
+    materialized: PinnedArtifactMember | None = None,
 ) -> PinnedArtifactMember:
     """Resolve one member without opening a second database transaction.
 
@@ -81,9 +125,17 @@ def resolve_pinned_artifact_member(
     ):
         raise PinnedArtifactResolutionError("pinned Artifact member request is invalid")
 
-    logical = session.get(ArtifactRecord, artifact_id)
-    revision = session.get(ArtifactRevisionRecord, artifact_revision_id)
-    job = session.get(JobRecord, revision.job_id) if revision is not None else None
+    logical = session.get(ArtifactRecord, artifact_id) if captured is None else captured.logical
+    revision = (
+        session.get(ArtifactRevisionRecord, artifact_revision_id)
+        if captured is None
+        else captured.revision
+    )
+    job = (
+        (session.get(JobRecord, revision.job_id) if revision is not None else None)
+        if captured is None
+        else captured.job
+    )
     if (
         logical is None
         or revision is None
@@ -102,24 +154,22 @@ def resolve_pinned_artifact_member(
     ):
         raise PinnedArtifactResolutionError("pinned Artifact provenance does not resolve")
 
-    manifest = revision.manifest
+    if captured is None:
+        captured = _capture_metadata(logical, revision, job)
+    manifest = captured.manifest
     files = manifest.get("files")
     if not isinstance(files, list):
         raise PinnedArtifactResolutionError("pinned Artifact manifest does not resolve")
-    entries = tuple(value for value in files if isinstance(value, dict))
-    matches = tuple(value for value in entries if value.get("file_name") == member_path)
-    try:
-        manifest_hash = content_sha256(manifest)
-    except (TypeError, ValueError) as exc:
-        raise PinnedArtifactResolutionError("pinned Artifact manifest does not resolve") from exc
+    matches = captured.members.get(member_path, ())
     if (
         manifest.get("logical_artifact_id") != artifact_id
         or manifest.get("revision_id") != artifact_revision_id
         or manifest.get("job_id") != job.job_id
         or manifest.get("artifact_type") not in manifest_artifact_types
         or manifest.get("primary_file") != expected_primary_file
-        or manifest_hash != revision.manifest_hash
-        or len(entries) != len(files)
+        or captured.manifest_hash != revision.manifest_hash
+        or revision.manifest is not manifest
+        or captured.entry_count != len(files)
         or len(matches) != 1
     ):
         raise PinnedArtifactResolutionError("pinned Artifact manifest does not resolve")
@@ -147,6 +197,25 @@ def resolve_pinned_artifact_member(
         or (member_path == expected_primary_file and revision.content_bytes != size)
     ):
         raise PinnedArtifactResolutionError("pinned Artifact member descriptor differs")
+
+    if materialized is not None:
+        if (
+            materialized.artifact_id,
+            materialized.artifact_revision_id,
+            materialized.member_path,
+            materialized.sha256,
+            materialized.schema_ref,
+            materialized.media_type,
+        ) != (
+            artifact_id,
+            artifact_revision_id,
+            member_path,
+            sha256,
+            schema_ref,
+            media_type,
+        ) or len(materialized.payload) != size:
+            raise PinnedArtifactResolutionError("pinned Artifact materialization differs")
+        return materialized
 
     try:
         storage_root = settings.nas_artifact_root.resolve(strict=True)
@@ -213,15 +282,297 @@ def resolve_pinned_artifact_member(
         media_type=media_type,
         sha256=sha256,
         artifact_type=logical.artifact_type,
-        manifest_artifact_type=manifest["artifact_type"],
+        manifest_artifact_type=cast(str, manifest["artifact_type"]),
         approved=True,
         producing_job_state="SUCCEEDED",
         payload=payload,
     )
 
 
+def resolve_pinned_artifact_member(
+    session: Session,
+    settings: CatalogSettings,
+    *,
+    artifact_id: str,
+    artifact_revision_id: str,
+    member_path: str,
+    sha256: str,
+    schema_ref: str,
+    media_type: str,
+    expected_artifact_types: Collection[str],
+    expected_primary_file: str,
+    max_bytes: int,
+    expected_manifest_artifact_types: Collection[str] | None = None,
+    historical_metadata_compatibility: bool = False,
+    allow_empty: bool = False,
+) -> PinnedArtifactMember:
+    """Preserved scalar boundary; metadata and file checks share one private leaf."""
+    return _resolve_pinned_artifact_member(
+        session,
+        settings,
+        artifact_id=artifact_id,
+        artifact_revision_id=artifact_revision_id,
+        member_path=member_path,
+        sha256=sha256,
+        schema_ref=schema_ref,
+        media_type=media_type,
+        expected_artifact_types=expected_artifact_types,
+        expected_primary_file=expected_primary_file,
+        max_bytes=max_bytes,
+        expected_manifest_artifact_types=expected_manifest_artifact_types,
+        historical_metadata_compatibility=historical_metadata_compatibility,
+        allow_empty=allow_empty,
+    )
+
+
+class PinnedArtifactReadContext:
+    """Bounded root-Session immutable decoding reuse, never a permission cache.
+
+    Prefetch exact metadata in sets before public reads. No lazy per-pointer SQL
+    or exported validated flag exists. Current provenance state is still checked
+    by the shared scalar leaf; current source/IAM/policy checks stay with Catalog.
+    """
+
+    MAX_REVISIONS = 4096
+    MAX_MEMBERS = 8192
+    MAX_RETAINED_BYTES = 128 * 1024**2
+
+    def __init__(self, session: Session, settings: CatalogSettings) -> None:
+        root = session.get_transaction()
+        if root is None or not root.is_active:
+            raise PinnedArtifactResolutionError("pinned Artifact read transaction is invalid")
+        self._session = session
+        self._root = root
+        self._thread_id = get_ident()
+        self.settings = settings
+        self._metadata: dict[tuple[str, str], _CapturedArtifactMetadata] = {}
+        self._members: dict[tuple[str, str, str, str, str, str], PinnedArtifactMember] = {}
+        self._retained_bytes = 0
+
+    def require_session(self, session: Session) -> None:
+        if (
+            session is not self._session
+            or session.get_transaction() is not self._root
+            or not self._root.is_active
+            or self._thread_id != get_ident()
+        ):
+            raise PinnedArtifactResolutionError("pinned Artifact read transaction is invalid")
+
+    def prefetch(self, identities: tuple[tuple[str, str], ...]) -> None:
+        self.require_session(self._session)
+        selected = tuple(sorted(set(identities).difference(self._metadata)))
+        if len(self._metadata) + len(selected) > self.MAX_REVISIONS:
+            raise PinnedArtifactResolutionError("pinned Artifact metadata budget is exceeded")
+        if not selected:
+            return
+        revisions = tuple(
+            self._session.scalars(
+                select(ArtifactRevisionRecord)
+                .where(
+                    tuple_(
+                        ArtifactRevisionRecord.logical_artifact_id,
+                        ArtifactRevisionRecord.revision_id,
+                    ).in_(selected)
+                )
+                .execution_options(populate_existing=True)
+            )
+        )
+        logicals = {
+            row.logical_artifact_id: row
+            for row in self._session.scalars(
+                select(ArtifactRecord)
+                .where(
+                    ArtifactRecord.logical_artifact_id.in_(
+                        tuple(sorted({key[0] for key in selected}))
+                    )
+                )
+                .execution_options(populate_existing=True)
+            )
+        }
+        jobs = {
+            row.job_id: row
+            for row in self._session.scalars(
+                select(JobRecord)
+                .where(JobRecord.job_id.in_(tuple(sorted({row.job_id for row in revisions}))))
+                .execution_options(populate_existing=True)
+            )
+        }
+        found = {(row.logical_artifact_id, row.revision_id) for row in revisions}
+        if found != set(selected):
+            raise PinnedArtifactResolutionError("pinned Artifact provenance does not resolve")
+        captured = {}
+        for revision in revisions:
+            logical = logicals.get(revision.logical_artifact_id)
+            if logical is None:
+                raise PinnedArtifactResolutionError("pinned Artifact provenance does not resolve")
+            captured[(revision.logical_artifact_id, revision.revision_id)] = _capture_metadata(
+                logical, revision, jobs.get(revision.job_id)
+            )
+        self._metadata.update(captured)
+
+    def require_file_set(
+        self,
+        artifact_id: str,
+        revision_id: str,
+        names: tuple[str, ...],
+        *,
+        manifest_version: str | None = None,
+    ) -> None:
+        """Check one fixed owner member closure; this is not source authorization."""
+        self.require_session(self._session)
+        captured = self._metadata.get((artifact_id, revision_id))
+        if (
+            captured is None
+            or (
+                manifest_version is not None
+                and captured.manifest.get("manifest_version") != manifest_version
+            )
+            or captured.entry_count != len(captured.members)
+            or set(captured.members) != set(names)
+            or any(len(values) != 1 for values in captured.members.values())
+        ):
+            raise PinnedArtifactResolutionError("pinned Artifact member set differs")
+
+    def member_pointer(
+        self,
+        artifact_id: str,
+        revision_id: str,
+        member_path: str,
+        *,
+        schema_ref: str,
+        media_type: str,
+    ) -> ArtifactMemberPointer:
+        """Resolve a descriptor pointer; callers must still read/verify its bytes."""
+        self.require_session(self._session)
+        captured = self._metadata.get((artifact_id, revision_id))
+        descriptors = () if captured is None else captured.members.get(member_path, ())
+        if (
+            len(descriptors) != 1
+            or descriptors[0].get("schema_ref") != schema_ref
+            or descriptors[0].get("media_type") != media_type
+        ):
+            raise PinnedArtifactResolutionError("pinned Artifact member descriptor differs")
+        return ArtifactMemberPointer.model_validate(
+            {
+                "artifact_id": artifact_id,
+                "artifact_revision_id": revision_id,
+                "member_path": member_path,
+                "schema_ref": schema_ref,
+                "media_type": media_type,
+                "sha256": descriptors[0].get("sha256"),
+            }
+        )
+
+    def read_pinned(
+        self,
+        *,
+        artifact_id: str,
+        artifact_revision_id: str,
+        member_path: str,
+        sha256: str,
+        schema_ref: str,
+        media_type: str,
+        expected_artifact_types: Collection[str],
+        expected_primary_file: str,
+        max_bytes: int,
+        expected_manifest_artifact_types: Collection[str] | None = None,
+    ) -> PinnedArtifactMember:
+        self.require_session(self._session)
+        captured = self._metadata.get((artifact_id, artifact_revision_id))
+        if captured is None:
+            raise PinnedArtifactResolutionError("pinned Artifact metadata was not captured")
+        key = artifact_id, artifact_revision_id, member_path, sha256, schema_ref, media_type
+        cached = self._members.get(key)
+        if cached is None:
+            if len(self._members) >= self.MAX_MEMBERS:
+                raise PinnedArtifactResolutionError("pinned Artifact member budget is exceeded")
+            descriptors = captured.members.get(member_path, ())
+            size = descriptors[0].get("bytes") if len(descriptors) == 1 else None
+            if type(size) is int and self._retained_bytes + size > self.MAX_RETAINED_BYTES:
+                raise PinnedArtifactResolutionError("pinned Artifact byte budget is exceeded")
+        member = _resolve_pinned_artifact_member(
+            self._session,
+            self.settings,
+            artifact_id=artifact_id,
+            artifact_revision_id=artifact_revision_id,
+            member_path=member_path,
+            sha256=sha256,
+            schema_ref=schema_ref,
+            media_type=media_type,
+            expected_artifact_types=expected_artifact_types,
+            expected_primary_file=expected_primary_file,
+            max_bytes=max_bytes,
+            expected_manifest_artifact_types=expected_manifest_artifact_types,
+            captured=captured,
+            materialized=cached,
+        )
+        if cached is not None:
+            return member
+        if len(self._members) >= self.MAX_MEMBERS:
+            raise PinnedArtifactResolutionError("pinned Artifact member budget is exceeded")
+        if self._retained_bytes + len(member.payload) > self.MAX_RETAINED_BYTES:
+            raise PinnedArtifactResolutionError("pinned Artifact byte budget is exceeded")
+        self._members[key] = member
+        self._retained_bytes += len(member.payload)
+        return member
+
+    def read_member(
+        self,
+        *,
+        artifact_id: str,
+        revision_id: str,
+        member_path: str,
+        sha256: str,
+        media_type: str,
+        schema_ref: str,
+        max_bytes: int,
+    ) -> bytes:
+        self.require_session(self._session)
+        captured = self._metadata.get((artifact_id, revision_id))
+        if captured is None:
+            raise PinnedArtifactResolutionError("pinned Artifact metadata was not captured")
+        primary = captured.manifest.get("primary_file")
+        manifest_type = captured.manifest.get("artifact_type")
+        if not isinstance(primary, str) or not isinstance(manifest_type, str):
+            raise PinnedArtifactResolutionError("pinned Artifact manifest does not resolve")
+        return self.read_pinned(
+            artifact_id=artifact_id,
+            artifact_revision_id=revision_id,
+            member_path=member_path,
+            sha256=sha256,
+            schema_ref=schema_ref,
+            media_type=media_type,
+            expected_artifact_types=(captured.logical.artifact_type,),
+            expected_manifest_artifact_types=(manifest_type,),
+            expected_primary_file=primary,
+            max_bytes=max_bytes,
+        ).payload
+
+    def verify_member(
+        self,
+        *,
+        artifact_id: str,
+        revision_id: str,
+        member_path: str,
+        sha256: str,
+        media_type: str,
+        schema_ref: str,
+        max_bytes: int,
+    ) -> None:
+        self.read_member(
+            artifact_id=artifact_id,
+            revision_id=revision_id,
+            member_path=member_path,
+            sha256=sha256,
+            schema_ref=schema_ref,
+            media_type=media_type,
+            max_bytes=max_bytes,
+        )
+
+
 __all__ = [
     "PinnedArtifactMember",
+    "PinnedArtifactReadContext",
     "PinnedArtifactResolutionError",
     "resolve_pinned_artifact_member",
 ]

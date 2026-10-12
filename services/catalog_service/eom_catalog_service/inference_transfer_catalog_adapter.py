@@ -25,6 +25,7 @@ from eom_orchestrator.models import ArtifactRevisionRecord
 from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
+from eom_catalog_service.artifacts import CatalogArtifactReader
 from eom_catalog_service.inference_transfer_projection import project_accepted_solution_report
 from eom_catalog_service.inference_transfer_scope import InferenceTransferPopulationScope
 from eom_catalog_service.inference_transfer_service import (
@@ -161,12 +162,14 @@ class CatalogInferenceTransferSourceAdapter:
         self,
         session: Session,
         pool: ReadOnlyKnowledgeCandidatePool,
+        *,
+        artifact_reader: CatalogArtifactReader | None = None,
     ) -> tuple[tuple[AcceptedInferenceTransferProfileInput, ...], int]:
         """One authoritative accepted-report/UTC-timestamp projection boundary."""
         try:
             solutions = resolve_solution_evidence_by_base_run(
                 session,
-                self.retrieval.artifacts,
+                self.retrieval.artifacts if artifact_reader is None else artifact_reader,
                 base_analysis_run_ids=tuple(
                     candidate.analysis_run_id for candidate in pool.candidates
                 ),

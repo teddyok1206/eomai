@@ -28,7 +28,7 @@ from eom_catalog_contracts import (
 )
 from pydantic import ValidationError
 
-from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.artifacts import CatalogArtifactReader, CatalogArtifactService
 
 type KnowledgeAnalysisReceipt = (
     KnowledgeAnalysisProposalReceipt
@@ -201,7 +201,7 @@ def resolve_knowledge_analysis_proposal(
 
 
 def resolve_knowledge_solution_proposal(
-    artifacts: CatalogArtifactService,
+    artifacts: CatalogArtifactReader,
     receipt: KnowledgeAnalysisProposalReceiptV9,
 ) -> KnowledgeAnalysisWorkerProposalV8:
     """Resolve the one additive report member without copying accepted base members."""

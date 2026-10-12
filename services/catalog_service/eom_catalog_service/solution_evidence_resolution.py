@@ -25,7 +25,7 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased
 
-from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.artifacts import CatalogArtifactReader
 from eom_catalog_service.knowledge_proposal_resolution import (
     KnowledgeProposalResolutionError,
     resolve_knowledge_solution_proposal,
@@ -100,7 +100,7 @@ def _proposal_pointer(
 
 
 def _resolve_row(
-    artifacts: CatalogArtifactService,
+    artifacts: CatalogArtifactReader,
     row: tuple[
         KnowledgeAnalysisRunRecord,
         ArtifactRevisionRecord,
@@ -229,7 +229,7 @@ def _resolve_row(
 
 def resolve_solution_evidence_by_base_run(
     session: Session,
-    artifacts: CatalogArtifactService,
+    artifacts: CatalogArtifactReader,
     *,
     base_analysis_run_ids: tuple[str, ...],
 ) -> dict[str, ResolvedSolutionEvidence]:

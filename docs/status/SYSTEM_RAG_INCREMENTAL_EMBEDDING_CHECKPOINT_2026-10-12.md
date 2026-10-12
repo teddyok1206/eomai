@@ -310,3 +310,37 @@ raw hash·inventory·총32,014,410 bytes가 독립 검사로 일치했다. prima
 HEAD403은 그대로 기록하고 공식 index의 동일 URL/hash·bounded Range GET206으로 availability를
 확인한 뒤 pip의 hashed cache body로 준비했다. URL/version/flavor 변경이나 설치·모델 실행은
 없었다. archive regular-file/RECORD layout 검사는 후속 receipt에서 별도로 보고한다.
+
+## Current-source·report·Artifact registry verifier — 2026-10-12 UTC
+
+기존 official source capture/admission/projection에 caller의 Catalog root Session용 additive
+operation과 bounded Artifact read context를 연결했다. index/shard/result/vector의 exact
+canonical bytes와 same-file-set/hash/row closure를 검증하고 등록·조회·재전송 때 현재 실제
+사용자 및 pin된 원문·report·Graph·policy를 다시 확인한다. 같은 numerical vector가 있다는
+사실은 source 사용 권한이 아니다. 원래 independent read-only capture/reuse 동작은 보존했다.
+
+1,024 members를 처리하는 synthetic operation-count 검증에서 metadata query3회와 manifest
+hash1회이며 member당 SQL/full-manifest hash를 반복하지 않는다. Session/root transaction/thread,
+revision/member/aggregate byte ceiling을 확인하고 초과는 file IO 전 거부한다. 해석된 bytes는
+request-local일 뿐 권한 cache·DB binary·새 Artifact 정본이 아니다.
+
+root 독립11-suite gate **177 PASS (16.64s)**, strict mypy10·Ruff/format10 PASS다.
+첫 tests-included strict run의6개 fixture typing 오류는 typed simulation boundary와
+`monkeypatch.setattr`로 수정했고 production override·blanket ignore를 추가하지 않았다.
+actual immutable temporary files와 simulated source/IAM ports를 사용한 source 검증이다.
+실제 revoke-vs-register concurrency와 production 권한을 통과했다는 뜻이 아니다.
+
+Identity owner의 required fence interface만 있으며 concrete security helper/grant/default
+composition은 없다. 누락 시 검증·member read/write 전에 명시적으로 unavailable이다.
+Catalog에 IAM UPDATE 권한을 주거나 기존 advisory lock만으로 password reset까지 보호된다고
+주장하지 않는다. 별도 reviewed official IAM seam과 실제 disposable revoke tests가 다음 gate다.
+
+## CUDA prefetch의 선할당 상한 수정·실제 재검증 — 2026-10-12 UTC
+
+기존 offline inspector의 같은 held FD에서 ZIP32 EOCD/central bytes·actual header count를
+검증한 뒤에만 `ZipFile` 객체를 만든다. count/byte/ZIP64/comment/multidisk/malformed 입력과
+실패 FD cleanup은 source **73 PASS (0.17s)**, strict mypy2·Ruff/format2 PASS다.
+별도 새 private receipt로 실제25개 raw hash/총3,848,835,734 bytes, bounded structure/metadata/
+dependency와 named/FD epochs를 확인했다. 이전 receipt/source hash를 새 코드 PASS로
+덮지 않았다. exact receipt/hash는 CUDA package-lock 문서 §10에 기록한다.
+이 결과는 실제 설치·전체 RECORD·GPU 권한·추론/default activation의 증거가 아니다.

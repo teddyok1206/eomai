@@ -1191,6 +1191,7 @@ class KnowledgeRetrievalApplicationService:
         scope: ReadOnlyCandidatePoolScope,
         *,
         reuse_context: ReadOnlyKnowledgeReuseContext | None = None,
+        artifact_reader: CatalogArtifactReader | None = None,
     ) -> ReadOnlyKnowledgeCandidatePool:
         """Admit bounded exact Item sources without requiring lexical overlap.
 
@@ -1199,6 +1200,11 @@ class KnowledgeRetrievalApplicationService:
         silently truncate the source population: an overlarge source raises a bounded-read error.
         Canonical source resolution remains the existing Catalog boundary.
         """
+        if reuse_context is not None and artifact_reader is not None:
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_REUSE_CONTEXT_INVALID",
+                "a reader injection cannot override an existing immutable reuse context",
+            )
         snapshot_id = scope.graph_snapshot.graph_snapshot_revision_id
         snapshot = self.resolve_snapshot_pointer(session, snapshot_id)
         if snapshot != scope.graph_snapshot:
@@ -1315,6 +1321,7 @@ class KnowledgeRetrievalApplicationService:
             snapshot_id,
             tuple(values[0][0] for values in by_run.values()),
             reuse_context=reuse_context,
+            artifact_reader=artifact_reader,
         )
         admitted: list[KnowledgeRetrievalCandidate] = []
         for run_id in run_ids:
@@ -1837,7 +1844,14 @@ class KnowledgeRetrievalApplicationService:
         pointers: tuple[KnowledgeNodeSourcePointerRecord, ...],
         *,
         reuse_context: ReadOnlyKnowledgeReuseContext | None = None,
+        artifact_reader: CatalogArtifactReader | None = None,
     ) -> _SnapshotSourceResolutionCache:
+        if reuse_context is not None and artifact_reader is not None:
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_REUSE_CONTEXT_INVALID",
+                "a reader injection cannot override an existing immutable reuse context",
+            )
+        reader = self.artifacts if artifact_reader is None else artifact_reader
         if reuse_context is not None:
             reuse_context._require_owner(self, session)
             if reuse_context._scope.graph_snapshot.graph_snapshot_revision_id != snapshot_id:
@@ -1852,7 +1866,7 @@ class KnowledgeRetrievalApplicationService:
                 runs_by_id={},
                 artifacts=reuse_context._artifacts
                 if reuse_context is not None
-                else _RequestScopedArtifactValidationCache(self.artifacts),
+                else _RequestScopedArtifactValidationCache(reader),
                 past_exam_provenance=reuse_context._past_exam
                 if reuse_context is not None
                 else PastExamSourceResolutionCache(),
@@ -1893,7 +1907,7 @@ class KnowledgeRetrievalApplicationService:
             runs_by_id=runs_by_id,
             artifacts=reuse_context._artifacts
             if reuse_context is not None
-            else _RequestScopedArtifactValidationCache(self.artifacts),
+            else _RequestScopedArtifactValidationCache(reader),
             past_exam_provenance=reuse_context._past_exam
             if reuse_context is not None
             else PastExamSourceResolutionCache(),

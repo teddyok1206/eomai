@@ -7,11 +7,14 @@ The CPU harness and workers never receive database or NAS access from this port.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any, cast
 
 from eom_catalog_contracts import ApprovedItemKnowledgeSourceV2, CreateEvidenceBundleCommand
 from eom_catalog_contracts.inference_transfer_experiment import (
     MAX_GRAPH_BASELINE_CANDIDATES,
+    ExperimentViewRecipe,
     StagedExperimentEntry,
     SuppliedGraphBaseline,
     profile_key,
@@ -24,15 +27,18 @@ from eom_catalog_contracts.inference_transfer_snapshot import (
 )
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
 from eom_identifiers import content_sha256
+from eom_identity_service.operator_authorization_fence import OperatorAuthorizationFence
 from eom_orchestrator.control_artifact_resolution import (
     BoundedControlArtifactRead,
     ControlArtifactResolutionError,
     resolve_control_artifact_members,
 )
+from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_protocol.artifact_members import ArtifactMemberPointer
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine, or_, select, text
 from sqlalchemy.orm import Session
 
+from eom_catalog_service.artifacts import CatalogArtifactReader
 from eom_catalog_service.inference_transfer_catalog_adapter import (
     AcceptedInferenceTransferProfileInput,
     CatalogInferenceTransferSourceAdapter,
@@ -52,12 +58,18 @@ from eom_catalog_service.inference_transfer_snapshot_service import (
     validate_snapshot_selection,
 )
 from eom_catalog_service.item_content_contract import ITEM_CONTENT_SCHEMAS, read_item_content
+from eom_catalog_service.knowledge_graph_models import (
+    KnowledgeNodeSourcePointerRecord,
+    KnowledgeSnapshotAnalysisRecord,
+)
 from eom_catalog_service.knowledge_graph_projection import knowledge_node_terms
 from eom_catalog_service.knowledge_retrieval_service import (
     KnowledgeRetrievalServiceError,
     ReadOnlyCandidatePoolScope,
     ReadOnlyKnowledgeReuseContext,
 )
+from eom_catalog_service.models import ItemComponentRecord, ItemRecord, ItemRevisionRecord
+from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.settings import CatalogSettings
 
 _MAXIMUM_ITEM_MEMBER_BYTES = 16 * 1024**2
@@ -77,6 +89,38 @@ def _reject_json_constant(value: str) -> Any:
     raise ValueError(f"non-standard JSON numeric constant: {value}")
 
 
+class InferenceTransferSessionCapturePhase(StrEnum):
+    AUTHORIZE_SCOPE = "AUTHORIZE_SCOPE"
+    CAPTURE_POPULATION = "CAPTURE_POPULATION"
+
+
+@dataclass(frozen=True, slots=True)
+class InferenceTransferSessionCapture:
+    scope: ReadOnlyCandidatePoolScope
+    corpus: AdmittedInferenceTransferCorpus | None = None
+    entries: tuple[StagedExperimentEntry, ...] = ()
+
+
+def _metadata_artifact_identities(value: object) -> set[tuple[str, str]]:
+    """Prefetch hints only; these values grant no source/member eligibility.
+
+    Canonical requests remain untrusted until the existing official resolver
+    parses and checks them. Only Artifact identity pairs are collected, not text.
+    """
+    found: set[tuple[str, str]] = set()
+    pending = [value]
+    while pending:
+        node = pending.pop()
+        if isinstance(node, dict):
+            artifact, revision = node.get("artifact_id"), node.get("artifact_revision_id")
+            if isinstance(artifact, str) and isinstance(revision, str):
+                found.add((artifact, revision))
+            pending.extend(node.values())
+        elif isinstance(node, list):
+            pending.extend(node)
+    return found
+
+
 class CatalogInferenceTransferSnapshotSourceAdapter:
     """Actual-actor owner port; every capture recomputes the complete exact scope."""
 
@@ -86,8 +130,10 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
 
     def _materialize_entries(
         self,
-        request: InferenceTransferSnapshotPrepareRequest,
+        request: InferenceTransferSnapshotPrepareRequest | ExperimentViewRecipe,
         inputs: tuple[AcceptedInferenceTransferProfileInput, ...],
+        *,
+        artifact_reader: CatalogArtifactReader | None = None,
     ) -> dict[str, StagedExperimentEntry]:
         """One explicit owner-local materialization; exact member checks precede parsing."""
         pointers: dict[ArtifactMemberPointer, int] = {}
@@ -133,7 +179,22 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
             if not batch:
                 return
             try:
-                values = resolve_control_artifact_members(self.engine, tuple(batch))
+                values = (
+                    resolve_control_artifact_members(self.engine, tuple(batch))
+                    if artifact_reader is None
+                    else tuple(
+                        artifact_reader.read_member(
+                            artifact_id=read.pointer.artifact_id,
+                            revision_id=read.pointer.artifact_revision_id,
+                            member_path=read.pointer.member_path,
+                            sha256=read.pointer.sha256,
+                            schema_ref=read.pointer.schema_ref,
+                            media_type=read.pointer.media_type,
+                            max_bytes=read.maximum_bytes,
+                        )
+                        for read in batch
+                    )
+                )
             except ControlArtifactResolutionError as exc:
                 raise InferenceTransferServiceError(
                     "INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH"
@@ -161,7 +222,9 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
                             profile=value.profile,
                             item=item,
                             accepted_report=value.report,
-                            recipe=request.recipe,
+                            recipe=request.recipe
+                            if isinstance(request, InferenceTransferSnapshotPrepareRequest)
+                            else request,
                         )
                 except (UnicodeError, ValueError) as exc:
                     raise InferenceTransferServiceError(
@@ -177,6 +240,167 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
             batch_bytes += size
         read_batch()
         return result
+
+    def capture_in_session(
+        self,
+        session: Session,
+        command: InferenceTransferCorpusReadCommand,
+        recipe: ExperimentViewRecipe,
+        *,
+        identity_fence: OperatorAuthorizationFence | None,
+        artifact_reader: PinnedArtifactReadContext,
+        phase: InferenceTransferSessionCapturePhase = (
+            InferenceTransferSessionCapturePhase.CAPTURE_POPULATION
+        ),
+    ) -> InferenceTransferSessionCapture:
+        """One current-operator owner operation in the caller's Catalog transaction.
+
+        Scope-only mode performs no source/member IO. Population capture fences
+        mutable source rows and delegates eligibility/projection to existing rules.
+        Published membership is a bounded metadata-prefetch hint, never admission.
+        """
+        if identity_fence is None:
+            raise InferenceTransferServiceError("INFERENCE_TRANSFER_AUTHORITY_UNAVAILABLE")
+        if not isinstance(phase, InferenceTransferSessionCapturePhase):
+            raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH")
+        artifact_reader.require_session(session)
+        identity_fence.fence_current_operator(session, command.actor_id)
+        scope = self.sources._scope(session, command)
+        policy = self.sources.retrieval.resolve_access_policy(
+            session, scope.access_policy_revision_id, sha256=scope.access_policy_sha256
+        )
+        self.sources.retrieval._authorize(session, scope, policy)
+        if (
+            self.sources.retrieval.resolve_snapshot_pointer(
+                session, scope.graph_snapshot.graph_snapshot_revision_id
+            )
+            != scope.graph_snapshot
+        ):
+            raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH")
+        if phase is InferenceTransferSessionCapturePhase.AUTHORIZE_SCOPE:
+            return InferenceTransferSessionCapture(scope)
+        recipe = ExperimentViewRecipe.model_validate(recipe.model_dump(mode="json"))
+        association, pointer = KnowledgeSnapshotAnalysisRecord, KnowledgeNodeSourcePointerRecord
+        memberships = tuple(
+            session.scalars(
+                select(association)
+                .join(
+                    pointer,
+                    (pointer.graph_snapshot_revision_id == association.graph_snapshot_revision_id)
+                    & (pointer.analysis_run_id == association.analysis_run_id),
+                )
+                .where(
+                    association.graph_snapshot_revision_id
+                    == scope.graph_snapshot.graph_snapshot_revision_id,
+                    association.source_kind == "APPROVED_ITEM_REVISION",
+                    pointer.source_class.in_(scope.source_classes),
+                )
+                .distinct()
+                .order_by(association.analysis_run_id)
+                .limit(1025)
+            )
+        )
+        if len(memberships) > 1024:
+            raise InferenceTransferServiceError("INFERENCE_TRANSFER_SNAPSHOT_POPULATION_TRUNCATED")
+        revisions = tuple(sorted({row.source_revision_id for row in memberships}))
+        source_rows = tuple(
+            session.execute(
+                select(ItemRecord, ItemRevisionRecord)
+                .join(ItemRevisionRecord, ItemRevisionRecord.item_id == ItemRecord.item_id)
+                .where(ItemRevisionRecord.item_revision_id.in_(revisions))
+                .order_by(ItemRecord.item_id, ItemRevisionRecord.item_revision_id)
+                .with_for_update(read=True, of=(ItemRecord, ItemRevisionRecord))
+                .execution_options(populate_existing=True)
+            )
+        )
+        base_ids = tuple(sorted({row.analysis_run_id for row in memberships}))
+        runs = tuple(
+            session.scalars(
+                select(KnowledgeAnalysisRunRecord)
+                .where(
+                    or_(
+                        KnowledgeAnalysisRunRecord.analysis_run_id.in_(base_ids),
+                        (KnowledgeAnalysisRunRecord.predecessor_analysis_run_id.in_(base_ids))
+                        & (KnowledgeAnalysisRunRecord.state == "ACCEPTED")
+                        & (
+                            KnowledgeAnalysisRunRecord.canonical_request["schema_version"].astext
+                            == "knowledge-analysis-request/10.0"
+                        ),
+                    )
+                )
+                .order_by(KnowledgeAnalysisRunRecord.analysis_run_id)
+                .with_for_update(read=True)
+                .execution_options(populate_existing=True)
+            )
+        )
+        components = tuple(
+            session.scalars(
+                select(ItemComponentRecord).where(
+                    ItemComponentRecord.item_revision_id.in_(revisions),
+                    ItemComponentRecord.component_type == "ITEM_CONTENT",
+                    ItemComponentRecord.ordinal == 0,
+                )
+            )
+        )
+        identities = (
+            {(row.source_artifact_id, row.source_artifact_revision_id) for row in memberships}
+            | {
+                (row.accepted_result_artifact_id, row.accepted_result_artifact_revision_id)
+                for row in memberships
+            }
+            | {
+                (revision.manifest_artifact_id, revision.manifest_artifact_revision_id)
+                for _item, revision in source_rows
+            }
+            | {(row.artifact_id, row.artifact_revision_id) for row in components}
+        )
+        for run in runs:
+            identities.update(_metadata_artifact_identities(run.canonical_request))
+            for artifact, revision in (
+                (run.accepted_result_artifact_id, run.accepted_result_artifact_revision_id),
+                (run.proposal_artifact_id, run.proposal_artifact_revision_id),
+            ):
+                if artifact is not None and revision is not None:
+                    identities.add((artifact, revision))
+        graph_member = scope.graph_snapshot.manifest_artifact
+        identities.add((graph_member.artifact_id, graph_member.artifact_revision_id))
+        artifact_reader.prefetch(tuple(sorted(identities)))
+        # Publication metadata pins this member; prove its actual immutable bytes
+        # in this root transaction without granting any source permission.
+        artifact_reader.verify_member(
+            artifact_id=graph_member.artifact_id,
+            revision_id=graph_member.artifact_revision_id,
+            member_path=graph_member.member_path,
+            sha256=graph_member.sha256,
+            schema_ref=graph_member.schema_ref,
+            media_type=graph_member.media_type,
+            max_bytes=64 * 1024**2,
+        )
+        pool = self.sources.retrieval.admit_read_only_candidate_pool(
+            session, scope, artifact_reader=artifact_reader
+        )
+        if pool.truncated:
+            raise InferenceTransferServiceError("INFERENCE_TRANSFER_SNAPSHOT_POPULATION_TRUNCATED")
+        inputs, missing = self.sources._resolve_profile_inputs(
+            session, pool, artifact_reader=artifact_reader
+        )
+        admitted_rows = []
+        for row in pool.candidates:
+            if not isinstance(row.source, ApprovedItemKnowledgeSourceV2):
+                raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH")
+            admitted_rows.append(AdmittedInferenceTransferSource(row.analysis_run_id, row.source))
+        admitted = tuple(admitted_rows)
+        corpus = AdmittedInferenceTransferCorpus(
+            profiles=tuple(row.profile for row in inputs),
+            graph_scores=(),
+            truncated=False,
+            missing_solution_reports=missing,
+            sources=admitted,
+        )
+        entries = self._materialize_entries(recipe, inputs, artifact_reader=artifact_reader)
+        return InferenceTransferSessionCapture(
+            scope, corpus, tuple(entries[key] for key in sorted(entries))
+        )
 
     def _baselines(
         self,

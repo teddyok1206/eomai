@@ -172,9 +172,10 @@ CUDA wheel25개의 다운로드·독립 raw-hash/ZIP 검증과 공유 GPU mutex/
 준비했습니다. 실제 설치·현재 권한 연결·native Runner·자동 증분·공통 소비자 연결은
 후속 작업입니다. **GPU 실제 비교·기본값 전환 및 영속 운영 인덱스는 아직 미활성**이며,
 소스/합성 테스트를 운영·모델 실행 증거로 해석하지 않습니다.
-실제 CUDA archive 점검에서는 Torch/Triton의 정상적인 directory member가 현재 설치 증명
-검사기의 허용 layout과 달라 호환성 보정 중입니다. archive hash 일치는 설치·실행 PASS가
-아니며, 모델/GPU 실행 없이 이 차이를 먼저 검증합니다.
+실제 CUDA archive 점검의 Torch/Triton directory layout 차이는 좁은 호환성 수정과 실제
+25개 archive 재검사로 확인했습니다. numerical observer/backend source461 PASS와
+current-source·report·Artifact owner 연결177 PASS는 설치·실행 PASS가 아닙니다.
+실제 IAM fence·native launcher·protected prefix와 공통 소비자 운영 연결은 아직 pending입니다.
 
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스
