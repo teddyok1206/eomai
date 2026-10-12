@@ -622,3 +622,23 @@ guarded stage harness/profile source **92 PASS (0.86s)**도 별도로 확인했�
 cases는 준비/collection만 완료했으며 **실제 DB 실행은 아직 NOT_EXECUTED**다. source head0053은
 production DB migration·설치 release alignment·native 실행·GPU 기본값 활성화를 뜻하지 않는다.
 기존0052 disposable8/6/16과 cleanup PASS 증거를 새로운0053 PASS로 확대하지 않는다.
+
+## 실제0053 disposable DB gate와 cleanup — 2026-10-12 23:08 UTC
+
+기존 supported `testdb_prepare.sh`로 만든 exact marked disposable DB에서
+`testdb_run.sh migrate`의0053 upgrade→0052 downgrade→0053 upgrade와 현재 head0053,
+control-plane routine/trigger 검증이 PASS다. 같은 owner/manifest preflight를 사용하는
+`embedding-stage-tests`는 **18 PASS (0.35s)**, skip0이다. nullable-safe native/legacy CHECK,
+native history가 남으면 DDL 전에 downgrade 거부, legacy/unrelated history의 보존을
+실제 PostgreSQL에서 검증했다. 모든 사례는 outer rollback이며 worker/model/GPU/NAS 작업은 없다.
+
+기존 guarded cleanup이 exact marked DB와 전용 owner/state를 제거했다. optional runtime role은
+생성하지 않았고 production DB/role/권한/Artifact는 변경하지 않았다. **cleanup PASS**이며
+prepare/cleanup의 비밀값 없는 기록은 외부 임시 evidence 디렉터리에 보존했다. migration/test
+결과는 해당 실행의 도구 출력과 이 checkpoint에 기록한다; 별도의 전체 실행 로그를 만들었다고
+주장하지 않는다. 앞 절의18-case NOT_EXECUTED는 이 후속 실제 evidence로 닫힌다.
+
+이 결과는0053의 disposable DB acceptance이지 production migration·native dispatcher·전체
+설치 admission·실제 CPU/CUDA 속도 측정·GPU 기본값 활성화 PASS가 아니다. 새 모델/GPU 실행0,
+기본값 NOT_ACTIVE, 전체 목표 ACTIVE다. 이전 source579/961과 DB16/8/6은 서로 다른 gate로
+보존하고 겹치는 테스트 수를 합산하지 않는다.

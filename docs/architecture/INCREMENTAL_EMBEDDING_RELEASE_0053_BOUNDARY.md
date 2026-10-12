@@ -39,3 +39,9 @@ DB harness. These tests never authorize production migration or native runtime/m
 The existing guarded `testdb_run.sh` has one closed `embedding-stage-tests` purpose. It uses the
 same owner URL/manifest/marker preflight and the official stage-owner fixture, not a new credential
 or profile. It selects only the18 prepared integration cases; production DB tests remain forbidden.
+
+Actual disposable acceptance,2026-10-12 23:08 UTC: exact0053 up/down/up, current head and
+control-plane gates PASS; the18 stage cases PASS (0.35s, no skips); guarded DB/owner/state cleanup
+PASS. Production migration, installed release and native/model/GPU activation remain unchanged.
+The [checkpoint](../status/SYSTEM_RAG_INCREMENTAL_EMBEDDING_CHECKPOINT_2026-10-12.md)
+distinguishes this result from earlier source-only and0052 acceptance.

@@ -198,8 +198,9 @@ bounded checkpoint/ACK channel과 실제 pip console-wrapper 호환성이 추가
 명시했으며, 문서/합성 PASS만으로 GPU 기본값을 전환하지 않습니다.
 고정 native factory·stdlib wheel 검증 공용화의 root 회귀961 PASS도 source 결과입니다.
 native stage/step DB guard의 새 source head는0053이며 exact release context1.2와 함께 준비했습니다.
-native/legacy/release source579 PASS, 새18 DB 사례는 아직 실행 전입니다. 현재 운영 DB/설치본을
-자동으로0053으로 바꾸거나 native 실행이 활성화됐다고 해석하지 않습니다.
+native/legacy/release source579 PASS 이후 guarded disposable PostgreSQL에서 새18 DB 사례도
+**18 PASS (0.35s)**,0053 up/down/up·control-plane gate와 cleanup PASS를 확인했습니다.
+현재 운영 DB/설치본을 자동으로0053으로 바꾸거나 native 실행이 활성화됐다고 해석하지 않습니다.
 
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스
