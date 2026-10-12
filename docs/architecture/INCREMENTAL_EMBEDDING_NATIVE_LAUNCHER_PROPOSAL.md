@@ -1,7 +1,8 @@
 # Protected native embedding factory and launcher — proposal
 
-2026-10-12 UTC. **DESIGN_ONLY / NOT_INSTALLED / NOT_ADMITTED / NOT_ACTIVE**.
-This note changes no code, schema, unit, ACL, identity, database or runtime. It proposes the
+2026-10-12 UTC. **CONFIG_CONTRACT_SOURCE_ONLY / NOT_INSTALLED / NOT_ADMITTED / NOT_ACTIVE**.
+The small installation-config schema/frozen contract is source-only; all factory and launcher
+behavior below remains a proposal. No unit, ACL, identity, database or runtime is changed. It proposes the
 smallest installed composition of the existing native leaves. Historical CPU experiment files,
 account, model manifests, environment, unit hashes and results remain unchanged. The actual
 same-input CPU/CUDA benchmark and, if superior with all gates passing, CUDA default activation
@@ -117,13 +118,15 @@ owns its non-writable ancestors and single-link regular file. Bundle location is
 `/opt/eom/embedding-runtime-bundles/<bundle_id>/<bundle_revision_id>/bundle.json`; proof/archive
 locations remain the observer's existing fixed locations. Payload root remains the one legacy root.
 
-Before code, define one closed JSON Schema2020-12/frozen model for this small **installation** value:
+The source-only closed JSON Schema2020-12/frozen model defines this small **installation** value:
 schema version, configuration ID/revision, CPU_INDEX_FP32|CUDA_INDEX_FP32 profile, exact bundle
 pointer, exact installed-proof pointer, numerical-runtime SHA, exact resource-profile value/SHA,
-and configuration semantic SHA. Owner release separately pins raw configuration SHA, accepted
+and configuration semantic SHA. The source contract is `embedding-native-runtime-config/1.0`,
+with exact existing bundle/proof pointers and a fixed resource value plus semantic SHA.
+Owner release separately pins raw configuration SHA, accepted
 private release/full-prefix receipt and exact unit/verifier bytes. No absolute paths, executable,
 module, operator ID, permission list, service grant, mutable device default or activation flag is
-accepted in this value. These are proposed fields, not a registered schema or existing adapter.
+accepted in this value. The fields are registered as a source-only contract, not an installed adapter.
 Index policy and distinct benchmark policy are resolved/authorized by their owners; runtime
 configuration cannot become either compute-purpose policy. Reparse values before use to reject
 constructed/copied frozen model bypasses and retain strict integer-only resource serialization.
@@ -342,3 +345,24 @@ if CUDA is superior and every authority/isolation/cleanup/image gate passes, act
 the released CUDA default, compatible CUDA-only index/QUERY family and rollback. Otherwise retain
 CPU with exact reasons. A factory proposal, prefix installation or performance verdict alone is
 not completion, and background-service admission remains separately unavailable.
+
+## Source config checkpoint — 2026-10-12 UTC
+
+Only the small `embedding-native-runtime-config/1.0` schema, packaged mirror and frozen Catalog
+models are implemented. `EmbeddingNativeRuntimeConfig` keeps configuration ID/revision,
+bundle/proof pointers, numerical runtime SHA and exact fixed resources with separate semantic
+hashes. The trusted owner still supplies the raw configuration SHA independently. All fields are
+closed; no path, executable, role, authority, source body, purpose grant, fallback/default or
+activation state is accepted.
+
+The public config parser/serializer rejects copied/constructed raw bools, floats and extra fields
+before dumping models. Its bounded fixed-shape inspection is constant-sized, not a generic
+recursive walker; raw JSON is bounded to64KiB and depth16 before decoding. Resource/hash checks
+and `validate_embedding_native_runtime_config_references` reuse the existing public bundle/proof
+schema and canonical pointer checks, then compare device, Python/CUDA build, exact ordered numeric
+archive pins, runtime SHA and batch/thread closure. Raw archive bytes, installed prefix members,
+live device/interop read-back, independent owner admission and authority remain adapter-owned;
+synthetic config tests cannot establish them. Historical schema bytes/count/digest are unchanged.
+No factory, worker, owner/harness, unit, database, install, actual inference or default is implemented
+or activated by this checkpoint; the required actual benchmark/conditional activation outcome
+above remains pending.

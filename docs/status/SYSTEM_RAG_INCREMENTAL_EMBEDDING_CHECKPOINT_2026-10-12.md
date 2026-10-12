@@ -509,3 +509,16 @@ root source/legacy6-suite **408 PASS (8.36s)**, strict mypy3·Ruff/format3 PASS,
 fixture implicit re-export strict 오류를 수정한 뒤 이 최종 source gate를 실행했다.
 이는 추가 모델·GPU·Artifact 실행이나 default 활성화가 아니며 기존 installed HOST_L2
 bytes/proof를 변경하지 않는다. 새 runtime의 관련 source SHA는 실제 설치 후 별도 관측한다.
+
+## 고정 native runtime config source — 2026-10-12 UTC
+
+CPU/CUDA 고정 profile의 작은 installation config schema/mirror와 frozen metadata를 root
+검토했다. config logical/revision, bundle/proof raw·semantic pointers, numerical SHA와 정확한
+자원 값/hash를 분리한다. 실행 파일/path/role/권한/default flag는 없으며 config는 admission
+증거나 factory가 아니다. raw config pin은 외부의 보호된 owner 설정에서 공급한다.
+
+root는 direct raw validator의 immutable bytes 확인과 negative3을 추가했다. 최종13-suite
+**815 PASS (14.34s)**, strict mypy6·Ruff/format6 PASS다. 기존812/227/681/source 결과와
+겹치므로 합산하지 않는다. schema/mirror raw SHA는
+`f48da8820d2452fe62cfaa8b3401f42abac2f43b94eaf1a18968e5f8492bef5e`다.
+실제 model/GPU 실행·새 runtime admission/default activation은 아직0/미완료다.

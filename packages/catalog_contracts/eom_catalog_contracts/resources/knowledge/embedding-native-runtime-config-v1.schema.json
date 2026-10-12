@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/embedding-native-runtime-config/1.0",
+  "title": "Small immutable native embedding installation configuration V1",
+  "description": "Expected installed metadata only. No path, executable, source authority, compute-purpose grant, mutable default or activation follows from this value. Trusted owner pins raw bytes separately.",
+  "$defs": {
+    "sha": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "batch_size",
+        "threads",
+        "interop_threads",
+        "cpu_quota_percent",
+        "tasks_max",
+        "ram_limit_bytes",
+        "timeout_seconds",
+        "maximum_active_launches",
+        "index_output_limit_bytes",
+        "benchmark_output_limit_bytes",
+        "vram_limit_bytes",
+        "resource_sha256"
+      ],
+      "properties": {
+        "batch_size": {
+          "type": "integer",
+          "const": 4
+        },
+        "threads": {
+          "type": "integer",
+          "const": 4
+        },
+        "interop_threads": {
+          "type": "integer",
+          "const": 1
+        },
+        "cpu_quota_percent": {
+          "type": "integer",
+          "const": 400
+        },
+        "tasks_max": {
+          "type": "integer",
+          "const": 64
+        },
+        "ram_limit_bytes": {
+          "type": "integer",
+          "const": 6442450944
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "const": 180
+        },
+        "maximum_active_launches": {
+          "type": "integer",
+          "const": 1
+        },
+        "index_output_limit_bytes": {
+          "type": "integer",
+          "const": 67108864
+        },
+        "benchmark_output_limit_bytes": {
+          "type": "integer",
+          "const": 16777216
+        },
+        "vram_limit_bytes": {
+          "type": "integer",
+          "enum": [
+            0,
+            8589934592
+          ]
+        },
+        "resource_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "configuration_id",
+        "configuration_revision_id",
+        "profile",
+        "bundle",
+        "installed_proof",
+        "runtime_sha256",
+        "resources",
+        "config_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-native-runtime-config/1.0"
+        },
+        "configuration_id": {
+          "type": "string",
+          "pattern": "^embeddingnativeconfig_[0-9a-f]{32}$"
+        },
+        "configuration_revision_id": {
+          "type": "string",
+          "pattern": "^embeddingnativeconfigrev_[0-9a-f]{32}$"
+        },
+        "profile": {
+          "enum": [
+            "CPU_INDEX_FP32",
+            "CUDA_INDEX_FP32"
+          ]
+        },
+        "bundle": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/bundlePointer"
+        },
+        "installed_proof": {
+          "$ref": "eom://schemas/knowledge/embedding-installed-runtime-proof/1.0#/$defs/pointer"
+        },
+        "runtime_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "resources": {
+          "$ref": "#/$defs/resources"
+        },
+        "config_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "profile": {
+                "const": "CPU_INDEX_FP32"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "installed_proof": {
+                "properties": {
+                  "profile": {
+                    "const": "CPU_INDEX_FP32"
+                  }
+                }
+              },
+              "resources": {
+                "properties": {
+                  "vram_limit_bytes": {
+                    "const": 0
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "installed_proof": {
+                "properties": {
+                  "profile": {
+                    "const": "CUDA_INDEX_FP32"
+                  }
+                }
+              },
+              "resources": {
+                "properties": {
+                  "vram_limit_bytes": {
+                    "const": 8589934592
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$ref": "#/$defs/config"
+}
