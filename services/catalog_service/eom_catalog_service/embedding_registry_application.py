@@ -280,7 +280,6 @@ def _registration(
     verification: EmbeddingRegistryVerificationPort,
     now: datetime,
 ) -> EmbeddingIndexRegistrationResult:
-    verification.authorize_scope(session, caller, command)
     repository = EmbeddingRegistryRepository(session)
     operation = repository.operation(command.operation_key)
     if operation is not None and operation.registration_request_sha256 != command.request_sha256:
@@ -421,6 +420,9 @@ def register_embedding_index(
         raise EmbeddingRegistryError("EMBEDDING_REGISTRY_REQUEST_INVALID") from None
     for attempt in range(2):
         try:
+            # Acquire authority's retained row fence in the root transaction.
+            # A uniqueness savepoint rollback must not release that fence.
+            owner.authorize_scope(session, caller, command)
             with session.begin_nested():
                 return _registration(session, caller, command, owner, timestamp)
         except IntegrityError as error:

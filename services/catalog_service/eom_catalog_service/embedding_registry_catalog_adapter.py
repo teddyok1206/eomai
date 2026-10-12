@@ -29,6 +29,7 @@ from eom_catalog_contracts.inference_transfer_embedding import (
 )
 from eom_catalog_contracts.inference_transfer_experiment import ExperimentViewRecipe
 from eom_identifiers import canonical_json_bytes
+from eom_identity_service import OperatorAuthorizationFenceError
 from eom_identity_service.operator_authorization_fence import OperatorAuthorizationFence
 from eom_operator_identity.errors import IdentityError
 from eom_orchestrator.embedding_artifact_store import (
@@ -327,6 +328,17 @@ class CatalogEmbeddingRegistryVerifier:
             return operation()
         except EmbeddingRegistryError:
             raise
+        except OperatorAuthorizationFenceError as error:
+            code = (
+                "EMBEDDING_REGISTRY_FORBIDDEN"
+                if error.code
+                in {
+                    "OPERATOR_AUTHORIZATION_FENCE_FORBIDDEN",
+                    "OPERATOR_AUTHORIZATION_FENCE_OPERATOR_INVALID",
+                }
+                else "EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE"
+            )
+            raise EmbeddingRegistryError(code) from None
         except IdentityError:
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN") from None
         except InferenceTransferServiceError as error:

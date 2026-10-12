@@ -58,6 +58,10 @@ from eom_catalog_service.knowledge_retrieval_service import (
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.settings import CatalogSettings
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
+from eom_identity_service import OperatorAuthorizationFenceError
+from eom_identity_service.operator_authorization_fence_sql import (
+    OperatorAuthorizationFenceErrorCode,
+)
 from eom_operator_identity import PermissionKey
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
 from sqlalchemy.orm import Session
@@ -526,6 +530,34 @@ def test_injected_member_reader_preserves_official_item_projection_and_shared_re
     assert next(iter(entries.values())).content is not None
     reader.read_member.assert_called_once()
     assert not adapter.engine.called
+
+
+@pytest.mark.parametrize(
+    "identity_code,registry_code",
+    [
+        ("OPERATOR_AUTHORIZATION_FENCE_FORBIDDEN", "EMBEDDING_REGISTRY_FORBIDDEN"),
+        ("OPERATOR_AUTHORIZATION_FENCE_OPERATOR_INVALID", "EMBEDDING_REGISTRY_FORBIDDEN"),
+        ("OPERATOR_AUTHORIZATION_FENCE_UNAVAILABLE", "EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE"),
+        (
+            "OPERATOR_AUTHORIZATION_FENCE_CONTEXT_INVALID",
+            "EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE",
+        ),
+        (
+            "OPERATOR_AUTHORIZATION_FENCE_CONFIGURATION_INVALID",
+            "EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE",
+        ),
+    ],
+)
+def test_identity_fence_failure_is_not_misreported_as_invalid_artifact(
+    identity_code: OperatorAuthorizationFenceErrorCode, registry_code: str
+) -> None:
+    def denied() -> None:
+        raise OperatorAuthorizationFenceError(identity_code)
+
+    with pytest.raises(EmbeddingRegistryError) as caught:
+        CatalogEmbeddingRegistryVerifier._guard(denied)
+    assert caught.value.code == registry_code
+    assert caught.value.__suppress_context__
 
 
 def test_injected_reader_cannot_replace_existing_historical_reuse_context() -> None:

@@ -419,3 +419,31 @@ root focused bootstrap/legacy/CUDA preallocation source gate **303 PASS (2.35s)*
 strict mypy2·Ruff/format2 PASS다. 이전 gate와 중복되어 합산하지 않는다. 실제 public retention,
 numeric/private wheel installation, protected snapshot/proof, 모델·GPU 실행과 default activation은
 이 기록 시점에는 아직 PASS가 아니다.
+
+## Public archive recovery와 non-root numerical assembly — 2026-10-12 UTC
+
+검증된 exact empty reservation을 원 root-private failed snapshot 아래
+`failed-empty-reservation`으로 복구 가능하게 이동했다. 최초 실패 helper/log와 빈 폴더는
+삭제하지 않았고 cache root만 검증 후0755로 제한했다. 수정된 raw-pinned root-private helper의
+bounded retry1에서 CPU55/CUDA70 exact public archives의 retention이 모두 PASS다. common archive는
+SHA별 한 canonical 파일이며 CPU/CUDA별 중복 정본을 만들지 않았다.
+
+정확한 retained `file:///opt/eom/embedding-runtime-archives/...` URI와 raw SHA를 명시한 임시
+lock으로 새 CPU/CUDA prefix의 public wheel assembly가 각각 non-root/offline/no-deps/
+require-hashes/no-compile/no-cache exit0이다. 모델 import·추론·GPU 실행은 없다. public install
+성공은 private current-source wheel, protected publication, numerical proof, full-prefix/ABI,
+worker sandbox/identity/lease admission 또는 default 활성화 PASS가 아니다.
+
+## Identity-owned current operator fence와 Catalog savepoint composition — 2026-10-12 UTC
+
+Identity의 고정 definer routine text·읽기 전용 installed owner/ACL/privilege inspection과
+PostgreSQL adapter를 source로 검토했다. 실제 ACTIVE operator를 같은 READ COMMITTED root
+transaction에서 row-fence/refresh하고, private weak root witness만 실제 nested 재확인에 쓴다.
+이 witness는 권한·session 인증·saved operator ID grant가 아니다. 만료/로그아웃/폐기 session은
+공식 owner transport의 별도 필수 인증 경계로 남는다. SAVEPOINT 전에 Catalog authorize_scope를
+배치하여 rollback이 최초 row fence를 풀지 않도록 수정했고 Identity 오류는 artifact 오류로
+오인하지 않는다. frozen 역사적 protocol/schema/원 operator 데이터는 수정하지 않았다.
+
+root 독립9-suite **471 PASS (15.96s)**, strict mypy10·Ruff/format10 PASS다. subset184 및 기존367
+결과와 겹치므로 합산하지 않는다. prepared limited-role integration6은 source/collection만
+준비되었으며 실제 DB 실행·routine 설치·권한 grant·migration·운영 활성화는 아직 없다.

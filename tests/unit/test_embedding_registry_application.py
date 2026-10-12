@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import replace
 from typing import cast
 from unittest.mock import Mock
@@ -19,6 +21,7 @@ from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryLookup,
     EmbeddingRegistryVerificationPort,
     MissingEmbeddingBindings,
+    ResolvedEmbeddingRegistration,
 )
 from eom_catalog_service.embedding_registry_repository import EmbeddingRegistryRepository
 from jsonschema.exceptions import ValidationError as JsonSchemaError
@@ -84,6 +87,69 @@ def test_registration_exact_replay_and_current_receipt(memory: MemoryFixture) ->
         "bindings": 1,
     }
     assert owner.calls.count("resolve") == 2 and owner.calls.count("authorize") == 2
+
+
+def test_registration_authority_fence_precedes_savepoint_but_resolution_stays_inside(
+    memory: MemoryFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session, owner = memory
+    command, _ = capture_pair()
+    original_nested = session.begin_nested
+    original_authorize = owner.authorize_scope
+    original_resolve = owner.resolve_registration
+    events: list[str] = []
+    depth = 0
+
+    @contextmanager
+    def nested() -> Iterator[None]:
+        nonlocal depth
+        events.append("savepoint")
+        depth += 1
+        try:
+            with original_nested():
+                yield
+        finally:
+            depth -= 1
+
+    def authorize(
+        current: Session,
+        caller: EmbeddingRegistryCaller,
+        intent: RegisterEmbeddingIndexCommand | EmbeddingRegistryLookup,
+    ) -> None:
+        assert depth == 0
+        events.append("authority")
+        original_authorize(current, caller, intent)
+
+    def resolve(
+        current: Session, caller: EmbeddingRegistryCaller, intent: RegisterEmbeddingIndexCommand
+    ) -> ResolvedEmbeddingRegistration:
+        assert depth == 1
+        events.append("source-resolution")
+        return original_resolve(current, caller, intent)
+
+    monkeypatch.setattr(session, "begin_nested", nested)
+    monkeypatch.setattr(owner, "authorize_scope", authorize)
+    monkeypatch.setattr(owner, "resolve_registration", resolve)
+    _register(session, owner, command)
+    _register(session, owner, command)
+    assert events[:3] == ["authority", "savepoint", "source-resolution"]
+    assert events.count("authority") == 2
+
+
+def test_registration_authority_denial_does_not_enter_savepoint_or_touch_registry(
+    memory: MemoryFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session, owner = memory
+    command, _ = capture_pair()
+    nested = Mock(side_effect=AssertionError("no savepoint before authority"))
+    denied = Mock(side_effect=EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN"))
+    monkeypatch.setattr(session, "begin_nested", nested)
+    monkeypatch.setattr(owner, "authorize_scope", denied)
+    with pytest.raises(EmbeddingRegistryError, match="EMBEDDING_REGISTRY_FORBIDDEN"):
+        _register(session, owner, command)
+    nested.assert_not_called()
+    assert not owner.calls
+    assert all(not rows for rows in session.state.values())
 
 
 def test_historical_replay_never_rewinds_and_keeps_first_binding_origin(
