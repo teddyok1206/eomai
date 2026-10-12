@@ -378,3 +378,23 @@ fake empty native Job/Artifact를 만들지 않는다. copied/constructed bool-i
 exact coverage/pins, overlap computational key와 raw/semantic hash 경계를 검증했다.
 이는 DB 동시성·Runner claim/launch·현재 사용자 인증·IAM fence·GPU 실행 증거가 아니다.
 해당 behavior와 compatible release/GPU 비교는 다음 단계이며 전체 goal은 ACTIVE다.
+
+## Fixed CPU/CUDA bootstrap source와 base assembly — 2026-10-12 UTC
+
+새 두 prefix 전용 snapshot bootstrap은 root-private byte-tree/hash/link/mode 확인 뒤에만
+exact `bin/python3.12 -I -S -B`를 실행한다. 기존 experiment helper 함수/상수 AST와 shell bytes는
+그대로다. public dependency graph54/CPU55/CUDA70과 별도 private source/wheel pin을 검증하며,
+원 모델 bytes·권한·units·factory·DB는 변경하지 않는다. root 독립4-suite **275 PASS (4.27s)**,
+strict mypy2·Ruff/format2·bash syntax PASS다. agent broader299와 합산하지 않는다.
+
+새 branch의 private ZIP32 실제 header/count/central 상한은 `ZipFile` 할당 및 기존 wheel
+검증 전에 적용한다. 모든 private EOM namespace의 registered/unregistered/unchecked `.pyc`와
+scan을 우회하는 내부 symlink를 거부한다. bootstrap의 끝은 INSTALLED_NOT_ADMITTED/NOT_PROBED이고
+numerical proof·full-prefix/ABI·worker 권한·launcher는 독립 후속 gate다.
+
+실제 fixed Conda base31 **56,222,902 bytes**의 raw SHA와 leaf epochs를 확인했다. 승인된 기존
+sudo 인증을 재사용해 reviewed shell hash의 root-private copy로 새 두 빈0700 developer prefix만
+준비했다. CPU base는 non-root explicit/offline/copy assembly exit0, Python3.12.13 read-back이다.
+CUDA base도 같은 exact local archive manifest로 non-root assembly를 진행한다. private platform/
+numeric wheels·protected publication·model/worker/GPU 실행은 이 단계에 없으며 기존 prefix와
+모델을 덮거나 복사하지 않았다. base assembly는 protected runtime 설치/입장 PASS가 아니다.

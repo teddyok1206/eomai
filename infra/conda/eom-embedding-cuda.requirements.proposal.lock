@@ -1,0 +1,8 @@
+# DESIGN-ONLY CUDA_INDEX_FP32 public dependency proposal; NOT_INSTALLED / NOT_ADMITTED.
+# Fixed prefix /opt/eom/conda/envs/eom-embedding-cuda, bin/python3.12 version3.12.13.
+# 70 unique public wheels; current eom-platform0.1.0 and eom-gpu-lease0.1.0 acceptance PENDING.
+# Nine common CUDA-lock entries repeat shared pins exactly; owner deduplicates identical identities.
+# Shared proposal raw SHA-256 974df998a3267b28fa4eadf54d69e7e14379e0b9e84683ab3bbca92d21cd5b04
+# cuda-runtime-wheels.lock raw SHA-256 1c1bf705f0a0af11f30ee669b870a60a786d3faa344b62fe2bc2095d1fd464ba
+-r eom-embedding-protected-runtime.requirements.proposal.lock
+-r ../../scripts/embedding/cuda-runtime-wheels.lock

@@ -18,9 +18,12 @@ import pwd
 import re
 import stat
 import sys
+import tarfile
 import zipfile
+from email.parser import BytesParser
 from pathlib import Path
 from typing import Final
+from urllib.parse import unquote
 
 PREFIX = Path("/opt/eom/conda/envs/eom-embedding-experiment")
 MODEL_STORE = Path("/opt/eom/embedding-models")
@@ -618,7 +621,575 @@ def main() -> int:
         return 1
 
 
+_INDEX_PREFIXES: Final = {
+    "CPU_INDEX_FP32": Path("/opt/eom/conda/envs/eom-embedding-index-cpu"),
+    "CUDA_INDEX_FP32": Path("/opt/eom/conda/envs/eom-embedding-cuda"),
+}
+_INDEX_LOCK_SHA: Final = {
+    "eom-embedding-protected-runtime.requirements.proposal.lock": (
+        "974df998a3267b28fa4eadf54d69e7e14379e0b9e84683ab3bbca92d21cd5b04"
+    ),
+    "eom-embedding-index-cpu.requirements.proposal.lock": (
+        "03b70b785820cdf61889690da2c82f8fb4a4560e5ea8034c4b647d55088ac71b"
+    ),
+    "eom-embedding-cuda.requirements.proposal.lock": (
+        "1adaf2109971b4ed1eb23d7c5400a76ea59a06c2a9d059ba54a493ec33b52784"
+    ),
+    "common-numeric-runtime-wheels.lock": (
+        "e2278a6253cd092c340091d08e5d20283e3a1e5052316c010c4c3cd12440513d"
+    ),
+    "cuda-runtime-wheels.lock": "1c1bf705f0a0af11f30ee669b870a60a786d3faa344b62fe2bc2095d1fd464ba",
+}
+_INDEX_ARCHIVE_ROOT = Path("/opt/eom/embedding-runtime-archives")
+_INDEX_UID = 0
+_INDEX_GID = 0
+_INDEX_PUBLIC_BYTES: Final = {"CPU_INDEX_FP32": 266514328, "CUDA_INDEX_FP32": 3929095329}
+_INDEX_PRIVATE_SOURCES: Final = {
+    "eom-platform": (
+        (
+            "packages/catalog_contracts/eom_catalog_contracts/embedding_runtime_bundle.py",
+            "eom_catalog_contracts/embedding_runtime_bundle.py",
+        ),
+        (
+            "packages/catalog_contracts/eom_catalog_contracts/embedding_installed_runtime_proof.py",
+            "eom_catalog_contracts/embedding_installed_runtime_proof.py",
+        ),
+        (
+            "services/catalog_service/eom_catalog_service/embedding_native_stdio.py",
+            "eom_catalog_service/embedding_native_stdio.py",
+        ),
+        (
+            "services/catalog_service/eom_catalog_service/embedding_offline_backend.py",
+            "eom_catalog_service/embedding_offline_backend.py",
+        ),
+        (
+            "services/catalog_service/eom_catalog_service/embedding_installed_runtime_observer.py",
+            "eom_catalog_service/embedding_installed_runtime_observer.py",
+        ),
+        (
+            "services/catalog_service/eom_catalog_service/embedding_runtime_distribution.py",
+            "eom_catalog_service/embedding_runtime_distribution.py",
+        ),
+        (
+            "services/catalog_service/eom_catalog_service/embedding_registry_catalog_adapter.py",
+            "eom_catalog_service/embedding_registry_catalog_adapter.py",
+        ),
+        (
+            "packages/workflow/eom_workflow/local_embedding_request.py",
+            "eom_workflow/local_embedding_request.py",
+        ),
+    ),
+    "eom-gpu-lease": (
+        ("packages/gpu_lease/eom_gpu_lease/__init__.py", "eom_gpu_lease/__init__.py"),
+        ("packages/gpu_lease/eom_gpu_lease/lease.py", "eom_gpu_lease/lease.py"),
+    ),
+}
+
+
+def index_runtime_locks(directory: Path, profile: str) -> dict[str, tuple[str, str, str]]:
+    """Fixed reviewed include graph, not a resolver or arbitrary requirements reader."""
+    if profile not in _INDEX_PREFIXES:
+        raise SnapshotInstallError("EMBEDDING_INDEX_PROFILE_INVALID")
+    documents = {}
+    for name, digest in _INDEX_LOCK_SHA.items():
+        target = directory / name
+        require_root_path(target, directory=False)
+        if target.stat().st_size > 128 * 1024 or _hash(target) != digest:
+            raise SnapshotInstallError("EMBEDDING_INDEX_LOCK_HASH_MISMATCH")
+        documents[name] = target.read_text(encoding="utf-8")
+    parsed: dict[str, dict[str, tuple[str, str, str]]] = {}
+
+    def parse(name: str) -> dict[str, tuple[str, str, str]]:
+        if name in parsed:
+            return parsed[name]
+        rows: dict[str, tuple[str, str, str]] = {}
+        for line in documents[name].splitlines():
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("-r "):
+                include = line[3:]
+                allowed = {
+                    "eom-embedding-protected-runtime.requirements.proposal.lock",
+                    "../../scripts/embedding/common-numeric-runtime-wheels.lock",
+                    "../../scripts/embedding/cuda-runtime-wheels.lock",
+                }
+                if include not in allowed:
+                    raise SnapshotInstallError("EMBEDDING_INDEX_LOCK_INCLUDE_INVALID")
+                incoming = parse(Path(include).name)
+            else:
+                match = re.fullmatch(
+                    r"([a-z0-9-]+) @ (https://[^ ]+) --hash=sha256:([0-9a-f]{64})", line
+                )
+                if match is None:
+                    raise SnapshotInstallError("EMBEDDING_INDEX_LOCK_INVALID")
+                package, url, sha = match.groups()
+                filename = unquote(url.rsplit("/", 1)[-1])
+                parts = filename[:-4].split("-")
+                if (
+                    not filename.endswith(".whl")
+                    or len(parts) != 5
+                    or parts[0].replace("_", "-") != package
+                ):
+                    raise SnapshotInstallError("EMBEDDING_INDEX_WHEEL_IDENTITY_INVALID")
+                incoming = {package: (parts[1], filename, sha)}
+            for package, identity in incoming.items():
+                if package in rows and rows[package] != identity:
+                    raise SnapshotInstallError("EMBEDDING_INDEX_LOCK_CONFLICT")
+                rows[package] = identity
+        parsed[name] = rows
+        return rows
+
+    shared = parse("eom-embedding-protected-runtime.requirements.proposal.lock")
+    selected = parse(
+        "eom-embedding-index-cpu.requirements.proposal.lock"
+        if profile == "CPU_INDEX_FP32"
+        else "eom-embedding-cuda.requirements.proposal.lock"
+    )
+    if len(shared) != 54 or len(selected) != (55 if profile == "CPU_INDEX_FP32" else 70):
+        raise SnapshotInstallError("EMBEDDING_INDEX_LOCK_CLOSURE_INVALID")
+    return selected
+
+
+def _index_close(descriptors: tuple[int, ...]) -> None:
+    failure: OSError | None = None
+    for descriptor in descriptors:
+        try:
+            os.close(descriptor)
+        except OSError as error:
+            if failure is None:
+                failure = error
+    if failure is not None:
+        raise failure
+
+
+def _index_source(path: Path) -> tuple[list[tuple[int, Path, tuple[int, ...]]], int]:
+    if len(path.parts) < 4 or path.parts[1] != "tmp" or not path.parts[2].startswith("eom-"):
+        raise SnapshotInstallError("EMBEDDING_INDEX_SOURCE_PATH_INVALID")
+    handles = _open_source_directory(path.parent)
+    opened: int | None = None
+    try:
+        private = handles[2][2]
+        uid = private[3]
+        if uid not in {_INDEX_UID, pwd.getpwnam("eom").pw_uid} or stat.S_IMODE(private[2]) != 0o700:
+            raise SnapshotInstallError("EMBEDDING_INDEX_SOURCE_PATH_INVALID")
+        for _fd, _name, epoch in handles[2:]:
+            if epoch[3] != uid or epoch[2] & 0o022:
+                raise SnapshotInstallError("EMBEDDING_INDEX_SOURCE_PATH_INVALID")
+        opened = os.open(
+            path.name,
+            os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC,
+            dir_fd=handles[-1][0],
+        )
+        value = os.fstat(opened)
+        if (
+            not stat.S_ISREG(value.st_mode)
+            or value.st_uid != uid
+            or value.st_nlink != 1
+            or value.st_mode & 0o6002
+        ):
+            raise SnapshotInstallError("EMBEDDING_INDEX_SOURCE_FILE_INVALID")
+        return handles, opened
+    except Exception:
+        _index_close(
+            (() if opened is None else (opened,)) + tuple(fd for fd, _, _ in reversed(handles))
+        )
+        raise
+
+
+def retain_index_archive(source: Path, sha: str, basename: str, *, maximum: int) -> Path:
+    """One streaming raw-byte materialization; interrupted reservations stay private evidence."""
+    if (
+        re.fullmatch(r"[0-9a-f]{64}", sha) is None
+        or _relative(basename).as_posix() != basename
+        or "/" in basename
+    ):
+        raise SnapshotInstallError("EMBEDDING_INDEX_ARCHIVE_IDENTITY_INVALID")
+    require_root_path(_INDEX_ARCHIVE_ROOT)
+    directory = _INDEX_ARCHIVE_ROOT / sha
+    target = directory / basename
+    try:
+        directory.mkdir(mode=0o700)
+    except FileExistsError:
+        require_root_path(directory)
+        if stat.S_IMODE(directory.stat().st_mode) != 0o755 or set(os.listdir(directory)) != {
+            basename
+        }:
+            raise SnapshotInstallError("EMBEDDING_INDEX_ARCHIVE_INCOMPLETE") from None
+        require_root_path(target, directory=False)
+        if (
+            stat.S_IMODE(target.stat().st_mode) != 0o644
+            or target.stat().st_size > maximum
+            or _hash(target) != sha
+        ):
+            raise SnapshotInstallError("EMBEDDING_INDEX_ARCHIVE_HASH_MISMATCH") from None
+        return target
+    handles, descriptor = _index_source(source)
+    output: int | None = None
+    try:
+        before = os.fstat(descriptor)
+        if not 0 < before.st_size <= maximum:
+            raise SnapshotInstallError("EMBEDDING_INDEX_ARCHIVE_SIZE_INVALID")
+        output = os.open(
+            target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600
+        )
+        digest, count = hashlib.sha256(), 0
+        while chunk := os.read(descriptor, 1024 * 1024):
+            count += len(chunk)
+            if count > before.st_size:
+                raise SnapshotInstallError("EMBEDDING_INDEX_SOURCE_CHANGED")
+            digest.update(chunk)
+            view = memoryview(chunk)
+            while view:
+                written = os.write(output, view)
+                if written <= 0:
+                    raise SnapshotInstallError("EMBEDDING_INDEX_ARCHIVE_WRITE_FAILED")
+                view = view[written:]
+        if (
+            count != before.st_size
+            or digest.hexdigest() != sha
+            or _epoch(before) != _epoch(os.fstat(descriptor))
+            or _epoch(before)
+            != _epoch(os.stat(source.name, dir_fd=handles[-1][0], follow_symlinks=False))
+        ):
+            raise SnapshotInstallError("EMBEDDING_INDEX_ARCHIVE_HASH_MISMATCH")
+        for fd, named, initial in handles:
+            if (
+                _ancestor_identity(os.fstat(fd)) != initial[:5]
+                or _ancestor_identity(named.lstat()) != initial[:5]
+            ):
+                raise SnapshotInstallError("EMBEDDING_INDEX_SOURCE_CHANGED")
+        os.fsync(output)
+        os.fchown(output, _INDEX_UID, _INDEX_GID)
+        os.fchmod(output, 0o644)
+        os.chown(directory, _INDEX_UID, _INDEX_GID)
+        os.chmod(directory, 0o755)
+        return target
+    finally:
+        _index_close(
+            (() if output is None else (output,))
+            + (descriptor,)
+            + tuple(fd for fd, _, _ in reversed(handles))
+        )
+
+
+def _index_private_zip32(wheel: Path) -> None:
+    """Bound actual ZIP metadata before ZipFile allocates its untrusted member inventory."""
+    descriptor = os.open(wheel, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC)
+    with os.fdopen(descriptor, "rb") as stream:
+        before = os.fstat(stream.fileno())
+        invalid = "EMBEDDING_INDEX_PRIVATE_WHEEL_INVALID"
+        if not stat.S_ISREG(before.st_mode) or not 22 <= before.st_size <= 64 * 1024**2:
+            raise SnapshotInstallError(invalid)
+        stream.seek(-22, os.SEEK_END)
+        end = stream.read(22)
+
+        def integer(raw: bytes, start: int, size: int) -> int:
+            return int.from_bytes(raw[start : start + size], "little")
+
+        count, central_size, central_start = (
+            integer(end, 10, 2),
+            integer(end, 12, 4),
+            integer(end, 16, 4),
+        )
+        if (
+            end[:4] != b"PK\x05\x06"
+            or integer(end, 4, 2) != 0
+            or integer(end, 6, 2) != 0
+            or integer(end, 8, 2) != count
+            or not 1 <= count <= 10000
+            or not 46 <= central_size <= 8 * 1024**2
+            or central_start == 0xFFFFFFFF
+            or integer(end, 20, 2) != 0
+            or central_start + central_size != before.st_size - 22
+        ):
+            raise SnapshotInstallError(invalid)
+
+        def extras(raw: bytes) -> None:
+            offset = 0
+            while offset < len(raw):
+                if offset + 4 > len(raw):
+                    raise SnapshotInstallError(invalid)
+                kind, size = integer(raw, offset, 2), integer(raw, offset + 2, 2)
+                offset += 4 + size
+                if kind == 1 or offset > len(raw):
+                    raise SnapshotInstallError(invalid)
+
+        position, actual = central_start, 0
+        while position < central_start + central_size:
+            actual += 1
+            if actual > 10000:
+                raise SnapshotInstallError(invalid)
+            stream.seek(position)
+            header = stream.read(46)
+            name_size, extra_size, comment_size = (
+                integer(header, 28, 2),
+                integer(header, 30, 2),
+                integer(header, 32, 2),
+            )
+            next_position = position + 46 + name_size + extra_size + comment_size
+            local_position = integer(header, 42, 4)
+            if (
+                len(header) != 46
+                or header[:4] != b"PK\x01\x02"
+                or integer(header, 6, 2) >= 45
+                or integer(header, 8, 2) & 0x2041
+                or integer(header, 20, 4) == 0xFFFFFFFF
+                or integer(header, 24, 4) == 0xFFFFFFFF
+                or not name_size
+                or comment_size
+                or integer(header, 34, 2) != 0
+                or local_position == 0xFFFFFFFF
+                or local_position + 30 > central_start
+                or next_position > central_start + central_size
+            ):
+                raise SnapshotInstallError(invalid)
+            name = stream.read(name_size)
+            extras(stream.read(extra_size))
+            if name.endswith(b".pyc"):
+                raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_BYTECODE_FORBIDDEN")
+            stream.seek(local_position)
+            local = stream.read(30)
+            local_name_size, local_extra_size = integer(local, 26, 2), integer(local, 28, 2)
+            data_start = local_position + 30 + local_name_size + local_extra_size
+            if (
+                len(local) != 30
+                or local[:4] != b"PK\x03\x04"
+                or local[4:10] != header[6:12]
+                or local_name_size != name_size
+                or integer(local, 18, 4) == 0xFFFFFFFF
+                or integer(local, 22, 4) == 0xFFFFFFFF
+                or data_start + integer(header, 20, 4) > central_start
+                or stream.read(local_name_size) != name
+            ):
+                raise SnapshotInstallError(invalid)
+            extras(stream.read(local_extra_size))
+            position = next_position
+        if (
+            actual != count
+            or position != central_start + central_size
+            or _epoch(before) != _epoch(os.fstat(stream.fileno()))
+            or _epoch(before) != _epoch(wheel.lstat())
+        ):
+            raise SnapshotInstallError(invalid)
+
+
+def _index_private_bytecode(prefix: Path) -> None:
+    """Deny even unregistered bytecode throughout private EOM namespaces, not public deps."""
+    site = prefix / "lib/python3.12/site-packages"
+    count = 0
+    for namespace in site.iterdir():
+        if not namespace.name.startswith(("eom_", "eomctl")):
+            continue
+        if namespace.is_symlink():
+            raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_NAMESPACE_INVALID")
+        if namespace.name.endswith(".pyc"):
+            raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_BYTECODE_FORBIDDEN")
+        for parent, directories, files in os.walk(namespace, followlinks=False):
+            count += len(directories) + len(files)
+            if any((Path(parent) / name).is_symlink() for name in (*directories, *files)):
+                raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_NAMESPACE_INVALID")
+            if count > 20000 or any(name.endswith(".pyc") for name in (*directories, *files)):
+                raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_BYTECODE_FORBIDDEN")
+
+
+def _index_private_source(
+    prefix: Path, wheel: Path, source: Path, commit: str, package: str
+) -> None:
+    """Private source leaves must be from the pinned Git archive, never a historical substitute."""
+    if re.fullmatch(r"[0-9a-f]{40}", commit) is None or package not in _INDEX_PRIVATE_SOURCES:
+        raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_SOURCE_INVALID")
+    _index_private_zip32(wheel)
+    with tarfile.open(source, mode="r:") as archive:
+        if archive.pax_headers.get("comment") != commit:
+            raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_COMMIT_MISMATCH")
+        entries = {}
+        for number, member in enumerate(archive):
+            if number >= 20000 or member.name in entries or member.size > 64 * 1024**2:
+                raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_SOURCE_INVALID")
+            _relative(member.name)
+            entries[member.name] = member
+        with zipfile.ZipFile(wheel) as payload:
+            names = payload.namelist()
+            if len(names) > 10000 or len(names) != len(set(names)):
+                raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_WHEEL_INVALID")
+            if package == "eom-gpu-lease":
+                for entry in payload.infolist():
+                    if entry.is_dir() or entry.filename.endswith(".dist-info/RECORD"):
+                        continue
+                    relative = _relative(entry.filename)
+                    if (
+                        relative.as_posix() != entry.filename
+                        or "\\" in entry.filename
+                        or ".data" in relative.parts
+                        or entry.file_size > 1024 * 1024
+                    ):
+                        raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_WHEEL_INVALID")
+                    if (
+                        _hash(prefix / "lib/python3.12/site-packages" / relative)
+                        != hashlib.sha256(payload.read(entry)).hexdigest()
+                    ):
+                        raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_INSTALLED_MISMATCH")
+            for original, installed in _INDEX_PRIVATE_SOURCES[package]:
+                selected_source = entries.get(original)
+                if (
+                    selected_source is None
+                    or not selected_source.isfile()
+                    or selected_source.size > 1024 * 1024
+                ):
+                    raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_SOURCE_MISSING")
+                stream = archive.extractfile(selected_source)
+                if stream is None:
+                    raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_SOURCE_MISSING")
+                with stream:
+                    raw = stream.read(1024 * 1024 + 1)
+                if (
+                    installed not in names
+                    or payload.getinfo(installed).file_size != len(raw)
+                    or payload.read(installed) != raw
+                ):
+                    raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_SOURCE_MISMATCH")
+                if (
+                    _hash(prefix / "lib/python3.12/site-packages" / installed)
+                    != hashlib.sha256(raw).hexdigest()
+                ):
+                    raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_INSTALLED_MISMATCH")
+
+
+def _index_inventory(prefix: Path, expected: dict[str, str]) -> None:
+    site = prefix / "lib/python3.12/site-packages"
+    found = {}
+    if any(site.glob("*.egg-info")):
+        raise SnapshotInstallError("EMBEDDING_INDEX_DISTRIBUTION_LAYOUT_INVALID")
+    for path in site.glob("*.dist-info/METADATA"):
+        require_root_path(path, directory=False)
+        if path.stat().st_size > 128 * 1024:
+            raise SnapshotInstallError("EMBEDDING_INDEX_METADATA_TOO_LARGE")
+        value = BytesParser().parsebytes(path.read_bytes())
+        names, versions = value.get_all("Name", []), value.get_all("Version", [])
+        if len(names) != 1 or len(versions) != 1:
+            raise SnapshotInstallError("EMBEDDING_INDEX_METADATA_INVALID")
+        name = re.sub(r"[-_.]+", "-", names[0]).lower()
+        if name in found:
+            raise SnapshotInstallError("EMBEDDING_INDEX_METADATA_DUPLICATE")
+        found[name] = versions[0]
+    if found != expected:
+        raise SnapshotInstallError("EMBEDDING_INDEX_DISTRIBUTION_CLOSURE_INVALID")
+
+
+def index_runtime_main() -> int:
+    """No model/unit/factory/proof construction; installation is not authority."""
+    parser = argparse.ArgumentParser(description="Fixed protected indexing snapshot bootstrap")
+    parser.add_argument("--profile", choices=tuple(_INDEX_PREFIXES), required=True)
+    parser.add_argument("--lock-directory", type=Path, required=True)
+    parser.add_argument("--wheelhouse", type=Path, action="append", required=True)
+    for name in ("platform", "lease"):
+        parser.add_argument(f"--{name}-wheel", type=Path, required=name == "platform")
+        parser.add_argument(f"--{name}-wheel-sha256", required=name == "platform")
+        parser.add_argument(f"--{name}-source", type=Path, required=name == "platform")
+        parser.add_argument(f"--{name}-source-sha256", required=name == "platform")
+        parser.add_argument(f"--{name}-commit", required=name == "platform")
+    args = parser.parse_args()
+    try:
+        prefix = _INDEX_PREFIXES[args.profile]
+        if (
+            os.geteuid() != 0
+            or not sys.flags.isolated
+            or not sys.flags.no_site
+            or not sys.flags.dont_write_bytecode
+            or Path(sys.executable) != prefix / "bin/python3.12"
+            or sys.version_info[:3] != (3, 12, 13)
+            or sys.platform != "linux"
+            or os.uname().machine != "x86_64"
+        ):
+            raise SnapshotInstallError("EMBEDDING_INDEX_INSTALL_CONTEXT_INVALID")
+        require_root_path(Path(__file__).resolve(strict=True), directory=False)
+        validate_runtime_tree(prefix)
+        selected = index_runtime_locks(args.lock_directory, args.profile)
+        cpu = index_runtime_locks(args.lock_directory, "CPU_INDEX_FP32")
+        cuda = index_runtime_locks(args.lock_directory, "CUDA_INDEX_FP32")
+        known = {row[1] for row in (*cpu.values(), *cuda.values())}
+        if not 1 <= len(args.wheelhouse) <= 4 or len(set(args.wheelhouse)) != len(args.wheelhouse):
+            raise SnapshotInstallError("EMBEDDING_INDEX_WHEELHOUSE_INVALID")
+        sources = {}
+        for directory in args.wheelhouse:
+            for name in os.listdir(directory):
+                if name not in known or name in sources:
+                    raise SnapshotInstallError("EMBEDDING_INDEX_WHEELHOUSE_INVENTORY_INVALID")
+                sources[name] = directory / name
+        if not {row[1] for row in selected.values()}.issubset(sources):
+            raise SnapshotInstallError("EMBEDDING_INDEX_WHEELHOUSE_INCOMPLETE")
+        required = (
+            "lease_wheel",
+            "lease_wheel_sha256",
+            "lease_source",
+            "lease_source_sha256",
+            "lease_commit",
+        )
+        if (
+            args.profile == "CUDA_INDEX_FP32"
+            and any(getattr(args, name) is None for name in required)
+        ) or (
+            args.profile == "CPU_INDEX_FP32"
+            and any(getattr(args, name) is not None for name in required)
+        ):
+            raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_PINS_REQUIRED")
+        for kind in ("platform", "lease") if args.profile == "CUDA_INDEX_FP32" else ("platform",):
+            wheel_sha, source_sha, commit = (
+                getattr(args, f"{kind}_wheel_sha256"),
+                getattr(args, f"{kind}_source_sha256"),
+                getattr(args, f"{kind}_commit"),
+            )
+            if (
+                re.fullmatch(r"[0-9a-f]{64}", wheel_sha) is None
+                or re.fullmatch(r"[0-9a-f]{64}", source_sha) is None
+                or re.fullmatch(r"[0-9a-f]{40}", commit) is None
+            ):
+                raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_PINS_REQUIRED")
+        expected = {name: row[0] for name, row in selected.items()} | {"eom-platform": "0.1.0"}
+        if args.profile == "CUDA_INDEX_FP32":
+            expected["eom-gpu-lease"] = "0.1.0"
+        _index_inventory(prefix, expected)
+        count = 0
+        for _version, basename, sha in sorted(selected.values(), key=lambda row: row[1]):
+            retained = retain_index_archive(sources[basename], sha, basename, maximum=2 * 1024**3)
+            count += retained.stat().st_size
+        if count != _INDEX_PUBLIC_BYTES[args.profile]:
+            raise SnapshotInstallError("EMBEDDING_INDEX_PUBLIC_BYTES_MISMATCH")
+        for kind, package in (
+            (("platform", "eom-platform"), ("lease", "eom-gpu-lease"))
+            if args.profile == "CUDA_INDEX_FP32"
+            else (("platform", "eom-platform"),)
+        ):
+            wheel = retain_index_archive(
+                getattr(args, f"{kind}_wheel"),
+                getattr(args, f"{kind}_wheel_sha256"),
+                package.replace("-", "_") + "-0.1.0-py3-none-any.whl",
+                maximum=64 * 1024**2,
+            )
+            source = retain_index_archive(
+                getattr(args, f"{kind}_source"),
+                getattr(args, f"{kind}_source_sha256"),
+                f"source-{getattr(args, f'{kind}_commit')}.tar",
+                maximum=256 * 1024**2,
+            )
+            _index_private_zip32(wheel)
+            if kind == "platform":
+                verify_platform_wheel(prefix, wheel, args.platform_wheel_sha256)
+            _index_private_source(prefix, wheel, source, getattr(args, f"{kind}_commit"), package)
+        _index_private_bytecode(prefix)
+        print("EMBEDDING_INDEX_INSTALL_STATUS=INSTALLED_NOT_ADMITTED")
+        print("EMBEDDING_INDEX_PROBE_STATUS=NOT_PROBED")
+        print("EMBEDDING_INDEX_NUMERICAL_PROOF=OWNER_GATE_REQUIRED")
+        return 0
+    except Exception:
+        print("EMBEDDING_INDEX_SNAPSHOT_REJECTED", file=sys.stderr)
+        return 1
+
+
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["index-runtime"]:
+        del sys.argv[1]
+        raise SystemExit(index_runtime_main())
     if sys.argv[1:2] == ["model-only"]:
         del sys.argv[1]
         raise SystemExit(model_only_main())
