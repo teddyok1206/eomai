@@ -30,6 +30,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "embedding-installed-runtime-proof": CatalogSchemaResource(
+            "schemas/knowledge/embedding-installed-runtime-proof-v1.schema.json",
+            "resources/knowledge/embedding-installed-runtime-proof-v1.schema.json",
+            "1.0",
+            "sha256:303342c0815c0aadb569d90c8f2106587e9bcbb04b1c1cf5d3d50c9a80fbe5c9",
+        ),
         "embedding-runtime-bundle": CatalogSchemaResource(
             "schemas/knowledge/embedding-runtime-bundle-v1.schema.json",
             "resources/knowledge/embedding-runtime-bundle-v1.schema.json",

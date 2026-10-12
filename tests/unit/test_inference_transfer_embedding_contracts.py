@@ -92,7 +92,13 @@ def test_all_preexisting_schema_registry_metadata_and_resource_bytes_are_frozen(
     resources = {
         name: resource
         for name, resource in CATALOG_SCHEMA_RESOURCES.items()
-        if name not in {SCHEMA_NAME, "embedding-registry", "embedding-runtime-bundle"}
+        if name
+        not in {
+            SCHEMA_NAME,
+            "embedding-registry",
+            "embedding-runtime-bundle",
+            "embedding-installed-runtime-proof",
+        }
     }
     assert len(resources) == 296
     # Recorded from the pre-embedding registry, independently compared with HEAD's AST literals.

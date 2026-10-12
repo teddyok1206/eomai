@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/embedding-installed-runtime-proof/1.0",
+  "title": "Embedding installed numerical runtime proof proposal 1.0",
+  "description": "Owner-configured immutable raw-archive and installed-RECORD closure. No worker authority, filesystem locator, activation or installation claim is conveyed by JSON validation.",
+  "oneOf": [
+    {"$ref": "#/$defs/proof"},
+    {"$ref": "#/$defs/pointer"}
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "proofId": {"type": "string", "pattern": "^embeddingruntimeproof_[0-9a-f]{32}$"},
+    "proofRevisionId": {"type": "string", "pattern": "^embeddingruntimeproofrev_[0-9a-f]{32}$"},
+    "profile": {"enum": ["CPU_INDEX_FP32", "CUDA_INDEX_FP32"]},
+    "boundedMetadataMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "size_bytes"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 131072}
+      }
+    },
+    "recordMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "size_bytes"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 8388608}
+      }
+    },
+    "archive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wheel_filename", "sha256", "size_bytes"],
+      "properties": {
+        "wheel_filename": {"type": "string", "maxLength": 255, "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.+-]+\\.whl$"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 2147483648}
+      }
+    },
+    "consoleScript": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "sha256", "size_bytes"],
+      "properties": {
+        "name": {"type": "string", "maxLength": 96, "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,95}$"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 16384}
+      }
+    },
+    "library": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "archive", "installed_record", "requested", "direct_url", "console_scripts"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"},
+        "version": {"type": "string", "pattern": "^[0-9][A-Za-z0-9.+_-]{0,95}$"},
+        "archive": {"$ref": "#/$defs/archive"},
+        "installed_record": {"$ref": "#/$defs/recordMember"},
+        "requested": {"type": "boolean"},
+        "direct_url": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/boundedMetadataMember"}]},
+        "console_scripts": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/consoleScript"}
+        }
+      }
+    },
+    "cpuLibraries": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/library"},
+      "allOf": [
+        {"contains": {"properties": {"name": {"const": "numpy"}, "version": {"const": "2.4.6"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "safetensors"}, "version": {"const": "0.6.2"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "tokenizers"}, "version": {"const": "0.22.2"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "torch"}, "version": {"const": "2.7.1+cpu"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "transformers"}, "version": {"const": "4.56.2"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1}
+      ]
+    },
+    "cudaLibraries": {
+      "type": "array",
+      "minItems": 20,
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/library"},
+      "allOf": [
+        {"contains": {"properties": {"name": {"const": "numpy"}, "version": {"const": "2.4.6"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "safetensors"}, "version": {"const": "0.6.2"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "tokenizers"}, "version": {"const": "0.22.2"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "torch"}, "version": {"const": "2.7.1+cu128"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "transformers"}, "version": {"const": "4.56.2"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "nvidia-cublas-cu12"}, "version": {"const": "12.8.3.14"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "nvidia-cuda-cupti-cu12"}, "version": {"const": "12.8.57"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "nvidia-cuda-nvrtc-cu12"}, "version": {"const": "12.8.61"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "nvidia-cuda-runtime-cu12"}, "version": {"const": "12.8.57"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "nvidia-cudnn-cu12"}, "version": {"const": "9.7.1.26"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "nvidia-cufft-cu12"}, "version": {"const": "11.3.3.41"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "nvidia-cufile-cu12"}, "version": {"const": "1.13.0.11"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "nvidia-curand-cu12"}, "version": {"const": "10.3.9.55"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "nvidia-cusolver-cu12"}, "version": {"const": "11.7.2.55"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "nvidia-cusparse-cu12"}, "version": {"const": "12.5.7.53"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "nvidia-cusparselt-cu12"}, "version": {"const": "0.6.3"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "nvidia-nccl-cu12"}, "version": {"const": "2.26.2"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "nvidia-nvjitlink-cu12"}, "version": {"const": "12.8.61"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "nvidia-nvtx-cu12"}, "version": {"const": "12.8.55"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"name": {"const": "triton"}, "version": {"const": "3.3.1"}}, "required": ["name", "version"]}, "minContains": 1, "maxContains": 1}
+      ]
+    },
+    "cpuDeviceCapture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "numeric_device"],
+      "properties": {
+        "source": {"const": "LINUX_CPUINFO_VENDOR_FAMILY_MODEL_STEPPING/1.0"},
+        "numeric_device": {
+          "allOf": [
+            {"$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/device"},
+            {"properties": {"kind": {"const": "CPU"}}, "required": ["kind"]}
+          ]
+        }
+      }
+    },
+    "cudaDeviceCapture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "numeric_device", "gpu_uuid", "pci_bus_id", "device_minor", "boot_id"],
+      "properties": {
+        "source": {"const": "OWNER_GPU_CAPTURE_LINUX_PROC/1.0"},
+        "numeric_device": {
+          "allOf": [
+            {"$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/device"},
+            {"properties": {"kind": {"const": "CUDA"}}, "required": ["kind"]}
+          ]
+        },
+        "gpu_uuid": {"type": "string", "pattern": "^GPU-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+        "pci_bus_id": {"type": "string", "pattern": "^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\\.[0-7]$"},
+        "device_minor": {"type": "integer", "const": 0},
+        "boot_id": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"}
+      }
+    },
+    "proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "proof_id", "proof_revision_id", "profile", "python_version", "torch_build_cuda_version", "device_capture", "numeric_libraries", "proof_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-installed-runtime-proof/1.0"},
+        "proof_id": {"$ref": "#/$defs/proofId"},
+        "proof_revision_id": {"$ref": "#/$defs/proofRevisionId"},
+        "profile": {"$ref": "#/$defs/profile"},
+        "python_version": {"const": "3.12.13"},
+        "torch_build_cuda_version": {"oneOf": [{"type": "null"}, {"const": "12.8"}]},
+        "device_capture": {"oneOf": [{"$ref": "#/$defs/cpuDeviceCapture"}, {"$ref": "#/$defs/cudaDeviceCapture"}]},
+        "numeric_libraries": {"type": "array", "minItems": 5, "maxItems": 20, "items": {"$ref": "#/$defs/library"}},
+        "proof_sha256": {"$ref": "#/$defs/sha256"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"profile": {"const": "CPU_INDEX_FP32"}}, "required": ["profile"]},
+          "then": {
+            "properties": {
+              "torch_build_cuda_version": {"type": "null"},
+              "device_capture": {"$ref": "#/$defs/cpuDeviceCapture"},
+              "numeric_libraries": {"$ref": "#/$defs/cpuLibraries"}
+            }
+          },
+          "else": {
+            "properties": {
+              "torch_build_cuda_version": {"const": "12.8"},
+              "device_capture": {"$ref": "#/$defs/cudaDeviceCapture"},
+              "numeric_libraries": {"$ref": "#/$defs/cudaLibraries"}
+            }
+          }
+        }
+      ]
+    },
+    "pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "schema_ref", "proof_id", "proof_revision_id", "profile", "proof_sha256", "proof_raw_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-installed-runtime-proof-pointer/1.0"},
+        "schema_ref": {"const": "eom://schemas/knowledge/embedding-installed-runtime-proof/1.0"},
+        "proof_id": {"$ref": "#/$defs/proofId"},
+        "proof_revision_id": {"$ref": "#/$defs/proofRevisionId"},
+        "profile": {"$ref": "#/$defs/profile"},
+        "proof_sha256": {"$ref": "#/$defs/sha256"},
+        "proof_raw_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

@@ -283,3 +283,30 @@ root 독립 release fixture **81 PASS (0.95s)**, explicit image-test 환경의 l
 합산하지 않는다. helper의 source raw SHA는
 `231089d320a70a41272c006ccca38e1c68014fccfba2ff61feb1515ca5699300`다.
 실제 이미지 runtime 설치/권한·lease 전환·GPU 실행/default activation은 여전히 pending이다.
+
+## Numerical installed-proof observer의 source 완료 — 2026-10-12 UTC
+
+JSON Schema2020-12·동일 packaged mirror·frozen proof를 먼저 정의한 뒤 exact retained raw
+wheel/RECORD/installed byte closure, nofollow 파일 snapshot, fixed Linux interpreter/device
+관측을 분리했다. configured proof pointer는 owner 입력이며 worker의 descriptor 주장을 그대로
+돌려주는 observer가 아니다. numerical hash에는 무관한 GUI/Git 전체 release를 넣지 않는다.
+단일 immutable 초기 검증 뒤에는 file/namespace epochs를 재검사하며 권한을 cache하지 않는다.
+
+실제 Torch/Triton archive에서 확인한 zero-byte canonical directory 호환성을 좁게 추가했다.
+directory는 실제 regular payload의 ancestor여야 하며 duplicate/link/nonzero/unrelated,
+file-directory 충돌과 RECORD file/hash/size 누락은 거부한다. proof1.0 schema 및 historical
+296 Catalog schema bytes/count/hash는 그대로다. directory를 skip하며 파일 closure를 약화하거나
+upstream wheel을 다시 만드는 방식은 사용하지 않는다.
+
+root 동일 observer/resolver/backend/codec/historical suite 재검증 **461 PASS (7.10s)**,
+strict mypy11·Ruff/format11 PASS다. 앞선442에 directory 케이스를 추가한 재실행이며 합산하지
+않는다. 실제 protected prefix/proof 생성, 전체 환경 ABI/RECORD와 device/cgroup/sandbox,
+shared physical migration, native launcher와 CPU/GPU 추론은 별도의 pending gate다.
+
+기존 numerical 버전4개의 공식 small METADATA를 재조회해 protected CPU METADATA와 같은지
+확인하고 exact URL/SHA를 common download lock에 기록했다. 별도 임시 폴더의 downloaded4
+raw hash·inventory·총32,014,410 bytes가 독립 검사로 일치했다. primary baseline CPU Torch도
+기존 exact URL/SHA의175,833,687-byte archive를 별도 임시 폴더에 준비해 raw SHA를 확인했다.
+HEAD403은 그대로 기록하고 공식 index의 동일 URL/hash·bounded Range GET206으로 availability를
+확인한 뒤 pip의 hashed cache body로 준비했다. URL/version/flavor 변경이나 설치·모델 실행은
+없었다. archive regular-file/RECORD layout 검사는 후속 receipt에서 별도로 보고한다.
