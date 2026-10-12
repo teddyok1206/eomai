@@ -318,3 +318,140 @@ changing that released parser. No rows, history, schema bytes or production stat
 No engine/repository/composition, publisher, Orchestrator head, release callbacks, DB/runtime/NAS,
 model/GPU, install or Git changes were performed by this agent in the guard phase. Root's separately
 owned head/release source work is not a production migration or native/service activation claim.
+
+## Next exact-candidate/dispatch phase — final design-only plan
+
+Root independently reviewed the guard/release source:579 tests PASS, strict/style PASS; committed
+`9d72c7c2`. Root then ran supported disposable0053 up/down0052/up0053 and **18 migration tests PASS
+in0.35s**, exact DB/owner cleanup PASS; evidence pushed at `73e499e8`. Production/model/GPU were
+unchanged. This section is a plan only: no queue/dispatcher behavior is edited before root approval.
+
+| Stage / exact paths | Exact symbols and protected responsibility |
+| --- | --- |
+| A: `repository.py` | `workflow_request_storage_document`, new `load_persisted_local_embedding_workflow_request` and `local_embedding_business_fingerprint`, `create_workflow_instance`; add request1.1 only to repository storage union with required owner/executor guard before lookup/create/replay. Preserve role request union, all legacy serialization/fingerprints, request1.0 history and nullable pins. `_compiled_role_protocol` delegates validated definitions to public `definition_execution_protocol`; `_stored_role_protocol` handles fixed native snapshot separately while retaining old inactive historical projection behavior. |
+| A: new `local_embedding_submission.py`; existing admission/execution port modules | `start_local_embedding_in_session` is the single Runner-owned atomic Workflow+START use case: mandatory actual owner and native executor, current root-session resolution/fences and exact definition/control validation; zero demands return existing coverage-only plan without Workflow/command/Job. Ports' `CommandLeaseIdentity` imports become type-only where necessary to prevent repository/interface import cycles, not a new lease abstraction. |
+| B: `repository.py` | Frozen internal `CommandCandidate`, fixed `CommandExecutionFamily`, `_native_workflow_filter`, `peek_command_candidate`, `claim_command_candidate`; existing `claim_next_command`/`claimable_command_exists` become **legacy-only**, including workflow-specific calls. No include-native boolean or unfenced fallback. |
+| B/C: `engine.py`, `errors.py` | `WorkflowRunner.__init__` accepts explicit paired owner/native executor or neither; `run_once` uses purpose peek/readiness/exact claim and existing lease scope. `_advance` delegates fixed native steps before generic role/terminal handling. `reconcile(workflow_id)` must reject native `command_id=None`; native reconcile requires existing queued command with a live lease. Add stable native unavailable/invalid-outcome codes only. |
+| C: new `local_embedding_step_execution.py` | `advance_local_embedding_step`, `complete_local_embedding_terminal`, native fenced-transaction wrapper; fixed two-step use case owns Runner step rows/events only. Reuse repository/state-machine primitives and required public executor/owner ports; no source/Artifact/kernel resolver is copied into Runner. |
+| C: `composition.py`, supported Runner exports | Explicit removable paired injection with default native-unavailable; leave Codex construction/readiness/execution unchanged. No configured factory, operator/session continuation, service grant or privileged installation is inferred from a source interface. |
+
+**Exact claim sequence:** two nonlocking LIMIT1 peeks (native/legacy), compare existing FIFO order;
+inspect only bounded pointer/request metadata, close that Session → evaluate the selected purpose's
+configured readiness without IAM/source fences, session activity writes or permission caching →
+fresh root READ COMMITTED transaction locks/refreshes **that Workflow and command only** with
+SKIP LOCKED and `populate_existing=True` → compare immutable header and re-evaluate claimability →
+mandatory `owner.resolve_claim` on actual root-session rows **before** token/generation assignment →
+assign existing lease fields → late live lease/owner/expiry fence before commit. No second candidate
+is silently substituted in that claim. Lost/busy header rolls back/releases locks and returns to peek.
+Native mutations use the same Workflow→command lock order, preserving the existing final command
+row fence; claim never holds a command lock while waiting on an inversely locked Workflow.
+
+Candidate captures command ID/type/hash/state/generation/attempts/availability/expiry/FIFO position
+and Workflow ID/definition ID+hash/request hash/current step/state/lock version; no lease token or
+actor-authority value. The null-safe total native routing predicate checks exact supported definition,
+protocol/request-schema and native step markers, including malformed native snapshots, through
+existing Workflow/definition PK joins and indexed step Workflow FK EXISTS. It never uses substring
+matching, JSON grants or a full event scan. The legacy claim query excludes those markers itself:
+an old caller cannot bypass the native owner by calling it directly. Existing indexes suffice for
+this bounded phase; prepare actual query-plan/statement-budget evidence before proposing an index.
+
+An unavailable/busy native purpose leaves its command unclaimed or records typed pending reads with
+a bounded existing ADVANCE backoff; the first ready legacy candidate still proceeds. No full queue
+source-plan capture loop or global Codex readiness gate disables native purpose readiness, and native
+unavailability never disables legacy readiness. Expired native command reclaim requires actual linked
+recovery admission before assignment; missing recovery evidence stays unavailable/uncertain, not a
+fresh encoding or mutated original launch association. Header/hash/readiness success is never a
+current operator/session/source grant.
+
+The native step stores only the original existing source-plan member pointer as input metadata and
+the new receipt **carrier** as output, with receipt-owner Job FK. Pending readings must exactly cover
+the unique original-plan computational keys/space, with no missing/duplicate/foreign keys; borrowed
+readings retain their original winner's Workflow/intent, not the current Workflow as a forged owner.
+Completed compute may remain pending registration. Success parses/binds the carrier to the expected
+Workflow/step/attempt and requires the executor's actual canonical receipt/producer/registration proof;
+then late current-owner/live-command fencing commits existing step/Workflow transitions and
+`final_pointer_manifest.embedding_receipt` only. No raw registration JSON/vector/text enters step DB.
+The helper calls inference outside **all** SQL transactions/fences; the transaction callable is for
+short owner mutations, never a context held around synchronous execution.
+
+CANCEL keeps supported durable Workflow/command/step cancellation semantics and current actual
+operator cancel authorization; it is a stop-request/history boundary, not unit/cgroup completion.
+It never releases launch capacity/GPU lease, resets reservations or marks outputs successful. Later
+results still fail their invalidated command/Workflow fence; supported owner cleanup/reconciliation
+must independently prove outcome. Native RETRY/REWORK cannot bypass fixed max-attempt1/no-rework,
+terminal state or uncertain ownership; reject unsupported operations explicitly without changing
+legacy commands. No new command/state/queue/schema/migration or generic dispatch framework is needed.
+
+Focused next tests: extend `test_local_embedding_runner_admission.py`; new
+`tests/unit/test_local_embedding_command_claim.py`, `test_local_embedding_runner_execution.py`,
+`tests/integration/test_local_embedding_runner.py`; extend existing composition/lease tests narrowly.
+Cover legacy claim native exclusion, native-unready/busy before legacy, exact candidate swap/competing
+claim/stale identity-map refresh, unchanged legacy FIFO/lease generations, missing owner/executor
+before create/claim, zero-demand no rows, late lease/session/source revocation rollback, exact pending
+keys/borrowed ownership, immutable receipt replay/no head rewind, direct-reconcile refusal, cancellation
+without cleanup/reset, and reclaim without actual recovery. Independent-process/query-plan DB tests
+are prepared for the guarded root harness only. Operator seed/API/current-session integration and
+scoped background `LOCAL_EMBEDDING_INDEX` authority remain required overall, not completion here.
+
+### Stage A approved source boundary — storage and atomic submission only
+
+Exact owned files: `services/workflow_runner/eom_workflow_runner/repository.py`, new
+`local_embedding_submission.py`, existing `local_embedding_admission.py` and singular
+`local_embedding_execution_port.py`; existing `tests/unit/test_local_embedding_runner_admission.py`,
+new `tests/unit/test_local_embedding_submission.py`, and this note. No claim, engine, composition,
+execution, migration, schema, API or runtime activation changes belong to this stage.
+
+Repository symbols: add exact1.1 `load_persisted_local_embedding_workflow_request` (no repair/latest),
+`local_embedding_business_fingerprint`, additive storage union/native `create_workflow_instance`
+arm, and fixed native protocol handling in `_compiled_role_protocol`/`_stored_role_protocol`.
+Fingerprint fields are definition key/version/hash, the complete nullable-preserving canonical1.1
+request, and `{actor_type, actor_id}`. Therefore replay/active-equivalence cannot cross operators;
+per-encoding computational deduplication remains the separate owner9 identity, unchanged.
+
+Add pure `validate_local_embedding_submission_controls` for exact compiled definition, request/
+plan/policy and operator-audit closure even with zero demands; existing
+`validate_local_embedding_runner_admission` calls it and retains its nonempty compute rejection.
+Required owner/executor presence is checked before **any** lookup/create/replay. The actual injected
+owner resolves the same active root Session and exact request before persistence and repeats its
+current authorization fence late; metadata cannot grant authority. Native stored definition identity,
+hash, exact snapshot and current active admission are checked for zero and nonzero outcomes alike.
+The caller retains root transaction ownership; a bounded savepoint makes Workflow+START atomic,
+and a late failure rolls both back without committing or changing a pre-existing replay.
+
+`start_local_embedding_in_session` returns an internal frozen typed union, not a new wire schema:
+`LocalEmbeddingCoverageOnly(plan: LocalEmbeddingSourcePlan)` reuses the already verified immutable
+zero-demand plan and creates no Workflow, command or Job; `LocalEmbeddingWorkflowSubmitted` carries
+the exact Workflow and START command records plus separate `workflow_created`/`command_created`
+observations. It creates/enqueues only after exact closure; replay still reauthorizes actual current
+operator/source and compares the actor-bound fingerprint. Executor presence is not runtime readiness,
+permission or a call to inference; candidate readiness remains Stage B. Type-only imports of existing
+`CommandLeaseIdentity` avoid a repository/interface cycle without creating another lease abstraction.
+
+Focused tests: exact request1.1 storage/reload including required nulls; no1.0 upgrade/repair; native
+and legacy definition/protocol projections; actor-bound fingerprints; missing either port and foreign
+purpose before SQL/replay; owner-denied source/session; valid zero demand no writes; zero demand
+invalid definition/hash/operator/control rejection; one Workflow+START; same-key replay/mismatch,
+same-actor active reuse versus cross-actor separation; late owner failure savepoint rollback; unchanged
+legacy fingerprint/storage/create and transfer1.0/1.1 behavior. All are source unit tests; no DB,
+current source authority, runtime composition or background service grant is claimed by this stage.
+
+Stage A source freeze: the exact seven owned paths above are implemented; no Stage B/C path changed.
+One added repository leaf, `validate_local_embedding_workflow_submission`, refreshes the exact
+Workflow PK with `populate_existing=True` and validates definition/request/actor/protocol closure
+inside native create's savepoint. The submission use case reuses that result; it does not duplicate
+Workflow validation. Original START is read/checked on replay; missing or corrupted history refuses
+without creating a replacement START or changing completed state. Definition admission is read with
+SHARE locking and identity-map refresh. The current owner is invoked before savepoints and late;
+composed nonzero submission makes four bounded owner calls (root, native create entry, native create
+late, submission late), zero demand two. Nested calls must reuse retained root fences, never create a
+nested authorization grant. No runtime readiness/inference runs inside any of these transactions.
+
+Final source gate: **584 tests PASS in39.15s** across17 native/legacy unit files; Ruff/check-format and
+strict mypy on all6 Python files PASS. Earlier focused gate139 PASS12.30s; intermediate broader
+527 PASS37.72s plus55 legacy persistence/dispatch PASS5.17s. Initial strict run exposed one test
+operator/service-union attribute error, corrected with the existing pure operator-audit extractor;
+no runtime defect/DB repair was inferred. All six frozen native control/receipt schema raw hashes
+were independently rechecked unchanged. Tests use explicit synthetic Session/owner/executor spies:
+they prove source validation/order/savepoint intent, not PostgreSQL rollback or actual permissions.
+No DB/root/IAM/NAS/model/GPU/install/Git actions were executed. Real authenticated session/source
+composition, protected executor, exact-candidate claims and service admission remain pending.

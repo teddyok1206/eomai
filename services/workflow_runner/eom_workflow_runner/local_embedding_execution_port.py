@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from eom_workflow.local_embedding_encoding_job import EmbeddingEncodingReadResult
 from eom_workflow.local_embedding_request import LocalEmbeddingWorkflowRequestV11
@@ -14,7 +14,9 @@ from sqlalchemy.orm import Session
 
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from eom_workflow_runner.readiness import RuntimeReadinessReport
-from eom_workflow_runner.repository import CommandLeaseIdentity
+
+if TYPE_CHECKING:
+    from eom_workflow_runner.repository import CommandLeaseIdentity
 
 type NativeFencedRunnerTransaction = Callable[[], AbstractContextManager[Session]]
 

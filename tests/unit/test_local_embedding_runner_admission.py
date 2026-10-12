@@ -23,6 +23,7 @@ from eom_workflow_runner.local_embedding_admission import (
     LocalEmbeddingOwnerAdmission,
     ResolvedLocalEmbeddingAdmission,
     validate_local_embedding_runner_admission,
+    validate_local_embedding_submission_controls,
 )
 from eom_workflow_runner.local_embedding_execution_port import (
     LocalEmbeddingNativeExecutor,
@@ -197,6 +198,12 @@ def test_zero_demand_controls_are_coverage_only_not_native_start_admission() -> 
         )
     )
     empty = ResolvedLocalEmbeddingAdmission(request, plan, scope.policy)
+    assert (
+        validate_local_embedding_submission_controls(
+            empty, definition, actor_type="human", actor_id="operator_" + "1" * 32
+        )
+        == empty
+    )
     with pytest.raises(ValueError, match="LOCAL_EMBEDDING_COVERAGE_ONLY"):
         validate_local_embedding_runner_admission(
             empty, definition, actor_type="human", actor_id="operator_" + "1" * 32

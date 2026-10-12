@@ -204,6 +204,10 @@ native/legacy/release source579 PASS 이후 guarded disposable PostgreSQL에서 
 실측용 실제 token/padding·누적 allocator 관측과 단 한 번의 owner resource 응답을 추가했고,
 기존 encoder/index 의미를 보존한 독립 source 회귀는825 PASS입니다. GPU 속도·전체 device
 관측·기본값 활성화 증거가 아니며, 실제 worker와 설치·권한 연결은 여전히 후속 gate입니다.
+native 요청 저장·현재 owner 확인·Workflow/START 원자적 제출과 replay 경계는 독립 source
+회귀584 PASS, strict type/lint/format PASS입니다. 기존 요청·claim·실패 기록을 바꾸지 않고,
+계산할 신규 입력이 없으면 Workflow를 만들지 않습니다. 실제 claim/dispatcher와 운영 실행은
+별도 후속 연결이며 이 source 결과만으로 활성화를 선언하지 않습니다.
 
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스

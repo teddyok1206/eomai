@@ -669,3 +669,19 @@ model 실행으로 재해석하지 않는다.
 실제 release 이후 implementation/runtime pin을 새로 관측해야 하며 old proof를 재사용 승인하지
 않는다. worker leaf/files·실제 설치 admission·CPU/CUDA 모델 실측·GPU 기본값 활성화는 아직
 PENDING, 새 모델/GPU 실행0이다. 이전 source 결과와 겹치는 수를 합산하지 않는다.
+
+## native 요청 저장과 atomic submission source — 2026-10-12 23:57 UTC
+
+기존 Runner repository에 exact request1.1 저장·재조회와 actor-bound fingerprint를 추가했다.
+기존 role union과 fingerprint·request1.0 history·nullable pins는 보존한다. 실제 주입된 owner와
+executor가 없으면 definition/replay 조회 전에 거부하고, 현재 root Session에서 source/권한을
+검증한다. zero-demand coverage는 같은 control 검증 후 Workflow/command/Job 없이 반환한다.
+신규 Workflow와 원래 START는 기존 savepoint 안에서 원자적으로 생성하며 replay는 원 START를
+재사용한다. 저장된 actor/audit는 권한 부여가 아니고 inference/모델 실행은 호출하지 않는다.
+
+root는 최종7-file raw hash를 확인하고 전체 변경을 검토한 뒤 고정17-suite를 독립 실행했다.
+**584 PASS (39.50s)**, source/tests6-file strict mypy·Ruff/format PASS다. agent584 PASS는
+같은 범위의 별도 실행이므로 합산하지 않는다. legacy Workflow·기출변형 request/dispatch와
+native controls/storage/replay를 함께 회귀 검증했다. 실제 DB/claim/dispatcher/runtime activation
+검증이 아니며 DB0053의18 PASS와 구분한다. 새 모델/GPU 실행0, 기본값 NOT_ACTIVE,
+전체 목표 ACTIVE다. 다음 Runner 작업은 exact claim과 고정 native step dispatch 연결이다.
