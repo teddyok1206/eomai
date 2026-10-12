@@ -1,6 +1,6 @@
 # 문항 핵심 착상 전이: 실제 운영 검증 기록
 
-상태 시각: 2026-10-12 10:00 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
+상태 시각: 2026-10-12 11:02 UTC. 이 문서는 실제 설치·실행 증거와 남은 gate를
 구분한다. 소스 테스트 통과를 운영 활성화나 사람의 전이 품질 승인으로 확대하지 않는다.
 
 사용자 최신 지시에 따라 **사람 평가는 현 목표의 완료 조건에서 제외**한다.
@@ -21,7 +21,44 @@
 
 ## Component 상태
 
-### 승인된 동일 pair successor — source 검증 완료, 실제 실행 대기
+### 최종 실제 검증에서 발견한 두 경계 보완 — source 검증, 후속 배포 대기
+
+같은 actual session에서 원 pair1 command를 정확히 복구했고, 원 key 두 건의 replay는
+각각 원 Workflow/command/selection을 반환했다. 이는 요청 접수 replay PASS이지
+worker 결과의 성공이 아니다. pair1은 원 FAILED 그대로이며 pair2는 아래 별도 실패다.
+
+- pair1 retry POST와 동일 key recovery의 실제 SQL 오류는
+  `InsufficientPrivilege / workflow_step_runs`다. 원 부모·Step·Job/실패는 유지됐으며
+  성공 child receipt는 아직 없다. 새 retry operation key로 우회하지 않는다.
+- API는 이 terminal Step에 SELECT만 허용하는데 새 leaf가 불필요한 FOR UPDATE를
+  요청했다. 부모 Workflow와 FAILED Job 잠금은 유지하고 terminal Step 잠금 한 줄만
+  제거했다. 권한 matrix·schema·migration은 변경하지 않았다.
+- actual matrix의 disposable DB에서 old FOR UPDATE의 42501을 재현하고 수정 후
+  retry/same-key replay/원 FAILED 보존을 확인했다. 관련 native26 PASS다.
+  첫 새 테스트의 NOINHERIT 역할 확인을 USAGE→MEMBER로 수정해 fresh 재실행했으며
+  owner INHERIT나 운영 grant를 넓히지 않았다.
+- pair2 원 Workflow `workflow_82a73b86ecfc42a3a018c988e6e3acd8`, command
+  `wfcmd_7ba041cbd5f04f7ba346dde8c327a99c`는 10:37:48 UTC FAILED였다. Job
+  `job_397fd1a72d584d108c2453c9030676a6` exit0 후 WORKER_RESULT_INVALID이며,
+  실제 진단에서 unique refs의 배열 순서만 잘못된 세 곳을 확인했다.
+  [generation 정본화 결정](ITEM_INFERENCE_TRANSFER_GENERATION_CANONICALIZATION.md)에
+  bounded FD/identity 진단과 원 candidate/input SHA, strict 보존 검증을 기록했다.
+- 기존 absent-hash generation boundary에서 unique typed refs만 정렬하는 source
+  보완275 focused PASS다. supplied hash·duplicate/foreign/malformed refs 거부와
+  직접 정본 parser의 unsorted 거부는 유지한다. 실패 파일/이력을 소급 수정하지 않는다.
+
+Fresh 전체 관련 회귀는83파일/2,899 PASS, 변경5파일 strict mypy/Ruff/format PASS다.
+actual privilege matrix의 native26 PASS 후 임시 DB·roles/private env를 정리했다.
+최종 두 쌍 console의 기존34+새12=46 합성 tests와 strict mypy/Ruff도 PASS다.
+첫 pair의 이미 보존된 retry body/version/key는 유지하고, 새 second retry만 별도
+operation key/부모/선택 closure로 기록한다. 모델 비교 제출은 이 테스트들의 일부가 아니다.
+
+현재 실제 설치는 fae이며 위 최소 수정본은 아직 설치하지 않았다. 두 후속 결과의
+MEMBER_VERIFIED와 retry key witness는 미완료다. 종료 조건3·4와 전체 완료를 선언하지
+않는다. 520개 임베딩, control PREPARE/RELEASE, 풀이보고서·문항/HWPX 재실행은 0이다.
+Slack discovery: `devreport_5e445d2b591e4dc0a9b04ef956ea9b55`.
+
+### 승인된 동일 pair successor — 운영 설치 완료, 실제 결과 검증 진행
 
 사용자는 추가 승인 요청 없이 목표를 달성하도록 진행을 지시했다. 읽기 전용 대조에서
 released definition1.1.0의 `max_step_attempts=1`과 Catalog의 attempt1 검증을 확인했다.
@@ -43,10 +80,25 @@ event로 생성한다. 원 상태·step·job·실패 코드는 변경하지 않�
 child, 다른 key/재귀 child retry/active lease/committed result/stale version은 거부한다.
 현재 source 권한은 HTTP cached reply 앞과 실제 worker execution에서 다시 확인한다.
 
-이 시점의 실제 설치는 아래 `f093bf85`이고, 새 successor leaf의 운영 설치·실제 인증
-read/worker/두 MEMBER_VERIFIED·original/retry key replay는 아직 대기다. 추가 실제 모델
-실행은 0이며 종료 조건3·4와 전체 목표 완료를 선언하지 않는다. 이미 완료한 BGE520개
-실험·control PREPARE/RELEASE·풀이보고서·문항/HWPX는 다시 실행하지 않는다.
+2026-10-12 10:10 UTC에 설치 source `fae10babfaa353a9fbc8af09b24baea996039310`,
+tree `fed473d2c82576b2866db702e58543de1ad9197b`와 retry DTO/owner/public route,
+original POST390/retry POST510을 확인했다. 기존 보호된 release adapter의 admission,
+pre/post-stop quiescence, 여섯 EXECUTE callbacks, normal installer의 RECORD/의존성/
+runtime isolation 검사 PASS다. 기존 active8 service를 복원했고 API READY를 확인했다.
+새 migration 없이 `20261010_0051`을 검증했으며 채팅의 supported exact pin adapter는
+f093→fae만 전진시켰다. Web·CPU runtime과 이미 발행된 b59 비교 control 핀은 유지한다.
+deployment/rollback record는
+`/var/lib/eom-api/deployments/fae10babfaa353a9fbc8af09b24baea996039310.json`이다.
+admitted build-only wheels와 normal installer의 별도 installed wheel bytes를 혼동하지 않는다.
+
+10:11 UTC 사용자 입력의 실제 guiadmin session/current-principal closure가 통과했다.
+native catalog만 만료되어 같은 slot06의 supported OBSERVE v2를 명시적으로 수행했고
+`codexcmd_3605c6732b4a412ca5a5499abaa16de2` SUCCEEDED/resource2254를 확인했다.
+이후 공식 model-options에서 기존 Terra/medium admission 가능을 확인했다. TTL·capacity·
+model·source policy는 변경하지 않았다. 새 인증 요청이나 root auth 복사는 없다.
+최종 두 MEMBER_VERIFIED·original/retry key replay와 종료 조건3·4는 아직 진행 중이며
+전체 목표 완료를 선언하지 않는다. 이미 완료한 BGE520개 실험·control PREPARE/RELEASE·
+풀이보고서·문항/HWPX는 다시 실행하지 않는다.
 
 ### 최소 transport/hash 보완의 실제 배포 — 2026-10-12 09:03 UTC
 
@@ -204,7 +256,7 @@ semantic SHA `d8fa68b17c646229d0e66e770c34876c6e3787a502dcc3417237aa947db8a342`�
 
 | Component | 실제 상태 | 한계 |
 |---|---|---|
-| 공유 API/platform | 설치 source `f093bf853e5bbf9094ff4e65c731d13569d60a91`, tree `d8b5b9c82b56080e5d605a7d4fe2efba0583076b`; 2026-10-12 09:03 UTC 최소 transport/generation-hash 보완 배포·검증 완료 | c8에서 수행한 전체 520개 BGE MEASURED/COMMITTED 정본과 b59 control 핀 보존. 첫 비교 FAILED, 두 쌍 member 검증/replay는 별도 gate; 사람 평가는 불필요 |
+| 공유 API/platform | 설치 source `fae10babfaa353a9fbc8af09b24baea996039310`, tree `fed473d2c82576b2866db702e58543de1ad9197b`; 2026-10-12 10:10 UTC 실패 보존형 동일 pair retry leaf 배포·검증 완료 | 전체 520개 BGE MEASURED/COMMITTED 정본과 b59 control 핀 보존. 첫 비교 FAILED 보존, 최종 두 쌍 member 검증/replay 진행; 사람 평가는 불필요 |
 | 운영 PostgreSQL | `20261010_0051` migration 및 exact-head 검증 PASS | 새 비교 Workflow stage CHECK 적용이지 비교 control 발행이나 worker 실행이 아님 |
 | 별도 CPU Conda | `/opt/eom/conda/envs/eom-embedding-experiment` 보호 snapshot 발행·승인된 격리 probe 및 전체 BGE 실험 PASS | 임베딩 성공은 풀이 전이·교육 품질의 증명이 아님 |
 | CPU platform | `06134fcd91413a957ac3133db062dbcdd525ee15` wheel에서 비편집 설치 | d291 candidate와 1,361개 payload member가 일치함; source 표기는 원래 설치값 유지 |

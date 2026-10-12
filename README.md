@@ -102,14 +102,19 @@ RAG 출처는 3건으로 제한합니다. 실제 HTTPS에서 교과서 답변·�
 [설계와 지원 경계](docs/architecture/GENERAL_CHAT_TEXTBOOK_RAG_DESIGN.md)를 참고하세요.
 
 문항의 **핵심 착상이 다른 문항 풀이에 어디서 통하는지** 찾는 opt-in 경계를 구현하고,
-호환 API/platform component의 현재 설치는 `f12fb971` release입니다. 기존 승인 풀이보고서와
+호환 API/platform component의 현재 설치는 `fae10bab` release입니다. 기존 승인 풀이보고서와
 exact Graph/Item 근거로 비교 표현을 만들고, 제거 가능한
 로컬 임베딩으로 후보를 찾은 뒤 Orchestrator의 bounded Codex 쌍 비교에서 조건·추론의 대응과
 차이를 검증합니다. 사람의 전이 평가와 모델 가설은 별도이며, 사용자 지시에 따라 사람
 평가는 이번 완료 조건에서 제외합니다. 기존 RAG·출제·승인 경로를 대체하지 않습니다.
-실제 `guiadmin` 인증과 original 기출 모집단 520개의 PREPARE는 확인했지만 첫 READ가
-실패해 corpus 실험·비교 control 발행·쌍 비교는 아직 대기 상태입니다. Component 설치나
-service health가 전체 기능·교육 품질 PASS는 아닙니다.
+실제 `guiadmin` 인증과 original 기출 모집단 520개의 BGE-M3 로컬 CPU 실험에서
+**520/520 profile, 1,560개 표현의 MEASURED/COMMITTED**를 확인했습니다. 기존 E5의
+길이 부족 결과는 별도 이력으로 보존합니다. V11 비교 control도 공식 PREPARE/RELEASE를
+완료했습니다. 첫 쌍의 worker 결과 self-hash 실패는 보존하고, 동일 입력·핀의 명시적
+successor 비교와 두 쌍의 정본 결과/replay 검증을 진행합니다. 원 key replay 두 건은 PASS이며,
+실제 운영에서 추가 확인한 terminal-step 잠금 권한과 unique 참조 배열 정렬의 최소 보완을
+검증하고 있습니다. 실패 결과를 성공으로 바꾸거나 권한을 확대하지 않습니다. 설치나 health만으로
+전체 기능·교육 품질 PASS를 주장하지 않습니다.
 원래 기출만의 범위·쌍별 재인가·전용 실행 계획을 검증하고, 같은 후보 집합에서 본문·풀이 근거·
 메타데이터를 비교하는 로컬 CPU 실험 경로도 구현했습니다. 실제 모델의 합성 입력 시험은
 실제 기출 품질 평가와 구분합니다.
@@ -125,13 +130,16 @@ Catalog owner·전용 resolver/Runner는 소스에서 연결됐습니다.
 현재 권한 재인가, atomic Workflow/V21/START, canonical 결과 조회 및 optional CPU/Artifact
 owner 호출부를 검증했습니다. 고정 격리 CPU runtime/model 설치와 승인된 no-forward 격리 검증,
 호환 공유 release·migration 0051·일곱 보호 callback·API ready·8개 service 복원은 PASS입니다.
-위 단계의 역사적 source 회귀는 2,609 PASS입니다. 현재 source 후보는 개념·소재·핵심
+위 단계의 역사적 source 회귀는 2,609 PASS입니다. 현재 설치는 개념·소재·핵심
 착상을 각각 설명하는 PairResult1.1/Workflow1.1/role1.30/V22 successor를 추가하며,
 기존 family와 prompt bytes를 보존합니다. 실제 READ의 내부 모델 검증 실패를 진단하고,
 Graph 후보 pool과 bounded 64개 baseline의 상한 불일치를 합성 자료로 재현해 보완했습니다.
 원문·모집단은 보존하고 baseline prefix 제한을 명시하며, 최종 출제 Evidence와 구분합니다.
-source 후보의 설치·실제 READ 정상화·owner PREPARE/RELEASE·CPU corpus 실험·쌍 비교는
-후속 gate입니다. 사람 평가 미실시는 blocker나 자동 성공이 아닙니다.
+실제 READ·owner PREPARE/RELEASE·CPU corpus 실험은 완료했고, 최종 쌍 비교/replay는
+진행 중입니다. 실패 보존형 retry는 released attempt1 제약을 변경하지 않고 기존 START
+queue에서 같은 logical pair의 successor를 생성합니다. 새 회귀 2,952 PASS, 추가 API
+160 PASS, disposable PostgreSQL 25 PASS이며 DB migration·새 queue는 없습니다.
+사람 평가 미실시는 blocker나 자동 성공이 아닙니다.
 [최초 설계 대조와 자동 검증 범위](docs/architecture/ITEM_INFERENCE_TRANSFER_FINAL_CONFORMANCE_GAPS.md),
 설치 component와 역사적 실패·남은 gate는
 [실제 운영 검증 기록](docs/architecture/ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md)에 구분합니다.

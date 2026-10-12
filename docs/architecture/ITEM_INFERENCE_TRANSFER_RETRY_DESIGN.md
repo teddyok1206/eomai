@@ -64,6 +64,20 @@ implementation/deployment와 동일 pair 재실행은 진행하되 credentials·
 경계를 우회하지 않는다. 처음의 same-Workflow proposal은 위 released1회 제약 때문에
 명시적 successor execution으로 정정했다. 새로운 comparison이나 embedding 실험이 아니다.
 
+## 실패 단계 조회의 최소 권한 (2026-10-12)
+
+운영 API는 `workflow_step_runs`를 SELECT만 할 수 있다. terminal step에 불필요한
+`FOR UPDATE`를 요청하면 PostgreSQL이 UPDATE 권한 부족으로 거부한다. 이를 고치려고
+worker 소유 단계의 수정 권한을 API에 추가하지 않는다. successor membership와 생성은
+기존 부모 Workflow row lock 아래 직렬화하고, 정확한 FAILED attempt1 단계는 일반 SELECT로
+읽는다. 실제 FAILED Job의 기존 허용된 잠금, output/Artifact 없음, active command와 held
+lease 없음, expected version 및 같은 transaction의 child/START/event 검증은 유지한다.
+이는 모든 step 변경이 부모 잠금을 얻는다는 일반 보장이 아니다. 원래 terminal 비교와
+released1회 계약을 확인하는 좁은 admission이며 기존 실패 기록을 수정하지 않는다.
+회귀는 실제 API runtime 권한 matrix를 적용한 격리 DB에서 step SELECT 허용·UPDATE 거부를
+먼저 확인하고 retry/replay·실패 이력 불변을 검증한다. 원래 parent-lock concurrency 회귀도
+유지하며 운영 권한, released schema/definition 및 worker state-machine은 바꾸지 않는다.
+
 ## 소스·격리 DB 검증 — 2026-10-12 UTC
 
 - 전체 관련 source/합성 console 회귀 **2,952 PASS /77.97초**. 추가 기존 API invocation/

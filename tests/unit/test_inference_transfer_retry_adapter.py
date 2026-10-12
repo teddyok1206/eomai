@@ -2,19 +2,23 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import Mock
 
 import pytest
 from eom_api.errors import ApiError
+from eom_api.services import inference_transfer_retry_adapter as retry_adapter
 from eom_api.services.inference_transfer_retry import AuthorizedInferenceTransferRetry
 from eom_api.services.inference_transfer_retry_adapter import (
     RETRY_CONTEXT,
+    InferenceTransferRetryAdapter,
     _failed_comparison,
     _validate_child,
 )
 from eom_identifiers import content_sha256
+from eom_orchestrator.models import JobRecord
 from eom_workflow.inference_transfer_control import ResolvedExecutionPlanV22
 from eom_workflow_runner.models import WorkflowInstanceRecord
 from sqlalchemy.orm import Session
@@ -23,6 +27,7 @@ from tests.unit.inference_transfer_api_fixtures import authentication
 from tests.unit.inference_transfer_invocation_fixtures import WORKFLOW_ID
 from tests.unit.test_inference_transfer_retry_application import (
     configured,
+    retry_actor,
     retry_request,
 )
 from tests.unit.test_inference_transfer_workflow_v11 import _plan
@@ -66,6 +71,28 @@ def test_only_exact_failed_first_attempt_without_work_or_artifact_is_admitted() 
     session, parent, step, job, authorized = failed_fixture()
     assert _failed_comparison(cast(Session, session), parent, authorized) == (step, job)
     assert session.scalar.call_count == 4
+
+
+def test_terminal_step_query_is_select_only_but_failed_job_lock_is_retained() -> None:
+    session, parent, _, job, authorized = failed_fixture()
+    _failed_comparison(cast(Session, session), parent, authorized)
+    query = session.scalar.call_args_list[0].args[0]
+    sql = str(query)
+    assert "workflow_step_runs" in sql and "FOR UPDATE" not in sql
+    assert "ORDER BY" in sql and "LIMIT" in sql
+    session.get.assert_called_once_with(JobRecord, job.job_id, with_for_update=True)
+
+
+def test_successor_admission_still_locks_parent_workflow(monkeypatch: pytest.MonkeyPatch) -> None:
+    session, _, _, _, authorized = failed_fixture()
+    session.scalar.side_effect = [None]
+    adapter = object.__new__(InferenceTransferRetryAdapter)
+    adapter.sessions = Mock()
+    monkeypatch.setattr(retry_adapter, "transaction", lambda _sessions: nullcontext(session))
+    with pytest.raises(ApiError, match="INFERENCE_TRANSFER_WORKFLOW_NOT_FOUND"):
+        adapter.retry(authorized, retry_actor(), expected_version=4, idempotency_key="exact-key")
+    sql = str(session.scalar.call_args.args[0])
+    assert "workflow_instances" in sql and "FOR UPDATE" in sql
 
 
 @pytest.mark.parametrize(

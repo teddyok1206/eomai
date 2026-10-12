@@ -6,8 +6,10 @@ is fake; no source authentication, files, worker, model or live DB is exercised.
 
 from __future__ import annotations
 
+import os
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
+from pathlib import Path
 from threading import Barrier
 from typing import Any
 from uuid import uuid4
@@ -58,9 +60,13 @@ from eom_workflow_runner.state_machine import (
     transition_step,
     transition_workflow,
 )
-from sqlalchemy import Connection, Engine, func, select
+from psycopg.errors import InsufficientPrivilege
+from sqlalchemy import Connection, Engine, func, select, text
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session, sessionmaker
 
+from scripts.api.testdb_guard import TestDatabaseManifest as DisposableManifest
+from scripts.api.testdb_guard import validate_state_directory
 from tests.integration.test_inference_transfer_api_submission_persistence import _actor, _submission
 from tests.integration.test_inference_transfer_plan_persistence import _controls
 from tests.integration.test_inference_transfer_stage_migration import (
@@ -435,6 +441,62 @@ def test_concurrent_retries_create_one_successor_not_another_attempt(
             )
             == 1
         )
+
+
+def test_actual_runtime_role_retries_with_select_only_terminal_steps(
+    stage_owner_connection: Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Disposable setup provisions the exact role with the unchanged API grant matrix."""
+    state = validate_state_directory(Path(os.environ["EOM_CHAT_KNOWLEDGE_TEST_STATE"]))
+    manifest = DisposableManifest.load(state / "manifest.json")
+    _seed(stage_owner_connection, monkeypatch)
+    actor = _actor()
+    authorized, version = _failed_parent(stage_owner_connection, actor)
+    with Session(bind=stage_owner_connection, join_transaction_mode="create_savepoint") as session:
+        before = _history(session, authorized)
+    assert stage_owner_connection.scalar(
+        text("SELECT pg_has_role(current_user, :role, 'MEMBER')"), {"role": manifest.runtime_role}
+    ), "the guarded disposable owner must be a member of its exact runtime role"
+    quoted_role = stage_owner_connection.dialect.identifier_preparer.quote(manifest.runtime_role)
+    stage_owner_connection.execute(text("SET LOCAL ROLE " + quoted_role))
+    try:
+        assert stage_owner_connection.scalar(text("SELECT current_user")) == manifest.runtime_role
+        privileges = stage_owner_connection.execute(
+            text(
+                "SELECT has_table_privilege(current_user, 'app.workflow_step_runs', 'SELECT'), "
+                "has_table_privilege(current_user, 'app.workflow_step_runs', 'UPDATE'), "
+                "has_table_privilege(current_user, 'app.workflow_instances', 'UPDATE'), "
+                "has_column_privilege(current_user, 'app.jobs', 'status', 'UPDATE'), "
+                "has_table_privilege(current_user, 'app.workflow_events', 'INSERT')"
+            )
+        ).one()
+        assert tuple(privileges) == (True, False, True, True, True)
+        # Prove the old query fails under the real matrix, without changing rows.
+        with pytest.raises(ProgrammingError) as caught, stage_owner_connection.begin_nested():
+            stage_owner_connection.execute(
+                select(WorkflowStepRunRecord.step_run_id)
+                .where(WorkflowStepRunRecord.step_run_id == authorized.request.failed_step_run_id)
+                .with_for_update()
+            )
+        assert isinstance(caught.value.orig, InsufficientPrivilege)
+        key = "synthetic-runtime-retry-" + uuid4().hex
+        adapter = _retry_adapter(stage_owner_connection)
+        first = adapter.retry(authorized, actor, expected_version=version, idempotency_key=key)
+        assert first == adapter.retry(
+            authorized, actor, expected_version=version, idempotency_key=key
+        )
+        with Session(
+            bind=stage_owner_connection, join_transaction_mode="create_savepoint"
+        ) as session:
+            assert _history(session, authorized) == before
+            child = session.get(WorkflowInstanceRecord, first[1])
+            assert child is not None and child.state == "REQUESTED"
+            assert (
+                child.runtime_context[RETRY_CONTEXT]["parent_workflow_id"]
+                == authorized.parent_workflow_id
+            )
+    finally:
+        stage_owner_connection.execute(text("RESET ROLE"))
 
 
 def test_stale_parent_version_rolls_back_without_child_or_lineage(

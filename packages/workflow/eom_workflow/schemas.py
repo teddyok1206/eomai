@@ -26,6 +26,7 @@ from eom_catalog_contracts import (
     content_team_material_required_retrieval_elements,
     validate_worker_knowledge_edge_endpoint_types,
 )
+from eom_catalog_contracts.item_inference_transfer import ClaimId
 from eom_hwpx_contracts import (
     ContentTeamLabeledBlock,
     ContentTeamMarkdownError,
@@ -42,7 +43,7 @@ from eom_hwpx_contracts import (
 from eom_identifiers import content_sha256
 from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import SchemaError
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from eom_workflow.control_plane import ResolvedExecutionPlanV3
 from eom_workflow.document_review import (
@@ -1567,10 +1568,10 @@ def _canonicalize_legacy_editorial_compatibility_result(value: object) -> object
 
 
 def _canonicalize_inference_transfer_pair_result_v11(value: object) -> object:
-    """Derive only an omitted inner self-hash, never repair a supplied digest.
+    """Serialize unique claim-reference sets and derive only an omitted self-hash.
 
-    The worker owns the exact comparison content and axes; the Orchestrator owns its canonical
-    serialization hash. Supplied values remain accountable to the unchanged strict boundary.
+    The worker owns comparison content, object order and reference membership. The Orchestrator
+    owns canonical set ordering and its hash. Supplied hashes bypass all normalization.
     """
 
     if not isinstance(value, dict):
@@ -1582,6 +1583,39 @@ def _canonicalize_inference_transfer_pair_result_v11(value: object) -> object:
     canonical = value.copy()
     canonical_output = output.copy()
     canonical["output"] = canonical_output
+    claim_ids = TypeAdapter(list[ClaimId])
+    for collection_name in ("axes", "mappings", "differences", "new_reasoning"):
+        collection = output.get(collection_name)
+        if not isinstance(collection, list):
+            continue
+        canonical_collection = None
+        for index, member in enumerate(collection):
+            if not isinstance(member, dict):
+                continue
+            canonical_member = None
+            for side in ("left_claim_ids", "right_claim_ids"):
+                references = member.get(side)
+                if not isinstance(references, list) or len(references) > 16:
+                    continue
+                try:
+                    checked = claim_ids.validate_python(references, strict=True)
+                except ValidationError:
+                    continue
+                # A duplicate is invalid input, not permission to remove a reference.
+                if len(checked) != len(set(checked)):
+                    continue
+                ordered = sorted(checked)
+                if ordered == references:
+                    continue
+                if canonical_member is None:
+                    canonical_member = member.copy()
+                canonical_member[side] = ordered
+            if canonical_member is not None:
+                if canonical_collection is None:
+                    canonical_collection = collection.copy()
+                canonical_collection[index] = canonical_member
+        if canonical_collection is not None:
+            canonical_output[collection_name] = canonical_collection
     canonical_output["result_sha256"] = content_sha256(canonical_output)
     return canonical
 
@@ -3242,7 +3276,10 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
             "selected claim references. Condition and decisive mappings plus shared_idea "
             "are required for positive overall judgments; INSUFFICIENT requires limitations. "
             "Do not output result_sha256: the Orchestrator derives the omitted hash of the exact "
-            "canonical body including axes at validation. Supplied incorrect hashes are rejected."
+            "canonical body including axes at validation. Unique claim-reference arrays are "
+            "sets whose canonical order is serialized by the Orchestrator; membership, sides "
+            "and object order remain unchanged. Duplicate or foreign references and supplied "
+            "incorrect hashes are rejected."
         )
     if schema_id in {
         "pdf-document-review-result@1.0",

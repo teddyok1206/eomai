@@ -232,6 +232,8 @@ def _failed_comparison(
         or parent.current_step_key != "compare_pair"
     ):
         raise _ineligible("Original comparison is not positioned at its failed comparison step.")
+    # The parent lock serializes successor admission. This exact terminal step
+    # is read-only API metadata; do not require worker-owned step UPDATE grants.
     step = session.scalar(
         select(WorkflowStepRunRecord)
         .where(
@@ -240,7 +242,6 @@ def _failed_comparison(
         )
         .order_by(WorkflowStepRunRecord.attempt.desc(), WorkflowStepRunRecord.step_run_id.desc())
         .limit(1)
-        .with_for_update()
     )
     if (
         step is None
