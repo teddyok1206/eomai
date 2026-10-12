@@ -21,6 +21,8 @@
   조회·근거 전달 use case를 두고, 각 기능은 목적에 맞는 typed 요청만 보낸다.
 - 권한, revision/hash 확인, 중복 처리, 결과 재사용은 공통 경계의 책임이다.
 - 결합 순서는 **공통 전달 경로 → 기출변형 → 신규 출제·검토 → ChatGPT·시험지 구성**이다.
+- 추가 요청: 같은 로컬 모델·입력으로 CPU/GPU 임베딩을 실측 비교하고, 정확성·격리·
+  capacity gate를 통과하면서 성능이 우수하면 GPU를 기본 실행 방식으로 활성화한다.
 
 | 기존 기능 | 결합할 내용 | 하지 않는 판단 |
 |---|---|---|
@@ -210,6 +212,27 @@ recipe·입력 hash를 pin하고 source 개정/폐기 시 association 갱신 규
 - 단순 immutable space value에 독립 라이프사이클이 없으면 새 registry/table부터 만들지
   않는다. 현재 공간의 public 모델·recipe pointer를 먼저 재사용한다.
 
+### 7.1.1 A단계의 수치 member 포맷
+
+기존 canonical JSON serializer는 float를 허용하지 않는다. 이 규칙을 완화하거나 DB의
+JSON 배열에 벡터를 넣지 않는다. 같은 file-set Artifact의 primary `shard.json`과 secondary
+`vectors.f32`로 나누며, 기존 `ControlFileSetPublisher`만 commit한다. 기존 단일 JSON
+ArtifactManifest의 의미도 바꾸지 않는다.
+
+수치 member는 header 없는 row-major float32 little-endian이다. JSON에는 정수 행 번호·
+차원·바이트 수, exact 입력 및 encoding identity, raw member SHA만 기록한다. 외부
+Artifact manifest SHA, semantic JSON hash, binary raw SHA는 서로 다른 값이다. commit 전
+descriptor는 자기 Artifact pointer를 요구하지 않고, commit 후 공식 member pointer로 참조한다.
+
+수치 codec의 주 작업은 bounded 순서 직렬화와 한 번의 검증이다. 표준 `struct`와 기존 SHA
+함수를 사용하며 신규 dependency는 없다. shape·실제 길이·raw SHA·finite·L2 단위 norm을
+확인하고 보관된 값을 재정규화해 손상을 숨기지 않는다. float32 반올림을 고려한 norm의
+절대 오차 한도는 `1e-5`다. 내부 codec 상한은 3,072행×4,096차원이고 실제 모델/작업
+계약의 더 작은 bound를 별도로 적용한다. codec은 순수 bytes 경계이며 filesystem·DB·
+권한을 소유하지 않는다. 시간은 O(Nd), binary 공간은 O(Nd); source lifetime과 row 참조의
+동시성·idempotency는 아래 Catalog binding/Orchestrator transaction 경계의 책임이다.
+단순 JSON float 배열은 canonical 규칙·binary DB 금지·반복 복사 방지와 맞지 않아 사용하지 않는다.
+
 ### 7.2 프로토콜 우선
 
 구현 전 필요한 최소 successor를 JSON Schema2020-12와 Pydantic으로 먼저 정의한다.
@@ -258,8 +281,9 @@ Catalog는 eligibility와 binding·인덱스 등록을, Orchestrator는 실행·
 - 이전 실패와 신규 차단의 원인이 같을 때만 supported retry를 사용한다. 무한 재시도는 없다.
 
 신규 dependency는 기본적으로 없다. core/domain은 PostgreSQL·NAS·torch·HTTP를 import하지
-않고 기존 application port/infra adapter 방향을 유지한다. CPU-first 격리 환경을 재사용하며
-encoder·worker는 DB/NAS/network에 직접 접근하지 않는다. Orchestrator만 commit한다.
+않고 기존 application port/infra adapter 방향을 유지한다. 첫 회귀는 기존 CPU 격리 환경을
+재사용하고 아래 GPU 비교 gate를 통과하면 기본 device를 갱신한다. encoder·worker는
+DB/NAS/network에 직접 접근하지 않는다. Orchestrator만 commit한다.
 
 ## 8. 자동화의 권한·인증·capacity
 
@@ -278,6 +302,34 @@ WorkerCapacityPolicy가 이미 이 작업을 허용한다고 가정하지 않는
 batch와 대화형 작업 우선순위를 사용하며 새 queue/framework를 먼저 만들지 않는다.
 GPU 전환은 별도 GPU lease/admission이 필요하다. 수치 인코딩만을 위해 Codex 대화 슬롯을
 상시 점유하지 않는다.
+
+### 8.1 CPU/GPU 비교와 기본 device 결정 — 사용자 추가 요청
+
+GPU 사용 가능성을 실제 설치된 모델·CUDA runtime·격리 launcher·GPU lease로 확인한다.
+단순히 torch에서 CUDA가 보인다는 이유만으로 활성화하지 않는다. 외부 LLM API와 새
+모델 다운로드 없이 현재 pin된 로컬 모델을 사용하고, Codex 슬롯과 GPU capacity는 구분한다.
+
+- 동일한 승인 입력·view recipe·모델 revision·float32/L2/무절단 조건으로 CPU/GPU를 비교한다.
+  dtype·TF32·truncation을 몰래 바꿔 속도 향상으로 보고하지 않는다.
+- 작은 synthetic 입력의 shape/finite/norm 검증 후, 승인된 bounded corpus 입력으로 batch
+  인코딩과 query 경로를 실측한다. 최초 seed 전체를 두 번 무작정 재실행하지 않는다.
+- 모델 로드 포함 cold latency, warm encode latency, end-to-end 시간, texts/s, CPU RAM,
+  GPU VRAM과 resource contention을 구분한다. 모델 warm 유지는 구현된 경우에만 측정한다.
+- 부동소수점 device 차이를 bit-identical SHA로 요구하지 않는다. 동일 정본 입력을 보존하고
+  cosine 오차·순위/동점 일관성·기존 불변조건을 검증한다. 실험 전 허용 오차와 반복 횟수를
+  고정하고 사후 결과에 맞춰 gate를 느슨하게 바꾸지 않는다. 교육적 품질 향상으로 해석하지 않는다.
+- 수치 실행 backend/precision/runtime 차이는 encoder-space identity에 반영한다. GPU가
+  CPU 벡터와 같은 차원이라는 이유로 서로 다른 space의 vector를 조용히 섞지 않는다.
+- GPU가 비교 workload에서 실측 우수하고 격리·권한·lease·기존 이미지 작업 회귀를 통과하면
+  compatible release와 명시적 실행 policy로 기본 device를 GPU로 바꾼다. 필요하면 GPU
+  space를 증분 구축·검증한 뒤 current index를 전환하고 기존 CPU space와 rollback을 보존한다.
+- GPU unavailable/경합 시 CPU 사용은 사전에 정의한 admission 정책으로만 허용하며 선택
+  device·대기/대체 사유를 기록한다. hash/권한/결과 무결성 오류를 CPU retry로 숨기지 않는다.
+
+완료 증거는 동일 입력 hash·모델/runtime/device pin, benchmark 결과, 정확성/검색 일관성,
+lease·resource 회귀와 기본 policy의 실제 활성 상태다. GPU가 개선되지 않거나 지원 gate를
+통과하지 못하면 CPU를 유지하고 실제 이유를 기록한다. GPU가 더 좋으면 기본 활성화까지
+이번 goal 범위이며, 비교만 하고 요청을 완료했다고 보고하지 않는다.
 
 개발 인증은 같은 실제 operator/session을 supported refresh와 `/me`로 확인하며 이어간다.
 비밀번호·토큰을 저장해 다시 로그인하거나 fresh-auth·권한·TTL을 무력화하지 않는다.
@@ -337,6 +389,8 @@ Exit: 최소 기출변형의 실제 공통 경로가 닫히고 다른 소비자�
 
 ### D. 회귀·배포·실제 증분 확인 — 약3~5시간 가정
 
+- 위 CPU/GPU 비교를 실행하고 실측 우수한 device를 기본으로 선택한다. GPU 우수 시
+  격리 실행·lease·space 전환·rollback·운영 기본값 활성화까지 검증한다.
 - formatter/linter/strict type checker·focused tests·dependency/hash compatibility를 통과한다.
 - DB mutation tests는 disposable DB에서만 실행한다. 운영 DB로 pytest하지 않는다.
 - compatible release set과 rollback을 고정하고 필요한 component만 배포한다.
@@ -361,6 +415,8 @@ Exit: 준비됨·대기·실패·차단 coverage가 정확하고, 기존 기능�
 - pinned historical replay·same-key publication·Artifact commit 후 metadata 실패 복구.
 - consumer별 요청/결과 포맷·bounded context·prompt version·RAG receipt 정합성.
 - 최초 seed와 delta encode/reuse count, CPU/메모리/지연을 따로 측정한다.
+- CPU/GPU 동일 입력 비교, device별 numerical space 분리, query 순위·float 오차,
+  GPU lease 경합·미가용의 명시적 정책, 기본 device 활성화와 rollback을 검증한다.
 
 전체 보고는 `SOURCE_PASS / DISPOSABLE_DB_PASS / INSTALLED / ACTIVE / LIVE_VERIFIED /
 NOT_IMPLEMENTED / NOT_EVALUATED`를 구분한다. 기존 corpus의 학습 완료, vector coverage,
@@ -368,6 +424,8 @@ NOT_IMPLEMENTED / NOT_EVALUATED`를 구분한다. 기존 corpus의 학습 완료
 
 ## 11. 코드 근거와 관련 문서
 
+- [증분 임베딩의 non-Codex 실행 경계](INCREMENTAL_EMBEDDING_EXECUTION_BOUNDARY.md):
+  기존 queue를 재사용하는 전용 실행 목적·DB/owner 변경과 CPU/GPU admission 설계.
 - `services/catalog_service/eom_catalog_service/knowledge_analysis_service.py`: 승인 분석·이벤트 transaction.
 - `services/catalog_service/eom_catalog_service/registry_service.py`: Item 승인·소유된 상태 변경.
 - `services/catalog_service/eom_catalog_service/knowledge_graph_publication_service.py`: source membership·Graph 출판 transaction.
