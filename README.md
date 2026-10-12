@@ -182,8 +182,11 @@ current-source·report·Artifact owner 연결177 PASS는 설치·실행 PASS가 
 Identity-owned current operator fence와 Catalog savepoint 배치 source는 root9-suite471 PASS,
 strict type/lint/format PASS입니다. savepoint rollback이 최초 권한 row fence를 풀지 않도록
 같은 root transaction에서 먼저 확보하지만, 이 기록이나 저장된 operator ID는 로그인 권한이
-아닙니다. 실제 IAM routine/limited-role DB 검증·native launcher·protected prefix와 공통
-소비자 운영 연결은 아직 pending입니다. 고정
+아닙니다. 최신 guarded disposable PostgreSQL에서 encoding reservation 경쟁·replay **8 PASS**,
+limited IAM routine·권한 변경·savepoint/복구 경계 **6 PASS**, profile 재검증과 cleanup PASS를
+확인했습니다. production IAM 설치/권한 부여는 아니며 native launcher·protected prefix와 공통
+소비자 운영 연결은 아직 pending입니다. CPU/CUDA 비교의 protocol source **681 PASS**와
+reservation source **237 PASS**도 실제 모델 속도 측정과 구분합니다. 고정
 [native launcher 설계](docs/architecture/INCREMENTAL_EMBEDDING_NATIVE_LAUNCHER_PROPOSAL.md)는
 CUDA의 shared lease뿐 아니라 잔류 GPU process와 종료 후 정리까지 별도 검증하도록 명시합니다.
 

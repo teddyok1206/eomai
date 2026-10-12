@@ -471,3 +471,27 @@ strict mypy8·Ruff/format8 PASS다. 실제 source/authority/binary verification 
 필수 주입 경계이며 자동 service grant를 만들지 않는다. guarded DB 경쟁8은 아직 실행 전이다.
 두 suite는 기존 suite와 겹치므로 합산하지 않는다. 모델·GPU 실행0, CUDA default NOT_ACTIVE,
 전체 목표 ACTIVE를 유지한다.
+
+## 실제 guarded encoding/Identity DB gate와 cleanup — 2026-10-12 UTC
+
+source helper/harness를 root 독립 **222 PASS (1.06s)**, strict mypy2·Ruff/format3·bash
+syntax PASS로 확인했다. 최초 root pytest는 잘못된 fixture filename으로0개 실행됐고,
+올바른 고정 목록으로 다시 실행한 위222개만 PASS로 기록한다.
+
+앞서 준비한 exact disposable DB에서 ordinary encoding reservation suite는
+**8 PASS (12.00s)**다. 두 독립 프로세스의 동일 key/겹치는 batch 경쟁, 원 Artifact allocation
+보존, immutable association/completion/replay, 늦은 fence rollback과 bounded query를 확인했다.
+실제 SQL evidence이며, synthetic source/Artifact metadata admission은 실제 NAS/vector proof가 아니다.
+
+같은 DB의 별도 acknowledged `OPERATOR_FENCE_LIMITED_TEMP/1.0` profile preparation,
+frozen Identity suite **6 PASS (12.15s)**, exact read-only profile replay가 모두 PASS다.
+routine/ACL/TEMP는 해당 unique disposable owner/runtime에만 적용했다. 실제 권한 변경 writer,
+savepoint root fence, password/retired session, ACL drift와 TEMP shadow 거부를 검증했고
+production routine·role·operator·schema에는 변경이 없다.
+
+실행 로그와 secret-free receipt는 외부 임시 evidence 디렉터리에 보존했다. receipt raw SHA는
+`a11723479708a2dcf236275a5e122f9c49b6cd802e9676917d39d978d612e05f`다.
+기존 guarded cleanup이 exact marked DB와 전용 두 role/state만 제거하여 **cleanup PASS**다.
+앞의21:21 기록의 cleanup PENDING은 이 후속 evidence로 닫힌다. 이전16/8/6/source suite는
+역할을 구분하며 중복 source PASS와 합산하지 않는다. 모델·GPU 실행0, protected runtime/
+native launcher/default activation PENDING, 전체 목표 ACTIVE다.
