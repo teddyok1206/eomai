@@ -5,6 +5,7 @@ REPOSITORY=/home/eom/EOM
 PYTHON=/srv/eom/conda/envs/eom-api/bin/python
 PIP=/srv/eom/conda/envs/eom-api/bin/pip
 OUTPUT_ROOT=/tmp/eom-image-provider-build
+DEPENDENCY_VERIFIER_SHA256=231089d320a70a41272c006ccca38e1c68014fccfba2ff61feb1515ca5699300
 
 fail() {
   printf '%s\n' "$1" >&2
@@ -22,11 +23,15 @@ chmod 0700 "${OUTPUT_ROOT}"
 state=$(mktemp -d "${OUTPUT_ROOT}/${head_commit}.XXXXXX")
 chmod 0700 "${state}"
 mkdir "${state}/source" "${state}/dist"
-git -C "${REPOSITORY}" archive "${head_commit}" packages/image_contracts services/image_provider \
+git -C "${REPOSITORY}" archive "${head_commit}" \
+  packages/image_contracts packages/gpu_lease services/image_provider \
+  scripts/image_provider/verify_release_dependency.py \
   | tar -x -C "${state}/source"
-"${PIP}" wheel --disable-pip-version-check --no-deps --no-build-isolation \
+"${PIP}" wheel --disable-pip-version-check --no-index --no-deps --no-build-isolation \
+  --wheel-dir "${state}/dist" "${state}/source/packages/gpu_lease"
+"${PIP}" wheel --disable-pip-version-check --no-index --no-deps --no-build-isolation \
   --wheel-dir "${state}/dist" "${state}/source/packages/image_contracts"
-"${PIP}" wheel --disable-pip-version-check --no-deps --no-build-isolation \
+"${PIP}" wheel --disable-pip-version-check --no-index --no-deps --no-build-isolation \
   --wheel-dir "${state}/dist" "${state}/source/services/image_provider"
 contract_wheel=$(find "${state}/dist" -maxdepth 1 -type f \
   -name 'eom_image_contracts-*.whl' -print)
@@ -231,9 +236,25 @@ with zipfile.ZipFile(provider) as archive:
 PY
 contract_sha=$(sha256sum "${contract_wheel}" | cut -d' ' -f1)
 provider_sha=$(sha256sum "${provider_wheel}" | cut -d' ' -f1)
+gpu_lease_wheel=${state}/dist/eom_gpu_lease-0.1.0-py3-none-any.whl
+[[ -f "${gpu_lease_wheel}" && ! -L "${gpu_lease_wheel}" ]] || \
+  fail "LOCAL_IMAGE_GPU_LEASE_WHEEL_REQUIRED"
+chmod 0600 "${contract_wheel}" "${provider_wheel}" "${gpu_lease_wheel}"
+gpu_lease_sha=$(sha256sum "${gpu_lease_wheel}" | cut -d' ' -f1)
+dependency_verifier=${state}/source/scripts/image_provider/verify_release_dependency.py
+[[ "$(sha256sum "${dependency_verifier}" | cut -d' ' -f1)" == "${DEPENDENCY_VERIFIER_SHA256}" ]] || \
+  fail "LOCAL_IMAGE_DEPENDENCY_VERIFIER_MISMATCH"
+"${PYTHON}" -I -B "${dependency_verifier}" build --profile provider \
+  --stage "${state}" --source-root "${state}/source" --source-commit "${head_commit}" \
+  --contract-wheel "${contract_wheel}" --contract-sha256 "${contract_sha}" \
+  --provider-wheel "${provider_wheel}" --provider-sha256 "${provider_sha}" \
+  --gpu-lease-wheel "${gpu_lease_wheel}" --gpu-lease-sha256 "${gpu_lease_sha}"
 printf 'SOURCE_COMMIT=%s\n' "${head_commit}"
 printf 'BUILD_STATE=%s\n' "${state}"
 printf 'CONTRACT_WHEEL=%s\n' "${contract_wheel}"
 printf 'CONTRACT_WHEEL_SHA256=%s\n' "${contract_sha}"
 printf 'PROVIDER_WHEEL=%s\n' "${provider_wheel}"
 printf 'PROVIDER_WHEEL_SHA256=%s\n' "${provider_sha}"
+printf 'GPU_LEASE_WHEEL=%s\n' "${gpu_lease_wheel}"
+printf 'GPU_LEASE_WHEEL_SHA256=%s\n' "${gpu_lease_sha}"
+printf 'GPU_SHARED_LEASE_MIGRATION_VERIFIED=NO\n'

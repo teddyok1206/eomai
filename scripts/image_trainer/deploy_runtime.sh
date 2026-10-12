@@ -16,6 +16,10 @@ PEFT_SHA256=${8:-}
 BITSANDBYTES_WHEEL=${9:-}
 BITSANDBYTES_SHA256=${10:-}
 SOURCE_COMMIT=${11:-}
+API_PYTHON=/srv/eom/conda/envs/eom-api/bin/python
+DEPENDENCY_VERIFIER_SHA256=231089d320a70a41272c006ccca38e1c68014fccfba2ff61feb1515ca5699300
+GPU_LEASE_WHEEL=
+GPU_LEASE_SHA256=
 TRAINER_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-trainer@.service
 TRAINER_UNIT_TARGET=/etc/systemd/system/eom-image-trainer@.service
 MICRO_PROBE_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-lora-micro-probe@.service
@@ -49,6 +53,17 @@ fail() {
 }
 
 [[ "${EUID}" -eq 0 ]] || fail "LOCAL_IMAGE_TRAINER_RUNTIME_ROOT_REQUIRED"
+if [[ $# -eq 15 ]]; then
+  [[ "${12}" == --gpu-lease-wheel && "${14}" == --gpu-lease-sha256 ]] || \
+    fail "LOCAL_IMAGE_TRAINER_DEPENDENCY_ARGUMENTS_INVALID"
+  GPU_LEASE_WHEEL=${13}
+  GPU_LEASE_SHA256=${15}
+  [[ "${GPU_LEASE_SHA256}" =~ ^[0-9a-f]{64}$ && \
+     "${GPU_LEASE_WHEEL}" == /tmp/eom-image-trainer-build/*/dist/eom_gpu_lease-0.1.0-py3-none-any.whl ]] || \
+    fail "LOCAL_IMAGE_TRAINER_GPU_LEASE_PIN_INVALID"
+elif [[ $# -ne 11 ]]; then
+  fail "LOCAL_IMAGE_TRAINER_DEPENDENCY_ARGUMENTS_INVALID"
+fi
 [[ "${SOURCE_COMMIT}" =~ ^[0-9a-f]{40}$ ]] || \
   fail "LOCAL_IMAGE_TRAINER_SOURCE_COMMIT_INVALID"
 [[ "$(git -C "${REPOSITORY}" rev-parse HEAD)" == "${SOURCE_COMMIT}" ]] || \
@@ -97,12 +112,104 @@ if systemctl list-units --type=service --state=activating,active --no-legend \
   fail "LOCAL_IMAGE_GPU_UNIT_ACTIVE"
 fi
 
+release_quarantine=$(mktemp -d /tmp/eom-image-trainer-release.XXXXXXXX)
+chmod 0700 "$release_quarantine"
+release_helper="$release_quarantine/verify_release_dependency.py"
+"$API_PYTHON" -I -B - "$REPOSITORY/scripts/image_provider/verify_release_dependency.py" \
+  "$release_helper" "$DEPENDENCY_VERIFIER_SHA256" <<'PY_IMAGE_RELEASE_BOOTSTRAP'
+import hashlib
+import os
+import stat
+import sys
+from pathlib import Path
+
+source, target, expected = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
+for member in (source, *source.parents, target.parent, *target.parent.parents):
+    value = member.lstat()
+    if stat.S_ISLNK(value.st_mode):
+        raise SystemExit("IMAGE_RELEASE_BOOTSTRAP_PATH_INVALID")
+parent = target.parent.stat()
+if parent.st_uid != 0 or stat.S_IMODE(parent.st_mode) != 0o700:
+    raise SystemExit("IMAGE_RELEASE_BOOTSTRAP_STAGE_INVALID")
+descriptor = os.open(source, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
+def epoch(value):
+    return (value.st_dev, value.st_ino, value.st_uid, value.st_gid, value.st_mode,
+            value.st_nlink, value.st_size, value.st_mtime_ns, value.st_ctime_ns)
+try:
+    initial = os.fstat(descriptor)
+    if not stat.S_ISREG(initial.st_mode) or initial.st_nlink != 1:
+        raise SystemExit("IMAGE_RELEASE_BOOTSTRAP_FILE_INVALID")
+    if not 0 < initial.st_size <= 128 * 1024:
+        raise SystemExit("IMAGE_RELEASE_BOOTSTRAP_FILE_INVALID")
+    parts, total = [], 0
+    while chunk := os.read(descriptor, 65536):
+        total += len(chunk)
+        if total > 128 * 1024:
+            raise SystemExit("IMAGE_RELEASE_BOOTSTRAP_FILE_INVALID")
+        parts.append(chunk)
+    payload = b"".join(parts)
+    if total != initial.st_size or epoch(initial) != epoch(os.fstat(descriptor)):
+        raise SystemExit("IMAGE_RELEASE_BOOTSTRAP_SOURCE_CHANGED")
+    if epoch(initial) != epoch(source.lstat()) or hashlib.sha256(payload).hexdigest() != expected:
+        raise SystemExit("IMAGE_RELEASE_BOOTSTRAP_HASH_MISMATCH")
+finally:
+    os.close(descriptor)
+output = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+try:
+    remaining = memoryview(payload)
+    while remaining:
+        count = os.write(output, remaining)
+        if count <= 0:
+            raise SystemExit("IMAGE_RELEASE_BOOTSTRAP_WRITE_FAILED")
+        remaining = remaining[count:]
+    os.fsync(output)
+finally:
+    os.close(output)
+PY_IMAGE_RELEASE_BOOTSTRAP
+
+release_exit() {
+  local release_status=$?
+  trap - EXIT
+  if [[ "$release_status" -ne 0 ]]; then
+    "$API_PYTHON" -I -B "$release_helper" recovery --profile trainer \
+      --stage "$release_quarantine" --source-commit "$SOURCE_COMMIT" || true
+    printf 'IMAGE_RELEASE_RECOVERY_REQUIRED=YES\n' >&2
+  fi
+  printf 'IMAGE_RELEASE_QUARANTINE=%s\n' "$release_quarantine"
+  return "$release_status"
+}
+trap release_exit EXIT
+release_arguments=(prepare --profile trainer --stage "$release_quarantine"
+  --repository "$REPOSITORY" --source-commit "$SOURCE_COMMIT"
+  --contract-wheel "$CONTRACT_WHEEL" --contract-sha256 "$CONTRACT_SHA256"
+  --provider-wheel "$PROVIDER_WHEEL" --provider-sha256 "$PROVIDER_SHA256"
+  --peft-wheel "$PEFT_WHEEL" --peft-sha256 "$PEFT_SHA256")
+release_arguments+=(--trainer-wheel "$TRAINER_WHEEL" --trainer-sha256 "$TRAINER_SHA256"
+  --bitsandbytes-wheel "$BITSANDBYTES_WHEEL" --bitsandbytes-sha256 "$BITSANDBYTES_SHA256")
+if [[ -n "$GPU_LEASE_WHEEL" ]]; then
+  release_arguments+=(--gpu-lease-wheel "$GPU_LEASE_WHEEL" --gpu-lease-sha256 "$GPU_LEASE_SHA256")
+fi
+"$API_PYTHON" -I -B "$release_helper" "${release_arguments[@]}"
+CONTRACT_WHEEL="$release_quarantine/wheels/$(basename "$CONTRACT_WHEEL")"
+PROVIDER_WHEEL="$release_quarantine/wheels/$(basename "$PROVIDER_WHEEL")"
+PEFT_WHEEL="$release_quarantine/wheels/$(basename "$PEFT_WHEEL")"
+TRAINER_WHEEL="$release_quarantine/wheels/$(basename "$TRAINER_WHEEL")"
+BITSANDBYTES_WHEEL="$release_quarantine/wheels/$(basename "$BITSANDBYTES_WHEEL")"
+if [[ -n "$GPU_LEASE_WHEEL" ]]; then
+  GPU_LEASE_WHEEL="$release_quarantine/wheels/eom_gpu_lease-0.1.0-py3-none-any.whl"
+fi
+"$API_PYTHON" -I -B "$release_helper" mark-mutation --profile trainer \
+  --stage "$release_quarantine" --source-commit "$SOURCE_COMMIT"
+
 if [[ ! -d "${TRAINER_ENV}" ]]; then
   "${CONDA}" create --offline --yes --clone "${INFERENCE_ENV}" --prefix "${TRAINER_ENV}"
 fi
 [[ -x "${TRAINER_ENV}/bin/python" && -x "${TRAINER_ENV}/bin/pip" ]] || \
   fail "LOCAL_IMAGE_TRAINER_ENV_INVALID"
-"${TRAINER_ENV}/bin/python" -m pip install --no-deps --force-reinstall \
+if [[ -n "${GPU_LEASE_WHEEL}" ]]; then
+  "${TRAINER_ENV}/bin/python" -I -B -m pip install --no-index --no-deps --no-compile --force-reinstall "${GPU_LEASE_WHEEL}"
+fi
+"${TRAINER_ENV}/bin/python" -I -B -m pip install --no-index --no-deps --force-reinstall \
   "${CONTRACT_WHEEL}" "${PROVIDER_WHEEL}" "${PEFT_WHEEL}" \
   "${BITSANDBYTES_WHEEL}" "${TRAINER_WHEEL}"
 
@@ -170,9 +277,11 @@ cmp -s "${PROVIDER_UNIT_SOURCE}" "${PROVIDER_UNIT_TARGET}" || \
 cmp -s "${POLKIT_SOURCE}" "${POLKIT_TARGET}" || \
   fail "LOCAL_IMAGE_TRAINER_POLKIT_DRIFT"
 
+"${API_PYTHON}" -I -B "${release_helper}" installed --profile trainer \
+  --stage "${release_quarantine}" --source-commit "${SOURCE_COMMIT}"
 runuser -u eom-image -g eom-image -- env -i \
   HOME=/var/lib/eom-image PATH=${TRAINER_ENV}/bin:/usr/bin:/bin PYTHONNOUSERSITE=1 \
-  "${TRAINER_ENV}/bin/python" -I - <<'PY'
+  "${TRAINER_ENV}/bin/python" -I -B - <<'PY'
 from importlib import metadata
 import eom_image_contracts
 import eom_image_provider
@@ -192,6 +301,13 @@ if actual != expected:
 print("LOCAL_IMAGE_TRAINER_IMPORT=PASS")
 PY
 
+if [[ -n "${GPU_LEASE_WHEEL}" ]]; then
+  "${TRAINER_ENV}/bin/python" -I -B -c \
+    'import importlib.metadata, pathlib, sys; import eom_gpu_lease; assert importlib.metadata.version("eom-gpu-lease") == "0.1.0"; assert pathlib.Path(eom_gpu_lease.__file__).is_relative_to(sys.prefix); assert not {"torch", "transformers", "diffusers", "bitsandbytes"}.intersection(sys.modules)'
+  printf 'GPU_LEASE_DEPENDENCY_INSTALLED=YES\n'
+fi
+printf 'GPU_SHARED_LEASE_MIGRATION_VERIFIED=NO\n'
+printf 'GPU_DEFAULT_ACTIVATION_VERIFIED=NO\n'
 printf 'LOCAL_IMAGE_TRAINER_RUNTIME_PREPARED=YES\n'
 printf 'SOURCE_COMMIT=%s\n' "${SOURCE_COMMIT}"
 printf 'TRAINER_WORKSPACE_ROOT=root:eom-image:3770\n'

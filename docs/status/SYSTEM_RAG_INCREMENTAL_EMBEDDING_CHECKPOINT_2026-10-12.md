@@ -263,3 +263,23 @@ native Runner의 source-plan과 실제 owned-subset launch 입력을 분리하�
 않는다. operator seed와 향후 background service 권한은 분리하며 실제 service policy가
 없으면 자동 실행을 활성화하지 않는다. GPU 비교와 우수할 경우 기본값 전환은 전체 목표의
 필수 작업으로 유지한다.
+
+## Image standalone lease dependency release closure — 2026-10-12 UTC
+
+기존 provider/trainer build/deploy의 legacy7/11 인자는 보존하며 exact standalone lease
+wheel와 raw SHA를 successor 옵션으로 받는다. fixed helper SHA의 root-private copy만
+실행하고 admission 전에는 pip·계정·unit을 변경하지 않는다. wheel namespace/RECORD와
+installed lease의 단일 owner를 검증하며, root prefix의 Conda metadata hardlink 예외와
+canonical lease single-link 규칙은 구분한다. shared physical lock/group/device migration은
+이 leaf가 수행하거나 PASS로 선언하지 않는다.
+
+root 재검토에서 확인한 archive preallocation·subprocess stdout·unchecked bytecode 문제는
+held-FD bounded ZIP32 central-directory 선검사, metadata stdout/deadline/kill/reap/FD cleanup,
+registered/unregistered/sourceless lease bytecode 거부로 수정했다. bytecode를 자동 삭제하거나
+hash 검증을 건너뛰지 않는다. installed ownership 검증이 최초 image import probe보다 앞선다.
+
+root 독립 release fixture **81 PASS (0.95s)**, explicit image-test 환경의 lease/adapter를
+포함한 **130 PASS (2.23s)**, strict mypy2·Ruff/format2·bash4 PASS다. 두 gate는 중복되므로
+합산하지 않는다. helper의 source raw SHA는
+`231089d320a70a41272c006ccca38e1c68014fccfba2ff61feb1515ca5699300`다.
+실제 이미지 runtime 설치/권한·lease 전환·GPU 실행/default activation은 여전히 pending이다.

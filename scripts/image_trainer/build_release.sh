@@ -5,6 +5,7 @@ REPOSITORY=/home/eom/EOM
 PYTHON=/srv/eom/conda/envs/eom-api/bin/python
 PIP=/srv/eom/conda/envs/eom-api/bin/pip
 OUTPUT_ROOT=/tmp/eom-image-trainer-build
+DEPENDENCY_VERIFIER_SHA256=231089d320a70a41272c006ccca38e1c68014fccfba2ff61feb1515ca5699300
 
 fail() {
   printf '%s\n' "$1" >&2
@@ -25,10 +26,11 @@ state=$(mktemp -d "${OUTPUT_ROOT}/${head_commit}.XXXXXX")
 chmod 0700 "${state}"
 mkdir "${state}/source" "${state}/dist"
 git -C "${REPOSITORY}" archive "${head_commit}" \
-  packages/image_contracts services/image_provider services/image_trainer \
+  packages/image_contracts packages/gpu_lease services/image_provider services/image_trainer \
+  scripts/image_provider/verify_release_dependency.py \
   | tar -x -C "${state}/source"
-for project in packages/image_contracts services/image_provider services/image_trainer; do
-  "${PIP}" wheel --disable-pip-version-check --no-deps --no-build-isolation \
+for project in packages/gpu_lease packages/image_contracts services/image_provider services/image_trainer; do
+  "${PIP}" wheel --disable-pip-version-check --no-index --no-deps --no-build-isolation \
     --wheel-dir "${state}/dist" "${state}/source/${project}"
 done
 contract_wheel=$(find "${state}/dist" -maxdepth 1 -type f \
@@ -352,15 +354,34 @@ with zipfile.ZipFile(trainer) as archive:
     if not required.issubset(names):
         raise SystemExit("LOCAL_IMAGE_TRAINER_WHEEL_INVALID")
 PY
+gpu_lease_wheel=${state}/dist/eom_gpu_lease-0.1.0-py3-none-any.whl
+[[ -f "${gpu_lease_wheel}" && ! -L "${gpu_lease_wheel}" ]] || \
+  fail "LOCAL_IMAGE_TRAINER_GPU_LEASE_WHEEL_REQUIRED"
+chmod 0600 "${contract_wheel}" "${provider_wheel}" "${trainer_wheel}" "${gpu_lease_wheel}"
+dependency_verifier=${state}/source/scripts/image_provider/verify_release_dependency.py
+[[ "$(sha256sum "${dependency_verifier}" | cut -d' ' -f1)" == "${DEPENDENCY_VERIFIER_SHA256}" ]] || \
+  fail "LOCAL_IMAGE_TRAINER_DEPENDENCY_VERIFIER_MISMATCH"
+"${PYTHON}" -I -B "${dependency_verifier}" build --profile trainer \
+  --stage "${state}" --source-root "${state}/source" --source-commit "${head_commit}" \
+  --contract-wheel "${contract_wheel}" \
+  --contract-sha256 "$(sha256sum "${contract_wheel}" | cut -d' ' -f1)" \
+  --provider-wheel "${provider_wheel}" \
+  --provider-sha256 "$(sha256sum "${provider_wheel}" | cut -d' ' -f1)" \
+  --trainer-wheel "${trainer_wheel}" \
+  --trainer-sha256 "$(sha256sum "${trainer_wheel}" | cut -d' ' -f1)" \
+  --gpu-lease-wheel "${gpu_lease_wheel}" \
+  --gpu-lease-sha256 "$(sha256sum "${gpu_lease_wheel}" | cut -d' ' -f1)"
 printf 'SOURCE_COMMIT=%s\n' "${head_commit}"
 printf 'BUILD_STATE=%s\n' "${state}"
 for variable_and_wheel in \
   "CONTRACT:${contract_wheel}" \
   "PROVIDER:${provider_wheel}" \
-  "TRAINER:${trainer_wheel}"; do
+  "TRAINER:${trainer_wheel}" \
+  "GPU_LEASE:${gpu_lease_wheel}"; do
   variable=${variable_and_wheel%%:*}
   wheel=${variable_and_wheel#*:}
   sha=$(sha256sum "${wheel}" | cut -d' ' -f1)
   printf '%s_WHEEL=%s\n' "${variable}" "${wheel}"
   printf '%s_WHEEL_SHA256=%s\n' "${variable}" "${sha}"
 done
+printf 'GPU_SHARED_LEASE_MIGRATION_VERIFIED=NO\n'
