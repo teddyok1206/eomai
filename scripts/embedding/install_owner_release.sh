@@ -24,10 +24,11 @@ done
 
 # A partial stage is retained on failure. Existing releases and all CPU files stay intact.
 stage=$(mktemp -d "$release_root/.owner-stage-XXXXXXXX")
-install -o root -g root -m 0400 "$source_wheel" "$stage/eom_platform-0.1.0-py3-none-any.whl"
+install -o root -g root -m 0600 "$source_wheel" "$stage/eom_platform-0.1.0-py3-none-any.whl"
 [[ "$(sha256sum "$stage/eom_platform-0.1.0-py3-none-any.whl" | cut -d' ' -f1)" == "$wheel_sha256" ]] || fail NATIVE_OWNER_WHEEL_HASH_MISMATCH
 /srv/eom/conda/envs/eom-api/bin/python -I -B \
   /home/eom/EOM/scripts/api/verify_release_wheel_records.py \
+  --platform-only \
   "$stage/eom_platform-0.1.0-py3-none-any.whl"
 /srv/eom/conda/envs/eom-api/bin/python -I -B -m pip install \
   --no-deps --no-index --no-compile --no-cache-dir \

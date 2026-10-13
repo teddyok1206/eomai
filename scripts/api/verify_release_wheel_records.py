@@ -260,6 +260,17 @@ def verify_wheel_record(path: Path) -> VerifiedWheelIdentity:
 
 def main(arguments: tuple[str, ...] | None = None) -> int:
     values = tuple(sys.argv[1:] if arguments is None else arguments)
+    if values and values[0] == "--platform-only":
+        if len(values) != 2 or Path(values[1]).name != "eom_platform-0.1.0-py3-none-any.whl":
+            print("platform_wheel_record_verification=INVALID_ARGUMENTS", file=sys.stderr)
+            return 2
+        try:
+            verify_wheel_record(Path(values[1]))
+        except WheelRecordError as exc:
+            print(f"platform_wheel_record_verification={exc}", file=sys.stderr)
+            return 1
+        print("platform_wheel_record_verification=PASS")
+        return 0
     emit_identity = bool(values and values[0] == "--emit-identity")
     if emit_identity:
         values = values[1:]

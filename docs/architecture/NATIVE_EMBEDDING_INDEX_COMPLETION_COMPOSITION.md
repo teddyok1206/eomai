@@ -57,6 +57,21 @@ execution. Activation is a separate composition step with actual Identity captur
 and current Catalog controls. The owner overlay stays removable; core services do
 not automatically import it.
 
+## Actual controller namespace preflight
+
+Read-only actual-owner checks found the ordinary controller connection uses
+`app,public`, while the native Identity fence deliberately requires exact
+`app,pg_catalog`. Do not relax that fence or alter the global role/default used by
+existing services. The existing Orchestrator database adapter now exposes one
+native-controller constructor using the same supported credential and explicit
+libpq connection option, before any application transaction. It rejects foreign
+drivers or contradictory preconfigured options and does not issue SET ROLE,
+grants, IAM changes or schema writes. The live metadata inspection also found
+the three embedding registry tables absent. That remains a prerequisite for the
+already tested additive 0052/0053 release, not permission to create tables in a
+canary or assume the current DB is migrated. No seed is submitted before those
+supported migration and current source/session/control gates are closed.
+
 ## Two closure corrections required by actual bounded production
 
 An operation's source-plan subset is not the entire authorized corpus. Catalog

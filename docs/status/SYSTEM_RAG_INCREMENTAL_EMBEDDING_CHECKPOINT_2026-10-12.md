@@ -2185,3 +2185,46 @@ checkpoint를 포함한다. IAM/source/numerical backend는 합성이므로 live
 다음은 보호 owner 실제 연결/설치와 같은 operator/session의 bounded seed/delta/query다.
 그 후 automatic service identity/reconcile, 소비자와 CPU/GPU 비교·조건부 default를 진행한다.
 `GOAL=ACTIVE`, `NATIVE_EXECUTOR_SOURCE=IMPLEMENTED`, `NATIVE_WORKFLOW_LIVE=NOT_ACTIVE`.
+
+## 2026-10-13 21:17 UTC — 별도 보호 owner 설치와 실제 metadata preflight
+
+GitHub `a321ec44` 반영·clean 상태와 이전 Slack milestone 기록을 확인하고 이어서 진행했다.
+독립 wheel build의 admission inventory 누락은 공통 definition protocol 계산과 실제
+application-only YAML 구성으로 보완했다. 같은 검사에서 누락된 기존 transfer 계약
+모듈 세 개도 명시 inventory에 포함했다. `7373af1a61edf98e7f59fe7f8ff307895a49aded`의
+표준 build-only·전체 RECORD/installed simulation PASS다.
+
+해당 source wheel raw SHA는
+`29aa61575e002f4ede927bd352fca37ffae705a30a35f06699a527efd0f2264c`이며
+`/opt/eom/embedding-owner-releases/7373af1a61edf98e7f59fe7f8ff307895a49aded/`에
+root-owned read-only로 별도 설치했다. `eom-workflow-runner` 실제 UID990/GID1000,
+supplementary groups 없음으로 모듈11개를 그 설치 경로에서 import하고 고정 launcher의
+기존 CPU installation current/readiness를 확인했다. DB/source admission이나 model
+forward/StartUnit을 수행한 검증은 아니다. CPU 설치본 `c2f8eef8`, config/receipt,
+prepare unit의 기존 owner 선택은 그대로다. 새 overlay의 설치가 활성화를 뜻하지 않는다.
+
+첫 별도 installer는 기존 RECORD CLI가 전체3-wheel 전용인 점 때문에 private stage에서
+중단됐다. 실제 final release 생성/pip/model 전에 실패했고 기록과 stage를 보존했다.
+동일 verifier의 공개 `--platform-only` leaf와 private0600 wheel 입력을 테스트로 보완해
+정확히 같은 후보 wheel을 설치했다. 전체3-wheel 검사 의미는 변경하지 않았다.
+
+실제 controller metadata만 조회해 `eom_app` OID16385/non-superuser/non-BYPASSRLS,
+기존 IAM/Workflow/Job8개 테이블의 SELECT/UPDATE를 확인했다. 기본 검색 경로는
+`app,public`이고 새 native fence는 `app,pg_catalog`를 요구한다. 기존 fence/role/default를
+완화하지 않고 Orchestrator DB adapter에 별도 native connection constructor를 추가했다.
+같은 credential, explicit libpq option, 기존 engine builder를 사용하며 다른 driver/option은
+거부한다. 운영 registry3개 테이블은 아직 존재하지 않으므로 **migration prerequisite
+pending**이다. 운영 DB에 pytest·grant·table creation·seed 제출을 하지 않았다.
+
+증거: `/tmp/eom-native-owner-installed.M3wFwUZt/`의 installation-v2,
+installed-owner-check, owner-schema-check 로그와 root 보호된 검증 entrypoints.
+실패한 owner-database-check의 검색 경로 결과도 별도로 보존한다. 관련 source/CLI/설치
+focused suite111 PASS,3.97s 이후 dependency/installation/executor를 포함한8-suite 최종
+회귀170 PASS,11.93s·strict mypy2·Ruff/format/bash/diff PASS다.
+이 숫자는 이전642/임시 DB28과 합산하지 않는다. 운영 API/Web/runner/chat5개 active.
+
+다음은 정확한 기존0052/0053 migration/release context와 현재 Identity provider/control
+composition을 연결한 bounded real seed/delta/reuse/query다. 그 후 automatic service
+reconciliation·계획된 consumers·CPU/GPU 측정과 조건부 default를 수행한다.
+`GOAL=ACTIVE`, `PROTECTED_OWNER_WHEEL=INSTALLED`, `NATIVE_LAUNCHER_READINESS=PASS`,
+`REGISTRY_MIGRATION=NOT_APPLIED`, `NATIVE_WORKFLOW_LIVE=NOT_ACTIVE`.

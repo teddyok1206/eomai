@@ -20,6 +20,7 @@ def test_owner_installation_is_separate_offline_and_no_clobber() -> None:
     assert 'mkdir -m 0755 "$target"' in source
     assert '[[ ! -e "$target" && ! -L "$target" ]]' in source
     assert "verify_release_wheel_records.py" in source
+    assert "--platform-only" in source
     assert '"$wheel_sha256" ]] || fail NATIVE_OWNER_WHEEL_HASH_MISMATCH' in source
     assert "--no-deps --no-index --no-compile --no-cache-dir" in source
     assert "CPU_RUNTIME=UNCHANGED" in source

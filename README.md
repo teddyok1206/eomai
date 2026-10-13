@@ -242,7 +242,14 @@ seed/delta나 GPU 기본값 전환의 완료 증거는 아닙니다.
 분리합니다. 임시 PostgreSQL에서 전체 Workflow/Artifact/index 완료, Graph 변경 시
 벡터 재사용, 저장·등록 중단 재개와 코드 업데이트 이후 원래 게시 provenance 유지까지
 검증합니다. 합성 IAM/model 경계의 검증은 실제 사용자·모델·운영 활성화의 증거가
-아니며, 보호된 owner 설치와 실제 seed/delta/query·자동 service identity는 아직 남아 있습니다.
+아니며, 실제 seed/delta/query·자동 service identity는 아직 남아 있습니다.
+보호된 owner wheel은 별도로 설치했고 실제 운영 실행 계정의 모듈 로딩·고정 CPU
+readiness 확인은 통과했습니다. 수치 prefix/config/receipt·운영 서비스는 바꾸지 않았습니다.
+독립 release 검사는 비-Codex 임베딩 정의도 공통 protocol 계산으로 확인합니다.
+운영 metadata 조회에서 임베딩 registry 테이블 미적용과 기존 controller의 `app,public`
+검색 경로를 확인했습니다. 새 owner 전용 `app,pg_catalog` 연결을 추가했으며 기존
+서비스의 연결·권한은 유지합니다. 지원된 additive migration과 실제 Identity/control
+연결을 마치기 전에는 운영 corpus 인덱싱 완료로 표시하지 않습니다.
 
 최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와
 strict type/lint/format PASS입니다. 실제 임시 DB28개 사례에는 독립 실행기 claim 경쟁과

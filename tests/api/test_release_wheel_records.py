@@ -90,6 +90,25 @@ def test_release_wheel_record_verifier_accepts_exact_member_set_hashes_and_sizes
     verify_wheel_record(_wheel(tmp_path))
 
 
+def test_platform_only_cli_verifies_one_wheel_not_the_full_api_release(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(("--platform-only", str(_wheel(tmp_path)))) == 0
+    assert capsys.readouterr().out == "platform_wheel_record_verification=PASS\n"
+    assert main((str(_wheel(tmp_path)),)) == 2
+
+
+def test_platform_only_cli_rejects_other_distribution_extra_args_and_invalid_record(
+    tmp_path: Path,
+) -> None:
+    platform = _wheel(tmp_path)
+    other = _wheel(tmp_path, distribution="eom_application_api")
+    assert main(("--platform-only", str(other))) == 2
+    assert main(("--platform-only", str(platform), str(other))) == 2
+    invalid = _wheel(tmp_path, record_mutation=lambda rows, _record: rows[0].__setitem__(2, "1"))
+    assert main(("--platform-only", str(invalid))) == 1
+
+
 @pytest.mark.parametrize(
     "mutation",
     (
