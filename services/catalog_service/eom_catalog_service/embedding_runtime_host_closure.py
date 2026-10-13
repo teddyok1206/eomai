@@ -714,13 +714,16 @@ def capture_protected_embedding_host(
         and files.owner_uid >= 0,
         "FILES_INVALID",
     )
+    # Fixed host checks must not grow with the caller's later whole-prefix inventory.
+    # The caller still owns the complete prefix check; this owner retains every host check.
+    host_files = NumericalRuntimeFileSnapshots(files.owner_uid)
     stack = ExitStack()
     try:
-        routes = _HostRoutes(files.owner_uid)
+        routes = _HostRoutes(host_files.owner_uid)
         for path, target in _ALIASES:
             routes.alias(path, target)
         routes.absence(_PRELOAD)
-        files.require_closed_namespaces(
+        host_files.require_closed_namespaces(
             {_CONFIG}, {path for path, _size, _sha in _FILES if path.parent == _CONFIG}
         )
         descriptors: dict[Path, int] = {}
@@ -735,7 +738,7 @@ def capture_protected_embedding_host(
                 "SEED_INVALID",
             )
             descriptor, raw = stack.enter_context(
-                files.verified_open(
+                host_files.verified_open(
                     path, sha256="sha256:" + sha, size=size, maximum=8 * 1024**2, retain_bytes=True
                 )
             )
@@ -766,7 +769,7 @@ def capture_protected_embedding_host(
             for name in _SONAMES:
                 routes.absence(root / name)
         result = ProtectedEmbeddingHostClosure(
-            files,
+            host_files,
             routes,
             stack,
             descriptors,

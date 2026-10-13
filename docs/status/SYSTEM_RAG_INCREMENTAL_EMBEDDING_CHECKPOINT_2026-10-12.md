@@ -1546,3 +1546,25 @@ helper·fingerprint·사용 중 process 없음·held/named inode·fsync 검사�
 복구 기록은 `/tmp/eom-embedding-successor-release.0Hv5gaAp/elf-cpu-recovery.log`,
 root snapshot은 `/opt/eom/.embedding-index-recovery-u1hAIh0g`다. 삭제나 실패→성공 변경 없음.
 다음은 수정 commit의 새 wheel/원본 pin으로 정식 전체-prefix 검증이다.
+
+## 실제 재검증 진행과 중복 검사 비용 분리 — 2026-10-13 09:42 UTC
+
+865571d9의 새 CPU 후보를 정식 검증 중이다. wheel raw2f79f0d7443f6ebf4cb417642f7f8728f797633684907d586d277a390611cb80,
+source tar rawdf9eed968c89bd73748aecc8d75dd221332d3fe343a9a23de0483b74dbda1228,
+owner input raw1844a149982c3bd5ee14f117860961201461bc995e2be366e42236e0f9aaa7df를 고정했다.
+작업 기록은 `/tmp/eom-embedding-successor-release.q7i87leS`, protected PRIVATE는
+`/opt/eom/.embedding-index-install-OYx4moKt`다. 아직 terminal 결과가 없어 PASS라고 하지 않는다.
+
+라이브러리 실제 metadata→기존 typed proof 연결은52606e61로 push했다. archive/RECORD owner와
+동일 file snapshot을 재사용하고 조작된 RECORD/payload/archive/wrapper/URL을 거부한다.
+wheel/observer/proof3-suite279 PASS6.17s, strict1·Ruff/format2 PASS; 실제 proof 발행은 아니다.
+
+실행 중 설치 검증이 한 코어를8분 이상 사용했고, host 검사4회가 뒤늦게 등록한 무관한
+prefix64개를256번 다시 확인하는 구조를 source 회귀로 재현했다. 고정 OS 파일 검사에 별도
+기존 snapshot을 사용하여 이 반복을0으로 줄였다. prefix 전체 마지막 검사64회와 변경 거부는
+유지한다. host/prefix/Conda/installer4-suite547 PASS65.29s, strict1·Ruff/format2 PASS.
+이는 O(E×N) 결합 제거이며 라이브러리 검증 생략이나 성능 임계값 완화가 아니다.
+진행 중865571d9의 보호 파일은 수정하지 않았다. 새 수정본의 실제 설치 속도는 미측정이다.
+
+API/Web/Catalog/HWPX/Workflow 장기 서비스는 running, RTX5080은 조회 시 GPU0%/2MiB였다.
+모델 forward0, CPU/GPU 비교 NOT_EVALUATED, GPU 기본값 NOT_ACTIVE를 유지한다.

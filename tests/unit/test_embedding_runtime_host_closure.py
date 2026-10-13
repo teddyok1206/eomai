@@ -551,6 +551,40 @@ def test_fixed_readelf_fd_bound_argv_has_bounded_output(
     assert children[0].stdout is not None and children[0].stdout.closed
 
 
+def test_host_check_cost_does_not_grow_with_later_prefix_members(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path, monkeypatch)
+    with fixture.capture() as capture:
+        members = []
+        for index in range(64):
+            member = tmp_path / f"prefix-member-{index}"
+            _put(member, b"synthetic unrelated prefix member")
+            fixture.files.observe_protected_member_identity(member)
+            members.append(member)
+        tracked = set(members)
+        original = Path.lstat
+        unrelated_checks = 0
+
+        def counted(path: Path) -> os.stat_result:
+            nonlocal unrelated_checks
+            if path in tracked:
+                unrelated_checks += 1
+            return original(path)
+
+        monkeypatch.setattr(Path, "lstat", counted)
+        for _ in range(4):
+            capture.assert_current()
+        assert unrelated_checks == 0
+        fixture.files.assert_unchanged()
+        assert unrelated_checks == 64
+        # Prefix work still owns its complete final checks; host operations do not replace them.
+        members[-1].chmod(0o660)
+        capture.assert_current()
+        with pytest.raises(InstalledRuntimeProofError):
+            fixture.files.assert_unchanged()
+
+
 def test_fixed_readelf_accepts_two_mib_at_shared_parser_limit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

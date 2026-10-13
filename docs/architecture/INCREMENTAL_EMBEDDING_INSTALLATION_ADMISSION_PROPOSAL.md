@@ -589,3 +589,24 @@ Focused wheel/observer/proof3-suite279 PASS6.17s; strict1 and Ruff/format2 PASS.
 CPU5/CUDA20 captured records with the fixture's independently constructed expected proof and
 reject tampered RECORD, payload, archive, console wrapper and direct URL before returning a proof.
 Fixture verification is not a real installed capture or publication receipt.
+
+## Keep host-tool checks independent of the growing prefix inventory
+
+Actual865571d9 prefix validation consumed a CPU core for over8minutes. A focused operation-count
+regression then reproduced a structural cause: four fixed-host checks revisited64 unrelated,
+later-added prefix files256times. `capture_protected_embedding_host` now owns a separate existing
+`NumericalRuntimeFileSnapshots` with the caller's same owner UID. No new adapter or cache is added.
+The host retains all fixed archive bytes, held FD/named/ancestor identity, loader routes/aliases,
+configuration namespace, capability and time/output checks. The prefix owner retains its complete
+final `files.assert_unchanged` and same-audit inventory check. Unrelated prefix drift is still
+rejected there, not silently accepted as installation evidence.
+
+Access cost changes from repeated O(E×N) whole-prefix metadata visits to O(E×H+N), where E is
+ELF operations, N is prefix members and H is the fixed host set. Source tests count actual lstat
+calls rather than relying on unstable wall-clock thresholds. This does not claim that the live
+audit passed or establish a measured CPU/GPU inference speedup; current frozen attempts are not
+patched in place. No wire format, schema, dependency, privilege or accepted historical pin changes.
+Final host/prefix/Conda/installer4-suite547 PASS65.29s, strict1 and Ruff/format2 PASS.
+The operation-count regression reports zero unrelated host checks while the owner's final check
+still visits all64 prefix files and rejects a changed one. The initial new test's fixture-name
+error was corrected before the reproducible pre-fix256-check failure; neither is hidden as PASS.
