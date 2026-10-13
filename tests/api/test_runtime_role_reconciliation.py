@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import TypedDict
 
 import pytest
 from eom_api.runtime_privileges import (
@@ -14,6 +15,14 @@ from eom_api.runtime_privileges import (
 from scripts.api import testdb_guard
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+
+
+class _SchemaMetadata(TypedDict, total=False):
+    schema_owner: str | None
+    schema_comment: str | None
+    effective_search_path: tuple[str, ...]
+    has_usage: bool
+    has_create: bool
 
 
 def test_runtime_role_bootstrap_revokes_drift_before_exact_grants() -> None:
@@ -127,14 +136,14 @@ def test_disposable_schema_metadata_requires_owner_marker_path_and_minimum_privi
         has_usage=True,
         has_create=True,
     )
-    invalid = (
+    invalid: tuple[_SchemaMetadata, ...] = (
         {"schema_owner": None},
         {"schema_comment": None},
         {"effective_search_path": ("public",)},
         {"has_usage": False},
         {"has_create": False},
     )
-    baseline = {
+    baseline: _SchemaMetadata = {
         "schema_owner": manifest.owner_role,
         "schema_comment": manifest.marker,
         "effective_search_path": ("app", "public"),
@@ -377,6 +386,8 @@ def test_disposable_modes_include_separate_opt_in_chat_role_suite() -> None:
         "hwpx-tests",
         "embedding-tests",
         "embedding-encoding-tests",
+        "embedding-stage-tests",
+        "authenticated-session-tests",
         "pdf-review-tests",
         "quality-review-tests",
         "chat-tests",

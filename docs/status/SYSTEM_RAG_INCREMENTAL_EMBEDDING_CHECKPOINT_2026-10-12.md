@@ -964,8 +964,12 @@ owner 및 profile lock/backup을 재사용한다. 이는 **SOURCE_PASS / NOT_RUN
 
 같은 marked DB의 fixture 교정 후 명시 재실행1회는 **11 PASS5.82s, skip0**다. 독립 writer8종의
 actual blocking, activity 불변, late-expiry rollback, valid baseline 뒤 wrong-OID/savepoint 거부를
-확인했다. Root source7-suite246 PASS6.80s, strict/Ruff/format8 PASS와 testdb harness94 PASS도
-별도 확인한다. 기존 failed log는 그대로다. 지원된 cleanup은 정확히 그 disposable DB/test roles/
+확인했다. Root source7-suite246 PASS6.80s, strict/Ruff/format8 PASS와 focused testdb harness4 PASS도
+별도 확인했다. 더 넓은 testdb/source 회귀는 첫 실행1 FAIL/121 PASS로, 기존 closed usage fixture가
+이전 native-stage 및 이번 authenticated-session 목적을 나열하지 않았다. 정확한 supported 목적
+목록을 fixture에 추가하고 별도 재실행한다. 앞 commit의 harness94 표기는 실측값이 아니므로
+이 기록으로 정정하며 core/DB246·11 결과와 혼동하지 않는다. 기존 failed log는 그대로다.
+지원된 cleanup은 정확히 그 disposable DB/test roles/
 합성 데이터만 제거했고 state absence를 확인했다. 이 임시 행은 test fixture로만 재생성 가능하며
 운영/Artifact/history가 삭제된 것은 없다. 로그는 별도0700 evidence 디렉터리에 남겼다.
 
@@ -980,3 +984,8 @@ audit, protected promotion/NEW instruction, numerical proof/실험, GPU 기본�
 
 Root local archive/cache만 변경했고 production DB/IAM/NAS write0, 새 model/GPU0다. 전체 목표는
 ACTIVE이며 actual provider/native admission 및 공통 소비자 구현을 계속한다.
+
+closed usage fixture에 정확한 두 supported test 목적을 보완한 재실행은 **122 PASS1.03s**다.
+그 파일의 기존 mixed metadata dict typing3건도 발견해 test-only TypedDict로 표현을 명확히
+했고 strict mypy·Ruff/format PASS를 확인한 후 같은122-case gate를 다시 실행했다.
+runtime 권한·source guard·DB/모델 동작을 바꾼 수정이 아니다.
