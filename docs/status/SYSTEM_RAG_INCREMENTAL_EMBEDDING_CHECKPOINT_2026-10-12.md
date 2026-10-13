@@ -1706,3 +1706,47 @@ PASS다. 초기 부모 테스트에서 역사적 CPU execution ID validator를 �
 이력을 성공으로 덮지 않음). 현재 새 probe는 SOURCE_PASS/NOT_INSTALLED/NOT_RUN이며
 실제 계정/DAC/고정 단위 검증 및 production admission은 남아 있다. 장기 서비스는 건드리지
 않았다. 다음은 이 소스의 wheel/RECORD와 새 전체-prefix inventory를 검증한 후 실제 probe다.
+
+## 실제 전용 CPU 계정의 격리 시험 통과 — 2026-10-13 13:01 UTC
+
+source `f3cf5d0fe841cecadd2602d0aa847d79c8806674`의 wheel1,467개 RECORD를 확인하고
+기존 검증본은 이동 보존한 뒤 새 CPU prefix를 공식 publisher로 설치·검증했다.
+wheel raw `0f49741fb6462d8193de400b3421aecba38edaf45f2d33a366c771915dc9e66a`,
+source tar raw `f2625ed14e93e97aecf2f39cb39fceea88cc1c4bf872c29cf9f7566b36efd837`.
+root PRIVATE `/opt/eom/.embedding-index-install-5nCcVgak`의119byte receipt는
+`EMBEDDING_PREFIX_BYTES_AUDIT_PASS_NOT_ADMITTED`이고 byte closure는
+`a0330deeb907111ba05ca3e782193cba38524ed41de1673422f4fcec733aa21c`다.
+same-audit inventory30,673 entries/27,199 regular/356 ELF,8,654,308bytes를 보존했다.
+raw `7eb20597490a39163d10147d0d338c01e26cec7630957c4a9b72e1fae22c3dd4`,
+semantic `4490e0111c860dd4bc183b75471c5ca48b83659ea8813640d5ae31adb6d4af13`.
+schema/Pydantic/canonical·현재 epoch·host 재검사도 실제 새 설치본으로 통과했다.
+
+전용 계정 `eom-embedding-index-cpu` UID978/GID975를 만들었다. 다른 group, sudo,
+worker 인증을 부여하지 않았다. 첫 설치 준비는 `getfacl` 부재로 계정 생성 직후 중단했다.
+ACL/단위/모델 실행 전 실패였으며 기록을 보존했다. 기존 `libacl1`은 유지하고 owner용
+`acl=2.3.2-1build1.1` 패키지만 설치했다(업그레이드/삭제0, 서비스 재시작0,
+loader cache raw SHA 불변). 정확한 모델 디렉터리·8개 파일에만 해당 UID의 읽기/탐색
+ACL을 부여했고 before/after를 보존했다. 가중치 복제·내용 변경은 없다.
+
+publication lock과 OLD pre-exec 검사 후 고정 unit의 실제 probe **1회 PASS**.
+execution `26f27a46ddb642d8ad7f9598a8028780`, invocation
+`63fdd9b13e7b4c759054c1e5f521c6fe`, worker PID2578518/start ticks1833500177다.
+자원/격리 effective policy, 입력·결과 FD, actual UID/GID, 원본 payload8개,18개 제한 접근,
+실제 수치 환경과 loaded ELF의 기존 prefix/host closure를 부모가 독립 확인했다.
+root ACK 후 같은 invocation의 exit0/MainPID0/empty cgroup 및 결과/설치 epoch 불변을
+확인했다. 소스 합성 테스트나 worker의 자기 보고만을 실행 성공으로 간주하지 않았다.
+
+- report raw: `16710f3d2deec39ab1f346d7f3cba72adffd79192b1a3435ea420499d05c736d`.
+- numerical runtime: `f02cfc2b977c262b2b20cf7a3cc07553ad41f718ca39334953fb11d7a6ab10fb`.
+- loaded-member identity: `76b5a231e77d88af8e1941dee31af4e4e860bbc802a61df4dbc49c903d1222fa`.
+- effective policy: `12e01ff616e90c4f18bf9f04202ec6349bad9fc3241d96e8996041d213317645`.
+- 정본 로컬 관측: `/opt/eom/.embedding-native-probe-install-xgjxah4q/owner-observation.json`
+  및 같은 디렉터리의 `probe-result.json`, `owner-attempt.json`, `installation.json`, ACL 기록.
+- 보호 실행 snapshot: `/opt/eom/.embedding-native-probe-run-GY60KUzT`.
+- 작업 로그: `/tmp/eom-native-cpu-probe-release.CoU0TThB/probe-owner.log`.
+
+상태는 `CPU_NATIVE_PROBE_PASS_NOT_ADMITTED`다. 실제 bundle Artifact 게시, immutable
+config/final receipt, production launcher/admission 및 source/consumer 연결은 남아 있다.
+model/tokenizer/forward0, root optional ML import0, GPU 실행0. API/Web/Catalog/HWPX/Workflow
+배포·운영 DB·원본 corpus·GPU 기본값은 변경하지 않았다. 테스트 수는 직전1,010개 source
+gate와 구분하며 실제 probe를 테스트 개수에 더하지 않는다.

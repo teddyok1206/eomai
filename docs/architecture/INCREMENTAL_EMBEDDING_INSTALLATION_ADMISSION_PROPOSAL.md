@@ -122,6 +122,51 @@ UIDs and proof bytes remain unchanged. Source/fixture PASS, actual probe PASS an
 activation remain separate. Account/DAC/unit installation and actual root observations follow
 reviewed source gates; this note does not claim they have already run.
 
+### Owner installation prerequisite discovered on the actual host
+
+The first bounded account/DAC preparation stopped because `getfacl` was absent. It had created
+only the dedicated UID978/GID975; no ACL, unit, model bytes or model execution had changed.
+Preserve that failed operation; resume from the exact observed account instead of recreating it.
+The Ubuntu `acl` command package is required for narrow per-UID model read access and auditable
+ACL read-back/rollback. This is an owner installation tool, not a worker/Python/ML dependency.
+The local package simulation selects only `acl=2.3.2-1build1.1`, with the existing matching
+`libacl1` unchanged: zero upgrades/removals. Do not substitute broad groups, duplicate weights,
+hand-written ACL xattrs or a new FFI library. Record actual package outcome and recheck the fixed
+host seed before executing the successor; a changed loader/cache still requires new admission.
+
+Actual outcome at2026-10-13 13:01 UTC: that exact package was installed with no upgrades,
+removals or service restarts; loader-cache bytes remained unchanged. Dedicated-account ACL
+installation and the one fixed nonprivileged probe passed. Current whole-prefix/schema/proof,
+effective policy, live PID/start/cgroup/maps, root acknowledgement and terminal empty-cgroup
+checks are recorded in the [checkpoint](../status/SYSTEM_RAG_INCREMENTAL_EMBEDDING_CHECKPOINT_2026-10-12.md).
+This closes actual CPU probe execution only, not final config/bundle/seal or native admission.
+
+### Next publication boundary: reuse the existing single-member Artifact owner
+
+The runtime bundle contract already exists; it is small metadata referencing the original
+weights and the actually observed numerical runtime. Publish `bundle.json` through the existing
+Orchestrator `ControlArtifactPublisher`, not a new registry, direct NAS write or a file-set
+pipeline. The caller is the approved installation owner, never a worker/request-supplied role.
+
+- Responsibility/canonical source: validate that existing bundle contract, then commit one
+  immutable control Artifact. A locally installed bundle is an explicit runtime materialization.
+- Identity/pointers: bundle logical/revision IDs and semantic hash remain separate from the
+  publisher's Job/Artifact/revision and raw member hash. Only a real publisher receipt supplies
+  the Artifact pointer; constructing a valid bundle does not admit execution.
+- Access/structure/scale: one indexed semantic-key lookup, one bounded canonical JSON member
+  (at most64KiB), O(member bytes). Model payload bytes never enter this boundary or PostgreSQL.
+- Transaction/concurrency: existing per-key advisory lock and append-only Job/Artifact commit;
+  no new DB schema, queue or locking implementation.
+- Retry: identity key is the bundle ID plus revision, not its content hash. Same bytes reuse
+  the historical publication; changed bytes under that identity conflict. Preserve uncertain
+  publication for same-key reconciliation instead of minting another identity.
+- Dependencies/alternative: a small Orchestrator adapter depends on public Catalog contracts
+  and the existing owner. A generic new artifact framework or duplicated file staging would
+  add no capability; a fabricated member pointer would have no canonical artifact to resolve.
+- Validation: schema/hash/UTC and receipt member/schema/media/hash checks, same-key replay,
+  conflicting immutable revision, incorrect receipt and metadata-only storage tests. Caller
+  owns actual installed proof/probe admission; publication success does not grant it.
+
 ## Existing seams and the smallest actual gap
 
 `embedding_runtime_prefix_closure.audit_installed_embedding_prefix` already obtains `_tree`

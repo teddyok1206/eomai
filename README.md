@@ -173,7 +173,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
 | 인증된 owner/session 전달 | SOURCE_PASS; 기존 인증 1회·고정 API peer·짧은 작업별 전달384 PASS, 실제 provider admission·배포는 미완료 |
 | 실제 disposable PostgreSQL |0052 registry/application16·reservation8·limited IAM6,0053 stage18+runner10·Identity11 PASS; migration·cleanup PASS |
-| CPU/CUDA 실행 환경 준비 | 실제 CPU 전체 설치·inventory·공식 수치 증명 게시/재조회 PASS; native 격리 probe 소스 검증 완료/실제 실행 남음, CUDA 미게시 |
+| CPU/CUDA 실행 환경 준비 | 실제 CPU 전체 설치·inventory·공식 수치 증명 및 비특권 native 격리 시험 PASS; 최종 실행 연결/승인 남음, CUDA 미게시 |
 | 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | NOT_ACTIVE / NOT_EVALUATED |
 
 2026-10-13 11:04 UTC 기준 `3be2949b`의 실제 CPU 전체 설치 검증과 결과 저장·재조회를
@@ -184,9 +184,10 @@ JSON Schema/Pydantic·현재 파일 상태·CPU 장치·수치 라이브러리5�
 후속으로 CPU 수치 증명을 공식 보호 경로에 덮어쓰기 없이 게시하고 기존 런타임 조회기로
 재검증했습니다. 고정 비특권 CPU 검증 프로그램·실행 단위와 부모 측 실행/라이브러리/종료
 확인 경로도 구현해 관련11-suite1,010 PASS와 API/core strict·lint·format을 통과했습니다.
-아직 실제 native probe 설치/실행 전이며 현재는 INSTALLED_NOT_ADMITTED입니다.
-모델을 실행한 결과가 아니므로 native 실행 격리 검증,
-실제 seed/delta·공통 소비자 연결·CPU/GPU 비교와 조건부 기본값 전환은 아직 남아 있습니다.
+후속 `f3cf5d0f` 설치본은 실제 전용 계정에서 격리 시험까지 통과했습니다(10월13일13:01 UTC).
+모델 파일8개 확인·제한 접근18항목·실제 실행 라이브러리·정상 종료와 잔여 프로세스 없음을
+확인했습니다. 모델 추론은 하지 않았으며, 최종 실행 연결/승인은 아직 남아 있습니다.
+실제 seed/delta·공통 소비자 연결·CPU/GPU 비교와 조건부 기본값 전환도 미완료입니다.
 CUDA의 현재 작업 폴더 검색 경로는 고정 격리 폴더 검증을 연결하기 전까지 계속 차단합니다.
 
 최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와
