@@ -2,8 +2,10 @@
 
 2026-10-13 UTC. **SOURCE_PROTOCOL_ONLY**, **SOURCE_GUARD_ONLY** and now **SOURCE_DISPATCH_ONLY**
 for the reviewed receipt, guard/storage and exact-candidate/fixed-native dispatch phases below.
-Actual owner authority, native executor/publisher composition and runtime activation remain
-unimplemented/unadmitted here. The separate disposable migration evidence is recorded below;
+The later [current owner composition](LOCAL_EMBEDDING_CURRENT_OWNER_COMPOSITION.md) implements
+Identity-capture/Catalog source admission and plan/policy publication as an opt-in source adapter.
+Actual provider admission, native executor composition and runtime activation remain unadmitted.
+The separate disposable migration evidence is recorded below;
 source dispatch is not production migration or runtime acceptance.
 This advances the approved
 [admission proposal](INCREMENTAL_EMBEDDING_RUNNER_ADMISSION_PROPOSAL.md), not a service grant or

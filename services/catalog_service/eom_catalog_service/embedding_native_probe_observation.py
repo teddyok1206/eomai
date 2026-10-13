@@ -1,4 +1,4 @@
-"""Root-maintenance observations for one fixed native CPU probe; not a runtime launcher."""
+"""Numerical-runtime maintenance observations; not Orchestrator dispatch or a launcher."""
 
 from __future__ import annotations
 
@@ -12,16 +12,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from eom_catalog_contracts.embedding_native_cpu_probe import ExecutionId, NativeCpuProbeResult
+from eom_identifiers import canonical_json_bytes, sha256_bytes
+from eom_orchestrator.inference_transfer_cpu_systemd import CpuUnitObservation, inspect_cpu_unit
+from pydantic import TypeAdapter
+
 from eom_catalog_service.embedding_runtime_files import (
     NumericalRuntimeFileSnapshots,
     read_live_runtime_os_file,
 )
 from eom_catalog_service.embedding_runtime_host_closure import ProtectedEmbeddingHostClosure
 from eom_catalog_service.embedding_runtime_prefix_closure import PrefixRuntimeInventory
-from eom_identifiers import canonical_json_bytes, sha256_bytes
-from pydantic import TypeAdapter
-
-from eom_orchestrator.inference_transfer_cpu_systemd import CpuUnitObservation, inspect_cpu_unit
 
 CPU_PROBE_TEMPLATE = "eom-embedding-native-cpu-probe@.service"
 CPU_PROBE_TEMPLATE_SHA256 = (

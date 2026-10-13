@@ -23,6 +23,8 @@ from eom_identity_service import (
     AuthenticatedSessionFence,
     AuthenticatedSessionFenceError,
     AuthenticatedSessionFenceOwnerPin,
+    CapturedOperatorAuthorizationFence,
+    OperatorAuthorizationFenceError,
 )
 from eom_identity_service.auth_service import AuthService
 from eom_identity_service.models import (
@@ -217,11 +219,21 @@ def test_actual_capture_and_same_root_fence_do_not_touch_activity(
 @pytest.mark.parametrize(
     "action", ["logout", "logout_all", "refresh", "password", "role", "disable", "delete", "access"]
 )
+@pytest.mark.parametrize("through_catalog_bridge", [False, True])
 def test_actual_independent_supported_writer_blocks_then_old_capture_rechecks(
-    prepared: PreparedSessionFence, action: str
+    prepared: PreparedSessionFence, action: str, through_catalog_bridge: bool
 ) -> None:
     started = Event()
     backend: list[int] = []
+    bridge = CapturedOperatorAuthorizationFence(
+        prepared.capture, AuthenticatedSessionFence(prepared.pin), PermissionKey.WORKFLOW_START
+    )
+
+    def check(session: Session) -> None:
+        if through_catalog_bridge:
+            bridge.fence_current_operator(session, prepared.target_id)
+        else:
+            prepared.check(session)
 
     def before_cursor(
         connection: Connection,
@@ -273,7 +285,7 @@ def test_actual_independent_supported_writer_blocks_then_old_capture_rechecks(
     try:
         with ThreadPoolExecutor(max_workers=1, thread_name_prefix="session-fence-writer") as pool:
             with Session(prepared.engine) as session, session.begin():
-                prepared.check(session)
+                check(session)
                 holder = session.scalar(text("SELECT pg_catalog.pg_backend_pid()"))
                 future = pool.submit(writer)
                 assert started.wait(5)
@@ -293,10 +305,15 @@ def test_actual_independent_supported_writer_blocks_then_old_capture_rechecks(
         event.remove(prepared.engine, "before_cursor_execute", before_cursor)
     with Session(prepared.engine) as session, session.begin():
         if action == "access":
-            prepared.check(session)
+            check(session)
         else:
-            with pytest.raises(AuthenticatedSessionFenceError):
-                prepared.check(session)
+            error_type = (
+                OperatorAuthorizationFenceError
+                if through_catalog_bridge
+                else AuthenticatedSessionFenceError
+            )
+            with pytest.raises(error_type):
+                check(session)
 
 
 def test_actual_late_expiry_rolls_back_caller_mutation(prepared: PreparedSessionFence) -> None:

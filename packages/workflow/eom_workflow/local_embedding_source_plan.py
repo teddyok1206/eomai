@@ -119,6 +119,36 @@ def parse_local_embedding_source_plan(value: object) -> LocalEmbeddingSourcePlan
         raise LocalEmbeddingAdmissionContractError("LOCAL_EMBEDDING_CONTRACT_INVALID") from None
 
 
+def validate_local_embedding_entry_source(
+    source: PopulationSource,
+    entry: StagedExperimentEntry,
+    *,
+    graph_snapshot: KnowledgeGraphSnapshotPointer,
+    projection_version: str,
+) -> None:
+    """Compare validated pure values, including profiles with an unavailable view.
+
+    Callers validate the contracts first. This does not resolve or authorize any
+    current source, report or Graph; that remains the Catalog owner's boundary.
+    """
+    basis = entry.profile.source_basis
+    core = (
+        "source_kind",
+        "source_class",
+        "item_id",
+        "item_revision_id",
+        "lifecycle_state",
+        "artifact_member",
+    )
+    if (
+        any(getattr(source, name) != getattr(basis.source, name) for name in core)
+        or basis.graph_snapshot != graph_snapshot
+        or entry.profile.extraction.method != "DETERMINISTIC_REPORT_PROJECTION"
+        or entry.profile.extraction.extractor_version != projection_version
+    ):
+        raise ValueError("native entry differs from exact source/Graph/projection values")
+
+
 def validate_local_embedding_plan_entries(
     plan: LocalEmbeddingSourcePlan, entries: tuple[StagedExperimentEntry, ...]
 ) -> None:
@@ -135,25 +165,19 @@ def validate_local_embedding_plan_entries(
     }:
         raise ValueError("native staged entries do not exactly cover plan demands")
     sources = {source.item_revision_id: source for source in plan.sources}
-    core = (
-        "source_kind",
-        "source_class",
-        "item_id",
-        "item_revision_id",
-        "lifecycle_state",
-        "artifact_member",
-    )
     for demand in plan.demands:
         entry, source = by_source[demand.source_revision_id], sources[demand.source_revision_id]
         basis = entry.profile.source_basis
+        validate_local_embedding_entry_source(
+            source,
+            entry,
+            graph_snapshot=plan.graph_snapshot,
+            projection_version=plan.namespace.projection_version,
+        )
         text = experiment_view_text(entry, plan.namespace.view)
         if (
-            any(getattr(source, name) != getattr(basis.source, name) for name in core)
-            or demand.profile != InferenceTransferProfilePointer.from_profile(entry.profile)
+            demand.profile != InferenceTransferProfilePointer.from_profile(entry.profile)
             or demand.solution_evidence != basis.solution_evidence
-            or basis.graph_snapshot != plan.graph_snapshot
-            or entry.profile.extraction.method != "DETERMINISTIC_REPORT_PROJECTION"
-            or entry.profile.extraction.extractor_version != plan.namespace.projection_version
             or text is None
             or not text.strip()
             or demand.encoding.input_text_sha256 != content_sha256(text)

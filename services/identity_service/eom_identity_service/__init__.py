@@ -6,6 +6,9 @@ from eom_identity_service.authenticated_session_fence import (
     AuthenticatedSessionFenceError,
     AuthenticatedSessionFenceOwnerPin,
 )
+from eom_identity_service.captured_operator_authorization_fence import (
+    CapturedOperatorAuthorizationFence,
+)
 from eom_identity_service.operator_authorization_fence import OperatorAuthorizationFence
 from eom_identity_service.operator_authorization_fence_sql import (
     OPERATOR_AUTHORIZATION_FENCE_BODY,
@@ -55,6 +58,7 @@ __all__ = [
     "AuthenticatedSessionFence",
     "AuthenticatedSessionFenceError",
     "AuthenticatedSessionFenceOwnerPin",
+    "CapturedOperatorAuthorizationFence",
     "FixedIdentityProviderPin",
     "IdentityOwnerSessionProviderAdmission",
     "OperatorAuthorizationFence",

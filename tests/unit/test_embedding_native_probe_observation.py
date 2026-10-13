@@ -9,9 +9,9 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from eom_catalog_service import embedding_native_probe_observation as owner
 from eom_catalog_service.embedding_runtime_prefix_closure import PrefixRuntimeInventory
 from eom_identifiers import sha256_bytes
-from eom_orchestrator import embedding_native_probe_observation as owner
 from eom_orchestrator.inference_transfer_cpu_systemd import CpuUnitObservation
 from eom_orchestrator.worker_systemd import FixedUnitStatus
 

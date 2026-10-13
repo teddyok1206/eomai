@@ -1953,3 +1953,71 @@ source core를 바꾸지 않아 c2f8eef8의641 PASS/strict/lint/format과 실제
 CPU release는 고정하고 다음은 actual owner/session·native handoff/launcher를 기존
 command/claim/reservation/Artifact/registry에 연결한다. 실제 bounded seed/delta/query,
 공통 소비자, CPU/GPU 비교 및 조건부 GPU 기본값은 아직 미완료다. 전체 goal은 ACTIVE다.
+
+## 2026-10-13 15:45 UTC — current operator/source admission 구현·임시 DB 검증
+
+출발점은 clean `1fa3621dccc8a349024094bb59194816d1057f61`이다. CPU 설치·receipt는
+`c2f8eef8` 그대로 고정했고 다시 설치하거나 probe/수치 검증을 재실행하지 않았다.
+[owner 연결 설계](../architecture/LOCAL_EMBEDDING_CURRENT_OWNER_COMPOSITION.md)의
+11개 결정을 먼저 기록하고 기존 계약 안에서 다음 연결을 구현했다.
+
+- Identity가 만든 실제 capture를 기존 `OperatorAuthorizationFence`에 연결했다.
+  actual operator를 요청 actor로 바꿀 수 없고 현재 session/permission을 같은 root에서
+  매번 확인한다. login TTL 연장, token 저장, 역할 가장 또는 새 인증 수단은 없다.
+- 기존 Catalog capture와 `plan_embedding_delta`로 native source plan을 구성한다.
+  exact selected source subset·현재 source/report/profile/Graph/recipe·입력 hash를
+  검증하고, 보고서 없음/선택 view 없음/계산 대상의 분류를 빠짐없이 재구성한다.
+  같은 입력은 하나의 encoding identity를 쓰되 source/profile 관계는 합치지 않는다.
+- `source-plan.json`/`policy.json`을 기존 Orchestrator `control-file-set/1.0`으로 게시한다.
+  별도 DB/queue/protocol을 만들지 않았고 DB에는 manifest metadata만 들어간다.
+  후보 정책 게시와 실제 release 선택·실행 권한은 별개다.
+- concrete native owner는 현재 읽기 정책을 **control bytes를 읽기 전에** 확인하고,
+  configured policy exact member와 저장된 plan을 해석한 뒤 공식 current Catalog 결과로
+  plan 전체를 재구성해 비교한다. 읽기 후 session/lease 만료를 다시 확인한다.
+- 초기 PENDING command의 접수/claim과 동일 root의 acquired PROCESSING→terminal을
+  구분했다. 과거 terminal row 또는 만료된 acquisition을 실행 허가로 재해석하지 않는다.
+  expired-acquisition 재개는 후속 executor의 supported linked-outcome recovery가 필요하다.
+
+### 실제 검증
+
+| Gate | 결과 |
+| --- | --- |
+| 최종 focused source 15 suites | **463 PASS**, 40.50s |
+| core/API strict mypy | 변경 핵심6개 모듈 PASS |
+| Ruff / formatter / diff whitespace | PASS |
+| guarded PostgreSQL Identity/session writer 경쟁 | **19 PASS**, 8.37s |
+| guarded PostgreSQL embedding artifact/registry/application | **19 PASS**, 28.27s |
+| disposable migration | `20261012_0053` up/down/up PASS |
+| guarded cleanup | PASS — 이 작업이 만든 임시 DB/역할/state만 제거 |
+
+PostgreSQL 테스트는 `/tmp/eom-api-testdb-20261013152905_cf2ba17d`에서만 실행했고
+공식 marker/owner/schema 검증·cleanup을 사용했다. 현재 이 임시 state는 존재하지 않는다.
+기존 sudo pane `%89`를 재사용했고 추가 사용자 비밀번호 요청은 없었다.
+증거 로그는 `/tmp/eom-native-owner-composition.GFru5YwE/`에 보존한다.
+실제 독립 writer는 logout/logout-all/refresh/password/role/disable/delete/access와
+경합했다. 기존 direct fence와 이번 Catalog bridge 모두 같은 root의 잠금을 보존하고
+다음 root에서 이전 capture의 유효성을 다시 판단했다. 합성 테스트 계정의 실제 DB 경쟁
+결과이며, production provider/실사용 계정으로 실행한 native seed 증거는 아니다.
+
+초기 테스트 호출의 source PYTHONPATH 누락은 invocation 수정 후 재실행했고, control
+publisher 부정 테스트는 기존 stable `CONTROL_FILE_SET_CONFLICT` 코드로 단언을 보정했다.
+첫 전체 회귀의 **425 PASS/1 FAIL**은 이미 HEAD에 있던 maintenance probe observer의
+Orchestrator→Catalog 역방향 import였다. 검사를 완화하지 않고 observer를 numerical
+runtime owner인 Catalog로 옮겼다. 설치된 CPU와 과거 보호 스크립트는 기존 wheel을
+그대로 사용하며, 신규 source 호출만 새 경로를 사용한다. 이후 전체 **461 PASS**,
+control bytes 전 current read-policy 부정 사례 추가 후 **462 PASS**였다.
+마지막 검토에서 Workflow request/actor/business hash 검증을 repository의 기존 공통
+검증기로 통일했고, 잘못된 저장 hash의 거부 사례까지 추가해 최종 **463 PASS**다.
+
+### 운영 영향과 다음 범위
+
+`eom-api`, `eom-web-gui`, `eom-workflow-runner`, `eom-general-chat`,
+`eom-general-chat-worker`는 active/running이다. 이 단계에서 운영 서비스 재배포,
+production migration, 운영 Artifact 게시, 모델/GPU/seed/delta 실행은 **0회**다.
+새 adapter는 source에 존재할 뿐 자동으로 기본 서비스에 연결되지 않는다.
+
+다음은 actual Identity provider/owner role composition과 native handoff/launcher를
+기존 reservation/command/Artifact/registry 경로에 연결하는 것이다. 이후 bounded
+seed→delta/reuse→genuine query, 공통 소비자, CPU/GPU 비교와 조건부 GPU 기본값을 검증한다.
+이번 source/임시 DB PASS를 전체 목표 완료나 운영 인덱스 활성화로 확대하지 않는다.
+`GOAL=ACTIVE`, `NATIVE_OWNER_SOURCE=IMPLEMENTED`, `NATIVE_WORKFLOW_LIVE=NOT_ACTIVE`.

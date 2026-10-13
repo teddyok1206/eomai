@@ -1,0 +1,141 @@
+"""Publish native plan/policy values through the existing Orchestrator file-set owner."""
+
+from __future__ import annotations
+
+import re
+import tempfile
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+
+from eom_catalog_contracts.models import Sha256, UtcDatetime
+from eom_identifiers import canonical_json_bytes, sha256_bytes
+from eom_protocol.artifact_members import ArtifactMemberPointer
+from eom_protocol.models import JobId
+from eom_workflow.local_embedding_execution_policy import (
+    LOCAL_EMBEDDING_POLICY_SCHEMA_REF,
+    LocalEmbeddingExecutionPolicy,
+    parse_local_embedding_execution_policy,
+)
+from eom_workflow.local_embedding_source_plan import (
+    LOCAL_EMBEDDING_SOURCE_PLAN_SCHEMA_REF,
+    LocalEmbeddingSourcePlan,
+    parse_local_embedding_source_plan,
+)
+from pydantic import TypeAdapter
+
+from eom_orchestrator.file_set_control_artifacts import (
+    CONTROL_FILE_SET_PROTOCOL,
+    ControlFileSetMember,
+    ControlFileSetPublisher,
+)
+
+SOURCE_PLAN_ARTIFACT_TYPE = "control_local_embedding_source_plan"
+EXECUTION_POLICY_ARTIFACT_TYPE = "control_local_embedding_execution_policy"
+
+
+@dataclass(frozen=True, slots=True)
+class PublishedLocalEmbeddingControl:
+    """Publication receipt, not a released execution policy or source permission."""
+
+    owner_job_id: str
+    member: ArtifactMemberPointer
+    semantic_sha256: str
+    manifest_sha256: str
+
+
+class LocalEmbeddingControlArtifactPublisher:
+    """No new publication protocol; authorization stays with the current owner operation."""
+
+    def __init__(self, publisher: ControlFileSetPublisher, *, source_commit: str) -> None:
+        if type(source_commit) is not str or re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
+            raise ValueError("LOCAL_EMBEDDING_CONTROL_SOURCE_INVALID")
+        self.publisher = publisher
+        self.source_commit = source_commit
+
+    def publish_source_plan(
+        self,
+        plan: LocalEmbeddingSourcePlan,
+        *,
+        idempotency_key: str,
+        created_at: datetime,
+    ) -> PublishedLocalEmbeddingControl:
+        checked = parse_local_embedding_source_plan(plan.model_dump(mode="json"))
+        return self._publish(
+            raw=canonical_json_bytes(checked.model_dump(mode="json")),
+            semantic_sha256=checked.plan_sha256,
+            member="source-plan.json",
+            schema=LOCAL_EMBEDDING_SOURCE_PLAN_SCHEMA_REF,
+            artifact_type=SOURCE_PLAN_ARTIFACT_TYPE,
+            idempotency_key=idempotency_key,
+            created_at=created_at,
+        )
+
+    def publish_policy(
+        self,
+        policy: LocalEmbeddingExecutionPolicy,
+        *,
+        idempotency_key: str,
+        created_at: datetime,
+    ) -> PublishedLocalEmbeddingControl:
+        checked = parse_local_embedding_execution_policy(policy.model_dump(mode="json"))
+        return self._publish(
+            raw=canonical_json_bytes(checked.model_dump(mode="json")),
+            semantic_sha256=checked.policy_sha256,
+            member="policy.json",
+            schema=LOCAL_EMBEDDING_POLICY_SCHEMA_REF,
+            artifact_type=EXECUTION_POLICY_ARTIFACT_TYPE,
+            idempotency_key=idempotency_key,
+            created_at=created_at,
+        )
+
+    def _publish(
+        self,
+        *,
+        raw: bytes,
+        semantic_sha256: str,
+        member: str,
+        schema: str,
+        artifact_type: str,
+        idempotency_key: str,
+        created_at: datetime,
+    ) -> PublishedLocalEmbeddingControl:
+        # An explicit local materialization boundary; only the existing owner
+        # publishes to NAS. A plan body (up to 64 MiB) never becomes a DB value.
+        created_at = TypeAdapter(UtcDatetime).validate_python(created_at)
+        digest = sha256_bytes(raw)
+        with tempfile.TemporaryDirectory(
+            prefix="native-controls-", dir=self.publisher.settings.workspace_root
+        ) as directory:
+            path = Path(directory) / member
+            path.write_bytes(raw)
+            path.chmod(0o600)
+            published = self.publisher.publish(
+                members=(
+                    ControlFileSetMember(
+                        member, path, digest, len(raw), schema, "application/json"
+                    ),
+                ),
+                primary_file=member,
+                artifact_type=artifact_type,
+                manifest_version=CONTROL_FILE_SET_PROTOCOL,
+                idempotency_key=idempotency_key,
+                source_commit=self.source_commit,
+                created_at=created_at,
+            )
+        if published.primary_file != member or published.primary_sha256 != digest:
+            # A commit may have happened. Preserve it and reconcile the same key.
+            raise ValueError("LOCAL_EMBEDDING_CONTROL_RECEIPT_INVALID")
+        return PublishedLocalEmbeddingControl(
+            owner_job_id=TypeAdapter(JobId).validate_python(published.job_id),
+            member=ArtifactMemberPointer(
+                artifact_id=published.artifact_id,
+                artifact_revision_id=published.artifact_revision_id,
+                member_path=member,
+                schema_ref=schema,
+                media_type="application/json",
+                sha256=digest,
+            ),
+            semantic_sha256=semantic_sha256,
+            manifest_sha256=TypeAdapter(Sha256).validate_python(published.manifest_sha256),
+        )

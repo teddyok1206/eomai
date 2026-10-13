@@ -172,6 +172,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | genuine QUERY 입력·encoder/handoff·실행 계약 | SOURCE_PASS; 입력494·encoder1272·protocol1610·compiler/read1779·4-member Artifact499 PASS; 실제 owner/queue/committed reader·소비자 연결은 미활성 |
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
 | 인증된 owner/session 전달 | SOURCE_PASS; 기존 인증 1회·고정 API peer·짧은 작업별 전달384 PASS, 실제 provider admission·배포는 미완료 |
+| 현재 사용자·자료의 native 작업 접수 연결 | SOURCE_IMPLEMENTED; 실제 인증 capture→기존 Catalog 검증·계획 재구성·잠금 확인을 연결, 운영 provider/실행기 연결은 미활성 |
 | 실행 bundle의 정본 저장 | 실제 Orchestrator Job/Artifact1건 게시·exact pointer 검증·보호된 bundle/config 설치 PASS; 임시 DB19 PASS 유지 |
 | 검증된 CPU 설치 기록의 실행 전 확인 | 실제 sealed receipt 게시·현재 파일/계정/boot·전용 UID 재조회 PASS; 실제 작업 실행기 연결은 미완료 |
 | 고정 CPU 실행 입구·설정 게시 CLI | 관련10-suite641 SOURCE_PASS; CPU에 c2f8eef8 설치·격리 probe·설치 seal PASS, INDEX/QUERY unit 활성화는 미완료 |
@@ -198,6 +199,12 @@ final receipt 게시와 조회를 마쳤습니다. 전용 UID의 기록 읽기·
 기존 설치본과 실패 기록을 보존했으며, 설치 과정의 archive 권한 불일치와 결과 저장 단계의
 중복 읽기를 정리했습니다. 이 설치 승인은 사용자/source/Job 실행 권한을 대신하지 않습니다.
 CPU 환경은 이 버전으로 고정하고, 다음에는 owner/native launcher와 실제 작업을 연결합니다.
+후속으로 실제 Identity capture를 기존 Catalog 권한 확인에 연결하는 어댑터와,
+현재 자료·풀이보고서로 저장된 계산 계획을 다시 검증하는 native 접수 구현을 추가했습니다.
+계산 계획/실행 정책은 기존 Orchestrator를 통해 별도 Artifact로 보존하고 DB에는
+본문을 복사하지 않습니다. 후보 정책 게시 자체가 실행 활성화나 권한 부여는 아닙니다.
+[현재 사용자·자료 연결 범위](docs/architecture/LOCAL_EMBEDDING_CURRENT_OWNER_COMPOSITION.md)에
+초기 접수와 만료된 실행의 구분, 현재 권한 재검증 및 남은 실행기 연결을 기록합니다.
 실제 seed/delta·공통 소비자 연결·CPU/GPU 비교와 조건부 기본값 전환도 미완료입니다.
 CUDA의 현재 작업 폴더 검색 경로는 고정 격리 폴더 검증을 연결하기 전까지 계속 차단합니다.
 

@@ -58,7 +58,7 @@ class ResolvedLocalEmbeddingAdmission:
 
 
 class LocalEmbeddingOwnerAdmission(Protocol):
-    """Actual fresh owner composition is REQUIRED; this Protocol has no implementation.
+    """Actual fresh owner composition is REQUIRED; no production default is supplied.
 
     Bind each exact active root Session to an independently authenticated current
     operator/session, current workflow:start, configured released native-purpose
