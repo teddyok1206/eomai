@@ -9,6 +9,13 @@ from eom_identity_service.authenticated_session_fence import (
 from eom_identity_service.captured_operator_authorization_fence import (
     CapturedOperatorAuthorizationFence,
 )
+from eom_identity_service.installed_owner_session_provider import (
+    HeldIdentityProviderFile,
+    InstalledIdentityProviderObservation,
+    ProtectedInstalledIdentityProviderAdmission,
+    identity_provider_code_members,
+    open_installed_identity_provider_observation,
+)
 from eom_identity_service.operator_authorization_fence import OperatorAuthorizationFence
 from eom_identity_service.operator_authorization_fence_sql import (
     OPERATOR_AUTHORIZATION_FENCE_BODY,
@@ -60,16 +67,21 @@ __all__ = [
     "AuthenticatedSessionFenceOwnerPin",
     "CapturedOperatorAuthorizationFence",
     "FixedIdentityProviderPin",
+    "HeldIdentityProviderFile",
     "IdentityOwnerSessionProviderAdmission",
+    "InstalledIdentityProviderObservation",
     "OperatorAuthorizationFence",
     "OperatorAuthorizationFenceError",
     "OperatorAuthorizationFenceOwnerPin",
     "OwnerSessionTransportError",
     "OwnerSessionTransportObservation",
     "PostgresOperatorAuthorizationFence",
+    "ProtectedInstalledIdentityProviderAdmission",
     "assert_identity_provider_current",
     "export_owner_session_capture",
+    "identity_provider_code_members",
     "import_owner_session_capture",
     "observe_owner_session_transport",
+    "open_installed_identity_provider_observation",
     "require_operator_authorization_fence_installation",
 ]
