@@ -743,3 +743,26 @@ root는 frozen10 raw SHA와 production/test 전체·설계를 검토했다. 독�
 실제 설치/UID·unit/cgroup·host OOM provider·source/session continuation·GPU monitor는 미연결이다.
 native encoder module bytes가 바뀌므로 실제 release에서 새 implementation/runtime pin을 관측해야
 한다. 실제 CPU/CUDA benchmark6 launches·GPU 기본값·seed/delta·소비자 활성화는 아직 PENDING이다.
+
+## 고정 host/tool FD source와 실제 읽기 전용 capture — 2026-10-13 UTC
+
+고정19 OS member·10 alias·loader/NEEDED/SONAME/version·native cache/config/preload/경합 경로의
+실제 bytes/epoch를 확인하는 stdlib host adapter를 추가했다. 검증된 executable FD로만 고정
+readelf/zstd argv를 실행하며, 기존 Conda reader는 그 필수 spawn seam을 재사용한다. 임의 command/
+tool/path callback이나 named-exec fallback은 없다. 실행 파일 FD가 loader/library 전체의 root
+변경까지 막는다는 주장은 하지 않으며 실제 유지보수 drain/현재 epoch 경계는 별도로 필요하다.
+
+root는 frozen5 raw SHA, host760/test748·Conda diff/test 변경·전체337-line 설계를 검토했다.
+독립 고정16-suite **982 PASS (20.78s)**, strict mypy4·Ruff/format4 PASS다. agent982와 겹치므로
+합산하지 않는다. 다른 gate의 소스/합성 결과를 실제 native runtime·모델 성능으로 확대하지 않는다.
+
+추가로 현재 UID1000에서 기존 보호된 CPython3.12의 `-I -S -B`를 사용해 source adapter의 실제
+읽기 전용 host capture/assert/close를 실행했다. 별도 supplied source seed raw pin
+`6f3e1a144cf8e4c0dbf45af34f05a838305aa4bf35b6f62cc088841313be1d5b`와 실제 보호 파일/alias/cache/
+ELF·현재 FD/epoch closure가 PASS했다. **DIAGNOSTIC_CURRENT_HOST_CAPTURE=PASS**이며 root0,
+tool spawn0, 신규 prefix instruction0, model0/GPU0다. worktree source를 사용한 non-root 진단이지
+protected installed-owner admission이나 권한 grant가 아니며 capture handle은 즉시 닫았다.
+
+CLI/publisher first-successor 순서·전체 public/private/source/prefix closure·final admission/proof와
+실제 native 실행·CPU/CUDA benchmark/default·seed/delta/소비자 연결은 여전히 남아 있다.
+기존 protected bootstrap/runtime와 production DB/NAS는 변경하지 않았다. 전체 목표 ACTIVE다.

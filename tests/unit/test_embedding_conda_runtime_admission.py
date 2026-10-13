@@ -68,6 +68,18 @@ class _Fence:
         self.calls += 1
         return cast(None, self.result)
 
+    def open_zstd(self) -> subprocess.Popen[bytes]:
+        # Synthetic-only factory; the production owner binds the accepted executable FD.
+        return subprocess.Popen(
+            [str(conda._ZSTD_PATH), "-q", "-d", "-c"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            env={"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"},
+            cwd="/",
+            close_fds=True,
+        )
+
 
 def test_initial_empty_member_is_an_immutable_actual_observation(tmp_path: Path) -> None:
     path = _member(tmp_path, b"")
@@ -349,6 +361,57 @@ def test_tool_fence_requires_the_owner_handle_none_return_only() -> None:
     fence = _Fence()
     conda._tool_fence(fence)
     assert fence.calls == 1
+
+
+def test_legacy_assertion_only_handle_cannot_fall_back_to_named_execution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class AssertionOnly:
+        def assert_current(self) -> None:
+            return None
+
+    monkeypatch.setattr(os, "open", _deny)
+    monkeypatch.setattr(subprocess, "Popen", _deny)
+    with pytest.raises(InstalledRuntimeProofError, match="CONDA_TOOL_UNAVAILABLE"):
+        conda.audit_installed_conda31(
+            _plan(),
+            prefix=tmp_path,
+            archive_root=tmp_path,
+            files=NumericalRuntimeFileSnapshots(os.geteuid()),
+            tool_admission=cast(conda.CondaArchiveToolAdmission, AssertionOnly()),
+        )
+
+
+def test_reader_delegates_one_spawn_to_required_fixed_tool_port(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    actual = subprocess.Popen
+    children: list[subprocess.Popen[bytes]] = []
+
+    class FixedSyntheticTool:
+        def assert_current(self) -> None:
+            return None
+
+        def open_zstd(self) -> subprocess.Popen[bytes]:
+            child = actual(
+                [sys.executable, "-I", "-S", "-B", "-c", "print('fixed synthetic decoder')"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+            )
+            children.append(child)
+            return child
+
+    monkeypatch.setattr(subprocess, "Popen", _deny)
+    reader = conda._ToolReader(io.BytesIO(b""), time.monotonic() + 2.0, tool=FixedSyntheticTool())
+    try:
+        chunks = []
+        while raw := reader.read(65536):
+            chunks.append(raw)
+        assert b"".join(chunks) == b"fixed synthetic decoder\n"
+    finally:
+        reader.close(success=False)
+    assert len(children) == 1 and children[0].poll() is not None
 
 
 @pytest.mark.parametrize("encoding", ["utf-8", "utf-16-le", "utf-16-be", "utf-32-le", "utf-32-be"])
@@ -1057,7 +1120,7 @@ def test_tool_constructor_failure_always_reaps_child_and_closes_pipes(
 
         monkeypatch.setattr(os, "set_blocking", unavailable)
     with pytest.raises((OSError, AssertionError)):
-        conda._ToolReader(io.BytesIO(b"x"), time.monotonic() + 10)
+        conda._ToolReader(io.BytesIO(b"x"), time.monotonic() + 10, tool=_Fence())
     assert not children if fault == "constructor" else len(children) == 1
     for process in children:
         assert process.poll() is not None
@@ -1085,7 +1148,7 @@ def test_tool_absolute_deadline_is_checked_after_select_io_and_before_return(
         )
 
     monkeypatch.setattr(subprocess, "Popen", child)
-    reader = conda._ToolReader(io.BytesIO(b""), time.monotonic() + 10)
+    reader = conda._ToolReader(io.BytesIO(b""), time.monotonic() + 10, tool=_Fence())
     clock = [0.0]
     reader.deadline = 1.0
     monkeypatch.setattr(time, "monotonic", lambda: clock[0])
@@ -1165,7 +1228,9 @@ def test_owned_tool_stream_denies_bounded_timeout_overflow_and_reaps(
     if fault == "overflow":
         monkeypatch.setattr(conda, "_MAX_EXPANDED", 16)
     started = time.monotonic()
-    reader = conda._ToolReader(io.BytesIO(b""), started + (0.05 if fault == "timeout" else 10))
+    reader = conda._ToolReader(
+        io.BytesIO(b""), started + (0.05 if fault == "timeout" else 10), tool=_Fence()
+    )
     try:
         with pytest.raises(InstalledRuntimeProofError, match=r"TOOL_TIMEOUT|STREAM_OVERFLOW"):
             reader.read(1)

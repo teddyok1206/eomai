@@ -317,6 +317,10 @@ class CondaArchiveToolAdmission(Protocol):
 
     def assert_current(self) -> None: ...
 
+    def open_zstd(self) -> subprocess.Popen[bytes]:
+        """Spawn only the independently captured fixed decoder through its held FD."""
+        ...
+
 
 def _validate_plan(plan: CondaRuntimeAuditPlan) -> None:
     _require(
@@ -350,7 +354,7 @@ def _tool_fence(tool: CondaArchiveToolAdmission) -> None:
     try:
         _require(tool is not None, "TOOL_UNAVAILABLE")
         result = cast(Callable[[], object], tool.assert_current)()
-        _require(result is None, "TOOL_UNAVAILABLE")
+        _require(result is None and callable(tool.open_zstd), "TOOL_UNAVAILABLE")
     except Exception:
         raise InstalledRuntimeProofError("INSTALLED_RUNTIME_CONDA_TOOL_UNAVAILABLE") from None
 
@@ -358,7 +362,9 @@ def _tool_fence(tool: CondaArchiveToolAdmission) -> None:
 class _ToolReader:
     """Bounded duplex pipe; one fixed zstd command, absolute deadline and owned cleanup."""
 
-    def __init__(self, compressed: IO[bytes], deadline: float) -> None:
+    def __init__(
+        self, compressed: IO[bytes], deadline: float, *, tool: CondaArchiveToolAdmission
+    ) -> None:
         self.compressed = compressed
         self.deadline = min(deadline, time.monotonic() + 10)
         _require(time.monotonic() < self.deadline, "TOOL_TIMEOUT")
@@ -368,15 +374,8 @@ class _ToolReader:
         self.eof = False
         self.expanded = 0
         try:
-            self.process = subprocess.Popen(
-                [str(_ZSTD_PATH), "-q", "-d", "-c"],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                env={"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"},
-                cwd="/",
-                close_fds=True,
-            )
+            _tool_fence(tool)
+            self.process = tool.open_zstd()
             _require(
                 self.process.stdin is not None and self.process.stdout is not None,
                 "TOOL_UNAVAILABLE",
@@ -1252,7 +1251,7 @@ def _audit_installed_conda31(
                 compressed = stack.enter_context(
                     archives[filename].open(f"{kind}-{filename[:-6]}.tar.zst")
                 )
-                reader = _ToolReader(compressed, deadline)
+                reader = _ToolReader(compressed, deadline, tool=tool_admission)
                 success = False
                 try:
                     if kind == "info":
