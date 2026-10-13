@@ -853,3 +853,30 @@ inventory. Keep depth16,100,000-entry, integer, prefix16GiB and all existing ide
 No previously accepted inventory or released schema exists for this draft. Record its new exact
 raw pin, rebuild the metadata consumer, and rerun the owner audit with a new identity; the original
 8MiB failure remains preserved. This increases the bounded metadata allocation, not runtime access.
+
+## Actual CPU installation seal — 2026-10-13 14:45 UTC
+
+The fixed CPU leaf and protected reader from `c2f8eef8` are installed in the root-owned CPU
+prefix; the prior f3cf5d0f prefix remains recoverable. The OLD audit retained30,677 entries,
+27,203 regular members and356 ELF members. A fresh dedicated-UID fixed-unit probe passed18
+denials,8 model-member checks, observed executable mappings, numerical identity, owner ACK and
+terminal empty-cgroup checks without model/tokenizer construction or forward calls.
+
+Under the existing publication lock the root owner sealed the current inventory, protected
+actual probe observation, canonical bundle/config and numerical proof. The protected reader
+accepted it. Actual UID978/GID975 readback accepted the receipt, rejected a wrong raw hash and
+rechecked current epochs twice without importing ML libraries. Metadata directories explicitly
+use0755 despite the maintenance umask; files are0444. Pins and lineage are in the dated checkpoint.
+
+Two operational failures remain preserved: the earlier bundle-publication script used0444 for
+two cache archives while the existing archive owner expects0644; those exact root-owned modes
+were reconciled after reproducing rejection, without changing bytes or reinstalling the prefix.
+The first seal orchestration attempted a repeated inventory read in one capture and failed.
+Only sealing resumed from protected actual probe records and fresh OLD/boot/host/prefix/terminal
+checks; no second probe or model execution occurred. No runtime invariant or released schema
+was weakened. The original failed logs are not overwritten as successful.
+
+Freeze this CPU release for owner/launcher integration. Orchestrator-only changes do not require
+a CPU rebuild if wire/numerical contracts remain compatible. INDEX/QUERY units are not activated;
+source/session/command authority is not granted by the seal. Seed/delta/query, consumers and
+CUDA/default remain pending. Installation PASS is not the full goal's completion.

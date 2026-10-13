@@ -1888,3 +1888,68 @@ API/Web/Catalog/HWPX/Workflow 재배포0이며 API/Web/Runner/General Chat은 �
 새 CPU main/receipt reader는 아직 설치하지 않았다(CPU runtime source는 f3cf5d0f).
 다음은 새 coherent CPU release의 final inventory/probe/receipt와 실제 owner/native launcher
 연결이다. seed/delta·공통 소비자·GPU 비교/default 미완료, 전체 goal ACTIVE를 유지한다.
+
+## 실제 고정 CPU 설치·격리 시험·설치 승인 기록 — 2026-10-13 14:45 UTC
+
+CPU prefix를 frozen `c2f8eef87a507c94bada3ac6e5ecd26c91f82f3c`로 갱신했다. 실제 사용자가
+없는 것을 확인하고 기존 f3cf5d0f 설치본을
+`/opt/eom/conda/envs/.embedding-index-verified-CPU_INDEX_FP32-5nCcVgak`에 이동해 보존했다.
+기존 개발 입력의 offline/no-deps 조립과 root publisher의 OLD 전체 byte audit를 거쳤다.
+새 모델/DB 프로토콜·dependency·worker 권한·가중치 변경은 없다.
+
+| 실제 증거 | 값 |
+| --- | --- |
+| 설치 evidence | `/opt/eom/.embedding-index-install-glj1CaKp` |
+| audit input raw | `aa76df631f816ba244de647436307adcafc2090696bfc40ad2bc8af8b93a3868` |
+| whole-prefix audit | `b0cfc04c70425de83222a70f1e7b872335bff85cc92c51a573e2f324e1a96714` |
+| inventory | 8,655,544bytes / 30,677entries / 27,203regular / 356ELF |
+| inventory raw | `7777d3207455560baeca77852734350cfed66cd87fe124926d5d0fc48f5812c9` |
+| inventory semantic | `6fa6ac38ced76eb62ce2a110ba9146b3e571069e19cd8f65d858d17b8317bc21` |
+| probe execution / invocation | `bc7f93279ab3435e966cb77cac37cd05` / `c0ae12437ce642dba20020e04b4c9025` |
+| 실제 process | UID978/GID975, PID2990577/start ticks1834099951 |
+| probe raw | `436f7a7fcbe75ed2be67a81cbbc02b1fe1900113032bdda2b3c4a74594b4a694` |
+| root observation raw | `9f0898e280ed8ee4008b30bcfbe6df538f9440af641dee4429c41ffa8f2abebe` |
+| final receipt raw | `0482d86f4226f89f6c0fad0acb05a64cfa241a71fcf55d1450817a2277fc79e2` |
+| final receipt semantic | `dbb0d1d1670c7d23d6126726c027ab389b4aefc8ba85111ff624e17f97c1bac8` |
+| sealed time | `2026-10-13T14:45:28.725709Z` |
+
+실제 전용 계정의18denials/8model members, 실행 라이브러리, owner ACK,
+exit0/MainPID0/empty cgroup PASS. 수치 runtime은 기존
+`f02cfc2b977c262b2b20cf7a3cc07553ad41f718ca39334953fb11d7a6ab10fb` 그대로다.
+probe 기록은 `/opt/eom/.embedding-native-probe-install-jj9q3ov1/`의
+`installation.json`, `acl-readback.json`, `owner-attempt.json`, `probe-result.json`,
+`owner-observation.json`, `owner-failure.json`, `final-installation-seal.json`에 보존했다.
+
+14:11에 등록한 exact bundle Artifact/config를 사용하여 root owner가 publication lock
+아래서 실제 probe·현재 terminal·OLD prefix/host/boot를 확인하고 final receipt를 봉인했다.
+`/opt/eom/embedding-runtime-admission/<configid>/<configrev>/`의 receipt/inventory와
+`schemas/`의 exact draft2개는 root-owned0444, directory0755다. 설치된 protected reader
+검증 PASS. 별도 UID978/GID975 실행에서도 정상 읽기·잘못된 receipt hash 거부·현재 상태
+2회 재확인 PASS였다. 이는 DAC/reader 검사이지 production INDEX/QUERY launcher 승인은 아니다.
+
+### 중간 실패와 복구 범위
+
+첫 publisher는 OLD audit 이후 `EMBEDDING_INDEX_SNAPSHOT_REJECTED`였다.14:11의
+wheel/source archive0444가 기존 `retain_index_archive`의0644 정책과 달랐다. 실제 helper의
+거부를 재현하고 정확한 root-owned 파일2개의 mode만0644로 정리했다. inode/size/mtime/hash와
+group/world 쓰기 금지는 유지했다. 중단된 설치 metadata 검증만 이어서 PASS했으며 prefix
+재설치나 실패 phase 덮어쓰기는 하지 않았다. 후속 결과는 별도 `cpu-finish.log`에 있다.
+
+새 native probe는14:41에 PASS했지만 seal orchestration의 동일 capture 중복 inventory
+읽기가 `INSTALLED_RUNTIME_REPEATED_BYTE_READ`로 차단됐다. final admission 파일 생성 전이었다.
+원본 failure/probe/owner observation을 보존하고 exact root 기록과 현재 terminal·prefix를
+검증해 **seal만1회 재개**했다. inventory raw를 한 번 읽어 재사용했고 probe 재실행0회다.
+실행된 root 사본은 `/opt/eom/.embedding-index-finish-H7l0cdEs`,
+`/opt/eom/.embedding-native-probe-run-YCcwy1MT`,
+`/opt/eom/.embedding-native-seal-resume-fbFB90MA`; 작업 로그는
+`/tmp/eom-native-cpu-owner-release.PSuNnJi9/`에 보존했다.
+
+source core를 바꾸지 않아 c2f8eef8의641 PASS/strict/lint/format과 실제 임시 DB19 PASS를
+재사용했다. 이번 모델/토크나이저 생성·forward/GPU/seed/delta/새 Artifact 게시/운영 migration은0회다.
+새 설치본의 probe1회, seal 재개1회, 전용 UID reader1회로 구분한다. API/Web/Runner/General Chat
+서비스는 active이며 재배포하지 않았다.
+
+판정: `CPU_INSTALLATION_ADMISSION=PASS`, `NATIVE_WORKFLOW_ACTIVATION=NOT_PERFORMED`.
+CPU release는 고정하고 다음은 actual owner/session·native handoff/launcher를 기존
+command/claim/reservation/Artifact/registry에 연결한다. 실제 bounded seed/delta/query,
+공통 소비자, CPU/GPU 비교 및 조건부 GPU 기본값은 아직 미완료다. 전체 goal은 ACTIVE다.

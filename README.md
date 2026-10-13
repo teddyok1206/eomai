@@ -172,11 +172,11 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | genuine QUERY 입력·encoder/handoff·실행 계약 | SOURCE_PASS; 입력494·encoder1272·protocol1610·compiler/read1779·4-member Artifact499 PASS; 실제 owner/queue/committed reader·소비자 연결은 미활성 |
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
 | 인증된 owner/session 전달 | SOURCE_PASS; 기존 인증 1회·고정 API peer·짧은 작업별 전달384 PASS, 실제 provider admission·배포는 미완료 |
-| 실행 bundle의 정본 저장 | 실제 Orchestrator Job/Artifact1건 게시·exact pointer 검증·보호된 bundle/config 설치 PASS; 임시 DB19 PASS 유지, 최종 실행 승인은 미완료 |
-| 검증된 CPU 설치 기록의 실행 전 확인 | SOURCE_PASS; exact receipt/config와 현재 파일·계정·boot 검증620 PASS, 실제 sealed 기록·실행기 연결은 미완료 |
-| 고정 CPU 실행 입구·설정 게시 CLI | SOURCE_PASS; 기존 descriptor/receipt/backend와 Artifact owner만 조합, 관련10-suite641 PASS; 실제 새 실행기 설치·seal은 미완료 |
+| 실행 bundle의 정본 저장 | 실제 Orchestrator Job/Artifact1건 게시·exact pointer 검증·보호된 bundle/config 설치 PASS; 임시 DB19 PASS 유지 |
+| 검증된 CPU 설치 기록의 실행 전 확인 | 실제 sealed receipt 게시·현재 파일/계정/boot·전용 UID 재조회 PASS; 실제 작업 실행기 연결은 미완료 |
+| 고정 CPU 실행 입구·설정 게시 CLI | 관련10-suite641 SOURCE_PASS; CPU에 c2f8eef8 설치·격리 probe·설치 seal PASS, INDEX/QUERY unit 활성화는 미완료 |
 | 실제 disposable PostgreSQL |0052 registry/application16·reservation8·limited IAM6,0053 stage18+runner10·Identity11 PASS; migration·cleanup PASS |
-| CPU/CUDA 실행 환경 준비 | 실제 CPU 전체 설치·inventory·공식 수치 증명 및 비특권 native 격리 시험 PASS; 최종 실행 연결/승인 남음, CUDA 미게시 |
+| CPU/CUDA 실행 환경 준비 | 실제 CPU 설치·inventory·수치 증명·비특권 격리 시험·최종 설치 기록 PASS; source/Job 실행 연결 남음, CUDA 미게시 |
 | 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | NOT_ACTIVE / NOT_EVALUATED |
 
 2026-10-13 11:04 UTC 기준 `3be2949b`의 실제 CPU 전체 설치 검증과 결과 저장·재조회를
@@ -193,7 +193,11 @@ JSON Schema/Pydantic·현재 파일 상태·CPU 장치·수치 라이브러리5�
 후속 `c2f8eef8`의 고정 CPU 실행 입구·설정 게시 CLI는 관련641개 소스 시험을 통과했고,
 14:11 UTC에는 실제 Orchestrator로 실행 bundle1건을 게시해 보호된 bundle/config까지
 연결·재조회했습니다. 가중치는 복제/변경하지 않았고 문항·임베딩 추론은 실행하지 않았습니다.
-CPU 설치본은 여전히 `f3cf5d0f`; 새 실행 입구 설치·final receipt와 실제 작업 연결은 남아 있습니다.
+후속14:45 UTC에는 CPU 설치본을 `c2f8eef8`로 갱신하고 실제 전용 계정 격리 검사,
+final receipt 게시와 조회를 마쳤습니다. 전용 UID의 기록 읽기·잘못된 hash 거부도 확인했습니다.
+기존 설치본과 실패 기록을 보존했으며, 설치 과정의 archive 권한 불일치와 결과 저장 단계의
+중복 읽기를 정리했습니다. 이 설치 승인은 사용자/source/Job 실행 권한을 대신하지 않습니다.
+CPU 환경은 이 버전으로 고정하고, 다음에는 owner/native launcher와 실제 작업을 연결합니다.
 실제 seed/delta·공통 소비자 연결·CPU/GPU 비교와 조건부 기본값 전환도 미완료입니다.
 CUDA의 현재 작업 폴더 검색 경로는 고정 격리 폴더 검증을 연결하기 전까지 계속 차단합니다.
 
