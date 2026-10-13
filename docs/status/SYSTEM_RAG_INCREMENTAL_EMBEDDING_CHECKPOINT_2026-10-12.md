@@ -1625,3 +1625,14 @@ shell syntax PASS. 이는 source gate이며 이 시점에는 실제 inventory �
 native execution admission, model/GPU forward, benchmark/default 전환은 미실시다.
 다음은 기존 보호 CPU prefix를 교체하지 않고 새 owner audit 기록에 출력하고 schema/Pydantic과
 실행 전 검증을 연결한다. 기존 API/Web/검색/출제 runtime은 변경하지 않는다.
+
+## 실제 inventory 크기 재현과 미출시 draft 조정 — 2026-10-13 10:56 UTC
+
+8020a79b exporter의 첫 실제 실행은 GnpPo79X에서 빈 후보를 보존하고 종료했다.
+읽기 전용 크기 진단에서 실제30,669 entries만8,651,841bytes로 기존8MiB 상한을 넘었다.
+30,001-entry 합성 회귀에서도 같은 serializer 상한 오류를 먼저 재현했다. 누락이나 압축
+우회 없이, 아직 승인 inventory가 없는 미출시 draft의 bound와 producer/consumer를16MiB로
+맞췄다. 새 draft raw는1c9c8b2a05fe8534e95b4955a8111f4882138b70b7374dd93d0770558b1f21d1이며
+worker schema registry와 released family는 바꾸지 않았다. entry/depth/integer/permission/
+epoch/hash 검사는 유지한다.4-suite396 PASS28.48s와 strict2 확인 후 신규 패키지로 재검증한다.
+8MiB 모델을 설치한 d0fc7352의 결과를 새16MiB consumer PASS로 재해석하지 않는다.

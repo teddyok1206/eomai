@@ -41,12 +41,12 @@ from eom_catalog_contracts.validation import catalog_schema_registry
 ROOTLOCAL_PREFIX_INVENTORY_REF: Final = "eom://local/embedding-native-prefix-inventory/1.0"
 ROOTLOCAL_ADMISSION_EVIDENCE_REF: Final = "eom://local/embedding-native-admission-receipt/1.0"
 PREFIX_INVENTORY_DRAFT_RAW_SHA256: Final = (
-    "sha256:9164de1dac4bae369b47a79436432440bf5f1ec26b2d7b7f35ec21824090e9f0"
+    "sha256:1c9c8b2a05fe8534e95b4955a8111f4882138b70b7374dd93d0770558b1f21d1"
 )
 ADMISSION_EVIDENCE_DRAFT_RAW_SHA256: Final = (
     "sha256:210b56190b6c71a7c49f6ae290d5dc3c206fdfb9f5c36745ea7aa271e2d1cd1f"
 )
-MAX_ROOTLOCAL_PREFIX_INVENTORY_BYTES: Final = 8 * 1024**2
+MAX_ROOTLOCAL_PREFIX_INVENTORY_BYTES: Final = 16 * 1024**2
 MAX_ROOTLOCAL_ADMISSION_EVIDENCE_BYTES: Final = 32 * 1024
 _MAX_PREFIX_BYTES = 16 * 1024**3
 _MAX_MEMBERS = 100_000

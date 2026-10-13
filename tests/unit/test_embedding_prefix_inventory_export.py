@@ -114,6 +114,34 @@ def test_export_is_bounded_including_added_semantic_hash(
         serialize(leaf, audit)
 
 
+def test_realistic_prefix_scale_roundtrips_without_dropping_members(leaf: dict[str, Any]) -> None:
+    # Actual CPU installation has 30,669 entries and >8 MiB of metadata. These are
+    # synthetic hashes/epochs and long package paths, never an actual audit fixture.
+    original = synthetic_audit()
+    directory, regular, _ = original.inventory.entries
+    entries = (
+        directory,
+        *(
+            replace(regular, relative_member=f"lib/{index:05d}_" + "module_" * 23 + ".py")
+            for index in range(30_000)
+        ),
+    )
+    audit = replace(
+        original,
+        regular_members=30_000,
+        link_members=0,
+        size_bytes=30_000,
+        inventory=replace(original.inventory, entries=entries),
+    )
+    raw = serialize(leaf, audit)
+    assert 8 * 1024**2 < len(raw) <= 16 * 1024**2
+    parsed = parse_rootlocal_prefix_inventory_candidate(
+        raw, schema_raw=INVENTORY_DRAFT.read_bytes()
+    )
+    assert parsed.audit.regular_members == 30_000 and len(parsed.entries) == 30_001
+    assert rootlocal_prefix_inventory_candidate_bytes(parsed) == raw
+
+
 @pytest.fixture
 def evidence_fd(leaf: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
     path = tmp_path / "prefix-inventory.candidate.json"

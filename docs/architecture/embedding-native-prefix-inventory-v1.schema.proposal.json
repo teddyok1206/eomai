@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "eom://local/embedding-native-prefix-inventory/1.0",
   "title": "Draft ROOTLOCAL same-audit prefix inventory; never admitted by parsing",
-  "$comment": "UNREGISTERED PROPOSAL. Raw bytes <=8MiB/depth16 before JSON. Entries sorted unique by relative_member with exact raw integers. Only authoritative final audit may originate this evidence; independent root owner accepts raw pin. Additional current host/protected manifest checks stay mandatory.",
+  "$comment": "UNREGISTERED PROPOSAL. Raw bytes <=16MiB/depth16 before JSON. Entries sorted unique by relative_member with exact raw integers. Only authoritative final audit may originate this evidence; independent root owner accepts raw pin. Additional current host/protected manifest checks stay mandatory.",
   "$defs": {
     "sha": {"type": "string", "minLength": 71, "maxLength": 71, "pattern": "^sha256:[0-9a-f]{64}$"},
     "unsigned64": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},

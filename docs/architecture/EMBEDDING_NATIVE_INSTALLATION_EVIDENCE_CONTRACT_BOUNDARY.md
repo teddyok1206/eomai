@@ -11,7 +11,7 @@ adapter, filesystem reader, unit launcher or candidate-to-sealed transition in t
 
 1. **Responsibility:** Add one Catalog contracts module for frozen ROOTLOCAL candidate-inventory
    and sealed-receipt *metadata*, two fixed raw parsers and supplied-reference validation only.
-2. **Canonical source:** Keep both original `.schema.proposal.json` bytes unchanged and outside
+2. **Canonical source:** Keep the reviewed `.schema.proposal.json` bytes outside
    worker schema registration. The owner supplies those exact raw schema bytes to the pure parser;
    fixed independent source SHA checks precede decoding/checking the whole JSON Schema 2020-12.
 3. **Identity:** Preserve configuration logical/revision IDs, inventory raw/semantic SHA, receipt
@@ -24,7 +24,7 @@ adapter, filesystem reader, unit launcher or candidate-to-sealed transition in t
    count/size consistency and a constant number of exact metadata-reference comparisons.
 6. **Structures:** Frozen typed tuples/value models and linear set/map checks; no large arbitrary
    dict payload, parallel registry, cache, schema/plugin framework or dynamically selected parser.
-7. **Bounds/cost:** Inventory ≤8 MiB, ≤100,000 entries; receipt ≤32 KiB; raw nesting ≤16 and integer
+7. **Bounds/cost:** Inventory ≤16 MiB, ≤100,000 entries; receipt ≤32 KiB; raw nesting ≤16 and integer
    lexemes ≤20 characters before JSON allocation. Reject duplicates, floats/NaN, extra fields,
    wrong raw integer types, copied/constructed extras, unsafe names and invalid UTC. O(bytes +
    entries + total relative-name length), with no filesystem scan/hash or quadratic uniqueness.
@@ -44,10 +44,10 @@ adapter, filesystem reader, unit launcher or candidate-to-sealed transition in t
 
 ## Fixed drafts and API limits
 
-Original raw SHA-256 (unprefixed here only for source freeze bookkeeping):
+Current raw SHA-256 (unprefixed here only for source freeze bookkeeping):
 
 - `embedding-native-prefix-inventory-v1.schema.proposal.json`:
-  `9164de1dac4bae369b47a79436432440bf5f1ec26b2d7b7f35ec21824090e9f0`.
+  `1c9c8b2a05fe8534e95b4955a8111f4882138b70b7374dd93d0770558b1f21d1`.
 - `embedding-native-admission-receipt-v1.schema.proposal.json`:
   `210b56190b6c71a7c49f6ae290d5dc3c206fdfb9f5c36745ea7aa271e2d1cd1f`.
 
@@ -73,6 +73,13 @@ worker resource inventory, public package exports, existing models, runtime, dat
 Git writes, installation and actual evidence publication remain outside this source leaf.
 
 ## Source checkpoint
+
+The first actual CPU export subsequently measured30,669 entries and8,651,841 bytes for entries
+alone. Before any accepted inventory existed, the unpublished inventory draft's byte bound was
+corrected from8MiB to16MiB and its raw pin above updated. All fields and other limits remain
+unchanged. The receipt draft and every released schema remain unchanged. The original inventory
+draft raw SHA was `9164de1dac4bae369b47a79436432440bf5f1ec26b2d7b7f35ec21824090e9f0`;
+the source checkpoint below records that historical gate, not a16MiB installed acceptance.
 
 The two fixed parsers now verify the complete original draft raw pins, use their JSON Schema
 2020-12 shapes and existing proof/bundle `$ref` registry, and enforce exact canonical evidence.

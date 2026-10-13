@@ -175,7 +175,7 @@ if ! (
 IFS= read -r AUDIT_STATUS < "$AUDIT_RECEIPT" || fail EMBEDDING_INDEX_AUDIT_RECEIPT_INVALID
 [[ "$AUDIT_STATUS" =~ ^EMBEDDING_PREFIX_BYTES_AUDIT_PASS_NOT_ADMITTED\ sha256:[0-9a-f]{64}$ && "$(stat -c %s "$AUDIT_RECEIPT")" -eq $((${#AUDIT_STATUS} + 1)) ]] || fail EMBEDDING_INDEX_AUDIT_RECEIPT_INVALID
 [[ -f "$AUDIT_INVENTORY" && ! -L "$AUDIT_INVENTORY" && "$(stat -c %u:%a:%h "$AUDIT_INVENTORY")" == 0:600:1 ]] || fail EMBEDDING_INDEX_INVENTORY_INVALID
-(( $(stat -c %s "$AUDIT_INVENTORY") > 0 && $(stat -c %s "$AUDIT_INVENTORY") <= 8388608 )) || fail EMBEDDING_INDEX_INVENTORY_INVALID
+(( $(stat -c %s "$AUDIT_INVENTORY") > 0 && $(stat -c %s "$AUDIT_INVENTORY") <= 16777216 )) || fail EMBEDDING_INDEX_INVENTORY_INVALID
 record_phase PREFIX_BYTES_AUDITED_NOT_ADMITTED
 arguments=(index-runtime --profile "$profile" --lock-directory "$PRIVATE/locks"
   --platform-wheel "$PLATFORM_WHEEL" --platform-wheel-sha256 "$PLATFORM_SHA"

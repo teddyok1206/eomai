@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from eom_catalog_service.embedding_runtime_prefix_closure import PrefixRuntimeByteAudit
 
-_INVENTORY_MAX_BYTES = 8 * 1024**2
+_INVENTORY_MAX_BYTES = 16 * 1024**2
 _INVENTORY_DESCRIPTOR = 3
 _INVENTORY_OWNER_UID = 0
 

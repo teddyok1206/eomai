@@ -1,6 +1,6 @@
 # Native installation admission: same-audit inventory and CPU-first seal
 
-2026-10-13 UTC. PROTOCOL_DRAFT / PHASE_A_B_C_D_E_F_SOURCE_ONLY / NOT_ADMITTED.
+2026-10-13 UTC. ROOTLOCAL_PROTOCOL_DRAFT / CPU_PREFIX_AUDIT_PASS / NOT_ADMITTED.
 The two adjacent `.schema.proposal.json` documents remain unregistered ROOTLOCAL drafts,
 not worker messages, grants or actual receipts. The additive same-audit local snapshot,
 shared model-free numerical observation, narrow Conda URI/pip noarch/overlay ownership handling
@@ -8,11 +8,11 @@ and shared CPU identity capture in PhaseA/B/C/D/E/F below are source-only implem
 all receipt/proof/factory/unit composition remains proposed. No production data, installed
 prefix, resource registry, unit or default changes.
 
-The previously examined CPU publication failed its OLD whole-prefix audit before NEW; the accepted
-read-only wheel diagnosis is not a replacement whole-prefix PASS. That failed input cannot
-advance to candidate publication, proof generation, unit probing or final seal. Source
-compatibility fixtures cannot change this fact. Root must first review the corrected source
-and rerun the actual complete pre-execution audit. Historical failed evidence remains intact.
+Earlier CPU publications failed their OLD whole-prefix audit before NEW; those historical failed
+inputs remain unchanged. The corrected d0fc7352 CPU publication passed the actual full audit on
+2026-10-13 at10:24 UTC, not just a wheel diagnosis. Its separate first inventory export encountered
+the metadata size limit documented below. Native unit probing, final seal and model execution remain
+pending. Neither historical failures nor source-only compatibility fixtures are reinterpreted.
 
 ## Eleven decisions
 
@@ -41,7 +41,7 @@ and rerun the actual complete pre-execution audit. Historical failed evidence re
    concrete adapter. Sorted tuples preserve the existing final audit ordering; a set/map
    checks relative-name uniqueness in O(n), not JSON `uniqueItems` over 100,000 objects.
    The existing host capture remains authoritative; do not copy its private loader parser.
-7. **Bounds.** Inventory raw bytes at most8MiB, at most100,000 entries, existing total prefix
+7. **Bounds.** Inventory raw bytes at most16MiB, at most100,000 entries, existing total prefix
    bound16GiB, relative names/links at most512 UTF-8 bytes. Receipt at most32KiB. Depth16,
    integer lexemes at most20 characters, exact integer types before serialization, duplicate
    keys/extra fields/floats/NaN/cycles/constructed bool bypass rejected. Byte bounds are
@@ -691,3 +691,15 @@ candidate before NEW. Creating the output before OLD captures parent epochs avoi
 an unexpected directory-epoch change during the audit. This is an installation-owner IO adapter,
 not worker behavior or a new runtime grant. The next independent owner must validate the exact
 draft/schema/Pydantic bytes and raw pin plus current epochs before any later proof/probe/seal.
+
+### Measured inventory sizing correction — 2026-10-13 10:53 UTC
+
+The first actual export retained an empty failed candidate after the whole-prefix read. A read-only
+size diagnostic measured30,669 entries requiring8,651,841 bytes for the entries array alone; the
+original8MiB output ceiling was too small. A30,001-entry source regression reproduces the export
+failure without root/model execution. Set the unpublished draft and producer/consumer byte limit
+to16MiB, preserving every entry, hash and epoch rather than dropping metadata or accepting a partial
+inventory. Keep depth16,100,000-entry, integer, prefix16GiB and all existing identity/closure checks.
+No previously accepted inventory or released schema exists for this draft. Record its new exact
+raw pin, rebuild the metadata consumer, and rerun the owner audit with a new identity; the original
+8MiB failure remains preserved. This increases the bounded metadata allocation, not runtime access.

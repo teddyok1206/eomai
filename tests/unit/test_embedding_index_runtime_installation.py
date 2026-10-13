@@ -786,7 +786,7 @@ def _synthetic_shell(
     if audit_fault == "inventory_empty":
         inventory = ""
     elif audit_fault == "inventory_oversized":
-        inventory = "truncate -s 8388609 /proc/self/fd/3\n"
+        inventory = "truncate -s 16777217 /proc/self/fd/3\n"
     elif audit_fault == "inventory_mode":
         inventory += "chmod 0644 /proc/self/fd/3\n"
     elif audit_fault == "inventory_link":
