@@ -1228,3 +1228,17 @@ carrier의 pointer·raw/semantic hash·runtime recipe·UTC·publication owner를
 Compiler/admission은 아직 새 definition을 거부하도록 테스트됐다. queue/DB migration/실제
 owner/native runtime/Artifact commit/read/variation worker 전달과 전체 활성화는 아직 남아 있다.
 테스트를 actual QUERY/model/GPU 실행으로 간주하지 않으며 전체 goal은 계속 ACTIVE다.
+
+## 두 번째 CPU 실패 후보 보존·developer 복구 완료 — 2026-10-13 UTC
+
+actual56 PASS 후 기존 exact CPU profile flock, source operation raw
+`964c1537f9f4d7c6360e617b56d51295e0d1e2d0152de2db2b649812d3d583a1`, 입력6ed5e508,
+빈 audit receipt·최종 실패 phase·publisher8f4b 및 원 fingerprint48b80eed를 다시 확인했다.
+현재/backup prefix를 쓰는 process가 없음을 확인하고 두 named/held directory identity를
+보존하는 recoverable rename을 수행했다. root failed bytes는
+`/opt/eom/conda/envs/.embedding-index-failed-CPU_INDEX_FP32-SjgdhzLY`에 남았고 developer
+backup은 fixed CPU 위치로 복구됐다. 이전 backup 위치는 **MOVED_NOT_DELETED**다.
+복구 후 동일 supported fingerprint48b80eed와 parent fsync를 확인했고 실제 log
+`second-cpu-recovery.log`는 PASS_NEW_NOT_EXECUTED를 기록한다. 파일 삭제·chown repair·
+실패 상태 성공 재해석·모델/GPU 추론은 없었다. 현재 fixed CPU는 developer 조립 입력이며
+승인된 production native runtime이 아니다. 두 failed PRIVATE/phase/receipt/archive도 보존한다.
