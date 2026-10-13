@@ -229,6 +229,14 @@ file-set은 한 번만 읽습니다. 별도 큐·DB schema·released protocol �
 원래 audit와 현재 lease의 구분, source 재인가와 아직 남은 전체 executor/registry 연결을
 기록합니다. 이 연결은 source 구현 상태이며 운영 seed/delta·인덱스 활성화 증거는 아닙니다.
 
+후속으로 현재 승인 자료 전체와 재사용할 벡터·정확한 predecessor/CAS를 조회하는 Catalog
+경로, seed/delta의 immutable index 구성, 실제 producer를 명시한 완료 receipt 게시·읽기를
+연결했습니다. 소규모 작업 대상 수와 전체 corpus coverage는 구분하며, Graph 변경 때
+binding을 다시 검증하고 같은 입력의 벡터는 재사용합니다. 과거 완료 기록 재검증은 현재
+index head를 변경하지 않습니다. [인덱스·완료 연결 설계](docs/architecture/NATIVE_EMBEDDING_INDEX_COMPLETION_COMPOSITION.md)에
+이 경계와 남은 전체 실행기·운영 활성화 작업을 기록합니다. 이 단계도 실제 corpus
+seed/delta나 GPU 기본값 전환의 완료 증거는 아닙니다.
+
 최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와
 strict type/lint/format PASS입니다. 실제 임시 DB28개 사례에는 독립 실행기 claim 경쟁과
 기존 실행 경로 분리가 포함됩니다. 합성 owner 콜백과 source 검증은 실제 사용자 권한이나

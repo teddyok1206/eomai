@@ -33,6 +33,7 @@ class PinnedArtifactMember:
     manifest_artifact_type: str
     approved: Literal[True]
     producing_job_state: Literal["SUCCEEDED"]
+    producer_job_id: str
     payload: bytes
 
 
@@ -285,6 +286,7 @@ def _resolve_pinned_artifact_member(
         manifest_artifact_type=cast(str, manifest["artifact_type"]),
         approved=True,
         producing_job_state="SUCCEEDED",
+        producer_job_id=revision.job_id,
         payload=payload,
     )
 

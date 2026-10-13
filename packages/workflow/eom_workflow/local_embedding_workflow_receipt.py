@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Literal
 
 from eom_catalog_contracts.embedding_registry import (
@@ -9,7 +10,12 @@ from eom_catalog_contracts.embedding_registry import (
     RegisterEmbeddingIndexCommand,
     validate_embedding_registration_result,
 )
-from eom_catalog_contracts.inference_transfer_embedding import IncrementalEmbeddingInput
+from eom_catalog_contracts.inference_transfer_embedding import (
+    EmbeddingIndexManifest,
+    IncrementalEmbeddingInput,
+    parse_embedding_index,
+)
+from eom_catalog_contracts.inference_transfer_experiment import PopulationSource, population_sha256
 from eom_catalog_contracts.models import Sha256, UtcDatetime
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
@@ -43,6 +49,14 @@ LOCAL_EMBEDDING_WORKFLOW_RECEIPT_SCHEMA_REF = (
 )
 MAX_LOCAL_EMBEDDING_STEP_OUTPUT_BYTES = 8 * 1024
 MAX_LOCAL_EMBEDDING_WORKFLOW_RECEIPT_BYTES = 64 * 1024
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedNativeIndexCoverage:
+    """Owner-resolved index/population values; not source or registration authority."""
+
+    index: EmbeddingIndexManifest
+    eligible_sources: tuple[PopulationSource, ...]
 
 
 def _hash(value: NativeEmbeddingContract, field: str, maximum: int) -> None:
@@ -196,6 +210,7 @@ def validate_local_embedding_workflow_receipt(
     receipt_owner_job_id: str,
     launch_association: LocalEmbeddingLaunchAssociation | None,
     owned_input: IncrementalEmbeddingInput | None,
+    index_coverage: ResolvedNativeIndexCoverage | None = None,
 ) -> LocalEmbeddingWorkflowReceipt:
     """Exact immutable resolved context, not current caller or linked recovery authority.
 
@@ -226,13 +241,67 @@ def validate_local_embedding_workflow_receipt(
         or command.graph_snapshot != plan.graph_snapshot
         or command.policy_revision_id != plan.access_policy_revision_id
         or command.policy_sha256 != plan.access_policy_sha256
-        or command.source_set_sha256 != plan.source_set_sha256
-        or command.eligible_source_count != len(plan.sources)
-        or command.binding_count != len(plan.demands)
         or (launch_association is None) != (owned_input is None)
         or (launch_association is None) != (receipt.native_launch_job_id is None)
     ):
         raise ValueError("native completion receipt differs from exact resolved Workflow context")
+    if index_coverage is None:
+        if (
+            command.source_set_sha256 != plan.source_set_sha256
+            or command.eligible_source_count != len(plan.sources)
+            or command.binding_count != len(plan.demands)
+        ):
+            raise ValueError(
+                "native completion receipt differs from exact resolved Workflow context: "
+                "requires whole-plan or resolved index coverage"
+            )
+    else:
+        index = parse_embedding_index(index_coverage.index.model_dump(mode="json"))
+        source_adapter: TypeAdapter[PopulationSource] = TypeAdapter(PopulationSource)
+        sources = {
+            s.item_revision_id: source_adapter.validate_python(s.model_dump(mode="json"))
+            for s in index_coverage.eligible_sources
+        }
+        bindings = {b.source.item_revision_id: b for b in index.bindings}
+        if (
+            len(sources) != len(index_coverage.eligible_sources)
+            or command.source_set_sha256 != population_sha256(index_coverage.eligible_sources)
+            or command.eligible_source_count != len(sources)
+            or command.binding_count != len(bindings)
+            or command.binding_set_sha256
+            != content_sha256([b.binding_sha256 for b in index.bindings])
+            or command.index_id != index.index_id
+            or command.index_revision_id != index.index_revision_id
+            or command.index_sha256 != index.index_sha256
+            or command.index_manifest.sha256
+            != sha256_bytes(canonical_json_bytes(index.model_dump(mode="json")))
+            or index.space != plan.space
+            or index.storage_partition != plan.namespace.storage_partition
+            or index.recipe != plan.recipe
+            or index.view != plan.namespace.view
+            or any(sources.get(s.item_revision_id) != s for s in plan.sources)
+            or any(
+                sources.get(b.source.item_revision_id) != b.source
+                or b.graph_snapshot != plan.graph_snapshot
+                or b.policy_revision_id != plan.access_policy_revision_id
+                or b.policy_sha256 != plan.access_policy_sha256
+                for b in index.bindings
+            )
+        ):
+            raise ValueError("native completion full index or corpus differs")
+        for demand in plan.demands:
+            binding = bindings.get(demand.source_revision_id)
+            if (
+                binding is None
+                or binding.source != sources[demand.source_revision_id]
+                or binding.encoding != demand.encoding
+                or binding.profile != demand.profile
+                or binding.solution_evidence != demand.solution_evidence
+                or binding.graph_snapshot != plan.graph_snapshot
+                or binding.policy_revision_id != plan.access_policy_revision_id
+                or binding.policy_sha256 != plan.access_policy_sha256
+            ):
+                raise ValueError("native completion index does not cover an exact selected demand")
     if launch_association is not None:
         assert owned_input is not None
         association = LocalEmbeddingLaunchAssociation.model_validate(launch_association)

@@ -33,6 +33,7 @@ from eom_catalog_contracts.inference_transfer_experiment import (
 from eom_catalog_service.embedding_registry_application import (
     lookup_missing_embedding_bindings,
     register_embedding_index,
+    verify_embedding_index_registration_observation,
 )
 from eom_catalog_service.embedding_registry_models import (
     EmbeddingEncodingRecord,
@@ -340,6 +341,29 @@ def test_atomic_registration_historical_replay_and_stale_identity_map(
             reader, CALLER, command, owner, now=NOW + timedelta(seconds=2)
         )
         assert replay.replayed and not replay.is_current and replay.current_lock_version == 3
+        selected, version = EmbeddingRegistryRepository(reader).current_namespace_revision(
+            command.corpus_id, command.namespace
+        )
+        assert selected.index_revision_id == successor.index_revision_id and version == 3
+        assert selected.index_manifest == successor.index_manifest
+        statements: list[str] = []
+
+        def observe(_connection, _cursor, statement, _parameters, _context, _many):
+            statements.append(statement.upper())
+
+        event.listen(guarded_engine, "before_cursor_execute", observe)
+        try:
+            verified = verify_embedding_index_registration_observation(
+                reader, CALLER, command, first, owner
+            )
+        finally:
+            event.remove(guarded_engine, "before_cursor_execute", observe)
+        assert verified == capture
+        assert not any(s.lstrip().startswith(("INSERT", "UPDATE", "DELETE")) for s in statements)
+        assert (
+            reader.get(EmbeddingIndexRecord, command.index_id).current_index_revision_id
+            == successor.index_revision_id
+        )
         assert replay.registered_at == first.registered_at
         assert replay.current_index_revision_id == successor.index_revision_id
         assert cached.lock_version == 3

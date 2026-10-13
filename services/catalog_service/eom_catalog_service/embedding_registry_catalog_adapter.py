@@ -58,6 +58,7 @@ from eom_catalog_service.embedding_incremental_plan import (
     RegisteredEmbeddingRow,
     plan_embedding_delta,
 )
+from eom_catalog_service.embedding_index_assembly import PreparedEmbeddingIndexBasis
 from eom_catalog_service.embedding_registry_application import read_pinned_embedding_index
 from eom_catalog_service.embedding_registry_ports import (
     AuthorizedEmbeddingReadProfile,
@@ -73,6 +74,10 @@ from eom_catalog_service.embedding_registry_ports import (
     ResolvedEmbeddingReferences,
     ResolvedEmbeddingRegistration,
     ResolvedPinnedEmbeddingIndex,
+)
+from eom_catalog_service.embedding_registry_repository import (
+    EmbeddingRegistryRepository,
+    registered_row,
 )
 from eom_catalog_service.inference_transfer_catalog_adapter import (
     InferenceTransferCorpusReadCommand,
@@ -90,6 +95,7 @@ from eom_catalog_service.knowledge_graph_models import (
     KnowledgeGraphSnapshotRecord,
 )
 from eom_catalog_service.knowledge_retrieval_service import KnowledgeRetrievalServiceError
+from eom_catalog_service.local_embedding_source_plan import build_local_embedding_source_plan
 from eom_catalog_service.pinned_artifact_resolution import (
     PinnedArtifactReadContext,
     PinnedArtifactResolutionError,
@@ -673,6 +679,85 @@ class CatalogEmbeddingRegistryVerifier:
                 tuple(value.source for value in capture.corpus.sources),
                 capture.entries,
             )
+
+        return self._guard(resolve)
+
+    def prepare_index_basis(
+        self, session: Session, caller: EmbeddingRegistryCaller, query: EmbeddingRegistryLookup
+    ) -> PreparedEmbeddingIndexBasis:
+        """Capture full current eligibility and reusable rows once before index assembly.
+
+        Old index bindings provide predecessor identity ONLY. Reusable numeric rows
+        are selected by exact current encoding keys, checked against current source
+        projections, and resolved through the canonical finite/L2 file-set reader.
+        No Job/model execution, registry mutation or future permission is returned.
+        """
+
+        def resolve() -> PreparedEmbeddingIndexBasis:
+            reader, capture = self._capture(
+                session, caller, query, InferenceTransferSessionCapturePhase.CAPTURE_POPULATION
+            )
+            if capture.corpus is None:
+                raise ValueError("index basis has no complete current population")
+            resolved = ResolvedEmbeddingLookup(
+                query.corpus_id,
+                self.configuration.space,
+                self.configuration.recipe,
+                tuple(s.source for s in capture.corpus.sources),
+                capture.entries,
+                capture.corpus.truncated,
+            )
+            plan = build_local_embedding_source_plan(
+                query,
+                resolved,
+                target_revision_ids=tuple(sorted(s.item_revision_id for s in resolved.sources)),
+            )
+            expected = {d.encoding.encoding_sha256: d.encoding for d in plan.demands}
+            repository = EmbeddingRegistryRepository(session)
+            records = repository.encodings(tuple(sorted(expected)))
+            rows = tuple(registered_row(records[key]) for key in sorted(records))
+            if any(row.encoding != expected.get(row.encoding.encoding_sha256) for row in rows):
+                raise ValueError("registered encoding differs from exact current input")
+            pointers = tuple(
+                sorted(
+                    {row.row_ref.shard_manifest for row in rows},
+                    key=lambda p: (p.artifact_id, p.artifact_revision_id, p.member_path, p.sha256),
+                )
+            )
+            shards = self._read_shards(reader, pointers)
+            by_pointer = dict(shards)
+            for row in rows:
+                shard = by_pointer[row.row_ref.shard_manifest]
+                if (
+                    row.row_ref.row_index >= len(shard.rows)
+                    or shard.rows[row.row_ref.row_index] != row.encoding
+                ):
+                    raise ValueError("registered row differs from exact committed ordinal")
+            selected = repository.current_namespace_revision(query.corpus_id, query.namespace)
+            previous = None
+            version = 1
+            if selected is not None:
+                registered, version = selected
+                index = self._read_index(reader, registered.index_manifest)
+                if (
+                    registered.corpus_id != query.corpus_id
+                    or registered.namespace != query.namespace
+                    or index.index_id != registered.index_id
+                    or index.index_revision_id != registered.index_revision_id
+                    or index.index_sha256 != registered.index_sha256
+                    or len(index.bindings) != registered.binding_count
+                    or content_sha256([b.binding_sha256 for b in index.bindings])
+                    != registered.binding_set_sha256
+                    or index.space != self.configuration.space
+                    or index.recipe != self.configuration.recipe
+                    or index.storage_partition != query.namespace.storage_partition
+                    or index.view != query.namespace.view
+                ):
+                    raise ValueError("registered predecessor differs from its immutable namespace")
+                previous = registered.index_manifest, index
+            # Recheck current caller/policy after filesystem reads; no corpus recapture.
+            self.authorize_scope(session, caller, query)
+            return PreparedEmbeddingIndexBasis(plan, rows, shards, previous, version)
 
         return self._guard(resolve)
 

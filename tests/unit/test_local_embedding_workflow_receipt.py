@@ -21,6 +21,7 @@ from eom_workflow import (
     validate_local_embedding_step_output,
     validate_local_embedding_workflow_receipt,
 )
+from eom_workflow.local_embedding_workflow_receipt import ResolvedNativeIndexCoverage
 from eom_workflow.models import ArtifactPointer
 from eom_workflow.schemas import (
     LOCAL_EMBEDDING_SCHEMA_RESOURCES,
@@ -34,9 +35,15 @@ from eom_workflow.schemas import (
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
-from tests.unit.inference_transfer_embedding_fixtures import seal
+from tests.unit.inference_transfer_embedding_fixtures import (
+    index_manifest,
+    seal,
+    shard_pointer,
+    source_binding,
+    vector_shard,
+)
 from tests.unit.inference_transfer_fixtures import sha
-from tests.unit.local_embedding_admission_fixtures import member
+from tests.unit.local_embedding_admission_fixtures import member, native_fixture
 from tests.unit.local_embedding_workflow_receipt_fixtures import (
     NativeReceiptFixture,
     receipt_fixture,
@@ -71,6 +78,80 @@ def reseal_receipt(body: dict[str, Any]) -> dict[str, Any]:
     body["registration_result"]["request_sha256"] = body["registration_command"]["request_sha256"]
     body["registration_result"] = seal(body["registration_result"], "result_sha256")
     return seal(body, "receipt_sha256")
+
+
+@pytest.mark.parametrize("corruption", [None, "duplicate", "missing", "index", "demand"])
+def test_bounded_operation_proves_full_corpus_without_shrinking_denominator(
+    corruption: str | None,
+) -> None:
+    fixture = receipt_fixture(borrowed_only=True)
+    full = fixture.native
+    selected = native_fixture("c" if corruption == "demand" else "a")
+    shard = vector_shard(
+        tuple(row.encoding for row in full.native_input.rows), space=full.plan.space
+    )
+    bindings = tuple(
+        source_binding(
+            entry,
+            view=full.plan.namespace.view,
+            recipe=full.plan.recipe,
+            space=full.plan.space,
+            shard=shard,
+            pointer=shard_pointer(shard),
+        )
+        for entry in full.entries
+    )
+    index = index_manifest(
+        *bindings,
+        space=full.plan.space,
+        view=full.plan.namespace.view,
+        revision_seed="3" if corruption == "index" else "2",
+    )
+    body = fixture.receipt.model_dump(mode="json")
+    body.update(
+        workflow_request_sha256=selected.request.request_sha256,
+        source_plan=selected.request.source_plan.model_dump(mode="json"),
+        source_plan_sha256=selected.plan.plan_sha256,
+    )
+    receipt = parse_local_embedding_workflow_receipt(seal(body, "receipt_sha256"))
+    arguments = dict(
+        workflow_id=receipt.workflow_id,
+        step_run_id=receipt.step_run_id,
+        receipt_owner_job_id=receipt.receipt_owner_job_id,
+        launch_association=None,
+        owned_input=None,
+    )
+    with pytest.raises(ValueError, match="whole-plan"):
+        validate_local_embedding_workflow_receipt(
+            receipt, selected.request, selected.plan, selected.policy, **arguments
+        )
+    sources = full.plan.sources
+    if corruption == "duplicate":
+        sources = (*sources, sources[0])
+    if corruption == "missing":
+        sources = sources[:1]
+    coverage = ResolvedNativeIndexCoverage(index, sources)
+    if corruption is None:
+        actual = validate_local_embedding_workflow_receipt(
+            receipt,
+            selected.request,
+            selected.plan,
+            selected.policy,
+            index_coverage=coverage,
+            **arguments,
+        )
+        assert actual.registration_command.eligible_source_count == 2
+        assert len(selected.plan.sources) == 1 and actual.registration_command.binding_count == 2
+    else:
+        with pytest.raises(ValueError, match="full index or corpus"):
+            validate_local_embedding_workflow_receipt(
+                receipt,
+                selected.request,
+                selected.plan,
+                selected.policy,
+                index_coverage=coverage,
+                **arguments,
+            )
 
 
 @pytest.mark.parametrize(

@@ -16,6 +16,7 @@ from eom_catalog_contracts.embedding_registry import (
     EmbeddingIndexRegistrationResult,
     RegisterEmbeddingIndexCommand,
     parse_embedding_registration_command,
+    parse_embedding_registration_result,
     validate_embedding_registration_result,
 )
 from eom_catalog_contracts.inference_transfer_embedding import (
@@ -289,6 +290,70 @@ def _receipt(
         body | {"result_sha256": content_sha256(body)}
     )
     return validate_embedding_registration_result(command, result)
+
+
+def verify_embedding_index_registration_observation(
+    session: Session,
+    caller: EmbeddingRegistryCaller,
+    command: RegisterEmbeddingIndexCommand,
+    result: EmbeddingIndexRegistrationResult,
+    verification: EmbeddingRegistryVerificationPort | None,
+) -> ResolvedEmbeddingRegistration:
+    """Reauthorize exact committed history, with NO registration, CAS or head rewrite.
+
+    The observed result's current/replayed flags describe its original observation;
+    they are neither today's mutable head nor authority. Immutable operation/revision
+    metadata, actual source/report scope and canonical finite/L2 components must still
+    agree. Returning resolved values permits receipt coverage checks in the same root.
+    """
+    try:
+        command = parse_embedding_registration_command(command.model_dump(mode="json"))
+        result = parse_embedding_registration_result(result.model_dump(mode="json"))
+        validate_embedding_registration_result(command, result)
+    except (JsonSchemaError, ValueError, TypeError):
+        raise EmbeddingRegistryError("EMBEDDING_REGISTRY_REQUEST_INVALID") from None
+    owner = _context(session, caller, verification)
+    owner.authorize_scope(session, caller, command)
+    resolved = validate_resolved_embedding_registration(
+        command, owner.resolve_registration(session, caller, command)
+    )
+    repository = EmbeddingRegistryRepository(session)
+    operation = repository.operation(command.operation_key)
+    registered = repository.read_pinned_revision(command.index_id, command.index_revision_id)
+    if (
+        operation is None
+        or registered is None
+        or registered.corpus_id != command.corpus_id
+        or registered.namespace != command.namespace
+        or not _matches(
+            operation,
+            {
+                "index_id": command.index_id,
+                "index_revision_id": command.index_revision_id,
+                "registration_request_sha256": command.request_sha256,
+                "index_sha256": command.index_sha256,
+                "previous_index_revision_id": command.expected_current_index_revision_id,
+                "revision_number": command.expected_lock_version,
+                "graph_snapshot_revision_id": command.graph_snapshot.graph_snapshot_revision_id,
+                "policy_revision_id": command.policy_revision_id,
+                "policy_sha256": command.policy_sha256,
+                "source_set_sha256": command.source_set_sha256,
+                "binding_set_sha256": command.binding_set_sha256,
+                "eligible_source_count": command.eligible_source_count,
+                "binding_count": command.binding_count,
+                "created_at": result.registered_at,
+                **_pointer_columns("manifest_", command.index_manifest),
+            },
+        )
+    ):
+        _fail("EMBEDDING_REGISTRATION_OBSERVATION_INVALID")
+    encodings, bindings = _components(session, caller, command, resolved, repository, owner)
+    if len(bindings) != command.binding_count or len(encodings) != len(
+        {b.encoding.encoding_sha256 for b in resolved.index.bindings}
+    ):
+        _fail("EMBEDDING_REGISTRY_POINTER_INVALID")
+    owner.authorize_scope(session, caller, command)
+    return resolved
 
 
 def _registration(

@@ -108,6 +108,28 @@ class PublishedControlFileSet:
     nas_path: str
 
 
+@dataclass(frozen=True, slots=True)
+class ControlFileSetIdentity:
+    """Trusted preselected identities for self-identifying content, not authority."""
+
+    job_id: str
+    artifact_id: str
+    artifact_revision_id: str
+
+    def __post_init__(self) -> None:
+        if any(
+            type(value) is not str or re.fullmatch(pattern, value) is None
+            for value, pattern in (
+                (self.job_id, r"job_[0-9a-f]{32}"),
+                (self.artifact_id, r"artifact_[0-9a-f]{32}"),
+                (self.artifact_revision_id, r"rev_[0-9a-f]{32}"),
+            )
+        ):
+            raise ControlPlaneError(
+                "CONTROL_FILE_SET_IDENTITY_INVALID", "publication identity is invalid"
+            )
+
+
 class ControlFileSetPublisher:
     """Publish one prevalidated file set with resumable idempotent commit semantics."""
 
@@ -119,6 +141,55 @@ class ControlFileSetPublisher:
     def publish(
         self,
         *,
+        members: tuple[ControlFileSetMember, ...],
+        primary_file: str,
+        artifact_type: str,
+        manifest_version: str,
+        idempotency_key: str,
+        source_commit: str,
+        created_at: datetime,
+    ) -> PublishedControlFileSet:
+        return self._publish(
+            members=members,
+            primary_file=primary_file,
+            artifact_type=artifact_type,
+            manifest_version=manifest_version,
+            idempotency_key=idempotency_key,
+            source_commit=source_commit,
+            created_at=created_at,
+            identity=None,
+        )
+
+    def publish_identified(
+        self,
+        *,
+        identity: ControlFileSetIdentity,
+        members: tuple[ControlFileSetMember, ...],
+        primary_file: str,
+        artifact_type: str,
+        manifest_version: str,
+        idempotency_key: str,
+        source_commit: str,
+        created_at: datetime,
+    ) -> PublishedControlFileSet:
+        identity = ControlFileSetIdentity(
+            identity.job_id, identity.artifact_id, identity.artifact_revision_id
+        )
+        return self._publish(
+            members=members,
+            primary_file=primary_file,
+            artifact_type=artifact_type,
+            manifest_version=manifest_version,
+            idempotency_key=idempotency_key,
+            source_commit=source_commit,
+            created_at=created_at,
+            identity=identity,
+        )
+
+    def _publish(
+        self,
+        *,
+        identity: ControlFileSetIdentity | None,
         members: tuple[ControlFileSetMember, ...],
         primary_file: str,
         artifact_type: str,
@@ -141,6 +212,7 @@ class ControlFileSetPublisher:
                 idempotency_key=idempotency_key,
                 artifact_type=artifact_type,
                 request=request,
+                identity=identity,
             )
             if not created and job.status == JobState.SUCCEEDED.value:
                 return self._existing(job.job_id, request)
@@ -309,6 +381,7 @@ class ControlFileSetPublisher:
         idempotency_key: str,
         artifact_type: str,
         request: dict[str, Any],
+        identity: ControlFileSetIdentity | None = None,
     ) -> tuple[JobRecord, bool]:
         with transaction(self.sessions) as session:
             ensure_protocol_version(
@@ -322,16 +395,28 @@ class ControlFileSetPublisher:
                 .with_for_update()
             )
             if existing is not None:
+                if identity is not None and (
+                    existing.job_id != identity.job_id
+                    or existing.logical_artifact_id != identity.artifact_id
+                    or existing.revision_id != identity.artifact_revision_id
+                ):
+                    raise ControlPlaneError(
+                        "CONTROL_FILE_SET_IDENTITY_CONFLICT", "existing allocation differs"
+                    )
                 return existing, False
             return submit_structured_job(
                 session,
-                job_id=new_job_id(),
+                job_id=new_job_id() if identity is None else identity.job_id,
                 protocol_version=CONTROL_FILE_SET_PROTOCOL,
                 idempotency_key=idempotency_key,
                 task_type=artifact_type,
                 request=request,
-                logical_artifact_id=new_logical_artifact_id(),
-                revision_id=new_revision_id(),
+                logical_artifact_id=new_logical_artifact_id()
+                if identity is None
+                else identity.artifact_id,
+                revision_id=new_revision_id()
+                if identity is None
+                else identity.artifact_revision_id,
             )
 
     def _require_resumable(self, job: JobRecord, request: dict[str, Any]) -> None:

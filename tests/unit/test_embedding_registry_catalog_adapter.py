@@ -20,6 +20,7 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingVectorShardManifest,
 )
 from eom_catalog_contracts.similarity_context import SimilarityIndexPin, SimilarityViewSelection
+from eom_catalog_service import embedding_registry_catalog_adapter as owner_module
 from eom_catalog_service import inference_transfer_catalog_adapter as source_module
 from eom_catalog_service.embedding_incremental_plan import RegisteredEmbeddingRow
 from eom_catalog_service.embedding_registry_application import (
@@ -29,6 +30,7 @@ from eom_catalog_service.embedding_registry_catalog_adapter import (
     CatalogEmbeddingRegistryVerifier,
     EmbeddingRegistryOwnerConfiguration,
 )
+from eom_catalog_service.embedding_registry_models import EmbeddingEncodingRecord
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingBindingOrigin,
     EmbeddingRegistryCaller,
@@ -303,6 +305,129 @@ def test_canonical_committed_index_shard_result_binary_and_source_composition(
     assert all(
         statement.get_execution_options()["populate_existing"] for statement in session.statements
     )
+
+
+@pytest.mark.parametrize("has_previous", [False, True])
+def test_prepared_index_basis_uses_current_sources_and_exact_reusable_rows(
+    owner: tuple[Any, ...], monkeypatch: pytest.MonkeyPatch, has_previous: bool
+) -> None:
+    verifier, session, command, index, binding, _scope, _root = owner
+    record = EmbeddingEncodingRecord(
+        **binding.encoding.model_dump(mode="python"),
+        **{
+            "shard_" + name: value
+            for name, value in binding.row_ref.shard_manifest.model_dump(mode="python").items()
+        },
+        row_index=binding.row_ref.row_index,
+    )
+    registered = RegisteredEmbeddingIndexRead(
+        command.corpus_id,
+        command.namespace,
+        index.index_id,
+        index.index_revision_id,
+        command.index_manifest,
+        index.index_sha256,
+        command.graph_snapshot.graph_snapshot_revision_id,
+        command.policy_revision_id,
+        command.policy_sha256,
+        len(index.bindings),
+        command.binding_set_sha256,
+    )
+
+    class Repository:
+        def __init__(self, current):
+            assert current is session
+
+        def encodings(self, keys):
+            assert keys == (binding.encoding.encoding_sha256,)
+            return {keys[0]: record}
+
+        def current_namespace_revision(self, corpus_id, namespace):
+            assert corpus_id == command.corpus_id and namespace == command.namespace
+            return (registered, 2) if has_previous else None
+
+    monkeypatch.setattr(owner_module, "EmbeddingRegistryRepository", Repository)
+    query = EmbeddingRegistryLookup(
+        command.corpus_id,
+        command.namespace,
+        command.graph_snapshot,
+        command.policy_revision_id,
+        command.policy_sha256,
+    )
+    basis = verifier.prepare_index_basis(
+        session, EmbeddingRegistryCaller("operator_" + "1" * 32), query
+    )
+    assert basis.full_plan.sources == (binding.source,)
+    assert basis.reusable_rows == (RegisteredEmbeddingRow(binding.encoding, binding.row_ref),)
+    assert len(basis.shards) == 1
+    assert basis.expected_lock_version == (2 if has_previous else 1)
+    assert basis.previous == ((command.index_manifest, index) if has_previous else None)
+    phases = [
+        call.kwargs.get("phase") for call in verifier.sources.capture_in_session.call_args_list
+    ]
+    assert phases == [
+        InferenceTransferSessionCapturePhase.CAPTURE_POPULATION,
+        InferenceTransferSessionCapturePhase.AUTHORIZE_SCOPE,
+    ]
+
+
+@pytest.mark.parametrize("fault", ["row", "binary", "late_fence", "predecessor"])
+def test_prepared_index_basis_fails_before_any_model_or_registry_write(
+    owner: tuple[Any, ...], monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    verifier, session, command, index, binding, _scope, root = owner
+    record = EmbeddingEncodingRecord(
+        **binding.encoding.model_dump(mode="python"),
+        **{
+            "shard_" + name: value
+            for name, value in binding.row_ref.shard_manifest.model_dump(mode="python").items()
+        },
+        row_index=1000 if fault == "row" else binding.row_ref.row_index,
+    )
+    registered = RegisteredEmbeddingIndexRead(
+        command.corpus_id,
+        command.namespace,
+        index.index_id,
+        index.index_revision_id,
+        command.index_manifest,
+        "sha256:" + "f" * 64,
+        command.graph_snapshot.graph_snapshot_revision_id,
+        command.policy_revision_id,
+        command.policy_sha256,
+        len(index.bindings),
+        command.binding_set_sha256,
+    )
+    repository = Mock()
+    repository.encodings.return_value = {binding.encoding.encoding_sha256: record}
+    repository.current_namespace_revision.return_value = (
+        (registered, 2) if fault == "predecessor" else None
+    )
+    monkeypatch.setattr(owner_module, "EmbeddingRegistryRepository", Mock(return_value=repository))
+    if fault == "binary":
+        (
+            root
+            / binding.row_ref.shard_manifest.artifact_id
+            / binding.row_ref.shard_manifest.artifact_revision_id
+            / "vectors.f32"
+        ).write_bytes(b"corrupt")
+    if fault == "late_fence":
+        verifier.identity_fence.fence_current_operator.side_effect = [
+            None,
+            OperatorAuthorizationFenceError("OPERATOR_AUTHORIZATION_FENCE_FORBIDDEN"),
+        ]
+    query = EmbeddingRegistryLookup(
+        command.corpus_id,
+        command.namespace,
+        command.graph_snapshot,
+        command.policy_revision_id,
+        command.policy_sha256,
+    )
+    with pytest.raises(EmbeddingRegistryError):
+        verifier.prepare_index_basis(
+            session, EmbeddingRegistryCaller("operator_" + "1" * 32), query
+        )
+    repository.insert_components.assert_not_called()
+    repository.advance.assert_not_called()
 
 
 @pytest.mark.parametrize(

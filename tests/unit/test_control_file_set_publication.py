@@ -9,6 +9,7 @@ from eom_identifiers import sha256_file
 from eom_orchestrator import file_set_control_artifacts as publication
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.file_set_control_artifacts import (
+    ControlFileSetIdentity,
     ControlFileSetMember,
     ControlFileSetPublisher,
 )
@@ -121,6 +122,47 @@ def test_control_file_set_publication_is_idempotent_and_exact(tmp_path: Path) ->
         assert not _contains_bytes(job.request)
         assert not _contains_bytes(revision.result)
         assert revision.content_bytes == primary.stat().st_size
+
+
+def test_identified_publication_preserves_allocation_and_legacy_replay(tmp_path: Path) -> None:
+    publisher, _engine = _publisher(tmp_path)
+    identity = ControlFileSetIdentity("job_" + "c" * 32, "artifact_" + "d" * 32, "rev_" + "e" * 32)
+    arguments = _arguments(tmp_path)
+    first = publisher.publish_identified(identity=identity, **arguments)
+    assert (first.job_id, first.artifact_id, first.artifact_revision_id) == (
+        identity.job_id,
+        identity.artifact_id,
+        identity.artifact_revision_id,
+    )
+    assert publisher.publish_identified(identity=identity, **arguments) == first
+    assert publisher.publish(**arguments) == first
+    with publisher.sessions() as session:
+        assert session.scalar(select(func.count()).select_from(JobRecord)) == 1
+        assert session.scalar(select(func.count()).select_from(ArtifactRevisionRecord)) == 1
+
+
+@pytest.mark.parametrize("field", ["job_id", "artifact_id", "artifact_revision_id"])
+def test_identified_publication_conflict_never_overwrites_allocation(
+    tmp_path: Path, field: str
+) -> None:
+    publisher, _engine = _publisher(tmp_path)
+    arguments = _arguments(tmp_path)
+    first = publisher.publish(**arguments)
+    values = {
+        "job_id": first.job_id,
+        "artifact_id": first.artifact_id,
+        "artifact_revision_id": first.artifact_revision_id,
+    }
+    values[field] = values[field].split("_")[0] + "_" + "f" * 32
+    with pytest.raises(ControlPlaneError, match="existing allocation differs"):
+        publisher.publish_identified(identity=ControlFileSetIdentity(**values), **arguments)
+    assert publisher.publish(**arguments) == first
+
+
+@pytest.mark.parametrize("value", ["job_latest", "job_" + "A" * 32, "job_" + "a" * 31, True])
+def test_identified_publication_requires_typed_immutable_identity(value: object) -> None:
+    with pytest.raises(ControlPlaneError, match="publication identity is invalid"):
+        ControlFileSetIdentity(value, "artifact_" + "d" * 32, "rev_" + "e" * 32)  # type: ignore[arg-type]
 
 
 def _contains_bytes(value: object) -> bool:

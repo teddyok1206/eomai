@@ -30,6 +30,7 @@ from eom_catalog_service.embedding_registry_models import (
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingBindingLookupKey,
     EmbeddingBindingOrigin,
+    EmbeddingRegistryError,
     RegisteredEmbeddingIndexRead,
 )
 
@@ -106,6 +107,38 @@ class EmbeddingRegistryRepository:
 
     def revision(self, revision_id: str) -> EmbeddingIndexRevisionRecord | None:
         return self.session.get(EmbeddingIndexRevisionRecord, revision_id)
+
+    def current_namespace_revision(
+        self, corpus_id: str, namespace: EmbeddingIndexNamespace
+    ) -> tuple[RegisteredEmbeddingIndexRead, int] | None:
+        """One unique-namespace lookup and pinned PK read, no write/current-head lock.
+
+        Select mutable head once, then keep that exact predecessor/version. A later
+        contender is handled by registration CAS, not another latest substitution.
+        Current source permission must be fenced by the Catalog application first.
+        """
+        record = EmbeddingIndexRecord
+        head = self.session.scalar(
+            select(record)
+            .where(
+                record.corpus_id == corpus_id,
+                *(
+                    getattr(record, name) == value
+                    for name, value in namespace.model_dump(mode="python").items()
+                ),
+            )
+            .execution_options(populate_existing=True)
+        )
+        if head is None:
+            return None
+        revision_id, version = head.current_index_revision_id, head.lock_version
+        if revision_id is None or type(version) is not int or version < 2:
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_POINTER_INVALID")
+        pinned = self.read_pinned_revision(head.index_id, revision_id)
+        revision = self.revision(revision_id)
+        if pinned is None or revision is None or revision.revision_number + 1 != version:
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_POINTER_INVALID")
+        return pinned, version
 
     def read_pinned_revision(
         self, index_id: str, revision_id: str

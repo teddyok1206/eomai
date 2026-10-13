@@ -10,6 +10,7 @@ from unittest.mock import Mock
 
 import pytest
 from eom_catalog_contracts.embedding_registry import (
+    EmbeddingIndexNamespace,
     EmbeddingIndexRegistrationResult,
     RegisterEmbeddingIndexCommand,
 )
@@ -87,6 +88,102 @@ def test_registration_exact_replay_and_current_receipt(memory: MemoryFixture) ->
         "bindings": 1,
     }
     assert owner.calls.count("resolve") == 2 and owner.calls.count("authorize") == 2
+
+
+def test_observation_verifies_historical_receipt_without_head_mutation(
+    memory: MemoryFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session, owner = memory
+    command, capture = capture_pair()
+    original = _register(session, owner, command)
+    later, later_capture = capture_pair(capture)
+    owner.captures[later.index_revision_id] = later_capture
+    _register(session, owner, later)
+    head = session.state["heads"][command.index_id]
+    identity_before = head.current_index_revision_id, head.lock_version
+    writes = Mock(side_effect=AssertionError("observation cannot change persistent history"))
+    monkeypatch.setattr(MemoryRepository, "head", writes)
+    monkeypatch.setattr(MemoryRepository, "create_head", writes)
+    monkeypatch.setattr(MemoryRepository, "advance", writes)
+    monkeypatch.setattr(MemoryRepository, "add_revision", writes)
+    verified = application.verify_embedding_index_registration_observation(
+        cast(Session, session),
+        CALLER,
+        command,
+        original,
+        cast(EmbeddingRegistryVerificationPort, owner),
+    )
+    assert verified == capture
+    assert (head.current_index_revision_id, head.lock_version) == identity_before
+    writes.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "fault", ["operation", "source", "count", "namespace", "time", "components"]
+)
+def test_observation_rejects_dangling_or_altered_persisted_history(
+    memory: MemoryFixture, fault: str
+) -> None:
+    session, owner = memory
+    command, _capture = capture_pair()
+    result = _register(session, owner, command)
+    row = session.state["revisions"][command.index_revision_id]
+    if fault == "operation":
+        row.operation_key = "another-operation"
+    if fault == "source":
+        row.source_set_sha256 = sha("f")
+    if fault == "count":
+        row.binding_count = 2
+    if fault == "namespace":
+        session.state["heads"][command.index_id].view = "CONTENT_ONLY"
+    if fault == "time":
+        row.created_at = NOW.replace(year=2025)
+    if fault == "components":
+        session.state["encodings"] = {}
+    with pytest.raises(EmbeddingRegistryError):
+        application.verify_embedding_index_registration_observation(
+            cast(Session, session),
+            CALLER,
+            command,
+            result,
+            cast(EmbeddingRegistryVerificationPort, owner),
+        )
+
+
+def test_observation_permission_denial_precedes_history_lookup(
+    memory: MemoryFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session, owner = memory
+    command, _ = capture_pair()
+    result = _register(session, owner, command)
+    denied = Mock(side_effect=EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN"))
+    lookup = Mock(side_effect=AssertionError("no history read before current permission"))
+    monkeypatch.setattr(owner, "authorize_scope", denied)
+    monkeypatch.setattr(MemoryRepository, "operation", lookup)
+    with pytest.raises(EmbeddingRegistryError, match="FORBIDDEN"):
+        application.verify_embedding_index_registration_observation(
+            cast(Session, session),
+            CALLER,
+            command,
+            result,
+            cast(EmbeddingRegistryVerificationPort, owner),
+        )
+    lookup.assert_not_called()
+
+
+def test_current_namespace_read_is_index_backed_and_does_not_lock_current_head() -> None:
+    command, _ = capture_pair()
+    session = Mock()
+    session.scalar.return_value = None
+    repository = EmbeddingRegistryRepository(session)
+    assert repository.current_namespace_revision(command.corpus_id, command.namespace) is None
+    statement = session.scalar.call_args.args[0]
+    sql = str(statement.compile(dialect=PGDialect())).upper()
+    assert "FOR UPDATE" not in sql and "JOIN" not in sql
+    for field in ("corpus_id", *EmbeddingIndexNamespace.model_fields):
+        assert f"EMBEDDING_INDEXES.{field.upper()} =" in sql
+    assert statement.get_execution_options()["populate_existing"] is True
+    session.execute.assert_not_called()
 
 
 def test_registration_authority_fence_precedes_savepoint_but_resolution_stays_inside(

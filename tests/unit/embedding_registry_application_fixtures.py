@@ -9,7 +9,10 @@ from dataclasses import replace
 from datetime import datetime
 from typing import Any, cast
 
-from eom_catalog_contracts.embedding_registry import RegisterEmbeddingIndexCommand
+from eom_catalog_contracts.embedding_registry import (
+    EmbeddingIndexNamespace,
+    RegisterEmbeddingIndexCommand,
+)
 from eom_catalog_contracts.inference_transfer_experiment import population_sha256
 from eom_catalog_service.embedding_incremental_plan import RegisteredEmbeddingRow
 from eom_catalog_service.embedding_registry_models import (
@@ -24,12 +27,13 @@ from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
     EmbeddingRegistryError,
     EmbeddingRegistryLookup,
+    RegisteredEmbeddingIndexRead,
     ResolvedEmbeddingBindingOrigin,
     ResolvedEmbeddingLookup,
     ResolvedEmbeddingReferences,
     ResolvedEmbeddingRegistration,
 )
-from eom_catalog_service.embedding_registry_repository import ASSOCIATION_COLUMNS
+from eom_catalog_service.embedding_registry_repository import ASSOCIATION_COLUMNS, artifact_member
 from sqlalchemy.orm import Session
 
 from tests.unit.inference_transfer_embedding_fixtures import (
@@ -132,6 +136,29 @@ class MemoryRepository:
     def revision(self, revision_id: str) -> EmbeddingIndexRevisionRecord | None:
         return cast(
             EmbeddingIndexRevisionRecord | None, self.session.state["revisions"].get(revision_id)
+        )
+
+    def read_pinned_revision(
+        self, index_id: str, revision_id: str
+    ) -> RegisteredEmbeddingIndexRead | None:
+        revision = self.revision(revision_id)
+        head = self.session.state["heads"].get(index_id)
+        if revision is None or head is None or revision.index_id != index_id:
+            return None
+        return RegisteredEmbeddingIndexRead(
+            head.corpus_id,
+            EmbeddingIndexNamespace.model_validate(
+                {name: getattr(head, name) for name in EmbeddingIndexNamespace.model_fields}
+            ),
+            revision.index_id,
+            revision.index_revision_id,
+            artifact_member(revision, "manifest_"),
+            revision.index_sha256,
+            revision.graph_snapshot_revision_id,
+            revision.policy_revision_id,
+            revision.policy_sha256,
+            revision.binding_count,
+            revision.binding_set_sha256,
         )
 
     def create_head(

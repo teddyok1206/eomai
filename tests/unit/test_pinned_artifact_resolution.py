@@ -123,6 +123,7 @@ def test_resolves_exact_member_and_full_provenance(tmp_path: Path) -> None:
     assert resolved.payload == b'{"value":1}'
     assert resolved.approved is True
     assert resolved.producing_job_state == "SUCCEEDED"
+    assert resolved.producer_job_id == "job_" + "3" * 32
 
 
 def test_empty_non_primary_member_requires_explicit_allowance(tmp_path: Path) -> None:

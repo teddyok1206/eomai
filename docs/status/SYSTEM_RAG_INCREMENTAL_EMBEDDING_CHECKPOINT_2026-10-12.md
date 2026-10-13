@@ -2131,3 +2131,32 @@ dependency는 없고 native protocol/수치 모델/Content Pack/기존 실패 �
 CPU/GPU 비교와 기본값 전환은 아직 미완료다. 다음은 전체 native executor가 기존
 reservation→owned input→계산→Artifact→완료/registry를 연결하도록 구성하는 것이다.
 `GOAL=ACTIVE`, `ENCODING_OWNER_SOURCE=IMPLEMENTED`, `NATIVE_WORKFLOW_LIVE=NOT_ACTIVE`.
+
+## 2026-10-13 19:42 UTC — index 구성·완료 기록의 실제 owner 연결
+
+후속 구현/검증은 [인덱스·완료 연결 설계](../architecture/NATIVE_EMBEDDING_INDEX_COMPLETION_COMPOSITION.md)에
+기록한다. 전체 goal과 최초 설계의 범위는 그대로다.
+
+- 공식 Catalog의 현재 전체 모집단에서 exact encoding key와 재사용 행을 해석한다.
+  승인/보고서/Graph·정본 finite/L2 결과를 확인하고 정확한 predecessor/CAS를 선택한다.
+  입력·조회는 같은 source capture를 사용하며 파일 읽기 후 현재 권한을 다시 확인한다.
+- full plan에서 부분 coverage의 새 immutable index를 만든다. 이전 binding을 복사하지
+  않으므로 source 철회·Graph/report 변경과 벡터 수치 재사용을 분리한다.
+- 소규모 작업 target 수와 전체 corpus denominator를 구분하는 receipt closure를 보강했다.
+  실제 producer Job ID를 먼저 고정해 기존 owner가 receipt를 저장하고, Catalog가
+  producer/commit/lifecycle/member/hash를 다시 검증한다. 가짜 producer는 거부한다.
+- 이미 등록된 완료 관측을 확인하는 읽기 경계는 historical 결과의 의미와 현재 head를
+  변경하지 않는다. 기존 publication API/released schema/migration/queue는 유지한다.
+
+최종 same-tree16 suites **379 PASS**,73.84s, strict mypy9·Ruff/format/diff PASS.
+실제 guarded disposable PostgreSQL **22 PASS**,32.54s. 새 namespace 선택과 historical
+관측의 무변경 조회, 동시 publication·identity conflict·중단 재개·정본 receipt를 포함한다.
+state `/tmp/eom-api-testdb-20261013193855_984afd97`는 공식 cleanup으로 제거했다.
+로그는 `/tmp/eom-native-completion.4XmEw88C/`, 이전 겹치는22 PASS 기록은
+`/tmp/eom-native-completion.fmUAGbk9/`에 별도로 보존한다. 숫자는 합산하지 않는다.
+
+모델/GPU 실행·CPU 재설치/probe/seal·운영 DB migration·서비스 재시작0회,
+API/Web/runner/chat/chat-worker5개 active. 운영 source/seed/delta/query 활성화는 아직 아니다.
+다음은 durable coordinator checkpoint와 실제 전체 executor/등록·동일 세션 검증 연결이다.
+그 후 원래 순서대로 실제 seed/delta/reuse/query·소비자·CPU/GPU 비교를 진행한다.
+`GOAL=ACTIVE`, `NATIVE_INDEX_ASSEMBLY_SOURCE=IMPLEMENTED`, `NATIVE_WORKFLOW_LIVE=NOT_ACTIVE`.
