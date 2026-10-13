@@ -929,3 +929,54 @@ Root는 frozen7개 경로의 raw SHA와 전체 변경을 독립 검토했고, �
 없는 fixture filename은 test0 상태에서 수정했고 운영 재실행이 아니다. 중첩 gate 수는 합산하지 않는다.
 **SOURCE_ONLY / NOT_ACTIVE**; 실제 QUERY/current owner/runtime admission·context composer·5개
 consumer·GPU/default는 아직 남아 있으며 model/GPU0다.
+
+### Identity integration의 기존 disposable owner 확장 — 실행 전 범위
+
+다음 root 검증은 기존 `testdb_run.sh`에 고정 `authenticated-session-tests` 목적 하나만 추가한다.
+기존 manifest/owner URL·DB/schema marker·현재 migration guard 뒤에 정확한 새 Identity integration
+파일만 실행하고 명시 opt-in을 설정한다. 새 DB schema/queue/runtime provider/권한 grant는 없다.
+동시 접근은 같은 disposable DB의 서로 다른 connection에서 검증한다. 테스트의 합성 계정·HMAC·
+행은 해당 DB에만 남으며 실패/성공 로그 보존 후 기존 marker-guarded cleanup으로 제거한다.
+운영 DB·실제 사용자 세션·모델·GPU는 건드리지 않고 integration PASS를 production 인증으로
+해석하지 않는다. 실패 시 자동 새 DB/재시도를 하지 않고 원인을 확인한다.
+
+첫 실제 실행은 **9 FAIL/2 PASS3.20s**였다. 원 로그 `integration.log`를 보존한다. readonly 실제
+context metadata에서 role/OID·READ COMMITTED·non-superuser·lockable 권한은 정상이고 search_path만
+`app,public`이었다. 기존 marker fixture의 일반 연결을 더 좁은 owner context로 사용한 fixture
+구성 누락이다. source의 `app,pg_catalog` 검증을 느슨하게 하지 않고, 같은 guarded URL/role의
+별도 READ COMMITTED·`app,pg_catalog`·bounded2-connection/finally-dispose test Engine을 구성했다.
+음성 사례도 정상 baseline 뒤 의도한 오류 코드를 검증한다. 같은 marked DB에서 교정된 테스트만
+명시 재실행1회를 진행하며 기존 실패를 성공 이력으로 바꾸지 않는다.
+
+### Whole-prefix closure 독립 source 검증 — 2026-10-13 UTC
+
+Root는 frozen11개 파일의 전체 source/test·updated ELF guard·설계와 raw SHA를 검토했다.
+17-suite **1057 PASS27.43s**, strict mypy·Ruff/format10-file PASS다. 원 Conda31 transforms,
+public wheel55/70, full private source membership, 실제 tree/ELF closure를 기존 owner끼리
+결합하는 read-only source 구현이다. old 보호 bootstrap의 root leaf가 새 실행 전 전체 바이트를
+확인하도록 준비했고 실제 설치 허가/receipt/모델/GPU 실행은 아직 없다.
+
+바로 다음은 기존 publisher의 mandatory old-audit-before-NEW 순서 개선과 실제 Conda31 archive/
+source-list retention이다. 새 authority/retainer/queue를 만들지 않고 canonical raw-SHA archive
+owner 및 profile lock/backup을 재사용한다. 이는 **SOURCE_PASS / NOT_RUNTIME_ADMITTED**다.
+
+### Identity 실제 재실행·cleanup와 Conda 정본 archive 준비 결과
+
+같은 marked DB의 fixture 교정 후 명시 재실행1회는 **11 PASS5.82s, skip0**다. 독립 writer8종의
+actual blocking, activity 불변, late-expiry rollback, valid baseline 뒤 wrong-OID/savepoint 거부를
+확인했다. Root source7-suite246 PASS6.80s, strict/Ruff/format8 PASS와 testdb harness94 PASS도
+별도 확인한다. 기존 failed log는 그대로다. 지원된 cleanup은 정확히 그 disposable DB/test roles/
+합성 데이터만 제거했고 state absence를 확인했다. 이 임시 행은 test fixture로만 재생성 가능하며
+운영/Artifact/history가 삭제된 것은 없다. 로그는 별도0700 evidence 디렉터리에 남겼다.
+
+같은 승인 sudo pane과 unchanged old 보호 Python의 `-I -S -B`에서, 기존 public archive retainer를
+재사용해 Conda31 원본(합계56222902B)과 raw-pinned `sources.lock`5588B를 보관했다. Source-list
+raw SHA는 `3decd31fdcd240cefca05b8fbd708e0dce724f63a3d255684617a6e2fcef010c`다. 각 파일의
+same-target replay/read-back과 SHA directory/archive parent fsync를 통과했다. 실제 retention
+로그는 `conda-canonical-retention.log`; 정본64-hex 경로32개는 root:root0644 파일/root0755
+parent다. 실행 script의 regex 문법 warning1건은 발생했지만 입력/결과/retainer 검증은 PASS이며
+실패를 숨기거나 재실행한 것은 없다. archive는 untrusted bytes로 보관한 것이며 full byte/ELF
+audit, protected promotion/NEW instruction, numerical proof/실험, GPU 기본값은 여전히 PENDING이다.
+
+Root local archive/cache만 변경했고 production DB/IAM/NAS write0, 새 model/GPU0다. 전체 목표는
+ACTIVE이며 actual provider/native admission 및 공통 소비자 구현을 계속한다.

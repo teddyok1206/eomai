@@ -1,9 +1,10 @@
-# Native embedding owner/session boundary — proposal for review
+# Native embedding owner/session boundary — Identity source foundation
 
-2026-10-13 UTC. DESIGN_ONLY / NO_BEHAVIOR / NOT_INSTALLED / NOT_ACTIVE.
-This note specifies the smallest missing authenticated continuation for the merged native
-submission/dispatch. It does not admit a SQL role, HMAC key, source, launcher or service identity.
-No code, schema, DB, credential, API, model/GPU, deployment or default changes accompany it.
+2026-10-13 UTC. SOURCE_FOUNDATION_IMPLEMENTED / NOT_INSTALLED_PROVIDER / NOT_ACTIVE.
+This note records the smallest authenticated continuation foundation for the merged native
+submission/dispatch. Only the approved Identity capture/fence and source tests below are implemented.
+It does not admit a SQL role, HMAC key, source, launcher or service identity. No schema, DB, credential,
+API route, worker/native-owner behavior, model/GPU, deployment or default changes accompany it.
 The [master §§8–9](SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md#8-자동화의-권한인증capacity),
 [Runner boundary](LOCAL_EMBEDDING_RUNNER_IMPLEMENTATION_BOUNDARY.md#focused-gates-and-next-actual-integration)
 and [native admission proposal](INCREMENTAL_EMBEDDING_RUNNER_ADMISSION_PROPOSAL.md) remain authoritative.
@@ -62,9 +63,9 @@ and [native admission proposal](INCREMENTAL_EMBEDDING_RUNNER_ADMISSION_PROPOSAL.
     it cannot replace retained root session/token fencing. Generic `eomctl --actor-id`, an old
     `ActorContext`, or executing Runner on the API engine does not close the authority boundary.
 
-## Proposed smallest official Identity API
+## Implemented source-only official Identity API
 
-The names below are proposed public Python seams, not wire messages or an installed grant:
+The names below are public Python source seams, not wire messages or an installed grant:
 
 ```python
 class AuthenticatedOperatorSession:
@@ -143,9 +144,9 @@ only its exact Workflow's bounded claims. It delegates source capture to
 ownership/publication to existing Orchestrator leaves. Neither a bare capture nor a parsed policy
 establishes the still-missing concrete owner/executor/publisher/current-source composition.
 
-## Exact next source/test plan — root approval required before behavior
+## Exact approved Identity source/test inventory
 
-First implement/review only the official Identity capture/fence foundation:
+Only the official Identity capture/fence foundation in these eight paths is implemented:
 
 | Exact path | Narrow responsibility |
 | --- | --- |
@@ -178,3 +179,74 @@ released retrieval-policy successor with literal `LOCAL_EMBEDDING_INDEX`, exact 
 source/model/recipe/resource/processing scope and current authenticated service transport. Existing
 request1.1 service audit parsing and operator permission hashes provide none of these. No permanent
 user token/session or initiating operator impersonation substitutes for this required goal follow-up.
+
+## Approved Identity source delta — before behavior
+
+Root approved only the eight Identity/test paths above plus this checkpoint note. Root's actual
+metadata-only installed-controller probe observed `current_user=session_user=eom_app`, non-superuser,
+non-BYPASSRLS and existing SELECT+UPDATE on operators/api_sessions/api_tokens. This demonstrates no
+need for a new role/routine/grant; it is not installation or native admission. Implement one direct
+Identity-owned caller-root adapter, with independently configured expected role name/OID and positive
+fresh-auth seconds. Recheck the actual connection/role/OID/privileges/READ COMMITTED writable root,
+bounded SQL wait settings and current rows before mutation; retain root/connection/thread witnesses.
+
+The compatible target lock order is **Operator FOR SHARE → ApiSession FOR SHARE → captured ACCESS
+ApiToken FOR SHARE**, never a REFRESH-token lock. Supported role/disable/delete/password writers lock
+Operator before sessions; logout locks/updates sessions; refresh locks its distinct REFRESH token,
+then session, then updates ACCESS tokens. Access authentication locks session and later updates the
+ACCESS token without acquiring an Operator row lock. Keep that legacy behavior unchanged, and do
+not call `/me` or refresh while the owner holds its session fence. No session activity/idle TTL or
+token last-used/refresh generation update occurs in the new fence.
+
+Capture shares one authoritative existing HMAC access-validation path; no duplicate token verifier.
+Only private creation after real verification produces an opaque, nonserializable capture. The
+source capture/fence protects copied/mutated identities and performs current/late UTC expiry and
+permission checks; it does not establish that its TokenCodec/provider key is the protected production
+Identity key. Actual protected provider/key/transport and native owner/executor remain uncomposed.
+Unit tests use synthetic HMAC keys/rows; guarded integration is collected only here, with actual
+independent writer/blocking/rollback execution left to root's supported disposable owner.
+
+## Source freeze checkpoint
+
+The explicit API environment passed **246 source tests** in 6.82s: the three Identity capture/token/
+auth unit files above plus `test_operator_authorization_fence.py`,
+`test_operator_authorization_fence_sql.py`, `test_inference_transfer_control_auth.py` and
+`test_inference_transfer_authenticated_experiment_cli.py`. API and core mypy both passed all eight
+listed paths with `--strict --explicit-package-bases --follow-imports=silent`; Ruff check and format
+check also passed all eight. The new opt-in integration file collected **11 tests** without execution.
+These are source gates, not proof of a live SQL fence, protected HMAC provider, owner transport,
+native execution or production activation. Root separately owns actual disposable-DB blocking and
+rollback validation. No roles, routines or grants were added.
+
+The capture privately binds the verified access-token HMAC digest for exact row identity; it keeps
+no raw token or HMAC key and exposes no serialized credential/grant. The concrete protected provider
+and native owner/executor composition remain required, unimplemented follow-ups.
+
+## Root actual disposable-DB verification — 2026-10-13 UTC
+
+Root independently matched all nine frozen hashes and reviewed the full implementation/tests.
+Its seven-suite source gate passed **246 tests in6.80s**, with strict mypy, Ruff lint and format
+**eight files PASS**. This overlaps the agent's246-test inventory and is not added to it.
+
+Using the existing marker-guarded disposable owner, root prepared a new temporary database and
+ran head0053/down0052/up0053 with control-plane guards PASS. The first integration run was
+**9 FAIL/2 PASS3.20s**: the generic marker fixture supplied `app,public`, not the explicit
+`app,pg_catalog` connection required by this narrower owner. Read-only actual context metadata
+confirmed the other role/OID/isolation/lockable checks. Production checks were not relaxed.
+
+After the approved fixture-only correction to a separate engine with the same guarded URL/role,
+READ COMMITTED, explicit search path, bounded pool and guaranteed disposal, the one recorded
+rerun passed **11 tests in5.82s, skip0**. These exercised independent logout/logout-all/refresh/
+password/role/disable/delete/access blocking, unchanged activity, late-expiry rollback and
+the intended wrong-OID/first-savepoint denials after a valid baseline. No new role/routine/grant.
+
+Both logs and the migration/cleanup evidence remain at
+`/tmp/eom-authenticated-session-db-evidence.rdWuNz8F`. The original failed run is not relabeled.
+The supported guarded cleanup removed only the marked test DB and its test identities/roles;
+the state directory is absent. Production DB, real user sessions, NAS and model/GPU were untouched.
+
+This proves the source foundation with real synthetic test transactions, **not an installed
+production provider**. Current HMAC stays in the actual API Identity owner; an opaque capture
+does not cross into a controller via `/me`. The fixed Catalog-manager SQL fence cannot be
+injected under `eom_app`. The next explicit provider/transport and same-root Identity bridge
+must close these actual boundaries without key copying, role impersonation or a saved-audit grant.

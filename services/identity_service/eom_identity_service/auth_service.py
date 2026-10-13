@@ -11,6 +11,7 @@ from eom_operator_identity.passwords import PasswordService
 from eom_orchestrator.database import build_session_factory, transaction
 from sqlalchemy import Engine, select
 
+from eom_identity_service.authenticated_session_fence import AuthenticatedOperatorSession
 from eom_identity_service.models import ApiSessionRecord, OperatorCredentialRecord, OperatorRecord
 from eom_identity_service.repository import (
     add_operator_event,
@@ -138,6 +139,21 @@ class AuthService:
         self._raise_refresh(outcome)
         assert outcome.pair is not None
         return outcome.pair
+
+    def capture_access(self, raw_token: str) -> AuthenticatedOperatorSession:
+        """One official authentication transaction; no permanent credential continuation."""
+        capture: AuthenticatedOperatorSession | None = None
+        error: IdentityError | None = None
+        with transaction(self.sessions) as session:
+            try:
+                capture = self.tokens.capture_access(session, raw_token)
+            except IdentityError as exc:
+                error = exc
+        if error is not None:
+            raise error
+        if capture is None:
+            raise RuntimeError("access capture completed without a result")
+        return capture
 
     def logout(self, api_session_id: str, operator_id: str) -> None:
         timestamp = datetime.now(UTC)

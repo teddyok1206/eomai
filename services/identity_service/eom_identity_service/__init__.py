@@ -1,5 +1,11 @@
 """Operator identity application and persistence service."""
 
+from eom_identity_service.authenticated_session_fence import (
+    AuthenticatedOperatorSession,
+    AuthenticatedSessionFence,
+    AuthenticatedSessionFenceError,
+    AuthenticatedSessionFenceOwnerPin,
+)
 from eom_identity_service.operator_authorization_fence import OperatorAuthorizationFence
 from eom_identity_service.operator_authorization_fence_sql import (
     OPERATOR_AUTHORIZATION_FENCE_BODY,
@@ -33,6 +39,10 @@ __all__ = [
     "OPERATOR_AUTHORIZATION_FENCE_REVOKE_PUBLIC_SQL",
     "OPERATOR_AUTHORIZATION_FENCE_SIGNATURE",
     "OPERATOR_AUTHORIZATION_FENCE_STATEMENT_TIMEOUT_MS",
+    "AuthenticatedOperatorSession",
+    "AuthenticatedSessionFence",
+    "AuthenticatedSessionFenceError",
+    "AuthenticatedSessionFenceOwnerPin",
     "OperatorAuthorizationFence",
     "OperatorAuthorizationFenceError",
     "OperatorAuthorizationFenceOwnerPin",

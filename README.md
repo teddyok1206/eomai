@@ -168,11 +168,12 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | --- | --- |
 | 계약·registry·Artifact·수치 검증·atomic submission·exact claim/native dispatch | SOURCE_PASS; 실제 owner/session·executor 운영 연결은 미활성 |
 | exact pinned index read | SOURCE_PASS; 현재 권한 재확인·일괄 binding 조회·선택된 벡터 읽기 구현, 공통 검색/QUERY 소비는 미활성 |
-| 실제 disposable PostgreSQL |0052 registry/application16·reservation8·limited IAM6,0053 stage18+runner10 PASS; migration·cleanup PASS |
+| authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
+| 실제 disposable PostgreSQL |0052 registry/application16·reservation8·limited IAM6,0053 stage18+runner10·Identity11 PASS; migration·cleanup PASS |
 | CPU/CUDA 실행 환경 준비 | Conda base31·public wheels55/70·동일 commit private wheel의 canonical-cache/offline 조립 완료; 최종 protected runtime 미승인 |
 | 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | NOT_ACTIVE / NOT_EVALUATED |
 
-최근 독립 source gate는 pinned-read270·Runner654·benchmark worker619·host/runtime982 PASS와
+최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와
 strict type/lint/format PASS입니다. 실제 임시 DB28개 사례에는 독립 실행기 claim 경쟁과
 기존 실행 경로 분리가 포함됩니다. 합성 owner 콜백과 source 검증은 실제 사용자 권한이나
 모델·GPU 실행 증거가 아닙니다.

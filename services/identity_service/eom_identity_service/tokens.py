@@ -21,6 +21,10 @@ from eom_operator_identity.identifiers import (
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from eom_identity_service.authenticated_session_fence import (
+    AuthenticatedOperatorSession,
+    _capture_verified_access,
+)
 from eom_identity_service.models import ApiSessionRecord, ApiTokenRecord, OperatorRecord
 from eom_identity_service.repository import effective_permissions, operator_projection
 
@@ -160,6 +164,16 @@ class SessionTokenService:
     def authenticate_access(
         self, session: Session, raw_token: str, *, now: datetime | None = None
     ) -> AccessAuthentication:
+        return self._authenticate_access(session, raw_token, now=now)[0]
+
+    def capture_access(self, session: Session, raw_token: str) -> AuthenticatedOperatorSession:
+        """Mint only from the same actual HMAC validation, never an authentication DTO."""
+        authentication, api_session, token = self._authenticate_access(session, raw_token)
+        return _capture_verified_access(authentication, api_session, token)
+
+    def _authenticate_access(
+        self, session: Session, raw_token: str, *, now: datetime | None = None
+    ) -> tuple[AccessAuthentication, ApiSessionRecord, ApiTokenRecord]:
         timestamp = now or datetime.now(UTC)
         parsed = self.codec.parse(raw_token, TokenType.ACCESS)
         if parsed is None:
@@ -197,7 +211,7 @@ class SessionTokenService:
             api_session.absolute_expires_at,
         )
         token.last_used_at = timestamp
-        return AccessAuthentication(
+        authentication = AccessAuthentication(
             operator=projection,
             session_id=api_session.api_session_id,
             authenticated_at=api_session.authenticated_at,
@@ -205,6 +219,7 @@ class SessionTokenService:
             permissions=effective_permissions(session, operator.operator_id),
             password_change_required=projection.must_change_password,
         )
+        return authentication, api_session, token
 
     def rotate_refresh(
         self, session: Session, raw_token: str, *, now: datetime | None = None
