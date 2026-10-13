@@ -262,6 +262,14 @@ def test_complete_synthetic_seed_retains_fd_routes_bytes_and_closes_once(
     assert capture.seed_sha256 == fixture.expected
     capture.assert_current()
     assert capture.fixed_loader_path() == fixture.loader
+    mapped = fixture.loader.stat()
+    capture.assert_mapped_file(fixture.loader, device=mapped.st_dev, inode=mapped.st_ino)
+    with pytest.raises(InstalledRuntimeProofError, match="MAPPED_FILE_UNAVAILABLE"):
+        capture.assert_mapped_file(fixture.loader, device=mapped.st_dev, inode=mapped.st_ino + 1)
+    with pytest.raises(InstalledRuntimeProofError, match="MAPPED_FILE_UNAVAILABLE"):
+        capture.assert_mapped_file(tmp_path / "uncaptured.so", device=mapped.st_dev, inode=1)
+    with pytest.raises(InstalledRuntimeProofError, match="MAPPED_FILE_INVALID"):
+        capture.assert_mapped_file(fixture.loader, device=True, inode=mapped.st_ino)
     assert capture.fixed_soname_versions("libc.so.6") == frozenset({"GLIBC_2.38"})
     with pytest.raises(InstalledRuntimeProofError, match="SONAME_UNAVAILABLE"):
         capture.fixed_soname_versions("unregistered.so")
@@ -274,6 +282,8 @@ def test_complete_synthetic_seed_retains_fd_routes_bytes_and_closes_once(
         capture.assert_current()
     with pytest.raises(InstalledRuntimeProofError, match="HOST_CLOSED"):
         capture.fixed_loader_path()
+    with pytest.raises(InstalledRuntimeProofError, match="HOST_CLOSED"):
+        capture.assert_mapped_file(fixture.loader, device=mapped.st_dev, inode=mapped.st_ino)
 
 
 @pytest.mark.parametrize("expected", [None, True, 1, "bad", "sha256:" + "a" * 64])

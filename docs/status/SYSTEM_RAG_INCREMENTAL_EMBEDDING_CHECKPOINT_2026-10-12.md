@@ -1674,3 +1674,35 @@ GPU default 전환이다. CUDA의 현재 작업 폴더 검색 문제도 고정 n
 아직 신규 embedding model forward0, benchmark NOT_EVALUATED, GPU default NOT_ACTIVE다.
 기존 API/Web/Catalog/HWPX/Workflow/Chat10개 서비스는11:02 UTC 조회에서 active/running이다.
 이번 단계에서 해당 장기 서비스·DB·worker 계정·정책·원본 corpus는 변경하지 않았다.
+
+## 공식 CPU proof 게시·고정 native probe 구현 — 2026-10-13 12:32 UTC
+
+실제 q0a7D0QV 후보의 numerical proof를 독립 OLD pre-exec epoch/host 확인 뒤
+`/opt/eom/embedding-runtime-proofs/embeddingruntimeproof_8ed4d4248f4740cdaf4eaee865b76b7e/embeddingruntimeproofrev_136c88d10ed740fab2b68d052b27375c/proof.json`에
+O_EXCL/root0444로 게시하고 file/parent fsync·정확한 readback을 수행했다. raw/semantic은
+원 후보의1389fd7e…05494/591bbb8b…6cbb와 같고, 설치된 공식
+`ProtectedInstalledEmbeddingRuntimeObserver`의 실제 재조회가 PASS다. root의 optional ML
+import·model/tokenizer/forward는0이다. 작업 로그는
+`/tmp/eom-embedding-cpu-proof.uCd9d7p4/owner-publication.log`, root 보호 실행 snapshot은
+`/opt/eom/.embedding-cpu-proof-lbMKXO1o`다. native admission은 아직 아니다.
+
+이어서 JSON Schema2020-12/frozen CPU probe input/result 계약을 먼저 추가했다. 입력은
+execution ID와 exact CPU proof/original payload pointer만 받고, 출력은
+OBSERVED_NOT_ADMITTED와 실제 수치 환경·제한 계정·거부 관측만 담는다. Artifact ID를
+임의로 만들어 bundle에 넣지 않는다. 실제 bundle 게시/config/final seal은 별도 잔여다.
+native CPU verifier는 기존 identity/proof/payload/model-free numerical/negative primitives를
+재사용한다. 모델을 만들지 않으며 root는 Torch를 import하지 않는다. 고정 systemd template은
+6GiB/4CPU/64tasks/180s, network/device/NAS/DB/secret 접근 거부, no restart다.
+
+부모 Orchestrator의 설치 관측 경계는 실제 InvocationID/PID/start ticks/cgroup과 살아 있는
+실행 ELF mapping을 기존 prefix/host inventory에 대조한 뒤 root SIGUSR1로만 종료를 허용한다.
+worker는 report fsync 후 최대30초만 기다린다. ACK와 terminal exit0/MainPID0/empty cgroup은
+별도이며, 미확인·오류·다른 실행·orphan·부분 결과는 성공으로 바꾸지 않는다. 새 queue,
+worker 간 통신, GPU 실행, 운영 source/corpus/DB 변경은 없다.
+
+source11-suite **1,010 PASS39.03s**, API/core strict4·Ruff8·format7·systemd verify·diff check
+PASS다. 초기 부모 테스트에서 역사적 CPU execution ID validator를 새32hex ID에 적용한
+불일치를 찾아 새 계약의 공개 typed alias를 사용하도록 수정했다(355 PASS/9 fixture error
+이력을 성공으로 덮지 않음). 현재 새 probe는 SOURCE_PASS/NOT_INSTALLED/NOT_RUN이며
+실제 계정/DAC/고정 단위 검증 및 production admission은 남아 있다. 장기 서비스는 건드리지
+않았다. 다음은 이 소스의 wheel/RECORD와 새 전체-prefix inventory를 검증한 후 실제 probe다.

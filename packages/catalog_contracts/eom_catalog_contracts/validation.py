@@ -30,6 +30,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "embedding-native-cpu-probe": CatalogSchemaResource(
+            "schemas/knowledge/embedding-native-cpu-probe-v1.schema.json",
+            "resources/knowledge/embedding-native-cpu-probe-v1.schema.json",
+            "1.0",
+            "sha256:133d5989acda16ec9f63fc10cbd5f57b114c4c816214c01bcb2e064eab2e14b3",
+        ),
         "embedding-reference-query-input-v1.1": CatalogSchemaResource(
             "schemas/knowledge/embedding-reference-query-input-v1_1.schema.json",
             "resources/knowledge/embedding-reference-query-input-v1_1.schema.json",

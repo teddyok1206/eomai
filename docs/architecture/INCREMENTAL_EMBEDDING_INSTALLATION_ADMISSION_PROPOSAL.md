@@ -5,8 +5,11 @@ The two adjacent `.schema.proposal.json` documents remain unregistered ROOTLOCAL
 not worker messages, grants or actual receipts. The additive same-audit local snapshot,
 shared model-free numerical observation, narrow Conda URI/pip noarch/overlay ownership handling
 and shared CPU identity capture are implemented. The actual CPU successor and same-audit inventory
-read-back passed at11:04 UTC; an independently observed numerical proof remains a private candidate.
-Final admission receipt, fixed native unit/probe and production factory wiring are still pending.
+read-back passed at11:04 UTC; its numerical proof was then published at the canonical proof root.
+The CPU proof was subsequently published without overwrite at its fixed immutable location and
+read back through `ProtectedInstalledEmbeddingRuntimeObserver`; no optional ML import or forward
+was performed by root. Final admission receipt, fixed native unit/probe and production factory
+wiring are still pending.
 No production corpus, resource registry, unit or default activation changed.
 
 Earlier CPU publications failed their OLD whole-prefix audit before NEW; those historical failed
@@ -17,8 +20,9 @@ pending. Neither historical failures nor source-only compatibility fixtures are 
 
 The corrected16MiB producer/consumer from3be2949b subsequently passed the actual audit and
 JSON Schema/Pydantic/epoch read-back. It retained30,669 entries in8,653,045 bytes, observed the actual
-CPU and five numerical distributions without importing optional ML libraries, and generated only
-a private proof candidate. Exact pins and failure preservation are in the incremental checkpoint.
+CPU and five numerical distributions without importing optional ML libraries, and initially
+generated only a private proof candidate. Exact pins, subsequent publication and failure
+preservation are in the incremental checkpoint.
 
 ## Eleven decisions
 
@@ -75,6 +79,48 @@ a private proof candidate. Exact pins and failure preservation are in the increm
     validation per encode wastes work and still cannot prove sandbox/process identity.
     Preserve the authoritative final inventory once, then require actual independent unit
     observations and the existing numerical backend read-back at their respective boundaries.
+
+## Fixed CPU probe implementation sequence — 2026-10-13
+
+Implement one CPU-only installation probe using the existing nonprivileged identity guard,
+protected proof observer, original payload resolver, model-free numerical observation and
+file/socket/network negative-probe primitives. It is maintenance, not an alternative index
+worker, benchmark, source query or production admission callback. Its small JSON Schema2020-12
+input/result contract is registered before executable behavior; parsed results are explicitly
+`OBSERVED_NOT_ADMITTED` and cannot satisfy the installation admission port.
+
+The root-prepared input contains only a unique execution ID, the exact CPU installed-proof
+pointer and unchanged legacy payload pointer. It contains no actor, arbitrary path, command,
+resource override, Artifact identity or policy. A real bundle's `ArtifactMemberPointer` must
+come from a supported Orchestrator commit, never invented IDs. Therefore this no-model probe
+can precede bundle publication; the final seal must additionally bind the actually published
+bundle/config and the same proof/payload, with fresh epoch checks. Probe success alone does
+not close that gate.
+
+The fixed `eom-embedding-native-cpu-probe@.service` receives root-owned regular input/output
+descriptors from `/run/eom-embedding-native-probe/<execution_id>/`, has its own already proposed
+CPU account, no supplemental authority, no network/devices, and no writable prefix/model/NAS.
+Its exact execution ID comes from the fixed unit instance and must match the input. It reads
+and hashes the canonical model snapshot without constructing a tokenizer or model. Public
+FP32 recipe observation imports optional libraries only after identity/input/proof checks.
+Denied-access probes never read forbidden bytes or truncate/write a negative-test target.
+The result is bounded canonical metadata, exact input raw SHA, current identity, negative
+access observations and the actual numerical descriptor; there is no vector output.
+
+To let the root owner inspect the *live* process without a second IPC service, the fresh probe
+blocks SIGUSR1 before optional imports, writes/fsyncs its complete report, then waits at most
+30 seconds for a root-origin SIGUSR1. Ordinary library output goes to null, not the report.
+The owner must independently bind unit InvocationID, PID/start time, exact cgroup and loaded
+ELF maps before acknowledging. Exit0, MainPID0, matching invocation, empty cgroup and unchanged
+report/prefix/proof/payload then complete the observation. A parsed report, non-root signal,
+missing acknowledgement, timeout or failed process does not. No automatic retry or unit reset.
+
+Use ordered fixed checks and hash maps/sets for pointer/member uniqueness; runtime work is
+O(prefix metadata + model bytes) once per installation, not once per vector. No DB migration,
+queue, GPU lease, root ML import or new dependency is required. Historical experiment units,
+UIDs and proof bytes remain unchanged. Source/fixture PASS, actual probe PASS and production
+activation remain separate. Account/DAC/unit installation and actual root observations follow
+reviewed source gates; this note does not claim they have already run.
 
 ## Existing seams and the smallest actual gap
 

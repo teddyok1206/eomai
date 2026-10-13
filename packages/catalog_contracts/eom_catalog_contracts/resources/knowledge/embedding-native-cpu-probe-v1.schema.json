@@ -1,0 +1,217 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/embedding-native-cpu-probe/1.0",
+  "title": "CPU installation probe observations; never admission or compute authority",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/input"
+    },
+    {
+      "$ref": "#/$defs/result"
+    }
+  ],
+  "$defs": {
+    "executionId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$",
+      "minLength": 32,
+      "maxLength": 32
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "minLength": 71,
+      "maxLength": 71
+    },
+    "denial": {
+      "enum": [
+        "DENIED",
+        "ABSENT_IN_SANDBOX"
+      ]
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "execution_id",
+        "profile",
+        "installed_proof",
+        "payload"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-native-cpu-probe-input/1.0"
+        },
+        "execution_id": {
+          "$ref": "#/$defs/executionId"
+        },
+        "profile": {
+          "const": "CPU_INDEX_FP32"
+        },
+        "installed_proof": {
+          "$ref": "eom://schemas/knowledge/embedding-installed-runtime-proof/1.0#/$defs/pointer",
+          "properties": {
+            "profile": { "const": "CPU_INDEX_FP32" }
+          }
+        },
+        "payload": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/payloadPointer"
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "evidence_state",
+        "recipe",
+        "execution_id",
+        "input_raw_sha256",
+        "pid",
+        "worker_uid",
+        "worker_gid",
+        "supplementary_gids",
+        "checked_model_members",
+        "payload_file_set_sha256",
+        "denials",
+        "numerical_runtime"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-native-cpu-probe-result/1.0"
+        },
+        "evidence_state": {
+          "const": "OBSERVED_NOT_ADMITTED"
+        },
+        "recipe": {
+          "const": "NATIVE_CPU_FIXED_UNIT_NO_MODEL_NO_FORWARD_NEGATIVES/1.0"
+        },
+        "execution_id": {
+          "$ref": "#/$defs/executionId"
+        },
+        "input_raw_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "pid": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "worker_uid": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967294
+        },
+        "worker_gid": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967294
+        },
+        "supplementary_gids": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "checked_model_members": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 32
+        },
+        "payload_file_set_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "denials": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "nas",
+            "repository",
+            "legacy_repository",
+            "api_configuration",
+            "root_auth",
+            "worker_homes",
+            "image_models",
+            "api_runtime",
+            "owner_workspace",
+            "legacy_handoff",
+            "probe_workspace",
+            "gpu",
+            "postgres",
+            "docker",
+            "systemd",
+            "dbus",
+            "prefix_write",
+            "model_write"
+          ],
+          "properties": {
+            "nas": {
+              "$ref": "#/$defs/denial"
+            },
+            "repository": {
+              "$ref": "#/$defs/denial"
+            },
+            "legacy_repository": {
+              "$ref": "#/$defs/denial"
+            },
+            "api_configuration": {
+              "$ref": "#/$defs/denial"
+            },
+            "root_auth": {
+              "$ref": "#/$defs/denial"
+            },
+            "worker_homes": {
+              "$ref": "#/$defs/denial"
+            },
+            "image_models": {
+              "$ref": "#/$defs/denial"
+            },
+            "api_runtime": {
+              "$ref": "#/$defs/denial"
+            },
+            "owner_workspace": {
+              "$ref": "#/$defs/denial"
+            },
+            "legacy_handoff": {
+              "$ref": "#/$defs/denial"
+            },
+            "probe_workspace": {
+              "$ref": "#/$defs/denial"
+            },
+            "gpu": {
+              "$ref": "#/$defs/denial"
+            },
+            "postgres": {
+              "$ref": "#/$defs/denial"
+            },
+            "docker": {
+              "$ref": "#/$defs/denial"
+            },
+            "systemd": {
+              "$ref": "#/$defs/denial"
+            },
+            "dbus": {
+              "$ref": "#/$defs/denial"
+            },
+            "prefix_write": {
+              "const": "DENIED"
+            },
+            "model_write": {
+              "const": "DENIED"
+            }
+          }
+        },
+        "numerical_runtime": {
+          "$ref": "eom://schemas/knowledge/embedding-numerical-runtime/1.0",
+          "properties": {
+            "device": { "properties": { "kind": { "const": "CPU" } } },
+            "recipe": {
+              "properties": { "batch_size": { "const": 4 }, "threads": { "const": 4 } }
+            },
+            "torch_build_cuda_version": { "type": "null" }
+          }
+        }
+      }
+    }
+  }
+}

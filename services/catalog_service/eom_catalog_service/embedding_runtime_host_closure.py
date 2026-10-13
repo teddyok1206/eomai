@@ -666,6 +666,26 @@ class ProtectedEmbeddingHostClosure:
         _require(self._loader_path in self._descriptors, "LOADER_UNAVAILABLE")
         return self._loader_path
 
+    def assert_mapped_file(self, path: Path, *, device: int, inode: int) -> None:
+        """Match an observed executable mapping against this already captured host ledger.
+
+        No path resolution, new allowlist or byte rehash occurs. The caller independently
+        owns process/start-time/unit observation; these ordinary values cannot attest it.
+        """
+        self.assert_current()
+        _require(
+            type(device) is int and type(inode) is int and device >= 0 and inode > 0,
+            "MAPPED_FILE_INVALID",
+        )
+        initial = self._identities.get(path)
+        _require(
+            initial is not None
+            and initial[:2] == (device, inode)
+            and path in self._descriptors
+            and os.pread(self._descriptors[path], 4, 0) == b"\x7fELF",
+            "MAPPED_FILE_UNAVAILABLE",
+        )
+
     def assert_absent_search_route(self, route: str) -> None:
         """Only the pinned, actually absent vendor directories; never a host search grant."""
         _require(type(route) is str, "ROUTE_INVALID")

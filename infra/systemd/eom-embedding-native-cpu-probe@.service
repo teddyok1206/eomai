@@ -1,0 +1,70 @@
+[Unit]
+Description=EOM fixed native CPU installation probe %i (no model or forward)
+StartLimitIntervalSec=infinity
+StartLimitBurst=1
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=eom-embedding-index-cpu
+Group=eom-embedding-index-cpu
+Slice=system.slice
+WorkingDirectory=/
+Environment=TZ=UTC
+Environment=LANG=C.UTF-8
+Environment=PATH=/usr/bin:/bin
+Environment=PYTHONNOUSERSITE=1
+Environment=HF_HUB_OFFLINE=1
+Environment=TRANSFORMERS_OFFLINE=1
+Environment=HF_HUB_DISABLE_TELEMETRY=1
+Environment=TOKENIZERS_PARALLELISM=false
+Environment=OMP_NUM_THREADS=4
+Environment=MKL_NUM_THREADS=4
+Environment=CUDA_VISIBLE_DEVICES=
+UnsetEnvironment=LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT PYTHONPATH PYTHONHOME PYTHONSTARTUP PYTHONUSERBASE
+ExecStart=/opt/eom/conda/envs/eom-embedding-index-cpu/bin/python3.12 -I -B -m eom_catalog_service.embedding_native_cpu_probe %i
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectProc=invisible
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX
+SystemCallArchitectures=native
+ReadOnlyPaths=/opt/eom/conda/envs/eom-embedding-index-cpu
+ReadOnlyPaths=/opt/eom/embedding-models
+ReadOnlyPaths=/opt/eom/embedding-runtime-proofs /opt/eom/embedding-runtime-archives
+InaccessiblePaths=/run/eom-embedding-native-probe /run/eom-embedding-experiments
+InaccessiblePaths=/var/lib/eom-workflow-runner
+InaccessiblePaths=/mnt/nas /home/eom/EOM /home/eom/EOMIS /etc/eom
+InaccessiblePaths=/root/.codex /srv/eom/worker-homes /srv/eom/models/image
+InaccessiblePaths=/srv/eom/conda/envs/eom-api
+InaccessiblePaths=-/var/run/docker.sock -/run/postgresql -/var/run/postgresql
+InaccessiblePaths=-/run/dbus -/run/systemd/private
+
+UMask=0077
+MemoryMax=6G
+CPUQuota=400%
+TasksMax=64
+TimeoutStartSec=180
+TimeoutStopSec=5
+KillMode=control-group
+Restart=no
+LimitFSIZE=64K
+LimitCORE=0
+StandardInput=file:/run/eom-embedding-native-probe/%i/input.json
+StandardOutput=file:/run/eom-embedding-native-probe/%i/result.json
+StandardError=null
