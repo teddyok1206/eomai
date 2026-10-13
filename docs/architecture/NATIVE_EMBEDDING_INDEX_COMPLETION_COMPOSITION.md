@@ -57,6 +57,16 @@ execution. Activation is a separate composition step with actual Identity captur
 and current Catalog controls. The owner overlay stays removable; core services do
 not automatically import it.
 
+The finite actual operator canary exposed a missing owner dependency before login:
+the platform-only overlay did not include its already declared `inference-transfer`
+extra, `eom-api-contracts`. The same installer accepts an optional exact companion
+wheel/hash from the same reviewed build. Both private copies pass standard RECORD
+verification and install offline into a new immutable owner release. Existing
+three-argument platform-only installation remains valid; no dependency is added to
+the CPU prefix, frozen operator interpreter or operating API. Installed preflight
+must import the complete chosen owner/authentication composition before requesting
+user input. Missing dependencies are not authentication failures or retry grants.
+
 ## Actual controller namespace preflight
 
 Read-only actual-owner checks found the ordinary controller connection uses

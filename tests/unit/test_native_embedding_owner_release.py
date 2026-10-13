@@ -21,6 +21,10 @@ def test_owner_installation_is_separate_offline_and_no_clobber() -> None:
     assert '[[ ! -e "$target" && ! -L "$target" ]]' in source
     assert "verify_release_wheel_records.py" in source
     assert "--platform-only" in source
+    assert "--owner-pair" in source
+    assert '"$contracts_sha256" ]] || fail NATIVE_OWNER_API_CONTRACTS_HASH_MISMATCH' in source
+    assert "NATIVE_OWNER_WHEEL_SOURCE_MISMATCH" in source
+    assert "NATIVE_OWNER_API_CONTRACTS_INSTALLED=PASS" in source
     assert '"$wheel_sha256" ]] || fail NATIVE_OWNER_WHEEL_HASH_MISMATCH' in source
     assert "--no-deps --no-index --no-compile --no-cache-dir" in source
     assert "CPU_RUNTIME=UNCHANGED" in source

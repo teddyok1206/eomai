@@ -109,6 +109,36 @@ def test_platform_only_cli_rejects_other_distribution_extra_args_and_invalid_rec
     assert main(("--platform-only", str(invalid))) == 1
 
 
+def test_owner_pair_cli_requires_exact_two_private_wheels_and_shared_stage(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    platform = _wheel(tmp_path)
+    contracts = _wheel(tmp_path, distribution="eom_api_contracts")
+    assert main(("--owner-pair", str(platform), str(contracts))) == 0
+    assert capsys.readouterr().out == "owner_wheel_record_verification=PASS\n"
+    assert main(("--owner-pair", str(platform))) == 2
+    assert main(("--owner-pair", str(platform), str(platform))) == 2
+    other = _wheel(tmp_path, distribution="eom_application_api")
+    assert main(("--owner-pair", str(platform), str(other))) == 2
+    foreign = tmp_path / "foreign"
+    foreign.mkdir()
+    moved = _wheel(foreign, distribution="eom_api_contracts")
+    assert main(("--owner-pair", str(platform), str(moved))) == 2
+
+
+def test_owner_pair_does_not_waive_contract_record_or_private_file_checks(tmp_path: Path) -> None:
+    platform = _wheel(tmp_path)
+    contracts = _wheel(
+        tmp_path,
+        distribution="eom_api_contracts",
+        record_mutation=lambda rows, _record: rows[0].__setitem__(2, "1"),
+    )
+    assert main(("--owner-pair", str(platform), str(contracts))) == 1
+    contracts = _wheel(tmp_path, distribution="eom_api_contracts")
+    contracts.chmod(0o644)
+    assert main(("--owner-pair", str(platform), str(contracts))) == 1
+
+
 @pytest.mark.parametrize(
     "mutation",
     (
