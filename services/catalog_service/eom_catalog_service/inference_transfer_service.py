@@ -112,6 +112,33 @@ class InferenceTransferSearchResult:
     eligible_profile_set_sha256: str
 
 
+def bounded_profile_channel_union(
+    channels: tuple[tuple[InferenceTransferProfilePointer, ...], ...], *, top_k: int
+) -> tuple[InferenceTransferProfilePointer, ...]:
+    """Interleave independent ranked channels without comparing their different scores."""
+    if (
+        type(top_k) is not int
+        or not 1 <= top_k <= 64
+        or type(channels) is not tuple
+        or (
+            len(channels) > 4
+            or any(type(channel) is not tuple or len(channel) > 64 for channel in channels)
+        )
+    ):
+        raise ValueError("INFERENCE_TRANSFER_CHANNEL_BUDGET_INVALID")
+    ordered: list[InferenceTransferProfilePointer] = []
+    seen: set[InferenceTransferProfilePointer] = set()
+    for index in range(max((len(channel) for channel in channels), default=0)):
+        for channel in channels:
+            if index < len(channel) and channel[index] not in seen:
+                pointer = channel[index]
+                seen.add(pointer)
+                ordered.append(pointer)
+                if len(ordered) == top_k:
+                    return tuple(ordered)
+    return tuple(ordered)
+
+
 def _profile_pointer(profile: InferenceTransferProfile) -> InferenceTransferProfilePointer:
     return InferenceTransferProfilePointer(
         profile_id=profile.profile_id,
@@ -285,19 +312,7 @@ class InferenceTransferApplicationService:
             ]
             if revision in by_revision
         )
-        ordered_values: list[InferenceTransferProfilePointer] = []
-        seen: set[InferenceTransferProfilePointer] = set()
-        for index in range(max(len(embedding_order), len(graph_order))):
-            for channel in (embedding_order, graph_order):
-                if index < len(channel) and channel[index] not in seen:
-                    pointer = channel[index]
-                    seen.add(pointer)
-                    ordered_values.append(pointer)
-                    if len(ordered_values) == command.top_k:
-                        break
-            if len(ordered_values) == command.top_k:
-                break
-        ordered = tuple(ordered_values)
+        ordered = bounded_profile_channel_union((embedding_order, graph_order), top_k=command.top_k)
         # Counts and the population hash also describe unselected pool members.
         # A revocation of any member must therefore block the entire result.
         self.sources.reauthorize(command, corpus)

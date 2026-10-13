@@ -872,3 +872,95 @@ def _document_for_test_shard(root: Path, pointer: Any) -> dict[str, Any]:
             (root / pointer.artifact_id / pointer.artifact_revision_id / "shard.json").read_bytes()
         ),
     )
+
+
+@pytest.mark.parametrize("revoked_at_end", [False, True])
+def test_similarity_batch_reuses_decode_but_recaptures_full_population_at_end(
+    owner: tuple[Any, ...], monkeypatch: pytest.MonkeyPatch, revoked_at_end: bool
+) -> None:
+    from contextlib import nullcontext
+    from dataclasses import replace
+
+    from eom_catalog_service import embedding_registry_catalog_adapter as module
+    from eom_catalog_service.embedding_registry_ports import ResolvedPinnedEmbeddingIndex
+    from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
+
+    from tests.unit.test_similarity_context_service import CALLER, case
+
+    verifier, session, _command, _index, _binding, _scope, _root = owner
+    # Synthetic source/Identity adapters isolate batch orchestration, not live IAM/SQL admission.
+    request, _sources, _query = case()
+    monkeypatch.setattr(verifier, "sessions", lambda: nullcontext(cast(Session, session)))
+    monkeypatch.setattr(session, "begin", lambda: nullcontext(), raising=False)
+    monkeypatch.setattr(session, "no_autoflush", nullcontext(), raising=False)
+    monkeypatch.setattr(session, "in_transaction", lambda: True, raising=False)
+    monkeypatch.setattr(session, "in_nested_transaction", lambda: False, raising=False)
+    original_capture = verifier.sources.capture_in_session
+    calls: list[str] = []
+
+    def capture(*arguments: Any, **options: Any) -> InferenceTransferSessionCapture:
+        assert arguments[1].top_k == request.top_k
+        value = cast(InferenceTransferSessionCapture, original_capture(*arguments, **options))
+        phase = options["phase"]
+        calls.append(phase.value)
+        if revoked_at_end and calls.count("CAPTURE_POPULATION") == 2:
+            assert value.corpus is not None
+            return replace(
+                value,
+                corpus=replace(value.corpus, sources=(), profiles=(), missing_solution_reports=0),
+                entries=(),
+            )
+        return value
+
+    prepared = verifier.prepare_similarity_context(CALLER, request)
+    monkeypatch.setattr(verifier.sources, "capture_in_session", capture)
+    application_calls = []
+
+    def application_read(
+        _session: Any, caller: Any, intent: Any, read_owner: Any
+    ) -> ResolvedPinnedEmbeddingIndex:
+        # The real public application's numeric/registered-pointer closure is covered by its
+        # existing tests; this seam test measures owner capture reuse and late revocation only.
+        read_owner.authorize_scope(_session, caller, intent.scope)
+        reader, actual = read_owner._capture(
+            _session, caller, intent.scope, InferenceTransferSessionCapturePhase.CAPTURE_POPULATION
+        )
+        reader.require_session(_session)
+        read_owner.authorize_scope(_session, caller, intent.scope)
+        application_calls.append(intent.selection.view)
+        assert actual.corpus is not None
+        return ResolvedPinnedEmbeddingIndex(
+            intent, tuple(value.source for value in actual.corpus.sources), (), (), ()
+        )
+
+    monkeypatch.setattr(module, "read_pinned_embedding_index", application_read)
+    if revoked_at_end:
+        with pytest.raises(SimilarityContextReadError) as error:
+            verifier.read_similarity_views(CALLER, request, prepared)
+        assert error.value.code == "SOURCE_REVOKED"
+    else:
+        values = verifier.read_similarity_views(CALLER, request, prepared)
+        assert len(values) == 3
+    assert application_calls == ["CONTENT_ONLY", "CONCRETE_FACETS", "METADATA_ONLY"]
+    assert calls.count("CAPTURE_POPULATION") == 2
+    assert calls.count("AUTHORIZE_SCOPE") == 9
+
+
+def test_similarity_owner_without_actual_identity_fence_is_not_a_source_grant(
+    owner: tuple[Any, ...], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from contextlib import nullcontext
+
+    from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
+
+    from tests.unit.test_similarity_context_service import CALLER, case
+
+    verifier, session, *_ = owner
+    request, _sources, _query = case()
+    monkeypatch.setattr(verifier, "sessions", lambda: nullcontext(cast(Session, session)))
+    monkeypatch.setattr(session, "begin", lambda: nullcontext(), raising=False)
+    monkeypatch.setattr(session, "no_autoflush", nullcontext(), raising=False)
+    verifier.identity_fence = None
+    with pytest.raises(SimilarityContextReadError) as error:
+        verifier.prepare_similarity_context(CALLER, request)
+    assert error.value.code == "AUTHORITY_UNAVAILABLE"

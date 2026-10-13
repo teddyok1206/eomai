@@ -1,8 +1,8 @@
 # System RAG similarity context implementation boundary
 
 Written: 2026-10-12 UTC. Inspected Git base: `550a239cac74b8255bf33467b78671b6d37f811f`.
-Status: **DESIGN + CONTRACT-ONLY SOURCE CHECKPOINT; behavior NOT IMPLEMENTED / NOT ACTIVATED**.
-The separately approved contract-only implementation is recorded in section 8. Source observations are not
+Status: **DESIGN + CONTRACT / PINNED-READ / COMPOSER SOURCE CHECKPOINTS; NOT ACTIVATED**.
+The separately approved source steps are recorded in sections 8–10. Source observations are not
 installed-runtime, production permission, performance, or educational-quality evidence.
 This note implements no authority, provider, schema, API, worker, database, model, or release.
 The root implementer must read this complete note before changing the common-context boundary.
@@ -34,6 +34,9 @@ authority, or worker corpus access. Extend the existing Catalog/Orchestrator own
 row, configured numerical runtime, or validated pointer is not a permission grant.
 
 ## 2. Verified source boundaries and gaps
+
+This table records the initial design inventory. Sections 8–10 record subsequent approved
+SOURCE implementations; they do not establish installation or operational activation.
 
 | Existing file / symbol | Actual supported meaning | Consequence |
 |---|---|---|
@@ -464,3 +467,89 @@ eleven suites: **270 PASS in 24.75s, skip0**; strict mypy, Ruff lint and format 
 The first root invocation named two nonexistent test paths and executed no tests; after resolving
 the actual repository filenames, the recorded gate above passed. This was an invocation correction,
 not a runtime retry or a hidden product failure. The overlapping agent/root counts are not summed.
+
+## 10. Approved C0 composer delta — source only
+
+Approved paths: new `similarity_context_service.py`, `similarity_context_ports.py`,
+`test_similarity_context_service.py`, `test_similarity_context_consumer_boundaries.py`; existing
+`embedding_registry_catalog_adapter.py`, `inference_transfer_service.py`, their two test files,
+and this note. No released schema, production QUERY runtime, Pack, CLI, DB, IAM or Git change is
+part of C0. First concrete purpose is approved-reference past-exam variation; other consumers are
+explicitly unoffered, not granted by the purpose enum. Non-empty topics/unit constraints are
+rejected until the official owner supports them; they are never silently ignored.
+
+1. **Responsibility:** The Catalog application composes independent candidate observations.
+   The existing Catalog verifier owns actual source/index/member reads. A mandatory query-result
+   verification seam owns an already committed genuine QUERY; C0 neither launches nor publishes it.
+2. **Canonical source:** Official immutable Item, accepted report, Graph and released policy remain
+   authority. Context and numerical rows are local auxiliary derivations, never Evidence receipts.
+3. **Identity:** Request/context hashes, source/profile/report revisions, index/space/recipe and
+   query execution/member identities stay separate. No new registry, query cache or mutable head.
+4. **Resolution:** Reuse public official capture, pinned index application read, f32 codec and
+   pure QUERY closure validators. Prepare exact anchor view texts only at the local preparation
+   boundary; query hashes must correspond to them. Invalid/missing/revoked pointers fail closed.
+5. **Access patterns:** Bounded population capture, exact view/revision lookup, profile/encoding
+   joins, unique member reads, independent top-k and deduplicated union, final full reauthorization.
+6. **Structures:** Frozen local tuples, maps and sets; reuse existing registry indexes. A small
+   bounded channel-union function serves both the legacy service and new composer; no framework.
+7. **Complexity:** At most 1,024 sources, three views and 64 results. Exact cosine O(VNd), sorting
+   O(VN log N), source union O(Vk). Only selected rows escape owner materialization. Source decoding
+   and numerical runtime have separate costs; fake read-count checks are not throughput evidence.
+8. **Transactions:** Preparation and final read use separate caller-owner transactions around any
+   slow QUERY. Inside one multi-view read, actual scope authorization is performed per view; the
+   official full population is captured at start and end and compared with prepared exact pins.
+   An owner-private window reuses decoded immutable members and captured inputs only inside the
+   exact Session/root transaction/caller/Graph/policy/recipe window. READ COMMITTED or Session
+   possession does not freeze source membership or grant permission. No current membership or
+   permission is accepted from a cache; end capture detects change before any disclosure. The
+   existing source owner's retained row/Identity fences remain required. No window crosses QUERY.
+9. **Dependencies:** Application ports contain small local values and required verification methods;
+   existing Catalog verifier implements source behavior. Core imports no SQL/filesystem/ML. Query
+   verifier absence is explicit, never replaced with benchmark or a test-only runtime grant.
+10. **Failure/replay:** OPTIONAL ordinary absence preserves valid Graph observations; REQUIRED
+    absence is unavailable. Permission, source/hash/index/query corruption returns FAILED without
+    candidates/counts/evidence. Same pins are reauthorized; no device/view/latest substitution,
+    report fabrication, worker execution, or failure-history rewriting.
+11. **Alternative:** The old on-demand ranker recomputes every DOCUMENT and cannot convey three
+    pinned indexes. A standalone provider duplicates authority. Reuse the official source/index
+    owners and committed-query verification seam instead. Missing C1/C2 dependencies keep vector
+    delivery/consumer activation unoffered, not falsely complete.
+
+### 10.1 C0 source checkpoint — 2026-10-13 UTC
+
+The nine approved paths now implement a typed approved-reference composer plus the existing
+owner's preparation, bounded multi-view read and fresh full-population reauthorization. The
+source owner receives the actual requested `top_k`, so its existing released-policy budget check
+is reused rather than silently using the old corpus-read default of one. Non-empty topic/unit
+constraints and all four unconnected consumer purposes remain explicitly unavailable.
+
+The legacy and new use cases share one bounded channel union. Three independent view ranks use
+the existing exact cosine/full-reference tie rule before display rounding; no view/Graph score
+arithmetic or quality threshold was added. Typed coverage distinguishes no report, missing view,
+no prepared index, unoffered QUERY, overflow and an empty related pool. Final authority failure
+removes every candidate, count, query pointer and Graph Evidence from the FAILED context.
+
+The multi-view owner tests verify two full official captures and nine scope checks across three
+views; a changed end population fails before returned rows/counts. That seam test substitutes
+the registered/numeric application read and is not live DB/IAM admission. Existing concrete
+single-index and application read tests cover its real pointer/binary closure. Each view uses a
+different logical namespace/index identity in the synthetic composer fixture. The existing
+snapshot capture currently supplies no Graph ranking rows; C0 does not invent them. Supplied
+authorized Graph observations are preserved by the composer, while existing workflow Evidence
+selection and receipts remain unchanged and unconnected until C2.
+
+Explicit API Conda gates: strict mypy, Ruff lint and format check **eight Python files PASS**;
+five-suite focused read/composer/owner/legacy regression **124 PASS in 17.01s**; the final
+fourteen-suite composer/consumer/registry/contracts/planner/codec/source-resolution regression
+**334 PASS in 29.29s**, skip zero. Overlapping counts are not added. Earlier local fixture/static
+failures were corrected and rerun; no runtime/history record was rewritten.
+
+Root independently read the nine-path change, matched all eight Python raw hashes and reran
+the same fourteen suites: **334 PASS in 29.47s, skip0**; strict mypy, Ruff lint and format
+**eight files PASS**. The earlier seven-path pinned-read result remains in section 9, not C0.
+
+**SOURCE_ONLY / NOT_ACTIVE.** The mandatory committed genuine QUERY read interface exists but no
+production implementation/admission/launcher/publisher was composed. Absence returns explicit
+QUERY unavailability, never a benchmark replay or DOCUMENT relabeling. C1 production execution,
+C2 variation Artifact/plan/Pack delivery and all five consumer activations remain incomplete.
+No schema/DB/IAM/runtime/model/GPU/CLI/Pack/Git mutation occurred in this C0 source step.

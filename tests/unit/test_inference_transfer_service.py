@@ -345,10 +345,11 @@ def test_catalog_reauthorization_rejects_revoked_unreported_source_before_counts
         )
         adapter.reauthorize(scoped_command, value)
     resolution.assert_not_called()
-    assert adapter._scope.call_args.kwargs == {}
-    assert adapter._scope.call_args.args[1] is scoped_command
+    scope_mock = cast(Mock, adapter._scope)
+    assert scope_mock.call_args.kwargs == {}
+    assert scope_mock.call_args.args[1] is scoped_command
     assert (
-        adapter._scope.call_args.args[1].population_scope
+        scope_mock.call_args.args[1].population_scope
         == InferenceTransferPopulationScope.OCCURRENCE_BACKED_PAST_EXAM
     )
 
@@ -508,3 +509,20 @@ def test_inactive_deleted_and_password_change_actors_are_denied_before_retrieval
     with pytest.raises(InferenceTransferServiceError, match="FORBIDDEN"):
         adapter._scope(cast(Session, session), command())
     adapter.retrieval.resolve_access_policy.assert_not_called()
+
+
+def test_public_bounded_channel_union_preserves_legacy_order_and_deduplicates_views() -> None:
+    from eom_catalog_service.inference_transfer_service import bounded_profile_channel_union
+
+    values = tuple(
+        InferenceTransferProfilePointer.from_profile(exact_profile(seed)) for seed in "abcd"
+    )
+    assert (
+        bounded_profile_channel_union((values[:2], (values[1], values[2])), top_k=3) == values[:3]
+    )
+    assert bounded_profile_channel_union(
+        (values[:2], values[2:], (values[0],), (values[3],)), top_k=4
+    ) == (values[0], values[2], values[3], values[1])
+    assert bounded_profile_channel_union((), top_k=1) == ()
+    with pytest.raises(ValueError):
+        bounded_profile_channel_union(((),) * 5, top_k=1)

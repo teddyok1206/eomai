@@ -1059,3 +1059,19 @@ phase7개/빈 audit receipt/backup 존재를 읽기 전용으로 확인했다. C
 `4e5093d6`에 커밋·push했다. 이는 protocol-only이며 실제 endpoint/provider/bridge는 아직 미활성이다.
 Context composer9 paths도 source freeze되어 독립 리뷰 대기다. Root는 source/실제권한/설치/수치/
 성능/활성화를 계속 구분하며 목표 완료나 GPU 기본값 전환을 선언하지 않는다.
+
+## 공통 유사도 조립 C0 독립 source gate — 2026-10-13 UTC
+
+Root가 frozen9 변경 전체를 정독하고 Python8 raw SHA를 확인한 후 동일14-suite
+**334 PASS29.47s, skip0**, strict mypy/Ruff/format8 PASS를 확인했다. 기존 단일-index
+read·source/권한 owner와 독립 view별 순위/중복제거를 재사용하며, 승인된 기출 anchor만을
+첫 구체 소비 범위로 삼는다. 현재 source/report 모집단은 여러 view를 읽기 전후 공식
+owner에서 다시 확인하고 최종 권한 실패 시 후보·집계·근거를 모두 반환하지 않는다.
+No-report/partial-view/QUERY 미제공/overflow/empty는 별도 상태이며 점수 평균·품질 판정·
+벤치마크 QUERY 대체나 DOCUMENT 재명명은 없다. 다른 네 consumer는 아직 연결되지 않았다.
+
+이는 **SOURCE_ONLY / NOT_ACTIVE**이며 실제 QUERY launcher·committed result reader·
+variation plan/Pack 전달과 운영 활성화를 닫은 것이 아니다. 기존 schema/DB/IAM/runtime/
+모델/GPU 실행 변경0, actualCPU audit 거부 및 backup은 그대로다. 후속 C1에서는 현 QUERY
+input1.0의 batch≤3과 실제 고정 numerical recipe의 호환성을 먼저 확인하고 필요한
+additive 계약만 만들며 기존 released bytes를 바꾸지 않는다. 전체 목표는 ACTIVE다.

@@ -28,12 +28,21 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     parse_incremental_embedding_result,
     validate_embedding_source_bindings,
 )
-from eom_catalog_contracts.inference_transfer_experiment import ExperimentViewRecipe
+from eom_catalog_contracts.inference_transfer_experiment import (
+    ExperimentViewRecipe,
+    experiment_view_text,
+)
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
+from eom_catalog_contracts.similarity_context import (
+    SimilarityContextRequest,
+    SimilarityViewSelection,
+    parse_similarity_context_request,
+)
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_identity_service import OperatorAuthorizationFenceError
 from eom_identity_service.operator_authorization_fence import OperatorAuthorizationFence
 from eom_operator_identity.errors import IdentityError
+from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.embedding_artifact_store import (
     EMBEDDING_INDEX_ARTIFACT_TYPE,
     EMBEDDING_INDEX_MANIFEST_VERSION,
@@ -49,6 +58,7 @@ from eom_catalog_service.embedding_incremental_plan import (
     RegisteredEmbeddingRow,
     plan_embedding_delta,
 )
+from eom_catalog_service.embedding_registry_application import read_pinned_embedding_index
 from eom_catalog_service.embedding_registry_ports import (
     AuthorizedEmbeddingReadProfile,
     EmbeddingBindingOrigin,
@@ -85,6 +95,11 @@ from eom_catalog_service.pinned_artifact_resolution import (
     PinnedArtifactResolutionError,
 )
 from eom_catalog_service.settings import CatalogSettings
+from eom_catalog_service.similarity_context_ports import (
+    PreparedSimilarityContext,
+    PreparedSimilaritySource,
+    SimilarityContextReadError,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +111,17 @@ class EmbeddingRegistryOwnerConfiguration:
     space: EmbeddingSpace
     recipe: ExperimentViewRecipe
     source_classes: tuple[Literal["APPROVED_ITEM", "PAST_EXAM"], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _SimilarityReadWindow:
+    """Owner-private bounded decode reuse, not a current authority/membership cache."""
+
+    session: Session
+    transaction: object
+    caller: EmbeddingRegistryCaller
+    reader: PinnedArtifactReadContext
+    capture: InferenceTransferSessionCapture
 
 
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -134,6 +160,10 @@ class CatalogEmbeddingRegistryVerifier:
         identity_fence: OperatorAuthorizationFence | None,
         settings: CatalogSettings | None = None,
     ) -> None:
+        self.engine = engine
+        self.sessions = build_session_factory(engine)
+        self._similarity_read_window: _SimilarityReadWindow | None = None
+        self._similarity_requested_top_k: int | None = None
         self.configuration = EmbeddingRegistryOwnerConfiguration(
             configuration.corpus_id,
             EmbeddingIndexNamespace.model_validate(configuration.namespace.model_dump(mode="json")),
@@ -180,15 +210,32 @@ class CatalogEmbeddingRegistryVerifier:
             if isinstance(intent, RegisterEmbeddingIndexCommand)
             else intent.maximum_sources,
             population_scope=InferenceTransferPopulationScope(intent.namespace.population_scope),
+            top_k=1
+            if self._similarity_requested_top_k is None
+            else self._similarity_requested_top_k,
         )
+        window = self._similarity_read_window
         capture = self.sources.capture_in_session(
             session,
             command,
             self.configuration.recipe,
             identity_fence=self.identity_fence,
-            artifact_reader=reader,
-            phase=phase,
+            artifact_reader=reader if window is None else window.reader,
+            phase=phase if window is None else InferenceTransferSessionCapturePhase.AUTHORIZE_SCOPE,
         )
+        if window is not None:
+            if (
+                isinstance(intent, RegisterEmbeddingIndexCommand)
+                or window.session is not session
+                or window.transaction is not session.get_transaction()
+                or session.in_nested_transaction()
+                or window.caller != caller
+                or window.capture.scope != capture.scope
+            ):
+                raise EmbeddingRegistryError("EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE")
+            reader = window.reader
+            if phase is InferenceTransferSessionCapturePhase.CAPTURE_POPULATION:
+                capture = window.capture
         if (
             isinstance(intent, RegisterEmbeddingIndexCommand)
             and "knowledge_graph:publish" not in capture.scope.requester_permission_keys
@@ -329,6 +376,190 @@ class CatalogEmbeddingRegistryVerifier:
             )
             yield pointer, shard, vectors
             del vectors
+
+    def _similarity_view_owner(
+        self, request: SimilarityContextRequest, selection: SimilarityViewSelection
+    ) -> CatalogEmbeddingRegistryVerifier:
+        config = self.configuration
+        if (
+            request.consumer_purpose != "PAST_EXAM_VARIATION"
+            or request.anchor.source.source_class != "PAST_EXAM"
+            or request.topics
+            or request.unit_ids
+            or not set(request.source_classes).issubset(config.source_classes)
+            or selection.recipe != config.recipe
+            or (selection.index is not None and selection.index.spaces.document != config.space)
+        ):
+            raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
+        namespace = EmbeddingIndexNamespace.model_validate(
+            config.namespace.model_dump(mode="json") | {"view": selection.view}
+        )
+        owner = CatalogEmbeddingRegistryVerifier(
+            self.engine,
+            EmbeddingRegistryOwnerConfiguration(
+                config.corpus_id, namespace, config.space, config.recipe, request.source_classes
+            ),
+            identity_fence=self.identity_fence,
+            settings=self.settings,
+        )
+        # One real source owner, not three independently captured authority providers.
+        owner.sources = self.sources
+        owner._similarity_requested_top_k = request.top_k
+        return owner
+
+    def _similarity_capture(
+        self, session: Session, caller: EmbeddingRegistryCaller, request: SimilarityContextRequest
+    ) -> tuple[
+        CatalogEmbeddingRegistryVerifier, PinnedArtifactReadContext, InferenceTransferSessionCapture
+    ]:
+        if any(
+            selection.recipe != self.configuration.recipe
+            or (
+                selection.index is not None
+                and selection.index.spaces.document != self.configuration.space
+            )
+            for selection in request.views
+        ):
+            raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
+        owner = self._similarity_view_owner(request, request.views[0])
+        scope = EmbeddingRegistryLookup(
+            self.configuration.corpus_id,
+            owner.configuration.namespace,
+            request.graph_snapshot,
+            request.policy_revision_id,
+            request.policy_sha256,
+            request.maximum_sources,
+        )
+        reader, capture = owner._guard(
+            lambda: owner._capture(
+                session, caller, scope, InferenceTransferSessionCapturePhase.CAPTURE_POPULATION
+            )
+        )
+        return owner, reader, capture
+
+    @staticmethod
+    def _prepare_similarity_capture(
+        request: SimilarityContextRequest, capture: InferenceTransferSessionCapture
+    ) -> PreparedSimilarityContext:
+        if capture.corpus is None:
+            raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
+        entries = {
+            entry.profile.source_basis.source.item_revision_id: entry for entry in capture.entries
+        }
+        values = []
+        for value in sorted(
+            capture.corpus.sources, key=lambda value: value.source.item_revision_id
+        ):
+            entry = entries.get(value.source.item_revision_id)
+            values.append(
+                PreparedSimilaritySource(
+                    source=value.source,
+                    profile=None
+                    if entry is None
+                    else InferenceTransferProfilePointer.from_profile(entry.profile),
+                    solution_evidence=None
+                    if entry is None
+                    else entry.profile.source_basis.solution_evidence,
+                )
+            )
+        anchor = entries.get(request.anchor.source.item_revision_id)
+        texts = []
+        if anchor is not None:
+            for selection in request.views:
+                text = experiment_view_text(anchor, selection.view)
+                if text is not None and text.strip():
+                    texts.append((selection.view, text))
+        return PreparedSimilarityContext(
+            request.request_sha256,
+            tuple(values),
+            tuple(texts),
+            capture.corpus.graph_scores,
+            truncated=capture.corpus.truncated,
+        )
+
+    @staticmethod
+    def _similarity_read_error(error: EmbeddingRegistryError) -> SimilarityContextReadError:
+        if error.code == "EMBEDDING_REGISTRY_FORBIDDEN":
+            return SimilarityContextReadError("SOURCE_ACCESS_DENIED")
+        if error.code == "EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE":
+            return SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
+        return SimilarityContextReadError("SOURCE_POINTER_INVALID")
+
+    def prepare_similarity_context(
+        self, caller: EmbeddingRegistryCaller, request: SimilarityContextRequest
+    ) -> PreparedSimilarityContext:
+        """Capture once through the official owner; only anchor text leaves preparation."""
+        request = parse_similarity_context_request(request)
+        try:
+            with self.sessions() as session, session.begin(), session.no_autoflush:
+                _owner, _reader, capture = self._similarity_capture(session, caller, request)
+                return self._prepare_similarity_capture(request, capture)
+        except EmbeddingRegistryError as error:
+            raise self._similarity_read_error(error) from None
+
+    def read_similarity_views(
+        self,
+        caller: EmbeddingRegistryCaller,
+        request: SimilarityContextRequest,
+        prepared: PreparedSimilarityContext,
+    ) -> tuple[ResolvedPinnedEmbeddingIndex, ...]:
+        """Bounded views share one read window; full start/end capture is actual authority."""
+        request = parse_similarity_context_request(request)
+        try:
+            with self.sessions() as session, session.begin(), session.no_autoflush:
+                _owner, reader, capture = self._similarity_capture(session, caller, request)
+                if self._prepare_similarity_capture(request, capture) != prepared:
+                    raise SimilarityContextReadError("SOURCE_REVOKED")
+                window = _SimilarityReadWindow(
+                    session, session.get_transaction(), caller, reader, capture
+                )
+                results = []
+                query_views = {view for view, _text in prepared.query_texts}
+                for selection in request.views:
+                    if selection.index is None or selection.view not in query_views:
+                        continue
+                    owner = self._similarity_view_owner(request, selection)
+                    owner._similarity_read_window = window
+                    scope = EmbeddingRegistryLookup(
+                        self.configuration.corpus_id,
+                        owner.configuration.namespace,
+                        request.graph_snapshot,
+                        request.policy_revision_id,
+                        request.policy_sha256,
+                        request.maximum_sources,
+                    )
+                    try:
+                        results.append(
+                            read_pinned_embedding_index(
+                                session, caller, EmbeddingRegistryRead(scope, selection), owner
+                            )
+                        )
+                    except EmbeddingRegistryError as error:
+                        if error.code in {
+                            "EMBEDDING_REGISTRY_FORBIDDEN",
+                            "EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE",
+                        }:
+                            raise self._similarity_read_error(error) from None
+                        raise SimilarityContextReadError("INDEX_POINTER_INVALID") from None
+                # READ COMMITTED or shared Session is not immutable source membership.
+                # Re-resolve every current source/report before returning any rows/counts.
+                _owner, _reader, final = self._similarity_capture(session, caller, request)
+                if self._prepare_similarity_capture(request, final) != prepared:
+                    raise SimilarityContextReadError("SOURCE_REVOKED")
+                return tuple(results)
+        except EmbeddingRegistryError as error:
+            raise self._similarity_read_error(error) from None
+
+    def reauthorize_similarity_context(
+        self,
+        caller: EmbeddingRegistryCaller,
+        request: SimilarityContextRequest,
+        prepared: PreparedSimilarityContext,
+    ) -> None:
+        """Fresh full-population check after QUERY/ranking, never a persisted grant."""
+        current = self.prepare_similarity_context(caller, request)
+        if current != prepared:
+            raise SimilarityContextReadError("SOURCE_REVOKED")
 
     def authorize_scope(
         self,
