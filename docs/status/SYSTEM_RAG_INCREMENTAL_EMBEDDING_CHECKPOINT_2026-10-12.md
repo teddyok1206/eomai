@@ -1750,3 +1750,33 @@ config/final receipt, production launcher/admission 및 source/consumer 연결�
 model/tokenizer/forward0, root optional ML import0, GPU 실행0. API/Web/Catalog/HWPX/Workflow
 배포·운영 DB·원본 corpus·GPU 기본값은 변경하지 않았다. 테스트 수는 직전1,010개 source
 gate와 구분하며 실제 probe를 테스트 개수에 더하지 않는다.
+
+## 실행 bundle의 기존 Artifact owner 연결 검증 — 2026-10-13 13:14 UTC
+
+`EmbeddingRuntimeBundleArtifactPublisher`는 이미 정의된 bundle 계약을 검증한 뒤 기존
+`ControlArtifactPublisher`로64KiB 이하 `bundle.json` 하나만 저장한다. 새 DB·queue·schema·
+파일 저장 framework·ML dependency는 추가하지 않았다. payload는 원래 가중치 pointer이며
+DB에는 작은 요청 metadata만 남는다. 실제 publisher 영수증에서만 Artifact/revision을 받고,
+bundle 논리 ID/revision/semantic hash와 raw member SHA를 분리한다.
+
+동일 bundle ID/revision의 내용 변경은 같은 key에서 conflict다. 새 content hash를 key로
+삼아 다른 Artifact로 우회하지 않는다. 입력/schema/hash/UTC는 저장 전에 검사하고, 반환된
+member/name/schema/media/hash/Job identity는 저장 뒤 검사한다. 후자 실패를 무기록으로
+가정하거나 다른 identity로 재시도하지 않는다. 이 adapter는 설치·사용자 권한을 부여하지
+않으며, 실제 approved installation owner의 bundle 게시·config/receipt 연결은 남아 있다.
+
+focused8-suite **559 PASS12.47s**, API/core strict3·Ruff/format3·bash/diff PASS.
+초기 mypy는 테스트의 동적 `dataclasses.replace` 인자2개 typing 오류였고 명시적인 typed
+분기로 수정했다. 처음 지정한 존재하지 않는 테스트 경로는 테스트0회인 invocation 오류로
+보존하며, 올바른 inventory에서 위559개를 실제 실행했다.
+
+새 marker-guarded `/tmp/eom-api-testdb-20261013131108_f6a30ac5`에서0053 up/down/up,
+owner/runtime reconciliation과 기존 `embedding-tests` **19 PASS28.10s**를 실행했다.
+추가3개는 실제 bundle publication/replay/conflict·독립 spawn 프로세스2개의 동일 key 경합·
+파일 commit 직후 중단의 동일 Job/Artifact 복구다. 기존 Artifact/registry16개와 함께 검증했고
+과거 수치에 합산하지 않는다. 모델 추론·production admission 시험은 아니다.
+
+검증 후 official cleanup으로 이 임시 DB/role/상태만 제거했다. 재생성 가능한 테스트
+산출물만 삭제했고 원 corpus·운영 DB·canonical Artifact는 보존했다. cleanup 로그는
+`/tmp/eom-native-cpu-probe-release.CoU0TThB/bundle-testdb-cleanup.log`다.
+전체 goal은 ACTIVE, 실제 seed/delta/소비자 연결과 GPU 비교/default 결정은 미완료다.
