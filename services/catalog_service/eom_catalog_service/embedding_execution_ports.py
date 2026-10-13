@@ -222,6 +222,10 @@ class BenchmarkNativeEmbeddingBackend(NativeEmbeddingBackend, Protocol):
         """Read cumulative allocator peaks without resetting constructor/load maxima."""
         ...
 
+    def cuda_oom_count(self) -> int | None:
+        """Actual cumulative device0 allocator num_ooms; CPU has no CUDA observation."""
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class InstalledEmbeddingRuntimeObservation:

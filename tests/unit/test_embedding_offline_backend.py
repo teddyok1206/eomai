@@ -50,6 +50,58 @@ from tests.unit.inference_transfer_embedding_fixtures import embedding_input, se
 ROOT = Path(__file__).resolve().parents[2]
 
 
+@pytest.mark.parametrize("device", ("CPU", "CUDA"))
+def test_cumulative_actual_cuda_oom_counter_includes_constructor_without_reset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, device: Literal["CPU", "CUDA"]
+) -> None:
+    configured, bundle, _, _ = configured_bundle(tmp_path, device)
+    state = fake_libraries(monkeypatch, bundle)
+    state["cuda_ooms"] = 2
+    backend = OfflineNativeEmbeddingBackend(
+        configured,
+        device=device,
+        runtime_observer=FakeObserver(bundle),
+        cuda_ownership=FakeOwnership() if device == "CUDA" else None,
+    )
+    assert backend.cuda_oom_count() == (2 if device == "CUDA" else None)
+    state["cuda_ooms"] = 3
+    assert backend.cuda_oom_count() == (3 if device == "CUDA" else None)
+    assert state["oom_reads"] == ([0, 0] if device == "CUDA" else [])
+    backend.close()
+    with pytest.raises(NativeEmbeddingBackendError, match="CLOSED"):
+        backend.cuda_oom_count()
+
+
+@pytest.mark.parametrize(
+    "fault", ("missing", "bool", "none", "float", "negative", "overflow", "lease", "runtime")
+)
+def test_actual_cuda_oom_counter_invalid_or_drift_denies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    configured, bundle, _, _ = configured_bundle(tmp_path, "CUDA")
+    state = fake_libraries(monkeypatch, bundle)
+    ownership = FakeOwnership()
+    backend = OfflineNativeEmbeddingBackend(
+        configured, device="CUDA", runtime_observer=FakeObserver(bundle), cuda_ownership=ownership
+    )
+    if fault == "missing":
+        state["torch"].cuda.memory_stats = lambda _device: {}
+    elif fault == "lease":
+        state["on_oom_read"] = lambda: setattr(ownership, "valid", False)
+    elif fault == "runtime":
+        state["on_oom_read"] = lambda: state.update(threads=3)
+    else:
+        state["cuda_ooms"] = {
+            "bool": True,
+            "none": None,
+            "float": 1.0,
+            "negative": -1,
+            "overflow": 65,
+        }[fault]
+    with pytest.raises(NativeEmbeddingBackendError):
+        backend.cuda_oom_count()
+
+
 @pytest.mark.parametrize("purpose", ("QUERY", "DOCUMENT"))
 @pytest.mark.parametrize("side", ("left", "right"))
 def test_observed_encode_reads_actual_ordered_padded_tokens_once(

@@ -245,6 +245,9 @@ def fake_libraries(
         "allocated_peak": 100,
         "reserved_peak": 200,
         "on_allocator_read": lambda: None,
+        "cuda_ooms": 0,
+        "oom_reads": [],
+        "on_oom_read": lambda: None,
         "token_ids": None,
         "token_vector": lambda _index: [3.0, 4.0],
     }
@@ -378,6 +381,12 @@ def fake_libraries(
         value: int = state[f"{kind}_peak"]
         return value
 
+    def memory_stats(device: int) -> dict[str, Any]:
+        assert device == 0
+        state["oom_reads"].append(device)
+        state["on_oom_read"]()
+        return {"num_ooms": state["cuda_ooms"]}
+
     torch = SimpleNamespace(
         __version__=versions["torch"],
         float32="float32",
@@ -411,6 +420,7 @@ def fake_libraries(
             synchronize=lambda _device: state.update(syncs=state["syncs"] + 1),
             max_memory_allocated=lambda device: allocator_peak("allocated", device),
             max_memory_reserved=lambda device: allocator_peak("reserved", device),
+            memory_stats=memory_stats,
         ),
     )
     transformers = SimpleNamespace(

@@ -725,6 +725,25 @@ class OfflineNativeEmbeddingBackend:
         self._tokenizer = None
         self._closed = True
 
+    def cuda_oom_count(self) -> int | None:
+        """Read the fresh process's cumulative actual allocator count, including constructor."""
+        try:
+            count: int | None = None
+            self._assert_runtime()
+            if self._device == "CPU":
+                pass
+            else:
+                self._synchronize()
+                count = self._torch.cuda.memory_stats(0)["num_ooms"]
+                if type(count) is not int or not 0 <= count <= 64:
+                    raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_NUMERICS_MISMATCH")
+            self._assert_runtime()
+            return count
+        except NativeEmbeddingBackendError:
+            raise
+        except (OSError, ValueError, TypeError, KeyError, AttributeError, RuntimeError) as exc:
+            raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_INFERENCE_FAILED") from exc
+
     def close(self) -> None:
         """Synchronize before teardown; owner retains the physical lease until unit exit."""
         if self._closed:

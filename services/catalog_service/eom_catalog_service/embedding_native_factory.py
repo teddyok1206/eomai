@@ -23,10 +23,10 @@ from eom_catalog_service.embedding_bundle_resolver import (
     resolve_configured_embedding_bundle,
 )
 from eom_catalog_service.embedding_execution_ports import (
+    BenchmarkNativeEmbeddingBackend,
     CudaEmbeddingOwnership,
     InstalledEmbeddingRuntimeObservation,
     InstalledEmbeddingRuntimeObserver,
-    NativeEmbeddingBackend,
 )
 from eom_catalog_service.embedding_installed_runtime_observer import (
     ConfiguredInstalledRuntimeProof,
@@ -109,7 +109,7 @@ def native_embedding_backend_scope(
     configuration_raw_sha256: str,
     admission: NativeEmbeddingInstallationAdmission,
     cuda_ownership: CudaEmbeddingOwnership | None = None,
-) -> Callable[[], AbstractContextManager[NativeEmbeddingBackend]]:
+) -> Callable[[], AbstractContextManager[BenchmarkNativeEmbeddingBackend]]:
     """Bind trusted owner inputs once; returned factory accepts no worker/request arguments.
 
     No root-installed capture/main or real receipt loader is implemented. Callers own the
@@ -140,7 +140,7 @@ def native_embedding_backend_scope(
     )
 
     @contextmanager
-    def scope() -> Iterator[NativeEmbeddingBackend]:
+    def scope() -> Iterator[BenchmarkNativeEmbeddingBackend]:
         files = NumericalRuntimeFileSnapshots(0)
         resolved: ResolvedEmbeddingBundle | None = None
         backend: OfflineNativeEmbeddingBackend | None = None

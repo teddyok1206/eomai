@@ -706,3 +706,40 @@ standalone CLI는 actual owner/tool admission이 없으므로 module/input 읽�
 설치 전체의 host/loader/source closure와 기존 보호된 interpreter의 pre-successor instruction
 gate, 실제 source/session/launcher 연결, CPU/CUDA 실측과 기본값 활성화는 여전히 PENDING이다.
 production DB/NAS/운영 권한 변경0, 새 model/GPU 실행0, 전체 목표 ACTIVE다.
+
+## 기존 보호 CPU bootstrap의 실제 읽기 전용 재확인 — 2026-10-13 00:08 UTC
+
+기존 supported `install_experiment_runtime.sh fingerprint`를 non-root 읽기 전용으로 실행해
+historical accepted byte-tree SHA `d0dcd26e841ef583ead382b19269f559a3263a35ce809d34c6308bfe0399ed73`와
+현재 tree가 일치함을 확인했다. 정본 역사적 근거는 `ITEM_INFERENCE_TRANSFER_LIVE_ACCEPTANCE.md`
+보호 CPU 설치 절이다. 기존 authenticated tmux `EOM:2 rag-incremental`의 sudo 세션으로 historical
+`/opt/eom/.embedding-install-n6SfouPM` root:root0700 및 phase-receipt root:root0600/83 bytes를
+재확인했고, 네 단계 QUARANTINE_COPY/STAGED_NOT_ACTIVATED/MODEL_AND_WHEEL_VERIFIED/
+INSTALLED_NOT_PROBED가 보존되어 있다. 새 비밀번호·토큰 저장/TTL 변경은 없었다.
+
+같은 protected 기록의 install.py는17,826 bytes/raw
+`cb58df1ecca3c8df981b49ad4956e71ae23567ad976056b19198a5429e3f9b5d`, platform.whl은3,144,752 bytes/raw
+`a8af46128b50c0110ec21deed2e62a4fa6b5fcf140165c1f8962cc00347deb16`다. 이 검사에서는 기존/신규
+interpreter·모델·GPU를 실행하지 않았고 파일/권한도 변경하지 않았다. 기존 independently accepted
+bootstrap의 이력·현재 무변경 확인이지 신규 host/tool/전체 prefix admission의 대체 증거가 아니다.
+
+## 고정 CPU/CUDA 측정 worker와 local file source — 2026-10-13 UTC
+
+기존 benchmark1.0·sample program·native encoder/f32 codec를 쓰는 측정 leaf를 추가했다.
+모델 constructor와 encode span에서 owner ACK 대기를 분리하고 실제 token/count/hash/right padding,
+EMPTY/OVERFLOW 거부, cumulative Linux RSS·CUDA allocator/OOM·필수 host OOM 관측을 기록한다.
+host OOM의 oom_kill subset을 다시 더하지 않으며 CPU는 CUDA 관측을 만들어내지 않는다.
+OOM=3 같은 실패 관측도 evidence에 보존하며 COMPLETED를 성능·자원 gate PASS로 바꾸지 않는다.
+
+고정 local outputs는 root가 사전 생성한4/16 member만 쓰고 create/truncate/overwrite/reopen을
+하지 않는다. 실제 native/controller UID/GID에서 closed DAC/ACL을 확인하며 native worker에
+eom group을 주지 않는다. cold/query는 ACK 전에 seal하고, supplementary range는 마지막 SHA가
+있을 때만 pointer가 된다. 실패는 이미 seal된 exact prefix만 보고하고 partial bytes를 보존한다.
+teardown과 resource roundtrip이 실패하면 성공을 반환하지 않고 cleanup은 owner lease를 닫지 않는다.
+
+root는 frozen10 raw SHA와 production/test 전체·설계를 검토했다. 독립 고정 eight-suite
+**619 PASS (37.63s)**, strict mypy9·Ruff/format9 PASS다. agent619 PASS와 겹치므로 합산하지 않는다.
+프로그램6개/1-or21 checkpoint와 실제 local FD/합성 ACL·library·owner fixture의 SOURCE gate이며,
+실제 설치/UID·unit/cgroup·host OOM provider·source/session continuation·GPU monitor는 미연결이다.
+native encoder module bytes가 바뀌므로 실제 release에서 새 implementation/runtime pin을 관측해야
+한다. 실제 CPU/CUDA benchmark6 launches·GPU 기본값·seed/delta·소비자 활성화는 아직 PENDING이다.
