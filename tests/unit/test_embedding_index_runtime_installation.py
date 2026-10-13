@@ -782,10 +782,24 @@ def _synthetic_shell(
     elif audit_fault == "empty":
         output = ""
     pause = "/usr/bin/sleep 2\n" if audit_fault == "timeout" else ""
+    inventory = "printf '%s' 'synthetic candidate metadata' >&3\n"
+    if audit_fault == "inventory_empty":
+        inventory = ""
+    elif audit_fault == "inventory_oversized":
+        inventory = "truncate -s 8388609 /proc/self/fd/3\n"
+    elif audit_fault == "inventory_mode":
+        inventory += "chmod 0644 /proc/self/fd/3\n"
+    elif audit_fault == "inventory_link":
+        inventory += (
+            "candidate=$(readlink /proc/self/fd/3)\n"
+            'mv "$candidate" "$candidate.retained"\n'
+            'ln -s "$candidate.retained" "$candidate"\n'
+        )
     old.write_text(
         f"#!/usr/bin/bash\nprintf 'OLD\\n' >> '{order}'\n"
         f"printf '%s\\n' \"$@\" > '{root / 'old-arguments'}'\n"
         + pause
+        + inventory
         + f"printf '%s' '{output}'\nexit {1 if audit_fault == 'nonzero' else 0}\n"
     )
     old.chmod(0o755)
@@ -798,6 +812,8 @@ def _synthetic_shell(
     ).hexdigest()
     text = re.sub(r"/opt(?=/|\s)", str(root / "opt"), text)
     text = text.replace('"$EUID" == 0', f'"$EUID" == {os.getuid()}')
+    text = text.replace("== 0:600:1:0", f"== {os.getuid()}:600:1:0")
+    text = text.replace("== 0:600:1 ]]", f"== {os.getuid()}:600:1 ]]")
     text = text.replace(
         '"$(stat -c %u "$PUBLICATION_LOCK")" == 0',
         f'"$(stat -c %u "$PUBLICATION_LOCK")" == {os.getuid()}',
@@ -903,6 +919,9 @@ def test_synthetic_shell_snapshot_hash_precedes_first_interpreter_instruction(
         expected = "EMBEDDING_PREFIX_BYTES_AUDIT_PASS_NOT_ADMITTED sha256:" + "f" * 64 + "\n"
         assert (private / "prefix-bytes-audit.receipt").read_text() == expected
         assert (private / "prefix-bytes-audit.receipt").stat().st_mode & 0o777 == 0o600
+        assert (
+            private / "prefix-inventory.candidate.json"
+        ).read_bytes() == b"synthetic candidate metadata"
         assert (private / "prefix-audit-input.json").read_bytes() == Path(args[14]).read_bytes()
         copied = private / "source/eom_catalog_service"
         assert {path.name for path in copied.iterdir()} == {
@@ -936,7 +955,20 @@ def test_synthetic_shell_snapshot_hash_precedes_first_interpreter_instruction(
 
 
 @pytest.mark.parametrize(
-    "fault", ["nonzero", "empty", "status", "missing_newline", "multiline", "oversized", "timeout"]
+    "fault",
+    [
+        "nonzero",
+        "empty",
+        "status",
+        "missing_newline",
+        "multiline",
+        "oversized",
+        "timeout",
+        "inventory_empty",
+        "inventory_oversized",
+        "inventory_mode",
+        "inventory_link",
+    ],
 )
 def test_old_audit_failure_keeps_staged_evidence_and_never_enters_new(
     tmp_path: Path, fault: str
@@ -964,7 +996,10 @@ def test_old_audit_failure_keeps_staged_evidence_and_never_enters_new(
     assert (private / "phase-receipt").read_text().endswith("BEFORE_OLD_PREFIX_BYTES_AUDIT\n")
     receipt = private / "prefix-bytes-audit.receipt"
     assert receipt.exists() and receipt.stat().st_size <= 129
-    assert "PREFIX_AUDIT_FAILED" in result.stderr or "AUDIT_RECEIPT_INVALID" in result.stderr
+    assert any(
+        code in result.stderr
+        for code in ("PREFIX_AUDIT_FAILED", "AUDIT_RECEIPT_INVALID", "INVENTORY_INVALID")
+    )
 
 
 @pytest.mark.parametrize(

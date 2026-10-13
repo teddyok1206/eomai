@@ -173,7 +173,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
 | 인증된 owner/session 전달 | SOURCE_PASS; 기존 인증 1회·고정 API peer·짧은 작업별 전달384 PASS, 실제 provider admission·배포는 미완료 |
 | 실제 disposable PostgreSQL |0052 registry/application16·reservation8·limited IAM6,0053 stage18+runner10·Identity11 PASS; migration·cleanup PASS |
-| CPU/CUDA 실행 환경 준비 | namespace·공유 model-free probe·Conda URI/QUERY Artifact 포함 최종 공통3355 source PASS; 실제 CPU wheel56 PASS; 새 전체-prefix/native 검증 남음, CUDA 미게시 |
+| CPU/CUDA 실행 환경 준비 | 실제 CPU 전체 설치 파일·의존관계 검증 PASS, INSTALLED_NOT_ADMITTED; native 실행 격리 검증 남음, CUDA 미게시 |
 | 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | NOT_ACTIVE / NOT_EVALUATED |
 
 2026-10-13의 실제 CPU 검증에서 정상 오프라인 설치 주소와 pip noarch의 원본/설치 경로
@@ -189,8 +189,12 @@ OS 검사와 설치 파일 검사의 범위가 섞여 발생한 반복 전체 �
 확장 모듈이 하위 라이브러리에 전달하는 검색 경로도 보존하도록 바로잡았습니다(관련571 PASS).
 CPU356개 의존관계 사전 진단은 통과했으나 CUDA의 현재 작업 폴더 검색 경로는 계속 차단합니다.
 CUDA는 고정 격리 실행 폴더와 그 검증을 연결하기 전까지 설치 승인으로 진행하지 않습니다.
-실패 후보·기록은 보존했으며 조립 환경을 복구했습니다. 이 진단은 runtime admission이나
-성능 PASS가 아니며, 새 전체-prefix/native 검증과 CPU/GPU 실측은 아직 남아 있습니다.
+실패 후보·기록은 보존했으며 조립 환경을 복구했습니다.
+2026-10-13 10:24 UTC에는 `d0fc7352`의 실제 CPU 전체 설치 검증이 통과했습니다.
+검증 구간은 약36초이며, 이는 모델 추론 성능 측정값이 아닙니다. 같은 검사에서 얻은
+파일별 식별·해시 정보를 실행 검증에 전달하는 저장 경로도395개 회귀로 확인했습니다.
+현재 상태는 INSTALLED_NOT_ADMITTED이며, native 실행 격리 검증·CPU/GPU 실측과 기본값
+활성화는 아직 남아 있습니다.
 
 최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와
 strict type/lint/format PASS입니다. 실제 임시 DB28개 사례에는 독립 실행기 claim 경쟁과

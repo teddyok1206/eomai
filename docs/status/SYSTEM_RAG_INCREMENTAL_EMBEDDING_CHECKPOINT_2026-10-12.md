@@ -1603,3 +1603,25 @@ CUDA287개에는 실제 없는 `/usr/local/cuda/lib64`와 cusparseLt의 `$ORIGIN
 CUDA 실행 폴더 격리/namespace를 검증하기 전에는 해당 gate를 완화하지 않는다.
 26b4 조립/input/기록은 보존하고 새 commit/input의 CPU 전체 검증부터 진행한다.
 모델 forward0, benchmark NOT_EVALUATED, GPU 기본값 NOT_ACTIVE. 기존 운영 서비스 변경 없음.
+
+## 실제 CPU 전체 설치 검증 통과·동일 검사 inventory 저장 — 2026-10-13 10:42 UTC
+
+source `d0fc735261de173aa87de609f6731d79542e100e`의 CPU 설치 검증은10:24:44 UTC에
+PASS로 종료했다. root PRIVATE `/opt/eom/.embedding-index-install-D44SJg4D`의 실제119byte
+receipt는 `EMBEDDING_PREFIX_BYTES_AUDIT_PASS_NOT_ADMITTED`와 byte closure
+`428af16afe671f1b76b6b17802b77ca3f1aa09263a84f7d9c9698b88958ef378`이다.
+입력 raw `3efcac7938ad414d95fdbb491aba6fa0a585bb6157d034159312fc76c0b92e97`,
+wheel raw `fd0f9f2355a9060b546785f8d7576133510f1a317f2d81e6bcb719cf642bfb3b`,
+source archive raw `05829ab6fd43e1052dee6077d7a83e937edbbd25703e0bd29643fdefda055130`.
+최종 phase는 INSTALLED_NOT_ADMITTED이며 NEW의 metadata-only 처리도 종료했다.
+검사 구간 약36초는 추론 benchmark가 아니다. 원 developer backup과 과거 실패는 보존했다.
+
+다음 owner 검증이 같은 검사 결과를 이용하도록 기존 ROOTLOCAL draft를 바꾸지 않고
+실제 audit에서 작은 inventory 후보를 저장하는 경로를 추가했다. owner가 미리 만든 빈
+root0600/nlink1 FD에만 쓰고,8MiB 상한·정확한 readback·file/parent fsync·epoch를
+검증한다. 부분 실패는 덮어쓰지 않고 보존하며 stdout receipt나 runtime 권한은 변경하지 않는다.
+export/installer/prefix/ROOTLOCAL4-suite **395 PASS20.26s**、API/core strict、Ruff/format、
+shell syntax PASS. 이는 source gate이며 이 시점에는 실제 inventory 후보 출력이나
+native execution admission, model/GPU forward, benchmark/default 전환은 미실시다.
+다음은 기존 보호 CPU prefix를 교체하지 않고 새 owner audit 기록에 출력하고 schema/Pydantic과
+실행 전 검증을 연결한다. 기존 API/Web/검색/출제 runtime은 변경하지 않는다.

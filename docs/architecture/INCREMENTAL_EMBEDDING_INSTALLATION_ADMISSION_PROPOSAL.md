@@ -670,3 +670,24 @@ the protected byte audit. CUDA remains denied: its pinned libcusparseLt declares
 it is an absent path. A future fixed nonprivileged CUDA execution boundary must explicitly pin
 and validate its working-directory namespace before that loading route can be supported. The
 current parser and negative empty-route tests continue rejecting it; CPU publication is separate.
+
+## Same-audit candidate export through an owner-opened descriptor
+
+The CPU d0fc7352 publication completed its real whole-prefix audit and reached
+INSTALLED_NOT_ADMITTED at 2026-10-13 10:24 UTC. The next smallest gap is retaining the returned
+inventory, not repeating the audit in a new parser. The existing root publisher opens one
+O_EXCL `prefix-inventory.candidate.json` before invoking OLD and passes it as descriptor3.
+OLD validates that descriptor against the fixed named root-private regular file, requires
+an empty file/offset0 and mode0600, and exports its actual returned audit into the unchanged
+ROOTLOCAL inventory draft. Boot ID is an actual bounded protected proc read. The existing
+119-byte stdout audit receipt remains unchanged; the candidate is not a final admission receipt.
+
+Serialize ordered small metadata only, with an8MiB incremental output bound. No installed bytes,
+model payload, NAS/DB pointer, source search or new registry is copied. Recheck the same inventory,
+file/host/bootstrap epochs before/after writing and fsync the descriptor and its parent directory;
+retain partial failed
+output and never overwrite/replay it as successful. The parent verifies a nonempty bounded owned
+candidate before NEW. Creating the output before OLD captures parent epochs avoids authorizing
+an unexpected directory-epoch change during the audit. This is an installation-owner IO adapter,
+not worker behavior or a new runtime grant. The next independent owner must validate the exact
+draft/schema/Pydantic bytes and raw pin plus current epochs before any later proof/probe/seal.

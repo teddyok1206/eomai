@@ -163,13 +163,19 @@ chmod 0755 "$PREFIX"
 record_phase STAGED_NOT_ADMITTED
 record_phase BEFORE_OLD_PREFIX_BYTES_AUDIT
 AUDIT_RECEIPT="$PRIVATE/prefix-bytes-audit.receipt"
+AUDIT_INVENTORY="$PRIVATE/prefix-inventory.candidate.json"
+# Open once before OLD captures directory epochs; fd3 is evidence output, never runtime authority.
+(set -o noclobber; : > "$AUDIT_INVENTORY") || fail EMBEDDING_INDEX_INVENTORY_EXISTS
+[[ -f "$AUDIT_INVENTORY" && ! -L "$AUDIT_INVENTORY" && "$(stat -c %u:%a:%h:%s "$AUDIT_INVENTORY")" == 0:600:1:0 ]] || fail EMBEDDING_INDEX_INVENTORY_INVALID
 if ! (
   set -o noclobber
-  timeout --signal=KILL 900 env -i PATH=/usr/bin:/bin TZ=UTC LANG=C.UTF-8 "$OLD_PREFIX/bin/python3.12" -I -S -B "$PRIVATE/admit.py" prefix-bytes --profile "$profile" --owner-input "$PRIVATE/prefix-audit-input.json" --owner-input-sha256 "sha256:$AUDIT_INPUT_SHA" | head -c 129 > "$AUDIT_RECEIPT"
+  timeout --signal=KILL 900 env -i PATH=/usr/bin:/bin TZ=UTC LANG=C.UTF-8 "$OLD_PREFIX/bin/python3.12" -I -S -B "$PRIVATE/admit.py" prefix-bytes --profile "$profile" --owner-input "$PRIVATE/prefix-audit-input.json" --owner-input-sha256 "sha256:$AUDIT_INPUT_SHA" 3<>"$AUDIT_INVENTORY" | head -c 129 > "$AUDIT_RECEIPT"
 ); then fail EMBEDDING_INDEX_OLD_PREFIX_AUDIT_FAILED; fi
 [[ -f "$AUDIT_RECEIPT" && ! -L "$AUDIT_RECEIPT" && "$(stat -c %s "$AUDIT_RECEIPT")" -le 128 ]] || fail EMBEDDING_INDEX_AUDIT_RECEIPT_INVALID
 IFS= read -r AUDIT_STATUS < "$AUDIT_RECEIPT" || fail EMBEDDING_INDEX_AUDIT_RECEIPT_INVALID
 [[ "$AUDIT_STATUS" =~ ^EMBEDDING_PREFIX_BYTES_AUDIT_PASS_NOT_ADMITTED\ sha256:[0-9a-f]{64}$ && "$(stat -c %s "$AUDIT_RECEIPT")" -eq $((${#AUDIT_STATUS} + 1)) ]] || fail EMBEDDING_INDEX_AUDIT_RECEIPT_INVALID
+[[ -f "$AUDIT_INVENTORY" && ! -L "$AUDIT_INVENTORY" && "$(stat -c %u:%a:%h "$AUDIT_INVENTORY")" == 0:600:1 ]] || fail EMBEDDING_INDEX_INVENTORY_INVALID
+(( $(stat -c %s "$AUDIT_INVENTORY") > 0 && $(stat -c %s "$AUDIT_INVENTORY") <= 8388608 )) || fail EMBEDDING_INDEX_INVENTORY_INVALID
 record_phase PREFIX_BYTES_AUDITED_NOT_ADMITTED
 arguments=(index-runtime --profile "$profile" --lock-directory "$PRIVATE/locks"
   --platform-wheel "$PLATFORM_WHEEL" --platform-wheel-sha256 "$PLATFORM_SHA"

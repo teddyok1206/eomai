@@ -10,7 +10,14 @@ import re
 import stat
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from eom_catalog_service.embedding_runtime_prefix_closure import PrefixRuntimeByteAudit
+
+_INVENTORY_MAX_BYTES = 8 * 1024**2
+_INVENTORY_DESCRIPTOR = 3
+_INVENTORY_OWNER_UID = 0
 
 _BOOTSTRAP = {
     "__init__.py",
@@ -104,6 +111,159 @@ def _current(epochs: dict[Path, tuple[int, ...]]) -> None:
         )
         if current != initial:
             raise ValueError("bootstrap epoch drift")
+
+
+def _inventory_descriptor(directory: Path) -> tuple[Path, tuple[int, ...]]:
+    """The owner opens this fixed evidence file before the audit; never choose an output path."""
+    path = directory / "prefix-inventory.candidate.json"
+    descriptor = os.fstat(_INVENTORY_DESCRIPTOR)
+    named = path.lstat()
+    identity = descriptor.st_dev, descriptor.st_ino, descriptor.st_uid, descriptor.st_gid
+    if (
+        not stat.S_ISREG(descriptor.st_mode)
+        or descriptor.st_uid != _INVENTORY_OWNER_UID
+        or stat.S_IMODE(descriptor.st_mode) != 0o600
+        or descriptor.st_nlink != 1
+        or descriptor.st_size != 0
+        or os.lseek(_INVENTORY_DESCRIPTOR, 0, os.SEEK_CUR) != 0
+        or named != descriptor
+        or path.is_symlink()
+    ):
+        raise ValueError("invalid inventory evidence descriptor")
+    return path, identity
+
+
+def _inventory_candidate_bytes(
+    audit: PrefixRuntimeByteAudit,
+    *,
+    owner_input_raw_sha256: str,
+    host_seed_sha256: str,
+    boot_id: str,
+) -> bytes:
+    """Serialize this audit's small immutable metadata; parsing this candidate grants nothing."""
+    from eom_catalog_service.embedding_runtime_files import fixed_native_embedding_profile
+    from eom_catalog_service.embedding_runtime_prefix_closure import PrefixRuntimeByteAudit
+
+    if type(audit) is not PrefixRuntimeByteAudit:
+        raise ValueError("invalid inventory audit type")
+    inventory = audit.inventory
+    inventory.__post_init__()
+    if (
+        inventory.owner_uid != 0
+        or inventory.prefix != fixed_native_embedding_profile(audit.profile).prefix
+        or re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", boot_id) is None
+    ):
+        raise ValueError("invalid inventory evidence frame")
+    regular = tuple(entry for entry in inventory.entries if stat.S_ISREG(entry.epoch[4]))
+    if (
+        any(
+            type(value) is not int
+            for value in (
+                audit.regular_members,
+                audit.link_members,
+                audit.size_bytes,
+                audit.elf_members,
+            )
+        )
+        or audit.regular_members != len(regular)
+        or audit.link_members != sum(stat.S_ISLNK(entry.epoch[4]) for entry in inventory.entries)
+        or audit.size_bytes != sum(entry.epoch[6] for entry in regular)
+        or not 0 < audit.elf_members <= audit.regular_members
+    ):
+        raise ValueError("invalid inventory audit counts")
+    audit_values = {
+        name: getattr(audit, name)
+        for name in (
+            "source_closure_sha256",
+            "member_inventory_sha256",
+            "byte_closure_sha256",
+            "elf_closure_sha256",
+            "regular_members",
+            "link_members",
+            "size_bytes",
+            "elf_members",
+        )
+    }
+    for value in (
+        owner_input_raw_sha256,
+        host_seed_sha256,
+        *(audit_values[name] for name in audit_values if name.endswith("sha256")),
+    ):
+        if type(value) is not str or re.fullmatch(r"sha256:[0-9a-f]{64}", value) is None:
+            raise ValueError("invalid inventory evidence hash")
+    body: dict[str, Any] = {
+        "schema_version": "embedding-native-prefix-inventory/1.0",
+        "evidence_state": "CANDIDATE_NOT_ADMITTED",
+        "profile": audit.profile,
+        "owner_input_raw_sha256": owner_input_raw_sha256,
+        "host_seed_sha256": host_seed_sha256,
+        "boot_id": boot_id,
+        "prefix_root_epoch": inventory.root_epoch,
+        "fixed_ancestor_epochs": tuple(epoch for _path, epoch in inventory.ancestor_epochs),
+        "audit": audit_values,
+        "entries": tuple(
+            {
+                "relative_member": entry.relative_member,
+                "kind": "REGULAR"
+                if stat.S_ISREG(entry.epoch[4])
+                else ("DIRECTORY" if stat.S_ISDIR(entry.epoch[4]) else "SYMLINK"),
+                "epoch": entry.epoch,
+                "sha256": entry.sha256,
+                "symlink_target": entry.symlink_target,
+            }
+            for entry in inventory.entries
+        ),
+    }
+    encoder = json.JSONEncoder(
+        sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+    )
+
+    def bounded(value: object) -> bytes:
+        raw = bytearray()
+        for chunk in encoder.iterencode(value):
+            part = chunk.encode("utf-8")
+            if len(raw) + len(part) > _INVENTORY_MAX_BYTES:
+                raise ValueError("inventory evidence exceeds its bound")
+            raw.extend(part)
+        return bytes(raw)
+
+    body["inventory_sha256"] = "sha256:" + hashlib.sha256(bounded(body)).hexdigest()
+    return bounded(body)
+
+
+def _write_inventory_candidate(raw: bytes, path: Path, identity: tuple[int, ...]) -> None:
+    """Write only the pre-opened new candidate, preserving partial evidence on any failure."""
+    if type(raw) is not bytes or not 0 < len(raw) <= _INVENTORY_MAX_BYTES:
+        raise ValueError("invalid inventory evidence size")
+    if _inventory_descriptor(path.parent) != (path, identity):
+        raise ValueError("inventory evidence descriptor changed")
+    remaining = memoryview(raw)
+    while remaining:
+        written = os.write(_INVENTORY_DESCRIPTOR, remaining)
+        if written <= 0:
+            raise ValueError("inventory evidence write failed")
+        remaining = remaining[written:]
+    os.fsync(_INVENTORY_DESCRIPTOR)
+    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+    for offset in range(0, len(raw), 65536):
+        if (
+            os.pread(_INVENTORY_DESCRIPTOR, min(65536, len(raw) - offset), offset)
+            != raw[offset : offset + 65536]
+        ):
+            raise ValueError("inventory evidence readback failed")
+    value = os.fstat(_INVENTORY_DESCRIPTOR)
+    if (
+        (value.st_dev, value.st_ino, value.st_uid, value.st_gid) != identity
+        or value != path.lstat()
+        or value.st_nlink != 1
+        or stat.S_IMODE(value.st_mode) != 0o600
+        or value.st_size != len(raw)
+    ):
+        raise ValueError("inventory evidence changed")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -213,6 +373,7 @@ def main(argv: list[str] | None = None) -> int:
         from eom_catalog_service.embedding_runtime_files import (
             NumericalRuntimeFileSnapshots,
             fixed_native_embedding_profile,
+            read_live_runtime_os_file,
         )
         from eom_catalog_service.embedding_runtime_host_closure import (
             capture_protected_embedding_host,
@@ -229,6 +390,14 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("owner input association mismatch")
         files = NumericalRuntimeFileSnapshots()
         _current(epochs)
+        inventory_path, inventory_identity = _inventory_descriptor(owner_input.parent)
+        boot_id = (
+            read_live_runtime_os_file(
+                Path("/proc/sys/kernel/random/boot_id"), maximum=64, owner_uid=0
+            )
+            .decode("ascii")
+            .strip()
+        )
         with capture_protected_embedding_host(expected_seed_sha256=host_sha, files=files) as host:
             audit = audit_installed_embedding_prefix(
                 plan,
@@ -239,6 +408,20 @@ def main(argv: list[str] | None = None) -> int:
                 files=files,
                 host=host,
             )
+            _current(epochs)
+            candidate = _inventory_candidate_bytes(
+                audit,
+                owner_input_raw_sha256=args.owner_input_sha256,
+                host_seed_sha256=host_sha,
+                boot_id=boot_id,
+            )
+            audit.inventory.assert_unchanged()
+            files.assert_unchanged()
+            host.assert_current()
+            _write_inventory_candidate(candidate, inventory_path, inventory_identity)
+            audit.inventory.assert_unchanged()
+            files.assert_unchanged()
+            host.assert_current()
             _current(epochs)
         print("EMBEDDING_PREFIX_BYTES_AUDIT_PASS_NOT_ADMITTED", audit.byte_closure_sha256)
         return 0
