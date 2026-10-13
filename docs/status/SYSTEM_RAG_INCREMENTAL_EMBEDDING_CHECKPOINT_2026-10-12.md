@@ -2275,3 +2275,23 @@ FD-only one-use capture와 current session fence에 연결하고 bounded real so
 reconciliation·계획된 소비자·CPU/GPU 성능/default gate를 원래 범위대로 진행한다.
 `GOAL=ACTIVE`, `PRODUCTION_MIGRATION=0053`, `API_RELEASE_ALIGNMENT=PASS`,
 `REGISTRY_PREREQUISITE=PRESENT`, `NATIVE_WORKFLOW_LIVE=NOT_ACTIVE`.
+
+## 2026-10-13 22:29 UTC — 실제 Identity provider 검증·bounded 실행 준비
+
+[운영 기록의 후속 절](../operations/INCREMENTAL_EMBEDDING_LIVE_RELEASE_2026-10-13.md)에
+실제 UID990의 API 프로세스·코드·설정·O_PATH key-metadata 검증과 비밀 키 읽기/재열기 거부를
+기록했다. 현재 API 구성의0640 형식은 소유자·그룹·hash 확인을 유지해 지원한다.
+기존 CPU 모델·prefix·receipt·unit, API·DB·서비스 상태는 이 단계에서 변경하지 않았다.
+
+실제 인증 준비 중 발견한 이미 선언된 API-contracts 의존성 누락은 같은 build의 검증된
+두 wheel을 새 불변 owner release에 함께 설치하는 기존 설치 경계 확장으로 해결했다.
+실패는 로그인 이전에 발생했으며 인증/모델 실패 이력으로 바꾸지 않는다.
+최종9-suite133 PASS·strict type·lint·format·bash·diff와 독립3-wheel build PASS다.
+표준 installed owner 전체 import와 정확한 CPU readiness도 실제 계정에서 PASS다.
+97/101개 중간 결과와133개 최종 결과를 합산하지 않는다.
+
+동일 사용자 인증 뒤 실제 기출 seed1→추가1→같은 요청 재전송을 수행할 유한 controller를
+같은 pane에 준비했다. 준비·provider 검증은 실제 source 권한/등록·자동 갱신·검색 활성화
+증거가 아니다. 현재 `GENUINE_OPERATOR_CAPTURE=PENDING`, `REAL_SEED_DELTA=PENDING`이며
+자동 service identity·공통 소비자/QUERY·CPU/GPU 실측과 조건부 GPU 기본값이 원래 범위대로
+남아 있다. `GOAL=ACTIVE`를 유지한다.

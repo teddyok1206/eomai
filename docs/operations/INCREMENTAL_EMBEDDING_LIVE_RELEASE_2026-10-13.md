@@ -109,3 +109,59 @@ checks. No credential, full source/prompt/result or backup bytes went to Slack/G
 
 Full goal remains ACTIVE. Neither this release nor synthetic tests are complete
 incremental indexing, similarity consumer activation or educational quality proof.
+
+## Actual provider observation and operator preparation — 22:29 UTC
+
+Source `90794dfc` implements the actual fixed API observer. `de15c873` supports the
+unchanged deployed root/API-group configuration mode0640 as well as0644; code
+remains0644 and every writable/foreign/hash/process check remains mandatory.
+The first rejected no-auth probe exposed that mode mismatch. It did not authenticate,
+read a secret, mutate DB/Workflow state, run a model or change a service.
+
+Actual UID990/GID1000, supplementary groups empty, observation PASS:
+
+- API source415d3c58, PID3392347, InvocationID16c1c69e349b4194a99abc88b23372bf.
+- Reviewed release-wheel member hashes match all seven fixed authentication files.
+- Root API config raw SHA
+  `sha256:d24cd1a6480c6b76c9e57fec6847b386d6fd027890b4b97ab865f834bd713159`.
+- Secret witness is O_PATH only. Direct read and readable re-open both DENIED.
+- Actual one-shot scope retains descriptors and closes them after its owner exits.
+  No API key bytes are given to the owner and no session grant is minted here.
+
+Actual immutable owner `9bdc7a730600963d1dd9eedc321ba6809341d634` also includes its
+already-declared `inference-transfer` API-contracts extra, copied from the same
+independently inspected build. The earlier platform-only canary stopped on that
+missing dependency **before login**. Preserve that log, rather than classify it as
+an authentication or model failure. Installer three-argument mode remains supported;
+paired installation is explicit, offline, hash/RECORD checked and no-clobber.
+
+| Owner component | Raw SHA-256 |
+| --- | --- |
+| platform | `fc48aad5a563ca550246c12e302835235087004808cb1201a43ac5f03bcbdb28` |
+| API contracts | `d853d8f539ff560624bf36ba8a0990f087c869ec1c01028de91dc3117fa3d848` |
+
+Final source regression9 suites **133 PASS**,10.07s; Ruff/format, strict mypy,
+bash syntax and diff PASS. The single existing Starlette test-client deprecation
+warning is unchanged. Earlier97/101 checks overlap and are not summed.
+
+Actual full owner/auth/Runner imports and fixed CPU readiness PASS. Readiness uses
+the exact admitted `bin/python3.12`, not its `python` alias; the rejected CLI
+invocation was corrected without changing the interpreter guard or CPU files.
+Numerical space, model payload, receipt, fixed units and operating API stay unchanged.
+
+The finite root-composed controller is staged at
+`/var/lib/eom-native-canary.RzDtd0AX/canary.py` (raw SHA
+`a70c418dc7ea3fa848a7ddf6af5eb7cba708407467e4d3bb219adeea3e2dbdec`).
+It uses the installed public owners, FD-only capture and current Identity fence;
+it is not another service, queue, authentication implementation or autonomous grant.
+Planned bounded work: current official PAST_EXAM source selection, one-source
+seed, one additional source delta, exact request replay. Full authorized-population
+coverage remains separate from this two-source sample. It cannot claim QUERY or
+automatic service/GPU activation. No credential/refresh token is saved; actual
+login is requested once only after complete installed preflight.
+
+Local bounded logs and rejected stages remain under
+`/tmp/eom-identity-provider-install.nAaycoDM/`. At this checkpoint the protected
+controller is waiting for user login in the same `EOM:2 rag-incremental` pane.
+`ACTUAL_PROVIDER_OBSERVATION=PASS`, `OWNER_FULL_PREFLIGHT=PASS`,
+`GENUINE_OPERATOR_CAPTURE=PENDING`, `REAL_SEED_DELTA=PENDING`, `GOAL=ACTIVE`.

@@ -171,7 +171,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | 공통 유사도 context 조립 | SOURCE_PASS; 기출변형용 승인 anchor·3개 독립 view·현재 권한 재확인334 PASS, 실제 QUERY 실행·소비자 연결은 미활성 |
 | genuine QUERY 입력·encoder/handoff·실행 계약 | SOURCE_PASS; 입력494·encoder1272·protocol1610·compiler/read1779·4-member Artifact499 PASS; 실제 owner/queue/committed reader·소비자 연결은 미활성 |
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
-| 인증된 owner/session 전달 | SOURCE_PASS; 기존 인증 1회·고정 API peer·짧은 작업별 전달384 PASS, 실제 provider admission·배포는 미완료 |
+| 인증된 owner/session 전달 | 수신 API 설치·실제 UID990의 provider/process/config/key-metadata 검증 PASS; 실제 사용자 capture·seed는 별도 실행 gate |
 | 현재 사용자·자료의 native 작업 접수 연결 | SOURCE_IMPLEMENTED; 실제 인증 capture→기존 Catalog 검증·계획 재구성·잠금 확인을 연결, 운영 provider/실행기 연결은 미활성 |
 | Native INDEX 파일 전달·입력/결과 저장 | SOURCE_PASS; 실제 계정 권한4·설치된 시작 권한9·CPU 합성 입력2개×1024차원·동일 실행 재조회 PASS, 실제 자료/Job/binding 연결은 미활성 |
 | 실행 bundle의 정본 저장 | 실제 Orchestrator Job/Artifact1건 게시·exact pointer 검증·보호된 bundle/config 설치 PASS; 임시 DB19 PASS 유지 |
@@ -256,6 +256,15 @@ readiness 확인은 통과했습니다. 별도 owner 설치에서는 수치 pref
 seed/delta/query·자동 service indexing의 완료 증거는 아닙니다. 실제 Identity/control
 연결과 해당 실행 gate가 남아 있습니다.
 [운영 배포 기록](docs/operations/INCREMENTAL_EMBEDDING_LIVE_RELEASE_2026-10-13.md)을 참고하세요.
+
+후속으로 현재 API의 프로세스·설정·인증 코드와 비밀 키의 메타데이터를 실제 운영 실행
+계정에서 검증했습니다. 비밀 키는 읽을 수 없는 파일 핸들로만 전달하며, 읽기와 재열기가
+모두 거부되는 것을 확인했습니다. 운영 설정의 더 제한적인0640 형식도 root/API 그룹과
+정확한 hash 검사를 유지해 지원합니다. 전용 owner 설치에는 이미 선언된 API 계약
+의존성을 같은 검증 build의 wheel로 함께 설치할 수 있게 보완했습니다. 관련133개 회귀와
+실제 전체 owner import·고정 CPU readiness는 PASS이며 CPU/API 환경은 변경하지 않았습니다.
+이 확인은 인증된 실제 자료 실행·자동 증분 갱신의 완료 증거가 아닙니다. 제한된 실제
+기출 seed1→추가1→같은 요청 재전송은 동일 사용자 인증 뒤 실행하도록 준비했습니다.
 
 최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와
 strict type/lint/format PASS입니다. 실제 임시 DB28개 사례에는 독립 실행기 claim 경쟁과
