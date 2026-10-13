@@ -127,8 +127,10 @@ def test_identity_and_caps_drift_denies_before_any_native_leaf(
             entry.require_native_embedding_identity(profile)
 
 
+@pytest.mark.parametrize("operation", ["INDEX", "QUERY"])
 def test_saved_binary_and_result_fds_receive_only_explicit_leaf_writes_and_are_closed(
     tmp_path: Path,
+    operation: str,
 ) -> None:
     result, vectors = tmp_path / "result", tmp_path / "vectors"
     result.write_bytes(b"")
@@ -151,8 +153,12 @@ def run(descriptors,scope):
     os.write(1,b'library diagnostic'); os.write(2,b'library error')
     os.write(descriptors.vectors,b'binary'); os.write(descriptors.result,b'{}')
 entry.require_native_embedding_identity=identity
-leaf.run_native_embedding_descriptors=run
-entry.run_native_embedding_index(profile='CPU_INDEX_FP32',backend_scope=lambda:None)
+if sys.argv[3]=='QUERY':
+    leaf.run_native_reference_query_descriptors=run
+    entry.run_native_embedding_reference_query(profile='CPU_INDEX_FP32',backend_scope=lambda:None)
+else:
+    leaf.run_native_embedding_descriptors=run
+    entry.run_native_embedding_index(profile='CPU_INDEX_FP32',backend_scope=lambda:None)
 for fd in saved:
     try: os.fstat(fd)
     except OSError as exc: assert exc.errno==errno.EBADF
@@ -160,7 +166,14 @@ for fd in saved:
 os.write(1,b'after diagnostic'); os.write(2,b'after error')
 """
     completed = subprocess.run(
-        ["/srv/eom/conda/envs/eom-api/bin/python", "-c", script, str(result), str(vectors)],
+        [
+            "/srv/eom/conda/envs/eom-api/bin/python",
+            "-c",
+            script,
+            str(result),
+            str(vectors),
+            operation,
+        ],
         check=False,
         timeout=30,
         stdout=subprocess.DEVNULL,
@@ -170,7 +183,10 @@ os.write(1,b'after diagnostic'); os.write(2,b'after error')
     assert result.read_bytes() == b"{}" and vectors.read_bytes() == b"binary"
 
 
-def test_duplicate_partial_failure_closes_only_owned_fds(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("operation", ["INDEX", "QUERY"])
+def test_duplicate_partial_failure_closes_only_owned_fds(
+    monkeypatch: pytest.MonkeyPatch, operation: str
+) -> None:
     closed: list[int] = []
     calls = 0
 
@@ -185,13 +201,19 @@ def test_duplicate_partial_failure_closes_only_owned_fds(monkeypatch: pytest.Mon
         patch.setattr(fcntl, "fcntl", duplicate)
         patch.setattr(os, "close", closed.append)
         with pytest.raises(entry.NativeEmbeddingEntrypointError):
-            entry.run_native_embedding_index(
-                profile="CPU_INDEX_FP32", backend_scope=lambda: pytest.fail("no scope")
+            run = (
+                entry.run_native_embedding_reference_query
+                if operation == "QUERY"
+                else entry.run_native_embedding_index
             )
+            run(profile="CPU_INDEX_FP32", backend_scope=lambda: pytest.fail("no scope"))
     assert closed == [12345]
 
 
-def test_identity_failure_precedes_imported_leaf_and_scope(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("operation", ["INDEX", "QUERY"])
+def test_identity_failure_precedes_imported_leaf_and_scope(
+    monkeypatch: pytest.MonkeyPatch, operation: str
+) -> None:
     from collections.abc import Iterator
     from contextlib import contextmanager
 
@@ -208,7 +230,12 @@ def test_identity_failure_precedes_imported_leaf_and_scope(monkeypatch: pytest.M
     monkeypatch.setattr(entry, "_quiet_channels", quiet)
     monkeypatch.setattr(entry, "require_native_embedding_identity", denied)
     with pytest.raises(entry.NativeEmbeddingEntrypointError):
-        entry.run_native_embedding_index(profile="CPU_INDEX_FP32", backend_scope=patch_scope)
+        run = (
+            entry.run_native_embedding_reference_query
+            if operation == "QUERY"
+            else entry.run_native_embedding_index
+        )
+        run(profile="CPU_INDEX_FP32", backend_scope=patch_scope)
 
 
 def test_fresh_entrypoint_import_is_stdlib_only_and_no_cli_default() -> None:

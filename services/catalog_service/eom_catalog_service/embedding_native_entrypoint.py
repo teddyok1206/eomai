@@ -1,4 +1,4 @@
-"""Stdlib-first library index adapter; no CLI, installed capture or production main."""
+"""Stdlib-first fixed native library adapters; no CLI, installed capture or production main."""
 
 from __future__ import annotations
 
@@ -131,3 +131,24 @@ def run_native_embedding_index(
             )
     except Exception:
         raise NativeEmbeddingEntrypointError("NATIVE_EMBEDDING_INDEX_EXECUTION_FAILED") from None
+
+
+def run_native_embedding_reference_query(
+    *,
+    profile: Literal["CPU_INDEX_FP32", "CUDA_INDEX_FP32"],
+    backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
+) -> None:
+    """Fixed QUERY leaf; an INDEX profile identity is not QUERY purpose/unit admission."""
+    try:
+        with _quiet_channels() as (result, vectors):
+            require_native_embedding_identity(profile)
+            from eom_catalog_service.embedding_native_stdio import (
+                NativeEmbeddingDescriptors,
+                run_native_reference_query_descriptors,
+            )
+
+            run_native_reference_query_descriptors(
+                NativeEmbeddingDescriptors(0, result, vectors), backend_scope
+            )
+    except Exception:
+        raise NativeEmbeddingEntrypointError("NATIVE_EMBEDDING_QUERY_EXECUTION_FAILED") from None

@@ -12,6 +12,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from eom_catalog_contracts.embedding_reference_query import parse_embedding_reference_query_result
+from eom_catalog_contracts.embedding_reference_query_v11 import (
+    parse_embedding_reference_query_input_v11,
+    validate_reference_query_result_v11,
+)
 from eom_catalog_contracts.embedding_vector_binary import (
     EmbeddingVectorBinaryError,
     read_unit_vectors,
@@ -21,12 +26,17 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     validate_incremental_embedding_result,
 )
 from eom_catalog_service import embedding_native_stdio as handoff
-from eom_catalog_service.embedding_encoder_adapter import encode_incremental_batch
+from eom_catalog_service.embedding_encoder_adapter import (
+    encode_incremental_batch,
+    encode_reference_query_batch,
+)
 from eom_catalog_service.embedding_execution_ports import NativeEmbeddingBackend
 from eom_identifiers import canonical_json_bytes
 
-from tests.unit.inference_transfer_embedding_fixtures import embedding_input
+from tests.unit.inference_transfer_embedding_fixtures import embedding_input, seal
 from tests.unit.test_embedding_incremental_encoding import SyntheticNativeBackend
+from tests.unit.test_embedding_reference_query_contracts import query_input_body
+from tests.unit.test_embedding_reference_query_v11_contracts import input_body
 
 
 @pytest.fixture
@@ -473,3 +483,195 @@ def test_invalid_descriptor_value_never_constructs_backend(
     with pytest.raises(handoff.NativeEmbeddingHandoffError, match="DESCRIPTOR_INVALID"):
         handoff.run_native_embedding_descriptors(replace(descriptors, vectors=value), scope)
     assert not scope.events
+
+
+@pytest.fixture
+def query_descriptors(
+    descriptors: handoff.NativeEmbeddingDescriptors, tmp_path: Path
+) -> handoff.NativeEmbeddingDescriptors:
+    (tmp_path / "input.json").write_bytes(canonical_json_bytes(input_body()))
+    return descriptors
+
+
+@pytest.fixture
+def query_scope() -> BackendScope:
+    scope = BackendScope()
+    scope.backend.batch_size = 4
+    return scope
+
+
+def test_fixed_query_handoff_writes_f32_then_existing_result_once(
+    query_descriptors: handoff.NativeEmbeddingDescriptors,
+    query_scope: BackendScope,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sync_order = []
+    actual_fsync = os.fsync
+
+    def synced(descriptor: int) -> None:
+        sync_order.append(descriptor)
+        actual_fsync(descriptor)
+
+    monkeypatch.setattr(os, "fsync", synced)
+    handoff.run_native_reference_query_descriptors(query_descriptors, query_scope)
+    payload = (tmp_path / "result.json").read_bytes()
+    result = parse_embedding_reference_query_result(json.loads(payload))
+    request = parse_embedding_reference_query_input_v11(input_body())
+    validate_reference_query_result_v11(request, result)
+    assert payload == canonical_json_bytes(result.model_dump(mode="json"))
+    read_unit_vectors(
+        (tmp_path / "vectors.f32").read_bytes(),
+        dimension=result.shard.dimension,
+        row_count=1,
+        expected_sha256=result.shard.binary.sha256,
+    )
+    assert sync_order == [query_descriptors.vectors, query_descriptors.result]
+    assert query_scope.events == ["construct", "exit"]
+    assert query_scope.backend.calls == [(tuple(row.text for row in request.rows), "QUERY")]
+    assert not (tmp_path / "shard.json").exists()
+
+
+@pytest.mark.parametrize("field", ["input", "result", "vectors"])
+@pytest.mark.parametrize("fault", ["mode", "offset", "links", "access"])
+def test_query_uses_same_descriptor_checks_before_construction(
+    query_descriptors: handoff.NativeEmbeddingDescriptors,
+    query_scope: BackendScope,
+    tmp_path: Path,
+    field: str,
+    fault: str,
+) -> None:
+    descriptor = getattr(query_descriptors, field)
+    name = {"input": "input.json", "result": "result.json", "vectors": "vectors.f32"}[field]
+    alternate: int | None = None
+    if fault == "mode":
+        os.fchmod(descriptor, 0o666)
+    elif fault == "offset":
+        os.lseek(descriptor, 1, os.SEEK_SET)
+    elif fault == "links":
+        os.link(tmp_path / name, tmp_path / "alias")
+    else:
+        alternate = os.open(tmp_path / name, os.O_RDWR)
+        query_descriptors = replace(query_descriptors, **{field: alternate})
+    try:
+        with pytest.raises(handoff.NativeEmbeddingHandoffError, match="DESCRIPTOR_INVALID"):
+            handoff.run_native_reference_query_descriptors(query_descriptors, query_scope)
+    finally:
+        if alternate is not None:
+            os.close(alternate)
+    assert not query_scope.events
+
+
+@pytest.mark.parametrize(
+    "fault",
+    ["INDEX", "LEGACY_QUERY", "AUTHORITY", "HASH", "NON_CANONICAL", "MAX_BYTES", "DUPLICATE"],
+)
+def test_query_literal_parser_rejects_wrong_input_before_backend(
+    query_descriptors: handoff.NativeEmbeddingDescriptors,
+    query_scope: BackendScope,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fault: str,
+) -> None:
+    document = input_body()
+    if fault == "INDEX":
+        document = embedding_input().model_dump(mode="json")
+    elif fault == "LEGACY_QUERY":
+        document = query_input_body()
+    elif fault == "AUTHORITY":
+        document = seal(document | {"actor_id": "ADMIN"}, "request_sha256")
+    elif fault == "HASH":
+        document["request_sha256"] = "sha256:" + "b" * 64
+    elif fault == "MAX_BYTES":
+        monkeypatch.setattr(handoff, "MAX_REFERENCE_QUERY_BYTES", 10)
+    payload = canonical_json_bytes(document)
+    if fault == "NON_CANONICAL":
+        payload += b"\n"
+    elif fault == "DUPLICATE":
+        payload = b'{"schema_version":1,"schema_version":2}'
+    (tmp_path / "input.json").write_bytes(payload)
+    with pytest.raises(handoff.NativeEmbeddingHandoffError):
+        handoff.run_native_reference_query_descriptors(query_descriptors, query_scope)
+    assert not query_scope.events
+
+
+@pytest.mark.parametrize("stage", ["binary", "result"])
+def test_query_partial_write_is_preserved_redacted_and_never_reencoded(
+    query_descriptors: handoff.NativeEmbeddingDescriptors,
+    query_scope: BackendScope,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    stage: str,
+) -> None:
+    actual_write = os.write
+    target = query_descriptors.vectors if stage == "binary" else query_descriptors.result
+
+    def failed(descriptor: int, payload: Any) -> int:
+        if descriptor == target:
+            actual_write(descriptor, payload[:7])
+            raise OSError("admitted source details")
+        return actual_write(descriptor, payload)
+
+    monkeypatch.setattr(os, "write", failed)
+    with pytest.raises(handoff.NativeEmbeddingHandoffError) as failure:
+        handoff.run_native_reference_query_descriptors(query_descriptors, query_scope)
+    assert str(failure.value) == "EMBEDDING_HANDOFF_IO_FAILED"
+    assert query_scope.events == ["construct", "exit"] and len(query_scope.backend.calls) == 1
+    name = "vectors.f32" if stage == "binary" else "result.json"
+    assert len((tmp_path / name).read_bytes()) == 7
+    if stage == "binary":
+        assert not (tmp_path / "result.json").read_bytes()
+
+
+def test_query_corrupt_binary_is_validated_by_same_codec_before_writes(
+    query_descriptors: handoff.NativeEmbeddingDescriptors,
+    query_scope: BackendScope,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def corrupted(request: Any, backend: NativeEmbeddingBackend) -> Any:
+        batch = encode_reference_query_batch(request, backend)
+        return replace(batch, vectors=b"x" * len(batch.vectors))
+
+    monkeypatch.setattr(handoff, "encode_reference_query_batch", corrupted)
+    with pytest.raises(EmbeddingVectorBinaryError, match="HASH_MISMATCH"):
+        handoff.run_native_reference_query_descriptors(query_descriptors, query_scope)
+    assert len(query_scope.backend.calls) == 1
+    assert not (tmp_path / "vectors.f32").read_bytes()
+    assert not (tmp_path / "result.json").read_bytes()
+
+
+@pytest.mark.parametrize("stage", ["CONSTRUCT", "ENCODE", "EXIT"])
+def test_query_source_change_and_teardown_failure_never_report_success(
+    query_descriptors: handoff.NativeEmbeddingDescriptors,
+    query_scope: BackendScope,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    stage: str,
+) -> None:
+    original = query_scope.backend.encode
+
+    def changed(texts: Any, *, purpose: Any) -> Any:
+        vectors = original(texts, purpose=purpose)
+        if stage == "ENCODE":
+            (tmp_path / "input.json").write_bytes(b"changed")
+        return vectors
+
+    monkeypatch.setattr(query_scope.backend, "encode", changed)
+
+    @contextmanager
+    def scoped() -> Iterator[NativeEmbeddingBackend]:
+        with query_scope() as backend:
+            if stage == "CONSTRUCT":
+                (tmp_path / "input.json").write_bytes(b"changed")
+            yield backend
+        if stage == "EXIT":
+            raise RuntimeError("untrusted teardown details")
+
+    with pytest.raises(handoff.NativeEmbeddingHandoffError):
+        handoff.run_native_reference_query_descriptors(query_descriptors, scoped)
+    assert query_scope.events == ["construct", "exit"]
+    assert len(query_scope.backend.calls) == (0 if stage == "CONSTRUCT" else 1)
+    if stage != "EXIT":
+        assert not (tmp_path / "vectors.f32").read_bytes()
+        assert not (tmp_path / "result.json").read_bytes()

@@ -15,6 +15,7 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingExecutionRuntime,
     EmbeddingSpace,
     parse_embedding_shard,
+    parse_incremental_embedding_input,
     validate_incremental_embedding_result,
 )
 from eom_catalog_service.embedding_encoder_adapter import (
@@ -23,6 +24,7 @@ from eom_catalog_service.embedding_encoder_adapter import (
 )
 from eom_catalog_service.inference_transfer_ports import EmbeddingRankerProvenance
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
+from jsonschema.exceptions import ValidationError as SchemaError
 
 from tests.unit.inference_transfer_embedding_fixtures import (
     embedding_input,
@@ -30,6 +32,7 @@ from tests.unit.inference_transfer_embedding_fixtures import (
     execution_runtime,
     seal,
 )
+from tests.unit.test_embedding_reference_query_v11_contracts import input_body
 
 
 class SyntheticNativeBackend:
@@ -249,3 +252,12 @@ def test_encoder_adapter_and_ports_do_not_import_database_filesystem_or_torch() 
             for item in node.names
         )
         assert not imports & {"torch", "sqlalchemy", "os", "pathlib", "subprocess", "httpx"}
+
+
+def test_query_input_is_not_admitted_as_document_even_with_same_model_and_runtime() -> None:
+    with pytest.raises(SchemaError):
+        parse_incremental_embedding_input(input_body())
+    request = embedding_input()
+    encoded = encode_incremental_batch(request, SyntheticNativeBackend(request.space))
+    assert encoded.result.schema_version == "incremental-embedding-result/1.0"
+    assert encoded.result.shard.space.purpose == "DOCUMENT"

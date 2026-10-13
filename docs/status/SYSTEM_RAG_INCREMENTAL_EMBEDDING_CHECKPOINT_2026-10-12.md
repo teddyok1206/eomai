@@ -1143,3 +1143,47 @@ nonroot offline 빌드했다. 원래 Git full40/PAX metadata를 갖는 source ta
 `09ab75831ef18df75fcaa37be842d547dd3a5620a7fc5ffd4f073bc49bd3b175`다. 기존 public RECORD verifier
 PASS이며 `/tmp/eom-embedding-successor-release.nFXZFn3X`0700/dist0750/tar·wheel0600다.
 이는 **BUILT_NOT_ADMITTED**이며 actual canonical retention/복구/새 assembly/input/publish는 다음이다.
+
+## Genuine QUERY encoder/handoff C1b 독립 gate — 2026-10-13 UTC
+
+Root frozen9 전체 정독/raw SHA 확인 후30-suite **1272 PASS91.68s, skip0**, strict/Ruff/format8
+PASS다. 고정 QUERY1.1 encoder와 protected FD entrypoint를 기존 DOCUMENT owner 안에 추가하며
+실제 QUERY 목적·before/after runtime/recipe 검증을 유지한다. 모델은 합성 backend만 사용했고
+실제 queue/claim/owner/Artifact read 및 variation worker 전달은 아직 미활성이다. C0/C1a·기존
+DOCUMENT·수치3 module bytes는 그대로다. 테스트 수는 이전 gate와 겹치므로 합산하지 않는다.
+
+## 실제 successor 조립·보존 복구·CPU audit — 2026-10-13 UTC
+
+위 명시적753d35e9 tar37dd1532/wheel09ab7583는 기존 root canonical retainer로 보존·readback·
+동일 target replay 검증을 완료했다. 새 source/helper raw58e61d5e snapshot은
+`/opt/eom/.embedding-index-successor-input-75vbdt4w`에 별도로 고정했다. 기존 d3 helper나
+canonical archive, 실패 이력은 덮지 않았다. CUDA lease는 기존 자체 source/wheel pin을 유지한다.
+
+기존 CPU profile flock·original fingerprint·실제 prefix 사용 process 부재 확인 후 처음 실패한
+root CPU를 `/opt/eom/conda/envs/.embedding-index-failed-CPU_INDEX_FP32-yyOK1Wsx`로 recoverable
+rename했다. 원래 developer backup은 fixed CPU 위치로 복구됐으므로 **이전 backup 경로에는 더
+이상 존재하지 않는다**. 원래 failed PRIVATE/phase/빈 receipt/log와 failed prefix bytes는 보존했다.
+이어 정확한 developer CPU/CUDA에 normal nonroot offline pip로 새 platform wheel을 설치했다.
+RECORD/direct_url 직접 수정, owner 변경, DB/NAS/model/GPU 실행은 없었다.
+
+새 closed input rawSHA는 CPU
+`6ed5e50893fb88f1a88f42bb8ede14b382434fed662ab2a73a7cb24d4d6923b4`, CUDA
+`5470ec9feda797a2bd4acad6abc953f428fb08dac3ee4eb930489b9dc310df65`이며 parser PASS다.
+새 supported fingerprint는 CPU48b80eed/CUDAd457c92d다. 실제 successor CPU publisher는
+**03:40 UTC**에 `INSTALLED_RUNTIME_METADATA_IDENTITY_INVALID` /
+`EMBEDDING_INDEX_OLD_PREFIX_AUDIT_FAILED`로 거부했다. phase는 다시
+`BEFORE_OLD_PREFIX_BYTES_AUDIT`, **STAGED_AUDIT_FAILED_NOT_ADMITTED / NEW_NOT_EXECUTED**다.
+이 두 번째 실패도 별도 보존하며 자동 재게시하지 않는다. CUDA는 미게시다.
+
+읽기 전용 actual55public+1private 검사7.813s에서 observation56 PASS, full verification33 PASS/
+23 FAIL을 분리했다. 최초 실패는 setuptools83.0.0의 top-level distribution METADATA와 정상
+vendored12 METADATA를 검증기가 혼동한 확정 오류다. 그12개는 모두 top RECORD에 있으며 실제
+archive raw SHA/size가 일치한다. 그 외 ZIP_MEMBER_INVALID19, WHEEL_DATA_LAYOUT_UNSUPPORTED2,
+DIRECT_URL_INVALID1은 별도 원인 분류 중이며 안전 조건을 임의 완화하지 않는다. private platform은
+PASS다. 최소 owning verifier/fixture 수정 후 전체 실제 패키지를 먼저 재검사하고 다음 explicit
+successor를 준비한다. 실제 model/GPU0, 성능 NOT_EVALUATED, 기본값 NOT_ACTIVE, goal ACTIVE다.
+
+실제 sanitized evidence는 `/tmp/eom-embedding-successor-release.nFXZFn3X`의
+`canonical-retention.log`, `cpu-recovery.log`, `cpu-private-assembly.log`,
+`cuda-private-assembly.log`, `cpu-protected-publication.log`에 남겨뒀다. 긴 원본 로그나
+패키지 payload는 Git/Slack에 넣지 않는다.

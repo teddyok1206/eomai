@@ -1,4 +1,4 @@
-"""Native indexing descriptor handoff; no launch, source authority or publication."""
+"""Fixed native DOCUMENT/QUERY descriptor handoffs; no launch, authority or publication."""
 
 from __future__ import annotations
 
@@ -11,12 +11,19 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from typing import Any
 
+from eom_catalog_contracts.embedding_reference_query import MAX_REFERENCE_QUERY_BYTES
+from eom_catalog_contracts.embedding_reference_query_v11 import (
+    EmbeddingReferenceQueryInputV11,
+    parse_embedding_reference_query_input_v11,
+    validate_reference_query_result_v11,
+)
 from eom_catalog_contracts.embedding_vector_binary import (
     EmbeddingVectorBinaryError,
     read_unit_vectors,
 )
 from eom_catalog_contracts.inference_transfer_embedding import (
     MAX_EMBEDDING_INPUT_BYTES,
+    EmbeddingVectorShardManifest,
     IncrementalEmbeddingInput,
     parse_incremental_embedding_input,
     validate_incremental_embedding_result,
@@ -26,7 +33,9 @@ from jsonschema.exceptions import ValidationError as JsonSchemaError
 
 from eom_catalog_service.embedding_encoder_adapter import (
     IncrementalEmbeddingEncodeError,
+    ReferenceQueryEmbeddingEncodeError,
     encode_incremental_batch,
+    encode_reference_query_batch,
 )
 from eom_catalog_service.embedding_execution_ports import NativeEmbeddingBackend
 
@@ -92,7 +101,7 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return value
 
 
-def _read_request(descriptor: int, initial: os.stat_result) -> IncrementalEmbeddingInput:
+def _read_payload(descriptor: int, initial: os.stat_result) -> tuple[bytes, dict[str, Any]]:
     chunks: list[bytes] = []
     total = 0
     while total <= initial.st_size:
@@ -110,7 +119,32 @@ def _read_request(descriptor: int, initial: os.stat_result) -> IncrementalEmbedd
         value = json.loads(payload, object_pairs_hook=_unique_object)
         if not isinstance(value, dict):
             raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_REQUEST_INVALID")
+        return payload, value
+    except NativeEmbeddingHandoffError:
+        raise
+    except (ValueError, TypeError, UnicodeError):
+        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_REQUEST_INVALID") from None
+
+
+def _read_request(descriptor: int, initial: os.stat_result) -> IncrementalEmbeddingInput:
+    payload, value = _read_payload(descriptor, initial)
+    try:
         request = parse_incremental_embedding_input(value)
+        if payload != canonical_json_bytes(request.model_dump(mode="json")):
+            raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_REQUEST_INVALID")
+        return request
+    except NativeEmbeddingHandoffError:
+        raise
+    except (JsonSchemaError, ValueError, TypeError, UnicodeError):
+        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_REQUEST_INVALID") from None
+
+
+def _read_reference_query(
+    descriptor: int, initial: os.stat_result
+) -> EmbeddingReferenceQueryInputV11:
+    payload, value = _read_payload(descriptor, initial)
+    try:
+        request = parse_embedding_reference_query_input_v11(value)
         if payload != canonical_json_bytes(request.model_dump(mode="json")):
             raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_REQUEST_INVALID")
         return request
@@ -153,16 +187,17 @@ def _write_member(descriptor: int, initial: os.stat_result, payload: bytes) -> o
     return after
 
 
-def _run_native_embedding_descriptors(
-    descriptors: NativeEmbeddingDescriptors,
-    backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
-) -> None:
+def _prepare_descriptors(
+    descriptors: NativeEmbeddingDescriptors, maximum_input_bytes: int
+) -> tuple[os.stat_result, os.stat_result, os.stat_result]:
     raw = (descriptors.input, descriptors.result, descriptors.vectors)
     if any(type(value) is not int or value < 0 for value in raw) or len(set(raw)) != 3:
         raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_DESCRIPTOR_INVALID")
     input_initial = _descriptor(descriptors.input, output=False)
     result_initial = _descriptor(descriptors.result, output=True)
     vectors_initial = _descriptor(descriptors.vectors, output=True)
+    if input_initial.st_size > maximum_input_bytes:
+        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_DESCRIPTOR_INVALID")
     if (
         len(
             {
@@ -173,45 +208,98 @@ def _run_native_embedding_descriptors(
         != 3
     ):
         raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_DESCRIPTOR_ALIAS")
-    request = _read_request(descriptors.input, input_initial)
+    return input_initial, result_initial, vectors_initial
+
+
+def _ready_outputs(
+    descriptors: NativeEmbeddingDescriptors,
+    initial: tuple[os.stat_result, os.stat_result, os.stat_result],
+) -> None:
+    input_initial, result_initial, vectors_initial = initial
+    _unchanged_input(descriptors.input, input_initial)
     _empty_output(descriptors.result, result_initial)
     _empty_output(descriptors.vectors, vectors_initial)
+
+
+def _write_outputs(
+    descriptors: NativeEmbeddingDescriptors,
+    initial: tuple[os.stat_result, os.stat_result, os.stat_result],
+    shard: EmbeddingVectorShardManifest,
+    vectors: bytes,
+    result_payload: bytes,
+    maximum_result_bytes: int,
+) -> None:
+    input_initial, result_initial, vectors_initial = initial
+    read_unit_vectors(
+        vectors,
+        dimension=shard.dimension,
+        row_count=shard.row_count,
+        expected_sha256=shard.binary.sha256,
+    )
+    if (
+        len(vectors) != shard.binary.byte_count
+        or not 0 < len(result_payload) <= maximum_result_bytes
+    ):
+        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_RESULT_INVALID")
+    _ready_outputs(descriptors, initial)
+    vectors_final = _write_member(descriptors.vectors, vectors_initial, vectors)
+    _unchanged_input(descriptors.input, input_initial)
+    result_final = _write_member(descriptors.result, result_initial, result_payload)
+    _unchanged_input(descriptors.input, input_initial)
+    if (
+        _epoch(vectors_final) != _epoch(os.fstat(descriptors.vectors))
+        or _epoch(result_final) != _epoch(os.fstat(descriptors.result))
+        or os.lseek(descriptors.vectors, 0, os.SEEK_CUR) != vectors_final.st_size
+        or os.lseek(descriptors.result, 0, os.SEEK_CUR) != result_final.st_size
+        or any(
+            fcntl.fcntl(descriptor, fcntl.F_GETFL) & (os.O_ACCMODE | os.O_APPEND) != os.O_WRONLY
+            for descriptor in (descriptors.vectors, descriptors.result)
+        )
+    ):
+        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_OUTPUT_CHANGED")
+
+
+def _run_native_embedding_descriptors(
+    descriptors: NativeEmbeddingDescriptors,
+    backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
+) -> None:
+    initial = _prepare_descriptors(descriptors, MAX_EMBEDDING_INPUT_BYTES)
+    request = _read_request(descriptors.input, initial[0])
+    _ready_outputs(descriptors, initial)
     # No request/descriptor is passed to construction: the owner pins runtime and ownership.
     with backend_scope() as backend:
-        _unchanged_input(descriptors.input, input_initial)
-        _empty_output(descriptors.result, result_initial)
-        _empty_output(descriptors.vectors, vectors_initial)
+        _ready_outputs(descriptors, initial)
         encoded = encode_incremental_batch(request, backend)
         validate_incremental_embedding_result(request, encoded.result)
-        shard = encoded.result.shard
-        read_unit_vectors(
+        _write_outputs(
+            descriptors,
+            initial,
+            encoded.result.shard,
             encoded.vectors,
-            dimension=shard.dimension,
-            row_count=shard.row_count,
-            expected_sha256=shard.binary.sha256,
+            canonical_json_bytes(encoded.result.model_dump(mode="json")),
+            MAX_EMBEDDING_INPUT_BYTES,
         )
-        if len(encoded.vectors) != shard.binary.byte_count:
-            raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_RESULT_INVALID")
-        result_payload = canonical_json_bytes(encoded.result.model_dump(mode="json"))
-        if not 0 < len(result_payload) <= MAX_EMBEDDING_INPUT_BYTES:
-            raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_RESULT_INVALID")
-        _unchanged_input(descriptors.input, input_initial)
-        _empty_output(descriptors.result, result_initial)
-        vectors_final = _write_member(descriptors.vectors, vectors_initial, encoded.vectors)
-        _unchanged_input(descriptors.input, input_initial)
-        result_final = _write_member(descriptors.result, result_initial, result_payload)
-        _unchanged_input(descriptors.input, input_initial)
-        if (
-            _epoch(vectors_final) != _epoch(os.fstat(descriptors.vectors))
-            or _epoch(result_final) != _epoch(os.fstat(descriptors.result))
-            or os.lseek(descriptors.vectors, 0, os.SEEK_CUR) != vectors_final.st_size
-            or os.lseek(descriptors.result, 0, os.SEEK_CUR) != result_final.st_size
-            or any(
-                fcntl.fcntl(descriptor, fcntl.F_GETFL) & (os.O_ACCMODE | os.O_APPEND) != os.O_WRONLY
-                for descriptor in (descriptors.vectors, descriptors.result)
-            )
-        ):
-            raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_OUTPUT_CHANGED")
+
+
+def _run_native_reference_query_descriptors(
+    descriptors: NativeEmbeddingDescriptors,
+    backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
+) -> None:
+    initial = _prepare_descriptors(descriptors, MAX_REFERENCE_QUERY_BYTES)
+    request = _read_reference_query(descriptors.input, initial[0])
+    _ready_outputs(descriptors, initial)
+    with backend_scope() as backend:
+        _ready_outputs(descriptors, initial)
+        encoded = encode_reference_query_batch(request, backend)
+        validate_reference_query_result_v11(request, encoded.result)
+        _write_outputs(
+            descriptors,
+            initial,
+            encoded.result.shard,
+            encoded.vectors,
+            canonical_json_bytes(encoded.result.model_dump(mode="json")),
+            MAX_REFERENCE_QUERY_BYTES,
+        )
 
 
 def run_native_embedding_descriptors(
@@ -235,4 +323,23 @@ def run_native_embedding_descriptors(
         raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_IO_FAILED") from None
     except Exception:
         # Third-party construction/encoding/context errors can contain admitted text.
+        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_EXECUTION_FAILED") from None
+
+
+def run_native_reference_query_descriptors(
+    descriptors: NativeEmbeddingDescriptors,
+    backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
+) -> None:
+    """Fixed QUERY handoff; owner identity/purpose/unit admission is separately mandatory."""
+    try:
+        _run_native_reference_query_descriptors(descriptors, backend_scope)
+    except (
+        NativeEmbeddingHandoffError,
+        ReferenceQueryEmbeddingEncodeError,
+        EmbeddingVectorBinaryError,
+    ):
+        raise
+    except OSError:
+        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_IO_FAILED") from None
+    except Exception:
         raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_EXECUTION_FAILED") from None

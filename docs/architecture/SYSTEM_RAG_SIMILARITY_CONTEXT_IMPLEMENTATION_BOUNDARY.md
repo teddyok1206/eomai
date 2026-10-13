@@ -778,3 +778,63 @@ GPU, Git, root, API, worker, Pack or numerical implementation mutation occurred.
 Root read the full C1 design and all eight C1a changes, matched their raw hashes, and independently
 reran the same sixteen suites: **494 PASS in30.65s, skip0**; strict mypy, Ruff and format **five
 Python files PASS**. Existing C0/numerical bytes and predecessor contracts remain unchanged.
+
+### 11.6 C1b approved pure-source design delta
+
+The eight approved Python paths add `encode_reference_query_batch`,
+`run_native_reference_query_descriptors` and `run_native_embedding_reference_query`, with a small
+frozen `EncodedReferenceQueryBatch` sibling. They parse only the literal `/1.1` input and produce
+the existing `/1.0` result/shard/view-row closure after one genuine `purpose='QUERY'` call. The
+same actual-backend model/runtime/dimension/batch/thread checks run before and after both real
+operations; finite/scalar/norm/float32 validation remains only at the existing authoritative codec.
+No numerical implementation bytes change and no extra normalization or corpus encoding occurs.
+
+Inside the existing stdio owner, bounded JSON reading, descriptor/inode preparation, unchanged
+input/empty output checks and binary-before-result fsync/write/epoch checks become shared private
+primitives. Fixed DOCUMENT and QUERY functions select their own literal parser/encoder, not a
+request-supplied callback, path, flags, plugin or public generic runner. Backend construction stays
+no-argument and owner-supplied, after all input/FD validation. Index public names/error behavior
+remain compatible. Entrypoint shares the existing quiet-FD/identity primitives and adds a fixed
+QUERY leaf; it still has no main/CLI/default capture or permission grant. Output bytes are temporary
+local materialization only. Invalid input skips construction; drift/partial writes/teardown failure
+never retry or imply publication. Synthetic tests extend the real two-use-case seam plus complete
+DOCUMENT regressions; actual model/GPU/unit admission, queue, DB, policy, Pack and C0 consumption
+remain outside this step.
+
+### 11.7 C1b source checkpoint — 2026-10-13 UTC
+
+The approved nine paths now contain the fixed QUERY encoder, protected-descriptor leaf and
+stdlib-first entrypoint plus frozen local-output sibling. Both actual use cases share private
+backend mismatch and shard packing primitives; stdio shares bounded raw JSON/FD preparation,
+unchanged-input/empty-output checks and validated binary-before-result writes/fsync/epoch checks.
+The native QUERY leaf accepts only input `/1.1`, caps input before reading at 1 MiB, invokes the
+backend once with `purpose='QUERY'`, and emits the existing result/shard/view-row contracts. The
+DOC leaf retains input/result `/1.0`, configured batch/thread checks, 64 MiB bound and error codes.
+No input-selected parser/factory/path/flags, generic execution mode or publication was added.
+
+Synthetic tests cover configured batch four/one partial row, 1–3 ordered view rows, CPU/CUDA
+metadata, before/after backend provenance/model/dimension/runtime/recipe drift, invalid finite/
+scalar/norm output through the original codec, wrong literal input before construction, FD mode/
+offset/access/link gates, corrupt binary, partial writes, local-input changes and uncertain scope exit.
+Both fixed entrypoints use the real quiet-FD primitive in a CPU-only subprocess seam; native
+identity is explicitly substituted, so this is not installed-purpose/unit admission. The synthetic
+model has equal QUERY/DOCUMENT prefix strings; the test intentionally verifies the fixed actual
+QUERY argument, not an invented prefix difference or permission to relabel DOCUMENT vectors.
+
+Explicit API Conda strict mypy/Ruff lint/format check **eight Python files PASS**; focused six
+suites **266 PASS in 6.68s**; the final thirty-suite native/backend/Artifact/Runner/contract/context/
+registry regression **1,272 PASS in 91.99s**, skip zero. Counts overlap and are not summed. Initial
+local test expectations for prefix inequality and wrong-schema exception type plus fixture type/
+format errors were corrected; all affected gates passed afterward. No runtime retry/history change.
+Original C0/C1a contract bytes and all three numerical implementation module hashes remain unchanged.
+
+**C1b SOURCE_ONLY / NOT_ACTIVE.** No actual model/native/GPU inference was run here; the tests use
+synthetic backends. The fixed runtime profile identity itself grants no QUERY purpose. Actual
+owner/session/unit/runtime admission, queue/DB check/claim/receipt, Orchestrator commit/read and C2
+variation delivery remain mandatory unimplemented boundaries. C0 query read remains unavailable
+until those owners are composed. No DB/IAM/policy/API/Pack/Git/root/runtime mutation occurred.
+
+Root independently read all nine frozen C1b paths and matched their raw hashes. The same
+thirty-suite inventory passed **1,272 tests in91.68s, skip0**; strict mypy, Ruff and format passed
+all eight Python files. This independent source gate does not admit an installed QUERY unit or
+execute the actual model, and does not change C0/C1a or the numerical module hashes.

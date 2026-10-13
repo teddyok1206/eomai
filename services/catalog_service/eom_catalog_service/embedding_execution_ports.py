@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from math import isfinite
 from typing import Literal, Protocol
 
+from eom_catalog_contracts.embedding_reference_query import EmbeddingReferenceQueryResult
 from eom_catalog_contracts.embedding_runtime_bundle import (
     EmbeddingNumericalDevice,
     EmbeddingNumericLibraryPin,
@@ -258,4 +259,12 @@ class EncodedEmbeddingBatch:
     """One temporary local-output materialization; binary bytes are never DB values."""
 
     result: IncrementalEmbeddingResult
+    vectors: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class EncodedReferenceQueryBatch:
+    """Temporary genuine QUERY output, not a corpus binding or native admission receipt."""
+
+    result: EmbeddingReferenceQueryResult
     vectors: bytes
