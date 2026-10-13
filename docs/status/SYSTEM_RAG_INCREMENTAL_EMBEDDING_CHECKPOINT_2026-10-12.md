@@ -686,7 +686,7 @@ native controls/storage/replay를 함께 회귀 검증했다. 실제 DB/claim/di
 검증이 아니며 DB0053의18 PASS와 구분한다. 새 모델/GPU 실행0, 기본값 NOT_ACTIVE,
 전체 목표 ACTIVE다. 다음 Runner 작업은 exact claim과 고정 native step dispatch 연결이다.
 
-## Conda31 파일 closure 독립 source gate — 2026-10-13 00:07 UTC
+## Conda31 파일 closure 독립 source gate — 2026-10-13 UTC
 
 고정31 원본 archive에서 source/installed 변환 ledger를 유도하고 기존 wheel 검증기를 재사용하는
 read-only adapter를 검토했다. original payload SHA, prefix relocation, canonical CPython cache,

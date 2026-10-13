@@ -159,59 +159,27 @@ DB migration·새 queue·권한 확대는 없습니다. 역사적 suite와 이 �
 격리·자원 경합 검증을 통과하면 운영 기본값 전환까지 진행합니다. 아직 비교 결과나
 GPU 기본값 활성화가 완료됐다는 뜻은 아닙니다.
 
-증분 임베딩 후보에는 native 입력·결과/float32 shard, pointer-only Catalog registry와
-migration0052, 동일 payload의 CPU/CUDA bundle·encoder, Orchestrator Artifact 게시 경로가
-있습니다. 저장·재전송·descriptor 경계 소스 회귀296 PASS 이후 인덱스 Artifact 게시·복구와
-testdb harness의 독립 검증은 **230 PASS**입니다. 최신 임시 PostgreSQL combined gate는
-**16 PASS**(Artifact·index·registry·application),0052 up/down/up와 cleanup PASS입니다.
-서로 겹치는 소스 gate를 합산하지 않으며, 세부 증거와 아직 없는 연결은
-[증분 임베딩 checkpoint](docs/status/SYSTEM_RAG_INCREMENTAL_EMBEDDING_CHECKPOINT_2026-10-12.md)에
-기록합니다. 기존 source·report·Graph·정책과 현재 사용자 권한은 대체하지 않습니다.
+증분 인덱스의 입력·결과/float32 shard, pointer-only Catalog registry, 동일 payload의
+CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소스 검증했습니다.
+같은 요청은 원래 작업을 재사용하고, 신규 입력이 없으면 Workflow를 만들지 않습니다.
+기존 source·report·Graph·정책과 현재 사용자 권한은 대체하지 않습니다.
 
-CUDA wheel25개의 다운로드·독립 raw-hash/ZIP 검증과 공유 GPU mutex/성능 판정 소스는
-준비했습니다. 별도 CPU/GPU 환경에서 fixed Conda base31과 public wheels55/70의
-non-root/offline/raw-hash-pinned 설치까지 실제로 완료했습니다. archive는 SHA별 한 정본을
-참조하며, 최초 권한 검사 실패의 기록과 빈 reservation도 보존합니다. 이는 보호된 최종
-runtime·private release·실제 모델 실행 승인과는 다릅니다. 현재 권한 연결·native Runner·
-자동 증분·공통 소비자 연결은 후속 작업입니다. **GPU 실제 비교·기본값 전환 및 영속 운영 인덱스는 아직 미활성**이며,
-소스/합성 테스트를 운영·모델 실행 증거로 해석하지 않습니다.
-실제 CUDA archive 점검의 Torch/Triton directory layout 차이는 좁은 호환성 수정과 실제
-25개 archive 재검사로 확인했습니다. compressed WHEEL tag의 bounded exact-set 호환성을
-수정한 numerical observer/backend root source488 PASS와
-current-source·report·Artifact owner 연결177 PASS는 설치·실행 PASS가 아닙니다.
-Identity-owned current operator fence와 Catalog savepoint 배치 source는 root9-suite471 PASS,
-strict type/lint/format PASS입니다. savepoint rollback이 최초 권한 row fence를 풀지 않도록
-같은 root transaction에서 먼저 확보하지만, 이 기록이나 저장된 operator ID는 로그인 권한이
-아닙니다. 최신 guarded disposable PostgreSQL에서 encoding reservation 경쟁·replay **8 PASS**,
-limited IAM routine·권한 변경·savepoint/복구 경계 **6 PASS**, profile 재검증과 cleanup PASS를
-확인했습니다. production IAM 설치/권한 부여는 아니며 native launcher·protected prefix와 공통
-소비자 운영 연결은 아직 pending입니다. CPU/CUDA 비교의 protocol source **681 PASS**와
-reservation source **237 PASS**도 실제 모델 속도 측정과 구분합니다. 고정
-[native launcher 설계](docs/architecture/INCREMENTAL_EMBEDDING_NATIVE_LAUNCHER_PROPOSAL.md)는
-CUDA의 shared lease뿐 아니라 잔류 GPU process와 종료 후 정리까지 별도 검증하도록 명시합니다.
+| 증분 인덱스 경계 | 현재 검증·활성 상태 |
+| --- | --- |
+| 계약·registry·Artifact·수치 검증·atomic submission | SOURCE_PASS; exact claim/dispatcher 연결 진행 중 |
+| 실제 disposable PostgreSQL |0052 registry/application16·reservation8·limited IAM6,0053 stage18 PASS; migration·cleanup PASS |
+| CPU/CUDA 실행 환경 준비 | Conda base31·public wheels55/70의 non-root/offline 설치 완료; 최종 protected runtime 미승인 |
+| 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | NOT_ACTIVE / NOT_EVALUATED |
 
-후속 source에는 native Workflow의 pointer-only 완료 receipt, 같은 입력 CPU/CUDA 비교의
-bounded checkpoint/ACK channel과 실제 pip console-wrapper 호환성이 추가됐습니다.
-독립 회귀 gate는 각각390/304/185 PASS이며 서로 겹치는 테스트 수를 합산하지 않습니다.
-실제 모델 연결·설치 admission·속도 측정은 아직 남아 있습니다. 보호된 기존 interpreter가
-새 실행 환경을 먼저 검증하도록 [설치 admission 경계](docs/architecture/INCREMENTAL_EMBEDDING_RUNTIME_ADMISSION_PROPOSAL.md)를
-명시했으며, 문서/합성 PASS만으로 GPU 기본값을 전환하지 않습니다.
-고정 native factory·stdlib wheel 검증 공용화의 root 회귀961 PASS도 source 결과입니다.
-native stage/step DB guard의 새 source head는0053이며 exact release context1.2와 함께 준비했습니다.
-native/legacy/release source579 PASS 이후 guarded disposable PostgreSQL에서 새18 DB 사례도
-**18 PASS (0.35s)**,0053 up/down/up·control-plane gate와 cleanup PASS를 확인했습니다.
-현재 운영 DB/설치본을 자동으로0053으로 바꾸거나 native 실행이 활성화됐다고 해석하지 않습니다.
-실측용 실제 token/padding·누적 allocator 관측과 단 한 번의 owner resource 응답을 추가했고,
-기존 encoder/index 의미를 보존한 독립 source 회귀는825 PASS입니다. GPU 속도·전체 device
-관측·기본값 활성화 증거가 아니며, 실제 worker와 설치·권한 연결은 여전히 후속 gate입니다.
-native 요청 저장·현재 owner 확인·Workflow/START 원자적 제출과 replay 경계는 독립 source
-회귀584 PASS, strict type/lint/format PASS입니다. 기존 요청·claim·실패 기록을 바꾸지 않고,
-계산할 신규 입력이 없으면 Workflow를 만들지 않습니다. 실제 claim/dispatcher와 운영 실행은
-별도 후속 연결이며 이 source 결과만으로 활성화를 선언하지 않습니다.
-고정 Conda31 원본과 설치 파일의 변환·cache·link·wheel overlay 검증 source는 독립15-suite
-902 PASS, strict type/lint/format4 PASS입니다. 여기에는 병행 개발 중인 CUDA OOM seam의
-추가10 source 사례가 포함되며, 실제 설치 admission·모델/GPU 실행 성공을 뜻하지 않습니다.
-보호된 host/tool 및 전체 실행 환경 연결은 아직 남아 있습니다.
+최근 독립 source gate는 submission584와 Conda/runtime902 PASS, strict type/lint/format PASS입니다.
+902에는 병행 CUDA OOM seam의10 source 사례가 포함되며 실제 모델 실행 증거가 아닙니다.
+서로 겹치는 테스트 수를 합산하지 않습니다. 각 gate·실패 보존·남은 운영 연결은
+[증분 임베딩 checkpoint](docs/status/SYSTEM_RAG_INCREMENTAL_EMBEDDING_CHECKPOINT_2026-10-12.md),
+[native launcher](docs/architecture/INCREMENTAL_EMBEDDING_NATIVE_LAUNCHER_PROPOSAL.md),
+[설치 admission](docs/architecture/INCREMENTAL_EMBEDDING_RUNTIME_ADMISSION_PROPOSAL.md),
+[공통 소비자 연결 경계](docs/architecture/SYSTEM_RAG_SIMILARITY_CONTEXT_IMPLEMENTATION_BOUNDARY.md)에
+기록합니다. **GPU 기본값과 영속 운영 인덱스는 아직 미활성**이며 문서·합성 PASS만으로
+설치·실행·성능·운영 PASS를 선언하지 않습니다.
 
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스
