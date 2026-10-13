@@ -3,8 +3,9 @@
 2026-10-13 UTC. SOURCE_FOUNDATION_IMPLEMENTED / NOT_INSTALLED_PROVIDER / NOT_ACTIVE.
 This note records the smallest authenticated continuation foundation for the merged native
 submission/dispatch. Only the approved Identity capture/fence and source tests below are implemented.
-It does not admit a SQL role, HMAC key, source, launcher or service identity. No schema, DB, credential,
-API route, worker/native-owner behavior, model/GPU, deployment or default changes accompany it.
+It does not admit a SQL role, HMAC key, source, launcher or service identity. The appended approved
+transport phase adds only a schema/value contract; no DB, credential, API route, worker/native-owner
+behavior, model/GPU, deployment or default changes accompany it.
 The [master §§8–9](SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md#8-자동화의-권한인증capacity),
 [Runner boundary](LOCAL_EMBEDDING_RUNNER_IMPLEMENTATION_BOUNDARY.md#focused-gates-and-next-actual-integration)
 and [native admission proposal](INCREMENTAL_EMBEDDING_RUNNER_ADMISSION_PROPOSAL.md) remain authoritative.
@@ -250,3 +251,94 @@ production provider**. Current HMAC stays in the actual API Identity owner; an o
 does not cross into a controller via `/me`. The fixed Catalog-manager SQL fence cannot be
 injected under `eom_app`. The next explicit provider/transport and same-root Identity bridge
 must close these actual boundaries without key copying, role impersonation or a saved-audit grant.
+
+## Approved owner-session transport delta — protocol first, before behavior
+
+Only the canonical `schemas/identity/operator-owner-session-capture-v1.schema.json`, its exact
+Operator Identity packaged mirror, frozen `owner_session_capture.py` contract, additive exports/
+single-resource packaging and focused contract tests are approved in this phase. Parsing this
+message **does not mint an opaque capture or establish provider admission**. No endpoint, exporter,
+importer, provider, Operator fence bridge or native owner behavior is implemented by this phase.
+
+1. **Boundary.** Official API Identity verifies the bearer with its existing TokenCodec; controller
+   later receives only observed capture bindings. API performs no native inference or NAS operation.
+2. **Canonical source.** Only genuinely verified Identity rows can supply a future response.
+   `/me`, parsed JSON, actor text, audit hashes and this frozen DTO cannot establish that provenance.
+3. **Identity.** Request ID and fresh nonce identify one operation-local exchange, not a credential,
+   Job or persistent continuation. Existing operator/session/ACCESS-token IDs remain separate.
+4. **Checks.** A closed request fixes operator-seed purpose; response binds its exact canonical
+   request SHA plus verified IDs, UTC times, refresh generation and verifier digest. No raw token,
+   key, roles, permissions, grant, runtime configuration or pathname is a member of either shape.
+5. **Access.** One fixed request/response exchange precedes SQL locking. Each later mutation uses
+   actual caller-root SQL fencing and unchanged official Catalog source/Graph/policy checks.
+6. **Structure.** Flat frozen values and one immutable schema resource suffice. No registration,
+   mutable registry, bearer persistence, receipt store or generic capability framework is added.
+7. **Cost.** Request <=4KiB and response <=8KiB; only bounded scalar fields exist. Canonical bytes
+   and SHA binding are checked, with duplicate-key, extra-field, boolean-integer and UTC negatives.
+8. **Concurrency.** Remote authentication happens once before owner SQL locks; no HTTP, `/me` or
+   refresh while locks are held. Operator→Session→ACCESS order and late UTC checks remain required.
+9. **Dependencies.** Values stay in Operator Identity contracts, with no IO/SQL/CLI/Catalog/Runner
+   import. The future Identity transport may use only supported mechanical fixed-peer behavior,
+   not CLI/private modules; the exact infrastructure placement still needs separate approval.
+10. **Failure/replay.** Invalid shape/canonical bytes/request hash fails explicitly. Future wrong
+    peer/provider, timeout or binding failure denies capture; no reconnect, refresh or response cache.
+    Reauthentication creates a fresh nonce, while existing Workflow/encoding idempotency is retained.
+11. **Alternative.** Current `/me` cannot transfer the deliberate opaque capture; copying HMAC into
+    controller or making API execute native/NAS would breach existing boundaries. This tiny protocol
+    is the minimum explicit next seam, not an installed transport or a saved-audit authorization.
+
+The proposed later fixed route is `POST /api/v1/auth/owner-session-capture`. A protected provider
+must independently verify actual installed Identity/provider admission and fixed connected API UID
+before bearer bytes; only its genuine observation may feed a separately approved opaque importer.
+The existing public `require_fixed_api_peer_socket` is infrastructure in
+`eom_orchestrator.inference_transfer_control_auth`, not in CLI or Catalog. Operator Identity contracts
+must not import it. Identity-owned server export belongs in Identity infrastructure; API route and
+controller transport remain separate presentation/infrastructure adapters. Their behavior is not
+approved here, and any mechanical relocation must preserve the released fixed-peer path/tests.
+
+The eventual same-root Operator fence bridge must call the authenticated session fence under the
+independently configured controller role, not inject the Catalog-manager-only Postgres routine
+under `eom_app` or use `SET ROLE`. Current Catalog roles, permissions and source checks remain actual
+queries. Automatic indexing still requires the distinct official service identity and released
+`LOCAL_EMBEDDING_INDEX` policy/processing scope; an operator capture is never their substitute.
+
+### Protocol-only source checkpoint
+
+The canonical/mirror schema raw SHA is
+`bb7571ce9decf18cff2d99e4dc13f2d92f1c237c65ab05fe243ce4d27fac4436`. Its two shapes have
+four request and thirteen response fields; the request hash covers all four canonical request fields.
+The response temporal rule is authenticated≤issued≤observed<min(access expiry,idle expiry), with
+both expiries≤absolute expiry; it validates claims, not current wall-clock/provider authenticity.
+All messages require immutable bounded exact canonical bytes at the wire parser. Model copies are
+checked as raw flat fields before serialization, without a generic recursive walker. The sole public
+schema-family loader returns independent values; no mutable global registry or new dependency was
+introduced (Pydantic/jsonschema were already platform dependencies).
+
+Initial source gates: **72 focused contract tests PASS**, and the combined eight-suite protocol plus
+legacy Identity/CLI/auth/fence regression **318 PASS in6.88s**. API/core strict mypy and Ruff/format
+passed the three Python paths. No new integration, provider, endpoint, key access, DB, model/GPU,
+root operation or runtime activation was performed. These gates do not add to or relabel the earlier
+root disposable evidence.
+The final pinned-resource regression rerun passed **318 in6.94s**; API/core strict checks including
+the earlier eight Identity paths passed **eleven files**, with final Ruff/format **three files PASS**.
+
+The smallest next behavior candidate remains separately unapproved: Identity-owned verified-capture
+export/import seams; one fixed API route calling existing `AppServices.auth.capture_access` exactly
+once; and one controller infrastructure provider using the existing supported
+`eom_orchestrator.inference_transfer_control_auth.require_fixed_api_peer_socket` and inherited-FD
+reader. Place that client in Orchestrator/controller infrastructure, not in Operator Identity values.
+Identity's exporter/importer must consume an independently admitted actual transport observation
+through an Identity-owned narrow port, not import Orchestrator, CLI or private Catalog helpers.
+No peer algorithm copy or generic transport/provider registry is needed; actual observation-to-opaque
+import provenance and the concrete provider admission still require root's behavior review.
+
+Proposed later source paths are `services/identity_service/eom_identity_service/owner_session_transport.py`,
+`services/orchestrator/eom_orchestrator/identity_owner_session_provider.py`, and
+`apps/application_api/eom_api/routers/owner_session_capture.py`, with focused corresponding tests and
+only necessary public export/router registration. The authenticated Operator fence bridge and actual
+native owner/executor are later separate scopes. These are a file map, not authorization to implement.
+
+Root independently reviewed all seven frozen protocol paths and matched the raw pins. Its eight-suite
+gate passed **318 tests in7.07s**, strict mypy **eleven files PASS**, Ruff and format **three files PASS**.
+The canonical/schema mirror and single package-data resource remain exact. No response DTO can mint
+the opaque capture; endpoint/provider/bridge/actual authentication activation still remain separate.

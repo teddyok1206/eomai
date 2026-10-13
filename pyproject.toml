@@ -97,6 +97,7 @@ eom_catalog_contracts = [
   "resources/document-review/*.json",
 ]
 eom_image_contracts = ["schemas/*.json"]
+eom_operator_identity = ["resources/operator-owner-session-capture-v1.schema.json"]
 
 [tool.pytest.ini_options]
 pythonpath = ["packages/gpu_lease"]
