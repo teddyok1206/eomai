@@ -28,6 +28,20 @@
 11. Alternatives: a saved actor is not authority; recomputing after a timeout or
     silently substituting current/latest would destroy reproducibility.
 
+## Release inspection includes the non-Codex definition
+
+The first independent wheel build after the executor connection rejected its
+own admission inventory: the existing release inspector inferred every protocol
+from an AgentStep and omitted the admitted application-only embedding definition.
+Materialize `config/workflows/local-embedding-index.v1.yaml` in that same installed
+simulation and use the authoritative `definition_execution_protocol` calculation
+for both Codex and native definitions. The fixed two-step schema remains unchanged;
+this file does not activate a runner or select an execution policy. Reinforce the
+same check in the inventory test. Three existing transfer contract modules missing
+from the explicit wheel inventory are also required, not waived or deleted.
+The rejected build installed nothing and changed no service, DB or frozen CPU
+runtime. Its local build candidate remains distinct from a passed release.
+
 ## Two closure corrections required by actual bounded production
 
 An operation's source-plan subset is not the entire authorized corpus. Catalog

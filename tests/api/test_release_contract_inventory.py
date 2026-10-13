@@ -14,7 +14,7 @@ import pytest
 from eom_catalog_contracts import catalog_schema_inventory
 from eom_workflow import WORKFLOW_ADMISSION_BY_IDENTITY, AgentStep
 from eom_workflow.compiler import compile_definition
-from eom_workflow.schemas import result_schema_protocol
+from eom_workflow.definition_execution_protocol import definition_execution_protocol
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -156,6 +156,7 @@ def test_installed_support_admission_covers_materialized_workflow_contracts() ->
         "legacy-item-editorial-compatibility",
         "customer-support",
         "item-inference-transfer-comparison",
+        "local-embedding-index",
     }
     fixed_prefixes = tuple(f"{name}." for name in sorted(fixed_families))
     staged = {
@@ -202,19 +203,25 @@ def test_installed_support_admission_covers_materialized_workflow_contracts() ->
     actual = {}
     for path in staged.values():
         definition = compile_definition(path, {"support"}).definition
-        protocols = {
-            result_schema_protocol(step.result_schema)
-            for step in definition.steps
-            if isinstance(step, AgentStep)
-        }
-        assert len(protocols) == 1
-        actual[(definition.definition_key, definition.definition_version)] = protocols.pop()
+        actual[(definition.definition_key, definition.definition_version)] = (
+            definition_execution_protocol(definition)
+        )
     expected = {
         identity: admission.role_protocol_version
         for identity, admission in WORKFLOW_ADMISSION_BY_IDENTITY.items()
         if identity[0] in fixed_families
     }
     assert actual == expected
+
+
+def test_installed_admission_uses_native_definition_protocol_without_codex_role() -> None:
+    """Application-only definitions must be inspected, not omitted or inferred as a role."""
+    compiled = compile_definition(ROOT / "config/workflows/local-embedding-index.v1.yaml", set())
+    assert not any(isinstance(step, AgentStep) for step in compiled.definition.steps)
+    assert definition_execution_protocol(compiled.definition) == "local-embedding/1.0"
+    source = installed_workflow_inspector_source()
+    assert "definition_execution_protocol(compiled.definition)" in source
+    assert "compile_definition(Path(local_embedding_definition), set())" in source
 
 
 def test_wheel_catalog_resource_inventory_matches_canonical_contracts() -> None:
