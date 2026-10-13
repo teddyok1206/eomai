@@ -1,10 +1,10 @@
 # Native installation admission: same-audit inventory and CPU-first seal
 
-2026-10-13 UTC. PROTOCOL_DRAFT / PHASE_A_B_C_SOURCE_ONLY / NOT_ADMITTED.
+2026-10-13 UTC. PROTOCOL_DRAFT / PHASE_A_B_C_D_SOURCE_ONLY / NOT_ADMITTED.
 The two adjacent `.schema.proposal.json` documents remain unregistered ROOTLOCAL drafts,
 not worker messages, grants or actual receipts. The additive same-audit local snapshot,
-shared model-free numerical observation and narrow Conda URI representation handling in
-PhaseA/B/C below are source-only implementations;
+shared model-free numerical observation and narrow Conda URI/pip noarch representation handling
+in PhaseA/B/C/D below are source-only implementations;
 all receipt/proof/factory/unit composition remains proposed. No production data, installed
 prefix, resource registry, unit or default changes.
 
@@ -394,3 +394,52 @@ at final suite start/end. The Conda bootstrap raw SHA changes from `fa848f01...`
 OFFLINE_ENCODER `f667e54d...` and runtime-files `a54e7cf5...` remain unchanged. No actual
 prefix audit, privileged mutation, metadata rewrite, model/new-prefix execution or install
 was performed in this phase. Root owns the subsequent exact source build and actual audit.
+
+## PhaseD — pip noarch source and installed path representations
+
+2026-10-13 UTC. ROOT_APPROVED_SOURCE_PHASE / NOT_INSTALLED / NOT_ADMITTED.
+Root's retained original read-only audit reached pip `paths_data`; independent bounded evidence
+found865 rows,468 raw `site-packages/` paths, and unique raw/mapped/listed sets. The existing
+`_mapped(..., "python")` yields the exact installed `files` set. Failed evidence and recovery
+remain root-owned history; no current staged-prefix state is inferred from those observations.
+
+1. **Boundary:** only pip noarch metadata path representation in the existing Conda owner.
+2. **Source:** retained archive/source-index/member ledger remains authoritative and unchanged.
+3. **Identity:** raw source path and installed path are distinct; never rewrite metadata bytes.
+4. **Mapping:** validate raw `_path` first, then use existing `_mapped(..., "python")` only for pip.
+5. **Eligibility:** a changed path must map into that pip owner's expected ledger. Unknown raw
+   generated cache/script rows are not exceptions; existing unchanged installed rows stay bounded.
+6. **Uniqueness:** put the mapped path in the existing observed set. Deterministic mapping means
+   both repeated raw paths and raw/mapped aliases collide there; no redundant second index.
+7. **Cost:** O(rows) mapper/set work, no new parser, normalize/resolve, archive hash, copy or scan.
+8. **Checks:** keep source SHA/size/path_type, absent-cache, archive/member/link and epoch checks.
+9. **Files:** retain exact installed `files` representation, count, uniqueness and membership.
+10. **Tests:** public synthetic raw/mapped positives and duplicate/alias/non-pip/unknown raw/
+    traversal/files/hash/size/type/actual-byte negatives; genuine eom UID, never fake root.
+11. **Alternative:** arbitrary normalization or metadata rewrite broadens this narrow source
+    mapping and loses original provenance. Reuse the mapper already owning archive installation.
+
+Only the same existing Conda owner, its focused unit tests and this note are owned. Schema/parser
+signatures, CLI and numerical modules stay unchanged. A new Conda bootstrap/source/wheel and root
+input pin are required before another actual audit; fixtures alone do not admit a prefix.
+
+### PhaseD source checkpoint
+
+The production change is raw `_path` validation, the existing pip-only mapper and an
+unchanged-or-known-owner-ledger guard before the original observed-set check. No schema,
+parser signature, CLI, metadata writer or numerical module changed. The synthetic archive
+fixture now includes a pip INSTALLER source member overlaid by the existing pip wheel, so
+the real failure shape is exercised rather than only a package-module path. CPU/CUDA public
+audit positives cover mapped, raw and combined prefetch-URI/raw metadata, retaining generated
+mapped cache rows and exact installed `files`. Negatives cover raw duplicates/mapped aliases,
+unknown raw cache/script/member, other owner/non-pip, traversal/files membership and original
+source SHA/size/type plus same-size changed archive/installed bytes.
+
+Final explicit API Conda/prefix/wheel/host4 suites605 PASS59.16s, including225 Conda cases;
+Python hashes match final suite start/end. API/core strict mypy2 each PASS; API Ruff2/format2
+PASS. The Conda bootstrap SHA is now
+`0fc91a10c42aa9802203a7625ec96a9b36e55d9efd77b4a4b0fc5de861d4412b`;
+OFFLINE_ENCODER `f667e54d...` and runtime-files `a54e7cf5...` remain unchanged. All fixtures use
+actual eom ownership, not root substitutes. No root, new actual audit/install, model/GPU forward,
+metadata repair, source schema change or runtime grant was performed. Fresh source/bootstrap
+pins and actual owner gates remain root tasks; source regression alone is not admission.

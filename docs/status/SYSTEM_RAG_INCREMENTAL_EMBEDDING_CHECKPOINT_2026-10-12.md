@@ -1418,3 +1418,22 @@ inode를 UID1000/0700로 복구했다. backup MOVED_NOT_DELETED이며 이전 실
 sanitized evidence는 `/tmp/eom-embedding-successor-release.MqQTK0U3`,
 `/tmp/eom-conda-metadata-trace.yhKICJxd`, `/tmp/eom-conda-metadata-detail.AcAYUUXb`에 있다.
 OLD 검사 실패로 NEW/model/GPU0, 실제 CPU/GPU 비교·기본 전환은 미완료이며 goal ACTIVE다.
+
+## pip source/installed 경로 수정 독립 gate — 2026-10-13 07:18 UTC
+
+기존 `_metadata_records`에서 raw path를 먼저 검증하고 pip만 기존 `_mapped(..., "python")`로
+변환한다. 바뀐 경로는 해당 pip의 검증된 ledger에 있어야 하며, 기존 observed set의 target
+중복 검사로 raw 중복과 raw/mapped alias를 함께 거부한다. source SHA/size/type·없는 generated
+cache·archive/member·files membership·epochs는 유지했다. metadata rewrite나 새 framework는
+없다. 실제처럼 prefetch URI/raw pip/mapped generated caches/installed files가 함께 있는
+positive와 unknown/raw/alias/다른 owner·package/경로/hash/bytes negatives를 추가했다.
+
+Agent의 최종 Conda/prefix/wheel/host4는605 PASS59.16s, API/core strict2 및 lint/format2 PASS다.
+Root가 frozen3 source/note/tests 전체 diff를 읽고 설치/기존 CPU/installed proof/observer까지
+포함한8-suite를 독립 실행했다: **945 PASS65.03s, skip0**, strict/Ruff/format2 PASS다.
+시작/종료 raw SHA가 같다. 이 scoped gate는 앞선62-suite3355를 합산하거나 전체 재실행으로
+부르지 않는다. 내부 metadata 표현만 바뀌어 무관한 QUERY/모델/generation gate는 반복하지 않았다.
+Conda raw `0fc91a10c42aa9802203a7625ec96a9b36e55d9efd77b4a4b0fc5de861d4412b`, test raw
+`6e76a18ae29c6bfd8f842d63afb6947cc25b0b2ccbbf0f8d20ea606faec825df`다. 수치 sourcef667과
+Artifact leaf021은 그대로다. 새 committed build/bootstrap/actual 전체-prefix 검사가 필요하다.
+모델/GPU0, benchmark NOT_EVALUATED, GPU default NOT_ACTIVE, goal ACTIVE를 유지한다.

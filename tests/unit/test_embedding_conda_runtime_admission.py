@@ -707,6 +707,7 @@ def _fixture(
     entries["packaging"][
         "lib/python3.12/site-packages/packaging/__pycache__/old.cpython-312.pyc"
     ] = (python_cache(b"obsolete source"), 0o664)
+    entries["pip"]["site-packages/pip-26.1.2.dist-info/INSTALLER"] = (b"conda\n", 0o664)
     license_raw = b"bounded original licensing metadata"
     monkeypatch.setattr(
         conda, "_LICENSES", (("zlib", "LICENSE", len(license_raw), _hash(license_raw)[7:]),)
@@ -941,6 +942,133 @@ def test_complete_synthetic_archive_transform_overlay_cache_and_link_ledger_is_r
         (path, os.readlink(path)) for path in first.installed_members if path.is_symlink()
     }
     assert all(path.exists() or path.is_symlink() for path in first.installed_members)
+
+
+def _pip_source_metadata(fixture: _SyntheticConda) -> dict[str, Any]:
+    body: dict[str, Any] = json.loads(fixture.records["pip"].read_bytes())
+    for row in body["paths_data"]["paths"]:
+        if "sha256" in row and row["_path"].startswith("lib/python3.12/site-packages/"):
+            row["_path"] = row["_path"].removeprefix("lib/python3.12/")
+    return body
+
+
+@pytest.mark.parametrize("representation", ("raw", "mapped", "raw_prefetch"))
+@pytest.mark.parametrize("profile", ("CPU_INDEX_FP32", "CUDA_INDEX_FP32"))
+def test_public_audit_retains_pip_raw_source_and_installed_files_as_distinct_representations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, representation: str, profile: str
+) -> None:
+    fixture = _fixture(tmp_path, monkeypatch, profile)
+    original = _audit(fixture)
+    if representation == "raw_prefetch":
+        _set_installation_uris(fixture, "prefetch")
+    path = fixture.records["pip"]
+    body = (
+        _pip_source_metadata(fixture)
+        if representation != "mapped"
+        else json.loads(path.read_bytes())
+    )
+    path.write_bytes(json.dumps(body).encode())
+    assert _audit(fixture) == original
+    assert path.stat().st_uid == os.geteuid()
+    installer = "site-packages/pip-26.1.2.dist-info/INSTALLER"
+    metadata_paths = {row["_path"] for row in body["paths_data"]["paths"]}
+    assert (
+        installer if representation != "mapped" else "lib/python3.12/" + installer
+    ) in metadata_paths
+    assert "lib/python3.12/" + installer in body["files"]
+    assert any(
+        name.startswith("lib/python3.12/site-packages/pip/__pycache__/") for name in metadata_paths
+    )
+    if representation == "raw_prefetch":
+        assert body["url"] == (
+            "file:///tmp/eom-embedding-conda-base-prefetch.KoqIDSXB/" + body["fn"]
+        )
+
+
+@pytest.mark.parametrize(
+    "fault",
+    (
+        "duplicate_raw",
+        "mapped_alias",
+        "unknown_raw_cache",
+        "unknown_raw_script",
+        "unknown_raw_member",
+        "other_owner",
+        "nonpip",
+        "traversal",
+        "raw_files",
+        "missing_files",
+        "duplicate_files",
+        "source_hash",
+        "source_size",
+        "source_size_bool",
+        "path_type",
+        "archive_bytes",
+        "member_bytes",
+    ),
+)
+def test_public_audit_pip_mapping_cannot_hide_alias_unknown_raw_or_identity_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    fixture = _fixture(tmp_path, monkeypatch)
+    path = fixture.records["pip"]
+    body = _pip_source_metadata(fixture)
+    rows = body["paths_data"]["paths"]
+    source = next(row for row in rows if row["_path"] == "site-packages/pip/__init__.py")
+    if fault == "duplicate_raw":
+        rows.append(dict(source))
+    elif fault == "mapped_alias":
+        rows.append(source | {"_path": "lib/python3.12/" + source["_path"]})
+    elif fault == "unknown_raw_cache":
+        cache = next(row for row in rows if row["_path"].endswith(".pyc"))
+        cache["_path"] = cache["_path"].removeprefix("lib/python3.12/")
+    elif fault == "unknown_raw_script":
+        script = next(row for row in rows if row["_path"] == "bin/pip")
+        script["_path"] = "python-scripts/pip"
+    elif fault == "unknown_raw_member":
+        source["_path"] = "site-packages/pip/unknown.py"
+    elif fault == "other_owner":
+        source["_path"] = "site-packages/packaging/old.py"
+    elif fault == "nonpip":
+        fixture.records["pip"].write_bytes(json.dumps(body).encode())
+        path = fixture.records["packaging"]
+        body = json.loads(path.read_bytes())
+        body["paths_data"]["paths"][0]["_path"] = "site-packages/packaging/__init__.py"
+    elif fault == "traversal":
+        source["_path"] = "site-packages/pip/../pip/__init__.py"
+    elif fault == "raw_files":
+        body["files"] = [row["_path"] for row in rows]
+    elif fault == "missing_files":
+        body["files"].pop()
+    elif fault == "duplicate_files":
+        body["files"][1] = body["files"][0]
+    elif fault == "source_hash":
+        source["sha256"] = "f" * 64
+    elif fault == "source_size":
+        source["size_in_bytes"] += 1
+    elif fault == "source_size_bool":
+        source["size_in_bytes"] = True
+    elif fault == "path_type":
+        source["path_type"] = "softlink"
+    elif fault == "archive_bytes":
+        archive = fixture.archive_paths["pip"]
+        archive_raw = bytearray(archive.read_bytes())
+        archive_raw[0] ^= 1
+        archive.write_bytes(archive_raw)
+    else:
+        member = fixture.files["lib/python3.12/source.py"]
+        member_raw = member.read_bytes()
+        member.write_bytes(b"!" + member_raw[1:])
+    path.write_bytes(json.dumps(body).encode())
+    code = (
+        "FILE_HASH_MISMATCH"
+        if fault in {"archive_bytes", "member_bytes"}
+        else "CONDA_PATH_INVALID"
+        if fault == "traversal"
+        else "CONDA_METADATA_INVALID"
+    )
+    with pytest.raises(InstalledRuntimeProofError, match=code):
+        _audit(fixture)
 
 
 def _set_installation_uris(fixture: _SyntheticConda, representation: str) -> None:

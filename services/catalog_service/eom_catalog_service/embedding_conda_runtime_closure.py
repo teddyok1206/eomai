@@ -1104,7 +1104,9 @@ def _metadata_records(
         expected = by_owner[name]
         for row in paths["paths"]:
             _require(type(row) is dict, "METADATA_INVALID")
-            path = _path(row.get("_path"))
+            source_path = _path(row.get("_path"))
+            path = _mapped(source_path, "python" if name == "pip" else None)
+            _require(path == source_path or path in expected, "METADATA_INVALID")
             _require(path not in observed, "METADATA_INVALID")
             observed.add(path)
             if path not in expected:

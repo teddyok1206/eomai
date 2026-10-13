@@ -177,7 +177,8 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | NOT_ACTIVE / NOT_EVALUATED |
 
 2026-10-13의 실제 CPU 검증에서 정상 오프라인 설치 주소와 pip noarch의 원본/설치 경로
-표현 차이를 확인했습니다. 주소 비교 수정은 소스 검증을 마쳤고 다음 경로 검사를 보완 중입니다.
+표현 차이를 확인했습니다. 두 수정은 소스 검증을 마쳤고, pip 경로 수정의 독립 설치 회귀는
+945 PASS입니다. 새로운 committed source/bootstrap으로 실제 전체 검사를 다시 해야 합니다.
 실패 후보·기록은 보존했으며 조립 환경을 복구했습니다. 이 진단은 runtime admission이나
 성능 PASS가 아니며, 새 전체-prefix/native 검증과 CPU/GPU 실측은 아직 남아 있습니다.
 
