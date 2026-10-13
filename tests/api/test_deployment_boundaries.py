@@ -564,9 +564,10 @@ def test_release_migration_wrapper_pins_source_and_database_owner() -> None:
     assert CURRENT_MIGRATION_REVISION == "20261012_0053"
     assert "target_revision != CURRENT_MIGRATION_REVISION" in operator
     assert 'owner[0] != owner[1] or owner[2] is not True or "app" not in owner[3]' in operator
-    assert 'current == "20261009_0050"' in operator
-    assert "command.upgrade(configuration, MIGRATION_REVISION)" in operator
-    assert "current != MIGRATION_REVISION" in operator
+    assert 'Callback.MIGRATION_UPGRADE_0051: (MIGRATION_REVISION, "20261009_0050")' in operator
+    assert "allowed_predecessor is not None and current == allowed_predecessor" in operator
+    assert "command.upgrade(configuration, target_revision)" in operator
+    assert "current != target_revision" in operator
     assert 'command.upgrade(configuration, "head")' not in operator
 
 
