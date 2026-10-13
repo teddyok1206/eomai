@@ -1324,3 +1324,35 @@ model/tensor checks는 그대로다. No-model evidence는 정책·설정·소스
 앞선 mutable worktree shared gate나 다른 source count와 합산하지 않는다. 실제 새 전체-prefix,
 fixed native unit·concrete proof/seal·owner admission, CPU/GPU forward/비교/default는 미완료다.
 모델/GPU 추론0, 성능 NOT_EVALUATED, GPU 기본값 NOT_ACTIVE, 전체 goal ACTIVE다.
+
+## 실제bf96 CPU 후보·Conda provenance 진단·복구 — 2026-10-13 06:22 UTC
+
+정확한 committed source `bf96c97d9f9628b705f80c9c3971585680e81e11`로 새 private build를
+만들었다. tar55183360B raw `8b71f287d3ab708ead38e17526cbc110387cbcc4ef54fb810baf8d3bca8ecc77`,
+wheel3500550B raw `73b981b61cb5458a23727e91a8362547571adc06f7ee8a96dc116ece23a1a29f`다.
+supported RECORD1462-member와 canonical retention/read-back/replay/fsync PASS다. normal pip의
+canonical URI 조립·bootstrap6/public input parser·CPU fingerprintbe4b97ab/CUDA b66b0275를
+확인했다. CPU input raw3f9ca9fa/CUDA ae1de739다. 설치 metadata 직접 수정은 없다.
+
+네 번째 전체 audit는 namespace 검사를 지나 `INSTALLED_RUNTIME_CONDA_METADATA_INVALID`로
+OLD 단계에서 멈췄다. PRIVATE `/opt/eom/.embedding-index-install-Ai2khY8x`, phase
+BEFORE_OLD_PREFIX_BYTES_AUDIT 및 빈 receipt·원 failure를 보존했다. Root가 고정 readonly
+stdlib trace raw `ae4ef105f003202ff8913385877022413adfea15429db1473f3859fb0195469b`를 정독하고
+보호 staging 후 원래 admit.py main을 그대로 호출했다. 원 exit1을 유지했고 locals/값/전체
+traceback 없이 basename/function/line만 관측했다. 실패 위치는 `_metadata_records`1049의
+name/version/build/fn/url tuple이다. NEW/model/GPU 실행은0이다.
+
+추가 고정31-record readonly 비교에서 name/version/build/fn 및 canonical archive SHA/size는
+모두 일치하고 url만 달랐다. 모든 record는 원 remote source URL 대신 정확한 기존 offline
+`file:///tmp/eom-embedding-conda-base-prefetch.KoqIDSXB/<filename>`을 기록했다. 이 관측은
+whole-prefix PASS가 아니며 임의 file URL 허용이나 metadata 수동 수정의 근거로 쓰지 않는다.
+원 archive/index/paths·보호 metadata·해시 closure를 유지하는 기존 owner의 좁은 provenance
+표현 호환성을 검토한다. 새 source와 fresh 전체 audit가 필요하다.
+
+기존 profile lock·input3f·pub8f·phase/빈 receipt·동일 fingerprint·실제 prefix users 부재와
+held/named directory identity를 확인한 scoped recovery raw
+`426565b36aadf4d0205ab7685322fd60426f3bc0de324582fa9a5d9d914cb2c4` PASS다. failed root bytes는
+`/opt/eom/conda/envs/.embedding-index-failed-CPU_INDEX_FP32-Ai2khY8x`에 보존했다. 원 developer
+inode를 fixed CPU UID1000/0700로 복구했고 backup은 MOVED_NOT_DELETED다. 이전3개 failure도
+보존했다. sanitizer logs는 `/tmp/eom-embedding-successor-release.PHLzxgRc`와
+`/tmp/eom-conda-metadata-trace.AX6uBIDm`에 있다. GPU 비교·기본 활성화는 여전히 미완료다.

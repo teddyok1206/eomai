@@ -176,6 +176,11 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | CPU/CUDA 실행 환경 준비 | namespace·공유 model-free probe 포함 최종 공통3211 source PASS; 실제 CPU wheel56 PASS; 새 전체-prefix/native 검증 남음, CUDA 미게시 |
 | 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | NOT_ACTIVE / NOT_EVALUATED |
 
+2026-10-13의 실제 새 CPU 전체 검증은 오프라인 설치 주소와 원격 출처 주소의 비교에서
+멈췄습니다. 31개 패키지의 identity·원본 archive SHA/size 일치와 URL만 다른 것을 읽기 전용으로
+확인했고, 실패 후보·기록을 보존한 채 조립 환경을 복구했습니다. 이 진단은 runtime admission이나
+성능 PASS가 아니며, 좁은 기존 검증기 수정과 새 전체 검증을 진행합니다.
+
 최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와
 strict type/lint/format PASS입니다. 실제 임시 DB28개 사례에는 독립 실행기 claim 경쟁과
 기존 실행 경로 분리가 포함됩니다. 합성 owner 콜백과 source 검증은 실제 사용자 권한이나
