@@ -1070,6 +1070,57 @@ def test_elf_rpath_is_transitive_but_runpath_is_direct_only(tmp_path: Path) -> N
     assert _graph(tmp_path / "explicit_child", metadata)[1] == 3
 
 
+def test_elf_bundled_dependencies_keep_extension_parent_rpath(tmp_path: Path) -> None:
+    metadata = {
+        "bin/python3.12": _elf_text(),
+        "site/package/extension.so": _elf_text(needed=("a.so",), rpath="$ORIGIN/../package.libs"),
+        "site/package.libs/a.so": _elf_text(soname="a.so", needed=("b.so",)),
+        "site/package.libs/b.so": _elf_text(soname="b.so"),
+    }
+    assert _graph(tmp_path / "inherited", metadata)[1] == 4
+    metadata["site/package/extension.so"] = _elf_text(
+        needed=("a.so",), runpath="$ORIGIN/../package.libs"
+    )
+    with pytest.raises(InstalledRuntimeProofError, match="HOST_SONAME_UNAVAILABLE"):
+        _graph(tmp_path / "not_inherited", metadata)
+
+
+def test_elf_unvisited_alternative_provider_is_still_checked(tmp_path: Path) -> None:
+    metadata = {
+        "bin/python3.12": _elf_text(needed=("a.so",), rpath="$ORIGIN/../first"),
+        "first/a.so": _elf_text(soname="a.so"),
+        "unused/a.so": _elf_text(soname="a.so", needed=("missing.so",)),
+    }
+    with pytest.raises(InstalledRuntimeProofError, match="HOST_SONAME_UNAVAILABLE"):
+        _graph(tmp_path, metadata)
+
+
+def test_elf_parent_context_does_not_allow_conflicting_resolutions(tmp_path: Path) -> None:
+    metadata = {
+        "bin/python3.12": _elf_text(),
+        "one/extension.so": _elf_text(needed=("a.so",), rpath="$ORIGIN/../shared:$ORIGIN"),
+        "two/extension.so": _elf_text(needed=("a.so",), rpath="$ORIGIN/../shared:$ORIGIN"),
+        "shared/a.so": _elf_text(soname="a.so", needed=("b.so",)),
+        "one/b.so": _elf_text(soname="b.so"),
+        "two/b.so": _elf_text(soname="b.so"),
+    }
+    with pytest.raises(InstalledRuntimeProofError, match="ELF_AMBIGUOUS"):
+        _graph(tmp_path, metadata)
+
+
+def test_elf_disconnected_cycle_is_not_omitted(tmp_path: Path) -> None:
+    metadata = {
+        "bin/python3.12": _elf_text(),
+        "unused/a.so": _elf_text(soname="a.so", needed=("b.so",)),
+        "unused/b.so": _elf_text(soname="b.so", needed=("a.so",)),
+    }
+    with pytest.raises(InstalledRuntimeProofError, match="HOST_SONAME_UNAVAILABLE"):
+        _graph(tmp_path / "missing_routes", metadata)
+    for name, dependency in (("a.so", "b.so"), ("b.so", "a.so")):
+        metadata["unused/" + name] = _elf_text(soname=name, needed=(dependency,), rpath="$ORIGIN")
+    assert _graph(tmp_path / "explicit_routes", metadata)[1] == 3
+
+
 @pytest.mark.parametrize("fault", ["cycle", "escape", "soname", "version", "host_version"])
 def test_elf_alias_and_version_resolution_fails_closed(tmp_path: Path, fault: str) -> None:
     metadata = {

@@ -34,6 +34,8 @@ _ABSENT_SEARCH_ROUTES = MappingProxyType(
         "/lib/intel64": Path("/usr/lib/intel64"),
         "/lib/intel64_win": Path("/usr/lib/intel64_win"),
         "/lib/win-x64": Path("/usr/lib/win-x64"),
+        # The absent parent proves the CUDA wheel's nested route cannot supply a library.
+        "/usr/local/cuda/lib64": Path("/usr/local/cuda"),
     }
 )
 
@@ -105,6 +107,26 @@ _FILES = (
         952616,
         "fce00b6f25f459cf4ae0b7fae4257909a1a8a86f9149e7c029a5d617baf1ccd0",
     ),
+    (
+        _LIB / "librt.so.1",
+        14624,
+        "6d072187d88e092e81561a44c03a4a41397319022c6d43519757cc051c576d82",
+    ),
+    (
+        _LIB / "libresolv.so.2",
+        64008,
+        "1d730ea434da5a5595bc6a961d7a9ace83e03703205df9644044b3dca79c362f",
+    ),
+    (
+        _LIB / "libgcc_s.so.1",
+        183024,
+        "d93224d2b0dab4247598be683adca02f5cf00586f99c187579cd7e92058fb7cb",
+    ),
+    (
+        _LIB / "libstdc++.so.6.0.33",
+        2592224,
+        "1fd75fe70354a416d75aef22bcae68c47bd25d20e2d0568c30b1a9838cf62f11",
+    ),
     (_CACHE, 45467, "bc2b95fdb167f457249c288055aa78a2fe3e67364b66d73a8f6d8dc745bcf3f3"),
     (
         Path("/etc/ld.so.conf"),
@@ -134,6 +156,7 @@ _ALIASES = (
     (_LIB / "libctf-nobfd.so.0", "libctf-nobfd.so.0.0.0"),
     (_LIB / "libzstd.so.1", "libzstd.so.1.5.5"),
     (_LIB / "libsframe.so.1", "libsframe.so.1.0.0"),
+    (_LIB / "libstdc++.so.6", "libstdc++.so.6.0.33"),
 )
 _SONAMES = {
     "libz.so.1": _LIB / "libz.so.1.3",
@@ -142,9 +165,19 @@ _SONAMES = {
     "libctf-nobfd.so.0": _LIB / "libctf-nobfd.so.0.0.0",
     "libzstd.so.1": _LIB / "libzstd.so.1.5.5",
     "libsframe.so.1": _LIB / "libsframe.so.1.0.0",
+    "libstdc++.so.6": _LIB / "libstdc++.so.6.0.33",
     **{
         name: _LIB / name
-        for name in ("libc.so.6", "libpthread.so.0", "libdl.so.2", "libutil.so.1", "libm.so.6")
+        for name in (
+            "libc.so.6",
+            "libpthread.so.0",
+            "libdl.so.2",
+            "libutil.so.1",
+            "libm.so.6",
+            "librt.so.1",
+            "libresolv.so.2",
+            "libgcc_s.so.1",
+        )
     },
     "ld-linux-x86-64.so.2": _LOADER,
 }
@@ -161,6 +194,13 @@ _NEEDED = {
     _LIB / "libctf-nobfd.so.0.0.0": ("libz.so.1", "libc.so.6"),
     _LIB / "libc.so.6": ("ld-linux-x86-64.so.2",),
     _LIB / "libm.so.6": ("libc.so.6", "ld-linux-x86-64.so.2"),
+    _LIB / "libgcc_s.so.1": ("libc.so.6", "ld-linux-x86-64.so.2"),
+    _LIB / "libstdc++.so.6.0.33": (
+        "libm.so.6",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2",
+        "libgcc_s.so.1",
+    ),
 }
 _SEARCH = (
     _LIB,
@@ -376,7 +416,7 @@ def _elf(raw: bytes) -> _Elf:
     )
     _require(
         all(value & ~0x18 == 0 for value in tags.get(30, ()))
-        and all(value & ~0x8000001 == 0 for value in tags.get(0x6FFFFFFB, ())),
+        and all(value & ~0x8000009 == 0 for value in tags.get(0x6FFFFFFB, ())),
         "ELF_FLAGS_INVALID",
     )
     strsize = tags[10][0]

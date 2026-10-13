@@ -927,16 +927,33 @@ def _elf_closure(
         if main is not None and not main.runpath
         else ()
     )
+    needed_names = {name for elf in objects.values() for name in elf.needed}
+    entry_paths = {
+        path
+        for path, elf in objects.items()
+        if path == prefix / "bin/python3.12" or elf.soname is None or elf.soname not in needed_names
+    }
     pending: list[tuple[Path, tuple[Path, ...]]] = [
-        (path, () if path == prefix / "bin/python3.12" else main_routes) for path in objects
+        (path, () if path == prefix / "bin/python3.12" else main_routes)
+        for path in sorted(entry_paths, reverse=True)
     ]
+    # Dependencies inherit their loader's context, not an invented standalone Python parent.
+    # Unvisited alternatives and disconnected components still receive complete inspection.
+    remaining = sorted(objects.keys() - entry_paths, reverse=True)
+    visited: set[Path] = set()
     seen: set[tuple[Path, tuple[Path, ...]]] = set()
     resolutions: dict[tuple[Path, str], Path | str] = {}
-    while pending:
+    while pending or remaining:
+        if not pending:
+            fallback = remaining.pop()
+            if fallback in visited:
+                continue
+            pending.append((fallback, main_routes))
         path, inherited = pending.pop()
         if (path, inherited) in seen:
             continue
         seen.add((path, inherited))
+        visited.add(path)
         elf = objects[path]
         own = _routes(elf, prefix, directories, links=links, host=host)
         search = own if elf.runpath else own + inherited

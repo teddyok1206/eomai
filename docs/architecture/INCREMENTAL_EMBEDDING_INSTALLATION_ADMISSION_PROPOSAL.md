@@ -633,3 +633,40 @@ receipt. This bounded extension adds no arbitrary search directory or missing-li
 Final host/prefix/Conda/installer4-suite554 PASS64.75s; strict2 and Ruff/format4 PASS.
 The current fixed host seed is
 `sha256:f7c2d8e39617117a9b2a08c30ee3d99b68ece4e54ee41d7bf6244d2515dda365`.
+
+## Preserve loader-parent context for bundled dependencies
+
+Readelf-only diagnosis of the actual CPU candidate exposed a false independent-root assumption:
+a Python extension's RPATH resolves its bundled library, which in turn inherits that RPATH for
+another bundled dependency. Auditing every library first as an unrelated Python child loses
+that context. This is not permission to search arbitrary sibling directories or host libraries.
+
+Keep the same complete byte inventory and bounded adjacency traversal. Initial entry candidates
+are the interpreter, objects without SONAME, and SONAMEs not referenced by any NEEDED edge.
+Visit dependencies in each actual parent search context; retain per-edge resolution consistency,
+first-match ordering, version checks, transitive RPATH and direct-only RUNPATH. After that traversal,
+individually inspect every unvisited object as a conservative fallback. No orphan, unused alternative
+provider or disconnected cycle disappears from coverage. Sets/maps provide O(V+E) membership and
+bounded worklists (existing context/edge limits remain); no registry, DB, protocol or dependency
+is added. This static graph verifies declared loading contexts, not arbitrary future dlopen calls;
+the independent nonprivileged probe and observed maps remain mandatory before admission.
+
+Add only the four observed fixed OS providers needed by these declared contexts: librt, libresolv,
+libgcc_s and libstdc++. Each uses reviewed root-owned bytes, exact hash/size/SONAME/NEEDED and cache
+resolution, including the libstdc++ alias. Permit the standard NODELETE ELF flag required by the
+fixed librt without broadening search flags. Their pins create a successor host seed. Existing
+root ownership, immutable source archive, named/FD identity and final snapshot checks apply.
+The simpler all-independent-root traversal is inaccurate; simply allowing unresolved names or
+unioning parent directories would accept incorrect dependencies. No failed release is edited.
+
+The CUDA readelf scan also declares `/usr/local/cuda/lib64`; actual `/usr/local/cuda` is absent
+under root-owned `/usr/local`. Record that exact parent absence in the same host seed rather
+than allowing this path to load anything. Parent creation as a file, directory or link rejects.
+
+Focused host/prefix/Conda/installer regression571 PASS64.84s; strict2 and Ruff/format4 PASS.
+The actual CPU356-object metadata reproduced in the synthetic graph now passes; this is not
+the protected byte audit. CUDA remains denied: its pinned libcusparseLt declares RUNPATH
+`$ORIGIN:`, whose empty component means current working directory. Do not erase it or pretend
+it is an absent path. A future fixed nonprivileged CUDA execution boundary must explicitly pin
+and validate its working-directory namespace before that loading route can be supported. The
+current parser and negative empty-route tests continue rejecting it; CPU publication is separate.

@@ -123,6 +123,17 @@ def _cache(entries: tuple[tuple[str, str, int, int, int], ...]) -> bytes:
     )
 
 
+@pytest.mark.parametrize("flags", [0x1, 0x8, 0x9, 0x8000000, 0x8000009])
+def test_fixed_host_supports_now_nodelete_pie_without_search_changes(flags: int) -> None:
+    assert host._elf(_elf(extra=(0x6FFFFFFB, flags))).needed == ()
+
+
+@pytest.mark.parametrize("flags", [0x2, 0x4, 0x10, 0x800, 0x800000B])
+def test_fixed_host_rejects_unreviewed_dynamic_flags(flags: int) -> None:
+    with pytest.raises(InstalledRuntimeProofError, match="ELF_FLAGS_INVALID"):
+        host._elf(_elf(extra=(0x6FFFFFFB, flags)))
+
+
 def _put(path: Path, raw: bytes, *, mode: int = 0o600) -> None:
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     path.write_bytes(raw)
@@ -232,7 +243,8 @@ def _fixture(
 
 
 def test_source_fixed_seed_has_exact_bounded_pins_and_no_native_admission() -> None:
-    assert len(host._FILES) == 19 and len(host._ALIASES) == 10
+    assert len(host._FILES) == 23 and len(host._ALIASES) == 11
+    assert {"librt.so.1", "libresolv.so.2", "libgcc_s.so.1", "libstdc++.so.6"} <= set(host._SONAMES)
     assert all(
         type(size) is int and 0 < size <= 8 * 1024**2 and len(sha) == 64
         for _path, size, sha in host._FILES
@@ -557,11 +569,12 @@ def test_fixed_readelf_fd_bound_argv_has_bounded_output(
 
 
 @pytest.mark.parametrize("fault", ["file", "directory", "symlink"])
+@pytest.mark.parametrize("route", ["/lib/intel64", "/usr/local/cuda/lib64"])
 def test_vendor_search_route_must_actually_be_absent(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str, route: str
 ) -> None:
     fixture = _fixture(tmp_path, monkeypatch)
-    target = host._ABSENT_SEARCH_ROUTES["/lib/intel64"]
+    target = host._ABSENT_SEARCH_ROUTES[route]
     if fault == "file":
         _put(target, b"unapproved search route")
     elif fault == "directory":
@@ -823,7 +836,7 @@ import eom_catalog_service.embedding_runtime_files as files
 for forbidden in ('pydantic','jsonschema','eom_catalog_contracts','eom_identifiers',
                   'torch','transformers','numpy','safetensors','tokenizers'):
  assert not any(n==forbidden or n.startswith(forbidden+'.') for n in sys.modules)
-assert len(host._FILES)==19 and hasattr(conda.CondaArchiveToolAdmission,'open_zstd')
+assert len(host._FILES)==23 and hasattr(conda.CondaArchiveToolAdmission,'open_zstd')
 assert hasattr(files.NumericalRuntimeFileSnapshots,'observe_protected_member_bytes')
 print('STDLIB_HOST_IMPORT_PASS')
 """

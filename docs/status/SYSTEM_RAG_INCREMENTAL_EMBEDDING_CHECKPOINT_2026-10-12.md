@@ -1585,3 +1585,21 @@ developer inode17563946 복구·원 fingerprint 재확인은 PASS다. root 복�
 `/opt/eom/.embedding-index-recovery-dZnjSrwI`와 q7i87leS의 복구 로그를 보존했다.
 86621491의 KEW6wjfU 패키지는 build/RECORD만 검증한 후보이며 설치하지 않았다.
 이제 위 경로 수정과 검사 비용 분리를 포함하는 새 commit/input으로 정식 재검증한다.
+
+## 번들 의존관계 진단과 CPU 우선 검증 — 2026-10-13 10:18 UTC
+
+26b4bea9 후보는 archive/RECORD·보호 보관·developer 조립·입력 생성까지만 진행했으며
+정식 publisher는 실행하지 않았다. 사전 진단에서 Python 확장 모듈의 RPATH를 하위
+번들 라이브러리가 상속하는 맥락을 독립 root 검사로 잃던 결함을 재현했다. 초기 진입점과
+의존관계 traversal을 분리하고, 미방문 대체 provider/단절 component도 후속 검사한다.
+누락·다른 부모에서 충돌하는 resolution·RUNPATH 비상속·불법 경로 거부는 유지한다.
+실제 관측한 root 소유 librt/resolv/gcc_s/stdc++의 exact bytes/alias/NEEDED도 host seed에
+추가했다. 일반 외부 라이브러리 허용이나 wheel/RECORD 수정은 없다.
+
+최종4-suite **571 PASS64.84s**, strict2·Ruff/format4 PASS. CPU356개 실제 메타데이터로
+구성한 합성 의존관계 진단은 PASS다. 전체 설치 검증이나 실행 admission으로 확대하지 않는다.
+CUDA287개에는 실제 없는 `/usr/local/cuda/lib64`와 cusparseLt의 `$ORIGIN:`가 있다.
+전자는 실제 없는 보호 parent를 고정했고, 후자의 현재 작업 폴더 검색은 여전히 거부한다.
+CUDA 실행 폴더 격리/namespace를 검증하기 전에는 해당 gate를 완화하지 않는다.
+26b4 조립/input/기록은 보존하고 새 commit/input의 CPU 전체 검증부터 진행한다.
+모델 forward0, benchmark NOT_EVALUATED, GPU 기본값 NOT_ACTIVE. 기존 운영 서비스 변경 없음.
