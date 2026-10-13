@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from eom_catalog_contracts.embedding_installed_runtime_proof import InstalledNumericLibraryProof
@@ -17,6 +17,7 @@ from eom_catalog_service.embedding_runtime_wheel_closure import (
     RuntimeWheelConsoleScriptPin,
     RuntimeWheelInstallationPin,
     RuntimeWheelMemberPin,
+    observe_runtime_wheel_installation,
     validate_runtime_console_wrapper,
     verify_installed_runtime_wheel,
 )
@@ -28,6 +29,36 @@ class VerifiedInstalledNumericDistribution:
     namespace_roots: frozenset[Path]
     installed_members: frozenset[Path]
     torch_version: tuple[str, str | None] | None
+
+
+def capture_installed_numeric_distribution(
+    archive: RuntimeWheelArchivePin,
+    name: str,
+    version: str,
+    *,
+    prefix: Path,
+    archive_root: Path,
+    files: NumericalRuntimeFileSnapshots,
+) -> tuple[InstalledNumericLibraryProof, VerifiedInstalledNumericDistribution]:
+    """Read actual metadata and verify it against the pinned archive, without ML imports.
+
+    Both values reuse one file capture. This does not attest whole-prefix admission, current
+    interpreter/device, unit isolation or the caller's authority to publish a proof.
+    """
+    try:
+        observed = observe_runtime_wheel_installation(
+            archive, name, version, prefix=prefix, files=files
+        )
+        proof = InstalledNumericLibraryProof.model_validate(asdict(observed))
+        verified = verify_installed_numeric_distribution(
+            proof, prefix=prefix, archive_root=archive_root, files=files
+        )
+        files.assert_unchanged()
+        return proof, verified
+    except InstalledRuntimeProofError:
+        raise
+    except Exception as exc:
+        raise InstalledRuntimeProofError("INSTALLED_RUNTIME_DISTRIBUTION_INVALID") from exc
 
 
 def validate_numeric_console_wrapper(raw: bytes, prefix: Path, entry: tuple[str, str]) -> None:

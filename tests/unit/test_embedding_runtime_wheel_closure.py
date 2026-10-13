@@ -22,7 +22,10 @@ from eom_catalog_contracts.embedding_installed_runtime_proof import (
     InstalledNumericLibraryProof,
 )
 from eom_catalog_service import embedding_runtime_wheel_closure as core
-from eom_catalog_service.embedding_runtime_distribution import verify_installed_numeric_distribution
+from eom_catalog_service.embedding_runtime_distribution import (
+    capture_installed_numeric_distribution,
+    verify_installed_numeric_distribution,
+)
 from eom_catalog_service.embedding_runtime_files import (
     InstalledRuntimeProofError,
     NumericalRuntimeFileSnapshots,
@@ -157,6 +160,65 @@ def test_public_wheel_observation_is_exact_and_then_source_verified(
             for path in verified.archive_payload_members
         )
     files.assert_unchanged()
+
+
+@pytest.mark.parametrize("profile", ["CPU_INDEX_FP32", "CUDA_INDEX_FP32"])
+@pytest.mark.parametrize("generated", [False, True])
+def test_numeric_capture_uses_actual_installation_and_existing_archive_verification(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    profile: EmbeddingRuntimeProfile,
+    generated: bool,
+) -> None:
+    staged = staged_runtime(tmp_path, monkeypatch, profile, with_generated=generated)
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    for expected in staged.proof.numeric_libraries:
+        proof, verified = capture_installed_numeric_distribution(
+            wheel_pin(expected).archive,
+            expected.name,
+            expected.version,
+            prefix=staged.prefix,
+            archive_root=staged.archive_root,
+            files=files,
+        )
+        assert proof == expected
+        assert verified.pin.name == expected.name
+        assert verified.pin.distribution_sha256 == expected.archive.sha256
+        assert verified.torch_version == (
+            (expected.version, "12.8" if profile == "CUDA_INDEX_FP32" else None)
+            if expected.name == "torch"
+            else None
+        )
+    files.assert_unchanged()
+
+
+@pytest.mark.parametrize("fault", ["record", "payload", "archive", "script", "url"])
+def test_numeric_capture_cannot_turn_observed_tampering_into_a_verified_proof(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    staged = staged_runtime(tmp_path, monkeypatch, with_generated=True)
+    expected = staged.proof.numeric_libraries[0]
+    dist = staged.dist_infos[expected.name]
+    if fault == "record":
+        target = dist / "RECORD"
+    elif fault == "payload":
+        target = staged.prefix / "lib/python3.12/site-packages/numpy/__init__.py"
+    elif fault == "archive":
+        target = staged.archives[expected.name]
+    elif fault == "script":
+        target = staged.prefix / "bin" / expected.console_scripts[0].name
+    else:
+        target = dist / "direct_url.json"
+    target.write_bytes(target.read_bytes() + b"unaccepted change")
+    with pytest.raises(InstalledRuntimeProofError):
+        capture_installed_numeric_distribution(
+            wheel_pin(expected).archive,
+            expected.name,
+            expected.version,
+            prefix=staged.prefix,
+            archive_root=staged.archive_root,
+            files=NumericalRuntimeFileSnapshots(os.geteuid()),
+        )
 
 
 def test_core_imports_with_actual_file_adapter_under_isolated_no_site_no_bytecode_python() -> None:

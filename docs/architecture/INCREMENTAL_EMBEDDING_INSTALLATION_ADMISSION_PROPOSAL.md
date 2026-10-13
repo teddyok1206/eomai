@@ -575,3 +575,17 @@ and compare the declared count with both record classes. This also prevents BASE
 satisfying a dependency's required version. Final parser diagnostics: CPU356/CUDA287 ELF files,
 zero errors; largest outputs1,509,162/1,503,268bytes respectively. Focused prefix/host/installer
 regression301 PASS17.27s, strict mypy2 and Ruff/format4 PASS. These are not runtime admission.
+
+## Observed numerical distribution capture
+
+The existing typed distribution adapter now composes the public installed metadata observer
+and archive/RECORD verifier for proof generation. Input remains one independently pinned wheel,
+name/version and the owner's existing file snapshot; output is the existing small frozen library
+proof plus verified distribution. No parser, registry, protocol, device fact or runtime grant is
+duplicated. The same snapshot reuses initial byte reads and checks current epochs before return.
+Actual installed metadata is captured rather than copied from an expected proof. Publication,
+the full-prefix gate, interpreter/device observation and nonprivileged unit remain owner duties.
+Focused wheel/observer/proof3-suite279 PASS6.17s; strict1 and Ruff/format2 PASS. New cases compare
+CPU5/CUDA20 captured records with the fixture's independently constructed expected proof and
+reject tampered RECORD, payload, archive, console wrapper and direct URL before returning a proof.
+Fixture verification is not a real installed capture or publication receipt.
