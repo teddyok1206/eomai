@@ -792,3 +792,20 @@ supported cleanup PASS이며 해당 disposable DB·표시된 test role/state만 
 `/tmp/eom-native-runner-db-evidence.Y1PwbVdO`에 보존한다. 실제 installed native owner/launcher,
 CPU/CUDA6회 비교·기본값 전환·seed/delta·공통 소비자 활성화는 PENDING이다. 새 model/GPU 실행0,
 production migration/IAM/NAS write0, 전체 목표 ACTIVE다.
+
+## 공통 후보 context·별도 QUERY 계약 source — 2026-10-13 UTC
+
+승인된 reference Item 기준의 공통 context와 production reference-query 입력/결과 계약을
+JSON Schema2020-12부터 추가했다. 정본 source/profile/report·Graph/policy·index/space/recipe와
+실행 pointer를 구분하며, Graph와 view별 vector 순위는 별도 채널이다. cosine 정수는 표시용이며
+확률·승인·정답 타당성으로 쓰지 않는다. 누락된 anchor report·부분 coverage·OPTIONAL과 REQUIRED
+미가용·FAILED의 정보 비공개를 명시한다. 기존296개 계약 hash/bytes는 보존했다.
+
+root는 frozen12개 파일·raw SHA 전체와 source/tests를 검토한 뒤 독립11-suite **411 PASS
+(13.91s), skip0**, explicit strict mypy·Ruff/format7-file PASS를 확인했다. agent377 PASS는
+다른 일부 fixture를 포함한 겹치는 gate이며 합산하지 않는다. QUERY/DOCUMENT 분리와 float-free
+정본 JSON은 유지한다. actual actor/source/raw-byte/lifecycle 검증은 기존 owner의 책임이다.
+
+이는 **CONTRACT_ONLY / SOURCE_PASS / NOT_ACTIVE**다. 실제 pinned index read·source authority·
+QUERY admission/실행·context compose·기출변형/출제/검토/ChatGPT/25문항 전달은 아직 미구현이며
+계약의 목적 enum이 기능 활성화나 권한을 만들지 않는다. model/GPU0, 전체 목표 ACTIVE다.

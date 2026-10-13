@@ -1,0 +1,755 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/system-rag-similarity-context/1.0",
+  "title": "Approved-reference System RAG auxiliary similarity context V1",
+  "description": "Source-only immutable metadata. Actual caller authority is injected outside this wire value. Independent Graph and per-view vector observations are not source Evidence, educational approval, probability, or an admitted query API.",
+  "$defs": {
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis",
+        "source",
+        "profile",
+        "solution_evidence"
+      ],
+      "properties": {
+        "basis": {
+          "const": "APPROVED_REFERENCE_ITEM"
+        },
+        "source": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/source"
+        },
+        "profile": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profilePointer"
+            }
+          ]
+        },
+        "solution_evidence": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "eom://schemas/knowledge/evidence-bundle-manifest/5.0#/$defs/solutionEvidence"
+            }
+          ]
+        }
+      }
+    },
+    "indexPin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "index_id",
+        "index_revision_id",
+        "index_manifest",
+        "index_sha256",
+        "storage_partition",
+        "spaces"
+      ],
+      "properties": {
+        "index_id": {
+          "type": "string",
+          "pattern": "^embeddingindex_[0-9a-f]{32}$"
+        },
+        "index_revision_id": {
+          "type": "string",
+          "pattern": "^embeddingindexrev_[0-9a-f]{32}$"
+        },
+        "index_manifest": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+        },
+        "index_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "storage_partition": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/partition"
+        },
+        "spaces": {
+          "$ref": "eom://schemas/knowledge/embedding-reference-query/1.0#/$defs/spaces"
+        }
+      }
+    },
+    "viewSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "view",
+        "recipe",
+        "index"
+      ],
+      "properties": {
+        "view": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/view"
+        },
+        "recipe": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/recipe"
+        },
+        "index": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/indexPin"
+            }
+          ]
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "request_id",
+        "consumer_purpose",
+        "anchor",
+        "graph_snapshot",
+        "policy_revision_id",
+        "policy_sha256",
+        "source_classes",
+        "topics",
+        "unit_ids",
+        "views",
+        "vector_mode",
+        "maximum_sources",
+        "top_k",
+        "request_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "system-rag-similarity-request/1.0"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^similarityrequest_[0-9a-f]{32}$"
+        },
+        "consumer_purpose": {
+          "enum": [
+            "PAST_EXAM_VARIATION",
+            "ITEM_AUTHORING",
+            "ITEM_REVIEW",
+            "GENERAL_CHAT_READ",
+            "MOCK_EXAM_OBSERVATION"
+          ]
+        },
+        "anchor": {
+          "$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/anchor"
+        },
+        "graph_snapshot": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"
+        },
+        "policy_revision_id": {
+          "type": "string",
+          "pattern": "^accessrev_[0-9a-f]{32}$"
+        },
+        "policy_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "source_classes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "APPROVED_ITEM",
+              "PAST_EXAM"
+            ]
+          }
+        },
+        "topics": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "unit_ids": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+          }
+        },
+        "views": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/viewSelection"
+          }
+        },
+        "vector_mode": {
+          "enum": [
+            "OPTIONAL",
+            "REQUIRED"
+          ]
+        },
+        "maximum_sources": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
+        },
+        "top_k": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "request_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        }
+      },
+      "$id": "eom://schemas/knowledge/system-rag-similarity-request/1.0"
+    },
+    "viewCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "view",
+        "status",
+        "available_binding_count",
+        "binding_set_sha256",
+        "scored_count",
+        "missing_view_count",
+        "reason"
+      ],
+      "properties": {
+        "view": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/view"
+        },
+        "status": {
+          "enum": [
+            "READY",
+            "PARTIAL",
+            "EMPTY",
+            "UNAVAILABLE"
+          ]
+        },
+        "available_binding_count": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1024
+            }
+          ]
+        },
+        "binding_set_sha256": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+            }
+          ]
+        },
+        "scored_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1023
+        },
+        "missing_view_count": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1024
+            }
+          ]
+        },
+        "reason": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "enum": [
+                "INDEX_NOT_PREPARED",
+                "QUERY_NOT_OFFERED",
+                "ANCHOR_REPORT_MISSING",
+                "VIEW_INPUT_MISSING",
+                "INPUT_OVERFLOW"
+              ]
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "UNAVAILABLE"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "available_binding_count": {
+                "type": "null"
+              },
+              "binding_set_sha256": {
+                "type": "null"
+              },
+              "scored_count": {
+                "const": 0
+              },
+              "missing_view_count": {
+                "type": "null"
+              },
+              "reason": {
+                "enum": [
+                  "INDEX_NOT_PREPARED",
+                  "QUERY_NOT_OFFERED",
+                  "ANCHOR_REPORT_MISSING",
+                  "VIEW_INPUT_MISSING",
+                  "INPUT_OVERFLOW"
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "available_binding_count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1024
+              },
+              "binding_set_sha256": {
+                "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+              },
+              "missing_view_count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1024
+              },
+              "reason": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "population": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authorized_source_count",
+        "authorized_source_set_sha256",
+        "accepted_profile_count",
+        "accepted_profile_set_sha256",
+        "missing_report_count",
+        "truncated",
+        "views"
+      ],
+      "properties": {
+        "authorized_source_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1024
+        },
+        "authorized_source_set_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "accepted_profile_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1024
+        },
+        "accepted_profile_set_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "missing_report_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1024
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "views": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/viewCoverage"
+          }
+        }
+      }
+    },
+    "graphObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "rank",
+        "graph_relevance_milli"
+      ],
+      "properties": {
+        "channel": {
+          "const": "GRAPH_LEXICAL"
+        },
+        "rank": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "graph_relevance_milli": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      }
+    },
+    "vectorObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "view",
+        "rank",
+        "cosine_millionths",
+        "score_semantics",
+        "query_row",
+        "document_row"
+      ],
+      "properties": {
+        "channel": {
+          "const": "VECTOR"
+        },
+        "view": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/view"
+        },
+        "rank": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "cosine_millionths": {
+          "type": "integer",
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "score_semantics": {
+          "const": "ROUNDED_DISPLAY_ONLY_NOT_RANKING_OR_PROBABILITY"
+        },
+        "query_row": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/rowRef"
+        },
+        "document_row": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/rowRef"
+        }
+      }
+    },
+    "explanation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "request_member",
+        "result_member",
+        "judgement"
+      ],
+      "properties": {
+        "kind": {
+          "const": "MODEL_INFERENCE"
+        },
+        "request_member": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+        },
+        "result_member": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+        },
+        "judgement": {
+          "enum": [
+            "INSUFFICIENT",
+            "NO_TRANSFER",
+            "STRUCTURAL_ANALOGY",
+            "NEAR_IDENTICAL_CANDIDATE"
+          ]
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "profile",
+        "solution_evidence",
+        "observations",
+        "explanation"
+      ],
+      "properties": {
+        "source": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/source"
+        },
+        "profile": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profilePointer"
+        },
+        "solution_evidence": {
+          "$ref": "eom://schemas/knowledge/evidence-bundle-manifest/5.0#/$defs/solutionEvidence"
+        },
+        "observations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/graphObservation"
+              },
+              {
+                "$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/vectorObservation"
+              }
+            ]
+          }
+        },
+        "explanation": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/explanation"
+            }
+          ]
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "request",
+        "status",
+        "population",
+        "query_execution",
+        "graph_evidence",
+        "candidates",
+        "limitations",
+        "error_code",
+        "context_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "system-rag-similarity-context/1.0"
+        },
+        "request": {
+          "$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/request"
+        },
+        "status": {
+          "enum": [
+            "READY",
+            "PARTIAL",
+            "EMPTY",
+            "UNAVAILABLE",
+            "FAILED"
+          ]
+        },
+        "population": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/population"
+            }
+          ]
+        },
+        "query_execution": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "eom://schemas/knowledge/embedding-reference-query/1.0#/$defs/executionPointer"
+            }
+          ]
+        },
+        "graph_evidence": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            }
+          ]
+        },
+        "candidates": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/candidate"
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "VECTOR_NOT_AVAILABLE",
+              "PARTIAL_REPORT_COVERAGE",
+              "PARTIAL_VIEW_COVERAGE",
+              "BOUNDED_SCOPE_TRUNCATED",
+              "NO_RELATED_CANDIDATES",
+              "REFERENCE_ANCHOR_NOT_PRIVATE_INTENT"
+            ]
+          }
+        },
+        "error_code": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "enum": [
+                "SOURCE_ACCESS_DENIED",
+                "SOURCE_REVOKED",
+                "SOURCE_POINTER_INVALID",
+                "SOURCE_HASH_MISMATCH",
+                "INDEX_POINTER_INVALID",
+                "INDEX_HASH_MISMATCH",
+                "QUERY_RESULT_INVALID",
+                "AUTHORITY_UNAVAILABLE"
+              ]
+            }
+          ]
+        },
+        "context_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "FAILED"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "population": {
+                "type": "null"
+              },
+              "query_execution": {
+                "type": "null"
+              },
+              "graph_evidence": {
+                "type": "null"
+              },
+              "candidates": {
+                "maxItems": 0
+              },
+              "error_code": {
+                "type": "string"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "population": {
+                "$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/population"
+              },
+              "error_code": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "EMPTY",
+                  "UNAVAILABLE"
+                ]
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "candidates": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "READY",
+                  "PARTIAL"
+                ]
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "candidates": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/request"
+    },
+    {
+      "$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/result"
+    }
+  ]
+}

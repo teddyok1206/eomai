@@ -1,7 +1,8 @@
 # System RAG similarity context implementation boundary
 
 Written: 2026-10-12 UTC. Inspected Git base: `550a239cac74b8255bf33467b78671b6d37f811f`.
-Status: **DESIGN ONLY / NOT IMPLEMENTED / NOT ACTIVATED**. Source observations below are not
+Status: **DESIGN + CONTRACT-ONLY SOURCE CHECKPOINT; behavior NOT IMPLEMENTED / NOT ACTIVATED**.
+The separately approved contract-only implementation is recorded in section 8. Source observations are not
 installed-runtime, production permission, performance, or educational-quality evidence.
 This note implements no authority, provider, schema, API, worker, database, model, or release.
 The root implementer must read this complete note before changing the common-context boundary.
@@ -10,7 +11,8 @@ This is the consumer-side boundary for
 [the agreed design](SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md), not a replacement
 for it. Persistent vector execution, host/runtime closure, actual Identity fences, service IAM,
 claim/lease, CPU/CUDA benchmarks, and default-device activation have separate owners. The only
-file created during this review is this note; other worktree changes were not altered or staged.
+file created during the initial design review was this note; section 8 records later contract work.
+Other owners' worktree changes were not altered or staged.
 
 ## 1. Decision and truthful first vertical
 
@@ -340,3 +342,51 @@ Record `SOURCE_PASS / DISPOSABLE_DB_PASS / INSTALLED / ACTIVE / LIVE_VERIFIED / 
 NOT_EVALUATED` separately. Context/schema source pass, persistent index coverage, production QUERY
 admission, CPU/CUDA performance/default activation, each consumer delivery, and human educational
 quality have different evidence and denominators. This note alone satisfies none of those gates.
+
+## 8. Contract-only source checkpoint — 2026-10-13 UTC
+
+The approved first boundary now has two additive closed Draft 2020-12 schemas and their exact
+packaged mirrors: `system-rag-similarity-context-v1.schema.json` and
+`embedding-reference-query-v1.schema.json`. Existing Catalog `validation.py` registers their raw
+hashes; public models/parsers are exported through the existing package interface. Released
+predecessor schema bytes and the original 296-entry inventory hash remain unchanged. Its existing
+freeze test excludes exactly the two new resource names, not a wildcard or a revised denominator.
+
+`similarity_context.py` carries approved reference anchors only, purpose-specific request metadata,
+three independent view selections, immutable index/space/recipe pins, scoped coverage, five closed
+result statuses and separate Graph/vector observations. Signed `cosine_millionths` is explicitly
+display-only. Optional absence can retain Graph observations; required vectors cannot be replaced
+by Graph-only success. Missing anchor reports disable reference QUERY explicitly. Full official
+past-exam page lineage is retained. FAILED exposes no candidates, population, query or Graph
+Evidence. Neither candidates nor comparison explanations satisfy existing Evidence receipts.
+
+`embedding_reference_query.py` is a distinct source-neutral QUERY input/result and execution
+pointer contract. QUERY/DOCUMENT must have complementary purposes and identical exact model,
+runtime, device, precision and normalization. One bounded query has 1–3 exact view/text/encoding
+rows; existing f32 shard metadata is reused without changing DOCUMENT-only incremental inputs.
+Pure supplied-index and supplied-query closure helpers reject mismatched revision/view/recipe,
+space, execution and row references. Actual target existence, raw member bytes/hash, source/report
+lineage, current permission, lifecycle and compute admission remain the owners' required checks.
+
+Models preserve raw copied/constructed extras, booleans and scalars before schema/Pydantic
+validation, reject incorrect hashes rather than repairing them, and retain float-free canonical
+serialization. Bounded nesting rejects cycles. No new dependency was added. Explicit API Conda
+source gates: strict typing, Ruff lint and formatting PASS for seven Python files; the focused
+new-contract plus predecessor suite passed 170 tests (5.06 seconds). The final broader
+eleven-suite contract/consumer regression passed 377 tests (16.66 seconds). Overlapping suites
+are not additive counts. Initial local test/typing failures were corrected and rerun; no failed
+runtime or historical product record was rewritten.
+
+**SOURCE_ONLY / NOT_ACTIVE.** No Catalog read/provider behavior, protocol transport, DB/IAM,
+Runner, runtime, benchmark admission, consumer/prompt/plan, installation or operational query was
+changed. No model/GPU invocation or new consumer tool was activated. All five consumer connections
+and genuine production QUERY admission remain unimplemented at this checkpoint. A valid synthetic
+contract fixture is not evidence that production QUERY exists.
+
+Root independently read all twelve frozen files and checked every raw SHA. Its eleven-suite
+contract/registry/source/consumer compatibility gate passed **411 tests in13.91s, skip0**, with
+explicit strict mypy and Ruff/check-format **seven files PASS**. The root inventory also includes
+`test_item_inference_transfer_contracts`, `test_inference_transfer_service`,
+`test_embedding_registry_application` and `test_embedding_registry_catalog_adapter`; it differs
+from the agent's377-test gate, so these overlapping counts are not summed. Protocol-only validation
+does not establish current source permission, installed QUERY execution, or consumer activation.
