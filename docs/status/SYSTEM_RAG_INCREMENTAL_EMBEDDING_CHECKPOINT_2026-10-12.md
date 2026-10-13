@@ -1075,3 +1075,20 @@ variation plan/Pack 전달과 운영 활성화를 닫은 것이 아니다. 기�
 모델/GPU 실행 변경0, actualCPU audit 거부 및 backup은 그대로다. 후속 C1에서는 현 QUERY
 input1.0의 batch≤3과 실제 고정 numerical recipe의 호환성을 먼저 확인하고 필요한
 additive 계약만 만들며 기존 released bytes를 바꾸지 않는다. 전체 목표는 ACTIVE다.
+
+## 실제 설치 오류의 최소 호환 수정 source gate — 2026-10-13 UTC
+
+pip26.1.2의 정확한 source generator·archive·두 선언 wrapper에 결합된 내부 pip3.12
+설치 alias 검증과 TOML의 안전한 literal JSON resource 지원을 source5 범위에서 수정했다.
+Root 전체 변경 정독/raw SHA 확인 후18-suite **1160 PASS32.16s, skip0**, strict/Ruff/
+format4 PASS다. released public no-dot proof/schema·typed shim·observer·helper·leaf·publisher
+bytes는 이 수정에서 그대로다. agent 최초1159 PASS/Conda replay1 FAIL와 unchanged2-case/
+full18 재실행 PASS는 host note에 보존했다. 이 source 결과로 actual failed CPU를 성공
+상태로 바꾸거나 NEW instruction을 실행하지 않았다.
+
+이어 root가 기존 helper의 실제 NEW-stage `_index_private_source`를 정독하다가 별도
+확정 불일치를 발견했다. 실제 Git tar/core validator는 full40 commit 폴더를 쓰는데 helper와
+기존 합성 fixture는 unprefixed member를 찾는다. 작은 별도 helper/test 수정으로 이 경로
+계약을 맞춘 뒤 새 explicit commit/wheel/source/input으로 재조립해야 한다. 기존 E5 main/
+model-only 설치와 과거 실패·candidate·backup은 보존한다. 아직 모델/GPU 실행0, 수치 비교/
+기본값 NOT_EVALUATED / NOT_ACTIVE다.

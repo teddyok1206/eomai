@@ -432,17 +432,26 @@ def _source_payload(source: _Source, package: str) -> dict[str, tuple[str, int]]
         roots = ("packages/gpu_lease",)
     patterns = project["tool"]["setuptools"].get("package-data", {})
     _require(type(patterns) is dict and len(patterns) <= 32, "SOURCE_PROJECT_INVALID")
+    literals: set[str] = set()
     for namespace, values in patterns.items():
         _require(
             re.fullmatch(r"eom_[a-z0-9_]{1,64}", namespace) is not None
             and type(values) is list
             and len(values) <= 64
             and all(
-                type(value) is str and re.fullmatch(r"[A-Za-z0-9_/-]+/\*\.json", value)
+                type(value) is str
+                and len(value) <= 512
+                and (
+                    re.fullmatch(r"[A-Za-z0-9_/-]+/\*\.json", value)
+                    or re.fullmatch(r"[A-Za-z0-9_/-]+/[A-Za-z0-9_.-]+\.json", value)
+                )
+                and not value.startswith("/")
+                and all(part not in {"", ".", ".."} for part in value.split("/"))
                 for value in values
             ),
             "SOURCE_PROJECT_INVALID",
         )
+        literals.update(namespace + "/" + value for value in values if "*" not in value)
     result: dict[str, tuple[str, int]] = {}
     for path, pin in source.pins.items():
         for base in roots:
@@ -453,13 +462,15 @@ def _source_payload(source: _Source, package: str) -> dict[str, tuple[str, int]]
             if not separator or not (namespace == "eomctl" or namespace.startswith("eom_")):
                 continue
             wanted = member.endswith(".py") or any(
-                fnmatch.fnmatchcase(member, pattern) and member.count("/") == pattern.count("/")
+                (member == pattern if "*" not in pattern else fnmatch.fnmatchcase(member, pattern))
+                and member.count("/") == pattern.count("/")
                 for pattern in patterns.get(namespace, [])
             )
             if wanted:
                 _require(target not in result, "SOURCE_DUPLICATE_TARGET")
                 result[target] = pin
     _require(bool(result), "SOURCE_PAYLOAD_MISSING")
+    _require(literals <= set(result), "SOURCE_LITERAL_RESOURCE_MISSING")
     return result
 
 

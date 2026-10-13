@@ -16,6 +16,7 @@ from eom_catalog_contracts.embedding_installed_runtime_proof import (
     EmbeddingRuntimeProfile,
     InstalledNumericLibraryProof,
 )
+from eom_catalog_service import embedding_runtime_wheel_closure as core
 from eom_catalog_service.embedding_runtime_distribution import verify_installed_numeric_distribution
 from eom_catalog_service.embedding_runtime_files import (
     InstalledRuntimeProofError,
@@ -35,6 +36,8 @@ from eom_identifiers import sha256_bytes
 from tests.unit.embedding_installed_runtime_fixtures import (
     staged_runtime,
     synthetic_console_wrapper,
+    synthetic_record,
+    synthetic_wheel,
 )
 
 
@@ -391,3 +394,193 @@ def test_public_core_owns_only_the_three_exact_wrapper_byte_recipes(
     validate_runtime_console_wrapper(raw, prefix, entry)
     with pytest.raises(InstalledRuntimeProofError, match="CONSOLE_WRAPPER_INVALID"):
         validate_runtime_console_wrapper(raw + b"import os\n", prefix, entry)
+
+
+def _pip_alias_fixture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, fault: str | None = None
+) -> tuple[Path, Path, RuntimeWheelArchivePin]:
+    """Explicit synthetic source/archive pin substitution; no installed pip execution."""
+    prefix, archives = tmp_path / "prefix", tmp_path / "archives"
+    dist = "pip-26.1.2.dist-info"
+    generation = b"# synthetic source generation owner, never executed\n"
+    source_pin = core._PIP_GENERATION_SOURCE[0], sha256_bytes(generation), len(generation)
+    members = {
+        dist + "/METADATA": b"Metadata-Version: 2.1\nName: pip\nVersion: 26.1.2\n\n",
+        dist + "/WHEEL": b"Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-any\n\n",
+        dist + "/entry_points.txt": (
+            b"[console_scripts]\npip=pip._internal.cli.main:main\n"
+            b"pip3=pip._internal.cli.main:main\n\n"
+        ),
+        source_pin[0]: generation,
+    }
+    if fault == "source":
+        members[source_pin[0]] += b"# unaccepted change\n"
+    if fault == "target":
+        members[dist + "/entry_points.txt"] = members[dist + "/entry_points.txt"].replace(
+            b":main", b":other"
+        )
+    if fault == "source_missing":
+        del members[source_pin[0]]
+    record_name = dist + "/RECORD"
+    raw = synthetic_wheel(members | {record_name: synthetic_record(members, record_name)})
+    archive = RuntimeWheelArchivePin("pip-26.1.2-py3-none-any.whl", sha256_bytes(raw), len(raw))
+    archive_path = archives / archive.sha256[7:] / archive.wheel_filename
+    archive_path.parent.mkdir(parents=True, mode=0o700)
+    archive_path.write_bytes(raw)
+    archive_path.chmod(0o600)
+    monkeypatch.setattr(core, "_PIP_GENERATION_SOURCE", source_pin)
+    expected = "sha256:" + "0" * 64 if fault == "archive" else archive.sha256
+    monkeypatch.setattr(
+        core,
+        "_PIP_GENERATION_ARCHIVE",
+        (
+            "different" if fault == "name" else "pip",
+            "26.1.3" if fault == "version" else "26.1.2",
+            "wrong-26.1.2-py3-none-any.whl" if fault == "filename" else archive.wheel_filename,
+            expected,
+        ),
+    )
+    installed = members | {dist + "/INSTALLER": b"pip\n"}
+    wrapper = synthetic_console_wrapper(prefix, ("pip._internal.cli.main", "main"), "removesuffix")
+    if fault == "shebang":
+        wrapper = wrapper.replace(str(prefix).encode(), b"/unaccepted-prefix", 1)
+    for script in ("pip", "pip3", "pip3.12"):
+        installed["../../../bin/" + script] = wrapper
+    if fault == "alias_body":
+        installed["../../../bin/pip3.12"] += b"import os\n"
+    if fault == "declared_body":
+        installed["../../../bin/pip3"] += b"# changed\n"
+    if fault == "missing":
+        del installed["../../../bin/pip3.12"]
+    if fault == "extra":
+        installed["../../../bin/pip3.11"] = wrapper
+    installed_record = synthetic_record(installed, record_name)
+    if fault == "record_hash":
+        lines = installed_record.splitlines(keepends=True)
+        installed_record = b"".join(
+            b"../../../bin/pip3.12,sha256=" + b"a" * 43 + b",1\n"
+            if line.startswith(b"../../../bin/pip3.12,")
+            else line
+            for line in lines
+        )
+    if fault == "duplicate":
+        installed_record += next(
+            line
+            for line in installed_record.splitlines(keepends=True)
+            if line.startswith(b"../../../bin/pip3.12,")
+        )
+    for name, value in (installed | {record_name: installed_record}).items():
+        path = (
+            prefix / "bin" / Path(name).name
+            if name.startswith("../../../bin/")
+            else prefix / "lib/python3.12/site-packages" / name
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(value)
+        path.chmod(0o600)
+    for path in [tmp_path, *tmp_path.rglob("*")]:
+        if path.is_dir():
+            path.chmod(0o700)
+    return prefix, archives, archive
+
+
+def test_generated_pip_alias_is_verified_inventory_not_public_console_proof(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    prefix, archives, archive = _pip_alias_fixture(tmp_path, monkeypatch)
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    observed = observe_runtime_wheel_installation(
+        archive, "pip", "26.1.2", prefix=prefix, files=files
+    )
+    assert tuple(script.name for script in observed.console_scripts) == ("pip", "pip3")
+    verified = verify_installed_runtime_wheel(
+        observed, prefix=prefix, archive_root=archives, files=files
+    )
+    assert prefix / "bin/pip3.12" in verified.all_installed_members
+    assert (
+        prefix / "bin/pip3.12" not in verified.installed_members | verified.archive_payload_members
+    )
+    assert verified.all_installed_members - verified.installed_members == frozenset(
+        prefix / "bin" / name for name in ("pip", "pip3", "pip3.12")
+    )
+    files.assert_unchanged()
+    with pytest.raises(InstalledRuntimeProofError):
+        RuntimeWheelConsoleScriptPin(
+            "pip3.12", observed.console_scripts[0].sha256, observed.console_scripts[0].size_bytes
+        )
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "archive",
+        "name",
+        "version",
+        "filename",
+        "source",
+        "source_missing",
+        "target",
+        "shebang",
+        "alias_body",
+        "declared_body",
+        "missing",
+        "extra",
+        "record_hash",
+        "duplicate",
+    ],
+)
+def test_generated_alias_never_skips_source_record_body_or_entry_validation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    prefix, archives, archive = _pip_alias_fixture(tmp_path, monkeypatch, fault=fault)
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    with pytest.raises(InstalledRuntimeProofError):
+        observed = observe_runtime_wheel_installation(
+            archive, "pip", "26.1.2", prefix=prefix, files=files
+        )
+        verify_installed_runtime_wheel(observed, prefix=prefix, archive_root=archives, files=files)
+
+
+def test_copied_pip_alias_public_pin_is_rejected_before_io(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    prefix, archives, archive = _pip_alias_fixture(tmp_path, monkeypatch)
+    observed = observe_runtime_wheel_installation(
+        archive, "pip", "26.1.2", prefix=prefix, files=NumericalRuntimeFileSnapshots(os.geteuid())
+    )
+    copied = replace(observed.console_scripts[0])
+    object.__setattr__(copied, "name", "pip3.12")
+    object.__setattr__(observed, "console_scripts", (copied,))
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    monkeypatch.setattr(
+        files, "verified_open", lambda *_a, **_k: pytest.fail("invalid public alias reached IO")
+    )
+    with pytest.raises(InstalledRuntimeProofError, match="DISTRIBUTION_INVALID"):
+        verify_installed_runtime_wheel(observed, prefix=prefix, archive_root=archives, files=files)
+
+
+@pytest.mark.parametrize("fault", ["rewrite", "symlink", "hardlink"])
+def test_generated_alias_keeps_actual_nofollow_and_epoch_binding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    prefix, archives, archive = _pip_alias_fixture(tmp_path, monkeypatch)
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    alias = prefix / "bin/pip3.12"
+    if fault == "rewrite":
+        observed = observe_runtime_wheel_installation(
+            archive, "pip", "26.1.2", prefix=prefix, files=files
+        )
+        raw = alias.read_bytes()
+        alias.write_bytes(raw)
+        with pytest.raises(InstalledRuntimeProofError, match="CHANGED"):
+            verify_installed_runtime_wheel(
+                observed, prefix=prefix, archive_root=archives, files=files
+            )
+    else:
+        alias.rename(alias.with_name("original"))
+        if fault == "symlink":
+            alias.symlink_to(alias.with_name("original"))
+        else:
+            os.link(alias.with_name("original"), alias)
+        with pytest.raises(InstalledRuntimeProofError):
+            observe_runtime_wheel_installation(archive, "pip", "26.1.2", prefix=prefix, files=files)

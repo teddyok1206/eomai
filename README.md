@@ -171,7 +171,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | 공통 유사도 context 조립 | SOURCE_PASS; 기출변형용 승인 anchor·3개 독립 view·현재 권한 재확인334 PASS, 실제 QUERY 실행·소비자 연결은 미활성 |
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
 | 실제 disposable PostgreSQL |0052 registry/application16·reservation8·limited IAM6,0053 stage18+runner10·Identity11 PASS; migration·cleanup PASS |
-| CPU/CUDA 실행 환경 준비 | canonical 원본/후보 준비 완료; CPU 실제 실행 전 audit에서 정상 pip alias 처리 누락 발견·수정 중, CUDA 미게시; 최종 runtime 미승인 |
+| CPU/CUDA 실행 환경 준비 | 실제 CPU audit의 pip alias 누락 수정 source1160 PASS; 별도 설치 경로 호환 수정·새 후보 조립 대기, CUDA 미게시; 최종 runtime 미승인 |
 | 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | NOT_ACTIVE / NOT_EVALUATED |
 
 최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와

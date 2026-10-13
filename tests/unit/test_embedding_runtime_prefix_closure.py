@@ -78,6 +78,7 @@ def _fixture(
     monkeypatch: pytest.MonkeyPatch,
     *,
     profile: Literal["CPU_INDEX_FP32", "CUDA_INDEX_FP32"] = "CPU_INDEX_FP32",
+    literal_resource: bool = False,
 ) -> tuple[prefix.PrefixRuntimeAuditPlan, Any, host.ProtectedEmbeddingHostClosure, Path, Path]:
     actual_popen = subprocess.Popen
     staged = conda_fixture(tmp_path, monkeypatch, profile)
@@ -111,6 +112,14 @@ def _fixture(
         "packages/gpu_lease/eom_gpu_lease/__init__.py": b"# synthetic\n",
         "packages/gpu_lease/eom_gpu_lease/lease.py": b"# synthetic\n",
     }
+    if literal_resource:
+        source["pyproject.toml"] += (
+            b"eom_operator_identity=['resources/operator-owner-session-capture-v1.schema.json']\n"
+        )
+        source["packages/operator_identity/eom_operator_identity/__init__.py"] = b"# synthetic\n"
+        source[
+            "packages/operator_identity/eom_operator_identity/resources/operator-owner-session-capture-v1.schema.json"
+        ] = b'{"synthetic_schema":true}\n'
     for parent, name in prefix._LOCKS:
         source[parent + "/" + name] = b"# pinned synthetic lock\n"
         _put(lock_directory / name, source[parent + "/" + name])
@@ -128,6 +137,14 @@ def _fixture(
             for path, raw in source.items()
             if path.startswith("services/catalog_service/")
         }
+        if literal_resource:
+            payload.update(
+                {
+                    path.removeprefix("packages/operator_identity/"): raw
+                    for path, raw in source.items()
+                    if path.startswith("packages/operator_identity/")
+                }
+            )
         if name == "eom-gpu-lease":
             payload = {
                 path.removeprefix("packages/gpu_lease/"): raw
@@ -318,6 +335,68 @@ def test_fixed_git_tar_commit_layout_and_all_private_resource_mapping(
             prefix._git_source(fd, len(raw), "b" * 40)
     finally:
         os.close(fd)
+
+
+@pytest.mark.parametrize("fault", [None, "missing", "changed", "extra"])
+def test_literal_json_resource_is_source_exact_and_part_of_whole_prefix_closure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str | None
+) -> None:
+    plan, staged, owned, helper, locks = _fixture(tmp_path, monkeypatch, literal_resource=True)
+    root = staged.prefix / "lib/python3.12/site-packages/eom_operator_identity/resources"
+    literal = root / "operator-owner-session-capture-v1.schema.json"
+    if fault == "missing":
+        literal.unlink()
+    elif fault == "changed":
+        literal.write_bytes(b'{"wrong_schema":true}\n')
+    elif fault == "extra":
+        _put(root / "unselected.schema.json", b"{}\n")
+    with owned:
+        if fault is None:
+            result = _audit(plan, staged, owned, helper, locks)
+            assert result.regular_members > 0 and literal.exists()
+        else:
+            with pytest.raises(InstalledRuntimeProofError):
+                _audit(plan, staged, owned, helper, locks)
+    assert not (tmp_path / "NEW_EXECUTED").exists()
+
+
+@pytest.mark.parametrize(
+    "selector",
+    [
+        "/resources/name.json",
+        "resources/../name.json",
+        "../resources/name.json",
+        "resources\\name.json",
+        "resources/**.json",
+        "resources/**/*.json",
+        "resources/name?.json",
+        "resources/[a].json",
+        "resources//name.json",
+        "resources/./name.json",
+        "resources/name.txt",
+    ],
+)
+def test_literal_resource_never_expands_general_globs_or_unsafe_paths(selector: str) -> None:
+    project = _project() + ("eom_operator_identity=[" + json.dumps(selector) + "]\n").encode()
+    source = prefix._Source(
+        {"services/catalog_service/eom_catalog_service/__init__.py": (_hash(b""), 0)},
+        {"pyproject.toml": project},
+    )
+    with pytest.raises(InstalledRuntimeProofError, match="SOURCE_PROJECT_INVALID"):
+        prefix._source_payload(source, "eom-platform")
+
+
+def test_missing_declared_literal_original_source_is_not_silently_omitted() -> None:
+    project = (
+        _project()
+        + b"eom_operator_identity=['resources/operator-owner-session-capture-v1.schema.json']\n"
+    )
+    source = prefix._Source(
+        {"services/catalog_service/eom_catalog_service/__init__.py": (_hash(b""), 0)},
+        {"pyproject.toml": project},
+    )
+    with pytest.raises(InstalledRuntimeProofError, match="SOURCE_LITERAL_RESOURCE_MISSING"):
+        prefix._source_payload(source, "eom-platform")
 
 
 def _input(plan: prefix.PrefixRuntimeAuditPlan) -> dict[str, Any]:

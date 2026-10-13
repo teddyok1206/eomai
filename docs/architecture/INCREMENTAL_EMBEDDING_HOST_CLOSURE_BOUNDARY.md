@@ -595,3 +595,71 @@ Root independently reviewed all three frozen publisher paths and matched their r
 The full18 gate passed **1125 tests in30.06s**, strict mypy/Ruff/format for the changed test
 and publisher Bash syntax PASS. The original helper, audit leaf/core and legacy installer
 remain unchanged. This is source acceptance only; guarded protected execution follows.
+
+## Approved actual-failure compatibility delta (five source paths)
+
+Root's first actual CPU publication stopped at BEFORE_OLD_PREFIX_BYTES_AUDIT with
+CONDA_OVERLAY_INVALID, preserving root staged prefix, original developer backup,
+phase and failed receipt. NEW/model/GPU execution stayed absent. Non-root public overlay
+observation isolated pip; packaging/setuptools/wheel passed. The exact owner-input raw
+pin was984be0006bafb8a7c53d0db079992f8bb1b222d24bc01c48b2ac96b2541175de.
+Root approved only wheel core/test, prefix core/test and this note; no live repair/resume.
+
+1. Boundary: close the two observed source compatibility gaps, not a schema/installer/
+   root policy change. Actual staged files, old candidates and failed evidence stay intact.
+2. Canonical source: exact pip26.1.2 wheel raw382ff9f685ee3bc25864f820aa50505825f10f5458ffff07e30a6d96e5715cab
+   and `pip/_internal/operations/install/wheel.py`28614B/rawb953db283fd1a9029d54e3f59744cffca96236e4161a6b4f2c7ea768f00ef537.
+   Source `get_console_script_specs` deliberately generates pip/pip3/pip3.12 under the
+   fixed CPython3.12/default recipe. No arbitrary version alias/environment option.
+3. Identity: preserve all released no-dot ConsoleScript proof/schema and typed-shim bytes.
+   The generated alias is an internal installed member, not a third public console proof.
+4. Checks: actual CPU RECORD43135B/raw44580260faf272fcd34ff9878c7da1b9b5002f74a1119b0d8942af55ea4ba80c
+   has all three wrappers. Each211B/raw5c6b3ff783d92acb79f80e7136c4f18926b84ac3b6a42f709788777bc66e473a
+   passes the existing exact prefix/shebang/callable wrapper validator. Archive-declared
+   entry metadata84B/raw5617fcb34218817dfb9ad778bc62fbdc13dcc5d2a7a9e0853f3079f9ddf4c7ca
+   declares only pip/pip3, both `pip._internal.cli.main:main`. Observation must capture/
+   bind the alias bytes/epochs to those declared wrappers; archive verification separately
+   pins the source-generation member and exact two entry targets. Prefix-specific wrapper
+   length follows the existing byte recipe/shebang (211 is observed CPU evidence, not a
+   hardcoded length for the shorter CUDA prefix). Never skip an unverified alias.
+5. Access: one purpose-specific fixed internal transformation maps this exact accepted pip
+   recipe to pip3.12's expected hash/size and is reused by observation/verification. All
+   existing full RECORD/hash/duplicate/member/wrapper/current-FD rules apply; all installed
+   members includes the alias while public console_scripts remains exactly pip/pip3.
+6. Structures: immutable local pins and existing maps/snapshot byte cache only. No general
+   dot regex, alias registry, alternate Python version, mutable plugin or new DTO.
+7. Scale: one extra≤16KiB protected member, existing≤8MiB RECORD/≤16 public consoles; reuse
+   observed bytes and snapshot hashes, no rehash/copy or installed RECORD rewrite.
+8. Concurrency: retain actual root-protected member/ancestor/named/FD epochs. Root maintenance
+   drain and explicit supported resume/reassembly remain independent operational gates.
+9. Dependency ownership: authoritative stdlib wheel core owns alias transformation; prefix
+   source mapper owns existing TOML package-data wildcard or safe exact relative JSON
+   filename, including `resources/operator-owner-session-capture-v1.schema.json`. Exact
+   literal requires original source presence and equality/hash/size/wheel set closure;
+   no absolute/traversal/backslash/recursive/question/bracket/general glob selector.
+10. Failure/tests: reject copied/constructed alias proof, duplicate/extra/missing/wrong
+    version/archive/source generation/entry target/body/shebang/hash/epoch and unsafe or
+    missing/changed/extra literal resources. Synthetic accepted-pin substitutions are test-
+    only. Existing wildcard/typed numeric/legacy behavior and source error labels remain.
+11. Alternative: widening public regex or editing installed metadata loses archive/proof
+    semantics. New private installed core/current resource, if required, needs an explicit
+    reviewed successor commit/wheel/source/input—not overwriting an old wheel body or
+    relabeling old evidence. This source gate neither republishes nor claims admission.
+
+Compatibility source5 status: **SOURCE_IMPLEMENTED_NOT_REPUBLISHED**. Focused wheel/prefix
+161 PASS in10.48s; final shared18-suite1160 PASS in32.11s; strict mypy4/Ruff4/format4 PASS.
+Actual no-site stdlib import remains in the suite. Tests preserve public two-name proof,
+bind generated alias to accepted archive/source/entry/actual wrapper and full inventory,
+deny wrong identity/source/body/shebang/record/missing/extra/duplicate/copy/epoch/link and
+support exact literal resource with source-presence/set/hash checks and unsafe selectors.
+All released schema/Pydantic/typed shim/observer/helper/leaf/publisher bytes stay unchanged.
+First18 run1159 PASS/1 frozen Conda CPU replay LINK_CHANGED; exact two unchanged replay
+cases2 PASS in2.70s and final full18 rerun above PASS. No lifecycle/epoch guard was weakened.
+There was no root/tool/NEW/model/GPU or protected-prefix action by this implementation.
+This closes the classified source failure, not the later NEW helper/final proof/activation
+gates. Root independently reviews/commits before explicit successor wheel/source/reassembly.
+
+Root independently read the five-path change and matched the four Python raw hashes.
+Its same eighteen-suite gate passed **1160 tests in32.16s, skip0**, with explicit API Conda
+strict mypy, Ruff lint and format **four files PASS**. This is not a runtime retry, protected
+prefix audit, model/GPU result, or admission. The previous publisher1125 gate remains above.

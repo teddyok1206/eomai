@@ -23,6 +23,7 @@ from typing import Any
 from eom_catalog_service.embedding_runtime_files import (
     InstalledRuntimeProofError,
     NumericalRuntimeFileSnapshots,
+    ObservedRuntimeMemberBytes,
 )
 from eom_catalog_service.embedding_runtime_files import (
     require_runtime_proof as _require,
@@ -32,6 +33,18 @@ _MAX_MEMBER = 2 * 1024**3
 _MAX_RECORD = 8 * 1024**2
 _MAX_METADATA = 128 * 1024
 _MAX_CENTRAL = 16 * 1024**2
+_PIP_GENERATION_ARCHIVE = (
+    "pip",
+    "26.1.2",
+    "pip-26.1.2-py3-none-any.whl",
+    "sha256:382ff9f685ee3bc25864f820aa50505825f10f5458ffff07e30a6d96e5715cab",
+)
+_PIP_GENERATION_SOURCE = (
+    "pip/_internal/operations/install/wheel.py",
+    "sha256:b953db283fd1a9029d54e3f59744cffca96236e4161a6b4f2c7ea768f00ef537",
+    28614,
+)
+_PIP_ENTRY = ("pip._internal.cli.main", "main")
 
 
 def _exact_hash(value: object) -> bool:
@@ -150,6 +163,24 @@ class VerifiedRuntimeWheelMembers:
     archive_payload_members: frozenset[Path]
 
 
+def _pip_generated_alias(
+    archive: RuntimeWheelArchivePin,
+    name: str,
+    version: str,
+    scripts: tuple[RuntimeWheelConsoleScriptPin, ...],
+) -> dict[str, tuple[str, int]]:
+    """One pinned CPython3.12 installation transform, never a public console name."""
+    if (name, version, archive.wheel_filename, archive.sha256) != _PIP_GENERATION_ARCHIVE:
+        return {}
+    _require(
+        tuple(script.name for script in scripts) == ("pip", "pip3")
+        and (scripts[0].sha256, scripts[0].size_bytes)
+        == (scripts[1].sha256, scripts[1].size_bytes),
+        "PIP_GENERATED_ALIAS_INVALID",
+    )
+    return {"pip3.12": (scripts[0].sha256, scripts[0].size_bytes)}
+
+
 def observe_runtime_wheel_installation(
     archive: RuntimeWheelArchivePin,
     name: str,
@@ -178,10 +209,17 @@ def observe_runtime_wheel_installation(
     dist = prefix / "lib/python3.12/site-packages" / f"{name.replace('-', '_')}-{version}.dist-info"
     record = files.observe_protected_member_bytes(dist / "RECORD", maximum=_MAX_RECORD)
     scripts: list[RuntimeWheelConsoleScriptPin] = []
+    generated: ObservedRuntimeMemberBytes | None = None
     for row in csv.reader(io.StringIO(record.raw.decode("utf-8", "strict"))):
         _require(len(row) == 3, "WHEEL_OBSERVATION_INVALID")
         if row[0].startswith("../../../bin/"):
             script = row[0].removeprefix("../../../bin/")
+            if script == "pip3.12":
+                _require(generated is None, "PIP_GENERATED_ALIAS_INVALID")
+                generated = files.observe_protected_member_bytes(
+                    prefix / "bin" / script, maximum=16384
+                )
+                continue
             _require(
                 re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}", script) is not None,
                 "WHEEL_OBSERVATION_INVALID",
@@ -190,6 +228,15 @@ def observe_runtime_wheel_installation(
             scripts.append(
                 RuntimeWheelConsoleScriptPin(script, observed.sha256, observed.size_bytes)
             )
+    declared_scripts = tuple(sorted(scripts, key=lambda script: script.name))
+    aliases = _pip_generated_alias(archive, name, version, declared_scripts)
+    _require(bool(aliases) == (generated is not None), "PIP_GENERATED_ALIAS_INVALID")
+    if generated is not None:
+        _require(
+            (generated.sha256, generated.size_bytes) == aliases["pip3.12"],
+            "PIP_GENERATED_ALIAS_INVALID",
+        )
+        validate_runtime_console_wrapper(generated.raw, prefix, _PIP_ENTRY)
     direct: RuntimeWheelMemberPin | None = None
     if (dist / "direct_url.json").exists():
         observed = files.observe_protected_member_bytes(
@@ -203,7 +250,7 @@ def observe_runtime_wheel_installation(
         RuntimeWheelMemberPin(record.sha256, record.size_bytes),
         (dist / "REQUESTED").exists(),
         direct,
-        tuple(sorted(scripts, key=lambda script: script.name)),
+        declared_scripts,
     )
 
 
@@ -629,6 +676,18 @@ def _verify_installed_runtime_wheel(
                 )
             for script in library.console_scripts:
                 additions[prefix / "bin" / script.name] = script.sha256, script.size_bytes
+            aliases = _pip_generated_alias(
+                library.archive, library.name, library.version, library.console_scripts
+            )
+            if aliases:
+                source_name, source_sha, source_size = _PIP_GENERATION_SOURCE
+                _require(
+                    entries == {"pip": _PIP_ENTRY, "pip3": _PIP_ENTRY}
+                    and wheel_pins.get(site / source_name) == (source_sha, source_size),
+                    "PIP_GENERATED_ALIAS_SOURCE_INVALID",
+                )
+                additions[prefix / "bin/pip3.12"] = aliases["pip3.12"]
+                entries = entries | {"pip3.12": _PIP_ENTRY}
             installed_record = site / record_name
             raw = files.read(
                 installed_record,
