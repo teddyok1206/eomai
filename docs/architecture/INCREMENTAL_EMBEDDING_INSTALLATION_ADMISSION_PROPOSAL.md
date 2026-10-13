@@ -610,3 +610,26 @@ Final host/prefix/Conda/installer4-suite547 PASS65.29s, strict1 and Ruff/format2
 The operation-count regression reports zero unrelated host checks while the owner's final check
 still visits all64 prefix files and rejects a changed one. The initial new test's fixture-name
 error was corrected before the reproducible pre-fix256-check failure; neither is hidden as PASS.
+
+## Known absent loader search routes, not external loading permission
+
+The actual865571d9 audit terminated with `INSTALLED_RUNTIME_PREFIX_ELF_ROUTE_INVALID`, not PASS
+or timeout. Readelf-only diagnosis found unchanged PyTorch objects declaring `/lib/intel64`,
+`/lib/intel64_win`, `/lib/win-x64`, plus a protoc `$ORIGIN/../lib64` directory absent inside the
+prefix. All three external directories were actually absent under protected `/usr/lib`, with
+the already-pinned `/lib -> usr/lib` alias. Do not remove/edit these wheel files or their RECORDs.
+
+The fixed host owner now captures exactly those three canonical absences using its existing
+absence/ancestor checker, incorporates them in the independently pinned host seed and exposes
+only `assert_absent_search_route`. A file, directory, dangling link, later creation or unknown
+absolute path rejects. This grants no host library search. The prefix resolver skips only such
+host-validated absent routes. For ORIGIN routes it first checks containment and resolves known
+in-prefix aliases, then uses the complete immutable directory inventory; absent/nondirectory
+entries cannot supply a library. Existing order, alias escape/cycle rejection, required versions
+and final complete prefix/host checks remain. The loader's handling of nonexisting directories
+is grounded in [glibc2.39 open_path](https://raw.githubusercontent.com/bminor/glibc/release/2.39/master/elf/dl-load.c).
+The new host seed and six-file source pins require a fresh release/input, never reuse of a failed
+receipt. This bounded extension adds no arbitrary search directory or missing-library fallback.
+Final host/prefix/Conda/installer4-suite554 PASS64.75s; strict2 and Ruff/format4 PASS.
+The current fixed host seed is
+`sha256:f7c2d8e39617117a9b2a08c30ee3d99b68ece4e54ee41d7bf6244d2515dda365`.

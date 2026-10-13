@@ -1568,3 +1568,20 @@ prefix64개를256번 다시 확인하는 구조를 source 회귀로 재현했다
 
 API/Web/Catalog/HWPX/Workflow 장기 서비스는 running, RTX5080은 조회 시 GPU0%/2MiB였다.
 모델 forward0, CPU/GPU 비교 NOT_EVALUATED, GPU 기본값 NOT_ACTIVE를 유지한다.
+
+## 미존재 loader 검색 경로의 실제 원인과 수정 — 2026-10-13 09:54 UTC
+
+865571d9 검증은 ELF_ROUTE_INVALID로 종료했다. 시간 초과나 PASS가 아니다. PyTorch의
+functorch/시험 실행 파일들이 미존재 `/lib/intel64`, `/lib/intel64_win`, `/lib/win-x64`를
+RUNPATH에 선언했고 protoc에는 prefix 내부의 없는 lib64가 있었다. 실제 세 외부 경로의 부재,
+`/lib -> usr/lib`, 보호된 root 소유 `/usr/lib`를 확인했다. 고정 부재를 기존 host owner가
+매번 검사하고, 내부 경로는 complete directory inventory와 alias containment를 사용한다.
+알 수 없는 절대 경로·존재/새로 생성된 외부 경로·symlink escape는 여전히 실패한다.
+새 host seed는 f7c2d8e39617117a9b2a08c30ee3d99b68ece4e54ee41d7bf6244d2515dda365다.
+
+최종4-suite554 PASS64.75s, strict2·Ruff/format4 PASS. 기존 입력/실패는 수정하지 않았다.
+실패 inode23611110은 `.embedding-index-failed-CPU_INDEX_FP32-OYx4moKt`에 보존했고,
+developer inode17563946 복구·원 fingerprint 재확인은 PASS다. root 복구 snapshot
+`/opt/eom/.embedding-index-recovery-dZnjSrwI`와 q7i87leS의 복구 로그를 보존했다.
+86621491의 KEW6wjfU 패키지는 build/RECORD만 검증한 후보이며 설치하지 않았다.
+이제 위 경로 수정과 검사 비용 분리를 포함하는 새 commit/input으로 정식 재검증한다.

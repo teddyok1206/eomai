@@ -187,6 +187,11 @@ def _fixture(
     monkeypatch.setattr(host, "_ALIASES", ((alias, "readelf-body"),))
     monkeypatch.setattr(
         host,
+        "_ABSENT_SEARCH_ROUTES",
+        {route: library.parent / route.rsplit("/", 1)[1] for route in host._ABSENT_SEARCH_ROUTES},
+    )
+    monkeypatch.setattr(
+        host,
         "_NEEDED",
         {
             zstd: ("libc.so.6",),
@@ -549,6 +554,35 @@ def test_fixed_readelf_fd_bound_argv_has_bounded_output(
         )
     assert len(children) == 1 and children[0].poll() == 0
     assert children[0].stdout is not None and children[0].stdout.closed
+
+
+@pytest.mark.parametrize("fault", ["file", "directory", "symlink"])
+def test_vendor_search_route_must_actually_be_absent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    fixture = _fixture(tmp_path, monkeypatch)
+    target = host._ABSENT_SEARCH_ROUTES["/lib/intel64"]
+    if fault == "file":
+        _put(target, b"unapproved search route")
+    elif fault == "directory":
+        target.mkdir(mode=0o700)
+    else:
+        target.symlink_to(tmp_path / "missing")
+    with pytest.raises(InstalledRuntimeProofError):
+        fixture.capture()
+
+
+def test_vendor_search_absence_is_current_and_unknown_routes_remain_denied(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path, monkeypatch)
+    with pytest.raises(InstalledRuntimeProofError), fixture.capture() as capture:
+        for route in host._ABSENT_SEARCH_ROUTES:
+            capture.assert_absent_search_route(route)
+        with pytest.raises(InstalledRuntimeProofError, match="ROUTE_INVALID"):
+            capture.assert_absent_search_route("/tmp/unchecked")
+        host._ABSENT_SEARCH_ROUTES["/lib/intel64"].mkdir(mode=0o700)
+        capture.assert_absent_search_route("/lib/intel64")
 
 
 def test_host_check_cost_does_not_grow_with_later_prefix_members(

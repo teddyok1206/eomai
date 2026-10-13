@@ -18,6 +18,7 @@ import time
 from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 
 from eom_catalog_service.embedding_runtime_files import (
     InstalledRuntimeProofError,
@@ -27,6 +28,14 @@ from eom_catalog_service.embedding_runtime_files import (
 
 # PyTorch CPU's pinned ELF metadata is 1,509,162 bytes; producer and parser share one bound.
 MAX_READELF_OUTPUT_BYTES = 2 * 1024**2
+
+_ABSENT_SEARCH_ROUTES = MappingProxyType(
+    {
+        "/lib/intel64": Path("/usr/lib/intel64"),
+        "/lib/intel64_win": Path("/usr/lib/intel64_win"),
+        "/lib/win-x64": Path("/usr/lib/win-x64"),
+    }
+)
 
 _LIB = Path("/usr/lib/x86_64-linux-gnu")
 _LOADER = _LIB / "ld-linux-x86-64.so.2"
@@ -175,6 +184,9 @@ def _seed_bytes() -> bytes:
         {
             "files": [(str(path), size, "sha256:" + sha) for path, size, sha in _FILES],
             "aliases": [(str(path), target) for path, target in _ALIASES],
+            "absent_search_routes": [
+                (route, str(path)) for route, path in _ABSENT_SEARCH_ROUTES.items()
+            ],
         },
         sort_keys=True,
         separators=(",", ":"),
@@ -614,6 +626,13 @@ class ProtectedEmbeddingHostClosure:
         _require(self._loader_path in self._descriptors, "LOADER_UNAVAILABLE")
         return self._loader_path
 
+    def assert_absent_search_route(self, route: str) -> None:
+        """Only the pinned, actually absent vendor directories; never a host search grant."""
+        _require(type(route) is str, "ROUTE_INVALID")
+        canonical = _ABSENT_SEARCH_ROUTES.get(route)
+        _require(canonical is not None and canonical in self._routes.absent, "ROUTE_INVALID")
+        self.assert_current()
+
     def inspect_elf(self, descriptor: int, *, deadline: float) -> bytes:
         """Fixed readelf on an already owner-held member FD; bounded absolute deadline."""
         _require(
@@ -723,6 +742,8 @@ def capture_protected_embedding_host(
         for path, target in _ALIASES:
             routes.alias(path, target)
         routes.absence(_PRELOAD)
+        for route in _ABSENT_SEARCH_ROUTES.values():
+            routes.absence(route)
         host_files.require_closed_namespaces(
             {_CONFIG}, {path for path, _size, _sha in _FILES if path.parent == _CONFIG}
         )

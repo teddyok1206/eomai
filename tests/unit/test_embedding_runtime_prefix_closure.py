@@ -987,6 +987,7 @@ def _graph(
     *,
     links: dict[str, str] | None = None,
     host_versions: dict[str, frozenset[str]] | None = None,
+    absent_host_routes: frozenset[str] = frozenset(),
 ) -> tuple[str, int]:
     """Synthetic metadata fence only; no readelf, root, GPU or loader execution."""
     installed = tmp_path / "prefix"
@@ -1016,12 +1017,17 @@ def _graph(
             raise InstalledRuntimeProofError("INSTALLED_RUNTIME_HOST_SONAME_UNAVAILABLE")
         return versions[name]
 
+    def absent(route: str) -> None:
+        if route not in absent_host_routes:
+            raise InstalledRuntimeProofError("INSTALLED_RUNTIME_HOST_ROUTE_INVALID")
+
     captured = cast(
         host.ProtectedEmbeddingHostClosure,
         SimpleNamespace(
             inspect_elf=inspect,
             fixed_soname_versions=version,
             fixed_loader_path=lambda: Path("/synthetic/fixed/loader"),
+            assert_absent_search_route=absent,
         ),
     )
     return prefix._elf_closure(
@@ -1107,11 +1113,53 @@ def test_elf_resolves_source_known_directory_alias(tmp_path: Path) -> None:
     "route", ["", ".", "/tmp/lib", "$ORIGIN/../../outside", "$LIB", "$PLATFORM", "$ORIGIN/$LIB"]
 )
 def test_exact_inside_prefix_origin_routes_never_accept_developer_or_shell_paths(
+    tmp_path: Path,
     route: str,
 ) -> None:
-    parsed = prefix._readelf(Path("/prefix/lib/a.so"), _elf_text(rpath=route))
     with pytest.raises(InstalledRuntimeProofError):
-        prefix._routes(parsed, Path("/prefix"), {Path("/prefix"), Path("/prefix/lib")})
+        _graph(tmp_path, {"lib/a.so": _elf_text(rpath=route)})
+
+
+def test_elf_skips_absent_origin_directories_without_reordering_existing_ones(
+    tmp_path: Path,
+) -> None:
+    assert (
+        _graph(
+            tmp_path,
+            {
+                "lib/a.so": _elf_text(needed=("b.so",), runpath="$ORIGIN/missing:$ORIGIN"),
+                "lib/b.so": _elf_text(soname="b.so"),
+            },
+        )[1]
+        == 2
+    )
+
+
+def test_elf_cannot_skip_an_origin_alias_escaping_the_prefix(tmp_path: Path) -> None:
+    with pytest.raises(InstalledRuntimeProofError, match="ELF_ROUTE_INVALID"):
+        _graph(
+            tmp_path,
+            {
+                "lib/a.so": _elf_text(runpath="$ORIGIN/../alias"),
+            },
+            links={"alias": "../outside"},
+        )
+
+
+def test_elf_skips_vendor_route_only_with_host_absence_evidence(tmp_path: Path) -> None:
+    assert (
+        _graph(
+            tmp_path,
+            {
+                "lib/a.so": _elf_text(needed=("b.so",), runpath="/lib/intel64:$ORIGIN"),
+                "lib/b.so": _elf_text(soname="b.so"),
+            },
+            absent_host_routes=frozenset({"/lib/intel64"}),
+        )[1]
+        == 2
+    )
+    with pytest.raises(InstalledRuntimeProofError, match="HOST_ROUTE_INVALID"):
+        _graph(tmp_path / "denied", {"lib/a.so": _elf_text(runpath="/lib/intel64")})
 
 
 def test_source_archive_bound_preserves_member_bound_and_rejects_bool() -> None:

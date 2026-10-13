@@ -839,10 +839,20 @@ def _readelf(path: Path, raw: bytes) -> _Elf:
     )
 
 
-def _routes(elf: _Elf, prefix: Path, directories: set[Path]) -> tuple[Path, ...]:
+def _routes(
+    elf: _Elf,
+    prefix: Path,
+    directories: set[Path],
+    *,
+    links: dict[Path, str],
+    host: ProtectedEmbeddingHostClosure,
+) -> tuple[Path, ...]:
     values = elf.runpath or elf.rpath
     result: list[Path] = []
     for value in values:
+        if value.startswith("/"):
+            host.assert_absent_search_route(value)
+            continue
         _require(
             value == "$ORIGIN"
             or value.startswith("$ORIGIN/")
@@ -857,8 +867,11 @@ def _routes(elf: _Elf, prefix: Path, directories: set[Path]) -> tuple[Path, ...]
         )
         _require("$" not in suffix and "\\" not in suffix, "ELF_ROUTE_INVALID")
         path = Path(os.path.normpath(str(elf.path.parent) + suffix))
-        _require(path.is_relative_to(prefix) and path in directories, "ELF_ROUTE_INVALID")
-        result.append(path)
+        _require(path.is_relative_to(prefix), "ELF_ROUTE_INVALID")
+        path = _resolve_alias(path, prefix, links)
+        # The complete immutable tree proves this directory is absent, just as ld.so observes.
+        if path in directories:
+            result.append(path)
     return tuple(result)
 
 
@@ -910,7 +923,9 @@ def _elf_closure(
     # One fixed Python process. RPATH is transitive; RUNPATH is direct-only.
     main = objects.get(prefix / "bin/python3.12")
     main_routes = (
-        _routes(main, prefix, directories) if main is not None and not main.runpath else ()
+        _routes(main, prefix, directories, links=links, host=host)
+        if main is not None and not main.runpath
+        else ()
     )
     pending: list[tuple[Path, tuple[Path, ...]]] = [
         (path, () if path == prefix / "bin/python3.12" else main_routes) for path in objects
@@ -923,7 +938,7 @@ def _elf_closure(
             continue
         seen.add((path, inherited))
         elf = objects[path]
-        own = _routes(elf, prefix, directories)
+        own = _routes(elf, prefix, directories, links=links, host=host)
         search = own if elf.runpath else own + inherited
         for name in elf.needed:
             edge_count += 1
