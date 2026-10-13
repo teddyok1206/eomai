@@ -11,6 +11,7 @@ import struct
 import subprocess
 import sys
 import zipfile
+from collections.abc import Iterator
 from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
 from typing import Any, Literal
@@ -605,6 +606,7 @@ def _vendored_dist_info_fixture(
     direct_url: str | None = None,
     legacy_archive_hash: bool = False,
     entry_points: bytes | None = None,
+    top_level_member: str | None = None,
 ) -> tuple[Path, Path, RuntimeWheelInstallationPin, Path]:
     """Small pinned payload; nested metadata/RECORD is never imported or installed separately."""
     prefix, archives = tmp_path / "prefix", tmp_path / "archives"
@@ -618,6 +620,8 @@ def _vendored_dist_info_fixture(
     }
     if entry_points is not None:
         members[dist + "/entry_points.txt"] = entry_points
+    if top_level_member is not None:
+        members[top_level_member] = b"# synthetic top-level payload; never executed\n"
     if vendored:
         for number in range(12):
             vendor = f"setuptools/_vendor/vendor{number}-1.0.dist-info"
@@ -1216,3 +1220,207 @@ def test_empty_gui_compatibility_never_admits_effective_entries_or_malformed_met
             archive_root=archives,
             files=NumericalRuntimeFileSnapshots(os.geteuid()),
         )
+
+
+@pytest.mark.parametrize("member", ["distutils-precedence.pth", "exam_helper.py"])
+def test_single_file_namespace_keeps_full_wheel_record_byte_and_epoch_closure(
+    tmp_path: Path, member: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    prefix, archives, pin, _nested = _vendored_dist_info_fixture(tmp_path, top_level_member=member)
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    observed = observe_runtime_wheel_installation(
+        pin.archive, pin.name, pin.version, prefix=prefix, files=files
+    )
+    assert observed == pin
+    verified = verify_installed_runtime_wheel(
+        observed, prefix=prefix, archive_root=archives, files=files
+    )
+    target = prefix / "lib/python3.12/site-packages" / member
+    assert target in verified.namespace_roots
+    assert target in verified.archive_payload_members & verified.installed_members
+    raw = target.read_bytes()
+    monkeypatch.setattr(
+        files, "verified_open", lambda *_a, **_k: pytest.fail("namespace closure must not rehash")
+    )
+    files.require_closed_namespaces(set(verified.namespace_roots), set(verified.installed_members))
+    files.verify(target, sha256=sha256_bytes(raw), size=len(raw), maximum=1024)
+    files.assert_unchanged()
+
+
+def test_verified_regular_only_namespace_preserves_its_byte_epoch_without_rehash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "single_module.py"
+    raw = b"# synthetic module; never imported\n"
+    target.write_bytes(raw)
+    target.chmod(0o600)
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    files.verify(target, sha256=sha256_bytes(raw), size=len(raw), maximum=1024)
+    monkeypatch.setattr(
+        files, "verified_open", lambda *_a, **_k: pytest.fail("namespace closure must not rehash")
+    )
+    files.require_closed_namespaces({target}, {target})
+    files.verify(target, sha256=sha256_bytes(raw), size=len(raw), maximum=1024)
+    files.assert_unchanged()
+
+
+@pytest.mark.parametrize(
+    "shape", ["unexpected_file", "missing_file", "unexpected_directory_member"]
+)
+def test_file_and_directory_roots_keep_exact_missing_extra_set_equality(
+    tmp_path: Path, shape: str
+) -> None:
+    target = tmp_path / "single.py"
+    target.write_bytes(b"# synthetic file\n")
+    target.chmod(0o600)
+    directory = tmp_path / "package"
+    directory.mkdir(mode=0o700)
+    member = directory / "__init__.py"
+    member.write_bytes(b"# synthetic package\n")
+    member.chmod(0o600)
+    roots = {target, directory}
+    expected = {target, member}
+    if shape == "unexpected_file":
+        expected.remove(target)
+    elif shape == "missing_file":
+        roots.remove(target)
+    else:
+        expected.remove(member)
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    with pytest.raises(InstalledRuntimeProofError, match="NAMESPACE_SET_MISMATCH"):
+        files.require_closed_namespaces(roots, expected)
+
+
+@pytest.mark.parametrize(
+    "fault,code",
+    [
+        ("missing", "NAMESPACE_UNAVAILABLE"),
+        ("symlink", "NAMESPACE_LINK"),
+        ("hardlink", "FILE_UNPROTECTED"),
+        ("writable", "FILE_UNPROTECTED"),
+        ("fifo", "NAMESPACE_UNPROTECTED"),
+        ("directory_writable", "NAMESPACE_UNPROTECTED"),
+        ("owner", "ANCESTOR_UNPROTECTED"),
+    ],
+)
+def test_regular_namespace_root_retains_protected_type_mode_owner_and_single_link(
+    tmp_path: Path, fault: str, code: str
+) -> None:
+    target = tmp_path / "single.py"
+    target.write_bytes(b"# synthetic file\n")
+    target.chmod(0o600)
+    owner = os.geteuid()
+    if fault == "missing":
+        target.unlink()
+    elif fault in {"symlink", "hardlink"}:
+        original = target.with_name("original.py")
+        target.rename(original)
+        if fault == "symlink":
+            target.symlink_to(original)
+        else:
+            os.link(original, target)
+    elif fault == "writable":
+        target.chmod(0o622)
+    elif fault == "fifo":
+        target.unlink()
+        os.mkfifo(target, mode=0o600)
+    elif fault == "directory_writable":
+        target.unlink()
+        target.mkdir(mode=0o722)
+        target.chmod(0o722)
+    else:
+        # The actual protected-open walk rejects this different owner at the
+        # user-owned pytest ancestor before reaching the member itself.
+        owner += 1
+    files = NumericalRuntimeFileSnapshots(owner)
+    with pytest.raises(InstalledRuntimeProofError, match=code):
+        files.require_closed_namespaces({target}, {target})
+
+
+@pytest.mark.parametrize("fault", ["rewrite", "replace", "symlink", "hardlink", "delete"])
+@pytest.mark.parametrize("after_namespace", [False, True])
+def test_regular_namespace_keeps_original_verified_epoch_before_and_after_observation(
+    tmp_path: Path, fault: str, after_namespace: bool
+) -> None:
+    target = tmp_path / "single.py"
+    raw = b"# synthetic file; never executed\n"
+    target.write_bytes(raw)
+    target.chmod(0o600)
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    files.verify(target, sha256=sha256_bytes(raw), size=len(raw), maximum=1024)
+    if after_namespace:
+        files.require_closed_namespaces({target}, {target})
+    if fault == "rewrite":
+        _rewrite_with_distinct_mtime(target)
+    elif fault == "delete":
+        target.unlink()
+    else:
+        original = target.with_name("original.py")
+        target.rename(original)
+        if fault == "replace":
+            target.write_bytes(raw)
+            target.chmod(0o600)
+        elif fault == "symlink":
+            target.symlink_to(original)
+        else:
+            os.link(original, target)
+    with pytest.raises(InstalledRuntimeProofError):
+        if after_namespace:
+            files.assert_unchanged()
+        else:
+            files.require_closed_namespaces({target}, {target})
+
+
+def test_empty_directory_root_is_still_bound_when_walk_yields_no_rows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    directory = tmp_path / "empty"
+    directory.mkdir(mode=0o700)
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    monkeypatch.setattr("eom_catalog_service.embedding_runtime_files.os.walk", lambda *_a, **_k: ())
+    files.require_closed_namespaces({directory}, set())
+    # Keep the old inode live so this test does not rely on filesystem reuse.
+    directory.rename(directory.with_name("retired-empty"))
+    directory.mkdir(mode=0o700)
+    with pytest.raises(InstalledRuntimeProofError, match="NAMESPACE_CHANGED"):
+        files.assert_unchanged()
+
+
+@pytest.mark.parametrize("timing", ["before_walk", "between_calls"])
+def test_directory_root_epoch_cannot_be_refreshed_by_walk_or_repeated_observation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, timing: str
+) -> None:
+    directory = tmp_path / "empty"
+    directory.mkdir(mode=0o700)
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+
+    def replace_directory() -> None:
+        original_inode = directory.stat().st_ino
+        directory.rename(directory.with_name("retired-empty"))
+        directory.mkdir(mode=0o700)
+        assert directory.stat().st_ino != original_inode
+
+    if timing == "before_walk":
+        original_walk = os.walk
+
+        def replacing_walk(
+            root: Path, *, followlinks: bool
+        ) -> Iterator[tuple[str, list[str], list[str]]]:
+            replace_directory()
+            yield from original_walk(root, followlinks=followlinks)
+
+        monkeypatch.setattr("eom_catalog_service.embedding_runtime_files.os.walk", replacing_walk)
+    else:
+        files.require_closed_namespaces({directory}, set())
+        replace_directory()
+    with pytest.raises(InstalledRuntimeProofError, match="NAMESPACE_CHANGED"):
+        files.require_closed_namespaces({directory}, set())
+
+
+def test_unchanged_directory_root_can_be_closed_twice_in_the_same_snapshot(tmp_path: Path) -> None:
+    directory = tmp_path / "empty"
+    directory.mkdir(mode=0o700)
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    files.require_closed_namespaces({directory}, set())
+    files.require_closed_namespaces({directory}, set())
+    files.assert_unchanged()

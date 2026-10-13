@@ -1016,3 +1016,81 @@ SQL compilation/read spies are not real PostgreSQL concurrency or operational ro
 owner/Job/unit/model/GPU, publication or installed-runtime action occurred. The paired QUERY-step
 CHECK, concrete current-owner continuation, queued QUERY executor, committed-query C0 reader and
 C2 consumer delivery remain separate prerequisites. Existing DOCUMENT execution remains intact.
+
+## 14. Protected regular namespace roots — approved source correction
+
+Actual nonprivileged CPU-prefix observation, independently repeated by root, found four public
+overlay wheel validations PASS, ten namespace roots and 965 expected members versus 964 walked
+members. The only missing member is `lib/python3.12/site-packages/distutils-precedence.pth`;
+extra count is zero. It is a protected root-owned single-link regular file. `os.walk(file)` yields
+no member, although the existing verified-wheel namespace contract includes such top-level files.
+Input SHA is `96f06fda4199bb614d19375dc569faffff15b1d7bad2ae46fd1e7aa0b8f857e5`, ending epochs
+PASS. This is a confirmed observation defect, not a wheel byte/hash failure or runtime admission.
+
+1. **Responsibility:** Existing runtime-file snapshot owner closes directory and regular-file
+   namespace roots. Only that method, existing wheel tests and this note are approved to change.
+2. **Canonical source:** Existing source-pinned wheel/RECORD and verified installed members;
+   `.pth` content is checked as bytes, never executed or excluded from the expected inventory.
+3. **Identity:** Retain archive/member SHA, protected file/ancestor epochs and exact member path.
+   No schema, pin, installer, staged candidate or historical failure identity is rewritten.
+4. **Checks:** Explicit root lstat type; regular files reuse protected-member identity checking
+   for owner/mode/single link/ancestors and unchanged epochs. Missing/link/special roots fail.
+5. **Access patterns:** Root membership, directory walk, exact expected/observed set equality and
+   final epoch checks. No package import, model launch or input-selected executable.
+6. **Structures:** Existing set/map/snapshots only; no skiplist, provider, registry or flags.
+7. **Complexity:** O(files + roots); regular roots need identity only, not repeated hash/parse.
+8. **Concurrency:** Preserve existing verified-byte epochs; root/member replacement or drift
+   fails during observation or final checks. No permission transition or filesystem repair.
+9. **Dependencies:** Stdlib snapshot owner remains shared by wheel/Conda/prefix callers. Reuse
+   its public protected-member identity method, not a parallel verifier or external package.
+10. **Failure:** Preserve exact missing/extra equality and existing fail-closed proof errors.
+    Unexpected regular roots, links, writable/multilink/special/missing members are not tolerated.
+11. **Alternative:** Removing `.pth` from expected would bypass closure. A small root-type branch
+    is sufficient; whole-prefix activation, fresh actual audit and recovery remain root's work.
+
+Source tests must include mixed/regular-only roots, actual wheel/RECORD association, unexpected
+members, root protection/types and epoch drift without rehashing. Backend Phase B, the old staged
+CPU candidate and failed history are outside this source correction and remain untouched.
+
+### 14.1 Namespace source correction checkpoint — 2026-10-13 UTC
+
+The three approved paths now handle protected regular namespace roots with the existing public
+identity snapshot method, preserving any earlier byte SHA/epoch without a new hash or parse.
+Directory roots retain protection and a root epoch even when a walk yields no rows. Missing,
+symlink, special, writable, wrong-owner and multilink roots fail with stable proof errors; exact
+expected/observed equality still rejects missing and unexpected members.
+
+The complete focused wheel suite is **188 PASS in 2.99s**. Strict mypy, Ruff lint and format check
+**two Python files PASS**. Tests include wheel/RECORD-associated `.pth`/top-level `.py`, mixed and
+regular-only roots, no rehash, source byte-epoch preservation, missing/extra/protection and epoch
+drift before/after namespace observation. Independent read-only review found no remaining blocker.
+The first focused gate was 186 PASS/2 FAIL: its wrong-owner fixture expected a leaf error despite
+the actual protected-open ancestor rejecting first, and directory recreation could reuse the old
+inode. The expectations now preserve actual owner checks and keep the old inode alive for a
+deterministic replacement. These diagnostic failures are preserved, not reclassified as PASS.
+
+The common nineteen-suite and C1c forty-three-suite source regressions have separate overlapping
+inventories; root performs the final shared gate after both the namespace and independently owned
+backend Phase B scopes are frozen. No aggregate count is claimed here from a mutable worktree.
+Actual fresh whole-prefix audit, new source publication and recovery remain root-owned pending
+actions. This source correction does not repair the old staged candidate, change its history,
+authorize an installed prefix/native identity or execute a model. **SOURCE_ONLY / NOT_ACTIVE.**
+
+### 14.2 Root-review directory epoch correction
+
+Root's production read found one narrower gap after the first source freeze: the walk's first
+directory observation could replace the root epoch captured immediately before walking. A
+same-snapshot repeated namespace call could likewise refresh it. Two tests kept the old empty
+directory inode live while replacing it before the first walk yield or between calls. Both
+reproduced the actual source defect: the expected namespace-change error did not occur.
+
+The existing directory-epoch map now keeps its first observation with `setdefault` and requires
+exact equality on every later root/walk observation. Unchanged repeated reads still pass; changed
+identity is rejected rather than refreshed. This is one owner-local metadata rule, with no byte
+hash/parse/scan, file repair, new framework or stronger authority claim. Regular member SHA/epochs
+and all previously protected ownership/type/set checks remain unchanged. The two diagnostic
+reproduction failures are retained as defect evidence, not overwritten as historical success.
+
+After the targeted correction, the complete wheel suite is **191 PASS in 2.93s**; strict mypy,
+Ruff lint/format **two Python files PASS**, and owned-three-path diff check PASS. No shared/actual
+gate was repeated for this correction; root performs those gates on the new frozen source bytes.

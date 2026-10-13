@@ -7,16 +7,25 @@ import subprocess
 import sys
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, NoReturn, cast
 
 import pytest
-from eom_catalog_contracts.embedding_runtime_bundle import EmbeddingNumericLibraryPin
+from eom_catalog_contracts.embedding_installed_runtime_proof import (
+    EmbeddingRuntimeProfile,
+    embedding_numeric_library_versions,
+)
+from eom_catalog_contracts.embedding_runtime_bundle import (
+    EmbeddingNumericLibraryPin,
+    EmbeddingRuntimeBundle,
+    embedding_runtime_bundle_bytes,
+)
 from eom_catalog_contracts.embedding_vector_binary import pack_unit_vectors, read_unit_vectors
 from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingSpace,
     IncrementalEmbeddingInput,
 )
 from eom_catalog_service.embedding_bundle_resolver import (
+    ConfiguredEmbeddingBundle,
     ResolvedEmbeddingBundle,
     resolve_configured_embedding_bundle,
 )
@@ -34,6 +43,7 @@ from eom_catalog_service.embedding_execution_ports import (
 from eom_catalog_service.embedding_offline_backend import (
     NativeEmbeddingBackendError,
     OfflineNativeEmbeddingBackend,
+    observe_native_runtime_without_model,
     observed_embedding_implementation_pins,
 )
 from eom_identifiers import content_sha256, sha256_bytes
@@ -46,8 +56,434 @@ from tests.unit.embedding_native_backend_fixtures import (
     stage_protected_numeric_origins,
 )
 from tests.unit.inference_transfer_embedding_fixtures import embedding_input, seal
+from tests.unit.test_embedding_runtime_bundle_contracts import _pointer
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def _probe_fixture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, device: Literal["CPU", "CUDA"] = "CPU"
+) -> tuple[ConfiguredEmbeddingBundle, EmbeddingRuntimeBundle, dict[str, Any], FakeObserver]:
+    """Exact5/20 synthetic pins and fake libraries, never actual installation evidence."""
+    configured, original, _root, manifest = configured_bundle(tmp_path, device)
+    profile: EmbeddingRuntimeProfile = "CPU_INDEX_FP32" if device == "CPU" else "CUDA_INDEX_FP32"
+    body = original.model_dump(mode="json")
+    runtime = body["numerical_runtime"]
+    runtime["libraries"] = [
+        {"name": name, "version": version, "distribution_sha256": "sha256:" + "d" * 64}
+        for name, version in embedding_numeric_library_versions(profile)
+    ]
+    body["numerical_runtime"] = seal(runtime, "runtime_sha256")
+    bundle = EmbeddingRuntimeBundle.model_validate(seal(body, "bundle_sha256"))
+    manifest.write_bytes(embedding_runtime_bundle_bytes(bundle))
+    return (
+        replace(configured, pointer=_pointer(bundle)),
+        bundle,
+        fake_libraries(monkeypatch, bundle),
+        FakeObserver(bundle),
+    )
+
+
+@pytest.mark.parametrize("device", ("CPU", "CUDA"))
+def test_public_model_free_probe_and_normal_backend_use_identical_numeric_functions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, device: Literal["CPU", "CUDA"]
+) -> None:
+    configured, bundle, state, observer = _probe_fixture(tmp_path, monkeypatch, device)
+    ownership = FakeOwnership() if device == "CUDA" else None
+    module = sys.modules["eom_catalog_service.embedding_offline_backend"]
+    original_configure = module._configure_native_numerics
+    original_read = module._read_native_numerical_descriptor
+    calls: list[str] = []
+
+    def configure(*args: Any, **kwargs: Any) -> None:
+        calls.append("configure")
+        original_configure(*args, **kwargs)
+
+    def read(*args: Any, **kwargs: Any) -> Any:
+        calls.append("read")
+        return original_read(*args, **kwargs)
+
+    monkeypatch.setattr(module, "_configure_native_numerics", configure)
+    monkeypatch.setattr(module, "_read_native_numerical_descriptor", read)
+    actual = observe_native_runtime_without_model(
+        profile="CPU_INDEX_FP32" if device == "CPU" else "CUDA_INDEX_FP32",
+        runtime_observer=observer,
+        expected_owner_uid=os.geteuid(),
+        cuda_ownership=ownership,
+    )
+    assert actual == bundle.numerical_runtime
+    assert calls == ["configure", "read", "read"]
+    assert state["loads"] == state["tokenized"] == [] and state["forwards"] == 0
+    assert "model" not in state and "tokenizer" not in state
+    assert state["threads"] == 4 and state["interop"] == 1
+    assert observer.calls == 2 and state["syncs"] == (1 if device == "CUDA" else 0)
+    calls.clear()
+    backend = OfflineNativeEmbeddingBackend(
+        configured, device=device, runtime_observer=observer, cuda_ownership=ownership
+    )
+    assert calls[0] == "configure" and calls.count("configure") == 1 and calls.count("read") >= 2
+    assert backend.execution_runtime.execution_runtime_sha256 == actual.runtime_sha256
+    assert [kind for kind, _path, _values in state["loads"]] == ["tokenizer", "model"]
+    backend.close()
+    if ownership is not None:
+        assert ownership.valid
+
+
+def test_model_free_probe_has_no_payload_bundle_tokenizer_model_or_forward_access(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _configured, bundle, state, observer = _probe_fixture(tmp_path, monkeypatch)
+    module = sys.modules["eom_catalog_service.embedding_offline_backend"]
+
+    def deny(*_args: object, **_kwargs: object) -> NoReturn:
+        raise AssertionError("probe must not resolve payloads or construct tokenizers/models")
+
+    monkeypatch.setattr(module, "resolve_configured_embedding_bundle", deny)
+    monkeypatch.setattr(module, "validate_resolved_embedding_bundle", deny)
+    monkeypatch.setattr(state["transformers"].AutoTokenizer, "from_pretrained", deny)
+    monkeypatch.setattr(state["transformers"].AutoModel, "from_pretrained", deny)
+    actual = observe_native_runtime_without_model(
+        profile="CPU_INDEX_FP32", runtime_observer=observer, expected_owner_uid=os.geteuid()
+    )
+    assert actual == bundle.numerical_runtime and state["loads"] == [] and state["forwards"] == 0
+
+
+@pytest.mark.parametrize(
+    "fault",
+    ("profile", "missing", "uid_bool", "cpu_lease", "cuda_missing", "cuda_stale", "lease_boolean"),
+)
+def test_probe_capture_and_ownership_denial_precedes_observer_or_optional_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    _configured, _bundle, state, observer = _probe_fixture(tmp_path, monkeypatch)
+    profile: Any = "CPU_INDEX_FP32"
+    owner_uid: Any = os.geteuid()
+    supplied: Any = observer
+    ownership: FakeOwnership | None = None
+    if fault == "profile":
+        profile = "CPU"
+    elif fault == "missing":
+        supplied = None
+    elif fault == "uid_bool":
+        owner_uid = True
+    elif fault == "cpu_lease":
+        ownership = FakeOwnership()
+    else:
+        profile = "CUDA_INDEX_FP32"
+        if fault != "cuda_missing":
+            ownership = FakeOwnership()
+            if fault == "cuda_stale":
+                ownership.valid = False
+            else:
+
+                def grant() -> None:
+                    return cast(None, True)
+
+                monkeypatch.setattr(ownership, "assert_owned", grant)
+    with pytest.raises(NativeEmbeddingBackendError):
+        observe_native_runtime_without_model(
+            profile=profile,
+            runtime_observer=supplied,
+            expected_owner_uid=owner_uid,
+            cuda_ownership=ownership,
+        )
+    assert observer.calls == 0 and state["imports"] == state["loads"] == []
+
+
+@pytest.mark.parametrize(
+    "fault",
+    (
+        "observer",
+        "python",
+        "profile_device",
+        "count",
+        "version",
+        "distribution_version",
+        "copied_bool",
+    ),
+)
+def test_probe_rejects_missing_or_wrong_actual_profile_before_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    _configured, _bundle, state, observer = _probe_fixture(tmp_path, monkeypatch)
+    if fault == "observer":
+        observer.failure = True
+    elif fault == "python":
+        observer.value = replace(observer.value, python_version="3.12.0")
+    elif fault == "profile_device":
+        observer.value = replace(observer.value, torch_build_cuda_version="12.8")
+    elif fault == "count":
+        observer.value = replace(observer.value, libraries=observer.value.libraries[1:])
+    elif fault in {"version", "distribution_version"}:
+        monkeypatch.setattr(importlib.metadata, "version", lambda _name: "999.0")
+    else:
+        observer.value = replace(
+            observer.value,
+            device=observer.value.device.model_copy(update={"compute_capability": (True, 0)}),
+        )
+    with pytest.raises(NativeEmbeddingBackendError):
+        observe_native_runtime_without_model(
+            profile="CPU_INDEX_FP32", runtime_observer=observer, expected_owner_uid=os.geteuid()
+        )
+    assert state["imports"] == state["loads"] == []
+
+
+@pytest.mark.parametrize(
+    "fault",
+    (
+        "torch",
+        "transformers",
+        "cuda_build",
+        "threads_bool",
+        "interop_bool",
+        "precision",
+        "tf32",
+        "autocast",
+        "deterministic",
+    ),
+)
+def test_probe_imported_versions_and_actual_numeric_flags_cannot_be_claimed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    _configured, _bundle, state, observer = _probe_fixture(tmp_path, monkeypatch)
+    if fault in {"torch", "transformers"}:
+        state[fault].__version__ = "999.0"
+    elif fault == "cuda_build":
+        state["torch"].version.cuda = "12.8"
+    elif fault in {"threads_bool", "interop_bool"}:
+        monkeypatch.setattr(
+            state["torch"],
+            "get_num_threads" if fault == "threads_bool" else "get_num_interop_threads",
+            lambda: True,
+        )
+    elif fault == "precision":
+        monkeypatch.setattr(state["torch"], "get_float32_matmul_precision", lambda: "high")
+    elif fault == "tf32":
+        module = sys.modules["eom_catalog_service.embedding_offline_backend"]
+        configure = module._configure_native_numerics
+
+        def tf32(*args: Any, **kwargs: Any) -> None:
+            configure(*args, **kwargs)
+            state["torch"].backends.cuda.matmul.allow_tf32 = True
+
+        monkeypatch.setattr(module, "_configure_native_numerics", tf32)
+    elif fault == "autocast":
+        state["autocast"] = True
+    else:
+        monkeypatch.setattr(state["torch"], "use_deterministic_algorithms", lambda *_a, **_k: None)
+    with pytest.raises(NativeEmbeddingBackendError):
+        observe_native_runtime_without_model(
+            profile="CPU_INDEX_FP32", runtime_observer=observer, expected_owner_uid=os.geteuid()
+        )
+    assert state["loads"] == state["tokenized"] == [] and state["forwards"] == 0
+
+
+@pytest.mark.parametrize(
+    "fault", ("observer", "library_sha", "threads", "implementation", "sync", "ownership")
+)
+def test_probe_final_fences_deny_without_releasing_owner_or_returning_descriptor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    _configured, _bundle, state, observer = _probe_fixture(tmp_path, monkeypatch, "CUDA")
+    ownership = FakeOwnership()
+    actual_observe = observer.observe
+
+    def late() -> Any:
+        if observer.calls == 1:
+            if fault == "observer":
+                observer.failure = True
+            elif fault == "library_sha":
+                library = observer.value.libraries[0].model_copy(
+                    update={"distribution_sha256": "sha256:" + "f" * 64}
+                )
+                observer.value = replace(
+                    observer.value, libraries=(library, *observer.value.libraries[1:])
+                )
+            elif fault == "threads":
+                state["threads"] = 3
+            elif fault == "implementation":
+                module = sys.modules["eom_catalog_service.embedding_offline_backend"]
+                module_origin = module.__file__
+                assert module_origin is not None
+                path = Path(module_origin)
+                path.write_bytes(path.read_bytes() + b"\n# synthetic late drift\n")
+            elif fault == "ownership":
+                ownership.valid = False
+        return actual_observe()
+
+    if fault == "sync":
+
+        def sync(_device: int) -> NoReturn:
+            raise RuntimeError("synthetic synchronization failure")
+
+        monkeypatch.setattr(state["torch"].cuda, "synchronize", sync)
+    monkeypatch.setattr(observer, "observe", late)
+    with pytest.raises(NativeEmbeddingBackendError, match="TEARDOWN_UNCERTAIN"):
+        observe_native_runtime_without_model(
+            profile="CUDA_INDEX_FP32",
+            runtime_observer=observer,
+            expected_owner_uid=os.geteuid(),
+            cuda_ownership=ownership,
+        )
+    assert observer.calls >= (1 if fault == "observer" else 2)
+    assert ownership.calls >= 2 and state["loads"] == [] and state["forwards"] == 0
+
+
+def test_probe_exception_still_runs_late_observer_and_hashes_code_only_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _configured, _bundle, state, observer = _probe_fixture(tmp_path, monkeypatch)
+    module = sys.modules["eom_catalog_service.embedding_offline_backend"]
+    original_read = module.read_protected_embedding_manifest
+    original_descriptor = module._read_native_numerical_descriptor
+    reads: list[int] = []
+    calls = 0
+
+    def read(path: Path, **kwargs: Any) -> Any:
+        reads.append(kwargs["maximum_bytes"])
+        return original_read(path, **kwargs)
+
+    def descriptor(*args: Any, **kwargs: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("synthetic read-back failure")
+        return original_descriptor(*args, **kwargs)
+
+    monkeypatch.setattr(module, "read_protected_embedding_manifest", read)
+    monkeypatch.setattr(module, "_read_native_numerical_descriptor", descriptor)
+    with pytest.raises(NativeEmbeddingBackendError, match="RUNTIME_INVALID"):
+        observe_native_runtime_without_model(
+            profile="CPU_INDEX_FP32", runtime_observer=observer, expected_owner_uid=os.geteuid()
+        )
+    assert reads == [128 * 1024] * 3 and calls == observer.calls == 2
+    assert state["loads"] == [] and state["forwards"] == 0
+
+
+def test_probe_partial_configuration_failure_still_reads_final_numeric_and_source_epochs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _configured, _bundle, state, observer = _probe_fixture(tmp_path, monkeypatch, "CUDA")
+    module = sys.modules["eom_catalog_service.embedding_offline_backend"]
+    original_assert = module._NumericalImplementationSnapshot.assert_unchanged
+    original_descriptor = module._read_native_numerical_descriptor
+    ownership = FakeOwnership()
+    snapshots = 0
+    descriptors = 0
+
+    def assert_snapshot(snapshot: Any) -> None:
+        nonlocal snapshots
+        snapshots += 1
+        original_assert(snapshot)
+
+    def descriptor(*args: Any, **kwargs: Any) -> Any:
+        nonlocal descriptors
+        descriptors += 1
+        return original_descriptor(*args, **kwargs)
+
+    def partial(_value: int) -> NoReturn:
+        assert state["threads"] == 4
+        raise RuntimeError("synthetic partial setting failure")
+
+    monkeypatch.setattr(
+        module._NumericalImplementationSnapshot, "assert_unchanged", assert_snapshot
+    )
+    monkeypatch.setattr(module, "_read_native_numerical_descriptor", descriptor)
+    monkeypatch.setattr(state["torch"], "set_num_interop_threads", partial)
+    with pytest.raises(NativeEmbeddingBackendError, match="TEARDOWN_UNCERTAIN"):
+        observe_native_runtime_without_model(
+            profile="CUDA_INDEX_FP32",
+            runtime_observer=observer,
+            expected_owner_uid=os.geteuid(),
+            cuda_ownership=ownership,
+        )
+    assert snapshots == 3 and descriptors == 1 and observer.calls == 2
+    assert state["syncs"] == 1 and ownership.valid and ownership.calls >= 4
+    assert state["loads"] == state["tokenized"] == [] and state["forwards"] == 0
+
+
+@pytest.mark.parametrize("fault", ("missing", "symlink", "oversized", "write_mode"))
+def test_probe_rejects_untrusted_implementation_before_numeric_setting_or_model_access(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    _configured, _bundle, state, observer = _probe_fixture(tmp_path, monkeypatch)
+    module = sys.modules["eom_catalog_service.embedding_offline_backend"]
+    original = module.__file__
+    assert original is not None
+    origin = tmp_path / "probe-implementation.py"
+    if fault == "symlink":
+        origin.symlink_to(original)
+    elif fault == "oversized":
+        origin.write_bytes(b"x" * (128 * 1024 + 1))
+        origin.chmod(0o600)
+    elif fault == "write_mode":
+        origin.write_bytes(Path(original).read_bytes())
+        origin.chmod(0o660)
+    monkeypatch.setattr(module, "__file__", str(origin))
+    with pytest.raises(NativeEmbeddingBackendError, match="IMPLEMENTATION_INVALID"):
+        observe_native_runtime_without_model(
+            profile="CPU_INDEX_FP32", runtime_observer=observer, expected_owner_uid=os.geteuid()
+        )
+    assert observer.calls == 2 and state["threads"] == 1 and state["interop"] == 2
+    assert state["loads"] == state["tokenized"] == [] and state["forwards"] == 0
+
+
+@pytest.mark.parametrize(
+    "fault", ("missing", "count", "current", "hardware", "capability", "workspace")
+)
+def test_probe_cuda_mapping_is_actual_readback_not_observer_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    _configured, _bundle, state, observer = _probe_fixture(tmp_path, monkeypatch, "CUDA")
+    ownership = FakeOwnership()
+    if fault == "workspace":
+        monkeypatch.delenv("CUBLAS_WORKSPACE_CONFIG")
+    else:
+        field, actual = {
+            "missing": ("is_available", False),
+            "count": ("device_count", 2),
+            "current": ("current_device", 1),
+            "hardware": ("get_device_name", "wrong-gpu"),
+            "capability": ("get_device_capability", (11, 0)),
+        }[fault]
+        setattr(state["torch"].cuda, field, lambda *_args: actual)
+    with pytest.raises(NativeEmbeddingBackendError):
+        observe_native_runtime_without_model(
+            profile="CUDA_INDEX_FP32",
+            runtime_observer=observer,
+            expected_owner_uid=os.geteuid(),
+            cuda_ownership=ownership,
+        )
+    assert observer.calls == 2 and ownership.valid
+    assert state["loads"] == state["tokenized"] == [] and state["forwards"] == 0
+    if fault == "workspace":
+        assert state["imports"] == []
+
+
+def test_normal_backend_keeps_its_original_nonprobe_batch_and_thread_recipe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    configured, bundle, _state, _observer = _probe_fixture(tmp_path, monkeypatch)
+    body = bundle.model_dump(mode="json")
+    runtime = body["numerical_runtime"]
+    runtime["recipe"].update(batch_size=2, threads=3)
+    body["numerical_runtime"] = seal(runtime, "runtime_sha256")
+    revised = EmbeddingRuntimeBundle.model_validate(seal(body, "bundle_sha256"))
+    (
+        configured.bundle_store_root
+        / revised.bundle_id
+        / revised.bundle_revision_id
+        / "bundle.json"
+    ).write_bytes(embedding_runtime_bundle_bytes(revised))
+    configured = replace(configured, pointer=_pointer(revised))
+    state = fake_libraries(monkeypatch, revised)
+    backend = OfflineNativeEmbeddingBackend(
+        configured, device="CPU", runtime_observer=FakeObserver(revised)
+    )
+    assert backend.batch_size == 2 and backend.threads == 3
+    assert len(backend.encode(("a", "b", "c", "d", "e"), purpose="DOCUMENT")) == 5
+    assert state["forwards"] == 3
+    backend.close()
 
 
 @pytest.mark.parametrize("device", ("CPU", "CUDA"))

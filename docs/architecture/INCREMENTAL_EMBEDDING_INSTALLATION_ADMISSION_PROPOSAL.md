@@ -1,12 +1,13 @@
 # Native installation admission: same-audit inventory and CPU-first seal
 
-2026-10-13 UTC. PROTOCOL_DRAFT / PHASE_A_SOURCE_ONLY / NOT_ADMITTED.
+2026-10-13 UTC. PROTOCOL_DRAFT / PHASE_A_B_SOURCE_ONLY / NOT_ADMITTED.
 The two adjacent `.schema.proposal.json` documents remain unregistered ROOTLOCAL drafts,
-not worker messages, grants or actual receipts. Only the additive same-audit local snapshot
-export in PhaseA below is implemented; all receipt/proof/factory/unit composition remains
-proposed. No production data, installed prefix, resource registry, unit or default changes.
+not worker messages, grants or actual receipts. The additive same-audit local snapshot and
+shared model-free numerical observation in PhaseA/B below are source-only implementations;
+all receipt/proof/factory/unit composition remains proposed. No production data, installed
+prefix, resource registry, unit or default changes.
 
-The current CPU publication failed its OLD whole-prefix audit before NEW; the accepted
+The previously examined CPU publication failed its OLD whole-prefix audit before NEW; the accepted
 read-only wheel diagnosis is not a replacement whole-prefix PASS. That failed input cannot
 advance to candidate publication, proof generation, unit probing or final seal. Source
 compatibility fixtures cannot change this fact. Root must first review the corrected source
@@ -259,3 +260,81 @@ The existing owner CLI receipt literal is unchanged and remains <=128B, without 
 Protocol draft bytes and frozen7044 diagnostic are unchanged. Actual ROOTLOCAL receipt/seal,
 proof generation, installed source/bootstrap acceptance, new unit/owner capture and GPU admission
 remain unavailable; no synthetic test is an actual installation, sandbox or model PASS.
+
+## PhaseB — shared model-free numerical observation
+
+2026-10-13 UTC. ROOT_APPROVED_SOURCE_PHASE / NOT_INSTALLED / NOT_ADMITTED.
+Only existing `embedding_offline_backend.py`, `test_embedding_offline_backend.py` and this
+note are owned. The fixed100b publisher/bootstrap/source candidate is not changed by this phase.
+
+1. **Boundary:** one public `observe_native_runtime_without_model` returns the existing frozen
+   numerical descriptor; normal encoding and independent installation no-forward acceptance
+   reuse the same private numerical functions. This is observation, not installation authority.
+2. **Source:** real caller-owned protected observer supplies archive/RECORD/OS evidence;
+   actual imports and bounded installed implementation snapshots supply independent read-back.
+   No descriptor/hash echo, version-to-archive-SHA inference or expected-model field is accepted.
+3. **Identity:** preserve distribution raw pins, implementation raw pins, descriptor semantic SHA
+   and separate installation/config/bundle/proof identities; no new provider/registry ID.
+4. **Checks:** require explicit fixed profile, observer, exact owner UID and appropriate CUDA
+   ownership before optional imports; verify exact CPU5/CUDA20 versions/build/device for probe.
+   Preserve normal backend expected-bundle comparisons and all model/tensor checks.
+5. **Access:** one initialization, three bounded implementation byte reads, then epochs and
+   live numeric/observer read-back. Probe reads no bundle/payload/weights, tokenizer or vectors.
+6. **Structure:** small private functions factor actual observation, imported versions,
+   configuration and descriptor construction; existing backend methods stay wrappers. No second
+   encoder, model-load boolean, mutable registry, global cache or generic runtime framework.
+7. **Cost:** fixed probe batch4/thread4/interop1; normal backend keeps its original recipe.
+   No added token-array copies or per-encode implementation rehash. Fresh unit process initializes
+   process-global thread/precision settings once; no reset/restore or concurrent operation.
+8. **Lifecycle:** before-import and final observer/ownership/snapshot checks are mandatory,
+   including exceptional exit. CUDA synchronizes only under current ownership; owner lease is
+   never closed/released by probe. Unknown teardown returns no successful descriptor.
+9. **Layers:** public owner/probe composition calls this Catalog seam; no private backend access,
+   reverse API/Orchestrator import, new dependency, schema, factory/main/unit or privileged action.
+10. **Failure:** missing/wrong profile/observer/owner/lease, claimed/imported runtime drift,
+    numeric flags/thread bools, source/epoch drift and final read-back failures are content-free
+    errors. Fixture libraries/observers are only source control-flow tests, not real admission.
+11. **Alternative:** constructing the backend loads tokenizer/model; a skip-load flag weakens
+    its invariant; duplicated setters/read-back drift. Factoring the actual shared path solves
+    the two real use cases without any of those alternatives.
+
+No-model observation measures installed/import/device/source identity and global flags/threads;
+FLOAT32/eval/eager/pooling/normalization recipe declarations remain implementation policy, not
+observed model/tensor/forward correctness. The normal backend still constructs with explicit
+float32/eager, calls eval, verifies parameters/buffers/devices and validates inference outputs.
+The public probe is not usable to bypass the production factory's sealed-admission port; the
+actual root-maintenance pre-exec capture/fixed-unit/negative/termination composition stays required.
+
+Changing this whole-file-pinned backend changes `OFFLINE_ENCODER` raw SHA. After source freeze,
+root needs a newly accepted source/wheel and actual installed read-back, then new descriptor,
+execution/bundle/config revisions and raw/semantic pins. Current100b proof/candidate/raw pins
+cannot be relabeled as this successor. The unchanged canonical payload and historical CPU
+prefix/spec/manifest are not modified. Actual CPU/CUDA benchmark and conditional activation
+remain later mandatory goal gates.
+
+### PhaseB source checkpoint
+
+Normal backend wrappers and the public probe now genuinely call the same numerical setter,
+actual imported-version/installation checks and descriptor read-back functions. Only the probe
+uses the fixed batch4/thread4/interop1 recipe; a regression retains normal batch2/thread3 and
+its original batch iteration. The probe takes its bounded implementation snapshot before
+numerical configuration, so even a partially failed setter reaches independent final observer,
+ownership, synchronization, snapshot and actual numeric read-back checks. The shared encoder
+still performs its unchanged tokenizer/model/parameter/tensor/forward checks. The probe does
+none of those operations and cannot attest their correctness.
+
+Focused fake-library tests161 PASS5.17s; final backend/factory2 suites188 PASS5.46s; separate
+legacy CPU/adapter and benchmark files/worker/channel regression9 suites427 PASS40.25s.
+Explicit API/core strict mypy each2 files PASS;
+API Ruff2/format2 PASS. New cases cover exact CPU5/CUDA20 read-back, missing/wrong capture,
+boolean ownership/settings/copied device values, import/profile/numeric/source/CUDA mapping
+drift, missing/symlink/oversized/writable implementation files, single initial bounded byte
+capture and epoch reuse, exceptional setter/read-back cleanup and absent model/payload access.
+All libraries, ownership and protected observers in these tests are synthetic source fixtures;
+they do not establish installation, real unit, model, GPU sandbox or admission acceptance.
+
+The first literal19 run during another owner's namespace3 WIP returned1581 PASS/2 FAIL39.34s.
+Both failures were unrelated namespace test expectations/snapshot changes; no non-owned file
+was modified here. This mixed-source run is preserved as failure history, not final acceptance.
+At root's instruction no repeated shared19 gate is run now; root performs one independent
+shared19/factory and related QUERY regression only after both owned3 scopes are frozen.

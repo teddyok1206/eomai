@@ -231,6 +231,28 @@ class NumericalRuntimeFileSnapshots:
     def require_closed_namespaces(self, roots: set[Path], expected: set[Path]) -> None:
         observed: set[Path] = set()
         for root in roots:
+            try:
+                initial = root.lstat()
+            except OSError as exc:
+                raise InstalledRuntimeProofError("INSTALLED_RUNTIME_NAMESPACE_UNAVAILABLE") from exc
+            _require(not stat.S_ISLNK(initial.st_mode), "NAMESPACE_LINK")
+            if stat.S_ISREG(initial.st_mode):
+                # A wheel can own a top-level module or .pth as a namespace root.
+                # Keep its verified-byte epoch; os.walk(file) would omit it.
+                self.observe_protected_member_identity(root)
+                observed.add(root)
+                continue
+            _require(
+                stat.S_ISDIR(initial.st_mode)
+                and initial.st_uid == self.owner_uid
+                and not initial.st_mode & 0o022,
+                "NAMESPACE_UNPROTECTED",
+            )
+            initial_epoch = _identity(initial)
+            _require(
+                self._namespace_directories.setdefault(root, initial_epoch) == initial_epoch,
+                "NAMESPACE_CHANGED",
+            )
             for parent, directories, names in os.walk(root, followlinks=False):
                 directory = Path(parent)
                 value = directory.lstat()
@@ -240,7 +262,12 @@ class NumericalRuntimeFileSnapshots:
                     and not value.st_mode & 0o022,
                     "NAMESPACE_UNPROTECTED",
                 )
-                self._namespace_directories[directory] = _identity(value)
+                directory_epoch = _identity(value)
+                _require(
+                    self._namespace_directories.setdefault(directory, directory_epoch)
+                    == directory_epoch,
+                    "NAMESPACE_CHANGED",
+                )
                 for name in directories:
                     _require(not (directory / name).is_symlink(), "NAMESPACE_LINK")
                 observed.update(directory / name for name in names)

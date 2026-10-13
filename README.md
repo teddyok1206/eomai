@@ -173,7 +173,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
 | 인증된 owner/session 전달 | SOURCE_PASS; 기존 인증 1회·고정 API peer·짧은 작업별 전달384 PASS, 실제 provider admission·배포는 미완료 |
 | 실제 disposable PostgreSQL |0052 registry/application16·reservation8·limited IAM6,0053 stage18+runner10·Identity11 PASS; migration·cleanup PASS |
-| CPU/CUDA 실행 환경 준비 | 형식 호환1485·동일 audit inventory1514 source PASS; 실제 CPU wheel56 전체 PASS; 전체-prefix/native 검사 남음, CUDA 미게시 |
+| CPU/CUDA 실행 환경 준비 | namespace·공유 model-free probe 포함 최종 공통3211 source PASS; 실제 CPU wheel56 PASS; 새 전체-prefix/native 검증 남음, CUDA 미게시 |
 | 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | NOT_ACTIVE / NOT_EVALUATED |
 
 최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와

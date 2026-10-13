@@ -1269,3 +1269,58 @@ Root가 frozen7 전체 diff/새 tests/설계 §13을 읽고 원 SHA를 확인했
 JSONB는 owner/lease 이전 명시 거부다. 기존2 queue family·engine·executor·admission·DB/
 migration·수치 module·persistence 본문은 보존했다. SQL/spies는 실제 DB/QUERY 실행이 아니다.
 실제 owner/paired CHECK/native execution/Artifact reader/consumer delivery는 계속 pending이다.
+
+## 실제100b CPU 후보·namespace 원인·복구 — 2026-10-13 05:37 UTC
+
+정확한 committed source `100b3a4504981cc1e25c32619ed6dbe06d895691`로 새 private build를
+만들었다. tar55101440B raw `80179e80d8a97967b8b8b04e5a8c0b4f00ef1b440ac1afe6bd2a12f39640b613`,
+wheel3498538B raw `45f3b5e3aca783a6763eccb2e743b8ba507f2573d4c57d2221c6ad21843c640e`다.
+supported RECORD1462-member 및 기존 root helper의 canonical retention/read-back/replay/fsync는
+PASS다. 처음 temp URI 설치 기록은 별도로 남기고 normal pip로 canonical URI에서 재조립했다.
+RECORD/direct_url의 직접 편집이나 source/payload 복사는 없다. 최종 CPU fingerprintafa36289,
+CUDA dc83a471, CPU input raw96f06fda/CUDA00391e07과 bootstrap6를 명시 parser로 확인했다.
+
+CPU 전체 보호 audit는 `INSTALLED_RUNTIME_NAMESPACE_SET_MISMATCH`로 OLD 단계에서 멈췄다.
+최종 failed PRIVATE `/opt/eom/.embedding-index-install-5goKXbH7`, phase BEFORE_OLD_PREFIX_BYTES_AUDIT,
+빈 receipt·pub log를 보존했다. NEW/model/GPU 실행은0다. 원인을 억지로 승인하지 않았다.
+Root가121-line readonly diagnostic과 raw55408624를 읽고 API Conda로 독립 재현했다:
+overlay4 각각 실제 public verify PASS, roots10/expected965/os.walk964, missing은 검증된 regular
+`distutils-precedence.pth`1개, extra0, 종료 epochs PASS다. 입력96과 source4 raw는 전후 불변이다.
+단일 파일 root에도 directory walk만 쓰는 기존 snapshot owner의 집합 관찰 결함으로 확인했다.
+
+기존 CPU profile lock·pub8f4b·input96·빈 receipt·실제 prefix process 부재·canonical fingerprint를
+다시 확인하고 scoped recovery raw `e0de385613685ecec885b828f4c8f3fb5d601ac235190e039625adb5f74ab421`
+로 recoverable rename/parent fsync를 완료했다. root failed bytes는
+`/opt/eom/conda/envs/.embedding-index-failed-CPU_INDEX_FP32-5goKXbH7`에 보존하고 같은 developer
+inode를 fixed CPU0700/UID1000로 복구했다. 이전 backup은 MOVED_NOT_DELETED다. 기존2실패 후보,
+3개 PRIVATE/phase/receipt 및 archive는 보존한다. 현재 CPU는 조립 입력이지 admitted runtime이 아니다.
+
+실제 sanitized evidence는 `/tmp/eom-embedding-successor-release.43koBl4C`의 build/record/
+canonical-retention, canonical assembly/fingerprint, prefix-input-preparation,
+cpu-publication-drain-preflight, cpu-protected-publication, actual-overlay-namespace-diagnosis,
+third-cpu-failure-metadata 및 third-cpu-recovery logs다. 긴 로그/패키지는 Git에 넣지 않는다.
+수정은 기존 snapshot boundary에서 regular root를 같은 보호 identity/epoch에 포함하는 것과,
+model-free 설정 readback을 정상 encoder와 공유하는 별도 source3에 한정한다. 서로 수정 중인
+파일을 읽은 합성 gate 결과는 final freeze acceptance로 합산/재사용하지 않는다. 새 committed
+source/prefix/native unit/actual owner와 CPU/GPU 실측·조건부 기본 전환은 아직 남았고 goal ACTIVE다.
+
+## Namespace·공유 model-free 수치 관찰 최종 독립 gate — 2026-10-13 05:48 UTC
+
+Root가 source2와 tests2 및 각 설계·checkpoint를 정독했다. directory 초기 epoch를 walk나
+반복호출이 refresh할 수 있던 문제도 실제 inode교체2-case로 재현한 뒤 setdefault/equality로
+고쳤다. regular root는 기존 보호 identity를 재사용하며 byteSHA를 보존한다. missing/extra
+동등성·owner/mode/single-link/ancestor/epoch 검사는 완화하지 않는다.
+
+새 public model-free 관찰은 정상 backend와 동일 setters/import/descriptor readback 함수를
+사용하며 payload/tokenizer/model/forward는 호출하지 않는다. 정상 encoding의 원래 recipe와
+model/tensor checks는 그대로다. No-model evidence는 정책·설정·소스·실제 library/device 관찰만
+뜻하고 model precision/eval/eager 정확성 관측을 대신하지 않는다. OFFLINE_ENCODER source raw가
+변했으므로 새 descriptor/bundle/config pins가 필요하며 기존 CPU 이력을 재해석하지 않는다.
+
+모든6-path freeze 이후 root가 중복을 제거한60-suite를 독립 실행했다:
+**3211 PASS162.50s, skip0**, strict/Ruff/format4 PASS. source raw는 backend
+`f667e54da9ebf74312ef4d93b6c8f44760c49bb6012dc00b9b47799ff54f500b`, runtime-files
+`a54e7cf535cfba66c8cdb64fa2eb8ca56e66938475af4f95c061e9f7d4109553`이며 종료 후에도 같다.
+앞선 mutable worktree shared gate나 다른 source count와 합산하지 않는다. 실제 새 전체-prefix,
+fixed native unit·concrete proof/seal·owner admission, CPU/GPU forward/비교/default는 미완료다.
+모델/GPU 추론0, 성능 NOT_EVALUATED, GPU 기본값 NOT_ACTIVE, 전체 goal ACTIVE다.

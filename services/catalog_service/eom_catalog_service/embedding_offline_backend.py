@@ -7,10 +7,15 @@ import importlib.metadata
 import os
 import platform
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from eom_catalog_contracts.embedding_installed_runtime_proof import (
+    EmbeddingRuntimeProfile,
+    embedding_numeric_library_versions,
+)
 from eom_catalog_contracts.embedding_runtime_bundle import (
     EmbeddingNumericalDevice,
     EmbeddingNumericalRecipe,
@@ -116,6 +121,243 @@ def observed_embedding_implementation_pins(
     return _resolve_implementation_snapshot(expected_owner_uid).pins
 
 
+def _require_native_ownership(
+    device: Literal["CPU", "CUDA"], ownership: CudaEmbeddingOwnership | None
+) -> None:
+    if device == "CUDA":
+        if ownership is None:
+            raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_CUDA_OWNERSHIP_REQUIRED")
+        try:
+            assert_owned: Callable[[], object] = ownership.assert_owned
+            if assert_owned() is not None:
+                raise ValueError("ownership observation must not return a grant")
+        except Exception as exc:
+            raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_CUDA_OWNERSHIP_INVALID") from exc
+
+
+def _observe_native_installation(
+    observer: InstalledEmbeddingRuntimeObserver | None,
+) -> InstalledEmbeddingRuntimeObservation:
+    if observer is None:
+        raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_CONFIGURATION_INVALID")
+    try:
+        observation = observer.observe()
+    except Exception as exc:
+        raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_OBSERVATION_FAILED") from exc
+    if (
+        type(observation) is not InstalledEmbeddingRuntimeObservation
+        or type(observation.libraries) is not tuple
+        or not 4 <= len(observation.libraries) <= 32
+    ):
+        raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_RUNTIME_MISMATCH")
+    libraries = tuple(
+        EmbeddingNumericLibraryPin.model_validate(pin) for pin in observation.libraries
+    )
+    device = EmbeddingNumericalDevice.model_validate(observation.device)
+    if (
+        observation.python_version != platform.python_version()
+        or sys.platform != "linux"
+        or platform.machine() != "x86_64"
+        or any(importlib.metadata.version(pin.name) != pin.version for pin in libraries)
+    ):
+        raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_RUNTIME_MISMATCH")
+    return InstalledEmbeddingRuntimeObservation(
+        observation.python_version, libraries, device, observation.torch_build_cuda_version
+    )
+
+
+def _require_native_import_versions(
+    torch: Any, transformers: Any, installation: InstalledEmbeddingRuntimeObservation
+) -> None:
+    libraries = {pin.name: pin.version for pin in installation.libraries}
+    if (
+        str(torch.__version__) != libraries["torch"]
+        or str(transformers.__version__) != libraries["transformers"]
+        or torch.version.cuda != installation.torch_build_cuda_version
+    ):
+        raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_RUNTIME_MISMATCH")
+
+
+def _configure_native_numerics(torch: Any, recipe: EmbeddingNumericalRecipe) -> None:
+    torch.set_num_threads(recipe.threads)
+    torch.set_num_interop_threads(1)
+    torch.set_float32_matmul_precision("highest")
+    torch.backends.cuda.matmul.allow_tf32 = False
+    torch.backends.cudnn.allow_tf32 = False
+    torch.backends.cudnn.benchmark = False
+    torch.use_deterministic_algorithms(True, warn_only=False)
+
+
+def _read_native_numerical_descriptor(
+    torch: Any,
+    installation: InstalledEmbeddingRuntimeObservation,
+    recipe: EmbeddingNumericalRecipe,
+    implementations: tuple[EmbeddingNumericImplementationPin, ...],
+    ownership: CudaEmbeddingOwnership | None,
+) -> EmbeddingNumericalRuntimeDescriptor:
+    threads, interop = torch.get_num_threads(), torch.get_num_interop_threads()
+    if (
+        torch.get_float32_matmul_precision() != "highest"
+        or torch.backends.cuda.matmul.allow_tf32 is not False
+        or torch.backends.cudnn.allow_tf32 is not False
+        or torch.backends.cudnn.benchmark is not False
+        or torch.are_deterministic_algorithms_enabled() is not True
+        or torch.is_deterministic_algorithms_warn_only_enabled() is not False
+        or torch.is_autocast_enabled("cpu") is not False
+        or torch.is_autocast_enabled("cuda") is not False
+        or type(threads) is not int
+        or threads != recipe.threads
+        or type(interop) is not int
+        or interop != 1
+    ):
+        raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_NUMERICS_MISMATCH")
+    device = installation.device
+    if device.kind == "CUDA":
+        _require_native_ownership("CUDA", ownership)
+        if (
+            os.environ.get("CUBLAS_WORKSPACE_CONFIG") != ":4096:8"
+            or torch.cuda.is_available() is not True
+            or torch.cuda.device_count() != 1
+            or torch.cuda.current_device() != 0
+            or torch.cuda.get_device_name(0) != device.hardware_model
+            or tuple(torch.cuda.get_device_capability(0)) != device.compute_capability
+        ):
+            raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_DEVICE_MISMATCH")
+        device = EmbeddingNumericalDevice(
+            kind="CUDA",
+            hardware_model=torch.cuda.get_device_name(0),
+            compute_capability=tuple(torch.cuda.get_device_capability(0)),
+            driver_version=device.driver_version,
+        )
+    observed_recipe = EmbeddingNumericalRecipe.model_validate(
+        {
+            "cublas_workspace": (
+                os.environ["CUBLAS_WORKSPACE_CONFIG"] if device.kind == "CUDA" else None
+            ),
+            "batch_size": recipe.batch_size,
+            "threads": threads,
+        }
+    )
+    body = {
+        "schema_version": "embedding-numerical-runtime/1.0",
+        "python_version": platform.python_version(),
+        "implementations": [pin.model_dump(mode="json") for pin in implementations],
+        "libraries": [pin.model_dump(mode="json") for pin in installation.libraries],
+        "device": device.model_dump(mode="json"),
+        "recipe": observed_recipe.model_dump(mode="json"),
+        "torch_build_cuda_version": torch.version.cuda,
+    }
+    return EmbeddingNumericalRuntimeDescriptor.model_validate(
+        body | {"runtime_sha256": content_sha256(body)}
+    )
+
+
+def observe_native_runtime_without_model(
+    *,
+    profile: EmbeddingRuntimeProfile,
+    runtime_observer: InstalledEmbeddingRuntimeObserver,
+    expected_owner_uid: int = 0,
+    cuda_ownership: CudaEmbeddingOwnership | None = None,
+) -> EmbeddingNumericalRuntimeDescriptor:
+    """Actual fixed-recipe observation only, not admission or model/tensor correctness.
+
+    Caller owns genuine pre-exec installation/unit admission and the protected observer.
+    Fresh nonprivileged probe processes import libraries but never resolve payloads, create
+    tokenizers/models or run forwards. No expected/request descriptor or path is accepted.
+    """
+    if (
+        type(profile) is not str
+        or profile not in {"CPU_INDEX_FP32", "CUDA_INDEX_FP32"}
+        or runtime_observer is None
+        or type(expected_owner_uid) is not int
+        or not 0 <= expected_owner_uid <= 4294967294
+    ):
+        raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_CONFIGURATION_INVALID")
+    device: Literal["CPU", "CUDA"] = "CPU" if profile == "CPU_INDEX_FP32" else "CUDA"
+    if device == "CPU" and cuda_ownership is not None:
+        raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_DEVICE_MISMATCH")
+    _require_native_ownership(device, cuda_ownership)
+    installation: InstalledEmbeddingRuntimeObservation | None = None
+    snapshot: _NumericalImplementationSnapshot | None = None
+    torch: Any = None
+    transformers: Any = None
+    descriptor: EmbeddingNumericalRuntimeDescriptor | None = None
+    recipe = EmbeddingNumericalRecipe(
+        cublas_workspace=":4096:8" if device == "CUDA" else None, batch_size=4, threads=4
+    )
+    try:
+        installation = _observe_native_installation(runtime_observer)
+        if (
+            installation.device.kind != device
+            or installation.python_version != "3.12.13"
+            or installation.torch_build_cuda_version != ("12.8" if device == "CUDA" else None)
+            or tuple((pin.name, pin.version) for pin in installation.libraries)
+            != embedding_numeric_library_versions(profile)
+        ):
+            raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_RUNTIME_MISMATCH")
+        _require_native_ownership(device, cuda_ownership)
+        if device == "CUDA" and os.environ.get("CUBLAS_WORKSPACE_CONFIG") != ":4096:8":
+            raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_RUNTIME_MISMATCH")
+        torch = importlib.import_module("torch")
+        transformers = importlib.import_module("transformers")
+        _require_native_import_versions(torch, transformers, installation)
+        snapshot = _resolve_implementation_snapshot(expected_owner_uid)
+        snapshot.assert_unchanged()
+        _configure_native_numerics(torch, recipe)
+        descriptor = _read_native_numerical_descriptor(
+            torch, installation, recipe, snapshot.pins, cuda_ownership
+        )
+        return descriptor
+    except NativeEmbeddingBackendError:
+        raise
+    except (ImportError, importlib.metadata.PackageNotFoundError) as exc:
+        raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_RUNTIME_UNAVAILABLE") from exc
+    except (OSError, ValueError, TypeError, KeyError, AttributeError, RuntimeError) as exc:
+        raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_RUNTIME_INVALID") from exc
+    finally:
+        if installation is not None:
+            failed = False
+            try:
+                _require_native_ownership(device, cuda_ownership)
+            except Exception:
+                failed = True
+            try:
+                if torch is not None and device == "CUDA":
+                    _require_native_ownership(device, cuda_ownership)
+                    torch.cuda.synchronize(0)
+            except Exception:
+                failed = True
+            actual: InstalledEmbeddingRuntimeObservation | None = None
+            try:
+                actual = _observe_native_installation(runtime_observer)
+                if actual != installation:
+                    raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_RUNTIME_MISMATCH")
+            except Exception:
+                failed = True
+            if snapshot is not None:
+                try:
+                    snapshot.assert_unchanged()
+                except Exception:
+                    failed = True
+            if torch is not None and transformers is not None and actual is not None:
+                try:
+                    _require_native_import_versions(torch, transformers, actual)
+                    if snapshot is not None:
+                        final = _read_native_numerical_descriptor(
+                            torch, actual, recipe, snapshot.pins, cuda_ownership
+                        )
+                        if descriptor is not None and final != descriptor:
+                            raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_RUNTIME_MISMATCH")
+                except Exception:
+                    failed = True
+            try:
+                _require_native_ownership(device, cuda_ownership)
+            except Exception:
+                failed = True
+            if failed:
+                raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_RUNTIME_TEARDOWN_UNCERTAIN")
+
+
 class OfflineNativeEmbeddingBackend:
     """Lazy exact FP32/eager backend over one verified legacy payload.
 
@@ -200,121 +442,33 @@ class OfflineNativeEmbeddingBackend:
             raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_RUNTIME_INVALID") from exc
 
     def _require_owned(self) -> None:
-        if self._device == "CUDA":
-            if self._ownership is None:
-                raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_CUDA_OWNERSHIP_REQUIRED")
-            try:
-                self._ownership.assert_owned()
-            except Exception as exc:
-                raise NativeEmbeddingBackendError(
-                    "NATIVE_EMBEDDING_CUDA_OWNERSHIP_INVALID"
-                ) from exc
+        _require_native_ownership(self._device, self._ownership)
 
     def _require_installation(self) -> InstalledEmbeddingRuntimeObservation:
-        if self._observer is None:
-            raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_CONFIGURATION_INVALID")
-        try:
-            observation = self._observer.observe()
-        except Exception as exc:
-            raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_OBSERVATION_FAILED") from exc
-        libraries = tuple(
-            EmbeddingNumericLibraryPin.model_validate(pin.model_dump(mode="json"))
-            for pin in observation.libraries
-        )
-        device = EmbeddingNumericalDevice.model_validate(observation.device.model_dump(mode="json"))
+        observation = _observe_native_installation(self._observer)
         if (
-            observation.python_version != platform.python_version()
-            or observation.python_version != self._expected.python_version
-            or libraries != self._expected.libraries
-            or device != self._expected.device
+            observation.python_version != self._expected.python_version
+            or observation.libraries != self._expected.libraries
+            or observation.device != self._expected.device
             or observation.torch_build_cuda_version != self._expected.torch_build_cuda_version
-            or sys.platform != "linux"
-            or platform.machine() != "x86_64"
-            or any(importlib.metadata.version(pin.name) != pin.version for pin in libraries)
         ):
             raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_RUNTIME_MISMATCH")
-        self._installation = InstalledEmbeddingRuntimeObservation(
-            observation.python_version, libraries, device, observation.torch_build_cuda_version
-        )
+        self._installation = observation
         return self._installation
 
     def _require_import_versions(self) -> None:
-        libraries = {pin.name: pin.version for pin in self._expected.libraries}
-        if (
-            str(self._torch.__version__) != libraries["torch"]
-            or str(self._transformers.__version__) != libraries["transformers"]
-            or self._torch.version.cuda != self._expected.torch_build_cuda_version
-        ):
-            raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_RUNTIME_MISMATCH")
+        _require_native_import_versions(self._torch, self._transformers, self._installation)
 
     def _configure_numerics(self) -> None:
-        torch = self._torch
-        torch.set_num_threads(self._expected.recipe.threads)
-        # Fixed interop=1 is part of this installed encoder implementation recipe.
-        torch.set_num_interop_threads(1)
-        torch.set_float32_matmul_precision("highest")
-        torch.backends.cuda.matmul.allow_tf32 = False
-        torch.backends.cudnn.allow_tf32 = False
-        torch.backends.cudnn.benchmark = False
-        torch.use_deterministic_algorithms(True, warn_only=False)
+        _configure_native_numerics(self._torch, self._expected.recipe)
 
     def _observed_descriptor(self) -> EmbeddingNumericalRuntimeDescriptor:
-        torch = self._torch
-        recipe = self._expected.recipe
-        if (
-            torch.get_float32_matmul_precision() != "highest"
-            or torch.backends.cuda.matmul.allow_tf32 is not False
-            or torch.backends.cudnn.allow_tf32 is not False
-            or torch.backends.cudnn.benchmark is not False
-            or torch.are_deterministic_algorithms_enabled() is not True
-            or torch.is_deterministic_algorithms_warn_only_enabled() is not False
-            or torch.is_autocast_enabled("cpu") is not False
-            or torch.is_autocast_enabled("cuda") is not False
-            or type(torch.get_num_threads()) is not int
-            or torch.get_num_threads() != recipe.threads
-            or torch.get_num_interop_threads() != 1
-        ):
-            raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_NUMERICS_MISMATCH")
-        if self._device == "CUDA":
-            self._require_owned()
-            if (
-                os.environ.get("CUBLAS_WORKSPACE_CONFIG") != ":4096:8"
-                or torch.cuda.is_available() is not True
-                or torch.cuda.device_count() != 1
-                or torch.cuda.current_device() != 0
-                or torch.cuda.get_device_name(0) != self._expected.device.hardware_model
-                or tuple(torch.cuda.get_device_capability(0))
-                != self._expected.device.compute_capability
-            ):
-                raise NativeEmbeddingBackendError("NATIVE_EMBEDDING_DEVICE_MISMATCH")
-            actual_device = EmbeddingNumericalDevice(
-                kind="CUDA",
-                hardware_model=torch.cuda.get_device_name(0),
-                compute_capability=tuple(torch.cuda.get_device_capability(0)),
-                driver_version=self._installation.device.driver_version,
-            )
-        else:
-            actual_device = self._installation.device
-        observed_recipe = EmbeddingNumericalRecipe.model_validate(
-            {
-                "cublas_workspace": (
-                    os.environ["CUBLAS_WORKSPACE_CONFIG"] if self._device == "CUDA" else None
-                ),
-                "batch_size": recipe.batch_size,
-                "threads": torch.get_num_threads(),
-            }
-        )
-        body = {
-            "schema_version": "embedding-numerical-runtime/1.0",
-            "python_version": platform.python_version(),
-            "implementations": [pin.model_dump(mode="json") for pin in self._implementation_pins],
-            "libraries": [pin.model_dump(mode="json") for pin in self._installation.libraries],
-            "device": actual_device.model_dump(mode="json"),
-            "recipe": observed_recipe.model_dump(mode="json"),
-            "torch_build_cuda_version": torch.version.cuda,
-        }
-        return EmbeddingNumericalRuntimeDescriptor.model_validate(
-            body | {"runtime_sha256": content_sha256(body)}
+        return _read_native_numerical_descriptor(
+            self._torch,
+            self._installation,
+            self._expected.recipe,
+            self._implementation_pins,
+            self._ownership,
         )
 
     def _assert_runtime(self) -> None:
