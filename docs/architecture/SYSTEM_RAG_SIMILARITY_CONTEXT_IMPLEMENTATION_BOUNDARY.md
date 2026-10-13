@@ -2,7 +2,7 @@
 
 Written: 2026-10-12 UTC. Inspected Git base: `550a239cac74b8255bf33467b78671b6d37f811f`.
 Status: **DESIGN + CONTRACT / PINNED-READ / COMPOSER SOURCE CHECKPOINTS; NOT ACTIVATED**.
-The separately approved source steps are recorded in sections 8–10. Source observations are not
+The separately approved source steps are recorded in sections 8–13. Source observations are not
 installed-runtime, production permission, performance, or educational-quality evidence.
 This note implements no authority, provider, schema, API, worker, database, model, or release.
 The root implementer must read this complete note before changing the common-context boundary.
@@ -931,3 +931,88 @@ Root independently read all nine frozen paths and matched their raw hashes. The 
 thirty-six-suite inventory passed **1610 tests in99.63s, skip0**; strict mypy, Ruff and format
 passed all six Python files. This remains the first protocol-only boundary: no compiler,
 queue, migration, real owner/native unit, Artifact publication or consumer activation follows.
+
+## 13. C1c fixed QUERY compiler/read boundary — approved source delta
+
+The seven approved paths extend the existing compiler, execution-protocol calculator and Runner
+repository, add two focused test modules, update the prior QUERY contract test's compiler-stage
+expectation, and record this delta. QUERY remains NOT_ADMITTED for new work. The admission table,
+native executor, engine, persistent Workflow creation implementation, DB constraints/migrations,
+QUERY schema/domain model bytes and numerical implementation remain unchanged.
+
+1. **Responsibility:** Compiler/protocol owner recognizes the literal QUERY definition. Runner
+   repository reads its exact inactive status and quarantines unsupported native history. This
+   step adds no native execution, publication, owner authority or consumer delivery.
+2. **Canonical source:** Reuse the committed closed `reference-query-execution/1.0` Schema and
+   public `parse_reference_query_workflow_definition`; no YAML/config, loader or schema successor.
+3. **Identity/revision:** Fixed key `local-embedding-reference-query`, definition version `1.0.0`,
+   schema `1.2`, protocol `reference-query/1.0`, canonical bytes and SHA remain distinct values.
+   Compiling or importing a valid inactive definition is not admission or runtime availability.
+4. **Checks:** Raw QUERY parser revalidation preserves forged copied extras/booleans. Stored
+   definitions must recompile to the same key, version, schema and canonical SHA before protocol
+   status is returned. No latest substitution, repair or native result registration in role maps.
+5. **Access patterns:** Fixed-purpose dispatch, keyed step projection, exact stored identity
+   lookup, ordered admission-status reads and the existing indexed FIFO command header.
+6. **Structures/indexes:** Keep existing ROLE/LOCAL_EMBEDDING queue families. Extend the existing
+   total native routing predicate with literal QUERY markers; no new queue/table/registry/cache.
+   Candidate native request remains DOCUMENT-only in this stage, so QUERY is explicitly absent.
+7. **Complexity:** The QUERY definition has exactly two steps. Compiler checks are bounded and
+   status iteration remains O(N); native routing preserves the existing SQL/PK/FIFO access plan.
+   No model, source corpus, Artifact or vector materialization is introduced.
+8. **Transactions:** Reject QUERY submission before generic serialization/fingerprint, lookup,
+   savepoint or persistence. Reject native candidates lacking a supported exact request before
+   root/row lookup or lease assignment. Valid DOCUMENT claim/lock/generation behavior is unchanged.
+9. **Dependencies:** Compiler depends on public domain/schema contracts. Runner consumes those
+   contracts in its existing owner module. No private cross-owner calls, framework or new ports.
+   Existing engine native-but-not-DOCUMENT guard keeps QUERY unavailable after quarantine.
+10. **Failure/replay:** Matching typed QUERY submission is explicitly unavailable using existing
+    `LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE`; cross-purpose input uses `WORKFLOW_REQUEST_INVALID`.
+    Unsupported native candidates use the same stable unavailable before mutation, never ROLE
+    fallback. Inactive QUERY reads truthfully show its protocol and accepts-new-work false.
+11. **Simpler alternative:** Adding admission alone reaches DOCUMENT-only serialization, claim,
+    executor and DB CHECK paths. Compile/read support plus fail-closed quarantine is the smallest
+    safe step before separately reviewed actual owner, queued QUERY execution and paired CHECK.
+
+Source tests use synthetic definitions and read/session spies only. They must cover exact
+canonical replay, raw copied corruption, inactive import/status, stale stored identity/hash,
+cross-purpose submission, QUERY routing markers, unsupported direct claim and zero mutation.
+Source migration head remains `20261012_0053`; no operational DB revision is inferred or queried.
+The fixed QUERY native-step CHECK, actual owner/session/unit admission and C0/C2 delivery remain
+mandatory subsequent boundaries, not requirements silently bypassed by this compiler extension.
+
+### 13.1 C1c compiler/read source checkpoint — 2026-10-13 UTC
+
+The seven approved paths now recognize only the fixed QUERY schema `1.2`, revalidate its raw
+typed definition with the committed public parser and calculate `reference-query/1.0`. Canonical
+replay and keyed fixed-step projection require no Codex role. Stored QUERY identity/schema/hash
+is checked before protocol status; valid inactive history is no longer mislabeled invalid. Even
+an active snapshot cannot offer new QUERY work while the unchanged admission policy excludes it.
+
+QUERY submission is refused before generic request storage/fingerprint or any Session operation.
+Cross-purpose requests use the existing invalid-request code; matching QUERY uses the existing
+native-unavailable code. The total SQL predicate includes literal QUERY markers in the same
+existing queue families, preventing ROLE fallback. Visible mixed QUERY/DOCUMENT metadata never
+produces a DOCUMENT candidate request. Direct claims with no supported exact request stop before
+root lookup, and a QUERY-only related definition stops after exact hash checks but before owner
+calls or lease mutation. Non-object canonical JSONB is a stable invalid-definition error, not an
+attribute exception. No broad catch, repair, additional family/flag/callback or new owner is added.
+
+Focused six-suite source regression is **150 PASS in 11.96s**; final forty-three-suite gate is
+**1,779 PASS in 115.09s**, skip zero. That inventory contains the complete previous C1c thirty-six
+suites, both new modules and existing command-claim/runtime-admission/submission/runner-admission/
+Workflow-definition suites. Counts overlap and are not summed. Explicit API Conda strict mypy,
+Ruff lint and format check **six Python files PASS**. An initial unused test import was removed.
+Independent read-only review found the mixed-purpose and non-object JSONB edges; both were given
+targeted guards/tests, and the whole gate was rerun on the final bytes. The earlier 1,775-pass
+collection precedes those four JSONB cases and is not the final freeze evidence.
+
+The unchanged admission table, QUERY schema/domain modules, engine/native admission/executor/
+step execution, models/migration and three numerical modules match all fourteen baseline raw
+hashes. The existing `_persist_workflow_instance` body retains raw SHA
+`26862954508e41bae72c54e446defc4dc4b4f6be7929ee2781cfc3396285a94d`.
+SQL compilation/read spies are not real PostgreSQL concurrency or operational routing evidence.
+
+**C1c COMPILER_READ SOURCE_ONLY / NOT_ACTIVE / QUERY_NOT_ADMITTED.** No DB, IAM, actual native
+owner/Job/unit/model/GPU, publication or installed-runtime action occurred. The paired QUERY-step
+CHECK, concrete current-owner continuation, queued QUERY executor, committed-query C0 reader and
+C2 consumer delivery remain separate prerequisites. Existing DOCUMENT execution remains intact.

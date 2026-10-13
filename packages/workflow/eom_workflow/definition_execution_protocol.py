@@ -7,9 +7,16 @@ from eom_workflow.local_embedding_workflow import (
     LocalEmbeddingWorkflowDefinition,
 )
 from eom_workflow.models import AgentStep, WorkflowDefinition
+from eom_workflow.reference_query_workflow import (
+    REFERENCE_QUERY_EXECUTION_PROTOCOL,
+    ReferenceQueryWorkflowDefinition,
+    parse_reference_query_workflow_definition,
+)
 from eom_workflow.schemas import result_schema_protocol
 
-type ExecutionWorkflowDefinition = WorkflowDefinition | LocalEmbeddingWorkflowDefinition
+type ExecutionWorkflowDefinition = (
+    WorkflowDefinition | LocalEmbeddingWorkflowDefinition | ReferenceQueryWorkflowDefinition
+)
 
 
 class DefinitionExecutionProtocolError(ValueError):
@@ -23,6 +30,14 @@ def definition_execution_protocol(definition: ExecutionWorkflowDefinition) -> st
     Revalidation also protects repository callers from a forged frozen copy. Old
     definitions keep their exact single-agent-family rule and meaning.
     """
+    if isinstance(definition, ReferenceQueryWorkflowDefinition):
+        try:
+            parse_reference_query_workflow_definition(definition)
+        except ValueError:
+            raise DefinitionExecutionProtocolError(
+                "reference query definition execution protocol is invalid"
+            ) from None
+        return REFERENCE_QUERY_EXECUTION_PROTOCOL
     if isinstance(definition, LocalEmbeddingWorkflowDefinition):
         try:
             LocalEmbeddingWorkflowDefinition.model_validate(

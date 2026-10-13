@@ -37,6 +37,12 @@ from eom_workflow.local_embedding_workflow import (
     LOCAL_EMBEDDING_EXECUTION_PROTOCOL,
     LOCAL_EMBEDDING_WORKFLOW_KEY,
 )
+from eom_workflow.reference_query_execution import ReferenceQueryWorkflowRequest
+from eom_workflow.reference_query_workflow import (
+    REFERENCE_QUERY_EXECUTION_PROTOCOL,
+    REFERENCE_QUERY_RESULT_SCHEMA,
+    REFERENCE_QUERY_WORKFLOW_KEY,
+)
 from eom_workflow.schemas import (
     result_schema_protocol,
     validate_inference_transfer_workflow_request,
@@ -155,26 +161,33 @@ def _native_workflow_filter() -> ColumnElement[bool]:
     request_versions = (
         "local-embedding-workflow-request/1.0",
         "local-embedding-workflow-request/1.1",
+        "reference-query-workflow-request/1.0",
     )
+    native_keys = (LOCAL_EMBEDDING_WORKFLOW_KEY, REFERENCE_QUERY_WORKFLOW_KEY)
+    native_protocols = (LOCAL_EMBEDDING_EXECUTION_PROTOCOL, REFERENCE_QUERY_EXECUTION_PROTOCOL)
+    native_purposes = ("LOCAL_EMBEDDING", "REFERENCE_QUERY")
     definition = select(WorkflowDefinitionRecord.definition_id).where(
         WorkflowDefinitionRecord.definition_id == WorkflowInstanceRecord.definition_id,
         or_(
-            WorkflowDefinitionRecord.definition_key == LOCAL_EMBEDDING_WORKFLOW_KEY,
-            WorkflowDefinitionRecord.canonical_definition["definition_key"].as_string()
-            == LOCAL_EMBEDDING_WORKFLOW_KEY,
+            WorkflowDefinitionRecord.definition_key.in_(native_keys),
+            WorkflowDefinitionRecord.canonical_definition["definition_key"]
+            .as_string()
+            .in_(native_keys),
         ),
     )
     step = select(WorkflowStepRunRecord.step_run_id).where(
         WorkflowStepRunRecord.workflow_id == WorkflowInstanceRecord.workflow_id,
         or_(
             WorkflowStepRunRecord.step_type == "application",
-            WorkflowStepRunRecord.result_schema == "incremental-embedding-result@1.0",
+            WorkflowStepRunRecord.result_schema.in_(
+                ("incremental-embedding-result@1.0", REFERENCE_QUERY_RESULT_SCHEMA)
+            ),
         ),
     )
     return func.coalesce(
         or_(
-            WorkflowInstanceRecord.definition_key == LOCAL_EMBEDDING_WORKFLOW_KEY,
-            WorkflowInstanceRecord.role_schema_version == LOCAL_EMBEDDING_EXECUTION_PROTOCOL,
+            WorkflowInstanceRecord.definition_key.in_(native_keys),
+            WorkflowInstanceRecord.role_schema_version.in_(native_protocols),
             WorkflowInstanceRecord.stage == WorkflowStage.LOCAL_EMBEDDING.value,
             WorkflowInstanceRecord.initial_request["schema_version"]
             .as_string()
@@ -182,8 +195,8 @@ def _native_workflow_filter() -> ColumnElement[bool]:
             WorkflowInstanceRecord.request_payload["schema_version"]
             .as_string()
             .in_(request_versions),
-            WorkflowInstanceRecord.initial_request["purpose"].as_string() == "LOCAL_EMBEDDING",
-            WorkflowInstanceRecord.request_payload["purpose"].as_string() == "LOCAL_EMBEDDING",
+            WorkflowInstanceRecord.initial_request["purpose"].as_string().in_(native_purposes),
+            WorkflowInstanceRecord.request_payload["purpose"].as_string().in_(native_purposes),
             definition.exists(),
             step.exists(),
         ),
@@ -211,7 +224,19 @@ def _command_candidate(
     family: CommandExecutionFamily,
 ) -> CommandCandidate:
     native_request = None
-    if family is CommandExecutionFamily.LOCAL_EMBEDDING:
+    query_marked = (
+        workflow.definition_key == REFERENCE_QUERY_WORKFLOW_KEY
+        or workflow.role_schema_version == REFERENCE_QUERY_EXECUTION_PROTOCOL
+        or any(
+            isinstance(document, dict)
+            and (
+                document.get("schema_version") == "reference-query-workflow-request/1.0"
+                or document.get("purpose") == "REFERENCE_QUERY"
+            )
+            for document in (workflow.initial_request, workflow.request_payload)
+        )
+    )
+    if family is CommandExecutionFamily.LOCAL_EMBEDDING and not query_marked:
         # Invalid native metadata remains native/unavailable, never a role fallback.
         with suppress(ValueError):
             native_request = load_persisted_local_embedding_workflow_request(
@@ -333,7 +358,7 @@ def workflow_definition_admission_statuses(
 
 
 def _stored_role_protocol(record: WorkflowDefinitionRecord) -> str:
-    if record.definition_key == LOCAL_EMBEDDING_WORKFLOW_KEY:
+    if record.definition_key in {LOCAL_EMBEDDING_WORKFLOW_KEY, REFERENCE_QUERY_WORKFLOW_KEY}:
         try:
             compiled = compile_definition_data(
                 record.canonical_definition, record.source_path, set()
@@ -735,7 +760,12 @@ def create_workflow_instance(
     session: Session,
     *,
     definition: WorkflowDefinitionRecord,
-    request: WorkflowRequest | InferenceTransferWorkflowRequest | LocalEmbeddingWorkflowRequestV11,
+    request: (
+        WorkflowRequest
+        | InferenceTransferWorkflowRequest
+        | LocalEmbeddingWorkflowRequestV11
+        | ReferenceQueryWorkflowRequest
+    ),
     idempotency_key: str,
     actor_type: str,
     actor_id: str,
@@ -745,6 +775,24 @@ def create_workflow_instance(
     local_embedding_owner: LocalEmbeddingOwnerAdmission | None = None,
     local_embedding_executor: LocalEmbeddingNativeExecutor | None = None,
 ) -> tuple[WorkflowInstanceRecord, bool]:
+    if (
+        isinstance(request, ReferenceQueryWorkflowRequest)
+        or definition.definition_key == REFERENCE_QUERY_WORKFLOW_KEY
+    ):
+        if (
+            not isinstance(request, ReferenceQueryWorkflowRequest)
+            or definition.definition_key != REFERENCE_QUERY_WORKFLOW_KEY
+        ):
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+                "workflow request kind does not match reference query purpose",
+            )
+        # Reading/compiling a definition does not admit its native owner or DB
+        # step pair. Reject before generic request serialization or persistence.
+        raise WorkflowError(
+            WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+            "reference query execution is not admitted",
+        )
     if (
         isinstance(request, LocalEmbeddingWorkflowRequestV11)
         or definition.definition_key == LOCAL_EMBEDDING_WORKFLOW_KEY
@@ -1114,6 +1162,11 @@ def claim_command_candidate(
             WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
             "native claim requires the actual owner and executor",
         )
+    if native and candidate.native_request is None:
+        raise WorkflowError(
+            WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+            "native claim exact supported request unavailable",
+        )
     root = session.get_transaction()
     if (
         not session.is_active
@@ -1166,6 +1219,19 @@ def claim_command_candidate(
             raise WorkflowError(
                 WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID,
                 "native exact definition is unavailable",
+            )
+        if not isinstance(definition.canonical_definition, dict):
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID,
+                "native exact definition snapshot is not an object",
+            )
+        if (
+            definition.definition_key != LOCAL_EMBEDDING_WORKFLOW_KEY
+            or definition.canonical_definition.get("definition_key") == REFERENCE_QUERY_WORKFLOW_KEY
+        ):
+            raise WorkflowError(
+                WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                "native claim definition purpose is not supported",
             )
         scope = local_embedding_owner.resolve_claim(
             session, command=command, workflow=workflow, request=request

@@ -1259,3 +1259,13 @@ Root가 frozen source/test/note 전체와 SHA를 독립 확인했다. API Python
 committed archive/wheel/bootstrap pin으로 실제 재조립해야 한다. 이미 검증된 actual56과
 실패·복구 이력을 새 prefix/native/model PASS로 승격하지 않는다. 모델/GPU 추론0,
 성능 NOT_EVALUATED, GPU 기본값 NOT_ACTIVE, 전체 goal ACTIVE다.
+
+## QUERY compiler/read 경계 독립 검증 — 2026-10-13 05:17 UTC
+
+Root가 frozen7 전체 diff/새 tests/설계 §13을 읽고 원 SHA를 확인했다. 독립43-suite는
+**1779 PASS117.10s, skip0**, strict/Ruff/format6 PASS다. 고정 QUERY1.2 정의를 컴파일하고
+정확한 stored identity/hash로 inactive 상태를 조회하지만 admission은 그대로 제외한다.
+신규 QUERY 제출은 DB 조회/저장 이전 stable unavailable, 혼합 DOC/QUERY 표식 및 nonobject
+JSONB는 owner/lease 이전 명시 거부다. 기존2 queue family·engine·executor·admission·DB/
+migration·수치 module·persistence 본문은 보존했다. SQL/spies는 실제 DB/QUERY 실행이 아니다.
+실제 owner/paired CHECK/native execution/Artifact reader/consumer delivery는 계속 pending이다.

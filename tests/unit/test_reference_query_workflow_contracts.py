@@ -1,4 +1,4 @@
-"""Fixed definition/source resource tests; no compiler, release or native activation."""
+"""Fixed definition/source resource tests; no release, admission or native activation."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from eom_workflow import (
     workflow_definition_is_admitted,
 )
 from eom_workflow import schemas as schema_owner
-from eom_workflow.compiler import WorkflowDefinitionError, compile_definition_data
+from eom_workflow.compiler import compile_definition_data
 from eom_workflow.schemas import (
     LOCAL_EMBEDDING_RECEIPT_SCHEMA_RESOURCES,
     LOCAL_EMBEDDING_SCHEMA_RESOURCES,
@@ -78,7 +78,7 @@ def test_exact_closed_schema_mirror_hash_and_existing_value_refs() -> None:
     }
 
 
-def test_definition_round_trip_is_frozen_but_not_compiler_or_admission_offered() -> None:
+def test_definition_round_trip_is_frozen_and_compilable_but_not_admission_offered() -> None:
     definition = parse_reference_query_workflow_definition(definition_body())
     assert definition.schema_version == "1.2"
     assert len(definition.steps) == 2
@@ -90,8 +90,8 @@ def test_definition_round_trip_is_frozen_but_not_compiler_or_admission_offered()
         ).model_dump(mode="json")
     )
     assert not workflow_definition_is_admitted(REFERENCE_QUERY_WORKFLOW_KEY, "1.0.0")
-    with pytest.raises(WorkflowDefinitionError):
-        compile_definition_data(definition_body(), "synthetic-unoffered-query", set())
+    compiled = compile_definition_data(definition_body(), "synthetic-unoffered-query", set())
+    assert compiled.definition == definition
 
 
 @pytest.mark.parametrize(
