@@ -220,6 +220,15 @@ INDEX 계산을 확인했습니다. 합성 입력2개가 각각1024차원으로 
 source binding·인덱스 등록, 소비자 연결·GPU 비교의 완료 증거는 아닙니다.
 [Native INDEX 연결 기록](docs/architecture/NATIVE_EMBEDDING_HANDOFF_IMPLEMENTATION.md)을 참고하세요.
 
+후속으로 현재 인증·source·command를 기존 encoding reservation API에 연결하는 concrete
+어댑터와 native coordinator Job의 등록·원래 intent 재사용 경로를 구현했습니다. 공유 결과는
+승자 작업의 전체 입력/계획을 읽지 않고 현재 허용된 encoding 행만 검증하며, 같은
+file-set은 한 번만 읽습니다. 별도 큐·DB schema·released protocol 변경은 없습니다.
+실제 임시 PostgreSQL의 Identity19·encoding/coordinator9 PASS와 정리 완료를 확인했습니다.
+[encoding owner 연결 범위](docs/architecture/LOCAL_EMBEDDING_ENCODING_OWNER_COMPOSITION.md)에
+원래 audit와 현재 lease의 구분, source 재인가와 아직 남은 전체 executor/registry 연결을
+기록합니다. 이 연결은 source 구현 상태이며 운영 seed/delta·인덱스 활성화 증거는 아닙니다.
+
 최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와
 strict type/lint/format PASS입니다. 실제 임시 DB28개 사례에는 독립 실행기 claim 경쟁과
 기존 실행 경로 분리가 포함됩니다. 합성 owner 콜백과 source 검증은 실제 사용자 권한이나

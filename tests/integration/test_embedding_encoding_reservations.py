@@ -33,6 +33,10 @@ from eom_orchestrator.models import (
     JobEventRecord,
     JobRecord,
 )
+from eom_orchestrator.native_embedding_launch_identity import (
+    create_native_embedding_launch,
+    require_native_embedding_launch,
+)
 from eom_orchestrator.repository import ensure_protocol_version
 from eom_orchestrator.state_machine import JobState, record_initial_event, transition_job
 from eom_workflow.local_embedding_encoding_job import (
@@ -70,6 +74,50 @@ def _fixture(
         reservation_fixture(*seeds, ordinal=uuid4().int if ordinal is None else ordinal),
         partition or "test-" + uuid4().hex,
     )
+
+
+def test_actual_native_coordinator_keeps_original_job_intent_and_key_within_db_bound(
+    guarded_engine: Engine,
+) -> None:
+    fixture = _fixture("a", "b")
+    arguments = {
+        "request": fixture.request,
+        "workflow_id": "workflow_" + uuid4().hex,
+        "step_run_id": "steprun_" + uuid4().hex,
+        "command_id": "wfcmd_" + uuid4().hex,
+        "runner_id": "synthetic-coordinator-metadata",
+        "lease_generation": 1,
+    }
+    schema = next(row[3] for row in LOCAL_EMBEDDING_SCHEMA_RESOURCES if row[0] == "encoding-job")
+    with Session(guarded_engine) as session, session.begin():
+        ensure_protocol_version(session, ENCODING_PROTOCOL_VERSION, schema)
+        session.flush()
+        first = create_native_embedding_launch(session, **arguments)
+        assert first.state == "CLAIMED"
+    with Session(guarded_engine) as session, session.begin():
+        second = create_native_embedding_launch(
+            session,
+            **(
+                arguments
+                | {
+                    "command_id": "wfcmd_" + uuid4().hex,
+                    "lease_generation": 2,
+                }
+            ),
+        )
+        assert second == first
+        assert require_native_embedding_launch(session, first.intent, fixture.request) == first
+        job = session.get(JobRecord, first.intent.native_launch_job_id)
+        assert job is not None and len(job.idempotency_key) <= 128 and job.worker_slot_id is None
+        assert "rows" not in job.request and "text" not in job.request
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(JobEventRecord)
+                .where(JobEventRecord.job_id == job.job_id)
+            )
+            == 4
+        )
 
 
 def _seed_launch(engine: Engine, fixture: NativeAdmissionFixture) -> None:

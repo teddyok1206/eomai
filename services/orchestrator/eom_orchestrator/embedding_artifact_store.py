@@ -81,6 +81,7 @@ from eom_orchestrator.file_set_control_artifacts import (
 )
 
 EMBEDDING_INDEX_ARTIFACT_TYPE = "control_embedding_index"
+EMBEDDING_RESULT_ARTIFACT_TYPE = "control_incremental_embedding"
 EMBEDDING_INDEX_MANIFEST_VERSION = CONTROL_FILE_SET_PROTOCOL
 EMBEDDING_INDEX_PRIMARY_MEMBER = "index.json"
 EMBEDDING_INDEX_MEMBER_NAMES = (EMBEDDING_INDEX_PRIMARY_MEMBER,)
@@ -685,7 +686,7 @@ class EmbeddingArtifactStore:
                 receipt = self.publisher.publish(
                     members=members,
                     primary_file="result.json",
-                    artifact_type="control_incremental_embedding",
+                    artifact_type=EMBEDDING_RESULT_ARTIFACT_TYPE,
                     manifest_version="control-file-set/1.0",
                     idempotency_key="embedding-artifact:" + key,
                     source_commit=self.source_commit,

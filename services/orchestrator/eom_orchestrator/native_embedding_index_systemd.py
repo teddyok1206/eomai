@@ -222,6 +222,12 @@ class FixedNativeIndexLauncher:
             index, template=INDEX_TEMPLATE
         )
 
+    def observe(self, execution_id: str) -> tuple[CpuUnitObservation, CpuUnitObservation]:
+        """Protected exact-unit read only; no start, source grant or held capacity."""
+        validate_native_index_execution_id(execution_id)
+        self._installed()
+        return self._observe(execution_id)
+
     def run(self, prepared: PreparedNativeIndex) -> IncrementalEmbeddingResult:
         prepared = PreparedNativeIndex(
             prepared.execution_id, prepared.association, prepared.request

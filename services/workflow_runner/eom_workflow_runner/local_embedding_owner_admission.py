@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from threading import get_ident
 from weakref import WeakKeyDictionary
 
+from eom_catalog_contracts.inference_transfer_experiment import StagedExperimentEntry
 from eom_catalog_contracts.models import Sha256
 from eom_catalog_service.embedding_registry_catalog_adapter import (
     CatalogEmbeddingRegistryVerifier,
@@ -99,6 +100,14 @@ class _AcquiredMutation:
     thread_id: int
 
 
+@dataclass(frozen=True, slots=True)
+class ResolvedLocalEmbeddingSources:
+    """Current root's values only; every later root must independently reauthorize."""
+
+    admission: ResolvedLocalEmbeddingAdmission
+    entries: tuple[StagedExperimentEntry, ...]
+
+
 class CatalogLocalEmbeddingOwnerAdmission:
     """Use current Identity and official Catalog boundaries for a bounded operator seed.
 
@@ -134,6 +143,11 @@ class CatalogLocalEmbeddingOwnerAdmission:
     def resolve_submission(
         self, session: Session, request: LocalEmbeddingWorkflowRequestV11
     ) -> ResolvedLocalEmbeddingAdmission:
+        return self.resolve_sources(session, request).admission
+
+    def resolve_sources(
+        self, session: Session, request: LocalEmbeddingWorkflowRequestV11
+    ) -> ResolvedLocalEmbeddingSources:
         request = parse_local_embedding_workflow_request_v11(request.model_dump(mode="json"))
         operator = require_local_embedding_operator_seed(request).operator_id
         # No control/source bytes are read for a stale capture or a substituted actor.
@@ -199,10 +213,14 @@ class CatalogLocalEmbeddingOwnerAdmission:
         )
         if rebuilt != plan:
             raise ValueError("LOCAL_EMBEDDING_SOURCE_PLAN_STALE")
+        by_source = {
+            entry.profile.source_basis.source.item_revision_id: entry for entry in current.entries
+        }
+        selected = tuple(by_source[d.source_revision_id] for d in plan.demands)
         # Reading/resolving may consume time. Never let an old successful check
         # stand in for the actual session's expiry/permission check at return.
         self.identity.fence_current_operator(session, operator)
-        return scope
+        return ResolvedLocalEmbeddingSources(scope, selected)
 
     @staticmethod
     def _require_rows(
@@ -262,6 +280,14 @@ class CatalogLocalEmbeddingOwnerAdmission:
         request: LocalEmbeddingWorkflowRequestV11,
         lease: CommandLeaseIdentity,
     ) -> None:
+        self.resolve_mutation_sources(session, request, lease)
+
+    def resolve_mutation_sources(
+        self,
+        session: Session,
+        request: LocalEmbeddingWorkflowRequestV11,
+        lease: CommandLeaseIdentity,
+    ) -> ResolvedLocalEmbeddingSources:
         self.identity.fence_current_operator(
             session, require_local_embedding_operator_seed(request).operator_id
         )
@@ -312,7 +338,7 @@ class CatalogLocalEmbeddingOwnerAdmission:
         if workflow is None:
             raise WorkflowError(WorkflowErrorCode.WORKFLOW_NOT_FOUND, "native workflow disappeared")
         self._require_rows(session, command, workflow, request)
-        self.resolve_submission(session, request)
+        sources = self.resolve_sources(session, request)
         if (
             command_lease_identity(command) != lease
             or command.lease_expires_at is None
@@ -322,3 +348,4 @@ class CatalogLocalEmbeddingOwnerAdmission:
                 WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
                 "native command expired during current source admission",
             )
+        return sources

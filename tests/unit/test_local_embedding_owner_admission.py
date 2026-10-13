@@ -38,6 +38,7 @@ from eom_workflow_runner.local_embedding_admission import ResolvedLocalEmbedding
 from eom_workflow_runner.local_embedding_owner_admission import (
     CatalogLocalEmbeddingOwnerAdmission,
     LocalEmbeddingOwnerConfiguration,
+    ResolvedLocalEmbeddingSources,
 )
 from eom_workflow_runner.models import (
     WorkflowCommandRecord,
@@ -313,7 +314,9 @@ def mutation_rows(
         "get",
         lambda model, *_a, **_kw: definition if model is WorkflowDefinitionRecord else workflow,
     )
-    monkeypatch.setattr(source.owner, "resolve_submission", lambda *_a: source.scope)
+    monkeypatch.setattr(
+        source.owner, "resolve_sources", lambda *_a: ResolvedLocalEmbeddingSources(source.scope, ())
+    )
     return session, command, workflow, lease
 
 
@@ -361,11 +364,11 @@ def test_clock_expiry_during_current_source_check_blocks_commit(
 ) -> None:
     session, command, _workflow, lease = mutation_rows(source, monkeypatch)
 
-    def expire(*_args: Any) -> ResolvedLocalEmbeddingAdmission:
+    def expire(*_args: Any) -> ResolvedLocalEmbeddingSources:
         command.lease_expires_at = datetime.now(UTC) - timedelta(seconds=1)
-        return source.scope
+        return ResolvedLocalEmbeddingSources(source.scope, ())
 
-    monkeypatch.setattr(source.owner, "resolve_submission", expire)
+    monkeypatch.setattr(source.owner, "resolve_sources", expire)
     try:
         with pytest.raises(WorkflowError, match="expired during"):
             source.owner.fence_mutation(session, source.scope.request, lease)

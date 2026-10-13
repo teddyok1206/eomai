@@ -2091,3 +2091,43 @@ Artifact→완료/registry를 연결해 bounded 실제 seed/delta/reuse/query를
 이후 공통 소비자·CPU/GPU 비교·조건부 GPU 기본값을 검증한다. `GOAL=ACTIVE`,
 `NATIVE_INDEX_SYNTHETIC_NUMERICAL=PASS`, `EXACT_REPLAY=PASS`,
 `PERSISTENT_CORPUS_INDEX_LIVE=NOT_ACTIVE`.
+
+## 2026-10-13 18:59 UTC — concrete encoding admission과 정본 결과 연결
+
+clean `e7e64d8e`에서 기존 계산·OS/replay 증거를 재사용했다. 새 모델/GPU 실행,
+CPU 설치/probe/seal, 운영 서비스 재시작, 운영 DB migration은0회다.
+
+- 현재 source/plan 검증과 같은 Catalog capture에서 demanded entries를 반환한다.
+  원래 submission/fence API는 유지하며 매 root의 Identity/source/command를 다시 확인한다.
+- concrete encoding admission은 Workflow→현재 command→step 순으로 잠금을 확보하고,
+  원래 요청·source plan·step input pointer·native Job/intent/key를 확인한다. saved intent
+  audit는 현재 lease/로그인의 권한이 아니다. terminal coordinator는 새 mutation에 쓰지 않는다.
+- native coordinator Job은 기존 structured Job owner로 생성하며128자 이내 hashed key와
+  불변 original intent event를 쓴다. 다음 command generation에서도 원래 Job/intent를
+  재사용한다. absent/savepoint root, 바뀐 request/hash/task/slot/intent를 거부한다.
+- owned input과 result/shard/binary는 기존 Catalog pinned reader로 해석한다. producer·
+  승인/lifecycle·schema/member set·raw/semantic hash·shape/finite/L2·row closure를 검사한다.
+  shared read는 현재 scope의 행만 검증하며 승자 input/전체 plan을 열지 않는다. 같은
+  file-set은 grouped read 한 번이며 빈/중복 행은 완료 증거가 아니다.
+- read는 historical lease를 요구하지 않는다. pending own work에는 현재 command 및
+  protected exact unit을 조회만 하며 시작하지 않는다. 만료는 uncertainty로 보존하고
+  Artifact/OS read 뒤 현재 Identity를 다시 검사한다.
+
+실제 disposable state는 `/tmp/eom-api-testdb-20261013185338_fb8952bc`였다. 공식
+marker/owner/schema/role preflight·migration/reconcile 후 Identity/session writer19 PASS
+(8.27s), encoding reservation/coordinator9 PASS(12.12s)를 확인하고 guarded cleanup했다.
+현재 이 state는 존재하지 않는다. 로그는 `/tmp/eom-encoding-owner.GxZz1cIA/`에 보존한다.
+sudo pane `%89`를 재사용했고 인증을 다시 요청하지 않았다. PG 데이터는 합성이며 실제
+DB 경쟁 증거이지 production source/IAM activation 증거가 아니다.
+
+최종 same-tree source11 suites **336 PASS**,32.16s다. 앞선335/encoding port13과
+겹치는 수는 합산하지 않는다. strict mypy5 modules·Ruff/format/diff PASS.
+file-set publication/read/metadata 검증은 실제 test-owned local files와 disposable SQLite였다.
+새로운 schema/queue/
+dependency는 없고 native protocol/수치 모델/Content Pack/기존 실패 이력은 그대로다.
+
+이 단계의 실제 생성은 임시 DB 안의 coordinator metadata와 테스트 파일뿐이다. 운영의
+실제 source/Job 실행, vector/index 게시·등록, bounded seed/delta/query·공통 소비자·
+CPU/GPU 비교와 기본값 전환은 아직 미완료다. 다음은 전체 native executor가 기존
+reservation→owned input→계산→Artifact→완료/registry를 연결하도록 구성하는 것이다.
+`GOAL=ACTIVE`, `ENCODING_OWNER_SOURCE=IMPLEMENTED`, `NATIVE_WORKFLOW_LIVE=NOT_ACTIVE`.
