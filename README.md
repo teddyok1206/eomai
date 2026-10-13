@@ -173,6 +173,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
 | 인증된 owner/session 전달 | SOURCE_PASS; 기존 인증 1회·고정 API peer·짧은 작업별 전달384 PASS, 실제 provider admission·배포는 미완료 |
 | 실행 bundle의 정본 저장 | 기존 단일-member Orchestrator 저장 경로 재사용; bundle 동시 저장/중단 복구 포함 임시 DB19 PASS, 실제 bundle 게시·실행 승인은 미완료 |
+| 검증된 CPU 설치 기록의 실행 전 확인 | SOURCE_PASS; exact receipt/config와 현재 파일·계정·boot 검증620 PASS, 실제 sealed 기록·실행기 연결은 미완료 |
 | 실제 disposable PostgreSQL |0052 registry/application16·reservation8·limited IAM6,0053 stage18+runner10·Identity11 PASS; migration·cleanup PASS |
 | CPU/CUDA 실행 환경 준비 | 실제 CPU 전체 설치·inventory·공식 수치 증명 및 비특권 native 격리 시험 PASS; 최종 실행 연결/승인 남음, CUDA 미게시 |
 | 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | NOT_ACTIVE / NOT_EVALUATED |

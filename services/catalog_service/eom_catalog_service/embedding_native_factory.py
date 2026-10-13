@@ -112,9 +112,9 @@ def native_embedding_backend_scope(
 ) -> Callable[[], AbstractContextManager[BenchmarkNativeEmbeddingBackend]]:
     """Bind trusted owner inputs once; returned factory accepts no worker/request arguments.
 
-    No root-installed capture/main or real receipt loader is implemented. Callers own the
-    independently accepted admission and CUDA lifetime; neither config parsing nor this binder
-    grants source, Job, unit, installed-prefix or physical-device authorization.
+    Callers own the independently accepted receipt capture, pre-exec owner/main and CUDA
+    lifetime. The concrete protected CPU receipt reader is separate; neither config parsing
+    nor this binder grants source, Job, unit, installed-prefix or physical-device authorization.
     """
     fixed = fixed_native_embedding_profile(profile)
     for value, pattern in (

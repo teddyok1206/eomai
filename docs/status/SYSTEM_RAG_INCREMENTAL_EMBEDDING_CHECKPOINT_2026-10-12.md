@@ -1780,3 +1780,28 @@ owner/runtime reconciliation과 기존 `embedding-tests` **19 PASS28.10s**를 �
 산출물만 삭제했고 원 corpus·운영 DB·canonical Artifact는 보존했다. cleanup 로그는
 `/tmp/eom-native-cpu-probe-release.CoU0TThB/bundle-testdb-cleanup.log`다.
 전체 goal은 ACTIVE, 실제 seed/delta/소비자 연결과 GPU 비교/default 결정은 미완료다.
+
+## 검증된 설치 기록의 읽기 전용 consumer — 2026-10-13 13:26 UTC
+
+기존 ROOTLOCAL schema/validator와 prefix/host 관측 경계를 재사용하는
+`ProtectedNativeEmbeddingInstallationAdmission`을 추가했다. caller가 독립적으로 확보한
+receipt raw pin과 exact config identity만 받고, 고정된 보호 경로의 receipt/inventory/
+config/proof/bundle 및 unit/probe 코드 해시를 검증한다. source/model이 넣은 경로나
+"approved" 선언으로 허가하지 않는다. CUDA·다른 config·재부팅·계정/group 변경·파일/조상/
+prefix/host 변경·잘못된 reference는 실패한다. 이 객체는 게시/서명/실행/DB 접근을 하지 않는다.
+
+9개 metadata member는 첫 구성에서 한 번씩 읽고, 반복 `assert_current`는 JSON 재해석이나
+파일 전체 재해시 없이 현재 identity/epoch를 확인한다. synthetic operation-count 검증에서
+반복5회에도 read/parse가 늘지 않았다. 실제 지연 성능을 측정했다는 주장은 아니다.
+context 진입 실패와 teardown 실패에도 capture를 닫고 host FD를 해제하며 재사용을 막는다.
+첫 실행 전 OLD 검증 및 실제 owner seal을 대체하지 않는다.
+
+focused9-suite **620 PASS13.85s**, API/core strict3·Ruff/format3·diff PASS.
+첫 mypy의 테스트4개 typing 오류는 None-return check와 stdlib monkeypatch 대상 표기를
+명시적으로 수정했다. production 우회나 blanket ignore는 없다. 기존 factory 설명도 새
+reader 구현 상태에 맞췄으며 호출 규약·실행 동작은 바꾸지 않았다.
+
+이 consumer는 SOURCE_PASS이며 설치된 f3cf5d0f runtime에는 아직 없다. 새 coherent release의
+owner bundle/config 게시·final receipt·production main/launcher 연결과 실제 검증이 필요하다.
+앞선13:01 실제 probe PASS는 f3cf5d0f 설치본의 증거로만 유지한다. 원칙/contract의 이름만으로
+현재 runtime이 새 consumer를 사용하거나 임베딩을 실행했다고 주장하지 않는다.

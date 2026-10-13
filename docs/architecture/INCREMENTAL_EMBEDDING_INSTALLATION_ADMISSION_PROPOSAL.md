@@ -8,15 +8,16 @@ and shared CPU identity capture are implemented. The actual CPU successor and sa
 read-back passed at11:04 UTC; its numerical proof was then published at the canonical proof root.
 The CPU proof was subsequently published without overwrite at its fixed immutable location and
 read back through `ProtectedInstalledEmbeddingRuntimeObserver`; no optional ML import or forward
-was performed by root. Final admission receipt, fixed native unit/probe and production factory
-wiring are still pending.
-No production corpus, resource registry, unit or default activation changed.
+was performed by root. The fixed nonprivileged CPU unit/probe passed an actual invocation at
+13:01 UTC. A protected CPU receipt reader is now source-tested, but no real final admission
+receipt or production factory wiring exists yet. Existing production services, corpus, resource
+registry and defaults remain unchanged; the dedicated probe account/unit are installation-only.
 
 Earlier CPU publications failed their OLD whole-prefix audit before NEW; those historical failed
 inputs remain unchanged. The corrected d0fc7352 CPU publication passed the actual full audit on
 2026-10-13 at10:24 UTC, not just a wheel diagnosis. Its separate first inventory export encountered
-the metadata size limit documented below. Native unit probing, final seal and model execution remain
-pending. Neither historical failures nor source-only compatibility fixtures are reinterpreted.
+the metadata size limit documented below. Final seal and model execution remain pending; the later
+actual probe does not reinterpret historical failures or source-only compatibility fixtures.
 
 The corrected16MiB producer/consumer from3be2949b subsequently passed the actual audit and
 JSON Schema/Pydantic/epoch read-back. It retained30,669 entries in8,653,045 bytes, observed the actual
@@ -239,8 +240,9 @@ reuse the previous numerical proof/runtime SHA or touch the historical CPU insta
 
 This maintenance path is purpose-fixed and unavailable to runtime requests. It does not call
 the production factory with a fake successful admission callback to break the seal cycle.
-The fixed native probe unit/main and actual root capture are still absent; their implementation
-and privileged execution require separate approval. The draft's facts are parsed values only.
+The later approved fixed native probe/main and root observation are recorded above. They do not
+by themselves seal the draft receipt or activate the production owner/main. The draft's facts
+remain parsed values unless independently captured and sealed by that approved owner operation.
 
 ## Fixed local layout and current adapter
 
@@ -270,6 +272,19 @@ unchecked DTO grant or default. Its `assert_current` signature is unchanged. Its
 does not establish first-instruction safety: the protected owner/unit pre-exec check must already
 have occurred. No continuously held FD, root-attacker resistance, kernel containment or privilege
 admission is inferred from serialized stat epochs or ordinary Python construction provenance.
+
+The concrete consumer uses these same fixed evidence/config/proof/bundle roots; callers cannot
+select directories. ROOTLOCAL schema bytes are separately root-installed below
+`/opt/eom/embedding-runtime-admission/schemas/` as `prefix-inventory-v1.schema.json` and
+`admission-receipt-v1.schema.json`, pinned to the already defined draft raw hashes. They do not
+enter the worker message schema registry or become model-supplied documents. Construction reads
+and validates each immutable metadata member once, then retains one prefix inventory and the
+existing protected host/file snapshots. Repeated `assert_current` performs only identity/epoch,
+account and boot checks, never JSON parsing, hashing whole files or loading a model. Work is
+O(prefix entries + bounded host/metadata files), with O(prefix entries) retained metadata;
+there is no second directory audit or cache invalidation scheme. Close invalidates the capture
+even if final checks fail and releases the existing host descriptors. This reader never seals,
+publishes or launches anything and does not replace the independent OLD pre-exec check.
 
 ## Exact next source map for separate approval
 
