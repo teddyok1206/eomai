@@ -278,10 +278,12 @@ class ProtectedInstalledIdentityProviderAdmission:
         if flags & os.O_PATH or flags & os.O_ACCMODE != os.O_RDONLY:
             raise _failure()
         owners = {0, pwd.getpwnam("eom").pw_uid} if kind == "CODE" else {0}
+        modes = (0o644,) if kind == "CODE" else (0o640, 0o644)
         if (
             before.st_uid not in owners
             or parent.st_uid not in owners
-            or stat.S_IMODE(before.st_mode) != 0o644
+            or stat.S_IMODE(before.st_mode) not in modes
+            or (kind == "CONFIGURATION" and before.st_gid != api_gid)
         ):
             raise _failure()
         raw = _raw(value.descriptor, 1024 * 1024)

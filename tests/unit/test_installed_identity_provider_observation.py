@@ -22,7 +22,7 @@ from eom_identity_service.owner_session_transport import (
 
 
 @pytest.fixture
-def observation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def observation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest):
     configuration = tmp_path / "config/api.yaml"
     secret = tmp_path / "keys/api.env"
     code_root = tmp_path / "code"
@@ -36,6 +36,7 @@ def observation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         path.parent.chmod(0o755)
         path.write_bytes(b"synthetic configuration/code" if path != secret else b"NOT-A-REAL-KEY")
         path.chmod(0o644 if path != secret else 0o600)
+    configuration.chmod(getattr(request, "param", 0o644))
     process_path = tmp_path / "process.stat"
     process_path.write_text("12345 (python) S " + " ".join(["0"] * 18 + ["9876"]) + "\n")
     descriptor = os.open(process_path, os.O_RDONLY)
@@ -124,11 +125,23 @@ def assert_current(value):
     )
 
 
+@pytest.mark.parametrize("observation", (0o640, 0o644), indirect=True)
 def test_real_readonly_and_metadata_only_descriptors_match_synthetic_unit(observation):
     value, *_ = observation
     assert_current(value)
     with pytest.raises(OSError):
         os.read(value.key_metadata.descriptor, 1)
+
+
+@pytest.mark.parametrize("mode", (0o604, 0o664, 0o646))
+def test_unapproved_configuration_modes_remain_denied(observation, mode):
+    value, *_ = observation
+    value.configuration.path.chmod(mode)
+    configuration = replace(
+        value.configuration, epoch=module._epoch(os.fstat(value.configuration.descriptor))
+    )
+    with pytest.raises(OwnerSessionTransportError, match=r"^OWNER_SESSION_PROVIDER_UNAVAILABLE$"):
+        assert_current(replace(value, configuration=configuration))
 
 
 @pytest.mark.parametrize("field", ("MainPID", "InvocationID", "User", "ActiveState", "DropInPaths"))

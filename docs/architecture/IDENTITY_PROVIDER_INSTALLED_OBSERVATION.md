@@ -61,3 +61,9 @@ UID/unit/InvocationID, late denial and secret-safe errors. Preserve existing rec
 genuine synthetic-HMAC transport, permission/root/expiry and CPU admission tests.
 Actual owner-UID observation is a separate opt-in OS check before real operator
 capture/seed; synthetic seams must never be reported as installed authorization.
+
+The first actual no-auth OS probe rejected the installed root-owned API configuration:
+its unchanged deployed mode is0640, not0644. Accept only0640/0644 for the non-secret
+configuration, with the existing API group and root ownership; code remains0644.
+Do not chmod the running configuration or relax writable/foreign-file checks.
+The rejected probe changed no login, database, model, runtime or service state.
