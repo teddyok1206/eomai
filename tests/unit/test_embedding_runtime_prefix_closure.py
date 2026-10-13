@@ -840,7 +840,7 @@ def test_prefix_readelf_bounded_fixed_native_metadata_denies_foreign_and_injecte
     elif fault == "audit":
         raw += b" 0x1 (AUDIT) untrusted\n"
     else:
-        raw += b"x" * (1024**2)
+        raw += b"x" * (2 * 1024**2)
     with pytest.raises(InstalledRuntimeProofError):
         prefix._readelf(Path("/prefix/lib/a.so"), raw)
 
@@ -862,9 +862,92 @@ def test_prefix_readelf_retains_complete_version_and_separate_search_recipe() ->
     assert parsed.requirements == (("libc.so.6", frozenset({"GLIBC_2.38"})),)
 
 
+@pytest.mark.parametrize("label", [b"", b"Flags: "])
+def test_prefix_readelf_accepts_both_gnu_dynamic_flag_labels(label: bytes) -> None:
+    raw = _elf_text(needed=("libc.so.6",))
+    raw += b" 0x1e (FLAGS) " + label + b"BIND_NOW STATIC_TLS\n"
+    raw += b" 0x6ffffffb (FLAGS_1) Flags: NOW NODELETE\n"
+    assert prefix._readelf(Path("/prefix/lib/a.so"), raw).needed == ("libc.so.6",)
+
+
+def test_prefix_readelf_retains_versions_above_one_mib_within_shared_limit() -> None:
+    raw = _elf_text(needed=("libc.so.6",), required=("libc.so.6", "GLIBC_2.14"))
+    raw += b"\n" * (2 * 1024**2 - len(raw))
+    assert len(raw) == prefix.MAX_READELF_OUTPUT_BYTES
+    assert prefix._readelf(Path("/prefix/lib/a.so"), raw).requirements == (
+        ("libc.so.6", frozenset({"GLIBC_2.14"})),
+    )
+
+
+def test_prefix_readelf_base_build_name_can_contain_a_directory_separator() -> None:
+    raw = _elf_text(
+        needed=("libc.so.6",),
+        definition="functorch/functorch.so",
+        required=("libc.so.6", "GLIBC_2.14"),
+    ).replace(b"Flags: none Index: 2 Cnt: 1", b"Flags: BASE Index: 1 Cnt: 1")
+    parsed = prefix._readelf(Path("/prefix/lib/functorch.so"), raw)
+    assert parsed.definitions == frozenset()
+    assert parsed.needed == ("libc.so.6",) and parsed.soname is None
+    assert parsed.rpath == parsed.runpath == ()
+    assert parsed.requirements == (("libc.so.6", frozenset({"GLIBC_2.14"})),)
+
+
+def test_prefix_readelf_base_name_can_equal_an_exported_version_name() -> None:
+    raw = _elf_text(definition="libnvrtc.so.12").replace(
+        b"contains 1 entry:", b"contains 2 entries:"
+    )
+    raw += b" 0x2 Rev: 1 Flags: BASE Index: 1 Cnt: 1 Name: libnvrtc.so.12\n"
+    assert prefix._readelf(Path("/prefix/lib/libnvrtc.so.12"), raw).definitions == frozenset(
+        {"libnvrtc.so.12"}
+    )
+
+
+@pytest.mark.parametrize("record", [b"none Index: 2", b"BASE Index: 1"])
+def test_prefix_readelf_duplicate_base_or_exported_definition_is_rejected(record: bytes) -> None:
+    raw = (
+        _elf_text(definition="libnvrtc.so.12")
+        .replace(b"contains 1 entry:", b"contains 2 entries:")
+        .replace(b"none Index: 2", record)
+    )
+    raw += b" 0x2 Rev: 1 Flags: " + record + b" Cnt: 1 Name: libnvrtc.so.12\n"
+    with pytest.raises(InstalledRuntimeProofError, match="ELF_VERSION_INVALID"):
+        prefix._readelf(Path("/prefix/lib/libnvrtc.so.12"), raw)
+
+
+@pytest.mark.parametrize("fault", ["flag", "index", "count", "length", "needed", "soname"])
+def test_prefix_readelf_base_name_does_not_expand_loader_or_symbol_names(fault: str) -> None:
+    raw = _elf_text(definition="functorch/functorch.so").replace(
+        b"Flags: none Index: 2 Cnt: 1", b"Flags: BASE Index: 1 Cnt: 1"
+    )
+    if fault == "flag":
+        raw = raw.replace(b"Flags: BASE", b"Flags: none")
+    elif fault == "index":
+        raw = raw.replace(b"Index: 1", b"Index: 2")
+    elif fault == "count":
+        raw = raw.replace(b"Cnt: 1", b"Cnt: 2")
+    elif fault == "length":
+        raw = raw.replace(b"functorch/functorch.so", b"a/" + b"b" * 511)
+    elif fault == "needed":
+        raw += b" 0x1 (NEEDED) Shared library: [functorch/functorch.so]\n"
+    else:
+        raw += b" 0xe (SONAME) Library soname: [functorch/functorch.so]\n"
+    with pytest.raises(InstalledRuntimeProofError):
+        prefix._readelf(Path("/prefix/lib/functorch.so"), raw)
+
+
 @pytest.mark.parametrize(
     "fault",
-    ["needed_format", "soname", "flags", "flags_1", "definition_count", "need_count", "file_count"],
+    [
+        "needed_format",
+        "soname",
+        "flags",
+        "bare_flags",
+        "duplicate_flags",
+        "flags_1",
+        "definition_count",
+        "need_count",
+        "file_count",
+    ],
 )
 def test_prefix_readelf_never_drops_loader_flags_or_declared_version_entries(fault: str) -> None:
     raw = _elf_text(
@@ -876,6 +959,10 @@ def test_prefix_readelf_never_drops_loader_flags_or_declared_version_entries(fau
         raw += b" 0xe (SONAME) Library soname: [/tmp/injected.so]\n"
     elif fault == "flags":
         raw += b" 0x1e (FLAGS) Flags: TEXTREL\n"
+    elif fault == "bare_flags":
+        raw += b" 0x1e (FLAGS) TEXTREL\n"
+    elif fault == "duplicate_flags":
+        raw += b" 0x1e (FLAGS) BIND_NOW\n 0x1e (FLAGS) Flags: BIND_NOW\n"
     elif fault == "flags_1":
         raw += b" 0x6ffffffb (FLAGS_1) Flags: NODEFLIB\n"
     elif fault == "definition_count":

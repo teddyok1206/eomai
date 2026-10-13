@@ -1525,3 +1525,24 @@ CPU/GPU 비교와 우수 시 기본 전환은 계속 필수 후속이다. 실제
 활성화는 아직 없다. 목표 카드 상태는 사용자 재개 요청 당시 BLOCKED였으나 승인된 대화 작업은
 재개했다. 도구는 카드 상태를 active로 바꾸는 기능을 제공하지 않으므로 실제 카드 상태를
 ACTIVE로 보고하지 않는다. 새 반복 blocked turn은 세지 않았으며 진단/구현을 계속 진행한다.
+
+## 실제 ELF 형식 호환성 수정 — 2026-10-13 09:24 UTC
+
+보호된 원 검증기의 진단은 functorch BASE 이름의 `/`를 일반 버전명으로 해석한 것이 첫
+원인임을 확인했다. CPU/CUDA 실제 파일의 readelf-only 사전 점검에서 정상 bare DT_FLAGS,
+PyTorch1.5MB 출력, CUDA의 동일 이름 BASE/일반 버전도 확인했다. 기존 parser/reader 안에서
+역할을 구분하고 공유2MiB 한도를 적용했다. NEEDED/SONAME 경로 금지, 플래그 allowlist,
+중복·선언 count·시간/출력 제한과 child cleanup은 유지한다. 파일별 예외는 만들지 않았다.
+
+회귀를 먼저 재현한 뒤 최종 prefix/host/installer3-suite **301 PASS17.27s**, strict2,
+Ruff/format4 PASS. CPU356/CUDA287개 실제 ELF 메타데이터는 각각 오류0,
+최대1,509,162/1,503,268bytes였다. 읽기 전용 해석 진단이며 전체 archive/loader closure 또는
+설치 admission PASS로 사용하지 않는다. 실제 모델 forward0, benchmark NOT_EVALUATED다.
+
+원36b652e2 실패 후보 inode20489026은
+`/opt/eom/conda/envs/.embedding-index-failed-CPU_INDEX_FP32-Y38QOEw3`에 보존했고,
+기존 developer inode17563946은 고정 CPU 위치로 복구했다. root maintenance lock·원 input,
+helper·fingerprint·사용 중 process 없음·held/named inode·fsync 검사를 거쳤다.
+복구 기록은 `/tmp/eom-embedding-successor-release.0Hv5gaAp/elf-cpu-recovery.log`,
+root snapshot은 `/opt/eom/.embedding-index-recovery-u1hAIh0g`다. 삭제나 실패→성공 변경 없음.
+다음은 수정 commit의 새 wheel/원본 pin으로 정식 전체-prefix 검증이다.

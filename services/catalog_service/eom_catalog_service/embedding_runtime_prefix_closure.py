@@ -29,7 +29,10 @@ from eom_catalog_service.embedding_runtime_files import (
     fixed_native_embedding_profile,
     require_runtime_proof,
 )
-from eom_catalog_service.embedding_runtime_host_closure import ProtectedEmbeddingHostClosure
+from eom_catalog_service.embedding_runtime_host_closure import (
+    MAX_READELF_OUTPUT_BYTES,
+    ProtectedEmbeddingHostClosure,
+)
 from eom_catalog_service.embedding_runtime_wheel_closure import (
     RuntimeWheelArchivePin,
     RuntimeWheelMemberPin,
@@ -718,7 +721,7 @@ class _Elf:
 
 
 def _readelf(path: Path, raw: bytes) -> _Elf:
-    _require(0 < len(raw) <= 1024**2, "ELF_INVALID")
+    _require(0 < len(raw) <= MAX_READELF_OUTPUT_BYTES, "ELF_INVALID")
     text = raw.decode("ascii", "strict")
     _require(
         re.search(r"^\s*Class:\s+ELF64\s*$", text, re.M) is not None
@@ -755,7 +758,7 @@ def _readelf(path: Path, raw: bytes) -> _Elf:
         ("FLAGS", {"SYMBOLIC", "BIND_NOW", "STATIC_TLS", "ORIGIN"}),
         ("FLAGS_1", {"NOW", "NODELETE", "PIE", "ORIGIN"}),
     ):
-        flags = re.findall(r"\(" + tag + r"\)\s+Flags:\s*([^\n]*)", text)
+        flags = re.findall(r"\(" + tag + r"\)[ \t]+(?:Flags:[ \t]*)?([^\n]*)", text)
         _require(
             len(flags) <= 1
             and len(flags) == text.count(f"({tag})")
@@ -763,6 +766,7 @@ def _readelf(path: Path, raw: bytes) -> _Elf:
             "ELF_FLAGS_INVALID",
         )
     definitions: set[str] = set()
+    base_definition: str | None = None
     requirements: dict[str, set[str]] = {}
     counts: dict[str, int] = {}
     current: str | None = None
@@ -787,10 +791,21 @@ def _readelf(path: Path, raw: bytes) -> _Elf:
         elif line.startswith("Version symbols section "):
             section, current = None, None
         elif section == "definition":
-            match = re.search(r"\bName: ([A-Za-z0-9_.+-]{1,128})\s*$", line)
-            if match:
-                _require(match[1] not in definitions, "ELF_VERSION_INVALID")
-                definitions.add(match[1])
+            # BASE identifies the build object, not an exported version or a loader path.
+            base = re.search(
+                r"\bFlags:\s+BASE\s+Index:\s+1\s+Cnt:\s+1\s+"
+                r"Name: ([A-Za-z0-9_./+-]{1,512})\s*$",
+                line,
+            )
+            if base:
+                _require(base_definition is None, "ELF_VERSION_INVALID")
+                base_definition = base[1]
+            else:
+                _require(not re.search(r"\bFlags:\s+BASE\b", line), "ELF_VERSION_INVALID")
+                match = re.search(r"\bName: ([A-Za-z0-9_.+-]{1,128})\s*$", line)
+                if match:
+                    _require(match[1] not in definitions, "ELF_VERSION_INVALID")
+                    definitions.add(match[1])
         elif section == "needs":
             file = re.search(r"\bFile: ([A-Za-z0-9_.+-]{1,128})\s+Cnt: ([0-9]+)\s*$", line)
             if file:
@@ -805,7 +820,10 @@ def _readelf(path: Path, raw: bytes) -> _Elf:
                     _require(match[1] not in requirements[current], "ELF_VERSION_INVALID")
                     requirements[current].add(match[1])
     _require(
-        (definition_count is None or definition_count == len(definitions))
+        (
+            definition_count is None
+            or definition_count == len(definitions) + (base_definition is not None)
+        )
         and (requirement_count is None or requirement_count == len(requirements))
         and all(len(requirements[name]) == count for name, count in counts.items()),
         "ELF_VERSION_INVALID",

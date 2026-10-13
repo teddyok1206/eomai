@@ -25,6 +25,9 @@ from eom_catalog_service.embedding_runtime_files import (
     require_runtime_proof,
 )
 
+# PyTorch CPU's pinned ELF metadata is 1,509,162 bytes; producer and parser share one bound.
+MAX_READELF_OUTPUT_BYTES = 2 * 1024**2
+
 _LIB = Path("/usr/lib/x86_64-linux-gnu")
 _LOADER = _LIB / "ld-linux-x86-64.so.2"
 _ZSTD = Path("/usr/bin/zstd")
@@ -661,7 +664,7 @@ class ProtectedEmbeddingHostClosure:
                 if not raw:
                     break
                 count += len(raw)
-                _require(count <= 1024**2, "TOOL_OVERFLOW")
+                _require(count <= MAX_READELF_OUTPUT_BYTES, "TOOL_OVERFLOW")
                 chunks.append(raw)
             _require(process.wait(timeout=max(0, finish - time.monotonic())) == 0, "TOOL_FAILED")
             _require(time.monotonic() < finish, "TOOL_TIMEOUT")

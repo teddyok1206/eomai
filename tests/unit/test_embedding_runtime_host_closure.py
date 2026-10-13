@@ -551,6 +551,22 @@ def test_fixed_readelf_fd_bound_argv_has_bounded_output(
     assert children[0].stdout is not None and children[0].stdout.closed
 
 
+def test_fixed_readelf_accepts_two_mib_at_shared_parser_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path, monkeypatch)
+    children = _synthetic_child(
+        monkeypatch, "import sys; sys.stdout.buffer.write(b'x' * (2 * 1024**2))"
+    )
+    with fixture.capture() as capture:
+        raw = capture.inspect_elf(
+            capture._descriptors[fixture.library], deadline=time.monotonic() + 2.0
+        )
+        assert len(raw) == host.MAX_READELF_OUTPUT_BYTES == 2 * 1024**2
+    assert children[0].poll() == 0
+    assert children[0].stdout is not None and children[0].stdout.closed
+
+
 @pytest.mark.parametrize("deadline", [True, 1, float("nan"), float("inf"), -1.0])
 def test_readelf_exact_deadline_validation_precedes_fd_access_or_spawn(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, deadline: Any
@@ -641,7 +657,7 @@ def test_readelf_io_failures_always_reap_and_close_owned_child(
     fixture = _fixture(tmp_path, monkeypatch)
     scripts = {
         "timeout": "import time; time.sleep(30)",
-        "overflow": "import sys; sys.stdout.buffer.write(b'x'*(1024**2+1)); sys.stdout.flush()",
+        "overflow": "import sys; sys.stdout.buffer.write(b'x'*(2*1024**2+1)); sys.stdout.flush()",
         "failure": "raise SystemExit(7)",
     }
     children = _synthetic_child(monkeypatch, scripts.get(fault, "import time; time.sleep(30)"))

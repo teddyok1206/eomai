@@ -544,3 +544,34 @@ as accepted. Existing CUDA ownership/live OS, proof/archive/RECORD and backend/f
 remain covered. Final explicit API observer/proof/backend/factory4 suites267 PASS6.45s; Python
 source/test hashes match start/end. API/core strict mypy2 each PASS, API Ruff2/format2 PASS.
 No actual host/probe/root/model/GPU/installer/Git operation or admission receipt was performed.
+
+## ELF BASE build-name compatibility
+
+2026-10-13 UTC. The actual protected36b652e2 prefix audit stopped at the functorch shared
+object: its one BASE definition is named `functorch/functorch.so`, so the path-free symbol-name
+regex counted zero definitions. The unchanged original owner trace and a separate readelf-only
+diagnosis identify the same file/count. A source regression reproduces that failure.
+The existing parser now accepts a bounded slash-bearing build name only in the exact
+`Flags: BASE / Index: 1 / Cnt: 1` record. Ordinary symbol names and NEEDED/SONAME loader names
+retain their previous grammar, counts and closure; no filesystem location is resolved from BASE.
+This corrects metadata interpretation, not an installed-file exception. See the
+[LSB symbol versioning fields](https://refspecs.linuxfoundation.org/LSB_3.1.0/LSB-Core-generic/LSB-Core-generic/symversion.html).
+Actual installed admission and CPU/GPU measurements still require their subsequent gates.
+
+The same readelf-only scan of356 actual CPU ELF files found two additional parser-boundary
+incompatibilities before another expensive installation audit: GNU readelf renders DT_FLAGS
+as bare `BIND_NOW`/`STATIC_TLS` while DT_FLAGS_1 includes `Flags:`, and the pinned PyTorch
+`libtorch_cpu.so` metadata is1,509,162bytes. Accept either label with the unchanged per-tag
+flag allowlists and duplicate-tag checks. Share a bounded2MiB output limit between the held-FD
+reader and parser; do not truncate version requirements or remove the output/time bounds.
+The scan is diagnosis only, not archive, loader-closure or installed-admission acceptance.
+Regression cases retain bare/labeled forbidden flags, duplicate tags, exact-limit acceptance,
+limit-plus-one rejection and child cleanup. No new dependency, wire format or DB change.
+
+CUDA metadata additionally shows BASE and exported definition entries with the same name, e.g.
+`libnvrtc.so.12`. Count BASE independently from exported versions: it is a build-object identity,
+not a provided symbol version. Keep at most one BASE record, reject duplicate exported names,
+and compare the declared count with both record classes. This also prevents BASE alone from
+satisfying a dependency's required version. Final parser diagnostics: CPU356/CUDA287 ELF files,
+zero errors; largest outputs1,509,162/1,503,268bytes respectively. Focused prefix/host/installer
+regression301 PASS17.27s, strict mypy2 and Ruff/format4 PASS. These are not runtime admission.
