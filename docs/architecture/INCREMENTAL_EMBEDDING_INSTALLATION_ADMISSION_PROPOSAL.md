@@ -168,6 +168,16 @@ pipeline. The caller is the approved installation owner, never a worker/request-
   conflicting immutable revision, incorrect receipt and metadata-only storage tests. Caller
   owns actual installed proof/probe admission; publication success does not grant it.
 
+The bounded installation CLI runs as the existing `eom-workflow-runner` owner, not root or a
+model worker. A reviewed root launch supplies an exact source commit and independent bundle
+raw SHA, plus root-opened regular stdin/stdout descriptors. It validates identity, bounds,
+hash and canonical existing bundle schema before opening the existing DB/NAS publisher.
+The CLI only presents the publisher's real Job/member/manifest receipt; it cannot choose
+arbitrary files, schema, credentials, actor or artifact type. This is an installation metadata
+operation, not corpus authorization, source execution, policy activation or a new service.
+For the bounded release, a root-owned verified platform wheel may be used with the admitted
+owner interpreter; this does not alter the running API/Runner installation or import Git.
+
 ## Existing seams and the smallest actual gap
 
 `embedding_runtime_prefix_closure.audit_installed_embedding_prefix` already obtains `_tree`
@@ -245,6 +255,32 @@ by themselves seal the draft receipt or activate the production owner/main. The 
 remain parsed values unless independently captured and sealed by that approved owner operation.
 
 ## Fixed local layout and current adapter
+
+### Fixed CPU execution composition
+
+The production CPU leaf composes the existing descriptor executor, protected installation
+reader and native backend scope; it does not add an encoder or persistence path. INDEX and
+QUERY are separate fixed systemd units selecting separate existing input/result schemas.
+PID1 receives five independently accepted installation pins from a root-owned owner configuration
+(configuration logical ID, revision, semantic SHA, raw SHA, receipt raw SHA). Worker JSON cannot
+select them. No missing pin has a default, and a malformed pin fails before backend construction.
+
+The leaf imports only stdlib/stdlib-only identity code initially. The existing quiet-descriptor
+entrypoint checks actual nonprivileged identity and validates the inherited request before
+entering the concrete receipt capture. The receipt remains open around backend lifetime; backend
+teardown precedes receipt closure. The existing factory checks runtime/bundle/resource closure,
+and the existing encoder checks the request against that actual backend. Exceptions produce a
+nonzero exit without traceback or request text on result/binary descriptors.
+
+The dominant operations are one fixed argument lookup, bounded descriptor read and ordered
+encoding using the existing implementation. No new message schema, DB table, queue, model copy,
+source resolver or dependency is required. Units retain fixed CPU resources, no network/devices,
+read-only model/runtime, no NAS/DB/auth/repository access and root-opened result descriptors.
+Installation pins select an immutable runtime, not operator/source/Job authorization. The
+Orchestrator still owns pre-exec installation checks, the cross-instance capacity reservation,
+claim/lease, process observation and publication. Merely installing these disabled templates or
+running source tests does not activate them. Reusing the probe as a model worker would mix
+installation evidence and source work, so its no-model purpose remains unchanged.
 
 Proposed immutable evidence root:
 `/opt/eom/embedding-runtime-admission/<configuration_id>/<configuration_revision_id>/`.

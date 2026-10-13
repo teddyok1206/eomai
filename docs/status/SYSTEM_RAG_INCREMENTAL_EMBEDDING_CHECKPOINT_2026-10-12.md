@@ -1805,3 +1805,27 @@ reader 구현 상태에 맞췄으며 호출 규약·실행 동작은 바꾸지 �
 owner bundle/config 게시·final receipt·production main/launcher 연결과 실제 검증이 필요하다.
 앞선13:01 실제 probe PASS는 f3cf5d0f 설치본의 증거로만 유지한다. 원칙/contract의 이름만으로
 현재 runtime이 새 consumer를 사용하거나 임베딩을 실행했다고 주장하지 않는다.
+
+## 고정 CPU 실행 입구와 설치 설정 게시 연결 — 2026-10-13 13:53 UTC
+
+새 encoder나 DB 경로 대신 기존 descriptor executor → protected receipt → native factory를
+잇는 작은 CPU composition을 구현했다. root/PID1이 고정한 config ID/revision/semantic/raw
+hash와 receipt raw SHA를 받으며, worker JSON은 이를 선택하지 않는다. INDEX와 QUERY는
+각각의 기존 입력 계약을 사용하는 별도 고정 unit이다. 초기 import는 stdlib-only이고 실제
+계정/격리·입력 검사를 거친 뒤 receipt/backend를 구성한다. backend를 닫은 다음 receipt를
+닫으며 실패·cleanup 불확실성은 비정상 종료한다. 결과/수치 descriptor에 traceback이나
+ordinary library log를 섞지 않는다. unit은 미설치/미활성이고 새 권한을 부여하지 않았다.
+
+설치 metadata용 CLI는 기존 `eom-workflow-runner` identity와 root-opened bounded FD,
+독립 source/raw pin을 확인한 뒤 기존 `EmbeddingRuntimeBundleArtifactPublisher`만 호출한다.
+임의 path/schema/role/Artifact ID·새 queue·DB migration·모델 호출은 없다. receipt를 쓰다가
+실패해도 실제 commit이 없었다고 가정하지 않으며 같은 key의 기존 owner 복구를 유지한다.
+
+관련10-suite **641 PASS14.89s**, API/core strict4·Ruff/format4·systemd unit verify·diff PASS.
+처음 source 테스트 호출의 잘못된 파일명은 실행0건이었고 실제 `_contracts.py` 경로로
+수정해 위 gate를 실행했다. 초기 typing3건과 unit 비교 fixture의 경로 normalization1건을
+명시적으로 고쳤다. 기존 persistence 경계는 변경하지 않아 앞선 실제 임시 DB19 PASS를
+재사용하며 운영 DB에 pytest를 돌리지 않았다.
+
+다음은 실제 owner bundle 게시와 설치 config/receipt다. 이번 SOURCE_PASS를 실제 native
+model 실행/seed/delta/GPU 비교 또는 공통 소비자 활성화로 확대하지 않는다.
