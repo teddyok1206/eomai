@@ -999,3 +999,63 @@ Root frozen3 전체정독/rawSHA 확인 뒤18-suite **1125 PASS30.06s**, strict/
 PASS를 확인했다. agent의 최초1124 PASS/Conda replay1 FAIL와 unchanged replay/full rerun PASS는
 host note에 보존한다. 가능한 conservative ancestor epoch 경합은 추정이지 확정 원인이 아니며
 guard를 느슨하게 하지 않았다. 보호 CPU/CUDA prefix 실제 root audit/NEW 실행은 아직 PENDING이다.
+
+### 실제 prefix 입력·mode 조립 계획 — root operation 이전
+
+기존 보호 helper/public `index_runtime_locks`와 별도 root0700 lock snapshot에서 실제 canonical
+public55/70 metadata를 조립했다. 기존 closed prefix-input parser는 CPU15742B raw
+`984be0006bafb8a7c53d0db079992f8bb1b222d24bc01c48b2ac96b2541175de`, CUDA19077B raw
+`2ea007179b532e8e6f06c322bfb60f81be085956d852ceab6d65647d3a0147c4`를 검증했다.
+public raw totals266514328/3929095329B는 기존 owner의 선언과 일치한다. 입력 준비는 허가가 아니다.
+
+read-only actual scan에서 task-owned developer CPU2094dirs/27181regular/1380links,
+CUDA2192dirs/27822regular/1380links이며 nonlink group-write29274/30013, other-write·SUID·SGID·
+regular hardlink·special0이었다. 다음 task-scoped 조립은 정확한 두0700 eom-owned prefix의
+nonlink regular/directories에만 `go-w`를 제거한다. 기존 Conda owner가 요구하는 archive mode
+`&~022`와 일치하며 owner/execute bits·원본bytes·symlink는 바꾸지 않는다. 운영 CPU·모델·서비스는
+대상이 아니다. 원래0664/0775는0644/0755가 되고 두 root0700은 유지된다.
+
+그 후 기존 supported fingerprint와 publisher의 exact profile lock/보호copy/backup을 사용한다.
+CPU부터 old bootstrap whole-prefix byte audit를 실제 실행하고 성공한 경우에만 기존 NEW stdlib
+helper 검사를 한다. 실패 시 해당 phase/backup/receipt를 보존하고 자동 재게시하지 않는다.
+입력 위치는 `/tmp/eom-prefix-input-cpu.SpySIO6m`, `/tmp/eom-prefix-input-cuda.6pHcXiAk`0700/
+input0600이며 key·token·모델text가 없다. 기존 accepted bootstrap과 source/module raw pins를
+사용하고 source 후보/실제 설치/성능/기본값은 계속 구분한다.
+
+### Actual CPU publisher 최초 거부 — 2026-10-13 02:23 UTC
+
+명시적으로 고정한 publisher raw `8f4baf45b507bcd524e51e8a01d82443c070d702aadabce4aff9faf7abff10fb`
+를 root-private snapshot에 복사·검증한 뒤 CPU profile을 호출했다. 기존 supported fingerprints는
+CPU `42cd37c1eeff5390dbf72e562177cebdc95889953a1d2e81447cbe298183c8e4`, CUDA
+`a1dde1440765cb64b7c4b9912ed6c76b280dcc33a3e30623ace416f3e6f1e7dc`다. 정확한 developer
+nonlink mode 조립은 PASS, symlink/owner/원본bytes는 바꾸지 않았다.
+
+CPU 보호copy/backup/promotion 후 actual old byte audit가
+`INSTALLED_RUNTIME_CONDA_OVERLAY_INVALID`로 거부했고 phase는
+`BEFORE_OLD_PREFIX_BYTES_AUDIT`다. **STAGED_AUDIT_FAILED_NOT_ADMITTED / NEW_NOT_EXECUTED**.
+CPU prefix는 root:root0755로 staged되어 있으므로 같은 publish를 자동 재제출하지 않는다.
+원본 developer backup·root-private owner input/source/phase·빈 audit receipt와 실제 실패 로그
+`cpu-protected-publication.log`는 보존한다. CUDA는 normalized developer 상태로 아직 publish하지 않았다.
+
+다음은 기존 public wheel observation에서 실제 네 overlay를 읽기 전용으로 분리해 원인을
+확인하고 필요한 최소 source/fixture 수정 범위를 정하는 것이다. pip console 이름 등 후보는
+아직 추정이며 fixture PASS만으로 actual 실패를 덮지 않는다. 실패 prefix를 실행하거나 검증을
+느슨하게 하지 않는다. 기존 운영 CPU·모델·서비스·production DB/IAM/NAS는 그대로이며 새 모델/
+GPU 실행0다. provider/context source work는 병행 가능하므로 전체 goal은 ACTIVE다.
+
+읽기 전용 actual observation에서 packaging/setuptools/wheel은 PASS, pip만 거부됨을 확인했다.
+pip RECORD의 `pip3.12`는 정상 source generator가 만드는 CPython3.12 alias이며, 세 pip wrapper의
+실제 bytes/size211과 source entry target/shebang이 모두 일치한다. 기존 public proof/schema의
+no-dot 이름 제한은 유지하고, original pip26.1.2 archive/source generation에 결합된 이 alias만
+wheel owner 내부에서 검증하는 최소 source5-file 수정 범위를 승인했다. RECORD·installed bytes
+수정이나 일반적 alias 허용은 없다. 이후 explicit successor wheel/source candidate로 검증해야
+하며 현재 failed candidate를 성공으로 재해석하지 않는다.
+
+actual root snapshot은 `/opt/eom/.embedding-index-install-yyOK1Wsx`, exact developer backup은
+`/opt/eom/conda/envs/.embedding-index-prepublication-CPU_INDEX_FP32-.embedding-index-install-yyOK1Wsx`다.
+phase7개/빈 audit receipt/backup 존재를 읽기 전용으로 확인했다. CUDA는 아직 미게시다.
+
+별도 owner-session transport 계약7 paths는 root 독립 **318 PASS7.07s**, strict11·Ruff/format3 PASS로
+`4e5093d6`에 커밋·push했다. 이는 protocol-only이며 실제 endpoint/provider/bridge는 아직 미활성이다.
+Context composer9 paths도 source freeze되어 독립 리뷰 대기다. Root는 source/실제권한/설치/수치/
+성능/활성화를 계속 구분하며 목표 완료나 GPU 기본값 전환을 선언하지 않는다.
