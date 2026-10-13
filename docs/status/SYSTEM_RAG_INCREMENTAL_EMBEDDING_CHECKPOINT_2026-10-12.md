@@ -850,3 +850,69 @@ Identity provider·SQL role·protected controller와 Catalog/native executor를 
 구현하거나 승인한 것이 아니다. source/runtime 준비와 실제 current owner/source/GPU authority를
 구분한다. 상시 증분 갱신의 공식 service identity는 별도 남은 필수 경계이며 operator seed만으로
 자동화를 완료했다고 보고하지 않는다.
+
+### 실제 developer assembly provenance와 controller metadata의 추가 확인
+
+2026-10-13 01:09 UTC 검사에서 private pip metadata는 실제 `/tmp/.../dist` 원본 URI를 기록했다.
+현재 wheel closure는 canonical `/opt/eom/embedding-runtime-archives/<raw SHA>/<wheel>`만
+허용하므로 이 developer assembly를 그대로 protected admission에 통과시킬 수 없다. Root는
+두 환경의 원래 direct_url/RECORD6개를 explicit small backup boundary
+`/tmp/eom-embedding-private-assembly-evidence.gF1fEaPk`0700/files0600에 복사하고 원본과 같은
+raw SHA를 확인했다. metadata/RECORD를 고치거나 기존 검증 조건을 느슨하게 하지 않았다.
+다음은 지원된 exact canonical archive retention 후 명시적 developer rematerialization이다.
+protected promotion/first instruction은 아직 실행하지 않았다. 실제 base 실행 파일의775 mode도
+prepublication의 명시적 보호 mode 조립 단계에서 처리해야 하며 성공 증거를 만들어내지 않는다.
+
+별도 readonly controller metadata probe는 실제 installed `eom-workflow-runner` UID에서
+`eom_app` role/session_user, superuser=false, bypassrls=false와 operators/api_sessions/api_tokens의
+기존 SELECT+UPDATE 가능을 확인했다. default_transaction_read_only로 metadata만 조회했고
+secret/token/session 행 내용은 출력하지 않았다. 기록은 existing sanitized evidence 폴더의
+`current-runner-role-metadata.log`다. Role/grant·HMAC·current authenticated capture/fence admission을
+의미하지 않으며 production write0, model/GPU0이다. 같은 사용자의 기존 sudo pane을 재사용했다.
+
+### Canonical retention 최초 staging 실패와 제한된 복구 계획 — 2026-10-13 01:26 UTC
+
+기존 보호 bootstrap의 `-I -S -B`와 separately pinned root-private helper로 기존 public
+`retain_index_archive`를 호출했다. source/dist 디렉터리가775여서 source ancestor guard가
+`EMBEDDING_INDEX_SOURCE_PATH_INVALID`로 거부했다. 원래 로그 `private-canonical-retention.log`는
+보존한다. 첫 wheel의 SHA 디렉터리 예약만 생성됐고 wheel/source bytes는 아직 게시되지 않았다.
+다음 wheel과 source tar의 retention도 실행되지 않았다. 새 prefix·모델·GPU를 실행하지 않았다.
+
+root의 metadata-only 검사에서 정확한 첫 예약은 root:root0700, device64512/inode18488967,
+ctime/mtime1791854244358351563, named/FD 동일, children0이었다. 이는 함수의 intake 거부 직전에
+생성한 빈 task-owned 임시 예약이며 canonical Artifact나 실행 결과가 아니다. 다음 조치는
+이 정확한 empty inode/epoch와 기존 root-private snapshot을 재확인해 예약을 그 snapshot 아래로
+recoverable하게 옮겨 보존하는 것이다. 삭제·기존 bytes overwrite·chmod로 성공 상태 위장은 없다.
+그 뒤 task-owned source/dist의 group-write만 제거하고 **별도 기록된 재실행1회**에서 같은 raw
+pin·지원된 retainer/read-back·parent fsync를 사용한다. 원래 실패를 성공으로 바꾸지 않는다.
+어떤 precondition이 달라졌거나 nonempty면 추가 side effect 없이 멈춘다. 전체 목표는 source
+구현을 병행할 수 있으므로 ACTIVE이며 이 준비 실패를 production 장애나 모델 실패로 분류하지 않는다.
+
+### Canonical retention와 developer rematerialization 결과 — 2026-10-13 01:30 UTC
+
+위 exact empty inode/epoch/child0 guard와 destination absence를 확인한 뒤 예약을
+`/opt/eom/.embedding-index-private-cache-JnNdhehG/partial-reservation-c9c29dda4bab9fb2f0d55c12b8df78d97f5997144602886be7152e24e782081b`
+로 옮겨 같은 inode를 보존하고 두 parent를 fsync했다. 삭제된 것은 없다. 필요하면 해당 private
+빈 디렉터리와 원 실패 로그로 이 준비 실패를 재현/추적할 수 있다.
+
+task source/dist를0750으로 조립한 뒤, separately pinned helper raw
+`d3cc5cb687b222d6d292439d60f945d37c91cb635fda8183d48008c0ea8b3d18`와 기존 protected bootstrap에서
+public retainer를 다시 호출했다. 명시적 재실행은1회이며 old log는 그대로다. platform/lease/source
+tar의 같은 raw SHA별 canonical 파일3개를 root:root0644로 보관했고 지원된 same-target replay의
+read-back hash 검증 및 SHA directory/archive parent fsync가 PASS했다. 로그:
+`private-partial-reservation-disposition.log`, `private-canonical-retention-retry1.log`.
+
+그 다음 same raw wheel을 canonical `/opt/eom/embedding-runtime-archives/<SHA>/<wheel>`에서
+non-root·offline/no-deps/no-compile로 명시적 재설치했다. 임시 설치였던 private packages만 동일
+bytes로 재조립했고 원래 metadata6개와 원본 wheel/source는 보존했다. 새로운 direct_url/RECORD는
+pip가 생성한 것이며 직접 수정하지 않았다. 두 환경의 platform direct_url raw SHA는
+`367338596055ee94b86c630eaf9cd43aee353140cbad09c789fd50bf281a5242`, lease는
+`92c391deeb67a88dd82f5b40961504b87f1f8cf2c2b7abe551232dab971f52d5`다. CPU platform RECORD는
+`09fbfd57f11a52df4ff41993409bd93682d540f00500da73e0750dcfeaa62bd4`, CUDA platform은
+`593e594eeb86cb8d981e7a08bee92fb50c70ee42a76ab886b00cf9eae8cc35d7`, lease는
+`6ac8167efcd40496dd4bebe2eceb4714fd6da2f1c4c791232ec65bc4111e5ba2`다. EOM pycache 없음도 확인했다.
+
+**CANONICAL_ARCHIVES_RETAINED / NONROOT_ASSEMBLED_NOT_ADMITTED**이며 protected promotion,
+first NEW instruction, 실제 numerical proof/UID·launcher·GPU lease·성능 비교·기본값은 아직
+PENDING이다. Root cache/archive filesystem만 변경했고 production DB/IAM/NAS write0,
+model/GPU0다. 기존 protected CPU·정본 모델·서비스는 변경하지 않았다.
