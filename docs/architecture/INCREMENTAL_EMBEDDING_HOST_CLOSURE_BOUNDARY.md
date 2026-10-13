@@ -563,3 +563,35 @@ original helper and historical experiment installer remain unchanged.
     receipt and legacy arguments, copy/interrupted-move/profile contention and historical
     shell/helper byte preservation. No root or protected-prefix operation is run by this
     source phase. Actual guarded root audit and final proof/config/receipt/probe are next.
+
+Publisher status: **SOURCE_IMPLEMENTED_NOT_RUN_ON_PROTECTED_PREFIX**. Only the approved
+three paths changed. New audit copies use no-clobber, fixed10s bounded max+1 byte reads;
+the receipt stream is bounded to129 bytes and accepted only at≤128 with exactly one fixed
+status/SHA/newline. All six source hashes remain checked by the unchanged actual leaf
+before imports. The sole NEW instruction follows successful OLD status/receipt validation.
+Once-written local stdout/phase evidence does not implement final NativeAdmission.
+
+Publisher synthetic68 PASS in3.16s; final shared18-suite1125 PASS in30.08s; strict mypy
+the one changed Python test, Ruff/format-check that file, and `bash -n` publisher PASS.
+Fixtures prove CPU/CUDA OLD→NEW order, exact old flags/paths/raw pin and six protected
+source copies; unchanged helper/historical-shell checks; missing/oversized/symlink/hash/
+legacy arguments; missing/oversized source module and missing/writable old bootstrap;
+nonzero/empty/wrong/multiline/no-newline/oversized/timeout receipt; preserved interrupted
+move/profile contention and copy failures. An initial positive fixture incorrectly chose
+an earlier retained failure quarantine by unordered glob; it now uses the exact returned
+quarantine path and verifies both copies survive. No production constraint was relaxed.
+
+First shared18 run recorded1124 PASS/1 frozen Conda CUDA replay LINK_CHANGED failure.
+The exact two replay cases then passed unchanged in2.68s, and the full18 rerun above
+passed. No Conda/core/leaf edit was made. Its link guard captures full ancestor epochs,
+including sticky `/tmp` in synthetic tests, so concurrent directory changes are a possible
+conservative denial, not a proven diagnosis or reason to weaken the production check.
+There was no real root/protected-prefix/NEW/ML/model/GPU/DB operation by this source phase.
+Root must independently review/execute this publisher after canonical32-file retention
+(31 archives plus the source-list), mode normalization and its existing root maintenance
+drain. Actual pre-execution and final installed evidence and measurement remain pending.
+
+Root independently reviewed all three frozen publisher paths and matched their raw hashes.
+The full18 gate passed **1125 tests in30.06s**, strict mypy/Ruff/format for the changed test
+and publisher Bash syntax PASS. The original helper, audit leaf/core and legacy installer
+remain unchanged. This is source acceptance only; guarded protected execution follows.

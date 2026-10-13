@@ -989,3 +989,13 @@ closed usage fixture에 정확한 두 supported test 목적을 보완한 재실�
 그 파일의 기존 mixed metadata dict typing3건도 발견해 test-only TypedDict로 표현을 명확히
 했고 strict mypy·Ruff/format PASS를 확인한 후 같은122-case gate를 다시 실행했다.
 runtime 권한·source guard·DB/모델 동작을 바꾼 수정이 아니다.
+
+## 기존 publisher의 실행 전 검증 순서 완료 — 2026-10-13 UTC
+
+기존 profile lock/보호copy/backup/phase owner를 확장해 old bootstrap의 실제 whole-prefix audit와
+bounded single-line receipt 확인을 **유일한 NEW instruction 전에 필수화**했다. 옛 audit 없는
+인수는 거부한다. helper/leaf/core/legacy installer bytes는 그대로이며 새 installation grant는 없다.
+Root frozen3 전체정독/rawSHA 확인 뒤18-suite **1125 PASS30.06s**, strict/Ruff/format1·Bash syntax
+PASS를 확인했다. agent의 최초1124 PASS/Conda replay1 FAIL와 unchanged replay/full rerun PASS는
+host note에 보존한다. 가능한 conservative ancestor epoch 경합은 추정이지 확정 원인이 아니며
+guard를 느슨하게 하지 않았다. 보호 CPU/CUDA prefix 실제 root audit/NEW 실행은 아직 PENDING이다.

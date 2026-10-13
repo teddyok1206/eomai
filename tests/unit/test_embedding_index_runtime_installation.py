@@ -15,7 +15,7 @@ import tempfile
 import zipfile
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from typing import cast
+from typing import Literal, cast
 
 import pytest
 
@@ -583,22 +583,71 @@ def test_nonroot_helper_context_refuses_before_retention(
     assert "SNAPSHOT_REJECTED" in capsys.readouterr().err
 
 
-def _synthetic_shell(root: Path, *, interrupt: bool = False) -> tuple[Path, Path, list[str], Path]:
-    """Same publication body, test-only path/UID substitutions and inert interpreter."""
+def _synthetic_shell(
+    root: Path,
+    *,
+    interrupt: bool = False,
+    audit_fault: str | None = None,
+    profile: Literal["CPU_INDEX_FP32", "CUDA_INDEX_FP32"] = "CPU_INDEX_FP32",
+) -> tuple[Path, Path, list[str], Path]:
+    """Same body, test-only path/UID substitutions and inert old/new programs."""
     text = SHELL.read_text()
-    prefix = root / "opt/eom/conda/envs/eom-embedding-index-cpu"
+    prefix = (
+        root
+        / "opt/eom/conda/envs"
+        / ("eom-embedding-index-cpu" if profile == "CPU_INDEX_FP32" else "eom-embedding-cuda")
+    )
     prefix.mkdir(parents=True, mode=0o700)
     binary = prefix / "bin/python3.12"
     binary.parent.mkdir()
     binary.parent.chmod(0o755)
     marker = root / "interpreter-entered"
-    binary.write_text(f"#!/usr/bin/bash\nprintf 'entered' > '{marker}'\n")
+    order = root / "execution-order"
+    binary.write_text(
+        f"#!/usr/bin/bash\nprintf 'NEW\\n' >> '{order}'\nprintf 'entered' > '{marker}'\n"
+    )
     binary.chmod(0o755)
+    old = root / "opt/eom/conda/envs/eom-embedding-experiment/bin/python3.12"
+    old.parent.mkdir(parents=True, mode=0o755)
+    output = "EMBEDDING_PREFIX_BYTES_AUDIT_PASS_NOT_ADMITTED sha256:" + "f" * 64 + "\n"
+    if audit_fault == "status":
+        output = "READY sha256:" + "f" * 64 + "\n"
+    elif audit_fault == "missing_newline":
+        output = output.rstrip("\n")
+    elif audit_fault == "multiline":
+        output += "another receipt\n"
+    elif audit_fault == "oversized":
+        output = "x" * 10000
+    elif audit_fault == "empty":
+        output = ""
+    pause = "/usr/bin/sleep 2\n" if audit_fault == "timeout" else ""
+    old.write_text(
+        f"#!/usr/bin/bash\nprintf 'OLD\\n' >> '{order}'\n"
+        f"printf '%s\\n' \"$@\" > '{root / 'old-arguments'}'\n"
+        + pause
+        + f"printf '%s' '{output}'\nexit {1 if audit_fault == 'nonzero' else 0}\n"
+    )
+    old.chmod(0o755)
+    owner = root / "owner/prefix-audit-input.json"
+    owner.parent.mkdir(mode=0o700)
+    owner.write_bytes(b'{"synthetic_audit":true}\n')
+    owner_sha = hashlib.sha256(owner.read_bytes()).hexdigest()
+    leaf_sha = hashlib.sha256(
+        (ROOT / "scripts/embedding/admit_index_runtime.py").read_bytes()
+    ).hexdigest()
     text = re.sub(r"/opt(?=/|\s)", str(root / "opt"), text)
     text = text.replace('"$EUID" == 0', f'"$EUID" == {os.getuid()}')
     text = text.replace(
         '"$(stat -c %u "$PUBLICATION_LOCK")" == 0',
         f'"$(stat -c %u "$PUBLICATION_LOCK")" == {os.getuid()}',
+    )
+    text = text.replace(
+        '"$(stat -c %u "$OLD_PREFIX/bin/python3.12")" == 0',
+        f'"$(stat -c %u "$OLD_PREFIX/bin/python3.12")" == {os.getuid()}',
+    )
+    text = text.replace(
+        '"$AUDIT_INPUT_SOURCE" =~ ^/tmp/eom-[A-Za-z0-9_.-]+/prefix-audit-input\\.json$',
+        f'"$AUDIT_INPUT_SOURCE" == "{owner}"',
     )
     text = text.replace("chown -hR root:root", f"chown -hR {os.getuid()}:{os.getgid()}")
     text = text.replace(
@@ -611,6 +660,12 @@ def _synthetic_shell(root: Path, *, interrupt: bool = False) -> tuple[Path, Path
             "record_phase PREFIX_ABSENT_RETAINED_QUARANTINE",
             "record_phase PREFIX_ABSENT_RETAINED_QUARANTINE\nexit 97",
         )
+    if audit_fault == "timeout":
+        text = text.replace(
+            "timeout --signal=KILL 900 env -i PATH",
+            "timeout --signal=KILL 0.1 env -i PATH",
+            1,
+        )
     script = root / "bootstrap.sh"
     script.write_text(text)
     helper_sha = hashlib.sha256(
@@ -618,7 +673,7 @@ def _synthetic_shell(root: Path, *, interrupt: bool = False) -> tuple[Path, Path
     ).hexdigest()
     args = [
         "publish",
-        "CPU_INDEX_FP32",
+        profile,
         "",
         helper_sha,
         "/tmp/eom-source/platform.whl",
@@ -631,20 +686,33 @@ def _synthetic_shell(root: Path, *, interrupt: bool = False) -> tuple[Path, Path
         "-",
         "-",
         "-",
+        str(owner),
+        owner_sha,
+        leaf_sha,
         "/tmp/eom-source",
     ]
+    if profile == "CUDA_INDEX_FP32":
+        args[9:14] = [
+            "/tmp/eom-source/lease.whl",
+            "3" * 64,
+            "b" * 40,
+            "/tmp/eom-source/lease-source.tar",
+            "4" * 64,
+        ]
     return script, prefix, args, marker
 
 
+@pytest.mark.parametrize("profile", ["CPU_INDEX_FP32", "CUDA_INDEX_FP32"])
 def test_synthetic_shell_snapshot_hash_precedes_first_interpreter_instruction(
     tmp_path: Path,
+    profile: Literal["CPU_INDEX_FP32", "CUDA_INDEX_FP32"],
 ) -> None:
-    script, prefix, args, marker = _synthetic_shell(tmp_path)
+    script, prefix, args, marker = _synthetic_shell(tmp_path, profile=profile)
     # Temporary input-only wheelhouse placeholder; inert interpreter does not parse/install it.
     with tempfile.TemporaryDirectory(prefix="eom-index-source-") as temporary:
         args[-1] = temporary
         fingerprint = subprocess.run(
-            ["/usr/bin/bash", str(script), "fingerprint", "CPU_INDEX_FP32"],
+            ["/usr/bin/bash", str(script), "fingerprint", profile],
             capture_output=True,
             text=True,
             check=True,
@@ -662,6 +730,210 @@ def test_synthetic_shell_snapshot_hash_precedes_first_interpreter_instruction(
         assert result.returncode == 0, result.stderr
         assert marker.exists() and "INSTALLED_NOT_ADMITTED" in result.stdout
         assert "NOT_PROBED" in result.stdout and "ACTIVE" not in result.stdout
+        assert (tmp_path / "execution-order").read_text().splitlines() == ["OLD", "NEW"]
+        private = Path(
+            next(
+                line.removeprefix("installer_quarantine=")
+                for line in result.stdout.splitlines()
+                if line.startswith("installer_quarantine=")
+            )
+        )
+        assert len(tuple((tmp_path / "opt/eom").glob(".embedding-index-install-*"))) == 2
+        expected = "EMBEDDING_PREFIX_BYTES_AUDIT_PASS_NOT_ADMITTED sha256:" + "f" * 64 + "\n"
+        assert (private / "prefix-bytes-audit.receipt").read_text() == expected
+        assert (private / "prefix-bytes-audit.receipt").stat().st_mode & 0o777 == 0o600
+        assert (private / "prefix-audit-input.json").read_bytes() == Path(args[14]).read_bytes()
+        copied = private / "source/eom_catalog_service"
+        assert {path.name for path in copied.iterdir()} == {
+            "__init__.py",
+            "embedding_runtime_files.py",
+            "embedding_runtime_wheel_closure.py",
+            "embedding_runtime_host_closure.py",
+            "embedding_conda_runtime_closure.py",
+            "embedding_runtime_prefix_closure.py",
+        }
+        assert all(path.stat().st_mode & 0o777 == 0o600 for path in copied.iterdir())
+        assert (tmp_path / "old-arguments").read_text().splitlines() == [
+            "-I",
+            "-S",
+            "-B",
+            str(private / "admit.py"),
+            "prefix-bytes",
+            "--profile",
+            profile,
+            "--owner-input",
+            str(private / "prefix-audit-input.json"),
+            "--owner-input-sha256",
+            "sha256:" + args[15],
+        ]
+        phases = (private / "phase-receipt").read_text().splitlines()
+        assert (
+            phases.index("BEFORE_OLD_PREFIX_BYTES_AUDIT")
+            < phases.index("PREFIX_BYTES_AUDITED_NOT_ADMITTED")
+            < phases.index("INSTALLED_NOT_ADMITTED")
+        )
+
+
+@pytest.mark.parametrize(
+    "fault", ["nonzero", "empty", "status", "missing_newline", "multiline", "oversized", "timeout"]
+)
+def test_old_audit_failure_keeps_staged_evidence_and_never_enters_new(
+    tmp_path: Path, fault: str
+) -> None:
+    script, prefix, args, marker = _synthetic_shell(tmp_path, audit_fault=fault)
+    with tempfile.TemporaryDirectory(prefix="eom-index-source-") as temporary:
+        args[-1] = temporary
+        args[2] = subprocess.run(
+            ["/usr/bin/bash", str(script), "fingerprint", "CPU_INDEX_FP32"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        result = subprocess.run(
+            ["/usr/bin/bash", str(script), *args],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+    assert result.returncode != 0 and not marker.exists() and prefix.exists()
+    assert (tmp_path / "execution-order").read_text().splitlines() == ["OLD"]
+    assert len(tuple(prefix.parent.glob(".embedding-index-prepublication-*"))) == 1
+    private = next((tmp_path / "opt/eom").glob(".embedding-index-install-*"))
+    assert (private / "phase-receipt").read_text().endswith("BEFORE_OLD_PREFIX_BYTES_AUDIT\n")
+    receipt = private / "prefix-bytes-audit.receipt"
+    assert receipt.exists() and receipt.stat().st_size <= 129
+    assert "PREFIX_AUDIT_FAILED" in result.stderr or "AUDIT_RECEIPT_INVALID" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "fault",
+    ["old13", "old16", "missing", "symlink", "oversized", "bad_sha", "input_sha", "leaf_sha"],
+)
+def test_missing_or_changed_audit_intake_never_runs_old_or_new(tmp_path: Path, fault: str) -> None:
+    script, prefix, args, marker = _synthetic_shell(tmp_path)
+    source = Path(args[14])
+    if fault == "old13":
+        del args[14:17]
+    elif fault == "old16":
+        del args[14:17]
+        args.extend(["/tmp/eom-old2", "/tmp/eom-old3", "/tmp/eom-old4"])
+    elif fault == "missing":
+        source.unlink()
+    elif fault == "symlink":
+        target = source.with_name("original.json")
+        source.rename(target)
+        source.symlink_to(target)
+    elif fault == "oversized":
+        source.write_bytes(b"x" * (128 * 1024 + 1))
+    elif fault == "bad_sha":
+        args[15] = "approved"
+    elif fault == "input_sha":
+        args[15] = "0" * 64
+    else:
+        args[16] = "0" * 64
+    with tempfile.TemporaryDirectory(prefix="eom-index-source-") as temporary:
+        args[-1] = temporary
+        args[2] = subprocess.run(
+            ["/usr/bin/bash", str(script), "fingerprint", "CPU_INDEX_FP32"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        result = subprocess.run(
+            ["/usr/bin/bash", str(script), *args],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    assert result.returncode != 0 and prefix.exists() and not marker.exists()
+    assert not (tmp_path / "execution-order").exists()
+    assert not tuple(prefix.parent.glob(".embedding-index-prepublication-*"))
+    if fault not in {"input_sha", "leaf_sha"}:
+        assert not tuple(prefix.parent.glob(".embedding-index-runtime-*"))
+    else:
+        private = next((tmp_path / "opt/eom").glob(".embedding-index-install-*"))
+        assert (private / "phase-receipt").read_text().endswith("AUDIT_INPUT_COPY\n")
+        assert (private / "prefix-audit-input.json").exists()
+        assert len(tuple(prefix.parent.glob(".embedding-index-runtime-*"))) == 1
+
+
+@pytest.mark.parametrize(
+    "fault", ["module_missing", "module_oversized", "old_missing", "old_writable"]
+)
+def test_required_source_snapshot_and_old_bootstrap_fail_before_prefix_replacement(
+    tmp_path: Path, fault: str
+) -> None:
+    script, prefix, args, marker = _synthetic_shell(tmp_path)
+    if fault.startswith("module"):
+        snapshot = tmp_path / "source-snapshot"
+        members = [
+            "scripts/embedding/_install_experiment_snapshot.py",
+            "scripts/embedding/admit_index_runtime.py",
+            *(
+                "infra/conda/" + name
+                for name in (
+                    "eom-embedding-protected-runtime.requirements.proposal.lock",
+                    "eom-embedding-index-cpu.requirements.proposal.lock",
+                    "eom-embedding-cuda.requirements.proposal.lock",
+                )
+            ),
+            "scripts/embedding/common-numeric-runtime-wheels.lock",
+            "scripts/embedding/cuda-runtime-wheels.lock",
+            *(
+                "services/catalog_service/eom_catalog_service/" + name
+                for name in (
+                    "__init__.py",
+                    "embedding_runtime_files.py",
+                    "embedding_runtime_wheel_closure.py",
+                    "embedding_runtime_host_closure.py",
+                    "embedding_conda_runtime_closure.py",
+                    "embedding_runtime_prefix_closure.py",
+                )
+            ),
+        ]
+        for relative in members:
+            target = snapshot / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((ROOT / relative).read_bytes())
+        module = (
+            snapshot
+            / "services/catalog_service/eom_catalog_service/embedding_runtime_prefix_closure.py"
+        )
+        if fault == "module_missing":
+            module.unlink()
+        else:
+            module.write_bytes(b"x" * (1024 * 1024 + 1))
+        script.write_text(
+            script.read_text().replace("REPOSITORY=/home/eom/EOM", f"REPOSITORY={snapshot}")
+        )
+    else:
+        old = prefix.parent / "eom-embedding-experiment/bin/python3.12"
+        if fault == "old_missing":
+            old.unlink()
+        else:
+            old.chmod(0o775)
+    with tempfile.TemporaryDirectory(prefix="eom-index-source-") as temporary:
+        args[-1] = temporary
+        args[2] = subprocess.run(
+            ["/usr/bin/bash", str(script), "fingerprint", "CPU_INDEX_FP32"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        result = subprocess.run(
+            ["/usr/bin/bash", str(script), *args],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    assert result.returncode != 0 and prefix.exists() and not marker.exists()
+    assert not (tmp_path / "execution-order").exists()
+    assert not tuple(prefix.parent.glob(".embedding-index-prepublication-*"))
+    assert len(tuple(prefix.parent.glob(".embedding-index-runtime-*"))) == 1
+    private = next((tmp_path / "opt/eom").glob(".embedding-index-install-*"))
+    assert (private / "phase-receipt").read_text().endswith("AUDIT_INPUT_COPY\n")
+    assert "AUDIT_MODULE_INVALID" in result.stderr or "OLD_BOOTSTRAP_INVALID" in result.stderr
 
 
 def test_interrupted_prefix_replacement_retains_backup_and_quarantine_without_execution(
@@ -691,11 +963,18 @@ def test_new_shell_fixed_boundaries_and_legacy_shell_bytes_are_preserved() -> No
     subprocess.run(["/usr/bin/bash", "-n", str(SHELL)], check=True)
     text = SHELL.read_text()
     assert '"$PREFIX/bin/python3.12" -I -S -B' in text
+    assert text.count('"$PREFIX/bin/python3.12" -I -S -B') == 1
     assert (
         text.index("TREE_HASH_MISMATCH")
         < text.index("RUNTIME_LINK_ESCAPE")
+        < text.index('"$OLD_PREFIX/bin/python3.12" -I -S -B')
+        < text.index("record_phase PREFIX_BYTES_AUDITED_NOT_ADMITTED")
         < text.index('"$PREFIX/bin/python3.12" -I -S -B')
     )
+    assert "OLD_PREFIX=/opt/eom/conda/envs/eom-embedding-experiment" in text
+    assert "$# -ge 16 && $# -le 19" in text and "$# -ge 13" not in text
+    assert "set -o noclobber" in text and "head -c 129" in text
+    assert "PYTHONPATH" in text and "env -i" in text and "OS/package" in text
 
 
 def test_synthetic_publication_lock_refuses_concurrent_process_without_overwrite(
