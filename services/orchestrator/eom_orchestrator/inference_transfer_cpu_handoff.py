@@ -296,6 +296,132 @@ def create_protected_cpu_handoff_member(
     _create_root_member(directory, name, payload, owner_gid=owner_gid, mode=mode)
 
 
+def write_protected_cpu_owner_member(
+    directory: int, name: str, payload: bytes, *, owner: CpuHandoffIdentity
+) -> None:
+    """Private local staging: exclusive creation or exact same-byte replay, never repair."""
+    if (
+        os.geteuid() != owner.owner_uid
+        or not name
+        or name in {".", ".."}
+        or any(char in name for char in "/\\\x00")
+        or type(payload) is not bytes
+        or len(payload) > MAX_EXPERIMENT_MEMBER_BYTES
+    ):
+        raise CpuHandoffError("NATIVE_CPU_OWNER_MEMBER_INVALID")
+    try:
+        descriptor = os.open(
+            name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+            0o600,
+            dir_fd=directory,
+        )
+    except FileExistsError:
+        existing = read_protected_cpu_handoff_member(
+            directory, name, uid=owner.owner_uid, gid=owner.owner_gid, mode=0o600
+        )
+        if existing != payload:
+            raise CpuHandoffError("NATIVE_CPU_OWNER_MEMBER_CONFLICT") from None
+        return
+    try:
+        os.fchmod(descriptor, 0o600)
+        remaining = memoryview(payload)
+        while remaining:
+            count = os.write(descriptor, remaining)
+            if count <= 0:
+                raise CpuHandoffError("NATIVE_CPU_OWNER_WRITE_FAILED")
+            remaining = remaining[count:]
+        os.fsync(descriptor)
+        actual = os.fstat(descriptor)
+        named = os.stat(name, dir_fd=directory, follow_symlinks=False)
+        if (
+            not stat.S_ISREG(actual.st_mode)
+            or actual.st_uid != owner.owner_uid
+            or actual.st_gid != owner.owner_gid
+            or actual.st_nlink != 1
+            or stat.S_IMODE(actual.st_mode) != 0o600
+            or actual.st_size != len(payload)
+            or (actual.st_dev, actual.st_ino) != (named.st_dev, named.st_ino)
+        ):
+            raise CpuHandoffError("NATIVE_CPU_OWNER_WRITE_FAILED")
+        os.fsync(directory)
+    finally:
+        os.close(descriptor)
+
+
+def ensure_protected_cpu_owner_workspace(
+    root: Path, execution_id: str, *, owner: CpuHandoffIdentity
+) -> Path:
+    """Create one private native workspace below a controller-selected fixed root."""
+    if (
+        os.geteuid() != owner.owner_uid
+        or type(execution_id) is not str
+        or re.fullmatch(r"[0-9a-f]{32}", execution_id, re.ASCII) is None
+    ):
+        raise CpuHandoffError("NATIVE_CPU_OWNER_WORKSPACE_INVALID")
+    with protected_cpu_handoff_directory(
+        root, owner=owner, uid=owner.owner_uid, gid=owner.owner_gid, mode=0o700
+    ) as parent:
+        try:
+            os.mkdir(execution_id, mode=0o700, dir_fd=parent)
+            os.fsync(parent)
+        except FileExistsError:
+            pass
+    workspace = root / execution_id
+    with protected_cpu_handoff_directory(
+        workspace, owner=owner, uid=owner.owner_uid, gid=owner.owner_gid, mode=0o700
+    ):
+        pass
+    return workspace
+
+
+def create_native_cpu_descriptor_handoff(
+    runtime_root: Path, execution_id: str, input_bytes: bytes, *, owner: CpuHandoffIdentity
+) -> None:
+    """Root-only exclusive input/result/binary descriptor files for INDEX or QUERY.
+
+    Caller first validates its purpose-specific frozen input and current launch
+    marker. This shared filesystem primitive is neither permission nor launch.
+    """
+    if os.geteuid() != 0:
+        raise CpuHandoffError("NATIVE_CPU_ROOT_REQUIRED")
+    if (
+        type(execution_id) is not str
+        or re.fullmatch(r"[0-9a-f]{32}", execution_id, re.ASCII) is None
+    ):
+        raise CpuHandoffError("NATIVE_CPU_EXECUTION_ID_INVALID")
+    if type(input_bytes) is not bytes or not 1 <= len(input_bytes) <= MAX_EXPERIMENT_MEMBER_BYTES:
+        raise CpuHandoffError("NATIVE_CPU_INPUT_INVALID")
+    with protected_cpu_handoff_directory(
+        runtime_root, owner=owner, uid=0, gid=owner.owner_gid, mode=0o750
+    ) as parent:
+        try:
+            os.mkdir(execution_id, mode=0o750, dir_fd=parent)
+        except FileExistsError:
+            raise CpuHandoffError("NATIVE_CPU_HANDOFF_EXISTS") from None
+        directory = os.open(
+            execution_id, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=parent
+        )
+        try:
+            os.fchown(directory, 0, owner.owner_gid)
+            os.fchmod(directory, 0o750)
+            create_protected_cpu_handoff_member(
+                directory, "input.json", input_bytes, owner_gid=owner.owner_gid, mode=0o600
+            )
+            for name in ("result.json", "vectors.f32"):
+                create_protected_cpu_handoff_member(
+                    directory, name, b"", owner_gid=owner.owner_gid, mode=0o640
+                )
+            os.fsync(directory)
+            named = os.stat(execution_id, dir_fd=parent, follow_symlinks=False)
+            actual = os.fstat(directory)
+            if _directory_identity(named) != _directory_identity(actual):
+                raise CpuHandoffError("NATIVE_CPU_ROOT_DIRECTORY_CHANGED")
+            os.fsync(parent)
+        finally:
+            os.close(directory)
+
+
 def prepare_cpu_handoff(execution_id: str) -> None:
     """Root-only fixed prepare unit; partial/existing handoffs are never overwritten."""
     execution_id = validate_cpu_execution_id(execution_id)

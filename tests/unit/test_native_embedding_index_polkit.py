@@ -12,6 +12,7 @@ import pytest
 RULES = Path(__file__).resolve().parents[2] / "infra/polkit"
 INSTANCE = "a" * 32
 INDEX = f"eom-embedding-native-cpu-index@{INSTANCE}.service"
+QUERY = INDEX.replace("cpu-index", "cpu-query")
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node is unavailable")
@@ -19,6 +20,28 @@ INDEX = f"eom-embedding-native-cpu-index@{INSTANCE}.service"
     ("user", "action", "unit", "verb", "expected"),
     (
         ("eom-workflow-runner", "manage-units", INDEX, "start", "yes"),
+        ("eom-workflow-runner", "manage-units", QUERY, "start", "yes"),
+        ("eom-workflow-runner", "manage-units", QUERY, "restart", "no"),
+        ("eom-workflow-runner", "manage-units", QUERY, "stop", "no"),
+        ("eom-workflow-runner", "manage-units", QUERY, "enable", "no"),
+        (
+            "eom-workflow-runner",
+            "manage-units",
+            QUERY.replace("cpu-query", "query-prepare"),
+            "start",
+            "no",
+        ),
+        ("eom-api", "manage-units", QUERY, "start", "no"),
+        ("eom-embedding-index-cpu", "manage-units", QUERY, "start", "no"),
+        ("eom", "manage-units", QUERY, "start", "no"),
+        ("eom-workflow-runner", "manage-units", QUERY + "\n", "start", "no"),
+        (
+            "eom-workflow-runner",
+            "manage-units",
+            QUERY.replace(INSTANCE, INSTANCE.upper()),
+            "start",
+            "no",
+        ),
         ("eom-workflow-runner", "manage-units", INDEX, "restart", "no"),
         ("eom-workflow-runner", "manage-units", INDEX, "stop", "no"),
         ("eom-workflow-runner", "manage-units", INDEX, "enable", "no"),
@@ -44,7 +67,7 @@ INDEX = f"eom-embedding-native-cpu-index@{INSTANCE}.service"
             "manage-units",
             INDEX.replace("cpu-index", "cpu-query"),
             "start",
-            "no",
+            "yes",
         ),
         ("eom-workflow-runner", "manage-units", "unrelated.service", "start", "no"),
         ("eom", "manage-units", INDEX, "start", "no"),

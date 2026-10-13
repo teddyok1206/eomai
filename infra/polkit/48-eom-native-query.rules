@@ -1,0 +1,17 @@
+// Fixed QUERY start only; install after all native controllers use shared CPU capacity.
+// Current source/session/command authorization remains with the actual application owner.
+polkit.addRule(function(action, subject) {
+    if (action.id !== "org.freedesktop.systemd1.manage-units") {
+        return polkit.Result.NOT_HANDLED;
+    }
+    var unit = action.lookup("unit");
+    var match = typeof unit === "string" &&
+        /^eom-embedding-native-cpu-query@[0-9a-f]{32}\.service$/.exec(unit);
+    if (match && match[0] === unit) {
+        if (subject.user === "eom-workflow-runner" && action.lookup("verb") === "start") {
+            return polkit.Result.YES;
+        }
+        return polkit.Result.NO;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

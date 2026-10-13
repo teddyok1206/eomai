@@ -2352,3 +2352,32 @@ source Alembic single head0054와 임시 SQLite 실제 SQL/144-case CHECK를 확
 인증 후 실제 seed/delta/reuse, 자동 service reconciliation, CPU/GPU/default gate도 원래
 범위대로 남긴다. `GOAL=ACTIVE`, `QUERY_QUEUE_LIFECYCLE=SOURCE_PASS`,
 `QUERY_PURPOSE_UNIT=NOT_ACTIVE`, `REAL_SEED_DELTA=PENDING`.
+
+## 2026-10-13 23:52 UTC — 고정 CPU QUERY 물리 실행 어댑터 source
+
+[설계 기록](../architecture/REFERENCE_QUERY_OWNER_COMPOSITION.md)의 후속11개 결정에 따라
+QUERY의 기존5-schema staging·root3-descriptor handoff·typed result/vector 검증과 고정
+unit launcher를 구현했다. INDEX와 공통 파일/capacity/실행 함수를 사용하며 원래 lock
+inode/location을 유지한다. actor/lease token은 numerical worker에 전달하지 않는다.
+
+실제 읽기 전용 systemd 조회에서 기존 INDEX prepare의 per-template slice를 확인했다.
+main의 system.slice만 검사하던 경로를 두 고정 kernel 위치 검사로 고쳤다. 실행기 종료 후
+남은 prepare/main·자식 프로세스, missing membership와 absent group의 구분, symlink/잘못된
+kernel 소유자, FD 누수와 timeout/변경된 invocation의 재시작 거부를 검증했다. QUERY의 새
+root unit/owner env/정확한 start-only polkit 후보는 아직 설치하지 않았으며 기존 INDEX unit
+bytes·실제 CPU 설치·old49/50 rule·운영9개 서비스는 변경하지 않았다.
+
+최종50-suite **1,263 PASS**,119.95s; strict mypy8·Ruff/format14·diff PASS다.
+새 QUERY2개 unit의 systemd-analyze verify도 진단 없이 PASS이며, 현재 실제 kernel/systemd
+native occupancy read는 PASS다. 이것은 protected QUERY/모델 실행이 아니다. 앞1,256 PASS
+이후 실제 slice 차이를 발견해 보강하고 전체를 다시 돌렸으며 중간 결과와 합산하지 않는다.
+root UID·unit observation·수치 backend는 명시적 합성 seam이다. 실제 임시 파일/flock/Node
+policy 평가는 그것들과 구분한다. 로그는 동일 임시 workspace의
+`query-physical-final-regression.log`, `query-physical-mypy-final.log`,
+`query-physical-systemd-verify-reviewed.log`, `query-physical-actual-cgroup-read.log`에 보존했다.
+
+이번 단계의 auth/Job/모델/GPU/DB/NAS production mutation은0이며 기존 유한 canary 입력창을
+유지했다. 다음은 실제 QUERY Job/checkpoint/producer·정본 영수증 완료 연결이다. 그 다음
+소비자/자동 service reconciliation과 실제 seed/delta/reuse·CPU/GPU/default gate도 원래
+범위대로 남긴다. `GOAL=ACTIVE`, `QUERY_PHYSICAL_ADAPTER=SOURCE_PASS`,
+`QUERY_UNIT_INSTALLATION=NOT_PERFORMED`, `GENUINE_QUERY_CONSUMER_READ=NOT_ACTIVE`.

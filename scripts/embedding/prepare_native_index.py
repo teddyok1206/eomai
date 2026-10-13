@@ -1,4 +1,4 @@
-"""Protected owner-release entrypoint for the fixed native INDEX root prepare unit."""
+"""Protected owner-release bootstrap for fixed INDEX and explicit QUERY root prepare."""
 
 from __future__ import annotations
 
@@ -27,7 +27,13 @@ def main() -> int:
         if not stat.S_ISDIR(value.st_mode) or value.st_uid != 0 or value.st_mode & 0o022:
             return 1
         sys.path.insert(0, str(overlay))
-        from eom_orchestrator.native_embedding_index_handoff import main as prepare
+        if len(sys.argv) == 2:
+            from eom_orchestrator.native_embedding_index_handoff import main as prepare
+        elif len(sys.argv) == 3 and sys.argv[1] == "QUERY":
+            sys.argv.pop(1)
+            from eom_orchestrator.native_embedding_query_handoff import main as prepare
+        else:
+            return 1
 
         return prepare()
     except Exception:

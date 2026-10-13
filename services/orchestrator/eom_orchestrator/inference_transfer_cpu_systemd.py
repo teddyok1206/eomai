@@ -211,12 +211,13 @@ def require_fixed_cpu_unit_template(name: str, expected_sha256: str) -> None:
 
 
 def require_native_cpu_environment_file(path: Path, expected_sha256: str) -> None:
-    """Only the two owner-selected, non-secret native installation files are accepted."""
+    """Only fixed owner-selected, non-secret numerical/INDEX/QUERY files are accepted."""
     if (
         path
         not in {
             Path("/etc/eom/embedding-native-cpu.env"),
             Path("/etc/eom/embedding-native-owner.env"),
+            Path("/etc/eom/embedding-native-query-owner.env"),
         }
         or re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None
     ):

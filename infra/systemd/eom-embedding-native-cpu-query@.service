@@ -1,5 +1,7 @@
 [Unit]
 Description=EOM fixed native CPU QUERY execution %i
+Requires=eom-embedding-native-query-prepare@%i.service
+After=eom-embedding-native-query-prepare@%i.service
 StartLimitIntervalSec=infinity
 StartLimitBurst=1
 

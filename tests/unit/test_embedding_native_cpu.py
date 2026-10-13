@@ -265,13 +265,11 @@ def test_fixed_unit_templates_share_isolation_but_keep_purpose_and_descriptors_s
             not {"ReadWritePaths", "SupplementaryGroups", "WantedBy", "ExecStartPre"}
             & values.keys()
         )
-        if purpose == "index":
-            assert values["Requires"] == ["eom-embedding-native-index-prepare@%i.service"]
-            assert values["After"] == ["eom-embedding-native-index-prepare@%i.service"]
-            source = source.replace("Requires=eom-embedding-native-index-prepare@%i.service\n", "")
-            source = source.replace("After=eom-embedding-native-index-prepare@%i.service\n", "")
-        else:
-            assert "Requires" not in values and "After" not in values
+        prepare = f"eom-embedding-native-{purpose}-prepare@%i.service"
+        assert values["Requires"] == [prepare]
+        assert values["After"] == [prepare]
+        source = source.replace(f"Requires={prepare}\n", "")
+        source = source.replace(f"After={prepare}\n", "")
         sources.append(
             source.replace(purpose.upper(), "PURPOSE").replace(
                 f"native-{purpose}/%i/", "native-PURPOSE/%i/"

@@ -6,7 +6,6 @@ import argparse
 import json
 import os
 import re
-import stat
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -27,11 +26,14 @@ from eom_workflow.local_embedding_encoding_job import (
 )
 
 from eom_orchestrator.inference_transfer_cpu_handoff import (
+    CpuHandoffError,
     CpuHandoffIdentity,
-    create_protected_cpu_handoff_member,
+    create_native_cpu_descriptor_handoff,
+    ensure_protected_cpu_owner_workspace,
     fixed_owner_identity,
     protected_cpu_handoff_directory,
     read_protected_cpu_handoff_member,
+    write_protected_cpu_owner_member,
 )
 
 OWNER_ROOT = Path("/var/lib/eom-workflow-runner/incremental-embeddings/index")
@@ -113,65 +115,16 @@ def _owner() -> CpuHandoffIdentity:
 def _write_owner_member(
     directory: int, name: str, payload: bytes, owner: CpuHandoffIdentity
 ) -> None:
-    """Same exact bytes may replay; partial or changed files never get overwritten."""
     try:
-        descriptor = os.open(
-            name,
-            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
-            0o600,
-            dir_fd=directory,
-        )
-    except FileExistsError:
-        existing = read_protected_cpu_handoff_member(
-            directory, name, uid=owner.owner_uid, gid=owner.owner_gid, mode=0o600
-        )
-        if existing != payload:
-            raise NativeIndexHandoffError("NATIVE_INDEX_OWNER_MEMBER_CONFLICT") from None
-        return
-    try:
-        os.fchmod(descriptor, 0o600)
-        remaining = memoryview(payload)
-        while remaining:
-            count = os.write(descriptor, remaining)
-            if count <= 0:
-                raise NativeIndexHandoffError("NATIVE_INDEX_OWNER_WRITE_FAILED")
-            remaining = remaining[count:]
-        os.fsync(descriptor)
-        actual = os.fstat(descriptor)
-        named = os.stat(name, dir_fd=directory, follow_symlinks=False)
-        if (
-            not stat.S_ISREG(actual.st_mode)
-            or actual.st_uid != owner.owner_uid
-            or actual.st_gid != owner.owner_gid
-            or actual.st_nlink != 1
-            or stat.S_IMODE(actual.st_mode) != 0o600
-            or actual.st_size != len(payload)
-            or (actual.st_dev, actual.st_ino) != (named.st_dev, named.st_ino)
-        ):
-            raise NativeIndexHandoffError("NATIVE_INDEX_OWNER_WRITE_FAILED")
-        os.fsync(directory)
-    finally:
-        os.close(descriptor)
+        write_protected_cpu_owner_member(directory, name, payload, owner=owner)
+    except CpuHandoffError as error:
+        raise NativeIndexHandoffError(error.code.replace("NATIVE_CPU_", "NATIVE_INDEX_")) from None
 
 
 def ensure_native_index_owner_workspace(execution_id: str) -> Path:
-    """Durable fixed owner-local commit workspace, including a borrowed-only execution."""
+    """Durable owner-local workspace; canonical bytes still belong to Artifact storage."""
     execution_id = validate_native_index_execution_id(execution_id)
-    owner = _owner()
-    with protected_cpu_handoff_directory(
-        OWNER_ROOT, owner=owner, uid=owner.owner_uid, gid=owner.owner_gid, mode=0o700
-    ) as parent:
-        try:
-            os.mkdir(execution_id, mode=0o700, dir_fd=parent)
-            os.fsync(parent)
-        except FileExistsError:
-            pass
-    workspace = OWNER_ROOT / execution_id
-    with protected_cpu_handoff_directory(
-        workspace, owner=owner, uid=owner.owner_uid, gid=owner.owner_gid, mode=0o700
-    ):
-        pass
-    return workspace
+    return ensure_protected_cpu_owner_workspace(OWNER_ROOT, execution_id, owner=_owner())
 
 
 def stage_native_index(prepared: PreparedNativeIndex) -> None:
@@ -253,46 +206,15 @@ def prepare_native_index_handoff(execution_id: str) -> None:
         )
         if marker != prepared.association.association_sha256.encode("ascii"):
             raise NativeIndexHandoffError("NATIVE_INDEX_LAUNCH_MARKER_INVALID")
-    with protected_cpu_handoff_directory(
-        RUNTIME_ROOT, owner=owner, uid=0, gid=owner.owner_gid, mode=0o750
-    ) as parent:
-        try:
-            os.mkdir(prepared.execution_id, mode=0o750, dir_fd=parent)
-        except FileExistsError:
-            raise NativeIndexHandoffError("NATIVE_INDEX_HANDOFF_EXISTS") from None
-        directory = os.open(
+    try:
+        create_native_cpu_descriptor_handoff(
+            RUNTIME_ROOT,
             prepared.execution_id,
-            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
-            dir_fd=parent,
+            canonical_json_bytes(prepared.request.model_dump(mode="json")),
+            owner=owner,
         )
-        try:
-            os.fchown(directory, 0, owner.owner_gid)
-            os.fchmod(directory, 0o750)
-            create_protected_cpu_handoff_member(
-                directory,
-                "input.json",
-                canonical_json_bytes(prepared.request.model_dump(mode="json")),
-                owner_gid=owner.owner_gid,
-                mode=0o600,
-            )
-            for name in ("result.json", "vectors.f32"):
-                create_protected_cpu_handoff_member(
-                    directory, name, b"", owner_gid=owner.owner_gid, mode=0o640
-                )
-            os.fsync(directory)
-            named = os.stat(prepared.execution_id, dir_fd=parent, follow_symlinks=False)
-            actual = os.fstat(directory)
-            if (named.st_dev, named.st_ino, named.st_uid, named.st_gid, named.st_mode) != (
-                actual.st_dev,
-                actual.st_ino,
-                actual.st_uid,
-                actual.st_gid,
-                actual.st_mode,
-            ):
-                raise NativeIndexHandoffError("NATIVE_INDEX_ROOT_DIRECTORY_CHANGED")
-            os.fsync(parent)
-        finally:
-            os.close(directory)
+    except CpuHandoffError as error:
+        raise NativeIndexHandoffError(error.code.replace("NATIVE_CPU_", "NATIVE_INDEX_")) from None
 
 
 def materialize_native_index_output(prepared: PreparedNativeIndex) -> IncrementalEmbeddingResult:

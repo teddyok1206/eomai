@@ -230,3 +230,87 @@ callback assertions were corrected and the final complete gate was rerun; source
 guards were not weakened. Earlier failure logs remain in the temporary workspace.
 At23:23 UTC all9 actual long-running services were active, including the installed
 `eom-hwpx-application-runner`; no service, model, policy or DB write was performed.
+
+## Fixed CPU QUERY handoff and invocation — next implementation decision
+
+1. Responsibility: Orchestrator's fixed numerical launch/handoff adapters extend
+   the existing CPU mechanism to QUERY; worker still receives only descriptor-bound
+   numerical input. Runner's current source/command owner remains upstream.
+2. Canonical source: official current preparation and its exact native input are
+   selected before staging. Owner-local/root-handoff files are temporary explicit
+   materialization, never a source grant, database or canonical Artifact.
+3. Identity: one original native Job/execution suffix, exact QUERY request/hash,
+   workflow request, policy, bundle and launch association; unit invocation and
+   Artifact producer identity are separate. No lease token reaches the worker.
+4. Resolution: reparse the five existing frozen schemas and validate their exact
+   closure. Root prepares only from private UID990-owned files after a hash-bound
+   launch marker. Worker sees input/result/binary descriptors, not actor controls.
+5. Access: keyed workspace/exact unit lookup, fixed bounded file reads, one capacity
+   lock and bounded active-unit/cgroup inspection. Never restart a nonfresh handle
+   or treat an observation timeout as proof of nonexecution.
+6. Structures: keep the same existing INDEX CPU-capacity lock path for INDEX/QUERY,
+   fixed purpose→unit-pair mapping, immutable typed prepared values and file sets.
+   No queue/table/registry/framework/dependency or numerical implementation change.
+7. Complexity: O(1) bounded input/output plus O(U) active native-unit/cgroup checks;
+   U is bounded by the one-active-launch policy. No re-encoding DOCUMENT vectors.
+8. Concurrency: hold the shared flock through prepare/run/terminal readback. After
+   controller death inspect both purposes' prepare/main units and surviving cgroups
+   before reuse. No SQL root may span any of this. Publication reauthorizes later.
+9. Ownership: share mechanical file, capacity and exact-invocation rules; keep
+   INDEX/QUERY schema/result checks separate. Root prepare cannot read model/DB/NAS.
+   The numerical worker keeps the existing frozen CPU installation and isolation.
+10. Failure/replay: exclusive files and same-byte replay only; partial/conflicting
+    bytes, missing seals or changed invocations fail explicitly. Known failure and
+    uncertainty retain original identity; neither permits a new inference identity.
+11. Simpler alternative: a separate QUERY lock or duplicated launcher would permit
+    overlap after owner crash and drift in recovery rules. Three small callbacks
+    in one fixed-purpose execution function share the actual two use cases without
+    introducing a general worker framework or changing released wire contracts.
+
+Deployment is a separate gate: no QUERY unit/polkit activation while an old INDEX
+controller may use its INDEX-only surviving-unit check. Quiesce/update controllers
+to the shared guard first. The existing finite INDEX canary and frozen CPU prefix
+are not replaced/restarted here. Actual QUERY Job/checkpoint/producer closure and
+the stronger consumer read remain required even after this physical adapter exists.
+
+## Fixed CPU physical adapter source — 2026-10-13 23:52 UTC
+
+- Added separately typed QUERY staging/materialization and fixed QUERY launcher.
+  The five existing request/policy/bundle/association/input schemas are reparsed;
+  native Job suffix, paired spaces and exact fixed CPU resource profile are checked.
+  Only source-neutral numerical input reaches the worker. Shared no-clobber private
+  writes/root descriptor creation retain mode/inode/epoch/bounded-read checks.
+- INDEX and QUERY use one fixed CPU execution function and the original INDEX lock
+  path. One start or exact terminal reuse; timeout/nonfresh/changed invocation is
+  uncertainty, never another execution. Both purposes' prepare/main units and
+  surviving cgroups are inspected after a controller crash.
+- Actual read-only systemd metadata revealed the installed INDEX prepare uses its
+  default per-template slice, unlike the main's explicit system.slice. The guard
+  now checks both fixed kernel locations, closes FDs on refusal, rejects symlinked
+  parents/missing kernel base and distinguishes an absent terminal group from an
+  unobservable membership file. Frozen INDEX template bytes remain unchanged.
+- QUERY now has explicit root-prepare dependency and system.slice, separate pinned
+  owner environment and exact source-only polkit start exception. The protected
+  bootstrap preserves legacy INDEX arity and adds only literal QUERY. Worker/API
+  start/restart/stop/enable, prepare-unit and malformed-suffix requests are denied.
+  No new rule/template/environment is installed or activated by these source edits.
+
+Final50-suite **1,263 PASS**,119.95s; strict mypy8 source modules, Ruff/format14 and
+diff PASS. systemd-analyze verify of the new prepare/query templates PASS with no
+diagnostics. A separate actual kernel/systemd inventory read PASS confirms current
+native capacity is quiescent; it performs no lock/launch/auth/model/DB mutation.
+The earlier1,256-pass run missed the real per-template-slice layout; after that
+discovery the additional path/member/FD checks and full regression were rerun.
+Focused72/115/152 and earlier full gates overlap and are not summed.
+
+Temporary file IO/flock and Node-composed polkit evaluation are actual; numerical
+backend/root UID/unit observations in source tests are explicitly synthetic. No
+protected QUERY admission, privileged QUERY probe, genuine model execution, Job,
+Artifact or caller-authorized seed/delta/query is proven here. Existing numerical
+code/installation, all released schemas/admission, INDEX units and installed rules
+remain unchanged. No dependency or DB migration was added in this physical phase.
+
+`QUERY_PHYSICAL_ADAPTER=SOURCE_PASS`, `QUERY_UNIT_INSTALLATION=NOT_PERFORMED`,
+`QUERY_JOB_CANONICAL_COMPLETION=NOT_CONNECTED`, `GENUINE_QUERY_CONSUMER_READ=NOT_ACTIVE`.
+Next is the original native Job/checkpoint/provenance and canonical receipt owner,
+not activation based only on this physical helper. The full original goal remains.

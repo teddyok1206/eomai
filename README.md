@@ -170,6 +170,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | exact pinned index read | SOURCE_PASS; 현재 권한 재확인·일괄 binding 조회·선택된 벡터 읽기 구현, 공통 검색/QUERY 소비는 미활성 |
 | 공통 유사도 context 조립 | SOURCE_PASS; 기출변형용 승인 anchor·3개 독립 view·현재 권한 재확인334 PASS, 실제 QUERY 실행·소비자 연결은 미활성 |
 | genuine QUERY 입력·encoder/handoff·실행 계약 | SOURCE_PASS; 현재 자료·정본4파일과 기존 큐의 QUERY별 claim/완료 검증 연결. 실제 고정 unit·정본 실행·소비자 조회는 미활성 |
+| 고정 CPU QUERY 실행 어댑터 | SOURCE_PASS; private/root handoff·실제 QUERY codec·INDEX와 공통 capacity/정확한 실행 관찰 구현. QUERY unit/polkit은 미설치, 실행 Job/정본 완료 연결과 실제 계산은 미검증 |
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
 | 인증된 owner/session 전달 | 수신 API 설치·실제 UID990의 provider/process/config/key-metadata 검증 PASS; 실제 사용자 capture·seed는 별도 실행 gate |
 | 현재 사용자·자료의 native 작업 접수 연결 | SOURCE_IMPLEMENTED; 실제 인증 capture→기존 Catalog 검증·계획 재구성·잠금 확인을 연결, 운영 provider/실행기 연결은 미활성 |
@@ -278,6 +279,12 @@ QUERY의 정확한 step/result CHECK만 추가하는0054이며, 운영 DB는0053
 새 protected release context1.3은0053→0054만 허용하고 기존 계약/명령의 의미는 보존합니다.
 이 후속38-suite1,004 PASS·strict type16·lint/format31 PASS입니다. 새 PostgreSQL13개
 사례는 공식 임시 DB 실행 경로에 추가했지만 아직 미실행이며 운영 활성화 증거가 아닙니다.
+이후 고정 CPU QUERY의5개 기존 계약 staging·3-descriptor root 전달·결과 검증을 구현하고
+INDEX와 실행/capacity 처리를 공유했습니다. 실제 systemd의 INDEX prepare가 별도 template
+slice를 쓰는 점도 확인해 두 경로의 잔여 프로세스를 검사합니다.50-suite1,263 PASS,
+strict type8·lint/format14·새 unit verify와 실제 커널의 읽기 전용 점검 PASS입니다.
+새 QUERY unit/권한은 아직 설치하지 않았고 실행 Job/정본 영수증 연결도 남아 있습니다.
+기존 CPU 설치와 INDEX unit, 운영 서비스는 변경하지 않았습니다.
 [QUERY owner 연결 범위](docs/architecture/REFERENCE_QUERY_OWNER_COMPOSITION.md)에 source
 검증과 아직 없는 운영 경계를 구분했습니다. 기존 서비스·CPU 모델 환경은 바꾸지 않았습니다.
 
