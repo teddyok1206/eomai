@@ -1379,3 +1379,42 @@ Artifact store raw `021e905de1555b7fe37613835f130d4621d42456863c340e3b512996e086
 source/wheel/bootstrap input과 actual 전체-prefix 재검증이 필요하다. QUERY admission은
 계속 OFF다. 실제 native owner/unit/seal·seed/delta·consumer·CPU/GPU 실측과 기본 전환은 남았고
 모델/GPU forward0, 성능 NOT_EVALUATED, GPU 기본값 NOT_ACTIVE, 전체 goal ACTIVE다.
+
+## 실제859 후보의 조립·noarch 경로 진단·복구 — 2026-10-13 07:02 UTC
+
+source `8594143bf89bf57d93e2a6454d25c901ac14b6ed`를 private build했다. tar55244800B raw
+`121e242ab2eae4b8888091d4ba696041784cf55e15a814fb8df4e357e7fdbc6a`, wheel3501631B raw
+`ea5f98dbf48f5bc1769639f25ed87ba1e1e1a877b4697b7ad70fa9c5c3d41b83`다. RECORD1462-member,
+canonical retention/read-back/replay/fsync, normal pip canonical 조립 및 public input parser PASS다.
+bootstrap Conda0874와 수치 sourcef667은 정확히 pin했다. CPU input1a2b5570/CUDA e3f8544d,
+fingerprintCPU615510ba/CUDA0e446462다. 기존 runtime/admission/운영 서비스는 바꾸지 않았다.
+
+최초 실제 게시 시도는 QUARANTINE_COPY에서 RUNTIME_MODE_INVALID로 실패했다. Root의 조립
+단계가 writable 파일만 정리하고 새 directory775를 놓친 invocation 결함이었다. fixed prefix
+교체·OLD byte audit·NEW 실행 이전이었다. 원 failure/quarantine은 보존했다. 기존 UID-preserving
+normalization script를 그대로 적용해 파일과 directory를 모두 정리했으며 bytes/metadata
+rewrite나 owner 권한 변경은 없었다. 재실행 wrapper는 별도 raw
+`f1785b50fd9608e4bed8ae8d0ee2ba910c9b694cf0fd1369e9373bc71996f330`과 새 logs로 기록했다.
+
+재검사에서는 앞선 URI/identity/source-index 검사를 통과했지만 `_metadata_records`1114에서
+METADATA_INVALID로 멈췄다. PRIVATE `/opt/eom/.embedding-index-install-uHawFHDa`, phase
+BEFORE_OLD_PREFIX_BYTES_AUDIT·빈 receipt를 보존했다. 원 main을 그대로 호출한 bounded
+readonly trace raw874a5923와 별도 selected metadata diagnostic raw
+`79421e4ba368e6ac43c30c847d36b8bbf3bdddb3fa24ab59988c5a7d824e95ec`은 원 exit1을 유지했다.
+일반 locals/내용/log가 아니라 고정 Conda 함수의 package/member 두 값만 제한 출력했다:
+pip의 raw `site-packages/pip-26.1.2.dist-info/INSTALLER`였다. 모델/worker 출력은 읽지 않았다.
+
+추가 public metadata readonly 관측은 pip865 rows 중468 raw source paths와 이미 mapped
+generated entries를 확인했다. 기존 noarch mapping을 적용하면 installed files 집합과 정확히
+일치하고 raw/mapped/listed 각각 unique다. synthetic fixture의 uniformly mapped metadata가
+실제 mixed 표현을 놓쳤다. 이것은 whole-prefix PASS가 아니다. 기존 mapper와 검증된 해당
+package ledger 안에서만 처리하고 raw/mapped alias·unknown generated path는 거부한다.
+
+기존 lock/input1a/pub8f/빈 receipt/동일 fingerprint/실제 prefix user 부재와 held/named
+directory identity를 확인한 scoped recovery raw
+`ca3e9e6d72bc3e8dd73c578cc34616646b788cb0f68afec15577b47b7732e737` PASS다. failed bytes는
+`/opt/eom/conda/envs/.embedding-index-failed-CPU_INDEX_FP32-uHawFHDa`에 보존하고 원 developer
+inode를 UID1000/0700로 복구했다. backup MOVED_NOT_DELETED이며 이전 실패들도 유지한다.
+sanitized evidence는 `/tmp/eom-embedding-successor-release.MqQTK0U3`,
+`/tmp/eom-conda-metadata-trace.yhKICJxd`, `/tmp/eom-conda-metadata-detail.AcAYUUXb`에 있다.
+OLD 검사 실패로 NEW/model/GPU0, 실제 CPU/GPU 비교·기본 전환은 미완료이며 goal ACTIVE다.
