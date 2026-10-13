@@ -1218,6 +1218,7 @@ def _audit_installed_conda31(
     )
     rows = _source_rows(source, plan.archives)
     overlay_members: set[Path] = set()
+    overlay_namespace_members: set[Path] = set()
     overlay_wheels: list[VerifiedRuntimeWheelMembers] = []
     overlay_roots: set[Path] = set()
     source_indices: dict[str, dict[str, Any]] = {}
@@ -1242,14 +1243,14 @@ def _audit_installed_conda31(
                 candidate, prefix=prefix, archive_root=archive_root, files=files
             )
             _require(
-                not overlay_members.intersection(verified.installed_members), "OWNERSHIP_CONFLICT"
+                not overlay_members.intersection(verified.all_installed_members),
+                "OWNERSHIP_CONFLICT",
             )
-            overlay_members.update(verified.installed_members)
+            overlay_members.update(verified.all_installed_members)
+            overlay_namespace_members.update(verified.installed_members)
             overlay_wheels.append(verified)
             overlay_roots.update(verified.namespace_roots)
-        files.require_closed_namespaces(
-            overlay_roots, {path for path in overlay_members if path.parent != prefix / "bin"}
-        )
+        files.require_closed_namespaces(overlay_roots, overlay_namespace_members)
         files.verify(_ZSTD_PATH, sha256=_ZSTD_SHA, size=_ZSTD_SIZE, maximum=2 * 1024**2)
         for name, (version, build, filename, _url) in rows.items():
             metadata: dict[str, dict[str, Any]] = {}

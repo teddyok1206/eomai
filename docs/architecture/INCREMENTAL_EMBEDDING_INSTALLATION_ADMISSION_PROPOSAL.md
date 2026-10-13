@@ -1,6 +1,6 @@
 # Native installation admission: same-audit inventory and CPU-first seal
 
-2026-10-13 UTC. PROTOCOL_DRAFT / PHASE_A_B_C_D_SOURCE_ONLY / NOT_ADMITTED.
+2026-10-13 UTC. PROTOCOL_DRAFT / PHASE_A_B_C_D_E_SOURCE_ONLY / NOT_ADMITTED.
 The two adjacent `.schema.proposal.json` documents remain unregistered ROOTLOCAL drafts,
 not worker messages, grants or actual receipts. The additive same-audit local snapshot,
 shared model-free numerical observation and narrow Conda URI/pip noarch representation handling
@@ -443,3 +443,54 @@ OFFLINE_ENCODER `f667e54d...` and runtime-files `a54e7cf5...` remain unchanged. 
 actual eom ownership, not root substitutes. No root, new actual audit/install, model/GPU forward,
 metadata repair, source schema change or runtime grant was performed. Fresh source/bootstrap
 pins and actual owner gates remain root tasks; source regression alone is not admission.
+
+## PhaseE — complete verified wheel-overlay ownership
+
+2026-10-13 UTC. ROOT_APPROVED_SOURCE_PHASE / NOT_INSTALLED / NOT_ADMITTED.
+The retained original audit identified the wheel-owned `bin/wheel` as an overlay survivor;
+root's separate public wheel verification confirmed that exact target is in the verified
+`all_installed_members`, not site-only `installed_members`. Failed bytes/history and recovery
+remain root-owned. This source correction does not reuse that diagnostic as prefix admission.
+
+1. **Boundary:** correct ownership aggregation in the existing Conda owner only.
+2. **Source:** reuse the wheel verifier's closed, byte/RECORD/epoch-checked member sets.
+3. **Identity:** package/archive pins and installed locations remain separate immutable values.
+4. **Ownership:** collect full `all_installed_members`, including verified outside-site scripts/data.
+5. **Namespace:** separately collect site-only `installed_members` with `namespace_roots`; no
+   arbitrary `bin` exclusion or outside-site member is passed as a site namespace expectation.
+6. **Collisions:** reject full-member intersections between overlay owners before aggregation.
+7. **Resolution:** full ownership governs survivor, source-member, cache and link decisions.
+8. **Cost/concurrency:** two bounded sets provide O(members) aggregation/O(1) membership; the
+   existing authoritative audit and final held-file/ancestor epoch boundary are unchanged.
+9. **Checks:** retain archive/source/member SHA, size/type, generated-wrapper/RECORD, obsolete
+   survivor, namespace and epoch checks plus the original digest recipes/signatures/CLI.
+10. **Tests/failure:** public synthetic audits cover overwritten `bin/wheel` and outside-site data,
+    duplicate owners, foreign/obsolete survivors, namespace and byte/type/epoch failures; genuine
+    eom ownership is not a root substitute. Failures never repair installed metadata or retry.
+11. **Alternative:** site-only ownership misses genuine replacements; arbitrary script/data path
+    allowance weakens closure. The already verified complete member set is the smallest reuse.
+
+Only the same Conda owner, its focused tests and this note are owned. No wheel-verifier,
+protocol, numerical, installer or privilege boundary changes. Fresh Conda bootstrap/source/wheel
+and root input pins are required for a new actual audit; source fixtures do not admit a prefix.
+
+### PhaseE source checkpoint
+
+The only production delta collects complete verified wheel members for full ownership/collision
+and the existing survivor/member/cache/link checks, plus a separate site-only set for namespace
+closure. No digest recipe, signature, CLI, wheel verifier or numerical module changed. The
+synthetic full-audit fixture contains original Conda `bin/wheel` and outside-site data replaced by
+verified wrapper/payload bytes, plus obsolete script/data that must remain absent. Public CPU/CUDA
+positives retain exact site INSTALLER/namespace evidence and replay the same complete byte audit.
+Negatives cover two genuinely verified outside-site owners, installed hash/size/link/mode changes,
+original archive SHA, re-pinned archive payload/source-frame mismatch, original source metadata,
+unclaimed outside-site survivors and epoch drift after genuine wheel verification. Existing site
+namespace, bytecode, source/link and installer regressions remain in the focused inventory.
+
+Final explicit API Conda/prefix/wheel/host4 suites625 PASS62.94s, including245 Conda cases;
+Python source/test hashes match suite start/end. API/core strict mypy2 each PASS; API Ruff2/format2
+PASS. Independent read-only source/test peer review found no blocker. The Conda bootstrap SHA is
+`bc76b6bd880e5d0ab35dda79022fecbacaded0d4cd92b461e6c30bc849012c13`.
+Actual eom-owned fixtures are source evidence only; no new actual prefix audit, root/install,
+metadata rewrite, model/GPU forward, Git write, admission seal or default activation occurred.
+Fresh build/bootstrap/input pins and independent actual owner gates remain root-owned tasks.

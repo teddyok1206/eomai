@@ -1472,3 +1472,25 @@ evidence는 `/tmp/eom-embedding-successor-release.ZE7J0ORx`와
 `/tmp/eom-conda-overlay-trace.jQSR6TrU`에 있다. OLD에서 중단했으므로 NEW/model/GPU0,
 benchmark NOT_EVALUATED, GPU default NOT_ACTIVE다. native unit/proof·CPU/CUDA 비교·조건부
 기본 활성화와 실제 incremental/index/consumer 경로는 계속 필요한 goal 후속이며 ACTIVE다.
+
+## 검증된 overlay 전체 소유 범위 수정 독립 gate — 2026-10-13 07:54 UTC
+
+기존 Conda owner만 두 집합으로 분리했다. public wheel verifier가 이미 검증한
+`all_installed_members`는 소유 충돌·잔재·원본 member/cache/link 검사에 사용하고,
+site-only `installed_members`는 namespace closure에 사용한다. 임의 bin/data 예외,
+새 parser/metadata repair·digest recipe·수치 source 변경은 없다. 기존 경계의 혼동을
+고친 것이며 별도 framework는 만들지 않았다.
+
+Agent4-suite625 PASS62.94s 뒤 Root가 frozen3 전체 diff를 읽고 설치/legacy CPU/proof/observer를
+포함한8-suite를 독립 실행했다: **965 PASS69.38s, skip0**, API/core strict2 및 Ruff/format2
+PASS다. source/test raw SHA는 시작/종료와 동일하다. Conda bootstrap raw
+`bc76b6bd880e5d0ab35dda79022fecbacaded0d4cd92b461e6c30bc849012c13`, test raw
+`2ad5ab8380faf462c7b490e3fca77e7005e6cf3d3b1bbae697956359dfd03541`다. 실제처럼 원 Conda의
+bin/wheel·outside-site data를 verified wheel이 대체하는 positive와 두 owner 충돌·원본
+archive/source/metadata·설치 hash/type·obsolete survivor·post-verification epoch negatives를
+검사했다. source fixture PASS는 actual prefix/native admission으로 확대하지 않는다.
+
+새 committed candidate의 actual whole-prefix 검사를 다음으로 수행한다. 앞선 모든 실패
+bytes/private/input/receipt와 scoped recovery를 보존한다. model/GPU forward0, benchmark
+NOT_EVALUATED, GPU default NOT_ACTIVE이며 사용자 요청한 실제 CPU/GPU 비교와 우수 시
+조건부 기본 전환은 상위 설계 §8.1의 필수 goal 후속으로 유지한다. goal ACTIVE다.

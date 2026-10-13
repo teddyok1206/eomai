@@ -25,7 +25,12 @@ from eom_catalog_service.embedding_runtime_files import (
     NumericalRuntimeFileSnapshots,
     ObservedRuntimeMemberBytes,
 )
-from eom_catalog_service.embedding_runtime_wheel_closure import RuntimeWheelArchivePin
+from eom_catalog_service.embedding_runtime_wheel_closure import (
+    RuntimeWheelArchivePin,
+    RuntimeWheelInstallationPin,
+    VerifiedRuntimeWheelMembers,
+    verify_installed_runtime_wheel,
+)
 
 
 def _hash(raw: bytes) -> str:
@@ -653,7 +658,12 @@ class _SyntheticConda:
 
 
 def _fixture(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, profile: str = "CPU_INDEX_FP32"
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    profile: str = "CPU_INDEX_FP32",
+    *,
+    duplicate_overlay_data: bool = False,
+    corrupt_overlay_source_frame: bool = False,
 ) -> _SyntheticConda:
     from tests.unit.embedding_installed_runtime_fixtures import (
         synthetic_console_wrapper,
@@ -708,6 +718,14 @@ def _fixture(
         "lib/python3.12/site-packages/packaging/__pycache__/old.cpython-312.pyc"
     ] = (python_cache(b"obsolete source"), 0o664)
     entries["pip"]["site-packages/pip-26.1.2.dist-info/INSTALLER"] = (b"conda\n", 0o664)
+    entries["wheel"].update(
+        {
+            "bin/wheel": (b"old overwritten wheel script", 0o775),
+            "share/eom-wheel-marker.txt": (b"old overwritten wheel data", 0o664),
+            "bin/obsolete-wheel": (b"obsolete wheel script", 0o775),
+            "share/obsolete-wheel.txt": (b"obsolete wheel data", 0o664),
+        }
+    )
     license_raw = b"bounded original licensing metadata"
     monkeypatch.setattr(
         conda, "_LICENSES", (("zlib", "LICENSE", len(license_raw), _hash(license_raw)[7:]),)
@@ -820,6 +838,10 @@ def _fixture(
                 0o664,
             )
         payload = dict(entries[name])
+        if name == "wheel" and corrupt_overlay_source_frame:
+            old_script, mode = payload["bin/wheel"]
+            assert isinstance(old_script, bytes)
+            payload["bin/wheel"] = (b"X" + old_script[1:], mode)
         if name == "zlib":
             payload["info/licenses/LICENSE"] = (license_raw, 0o664)
         archive_raw = _conda_zip(filename, _tar(info_members), _tar(payload))
@@ -850,6 +872,9 @@ def _fixture(
             + "/METADATA": f"Metadata-Version: 2.1\nName: {name}\nVersion: {version}\n\n".encode(),
             dist + "/WHEEL": b"Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-any\n\n",
         }
+        data_name = f"{name}-{version}.data/data/share/eom-wheel-marker.txt"
+        if name == "wheel" or (name == "packaging" and duplicate_overlay_data):
+            members[data_name] = b"# accepted overlay data never executed\n"
         scripts = ("pip", "pip3") if name == "pip" else (("wheel",) if name == "wheel" else ())
         if scripts:
             members[dist + "/entry_points.txt"] = (
@@ -864,6 +889,8 @@ def _fixture(
         overlay_pins.append(overlay_pin)
         overlays.append((name, version, overlay_pin.sha256[7:]))
         installed = members | {dist + "/INSTALLER": b"pip\n", dist + "/REQUESTED": b""}
+        if data_name in installed:
+            installed["../../../share/eom-wheel-marker.txt"] = installed.pop(data_name)
         for script in scripts:
             installed["../../../bin/" + script] = synthetic_console_wrapper(
                 prefix, (name + ".cli", "main"), "removesuffix"
@@ -916,6 +943,128 @@ def _audit(fixture: _SyntheticConda, fence: _Fence | None = None) -> conda.Conda
         files=NumericalRuntimeFileSnapshots(os.geteuid()),
         tool_admission=fence or _Fence(),
     )
+
+
+@pytest.mark.parametrize("profile", ["CPU_INDEX_FP32", "CUDA_INDEX_FP32"])
+def test_public_audit_owns_verified_scripts_data_and_site_metadata_without_namespace_mixing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, profile: str
+) -> None:
+    fixture = _fixture(tmp_path, monkeypatch, profile)
+    first, second = _audit(fixture), _audit(fixture)
+    assert first == second
+    wheel = next(owner for owner in first.overlay_wheels if owner.name == "wheel")
+    site = fixture.prefix / "lib/python3.12/site-packages"
+    script, data = fixture.prefix / "bin/wheel", fixture.prefix / "share/eom-wheel-marker.txt"
+    installer = site / f"wheel-{wheel.version}.dist-info/INSTALLER"
+    assert {script, data, installer} <= wheel.all_installed_members <= first.installed_members
+    assert data in wheel.archive_payload_members and script not in wheel.archive_payload_members
+    assert installer in wheel.installed_members
+    assert {script, data}.isdisjoint(wheel.installed_members)
+    assert all(
+        path.is_relative_to(site) for path in wheel.installed_members | wheel.namespace_roots
+    )
+    record = json.loads(fixture.records["wheel"].read_bytes())
+    assert {"bin/wheel", "share/eom-wheel-marker.txt"} <= set(record["files"])
+    for target in (script, data):
+        source = next(
+            row
+            for row in record["paths_data"]["paths"]
+            if row["_path"] == str(target.relative_to(fixture.prefix))
+        )
+        assert _hash(target.read_bytes())[7:] != source["sha256"]
+    assert not (fixture.prefix / "bin/obsolete-wheel").exists()
+    assert not (fixture.prefix / "share/obsolete-wheel.txt").exists()
+    assert first.ledger_sha256 == second.ledger_sha256
+
+
+def test_public_audit_rejects_two_verified_owners_of_the_same_outside_site_data(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path, monkeypatch, duplicate_overlay_data=True)
+    with pytest.raises(InstalledRuntimeProofError, match="CONDA_OWNERSHIP_CONFLICT"):
+        _audit(fixture)
+
+
+@pytest.mark.parametrize("member", ["bin/wheel", "share/eom-wheel-marker.txt"])
+@pytest.mark.parametrize("fault", ["hash", "size", "symlink", "hardlink", "writable"])
+def test_full_overlay_ownership_does_not_waive_actual_installed_bytes_or_type(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, member: str, fault: str
+) -> None:
+    fixture = _fixture(tmp_path, monkeypatch)
+    target = fixture.prefix / member
+    raw = target.read_bytes()
+    if fault == "hash":
+        target.write_bytes(b"X" + raw[1:])
+    elif fault == "size":
+        target.write_bytes(raw + b"X")
+    elif fault == "symlink":
+        target.rename(target.with_name(target.name + "-alias"))
+        target.symlink_to(target.name + "-alias")
+    elif fault == "hardlink":
+        os.link(target, target.with_name(target.name + "-alias"))
+    else:
+        target.chmod(0o666)
+    with pytest.raises(InstalledRuntimeProofError):
+        _audit(fixture)
+
+
+@pytest.mark.parametrize("fault", ["archive_hash", "source_frame", "source_metadata"])
+def test_verified_overlay_replacements_do_not_waive_original_source_archive_and_ledger(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    fixture = _fixture(tmp_path, monkeypatch, corrupt_overlay_source_frame=fault == "source_frame")
+    if fault == "archive_hash":
+        target = fixture.archive_paths["wheel"]
+        raw = target.read_bytes()
+        target.write_bytes(b"X" + raw[1:])
+    elif fault == "source_metadata":
+        target = fixture.records["wheel"]
+        record = json.loads(target.read_bytes())
+        next(row for row in record["paths_data"]["paths"] if row["_path"] == "bin/wheel")[
+            "sha256"
+        ] = "f" * 64
+        target.write_bytes(json.dumps(record).encode())
+    code = {
+        "archive_hash": "FILE_HASH_MISMATCH",
+        "source_frame": "CONDA_MEMBER_HASH_MISMATCH",
+        "source_metadata": "CONDA_METADATA_INVALID",
+    }[fault]
+    with pytest.raises(InstalledRuntimeProofError, match=code):
+        _audit(fixture)
+
+
+@pytest.mark.parametrize("member", ["bin/obsolete-wheel", "share/obsolete-wheel.txt"])
+def test_full_overlay_ownership_still_denies_unclaimed_original_survivors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, member: str
+) -> None:
+    fixture = _fixture(tmp_path, monkeypatch)
+    _put(fixture.prefix / member, b"unclaimed original source still present")
+    with pytest.raises(InstalledRuntimeProofError, match="CONDA_OVERLAY_SURVIVOR"):
+        _audit(fixture)
+
+
+@pytest.mark.parametrize("member", ["bin/wheel", "share/eom-wheel-marker.txt"])
+def test_full_overlay_members_remain_epoch_fenced_after_genuine_wheel_verification(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, member: str
+) -> None:
+    fixture = _fixture(tmp_path, monkeypatch)
+    verify = verify_installed_runtime_wheel
+
+    def verified_then_changed(
+        library: RuntimeWheelInstallationPin,
+        *,
+        prefix: Path,
+        archive_root: Path,
+        files: NumericalRuntimeFileSnapshots,
+    ) -> VerifiedRuntimeWheelMembers:
+        observed = verify(library, prefix=prefix, archive_root=archive_root, files=files)
+        if observed.name == "wheel":
+            (fixture.prefix / member).chmod(0o640)
+        return observed
+
+    monkeypatch.setattr(conda, "verify_installed_runtime_wheel", verified_then_changed)
+    with pytest.raises(InstalledRuntimeProofError, match="CHANGED"):
+        _audit(fixture)
 
 
 @pytest.mark.parametrize("profile", ["CPU_INDEX_FP32", "CUDA_INDEX_FP32"])
