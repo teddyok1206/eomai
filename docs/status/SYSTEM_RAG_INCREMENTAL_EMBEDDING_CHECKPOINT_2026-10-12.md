@@ -1635,4 +1635,42 @@ native execution admission, model/GPU forward, benchmark/default 전환은 미�
 맞췄다. 새 draft raw는1c9c8b2a05fe8534e95b4955a8111f4882138b70b7374dd93d0770558b1f21d1이며
 worker schema registry와 released family는 바꾸지 않았다. entry/depth/integer/permission/
 epoch/hash 검사는 유지한다.4-suite396 PASS28.48s와 strict2 확인 후 신규 패키지로 재검증한다.
-8MiB 모델을 설치한 d0fc7352의 결과를 새16MiB consumer PASS로 재해석하지 않는다.
+8MiB consumer가 들어 있던 d0fc7352의 결과를 새16MiB consumer PASS로 재해석하지 않는다.
+
+## 실제 inventory·수치 라이브러리 재조회 완료 — 2026-10-13 11:08 UTC
+
+source3be2949bb6ff45141a6d44e0e68adeaeb2dc4251을 새 wheel로 조립·보호 보관·설치했다.
+실제 PRIVATE `/opt/eom/.embedding-index-install-q0a7D0QV`의119byte receipt는
+`EMBEDDING_PREFIX_BYTES_AUDIT_PASS_NOT_ADMITTED`이고 byte closure는
+e0d3d0c16289c59d06da1604c15596a87fe1e1abcbdd7663fb5bc63d2aa689dc다.
+owner input raw4dcc4106db8cff25e6ff317d5190d6cadfbe4c0dad2c7c755f5a110bc4d54bad,
+wheel raw316ce856ca6cf87057b1d44d0dc61c37d1cff3e1b26d17f19fc359b8111777fc,
+source tar raw6d18e2fb1ec1e1db649ab71c9078b632f070047b65fb94447e4ceafce31185c9다.
+
+동일 실제 audit의 inventory는30,669 entries/27,195 regular/356 ELF,8,653,045bytes다.
+raw485fcb486a1d3929794b6f8978b4ea4e71eebaac21ac50516a58dc763d540225,
+semantic86b27df03585143313945fd53bcf3325d34547b3ed9ed99c38638e18bc753cfc를 분리했다.
+root0600/nlink1 파일의 정확한 readback 후 설치된 새 consumer로 JSON Schema2020-12와
+Pydantic/canonical bytes·모든 현재 prefix epoch·host seed를 검증했다. 실제 CPU 장치,
+수치 library5개와 구현 source3개를 공개 관측 경계로 확인했다. root에서 Torch/Transformers/
+NumPy/tokenizers/safetensors를 import하지 않았으며 model/tokenizer/forward 호출은0이다.
+
+기존 proof 계약으로 만든3,952byte 값은 같은 PRIVATE의 `numeric-proof.candidate.json`에만
+저장했다. raw1389fd7e96bfbd07087187c9ae12aa75e4e44c3b80a480f426d4a5b40ab05494,
+semantic591bbb8b0e8af96aa3ab1093056037ca49288e1ffebc2bd6c75f2d76deee6cbb.
+상태는 PRIVATE_CANDIDATE_NOT_PUBLISHED/NOT_ADMITTED다. 부여되지 않은 실행 권한이나
+독립 nonprivileged unit probe를 관측값으로 만들어 넣지 않았다.
+
+최종 source4-suite396 PASS28.51s, API/core strict2·Ruff/format4·shell syntax PASS.
+원 GnpPo79X의8MiB export 실패는 보존했다. d0fc7352 검증본은
+`/opt/eom/conda/envs/.embedding-index-verified-CPU_INDEX_FP32-D44SJg4D`에 이동 보존했고,
+developer inode17563946을 재사용한 뒤 새 설치의 prepublication backup으로 보존했다.
+삭제나 역사적 실패의 성공 재해석은 없다. 단기 작업 로그는
+`/tmp/eom-embedding-successor-release.cQxWPeDg`이며 정본 설치 evidence는 위 root PRIVATE다.
+
+남은 순서는 실제 numerical proof/bundle/config 게시·고정 비특권 native probe와 admission
+연결 → 실제 seed/delta·공통 조회 소비 → CPU/CUDA 동일 입력 성능/정확성/lease 비교와 조건부
+GPU default 전환이다. CUDA의 현재 작업 폴더 검색 문제도 고정 namespace로 확인해야 한다.
+아직 신규 embedding model forward0, benchmark NOT_EVALUATED, GPU default NOT_ACTIVE다.
+기존 API/Web/Catalog/HWPX/Workflow/Chat10개 서비스는11:02 UTC 조회에서 active/running이다.
+이번 단계에서 해당 장기 서비스·DB·worker 계정·정책·원본 corpus는 변경하지 않았다.

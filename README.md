@@ -173,28 +173,17 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
 | 인증된 owner/session 전달 | SOURCE_PASS; 기존 인증 1회·고정 API peer·짧은 작업별 전달384 PASS, 실제 provider admission·배포는 미완료 |
 | 실제 disposable PostgreSQL |0052 registry/application16·reservation8·limited IAM6,0053 stage18+runner10·Identity11 PASS; migration·cleanup PASS |
-| CPU/CUDA 실행 환경 준비 | 실제 CPU 전체 설치 파일·의존관계 검증 PASS, INSTALLED_NOT_ADMITTED; native 실행 격리 검증 남음, CUDA 미게시 |
+| CPU/CUDA 실행 환경 준비 | 실제 CPU 전체 설치·inventory 저장/재조회·라이브러리 관측 PASS; native 실행 격리 검증 남음, CUDA 미게시 |
 | 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | NOT_ACTIVE / NOT_EVALUATED |
 
-2026-10-13의 실제 CPU 검증에서 정상 오프라인 설치 주소와 pip noarch의 원본/설치 경로
-표현 차이를 확인했습니다. 이후 검증된 wheel의 실행 파일을 잔재로 오인하던 소유 범위도
-수정했습니다. 전체 파일 소유와 site namespace를 분리한 독립 설치 회귀는965 PASS입니다.
-이어 ELF 파일 식별명과 버전명의 구분·정상 플래그 표기·출력 크기 해석을 수정했습니다.
-관련 회귀301 PASS, 실제 CPU356개/CUDA287개 라이브러리의 메타데이터 해석은 오류0입니다.
-CPU 장치 관측과 설치 기록의 순수 검증 연결도 source 검증을 마쳤습니다.
-OS 검사와 설치 파일 검사의 범위가 섞여 발생한 반복 전체 조회도 분리했습니다
-(관련547 PASS, 설치 전체의 마지막 검사는 유지). 실제 실행 시간 개선은 다음 설치에서 확인합니다.
-후속 실제 검증에서 발견한 PyTorch의 미존재 검색 경로도 고정된 부재 확인으로 처리했습니다
-(관련554 PASS). 외부 경로가 존재하거나 이후 생기면 거부하며, 정식 재검증은 아직 남아 있습니다.
-확장 모듈이 하위 라이브러리에 전달하는 검색 경로도 보존하도록 바로잡았습니다(관련571 PASS).
-CPU356개 의존관계 사전 진단은 통과했으나 CUDA의 현재 작업 폴더 검색 경로는 계속 차단합니다.
-CUDA는 고정 격리 실행 폴더와 그 검증을 연결하기 전까지 설치 승인으로 진행하지 않습니다.
-실패 후보·기록은 보존했으며 조립 환경을 복구했습니다.
-2026-10-13 10:24 UTC에는 `d0fc7352`의 실제 CPU 전체 설치 검증이 통과했습니다.
-검증 구간은 약36초이며, 이는 모델 추론 성능 측정값이 아닙니다. 같은 검사에서 얻은
-파일별 식별·해시 정보를 실행 검증에 전달하는 저장 경로도395개 회귀로 확인했습니다.
-현재 상태는 INSTALLED_NOT_ADMITTED이며, native 실행 격리 검증·CPU/GPU 실측과 기본값
-활성화는 아직 남아 있습니다.
+2026-10-13 11:04 UTC 기준 `3be2949b`의 실제 CPU 전체 설치 검증과 결과 저장·재조회를
+통과했습니다. 같은 검사에서 얻은30,669개 항목/356개 ELF의 식별·해시 정보를 보존하고,
+JSON Schema/Pydantic·현재 파일 상태·CPU 장치·수치 라이브러리5개·구현 파일3개를 확인했습니다.
+실제 목록이 초기8MiB 상한을 넘던 문제도 재현해 미출시 저장 규칙을16MiB로 맞췄습니다.
+관련 회귀396 PASS, strict type/lint/format PASS이며 실패 기록과 이전 설치본은 보존했습니다.
+현재는 INSTALLED_NOT_ADMITTED입니다. 모델을 실행한 결과가 아니며 native 실행 격리 검증,
+실제 seed/delta·공통 소비자 연결·CPU/GPU 비교와 조건부 기본값 전환은 아직 남아 있습니다.
+CUDA의 현재 작업 폴더 검색 경로는 고정 격리 폴더 검증을 연결하기 전까지 계속 차단합니다.
 
 최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와
 strict type/lint/format PASS입니다. 실제 임시 DB28개 사례에는 독립 실행기 claim 경쟁과

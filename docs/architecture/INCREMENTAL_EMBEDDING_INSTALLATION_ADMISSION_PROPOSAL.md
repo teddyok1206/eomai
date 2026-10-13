@@ -4,15 +4,21 @@
 The two adjacent `.schema.proposal.json` documents remain unregistered ROOTLOCAL drafts,
 not worker messages, grants or actual receipts. The additive same-audit local snapshot,
 shared model-free numerical observation, narrow Conda URI/pip noarch/overlay ownership handling
-and shared CPU identity capture in PhaseA/B/C/D/E/F below are source-only implementations;
-all receipt/proof/factory/unit composition remains proposed. No production data, installed
-prefix, resource registry, unit or default changes.
+and shared CPU identity capture are implemented. The actual CPU successor and same-audit inventory
+read-back passed at11:04 UTC; an independently observed numerical proof remains a private candidate.
+Final admission receipt, fixed native unit/probe and production factory wiring are still pending.
+No production corpus, resource registry, unit or default activation changed.
 
 Earlier CPU publications failed their OLD whole-prefix audit before NEW; those historical failed
 inputs remain unchanged. The corrected d0fc7352 CPU publication passed the actual full audit on
 2026-10-13 at10:24 UTC, not just a wheel diagnosis. Its separate first inventory export encountered
 the metadata size limit documented below. Native unit probing, final seal and model execution remain
 pending. Neither historical failures nor source-only compatibility fixtures are reinterpreted.
+
+The corrected16MiB producer/consumer from3be2949b subsequently passed the actual audit and
+JSON Schema/Pydantic/epoch read-back. It retained30,669 entries in8,653,045 bytes, observed the actual
+CPU and five numerical distributions without importing optional ML libraries, and generated only
+a private proof candidate. Exact pins and failure preservation are in the incremental checkpoint.
 
 ## Eleven decisions
 
