@@ -1,9 +1,10 @@
 # Native installation admission: same-audit inventory and CPU-first seal
 
-2026-10-13 UTC. PROTOCOL_DRAFT / PHASE_A_B_SOURCE_ONLY / NOT_ADMITTED.
+2026-10-13 UTC. PROTOCOL_DRAFT / PHASE_A_B_C_SOURCE_ONLY / NOT_ADMITTED.
 The two adjacent `.schema.proposal.json` documents remain unregistered ROOTLOCAL drafts,
-not worker messages, grants or actual receipts. The additive same-audit local snapshot and
-shared model-free numerical observation in PhaseA/B below are source-only implementations;
+not worker messages, grants or actual receipts. The additive same-audit local snapshot,
+shared model-free numerical observation and narrow Conda URI representation handling in
+PhaseA/B/C below are source-only implementations;
 all receipt/proof/factory/unit composition remains proposed. No production data, installed
 prefix, resource registry, unit or default changes.
 
@@ -338,3 +339,58 @@ Both failures were unrelated namespace test expectations/snapshot changes; no no
 was modified here. This mixed-source run is preserved as failure history, not final acceptance.
 At root's instruction no repeated shared19 gate is run now; root performs one independent
 shared19/factory and related QUERY regression only after both owned3 scopes are frozen.
+
+## PhaseC — exact Conda install-location URI representations
+
+2026-10-13 UTC. ROOT_APPROVED_SOURCE_PHASE / NOT_INSTALLED / NOT_ADMITTED.
+Root's original protected read-only audit stopped at `_metadata_records` identity comparison;
+independent bounded31 reads confirmed only URL differs, while name/version/build/fn/archive
+SHA/size match. All31 URLs use the exact reviewed eight-character prefetch namespace. Original
+status1, empty receipt and failed private bytes remain historical; root completed recovery.
+
+1. **Boundary:** change only existing Conda metadata URI representation comparison; no installer,
+   new provider, protocol, registry, admission flag or production execution.
+2. **Source:** pinned source lock, independently verified retained archive SHA/size, source index
+   and complete member/transformation ledger remain the authoritative source identity.
+3. **Identity:** URL records installation location, not archive identity or permission. Installed
+   metadata bytes are not rewritten and the diagnostic URI never supplies bytes or authority.
+4. **Checks:** retain exact name/version/build/fn plus existing metadata SHA/size/index/path and
+   installed member/cache/link checks. URI acceptance cannot replace any of them.
+5. **Representations:** only exact source-lock upstream URI, verified canonical archive `as_uri()`
+   or `file:///tmp/eom-embedding-conda-base-prefetch.[A-Za-z0-9]{8}/<exact filename>` is eligible.
+6. **Structures:** one small private raw-string predicate, bounded length and `re.fullmatch` with
+   escaped exact filename; no URL decoding, normalization, dereferencing or basename lookup.
+7. **Cost:** reuse existing filename/pin maps and actual audit archive root, O(31) URI checks;
+   no extra archive parser/hash/copy, directory scan or public input/schema field.
+8. **Concurrency:** preserve the same existing protected member/ancestor epochs and terminal
+   unchanged/deadline/tool checks; source fixtures retain genuine eom ownership, not fake UID0.
+9. **Layers:** own only existing `embedding_conda_runtime_closure.py`, its existing focused test
+   and this note; private helper argument propagation only, no worker/factory/CLI change.
+10. **Failure:** full-audit tests cover all three positive forms, foreign/traversal/encoding/
+    query/fragment/raw-type negatives and wrong metadata/archive/member identities despite an
+    eligible URI. Synthetic source tests are not actual root installation or admission.
+11. **Alternative:** remote-only equality rejects actual local-install metadata; rewriting it
+    loses original provenance, and arbitrary `file://` basename acceptance is too broad.
+
+This changes the whole-file-pinned Conda bootstrap SHA, requiring a newly reviewed source/wheel,
+root input/bootstrap pins and actual pre-execution audit. The currently retained bf96 release
+cannot be relabeled. Canonical31 archives, metadata/prefix bytes, numerical OFFLINE_ENCODER SHA,
+historical runtime and existing CLI receipt remain unchanged by this source-only phase.
+
+### PhaseC source checkpoint
+
+The private URI predicate and audit-root argument propagation are implemented. Existing
+identity/index/metadata SHA/size/member/archive/link/cache/epoch checks are untouched. Full
+public synthetic audits accept each of the three representations with the same source-byte
+ledger;22 malformed/foreign/raw URI cases fail, and eligible canonical/prefetch URIs cannot
+bypass name/version/build/fn/SHA/size or same-size changed archive/member bytes. A pure test
+disables filesystem open/resolve to verify the predicate never dereferences a location.
+All fixtures retain actual eom UID ownership; none claim a root-installed audit or grant.
+
+Final explicit API Conda/prefix/wheel/host4 suites582 PASS45.15s (including202 Conda cases).
+API/core strict mypy2 each PASS; API Ruff2/format2 PASS. Python source hashes were identical
+at final suite start/end. The Conda bootstrap raw SHA changes from `fa848f01...` to
+`0874fc81647867a435fd6e1e33e585206c19663e4f704305c1d9844c412fa494`;
+OFFLINE_ENCODER `f667e54d...` and runtime-files `a54e7cf5...` remain unchanged. No actual
+prefix audit, privileged mutation, metadata rewrite, model/new-prefix execution or install
+was performed in this phase. Root owns the subsequent exact source build and actual audit.

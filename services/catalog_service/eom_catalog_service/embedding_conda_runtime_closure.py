@@ -1029,6 +1029,26 @@ def _observe_link(
             os.close(descriptor)
 
 
+def _installed_archive_uri_matches(
+    value: object, source_uri: str, archive: Path, filename: str
+) -> bool:
+    """Location representation only; independently checked archive bytes remain authority."""
+    return (
+        type(value) is str
+        and len(value) <= 512
+        and (
+            value == source_uri
+            or value == archive.as_uri()
+            or re.fullmatch(
+                r"file:///tmp/eom-embedding-conda-base-prefetch\.[A-Za-z0-9]{8}/"
+                + re.escape(filename),
+                value,
+            )
+            is not None
+        )
+    )
+
+
 def _metadata_records(
     prefix: Path,
     rows: dict[str, tuple[str, str, str, str]],
@@ -1036,6 +1056,8 @@ def _metadata_records(
     files: NumericalRuntimeFileSnapshots,
     source_indices: dict[str, dict[str, Any]],
     archive_pins: dict[str, CondaRuntimeArchivePin],
+    *,
+    archive_root: Path,
 ) -> int:
     generated = 0
     by_owner = {name: set[str]() for name in rows}
@@ -1052,9 +1074,14 @@ def _metadata_records(
                 record.get("version"),
                 record.get("build"),
                 record.get("fn"),
-                record.get("url"),
             )
-            == (name, version, build, filename, url),
+            == (name, version, build, filename)
+            and _installed_archive_uri_matches(
+                record.get("url"),
+                url,
+                archive_root / archive_pins[filename].sha256.removeprefix("sha256:") / filename,
+                filename,
+            ),
             "METADATA_INVALID",
         )
         _require(
@@ -1277,6 +1304,7 @@ def _audit_installed_conda31(
             files,
             source_indices,
             {pin.filename: pin for pin in plan.archives},
+            archive_root=archive_root,
         )
         overlay_names = {name for name, _version, _sha_value in _OVERLAYS}
         for path, member in ledger.items():

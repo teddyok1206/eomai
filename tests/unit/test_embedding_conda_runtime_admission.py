@@ -943,6 +943,155 @@ def test_complete_synthetic_archive_transform_overlay_cache_and_link_ledger_is_r
     assert all(path.exists() or path.is_symlink() for path in first.installed_members)
 
 
+def _set_installation_uris(fixture: _SyntheticConda, representation: str) -> None:
+    for name, path in fixture.records.items():
+        record = json.loads(path.read_bytes())
+        if representation == "canonical":
+            record["url"] = fixture.archive_paths[name].as_uri()
+        elif representation == "prefetch":
+            record["url"] = "file:///tmp/eom-embedding-conda-base-prefetch.KoqIDSXB/" + record["fn"]
+        path.write_bytes(json.dumps(record).encode())
+
+
+@pytest.mark.parametrize("representation", ("upstream", "canonical", "prefetch"))
+def test_public_conda_audit_accepts_only_reviewed_location_forms_with_same_byte_ledger(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, representation: str
+) -> None:
+    fixture = _fixture(tmp_path, monkeypatch)
+    original = _audit(fixture)
+    _set_installation_uris(fixture, representation)
+    assert _audit(fixture) == original
+    assert all(path.stat().st_uid == os.geteuid() for path in fixture.records.values())
+
+
+@pytest.mark.parametrize(
+    "fault",
+    (
+        "foreign_file",
+        "foreign_https",
+        "foreign_canonical_hash",
+        "wrong_filename",
+        "short_suffix",
+        "long_suffix",
+        "unicode_suffix",
+        "uppercase_scheme",
+        "host",
+        "userinfo",
+        "traversal",
+        "dot",
+        "double_slash",
+        "encoded_prefix",
+        "encoded_filename",
+        "encoded_separator",
+        "query",
+        "fragment",
+        "newline",
+        "oversized",
+        "null",
+        "boolean",
+    ),
+)
+def test_public_conda_audit_rejects_unreviewed_url_without_normalization(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    fixture = _fixture(tmp_path, monkeypatch)
+    path = fixture.records["_libgcc_mutex"]
+    record = json.loads(path.read_bytes())
+    filename = record["fn"]
+    cache = "file:///tmp/eom-embedding-conda-base-prefetch.KoqIDSXB/"
+    values: dict[str, object] = {
+        "foreign_file": "file:///tmp/unreviewed/" + filename,
+        "foreign_https": "https://example.invalid/" + filename,
+        "foreign_canonical_hash": (fixture.archive_root / ("f" * 64) / filename).as_uri(),
+        "wrong_filename": cache + "unregistered-1.0-build_0.conda",
+        "short_suffix": cache.replace("KoqIDSXB", "Ab0Cd1E") + filename,
+        "long_suffix": cache.replace("KoqIDSXB", "Ab0Cd1Ef2") + filename,
+        "unicode_suffix": cache.replace("KoqIDSXB", "KoqIDSX한") + filename,
+        "uppercase_scheme": "FILE" + cache[4:] + filename,
+        "host": cache.replace("file:///", "file://localhost/") + filename,
+        "userinfo": cache.replace("file:///", "file://synthetic@example.invalid/") + filename,
+        "traversal": cache + "../" + filename,
+        "dot": cache + "./" + filename,
+        "double_slash": cache + "/" + filename,
+        "encoded_prefix": cache.replace("eom-", "%65om-") + filename,
+        "encoded_filename": cache + "%5f" + filename[1:],
+        "encoded_separator": cache.rstrip("/") + "%2f" + filename,
+        "query": cache + filename + "?synthetic=1",
+        "fragment": cache + filename + "#synthetic",
+        "newline": cache + filename + "\n",
+        "oversized": cache + "x" * 513,
+        "null": None,
+        "boolean": True,
+    }
+    record["url"] = values[fault]
+    path.write_bytes(json.dumps(record).encode())
+    with pytest.raises(InstalledRuntimeProofError, match="CONDA_METADATA_INVALID"):
+        _audit(fixture)
+
+
+@pytest.mark.parametrize("representation", ("canonical", "prefetch"))
+@pytest.mark.parametrize(
+    "fault", ("name", "version", "build", "fn", "sha256", "size", "archive", "member")
+)
+def test_eligible_installation_uri_cannot_replace_identity_or_actual_byte_checks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, representation: str, fault: str
+) -> None:
+    fixture = _fixture(tmp_path, monkeypatch)
+    _set_installation_uris(fixture, representation)
+    if fault == "archive":
+        path = fixture.archive_paths["python"]
+        raw = bytearray(path.read_bytes())
+        raw[0] ^= 1
+        path.write_bytes(raw)
+    elif fault == "member":
+        path = fixture.files["lib/python3.12/source.py"]
+        member_raw = path.read_bytes()
+        path.write_bytes(b"!" + member_raw[1:])
+    else:
+        path = fixture.records["python"]
+        record = json.loads(path.read_bytes())
+        if fault == "sha256":
+            record[fault] = "f" * 64
+        elif fault == "size":
+            record[fault] += 1
+        else:
+            record[fault] = "wrong"
+        path.write_bytes(json.dumps(record).encode())
+    code = "FILE_HASH_MISMATCH" if fault in {"archive", "member"} else "CONDA_METADATA_INVALID"
+    with pytest.raises(InstalledRuntimeProofError, match=code):
+        _audit(fixture)
+
+
+@pytest.mark.parametrize("value", (None, True, False, 1, b"uri", [], {}, "x" * 513))
+def test_uri_raw_type_and_bound_reject_before_path_conversion(
+    monkeypatch: pytest.MonkeyPatch, value: object
+) -> None:
+    monkeypatch.setattr(Path, "as_uri", _deny)
+    assert not conda._installed_archive_uri_matches(
+        value,
+        "https://example.invalid/source.conda",
+        Path("/canonical/source.conda"),
+        "source.conda",
+    )
+
+
+def test_uri_predicate_has_no_io_decode_or_normalization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    filename = "python-3.12.13-hc5f7cf0_3.conda"
+    source_uri = "https://repo.anaconda.com/pkgs/main/linux-64/" + filename
+    archive = Path("/opt/eom/embedding-runtime-archives") / ("a" * 64) / filename
+    accepted = (
+        source_uri,
+        archive.as_uri(),
+        "file:///tmp/eom-embedding-conda-base-prefetch.Ab0Cd1Ef/" + filename,
+    )
+    monkeypatch.setattr(os, "open", _deny)
+    monkeypatch.setattr(Path, "resolve", _deny)
+    for value in accepted:
+        assert conda._installed_archive_uri_matches(value, source_uri, archive, filename)
+
+
 @pytest.mark.parametrize(
     "fault",
     [
