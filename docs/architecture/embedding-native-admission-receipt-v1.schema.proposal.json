@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://local/embedding-native-admission-receipt/1.0",
+  "title": "Draft ROOTLOCAL CPU sealed installation evidence; not a worker grant",
+  "$comment": "UNREGISTERED PROPOSAL, CPU-first only. Raw <=32KiB/depth16 before JSON; duplicate keys/float/bool integer bypass forbidden. Actual root owner must observe unit negatives, no-model/no-forward imports/readback, loaded maps and matching termination before seal. Parsed values/digests/callbacks do not attest those facts. Trusted root release independently pins complete raw bytes; ongoing prefix/host/config/device checks required.",
+  "$defs": {
+    "sha": {"type": "string", "minLength": 71, "maxLength": 71, "pattern": "^sha256:[0-9a-f]{64}$"},
+    "hex32": {"type": "string", "minLength": 32, "maxLength": 32, "pattern": "^[0-9a-f]{32}$"},
+    "utc": {
+      "type": "string", "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?Z(?![\\s\\S])"
+    },
+    "configuration": {
+      "type": "object", "additionalProperties": false,
+      "required": ["configuration_id", "configuration_revision_id", "configuration_raw_sha256", "configuration_sha256"],
+      "properties": {
+        "configuration_id": {"type": "string", "minLength": 54, "maxLength": 54, "pattern": "^embeddingnativeconfig_[0-9a-f]{32}$"},
+        "configuration_revision_id": {"type": "string", "minLength": 57, "maxLength": 57, "pattern": "^embeddingnativeconfigrev_[0-9a-f]{32}$"},
+        "configuration_raw_sha256": {"$ref": "#/$defs/sha"},
+        "configuration_sha256": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "inventoryPointer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_ref", "inventory_raw_sha256", "inventory_sha256"],
+      "properties": {
+        "schema_ref": {"const": "eom://local/embedding-native-prefix-inventory/1.0"},
+        "inventory_raw_sha256": {"$ref": "#/$defs/sha"},
+        "inventory_sha256": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "unitProbe": {
+      "type": "object", "additionalProperties": false,
+      "required": ["recipe", "execution_id", "invocation_id", "pid", "start_time_ticks", "worker_uid", "worker_gid", "supplementary_gids", "unit_template_sha256", "probe_code_sha256", "effective_policy_sha256", "probe_report_raw_sha256", "loaded_elf_members_sha256", "observed_runtime_sha256", "model_constructor_calls", "tokenizer_constructor_calls", "forward_calls", "terminal_exec_main_code", "terminal_exec_main_status", "terminal_main_pid", "terminal_cgroup_member_count", "terminated_at_utc"],
+      "properties": {
+        "recipe": {"const": "NATIVE_CPU_FIXED_UNIT_NO_MODEL_NO_FORWARD_NEGATIVES/1.0"},
+        "execution_id": {"$ref": "#/$defs/hex32"},
+        "invocation_id": {"$ref": "#/$defs/hex32"},
+        "pid": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+        "start_time_ticks": {"type": "integer", "minimum": 1, "maximum": 18446744073709551615},
+        "worker_uid": {"type": "integer", "minimum": 1, "maximum": 4294967294},
+        "worker_gid": {"type": "integer", "minimum": 1, "maximum": 4294967294},
+        "supplementary_gids": {"type": "array", "maxItems": 0, "items": false},
+        "unit_template_sha256": {"$ref": "#/$defs/sha"},
+        "probe_code_sha256": {"$ref": "#/$defs/sha"},
+        "effective_policy_sha256": {"$ref": "#/$defs/sha"},
+        "probe_report_raw_sha256": {"$ref": "#/$defs/sha"},
+        "loaded_elf_members_sha256": {"$ref": "#/$defs/sha"},
+        "observed_runtime_sha256": {"$ref": "#/$defs/sha"},
+        "model_constructor_calls": {"type": "integer", "const": 0},
+        "tokenizer_constructor_calls": {"type": "integer", "const": 0},
+        "forward_calls": {"type": "integer", "const": 0},
+        "terminal_exec_main_code": {"type": "integer", "const": 1},
+        "terminal_exec_main_status": {"type": "integer", "const": 0},
+        "terminal_main_pid": {"type": "integer", "const": 0},
+        "terminal_cgroup_member_count": {"type": "integer", "const": 0},
+        "terminated_at_utc": {"$ref": "#/$defs/utc"}
+      }
+    }
+  },
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "evidence_state", "profile", "configuration", "inventory", "installed_proof", "bundle", "runtime_sha256", "unit_probe", "sealed_at_utc", "receipt_sha256"],
+  "properties": {
+    "schema_version": {"const": "embedding-native-admission-receipt/1.0"},
+    "evidence_state": {"const": "SEALED_INSTALLATION_EVIDENCE"},
+    "profile": {"const": "CPU_INDEX_FP32"},
+    "configuration": {"$ref": "#/$defs/configuration"},
+    "inventory": {"$ref": "#/$defs/inventoryPointer"},
+    "installed_proof": {"$ref": "eom://schemas/knowledge/embedding-installed-runtime-proof/1.0#/$defs/pointer"},
+    "bundle": {"$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/bundlePointer"},
+    "runtime_sha256": {"$ref": "#/$defs/sha"},
+    "unit_probe": {"$ref": "#/$defs/unitProbe"},
+    "sealed_at_utc": {"$ref": "#/$defs/utc"},
+    "receipt_sha256": {"$ref": "#/$defs/sha"}
+  }
+}

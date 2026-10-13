@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://local/embedding-native-prefix-inventory/1.0",
+  "title": "Draft ROOTLOCAL same-audit prefix inventory; never admitted by parsing",
+  "$comment": "UNREGISTERED PROPOSAL. Raw bytes <=8MiB/depth16 before JSON. Entries sorted unique by relative_member with exact raw integers. Only authoritative final audit may originate this evidence; independent root owner accepts raw pin. Additional current host/protected manifest checks stay mandatory.",
+  "$defs": {
+    "sha": {"type": "string", "minLength": 71, "maxLength": 71, "pattern": "^sha256:[0-9a-f]{64}$"},
+    "unsigned64": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},
+    "positive64": {"type": "integer", "minimum": 1, "maximum": 18446744073709551615},
+    "uid": {"type": "integer", "minimum": 0, "maximum": 4294967294},
+    "statEpoch": {
+      "type": "array", "minItems": 9, "maxItems": 9, "items": false,
+      "description": "Existing exact tuple: dev,ino,uid,gid,mode,nlink,size,mtime_ns,ctime_ns. Consumer also validates type/ownership/modes and exact actual named/FD epoch; bools are not integers.",
+      "prefixItems": [
+        {"$ref": "#/$defs/unsigned64"}, {"$ref": "#/$defs/positive64"},
+        {"type": "integer", "const": 0}, {"$ref": "#/$defs/uid"},
+        {"type": "integer", "minimum": 0, "maximum": 65535},
+        {"type": "integer", "minimum": 1, "maximum": 100000},
+        {"type": "integer", "minimum": 0, "maximum": 17179869184},
+        {"$ref": "#/$defs/unsigned64"}, {"$ref": "#/$defs/unsigned64"}
+      ]
+    },
+    "ancestorEpoch": {
+      "type": "array", "minItems": 5, "maxItems": 5, "items": false,
+      "description": "Existing directory identity: dev,ino,uid,gid,mode; root-owned nonwritable directory required by consumer.",
+      "prefixItems": [
+        {"$ref": "#/$defs/unsigned64"}, {"$ref": "#/$defs/positive64"},
+        {"type": "integer", "const": 0}, {"$ref": "#/$defs/uid"},
+        {"type": "integer", "minimum": 0, "maximum": 65535}
+      ]
+    },
+    "relativeMember": {
+      "type": "string", "minLength": 1, "maxLength": 512,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*[\\\\\\u0000-\\u001f\\u007f]).*[^/]$"
+    },
+    "entry": {
+      "type": "object", "additionalProperties": false,
+      "required": ["relative_member", "kind", "epoch", "sha256", "symlink_target"],
+      "properties": {
+        "relative_member": {"$ref": "#/$defs/relativeMember"},
+        "kind": {"enum": ["REGULAR", "DIRECTORY", "SYMLINK"]},
+        "epoch": {"$ref": "#/$defs/statEpoch"},
+        "sha256": {"oneOf": [{"$ref": "#/$defs/sha"}, {"type": "null"}]},
+        "symlink_target": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1, "maxLength": 512,
+             "pattern": "^(?!/)(?!.*[\\\\\\u0000-\\u001f\\u007f]).+$"}
+          ]
+        }
+      },
+      "allOf": [
+        {"if": {"properties": {"kind": {"const": "REGULAR"}}},
+         "then": {"properties": {"sha256": {"$ref": "#/$defs/sha"}, "symlink_target": {"type": "null"}}}},
+        {"if": {"properties": {"kind": {"const": "DIRECTORY"}}},
+         "then": {"properties": {"sha256": {"type": "null"}, "symlink_target": {"type": "null"}}}},
+        {"if": {"properties": {"kind": {"const": "SYMLINK"}}},
+         "then": {"properties": {"sha256": {"type": "null"}, "symlink_target": {"type": "string"}}}}
+      ]
+    },
+    "audit": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_closure_sha256", "member_inventory_sha256", "byte_closure_sha256", "elf_closure_sha256", "regular_members", "link_members", "size_bytes", "elf_members"],
+      "properties": {
+        "source_closure_sha256": {"$ref": "#/$defs/sha"},
+        "member_inventory_sha256": {"$ref": "#/$defs/sha"},
+        "byte_closure_sha256": {"$ref": "#/$defs/sha"},
+        "elf_closure_sha256": {"$ref": "#/$defs/sha"},
+        "regular_members": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "link_members": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 17179869184},
+        "elf_members": {"type": "integer", "minimum": 1, "maximum": 100000}
+      }
+    }
+  },
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "evidence_state", "profile", "owner_input_raw_sha256", "host_seed_sha256", "boot_id", "prefix_root_epoch", "fixed_ancestor_epochs", "audit", "entries", "inventory_sha256"],
+  "properties": {
+    "schema_version": {"const": "embedding-native-prefix-inventory/1.0"},
+    "evidence_state": {"const": "CANDIDATE_NOT_ADMITTED"},
+    "profile": {"enum": ["CPU_INDEX_FP32", "CUDA_INDEX_FP32"]},
+    "owner_input_raw_sha256": {"$ref": "#/$defs/sha"},
+    "host_seed_sha256": {"$ref": "#/$defs/sha"},
+    "boot_id": {"type": "string", "minLength": 36, "maxLength": 36, "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "prefix_root_epoch": {"$ref": "#/$defs/statEpoch"},
+    "fixed_ancestor_epochs": {
+      "type": "array", "minItems": 5, "maxItems": 5,
+      "items": {"$ref": "#/$defs/ancestorEpoch"},
+      "description": "Fixed implicit order /, /opt, /opt/eom, /opt/eom/conda, /opt/eom/conda/envs; no caller paths."
+    },
+    "audit": {"$ref": "#/$defs/audit"},
+    "entries": {"type": "array", "minItems": 1, "maxItems": 100000, "items": {"$ref": "#/$defs/entry"}},
+    "inventory_sha256": {"$ref": "#/$defs/sha"}
+  }
+}
