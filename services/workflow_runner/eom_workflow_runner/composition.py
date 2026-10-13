@@ -27,6 +27,8 @@ from eom_workflow_runner.actor_authorization_adapters import (
 )
 from eom_workflow_runner.engine import PlatformRoleJobExecutor, WorkflowRunner
 from eom_workflow_runner.inference_transfer_executor import PlatformInferenceTransferExecutor
+from eom_workflow_runner.local_embedding_admission import LocalEmbeddingOwnerAdmission
+from eom_workflow_runner.local_embedding_execution_port import LocalEmbeddingNativeExecutor
 from eom_workflow_runner.readiness import WorkflowRuntimeReadiness
 from eom_workflow_runner.settings import WorkflowSettings
 
@@ -47,8 +49,12 @@ def build_workflow_runtime(
     workflow_settings: WorkflowSettings | None = None,
     platform_settings: Settings | None = None,
     catalog_settings: CatalogSettings | None = None,
+    local_embedding_owner: LocalEmbeddingOwnerAdmission | None = None,
+    local_embedding_executor: LocalEmbeddingNativeExecutor | None = None,
 ) -> WorkflowRuntime:
     """Build the complete production runner graph without presentation-layer wiring."""
+    if (local_embedding_owner is None) != (local_embedding_executor is None):
+        raise ValueError("native owner and executor must be supplied together")
     actual_engine = engine or build_engine()
     actual_workflow_settings = workflow_settings or WorkflowSettings.from_environment()
     actual_platform_settings = platform_settings or Settings.from_environment()
@@ -106,6 +112,8 @@ def build_workflow_runtime(
             actor_authorizer=actor_authorizer,
         ),
         runner_id=runner_id,
+        local_embedding_owner=local_embedding_owner,
+        local_embedding_executor=local_embedding_executor,
     )
     return WorkflowRuntime(
         engine=actual_engine,

@@ -1,8 +1,10 @@
 # Fixed native embedding Runner implementation boundary
 
-2026-10-12 UTC. **SOURCE_PROTOCOL_ONLY** for the two receipt contracts and **SOURCE_GUARD_ONLY**
-for the first Runner migration/model/admission/interface phase. Actual Runner dispatch, publisher,
-current authority, migration execution and runtime activation remain unimplemented/unadmitted here.
+2026-10-13 UTC. **SOURCE_PROTOCOL_ONLY**, **SOURCE_GUARD_ONLY** and now **SOURCE_DISPATCH_ONLY**
+for the reviewed receipt, guard/storage and exact-candidate/fixed-native dispatch phases below.
+Actual owner authority, native executor/publisher composition and runtime activation remain
+unimplemented/unadmitted here. The separate disposable migration evidence is recorded below;
+source dispatch is not production migration or runtime acceptance.
 This advances the approved
 [admission proposal](INCREMENTAL_EMBEDDING_RUNNER_ADMISSION_PROPOSAL.md), not a service grant or
 runtime activation. Per-encoding owner source is committed at `bc973084`; root subsequently ran
@@ -455,3 +457,138 @@ were independently rechecked unchanged. Tests use explicit synthetic Session/own
 they prove source validation/order/savepoint intent, not PostgreSQL rollback or actual permissions.
 No DB/root/IAM/NAS/model/GPU/install/Git actions were executed. Real authenticated session/source
 composition, protected executor, exact-candidate claims and service admission remain pending.
+
+## Stage B/C approved source boundary — exact claims and fixed native execution
+
+The reviewed next-phase plan is implemented in the existing Runner, not a new queue or dispatcher.
+Owner/executor injection remains explicit and paired; default production composition has neither.
+There are no new dependencies, schemas, migrations, states, commands or runtime/config activation.
+
+`CommandExecutionFamily` has only ROLE/LOCAL_EMBEDDING. A frozen `CommandCandidate` captures the
+exact command/Workflow header plus bounded immutable native request metadata; no token or authority
+decision is retained. Each family uses one nonlocking FIFO LIMIT1 peek. Readiness runs after that
+Session closes and never invokes current-source/IAM admission. Native readiness is independent of
+Codex; unavailable or busy native work cannot starve the ready role family. A locked/changed exact
+candidate, or an owner's explicit unavailable/recovery denial, can skip only that family for this
+bounded poll: the other family gets a fresh peek/readiness/root claim, never a replacement inside
+the failed claim. Deterministic integrity errors are not treated as readiness or silently repaired.
+
+The total SQL native predicate includes exact definition/JSON definition identity, protocol, request
+version/purpose and native step markers through existing PK/FK EXISTS. Old `claim_next_command` and
+`claimable_command_exists`, including Workflow-specific calls, themselves exclude native and malformed
+native-marked history. There is no include-native bypass. Exact claims refresh and lock Workflow then
+command with SKIP LOCKED, compare immutable headers and current claimability, and invoke the actual
+required owner's `resolve_claim` before assigning token/generation. Existing public native submission
+validation checks request/definition/operator/protocol closure. Late current-owner and expiry checks
+remain under the same root. Expired native acquisitions require that owner's actual linked recovery
+admission; the source interface does not supply one or reset original encoding ownership.
+
+`local_embedding_step_execution.py` owns only fixed `encode_batch` and `complete` Runner use cases.
+The compute step stores its original source-plan pointer, not source text or vector payload. Native
+execution occurs only between closed root transactions. Every short mutation/heartbeat locks
+Workflow→command, revalidates exact original request/definition pins and reacquires the actual
+owner's current context both before and late. The heartbeat thread carries immutable request/lease
+identity, not a prior authorization result; the eventual concrete owner must support these fresh
+thread-safe operations. The final wall-clock expiry check occurs after authority checks. A command's
+PROCESSING→SUCCEEDED/FAILED commit uses a narrowly checked same-root terminal snapshot under its
+retained lock; it does not make a historical terminal command generally lease-valid.
+
+Pending outcomes must exactly cover the original plan's unique computational keys/space. OWNED
+intents bind this Workflow/step/request; BORROWED/UNCERTAIN/COMPLETED readings preserve the actual
+winner's original intent, and completed computation may still wait for registration. Only small
+original-step metadata schedules an idempotent existing ADVANCE with 1–60-second backoff; readings,
+requests and vector data are not copied into the command. Failed/cancelled attempts never restart.
+
+Root approved one missing supported interface: required native executor `validate_completion` in
+the singular `local_embedding_execution_port.py`. During a short root transaction, the concrete
+executor must resolve/reauthorize the exact canonical receipt, actual committed producer/Job,
+original plan/association, registration and current source/session through existing owners. Runner
+does not implement another Artifact/source/kernel resolver. The returned closed carrier must be
+equal to the supplied carrier; replacement/latest/repair is denied. Step success, successful-step
+replay, terminal and terminal replay each call it. Only the carrier and receipt-owner Job FK enter
+the compute step; terminal stores `runtime_context.final_pointer_manifest.embedding_receipt` and
+the ordinary fixed terminal step. Historical receipt current/head observations are not fresh grants
+and never rewind the Catalog index. There is no default/pass-through validation implementation.
+
+Native direct `reconcile(workflow_id)` is denied without a real queued live command. Native
+APPROVE/REWORK/RETRY are unsupported and never enter legacy recovery. CANCEL retains existing actual
+operator cancel/admin checks and the required native owner's fresh action/session fence; it is a
+durable Workflow/command/step stop, not unit/cgroup termination, launch reservation reset, GPU lease
+release or output success. A concrete native owner must reauthorize the command's actual action
+inside every root, including cancel/reconcile, rather than reuse workflow:start audit or the
+presentation authorizer's earlier observation. Supported owner outcome/cleanup remains separate.
+
+Prepared guarded integration file: `tests/integration/test_local_embedding_runner.py`, eight
+cases collected in0.20s, **NOT_EXECUTED by this source agent**. It reuses the official disposable
+state/schema/owner guard. Uniquely identified synthetic Workflow/command fixtures are committed
+only in that verified disposable DB and retained until root's whole-DB cleanup: independent spawned
+processes must see committed rows to prove actual SKIP LOCKED/claim-once behavior. No row/history
+deletion, successful reinterpretation, Job, Artifact, NAS or numerical work occurs. The file covers
+exact native claim, old legacy exclusion, late revocation rollback, stale identity-map refresh,
+held Workflow lock, independent process race, refused expired reclaim, two-statement peeks and
+actual EXPLAIN/index inventory. Tiny-fixture plans do not establish production latency/throughput.
+
+Source tests use synthetic owner/Session/receipt callbacks only. They do not prove actual source
+eligibility, current Identity/session authority, canonical NAS commitment, protected binaries,
+worker isolation, GPU admission or production compatibility. The overall incremental/GPU goal and
+operator/API/session/service integration remain active follow-up work, not completed by this phase.
+
+Final Stage B/C source gate: **642 tests PASS in57.77s** across the21 native/legacy unit files,
+Ruff/check-format and strict mypy on all11 Python files PASS; guarded integration **eight collected,
+NOT_EXECUTED**. The earlier focused matrix was68 PASS21.74s before adding the denied-claim fallback
+case; the earlier broad run was641 PASS57.91s. The initial focused run had32 PASS/3 fixture failures
+(old preclaim monkeypatch target, a SQL spy excluding expired state and accumulated mock-call order);
+source fixtures and the preclaim test now use actual new seams. The expanded strict gate also fixed
+an existing test's access through nonexported `cli.Settings` to its already imported public Settings
+class, without a product change. No core failure was converted into an operating-state repair.
+No DB/root/IAM/NAS/model/GPU/install/Git actions were executed by this source agent.
+
+### Independent review follow-up — two confirmed source defects
+
+Root's independent peer reproduced a routing asymmetry after the first freeze: SQL claims excluded
+a native-marked related definition/step, but detached direct reconcile/advance inspected only parent
+markers. `workflow_requires_local_embedding` now performs one exact-PK read using the **same** total
+SQL predicate, including existing PK/FK EXISTS, inside `_load_workflow`'s existing Session. A native
+relation under a legacy-compiled parent fails explicitly before legacy readiness/advance. No second
+predicate, route flag, permission/cache, source resolver or queue was introduced. Legitimate legacy
+load/advance/reconcile control cases remain unchanged. The additional bounded metadata query is not
+an authority grant or a production performance claim.
+
+The peer also reproduced a forged returned Pending (`readings=()`) escaping revalidation as a bare
+ValueError. Only that returned-value validation now normalizes to the existing
+`LOCAL_EMBEDDING_OUTCOME_INVALID` WorkflowError. It preserves the running step/encoding ownership,
+creates no success/advance, and performs no capacity/GPU cleanup. Arbitrary executor exceptions and
+uncertain launch outcomes are not normalized into invented failure/completion or reexecution.
+
+The guarded integration inventory now includes related-definition and related-step malformed-parent
+mirrors: **ten collected in0.18s, NOT_EXECUTED** here. An initial resumed source invocation omitted its
+source PYTHONPATH and failed collection against old installed packages; explicit source paths were
+restored and the source gates rerun. This was not a runtime/package/state repair.
+
+Corrected re-freeze gate: **654 tests PASS in59.79s** across the same21 source unit files; strict
+mypy/Ruff/check-format **all11 Python files PASS**, `git diff --check` PASS. Earlier corrected broad
+gate651 PASS58.80s preceded the three additional legitimate-legacy route controls. The ten guarded
+DB tests remain only collected, not executed. No runtime/DB/IAM/NAS/model/GPU/installation change.
+
+### Root independent source and actual disposable PostgreSQL gate
+
+Root independently verified the exact frozen12-file receipt and reran the same21 unit suites:
+**654 PASS in59.87s**, explicit `--strict --explicit-package-bases` mypy and Ruff/check-format
+**11 files PASS**. This duplicates the agent's gate, not an additional654 unique tests.
+The existing guarded `embedding-stage-tests` purpose now invokes both the18 migration tests and
+the10 Runner tests, without a new purpose, queue, role or protocol. Harness regression:
+**92 PASS in0.87s**, shell syntax PASS.
+
+On2026-10-13 UTC, root prepared the exact marked disposable DB
+`/tmp/eom-api-testdb-20261013004344_87e464e3` using the supported testdb owner path.
+Full upgrade to0053, downgrade to0052 and upgrade to0053 passed, including current-head/control-plane
+verification. The one guarded invocation executed **28 tests PASS in8.23s, zero skips**. These include
+two independent processes contending for one committed native command, SKIP LOCKED, generation,
+late synthetic revocation rollback and malformed related-definition/step routing. Fixture rows were
+retained until supported whole-DB cleanup; no row repair/deletion or success reinterpretation occurred.
+
+Supported cleanup removed only that disposable DB, its marked test roles/state; cleanup PASS and
+state absence confirmed. Sanitized prepare/cleanup evidence is
+`/tmp/eom-native-runner-db-evidence.Y1PwbVdO`; migration/pytest results are recorded in the goal
+checkpoint/tool receipts. Tests prove actual PostgreSQL concurrency, not real Identity/session,
+source authority or runtime admission. No production migration/IAM/NAS changes or model/GPU runs.

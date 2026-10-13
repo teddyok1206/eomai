@@ -24,6 +24,8 @@ from eom_workflow_runner.catalog_port import WorkflowCatalogPort
 from eom_workflow_runner.composition import build_workflow_runtime
 from eom_workflow_runner.engine import PlatformRoleJobExecutor, WorkflowRunner
 from eom_workflow_runner.inference_transfer_executor import PlatformInferenceTransferExecutor
+from eom_workflow_runner.local_embedding_admission import LocalEmbeddingOwnerAdmission
+from eom_workflow_runner.local_embedding_execution_port import LocalEmbeddingNativeExecutor
 from eom_workflow_runner.readiness import (
     ReadinessStatus,
     RuntimeReadinessCheck,
@@ -108,9 +110,19 @@ def test_production_composition_supplies_catalog_adapter(tmp_path: Path) -> None
     )
     assert runtime.runner.executor.orchestrator.settings == _platform_settings(tmp_path)
     assert runtime.runner.capacity_reconciler is runtime.runner.executor.orchestrator.capacity
+    assert runtime.runner.local_embedding_owner is None
+    assert runtime.runner.local_embedding_executor is None
     assert isinstance(runtime.runner.preset_validator, PresetModelValidationProcessor)
     assert runtime.runner.preset_validator.settings == runtime.platform_settings
     engine.dispose()
+
+
+@pytest.mark.parametrize("owner_only", [False, True])
+def test_native_composition_requires_paired_explicit_injection(owner_only: bool) -> None:
+    owner = cast(LocalEmbeddingOwnerAdmission, object()) if owner_only else None
+    executor = None if owner_only else cast(LocalEmbeddingNativeExecutor, object())
+    with pytest.raises(ValueError, match="supplied together"):
+        build_workflow_runtime(local_embedding_owner=owner, local_embedding_executor=executor)
 
 
 @pytest.mark.parametrize("with_validation", [False, True])
@@ -323,7 +335,7 @@ def test_doctor_reports_missing_worker_configuration_before_composition(
         worker_config=tmp_path / "missing-worker-slots.yaml",
         worker_config_source=WorkerConfigSource.EXPLICIT,
     )
-    monkeypatch.setattr(cli.Settings, "from_environment", lambda: settings)
+    monkeypatch.setattr(Settings, "from_environment", lambda: settings)
 
     def unexpected(**_kwargs: object) -> object:
         raise AssertionError("composition must not run with invalid worker configuration")

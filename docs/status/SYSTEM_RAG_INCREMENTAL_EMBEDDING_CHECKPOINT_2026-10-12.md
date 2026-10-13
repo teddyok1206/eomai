@@ -766,3 +766,29 @@ protected installed-owner admission이나 권한 grant가 아니며 capture hand
 CLI/publisher first-successor 순서·전체 public/private/source/prefix closure·final admission/proof와
 실제 native 실행·CPU/CUDA benchmark/default·seed/delta/소비자 연결은 여전히 남아 있다.
 기존 protected bootstrap/runtime와 production DB/NAS는 변경하지 않았다. 전체 목표 ACTIVE다.
+
+## native exact claim/dispatch와 실제 임시 DB 검증 — 2026-10-13 00:45 UTC
+
+기존 Runner에 목적별 bounded candidate peek→exact claim과 고정 encode_batch/complete 실행
+분기를 연결했다. native 준비가 안 된 경우 기존 Codex 작업을 막지 않고, 저장된 audit를 현재
+권한으로 쓰지 않는다. 실행 사이마다 짧은 root transaction에서 lease와 필수 owner를 다시
+검증하며 inference 동안 SQL transaction을 열어두지 않는다. 기존 상태·queue·역할을 유지하고
+새 생산 composition은 여전히 owner/executor 미연결로 명시 거부한다.
+
+독립 재검토에서 두 source defect를 재현·수정했다. parent뿐 아니라 related definition/step의
+native marker를 같은 공식 SQL predicate로 분기하여 direct reconcile 우회를 막았다. 잘못된
+Pending 응답은 안정적인 OUTCOME_INVALID로 처리하고 성공·새 작업·capacity 해제를 만들지 않는다.
+root의 독립21-suite **654 PASS (59.87s)**, strict mypy/Ruff/format11-file PASS다. agent의 동일
+654 gate와 합산하지 않는다. harness92 PASS(0.87s), shell syntax/diff check PASS도 별도로 기록한다.
+
+실제 marked disposable DB `/tmp/eom-api-testdb-20261013004344_87e464e3`에서0053 up→0052 down→
+0053 up 및 head/control-plane PASS 후, 같은 guarded owner invocation으로 stage18+runner10의
+**28 PASS (8.23s), skip0**를 확인했다. 독립 두 process의 동일 command claim 경쟁, row lock,
+lease generation/late revocation rollback과 기존 경로 회귀가 포함된다. synthetic owner 콜백은
+실제 사용자/source/session 권한 검증의 대체물이 아니다.
+
+supported cleanup PASS이며 해당 disposable DB·표시된 test role/state만 제거했다. 재생성 가능한
+시험 데이터였고 canonical Artifact/원본/운영 DB는 건드리지 않았다. sanitized prepare/cleanup은
+`/tmp/eom-native-runner-db-evidence.Y1PwbVdO`에 보존한다. 실제 installed native owner/launcher,
+CPU/CUDA6회 비교·기본값 전환·seed/delta·공통 소비자 활성화는 PENDING이다. 새 model/GPU 실행0,
+production migration/IAM/NAS write0, 전체 목표 ACTIVE다.

@@ -166,13 +166,15 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 
 | 증분 인덱스 경계 | 현재 검증·활성 상태 |
 | --- | --- |
-| 계약·registry·Artifact·수치 검증·atomic submission | SOURCE_PASS; exact claim/dispatcher 연결 진행 중 |
-| 실제 disposable PostgreSQL |0052 registry/application16·reservation8·limited IAM6,0053 stage18 PASS; migration·cleanup PASS |
+| 계약·registry·Artifact·수치 검증·atomic submission·exact claim/native dispatch | SOURCE_PASS; 실제 owner/session·executor 운영 연결은 미활성 |
+| 실제 disposable PostgreSQL |0052 registry/application16·reservation8·limited IAM6,0053 stage18+runner10 PASS; migration·cleanup PASS |
 | CPU/CUDA 실행 환경 준비 | Conda base31·public wheels55/70의 non-root/offline 설치 완료; 최종 protected runtime 미승인 |
 | 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | NOT_ACTIVE / NOT_EVALUATED |
 
-최근 독립 source gate는 submission584와 Conda/runtime902 PASS, strict type/lint/format PASS입니다.
-902에는 병행 CUDA OOM seam의10 source 사례가 포함되며 실제 모델 실행 증거가 아닙니다.
+최근 독립 source gate는 Runner654·benchmark worker619·host/runtime982 PASS와
+strict type/lint/format PASS입니다. 실제 임시 DB28개 사례에는 독립 실행기 claim 경쟁과
+기존 실행 경로 분리가 포함됩니다. 합성 owner 콜백과 source 검증은 실제 사용자 권한이나
+모델·GPU 실행 증거가 아닙니다.
 서로 겹치는 테스트 수를 합산하지 않습니다. 각 gate·실패 보존·남은 운영 연결은
 [증분 임베딩 checkpoint](docs/status/SYSTEM_RAG_INCREMENTAL_EMBEDDING_CHECKPOINT_2026-10-12.md),
 [native launcher](docs/architecture/INCREMENTAL_EMBEDDING_NATIVE_LAUNCHER_PROPOSAL.md),

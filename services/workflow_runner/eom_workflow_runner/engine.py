@@ -75,6 +75,8 @@ from eom_workflow.inference_transfer import (
     TRANSFER_PAIR_WORKFLOW_KEY,
 )
 from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
+from eom_workflow.local_embedding_request import LocalEmbeddingWorkflowRequestV11
+from eom_workflow.local_embedding_workflow import LocalEmbeddingWorkflowDefinition
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -91,6 +93,13 @@ from eom_workflow_runner.catalog_port import (
 )
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
 from eom_workflow_runner.inference_transfer_execution_port import InferenceTransferRoleJobExecutor
+from eom_workflow_runner.local_embedding_admission import LocalEmbeddingOwnerAdmission
+from eom_workflow_runner.local_embedding_execution_port import LocalEmbeddingNativeExecutor
+from eom_workflow_runner.local_embedding_step_execution import (
+    advance_local_embedding_step,
+    complete_local_embedding_terminal,
+    native_fenced_runner_transaction,
+)
 from eom_workflow_runner.logging import log_workflow_event
 from eom_workflow_runner.models import (
     ApprovalRequestRecord,
@@ -100,15 +109,19 @@ from eom_workflow_runner.models import (
     WorkflowStepRunRecord,
 )
 from eom_workflow_runner.readiness import (
+    ReadinessStatus,
+    RuntimeReadinessCheck,
+    RuntimeReadinessReport,
     WorkflowExecutionReadiness,
     WorkflowRuntimeNotReady,
 )
 from eom_workflow_runner.repository import (
+    CommandCandidate,
+    CommandExecutionFamily,
     CommandLeaseIdentity,
     CommandType,
     active_approval,
-    claim_next_command,
-    claimable_command_exists,
+    claim_command_candidate,
     command_lease_identity,
     create_approval_request,
     create_step_run,
@@ -116,9 +129,12 @@ from eom_workflow_runner.repository import (
     link_superseded_attempts,
     list_step_runs,
     load_persisted_inference_transfer_workflow_request,
+    load_persisted_local_embedding_workflow_request,
     load_persisted_workflow_request,
+    peek_command_candidate,
     renew_command_lease,
     require_command_lease,
+    workflow_requires_local_embedding,
 )
 from eom_workflow_runner.review_correction_binding import validate_review_correction_step_binding
 from eom_workflow_runner.role_execution_binding import (
@@ -147,6 +163,17 @@ from eom_workflow_runner.state_machine import (
 _ACTIVE_COMMAND_LEASE: ContextVar[CommandLeaseIdentity | None] = ContextVar(
     "active_workflow_command_lease", default=None
 )
+_ACTIVE_NATIVE_REQUEST: ContextVar[
+    tuple[str, LocalEmbeddingWorkflowRequestV11, CommandLeaseIdentity] | None
+] = ContextVar("active_local_embedding_request", default=None)
+
+
+def _local_embedding_unavailable_report(
+    code: WorkflowErrorCode, detail: str
+) -> RuntimeReadinessReport:
+    return RuntimeReadinessReport(
+        (RuntimeReadinessCheck("local_embedding_owner", ReadinessStatus.FAIL, code.value, detail),)
+    )
 
 
 @contextmanager
@@ -457,6 +484,8 @@ class WorkflowRunner:
         preset_validator: PresetValidationProcessor | None = None,
         capacity_reconciler: CapacityReconciler | None = None,
         inference_transfer_executor: InferenceTransferRoleJobExecutor | None = None,
+        local_embedding_owner: LocalEmbeddingOwnerAdmission | None = None,
+        local_embedding_executor: LocalEmbeddingNativeExecutor | None = None,
         runner_id: str | None = None,
     ) -> None:
         if catalog is None:
@@ -465,6 +494,8 @@ class WorkflowRunner:
             raise ValueError("workflow actor authorizer is required")
         if not available_roles:
             raise ValueError("workflow worker roles are required")
+        if (local_embedding_owner is None) != (local_embedding_executor is None):
+            raise ValueError("native owner and executor must be supplied together")
         self.engine = engine
         self.sessions = build_session_factory(engine)
         self.settings = settings or WorkflowSettings.from_environment()
@@ -479,62 +510,147 @@ class WorkflowRunner:
         self.preset_validator = preset_validator
         self.capacity_reconciler = capacity_reconciler
         self.inference_transfer_executor = inference_transfer_executor
+        self.local_embedding_owner = local_embedding_owner
+        self.local_embedding_executor = local_embedding_executor
 
     def run_once(self, workflow_id: str | None = None) -> WorkflowCommandRecord | None:
-        with self.sessions() as session:
-            has_work = claimable_command_exists(session, workflow_id=workflow_id)
-        if not has_work:
-            return None
-        self._require_runtime_ready()
-        with self._fenced_transaction() as session:
-            command = claim_next_command(
-                session,
-                runner_id=self.runner_id,
-                lease_seconds=self.runner_config.command_lease_seconds,
-                workflow_id=workflow_id,
-            )
-            if command is None:
+        skipped_families: set[CommandExecutionFamily] = set()
+        native_claim_failure: RuntimeReadinessReport | None = None
+        for _ in CommandExecutionFamily:
+            candidate = self._ready_command_candidate(workflow_id, frozenset(skipped_families))
+            if candidate is None:
+                if native_claim_failure is not None:
+                    raise WorkflowRuntimeNotReady(native_claim_failure)
                 return None
-            command_id = command.command_id
-            lease = command_lease_identity(command)
-        with self._fenced_transaction() as session:
-            processing = require_command_lease(session, lease, for_update=True)
-            transition_command(processing, CommandState.PROCESSING)
-
-        try:
-            with self._command_lease_scope(lease):
-                self._process_command(command_id)
-        except WorkflowError as exc:
-            with self._fenced_transaction() as session:
-                try:
-                    failed = require_command_lease(session, lease, for_update=True)
-                except WorkflowError:
-                    failed = None
-                if failed is not None and failed.state == CommandState.PROCESSING.value:
-                    failed.error_code = exc.code.value
-                    transition_command(failed, CommandState.FAILED)
-            log_workflow_event(
-                LOGGER,
-                logging.ERROR,
-                str(exc),
-                event="WORKFLOW_COMMAND_FAILED",
-                command_id=command_id,
-                error_code=exc.code.value,
-            )
+            try:
+                with transaction(self.sessions) as session:
+                    command = claim_command_candidate(
+                        session,
+                        candidate,
+                        runner_id=self.runner_id,
+                        lease_seconds=self.runner_config.command_lease_seconds,
+                        local_embedding_owner=self.local_embedding_owner,
+                        local_embedding_executor=self.local_embedding_executor,
+                    )
+                    if command is not None:
+                        command_id = command.command_id
+                        lease = command_lease_identity(command)
+                        break
+            except WorkflowError as exc:
+                if (
+                    candidate.family is not CommandExecutionFamily.LOCAL_EMBEDDING
+                    or exc.code
+                    not in {
+                        WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                        WorkflowErrorCode.ACTOR_AUTHORIZATION_UNAVAILABLE,
+                    }
+                ):
+                    raise
+                native_claim_failure = _local_embedding_unavailable_report(
+                    exc.code, "current native owner or supported recovery unavailable"
+                )
+            # A locked/changed purpose cannot starve the other purpose. The next
+            # peek/readiness/claim uses a NEW root, not a substitute inside claim.
+            skipped_families.add(candidate.family)
         else:
+            if native_claim_failure is not None:
+                raise WorkflowRuntimeNotReady(native_claim_failure)
+            return None
+        with self._execution_family_scope(candidate, lease):
             with self._fenced_transaction() as session:
-                try:
-                    succeeded = require_command_lease(session, lease, for_update=True)
-                except WorkflowError:
-                    succeeded = None
-                if succeeded is not None and succeeded.state == CommandState.PROCESSING.value:
-                    transition_command(succeeded, CommandState.SUCCEEDED)
+                processing = require_command_lease(session, lease, for_update=True)
+                transition_command(processing, CommandState.PROCESSING)
+            try:
+                with self._command_lease_scope(lease):
+                    self._process_command(command_id)
+            except WorkflowError as exc:
+                with self._fenced_transaction() as session:
+                    try:
+                        failed = require_command_lease(session, lease, for_update=True)
+                    except WorkflowError:
+                        failed = None
+                    if failed is not None and failed.state == CommandState.PROCESSING.value:
+                        failed.error_code = exc.code.value
+                        transition_command(failed, CommandState.FAILED)
+                log_workflow_event(
+                    LOGGER,
+                    logging.ERROR,
+                    str(exc),
+                    event="WORKFLOW_COMMAND_FAILED",
+                    command_id=command_id,
+                    error_code=exc.code.value,
+                )
+            else:
+                with self._fenced_transaction() as session:
+                    try:
+                        succeeded = require_command_lease(session, lease, for_update=True)
+                    except WorkflowError:
+                        succeeded = None
+                    if succeeded is not None and succeeded.state == CommandState.PROCESSING.value:
+                        transition_command(succeeded, CommandState.SUCCEEDED)
         with self.sessions() as session:
             result = session.get(WorkflowCommandRecord, command_id)
             if result is None:
                 raise RuntimeError("processed command disappeared")
             session.expunge(result)
             return result
+
+    def _ready_command_candidate(
+        self,
+        workflow_id: str | None,
+        excluded_families: frozenset[CommandExecutionFamily] = frozenset(),
+    ) -> CommandCandidate | None:
+        with self.sessions() as session:
+            candidates = tuple(
+                candidate
+                for family in CommandExecutionFamily
+                if family not in excluded_families
+                and (
+                    candidate := peek_command_candidate(
+                        session, family=family, workflow_id=workflow_id
+                    )
+                )
+                is not None
+            )
+        first_failure: RuntimeReadinessReport | None = None
+        for candidate in sorted(candidates, key=lambda row: (row.created_at, row.command_id)):
+            if candidate.family is CommandExecutionFamily.ROLE:
+                report = self.readiness.evaluate()
+            elif (
+                self.local_embedding_owner is None
+                or self.local_embedding_executor is None
+                or candidate.native_request is None
+            ):
+                report = _local_embedding_unavailable_report(
+                    WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                    "actual native owner, executor or exact request unavailable",
+                )
+            else:
+                report = self.local_embedding_executor.evaluate(candidate.native_request)
+            if report.ready:
+                return candidate
+            first_failure = first_failure or report
+        if first_failure is not None:
+            raise WorkflowRuntimeNotReady(first_failure)
+        return None
+
+    @contextmanager
+    def _execution_family_scope(
+        self, candidate: CommandCandidate, lease: CommandLeaseIdentity
+    ) -> Iterator[None]:
+        native = None
+        if candidate.family is CommandExecutionFamily.LOCAL_EMBEDDING:
+            if candidate.native_request is None:
+                raise WorkflowError(
+                    WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                    "native exact request unavailable",
+                )
+            native = (candidate.workflow_id, candidate.native_request, lease)
+        token = _ACTIVE_NATIVE_REQUEST.set(native)
+        try:
+            yield
+        finally:
+            _ACTIVE_NATIVE_REQUEST.reset(token)
 
     def _require_runtime_ready(self) -> None:
         readiness = self.readiness.evaluate()
@@ -599,6 +715,12 @@ class WorkflowRunner:
                 time.sleep(self.runner_config.poll_interval_seconds)
 
     def reconcile(self, workflow_id: str) -> None:
+        _workflow, compiled = self._load_workflow(workflow_id)
+        if isinstance(compiled.definition, LocalEmbeddingWorkflowDefinition):
+            raise WorkflowError(
+                WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                "native reconcile requires an actual queued command with a live lease",
+            )
         self._require_runtime_ready()
         self._advance(workflow_id, None, "system", self.runner_id)
 
@@ -612,6 +734,16 @@ class WorkflowRunner:
                 )
             session.expunge(command)
         command_type = CommandType(command.command_type)
+        if _ACTIVE_NATIVE_REQUEST.get() is not None and command_type not in {
+            CommandType.START_WORKFLOW,
+            CommandType.ADVANCE_WORKFLOW,
+            CommandType.RECONCILE_WORKFLOW,
+            CommandType.CANCEL_WORKFLOW,
+        }:
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_INVALID_TRANSITION,
+                "native approval, rework and retry are unsupported",
+            )
         if command_type in {
             CommandType.START_WORKFLOW,
             CommandType.ADVANCE_WORKFLOW,
@@ -632,7 +764,8 @@ class WorkflowRunner:
                         WorkflowErrorCode.APPROVAL_UNAUTHORIZED,
                         "only an admin can reconcile a workflow",
                     )
-            self._resume_capacity_queued_failure(command)
+            if _ACTIVE_NATIVE_REQUEST.get() is None:
+                self._resume_capacity_queued_failure(command)
             self._advance(
                 command.workflow_id,
                 command.command_id,
@@ -668,6 +801,9 @@ class WorkflowRunner:
     ) -> None:
         for _ in range(128):
             workflow, compiled = self._load_workflow(workflow_id)
+            if isinstance(compiled.definition, LocalEmbeddingWorkflowDefinition):
+                self._advance_local_embedding(workflow, compiled, command_id, actor_type, actor_id)
+                return
             if workflow.state in TERMINAL_WORKFLOW_STATES:
                 if workflow.state == WorkflowState.COMPLETED.value:
                     with self._fenced_transaction() as session:
@@ -748,6 +884,62 @@ class WorkflowRunner:
         raise WorkflowError(
             WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
             "workflow advancement exceeded deterministic step limit",
+        )
+
+    def _advance_local_embedding(
+        self,
+        workflow: WorkflowInstanceRecord,
+        compiled: CompiledWorkflowDefinition,
+        command_id: str | None,
+        actor_type: str,
+        actor_id: str,
+    ) -> None:
+        lease = _ACTIVE_COMMAND_LEASE.get()
+        native = _ACTIVE_NATIVE_REQUEST.get()
+        if (
+            command_id is None
+            or lease is None
+            or lease.command_id != command_id
+            or native is None
+            or native[0] != workflow.workflow_id
+            or self.local_embedding_owner is None
+            or self.local_embedding_executor is None
+            or not isinstance(compiled.definition, LocalEmbeddingWorkflowDefinition)
+        ):
+            raise WorkflowError(
+                WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                "native advancement requires its actual leased owner context",
+            )
+        request = load_persisted_local_embedding_workflow_request(workflow.initial_request)
+        if request != native[1]:
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT, "native original request changed"
+            )
+        if workflow.state in {WorkflowState.FAILED.value, WorkflowState.CANCELLED.value}:
+            return
+        if workflow.current_step_key == "encode_batch":
+            continued = advance_local_embedding_step(
+                workflow=workflow,
+                compiled=compiled,
+                request=request,
+                lease=lease,
+                owner=self.local_embedding_owner,
+                executor=self.local_embedding_executor,
+                fenced_transaction=self._fenced_transaction,
+                poll_interval_seconds=self.runner_config.poll_interval_seconds,
+                actor_type=actor_type,
+                actor_id=actor_id,
+            )
+            if not continued:
+                return
+        complete_local_embedding_terminal(
+            workflow_id=workflow.workflow_id,
+            request=request,
+            lease=lease,
+            executor=self.local_embedding_executor,
+            fenced_transaction=self._fenced_transaction,
+            actor_type=actor_type,
+            actor_id=actor_id,
         )
 
     def _execute_agent(
@@ -2811,7 +3003,13 @@ class WorkflowRunner:
             workflow = session.get(WorkflowInstanceRecord, workflow_id)
             if workflow is None:
                 raise WorkflowError(WorkflowErrorCode.WORKFLOW_NOT_FOUND, "workflow not found")
+            native = workflow_requires_local_embedding(session, workflow_id=workflow_id)
             compiled = self._compiled_for_record(session, workflow)
+            if native and not isinstance(compiled.definition, LocalEmbeddingWorkflowDefinition):
+                raise WorkflowError(
+                    WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                    "native-marked Workflow relations do not admit legacy execution",
+                )
             session.expunge(workflow)
             return workflow, compiled
 
@@ -3111,18 +3309,57 @@ class WorkflowRunner:
 
     @contextmanager
     def _fenced_transaction(self) -> Iterator[Session]:
-        with _command_fenced_transaction(self.sessions) as session:
-            yield session
+        native = _ACTIVE_NATIVE_REQUEST.get()
+        if native is None:
+            with _command_fenced_transaction(self.sessions) as session:
+                yield session
+        else:
+            if self.local_embedding_owner is None:
+                raise WorkflowError(
+                    WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                    "native owner is unavailable",
+                )
+            with native_fenced_runner_transaction(
+                self.sessions,
+                owner=self.local_embedding_owner,
+                workflow_id=native[0],
+                request=native[1],
+                lease=native[2],
+            ) as session:
+                yield session
 
     @contextmanager
     def _command_lease_scope(self, lease: CommandLeaseIdentity) -> Iterator[None]:
         stop = Event()
         lost = Event()
+        native = _ACTIVE_NATIVE_REQUEST.get()
+
+        @contextmanager
+        def lease_transaction() -> Iterator[Session]:
+            if native is None:
+                with transaction(self.sessions) as session:
+                    yield session
+            else:
+                if self.local_embedding_owner is None:
+                    raise WorkflowError(
+                        WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                        "native heartbeat owner is unavailable",
+                    )
+                # ContextVars are not inherited by the heartbeat thread. Carry
+                # immutable request identity, NEVER the prior authorization.
+                with native_fenced_runner_transaction(
+                    self.sessions,
+                    owner=self.local_embedding_owner,
+                    workflow_id=native[0],
+                    request=native[1],
+                    lease=lease,
+                ) as session:
+                    yield session
 
         def heartbeat() -> None:
             while not stop.wait(self.runner_config.command_lease_heartbeat_seconds):
                 try:
-                    with transaction(self.sessions) as session:
+                    with lease_transaction() as session:
                         renew_command_lease(
                             session,
                             lease,
@@ -3145,7 +3382,7 @@ class WorkflowRunner:
                     )
                     return
 
-        with transaction(self.sessions) as session:
+        with lease_transaction() as session:
             renew_command_lease(
                 session,
                 lease,
@@ -3165,7 +3402,7 @@ class WorkflowRunner:
                     WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
                     "workflow command lease heartbeat was lost",
                 )
-            with transaction(self.sessions) as session:
+            with lease_transaction() as session:
                 require_command_lease(session, lease, for_update=True)
         finally:
             stop.set()
@@ -3181,7 +3418,12 @@ class WorkflowRunner:
                 WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
                 "workflow command lease context is missing",
             )
-        with transaction(self.sessions) as session:
+        context = (
+            self._fenced_transaction()
+            if _ACTIVE_NATIVE_REQUEST.get() is not None
+            else transaction(self.sessions)
+        )
+        with context as session:
             renew_command_lease(
                 session,
                 lease,

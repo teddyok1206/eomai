@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import UTC, datetime
+from typing import cast
+from unittest.mock import Mock
 
 import eom_workflow_runner.engine as engine_module
 import pytest
@@ -12,6 +15,8 @@ from eom_workflow_runner.readiness import (
     RuntimeReadinessReport,
     WorkflowRuntimeNotReady,
 )
+from eom_workflow_runner.repository import CommandCandidate, CommandExecutionFamily
+from sqlalchemy.orm import Session, sessionmaker
 
 
 class _RegistryStagingUnavailable:
@@ -37,12 +42,22 @@ def test_registry_staging_failure_precedes_command_claim(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     runner = object.__new__(WorkflowRunner)
-    runner.sessions = _read_session
+    runner.sessions = cast(sessionmaker[Session], _read_session)
     runner.readiness = _RegistryStagingUnavailable()
-    monkeypatch.setattr(engine_module, "claimable_command_exists", lambda *_args, **_kwargs: True)
+    candidate = Mock(spec=CommandCandidate)
+    candidate.family = CommandExecutionFamily.ROLE
+    candidate.created_at = datetime.now(UTC)
+    candidate.command_id = "wfcmd_" + "1" * 32
     monkeypatch.setattr(
         engine_module,
-        "claim_next_command",
+        "peek_command_candidate",
+        lambda *_args, **kwargs: (
+            candidate if kwargs["family"] is CommandExecutionFamily.ROLE else None
+        ),
+    )
+    monkeypatch.setattr(
+        engine_module,
+        "claim_command_candidate",
         lambda *_args, **_kwargs: pytest.fail("runtime-not-ready command was claimed"),
     )
 

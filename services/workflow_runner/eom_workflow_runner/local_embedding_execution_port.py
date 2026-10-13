@@ -72,3 +72,24 @@ class LocalEmbeddingNativeExecutor(Protocol):
         recovery owner authority; this interface does not create that authority.
         """
         ...
+
+    def validate_completion(
+        self,
+        *,
+        session: Session,
+        workflow: WorkflowInstanceRecord,
+        step: WorkflowStepRunRecord,
+        request: LocalEmbeddingWorkflowRequestV11,
+        command_lease: CommandLeaseIdentity,
+        output: LocalEmbeddingStepOutput,
+    ) -> LocalEmbeddingStepOutput:
+        """Resolve and reauthorize the exact canonical receipt with existing owners.
+
+        This short root transaction does not run inference. Resolve the carrier's
+        raw member and canonical receipt, producer/Job, original plan/association,
+        registration and current source/session closure. Return the SAME checked
+        carrier, never repair it or substitute latest. A pass-through/default
+        implementation is not authority. Step success and terminal/replay each
+        call this seam; immutable receipt observations do not rewind index head.
+        """
+        ...

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import secrets
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -41,7 +42,7 @@ from eom_workflow.schemas import (
     validate_inference_transfer_workflow_request,
     validate_inference_transfer_workflow_request_v11,
 )
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, not_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
@@ -116,6 +117,146 @@ class CommandLeaseIdentity:
     runner_id: str
     lease_token: str
     lease_generation: int
+
+
+class CommandExecutionFamily(StrEnum):
+    ROLE = "ROLE"
+    LOCAL_EMBEDDING = "LOCAL_EMBEDDING"
+
+
+@dataclass(frozen=True, slots=True)
+class CommandCandidate:
+    """Read-only exact queue header, not a lease or cached authority decision."""
+
+    family: CommandExecutionFamily
+    command_id: str
+    workflow_id: str
+    command_type: str
+    command_request_hash: str
+    command_contents_hash: str
+    command_state: str
+    lease_generation: int
+    attempts: int
+    available_at: datetime
+    lease_expires_at: datetime | None
+    created_at: datetime
+    definition_id: str
+    definition_hash: str
+    workflow_request_hash: str
+    workflow_contents_hash: str
+    current_step_key: str
+    workflow_state: str
+    workflow_lock_version: int
+    native_request: LocalEmbeddingWorkflowRequestV11 | None
+
+
+def _native_workflow_filter() -> ColumnElement[bool]:
+    """Total routing guard, including malformed native history; never authorization."""
+    request_versions = (
+        "local-embedding-workflow-request/1.0",
+        "local-embedding-workflow-request/1.1",
+    )
+    definition = select(WorkflowDefinitionRecord.definition_id).where(
+        WorkflowDefinitionRecord.definition_id == WorkflowInstanceRecord.definition_id,
+        or_(
+            WorkflowDefinitionRecord.definition_key == LOCAL_EMBEDDING_WORKFLOW_KEY,
+            WorkflowDefinitionRecord.canonical_definition["definition_key"].as_string()
+            == LOCAL_EMBEDDING_WORKFLOW_KEY,
+        ),
+    )
+    step = select(WorkflowStepRunRecord.step_run_id).where(
+        WorkflowStepRunRecord.workflow_id == WorkflowInstanceRecord.workflow_id,
+        or_(
+            WorkflowStepRunRecord.step_type == "application",
+            WorkflowStepRunRecord.result_schema == "incremental-embedding-result@1.0",
+        ),
+    )
+    return func.coalesce(
+        or_(
+            WorkflowInstanceRecord.definition_key == LOCAL_EMBEDDING_WORKFLOW_KEY,
+            WorkflowInstanceRecord.role_schema_version == LOCAL_EMBEDDING_EXECUTION_PROTOCOL,
+            WorkflowInstanceRecord.stage == WorkflowStage.LOCAL_EMBEDDING.value,
+            WorkflowInstanceRecord.initial_request["schema_version"]
+            .as_string()
+            .in_(request_versions),
+            WorkflowInstanceRecord.request_payload["schema_version"]
+            .as_string()
+            .in_(request_versions),
+            WorkflowInstanceRecord.initial_request["purpose"].as_string() == "LOCAL_EMBEDDING",
+            WorkflowInstanceRecord.request_payload["purpose"].as_string() == "LOCAL_EMBEDDING",
+            definition.exists(),
+            step.exists(),
+        ),
+        False,
+    )
+
+
+def workflow_requires_local_embedding(session: Session, *, workflow_id: str) -> bool:
+    """Read the SAME total routing predicate at one PK, including related native markers."""
+    native = session.scalar(
+        select(_native_workflow_filter()).where(WorkflowInstanceRecord.workflow_id == workflow_id)
+    )
+    if native is None:
+        raise WorkflowError(WorkflowErrorCode.WORKFLOW_NOT_FOUND, "workflow routing target missing")
+    if type(native) is not bool:
+        raise WorkflowError(
+            WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID, "workflow routing projection invalid"
+        )
+    return native
+
+
+def _command_candidate(
+    command: WorkflowCommandRecord,
+    workflow: WorkflowInstanceRecord,
+    family: CommandExecutionFamily,
+) -> CommandCandidate:
+    native_request = None
+    if family is CommandExecutionFamily.LOCAL_EMBEDDING:
+        # Invalid native metadata remains native/unavailable, never a role fallback.
+        with suppress(ValueError):
+            native_request = load_persisted_local_embedding_workflow_request(
+                workflow.initial_request
+            )
+    return CommandCandidate(
+        family=family,
+        command_id=command.command_id,
+        workflow_id=workflow.workflow_id,
+        command_type=command.command_type,
+        command_request_hash=command.request_hash,
+        command_contents_hash=content_sha256(
+            {
+                "workflow_id": command.workflow_id,
+                "command_type": command.command_type,
+                "payload": command.payload,
+                "actor_type": command.actor_type,
+                "actor_id": command.actor_id,
+                "source": command.source,
+            }
+        ),
+        command_state=command.state,
+        lease_generation=command.lease_generation,
+        attempts=command.attempts,
+        available_at=command.available_at,
+        lease_expires_at=command.lease_expires_at,
+        created_at=command.created_at,
+        definition_id=workflow.definition_id,
+        definition_hash=workflow.definition_hash,
+        workflow_request_hash=workflow.request_hash,
+        workflow_contents_hash=content_sha256(
+            {
+                "definition_key": workflow.definition_key,
+                "definition_version": workflow.definition_version,
+                "role_schema_version": workflow.role_schema_version,
+                "stage": workflow.stage,
+                "initial_request": workflow.initial_request,
+                "request_payload": workflow.request_payload,
+            }
+        ),
+        current_step_key=workflow.current_step_key,
+        workflow_state=workflow.state,
+        workflow_lock_version=workflow.lock_version,
+        native_request=native_request,
+    )
 
 
 def _compiled_role_protocol(compiled: CompiledWorkflowDefinition) -> str:
@@ -885,9 +1026,10 @@ def claim_next_command(
     now = datetime.now(UTC)
     query = (
         select(WorkflowCommandRecord)
-        .where(_claimable_command_filter(now))
+        .join(WorkflowInstanceRecord)
+        .where(_claimable_command_filter(now), not_(_native_workflow_filter()))
         .order_by(WorkflowCommandRecord.created_at, WorkflowCommandRecord.command_id)
-        .with_for_update(skip_locked=True)
+        .with_for_update(skip_locked=True, of=WorkflowCommandRecord)
         .limit(1)
     )
     if workflow_id is not None:
@@ -895,6 +1037,17 @@ def claim_next_command(
     command = session.execute(query).scalar_one_or_none()
     if command is None:
         return None
+    _assign_command_lease(session, command, runner_id, lease_seconds, now)
+    return command
+
+
+def _assign_command_lease(
+    session: Session,
+    command: WorkflowCommandRecord,
+    runner_id: str,
+    lease_seconds: int,
+    now: datetime,
+) -> None:
     if command.state != CommandState.PENDING.value:
         transition_command(command, CommandState.PENDING)
     transition_command(command, CommandState.LEASED)
@@ -904,6 +1057,147 @@ def claim_next_command(
     command.lease_generation += 1
     command.lease_expires_at = now + timedelta(seconds=lease_seconds)
     session.flush()
+
+
+def peek_command_candidate(
+    session: Session,
+    *,
+    family: CommandExecutionFamily,
+    workflow_id: str | None = None,
+) -> CommandCandidate | None:
+    """One nonlocking FIFO header per fixed purpose; no owner/readiness call."""
+    if not isinstance(family, CommandExecutionFamily):
+        raise ValueError("WORKFLOW_COMMAND_EXECUTION_FAMILY_INVALID")
+    predicate = _native_workflow_filter()
+    query = (
+        select(WorkflowCommandRecord, WorkflowInstanceRecord)
+        .join(WorkflowInstanceRecord)
+        .where(
+            _claimable_command_filter(datetime.now(UTC)),
+            predicate if family is CommandExecutionFamily.LOCAL_EMBEDDING else not_(predicate),
+        )
+        .order_by(WorkflowCommandRecord.created_at, WorkflowCommandRecord.command_id)
+        .limit(1)
+        .execution_options(populate_existing=True)
+    )
+    if workflow_id is not None:
+        query = query.where(WorkflowCommandRecord.workflow_id == workflow_id)
+    row = session.execute(query).one_or_none()
+    if row is None:
+        return None
+    command, workflow = row
+    return _command_candidate(command, workflow, family)
+
+
+def claim_command_candidate(
+    session: Session,
+    candidate: CommandCandidate,
+    *,
+    runner_id: str,
+    lease_seconds: int,
+    local_embedding_owner: LocalEmbeddingOwnerAdmission | None = None,
+    local_embedding_executor: LocalEmbeddingNativeExecutor | None = None,
+) -> WorkflowCommandRecord | None:
+    """Exact-ID root claim; never replace a changed or locked FIFO candidate.
+
+    The owner must independently admit any expired native acquisition, including
+    supported linked uncertain-outcome recovery, before a generation is assigned.
+    A persisted request, candidate header or readiness report cannot do so.
+    """
+    if not isinstance(candidate, CommandCandidate) or not isinstance(
+        candidate.family, CommandExecutionFamily
+    ):
+        raise ValueError("WORKFLOW_COMMAND_EXECUTION_FAMILY_INVALID")
+    native = candidate.family is CommandExecutionFamily.LOCAL_EMBEDDING
+    if native and (local_embedding_owner is None or local_embedding_executor is None):
+        raise WorkflowError(
+            WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+            "native claim requires the actual owner and executor",
+        )
+    root = session.get_transaction()
+    if (
+        not session.is_active
+        or root is None
+        or not root.is_active
+        or session.in_nested_transaction()
+    ):
+        raise WorkflowError(
+            WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
+            "exact claim requires an active root transaction",
+        )
+    predicate = _native_workflow_filter()
+    workflow = session.scalar(
+        select(WorkflowInstanceRecord)
+        .where(
+            WorkflowInstanceRecord.workflow_id == candidate.workflow_id,
+            predicate if native else not_(predicate),
+        )
+        .with_for_update(skip_locked=True)
+        .execution_options(populate_existing=True)
+    )
+    if workflow is None:
+        return None
+    command = session.scalar(
+        select(WorkflowCommandRecord)
+        .where(
+            WorkflowCommandRecord.command_id == candidate.command_id,
+            WorkflowCommandRecord.workflow_id == candidate.workflow_id,
+            _claimable_command_filter(datetime.now(UTC)),
+        )
+        .with_for_update(skip_locked=True)
+        .execution_options(populate_existing=True)
+    )
+    if (
+        command is None
+        or _command_candidate(command, workflow, candidate.family) != candidate
+        or not _command_is_claimable(command, datetime.now(UTC))
+    ):
+        return None
+    if native:
+        assert local_embedding_owner is not None
+        request = load_persisted_local_embedding_workflow_request(workflow.initial_request)
+        definition = session.scalar(
+            select(WorkflowDefinitionRecord)
+            .where(WorkflowDefinitionRecord.definition_id == workflow.definition_id)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        if definition is None or definition.definition_hash != workflow.definition_hash:
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID,
+                "native exact definition is unavailable",
+            )
+        scope = local_embedding_owner.resolve_claim(
+            session, command=command, workflow=workflow, request=request
+        )
+        scope = validate_local_embedding_runner_admission(
+            scope,
+            compile_definition_data(definition.canonical_definition, definition.source_path, set()),
+            actor_type=workflow.created_actor_type,
+            actor_id=workflow.created_actor_id,
+        )
+        if (
+            scope.request != request
+            or definition.definition_hash != scope.request.workflow_definition_sha256
+            or command.request_hash != candidate.command_contents_hash
+        ):
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+                "native exact candidate closure differs",
+            )
+        validate_local_embedding_workflow_submission(
+            session,
+            workflow,
+            definition=definition,
+            request=request,
+            actor_type=workflow.created_actor_type,
+            actor_id=workflow.created_actor_id,
+        )
+    _assign_command_lease(session, command, runner_id, lease_seconds, datetime.now(UTC))
+    if native:
+        assert local_embedding_owner is not None
+        local_embedding_owner.fence_mutation(session, request, command_lease_identity(command))
+    require_command_lease(session, command_lease_identity(command), for_update=True)
     return command
 
 
@@ -972,7 +1266,8 @@ def claimable_command_exists(session: Session, *, workflow_id: str | None = None
     """Check for pending or reclaimable work without locking or changing it."""
     query = (
         select(WorkflowCommandRecord.command_id)
-        .where(_claimable_command_filter(datetime.now(UTC)))
+        .join(WorkflowInstanceRecord)
+        .where(_claimable_command_filter(datetime.now(UTC)), not_(_native_workflow_filter()))
         .order_by(WorkflowCommandRecord.created_at, WorkflowCommandRecord.command_id)
         .limit(1)
     )
@@ -993,6 +1288,14 @@ def _claimable_command_filter(now: datetime) -> ColumnElement[bool]:
             )
             & (WorkflowCommandRecord.lease_expires_at < now)
         ),
+    )
+
+
+def _command_is_claimable(command: WorkflowCommandRecord, now: datetime) -> bool:
+    return (command.state == CommandState.PENDING.value and command.available_at <= now) or (
+        command.state in {CommandState.LEASED.value, CommandState.PROCESSING.value}
+        and command.lease_expires_at is not None
+        and command.lease_expires_at < now
     )
 
 
