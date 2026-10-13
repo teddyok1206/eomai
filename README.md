@@ -248,7 +248,9 @@ readiness 확인은 통과했습니다. 수치 prefix/config/receipt·운영 서
 독립 release 검사는 비-Codex 임베딩 정의도 공통 protocol 계산으로 확인합니다.
 운영 metadata 조회에서 임베딩 registry 테이블 미적용과 기존 controller의 `app,public`
 검색 경로를 확인했습니다. 새 owner 전용 `app,pg_catalog` 연결을 추가했으며 기존
-서비스의 연결·권한은 유지합니다. 지원된 additive migration과 실제 Identity/control
+서비스의 연결·권한은 유지합니다. 최신 보호 owner 설치본에서도 그 연결을 확인했으며,
+운영 DB head는0051·새 registry4개 테이블은 미적용입니다. 지원된 additive migration과
+실제 Identity/control
 연결을 마치기 전에는 운영 corpus 인덱싱 완료로 표시하지 않습니다.
 
 최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와
