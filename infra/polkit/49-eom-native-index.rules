@@ -1,15 +1,18 @@
 // Only the trusted Orchestrator owner may start one fixed native INDEX instance.
 // Source/session/command authorization remains the application's responsibility.
+// Evaluate this exact exception before 50-eom-worker-units.rules denies other starts.
 polkit.addRule(function(action, subject) {
-    if (action.id !== "org.freedesktop.systemd1.manage-units" ||
-        subject.user !== "eom-workflow-runner" ||
-        action.lookup("verb") !== "start") {
+    if (action.id !== "org.freedesktop.systemd1.manage-units") {
         return polkit.Result.NOT_HANDLED;
     }
     var unit = action.lookup("unit");
     if (typeof unit === "string" &&
         /^eom-embedding-native-cpu-index@[0-9a-f]{32}\.service$/.test(unit)) {
-        return polkit.Result.YES;
+        if (subject.user === "eom-workflow-runner" && action.lookup("verb") === "start") {
+            return polkit.Result.YES;
+        }
+        // Never fall back to an interactive admin challenge for a worker/API process.
+        return polkit.Result.NO;
     }
     return polkit.Result.NOT_HANDLED;
 });

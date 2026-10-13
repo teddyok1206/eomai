@@ -2021,3 +2021,73 @@ production migration, 운영 Artifact 게시, 모델/GPU/seed/delta 실행은 **
 seed→delta/reuse→genuine query, 공통 소비자, CPU/GPU 비교와 조건부 GPU 기본값을 검증한다.
 이번 source/임시 DB PASS를 전체 목표 완료나 운영 인덱스 활성화로 확대하지 않는다.
 `GOAL=ACTIVE`, `NATIVE_OWNER_SOURCE=IMPLEMENTED`, `NATIVE_WORKFLOW_LIVE=NOT_ACTIVE`.
+
+## 2026-10-13 18:05 UTC — 실제 Native INDEX 계산·동일 실행 재조회
+
+보호된 owner release는 `28cfcfa0ba63d4753f85b8e2c09e15671eeebf94`, 실제 수치
+prefix는 기존 `c2f8eef87a507c94bada3ac6e5ecd26c91f82f3c`다. CPU prefix/receipt와
+모델 bytes는 변경하지 않았다. 동일 sudo pane `%89`를 재사용했고 새 비밀번호 요청은 없었다.
+
+### 실제로 닫힌 경계
+
+- Orchestrator owner의 input/association staging → root prepare의 고정3 FD →
+  기존 격리 CPU → 정확한 결과·float32 binary readback이 실제로 연결됐다.
+- **합성 입력2개×1024차원**, CPU/float32/L2/무절단, 결과 raw/semantic SHA와 finite/norm
+  검증 PASS. 실행 handle은 `63dc1d2bffa84943b3a66a7ecd2ef504`다.
+- exact completed handle 재조회에서 **추가 StartUnit0**, 동일 invocation/시작·종료 시각,
+  동일 result/binary hash를 확인했다. 남은 PID/cgroup 없이 종료했다.
+- 설치된 시작 권한9 cases PASS: owner의 exact INDEX start만 허용하고 prepare/query,
+  restart/stop, 잘못된 instance, CPU worker/API 요청은 거부했다. 기존 worker start는 유지됐다.
+- actual root/owner/worker UID/DAC4 PASS: 입력/출력 권한·no-clobber·검증된 readback,
+  모델 ancestor search-only와 read/search 차이, 계속된 쓰기 거부를 확인했다.
+
+결과 semantic SHA는 `sha256:17e09bfbfec9acb9de71ca3bffa81aa26deaa0c9ce08c205c9758cf3e32c1d8f`,
+binary raw SHA는 `sha256:3026db4339bdb56c4d7c98dc842c45451f16c1a396b91283af49f02caea32de3`다.
+main unit wall time은17:47:17–17:48:19 UTC(약62초), CPUUsage는62.635s다. 설치 검증·
+모델 cold load·계산을 포함하며 warm/CPU-GPU 비교나 교육 품질 개선 수치가 아니다.
+
+### 발견·수정과 실패 보존
+
+1. 새51-rule 앞에서 기존50-rule이 명시 거부했다. native exact 예외를49-rule로 옮겨
+   정렬된 규칙 전체를 테스트했다. 다른 native 요청에는 명시 NO를 반환해 관리자 인증
+   challenge로 넘어가지 않는다. 기존50-rule bytes와 다른 서비스 권한은 그대로다.
+2. QUERY의 필수 denial root가 없어 PID1이 `226/NAMESPACE`로 중단했다. Python/모델은
+   시작되지 않았다. 고정 tmpfiles 설정으로 native roots3개를 준비한다. 경로 보호를
+   optional로 바꾸지 않는다. 새 launcher는 잘못된 root를 StartUnit 전 차단한다.
+3. 모델의 두 namespace ancestor는 CPU UID에 --x만 부여돼 있었다. 기존 probe의 직접
+   파일 읽기는 통과했지만 실제 resolver의 O_RDONLY directory FD는 실패했다.
+   격리 no-forward 진단으로 `EMBEDDING_BUNDLE_INVALID`의 위치를 확인하고 해당2개
+   디렉터리의 UID ACL만 r-x로 맞췄다. 선택 revision/files는 이미 read-only였고,
+   model manifest hash·그룹·쓰기 권한·CPU prefix/receipt는 그대로다.
+
+실패한 OS handle `55d43c34da854537a7b3dfb032471e1a` 및
+`195413f77a3e432281d5c9b8a40ad707`은 보존했다. reset/restart하지 않았다.
+후속 합성 실행에는 predecessor/cause를 기록했다. 진단2회는 forward를 금지했다.
+테스트의 두 입력·Job/Artifact IDs는 **TEST_ONLY_SYNTHETIC**이고 운영에 등록된 자료/Job의
+증거가 아니다. 실제 corpus 조회·등록·seed·delta·QUERY·GPU 실행은 아직0회다.
+
+### 현재 소스와 아직 남은 연결
+
+기존 결과 store에 owned-batch 게시를 연결했고, 별도 `input.json`도 같은 file-set owner로
+게시한다. DB에는 작은 metadata만 저장한다. 순수 owned-input builder는 현재 plan/profile과
+sorted unique reserved Jobs를 연결해 exact text를 만들며 원래 all-demand 요청을 변경하지
+않는다. 비어 있거나 다른 scope·중복 allocation·잘못된 device·불완전한 profile은 거부한다.
+이 코드는 권한을 생성하지 않는다. 실제 인증 provider/encoding admission/native executor,
+완료 receipt·Catalog binding/index 등록 연결은 아직 미활성이다.
+
+최종 focused source15 suites **430 PASS**, 28.50s다. 앞선214·runtime-layout16·owned-input12와
+겹치는 수는 합산하지 않는다. strict mypy3개 모듈·Ruff/format PASS. 새 DB
+schema/migration/queue/외부 LLM API는 없고 PostgreSQL 회귀는
+이전15:45의 guarded38 PASS를 참조한다. 이번 새 persistence 경로는 disposable SQLite와
+로컬 test-owned Artifacts에서 검증했다. 운영 PostgreSQL에는 테스트를 실행하지 않았다.
+
+증거는 `/tmp/eom-native-index-release.Aa835HIK/`의 OS/polkit/수치/replay 기록,
+owner workspace와 root handoff, root 보호 release의 rollback에 보존한다. 입력·결과·로그는
+Git에 넣지 않는다. 별도 owner release 때문에 수치 prefix를 다시 설치하지 않았다.
+API/Web/Workflow/Chat5개 서비스는 active이고 이 단계에서 이 서비스를 재시작하지 않았다.
+
+다음은 실제 Identity provider/owner 역할과 기존 reservation→owned input→native 계산→
+Artifact→완료/registry를 연결해 bounded 실제 seed/delta/reuse/query를 닫는 것이다.
+이후 공통 소비자·CPU/GPU 비교·조건부 GPU 기본값을 검증한다. `GOAL=ACTIVE`,
+`NATIVE_INDEX_SYNTHETIC_NUMERICAL=PASS`, `EXACT_REPLAY=PASS`,
+`PERSISTENT_CORPUS_INDEX_LIVE=NOT_ACTIVE`.

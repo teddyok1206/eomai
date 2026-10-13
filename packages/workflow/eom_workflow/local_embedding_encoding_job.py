@@ -11,6 +11,7 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     SHARD_SCHEMA_REF,
     EmbeddingEncodingIdentity,
     EmbeddingSpace,
+    EmbeddingTextInput,
     EmbeddingVectorRowRef,
     IncrementalEmbeddingInput,
     IncrementalEmbeddingResult,
@@ -18,6 +19,10 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     parse_incremental_embedding_input,
     parse_incremental_embedding_result,
     validate_incremental_embedding_result,
+)
+from eom_catalog_contracts.inference_transfer_experiment import (
+    StagedExperimentEntry,
+    experiment_view_text,
 )
 from eom_catalog_contracts.models import Sha256
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
@@ -29,6 +34,7 @@ from eom_workflow.local_embedding_source_plan import (
     LOCAL_EMBEDDING_SOURCE_PLAN_SCHEMA_REF,
     LocalEmbeddingSourcePlan,
     parse_local_embedding_source_plan,
+    validate_local_embedding_plan_entries,
 )
 from eom_workflow.models import ArtifactId, JobId, RevisionId, StepRunId, WorkflowId
 from eom_workflow.schemas import (
@@ -308,6 +314,76 @@ class EmbeddingEncodingJobOwnerPort(Protocol):
     def read(
         self, references: tuple[EmbeddingEncodingJobReference, ...]
     ) -> tuple[EmbeddingEncodingReadResult, ...]: ...
+
+
+def build_owned_incremental_embedding_input(
+    plan: LocalEmbeddingSourcePlan,
+    entries: tuple[StagedExperimentEntry, ...],
+    owned_jobs: tuple[LocalEmbeddingOwnedJob, ...],
+    *,
+    native_launch_job_id: str,
+    resources: LocalEmbeddingResourceProfile,
+) -> IncrementalEmbeddingInput:
+    """Materialize only this exact reserved subset, never mutate the original plan.
+
+    Current source/command authority belongs to Catalog and the reservation owner.
+    This pure builder validates their values. Source lookup/dedup is O(N), plus
+    input-byte hashing and stable encoding order; no worker or storage IO occurs.
+    """
+    plan = parse_local_embedding_source_plan(plan.model_dump(mode="json"))
+    resources = LocalEmbeddingResourceProfile.model_validate(resources)
+    native_launch_job_id = TypeAdapter(JobId).validate_python(native_launch_job_id, strict=True)
+    if type(owned_jobs) is not tuple or not 1 <= len(owned_jobs) <= 1024:
+        raise ValueError("owned numerical input requires a nonempty bounded reservation tuple")
+    checked = tuple(LocalEmbeddingOwnedJob.model_validate(job) for job in owned_jobs)
+    keys = tuple(job.request.encoding.encoding_sha256 for job in checked)
+    planned = {d.encoding.encoding_sha256: d.encoding for d in plan.demands}
+    if (
+        keys != tuple(sorted(set(keys)))
+        or resources.device != plan.space.runtime.device
+        or any(
+            job.request.space != plan.space
+            or planned.get(job.request.encoding.encoding_sha256) != job.request.encoding
+            or job.job_reference.job_id == native_launch_job_id
+            for job in checked
+        )
+        or any(
+            len({getattr(job.job_reference, field) for job in checked}) != len(checked)
+            for field in ("job_id", "allocated_artifact_id", "allocated_artifact_revision_id")
+        )
+    ):
+        raise ValueError(
+            "owned numerical input differs from plan, space or distinct Job allocations"
+        )
+    validate_local_embedding_plan_entries(plan, entries)
+    by_source = {entry.profile.source_basis.source.item_revision_id: entry for entry in entries}
+    selected = set(keys)
+    by_encoding: dict[str, EmbeddingTextInput] = {}
+    for demand in plan.demands:
+        key = demand.encoding.encoding_sha256
+        if key not in selected:
+            continue
+        text = experiment_view_text(by_source[demand.source_revision_id], plan.namespace.view)
+        if text is None or not text.strip():
+            raise ValueError("owned numerical input has no exact materialized view")
+        row = EmbeddingTextInput(encoding=demand.encoding, text=text)
+        prior = by_encoding.get(key)
+        if prior is not None and prior != row:
+            raise ValueError("owned numerical input has an encoding collision")
+        by_encoding[key] = row
+    if set(by_encoding) != selected:
+        raise ValueError("owned numerical input is not exactly covered by current entries")
+    rows = tuple(by_encoding[key] for key in keys)
+    body = {
+        "schema_version": "incremental-embedding-input/1.0",
+        "job_id": native_launch_job_id,
+        "space": plan.space.model_dump(mode="json"),
+        "rows": [row.model_dump(mode="json") for row in rows],
+        "batch_size": resources.batch_size,
+        "threads": resources.threads,
+        "input_set_sha256": embedding_input_set_sha256(tuple(row.encoding for row in rows)),
+    }
+    return parse_incremental_embedding_input(body | {"request_sha256": content_sha256(body)})
 
 
 def validate_local_embedding_launch_association(

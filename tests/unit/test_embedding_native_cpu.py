@@ -278,3 +278,47 @@ def test_fixed_unit_templates_share_isolation_but_keep_purpose_and_descriptors_s
             )
         )
     assert sources[0] == sources[1]
+
+
+def test_fixed_native_denial_roots_are_created_before_sandbox_construction() -> None:
+    source = (ROOT / "infra/tmpfiles/eom-embedding-native.conf").read_text()
+    rows = {
+        values[1]: tuple(values)
+        for line in source.splitlines()
+        if line and not line.startswith("#") and (values := line.split())
+    }
+    assert rows == {
+        "/run/eom-embedding-native-index": (
+            "d",
+            "/run/eom-embedding-native-index",
+            "0750",
+            "root",
+            "eom",
+            "-",
+        ),
+        "/run/eom-embedding-native-query": (
+            "d",
+            "/run/eom-embedding-native-query",
+            "0750",
+            "root",
+            "eom",
+            "-",
+        ),
+        "/run/eom-embedding-native-probe": (
+            "d",
+            "/run/eom-embedding-native-probe",
+            "0700",
+            "root",
+            "root",
+            "-",
+        ),
+    }
+    for purpose in ("index", "query", "probe"):
+        unit = (ROOT / f"infra/systemd/eom-embedding-native-cpu-{purpose}@.service").read_text()
+        denied = {
+            path
+            for line in unit.splitlines()
+            if line.startswith("InaccessiblePaths=")
+            for path in line.partition("=")[2].split()
+        }
+        assert f"/run/eom-embedding-native-{purpose}" in denied

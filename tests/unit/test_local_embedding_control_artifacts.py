@@ -14,6 +14,7 @@ from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.file_set_control_artifacts import CONTROL_FILE_SET_PROTOCOL
 from eom_orchestrator.local_embedding_control_artifacts import (
     EXECUTION_POLICY_ARTIFACT_TYPE,
+    OWNED_INPUT_ARTIFACT_TYPE,
     SOURCE_PLAN_ARTIFACT_TYPE,
     LocalEmbeddingControlArtifactPublisher,
 )
@@ -110,6 +111,85 @@ def test_invalid_policy_hash_rejected_before_any_publication(tmp_path: Path) -> 
             fixture.policy.model_copy(update={"policy_sha256": "sha256:" + "f" * 64}),
             idempotency_key="synthetic-native-control:" + "b" * 32,
             created_at=NOW,
+        )
+    with publisher.sessions() as session:
+        assert session.scalar(select(func.count()).select_from(JobRecord)) == 0
+
+
+def test_owned_input_uses_exact_canonical_member_and_replays_without_copying_text_into_db(
+    tmp_path: Path,
+) -> None:
+    fixture = native_fixture("a", "b", owned_seeds=("a",))
+    publisher, _engine = _publisher(tmp_path)
+    workspace = tmp_path / "owner-workspace"
+    workspace.mkdir()
+    publisher.settings = replace(publisher.settings, workspace_root=workspace)
+    adapter = LocalEmbeddingControlArtifactPublisher(publisher, source_commit="a" * 40)
+    key = "synthetic-owned-input:" + "a" * 32
+    receipt = adapter.publish_owned_input(fixture.native_input, idempotency_key=key, created_at=NOW)
+    assert (
+        adapter.publish_owned_input(fixture.native_input, idempotency_key=key, created_at=NOW)
+        == receipt
+    )
+    assert receipt.semantic_sha256 == fixture.native_input.request_sha256
+    assert receipt.member.member_path == "input.json"
+    assert receipt.owner_job_id != fixture.native_input.job_id
+    assert len(fixture.plan.demands) == 2 and len(fixture.native_input.rows) == 1
+    assert list(workspace.iterdir()) == []
+    with publisher.sessions() as session, session.begin():
+        reader = PinnedArtifactReadContext(
+            session, CatalogSettings(nas_artifact_root=publisher.settings.nas_artifact_root)
+        )
+        pointer = receipt.member
+        reader.prefetch(((pointer.artifact_id, pointer.artifact_revision_id),))
+        reader.require_file_set(
+            pointer.artifact_id,
+            pointer.artifact_revision_id,
+            ("input.json",),
+            manifest_version=CONTROL_FILE_SET_PROTOCOL,
+        )
+        raw = reader.read_pinned(
+            **pointer.model_dump(mode="python"),
+            expected_artifact_types=(OWNED_INPUT_ARTIFACT_TYPE,),
+            expected_primary_file="input.json",
+            max_bytes=64 * 1024**2,
+        ).payload
+        assert raw == canonical_json_bytes(fixture.native_input.model_dump(mode="json"))
+        assert session.scalar(select(func.count()).select_from(JobRecord)) == 1
+        assert session.scalar(select(func.count()).select_from(ArtifactRevisionRecord)) == 1
+        job = session.scalar(select(JobRecord))
+        assert job is not None
+        metadata = canonical_json_bytes(job.request)
+        assert b'"text"' not in metadata and b'"rows"' not in metadata
+        assert len(metadata) < 4096
+
+
+def test_owned_input_cannot_replace_another_payload_under_same_key(tmp_path: Path) -> None:
+    fixture = native_fixture("a")
+    other = native_fixture("b")
+    publisher, _engine = _publisher(tmp_path)
+    publisher.settings = replace(publisher.settings, workspace_root=tmp_path)
+    adapter = LocalEmbeddingControlArtifactPublisher(publisher, source_commit="a" * 40)
+    key = "synthetic-owned-input:" + "b" * 32
+    first = adapter.publish_owned_input(fixture.native_input, idempotency_key=key, created_at=NOW)
+    with pytest.raises(ControlPlaneError) as failure:
+        adapter.publish_owned_input(other.native_input, idempotency_key=key, created_at=NOW)
+    assert failure.value.code == "CONTROL_FILE_SET_CONFLICT"
+    assert (
+        adapter.publish_owned_input(fixture.native_input, idempotency_key=key, created_at=NOW)
+        == first
+    )
+
+
+def test_owned_input_hash_is_validated_before_publication(tmp_path: Path) -> None:
+    fixture = native_fixture()
+    publisher, _engine = _publisher(tmp_path)
+    publisher.settings = replace(publisher.settings, workspace_root=tmp_path)
+    adapter = LocalEmbeddingControlArtifactPublisher(publisher, source_commit="a" * 40)
+    changed = fixture.native_input.model_copy(update={"request_sha256": "sha256:" + "f" * 64})
+    with pytest.raises(ValueError):
+        adapter.publish_owned_input(
+            changed, idempotency_key="synthetic-owned-input:" + "c" * 32, created_at=NOW
         )
     with publisher.sessions() as session:
         assert session.scalar(select(func.count()).select_from(JobRecord)) == 0

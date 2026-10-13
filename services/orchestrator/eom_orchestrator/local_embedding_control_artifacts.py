@@ -8,6 +8,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from eom_catalog_contracts.inference_transfer_embedding import (
+    INPUT_SCHEMA_REF,
+    IncrementalEmbeddingInput,
+    parse_incremental_embedding_input,
+)
 from eom_catalog_contracts.models import Sha256, UtcDatetime
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
@@ -32,6 +37,7 @@ from eom_orchestrator.file_set_control_artifacts import (
 
 SOURCE_PLAN_ARTIFACT_TYPE = "control_local_embedding_source_plan"
 EXECUTION_POLICY_ARTIFACT_TYPE = "control_local_embedding_execution_policy"
+OWNED_INPUT_ARTIFACT_TYPE = "control_local_embedding_owned_input"
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +91,30 @@ class LocalEmbeddingControlArtifactPublisher:
             member="policy.json",
             schema=LOCAL_EMBEDDING_POLICY_SCHEMA_REF,
             artifact_type=EXECUTION_POLICY_ARTIFACT_TYPE,
+            idempotency_key=idempotency_key,
+            created_at=created_at,
+        )
+
+    def publish_owned_input(
+        self,
+        request: IncrementalEmbeddingInput,
+        *,
+        idempotency_key: str,
+        created_at: datetime,
+    ) -> PublishedLocalEmbeddingControl:
+        """Persist one admitted owned subset before binding its launch association.
+
+        The encoding owner already holds current source/command authorization and
+        reservations. This leaf validates bytes only; publication is not admission.
+        Original all-demand Workflow request and source plan remain unchanged.
+        """
+        checked = parse_incremental_embedding_input(request.model_dump(mode="json"))
+        return self._publish(
+            raw=canonical_json_bytes(checked.model_dump(mode="json")),
+            semantic_sha256=checked.request_sha256,
+            member="input.json",
+            schema=INPUT_SCHEMA_REF,
+            artifact_type=OWNED_INPUT_ARTIFACT_TYPE,
             idempotency_key=idempotency_key,
             created_at=created_at,
         )

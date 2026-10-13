@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import pwd
+import subprocess
 import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -11,7 +12,8 @@ from pathlib import Path
 
 import pytest
 from eom_catalog_service.embedding_encoder_adapter import encode_incremental_batch
-from eom_identifiers import canonical_json_bytes
+from eom_catalog_service.embedding_runtime_files import NumericalRuntimeFileSnapshots
+from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_orchestrator import native_embedding_index_handoff as handoff
 
 from tests.unit.local_embedding_admission_fixtures import native_fixture
@@ -108,3 +110,40 @@ def test_real_owner_reads_valid_binary_and_preserves_root_result(
         assert handoff.materialize_native_index_output(materialized) == encoded.result
         assert (materialized.workspace / "vectors.f32").read_bytes() == encoded.vectors
     assert (directory / "vectors.f32").read_bytes() == encoded.vectors
+
+
+def test_model_ancestor_search_only_acl_is_insufficient_for_protected_directory_open() -> None:
+    if os.environ.get("EOM_RUN_NATIVE_INDEX_HANDOFF_PRIVILEGED") != "1":
+        pytest.skip("explicit native handoff OS gate required")
+    assert os.geteuid() == 0
+    worker = pwd.getpwnam("eom-embedding-index-cpu")
+    with tempfile.TemporaryDirectory(prefix="eom-native-model-dac-", dir="/run") as directory:
+        root = Path(directory)
+        root.chmod(0o755)
+        model = root / "model"
+        model.mkdir(mode=0o750)
+        manifest = model / "manifest.json"
+        raw = b'{"test_only_synthetic":true}'
+        manifest.write_bytes(raw)
+        manifest.chmod(0o440)
+        subprocess.run(("/usr/bin/setfacl", "-m", f"u:{worker.pw_uid}:--x", str(model)), check=True)
+        subprocess.run(
+            ("/usr/bin/setfacl", "-m", f"u:{worker.pw_uid}:r--", str(manifest)), check=True
+        )
+        with effective_identity(worker.pw_name):
+            # Direct payload reads pass, but the held-directory validation correctly fails.
+            assert manifest.read_bytes() == raw
+            with pytest.raises(ValueError, match="INSTALLED_RUNTIME_FILE_UNAVAILABLE"):
+                NumericalRuntimeFileSnapshots(0).observe_protected_member_identity(manifest)
+        subprocess.run(("/usr/bin/setfacl", "-m", f"u:{worker.pw_uid}:r-x", str(model)), check=True)
+        with effective_identity(worker.pw_name):
+            snapshot = NumericalRuntimeFileSnapshots(0)
+            snapshot.observe_protected_member_identity(manifest)
+            snapshot.assert_unchanged()
+            with pytest.raises(ValueError, match="INSTALLED_RUNTIME_REPEATED_BYTE_READ"):
+                snapshot.read(manifest, sha256=sha256_bytes(raw), maximum=1024)
+            reader = NumericalRuntimeFileSnapshots(0)
+            assert reader.read(manifest, sha256=sha256_bytes(raw), maximum=1024) == raw
+            reader.assert_unchanged()
+            with pytest.raises(PermissionError):
+                manifest.open("wb")

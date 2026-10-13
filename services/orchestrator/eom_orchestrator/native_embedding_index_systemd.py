@@ -27,6 +27,7 @@ from eom_orchestrator.inference_transfer_cpu_systemd import (
 )
 from eom_orchestrator.native_embedding_index_handoff import (
     OWNER_ROOT,
+    RUNTIME_ROOT,
     NativeIndexHandoffError,
     PreparedNativeIndex,
     materialize_native_index_output,
@@ -55,6 +56,32 @@ def native_index_unit_names(execution_id: str) -> tuple[str, str]:
         PREPARE_TEMPLATE.replace("@.service", f"@{identity}.service"),
         INDEX_TEMPLATE.replace("@.service", f"@{identity}.service"),
     )
+
+
+def _require_runtime_roots() -> None:
+    """Reject missing namespace-denial roots before consuming a unit invocation.
+
+    Root may still change the layout between this check and PID1. That remains
+    an observed failed execution, never permission to reset/restart its handle.
+    """
+    owner = fixed_owner_identity()
+    roots = (
+        (RUNTIME_ROOT, owner.owner_gid, 0o750),
+        (Path("/run/eom-embedding-native-query"), owner.owner_gid, 0o750),
+        (Path("/run/eom-embedding-native-probe"), 0, 0o700),
+    )
+    try:
+        for path, group, mode in roots:
+            value = path.lstat()
+            if (
+                not stat.S_ISDIR(value.st_mode)
+                or value.st_uid != 0
+                or value.st_gid != group
+                or stat.S_IMODE(value.st_mode) != mode
+            ):
+                raise NativeIndexLaunchError("NATIVE_INDEX_RUNTIME_LAYOUT_INVALID")
+    except OSError:
+        raise NativeIndexLaunchError("NATIVE_INDEX_RUNTIME_LAYOUT_INVALID") from None
 
 
 @contextmanager
@@ -186,6 +213,7 @@ class FixedNativeIndexLauncher:
         require_native_cpu_environment_file(
             Path("/etc/eom/embedding-native-owner.env"), self.owner_environment_sha256
         )
+        _require_runtime_roots()
         self.assert_runtime_current()
 
     def _observe(self, execution_id: str) -> tuple[CpuUnitObservation, CpuUnitObservation]:

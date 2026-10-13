@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import os
+import stat
 import subprocess
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -30,6 +32,7 @@ def setup_launcher(
     )
     monkeypatch.setattr(launcher, "require_fixed_cpu_unit_template", lambda *_a: None)
     monkeypatch.setattr(launcher, "require_native_cpu_environment_file", lambda *_a: None)
+    monkeypatch.setattr(launcher, "_require_runtime_roots", lambda: None)
     monkeypatch.setattr(launcher, "_require_no_running_index", lambda: None)
     monkeypatch.setattr(launcher, "_require_empty_unit_cgroup", lambda *_a: None)
     reads = iter(states)
@@ -61,6 +64,51 @@ def test_template_hashes_and_root_prepare_dependency_are_real_source() -> None:
     assert sha256_file(root / launcher.INDEX_TEMPLATE) == "sha256:" + launcher.INDEX_TEMPLATE_SHA256
     text = (root / launcher.INDEX_TEMPLATE).read_text()
     assert "Requires=eom-embedding-native-index-prepare@%i.service" in text
+
+
+@pytest.mark.parametrize("bad", (None, "missing", "symlink", "writable", "uid", "gid"))
+def test_runtime_layout_is_checked_before_a_unit_can_be_started(
+    monkeypatch: pytest.MonkeyPatch, bad: str | None
+) -> None:
+    monkeypatch.setattr(launcher, "fixed_owner_identity", lambda: CpuHandoffIdentity(990, 1000))
+
+    def metadata(path: Path) -> Any:
+        mode, uid, gid = stat.S_IFDIR | 0o750, 0, 1000
+        if path.name.endswith("-probe"):
+            mode, gid = stat.S_IFDIR | 0o700, 0
+        if path.name.endswith("-query"):
+            if bad == "missing":
+                raise FileNotFoundError
+            if bad == "symlink":
+                mode = stat.S_IFLNK | 0o750
+            if bad == "writable":
+                mode = stat.S_IFDIR | 0o770
+            if bad == "uid":
+                uid = 990
+            if bad == "gid":
+                gid = 975
+        return SimpleNamespace(st_mode=mode, st_uid=uid, st_gid=gid)
+
+    monkeypatch.setattr(Path, "lstat", metadata)
+    if bad is None:
+        launcher._require_runtime_roots()
+    else:
+        with pytest.raises(launcher.NativeIndexLaunchError, match="RUNTIME_LAYOUT_INVALID"):
+            launcher._require_runtime_roots()
+
+
+def test_missing_runtime_layout_is_reported_without_starting_or_consuming_the_handle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    adapter, calls = setup_launcher(tmp_path, monkeypatch, [])
+
+    def missing() -> None:
+        raise launcher.NativeIndexLaunchError("NATIVE_INDEX_RUNTIME_LAYOUT_INVALID")
+
+    monkeypatch.setattr(launcher, "_require_runtime_roots", missing)
+    with pytest.raises(launcher.NativeIndexLaunchError, match="RUNTIME_LAYOUT_INVALID"):
+        adapter.run(prepared())
+    assert calls == []
 
 
 def test_one_start_then_exact_terminal_readback(

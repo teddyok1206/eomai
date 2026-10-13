@@ -173,9 +173,10 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
 | 인증된 owner/session 전달 | SOURCE_PASS; 기존 인증 1회·고정 API peer·짧은 작업별 전달384 PASS, 실제 provider admission·배포는 미완료 |
 | 현재 사용자·자료의 native 작업 접수 연결 | SOURCE_IMPLEMENTED; 실제 인증 capture→기존 Catalog 검증·계획 재구성·잠금 확인을 연결, 운영 provider/실행기 연결은 미활성 |
+| Native INDEX 파일 전달·입력/결과 저장 | SOURCE_PASS; 실제 계정 권한4·설치된 시작 권한9·CPU 합성 입력2개×1024차원·동일 실행 재조회 PASS, 실제 자료/Job/binding 연결은 미활성 |
 | 실행 bundle의 정본 저장 | 실제 Orchestrator Job/Artifact1건 게시·exact pointer 검증·보호된 bundle/config 설치 PASS; 임시 DB19 PASS 유지 |
 | 검증된 CPU 설치 기록의 실행 전 확인 | 실제 sealed receipt 게시·현재 파일/계정/boot·전용 UID 재조회 PASS; 실제 작업 실행기 연결은 미완료 |
-| 고정 CPU 실행 입구·설정 게시 CLI | 관련10-suite641 SOURCE_PASS; CPU에 c2f8eef8 설치·격리 probe·설치 seal PASS, INDEX/QUERY unit 활성화는 미완료 |
+| 고정 CPU 실행 입구·설정 게시 CLI | CPU에 c2f8eef8 설치·격리 probe·설치 seal PASS; INDEX 고정 실행 단위 설치·합성 수치 계산 확인, QUERY 연결은 미완료 |
 | 실제 disposable PostgreSQL |0052 registry/application16·reservation8·limited IAM6,0053 stage18+runner10·Identity11 PASS; migration·cleanup PASS |
 | CPU/CUDA 실행 환경 준비 | 실제 CPU 설치·inventory·수치 증명·비특권 격리 시험·최종 설치 기록 PASS; source/Job 실행 연결 남음, CUDA 미게시 |
 | 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | NOT_ACTIVE / NOT_EVALUATED |
@@ -207,6 +208,17 @@ CPU 환경은 이 버전으로 고정하고, 다음에는 owner/native launcher�
 초기 접수와 만료된 실행의 구분, 현재 권한 재검증 및 남은 실행기 연결을 기록합니다.
 실제 seed/delta·공통 소비자 연결·CPU/GPU 비교와 조건부 기본값 전환도 미완료입니다.
 CUDA의 현재 작업 폴더 검색 경로는 고정 격리 폴더 검증을 연결하기 전까지 계속 차단합니다.
+
+후속17:48 UTC에는 보호된 owner 설치본 `28cfcfa0`과 기존 CPU `c2f8eef8`에서 실제
+INDEX 계산을 확인했습니다. 합성 입력2개가 각각1024차원으로 계산됐고, 같은 실행을
+재조회해도 unit invocation·시작/종료 시각·결과 hash가 같고 재시작은0회였습니다.
+초기 시작 권한 규칙 순서·필수 임시 폴더 누락·모델 상위 폴더 읽기 권한 문제는 각각
+원인을 확인해 수정했으며, 실패한 실행과 설치 rollback은 보존했습니다. CPU prefix,
+설치 receipt·모델 bytes·기존 권한 규칙은 바꾸지 않았고 worker 그룹/쓰기 권한도 추가하지
+않았습니다. 새 소스에는 정확한 owned subset 구성·입력 Artifact 게시와 실행 전 폴더
+검증도 추가했습니다. 이는 **수치 실행과 파일 전달 검증**이며 실제 기출 seed/delta,
+source binding·인덱스 등록, 소비자 연결·GPU 비교의 완료 증거는 아닙니다.
+[Native INDEX 연결 기록](docs/architecture/NATIVE_EMBEDDING_HANDOFF_IMPLEMENTATION.md)을 참고하세요.
 
 최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와
 strict type/lint/format PASS입니다. 실제 임시 DB28개 사례에는 독립 실행기 claim 경쟁과
