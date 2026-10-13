@@ -1111,3 +1111,20 @@ API OpenAPI의 기존 path/component 의미는 모두 그대로다. 새 auth-con
 admission adapter, compatible 배포·실제 capture, Catalog bridge/native owner/executor와 공식
 service identity는 남아 있다. fixture callback·ASGI/socket 테스트나 decoded DTO는 실제 권한/
 admission 증거가 아니다. production DB/IAM/NAS/model/GPU 변경0, 전체 목표 ACTIVE다.
+
+## Git source archive 소비 경로 수정 — 2026-10-13 UTC
+
+기존 설치 helper의 index-only 경로를 실제 Git producer에 맞췄다. 원래 plain archive와
+정확한 full40 root archive만 구분하며 wrong/mixed root·중복·unsafe path·bound·selected
+nonregular/changed source를 거부한다. E5 main/model-only 및 기존 wheel/prefix/core 수치
+bytes는 그대로다. 새로운 helper raw SHA는
+`58e61d5e346cfbeaa3b1fa676181eac08d6fdff6e417f22aa5fe9e8801bc38ad`이며 옛 보호 d3 helper를
+덮지 않는다. Root frozen3 정독/raw SHA 확인 뒤19-suite **1370 PASS32.98s, skip0**, strict/
+Ruff/format2 PASS를 확인했다. 자세한 ownership/11decision은
+[archive 호환 note](../architecture/INCREMENTAL_EMBEDDING_INDEX_SOURCE_ARCHIVE_COMPATIBILITY.md)에 있다.
+
+다음 actual 작업은 새 explicit committed tar/wheel의 offline build·canonical retention과
+root staged failed CPU의 recoverable rename, exact original developer backup의 위치 복구,
+정상 nonroot pip 조립·새 input/fingerprint를 통한 existing publish다. 기존 CPU profile flock을
+유지하고 old failed PRIVATE/phase/receipt/log/canonical archive를 보존한다. 새 retry key·DB row
+수정·failed history 성공 재해석·installed RECORD 직접 편집은 없다. 아직 NEW/model/GPU0다.

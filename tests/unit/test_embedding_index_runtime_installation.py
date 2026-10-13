@@ -310,7 +310,13 @@ def test_cleanup_attempts_every_descriptor_after_one_close_failure(
     assert closed == [1, 2, 3]
 
 
-def _private_fixture(helper: ModuleType, root: Path) -> tuple[Path, Path, Path, str]:
+def _private_fixture(
+    helper: ModuleType,
+    root: Path,
+    *,
+    package: str = "eom-platform",
+    prefixed: bool = False,
+) -> tuple[Path, Path, Path, str]:
     prefix, wheel, source = root / "prefix", root / "platform.whl", root / "source.tar"
     commit = "a" * 40
     with (
@@ -319,9 +325,13 @@ def _private_fixture(helper: ModuleType, root: Path) -> tuple[Path, Path, Path, 
         ) as original,
         zipfile.ZipFile(wheel, "w") as installed,
     ):
-        for number, (path, member) in enumerate(helper._INDEX_PRIVATE_SOURCES["eom-platform"]):
+        if prefixed:
+            directory = tarfile.TarInfo(commit)
+            directory.type = tarfile.DIRTYPE
+            original.addfile(directory)
+        for number, (path, member) in enumerate(helper._INDEX_PRIVATE_SOURCES[package]):
             raw = f"# synthetic current source leaf {number}\n".encode()
-            entry = tarfile.TarInfo(path)
+            entry = tarfile.TarInfo(commit + "/" + path if prefixed else path)
             entry.size = len(raw)
             original.addfile(entry, io.BytesIO(raw))
             installed.writestr(member, raw)
@@ -329,6 +339,157 @@ def _private_fixture(helper: ModuleType, root: Path) -> tuple[Path, Path, Path, 
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(raw)
     return prefix, wheel, source, commit
+
+
+@pytest.mark.parametrize("package", ["eom-platform", "eom-gpu-lease"])
+@pytest.mark.parametrize("prefixed", [False, True])
+def test_private_source_exact_plain_and_full_commit_layouts(
+    helper: ModuleType, tmp_path: Path, package: str, prefixed: bool
+) -> None:
+    prefix, wheel, source, commit = _private_fixture(
+        helper, tmp_path, package=package, prefixed=prefixed
+    )
+    helper._index_private_source(prefix, wheel, source, commit, package)
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        "wrong_comment",
+        "wrong_root",
+        "missing_root",
+        "root_file",
+        "root_nonzero",
+        "late_root",
+        "mixed_plain",
+        "mixed_prefixed",
+        "duplicate_root",
+        "duplicate_member",
+        "dot_path",
+        "double_separator",
+        "backslash",
+        "traversal",
+        "absolute",
+        "foreign_commit",
+        "selected_symlink",
+        "selected_hardlink",
+        "selected_directory",
+        "missing_selected",
+        "changed_source",
+    ],
+)
+def test_private_source_archive_layout_and_leaf_failures(
+    helper: ModuleType, tmp_path: Path, failure: str
+) -> None:
+    prefixed = failure != "mixed_prefixed"
+    prefix, wheel, source, commit = _private_fixture(helper, tmp_path, prefixed=prefixed)
+    members: list[tuple[tarfile.TarInfo, bytes]] = []
+    with tarfile.open(source, "r:") as archive:
+        for entry in archive:
+            stream = archive.extractfile(entry) if entry.isfile() else None
+            raw = b"" if stream is None else stream.read()
+            if stream is not None:
+                stream.close()
+            members.append((entry, raw))
+    selected = 1 if prefixed else 0
+    expected = "PRIVATE_SOURCE_INVALID"
+    comment = commit
+    if failure == "wrong_comment":
+        comment = "b" * 40
+        expected = "PRIVATE_COMMIT_MISMATCH"
+    elif failure == "wrong_root":
+        for entry, _raw in members:
+            entry.name = "b" * 40 + entry.name[len(commit) :]
+    elif failure == "missing_root":
+        members.pop(0)
+    elif failure == "root_file":
+        members[0][0].type = tarfile.REGTYPE
+    elif failure == "root_nonzero":
+        members[0][0].size = 1
+        members[0] = members[0][0], b"x"
+    elif failure == "late_root":
+        members.append(members.pop(0))
+    elif failure in {"mixed_plain", "mixed_prefixed"}:
+        path = "unrelated.py" if prefixed else commit + "/unrelated.py"
+        members.append((tarfile.TarInfo(path), b""))
+    elif failure in {"duplicate_root", "duplicate_member"}:
+        members.append(members[0 if failure == "duplicate_root" else selected])
+    elif failure in {
+        "dot_path",
+        "double_separator",
+        "backslash",
+        "traversal",
+        "absolute",
+        "foreign_commit",
+    }:
+        path = {
+            "dot_path": commit + "/./unrelated.py",
+            "double_separator": commit + "//unrelated.py",
+            "backslash": commit + "/unrelated\\leaf.py",
+            "traversal": commit + "/../unrelated.py",
+            "absolute": "/" + commit + "/unrelated.py",
+            "foreign_commit": "b" * 40 + "/unrelated.py",
+        }[failure]
+        members.append((tarfile.TarInfo(path), b""))
+        if failure in {"traversal", "absolute"}:
+            expected = "SNAPSHOT_PATH_INVALID"
+    elif failure.startswith("selected_"):
+        members[selected][0].type = {
+            "selected_symlink": tarfile.SYMTYPE,
+            "selected_hardlink": tarfile.LNKTYPE,
+            "selected_directory": tarfile.DIRTYPE,
+        }[failure]
+        members[selected][0].size = 0
+        members[selected][0].linkname = "unrelated.py"
+        members[selected] = members[selected][0], b""
+        expected = "PRIVATE_SOURCE_MISSING"
+    elif failure == "missing_selected":
+        members.pop(selected)
+        expected = "PRIVATE_SOURCE_MISSING"
+    else:
+        raw = b"changed original source"
+        members[selected][0].size = len(raw)
+        members[selected] = members[selected][0], raw
+        expected = "PRIVATE_SOURCE_MISMATCH"
+    with tarfile.open(
+        source, "w", format=tarfile.PAX_FORMAT, pax_headers={"comment": comment}
+    ) as archive:
+        for entry, raw in members:
+            archive.addfile(entry, io.BytesIO(raw))
+    with pytest.raises(helper.SnapshotInstallError, match=expected):
+        helper._index_private_source(prefix, wheel, source, commit, "eom-platform")
+
+
+@pytest.mark.parametrize("failure", ["count", "member_size", "selected_size"])
+def test_private_source_bounds_fail_before_zip_payload_or_source_read(
+    helper: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    prefix, wheel, source, commit = _private_fixture(helper, tmp_path, prefixed=True)
+    with tarfile.open(
+        source, "w", format=tarfile.PAX_FORMAT, pax_headers={"comment": commit}
+    ) as archive:
+        directory = tarfile.TarInfo(commit)
+        directory.type = tarfile.DIRTYPE
+        archive.addfile(directory)
+        if failure == "count":
+            for number in range(20000):
+                archive.addfile(tarfile.TarInfo(f"{commit}/bounded/{number}"))
+        else:
+            original = helper._INDEX_PRIVATE_SOURCES["eom-platform"][0][0]
+            entry = tarfile.TarInfo(commit + "/" + original)
+            entry.size = (64 if failure == "member_size" else 1) * 1024**2 + 1
+            if failure == "member_size":
+                # Header-only malformed payload: gate must reject without trying to read it.
+                archive.addfile(entry)
+            else:
+                archive.addfile(entry, io.BytesIO(bytes(entry.size)))
+    if failure != "selected_size":
+        monkeypatch.setattr(
+            helper.zipfile, "ZipFile", lambda *args, **kwargs: pytest.fail("ZIP payload opened")
+        )
+    expected = "PRIVATE_SOURCE_MISSING" if failure == "selected_size" else "PRIVATE_SOURCE_INVALID"
+    with pytest.raises(helper.SnapshotInstallError, match=expected):
+        helper._index_private_source(prefix, wheel, source, commit, "eom-platform")
 
 
 def test_private_source_commit_and_current_leaves_cannot_use_historical_wheel(

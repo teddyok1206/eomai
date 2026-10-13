@@ -1003,11 +1003,32 @@ def _index_private_source(
         if archive.pax_headers.get("comment") != commit:
             raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_COMMIT_MISMATCH")
         entries = {}
+        prefixed = False
         for number, member in enumerate(archive):
-            if number >= 20000 or member.name in entries or member.size > 64 * 1024**2:
+            if (
+                number >= 20000
+                or not 0 <= member.size <= 64 * 1024**2
+                or _relative(member.name).as_posix() != member.name
+                or "\\" in member.name
+            ):
                 raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_SOURCE_INVALID")
-            _relative(member.name)
-            entries[member.name] = member
+            if number == 0 and member.name == commit:
+                if not member.isdir() or member.size != 0:
+                    raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_SOURCE_INVALID")
+                prefixed = True
+                continue
+            if prefixed:
+                if not member.name.startswith(commit + "/"):
+                    raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_SOURCE_INVALID")
+                name = member.name.removeprefix(commit + "/")
+                _relative(name)
+            else:
+                name = member.name
+                if re.fullmatch(r"[0-9a-f]{40}", name.split("/", 1)[0]):
+                    raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_SOURCE_INVALID")
+            if name in entries:
+                raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_SOURCE_INVALID")
+            entries[name] = member
         with zipfile.ZipFile(wheel) as payload:
             names = payload.namelist()
             if len(names) > 10000 or len(names) != len(set(names)):
