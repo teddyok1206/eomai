@@ -809,3 +809,44 @@ root는 frozen12개 파일·raw SHA 전체와 source/tests를 검토한 뒤 독�
 이는 **CONTRACT_ONLY / SOURCE_PASS / NOT_ACTIVE**다. 실제 pinned index read·source authority·
 QUERY admission/실행·context compose·기출변형/출제/검토/ChatGPT/25문항 전달은 아직 미구현이며
 계약의 목적 enum이 기능 활성화나 권한을 만들지 않는다. model/GPU0, 전체 목표 ACTIVE다.
+
+## 별도 private wheel 후보의 실제 offline build — 2026-10-13 00:55 UTC
+
+root는 worktree/WIP가 아닌 명시적 commit `ba630f1ec9ea23e82030bf5390317bb40ae29f47`의 Git tar에서
+non-root·API Conda·`pip wheel --no-index --no-deps --no-build-isolation`로 platform/standalone
+GPU lease wheel을 빌드했다. 작업 폴더 `/tmp/eom-embedding-private-release.xnV7hWYH`는0700,
+tar와 wheel은0600이다. source tar는 full40 commit directory prefix와 원래 Git metadata를 가진다.
+
+| 후보 | 바이트 | raw SHA-256 | 이번 실제 검사 |
+| --- | ---: | --- | --- |
+| source tar |54272000|`24cf6b63eebf3fdc6a52ec8e43d19d7ca3ebc8a0ace47af4280cae225475160b`|Git explicit commit archive |
+| eom-platform0.1.0 wheel |3444413|`c9c29dda4bab9fb2f0d55c12b8df78d97f5997144602886be7152e24e782081b`|기존 public RECORD verifier PASS |
+| eom-gpu-lease0.1.0 wheel |4456|`aac5d47020f208ad6ae30ae04cd533a755e661ce160f4cb74310e5d724ca305c`|ZIP CRC PASS만; full installed/source admission은 미실행 |
+
+두 wheel은 **BUILT_NOT_INSTALLED**이며 root archive retention/보호 prefix/UID·unit·runtime proof/
+운영 설치를 변경하지 않았다. 모델/GPU 실행도0이다. 향후 whole-prefix closure에서 실제 source/
+RECORD/member와 함께 확인할 후보일 뿐이며 CRC·파일 hash만으로 runtime admission을 만들지 않는다.
+현재 읽기 전용 hardware 조회는 RTX5080/16303MiB, used2MiB, driver580.126.09로 확인됐으나
+실험 직전 lease/경합 상태는 다시 확인해야 한다. GPU 기본값은 아직 NOT_ACTIVE다.
+
+같은 후보를2026-10-13 00:58 UTC에 **non-root 개발 환경 조립**으로만 설치했다. 실제 UID1000의
+CPU/CUDA 전용 prefix는 eom:eom0700임을 먼저 확인했고, `-I -B`/`--no-index --no-deps --no-compile`
+pip 설치가 각각 성공했다. CPU는 platform1개, CUDA는 platform+standalone lease2개다. 두 환경의
+EOM namespace에 `__pycache__`가 발견되지 않았다. 기존 protected CPU/runtime와 정본 모델은
+변경하지 않았다. 새 환경은 **NONROOT_ASSEMBLED_NOT_ADMITTED**이며 root promotion/whole-prefix
+허가·actual numerical proof·모델 실행·GPU 기본값·서비스 활성화가 아니다.
+
+## 실제 owner/session 연결의 확인된 경계 — 2026-10-13 UTC
+
+별도 독립 read-only 검토에서 existing 보호 inference-transfer CLI의 FD-only bearer/fixed API
+peer와 실제 인증 패턴을 확인했다. generic actor-string CLI와 혼동하지 않는다. 그러나 `/me`와
+saved audit는 caller root transaction의 current token/session revocation fence가 아니며, API DB
+role은 Workflow/START submission만 지원하고 native claim/step 실행 권한은 없다. 실제 current
+Identity provider·SQL role·protected controller와 Catalog/native executor를 연결해야 한다.
+
+확인된 경계와 최소11-decision 계획은
+[owner/session 구현 경계](../architecture/LOCAL_EMBEDDING_OWNER_SESSION_IMPLEMENTATION_BOUNDARY.md)에
+기록했다. 이는 **DESIGN_ONLY**이며 key 복사·역할 사칭·새 권한 grant·영구 사용자 세션·자동 refresh를
+구현하거나 승인한 것이 아니다. source/runtime 준비와 실제 current owner/source/GPU authority를
+구분한다. 상시 증분 갱신의 공식 service identity는 별도 남은 필수 경계이며 operator seed만으로
+자동화를 완료했다고 보고하지 않는다.
