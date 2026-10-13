@@ -1,10 +1,10 @@
 # Native installation admission: same-audit inventory and CPU-first seal
 
-2026-10-13 UTC. PROTOCOL_DRAFT / PHASE_A_B_C_D_E_SOURCE_ONLY / NOT_ADMITTED.
+2026-10-13 UTC. PROTOCOL_DRAFT / PHASE_A_B_C_D_E_F_SOURCE_ONLY / NOT_ADMITTED.
 The two adjacent `.schema.proposal.json` documents remain unregistered ROOTLOCAL drafts,
 not worker messages, grants or actual receipts. The additive same-audit local snapshot,
-shared model-free numerical observation and narrow Conda URI/pip noarch representation handling
-in PhaseA/B/C/D below are source-only implementations;
+shared model-free numerical observation, narrow Conda URI/pip noarch/overlay ownership handling
+and shared CPU identity capture in PhaseA/B/C/D/E/F below are source-only implementations;
 all receipt/proof/factory/unit composition remains proposed. No production data, installed
 prefix, resource registry, unit or default changes.
 
@@ -494,3 +494,53 @@ PASS. Independent read-only source/test peer review found no blocker. The Conda 
 Actual eom-owned fixtures are source evidence only; no new actual prefix audit, root/install,
 metadata rewrite, model/GPU forward, Git write, admission seal or default activation occurred.
 Fresh build/bootstrap/input pins and independent actual owner gates remain root-owned tasks.
+
+## PhaseF — shared observed CPU identity capture only
+
+2026-10-13 UTC. ROOT_APPROVED_SOURCE_PHASE / NOT_INSTALLED / NOT_ADMITTED.
+The remaining CPU capture gap above is closed only at the public OS observation boundary.
+Existing `embedding_runtime_os_identity.py`, focused installed-observer tests and this note
+are the exact owned paths; current PhaseE actual publication remains a separate root operation.
+
+1. **Boundary:** expose one observed CPU capture value, never installation or execution admission.
+2. **Source:** read the existing protected bounded live `cpuinfo` path with its current owner checks.
+3. **Identity:** return existing `CpuRuntimeDeviceCapture`/numerical-device values and fixed source
+   recipe; no new entity, revision, registry, receipt or expected device parameter.
+4. **Checks:** retain the same vendor/family/model/stepping parser and homogeneous-CPU guard.
+5. **Access:** capture is a fresh live observation; existing CPU read-back calls the same function
+   and still compares the actually observed device with the pinned proof capture.
+6. **Structures:** bounded bytes, per-block field dict and unique identity set; frozen existing
+   values contain no raw CPUinfo, paths, credentials, boot grant or mutable process state.
+7. **Cost:** O(cpuinfo bytes), existing2MiB ceiling and one read per observation, no immutable
+   archive/code rehash, subprocess, ML import, loader parser or duplicate observation engine.
+8. **Concurrency:** existing held/named/ancestor reader checks remain; the value is not a held
+   installation capture and grants no first-instruction, unit, model or source authority.
+9. **Layers:** Catalog OS adapter only; existing proof contract/reader dependencies, no new imports
+   from Orchestrator/API/scripts and no CUDA/interpreter/proof-generation/factory changes.
+10. **Failure/tests:** missing/empty/oversized/malformed/heterogeneous/unprotected OS evidence
+    rejects; real fixture UID remains eom, not fake root. Test fresh read-back, expected-capture
+    mismatch and shared-function delegation; no actual host admission is inferred from fixtures.
+11. **Alternative:** constructing a CPU capture from a planned descriptor is an echo; copying the
+    parser into a proof generator creates a second rule. Reuse this actual observation once.
+
+The concrete root publisher, fixed no-model unit, independently accepted sealed receipt and
+production admission adapter remain absent; this function cannot mint any of them. The relevant
+OFFLINE_ENCODER/L2/f32 numerical pins are unchanged. The OS module's new raw bytes still require
+a fresh accepted private release/full-prefix source pin before installed use.
+
+### PhaseF source checkpoint
+
+`capture_runtime_cpu_device(*, proc_root=Path("/proc"), owner_uid=0)` now returns the existing
+frozen CPU capture from the unchanged protected2MiB CPUinfo reader and parser. Existing CPU
+`observe_runtime_device` invokes that same public function and retains pinned-device equality;
+CUDA/interpreter branches and all numerical implementation modules are unchanged. This supersedes
+only the earlier proposed shared CPU capture gap, not any installation/proof/unit/seal gap.
+
+The17 new synthetic cases verify one bounded read per fresh capture/read-back, shared delegation,
+changed actual hardware versus a previously captured expectation, malformed required/duplicate
+fields, vendor/numeric/homogeneity restrictions and missing/empty/oversized/link/mode/ancestor
+denials. They use the fixture's actual eom UID; no root ownership or live installation is mocked
+as accepted. Existing CUDA ownership/live OS, proof/archive/RECORD and backend/factory regressions
+remain covered. Final explicit API observer/proof/backend/factory4 suites267 PASS6.45s; Python
+source/test hashes match start/end. API/core strict mypy2 each PASS, API Ruff2/format2 PASS.
+No actual host/probe/root/model/GPU/installer/Git operation or admission receipt was performed.

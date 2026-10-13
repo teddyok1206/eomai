@@ -37,6 +37,42 @@ def require_native_runtime_interpreter(prefix: Path) -> str:
     return platform.python_version()
 
 
+def capture_runtime_cpu_device(
+    *,
+    proc_root: Path = Path("/proc"),
+    owner_uid: int = 0,
+) -> CpuRuntimeDeviceCapture:
+    """Fresh protected CPU observation only; no expected device or installation admission."""
+    raw = read_live_runtime_os_file(proc_root / "cpuinfo", maximum=2 * 1024**2, owner_uid=owner_uid)
+    identities: set[tuple[str, int, int, int]] = set()
+    for block in raw.decode("utf-8").strip().split("\n\n"):
+        fields: dict[str, str] = {}
+        for line in block.splitlines():
+            key, separator, value = line.partition(":")
+            _require(bool(separator) and key.strip() not in fields, "CPUINFO_INVALID")
+            fields[key.strip()] = value.strip()
+        _require(
+            {"processor", "vendor_id", "cpu family", "model", "stepping"} <= fields.keys(),
+            "CPUINFO_INVALID",
+        )
+        vendor = fields["vendor_id"]
+        _require(re.fullmatch(r"[A-Za-z0-9_-]{1,32}", vendor) is not None, "CPUINFO_INVALID")
+        numbers = tuple(fields[key] for key in ("cpu family", "model", "stepping"))
+        _require(all(re.fullmatch(r"[0-9]{1,3}", value) for value in numbers), "CPUINFO_INVALID")
+        identities.add((vendor, int(numbers[0]), int(numbers[1]), int(numbers[2])))
+    _require(len(identities) == 1, "CPU_HETEROGENEOUS")
+    vendor, family, model, stepping = next(iter(identities))
+    return CpuRuntimeDeviceCapture(
+        source="LINUX_CPUINFO_VENDOR_FAMILY_MODEL_STEPPING/1.0",
+        numeric_device=EmbeddingNumericalDevice(
+            kind="CPU",
+            hardware_model=f"{vendor} family {family} model {model} stepping {stepping}",
+            compute_capability=None,
+            driver_version=None,
+        ),
+    )
+
+
 def observe_runtime_device(
     capture: RuntimeDeviceCapture,
     *,
@@ -44,35 +80,7 @@ def observe_runtime_device(
     owner_uid: int = 0,
 ) -> EmbeddingNumericalDevice:
     if isinstance(capture, CpuRuntimeDeviceCapture):
-        raw = read_live_runtime_os_file(
-            proc_root / "cpuinfo", maximum=2 * 1024**2, owner_uid=owner_uid
-        )
-        identities: set[tuple[str, int, int, int]] = set()
-        for block in raw.decode("utf-8").strip().split("\n\n"):
-            fields: dict[str, str] = {}
-            for line in block.splitlines():
-                key, separator, value = line.partition(":")
-                _require(bool(separator) and key.strip() not in fields, "CPUINFO_INVALID")
-                fields[key.strip()] = value.strip()
-            _require(
-                {"processor", "vendor_id", "cpu family", "model", "stepping"} <= fields.keys(),
-                "CPUINFO_INVALID",
-            )
-            vendor = fields["vendor_id"]
-            _require(re.fullmatch(r"[A-Za-z0-9_-]{1,32}", vendor) is not None, "CPUINFO_INVALID")
-            numbers = tuple(fields[key] for key in ("cpu family", "model", "stepping"))
-            _require(
-                all(re.fullmatch(r"[0-9]{1,3}", value) for value in numbers), "CPUINFO_INVALID"
-            )
-            identities.add((vendor, int(numbers[0]), int(numbers[1]), int(numbers[2])))
-        _require(len(identities) == 1, "CPU_HETEROGENEOUS")
-        vendor, family, model, stepping = next(iter(identities))
-        actual = EmbeddingNumericalDevice(
-            kind="CPU",
-            hardware_model=f"{vendor} family {family} model {model} stepping {stepping}",
-            compute_capability=None,
-            driver_version=None,
-        )
+        actual = capture_runtime_cpu_device(proc_root=proc_root, owner_uid=owner_uid).numeric_device
     else:
         assert isinstance(capture, CudaRuntimeDeviceCapture)
         driver_text = read_live_runtime_os_file(

@@ -1494,3 +1494,34 @@ archive/source/metadata·설치 hash/type·obsolete survivor·post-verification 
 bytes/private/input/receipt와 scoped recovery를 보존한다. model/GPU forward0, benchmark
 NOT_EVALUATED, GPU default NOT_ACTIVE이며 사용자 요청한 실제 CPU/GPU 비교와 우수 시
 조건부 기본 전환은 상위 설계 §8.1의 필수 goal 후속으로 유지한다. goal ACTIVE다.
+
+## 실제 ELF 단계 도달·CPU 관측·로컬 설치 기록 검증 — 2026-10-13 09:01 UTC
+
+source36b652e2의 CPU 후보는 기존 오프라인 주소/pip 경로/overlay 소유 검사를 통과한 뒤
+`INSTALLED_RUNTIME_PREFIX_ELF_VERSION_INVALID`로 멈췄다. 원 실패 PRIVATE는
+`/opt/eom/.embedding-index-install-Y38QOEw3`, 단계는 BEFORE_OLD_PREFIX_BYTES_AUDIT,
+receipt는 빈 상태이며 NEW/model/GPU forward는 실행하지 않았다. 원 developer inode17563946은
+retained backup에 있고 root 후보 inode20489026을 원인 진단 동안 유지한다. 기존 운영 임베딩
+prefix는 변경하지 않았다. 원 보호 leaf를 그대로 실행하는 읽기 전용 진단 raw
+`f6faf516d8087ed24f334ce6298ae7add041342877a130c061e342a9467e2e93`은 해당 오류의 함수/행 및
+제한된 ELF 상대 경로/count만 관측한다. 진단 결과 없이 검사를 완화하거나 파일을 수정하지 않는다.
+
+기존 CPUinfo reader/parser를 public `capture_runtime_cpu_device`로 공유했다. 기대 장치 입력은
+받지 않고 기존 read-back이 같은 관측 함수를 호출한 뒤 pinned device와 비교한다. CUDA,
+interpreter, encoder/L2/f32는 불변이다. Agent267 PASS 뒤 Root가 entrypoint를 더한5-suite를
+독립 실행해 **299 PASS8.03s, skip0**, API/core strict2 및 Ruff/format2 PASS를 확인했다.
+source raw33858870ce01dd4cfe654ebd46533e8e1fc27fb7eb0847dff05bc4a73f8727ad,
+test rawa94ffb923e44bc7c086cb028db1e59b77e7334073fffb014ec70a841db177ece다.
+
+두 unchanged ROOTLOCAL draft를 위한 IO 없는 frozen metadata leaf도 구현했다. candidate/receipt의
+raw/semantic/revision/reference·UTC·크기/깊이·integer·중복·directory parent를 검증한다.
+worker registry 등록이나 admission 발급은 없으며 실제 prefix/unit 관측을 대신하지 않는다.
+Root가 전체 production module/design note를 읽고 exact5-suite를 독립 실행해
+**442 PASS5.78s, skip0**, strict2/Ruff/format2 PASS를 확인했다. Agent의 API/core442와 같은
+inventory이므로 합산하지 않는다. frozen source raw93815f7e6e57c72a2f57975065222eda7b626700670f843b2de6cbb422db9bd5,
+test raw84b231070ea16ac36cc3969c76c0363bd33903e0e720988827db804a1d7b9482다.
+
+CPU/GPU 비교와 우수 시 기본 전환은 계속 필수 후속이다. 실제 임베딩 실행/benchmark/default
+활성화는 아직 없다. 목표 카드 상태는 사용자 재개 요청 당시 BLOCKED였으나 승인된 대화 작업은
+재개했다. 도구는 카드 상태를 active로 바꾸는 기능을 제공하지 않으므로 실제 카드 상태를
+ACTIVE로 보고하지 않는다. 새 반복 blocked turn은 세지 않았으며 진단/구현을 계속 진행한다.

@@ -15,10 +15,12 @@ from typing import Any
 
 import pytest
 from eom_catalog_contracts.embedding_installed_runtime_proof import (
+    CpuRuntimeDeviceCapture,
     EmbeddingInstalledRuntimeProof,
     EmbeddingRuntimeProfile,
     installed_runtime_proof_bytes,
 )
+from eom_catalog_service import embedding_runtime_os_identity as os_identity
 from eom_catalog_service.embedding_installed_runtime_observer import (
     ConfiguredInstalledRuntimeProof,
     ProtectedInstalledEmbeddingRuntimeObserver,
@@ -26,6 +28,7 @@ from eom_catalog_service.embedding_installed_runtime_observer import (
 from eom_catalog_service.embedding_runtime_files import (
     InstalledRuntimeProofError,
     NumericalRuntimeFileSnapshots,
+    read_live_runtime_os_file,
 )
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 
@@ -391,6 +394,129 @@ def test_cpu_heterogeneity_live_readback_fails(
     path.write_bytes(path.read_bytes().replace(b"model : 143", b"model : 142", 1))
     with pytest.raises(InstalledRuntimeProofError, match="CPU_HETEROGENEOUS"):
         observer.observe()
+
+
+def test_public_cpu_capture_and_existing_readback_share_fresh_bounded_observation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    staged = staged_runtime(tmp_path, monkeypatch)
+    path = staged.proc_root / "cpuinfo"
+    assert path.stat().st_uid == os.geteuid()
+    read = read_live_runtime_os_file
+    capture = os_identity.capture_runtime_cpu_device
+    reads = captures = 0
+
+    def counted_read(path: Path, *, maximum: int, owner_uid: int = 0) -> bytes:
+        nonlocal reads
+        assert path == staged.proc_root / "cpuinfo"
+        assert maximum == 2 * 1024**2 and owner_uid == os.geteuid()
+        reads += 1
+        return read(path, maximum=maximum, owner_uid=owner_uid)
+
+    def counted_capture(
+        *, proc_root: Path = Path("/proc"), owner_uid: int = 0
+    ) -> CpuRuntimeDeviceCapture:
+        nonlocal captures
+        captures += 1
+        return capture(proc_root=proc_root, owner_uid=owner_uid)
+
+    monkeypatch.setattr(os_identity, "read_live_runtime_os_file", counted_read)
+    monkeypatch.setattr(os_identity, "capture_runtime_cpu_device", counted_capture)
+    monkeypatch.setattr(importlib, "import_module", lambda *_a, **_k: pytest.fail("no ML import"))
+    first = os_identity.capture_runtime_cpu_device(
+        proc_root=staged.proc_root, owner_uid=os.geteuid()
+    )
+    assert first == staged.proof.device_capture
+    assert first.source == "LINUX_CPUINFO_VENDOR_FAMILY_MODEL_STEPPING/1.0"
+    assert first.numeric_device.compute_capability is None
+    assert first.numeric_device.driver_version is None
+    assert (
+        os_identity.observe_runtime_device(
+            first, proc_root=staged.proc_root, owner_uid=os.geteuid()
+        )
+        == first.numeric_device
+    )
+    path.write_bytes(path.read_bytes().replace(b"model : 143", b"model : 142"))
+    second = os_identity.capture_runtime_cpu_device(
+        proc_root=staged.proc_root, owner_uid=os.geteuid()
+    )
+    assert second != first and second.numeric_device.hardware_model.endswith("model 142 stepping 8")
+    with pytest.raises(InstalledRuntimeProofError, match="DEVICE_CAPTURE_MISMATCH"):
+        os_identity.observe_runtime_device(
+            first, proc_root=staged.proc_root, owner_uid=os.geteuid()
+        )
+    assert reads == captures == 4
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "missing_field",
+        "separator",
+        "duplicate",
+        "vendor",
+        "vendor_unicode",
+        "negative_number",
+        "long_number",
+        "empty_number",
+        "heterogeneous",
+    ],
+)
+def test_public_cpu_capture_retains_closed_fields_numbers_and_homogeneity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    staged = staged_runtime(tmp_path, monkeypatch)
+    path = staged.proc_root / "cpuinfo"
+    raw = path.read_bytes()
+    if fault == "missing_field":
+        raw = raw.replace(b"stepping : 8\n", b"")
+    elif fault == "separator":
+        raw = raw.replace(b"vendor_id :", b"vendor_id ")
+    elif fault == "duplicate":
+        raw = raw.replace(b"vendor_id : GenuineIntel\n", b"vendor_id : GenuineIntel\nmodel : 143\n")
+    elif fault == "vendor":
+        raw = raw.replace(b"GenuineIntel", b"Unknown/Vendor")
+    elif fault == "vendor_unicode":
+        raw = raw.replace(b"GenuineIntel", "GenuinéIntel".encode())
+    elif fault == "negative_number":
+        raw = raw.replace(b"model : 143", b"model : -1")
+    elif fault == "long_number":
+        raw = raw.replace(b"model : 143", b"model : 1000")
+    elif fault == "empty_number":
+        raw = raw.replace(b"model : 143", b"model : ")
+    else:
+        raw = raw.replace(b"model : 143", b"model : 142", 1)
+    path.write_bytes(raw)
+    code = "CPU_HETEROGENEOUS" if fault == "heterogeneous" else "CPUINFO_INVALID"
+    with pytest.raises(InstalledRuntimeProofError, match=code):
+        os_identity.capture_runtime_cpu_device(proc_root=staged.proc_root, owner_uid=os.geteuid())
+
+
+@pytest.mark.parametrize(
+    "fault", ["missing", "empty", "oversized", "symlink", "hardlink", "writable", "ancestor"]
+)
+def test_public_cpu_capture_reuses_protected_live_reader_failure_boundaries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    staged = staged_runtime(tmp_path, monkeypatch)
+    path = staged.proc_root / "cpuinfo"
+    if fault == "missing":
+        path.unlink()
+    elif fault == "empty":
+        path.write_bytes(b"")
+    elif fault == "oversized":
+        path.write_bytes(b"x" * (2 * 1024**2 + 1))
+    elif fault == "symlink":
+        target = path.rename(path.with_name("real-cpuinfo"))
+        path.symlink_to(target)
+    elif fault == "hardlink":
+        os.link(path, path.with_name("alias-cpuinfo"))
+    elif fault == "writable":
+        path.chmod(0o660)
+    else:
+        staged.proc_root.chmod(0o770)
+    with pytest.raises(InstalledRuntimeProofError):
+        os_identity.capture_runtime_cpu_device(proc_root=staged.proc_root, owner_uid=os.geteuid())
 
 
 def test_observer_modules_have_no_ml_or_source_script_imports() -> None:
