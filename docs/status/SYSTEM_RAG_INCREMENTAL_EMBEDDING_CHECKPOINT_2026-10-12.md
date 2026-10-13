@@ -1829,3 +1829,62 @@ ordinary library log를 섞지 않는다. unit은 미설치/미활성이고 새 
 
 다음은 실제 owner bundle 게시와 설치 config/receipt다. 이번 SOURCE_PASS를 실제 native
 model 실행/seed/delta/GPU 비교 또는 공통 소비자 활성화로 확대하지 않는다.
+
+## 실제 bundle Artifact 게시와 보호 설정 연결 — 2026-10-13 14:11 UTC
+
+`c2f8eef87a507c94bada3ac6e5ecd26c91f82f3c`를 push하고 exact Git archive에서 platform wheel을
+만들었다. wheel3,529,278bytes/1,471members의 RECORD 검증과 repo 없이 wheel 내부 import/schema
+resource 조회를 통과했다. wheel raw `2755e2904be152dc74c1dc3b1919b03a1ef9762671c059a60862b7d9eaa35924`,
+source tar raw `c0f9894fbc752f5b9af994f61326315e89f1fc3c5a47a5422d087508f9059e98`다. 둘 다
+`/opt/eom/embedding-runtime-archives/<raw>/`에 root-owned0444로 보존했다. API/Runner 설치본을
+교체하지 않고 기존 owner interpreter가 이 immutable wheel의 게시 adapter를 사용했다.
+
+OLD pre-exec/current inventory·boot·host 확인 후 실제13:01 probe의 runtime, 설치된 proof와
+원본 BGE payload를 검증하여6,418byte bundle을 만들었다. numerical runtime과 원본 가중치는
+그대로이며 execution model revision만 별도 metadata identity로 생성했다. Artifact IDs는
+입력에서 만들지 않고 실제 Orchestrator 게시 영수증에서 받았다.
+
+- 실제 publication owner: 기존 `eom-workflow-runner`, UID990/기본 GID1000(`eom`).
+- Job: `job_da1f008b97844f28933f92bceeb34bae`.
+- Artifact/revision: `artifact_43173bb478eb4a7dad4af754580d88a9` /
+  `rev_300f2d5e9e364e97887379abe550c1fa`, member `bundle.json`.
+- bundle: `embeddingbundle_a32495ebc3c343cf938000e91153ab8c` /
+  `embeddingbundlerev_a0186b2dbee54ae19977ddd96a702663`.
+- bundle raw `79120417d03f86a0e9df7064815c20c898b2c42ddfdef83777e9b2c2231e688b`,
+  semantic `2ac678d1bb5bd5e4b34c415e6bca8e07578ee5e26b18cdff3ced1813725a63bf`.
+- outer manifest `eec3a18849b95c1a7dc44dcd65fd3b08d26b622b0e6f9da715811182da53d449`.
+- publication receipt raw `8af70a19d84426704ec879897dc1321a019e919b7205e842481cf04f9596fcc1`.
+- 실제 게시 unit invocation `f43f8a0bcdf6437e9a0e5def51ab0e78`, exit0/MainPID0/ControlPID0,
+  empty cgroup. 모델 계정이 아닌 기존 Orchestrator가 기존 DB/Artifact 경계로만 게시했다.
+- execution model revision `embeddingmodelrev_ae725473125a472db365bcd2674e8882`;
+  original payload revision `embeddingmodelrev_32de764c92823791bc6ba4f35fffedd9` 불변.
+
+공식 bundle resolver와 config/proof reference validator로 root-owned0444 local runtime
+materialization을 실제 재조회했다. 이것은 NAS 정본 metadata의 명시적인 설치 경계이며,
+가중치 복제나 다른 정본 문항/보고서 저장소가 아니다.
+
+- config: `embeddingnativeconfig_b839a737216d4324869c7f9b62e98d8a` /
+  `embeddingnativeconfigrev_26ed8999ae3b4a7cbc0bad3bf92b9732`.
+- config raw `ff7a6943ab8b58322d509c009919aa1ae19a61f13ea2390ba78eb9c24d18f67c`,
+  semantic `fb325aa159c42a303413a80801ea1e8b71a2e0ab99dbf826bd4eb81fed97241e`.
+- runtime SHA `f02cfc2b977c262b2b20cf7a3cc07553ad41f718ca39334953fb11d7a6ab10fb`.
+- 보호 기록 `/opt/eom/.embedding-bundle-publication-lfT2fBRW/`의 `preparation.json`,
+  `published.json`, `native-config-candidate.json`, `configuration-publication.json`.
+- local bundle/config는 각각 `/opt/eom/embedding-runtime-bundles/<id>/<revision>/bundle.json`,
+  `/opt/eom/embedding-native-config/<id>/<revision>/config.json`에 있다. mutable latest 없음.
+- 작업/진단 로그 `/tmp/eom-native-cpu-owner-release.PSuNnJi9/`.
+
+첫 게시 준비는 존재하지 않는 `eom-workflow-runner` 그룹 가정으로 stage 생성 전에 실패했다.
+그 시점에 archive/bootstrap만 보존됐고 unit은 not-found, DB 게시·모델 실행 전이었다.
+실제 계정/GID를 확인해 **새 group/권한 추가 없이** 기존 GID1000으로 준비를 마쳤다.
+그 뒤 게시 프로그램은 정상 종료했지만 `systemd-run --wait`가 RemainAfterExit unit의
+inactive 상태를 기다렸다. 독립적으로 같은 invocation의 exit0·PID0·empty cgroup을 확인한
+다음 대기 client만 중단했다. unit/history/Job은 건드리지 않았고 동일 작업 재제출0회다.
+이후 실제 root receipt와 schema/hash/reference/readback을 확인하여 위 PASS로 기록한다.
+
+현재 판정은 `BUNDLE_ARTIFACT_AND_LOCAL_CONFIG_PASS_NOT_ADMITTED`다. 실제 publication1회,
+live replay0회, model/tokenizer/forward0, GPU0, weight copy0. 운영 pytest/migration0,
+API/Web/Catalog/HWPX/Workflow 재배포0이며 API/Web/Runner/General Chat은 모두 active다.
+새 CPU main/receipt reader는 아직 설치하지 않았다(CPU runtime source는 f3cf5d0f).
+다음은 새 coherent CPU release의 final inventory/probe/receipt와 실제 owner/native launcher
+연결이다. seed/delta·공통 소비자·GPU 비교/default 미완료, 전체 goal ACTIVE를 유지한다.

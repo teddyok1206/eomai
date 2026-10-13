@@ -9,8 +9,10 @@ read-back passed at11:04 UTC; its numerical proof was then published at the cano
 The CPU proof was subsequently published without overwrite at its fixed immutable location and
 read back through `ProtectedInstalledEmbeddingRuntimeObserver`; no optional ML import or forward
 was performed by root. The fixed nonprivileged CPU unit/probe passed an actual invocation at
-13:01 UTC. A protected CPU receipt reader is now source-tested, but no real final admission
-receipt or production factory wiring exists yet. Existing production services, corpus, resource
+13:01 UTC. A protected CPU receipt reader and fixed execution composition are source-tested.
+At14:11 UTC the existing Orchestrator published one real runtime bundle and the protected local
+bundle/config were read back. No real final admission receipt or activated production factory
+wiring exists yet. Existing production services, corpus, resource
 registry and defaults remain unchanged; the dedicated probe account/unit are installation-only.
 
 Earlier CPU publications failed their OLD whole-prefix audit before NEW; those historical failed
