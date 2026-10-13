@@ -1214,3 +1214,17 @@ wheel·전체 Conda/source/ELF/host/prefix audit·unit/proof/실제 owner가 여
 16303MiB 중2MiB 사용/util0 및 compute-app 없음이 확인됐다. 이는 현재 장치 정보이지 실제
 GPU lease/격리/수치/성능 admission이 아니다. model/GPU inference0, 성능 NOT_EVALUATED,
 GPU 기본값 NOT_ACTIVE, 전체 goal ACTIVE를 유지한다.
+
+## QUERY 전용 control·publication 계약 C1c 첫 경계 — 2026-10-13 UTC
+
+Root가 먼저 draft schema595줄/mirror 및11decision을 정독했고 QUERY의 operator continuation을
+DOCUMENT seed와 구분한 `OPERATOR_REQUEST_ONLY`로 고쳤다. 이후 frozen9 전체 source/tests를
+정독하고 raw SHA를 확인한 독립36-suite는 **1610 PASS99.63s, skip0**, strict/Ruff/format6 PASS다.
+기존 native4-resource/receipt2-resource 및 C0/C1a/C1b/수치 module bytes는 보존했다.
+
+이 source-only 계약은 고정2단계/attempt1/rework0 definition과 request/policy/launch/receipt/
+carrier의 pointer·raw/semantic hash·runtime recipe·UTC·publication owner를 닫는다. 실제 Job
+3개를 억지로 만들지 않으며 worker wire에 caller 권한·token·source path를 넣지 않는다.
+Compiler/admission은 아직 새 definition을 거부하도록 테스트됐다. queue/DB migration/실제
+owner/native runtime/Artifact commit/read/variation worker 전달과 전체 활성화는 아직 남아 있다.
+테스트를 actual QUERY/model/GPU 실행으로 간주하지 않으며 전체 goal은 계속 ACTIVE다.

@@ -1,0 +1,595 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/reference-query-execution/1.0",
+  "title": "EOM fixed approved-reference QUERY execution contracts V1",
+  "description": "Protocol-only immutable intent and publication provenance, never current identity/source/runtime/unit authority or admission. No DOCUMENT schema meaning, corpus registration, native operation, or policy activation follows from validation.",
+  "$defs": {
+    "definition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "definition_key",
+        "definition_version",
+        "start_step",
+        "limits",
+        "steps"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.2"
+        },
+        "definition_key": {
+          "const": "local-embedding-reference-query"
+        },
+        "definition_version": {
+          "const": "1.0.0"
+        },
+        "start_step": {
+          "const": "encode_reference_query"
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "max_rework_cycles",
+            "max_step_attempts"
+          ],
+          "properties": {
+            "max_rework_cycles": {
+              "type": "integer",
+              "const": 0
+            },
+            "max_step_attempts": {
+              "type": "integer",
+              "const": 1
+            }
+          }
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "key",
+                "type",
+                "operation",
+                "result_schema",
+                "on_success"
+              ],
+              "properties": {
+                "key": {
+                  "const": "encode_reference_query"
+                },
+                "type": {
+                  "const": "application"
+                },
+                "operation": {
+                  "const": "BUILD_REFERENCE_QUERY_EMBEDDINGS"
+                },
+                "result_schema": {
+                  "const": "embedding-reference-query-result@1.0"
+                },
+                "on_success": {
+                  "const": "complete"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "key",
+                "type",
+                "terminal_status"
+              ],
+              "properties": {
+                "key": {
+                  "const": "complete"
+                },
+                "type": {
+                  "const": "terminal"
+                },
+                "terminal_status": {
+                  "const": "COMPLETED"
+                }
+              }
+            }
+          ],
+          "items": false
+        }
+      },
+      "$id": "eom://schemas/workflow/reference-query-workflow-definition/1.0"
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "request_name",
+        "purpose",
+        "workflow_definition_key",
+        "workflow_definition_version",
+        "workflow_definition_sha256",
+        "operator_audit",
+        "context_request",
+        "runtime_bundle",
+        "resource_profile",
+        "native_execution_policy",
+        "native_execution_policy_sha256",
+        "request_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "reference-query-workflow-request/1.0"
+        },
+        "request_name": {
+          "const": "REFERENCE_QUERY_WORKFLOW_REQUEST"
+        },
+        "purpose": {
+          "const": "REFERENCE_QUERY"
+        },
+        "workflow_definition_key": {
+          "const": "local-embedding-reference-query"
+        },
+        "workflow_definition_version": {
+          "const": "1.0.0"
+        },
+        "workflow_definition_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "operator_audit": {
+          "$ref": "eom://schemas/workflow/local-embedding-workflow-request/1.1#/$defs/operatorAudit"
+        },
+        "context_request": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/request"
+            },
+            {
+              "properties": {
+                "consumer_purpose": {
+                  "const": "PAST_EXAM_VARIATION"
+                }
+              }
+            }
+          ]
+        },
+        "runtime_bundle": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/bundlePointer"
+        },
+        "resource_profile": {
+          "$ref": "eom://schemas/workflow/local-embedding-execution-policy/1.0#/$defs/resourceProfile"
+        },
+        "native_execution_policy": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            },
+            {
+              "properties": {
+                "member_path": {
+                  "const": "policy.json"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/workflow/reference-query-execution-policy/1.0"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "native_execution_policy_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "request_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        }
+      },
+      "$id": "eom://schemas/workflow/reference-query-workflow-request/1.0"
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "purpose",
+        "continuation_mode",
+        "workflow_definition_sha256",
+        "spaces",
+        "runtime_bundle",
+        "resource_profile",
+        "gpu_busy",
+        "created_at",
+        "policy_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "reference-query-execution-policy/1.0"
+        },
+        "purpose": {
+          "const": "REFERENCE_QUERY"
+        },
+        "continuation_mode": {
+          "const": "OPERATOR_REQUEST_ONLY"
+        },
+        "workflow_definition_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "spaces": {
+          "$ref": "eom://schemas/knowledge/embedding-reference-query/1.0#/$defs/spaces"
+        },
+        "runtime_bundle": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/bundlePointer"
+        },
+        "resource_profile": {
+          "$ref": "eom://schemas/workflow/local-embedding-execution-policy/1.0#/$defs/resourceProfile"
+        },
+        "gpu_busy": {
+          "const": "WAIT"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "policy_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        }
+      },
+      "$id": "eom://schemas/workflow/reference-query-execution-policy/1.0"
+    },
+    "launch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "purpose",
+        "workflow_id",
+        "step_run_id",
+        "step_key",
+        "attempt",
+        "workflow_request_sha256",
+        "context_request_sha256",
+        "native_launch_job_id",
+        "query_request_id",
+        "query_request_sha256",
+        "query_input_set_sha256",
+        "recipe_sha256",
+        "runtime_bundle",
+        "resource_profile_sha256",
+        "original_command_id",
+        "original_command_generation",
+        "launched_at",
+        "association_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "reference-query-launch-association/1.0"
+        },
+        "purpose": {
+          "const": "REFERENCE_QUERY"
+        },
+        "workflow_id": {
+          "type": "string",
+          "pattern": "^workflow_[0-9a-f]{32}$"
+        },
+        "step_run_id": {
+          "type": "string",
+          "pattern": "^steprun_[0-9a-f]{32}$"
+        },
+        "step_key": {
+          "const": "encode_reference_query"
+        },
+        "attempt": {
+          "type": "integer",
+          "const": 1
+        },
+        "workflow_request_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "context_request_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "native_launch_job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9a-f]{32}$"
+        },
+        "query_request_id": {
+          "type": "string",
+          "pattern": "^embeddingquery_[0-9a-f]{32}$"
+        },
+        "query_request_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "query_input_set_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "recipe_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "runtime_bundle": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/bundlePointer"
+        },
+        "resource_profile_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "original_command_id": {
+          "type": "string",
+          "pattern": "^wfcmd_[0-9a-f]{32}$"
+        },
+        "original_command_generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "launched_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "association_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        }
+      },
+      "$id": "eom://schemas/workflow/reference-query-launch-association/1.0"
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "purpose",
+        "workflow_id",
+        "workflow_definition_sha256",
+        "workflow_request_sha256",
+        "context_request_sha256",
+        "step_run_id",
+        "step_key",
+        "attempt",
+        "receipt_owner_job_id",
+        "query_artifact_owner_job_id",
+        "native_launch_job_id",
+        "launch_association_sha256",
+        "execution_result_schema",
+        "query_input",
+        "query_execution",
+        "shard",
+        "binary",
+        "runtime_bundle",
+        "resource_profile_sha256",
+        "published_at",
+        "receipt_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "reference-query-workflow-receipt/1.0"
+        },
+        "purpose": {
+          "const": "REFERENCE_QUERY"
+        },
+        "workflow_id": {
+          "type": "string",
+          "pattern": "^workflow_[0-9a-f]{32}$"
+        },
+        "workflow_definition_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "workflow_request_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "context_request_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "step_run_id": {
+          "type": "string",
+          "pattern": "^steprun_[0-9a-f]{32}$"
+        },
+        "step_key": {
+          "const": "encode_reference_query"
+        },
+        "attempt": {
+          "type": "integer",
+          "const": 1
+        },
+        "receipt_owner_job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9a-f]{32}$"
+        },
+        "query_artifact_owner_job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9a-f]{32}$"
+        },
+        "native_launch_job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9a-f]{32}$"
+        },
+        "launch_association_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "execution_result_schema": {
+          "const": "embedding-reference-query-result@1.0"
+        },
+        "query_input": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            },
+            {
+              "properties": {
+                "member_path": {
+                  "const": "input.json"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/knowledge/embedding-reference-query-input/1.1"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "query_execution": {
+          "$ref": "eom://schemas/knowledge/embedding-reference-query/1.0#/$defs/executionPointer"
+        },
+        "shard": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            },
+            {
+              "properties": {
+                "member_path": {
+                  "const": "shard.json"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/knowledge/embedding-vector-shard/1.0"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "binary": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            },
+            {
+              "properties": {
+                "member_path": {
+                  "const": "vectors.f32"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/knowledge/embedding-f32le-l2-row-major/1.0"
+                },
+                "media_type": {
+                  "const": "application/octet-stream"
+                }
+              }
+            }
+          ]
+        },
+        "runtime_bundle": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/bundlePointer"
+        },
+        "resource_profile_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "published_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "receipt_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        }
+      },
+      "$id": "eom://schemas/workflow/reference-query-workflow-receipt/1.0"
+    },
+    "step-output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "purpose",
+        "workflow_id",
+        "step_run_id",
+        "step_key",
+        "attempt",
+        "receipt_owner_job_id",
+        "execution_result_schema",
+        "receipt_schema",
+        "receipt",
+        "receipt_sha256",
+        "output_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "reference-query-step-output/1.0"
+        },
+        "purpose": {
+          "const": "REFERENCE_QUERY"
+        },
+        "workflow_id": {
+          "type": "string",
+          "pattern": "^workflow_[0-9a-f]{32}$"
+        },
+        "step_run_id": {
+          "type": "string",
+          "pattern": "^steprun_[0-9a-f]{32}$"
+        },
+        "step_key": {
+          "const": "encode_reference_query"
+        },
+        "attempt": {
+          "type": "integer",
+          "const": 1
+        },
+        "receipt_owner_job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9a-f]{32}$"
+        },
+        "execution_result_schema": {
+          "const": "embedding-reference-query-result@1.0"
+        },
+        "receipt_schema": {
+          "const": "eom://schemas/workflow/reference-query-workflow-receipt/1.0"
+        },
+        "receipt": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            },
+            {
+              "properties": {
+                "member_path": {
+                  "const": "receipt.json"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/workflow/reference-query-workflow-receipt/1.0"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "receipt_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "output_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        }
+      },
+      "$id": "eom://schemas/workflow/reference-query-step-output/1.0"
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/definition"
+    },
+    {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/request"
+    },
+    {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/policy"
+    },
+    {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/launch"
+    },
+    {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/receipt"
+    },
+    {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/step-output"
+    }
+  ]
+}

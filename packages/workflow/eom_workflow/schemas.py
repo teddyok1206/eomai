@@ -27,8 +27,10 @@ from eom_catalog_contracts import (
     content_team_material_required_retrieval_elements,
     validate_worker_knowledge_edge_endpoint_types,
 )
+from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.item_inference_transfer import ClaimId
 from eom_catalog_contracts.models import FrozenModel
+from eom_catalog_contracts.validation import CatalogSchemaError
 from eom_hwpx_contracts import (
     ContentTeamLabeledBlock,
     ContentTeamMarkdownError,
@@ -520,6 +522,95 @@ ROLE_SCHEMA_FILES = tuple(
 
 class WorkflowSchemaError(ValueError):
     pass
+
+
+REFERENCE_QUERY_EXECUTION_SCHEMA_RESOURCE = (
+    "reference-query-execution-v1.schema.json",
+    "eom://schemas/workflow/reference-query-execution/1.0",
+    "sha256:68e741506fec708956096aa5af6199e7c03821219385775cf9623aea88246c9b",
+)
+type ReferenceQueryMessageName = Literal[
+    "definition", "request", "policy", "launch", "receipt", "step-output"
+]
+_REFERENCE_QUERY_MESSAGES = frozenset(
+    {"definition", "request", "policy", "launch", "receipt", "step-output"}
+)
+
+
+class ReferenceQueryContractError(ValueError):
+    """Stable content-free contract failure; no permission or runtime claim."""
+
+
+@cache
+def _reference_query_execution_schema() -> dict[str, Any]:
+    filename, schema_id, expected = REFERENCE_QUERY_EXECUTION_SCHEMA_RESOURCE
+    try:
+        with WORKFLOW_RESOURCE_ROOT.joinpath(filename).open("rb") as stream:
+            payload = stream.read(64 * 1024 + 1)
+        if not 0 < len(payload) <= 64 * 1024 or sha256_bytes(payload) != expected:
+            raise ValueError("QUERY resource differs")
+        raw = json.loads(payload)
+        if not isinstance(raw, dict) or raw.get("$id") != schema_id:
+            raise ValueError("QUERY schema differs")
+        Draft202012Validator.check_schema(raw)
+        return raw
+    except Exception:
+        raise ReferenceQueryContractError("REFERENCE_QUERY_SCHEMA_UNAVAILABLE") from None
+
+
+def load_reference_query_execution_schema() -> dict[str, Any]:
+    return copy.deepcopy(_reference_query_execution_schema())
+
+
+@cache
+def _reference_query_execution_registry() -> Registry[Any]:
+    try:
+        return local_embedding_admission_schema_registry().with_resources(
+            (
+                (
+                    REFERENCE_QUERY_EXECUTION_SCHEMA_RESOURCE[1],
+                    Resource.from_contents(_reference_query_execution_schema()),
+                ),
+            )
+        )
+    except (LocalEmbeddingAdmissionContractError, CatalogSchemaError):
+        raise ReferenceQueryContractError("REFERENCE_QUERY_SCHEMA_UNAVAILABLE") from None
+
+
+def reference_query_execution_schema_registry() -> Registry[Any]:
+    """Fresh public values cannot mutate the parser's pinned resource."""
+    try:
+        return local_embedding_admission_schema_registry().with_resources(
+            (
+                (
+                    REFERENCE_QUERY_EXECUTION_SCHEMA_RESOURCE[1],
+                    Resource.from_contents(load_reference_query_execution_schema()),
+                ),
+            )
+        )
+    except (LocalEmbeddingAdmissionContractError, CatalogSchemaError):
+        raise ReferenceQueryContractError("REFERENCE_QUERY_SCHEMA_UNAVAILABLE") from None
+
+
+def validate_reference_query_message(name: ReferenceQueryMessageName, value: object) -> None:
+    """Only six fixed QUERY frames; no operation dispatch or installation admission."""
+    try:
+        if name not in _REFERENCE_QUERY_MESSAGES:
+            raise ValueError("QUERY message differs")
+        document = raw_similarity_contract_value(value)
+        maximum = 8 * 1024 if name == "step-output" else 64 * 1024
+        if len(canonical_json_bytes(document)) > maximum:
+            raise ValueError("QUERY message exceeds its bound")
+        _reference_query_execution_schema()
+        Draft202012Validator(
+            {"$ref": REFERENCE_QUERY_EXECUTION_SCHEMA_RESOURCE[1] + "#/$defs/" + name},
+            registry=_reference_query_execution_registry(),
+            format_checker=FormatChecker(),
+        ).validate(document)
+    except ReferenceQueryContractError:
+        raise
+    except Exception:
+        raise ReferenceQueryContractError("REFERENCE_QUERY_CONTRACT_INVALID") from None
 
 
 LOCAL_EMBEDDING_SCHEMA_RESOURCES = (

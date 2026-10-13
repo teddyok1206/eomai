@@ -838,3 +838,96 @@ Root independently read all nine frozen C1b paths and matched their raw hashes. 
 thirty-suite inventory passed **1,272 tests in91.68s, skip0**; strict mypy, Ruff and format passed
 all eight Python files. This independent source gate does not admit an installed QUERY unit or
 execute the actual model, and does not change C0/C1a or the numerical module hashes.
+
+## 12. C1c fixed QUERY execution protocol — approved first boundary
+
+This nine-path step defines contracts only. It does not change the compiler/admission/Runner,
+apply the proposed migration, publish a policy/Artifact, launch a native unit or consume QUERY in
+C0. Source `alembic heads` is the single `20261012_0053`; operating DB revision is not rechecked.
+The QUERY native-step CHECK successor remains separately required before a real queue operation.
+
+1. **Responsibility:** Two cohesive new domain modules define the fixed QUERY Workflow and its
+   request/policy/launch/publication receipt/carrier. Existing schema owner adds one independent
+   closed 2020-12 resource plus exact mirror/public exports. No generic operation/plugin/provider.
+2. **Canonical source:** `SimilarityContextRequest/1.0` carries the immutable official anchor,
+   Graph/policy and literal registered-index pins once. Policy remains a referenced immutable
+   Artifact. Native input `/1.1` and result `/1.0` remain their canonical numerical contracts;
+   source authority/runtime admission cannot be supplied by these value objects.
+3. **Identity/revision:** Keep context/controller/native-request hashes, workflow/step/native Job,
+   query-output publication Job, receipt publication Job and all Artifact revisions/raw member
+   hashes separate. Definition schema `1.2`, fixed key `local-embedding-reference-query/1.0.0`,
+   execution protocol `reference-query/1.0` and controller purpose `REFERENCE_QUERY` are distinct
+   from native space purpose `QUERY` and the released DOCUMENT contracts. Those Job fields preserve
+   distinct concepts, not an arbitrary requirement to allocate three unequal Job IDs.
+4. **Pointers/checks:** Request contains only OPERATOR audit, one small typed context, definition
+   SHA, runtime bundle/resource values and policy Artifact/hash. Pure closure checks policy,
+   paired QUERY/DOCUMENT space/device/recipe, every selected index and exact context. Launch audit
+   pins the allocated native Job and exact native request/input-set hashes; no stored lease token.
+   Receipt closes the committed input/result/shard/binary members of one QUERY file set and its
+   receipt carrier, with exact original request/launch/UTC provenance.
+5. **Access patterns:** Keyed contract/resource lookup, ordered 1–3 view rows, set-based unique
+   identities, canonical append-only audit/pointers. No corpus scan, query cache or DB vector/text
+   storage. Missing source/index/actual owner remains an unavailable use-case, not a schema grant.
+6. **Structures:** Reuse public paired-space/context/runtime-bundle/OPERATOR-audit/resource/ID/
+   Artifact-member values. The new resource registers separately; old role/native resources and
+   inventories/raw hashes are not expanded or rewritten. Small domain values remain frozen.
+7. **Complexity/scale:** Each control/receipt is capped at 64 KiB, carrier 8 KiB; at most three
+   index/view pins are checked with tuples/maps/sets. Domain checks are bounded O(V) excluding
+   the existing canonical serialization, with no binary materialization, parsing loops or inference.
+8. **Transactions:** None in contracts. The future actual owner must allocate/reserve the logical
+   Job and reacquire actual current session/source/command fences in fresh roots; persisted audit
+   and original command generation are not continuation. QUERY policy uses its own literal
+   `OPERATOR_REQUEST_ONLY`, not DOCUMENT's `OPERATOR_SEED_ONLY`. Slow inference remains outside SQL.
+9. **Dependencies:** Domain modules import public existing contracts/value objects and schema
+   validators only. No SQLAlchemy/filesystem/network/native launcher/ML/GPU/root/Runtime imports.
+   Schema resource loading remains with existing workflow schema owner and installed resources.
+10. **Failure/replay:** Literal schemas, raw scalar/model-copy/extra preservation, immutable
+    pointer/hash closure and UTC order fail explicitly before any behavior. Pure replay validation
+    matches exact historical values; it does not retry, update status or assert current permission.
+    No `approved/admitted` booleans, token/provider capture, source path, vectors or source text body.
+11. **Simpler alternative:** DOCUMENT request/receipt describes corpus/index registration and
+    cannot truthfully describe a QUERY publication. One fixed two-step definition and closed
+    pointer-only QUERY receipt are necessary; a separate queue/table/registry/framework is not.
+
+### 12.1 C1c protocol-only source checkpoint — 2026-10-13 UTC
+
+The approved nine paths add the one closed resource/exact mirror (raw SHA
+`sha256:68e741506fec708956096aa5af6199e7c03821219385775cf9623aea88246c9b`), two frozen domain
+modules, independent workflow schema-owner registration/public exports and two new test modules.
+Root read the complete draft schema/mirror and eleven decisions before model code; its QUERY
+continuation correction to `OPERATOR_REQUEST_ONLY` leaves DOCUMENT's seed enum unchanged. Job
+roles remain separate expected identities without arbitrary unequal-ID checks or actual allocation.
+
+The literal definition has schema `1.2`, application `encode_reference_query` then `complete`,
+attempt one/rework zero. Controller frames contain only bounded immutable metadata/pointers.
+Cross-value checks close exact policy raw/semantic hashes, runtime bundle/model/numerical recipe,
+source context/index/partition/view, native request/result hashes, launch audit and UTC ordering,
+QUERY input/result/shard/binary same-file-set members and receipt/carrier raw/semantic hashes.
+No-report/profile stays absent; topic/unit values are preserved, not ignored or silently cleared.
+Required index absence is not a launchable control request. Current target existence, actual source
+permission, numeric bytes and installed/native producer admission still belong to their real owners.
+
+New tests cover grant/path/body/extra rejection, boolean/float/raw model-copy/construct revalidation,
+stale expected context/policy/member/owner hashes, foreign Artifact revisions, malformed member
+schema/media, UTC order, same publication-owner identities and no invented missing report. Missing/
+corrupt new schema or required existing schema dependency is explicit SCHEMA_UNAVAILABLE, not bad
+caller input. Public schema/registry mutation cannot alter parser-pinned resources. Released native
+four-resource/two-receipt inventories, their schema/mirror bytes and DOCUMENT purpose remain intact.
+The new definition is explicitly still unoffered to the current compiler and admission table.
+
+Explicit API Conda strict mypy/Ruff lint/format **six Python files PASS**. The final thirty-six-suite
+protocol/native/backend/Artifact/Runner/context/registry regression is **1,610 PASS in 99.87s**,
+skip zero. Counts overlap previous gates and are not summed. Initial source fixtures used `+00:00`
+instead of canonical `Z`, mixed default CUDA bundle with a CPU profile, and expected an unwrapped
+Pydantic exception; those were corrected alongside precise content-free public parser errors. Static
+typing/format corrections and all affected tests were rerun. No operational retry/history change.
+
+**C1c FIRST_PROTOCOL_BOUNDARY SOURCE_ONLY / NOT_ACTIVE.** Compiler/protocol calculation/admission,
+Runner/queue/claim/lease, migration/DB/IAM, actual owner/unit/model/GPU, Artifact commit/read and C2
+consumer delivery remain unchanged and unconnected. C0/C1a/C1b and numerical module bytes are
+preserved. No Git/root/API/worker/Pack/runtime/model execution occurred in this source step.
+
+Root independently read all nine frozen paths and matched their raw hashes. The same
+thirty-six-suite inventory passed **1610 tests in99.63s, skip0**; strict mypy, Ruff and format
+passed all six Python files. This remains the first protocol-only boundary: no compiler,
+queue, migration, real owner/native unit, Artifact publication or consumer activation follows.
