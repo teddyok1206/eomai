@@ -7,12 +7,13 @@ import io
 import json
 import os
 import runpy
+import stat
 import subprocess
 import sys
 import tarfile
 import time
 from contextlib import ExitStack
-from dataclasses import replace
+from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Literal, NoReturn, cast
@@ -249,12 +250,284 @@ def test_complete_source_conda_overlay_private_tree_closure_has_no_new_instructi
 ) -> None:
     plan, staged, owned, helper, locks = _fixture(tmp_path, monkeypatch, profile=profile)
     marker = tmp_path / "NEW_EXECUTED"
+    observed_trees: list[dict[Path, tuple[int, ...]]] = []
+    actual_tree = prefix._tree
+
+    def tree(
+        root: Path, expected: set[Path], links: dict[Path, str], owner_uid: int
+    ) -> tuple[dict[Path, tuple[int, ...]], int, int]:
+        result = actual_tree(root, expected, links, owner_uid)
+        observed_trees.append(result[0])
+        return result
+
+    monkeypatch.setattr(prefix, "_tree", tree)
     with owned:
         first = _audit(plan, staged, owned, helper, locks)
         second = _audit(plan, staged, owned, helper, locks)
     assert first == second and first.profile == profile
     assert first.regular_members > 31 and first.link_members == 4 and first.elf_members == 0
+    inventory = first.inventory
+    assert len(observed_trees) == 2
+    assert inventory.root_epoch is observed_trees[0][staged.prefix]
+    assert inventory.owner_uid == os.geteuid() == staged.prefix.lstat().st_uid
+    assert inventory.ancestor_epochs == tuple(
+        (path, prefix._ancestor_identity(path.lstat())) for path in reversed(staged.prefix.parents)
+    )
+    names = [entry.relative_member for entry in inventory.entries]
+    assert names == sorted(set(names))
+    regular = links = size = 0
+    for entry in inventory.entries:
+        path = staged.prefix / entry.relative_member
+        assert entry.epoch is observed_trees[0][path]
+        assert entry.epoch == prefix._identity(path.lstat())
+        if stat.S_ISREG(entry.epoch[4]):
+            assert entry.sha256 == _hash(path.read_bytes()) and entry.symlink_target is None
+            regular += 1
+            size += entry.epoch[6]
+        elif stat.S_ISLNK(entry.epoch[4]):
+            assert entry.symlink_target == os.readlink(path) and entry.sha256 is None
+            links += 1
+        else:
+            assert stat.S_ISDIR(entry.epoch[4]) and entry.sha256 is entry.symlink_target is None
+    assert (regular, links, size) == (first.regular_members, first.link_members, first.size_bytes)
+    assert {staged.prefix, *(staged.prefix / name for name in names)} == set(observed_trees[0])
+    inventory.assert_unchanged()
     assert not marker.exists()
+
+
+def _local_inventory(tmp_path: Path) -> prefix.PrefixRuntimeInventory:
+    """Actual eom-owned metadata values only, not a complete byte audit or root admission."""
+    root = tmp_path / "prefix"
+    root.mkdir(mode=0o700)
+    target = root / "bin/a"
+    _put(target, b"synthetic local bytes")
+    link = root / "bin/alias"
+    link.symlink_to("a")
+    epochs, _size, _regular = prefix._tree(root, {target, link}, {link: "a"}, os.geteuid())
+    return prefix.PrefixRuntimeInventory(
+        root,
+        os.geteuid(),
+        epochs[root],
+        tuple((path, prefix._ancestor_identity(path.lstat())) for path in reversed(root.parents)),
+        tuple(
+            prefix.PrefixRuntimeInventoryEntry(
+                str(path.relative_to(root)),
+                epoch,
+                _hash(b"synthetic local bytes") if path == target else None,
+                "a" if path == link else None,
+            )
+            for path, epoch in sorted(epochs.items())
+            if path != root
+        ),
+    )
+
+
+def test_inventory_is_frozen_and_unchanged_check_never_walks_opens_or_rehashes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    inventory = _local_inventory(tmp_path)
+    with pytest.raises(FrozenInstanceError):
+        inventory.__setattr__("owner_uid", 0)
+    with pytest.raises(FrozenInstanceError):
+        inventory.entries[0].__setattr__("relative_member", "changed")
+    assert isinstance(inventory.entries, tuple) and isinstance(inventory.root_epoch, tuple)
+
+    def deny(*_args: object, **_kwargs: object) -> NoReturn:
+        raise AssertionError("metadata-only inventory must not read bytes or rescan")
+
+    for module, name in (
+        (os, "walk"),
+        (os, "open"),
+        (os, "read"),
+        (os, "pread"),
+        (hashlib, "sha256"),
+    ):
+        monkeypatch.setattr(module, name, deny)
+    inventory.assert_unchanged()
+
+
+@pytest.mark.parametrize(
+    "fault", ["missing", "added", "same_bytes_replaced", "mode", "directory", "link", "ancestor"]
+)
+def test_retained_inventory_denies_missing_added_replaced_link_or_metadata_drift(
+    tmp_path: Path, fault: str
+) -> None:
+    inventory = _local_inventory(tmp_path)
+    target = inventory.prefix / "bin/a"
+    if fault == "missing":
+        target.unlink()
+    elif fault == "added":
+        _put(inventory.prefix / "bin/extra", b"unregistered")
+        # Namespace timestamps can share a filesystem tick; this tests a real changed epoch,
+        # not an unsupported continuous-directory-membership claim from metadata alone.
+        directory_epoch = inventory.entries[0].epoch
+        os.utime(target.parent, ns=(directory_epoch[7] + 1, directory_epoch[7] + 1))
+    elif fault == "same_bytes_replaced":
+        replacement = inventory.prefix / "bin/replacement"
+        _put(replacement, target.read_bytes())
+        replacement.replace(target)
+    elif fault == "mode":
+        target.chmod(0o640)
+    elif fault == "directory":
+        target.parent.chmod(0o750)
+    elif fault == "link":
+        link = target.parent / "alias"
+        link.unlink()
+        link.symlink_to("different")
+    else:
+        tmp_path.chmod(0o750)
+    with pytest.raises(InstalledRuntimeProofError, match="INVENTORY_CHANGED"):
+        inventory.assert_unchanged()
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "root_bool",
+        "owner_bool",
+        "nested_bool",
+        "path",
+        "hash",
+        "link",
+        "order",
+        "duplicate",
+        "empty",
+        "missing_directory",
+        "ancestor",
+        "list",
+        "count",
+        "bytes",
+    ],
+)
+def test_forged_or_changed_inventory_values_revalidate_before_metadata_io(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    inventory = _local_inventory(tmp_path)
+    forged = replace(inventory)
+    if fault == "root_bool":
+        object.__setattr__(forged, "root_epoch", (True, *inventory.root_epoch[1:]))
+    elif fault == "owner_bool":
+        object.__setattr__(forged, "owner_uid", True)
+    elif fault in {"nested_bool", "path", "hash", "link"}:
+        index = 1 if fault != "link" else 2
+        entry = replace(inventory.entries[index])
+        field, value = (
+            ("epoch", (True, *entry.epoch[1:]))
+            if fault == "nested_bool"
+            else ("relative_member", "../outside")
+            if fault == "path"
+            else ("sha256", _hash(b"x") + "\n")
+            if fault == "hash"
+            else ("symlink_target", None)
+        )
+        object.__setattr__(entry, field, value)
+        object.__setattr__(
+            forged, "entries", (*inventory.entries[:index], entry, *inventory.entries[index + 1 :])
+        )
+    elif fault == "order":
+        object.__setattr__(forged, "entries", tuple(reversed(inventory.entries)))
+    elif fault == "duplicate":
+        object.__setattr__(forged, "entries", (*inventory.entries, inventory.entries[-1]))
+    elif fault == "empty":
+        object.__setattr__(forged, "entries", ())
+    elif fault == "missing_directory":
+        object.__setattr__(forged, "entries", inventory.entries[1:])
+    elif fault == "ancestor":
+        object.__setattr__(forged, "ancestor_epochs", inventory.ancestor_epochs[:-1])
+    elif fault == "list":
+        object.__setattr__(forged, "entries", list(inventory.entries))
+    elif fault == "count":
+        monkeypatch.setattr(prefix, "_MAX_MEMBERS", len(inventory.entries) - 1)
+    else:
+        monkeypatch.setattr(prefix, "_MAX_BYTES", 1)
+
+    def deny(*_args: object, **_kwargs: object) -> NoReturn:
+        raise AssertionError("malformed local values deny before metadata IO")
+
+    monkeypatch.setattr(Path, "lstat", deny)
+    with pytest.raises(InstalledRuntimeProofError, match=r"INVENTORY|PATH_INVALID"):
+        forged.assert_unchanged()
+
+
+def test_same_audit_export_uses_existing_tree_epochs_hashes_and_no_additional_io(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, staged, owned, helper, locks = _fixture(tmp_path, monkeypatch)
+    actual_tree = prefix._tree
+    actual_inventory = prefix.PrefixRuntimeInventory
+    observed: list[dict[Path, tuple[int, ...]]] = []
+
+    def tree(
+        root: Path, expected: set[Path], links: dict[Path, str], owner_uid: int
+    ) -> tuple[dict[Path, tuple[int, ...]], int, int]:
+        result = actual_tree(root, expected, links, owner_uid)
+        observed.append(result[0])
+        return result
+
+    def deny(*_args: object, **_kwargs: object) -> NoReturn:
+        raise AssertionError("export must reuse current metadata and verified hashes")
+
+    def export(*args: Any, **kwargs: Any) -> prefix.PrefixRuntimeInventory:
+        with monkeypatch.context() as blocked:
+            for module, name in (
+                (os, "open"),
+                (os, "walk"),
+                (os, "pread"),
+                (hashlib, "sha256"),
+                (prefix, "_tree"),
+                (Path, "lstat"),
+            ):
+                blocked.setattr(module, name, deny)
+            return actual_inventory(*args, **kwargs)
+
+    monkeypatch.setattr(prefix, "_tree", tree)
+    monkeypatch.setattr(prefix, "PrefixRuntimeInventory", export)
+    with owned:
+        audit = _audit(plan, staged, owned, helper, locks)
+    assert len(observed) == 1 and audit.inventory.root_epoch is observed[0][staged.prefix]
+
+
+def test_additive_inventory_preserves_existing_bounded_cli_receipt_literal() -> None:
+    leaf = Path(__file__).resolve().parents[2] / "scripts/embedding/admit_index_runtime.py"
+    assert (
+        b'print("EMBEDDING_PREFIX_BYTES_AUDIT_PASS_NOT_ADMITTED", audit.byte_closure_sha256)'
+        in leaf.read_bytes()
+    )
+    receipt = b"EMBEDDING_PREFIX_BYTES_AUDIT_PASS_NOT_ADMITTED " + _hash(b"x").encode() + b"\n"
+    assert len(receipt) <= 128 and b"inventory" not in receipt and b"{" not in receipt
+
+
+@pytest.mark.parametrize("fault", ["added", "removed", "directory", "link", "host"])
+def test_terminal_audit_drift_returns_no_inventory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    plan, staged, owned, helper, locks = _fixture(tmp_path, monkeypatch)
+    actual_elf = prefix._elf_closure
+
+    def late(*args: Any, **kwargs: Any) -> tuple[str, int]:
+        result = actual_elf(*args, **kwargs)
+        target = staged.prefix / "lib/python3.12/site-packages/eom_catalog_service/native.py"
+        if fault == "added":
+            _put(target.parent / "unexpected.py", b"unregistered")
+        elif fault == "removed":
+            target.unlink()
+        elif fault == "directory":
+            target.parent.chmod(0o750)
+        elif fault == "link":
+            path = next(path for path in staged.prefix.rglob("*") if path.is_symlink())
+            path.unlink()
+            path.symlink_to("unexpected")
+        else:
+
+            def changed(_self: object) -> NoReturn:
+                raise InstalledRuntimeProofError("INSTALLED_RUNTIME_HOST_FILE_CHANGED")
+
+            monkeypatch.setattr(host.ProtectedEmbeddingHostClosure, "assert_current", changed)
+        return result
+
+    monkeypatch.setattr(prefix, "_elf_closure", late)
+    with pytest.raises(InstalledRuntimeProofError), owned:
+        _audit(plan, staged, owned, helper, locks)
 
 
 @pytest.mark.parametrize(

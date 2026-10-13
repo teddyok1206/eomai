@@ -188,6 +188,164 @@ class PrefixRuntimeAuditPlan:
 
 
 @dataclass(frozen=True, slots=True)
+class PrefixRuntimeInventoryEntry:
+    """One observed member value; constructible Python data, never an admission grant."""
+
+    relative_member: str
+    epoch: tuple[int, ...]
+    sha256: str | None
+    symlink_target: str | None
+
+    def __post_init__(self) -> None:
+        _relative(self.relative_member)
+        _inventory_epoch(self.epoch, 9)
+        mode = self.epoch[4]
+        _require(
+            stat.S_ISDIR(mode) or stat.S_ISREG(mode) or stat.S_ISLNK(mode),
+            "INVENTORY_INVALID",
+        )
+        if stat.S_ISREG(mode):
+            _require(
+                type(self.sha256) is str
+                and len(self.sha256) == 71
+                and re.fullmatch(r"sha256:[0-9a-f]{64}", self.sha256) is not None
+                and self.symlink_target is None
+                and self.epoch[5] == 1
+                and not mode & 0o6022,
+                "INVENTORY_INVALID",
+            )
+        elif stat.S_ISLNK(mode):
+            _require(
+                self.sha256 is None
+                and type(self.symlink_target) is str
+                and 0 < len(self.symlink_target.encode()) <= 512
+                and not self.symlink_target.startswith("/")
+                and "\\" not in self.symlink_target
+                and all(ord(value) >= 32 for value in self.symlink_target)
+                and self.epoch[5] == 1,
+                "INVENTORY_INVALID",
+            )
+        else:
+            _require(
+                self.sha256 is None and self.symlink_target is None and not mode & 0o022,
+                "INVENTORY_INVALID",
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class PrefixRuntimeInventory:
+    """Same-audit metadata closure; no serializer, byte rehash or origin/privilege grant."""
+
+    prefix: Path
+    owner_uid: int
+    root_epoch: tuple[int, ...]
+    ancestor_epochs: tuple[tuple[Path, tuple[int, ...]], ...]
+    entries: tuple[PrefixRuntimeInventoryEntry, ...]
+
+    def __post_init__(self) -> None:
+        _require(
+            isinstance(self.prefix, Path)
+            and self.prefix.is_absolute()
+            and ".." not in self.prefix.parts
+            and type(self.owner_uid) is int
+            and 0 <= self.owner_uid <= 4294967294
+            and type(self.ancestor_epochs) is tuple
+            and type(self.entries) is tuple
+            and 0 < len(self.entries) <= _MAX_MEMBERS,
+            "INVENTORY_INVALID",
+        )
+        _inventory_epoch(self.root_epoch, 9)
+        _require(
+            self.root_epoch[2] == self.owner_uid
+            and stat.S_ISDIR(self.root_epoch[4])
+            and not self.root_epoch[4] & 0o022,
+            "INVENTORY_INVALID",
+        )
+        _require(
+            len(self.ancestor_epochs) == len(self.prefix.parents)
+            and all(type(value) is tuple and len(value) == 2 for value in self.ancestor_epochs),
+            "INVENTORY_INVALID",
+        )
+        _require(
+            tuple(path for path, _epoch in self.ancestor_epochs)
+            == tuple(reversed(self.prefix.parents)),
+            "INVENTORY_INVALID",
+        )
+        for path, epoch in self.ancestor_epochs:
+            _inventory_epoch(epoch, 5)
+            _require(
+                stat.S_ISDIR(epoch[4]) and epoch[2] in {0, self.owner_uid},
+                "INVENTORY_INVALID",
+            )
+            test_sticky = (
+                self.owner_uid != 0 and path == Path("/tmp") and bool(epoch[4] & stat.S_ISVTX)
+            )
+            _require(not epoch[4] & 0o022 or test_sticky, "INVENTORY_INVALID")
+        previous_name: str | None = None
+        directories: set[str] = set()
+        required_directories: set[str] = set()
+        size = 0
+        for entry in self.entries:
+            _require(type(entry) is PrefixRuntimeInventoryEntry, "INVENTORY_INVALID")
+            entry.__post_init__()
+            _require(entry.epoch[2] == self.owner_uid, "INVENTORY_INVALID")
+            _require(
+                previous_name is None or previous_name < entry.relative_member,
+                "INVENTORY_INVALID",
+            )
+            previous_name = entry.relative_member
+            if stat.S_ISDIR(entry.epoch[4]):
+                directories.add(entry.relative_member)
+            else:
+                parent = entry.relative_member.rpartition("/")[0]
+                while parent:
+                    required_directories.add(parent)
+                    parent = parent.rpartition("/")[0]
+            if stat.S_ISREG(entry.epoch[4]):
+                size += entry.epoch[6]
+                _require(size <= _MAX_BYTES, "INVENTORY_INVALID")
+        _require(
+            directories == required_directories,
+            "INVENTORY_INVALID",
+        )
+
+    def assert_unchanged(self) -> None:
+        """Metadata/link checks only; a caller-created value does not attest audited bytes."""
+        self.__post_init__()
+        try:
+            _require(
+                all(
+                    _ancestor_identity(path.lstat()) == epoch
+                    for path, epoch in self.ancestor_epochs
+                )
+                and _identity(self.prefix.lstat()) == self.root_epoch,
+                "INVENTORY_CHANGED",
+            )
+            for entry in self.entries:
+                path = self.prefix / entry.relative_member
+                _require(_identity(path.lstat()) == entry.epoch, "INVENTORY_CHANGED")
+                if entry.symlink_target is not None:
+                    _require(os.readlink(path) == entry.symlink_target, "INVENTORY_CHANGED")
+        except OSError:
+            raise InstalledRuntimeProofError("INSTALLED_RUNTIME_PREFIX_INVENTORY_CHANGED") from None
+
+
+def _inventory_epoch(epoch: tuple[int, ...], length: int) -> None:
+    _require(
+        type(epoch) is tuple
+        and len(epoch) == length
+        and all(type(value) is int and 0 <= value <= 18446744073709551615 for value in epoch)
+        and epoch[1] > 0
+        and epoch[2] <= 4294967294
+        and epoch[3] <= 4294967294
+        and epoch[4] <= 65535,
+        "INVENTORY_INVALID",
+    )
+    if length == 9:
+        _require(0 < epoch[5] <= _MAX_MEMBERS and epoch[6] <= _MAX_BYTES, "INVENTORY_INVALID")
+
+
+@dataclass(frozen=True, slots=True)
 class PrefixRuntimeByteAudit:
     profile: str
     source_closure_sha256: str
@@ -198,6 +356,7 @@ class PrefixRuntimeByteAudit:
     link_members: int
     size_bytes: int
     elf_members: int
+    inventory: PrefixRuntimeInventory
 
 
 def parse_embedding_prefix_audit_input(
@@ -486,6 +645,10 @@ def _identity(value: os.stat_result) -> tuple[int, ...]:
         value.st_mtime_ns,
         value.st_ctime_ns,
     )
+
+
+def _ancestor_identity(value: os.stat_result) -> tuple[int, ...]:
+    return value.st_dev, value.st_ino, value.st_uid, value.st_gid, value.st_mode
 
 
 def _tree(
@@ -811,6 +974,9 @@ def audit_installed_embedding_prefix(
             and type(files) is NumericalRuntimeFileSnapshots
         )
         host.assert_current()
+        ancestor_epochs = tuple(
+            (path, _ancestor_identity(path.lstat())) for path in reversed(prefix.parents)
+        )
         deadline = time.monotonic() + 900.0
         sources: dict[str, _Source] = {}
         sources_by_name: dict[str, _Source] = {}
@@ -960,6 +1126,7 @@ def audit_installed_embedding_prefix(
                 prefix, expected_members, links, files, host, deadline
             )
             member_values = []
+            member_hashes: dict[Path, str] = {}
             for path in sorted(expected_members):
                 mode = stat.S_IMODE(path.lstat().st_mode)
                 if path in links:
@@ -967,12 +1134,39 @@ def audit_installed_embedding_prefix(
                 else:
                     with files.open_verified_member(path) as (_descriptor, sha):
                         member_values.append((str(path.relative_to(prefix)), mode, sha))
+                        member_hashes[path] = sha
             files.assert_unchanged()
             host.assert_current()
             _require(
                 time.monotonic() < deadline
-                and all(_identity(path.lstat()) == initial for path, initial in epochs.items()),
+                and all(_identity(path.lstat()) == initial for path, initial in epochs.items())
+                and all(
+                    _ancestor_identity(path.lstat()) == initial for path, initial in ancestor_epochs
+                ),
                 "TREE_CHANGED",
+            )
+            _require(0 < len(epochs) - 1 <= _MAX_MEMBERS, "INVENTORY_INVALID")
+            inventory = PrefixRuntimeInventory(
+                prefix,
+                files.owner_uid,
+                epochs[prefix],
+                ancestor_epochs,
+                tuple(
+                    PrefixRuntimeInventoryEntry(
+                        str(path.relative_to(prefix)),
+                        epochs[path],
+                        member_hashes.get(path),
+                        links.get(path),
+                    )
+                    for path in sorted(
+                        set(epochs) - {prefix}, key=lambda member: str(member.relative_to(prefix))
+                    )
+                ),
+            )
+            _require(
+                len(member_hashes) == regular
+                and set(member_hashes) | set(links) == expected_members,
+                "INVENTORY_INVALID",
             )
             return PrefixRuntimeByteAudit(
                 plan.conda.profile,
@@ -989,6 +1183,7 @@ def audit_installed_embedding_prefix(
                 len(links),
                 size,
                 elf_count,
+                inventory,
             )
     except InstalledRuntimeProofError:
         raise

@@ -1,9 +1,10 @@
 # Native installation admission: same-audit inventory and CPU-first seal
 
-2026-10-13 UTC. DESIGN / PROTOCOL_DRAFT_ONLY / NOT_IMPLEMENTED / NOT_ADMITTED.
-Only this note and the two adjacent `.schema.proposal.json` documents are proposed.
-They are unregistered ROOTLOCAL evidence, not worker messages, grants or actual receipts.
-No production data, prefix, source behavior, resource inventory, unit or default changes.
+2026-10-13 UTC. PROTOCOL_DRAFT / PHASE_A_SOURCE_ONLY / NOT_ADMITTED.
+The two adjacent `.schema.proposal.json` documents remain unregistered ROOTLOCAL drafts,
+not worker messages, grants or actual receipts. Only the additive same-audit local snapshot
+export in PhaseA below is implemented; all receipt/proof/factory/unit composition remains
+proposed. No production data, installed prefix, resource registry, unit or default changes.
 
 The current CPU publication failed its OLD whole-prefix audit before NEW; the accepted
 read-only wheel diagnosis is not a replacement whole-prefix PASS. That failed input cannot
@@ -196,3 +197,65 @@ the real CPU/CUDA benchmark: a candidate cannot execute benchmark/index work. Th
 actual benchmark correctness/performance/capacity gates precede conditional default activation.
 Actual conditional CUDA activation and automatic service identity remain required goal follow-ups,
 not displaced or circularly blocked by this source/protocol checkpoint.
+
+## PhaseA — same-audit local inventory only
+
+2026-10-13 UTC. ROOT_APPROVED_SOURCE_PHASE / NOT_ADMITTED / NOT_PUBLISHED.
+The exact owned paths are existing `embedding_runtime_prefix_closure.py`, its existing
+`test_embedding_runtime_prefix_closure.py` and this note. The two protocol drafts stay frozen.
+
+1. **Boundary:** export the actual final whole-prefix audit snapshot, not a receipt, provider,
+   installer, factory capture, proof, unit grant or production admission implementation.
+2. **Canonical source:** use the existing one `_tree` result, verified regular SHA strings and
+   declared source-validated link targets. Do not parse/scan/hash the installation again.
+3. **Identity:** retain actual prefix and owner UID plus root/in-prefix nine-integer epochs;
+   fixture files retain their actual eom UID1000, not a mocked root identity.
+4. **Checks:** capture fixed prefix-ancestor five-field metadata before audit and recheck at
+   its existing terminal boundary. Reuse existing byte/FD/named checks; the exported snapshot
+   offers metadata-only `assert_unchanged`, not continuous FD or byte-verification authority.
+5. **Access:** initial ordered export and subsequent per-entry metadata checks, no directory
+   walk or byte read during unchanged checks. Directory epochs catch member addition/removal.
+6. **Structures:** frozen root/ancestor/entry tuples with exact raw integers, canonical bounded
+   relative names, regular SHA or declared link target, sorted unique membership and counts.
+7. **Cost:** O(members log members) ordering, O(members) frozen metadata, existing100,000-member/
+   16GiB limits. Existing immutable epoch/hash strings are shared, not deep-copied payloads.
+8. **Concurrency:** export only after existing host/files/tree/deadline checks. Late ancestor,
+   root/directory/member/link drift fails; the real publication reservation remains caller-owned.
+9. **Ownership:** stdlib-only Catalog infrastructure; no private cross-module imports, new
+   dependency, protocol registration, JSON serializer, boot/device capture or filesystem writes.
+10. **Failure:** malformed/copied local values reject before IO; stale/missing/add/remove/link
+    changes raise stable inventory errors. Ordinary Python data remains constructible and is
+    not a grant or cryptographic origin witness. Preserve old digest/count and CLI128B behavior.
+11. **Alternative:** returning digests only discards needed epochs; rebuilding another tree
+    wastes IO and creates a second authority rule. This additive result closes only that gap.
+
+Freeze focused prefix/old regression, full literal19 suites, explicit API/core strict checking
+and Ruff/format before root review. This source change requires fresh accepted source/wheel/
+bootstrap pins before a later actual audit; no installed prefix or historical evidence is updated.
+
+Metadata epochs do not attest continuous namespace membership: a filesystem can give an in-tick
+addition the same directory timestamp/allocated size. The source tests explicitly advance the
+actual temporary directory mtime for that drift check; they do not fake UID/stat or claim a
+kernel guarantee. Root-only nonwritable prefixes, the real publication reservation and independent
+pre-execution owner checks remain mandatory. No polling/rescan or security-framework expansion
+is added to manufacture a stronger promise than the existing named-epoch boundary.
+
+### PhaseA source checkpoint
+
+The actual final audit now returns frozen `PrefixRuntimeInventory`/entry values through the
+additive `PrefixRuntimeByteAudit.inventory` field. Root/entry epoch tuple objects and regular
+SHA strings originate from the same existing audit; export introduces no tree walk, archive
+parser, full byte hash, payload copy or JSON output. Relative entry ordering is explicit string
+ordering, while historical member/digest ordering is unchanged. Raw-value revalidation and
+metadata-only unchanged checks are linear in bounded members; the initial export sort is
+O(n log n). The values preserve actual UID1000 in eom-owned fixtures, not claimed root identity.
+
+Explicit API Python focused111 PASS12.61s; the requested literal19 suites1514 PASS38.54s,
+skip0. Explicit API/core strict mypy each2 files PASS; API Ruff2/format2 PASS. Tests cover same
+epoch-object reuse, frozen/nested raw bool/shape/hash/ordering/uniqueness/count/size guards,
+missing/add/remove/replacement/link/mode/root/ancestor drift, terminal tree/host failure,
+metadata-only no-open/no-walk/no-hash checks and export with all additional IO/hash disabled.
+The existing owner CLI receipt literal is unchanged and remains <=128B, without inventory JSON.
+Protocol draft bytes and frozen7044 diagnostic are unchanged. Actual ROOTLOCAL receipt/seal,
+proof generation, installed source/bootstrap acceptance, new unit/owner capture and GPU admission
+remain unavailable; no synthetic test is an actual installation, sandbox or model PASS.

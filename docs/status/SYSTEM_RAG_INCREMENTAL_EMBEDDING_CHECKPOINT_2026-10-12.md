@@ -1242,3 +1242,20 @@ backup은 fixed CPU 위치로 복구됐다. 이전 backup 위치는 **MOVED_NOT_
 `second-cpu-recovery.log`는 PASS_NEW_NOT_EXECUTED를 기록한다. 파일 삭제·chown repair·
 실패 상태 성공 재해석·모델/GPU 추론은 없었다. 현재 fixed CPU는 developer 조립 입력이며
 승인된 production native runtime이 아니다. 두 failed PRIVATE/phase/receipt/archive도 보존한다.
+
+## 동일 final-audit inventory 재사용 PhaseA — 2026-10-13 05:00 UTC
+
+기존 whole-prefix audit의 실제 epoch/hash를 frozen inventory로 반환하도록 owning module을
+확장했다. 추가 directory walk/전체 byte hash/JSON 출력/설치는 없다. Prefix/entry9-field와
+고정 ancestor5-field를 유지하며 metadata-only unchanged 검사는 bounded O(members)다.
+일반 Python 값은 권한이나 origin witness가 아니고, named epoch는 continuous membership을
+보증하지 않는다. root-only prefix·publication reservation·독립 pre-execution owner는 그대로
+필수다. 실제 fixture UID1000과 기존 CLI128B, draft schema bytes를 보존했다.
+
+Root가 frozen source/test/note 전체와 SHA를 독립 확인했다. API Python19-suite는
+**1514 PASS38.69s, skip0**, strict/Ruff/format2 PASS다. source raw
+`f2b771e8f89c5113b38078c70deb1873da203590b9621c278631431b953e7301`, test raw
+`da0ccc227d60999a4bf63849585a497e7a6f2293196198e6e2b73c5db041bc60`다. 이 source는 새
+committed archive/wheel/bootstrap pin으로 실제 재조립해야 한다. 이미 검증된 actual56과
+실패·복구 이력을 새 prefix/native/model PASS로 승격하지 않는다. 모델/GPU 추론0,
+성능 NOT_EVALUATED, GPU 기본값 NOT_ACTIVE, 전체 goal ACTIVE다.
