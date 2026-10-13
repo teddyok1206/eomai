@@ -208,6 +208,10 @@ native 요청 저장·현재 owner 확인·Workflow/START 원자적 제출과 re
 회귀584 PASS, strict type/lint/format PASS입니다. 기존 요청·claim·실패 기록을 바꾸지 않고,
 계산할 신규 입력이 없으면 Workflow를 만들지 않습니다. 실제 claim/dispatcher와 운영 실행은
 별도 후속 연결이며 이 source 결과만으로 활성화를 선언하지 않습니다.
+고정 Conda31 원본과 설치 파일의 변환·cache·link·wheel overlay 검증 source는 독립15-suite
+902 PASS, strict type/lint/format4 PASS입니다. 여기에는 병행 개발 중인 CUDA OOM seam의
+추가10 source 사례가 포함되며, 실제 설치 admission·모델/GPU 실행 성공을 뜻하지 않습니다.
+보호된 host/tool 및 전체 실행 환경 연결은 아직 남아 있습니다.
 
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스

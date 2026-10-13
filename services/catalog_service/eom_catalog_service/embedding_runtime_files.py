@@ -94,6 +94,15 @@ class RuntimeFileEpoch:
             raise InstalledRuntimeProofError("INSTALLED_RUNTIME_FILE_CHANGED") from exc
 
 
+@dataclass(frozen=True, slots=True)
+class ObservedRuntimeMemberBytes:
+    """Actual bounded immutable bytes; not an expected pin or installation grant."""
+
+    sha256: str
+    size_bytes: int
+    raw: bytes
+
+
 @contextmanager
 def _protected_open(
     path: Path, owner_uid: int
@@ -164,6 +173,8 @@ class NumericalRuntimeFileSnapshots:
         self.owner_uid = owner_uid
         self._epochs: dict[Path, RuntimeFileEpoch] = {}
         self._namespace_directories: dict[Path, tuple[int, ...]] = {}
+        self._observations: dict[Path, ObservedRuntimeMemberBytes] = {}
+        self._observation_bytes = 0
 
     def observe_protected_interpreter(self, path: Path) -> None:
         """Protect actual executable identity; full interpreter bytes belong to launch audit."""
@@ -178,6 +189,44 @@ class NumericalRuntimeFileSnapshots:
             epoch = RuntimeFileEpoch(path, _identity(os.fstat(descriptor)), ancestors, "")
         epoch.assert_unchanged()
         self._epochs[path] = epoch
+
+    def observe_protected_member_bytes(
+        self, path: Path, *, maximum: int
+    ) -> ObservedRuntimeMemberBytes:
+        """Capture small metadata once, retaining byte identity for one expected read."""
+        _require(type(maximum) is int and 0 < maximum <= 8 * 1024**2, "OBSERVATION_INVALID")
+        previous = self._epochs.get(path)
+        if previous is not None:
+            _require(previous.sha256 == "", "REPEATED_BYTE_READ")
+            previous.assert_unchanged()
+        with _protected_open(path, self.owner_uid) as (descriptor, ancestors):
+            initial = os.fstat(descriptor)
+            _require(
+                0 <= initial.st_size <= maximum
+                and self._observation_bytes + initial.st_size <= 16 * 1024**2,
+                "FILE_SIZE_INVALID",
+            )
+            if previous is not None:
+                _require(_identity(initial) == previous.identity, "FILE_CHANGED")
+            digest = hashlib.sha256()
+            chunks: list[bytes] = []
+            count = 0
+            while chunk := os.pread(descriptor, min(65536, maximum + 1 - count), count):
+                count += len(chunk)
+                _require(count <= initial.st_size, "FILE_SIZE_INVALID")
+                digest.update(chunk)
+                chunks.append(chunk)
+            _require(count == initial.st_size, "FILE_SIZE_INVALID")
+            observed = ObservedRuntimeMemberBytes(
+                "sha256:" + digest.hexdigest(), count, b"".join(chunks)
+            )
+            epoch = RuntimeFileEpoch(path, _identity(initial), ancestors, observed.sha256)
+            _require(_identity(os.fstat(descriptor)) == epoch.identity, "FILE_CHANGED")
+        epoch.assert_unchanged()
+        self._epochs[path] = epoch
+        self._observations[path] = observed
+        self._observation_bytes += observed.size_bytes
+        return observed
 
     def require_closed_namespaces(self, roots: set[Path], expected: set[Path]) -> None:
         observed: set[Path] = set()
@@ -207,6 +256,24 @@ class NumericalRuntimeFileSnapshots:
         size: int | None = None,
         retain_bytes: bool = False,
     ) -> Iterator[tuple[int, bytes]]:
+        if path in self._observations:
+            observed = self._observations[path]
+            epoch = self._epochs[path]
+            _require(
+                observed.sha256 == sha256
+                and 0 <= observed.size_bytes <= maximum
+                and (size is None or observed.size_bytes == size),
+                "DUPLICATE_REFERENCE_MISMATCH",
+            )
+            epoch.assert_unchanged()
+            with _protected_open(path, self.owner_uid) as (descriptor, _ancestors):
+                _require(_identity(os.fstat(descriptor)) == epoch.identity, "FILE_CHANGED")
+                yield descriptor, observed.raw if retain_bytes else b""
+                _require(_identity(os.fstat(descriptor)) == epoch.identity, "FILE_CHANGED")
+            epoch.assert_unchanged()
+            self._observation_bytes -= observed.size_bytes
+            del self._observations[path]
+            return
         _require(path not in self._epochs, "REPEATED_BYTE_READ")
         with _protected_open(path, self.owner_uid) as (descriptor, ancestors):
             initial = os.fstat(descriptor)

@@ -45,7 +45,8 @@ not whole-prefix admission or a retrospective first-instruction certificate.
    A local root-private receipt is installation evidence, not an Artifact, DB row,
    authority DTO or new cross-service protocol. No DB/index/schema change is proposed.
 7. **Scale/complexity.** O(total accepted archive/installed bytes + members + ELF
-   dependency edges), bounded streaming memory; no second complete prefix/model copy.
+   dependency edges), plus O(members log members) for canonical sorted ledger output;
+   bounded streaming memory; no second complete prefix/model copy.
    Keep existing wheel limits:20,000 entries,16MiB central directory,2GiB member,
    4GiB expanded wheel; impose an aggregate reviewed profile budget before work.
    Initial proposed Conda limits:31 archives,100,000 combined members,8GiB expanded
@@ -418,3 +419,404 @@ distinct. If superior and correctness/isolation/capacity/lease gates pass, perfo
 reviewed actual CUDA-default policy/index/query activation with exact read-back and
 CPU rollback, rather than stopping at proof installation or benchmark-only status.
 Until then: INSTALLED_NOT_ADMITTED / NOT_PROBED / CUDA_NOT_ACTIVE remains explicit.
+
+## Next source phase: exact Conda31 byte-audit plan (review freeze)
+
+2026-10-12 UTC. ROOT_APPROVED_SOURCE_PHASE / SYNTHETIC_GATES_PASS / NOT_ADMITTED. Root committed the
+mechanical wheel extraction in `73fe4d95` and the native factory/public file-profile
+seams in `9ace25e6`. The following five-path phase is a **read-only Conda31 byte audit**,
+not whole-prefix/host ELF admission, proof generation or an implementation of
+`NativeEmbeddingInstallationAdmission`. No installer, protected-prefix, old helper,
+production privilege, model, GPU, DB, migration or runtime action is included.
+
+| Owned path | Exact addition |
+|---|---|
+| `scripts/embedding/admit_index_runtime.py` (new) | Closed `conda31-bytes` CLI; protected owner-input/root-context intake and sanitized partial-audit result only. No install/copy/repair or new-interpreter invocation. |
+| Catalog `embedding_conda_runtime_closure.py` (new) | Stdlib-only archive→transformation→installed Conda survivor/cache/link/overlap ledger. Calls the existing public wheel core for the four exact overlays; no second wheel validator. |
+| Catalog `embedding_runtime_files.py` | Only the coordinated bounded initial-byte observation below; preserve existing expected-byte APIs, error behavior and ancestor/FD/named epochs. No changes to factory/observer ownership. |
+| `tests/unit/test_embedding_conda_runtime_admission.py` (new) | Synthetic archive/prefix/tool-ownership fixtures, malicious inputs/races, exact transformations/cache rules and real isolated stdlib import-closure tests. No actual protected installation or model/device/DB test. |
+| This admission note | Approved scope, measured source gates and explicit still-unavailable whole-prefix/runtime gates. |
+
+### Public values and invocation shape
+
+The new module exposes one purpose-specific operation:
+
+```text
+audit_installed_conda31(plan: CondaRuntimeAuditPlan, *,
+    prefix: Path, archive_root: Path, files: NumericalRuntimeFileSnapshots,
+    tool_admission: CondaArchiveToolAdmission) -> CondaRuntimeByteAudit
+```
+
+`prefix` and `archive_root` are captured trusted owner locations, not fields in the
+plan. The CLI supplies only `fixed_native_embedding_profile(profile).prefix` and
+`/opt/eom/embedding-runtime-archives`; non-root synthetic tests substitute isolated
+temporary locations through this infrastructure boundary. `files.owner_uid=0` is
+mandatory in the real CLI. No worker-supplied directories or command/module selectors.
+
+Three small frozen local values are sufficient: `CondaRuntimeArchivePin` contains
+`filename`, `sha256`, `size_bytes`; `CondaRuntimeAuditPlan` contains `profile`,
+`source_list_sha256`, `source_list_size_bytes`, exactly31 sorted archive pins and
+exactly4 sorted existing `RuntimeWheelArchivePin` overlay pins;
+`CondaRuntimeByteAudit` contains only the profile, source-list/raw-archive/overlay
+closure hashes, transformation/member/cache counts and deterministic ledger SHA.
+These are local immutable values, not protocol/authority DTOs, registries or receipts.
+Revalidate **all** direct values, nested pin types and tuple bounds at the public
+operation, including constructed/copied instances, before allocation, file reads or
+child creation. Exact integers exclude booleans; hashes are `sha256:` plus lowercase64;
+bounded ASCII filenames cannot include a directory or select another archive type.
+
+The closed CLI arguments are `conda31-bytes --profile CPU_INDEX_FP32|CUDA_INDEX_FP32
+--owner-input /opt/eom/.embedding-index-install-XXXXXXXX/conda31-audit-input.json
+--owner-input-sha256 sha256:<64>`, where `XXXXXXXX` is exactly the existing eight-character
+ASCII alphanumeric quarantine suffix. The path is existing-only/root-protected under
+that exact pattern, not an arbitrary input/output path. Its ≤64KiB unique-key JSON has
+only `profile`, `source_list_sha256`, `source_list_size_bytes`, `archives` and
+`overlay_archives`, matching the value fields above; no own hash, permissions, arbitrary
+recipe, tool command, URL, operator, accepted flag or resource-budget field. Owner
+expected raw SHA remains a separate trusted invocation pin. The fixed five protected
+lock copies are siblings under the same quarantine's `locks/`; the source-list location
+is derived as `<archive_root>/<source-list-raw-sha>/sources.lock` and every archive path
+as `<archive_root>/<archive-raw-sha>/<filename>`.
+
+Root must execute only the raw-pinned leaf/minimal module snapshot with the independently
+protected **old** CPython3.12.13 `-I -S -B`, scrubbed environment and the existing retained
+publication reservation. CLI root UID, interpreter/isolation flags, protected source/
+input ancestry and expected raw pins are prerequisites, not declarations inside JSON.
+Missing canonical source-list/31 archives/four overlays/locks or a real independently
+accepted tool context returns unavailable **before spawning**. This source phase does
+not create archives/quarantine/receipts, acquire/create a publication reservation or
+load an optional provider. Standalone invocation cannot synthesize the missing tool
+context: until its real owner composition is admitted, it denies rather than treating
+root-owned JSON as a grant. Successful library output means
+`CONDA31_BYTES_AUDITED_NOT_ADMITTED`, never READY, whole-prefix or native admission.
+
+### Initial observed-byte seam, with existing lifetime checks
+
+Add the small frozen value `ObservedRuntimeMemberBytes(sha256: str, size_bytes: int,
+raw: bytes)` and exactly
+`NumericalRuntimeFileSnapshots.observe_protected_member_bytes(path, *, maximum)`.
+The method accepts an exact positive integer maximum≤8MiB, including legitimate
+zero-byte regular members (actual empty-byte SHA and size0); enforce a16MiB aggregate
+retained-observation budget before reading, with `st_size` and held-FD epochs checked
+before allocation. Reuse this owner's protected open internally; never expose/private
+import `_protected_open`. Return actual SHA/size and the single bounded immutable raw
+value, retain its exact file/ancestor/named epochs, and check them after the read.
+An existing identity-only observation can upgrade only through this new explicit method
+after exact epoch revalidation. A hashed or already consumed observation is not reread.
+
+The existing `verify` may match a new observed SHA/size and check epochs without hashing
+again. The first existing expected `read`/`verified_open` for this new observation can
+reuse the retained raw bytes under the exact expected SHA/size/maximum and fresh held
+FD/named/ancestor checks, then consume the observation's reuse slot. Existing callers
+that did not use the new observation keep their current repeated-read denial and
+duplicate-reference semantics. A mismatch or too-small bound fails, never silently
+reopens/reparses. Retained observations share the original bytes object, not a new copy;
+small RECORD/direct-URL/Conda metadata inputs can therefore seed exact existing wheel
+pins without repeated byte hashing. No unbounded unknown-hash read or OS-file cache.
+
+### Fixed31 source and exact four-overlay ownership
+
+The authoritative source-list raw SHA is
+`sha256:3decd31fdcd240cefca05b8fbd708e0dce724f63a3d255684617a6e2fcef010c`.
+Its raw-pinned rows supply exact filename/name/version/build/subdir/URL/archive SHA,
+not the installed metadata or a package cache. Require the exact31 distinct names:
+`_libgcc_mutex`, `_openmp_mutex`, `bzip2`, `ca-certificates`, `ld_impl_linux-64`,
+`libexpat`, `libffi`, `libgcc`, `libgcc-ng`, `libstdcxx`, `libuuid`, `libxcb`,
+`libzlib`, `ncurses`, `openssl`, `packaging`, `pip`, `pthread-stubs`, `python`,
+`readline`, `setuptools`, `sqlite`, `tk`, `tzdata`, `wheel`, `xorg-libx11`,
+`xorg-libxau`, `xorg-libxdmcp`, `xorg-xorgproto`, `xz`, `zlib`.
+All URLs are the exact source-list rows, with only pip/tzdata under `noarch`; no network
+operation follows them. Plan archive SHA/name must equal these rows and actual bounded
+sizes; the31 archive byte hashes are checked before decompression. The known mutex
+empty-metadata/zero-payload exception remains exact raw-pin-specific.
+
+The fixed5 lock raw pins above select identical overlay archives for both profiles:
+
+| Overlay | Exact archive filename | Raw SHA (without `sha256:`) |
+|---|---|---|
+| packaging26.2 | `packaging-26.2-py3-none-any.whl` | `5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e` |
+| pip26.1.2 | `pip-26.1.2-py3-none-any.whl` | `382ff9f685ee3bc25864f820aa50505825f10f5458ffff07e30a6d96e5715cab` |
+| setuptools83.0.0 | `setuptools-83.0.0-py3-none-any.whl` | `29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3` |
+| wheel0.47.0 | `wheel-0.47.0-py3-none-any.whl` | `212281cab4dff978f6cedd499cd893e1f620791ca6ff7107cf270781e587eced` |
+
+Pin matching is derived from those exact protected lock bytes, not latest or arbitrary
+distribution selection. Initially observe each actual installed RECORD/direct-URL/
+console wrapper and REQUESTED presence, construct the existing mechanical pin, then
+call `verify_installed_runtime_wheel`. Use its returned installed-member sets as the
+only final wheel ownership; allow shared members only with identical bytes. The four
+overlaid Conda packages must have exactly their archive-derived obsolete-only members
+absent, not merely ignore all Conda `site-packages`. Unexpected survivors, missing
+non-overlaid survivors and conflicting ownership fail. No other public/private wheel
+or namespace is certified in this phase. Prefix-wide unexpected-member closure remains
+the next whole-prefix audit; this partial output does not cover unrelated additions.
+
+### Bounded archive,272-relocation and canonical-cache ledger
+
+Before `ZipFile`, bound the existing `.conda` EOCD/central entry structure to exactly3
+members and≤64KiB directory metadata; permit only exact `metadata.json` and matching
+`info-<archive-stem>.tar.zst`/`pkg-<archive-stem>.tar.zst`, with no central/general ZIP64
+(only the approved local equal-size encoding below), encryption,
+unsafe aliases or compression-method surprise. Only canonical raw sources are inputs.
+Prototype size bounds precede streams:31 archives≤64MiB combined raw bytes,100,000
+combined tar members,8GiB expanded bytes,2GiB streamed payload/member,≤16MiB total
+parsed metadata,≤1MiB per installed Conda record, and≤64MiB per transformed member.
+These comfortably cover the observed56,222,902 raw bytes/7,168 files/1,380 links and
+largest declared relocation31,498,184 bytes. Bounds are fixed owner source constants,
+not values supplied by a prefix. Keep only path/pin/type/link/source-association records
+in keyed maps; consume large payloads once in chunks and discard them, never retain a
+full prefix/archive dictionary of file bytes. One transformed member has an explicit
+bounded temporary source/computed-byte comparison boundary, not another canonical copy.
+
+Tar headers/types/size and bounded POSIX-PAX overrides are inspected before payload
+read/concatenation; reject sparse/device/hardlink/unmodeled extension records. Regular
+file hashes/sizes, directory metadata and symlink targets must match accepted
+`info/paths.json`; source `info/index.json` and noarch metadata determine Linux identity
+and the closed Python/generic path mapping. Link targets may use reviewed relative
+parent components only when the archive-declared chain remains entirely in the exact
+prefix, with cycles/escape/type changes denied. The new Conda adapter owns this narrow
+archive-declared symlink observation and held ancestor/named-link/target epochs because
+the existing public file adapter intentionally accepts regular members only; it does
+not reach into that adapter's private opening code. No extraction or package hook.
+Compare generated Conda records' fixed source identity/common metadata and exact mapped
+path associations with the archive ledger; bound/validate generated local metadata but
+never trust `sha256_in_prefix`, stale `link.source` or `files` as executable ownership.
+
+Recompute the source-declared272 relocations (161binary,111text) in the exact two
+profiles: five fixed Linux Conda encodings; text placeholder replacement; binary only
+placeholder-containing NUL-terminated spans with length-preserving tail padding.
+Enforce original source hash/size, declared mode/placeholder, prefix-length and final
+byte hash/size. No activation/space/long-shebang fallback, general transform callbacks
+or installed correction table. The one `bin/wheel` source-declared transformation is
+still recorded, but its final bytes are owned/verified by the accepted overlay wheel.
+
+Derive the1133 archived bytecode/source associations before installed comparisons.
+Require exactly the779 Python survivors with canonical raw member SHA/size,
+CPython3.12 magic `cb0d0d0a`, timestamp flags0, closed `cpython-312` basename/optimization
+and exact `.py` archive source identity/header.775 caches must remain current for the
+same admitted installed source SHA/size/mtime. Only the exact four source members named
+above may have stale canonical cache headers after their verified text relocation;
+require actual timestamp/size mismatch so CPython cannot execute that stale cache.
+The354 packaging/setuptools/wheel archive caches and395 generated pip noarch caches
+must be absent, with archive/noarch source associations retained as removal evidence.
+No bytecode unmarshaling/compilation/execution, inferred cache repair, private EOM cache,
+unregistered/sourceless cache or blanket deletion. Metadata-listed absent paths are
+not recreated. Failure leaves the existing canonical assembly unchanged.
+
+### Mandatory accepted tool handle and source gates
+
+The one small purpose-specific port is `CondaArchiveToolAdmission.assert_current()
+-> None`: a mandatory independently accepted owner-captured zstd executable/host-loader/
+dependency/environment lifetime fence, **not** a Boolean or serialized acceptance field.
+Its concrete trusted capture/loading belongs to the later fixed OS closure phase; this
+phase does not admit a tool from its own observed metadata. Require that exact handle
+before any child, before/after every tool use and before returning a partial audit.
+There is no optional default, command callback, import-by-name provider or runtime
+plugin registry. The module owns the sole fixed invocation `/usr/bin/zstd -q -d -c`,
+scrubbed env/known cwd, exact raw executable pin above and protected FD/named epochs.
+The independent handle must also cover fixed loader/dependency/cache/alias routing and
+no capabilities/preload injection; an executable SHA alone is insufficient. Readelf
+is not invoked by this phase and its candidate pin above confers no acceptance.
+
+Feed/read the owned zstd child concurrently with bounded buffers, stderr DEVNULL,
+absolute deadline and explicit overflow denial; no `capture_output` then size check,
+chunk-reset timeout or shell. Cap each tool stream at10s and each full audit at180s;
+terminate/reap only the owned child on any error and retain source/prefix epochs.
+The child emits decompressed bytes only and cannot select files, archives or hooks.
+Missing/stale tool ownership or any epoch/bounds/hash/layout discrepancy returns a
+stable content-free unavailable/invalid result, never partial semantic success.
+The partial result is nonpersistent; replay reads the same exact inputs and revalidates
+current epochs. No repair/retry within the audit or own O_EXCL publication yet.
+
+Focused tests will cover direct bool/integer/nested mutation rejection before I/O;
+missing canonical inputs/tool handle before spawn; small real child timeout/overflow/
+contention-free cleanup under a synthetic tool fence; safe/hostile ZIP/tar/PAX/link/
+owner/mode/hardlink/epoch cases; all five encodings and binary-span padding; exact
+four overlay/removal conflicts; current/stale/mutated/source-less cache association;
+metadata self-attestation rejection; old expected-file repeated-read behavior plus
+initial-observation reuse/caps/races; canonical partial ledger determinism and both
+profiles. Run real `-I -S -B` import closure against the current real files/wheel/Conda
+modules, scoped Ruff/format/strict mypy and existing distribution/observer/factory
+regressions. Fixtures are synthetic and source gates are not a protected-prefix PASS.
+
+**Subsequent approval boundary:** fixed host/tool ELF/loader acceptance, full55/70+
+private/source/whole-tree closure, root archive materialization/receipt/proof generation,
+the mandatory old-interpreter-before-new-instruction installer integration, concrete
+factory admission, launcher UID/ACL/unit probes and actual CPU/CUDA benchmark/default
+activation remain separate required work. This source phase cannot satisfy them.
+
+### Original-archive compatibility evidence and proposed narrow corrections
+
+2026-10-12 UTC. READONLY_DIAGNOSTIC / ROOT_APPROVED_NARROW_SOURCE_RULES / NOT_ADMITTED. Root authorized
+non-root fixed zstd reads of the two aliases, their two target-owner archives and the
+same fixed31 archives' licensing classification. Every original candidate was opened
+regular/nlink1/O_RDONLY/NOFOLLOW/CLOEXEC; held raw SHA/size and FD/named epochs matched
+the exact source list before/after. Bounded headers/metadata/payload reads used the
+fixed `/usr/bin/zstd -q -d -c`, scrubbed environment/stderr null,10s per child/180s total
+and owned cleanup. The31 diagnostic finished in0.655s, reading original archive bytes,
+not a package cache or successor interpreter. No write, installation, ML/GPU/DB/root
+action or tool/full-prefix admission occurred. These observations are **not** supplied
+as a real `CondaArchiveToolAdmission` handle.
+
+The original archives account exactly for7,168 regular tar members:7,147 declared
+regular payloads plus21 undeclared **licensing metadata**; all1,380 links are declared.
+Every declared regular member's original raw SHA/size matched its `info/paths.json`
+row. No missing/duplicate/other undeclared executable member was encountered.
+Therefore neither previous count is discarded, and no21-path ignore rule is proposed.
+
+All93 central ZIP entries have empty extras and bounded ordinary32-bit sizes, with
+no ZIP64 EOCD/locator.42 local headers instead use the exact local-only size form:
+version45, both local size fields `0xffffffff`, extra tag0x0001/length16 containing
+uncompressed/compressed uint64 sizes equal to the bounded central values. For example:
+
+| Exact original archive/member | Held source result |
+|---|---|
+| `python-3.12.13-hc5f7cf0_3.conda`, raw SHA `23572134eb5b0c89673831ceb575c883425039c01778fcaed5ebf5cc513e2a84`,31,709,996 bytes; `pkg-python-3.12.13-hc5f7cf0_3.tar.zst` at offset74 | central size31,571,924; local extra `01001000d4bfe10100000000d4bfe10100000000` |
+| `zlib-1.3.2-h47b2149_0.conda`, raw SHA `4bb61142e8fe22510086c1030e1ff3ad4888ebf9bf0a11e9931594e8549a9d42`,94,060 bytes; `pkg-zlib-1.3.2-h47b2149_0.tar.zst` at offset74 | central size86,801; local extra `01001000115301000000000011530100000000` |
+
+**Proposed ZIP diff:** validate each local header/name/flags/method/CRC and body range
+before opening its member. Accept ordinary local sizes with no extra, or **only** the
+exact form above with equal bounded central sizes. Reject central extras, true ZIP64
+EOCD/locator, other local extensions/sentinels, descriptors/encryption, inconsistent
+sizes/names/overlapping body ranges. The earlier blanket wording is corrected to "no general
+ZIP64; only this fixed local-size encoding". No library-wide ZIP parser
+relaxation or changes to the existing mechanical wheel validator.
+
+The exact cross-package aliases are original tar type2/size0/mode0777; their referring
+softlink SHA describes a build-time target, not the symlink text or current owner:
+
+| Original referring alias | Original independently pinned target owner |
+|---|---|
+| Python raw pin above: `compiler_compat/ld` → `../bin/x86_64-conda-linux-gnu-ld`; info SHA `70d094c82cbcf7b2f2447c475c57e965b54f8e7698f82ca1871a4a015b2d5634`, size2,941,304 | `ld_impl_linux-64-2.44-h9e0c5a2_3.conda`, raw SHA `4a4875ab4354d4a1bf1695850efad8787d7063387ed6b5aec5ecb659869e2590`,742,162 bytes; original `bin/x86_64-conda-linux-gnu-ld` SHA `e5e2063623d80bd5956391561faf35295bacaa03af1c0c1f6e4391d08d48364f`, size2,941,304. Original info/payload match; target has its own declared binary relocation. |
+| Zlib raw pin above: `lib/libz.so` → `libz.so.1.3.2`; info SHA `d1e842e199a902992c7b778b8482f4777ccd3cbe9c26f8a44c783d9e6601da79`, size117,416 | `libzlib-1.3.2-h47b2149_0.conda`, raw SHA `02b0d3bad12d15c668f06a32283907608bcfb49ca40d9d09d3bcfe6bd4765f31`,61,662 bytes; original `lib/libz.so.1.3.2` SHA `0900010993ecb9e3bf674459147f3433b5b001aeea94d5ba43b61c867e596cd1`, size117,416. Original info/payload match. |
+
+**Proposed link diff:** bind the referring original raw archive + exact alias/type/text/
+info row. Permit only those two closed cross-package owner associations; independently
+validate the resolved target's **own** original/relocated final pin and retained epochs.
+Same-package aliases bind the target owner's original pin; the two source-declared
+directory aliases (`ncurses:lib/terminfo`→`share/terminfo`, `python:lib/python3.1`→
+`lib/python3.12`) require their original softlink type/exact spelling, internal directory
+ownership, SHA `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
+(digest of empty bytes, **not a blank SHA string**) and size0. Blank source SHA is rejected.
+No use of stale referring SHA as target authority,
+unresolved link, hash repair, arbitrary cross-package route or generic exception.
+
+All21 auxiliary regular members are under `info/licenses/`, zero executable materialization
+authority, and fixed by the original archive's raw pin. The exact proposed closed ledger
+is below; full original archive pins remain the fixed source-list rows, not this table:
+
+| Package / member suffix under `info/licenses/` | Size | Original member SHA |
+|---|---:|---|
+| `_openmp_mutex` / `LICENSE` |1510|`d939c95d76d470fe1796d8a24ca1ee28c920fc85f61c57059de993586fa60071`|
+| `bzip2` / `LICENSE` |1896|`c6dbbf828498be844a89eaa3b84adbab3199e342eb5cb2ed2f0d4ba7ec0f38a3`|
+| `ld_impl_linux-64` / `COPYING3.LIB` |7639|`a853c2ffec17057872340eee242ae4d96cbf2b520ae27d903e1b2fef1a5f9d1c`|
+| `ld_impl_linux-64` / `COPYING` |18002|`231f7edcc7352d7734a96eef0b8030f77982678c516876fcb81e25b32d68564c`|
+| `ld_impl_linux-64` / `COPYING3` |35147|`8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903`|
+| `ld_impl_linux-64` / `COPYING.LIB` |25291|`56bdea73b6145ef6ac5259b3da390b981d840c24cb03b8e1cbc678de7ecfa18d`|
+| `libffi` / `LICENSE` |1132|`67894089811f93fca47a76f85e017da6f8582d4ba0905963c6e0f1ad6df7a195`|
+| `libuuid` / `Documentation/licenses/COPYING.BSD-3` |1391|`9b718a9460fed5952466421235bc79eb49d4e9eacc920d7a9dd6285ab8fd6c6d`|
+| `libxcb` / `COPYING` |1337|`c5ffbfeaa501071ceeb97b7de2c0d703fdaa35de01c0fb6cbac1c28453a3e9fd`|
+| `libzlib` / `LICENSE` |1002|`e32ff4e00d9d94930537635291da39e7e612703334bf6fde8c7f1686fe8a45a2`|
+| `ncurses` / `COPYING` |1447|`b2feb54f39529abe226f709a292584fde48a2e5721559fee417d2cdd51cb7cc1`|
+| `openssl` / `LICENSE.txt` |10175|`7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a`|
+| `readline` / `COPYING` |35147|`8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903`|
+| `sqlite` / `LICENSE.md` |263|`9c6479123f32a1ed50d9a0af203dfe8972e65035b0cdeef436b5f8d0924517fe`|
+| `tk` / `tcl8.6.15/license.terms` |2255|`c0a69a2bfd757361ec7e6143973b103c90409316b49e9c88db26ad6388e79f16`|
+| `wheel` / `LICENSE.txt` |1107|`30c23618679108f3e8ea1d2a658c7ca417bdfc891c98ef1a89fa4ff0c9828654`|
+| `xorg-libx11` / `COPYING` |46458|`2e7012a140f000735a7172674a2d314398d79622444fba65d108b029b29ab283`|
+| `xorg-libxau` / `COPYING` |1148|`56abe29bb1d9806a9e04fa9f80fed2c0f18027594df3f098148d814aef6bddfa`|
+| `xorg-libxdmcp` / `COPYING` |1178|`8a3c3f35b0dbcb60a4e242b9e4394a352a65bb27deb2938ea1e2e62a626e16e9`|
+| `xz` / `COPYING` |3119|`616a3ad264ce29b8f1cb97e53037b139d406899ca8d1f799651e17bfa09830b8`|
+| `zlib` / `LICENSE` |1002|`e32ff4e00d9d94930537635291da39e7e612703334bf6fde8c7f1686fe8a45a2`|
+
+**Proposed licensing diff:** consume/hash each bounded≤1MiB original auxiliary member,
+require the exact package/path/size/SHA above and count21, and incorporate sorted metadata
+pins into the partial ledger digest/count. These paths are not installed payloads and
+must not exist at their prefix-relative locations. No arbitrary `info/*` allowance,
+duplicate/changed/extra/missing auxiliary member or executable undeclared skip. Normal
+declared regular/link sets still require exact equality. No source bytes are copied.
+
+Source archive modes0664/0775 normalize by removing group/other-write to the already
+protected final0644/0755; that permission normalization does not alter byte identity.
+Archive caches have no opt-N variants; enforce the exact observed basename family.
+Actual binary delimiter/padding uses the encoding's NUL delimiter (1/2/4bytes), with
+raw-zero tail padding preserving length, not an ASCII-only split or inline padding.
+These preserve the already-approved source-aware transformation/cache rules rather
+than add generic recipes. Dedicated negative fixtures will exercise each narrow rule.
+Root fully reviewed and approved these exact three narrow source rules; it independently
+read the two original offset74 local-header cases. This is not a protected installation,
+host/tool, CLI/provider or model/device admission.
+
+## Conda31 source phase verification and remaining operational gates
+
+The five-path source implementation adds the explicit bounded protected observation,
+fixed31 archive-derived transformation/cache/link/licensing ledger, exact four-overlay
+mechanical validation and synthetic test fixtures. Protected reads retain before/after
+FD/named/ancestor epochs; existing expected-only repeat-read/error behavior is preserved.
+Small initially observed metadata is reused once without another byte hash. Overlay
+namespaces and known retained Python cache directories are closed using the existing
+public file owner; unrelated prefix additions still require the later whole-tree gate.
+
+The tool constructor cleans up its owned child/pipes/selector on setup failure; reads
+check the same absolute deadline after select/I/O and before returning. Source-known
+metadata values are compared with exact recursive JSON types; bool/float substitutions
+for archive/row sizes, build numbers or paths_version fail. Original payload hashes,
+declared placeholders/modes, computed final bytes, source/cache headers and resolved
+target-owner bytes are checked independently of installed metadata self-attestation.
+No archive extraction, bytecode loading/compilation, package-cache trust or repair occurs.
+
+Source gates:145 focused synthetic tests PASS (10.33s),892 model-free tests across the
+exact15 suites below PASS (final rerun20.20s), scoped strict mypy4 with
+`--follow-imports=silent --explicit-package-bases`, Ruff lint4 and formatting4 PASS.
+The focused gate includes a real explicit API CPython `-I -S -B` subprocess importing
+the current actual Conda/files/wheel modules, without stubs/Pydantic/schema/Identifiers/ML
+imports. Other real test children are bounded synthetic stdlib pipe emitters, not zstd,
+an installed successor, wrapper, model or device. Read-only authorized original-archive
+diagnostics above remain separately labeled and do not count as installed admission.
+
+Exact regression files (all under `tests/unit/`):
+
+```text
+test_embedding_conda_runtime_admission.py
+test_embedding_runtime_wheel_closure.py
+test_embedding_runtime_bundle_contracts.py
+test_embedding_installed_runtime_proof.py
+test_embedding_installed_runtime_observer.py
+test_embedding_runtime_distribution.py
+test_embedding_bundle_resolver.py
+test_embedding_offline_backend.py
+test_embedding_native_stdio.py
+test_embedding_vector_binary.py
+test_embedding_incremental_encoding.py
+test_embedding_incremental_plan.py
+test_embedding_native_runtime_config_contracts.py
+test_embedding_native_factory.py
+test_embedding_native_entrypoint.py
+```
+
+Use explicit `/srv/eom/conda/envs/eom-api/bin/python -m pytest -q` from the repository,
+with the existing source roots (repository, Catalog, CatalogContracts, Identifiers,
+Protocol, Workflow, Orchestrator, Identity, OperatorIdentity, ContentPack, ItemRegistry,
+ContentIntake, HWPX contracts/manager, ImageContracts, WorkflowRunner, ImageProvider,
+ImageCandidateRunner, ApplicationAPI/APIContracts). The scoped checker is the explicit
+`/srv/eom/conda/envs/eom-core/bin/python -m mypy --strict --follow-imports=silent
+--explicit-package-bases` for the three new/changed source Python files and new test;
+Ruff check/format uses the same four files. No integration/DB flag is set.
+
+The closed standalone CLI validates only its fixed profile/owner-quarantine argument
+shape and the old protected root interpreter/isolation context, then denies missing
+independent tool ownership **before** importing any audit module, reading owner inputs
+or spawning anything. It cannot load a plugin, accept a Boolean/root-JSON grant or fake
+the mandatory tool handle. Parsing the protected local plan/lock inputs and composing
+the actual independently accepted tool context remains a later owner gate; the callable
+byte-audit operation is implemented and tested, not an operational CLI-success branch.
+No receipt/proof is published and the factory admission port is not implemented.
+
+The original installer/new-interpreter history, legacy CPU installation and protected
+archives/prefixes remain untouched. Next required work is exact independent host/tool/
+loader acceptance, canonical source-list/Conda31 archive materialization via the existing
+boundary, full public/private/source/prefix closure and the old-interpreter pre-successor
+instruction gate. Only after those gates may root derive actual numerical proofs and
+admit fixed factory/launcher/UID/read-only ACLs, complete all GPU-entrypoint/lease/orphan
+gates, and run the mandatory real same-input CPU/CUDA benchmark/default activation.
+Current status remains CONDA31_SOURCE_ONLY / INSTALLED_NOT_ADMITTED / NOT_PROBED /
+CUDA_NOT_ACTIVE. No production or historical state was changed by this source phase.
