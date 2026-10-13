@@ -383,10 +383,84 @@ changed. No model/GPU invocation or new consumer tool was activated. All five co
 and genuine production QUERY admission remain unimplemented at this checkpoint. A valid synthetic
 contract fixture is not evidence that production QUERY exists.
 
-Root independently read all twelve frozen files and checked every raw SHA. Its eleven-suite
+Root independently read all twelve frozen contract files and checked every raw SHA. Its eleven-suite
 contract/registry/source/consumer compatibility gate passed **411 tests in13.91s, skip0**, with
 explicit strict mypy and Ruff/check-format **seven files PASS**. The root inventory also includes
 `test_item_inference_transfer_contracts`, `test_inference_transfer_service`,
 `test_embedding_registry_application` and `test_embedding_registry_catalog_adapter`; it differs
 from the agent's377-test gate, so these overlapping counts are not summed. Protocol-only validation
 does not establish current source permission, installed QUERY execution, or consumer activation.
+
+## 9. Exact pinned index read delta — source implementation scope
+
+This step extends only the existing registry application/ports/repository/Catalog verifier and
+their focused tests. The owner-local read intent reuses `EmbeddingRegistryLookup` and frozen
+`SimilarityViewSelection`; no new public wire/schema, authority provider, registry, migration or
+consumer query is introduced. The exact index must be present. An absent Identity/source owner
+remains `EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE`, never a permissive adapter default.
+
+Read authorization reuses public `capture_in_session` with the actual caller's current Identity
+fence, active operator/role, ITEM_READ, KNOWLEDGE_GRAPH_RETRIEVE, KNOWLEDGE_ANALYSIS_READ and
+CONTENT_INTAKE_READ for past exams, plus the exact released answer-bearing policy. The existing
+ITEM_PREPARATION scope is not a grant for a future Chat/private-intent operation. The existing
+`knowledge_graph:publish` condition remains exclusively a registration/write check.
+
+The application authorizes before an exact PK/revision + immutable namespace lookup, verifies
+the committed canonical index through its existing owner, then batches selected encoding/binding
+lookups and performs late authorization in the same caller-owned transaction. No head/current
+pointer lookup, FOR UPDATE, write, flush, commit, implicit latest or historical count reuse occurs.
+Current official source/report eligibility chooses the subset before numeric member reads.
+Out-of-scope historical sources/rows and full index metadata remain internal to the verifier;
+currently eligible stale source/report/hash pins fail explicitly rather than being rebound.
+Historical binding-origin pointers are not dereferenced or exported as authority when the exact
+requested committed index independently contains and validates the same immutable binding.
+
+The read value contains only the requested index/namespace pointers, currently authorized source
+and accepted-profile references, selected bindings, and owner-local selected numerical rows.
+Full Item/report text, global historical counts and unselected numerical rows are not returned.
+Numerical tuples exist only at this explicit local read/materialization boundary, never in DB or
+wire DTOs. The existing private shard/result/binary validator is factored inside the same owner
+to read/validate each selected unique member once; no parallel binary reader is added.
+
+Maps/sets join exact source, profile, binding and encoding identities; existing indexed batch
+queries and PK/FK/namespace indexes are reused. The work is O(N + R + Sd) for N authorized sources,
+R selected bindings and S materialized shard rows, with O(N + R + Sd) bounded local memory.
+Registration/missing-binding signatures and behavior remain unchanged. Retry reuses the exact
+immutable selection and reauthorizes it; source revocation or missing/corrupt targets is not a
+reason to select another index. Actual installation/IAM/API/QUERY/consumer activation remains
+outside this source-only step.
+
+### 9.1 Pinned-read source checkpoint — 2026-10-13 UTC
+
+The seven approved source paths now implement the exact revision read and owner-local resolved
+value. The application suppresses SQLAlchemy autoflush, checks the required read owner before
+lookup, validates raw copied selection values with the existing closed 2020-12 view schema,
+and reauthorizes after batched scalar binding/encoding checks. Wrong nested owner values fail
+with a stable pointer error rather than an uncaught attribute error. Numeric finite/shape/hash
+and unit-norm validation remains solely at the existing authoritative f32 codec; there is no
+duplicate normalization or corruption repair.
+
+The same owner-local generator verifies numerical shards for both registration and read.
+Registration retains only the previous manifest result, not decoded corpus matrices. A read
+retains only selected row tuples and one working shard matrix at a time. Tests cover two logical
+sources sharing one numerical row with one read of each unique index/result/shard/binary member,
+and a 1,024-binding synthetic case using one binding batch and one unique-encoding batch. These
+are source complexity/read-count checks, not a live query plan, throughput benchmark, or IAM grant.
+
+Explicit API Conda source gates: strict mypy, Ruff lint and format check **six Python files PASS**;
+focused new-read plus old application/owner regression **81 tests PASS in 17.52s**; the eleven
+suite read/registry/contracts/planner/codec/source-resolution regression **270 tests PASS in
+24.25s**, skip zero. The inventories overlap and are not added. `git diff --check` passed for the
+seven approved paths. No model, GPU, DB, installed-runtime or historical-product execution was
+performed for this source step.
+
+**SOURCE_ONLY / NOT_ACTIVE.** Context composition, genuine production QUERY admission and the
+five consumer connections remain subsequent steps. This read is not a public search endpoint,
+background grant, chat scope, or proof of operational installation. Missing actual owners stay
+explicitly unavailable; synthetic source/authority fixtures never stand in for production grants.
+
+Root independently reviewed all seven frozen paths, matched their raw SHA values, and reran the
+eleven suites: **270 PASS in 24.75s, skip0**; strict mypy, Ruff lint and format **six files PASS**.
+The first root invocation named two nonexistent test paths and executed no tests; after resolving
+the actual repository filenames, the recorded gate above passed. This was an invocation correction,
+not a runtime retry or a hidden product failure. The overlapping agent/root counts are not summed.

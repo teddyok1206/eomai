@@ -10,6 +10,7 @@ import re
 from datetime import UTC, datetime
 from typing import Any, NoReturn
 
+from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.embedding_registry import (
     EmbeddingIndexNamespace,
     EmbeddingIndexRegistrationResult,
@@ -19,7 +20,9 @@ from eom_catalog_contracts.embedding_registry import (
 )
 from eom_catalog_contracts.inference_transfer_embedding import (
     MAX_EMBEDDING_ROWS,
+    EmbeddingEncodingIdentity,
     EmbeddingSourceBinding,
+    EmbeddingVectorRowRef,
     parse_embedding_binding,
     parse_embedding_index,
     validate_embedding_index_references,
@@ -29,28 +32,43 @@ from eom_catalog_contracts.inference_transfer_experiment import (
     StagedExperimentEntry,
     population_sha256,
 )
-from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
+from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
+from eom_catalog_contracts.knowledge import (
+    ApprovedItemKnowledgeSourceV2,
+    KnowledgeGraphSnapshotPointer,
+)
 from eom_catalog_contracts.models import Sha256, UtcDatetime
-from eom_identifiers import content_sha256
+from eom_catalog_contracts.similarity_context import SimilarityViewSelection
+from eom_catalog_contracts.validation import catalog_schema_registry
+from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
+from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError as JsonSchemaError
 from pydantic import TypeAdapter
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from eom_catalog_service.embedding_incremental_plan import plan_embedding_delta
+from eom_catalog_service.embedding_incremental_plan import (
+    RegisteredEmbeddingRow,
+    plan_embedding_delta,
+)
 from eom_catalog_service.embedding_registry_models import (
     EmbeddingIndexRecord,
     EmbeddingIndexRevisionRecord,
 )
 from eom_catalog_service.embedding_registry_ports import (
+    AuthorizedEmbeddingReadProfile,
     EmbeddingBindingLookupKey,
     EmbeddingRegistryCaller,
     EmbeddingRegistryError,
     EmbeddingRegistryLookup,
+    EmbeddingRegistryRead,
     EmbeddingRegistryVerificationPort,
+    MaterializedEmbeddingReadRow,
     MissingEmbeddingBindings,
+    RegisteredEmbeddingIndexRead,
     ResolvedEmbeddingRegistration,
+    ResolvedPinnedEmbeddingIndex,
 )
 from eom_catalog_service.embedding_registry_repository import (
     EmbeddingRegistryRepository,
@@ -578,6 +596,212 @@ def lookup_missing_embedding_bindings(
     """Redacted application boundary; caller owns this read/authorization transaction."""
     try:
         return _lookup_missing_embedding_bindings(session, caller, query, verification)
+    except EmbeddingRegistryError:
+        raise
+    except (JsonSchemaError, ValueError, TypeError, KeyError):
+        raise EmbeddingRegistryError("EMBEDDING_REGISTRY_POINTER_INVALID") from None
+
+
+def _validate_pinned_read_intent(intent: EmbeddingRegistryRead) -> EmbeddingRegistryRead:
+    if not isinstance(intent, EmbeddingRegistryRead) or not isinstance(
+        intent.scope, EmbeddingRegistryLookup
+    ):
+        _fail("EMBEDDING_REGISTRY_REQUEST_INVALID")
+    scope = intent.scope
+    namespace = EmbeddingIndexNamespace.model_validate(
+        raw_similarity_contract_value(scope.namespace)
+    )
+    graph = KnowledgeGraphSnapshotPointer.model_validate(
+        raw_similarity_contract_value(scope.graph_snapshot)
+    )
+    selection_values = raw_similarity_contract_value(intent.selection)
+    canonical_json_bytes(selection_values)
+    Draft202012Validator(
+        {"$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/viewSelection"},
+        registry=catalog_schema_registry(),
+    ).validate(selection_values)
+    selection = SimilarityViewSelection.model_validate(selection_values)
+    pin = selection.index
+    if pin is None or (
+        type(scope.maximum_sources) is not int
+        or not 1 <= scope.maximum_sources <= MAX_EMBEDDING_ROWS
+        or not re.fullmatch(r"corpus_[0-9a-f]{32}", scope.corpus_id)
+        or not re.fullmatch(r"accessrev_[0-9a-f]{32}", scope.policy_revision_id)
+        or graph.manifest_artifact.sha256 != graph.manifest_sha256
+        or namespace.view != selection.view
+        or namespace.recipe_sha256 != selection.recipe.recipe_sha256
+        or namespace.storage_partition != pin.storage_partition
+        or namespace.space_sha256 != pin.spaces.document.space_sha256
+    ):
+        _fail("EMBEDDING_REGISTRY_REQUEST_INVALID")
+    TypeAdapter(Sha256).validate_python(scope.policy_sha256)
+    return intent
+
+
+def _validate_registered_pinned_read(
+    intent: EmbeddingRegistryRead, registered: RegisteredEmbeddingIndexRead | None
+) -> RegisteredEmbeddingIndexRead:
+    pin = intent.selection.index
+    assert pin is not None
+    if not isinstance(registered, RegisteredEmbeddingIndexRead) or (
+        registered.corpus_id != intent.scope.corpus_id
+        or registered.namespace != intent.scope.namespace
+        or registered.index_id != pin.index_id
+        or registered.index_revision_id != pin.index_revision_id
+        or registered.index_manifest != pin.index_manifest
+        or registered.index_sha256 != pin.index_sha256
+        or registered.graph_snapshot_revision_id
+        != intent.scope.graph_snapshot.graph_snapshot_revision_id
+        or registered.policy_revision_id != intent.scope.policy_revision_id
+        or registered.policy_sha256 != intent.scope.policy_sha256
+        or type(registered.binding_count) is not int
+        or not 1 <= registered.binding_count <= MAX_EMBEDDING_ROWS
+    ):
+        _fail("EMBEDDING_REGISTRY_POINTER_INVALID")
+    TypeAdapter(Sha256).validate_python(registered.binding_set_sha256)
+    return registered
+
+
+def _validate_resolved_pinned_read(
+    intent: EmbeddingRegistryRead, resolved: ResolvedPinnedEmbeddingIndex
+) -> ResolvedPinnedEmbeddingIndex:
+    if (
+        not isinstance(resolved, ResolvedPinnedEmbeddingIndex)
+        or resolved.intent != intent
+        or (
+            not isinstance(resolved.sources, tuple)
+            or not isinstance(resolved.profiles, tuple)
+            or not isinstance(resolved.bindings, tuple)
+            or not isinstance(resolved.numerical_rows, tuple)
+            or len(resolved.sources) > intent.scope.maximum_sources
+            or len(resolved.profiles) > len(resolved.sources)
+            or len(resolved.bindings) > len(resolved.profiles)
+            or len(resolved.numerical_rows) > len(resolved.bindings)
+        )
+    ):
+        _fail("EMBEDDING_REGISTRY_POINTER_INVALID")
+    if (
+        any(not isinstance(value, ApprovedItemKnowledgeSourceV2) for value in resolved.sources)
+        or any(not isinstance(value, AuthorizedEmbeddingReadProfile) for value in resolved.profiles)
+        or any(not isinstance(value, EmbeddingSourceBinding) for value in resolved.bindings)
+        or any(
+            not isinstance(value, MaterializedEmbeddingReadRow) for value in resolved.numerical_rows
+        )
+    ):
+        _fail("EMBEDDING_REGISTRY_POINTER_INVALID")
+    for source in resolved.sources:
+        type(source).model_validate(raw_similarity_contract_value(source))
+    for profile in resolved.profiles:
+        if not isinstance(profile.profile, InferenceTransferProfilePointer):
+            _fail("EMBEDDING_REGISTRY_POINTER_INVALID")
+        InferenceTransferProfilePointer.model_validate(
+            raw_similarity_contract_value(profile.profile)
+        )
+    for value in resolved.numerical_rows:
+        if not isinstance(value.row, RegisteredEmbeddingRow) or (
+            not isinstance(value.row.encoding, EmbeddingEncodingIdentity)
+            or not isinstance(value.row.row_ref, EmbeddingVectorRowRef)
+        ):
+            _fail("EMBEDDING_REGISTRY_POINTER_INVALID")
+        EmbeddingEncodingIdentity.model_validate(raw_similarity_contract_value(value.row.encoding))
+        EmbeddingVectorRowRef.model_validate(raw_similarity_contract_value(value.row.row_ref))
+    sources = {source.item_revision_id: source for source in resolved.sources}
+    profiles = {value.source_item_revision_id: value.profile for value in resolved.profiles}
+    bindings = {binding.source.item_revision_id: binding for binding in resolved.bindings}
+    rows = {value.row.encoding.encoding_sha256: value.row for value in resolved.numerical_rows}
+    if (
+        len(sources) != len(resolved.sources)
+        or len(profiles) != len(resolved.profiles)
+        or len(bindings) != len(resolved.bindings)
+        or len(rows) != len(resolved.numerical_rows)
+        or not set(profiles).issubset(sources)
+        or not set(bindings).issubset(profiles)
+        or set(rows) != {binding.encoding.encoding_sha256 for binding in resolved.bindings}
+    ):
+        _fail("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+    pin = intent.selection.index
+    assert pin is not None
+    for original in resolved.bindings:
+        binding = parse_embedding_binding(raw_similarity_contract_value(original))
+        if (
+            binding.source != sources.get(binding.source.item_revision_id)
+            or binding.profile != profiles.get(binding.source.item_revision_id)
+            or binding.graph_snapshot != intent.scope.graph_snapshot
+            or binding.policy_revision_id != intent.scope.policy_revision_id
+            or binding.policy_sha256 != intent.scope.policy_sha256
+            or binding.view != intent.selection.view
+            or binding.recipe != intent.selection.recipe
+            or binding.projection_version != intent.scope.namespace.projection_version
+            or binding.encoding.storage_partition != pin.storage_partition
+            or binding.encoding.space_sha256 != pin.spaces.document.space_sha256
+            or rows[binding.encoding.encoding_sha256].encoding != binding.encoding
+            or rows[binding.encoding.encoding_sha256].row_ref != binding.row_ref
+        ):
+            _fail("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+    for value in resolved.numerical_rows:
+        if (
+            not isinstance(value.values, tuple)
+            or len(value.values) != pin.spaces.document.model_spec.dimension
+        ):
+            _fail("EMBEDDING_REGISTRY_POINTER_INVALID")
+    return resolved
+
+
+def read_pinned_embedding_index(
+    session: Session,
+    caller: EmbeddingRegistryCaller,
+    intent: EmbeddingRegistryRead,
+    verification: EmbeddingRegistryVerificationPort | None,
+) -> ResolvedPinnedEmbeddingIndex:
+    """Read one exact registered revision; no head lock, writes, latest fallback or query encode.
+
+    Actual source/member/numeric verification is mandatory. Caller retains the
+    root transaction; no returned count, pointer or numeric row is reusable authority.
+    """
+    try:
+        intent = _validate_pinned_read_intent(intent)
+        owner = _context(session, caller, verification)
+        if session.in_nested_transaction() or not callable(
+            getattr(owner, "resolve_pinned_read", None)
+        ):
+            _fail("EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE")
+        with session.no_autoflush:
+            owner.authorize_scope(session, caller, intent.scope)
+            repository = EmbeddingRegistryRepository(session)
+            pin = intent.selection.index
+            assert pin is not None
+            registered = _validate_registered_pinned_read(
+                intent, repository.read_pinned_revision(pin.index_id, pin.index_revision_id)
+            )
+            resolved = _validate_resolved_pinned_read(
+                intent, owner.resolve_pinned_read(session, caller, intent, registered)
+            )
+            if len(resolved.bindings) > registered.binding_count:
+                _fail("EMBEDDING_REGISTRY_POINTER_INVALID")
+            keys = tuple(_key(binding) for binding in resolved.bindings)
+            bindings = repository.bindings(keys)
+            encodings = repository.encodings(tuple(sorted({key.encoding_sha256 for key in keys})))
+            if len(bindings) != len(resolved.bindings) or len(encodings) != len(
+                resolved.numerical_rows
+            ):
+                _fail("EMBEDDING_REGISTRY_POINTER_INVALID")
+            expected_rows = {
+                value.row.encoding.encoding_sha256: value.row for value in resolved.numerical_rows
+            }
+            for binding in resolved.bindings:
+                record = bindings.get(binding.binding_sha256)
+                row = encodings.get(binding.encoding.encoding_sha256)
+                if (
+                    record is None
+                    or row is None
+                    or (
+                        not _matches(record, _binding_columns(binding))
+                        or registered_row(row) != expected_rows[binding.encoding.encoding_sha256]
+                    )
+                ):
+                    _fail("EMBEDDING_REGISTRY_POINTER_INVALID")
+            owner.authorize_scope(session, caller, intent.scope)
+            return resolved
     except EmbeddingRegistryError:
         raise
     except (JsonSchemaError, ValueError, TypeError, KeyError):

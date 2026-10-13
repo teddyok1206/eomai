@@ -916,3 +916,16 @@ pip가 생성한 것이며 직접 수정하지 않았다. 두 환경의 platform
 first NEW instruction, 실제 numerical proof/UID·launcher·GPU lease·성능 비교·기본값은 아직
 PENDING이다. Root cache/archive filesystem만 변경했고 production DB/IAM/NAS write0,
 model/GPU0다. 기존 protected CPU·정본 모델·서비스는 변경하지 않았다.
+
+## Exact pinned registry read source — 2026-10-13 UTC
+
+기존 registry application/ports/repository/Catalog adapter에서 정확한 revision 읽기와 현재
+source/report/정책 권한의 재확인을 구현했다. current head나 latest 대체 없이 선택된 binding과
+encoding을 일괄 조회하고, 같은 shard는 한 번만 materialize한다. 전체 historical 수치·문항 text를
+새 wire payload나 DB에 복제하지 않는다. 잘못된 nested owner 값4종은 stable pointer 오류로 거부한다.
+
+Root는 frozen7개 경로의 raw SHA와 전체 변경을 독립 검토했고, 정확한 기존 filename으로
+11-suite **270 PASS24.75s, skip0**와 strict mypy·Ruff/format6-file PASS를 확인했다. 첫 invocation의
+없는 fixture filename은 test0 상태에서 수정했고 운영 재실행이 아니다. 중첩 gate 수는 합산하지 않는다.
+**SOURCE_ONLY / NOT_ACTIVE**; 실제 QUERY/current owner/runtime admission·context composer·5개
+consumer·GPU/default는 아직 남아 있으며 model/GPU0다.

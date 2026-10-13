@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -19,6 +19,7 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     SHARD_SCHEMA_REF,
     EmbeddingEncodingIdentity,
     EmbeddingIndexManifest,
+    EmbeddingSourceBinding,
     EmbeddingSpace,
     EmbeddingVectorRowRef,
     EmbeddingVectorShardManifest,
@@ -28,7 +29,8 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     validate_embedding_source_bindings,
 )
 from eom_catalog_contracts.inference_transfer_experiment import ExperimentViewRecipe
-from eom_identifiers import canonical_json_bytes
+from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
+from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_identity_service import OperatorAuthorizationFenceError
 from eom_identity_service.operator_authorization_fence import OperatorAuthorizationFence
 from eom_operator_identity.errors import IdentityError
@@ -48,14 +50,19 @@ from eom_catalog_service.embedding_incremental_plan import (
     plan_embedding_delta,
 )
 from eom_catalog_service.embedding_registry_ports import (
+    AuthorizedEmbeddingReadProfile,
     EmbeddingBindingOrigin,
     EmbeddingRegistryCaller,
     EmbeddingRegistryError,
     EmbeddingRegistryLookup,
+    EmbeddingRegistryRead,
+    MaterializedEmbeddingReadRow,
+    RegisteredEmbeddingIndexRead,
     ResolvedEmbeddingBindingOrigin,
     ResolvedEmbeddingLookup,
     ResolvedEmbeddingReferences,
     ResolvedEmbeddingRegistration,
+    ResolvedPinnedEmbeddingIndex,
 )
 from eom_catalog_service.inference_transfer_catalog_adapter import (
     InferenceTransferCorpusReadCommand,
@@ -243,8 +250,21 @@ class CatalogEmbeddingRegistryVerifier:
         reader: PinnedArtifactReadContext,
         pointers: tuple[ArtifactMemberPointer, ...],
     ) -> tuple[tuple[ArtifactMemberPointer, EmbeddingVectorShardManifest], ...]:
-        reader.prefetch(tuple(sorted({(p.artifact_id, p.artifact_revision_id) for p in pointers})))
         shards = []
+        for pointer, shard, values in self._iter_numerical_shards(reader, pointers):
+            shards.append((pointer, shard))
+            del values
+        return tuple(shards)
+
+    def _iter_numerical_shards(
+        self,
+        reader: PinnedArtifactReadContext,
+        pointers: tuple[ArtifactMemberPointer, ...],
+    ) -> Iterator[
+        tuple[ArtifactMemberPointer, EmbeddingVectorShardManifest, tuple[tuple[float, ...], ...]]
+    ]:
+        """One existing owner numeric boundary; registration discards decoded local values."""
+        reader.prefetch(tuple(sorted({(p.artifact_id, p.artifact_revision_id) for p in pointers})))
         for pointer in pointers:
             if (
                 pointer.schema_ref != SHARD_SCHEMA_REF
@@ -296,7 +316,7 @@ class CatalogEmbeddingRegistryVerifier:
                 media_type=shard.binary.media_type,
                 sha256=shard.binary.sha256,
             )
-            read_unit_vectors(
+            vectors = read_unit_vectors(
                 reader.read_pinned(
                     **binary.model_dump(mode="python"),
                     expected_artifact_types=("control_incremental_embedding",),
@@ -307,8 +327,8 @@ class CatalogEmbeddingRegistryVerifier:
                 row_count=shard.row_count,
                 expected_sha256=shard.binary.sha256,
             )
-            shards.append((pointer, shard))
-        return tuple(shards)
+            yield pointer, shard, vectors
+            del vectors
 
     def authorize_scope(
         self,
@@ -422,6 +442,118 @@ class CatalogEmbeddingRegistryVerifier:
                 tuple(value.source for value in capture.corpus.sources),
                 capture.entries,
             )
+
+        return self._guard(resolve)
+
+    def resolve_pinned_read(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        intent: EmbeddingRegistryRead,
+        registered: RegisteredEmbeddingIndexRead,
+    ) -> ResolvedPinnedEmbeddingIndex:
+        """Use the existing actual read owner, never registration/write authority."""
+
+        def resolve() -> ResolvedPinnedEmbeddingIndex:
+            reader, capture = self._capture(
+                session,
+                caller,
+                intent.scope,
+                InferenceTransferSessionCapturePhase.CAPTURE_POPULATION,
+            )
+            assert capture.corpus is not None
+            pin = intent.selection.index
+            if pin is None:
+                raise ValueError("pinned index selection is absent")
+            index = self._read_index(reader, pin.index_manifest)
+            if (
+                index.index_id != pin.index_id
+                or index.index_revision_id != pin.index_revision_id
+                or index.index_sha256 != pin.index_sha256
+                or index.space != self.configuration.space
+                or index.storage_partition != intent.scope.namespace.storage_partition
+                or index.view != intent.selection.view
+                or index.recipe != intent.selection.recipe
+                or index.recipe != self.configuration.recipe
+                or registered.index_id != index.index_id
+                or registered.index_revision_id != index.index_revision_id
+                or registered.index_manifest != pin.index_manifest
+                or registered.index_sha256 != index.index_sha256
+                or registered.binding_count != len(index.bindings)
+                or registered.binding_set_sha256
+                != content_sha256([binding.binding_sha256 for binding in index.bindings])
+            ):
+                raise ValueError("registered index namespace/revision/hash/count differs")
+            sources = tuple(
+                sorted(
+                    (value.source for value in capture.corpus.sources),
+                    key=lambda value: value.item_revision_id,
+                )
+            )
+            admitted = {value.item_revision_id: value for value in sources}
+            entries = {
+                value.profile.source_basis.source.item_revision_id: value
+                for value in capture.entries
+            }
+            selected = tuple(
+                binding for binding in index.bindings if binding.source.item_revision_id in admitted
+            )
+            for binding in selected:
+                if (
+                    binding.source != admitted[binding.source.item_revision_id]
+                    or binding.source.item_revision_id not in entries
+                    or binding.graph_snapshot != intent.scope.graph_snapshot
+                    or binding.policy_revision_id != intent.scope.policy_revision_id
+                    or binding.policy_sha256 != intent.scope.policy_sha256
+                    or binding.view != intent.selection.view
+                    or binding.recipe != intent.selection.recipe
+                    or binding.projection_version != intent.scope.namespace.projection_version
+                ):
+                    raise ValueError("eligible binding source/report/Graph/policy pin is stale")
+            pointers = tuple(
+                sorted(
+                    {binding.row_ref.shard_manifest for binding in selected},
+                    key=lambda pointer: (
+                        pointer.artifact_id,
+                        pointer.artifact_revision_id,
+                        pointer.member_path,
+                        pointer.sha256,
+                    ),
+                )
+            )
+            by_pointer: dict[ArtifactMemberPointer, list[EmbeddingSourceBinding]] = {}
+            for binding in selected:
+                by_pointer.setdefault(binding.row_ref.shard_manifest, []).append(binding)
+            shards = []
+            materialized: dict[str, MaterializedEmbeddingReadRow] = {}
+            for pointer, shard, values in self._iter_numerical_shards(reader, pointers):
+                shards.append((pointer, shard))
+                for binding in by_pointer[pointer]:
+                    if binding.row_ref.row_index >= len(values):
+                        raise ValueError("selected immutable row index is missing")
+                    row = MaterializedEmbeddingReadRow(
+                        RegisteredEmbeddingRow(binding.encoding, binding.row_ref),
+                        values[binding.row_ref.row_index],
+                    )
+                    previous = materialized.get(binding.encoding.encoding_sha256)
+                    if previous is not None and previous.row != row.row:
+                        raise ValueError("one selected encoding has conflicting immutable rows")
+                    materialized[binding.encoding.encoding_sha256] = row
+                # Retain selected row tuples only, not every decoded corpus shard matrix.
+                del values
+            validate_embedding_source_bindings(
+                selected,
+                capture.entries,
+                tuple(shards),
+            )
+            rows = tuple(materialized[key] for key in sorted(materialized))
+            profiles = tuple(
+                AuthorizedEmbeddingReadProfile(
+                    revision, InferenceTransferProfilePointer.from_profile(entry.profile)
+                )
+                for revision, entry in sorted(entries.items())
+            )
+            return ResolvedPinnedEmbeddingIndex(intent, sources, profiles, selected, rows)
 
         return self._guard(resolve)
 

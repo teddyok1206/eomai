@@ -6,7 +6,10 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any, cast
 
-from eom_catalog_contracts.embedding_registry import RegisterEmbeddingIndexCommand
+from eom_catalog_contracts.embedding_registry import (
+    EmbeddingIndexNamespace,
+    RegisterEmbeddingIndexCommand,
+)
 from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingEncodingIdentity,
     EmbeddingVectorRowRef,
@@ -27,6 +30,7 @@ from eom_catalog_service.embedding_registry_models import (
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingBindingLookupKey,
     EmbeddingBindingOrigin,
+    RegisteredEmbeddingIndexRead,
 )
 
 ASSOCIATION_COLUMNS = (
@@ -102,6 +106,56 @@ class EmbeddingRegistryRepository:
 
     def revision(self, revision_id: str) -> EmbeddingIndexRevisionRecord | None:
         return self.session.get(EmbeddingIndexRevisionRecord, revision_id)
+
+    def read_pinned_revision(
+        self, index_id: str, revision_id: str
+    ) -> RegisteredEmbeddingIndexRead | None:
+        """One exact PK/FK join; never select the mutable current pointer or acquire its lock."""
+        revision, index = EmbeddingIndexRevisionRecord, EmbeddingIndexRecord
+        row = self.session.execute(
+            select(
+                revision.index_id,
+                revision.index_revision_id,
+                revision.manifest_artifact_id,
+                revision.manifest_artifact_revision_id,
+                revision.manifest_member_path,
+                revision.manifest_schema_ref,
+                revision.manifest_media_type,
+                revision.manifest_sha256,
+                revision.index_sha256,
+                revision.graph_snapshot_revision_id,
+                revision.policy_revision_id,
+                revision.policy_sha256,
+                revision.binding_count,
+                revision.binding_set_sha256,
+                index.corpus_id,
+                index.storage_partition,
+                index.space_sha256,
+                index.view,
+                index.recipe_sha256,
+                index.projection_version,
+                index.population_scope,
+            )
+            .join(index, index.index_id == revision.index_id)
+            .where(revision.index_id == index_id, revision.index_revision_id == revision_id)
+        ).one_or_none()
+        if row is None:
+            return None
+        return RegisteredEmbeddingIndexRead(
+            row.corpus_id,
+            EmbeddingIndexNamespace.model_validate(
+                {name: getattr(row, name) for name in EmbeddingIndexNamespace.model_fields}
+            ),
+            row.index_id,
+            row.index_revision_id,
+            artifact_member(row, "manifest_"),
+            row.index_sha256,
+            row.graph_snapshot_revision_id,
+            row.policy_revision_id,
+            row.policy_sha256,
+            row.binding_count,
+            row.binding_set_sha256,
+        )
 
     def create_head(
         self, command: RegisterEmbeddingIndexCommand, now: datetime

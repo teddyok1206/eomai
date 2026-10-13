@@ -11,6 +11,7 @@ from unittest.mock import Mock
 
 import pytest
 from eom_catalog_contracts import EvidenceBudget
+from eom_catalog_contracts.embedding_reference_query import ReferenceQuerySpaces
 from eom_catalog_contracts.embedding_registry import RegisterEmbeddingIndexCommand
 from eom_catalog_contracts.embedding_vector_binary import pack_unit_vectors
 from eom_catalog_contracts.inference_transfer_embedding import (
@@ -18,6 +19,7 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingIndexManifest,
     EmbeddingVectorShardManifest,
 )
+from eom_catalog_contracts.similarity_context import SimilarityIndexPin, SimilarityViewSelection
 from eom_catalog_service import inference_transfer_catalog_adapter as source_module
 from eom_catalog_service.embedding_incremental_plan import RegisteredEmbeddingRow
 from eom_catalog_service.embedding_registry_application import (
@@ -32,6 +34,8 @@ from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
     EmbeddingRegistryError,
     EmbeddingRegistryLookup,
+    EmbeddingRegistryRead,
+    RegisteredEmbeddingIndexRead,
 )
 from eom_catalog_service.inference_transfer_catalog_adapter import (
     AcceptedInferenceTransferProfileInput,
@@ -68,7 +72,9 @@ from sqlalchemy.orm import Session
 
 from tests.unit.embedding_registry_application_fixtures import capture_pair
 from tests.unit.inference_transfer_embedding_fixtures import (
+    embedding_entry,
     embedding_result,
+    embedding_space,
     index_pointer,
     seal,
     shard_pointer,
@@ -567,3 +573,302 @@ def test_injected_reader_cannot_replace_existing_historical_reuse_context() -> N
             Mock(), Mock(), reuse_context=Mock(), artifact_reader=Mock()
         )
     assert error.value.code == "KNOWLEDGE_RETRIEVAL_REUSE_CONTEXT_INVALID"
+
+
+def _read_selection(
+    command: RegisterEmbeddingIndexCommand, index: EmbeddingIndexManifest
+) -> tuple[EmbeddingRegistryRead, RegisteredEmbeddingIndexRead]:
+    intent = EmbeddingRegistryRead(
+        EmbeddingRegistryLookup(
+            command.corpus_id,
+            command.namespace,
+            command.graph_snapshot,
+            command.policy_revision_id,
+            command.policy_sha256,
+        ),
+        SimilarityViewSelection(
+            view=index.view,
+            recipe=index.recipe,
+            index=SimilarityIndexPin(
+                index_id=index.index_id,
+                index_revision_id=index.index_revision_id,
+                index_manifest=command.index_manifest,
+                index_sha256=index.index_sha256,
+                storage_partition=index.storage_partition,
+                spaces=ReferenceQuerySpaces(
+                    query=embedding_space(purpose="QUERY"), document=index.space
+                ),
+            ),
+        ),
+    )
+    registered = RegisteredEmbeddingIndexRead(
+        command.corpus_id,
+        command.namespace,
+        command.index_id,
+        command.index_revision_id,
+        command.index_manifest,
+        command.index_sha256,
+        command.graph_snapshot.graph_snapshot_revision_id,
+        command.policy_revision_id,
+        command.policy_sha256,
+        command.binding_count,
+        command.binding_set_sha256,
+    )
+    return intent, registered
+
+
+def test_pinned_read_uses_read_scope_without_publish_and_one_read_per_unique_member(
+    owner: tuple[Any, ...],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    verifier, session, command, index, binding, scope, _root = owner
+    # Synthetic scope isolates the write-check regression, not actual read-authority admission.
+    scope.requester_permission_keys = ()
+    intent, registered = _read_selection(command, index)
+    read = PinnedArtifactReadContext.read_pinned
+    counts: dict[tuple[str, str, str], int] = {}
+
+    def counted(reader: PinnedArtifactReadContext, **arguments: Any) -> Any:
+        key = arguments["artifact_id"], arguments["artifact_revision_id"], arguments["member_path"]
+        counts[key] = counts.get(key, 0) + 1
+        return read(reader, **arguments)
+
+    monkeypatch.setattr(PinnedArtifactReadContext, "read_pinned", counted)
+    result = verifier.resolve_pinned_read(
+        cast(Session, session), EmbeddingRegistryCaller("operator_" + "1" * 32), intent, registered
+    )
+    assert (
+        result.available_binding_count
+        == result.accepted_profile_count
+        == result.authorized_source_count
+        == 1
+    )
+    assert result.numerical_rows[0].row.row_ref == binding.row_ref
+    assert result.numerical_rows[0].values == (1.0,) + (0.0,) * (
+        index.space.model_spec.dimension - 1
+    )
+    assert len(counts) == 4 and set(counts.values()) == {1}
+    assert not hasattr(result, "index") and not hasattr(result, "entries")
+    assert not hasattr(result, "binding_count") and not hasattr(result, "binding_set_sha256")
+
+
+@pytest.mark.parametrize("failure", ["fence", "hash", "row", "binary", "nonfinite", "scope"])
+def test_pinned_read_rejects_missing_hash_shape_and_authority_without_repair(
+    owner: tuple[Any, ...],
+    failure: str,
+) -> None:
+    verifier, session, command, index, _binding, _scope, root = owner
+    intent, registered = _read_selection(command, index)
+    if failure == "fence":
+        verifier.identity_fence = None
+    elif failure == "hash":
+        registered = replace(registered, index_sha256="sha256:" + "f" * 64)
+    elif failure == "row":
+        registered = replace(registered, binding_count=2)
+    elif failure in {"binary", "nonfinite"}:
+        path = (
+            root
+            / index.shards[0].artifact_id
+            / index.shards[0].artifact_revision_id
+            / "vectors.f32"
+        )
+        payload = path.read_bytes()
+        path.write_bytes(payload[:-1] if failure == "binary" else b"\x00\x00\xc0\x7f" + payload[4:])
+    else:
+        verifier.sources.capture_in_session.side_effect = InferenceTransferServiceError(
+            "INFERENCE_TRANSFER_FORBIDDEN"
+        )
+    expected = (
+        "EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE"
+        if failure == "fence"
+        else (
+            "EMBEDDING_REGISTRY_FORBIDDEN"
+            if failure == "scope"
+            else "EMBEDDING_REGISTRY_POINTER_INVALID"
+        )
+    )
+    with pytest.raises(EmbeddingRegistryError, match=expected):
+        verifier.resolve_pinned_read(
+            cast(Session, session),
+            EmbeddingRegistryCaller("operator_" + "1" * 32),
+            intent,
+            registered,
+        )
+
+
+@pytest.mark.parametrize("population", ["revoked", "new_missing_report", "stale_report"])
+def test_current_eligible_population_controls_partial_read_not_historical_counts(
+    owner: tuple[Any, ...],
+    population: str,
+) -> None:
+    verifier, session, command, index, binding, _scope, _root = owner
+    intent, registered = _read_selection(command, index)
+    original = verifier.sources.capture_in_session.side_effect
+
+    def capture(*args: Any, **kwargs: Any) -> InferenceTransferSessionCapture:
+        current = cast(InferenceTransferSessionCapture, original(*args, **kwargs))
+        assert current.corpus is not None
+        if population == "revoked":
+            return replace(
+                current, corpus=AdmittedInferenceTransferCorpus((), (), False, 0, ()), entries=()
+            )
+        if population == "new_missing_report":
+            new_source = embedding_entry("b").profile.source_basis.source
+            corpus = replace(
+                current.corpus,
+                sources=(
+                    *current.corpus.sources,
+                    AdmittedInferenceTransferSource("analysisrun_" + "b" * 32, new_source),
+                ),
+                missing_solution_reports=1,
+            )
+            return replace(current, corpus=corpus)
+        return replace(
+            current,
+            corpus=replace(current.corpus, profiles=(), missing_solution_reports=1),
+            entries=(),
+        )
+
+    verifier.sources.capture_in_session.side_effect = capture
+    if population == "stale_report":
+        with pytest.raises(EmbeddingRegistryError, match="EMBEDDING_REGISTRY_POINTER_INVALID"):
+            verifier.resolve_pinned_read(
+                cast(Session, session),
+                EmbeddingRegistryCaller("operator_" + "1" * 32),
+                intent,
+                registered,
+            )
+    else:
+        result = verifier.resolve_pinned_read(
+            cast(Session, session),
+            EmbeddingRegistryCaller("operator_" + "1" * 32),
+            intent,
+            registered,
+        )
+        if population == "revoked":
+            assert (
+                result.sources == result.profiles == result.bindings == result.numerical_rows == ()
+            )
+        else:
+            assert result.authorized_source_count == 2
+            assert (
+                result.accepted_profile_count
+                == result.missing_report_count
+                == result.available_binding_count
+                == 1
+            )
+            assert result.bindings == (binding,)
+
+
+@pytest.mark.parametrize("admit_second", [False, True])
+def test_shared_shard_is_materialized_once_and_unadmitted_binding_is_not_disclosed(
+    owner: tuple[Any, ...],
+    monkeypatch: pytest.MonkeyPatch,
+    admit_second: bool,
+) -> None:
+    verifier, session, command, index, first_binding, _scope, root = owner
+    original_capture = verifier.sources.capture_in_session.side_effect
+    entry = embedding_entry("b")
+    shard_body = _document_for_test_shard(root, index.shards[0])
+    shard = EmbeddingVectorShardManifest.model_validate(shard_body)
+    second_binding = source_binding(entry, shard=shard, pointer=index.shards[0])
+    index_body = index.model_dump(mode="json")
+    index_body["bindings"].append(second_binding.model_dump(mode="json"))
+    updated = EmbeddingIndexManifest.model_validate(seal(index_body, "index_sha256"))
+    pointer = index_pointer(updated, "f")
+    body = command.model_dump(mode="json")
+    body.update(
+        index_manifest=pointer.model_dump(mode="json"),
+        index_sha256=updated.index_sha256,
+        binding_count=2,
+        eligible_source_count=2,
+        binding_set_sha256=content_sha256(
+            [first_binding.binding_sha256, second_binding.binding_sha256]
+        ),
+    )
+    command = RegisterEmbeddingIndexCommand.model_validate(seal(body, "request_sha256"))
+    records = _file_set(
+        root,
+        pointer.artifact_id,
+        pointer.artifact_revision_id,
+        "control_embedding_index",
+        "index.json",
+        {
+            "index.json": (
+                canonical_json_bytes(updated.model_dump(mode="json")),
+                pointer.schema_ref,
+                "application/json",
+            )
+        },
+        "f",
+    )
+    for record in records:
+        identity = (
+            record.job_id
+            if isinstance(record, JobRecord)
+            else (
+                record.logical_artifact_id
+                if isinstance(record, ArtifactRecord)
+                else cast(ArtifactRevisionRecord, record).revision_id
+            )
+        )
+        session.records[(type(record), identity)] = record
+
+    def capture(*args: Any, **kwargs: Any) -> InferenceTransferSessionCapture:
+        current = cast(InferenceTransferSessionCapture, original_capture(*args, **kwargs))
+        assert current.corpus is not None
+        if not admit_second:
+            return current
+        return replace(
+            current,
+            corpus=replace(
+                current.corpus,
+                profiles=(*current.corpus.profiles, entry.profile),
+                sources=(
+                    *current.corpus.sources,
+                    AdmittedInferenceTransferSource(
+                        "analysisrun_" + "b" * 32, entry.profile.source_basis.source
+                    ),
+                ),
+            ),
+            entries=(*current.entries, entry),
+        )
+
+    verifier.sources.capture_in_session.side_effect = capture
+    read = PinnedArtifactReadContext.read_pinned
+    counts: dict[str, int] = {}
+
+    def counted(reader: PinnedArtifactReadContext, **arguments: Any) -> Any:
+        member = arguments["member_path"]
+        counts[member] = counts.get(member, 0) + 1
+        return read(reader, **arguments)
+
+    monkeypatch.setattr(PinnedArtifactReadContext, "read_pinned", counted)
+    intent, registered = _read_selection(command, updated)
+    result = verifier.resolve_pinned_read(
+        cast(Session, session), EmbeddingRegistryCaller("operator_" + "1" * 32), intent, registered
+    )
+    assert (
+        result.available_binding_count
+        == result.authorized_source_count
+        == (2 if admit_second else 1)
+    )
+    assert len(result.numerical_rows) == 1
+    assert counts == {"index.json": 1, "shard.json": 1, "result.json": 1, "vectors.f32": 1}
+    if not admit_second:
+        assert result.bindings == (first_binding,)
+        assert all(
+            source.item_revision_id != second_binding.source.item_revision_id
+            for source in result.sources
+        )
+
+
+def _document_for_test_shard(root: Path, pointer: Any) -> dict[str, Any]:
+    import json
+
+    return cast(
+        dict[str, Any],
+        json.loads(
+            (root / pointer.artifact_id / pointer.artifact_revision_id / "shard.json").read_bytes()
+        ),
+    )

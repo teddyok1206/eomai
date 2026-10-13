@@ -20,7 +20,9 @@ from eom_catalog_contracts.inference_transfer_experiment import (
     PopulationSource,
     StagedExperimentEntry,
 )
+from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
 from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
+from eom_catalog_contracts.similarity_context import SimilarityViewSelection
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from sqlalchemy.orm import Session
 
@@ -75,6 +77,76 @@ class ResolvedEmbeddingLookup:
     sources: tuple[PopulationSource, ...]
     entries: tuple[StagedExperimentEntry, ...]
     truncated: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class EmbeddingRegistryRead:
+    """Owner-local exact immutable selection, never a wire query or authority grant."""
+
+    scope: EmbeddingRegistryLookup
+    selection: SimilarityViewSelection
+
+
+@dataclass(frozen=True, slots=True)
+class RegisteredEmbeddingIndexRead:
+    """Internal registered metadata; historical counts never become disclosed coverage."""
+
+    corpus_id: str
+    namespace: EmbeddingIndexNamespace
+    index_id: str
+    index_revision_id: str
+    index_manifest: ArtifactMemberPointer
+    index_sha256: str
+    graph_snapshot_revision_id: str
+    policy_revision_id: str
+    policy_sha256: str
+    binding_count: int
+    binding_set_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class AuthorizedEmbeddingReadProfile:
+    source_item_revision_id: str
+    profile: InferenceTransferProfilePointer
+
+
+@dataclass(frozen=True, slots=True)
+class MaterializedEmbeddingReadRow:
+    """Owner-local decoded row at the explicit numeric read boundary, not a wire/DB value.
+
+    The existing owner codec verifies finite/shape/raw SHA/unit norm before producing
+    this value. It is neither serialized as JSON nor normalized to conceal corruption.
+    """
+
+    row: RegisteredEmbeddingRow
+    values: tuple[float, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedPinnedEmbeddingIndex:
+    """Only the current authorized population and selected rows, no whole historical index."""
+
+    intent: EmbeddingRegistryRead
+    sources: tuple[PopulationSource, ...]
+    profiles: tuple[AuthorizedEmbeddingReadProfile, ...]
+    bindings: tuple[EmbeddingSourceBinding, ...]
+    numerical_rows: tuple[MaterializedEmbeddingReadRow, ...]
+
+    @property
+    def authorized_source_count(self) -> int:
+        return len(self.sources)
+
+    @property
+    def accepted_profile_count(self) -> int:
+        return len(self.profiles)
+
+    @property
+    def missing_report_count(self) -> int:
+        return len(self.sources) - len(self.profiles)
+
+    @property
+    def available_binding_count(self) -> int:
+        return len(self.bindings)
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,6 +241,21 @@ class EmbeddingRegistryVerificationPort(Protocol):
         caller: EmbeddingRegistryCaller,
         query: EmbeddingRegistryLookup,
     ) -> ResolvedEmbeddingLookup: ...
+
+    def resolve_pinned_read(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        intent: EmbeddingRegistryRead,
+        registered: RegisteredEmbeddingIndexRead,
+    ) -> ResolvedPinnedEmbeddingIndex:
+        """Resolve the exact committed index and current eligible subset under this owner.
+
+        Reuse actual read authorization, official source/report capture and the
+        existing immutable member/numeric validator. No historical out-of-scope
+        source, global index count or unselected numeric row may escape this call.
+        """
+        ...
 
     def verify_registered_references(
         self,
