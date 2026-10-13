@@ -170,7 +170,11 @@ def _root_path(path: Path, *, allow_final_symlink: bool = False) -> Path:
 
 
 def _require_template(name: str, expected_sha256: str) -> None:
-    path = _root_path(UNIT_ROOT / name)
+    _require_root_file(UNIT_ROOT / name, expected_sha256)
+
+
+def _require_root_file(path: Path, expected_sha256: str) -> None:
+    path = _root_path(path)
     descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
     try:
         initial = os.fstat(descriptor)
@@ -194,6 +198,30 @@ def _require_template(name: str, expected_sha256: str) -> None:
             raise ValueError("INFERENCE_CPU_TEMPLATE_INVALID")
     finally:
         os.close(descriptor)
+
+
+def require_fixed_cpu_unit_template(name: str, expected_sha256: str) -> None:
+    """Public byte/ownership check for owner-selected fixed CPU templates."""
+    if (
+        re.fullmatch(r"eom-[a-z0-9-]+@\.service", name) is None
+        or re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None
+    ):
+        raise ValueError("INFERENCE_CPU_TEMPLATE_INVALID")
+    _require_template(name, expected_sha256)
+
+
+def require_native_cpu_environment_file(path: Path, expected_sha256: str) -> None:
+    """Only the two owner-selected, non-secret native installation files are accepted."""
+    if (
+        path
+        not in {
+            Path("/etc/eom/embedding-native-cpu.env"),
+            Path("/etc/eom/embedding-native-owner.env"),
+        }
+        or re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None
+    ):
+        raise ValueError("INFERENCE_CPU_CONFIGURATION_INVALID")
+    _require_root_file(path, expected_sha256)
 
 
 def _template_epoch(value: os.stat_result) -> tuple[int, int, int, int, int, int, int, int, int]:

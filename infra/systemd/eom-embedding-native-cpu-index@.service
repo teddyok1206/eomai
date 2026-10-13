@@ -1,5 +1,7 @@
 [Unit]
 Description=EOM fixed native CPU INDEX execution %i
+Requires=eom-embedding-native-index-prepare@%i.service
+After=eom-embedding-native-index-prepare@%i.service
 StartLimitIntervalSec=infinity
 StartLimitBurst=1
 

@@ -127,6 +127,7 @@ def _read_member(
     mode: int,
     gid: int | None = None,
     allow_empty: bool = False,
+    maximum_bytes: int | None = None,
 ) -> bytes:
     descriptor: int | None = None
     try:
@@ -134,13 +135,20 @@ def _read_member(
             name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK, dir_fd=directory
         )
         initial = os.fstat(descriptor)
+        if maximum_bytes is not None and (type(maximum_bytes) is not int or maximum_bytes < 1):
+            raise CpuHandoffError("INFERENCE_CPU_MEMBER_INVALID")
+        limit = (
+            MAX_EXPERIMENT_MEMBER_BYTES
+            if maximum_bytes is None
+            else min(maximum_bytes, MAX_EXPERIMENT_MEMBER_BYTES)
+        )
         if (
             not stat.S_ISREG(initial.st_mode)
             or initial.st_nlink != 1
             or initial.st_uid != uid
             or (gid is not None and initial.st_gid != gid)
             or stat.S_IMODE(initial.st_mode) != mode
-            or not (0 if allow_empty else 1) <= initial.st_size <= MAX_EXPERIMENT_MEMBER_BYTES
+            or not (0 if allow_empty else 1) <= initial.st_size <= limit
         ):
             raise CpuHandoffError("INFERENCE_CPU_MEMBER_INVALID")
         chunks: list[bytes] = []
@@ -242,6 +250,50 @@ def _create_root_member(
     finally:
         if descriptor is not None:
             os.close(descriptor)
+
+
+@contextmanager
+def protected_cpu_handoff_directory(
+    path: Path, *, owner: CpuHandoffIdentity, uid: int, mode: int, gid: int | None = None
+) -> Iterator[int]:
+    """Public retained-FD boundary shared by fixed experimental and native handoffs."""
+    with _directory(path, owner=owner, uid=uid, mode=mode, gid=gid) as directory:
+        yield directory
+
+
+def read_protected_cpu_handoff_member(
+    directory: int,
+    name: str,
+    *,
+    uid: int,
+    mode: int,
+    gid: int | None = None,
+    allow_empty: bool = False,
+    maximum_bytes: int | None = None,
+) -> bytes:
+    """Read one bounded immutable member using the existing inode/epoch checks."""
+    if not name or name in {".", ".."} or any(char in name for char in "/\\\x00"):
+        raise CpuHandoffError("INFERENCE_CPU_MEMBER_INVALID")
+    return _read_member(
+        directory,
+        name,
+        uid=uid,
+        mode=mode,
+        gid=gid,
+        allow_empty=allow_empty,
+        maximum_bytes=maximum_bytes,
+    )
+
+
+def create_protected_cpu_handoff_member(
+    directory: int, name: str, payload: bytes, *, owner_gid: int, mode: int
+) -> None:
+    """Root-only no-clobber writer; exposing it does not grant a launch or source access."""
+    if os.geteuid() != _ROOT_UID:
+        raise CpuHandoffError("INFERENCE_CPU_ROOT_REQUIRED")
+    if not name or name in {".", ".."} or any(char in name for char in "/\\\x00"):
+        raise CpuHandoffError("INFERENCE_CPU_MEMBER_INVALID")
+    _create_root_member(directory, name, payload, owner_gid=owner_gid, mode=mode)
 
 
 def prepare_cpu_handoff(execution_id: str) -> None:

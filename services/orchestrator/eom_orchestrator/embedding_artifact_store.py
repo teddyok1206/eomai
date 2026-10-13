@@ -46,6 +46,17 @@ from eom_catalog_contracts.models import Sha256, UtcDatetime
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_protocol.models import JobId
+from eom_workflow.local_embedding_encoding_job import (
+    LocalEmbeddingLaunchAssociation,
+    validate_local_embedding_launch_association,
+)
+from eom_workflow.local_embedding_execution_policy import LocalEmbeddingExecutionPolicy
+from eom_workflow.local_embedding_request import (
+    LocalEmbeddingWorkflowRequestV11,
+    parse_local_embedding_workflow_request_v11,
+    validate_local_embedding_request_references,
+)
+from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
 from eom_workflow.local_embedding_workflow import (
     LocalEmbeddingWorkflowRequest,
     parse_local_embedding_workflow_request,
@@ -562,6 +573,62 @@ class EmbeddingArtifactStore:
                 "workflow_request_sha256": workflow_request.request_sha256,
             }
         ).removeprefix("sha256:")
+        return self._publish_result(
+            request=request, workspace=workspace, timestamp=timestamp, key=key
+        )
+
+    def publish_owned_batch(
+        self,
+        *,
+        workflow_request: LocalEmbeddingWorkflowRequestV11,
+        plan: LocalEmbeddingSourcePlan,
+        policy: LocalEmbeddingExecutionPolicy,
+        association: LocalEmbeddingLaunchAssociation,
+        request: IncrementalEmbeddingInput,
+        workspace: Path,
+        created_at: datetime,
+    ) -> PublishedEmbeddingArtifacts:
+        """Publish the separately owned subset while preserving original1.1 intent.
+
+        The current source/command owner authorizes this use case. Pure value
+        checks here cannot replace that authority or establish launch provenance.
+        """
+        try:
+            workflow_request = parse_local_embedding_workflow_request_v11(
+                workflow_request.model_dump(mode="json")
+            )
+            validate_local_embedding_request_references(workflow_request, plan, policy)
+            request = parse_incremental_embedding_input(request.model_dump(mode="json"))
+            validate_local_embedding_launch_association(
+                association,
+                plan,
+                request,
+                workflow_request.resource_profile,
+                workflow_request.request_sha256,
+            )
+            timestamp = TypeAdapter(UtcDatetime).validate_python(created_at)
+        except Exception:
+            raise EmbeddingArtifactStoreError("EMBEDDING_ARTIFACT_CONTEXT_INVALID") from None
+        key = content_sha256(
+            {
+                "logical_encoder_job_id": request.job_id,
+                "native_request_sha256": request.request_sha256,
+                "launch_association_sha256": association.association_sha256,
+                "workflow_request_sha256": workflow_request.request_sha256,
+            }
+        ).removeprefix("sha256:")
+        return self._publish_result(
+            request=request, workspace=workspace, timestamp=timestamp, key=key
+        )
+
+    def _publish_result(
+        self,
+        *,
+        request: IncrementalEmbeddingInput,
+        workspace: Path,
+        timestamp: datetime,
+        key: str,
+    ) -> PublishedEmbeddingArtifacts:
         with (
             _directory(workspace) as directory,
             _member(directory, "result.json", MAX_EMBEDDING_INPUT_BYTES) as result_bytes,
