@@ -1094,3 +1094,100 @@ reproduction failures are retained as defect evidence, not overwritten as histor
 After the targeted correction, the complete wheel suite is **191 PASS in 2.93s**; strict mypy,
 Ruff lint/format **two Python files PASS**, and owned-three-path diff check PASS. No shared/actual
 gate was repeated for this correction; root performs those gates on the new frozen source bytes.
+
+## 15. Reference-query Artifact publication — approved source leaf
+
+1. **Responsibility:** Extend the existing Orchestrator Artifact store with one fixed QUERY
+   publication method. It validates supplied immutable contracts and local results; the actual
+   owner still supplies current authorization, command/claim lease and genuine producer checks.
+2. **Canonical source:** Exact canonical staged input 1.1, result 1.0 and validated f32 bytes.
+   Reuse the existing ControlFileSetPublisher; only that owner commits the canonical Artifact.
+3. **Identity:** Preserve controller/native request, launch association and publication Job IDs,
+   Artifact ID/revision and raw member hashes as separate concepts. No arbitrary inequality of
+   native/publication Job values is introduced and no QUERY receipt or runtime grant is minted.
+4. **Checks:** Reparse closed contracts and validate launch/request/policy/bundle/input closure,
+   actual QUERY purpose, recipe/runtime/resource pins, UTC ordering, canonical JSON and the
+   existing authoritative numeric codec. Validate the returned real publication pointer frame.
+5. **Access patterns:** Fixed four-member reads, create-once shard metadata and keyed immutable
+   request replay. Source/report bodies, authority tokens and vector values are not put in DB.
+6. **Structures:** One frozen pointer result and a fixed sorted tuple of input.json, result.json,
+   shard.json and vectors.f32. Existing owner-local protected FD primitives remain shared.
+7. **Complexity:** Bounded O(input + result + binary bytes), at most three QUERY rows; no corpus
+   scan/re-encoding, repeated numeric normalization, registry or generic parser/provider layer.
+8. **Concurrency:** Hold no-follow directory/member descriptors through publication and final
+   epoch checks. Existing shard bytes must agree; the same immutable key cannot replace output.
+9. **Dependencies:** Orchestrator leaf consumes public contracts/codec and the existing publisher.
+   No Catalog private access, source lookup, native executor, queue, IAM or DB change is made.
+10. **Failure:** Missing/unsafe/changed members, stale or mismatched immutable closure and invalid
+    publisher receipts fail explicitly. A failure after publication does not assert no side effect
+    occurred; retries remain the existing publisher's same-key immutable replay boundary.
+11. **Alternative:** Relabeling DOCUMENT output or publishing unbound QUERY files bypasses the
+    supplied closure. A fixed source leaf suffices; actual QUERY admission/execution and committed
+    reader remain inactive prerequisites, not callbacks or boolean grants added here.
+
+Approved paths are this note, existing embedding_artifact_store.py, a new focused QUERY Artifact
+test, and the existing Artifact-store test only for its exact public-import boundary inventory.
+Source fixtures do not prove native QUERY execution, current authority, lease ownership or NAS
+publication. DOCUMENT/index signatures and behavior, released protocol bytes and numerical
+modules stay unchanged. **SOURCE_ONLY / NOT_ACTIVE / QUERY_NOT_ADMITTED.**
+
+### 15.1 QUERY Artifact source checkpoint — 2026-10-13 UTC
+
+The existing store now reparses supplied typed QUERY values before serialization and validates
+the fixed launch/controller/policy/bundle/input 1.1 closure before opening the workspace. Exact
+canonical staged input/result bytes and the existing authoritative f32 codec are checked, without
+input repair, padding or re-normalization. Protected member FDs remain held through the existing
+publisher and final epoch checks. One create-once shard and exactly four ordered member pointers
+share the publisher's Artifact/revision. The result is a small frozen pointer value, not an execution
+receipt, authorization or producer proof. Native and publisher Job concepts need no arbitrary
+inequality. Existing DOCUMENT/index method signatures and bodies remain unchanged.
+
+Final ten-suite source regression is **494 PASS in 55.10s**, skip zero. Inventory:
+`test_embedding_reference_query_artifact_store`, `test_embedding_artifact_store`,
+`test_embedding_index_artifact_store`, `test_reference_query_execution_contracts`,
+`test_embedding_reference_query_v11_contracts`, `test_embedding_reference_query_contracts`,
+`test_embedding_reference_query_encoding`, `test_local_embedding_runner_execution`,
+`test_local_embedding_workflow_receipt` and `test_control_file_set_publication`, all under
+`tests/unit/`. Explicit API Conda strict mypy, Ruff lint and format check **three Python paths
+PASS**; owned diff check PASS. No shared count is added to an earlier overlapping gate.
+
+The first six-suite gate was **306 PASS / 4 FAIL in 16.93s**: public JSON Schema rejects bool,
+extra and purpose drift with its exact ValidationError, which the new leaf initially did not
+translate. Only that exception was added to the fixed QUERY boundary; no broad catch or released
+contract changed. A following 310 PASS gate preceded independent review and is not the final
+freeze. Read-only review then identified JSON-decoder RecursionError before raw-contract depth
+validation. The new QUERY result block alone maps that precise exception and rejects deep JSON
+with stable content-free error, publisher call count zero and original bytes preserved. An initial
+strict test-dictionary inference issue and formatting failures were corrected before final gates.
+
+Coverage includes canonical four-member/schema/hash closure, configured batch four with one real
+row, typed/nested model-copy negatives, bool/extra/input-version/purpose/runtime/recipe/launch
+drift, duplicate/noncanonical/deep JSON, codec hash/shape/nonfinite/nonunit checks, protected input
+and output members, publication-time member/workspace replacement, immutable-key replay/output
+conflict, malformed/null receipt, equal native/publication Job values and unknown-outcome no retry.
+Fake owner metadata/replay tests are not PostgreSQL, NAS, current-session/command-lease or native
+QUERY acceptance. Actual owner/native admission, source reauthorization, genuine producer binding,
+committed-query reader and first consumer delivery remain separate prerequisites. No DB, migration,
+IAM, runtime, model/GPU, queue, source lookup or installed activation occurred in this leaf.
+
+### 15.2 Root-review three-view publication coverage
+
+Root requested a three-row positive in addition to the earlier one-row/batch-four fixture. The
+existing public contracts express three distinct CONTENT_ONLY/CONCRETE_FACETS/METADATA_ONLY
+views. Test-only Case/reseal helpers close synthetic third-index metadata, controller/native/launch
+hashes and sorted encoding rows; no index registration or source authority is invented. Three
+different unit f32 rows are published without padding, while the configured numerical batch stays
+four. Four negatives reject resealed view/row disagreement and declared binary hash/shape drift,
+with publisher calls zero and original bytes preserved.
+
+The precise limit remains explicit: permuting vectors and coherently changing all declared hashes
+cannot establish or refute semantic encoding at this byte-publication leaf. The actual producer and
+owner execution binding is still required. Unused Case receipt/output fixtures are not proof of the
+new publication. Read-only review found no additional defect; production and existing DOCUMENT/
+index test bytes remain unchanged from the preceding freeze.
+
+The targeted five added tests are **5 PASS in 4.92s**. Final exact ten-suite regression, superseding
+the prior source freeze in §15.1, is **499 PASS in 54.80s**, skip zero. Strict mypy, Ruff lint and
+format check **the same three Python paths PASS**; gate start/end Python raw hashes agree. No
+counts are added across overlapping runs. This is still **SOURCE_ONLY / NOT_ACTIVE /
+QUERY_NOT_ADMITTED**, with no operational, migration, runtime, model or authority change.

@@ -330,6 +330,9 @@ def test_store_source_has_no_parallel_database_network_process_or_git_boundary()
         "datetime",
         "pathlib",
         "typing",
+        "eom_catalog_contracts.embedding_reference_query",
+        "eom_catalog_contracts.embedding_reference_query_v11",
+        "eom_catalog_contracts.embedding_runtime_bundle",
         "eom_catalog_contracts.embedding_vector_binary",
         "eom_catalog_contracts.inference_transfer_embedding",
         "eom_catalog_contracts.knowledge",
@@ -338,6 +341,8 @@ def test_store_source_has_no_parallel_database_network_process_or_git_boundary()
         "eom_protocol.artifact_members",
         "eom_protocol.models",
         "eom_workflow.local_embedding_workflow",
+        "eom_workflow.reference_query_execution",
+        "jsonschema.exceptions",
         "pydantic",
         "eom_orchestrator.file_set_control_artifacts",
     }

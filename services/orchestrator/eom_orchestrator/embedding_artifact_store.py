@@ -13,6 +13,18 @@ from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any
 
+from eom_catalog_contracts.embedding_reference_query import (
+    MAX_REFERENCE_QUERY_BYTES,
+    REFERENCE_QUERY_RESULT_REF,
+    parse_embedding_reference_query_result,
+)
+from eom_catalog_contracts.embedding_reference_query_v11 import (
+    REFERENCE_QUERY_INPUT_V11_REF,
+    EmbeddingReferenceQueryInputV11,
+    parse_embedding_reference_query_input_v11,
+    validate_reference_query_result_v11,
+)
+from eom_catalog_contracts.embedding_runtime_bundle import EmbeddingRuntimeBundle
 from eom_catalog_contracts.embedding_vector_binary import read_unit_vectors
 from eom_catalog_contracts.inference_transfer_embedding import (
     INDEX_SCHEMA_REF,
@@ -38,19 +50,32 @@ from eom_workflow.local_embedding_workflow import (
     LocalEmbeddingWorkflowRequest,
     parse_local_embedding_workflow_request,
 )
+from eom_workflow.reference_query_execution import (
+    ReferenceQueryExecutionPolicy,
+    ReferenceQueryLaunchAssociation,
+    ReferenceQueryWorkflowRequest,
+    parse_reference_query_execution_policy,
+    parse_reference_query_launch_association,
+    parse_reference_query_workflow_request,
+    validate_reference_query_launch_association,
+)
+from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import Field, TypeAdapter
 
 from eom_orchestrator.file_set_control_artifacts import (
     CONTROL_FILE_SET_PROTOCOL,
     ControlFileSetMember,
     ControlFileSetPublisher,
+    PublishedControlFileSet,
 )
 
 EMBEDDING_INDEX_ARTIFACT_TYPE = "control_embedding_index"
 EMBEDDING_INDEX_MANIFEST_VERSION = CONTROL_FILE_SET_PROTOCOL
 EMBEDDING_INDEX_PRIMARY_MEMBER = "index.json"
 EMBEDDING_INDEX_MEMBER_NAMES = (EMBEDDING_INDEX_PRIMARY_MEMBER,)
-_MEMBERS = frozenset({"result.json", "shard.json", "vectors.f32", EMBEDDING_INDEX_PRIMARY_MEMBER})
+_MEMBERS = frozenset(
+    {"input.json", "result.json", "shard.json", "vectors.f32", EMBEDDING_INDEX_PRIMARY_MEMBER}
+)
 _MAX_BINARY_BYTES = 16 * 1024**2
 _BINARY_SCHEMA_REF = "eom://schemas/knowledge/embedding-f32le-l2-row-major/1.0"
 
@@ -67,6 +92,19 @@ class EmbeddingArtifactStoreError(ValueError):
 class PublishedEmbeddingArtifacts:
     owner_job_id: str
     logical_encoder_job_id: str
+    result: ArtifactMemberPointer
+    shard: ArtifactMemberPointer
+    binary: ArtifactMemberPointer
+    manifest_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class PublishedReferenceQueryArtifacts:
+    """Publication pointers only; not a current authorization or genuine producer proof."""
+
+    owner_job_id: str
+    logical_query_job_id: str
+    input: ArtifactMemberPointer
     result: ArtifactMemberPointer
     shard: ArtifactMemberPointer
     binary: ArtifactMemberPointer
@@ -254,6 +292,149 @@ class EmbeddingArtifactStore:
             raise EmbeddingArtifactStoreError("EMBEDDING_ARTIFACT_SOURCE_INVALID")
         self.publisher = publisher
         self.source_commit = source_commit
+
+    def publish_reference_query(
+        self,
+        *,
+        workflow_request: ReferenceQueryWorkflowRequest,
+        policy: ReferenceQueryExecutionPolicy,
+        bundle: EmbeddingRuntimeBundle,
+        launch: ReferenceQueryLaunchAssociation,
+        request: EmbeddingReferenceQueryInputV11,
+        workspace: Path,
+        created_at: datetime,
+    ) -> PublishedReferenceQueryArtifacts:
+        """Commit supplied QUERY closure; the calling owner retains current auth/lease checks."""
+        try:
+            # Parse raw instances before serialization so model_copy cannot discard bad extras.
+            workflow_request = parse_reference_query_workflow_request(workflow_request)
+            policy = parse_reference_query_execution_policy(policy)
+            launch = parse_reference_query_launch_association(launch)
+            request = parse_embedding_reference_query_input_v11(request)
+            validate_reference_query_launch_association(
+                launch, workflow_request, policy, bundle, request
+            )
+            timestamp = TypeAdapter(UtcDatetime).validate_python(created_at, strict=True)
+            if timestamp < launch.launched_at:
+                raise ValueError("publication precedes its launch association")
+            input_bytes = canonical_json_bytes(request.model_dump(mode="json"))
+        except (ValueError, TypeError, JsonSchemaValidationError):
+            raise EmbeddingArtifactStoreError("EMBEDDING_REFERENCE_QUERY_CONTEXT_INVALID") from None
+        key = "embedding-reference-query-artifact:" + content_sha256(
+            {
+                "logical_query_job_id": request.job_id,
+                "native_request_sha256": request.request_sha256,
+                "workflow_request_sha256": workflow_request.request_sha256,
+                "launch_association_sha256": launch.association_sha256,
+            }
+        ).removeprefix("sha256:")
+        with (
+            _directory(workspace) as directory,
+            _member(directory, "input.json", MAX_REFERENCE_QUERY_BYTES) as saved_input,
+            _member(directory, "result.json", MAX_REFERENCE_QUERY_BYTES) as result_bytes,
+            _member(directory, "vectors.f32", _MAX_BINARY_BYTES) as binary_bytes,
+        ):
+            if saved_input != input_bytes:
+                raise EmbeddingArtifactStoreError("EMBEDDING_REFERENCE_QUERY_INPUT_INVALID")
+            try:
+                document = json.loads(result_bytes, object_pairs_hook=_unique_object)
+                result = parse_embedding_reference_query_result(document)
+                validate_reference_query_result_v11(request, result)
+                if result_bytes != canonical_json_bytes(result.model_dump(mode="json")):
+                    raise ValueError("QUERY result is not exact canonical JSON")
+            except (ValueError, TypeError, JsonSchemaValidationError, RecursionError):
+                raise EmbeddingArtifactStoreError(
+                    "EMBEDDING_REFERENCE_QUERY_RESULT_INVALID"
+                ) from None
+            shard = result.shard
+            read_unit_vectors(
+                binary_bytes,
+                dimension=shard.dimension,
+                row_count=shard.row_count,
+                expected_sha256=shard.binary.sha256,
+            )
+            shard_bytes = canonical_json_bytes(shard.model_dump(mode="json"))
+            _materialize_manifest(directory, "shard.json", shard_bytes)
+            with _member(directory, "shard.json", MAX_REFERENCE_QUERY_BYTES) as saved_shard:
+                if saved_shard != shard_bytes:
+                    raise EmbeddingArtifactStoreError("EMBEDDING_REFERENCE_QUERY_SHARD_CONFLICT")
+                members = (
+                    ControlFileSetMember(
+                        "input.json",
+                        workspace / "input.json",
+                        sha256_bytes(saved_input),
+                        len(saved_input),
+                        REFERENCE_QUERY_INPUT_V11_REF,
+                        "application/json",
+                    ),
+                    ControlFileSetMember(
+                        "result.json",
+                        workspace / "result.json",
+                        sha256_bytes(result_bytes),
+                        len(result_bytes),
+                        REFERENCE_QUERY_RESULT_REF,
+                        "application/json",
+                    ),
+                    ControlFileSetMember(
+                        "shard.json",
+                        workspace / "shard.json",
+                        sha256_bytes(saved_shard),
+                        len(saved_shard),
+                        SHARD_SCHEMA_REF,
+                        "application/json",
+                    ),
+                    ControlFileSetMember(
+                        "vectors.f32",
+                        workspace / "vectors.f32",
+                        shard.binary.sha256,
+                        len(binary_bytes),
+                        _BINARY_SCHEMA_REF,
+                        "application/octet-stream",
+                    ),
+                )
+                receipt = self.publisher.publish(
+                    members=members,
+                    primary_file="result.json",
+                    artifact_type="control_embedding_reference_query",
+                    manifest_version=CONTROL_FILE_SET_PROTOCOL,
+                    idempotency_key=key,
+                    source_commit=self.source_commit,
+                    created_at=timestamp,
+                )
+                try:
+                    if not isinstance(receipt, PublishedControlFileSet):
+                        raise ValueError("QUERY owner receipt type differs")
+                    owner_job_id = TypeAdapter(JobId).validate_python(receipt.job_id)
+                    manifest_sha256 = TypeAdapter(Sha256).validate_python(receipt.manifest_sha256)
+                    if (
+                        receipt.primary_file != "result.json"
+                        or receipt.primary_sha256 != members[1].sha256
+                    ):
+                        raise ValueError("QUERY owner receipt differs")
+                    pointers = tuple(
+                        ArtifactMemberPointer(
+                            artifact_id=receipt.artifact_id,
+                            artifact_revision_id=receipt.artifact_revision_id,
+                            member_path=member.file_name,
+                            schema_ref=member.schema_ref,
+                            media_type=member.media_type,
+                            sha256=member.sha256,
+                        )
+                        for member in members
+                    )
+                    return PublishedReferenceQueryArtifacts(
+                        owner_job_id,
+                        request.job_id,
+                        pointers[0],
+                        pointers[1],
+                        pointers[2],
+                        pointers[3],
+                        manifest_sha256,
+                    )
+                except (ValueError, TypeError):
+                    raise EmbeddingArtifactStoreError(
+                        "EMBEDDING_REFERENCE_QUERY_RECEIPT_INVALID"
+                    ) from None
 
     def publish_index(
         self,
