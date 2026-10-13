@@ -1187,3 +1187,30 @@ successor를 준비한다. 실제 model/GPU0, 성능 NOT_EVALUATED, 기본값 NO
 `canonical-retention.log`, `cpu-recovery.log`, `cpu-private-assembly.log`,
 `cuda-private-assembly.log`, `cpu-protected-publication.log`에 남겨뒀다. 긴 원본 로그나
 패키지 payload는 Git/Slack에 넣지 않는다.
+
+## 실제 wheel 형식 호환 수정·56개 전체 검증 — 2026-10-13 UTC
+
+기존 wheel owner 안에서 top/vendored METADATA, permission-only ZIP mode, 실제 두 `.data`
+설치 위치, canonical URI의 literal-plus 표기를 함께 수정했다. 첫 독립 root19-suite
+1472 PASS35.31s 뒤 actual56에서54 PASS/GUI section2 FAIL을 발견했고 그 이력도 남겼다.
+두 실제 entry-point 파일은 protected archive/RECORD/installed-byte/epoch가 모두 맞으며
+effective GUI0/defaults0이었다. 빈 section만 허용하고 실제/상속/default GUI와 malformed
+metadata는 계속 거부한다. 설치 파일·RECORD·direct_url을 고쳐 검사를 통과시키지 않았다.
+
+최종 root19-suite **1485 PASS36.47s, skip0**, strict/Ruff/format2 PASS다. 최종 source core raw
+`c7a1476a34a9800d2f0296b50f9a9f2fe96543ea2ea63cea67fbee748e9dc1b4`로 읽기 전용 actual56
+**observation56 PASS / verification56 PASS12.878s**를 확인했다. input은 기존6ed5e508 그대로다.
+actual evidence `actual56-layout-verification.log`와 `actual56-empty-gui-verification.log`를
+동일 task directory에 따로 보존한다. 해시·목록·bytes·권한·epoch 검사는 유지했다.
+
+두 번째 failed PRIVATE는 입력 raw SHA로 유일하게 확인한
+`/opt/eom/.embedding-index-install-SjgdhzLY`이며 retained developer backup은
+`/opt/eom/conda/envs/.embedding-index-prepublication-CPU_INDEX_FP32-.embedding-index-install-SjgdhzLY`다.
+현재 CPU는 root0755 staged, phase BEFORE_OLD_PREFIX_BYTES_AUDIT/빈 receipt다. 원래 실패
+yyOK1Wsx와 이번 실패 둘 다 보존하며 자동 재게시/성공 재해석하지 않는다. 새 explicit source/
+wheel·전체 Conda/source/ELF/host/prefix audit·unit/proof/실제 owner가 여전히 필요하다.
+
+04:16:44 UTC 읽기 전용 장치 조회에서 RTX5080, driver580.126.09, actual compute-capability12.0,
+16303MiB 중2MiB 사용/util0 및 compute-app 없음이 확인됐다. 이는 현재 장치 정보이지 실제
+GPU lease/격리/수치/성능 admission이 아니다. model/GPU inference0, 성능 NOT_EVALUATED,
+GPU 기본값 NOT_ACTIVE, 전체 goal ACTIVE를 유지한다.

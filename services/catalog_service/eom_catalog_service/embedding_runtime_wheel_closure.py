@@ -374,6 +374,27 @@ def _installed_target(prefix: Path, name: str) -> Path:
     return path
 
 
+def _wheel_target(
+    prefix: Path, library: RuntimeWheelInstallationPin, name: str, *, directory: bool = False
+) -> Path | None:
+    """Only the two observed wheel relocation roles; no wheel-controlled destination roots."""
+    parts = name.split("/")
+    if not any(part.endswith(".data") for part in parts):
+        return prefix / "lib/python3.12/site-packages" / name
+    _require(
+        parts[0] == f"{library.name.replace('-', '_')}-{library.version}.data"
+        and not any(part.endswith(".data") for part in parts[1:]),
+        "WHEEL_DATA_LAYOUT_UNSUPPORTED",
+    )
+    if len(parts) == 1:
+        _require(directory, "WHEEL_DATA_LAYOUT_UNSUPPORTED")
+        return None
+    _require(parts[1] in {"headers", "data"}, "WHEEL_DATA_LAYOUT_UNSUPPORTED")
+    _require(directory or len(parts) > 2, "WHEEL_DATA_LAYOUT_UNSUPPORTED")
+    root = prefix / "include/python3.12" / library.name if parts[1] == "headers" else prefix
+    return root.joinpath(*parts[2:])
+
+
 class _ConsoleEntryMetadata(configparser.ConfigParser):
     def optionxform(self, optionstr: str) -> str:
         return optionstr
@@ -382,7 +403,10 @@ class _ConsoleEntryMetadata(configparser.ConfigParser):
 def _entries(raw: bytes) -> dict[str, tuple[str, str]]:
     parser = _ConsoleEntryMetadata(interpolation=None, strict=True)
     parser.read_string(raw.decode("utf-8"))
-    _require(not parser.has_section("gui_scripts"), "GUI_SCRIPTS_FORBIDDEN")
+    _require(
+        not parser.has_section("gui_scripts") or not parser.items("gui_scripts"),
+        "GUI_SCRIPTS_FORBIDDEN",
+    )
     result: dict[str, tuple[str, str]] = {}
     for name, value in (
         parser.items("console_scripts") if parser.has_section("console_scripts") else ()
@@ -559,6 +583,8 @@ def _verify_installed_runtime_wheel(
             infos = archive.infolist()
             names: dict[str, zipfile.ZipInfo] = {}
             member_targets: set[str] = set()
+            mapped_targets: set[Path] = set()
+            mapped_files: set[Path] = set()
             pending_directories: set[str] = set()
             expanded = 0
             for info in infos:
@@ -575,10 +601,10 @@ def _verify_installed_runtime_wheel(
                     and info.file_size <= max(1, info.compress_size) * 100,
                     "ZIP_MEMBER_INVALID",
                 )
-                _require(
-                    not any(part.endswith(".data") for part in target_name.split("/")),
-                    "WHEEL_DATA_LAYOUT_UNSUPPORTED",
-                )
+                mapped = _wheel_target(prefix, library, target_name, directory=directory)
+                if mapped is not None:
+                    _require(mapped not in mapped_targets, "WHEEL_MAPPED_TARGET_COLLISION")
+                    mapped_targets.add(mapped)
                 expanded += info.file_size
                 _require(expanded <= 4 * 1024**3, "ZIP_EXPANDED_TOO_LARGE")
                 if directory:
@@ -591,7 +617,9 @@ def _verify_installed_runtime_wheel(
                     )
                     pending_directories.add(target_name)
                 else:
-                    _require(not mode or stat.S_ISREG(mode), "ZIP_MEMBER_INVALID")
+                    _require(stat.S_IFMT(mode) in {0, stat.S_IFREG}, "ZIP_MEMBER_INVALID")
+                    assert mapped is not None
+                    mapped_files.add(mapped)
                     names[info.filename] = info
             for name in names:
                 parent = name.rpartition("/")[0]
@@ -599,12 +627,31 @@ def _verify_installed_runtime_wheel(
                     _require(parent not in names, "ZIP_FILE_DIRECTORY_COLLISION")
                     pending_directories.discard(parent)
                     parent = parent.rpartition("/")[0]
+            for target in mapped_files:
+                _require(
+                    not any(parent in mapped_files for parent in target.parents),
+                    "WHEEL_MAPPED_TARGET_COLLISION",
+                )
+            _require(
+                not any(name.endswith(".data") for name in pending_directories),
+                "WHEEL_DATA_LAYOUT_UNSUPPORTED",
+            )
             _require(not pending_directories, "ZIP_DIRECTORY_UNRELATED")
-            metadata_names = [name for name in names if name.endswith(".dist-info/METADATA")]
+            # Vendored dist-info is fully checked payload, not the installed distribution identity.
+            metadata_names = [
+                name
+                for name in names
+                if name.endswith(".dist-info/METADATA") and len(name.split("/")) == 2
+            ]
             _require(len(metadata_names) == 1, "METADATA_IDENTITY_INVALID")
             dist_info = metadata_names[0].rsplit("/", 1)[0]
             _require(
-                {name.split("/", 1)[0] for name in names if ".dist-info/" in name} == {dist_info},
+                {
+                    name.split("/", 1)[0]
+                    for name in names
+                    if name.split("/", 1)[0].endswith(".dist-info")
+                }
+                == {dist_info},
                 "METADATA_IDENTITY_INVALID",
             )
             record_name = dist_info + "/RECORD"
@@ -630,9 +677,13 @@ def _verify_installed_runtime_wheel(
                 }
                 sha, size, raw = _zip_member(archive, info, retain)
                 _require(records[name] == (sha, size), "WHEEL_RECORD_HASH_MISMATCH")
-                target = site / name
+                payload_target = _wheel_target(prefix, library, name)
+                assert payload_target is not None
+                target = payload_target
+                _require(target not in wheel_pins, "WHEEL_MAPPED_TARGET_COLLISION")
                 wheel_pins[target] = sha, size
-                roots.add(site / name.split("/", 1)[0])
+                if target.is_relative_to(site):
+                    roots.add(site / target.relative_to(site).parts[0])
                 if name == "torch/version.py":
                     actual = files.read(target, sha256=sha, size=size, maximum=_MAX_METADATA)
                     torch_version = _torch_constants(actual)
@@ -688,6 +739,7 @@ def _verify_installed_runtime_wheel(
                 )
                 additions[prefix / "bin/pip3.12"] = aliases["pip3.12"]
                 entries = entries | {"pip3.12": _PIP_ENTRY}
+            _require(set(wheel_pins).isdisjoint(additions), "WHEEL_GENERATED_TARGET_COLLISION")
             installed_record = site / record_name
             raw = files.read(
                 installed_record,
@@ -715,20 +767,25 @@ def _verify_installed_runtime_wheel(
                         object_pairs_hook=_unique_json,
                     )
                     digest = library.archive.sha256[7:]
+                    uri = archive_path.as_uri()
                     _require(
                         value
-                        in (
+                        in tuple(
                             {
-                                "url": archive_path.as_uri(),
+                                "url": spelling,
                                 "archive_info": {
                                     "hash": "sha256=" + digest,
                                     "hashes": {"sha256": digest},
                                 },
-                            },
+                            }
+                            for spelling in {uri, uri.replace("%2B", "+")}
+                        )
+                        + tuple(
                             {
-                                "url": archive_path.as_uri(),
+                                "url": spelling,
                                 "archive_info": {"hashes": {"sha256": digest}},
-                            },
+                            }
+                            for spelling in {uri, uri.replace("%2B", "+")}
                         ),
                         "DIRECT_URL_INVALID",
                     )

@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import ast
+import io
+import json
 import os
+import stat
 import struct
 import subprocess
 import sys
+import zipfile
 from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
 from typing import Any, Literal
@@ -60,6 +64,13 @@ def wheel_pin(library: InstalledNumericLibraryProof) -> RuntimeWheelInstallation
             for value in library.console_scripts
         ),
     )
+
+
+def _rewrite_with_distinct_mtime(path: Path) -> None:
+    """Synthetic epoch drift must not depend on two writes straddling a filesystem tick."""
+    before = path.stat()
+    path.write_bytes(path.read_bytes())
+    os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns + 1_000_000_000))
 
 
 @pytest.mark.parametrize("profile", ["CPU_INDEX_FP32", "CUDA_INDEX_FP32"])
@@ -570,8 +581,7 @@ def test_generated_alias_keeps_actual_nofollow_and_epoch_binding(
         observed = observe_runtime_wheel_installation(
             archive, "pip", "26.1.2", prefix=prefix, files=files
         )
-        raw = alias.read_bytes()
-        alias.write_bytes(raw)
+        _rewrite_with_distinct_mtime(alias)
         with pytest.raises(InstalledRuntimeProofError, match="CHANGED"):
             verify_installed_runtime_wheel(
                 observed, prefix=prefix, archive_root=archives, files=files
@@ -584,3 +594,625 @@ def test_generated_alias_keeps_actual_nofollow_and_epoch_binding(
             os.link(alias.with_name("original"), alias)
         with pytest.raises(InstalledRuntimeProofError):
             observe_runtime_wheel_installation(archive, "pip", "26.1.2", prefix=prefix, files=files)
+
+
+def _vendored_dist_info_fixture(
+    tmp_path: Path,
+    *,
+    vendored: bool = True,
+    fault: str | None = None,
+    version: str = "83.0.0",
+    direct_url: str | None = None,
+    legacy_archive_hash: bool = False,
+    entry_points: bytes | None = None,
+) -> tuple[Path, Path, RuntimeWheelInstallationPin, Path]:
+    """Small pinned payload; nested metadata/RECORD is never imported or installed separately."""
+    prefix, archives = tmp_path / "prefix", tmp_path / "archives"
+    dist = f"setuptools-{version}.dist-info"
+    nested = "setuptools/_vendor/vendor0-1.0.dist-info/METADATA"
+    members = {
+        "setuptools/__init__.py": b"# synthetic package; never imported\n",
+        dist
+        + "/METADATA": f"Metadata-Version: 2.1\nName: setuptools\nVersion: {version}\n\n".encode(),
+        dist + "/WHEEL": b"Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-any\n\n",
+    }
+    if entry_points is not None:
+        members[dist + "/entry_points.txt"] = entry_points
+    if vendored:
+        for number in range(12):
+            vendor = f"setuptools/_vendor/vendor{number}-1.0.dist-info"
+            members[vendor + "/METADATA"] = (
+                f"Metadata-Version: 2.1\nName: vendor{number}\nVersion: 1.0\n\n".encode()
+            )
+            members[vendor + "/WHEEL"] = b"nested WHEEL is ordinary source payload\n"
+            members[vendor + "/RECORD"] = b"nested RECORD is ordinary source payload\n"
+    if fault == "root_name":
+        members[dist + "/METADATA"] = members[dist + "/METADATA"].replace(
+            b"Name: setuptools", b"Name: foreign"
+        )
+    elif fault == "root_version":
+        members[dist + "/METADATA"] = members[dist + "/METADATA"].replace(
+            b"Version: 83.0.0", b"Version: 83.0.1"
+        )
+    elif fault == "root_duplicate_name":
+        members[dist + "/METADATA"] = b"Name: setuptools\n" + members[dist + "/METADATA"]
+    elif fault == "root_duplicate_version":
+        members[dist + "/METADATA"] = b"Version: 83.0.0\n" + members[dist + "/METADATA"]
+    elif fault == "root_missing":
+        del members[dist + "/METADATA"]
+    elif fault == "root_multiple":
+        members["foreign-1.0.dist-info/METADATA"] = b"Name: foreign\nVersion: 1.0\n\n"
+    elif fault == "root_namespace":
+        members["foreign-1.0.dist-info/unrelated.txt"] = b"second top-level namespace"
+    elif fault == "root_filename":
+        changed = "setuptools-83.0.1.dist-info"
+        members = {name.replace(dist, changed, 1): raw for name, raw in members.items()}
+        dist = changed
+    record_name = dist + "/RECORD"
+    archive_members = dict(members)
+    record = synthetic_record(members, record_name)
+    if fault in {"nested_record_hash", "nested_record_size"}:
+        lines = record.splitlines(keepends=True)
+        record = b"".join(
+            (nested + ",sha256=" + "A" * 43 + ",1\n").encode()
+            if fault == "nested_record_hash" and line.startswith((nested + ",").encode())
+            else line
+            for line in lines
+        )
+        if fault == "nested_record_size":
+            record = b"".join(
+                line.rsplit(b",", 1)[0] + b",999\n"
+                if line.startswith((nested + ",").encode())
+                else line
+                for line in record.splitlines(keepends=True)
+            )
+    elif fault == "nested_record_missing":
+        record = b"".join(
+            line
+            for line in record.splitlines(keepends=True)
+            if not line.startswith((nested + ",").encode())
+        )
+    elif fault == "nested_record_extra":
+        record += b"setuptools/_vendor/unowned.py,sha256=" + b"A" * 43 + b",1\n"
+    elif fault == "nested_record_duplicate":
+        record += next(
+            line
+            for line in record.splitlines(keepends=True)
+            if line.startswith((nested + ",").encode())
+        )
+    elif fault == "nested_archive_bytes":
+        archive_members[nested] += b"unaccepted original bytes\n"
+    raw = synthetic_wheel(archive_members | {record_name: record})
+    archive = RuntimeWheelArchivePin(
+        f"setuptools-{version}-py3-none-any.whl", sha256_bytes(raw), len(raw)
+    )
+    archive_path = archives / archive.sha256[7:] / archive.wheel_filename
+    archive_path.parent.mkdir(parents=True, mode=0o700)
+    archive_path.write_bytes(raw)
+    archive_path.chmod(0o600)
+    installed = members | {dist + "/INSTALLER": b"pip\n"}
+    url_pin = None
+    if direct_url is not None:
+        uri = archive_path.as_uri()
+        url = {
+            "percent": uri,
+            "literal": uri.replace("%2B", "+"),
+            "lower_percent": uri.replace("%2B", "%2b"),
+            "host": uri.replace("file:///", "file://localhost/"),
+            "query": uri + "?accepted=true",
+            "fragment": uri + "#archive",
+            "other_path": uri.replace("/archives/", "/other-archives/"),
+            "double_encoded": uri.replace("%2B", "%252B"),
+        }.get(direct_url, uri)
+        digest = "0" * 64 if direct_url == "wrong_hash" else archive.sha256[7:]
+        info: dict[str, Any] = {"hashes": {"sha256": digest}}
+        if legacy_archive_hash:
+            info["hash"] = "sha256=" + digest
+        if direct_url == "extra_field":
+            info["accepted"] = True
+        url_raw = json.dumps({"url": url, "archive_info": info}, separators=(",", ":")).encode()
+        installed[dist + "/direct_url.json"] = url_raw
+        url_pin = RuntimeWheelMemberPin(sha256_bytes(url_raw), len(url_raw))
+    installed_record = synthetic_record(installed, record_name)
+    if fault == "installed_record_missing":
+        installed_record = b"".join(
+            line
+            for line in installed_record.splitlines(keepends=True)
+            if not line.startswith((nested + ",").encode())
+        )
+    elif fault == "installed_record_extra":
+        installed_record += b"setuptools/_vendor/unowned.py,sha256=" + b"A" * 43 + b",1\n"
+    for name, value in (installed | {record_name: installed_record}).items():
+        target = prefix / "lib/python3.12/site-packages" / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(value)
+        target.chmod(0o600)
+    nested_path = prefix / "lib/python3.12/site-packages" / nested
+    if fault == "installed_bytes":
+        nested_path.write_bytes(b"X" + nested_path.read_bytes()[1:])
+    elif fault == "installed_missing":
+        nested_path.unlink()
+    elif fault == "installed_extra":
+        extra = nested_path.parent / "unowned.py"
+        extra.write_bytes(b"unowned installed payload")
+        extra.chmod(0o600)
+    for path in [tmp_path, *tmp_path.rglob("*")]:
+        if path.is_dir():
+            path.chmod(0o700)
+    return (
+        prefix,
+        archives,
+        RuntimeWheelInstallationPin(
+            "setuptools",
+            version,
+            archive,
+            RuntimeWheelMemberPin(sha256_bytes(installed_record), len(installed_record)),
+            False,
+            url_pin,
+            (),
+        ),
+        nested_path,
+    )
+
+
+@pytest.mark.parametrize("vendored", [False, True])
+def test_root_metadata_alone_defines_identity_and_vendored_metadata_remains_complete_payload(
+    tmp_path: Path, vendored: bool
+) -> None:
+    prefix, archives, pin, nested = _vendored_dist_info_fixture(tmp_path, vendored=vendored)
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    observed = observe_runtime_wheel_installation(
+        pin.archive, pin.name, pin.version, prefix=prefix, files=files
+    )
+    assert observed == pin
+    verified = verify_installed_runtime_wheel(
+        pin, prefix=prefix, archive_root=archives, files=files
+    )
+    assert (verified.name, verified.version) == ("setuptools", "83.0.0")
+    site = prefix / "lib/python3.12/site-packages"
+    assert verified.namespace_roots == frozenset(
+        {site / "setuptools", site / "setuptools-83.0.0.dist-info"}
+    )
+    assert (nested in verified.archive_payload_members) is vendored
+    assert (nested in verified.installed_members) is vendored
+    assert len([path for path in verified.archive_payload_members if path.name == "METADATA"]) == (
+        13 if vendored else 1
+    )
+    files.require_closed_namespaces(set(verified.namespace_roots), set(verified.installed_members))
+    files.assert_unchanged()
+
+
+@pytest.mark.parametrize(
+    "fault,code",
+    [
+        ("root_name", "DISTRIBUTION_NAME_MISMATCH"),
+        ("root_version", "DISTRIBUTION_VERSION_MISMATCH"),
+        ("root_duplicate_name", "DISTRIBUTION_NAME_MISMATCH"),
+        ("root_duplicate_version", "DISTRIBUTION_VERSION_MISMATCH"),
+        ("root_missing", "METADATA_IDENTITY_INVALID"),
+        ("root_multiple", "METADATA_IDENTITY_INVALID"),
+        ("root_namespace", "METADATA_IDENTITY_INVALID"),
+        ("root_filename", "WHEEL_FILENAME_IDENTITY_INVALID"),
+        ("nested_archive_bytes", "WHEEL_RECORD_HASH_MISMATCH"),
+        ("nested_record_hash", "WHEEL_RECORD_HASH_MISMATCH"),
+        ("nested_record_size", "WHEEL_RECORD_HASH_MISMATCH"),
+        ("nested_record_missing", "WHEEL_RECORD_SET_INVALID"),
+        ("nested_record_extra", "WHEEL_RECORD_SET_INVALID"),
+        ("nested_record_duplicate", "RECORD_ROW_INVALID"),
+        ("installed_bytes", "FILE_HASH_MISMATCH"),
+        ("installed_missing", "FILE_UNAVAILABLE"),
+        ("installed_record_missing", "INSTALLED_RECORD_SET_MISMATCH"),
+        ("installed_record_extra", "INSTALLED_RECORD_SET_MISMATCH"),
+    ],
+)
+def test_vendored_payload_does_not_weaken_root_identity_record_or_installed_checks(
+    tmp_path: Path, fault: str, code: str
+) -> None:
+    prefix, archives, pin, _nested = _vendored_dist_info_fixture(tmp_path, fault=fault)
+    with pytest.raises(InstalledRuntimeProofError, match=code):
+        verify_installed_runtime_wheel(
+            pin,
+            prefix=prefix,
+            archive_root=archives,
+            files=NumericalRuntimeFileSnapshots(os.geteuid()),
+        )
+
+
+def test_vendored_namespace_still_rejects_unregistered_installed_payload(tmp_path: Path) -> None:
+    prefix, archives, pin, _nested = _vendored_dist_info_fixture(tmp_path, fault="installed_extra")
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    verified = verify_installed_runtime_wheel(
+        pin, prefix=prefix, archive_root=archives, files=files
+    )
+    with pytest.raises(InstalledRuntimeProofError, match="NAMESPACE_SET_MISMATCH"):
+        files.require_closed_namespaces(
+            set(verified.namespace_roots), set(verified.installed_members)
+        )
+
+
+@pytest.mark.parametrize("fault", ["rewrite", "replace", "symlink", "hardlink"])
+def test_vendored_metadata_is_bound_to_actual_protected_file_epochs(
+    tmp_path: Path, fault: str
+) -> None:
+    prefix, archives, pin, nested = _vendored_dist_info_fixture(tmp_path)
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    verify_installed_runtime_wheel(pin, prefix=prefix, archive_root=archives, files=files)
+    raw = nested.read_bytes()
+    if fault == "rewrite":
+        _rewrite_with_distinct_mtime(nested)
+    elif fault == "replace":
+        replacement = nested.with_name("replacement")
+        replacement.write_bytes(raw)
+        replacement.chmod(0o600)
+        replacement.replace(nested)
+    else:
+        original = nested.with_name("original")
+        nested.rename(original)
+        if fault == "symlink":
+            nested.symlink_to(original)
+        else:
+            os.link(original, nested)
+    with pytest.raises(InstalledRuntimeProofError, match="CHANGED"):
+        files.assert_unchanged()
+
+
+def _fixture_zip_attributes(
+    archives: Path, pin: RuntimeWheelInstallationPin, mode: int, *, directory: bool = False
+) -> RuntimeWheelInstallationPin:
+    original = archives / pin.archive.sha256[7:] / pin.archive.wheel_filename
+    output = io.BytesIO()
+    with zipfile.ZipFile(original) as source, zipfile.ZipFile(output, "w") as target:
+        for info in source.infolist():
+            raw = source.read(info)
+            if info.filename == "setuptools/__init__.py" and not directory:
+                info.create_system = 3
+                info.external_attr = mode << 16
+            target.writestr(info, raw)
+        if directory:
+            entry = zipfile.ZipInfo("setuptools/")
+            entry.create_system = 3
+            entry.external_attr = mode << 16
+            target.writestr(entry, b"")
+    raw = output.getvalue()
+    archive = replace(pin.archive, sha256=sha256_bytes(raw), size_bytes=len(raw))
+    path = archives / archive.sha256[7:] / archive.wheel_filename
+    path.parent.mkdir(mode=0o700, exist_ok=True)
+    path.write_bytes(raw)
+    path.chmod(0o600)
+    return replace(pin, archive=archive)
+
+
+@pytest.mark.parametrize("mode", [0o644, 0o755, stat.S_IFREG | 0o644])
+def test_archive_regular_file_accepts_only_bare_permissions_or_explicit_regular_type(
+    tmp_path: Path, mode: int
+) -> None:
+    prefix, archives, pin, _nested = _vendored_dist_info_fixture(tmp_path)
+    pin = _fixture_zip_attributes(archives, pin, mode)
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    verify_installed_runtime_wheel(pin, prefix=prefix, archive_root=archives, files=files)
+    files.assert_unchanged()
+
+
+@pytest.mark.parametrize(
+    "kind", [stat.S_IFLNK, stat.S_IFDIR, stat.S_IFSOCK, stat.S_IFIFO, stat.S_IFCHR, stat.S_IFBLK]
+)
+def test_archive_explicit_special_types_remain_forbidden(tmp_path: Path, kind: int) -> None:
+    prefix, archives, pin, _nested = _vendored_dist_info_fixture(tmp_path)
+    pin = _fixture_zip_attributes(archives, pin, kind | 0o644)
+    with pytest.raises(InstalledRuntimeProofError, match="ZIP_MEMBER_INVALID"):
+        verify_installed_runtime_wheel(
+            pin,
+            prefix=prefix,
+            archive_root=archives,
+            files=NumericalRuntimeFileSnapshots(os.geteuid()),
+        )
+
+
+@pytest.mark.parametrize("mode", [0o755, stat.S_IFREG | 0o755, stat.S_IFLNK | 0o755])
+def test_zip_directory_still_requires_explicit_directory_type(tmp_path: Path, mode: int) -> None:
+    prefix, archives, pin, _nested = _vendored_dist_info_fixture(tmp_path)
+    pin = _fixture_zip_attributes(archives, pin, mode, directory=True)
+    with pytest.raises(InstalledRuntimeProofError, match="ZIP_DIRECTORY_MEMBER_INVALID"):
+        verify_installed_runtime_wheel(
+            pin,
+            prefix=prefix,
+            archive_root=archives,
+            files=NumericalRuntimeFileSnapshots(os.geteuid()),
+        )
+
+
+@pytest.mark.parametrize("spelling", ["percent", "literal"])
+@pytest.mark.parametrize("legacy_archive_hash", [False, True])
+def test_direct_url_accepts_only_two_canonical_plus_spellings_and_existing_hash_shapes(
+    tmp_path: Path, spelling: str, legacy_archive_hash: bool
+) -> None:
+    prefix, archives, pin, _nested = _vendored_dist_info_fixture(
+        tmp_path,
+        version="83.0.0+fixture",
+        direct_url=spelling,
+        legacy_archive_hash=legacy_archive_hash,
+    )
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    observed = observe_runtime_wheel_installation(
+        pin.archive, pin.name, pin.version, prefix=prefix, files=files
+    )
+    assert observed == pin
+    verify_installed_runtime_wheel(pin, prefix=prefix, archive_root=archives, files=files)
+    files.assert_unchanged()
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "lower_percent",
+        "host",
+        "query",
+        "fragment",
+        "other_path",
+        "double_encoded",
+        "wrong_hash",
+        "extra_field",
+    ],
+)
+def test_direct_url_plus_compatibility_never_normalizes_location_or_hash(
+    tmp_path: Path, fault: str
+) -> None:
+    prefix, archives, pin, _nested = _vendored_dist_info_fixture(
+        tmp_path, version="83.0.0+fixture", direct_url=fault
+    )
+    with pytest.raises(InstalledRuntimeProofError, match="DIRECT_URL_INVALID"):
+        verify_installed_runtime_wheel(
+            pin,
+            prefix=prefix,
+            archive_root=archives,
+            files=NumericalRuntimeFileSnapshots(os.geteuid()),
+        )
+
+
+def _relocated_payload_fixture(
+    tmp_path: Path, package: str, *, fault: str | None = None, directories: bool = False
+) -> tuple[Path, Path, RuntimeWheelInstallationPin, Path]:
+    prefix, archives = tmp_path / "prefix", tmp_path / "archives"
+    version, role, remainder, size = (
+        ("3.5.5", "headers", "greenlet.h", 4755)
+        if package == "greenlet"
+        else ("1.14.0", "data", "share/man/man1/isympy.1", 6659)
+    )
+    dist = f"{package}-{version}.dist-info"
+    relocation = f"{package}-{version}.data/{role}/{remainder}"
+    payload = b"synthetic relocated source\n" + b"x" * (size - 27)
+    assert len(payload) == size
+    target = (
+        prefix / "include/python3.12/greenlet/greenlet.h"
+        if package == "greenlet"
+        else prefix / "share/man/man1/isympy.1"
+    )
+    members = {
+        package + "/__init__.py": b"# synthetic source; never imported\n",
+        dist + "/METADATA": f"Name: {package}\nVersion: {version}\n\n".encode(),
+        dist + "/WHEEL": b"Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-any\n\n",
+        relocation: payload,
+    }
+    archive_members = dict(members)
+    if fault in {"role", "foreign_root", "version", "nested_data", "traversal", "empty"}:
+        changed = {
+            "role": relocation.replace(f".data/{role}/", ".data/scripts/"),
+            "foreign_root": relocation.replace(package + "-", "foreign-", 1),
+            "version": relocation.replace(version + ".data", "0.1.data", 1),
+            "nested_data": relocation.replace(f".data/{role}/", f".data/{role}/nested.data/"),
+            "traversal": relocation.replace(f".data/{role}/", f".data/{role}/../"),
+            "empty": relocation.split("/", 2)[0] + "/" + role,
+        }[fault]
+        archive_members[changed] = archive_members.pop(relocation)
+    elif fault == "ordinary_collision":
+        archive_members[
+            f"{package}-{version}.data/data/lib/python3.12/site-packages/{package}/__init__.py"
+        ] = b"collision"
+    elif fault == "relocated_collision":
+        archive_members[f"{package}-{version}.data/data/include/python3.12/greenlet/greenlet.h"] = (
+            payload
+        )
+    elif fault == "file_parent_collision":
+        archive_members[f"{package}-{version}.data/data/share"] = b"not a directory"
+    elif fault == "mapped_parent_collision":
+        archive_members[f"{package}-{version}.data/data/lib/python3.12/site-packages/{package}"] = (
+            b"not a directory"
+        )
+    elif fault == "generated_collision":
+        archive_members[
+            f"{package}-{version}.data/data/lib/python3.12/site-packages/{dist}/INSTALLER"
+        ] = b"pip\n"
+    record_name = dist + "/RECORD"
+    record = synthetic_record(archive_members, record_name)
+    if fault == "archive_hash":
+        archive_members[relocation] = b"X" + archive_members[relocation][1:]
+    elif fault == "record_missing":
+        record = b"".join(
+            row
+            for row in record.splitlines(keepends=True)
+            if not row.startswith((relocation + ",").encode())
+        )
+    raw = synthetic_wheel(archive_members | {record_name: record})
+    if directories:
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(raw)) as source, zipfile.ZipFile(buffer, "w") as archive:
+            for entry in source.infolist():
+                archive.writestr(entry, source.read(entry))
+            parts = relocation.split("/")[:-1]
+            for count in range(1, len(parts) + 1):
+                entry = zipfile.ZipInfo("/".join(parts[:count]) + "/")
+                entry.external_attr = (stat.S_IFDIR | 0o755) << 16
+                archive.writestr(entry, b"")
+        raw = buffer.getvalue()
+    archive_pin = RuntimeWheelArchivePin(
+        f"{package}-{version}-py3-none-any.whl", sha256_bytes(raw), len(raw)
+    )
+    archive_path = archives / archive_pin.sha256[7:] / archive_pin.wheel_filename
+    archive_path.parent.mkdir(parents=True, mode=0o700)
+    archive_path.write_bytes(raw)
+    archive_path.chmod(0o600)
+    site = prefix / "lib/python3.12/site-packages"
+    relative = "../../../" + target.relative_to(prefix).as_posix()
+    if fault == "wrong_header_scheme":
+        relative = "../../../include/site/python3.12/greenlet/greenlet.h"
+    installed = {name: value for name, value in members.items() if name != relocation}
+    installed[relative] = payload
+    installed[dist + "/INSTALLER"] = b"pip\n"
+    if fault == "generated_collision":
+        # Actual protected bytes agree; archive ownership must still not collide with pip additions.
+        installed[dist + "/INSTALLER"] = b"pip\n"
+    installed_record = synthetic_record(installed, record_name)
+    if fault == "installed_record_extra":
+        installed_record += b"../../../share/unowned.txt,sha256=" + b"A" * 43 + b",1\n"
+    for name, value in (installed | {record_name: installed_record}).items():
+        path = prefix / name[9:] if name.startswith("../../../") else site / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(value)
+        path.chmod(0o600)
+    if fault == "installed_missing":
+        target.unlink()
+    elif fault == "installed_hash":
+        target.write_bytes(b"X" + target.read_bytes()[1:])
+    for path in [tmp_path, *tmp_path.rglob("*")]:
+        if path.is_dir():
+            path.chmod(0o700)
+    return (
+        prefix,
+        archives,
+        RuntimeWheelInstallationPin(
+            package,
+            version,
+            archive_pin,
+            RuntimeWheelMemberPin(sha256_bytes(installed_record), len(installed_record)),
+            False,
+            None,
+            (),
+        ),
+        target,
+    )
+
+
+@pytest.mark.parametrize("package", ["greenlet", "sympy"])
+@pytest.mark.parametrize("directories", [False, True])
+def test_exact_headers_and_man_data_relocations_are_complete_verified_inventory(
+    tmp_path: Path, package: str, directories: bool
+) -> None:
+    prefix, archives, pin, target = _relocated_payload_fixture(
+        tmp_path, package, directories=directories
+    )
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    observed = observe_runtime_wheel_installation(
+        pin.archive, pin.name, pin.version, prefix=prefix, files=files
+    )
+    assert observed == pin
+    verified = verify_installed_runtime_wheel(
+        pin, prefix=prefix, archive_root=archives, files=files
+    )
+    assert target in verified.all_installed_members & verified.archive_payload_members
+    assert target not in verified.installed_members
+    assert all(
+        path.is_relative_to(prefix / "lib/python3.12/site-packages")
+        for path in verified.namespace_roots
+    )
+    files.require_closed_namespaces(set(verified.namespace_roots), set(verified.installed_members))
+    files.assert_unchanged()
+
+
+@pytest.mark.parametrize(
+    "package,fault,code",
+    [
+        ("greenlet", "role", "WHEEL_DATA_LAYOUT_UNSUPPORTED"),
+        ("greenlet", "foreign_root", "WHEEL_DATA_LAYOUT_UNSUPPORTED"),
+        ("greenlet", "version", "WHEEL_DATA_LAYOUT_UNSUPPORTED"),
+        ("greenlet", "nested_data", "WHEEL_DATA_LAYOUT_UNSUPPORTED"),
+        ("greenlet", "traversal", "MEMBER_PATH_INVALID"),
+        ("greenlet", "empty", "WHEEL_DATA_LAYOUT_UNSUPPORTED"),
+        ("greenlet", "ordinary_collision", "WHEEL_MAPPED_TARGET_COLLISION"),
+        ("greenlet", "relocated_collision", "WHEEL_MAPPED_TARGET_COLLISION"),
+        ("sympy", "file_parent_collision", "ZIP_FILE_DIRECTORY_COLLISION"),
+        ("greenlet", "mapped_parent_collision", "WHEEL_MAPPED_TARGET_COLLISION"),
+        ("greenlet", "generated_collision", "WHEEL_GENERATED_TARGET_COLLISION"),
+        ("greenlet", "wrong_header_scheme", "FILE_UNAVAILABLE"),
+        ("sympy", "archive_hash", "WHEEL_RECORD_HASH_MISMATCH"),
+        ("sympy", "record_missing", "WHEEL_RECORD_SET_INVALID"),
+        ("greenlet", "installed_missing", "FILE_UNAVAILABLE"),
+        ("sympy", "installed_hash", "FILE_HASH_MISMATCH"),
+        ("sympy", "installed_record_extra", "INSTALLED_RECORD_SET_MISMATCH"),
+    ],
+)
+def test_data_relocation_keeps_closed_scheme_source_record_target_and_protection(
+    tmp_path: Path, package: str, fault: str, code: str
+) -> None:
+    prefix, archives, pin, _target = _relocated_payload_fixture(tmp_path, package, fault=fault)
+    with pytest.raises(InstalledRuntimeProofError, match=code):
+        verify_installed_runtime_wheel(
+            pin,
+            prefix=prefix,
+            archive_root=archives,
+            files=NumericalRuntimeFileSnapshots(os.geteuid()),
+        )
+
+
+@pytest.mark.parametrize("package", ["greenlet", "sympy"])
+def test_relocated_payload_stays_bound_to_protected_epochs(tmp_path: Path, package: str) -> None:
+    prefix, archives, pin, target = _relocated_payload_fixture(tmp_path, package)
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    verify_installed_runtime_wheel(pin, prefix=prefix, archive_root=archives, files=files)
+    _rewrite_with_distinct_mtime(target)
+    with pytest.raises(InstalledRuntimeProofError, match="CHANGED"):
+        files.assert_unchanged()
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b"[console_scripts]\n",
+        b"[console_scripts]\n[gui_scripts]\n",
+        b"[console_scripts]\n\n[gui_scripts]\n# no executable GUI entry\n; empty metadata\n",
+        b"  [console_scripts]  \n\n  [gui_scripts]  \n \t\n",
+    ],
+)
+def test_absent_and_effectively_empty_gui_section_keeps_full_archive_and_installed_association(
+    tmp_path: Path, raw: bytes
+) -> None:
+    prefix, archives, pin, _nested = _vendored_dist_info_fixture(tmp_path, entry_points=raw)
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    observed = observe_runtime_wheel_installation(
+        pin.archive, pin.name, pin.version, prefix=prefix, files=files
+    )
+    assert observed == pin
+    verified = verify_installed_runtime_wheel(
+        pin, prefix=prefix, archive_root=archives, files=files
+    )
+    member = prefix / "lib/python3.12/site-packages/setuptools-83.0.0.dist-info/entry_points.txt"
+    assert member in verified.archive_payload_members & verified.installed_members
+    assert observed.console_scripts == ()
+    files.require_closed_namespaces(set(verified.namespace_roots), set(verified.installed_members))
+    files.assert_unchanged()
+
+
+@pytest.mark.parametrize(
+    "raw,code",
+    [
+        (b"[gui_scripts]\nrun=example.gui:main\n", "GUI_SCRIPTS_FORBIDDEN"),
+        (b"[gui_scripts]\nrun=\n", "GUI_SCRIPTS_FORBIDDEN"),
+        (b"[DEFAULT]\nrun=example.gui:main\n[gui_scripts]\n", "GUI_SCRIPTS_FORBIDDEN"),
+        (b"[DEFAULT]\nrun=\n[gui_scripts]\n", "GUI_SCRIPTS_FORBIDDEN"),
+        (b"[gui_scripts]\n[gui_scripts]\n", "DISTRIBUTION_INVALID"),
+        (b"[gui_scripts]\nrun=example.gui:main\nrun=other.gui:main\n", "DISTRIBUTION_INVALID"),
+        (b"[gui_scripts]\nrun\n", "DISTRIBUTION_INVALID"),
+        (b"unsectioned invalid metadata\n", "DISTRIBUTION_INVALID"),
+        (b"[console_scripts]\nrun=not a callable\n[gui_scripts]\n", "ENTRY_POINT_INVALID"),
+    ],
+)
+def test_empty_gui_compatibility_never_admits_effective_entries_or_malformed_metadata(
+    tmp_path: Path, raw: bytes, code: str
+) -> None:
+    prefix, archives, pin, _nested = _vendored_dist_info_fixture(tmp_path, entry_points=raw)
+    with pytest.raises(InstalledRuntimeProofError, match=code):
+        verify_installed_runtime_wheel(
+            pin,
+            prefix=prefix,
+            archive_root=archives,
+            files=NumericalRuntimeFileSnapshots(os.geteuid()),
+        )
