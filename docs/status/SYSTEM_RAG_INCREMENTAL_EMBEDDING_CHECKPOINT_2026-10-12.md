@@ -1437,3 +1437,38 @@ Conda raw `0fc91a10c42aa9802203a7625ec96a9b36e55d9efd77b4a4b0fc5de861d4412b`, te
 `6e76a18ae29c6bfd8f842d63afb6947cc25b0b2ccbbf0f8d20ea606faec825df`다. 수치 sourcef667과
 Artifact leaf021은 그대로다. 새 committed build/bootstrap/actual 전체-prefix 검사가 필요하다.
 모델/GPU0, benchmark NOT_EVALUATED, GPU default NOT_ACTIVE, goal ACTIVE를 유지한다.
+
+## 실제408 후보·검증된 overlay script 소유 범위 진단·복구 — 2026-10-13 07:36 UTC
+
+source `40816b8cc4fdbf70d936f60c0e72015462b1e1e2`로 fresh build했다. tar55255040B raw
+`c3354187a411292436ccf85ed03485d1de8f5dd1de38296036966c8176811ca3`, wheel3501661B raw
+`98d6b3d8081a6c169f6469bb28de2859151e3e7ca075441783de9468aa3462df`다. RECORD1462,
+canonical retention/read-back/replay/fsync, normal pip canonical URI 조립 PASS다. 파일뿐 아니라
+directory까지 기존 정상 mode normalization을 수행했고 prefix UID1000/0700를 확인했다.
+Conda bootstrap0fc, helper58, CPU input7fb56245/CUDA50837ebc를 정확히 pin했다. 최종 fingerprint는
+CPU9307c5ce/CUDA7b1fcca5다. 기존 운영/runtime/model payload는 변경하지 않았다.
+
+이번 OLD actual 전체 검사에서는 URI 및 mixed pip path metadata를 모두 통과하고
+CONDA_OVERLAY_SURVIVOR로 멈췄다. PRIVATE `/opt/eom/.embedding-index-install-vJht4UTh`, phase
+BEFORE_OLD_PREFIX_BYTES_AUDIT·빈 receipt·original failure를 보존했다. 원 protected main의
+readonly diagnostic raw `f265ed835a5630e1bfef5baf505968e113a2b2b8ca93244d61e6083c873650f3`은
+원 exit1을 유지하며 `_audit_installed_conda31`1315의 package/member만 제한 관측했다:
+wheel의 `bin/wheel`이다. 전체 locals/모델·문항 내용이나 worker 결과는 출력하지 않았다.
+
+Root의 독립 public observe/verify_installed_runtime_wheel에서 exact wheel0.47 source SHA212와
+actual archive/member/installed RECORD/frame/epochs PASS다. 실제 `bin/wheel`은
+`all_installed_members`에 있고 site-only `installed_members`에는 없다. 정상 검증된 script를
+Conda가 site namespace 집합만 사용해 survivor로 오인한 현재 owner의 범위 혼동이다.
+임의 bin allowlist, generated metadata 생략, 정상 파일 삭제로 해결하지 않는다. full ownership과
+site namespace를 구분하고 기존 authoritative verified result를 재사용할 좁은 수정이 필요하다.
+이 public wheel PASS는 whole-prefix/native admission으로 확대하지 않는다.
+
+기존 lock/pub8f/input7fb/빈 receipt/fingerprint/current prefix users 부재 및 held/named
+directory checks를 유지한 scoped recovery raw
+`3488e27a33779b3cf24fdd180cbc0415d1cf46ba60a29af3cdb340f13fe97073` PASS다. failed root bytes는
+`/opt/eom/conda/envs/.embedding-index-failed-CPU_INDEX_FP32-vJht4UTh`에 보존하고 원 developer
+inode를 UID1000/0700로 복구했다. backup MOVED_NOT_DELETED이며 기존 모든 실패를 보존한다.
+evidence는 `/tmp/eom-embedding-successor-release.ZE7J0ORx`와
+`/tmp/eom-conda-overlay-trace.jQSR6TrU`에 있다. OLD에서 중단했으므로 NEW/model/GPU0,
+benchmark NOT_EVALUATED, GPU default NOT_ACTIVE다. native unit/proof·CPU/CUDA 비교·조건부
+기본 활성화와 실제 incremental/index/consumer 경로는 계속 필요한 goal 후속이며 ACTIVE다.
