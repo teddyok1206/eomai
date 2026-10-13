@@ -42,6 +42,21 @@ from the explicit wheel inventory are also required, not waived or deleted.
 The rejected build installed nothing and changed no service, DB or frozen CPU
 runtime. Its local build candidate remains distinct from a passed release.
 
+## Separate removable owner installation
+
+`scripts/embedding/install_owner_release.sh` installs only an independently built,
+reviewed platform wheel into an immutable source-commit directory under the
+existing owner-release root. A private copy's expected raw hash and standard wheel
+RECORD are checked before offline, dependency-free installation. A no-clobber
+directory reservation prevents replacing an earlier release; a partial stage or
+release is preserved on failure instead of being deleted or treated as installed.
+No numerical prefix, CPU config/receipt, unit/environment, DB, API or live service
+is changed. Installed-owner imports and the fixed CPU readiness callback are a
+subsequent actual-UID read-only check, not source/session authorization or a model
+execution. Activation is a separate composition step with actual Identity capture
+and current Catalog controls. The owner overlay stays removable; core services do
+not automatically import it.
+
 ## Two closure corrections required by actual bounded production
 
 An operation's source-plan subset is not the entire authorized corpus. Catalog
