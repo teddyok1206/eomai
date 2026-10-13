@@ -1,4 +1,4 @@
-"""Fixed QUERY definition values; compiler, admission and native launch are unconnected."""
+"""Fixed QUERY definition values; current admission and native launch are separate boundaries."""
 
 from __future__ import annotations
 

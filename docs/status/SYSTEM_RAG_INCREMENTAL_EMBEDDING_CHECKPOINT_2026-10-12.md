@@ -2319,3 +2319,36 @@ QUERY source/정본 파일 read는 SOURCE_PASS다. QUERY queue/current claim·fi
 consumer read, 자동 service reconciliation, 소비자 연결 및 CPU/GPU/default gate는 계속
 미완료이며, source 테스트로 이를 대체하지 않는다. 운영9개 서비스는 active다.
 `GOAL=ACTIVE`, `REAL_SEED_DELTA=PENDING`, `QUERY_RUNTIME=NOT_ACTIVE`.
+
+## 2026-10-13 23:23 UTC — QUERY queue/현재-owner/완료 경계 source 연결
+
+[QUERY owner 기록](../architecture/REFERENCE_QUERY_OWNER_COMPOSITION.md)의 후속 설계와
+구현에 따라 기존 command 큐를 그대로 사용하면서 ROLE/INDEX/QUERY의 준비·claim 종류를
+분리했다. 준비되지 않은 QUERY는 다른 작업을 막지 않으며, 불완전/상충하는 native marker는
+ROLE이나 INDEX로 유입되지 않는다. 실제 SQLite SQL로 이 구분을 확인했다.
+
+QUERY별 operator-bound/idempotent 제출, 정확한 candidate·Workflow→command lock 순서,
+현재 Identity/source/index 재확인과 늦은 lease 검사, SQL 밖 실행, pointer-only 완료·terminal
+재전송을 연결했다. INDEX와 공유하는 것은 기계적 command/root/terminal 검사뿐이며 실제
+source·물리적 목적·정본 영수증 검증은 목적별 owner에 남겼다. 과거 미완료 실행은 새 command
+identity나 만료를 이유로 재시작하지 않는다. 실제 numerical executor 기본 구현은 없다.
+
+source head는 정확한 QUERY step/result CHECK만 추가하는0054이며, protected release
+context/admission1.3은0053→0054만 허용한다.0053과 과거 schema/callback/0051 wrapper는
+보존했다. 현재 운영 API/DB는0053 그대로이며 이번 단계에서 migration/배포하지 않았다.
+QUERY 전역 admission도 미허용 상태를 유지한다. 포트 주입이나 source PASS는 활성화가 아니다.
+
+최종38-suite **1,004 PASS**,105.47s; strict mypy16·Ruff/format31·bash4·diff PASS다.
+source Alembic single head0054와 임시 SQLite 실제 SQL/144-case CHECK를 확인했다.
+996/50/1개 중간 결과는 겹치므로 합산하지 않는다. 새 PostgreSQL13개 검증은 공식
+`embedding-stage-tests`에 추가하고 collection만 확인했다. 해당 shell의 sudo가 유효하지
+않고 기존 유한 canary가 사용자 입력 대기 중이므로 실제 임시 DB/production IAM/모델/검색
+성공으로 보고하지 않는다. 새 로그인 창·token 저장·정책/서비스/CPU 변경은 없다.
+
+23:23 UTC 실제 관련9개 서비스는 active다. 기록은 임시 검증 workspace의
+`query-queue-final-regression.log`, `query-queue-mypy-final-reviewed.log`,
+`query-step-pg-collection.log`에 남겼으며 Git/Slack에는 원문 log나 자료를 싣지 않았다.
+다음은 설치된 QUERY-purpose 실행·원래 Job/checkpoint/정본 완료 read와 소비자 연결이다.
+인증 후 실제 seed/delta/reuse, 자동 service reconciliation, CPU/GPU/default gate도 원래
+범위대로 남긴다. `GOAL=ACTIVE`, `QUERY_QUEUE_LIFECYCLE=SOURCE_PASS`,
+`QUERY_PURPOSE_UNIT=NOT_ACTIVE`, `REAL_SEED_DELTA=PENDING`.

@@ -593,6 +593,8 @@ def test_native_ready_does_not_depend_on_global_codex_readiness(
     runner = object.__new__(WorkflowRunner)
     runner.local_embedding_owner = cast(LocalEmbeddingOwnerAdmission, source.owner)
     runner.local_embedding_executor = cast(LocalEmbeddingNativeExecutor, source.executor)
+    runner.reference_query_owner = None
+    runner.reference_query_executor = None
     source.executor.evaluate.return_value = RuntimeReadinessReport(())
     runner.readiness = Mock()
     runner.readiness.evaluate.side_effect = AssertionError(
@@ -686,9 +688,7 @@ def test_native_root_mutation_locks_workflow_before_command_and_fences_late_expi
     fixture.session.scalar.side_effect = scalar
     fixture.session.execute.side_effect = execute
     fixture.owner.fence_mutation.side_effect = lambda *_args: order.append("current-owner")
-    monkeypatch.setattr(
-        "eom_workflow_runner.local_embedding_step_execution.transaction", transaction
-    )
+    monkeypatch.setattr("eom_workflow_runner.native_workflow_transaction.transaction", transaction)
     with (
         pytest.raises(WorkflowError, match="ownership was lost"),
         native_fenced_runner_transaction(
@@ -794,9 +794,7 @@ def test_native_terminal_command_commit_retains_late_live_identity(
     fixture.session.scalar.side_effect = scalar
     fixture.session.execute.return_value.scalar_one_or_none.return_value = command
     fixture.owner.fence_mutation.side_effect = fence
-    monkeypatch.setattr(
-        "eom_workflow_runner.local_embedding_step_execution.transaction", transaction
-    )
+    monkeypatch.setattr("eom_workflow_runner.native_workflow_transaction.transaction", transaction)
 
     def finish() -> None:
         with native_fenced_runner_transaction(
@@ -833,6 +831,8 @@ def test_busy_native_exact_claim_uses_new_root_for_ready_legacy(
     runner.runner_config = cast(Any, SimpleNamespace(command_lease_seconds=60))
     runner.local_embedding_owner = cast(LocalEmbeddingOwnerAdmission, source.owner)
     runner.local_embedding_executor = cast(LocalEmbeddingNativeExecutor, source.executor)
+    runner.reference_query_owner = None
+    runner.reference_query_executor = None
     session = Mock(spec=Session)
     session.get.return_value = command
     session.execute.return_value.scalar_one_or_none.return_value = command

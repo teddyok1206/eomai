@@ -177,9 +177,12 @@ class WorkflowStepRunRecord(Base):
         ),
         CheckConstraint(
             "(step_type = 'application') = "
-            "(result_schema IS NOT DISTINCT FROM 'incremental-embedding-result@1.0') "
-            "AND (step_type <> 'application' OR "
-            "(worker_role IS NULL AND step_key = 'encode_batch'))",
+            "(result_schema IS NOT DISTINCT FROM 'incremental-embedding-result@1.0' OR "
+            "result_schema IS NOT DISTINCT FROM 'embedding-reference-query-result@1.0') "
+            "AND (step_type <> 'application' OR (worker_role IS NULL AND ("
+            "(result_schema = 'incremental-embedding-result@1.0' AND step_key = 'encode_batch') OR "
+            "(result_schema = 'embedding-reference-query-result@1.0' "
+            "AND step_key = 'encode_reference_query' AND attempt = 1))))",
             name="ck_workflow_step_runs_local_embedding",
         ),
     )

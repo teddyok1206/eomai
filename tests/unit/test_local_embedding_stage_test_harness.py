@@ -16,6 +16,7 @@ def test_native_stage_branch_stays_after_exact_disposable_owner_preflight() -> N
     assert source.index("validate_state_directory(") < branch
     leaf = source[branch : source.index('if [[ "${action}" == "embedding-encoding-tests" ]]')]
     assert "tests/integration/test_local_embedding_stage_migration.py" in leaf
+    assert "tests/integration/test_reference_query_step_migration.py" in leaf
     assert "tests/integration/test_local_embedding_runner.py" in leaf
     assert 'EOM_CHAT_KNOWLEDGE_TEST_STATE="${state_directory}"' in leaf
     assert "EOM_RUN_API_INTEGRATION=1" in leaf

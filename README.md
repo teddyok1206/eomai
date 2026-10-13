@@ -169,7 +169,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | 계약·registry·Artifact·수치 검증·atomic submission·exact claim/native dispatch | SOURCE_PASS; 실제 owner/session·executor 운영 연결은 미활성 |
 | exact pinned index read | SOURCE_PASS; 현재 권한 재확인·일괄 binding 조회·선택된 벡터 읽기 구현, 공통 검색/QUERY 소비는 미활성 |
 | 공통 유사도 context 조립 | SOURCE_PASS; 기출변형용 승인 anchor·3개 독립 view·현재 권한 재확인334 PASS, 실제 QUERY 실행·소비자 연결은 미활성 |
-| genuine QUERY 입력·encoder/handoff·실행 계약 | SOURCE_PASS; 현재 사용자/source 준비·입력1.1 공통context·정본4파일 검증 연결, 실제 queue/unit/검증된 소비자 조회는 미활성 |
+| genuine QUERY 입력·encoder/handoff·실행 계약 | SOURCE_PASS; 현재 자료·정본4파일과 기존 큐의 QUERY별 claim/완료 검증 연결. 실제 고정 unit·정본 실행·소비자 조회는 미활성 |
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
 | 인증된 owner/session 전달 | 수신 API 설치·실제 UID990의 provider/process/config/key-metadata 검증 PASS; 실제 사용자 capture·seed는 별도 실행 gate |
 | 현재 사용자·자료의 native 작업 접수 연결 | SOURCE_IMPLEMENTED; 실제 인증 capture→기존 Catalog 검증·계획 재구성·잠금 확인을 연결, 운영 provider/실행기 연결은 미활성 |
@@ -270,8 +270,14 @@ seed/delta/query·자동 service indexing의 완료 증거는 아닙니다. 실�
 그대로 두고 실제 배치4 설정의 입력1.1을 공통 context 조립기에 명시적으로 연결하며,
 같은 transaction 안에서 자료·보고서·인덱스와 현재 권한을 확인합니다. 정본4파일과 실제
 게시 Job을 읽는 경로도 추가했지만, 이것만으로 실제 QUERY 실행이 승인됐다고 판단하지
-않습니다. 관련24-suite657 PASS·strict type/lint/format PASS이며, QUERY queue/unit·genuine
-실행 확인·기출변형 등 소비자 활성화는 후속 작업입니다.
+않습니다. 이 source 연결의24-suite657 PASS 이후, 기존 큐에 QUERY 전용 준비·claim·완료/
+재전송 경계를 추가했습니다. 같은 큐에서 준비되지 않은 QUERY가 INDEX나 출제를 막지
+않도록 실행 종류를 분리하고 공통 root/lease/terminal 검사는 공유합니다. 실제 고정 unit·
+genuine 실행·기출변형 등 소비자 활성화는 아직 후속 작업입니다. source migration은
+QUERY의 정확한 step/result CHECK만 추가하는0054이며, 운영 DB는0053 그대로입니다.
+새 protected release context1.3은0053→0054만 허용하고 기존 계약/명령의 의미는 보존합니다.
+이 후속38-suite1,004 PASS·strict type16·lint/format31 PASS입니다. 새 PostgreSQL13개
+사례는 공식 임시 DB 실행 경로에 추가했지만 아직 미실행이며 운영 활성화 증거가 아닙니다.
 [QUERY owner 연결 범위](docs/architecture/REFERENCE_QUERY_OWNER_COMPOSITION.md)에 source
 검증과 아직 없는 운영 경계를 구분했습니다. 기존 서비스·CPU 모델 환경은 바꾸지 않았습니다.
 

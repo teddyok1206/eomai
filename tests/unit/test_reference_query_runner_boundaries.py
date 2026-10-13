@@ -230,6 +230,7 @@ def test_query_markers_are_quarantined_by_the_same_total_routing_predicate(opera
     assert set(CommandExecutionFamily) == {
         CommandExecutionFamily.ROLE,
         CommandExecutionFamily.LOCAL_EMBEDDING,
+        CommandExecutionFamily.REFERENCE_QUERY,
     }
 
 

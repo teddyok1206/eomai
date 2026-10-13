@@ -74,7 +74,7 @@ class Case:
     output: ReferenceQueryStepOutput
 
 
-def case() -> Case:
+def case(*, definition_sha256: str | None = None) -> Case:
     profile, bundle = runtime_profile("CPU"), _bundle("CPU")
     query = EmbeddingSpace.model_validate(
         seal(profile.space.model_dump(mode="json") | {"purpose": "QUERY"}, "space_sha256")
@@ -94,7 +94,7 @@ def case() -> Case:
                 "schema_version": "reference-query-execution-policy/1.0",
                 "purpose": "REFERENCE_QUERY",
                 "continuation_mode": "OPERATOR_REQUEST_ONLY",
-                "workflow_definition_sha256": sha("d"),
+                "workflow_definition_sha256": definition_sha256 or sha("d"),
                 "spaces": spaces,
                 "runtime_bundle": profile.runtime_bundle.model_dump(mode="json"),
                 "resource_profile": profile.resource_profile.model_dump(mode="json"),
@@ -112,7 +112,7 @@ def case() -> Case:
                 "purpose": "REFERENCE_QUERY",
                 "workflow_definition_key": "local-embedding-reference-query",
                 "workflow_definition_version": "1.0.0",
-                "workflow_definition_sha256": sha("d"),
+                "workflow_definition_sha256": definition_sha256 or sha("d"),
                 "operator_audit": {
                     "kind": "OPERATOR",
                     "operator_id": "operator_" + "1" * 32,

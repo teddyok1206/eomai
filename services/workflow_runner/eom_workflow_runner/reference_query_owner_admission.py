@@ -57,7 +57,25 @@ from eom_workflow.reference_query_execution import (
 )
 from pydantic import TypeAdapter
 from sqlalchemy import Engine
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
+
+from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
+from eom_workflow_runner.models import (
+    WorkflowCommandRecord,
+    WorkflowDefinitionRecord,
+    WorkflowInstanceRecord,
+)
+from eom_workflow_runner.native_command_fence import (
+    NativeCommandMutationFence,
+    require_unexpired_native_command,
+)
+from eom_workflow_runner.native_step_completion import native_application_step
+from eom_workflow_runner.reference_query_admission import ResolvedReferenceQueryAdmission
+from eom_workflow_runner.repository import (
+    CommandLeaseIdentity,
+    validate_reference_query_workflow_submission,
+)
+from eom_workflow_runner.state_machine import CommandState
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,8 +172,8 @@ def build_reference_query_native_input(
 class CatalogReferenceQueryOwnerAdmission:
     """Actual Identity and official Catalog scope, before any QUERY side effect.
 
-    Native claim/lease/installed-purpose admission is deliberately not supplied by
-    this source preparation adapter. Every later root must independently resolve it.
+    Claim/mutation independently resolve the actual source/session in their own
+    root. Installed physical QUERY-purpose admission remains the executor's duty.
     """
 
     def __init__(
@@ -176,6 +194,92 @@ class CatalogReferenceQueryOwnerAdmission:
         self.catalog = CatalogEmbeddingRegistryVerifier(
             engine, configuration.registry, identity_fence=self.identity, settings=self.settings
         )
+        self._command_fence = NativeCommandMutationFence()
+
+    def resolve_submission(
+        self, session: Session, request: ReferenceQueryWorkflowRequest
+    ) -> ResolvedReferenceQueryAdmission:
+        sources = self.resolve_sources(session, request)
+        return ResolvedReferenceQueryAdmission(sources.request, sources.policy, sources.bundle)
+
+    @staticmethod
+    def _require_rows(
+        session: Session,
+        command: WorkflowCommandRecord,
+        workflow: WorkflowInstanceRecord,
+        request: ReferenceQueryWorkflowRequest,
+    ) -> None:
+        definition = session.get(WorkflowDefinitionRecord, workflow.definition_id)
+        if (
+            object_session(command) is not session
+            or object_session(workflow) is not session
+            or command.workflow_id != workflow.workflow_id
+            or definition is None
+        ):
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
+                "QUERY current owner requires attached exact Workflow/command rows",
+            )
+        validate_reference_query_workflow_submission(
+            session,
+            workflow,
+            definition=definition,
+            request=request,
+            actor_type="human",
+            actor_id=request.operator_audit.operator_id,
+        )
+
+    def resolve_claim(
+        self,
+        session: Session,
+        *,
+        command: WorkflowCommandRecord,
+        workflow: WorkflowInstanceRecord,
+        request: ReferenceQueryWorkflowRequest,
+    ) -> ResolvedReferenceQueryAdmission:
+        request = parse_reference_query_workflow_request(request)
+        self.identity.fence_current_operator(session, request.operator_audit.operator_id)
+        self._require_rows(session, command, workflow, request)
+        if (
+            command.state != CommandState.PENDING.value
+            or command.attempts != 0
+            or command.lease_generation != 0
+            or command.lease_owner is not None
+            or command.lease_token is not None
+            or command.lease_expires_at is not None
+        ):
+            # Expiry cannot prove the original physical execution did not run.
+            # Durable QUERY checkpoint recovery must precede any later reclaim.
+            raise WorkflowError(
+                WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                "QUERY acquisition requires supported original-execution reconciliation",
+            )
+        step = native_application_step(session, workflow.workflow_id, "encode_reference_query")
+        if step is not None and step.state != "SUCCEEDED":
+            raise WorkflowError(
+                WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                "QUERY prior attempt requires supported original-execution reconciliation",
+            )
+        return self.resolve_submission(session, request)
+
+    def fence_mutation(
+        self, session: Session, request: ReferenceQueryWorkflowRequest, lease: CommandLeaseIdentity
+    ) -> None:
+        self.resolve_mutation_sources(session, request, lease)
+
+    def resolve_mutation_sources(
+        self, session: Session, request: ReferenceQueryWorkflowRequest, lease: CommandLeaseIdentity
+    ) -> ResolvedReferenceQuerySources:
+        request = parse_reference_query_workflow_request(request)
+        self.identity.fence_current_operator(session, request.operator_audit.operator_id)
+        command = self._command_fence.acquire(session, request.request_sha256, lease)
+        workflow = session.get(WorkflowInstanceRecord, command.workflow_id)
+        if workflow is None:
+            raise WorkflowError(WorkflowErrorCode.WORKFLOW_NOT_FOUND, "QUERY Workflow disappeared")
+        self._require_rows(session, command, workflow, request)
+        sources = self.resolve_sources(session, request)
+        require_unexpired_native_command(command, lease)
+        return sources
 
     def resolve_sources(
         self, session: Session, request: ReferenceQueryWorkflowRequest

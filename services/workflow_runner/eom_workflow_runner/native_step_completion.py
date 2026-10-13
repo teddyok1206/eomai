@@ -1,0 +1,180 @@
+"""Common terminal persistence for the two fixed native embedding workflows."""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from datetime import UTC, datetime
+from types import MappingProxyType
+from typing import Literal
+
+from eom_workflow.local_embedding_workflow_receipt import LocalEmbeddingStepOutput
+from eom_workflow.reference_query_execution import ReferenceQueryStepOutput
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
+from eom_workflow_runner.local_embedding_execution_port import NativeFencedRunnerTransaction
+from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
+from eom_workflow_runner.repository import CommandLeaseIdentity, create_step_run
+from eom_workflow_runner.state_machine import (
+    StepState,
+    WorkflowStage,
+    WorkflowState,
+    transition_stage,
+    transition_step,
+    transition_workflow,
+)
+
+type NativeStepKey = Literal["encode_batch", "encode_reference_query"]
+type NativeStepOutput = LocalEmbeddingStepOutput | ReferenceQueryStepOutput
+type ValidateNativeCompletion = Callable[
+    [Session, WorkflowInstanceRecord, WorkflowStepRunRecord], NativeStepOutput
+]
+
+_TERMINAL_KEYS = MappingProxyType(
+    {
+        "encode_batch": ("embedding_receipt", "LOCAL_EMBEDDING_COMPLETION_STAGE_ENTERED"),
+        "encode_reference_query": (
+            "reference_query_receipt",
+            "REFERENCE_QUERY_COMPLETION_STAGE_ENTERED",
+        ),
+    }
+)
+
+
+def native_application_step(
+    session: Session, workflow_id: str, step_key: NativeStepKey
+) -> WorkflowStepRunRecord | None:
+    return session.scalar(
+        select(WorkflowStepRunRecord)
+        .where(
+            WorkflowStepRunRecord.workflow_id == workflow_id,
+            WorkflowStepRunRecord.step_key == step_key,
+        )
+        .order_by(WorkflowStepRunRecord.attempt.desc())
+        .limit(1)
+        .execution_options(populate_existing=True)
+    )
+
+
+def complete_native_terminal(
+    *,
+    workflow_id: str,
+    step_key: NativeStepKey,
+    lease: CommandLeaseIdentity,
+    validate_completion: ValidateNativeCompletion,
+    fenced_transaction: NativeFencedRunnerTransaction,
+    actor_type: str,
+    actor_id: str,
+) -> None:
+    """Only the purpose owner may supply a freshly canonical-validated output.
+
+    This function owns common terminal transitions, not source/native admission.
+    The callback is mandatory and is called again for every completed replay.
+    """
+    manifest_key, event = _TERMINAL_KEYS[step_key]
+    with fenced_transaction() as session:
+        workflow = session.get(WorkflowInstanceRecord, workflow_id)
+        step = native_application_step(session, workflow_id, step_key)
+        if (
+            workflow is None
+            or workflow.current_step_key != "complete"
+            or workflow.state not in {WorkflowState.RUNNING.value, WorkflowState.COMPLETED.value}
+            or step is None
+            or step.state != StepState.SUCCEEDED.value
+        ):
+            raise WorkflowError(
+                WorkflowErrorCode.LOCAL_EMBEDDING_OUTCOME_INVALID,
+                "native terminal has no exact successful receipt",
+            )
+        try:
+            output = validate_completion(session, workflow, step)
+        except ValueError as exc:
+            raise WorkflowError(
+                WorkflowErrorCode.LOCAL_EMBEDDING_OUTCOME_INVALID,
+                "native terminal receipt could not be validated",
+            ) from exc
+        if (
+            output.workflow_id != workflow_id
+            or output.step_run_id != step.step_run_id
+            or output.step_key != step_key
+            or output.attempt != step.attempt
+            or output.receipt_owner_job_id != step.platform_job_id
+        ):
+            raise WorkflowError(
+                WorkflowErrorCode.LOCAL_EMBEDDING_OUTCOME_INVALID,
+                "native terminal receipt has a different step/producer identity",
+            )
+        expected = {manifest_key: output.model_dump(mode="json")}
+        terminal = session.scalar(
+            select(WorkflowStepRunRecord)
+            .where(
+                WorkflowStepRunRecord.workflow_id == workflow_id,
+                WorkflowStepRunRecord.step_key == "complete",
+            )
+            .order_by(WorkflowStepRunRecord.attempt.desc())
+            .limit(1)
+            .execution_options(populate_existing=True)
+        )
+        if workflow.state == WorkflowState.COMPLETED.value:
+            if (
+                workflow.runtime_context.get("final_pointer_manifest") != expected
+                or terminal is None
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.LOCAL_EMBEDDING_OUTCOME_INVALID,
+                    "native terminal replay pointer differs",
+                )
+        elif terminal is None:
+            terminal = create_step_run(
+                session,
+                workflow_id=workflow_id,
+                step_key="complete",
+                step_type="terminal",
+                worker_role=None,
+                result_schema=None,
+                input_pointer_manifest={},
+                max_attempts=1,
+            )
+            terminal.started_at = datetime.now(UTC)
+            transition_step(terminal, StepState.RUNNING)
+            transition_step(terminal, StepState.SUCCEEDED)
+            terminal.finished_at = datetime.now(UTC)
+        if (
+            terminal is None
+            or terminal.attempt != 1
+            or terminal.step_type != "terminal"
+            or terminal.worker_role is not None
+            or terminal.result_schema is not None
+            or terminal.input_pointer_manifest != {}
+            or terminal.output_pointer_manifest is not None
+            or terminal.platform_job_id is not None
+            or terminal.state != StepState.SUCCEEDED.value
+        ):
+            raise WorkflowError(
+                WorkflowErrorCode.LOCAL_EMBEDDING_OUTCOME_INVALID,
+                "native terminal step history differs",
+            )
+        if workflow.state == WorkflowState.COMPLETED.value:
+            return
+        workflow.runtime_context = workflow.runtime_context | {"final_pointer_manifest": expected}
+        transition_stage(
+            session,
+            workflow_id,
+            WorkflowStage.COMPLETED,
+            "complete",
+            event,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            command_id=lease.command_id,
+        )
+        transition_workflow(
+            session,
+            workflow_id,
+            WorkflowState.COMPLETED,
+            "WORKFLOW_COMPLETED",
+            actor_type=actor_type,
+            actor_id=actor_id,
+            command_id=lease.command_id,
+            step_key="complete",
+        )

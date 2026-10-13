@@ -221,8 +221,8 @@ def test_current_shell_and_deployment_use_only_the_exact_successor() -> None:
         assert "MIGRATION_VERIFY_0052|MIGRATION_UPGRADE_0052" in source
         assert "MIGRATION_VERIFY_0053|MIGRATION_UPGRADE_0053" in source
     deployment = (ROOT / "scripts/api/deploy_release.sh").read_text()
-    assert 'run_release_operator MIGRATION_VERIFY_0053 "${COMMIT}"' in deployment
-    assert 'if CURRENT_MIGRATION_REVISION != "20261012_0053":' in deployment
+    assert 'run_release_operator MIGRATION_VERIFY_0054 "${COMMIT}"' in deployment
+    assert 'if CURRENT_MIGRATION_REVISION != "20261013_0054":' in deployment
     assert 'run_release_operator MIGRATION_VERIFY_0052 "${COMMIT}"' not in deployment
     historical = (ROOT / "scripts/api/migrate_release.sh").read_text()
     assert "MIGRATION_UPGRADE_0051" in historical and "MIGRATION_VERIFY_0053" not in historical

@@ -75,8 +75,12 @@ from eom_workflow.inference_transfer import (
     TRANSFER_PAIR_WORKFLOW_KEY,
 )
 from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
-from eom_workflow.local_embedding_request import LocalEmbeddingWorkflowRequestV11
 from eom_workflow.local_embedding_workflow import LocalEmbeddingWorkflowDefinition
+from eom_workflow.reference_query_execution import (
+    ReferenceQueryWorkflowRequest,
+    parse_reference_query_workflow_request,
+)
+from eom_workflow.reference_query_workflow import ReferenceQueryWorkflowDefinition
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -98,7 +102,6 @@ from eom_workflow_runner.local_embedding_execution_port import LocalEmbeddingNat
 from eom_workflow_runner.local_embedding_step_execution import (
     advance_local_embedding_step,
     complete_local_embedding_terminal,
-    native_fenced_runner_transaction,
 )
 from eom_workflow_runner.logging import log_workflow_event
 from eom_workflow_runner.models import (
@@ -108,12 +111,22 @@ from eom_workflow_runner.models import (
     WorkflowInstanceRecord,
     WorkflowStepRunRecord,
 )
+from eom_workflow_runner.native_workflow_transaction import (
+    NativeWorkflowRequest,
+    native_fenced_runner_transaction,
+)
 from eom_workflow_runner.readiness import (
     ReadinessStatus,
     RuntimeReadinessCheck,
     RuntimeReadinessReport,
     WorkflowExecutionReadiness,
     WorkflowRuntimeNotReady,
+)
+from eom_workflow_runner.reference_query_admission import ReferenceQueryOwnerAdmission
+from eom_workflow_runner.reference_query_execution_port import ReferenceQueryNativeExecutor
+from eom_workflow_runner.reference_query_step_execution import (
+    advance_reference_query_step,
+    complete_reference_query_terminal,
 )
 from eom_workflow_runner.repository import (
     CommandCandidate,
@@ -164,7 +177,7 @@ _ACTIVE_COMMAND_LEASE: ContextVar[CommandLeaseIdentity | None] = ContextVar(
     "active_workflow_command_lease", default=None
 )
 _ACTIVE_NATIVE_REQUEST: ContextVar[
-    tuple[str, LocalEmbeddingWorkflowRequestV11, CommandLeaseIdentity] | None
+    tuple[str, NativeWorkflowRequest, CommandLeaseIdentity] | None
 ] = ContextVar("active_local_embedding_request", default=None)
 
 
@@ -486,6 +499,8 @@ class WorkflowRunner:
         inference_transfer_executor: InferenceTransferRoleJobExecutor | None = None,
         local_embedding_owner: LocalEmbeddingOwnerAdmission | None = None,
         local_embedding_executor: LocalEmbeddingNativeExecutor | None = None,
+        reference_query_owner: ReferenceQueryOwnerAdmission | None = None,
+        reference_query_executor: ReferenceQueryNativeExecutor | None = None,
         runner_id: str | None = None,
     ) -> None:
         if catalog is None:
@@ -496,6 +511,8 @@ class WorkflowRunner:
             raise ValueError("workflow worker roles are required")
         if (local_embedding_owner is None) != (local_embedding_executor is None):
             raise ValueError("native owner and executor must be supplied together")
+        if (reference_query_owner is None) != (reference_query_executor is None):
+            raise ValueError("QUERY owner and executor must be supplied together")
         self.engine = engine
         self.sessions = build_session_factory(engine)
         self.settings = settings or WorkflowSettings.from_environment()
@@ -512,6 +529,8 @@ class WorkflowRunner:
         self.inference_transfer_executor = inference_transfer_executor
         self.local_embedding_owner = local_embedding_owner
         self.local_embedding_executor = local_embedding_executor
+        self.reference_query_owner = reference_query_owner
+        self.reference_query_executor = reference_query_executor
 
     def run_once(self, workflow_id: str | None = None) -> WorkflowCommandRecord | None:
         skipped_families: set[CommandExecutionFamily] = set()
@@ -531,20 +550,18 @@ class WorkflowRunner:
                         lease_seconds=self.runner_config.command_lease_seconds,
                         local_embedding_owner=self.local_embedding_owner,
                         local_embedding_executor=self.local_embedding_executor,
+                        reference_query_owner=self.reference_query_owner,
+                        reference_query_executor=self.reference_query_executor,
                     )
                     if command is not None:
                         command_id = command.command_id
                         lease = command_lease_identity(command)
                         break
             except WorkflowError as exc:
-                if (
-                    candidate.family is not CommandExecutionFamily.LOCAL_EMBEDDING
-                    or exc.code
-                    not in {
-                        WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
-                        WorkflowErrorCode.ACTOR_AUTHORIZATION_UNAVAILABLE,
-                    }
-                ):
+                if candidate.family is CommandExecutionFamily.ROLE or exc.code not in {
+                    WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                    WorkflowErrorCode.ACTOR_AUTHORIZATION_UNAVAILABLE,
+                }:
                     raise
                 native_claim_failure = _local_embedding_unavailable_report(
                     exc.code, "current native owner or supported recovery unavailable"
@@ -616,6 +633,14 @@ class WorkflowRunner:
         for candidate in sorted(candidates, key=lambda row: (row.created_at, row.command_id)):
             if candidate.family is CommandExecutionFamily.ROLE:
                 report = self.readiness.evaluate()
+            elif isinstance(candidate.native_request, ReferenceQueryWorkflowRequest):
+                if self.reference_query_owner is None or self.reference_query_executor is None:
+                    report = _local_embedding_unavailable_report(
+                        WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                        "actual QUERY owner or executor unavailable",
+                    )
+                else:
+                    report = self.reference_query_executor.evaluate(candidate.native_request)
             elif (
                 self.local_embedding_owner is None
                 or self.local_embedding_executor is None
@@ -639,7 +664,7 @@ class WorkflowRunner:
         self, candidate: CommandCandidate, lease: CommandLeaseIdentity
     ) -> Iterator[None]:
         native = None
-        if candidate.family is CommandExecutionFamily.LOCAL_EMBEDDING:
+        if candidate.family is not CommandExecutionFamily.ROLE:
             if candidate.native_request is None:
                 raise WorkflowError(
                     WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
@@ -716,7 +741,10 @@ class WorkflowRunner:
 
     def reconcile(self, workflow_id: str) -> None:
         _workflow, compiled = self._load_workflow(workflow_id)
-        if isinstance(compiled.definition, LocalEmbeddingWorkflowDefinition):
+        if isinstance(
+            compiled.definition,
+            (LocalEmbeddingWorkflowDefinition, ReferenceQueryWorkflowDefinition),
+        ):
             raise WorkflowError(
                 WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
                 "native reconcile requires an actual queued command with a live lease",
@@ -803,6 +831,9 @@ class WorkflowRunner:
             workflow, compiled = self._load_workflow(workflow_id)
             if isinstance(compiled.definition, LocalEmbeddingWorkflowDefinition):
                 self._advance_local_embedding(workflow, compiled, command_id, actor_type, actor_id)
+                return
+            if isinstance(compiled.definition, ReferenceQueryWorkflowDefinition):
+                self._advance_reference_query(workflow, compiled, command_id, actor_type, actor_id)
                 return
             if workflow.state in TERMINAL_WORKFLOW_STATES:
                 if workflow.state == WorkflowState.COMPLETED.value:
@@ -937,6 +968,59 @@ class WorkflowRunner:
             request=request,
             lease=lease,
             executor=self.local_embedding_executor,
+            fenced_transaction=self._fenced_transaction,
+            actor_type=actor_type,
+            actor_id=actor_id,
+        )
+
+    def _advance_reference_query(
+        self,
+        workflow: WorkflowInstanceRecord,
+        compiled: CompiledWorkflowDefinition,
+        command_id: str | None,
+        actor_type: str,
+        actor_id: str,
+    ) -> None:
+        lease = _ACTIVE_COMMAND_LEASE.get()
+        native = _ACTIVE_NATIVE_REQUEST.get()
+        if (
+            command_id is None
+            or lease is None
+            or lease.command_id != command_id
+            or native is None
+            or native[0] != workflow.workflow_id
+            or not isinstance(native[1], ReferenceQueryWorkflowRequest)
+            or self.reference_query_owner is None
+            or self.reference_query_executor is None
+        ):
+            raise WorkflowError(
+                WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                "QUERY advancement requires its actual leased owner context",
+            )
+        request = parse_reference_query_workflow_request(workflow.initial_request)
+        if request != native[1]:
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT, "QUERY original request changed"
+            )
+        if workflow.state in {WorkflowState.FAILED.value, WorkflowState.CANCELLED.value}:
+            return
+        if workflow.current_step_key == "encode_reference_query":
+            advance_reference_query_step(
+                workflow=workflow,
+                compiled=compiled,
+                request=request,
+                lease=lease,
+                owner=self.reference_query_owner,
+                executor=self.reference_query_executor,
+                fenced_transaction=self._fenced_transaction,
+                actor_type=actor_type,
+                actor_id=actor_id,
+            )
+        complete_reference_query_terminal(
+            workflow_id=workflow.workflow_id,
+            request=request,
+            lease=lease,
+            executor=self.reference_query_executor,
             fenced_transaction=self._fenced_transaction,
             actor_type=actor_type,
             actor_id=actor_id,
@@ -3005,7 +3089,10 @@ class WorkflowRunner:
                 raise WorkflowError(WorkflowErrorCode.WORKFLOW_NOT_FOUND, "workflow not found")
             native = workflow_requires_local_embedding(session, workflow_id=workflow_id)
             compiled = self._compiled_for_record(session, workflow)
-            if native and not isinstance(compiled.definition, LocalEmbeddingWorkflowDefinition):
+            if native and not isinstance(
+                compiled.definition,
+                (LocalEmbeddingWorkflowDefinition, ReferenceQueryWorkflowDefinition),
+            ):
                 raise WorkflowError(
                     WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
                     "native-marked Workflow relations do not admit legacy execution",
@@ -3314,17 +3401,40 @@ class WorkflowRunner:
             with _command_fenced_transaction(self.sessions) as session:
                 yield session
         else:
+            with self._native_transaction(native) as session:
+                yield session
+
+    @contextmanager
+    def _native_transaction(
+        self, native: tuple[str, NativeWorkflowRequest, CommandLeaseIdentity]
+    ) -> Iterator[Session]:
+        workflow_id, request, lease = native
+        if isinstance(request, ReferenceQueryWorkflowRequest):
+            if self.reference_query_owner is None:
+                raise WorkflowError(
+                    WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                    "QUERY owner is unavailable",
+                )
+            with native_fenced_runner_transaction(
+                self.sessions,
+                owner=self.reference_query_owner,
+                workflow_id=workflow_id,
+                request=request,
+                lease=lease,
+            ) as session:
+                yield session
+        else:
             if self.local_embedding_owner is None:
                 raise WorkflowError(
                     WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
-                    "native owner is unavailable",
+                    "native INDEX owner is unavailable",
                 )
             with native_fenced_runner_transaction(
                 self.sessions,
                 owner=self.local_embedding_owner,
-                workflow_id=native[0],
-                request=native[1],
-                lease=native[2],
+                workflow_id=workflow_id,
+                request=request,
+                lease=lease,
             ) as session:
                 yield session
 
@@ -3340,20 +3450,9 @@ class WorkflowRunner:
                 with transaction(self.sessions) as session:
                     yield session
             else:
-                if self.local_embedding_owner is None:
-                    raise WorkflowError(
-                        WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
-                        "native heartbeat owner is unavailable",
-                    )
                 # ContextVars are not inherited by the heartbeat thread. Carry
                 # immutable request identity, NEVER the prior authorization.
-                with native_fenced_runner_transaction(
-                    self.sessions,
-                    owner=self.local_embedding_owner,
-                    workflow_id=native[0],
-                    request=native[1],
-                    lease=lease,
-                ) as session:
+                with self._native_transaction((native[0], native[1], lease)) as session:
                     yield session
 
         def heartbeat() -> None:

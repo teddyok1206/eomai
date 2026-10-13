@@ -6,7 +6,9 @@ No installed QUERY, production authentication, numerical inference or NAS eviden
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -35,6 +37,7 @@ from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.local_embedding_control_artifacts import (
     LocalEmbeddingControlArtifactPublisher,
 )
+from eom_workflow.compiler import compile_definition_data
 from eom_workflow.reference_query_execution import (
     ReferenceQueryExecutionPolicy,
     ReferenceQueryWorkflowRequest,
@@ -42,11 +45,22 @@ from eom_workflow.reference_query_execution import (
     parse_reference_query_workflow_request,
 )
 from eom_workflow_runner import reference_query_owner_admission as module
+from eom_workflow_runner.errors import WorkflowError
+from eom_workflow_runner.models import (
+    WorkflowCommandRecord,
+    WorkflowDefinitionRecord,
+    WorkflowInstanceRecord,
+    WorkflowStepRunRecord,
+)
 from eom_workflow_runner.reference_query_owner_admission import (
     CatalogReferenceQueryOwnerAdmission,
     ReferenceQueryOwnerConfiguration,
     ResolvedReferenceQuerySources,
     build_reference_query_native_input,
+)
+from eom_workflow_runner.repository import (
+    CommandLeaseIdentity,
+    reference_query_business_fingerprint,
 )
 from sqlalchemy.orm import Session
 
@@ -55,6 +69,7 @@ from tests.unit.test_authenticated_session_fence import PIN, verified_capture
 from tests.unit.test_control_file_set_publication import _publisher
 from tests.unit.test_local_embedding_control_artifacts import NOW
 from tests.unit.test_reference_query_execution_contracts import case
+from tests.unit.test_reference_query_workflow_contracts import definition_body
 from tests.unit.test_similarity_context_service import case as context_case
 
 
@@ -72,7 +87,8 @@ class OwnerFixture:
 
 @pytest.fixture
 def source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> OwnerFixture:
-    base = case()
+    compiled = compile_definition_data(definition_body(), "synthetic-current-query-owner", set())
+    base = case(definition_sha256=compiled.sha256)
     publisher, _engine = _publisher(tmp_path)
     publisher.settings = replace(publisher.settings, workspace_root=tmp_path)
     saved_bundle = EmbeddingRuntimeBundleArtifactPublisher(
@@ -174,6 +190,184 @@ def source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> OwnerFixture:
     monkeypatch.setattr(owner.catalog, "prepare_similarity_context_in_session", prepare)
     monkeypatch.setattr(owner.catalog, "read_similarity_views_in_session", read)
     return result
+
+
+def mutation_rows(
+    source: OwnerFixture, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Session, WorkflowCommandRecord, WorkflowInstanceRecord, CommandLeaseIdentity]:
+    """Actual attached ORM/root/lease code, with explicitly synthetic SQL/source seams."""
+    with source.publisher.sessions() as root, root.begin():
+        sources = source.owner.resolve_sources(root, source.request)
+    compiled = compile_definition_data(definition_body(), "synthetic-current-query-owner", set())
+    session = Session()
+    definition = WorkflowDefinitionRecord(
+        definition_id="wfdef_" + "a" * 32,
+        definition_key=compiled.definition.definition_key,
+        definition_version=compiled.definition.definition_version,
+        definition_hash=compiled.sha256,
+        schema_version=compiled.definition.schema_version,
+        canonical_definition=compiled.as_dict(),
+        source_path=compiled.source_path,
+    )
+    request = source.request
+    actor = request.operator_audit.operator_id
+    workflow = WorkflowInstanceRecord(
+        workflow_id="workflow_" + "a" * 32,
+        definition_id=definition.definition_id,
+        definition_key=definition.definition_key,
+        definition_version=definition.definition_version,
+        definition_hash=definition.definition_hash,
+        protocol_version="1.0.1",
+        role_schema_version="reference-query/1.0",
+        created_actor_type="human",
+        created_actor_id=actor,
+        initial_request=request.model_dump(mode="json"),
+        request_payload=request.model_dump(mode="json"),
+        request_hash=reference_query_business_fingerprint(
+            definition, request, actor_type="human", actor_id=actor
+        ),
+    )
+    lease = CommandLeaseIdentity("wfcommand_" + "b" * 32, "query-owner", "wflease_" + "c" * 32, 1)
+    command = WorkflowCommandRecord(
+        command_id=lease.command_id,
+        workflow_id=workflow.workflow_id,
+        state="PROCESSING",
+        attempts=1,
+        lease_owner=lease.runner_id,
+        lease_token=lease.lease_token,
+        lease_generation=1,
+        lease_expires_at=datetime.now(UTC) + timedelta(seconds=60),
+    )
+    session.add_all((definition, workflow, command))
+    monkeypatch.setattr(
+        session, "execute", lambda *_a, **_kw: SimpleNamespace(scalar_one_or_none=lambda: command)
+    )
+
+    def scalar(query: Any, **_kw: Any) -> Any:
+        entity = query.column_descriptions[0]["entity"]
+        if entity is WorkflowStepRunRecord:
+            return None
+        return workflow if entity is WorkflowInstanceRecord else command
+
+    monkeypatch.setattr(session, "scalar", scalar)
+    monkeypatch.setattr(
+        session,
+        "get",
+        lambda model, *_a, **_kw: definition if model is WorkflowDefinitionRecord else workflow,
+    )
+    monkeypatch.setattr(source.owner, "resolve_sources", lambda *_a: sources)
+    return session, command, workflow, lease
+
+
+def test_query_current_owner_only_allows_terminal_transition_inside_acquired_root(
+    source: OwnerFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session, command, workflow, lease = mutation_rows(source, monkeypatch)
+    try:
+        source.owner.fence_mutation(session, source.request, lease)
+        command.state = "SUCCEEDED"
+        source.owner.fence_mutation(session, source.request, lease)
+        session.rollback()
+        session.add_all((workflow, command))
+        with pytest.raises(WorkflowError, match="ownership was lost"):
+            source.owner.fence_mutation(session, source.request, lease)
+    finally:
+        session.close()
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("lease_owner", "other"),
+        ("lease_token", "other"),
+        ("lease_generation", 2),
+        ("state", "CANCELLED"),
+    ],
+)
+def test_query_current_owner_rejects_changed_acquisition(
+    source: OwnerFixture,
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+    value: Any,
+) -> None:
+    session, command, _workflow, lease = mutation_rows(source, monkeypatch)
+    try:
+        source.owner.fence_mutation(session, source.request, lease)
+        setattr(command, field, value)
+        with pytest.raises(WorkflowError):
+            source.owner.fence_mutation(session, source.request, lease)
+    finally:
+        session.close()
+
+
+def test_query_expiry_during_source_resolution_blocks_the_root_commit(
+    source: OwnerFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session, command, _workflow, lease = mutation_rows(source, monkeypatch)
+    original = source.owner.resolve_sources
+
+    def expire(*args: Any) -> ResolvedReferenceQuerySources:
+        result = original(*args)
+        command.lease_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        return result
+
+    monkeypatch.setattr(source.owner, "resolve_sources", expire)
+    try:
+        with pytest.raises(WorkflowError, match="expired during"):
+            source.owner.fence_mutation(session, source.request, lease)
+    finally:
+        session.close()
+
+
+def test_query_claim_accepts_only_fresh_pending_and_never_assumes_expiry_means_no_execution(
+    source: OwnerFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session, command, workflow, _lease = mutation_rows(source, monkeypatch)
+    try:
+        command.lease_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        with pytest.raises(WorkflowError, match="reconciliation"):
+            source.owner.resolve_claim(
+                session, command=command, workflow=workflow, request=source.request
+            )
+        command.state, command.attempts, command.lease_generation = "PENDING", 0, 0
+        command.lease_owner = command.lease_token = command.lease_expires_at = None
+        assert (
+            source.owner.resolve_claim(
+                session, command=command, workflow=workflow, request=source.request
+            ).request
+            == source.request
+        )
+        session.expunge(command)
+        with pytest.raises(WorkflowError, match="attached"):
+            source.owner.resolve_claim(
+                session, command=command, workflow=workflow, request=source.request
+            )
+    finally:
+        session.close()
+
+
+@pytest.mark.parametrize("state", ("READY", "RUNNING", "FAILED", "CANCELLED"))
+def test_fresh_command_cannot_bypass_an_existing_query_attempt(
+    source: OwnerFixture,
+    monkeypatch: pytest.MonkeyPatch,
+    state: str,
+) -> None:
+    session, command, workflow, _lease = mutation_rows(source, monkeypatch)
+    command.state, command.attempts, command.lease_generation = "PENDING", 0, 0
+    command.lease_owner = command.lease_token = command.lease_expires_at = None
+    step = WorkflowStepRunRecord(state=state)
+    monkeypatch.setattr(module, "native_application_step", lambda *_args: step)
+    try:
+        with pytest.raises(WorkflowError, match="prior attempt"):
+            source.owner.resolve_claim(
+                session, command=command, workflow=workflow, request=source.request
+            )
+        assert command.lease_generation == 0
+    finally:
+        session.close()
 
 
 def test_source_preparation_keeps_one_root_and_actual_capture_then_checks_late(

@@ -37,7 +37,10 @@ from eom_workflow.local_embedding_workflow import (
     LOCAL_EMBEDDING_EXECUTION_PROTOCOL,
     LOCAL_EMBEDDING_WORKFLOW_KEY,
 )
-from eom_workflow.reference_query_execution import ReferenceQueryWorkflowRequest
+from eom_workflow.reference_query_execution import (
+    ReferenceQueryWorkflowRequest,
+    parse_reference_query_workflow_request,
+)
 from eom_workflow.reference_query_workflow import (
     REFERENCE_QUERY_EXECUTION_PROTOCOL,
     REFERENCE_QUERY_RESULT_SCHEMA,
@@ -72,6 +75,12 @@ from eom_workflow_runner.models import (
     WorkflowInstanceRecord,
     WorkflowStepRunRecord,
 )
+from eom_workflow_runner.reference_query_admission import (
+    ReferenceQueryOwnerAdmission,
+    resolve_reference_query_submission_controls,
+    validate_reference_query_runner_admission,
+)
+from eom_workflow_runner.reference_query_execution_port import ReferenceQueryNativeExecutor
 from eom_workflow_runner.state_machine import (
     ACTIVE_WORKFLOW_STATES,
     ApprovalState,
@@ -128,6 +137,7 @@ class CommandLeaseIdentity:
 class CommandExecutionFamily(StrEnum):
     ROLE = "ROLE"
     LOCAL_EMBEDDING = "LOCAL_EMBEDDING"
+    REFERENCE_QUERY = "REFERENCE_QUERY"
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,7 +163,7 @@ class CommandCandidate:
     current_step_key: str
     workflow_state: str
     workflow_lock_version: int
-    native_request: LocalEmbeddingWorkflowRequestV11 | None
+    native_request: LocalEmbeddingWorkflowRequestV11 | ReferenceQueryWorkflowRequest | None
 
 
 def _native_workflow_filter() -> ColumnElement[bool]:
@@ -179,6 +189,7 @@ def _native_workflow_filter() -> ColumnElement[bool]:
         WorkflowStepRunRecord.workflow_id == WorkflowInstanceRecord.workflow_id,
         or_(
             WorkflowStepRunRecord.step_type == "application",
+            WorkflowStepRunRecord.step_key == "encode_reference_query",
             WorkflowStepRunRecord.result_schema.in_(
                 ("incremental-embedding-result@1.0", REFERENCE_QUERY_RESULT_SCHEMA)
             ),
@@ -218,14 +229,60 @@ def workflow_requires_local_embedding(session: Session, *, workflow_id: str) -> 
     return native
 
 
+def _query_workflow_filter() -> ColumnElement[bool]:
+    """Query quarantine wins over contradictory INDEX markers; never a grant."""
+    definition = select(WorkflowDefinitionRecord.definition_id).where(
+        WorkflowDefinitionRecord.definition_id == WorkflowInstanceRecord.definition_id,
+        or_(
+            WorkflowDefinitionRecord.definition_key == REFERENCE_QUERY_WORKFLOW_KEY,
+            WorkflowDefinitionRecord.canonical_definition["definition_key"].as_string()
+            == REFERENCE_QUERY_WORKFLOW_KEY,
+        ),
+    )
+    step = select(WorkflowStepRunRecord.step_run_id).where(
+        WorkflowStepRunRecord.workflow_id == WorkflowInstanceRecord.workflow_id,
+        or_(
+            WorkflowStepRunRecord.step_key == "encode_reference_query",
+            WorkflowStepRunRecord.result_schema == REFERENCE_QUERY_RESULT_SCHEMA,
+        ),
+    )
+    return func.coalesce(
+        or_(
+            WorkflowInstanceRecord.definition_key == REFERENCE_QUERY_WORKFLOW_KEY,
+            WorkflowInstanceRecord.role_schema_version == REFERENCE_QUERY_EXECUTION_PROTOCOL,
+            WorkflowInstanceRecord.initial_request["schema_version"].as_string()
+            == "reference-query-workflow-request/1.0",
+            WorkflowInstanceRecord.request_payload["schema_version"].as_string()
+            == "reference-query-workflow-request/1.0",
+            WorkflowInstanceRecord.initial_request["purpose"].as_string() == "REFERENCE_QUERY",
+            WorkflowInstanceRecord.request_payload["purpose"].as_string() == "REFERENCE_QUERY",
+            definition.exists(),
+            step.exists(),
+        ),
+        False,
+    )
+
+
+def _execution_family_filter(family: CommandExecutionFamily) -> ColumnElement[bool]:
+    native, query = _native_workflow_filter(), _query_workflow_filter()
+    if family is CommandExecutionFamily.ROLE:
+        return not_(native)
+    if family is CommandExecutionFamily.REFERENCE_QUERY:
+        return native & query
+    if family is CommandExecutionFamily.LOCAL_EMBEDDING:
+        return native & not_(query)
+    raise ValueError("WORKFLOW_COMMAND_EXECUTION_FAMILY_INVALID")
+
+
 def _command_candidate(
     command: WorkflowCommandRecord,
     workflow: WorkflowInstanceRecord,
     family: CommandExecutionFamily,
 ) -> CommandCandidate:
-    native_request = None
+    native_request: LocalEmbeddingWorkflowRequestV11 | ReferenceQueryWorkflowRequest | None = None
     query_marked = (
-        workflow.definition_key == REFERENCE_QUERY_WORKFLOW_KEY
+        family is CommandExecutionFamily.REFERENCE_QUERY
+        or workflow.definition_key == REFERENCE_QUERY_WORKFLOW_KEY
         or workflow.role_schema_version == REFERENCE_QUERY_EXECUTION_PROTOCOL
         or any(
             isinstance(document, dict)
@@ -236,11 +293,13 @@ def _command_candidate(
             for document in (workflow.initial_request, workflow.request_payload)
         )
     )
-    if family is CommandExecutionFamily.LOCAL_EMBEDDING and not query_marked:
+    if family is not CommandExecutionFamily.ROLE:
         # Invalid native metadata remains native/unavailable, never a role fallback.
         with suppress(ValueError):
-            native_request = load_persisted_local_embedding_workflow_request(
-                workflow.initial_request
+            native_request = (
+                parse_reference_query_workflow_request(workflow.initial_request)
+                if query_marked
+                else load_persisted_local_embedding_workflow_request(workflow.initial_request)
             )
     return CommandCandidate(
         family=family,
@@ -474,9 +533,16 @@ def workflow_business_fingerprint(
 
 
 def workflow_request_storage_document(
-    request: WorkflowRequest | InferenceTransferWorkflowRequest | LocalEmbeddingWorkflowRequestV11,
+    request: (
+        WorkflowRequest
+        | InferenceTransferWorkflowRequest
+        | LocalEmbeddingWorkflowRequestV11
+        | ReferenceQueryWorkflowRequest
+    ),
 ) -> dict[str, Any]:
     """Serialize a request without dropping schema-required nullable values."""
+    if isinstance(request, ReferenceQueryWorkflowRequest):
+        return parse_reference_query_workflow_request(request).model_dump(mode="json")
     if isinstance(request, LocalEmbeddingWorkflowRequestV11):
         checked = LocalEmbeddingWorkflowRequestV11.model_validate(request)
         checked = parse_local_embedding_workflow_request_v11(checked.model_dump(mode="json"))
@@ -692,6 +758,68 @@ def validate_local_embedding_workflow_submission(
     return current
 
 
+def reference_query_business_fingerprint(
+    definition: WorkflowDefinitionRecord,
+    request: ReferenceQueryWorkflowRequest,
+    *,
+    actor_type: str,
+    actor_id: str,
+) -> str:
+    """Exact operator-bound QUERY identity, independent from a numerical encoding key."""
+    return content_sha256(
+        {
+            "definition_key": definition.definition_key,
+            "definition_version": definition.definition_version,
+            "definition_hash": definition.definition_hash,
+            "request": workflow_request_storage_document(request),
+            "actor": {"actor_type": actor_type, "actor_id": actor_id},
+        }
+    )
+
+
+def validate_reference_query_workflow_submission(
+    session: Session,
+    workflow: WorkflowInstanceRecord,
+    *,
+    definition: WorkflowDefinitionRecord,
+    request: ReferenceQueryWorkflowRequest,
+    actor_type: str,
+    actor_id: str,
+) -> WorkflowInstanceRecord:
+    """Canonical submission closure, not authority from an old request or receipt."""
+    request = parse_reference_query_workflow_request(request)
+    current = session.scalar(
+        select(WorkflowInstanceRecord)
+        .where(WorkflowInstanceRecord.workflow_id == workflow.workflow_id)
+        .execution_options(populate_existing=True)
+    )
+    expected = workflow_request_storage_document(request)
+    if current is None or (
+        actor_type != "human"
+        or actor_id != request.operator_audit.operator_id
+        or definition.definition_key != request.workflow_definition_key
+        or definition.definition_version != request.workflow_definition_version
+        or definition.definition_hash != request.workflow_definition_sha256
+        or _stored_role_protocol(definition) != REFERENCE_QUERY_EXECUTION_PROTOCOL
+        or current.definition_id != definition.definition_id
+        or current.definition_key != definition.definition_key
+        or current.definition_version != definition.definition_version
+        or current.definition_hash != definition.definition_hash
+        or current.protocol_version != "1.0.1"
+        or current.role_schema_version != REFERENCE_QUERY_EXECUTION_PROTOCOL
+        or current.created_actor_type != actor_type
+        or current.created_actor_id != actor_id
+        or current.initial_request != expected
+        or current.request_payload != expected
+        or current.request_hash
+        != reference_query_business_fingerprint(
+            definition, request, actor_type=actor_type, actor_id=actor_id
+        )
+    ):
+        raise ValueError("REFERENCE_QUERY_SUBMISSION_REPLAY_INVALID")
+    return current
+
+
 def _matching_submission(
     session: Session, *, idempotency_key: str, request_hash: str
 ) -> WorkflowInstanceRecord | None:
@@ -774,6 +902,8 @@ def create_workflow_instance(
     inference_transfer_context: InferenceTransferSubmissionContext | None = None,
     local_embedding_owner: LocalEmbeddingOwnerAdmission | None = None,
     local_embedding_executor: LocalEmbeddingNativeExecutor | None = None,
+    reference_query_owner: ReferenceQueryOwnerAdmission | None = None,
+    reference_query_executor: ReferenceQueryNativeExecutor | None = None,
 ) -> tuple[WorkflowInstanceRecord, bool]:
     if (
         isinstance(request, ReferenceQueryWorkflowRequest)
@@ -787,11 +917,65 @@ def create_workflow_instance(
                 WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
                 "workflow request kind does not match reference query purpose",
             )
-        # Reading/compiling a definition does not admit its native owner or DB
-        # step pair. Reject before generic request serialization or persistence.
+        # No installed QUERY owner is inferred from the INDEX/ROLE configuration.
+        if reference_query_owner is None or reference_query_executor is None:
+            raise WorkflowError(
+                WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                "reference query requires its actual QUERY owner and executor",
+            )
+        if (
+            runtime_context is not None
+            or completed_preset_revision_id is not None
+            or inference_transfer_context is not None
+            or local_embedding_owner is not None
+            or local_embedding_executor is not None
+        ):
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+                "reference query cannot accept another purpose's execution context",
+            )
+        scope_query = resolve_reference_query_submission_controls(
+            session,
+            definition=definition,
+            request=request,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            owner=reference_query_owner,
+            executor=reference_query_executor,
+        )
+        with session.begin_nested():
+            result = _persist_workflow_instance(
+                session,
+                definition=definition,
+                request=scope_query.request,
+                idempotency_key=idempotency_key,
+                actor_type=actor_type,
+                actor_id=actor_id,
+            )
+            workflow = validate_reference_query_workflow_submission(
+                session,
+                result[0],
+                definition=definition,
+                request=scope_query.request,
+                actor_type=actor_type,
+                actor_id=actor_id,
+            )
+            late_query = resolve_reference_query_submission_controls(
+                session,
+                definition=definition,
+                request=scope_query.request,
+                actor_type=actor_type,
+                actor_id=actor_id,
+                owner=reference_query_owner,
+                executor=reference_query_executor,
+            )
+            if late_query != scope_query:
+                raise ValueError("REFERENCE_QUERY_SUBMISSION_CONTEXT_INVALID")
+            return workflow, result[1]
+    if reference_query_owner is not None or reference_query_executor is not None:
         raise WorkflowError(
-            WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
-            "reference query execution is not admitted",
+            WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+            "reference query owner cannot admit another workflow purpose",
         )
     if (
         isinstance(request, LocalEmbeddingWorkflowRequestV11)
@@ -893,7 +1077,12 @@ def _persist_workflow_instance(
     session: Session,
     *,
     definition: WorkflowDefinitionRecord,
-    request: WorkflowRequest | InferenceTransferWorkflowRequest | LocalEmbeddingWorkflowRequestV11,
+    request: (
+        WorkflowRequest
+        | InferenceTransferWorkflowRequest
+        | LocalEmbeddingWorkflowRequestV11
+        | ReferenceQueryWorkflowRequest
+    ),
     idempotency_key: str,
     actor_type: str,
     actor_id: str,
@@ -902,7 +1091,11 @@ def _persist_workflow_instance(
 ) -> tuple[WorkflowInstanceRecord, bool]:
     request_data = workflow_request_storage_document(request)
     request_hash = (
-        local_embedding_business_fingerprint(
+        reference_query_business_fingerprint(
+            definition, request, actor_type=actor_type, actor_id=actor_id
+        )
+        if isinstance(request, ReferenceQueryWorkflowRequest)
+        else local_embedding_business_fingerprint(
             definition, request, actor_type=actor_type, actor_id=actor_id
         )
         if isinstance(request, LocalEmbeddingWorkflowRequestV11)
@@ -936,7 +1129,7 @@ def _persist_workflow_instance(
             WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID,
             "stored definition has no start step",
         )
-    if isinstance(request, LocalEmbeddingWorkflowRequestV11):
+    if isinstance(request, (LocalEmbeddingWorkflowRequestV11, ReferenceQueryWorkflowRequest)):
         role_schema_version = _stored_role_protocol(definition)
     else:
         role_protocols = {
@@ -963,7 +1156,9 @@ def _persist_workflow_instance(
         state=WorkflowState.REQUESTED.value,
         stage=(
             WorkflowStage.LOCAL_EMBEDDING.value
-            if isinstance(request, LocalEmbeddingWorkflowRequestV11)
+            if isinstance(
+                request, (LocalEmbeddingWorkflowRequestV11, ReferenceQueryWorkflowRequest)
+            )
             else WorkflowStage.INFERENCE_TRANSFER.value
             if isinstance(request, InferenceTransferWorkflowRequest)
             else WorkflowStage.DOCUMENT_REVIEW.value
@@ -1116,13 +1311,13 @@ def peek_command_candidate(
     """One nonlocking FIFO header per fixed purpose; no owner/readiness call."""
     if not isinstance(family, CommandExecutionFamily):
         raise ValueError("WORKFLOW_COMMAND_EXECUTION_FAMILY_INVALID")
-    predicate = _native_workflow_filter()
+    predicate = _execution_family_filter(family)
     query = (
         select(WorkflowCommandRecord, WorkflowInstanceRecord)
         .join(WorkflowInstanceRecord)
         .where(
             _claimable_command_filter(datetime.now(UTC)),
-            predicate if family is CommandExecutionFamily.LOCAL_EMBEDDING else not_(predicate),
+            predicate,
         )
         .order_by(WorkflowCommandRecord.created_at, WorkflowCommandRecord.command_id)
         .limit(1)
@@ -1145,6 +1340,8 @@ def claim_command_candidate(
     lease_seconds: int,
     local_embedding_owner: LocalEmbeddingOwnerAdmission | None = None,
     local_embedding_executor: LocalEmbeddingNativeExecutor | None = None,
+    reference_query_owner: ReferenceQueryOwnerAdmission | None = None,
+    reference_query_executor: ReferenceQueryNativeExecutor | None = None,
 ) -> WorkflowCommandRecord | None:
     """Exact-ID root claim; never replace a changed or locked FIFO candidate.
 
@@ -1156,8 +1353,39 @@ def claim_command_candidate(
         candidate.family, CommandExecutionFamily
     ):
         raise ValueError("WORKFLOW_COMMAND_EXECUTION_FAMILY_INVALID")
-    native = candidate.family is CommandExecutionFamily.LOCAL_EMBEDDING
-    if native and (local_embedding_owner is None or local_embedding_executor is None):
+    native = candidate.family is not CommandExecutionFamily.ROLE
+    query_request = (
+        candidate.native_request
+        if isinstance(candidate.native_request, ReferenceQueryWorkflowRequest)
+        else None
+    )
+    if native and (
+        (candidate.family is CommandExecutionFamily.REFERENCE_QUERY) != (query_request is not None)
+    ):
+        raise WorkflowError(
+            WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+            "native candidate request does not match its exact execution family",
+        )
+    if (
+        native
+        and query_request is not None
+        and (
+            reference_query_owner is None
+            or reference_query_executor is None
+            or not workflow_definition_is_admitted(
+                query_request.workflow_definition_key, query_request.workflow_definition_version
+            )
+        )
+    ):
+        raise WorkflowError(
+            WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+            "QUERY claim requires its admitted definition and actual owner/executor",
+        )
+    if (
+        native
+        and query_request is None
+        and (local_embedding_owner is None or local_embedding_executor is None)
+    ):
         raise WorkflowError(
             WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
             "native claim requires the actual owner and executor",
@@ -1178,12 +1406,12 @@ def claim_command_candidate(
             WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
             "exact claim requires an active root transaction",
         )
-    predicate = _native_workflow_filter()
+    predicate = _execution_family_filter(candidate.family)
     workflow = session.scalar(
         select(WorkflowInstanceRecord)
         .where(
             WorkflowInstanceRecord.workflow_id == candidate.workflow_id,
-            predicate if native else not_(predicate),
+            predicate,
         )
         .with_for_update(skip_locked=True)
         .execution_options(populate_existing=True)
@@ -1207,8 +1435,6 @@ def claim_command_candidate(
     ):
         return None
     if native:
-        assert local_embedding_owner is not None
-        request = load_persisted_local_embedding_workflow_request(workflow.initial_request)
         definition = session.scalar(
             select(WorkflowDefinitionRecord)
             .where(WorkflowDefinitionRecord.definition_id == workflow.definition_id)
@@ -1225,46 +1451,106 @@ def claim_command_candidate(
                 WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID,
                 "native exact definition snapshot is not an object",
             )
-        if (
-            definition.definition_key != LOCAL_EMBEDDING_WORKFLOW_KEY
-            or definition.canonical_definition.get("definition_key") == REFERENCE_QUERY_WORKFLOW_KEY
-        ):
-            raise WorkflowError(
-                WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
-                "native claim definition purpose is not supported",
+        if query_request is not None:
+            assert reference_query_owner is not None
+            request_query = parse_reference_query_workflow_request(workflow.initial_request)
+            if definition.definition_key != REFERENCE_QUERY_WORKFLOW_KEY:
+                raise WorkflowError(
+                    WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                    "QUERY claim definition purpose differs",
+                )
+            scope_query = reference_query_owner.resolve_claim(
+                session, command=command, workflow=workflow, request=request_query
             )
-        scope = local_embedding_owner.resolve_claim(
-            session, command=command, workflow=workflow, request=request
-        )
-        scope = validate_local_embedding_runner_admission(
-            scope,
-            compile_definition_data(definition.canonical_definition, definition.source_path, set()),
-            actor_type=workflow.created_actor_type,
-            actor_id=workflow.created_actor_id,
-        )
-        if (
-            scope.request != request
-            or definition.definition_hash != scope.request.workflow_definition_sha256
-            or command.request_hash != candidate.command_contents_hash
-        ):
-            raise WorkflowError(
-                WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
-                "native exact candidate closure differs",
+            scope_query = validate_reference_query_runner_admission(
+                scope_query,
+                compile_definition_data(
+                    definition.canonical_definition, definition.source_path, set()
+                ),
+                actor_type=workflow.created_actor_type,
+                actor_id=workflow.created_actor_id,
             )
-        validate_local_embedding_workflow_submission(
-            session,
-            workflow,
-            definition=definition,
-            request=request,
-            actor_type=workflow.created_actor_type,
-            actor_id=workflow.created_actor_id,
-        )
+            if (
+                scope_query.request != request_query
+                or definition.definition_hash != request_query.workflow_definition_sha256
+                or command.request_hash != candidate.command_contents_hash
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+                    "QUERY exact candidate closure differs",
+                )
+            validate_reference_query_workflow_submission(
+                session,
+                workflow,
+                definition=definition,
+                request=request_query,
+                actor_type=workflow.created_actor_type,
+                actor_id=workflow.created_actor_id,
+            )
+        else:
+            assert local_embedding_owner is not None
+            request = load_persisted_local_embedding_workflow_request(workflow.initial_request)
+            _validate_local_embedding_claim(
+                session, candidate, command, workflow, definition, request, local_embedding_owner
+            )
     _assign_command_lease(session, command, runner_id, lease_seconds, datetime.now(UTC))
     if native:
-        assert local_embedding_owner is not None
-        local_embedding_owner.fence_mutation(session, request, command_lease_identity(command))
+        if query_request is not None:
+            assert reference_query_owner is not None
+            reference_query_owner.fence_mutation(
+                session, query_request, command_lease_identity(command)
+            )
+        else:
+            assert local_embedding_owner is not None
+            assert isinstance(candidate.native_request, LocalEmbeddingWorkflowRequestV11)
+            local_embedding_owner.fence_mutation(
+                session, candidate.native_request, command_lease_identity(command)
+            )
     require_command_lease(session, command_lease_identity(command), for_update=True)
     return command
+
+
+def _validate_local_embedding_claim(
+    session: Session,
+    candidate: CommandCandidate,
+    command: WorkflowCommandRecord,
+    workflow: WorkflowInstanceRecord,
+    definition: WorkflowDefinitionRecord,
+    request: LocalEmbeddingWorkflowRequestV11,
+    owner: LocalEmbeddingOwnerAdmission,
+) -> None:
+    if (
+        definition.definition_key != LOCAL_EMBEDDING_WORKFLOW_KEY
+        or definition.canonical_definition.get("definition_key") == REFERENCE_QUERY_WORKFLOW_KEY
+    ):
+        raise WorkflowError(
+            WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+            "native claim definition purpose is not supported",
+        )
+    scope = owner.resolve_claim(session, command=command, workflow=workflow, request=request)
+    scope = validate_local_embedding_runner_admission(
+        scope,
+        compile_definition_data(definition.canonical_definition, definition.source_path, set()),
+        actor_type=workflow.created_actor_type,
+        actor_id=workflow.created_actor_id,
+    )
+    if (
+        scope.request != request
+        or definition.definition_hash != scope.request.workflow_definition_sha256
+        or command.request_hash != candidate.command_contents_hash
+    ):
+        raise WorkflowError(
+            WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+            "native exact candidate closure differs",
+        )
+    validate_local_embedding_workflow_submission(
+        session,
+        workflow,
+        definition=definition,
+        request=request,
+        actor_type=workflow.created_actor_type,
+        actor_id=workflow.created_actor_id,
+    )
 
 
 def command_lease_identity(command: WorkflowCommandRecord) -> CommandLeaseIdentity:

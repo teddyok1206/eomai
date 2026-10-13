@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 
-from eom_orchestrator.database import transaction
 from eom_workflow.compiler import CompiledWorkflowDefinition
 from eom_workflow.local_embedding_request import LocalEmbeddingWorkflowRequestV11
 from eom_workflow.local_embedding_workflow import LocalEmbeddingWorkflowDefinition
@@ -14,8 +11,7 @@ from eom_workflow.local_embedding_workflow_receipt import (
     LocalEmbeddingStepOutput,
     parse_local_embedding_step_output,
 )
-from sqlalchemy import select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
 from eom_workflow_runner.local_embedding_admission import (
@@ -28,109 +24,33 @@ from eom_workflow_runner.local_embedding_execution_port import (
     NativeFencedRunnerTransaction,
 )
 from eom_workflow_runner.models import (
-    WorkflowCommandRecord,
     WorkflowInstanceRecord,
     WorkflowStepRunRecord,
+)
+from eom_workflow_runner.native_step_completion import (
+    complete_native_terminal,
+    native_application_step,
+)
+from eom_workflow_runner.native_workflow_transaction import (
+    native_fenced_runner_transaction as native_fenced_runner_transaction,
 )
 from eom_workflow_runner.repository import (
     CommandLeaseIdentity,
     CommandType,
     create_step_run,
     enqueue_command,
-    load_persisted_local_embedding_workflow_request,
-    require_command_lease,
 )
 from eom_workflow_runner.state_machine import (
-    CommandState,
     StepState,
-    WorkflowStage,
     WorkflowState,
     record_workflow_event,
-    transition_stage,
     transition_step,
     transition_workflow,
 )
 
 
-@contextmanager
-def native_fenced_runner_transaction(
-    factory: sessionmaker[Session],
-    *,
-    owner: LocalEmbeddingOwnerAdmission,
-    workflow_id: str,
-    request: LocalEmbeddingWorkflowRequestV11,
-    lease: CommandLeaseIdentity,
-) -> Iterator[Session]:
-    """Fresh root authority and Workflow→command lock order, never an inference scope."""
-    with transaction(factory) as session:
-        workflow = session.scalar(
-            select(WorkflowInstanceRecord)
-            .where(WorkflowInstanceRecord.workflow_id == workflow_id)
-            .with_for_update()
-            .execution_options(populate_existing=True)
-        )
-        if workflow is None:
-            raise WorkflowError(WorkflowErrorCode.WORKFLOW_NOT_FOUND, "native workflow disappeared")
-        command = require_command_lease(session, lease, for_update=True)
-        initial_command_state = command.state
-        if (
-            command.workflow_id != workflow_id
-            or workflow.definition_key != request.workflow_definition_key
-            or workflow.definition_version != request.workflow_definition_version
-            or workflow.definition_hash != request.workflow_definition_sha256
-            or workflow.role_schema_version != "local-embedding/1.0"
-            or workflow.protocol_version != "1.0.1"
-            or load_persisted_local_embedding_workflow_request(workflow.initial_request) != request
-            or workflow.request_payload != workflow.initial_request
-        ):
-            raise WorkflowError(
-                WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
-                "native mutation request or command differs",
-            )
-        owner.fence_mutation(session, request, lease)
-        yield session
-        session.flush()
-        final_command_state = command.state
-        owner.fence_mutation(session, request, lease)
-        # Authority checks can themselves consume time: expiry is checked LAST.
-        if final_command_state in {CommandState.SUCCEEDED.value, CommandState.FAILED.value}:
-            # Only this root's PROCESSING→terminal transition is allowed. Keep
-            # the acquired row lock, actual owner and unexpired exact identity.
-            current = session.scalar(
-                select(WorkflowCommandRecord)
-                .where(WorkflowCommandRecord.command_id == lease.command_id)
-                .with_for_update()
-                .execution_options(populate_existing=True)
-            )
-            if (
-                initial_command_state != CommandState.PROCESSING.value
-                or current is None
-                or current.state != final_command_state
-                or current.lease_owner != lease.runner_id
-                or current.lease_token != lease.lease_token
-                or current.lease_generation != lease.lease_generation
-                or current.lease_expires_at is None
-                or current.lease_expires_at <= datetime.now(UTC)
-            ):
-                raise WorkflowError(
-                    WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
-                    "native terminal command lost its acquired lease",
-                )
-        else:
-            require_command_lease(session, lease, for_update=True)
-
-
 def _native_step(session: Session, workflow_id: str) -> WorkflowStepRunRecord | None:
-    return session.scalar(
-        select(WorkflowStepRunRecord)
-        .where(
-            WorkflowStepRunRecord.workflow_id == workflow_id,
-            WorkflowStepRunRecord.step_key == "encode_batch",
-        )
-        .order_by(WorkflowStepRunRecord.attempt.desc())
-        .limit(1)
-        .execution_options(populate_existing=True)
-    )
+    return native_application_step(session, workflow_id, "encode_batch")
 
 
 def _checked_step(step: WorkflowStepRunRecord, request: LocalEmbeddingWorkflowRequestV11) -> None:
@@ -406,106 +326,26 @@ def complete_local_embedding_terminal(
     actor_type: str,
     actor_id: str,
 ) -> None:
-    with fenced_transaction() as session:
-        workflow = session.get(WorkflowInstanceRecord, workflow_id)
-        step = _native_step(session, workflow_id)
-        if (
-            workflow is None
-            or workflow.current_step_key != "complete"
-            or workflow.state not in {WorkflowState.RUNNING.value, WorkflowState.COMPLETED.value}
-            or step is None
-            or step.state != StepState.SUCCEEDED.value
-        ):
-            raise WorkflowError(
-                WorkflowErrorCode.LOCAL_EMBEDDING_OUTCOME_INVALID,
-                "native terminal has no exact successful receipt",
-            )
+    def validate(
+        session: Session, workflow: WorkflowInstanceRecord, step: WorkflowStepRunRecord
+    ) -> LocalEmbeddingStepOutput:
         _checked_step(step, request)
-        try:
-            output = _checked_completion(
-                session,
-                executor=executor,
-                workflow=workflow,
-                step=step,
-                request=request,
-                lease=lease,
-                output=parse_local_embedding_step_output(step.output_pointer_manifest),
-            )
-        except ValueError as exc:
-            raise WorkflowError(
-                WorkflowErrorCode.LOCAL_EMBEDDING_OUTCOME_INVALID,
-                "native terminal receipt could not be validated",
-            ) from exc
-        expected = {"embedding_receipt": output.model_dump(mode="json")}
-        terminal = session.scalar(
-            select(WorkflowStepRunRecord)
-            .where(
-                WorkflowStepRunRecord.workflow_id == workflow_id,
-                WorkflowStepRunRecord.step_key == "complete",
-            )
-            .order_by(WorkflowStepRunRecord.attempt.desc())
-            .limit(1)
-            .execution_options(populate_existing=True)
-        )
-        if workflow.state == WorkflowState.COMPLETED.value:
-            if (
-                workflow.runtime_context.get("final_pointer_manifest") != expected
-                or terminal is None
-            ):
-                raise WorkflowError(
-                    WorkflowErrorCode.LOCAL_EMBEDDING_OUTCOME_INVALID,
-                    "native terminal replay pointer differs",
-                )
-        elif terminal is None:
-            terminal = create_step_run(
-                session,
-                workflow_id=workflow_id,
-                step_key="complete",
-                step_type="terminal",
-                worker_role=None,
-                result_schema=None,
-                input_pointer_manifest={},
-                max_attempts=1,
-            )
-            terminal.started_at = datetime.now(UTC)
-            transition_step(terminal, StepState.RUNNING)
-            transition_step(terminal, StepState.SUCCEEDED)
-            terminal.finished_at = datetime.now(UTC)
-        if (
-            terminal is None
-            or terminal.attempt != 1
-            or terminal.step_type != "terminal"
-            or terminal.worker_role is not None
-            or terminal.result_schema is not None
-            or terminal.input_pointer_manifest != {}
-            or terminal.output_pointer_manifest is not None
-            or terminal.platform_job_id is not None
-            or terminal.state != StepState.SUCCEEDED.value
-        ):
-            raise WorkflowError(
-                WorkflowErrorCode.LOCAL_EMBEDDING_OUTCOME_INVALID,
-                "native terminal step history differs",
-            )
-        if workflow.state == WorkflowState.COMPLETED.value:
-            return
-        workflow.runtime_context = workflow.runtime_context | {"final_pointer_manifest": expected}
-        transition_stage(
+        return _checked_completion(
             session,
-            workflow_id,
-            WorkflowStage.COMPLETED,
-            "complete",
-            "LOCAL_EMBEDDING_COMPLETION_STAGE_ENTERED",
-            actor_type=actor_type,
-            actor_id=actor_id,
-            command_id=lease.command_id,
+            executor=executor,
+            workflow=workflow,
+            step=step,
+            request=request,
+            lease=lease,
+            output=parse_local_embedding_step_output(step.output_pointer_manifest),
         )
-        transition_workflow(
-            session,
-            workflow_id,
-            WorkflowState.COMPLETED,
-            "WORKFLOW_COMPLETED",
-            actor_type=actor_type,
-            actor_id=actor_id,
-            command_id=lease.command_id,
-            step_key="complete",
-        )
+
+    complete_native_terminal(
+        workflow_id=workflow_id,
+        step_key="encode_batch",
+        lease=lease,
+        validate_completion=validate,
+        fenced_transaction=fenced_transaction,
+        actor_type=actor_type,
+        actor_id=actor_id,
+    )

@@ -33,6 +33,8 @@ from eom_workflow_runner.readiness import (
     WorkflowExecutionReadiness,
     WorkflowRuntimeNotReady,
 )
+from eom_workflow_runner.reference_query_admission import ReferenceQueryOwnerAdmission
+from eom_workflow_runner.reference_query_execution_port import ReferenceQueryNativeExecutor
 from eom_workflow_runner.settings import WorkflowSettings
 from sqlalchemy import create_engine
 
@@ -112,6 +114,8 @@ def test_production_composition_supplies_catalog_adapter(tmp_path: Path) -> None
     assert runtime.runner.capacity_reconciler is runtime.runner.executor.orchestrator.capacity
     assert runtime.runner.local_embedding_owner is None
     assert runtime.runner.local_embedding_executor is None
+    assert runtime.runner.reference_query_owner is None
+    assert runtime.runner.reference_query_executor is None
     assert isinstance(runtime.runner.preset_validator, PresetModelValidationProcessor)
     assert runtime.runner.preset_validator.settings == runtime.platform_settings
     engine.dispose()
@@ -123,6 +127,16 @@ def test_native_composition_requires_paired_explicit_injection(owner_only: bool)
     executor = None if owner_only else cast(LocalEmbeddingNativeExecutor, object())
     with pytest.raises(ValueError, match="supplied together"):
         build_workflow_runtime(local_embedding_owner=owner, local_embedding_executor=executor)
+
+
+@pytest.mark.parametrize("owner_only", [False, True])
+def test_query_composition_requires_paired_explicit_injection_before_runtime_io(
+    owner_only: bool,
+) -> None:
+    owner = cast(ReferenceQueryOwnerAdmission, object()) if owner_only else None
+    executor = None if owner_only else cast(ReferenceQueryNativeExecutor, object())
+    with pytest.raises(ValueError, match="QUERY owner and executor must be supplied together"):
+        build_workflow_runtime(reference_query_owner=owner, reference_query_executor=executor)
 
 
 @pytest.mark.parametrize("with_validation", [False, True])

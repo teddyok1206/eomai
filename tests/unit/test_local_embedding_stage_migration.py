@@ -61,11 +61,22 @@ def test_revision_predecessor_upgrade_and_models_project_exact_total_boolean_gua
         for constraint in cast(Table, WorkflowStepRunRecord.__table__).constraints
         if isinstance(constraint, CheckConstraint)
     }
-    assert expected["ck_workflow_step_runs_local_embedding"] == guard
+    # 0053 stays frozen. Its exact predecessor meaning is retained by0054,
+    # while current models project the successor's two exact native purposes.
+    spec = importlib.util.spec_from_file_location(
+        "synthetic_query_step_successor",
+        Path("migrations/versions/20261013_0054_reference_query_step.py"),
+    )
+    assert spec is not None and spec.loader is not None
+    successor = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(successor)
+    assert guard == successor._PREVIOUS_PREDICATE
+    current_guard = expected["ck_workflow_step_runs_local_embedding"]
+    assert current_guard == successor._PREDICATE
     ddl = str(
         CreateTable(cast(Table, WorkflowStepRunRecord.__table__)).compile(dialect=POSTGRES_DIALECT)
     )
-    assert guard in ddl
+    assert current_guard in ddl
     assert "step_type VARCHAR(32) NOT NULL" in ddl
     assert "platform_job_id VARCHAR" in ddl and "FOREIGN KEY(platform_job_id)" in ddl
     instance_ddl = str(
