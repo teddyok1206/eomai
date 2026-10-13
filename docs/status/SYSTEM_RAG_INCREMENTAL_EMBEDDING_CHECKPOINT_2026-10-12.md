@@ -1092,3 +1092,22 @@ full18 재실행 PASS는 host note에 보존했다. 이 source 결과로 actual 
 계약을 맞춘 뒤 새 explicit commit/wheel/source/input으로 재조립해야 한다. 기존 E5 main/
 model-only 설치와 과거 실패·candidate·backup은 보존한다. 아직 모델/GPU 실행0, 수치 비교/
 기본값 NOT_EVALUATED / NOT_ACTIVE다.
+
+## 인증된 owner/session 전달 source 구현 — 2026-10-13 UTC
+
+source13+note를 정독하고 raw SHA를 대조한 root gate는13-suite **384 PASS13.13s**, strict10/
+Ruff/format11 PASS다. 기존 Starlette/httpx warning1개는 보존하며 dependency를 설치하지 않았다.
+고정 API에 한 번 genuine HMAC capture를 요청하고, 같은 실제 socket·fresh nonce·canonical
+request/reply·짧은 UTC/deadline과 mandatory provider admission을 확인한 후 operation-local
+opaque capture를 전달한다. controller만 bearer FD를 소비하며 worker에는 token/key/source
+authority를 전달하지 않는다. 현재 caller-root SQL fence·Catalog source checks는 그대로 필수다.
+
+API OpenAPI의 기존 path/component 의미는 모두 그대로다. 새 auth-control capture path와 함께
+이전 tracked fae10bab retry/v1.1의 snapshot 누락도 authoritative regeneration에 반영했다.
+새 retry 동작을 만든 것은 아니다. auth capture는 idempotency cache나 saved reply 재생에
+들어가지 않으며 operator 권한·runtime/endpoint override를 wire에서 받지 않는다.
+
+**SOURCE_ONLY / NOT_ACTIVE**. 실제 보호된 API release/wheel/config/process/Identity key ownership
+admission adapter, compatible 배포·실제 capture, Catalog bridge/native owner/executor와 공식
+service identity는 남아 있다. fixture callback·ASGI/socket 테스트나 decoded DTO는 실제 권한/
+admission 증거가 아니다. production DB/IAM/NAS/model/GPU 변경0, 전체 목표 ACTIVE다.

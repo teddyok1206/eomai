@@ -342,3 +342,119 @@ Root independently reviewed all seven frozen protocol paths and matched the raw 
 gate passed **318 tests in7.07s**, strict mypy **eleven files PASS**, Ruff and format **three files PASS**.
 The canonical/schema mirror and single package-data resource remain exact. No response DTO can mint
 the opaque capture; endpoint/provider/bridge/actual authentication activation still remain separate.
+
+## Approved transport behavior delta — before implementation
+
+Protocol bytes/models are frozen at `4e5093d6`. This next source phase implements the narrow
+transport/export/import path only; bridge, native owner/executor, DB/IAM, installed provider,
+deployment, model/GPU and automatic service behavior remain outside it.
+
+1. **Responsibility.** Identity infrastructure exports only a genuine existing capture and imports
+   only a separately admitted actual transport observation. Orchestrator/controller infrastructure
+   owns the fixed HTTP/FD exchange; the API route invokes existing `AppServices.auth.capture_access`.
+2. **Canonical source.** Export reads the existing Identity private capture validator. Import binds
+   an actual held connected socket, required protected-provider admission and configured pin,
+   canonical reply/exact request SHA and current UTC; decoded JSON or an audit DTO alone cannot mint.
+3. **Identity.** One fresh request ID/nonce belongs to one exchange. The mandatory local
+   `FixedIdentityProviderPin` reuses the actual API release's full40 source commit and retained API
+   wheel raw SHA plus protected non-secret `/etc/eom-api/api.yaml` raw SHA. It creates no new
+   provider ID/revision/registry. Pins are independently configured, not response claims or grants.
+4. **Resolution.** Admission asserts those exact keyword pins before and after transport/import.
+   The client calls existing public `require_fixed_api_peer_socket` before Authorization bytes and
+   retains the same live socket identity through import. Provider/config/peer disappearance denies.
+5. **Access.** One bounded inherited bearer FD, one fixed POST, one genuine HMAC verification and
+   one operation-local capture; no actor/request chooses role, endpoint, provider, config or runtime.
+6. **Structures.** Tiny frozen pin plus private-construction observation/witness and existing opaque
+   capture. No generic capability framework, registry, persistent credential or response cache.
+7. **Bounds.** Canonical4KiB request/8KiB response, fixed finite total transport deadline and current
+   UTC response bracket. API checks streamed bytes before assembly, with bounded header/token input.
+8. **Concurrency.** HTTP completes before caller-root locks. Server auth completes its existing root;
+   capture later requires the unchanged SQL fence in every owner root. No `/me`/HTTP/refresh while
+   locks are held; no lifetime/TTL mutation is added to the existing fence.
+9. **Direction/ownership.** Identity imports no Orchestrator/CLI/private Catalog modules. The client
+   imports supported Identity interfaces and the existing public Orchestrator fixed-peer/FD helpers.
+   The new API operation is auth-control metadata, not a native permission/execution route.
+10. **Failure/retry.** Content-free codes only; no raw bearer/key/verifier digest/full validation
+    payload in repr/log/error/audit. Missing admission, malformed/copy-mutated observation, wrong
+    peer/pin/hash/time, timeout or server-close denies; finally closes the connection. No reconnect,
+    auto-refresh or saved reply replay. A new operation must authenticate with a fresh challenge.
+11. **Alternative/shared creation.** Export cannot use `/me`; import cannot use an unchecked DTO.
+    Factor only existing `_CapturedValues`→opaque origin creation into one private factory reused
+    by genuine TokenService mint and admitted import. The exact four creation lines move unchanged,
+    with value validation retained; no public constructor/serializer/unchecked mint is introduced.
+
+Exact source/test scope:
+
+| Path | Delta |
+| --- | --- |
+| `services/identity_service/eom_identity_service/owner_session_transport.py` | New genuine export, mandatory configured provider/admission and opaque actual observation/import |
+| `services/identity_service/eom_identity_service/authenticated_session_fence.py` | Private single creation factory only; authentication/fence/lock/TTL semantics unchanged |
+| `services/identity_service/eom_identity_service/__init__.py` | Necessary supported additive transport exports |
+| `services/orchestrator/eom_orchestrator/identity_owner_session_provider.py` | New fixed one-exchange provider, real public peer/FD reuse, no key/SQL/native operation |
+| `apps/application_api/eom_api/routers/owner_session_capture.py` | New bounded canonical route; exactly one existing AuthService capture call |
+| `apps/application_api/eom_api/app.py`, `openapi.py` | Additive router/auth-control metadata registration only |
+| `tests/unit/test_owner_session_transport.py` | Genuine export, admitted observation, copied/forged/missing admission/current pins/clock negatives |
+| `tests/unit/test_identity_owner_session_provider.py` | Actual forward source wiring with synthetic socket/provider; peer-before-bearer, deadlines, caps, no retry, cleanup/redaction |
+| `tests/api/test_owner_session_capture_route.py` | Exactly-once genuine TokenService-backed source auth, canonical request/response and sanitized negative route tests |
+| This note | Ordered boundaries/source gates/status |
+
+The trusted `assert_current(source_commit=..., wheel_sha256=...,
+configuration_sha256=...) -> None` admission adapter has no default. Source callback/fake socket
+success is not installed production admission. Root still must bind actual provider release,
+protected configuration/key ownership and peer process to this port before activation; the source
+forward path calls it rather than substituting a permanent-unavailable fake or a DTO claim.
+The non-secret configuration hash does not hash, disclose or copy the token key. Admission must
+independently bind the actual installed API process/release/configuration and protected Identity
+provider/key ownership; a build-info response, parsed config or callback success alone is not proof.
+The fixed API route/URI is `POST /api/v1/auth/owner-session-capture` at127.0.0.1:8765. No authority
+material reaches workers; no API process becomes native executor or NAS publisher.
+
+The additive route also requires the existing API contract artifact checkpoint: add only
+`auth_owner_session_capture` to `tests/api/test_openapi_contract.py`'s auth-mutation exceptions,
+and regenerate `api/openapi/eom-api-v1.openapi.json` plus its `.sha256`. This auth-control handoff
+must not enter an idempotency response cache; every exchange verifies the bearer again. The raw
+stream parser remains4KiB-bounded and its OpenAPI requestBody uses the frozen canonical request
+schema. Existing endpoints/spec semantics and the seven protocol-phase bytes remain unchanged.
+These three additional paths are explicitly approved source contract maintenance, not API deployment.
+
+The authoritative regeneration also reflects pre-existing snapshot drift: root confirmed the
+already tracked `fae10bab` retry route `/knowledge/inference-transfer/workflows/{workflow_id}/retries/v1.1`
+and `FailedComparisonStepId`/`InferenceTransferPairRetryRequestV1` components were absent from the
+old committed snapshot. They are not new source additions in this phase. All prior snapshot paths
+and components compare structurally unchanged; no extra retry implementation was made here.
+
+### Transport source checkpoint — not installed admission
+
+The source forward path now requires configured `FixedIdentityProviderPin` and actual admission;
+there is no production default or permanent-unavailable fake implementation. Export reads only a
+genuine existing capture; a private single creation factory is shared with the one-use admitted
+transport importer. Current peer/provider/pins, held socket identity, request SHA, canonical bytes,
+UTC bracket and ten-second deadline are checked before minting. The imported opaque capture is
+still not authority without the unchanged caller-root SQL fence/current Catalog checks.
+
+The new three focused files passed **58 tests in2.62s**. The thirteen-suite source/API regression
+passed **384 tests in13.75s** (58 new transport,318 existing protocol/Identity/CLI and8 API snapshot/
+endpoint tests). API/core strict mypy passed the ten behavior Python paths; Ruff and format passed
+those ten plus the existing OpenAPI test. Initial copy-test fixtures expected downstream denial,
+but copying was already rejected by the existing immutable classes; fixtures now assert that and
+also test manual copied origins. Typing/style fixture issues were corrected without weakening
+checks. The existing Starlette/httpx deprecation warning was retained; no dependency was installed.
+
+OpenAPI JSON raw SHA is `09e88b73fead0147f3447179756b5dc1882e2bfe56c0ce0ffd224ae1f0cee2ce`;
+the sibling file is exactly `api/openapi/eom-api-v1.sha256`. All six non-note protocol-phase paths
+retain their prior raw hashes. No live API/DB, root, key/config read, model/GPU, native owner/executor,
+bridge, role/grant, runtime activation or automatic service registration was performed here.
+
+Root independently read all thirteen source/artifact changes plus this note and matched their
+raw hashes. The same thirteen-suite gate passed **384 tests in13.13s**, with the existing one
+Starlette/httpx warning retained; strict mypy **ten files PASS**, Ruff lint/format **eleven files
+PASS**. Structural OpenAPI comparison independently confirmed every previous path/component
+unchanged and the two documented additive paths. These are source gates, not installed admission.
+
+Actual follow-up input/output requirements: root must supply existing full40 API release commit,
+retained API-wheel SHA, protected non-secret API-config SHA and an independently accepted observer
+binding the actual process/peer/config/Identity-key ownership to those pins. Its assertion returns
+no grant. The fixed provider consumes only one inherited bearer FD and returns the opaque operation
+capture; it returns no token/key/serialized authority. Admission cannot be inferred from this source
+test callback, a decoded response or API build-info alone. Root separately owns compatible deployment
+and actual provider acceptance; service identity/released `LOCAL_EMBEDDING_INDEX` remains required.

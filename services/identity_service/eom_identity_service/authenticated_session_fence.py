@@ -223,6 +223,12 @@ def _capture_verified_access(
         api_session.idle_expires_at,
         api_session.refresh_generation,
     )
+    return _new_authenticated_capture(values)
+
+
+def _new_authenticated_capture(values: _CapturedValues) -> AuthenticatedOperatorSession:
+    """Identity-private shared creation after genuine verification or admitted transport."""
+    values.__post_init__()
     capture = object.__new__(AuthenticatedOperatorSession)
     object.__setattr__(capture, "_values", values)
     object.__setattr__(capture, "_origin", _CaptureOrigin(ref(capture), values, values.pin()))

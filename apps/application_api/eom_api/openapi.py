@@ -19,6 +19,7 @@ AUTH_CONTROL_OPERATIONS = frozenset(
         "auth_logout",
         "auth_logout_all",
         "auth_me",
+        "auth_owner_session_capture",
         "auth_account",
         "auth_change_password",
         "auth_update_credentials",
