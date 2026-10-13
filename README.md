@@ -244,14 +244,18 @@ seed/delta나 GPU 기본값 전환의 완료 증거는 아닙니다.
 검증합니다. 합성 IAM/model 경계의 검증은 실제 사용자·모델·운영 활성화의 증거가
 아니며, 실제 seed/delta/query·자동 service identity는 아직 남아 있습니다.
 보호된 owner wheel은 별도로 설치했고 실제 운영 실행 계정의 모듈 로딩·고정 CPU
-readiness 확인은 통과했습니다. 수치 prefix/config/receipt·운영 서비스는 바꾸지 않았습니다.
+readiness 확인은 통과했습니다. 별도 owner 설치에서는 수치 prefix/config/receipt를
+유지했고 기존 서비스를 바꾸지 않았습니다.
 독립 release 검사는 비-Codex 임베딩 정의도 공통 protocol 계산으로 확인합니다.
-운영 metadata 조회에서 임베딩 registry 테이블 미적용과 기존 controller의 `app,public`
-검색 경로를 확인했습니다. 새 owner 전용 `app,pg_catalog` 연결을 추가했으며 기존
-서비스의 연결·권한은 유지합니다. 최신 보호 owner 설치본에서도 그 연결을 확인했으며,
-운영 DB head는0051·새 registry4개 테이블은 미적용입니다. 지원된 additive migration과
-실제 Identity/control
-연결을 마치기 전에는 운영 corpus 인덱싱 완료로 표시하지 않습니다.
+운영 metadata 조회에서 발견한 기존 controller의 `app,public` 검색 경로는 native owner
+전용 `app,pg_catalog` 연결로 분리했습니다. 이후 백업·quiescence 확인과 보호된 정확한
+0052/0053 callback을 거쳐 운영 DB와 API/platform을 호환 source `415d3c58`로 정렬했습니다.
+운영 head0053·registry4개 테이블·API live/ready·격리 검증·관련9개 서비스 복원은 PASS입니다.
+인증 없는 owner-session capture 요청도 올바르게401을 반환합니다. 수치 CPU 환경은
+변경하지 않았고 기존 기록을 보존했습니다. 이 배포가 실제 operator capture, corpus
+seed/delta/query·자동 service indexing의 완료 증거는 아닙니다. 실제 Identity/control
+연결과 해당 실행 gate가 남아 있습니다.
+[운영 배포 기록](docs/operations/INCREMENTAL_EMBEDDING_LIVE_RELEASE_2026-10-13.md)을 참고하세요.
 
 최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와
 strict type/lint/format PASS입니다. 실제 임시 DB28개 사례에는 독립 실행기 claim 경쟁과

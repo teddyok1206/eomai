@@ -2240,3 +2240,38 @@ registry4개 테이블은 모두 미존재다. 이것은 정상 서비스 장애
 forward는0이고 기존7373/28cfc owner release와 실패 기록은 그대로 보존한다. 다음 배포는
 0052와0053의 exact source/context/target과 API 호환 조합을 먼저 고정하며, 이 상태에서
 native seed를 제출하거나 현재 head를 최신이라고 가정하지 않는다.
+
+## 2026-10-13 21:51 UTC — 운영0052/0053와 API 실제 정렬
+
+[운영 기록](../operations/INCREMENTAL_EMBEDDING_LIVE_RELEASE_2026-10-13.md)에 정확한
+source/tree/archive/wheel/context, 사전 상태·backup·callback·복원과 다음 gate를 기록했다.
+선행 metadata에서 발견했던 운영 registry 미적용은 더 이상 현재 상태가 아니다.
+작업/lease/chat/요청 quiescence를 전후 확인하고 관련8개 producer/API를 중지한 제한 창에서
+기존 보호 callback으로0051→0052→0053를 적용했다. 행 직접 변경·실패 이력 재해석·pytest는 없다.
+
+별도 frozen0052 source73fe4d95/context1.1과 current source415d3c58/context1.2를 사용했고,
+Source/CURRENT_MIGRATION_REVISION을 조작하거나 callback을 head로 바꾸지 않았다.
+운영 새 backup796094885 bytes와 manifest 검증 PASS 후 작업했다. 별도 root operator
+interpreter와 수치 CPU prefix/config/receipt는 그대로다.
+
+현재 API/contracts/platform source415d3c58 설치, metadata·fixed role reconcile·PDF runtime·
+API isolation PASS. API LIVE/READY와 관련9개 active, stopped 이전 상태로 복원했다.
+실제 UID990/GID1000 controller에서 exact app,pg_catalog, 기존8개 privilege metadata,
+운영 head20261012_0053, registry4개 테이블 PRESENT/missing0을 다시 확인했다.
+Unauthenticated capture401은 receiver 활성·거부 의미만 검증하며 actual operator/source
+admission의 PASS로 확대하지 않는다. 모델/GPU forward·native StartUnit·seed 제출은0이다.
+
+6-suite release boundary193 PASS,3.00s. 기존0051 전용 static assertion은 현재 정확한
+0052/0053 target/predecessor와 원 wrapper/old callback 보존을 검사하도록 갱신했다.
+추가 provider/API/HMAC regressions86 PASS,2.52s(기존 Starlette test-client deprecation1).
+이는 합성 token/provider 경계이며 actual authentication 증거가 아니다. 새 dependency는 없다.
+표준3-wheel build/RECORD/installed simulation PASS; source170/642·PG28과 합산하지 않는다.
+로컬 evidence `/tmp/eom-native-release-contexts.covTJwvQ/`와 표준 deployment rollback record를
+보존하며 secret/full content/backup bytes를 Git/Slack에 보내지 않았다.
+
+다음은 실제 installed Identity provider/process/config/key-ownership observer를 기존
+FD-only one-use capture와 current session fence에 연결하고 bounded real source/control을
+공식 owner로 고정해 seed/delta/reuse/query를 실행하는 것이다. 그 후 자동 service
+reconciliation·계획된 소비자·CPU/GPU 성능/default gate를 원래 범위대로 진행한다.
+`GOAL=ACTIVE`, `PRODUCTION_MIGRATION=0053`, `API_RELEASE_ALIGNMENT=PASS`,
+`REGISTRY_PREREQUISITE=PRESENT`, `NATIVE_WORKFLOW_LIVE=NOT_ACTIVE`.
