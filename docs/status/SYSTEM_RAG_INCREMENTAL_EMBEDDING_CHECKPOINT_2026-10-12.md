@@ -1128,3 +1128,18 @@ root staged failed CPU의 recoverable rename, exact original developer backup의
 정상 nonroot pip 조립·새 input/fingerprint를 통한 existing publish다. 기존 CPU profile flock을
 유지하고 old failed PRIVATE/phase/receipt/log/canonical archive를 보존한다. 새 retry key·DB row
 수정·failed history 성공 재해석·installed RECORD 직접 편집은 없다. 아직 NEW/model/GPU0다.
+
+## Genuine QUERY 입력 C1a 계약 gate — 2026-10-13 UTC
+
+Root가 C1 11decision 설계 및 frozen8 C1a 전체 변경을 정독/raw SHA 확인한 뒤16-suite
+**494 PASS30.65s, skip0**, strict/Ruff/format5 PASS를 확인했다. 실제 1–3행과 configured
+batch1–16을 분리하는 input-only1.1 successor이며 기존 input1.0·result/context1.0·C0 및
+수치3 module은 바꾸지 않는다. original296 schema resource inventory도 그대로다.
+Actual QUERY admission·encoder·queue·Artifact·소비자 전달은 아직 미활성이며 모델0/GPU0다.
+
+명시적 commit `753d35e9e64a62b530da53d3134be8373694b56c`에서 별도 private successor를
+nonroot offline 빌드했다. 원래 Git full40/PAX metadata를 갖는 source tar54804480B/raw
+`37dd15325c332ea227eaec4989e2fd6e1f4775a619453a9e6f95d653d93d234f`, platform wheel3484636B/raw
+`09ab75831ef18df75fcaa37be842d547dd3a5620a7fc5ffd4f073bc49bd3b175`다. 기존 public RECORD verifier
+PASS이며 `/tmp/eom-embedding-successor-release.nFXZFn3X`0700/dist0750/tar·wheel0600다.
+이는 **BUILT_NOT_ADMITTED**이며 actual canonical retention/복구/새 assembly/input/publish는 다음이다.

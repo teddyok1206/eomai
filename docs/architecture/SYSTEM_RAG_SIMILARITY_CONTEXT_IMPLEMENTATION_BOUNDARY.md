@@ -553,3 +553,228 @@ production implementation/admission/launcher/publisher was composed. Absence ret
 QUERY unavailability, never a benchmark replay or DOCUMENT relabeling. C1 production execution,
 C2 variation Artifact/plan/Pack delivery and all five consumer activations remain incomplete.
 No schema/DB/IAM/runtime/model/GPU/CLI/Pack/Git mutation occurred in this C0 source step.
+
+## 11. C1 genuine reference QUERY — design-only delta, 2026-10-13 UTC
+
+This section proposes the next bounded vertical path. It does not activate QUERY, amend released
+DOCUMENT contracts, authorize DB/root/runtime actions, or claim that an installed owner exists.
+The first connection remains an authorized approved-reference query for **past-exam variation**;
+private drafts/chat queries and the other four consumers are not introduced here.
+
+### 11.1 Protocol necessity before behavior
+
+The frozen `EmbeddingReferenceQueryInput/1.0` limits both row count and `batch_size` to three.
+The actual backend reports its configured numerical recipe, not the number of rows in a final
+partial batch. An admitted QUERY/DOCUMENT pair configured with batch size four cannot be called
+three, resized, padded with invented rows, or silently assigned a different runtime. A proposed
+**input-only `/1.1` successor** keeps one to three genuine rows but permits the existing numerical
+recipe bound of 1–16. It reuses `ReferenceQuerySpaces`, released view recipes, encoding pointers
+and float-free canonical helpers. The frozen input `/1.0` parser and schema remain unchanged.
+
+`EmbeddingReferenceQueryResult/1.0` contains no batch-size field: it pins the exact request hash,
+spaces, recipe, input set and shard. A separate `/1.1` input/result-closure validator can therefore
+retain that result and the existing context `/1.0` execution pointer without a context/result
+successor. Additive public parsing accepts the two literal input versions only; it must not widen
+the old parser or treat arbitrary schema names as an extension mechanism.
+
+The fixed native index workflow, request `/1.1`, execution policy, encoding reservations and
+receipts are **DOCUMENT-only**. QUERY needs its own small closed controller request/purpose and
+fixed application operation, while reusing existing queue, Job, command-lease and Artifact owners.
+The current DB check `ck_workflow_step_runs_local_embedding` allows only application result
+`incremental-embedding-result@1.0` and `step_key='encode_batch'`. A real queued QUERY application
+step consequently needs an additive conditional-check migration. Source tests cannot bypass
+that check or relabel a QUERY result as the index result. Existing `LOCAL_EMBEDDING` stage can be
+reused; no new queue, table, registry or indexing-service identity is justified by this path.
+
+These are source-byte observations. Whether the currently installed registered DOCUMENT indexes
+have batch size four, exact compatible model/runtime/view recipes, an admitted native QUERY
+purpose, or a usable current-owner continuation remains **UNKNOWN** until actual preflight.
+An input-only contract successor is not such preflight or a GPU approval.
+
+### 11.2 Eleven required decisions
+
+1. **Responsibility/boundary:** Catalog's existing verifier prepares the exact authorized anchor
+   and candidate scope; Orchestrator's native owner executes one bounded QUERY and publishes it;
+   Runner retains existing queue/claim/state-machine responsibilities. C0 consumes only an
+   admitted committed result through its mandatory read port. No consumer gets a direct model,
+   PostgreSQL or NAS capability. C1 ends at that read port, not at an activated authoring Pack.
+2. **Canonical source:** Original approved Item revision, accepted profile/report pointers,
+   pinned official Graph/policy and registered index revisions remain authoritative. Native QUERY
+   text is the existing released recipe's bounded anchor projection, not a new accepted report,
+   private draft or full copied Item. The published QUERY file set is canonical for that execution.
+3. **Identity/revision:** Keep context request ID/hash, query request ID/hash, logical native Job,
+   publication-owner Job, Artifact/revision/raw member hashes, index/namespace revision, paired
+   spaces and numerical recipe separate. One query Job belongs to one exact context request;
+   no global text/query cache, DOCUMENT encoding-key reservation or corpus binding is created.
+4. **Pointers/resolution:** Controller request pins the exact context request and every selected
+   registered index, namespace, Graph, policy, anchor/profile/report, runtime bundle and resource
+   policy. Worker input carries only the bounded QUERY DTO. Actual current caller is outside the
+   wire. Source owner checks existence, lifecycle, permission, exact schema/media/hash and query
+   derivation before submission/claim and again after execution. An absent index is explicit
+   unavailable; stale/mismatched or revoked references fail closed, never resolve `latest`.
+5. **Access patterns:** Context-key reservation and Job/command ID lookups are indexed; exact
+   immutable source/member lookups are batched; view selection and rows are ordered tuples;
+   duplicate/index/member identity checks use maps/sets; events are append-only. Three views
+   share one genuine query execution and may not mix model/runtime/device/partition/recipe.
+6. **Structures/indexes:** Reuse existing `jobs_idempotency_key_key`, Workflow command queue and
+   Job/event records. Public `submit_structured_job` supplies the reservation primitive, but its
+   check-then-insert alone is not a concurrency guarantee: the owner needs the existing bounded
+   unique-key/savepoint/re-read pattern and exact immutable-request comparison. Reserve one
+   context-specific logical QUERY Job, not three independent per-view jobs or a cloned encoding
+   reservation framework. No new DB index is proposed without an observed missing lookup plan.
+7. **Scale/complexity:** One inference has 1–3 rows; exact document reads stay bounded by the
+   existing 1,024-source limit and three views. Preparation/ranking remains O(P + V*P*d) with
+   map/set deduplication and one read per unique shard member. Query binary is at most three
+   float32 rows; no candidate is re-encoded and no vector/body is persisted in DB/wire context.
+8. **Transactions/concurrency:** Short writable owner roots acquire the actual Identity/session
+   fences before submission/claim/savepoints and recheck command owner/token/generation/expiry
+   late before commit. No SQL root, source-permission cache or C0 preparation window survives
+   slow inference. Renewals use their own fresh fenced root. Source population is independently
+   reauthorized in fresh roots before computation and before publication/disclosure, including
+   unranked/no-report rows. Expired user authority means explicit unavailable, not service/admin
+   impersonation or a saved audit grant. CUDA acquires the shared GPU0 lease before model/CUDA
+   initialization and retains it through synchronization, unit exit and cgroup cleanup. Busy is
+   WAIT, not a second inference or automatic CPU fallback.
+9. **Dependency/ownership:** Reuse the actual `AuthService.capture_access` transport and
+   `AuthenticatedSessionFence.assert_current` in the controller, never in the worker. The existing
+   Catalog public prepare/read/reauthorize methods remain the source authority. The native backend
+   factory, fixed prefix/UID/RECORD admission, backend and codec are reused; purpose-specific launch
+   is independently required. `ControlFileSetPublisher` remains the only NAS commit owner. Add
+   cohesive QUERY functions to existing adapters instead of a plugin/provider framework.
+10. **Failure/retry/idempotency:** Same context/request/key replays the same exact committed output
+    with fresh current authority; it never reruns inference to repair unknown processing. Different
+    request bytes conflict. Failed/partial/uncertain launch or teardown history is preserved;
+    no automatic model retry or newly allocated key escapes it. Permissions, hashes, purpose,
+    runtime and late revocation fail closed with no candidates/counts/evidence. Genuine optional
+    runtime/index absence is explicit unavailability and preserves only authorized Graph evidence.
+11. **Simpler alternative:** Reusing the benchmark QUERY would borrow a measurement admission;
+    changing DOCUMENT to QUERY would corrupt purpose provenance; running the old on-demand ranker
+    would re-encode the corpus. Instead, use one actual QUERY plus existing persisted DOCUMENT rows.
+    The new fixed operation is the smallest truthful queue/Artifact extension. No ANN, query cache,
+    generic multimode framework, corpus re-encoding, automatic policy grant or five-consumer rewrite.
+
+### 11.3 Exact staged source candidates, not an edit authorization
+
+Each stage requires root review and an explicit file freeze before the next. Existing numerical
+implementation files (`embedding_offline_backend.py`, `inference_transfer_vectors.py` and
+`embedding_vector_binary.py`) do not need changes: backend already accepts genuine `purpose=QUERY`.
+Their exact bytes must remain paired with the registered DOCUMENT space. Physical native profiles
+`CPU_INDEX_FP32`/`CUDA_INDEX_FP32` name existing fixed installations, not a QUERY permission. A new
+QUERY entrypoint may reuse them only after separate actual purpose/unit admission, without adding
+duplicate model installations or asserting that an INDEX runtime proof grants QUERY execution.
+
+- **C1a — input-only contract first:** proposed new
+  `schemas/knowledge/embedding-reference-query-input-v1_1.schema.json`, its packaged mirror under
+  `packages/catalog_contracts/eom_catalog_contracts/resources/knowledge/`, and
+  `packages/catalog_contracts/eom_catalog_contracts/embedding_reference_query_v11.py`; additive
+  registry/export changes in the existing Catalog `validation.py` and `__init__.py`; new
+  `tests/unit/test_embedding_reference_query_v11_contracts.py`. Only if required by the frozen
+  inventory test, add this one literal resource to the existing exact exclusion in
+  `tests/unit/test_inference_transfer_embedding_contracts.py`, preserving original 296/raw inventory
+  SHA and every predecessor schema byte. Independently test the new resource's raw hash and mirror.
+  C0's eight Python files remain unchanged in this first step.
+- **C1b — pure genuine encoder/handoff:** existing
+  `services/catalog_service/eom_catalog_service/embedding_encoder_adapter.py`,
+  `embedding_execution_ports.py`, `embedding_native_stdio.py`, `embedding_native_entrypoint.py`;
+  additive QUERY functions and a small frozen QUERY output value, with protected-FD primitives
+  shared inside the existing owner. No request-supplied parser, executable, module, path or factory.
+  Extend existing `test_embedding_incremental_encoding.py`, `test_embedding_native_stdio.py`,
+  `test_embedding_native_entrypoint.py` for QUERY and complete DOCUMENT regressions; add
+  `test_embedding_reference_query_encoding.py`. No native launch or installed-identity claim.
+- **C1c — fixed queued control/receipt, only after its schema review:** proposed new
+  `schemas/workflow/reference-query-execution-v1.schema.json` and packaged mirror;
+  `packages/workflow/eom_workflow/reference_query_execution.py` for bounded owner request/policy/
+  step-output/receipt and `reference_query_workflow.py` for one fixed operation/definition.
+  Reuse `LocalEmbeddingResourceProfile` as a value, not its DOCUMENT policy/container. Add literal
+  support to existing workflow `schemas.py`, `compiler.py`, `admission.py`,
+  `definition_execution_protocol.py`, `__init__.py`. Runner candidates are the existing
+  `repository.py`, `engine.py`, `models.py`, plus proposed cohesive `reference_query_execution.py`;
+  factor the existing native step's mechanical lease/transaction checks only where both real
+  operations use them. One newly allocated migration after the actual current head extends only
+  the fixed-step CHECK and refuses destructive downgrade with QUERY history. Its exact filename
+  cannot be safely chosen from this source snapshot. No table/grant/queue/framework is proposed.
+- **C1d — actual owner, Artifact and C0 read seam:** proposed
+  `services/orchestrator/eom_orchestrator/reference_query_owner.py` owns source/current-session/
+  Job/unit scope; extend existing `embedding_artifact_store.py` with `publish_reference_query`
+  and its exact query Artifact type, reusing protected local reads and `ControlFileSetPublisher`.
+  Proposed `services/catalog_service/eom_catalog_service/reference_query_artifact_read.py`
+  implements only the existing committed-query read port through supported owner reads, not a
+  second source provider. Existing `similarity_context_ports.py` and `similarity_context_service.py`
+  add literal input `/1.1` support after approval; result/context predecessors stay unchanged.
+  Concrete installed owner/session/unit/claim/lease proof is a separate operational prerequisite;
+  an injected fake, saved provider DTO or source protocol is not its implementation.
+
+C1c/C1d are a proposed bounded vertical inventory, not permission to edit all those files now.
+Before their approval, inspect the actual root owner's public launch/read composition and freeze
+the smaller resulting exact set. If an essential public seam is absent, retain explicit unavailable
+or propose a narrow owner extension; never call another owner's private persistence/launch code.
+
+### 11.4 Actual forward path, authority-free worker input and source gates
+
+The intended first path is: existing variation source resolution (`RegistryService`
+public `resolve_past_exam_variation_content`, then `WorkflowCatalogService` preparation) supplies
+an approved reference; existing Catalog owner independently prepares the exact request/scope and
+literal registered index pins; actual current owner submits the fixed native QUERY; existing queue
+claims it with real command lease; the worker runs `encode(..., purpose='QUERY')` over only anchor
+rows; Orchestrator validates/publishes the exact file set; committed-query read returns the existing
+typed result to C0; C0 reauthorizes and composes independent observations. The later C2 compatible
+plan/Pack sidecar pins that context for authoring/review. C1 alone must not claim that the existing
+variation worker already receives it. No authoring slot/parent SQL lease should be held waiting for
+a separate native query; durable asynchronous handoff belongs to that later compatible plan step.
+
+Current QUERY wire fields contain typed model/runtime/encoding/view values and bounded text, **not**
+an actual actor, role, permission, source filesystem path or executable. Model member names are
+validated relative identities resolved from protected fixed runtime roots, not arbitrary paths.
+Worker descriptors are inherited local files only. Controller supplies actual authority outside
+wire; any actor audit fields in its new closed request are derived from genuine capture and are
+never a grant. `ParentRoleToken`, bearer/access/refresh tokens, provider captures, DB/NAS locations,
+actual command lease token, runtime override flags and arbitrary source paths must not enter worker
+input, result, Artifact manifest, logs, SQL JSON or Slack. QUERY row text proves neither source rights
+nor scientific validity. Worker/result-supplied spaces are checked against actual admitted runtime.
+
+SOURCE gates must cover input1.0 byte preservation + new1.1 raw/schema/mirror/canonical/hash/strict
+scalar checks; same configured batch4 with one genuine partial row (not four invented rows);
+actual QUERY prefix/purpose and row order; same exact QUERY/DOCUMENT runtime/model/normalization;
+wrong purpose/device/batch/thread/recipe/row/hash/model-copy rejection; before/after backend drift;
+protected FD alias/seek/symlink/change/partial-write cases; exact Job replay and unique-key race;
+claim/heartbeat/late expiry and source/report/population revocation; GPU busy/uncertain cleanup;
+query-only Artifact commit/receipt/member bytes and publication Job linkage; no registry/index
+registration and no DOCUMENT re-encoding; committed-query current-authority read; optional absence
+versus corruption fail-closed; original DOCUMENT/Runner regressions and forbidden-layer imports.
+DB mutation tests are disposable only, installed/native/GPU tests explicitly opt-in. Static/fake
+SOURCE_PASS cannot be reported as owner/native/QUERY/runtime READY. Actual provider/session scope,
+registered numerical pair and installed purpose/unit admission remain mandatory UNKNOWNs until
+the corresponding supported preflight is performed.
+
+### 11.5 C1a source checkpoint — 2026-10-13 UTC
+
+The approved eight paths add only the closed input `/1.1` schema (raw SHA
+`sha256:03a2d1332fefef201d30baae59597dda49a46f5650c45bf1384cf20a1f08c81d`), its exact
+package-resource mirror, frozen model/literal parser, small `/1.1`-input `/1.0`-result closure,
+additive Catalog registry/exports and source contract tests. Canonical schema preceded model code.
+The package mirror follows the existing actual `resources/knowledge/` owner, correcting the
+earlier proposed `schemas/knowledge/` location; no alternate loader or packaging dependency.
+
+Rows remain 1–3; configured batch remains 1–16 without pretending to observe actual installation.
+Synthetic configured batch four with one partial row, all three views, canonical hashes, strict
+scalars, authority/path/extra rejection, nested model-copy/constructed corruption and released
+result member drift are covered. The legacy registry test excludes exactly the one new literal
+resource separately, retaining **296** and its original inventory SHA. Original query input/parser/
+validator/schema, result/context `/1.0`, all eight C0 Python paths and three numerical modules are
+unchanged. Tests/verification do not assert source authority or native QUERY execution.
+
+Explicit API Conda strict mypy, Ruff lint and format check **five Python files PASS**. The final
+sixteen-suite contract/composer/owner/registry/planner/codec/source-resolution regression is
+**494 PASS in 30.87s**, skip zero. Counts overlap prior C0 gates and are not summed. The first local
+pytest invocation omitted source `PYTHONPATH` and collected zero tests from the old installed
+package; the corrected explicit source path passed. Local fixture typing/format errors were fixed
+and all affected static/test gates rerun; no operation/history record was changed.
+
+**C1a SOURCE_ONLY / NOT_ACTIVE.** C1b encoder/handoff, C1c native queue/check/receipt, C1d actual
+owner/installed purpose/unit admission/Artifact read and C2 variation plan/Pack delivery remain
+unimplemented in this checkpoint. C0 does not consume input `/1.1` yet. No DB, IAM, runtime, model,
+GPU, Git, root, API, worker, Pack or numerical implementation mutation occurred.
+
+Root read the full C1 design and all eight C1a changes, matched their raw hashes, and independently
+reran the same sixteen suites: **494 PASS in30.65s, skip0**; strict mypy, Ruff and format **five
+Python files PASS**. Existing C0/numerical bytes and predecessor contracts remain unchanged.

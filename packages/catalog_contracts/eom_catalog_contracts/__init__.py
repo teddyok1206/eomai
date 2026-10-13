@@ -351,6 +351,13 @@ from eom_catalog_contracts.embedding_reference_query import (
     parse_embedding_reference_query_result,
     validate_reference_query_result,
 )
+from eom_catalog_contracts.embedding_reference_query_v11 import (
+    REFERENCE_QUERY_INPUT_V11_REF,
+    REFERENCE_QUERY_INPUT_V11_SCHEMA,
+    EmbeddingReferenceQueryInputV11,
+    parse_embedding_reference_query_input_v11,
+    validate_reference_query_result_v11,
+)
 from eom_catalog_contracts.embedding_registry import (
     EMBEDDING_REGISTRY_SCHEMA,
     MAX_EMBEDDING_REGISTRATION_BYTES,
@@ -1036,6 +1043,8 @@ __all__ = [
     "PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION",
     "PDF_DOCUMENT_REVIEW_PAGE_MAX_BYTES",
     "REFERENCE_QUERY_INPUT_REF",
+    "REFERENCE_QUERY_INPUT_V11_REF",
+    "REFERENCE_QUERY_INPUT_V11_SCHEMA",
     "REFERENCE_QUERY_RESULT_REF",
     "SIMILARITY_CONTEXT_REF",
     "SOLUTION_REFERENCE_NODE_TYPES",
@@ -1275,6 +1284,7 @@ __all__ = [
     "EmbeddingNumericalRecipe",
     "EmbeddingNumericalRuntimeDescriptor",
     "EmbeddingReferenceQueryInput",
+    "EmbeddingReferenceQueryInputV11",
     "EmbeddingReferenceQueryResult",
     "EmbeddingRuntimeBundle",
     "EmbeddingRuntimeBundlePointer",
@@ -1777,6 +1787,7 @@ __all__ = [
     "parse_embedding_native_runtime_config_bytes",
     "parse_embedding_numerical_runtime",
     "parse_embedding_reference_query_input",
+    "parse_embedding_reference_query_input_v11",
     "parse_embedding_reference_query_result",
     "parse_embedding_registration_command",
     "parse_embedding_registration_result",
@@ -1812,6 +1823,7 @@ __all__ = [
     "validate_mock_exam_placements",
     "validate_mock_exam_planned_placements",
     "validate_reference_query_result",
+    "validate_reference_query_result_v11",
     "validate_reviewed_authoring_guidance",
     "validate_science_acquisition_against_plan",
     "validate_science_corpus_manifest_against_acquisition",

@@ -102,6 +102,7 @@ def test_all_preexisting_schema_registry_metadata_and_resource_bytes_are_frozen(
             "embedding-native-runtime-config",
             "system-rag-similarity-context",
             "embedding-reference-query",
+            "embedding-reference-query-input-v1.1",
         }
     }
     assert len(resources) == 296
