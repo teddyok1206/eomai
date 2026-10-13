@@ -13,6 +13,9 @@ from eom_catalog_contracts.embedding_reference_query import (
     parse_embedding_reference_query_input,
     parse_embedding_reference_query_result,
 )
+from eom_catalog_contracts.embedding_reference_query_v11 import (
+    parse_embedding_reference_query_input_v11,
+)
 from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
 from eom_catalog_contracts.embedding_vector_binary import pack_unit_vectors
 from eom_catalog_contracts.inference_transfer_embedding import (
@@ -320,6 +323,53 @@ def test_three_independent_views_nonlexical_candidate_and_deterministic_display_
         again.model_dump(mode="json")
     )
     assert query.calls == 2  # Immutable query resolution, not encoding or model calls.
+
+
+def test_explicit_input_v11_configured_batch_four_composes_without_resizing_rows() -> None:
+    request, sources, query = case()
+    assert isinstance(query.value, VerifiedReferenceQueryRead)
+    original = query.value
+    native = parse_embedding_reference_query_input_v11(
+        seal(
+            original.request.model_dump(mode="json")
+            | {"schema_version": "embedding-reference-query-input/1.1", "batch_size": 4},
+            "request_sha256",
+        )
+    )
+    result = parse_embedding_reference_query_result(
+        seal(
+            original.result.model_dump(mode="json") | {"request_sha256": native.request_sha256},
+            "result_sha256",
+        )
+    )
+    member = ArtifactMemberPointer.model_validate(
+        original.result_member.model_dump(mode="json")
+        | {"sha256": content_sha256(result.model_dump(mode="json"))}
+    )
+    query.value = replace(original, request=native, result=result, result_member=member)
+    context = SimilarityContextApplicationService(sources, query).compose(CALLER, request)
+    assert context.status == "READY", context
+    assert context.query_execution is not None
+    assert context.query_execution.request_sha256 == native.request_sha256
+    assert len(native.rows) == 3 and native.batch_size == 4
+    assert len(context.candidates) == 2
+    assert sources.calls == ["prepare", "read", "reauthorize"]
+
+
+def test_input_v11_cannot_reuse_predecessor_result_hash_or_serialize_forged_values() -> None:
+    request, sources, query = case()
+    assert isinstance(query.value, VerifiedReferenceQueryRead)
+    native = parse_embedding_reference_query_input_v11(
+        seal(
+            query.value.request.model_dump(mode="json")
+            | {"schema_version": "embedding-reference-query-input/1.1", "batch_size": 4},
+            "request_sha256",
+        )
+    )
+    query.value = replace(query.value, request=native)
+    result = SimilarityContextApplicationService(sources, query).compose(CALLER, request)
+    assert result.status == "FAILED" and result.error_code == "QUERY_RESULT_INVALID"
+    assert result.candidates == () and result.query_execution is None and result.population is None
 
 
 @pytest.mark.parametrize("required", [False, True])

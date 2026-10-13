@@ -10,13 +10,16 @@ from pydantic import ConfigDict, Field, TypeAdapter, model_validator
 
 from eom_catalog_contracts.embedding_reference_query import (
     REFERENCE_QUERY_RESULT_REF,
-    EmbeddingReferenceQueryInput,
     EmbeddingReferenceQueryResult,
     ReferenceQueryExecutionPointer,
     ReferenceQuerySpaces,
     raw_similarity_contract_value,
     similarity_contract_document,
-    validate_reference_query_result,
+)
+from eom_catalog_contracts.embedding_reference_query_v11 import (
+    SupportedReferenceQueryInput,
+    parse_supported_reference_query_input,
+    validate_supported_reference_query_result,
 )
 from eom_catalog_contracts.embedding_registry import EmbeddingIndexId, EmbeddingIndexRevisionId
 from eom_catalog_contracts.inference_transfer_embedding import (
@@ -537,14 +540,15 @@ def parse_similarity_context(value: object) -> SimilarityContext:
 
 def validate_similarity_query_execution(
     context: SimilarityContext,
-    request: EmbeddingReferenceQueryInput,
+    request: SupportedReferenceQueryInput,
     result: EmbeddingReferenceQueryResult,
     result_member: ArtifactMemberPointer,
     shard_member: ArtifactMemberPointer,
 ) -> None:
     """Check supplied immutable values; this does not resolve or authorize their targets."""
     context = parse_similarity_context(context)
-    validate_reference_query_result(request, result)
+    request = parse_supported_reference_query_input(request)
+    validate_supported_reference_query_result(request, result)
     execution = context.query_execution
     result_member = ArtifactMemberPointer.model_validate(
         raw_similarity_contract_value(result_member)

@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from eom_catalog_contracts.embedding_reference_query import (
-    EmbeddingReferenceQueryInput,
     EmbeddingReferenceQueryResult,
 )
+from eom_catalog_contracts.embedding_reference_query_v11 import SupportedReferenceQueryInput
 from eom_catalog_contracts.inference_transfer_experiment import ExperimentView, PopulationSource
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
 from eom_catalog_contracts.knowledge import KnowledgeSolutionEvidencePointer
@@ -59,7 +59,7 @@ class VerifiedReferenceQueryRead:
     exist only at this explicit bounded local numeric boundary, not DB/wire/context.
     """
 
-    request: EmbeddingReferenceQueryInput
+    request: SupportedReferenceQueryInput
     result: EmbeddingReferenceQueryResult
     result_member: ArtifactMemberPointer
     shard_member: ArtifactMemberPointer

@@ -496,9 +496,26 @@ class CatalogEmbeddingRegistryVerifier:
         self, caller: EmbeddingRegistryCaller, request: SimilarityContextRequest
     ) -> PreparedSimilarityContext:
         """Capture once through the official owner; only anchor text leaves preparation."""
+        with self.sessions() as session, session.begin():
+            return self.prepare_similarity_context_in_session(session, caller, request)
+
+    @staticmethod
+    def _require_similarity_root(session: Session) -> None:
+        root = session.get_transaction()
+        if root is None or not root.is_active or session.in_nested_transaction():
+            raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
+
+    def prepare_similarity_context_in_session(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        request: SimilarityContextRequest,
+    ) -> PreparedSimilarityContext:
+        """Preserve the current native owner's root; never open or commit another root."""
+        self._require_similarity_root(session)
         request = parse_similarity_context_request(request)
         try:
-            with self.sessions() as session, session.begin(), session.no_autoflush:
+            with session.no_autoflush:
                 _owner, _reader, capture = self._similarity_capture(session, caller, request)
                 return self._prepare_similarity_capture(request, capture)
         except EmbeddingRegistryError as error:
@@ -511,9 +528,21 @@ class CatalogEmbeddingRegistryVerifier:
         prepared: PreparedSimilarityContext,
     ) -> tuple[ResolvedPinnedEmbeddingIndex, ...]:
         """Bounded views share one read window; full start/end capture is actual authority."""
+        with self.sessions() as session, session.begin():
+            return self.read_similarity_views_in_session(session, caller, request, prepared)
+
+    def read_similarity_views_in_session(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        request: SimilarityContextRequest,
+        prepared: PreparedSimilarityContext,
+    ) -> tuple[ResolvedPinnedEmbeddingIndex, ...]:
+        """Same checked read window in a caller root, with fresh start/end source fences."""
+        self._require_similarity_root(session)
         request = parse_similarity_context_request(request)
         try:
-            with self.sessions() as session, session.begin(), session.no_autoflush:
+            with session.no_autoflush:
                 _owner, reader, capture = self._similarity_capture(session, caller, request)
                 if self._prepare_similarity_capture(request, capture) != prepared:
                     raise SimilarityContextReadError("SOURCE_REVOKED")

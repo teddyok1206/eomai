@@ -15,6 +15,7 @@ from eom_orchestrator.file_set_control_artifacts import CONTROL_FILE_SET_PROTOCO
 from eom_orchestrator.local_embedding_control_artifacts import (
     EXECUTION_POLICY_ARTIFACT_TYPE,
     OWNED_INPUT_ARTIFACT_TYPE,
+    REFERENCE_QUERY_POLICY_ARTIFACT_TYPE,
     SOURCE_PLAN_ARTIFACT_TYPE,
     LocalEmbeddingControlArtifactPublisher,
 )
@@ -23,8 +24,49 @@ from sqlalchemy import func, select
 
 from tests.unit.local_embedding_admission_fixtures import native_fixture
 from tests.unit.test_control_file_set_publication import _publisher
+from tests.unit.test_reference_query_execution_contracts import case as query_case
 
 NOW = datetime(2026, 10, 13, 15, 0, tzinfo=UTC)
+
+
+def test_reference_query_policy_publication_replays_and_keeps_document_kind_separate(
+    tmp_path: Path,
+) -> None:
+    policy = query_case().policy
+    publisher, _engine = _publisher(tmp_path)
+    publisher.settings = replace(publisher.settings, workspace_root=tmp_path)
+    adapter = LocalEmbeddingControlArtifactPublisher(publisher, source_commit="a" * 40)
+    key = "synthetic-reference-policy:" + "c" * 32
+    receipt = adapter.publish_reference_query_policy(policy, idempotency_key=key, created_at=NOW)
+    assert (
+        adapter.publish_reference_query_policy(policy, idempotency_key=key, created_at=NOW)
+        == receipt
+    )
+    assert receipt.semantic_sha256 == policy.policy_sha256
+    with publisher.sessions() as session, session.begin():
+        pointer = receipt.member
+        reader = PinnedArtifactReadContext(
+            session, CatalogSettings(nas_artifact_root=publisher.settings.nas_artifact_root)
+        )
+        reader.prefetch(((pointer.artifact_id, pointer.artifact_revision_id),))
+        member = reader.read_pinned(
+            **pointer.model_dump(mode="python"),
+            expected_artifact_types=(REFERENCE_QUERY_POLICY_ARTIFACT_TYPE,),
+            expected_primary_file="policy.json",
+            max_bytes=64 * 1024,
+        )
+        assert member.payload == canonical_json_bytes(policy.model_dump(mode="json"))
+        job = session.scalar(select(JobRecord))
+        assert job is not None
+        assert b'"spaces"' not in canonical_json_bytes(job.request)
+    with pytest.raises(ControlPlaneError):
+        adapter.publish_policy(native_fixture().policy, idempotency_key=key, created_at=NOW)
+    with pytest.raises(ValueError):
+        adapter.publish_reference_query_policy(
+            policy.model_copy(update={"policy_sha256": "sha256:" + "f" * 64}),
+            idempotency_key=key + "bad",
+            created_at=NOW,
+        )
 
 
 def test_plan_and_policy_publish_through_existing_owner_and_catalog_resolves_exact_members(

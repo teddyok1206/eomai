@@ -7,10 +7,12 @@ import re
 from eom_catalog_contracts.embedding_reference_query import (
     REFERENCE_QUERY_RESULT_REF,
     ReferenceQueryExecutionPointer,
-    parse_embedding_reference_query_input,
     parse_embedding_reference_query_result,
     raw_similarity_contract_value,
-    validate_reference_query_result,
+)
+from eom_catalog_contracts.embedding_reference_query_v11 import (
+    parse_supported_reference_query_input,
+    validate_supported_reference_query_result,
 )
 from eom_catalog_contracts.embedding_vector_binary import read_unit_vectors
 from eom_catalog_contracts.inference_transfer_embedding import (
@@ -69,7 +71,7 @@ from eom_catalog_service.similarity_context_ports import (
 )
 
 
-def _validate_preparation(
+def validate_similarity_preparation(
     request: SimilarityContextRequest, prepared: PreparedSimilarityContext
 ) -> dict[str, PreparedSimilaritySource]:
     if not isinstance(prepared, PreparedSimilarityContext) or (
@@ -153,11 +155,11 @@ def _validate_query(
         or not isinstance(query.shard_member, ArtifactMemberPointer)
     ):
         raise SimilarityContextReadError("QUERY_RESULT_INVALID")
-    input_value = parse_embedding_reference_query_input(query.request)
+    input_value = parse_supported_reference_query_input(query.request)
     result = parse_embedding_reference_query_result(query.result)
     ArtifactMemberPointer.model_validate(raw_similarity_contract_value(query.result_member))
     ArtifactMemberPointer.model_validate(raw_similarity_contract_value(query.shard_member))
-    validate_reference_query_result(input_value, result)
+    validate_supported_reference_query_result(input_value, result)
     texts = dict(prepared.query_texts)
     expected = {
         selection.view: texts[selection.view]
@@ -353,7 +355,7 @@ class SimilarityContextApplicationService:
             ):
                 raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
             prepared = self.sources.prepare_similarity_context(caller, request)
-            sources = _validate_preparation(request, prepared)
+            sources = validate_similarity_preparation(request, prepared)
             query: VerifiedReferenceQueryRead | None = None
             unavailable: SimilarityUnavailableReason = "QUERY_NOT_OFFERED"
             query_views = {view for view, _text in prepared.query_texts}

@@ -27,6 +27,11 @@ from eom_workflow.local_embedding_source_plan import (
     LocalEmbeddingSourcePlan,
     parse_local_embedding_source_plan,
 )
+from eom_workflow.reference_query_execution import (
+    REFERENCE_QUERY_POLICY_REF,
+    ReferenceQueryExecutionPolicy,
+    parse_reference_query_execution_policy,
+)
 from pydantic import TypeAdapter
 
 from eom_orchestrator.file_set_control_artifacts import (
@@ -37,6 +42,7 @@ from eom_orchestrator.file_set_control_artifacts import (
 
 SOURCE_PLAN_ARTIFACT_TYPE = "control_local_embedding_source_plan"
 EXECUTION_POLICY_ARTIFACT_TYPE = "control_local_embedding_execution_policy"
+REFERENCE_QUERY_POLICY_ARTIFACT_TYPE = "control_reference_query_execution_policy"
 OWNED_INPUT_ARTIFACT_TYPE = "control_local_embedding_owned_input"
 
 
@@ -115,6 +121,25 @@ class LocalEmbeddingControlArtifactPublisher:
             member="input.json",
             schema=INPUT_SCHEMA_REF,
             artifact_type=OWNED_INPUT_ARTIFACT_TYPE,
+            idempotency_key=idempotency_key,
+            created_at=created_at,
+        )
+
+    def publish_reference_query_policy(
+        self,
+        policy: ReferenceQueryExecutionPolicy,
+        *,
+        idempotency_key: str,
+        created_at: datetime,
+    ) -> PublishedLocalEmbeddingControl:
+        """QUERY controls stay distinct from DOCUMENT seed policy; no release or grant."""
+        checked = parse_reference_query_execution_policy(policy)
+        return self._publish(
+            raw=canonical_json_bytes(checked.model_dump(mode="json")),
+            semantic_sha256=checked.policy_sha256,
+            member="policy.json",
+            schema=REFERENCE_QUERY_POLICY_REF,
+            artifact_type=REFERENCE_QUERY_POLICY_ARTIFACT_TYPE,
             idempotency_key=idempotency_key,
             created_at=created_at,
         )

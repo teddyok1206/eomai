@@ -94,6 +94,9 @@ class OwnerSession(MetadataSession):
         )
         self.graph = SimpleNamespace(graph_id=command.graph_snapshot.graph_id)
 
+    def in_nested_transaction(self) -> bool:
+        return False
+
     def scalar(self, statement: Any) -> object:
         model = statement.column_descriptions[0]["entity"]
         return self.corpus if model.__name__ == "KnowledgeCorpusRecord" else object()
@@ -1070,8 +1073,12 @@ def _document_for_test_shard(root: Path, pointer: Any) -> dict[str, Any]:
 
 
 @pytest.mark.parametrize("revoked_at_end", [False, True])
+@pytest.mark.parametrize("caller_root", [False, True])
 def test_similarity_batch_reuses_decode_but_recaptures_full_population_at_end(
-    owner: tuple[Any, ...], monkeypatch: pytest.MonkeyPatch, revoked_at_end: bool
+    owner: tuple[Any, ...],
+    monkeypatch: pytest.MonkeyPatch,
+    revoked_at_end: bool,
+    caller_root: bool,
 ) -> None:
     from contextlib import nullcontext
     from dataclasses import replace
@@ -1107,7 +1114,12 @@ def test_similarity_batch_reuses_decode_but_recaptures_full_population_at_end(
             )
         return value
 
-    prepared = verifier.prepare_similarity_context(CALLER, request)
+    if caller_root:
+        prepared = verifier.prepare_similarity_context_in_session(session, CALLER, request)
+        # Opening another root would release or replace the native owner's fences.
+        monkeypatch.setattr(verifier, "sessions", Mock(side_effect=AssertionError("second root")))
+    else:
+        prepared = verifier.prepare_similarity_context(CALLER, request)
     monkeypatch.setattr(verifier.sources, "capture_in_session", capture)
     application_calls = []
 
@@ -1129,16 +1141,51 @@ def test_similarity_batch_reuses_decode_but_recaptures_full_population_at_end(
         )
 
     monkeypatch.setattr(module, "read_pinned_embedding_index", application_read)
+
+    def read_views():
+        if caller_root:
+            return verifier.read_similarity_views_in_session(session, CALLER, request, prepared)
+        return verifier.read_similarity_views(CALLER, request, prepared)
+
     if revoked_at_end:
         with pytest.raises(SimilarityContextReadError) as error:
-            verifier.read_similarity_views(CALLER, request, prepared)
+            read_views()
         assert error.value.code == "SOURCE_REVOKED"
     else:
-        values = verifier.read_similarity_views(CALLER, request, prepared)
+        values = read_views()
         assert len(values) == 3
     assert application_calls == ["CONTENT_ONLY", "CONCRETE_FACETS", "METADATA_ONLY"]
     assert calls.count("CAPTURE_POPULATION") == 2
     assert calls.count("AUTHORIZE_SCOPE") == 9
+
+
+@pytest.mark.parametrize("state", ("missing", "ended", "nested"))
+def test_similarity_caller_root_guard_denies_before_source_io(
+    owner: tuple[Any, ...], monkeypatch: pytest.MonkeyPatch, state: str
+) -> None:
+    from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
+
+    from tests.unit.test_similarity_context_service import CALLER, case
+
+    verifier, session, *_ = owner
+    request, sources, _query = case()
+    monkeypatch.setattr(
+        session, "get_transaction", lambda: None if state == "missing" else session.root
+    )
+    session.root.is_active = state != "ended"
+    monkeypatch.setattr(session, "in_nested_transaction", lambda: state == "nested")
+    capture = Mock(side_effect=AssertionError("source IO before root admission"))
+    monkeypatch.setattr(verifier.sources, "capture_in_session", capture)
+    for operation in (
+        lambda: verifier.prepare_similarity_context_in_session(session, CALLER, request),
+        lambda: verifier.read_similarity_views_in_session(
+            session, CALLER, request, sources.prepared
+        ),
+    ):
+        with pytest.raises(SimilarityContextReadError) as failure:
+            operation()
+        assert failure.value.code == "AUTHORITY_UNAVAILABLE"
+    capture.assert_not_called()
 
 
 def test_similarity_owner_without_actual_identity_fence_is_not_a_source_grant(

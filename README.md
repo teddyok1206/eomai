@@ -169,7 +169,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | 계약·registry·Artifact·수치 검증·atomic submission·exact claim/native dispatch | SOURCE_PASS; 실제 owner/session·executor 운영 연결은 미활성 |
 | exact pinned index read | SOURCE_PASS; 현재 권한 재확인·일괄 binding 조회·선택된 벡터 읽기 구현, 공통 검색/QUERY 소비는 미활성 |
 | 공통 유사도 context 조립 | SOURCE_PASS; 기출변형용 승인 anchor·3개 독립 view·현재 권한 재확인334 PASS, 실제 QUERY 실행·소비자 연결은 미활성 |
-| genuine QUERY 입력·encoder/handoff·실행 계약 | SOURCE_PASS; 입력494·encoder1272·protocol1610·compiler/read1779·4-member Artifact499 PASS; 실제 owner/queue/committed reader·소비자 연결은 미활성 |
+| genuine QUERY 입력·encoder/handoff·실행 계약 | SOURCE_PASS; 현재 사용자/source 준비·입력1.1 공통context·정본4파일 검증 연결, 실제 queue/unit/검증된 소비자 조회는 미활성 |
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
 | 인증된 owner/session 전달 | 수신 API 설치·실제 UID990의 provider/process/config/key-metadata 검증 PASS; 실제 사용자 capture·seed는 별도 실행 gate |
 | 현재 사용자·자료의 native 작업 접수 연결 | SOURCE_IMPLEMENTED; 실제 인증 capture→기존 Catalog 검증·계획 재구성·잠금 확인을 연결, 운영 provider/실행기 연결은 미활성 |
@@ -265,6 +265,15 @@ seed/delta/query·자동 service indexing의 완료 증거는 아닙니다. 실�
 실제 전체 owner import·고정 CPU readiness는 PASS이며 CPU/API 환경은 변경하지 않았습니다.
 이 확인은 인증된 실제 자료 실행·자동 증분 갱신의 완료 증거가 아닙니다. 제한된 실제
 기출 seed1→추가1→같은 요청 재전송은 동일 사용자 인증 뒤 실행하도록 준비했습니다.
+
+인증 대기 중에는 검색용 QUERY의 현재 사용자·자료 연결을 구현했습니다. 기존 입력1.0은
+그대로 두고 실제 배치4 설정의 입력1.1을 공통 context 조립기에 명시적으로 연결하며,
+같은 transaction 안에서 자료·보고서·인덱스와 현재 권한을 확인합니다. 정본4파일과 실제
+게시 Job을 읽는 경로도 추가했지만, 이것만으로 실제 QUERY 실행이 승인됐다고 판단하지
+않습니다. 관련24-suite657 PASS·strict type/lint/format PASS이며, QUERY queue/unit·genuine
+실행 확인·기출변형 등 소비자 활성화는 후속 작업입니다.
+[QUERY owner 연결 범위](docs/architecture/REFERENCE_QUERY_OWNER_COMPOSITION.md)에 source
+검증과 아직 없는 운영 경계를 구분했습니다. 기존 서비스·CPU 모델 환경은 바꾸지 않았습니다.
 
 최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와
 strict type/lint/format PASS입니다. 실제 임시 DB28개 사례에는 독립 실행기 claim 경쟁과

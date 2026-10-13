@@ -11,7 +11,9 @@ from eom_catalog_contracts import (
     REFERENCE_QUERY_INPUT_V11_SCHEMA,
     EmbeddingReferenceQueryInputV11,
     parse_embedding_reference_query_input_v11,
+    parse_supported_reference_query_input,
     validate_reference_query_result_v11,
+    validate_supported_reference_query_result,
 )
 from eom_catalog_contracts.embedding_reference_query import (
     REFERENCE_QUERY_INPUT_REF,
@@ -181,6 +183,28 @@ def test_configured_batch_is_not_partial_row_count(batch_size: int, row_count: i
     assert result.schema_version == "embedding-reference-query-result/1.0"
     assert result.shard.row_count == row_count
     assert result.request_sha256 == request.request_sha256
+
+
+def test_supported_input_dispatch_does_not_change_either_literal_parser() -> None:
+    old = parse_embedding_reference_query_input(query_input_body())
+    current = parse_embedding_reference_query_input_v11(input_body(batch_size=4))
+    assert parse_supported_reference_query_input(old) == old
+    assert parse_supported_reference_query_input(current) == current
+    result = parse_embedding_reference_query_result(result_body(current))
+    validate_supported_reference_query_result(current, result)
+    with pytest.raises(ERRORS):
+        parse_supported_reference_query_input(
+            seal(old.model_dump(mode="json") | {"batch_size": 4}, "request_sha256")
+        )
+    with pytest.raises(ERRORS):
+        validate_supported_reference_query_result(old, result)
+
+
+@pytest.mark.parametrize("version", (None, "", "embedding-reference-query-input/1.2", "latest"))
+def test_supported_input_dispatch_rejects_unknown_or_missing_version(version: object) -> None:
+    document = input_body() | {"schema_version": version}
+    with pytest.raises(ERRORS):
+        parse_supported_reference_query_input(document)
 
 
 def test_canonical_hash_round_trip_and_immutable_input() -> None:

@@ -2295,3 +2295,27 @@ reconciliation·계획된 소비자·CPU/GPU 성능/default gate를 원래 범�
 증거가 아니다. 현재 `GENUINE_OPERATOR_CAPTURE=PENDING`, `REAL_SEED_DELTA=PENDING`이며
 자동 service identity·공통 소비자/QUERY·CPU/GPU 실측과 조건부 GPU 기본값이 원래 범위대로
 남아 있다. `GOAL=ACTIVE`를 유지한다.
+
+## 2026-10-13 22:52 UTC — 인증 대기 중 QUERY 현재-source/정본-read source 연결
+
+[QUERY owner 설계·검증](../architecture/REFERENCE_QUERY_OWNER_COMPOSITION.md)에11개 설계
+결정, 실제 구현 책임·동일 root 검증·입력1.0/1.1의 분리와 아직 없는 실행 경계를 기록했다.
+현재 Identity capture/fence와 공식 Catalog prepare/read를 연결하는 owner와 source-neutral
+입력 생성, 별도 QUERY 정책 게시, 실제4-member Artifact/producers/hash/binary 검증을 추가했다.
+공통 context는 입력1.1의 실제 배치4/부분 행도 소비하되 이전 parser/schema는 변경하지 않는다.
+
+최종24-suite657 PASS·strict mypy10·Ruff/format16·diff PASS다. 임시 SQLite/파일 게시·읽기는
+실제이며 IAM/source/index/native 수치는 명시적 합성 seam이다. 운영 PostgreSQL·사용자 인증·
+모델 실행 증거로 확대하지 않는다. 초기 fixture의 선택하지 않은 세 번째 view와 strict type
+문제는 수정하고 전체 gate를 다시 실행했다. 165/8/16/656 중간 결과를 합산하지 않는다.
+
+고정 Graph1040 분석 association의 구성도 읽기 전용 metadata로 확인했다: 기출 Item520,
+생성 Item25, 문서 분석495(문서 revision10). 분석 레코드 수를 eligible Item 수로 오인해
+제한을 늘리거나 수치 인덱스 완료를 주장하지 않는다. 실제 caller별 공식 모집단은 아직
+인증된 current-source 검증 전이다. 기존 유한 INDEX controller의 동일 process3416211/
+3416258은 살아 있으며 입력을 기다린다; 새 세션·모델 재시작·DB 변경은 없다.
+
+QUERY source/정본 파일 read는 SOURCE_PASS다. QUERY queue/current claim·fixed unit·genuine
+consumer read, 자동 service reconciliation, 소비자 연결 및 CPU/GPU/default gate는 계속
+미완료이며, source 테스트로 이를 대체하지 않는다. 운영9개 서비스는 active다.
+`GOAL=ACTIVE`, `REAL_SEED_DELTA=PENDING`, `QUERY_RUNTIME=NOT_ACTIVE`.

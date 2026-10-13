@@ -10,12 +10,15 @@ from pydantic import ConfigDict, Field, model_validator
 
 from eom_catalog_contracts.embedding_reference_query import (
     MAX_REFERENCE_QUERY_BYTES,
+    EmbeddingReferenceQueryInput,
     EmbeddingReferenceQueryResult,
     ReferenceQuerySpaces,
     ReferenceQueryTextInput,
+    parse_embedding_reference_query_input,
     parse_embedding_reference_query_result,
     raw_similarity_contract_value,
     similarity_contract_document,
+    validate_reference_query_result,
 )
 from eom_catalog_contracts.inference_transfer_embedding import embedding_input_set_sha256
 from eom_catalog_contracts.inference_transfer_experiment import ExperimentViewRecipe
@@ -95,3 +98,30 @@ def validate_reference_query_result_v11(
         or tuple(row.view for row in result.view_rows) != tuple(row.view for row in request.rows)
     ):
         raise ValueError("reference QUERY result differs from its exact pinned request")
+
+
+type SupportedReferenceQueryInput = EmbeddingReferenceQueryInput | EmbeddingReferenceQueryInputV11
+
+
+def parse_supported_reference_query_input(value: object) -> SupportedReferenceQueryInput:
+    """Select exactly one released parser; neither parser's meaning is widened."""
+    document = raw_similarity_contract_value(value)
+    if not isinstance(document, dict):
+        raise ValueError("reference QUERY input must declare its supported literal version")
+    match document.get("schema_version"):
+        case "embedding-reference-query-input/1.0":
+            return parse_embedding_reference_query_input(document)
+        case "embedding-reference-query-input/1.1":
+            return parse_embedding_reference_query_input_v11(document)
+        case _:
+            raise ValueError("reference QUERY input version is unsupported")
+
+
+def validate_supported_reference_query_result(
+    request: SupportedReferenceQueryInput, result: EmbeddingReferenceQueryResult
+) -> None:
+    request = parse_supported_reference_query_input(request)
+    if isinstance(request, EmbeddingReferenceQueryInputV11):
+        validate_reference_query_result_v11(request, result)
+    else:
+        validate_reference_query_result(request, result)
