@@ -169,17 +169,17 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | 계약·registry·Artifact·수치 검증·atomic submission·exact claim/native dispatch | SOURCE_PASS; 실제 owner/session·executor 운영 연결은 미활성 |
 | exact pinned index read | SOURCE_PASS; 현재 권한 재확인·일괄 binding 조회·선택된 벡터 읽기 구현, 공통 검색/QUERY 소비는 미활성 |
 | 공통 유사도 context 조립 | SOURCE_PASS; 기출변형용 승인 anchor·3개 독립 view·현재 권한 재확인334 PASS, 실제 QUERY 실행·소비자 연결은 미활성 |
-| genuine QUERY 입력·encoder/handoff·실행 계약 | SOURCE_PASS; 입력494·encoder1272·protocol1610·compiler/read1779 PASS; 실제 queue/owner/Artifact 연결은 미활성 |
+| genuine QUERY 입력·encoder/handoff·실행 계약 | SOURCE_PASS; 입력494·encoder1272·protocol1610·compiler/read1779·4-member Artifact499 PASS; 실제 owner/queue/committed reader·소비자 연결은 미활성 |
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
 | 인증된 owner/session 전달 | SOURCE_PASS; 기존 인증 1회·고정 API peer·짧은 작업별 전달384 PASS, 실제 provider admission·배포는 미완료 |
 | 실제 disposable PostgreSQL |0052 registry/application16·reservation8·limited IAM6,0053 stage18+runner10·Identity11 PASS; migration·cleanup PASS |
-| CPU/CUDA 실행 환경 준비 | namespace·공유 model-free probe 포함 최종 공통3211 source PASS; 실제 CPU wheel56 PASS; 새 전체-prefix/native 검증 남음, CUDA 미게시 |
+| CPU/CUDA 실행 환경 준비 | namespace·공유 model-free probe·Conda URI/QUERY Artifact 포함 최종 공통3355 source PASS; 실제 CPU wheel56 PASS; 새 전체-prefix/native 검증 남음, CUDA 미게시 |
 | 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | NOT_ACTIVE / NOT_EVALUATED |
 
 2026-10-13의 실제 새 CPU 전체 검증은 오프라인 설치 주소와 원격 출처 주소의 비교에서
 멈췄습니다. 31개 패키지의 identity·원본 archive SHA/size 일치와 URL만 다른 것을 읽기 전용으로
 확인했고, 실패 후보·기록을 보존한 채 조립 환경을 복구했습니다. 이 진단은 runtime admission이나
-성능 PASS가 아니며, 좁은 기존 검증기 수정과 새 전체 검증을 진행합니다.
+성능 PASS가 아니며, 좁은 기존 검증기 수정은 소스 검증을 마쳤고 새 전체 검증을 진행합니다.
 
 최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와
 strict type/lint/format PASS입니다. 실제 임시 DB28개 사례에는 독립 실행기 claim 경쟁과

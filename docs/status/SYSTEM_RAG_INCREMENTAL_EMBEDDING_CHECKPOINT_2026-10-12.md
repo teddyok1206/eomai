@@ -1356,3 +1356,26 @@ held/named directory identity를 확인한 scoped recovery raw
 inode를 fixed CPU UID1000/0700로 복구했고 backup은 MOVED_NOT_DELETED다. 이전3개 failure도
 보존했다. sanitizer logs는 `/tmp/eom-embedding-successor-release.PHLzxgRc`와
 `/tmp/eom-conda-metadata-trace.AX6uBIDm`에 있다. GPU 비교·기본 활성화는 여전히 미완료다.
+
+## Conda URI·QUERY Artifact 최종 독립 gate — 2026-10-13 06:40 UTC
+
+Root가 두 approved scope의 production/test 전체 변경과 11-decision notes를 정독했다.
+Conda는 원 source URL·검증된 canonical archive URI·고정8-character offline cache URI만 raw
+비교하고 모든 identity/archive/index/member/epoch 검사를 유지한다. metadata 직접 편집,
+URL decode/dereference·새 installer/framework는 없다. 최종 scoped4는582 PASS45.15s다.
+
+QUERY는 supplied controller/launch/policy/bundle/input1.1 closure와 canonical input/result1.0,
+기존 codec 및 유지된 member FDs를 검증하고 같은 publisher로4-member를 게시한다. 실제
+authority/lease/producer proof는 만들지 않는다. DOC/index 본문·서명은 유지했다. Root가
+요청한3-view/서로 다른 unit vector/batch4 및 resealed row/view·binary 불일치도 추가했다.
+진단306 PASS/4 FAIL와 decoder RecursionError 수정 이력은 §15.1에 보존했다. 최종 scoped10은
+499 PASS54.80s이며 coherent rehashed semantic permutation 탐지 주장은 하지 않는다.
+
+두 scope freeze 후 중복을 제거한62-suite의 root 독립 gate는
+**3355 PASS190.99s, skip0**, API strict/Ruff/format5 PASS다. 시작/종료 Python5 raw SHA가 같다.
+Conda source raw `0874fc81647867a435fd6e1e33e585206c19663e4f704305c1d9844c412fa494`,
+Artifact store raw `021e905de1555b7fe37613835f130d4621d42456863c340e3b512996e0864442`다.
+앞선 overlapping source count나 실제 audit 실패와 합산/대체하지 않는다. 새 committed
+source/wheel/bootstrap input과 actual 전체-prefix 재검증이 필요하다. QUERY admission은
+계속 OFF다. 실제 native owner/unit/seal·seed/delta·consumer·CPU/GPU 실측과 기본 전환은 남았고
+모델/GPU forward0, 성능 NOT_EVALUATED, GPU 기본값 NOT_ACTIVE, 전체 goal ACTIVE다.
