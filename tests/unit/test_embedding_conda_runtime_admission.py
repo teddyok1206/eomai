@@ -92,6 +92,44 @@ def test_initial_empty_member_is_an_immutable_actual_observation(tmp_path: Path)
     files.assert_unchanged()
 
 
+def test_verified_borrow_retains_sha_and_fd_without_rehash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = _member(tmp_path)
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    digest, size = _hash(path.read_bytes()), path.stat().st_size
+    files.verify(path, sha256=digest, size=size, maximum=1024)
+    monkeypatch.setattr(hashlib, "sha256", _deny)
+    with files.open_verified_member(path) as (descriptor, actual_sha):
+        assert actual_sha == digest and os.pread(descriptor, 4, 0) == b"boun"
+    with pytest.raises(OSError):
+        os.fstat(descriptor)
+
+
+@pytest.mark.parametrize("state", ["unknown", "identity_only", "stale", "substitute"])
+def test_verified_borrow_rejects_unknown_identity_stale_and_substituted_fd(
+    tmp_path: Path, state: str
+) -> None:
+    path = _member(tmp_path)
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    if state == "identity_only":
+        files.observe_protected_member_identity(path)
+    elif state != "unknown":
+        files.verify(path, sha256=_hash(path.read_bytes()), size=path.stat().st_size, maximum=1024)
+    if state == "stale":
+        path.write_bytes(b"changed")
+    with (
+        pytest.raises(InstalledRuntimeProofError),
+        files.open_verified_member(path) as (descriptor, _sha),
+    ):
+        other = _member(tmp_path, b"other", "other")
+        replacement = os.open(other, os.O_RDONLY)
+        try:
+            os.dup2(replacement, descriptor)
+        finally:
+            os.close(replacement)
+
+
 @pytest.mark.parametrize("maximum", [True, False, -1, 0, 8 * 1024**2 + 1, 1.0, "1", None])
 def test_initial_observation_rejects_invalid_exact_bound_before_open(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, maximum: object
@@ -897,6 +935,12 @@ def test_complete_synthetic_archive_transform_overlay_cache_and_link_ledger_is_r
         first.licensing_members,
     ) == (1, 1, 3, 2, 2, 1)
     assert first.link_members == 4 and fence.calls >= 125
+    assert len(first.overlay_wheels) == 4
+    assert len(first.installed_links) == 4
+    assert set(first.installed_links) == {
+        (path, os.readlink(path)) for path in first.installed_members if path.is_symlink()
+    }
+    assert all(path.exists() or path.is_symlink() for path in first.installed_members)
 
 
 @pytest.mark.parametrize(

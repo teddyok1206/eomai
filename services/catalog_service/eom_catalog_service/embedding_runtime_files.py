@@ -247,6 +247,19 @@ class NumericalRuntimeFileSnapshots:
         _require(observed == expected, "NAMESPACE_SET_MISMATCH")
 
     @contextmanager
+    def open_verified_member(self, path: Path) -> Iterator[tuple[int, str]]:
+        """Borrow only an already byte-verified member; no rehash, copy or new admission."""
+        epoch = self._epochs.get(path)
+        _require(epoch is not None and bool(epoch.sha256), "VERIFIED_MEMBER_UNAVAILABLE")
+        assert epoch is not None
+        epoch.assert_unchanged()
+        with _protected_open(path, self.owner_uid) as (descriptor, _ancestors):
+            _require(_identity(os.fstat(descriptor)) == epoch.identity, "FILE_CHANGED")
+            yield descriptor, epoch.sha256
+            _require(_identity(os.fstat(descriptor)) == epoch.identity, "FILE_CHANGED")
+        epoch.assert_unchanged()
+
+    @contextmanager
     def verified_open(
         self,
         path: Path,

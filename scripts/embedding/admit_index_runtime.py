@@ -1,27 +1,123 @@
-"""Closed owner leaf; real tool/loader composition is deliberately unavailable.
-
-The stdlib Conda byte audit is callable by an independently admitted owner context.
-This standalone CLI cannot manufacture that context from root-owned JSON or an ID.
-No installed-prefix imports, filesystem mutations or successor instructions occur.
-"""
+"""Closed read-only protected-owner prefix audit; never execute NEW or grant admission."""
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import re
+import stat
 import sys
 from pathlib import Path
+from typing import Any
+
+_BOOTSTRAP = {
+    "__init__.py",
+    "embedding_runtime_files.py",
+    "embedding_runtime_wheel_closure.py",
+    "embedding_runtime_host_closure.py",
+    "embedding_conda_runtime_closure.py",
+    "embedding_runtime_prefix_closure.py",
+}
+
+
+def _root_bytes(path: Path, sha: str, maximum: int) -> tuple[bytes, dict[Path, tuple[int, ...]]]:
+    """Initial six-file bootstrap only; public snapshots own all subsequent audit IO."""
+    descriptors: list[int] = []
+    epochs: dict[Path, tuple[int, ...]] = {}
+
+    def identity(value: os.stat_result) -> tuple[int, ...]:
+        return (
+            value.st_dev,
+            value.st_ino,
+            value.st_uid,
+            value.st_gid,
+            value.st_mode,
+            value.st_nlink,
+            value.st_size,
+            value.st_mtime_ns,
+            value.st_ctime_ns,
+        )
+
+    try:
+        for component in path.parent.parts:
+            parent = descriptors[-1] if descriptors else None
+            fd = os.open(
+                component,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                dir_fd=parent,
+            )
+            descriptors.append(fd)
+            named = next(reversed(epochs)) / component if epochs else Path(component)
+            value = os.fstat(fd)
+            if value.st_uid != 0 or value.st_mode & 0o022:
+                raise ValueError("unprotected bootstrap ancestor")
+            epochs[named] = identity(value)
+        fd = os.open(
+            path.name,
+            os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+            dir_fd=descriptors[-1],
+        )
+        descriptors.append(fd)
+        value = os.fstat(fd)
+        if (
+            not stat.S_ISREG(value.st_mode)
+            or value.st_uid != 0
+            or value.st_nlink != 1
+            or value.st_mode & 0o6022
+            or not 0 <= value.st_size <= maximum
+        ):
+            raise ValueError("unprotected bootstrap member")
+        raw = bytearray()
+        while chunk := os.read(fd, min(65536, maximum + 1 - len(raw))):
+            raw.extend(chunk)
+            if len(raw) > value.st_size:
+                raise ValueError("bootstrap size drift")
+        epochs[path] = identity(value)
+        if len(raw) != value.st_size or "sha256:" + hashlib.sha256(raw).hexdigest() != sha:
+            raise ValueError("bootstrap pin mismatch")
+        if (
+            any(identity(member.lstat()) != initial for member, initial in epochs.items())
+            or identity(os.fstat(fd)) != epochs[path]
+        ):
+            raise ValueError("bootstrap epoch drift")
+        return bytes(raw), epochs
+    finally:
+        for fd in reversed(descriptors):
+            os.close(fd)
+
+
+def _current(epochs: dict[Path, tuple[int, ...]]) -> None:
+    for path, initial in epochs.items():
+        value = path.lstat()
+        current = (
+            value.st_dev,
+            value.st_ino,
+            value.st_uid,
+            value.st_gid,
+            value.st_mode,
+            value.st_nlink,
+            value.st_size,
+            value.st_mtime_ns,
+            value.st_ctime_ns,
+        )
+        if current != initial:
+            raise ValueError("bootstrap epoch drift")
 
 
 def main(argv: list[str] | None = None) -> int:
     arguments = sys.argv[1:] if argv is None else argv
     flags = {"--profile", "--owner-input", "--owner-input-sha256"}
-    if len(arguments) != 7 or arguments[0] != "conda31-bytes" or set(arguments[1::2]) != flags:
+    if (
+        len(arguments) != 7
+        or arguments[0] not in {"conda31-bytes", "prefix-bytes"}
+        or set(arguments[1::2]) != flags
+    ):
         print("EMBEDDING_CONDA_ARGUMENTS_INVALID", file=sys.stderr)
         return 1
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("conda31-bytes",))
+    parser.add_argument("mode", choices=("conda31-bytes", "prefix-bytes"))
     parser.add_argument("--profile", choices=("CPU_INDEX_FP32", "CUDA_INDEX_FP32"), required=True)
     parser.add_argument("--owner-input", required=True)
     parser.add_argument("--owner-input-sha256", required=True)
@@ -32,7 +128,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if (
         re.fullmatch(
-            r"/opt/eom/\.embedding-index-install-[A-Za-z0-9]{8}/conda31-audit-input\.json",
+            r"/opt/eom/\.embedding-index-install-[A-Za-z0-9]{8}/(?:conda31|prefix)-audit-input\.json",
             args.owner_input,
         )
         is None
@@ -48,10 +144,113 @@ def main(argv: list[str] | None = None) -> int:
     ):
         print("EMBEDDING_CONDA_OWNER_UNAVAILABLE", file=sys.stderr)
         return 1
-    # No source/input import or tool subprocess before a genuinely captured handle.
-    # The later reviewed OS closure owner must wire that mandatory port explicitly.
-    print("INSTALLED_RUNTIME_CONDA_TOOL_UNAVAILABLE", file=sys.stderr)
-    return 1
+    try:
+        owner_input = Path(args.owner_input)
+        if Path(__file__) != owner_input.parent / "admit.py":
+            raise ValueError("not a protected admitted owner leaf")
+        raw, epochs = _root_bytes(owner_input, args.owner_input_sha256, 128 * 1024)
+
+        def unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+            result: dict[str, Any] = {}
+            for key, member in pairs:
+                if key in result:
+                    raise ValueError("duplicate owner field")
+                result[key] = member
+            return result
+
+        def reject(_value: str) -> Any:
+            raise ValueError("noninteger owner value")
+
+        value: Any = json.loads(
+            raw, object_pairs_hook=unique, parse_float=reject, parse_constant=reject
+        )
+        if (
+            type(value) is not dict
+            or set(value)
+            != {
+                "schema_version",
+                "profile",
+                "host_seed_sha256",
+                "conda_source",
+                "conda_archives",
+                "public_archives",
+                "private_archives",
+                "created_at",
+                "history",
+                "helper",
+                "bootstrap",
+            }
+            or type(value.get("bootstrap")) is not list
+            or len(value["bootstrap"]) != 6
+        ):
+            raise ValueError("invalid bootstrap values")
+        pins = value["bootstrap"]
+        if [pin.get("filename") for pin in pins if type(pin) is dict] != sorted(_BOOTSTRAP):
+            raise ValueError("invalid bootstrap set")
+        source = owner_input.parent / "source"
+        for pin in pins:
+            if (
+                set(pin) != {"filename", "sha256", "size_bytes"}
+                or type(pin["sha256"]) is not str
+                or re.fullmatch(r"sha256:[0-9a-f]{64}", pin["sha256"]) is None
+                or type(pin["size_bytes"]) is not int
+                or not 0 <= pin["size_bytes"] <= 1024**2
+            ):
+                raise ValueError("invalid bootstrap pin")
+            member, observed = _root_bytes(
+                source / "eom_catalog_service" / pin["filename"], pin["sha256"], 1024**2
+            )
+            if len(member) != pin["size_bytes"]:
+                raise ValueError("invalid bootstrap size")
+            epochs.update(observed)
+        _current(epochs)
+        if any(
+            name == "eom_catalog_service" or name.startswith("eom_catalog_service.")
+            for name in sys.modules
+        ):
+            raise ValueError("not a fresh isolated owner process")
+        sys.path.insert(0, str(source))
+        from eom_catalog_service.embedding_runtime_files import (
+            NumericalRuntimeFileSnapshots,
+            fixed_native_embedding_profile,
+        )
+        from eom_catalog_service.embedding_runtime_host_closure import (
+            capture_protected_embedding_host,
+        )
+        from eom_catalog_service.embedding_runtime_prefix_closure import (
+            audit_installed_embedding_prefix,
+            parse_embedding_prefix_audit_input,
+        )
+
+        plan, host_sha, bootstrap = parse_embedding_prefix_audit_input(raw)
+        if plan.conda.profile != args.profile or bootstrap != tuple(
+            (pin["filename"], pin["sha256"], pin["size_bytes"]) for pin in pins
+        ):
+            raise ValueError("owner input association mismatch")
+        files = NumericalRuntimeFileSnapshots()
+        _current(epochs)
+        with capture_protected_embedding_host(expected_seed_sha256=host_sha, files=files) as host:
+            audit = audit_installed_embedding_prefix(
+                plan,
+                prefix=fixed_native_embedding_profile(args.profile).prefix,
+                archive_root=Path("/opt/eom/embedding-runtime-archives"),
+                helper_path=owner_input.parent / "install.py",
+                lock_directory=owner_input.parent / "locks",
+                files=files,
+                host=host,
+            )
+            _current(epochs)
+        print("EMBEDDING_PREFIX_BYTES_AUDIT_PASS_NOT_ADMITTED", audit.byte_closure_sha256)
+        return 0
+    except Exception as exc:
+        code = getattr(exc, "code", "EMBEDDING_PREFIX_AUDIT_INVALID")
+        print(
+            code
+            if type(code) is str and re.fullmatch(r"[A-Z_]+", code)
+            else "EMBEDDING_PREFIX_AUDIT_INVALID",
+            file=sys.stderr,
+        )
+        return 1
 
 
 if __name__ == "__main__":

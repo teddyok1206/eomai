@@ -146,6 +146,65 @@ class VerifiedRuntimeWheelMembers:
     namespace_roots: frozenset[Path]
     installed_members: frozenset[Path]
     torch_version: tuple[str, str | None] | None
+    all_installed_members: frozenset[Path]
+    archive_payload_members: frozenset[Path]
+
+
+def observe_runtime_wheel_installation(
+    archive: RuntimeWheelArchivePin,
+    name: str,
+    version: str,
+    *,
+    prefix: Path,
+    files: NumericalRuntimeFileSnapshots,
+) -> RuntimeWheelInstallationPin:
+    """Observe bounded metadata once; authoritative archive/RECORD validation follows.
+
+    Actual observed RECORD or existence flags are not source or installation authority.
+    This single observation seam serves Conda overlays and whole-prefix composition.
+    """
+    _require(
+        type(archive) is RuntimeWheelArchivePin
+        and type(name) is str
+        and re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", name) is not None
+        and type(version) is str
+        and re.fullmatch(r"[0-9][A-Za-z0-9.+_-]{0,95}", version) is not None
+        and isinstance(prefix, Path)
+        and prefix.is_absolute()
+        and ".." not in prefix.parts,
+        "DISTRIBUTION_INVALID",
+    )
+    archive.__post_init__()
+    dist = prefix / "lib/python3.12/site-packages" / f"{name.replace('-', '_')}-{version}.dist-info"
+    record = files.observe_protected_member_bytes(dist / "RECORD", maximum=_MAX_RECORD)
+    scripts: list[RuntimeWheelConsoleScriptPin] = []
+    for row in csv.reader(io.StringIO(record.raw.decode("utf-8", "strict"))):
+        _require(len(row) == 3, "WHEEL_OBSERVATION_INVALID")
+        if row[0].startswith("../../../bin/"):
+            script = row[0].removeprefix("../../../bin/")
+            _require(
+                re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}", script) is not None,
+                "WHEEL_OBSERVATION_INVALID",
+            )
+            observed = files.observe_protected_member_bytes(prefix / "bin" / script, maximum=16384)
+            scripts.append(
+                RuntimeWheelConsoleScriptPin(script, observed.sha256, observed.size_bytes)
+            )
+    direct: RuntimeWheelMemberPin | None = None
+    if (dist / "direct_url.json").exists():
+        observed = files.observe_protected_member_bytes(
+            dist / "direct_url.json", maximum=_MAX_METADATA
+        )
+        direct = RuntimeWheelMemberPin(observed.sha256, observed.size_bytes)
+    return RuntimeWheelInstallationPin(
+        name,
+        version,
+        archive,
+        RuntimeWheelMemberPin(record.sha256, record.size_bytes),
+        (dist / "REQUESTED").exists(),
+        direct,
+        tuple(sorted(scripts, key=lambda script: script.name)),
+    )
 
 
 def _safe_member(name: str) -> None:
@@ -630,6 +689,8 @@ def _verify_installed_runtime_wheel(
                     if target.is_relative_to(site)
                 ),
                 torch_version,
+                frozenset(set(expected) | {installed_record}),
+                frozenset(wheel_pins),
             )
 
 

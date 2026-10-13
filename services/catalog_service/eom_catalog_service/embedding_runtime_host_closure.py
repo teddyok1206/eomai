@@ -510,10 +510,13 @@ class ProtectedEmbeddingHostClosure:
         descriptors: dict[Path, int],
         identities: dict[Path, tuple[int, ...]],
         seed_sha256: str,
+        soname_versions: dict[str, frozenset[str]] | None = None,
     ) -> None:
         self._files, self._routes, self._stack = files, routes, stack
         self._descriptors, self._identities = descriptors, identities
         self.seed_sha256 = seed_sha256
+        self._soname_versions = {} if soname_versions is None else dict(soname_versions)
+        self._loader_path = _LOADER
         self._closed = False
 
     def __enter__(self) -> ProtectedEmbeddingHostClosure:
@@ -595,6 +598,18 @@ class ProtectedEmbeddingHostClosure:
             raise
         except Exception:
             raise InstalledRuntimeProofError("INSTALLED_RUNTIME_HOST_TOOL_UNAVAILABLE") from None
+
+    def fixed_soname_versions(self, name: str) -> frozenset[str]:
+        """Exact captured immutable definitions only, not an arbitrary host resolver."""
+        self.assert_current()
+        _require(type(name) is str and name in self._soname_versions, "SONAME_UNAVAILABLE")
+        return self._soname_versions[name]
+
+    def fixed_loader_path(self) -> Path:
+        """Actual source-fixed captured loader identity; aliases/epochs remain current."""
+        self.assert_current()
+        _require(self._loader_path in self._descriptors, "LOADER_UNAVAILABLE")
+        return self._loader_path
 
     def inspect_elf(self, descriptor: int, *, deadline: float) -> bytes:
         """Fixed readelf on an already owner-held member FD; bounded absolute deadline."""
@@ -748,7 +763,13 @@ def capture_protected_embedding_host(
             for name in _SONAMES:
                 routes.absence(root / name)
         result = ProtectedEmbeddingHostClosure(
-            files, routes, stack, descriptors, identities, _hash(_seed_bytes())
+            files,
+            routes,
+            stack,
+            descriptors,
+            identities,
+            _hash(_seed_bytes()),
+            {name: objects[path].definitions for name, path in _SONAMES.items()},
         )
         result.assert_current()
         return result

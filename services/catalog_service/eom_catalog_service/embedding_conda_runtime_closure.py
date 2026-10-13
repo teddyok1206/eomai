@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import csv
 import hashlib
-import io
 import json
 import os
 import re
@@ -29,9 +27,9 @@ from eom_catalog_service.embedding_runtime_files import (
 )
 from eom_catalog_service.embedding_runtime_wheel_closure import (
     RuntimeWheelArchivePin,
-    RuntimeWheelConsoleScriptPin,
     RuntimeWheelInstallationPin,
-    RuntimeWheelMemberPin,
+    VerifiedRuntimeWheelMembers,
+    observe_runtime_wheel_installation,
     verify_installed_runtime_wheel,
 )
 
@@ -310,6 +308,9 @@ class CondaRuntimeByteAudit:
     absent_generated_caches: int
     licensing_members: int
     ledger_sha256: str
+    installed_members: frozenset[Path]
+    installed_links: tuple[tuple[Path, str], ...]
+    overlay_wheels: tuple[VerifiedRuntimeWheelMembers, ...]
 
 
 class CondaArchiveToolAdmission(Protocol):
@@ -928,36 +929,12 @@ def _candidate_wheel(
     prefix: Path,
     files: NumericalRuntimeFileSnapshots,
 ) -> RuntimeWheelInstallationPin:
-    dist = prefix / "lib/python3.12/site-packages" / f"{name}-{version}.dist-info"
-    record = files.observe_protected_member_bytes(dist / "RECORD", maximum=8 * 1024**2)
-    scripts: list[RuntimeWheelConsoleScriptPin] = []
-    for row in csv.reader(io.StringIO(record.raw.decode("utf-8", "strict"))):
-        _require(len(row) == 3, "OVERLAY_INVALID")
-        if row[0].startswith("../../../bin/"):
-            script = row[0].removeprefix("../../../bin/")
-            _require(
-                re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,95}", script) is not None,
-                "OVERLAY_INVALID",
-            )
-            observed = files.observe_protected_member_bytes(prefix / "bin" / script, maximum=16384)
-            scripts.append(
-                RuntimeWheelConsoleScriptPin(script, observed.sha256, observed.size_bytes)
-            )
-    direct: RuntimeWheelMemberPin | None = None
-    if (dist / "direct_url.json").exists():
-        observed = files.observe_protected_member_bytes(
-            dist / "direct_url.json", maximum=128 * 1024
-        )
-        direct = RuntimeWheelMemberPin(observed.sha256, observed.size_bytes)
-    return RuntimeWheelInstallationPin(
-        name,
-        version,
-        pin,
-        RuntimeWheelMemberPin(record.sha256, record.size_bytes),
-        (dist / "REQUESTED").exists(),
-        direct,
-        tuple(sorted(scripts, key=lambda script: script.name)),
-    )
+    try:
+        return observe_runtime_wheel_installation(pin, name, version, prefix=prefix, files=files)
+    except InstalledRuntimeProofError as exc:
+        if exc.code == "INSTALLED_RUNTIME_WHEEL_OBSERVATION_INVALID":
+            raise InstalledRuntimeProofError("INSTALLED_RUNTIME_CONDA_OVERLAY_INVALID") from None
+        raise
 
 
 def _link_target(path: str, target: str) -> str:
@@ -1212,6 +1189,7 @@ def _audit_installed_conda31(
     )
     rows = _source_rows(source, plan.archives)
     overlay_members: set[Path] = set()
+    overlay_wheels: list[VerifiedRuntimeWheelMembers] = []
     overlay_roots: set[Path] = set()
     source_indices: dict[str, dict[str, Any]] = {}
     with ExitStack() as stack:
@@ -1238,6 +1216,7 @@ def _audit_installed_conda31(
                 not overlay_members.intersection(verified.installed_members), "OWNERSHIP_CONFLICT"
             )
             overlay_members.update(verified.installed_members)
+            overlay_wheels.append(verified)
             overlay_roots.update(verified.namespace_roots)
         files.require_closed_namespaces(
             overlay_roots, {path for path in overlay_members if path.parent != prefix / "bin"}
@@ -1453,4 +1432,25 @@ def _audit_installed_conda31(
         generated,
         len(budget.licenses),
         "sha256:" + ledger_digest.hexdigest(),
+        frozenset(
+            {
+                prefix / path
+                for path, member in ledger.items()
+                if not (member.package in overlay_names and prefix / path not in overlay_members)
+                and not (member.cache_header is not None and member.package != "python")
+            }
+            | {
+                prefix / "conda-meta" / f"{name}-{version}-{build}.json"
+                for name, (version, build, _filename, _url) in rows.items()
+            }
+            | {path for wheel in overlay_wheels for path in wheel.all_installed_members}
+        ),
+        tuple(
+            sorted(
+                (path, target)
+                for path, (target, _epoch, _parents) in links.items()
+                if target is not None
+            )
+        ),
+        tuple(overlay_wheels),
     )

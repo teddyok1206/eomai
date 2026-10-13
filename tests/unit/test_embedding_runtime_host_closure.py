@@ -244,6 +244,10 @@ def test_complete_synthetic_seed_retains_fd_routes_bytes_and_closes_once(
     descriptors = tuple(capture._descriptors.values())
     assert capture.seed_sha256 == fixture.expected
     capture.assert_current()
+    assert capture.fixed_loader_path() == fixture.loader
+    assert capture.fixed_soname_versions("libc.so.6") == frozenset({"GLIBC_2.38"})
+    with pytest.raises(InstalledRuntimeProofError, match="SONAME_UNAVAILABLE"):
+        capture.fixed_soname_versions("unregistered.so")
     capture.close()
     capture.close()
     for descriptor in descriptors:
@@ -251,6 +255,8 @@ def test_complete_synthetic_seed_retains_fd_routes_bytes_and_closes_once(
             os.fstat(descriptor)
     with pytest.raises(InstalledRuntimeProofError, match="HOST_CLOSED"):
         capture.assert_current()
+    with pytest.raises(InstalledRuntimeProofError, match="HOST_CLOSED"):
+        capture.fixed_loader_path()
 
 
 @pytest.mark.parametrize("expected", [None, True, 1, "bad", "sha256:" + "a" * 64])

@@ -335,3 +335,231 @@ PASS. Actual current-module `-I -S -B` stdlib-only import and inert executable-F
 are included. Independent native-owner read-only review found no blocker in the seed/
 named-FD/capability and bounded readelf lifetime boundary; it executed no tests/tools.
 No dependency, schema, migration, installer, CLI, factory, proof or protected file change.
+
+## Whole-prefix source phase: exact inputs and narrow public seams
+
+Root reviewed/committed host5 as `65113de1`; its independent16-suite gate was982 PASS
+in20.78s. Root also ran a non-root current fixed host capture/assert/close with the exact
+accepted seed pin under the unchanged old `-I -S -B`: PASS, tool/root/new-prefix/model/
+GPU invocations0. That diagnostic is not an installed-admission grant.
+
+The next source operation is `audit_installed_embedding_prefix`, returning only observed
+closed byte/inventory/ELF digests and counts. It does not implement the factory admission
+port or publish a receipt. Owned paths are a new purpose-named prefix module/test, existing
+Conda core/test identity-only inventory, the existing fixed admission leaf, and this note.
+Installer/snapshot helper/factory/proof/protected prefixes remain untouched. Root later
+approved only the narrow verified-FD borrow in the existing runtime-files owner, described
+below; its initial/expected read, hash, epoch and namespace semantics stay unchanged.
+
+The fixed leaf's small root-owner JSON input will be a closed, bounded local value tree,
+not a privilege DTO: exact profile and host-seed SHA; Conda source-list raw SHA/size and31
+archive filename/raw SHA/size values; exact55/70 public archive sizes matched to the
+existing fixed released lock closure; private platform plus CUDA-only standalone lease
+archive pins, each exact full40 source commit and raw source-tar SHA/size; separately
+pinned bounded generated `conda-meta/created_at` and `conda-meta/history` bytes. All
+paths derive from the fixed profile/archive/quarantine roots. No source directory,
+executable, callback, role, UID, approved flag, device default or arbitrary skip field.
+Input raw SHA is an independently supplied caller pin and all nested values are exact-
+type revalidated before allocation/IO. Duplicate source pins reuse one held canonical
+archive; same immutable key/different commit/hash/size conflicts. This local owner shape
+must be recorded before behavior; it is not a worker/cross-service protocol.
+
+Read-only names/stat inventory of the two still developer-owned prefixes found exactly
+those two non-JSON Conda metadata additions; top members are bin/compiler_compat/
+conda-meta/include/lib/man/share/ssl/x86_64-conda-linux-gnu. CPU has27,100 ordinary
+walk leaves/1378 leaf symlinks/1,158,305,033 regular bytes, CUDA27,732/1378/7,067,147,553.
+The two directory symlinks are separately walked as links. These observations are not
+an expected inventory, cache admission or authority to ignore any undeclared member.
+The composer derives the final exact inventory from original Conda transforms and
+verified wheel membership, then compares every regular/link leaf and directory ancestor.
+No installed metadata independently defines executable provenance.
+
+Root approved and the source phase implements these two genuine public-seam gaps:
+
+- Existing wheel output `installed_members` is site-only and must stay unchanged for
+  the typed numerical adapter. Add identity-only `all_installed_members` including its
+  already verified console wrappers and `archive_payload_members` for exact private
+  source membership. No raw payload or new parser/protocol is returned.
+- Existing installed RECORD/wrapper/direct-URL observation is private Conda
+  `_candidate_wheel`. Move/delegate that exact stdlib mechanical observation to public
+  `observe_runtime_wheel_installation` in the authoritative wheel core; preserve current
+  Conda wrapper/error behavior. Do not cross-import or copy the private parser.
+
+The existing public snapshot `index_runtime_locks` owns exact5 lock/hash/include and
+55/70 closure. The leaf must reuse that public rule from an independently admitted fixed
+root helper snapshot, not import a writable worktree or private helper symbol. Root approved
+the exact helper raw pin matched to its member in the full40 source archive, protected
+snapshot observation before execution, current checks around the public call and raw-
+pinned five source locks. No alternative requirements resolver or arbitrary command/
+plugin callback is present.
+
+Conda adds only actual identity inventory after its unchanged transformation/overlay/
+cache/link validation: retained original regular/link paths, source-known link texts,
+31 actual Conda metadata paths and already verified overlay members. Root source-pinned
+generated metadata is separate. The prefix composer consumes these public small values;
+it must not inspect private `_Member`, `_epochs` or ledger dictionaries.
+
+Private source proof reads only raw-pinned, held plain Git source archives with bounded
+512-byte headers, exact full40 global PAX comment and regular/directory members. No
+symlink/hardlink/device/sparse or unbounded tar/PAX allocation; unknown layouts deny.
+Use pinned source `pyproject.toml` package roots and package-data patterns to derive
+**all** packaged EOM Python/resources, not the old eight leaves; compare that complete
+set and each source hash/size to wheel-verified installed members. Metadata/console
+entries remain separately archive/source-project bound. No source extraction, rebuild,
+runtime Git, repeated payload copy or alternate canonical artifact.
+
+ELF inspection uses only the actual host handle's public fixed FD readelf method, with
+bounded fixed-output parsing for these known native profiles. Resolve exact SONAME/
+NEEDED and version sets against captured host targets or the verified prefix inventory;
+support reviewed inside-prefix `$ORIGIN` RPATH/RUNPATH semantics without a new general
+linker. Unsupported/ambiguous routes, foreign ELF, unknown loader/version or absent
+dependencies fail. Keep dynamic-plugin/OS-maintenance limitations explicit. Current
+root-owned host pins cannot be widened from owner JSON or an installed wheel's claims.
+
+Source tests will cover complete synthetic inventories/source mappings, copied/constructed
+nested values, exact input bounds/duplicate keys/unknown fields, missing/extra/changed
+archives/source/private modules/resources, stale/hidden pyc/hooks/symlinks/ownership,
+console member closure, ELF route/version/timeout drift and failure before any inert
+NEW marker. The leaf remains read-only and cannot execute a successor even on success.
+After source freeze/review, the immediately following separate publisher ordering gate
+will place this real operation before the first protected NEW instruction; final proof/
+receipt/native admission and actual benchmark/default activation follow, not another
+permanently unavailable provider.
+
+### Implemented source gate and immediate operational handoff
+
+Status: **SOURCE_IMPLEMENTED_NOT_INSTALLED_ADMISSION**. This is a read-only composition,
+not a new installer or a implementation of `NativeEmbeddingInstallationAdmission`.
+
+1. Boundary: the fixed old protected CPython3.12.13 `-I -S -B` leaf derives actual host,
+   original Conda31 transforms, exact55/70 public wheels, complete private source/wheel
+   membership and whole-prefix tree/ELF closure before any successor instruction. This
+   agent did not execute the root leaf or either successor interpreter.
+2. Canonical source: the existing canonical raw-SHA archive root and full40 source tar,
+   not `/tmp`, a package cache, worktree or editable install. Source tar alone has a64MiB
+   cap; wheel/member metadata keeps the existing8MiB cap. No extraction/rebuild or second
+   canonical payload occurs. A non-root old-interpreter bounded source-only diagnostic
+   checked root's ba630f1e source tar pin `24cf6b63…75160b`:54,272,000 bytes,5,595 regular
+   source files,1,444 platform package/resource leaves and2 standalone lease leaves.
+   That diagnostic did not admit or inspect an installed prefix or execute archive code.
+3. Identity: root supplies the exact owner-input raw SHA independently. Source commit,
+   archive raw SHA, installed member SHA, profile and observed closure digests remain
+   distinct. An output digest is observation, never a root grant or magic receipt.
+4. Resolution: the128KiB closed local `embedding-prefix-audit-input/1.0` value has exactly
+   schema_version/profile/host_seed_sha256/conda_source/conda_archives/public_archives/
+   private_archives/created_at/history/helper/bootstrap. The six sorted bootstrap names
+   are `__init__.py`, files, wheel, host, Conda and prefix closure modules. Only these
+   exact fixed-source files may be imported after root UID/nonwritable ancestor/nofollow/
+   nlink1/raw-hash/size/FD-and-named epoch capture; no dev PYTHONPATH or already-imported
+   Catalog module is accepted. Duplicate keys, float/Boolean integers, unknown fields,
+   wrong names/counts/pins and constructed nested values deny. The publisher must itself
+   pin/capture `admit.py` before executing this leaf; that ordering is the next gate.
+5. Access: canonical source archives are held/reused by raw SHA, private package leaves
+   are mapped by source TOML package roots/resource patterns, and filesystem membership
+   uses sets/maps. Exact generated Conda `created_at`/`history` are separately raw-pinned.
+   Existing authoritative wheel metadata/RECORD/entry-point validation is reused; source
+   project name/version and all private Python/resource bytes are checked. Private wheel
+   build provenance/metadata remains independently expected by its admitted raw archive
+   pin, not inferred from an installed project's claims.
+6. Structures: actual Conda byte audit adds immutable installed-member/link/verified-
+   overlay inventory. Wheel output adds all installed members and original payload
+   members without changing legacy site-only `installed_members`. The fixed wheel
+   observation operation is the sole moved implementation, not a copied parser. The
+   snapshot FD borrow requires an existing nonempty-SHA verified member and current
+   ancestor/named/FD epochs; identity-only/unknown/stale/closed members cannot upgrade
+   through it. Host accessors expose only captured immutable SONAME versions/loader path.
+7. Scale: source≤20,000 tar members, prefix≤100,000 regular/link leaves and16GiB, ELF≤1,024
+   objects/8,192 traversal edges, each fixed readelf output≤1MiB; whole operation has an
+   absolute900s deadline and the existing shorter tool bounds. Source and inventories are
+   linear walks; dependency lookup is keyed. No repeated hashing or large payload cache
+   is added. Repeated libraries reuse verified overlay results and snapshot hashes.
+8. Concurrency: current protected-file, host-tool, tree and alias epochs are checked at
+   observation/use/return. Root OS/package maintenance must drain these users. Fixed
+   executable/member FDs do not freeze loader/library pathname opens under privileged
+   OS mutation. No implicit mixed-runtime, orphan cleanup or native GPU readiness claim.
+9. Adapter ownership: eleven files only: prefix core/test, admission leaf, Conda core/test,
+   wheel core/test, files' approved borrow, host core/test accessors and this note. All
+   initial composition imports are stdlib-only, tested under actual `-I -S -B`; no schema,
+   protocol, runtime factory, installer, model, driver, IAM or new dependency change.
+10. Failure/retry: reject missing/extra/changed/unowned/hidden bytecode/hooks/links or source
+    mismatch without deletion, repair or NEW execution. ELF uses actual held-FD readelf,
+    first matching reviewed `$ORIGIN` route, transitive RPATH/direct-only RUNPATH and
+    source-known link components; there is no invented prefix/lib fallback. Unsupported
+    loader/foreign ELF/unsafe flags, malformed/dropped tags, version-count/version-set or
+    ambiguous context resolution denies. dlopen/plugins/actual loaded maps and CUDA driver
+    context still require the separately bounded native-UID import/probe; this is not a
+    general Linux linker certification. No failed audit is promoted to a receipt.
+11. Simpler alternative: installed METADATA/RECORD/self-reported prefix JSON alone cannot
+    prove original transforms, full source coverage or first-instruction safety. This
+    composer reuses the admitted mechanical boundaries rather than another parser/manager.
+    Immediately next: root-reviewed existing publisher ordering before NEW, guarded actual
+    CPU/CUDA audit, then exact proof/config/receipt and isolated native probe/measurement.
+    Legacy CPU and historical installer remain untouched; benchmark superiority and all
+    isolation/capacity/correctness gates must still precede GPU-default activation.
+
+Source gate: prefix66 PASS in7.23s; exact17-suite1057 PASS in27.50s; strict mypy10 files,
+Ruff10 and format-check10 PASS. Tests include whole synthetic CPU/CUDA composition/replay,
+source/hash/member/owner-input/epoch/bytecode failures before a NEW marker, ordered ELF
+search/version/alias negatives and actual no-site stdlib import. Initial synthetic graph
+fixtures exposed missing required size and group-writable intermediate test directories;
+both fixtures were corrected, without relaxing production owner/mode/size checks. There
+was no independent peer prefix-ELF review; root's independent source review is separate.
+
+Root reported canonical retention and same-wheel reinstallation after preserving the
+initial correct dist775 rejection and original metadata. Canonical direct URLs and no
+EOM `__pycache__` are evidence only. Both actual prefixes remain developer-owned
+**DEV_ASSEMBLED_NOT_ADMITTED**; protected mode normalization/promotion, first-instruction
+publisher ordering, numerical proof, model/CPU/GPU execution and activation remain pending.
+
+## Approved publisher ordering delta (source-only)
+
+Root independently verified the frozen whole-prefix11 hashes, fully reviewed their
+source/note and ran exact17-suite1057 PASS in27.43s, strict10/Ruff10/format10 PASS.
+Root approved the following next three paths only: `install_index_runtime.sh`, its
+existing `test_embedding_index_runtime_installation.py`, and this note. Audit leaf/core,
+original helper and historical experiment installer remain unchanged.
+
+1. Responsibility: extend the existing protected copy/profile-lock/backup owner boundary,
+   requiring old protected bootstrap byte audit before **any** NEW instruction. No new
+   package installation, ML/device invocation, native admission or operator grant.
+2. Canonical source: root must first retain exact Conda31 and source-list in the existing
+   raw-SHA archive root. Reuse public `retain_index_archive` for exact known basenames;
+   no new retainer or parser. `/tmp` and package cache are never audit provenance.
+3. Identity: retain runtime tree/hash, helper hash, private raw hashes and full40 commits;
+   add independent owner-input raw SHA and audit-leaf raw SHA. Root must separately admit
+   the publisher's protected source before invoking it; a writable worktree is not a grant.
+4. Inputs: after mode/profile, exactly15 fixed fields plus1..4 wheelhouse directories.
+   The new three fields follow the lease fields: owner-input source path, owner-input raw
+   SHA, audit-leaf raw SHA. Owner input must be `/tmp/eom-*/prefix-audit-input.json`;
+   hashes are exact64 lowercase hex. Existing unaudited13-field calls cannot run NEW,
+   including old four-wheelhouse calls that overlap the new minimum count. Fingerprint
+   and prepare-prefix actions remain unchanged. Validate closed values before mutation.
+5. Access: copy the input into fresh root0700 `PRIVATE/prefix-audit-input.json`0600,
+   exact-pinned fixed leaf into `PRIVATE/admit.py`0600, six literal closure files into
+   `PRIVATE/source/eom_catalog_service/`0600 and existing five locks/helper. The actual
+   leaf checks owner-input/source raw pins, sizes, epochs and closed module set before
+   imports; do not add a second shell JSON parser or execute writable inputs.
+6. Structures: fixed literal arrays, existing phase receipt and a once-written protected
+   audit stdout receipt. No generic command broker, registry, plugin, DTO Boolean grant
+   or new installer framework. All detailed closure logic stays in its existing owners.
+7. Bounds: owner input≤128KiB and six source files≤1MiB each, fixed old audit≤900s. Receipt
+   must have exactly the fixed status plus one lowercase SHA line, bounded before read.
+   No unlimited stdout capture or command-string/eval execution.
+8. Concurrency: retain the same exact root profile flock from copy through backup/promotion,
+   old audit and existing first NEW instruction. Root OS/package maintenance must drain
+   these users throughout. Epoch checks/FD dispatch do not defeat privileged loader TOCTOU.
+9. Dependency direction/order: old `/opt/eom/conda/envs/eom-embedding-experiment/bin/python3.12`
+   `-I -S -B PRIVATE/admit.py prefix-bytes --profile ... --owner-input ...`
+   `--owner-input-sha256 sha256:...` is mandatory at STAGED_NOT_ADMITTED. Capture and check
+   actual status0/receipt, record PREFIX_BYTES_AUDITED_NOT_ADMITTED, then and only then
+   run unchanged NEW `-I -S -B PRIVATE/install.py index-runtime ...`. Old helper checks/
+   retention remain intact; old bootstrap is independently accepted, not re-certified.
+10. Failure/retry: missing/wrong/oversized input/leaf/module, old audit failure/timeout or
+    malformed/oversized receipt leaves NEW marker absent. Preserve protected copy, backup,
+    phase/failed receipt; no restore, deletion, repair or claimed admission. Once-written
+    local evidence is not the later immutable final native admission revision.
+11. Alternative/tests: checking NEW with NEW is too late. Existing synthetic shell fixtures
+    use test-only paths/UID and inert old/new programs to prove order/absence, malformed
+    receipt and legacy arguments, copy/interrupted-move/profile contention and historical
+    shell/helper byte preservation. No root or protected-prefix operation is run by this
+    source phase. Actual guarded root audit and final proof/config/receipt/probe are next.

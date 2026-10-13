@@ -26,6 +26,7 @@ from eom_catalog_service.embedding_runtime_wheel_closure import (
     RuntimeWheelConsoleScriptPin,
     RuntimeWheelInstallationPin,
     RuntimeWheelMemberPin,
+    observe_runtime_wheel_installation,
     validate_runtime_console_wrapper,
     verify_installed_runtime_wheel,
 )
@@ -95,6 +96,12 @@ def test_direct_core_and_typed_numeric_adapter_preserve_exact_member_and_value_c
         )
         assert core.namespace_roots == typed.namespace_roots
         assert core.installed_members == typed.installed_members
+        assert core.installed_members <= core.all_installed_members
+        assert core.all_installed_members - core.installed_members == frozenset(
+            staged.prefix / "bin" / script.name for script in library.console_scripts
+        )
+        assert core.archive_payload_members <= core.installed_members
+        assert all(path.is_relative_to(staged.prefix) for path in core.all_installed_members)
         assert core.torch_version == typed.torch_version
         if library.name == "torch":
             assert core.torch_version == (
@@ -106,6 +113,35 @@ def test_direct_core_and_typed_numeric_adapter_preserve_exact_member_and_value_c
     core_files.require_closed_namespaces(core_roots, core_members)
     core_files.assert_unchanged()
     numeric_files.assert_unchanged()
+
+
+@pytest.mark.parametrize("profile", ["CPU_INDEX_FP32", "CUDA_INDEX_FP32"])
+@pytest.mark.parametrize("generated", [False, True])
+def test_public_wheel_observation_is_exact_and_then_source_verified(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    profile: EmbeddingRuntimeProfile,
+    generated: bool,
+) -> None:
+    staged = staged_runtime(tmp_path, monkeypatch, profile, with_generated=generated)
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    for library in staged.proof.numeric_libraries:
+        expected = wheel_pin(library)
+        observed = observe_runtime_wheel_installation(
+            expected.archive, expected.name, expected.version, prefix=staged.prefix, files=files
+        )
+        assert observed == expected
+        verified = verify_installed_runtime_wheel(
+            observed, prefix=staged.prefix, archive_root=staged.archive_root, files=files
+        )
+        assert verified.all_installed_members == verified.installed_members | frozenset(
+            staged.prefix / "bin" / script.name for script in expected.console_scripts
+        )
+        assert not any(
+            path.name in {"INSTALLER", "REQUESTED", "direct_url.json", "RECORD"}
+            for path in verified.archive_payload_members
+        )
+    files.assert_unchanged()
 
 
 def test_core_imports_with_actual_file_adapter_under_isolated_no_site_no_bytecode_python() -> None:
