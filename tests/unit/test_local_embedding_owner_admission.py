@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 from eom_catalog_service.embedding_registry_catalog_adapter import (
@@ -33,6 +34,7 @@ from eom_orchestrator.local_embedding_control_artifacts import (
 )
 from eom_orchestrator.models import ArtifactRevisionRecord
 from eom_workflow.local_embedding_request import LocalEmbeddingWorkflowRequestV11
+from eom_workflow_runner import local_embedding_owner_admission as owner_module
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
 from eom_workflow_runner.local_embedding_admission import ResolvedLocalEmbeddingAdmission
 from eom_workflow_runner.local_embedding_owner_admission import (
@@ -397,6 +399,74 @@ def test_claim_does_not_reinterpret_expired_previous_execution_as_safe(
             source.owner.resolve_claim(
                 session, command=command, workflow=workflow, request=source.scope.request
             )
+    finally:
+        session.close()
+
+
+@pytest.mark.parametrize(
+    "history", ["valid", "missing", "unallocated", "failed", "bad_step", "denied"]
+)
+def test_expired_claim_can_only_rejoin_verified_original_context(
+    source: OwnerFixture, monkeypatch: pytest.MonkeyPatch, history: str
+) -> None:
+    session, command, workflow, _lease = mutation_rows(source, monkeypatch)
+    command.lease_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+    request = source.scope.request
+    step = SimpleNamespace(
+        step_run_id="steprun_" + "e" * 32,
+        state="FAILED" if history == "bad_step" else "RUNNING",
+        step_type="application",
+        worker_role=None,
+        result_schema="incremental-embedding-result@1.0",
+        input_pointer_manifest={
+            "source_plan": request.source_plan.model_dump(mode="json"),
+            "source_plan_sha256": request.source_plan_sha256,
+        },
+    )
+    original_scalar = session.scalar
+    monkeypatch.setattr(
+        session,
+        "scalar",
+        lambda query, **kwargs: (
+            step
+            if query.column_descriptions[0]["entity"] is owner_module.WorkflowStepRunRecord
+            else original_scalar(query, **kwargs)
+        ),
+    )
+    original = SimpleNamespace(intent=object())
+    read = Mock(return_value=None if history == "missing" else original)
+    coordinator = Mock()
+    coordinator.return_value.read.return_value = SimpleNamespace(
+        state="FAILED" if history == "failed" else "RUNNING",
+        records=() if history == "unallocated" else (object(),),
+    )
+    monkeypatch.setattr(owner_module, "read_native_embedding_launch", read)
+    monkeypatch.setattr(owner_module, "NativeEmbeddingCoordinator", coordinator)
+    if history == "denied":
+        source.deny = True
+    try:
+        if history == "valid":
+            assert (
+                source.owner.resolve_claim(
+                    session, command=command, workflow=workflow, request=request
+                )
+                == source.scope
+            )
+            read.assert_called_once_with(
+                session,
+                request=request,
+                workflow_id=workflow.workflow_id,
+                step_run_id=step.step_run_id,
+            )
+        else:
+            with pytest.raises((WorkflowError, OperatorAuthorizationFenceError)):
+                source.owner.resolve_claim(
+                    session, command=command, workflow=workflow, request=request
+                )
+        # This is only pre-claim admission, never a rewritten lease/audit/state.
+        assert command.attempts == command.lease_generation == 1 and command.state == "PROCESSING"
+        if history in {"bad_step", "denied"}:
+            read.assert_not_called()
     finally:
         session.close()
 

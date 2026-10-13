@@ -154,32 +154,45 @@ def _write_owner_member(
         os.close(descriptor)
 
 
-def stage_native_index(prepared: PreparedNativeIndex) -> None:
-    prepared = PreparedNativeIndex(prepared.execution_id, prepared.association, prepared.request)
+def ensure_native_index_owner_workspace(execution_id: str) -> Path:
+    """Durable fixed owner-local commit workspace, including a borrowed-only execution."""
+    execution_id = validate_native_index_execution_id(execution_id)
     owner = _owner()
     with protected_cpu_handoff_directory(
         OWNER_ROOT, owner=owner, uid=owner.owner_uid, gid=owner.owner_gid, mode=0o700
     ) as parent:
         try:
-            os.mkdir(prepared.execution_id, mode=0o700, dir_fd=parent)
+            os.mkdir(execution_id, mode=0o700, dir_fd=parent)
             os.fsync(parent)
         except FileExistsError:
             pass
-        with protected_cpu_handoff_directory(
-            prepared.workspace, owner=owner, uid=owner.owner_uid, gid=owner.owner_gid, mode=0o700
-        ) as directory:
-            _write_owner_member(
-                directory,
-                "input.json",
-                canonical_json_bytes(prepared.request.model_dump(mode="json")),
-                owner,
-            )
-            _write_owner_member(
-                directory,
-                "association.json",
-                canonical_json_bytes(prepared.association.model_dump(mode="json")),
-                owner,
-            )
+    workspace = OWNER_ROOT / execution_id
+    with protected_cpu_handoff_directory(
+        workspace, owner=owner, uid=owner.owner_uid, gid=owner.owner_gid, mode=0o700
+    ):
+        pass
+    return workspace
+
+
+def stage_native_index(prepared: PreparedNativeIndex) -> None:
+    prepared = PreparedNativeIndex(prepared.execution_id, prepared.association, prepared.request)
+    owner = _owner()
+    ensure_native_index_owner_workspace(prepared.execution_id)
+    with protected_cpu_handoff_directory(
+        prepared.workspace, owner=owner, uid=owner.owner_uid, gid=owner.owner_gid, mode=0o700
+    ) as directory:
+        _write_owner_member(
+            directory,
+            "input.json",
+            canonical_json_bytes(prepared.request.model_dump(mode="json")),
+            owner,
+        )
+        _write_owner_member(
+            directory,
+            "association.json",
+            canonical_json_bytes(prepared.association.model_dump(mode="json")),
+            owner,
+        )
 
 
 def _read_prepared(execution_id: str, owner: CpuHandoffIdentity) -> PreparedNativeIndex:

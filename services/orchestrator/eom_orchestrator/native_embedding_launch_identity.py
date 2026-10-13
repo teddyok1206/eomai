@@ -5,7 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from eom_identifiers import content_sha256, new_job_id, new_logical_artifact_id, new_revision_id
-from eom_workflow.local_embedding_encoding_job import LocalEmbeddingLaunchIntent
+from eom_workflow.local_embedding_encoding_job import (
+    LocalEmbeddingLaunchAssociation,
+    LocalEmbeddingLaunchIntent,
+)
 from eom_workflow.local_embedding_request import (
     LocalEmbeddingWorkflowRequestV11,
     parse_local_embedding_workflow_request_v11,
@@ -50,6 +53,51 @@ def native_embedding_launch_key(workflow_id: str, step_run_id: str, request_sha2
     )
     # The existing Job key column is128 characters: pin the tuple by its hash.
     return "native-embedding-launch:" + digest.removeprefix("sha256:")
+
+
+def read_native_embedding_launch(
+    session: Session,
+    *,
+    request: LocalEmbeddingWorkflowRequestV11,
+    workflow_id: str,
+    step_run_id: str,
+) -> NativeEmbeddingLaunchObservation | None:
+    """Read one pinned coordinator context; caller fences current authority BEFORE this read."""
+    _require_owner_root(session)
+    request = parse_local_embedding_workflow_request_v11(request.model_dump(mode="json"))
+    EmbeddingEncodingReservationStorage.require_protocol(session)
+    row = session.scalar(
+        select(JobRecord).where(
+            JobRecord.idempotency_key
+            == native_embedding_launch_key(workflow_id, step_run_id, request.request_sha256)
+        )
+    )
+    if row is None:
+        return None
+    events = tuple(
+        session.scalars(
+            select(JobEventRecord).where(
+                JobEventRecord.job_id == row.job_id, JobEventRecord.event == NATIVE_INTENT_EVENT
+            )
+        )
+    )
+    if len(events) != 1:
+        raise EmbeddingEncodingReservationError("EMBEDDING_NATIVE_LAUNCH_INTENT_INVALID")
+    intent = LocalEmbeddingLaunchIntent.model_validate(events[0].data)
+    return require_native_embedding_launch(session, intent, request)
+
+
+def read_native_embedding_launch_association(
+    session: Session, intent: LocalEmbeddingLaunchIntent, request: LocalEmbeddingWorkflowRequestV11
+) -> LocalEmbeddingLaunchAssociation | None:
+    """Exact owner association, not a source or current lease grant."""
+    require_native_embedding_launch(session, intent, request)
+    association = EmbeddingEncodingReservationStorage.association(
+        session, intent.native_launch_job_id
+    )
+    if association is not None and association.intent != intent:
+        raise EmbeddingEncodingReservationError("EMBEDDING_NATIVE_LAUNCH_INTENT_INVALID")
+    return association
 
 
 def create_native_embedding_launch(

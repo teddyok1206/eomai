@@ -49,6 +49,7 @@ from eom_orchestrator.embedding_artifact_store import (
     EMBEDDING_INDEX_MEMBER_NAMES,
     EMBEDDING_INDEX_PRIMARY_MEMBER,
 )
+from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from jsonschema.exceptions import ValidationError as JsonSchemaError
 from sqlalchemy import Engine, select
@@ -661,6 +662,119 @@ class CatalogEmbeddingRegistryVerifier:
             return ResolvedEmbeddingRegistration(
                 command.corpus_id, index, shards, previous, sources, capture.entries
             )
+
+        return self._guard(resolve)
+
+    def require_index_publication_scope(
+        self, session: Session, caller: EmbeddingRegistryCaller, query: EmbeddingRegistryLookup
+    ) -> None:
+        """Admit the real publish permission BEFORE native allocation/model work."""
+
+        def admit() -> None:
+            _reader, capture = self._capture(
+                session, caller, query, InferenceTransferSessionCapturePhase.AUTHORIZE_SCOPE
+            )
+            if "knowledge_graph:publish" not in capture.scope.requester_permission_keys:
+                raise EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN")
+
+        self._guard(admit)
+
+    def resolve_prepared_index(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        command: RegisterEmbeddingIndexCommand,
+        index: EmbeddingIndexManifest,
+    ) -> ResolvedEmbeddingRegistration:
+        """Validate exact local proposed bytes with canonical CURRENT sources/numeric rows.
+
+        This does not claim that the index Artifact is committed or registered. It
+        permits the existing Artifact owner to publish a trusted prepared result;
+        registration still resolves and verifies that actual committed member.
+        """
+
+        def resolve() -> ResolvedEmbeddingRegistration:
+            reader, _capture = self._capture(
+                session, caller, command, InferenceTransferSessionCapturePhase.AUTHORIZE_SCOPE
+            )
+            checked = parse_embedding_index(index.model_dump(mode="json"))
+            if (
+                checked.space != self.configuration.space
+                or checked.recipe != self.configuration.recipe
+            ):
+                raise ValueError("prepared index numerical configuration differs")
+            shards = self._read_shards(reader, checked.shards)
+            previous = (
+                None
+                if checked.previous_manifest is None
+                else (
+                    checked.previous_manifest,
+                    self._read_index(reader, checked.previous_manifest),
+                )
+            )
+            capture = self.sources.capture_in_session(
+                session,
+                InferenceTransferCorpusReadCommand(
+                    caller.operator_id,
+                    command.graph_snapshot,
+                    command.policy_revision_id,
+                    command.policy_sha256,
+                    self.configuration.source_classes,
+                    1024,
+                    InferenceTransferPopulationScope(command.namespace.population_scope),
+                ),
+                self.configuration.recipe,
+                identity_fence=self.identity_fence,
+                artifact_reader=reader,
+            )
+            assert capture.corpus is not None
+            return ResolvedEmbeddingRegistration(
+                command.corpus_id,
+                checked,
+                shards,
+                previous,
+                tuple(
+                    sorted(
+                        (s.source for s in capture.corpus.sources), key=lambda s: s.item_revision_id
+                    )
+                ),
+                capture.entries,
+                capture.corpus.truncated,
+            )
+
+        return self._guard(resolve)
+
+    def resolve_optional_index_publication(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        command: RegisterEmbeddingIndexCommand,
+    ) -> ResolvedEmbeddingRegistration | None:
+        """Only absence of BOTH exact metadata identities means not yet published.
+
+        Wrong identity, partial metadata, revoked source, hash drift or unapproved
+        producer is an error, never a fallback to local/new/latest materialization.
+        Current publication authority is checked before revealing either existence.
+        """
+
+        def resolve() -> ResolvedEmbeddingRegistration | None:
+            self.authorize_scope(session, caller, command)
+            pointer = command.index_manifest
+            logical = session.get(ArtifactRecord, pointer.artifact_id, populate_existing=True)
+            revision = session.get(
+                ArtifactRevisionRecord, pointer.artifact_revision_id, populate_existing=True
+            )
+            if logical is None and revision is None:
+                return None
+            if (
+                logical is None
+                or revision is None
+                or revision.logical_artifact_id != pointer.artifact_id
+            ):
+                raise ValueError(
+                    "index publication identity is dangling or belongs to another entity"
+                )
+            return self.resolve_registration(session, caller, command)
 
         return self._guard(resolve)
 

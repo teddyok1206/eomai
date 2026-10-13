@@ -307,6 +307,76 @@ def test_canonical_committed_index_shard_result_binary_and_source_composition(
     )
 
 
+def test_prepared_local_index_is_not_claimed_committed_but_components_are_validated(owner) -> None:
+    verifier, session, command, index, _binding, _scope, _root = owner
+    caller = EmbeddingRegistryCaller("operator_" + "1" * 32)
+    resolved = verifier.resolve_prepared_index(session, caller, command, index)
+    assert validate_resolved_embedding_registration(command, resolved) == resolved
+    verifier.require_index_publication_scope(
+        session,
+        caller,
+        EmbeddingRegistryLookup(
+            command.corpus_id,
+            command.namespace,
+            command.graph_snapshot,
+            command.policy_revision_id,
+            command.policy_sha256,
+        ),
+    )
+
+
+@pytest.mark.parametrize("state", ["absent", "logical_only", "revision_only", "foreign", "present"])
+def test_optional_index_publication_only_accepts_exact_absence_as_uncommitted(
+    owner, monkeypatch, state
+) -> None:
+    verifier, _session, command, _index, _binding, _scope, _root = owner
+    session = Mock(spec=Session)
+    authorize = Mock()
+    resolved = Mock(return_value=object())
+    monkeypatch.setattr(verifier, "authorize_scope", authorize)
+    monkeypatch.setattr(verifier, "resolve_registration", resolved)
+    logical = None if state in {"absent", "revision_only"} else object()
+    revision = (
+        None
+        if state in {"absent", "logical_only"}
+        else SimpleNamespace(
+            logical_artifact_id="artifact_" + "f" * 32
+            if state == "foreign"
+            else command.index_manifest.artifact_id
+        )
+    )
+    session.get.side_effect = (logical, revision)
+    caller = EmbeddingRegistryCaller("operator_" + "1" * 32)
+    if state == "absent":
+        assert verifier.resolve_optional_index_publication(session, caller, command) is None
+        resolved.assert_not_called()
+    elif state == "present":
+        assert (
+            verifier.resolve_optional_index_publication(session, caller, command)
+            is resolved.return_value
+        )
+    else:
+        with pytest.raises(EmbeddingRegistryError, match="POINTER_INVALID"):
+            verifier.resolve_optional_index_publication(session, caller, command)
+        resolved.assert_not_called()
+    authorize.assert_called_once_with(session, caller, command)
+
+
+def test_optional_publication_denial_precedes_existence_lookup(owner, monkeypatch) -> None:
+    verifier, _session, command, _index, _binding, _scope, _root = owner
+    session = Mock(spec=Session)
+    monkeypatch.setattr(
+        verifier,
+        "authorize_scope",
+        Mock(side_effect=EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN")),
+    )
+    with pytest.raises(EmbeddingRegistryError, match="FORBIDDEN"):
+        verifier.resolve_optional_index_publication(
+            session, EmbeddingRegistryCaller("operator_" + "1" * 32), command
+        )
+    session.get.assert_not_called()
+
+
 @pytest.mark.parametrize("has_previous", [False, True])
 def test_prepared_index_basis_uses_current_sources_and_exact_reusable_rows(
     owner: tuple[Any, ...], monkeypatch: pytest.MonkeyPatch, has_previous: bool

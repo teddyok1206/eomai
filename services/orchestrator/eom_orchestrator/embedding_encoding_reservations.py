@@ -446,11 +446,20 @@ class EmbeddingEncodingReservations:
     ) -> tuple[EmbeddingEncodingReadResult, ...]:
         references = _references(references)
         with self._sessions.begin() as session:
-            self._admission.fence_read_scope(session, references)
-            jobs = self._storage.lock_references(session, references, lock=False)
-            records = self._storage.reservations(session, jobs)
-            observed = self._admission.reauthorize_read(session, _targets(records))
-            by_id = {
-                value.owned_job.job_reference.job_id: value for value in _results(records, observed)
-            }
-            return tuple(by_id[reference.job_id] for reference in references)
+            return self.read_in_session(session, references)
+
+    def read_in_session(
+        self, session: Session, references: tuple[EmbeddingEncodingJobReference, ...]
+    ) -> tuple[EmbeddingEncodingReadResult, ...]:
+        """Supported same-root read for atomic receipt verification; no inference/write."""
+        if session.get_transaction() is None or session.in_nested_transaction():
+            raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_OWNER_ROOT_REQUIRED")
+        references = _references(references)
+        self._admission.fence_read_scope(session, references)
+        jobs = self._storage.lock_references(session, references, lock=False)
+        records = self._storage.reservations(session, jobs)
+        observed = self._admission.reauthorize_read(session, _targets(records))
+        by_id = {
+            value.owned_job.job_reference.job_id: value for value in _results(records, observed)
+        }
+        return tuple(by_id[reference.job_id] for reference in references)

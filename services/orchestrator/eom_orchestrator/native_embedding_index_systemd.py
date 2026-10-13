@@ -228,6 +228,10 @@ class FixedNativeIndexLauncher:
         self._installed()
         return self._observe(execution_id)
 
+    def assert_current_runtime(self) -> None:
+        """Readiness-only installed closure; no IAM write, capacity claim or unit start."""
+        self._installed()
+
     def run(self, prepared: PreparedNativeIndex) -> IncrementalEmbeddingResult:
         prepared = PreparedNativeIndex(
             prepared.execution_id, prepared.association, prepared.request

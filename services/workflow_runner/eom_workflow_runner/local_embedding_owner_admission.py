@@ -33,6 +33,8 @@ from eom_orchestrator.local_embedding_control_artifacts import (
     EXECUTION_POLICY_ARTIFACT_TYPE,
     SOURCE_PLAN_ARTIFACT_TYPE,
 )
+from eom_orchestrator.native_embedding_coordinator import NativeEmbeddingCoordinator
+from eom_orchestrator.native_embedding_launch_identity import read_native_embedding_launch
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.local_embedding_execution_policy import (
     LOCAL_EMBEDDING_POLICY_SCHEMA_REF,
@@ -54,6 +56,7 @@ from eom_workflow_runner.models import (
     WorkflowCommandRecord,
     WorkflowDefinitionRecord,
     WorkflowInstanceRecord,
+    WorkflowStepRunRecord,
 )
 from eom_workflow_runner.repository import (
     CommandLeaseIdentity,
@@ -268,10 +271,67 @@ class CatalogLocalEmbeddingOwnerAdmission:
         )
         self._require_rows(session, command, workflow, request)
         if command.state != CommandState.PENDING.value or command.attempts != 0:
-            raise WorkflowError(
-                WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
-                "native acquisition requires supported prior-execution reconciliation",
+            # Current source/session authority is still required; original intent
+            # is ONLY provenance for rejoining the exact existing computation.
+            if (
+                command.state not in {CommandState.LEASED.value, CommandState.PROCESSING.value}
+                or command.attempts < 1
+                or command.lease_generation < 1
+                or command.lease_expires_at is None
+                or command.lease_expires_at > datetime.now(UTC)
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                    "native acquisition requires supported prior-execution reconciliation",
+                )
+            scope = self.resolve_submission(session, request)
+            step = session.scalar(
+                select(WorkflowStepRunRecord)
+                .where(
+                    WorkflowStepRunRecord.workflow_id == workflow.workflow_id,
+                    WorkflowStepRunRecord.step_key == "encode_batch",
+                    WorkflowStepRunRecord.attempt == 1,
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
+            if (
+                step is None
+                or step.state not in {"RUNNING", "SUCCEEDED"}
+                or step.step_type != "application"
+                or step.worker_role is not None
+                or step.result_schema != "incremental-embedding-result@1.0"
+                or step.input_pointer_manifest
+                != {
+                    "source_plan": request.source_plan.model_dump(mode="json"),
+                    "source_plan_sha256": request.source_plan_sha256,
+                }
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                    "native recovery lacks its exact prior step; supported reconcile is required",
+                )
+            launch = read_native_embedding_launch(
+                session,
+                request=request,
+                workflow_id=workflow.workflow_id,
+                step_run_id=step.step_run_id,
+            )
+            if launch is None:
+                raise WorkflowError(
+                    WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                    "native recovery cannot substitute a vanished execution identity",
+                )
+            history = NativeEmbeddingCoordinator(launch.intent, request).read(session)
+            if not history.records or history.state in {"FAILED", "CANCELLED"}:
+                raise WorkflowError(
+                    WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                    "native recovery requires allocated, non-failed original execution history",
+                )
+            self.identity.fence_current_operator(
+                session, require_local_embedding_operator_seed(request).operator_id
+            )
+            return scope
         return self.resolve_submission(session, request)
 
     def fence_mutation(

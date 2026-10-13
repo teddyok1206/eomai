@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/native-embedding-coordinator/1.0",
+  "title": "Native embedding owner continuation metadata 1.0",
+  "description": "Four immutable existing-Job checkpoints, not permission or a worker result; never contains source text, vectors, tokens, paths or current lease credentials.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "record_type", "native_launch_job_id", "intent_sha256", "payload", "checkpoint_sha256"],
+  "properties": {
+    "schema_version": {"const": "native-embedding-coordinator/1.0"},
+    "record_type": {"enum": ["ALLOCATION", "INDEX_PREPARED", "REGISTERED", "COMPLETED"]},
+    "native_launch_job_id": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+    "intent_sha256": {"$ref": "#/$defs/hash"},
+    "checkpoint_sha256": {"$ref": "#/$defs/hash"},
+    "payload": {"oneOf": [{"$ref": "#/$defs/allocation"}, {"$ref": "#/$defs/prepared"}, {"$ref": "#/$defs/registered"}, {"$ref": "#/$defs/completed"}]}
+  },
+  "allOf": [
+    {"if": {"properties": {"record_type": {"const": "ALLOCATION"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/allocation"}}}},
+    {"if": {"properties": {"record_type": {"const": "INDEX_PREPARED"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/prepared"}}}},
+    {"if": {"properties": {"record_type": {"const": "REGISTERED"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/registered"}}}},
+    {"if": {"properties": {"record_type": {"const": "COMPLETED"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/completed"}}}}
+  ],
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "utc": {"type": "string", "format": "date-time", "pattern": "(?:Z|\\+00:00)$"},
+    "producer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["job_id", "artifact_id", "artifact_revision_id"],
+      "properties": {
+        "job_id": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"}
+      }
+    },
+    "allocation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["index_producer", "receipt_producer", "created_at", "source_commit"],
+      "properties": {
+        "index_producer": {"$ref": "#/$defs/producer"},
+        "receipt_producer": {"$ref": "#/$defs/producer"},
+        "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "created_at": {"$ref": "#/$defs/utc"}
+      }
+    },
+    "prepared": {
+      "type": "object", "additionalProperties": false,
+      "required": ["registration_command", "index_created_at"],
+      "properties": {
+        "registration_command": {"$ref": "eom://schemas/knowledge/embedding-registry/1.0#/$defs/command"},
+        "index_created_at": {"$ref": "#/$defs/utc"}
+      }
+    },
+    "registered": {
+      "type": "object", "additionalProperties": false,
+      "required": ["registration_result", "registration_observed_at"],
+      "properties": {
+        "registration_result": {"$ref": "eom://schemas/knowledge/embedding-registry/1.0#/$defs/result"},
+        "registration_observed_at": {"$ref": "#/$defs/utc"}
+      }
+    },
+    "completed": {
+      "type": "object", "additionalProperties": false,
+      "required": ["output"],
+      "properties": {"output": {"$ref": "eom://schemas/workflow/local-embedding-step-output/1.0"}}
+    }
+  }
+}

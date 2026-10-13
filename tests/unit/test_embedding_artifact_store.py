@@ -328,6 +328,7 @@ def test_store_source_has_no_parallel_database_network_process_or_git_boundary()
         "contextlib",
         "dataclasses",
         "datetime",
+        "functools",  # bind an exact typed publisher identity; no new side-effect boundary
         "pathlib",
         "typing",
         "eom_catalog_contracts.embedding_reference_query",

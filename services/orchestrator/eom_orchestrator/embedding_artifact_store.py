@@ -10,6 +10,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -75,6 +76,7 @@ from pydantic import Field, TypeAdapter
 
 from eom_orchestrator.file_set_control_artifacts import (
     CONTROL_FILE_SET_PROTOCOL,
+    ControlFileSetIdentity,
     ControlFileSetMember,
     ControlFileSetPublisher,
     PublishedControlFileSet,
@@ -456,6 +458,7 @@ class EmbeddingArtifactStore:
         previous: tuple[ArtifactMemberPointer, EmbeddingIndexManifest] | None,
         scope: EmbeddingIndexPublicationScope,
         workspace: Path,
+        identity: ControlFileSetIdentity | None = None,
     ) -> PublishedEmbeddingIndexArtifacts:
         """Commit one pinned metadata index; no source access, vectors or head mutation."""
         try:
@@ -508,7 +511,12 @@ class EmbeddingArtifactStore:
                     INDEX_SCHEMA_REF,
                     "application/json",
                 )
-                receipt = self.publisher.publish(
+                publish = (
+                    self.publisher.publish
+                    if identity is None
+                    else partial(self.publisher.publish_identified, identity=identity)
+                )
+                receipt = publish(
                     members=(member,),
                     primary_file=EMBEDDING_INDEX_PRIMARY_MEMBER,
                     artifact_type=EMBEDDING_INDEX_ARTIFACT_TYPE,
@@ -523,6 +531,15 @@ class EmbeddingArtifactStore:
                     if (
                         receipt.primary_file != EMBEDDING_INDEX_PRIMARY_MEMBER
                         or receipt.primary_sha256 != member.sha256
+                        or (
+                            identity is not None
+                            and (receipt.job_id, receipt.artifact_id, receipt.artifact_revision_id)
+                            != (
+                                identity.job_id,
+                                identity.artifact_id,
+                                identity.artifact_revision_id,
+                            )
+                        )
                     ):
                         raise ValueError("index owner receipt differs")
                     pointer = ArtifactMemberPointer(
@@ -543,6 +560,29 @@ class EmbeddingArtifactStore:
                     )
                 except Exception:
                     raise EmbeddingArtifactStoreError("EMBEDDING_INDEX_RECEIPT_INVALID") from None
+
+    def stage_index_manifest(self, *, index: EmbeddingIndexManifest, workspace: Path) -> None:
+        """Fixed durable local materialization before its small checkpoint; no NAS write."""
+        index = parse_embedding_index(index.model_dump(mode="json"))
+        with _directory(workspace) as directory:
+            _materialize_manifest(
+                directory,
+                EMBEDDING_INDEX_PRIMARY_MEMBER,
+                canonical_json_bytes(index.model_dump(mode="json")),
+            )
+
+    def read_staged_index(self, *, workspace: Path, expected_sha256: str) -> EmbeddingIndexManifest:
+        """Read the exact checkpointed local bytes; never regenerate from current/latest."""
+        with (
+            _directory(workspace) as directory,
+            _member(directory, EMBEDDING_INDEX_PRIMARY_MEMBER, MAX_EMBEDDING_INPUT_BYTES) as raw,
+        ):
+            if sha256_bytes(raw) != TypeAdapter(Sha256).validate_python(expected_sha256):
+                raise EmbeddingArtifactStoreError("EMBEDDING_INDEX_MEMBER_CONFLICT")
+            body = json.loads(raw)
+            if canonical_json_bytes(body) != raw:
+                raise EmbeddingArtifactStoreError("EMBEDDING_INDEX_MEMBER_CONFLICT")
+            return parse_embedding_index(body)
 
     def publish(
         self,

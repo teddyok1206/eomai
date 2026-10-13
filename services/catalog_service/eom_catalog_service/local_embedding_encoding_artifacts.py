@@ -9,6 +9,7 @@ from typing import Any
 from eom_catalog_contracts.embedding_vector_binary import read_unit_vectors
 from eom_catalog_contracts.inference_transfer_embedding import (
     MAX_EMBEDDING_INPUT_BYTES,
+    EmbeddingVectorShardManifest,
     IncrementalEmbeddingInput,
     IncrementalEmbeddingResult,
     parse_embedding_shard,
@@ -110,6 +111,17 @@ class CatalogLocalEmbeddingEncodingArtifacts:
         Artifact, never one full shard read per row. No vectors or winner count is
         returned; this internal read does not disclose a historical source scope.
         """
+        self.resolve_shared_row_shards(rows)
+
+    def resolve_shared_row_shards(
+        self, rows: tuple[tuple[LocalEmbeddingOwnedJob, EmbeddingEncodingCompletedEvent], ...]
+    ) -> tuple[tuple[ArtifactMemberPointer, EmbeddingVectorShardManifest], ...]:
+        """Trusted index assembly metadata, NEVER a public user/worker disclosure.
+
+        Same exact selected-row proof as verify_shared_rows. No input/source plan or
+        vector bytes are returned. Full internal shard metadata is for canonical
+        reference assembly only, not a transferable grant or disclosed coverage.
+        """
         if type(rows) is not tuple or not 1 <= len(rows) <= 1024:
             raise ValueError("LOCAL_EMBEDDING_SHARED_ROW_BATCH_INVALID")
         selected_keys: set[str] = set()
@@ -132,6 +144,7 @@ class CatalogLocalEmbeddingEncodingArtifacts:
         self.reader.prefetch(
             tuple(sorted({(key[0].artifact_id, key[0].artifact_revision_id) for key in groups}))
         )
+        resolved = []
         for (result_pointer, shard_pointer, binary_pointer), selected in groups.items():
             result = self._resolve_file_set(result_pointer, shard_pointer, binary_pointer)
             shard = result.shard
@@ -148,6 +161,18 @@ class CatalogLocalEmbeddingEncodingArtifacts:
                     or receipt.shard_sha256 != shard.shard_sha256
                 ):
                     raise ValueError("LOCAL_EMBEDDING_SHARED_ROW_CLOSURE_INVALID")
+            resolved.append((shard_pointer, shard))
+        return tuple(
+            sorted(
+                resolved,
+                key=lambda value: (
+                    value[0].artifact_id,
+                    value[0].artifact_revision_id,
+                    value[0].member_path,
+                    value[0].sha256,
+                ),
+            )
+        )
 
     def _resolve_file_set(
         self,

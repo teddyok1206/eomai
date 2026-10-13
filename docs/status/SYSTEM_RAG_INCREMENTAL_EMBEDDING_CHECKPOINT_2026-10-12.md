@@ -2160,3 +2160,28 @@ API/Web/runner/chat/chat-worker5개 active. 운영 source/seed/delta/query 활�
 다음은 durable coordinator checkpoint와 실제 전체 executor/등록·동일 세션 검증 연결이다.
 그 후 원래 순서대로 실제 seed/delta/reuse/query·소비자·CPU/GPU 비교를 진행한다.
 `GOAL=ACTIVE`, `NATIVE_INDEX_ASSEMBLY_SOURCE=IMPLEMENTED`, `NATIVE_WORKFLOW_LIVE=NOT_ACTIVE`.
+
+## 2026-10-13 20:55 UTC — concrete CPU executor와 중단 재개 연결
+
+[인덱스·완료 연결 기록](../architecture/NATIVE_EMBEDDING_INDEX_COMPLETION_COMPOSITION.md#executor-verification--2026-10-13-2055-utc)에
+전체 경계·증거·남은 운영 연결을 기록했다. 기존 Job의 schema-first checkpoint 네 단계로
+할당→정확한 인덱스 게시 준비→실제 등록 관측→정본 완료 carrier를 연결했다.
+계산·인덱스/완료·현재 source/command 확인은 책임별 모듈로 분리하며 새 큐/DB/migration은 없다.
+
+현재 SourceOwner가 expired claim을 재인가하더라도 exact prior step/allocated coordinator가
+없거나 실패/철회/손상된 경우에는 재할당/재시작하지 않는다. 같은 unit 결과와 완료된
+encoding은 재사용하며, 게시 요청의 원래 source commit도 고정해 코드 업데이트 후
+무분별한 새 key/Artifact/model 생성으로 우회하지 않는다.
+
+최종 source20 suites **642 PASS**,69.94s, strict mypy15·Ruff/format/bash/diff PASS.
+guarded disposable PG **28 PASS**,77.01s. 실제 Workflow/Job/Artifact/index/완료·terminal
+영속 경로, Graph-only 계산 재사용, 세 중단 구간, release change 및 concurrent first-use
+checkpoint를 포함한다. IAM/source/numerical backend는 합성이므로 live 권한/모델 증거가 아니다.
+이전25/27 PASS 및 실패 로그는 보존하며 숫자를 합산하지 않는다. 최종 임시 DB
+`/tmp/eom-api-testdb-20261013205041_11f2118d`는 공식 cleanup으로 제거했고,
+로그는 `/tmp/eom-native-executor.XoUy2uka/`에 있다. sudo 인증은 같은 pane을 재사용했다.
+
+운영 서비스5개 active. 운영 DB pytest·모델/GPU 실행·CPU 재설치/seal·서비스 재시작0회.
+다음은 보호 owner 실제 연결/설치와 같은 operator/session의 bounded seed/delta/query다.
+그 후 automatic service identity/reconcile, 소비자와 CPU/GPU 비교·조건부 default를 진행한다.
+`GOAL=ACTIVE`, `NATIVE_EXECUTOR_SOURCE=IMPLEMENTED`, `NATIVE_WORKFLOW_LIVE=NOT_ACTIVE`.

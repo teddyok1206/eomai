@@ -842,6 +842,54 @@ def validate_local_embedding_receipt_message(
         raise LocalEmbeddingAdmissionContractError("LOCAL_EMBEDDING_CONTRACT_INVALID") from None
 
 
+NATIVE_EMBEDDING_COORDINATOR_SCHEMA_RESOURCE = (
+    "native-embedding-coordinator-v1.schema.json",
+    "eom://schemas/workflow/native-embedding-coordinator/1.0",
+    "sha256:796268d09fb8004b3f1ce17e16c8d44e19e151d3434c5288324bf1292707fd08",
+)
+
+
+@cache
+def _native_embedding_coordinator_schema() -> dict[str, Any]:
+    filename, schema_id, expected = NATIVE_EMBEDDING_COORDINATOR_SCHEMA_RESOURCE
+    try:
+        with WORKFLOW_RESOURCE_ROOT.joinpath(filename).open("rb") as stream:
+            raw = stream.read(64 * 1024 + 1)
+        if not 0 < len(raw) <= 64 * 1024 or sha256_bytes(raw) != expected:
+            raise ValueError("coordinator schema differs")
+        document = json.loads(raw)
+        if not isinstance(document, dict) or document.get("$id") != schema_id:
+            raise ValueError("coordinator schema identity differs")
+        Draft202012Validator.check_schema(document)
+        return document
+    except Exception:
+        raise LocalEmbeddingAdmissionContractError("LOCAL_EMBEDDING_SCHEMA_UNAVAILABLE") from None
+
+
+def load_native_embedding_coordinator_schema() -> dict[str, Any]:
+    return copy.deepcopy(_native_embedding_coordinator_schema())
+
+
+def validate_native_embedding_coordinator_message(value: object) -> None:
+    """One separate owner-only frame; released encoding/receipt/role schemas stay exact."""
+    try:
+        document = _native_contract_values(value)
+        if len(canonical_json_bytes(document)) > 16 * 1024:
+            raise ValueError("coordinator metadata exceeds its bound")
+        schema = _native_embedding_coordinator_schema()
+        Draft202012Validator(
+            schema,
+            registry=_local_embedding_receipt_schema_registry().with_resource(
+                NATIVE_EMBEDDING_COORDINATOR_SCHEMA_RESOURCE[1], Resource.from_contents(schema)
+            ),
+            format_checker=FormatChecker(),
+        ).validate(document)
+    except LocalEmbeddingAdmissionContractError:
+        raise
+    except Exception:
+        raise LocalEmbeddingAdmissionContractError("LOCAL_EMBEDDING_CONTRACT_INVALID") from None
+
+
 def load_json_schema(resource: Traversable, logical_name: str) -> dict[str, Any]:
     try:
         raw: object = json.loads(resource.read_text(encoding="utf-8"))

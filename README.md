@@ -234,8 +234,15 @@ file-set은 한 번만 읽습니다. 별도 큐·DB schema·released protocol �
 연결했습니다. 소규모 작업 대상 수와 전체 corpus coverage는 구분하며, Graph 변경 때
 binding을 다시 검증하고 같은 입력의 벡터는 재사용합니다. 과거 완료 기록 재검증은 현재
 index head를 변경하지 않습니다. [인덱스·완료 연결 설계](docs/architecture/NATIVE_EMBEDDING_INDEX_COMPLETION_COMPOSITION.md)에
-이 경계와 남은 전체 실행기·운영 활성화 작업을 기록합니다. 이 단계도 실제 corpus
+이 경계와 후속 실행기·운영 활성화 작업을 기록합니다. 이 단계도 실제 corpus
 seed/delta나 GPU 기본값 전환의 완료 증거는 아닙니다.
+
+현재는 위 모듈들을 잇는 concrete CPU 실행기도 구현했습니다. 기존 Job에 네 단계의
+작은 불변 checkpoint를 남기며, 계산·인덱스 등록/완료·현재 권한 확인은 책임별로
+분리합니다. 임시 PostgreSQL에서 전체 Workflow/Artifact/index 완료, Graph 변경 시
+벡터 재사용, 저장·등록 중단 재개와 코드 업데이트 이후 원래 게시 provenance 유지까지
+검증합니다. 합성 IAM/model 경계의 검증은 실제 사용자·모델·운영 활성화의 증거가
+아니며, 보호된 owner 설치와 실제 seed/delta/query·자동 service identity는 아직 남아 있습니다.
 
 최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와
 strict type/lint/format PASS입니다. 실제 임시 DB28개 사례에는 독립 실행기 claim 경쟁과

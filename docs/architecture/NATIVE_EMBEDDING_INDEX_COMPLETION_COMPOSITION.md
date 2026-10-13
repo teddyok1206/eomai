@@ -102,3 +102,94 @@ No production index seed/delta or consumer activation is established by this pha
 The full goal remains ACTIVE; next is actual executor/checkpoint/registration and
 same-session completion composition, then bounded real seed/delta/reuse/query and
 the originally planned consumers/GPU comparison. Do not reopen sealed CPU proof.
+
+## Actual executor and durable continuation
+
+The implemented source composition uses four fixed, schema-first coordinator events in the existing
+Job history: ALLOCATION → INDEX_PREPARED → REGISTERED → COMPLETED. Each carries the
+exact original native Job/intent hash and bounded typed metadata, never text or vectors.
+ALLOCATION fixes separate index/receipt producer identities and one input publication
+timestamp and original publication code provenance. INDEX_PREPARED fixes the exact registration command and local index bytes'
+hash before publication. REGISTERED records the actual immutable Catalog observation
+inside its transaction; COMPLETED links the actual committed receipt carrier.
+
+Primary operations are keyed Job lookup, append-only ordered events, canonical member
+reads, and existing registry CAS. Native Job locking serializes the four records; each
+record is immutable/idempotent and missing/skipped/conflicting history is an error.
+No new table, generic checkpoint framework, queue or dependency is added. The new
+coordinator schema is separate from all released worker/receipt/schema inventories.
+
+Only the concrete current operator/source owner may drive the CPU executor. Readiness
+checks installed CPU configuration without IAM writes/model start. Every short mutation
+root fences actual current Workflow/command/step and source; no SQL root spans inference.
+NAS publication occurs with current authority retained, through the existing owner.
+Numeric reservation APIs own their own roots rather than opening a competing transaction
+under the Runner's Workflow lock. Original intent audit is never the current lease.
+
+Resume reads the same allocation, association and exact systemd handle. Completed
+encoding rows bypass computation. BUSY/UNCERTAIN is pending, not permission to recreate
+a handle. The staged index is durable owner-local materialization and is read by exact
+hash on resume; after commit the canonical index is preferred. Lost local bytes plus an
+uncommitted canonical member is explicitly unavailable, not permission to rebuild from
+latest. Registration replay verifies history without rewriting the index head.
+
+Claim continuation is allowed only by fresh current authority and the exact existing
+native Workflow/step/coordinator history. It is not an authentication extension or
+reopening failed history. Step/command completion resolves the same genuine carrier,
+original launch/input/shared results and registered numeric/source pointers in its root.
+Automatic service identity and CUDA/default activation remain distinct later gates.
+
+Responsibilities are split into the CPU executor (reservation/input/unit/result),
+index completion (publication/registration/receipt), shared current execution-source
+fence and immutable original publication-provenance composition. The latter preserves
+the same Artifact request even if owner code is upgraded during continuation.
+
+An expired claim may rejoin only an exact non-failed allocated coordinator/step
+under fresh actual Identity/source authority. Missing allocation, vanished execution,
+wrong step or failed history remains unavailable. No prior audit extends a session
+or provides the new command token/generation. Protocol hash, contiguous order and
+each producer identity are checked on read/replay. First-use coordinator protocol
+registration uses PostgreSQL unique-key conflict handling across concurrent Jobs.
+
+Optional canonical index resolution returns uncommitted only when BOTH exact
+metadata identities are absent. Partial metadata, foreign identity, corrupt hash,
+revoked source and unapproved producer remain errors; no local/latest fallback.
+The local proposed index is separately resolved against current official sources
+and canonical numeric rows before NAS publication and actual registration.
+
+## Executor verification — 2026-10-13 20:55 UTC
+
+Final same-tree20 focused suites **642 PASS**,69.94s; strict mypy15 source modules,
+Ruff/format/bash/diff PASS. Separate owner-only schema/resource/mirror and frozen
+Pydantic checkpoint values are implemented without changing released predecessors.
+Schema raw SHA is
+`sha256:796268d09fb8004b3f1ce17e16c8d44e19e151d3434c5288324bf1292707fd08`.
+
+Final guarded disposable PostgreSQL **28 PASS**,77.01s. The six new actual DB cases
+include concurrent first-use checkpoint roots, complete Workflow→encoding→Artifact→
+index→receipt→terminal flow, Graph-only delta with no extra numerical forward,
+interruption after numeric publication/before encoding completion, interruption
+inside registration and after receipt publication, and owner release code changes
+between receipt publication and continuation. Source/IAM and numerical backend are
+EXPLICITLY SYNTHETIC. Canonical numeric bytes/file sets and DB transactions are real;
+these cases do not prove real model performance, user authentication or live activation.
+
+One source gate failed its stdlib-only boundary inventory after adding `functools`
+to bind a typed identity; the inventory was precisely extended and the whole642
+gate rerun. Earlier DB runs exposed test-only UID/protocol setup, request replay
+expectation and synthetic Graph revision/pointer fixture mistakes. The production
+UID/authorization/schema/unique/FK checks were not weakened to accommodate fixtures.
+Those failed logs and overlapping25/27 PASS results are retained and not summed.
+
+Official prepare/migration/reconcile/guarded cleanup PASS. Final state
+`/tmp/eom-api-testdb-20261013205041_11f2118d` is removed; logs are retained outside Git
+at `/tmp/eom-native-executor.XoUy2uka/`. Earlier same-phase evidence is retained in
+the other `/tmp/eom-native-executor.*` task directories. No production DB test,
+model/GPU run, CPU reinstall/probe/seal or operating service restart occurred.
+API/Web/runner/chat/chat-worker5 services remain active. Same sudo pane was reused.
+
+Source executor is implemented; it is not installed/activated as the current runner.
+Next: protected owner connection and actual authenticated compatible composition,
+bounded real seed/delta/reuse/query, automatic service-identity reconciliation,
+planned consumer connections and the original CPU/GPU comparison/default gate.
+Full goal stays ACTIVE; this checkpoint is not a smaller substitute completion.

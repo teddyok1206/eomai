@@ -156,6 +156,8 @@ def _owner(
     fixture: NativeAdmissionFixture, monkeypatch: pytest.MonkeyPatch
 ) -> tuple[EmbeddingEncodingReservations, SyntheticAdmission, Mock, Mock, Mock]:
     session = Mock(spec=Session)
+    session.in_nested_transaction.return_value = False
+    session.get_transaction.return_value = object()
     context = MagicMock()
     context.__enter__.return_value = session
     factory = Mock(spec=sessionmaker)
