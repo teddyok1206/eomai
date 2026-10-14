@@ -3081,8 +3081,9 @@ The real-socket tests run as the actual local test process with deliberately
 assigned peer-role labels, not installed API/chat/worker identities. Metadata uses
 actual SQLite roots, with synthetic Identity/source/member observations. Local
 POSIX ACL tests do not prove actual systemd/UID/DB-fence isolation. Earlier failures
-are retained:21 constructor-value fixture failures because required raw version/
-operation fields were omitted,13 fixture errors using the wrong projection key,
+are retained:21 contract-construction failures because required raw version/
+operation fields were omitted; production constructors/callers now require them
+explicitly. There were also13 fixture errors using the wrong projection key,
 and4 assertions matching exception prose instead of stable `.code`. These were
 corrected without relaxing schemas, source guards or production error semantics;
 the overlapping earlier passes are not added to the final totals.
@@ -3102,3 +3103,21 @@ peer/permission/negative/materialization behavior before submitting a bounded ne
 item. Rollback drains or retains a compatible runtime for accepted plan23 work,
 disables the runner feature before the Catalog operation and preserves all immutable
 history; it never rewrites plan23 to plan19 or disables source checks to continue.
+
+Candidate `3eac52251dfd08b166140bfd0f405e0be860a89a` passed the full three-wheel/
+RECORD release inspection and isolated two-/three-wheel probes. Those probes import
+the actual new contract, Catalog service/dispatch/ACL adapter, ordinary runner
+provider/client, metadata binder and both runtime compositions from only the selected
+archives. They verify required raw wire fields, exact packaged/offline schema refs,
+unchanged predecessor hash, bounds and default-disabled behavior. The three-wheel
+probe also constructs the actual packaged app and checks complete unchanged OpenAPI.
+Checkout, undeclared wheel/installed-prefix and ML fallback are forbidden. No
+DB/current-source/HMAC capture, socket ACL, model, native Job or runtime mutation is
+performed by package probes; import success is not installed materialization PASS.
+
+Raw wheel SHA: platform
+`d6e8a4943909f2097c24ceb297f416b0e9c1d9be6422baf0b8bdd9da9a10f2c0`;
+contracts `6390032344a0d36c13257363251b245d3a6c02c251801c04a5bc09bb80cffe02`;
+API `5c7d8b2184855323ed112142559561e2b1df8888198ba05bf47f50abc33b0f49`.
+Logs `release-build`, `owner-pair-proof`, `three-wheel-proof` share the evidence
+prefix above. These candidate wheels were built/verified, not installed or activated.
