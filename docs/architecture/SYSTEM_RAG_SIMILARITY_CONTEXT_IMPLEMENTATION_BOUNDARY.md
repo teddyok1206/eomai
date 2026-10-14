@@ -1696,3 +1696,13 @@ Still required: published compatible Pack/instruction provenance, actual API nat
 QUERY preparation/context publication and trusted reader composition into the real
 Orchestrator callback, then bounded variation acceptance. Other goal consumers and
 actual CPU/GPU measurement/default selection also remain open.
+
+Candidate `ae75dd83e1729ca45a55097188d919050e539f8d` passed the complete existing
+three-wheel/RECORD build and strict two-wheel-only imports, now including actual
+Catalog prompt-mode/replay wiring, frozen context value and exact16/17 SVG layout
+pins. No checkout/API-wheel/prefix fallback or ML import was allowed. This proof
+did not call DB/source/publication/model operations. Platform raw
+`8c6b6a21d8f88e5d549f81fe26f9e21a471f4dfd11b4e0f7e6b035f777050043`;
+API-contract raw `7fba99f40a256224adb2a78fe836608031e15bbbeef706bb80017355b4f1ed91`.
+Evidence: `similarity-reference-pack-{release-build,owner-pair-proof}.log`.
+Candidate is not installed; runtime activation and actual consumer acceptance remain open.
