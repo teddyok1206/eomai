@@ -36,11 +36,12 @@ if (($# != 2)) || \
   [[ "$1" != "verify" && "$1" != "inspect" && "$1" != "migrate" && "$1" != "hwpx-tests" && \
     "$1" != "embedding-tests" && "$1" != "embedding-encoding-tests" && \
     "$1" != "embedding-stage-tests" && "$1" != "authenticated-session-tests" && \
+    "$1" != "local-indexing-service-tests" && \
     "$1" != "pdf-review-tests" && \
     "$1" != "quality-review-tests" && "$1" != "chat-tests" && \
     "$1" != "chat-role-tests" && "$1" != "chat-knowledge-tests" && "$1" != "tests" ]]; then
   printf '%s\n' \
-    "usage: $0 {verify|inspect|migrate|hwpx-tests|embedding-tests|embedding-encoding-tests|embedding-stage-tests|authenticated-session-tests|pdf-review-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
+    "usage: $0 {verify|inspect|migrate|hwpx-tests|embedding-tests|embedding-encoding-tests|embedding-stage-tests|authenticated-session-tests|local-indexing-service-tests|pdf-review-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
   exit 2
 fi
 [[ "$(id -un)" == "eom" ]] || fail "test database execution must run as eom"
@@ -233,6 +234,16 @@ if [[ "${action}" == "authenticated-session-tests" ]]; then
   export EOM_API_TEST_STATE="${state_directory}"
   "${PYTHON}" -m pytest -q tests/integration/test_authenticated_session_fence.py
   printf 'Disposable authenticated-session fencing and writer-concurrency tests passed.\n'
+  exit 0
+fi
+
+if [[ "${action}" == "local-indexing-service-tests" ]]; then
+  export EOM_RUN_INTEGRATION=1
+  export EOM_RUN_API_INTEGRATION=1
+  export EOM_RUN_LOCAL_INDEXING_SERVICE_INTEGRATION=1
+  export EOM_API_TEST_STATE="${state_directory}"
+  "${PYTHON}" -m pytest -q tests/integration/test_local_indexing_service_registry.py
+  printf 'Disposable Identity indexing-service registry tests passed.\n'
   exit 0
 fi
 

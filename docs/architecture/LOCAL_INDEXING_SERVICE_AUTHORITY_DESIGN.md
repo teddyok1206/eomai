@@ -121,7 +121,96 @@ frozen Workflow request1.1 retain their previous bytes and meanings.
   metadata/copied-model rejection and unchanged unoffered QUERY admission PASS.
   This is package verification, not an installed service/DB/runtime grant.
 
+Protocol-only milestone before the persistence implementation below:
+
 `SERVICE_IDENTITY_PERSISTENCE=NOT_IMPLEMENTED`,
 `SERVICE_RUNTIME_AUTHENTICATION=NOT_IMPLEMENTED`,
 `CATALOG_SERVICE_SOURCE_GRANT=NOT_IMPLEMENTED`,
 `AUTOMATIC_RECONCILIATION=NOT_ACTIVE`.
+
+## Identity-owned persistence implementation
+
+The control-plane registry uses exactly3 relations. `local_indexing_services`
+contains the logical ID, latest registered revision, independently selected current
+revision, ACTIVE/DISABLED state, resource version and UTC timestamps. Registration
+of a successor preserves the current activation. Explicit activation may select an
+older exact registered revision for rollback; it never silently selects latest.
+
+`local_indexing_service_revisions` stores the small typed identity fields directly,
+not a second JSON document or Artifact payload. Unique `(service_id, revision_number)`
+and `(service_id, previous_service_revision_id)` plus composite same-service FKs
+protect the immutable chain and both head references. Deferred current/latest FKs
+allow the first disabled head and revision to be registered in one transaction.
+
+`local_indexing_service_events` is append-only, keyed by service and resource version,
+with a unique bounded operation key, exact command hash, actual database principal,
+target/previous/result revision pointers and previous/result states. It contains no
+credentials or binary data. Same-key replay returns the original event's historical
+result; callers must separately resolve/lock the current head. A conflicting key,
+different immutable bytes or stale expected resource version fails, not repairs.
+
+These in-process owner use cases require an explicit active PostgreSQL root and
+the actual authenticated table-owner principal (`SESSION_USER = CURRENT_USER`),
+not a requested administrator role. They qualify all3 tables in `app`, use an
+indexed exclusive head lock for writers and a retained shared head lock for the
+owner's metadata read. A savepoint makes one operation atomic without committing
+the caller's root. Wait limits are bounded and existing smaller limits preserved.
+No service/runtime write grants are installed. There is no new operator permission
+or user-facing endpoint. The later least-privilege runtime fence must not use this
+control-plane owner privilege as a substitute for machine authentication.
+
+Migration0055 adds only these relations, indexes and history/head guards; no existing
+rows or roles are changed. Downgrade refuses any service/head/revision/event history.
+Application code owns canonical hash/successor validation and atomic event coupling;
+DB constraints/immutable guards reinforce it. Unsupported table-owner SQL is not a
+supported control interface. Catalog service-source grants and actual installed
+runtime authentication remain separate required work.
+
+### Persistence verification — 2026-10-14 UTC
+
+- Source regression:72 suites, **1,940 PASS** (275.85s). The later lock-error cleanup
+  correction passed its focused79-case source gate and the full29-case actual
+  registry gate. Strict mypy35 modules, Ruff lint/format59 files, shell syntax and
+  diff checks PASS. No new dependency: PostgreSQL transaction-state inspection
+  reuses the already declared psycopg driver.
+- In the existing marker-guarded disposable DB,0054→0055→0054→0055 migration cycle
+  PASS before service history was created. Existing Workflow/Artifact history was
+  preserved. After history existed, the actual downgrade refusal was verified;
+  rows were not deleted to make a positive empty-history test pass.
+- Actual PostgreSQL registry: **29 PASS** (1.20s). Registration stays disabled;
+  successor registration preserves the selected current revision; explicit rollback
+  works. Same-key replay returns the original historical state without reactivation.
+  Global key conflicts and late event failures leave no orphan head/revision even
+  when the caller commits its root. Independent roots verify same-key deduplication,
+  competing expected-version updates, nonforking successors, retained shared locks,
+  supported disable, lock timeout/replay and immutable records. Composite FKs,
+  head/version/NULL guards, UTC conversion, smaller caller wait limits and actual
+  database-principal audit were checked. The existing disposable runtime role
+  gained no privileges on the3 new tables.
+- A real PostgreSQL lock timeout reproduced an initial cleanup defect: checking
+  only `Session.is_active` issued a second SET in an aborted root and masked55P03
+  with25P02. Cleanup now inspects the captured driver's actual transaction status,
+  never reconnects a lost connection, and preserves the original cause under
+  `LOCAL_INDEXING_SERVICE_BUSY`. Root read failures require rollback; writer
+  savepoint failures preserve the outer root. There is no automatic retry/new key.
+- Existing native stage/runner/QUERY53 (33.63s), Artifact/registry/application28
+  (77.39s), encoding reservation9 (12.29s): **90 PASS** on0055. Together with the
+  new29,119 distinct actual DB cases passed; repeat runs are not added to the count.
+  The old90 retain their synthetic IAM/numerical seams. The new29 prove actual
+  owner metadata/locks, **not** an authenticated background runtime or source grant.
+- Final disposable inspection: correct marker/owner, head0055, other connections0,
+  read-only server transaction confirmed. Synthetic committed evidence is retained.
+  Production migration, service installation/permissions and numerical runtime
+  were not changed. API ready and all9 relevant services remained active.
+
+Current boundary:
+`SERVICE_IDENTITY_PERSISTENCE=SOURCE_PASS_AND_DISPOSABLE_DB_PASS`,
+`CONTROL_METADATA_LOCKING=DISPOSABLE_DB_PASS`,
+`SERVICE_RUNTIME_AUTHENTICATION=NOT_IMPLEMENTED`,
+`CATALOG_SERVICE_SOURCE_GRANT=NOT_IMPLEMENTED`,
+`AUTOMATIC_RECONCILIATION=NOT_ACTIVE`.
+
+Next is the separately admitted least-privilege runtime fence and Catalog indexing
+source grant. The owner-only metadata lock must not be called a machine-authentication
+capability or be exposed as runtime owner privilege. Source head0055 does not imply
+that production has been migrated; installed release alignment remains required.

@@ -16,6 +16,14 @@ from eom_identity_service.installed_owner_session_provider import (
     identity_provider_code_members,
     open_installed_identity_provider_observation,
 )
+from eom_identity_service.local_indexing_service_registry import (
+    LocalIndexingControlOperation,
+    LocalIndexingControlResult,
+    activate_local_indexing_service,
+    disable_local_indexing_service,
+    lock_current_local_indexing_service_metadata,
+    register_local_indexing_service,
+)
 from eom_identity_service.operator_authorization_fence import OperatorAuthorizationFence
 from eom_identity_service.operator_authorization_fence_sql import (
     OPERATOR_AUTHORIZATION_FENCE_BODY,
@@ -70,6 +78,8 @@ __all__ = [
     "HeldIdentityProviderFile",
     "IdentityOwnerSessionProviderAdmission",
     "InstalledIdentityProviderObservation",
+    "LocalIndexingControlOperation",
+    "LocalIndexingControlResult",
     "OperatorAuthorizationFence",
     "OperatorAuthorizationFenceError",
     "OperatorAuthorizationFenceOwnerPin",
@@ -77,11 +87,15 @@ __all__ = [
     "OwnerSessionTransportObservation",
     "PostgresOperatorAuthorizationFence",
     "ProtectedInstalledIdentityProviderAdmission",
+    "activate_local_indexing_service",
     "assert_identity_provider_current",
+    "disable_local_indexing_service",
     "export_owner_session_capture",
     "identity_provider_code_members",
     "import_owner_session_capture",
+    "lock_current_local_indexing_service_metadata",
     "observe_owner_session_transport",
     "open_installed_identity_provider_observation",
+    "register_local_indexing_service",
     "require_operator_authorization_fence_installation",
 ]

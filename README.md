@@ -173,7 +173,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | 고정 CPU QUERY 실행 어댑터 | SOURCE_PASS; private/root handoff·공통 capacity·재시작 후 중복 dispatch 차단·정확한 실행 관찰 구현. QUERY unit/polkit은 미설치, 실제 계산은 미검증 |
 | QUERY Job·실행·정본 완료 조회 | SOURCE_PASS; 원 Job/4개 checkpoint·실행기·원 claim 복구와 현재 권한/정본 완료 조회 구현. 운영 설치·실제 계산·소비 활성화는 미검증 |
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
-| 자동 인덱싱 전용 신원 계약 | SOURCE_PASS; [개정·해시·활성 상태 메타데이터](docs/architecture/LOCAL_INDEXING_SERVICE_AUTHORITY_DESIGN.md)만 검증. 실제 신원 등록·자료 grant·자동 실행은 미활성 |
+| 자동 인덱싱 전용 신원·저장 | SOURCE_PASS; [신원·개정·상태·이력과 owner 잠금](docs/architecture/LOCAL_INDEXING_SERVICE_AUTHORITY_DESIGN.md)을 실제 임시 DB29개 시험으로 검증. 운영 등록·실행 인증·자료 grant·자동 실행은 미활성 |
 | 인증된 owner/session 전달 | 수신 API 설치·실제 UID990의 provider/process/config/key-metadata 검증 PASS; 실제 사용자 capture·seed는 별도 실행 gate |
 | 현재 사용자·자료의 native 작업 접수 연결 | SOURCE_IMPLEMENTED; 실제 인증 capture→기존 Catalog 검증·계획 재구성·잠금 확인을 연결, 운영 provider/실행기 연결은 미활성 |
 | Native INDEX 파일 전달·입력/결과 저장 | SOURCE_PASS; 실제 계정 권한4·설치된 시작 권한9·CPU 합성 입력2개×1024차원·동일 실행 재조회 PASS, 실제 자료/Job/binding 연결은 미활성 |
@@ -283,12 +283,13 @@ SQL 밖에서 계산하고, 원 Job/4개 checkpoint와 지정 producer의4파일
 이미 끝난 검색을 읽기 위해 새 Job/lease나 모델 실행을 요구하지 않습니다. Catalog가 Runner
 테이블을 직접 읽지 않으며, 완료 처리와 조회가 같은 정본 검증 규칙을 재사용합니다.
 
-최신61-suite **1,517 PASS**·strict type28·lint/format46·shell/diff PASS입니다.
+QUERY 접수 후보의61-suite **1,517 PASS**·strict type28·lint/format46·shell/diff PASS입니다.
 실제 임시 Job/Artifact/파일·중단 복구 검증이며 IAM/자료/수치 계산의 합성 seam과 구분합니다.
 code candidate `a714e65e`의3개 wheel/RECORD·격리25-module import도 PASS했지만 실제
 설치/활성화는 아닙니다. 문서 후속 커밋과 검증된 code candidate를 구분합니다.
 QUERY 정의/실행 단위는 아직 미허용·미설치이고, 실제 실행·소비자 연결은 후속 검증입니다.
-source head는0054, 운영 DB는0053이며 기존 계약·명령·CPU 설치·서비스는 변경하지 않았습니다.
+이 QUERY 후보의 source head는0054였고 운영 DB는0053으로 유지했습니다.
+기존 계약·명령·CPU 설치·서비스는 변경하지 않았습니다.
 이후 기존 marker-guarded 임시 DB의 소유자·현재 연결0을 확인하고0050→0054 및 실제
 down/up cycle을 통과했습니다. 실제 PostgreSQL에서 stage/runner/QUERY53·Artifact/registry/
 등록28·encoding reservation9개, 서로 다른90개가 PASS했습니다.53개 gate는 같은 DB에서
@@ -300,6 +301,13 @@ INDEX seed/Graph delta 재사용을 실제 DB에서 확인했지만 IAM/수치 �
 IAM/수치 seam을 구분하며, 실제 사용자·모델/GPU·운영 QUERY 활성화 PASS는 아닙니다.
 [QUERY owner 구현·검증 기록](docs/architecture/REFERENCE_QUERY_OWNER_COMPOSITION.md)에
 단계별 증거와 남은 운영 경계를 구분했습니다.
+
+후속 Identity 신원 저장 구현으로 source head는0055가 됐습니다. 작은 신원 개정·현재
+활성 상태·append-only 이력을 저장하며 등록만으로 활성화하지 않습니다. 전체 소스1,940개,
+잠금 오류 보강 뒤 관련79개와 실제 DB29개를 통과했고 기존 임베딩 DB90개도0055에서
+다시 통과했습니다. source/임시 DB 검증이며 운영 마이그레이션·machine 인증·Catalog 자료
+grant나 자동 갱신 활성화는 아닙니다. 실제 잠금 초과 오류가 정리 코드에 가려지던 문제도
+재현·수정했고, 기존 실패 기록과 임시 DB의 합성 이력은 보존했습니다.
 
 최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와
 strict type/lint/format PASS입니다. 실제 임시 DB28개 사례에는 독립 실행기 claim 경쟁과

@@ -15,6 +15,7 @@ import eom_catalog_service.legacy_usage_models
 import eom_catalog_service.models
 import eom_catalog_service.pdf_learning_completion_models  # noqa: F401
 import eom_hwpx_manager.models  # noqa: F401
+import eom_identity_service.local_indexing_service_models
 import eom_identity_service.models  # noqa: F401
 import eom_orchestrator.control_models
 import eom_orchestrator.general_chat_models
