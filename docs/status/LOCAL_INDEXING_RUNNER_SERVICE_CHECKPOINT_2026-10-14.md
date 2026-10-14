@@ -71,6 +71,23 @@ SourceOwner lacked the new explicit current-actor/caller methods; the fixture no
 implements those same ports and keeps its late source-revocation check. Production
 authority is not weakened, and failed runs are not relabeled successful.
 
+## Package verification, not installed activation
+
+Code candidate `1cf47fca0c67afec4cea278520958d20a97a570c` built all3 release
+wheels; RECORD verification PASS. Fixed dist:
+`/tmp/eom-api-build/1cf47fca0c67afec4cea278520958d20a97a570c.w8QoZo/dist`.
+The immutable operator interpreter under `-I -B` imported43 named modules from these
+wheels, with no checkout/PYTHONPATH or package installation. Both successor schema
+hashes and local reference closure, exact request/policy coupling, separate actors
+and unchanged old future-service denial PASS. Numeric environments were not resealed.
+No DB connection, service/unit/grant activation, model or GPU execution occurred.
+
+Evidence: `local-indexing-runner-wheel-build.log` and
+`local-indexing-runner-wheel-import-reviewed.log` in the same directory. The initial
+`local-indexing-runner-wheel-import.log` is preserved: the probe used a nonexistent
+loader name. Correcting the probe to the supported public loader passed without
+changing source or rebuilding the wheels. It was not a runtime service failure.
+
 ## Remaining required gates
 
 `SERVICE_RUNNER_COMPOSITION=SOURCE_PASS_AND_DISPOSABLE_CLAIM_PASS`.
