@@ -200,6 +200,7 @@ def test_owner_publication_replay_preserves_one_canonical_artifact_and_same_root
     assert first.query_selection.workflow_id == case.value.query.workflow_id
     assert first.query_selection.workflow_request_sha256 == case.value.query.request.request_sha256
     assert first.query_selection.context_request_sha256 == first.plan.context.request.request_sha256
+    assert first.operator_id == case.caller.operator_id
     assert case.request.production_occurrence is None and case.request.expected_resolution is None
     (member,) = tuple(case.publisher.settings.nas_artifact_root.rglob("context.json"))
     before = member.stat()

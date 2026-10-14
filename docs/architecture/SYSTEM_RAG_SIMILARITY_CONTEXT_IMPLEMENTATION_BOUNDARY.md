@@ -2809,3 +2809,90 @@ contracts `57904cbb77d218b529417310b25378cec416e4adafa2db3e164a068426c4eea1`;
 API `93391139e6edf911c18c83dd9485a7e93f16e0a4fdf94d2deeec5f62394d0d7d`.
 Logs `release-build`, `owner-pair-proof-final`, `three-wheel-proof-final` share the
 source evidence prefix above. This candidate is pushed, not installed/activated.
+
+## 31. First item-start transaction and immutable private preparation acceptance
+
+Design before change, 2026-10-14 UTC:
+
+1. Boundary: extend the existing application command's trusted Python preparation
+   handoff, not the public WorkflowStartRequest, router, worker or native authority.
+2. Canonical source: actual authenticated actor, exact request, Catalog Evidence V5,
+   released preset and bound Content Pack/definition in the existing transaction.
+3. Identity: keep Workflow/plan/Artifact revisions distinct. Carry the preparation's
+   actual operator plus its existing three-field QUERY selector; neither is a grant.
+4. Checks: closed preparation values and actual actor/request first; exact Evidence,
+   preset and full expected resolution before accepting a fresh Workflow. Pure plan23
+   binding remains before the single original plan-record call.
+5. Access: existing preflight/creation and indexed replay/active-equivalent lookups.
+   No new search, DB/NAS read owner, native launch or latest fallback in the API.
+6. Structures: existing runtime-context metadata stores `similarity_query` and one
+   `similarity_preparation_v1_sha256`. No schema family, migration, cache or queue.
+7. Cost: bounded pure value validation/hash and a shallow metadata-map update;
+   no repeated file reads/rehashing, model computation or extra replay source query.
+8. Transaction: on a fresh Workflow, plan23 + selector + accepted fingerprint + START
+   enqueue commit together. Publication happened at its existing separate owner;
+   a later transaction failure never means that publication was absent.
+9. Ownership: the API application owns acceptance; the existing resolver owns plan
+   recording; runner owns execution and current Catalog source/Identity staging.
+   No domain-to-infrastructure import or new dependency is introduced.
+10. Replay: no-preparation replays retain their original immediate receipt path.
+    An explicitly supplied preparation must match its accepted selector/fingerprint.
+    Active-equivalent work cannot acquire/replace context. Drift/conflicts fail;
+    independent committed Artifacts and historical execution remain preserved.
+11. Alternative: adding selector input to HTTP would expose internal orchestration;
+    upgrading an already recorded plan19 violates immutable acceptance. Recomputing
+    acceptance from mutable source/activation on replay breaks original receipt
+    semantics, so persist the small original acceptance fingerprint instead.
+
+The v1 fingerprint is canonical accepted input identity, not an authorization cache
+or derived search score. It covers actual operator, request/Evidence/preset hashes,
+full resolution, QUERY selector, delivery and context semantic hash under the frozen
+purpose `ITEM_SIMILARITY_PREPARATION_V1`. Never change that algorithm in place for
+existing history. No source bytes or full context are stored in Workflow metadata.
+The optional trusted handoff remains disabled for public requests until the existing
+owner/native preparation transport is actually composed/admitted. Source acceptance
+of this transaction does not prove live end-to-end C2, native admission or deployment.
+
+### 31.1 Application transaction/replay source checkpoint — 2026-10-14 UTC
+
+The real `CommandAdapter.start_workflow` accepts an optional trusted Python-only
+`PreparedItemSimilarity` and validates it before any Catalog action. Its normal
+public route supplies no preparation: no HTTP field, worker behavior or activation
+was added. Pure checks bind actual operator/request, exact publication/delivery,
+selector, full resolution and transaction-selected Evidence/preset. The immutable
+v1 fingerprint also includes the publication producer Job/manifest metadata.
+
+For a fresh Workflow the existing resolver receives its checked context before
+the one plan-record call, then the existing transaction saves plan23, selector,
+fingerprint and START. A provisional Workflow insertion remains in that same root;
+any resolution/plan/enqueue failure rolls it back. Existing same-key receipt reads
+precede mutable controls and do not read source bytes. An explicit changed/private
+preparation conflicts on both replay and existing-equivalent work; absent preparation
+does not erase an original accepted context or upgrade a historical plan19.
+
+Final27-file regression: **431 PASS /172.71s**, strict mypy3, Ruff/format5 and diff
+checks PASS. Earlier existing43 and focused18 overlap the final gate, not additional
+totals. New tests use actual public request validation/conversion, the actual command
+adapter, repository Workflow/event/command creation, real temporary SQLite roots and
+the existing real resolver with explicitly synthetic controls/final record owner.
+Outer BEGIN is explicit for correct SQLite SAVEPOINT rollback assertions. The
+temporary plan metadata table omits PostgreSQL-only constraints: this is NOT new
+PostgreSQL plan23 persistence or actual Identity/source/native acceptance.
+
+Cases cover exact/no-preparation replay without Catalog/control reads, original
+binding on active equivalence, cross-operator/change conflicts, no plan19 upgrade,
+pack/preset/Evidence drift, final enqueue rollback with prior context Artifact kept,
+closed private value/public input rejection, source-withdrawn metadata receipts and
+the exact deterministic fingerprint algorithm. No candidates/query payload is added
+to Workflow metadata. Initial fixture failure lacked image/registration role policies;
+the synthetic preset was completed rather than weakening the real four-role definition.
+The sole warning remains the existing Starlette/httpx TestClient deprecation.
+
+Evidence prefix: `/tmp/eom-identity-provider-install.nAaycoDM/similarity-start-binding-`;
+`existing`, `focused`, `fixture-roles`, `acceptance`, `mypy-final`. No new production
+DB/schema/grant, Artifact, native/model/GPU execution or installed runtime changed.
+The original QUERY was observed again at22:33:40 UTC: same two live processes/pane,
+still at its original Studio input gate, with no capture/model forward. No restart,
+duplicate login prompt or command sent into that prompt occurred. Next observation
+is at/after23:03:40 UTC. Real owner transport/automatic preparation, compatible
+installation, C2 item acceptance, continuous coverage and device evaluation remain.

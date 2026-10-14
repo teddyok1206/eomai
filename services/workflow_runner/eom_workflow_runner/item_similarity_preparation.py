@@ -29,6 +29,7 @@ from eom_identity_service import OperatorAuthorizationFenceError
 from eom_identity_service.repository import effective_permissions
 from eom_image_contracts import SVG_LABEL_LAYOUT_PACK_BUNDLES
 from eom_operator_identity import PermissionKey
+from eom_operator_identity.contracts import OperatorId
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.execution_resolver import validate_educational_retrieval_policy
 from eom_orchestrator.file_set_control_artifacts import (
@@ -66,6 +67,7 @@ class PreparedItemSimilarity:
     preset_content_sha256: str
     resolution: ExpectedWorkflowResolution
     query_selection: CompletedSimilarityQuerySelection
+    operator_id: OperatorId
 
 
 def _current_context(
@@ -255,6 +257,7 @@ class CatalogItemSimilarityPreparation:
                     preset.content_sha256,
                     expected,
                     query_selection,
+                    caller.operator_id,
                 )
             except OperatorAuthorizationFenceError as error:
                 raise ControlPlaneError(

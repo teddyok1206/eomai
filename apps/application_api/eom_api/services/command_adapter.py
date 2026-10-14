@@ -77,6 +77,7 @@ from eom_workflow import (
 from eom_workflow.control_plane import WorkerRole
 from eom_workflow.schemas import result_schema_protocol
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
+from eom_workflow_runner.item_similarity_preparation import PreparedItemSimilarity
 from eom_workflow_runner.models import (
     WorkflowCommandRecord,
     WorkflowDefinitionRecord,
@@ -97,6 +98,13 @@ from eom_api.errors import ApiError
 from eom_api.services.catalog_application_client import (
     CatalogApplicationClient,
     CatalogApplicationClientError,
+)
+from eom_api.services.item_similarity_start import (
+    CheckedSimilarityStart,
+    check_similarity_start,
+    require_similarity_start_replay,
+    require_similarity_start_resolution,
+    similarity_start_context,
 )
 
 
@@ -275,14 +283,23 @@ class CommandAdapter:
         actor: ActorContext,
         *,
         idempotency_key: str,
+        prepared_similarity: PreparedItemSimilarity | None = None,
     ) -> tuple[str, str, int]:
         workflow_request = _workflow_request_from_api(request)
+        # Private trusted producer handoff only; never a public request field,
+        # source permission grant or native executor constructed inside the API.
+        checked_similarity = (
+            check_similarity_start(prepared_similarity, workflow_request, actor)
+            if prepared_similarity is not None
+            else None
+        )
         replay = self._workflow_start_replay(
             workflow_request,
             actor=actor,
             idempotency_key=idempotency_key,
             definition_key=request.definition_key,
             definition_version=request.definition_version,
+            similarity=checked_similarity,
         )
         if replay is not None:
             return replay
@@ -549,6 +566,14 @@ class CommandAdapter:
             )
             command: WorkflowCommandRecord | None
             if created:
+                if checked_similarity is not None:
+                    require_similarity_start_resolution(
+                        checked_similarity,
+                        definition=definition,
+                        runtime_context=runtime_context,
+                        preset=transaction_preset or knowledge_preset,
+                        evidence=knowledge_evidence,
+                    )
                 if workflow_request.execution_preset_key is not None:
                     if runtime_context is None:
                         raise ApiError(
@@ -602,6 +627,11 @@ class CommandAdapter:
                                 evidence=knowledge_evidence,
                                 dependencies=dependencies,
                                 steps=requirements,
+                                similarity=(
+                                    checked_similarity.preparation.plan
+                                    if checked_similarity is not None
+                                    else None
+                                ),
                             )
                         else:
                             plan = resolve_execution_plan(
@@ -624,6 +654,8 @@ class CommandAdapter:
                         "preset_id": plan.preset_id,
                         "preset_revision_id": plan.preset_revision_id,
                     }
+                    if checked_similarity is not None:
+                        context = similarity_start_context(context, checked_similarity, plan)
                     workflow.runtime_context = context
                 command, _ = enqueue_command(
                     session,
@@ -636,6 +668,8 @@ class CommandAdapter:
                     idempotency_key=f"start:{workflow.workflow_id}",
                 )
             else:
+                if checked_similarity is not None:
+                    require_similarity_start_replay(workflow.runtime_context, checked_similarity)
                 command = session.scalar(
                     select(WorkflowCommandRecord)
                     .where(
@@ -1261,6 +1295,7 @@ class CommandAdapter:
         idempotency_key: str,
         definition_key: str,
         definition_version: str | tuple[str, ...],
+        similarity: CheckedSimilarityStart | None = None,
     ) -> tuple[str, str, int] | None:
         """Return an exact prior receipt before consulting any mutable current pointer."""
 
@@ -1299,6 +1334,8 @@ class CommandAdapter:
                     "Workflow resolution mismatch",
                     "The stored Workflow did not accept the exact requested resolution.",
                 )
+            if similarity is not None:
+                require_similarity_start_replay(workflow.runtime_context, similarity)
             command = session.scalar(
                 select(WorkflowCommandRecord)
                 .where(
