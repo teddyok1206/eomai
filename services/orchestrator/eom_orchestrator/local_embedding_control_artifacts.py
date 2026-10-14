@@ -41,6 +41,7 @@ from eom_orchestrator.file_set_control_artifacts import (
     CONTROL_FILE_SET_PROTOCOL,
     ControlFileSetMember,
     ControlFileSetPublisher,
+    ControlPublicationTime,
 )
 
 SOURCE_PLAN_ARTIFACT_TYPE = "control_local_embedding_source_plan"
@@ -84,6 +85,24 @@ class LocalEmbeddingControlArtifactPublisher:
             artifact_type=SOURCE_PLAN_ARTIFACT_TYPE,
             idempotency_key=idempotency_key,
             created_at=created_at,
+        )
+
+    def publish_observed_source_plan(
+        self,
+        plan: LocalEmbeddingSourcePlan,
+        *,
+        idempotency_key: str,
+    ) -> PublishedLocalEmbeddingControl:
+        """Unattended plan replay uses its first actual publication timestamp."""
+        checked = parse_local_embedding_source_plan(plan.model_dump(mode="json"))
+        return self._publish(
+            raw=canonical_json_bytes(checked.model_dump(mode="json")),
+            semantic_sha256=checked.plan_sha256,
+            member="source-plan.json",
+            schema=LOCAL_EMBEDDING_SOURCE_PLAN_SCHEMA_REF,
+            artifact_type=SOURCE_PLAN_ARTIFACT_TYPE,
+            idempotency_key=idempotency_key,
+            created_at=ControlPublicationTime.FIRST_OBSERVATION,
         )
 
     def publish_policy(
@@ -176,11 +195,12 @@ class LocalEmbeddingControlArtifactPublisher:
         schema: str,
         artifact_type: str,
         idempotency_key: str,
-        created_at: datetime,
+        created_at: datetime | ControlPublicationTime,
     ) -> PublishedLocalEmbeddingControl:
         # An explicit local materialization boundary; only the existing owner
         # publishes to NAS. A plan body (up to 64 MiB) never becomes a DB value.
-        created_at = TypeAdapter(UtcDatetime).validate_python(created_at)
+        if created_at is not ControlPublicationTime.FIRST_OBSERVATION:
+            created_at = TypeAdapter(UtcDatetime).validate_python(created_at)
         digest = sha256_bytes(raw)
         with tempfile.TemporaryDirectory(
             prefix="native-controls-", dir=self.publisher.settings.workspace_root
@@ -188,19 +208,28 @@ class LocalEmbeddingControlArtifactPublisher:
             path = Path(directory) / member
             path.write_bytes(raw)
             path.chmod(0o600)
-            published = self.publisher.publish(
-                members=(
-                    ControlFileSetMember(
-                        member, path, digest, len(raw), schema, "application/json"
-                    ),
-                ),
-                primary_file=member,
-                artifact_type=artifact_type,
-                manifest_version=CONTROL_FILE_SET_PROTOCOL,
-                idempotency_key=idempotency_key,
-                source_commit=self.source_commit,
-                created_at=created_at,
+            members = (
+                ControlFileSetMember(member, path, digest, len(raw), schema, "application/json"),
             )
+            if created_at is ControlPublicationTime.FIRST_OBSERVATION:
+                published = self.publisher.publish_first_observation(
+                    members=members,
+                    primary_file=member,
+                    artifact_type=artifact_type,
+                    manifest_version=CONTROL_FILE_SET_PROTOCOL,
+                    idempotency_key=idempotency_key,
+                    source_commit=self.source_commit,
+                )
+            else:
+                published = self.publisher.publish(
+                    members=members,
+                    primary_file=member,
+                    artifact_type=artifact_type,
+                    manifest_version=CONTROL_FILE_SET_PROTOCOL,
+                    idempotency_key=idempotency_key,
+                    source_commit=self.source_commit,
+                    created_at=created_at,
+                )
         if published.primary_file != member or published.primary_sha256 != digest:
             # A commit may have happened. Preserve it and reconcile the same key.
             raise ValueError("LOCAL_EMBEDDING_CONTROL_RECEIPT_INVALID")

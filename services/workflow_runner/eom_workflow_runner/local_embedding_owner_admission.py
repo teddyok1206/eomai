@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from eom_catalog_contracts.inference_transfer_experiment import StagedExperimentEntry
+from eom_catalog_contracts.local_indexing_policy import LocalIndexingAccessPolicy
 from eom_catalog_contracts.models import Sha256
 from eom_catalog_service.embedding_registry_catalog_adapter import (
     EmbeddingRegistryOwnerConfiguration,
@@ -17,6 +18,7 @@ from eom_catalog_service.embedding_registry_indexing_authority import (
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryActor,
     EmbeddingRegistryLookup,
+    EmbeddingRegistryServiceCaller,
 )
 from eom_catalog_service.local_embedding_source_plan import build_local_embedding_source_plan
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
@@ -39,7 +41,10 @@ from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.local_embedding_execution_policy import (
     LOCAL_EMBEDDING_POLICY_SCHEMA_REF,
     LOCAL_EMBEDDING_SERVICE_POLICY_SCHEMA_REF,
+    LocalEmbeddingRuntimeProfile,
+    LocalEmbeddingServiceExecutionPolicy,
     parse_local_embedding_executable_policy,
+    parse_local_embedding_service_execution_policy,
 )
 from eom_workflow.local_embedding_request import (
     LocalEmbeddingExecutableRequest,
@@ -108,6 +113,15 @@ class ResolvedLocalEmbeddingSources:
 
     admission: ResolvedLocalEmbeddingAdmission
     entries: tuple[StagedExperimentEntry, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ServiceReconciliationControls:
+    """Current-root data for request construction, not future source authority."""
+
+    caller: EmbeddingRegistryServiceCaller
+    grant: LocalIndexingAccessPolicy
+    policy: LocalEmbeddingServiceExecutionPolicy
 
 
 class CatalogLocalEmbeddingOwnerAdmission:
@@ -199,6 +213,71 @@ class CatalogLocalEmbeddingOwnerAdmission:
     ) -> None:
         self._actor_authority.fence(session, request)
 
+    def _service_authority(self) -> ServiceLocalEmbeddingActorAuthority:
+        if type(self._actor_authority) is not ServiceLocalEmbeddingActorAuthority:
+            raise ValueError("LOCAL_EMBEDDING_SERVICE_UNAVAILABLE")
+        return self._actor_authority
+
+    def current_reconciliation_lookup(self, session: Session) -> EmbeddingRegistryLookup | None:
+        return self._service_authority().source_authority.current_lookup(
+            session, self.configuration.registry
+        )
+
+    @staticmethod
+    def _read_control(
+        reader: PinnedArtifactReadContext,
+        pointer: ArtifactMemberPointer,
+        artifact_type: str,
+        limit: int,
+    ) -> object:
+        reader.prefetch(((pointer.artifact_id, pointer.artifact_revision_id),))
+        reader.require_file_set(
+            pointer.artifact_id,
+            pointer.artifact_revision_id,
+            (pointer.member_path,),
+            manifest_version=CONTROL_FILE_SET_PROTOCOL,
+        )
+        raw = reader.read_pinned(
+            **pointer.model_dump(mode="python"),
+            expected_artifact_types=(artifact_type,),
+            expected_primary_file=pointer.member_path,
+            max_bytes=limit,
+        ).payload
+        value: object = json.loads(raw)
+        if canonical_json_bytes(value) != raw:
+            raise ValueError("LOCAL_EMBEDDING_CONTROL_BYTES_INVALID")
+        return value
+
+    def resolve_reconciliation_controls(
+        self,
+        session: Session,
+        query: EmbeddingRegistryLookup,
+        profile: LocalEmbeddingRuntimeProfile,
+    ) -> ServiceReconciliationControls:
+        authority = self._service_authority().source_authority
+        caller = EmbeddingRegistryServiceCaller(authority.authority.service_fence.pin.service)
+        config = self.configuration
+        grant = authority.authorize_scope(session, caller, query, config.registry)
+        self.catalog.authorize_scope(session, caller, query)
+        policy = parse_local_embedding_service_execution_policy(
+            self._read_control(
+                PinnedArtifactReadContext(session, self.settings),
+                config.native_execution_policy,
+                EXECUTION_POLICY_ARTIFACT_TYPE,
+                64 * 1024,
+            )
+        )
+        profile = LocalEmbeddingRuntimeProfile.model_validate(profile.model_dump(mode="json"))
+        if (
+            policy.policy_sha256 != config.native_execution_policy_sha256
+            or policy.service != caller.service
+            or profile not in policy.profiles
+            or profile.space != config.registry.space
+            or profile.resource_profile.resource_profile_sha256 != authority.resource_profile_sha256
+        ):
+            raise ValueError("LOCAL_EMBEDDING_OWNER_CONFIGURATION_MISMATCH")
+        return ServiceReconciliationControls(caller, grant, policy)
+
     def resolve_submission(
         self, session: Session, request: LocalEmbeddingExecutableRequest
     ) -> ResolvedLocalEmbeddingAdmission:
@@ -238,29 +317,13 @@ class CatalogLocalEmbeddingOwnerAdmission:
             )
         )
 
-        def read(pointer: ArtifactMemberPointer, artifact_type: str, limit: int) -> object:
-            reader.require_file_set(
-                pointer.artifact_id,
-                pointer.artifact_revision_id,
-                (pointer.member_path,),
-                manifest_version=CONTROL_FILE_SET_PROTOCOL,
-            )
-            raw = reader.read_pinned(
-                **pointer.model_dump(mode="python"),
-                expected_artifact_types=(artifact_type,),
-                expected_primary_file=pointer.member_path,
-                max_bytes=limit,
-            ).payload
-            value: object = json.loads(raw)
-            if canonical_json_bytes(value) != raw:
-                raise ValueError("LOCAL_EMBEDDING_CONTROL_BYTES_INVALID")
-            return value
-
         policy = parse_local_embedding_executable_policy(
-            read(request.native_execution_policy, EXECUTION_POLICY_ARTIFACT_TYPE, 64 * 1024)
+            self._read_control(
+                reader, request.native_execution_policy, EXECUTION_POLICY_ARTIFACT_TYPE, 64 * 1024
+            )
         )
         plan = parse_local_embedding_source_plan(
-            read(request.source_plan, SOURCE_PLAN_ARTIFACT_TYPE, 64 * 1024**2)
+            self._read_control(reader, request.source_plan, SOURCE_PLAN_ARTIFACT_TYPE, 64 * 1024**2)
         )
         scope = ResolvedLocalEmbeddingAdmission(request, plan, policy)
         current = self.catalog.resolve_lookup(session, caller, query)

@@ -130,6 +130,60 @@ def test_service_scope_only_admission_has_no_population_or_files(service_case) -
     assert not c.session.statements and not c.base.sources.capture_in_session.called
 
 
+def test_new_reconciliation_selects_and_authorizes_exact_current_graph(service_case):
+    c = service_case
+    c.source.session.corpus.current_graph_snapshot_revision_id = (
+        c.query.graph_snapshot.graph_snapshot_revision_id
+    )
+    query = c.gate.current_lookup(c.source.session, c.base.configuration)
+    assert query == c.query
+    assert query.policy_revision_id == c.policy.source_access_policy_revision_id
+    assert query.policy_revision_id != c.policy.access_policy_revision_id
+    c.population.assert_not_called()
+
+
+def test_no_published_graph_is_not_a_fabricated_empty_snapshot(service_case):
+    c = service_case
+    c.source.session.corpus.current_graph_snapshot_revision_id = None
+    assert c.gate.current_lookup(c.source.session, c.base.configuration) is None
+    c.source.retrieval.resolve_snapshot_pointer.assert_not_called()
+    c.population.assert_not_called()
+
+
+@pytest.mark.parametrize("field", ["corpus", "native_policy", "resource", "namespace"])
+def test_current_head_does_not_broaden_installed_service_selection(service_case, field):
+    c = service_case
+    c.source.session.corpus.current_graph_snapshot_revision_id = (
+        c.query.graph_snapshot.graph_snapshot_revision_id
+    )
+    gate, configuration = c.gate, c.base.configuration
+    if field == "corpus":
+        configuration = replace(configuration, corpus_id="corpus_" + "f" * 32)
+    elif field == "namespace":
+        configuration = replace(
+            configuration,
+            namespace=configuration.namespace.model_copy(
+                update={
+                    "view": "CONTENT_ONLY"
+                    if configuration.namespace.view != "CONTENT_ONLY"
+                    else "METADATA_ONLY"
+                }
+            ),
+        )
+    else:
+        gate = replace(
+            gate,
+            **{
+                "native_execution_policy_sha256"
+                if field == "native_policy"
+                else "resource_profile_sha256": "sha256:" + "f" * 64
+            },
+        )
+    with pytest.raises(LocalIndexingSourceError, match="FORBIDDEN"):
+        gate.current_lookup(c.source.session, configuration)
+    c.population.assert_not_called()
+
+
 def test_prepared_index_and_lookup_use_same_service_front_door(service_case) -> None:
     c = service_case
     prepared = c.verifier.resolve_prepared_index(c.session, c.caller, c.command, c.index)

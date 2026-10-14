@@ -617,3 +617,40 @@ The successor controls and shared Runner composition are now implemented in sour
 executed gates, preserved failed attempts and remaining installation boundaries are
 recorded in the [Runner checkpoint](../status/LOCAL_INDEXING_RUNNER_SERVICE_CHECKPOINT_2026-10-14.md).
 This does not activate a service grant or automatic missing-binding processing.
+
+## Official missing-binding reconciliation
+
+1. Catalog owns current published Graph selection and exact missing-binding reads;
+   Runner owns bounded preparation/submission; Orchestrator alone publishes plans.
+   Existing claim/lease/execution and numeric Artifact owners remain unchanged.
+2. Commit-recorded Graph membership, accepted reports and registered bindings are
+   canonical. Timer notifications are hints, not completion or a timestamp watermark.
+3. Each observation pins the selected Graph revision and service/source policies.
+   New observations may select the current head; saved work never substitutes latest.
+4. Authenticate the actual service before reading even the current corpus head.
+   Reuse the existing exact policy/source/Graph/Artifact checks, late in the same root.
+5. Read one bounded population, indexed binding/encoding membership, then deterministic
+   missing-source order. Existing bindings and absent reports do not create new Jobs.
+6. Extend the existing missing-binding application with a typed prepared observation
+   so the native plan reuses its validated population, not a second report scan.
+   Sets/maps deduplicate targets; the existing unique request/encoding keys own races.
+7. Population remains bounded1024; one submission selects at most a configured bounded
+   source count. Selection is O(S+K log K), with O(S+K) temporary metadata, no new DB.
+8. Retain service/source fences in a clean root through plan publication and atomic
+   Workflow/START submission. Plan publication uses Orchestrator's separate owned
+   transactions; numerical work happens later, outside this preparation root.
+9. In-process frozen values do not introduce a cross-service wire family. Catalog
+   returns current data, not authority; Runner calls public Catalog/Orchestrator APIs.
+10. Derive deterministic plan/request keys from exact inputs. The existing publication
+    lock allocates the first actual UTC creation time for unattended replay; fixed-time
+    publication keeps its old strict semantics. Different code provenance has a distinct
+    small control key; encoding keys remain unchanged. Crash after plan commit reuses
+    that control; crash after atomic submission rejoins the same Workflow/command.
+    Failed history is returned, never rewritten or bypassed with another retry identity.
+11. Copying queue code, scanning targets separately in each runner, invented report
+    vectors, fake timestamps or a second outbox would be unnecessary. Reuse official
+    missing-binding resolution and the supported atomic native submission instead.
+
+No migration, dependency, operator impersonation, new worker grant or source-policy
+expansion is part of this change. Installing a continuously running service and actual
+seed/delta/QUERY evidence remain independent required steps, not implied by this API.

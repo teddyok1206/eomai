@@ -354,6 +354,24 @@ def test_missing_lookup_then_exact_coverage_with_reusable_row(memory: MemoryFixt
     assert second.eligible_source_count == second.available_view_count == 1
 
 
+def test_prepared_missing_lookup_returns_the_same_once_materialized_population(memory):
+    session, owner = memory
+    command, capture = capture_pair()
+    original = owner.resolve_lookup
+    calls = []
+
+    def resolve(*args):
+        calls.append(args)
+        return original(*args)
+
+    owner.resolve_lookup = resolve
+    result = application.prepare_missing_embedding_bindings(session, CALLER, _query(command), owner)
+    assert len(calls) == 1
+    assert result.resolved.entries == capture.entries
+    assert result.resolved.sources == capture.sources
+    assert len(result.observation.missing) == 1
+
+
 def test_graph_only_binding_change_reuses_encoding_without_registering_rows(
     memory: MemoryFixture,
 ) -> None:

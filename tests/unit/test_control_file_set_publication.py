@@ -124,6 +124,46 @@ def test_control_file_set_publication_is_idempotent_and_exact(tmp_path: Path) ->
         assert revision.content_bytes == primary.stat().st_size
 
 
+def test_first_observation_allocates_real_time_once_without_relaxing_fixed_replay(
+    tmp_path: Path,
+) -> None:
+    publisher, _engine = _publisher(tmp_path)
+    arguments = _arguments(tmp_path)
+    arguments.pop("created_at")
+    before = datetime.now(UTC)
+    first = publisher.publish_first_observation(**arguments)
+    after = datetime.now(UTC)
+    assert publisher.publish_first_observation(**arguments) == first
+    with publisher.sessions() as session:
+        job = session.get(JobRecord, first.job_id)
+        original_time = datetime.fromisoformat(job.request["created_at_utc"].replace("Z", "+00:00"))
+        assert before <= original_time <= after
+        assert session.scalar(select(func.count()).select_from(JobRecord)) == 1
+    assert publisher.publish(**arguments, created_at=original_time) == first
+    with pytest.raises(ControlPlaneError):
+        publisher.publish(**arguments, created_at=before)
+    with pytest.raises(ControlPlaneError):
+        publisher.publish_first_observation(**(arguments | {"source_commit": "c" * 40}))
+
+
+@pytest.mark.parametrize("identified", [False, True])
+def test_fixed_time_publication_none_never_selects_first_observation(tmp_path, identified):
+    publisher, _engine = _publisher(tmp_path)
+    arguments = _arguments(tmp_path) | {"created_at": None}
+    with pytest.raises((ControlPlaneError, AttributeError, TypeError)):
+        if identified:
+            publisher.publish_identified(
+                identity=ControlFileSetIdentity(
+                    "job_" + "c" * 32, "artifact_" + "d" * 32, "rev_" + "e" * 32
+                ),
+                **arguments,
+            )
+        else:
+            publisher.publish(**arguments)
+    with publisher.sessions() as session:
+        assert session.scalar(select(func.count()).select_from(JobRecord)) == 0
+
+
 def test_identified_publication_preserves_allocation_and_legacy_replay(tmp_path: Path) -> None:
     publisher, _engine = _publisher(tmp_path)
     identity = ControlFileSetIdentity("job_" + "c" * 32, "artifact_" + "d" * 32, "rev_" + "e" * 32)

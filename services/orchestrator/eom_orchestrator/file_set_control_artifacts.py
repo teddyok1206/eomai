@@ -10,6 +10,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import Enum
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -77,6 +78,12 @@ _MANIFEST_FIELDS = frozenset(
     }
 )
 _MEMBER_FIELDS = frozenset({"file_name", "sha256", "bytes", "schema_ref", "media_type"})
+
+
+class ControlPublicationTime(Enum):
+    FIRST_OBSERVATION = "FIRST_OBSERVATION"
+
+
 _TRANSITIONS: dict[JobState, tuple[JobState, str]] = {
     JobState.CREATED: (JobState.VALIDATED, "CONTROL_FILE_SET_VALIDATED"),
     JobState.VALIDATED: (JobState.QUEUED, "CONTROL_FILE_SET_QUEUED"),
@@ -186,6 +193,32 @@ class ControlFileSetPublisher:
             identity=identity,
         )
 
+    def publish_first_observation(
+        self,
+        *,
+        members: tuple[ControlFileSetMember, ...],
+        primary_file: str,
+        artifact_type: str,
+        manifest_version: str,
+        idempotency_key: str,
+        source_commit: str,
+    ) -> PublishedControlFileSet:
+        """Allocate real UTC time once under the existing lock; replay exact inputs.
+
+        Unattended reconciliation does not know a previous call's timestamp. Only
+        this named use case reuses the original one; fixed-time APIs stay strict.
+        """
+        return self._publish(
+            members=members,
+            primary_file=primary_file,
+            artifact_type=artifact_type,
+            manifest_version=manifest_version,
+            idempotency_key=idempotency_key,
+            source_commit=source_commit,
+            created_at=ControlPublicationTime.FIRST_OBSERVATION,
+            identity=None,
+        )
+
     def _publish(
         self,
         *,
@@ -196,18 +229,38 @@ class ControlFileSetPublisher:
         manifest_version: str,
         idempotency_key: str,
         source_commit: str,
-        created_at: datetime,
+        created_at: datetime | ControlPublicationTime,
     ) -> PublishedControlFileSet:
-        request = self._request(
-            members=members,
-            primary_file=primary_file,
-            artifact_type=artifact_type,
-            manifest_version=manifest_version,
-            source_commit=source_commit,
-            created_at=created_at,
-            idempotency_key=idempotency_key,
+        if type(idempotency_key) is not str or not 16 <= len(idempotency_key) <= 128:
+            raise ControlPlaneError("CONTROL_FILE_SET_INVALID", "file-set key is invalid")
+
+        def request_at(timestamp: datetime) -> dict[str, Any]:
+            return self._request(
+                members=members,
+                primary_file=primary_file,
+                artifact_type=artifact_type,
+                manifest_version=manifest_version,
+                source_commit=source_commit,
+                created_at=timestamp,
+            )
+
+        # Preserve the existing fixed-time path's pre-lock file validation cost.
+        fixed = (
+            None
+            if created_at is ControlPublicationTime.FIRST_OBSERVATION
+            else request_at(created_at)
         )
         with self._publication_lock(idempotency_key):
+            if created_at is ControlPublicationTime.FIRST_OBSERVATION:
+                with self.sessions() as session:
+                    original = session.scalar(
+                        select(JobRecord).where(JobRecord.idempotency_key == idempotency_key)
+                    )
+                    timestamp = self._created_at(original) if original else datetime.now(UTC)
+                request = request_at(timestamp)
+            else:
+                assert fixed is not None
+                request = fixed
             job, created = self._load_or_create_job(
                 idempotency_key=idempotency_key,
                 artifact_type=artifact_type,
@@ -289,12 +342,11 @@ class ControlFileSetPublisher:
         manifest_version: str,
         source_commit: str,
         created_at: datetime,
-        idempotency_key: str,
     ) -> dict[str, Any]:
         if (
             not 1 <= len(members) <= MAX_FILE_SET_MEMBERS
-            or not 16 <= len(idempotency_key) <= 128
             or re.fullmatch(r"[0-9a-f]{40}", source_commit) is None
+            or not isinstance(created_at, datetime)
             or created_at.tzinfo is None
             or created_at.utcoffset() != UTC.utcoffset(created_at)
             or not artifact_type.startswith("control_")

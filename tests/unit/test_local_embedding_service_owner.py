@@ -45,6 +45,7 @@ from tests.unit.local_embedding_service_fixtures import ServiceNativeFixture, se
 from tests.unit.test_control_file_set_publication import _publisher
 from tests.unit.test_local_embedding_control_artifacts import NOW
 from tests.unit.test_local_embedding_owner_admission import mutation_rows
+from tests.unit.test_local_embedding_runner_admission import scope_fixture
 from tests.unit.test_local_indexing_runtime_admission import installed as installed
 from tests.unit.test_postgres_local_indexing_fence import case as case
 
@@ -66,8 +67,11 @@ class ServiceOwnerCase:
 @pytest.fixture
 def service_owner(case, tmp_path, monkeypatch):
     fence, _synthetic_sql = case
+    _scope, compiled = scope_fixture()
     fixture = service_fixture(
-        service=fence.pin.service, runtime_configuration_sha256=fence.pin.configuration_sha256
+        service=fence.pin.service,
+        runtime_configuration_sha256=fence.pin.configuration_sha256,
+        workflow_definition_sha256=compiled.sha256,
     )
     publisher, _engine = _publisher(tmp_path)
     publisher.settings = replace(publisher.settings, workspace_root=tmp_path)

@@ -68,6 +68,7 @@ from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryVerificationPort,
     MaterializedEmbeddingReadRow,
     MissingEmbeddingBindings,
+    PreparedEmbeddingBindingLookup,
     RegisteredEmbeddingIndexRead,
     ResolvedEmbeddingRegistration,
     ResolvedPinnedEmbeddingIndex,
@@ -524,12 +525,12 @@ def register_embedding_index(
     raise AssertionError("bounded registration attempts must return or fail")
 
 
-def _lookup_missing_embedding_bindings(
+def _prepare_missing_embedding_bindings(
     session: Session,
     caller: EmbeddingRegistryActor,
     query: EmbeddingRegistryLookup,
     verification: EmbeddingRegistryVerificationPort | None,
-) -> MissingEmbeddingBindings:
+) -> PreparedEmbeddingBindingLookup:
     """Exact bounded lookup after official owner admission; never corpus discovery."""
     owner = _context(session, caller, verification)
     try:
@@ -648,7 +649,24 @@ def _lookup_missing_embedding_bindings(
         ):
             _fail("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
     missing = repository.missing_bindings(selected)
-    return MissingEmbeddingBindings(missing, rows, len(sources), len(selected))
+    return PreparedEmbeddingBindingLookup(
+        MissingEmbeddingBindings(missing, rows, len(sources), len(selected)), resolved
+    )
+
+
+def prepare_missing_embedding_bindings(
+    session: Session,
+    caller: EmbeddingRegistryActor,
+    query: EmbeddingRegistryLookup,
+    verification: EmbeddingRegistryVerificationPort | None,
+) -> PreparedEmbeddingBindingLookup:
+    """Reuse the validated population for a plan in this same authorized root only."""
+    try:
+        return _prepare_missing_embedding_bindings(session, caller, query, verification)
+    except EmbeddingRegistryError:
+        raise
+    except (JsonSchemaError, ValueError, TypeError, KeyError):
+        raise EmbeddingRegistryError("EMBEDDING_REGISTRY_POINTER_INVALID") from None
 
 
 def lookup_missing_embedding_bindings(
@@ -658,12 +676,7 @@ def lookup_missing_embedding_bindings(
     verification: EmbeddingRegistryVerificationPort | None,
 ) -> MissingEmbeddingBindings:
     """Redacted application boundary; caller owns this read/authorization transaction."""
-    try:
-        return _lookup_missing_embedding_bindings(session, caller, query, verification)
-    except EmbeddingRegistryError:
-        raise
-    except (JsonSchemaError, ValueError, TypeError, KeyError):
-        raise EmbeddingRegistryError("EMBEDDING_REGISTRY_POINTER_INVALID") from None
+    return prepare_missing_embedding_bindings(session, caller, query, verification).observation
 
 
 def _validate_pinned_read_intent(intent: EmbeddingRegistryRead) -> EmbeddingRegistryRead:

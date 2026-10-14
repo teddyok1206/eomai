@@ -142,6 +142,44 @@ def test_exact_service_and_distinct_source_policy_with_root_metadata_locks(owner
     assert not hasattr(owner.intent, "requester_permission_keys")
 
 
+def test_current_graph_discovery_authenticates_and_pins_actual_head(owner):
+    graph = owner.intent.graph_snapshot
+    owner.session.corpus.current_graph_snapshot_revision_id = graph.graph_snapshot_revision_id
+    policy, actual = owner.authority.current_graph(
+        owner.session, owner.policy.access_policy_revision_id, owner.policy.content_sha256
+    )
+    assert policy == owner.policy and actual == graph
+    assert owner.iam.call_count == 2
+    owner.retrieval.resolve_snapshot_pointer.assert_called_once_with(
+        owner.session, graph.graph_snapshot_revision_id
+    )
+    assert all(statement._for_update_arg.read for statement in owner.session.calls)
+
+
+def test_current_graph_legitimate_unpublished_corpus_has_no_invented_pointer(owner):
+    owner.session.corpus.current_graph_snapshot_revision_id = None
+    policy, actual = owner.authority.current_graph(
+        owner.session, owner.policy.access_policy_revision_id, owner.policy.content_sha256
+    )
+    assert policy == owner.policy and actual is None
+    owner.retrieval.resolve_snapshot_pointer.assert_not_called()
+
+
+@pytest.mark.parametrize("failure", ["revoked", "unavailable"])
+def test_current_graph_authority_failure_precedes_corpus_discovery(owner, failure):
+    owner.iam.side_effect = LocalIndexingFenceError(
+        "LOCAL_INDEXING_FENCE_FORBIDDEN"
+        if failure == "revoked"
+        else "LOCAL_INDEXING_FENCE_UNAVAILABLE"
+    )
+    with pytest.raises(LocalIndexingSourceError, match=r"FORBIDDEN|UNAVAILABLE"):
+        owner.authority.current_graph(
+            owner.session, owner.policy.access_policy_revision_id, owner.policy.content_sha256
+        )
+    assert not owner.session.calls
+    owner.retrieval.resolve_snapshot_pointer.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "field,value",
     [

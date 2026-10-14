@@ -13,9 +13,11 @@ import math
 import multiprocessing
 import os
 import stat
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
+from threading import Barrier
 from typing import Any, Protocol
 from uuid import uuid4
 
@@ -40,7 +42,11 @@ from eom_orchestrator.embedding_artifact_store import (
     EmbeddingArtifactStore,
     PublishedEmbeddingArtifacts,
 )
-from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
+from eom_orchestrator.file_set_control_artifacts import (
+    CONTROL_FILE_SET_PROTOCOL,
+    ControlFileSetMember,
+    ControlFileSetPublisher,
+)
 from eom_orchestrator.models import (
     ArtifactRecord,
     ArtifactRevisionRecord,
@@ -169,6 +175,82 @@ def publication(guarded_engine: Engine, tmp_path: Path) -> SyntheticPublication:
         settings.workspace_root,
         key,
     )
+
+
+def _observed_control_arguments(value: SyntheticPublication) -> dict[str, Any]:
+    raw = b'{"test_only":"unattended-publication-time-not-source-authority"}'
+    path = value.local_root / "observed-control.json"
+    path.write_bytes(raw)
+    path.chmod(0o600)
+    return dict(
+        members=(
+            ControlFileSetMember(
+                "observed-control.json",
+                path,
+                sha256_bytes(raw),
+                len(raw),
+                "eom://schemas/workflow/local-embedding-source-plan/1.0",
+                "application/json",
+            ),
+        ),
+        primary_file="observed-control.json",
+        artifact_type="control_observed_time_test",
+        manifest_version=CONTROL_FILE_SET_PROTOCOL,
+        idempotency_key="observed-time-test:" + uuid4().hex,
+        source_commit=SOURCE_COMMIT,
+    )
+
+
+def test_actual_first_observation_concurrency_allocates_one_time_and_artifact(publication):
+    arguments = _observed_control_arguments(publication)
+    barrier = Barrier(2)
+    before = datetime.now(UTC)
+
+    def publish(_ordinal):
+        publisher = ControlFileSetPublisher(publication.engine, publication.settings)
+        barrier.wait(timeout=30)
+        return publisher.publish_first_observation(**arguments)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, replayed = tuple(pool.map(publish, range(2)))
+    assert first == replayed
+    with build_session_factory(publication.engine)() as session:
+        rows = tuple(
+            session.scalars(
+                select(JobRecord).where(JobRecord.idempotency_key == arguments["idempotency_key"])
+            )
+        )
+        assert len(rows) == 1 and rows[0].status == "SUCCEEDED"
+        selected_time = datetime.fromisoformat(
+            rows[0].request["created_at_utc"].replace("Z", "+00:00")
+        )
+        assert before <= selected_time <= datetime.now(UTC)
+
+
+def test_actual_observed_time_survives_interruption_before_commit(publication, monkeypatch):
+    arguments = _observed_control_arguments(publication)
+    publisher = ControlFileSetPublisher(publication.engine, publication.settings)
+    original = publisher._advance
+
+    def interrupted(_job_id):
+        raise RuntimeError("synthetic after owned publication allocation")
+
+    monkeypatch.setattr(publisher, "_advance", interrupted)
+    with pytest.raises(RuntimeError, match="allocation"):
+        publisher.publish_first_observation(**arguments)
+    with publisher.sessions() as session:
+        original_job = session.scalar(
+            select(JobRecord).where(JobRecord.idempotency_key == arguments["idempotency_key"])
+        )
+        original_id, original_time = original_job.job_id, original_job.request["created_at_utc"]
+        assert original_job.status == "CREATED"
+    monkeypatch.setattr(publisher, "_advance", original)
+    replayed = publisher.publish_first_observation(**arguments)
+    assert replayed.job_id == original_id
+    with publisher.sessions() as session:
+        saved = session.get(JobRecord, original_id)
+        assert saved.status == "SUCCEEDED"
+        assert saved.request["created_at_utc"] == original_time
 
 
 def _metadata_only(value: object, texts: tuple[str, ...]) -> None:

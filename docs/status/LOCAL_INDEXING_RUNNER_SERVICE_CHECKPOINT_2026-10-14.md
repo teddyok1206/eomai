@@ -99,3 +99,68 @@ remain separate. Do not replace the still-live finite operator controller or inf
 its phase from empty output. Genuine bounded persistent seed, source-add delta,
 same-key replay and QUERY are still required before the consumers in the original
 order. CPU/GPU numerical comparison has not run; device default is unchanged.
+
+## Official reconciliation follow-up
+
+The source now connects the supported Catalog missing-binding observation to the
+existing atomic Workflow/START application. New observations authenticate before
+selecting the current corpus head, then pin that exact published Graph and policies.
+Historical work still resolves its saved revisions, never latest. A typed prepared
+lookup reuses the once-materialized population for deterministic bounded target
+selection; no second report scan, target registry, queue, outbox or DB migration.
+
+The service owner resolves the exact published native policy/profile before control
+reads and reauthorizes late. Orchestrator publishes a plan before native submission;
+retained service/source locks protect the preparation root. Model execution occurs
+later through the existing executor, never under those locks. A crash between plan
+commit and atomic submission can leave only a reusable validated control, not a fake
+completed embedding. Fixed request/encoding keys retain all existing concurrency rules.
+
+Unattended control publication allocates its first actual UTC time under the existing
+publication lock, and subsequent exact calls reuse it. Fixed-time and explicitly
+allocated publication retain their previous strict time/provenance semantics and
+pre-lock file validation. No fake timestamp or new timestamp registry is introduced.
+Small plan-control keys distinguish owner-code provenance; numerical encoding keys
+do not change, so that distinction cannot force duplicate vector computation.
+
+The result distinguishes no published Graph, no eligible source, accepted-report
+wait, unavailable view, up-to-date coverage, queued/replayed work and terminal
+incomplete history. Missing reports never get placeholder vectors or empty Jobs.
+Saved failures are not reset or bypassed by inventing retry identities. Report
+arrival can become new work without relabeling an earlier wait as completion.
+
+Actual marker-guarded PostgreSQL evidence: **70** service/Identity/policy tests,
+**63** stage/runner tests, **32** Artifact/Registry/native-flow tests and **9**
+encoding reservation tests PASS: **174 distinct cases**, not repeated-run totals.
+Four new actual cases verify first-time publication concurrency/recovery and
+independent reconciliation roots producing one Workflow/START, plus a real outer
+rollback after submission savepoint retaining/reusing its committed plan. Service
+IAM/population/runtime are explicitly synthetic in those new execution cases.
+No model, GPU, actual service unit/authentication or production mutation is proved.
+Final DB inspection: marker/owner PASS,0055,0 other connections, read-only.
+
+Final follow-up regression: **88 suites /2,370 PASS** in306.40s. Strict mypy69 source
+modules, Ruff lint/format120 Python files, additional disposable-tooling89 source
+tests, shell syntax and diff checks PASS. The new unit cases are included in that
+2,370, not summed again. Package evidence is added after its build gate completes.
+Evidence in the same directory:
+
+- `local-embedding-reconcile-focused{,-reviewed}.log`
+- `local-embedding-reconcile-regression{,-reviewed}.log`
+- `local-embedding-reconcile-final-{mypy,ruff,format}.log`
+- `local-embedding-reconcile-{policy,stage,encoding}-postgres.log`
+- `local-embedding-reconcile-artifact-postgres{,-final}.log`
+- `local-embedding-reconcile-{inspect,tooling}.log`
+
+Initial new-owner tests exposed a missing policy-metadata prefetch before member
+closure validation. The shared control reader now performs the supported prefetch;
+an already-prefetched batch does no additional query. The first full source run had
+2,367 PASS/1 fixture failure: a supposed foreign namespace was its unchanged view.
+The fixture now chooses a genuinely different view; the production guard is intact.
+The earlier type check also caught an accidentally widened fixed-policy timestamp
+signature. It is restored; an explicit internal time strategy, not a public None
+fallback, distinguishes the new unattended path. All original failed logs remain.
+
+This is a callable source application, **not an activated automatic service**.
+Actual installed entry/provider, least-privilege admission, bounded genuine seed,
+source-add delta, replay/QUERY, consumers and CPU/GPU comparison remain required.

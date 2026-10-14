@@ -245,6 +245,14 @@ class MissingEmbeddingBindings:
     available_view_count: int
 
 
+@dataclass(frozen=True, slots=True)
+class PreparedEmbeddingBindingLookup:
+    """One current-root materialization for planning, never a transferable grant."""
+
+    observation: MissingEmbeddingBindings
+    resolved: ResolvedEmbeddingLookup
+
+
 class EmbeddingRegistryVerificationPort(Protocol):
     """Trusted Catalog owner adapter, deliberately not installed/composed yet.
 

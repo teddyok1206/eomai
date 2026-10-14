@@ -22,7 +22,10 @@ from eom_catalog_service.inference_transfer_snapshot_catalog_adapter import (
     LocalIndexingSessionCapture,
 )
 from eom_catalog_service.local_indexing_source_authority import CatalogLocalIndexingSourceAuthority
-from eom_catalog_service.local_indexing_source_ports import LocalIndexingSourceReadIntent
+from eom_catalog_service.local_indexing_source_ports import (
+    LocalIndexingSourceError,
+    LocalIndexingSourceReadIntent,
+)
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 
 
@@ -101,6 +104,38 @@ class CatalogIndexingRegistrySourceAuthority:
         return self.authority.authorize_scope(
             session, self.source_intent(caller, intent, configuration)
         )
+
+    def current_lookup(
+        self, session: Session, configuration: EmbeddingRegistryOwnerConfiguration
+    ) -> EmbeddingRegistryLookup | None:
+        """Select the current published head only for a new reconciliation observation."""
+        policy, graph = self.authority.current_graph(
+            session, self.service_policy_revision_id, self.service_policy_sha256
+        )
+        if (
+            configuration.corpus_id != policy.corpus_id
+            or configuration.namespace not in policy.namespaces
+            or configuration.space != policy.space
+            or configuration.recipe != policy.recipe
+            or not set(configuration.source_classes).issubset(policy.source_classes)
+            or self.native_execution_policy_sha256 != policy.native_execution_policy_sha256
+            or self.resource_profile_sha256 != policy.resource_profile_sha256
+            or self.maximum_sources > policy.maximum_sources
+        ):
+            raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_FORBIDDEN")
+        if graph is None:
+            return None
+        query = EmbeddingRegistryLookup(
+            configuration.corpus_id,
+            configuration.namespace,
+            graph,
+            policy.source_access_policy_revision_id,
+            policy.source_access_policy_sha256,
+            self.maximum_sources,
+        )
+        caller = EmbeddingRegistryServiceCaller(self.authority.service_fence.pin.service)
+        self.authorize_scope(session, caller, query, configuration)
+        return query
 
     def capture(
         self,

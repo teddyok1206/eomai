@@ -311,18 +311,23 @@ Catalog 서비스 자료 정책1.1·공식 owner 발행·Registry 등록 연결�
 서비스 전용 요청1.2·실행 정책1.1을 추가하고 기존 명령/claim/lease/복구/실행기에
 연결했습니다. 사람 로그인과 서비스 인증은 명시적으로 분리하며, 기존 operator 요청1.1의
 미래 서비스 audit는 여전히 실행을 허용하지 않습니다. 기존4개 계약과 수치 DAG는 보존합니다.
-최신87-suite 회귀2,340개·strict mypy67 모듈·Ruff113 파일이 PASS했습니다.
-임시 DB의 claim/runner61개·Registry/native-flow30개·encoding reservation9개도
-PASS했습니다. 합성 IAM/source/
-수치 계산 seam은 실제 서비스 인증·모델 실행 증거가 아닙니다. 선행 Registry30개와
-당시3개 wheel/RECORD·독립 wheel-only42 모듈 검증, 신원/자료 정책/발행 DB70개는
-별도 역사적 증거로 보존하며 현재 후보의 설치 승인으로 확대 해석하지 않습니다.
-현재 Runner 코드 후보`1cf47fca`의3개 wheel/RECORD와 격리된 wheel-only43 모듈
-검증도 PASS했습니다. 운영 설치·실제 인증·모델 실행은 하지 않은 패키지 검증입니다.
+공식 missing-binding 조회를 기존 Workflow/START 접수에 연결했습니다. 새 점검은 현재
+출판된 Graph를 확인한 뒤 정확한 revision을 고정하고, 누락된 자료만 제한된 수로 접수합니다.
+보고서 대기·사용 불가 view·이미 준비된 자료에는 빈 작업을 만들지 않습니다. 중복 알림은
+기존 요청을 재사용하며 실패 이력을 초기화하지 않습니다. 최초 실제 게시 시간을 재사용하는
+명시적 게시 경로를 추가했고, 기존 고정 시간 게시의 엄격한 계약은 유지합니다.
+
+최신88-suite 회귀2,370개·strict mypy69 모듈·Ruff120 파일이 PASS했습니다.
+별도 임시 DB 도구 source89개도 PASS했습니다. 실제 임시 DB의 신원/자료 정책/발행70개·
+claim/runner63개·Registry/native-flow32개·encoding reservation9개, 서로 다른174개가
+PASS했습니다. 동시 누락 접수의 단일 Workflow/START와 실제 root rollback 후 계획 재사용을
+검증했지만 합성 IAM/source/수치 계산 seam은 실제 서비스 인증·모델 실행 증거가 아닙니다.
+선행 코드`1cf47fca`의3개 wheel/RECORD와 격리된 wheel-only43 모듈 검증은 별도 역사적
+증거로 보존하며 현재 후보의 설치 승인으로 확대 해석하지 않습니다.
 0055 전용 배포 계약1.4는 정확한0054에서만 갱신하며 운영 migration을 뜻하지 않습니다.
 
 **운영 서비스 활성화·자동 증분 처리·실제 seed/delta/QUERY·CPU/GPU 비교는 아직 남아 있습니다.**
-다음은 실제 서비스 entry/provider 설치와 공식 missing-binding reconciliation 연결입니다.
+다음은 이 접수 경로를 실제 서비스 entry/provider에 설치·연결하는 단계입니다.
 [서비스 Runner 구현·검증 기록](docs/status/LOCAL_INDEXING_RUNNER_SERVICE_CHECKPOINT_2026-10-14.md),
 [현재 Registry checkpoint](docs/status/LOCAL_INDEXING_REGISTRY_SERVICE_CHECKPOINT_2026-10-14.md),
 [정책 발행 증거](docs/status/LOCAL_INDEXING_POLICY_PUBLICATION_CHECKPOINT_2026-10-14.md),
