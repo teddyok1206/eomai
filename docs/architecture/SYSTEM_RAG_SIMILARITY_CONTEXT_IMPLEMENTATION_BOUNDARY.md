@@ -1495,3 +1495,23 @@ The existing genuine QUERY root/owner handles remained alive at17:50 UTC awaitin
 their original login; no restart or second query was submitted. Next required C2
 work is compatible Pack/instruction provenance, trusted runtime composition and an
 actual bounded variation after the genuine QUERY acceptance; the full goal remains open.
+
+Candidate `3c5e835e70bfa3625d68e1d0fa3588b4ddde4a27` passed the complete existing
+three-wheel/RECORD build and strict two-wheel-only imports including the actual
+Catalog selected-material owner, new public contracts, runtime adapter and workspace
+value. Packaged schema raw SHA/offline refs, copied extra-field refusal and absence
+of checkout/API-wheel/prefix fallback or ML imports passed. Public exports/registry
+were additionally type-checked: strict mypy **8 source files PASS** (overlaps the6).
+Platform raw `a26feedbcc825794ef2a95ee8136642ebf7aed2eb5ec889dd2445fe4a1c42b8f`;
+API-contract raw `b143635b59fa95163d17217dd24033943006904a95e9af6a77273f8bd2ec4f9c`.
+Evidence: `similarity-reference-materials-{release-build,owner-pair-proof,mypy-public-exports}.log`.
+Candidate is not installed; the existing API/owner pair and waiting QUERY are unchanged.
+
+Next integration inventory: Pack1.20.16 already exists as an inactive evidence-binding
+clarification successor (`f019a060`), so do not overwrite it or assume1.20.16 is free.
+Plan resolution/replay in `execution_resolver.py`, the real Orchestrator materializer
+callback and evidence/result validation still need compatible plan23 wiring. In
+particular, evidence validation also calls the shared allowlist without a similarity
+context; do not activate the new plan after testing only the workspace leaf. Preserve
+current actor/source fences, original evidence usage and late review validation while
+closing that actual end-to-end path.
