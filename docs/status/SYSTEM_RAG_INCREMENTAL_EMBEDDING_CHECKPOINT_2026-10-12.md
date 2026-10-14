@@ -2531,3 +2531,30 @@ read-only였고02:14 UTC 운영 API LIVE/READY도 정상이다. 운영 migration
 schema/hash/ref closure PASS다. 저장 key가 실제 column의32자 제한 안에 들어가고 불변 JSON
 schema와 구분됨을 package에서 확인했다. QUERY global admission도 미허용임을 확인했다.
 이 검증의 실제 설치·DB·auth·model 변경은 없고 문서 후속 커밋과 code candidate를 구분한다.
+
+## 2026-10-14 UTC — QUERY 원자적 접수·기존 INDEX 경계 재사용
+
+현재 owner 확인→Workflow/START 명령→늦은 재확인을 caller-owned root/savepoint 한 곳에
+묶은 QUERY 접수 use case를 추가했다. INDEX와 시작 명령의 원 identity/actor/key/payload/
+source/hash 검증을 공유하고 repository의 단일 fingerprint를 사용한다. 기존 hash bytes,
+INDEX coverage-only·권한·원 요청 의미는 보존한다. 없는/바뀐 과거 명령은 새로 만들지 않는다.
+
+실제 PostgreSQL에 동시2접속 같은 요청, 원 ID 재조회, 늦은 owner 거부, 명령 저장 실패의
+rollback, 불완전/다른 source 이력 보존6개를 추가했다. 이제 stage/runner/QUERY53 PASS
+(34.17s; 앞33.47/33.66s 반복과 합산 안 함), Artifact/registry/INDEX28 PASS(76.58s),
+reservation/concurrency9 PASS(12.35s), 서로 다른90개다. 실제 Workflow/command/Job/Artifact
+transaction과 합성 admission/IAM/numerical seam을 구분하며 실제 운영 승인은 아니다.
+
+기존28개 gate 재실행에서 전체 DB의 과거 인코딩 Job까지 세던 fixture(27 PASS/1 실패)를
+발견했다. 현재 계획의 exact indexed encoding keys만 읽되 같은 seed/Graph delta에 Job1개·
+계산1회 기준은 유지했다. 과거 행/실패 이력은 보존한다. QUERY 부재를 가정하는 positive
+migration test만 빈 temp schema 복사본에서 시험해 실제 app 이력을 지우지 않는다.
+
+최종61-suite **1,517 PASS**,278.73s; strict mypy28·Ruff/format46·shell/diff PASS다.
+앞1515/47 focused는 중복이다. 마지막 임시 DB는 head0054·다른 연결0·server read-only다.
+02:39 UTC 기존 controller는 live, 원 log0 bytes이며 인증/seed 완료 증거가 아니다.
+기존 Studio 로그인 창 확인을 비차단으로 요청했으며 창/프로세스 교체·credential 저장,
+운영 DB/role/서비스/unit·모델/GPU 변경은 없다.
+`GOAL=ACTIVE`, `ATOMIC_QUERY_SUBMISSION=SOURCE_AND_DISPOSABLE_PASS`,
+`QUERY_GLOBAL_ADMISSION=UNOFFERED`, `REAL_SEED_DELTA=PENDING`,
+`GENUINE_QUERY_CONSUMER_READ=NOT_ACTIVE`. 원래 목표의 운영·자동화·소비자·GPU gate는 남아 있다.

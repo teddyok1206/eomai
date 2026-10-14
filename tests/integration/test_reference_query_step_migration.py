@@ -20,7 +20,13 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from tests.integration.test_inference_transfer_stage_migration import (
     stage_owner_connection as stage_owner_connection,
 )
-from tests.integration.test_local_embedding_stage_migration import _seed, _step
+from tests.integration.test_local_embedding_stage_migration import (
+    _seed,
+    _step,
+)
+from tests.integration.test_local_embedding_stage_migration import (
+    empty_workflow_tables as empty_workflow_tables,
+)
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
@@ -148,9 +154,11 @@ def test_actual_downgrade_refuses_query_history_before_ddl(
 
 
 def test_empty_query_downgrade_keeps_index_and_round_trips_only_check(
-    stage_owner_connection: Connection,
+    empty_workflow_tables: Connection,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Committed synthetic QUERY starts are retained; isolate only this absent-history case.
+    stage_owner_connection = empty_workflow_tables
     _, workflow = _seed(stage_owner_connection)
     _step(
         stage_owner_connection,

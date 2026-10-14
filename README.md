@@ -270,6 +270,9 @@ seed/delta/query·자동 service indexing의 완료 증거는 아닙니다. 실�
 
 검색용 QUERY는 현재 사용자·자료·보고서·인덱스 확인부터 고정 CPU 실행기와 정본 완료
 검증까지 코드상 연결했습니다. 기존 입력1.0은 유지하고 입력1.1의 실제 배치4를 사용합니다.
+QUERY의 Workflow와 시작 명령도 현재 권한 확인·동일 요청 재사용·늦은 거부 rollback을
+하나의 접수 경계로 연결했습니다. INDEX와 명령 identity/hash 검증만 공유하고 각 목적의
+권한·실행 정책은 분리합니다. 없거나 변조된 과거 시작 명령은 새로 만들어 복구하지 않습니다.
 기존 큐에서 ROLE/INDEX/QUERY를 분리하므로 준비되지 않은 QUERY가 다른 실행을 막지 않습니다.
 SQL 밖에서 계산하고, 원 Job/4개 checkpoint와 지정 producer의4파일·영수증을 검증합니다.
 대기·중단 복구는 원래 identity를 재사용하며, 재부팅으로 unit 기록이 사라져도 같은 계산을
@@ -279,16 +282,18 @@ SQL 밖에서 계산하고, 원 Job/4개 checkpoint와 지정 producer의4파일
 이미 끝난 검색을 읽기 위해 새 Job/lease나 모델 실행을 요구하지 않습니다. Catalog가 Runner
 테이블을 직접 읽지 않으며, 완료 처리와 조회가 같은 정본 검증 규칙을 재사용합니다.
 
-최신60-suite **1,501 PASS**·strict type24·lint/format39·shell/diff PASS입니다.
+최신61-suite **1,517 PASS**·strict type28·lint/format46·shell/diff PASS입니다.
 실제 임시 Job/Artifact/파일·중단 복구 검증이며 IAM/자료/수치 계산의 합성 seam과 구분합니다.
 code candidate `af0b042d`의3개 wheel/RECORD·격리21-module import도 PASS했지만 실제
 설치/활성화는 아닙니다. 문서 후속 커밋과 검증된 code candidate를 구분합니다.
 QUERY 정의/실행 단위는 아직 미허용·미설치이고, 실제 실행·소비자 연결은 후속 검증입니다.
 source head는0054, 운영 DB는0053이며 기존 계약·명령·CPU 설치·서비스는 변경하지 않았습니다.
 이후 기존 marker-guarded 임시 DB의 소유자·현재 연결0을 확인하고0050→0054 및 실제
-down/up cycle을 통과했습니다. 실제 PostgreSQL에서 stage/runner/QUERY47·Artifact/registry/
-등록28·encoding reservation9개, 서로 다른84개가 PASS했습니다. QUERY CHECK13개와
-commit/crash/read/replay6개도 포함되며47개 gate는 같은 DB에서 다시 PASS했습니다.
+down/up cycle을 통과했습니다. 실제 PostgreSQL에서 stage/runner/QUERY53·Artifact/registry/
+등록28·encoding reservation9개, 서로 다른90개가 PASS했습니다.53개 gate는 같은 DB에서
+반복 PASS했으며 QUERY CHECK13·commit/crash/read/replay6·atomic 접수6개가 포함됩니다.
+동시 접수·늦은 권한 거부·명령 저장 실패와 기존
+INDEX seed/Graph delta 재사용을 실제 DB에서 확인했지만 IAM/수치 계산은 합성 seam입니다.
 이 과정에서 찾은 protocol registry의32자 key 오류는 고정 내부 key와 불변 JSON schema를
 분리해 수정했습니다. DB 제한·trigger·실패 이력은 유지했습니다. 실제 DB 증거와 합성
 IAM/수치 seam을 구분하며, 실제 사용자·모델/GPU·운영 QUERY 활성화 PASS는 아닙니다.

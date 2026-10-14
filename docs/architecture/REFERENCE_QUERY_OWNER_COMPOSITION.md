@@ -684,3 +684,79 @@ actual32-character column. It also verified global QUERY admission remains
 unoffered. No source import, installation, runtime/database/auth/model mutation
 was used by this package proof. The follow-up documentation commit is separate
 from the inspected code candidate.
+
+## Atomic QUERY submission — implementation decision
+
+1. Runner owns one typed QUERY start use case, not ad hoc Catalog/consumer queue writes.
+2. Canonical source remains exact request/definition/current owner; the existing
+   Workflow and START_WORKFLOW command are durable queue facts, not read grants.
+3. Existing logical Workflow/command IDs and unique idempotency keys are retained.
+4. Resolve actual current controls/actor before savepoints; revalidate late in the
+   same root. Replay checks the original command/payload/actor/source/hash.
+5. Dominant operations are unique-key lookup and atomic creation, not list scans.
+6. Reuse existing indexed queue, ORM and constraints. Share only native START
+   command mechanics between INDEX and QUERY; purpose admission remains separate.
+7. Bounded metadata and O(log N) indexed lookup; no content/vector copying or model work.
+8. Caller owns the root; one savepoint encloses Workflow and command creation and
+   the late fence. No independent commit or dangling Workflow on command failure.
+9. Application use case calls supported repository operations; consumers must not
+   write Runner tables or introduce a second command queue.
+10. Same/equivalent replay returns original rows; missing/tampered command fails
+    without repair. Denial/command failure rolls back new rows; no launch/retry.
+11. Direct callers could manually combine the operations, but duplicated start/
+    replay/fence logic would drift. Two actual native purposes justify a small
+    shared command function, not a generic submission framework or flag API.
+
+No new wire schema/DB migration is needed: existing frozen QUERY request and empty
+START command already define both boundaries. INDEX's coverage-only zero-demand
+behavior is unchanged. The global QUERY definition remains unoffered; synthetic
+admission in tests is not installed purpose/IAM acceptance or activation.
+
+The shared START check uses the repository's public canonical command fingerprint;
+enqueue and replay validation no longer carry separate copies of its hash recipe.
+The exact existing serialized fields/values are preserved and tested for both native
+sources. Incomplete/wrong-source synthetic QUERY starts remain in the disposable DB;
+only the positive absent-QUERY migration case uses the existing empty temporary
+schema fixture, with its actual app CHECK preserved. No history is deleted for replay.
+
+### Atomic submission implementation and verification
+
+`start_reference_query_in_session` composes current control/actor resolution,
+Workflow creation/replay, original START resolution and a late owner fence in one
+caller-owned root/savepoint. `resolve_native_start_command` is also used by INDEX;
+it checks original Workflow/command actor, key, type, empty payload, source and exact
+canonical fingerprint without repairing a missing/changed command. The repository
+owns one public hash recipe; byte-identical old serialization is regression-tested.
+INDEX's zero-demand coverage-only path is unchanged. No new schema, migration,
+dependency, queue, general framework or implicit QUERY admission was introduced.
+
+Actual guarded PostgreSQL now includes6 atomic QUERY submission cases: original
+replay, concurrent two-connection same-key creation, late owner denial and queue
+failure rolling both rows back, missing/wrong-source history preserved rather than
+repaired. Source tests cover equivalent-key reuse, root/savepoint shape, every
+owner denial point, tampered commands and no numerical/readiness/commit calls.
+Workflow/command SQL and transactions are actual here; admission/IAM/executor are
+explicit synthetic seams. Other query persistence tests retain their own declared
+synthetic Workflow seam; do not turn either into genuine installed acceptance.
+
+Final61-suite source **1,517 PASS**,278.73s; strict mypy28, Ruff/format46,
+shell/diff PASS. Earlier1515/47 focused results overlap and are not added.
+Actual PostgreSQL stage/runner/QUERY53 PASS,34.17s (earlier same-DB repeats33.47/
+33.66s); Artifact/registry/application/INDEX28 PASS,76.58s; reservation/concurrency9
+PASS,12.35s. These are90 distinct cases, not a sum of repeated53-case gates.
+
+The first rerun of the28-case gate found an old whole-DB encoding-Job count
+assumption (27 PASS/1 failure). It now uses the original plan's exact indexed
+encoding keys and still requires one successful Job/one numerical call across its
+seed and Graph-only delta. Old synthetic Jobs/events are not deleted or changed.
+Only the positive absent-QUERY DDL test uses empty temp schema copies; retained
+actual app QUERY Workflow history remains protected by the normal downgrade guard.
+
+Final read-only inspection found disposable head0054 and0 other connections.
+At02:39 UTC the same original finite controller3416211/3416258 remained live with
+its original log0 bytes. A nonblocking request referred the user to the existing
+Studio login prompt; no pane capture, new login window, credential persistence,
+process replacement or production DB/runtime/model/GPU change occurred.
+`ATOMIC_QUERY_SUBMISSION=SOURCE_AND_DISPOSABLE_PASS`,
+`QUERY_GLOBAL_ADMISSION=UNOFFERED`, `REAL_SEED_DELTA=PENDING`,
+`GENUINE_QUERY_CONSUMER_READ=NOT_ACTIVE`. Full goal remains active.

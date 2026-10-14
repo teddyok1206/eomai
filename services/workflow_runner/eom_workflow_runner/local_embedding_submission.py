@@ -4,10 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from eom_identifiers import content_sha256
 from eom_workflow.local_embedding_request import LocalEmbeddingWorkflowRequestV11
 from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
@@ -21,13 +19,11 @@ from eom_workflow_runner.models import (
     WorkflowDefinitionRecord,
     WorkflowInstanceRecord,
 )
-from eom_workflow_runner.repository import (
-    CommandType,
-    create_workflow_instance,
-    enqueue_command,
+from eom_workflow_runner.native_start_command import (
+    LOCAL_EMBEDDING_SUBMISSION_SOURCE,
+    resolve_native_start_command,
 )
-
-_SUBMISSION_SOURCE = "local_embedding_submission"
+from eom_workflow_runner.repository import create_workflow_instance
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,48 +108,14 @@ def start_local_embedding_in_session(
             local_embedding_owner=owner,
             local_embedding_executor=executor,
         )
-        if created:
-            command, command_created = enqueue_command(
-                session,
-                workflow_id=workflow.workflow_id,
-                command_type=CommandType.START_WORKFLOW,
-                payload={},
-                actor_type=actor_type,
-                actor_id=actor_id,
-                source=_SUBMISSION_SOURCE,
-                idempotency_key=f"start:{workflow.workflow_id}",
-            )
-        else:
-            # Never synthesize a START for completed or incomplete history.
-            replay_command = session.scalar(
-                select(WorkflowCommandRecord)
-                .where(WorkflowCommandRecord.idempotency_key == f"start:{workflow.workflow_id}")
-                .execution_options(populate_existing=True)
-            )
-            if replay_command is None:
-                raise ValueError("LOCAL_EMBEDDING_SUBMISSION_REPLAY_INVALID")
-            command = replay_command
-            command_created = False
-        if (
-            command.workflow_id != workflow.workflow_id
-            or command.command_type != CommandType.START_WORKFLOW.value
-            or command.payload != {}
-            or command.actor_type != actor_type
-            or command.actor_id != actor_id
-            or command.source != _SUBMISSION_SOURCE
-            or command.request_hash
-            != content_sha256(
-                {
-                    "workflow_id": workflow.workflow_id,
-                    "command_type": CommandType.START_WORKFLOW.value,
-                    "payload": {},
-                    "actor_type": actor_type,
-                    "actor_id": actor_id,
-                    "source": _SUBMISSION_SOURCE,
-                }
-            )
-        ):
-            raise ValueError("LOCAL_EMBEDDING_SUBMISSION_REPLAY_INVALID")
+        command, command_created = resolve_native_start_command(
+            session,
+            workflow=workflow,
+            workflow_created=created,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            source=LOCAL_EMBEDDING_SUBMISSION_SOURCE,
+        )
         late = resolve_local_embedding_submission_controls(
             session,
             definition=definition,

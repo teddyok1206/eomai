@@ -1204,6 +1204,28 @@ def _persist_workflow_instance(
     return workflow, True
 
 
+def command_business_fingerprint(
+    *,
+    workflow_id: str,
+    command_type: CommandType,
+    payload: dict[str, Any],
+    actor_type: str,
+    actor_id: str,
+    source: str,
+) -> str:
+    """Canonical stored command identity; validation and creation share one recipe."""
+    return content_sha256(
+        {
+            "workflow_id": workflow_id,
+            "command_type": command_type.value,
+            "payload": payload,
+            "actor_type": actor_type,
+            "actor_id": actor_id,
+            "source": source,
+        }
+    )
+
+
 def enqueue_command(
     session: Session,
     *,
@@ -1216,15 +1238,13 @@ def enqueue_command(
     idempotency_key: str,
     available_at: datetime | None = None,
 ) -> tuple[WorkflowCommandRecord, bool]:
-    request_hash = content_sha256(
-        {
-            "workflow_id": workflow_id,
-            "command_type": command_type.value,
-            "payload": payload,
-            "actor_type": actor_type,
-            "actor_id": actor_id,
-            "source": source,
-        }
+    request_hash = command_business_fingerprint(
+        workflow_id=workflow_id,
+        command_type=command_type,
+        payload=payload,
+        actor_type=actor_type,
+        actor_id=actor_id,
+        source=source,
     )
     existing = session.scalar(
         select(WorkflowCommandRecord).where(

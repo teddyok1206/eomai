@@ -245,6 +245,7 @@ if [[ "${action}" == "embedding-stage-tests" ]]; then
   "${PYTHON}" -m pytest -q tests/integration/test_local_embedding_stage_migration.py \
     tests/integration/test_reference_query_step_migration.py \
     tests/integration/test_reference_query_native_persistence.py \
+    tests/integration/test_reference_query_submission.py \
     tests/integration/test_local_embedding_runner.py
   printf 'Disposable model-free native embedding stage and runner tests passed.\n'
   exit 0

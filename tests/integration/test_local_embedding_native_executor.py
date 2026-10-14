@@ -57,6 +57,7 @@ from eom_orchestrator.native_embedding_launch_identity import create_native_embe
 from eom_orchestrator.repository import ensure_protocol_version
 from eom_orchestrator.settings import Settings
 from eom_protocol.artifact_members import ArtifactMemberPointer
+from eom_workflow.local_embedding_encoding_job import EMBEDDING_ENCODING_IDEMPOTENCY_PREFIX
 from eom_workflow.local_embedding_execution_policy import LocalEmbeddingExecutionPolicy
 from eom_workflow.local_embedding_request import LocalEmbeddingWorkflowRequestV11
 from eom_workflow.native_embedding_coordinator import (
@@ -539,6 +540,7 @@ def execution(guarded_engine: Engine, tmp_path: Path, monkeypatch: pytest.Monkey
         launcher=launcher,
         sessions=sessions,
         request=request,
+        plan=plan,
         owner=owner,
         publisher=publisher,
         current=current,
@@ -559,16 +561,15 @@ def test_actual_disposable_seed_and_graph_delta_reuses_vectors_without_model(exe
     with execution.sessions.begin() as session:
         for workflow, _lease, _fenced in (first, second):
             assert session.get(WorkflowInstanceRecord, workflow.workflow_id).state == "COMPLETED"
-        assert (
-            len(
-                tuple(
-                    session.scalars(
-                        select(JobRecord).where(JobRecord.task_type == "native_embedding_encoding")
-                    )
-                )
-            )
-            == 1
-        )
+        # Prior committed tests remain intact. Resolve only this immutable plan's
+        # exact unique encoding keys; a global task-type count is not this cohort.
+        keys = {
+            EMBEDDING_ENCODING_IDEMPOTENCY_PREFIX + demand.encoding.encoding_sha256
+            for demand in execution.plan.demands
+        }
+        jobs = tuple(session.scalars(select(JobRecord).where(JobRecord.idempotency_key.in_(keys))))
+        assert len(keys) == len(jobs) == 1
+        assert jobs[0].task_type == "native_embedding_encoding" and jobs[0].status == "SUCCEEDED"
 
 
 @pytest.mark.parametrize(
