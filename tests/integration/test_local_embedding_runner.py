@@ -43,6 +43,7 @@ from eom_workflow_runner.repository import (
     CommandCandidate,
     CommandExecutionFamily,
     CommandLeaseIdentity,
+    NativeCommandActorSelection,
     claim_command_candidate,
     claim_next_command,
     claimable_command_exists,
@@ -363,7 +364,32 @@ def test_actual_peek_one_statement_per_family_and_query_plan(claim_fixture: Clai
         assert {"ix_workflow_commands_claimable", "ix_workflow_step_runs_workflow_id"} <= names
 
 
-@pytest.mark.parametrize("marker", ["related_definition", "related_step"])
+def test_actual_native_actor_selection_is_one_existing_queue_lookup(claim_fixture):
+    actor_type, actor_id = local_embedding_request_actor(claim_fixture.owner.scope.request)
+    with claim_fixture.sessions() as session:
+        selected = peek_command_candidate(
+            session,
+            family=CommandExecutionFamily.LOCAL_EMBEDDING,
+            actor_selection=NativeCommandActorSelection(actor_type, actor_id),
+        )
+        assert selected is not None and selected.command_id == claim_fixture.command_id
+        missing = peek_command_candidate(
+            session,
+            family=CommandExecutionFamily.LOCAL_EMBEDDING,
+            workflow_id=claim_fixture.workflow_id,
+            actor_selection=NativeCommandActorSelection(
+                actor_type,
+                ("operator_" if actor_type == "human" else "localindexservice_") + uuid4().hex,
+            ),
+        )
+        assert missing is None
+    assert claim_fixture.peek() == selected
+
+
+@pytest.mark.parametrize(
+    "marker",
+    ["related_definition", "related_step", "service_initial_request", "service_request_payload"],
+)
 def test_actual_malformed_native_relation_blocks_unleased_legacy_reconcile(
     stage_owner_connection: Connection, monkeypatch: pytest.MonkeyPatch, marker: str
 ) -> None:
@@ -402,8 +428,16 @@ def test_actual_malformed_native_relation_blocks_unleased_legacy_reconcile(
                 state="RUNNING",
                 stage="AUTHORING",
                 current_step_key=compiled.definition.start_step,
-                request_payload={"schema_version": "1.0"},
-                initial_request={"schema_version": "1.0"},
+                request_payload={
+                    "schema_version": "local-embedding-workflow-request/1.2"
+                    if marker == "service_request_payload"
+                    else "1.0"
+                },
+                initial_request={
+                    "schema_version": "local-embedding-workflow-request/1.2"
+                    if marker == "service_initial_request"
+                    else "1.0"
+                },
                 runtime_context={},
                 idempotency_key="synthetic-malformed-native-relation:" + identity,
                 request_hash="sha256:" + identity * 2,

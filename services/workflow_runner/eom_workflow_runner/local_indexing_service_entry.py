@@ -1,0 +1,168 @@
+"""Fixed installed-unit entry; no repository, login, external API or Codex slot."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import signal
+import stat
+import sys
+import time
+from datetime import UTC, datetime
+from pathlib import Path
+from threading import Event
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from eom_workflow_runner.local_indexing_service_runtime import LocalIndexingServiceRuntime
+
+_RELEASES = Path("/opt/eom/embedding-owner-releases")
+_RUNTIME_CONFIGURATION = Path("/etc/eom/local-indexing-runtime.json")
+
+
+def _installed_site() -> Path:
+    entry = Path(__file__)
+    site, release = entry.parent.parent, entry.parent.parent.parent
+    if (
+        not sys.flags.isolated
+        or not sys.dont_write_bytecode
+        or sys.argv != [str(entry)]
+        or entry.name != "local_indexing_service_entry.py"
+        or entry.parent.name != "eom_workflow_runner"
+        or site.name != "site-packages"
+        or release.parent != _RELEASES
+        or re.fullmatch(r"[0-9a-f]{40}", release.name) is None
+    ):
+        raise ValueError("LOCAL_INDEXING_SERVICE_INSTALLATION_UNAVAILABLE")
+    for parent in entry.parents:
+        value = parent.lstat()
+        if (
+            not stat.S_ISDIR(value.st_mode)
+            or parent.is_symlink()
+            or value.st_uid != 0
+            or value.st_mode & 0o022
+        ):
+            raise ValueError("LOCAL_INDEXING_SERVICE_INSTALLATION_UNAVAILABLE")
+    metadata = entry.lstat()
+    if (
+        entry.is_symlink()
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != 0
+        or metadata.st_mode & 0o022
+        or metadata.st_nlink != 1
+    ):
+        raise ValueError("LOCAL_INDEXING_SERVICE_INSTALLATION_UNAVAILABLE")
+    return site
+
+
+def _emit(event: str, **metadata: str | int | None) -> None:
+    print(
+        json.dumps(
+            {"timestamp": datetime.now(UTC).isoformat(), "event": event, **metadata},
+            sort_keys=True,
+        ),
+        flush=True,
+    )
+
+
+def serve_local_indexing(runtime: LocalIndexingServiceRuntime, stop: Event) -> None:
+    """Drain this actor's existing queue before another bounded source observation."""
+    deadline = 0.0
+    last: tuple[object, ...] | None = None
+    while not stop.is_set():
+        command = runtime.runner.run_once()
+        if command is not None:
+            _emit(
+                "LOCAL_INDEXING_COMMAND_OBSERVED",
+                workflow_id=command.workflow_id,
+                command_id=command.command_id,
+                state=command.state,
+            )
+            continue
+        if stop.is_set():
+            break
+        now = time.monotonic()
+        if now >= deadline:
+            observed = runtime.reconciliation.run_once()
+            signature = (
+                observed.state,
+                observed.graph_snapshot_revision_id,
+                observed.missing_binding_count,
+                observed.missing_report_revision_ids,
+                observed.workflow_id,
+            )
+            if signature != last:
+                _emit(
+                    "LOCAL_INDEXING_RECONCILIATION_OBSERVED",
+                    state=observed.state.value,
+                    graph_snapshot_revision_id=observed.graph_snapshot_revision_id,
+                    eligible_sources=observed.eligible_source_count,
+                    missing_reports=len(observed.missing_report_revision_ids),
+                    unavailable_views=observed.unavailable_view_count,
+                    missing_bindings=observed.missing_binding_count,
+                    selected_targets=observed.selected_target_count,
+                    workflow_id=observed.workflow_id,
+                    command_id=observed.command_id,
+                )
+                last = signature
+            deadline = time.monotonic() + runtime.configuration.poll_interval_seconds
+            # A newly submitted command gets an immediate iteration. No target
+            # list is scanned or claimed independently of the existing Runner.
+            if observed.workflow_id is not None and observed.state.value == "QUEUED":
+                continue
+        stop.wait(min(5.0, max(0.1, deadline - time.monotonic())))
+
+
+def main() -> int:
+    capture = None
+    runtime = None
+    try:
+        site = _installed_site()
+        sys.path.insert(0, str(site))
+        from eom_identity_service.local_indexing_runtime import (
+            LocalIndexingRuntimePin,
+            capture_local_indexing_runtime,
+        )
+        from eom_operator_identity import parse_local_indexing_runtime_configuration
+
+        # Preliminary bounded metadata only. The actual capture below independently
+        # verifies root ownership, exact bytes, unit/process, wheels and file epochs.
+        with _RUNTIME_CONFIGURATION.open("rb") as stream:
+            raw = stream.read(4097)
+        selected = parse_local_indexing_runtime_configuration(raw)
+        pin = LocalIndexingRuntimePin(
+            selected.service,
+            selected.runtime_source_commit,
+            "sha256:" + hashlib.sha256(raw).hexdigest(),
+        )
+        capture = capture_local_indexing_runtime(pin)
+        from eom_workflow_runner.local_indexing_service_runtime import (
+            build_local_indexing_service_runtime,
+        )
+
+        stop = Event()
+        signal.signal(signal.SIGTERM, lambda _signum, _frame: stop.set())
+        signal.signal(signal.SIGINT, lambda _signum, _frame: stop.set())
+        runtime = build_local_indexing_service_runtime(capture, pin)
+        _emit("LOCAL_INDEXING_SERVICE_STARTED", pid=os.getpid())
+        serve_local_indexing(runtime, stop)
+        return 0
+    except Exception as error:
+        code = getattr(error, "code", None)
+        if not isinstance(code, str) or re.fullmatch(r"[A-Z][A-Z0-9_]{1,95}", code) is None:
+            code = "LOCAL_INDEXING_SERVICE_UNAVAILABLE"
+        # Never print exception text/tracebacks: SQL/HTTP exceptions can carry
+        # credentials or materialized source data even in a failed startup.
+        _emit("LOCAL_INDEXING_SERVICE_STOPPED", code=code, error_type=type(error).__name__)
+        return 1
+    finally:
+        if runtime is not None:
+            runtime.engine.dispose()
+        if capture is not None:
+            capture.close()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

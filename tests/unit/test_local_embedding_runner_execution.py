@@ -428,6 +428,8 @@ def test_native_related_marker_under_legacy_parent_blocks_direct_route_before_re
         yield cast(Session, session)
 
     runner = object.__new__(WorkflowRunner)
+    runner.command_families = frozenset(CommandExecutionFamily)
+    runner.command_actor_selection = None
     runner.sessions = cast(sessionmaker[Session], read)
     runner.available_roles = frozenset(roles)
     runner.runner_id = "source-routing-only"
@@ -566,6 +568,8 @@ def test_native_unavailable_does_not_starve_ready_legacy_and_does_not_acquire_au
     legacy = replace(native, family=CommandExecutionFamily.ROLE, native_request=None)
     legacy = replace(legacy, created_at=native.created_at + timedelta(seconds=1))
     runner = object.__new__(WorkflowRunner)
+    runner.command_families = frozenset(CommandExecutionFamily)
+    runner.command_actor_selection = None
     runner.local_embedding_owner = None
     runner.local_embedding_executor = None
     runner.readiness = Mock()
@@ -591,6 +595,8 @@ def test_native_ready_does_not_depend_on_global_codex_readiness(
     source, _workflow, _command = candidate_fixture()
     native = peek(source)
     runner = object.__new__(WorkflowRunner)
+    runner.command_families = frozenset(CommandExecutionFamily)
+    runner.command_actor_selection = None
     runner.local_embedding_owner = cast(LocalEmbeddingOwnerAdmission, source.owner)
     runner.local_embedding_executor = cast(LocalEmbeddingNativeExecutor, source.executor)
     runner.reference_query_owner = None
@@ -621,6 +627,8 @@ def test_only_unready_native_reports_unavailable_without_mutations(
     source, _workflow, _command = candidate_fixture()
     native = peek(source)
     runner = object.__new__(WorkflowRunner)
+    runner.command_families = frozenset(CommandExecutionFamily)
+    runner.command_actor_selection = None
     runner.local_embedding_owner = cast(LocalEmbeddingOwnerAdmission, source.owner)
     runner.local_embedding_executor = cast(LocalEmbeddingNativeExecutor, source.executor)
     source.executor.evaluate.return_value = RuntimeReadinessReport(
@@ -647,6 +655,8 @@ def test_direct_native_reconcile_denies_before_global_readiness(
 ) -> None:
     fixture = execution_fixture()
     runner = object.__new__(WorkflowRunner)
+    runner.command_families = frozenset(CommandExecutionFamily)
+    runner.command_actor_selection = None
     monkeypatch.setattr(runner, "_load_workflow", lambda _id: (fixture.workflow, fixture.compiled))
     monkeypatch.setattr(
         runner, "_require_runtime_ready", lambda: pytest.fail("global readiness called")
@@ -741,6 +751,8 @@ def test_native_cancellation_is_durable_stop_not_capacity_or_gpu_cleanup(
         else (fixture.step,)
     )
     runner = object.__new__(WorkflowRunner)
+    runner.command_families = frozenset(CommandExecutionFamily)
+    runner.command_actor_selection = None
     monkeypatch.setattr(runner, "_fenced_transaction", fixture.fenced)
     authorization = WorkflowActorAuthorization(
         fixture.workflow.created_actor_id,
@@ -827,6 +839,8 @@ def test_busy_native_exact_claim_uses_new_root_for_ready_legacy(
     command.lease_generation = 1
     command.lease_expires_at = datetime.now(UTC) + timedelta(seconds=60)
     runner = object.__new__(WorkflowRunner)
+    runner.command_families = frozenset(CommandExecutionFamily)
+    runner.command_actor_selection = None
     runner.runner_id = "runner"
     runner.runner_config = cast(Any, SimpleNamespace(command_lease_seconds=60))
     runner.local_embedding_owner = cast(LocalEmbeddingOwnerAdmission, source.owner)

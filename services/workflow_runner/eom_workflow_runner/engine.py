@@ -133,6 +133,7 @@ from eom_workflow_runner.repository import (
     CommandExecutionFamily,
     CommandLeaseIdentity,
     CommandType,
+    NativeCommandActorSelection,
     active_approval,
     claim_command_candidate,
     command_lease_identity,
@@ -155,7 +156,7 @@ from eom_workflow_runner.role_execution_binding import (
     read_platform_role_result,
 )
 from eom_workflow_runner.role_execution_port import RoleExecutionResult
-from eom_workflow_runner.settings import WorkflowSettings
+from eom_workflow_runner.settings import RunnerConfig, WorkflowSettings
 from eom_workflow_runner.state_machine import (
     SUCCESSFUL_TERMINAL_WORKFLOW_STATES,
     UNSUCCESSFUL_TERMINAL_WORKFLOW_STATES,
@@ -502,24 +503,58 @@ class WorkflowRunner:
         reference_query_owner: ReferenceQueryOwnerAdmission | None = None,
         reference_query_executor: ReferenceQueryNativeExecutor | None = None,
         runner_id: str | None = None,
+        command_families: frozenset[CommandExecutionFamily] = frozenset(CommandExecutionFamily),
+        command_actor_selection: NativeCommandActorSelection | None = None,
+        runner_config: RunnerConfig | None = None,
     ) -> None:
         if catalog is None:
             raise ValueError("workflow catalog adapter is required")
         if actor_authorizer is None:
             raise ValueError("workflow actor authorizer is required")
-        if not available_roles:
+        if (
+            type(command_families) is not frozenset
+            or not command_families
+            or any(type(family) is not CommandExecutionFamily for family in command_families)
+        ):
+            raise ValueError("workflow command families must be explicit and nonempty")
+        role_enabled = CommandExecutionFamily.ROLE in command_families
+        if role_enabled and not available_roles:
             raise ValueError("workflow worker roles are required")
+        if command_actor_selection is not None:
+            if role_enabled or type(command_actor_selection) is not NativeCommandActorSelection:
+                raise ValueError("actor selection requires native-only command families")
+            command_actor_selection.__post_init__()
         if (local_embedding_owner is None) != (local_embedding_executor is None):
             raise ValueError("native owner and executor must be supplied together")
         if (reference_query_owner is None) != (reference_query_executor is None):
             raise ValueError("QUERY owner and executor must be supplied together")
+        if not role_enabled and (
+            executor is not None
+            or (
+                CommandExecutionFamily.LOCAL_EMBEDDING in command_families
+                and local_embedding_owner is None
+            )
+            or (
+                CommandExecutionFamily.REFERENCE_QUERY in command_families
+                and reference_query_owner is None
+            )
+        ):
+            raise ValueError("native-only execution requires actual owners and no role executor")
         self.engine = engine
         self.sessions = build_session_factory(engine)
         self.settings = settings or WorkflowSettings.from_environment()
-        self.runner_config = self.settings.load_runner()
+        self.runner_config = (
+            RunnerConfig.model_validate(runner_config)
+            if runner_config is not None
+            else self.settings.load_runner()
+        )
         self.actor_authorizer = actor_authorizer
         self.available_roles = available_roles
-        self.executor = executor or PlatformRoleJobExecutor(engine, self.settings)
+        self.executor = (
+            executor or PlatformRoleJobExecutor(engine, self.settings) if role_enabled else None
+        )
+        self.command_families = command_families
+        self.command_actor_selection = command_actor_selection
         self.catalog = catalog
         self.readiness = readiness
         self.runner_id = runner_id or f"runner-{uuid4().hex}"
@@ -535,7 +570,7 @@ class WorkflowRunner:
     def run_once(self, workflow_id: str | None = None) -> WorkflowCommandRecord | None:
         skipped_families: set[CommandExecutionFamily] = set()
         native_claim_failure: RuntimeReadinessReport | None = None
-        for _ in CommandExecutionFamily:
+        for _ in range(len(self.command_families)):
             candidate = self._ready_command_candidate(workflow_id, frozenset(skipped_families))
             if candidate is None:
                 if native_claim_failure is not None:
@@ -621,10 +656,14 @@ class WorkflowRunner:
             candidates = tuple(
                 candidate
                 for family in CommandExecutionFamily
-                if family not in excluded_families
+                if family in self.command_families
+                and family not in excluded_families
                 and (
                     candidate := peek_command_candidate(
-                        session, family=family, workflow_id=workflow_id
+                        session,
+                        family=family,
+                        workflow_id=workflow_id,
+                        actor_selection=self.command_actor_selection,
                     )
                 )
                 is not None
@@ -835,6 +874,11 @@ class WorkflowRunner:
             if isinstance(compiled.definition, ReferenceQueryWorkflowDefinition):
                 self._advance_reference_query(workflow, compiled, command_id, actor_type, actor_id)
                 return
+            if CommandExecutionFamily.ROLE not in self.command_families:
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_INVALID_TRANSITION,
+                    "role workflow execution is disabled in this native owner",
+                )
             if workflow.state in TERMINAL_WORKFLOW_STATES:
                 if workflow.state == WorkflowState.COMPLETED.value:
                     with self._fenced_transaction() as session:
@@ -1253,6 +1297,11 @@ class WorkflowRunner:
                             )
                         context["prompt_artifacts"] = prompt_artifacts
                         current.runtime_context = context
+                if self.executor is None:
+                    raise WorkflowError(
+                        WorkflowErrorCode.WORKFLOW_STEP_FAILED,
+                        "role executor is unavailable in this native owner",
+                    )
                 execution = self.executor.execute(
                     workflow=workflow,
                     step=self._detached_step(step_run_id),

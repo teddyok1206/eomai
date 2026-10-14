@@ -654,3 +654,49 @@ This does not activate a service grant or automatic missing-binding processing.
 No migration, dependency, operator impersonation, new worker grant or source-policy
 expansion is part of this change. Installing a continuously running service and actual
 seed/delta/QUERY evidence remain independent required steps, not implied by this API.
+
+## Installed service composition
+
+1. Identity admits the actual fixed unit/process/installed release; Catalog admits
+   exact data/derived-index access; the existing Runner owns native commands and
+   Orchestrator alone publishes files. Installation does not self-grant access.
+2. Canonical controls are the registered service/grant, released native-policy
+   Artifact, immutable numeric installation and exact source/report/Graph revisions.
+3. Keep service/Artifact revisions and raw/semantic hashes distinct. A small frozen
+   owner configuration has no new entity registry or independent revision lifecycle.
+4. Add a closed non-secret owner-selection schema before behavior. A fixed root-owned
+   file is read and epoch-bound by the actual runtime capture. It is deliberately
+   separate from the runtime configuration/unit hash: the grant pins that runtime
+   configuration, so hashing the grant back into it would create a cycle. Saved
+   requests pin the selected grant/policy; edits require a new admitted process.
+5. Access is fixed-key protected-file lookup, exact DB identities and indexed native
+   queue iteration. New reconciliation selects current publication; saved jobs do not.
+6. Reuse the existing Runner command-family enum and queue; an explicit INDEX-only
+   composition must not load/execute Codex-role jobs or invent fake available roles.
+7. Configuration stays bounded64KiB, preparation1024 sources and bounded submission.
+   No vector/model payload, cache, queue or new dependency is introduced.
+8. Retain actual service/source locks in existing roots; numeric work remains outside.
+   Keep actual command lease heartbeat/recovery. A timer never resets failed history.
+9. Stdlib entry bootstrap loads only its immutable installed owner release. Adapters
+   own OS/systemd/DB/Artifact IO; IO-free configuration models remain in Workflow.
+10. The existing Catalog runtime role already owns Registry and Workflow submission
+    boundaries. Its current privilege contract lacks the four embedding relations
+    and native command/step writes. Add only required SELECT/INSERT, mutable-index
+    UPDATE and native command/step INSERT/UPDATE to that existing owner contract.
+    No DELETE, DDL, role membership, Identity-table writes, new user/worker privileges
+    or access-policy publication right. Privilege readiness is not source authority.
+11. Sharing a Studio session, granting SYSTEM, copying a runner or broadening the
+    ordinary worker's credentials would be insufficient. A narrow installed owner
+    plus purpose-filtered existing execution and explicit privilege deltas is enough.
+
+Protocol and source tests do not install the unit, execute grants or upgrade the
+production DB. First quiesce/resolve the finite original controller, then use the
+supported release/migration/bootstrap boundaries and genuine bounded acceptance.
+
+The purpose-only Runner uses the existing family inventory with an optional exact
+native command-actor selection. It is a queue filter, not permission. This prevents
+an older operator seed at the shared INDEX queue head from starving service work;
+the actual owner still reauthorizes the exact selected command in its root. Reuse
+the existing ready-queue index and FIFO order, never scan a separate target list.
+Default mixed/role execution remains unchanged. Empty role capacity is valid only
+for an explicitly native-only composition with its actual owner/executor supplied.

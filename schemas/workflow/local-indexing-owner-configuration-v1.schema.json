@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/local-indexing-owner-configuration/1.0",
+  "title": "Non-secret fixed owner selection; not current service/source authority",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "corpus_id",
+    "namespace",
+    "recipe",
+    "source_classes",
+    "service_policy_revision_id",
+    "service_policy_sha256",
+    "native_execution_policy",
+    "native_execution_policy_sha256",
+    "runtime_profile",
+    "database_owner",
+    "runtime_verifier",
+    "cpu_environment_raw_sha256",
+    "owner_environment_raw_sha256",
+    "poll_interval_seconds",
+    "maximum_targets",
+    "maximum_sources"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-indexing-owner-configuration/1.0"
+    },
+    "corpus_id": {
+      "type": "string",
+      "pattern": "^corpus_[0-9a-f]{32}$"
+    },
+    "namespace": {
+      "$ref": "eom://schemas/knowledge/embedding-registry/1.0#/$defs/namespace"
+    },
+    "recipe": {
+      "$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/recipe"
+    },
+    "source_classes": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "APPROVED_ITEM",
+          "PAST_EXAM"
+        ]
+      },
+      "minItems": 1,
+      "maxItems": 2,
+      "uniqueItems": true
+    },
+    "service_policy_revision_id": {
+      "type": "string",
+      "pattern": "^accessrev_[0-9a-f]{32}$"
+    },
+    "service_policy_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "native_execution_policy": {
+      "$ref": "eom://schemas/workflow/local-embedding-workflow-request/1.2#/properties/native_execution_policy"
+    },
+    "native_execution_policy_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "runtime_profile": {
+      "$ref": "eom://schemas/workflow/local-embedding-execution-policy/1.0#/$defs/runtimeProfile"
+    },
+    "database_owner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role_name",
+        "role_oid"
+      ],
+      "properties": {
+        "role_name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "maxLength": 63
+        },
+        "role_oid": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
+        }
+      }
+    },
+    "runtime_verifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_commit",
+        "script_raw_sha256"
+      ],
+      "properties": {
+        "source_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$",
+          "minLength": 40,
+          "maxLength": 40
+        },
+        "script_raw_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "cpu_environment_raw_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "owner_environment_raw_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "poll_interval_seconds": {
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 1800
+    },
+    "maximum_targets": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1024
+    },
+    "maximum_sources": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1024
+    }
+  },
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "minLength": 71,
+      "maxLength": 71
+    }
+  }
+}

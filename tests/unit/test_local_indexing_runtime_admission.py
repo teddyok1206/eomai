@@ -144,6 +144,40 @@ def check(
     )
 
 
+def test_fixed_owner_selection_is_bound_to_actual_capture_epoch(installed, tmp_path, monkeypatch):
+    path = put(tmp_path / "owner-selection.json", b'{"test_only":"non-secret selection"}')
+    monkeypatch.setattr(runtime, "_OWNER_SELECTION_PATH", path)
+    capture = runtime.capture_local_indexing_runtime(installed["pin"])
+    assert capture.read_owner_configuration() == path.read_bytes()
+    check(capture, installed["pin"])
+    path.write_bytes(b'{"test_only":"changed"}')
+    with pytest.raises(runtime.IndexingRuntimeAdmissionError, match="CHANGED"):
+        check(capture, installed["pin"])
+
+
+@pytest.mark.parametrize("fault", ["missing", "writable", "symlink", "oversized", "late"])
+def test_owner_selection_fails_closed_before_any_source_authority(
+    installed, tmp_path, monkeypatch, fault
+):
+    path = put(tmp_path / "owner-selection.json", b"{}")
+    monkeypatch.setattr(runtime, "_OWNER_SELECTION_PATH", path)
+    if fault == "missing":
+        path.unlink()
+    elif fault == "writable":
+        path.chmod(0o666)
+    elif fault == "symlink":
+        other = put(tmp_path / "other.json", b"{}")
+        path.unlink()
+        path.symlink_to(other)
+    elif fault == "oversized":
+        path.write_bytes(b" " * (64 * 1024 + 1))
+    else:
+        os.utime(path, ns=(installed["started"] + 1, installed["started"] + 1))
+    capture = runtime.capture_local_indexing_runtime(installed["pin"])
+    with pytest.raises(runtime.IndexingRuntimeAdmissionError, match="CHANGED"):
+        capture.read_owner_configuration()
+
+
 def test_actual_developer_process_is_denied_before_protected_configuration_read(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -41,7 +41,7 @@ LOCAL_EMBEDDING_REQUEST_V11_SCHEMA_REF = (
 LOCAL_EMBEDDING_SERVICE_REQUEST_SCHEMA_REF = (
     "eom://schemas/workflow/local-embedding-workflow-request/1.2"
 )
-LOCAL_INDEXING_WORKFLOW_ACTOR_TYPE = "local_indexing_service"
+LOCAL_INDEXING_WORKFLOW_ACTOR_TYPE: Literal["local_indexing_service"] = "local_indexing_service"
 
 
 class LocalEmbeddingOperatorAudit(NativeEmbeddingContract):
@@ -192,7 +192,9 @@ def parse_local_embedding_executable_request(value: object) -> LocalEmbeddingExe
     raise LocalEmbeddingAdmissionContractError("LOCAL_EMBEDDING_CONTRACT_INVALID")
 
 
-def local_embedding_request_actor(request: LocalEmbeddingExecutableRequest) -> tuple[str, str]:
+def local_embedding_request_actor(
+    request: LocalEmbeddingExecutableRequest,
+) -> tuple[Literal["human", "local_indexing_service"], str]:
     """Closed Workflow audit pair only, never authentication or authority."""
     checked = parse_local_embedding_executable_request(request)
     if isinstance(checked, LocalEmbeddingServiceWorkflowRequest):

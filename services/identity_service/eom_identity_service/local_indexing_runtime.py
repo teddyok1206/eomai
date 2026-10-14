@@ -31,6 +31,7 @@ from eom_operator_identity import (
 _UNIT_NAME = "eom-embedding-index-owner.service"
 _UNIT_PATH = Path("/etc/systemd/system") / _UNIT_NAME
 _CONFIG_PATH = Path("/etc/eom/local-indexing-runtime.json")
+_OWNER_SELECTION_PATH = Path("/etc/eom/local-indexing-owner.json")
 _RELEASES = Path("/opt/eom/embedding-owner-releases")
 _PREFIX = Path("/opt/eom/conda/envs/eom-embedding-experiment")
 _ENTRY = "eom_workflow_runner/local_indexing_service_entry.py"
@@ -355,6 +356,30 @@ class AuthenticatedLocalIndexingRuntime:
 
     def close(self) -> None:
         self._closed = True
+
+    def read_owner_configuration(self) -> bytes:
+        """Bind one fixed non-secret root selection to this actual process epoch.
+
+        This is neither an arbitrary-file reader nor data authority. The Catalog
+        grant pins the separate runtime configuration; owner selections are kept
+        outside that hash cycle and every request records their exact control pins.
+        """
+        try:
+            pin = self._pin
+            self.assert_current(
+                service=pin.service,
+                runtime_source_commit=pin.runtime_source_commit,
+                configuration_sha256=pin.configuration_sha256,
+            )
+            raw = self._files.read(_OWNER_SELECTION_PATH, maximum=64 * 1024)
+            self.assert_current(
+                service=pin.service,
+                runtime_source_commit=pin.runtime_source_commit,
+                configuration_sha256=pin.configuration_sha256,
+            )
+            return raw
+        except Exception:
+            raise IndexingRuntimeAdmissionError("LOCAL_INDEXING_RUNTIME_CHANGED") from None
 
     def assert_current(
         self,

@@ -174,3 +174,73 @@ closure, old audit-only rejection, frozen observations, no default authority and
 the distinct observed-time/fixed-time publication APIs PASS. No source checkout,
 package installation, DB connection, unit change or numerical execution occurred.
 Evidence: `local-embedding-reconcile-wheel-{build,import}.log` in the same directory.
+
+## Purpose-only installed-service source checkpoint
+
+The next source candidate adds a stdlib installed entry, one packaged canonical
+systemd template and actual service composition over the existing Runner. No new
+queue, service framework, DB migration, dependency, Codex role/slot or operator
+impersonation. The template is not installed or started by source tests.
+
+`local-indexing-owner-configuration/1.0` is a closed, non-secret, bounded64KiB
+selection contract. Canonical and packaged schema SHA:
+`9d31827404897c154c0412b74f00112cf5f8192b0fd668bdf27801a26b7e3e39`.
+It pins the exact namespace, source classes, grant, native policy/profile, DB fence
+owner and protected numerical verifier/env hashes. It is not a credential or data
+grant. The actual captured process reads only the fixed root selection file and
+binds it to its own pre-start file epoch. Keeping selection separate from the main
+runtime-configuration hash avoids a grant/configuration hash cycle. Existing main
+runtime and historical request/policy schema bytes are unchanged.
+
+Native-only Runner construction accepts no fake available roles, does not build
+the role executor or read worker YAML, and uses existing command/claim/lease/
+heartbeat/recovery. Exact actor selection filters the same bounded FIFO queue;
+the real owner must still authenticate and authorize the claimed command. Default
+mixed-role composition remains unchanged. The total native-quarantine predicate
+also now includes service request1.2: a malformed service-only marker cannot fall
+through to an ordinary role workflow.
+
+The Catalog runtime privilege contract previously omitted four embedding tables
+and native command/step writes. The existing role's explicit matrix now includes
+only required reads/inserts and mutable index/command/step updates. No DELETE,
+DDL, role membership, Identity writes or new policy-publication privilege. This
+source change has **not** applied GRANT or proved the actual runtime-role matrix.
+
+Final source regression: **93 suites /2,427 PASS** in308.26s. A subsequently added
+canonical packaged-unit test passed in a separate **62-case** focused gate; those
+overlapping cases are not summed with the regression count. Strict mypy74 source
+modules and Ruff lint/format131 Python files PASS. Initial11 regression failures
+were stale hand-built Runner fixtures and unspecced verification mocks; fixtures
+were corrected without production fallback. A subsequent focused lambda fixture
+and one constant's widened type annotation were corrected. Original logs remain.
+
+Current marker-guarded actual PostgreSQL: **67** stage/Runner cases PASS, including
+exact actor selection and request1.2 quarantine; **70** service/Identity/policy
+cases PASS. SQL/claim/transaction behavior is real, but IAM/runtime/source seams
+remain synthetic. They are not actual installed-service authentication evidence.
+The **32** Artifact/Registry/native-flow and **9** encoding-reservation cases also
+PASS on this candidate, yielding **178 distinct** actual disposable-DB cases.
+Final read-only inspection: marker/owner PASS,0055,0 other connections.
+
+The fixed numerical-verifier adapter runs the protected existing no-forward check
+with a fresh four-key environment and no controller credentials. Two read-only
+invocations under the ordinary eom user passed; the timed one took **12.03s** and
+272064KiB maximum RSS. This is a known verification cost, **not** a model-forward,
+service-sandbox admission, CPU/GPU comparison or performance improvement claim.
+
+Evidence in the same directory:
+
+- `local-index-owner-regression-{initial,reviewed}.log`
+- `local-index-owner-focused-reviewed.log`
+- `local-index-owner-final-{mypy,ruff,format}-reviewed.log`
+- `local-index-owner-final-added-reviewed.log`
+- `local-index-owner-{stage,policy}-postgres.log`
+- `local-index-owner-{artifact,encoding}-postgres.log`, `local-index-owner-inspect.log`
+- `local-index-owner-numeric-readonly-{check,timed,timing}.log`
+
+Actual installation, supported0053→0054→0055 migration/admission, role reconciliation,
+service/grant activation and original-controller quiescence are still pending.
+The original finite operator controller was observed alive at2026-10-14 08:59 UTC
+with no terminal output. No replacement, extension or inferred success occurred.
+Genuine bounded persistent seed, source-add delta, same-key replay/QUERY, downstream
+consumers and CPU/GPU comparison remain required by the active goal.

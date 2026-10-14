@@ -42,6 +42,8 @@ def test_registry_staging_failure_precedes_command_claim(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     runner = object.__new__(WorkflowRunner)
+    runner.command_families = frozenset(CommandExecutionFamily)
+    runner.command_actor_selection = None
     runner.sessions = cast(sessionmaker[Session], _read_session)
     runner.readiness = _RegistryStagingUnavailable()
     candidate = Mock(spec=CommandCandidate)

@@ -317,10 +317,17 @@ Catalog 서비스 자료 정책1.1·공식 owner 발행·Registry 등록 연결�
 기존 요청을 재사용하며 실패 이력을 초기화하지 않습니다. 최초 실제 게시 시간을 재사용하는
 명시적 게시 경로를 추가했고, 기존 고정 시간 게시의 엄격한 계약은 유지합니다.
 
-최신88-suite 회귀2,370개·strict mypy69 모듈·Ruff120 파일이 PASS했습니다.
-별도 임시 DB 도구 source89개도 PASS했습니다. 실제 임시 DB의 신원/자료 정책/발행70개·
-claim/runner63개·Registry/native-flow32개·encoding reservation9개, 서로 다른174개가
-PASS했습니다. 동시 누락 접수의 단일 Workflow/START와 실제 root rollback 후 계획 재사용을
+현재 후보에는 고정 설치 entry·비밀값 없는 owner 설정·정본 systemd 템플릿을 추가했습니다.
+기존 Runner를 인덱싱 전용으로 구성하며 같은 큐의 실행 주체 필터는 권한으로 취급하지 않습니다.
+실제 프로세스 확인 이후 설정을 읽고 변경을 감지하며, Codex 역할/슬롯을 만들지 않습니다.
+Catalog 권한 계약에 필요한 embedding/native 명령 권한만 추가했으며 실제 GRANT는 미적용입니다.
+
+최신93-suite 회귀2,427개·strict mypy74 모듈·Ruff131 파일이 PASS했습니다.
+이후 추가된 정본 unit 템플릿 사례도 별도62-case gate에서 PASS했으며 중복 합산하지 않습니다.
+별도 임시 DB 도구 source89개 PASS는 선행 증거입니다. 최신 실제 임시 DB의
+신원/자료 정책/발행70개·claim/runner67개·Registry/native-flow32개·
+encoding reservation9개, 서로 다른178개가 PASS했습니다.
+동시 누락 접수의 단일 Workflow/START와 실제 root rollback 후 계획 재사용을
 검증했지만 합성 IAM/source/수치 계산 seam은 실제 서비스 인증·모델 실행 증거가 아닙니다.
 선행 코드`1cf47fca`의3개 wheel/RECORD와 격리된 wheel-only43 모듈 검증은 별도 역사적
 증거로 보존하며 현재 후보의 설치 승인으로 확대 해석하지 않습니다.
@@ -329,7 +336,7 @@ PASS했습니다. 동시 누락 접수의 단일 Workflow/START와 실제 root r
 0055 전용 배포 계약1.4는 정확한0054에서만 갱신하며 운영 migration을 뜻하지 않습니다.
 
 **운영 서비스 활성화·자동 증분 처리·실제 seed/delta/QUERY·CPU/GPU 비교는 아직 남아 있습니다.**
-다음은 이 접수 경로를 실제 서비스 entry/provider에 설치·연결하는 단계입니다.
+다음은 구현된 서비스 entry/provider를 실제로 설치·승인하고 연결하는 단계입니다.
 [서비스 Runner 구현·검증 기록](docs/status/LOCAL_INDEXING_RUNNER_SERVICE_CHECKPOINT_2026-10-14.md),
 [현재 Registry checkpoint](docs/status/LOCAL_INDEXING_REGISTRY_SERVICE_CHECKPOINT_2026-10-14.md),
 [정책 발행 증거](docs/status/LOCAL_INDEXING_POLICY_PUBLICATION_CHECKPOINT_2026-10-14.md),

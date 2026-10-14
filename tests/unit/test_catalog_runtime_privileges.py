@@ -13,6 +13,31 @@ from eom_catalog_service.runtime_privileges import (
 from sqlalchemy.engine import Connection
 
 
+def test_native_index_owner_privileges_are_bounded_and_append_only():
+    immutable = {"embedding_encodings", "embedding_source_bindings", "embedding_index_revisions"}
+    assert immutable | {"embedding_indexes"} <= set(READ_TABLES)
+    assert immutable | {"embedding_indexes"} <= set(INSERT_TABLES)
+    assert immutable.isdisjoint(UPDATE_TABLES)
+    assert {"embedding_indexes", "workflow_commands", "workflow_step_runs"} <= set(UPDATE_TABLES)
+    assert "workflow_step_runs" in INSERT_TABLES
+    assert {"workflow_definitions", "workflow_events", "protocol_versions"}.isdisjoint(
+        UPDATE_TABLES
+    )
+    assert {
+        "local_indexing_services",
+        "local_indexing_service_revisions",
+        "local_indexing_service_events",
+    }.isdisjoint(INSERT_TABLES)
+    assert {
+        "local_indexing_services",
+        "local_indexing_service_revisions",
+        "local_indexing_service_events",
+    }.isdisjoint(UPDATE_TABLES)
+    assert "education_retrieval_access_policy_revisions" not in INSERT_TABLES
+    assert "education_retrieval_access_policy_revisions" not in UPDATE_TABLES
+    assert {privilege for privilege, _tables in TABLE_PRIVILEGES} == {"SELECT", "INSERT", "UPDATE"}
+
+
 def test_catalog_runtime_grants_only_its_application_boundary() -> None:
     for table in (
         "artifacts",

@@ -1,0 +1,233 @@
+"""Purpose-only construction/scheduling with explicit synthetic IO; no live grant."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from threading import Event
+from types import SimpleNamespace
+from unittest.mock import Mock
+
+import pytest
+from eom_workflow_runner import engine as engine_module
+from eom_workflow_runner import local_indexing_service_entry as entry
+from eom_workflow_runner.actor_authorization_adapters import (
+    OperatorIdentityWorkflowActorAuthorizer,
+    SqlAlchemyOperatorActorSource,
+)
+from eom_workflow_runner.catalog_port import WorkflowCatalogPort
+from eom_workflow_runner.engine import WorkflowRunner
+from eom_workflow_runner.local_embedding_admission import LocalEmbeddingOwnerAdmission
+from eom_workflow_runner.local_embedding_execution_port import LocalEmbeddingNativeExecutor
+from eom_workflow_runner.local_embedding_service_reconciliation import (
+    LocalEmbeddingReconciliationResult,
+    ReconciliationState,
+)
+from eom_workflow_runner.local_indexing_service_runtime import (
+    IndexingRoleExecutionDisabled,
+    build_local_indexing_service_runtime,
+)
+from eom_workflow_runner.repository import (
+    CommandExecutionFamily,
+    NativeCommandActorSelection,
+    peek_command_candidate,
+)
+from eom_workflow_runner.settings import RunnerConfig, WorkflowSettings
+from sqlalchemy import create_engine
+
+
+def native_runner(monkeypatch, **changes):
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    monkeypatch.setattr(
+        engine_module,
+        "PlatformRoleJobExecutor",
+        lambda *_a, **_k: pytest.fail("native owner must not build a Codex role executor"),
+    )
+    monkeypatch.setattr(
+        WorkflowSettings,
+        "load_runner",
+        lambda *_a: pytest.fail("explicit native configuration must not read worker YAML"),
+    )
+    arguments = dict(
+        catalog=Mock(spec=WorkflowCatalogPort),
+        actor_authorizer=OperatorIdentityWorkflowActorAuthorizer(
+            SqlAlchemyOperatorActorSource(engine)
+        ),
+        readiness=IndexingRoleExecutionDisabled(),
+        available_roles=frozenset(),
+        local_embedding_owner=Mock(spec=LocalEmbeddingOwnerAdmission),
+        local_embedding_executor=Mock(spec=LocalEmbeddingNativeExecutor),
+        command_families=frozenset({CommandExecutionFamily.LOCAL_EMBEDDING}),
+        command_actor_selection=NativeCommandActorSelection(
+            "local_indexing_service", "localindexservice_" + "a" * 32
+        ),
+        runner_config=RunnerConfig(
+            version=1,
+            poll_interval_seconds=5,
+            command_lease_seconds=900,
+            command_lease_heartbeat_seconds=30,
+            max_commands_per_run=64,
+        ),
+    )
+    return WorkflowRunner(engine, **(arguments | changes))
+
+
+def test_native_only_uses_no_fake_roles_codex_executor_or_readiness(monkeypatch):
+    runner = native_runner(monkeypatch)
+    assert runner.executor is None and not runner.available_roles
+    assert not runner.readiness.evaluate().ready
+    assert runner.command_families == frozenset({CommandExecutionFamily.LOCAL_EMBEDDING})
+
+
+def test_native_only_peek_uses_same_queue_but_only_its_family_and_actor(monkeypatch):
+    runner = native_runner(monkeypatch)
+    peek = Mock(return_value=None)
+    monkeypatch.setattr(engine_module, "peek_command_candidate", peek)
+    assert runner.run_once() is None
+    peek.assert_called_once()
+    assert peek.call_args.kwargs["family"] is CommandExecutionFamily.LOCAL_EMBEDDING
+    assert peek.call_args.kwargs["actor_selection"] == runner.command_actor_selection
+    runner.local_embedding_executor.evaluate.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "fault", ["empty_families", "raw_family", "missing_owner", "role_selection"]
+)
+def test_unsupported_native_composition_is_explicit(monkeypatch, fault):
+    changes = {
+        "empty_families": {"command_families": frozenset()},
+        "raw_family": {"command_families": frozenset({"LOCAL_EMBEDDING"})},
+        "missing_owner": {"local_embedding_owner": None, "local_embedding_executor": None},
+        "role_selection": {
+            "command_families": frozenset(CommandExecutionFamily),
+            "available_roles": frozenset({"authoring"}),
+        },
+    }[fault]
+    with pytest.raises(ValueError):
+        native_runner(monkeypatch, **changes)
+
+
+def test_runtime_factory_requires_actual_capture_before_configuration_or_engine():
+    with pytest.raises(ValueError, match="RUNTIME_UNAVAILABLE"):
+        build_local_indexing_service_runtime(object(), object())
+
+
+@pytest.mark.parametrize(
+    "kind,identifier",
+    [
+        ("human", "operator_" + "b" * 32),
+        ("local_indexing_service", "localindexservice_" + "c" * 32),
+    ],
+)
+def test_actor_filter_is_selection_not_permission_and_one_bounded_statement(kind, identifier):
+    selected = NativeCommandActorSelection(kind, identifier)
+    session = Mock()
+    session.execute.return_value.one_or_none.return_value = None
+    assert (
+        peek_command_candidate(
+            session, family=CommandExecutionFamily.LOCAL_EMBEDDING, actor_selection=selected
+        )
+        is None
+    )
+    statement = session.execute.call_args.args[0]
+    values = statement.compile().params
+    assert kind in values.values() and identifier in values.values()
+    assert statement._limit_clause.value == 1
+    session.execute.assert_called_once()
+    assert not hasattr(selected, "permissions")
+    with pytest.raises(ValueError):
+        peek_command_candidate(
+            session, family=CommandExecutionFamily.ROLE, actor_selection=selected
+        )
+
+
+def test_developer_entry_denies_before_configuration_and_redacts_error(monkeypatch, capsys):
+    def denied():
+        raise ValueError("synthetic credential must never reach output")
+
+    monkeypatch.setattr(entry, "_installed_site", denied)
+    assert entry.main() == 1
+    output = capsys.readouterr().out
+    assert "synthetic credential" not in output
+    assert "LOCAL_INDEXING_SERVICE_UNAVAILABLE" in output
+
+
+def test_stop_after_idle_peek_does_not_start_new_observation():
+    stop = Event()
+
+    def idle():
+        stop.set()
+        return None
+
+    runtime = SimpleNamespace(runner=SimpleNamespace(run_once=idle), reconciliation=Mock())
+    entry.serve_local_indexing(runtime, stop)
+    runtime.reconciliation.run_once.assert_not_called()
+
+
+def test_queue_is_drained_before_reconciliation_without_independent_claim(capsys):
+    stop = Event()
+    command = SimpleNamespace(
+        workflow_id="workflow_" + "a" * 32, command_id="wfcmd_" + "b" * 32, state="SUCCEEDED"
+    )
+    runner = Mock()
+    runner.run_once.side_effect = [command, None]
+    observation = LocalEmbeddingReconciliationResult(ReconciliationState.NO_PUBLISHED_GRAPH, None)
+
+    def reconcile():
+        stop.set()
+        return observation
+
+    runtime = SimpleNamespace(
+        runner=runner,
+        reconciliation=SimpleNamespace(run_once=reconcile),
+        configuration=SimpleNamespace(poll_interval_seconds=60),
+    )
+    entry.serve_local_indexing(runtime, stop)
+    events = capsys.readouterr().out
+    assert events.index("COMMAND_OBSERVED") < events.index("RECONCILIATION_OBSERVED")
+    assert runner.run_once.call_count == 2
+
+
+def test_unchanged_reconciliation_does_not_spam_journal(monkeypatch, capsys):
+    stop = Event()
+    clock = [0.0]
+    waits = []
+    monkeypatch.setattr(entry.time, "monotonic", lambda: clock[0])
+
+    def wait(seconds):
+        waits.append(seconds)
+        clock[0] += 60
+        if len(waits) == 2:
+            stop.set()
+
+    monkeypatch.setattr(stop, "wait", wait)
+    runtime = SimpleNamespace(
+        runner=Mock(),
+        reconciliation=Mock(),
+        configuration=SimpleNamespace(poll_interval_seconds=60),
+    )
+    runtime.runner.run_once.return_value = None
+    runtime.reconciliation.run_once.return_value = LocalEmbeddingReconciliationResult(
+        ReconciliationState.NO_PUBLISHED_GRAPH, None
+    )
+    entry.serve_local_indexing(runtime, stop)
+    assert runtime.reconciliation.run_once.call_count == 2
+    assert capsys.readouterr().out.count("RECONCILIATION_OBSERVED") == 1
+    assert all(0 < seconds <= 5 for seconds in waits)
+
+
+def test_packaged_unit_is_single_canonical_template_and_has_no_runtime_repo_or_slot():
+    source = (
+        Path(__file__).resolve().parents[2]
+        / "services/workflow_runner/eom_workflow_runner/resources"
+        / "eom-embedding-index-owner.service.in"
+    )
+    unit = source.read_text()
+    executable = next(line for line in unit.splitlines() if line.startswith("ExecStart="))
+    assert "@SOURCE_COMMIT@" in executable
+    assert "/home/eom/" not in executable and "codex" not in executable.lower()
+    assert "Restart=no" in unit and "NoNewPrivileges=yes" in unit
+    assert "PrivateDevices=yes" in unit and "IPAddressDeny=any" in unit
+    assert "InaccessiblePaths=/etc/eom/secrets" in unit
+    assert "EnvironmentFile=/etc/eom/secrets/catalog-manager.env" in unit
+    assert "StandardInput=null" in unit
+    assert "slot" not in unit.lower()

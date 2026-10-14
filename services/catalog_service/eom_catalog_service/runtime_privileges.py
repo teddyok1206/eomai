@@ -44,6 +44,10 @@ READ_TABLES: Final[tuple[str, ...]] = (
     "educational_document_revisions",
     "educational_document_registrations",
     "educational_documents",
+    "embedding_encodings",
+    "embedding_index_revisions",
+    "embedding_indexes",
+    "embedding_source_bindings",
     "evidence_bundle_entries",
     "evidence_bundle_revisions",
     "evidence_bundles",
@@ -155,6 +159,10 @@ INSERT_TABLES: Final[tuple[str, ...]] = (
     "educational_document_revisions",
     "educational_document_registrations",
     "educational_documents",
+    "embedding_encodings",
+    "embedding_index_revisions",
+    "embedding_indexes",
+    "embedding_source_bindings",
     "evidence_bundle_entries",
     "evidence_bundle_revisions",
     "evidence_bundles",
@@ -218,6 +226,7 @@ INSERT_TABLES: Final[tuple[str, ...]] = (
     "workflow_commands",
     "workflow_events",
     "workflow_instances",
+    "workflow_step_runs",
     "usage_records_v1",
 )
 
@@ -229,6 +238,7 @@ UPDATE_TABLES: Final[tuple[str, ...]] = (
     "content_intake_batches",
     "educational_document_registrations",
     "educational_documents",
+    "embedding_indexes",
     "evidence_bundles",
     "item_revisions",
     "items",
@@ -244,7 +254,9 @@ UPDATE_TABLES: Final[tuple[str, ...]] = (
     "legacy_usage_mapping_contracts",
     "organizations",
     "publications",
+    "workflow_commands",
     "workflow_instances",
+    "workflow_step_runs",
 )
 
 TABLE_PRIVILEGES: Final[tuple[tuple[TablePrivilege, tuple[str, ...]], ...]] = (

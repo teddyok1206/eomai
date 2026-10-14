@@ -671,6 +671,8 @@ def test_unavailable_query_does_not_starve_ready_index(
         created_at=query.created_at + timedelta(seconds=1),
     )
     runner = object.__new__(WorkflowRunner)
+    runner.command_families = frozenset(CommandExecutionFamily)
+    runner.command_actor_selection = None
 
     @contextmanager
     def read_session() -> Iterator[Session]:
@@ -683,9 +685,10 @@ def test_unavailable_query_does_not_starve_ready_index(
     runner.local_embedding_executor.evaluate.return_value = RuntimeReadinessReport(())
     monkeypatch.setattr(
         "eom_workflow_runner.engine.peek_command_candidate",
-        lambda _session, *, family, workflow_id: {query.family: query, index.family: index}.get(
-            family
-        ),
+        lambda _session, *, family, workflow_id, actor_selection=None: {
+            query.family: query,
+            index.family: index,
+        }.get(family),
     )
     assert runner._ready_command_candidate(None) is index
     runner.local_embedding_owner = None

@@ -7,9 +7,11 @@ from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from eom_identifiers import content_sha256
+from eom_operator_identity.contracts import OperatorId
+from eom_operator_identity.local_indexing_service import ServiceId
 from eom_workflow import (
     CompiledWorkflowDefinition,
     ContentTeamItemBriefV4,
@@ -53,6 +55,7 @@ from eom_workflow.schemas import (
     validate_inference_transfer_workflow_request,
     validate_inference_transfer_workflow_request_v11,
 )
+from pydantic import TypeAdapter
 from sqlalchemy import func, not_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -143,6 +146,22 @@ class CommandExecutionFamily(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class NativeCommandActorSelection:
+    """Indexed queue selection only; never actual actor/source authorization."""
+
+    actor_type: Literal["human", "local_indexing_service"]
+    actor_id: str
+
+    def __post_init__(self) -> None:
+        if self.actor_type == "human":
+            TypeAdapter(OperatorId).validate_python(self.actor_id, strict=True)
+        elif self.actor_type == "local_indexing_service":
+            TypeAdapter(ServiceId).validate_python(self.actor_id, strict=True)
+        else:
+            raise ValueError("NATIVE_COMMAND_ACTOR_SELECTION_INVALID")
+
+
+@dataclass(frozen=True, slots=True)
 class CommandCandidate:
     """Read-only exact queue header, not a lease or cached authority decision."""
 
@@ -173,6 +192,7 @@ def _native_workflow_filter() -> ColumnElement[bool]:
     request_versions = (
         "local-embedding-workflow-request/1.0",
         "local-embedding-workflow-request/1.1",
+        "local-embedding-workflow-request/1.2",
         "reference-query-workflow-request/1.0",
     )
     native_keys = (LOCAL_EMBEDDING_WORKFLOW_KEY, REFERENCE_QUERY_WORKFLOW_KEY)
@@ -1348,10 +1368,18 @@ def peek_command_candidate(
     *,
     family: CommandExecutionFamily,
     workflow_id: str | None = None,
+    actor_selection: NativeCommandActorSelection | None = None,
 ) -> CommandCandidate | None:
     """One nonlocking FIFO header per fixed purpose; no owner/readiness call."""
     if not isinstance(family, CommandExecutionFamily):
         raise ValueError("WORKFLOW_COMMAND_EXECUTION_FAMILY_INVALID")
+    if actor_selection is not None:
+        if (
+            type(actor_selection) is not NativeCommandActorSelection
+            or family is CommandExecutionFamily.ROLE
+        ):
+            raise ValueError("NATIVE_COMMAND_ACTOR_SELECTION_INVALID")
+        actor_selection.__post_init__()
     predicate = _execution_family_filter(family)
     query = (
         select(WorkflowCommandRecord, WorkflowInstanceRecord)
@@ -1366,6 +1394,11 @@ def peek_command_candidate(
     )
     if workflow_id is not None:
         query = query.where(WorkflowCommandRecord.workflow_id == workflow_id)
+    if actor_selection is not None:
+        query = query.where(
+            WorkflowCommandRecord.actor_type == actor_selection.actor_type,
+            WorkflowCommandRecord.actor_id == actor_selection.actor_id,
+        )
     row = session.execute(query).one_or_none()
     if row is None:
         return None
