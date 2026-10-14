@@ -1,6 +1,6 @@
 # Actual local indexing activation — 2026-10-14
 
-12:04 UTC checkpoint (chronology retained below). Actual control installation and source validation are
+12:23 UTC checkpoint (chronology retained below). Actual control installation and source validation are
 separate from successful seed/delta/QUERY. The full goal remains ACTIVE.
 
 ## Actual changes
@@ -289,3 +289,52 @@ source regression are separate: native stage/claim67 PASS and corrected source
 regression1050 PASS in260.46s. Disposable inspection confirms marker/head0055 and
 zero other connections. Installed ac8c8c7d remains failed until its reviewed
 successor is installed. Original seed/delta/reuse/QUERY/consumer/GPU gates remain.
+
+## Actual immutable-read owner: first committed source admission
+
+Source`d0833e2e8527a1ebd83f5b03e9bc6a46aa976ecc` built/RECORD/pair verified,
+installed and activated through the existing supported Identity/Orchestrator/
+Catalog control operations as revision9/resource18. No new DB function, grant,
+credential, schema or migration was added to work around the read-lock error.
+Immutable trigger live verification and the small fresh-SELECT correction apply.
+Native regression1050 PASS, separate ordinary actor/runner/legacy regression48
+PASS, actual disposable95 and native stage67 PASS. Counts overlap where noted.
+
+- Frozen controls:`/var/lib/eom-local-indexing-activation.d0833e2e-0wkebbhu`.
+- Service revision:`localindexservicerev_7ef8e2d037a94140bc4c29f7a1baff67`.
+- Grant:`accessrev_0900dc8d23fc474d94261c13989ae40e`, semantic SHA
+ `sha256:8ca5d29e1906a1fe8379de36ae8f5f9252f8971024d8c8f87072b28508841215`.
+- Platform raw wheel`dd33b56c2411d93b3bf4897a351dba9e63e9f31ebd4c1ba46b4ea6723ad386e0`;
+ API-contract raw wheel`b8565534036b471a016c0015f97672836873b2d5c6e0cf69e4e9983fd348b41f`.
+- Runtime raw`06474fdd39320b9e23e9640863a33a0790d8c3299ff96f780ee4f7b3b2cb989e`;
+ owner raw`dbccd1fc851712094ebc543242b5e24fe7900b090a77b9818819d181ea0fb0ec`;
+ unit raw`13f44eb4e0e271c3643434e672402ccee7059dc5ecbe3cd466f620b7ad337997`.
+- Actual invocation`ecf2b796edc54750b3b15b8fb067fbe9`, PID3921221, startup
+ 12:08:19UTC. Source-plan control committed12:12:10UTC as
+ `job_99242af1314d48bc8e746a52bc7074c7`, Artifact
+ `artifact_64f10724341d4ea2bec415726e8e3c7f`/`rev_51a4c10d044b4b79bec42bd82cdc60ae`.
+
+At12:19:50UTC the actual installed service's canonical source/late-authority and
+atomic submission completed: eligible520, missing reports0, unavailable views0,
+missing bindings520, selected targets1. This scope is occurrence-backed original
+PAST_EXAM / CONTENT_ONLY with the unchanged pinned Graph/source policy/model.
+It is not APPROVED_ITEM/all-view coverage or an educational-quality verdict.
+
+Committed Workflow`workflow_0898881f37d246c4b4d5ab28a58b4818` and native START
+`wfcmd_b354e7f8c9fc4d8ea32a3b2a527bdabe` exist. At12:23:02UTC the Workflow was
+REQUESTED/LOCAL_EMBEDDING/encode_batch with no failure. Encoding/binding/index
+counts were still0. Control-plan success and queue admission are not a successful
+numerical result, canonical vector/index, QUERY or full-goal completion.
+
+The process is confirmed live, Restart=no, boot enable remains disabled. Do not
+restart/reconfigure/reissue while this exact Workflow/command is nonterminal.
+Keep its original claim/request/history and inspect the same execution. API/Web,
+ordinary runner and frozen numeric CPU/model files remain unchanged. No new Codex
+slot, external API or GPU execution was introduced by source admission.
+
+Observed source admission alone took about11m32s (startup-to-queue), with repeated
+full-scope canonical reads before effects; do not report this as model latency.
+Memory stayed within the existing1GiB unit limit (reclaim reached its cap). Keep
+this measured preparation cost visible for later batching/profiling, not a reason
+to skip evidence, current permission or late fences. Native execution/commit,
+delta/reuse/QUERY, automatic full coverage, consumers and CPU/GPU remain pending.

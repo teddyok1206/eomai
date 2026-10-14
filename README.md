@@ -166,14 +166,14 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 
 | 증분 인덱스 경계 | 현재 검증·활성 상태 |
 | --- | --- |
-| 계약·registry·Artifact·수치 검증·atomic submission·exact claim/native dispatch | SOURCE_PASS; 실제 owner/session·executor 운영 연결은 미활성 |
+| 계약·registry·Artifact·수치 검증·atomic submission·exact claim/native dispatch | SOURCE_PASS; 실제 서비스 owner/source 검증과 첫 native 1건 접수 PASS. 수치 결과·인덱스 저장의 운영 검증은 진행 중 |
 | exact pinned index read | SOURCE_PASS; 현재 권한 재확인·일괄 binding 조회·선택된 벡터 읽기 구현, 공통 검색/QUERY 소비는 미활성 |
 | 공통 유사도 context 조립 | SOURCE_PASS; 기출변형용 승인 anchor·3개 독립 view·현재 권한 재확인334 PASS, 실제 QUERY 실행·소비자 연결은 미활성 |
 | genuine QUERY 입력·encoder/handoff·실행 계약 | SOURCE_PASS; 현재 자료·정본4파일과 기존 큐의 QUERY별 claim/완료 검증 연결. 실제 고정 unit·정본 실행·소비자 조회는 미활성 |
 | 고정 CPU QUERY 실행 어댑터 | SOURCE_PASS; private/root handoff·공통 capacity·재시작 후 중복 dispatch 차단·정확한 실행 관찰 구현. QUERY unit/polkit은 미설치, 실제 계산은 미검증 |
 | QUERY Job·실행·정본 완료 조회 | SOURCE_PASS; 원 Job/4개 checkpoint·실행기·원 claim 복구와 현재 권한/정본 완료 조회 구현. 운영 설치·실제 계산·소비 활성화는 미검증 |
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
-| 자동 인덱싱 전용 신원·저장 | 운영0055의 신원·자료 정책·고정 unit 설치/시작 인증 PASS. 실제 자료 검증 중 발견한 참조·캐시 오류를 수정했고, DB가 불변으로 보호하는 실행 정의의 불필요한 읽기 잠금도 수정·검증. 별도 owner 후속 설치/seed 검증 중이며 seed/delta·자동 갱신 완료는 아님. [실제 활성화 기록](docs/status/LOCAL_INDEXING_ACTIVATION_2026-10-14.md) |
+| 자동 인덱싱 전용 신원·저장 | 운영0055의 신원·자료 정책·고정 unit 설치/인증 PASS. 별도 owner d0833e2e에서 실제 기출520개 모집단 검증과 native 1건 원자 접수 PASS. 벡터·인덱스 저장, seed/delta·자동 갱신 완료는 아직 아님. [실제 활성화 기록](docs/status/LOCAL_INDEXING_ACTIVATION_2026-10-14.md) |
 | 인증된 owner/session 전달 | 수신 API 설치·실제 UID990의 provider/process/config/key-metadata 검증 PASS; 실제 사용자 capture·seed는 별도 실행 gate |
 | 현재 사용자·자료의 native 작업 접수 연결 | SOURCE_IMPLEMENTED; 실제 인증 capture→기존 Catalog 검증·계획 재구성·잠금 확인을 연결, 운영 provider/실행기 연결은 미활성 |
 | Native INDEX 파일 전달·입력/결과 저장 | SOURCE_PASS; 실제 계정 권한4·설치된 시작 권한9·CPU 합성 입력2개×1024차원·동일 실행 재조회 PASS, 실제 자료/Job/binding 연결은 미활성 |
