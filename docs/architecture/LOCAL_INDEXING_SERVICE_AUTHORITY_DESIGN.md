@@ -579,3 +579,36 @@ generic SYSTEM. Extend the existing owner/claim/lease/recovery/executor path wit
 explicit typed dispatch and fresh service fencing; do not create a target-scanning
 parallel runner. Old request hashes/business fingerprints remain exact. Any claimed
 runtime compatibility or activation still needs its own installed/actual evidence.
+
+### Runner successor implementation boundary
+
+1. Runner owns admission/commands/claim/lease/recovery; Orchestrator retains numerical
+   execution, encoding reservations and Artifact commit. No worker acquires DB/NAS.
+2. Canonical authority remains current Identity plus Catalog grant/source/report;
+   canonical execution controls remain existing committed policy/plan Artifacts.
+3. Reuse logical service/revision/hash and existing Workflow/command/Job identities.
+   New schema versions identify new messages, not new mutable entity registries.
+4. Request1.2 pins service audit, source policy, Graph, plan, native policy1.1, runtime
+   bundle, namespace/space and resources. Resolve exact versions/hashes; never latest.
+5. Dominant access is exact key lookup, indexed command claim, immutable event order
+   and bounded source iteration. No per-runner independent target scan.
+6. Reuse indexed queues, unique encoding keys, CAS heads and append-only checkpoints.
+   Add only a closed request/policy union and a purpose-specific authority strategy.
+7. Metadata stays64KiB, sources/demands bounded1024; no new corpus-scale copy, vector
+   DB value or query. Existing numerical/file materialization remains the sole path.
+8. Acquire actual source/actor fences before submission/claim savepoints; retain and
+   recheck in each root, and validate live lease late. Never compute under SQL locks.
+9. IO-free workflow contracts stay below application/adapter composition. Human and
+   machine authentication are separate strategies; execution/recovery logic is shared.
+10. Preserve old business/request hashes and old audit-only rejection. Use actor type
+    `local_indexing_service` with its exact logical ID, not human/SYSTEM. Deny revoked
+    service, mismatched controls and stale command before effects; uncertain execution
+    rejoins its original launch, never creates a new identity or rewrites failure.
+11. Extending operator policy1.0, copying the executor, granting a saved audit, or
+    creating a second queue is insufficient. Successor controls and a narrow actual
+    actor authority reuse the same numerical path and keep old semantics testable.
+
+No migration or dependency is planned for this actor/control change. Schema2020-12
+and packaged mirrors precede models/behavior. Source tests and disposable SQL prove
+only their explicit seams; real service installation and bounded processing remain
+separate required acceptance.

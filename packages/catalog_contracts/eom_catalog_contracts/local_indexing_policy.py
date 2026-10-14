@@ -144,6 +144,22 @@ def local_indexing_access_policy_bytes(value: LocalIndexingAccessPolicy) -> byte
     return canonical_json_bytes(checked.model_dump(mode="json"))
 
 
+def local_indexing_authorization_audit_sha256(value: LocalIndexingAccessPolicy) -> str:
+    """Bind immutable authority provenance only, NOT current authentication/permission."""
+    policy = LocalIndexingAccessPolicy.model_validate(value)
+    return content_sha256(
+        {
+            "purpose": policy.purpose,
+            "service": policy.service.model_dump(mode="json"),
+            "service_policy_revision_id": policy.access_policy_revision_id,
+            "service_policy_sha256": policy.content_sha256,
+            "runtime_configuration_sha256": policy.runtime_configuration_sha256,
+            "source_access_policy_revision_id": policy.source_access_policy_revision_id,
+            "source_access_policy_sha256": policy.source_access_policy_sha256,
+        }
+    )
+
+
 def require_local_indexing_source_policy(
     policy: LocalIndexingAccessPolicy,
     source: EducationRetrievalAccessPolicy,

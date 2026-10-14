@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/local-embedding-execution-policy/1.1",
+  "title": "EOM local indexing service-only execution policy; not runtime or source authority",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "purpose",
+    "admission_mode",
+    "workflow_definition_sha256",
+    "profiles",
+    "default_device",
+    "gpu_busy",
+    "created_at",
+    "policy_sha256",
+    "service"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-embedding-execution-policy/1.1"
+    },
+    "purpose": {
+      "const": "LOCAL_EMBEDDING"
+    },
+    "admission_mode": {
+      "const": "LOCAL_INDEXING_SERVICE_ONLY"
+    },
+    "workflow_definition_sha256": {
+      "$ref": "eom://schemas/workflow/local-embedding-execution-policy/1.0#/$defs/hash"
+    },
+    "profiles": {
+      "type": "array",
+      "items": {
+        "$ref": "eom://schemas/workflow/local-embedding-execution-policy/1.0#/$defs/runtimeProfile"
+      },
+      "minItems": 1,
+      "maxItems": 2,
+      "uniqueItems": true
+    },
+    "default_device": {
+      "enum": [
+        "CPU",
+        "CUDA"
+      ]
+    },
+    "gpu_busy": {
+      "const": "WAIT"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "policy_sha256": {
+      "$ref": "eom://schemas/workflow/local-embedding-execution-policy/1.0#/$defs/hash"
+    },
+    "service": {
+      "$ref": "eom://schemas/knowledge/education-retrieval-access-policy/1.1#/$defs/serviceReference"
+    }
+  }
+}

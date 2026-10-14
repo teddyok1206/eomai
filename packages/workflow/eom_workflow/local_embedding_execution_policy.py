@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Self
 
 from eom_catalog_contracts.embedding_runtime_bundle import (
     EmbeddingRuntimeBundle,
@@ -13,6 +13,7 @@ from eom_catalog_contracts.embedding_runtime_bundle import (
 from eom_catalog_contracts.inference_transfer_embedding import EmbeddingSpace
 from eom_catalog_contracts.models import Sha256, UtcDatetime
 from eom_identifiers import canonical_json_bytes, content_sha256
+from eom_operator_identity import LocalIndexingServiceReference
 from pydantic import Field, model_validator
 
 from eom_workflow.schemas import (
@@ -22,6 +23,9 @@ from eom_workflow.schemas import (
 )
 
 LOCAL_EMBEDDING_POLICY_SCHEMA_REF = "eom://schemas/workflow/local-embedding-execution-policy/1.0"
+LOCAL_EMBEDDING_SERVICE_POLICY_SCHEMA_REF = (
+    "eom://schemas/workflow/local-embedding-execution-policy/1.1"
+)
 MAX_LOCAL_EMBEDDING_GPU_VRAM_BYTES = 8 * 1024**3
 
 
@@ -71,14 +75,10 @@ class LocalEmbeddingRuntimeProfile(NativeEmbeddingContract):
         return self
 
 
-class LocalEmbeddingExecutionPolicy(NativeEmbeddingContract):
-    """A candidate immutable policy manifest, not proof of released operator admission."""
+class _LocalEmbeddingExecutionPolicyBody(NativeEmbeddingContract):
+    """One numerical/profile invariant, independent from the two actor admission modes."""
 
-    schema_version: Literal["local-embedding-execution-policy/1.0"] = (
-        "local-embedding-execution-policy/1.0"
-    )
     purpose: Literal["LOCAL_EMBEDDING"] = "LOCAL_EMBEDDING"
-    admission_mode: Literal["OPERATOR_SEED_ONLY"] = "OPERATOR_SEED_ONLY"
     workflow_definition_sha256: Sha256
     profiles: tuple[LocalEmbeddingRuntimeProfile, ...] = Field(min_length=1, max_length=2)
     default_device: Literal["CPU", "CUDA"]
@@ -87,7 +87,7 @@ class LocalEmbeddingExecutionPolicy(NativeEmbeddingContract):
     policy_sha256: Sha256
 
     @model_validator(mode="after")
-    def exact_policy(self) -> LocalEmbeddingExecutionPolicy:
+    def exact_policy(self) -> Self:
         devices = tuple(profile.resource_profile.device for profile in self.profiles)
         if devices != tuple(sorted(set(devices))) or self.default_device not in devices:
             raise ValueError(
@@ -102,12 +102,63 @@ class LocalEmbeddingExecutionPolicy(NativeEmbeddingContract):
         return self
 
 
+class LocalEmbeddingExecutionPolicy(_LocalEmbeddingExecutionPolicyBody):
+    """Original operator-seed-only candidate; not proof of released admission."""
+
+    schema_version: Literal["local-embedding-execution-policy/1.0"] = (
+        "local-embedding-execution-policy/1.0"
+    )
+    admission_mode: Literal["OPERATOR_SEED_ONLY"] = "OPERATOR_SEED_ONLY"
+
+
+class LocalEmbeddingServiceExecutionPolicy(_LocalEmbeddingExecutionPolicyBody):
+    """Service-only successor; no actual runtime, source grant or self-activation."""
+
+    schema_version: Literal["local-embedding-execution-policy/1.1"] = (
+        "local-embedding-execution-policy/1.1"
+    )
+    admission_mode: Literal["LOCAL_INDEXING_SERVICE_ONLY"] = "LOCAL_INDEXING_SERVICE_ONLY"
+    service: LocalIndexingServiceReference
+
+
+type LocalEmbeddingExecutablePolicy = (
+    LocalEmbeddingExecutionPolicy | LocalEmbeddingServiceExecutionPolicy
+)
+
+
 def parse_local_embedding_execution_policy(value: object) -> LocalEmbeddingExecutionPolicy:
     validate_local_embedding_admission_message("execution-policy", value)
     try:
         return LocalEmbeddingExecutionPolicy.model_validate(value)
     except Exception:
         raise LocalEmbeddingAdmissionContractError("LOCAL_EMBEDDING_CONTRACT_INVALID") from None
+
+
+def parse_local_embedding_service_execution_policy(
+    value: object,
+) -> LocalEmbeddingServiceExecutionPolicy:
+    validate_local_embedding_admission_message("service-execution-policy", value)
+    try:
+        return LocalEmbeddingServiceExecutionPolicy.model_validate(value)
+    except Exception:
+        raise LocalEmbeddingAdmissionContractError("LOCAL_EMBEDDING_CONTRACT_INVALID") from None
+
+
+def parse_local_embedding_executable_policy(value: object) -> LocalEmbeddingExecutablePolicy:
+    """Closed schema dispatch only; selecting a version is not owner release admission."""
+    try:
+        if isinstance(value, (LocalEmbeddingExecutionPolicy, LocalEmbeddingServiceExecutionPolicy)):
+            value = type(value).model_validate(value).model_dump(mode="json")
+        if isinstance(value, dict):
+            if value.get("schema_version") == "local-embedding-execution-policy/1.0":
+                return parse_local_embedding_execution_policy(value)
+            if value.get("schema_version") == "local-embedding-execution-policy/1.1":
+                return parse_local_embedding_service_execution_policy(value)
+    except LocalEmbeddingAdmissionContractError:
+        raise
+    except (ValueError, TypeError):
+        raise LocalEmbeddingAdmissionContractError("LOCAL_EMBEDDING_CONTRACT_INVALID") from None
+    raise LocalEmbeddingAdmissionContractError("LOCAL_EMBEDDING_CONTRACT_INVALID")
 
 
 def validate_local_embedding_runtime_profile(

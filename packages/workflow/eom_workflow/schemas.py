@@ -639,8 +639,28 @@ LOCAL_EMBEDDING_SCHEMA_RESOURCES = (
         "sha256:07f1a6abc3635a927900149f949ade9dad28690b3948a0a7370bfc291c6d0963",
     ),
 )
+
+LOCAL_EMBEDDING_SERVICE_SCHEMA_RESOURCES = (
+    (
+        "service-request",
+        "local-embedding-workflow-request-v1_2.schema.json",
+        "eom://schemas/workflow/local-embedding-workflow-request/1.2",
+        "sha256:635bf4c24d3e2bf17d070b6c971d97c2436139dac6dc57f2ca22cfc0d32ac581",
+    ),
+    (
+        "service-execution-policy",
+        "local-embedding-execution-policy-v1_1.schema.json",
+        "eom://schemas/workflow/local-embedding-execution-policy/1.1",
+        "sha256:95d87832450cd8823fdafa3458ee21a513b1c9a49c1196a4a867f354d9565f37",
+    ),
+)
 type LocalEmbeddingSchemaName = Literal[
-    "request", "source-plan", "encoding-job", "execution-policy"
+    "request",
+    "source-plan",
+    "encoding-job",
+    "execution-policy",
+    "service-request",
+    "service-execution-policy",
 ]
 
 
@@ -685,7 +705,12 @@ class NativeEmbeddingContract(FrozenModel):
 def _local_embedding_admission_schema(name: LocalEmbeddingSchemaName) -> dict[str, Any]:
     try:
         _, filename, schema_id, expected = next(
-            entry for entry in LOCAL_EMBEDDING_SCHEMA_RESOURCES if entry[0] == name
+            entry
+            for entry in (
+                *LOCAL_EMBEDDING_SCHEMA_RESOURCES,
+                *LOCAL_EMBEDDING_SERVICE_SCHEMA_RESOURCES,
+            )
+            if entry[0] == name
         )
         with WORKFLOW_RESOURCE_ROOT.joinpath(filename).open("rb") as stream:
             payload = stream.read(64 * 1024 + 1)
@@ -701,7 +726,7 @@ def _local_embedding_admission_schema(name: LocalEmbeddingSchemaName) -> dict[st
 
 
 def load_local_embedding_admission_schema(name: LocalEmbeddingSchemaName) -> dict[str, Any]:
-    """Only the four pinned native resources; no role inventory or legacy hash change."""
+    """Only pinned native resources; no role inventory or legacy hash change."""
     return copy.deepcopy(_local_embedding_admission_schema(name))
 
 
@@ -715,7 +740,10 @@ def _local_embedding_admission_schema_registry() -> Registry[Any]:
                 _local_embedding_admission_schema(cast(LocalEmbeddingSchemaName, name))
             ),
         )
-        for name, _, schema_id, _ in LOCAL_EMBEDDING_SCHEMA_RESOURCES
+        for name, _, schema_id, _ in (
+            *LOCAL_EMBEDDING_SCHEMA_RESOURCES,
+            *LOCAL_EMBEDDING_SERVICE_SCHEMA_RESOURCES,
+        )
     )
 
 
@@ -728,7 +756,10 @@ def local_embedding_admission_schema_registry() -> Registry[Any]:
                 load_local_embedding_admission_schema(cast(LocalEmbeddingSchemaName, name))
             ),
         )
-        for name, _, schema_id, _ in LOCAL_EMBEDDING_SCHEMA_RESOURCES
+        for name, _, schema_id, _ in (
+            *LOCAL_EMBEDDING_SCHEMA_RESOURCES,
+            *LOCAL_EMBEDDING_SERVICE_SCHEMA_RESOURCES,
+        )
     )
 
 
@@ -737,7 +768,12 @@ def validate_local_embedding_admission_message(
 ) -> None:
     """Closed frame and integer-only byte bound before typed semantic validation."""
     try:
-        maximum = 64 * 1024 if name in {"request", "execution-policy"} else 64 * 1024**2
+        maximum = (
+            64 * 1024
+            if name
+            in {"request", "execution-policy", "service-request", "service-execution-policy"}
+            else 64 * 1024**2
+        )
         if len(canonical_json_bytes(value)) > maximum:
             raise ValueError("native contract byte bound differs")
         validator = Draft202012Validator(

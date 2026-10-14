@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/local-embedding-workflow-request/1.2",
+  "title": "EOM service-only local embedding request; actual installed authority is mandatory",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_name",
+    "purpose",
+    "workflow_definition_key",
+    "workflow_definition_version",
+    "workflow_definition_sha256",
+    "actor_context",
+    "corpus_id",
+    "graph_snapshot",
+    "access_policy_revision_id",
+    "access_policy_sha256",
+    "namespace",
+    "space",
+    "runtime_bundle",
+    "source_plan",
+    "source_plan_sha256",
+    "native_execution_policy",
+    "native_execution_policy_sha256",
+    "resource_profile",
+    "request_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-embedding-workflow-request/1.2"
+    },
+    "request_name": {
+      "const": "LOCAL_EMBEDDING_WORKFLOW_REQUEST"
+    },
+    "purpose": {
+      "const": "LOCAL_EMBEDDING"
+    },
+    "workflow_definition_key": {
+      "const": "local-embedding-index"
+    },
+    "workflow_definition_version": {
+      "const": "1.0.0"
+    },
+    "workflow_definition_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "actor_context": {
+      "$ref": "#/$defs/serviceAudit"
+    },
+    "corpus_id": {
+      "type": "string",
+      "pattern": "^corpus_[0-9a-f]{32}$"
+    },
+    "graph_snapshot": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"
+    },
+    "access_policy_revision_id": {
+      "type": "string",
+      "pattern": "^accessrev_[0-9a-f]{32}$"
+    },
+    "access_policy_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "namespace": {
+      "$ref": "eom://schemas/knowledge/embedding-registry/1.0#/$defs/namespace"
+    },
+    "space": {
+      "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/space"
+    },
+    "runtime_bundle": {
+      "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/bundlePointer"
+    },
+    "source_plan": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+        },
+        {
+          "properties": {
+            "member_path": {
+              "const": "source-plan.json"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/workflow/local-embedding-source-plan/1.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            }
+          }
+        }
+      ]
+    },
+    "source_plan_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "native_execution_policy": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+        },
+        {
+          "properties": {
+            "member_path": {
+              "const": "policy.json"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/workflow/local-embedding-execution-policy/1.1"
+            },
+            "media_type": {
+              "const": "application/json"
+            }
+          }
+        }
+      ]
+    },
+    "native_execution_policy_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "resource_profile": {
+      "$ref": "eom://schemas/workflow/local-embedding-execution-policy/1.0#/$defs/resourceProfile"
+    },
+    "request_sha256": {
+      "$ref": "#/$defs/hash"
+    }
+  },
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "serviceAudit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "service_id",
+        "service_revision_id",
+        "service_identity_sha256",
+        "service_policy_revision_id",
+        "service_policy_sha256",
+        "authorization_audit_sha256"
+      ],
+      "properties": {
+        "kind": {
+          "const": "LOCAL_INDEXING_SERVICE"
+        },
+        "service_id": {
+          "type": "string",
+          "pattern": "^localindexservice_[0-9a-f]{32}$"
+        },
+        "service_revision_id": {
+          "type": "string",
+          "pattern": "^localindexservicerev_[0-9a-f]{32}$"
+        },
+        "service_identity_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "service_policy_revision_id": {
+          "type": "string",
+          "pattern": "^accessrev_[0-9a-f]{32}$"
+        },
+        "service_policy_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "authorization_audit_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    }
+  }
+}
