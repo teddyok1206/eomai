@@ -173,7 +173,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | 고정 CPU QUERY 실행 어댑터 | SOURCE_PASS; private/root handoff·공통 capacity·재시작 후 중복 dispatch 차단·정확한 실행 관찰 구현. QUERY unit/polkit은 미설치, 실제 계산은 미검증 |
 | QUERY Job·실행·정본 완료 조회 | SOURCE_PASS; 원 Job/4개 checkpoint·실행기·원 claim 복구와 현재 권한/정본 완료 조회 구현. 운영 설치·실제 계산·소비 활성화는 미검증 |
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
-| 자동 인덱싱 전용 신원·저장 | 운영0055의 신원·자료 정책·고정 unit 설치/인증 및 실제 기출520개 모집단/1건 접수 PASS. 첫 작업은 계산 전 중단했으며 누락 프로토콜은 명시적 owner 준비로 등록 완료. 수정본 f0efefe8은 비활성 설치, 실제 동일 metadata 조회85ms/520개 PASS. 벡터·binding·index는0이며 기존 작업의 버전 고정을 보존하는 운영 인계가 남음. [실제 활성화 기록](docs/status/LOCAL_INDEXING_ACTIVATION_2026-10-14.md) |
+| 자동 인덱싱 전용 신원·저장 | 운영0055·source07fd3059/신원 revision10 활성화. 원래 계산 전 실패는 FAILED 이력/정확한 영수증 보존 후 정식 인계 완료. 동일 자료 계획·Graph·출처 정책을 고정한 후속1건을 정상 큐에 접수하고 유효 claim 확보. metadata 조회85ms/520개 PASS; 벡터·binding·index 저장과 seed/delta·자동 갱신 완료는 아직 아님. [실제 활성화 기록](docs/status/LOCAL_INDEXING_ACTIVATION_2026-10-14.md) |
 | 인증된 owner/session 전달 | 수신 API 설치·실제 UID990의 provider/process/config/key-metadata 검증 PASS; 실제 사용자 capture·seed는 별도 실행 gate |
 | 현재 사용자·자료의 native 작업 접수 연결 | SOURCE_IMPLEMENTED; 실제 인증 capture→기존 Catalog 검증·계획 재구성·잠금 확인을 연결, 운영 provider/실행기 연결은 미활성 |
 | Native INDEX 파일 전달·입력/결과 저장 | SOURCE_PASS; 실제 계정 권한4·설치된 시작 권한9·CPU 합성 입력2개×1024차원·동일 실행 재조회 PASS, 실제 자료/Job/binding 연결은 미활성 |

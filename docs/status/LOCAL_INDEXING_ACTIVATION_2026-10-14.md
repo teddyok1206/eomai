@@ -1,6 +1,6 @@
 # Actual local indexing activation — 2026-10-14
 
-13:12 UTC checkpoint (chronology retained below). Actual control installation and source validation are
+13:40 UTC checkpoint (chronology retained below). Actual control installation and source validation are
 separate from successful seed/delta/QUERY. The full goal remains ACTIVE.
 
 ## Actual changes
@@ -441,3 +441,89 @@ The13:25:16 actual read-only preflight still proves exact protocol registration,
 native Job0/vector0/index0 and the original expired command. This candidate is
 not yet a live retirement, new service activation or successful seed. Procedure:
 `../operations/LOCAL_INDEXING_PREALLOCATION_RETIREMENT.md`.
+
+## Actual original retirement and corrected runtime — 13:36 UTC
+
+Source`07fd3059e8b9d9bbecccef3fccc66f9858267d5b` built/RECORD/independent pair
+closure PASS and is installed. Platform wheel raw
+`825d773437712cf0c4b960bdc72a1eadf497a51b87e14fb3f368888167eaab94`,
+API-contract raw
+`f904b90daaea8be0ab77210cf0427932c62fe1648e71310832f77fec10faadc4`.
+
+The protected operator verified the original stopped invocation's exact
+missing-protocol event, froze the retirement COMMAND and invoked only the supported
+table-owner application. At13:32:02 the original Workflow/START/step/stage are
+FAILED with`EMBEDDING_ENCODING_PROTOCOL_UNAVAILABLE`; original request, IDs, hash,
+key, generation1 and elapsed lease remain. No native Job/encoding/binding/index
+was created. Retirement command SHA
+`sha256:fd3f4c492fc33aae2c84d20f995b3601bbccf223bfa617aac05f25c36307fea7`,
+immutable DB receipt SHA
+`sha256:968d36244ace9a67df16d96d26c207e482af8b88a8114166fdda706e20bd9b03`.
+Temporary exact materialization:
+`/var/lib/eom-local-indexing-retirement.07fd3059/{command,receipt}.json`.
+This is explicit failure preservation, not raw row repair or successful acceptance.
+
+Only after terminal proof, the ordinary Orchestrator UID990 publisher committed
+the new native policy through Job`job_55bc6469799c4f4db81d4801172ba651`, Artifact
+`artifact_6ca8ae995a2f48538629196d036358c5` /
+`rev_7048bdf0330d4669900007e5373fbbec`, member`policy.json` raw
+`sha256:55050921a867b1f9cc5749b55780d96f0c9584181831e0f58917fe52d843efe7`,
+semantic`sha256:e36cc52fe202f021bc920752c04eb11e18f0467ae2ffaa2d1417812b99745421`.
+Owner Identity register/activate and Catalog grant publication admit revision10
+`localindexservicerev_013a0c89873f496087365f3162edddfd`, identity SHA
+`sha256:15ab5f8a6eb9dcadc49889f831123f8f56ce21882972da27b8ae57007716a2c5`,
+resource-version20. Grant`accessrev_8be359b87841481e964b28e3ce276670`, SHA
+`sha256:cf3a8401346617eed2f6ab24d510f98f81acf3482d680356d15d3c1ee82b358c`.
+No source permission, model/space/recipe or resource bound was expanded.
+
+Frozen controls:`/var/lib/eom-local-indexing-activation.07fd3059-2jnso7vk`.
+Installed raw SHA: runtime`b5a13535d13439a1dc11ce9edfabdec7e485995358d44f6deca8198480401322`,
+owner`9e90147fa821eddae5debb9fbf92070267b3254cb5517d25028ba5bdd819f647`,
+unit`adb4b4b0e8132568f7b0f55937acab4796a9ebee9b80b23947fa2a9ba9c44054`.
+CPU and owner environment raw hashes remain unchanged. Numeric runtime/model,
+API/Web/ordinary runner, migration0055 and permission contracts are untouched.
+
+At13:34:52 invocation`855a5efeb93d46c1bf493d93021578f1`, PID3963123 passed actual
+startup and remains active. Restart=no, boot disabled, poll1800/max-target1 remain.
+The13:36:12 observation still has native Job/vector/index0: corrected initial
+source reconciliation is live, not a numerical success. Preserve this specific
+process/identity and observe its ordinary missing-binding submission; do not
+restart it on observation delay or create another target list/key. API READY.
+
+Evidence: same temporary evidence root, files
+`native-{retirement-owner-install-and-prepare,preallocation-retirement-execution,
+indexing-successor-preparation-07fd3059,indexing-successor-activation-07fd3059,
+indexing-successor-unit-start-07fd3059,indexing-successor-progress-07fd3059}.log`.
+
+## Corrected release's ordinary successor is claimed — 13:40 UTC
+
+The unchanged normal missing-binding application admits520 original occurrence-
+backed PAST_EXAM sources, missing reports0/unavailable views0/missing bindings520,
+selects1 target and atomically queues Workflow
+`workflow_1b7cbbdf82484bd2b171981ef967b5d1` /
+START`wfcmd_b3be09d2f84244a9a6af3d2cb36a7c7d` at13:37:04.671626.
+This is about2m12s from service startup, compared with the previous release's
+11m32s admission. It is source preparation, NOT encoder/model time.
+
+At13:40:15 the new START is PROCESSING, attempts/generation1 and a valid lease
+expiring13:54:07; the Workflow is still REQUESTED/LOCAL_EMBEDDING. The exact
+current service PID3963123/invocation855a5efeb93d46c1bf493d93021578f1 remains
+active; no restart/reissue. Native Job/vector/binding/index counters remain0.
+Normal current-source/actor/lease checks are still in progress before computation.
+
+Read-only lineage comparison proves the old request SHA remains
+`sha256:32483459cc087ecd50b8ffd1d1f37a392520f39da1f48c2491643cf74c55f4a3` and
+new request SHA is
+`sha256:f20b207708d85c1e5fed72c1b253be279c739ee710f84b290b22071a9228e6d9`.
+Both pin the SAME source-plan semantic SHA
+`sha256:d0798d16ad8758f1971ecdfd5acb96e4bcbaf3a7f89ad10e07b7b1d6874b3514`,
+Graph revision and source access-policy revision. Service revision/grant differ
+explicitly: retired request9 vs corrected request10. Thus no source/plan was
+silently substituted, original pins were not overwritten, and the old request is
+terminal before its corrected-release successor exists. This is not an uncertain
+execution duplicate: the original allocated no native Job and ran no model.
+
+Evidence:`native-indexing-corrected-handoff-pins.log` and
+`native-indexing-successor-1339-observation.log` in the same temporary evidence
+root. Preserve the live exact handle and queue identities for the next numerical
+result/commit observation; do not create another key on a slow observation.
