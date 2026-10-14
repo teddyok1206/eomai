@@ -6,6 +6,7 @@ import os
 import re
 import socket
 import stat
+import struct
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -171,6 +172,41 @@ def _socket_epoch(connection: socket.socket) -> tuple[object, ...]:
     )
 
 
+def _api_unix_socket_epoch(connection: socket.socket) -> tuple[object, ...]:
+    """Held receiving FD identity only; the installed adapter must check the API peer."""
+    if (
+        not isinstance(connection, socket.socket)
+        or connection.family != socket.AF_UNIX
+        or connection.type != socket.SOCK_STREAM
+    ):
+        raise OwnerSessionTransportError("OWNER_SESSION_OBSERVATION_INVALID")
+    metadata = os.fstat(connection.fileno())
+    credentials = connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)
+    if (
+        not stat.S_ISSOCK(metadata.st_mode)
+        or metadata.st_uid != os.geteuid()
+        or type(credentials) is not bytes
+        or len(credentials) != struct.calcsize("3i")
+    ):
+        raise OwnerSessionTransportError("OWNER_SESSION_OBSERVATION_INVALID")
+    pid, uid, gid = struct.unpack("3i", credentials)
+    if pid < 2 or uid < 0 or gid < 0:
+        raise OwnerSessionTransportError("OWNER_SESSION_OBSERVATION_INVALID")
+    return (
+        connection.fileno(),
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_uid,
+        metadata.st_gid,
+        connection.getpeername(),
+        connection.getsockname(),
+        pid,
+        uid,
+        gid,
+    )
+
+
 @dataclass(slots=True, repr=False)
 class _ObservationOrigin:
     observation: ReferenceType[OwnerSessionTransportObservation]
@@ -179,6 +215,7 @@ class _ObservationOrigin:
     response_identity: tuple[object, ...]
     connection: socket.socket
     epoch: tuple[object, ...]
+    epoch_reader: Callable[[socket.socket], tuple[object, ...]]
     pin: FixedIdentityProviderPin
     pin_identity: tuple[str, str, str]
     admission: IdentityOwnerSessionProviderAdmission
@@ -217,7 +254,7 @@ def _current(origin: _ObservationOrigin) -> None:
         or origin.pin_identity
         != (origin.pin.source_commit, origin.pin.wheel_sha256, origin.pin.configuration_sha256)
         or current_thread() is not origin.thread
-        or _socket_epoch(origin.connection) != origin.epoch
+        or origin.epoch_reader(origin.connection) != origin.epoch
         or _response_identity(origin.response) != origin.response_identity
     ):
         raise OwnerSessionTransportError("OWNER_SESSION_OBSERVATION_INVALID")
@@ -250,9 +287,35 @@ def observe_owner_session_transport(
     Python construction provenance is not cryptographic/unforgeable security;
     independently installed provider/peer admission is still required.
     """
+    return _observe_owner_session_transport(
+        request=request,
+        response_raw=response_raw,
+        connection=connection,
+        pin=pin,
+        admission=admission,
+        verify_peer=verify_peer,
+        started_at=started_at,
+        deadline=deadline,
+        epoch_reader=_socket_epoch,
+    )
+
+
+def _observe_owner_session_transport(
+    *,
+    request: SupportedOwnerSessionCaptureRequest,
+    response_raw: bytes,
+    connection: socket.socket,
+    pin: FixedIdentityProviderPin,
+    admission: IdentityOwnerSessionProviderAdmission,
+    verify_peer: Callable[[socket.socket], None],
+    started_at: datetime,
+    deadline: float,
+    epoch_reader: Callable[[socket.socket], tuple[object, ...]],
+) -> OwnerSessionTransportObservation:
+    """Shared private observation owner for the fixed TCP and installed Unix adapters."""
     try:
         assert_identity_provider_current(pin, admission)
-        epoch = _socket_epoch(connection)
+        epoch = epoch_reader(connection)
         verify_peer(connection)
         response = validate_supported_owner_session_capture_response(
             request, parse_supported_owner_session_capture_response(response_raw)
@@ -273,6 +336,7 @@ def observe_owner_session_transport(
             _response_identity(response),
             connection,
             epoch,
+            epoch_reader,
             pin,
             (pin.source_commit, pin.wheel_sha256, pin.configuration_sha256),
             admission,

@@ -7,6 +7,7 @@ import hashlib
 import os
 import pwd
 import re
+import socket
 import stat
 import subprocess
 from collections.abc import Iterator
@@ -16,9 +17,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
+from eom_operator_identity.owner_session_capture_v11 import OwnerSessionCaptureRequestV11
+
+from eom_identity_service.authenticated_session_fence import AuthenticatedOperatorSession
 from eom_identity_service.owner_session_transport import (
     FixedIdentityProviderPin,
     OwnerSessionTransportError,
+    _api_unix_socket_epoch,
+    _observe_owner_session_transport,
+    import_owner_session_capture,
 )
 
 _API_PREFIX = Path("/srv/eom/conda/envs/eom-api/lib/python3.12/site-packages")
@@ -29,6 +36,8 @@ _CODE_MEMBERS = frozenset(
         "eom_api/routers/owner_session_capture.py",
         "eom_api/lifespan.py",
         "eom_api/settings.py",
+        "eom_api/dependencies.py",
+        "eom_api/request_context.py",
         "eom_identity_service/tokens.py",
         "eom_identity_service/auth_service.py",
         "eom_identity_service/authenticated_session_fence.py",
@@ -187,6 +196,48 @@ class ProtectedInstalledIdentityProviderAdmission:
             raise _failure()
         observation.__post_init__()
         self.observation = observation
+
+    def _assert_catalog_api_peer(self, connection: socket.socket) -> None:
+        """Physical binding; the shared transport has just fenced current provider bytes."""
+        observed = self.observation
+        try:
+            epoch = _api_unix_socket_epoch(connection)
+            api = pwd.getpwnam("eom-api")
+            if epoch[-3:] != (observed.pid, api.pw_uid, api.pw_gid):
+                raise _failure()
+        except Exception:
+            raise _failure() from None
+
+    def capture_catalog_request(
+        self,
+        *,
+        request: OwnerSessionCaptureRequestV11,
+        response_raw: bytes,
+        connection: socket.socket,
+        started_at: datetime,
+        deadline: float,
+    ) -> AuthenticatedOperatorSession:
+        """Consume a current installed peer's exact QUERY capture; never a DTO-only mint."""
+        try:
+            checked = OwnerSessionCaptureRequestV11.model_validate(request)
+            if checked.purpose != "REFERENCE_QUERY":
+                raise _failure()
+            observation = _observe_owner_session_transport(
+                request=checked,
+                response_raw=response_raw,
+                connection=connection,
+                pin=self.observation.pin,
+                admission=self,
+                verify_peer=self._assert_catalog_api_peer,
+                started_at=started_at,
+                deadline=deadline,
+                epoch_reader=_api_unix_socket_epoch,
+            )
+            return import_owner_session_capture(observation)
+        except OwnerSessionTransportError:
+            raise
+        except Exception:
+            raise _failure() from None
 
     def assert_current(
         self, *, source_commit: str, wheel_sha256: str, configuration_sha256: str

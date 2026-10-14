@@ -2063,3 +2063,84 @@ Raw wheel SHA: platform `aea6f8df227450e0dfd8c58b80bc37e978d766b703fe83910dc3dd4
 contracts `f41f922eae8a82576010e5993531bdb41e0541fec0b5be00fc48581c77ae46f3`;
 API `a46cdbc7665f0d21242093875b9c893a29111b9c6bf3ea9d157b9ef66122ce84`.
 Evidence: `similarity-api-owner-auth-{release-build,owner-pair-proof,three-wheel-proof-final}.log`.
+
+## 24. Current installed API peer → Catalog owner capture
+
+2026-10-14 UTC. This is the receiving half of §23, not asynchronous QUERY submission.
+
+1. Responsibility: Identity's existing installed-provider adapter imports a capture
+   only from a held Catalog-side Unix connection to the exact admitted API process.
+2. Canonical source: actual API HMAC export and current protected process/config/code
+   observation, followed by the existing current-session SQL fence in the owner.
+3. Identity: preserve the same opaque capture and operator/session/token identities;
+   no new persistent entity, session renewal, user registry or permission receipt.
+4. Pointers: retain the installed provider's existing held process/files and exact
+   release/config hashes. Check API request dependency/context code too. A different
+   PID, UID, provider epoch, connection or closed descriptor fails explicitly.
+5. Access: bounded fixed peer/config checks and small closed auth values; no model,
+   corpus scan, NAS, worker auth, password or API hash-key read by the recipient.
+6. Structures: extend the existing one-use transport observation with a private
+   fixed epoch reader for each of its two real transport directions. Do not duplicate
+   capture minting/expiry/replay logic in a parallel transport framework.
+7. Cost: constant-size peer metadata and existing bounded provider file checks,
+   independent of corpus size. No measured latency improvement is claimed.
+8. Concurrency: observation/import stay in the same handler thread, under the
+   original10-second transport deadline and original session/access expiries. The
+   same held Unix FD and `SO_PEERCRED` PID/UID/GID are rechecked; multi-worker API
+   process topologies are not implicitly admitted by a shared UID.
+9. Dependencies: Identity infrastructure only; no Catalog/API/Orchestrator backimport,
+   new package or DB schema. Existing TCP provider entrypoint remains unchanged.
+10. Failure/replay: use the original canonical request/response1.1 schemas, restricted
+    here to `REFERENCE_QUERY`. Reject seed/benchmark/unknown purposes and mismatched
+    nonce/request hash before import. No DTO-only mint, reusable observation, changed
+    clock/peer, retry, deadline extension or token persistence. Keep failures safe.
+11. Alternative: trusting only the API Unix UID or an actor/session DTO cannot bind
+    the actual loaded provider. Replacing the existing TCP observation globally or
+    copying its security logic adds risk; share its original one-use/expiry owner.
+
+The existing JSON Schema2020-12 capture1.1 family precedes this adapter and remains
+byte-for-byte unchanged. A later closed Item-preparation RPC must create a fresh
+challenge tied to that held command/connection and consume the reply before any
+owner side effect. Its first-frame schema, exact Catalog server binding, loaded API
+client code and installed receiver privilege admission still need validation before
+activation. This leaf does not grant arbitrary sockets or parsed payloads access,
+turn a schema into installed admission, or replace current SQL source/session checks.
+
+### 24.1 Receiving peer source checkpoint — 2026-10-14 UTC
+
+`ProtectedInstalledIdentityProviderAdmission.capture_catalog_request` now consumes
+only the exact `REFERENCE_QUERY` exchange from a held Unix peer matching the admitted
+API PID/UID/GID. The original public TCP observer keeps its signature and fixed TCP
+epoch. Both use one private observation/expiry/one-use implementation, not separate
+capture minting. Installed code inventory now independently pins the API authentication
+dependency and request-local context as well as the prior nine members. No shared UID
+fallback, model-controlled observer, token store, new dependency or schema migration
+was added. Current provider checking remains once per shared observation fence; the
+private physical-peer check does not rehash all provider files a second time.
+
+Final26-suite regression: **587 PASS /160.47s**; strict mypy2 and Ruff/format4 PASS.
+New tests exchange actual bytes over temporary Unix sockets and use real held FDs,
+including an actual `dup2` descriptor replacement. The API PID/UID, installed unit
+and protected ownership observations are explicitly synthetic; successful source
+import is NOT installed private-IPC acceptance. Tests cover different PID with same
+UID, changed UID/GID, provider restart/configured process mismatch, purpose/version/
+hash/canonical-frame rejection, transport time bounds, closed/changed FD, wrong
+thread, boolean-grant callback refusal, same SQL-source values and one-use import.
+Legacy TCP/provider tests remain included. No production provider or credential was
+read by these fixtures. Existing DB20 evidence is separate and does not prove this
+new live peer boundary. Earlier99/586 test results overlap and are not additive.
+
+Initial lint/collection failures (test wrapping and pytest's reserved `request`
+parameter) were corrected. The prior inventory assertion expected nine files;
+it now independently asserts the complete closed eleven-member set, rather than
+weakening current provider checks. Evidence prefix:
+`/tmp/eom-identity-provider-install.nAaycoDM/similarity-catalog-owner-peer-`.
+
+At20:02:41 UTC the original genuine QUERY root4163147/owner4163164 were confirmed
+S+, with the same live tmux pane, still at the original Studio input boundary.
+Its preflight remains the last event: no source capture/model forward has happened.
+No restart, replacement prompt, expiry extension, production mutation or installed
+API/owner/Pack/Graph change was made here. Next remains the closed Item preparation
+RPC/client/server handshake plus asynchronous native QUERY/continuation, current
+multi-user scope and actual installed Item acceptance. Other consumers, persistent
+coverage and actual CPU/GPU/default-device gates remain in the full active goal.
