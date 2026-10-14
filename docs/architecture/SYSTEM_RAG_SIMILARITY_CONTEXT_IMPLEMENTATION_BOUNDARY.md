@@ -1387,3 +1387,14 @@ synthetic in both. Logs: `/tmp/eom-identity-provider-install.nAaycoDM/` with pre
 `similarity-materialization-`, including original failure logs and final reruns.
 No migration, production DB/role/unit/runtime/Pack change, real QUERY/model/GPU run,
 candidate grant, corpus re-encoding or consumer activation is claimed here.
+
+Candidate `cc369e193c472b6e718a30fc2f06a0421e2c8742` passed the existing complete
+three-wheel/RECORD build and a strict two-wheel-only transitive import/resource/ref
+proof for the new plan, Orchestrator port/materializer, WorkflowRunner Catalog
+adapter and review parser. No checkout, API wheel, installed-prefix EOM fallback or
+ML import was permitted. Platform raw
+`ee6f0e9945e3403d7a5905304d59d3dbb4bab0d9e2064f8d7d128a6337a28d6b`;
+API-contract raw `aef1b45d52d2810733d30fa6762e9f6e64990268ad2719a0e95b200990a48cd4`.
+Evidence: `similarity-materialization-{release-build,owner-pair-proof}.log` in the
+same local directory. This candidate is not installed; API75fdc265 and owner5018ad2d
+remain the pinned runtime for the existing genuine QUERY canary.
