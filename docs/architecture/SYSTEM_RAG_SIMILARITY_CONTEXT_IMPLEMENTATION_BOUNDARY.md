@@ -1958,3 +1958,13 @@ a new plan23 persistence result. Owner RPC/queue and actual session-scoped share
 selection, compatible publication/activation and installed bounded Item acceptance
 remain open. Chat/exam consumers and actual CPU/GPU measurements/default-device
 decision also remain in the active goal; this checkpoint does not close them.
+
+Candidate `c8090f748c971dec77be339e025b0f115519b699` passed the existing full
+three-wheel/RECORD build and strict platform+contracts-only import proof. The actual
+preparation component/frozen result and late reader method resolve from those two
+archives with no checkout, API-wheel, installed-prefix or ML fallback. This proof
+does not call a DB/source capture/publication/model. Platform raw wheel SHA:
+`c320a2fd44532fc19369d73c55922763bb97084076339d8e16e6eb37d4b0c489`;
+contracts raw SHA: `d826b3062d2598deddf7dd98901228a9e96b1981f4d09eb839099205d7194050`.
+Evidence: `similarity-item-preparation-{release-build,owner-pair-proof}.log` in the
+same prefix directory. The candidate is not installed or activated.
