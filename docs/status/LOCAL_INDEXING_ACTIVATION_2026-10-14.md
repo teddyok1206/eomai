@@ -717,3 +717,16 @@ roles through the SAME gate. Exact admission-map equality remains mandatory.
 Release inventory/native-protocol/owner-boundary source gate109 PASS; no production
 installation, source repair, test DB bypass or model execution occurred in this
 failed build. Retained log:`reference-query-exact-admission-release-build.log`.
+
+Corrected source`7f633554edfb253581de5c0895dd32bd2ba4db79` subsequently passed
+the complete independent release build/RECORD/installed definition inventory and
+pair-only transitive import proof. Owner platform raw
+`9ff87f17d6e35202d294bbf8e8de5feff0feeb9adac2677f304cccaa71605e03`,
+API-contract raw`35110efb4d25d04a00f20f63a7bcc4315c3c65a5077fef3118d2f18e237cfbf3`.
+The root no-clobber installer staged that exact owner pair INACTIVE under
+`/opt/eom/embedding-owner-releases/7f633554edfb253581de5c0895dd32bd2ba4db79`.
+No activation, service identity/grant change, API redeploy, numeric-prefix change,
+new source read or inference was performed by this installation. Active control
+metadata remains revision11/ae8f8bf6 and its owner unit stays quiescent. Next step
+must explicitly select reviewed controls, not treat an installed directory as
+native QUERY execution or activate a source by choosing implicit latest.
