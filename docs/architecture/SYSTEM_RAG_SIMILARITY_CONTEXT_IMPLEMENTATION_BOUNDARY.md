@@ -2611,3 +2611,19 @@ the unprivileged API/Catalog or bypassed to force new QUERY submission to succee
 Use the existing supported Orchestrator/native boundary; do not expand INDEX
 authority or add a parallel queue/root broker. All original consumers, continuous
 coverage and measured device/default requirements remain in the active full goal.
+
+Candidate `a45870fe660aafc8b392fb9b4d402d026da371e9` passed full three-wheel/RECORD
+build and independent isolated owner-pair/three-wheel probes. The owner pair resolves
+the API selector facade and preserves canonical validation with safe input errors.
+The three-wheel probe constructs the ACTUAL packaged app with explicit synthetic
+invalid DB credentials (no connection), verifies the new fixed Catalog client/service,
+and compares its full OpenAPI to the packaged snapshot/hash and readonly operation.
+No EOM import may fall back to checkout, installed prefix or undeclared archives;
+no ML module, runtime DB/capture/model call or publication is used by the proofs.
+This proves package closure/contract equality, not live authentication or retrieval.
+
+Raw wheel SHA: platform `5a5a908fe97d4819294cdeaa1ecc1b1afbc6453c01618febbee741ffadc1ba98`;
+contracts `2db479ae497329dcf79d05229c66c4b1ca1c85be1495256a417ef5a239b4472c`;
+API `3c3b94196b688c415384e3ec5daafb1731ec1c2112b0938c3cc35bf4dedc4303`.
+Evidence suffixes: `release-build.log`, `owner-pair-proof.log`, `three-wheel-proof.log`
+under the API evidence prefix. The candidate is pushed, not installed/activated.
