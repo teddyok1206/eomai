@@ -309,3 +309,19 @@ before any signal; its log is retained separately. Reviewed evidence:
 This removes the unresolved live-controller conflict. Actual service installation,
 migration/admission, policy activation, seed/delta/QUERY and GPU gates are still
 required. The goal remains ACTIVE.
+
+### Actual installation/release follow-up — 09:43 UTC
+
+Owner overlay and compatible API/shared runtime source4cf6 are now installed.
+Protected operator contexts ADMIT, fresh verified backup, supported0053→0054→0055,
+actual Catalog role reconciliation and fixed Identity SQL-fence creation/inspection
+PASS. All9 original services active and API LIVE/READY. Exact pointers, callback/
+source/wheel distinctions, controlled original-login handoff, retained failures,
+owner-env rollback and no-forward CPU readiness are recorded in the
+[live release runbook](../operations/INCREMENTAL_EMBEDDING_LIVE_RELEASE_2026-10-13.md#actual-00540055-compatible-release--2026-10-14-0943-utc).
+
+`OWNER_OVERLAY=INSTALLED`, `PRODUCTION_MIGRATION=20261014_0055`,
+`COMPATIBLE_API_RELEASE=4cf6ac9a`, `SERVICE_IDENTITY_AND_DATA_GRANT=NOT_ACTIVE`,
+`INDEX_OWNER_UNIT=NOT_INSTALLED`, `AUTOMATIC_RECONCILIATION=NOT_ACTIVE`.
+The actual unit/config/service-grant admission and genuine seed/delta/replay/QUERY
+are next, not replaced by package/readiness or historical520 experiment evidence.

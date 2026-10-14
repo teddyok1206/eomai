@@ -345,6 +345,11 @@ Application API wheel fallback을 금지하고 설정/schema/정본 unit 템플�
 savepoint로 되돌립니다. 관련 source195개와 실제 임시 DB80개가 PASS했습니다.
 owner 설치 도구도 보호된 interpreter/libexec만 실행하도록 보강했으며,
 이 검증 자체는 운영 함수·권한·서비스 활성화를 뜻하지 않습니다.
+후속 실제 배포에서는 보호된 owner 코드`4cf6ac9a` 설치, 새 DB 백업,
+정식`0053→0054→0055` 갱신, 고정 Identity 함수와 Catalog 권한 정합,
+API/공유 런타임`4cf6ac9a` 배포·격리 검증을 완료했습니다. 관련9개 서비스와
+API LIVE/READY를 확인했습니다. 인덱싱 전용 서비스의 신원/자료 정책 활성화와
+실제 seed/delta/QUERY는 아직 수행하지 않았습니다. 이 설치를 자동 처리 완료로 표시하지 않습니다.
 [서비스 Runner 구현·검증 기록](docs/status/LOCAL_INDEXING_RUNNER_SERVICE_CHECKPOINT_2026-10-14.md),
 [현재 Registry checkpoint](docs/status/LOCAL_INDEXING_REGISTRY_SERVICE_CHECKPOINT_2026-10-14.md),
 [정책 발행 증거](docs/status/LOCAL_INDEXING_POLICY_PUBLICATION_CHECKPOINT_2026-10-14.md),

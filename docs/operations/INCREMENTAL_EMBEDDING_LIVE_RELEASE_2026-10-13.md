@@ -185,3 +185,91 @@ registry/application28 PASS and reservation/concurrency9 PASS. A final read-only
 inspection confirmed0054/other connections0. Logs and synthetic histories remain
 preserved; no test rows, schemas or credentials were removed for a retry. No
 production DB, role bootstrap, service, unit, model or GPU mutation occurred.
+
+## Actual 0054/0055 compatible release — 2026-10-14 09:43 UTC
+
+This is a later operational checkpoint, not a reinterpretation of the earlier
+0052/0053 or pending operator-canary evidence.
+
+- Original finite controller: exact frozen script SHA and current controlling-tty
+  getpass read verified before capture/submission. The pre-login wait was
+  intentionally interrupted; parent/child handles are absent. No timeout-based
+  restart, credential capture, original budget extension or successful-seed claim.
+- Owner source `4cf6ac9a69a91625c7a1e354e6dd6a50769a4452` is installed under
+  `/opt/eom/embedding-owner-releases/4cf6ac9a69a91625c7a1e354e6dd6a50769a4452`.
+  Fixed protected installer/verifier use the unchanged immutable operator Python,
+  never developer API Python/checkout code as root. Actual overlay imports PASS;
+  no code was installed into either frozen interpreter.
+- Exact root-private0054 bridge and0055 release source/archives/all3 raw wheels
+  independently materialized, source/extracted-wheel closure checked and ADMIT_PASS.
+  A fixed service stop window retained the existing host-capacity lock, rechecked
+  complete Workflow metadata, actual DB work and physical worker quiescence.
+- New backup/manifest verification PASS:
+  `/mnt/nas/eom/backups/postgresql/eom_20261014T093652Z_af16564301c5.dump` and
+  matching `.manifest.json`,796153784 bytes. Existing backup script/contract ran
+  from the admitted protected source with only compose/contract/interpreter paths
+  explicitly remapped to that frozen source/operator. No original backup removed.
+- Supported exact callbacks upgraded0053→0054→0055 and verified both heads. Actual
+  Catalog role reconciliation PASS. The supported Identity owner operation created
+  and exactly inspected the fixed SQL fence/ACL; this is not unit authentication
+  or a service data grant. No tests targeted production or directly repaired rows.
+- Standard API deployment source/tree/archive:
+  `4cf6ac9a69a91625c7a1e354e6dd6a50769a4452` /
+  `40c3387c060db76acd808b49c102e98f63812f3a` /
+  `sha256:51f0fe11e036c6d8d2b9363da27baad7f2aeba955ba59fb414f52af62d940294`.
+  Release wheel RECORD, API/Catalog/HWPX role callbacks, metadata, native PDF and
+  actual API isolation PASS. API LIVE/READY and all9 pre-window services active;
+  Web remained hosted. Authenticated content smoke was explicitly deferred.
+- Delivery dist `/tmp/eom-api-build/4cf6ac9a69a91625c7a1e354e6dd6a50769a4452.iPyq1v/dist`
+  is a separate build from the owner-overlay/control-context wheels at `.hCi9IP`.
+  Equal source identity does not mean equal raw wheel bytes; never substitute one
+  build's raw hashes for the other's.
+- New protected root prepare entry installed; owner env switched atomically from
+  old raw `c37ffa9abf97cf337ef97854e5c66f23a1e63305a2d217bc6ce1a7886952672a`
+  to `fc2f4927e4b24867999f7d29e9253d78ab56bc24a94bd867fce4e89b898c0b04`.
+  Exact entry raw SHA `7242761e9d327d88dd2f1670d678a4520cbbd28f6d77a76f9ab50860d6cf0dca`.
+  Original env is retained as `owner-environment.0053.predecessor.env` in the0055
+  private stage below. All old INDEX/prepare instances had MainPID0 before change.
+  New owner-env/fixed CPU readiness PASS without native StartUnit/model forward;
+  CPU prefix, weights, CPU env, numerical config and receipt remain unchanged.
+
+| Scope | Source | Root-private stage | Context raw SHA |
+| --- | --- | --- | --- |
+| exact0054 bridge | `24336eaa64f4c9ce4285db5feb97430c05d3adb4` | `/var/lib/eom-release-operator-stage.24336eaa-h3llo30e` | `cafbdb33d794cf58c845aac51f48f86b71c552301dc94724ed383fea60fdb15d` |
+| exact0055 release | `4cf6ac9a69a91625c7a1e354e6dd6a50769a4452` | `/var/lib/eom-release-operator-stage.4cf6ac9a-h38_d8_l` | `18848f5a6a5870420bf6eacfd0a134973ffb7cb122df642e95d209badff6e0d8` |
+
+Protected libexec: `/usr/local/libexec/eom-release-operator-indexing-4cf6ac9a`.
+Launcher/helper raw SHA:
+`1d2f7194338f50c4010259059a4abf214bc40c354c3eb6e3778f8fc0c6cdbb9b` /
+`007644c19c2dfae5f2d9653bdc1f48fb629b9a0f8f1be09a20c515a9e9d43b9e`.
+Operator prefix/tree SHA remain the historical admitted values above. The one-off
+materialization/window programs only compose this existing fixed adapter; they
+are not a new production supervisor, queue or arbitrary migration endpoint.
+
+Recovery record:
+`/var/lib/eom-api/deployments/4cf6ac9a69a91625c7a1e354e6dd6a50769a4452.json`.
+Do not restore an old0053 API against0055 or blindly downgrade retained history.
+Use the compatible installed release and exact recorded owner-env predecessor.
+
+Operational logs remain under `/tmp/eom-identity-provider-install.nAaycoDM/`:
+
+- `local-index-owner-installed-overlay{,-import}.log`
+- `local-indexing-release-{context-materialization,admit-20261013_0054,admit-20261014_0055}.log`
+- `local-indexing-production-release-window-reviewed.log`
+- `local-indexing-compatible-api-install.log`, `local-indexing-installed-api-identity.log`
+- `local-indexing-release-services-{before,after}.log`
+- `local-indexing-owner-environment-install.log`, `local-indexing-updated-owner-numeric-preflight.log`
+
+Initial owner-read/window composition conservatively returned JOB_BUSY because
+Workflow model metadata was not loaded; the first window therefore stopped **no**
+service and changed no DB. The corrected composition explicitly checks the three
+actual table objects, preserving the original guard. Original logs are retained;
+no state-machine/source rule was weakened to force quiescence.
+
+Latest authoritative pre-window baseline: production0053 and all four embedding
+metadata relations0. Actual production is now0055. There was no numerical forward
+in this release. `SERVICE_IDENTITY_AND_DATA_GRANT=NOT_ACTIVE`,
+`INDEX_OWNER_UNIT=NOT_INSTALLED`, `AUTOMATIC_RECONCILIATION=NOT_ACTIVE`.
+Genuine persistent seed/source-add delta/replay/QUERY, consumers and CPU/GPU
+comparison remain required. Next: activate the exact4cf6 service unit/config/
+Identity/Catalog grant, then bounded genuine acceptance. The full goal is ACTIVE.
