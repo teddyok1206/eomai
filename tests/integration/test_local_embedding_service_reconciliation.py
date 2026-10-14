@@ -22,6 +22,7 @@ from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryLookup,
     MissingEmbeddingBindings,
     PreparedEmbeddingBindingLookup,
+    SelectedEmbeddingSources,
 )
 from eom_catalog_service.settings import CatalogSettings
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
@@ -91,6 +92,22 @@ def reconciliation(guarded_engine, service_owner, tmp_path, monkeypatch):
         authorize(session, supplied_caller, selected)
         return c.current
 
+    def selected_lookup(session, supplied_caller, selected):
+        assert type(selected) is SelectedEmbeddingSources
+        selected.__post_init__()
+        authorize(session, supplied_caller, selected.scope)
+        targets = set(selected.source_revision_ids)
+        assert targets.issubset(source.item_revision_id for source in c.current.sources)
+        return replace(
+            c.current,
+            sources=tuple(s for s in c.current.sources if s.item_revision_id in targets),
+            entries=tuple(
+                e
+                for e in c.current.entries
+                if e.profile.source_basis.source.item_revision_id in targets
+            ),
+        )
+
     def current_lookup(gate, session, configuration):
         gate.authorize_scope(session, caller, query, configuration)
         return query
@@ -120,6 +137,7 @@ def reconciliation(guarded_engine, service_owner, tmp_path, monkeypatch):
 
     monkeypatch.setattr(owner.catalog, "authorize_scope", authorize)
     monkeypatch.setattr(owner.catalog, "resolve_lookup", lookup)
+    monkeypatch.setattr(owner.catalog, "resolve_selected_sources", selected_lookup)
     monkeypatch.setattr(CatalogIndexingRegistrySourceAuthority, "current_lookup", current_lookup)
     monkeypatch.setattr(application, "prepare_missing_embedding_bindings", prepare)
     _scope, compiled = scope_fixture()
@@ -160,6 +178,16 @@ def test_actual_independent_roots_reconcile_one_workflow_and_start(reconciliatio
         )
         assert workflow.created_actor_type == "local_indexing_service"
         assert len(commands) == 1 and commands[0].command_id == first.command_id
+    c.launcher.run.assert_not_called()
+
+
+def test_actual_bounded_submission_revalidates_only_its_selected_targets(reconciliation):
+    c = reconciliation
+    app = application.LocalEmbeddingServiceReconciliation(c.app.executor, maximum_targets=1)
+    result = app.run_once()
+    assert result.state is ReconciliationState.QUEUED
+    assert result.eligible_source_count == 2 and result.selected_target_count == 1
+    assert app.run_once().state is ReconciliationState.REPLAYED
     c.launcher.run.assert_not_called()
 
 

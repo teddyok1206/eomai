@@ -1,4 +1,4 @@
-"""Synthetic SQL/IAM submission seams; QUERY admission is patched only where explicit."""
+"""Real exact-pair admission with synthetic SQL/IAM submission seams, never a grant."""
 
 from __future__ import annotations
 
@@ -18,10 +18,10 @@ from eom_workflow_runner.reference_query_submission import (
 )
 from eom_workflow_runner.repository import CommandType, command_business_fingerprint
 
-from tests.unit.test_reference_query_queue_execution import source as source
 from tests.unit.test_reference_query_queue_execution import (
-    synthetic_admission as synthetic_admission,
+    admitted_query_definition as admitted_query_definition,
 )
+from tests.unit.test_reference_query_queue_execution import source as source
 
 
 @pytest.mark.parametrize("source", ("local_embedding_submission", "reference_query_submission"))
@@ -58,18 +58,18 @@ def fresh(value):
     return value
 
 
-def test_global_query_is_unoffered_even_at_atomic_start_boundary(source):
+def test_admitted_query_still_requires_current_owner_before_atomic_start(source):
     fresh(source)
-    with pytest.raises(WorkflowError) as error:
+    source.owner.resolve_submission.side_effect = ValueError("SYNTHETIC_CURRENT_OWNER_DENIED")
+    with pytest.raises(ValueError, match="CURRENT_OWNER_DENIED"):
         submit(source)
-    assert error.value.code is WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE
     assert not source.rows
-    source.owner.resolve_submission.assert_not_called()
+    source.owner.resolve_submission.assert_called_once()
     source.executor.execute.assert_not_called()
 
 
 def test_atomic_query_creates_once_and_replays_original_command_without_launch(
-    source, synthetic_admission
+    source, admitted_query_definition
 ):
     fresh(source)
     depths = []
@@ -101,7 +101,7 @@ def test_atomic_query_creates_once_and_replays_original_command_without_launch(
 
 
 @pytest.mark.parametrize("when", (1, 2, 3, 4))
-def test_current_owner_denial_rolls_back_both_new_rows(source, synthetic_admission, when):
+def test_current_owner_denial_rolls_back_both_new_rows(source, admitted_query_definition, when):
     fresh(source)
     count = 0
 
@@ -119,7 +119,9 @@ def test_current_owner_denial_rolls_back_both_new_rows(source, synthetic_admissi
     source.executor.execute.assert_not_called()
 
 
-def test_queue_failure_cannot_leave_a_dangling_workflow(source, synthetic_admission, monkeypatch):
+def test_queue_failure_cannot_leave_a_dangling_workflow(
+    source, admitted_query_definition, monkeypatch
+):
     fresh(source)
     failed = Mock(side_effect=ValueError("SYNTHETIC_ENQUEUE_FAILED"))
     monkeypatch.setattr(native_start_command, "enqueue_command", failed)
@@ -139,7 +141,9 @@ def test_queue_failure_cannot_leave_a_dangling_workflow(source, synthetic_admiss
         ("idempotency_key", "another-start"),
     ),
 )
-def test_changed_original_command_fails_without_repair(source, synthetic_admission, field, value):
+def test_changed_original_command_fails_without_repair(
+    source, admitted_query_definition, field, value
+):
     fresh(source)
     original = submit(source)
     setattr(original.command, field, value)
@@ -149,7 +153,7 @@ def test_changed_original_command_fails_without_repair(source, synthetic_admissi
     assert tuple(source.rows) == before and getattr(original.command, field) == value
 
 
-def test_missing_start_is_not_recreated_for_an_existing_workflow(source, synthetic_admission):
+def test_missing_start_is_not_recreated_for_an_existing_workflow(source, admitted_query_definition):
     fresh(source)
     original = submit(source)
     source.rows.remove(original.command)
@@ -159,7 +163,7 @@ def test_missing_start_is_not_recreated_for_an_existing_workflow(source, synthet
     assert tuple(source.rows) == before
 
 
-def test_nested_entry_fails_before_owner_or_new_rows(source, synthetic_admission):
+def test_nested_entry_fails_before_owner_or_new_rows(source, admitted_query_definition):
     fresh(source)
     with source.savepoint(), pytest.raises(WorkflowError) as error:
         submit(source)

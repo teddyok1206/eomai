@@ -42,6 +42,7 @@ _ADMISSIONS = (
     WorkflowAdmission("item-inference-transfer-comparison", "1.1.0", "workflow-role/1.30.0"),
     # Historical column name is not a Codex role or native execution grant.
     WorkflowAdmission("local-embedding-index", "1.0.0", "local-embedding/1.0"),
+    WorkflowAdmission("local-embedding-reference-query", "1.0.0", "reference-query/1.0"),
     WorkflowAdmission("legacy-item-extraction", "1.0.0", "workflow-role/1.14.0"),
     WorkflowAdmission(
         "legacy-item-editorial-compatibility",

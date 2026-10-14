@@ -1,7 +1,7 @@
 """Synthetic SQL/IAM/numerical seams: source lifecycle, NOT installed QUERY acceptance.
 
-The global QUERY definition remains unoffered. Only the tests explicitly using
-`synthetic_admission` patch that table decision; no runtime/default is activated.
+The exact QUERY pair uses real admission. IAM, SQL and numerical execution are
+explicit synthetic seams; no installed runtime/default or user grant is claimed.
 """
 
 from __future__ import annotations
@@ -21,8 +21,8 @@ from eom_orchestrator.models import Base
 from eom_workflow.admission import workflow_definition_is_admitted
 from eom_workflow.compiler import CompiledWorkflowDefinition, compile_definition_data
 from eom_workflow.reference_query_execution import validate_reference_query_step_output
-from eom_workflow_runner import reference_query_admission, repository
 from eom_workflow_runner import reference_query_step_execution as step_module
+from eom_workflow_runner import repository
 from eom_workflow_runner.engine import WorkflowRunner
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
 from eom_workflow_runner.models import (
@@ -322,12 +322,9 @@ def source() -> QueryFixture:
 
 
 @pytest.fixture
-def synthetic_admission(monkeypatch: pytest.MonkeyPatch) -> None:
-    assert not workflow_definition_is_admitted("local-embedding-reference-query", "1.0.0")
-    monkeypatch.setattr(
-        reference_query_admission, "workflow_definition_is_admitted", lambda *_: True
-    )
-    monkeypatch.setattr(repository, "workflow_definition_is_admitted", lambda *_: True)
+def admitted_query_definition() -> None:
+    assert workflow_definition_is_admitted("local-embedding-reference-query", "1.0.0")
+    assert not workflow_definition_is_admitted("local-embedding-reference-query", "1.0.1")
 
 
 def test_fixed_lifecycle_closes_sql_before_inference_and_revalidates_terminal_replay(
@@ -487,7 +484,10 @@ def test_terminal_pointer_tamper_is_not_repaired(source: QueryFixture) -> None:
     assert source.executor.execute.call_count == 1
 
 
-def test_query_unoffered_even_with_ports_before_any_submission_io(source: QueryFixture) -> None:
+@pytest.mark.parametrize("missing", ("owner", "executor"))
+def test_query_admission_cannot_replace_missing_runtime_ports_before_io(
+    source: QueryFixture, missing: str
+) -> None:
     with pytest.raises(WorkflowError) as failure:
         create_workflow_instance(
             cast(Session, source.session),
@@ -496,8 +496,14 @@ def test_query_unoffered_even_with_ports_before_any_submission_io(source: QueryF
             idempotency_key="synthetic-query-unoffered",
             actor_type="human",
             actor_id=source.workflow.created_actor_id,
-            reference_query_owner=cast(ReferenceQueryOwnerAdmission, source.owner),
-            reference_query_executor=cast(ReferenceQueryNativeExecutor, source.executor),
+            reference_query_owner=(
+                None if missing == "owner" else cast(ReferenceQueryOwnerAdmission, source.owner)
+            ),
+            reference_query_executor=(
+                None
+                if missing == "executor"
+                else cast(ReferenceQueryNativeExecutor, source.executor)
+            ),
         )
     assert failure.value.code is WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE
     assert source.session.mock_calls == [] and source.owner.mock_calls == []
@@ -505,7 +511,7 @@ def test_query_unoffered_even_with_ports_before_any_submission_io(source: QueryF
 
 def test_query_claim_is_exact_and_owner_precedes_lease_then_checks_late(
     source: QueryFixture,
-    synthetic_admission: None,
+    admitted_query_definition: None,
 ) -> None:
     candidate = source.candidate()
     order: list[str] = []
@@ -538,7 +544,7 @@ def test_query_claim_is_exact_and_owner_precedes_lease_then_checks_late(
 
 def test_submission_reuses_the_same_workflow_and_checks_owner_before_and_after_savepoint(
     source: QueryFixture,
-    synthetic_admission: None,
+    admitted_query_definition: None,
 ) -> None:
     source.rows.clear()
     depths: list[int] = []
@@ -560,7 +566,7 @@ def test_submission_reuses_the_same_workflow_and_checks_owner_before_and_after_s
 
 def test_late_submission_revocation_rolls_back_new_rows_and_does_not_execute(
     source: QueryFixture,
-    synthetic_admission: None,
+    admitted_query_definition: None,
 ) -> None:
     source.rows.clear()
     source.owner.resolve_submission.side_effect = [source.scope, ValueError("synthetic revoked")]
@@ -572,7 +578,7 @@ def test_late_submission_revocation_rolls_back_new_rows_and_does_not_execute(
 @pytest.mark.parametrize("change", ("generation", "request", "actor", "definition"))
 def test_changed_exact_candidate_cannot_substitute_or_claim(
     source: QueryFixture,
-    synthetic_admission: None,
+    admitted_query_definition: None,
     change: str,
 ) -> None:
     candidate = source.candidate()

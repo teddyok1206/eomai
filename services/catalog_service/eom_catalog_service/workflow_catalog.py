@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from contextlib import nullcontext
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Literal, cast
 
 from eom_catalog_contracts import (
@@ -112,6 +113,7 @@ from eom_workflow.models import (
     RoleResult,
 )
 from eom_workflow.schemas import (
+    ROLE_ALLOWED_RESULT_SCHEMAS,
     load_review_correction_directive_schema,
     validate_role_result,
     validate_schema_message,
@@ -336,72 +338,13 @@ def _uses_v1_reference_conditioning(
     )
 
 
-ROLE_BY_RESULT_SCHEMA = {
-    "authoring-result@1.0": "authoring",
-    "authoring-result@2.0": "authoring",
-    "authoring-result@3.0": "authoring",
-    "image-result@1.0": "image",
-    "image-result@2.0": "image",
-    "image-result@3.0": "image",
-    "review-result@1.0": "review",
-    "review-result@2.0": "review",
-    "review-result@3.0": "review",
-    "registration-result@1.0": "item_management",
-    "registration-result@2.0": "item_management",
-    "registration-result@3.0": "item_management",
-    "authoring-result@4.0": "authoring",
-    "image-result@4.0": "image",
-    "review-result@4.0": "review",
-    "registration-result@4.0": "item_management",
-    "authoring-result@5.0": "authoring",
-    "image-result@5.0": "image",
-    "review-result@5.0": "review",
-    "registration-result@5.0": "item_management",
-    "authoring-result@6.0": "authoring",
-    "image-result@6.0": "image",
-    "review-result@6.0": "review",
-    "registration-result@6.0": "item_management",
-    "authoring-result@7.0": "authoring",
-    "authoring-result@8.0": "authoring",
-    "image-result@8.0": "image",
-    "review-result@8.0": "review",
-    "registration-result@8.0": "item_management",
-    "authoring-result@9.0": "authoring",
-    "image-result@9.0": "image",
-    "review-result@9.0": "review",
-    "registration-result@9.0": "item_management",
-    "authoring-result@10.0": "authoring",
-    "image-result@10.0": "image",
-    "review-result@10.0": "review",
-    "registration-result@10.0": "item_management",
-    "authoring-result@11.0": "authoring",
-    "image-result@11.0": "image",
-    "review-result@11.0": "review",
-    "registration-result@11.0": "item_management",
-    "authoring-result@12.0": "authoring",
-    "image-result@12.0": "image",
-    "review-result@12.0": "review",
-    "registration-result@12.0": "item_management",
-    "review-result@7.0": "review",
-    "registration-result@7.0": "item_management",
-    "knowledge-analysis-proposal-result@1.0": "support",
-    "knowledge-analysis-proposal-result@2.0": "support",
-    "knowledge-analysis-proposal-result@3.0": "support",
-    "knowledge-analysis-proposal-result@4.0": "support",
-    "knowledge-analysis-proposal-result@5.0": "support",
-    "knowledge-analysis-proposal-result@6.0": "support",
-    "knowledge-analysis-proposal-result@7.0": "support",
-    "knowledge-analysis-proposal-result@8.0": "support",
-    "knowledge-analysis-proposal-result@9.0": "support",
-    "knowledge-analysis-proposal-result@10.0": "support",
-    "customer-support-result@1.0": "support",
-    "pdf-document-review-result@1.0": "support",
-    "pdf-document-review-result@4.0": "support",
-    "pdf-document-review-result@2.0": "support",
-    "pdf-document-review-result@3.0": "support",
-    "legacy-item-editorial-compatibility-result@1.0": "support",
-    "legacy-item-extraction-result@1.0": "support",
-}
+ROLE_BY_RESULT_SCHEMA = MappingProxyType(
+    {
+        schema_id: role
+        for role, schema_ids in ROLE_ALLOWED_RESULT_SCHEMAS.items()
+        for schema_id in sorted(schema_ids)
+    }
+)
 GENERATED_RESULT_SCHEMA_PAIRS = frozenset(
     {
         ("authoring-result@3.0", "image-result@3.0"),

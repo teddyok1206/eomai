@@ -1,4 +1,4 @@
-"""Fixed QUERY compilation/protocol only; no admission, DB or native execution."""
+"""Fixed QUERY compilation/exact admission; no DB, runtime grant or native execution."""
 
 from __future__ import annotations
 
@@ -44,8 +44,11 @@ def test_fixed_query_compiles_without_a_codex_role_and_replays_exactly() -> None
     reversed_keys = dict(reversed(tuple(body.items())))
     replay = compile_definition_data(reversed_keys, "synthetic-query-replay", {"support"})
     assert replay.canonical_bytes == compiled.canonical_bytes and replay.sha256 == compiled.sha256
-    assert not workflow_definition_is_admitted(REFERENCE_QUERY_WORKFLOW_KEY, "1.0.0")
-    assert workflow_admission(REFERENCE_QUERY_WORKFLOW_KEY, "1.0.0") is None
+    assert workflow_definition_is_admitted(REFERENCE_QUERY_WORKFLOW_KEY, "1.0.0")
+    admission = workflow_admission(REFERENCE_QUERY_WORKFLOW_KEY, "1.0.0")
+    assert admission is not None
+    assert admission.role_protocol_version == REFERENCE_QUERY_EXECUTION_PROTOCOL
+    assert not workflow_definition_is_admitted(REFERENCE_QUERY_WORKFLOW_KEY, "1.0.1")
     assert "embedding-reference-query-result@1.0" not in RESULT_SCHEMA_FILES
 
 
@@ -60,7 +63,7 @@ def test_declared_query_candidate_matches_frozen_contract_without_activating_it(
         compiled.sha256 == compile_definition_data(definition_body(), "typed-query", set()).sha256
     )
     assert definition_execution_protocol(compiled.definition) == REFERENCE_QUERY_EXECUTION_PROTOCOL
-    assert workflow_admission(REFERENCE_QUERY_WORKFLOW_KEY, "1.0.0") is None
+    assert workflow_definition_is_admitted(REFERENCE_QUERY_WORKFLOW_KEY, "1.0.0")
 
 
 @pytest.mark.parametrize(

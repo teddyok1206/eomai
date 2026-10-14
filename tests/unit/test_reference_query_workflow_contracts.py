@@ -78,7 +78,7 @@ def test_exact_closed_schema_mirror_hash_and_existing_value_refs() -> None:
     }
 
 
-def test_definition_round_trip_is_frozen_and_compilable_but_not_admission_offered() -> None:
+def test_definition_round_trip_is_frozen_and_exact_pair_admitted() -> None:
     definition = parse_reference_query_workflow_definition(definition_body())
     assert definition.schema_version == "1.2"
     assert len(definition.steps) == 2
@@ -89,8 +89,9 @@ def test_definition_round_trip_is_frozen_and_compilable_but_not_admission_offere
             dict(reversed(tuple(definition_body().items())))
         ).model_dump(mode="json")
     )
-    assert not workflow_definition_is_admitted(REFERENCE_QUERY_WORKFLOW_KEY, "1.0.0")
-    compiled = compile_definition_data(definition_body(), "synthetic-unoffered-query", set())
+    assert workflow_definition_is_admitted(REFERENCE_QUERY_WORKFLOW_KEY, "1.0.0")
+    assert not workflow_definition_is_admitted(REFERENCE_QUERY_WORKFLOW_KEY, "1.0.1")
+    compiled = compile_definition_data(definition_body(), "synthetic-query-definition", set())
     assert compiled.definition == definition
 
 

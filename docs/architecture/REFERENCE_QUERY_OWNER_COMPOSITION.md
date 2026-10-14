@@ -1,5 +1,44 @@
 # Current-owner reference QUERY composition
 
+## Exact QUERY admission after concrete owner implementation — 2026-10-14
+
+The typed current-source owner, fixed-purpose executor, durable launch/checkpoint
+recovery and canonical consumer-read adapter now exist. Admit only the existing
+`local-embedding-reference-query@1.0.0` / `reference-query/1.0` pair in the SINGLE
+Workflow admission table, as INDEX already does. Definition import/admission is
+not an installed unit, caller permission, active policy, model launch or consumer
+release. The ordinary API/ROLE runner still lacks the paired QUERY composition
+and must reject it before lookup/claim; no default executor or actor is introduced.
+
+Canonical source is the same frozen two-step definition and request/policy/bundle/
+source/index/claim/receipt pointers. Preserve all JSON Schema bytes, definition
+hashes, prior unoffered history and literal unknown-version denial. This is an
+O(1) immutable tuple-key lookup in the existing mapping, not a new registry,
+protocol, queue, table, index, cache or migration. Existing exact import/submission
+transactions, atomic START idempotency and late current-owner fences own all
+effects; admission itself has none. Dependencies remain pure workflow contracts
+and the existing application/adapters. Source tests must exercise real admission
+without patching it and retain unavailable-owner, cross-purpose, wrong-version,
+actor/lease/revocation, replay and terminal-receipt negatives. Disabling/removing
+the exact admission in a future compatible release blocks NEW work, not deletion
+or successful reinterpretation of immutable history. The simpler permanent
+unoffered entry cannot execute a genuine QUERY; bypassing admission in an operator
+script or widening ROLE would be an unsupported substitute.
+
+Physical QUERY units/polkit/owner config must still be installed and verified,
+controls published through the Orchestrator, and an ACTUAL authenticated operator
+captured before live submission. These gates remain pending; a source admission
+row must never be reported as operational QUERY/consumer acceptance.
+
+The wider gate also exposed a PREEXISTING duplicated Catalog schema→role map that
+omitted the two already-supported inference-transfer comparison result versions.
+Derive its immutable lookup from the authoritative Workflow role-result registry
+instead of appending more parallel strings. Native INDEX/QUERY result carriers
+remain outside that role registry. Existing schema validation and exact upstream
+Workflow/Job/Artifact identity checks are unchanged; this is not a new role,
+protocol, source permission or comparison acceptance. The existing registry-
+equality regression and explicit native-carrier negatives protect the boundary.
+
 2026-10-13 UTC. Continuation of the original system-RAG/incremental-index design.
 This note does not activate QUERY, a service identity, a consumer or a numerical runtime.
 

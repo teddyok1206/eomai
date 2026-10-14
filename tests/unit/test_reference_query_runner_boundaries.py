@@ -1,4 +1,4 @@
-"""Metadata/SQL spies only; QUERY stays unadmitted without DB or fake runtime grants."""
+"""Exact QUERY admission never substitutes for paired runtime owners or source grants."""
 
 from __future__ import annotations
 
@@ -65,42 +65,55 @@ def query_request() -> ReferenceQueryWorkflowRequest:
     return case().request
 
 
-def test_query_definition_import_is_inactive_and_does_not_offer_new_work() -> None:
+def test_exact_query_import_admission_is_distinct_from_native_execution() -> None:
     compiled = compile_definition_data(definition_body(), "synthetic-query-import", set())
     session = Mock(spec=Session)
     session.scalar.return_value = None
     imported, created = import_workflow_definition(session, compiled)
-    assert created and imported.active is False
+    assert created and imported.active is True
     assert imported.definition_hash == compiled.sha256
     session.scalars.return_value = (imported,)
     (status,) = workflow_definition_admission_statuses(session)
     assert status.role_protocol_version == REFERENCE_QUERY_EXECUTION_PROTOCOL
     assert status.role_protocol_error is None
-    assert status.active is status.admitted is status.accepts_new_work is False
+    assert status.active is status.admitted is status.accepts_new_work is True
     session.reset_mock()
+    session.scalar.return_value = imported
     assert (
         admitted_workflow_definition(
             session,
             definition_key=REFERENCE_QUERY_WORKFLOW_KEY,
             definition_version="1.0.0",
         )
-        is None
+        is imported
     )
-    session.scalar.assert_not_called()
+    session.scalar.assert_called_once()
+
+
+def test_query_admission_never_reactivates_an_existing_inactive_snapshot() -> None:
+    existing = record(active=False)
+    compiled = compile_definition_data(definition_body(), "synthetic-old-query", set())
+    session = Mock(spec=Session)
+    session.scalar.return_value = existing
+    imported, created = import_workflow_definition(session, compiled)
+    assert imported is existing and not created and imported.active is False
+    session.add.assert_not_called()
+    session.flush.assert_not_called()
+    session.scalars.return_value = (existing,)
+    (status,) = workflow_definition_admission_statuses(session)
+    assert status.admitted and not status.active and not status.accepts_new_work
 
 
 @pytest.mark.parametrize("active", (False, True))
-def test_query_status_does_not_turn_active_snapshot_into_admission(active: bool) -> None:
+def test_query_status_keeps_activation_separate_from_exact_pair_admission(active: bool) -> None:
     definition = record(active=active)
     session = Mock(spec=Session)
     session.scalars.return_value = (definition,)
     (status,) = workflow_definition_admission_statuses(session)
     assert status.role_protocol_version == REFERENCE_QUERY_EXECUTION_PROTOCOL
     assert status.active is active
-    assert not status.admitted and not status.accepts_new_work
-    assert not workflow_definition_is_admitted(
-        definition.definition_key, definition.definition_version
-    )
+    assert status.admitted and status.accepts_new_work is active
+    assert workflow_definition_is_admitted(definition.definition_key, definition.definition_version)
 
 
 @pytest.mark.parametrize("change", ("hash", "version", "schema", "canonical_key", "extra"))
@@ -119,7 +132,7 @@ def test_stored_query_identity_and_hash_are_revalidated(change: str, active: boo
         definition.canonical_definition["authority"] = "ADMIN"
     session = Mock(spec=Session)
     session.scalars.return_value = (definition,)
-    if active:
+    if active or change != "version":
         with pytest.raises(WorkflowError) as failure:
             workflow_definition_admission_statuses(session)
         assert failure.value.code is WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID

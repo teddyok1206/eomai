@@ -1,12 +1,14 @@
 # Actual local indexing activation — 2026-10-14
 
-14:22 UTC checkpoint (chronology retained below). The first real encoding/launch
-Jobs, Workflow and START all succeeded; one vector encoding, one source binding
-and one immutable PARTIAL index (1/520 eligible sources) exist. Its exact owner
-drained normally. The reviewed sourceae8f8bf6/service revision11 is active and its
-normal reconciliation observes519 missing bindings, selecting only the next1.
-Delta completion/replay/QUERY, consumer activation and CPU/GPU comparison are not
-yet live acceptance. The full goal remains ACTIVE.
+14:47 UTC checkpoint (chronology retained below). Real bounded seed AND delta are
+terminal successes: two encoding/binding rows and two revisions of ONE immutable
+PARTIAL index (2/520 eligible sources). The first vector/binding is unchanged.
+The sourceae8f8bf6/revision11 owner drained normally after the delta, with no active
+command, for the next release/runtime preparation; its unit is inactive/boot
+disabled, not continuously indexing yet. Fixed QUERY templates/config/Polkit are
+installed; current numeric readiness and actual-owner permission checks pass, but
+no genuine QUERY Job or consumer is active. Same-key live replay, further coverage,
+consumer activation and CPU/GPU comparison remain. The full goal remains ACTIVE.
 
 ## Actual changes
 
@@ -629,3 +631,80 @@ Evidence: `native-indexing-first-seed-terminal-confirmed.log`,
 policy-publication-start,activation,controls-and-unit-start,start-diagnostic,
 pre-restart-proof,start-fixed-epoch,first-delta-admission}.log`. Source/push and
 installed activation are distinct; no fresh25-item generation/HWPX was required.
+
+## Genuine bounded delta preserves the first vector — 14:36 UTC
+
+Workflow`workflow_f9f8cbd70dac45c5ab10a12b785ab268` and its original
+START`wfcmd_84a3ded5ded24a12aa11595936c0935e` are COMPLETED/SUCCEEDED,
+attempts/generation1. Encoding Job`job_78995dceb4d44893956555b2eda9c690` and launch
+Job`job_37241226c2d94873858a6948a4c10a02` are SUCCEEDED. The exact native CPU
+unit exited0 at14:26:12 after about64s. The original numerical unit was not rerun.
+The full delta command was observed terminal at14:36:47; concurrent source tests
+and warm filesystem caches mean this is not a controlled performance benchmark.
+
+Encoding/binding/revision counts advance1→2; logical index count stays1.
+Revision2`embeddingindexrev_ec428fa3e4bd4ecd878b68cee5d932b1` explicitly links
+revision1`embeddingindexrev_56ec66cd1dbe484e94740a3f05d98ba9`. It has coverage2/520,
+Artifact`artifact_18aa890b3f3b4e24b7a62038b06c8d7c` /
+`rev_c4569ed7412f4e05a32ab5dedbe1f797`, manifest raw
+`sha256:1b7381d8c24a8458575a683dd32df90835f2861996d822c4fd1955c2e5bc0d48`.
+Before/after comparison proves the first encoding/input/space hashes, shard
+Artifact/revision/hash, row index, registration time and binding metadata all
+unchanged. This is real incremental reuse, not a replacement full seed or an old
+experiment relabeled as persistent vectors. Missing remaining518 is not completion.
+
+The exact owner3993439/invocationb183d35726304d7587c8d142e3280405 received its
+existing graceful stop event and finished this command before exiting successfully.
+No forced stop, lease-expiry retry, failed-history repair or next target occurred.
+First receipt: Artifact`artifact_d73b50a8ea314af784db35ae811a0f20` /
+`rev_70c78e40b699491db46b487a761c6b12`, semantic
+`sha256:d8ea745f4e5528a8571907f72fa9e0d66ba776d53924d44e3f9c7fcc718e9f4c`.
+Delta receipt: Artifact`artifact_3f6d17fb744c4d6abfdb86fe606992b4` /
+`rev_2d83c69f34c6497c9178e9bef5c4e898`, semantic
+`sha256:981339783507465ff517d4ea0f6f1483204e872dd2e260ad68295e800e782e2e`.
+Read-only metadata evidence is separate from runtime authorization; it did not
+resolve source bytes or claim a service identity.
+
+## QUERY entry preparation, not QUERY execution — 14:47 UTC
+
+The two existing fixed QUERY templates, separate nonsecret owner environment and
+the exact48-eom-native-query Polkit rule are now installed/root-owned. Template
+hashes remain`4194d01e...`(prepare) and`1bd18e25...`(numeric); rule raw
+`8edf94e8fb7860f81f98bd8300d8978ef7ac2e7b9f4dc13a6b2fd075c8e530a0`.
+Query owner environment raw
+`b6b1e6ccdf58facfc5e9e46a96409b0c3b1c74f632fcd42fed100e8a4f0ecc62`
+references the already-protected4cf6 QUERY-capable prepare bootstrap. INDEX/CPU
+environment, interpreter/model/config/bundle/receipt, ordinary services and0055
+are unchanged. No QUERY StartUnit, model forward, Workflow or source grant yet.
+
+Actual UID990 isolated read-only launcher/numeric-installation preflight PASS.
+Root then checked Polkit for the ACTUAL kernel-observed running Workflow owner
+(UID/PID/starttime and systemd invocation unchanged before/after), not root as the
+authorization subject: exact QUERY start and existing INDEX start allowed; QUERY
+stop/restart, malformed instance/newline and direct root-prepare start denied.
+All7 results have exact expected0/1 exit codes; no unit was started by this check.
+The initial probes used an unsupported `--details` CLI spelling and then an
+untrusted caller passing action details (126/127). Retain these invocation errors;
+they are not actual permission denials, source authorization or model failures.
+
+The source candidate admits only the existing exact QUERY definition/protocol
+pair; actual paired owner/executor, source/session/claim/receipt checks remain.
+No schema bytes/migration/new queue/role grant. A preexisting duplicate Catalog
+schema-role map also omitted both supported comparison-result versions; it now
+derives an immutable lookup from the authoritative registry, still excluding native
+INDEX/QUERY result carriers. Source candidate regression718 PASS/200.40s, final
+role-map/compiler49 PASS/5.75s and native-boundary74 PASS/17.71s (overlapping).
+Actual guarded PostgreSQL stage/runner/submission68 PASS/46.40s, strict mypy2,
+Ruff/format/diff PASS. First DB run65 PASS/2 failures exposed a synthetic source
+fixture overriding only the old full lookup. The fixture now models exact target
+selection too, with an additional bounded/replay test. No production guard changed.
+
+Evidence: `native-selected-source-{lineage-before-delta-reviewed,delta-after-compute,
+delta-index-observation,delta-drain-observation}.log`,
+`reference-query-{fixed-unit-installation,actual-owner-polkit,
+fixed-numeric-entry-preflight,exact-admission-regression-reviewed,
+exact-admission-postgres-reviewed,role-map-final-focused}.log`.
+The owner is deliberately quiescent for the next compatible release/runtime
+preparation. Native QUERY policy/definition publication, actual operator capture,
+genuine QUERY/replay/consumer read, larger automatic coverage/other views and
+CPU/GPU admission/comparison/default remain the ORIGINAL outstanding goal gates.

@@ -1457,6 +1457,14 @@ def test_catalog_result_schema_roles_match_the_workflow_contract_registry() -> N
         for schema_id in schema_ids
     }
     assert expected == ROLE_BY_RESULT_SCHEMA
+    assert ROLE_BY_RESULT_SCHEMA["item-inference-transfer-pair-result@1.0"] == "support"
+    assert ROLE_BY_RESULT_SCHEMA["item-inference-transfer-pair-result@1.1"] == "support"
+    assert "incremental-embedding-result@1.0" not in ROLE_BY_RESULT_SCHEMA
+    assert "embedding-reference-query-result@1.0" not in ROLE_BY_RESULT_SCHEMA
+    with pytest.raises(TypeError):
+        cast(dict[str, str], ROLE_BY_RESULT_SCHEMA)["embedding-reference-query-result@1.0"] = (
+            "support"
+        )
 
 
 def test_invalid_v4_authoring_result_never_materializes_an_artifact(tmp_path: Path) -> None:

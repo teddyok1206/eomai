@@ -1,4 +1,4 @@
-"""Actual guarded PostgreSQL atomic submission; admission/IAM/physical executor are synthetic.
+"""Actual guarded PostgreSQL and exact admission; IAM/physical executor are synthetic.
 
 No model, NAS, production data or real QUERY activation. Committed synthetic
 Workflow/command evidence remains in this disposable DB, never deleted on retry.
@@ -16,7 +16,7 @@ import pytest
 from eom_workflow.admission import workflow_definition_is_admitted
 from eom_workflow.compiler import compile_definition_data
 from eom_workflow.reference_query_execution import parse_reference_query_workflow_request
-from eom_workflow_runner import native_start_command, reference_query_admission, repository
+from eom_workflow_runner import native_start_command
 from eom_workflow_runner.models import (
     WorkflowCommandRecord,
     WorkflowDefinitionRecord,
@@ -78,18 +78,10 @@ class AtomicCase:
 
 
 @pytest.fixture
-def atomic(guarded_engine, monkeypatch):
+def atomic(guarded_engine):
     assert guarded_engine.dialect.name == "postgresql"
-    assert not workflow_definition_is_admitted("local-embedding-reference-query", "1.0.0")
-    actual = workflow_definition_is_admitted
-
-    def synthetic(key, version):
-        return (key, version) == ("local-embedding-reference-query", "1.0.0") or actual(
-            key, version
-        )
-
-    monkeypatch.setattr(reference_query_admission, "workflow_definition_is_admitted", synthetic)
-    monkeypatch.setattr(repository, "workflow_definition_is_admitted", synthetic)
+    assert workflow_definition_is_admitted("local-embedding-reference-query", "1.0.0")
+    assert not workflow_definition_is_admitted("local-embedding-reference-query", "1.0.1")
     compiled = compile_definition_data(definition_body(), "synthetic/guarded-query-start", set())
     base = case(definition_sha256=compiled.sha256)
     request = parse_reference_query_workflow_request(

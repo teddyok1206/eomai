@@ -166,14 +166,14 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 
 | 증분 인덱스 경계 | 현재 검증·활성 상태 |
 | --- | --- |
-| 계약·registry·Artifact·수치 검증·atomic submission·exact claim/native dispatch | SOURCE_PASS; 실제 native 계산·encoding/launch Job 및 Workflow/START 성공. vector/binding/불변 PARTIAL index 각1건 저장(coverage1/520). delta/replay·QUERY는 별도 진행 중 |
+| 계약·registry·Artifact·수치 검증·atomic submission·exact claim/native dispatch | SOURCE_PASS; 실제 seed와 delta 모두 계산·Job·Workflow/START 성공. vector/binding 각2건, 같은 논리 인덱스의 불변 revision2(coverage2/520), 첫 벡터/연결 재사용 확인. 실제 same-key replay·QUERY는 미완료 |
 | exact pinned index read | SOURCE_PASS; 현재 권한 재확인·일괄 binding 조회·선택된 벡터 읽기 구현, 공통 검색/QUERY 소비는 미활성 |
 | 공통 유사도 context 조립 | SOURCE_PASS; 기출변형용 승인 anchor·3개 독립 view·현재 권한 재확인334 PASS, 실제 QUERY 실행·소비자 연결은 미활성 |
-| genuine QUERY 입력·encoder/handoff·실행 계약 | SOURCE_PASS; 현재 자료·정본4파일과 기존 큐의 QUERY별 claim/완료 검증 연결. 실제 고정 unit·정본 실행·소비자 조회는 미활성 |
-| 고정 CPU QUERY 실행 어댑터 | SOURCE_PASS; private/root handoff·공통 capacity·재시작 후 중복 dispatch 차단·정확한 실행 관찰 구현. QUERY unit/polkit은 미설치, 실제 계산은 미검증 |
+| genuine QUERY 입력·encoder/handoff·실행 계약 | SOURCE_PASS; 정본4파일·기존 큐의 QUERY별 claim/완료 검증. 정확한 QUERY 정의 접수 허용 후보 회귀718·임시 DB68 PASS. 실제 정의/정책 활성화·정본 계산·소비자 조회는 미완료 |
+| 고정 CPU QUERY 실행 어댑터 | SOURCE_PASS; private/root handoff·공통 capacity·재시작 중복 차단. 고정 unit/설정/polkit 설치·UID990 수치 사전확인·실제 owner 허용/거부7 PASS. 실제 QUERY 모델 계산·사용자 권한 검증은 별도 |
 | QUERY Job·실행·정본 완료 조회 | SOURCE_PASS; 원 Job/4개 checkpoint·실행기·원 claim 복구와 현재 권한/정본 완료 조회 구현. 운영 설치·실제 계산·소비 활성화는 미검증 |
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
-| 자동 인덱싱 전용 신원·저장 | 운영0055·sourceae8f8bf6/신원 revision11 활성. 첫1건 terminal 성공/정상 종료 후 exact-target 조회 수정본 설치. 실제 인덱스1/520은 보존하고 누락519 중 다음1건을 정상 접수; 증분 완료·재사용·전체 자동 갱신은 미완료. 회귀1297·임시 PostgreSQL77/32 PASS. [실제 활성화 기록](docs/status/LOCAL_INDEXING_ACTIVATION_2026-10-14.md) |
+| 자동 인덱싱 전용 신원·저장 | 운영0055·sourceae8f8bf6/신원 revision11. 실제 seed+delta 성공, 첫 벡터/연결과 이전 revision 보존, coverage2/520. 다음 release/runtime 준비를 위해 현재 건 완료 후 정상 종료; 상시 자동 인덱싱은 아직 재개 전. 전체/다른 view·실제 replay·소비 연결은 미완료. [실제 활성화 기록](docs/status/LOCAL_INDEXING_ACTIVATION_2026-10-14.md) |
 | 인증된 owner/session 전달 | 수신 API 설치·실제 UID990의 provider/process/config/key-metadata 검증 PASS; 실제 사용자 capture·seed는 별도 실행 gate |
 | 현재 사용자·자료의 native 작업 접수 연결 | SOURCE_IMPLEMENTED; 실제 인증 capture→기존 Catalog 검증·계획 재구성·잠금 확인을 연결, 운영 provider/실행기 연결은 미활성 |
 | Native INDEX 파일 전달·입력/결과 저장 | SOURCE_PASS; 실제 계정 권한4·설치된 시작 권한9·CPU 합성 입력2개×1024차원·동일 실행 재조회 PASS, 실제 자료/Job/binding 연결은 미활성 |
