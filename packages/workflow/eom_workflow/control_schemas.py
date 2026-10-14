@@ -29,6 +29,12 @@ class ControlSchemaResource:
 
 CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType(
     {
+        "resolved-execution-plan-v23": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v23.schema.json",
+            "resources/control-plane/resolved-execution-plan-v23.schema.json",
+            "23.0",
+            "sha256:d0d41a79fee8d94c7815795081f55f46696e2802623670d09491559afefb02ad",
+        ),
         "resolved-execution-plan-v22": ControlSchemaResource(
             "schemas/workflow/control-plane/resolved-execution-plan-v22.schema.json",
             "resources/control-plane/resolved-execution-plan-v22.schema.json",
@@ -826,6 +832,8 @@ def _control_schema_registry() -> Registry[Any]:
         "educational-retrieval-requirement",
         "educational-retrieval-requirement-v2",
         "item-inference-transfer",
+        "item-inference-transfer-embedding",
+        "system-rag-similarity-delivery",
     ):
         schema = load_schema(name)
         identifier = schema.get("$id")

@@ -13,6 +13,7 @@ from eom_catalog_contracts.inference_transfer_experiment import ExperimentView, 
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
 from eom_catalog_contracts.knowledge import KnowledgeSolutionEvidencePointer
 from eom_catalog_contracts.similarity_context import (
+    SimilarityContext,
     SimilarityContextRequest,
     SimilarityFailureCode,
     SimilarityUnavailableReason,
@@ -116,3 +117,11 @@ class SimilarityReferenceQueryReadPort(Protocol):
     ) -> VerifiedReferenceQueryRead | SimilarityQueryUnavailable:
         """Only admitted committed QUERY; never benchmark replay or DOCUMENT relabeling."""
         ...
+
+
+class SimilarityContextReadPort(Protocol):
+    """Existing common application's public read operation, not a new source authority."""
+
+    def compose(
+        self, caller: EmbeddingRegistryCaller, request: SimilarityContextRequest
+    ) -> SimilarityContext: ...

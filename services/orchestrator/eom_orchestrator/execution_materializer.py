@@ -80,6 +80,10 @@ from eom_workflow.inference_transfer_materialization import (
 )
 from eom_workflow.models import RoleWorkerInput
 from eom_workflow.schemas import validate_role_input
+from eom_workflow.similarity_control import (
+    ResolvedExecutionPlanV23,
+    parse_similarity_execution_plan,
+)
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from sqlalchemy.orm import Session
 
@@ -94,6 +98,13 @@ from eom_orchestrator.control_service import (
     resolve_released_instruction_bundle,
 )
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
+from eom_orchestrator.similarity_materialization import (
+    SIMILARITY_ROLE_CONTRACT,
+    SIMILARITY_WORKSPACE_ALIAS,
+    SimilarityMaterializationContext,
+    require_similarity_materialization_context,
+    resolve_similarity_materials,
+)
 
 MAX_MARKDOWN_MEMBER_BYTES = 2 * 1024 * 1024
 MAX_MATERIALIZED_BYTES = 32 * 1024 * 1024
@@ -183,6 +194,7 @@ def materialize_execution_step(
     authorized_artifact_revision_ids: frozenset[str],
     execution_tier: Literal["PRIMARY", "ESCALATED"] = "PRIMARY",
     inference_transfer_context: InferenceTransferMaterializationContext | None = None,
+    similarity_context: SimilarityMaterializationContext | None = None,
 ) -> MaterializedExecution:
     """Materialize one exact plan step without resolving any mutable current pointer."""
 
@@ -226,6 +238,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV18
         | ResolvedExecutionPlanV20
         | ResolvedExecutionPlanV21
+        | ResolvedExecutionPlanV23
     )
     if plan_schema_version == "resolved-execution-plan/2.0":
         plan = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
@@ -265,6 +278,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV19.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/20.0":
         plan = ResolvedExecutionPlanV20.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/23.0":
+        plan = parse_similarity_execution_plan(plan_record.canonical_document)
     elif plan_schema_version in {"resolved-execution-plan/21.0", "resolved-execution-plan/22.0"}:
         plan = _validated_transfer_materialization_plan(
             plan_record.canonical_document,
@@ -279,6 +294,10 @@ def materialize_execution_step(
     if len(matching) != 1:
         raise ControlPlaneError("CONTROL_PLAN_STEP_MISSING", "resolved execution step is missing")
     step = matching[0]
+    if isinstance(plan, ResolvedExecutionPlanV23) and step.role in {"authoring", "review"}:
+        require_similarity_materialization_context(
+            plan, step_key=step_key, context=similarity_context
+        )
     if isinstance(plan, ResolvedExecutionPlanV21):
         assert inference_transfer_context is not None
         _validate_transfer_workspace_inputs(
@@ -414,6 +433,31 @@ def materialize_execution_step(
                 total_bytes += len(evidence_materials.variation_request_payload)
                 total_bytes += len(evidence_materials.variation_source_payload)
                 member_count += 2
+            if isinstance(plan, ResolvedExecutionPlanV23) and step.role in {"authoring", "review"}:
+                original_source = next(
+                    entry.source
+                    for entry in evidence_materials.manifest.entries
+                    if isinstance(entry.source, ApprovedItemKnowledgeSourceV2)
+                    and entry.source.source_class == "PAST_EXAM"
+                    and entry.source.item_revision_id
+                    == plan.retrieval_requirement.past_exam_variation.source_item_revision_id
+                )
+                similarity_payload = resolve_similarity_materials(
+                    session,
+                    plan=plan,
+                    step_key=step_key,
+                    context=similarity_context,
+                    original_source=original_source,
+                    canonical_artifact_root=artifact_root,
+                    authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+                )
+                similarity_path = workspace / SIMILARITY_WORKSPACE_ALIAS
+                _ensure_parent(
+                    similarity_path.parent, workspace=workspace, group_id=worker_group_id
+                )
+                _write_exclusive(similarity_path, similarity_payload, group_id=worker_group_id)
+                total_bytes += len(similarity_payload)
+                member_count += 1
             _require_total_size(total_bytes, analysis=False)
             evidence_bundle_revision_id = plan.evidence_bundle_revision_id
             evidence_manifest_sha256 = plan.evidence_manifest_sha256
@@ -519,6 +563,8 @@ def materialize_execution_step(
         _require_total_size(total_bytes, analysis=True)
 
     agents_bytes = _agents_document(instruction_docs)
+    if isinstance(plan, ResolvedExecutionPlanV23) and step.role in {"authoring", "review"}:
+        agents_bytes += SIMILARITY_ROLE_CONTRACT
     if isinstance(plan, (ResolvedExecutionPlanV13, ResolvedExecutionPlanV14)):
         agents_bytes += _admitted_document_review_contract(plan)
     total_bytes += len(agents_bytes)
@@ -756,6 +802,7 @@ def authorized_execution_artifact_revisions(
     plan_id: str,
     step_key: str,
     inference_transfer_context: InferenceTransferMaterializationContext | None = None,
+    similarity_context: SimilarityMaterializationContext | None = None,
 ) -> frozenset[str]:
     """Derive the exact materialization allowlist from one immutable plan and its manifests."""
 
@@ -785,6 +832,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV19
             | ResolvedExecutionPlanV20
             | ResolvedExecutionPlanV21
+            | ResolvedExecutionPlanV23
         ) = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/3.0":
         plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
@@ -822,6 +870,8 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV19.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/20.0":
         plan = ResolvedExecutionPlanV20.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/23.0":
+        plan = parse_similarity_execution_plan(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") in {
         "resolved-execution-plan/21.0",
         "resolved-execution-plan/22.0",
@@ -846,6 +896,11 @@ def authorized_execution_artifact_revisions(
     if isinstance(plan, ResolvedExecutionPlanV21):
         return _authorized_transfer_control_revisions(session, plan)
     revision_ids: set[str] = set()
+    if isinstance(plan, ResolvedExecutionPlanV23) and step.role in {"authoring", "review"}:
+        require_similarity_materialization_context(
+            plan, step_key=step_key, context=similarity_context
+        )
+        revision_ids.add(plan.similarity_delivery.context_member.artifact_revision_id)
     if isinstance(plan, ResolvedExecutionPlanV2):
         revision_ids.add(plan.source_artifact_revision_id)
     elif isinstance(plan, (ResolvedExecutionPlanV4, ResolvedExecutionPlanV5)):

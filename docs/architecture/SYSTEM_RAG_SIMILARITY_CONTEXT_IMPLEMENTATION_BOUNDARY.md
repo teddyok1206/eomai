@@ -1293,3 +1293,97 @@ Application API wheel, prefix fallback or ML imports. Platform raw
 API-contract raw `307b371555bd62320d400a73542b8a6453e2bfcaa222d6847addeec2ce1db850`.
 Evidence: `similarity-delivery-{release-build,owner-pair-proof}.log` in the same local
 directory. Candidate is NOT installed; current API75fdc265/owner5018ad2d are unchanged.
+
+## 17. C2 grounded-plan and workspace binding
+
+2026-10-14 UTC. Inspecting the existing inventory confirms23 is the next unused
+plan version;21/22 remain comparison plans. Add plan23, not edits to plan19 bytes.
+
+1. **Responsibility:** Extend the existing grounded post-registration plan with one
+   typed similarity-delivery pin. Orchestrator materializes it only for authoring/
+   review; current Catalog common-context composition remains the source authority.
+2. **Canonical source:** The same context Artifact from§16. Existing original Item,
+   Evidence Bundle, accepted report, Graph/policy and usage receipts stay unchanged.
+3. **Identity:** New plan schema/resolver23, original workflow1.16 topology and Pack/
+   instruction pins are separate. There is no new workflow graph merely for a file.
+   A future compatible Pack/preset enables delivery; old pinned runs keep plan19.
+4. **Resolution:** Schema-first parse, exact delivery/raw/context/request hashes and
+   original variation source/Graph/policy agreement. Materialization uses the existing
+   approved Artifact reader, exact allowlist and a mandatory current common-context
+   reader; a stored permission hash or valid file alone is not current authority.
+5. **Access:** Fixed plan/member key lookup, bounded JSON read and one fixed workspace
+   alias `references/similarity/context.json`; no mutable head, model encode or search.
+6. **Structures:** Frozen plan/pin, keyed source identity, existing file-set/Artifact
+   records and exclusive workspace creation. No DB/index/queue/cache or new framework.
+7. **Cost:** O(context bytes)≤512KiB at the explicit read/materialization boundary.
+   Two common reads fence member IO; each retains the existing full-population
+   authorization/decoding and bounded exact ranking cost (up to1,024 sources),
+   not merely one selected candidate lookup. No DOCUMENT encoding, constant-time
+   corpus-authorization claim, or authority cache is introduced. Already verified
+   immutable bytes may be reused only inside the same existing reader root.
+8. **Transactions:** Trusted caller keeps the actual current owner/session/source
+   fences through bounded validation/staging. No inference in that transaction.
+   Source/permission drift removes disclosure; partial workspace failure is not a
+   new query, successful workflow or authorization to retry with a new identity.
+9. **Dependencies:** New plan contract→public Catalog delivery/types; Orchestrator
+   defines the small owner-local read port. The existing WorkflowRunner integration
+   layer implements it through the current Catalog common application and pinned
+   Artifact reader. Orchestrator does not import Catalog infrastructure. No worker
+   DB/NAS, private resolver imports, external API or new dependency. Domain stays IO-free.
+10. **Failure:** Missing current reader, wrong purpose/role/pointer/Graph/policy/source,
+    stale context or revoked authority fails closed. OPTIONAL absence is only the
+    explicit validated common result, not an exception swallowed as missing vectors.
+    Same pinned plan/context are reused; no latest/device/recipe replacement.
+11. **Alternative:** Adding free-form keys to plan19 or auto-authorizing its file
+    list skips the new meaning. One compatible plan plus fixed validated staging is
+    sufficient; no nested copy of a stored plan or fabricated Evidence receipt.
+
+Plan23 keeps workflow1.16, maximum3-review behavior and approval-after-registration;
+it does not activate a new graph or grant unsupported consumers/private intent.
+Its pure construction accepts an UNPERSISTED base candidate only; existing stored
+plans must never be rewritten/upgraded. Runtime preparation, current-reader binding,
+Pack/prompt provenance, activation and actual variation remain separate required
+integration, not implied by schema/materialization source tests.
+
+The role-only sidecar is metadata, not the candidate's actual worked solution or
+original-page pixels. C2 remains INCOMPLETE until bounded selected candidate
+evidence/profile materialization, compatible Pack/instruction provenance, trusted
+runtime preparation/reader composition, and actual variation execution are connected.
+Do not claim that a worker used full candidate reasoning merely from this JSON file.
+
+### 17.1 Source-only plan/materialization checkpoint — 2026-10-14 UTC
+
+Plan23 canonical and packaged schema raw SHA is
+`d0d41a79fee8d94c7815795081f55f46696e2802623670d09491559afefb02ad`.
+Its schema-first public model preserves workflow1.16, original source, Evidence and
+review escalation. The original296 Catalog resources/count/hash remain frozen.
+Existing plan persistence dispatch retains dependency/Pack/preset/role and unique
+workflow replay guards; the new fixture directly tests dependency refusal before
+DB access, not a newly executed PostgreSQL persistence acceptance.
+
+The Orchestrator application owns a narrow local read interface and checks exact
+workflow/operator expectation, authoring/review role, request and returned bounded
+raw SHA. The WorkflowRunner adapter holds the actual captured Catalog caller and
+common reader, refusing a mismatched operator even when file/hash metadata is valid.
+It checks current common context before/after pinned member IO, exact original Item
+and content-member identity, singleton file set, schema/media/raw hash, approval and
+successful producer. Image/registration roles get neither sidecar nor role guidance.
+Primary/escalated review retain the same reference pin; missing or revoked authority
+does not become OPTIONAL vector absence. A failed partial workspace is not a runnable
+job; no auxiliary file or AGENTS document is created after the tested refusal.
+
+Initial21-suite regression:437 PASS/1 FAIL. The existing dependency test detected
+an Orchestrator import of Catalog infrastructure; the new adapter was relocated to
+the WorkflowRunner integration layer and the test was NOT weakened. Earlier physical
+fixtures also incorrectly assumed that a containing storage root is invalid and that
+verified immutable bytes must be rehashed on every same-root read; those expectations
+were corrected without weakening the shared Artifact reader. A late physical file
+change cannot replace the already verified bytes, and a fresh reader rejects it.
+
+Final22-suite source regression: **538 PASS**; strict mypy7, Ruff/format13 and diff
+checks PASS. Actual local SQLite publisher/Artifact-reader tests are distinguished
+from stubbed public workspace-wiring tests; current IAM/source/QUERY evidence is
+synthetic in both. Logs: `/tmp/eom-identity-provider-install.nAaycoDM/` with prefix
+`similarity-materialization-`, including original failure logs and final reruns.
+No migration, production DB/role/unit/runtime/Pack change, real QUERY/model/GPU run,
+candidate grant, corpus re-encoding or consumer activation is claimed here.
