@@ -1156,8 +1156,8 @@ class KnowledgeRetrievalApplicationService:
             )
         return policy
 
+    @staticmethod
     def lock_source_access_policy(
-        self,
         session: Session,
         revision_id: str,
         *,
@@ -1178,7 +1178,13 @@ class KnowledgeRetrievalApplicationService:
                 "KNOWLEDGE_RETRIEVAL_POLICY_INVALID",
                 "source policy family is unsupported",
             )
-        return self.resolve_access_policy(session, revision_id, sha256=sha256)
+        policy = KnowledgeRetrievalApplicationService._policy(session, revision_id)
+        if policy.content_sha256 != sha256:
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_POLICY_STALE",
+                "pinned source policy hash differs",
+            )
+        return policy
 
     @staticmethod
     def topic_keys_for_terms(

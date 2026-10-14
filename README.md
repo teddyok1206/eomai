@@ -324,10 +324,18 @@ Catalog의 서비스 전용 자료 정책1.1과 별도 조회 입구도 추가�
 그대로 참조하므로 서비스 grant가 사용자 조회 정책을 대신하지 않습니다. 두 경로는 같은
 Graph/source/승인 보고서 resolver를 사용하며 fake ADMIN/WORKER나 별도 검색 엔진은 없습니다.
 새 집중 테스트77개·실제 임시 DB51개(기존42+정책 읽기9)가 PASS했습니다. 정책 발행 control,
-Registry/Runner의 서비스 목적 연결과 운영 활성화는 아직 남아 있습니다. 실제 DB에서 찾은
+Registry/Runner의 서비스 목적 연결과 운영 활성화는 당시 미구현이었습니다. 실제 DB에서 찾은
 기존 정책 parser의 JSON Schema 오류 변환 누락도 해당 책임 경계에서 수정했습니다.
 해당 변경의 전체83-suite 회귀2,275개·strict mypy46 모듈·Ruff83 파일도 PASS했습니다.
 3개 wheel/RECORD와 독립 wheel-only40 모듈·schema reference 검증도 PASS했습니다.
+
+후속으로 공식 owner 정책 발행 API를 구현했습니다. revision/hash 재전송·동시 발행·현재
+신원/자료 정책·corpus 확인과 bounded wait를 기존 관계에서 처리하며 새 관리 DB는 없습니다.
+실제 임시 DB70개(기존51+발행19)가 PASS했고, 6회 동시 발행과 잠금 만료 후 재전송을
+확인했습니다. 운영 정책 발행·서비스 활성화·실제 seed/delta/조회는 아직 수행하지 않았습니다.
+최종84-suite 회귀2,283개·strict mypy47 모듈·Ruff86 파일도 PASS했습니다.
+[정책 발행 checkpoint](docs/status/LOCAL_INDEXING_POLICY_PUBLICATION_CHECKPOINT_2026-10-14.md)에
+실행 증거와 남은 Registry/Runner 연결을 구분합니다.
 
 최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와
 strict type/lint/format PASS입니다. 실제 임시 DB28개 사례에는 독립 실행기 claim 경쟁과

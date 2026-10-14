@@ -491,3 +491,34 @@ ambient-process runtime admission. No DB connection, service/policy publication,
 installation, model/GPU run or source-checkout dependency is used. QUERY global
 admission remains UNOFFERED. Evidence:
 `local-indexing-source-policy-wheel-{build,import}.log` in the same directory.
+
+## Supported service-policy publication
+
+Catalog owns one small control publication use case, not a runtime self-grant.
+It requires an explicit clean writable READ COMMITTED root and the actual policy
+table owner (`SESSION_USER = CURRENT_USER`), then the supported Identity owner
+metadata lock for the exact ACTIVE service revision. Source policy1.0 and ACTIVE
+corpus/logical Graph are resolved/locked through their existing owners. The shared
+pure source-policy compatibility rule is used both here and by runtime reads.
+
+The canonical source is the existing immutable Catalog policy-revision row. Its
+revision PK plus semantic SHA supplies idempotency; no new command queue, outbox,
+registry, operation-key table or schema migration is needed. Concurrent exact
+publication inserts once; the losing root reads and revalidates the same row.
+Different content under the same revision fails, never updates or repairs it.
+Use bounded waits, one savepoint for the insertion, and retained pre-savepoint
+Identity/source/corpus locks. Caller commits/rolls back the root; uncertain timeouts
+require same-revision replay after rollback. Only small policy metadata is stored.
+
+Expected scale is a small number of releases. Exact PK/unique-hash lookup and
+indexed corpus/service references are O(log R); metadata parsing is bounded64KiB.
+The returned result contains revision/hash, actual publication audit and created/
+replayed observation, not service authentication or a data capability. Runtime has
+no policy-table INSERT/UPDATE/DELETE grant. Actual runtime/config/compute admission
+remains a separate later gate. Direct ad-hoc DB rows and copied operator credentials
+are not a supported substitute. A generic publication framework is unnecessary for
+this single control operation; existing typed policies/relations are reused.
+
+Implementation and actual disposable owner evidence are in the
+[publication checkpoint](../status/LOCAL_INDEXING_POLICY_PUBLICATION_CHECKPOINT_2026-10-14.md).
+The supported control API is implemented; service/runtime activation is not.

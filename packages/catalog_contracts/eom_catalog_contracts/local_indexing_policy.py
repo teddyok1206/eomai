@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
 from eom_catalog_contracts.inference_transfer_embedding import EmbeddingSpace
 from eom_catalog_contracts.inference_transfer_experiment import ExperimentViewRecipe
+from eom_catalog_contracts.knowledge import EducationRetrievalAccessPolicy
 from eom_catalog_contracts.models import FrozenModel, Sha256, UtcDatetime
 from eom_catalog_contracts.validation import validate_contract
 
@@ -141,6 +142,22 @@ class LocalIndexingAccessPolicy(FrozenModel):
 def local_indexing_access_policy_bytes(value: LocalIndexingAccessPolicy) -> bytes:
     checked = LocalIndexingAccessPolicy.model_validate(value)
     return canonical_json_bytes(checked.model_dump(mode="json"))
+
+
+def require_local_indexing_source_policy(
+    policy: LocalIndexingAccessPolicy,
+    source: EducationRetrievalAccessPolicy,
+) -> None:
+    """One pure compatibility rule, never runtime identity/permission authentication."""
+    if (
+        policy.source_access_policy_revision_id != source.access_policy_revision_id
+        or policy.source_access_policy_sha256 != source.content_sha256
+        or not set(policy.source_classes).issubset(source.allowed_source_classes)
+        or "ITEM_PREPARATION" not in source.allowed_query_kinds
+        or not source.answer_bearing_roles
+        or source.maximum_budget.max_item_revisions < 1
+    ):
+        raise LocalIndexingPolicyContractError()
 
 
 def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:

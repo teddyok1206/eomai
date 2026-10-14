@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from eom_catalog_contracts.local_indexing_policy import LocalIndexingAccessPolicy
+from eom_catalog_contracts.local_indexing_policy import (
+    LocalIndexingAccessPolicy,
+    LocalIndexingPolicyContractError,
+    require_local_indexing_source_policy,
+)
 from eom_identity_service import LocalIndexingFenceError, PostgresLocalIndexingServiceFence
 from eom_operator_identity import local_indexing_service_reference
 from sqlalchemy import select
@@ -56,6 +60,10 @@ class CatalogLocalIndexingSourceAuthority:
                 intent.access_policy_revision_id,
                 sha256=intent.access_policy_sha256,
             )
+            try:
+                require_local_indexing_source_policy(policy, source_policy)
+            except LocalIndexingPolicyContractError:
+                raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_FORBIDDEN") from None
             if (
                 policy.service != local_indexing_service_reference(identity)
                 or policy.source_access_policy_revision_id != intent.access_policy_revision_id
@@ -70,10 +78,6 @@ class CatalogLocalIndexingSourceAuthority:
                 or intent.native_execution_policy_sha256 != policy.native_execution_policy_sha256
                 or intent.resource_profile_sha256 != policy.resource_profile_sha256
                 or not set(intent.source_classes).issubset(policy.source_classes)
-                or not set(intent.source_classes).issubset(source_policy.allowed_source_classes)
-                or "ITEM_PREPARATION" not in source_policy.allowed_query_kinds
-                or not source_policy.answer_bearing_roles
-                or source_policy.maximum_budget.max_item_revisions < 1
                 or intent.maximum_candidates > policy.maximum_sources
             ):
                 raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_FORBIDDEN")

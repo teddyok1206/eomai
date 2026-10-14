@@ -97,6 +97,8 @@ def owner(case, monkeypatch: pytest.MonkeyPatch):
     retrieval = Mock(spec=KnowledgeRetrievalApplicationService)
     retrieval.resolve_local_indexing_access_policy.return_value = policy
     retrieval.lock_source_access_policy.return_value = SimpleNamespace(
+        access_policy_revision_id=policy.source_access_policy_revision_id,
+        content_sha256=policy.source_access_policy_sha256,
         allowed_source_classes=policy.source_classes,
         allowed_query_kinds=("ITEM_PREPARATION",),
         answer_bearing_roles=("EDITOR",),
