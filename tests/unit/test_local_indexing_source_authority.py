@@ -96,7 +96,7 @@ def owner(case, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(PostgresLocalIndexingServiceFence, "fence_current_service", iam)
     retrieval = Mock(spec=KnowledgeRetrievalApplicationService)
     retrieval.resolve_local_indexing_access_policy.return_value = policy
-    retrieval.lock_source_access_policy.return_value = SimpleNamespace(
+    retrieval.resolve_access_policy.return_value = SimpleNamespace(
         access_policy_revision_id=policy.source_access_policy_revision_id,
         content_sha256=policy.source_access_policy_sha256,
         allowed_source_classes=policy.source_classes,
@@ -120,7 +120,7 @@ def authorize(owner):
     return owner.authority.authorize_scope(cast(Session, owner.session), owner.intent)
 
 
-def test_exact_service_and_distinct_source_policy_with_root_metadata_locks(owner) -> None:
+def test_exact_service_locks_mutable_head_but_only_reads_immutable_metadata(owner) -> None:
     assert authorize(owner) == owner.policy
     owner.iam.assert_called_once_with(owner.session)
     owner.retrieval.resolve_local_indexing_access_policy.assert_called_once_with(
@@ -128,13 +128,16 @@ def test_exact_service_and_distinct_source_policy_with_root_metadata_locks(owner
         owner.policy.access_policy_revision_id,
         sha256=owner.policy.content_sha256,
     )
-    owner.retrieval.lock_source_access_policy.assert_called_once_with(
+    owner.retrieval.resolve_access_policy.assert_called_once_with(
         owner.session,
         owner.policy.source_access_policy_revision_id,
         sha256=owner.policy.source_access_policy_sha256,
     )
     assert owner.policy.access_policy_revision_id != owner.intent.access_policy_revision_id
-    assert all(statement._for_update_arg.read for statement in owner.session.calls)
+    corpus, publication = owner.session.calls
+    assert corpus._for_update_arg.read
+    assert publication._for_update_arg is None
+    owner.retrieval.lock_source_access_policy.assert_not_called()
     assert all(
         statement.get_execution_options()["populate_existing"] for statement in owner.session.calls
     )
@@ -255,15 +258,13 @@ def test_current_graph_publication_lifecycle_and_source_policy_constraints(
     elif fault == "graph_hash":
         owner.retrieval.resolve_snapshot_pointer.return_value = None
     elif fault == "source_class":
-        owner.retrieval.lock_source_access_policy.return_value.allowed_source_classes = (
-            "TEXTBOOK",
-        )
+        owner.retrieval.resolve_access_policy.return_value.allowed_source_classes = ("TEXTBOOK",)
     elif fault == "query_kind":
-        owner.retrieval.lock_source_access_policy.return_value.allowed_query_kinds = ()
+        owner.retrieval.resolve_access_policy.return_value.allowed_query_kinds = ()
     elif fault == "answer_bearing":
-        owner.retrieval.lock_source_access_policy.return_value.answer_bearing_roles = ()
+        owner.retrieval.resolve_access_policy.return_value.answer_bearing_roles = ()
     else:
-        owner.retrieval.lock_source_access_policy.return_value.maximum_budget.max_item_revisions = 0
+        owner.retrieval.resolve_access_policy.return_value.maximum_budget.max_item_revisions = 0
     with pytest.raises(LocalIndexingSourceError, match="FORBIDDEN"):
         authorize(owner)
 
@@ -317,13 +318,14 @@ def test_actual_policy_resolver_revalidates_exact_released_metadata(owner, fault
         )
 
 
-def test_actual_policy_resolver_returns_exact_small_model_and_locks_row(owner) -> None:
+def test_actual_policy_resolver_returns_exact_small_model_without_write_privilege(owner) -> None:
     actual = KnowledgeRetrievalApplicationService.resolve_local_indexing_access_policy(
         cast(Session, owner.session),
         owner.policy.access_policy_revision_id,
         sha256=owner.policy.content_sha256,
     )
-    assert actual == owner.policy and owner.session.calls[0]._for_update_arg.read
+    assert actual == owner.policy and owner.session.calls[0]._for_update_arg is None
+    assert owner.session.calls[0].get_execution_options()["populate_existing"]
 
 
 def test_service_front_door_reuses_candidate_algorithm_without_operator_authorization(

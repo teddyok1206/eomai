@@ -733,3 +733,28 @@ their hashes before starting Bash. Existing 3/5 argument modes, exact wheel pins
 RECORD validation, fresh no-clobber target and retained failure stage remain. No
 code is installed into either the operator or numerical interpreter. This closes
 the existing adapter boundary; it is not a new release framework or runtime grant.
+
+## Immutable read privileges versus mutable authorization locks
+
+Actual activation on2026-10-14 exposed PostgreSQL42501: `FOR SHARE` requires
+UPDATE privilege even for a SELECT. Catalog intentionally cannot UPDATE released
+access-policy revisions or append-only Graph publications. Owner-login tests did
+not cover that restricted-login boundary.
+
+- Keep Identity's supported shared fence and the mutable corpus-head shared lock.
+  They serialize service disable/head changes against the admitting root.
+- Read immutable policy revisions and publication rows with SELECT, exact PK/hash,
+  schema/lifecycle validation and fresh ORM population. Successor publication never
+  overwrites these records. The current source policy is still rechecked at every
+  admission; no cached authorization or implicit latest is introduced.
+- Preserve the owner-only source-policy lock used during control publication.
+  Runtime service reads use the existing public policy resolver instead.
+- No schema, protocol, role, grant, Artifact identity or queue change. Indexed
+  O(1) metadata reads remain; a fresh policy lookup is not a population scan.
+- Runtime code remains in Catalog; Identity and the numerical worker gain no data
+  access. Failure remains explicit with no retry/new execution identity.
+- Verify SELECT-only positive reads and UPDATE/DELETE denial in the marked
+  disposable DB, in addition to current mutable-head locking/concurrency tests.
+
+The simpler-looking alternative of granting UPDATE to make row locks pass would
+violate the existing append-only privilege boundary and is rejected.

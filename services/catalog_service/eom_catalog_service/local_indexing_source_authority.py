@@ -48,7 +48,7 @@ class CatalogLocalIndexingSourceAuthority:
         policy = self.retrieval.resolve_local_indexing_access_policy(
             session, revision_id, sha256=sha256
         )
-        source_policy = self.retrieval.lock_source_access_policy(
+        source_policy = self.retrieval.resolve_access_policy(
             session,
             policy.source_access_policy_revision_id,
             sha256=policy.source_access_policy_sha256,
@@ -144,7 +144,6 @@ class CatalogLocalIndexingSourceAuthority:
                     KnowledgeGraphPublicationRecord.graph_snapshot_revision_id
                     == intent.graph_snapshot.graph_snapshot_revision_id,
                 )
-                .with_for_update(read=True)
                 .execution_options(populate_existing=True)
             )
             if (

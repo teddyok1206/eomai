@@ -1120,13 +1120,14 @@ class KnowledgeRetrievalApplicationService:
                 "KNOWLEDGE_RETRIEVAL_POLICY_INVALID",
                 "bounded exact policy pins required",
             )
+        # Released revisions are append-only. FOR SHARE would require UPDATE
+        # privilege, which the runtime must not gain merely to read a policy.
         record = session.scalar(
             select(EducationRetrievalAccessPolicyRevisionRecord)
             .where(
                 EducationRetrievalAccessPolicyRevisionRecord.access_policy_revision_id
                 == revision_id
             )
-            .with_for_update(read=True)
             .execution_options(populate_existing=True)
         )
         if (
@@ -1558,7 +1559,9 @@ class KnowledgeRetrievalApplicationService:
     @staticmethod
     def _policy(session: Session, access_policy_revision_id: str) -> EducationRetrievalAccessPolicy:
         record = session.get(
-            EducationRetrievalAccessPolicyRevisionRecord, access_policy_revision_id
+            EducationRetrievalAccessPolicyRevisionRecord,
+            access_policy_revision_id,
+            populate_existing=True,
         )
         if record is None or record.state != "RELEASED":
             raise KnowledgeRetrievalServiceError(
