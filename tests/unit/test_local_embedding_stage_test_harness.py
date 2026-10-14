@@ -8,6 +8,25 @@ from pathlib import Path
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts/api/testdb_run.sh"
 
 
+def test_disposable_inspection_is_read_only_and_follows_existing_private_state_guards() -> None:
+    source = SCRIPT.read_text()
+    branch = source.index('if [[ "${action}" == "inspect" ]]')
+    assert source.index("validate_application_schema_metadata(") < branch
+    leaf = source[branch : source.index('if [[ "${action}" == "migrate" ]]')]
+    assert "connection.read_only = True" in leaf
+    assert "SHOW transaction_read_only" in leaf
+    assert "validate_catalog_metadata(" in leaf
+    assert "shobj_description(db.oid,'pg_database')" in leaf
+    assert "current_database()" in leaf and "current_user" in leaf
+    assert "app.alembic_version" in leaf and "pg_stat_activity" in leaf
+    assert "pid<>pg_backend_pid()" in leaf
+    for forbidden in ("INSERT", "UPDATE", "DELETE", "ALTER", "DROP", "GRANT", "COMMIT"):
+        assert forbidden not in leaf
+    assert "print(json.dumps" in leaf and '"other_connections"' in leaf
+    assert "print(os.environ" not in leaf
+    assert '"$1" != "inspect"' in source
+
+
 def test_native_stage_branch_stays_after_exact_disposable_owner_preflight() -> None:
     source = SCRIPT.read_text()
     branch = source.index('if [[ "${action}" == "embedding-stage-tests" ]]')

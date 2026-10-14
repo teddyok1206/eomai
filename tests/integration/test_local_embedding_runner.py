@@ -302,7 +302,7 @@ def test_actual_expired_native_command_cannot_restart_without_recovery(
     assert claim_fixture.peek() == expired
 
 
-def test_actual_peek_two_statements_and_query_plan(claim_fixture: ClaimFixture) -> None:
+def test_actual_peek_one_statement_per_family_and_query_plan(claim_fixture: ClaimFixture) -> None:
     statements: list[tuple[str, Any]] = []
 
     def capture(
@@ -319,12 +319,14 @@ def test_actual_peek_two_statements_and_query_plan(claim_fixture: ClaimFixture) 
     try:
         with claim_fixture.sessions() as session:
             for family in CommandExecutionFamily:
+                before = len(statements)
                 peek_command_candidate(
                     session, family=family, workflow_id=claim_fixture.workflow_id
                 )
+                assert len(statements) == before + 1
     finally:
         event.remove(claim_fixture.engine, "before_cursor_execute", capture)
-    assert len(statements) == 2
+    assert len(statements) == len(CommandExecutionFamily)
     with claim_fixture.engine.connect() as connection:
         for statement, parameters in statements:
             plan = connection.exec_driver_sql(

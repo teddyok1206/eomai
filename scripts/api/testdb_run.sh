@@ -33,14 +33,14 @@ if (($# == 3)) && [[ "$1" == "operator-fence-prepare" || "$1" == "operator-fence
 fi
 
 if (($# != 2)) || \
-  [[ "$1" != "verify" && "$1" != "migrate" && "$1" != "hwpx-tests" && \
+  [[ "$1" != "verify" && "$1" != "inspect" && "$1" != "migrate" && "$1" != "hwpx-tests" && \
     "$1" != "embedding-tests" && "$1" != "embedding-encoding-tests" && \
     "$1" != "embedding-stage-tests" && "$1" != "authenticated-session-tests" && \
     "$1" != "pdf-review-tests" && \
     "$1" != "quality-review-tests" && "$1" != "chat-tests" && \
     "$1" != "chat-role-tests" && "$1" != "chat-knowledge-tests" && "$1" != "tests" ]]; then
   printf '%s\n' \
-    "usage: $0 {verify|migrate|hwpx-tests|embedding-tests|embedding-encoding-tests|embedding-stage-tests|authenticated-session-tests|pdf-review-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
+    "usage: $0 {verify|inspect|migrate|hwpx-tests|embedding-tests|embedding-encoding-tests|embedding-stage-tests|authenticated-session-tests|pdf-review-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
   exit 2
 fi
 [[ "$(id -un)" == "eom" ]] || fail "test database execution must run as eom"
@@ -121,6 +121,65 @@ PY
 cd "${REPOSITORY_ROOT}"
 if [[ "${action}" == "verify" ]]; then
   printf 'Disposable application schema prerequisite passed.\n'
+  exit 0
+fi
+if [[ "${action}" == "inspect" ]]; then
+  # Content-free read-only inventory for an already guarded disposable owner DB.
+  # This is not authority to migrate/reuse a busy DB or to bypass any test gate.
+  EOM_API_TEST_STATE="${state_directory}" "${PYTHON}" <<'PY'
+import json
+import os
+from pathlib import Path
+
+import psycopg
+
+from scripts.api.testdb_guard import TestDatabaseManifest, validate_catalog_metadata
+
+manifest = TestDatabaseManifest.load(Path(os.environ["EOM_API_TEST_STATE"]) / "manifest.json")
+with psycopg.connect(os.environ["EOM_DATABASE_URL"].replace("+psycopg", "")) as connection:
+    connection.read_only = True
+    with connection.cursor() as cursor:
+        cursor.execute("SHOW transaction_read_only")
+        read_only = cursor.fetchone()[0] == "on"
+        if not read_only:
+            raise SystemExit("disposable inspection requires a read-only transaction")
+        cursor.execute(
+            "SELECT current_database(),current_user,owner.rolname,"
+            "shobj_description(db.oid,'pg_database'),shobj_description(owner.oid,'pg_authid') "
+            "FROM pg_database db JOIN pg_roles owner ON db.datdba=owner.oid "
+            "WHERE db.datname=current_database()"
+        )
+        database, user, owner, marker, owner_marker = cursor.fetchone()
+        if database != manifest.database or user != manifest.owner_role:
+            raise SystemExit("disposable inspection identity mismatch")
+        validate_catalog_metadata(
+            manifest,
+            database_owner=owner,
+            database_comment=marker,
+            owner_comment=owner_marker,
+            require_runtime=False,
+        )
+        cursor.execute("SELECT to_regclass('app.alembic_version')")
+        if cursor.fetchone()[0] is None:
+            head = None
+        else:
+            cursor.execute("SELECT version_num FROM app.alembic_version")
+            heads = cursor.fetchall()
+            if len(heads) != 1:
+                raise SystemExit("disposable inspection migration head is ambiguous")
+            head = heads[0][0]
+        cursor.execute(
+            "SELECT count(*) FROM pg_stat_activity "
+            "WHERE datname=current_database() AND pid<>pg_backend_pid()"
+        )
+        other_connections = cursor.fetchone()[0]
+print(json.dumps({
+    "disposable_identity": "PASS",
+    "read_only": read_only,
+    "migration_head": head,
+    "other_connections": other_connections,
+}, sort_keys=True))
+PY
   exit 0
 fi
 if [[ "${action}" == "migrate" ]]; then

@@ -165,3 +165,23 @@ Local bounded logs and rejected stages remain under
 controller is waiting for user login in the same `EOM:2 rag-incremental` pane.
 `ACTUAL_PROVIDER_OBSERVATION=PASS`, `OWNER_FULL_PREFLIGHT=PASS`,
 `GENUINE_OPERATOR_CAPTURE=PENDING`, `REAL_SEED_DELTA=PENDING`, `GOAL=ACTIVE`.
+
+## Reusing an existing disposable test DB, not production
+
+Before reuse, `scripts/api/testdb_run.sh inspect <exact-state-directory>` runs the
+existing private-state/URL/schema guards and a read-only database/owner/marker/head
+and other-connection inventory. It prints no credentials, query text or data rows.
+Inspection is not migration authority: a busy, missing or mismatched DB is not
+reused; source tests still require their normal exact-head guards. For a quiescent
+marked disposable DB, use the existing `migrate` and focused test purposes, not a
+manual stamp, row repair, test guard bypass or production connection. The original
+database head and outputs are recorded before any migration.
+
+2026-10-14 UTC actual execution: the above exact state passed all identity/marker
+guards and reported head0050/other connections0. The supported migration cycle
+advanced only this disposable DB to0054, down0054→0053 and up again, with control
+checks PASS. Stage/runner/QUERY47 PASS (same-DB repeat47 PASS), embedding persistence/
+registry/application28 PASS and reservation/concurrency9 PASS. A final read-only
+inspection confirmed0054/other connections0. Logs and synthetic histories remain
+preserved; no test rows, schemas or credentials were removed for a retry. No
+production DB, role bootstrap, service, unit, model or GPU mutation occurred.

@@ -7,6 +7,7 @@ import pytest
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_orchestrator.models import JobEventRecord, JobRecord, ProtocolVersionRecord
 from eom_orchestrator.native_reference_query_coordinator import (
+    NATIVE_REFERENCE_QUERY_COORDINATOR_PROTOCOL,
     NativeReferenceQueryCoordinator,
     create_native_reference_query_launch,
     native_reference_query_launch_key,
@@ -29,6 +30,16 @@ from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.native_reference_query_coordinator_fixtures import query_records
 from tests.unit.test_control_file_set_publication import _publisher
 from tests.unit.test_reference_query_execution_contracts import case
+
+
+def test_storage_protocol_key_fits_the_registry_without_renaming_the_released_schema():
+    limit = ProtocolVersionRecord.__table__.c.version.type.length
+    assert len(NATIVE_REFERENCE_QUERY_COORDINATOR_PROTOCOL) <= limit
+    assert NATIVE_REFERENCE_QUERY_COORDINATOR_PROTOCOL == "native-query-coordinator/1.0"
+    assert load_native_reference_query_coordinator_schema()["$id"] == (
+        "eom://schemas/workflow/native-reference-query-coordinator/1.0"
+    )
+    assert query_records(case())[0].schema_version == "native-reference-query-coordinator/1.0"
 
 
 def test_schema_exact_mirror_pinned_hash_and_isolated_public_copy():
@@ -252,7 +263,7 @@ def test_altered_persistence_is_not_a_valid_original_execution(tmp_path, fault):
             version = (
                 "reference-query/1.0"
                 if fault == "protocol"
-                else "native-reference-query-coordinator/1.0"
+                else NATIVE_REFERENCE_QUERY_COORDINATOR_PROTOCOL
             )
             session.get(ProtocolVersionRecord, version).schema_sha256 = "sha256:" + "0" * 64
         if fault == "state":

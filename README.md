@@ -279,14 +279,19 @@ SQL 밖에서 계산하고, 원 Job/4개 checkpoint와 지정 producer의4파일
 이미 끝난 검색을 읽기 위해 새 Job/lease나 모델 실행을 요구하지 않습니다. Catalog가 Runner
 테이블을 직접 읽지 않으며, 완료 처리와 조회가 같은 정본 검증 규칙을 재사용합니다.
 
-최신60-suite **1,499 PASS**·strict type24·lint/format36·shell/diff PASS입니다.
+최신60-suite **1,501 PASS**·strict type24·lint/format39·shell/diff PASS입니다.
 실제 임시 Job/Artifact/파일·중단 복구 검증이며 IAM/자료/수치 계산의 합성 seam과 구분합니다.
 code candidate `0d4ad538`의3개 wheel/RECORD·격리21-module import도 PASS했지만 실제
 설치/활성화는 아닙니다. 문서 후속 커밋과 검증된 code candidate를 구분합니다.
 QUERY 정의/실행 단위는 아직 미허용·미설치이고, 실제 실행·소비자 연결은 후속 검증입니다.
 source head는0054, 운영 DB는0053이며 기존 계약·명령·CPU 설치·서비스는 변경하지 않았습니다.
-보호된 임시 DB 경로에 QUERY CHECK13개와 commit/crash/read/replay6개를 넣었으나 아직
-collection만 확인했습니다. 실제 DB/IAM/모델·GPU 검증 PASS로 확대하지 않습니다.
+이후 기존 marker-guarded 임시 DB의 소유자·현재 연결0을 확인하고0050→0054 및 실제
+down/up cycle을 통과했습니다. 실제 PostgreSQL에서 stage/runner/QUERY47·Artifact/registry/
+등록28·encoding reservation9개, 서로 다른84개가 PASS했습니다. QUERY CHECK13개와
+commit/crash/read/replay6개도 포함되며47개 gate는 같은 DB에서 다시 PASS했습니다.
+이 과정에서 찾은 protocol registry의32자 key 오류는 고정 내부 key와 불변 JSON schema를
+분리해 수정했습니다. DB 제한·trigger·실패 이력은 유지했습니다. 실제 DB 증거와 합성
+IAM/수치 seam을 구분하며, 실제 사용자·모델/GPU·운영 QUERY 활성화 PASS는 아닙니다.
 [QUERY owner 구현·검증 기록](docs/architecture/REFERENCE_QUERY_OWNER_COMPOSITION.md)에
 단계별 증거와 남은 운영 경계를 구분했습니다.
 

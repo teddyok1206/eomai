@@ -607,3 +607,71 @@ shared terminal validator and Catalog error mapping, and validated packaged sche
 hash/reference closure. No checkout import or installed/runtime/model mutation was
 used. A final read-only systemd check at01:57 UTC found all9 related services active;
 this is service health, not genuine QUERY/seed/delta or consumer acceptance.
+
+## First actual PostgreSQL QUERY gate — storage identifier decision
+
+The guarded disposable gate exposed that the full checkpoint JSON schema version
+`native-reference-query-coordinator/1.0` exceeds the existing protocol registry's
+32-character key. SQLite source fixtures did not enforce that SQL length. Preserve
+the released JSON schema/version/hash and the registry column; use the explicit
+internal registry key `native-query-coordinator/1.0` with that exact schema hash.
+This is a storage protocol identity, not string truncation, a schema alias, latest
+fallback or a reinterpretation of existing bytes. Actual PostgreSQL could never
+have committed the overlength key; no production QUERY history is migrated or
+repaired. Missing/hash-mismatched protocol records still fail explicitly. Add a
+source column-bound regression and run the actual commit/crash/read/replay suite.
+
+The same gate exposed test-only assumptions: an old fixed head, mutation of
+immutable fixture snapshots after insertion, and two queue families when there
+are now three. Seed the intended synthetic identities at INSERT, retain all
+immutability/downgrade checks, compare the unchanged actual admitted head and
+require exactly one indexed peek statement per family. Do not disable triggers,
+weaken constraints, stamp history, repair rows or use production as a test target.
+
+Committed synthetic claim history made an old positive "empty database" assumption
+invalid on the second run. That one positive0053 DDL case now uses empty PostgreSQL
+temporary table schema copies (`LIKE ... INCLUDING ALL`, no copied data), seeded
+before mutation with the exact CHECKs. Its local search path and DDL roll back in
+the existing guarded outer transaction; the test also asserts the real app CHECK
+is unchanged. All history/immutability/negative tests still use actual app tables.
+No old row, failed event or trigger is removed or rewritten to make a test pass.
+
+### Actual disposable PostgreSQL acceptance, 2026-10-14 UTC
+
+The existing official private state
+`/tmp/eom-api-testdb-20261007114938_c6970ffc` passed owner/schema and database/role
+marker checks. Read-only inspection (including server `transaction_read_only=on`)
+found head0050 and no other connections. The existing supported migration purpose
+performed0050→0054,0054→0053→0054 and control/immutable-trigger checks successfully.
+No root authentication, fresh DB/role, credential copy, production mutation or
+manual stamp/row repair was needed. The protected existing test state is retained.
+
+Actual complete gates, not collected-only or summed overlapping retries:
+
+- stage/runner/QUERY47 PASS,27.94s; same DB replay47 PASS,28.11s. Includes the
+  previously unrun13 QUERY CHECK and6 commit/crash/read/replay cases;
+- Artifact/index/bundle/registry/application/completion/native executor28 PASS,
+  77.52s;
+- encoding reservation/concurrency9 PASS,12.40s.
+
+These are84 different PostgreSQL cases. Query publication/receipt/Job/index bytes
+and transaction/concurrency behavior are actual; IAM/Workflow/numerical seams in
+the composed tests remain explicitly synthetic, not installed or real-corpus
+acceptance. Initial21 failures (26 PASS) and the next1 isolation failure (46 PASS)
+are preserved in logs. The actual32-character defect, immutable-seed/head/peek
+fixture assumptions and retained-history positive isolation were fixed without
+weakening the application guards, deleting rows or changing released schemas.
+
+Final60-suite source **1,501 PASS**,263.42s; strict mypy24, Ruff/format39,
+shell/diff PASS. Focused94/95 and earlier1499/1494 counts are not aggregated.
+Final disposable inspection found head0054, server read-only mode and0 other
+connections. Production API live/ready returned LIVE/READY at02:14 UTC. No
+production migration, service/unit/polkit, model/GPU, credentials or runtime
+activation was changed. The original finite INDEX controller3416211/3416258 was
+confirmed live at02:09 UTC; its original log remained0 bytes, not capture/seed
+completion evidence. No replacement process, auth-pane capture or new login was
+performed.
+
+`POSTGRES_QUERY_CHECK=PASS`, `POSTGRES_QUERY_PERSISTENCE=PASS`,
+`POSTGRES_EMBEDDING_BOUNDARIES=PASS`, `QUERY_GLOBAL_ADMISSION=UNOFFERED`,
+`GENUINE_QUERY_CONSUMER_READ=NOT_ACTIVE`, `REAL_SEED_DELTA=PENDING`.

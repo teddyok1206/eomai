@@ -39,7 +39,9 @@ _STAGES: dict[NativeQueryPhase, tuple[JobState, JobState]] = {
     "COMPLETED": (JobState.COMMITTING, JobState.SUCCEEDED),
 }
 _EVENTS = {"REFERENCE_QUERY_NATIVE_" + phase: phase for phase in _STAGES}
-_CHECKPOINT_PROTOCOL = "native-reference-query-coordinator/1.0"
+# Registry keys and JSON schema versions are distinct identities. The former has
+# an existing VARCHAR(32) bound; the released checkpoint bytes/hash stay unchanged.
+NATIVE_REFERENCE_QUERY_COORDINATOR_PROTOCOL = "native-query-coordinator/1.0"
 
 
 class NativeReferenceQueryHistoryError(ValueError):
@@ -243,7 +245,7 @@ class NativeReferenceQueryCoordinator:
             if records:
                 _protocol(
                     session,
-                    _CHECKPOINT_PROTOCOL,
+                    NATIVE_REFERENCE_QUERY_COORDINATOR_PROTOCOL,
                     NATIVE_REFERENCE_QUERY_COORDINATOR_SCHEMA_RESOURCE[2],
                 )
             validate_native_reference_query_history(records, original, self.request)
@@ -293,7 +295,7 @@ class NativeReferenceQueryCoordinator:
             raise NativeReferenceQueryHistoryError("REFERENCE_QUERY_CHECKPOINT_TERMINAL_OR_FOREIGN")
         _protocol(
             session,
-            _CHECKPOINT_PROTOCOL,
+            NATIVE_REFERENCE_QUERY_COORDINATOR_PROTOCOL,
             NATIVE_REFERENCE_QUERY_COORDINATOR_SCHEMA_RESOURCE[2],
             create=True,
         )

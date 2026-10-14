@@ -2489,3 +2489,39 @@ installed simulation과 격리 `-I -B` wheel-only21-module import/schema/ref 검
 source checkout import나 실제 설치를 하지 않았다. 01:57 UTC 관련9개 서비스는 read-only
 조회에서 모두 active였다. 이 건강 상태를 실제 QUERY/seed/delta·소비자 승인으로 확대하지
 않는다. 문서 후속 커밋과 패키지 검증 대상 code candidate는 별개로 기록한다.
+
+## 2026-10-14 UTC — 실제 PostgreSQL gate 실행·발견 결함 수정
+
+기존 보호된 임시 DB state의 owner/URL/schema/DB·role marker를 공식 경계로 확인했다.
+읽기 전용 `inspect`를 기존 테스트 도구에 추가해 server read-only·head0050·다른 연결0을
+확인한 뒤 기존 `migrate`로0050→0054,0054→0053→0054와 control 검증을 통과했다.
+새 sudo/DB/role·credential 복제 없이 승인된 임시 DB 안에서만 실행했다.
+
+첫 실제 gate에서 QUERY checkpoint schema version을 protocol registry key로 쓴32자
+초과 결함을 찾았다. 불변 schema/version/hash와 DB column을 유지하고 명시적인 내부 key
+`native-query-coordinator/1.0`를 사용했다. 임의 문자열 절단·schema alias·실패 이력 수정은
+아니다. 실제 PostgreSQL에는 긴 key를 commit할 수 없었고 운영 QUERY 이력은 바꾸지 않았다.
+
+추가 실패는 오래된 head/분기 수 가정과 INSERT 뒤 불변 snapshot을 변경하던 fixture였다.
+정확한 초기 identity로 seed하고 현재 head 불변·family당 indexed peek1회를 검증하도록
+수정했다. 재실행 때 남는 synthetic claim 이력 때문에 ‘빈 경우’는 실제 CHECK를 복사한
+빈 PostgreSQL temp tables에서만 시험하고 app CHECK 불변도 확인했다. 실제 이력의 삭제/
+성공 재해석이나 trigger/guard 해제 없이 같은 DB에서 반복 가능하게 했다.
+
+실제 PostgreSQL 결과는 stage/runner/QUERY47 PASS(27.94s), 같은 DB 재실행47 PASS(28.11s),
+Artifact/index/bundle/registry/application/completion/native executor28 PASS(77.52s),
+encoding reservation/concurrency9 PASS(12.40s)다. 서로 다른84개이며 반복47을 합산하지
+않는다. 이전 collection-only였던 QUERY CHECK13개와 저장/중단/조회/replay6개도 포함된다.
+첫21 실패/다음1 실패 로그와 기존 synthetic 이력은 보존한다.
+
+최종 source60-suite **1,501 PASS**,263.42s; strict mypy24·Ruff/format39·shell/diff PASS다.
+94/95개 focused 결과는 겹치므로 합산하지 않는다. 실제 DB/Artifact/transaction 증거와
+합성 IAM/Workflow/수치 seam을 구분한다. 마지막 임시 DB는 head0054·다른 연결0·server
+read-only였고02:14 UTC 운영 API LIVE/READY도 정상이다. 운영 migration/role/unit/서비스/
+모델/GPU/credential 변경은 없다. 기존 유한 controller는02:09 UTC live, 원 log0 bytes로
+확인됐으며 인증·seed 완료라고 주장하지 않는다. 기존 창/세션을 교체하거나 추가하지 않았다.
+
+`GOAL=ACTIVE`, `POSTGRES_QUERY_CHECK=PASS`, `POSTGRES_QUERY_PERSISTENCE=PASS`,
+`POSTGRES_EMBEDDING_BOUNDARIES=PASS`, `REAL_SEED_DELTA=PENDING`,
+`GENUINE_QUERY_CONSUMER_READ=NOT_ACTIVE`, `QUERY_GLOBAL_ADMISSION=UNOFFERED`.
+실제 자료 seed/delta/reuse/query, service 자동화·소비자 활성화와 CPU/GPU/default gate는 남아 있다.

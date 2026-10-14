@@ -108,28 +108,9 @@ def test_actual_downgrade_refuses_query_history_before_ddl(
     monkeypatch: pytest.MonkeyPatch,
     marker: str,
 ) -> None:
-    definition, workflow = _seed(stage_owner_connection)
-    if marker == "definition":
-        statement = (
-            "UPDATE workflow_definitions SET definition_key='local-embedding-reference-query' "
-            "WHERE definition_id=:id"
-        )
-        stage_owner_connection.execute(text(statement), {"id": definition})
-    elif marker in {"protocol", "initial", "payload"}:
-        # Closed synthetic fixture statements, not a user-controlled SQL adapter.
-        assignment = {
-            "protocol": "role_schema_version='reference-query/1.0'",
-            "initial": 'initial_request=\'{"purpose":"REFERENCE_QUERY"}\'::jsonb',
-            "payload": (
-                'request_payload=\'{"schema_version":'
-                '"reference-query-workflow-request/1.0"}\'::jsonb'
-            ),
-        }[marker]
-        stage_owner_connection.execute(
-            text(f"UPDATE workflow_instances SET {assignment} WHERE workflow_id=:id"),
-            {"id": workflow},
-        )
-    elif marker == "step":
+    # Snapshot identities must be correct at INSERT; immutable triggers stay enabled.
+    _, workflow = _seed(stage_owner_connection, marker="query_" + marker)
+    if marker == "step":
         _step(
             stage_owner_connection,
             workflow,
@@ -138,7 +119,7 @@ def test_actual_downgrade_refuses_query_history_before_ddl(
             schema="embedding-reference-query-result@1.0",
             key="encode_reference_query",
         )
-    else:
+    elif marker == "carrier":
         step = _step(
             stage_owner_connection,
             workflow,
