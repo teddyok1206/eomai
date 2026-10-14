@@ -1601,3 +1601,98 @@ Platform raw `befdbe92ca1aabc1ffdb14caff9d1d9709033d232c3db8a56da7cce4feff73f0`;
 API-contract raw `bf6d3ea7e2aa78772348aabeebe8ef7e8e4787d01f46694026998deaf1e25436`.
 Evidence: `similarity-plan-runtime-{release-build,owner-pair-proof}.log`. Source
 candidate is not installed; actual API preparation and role callback remain unwired.
+
+## 20. Compatible reference-aware Pack and trusted prompt mode
+
+2026-10-14 UTC. This is a source successor, not an activation or a new workflow.
+
+1. **Responsibility:** Pack1.20.17 extends only authoring/review guidance. Catalog
+   derives its small render-context mode from the exact stored execution plan;
+   workers cannot choose availability or authority through a brief or model output.
+2. **Canonical source:** Existing plan, published Pack/instruction bytes, original
+   Graph Evidence, original variation source and the two validated similarity
+   workspace projections keep their separate ownership and meanings.
+3. **Identity:** Preserve Pack1.20.16 and earlier bytes. Deterministically derive17
+   from16; only Pack metadata, two role profiles and two prompts change. Workflow1.16,
+   role1.24/results12, original guidance files and image/registration inputs stay fixed.
+4. **Pointers:** Render mode `PINNED_REFERENCE_CONTEXT` requires an exact plan23
+   row/header/hash, workflow, preset, role and Pack release binding. It does not
+   authorize source access. The real materializer must still reauthorize and stage
+   both `references/similarity/context.json` and `materials.json` from pinned inputs.
+5. **Access:** One primary-key plan lookup for each new-Pack authoring/review prompt;
+   no corpus scan, native model execution or similarity search while rendering.
+6. **Structures:** Existing four-field plan pin, frozen typed plan and a two-value
+   literal render mode. No new table, queue, wire/result field, cache or dependency.
+7. **Cost:** O(bounded plan bytes) time/space, one indexed lookup. Only new Pack17
+   roles use this context; historical prompt bytes/context hashes remain unchanged.
+8. **Transactions:** Read the already committed plan at the existing Catalog prompt
+   boundary. Missing/stale/mixed binding fails before prompt publication. Do not
+   persist19 then upgrade to23 or run a model within the API admission transaction.
+9. **Dependencies:** Catalog owns the DB adapter; Workflow plan parsers remain pure.
+   The deterministic Pack generator embeds one versioned guidance source with its
+   SHA. No new unstaged worker file is assumed and no business rule is copied to UI.
+10. **Failure/replay:** Valid19/20 use `NOT_OFFERED`; missing/corrupt/unknown plans
+    fail explicitly rather than masquerading as absence. Mode is not a source grant.
+    Existing pinned-prompt replay remains byte-exact. New-Pack context hashing also
+    includes plan ID/SHA, and exact replay rechecks that same row without rendering
+    or publishing another prompt. Thus changing the delivery while keeping the same
+    mode cannot reuse a previous prompt. Historical replay keeps its prior behavior.
+    Auxiliary coverage absence
+    alone is not an originality failure; real Evidence sufficiency remains enforced.
+11. **Alternative:** Requiring auxiliary files in every prompt would break ordinary
+    workflows; guessing from file presence or user text would lose provenance.
+    Two explicit modes suffice; do not add a generic prompt framework or new workflow.
+
+The appended rules compare concrete conditions, intermediate relations, decisive
+inference, asked judgements and misconceptions, not generic solution-stage slogans.
+Ranks remain independent observations and scores are not correctness, approval,
+probability or originality thresholds. Profiles are not new Evidence IDs. Preserve
+the exact existing citation union, original-source requirement, copy policy, student
+layout/material constraints and maximum-three-pass repair loop.
+
+The inherited image profile/prompt/policy must remain byte-identical and exact
+Pack bundle hashes must retain the existing SVG label-layout gate. This includes
+inactive16, whose previous membership omission is a source defect, not permission
+to change an installed/historical Pack. Validate deterministic bundles before
+adding explicit successor hashes; never use a semver range or latest fallback.
+
+### 20.1 Source-compatible Pack checkpoint — 2026-10-14 UTC
+
+Pack1.20.17 is deterministically derived from16 with exactly five changed source
+files: Pack metadata, authoring/review profiles12.3.0 and their prompts. One embedded
+guidance source, including its raw SHA, defines the two explicit modes and concrete
+five-facet comparison. Original content-team guidance, image/registration prompts,
+workflow topology, role/results schemas and existing Evidence rules are unchanged.
+The generator refuses overwriting a target and verifies exact regenerated tree bytes.
+
+Actual Catalog rendering now derives its mode from the persisted19/20/23 plan,
+checking its row header, workflow/definition, preset, Pack release/hash and exact role
+in one indexed lookup. Neither user text nor a similarly named runtime dictionary
+selects the mode. The small frozen context contains mode plus plan ID/SHA, so pinned
+prompt replay rejects changed delivery even if its mode has not changed. Old-Pack
+context hashes and byte-only replay retain their prior behavior. This is metadata
+binding, NOT current source authorization or proof of runtime materialization.
+
+Both inactive16 and17 retain exact deterministic SVG layout-gate bundle pins;
+16's missing membership was fixed without editing that Pack. New17 does not silently
+lose image policy when gaining reference guidance. A stale test that treated16 as
+an unknown future release now uses99.0.0; released brief rejection remains enforced.
+
+Final27-suite regression **511 PASS /61.37s**, strict mypy4, Ruff/format6 and diff
+checks PASS. Tests use synthetic plan/source authority and temporary Pack/workspace
+files, not production IAM, a new PostgreSQL plan persistence run or a model. The new
+39 cases include both roles/modes, exact compilation/reproduction, image gate hashes,
+binding refusal, bounded malformed plans, actual Catalog context wiring, unchanged
+old-role contexts and immutable prompt replay. Earlier overlapping63/56/505/509
+gates are not additive totals. Initial preset and changed-member negative fixtures
+accidentally supplied the original ID; they were corrected to guaranteed-different
+IDs, not by weakening refusal. Failed logs are retained. Evidence prefix:
+`/tmp/eom-identity-provider-install.nAaycoDM/similarity-reference-pack-`.
+
+No production DB/migration/service/Pack/policy change, model/GPU execution, corpus
+re-encoding or consumer activation in this checkpoint. The same QUERY handles were
+alive at18:30 UTC awaiting the original Studio login; no restart or second submit.
+Still required: published compatible Pack/instruction provenance, actual API native
+QUERY preparation/context publication and trusted reader composition into the real
+Orchestrator callback, then bounded variation acceptance. Other goal consumers and
+actual CPU/GPU measurement/default selection also remain open.

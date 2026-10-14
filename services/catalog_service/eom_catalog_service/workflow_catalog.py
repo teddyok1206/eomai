@@ -182,6 +182,11 @@ from eom_catalog_service.models import (
 from eom_catalog_service.pack_resources import PackResourceResolver
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.settings import CatalogSettings
+from eom_catalog_service.similarity_prompt_context import (
+    SIMILARITY_REFERENCE_PACK_VERSION,
+    read_similarity_prompt_context,
+    requires_similarity_prompt_context,
+)
 from eom_catalog_service.staging import (
     create_catalog_operation_directory,
     require_catalog_runtime_directory,
@@ -238,7 +243,7 @@ def _review_correction_prompt_supplement(context: dict[str, str]) -> str:
 # Reuse each membership set across brief and image bindings so a compatible editorial
 # successor cannot acquire a different material schema or lose its image policy.
 CONTENT_TEAM_MATERIAL_V5_PACK_VERSIONS = frozenset(
-    {"1.20.12", "1.20.13", "1.20.14", "1.20.15", "1.20.16"}
+    {"1.20.12", "1.20.13", "1.20.14", "1.20.15", "1.20.16", SIMILARITY_REFERENCE_PACK_VERSION}
 )
 CONTENT_TEAM_MATERIAL_V4_PACK_VERSIONS = frozenset(
     {
@@ -865,7 +870,13 @@ class WorkflowCatalogService:
                 "render_context_sha256"
             ] or not prompt_text.endswith(_review_correction_prompt_supplement(correction)):
                 raise ValueError("pinned review correction prompt context changed")
-        elif REVIEW_CORRECTION_PROMPT_MARKER in prompt_text:
+        elif requires_similarity_prompt_context(workflow, step):
+            context = self._prompt_context(
+                workflow, step, request, upstream, str(pack_snapshot["release_id"])
+            )
+            if content_sha256(context) != envelope["render_context_sha256"]:
+                raise ValueError("pinned similarity prompt context changed")
+        if raw_correction is None and REVIEW_CORRECTION_PROMPT_MARKER in prompt_text:
             raise ValueError("pinned review correction directive was removed")
         return PreparedPrompt(prompt_text, dict(pointer), dict(envelope))
 
@@ -2314,6 +2325,14 @@ class WorkflowCatalogService:
                 "source_review_result_json": "null",
             },
         }
+        if requires_similarity_prompt_context(workflow, step):
+            with self.sessions() as session:
+                context["similarity"] = read_similarity_prompt_context(
+                    session,
+                    workflow=workflow,
+                    step=step,
+                    pack_release_id=release_id,
+                ).as_dict()
         raw_history = workflow.runtime_context.get("review_rework_history")
         if raw_history is not None:
             history = validate_review_rework_history(raw_history)

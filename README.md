@@ -67,6 +67,13 @@ CLI·실행 파일·계정 배정·모델·추론 강도를 고정한 Artifact�
 후보입니다. 운영 활성 버전은 `generated-knowledge-item@1.20.15`로 유지되며, 모델 설정 기능
 배포나 초안 검증이 Content Pack을 자동 활성화하지 않습니다.
 
+유사 문항 보조 자료를 출제·검토에 활용하는 `generated-knowledge-item@1.20.17`도 저장소
+후보로 추가했습니다. 서버가 고정한 실행 계획에서 자료 전달 여부를 판별하고, 제공된 경우에만
+원본·후보의 조건, 중간 관계, 핵심 착상과 오개념을 비교하도록 했습니다. 점수를 승인이나 같은
+풀이의 확률로 해석하지 않으며 기존 Graph 근거·최대 3교·문항 편집 규칙은 유지합니다.
+이 프롬프트와 자료 배치 경계의 소스 검증은 실제 운영 연결·모델 실행을 뜻하지 않습니다.
+[유사도 자료 전달 구현 경계](docs/architecture/SYSTEM_RAG_SIMILARITY_CONTEXT_IMPLEMENTATION_BOUNDARY.md#20-compatible-reference-aware-pack-and-trusted-prompt-mode)를 참고하세요.
+
 일반 대화(`일반 → ChatGPT`)는 별도 상주 `chat` 슬롯으로 운영되고 있습니다.
 기존 작업 슬롯01–06과 분리한 로컬 Codex에서 계정별 기록·이어 묻기·안전한 Markdown 표시를
 제공합니다. 실제 답변·사용자 격리·재시작 기록 보존을 검증했으며 사용자도 동작을 확인했습니다.

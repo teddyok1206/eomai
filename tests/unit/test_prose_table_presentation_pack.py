@@ -118,7 +118,7 @@ def test_successor_does_not_accept_an_older_brief_or_guess_an_unknown_release() 
     )
     with pytest.raises(ContentPackError, match="requires the content-team pack"):
         WorkflowCatalogService._require_item_brief_release(
-            "generated-knowledge-item", "1.20.16", current_request
+            "generated-knowledge-item", "99.0.0", current_request
         )
 
 
