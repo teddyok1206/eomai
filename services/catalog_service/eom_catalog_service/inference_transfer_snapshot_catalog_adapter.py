@@ -7,6 +7,7 @@ The CPU harness and workers never receive database or NAS access from this port.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, cast
@@ -66,7 +67,13 @@ from eom_catalog_service.knowledge_graph_projection import knowledge_node_terms
 from eom_catalog_service.knowledge_retrieval_service import (
     KnowledgeRetrievalServiceError,
     ReadOnlyCandidatePoolScope,
+    ReadOnlyKnowledgeCandidatePool,
     ReadOnlyKnowledgeReuseContext,
+)
+from eom_catalog_service.local_indexing_source_ports import (
+    LocalIndexingSourceAuthorization,
+    LocalIndexingSourceError,
+    LocalIndexingSourceReadIntent,
 )
 from eom_catalog_service.models import ItemComponentRecord, ItemRecord, ItemRevisionRecord
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
@@ -97,6 +104,15 @@ class InferenceTransferSessionCapturePhase(StrEnum):
 @dataclass(frozen=True, slots=True)
 class InferenceTransferSessionCapture:
     scope: ReadOnlyCandidatePoolScope
+    corpus: AdmittedInferenceTransferCorpus | None = None
+    entries: tuple[StagedExperimentEntry, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class LocalIndexingSessionCapture:
+    """Actual checked service read result; no operator role/permission projection."""
+
+    scope: LocalIndexingSourceReadIntent
     corpus: AdmittedInferenceTransferCorpus | None = None
     entries: tuple[StagedExperimentEntry, ...] = ()
 
@@ -279,6 +295,63 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
             raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH")
         if phase is InferenceTransferSessionCapturePhase.AUTHORIZE_SCOPE:
             return InferenceTransferSessionCapture(scope)
+        corpus, entries = self._capture_population(
+            session,
+            scope,
+            recipe,
+            artifact_reader=artifact_reader,
+            read_pool=lambda: self.sources.retrieval.admit_read_only_candidate_pool(
+                session,
+                scope,
+                artifact_reader=artifact_reader,
+            ),
+        )
+        return InferenceTransferSessionCapture(scope, corpus, entries)
+
+    def capture_indexing_in_session(
+        self,
+        session: Session,
+        intent: LocalIndexingSourceReadIntent,
+        *,
+        authority: LocalIndexingSourceAuthorization | None,
+        artifact_reader: PinnedArtifactReadContext,
+        phase: InferenceTransferSessionCapturePhase = (
+            InferenceTransferSessionCapturePhase.CAPTURE_POPULATION
+        ),
+    ) -> LocalIndexingSessionCapture:
+        """Service purpose front door; reuse exact source locks, resolver and projection."""
+        if authority is None or not isinstance(phase, InferenceTransferSessionCapturePhase):
+            raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_UNAVAILABLE")
+        artifact_reader.require_session(session)
+        policy = authority.authorize_scope(session, intent)
+        if phase is InferenceTransferSessionCapturePhase.AUTHORIZE_SCOPE:
+            return LocalIndexingSessionCapture(intent)
+        corpus, entries = self._capture_population(
+            session,
+            intent,
+            intent.recipe,
+            artifact_reader=artifact_reader,
+            read_pool=lambda: self.sources.retrieval.admit_local_indexing_candidate_pool(
+                session,
+                intent,
+                authority=authority,
+                artifact_reader=artifact_reader,
+            ),
+        )
+        if authority.authorize_scope(session, intent) != policy:
+            raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_UNAVAILABLE")
+        return LocalIndexingSessionCapture(intent, corpus, entries)
+
+    def _capture_population(
+        self,
+        session: Session,
+        scope: ReadOnlyCandidatePoolScope | LocalIndexingSourceReadIntent,
+        recipe: ExperimentViewRecipe,
+        *,
+        artifact_reader: PinnedArtifactReadContext,
+        read_pool: Callable[[], ReadOnlyKnowledgeCandidatePool],
+    ) -> tuple[AdmittedInferenceTransferCorpus, tuple[StagedExperimentEntry, ...]]:
+        """Common lock/prefetch/physical-byte/accepted-report path after owner admission."""
         recipe = ExperimentViewRecipe.model_validate(recipe.model_dump(mode="json"))
         association, pointer = KnowledgeSnapshotAnalysisRecord, KnowledgeNodeSourcePointerRecord
         memberships = tuple(
@@ -376,9 +449,7 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
             media_type=graph_member.media_type,
             max_bytes=64 * 1024**2,
         )
-        pool = self.sources.retrieval.admit_read_only_candidate_pool(
-            session, scope, artifact_reader=artifact_reader
-        )
+        pool = read_pool()
         if pool.truncated:
             raise InferenceTransferServiceError("INFERENCE_TRANSFER_SNAPSHOT_POPULATION_TRUNCATED")
         inputs, missing = self.sources._resolve_profile_inputs(
@@ -398,9 +469,7 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
             sources=admitted,
         )
         entries = self._materialize_entries(recipe, inputs, artifact_reader=artifact_reader)
-        return InferenceTransferSessionCapture(
-            scope, corpus, tuple(entries[key] for key in sorted(entries))
-        )
+        return corpus, tuple(entries[key] for key in sorted(entries))
 
     def _baselines(
         self,

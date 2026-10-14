@@ -370,3 +370,112 @@ probe. QUERY global admission remains UNOFFERED. Logs:
 `local-indexing-service-auth-wheel-import.log` in the same evidence directory.
 Production API readiness was read-only READY at2026-10-14 05:10:43 UTC; this is a
 service health observation, not acceptance or activation of the new boundary.
+
+## Catalog service data scope
+
+The next additive policy is `education-retrieval-access-policy/1.1`, a **service-only
+closed shape**, not a change to the role-based1.0 shape or a new human role. Keep
+the existing immutable Catalog policy-revision table; no new registry or migration.
+The purpose-specific owner resolves1.1 explicitly, while existing role-based1.0
+readers continue to reject unsupported shapes. No latest-policy substitution occurs.
+
+Pin one exact service reference and runtime-config raw SHA, one corpus/logical
+Graph, sorted approved source classes, one DOCUMENT encoder space/view recipe and
+at most3 exact namespaces. Namespaces may differ only by view. Pin the execution
+policy/resource semantic hashes as independent compute restrictions, and bound the
+source population to at most1024. Occurrence scope allows only PAST_EXAM. Accepted
+V10 solution projection is the only answer-bearing use; this grants no human query,
+Item/report approval, Graph publication or arbitrary file access. The service head
+is the revocation point; policy history remains immutable RELEASED evidence.
+
+Dominant access is exact policy PK/hash plus indexed service/corpus/Graph checks and
+bounded published-source iteration. Use the existing source resolver and a shared
+internal candidate-pool algorithm after two separate checked authority front doors.
+Do not construct operator `_scope()`, fake requester roles or synthetic permission
+lists for service reads. The resulting pool is ephemeral per-root data, not a grant.
+The service head, corpus and mutable source rows remain locked/rechecked under the
+same explicit Catalog root. Computation and Artifact publication remain outside it.
+Failure/timeout requires rollback; same-key reconciliation preserves prior output.
+The simpler UID/parser/ADMIN reuse is insufficient, while a parallel source engine
+or generic permission framework would duplicate existing authoritative rules.
+
+Keep the **source policy** and **service data grant** distinct. The1.1 service grant
+pins the existing1.0 source-policy revision/hash; it is not stored in place of that
+source policy in bindings/indexes. Both are resolved at service reads. This preserves
+later real-operator retrieval under the same source-policy pins, without treating
+the service as a human role or asking human readers to interpret a service policy.
+Source classes/ITEM_PREPARATION and answer-bearing capability remain constrained by
+the pinned source policy, while the explicit service grant supplies the distinct
+background purpose authority. No permission list is fabricated from these limits.
+
+### Implemented service policy/read boundary — 2026-10-14
+
+The mirrored1.1 service-policy schema and strict bounded canonical model are now
+implemented; raw schema SHA is
+`2ba2fc1fd906fef5a17acb3a7ba7d7e3351aa9a2e863a4386f0913b4bf7f7152`.
+The1.0 policy schema bytes and role semantics remain unchanged. The new policy has
+no roles/permissions/operator ID, and rejects credentials, copied-model extras,
+mixed model/recipe/partition/population namespaces, occurrence/non-past-exam mixing
+and stale semantic hashes. An exact runtime-config hash is mandatory independently
+of the service reference. Execution-policy/resource hashes do not themselves launch
+or admit numerical work.
+
+`CatalogLocalIndexingSourceAuthority` requires the concrete Identity DB/runtime
+fence, explicitly resolves both service1.1 and source1.0 policies, and retains
+current corpus/publication/policy locks. It checks the exact namespace, model,
+recipe, source classes, source-count ceiling and compute-control hashes. The old
+role-based `_scope()` is never called for a service. The source policy must permit
+ITEM_PREPARATION, the requested source classes and answer-bearing Item capability.
+
+`KnowledgeRetrievalApplicationService` now has two authority front doors and one
+shared bounded candidate-pool algorithm. The snapshot adapter likewise has
+separate operator/service envelopes and one shared mutable-source lock, Artifact
+prefetch, physical-member verification, accepted-report and projection body. This
+avoids a second search engine or copied scientific eligibility rules. Service
+capture rechecks authority late; scope-only admission does no source/member IO.
+Missing reports and unavailable views retain the existing partial coverage meaning.
+
+Source gates before final regression: new policy/authority77 PASS, existing
+retrieval/snapshot/registry adapter141 PASS, strict mypy46 modules and Ruff lint/
+format83 files PASS. The new IAM/unit and metadata tests use explicitly synthetic
+seams; they are not root/Catalog runtime admission or an actual corpus run.
+
+Actual guarded disposable PostgreSQL:51 PASS, comprising prior registry29, exact
+SQL function semantics13 and new policy reads9. The9 new cases run under the
+actual disposable owner and keep all synthetic1.0/1.1 policy rows in rolled-back
+roots. Exact PK/hash/family, malformed/extra documents, real RowShareLock and
+rejection of1.1 by human1.0 readers are checked. No service/IAM/worker grant or
+runtime role change is made. Postcheck confirms the disposable marker/owner,
+head0055,0 other connections and an actual read-only inspect transaction.
+
+The first policy DB run was50 PASS/1 failure and remains in
+`local-indexing-source-policy-postgres.log`. It exposed an existing parser-boundary
+defect: `_policy()` caught Pydantic validation errors but not JSON Schema validation
+errors, so an unsupported document leaked the internal schema exception. The same
+deserialization owner now maps both to its stable POLICY_INVALID error; no special
+service-version bypass was added. The reviewed51 PASS is recorded separately.
+The initial synthetic namespace-negative fixture accidentally selected its existing
+view; it now selects a genuinely different view, without weakening the scope rule.
+
+Required next work remains supported service-policy publication, Registry/Runner
+service-purpose composition, immutable successor execution/request controls, actual
+installed admission and bounded seed/delta/replay/QUERY. No new service, policy or
+numerical purpose has been installed/activated by this source/read checkpoint.
+`CATALOG_SERVICE_DATA_POLICY=SOURCE_AND_DISPOSABLE_READ_PASS`,
+`CATALOG_SERVICE_POLICY_PUBLICATION=NOT_IMPLEMENTED`,
+`AUTOMATIC_RECONCILIATION=NOT_ACTIVE`.
+
+Final checkpoint regression:83 suites /2,275 PASS in283.77s, strict mypy46
+modules and Ruff lint/format83 files PASS. All source/schema/resource/dependency
+and existing operator/INDEX/QUERY boundaries remain in that gate. No skipped case
+is relabeled as an executed live permission or model test. Evidence under the same
+`/tmp/eom-identity-provider-install.nAaycoDM/` directory:
+
+- `local-indexing-source-policy-regression.log`
+- `local-indexing-source-policy-{mypy,ruff,format}.log`
+- `local-indexing-source-authority-final.log`
+- `local-indexing-source-policy-postgres-reviewed.log`
+- `local-indexing-source-policy-inspect.log`
+
+This is source/package-read preparation plus actual disposable owner policy reads,
+not the completed incremental-index goal or production service activation.

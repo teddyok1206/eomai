@@ -51,11 +51,13 @@ from eom_catalog_contracts import (
     KnowledgeGraphSnapshotPointer,
     validate_contract,
 )
+from eom_catalog_contracts.local_indexing_policy import LocalIndexingAccessPolicy
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_identity_service.models import OperatorRecord
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
+from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 from sqlalchemy import Engine, distinct, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
@@ -93,6 +95,11 @@ from eom_catalog_service.knowledge_graph_models import (
     KnowledgeSnapshotAnalysisRecord,
 )
 from eom_catalog_service.knowledge_graph_projection import knowledge_node_terms
+from eom_catalog_service.local_indexing_source_ports import (
+    LocalIndexingSourceAuthorization,
+    LocalIndexingSourceError,
+    LocalIndexingSourceReadIntent,
+)
 from eom_catalog_service.models import ItemRecord, ItemRevisionRecord
 from eom_catalog_service.past_exam_source_provenance import PastExamSourceResolutionCache
 from eom_catalog_service.settings import CatalogSettings
@@ -1096,6 +1103,84 @@ class KnowledgeRetrievalApplicationService:
         return policy
 
     @staticmethod
+    def resolve_local_indexing_access_policy(
+        session: Session,
+        revision_id: str,
+        *,
+        sha256: str,
+    ) -> LocalIndexingAccessPolicy:
+        """Service-only1.1 policy; existing human1.0 readers are unchanged."""
+        if (
+            type(revision_id) is not str
+            or re.fullmatch(r"accessrev_[0-9a-f]{32}", revision_id) is None
+            or type(sha256) is not str
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", sha256) is None
+        ):
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_POLICY_INVALID",
+                "bounded exact policy pins required",
+            )
+        record = session.scalar(
+            select(EducationRetrievalAccessPolicyRevisionRecord)
+            .where(
+                EducationRetrievalAccessPolicyRevisionRecord.access_policy_revision_id
+                == revision_id
+            )
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        if (
+            record is None
+            or record.state != "RELEASED"
+            or record.schema_version != ("education-retrieval-access-policy/1.1")
+        ):
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_POLICY_INVALID",
+                "indexing policy is absent or unsupported",
+            )
+        try:
+            policy = LocalIndexingAccessPolicy.model_validate(record.canonical_document)
+        except ValueError:
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_POLICY_INVALID",
+                "indexing policy document is invalid",
+            ) from None
+        if (
+            policy.access_policy_revision_id != revision_id
+            or policy.content_sha256 != record.content_sha256
+            or policy.content_sha256 != sha256
+        ):
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_POLICY_STALE",
+                "exact indexing policy identity/hash differs",
+            )
+        return policy
+
+    def lock_source_access_policy(
+        self,
+        session: Session,
+        revision_id: str,
+        *,
+        sha256: str,
+    ) -> EducationRetrievalAccessPolicy:
+        """Fresh source-policy metadata retained by a writable service-operation root."""
+        record = session.scalar(
+            select(EducationRetrievalAccessPolicyRevisionRecord)
+            .where(
+                EducationRetrievalAccessPolicyRevisionRecord.access_policy_revision_id
+                == revision_id
+            )
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        if record is None or record.schema_version != "education-retrieval-access-policy/1.0":
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_POLICY_INVALID",
+                "source policy family is unsupported",
+            )
+        return self.resolve_access_policy(session, revision_id, sha256=sha256)
+
+    @staticmethod
     def topic_keys_for_terms(
         session: Session,
         *,
@@ -1223,6 +1308,55 @@ class KnowledgeRetrievalApplicationService:
                 graph_snapshot=snapshot,
                 policy_sha256=policy.content_sha256,
             )
+        return self._read_candidate_pool(
+            session,
+            scope,
+            snapshot=snapshot,
+            allow_answer_bearing=scope.requester_role in policy.answer_bearing_roles,
+            reuse_context=reuse_context,
+            artifact_reader=artifact_reader,
+        )
+
+    def admit_local_indexing_candidate_pool(
+        self,
+        session: Session,
+        scope: LocalIndexingSourceReadIntent,
+        *,
+        authority: LocalIndexingSourceAuthorization | None,
+        artifact_reader: CatalogArtifactReader | None = None,
+    ) -> ReadOnlyKnowledgeCandidatePool:
+        """Separate actual service gate, same canonical source algorithm; no fake user."""
+        if authority is None or type(scope) is not LocalIndexingSourceReadIntent:
+            raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_UNAVAILABLE")
+        policy = authority.authorize_scope(session, scope)
+        snapshot = self.resolve_snapshot_pointer(
+            session, scope.graph_snapshot.graph_snapshot_revision_id
+        )
+        if snapshot != scope.graph_snapshot:
+            raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_SCOPE_INVALID")
+        result = self._read_candidate_pool(
+            session,
+            scope,
+            snapshot=snapshot,
+            allow_answer_bearing=True,
+            artifact_reader=artifact_reader,
+        )
+        if authority.authorize_scope(session, scope) != policy:
+            raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_UNAVAILABLE")
+        return result
+
+    def _read_candidate_pool(
+        self,
+        session: Session,
+        scope: ReadOnlyCandidatePoolScope | LocalIndexingSourceReadIntent,
+        *,
+        snapshot: KnowledgeGraphSnapshotPointer,
+        allow_answer_bearing: bool,
+        reuse_context: ReadOnlyKnowledgeReuseContext | None = None,
+        artifact_reader: CatalogArtifactReader | None = None,
+    ) -> ReadOnlyKnowledgeCandidatePool:
+        """Shared bounded source selection AFTER the purpose-specific authority gate."""
+        snapshot_id = snapshot.graph_snapshot_revision_id
         association = KnowledgeSnapshotAnalysisRecord
         pointer = KnowledgeNodeSourcePointerRecord
         node = KnowledgeNodeRecord
@@ -1257,7 +1391,7 @@ class KnowledgeRetrievalApplicationService:
             .order_by(association.analysis_run_id)
             .limit(scope.maximum_candidates + 1)
         )
-        if scope.requester_role not in policy.answer_bearing_roles:
+        if not allow_answer_bearing:
             statement = statement.where(node.answer_bearing.is_(False))
         if scope.analysis_run_ids:
             statement = statement.where(association.analysis_run_id.in_(scope.analysis_run_ids))
@@ -1301,7 +1435,7 @@ class KnowledgeRetrievalApplicationService:
             .order_by(pointer.analysis_run_id, pointer.node_id, pointer.anchor_id)
             .limit(maximum_pointer_rows + 1)
         )
-        if scope.requester_role not in policy.answer_bearing_roles:
+        if not allow_answer_bearing:
             detail = detail.where(node.answer_bearing.is_(False))
         if occurrence_scoped:
             detail = detail.where(pointer.source_class == "PAST_EXAM")
@@ -1428,7 +1562,7 @@ class KnowledgeRetrievalApplicationService:
         try:
             validate_contract("education-retrieval-access-policy", record.canonical_document)
             policy = EducationRetrievalAccessPolicy.model_validate(record.canonical_document)
-        except (ValueError, ValidationError) as exc:
+        except (ValueError, ValidationError, JsonSchemaValidationError) as exc:
             raise KnowledgeRetrievalServiceError(
                 "KNOWLEDGE_RETRIEVAL_POLICY_INVALID",
                 "retrieval access policy document is invalid",
