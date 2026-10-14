@@ -235,3 +235,13 @@ The actual DB119-case proof above is unchanged. Callback tests use explicitly
 synthetic protected-runtime/owner-DB seams; they are not root installation proof.
 The exact schema raw SHA is
 `af03ddeccb0cab48f60341121c987e05733e18aba1986c06408d835953eacb79`.
+
+Code candidate `284d9a8ce6aabcec4680e1e404ed4a79dd0d3817` passed all3 wheel
+builds/RECORD and the installed package simulation with the exact0055 admission
+gate. An immutable operator interpreter imported the25 existing named modules
+and5 identity/registry modules from wheels only. Pointer widths, deferred same-
+service FKs, schema SHA/canonical values and rejection of an implicit owner root
+were verified without a DB connection or installation. QUERY remains globally
+unoffered. This package proof does not activate the new root context, service
+authentication, Catalog grant or automatic reconciliation. The initial failed
+7bf24aea build and lock-error reproduction logs were retained separately.
