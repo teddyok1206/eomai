@@ -2405,3 +2405,19 @@ unchanged. Production composition must still supply independently admitted Ident
 function owner and trusted released read configuration; default unavailable is not
 silently converted to an authority grant. Full-goal consumer activation, actual QUERY,
 automatic coverage and CPU/GPU/default-device requirements remain open.
+
+Candidate `50077c31f50a846105bcceafb9bcf73f0a1f7dd1` passed the three-wheel build
+and full RECORD inspection. Isolated owner-pair (platform/contracts only) and
+explicit three-wheel probes also PASS: the new selector/schema/hash, closed reply,
+Catalog service/socket composition, optional shared provenance reader and API client
+resolve transitively from the selected archives. All EOM imports outside those
+archives, including checkout, existing prefix and undeclared API wheel fallback,
+are denied; no ML module or runtime DB/capture/model call is used by the proofs.
+This is package closure, not an installed operator-RPC acceptance.
+
+Raw wheel SHA: platform `85b323b9c00c0595ef60e150c3bd21a15a3192b26cc2461eb477beed98441d45`;
+contracts `6818488595898cae41a90c10e2fbeb6370de2bdd377436edc53b8f479ce58cdf`;
+API `41c2da6edf0f21cc29da6b3cd55423ee67020ea182a57e9a6e769f546806614f`.
+Evidence suffixes under the same prefix: `release-build.log`, `owner-pair-proof.log`,
+`three-wheel-proof.log`, `acceptance.log`, `existing-regression.log`,
+`resource-boundaries.log`, `mypy-seven.log`. The candidate is pushed, not installed.
