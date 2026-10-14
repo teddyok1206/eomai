@@ -14,8 +14,10 @@ from eom_orchestrator.execution_materializer import (
     materialize_execution_step,
 )
 from eom_orchestrator.similarity_materialization import (
+    SIMILARITY_MATERIALS_WORKSPACE_ALIAS,
     SIMILARITY_ROLE_CONTRACT,
     SIMILARITY_WORKSPACE_ALIAS,
+    SimilarityWorkspaceMaterials,
 )
 from eom_workflow.similarity_control import parse_similarity_execution_plan
 from eom_workflow_runner.engine import _parse_review_escalation_plan
@@ -34,7 +36,10 @@ def workspace_case(tmp_path, monkeypatch):
 
     def resolved(session, **kwargs):
         calls.append((session, kwargs))
-        return canonical_json_bytes(case["context"].model_dump(mode="json"))
+        return SimilarityWorkspaceMaterials(
+            canonical_json_bytes(case["context"].model_dump(mode="json")),
+            canonical_json_bytes(case["references"].model_dump(mode="json")),
+        )
 
     monkeypatch.setattr(module, "resolve_similarity_materials", resolved)
     case["resolution_calls"] = calls
@@ -68,6 +73,9 @@ def test_authoring_and_both_review_tiers_preserve_original_and_separate_auxiliar
     assert (workspace / SIMILARITY_WORKSPACE_ALIAS).read_bytes() == canonical_json_bytes(
         case["context"].model_dump(mode="json")
     )
+    assert (workspace / SIMILARITY_MATERIALS_WORKSPACE_ALIAS).read_bytes() == canonical_json_bytes(
+        case["references"].model_dump(mode="json")
+    )
     assert (workspace / "references/variation/source-item.json").read_bytes() == case[
         "source_payload"
     ]
@@ -78,7 +86,7 @@ def test_authoring_and_both_review_tiers_preserve_original_and_separate_auxiliar
     agents = (workspace / "AGENTS.md").read_bytes()
     assert agents.endswith(SIMILARITY_ROLE_CONTRACT)
     assert result.agents_sha256 == sha256_bytes(agents)
-    assert result.materialized_member_count == 8
+    assert result.materialized_member_count == 9
     assert result.plan_sha256 == case["plan"].plan_sha256
     assert result.evidence_manifest_sha256 == case["manifest"]["manifest_sha256"]
     ((session, arguments),) = case["resolution_calls"]
@@ -137,6 +145,7 @@ def test_only_authoring_and_review_receive_the_auxiliary_member_allowlist(
         workspace = _workspace(tmp_path, "unrelated")
         materialize(case, workspace, step_key=role, similarity_context=None)
         assert not (workspace / SIMILARITY_WORKSPACE_ALIAS).exists()
+        assert not (workspace / SIMILARITY_MATERIALS_WORKSPACE_ALIAS).exists()
         assert SIMILARITY_ROLE_CONTRACT not in (workspace / "AGENTS.md").read_bytes()
     assert not case["resolution_calls"]
 

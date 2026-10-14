@@ -23,7 +23,8 @@ from eom_catalog_contracts.inference_transfer_experiment import (
 )
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
 from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
-from eom_catalog_contracts.similarity_context import SimilarityViewSelection
+from eom_catalog_contracts.similarity_context import SimilarityContext, SimilarityViewSelection
+from eom_catalog_contracts.similarity_materials import SimilarityReferenceMaterials
 from eom_operator_identity import LocalIndexingServiceReference, local_indexing_service_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from sqlalchemy.orm import Session
@@ -137,6 +138,14 @@ class SelectedEmbeddingSources:
             or len(self.source_revision_ids) > self.scope.maximum_sources
         ):
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+
+
+class SimilarityMaterialsReadPort(Protocol):
+    """Existing selected-source owner integration, not the DB-independent composer port."""
+
+    def read_similarity_materials_in_session(
+        self, session: Session, caller: EmbeddingRegistryCaller, context: SimilarityContext
+    ) -> SimilarityReferenceMaterials: ...
 
 
 @dataclass(frozen=True, slots=True)

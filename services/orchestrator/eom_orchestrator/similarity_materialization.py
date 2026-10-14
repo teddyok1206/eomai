@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,12 +12,20 @@ from eom_catalog_contracts.inference_transfer_experiment import PopulationSource
 from eom_catalog_contracts.similarity_context import (
     MAX_SIMILARITY_CONTEXT_BYTES,
     SimilarityContextRequest,
+    parse_similarity_context,
     parse_similarity_context_request,
 )
-from eom_identifiers import sha256_bytes
+from eom_catalog_contracts.similarity_materials import (
+    MAX_SIMILARITY_MATERIALS_BYTES,
+    parse_similarity_materials,
+    validate_similarity_materials,
+)
+from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_workflow.similarity_control import (
     ResolvedExecutionPlanV23,
     parse_similarity_execution_plan,
+    validate_similarity_original_source,
+    validate_similarity_plan_context,
     validate_similarity_plan_request,
 )
 from jsonschema.exceptions import ValidationError as SchemaError
@@ -25,9 +34,15 @@ from sqlalchemy.orm import Session
 from eom_orchestrator.control_service import ControlPlaneError
 
 SIMILARITY_WORKSPACE_ALIAS = "references/similarity/context.json"
+SIMILARITY_MATERIALS_WORKSPACE_ALIAS = "references/similarity/materials.json"
 SIMILARITY_ROLE_CONTRACT = (
     b"\n## Auxiliary related-reference context\n\n"
     b"Read `references/similarity/context.json` as auxiliary approved-reference observations.\n"
+    b"Read `references/similarity/materials.json` for the exact anchor profile and selected "
+    b"question-only Item/accepted-report projections. Missing text or decisive claims remain "
+    b"unavailable/insufficient. Never fill them with an invented source statement.\n"
+    b"Profile extraction and inferred flags distinguish approved analysis projections from "
+    b"model inference, not original-page quotations or inspected pixels.\n"
     b"The anchor is the original reference, NOT a semantic comparison of the private draft.\n"
     b"Preserve independent Graph/vector/view ranks and explicit partial/unavailable coverage.\n"
     b"Scores are display-only retrieval observations, not probabilities, correctness, approval, "
@@ -38,6 +53,14 @@ SIMILARITY_ROLE_CONTRACT = (
     b"Keep the original variation constraints, actual Graph Evidence and maximum-three-review "
     b"contract unchanged. Do not copy another source merely because it is related.\n"
 )
+
+
+@dataclass(frozen=True, slots=True)
+class SimilarityWorkspaceMaterials:
+    """Exactly two payloads at the temporary workspace boundary, never DB/wire authority."""
+
+    context_payload: bytes
+    references_payload: bytes
 
 
 class SimilarityMaterializationReadPort(Protocol):
@@ -53,7 +76,7 @@ class SimilarityMaterializationReadPort(Protocol):
         original_source: PopulationSource,
         canonical_artifact_root: Path,
         authorized_artifact_revision_ids: frozenset[str],
-    ) -> bytes: ...
+    ) -> SimilarityWorkspaceMaterials: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,7 +138,7 @@ def resolve_similarity_materials(
     original_source: PopulationSource,
     canonical_artifact_root: Path,
     authorized_artifact_revision_ids: frozenset[str],
-) -> bytes:
+) -> SimilarityWorkspaceMaterials:
     """Delegate IO to the official adapter; recheck exact returned bytes at this boundary."""
     checked = parse_similarity_execution_plan(plan)
     bound = require_similarity_materialization_context(checked, step_key=step_key, context=context)
@@ -124,7 +147,7 @@ def resolve_similarity_materials(
         raise ControlPlaneError(
             "CONTROL_POINTER_PERMISSION_DENIED", "similarity member is not authorized"
         )
-    payload = bound.reader.resolve(
+    resolved = bound.reader.resolve(
         session,
         plan=checked,
         operator_id=bound.operator_id,
@@ -133,12 +156,28 @@ def resolve_similarity_materials(
         canonical_artifact_root=canonical_artifact_root,
         authorized_artifact_revision_ids=authorized_artifact_revision_ids,
     )
-    if (
-        type(payload) is not bytes
-        or len(payload) > MAX_SIMILARITY_CONTEXT_BYTES
-        or sha256_bytes(payload) != pin.sha256
-    ):
+    try:
+        if type(resolved) is not SimilarityWorkspaceMaterials or (
+            type(resolved.context_payload) is not bytes
+            or type(resolved.references_payload) is not bytes
+            or len(resolved.context_payload) > MAX_SIMILARITY_CONTEXT_BYTES
+            or len(resolved.references_payload) > MAX_SIMILARITY_MATERIALS_BYTES
+            or sha256_bytes(resolved.context_payload) != pin.sha256
+        ):
+            raise ValueError("SIMILARITY_WORKSPACE_PAYLOAD_INVALID")
+        current = parse_similarity_context(json.loads(resolved.context_payload))
+        validate_similarity_plan_context(checked, current)
+        validate_similarity_original_source(checked, current, original_source)
+        references = parse_similarity_materials(json.loads(resolved.references_payload))
+        validate_similarity_materials(references, current)
+        if (
+            canonical_json_bytes(current.model_dump(mode="json")) != resolved.context_payload
+            or canonical_json_bytes(references.model_dump(mode="json"))
+            != resolved.references_payload
+        ):
+            raise ValueError("SIMILARITY_WORKSPACE_CANONICAL_BYTES_INVALID")
+    except (ValueError, TypeError, SchemaError, RecursionError):
         raise ControlPlaneError(
             "CONTROL_SIMILARITY_CONTEXT_INVALID", "similarity adapter returned different bytes"
-        )
-    return payload
+        ) from None
+    return resolved

@@ -11,12 +11,15 @@ from eom_catalog_contracts.similarity_context import (
     parse_similarity_context,
     parse_similarity_context_request,
 )
+from eom_catalog_contracts.similarity_materials import build_similarity_materials
 from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryCaller
+from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
 from eom_identifiers import canonical_json_bytes
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
 from eom_orchestrator.similarity_materialization import (
     SimilarityMaterializationContext,
+    SimilarityWorkspaceMaterials,
     resolve_similarity_materials,
 )
 from eom_workflow.similarity_control import bind_similarity_execution_plan
@@ -57,11 +60,20 @@ def materialization_case(tmp_path, monkeypatch):
     plan = bind_similarity_execution_plan(case["base"], receipt.delivery, case["context"])
     reader = CurrentReader(case["context"])
     caller = EmbeddingRegistryCaller("operator_" + "a" * 32)
+    references = build_similarity_materials(
+        case["context"], anchor_profile=case["anchor_profile"], entries=case["reference_entries"]
+    )
+
+    class MaterialReader:
+        def read_similarity_materials_in_session(self, session, actual_caller, context):
+            assert actual_caller == caller and context == case["context"]
+            return references
+
     context = SimilarityMaterializationContext(
         workflow_id=plan.workflow_id,
         operator_id=caller.operator_id,
         request=case["context"].request,
-        reader=CatalogSimilarityMaterializationReader(caller, reader),
+        reader=CatalogSimilarityMaterializationReader(caller, reader, MaterialReader()),
     )
     original = TypeAdapter(PopulationSource).validate_python(case["original_source"])
     return case | {
@@ -70,6 +82,7 @@ def materialization_case(tmp_path, monkeypatch):
         "plan": plan,
         "reader": reader,
         "caller": caller,
+        "references": references,
         "bound": context,
         "original": original,
     }
@@ -112,7 +125,10 @@ def test_exact_member_is_read_between_two_current_checks_without_query_or_write(
     before = path.stat()
     with case["publisher"].sessions.begin() as session:
         raw = resolve(case, session, step_key=step_key)
-    assert raw == canonical_json_bytes(case["context"].model_dump(mode="json"))
+    assert raw.context_payload == canonical_json_bytes(case["context"].model_dump(mode="json"))
+    assert raw.references_payload == canonical_json_bytes(
+        case["references"].model_dump(mode="json")
+    )
     assert case["reader"].calls == [(case["caller"], case["context"].request)] * 2
     assert path.stat() == before
 
@@ -271,7 +287,7 @@ def test_late_file_change_cannot_replace_already_verified_canonical_bytes(
     path = next(case["publisher"].settings.nas_artifact_root.rglob("context.json"))
     case["reader"].on_late = lambda: path.write_bytes(b"{}")
     with case["publisher"].sessions.begin() as session:
-        assert resolve(case, session) == canonical_json_bytes(
+        assert resolve(case, session).context_payload == canonical_json_bytes(
             case["context"].model_dump(mode="json")
         )
     assert path.read_bytes() == b"{}"
@@ -315,3 +331,63 @@ def test_port_returned_payload_must_match_the_exact_bounded_member_pin(
     ):
         resolve(case, session, context=replace(case["bound"], reader=WrongPayloadReader()))
     assert captured.value.code == "CONTROL_SIMILARITY_CONTEXT_INVALID"
+
+
+@pytest.mark.parametrize(
+    "fault", ("invalid_json", "copied_reference", "canonical_whitespace", "oversized")
+)
+def test_reference_payload_requires_closed_context_bound_canonical_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    case = materialization_case(tmp_path, monkeypatch)
+    payload = canonical_json_bytes(case["references"].model_dump(mode="json"))
+    if fault == "invalid_json":
+        payload = b"{"
+    elif fault == "copied_reference":
+        body = case["references"].model_dump(mode="json")
+        body["context_sha256"] = "sha256:" + "0" * 64
+        payload = canonical_json_bytes(seal(body, "materials_sha256"))
+    elif fault == "canonical_whitespace":
+        payload += b"\n"
+    else:
+        payload = b"x" * (4 * 1024 * 1024 + 1)
+
+    class WrongReferencesReader:
+        def resolve(self, session, **kwargs):
+            return SimilarityWorkspaceMaterials(
+                canonical_json_bytes(case["context"].model_dump(mode="json")), payload
+            )
+
+    with (
+        case["publisher"].sessions.begin() as session,
+        pytest.raises(ControlPlaneError) as captured,
+    ):
+        resolve(case, session, context=replace(case["bound"], reader=WrongReferencesReader()))
+    assert captured.value.code == "CONTROL_SIMILARITY_CONTEXT_INVALID"
+
+
+@pytest.mark.parametrize(
+    "code", ("SOURCE_REVOKED", "AUTHORITY_UNAVAILABLE", "SOURCE_HASH_MISMATCH")
+)
+def test_material_reader_current_denial_is_not_optional_empty_references(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, code: str
+) -> None:
+    case = materialization_case(tmp_path, monkeypatch)
+
+    class DeniedMaterialsReader:
+        def read_similarity_materials_in_session(self, session, caller, context):
+            raise SimilarityContextReadError(code)
+
+    case["bound"].reader.materials_reader = DeniedMaterialsReader()
+    with (
+        case["publisher"].sessions.begin() as session,
+        pytest.raises(ControlPlaneError) as captured,
+    ):
+        resolve(case, session)
+    expected = {
+        "SOURCE_REVOKED": "CONTROL_SIMILARITY_AUTHORITY_DENIED",
+        "AUTHORITY_UNAVAILABLE": "CONTROL_SIMILARITY_AUTHORITY_UNAVAILABLE",
+        "SOURCE_HASH_MISMATCH": "CONTROL_SIMILARITY_CONTEXT_INVALID",
+    }
+    assert captured.value.code == expected[code]
+    assert len(case["reader"].calls) == 1

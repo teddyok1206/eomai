@@ -34,9 +34,17 @@ from eom_catalog_contracts.inference_transfer_experiment import (
 )
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
 from eom_catalog_contracts.similarity_context import (
+    SimilarityContext,
     SimilarityContextRequest,
     SimilarityViewSelection,
+    parse_similarity_context,
     parse_similarity_context_request,
+)
+from eom_catalog_contracts.similarity_delivery import validate_deliverable_similarity_context
+from eom_catalog_contracts.similarity_materials import (
+    MAX_SIMILARITY_MATERIAL_CANDIDATES,
+    SimilarityReferenceMaterials,
+    build_similarity_materials,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_identity_service import OperatorAuthorizationFenceError
@@ -961,6 +969,60 @@ class CatalogEmbeddingRegistryVerifier:
             )
 
         return self._guard(resolve)
+
+    def read_similarity_materials_in_session(
+        self, session: Session, caller: EmbeddingRegistryCaller, context: SimilarityContext
+    ) -> SimilarityReferenceMaterials:
+        """Selected official projections; caller separately verifies QUERY/context provenance."""
+        self._require_similarity_root(session)
+        context = parse_similarity_context(context)
+        request = context.request
+        validate_deliverable_similarity_context(context, expected_request=request)
+        if len(context.candidates) > MAX_SIMILARITY_MATERIAL_CANDIDATES:
+            raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
+        if (
+            type(caller) is not EmbeddingRegistryCaller
+            or self._indexing_source_authority is not None
+        ):
+            raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
+        owner = self._similarity_view_owner(request, request.views[0])
+        targets = {candidate.source.item_revision_id for candidate in context.candidates}
+        if request.anchor.profile is not None:
+            targets.add(request.anchor.source.item_revision_id)
+        try:
+            if not targets:
+                # Even an empty projection cannot skip the actual source owner.
+                self._similarity_capture(session, caller, request)
+                return build_similarity_materials(context, anchor_profile=None, entries=())
+            selected = SelectedEmbeddingSources(
+                EmbeddingRegistryLookup(
+                    owner.configuration.corpus_id,
+                    owner.configuration.namespace,
+                    request.graph_snapshot,
+                    request.policy_revision_id,
+                    request.policy_sha256,
+                    request.maximum_sources,
+                ),
+                tuple(sorted(targets)),
+            )
+            resolved = owner.resolve_selected_sources(session, caller, selected)
+            entries = {
+                entry.profile.source_basis.source.item_revision_id: entry
+                for entry in resolved.entries
+            }
+            if len(entries) != len(resolved.entries) or set(entries) != targets:
+                raise ValueError("selected reference projections differ")
+            return build_similarity_materials(
+                context,
+                anchor_profile=None
+                if request.anchor.profile is None
+                else entries[request.anchor.source.item_revision_id].profile,
+                entries=tuple(entries[row.source.item_revision_id] for row in context.candidates),
+            )
+        except EmbeddingRegistryError as error:
+            raise similarity_context_error_from_registry(error) from None
+        except (ValueError, TypeError, JsonSchemaError):
+            raise SimilarityContextReadError("SOURCE_POINTER_INVALID") from None
 
     def prepare_index_basis(
         self, session: Session, caller: EmbeddingRegistryActor, query: EmbeddingRegistryLookup

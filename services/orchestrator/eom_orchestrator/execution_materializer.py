@@ -99,6 +99,7 @@ from eom_orchestrator.control_service import (
 )
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 from eom_orchestrator.similarity_materialization import (
+    SIMILARITY_MATERIALS_WORKSPACE_ALIAS,
     SIMILARITY_ROLE_CONTRACT,
     SIMILARITY_WORKSPACE_ALIAS,
     SimilarityMaterializationContext,
@@ -442,7 +443,7 @@ def materialize_execution_step(
                     and entry.source.item_revision_id
                     == plan.retrieval_requirement.past_exam_variation.source_item_revision_id
                 )
-                similarity_payload = resolve_similarity_materials(
+                similarity_materials = resolve_similarity_materials(
                     session,
                     plan=plan,
                     step_key=step_key,
@@ -451,13 +452,17 @@ def materialize_execution_step(
                     canonical_artifact_root=artifact_root,
                     authorized_artifact_revision_ids=authorized_artifact_revision_ids,
                 )
-                similarity_path = workspace / SIMILARITY_WORKSPACE_ALIAS
-                _ensure_parent(
-                    similarity_path.parent, workspace=workspace, group_id=worker_group_id
-                )
-                _write_exclusive(similarity_path, similarity_payload, group_id=worker_group_id)
-                total_bytes += len(similarity_payload)
-                member_count += 1
+                for alias, payload in (
+                    (SIMILARITY_WORKSPACE_ALIAS, similarity_materials.context_payload),
+                    (SIMILARITY_MATERIALS_WORKSPACE_ALIAS, similarity_materials.references_payload),
+                ):
+                    similarity_path = workspace / alias
+                    _ensure_parent(
+                        similarity_path.parent, workspace=workspace, group_id=worker_group_id
+                    )
+                    _write_exclusive(similarity_path, payload, group_id=worker_group_id)
+                    total_bytes += len(payload)
+                    member_count += 1
             _require_total_size(total_bytes, analysis=False)
             evidence_bundle_revision_id = plan.evidence_bundle_revision_id
             evidence_manifest_sha256 = plan.evidence_manifest_sha256

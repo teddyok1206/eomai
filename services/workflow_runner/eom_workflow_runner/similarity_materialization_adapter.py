@@ -11,8 +11,10 @@ from eom_catalog_contracts.similarity_context import (
     SimilarityContextRequest,
     parse_similarity_context,
 )
+from eom_catalog_contracts.similarity_materials import validate_similarity_materials
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
+    SimilarityMaterialsReadPort,
     validate_embedding_registry_actor,
 )
 from eom_catalog_service.pinned_artifact_resolution import (
@@ -20,12 +22,18 @@ from eom_catalog_service.pinned_artifact_resolution import (
     PinnedArtifactResolutionError,
 )
 from eom_catalog_service.settings import CatalogSettings
-from eom_catalog_service.similarity_context_ports import SimilarityContextReadPort
+from eom_catalog_service.similarity_context_ports import (
+    SimilarityContextReadError,
+    SimilarityContextReadPort,
+)
 from eom_identifiers import canonical_json_bytes
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.file_set_control_artifacts import CONTROL_FILE_SET_PROTOCOL
 from eom_orchestrator.similarity_context_artifact import SIMILARITY_CONTEXT_ARTIFACT_TYPE
-from eom_orchestrator.similarity_materialization import SimilarityMaterializationReadPort
+from eom_orchestrator.similarity_materialization import (
+    SimilarityMaterializationReadPort,
+    SimilarityWorkspaceMaterials,
+)
 from eom_workflow.similarity_control import (
     ResolvedExecutionPlanV23,
     parse_similarity_execution_plan,
@@ -40,14 +48,22 @@ from sqlalchemy.orm import Session
 class CatalogSimilarityMaterializationReader(SimilarityMaterializationReadPort):
     """Bound to the actual captured caller and common application, not model authority."""
 
-    def __init__(self, caller: EmbeddingRegistryCaller, reader: SimilarityContextReadPort) -> None:
-        if not isinstance(caller, EmbeddingRegistryCaller) or not callable(
-            getattr(reader, "compose", None)
+    def __init__(
+        self,
+        caller: EmbeddingRegistryCaller,
+        reader: SimilarityContextReadPort,
+        materials_reader: SimilarityMaterialsReadPort,
+    ) -> None:
+        if (
+            not isinstance(caller, EmbeddingRegistryCaller)
+            or not callable(getattr(reader, "compose", None))
+            or not callable(getattr(materials_reader, "read_similarity_materials_in_session", None))
         ):
             raise ValueError("SIMILARITY_MATERIALIZATION_CONTEXT_INVALID")
         validate_embedding_registry_actor(caller)
         self.caller = caller
         self.reader = reader
+        self.materials_reader = materials_reader
 
     def _current_context(
         self, plan: ResolvedExecutionPlanV23, request: SimilarityContextRequest
@@ -81,7 +97,7 @@ class CatalogSimilarityMaterializationReader(SimilarityMaterializationReadPort):
         original_source: PopulationSource,
         canonical_artifact_root: Path,
         authorized_artifact_revision_ids: frozenset[str],
-    ) -> bytes:
+    ) -> SimilarityWorkspaceMaterials:
         """No model execution or writes; current common read before and after member IO."""
         checked = parse_similarity_execution_plan(plan)
         validate_similarity_plan_request(checked, request)
@@ -122,13 +138,34 @@ class CatalogSimilarityMaterializationReader(SimilarityMaterializationReadPort):
             member = reader.read_pinned(**arguments)
             if member.payload != expected:
                 raise ValueError("SIMILARITY_MATERIALIZATION_BYTES_INVALID")
+            references = validate_similarity_materials(
+                self.materials_reader.read_similarity_materials_in_session(
+                    session, self.caller, first
+                ),
+                first,
+            )
             late = self._current_context(checked, request)
             if late != first:
                 raise ValueError("SIMILARITY_MATERIALIZATION_CURRENT_CHANGED")
             final_member = reader.read_pinned(**arguments)
             if final_member.payload != member.payload:
                 raise ValueError("SIMILARITY_MATERIALIZATION_BYTES_CHANGED")
-            return member.payload
+            return SimilarityWorkspaceMaterials(
+                member.payload, canonical_json_bytes(references.model_dump(mode="json"))
+            )
+        except SimilarityContextReadError as error:
+            if error.code in {"SOURCE_ACCESS_DENIED", "SOURCE_REVOKED"}:
+                raise ControlPlaneError(
+                    "CONTROL_SIMILARITY_AUTHORITY_DENIED", "reference source authorization failed"
+                ) from None
+            if error.code == "AUTHORITY_UNAVAILABLE":
+                raise ControlPlaneError(
+                    "CONTROL_SIMILARITY_AUTHORITY_UNAVAILABLE",
+                    "reference source reader unavailable",
+                ) from None
+            raise ControlPlaneError(
+                "CONTROL_SIMILARITY_CONTEXT_INVALID", "reference source projection differs"
+            ) from None
         except (PinnedArtifactResolutionError, ValueError, TypeError, SchemaError):
             raise ControlPlaneError(
                 "CONTROL_SIMILARITY_CONTEXT_INVALID", "similarity member or current scope is stale"

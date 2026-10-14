@@ -30,6 +30,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "system-rag-similarity-materials": CatalogSchemaResource(
+            "schemas/knowledge/system-rag-similarity-materials-v1.schema.json",
+            "resources/knowledge/system-rag-similarity-materials-v1.schema.json",
+            "1.0",
+            "sha256:a81f556811c74a93faf8635e492ec92a5791948428f9995179b27dea77bc640b",
+        ),
         "embedding-native-cpu-probe": CatalogSchemaResource(
             "schemas/knowledge/embedding-native-cpu-probe-v1.schema.json",
             "resources/knowledge/embedding-native-cpu-probe-v1.schema.json",

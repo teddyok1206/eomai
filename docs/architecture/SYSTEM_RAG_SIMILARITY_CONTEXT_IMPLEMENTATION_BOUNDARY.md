@@ -1,8 +1,8 @@
 # System RAG similarity context implementation boundary
 
 Written: 2026-10-12 UTC. Inspected Git base: `550a239cac74b8255bf33467b78671b6d37f811f`.
-Status: **DESIGN + CONTRACT / PINNED-READ / COMPOSER SOURCE CHECKPOINTS; NOT ACTIVATED**.
-The separately approved source steps are recorded in sections 8–13. Source observations are not
+Status: **DESIGN + CONTRACT / PINNED-READ / COMPOSER / DELIVERY SOURCE CHECKPOINTS; NOT ACTIVATED**.
+The separately approved source steps are recorded in sections 8–18. Source observations are not
 installed-runtime, production permission, performance, or educational-quality evidence.
 This note implements no authority, provider, schema, API, worker, database, model, or release.
 The root implementer must read this complete note before changing the common-context boundary.
@@ -1398,3 +1398,100 @@ API-contract raw `aef1b45d52d2810733d30fa6762e9f6e64990268ad2719a0e95b200990a48c
 Evidence: `similarity-materialization-{release-build,owner-pair-proof}.log` in the
 same local directory. This candidate is not installed; API75fdc265 and owner5018ad2d
 remain the pinned runtime for the existing genuine QUERY canary.
+
+## 18. Bounded selected-reference materialization
+
+2026-10-14 UTC. Plan23 is still an unreleased source candidate with no production
+plan/workspace history. Its pinned context already identifies each candidate's exact
+Item/member, accepted-report pointer and profile hash; no additional source authority
+or mutable lookup is needed. Previous candidate wheels/evidence remain immutable and
+are not retrospectively called this new materialization acceptance.
+
+1. **Responsibility:** Catalog's existing verifier resolves selected reference
+   entries through its supported selected-source operation. The existing runtime
+   adapter stages a closed derived JSON beside context, not inside Graph Evidence.
+2. **Canonical source:** The original Item/member and accepted V10 report remain
+   canonical. Reuse `StagedExperimentEntry` question-only text and concrete profile
+   claims rather than copying entire Item/report/PDF/PNG files. Include the anchor's
+   exact accepted profile when present, without duplicating its already staged Item.
+3. **Identity:** One small frozen materials value pins request/context semantic hashes
+   and its own canonical hash. Entries retain source/profile/report identities;
+   no new registry, logical entity, Artifact lifecycle or DB aggregate is created.
+4. **Resolution:** Compare every selected current source, profile, report and Graph
+   against the exact context. Never substitute latest, add an unselected entry, or
+   silently drop missing text/report/decisive reasoning. Existing entry limitations
+   and explicit absent content survive; no inspected-pixel or quotation claim.
+5. **Access:** One selected-source batch and map lookup, then context order iteration.
+   Authoring/review accept at most8 context candidates plus the anchor profile and
+   4MiB canonical materials;
+   larger results explicitly fail this delivery budget, never truncate source text.
+6. **Structures:** Existing source selector, tuple of entries, keyed membership map,
+   canonical serializer and exclusive workspace creation. No new queue/cache/index.
+7. **Cost:** Selection/closure O(N+K), material bytes O(B), K≤8. Existing official
+   source eligibility retains its bounded full-population cost; it is not advertised
+   as constant-time metadata access. No encoding or comparison-model invocation.
+8. **Transactions:** Use the actual caller and the same root Session/identity/source
+   fences as the existing read adapter. Before/after common authorization remains;
+   no long model execution occurs inside this transaction or the source commit.
+9. **Dependencies:** Contract-only model/schema reuse existing entry types. Catalog
+   verifier implements its public material-read seam; WorkflowRunner implements the
+   Orchestrator application port. No infrastructure dependency moves into contracts
+   or Orchestrator; no worker DB/NAS or new dependency.
+10. **Failure/replay:** Mismatched/missing/duplicate/oversized entries fail before
+    runnable workspace completion. Same pinned context and deterministic entry
+    projection reproduce bytes; missing decisive claims remain limitations, not a
+    positive transfer verdict. Retry does not pick a new index/source/recipe.
+11. **Alternative:** Pointers/scores alone cannot let a worker inspect the candidate's
+    actual conditions or accepted-report-derived reasoning. A bounded existing entry
+    projection is sufficient; copying the full corpus/reports or a new material store
+    would duplicate canonical data unnecessarily.
+
+Define the closed `system-rag-similarity-materials/1.0` JSON Schema2020-12 and frozen
+model before behavior. Workspace alias is `references/similarity/materials.json`;
+it is explicit temporary materialization, not a second canonical Artifact. The
+returned local port value carries the two workspace payloads only at this boundary;
+neither payload is stored in DB or added as arbitrary keys to existing role messages.
+Compatible Pack/instruction provenance and actual trusted runtime composition remain
+mandatory before plan23's first operational activation.
+
+### 18.1 Source-only selected-material checkpoint — 2026-10-14 UTC
+
+Closed materials schema raw SHA:
+`a81f556811c74a93faf8635e492ec92a5791948428f9995179b27dea77bc640b`.
+The schema/frozen model reuses existing exact Item-text/profile/metadata contracts,
+checks canonical byte/semantic hash bounds, rejects duplicate/extra/foreign/altered
+references, and preserves absent text/anchor report or decisive claims without
+inventing content. Source/model-inference provenance is retained in each profile;
+these projections are not original-page quotations, pixels or Evidence-usage receipts.
+
+The existing Catalog verifier now exposes one selected-reference read using its
+supported selected-source batch, actual caller fence, exact Graph/policy and existing
+source/report projection. Hash-map closure checks restore context order regardless
+of capture order. Missing, duplicate, changed or truncated capture is not partial
+success. Empty material still performs official current capture. The WorkflowRunner
+adapter validates these references before its late common read and pinned producer
+check. Orchestrator validates exactly two bounded canonical payloads and writes them
+only at the established temporary workspace boundary; no new Artifact writer/store.
+Authoring and primary/escalated review retain original Evidence/variation files and
+add both sidecars; image/registration receive neither. Existing plan23 schema bytes,
+workflow/role schemas, released Packs and original296 Catalog metadata/bytes remain
+unchanged. Plan23 has no operational history and is still not activated.
+
+Final25-suite regression: **651 PASS /49.68s**, strict mypy6 and Ruff/format14 PASS.
+The prior run649 PASS/2 FAIL is retained: the DB Session-shaped projection port was
+moved from DB-independent common-context ports to the existing registry integration
+ports, and empty-capture registry errors now use the same closed mapping as nonempty
+selection. Neither boundary test nor authority refusal was weakened. Earlier fixture
+failures exposed the candidate's old synthetic Graph pin; fixture profile/context
+pins were corrected together, not the actual mismatch guard. Contract-only116,
+focused81 and Catalog83 were overlapping intermediate gates, not additive totals.
+
+Physical context reads use local SQLite/temporary Artifact bytes; selected-source
+and IAM fixtures are synthetic, and public workspace tests explicitly stub the read
+adapter. No production DB/role/unit/identity change, real QUERY/model/GPU run, corpus
+re-encoding or consumer activation is claimed. Evidence prefix:
+`/tmp/eom-identity-provider-install.nAaycoDM/similarity-reference-materials-`.
+The existing genuine QUERY root/owner handles remained alive at17:50 UTC awaiting
+their original login; no restart or second query was submitted. Next required C2
+work is compatible Pack/instruction provenance, trusted runtime composition and an
+actual bounded variation after the genuine QUERY acceptance; the full goal remains open.
