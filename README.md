@@ -322,7 +322,7 @@ Catalog 서비스 자료 정책1.1·공식 owner 발행·Registry 등록 연결�
 실제 프로세스 확인 이후 설정을 읽고 변경을 감지하며, Codex 역할/슬롯을 만들지 않습니다.
 Catalog 권한 계약에 필요한 embedding/native 명령 권한만 추가했으며 실제 GRANT는 미적용입니다.
 
-최신93-suite 회귀2,427개·strict mypy74 모듈·Ruff131 파일이 PASS했습니다.
+서비스 구성 후보`9730bf95`의93-suite 회귀2,427개·strict mypy74 모듈·Ruff131 파일이 PASS했습니다.
 이후 추가된 정본 unit 템플릿 사례도 별도62-case gate에서 PASS했으며 중복 합산하지 않습니다.
 별도 임시 DB 도구 source89개 PASS는 선행 증거입니다. 최신 실제 임시 DB의
 신원/자료 정책/발행70개·claim/runner67개·Registry/native-flow32개·
@@ -340,6 +340,11 @@ Application API wheel fallback을 금지하고 설정/schema/정본 unit 템플�
 
 **운영 서비스 활성화·자동 증분 처리·실제 seed/delta/QUERY·CPU/GPU 비교는 아직 남아 있습니다.**
 다음은 구현된 서비스 entry/provider를 실제로 설치·승인하고 연결하는 단계입니다.
+후속 Identity 소유자 설치 경계는 고정 DB 함수의 생성·정확한 재실행·동시 설치 차단을
+지원하며 기존 drift를 덮거나 권한을 자동 복구하지 않습니다. 실패한 생성/권한 변경은
+savepoint로 되돌립니다. 관련 source195개와 실제 임시 DB80개가 PASS했습니다.
+owner 설치 도구도 보호된 interpreter/libexec만 실행하도록 보강했으며,
+이 검증 자체는 운영 함수·권한·서비스 활성화를 뜻하지 않습니다.
 [서비스 Runner 구현·검증 기록](docs/status/LOCAL_INDEXING_RUNNER_SERVICE_CHECKPOINT_2026-10-14.md),
 [현재 Registry checkpoint](docs/status/LOCAL_INDEXING_REGISTRY_SERVICE_CHECKPOINT_2026-10-14.md),
 [정책 발행 증거](docs/status/LOCAL_INDEXING_POLICY_PUBLICATION_CHECKPOINT_2026-10-14.md),

@@ -146,3 +146,37 @@ def test_disposable_purpose_follows_owner_guard_without_privileged_or_runtime_fa
     assert 'EOM_API_TEST_STATE="${state_directory}"' in leaf
     assert "tests/integration/test_local_indexing_service_registry.py" in leaf
     assert not any(value in leaf for value in ("sudo", "source ", "psql", "owner.env"))
+
+
+@pytest.mark.parametrize("owner", [None, object(), {"role_name": "eom_app", "role_oid": 1}])
+def test_fixed_fence_installation_rejects_untyped_owner_before_db(owner) -> None:
+    from eom_identity_service import LocalIndexingFenceError, install_local_indexing_service_fence
+
+    with (
+        Session() as session,
+        pytest.raises(LocalIndexingFenceError, match="CONFIGURATION_INVALID"),
+    ):
+        install_local_indexing_service_fence(session, owner)
+
+
+def test_fixed_fence_installation_reuses_explicit_postgres_owner_root() -> None:
+    from eom_identity_service import (
+        LocalIndexingFenceOwnerPin,
+        install_local_indexing_service_fence,
+    )
+
+    owner = LocalIndexingFenceOwnerPin("synthetic_owner", 12001)
+    with Session() as session, pytest.raises(LocalIndexingServiceError) as caught:
+        install_local_indexing_service_fence(session, owner)
+    assert caught.value.code == LocalIndexingServiceErrorCode.CONTEXT_INVALID
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    try:
+        with (
+            Session(engine) as session,
+            session.begin(),
+            pytest.raises(LocalIndexingServiceError) as caught,
+        ):
+            install_local_indexing_service_fence(session, owner)
+        assert caught.value.code == LocalIndexingServiceErrorCode.CONTEXT_INVALID
+    finally:
+        engine.dispose()

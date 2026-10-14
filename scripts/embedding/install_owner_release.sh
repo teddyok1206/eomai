@@ -7,6 +7,25 @@ umask 077
 
 fail() { printf '%s\n' "$1" >&2; exit 1; }
 [[ "$EUID" == 0 && ( $# == 3 || $# == 5 ) ]] || fail NATIVE_OWNER_INSTALL_ARGUMENTS_INVALID
+installer=/usr/local/libexec/eom-embedding-owner/install_owner_release.sh
+verifier=/usr/local/libexec/eom-embedding-owner/verify_release_wheel_records.py
+owner_python=/opt/eom/conda/envs/eom-embedding-experiment/bin/python3.12
+[[ "${BASH_SOURCE[0]}" == "$installer" ]] || fail NATIVE_OWNER_INSTALLER_UNPROTECTED
+protected_path() {
+  local node=$1
+  while :; do
+    [[ -e "$node" && ! -L "$node" && "$(stat -c %u "$node")" == 0 ]] || \
+      fail NATIVE_OWNER_EXECUTION_PATH_INVALID
+    (( (8#$(stat -c %a "$node") & 8#022) == 0 )) || fail NATIVE_OWNER_EXECUTION_PATH_INVALID
+    [[ "$node" != / ]] || break
+    node=$(dirname -- "$node")
+  done
+}
+for executable in "$installer" "$verifier" "$owner_python"; do
+  protected_path "$executable"
+  [[ -f "$executable" && "$(stat -c %h "$executable")" == 1 ]] || \
+    fail NATIVE_OWNER_EXECUTION_PATH_INVALID
+done
 source_commit=$1
 source_wheel=$2
 wheel_sha256=$3
@@ -45,10 +64,9 @@ if [[ -n "$contracts_wheel" ]]; then
 else
   verification_mode=--platform-only
 fi
-/srv/eom/conda/envs/eom-api/bin/python -I -B \
-  /home/eom/EOM/scripts/api/verify_release_wheel_records.py \
+"$owner_python" -I -B "$verifier" \
   "$verification_mode" "${staged_wheels[@]}"
-/srv/eom/conda/envs/eom-api/bin/python -I -B -m pip install \
+"$owner_python" -I -B -m pip install \
   --no-deps --no-index --no-compile --no-cache-dir \
   --target "$stage/site-packages" "${staged_wheels[@]}"
 [[ -f "$stage/site-packages/eom_workflow_runner/local_embedding_native_executor.py" \

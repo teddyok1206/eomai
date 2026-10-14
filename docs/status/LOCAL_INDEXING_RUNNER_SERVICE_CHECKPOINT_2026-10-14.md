@@ -260,3 +260,52 @@ installation, service activation, runtime-role GRANT or numeric execution.
 
 Evidence: `local-index-owner-wheel-build.log`, `local-index-owner-pair-record.log`
 and `local-index-owner-pair-import.log` in the same evidence directory.
+
+## Supported owner installation and handoff follow-up
+
+Identity now exposes `install_local_indexing_service_fence` through its existing
+owner control adapter. It reuses clean explicit root/actual table-owner/bounded-wait
+checks, validates the pinned role/OID/schema owner and rejects SET ROLE. A fixed
+nonblocking transaction advisory lock serializes installation. The only mutation
+is frozen CREATE + PUBLIC revoke + fixed Catalog EXECUTE grant; exact existing
+installation returns REPLAYED without DDL. Existing body/overload/ACL drift is
+never repaired. Creation/final inspection share a savepoint, so a rejection cannot
+leave partial DDL/ACL even if the caller catches it; outer commit/lock ownership
+remains with the caller. No new schema, SQL input, registry or runtime self-grant.
+
+Actual marker-guarded PostgreSQL: **80 PASS** (61 registry/fence/source +19 policy).
+Ten new cases exercise actual CREATE/ACL/exact replay, false owner/SET ROLE denial,
+body/overload/ACL preservation, concurrent BUSY, savepoint cleanup after failed
+inspection and full root rollback/reinstallation. The existing fixed Catalog role
+is only a grantee in the disposable DB: no role/credential changes and no actual
+Catalog login/runtime claim. Every new test's DDL and DB-local grants roll back.
+Final inspection confirms0055,0 other connections and the disposable marker.
+
+Focused source/owner-release/dependency regressions: **195 PASS** in8.31s. Strict
+mypy2 changed source modules, Ruff lint/format5 Python files, shell syntax and diff
+PASS. These source cases overlap the preceding93-suite gate and are not added to
+its count. Evidence: `local-index-owner-install-final-focused.log`,
+`local-index-owner-install-mypy-reviewed.log`,
+`local-index-owner-install-policy-postgres-reviewed.log` and
+`local-index-owner-install-inspect.log` in the same directory.
+
+The existing owner-release installer no longer invokes developer-owned API Python
+or checkout verifier as root. It requires the independently reviewed fixed
+root-owned libexec installer/verifier and protected operator interpreter, preserving
+offline3/5 argument modes, pinned wheels, RECORD and no-clobber release semantics.
+Installing an owner overlay does not alter either immutable interpreter or activate
+the service/native configuration.
+
+At2026-10-14 09:16 UTC the original controller's exact frozen source SHA, parent/
+child identities, sole getpass site before capture/submission and blocked read of
+its controlling tty were verified with current sudo. The exact waiting child was
+stopped for a second phase check, interrupted, and continued to exit; both original
+handles are now absent. This is intentional pre-login handoff, **not** inferred
+timeout, successful seed, failed-DB repair or a model execution. Original terminal
+logs/source/budget/history remain. An initial cmdline parsing assertion failed
+before any signal; its log is retained separately. Reviewed evidence:
+`local-index-owner-controller-{readonly,terminal-preflight,handoff-reviewed}.log`.
+
+This removes the unresolved live-controller conflict. Actual service installation,
+migration/admission, policy activation, seed/delta/QUERY and GPU gates are still
+required. The goal remains ACTIVE.

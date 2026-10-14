@@ -38,6 +38,15 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 
+from eom_identity_service.local_indexing_fence_sql import (
+    LOCAL_INDEXING_FENCE_BODY_SHA256,
+    LOCAL_INDEXING_FENCE_CREATE_SQL,
+    LOCAL_INDEXING_FENCE_GRANT_SQL,
+    LOCAL_INDEXING_FENCE_REVOKE_PUBLIC_SQL,
+    LocalIndexingFenceError,
+    LocalIndexingFenceOwnerPin,
+    require_local_indexing_fence_installation,
+)
 from eom_identity_service.local_indexing_service_models import (
     LocalIndexingServiceEventRecord,
     LocalIndexingServiceRecord,
@@ -67,6 +76,13 @@ class LocalIndexingControlResult:
     target: LocalIndexingServiceReference | None
     status_after_operation: LocalIndexingServiceStatus
     replayed: bool
+
+
+@dataclass(frozen=True, slots=True)
+class LocalIndexingFenceInstallationResult:
+    disposition: Literal["CREATED", "REPLAYED"]
+    owner: LocalIndexingFenceOwnerPin
+    body_sha256: str
 
 
 def _error(code: LocalIndexingServiceErrorCode, message: str) -> LocalIndexingServiceError:
@@ -402,6 +418,68 @@ def _integrity_error(error: IntegrityError) -> LocalIndexingServiceError:
     return _error(
         code, "local indexing identity registration conflicts with immutable control metadata"
     )
+
+
+def install_local_indexing_service_fence(
+    session: Session, owner: LocalIndexingFenceOwnerPin
+) -> LocalIndexingFenceInstallationResult:
+    """Install only the fixed interface in the caller's actual clean owner root.
+
+    Existing drift is never repaired or replaced. The nested mutation boundary
+    removes partial CREATE/ACL on failure; caller still owns the outer root/lock.
+    """
+    if type(owner) is not LocalIndexingFenceOwnerPin:
+        raise LocalIndexingFenceError("LOCAL_INDEXING_FENCE_CONFIGURATION_INVALID")
+    owner = LocalIndexingFenceOwnerPin(owner.role_name, owner.role_oid)
+    with _owner_operation(session) as principal:
+        current = (
+            session.execute(
+                text(
+                    "SELECT principal.oid AS owner_oid, application.nspowner AS schema_owner, "
+                    "pg_catalog.current_setting('role') AS selected_role "
+                    "FROM pg_catalog.pg_roles principal "
+                    "JOIN pg_catalog.pg_namespace application ON application.nspname='app' "
+                    "WHERE principal.rolname=SESSION_USER"
+                )
+            )
+            .mappings()
+            .one()
+        )
+        if (
+            principal != owner.role_name
+            or current["owner_oid"] != owner.role_oid
+            or current["schema_owner"] != owner.role_oid
+            or current["selected_role"] != "none"
+        ):
+            raise LocalIndexingFenceError("LOCAL_INDEXING_FENCE_FORBIDDEN")
+        # Fixed two-int namespace: concurrent installation never replaces a
+        # routine; a losing root rolls back before replaying the same operation.
+        if (
+            session.scalar(
+                text("SELECT pg_catalog.pg_try_advisory_xact_lock(1162825554,1229869912)")
+            )
+            is not True
+        ):
+            raise _error(LocalIndexingServiceErrorCode.BUSY, "fixed fence installation is busy")
+        with session.begin_nested():
+            existing = session.execute(
+                text(
+                    "SELECT procedure.oid FROM pg_catalog.pg_proc procedure "
+                    "JOIN pg_catalog.pg_namespace namespace "
+                    "ON namespace.oid=procedure.pronamespace "
+                    "WHERE namespace.nspname='public' "
+                    "AND procedure.proname='eom_fence_local_indexing_service_v1' "
+                    "ORDER BY procedure.oid LIMIT 2"
+                )
+            ).all()
+            if not existing:
+                session.execute(text(LOCAL_INDEXING_FENCE_CREATE_SQL))
+                session.execute(text(LOCAL_INDEXING_FENCE_REVOKE_PUBLIC_SQL))
+                session.execute(text(LOCAL_INDEXING_FENCE_GRANT_SQL))
+            require_local_indexing_fence_installation(session.connection(), owner)
+            return LocalIndexingFenceInstallationResult(
+                "REPLAYED" if existing else "CREATED", owner, LOCAL_INDEXING_FENCE_BODY_SHA256
+            )
 
 
 def register_local_indexing_service(

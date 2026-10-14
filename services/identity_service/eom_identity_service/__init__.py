@@ -38,8 +38,10 @@ from eom_identity_service.local_indexing_runtime import (
 from eom_identity_service.local_indexing_service_registry import (
     LocalIndexingControlOperation,
     LocalIndexingControlResult,
+    LocalIndexingFenceInstallationResult,
     activate_local_indexing_service,
     disable_local_indexing_service,
+    install_local_indexing_service_fence,
     lock_current_local_indexing_service_metadata,
     register_local_indexing_service,
 )
@@ -111,6 +113,7 @@ __all__ = [
     "LocalIndexingControlOperation",
     "LocalIndexingControlResult",
     "LocalIndexingFenceError",
+    "LocalIndexingFenceInstallationResult",
     "LocalIndexingFenceOwnerPin",
     "LocalIndexingRuntimePin",
     "OperatorAuthorizationFence",
@@ -128,6 +131,7 @@ __all__ = [
     "export_owner_session_capture",
     "identity_provider_code_members",
     "import_owner_session_capture",
+    "install_local_indexing_service_fence",
     "lock_current_local_indexing_service_metadata",
     "observe_owner_session_transport",
     "open_installed_identity_provider_observation",

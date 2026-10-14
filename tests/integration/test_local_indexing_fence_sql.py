@@ -14,12 +14,17 @@ from uuid import uuid4
 
 import pytest
 from eom_identity_service import (
+    LOCAL_INDEXING_FENCE_BODY_SHA256,
     LOCAL_INDEXING_FENCE_CALL_SQL,
     LOCAL_INDEXING_FENCE_CREATE_SQL,
+    LOCAL_INDEXING_FENCE_EXECUTE_ROLE,
     LOCAL_INDEXING_FENCE_REVOKE_PUBLIC_SQL,
     LOCAL_INDEXING_FENCE_SIGNATURE,
+    LocalIndexingFenceError,
+    LocalIndexingFenceOwnerPin,
     activate_local_indexing_service,
     disable_local_indexing_service,
+    install_local_indexing_service_fence,
     register_local_indexing_service,
 )
 from eom_operator_identity import (
@@ -149,6 +154,183 @@ def test_actual_set_role_even_to_same_owner_is_not_authenticated_session(routine
     with pytest.raises(DBAPIError) as caught:
         read(routine, target)
     assert caught.value.orig.sqlstate == "P0001"
+
+
+@pytest.fixture
+def installation_root(guarded_engine: Engine):
+    """Real DDL/ACL, not a Catalog login. All DB-scoped grants roll back.
+
+    The fixed Catalog role must already exist. Never create/modify a cluster role,
+    read its credentials, or reuse a production DB for this opt-in acceptance.
+    """
+    with Session(guarded_engine) as session:
+        root = session.begin()
+        try:
+            assert (
+                session.scalar(
+                    text("SELECT oid FROM pg_catalog.pg_roles WHERE rolname=:role"),
+                    {"role": LOCAL_INDEXING_FENCE_EXECUTE_ROLE},
+                )
+                is not None
+            ), "the existing fixed Catalog role is a required integration resource"
+            assert (
+                session.scalar(
+                    text("SELECT pg_catalog.to_regprocedure(:signature)"),
+                    {"signature": LOCAL_INDEXING_FENCE_SIGNATURE},
+                )
+                is None
+            ), "never reinterpret or replace an installed interface"
+            owner = session.execute(
+                text("SELECT SESSION_USER, oid FROM pg_catalog.pg_roles WHERE rolname=SESSION_USER")
+            ).one()
+            # Use only the known fixed role; these privileges are local to the
+            # marked disposable DB and disappear with this root's rollback.
+            session.execute(text("GRANT USAGE ON SCHEMA app TO eom_catalog_manager_runtime"))
+            yield session, LocalIndexingFenceOwnerPin(owner[0], owner[1])
+        finally:
+            if root.is_active:
+                root.rollback()
+
+
+def test_supported_installation_is_atomic_and_exact_replay_does_no_ddl(installation_root):
+    session, owner = installation_root
+    created = install_local_indexing_service_fence(session, owner)
+    assert created.disposition == "CREATED" and created.owner == owner
+    assert created.body_sha256 == LOCAL_INDEXING_FENCE_BODY_SHA256
+    oid = session.scalar(
+        text("SELECT pg_catalog.to_regprocedure(:signature)::pg_catalog.oid"),
+        {"signature": LOCAL_INDEXING_FENCE_SIGNATURE},
+    )
+    assert install_local_indexing_service_fence(session, owner).disposition == "REPLAYED"
+    assert (
+        session.scalar(
+            text("SELECT pg_catalog.to_regprocedure(:signature)::pg_catalog.oid"),
+            {"signature": LOCAL_INDEXING_FENCE_SIGNATURE},
+        )
+        == oid
+    )
+    assert session.in_transaction()
+
+
+@pytest.mark.parametrize("fault", ["owner_name", "owner_oid", "set_role"])
+def test_installation_rejects_false_owner_without_creating_function(installation_root, fault):
+    session, owner = installation_root
+    if fault == "owner_name":
+        owner = LocalIndexingFenceOwnerPin("not_the_owner", owner.role_oid)
+    elif fault == "owner_oid":
+        owner = LocalIndexingFenceOwnerPin(owner.role_name, owner.role_oid + 1)
+    else:
+        session.execute(text("SELECT pg_catalog.set_config('role',SESSION_USER,true)"))
+    with pytest.raises(LocalIndexingFenceError, match="FORBIDDEN"):
+        install_local_indexing_service_fence(session, owner)
+    assert (
+        session.scalar(
+            text("SELECT pg_catalog.to_regprocedure(:signature)"),
+            {"signature": LOCAL_INDEXING_FENCE_SIGNATURE},
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize("fault", ["public_acl", "overload", "body"])
+def test_existing_drift_is_not_replaced_or_acl_repaired(installation_root, fault):
+    session, owner = installation_root
+    if fault == "public_acl":
+        install_local_indexing_service_fence(session, owner)
+        session.execute(
+            text("GRANT EXECUTE ON FUNCTION " + LOCAL_INDEXING_FENCE_SIGNATURE + " TO PUBLIC")
+        )
+    elif fault == "overload":
+        session.execute(
+            text(
+                "CREATE FUNCTION public.eom_fence_local_indexing_service_v1(pg_catalog.text) "
+                "RETURNS pg_catalog.jsonb LANGUAGE SQL AS 'SELECT NULL::pg_catalog.jsonb'"
+            )
+        )
+    else:
+        session.execute(
+            text(
+                LOCAL_INDEXING_FENCE_CREATE_SQL.replace(
+                    "DECLARE\n", "DECLARE\n    unexpected_value int;\n", 1
+                )
+            )
+        )
+    before = session.execute(
+        text(
+            "SELECT procedure.oid, procedure.prosrc, procedure.proacl::pg_catalog.text "
+            "FROM pg_catalog.pg_proc procedure JOIN pg_catalog.pg_namespace namespace "
+            "ON namespace.oid=procedure.pronamespace WHERE namespace.nspname='public' "
+            "AND procedure.proname='eom_fence_local_indexing_service_v1' ORDER BY procedure.oid"
+        )
+    ).all()
+    with pytest.raises(LocalIndexingFenceError, match="UNAVAILABLE"):
+        install_local_indexing_service_fence(session, owner)
+    after = session.execute(
+        text(
+            "SELECT procedure.oid, procedure.prosrc, procedure.proacl::pg_catalog.text "
+            "FROM pg_catalog.pg_proc procedure JOIN pg_catalog.pg_namespace namespace "
+            "ON namespace.oid=procedure.pronamespace WHERE namespace.nspname='public' "
+            "AND procedure.proname='eom_fence_local_indexing_service_v1' ORDER BY procedure.oid"
+        )
+    ).all()
+    assert after == before
+
+
+def test_concurrent_installation_returns_busy_not_duplicate_ddl(installation_root, guarded_engine):
+    session, owner = installation_root
+    assert install_local_indexing_service_fence(session, owner).disposition == "CREATED"
+
+    def competing():
+        with Session(guarded_engine) as second, second.begin():
+            return install_local_indexing_service_fence(second, owner)
+
+    with (
+        ThreadPoolExecutor(max_workers=1) as pool,
+        pytest.raises(LocalIndexingServiceError) as caught,
+    ):
+        pool.submit(competing).result(timeout=10)
+    assert str(caught.value.code) == "LOCAL_INDEXING_SERVICE_BUSY"
+
+
+def test_failed_final_inspection_rolls_back_partial_function_not_owner_root(installation_root):
+    session, owner = installation_root
+    # Deliberately invalid DB-local role privileges. No identity content is read,
+    # no cluster-role mutation occurs, and this fixture rolls the grant back.
+    session.execute(
+        text("GRANT SELECT ON app.local_indexing_services TO eom_catalog_manager_runtime")
+    )
+    with pytest.raises(LocalIndexingFenceError, match="UNAVAILABLE"):
+        install_local_indexing_service_fence(session, owner)
+    assert session.in_transaction() and session.get_nested_transaction() is None
+    assert (
+        session.scalar(
+            text("SELECT pg_catalog.to_regprocedure(:signature)"),
+            {"signature": LOCAL_INDEXING_FENCE_SIGNATURE},
+        )
+        is None
+    )
+
+
+def test_owner_rollback_removes_ddl_and_allows_next_supported_installation(
+    installation_root, guarded_engine
+):
+    session, owner = installation_root
+    assert install_local_indexing_service_fence(session, owner).disposition == "CREATED"
+    session.rollback()
+    with Session(guarded_engine) as second:
+        root = second.begin()
+        try:
+            assert (
+                second.scalar(
+                    text("SELECT pg_catalog.to_regprocedure(:signature)"),
+                    {"signature": LOCAL_INDEXING_FENCE_SIGNATURE},
+                )
+                is None
+            )
+            second.execute(text("GRANT USAGE ON SCHEMA app TO eom_catalog_manager_runtime"))
+            assert install_local_indexing_service_fence(second, owner).disposition == "CREATED"
+        finally:
+            root.rollback()
 
 
 def test_actual_shared_head_lock_blocks_control_writer_until_root_rollback(routine, target) -> None:

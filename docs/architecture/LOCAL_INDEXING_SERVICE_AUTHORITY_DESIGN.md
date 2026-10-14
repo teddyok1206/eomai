@@ -700,3 +700,36 @@ the actual owner still reauthorizes the exact selected command in its root. Reus
 the existing ready-queue index and FIFO order, never scan a separate target list.
 Default mixed/role execution remains unchanged. Empty role capacity is valid only
 for an explicitly native-only composition with its actual owner/executor supplied.
+
+## Owner-only fixed SQL-fence installation
+
+The actual service release needs a supported owner operation, not ad hoc SQL or
+Catalog self-grant. Extend the existing Identity control owner, with these bounds:
+
+1. Identity owns this one fixed routine; Catalog remains its restricted caller.
+2. The existing frozen SQL body/signature/ACL checker is canonical; no SQL input.
+3. No new identity/revision table; return CREATED/REPLAYED plus the fixed body hash.
+4. Verify the exact pinned actual table/schema owner and OID, never SET ROLE.
+5. One indexed function-name inventory and existing three-table owner checks.
+6. Use one fixed transaction advisory lock; no parallel installation registry.
+7. O(1) fixed metadata/DDL statements; no source population or Artifact reads.
+8. Reuse the existing clean explicit owner root and bounded waits. Creation,
+   PUBLIC revoke, fixed-role EXECUTE grant and final exact inspection are atomic.
+9. The Identity control adapter owns DDL. The unit/runtime never invokes it.
+10. Existing exact installation replays without writes. Existing drift/overload
+    fails closed: no OR REPLACE, ACL repair, automatic retry or root commit.
+11. Manual constants are insufficient as a supported idempotent owner use case;
+    a new installer framework or generic arbitrary DDL endpoint is unnecessary.
+
+This operation grants neither Identity table access nor a Catalog data policy.
+The caller retains commit/rollback ownership. Actual least-privilege login/runtime
+proof remains separate from owner-DB SQL/ACL tests.
+
+Owner-release staging reuses `install_owner_release.sh`, but its legacy root calls
+to the developer-owned API Python/verifier cannot be used for this installation.
+Require a reviewed root-owned installer/verifier pair at one fixed libexec location
+and the already protected operator interpreter. The caller independently checks
+their hashes before starting Bash. Existing 3/5 argument modes, exact wheel pins,
+RECORD validation, fresh no-clobber target and retained failure stage remain. No
+code is installed into either the operator or numerical interpreter. This closes
+the existing adapter boundary; it is not a new release framework or runtime grant.
