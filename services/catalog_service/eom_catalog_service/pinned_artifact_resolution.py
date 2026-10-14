@@ -419,6 +419,7 @@ class PinnedArtifactReadContext:
         names: tuple[str, ...],
         *,
         manifest_version: str | None = None,
+        manifest_sha256: str | None = None,
     ) -> None:
         """Check one fixed owner member closure; this is not source authorization."""
         self.require_session(self._session)
@@ -429,6 +430,7 @@ class PinnedArtifactReadContext:
                 manifest_version is not None
                 and captured.manifest.get("manifest_version") != manifest_version
             )
+            or (manifest_sha256 is not None and captured.manifest_hash != manifest_sha256)
             or captured.entry_count != len(captured.members)
             or set(captured.members) != set(names)
             or any(len(values) != 1 for values in captured.members.values())

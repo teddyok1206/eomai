@@ -10,6 +10,10 @@ from pathlib import Path
 from eom_catalog_contracts.inference_transfer_embedding import IncrementalEmbeddingResult
 from jsonschema.exceptions import ValidationError as SchemaError
 
+from eom_orchestrator.inference_transfer_cpu_handoff import (
+    claim_native_cpu_dispatch,
+    fixed_owner_identity,
+)
 from eom_orchestrator.inference_transfer_cpu_systemd import (
     CpuUnitObservation,
     inspect_cpu_unit,
@@ -106,6 +110,11 @@ class FixedNativeIndexLauncher:
                 assert_runtime=self._installed,
                 observe=self._observe,
                 materialize=lambda: materialize_native_index_output(prepared),
+                claim_start=lambda: claim_native_cpu_dispatch(
+                    prepared.workspace,
+                    prepared.association.association_sha256,
+                    owner=fixed_owner_identity(),
+                ),
             )
         except NativeIndexLaunchError:
             raise

@@ -34,6 +34,7 @@ def setup_launcher(
     monkeypatch.setattr(launcher, "require_fixed_cpu_unit_template", lambda *_a: None)
     monkeypatch.setattr(launcher, "require_native_cpu_environment_file", lambda *_a: None)
     monkeypatch.setattr(launcher, "_require_runtime_roots", lambda: None)
+    monkeypatch.setattr(launcher, "claim_native_cpu_dispatch", lambda *_a, **_kw: None)
     monkeypatch.setattr(cpu, "require_no_active_native_cpu_execution", lambda: None)
     monkeypatch.setattr(cpu, "require_empty_native_cpu_cgroup", lambda *_a: None)
     reads = iter(states)

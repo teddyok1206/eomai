@@ -64,6 +64,7 @@ from eom_workflow_runner.models import (
     WorkflowCommandRecord,
     WorkflowDefinitionRecord,
     WorkflowInstanceRecord,
+    WorkflowStepRunRecord,
 )
 from eom_workflow_runner.native_command_fence import (
     NativeCommandMutationFence,
@@ -73,6 +74,7 @@ from eom_workflow_runner.native_step_completion import native_application_step
 from eom_workflow_runner.reference_query_admission import ResolvedReferenceQueryAdmission
 from eom_workflow_runner.repository import (
     CommandLeaseIdentity,
+    require_command_lease,
     validate_reference_query_workflow_submission,
 )
 from eom_workflow_runner.state_machine import CommandState
@@ -279,6 +281,37 @@ class CatalogReferenceQueryOwnerAdmission:
         self._require_rows(session, command, workflow, request)
         sources = self.resolve_sources(session, request)
         require_unexpired_native_command(command, lease)
+        return sources
+
+    def resolve_execution_sources(
+        self,
+        session: Session,
+        request: ReferenceQueryWorkflowRequest,
+        lease: CommandLeaseIdentity,
+        *,
+        workflow_id: str,
+        step_run_id: str,
+    ) -> ResolvedReferenceQuerySources:
+        """Current attached Workflow/command/step closure for computation and completion."""
+        sources = self.resolve_mutation_sources(session, request, lease)
+        command = require_command_lease(session, lease)
+        workflow = session.get(WorkflowInstanceRecord, workflow_id)
+        step = session.get(WorkflowStepRunRecord, step_run_id)
+        if (
+            workflow is None
+            or step is None
+            or workflow.state not in {"RUNNING", "COMPLETED"}
+            or command.workflow_id != workflow_id
+            or step.workflow_id != workflow_id
+            or step.step_key != "encode_reference_query"
+            or step.attempt != 1
+            or step.state not in {"RUNNING", "SUCCEEDED"}
+            or step.step_type != "application"
+            or step.worker_role is not None
+            or step.result_schema != "embedding-reference-query-result@1.0"
+            or step.input_pointer_manifest != {"workflow_request_sha256": request.request_sha256}
+        ):
+            raise ValueError("REFERENCE_QUERY_EXECUTOR_CURRENT_STEP_INVALID")
         return sources
 
     def resolve_sources(

@@ -253,6 +253,7 @@ def run_fixed_native_cpu[Result](
     assert_runtime: Callable[[], None],
     observe: Callable[[str], NativeCpuObservations],
     materialize: Callable[[], Result],
+    claim_start: Callable[[], None],
 ) -> Result:
     """One fixed launch or exact terminal readback; timeout never permits a restart."""
     units = native_cpu_unit_names(purpose, execution_id)
@@ -270,6 +271,9 @@ def run_fixed_native_cpu[Result](
             if not all(row.fresh for row in before):
                 raise NativeCpuExecutionError("NATIVE_CPU_UNCERTAIN")
             require_no_active_native_cpu_execution()
+            # Fresh systemd metadata may follow a reboot, not just an unused handle.
+            # A consumed durable owner marker must never authorize a second start.
+            claim_start()
             with suppress(OSError, subprocess.SubprocessError):
                 subprocess.run(
                     ("/usr/bin/systemctl", "--no-ask-password", "start", units[1]),

@@ -5,11 +5,18 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from eom_catalog_contracts.embedding_reference_query import EmbeddingReferenceQueryResult
+from eom_catalog_contracts.embedding_reference_query_v11 import validate_reference_query_result_v11
+from eom_workflow.native_reference_query_coordinator import NativeQueryExecuted
 from jsonschema.exceptions import ValidationError as SchemaError
 
+from eom_orchestrator.inference_transfer_cpu_handoff import (
+    claim_native_cpu_dispatch,
+    fixed_owner_identity,
+)
 from eom_orchestrator.inference_transfer_cpu_systemd import (
     CpuUnitObservation,
     inspect_cpu_unit,
@@ -85,6 +92,46 @@ class FixedNativeQueryLauncher:
     def assert_current_runtime(self) -> None:
         self._installed()
 
+    def completion_observation(
+        self, prepared: PreparedNativeQuery, result: EmbeddingReferenceQueryResult
+    ) -> NativeQueryExecuted:
+        """Observe successful original units, not a persisted-result or replay launch grant."""
+        prepared.__post_init__()
+        validate_reference_query_result_v11(prepared.request, result)
+        boot_file = Path("/proc/sys/kernel/random/boot_id")
+        boot_id = boot_file.read_text(encoding="ascii").strip()
+        prepare, query = self.observe(prepared.execution_id)
+        if (
+            not prepare.succeeded
+            or not query.succeeded
+            or boot_file.read_text(encoding="ascii").strip() != boot_id
+        ):
+            raise NativeQueryLaunchError("NATIVE_QUERY_COMPLETION_UNCERTAIN")
+        try:
+            return NativeQueryExecuted.model_validate(
+                {
+                    "boot_id": boot_id,
+                    "prepare": {
+                        "invocation_id": prepare.invocation_id,
+                        "started_monotonic": prepare.status.exec_main_started_monotonic,
+                        "exited_monotonic": prepare.exited_monotonic,
+                    },
+                    "query": {
+                        "invocation_id": query.invocation_id,
+                        "started_monotonic": query.status.exec_main_started_monotonic,
+                        "exited_monotonic": query.exited_monotonic,
+                    },
+                    "prepare_template_sha256": "sha256:" + PREPARE_TEMPLATE_SHA256,
+                    "query_template_sha256": "sha256:" + QUERY_TEMPLATE_SHA256,
+                    "cpu_environment_sha256": "sha256:" + self.cpu_environment_sha256,
+                    "owner_environment_sha256": "sha256:" + self.owner_environment_sha256,
+                    "result_sha256": result.result_sha256,
+                    "completed_observed_at": datetime.now(UTC),
+                }
+            )
+        except ValueError:
+            raise NativeQueryLaunchError("NATIVE_QUERY_COMPLETION_UNCERTAIN") from None
+
     def run(self, prepared: PreparedNativeQuery) -> EmbeddingReferenceQueryResult:
         prepared.__post_init__()
         try:
@@ -94,6 +141,11 @@ class FixedNativeQueryLauncher:
                 assert_runtime=self._installed,
                 observe=self._observe,
                 materialize=lambda: materialize_native_query_output(prepared),
+                claim_start=lambda: claim_native_cpu_dispatch(
+                    prepared.workspace,
+                    prepared.association.association_sha256,
+                    owner=fixed_owner_identity(),
+                ),
             )
         except NativeQueryLaunchError:
             raise

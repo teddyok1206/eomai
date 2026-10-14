@@ -2381,3 +2381,32 @@ policy 평가는 그것들과 구분한다. 로그는 동일 임시 workspace의
 소비자/자동 service reconciliation과 실제 seed/delta/reuse·CPU/GPU/default gate도 원래
 범위대로 남긴다. `GOAL=ACTIVE`, `QUERY_PHYSICAL_ADAPTER=SOURCE_PASS`,
 `QUERY_UNIT_INSTALLATION=NOT_PERFORMED`, `GENUINE_QUERY_CONSUMER_READ=NOT_ACTIVE`.
+
+## 2026-10-14 UTC — QUERY 원 Job·정본 완료 owner와 중복 dispatch 차단
+
+[QUERY 설계 기록](../architecture/REFERENCE_QUERY_OWNER_COMPOSITION.md)에11개 결정과
+실제 구현/검증을 남겼다. 별도 closed schema/frozen model로 원 QUERY Job과4개 checkpoint,
+정확한 producer로 게시하는 query4파일·완료 영수증, 실제 committed/approved 파일 읽기를
+연결했다. 현재 Workflow/command/step/사용자/자료를 확인한 뒤 정본 이력·manifest·파일·
+정확한 현재 입력을 대조하고 권한을 다시 확인하는 완료 owner를 구현했다. 저장소 파일이
+유효하다는 사실만으로 강한 consumer read capability를 반환하지 않는다.
+
+재시작 검토에서는 fresh systemd 상태만으로 이전 dispatch가 없었다고 판단할 수 없는
+경계를 발견했다. source INDEX/QUERY 모두 공유 capacity 안에서 atomic/fsynced marker를
+한 번 소모하도록 보강했다. unit 기록이 사라져도 같은 작업의 두 번째 StartUnit은 거부하고,
+정확한 terminal 결과 조회는 유지한다. 실제 임시 파일 concurrent claim과 forgotten-handle
+시험에서 중복 시작이 없음을 확인했다. 현재 설치된 INDEX/수치 환경은 바꾸지 않았다.
+
+최종57-suite **1,382 PASS**,143.98s; strict mypy14·Ruff/format22·diff PASS다.
+앞1,371 PASS와80/99/53개 focused 결과는 겹치므로 합산하지 않는다. 실제 SQLite Job/
+Artifact/manifest/hash와 file concurrency는 합성 IAM/source/unit observation과 구분한다.
+기존 PostgreSQL13개 QUERY migration 사례는 이번에도 실제 실행하지 않았다. source
+schema/DB head의 의미나 기존 released 계약을 바꾸지 않았고 새 dependency도 없다.
+
+00:17 UTC 기존 유한 INDEX controller3416211/3416258은 같은 입력 대기 상태였으며 교체/
+재로그인을 하지 않았다. 이번 source 작업의 운영 Job/Artifact·migration·서비스·모델/GPU
+변경은0이다. 실제 executor 조립·원 claim/pending 복구·QUERY 설치/activation·consumer
+read가 아직 남고, 실제 seed/delta/reuse·자동 service reconciliation·소비자와 CPU/GPU
+실측/default gate도 원래 목표대로 남아 있다. `GOAL=ACTIVE`,
+`QUERY_JOB_HISTORY_STORAGE=SOURCE_PASS`, `QUERY_COMPLETION_OWNER=SOURCE_PASS`,
+`QUERY_EXECUTOR_COMPOSITION=NOT_CONNECTED`, `GENUINE_QUERY_CONSUMER_READ=NOT_ACTIVE`.

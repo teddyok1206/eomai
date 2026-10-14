@@ -314,3 +314,97 @@ remain unchanged. No dependency or DB migration was added in this physical phase
 `QUERY_JOB_CANONICAL_COMPLETION=NOT_CONNECTED`, `GENUINE_QUERY_CONSUMER_READ=NOT_ACTIVE`.
 Next is the original native Job/checkpoint/provenance and canonical receipt owner,
 not activation based only on this physical helper. The full original goal remains.
+
+## QUERY Job and canonical completion — 2026-10-14 UTC decision
+
+1. Boundary: extend the existing Orchestrator Job/event and file-set owners. Runner
+   still owns current Workflow/command/source authorization; no new queue/service.
+2. Canonical source: immutable request/launch events and committed Artifact members.
+   Checkpoints are bounded immutable continuation metadata, never IAM evidence.
+3. Identity: native Job, query-publication producer and receipt producer are distinct;
+   one Workflow/step/request key retains its original launch through recovery.
+4. Resolution: validate the literal request/launch and new closed checkpoint schema,
+   registered protocol hash, event transitions, producer/member/hash/time closure.
+5. Access: indexed Job-key lookup, Workflow/command-then-Job locks and ordered event
+   prefixes. No text/vector/result bytes in the coordinator's SQL values.
+6. Structures: four contiguous ALLOCATION/EXECUTED/PUBLISHED/COMPLETED events,
+   existing unique Job key and immutable typed publication pointers; no new table.
+7. Scale: O(log J + H) indexed lookup/history, H<=4 checkpoint records; bounded
+   metadata and four-member Artifact reads. No repeated corpus encoding or scans.
+8. Transactions: caller retains current owner fences in each nonnested root. Record
+   allocation before launch; observe units outside SQL; freshly authorize before
+   checkpoint/publication. Actual successful unit observations are pinned once.
+9. Dependency: pure contracts do not import systemd/SQL; Orchestrator adapts unit
+   observations and publishes, Catalog reads committed/approved exact producers.
+10. Replay: exact phase replay is read-only; conflicts, gaps, altered jobs and known
+    failures fail closed. Preallocated publication identities prevent a crash from
+    producing a different owner. Checkpoints grant no permission to restart a unit.
+11. Alternative: inferring execution from a PNG/vector file or storing a success
+    boolean loses the original invocation/producer closure. Reusing INDEX's protocol
+    would mislabel purpose. Separate small QUERY frames preserve both histories.
+
+No numerical execution, activation, service identity or consumer acceptance follows
+from these source/storage checks. Those remain explicit gates of the original goal.
+
+Crash review also found that a fresh systemd handle alone cannot distinguish an
+unstarted Job from an earlier dispatch whose unit observation was lost on reboot.
+Before StartUnit, both source INDEX/QUERY adapters therefore atomically consume a
+private, fsynced `.dispatch-attempted` marker under the existing shared capacity
+lock. Exact terminal readback remains allowed; fresh-but-consumed handles fail
+uncertain without another start. A crash between marker and StartUnit is uncertain,
+not permission to guess that execution never happened. Existing installed INDEX
+code/templates and the waiting finite canary are not changed by this source fix.
+
+## Original Job, canonical completion and dispatch safety — source implementation
+
+- A separate closed2020-12 checkpoint schema and frozen models preserve released
+  INDEX, QUERY input/result/receipt and queue contracts. No migration/dependency.
+- Orchestrator keeps one indexed Workflow/step/request native Job with the literal
+  QUERY protocol and original launch event. Four contiguous typed events validate
+  protocol hashes, state transitions, distinct producer identities, exact files,
+  successful unit observations and monotonic/publication time order. Reentry never
+  allocates a replacement native Job, overwrites a checkpoint or repairs failure.
+- Existing file-set publication gains optional identified QUERY publication and
+  purpose-specific self-identifying completion. Catalog resolves its real approved
+  producer/member/hash and exact manifest, not just an in-memory receipt. Shared
+  INDEX/QUERY helpers contain only file publication/read mechanics; purpose schema,
+  timestamps and errors remain independent. Metadata only is stored in SQL.
+- The concrete completion owner first fences the actual current Workflow/command/
+  step/source, then validates original Job history and canonical receipt/four files,
+  reconstructs the exact native input from current approved sources and fences late.
+  It checks the attached step's producer rather than trusting a detached object.
+  Historical successful unit observations do not require another numerical launch
+  or surviving old units just to read a committed result.
+- The fixed QUERY launcher can capture exact successful prepare/query invocation,
+  template/environment hashes, boot and timing metadata after validating its result.
+  INDEX/QUERY consume one atomic/fsynced owner dispatch marker under the existing
+  capacity lock. Fresh systemd metadata after an uncertain dispatch cannot restart
+  it. A terminal read still reuses the exact result without a new dispatch claim.
+
+These are source/storage boundaries, not a default native executor. The global
+QUERY definition remains unoffered. Concrete executor composition and supported
+original-claim/pending recovery are still required before activation. No stronger
+`VerifiedReferenceQueryRead` is returned by a storage-only adapter. Service identity,
+consumer delivery, real seed/delta/query and CPU/GPU selection remain in scope.
+
+Final57-suite **1,382 PASS**,143.98s; strict mypy14 source modules, Ruff/format22
+Python files and diff PASS. The preceding1,371-pass full run predates the durable
+dispatch fix; focused80/99 and earlier53/44 gates overlap and are not summed.
+Initial test fixtures for canonical UTC/hash and stable conflict codes were
+corrected, then the final complete gate was rerun without weakening source guards.
+Actual temporary SQLite Job/events, file-set commit/read/replay, hashes, local
+concurrent dispatch claims and forgotten-handle no-second-start paths are covered.
+Current IAM/source derivation/unit observations remain explicit synthetic seams;
+none of these tests prove production authorization or numerical execution.
+
+No production Job/Artifact, DB migration, service restart, model forward, GPU work
+or QUERY installation was performed. The prior13-case PostgreSQL QUERY migration
+gate remains collected-only, not PASS. The original finite INDEX controller was
+read-only observed at00:17 UTC still waiting for its existing input; it was not
+replaced or reauthenticated. Source logs are retained in the existing temporary
+workspace as `query-canonical-final-regression.log` and
+`query-canonical-mypy-final.log`. No new auth window or saved credential was added.
+
+`QUERY_JOB_HISTORY_STORAGE=SOURCE_PASS`, `QUERY_COMPLETION_OWNER=SOURCE_PASS`,
+`QUERY_EXECUTOR_COMPOSITION=NOT_CONNECTED`, `QUERY_CLAIM_RECOVERY=NOT_IMPLEMENTED`,
+`QUERY_UNIT_INSTALLATION=NOT_PERFORMED`, `GENUINE_QUERY_CONSUMER_READ=NOT_ACTIVE`.

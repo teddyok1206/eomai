@@ -66,6 +66,7 @@ class CatalogReferenceQueryArtifacts:
         workflow_id: str,
         step_run_id: str,
         receipt_owner_job_id: str,
+        manifest_sha256: str | None = None,
     ) -> ResolvedReferenceQueryArtifacts:
         receipt = parse_reference_query_workflow_receipt(receipt)
         input_pointer = receipt.query_input
@@ -81,6 +82,7 @@ class CatalogReferenceQueryArtifacts:
             input_pointer.artifact_revision_id,
             ("input.json", "result.json", "shard.json", "vectors.f32"),
             manifest_version=CONTROL_FILE_SET_PROTOCOL,
+            manifest_sha256=manifest_sha256,
         )
         producers: set[str] = set()
 

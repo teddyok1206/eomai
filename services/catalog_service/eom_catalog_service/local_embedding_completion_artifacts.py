@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import json
 
+from eom_catalog_contracts.embedding_reference_query import MAX_REFERENCE_QUERY_BYTES
 from eom_identifiers import canonical_json_bytes
 from eom_orchestrator.file_set_control_artifacts import CONTROL_FILE_SET_PROTOCOL
-from eom_orchestrator.local_embedding_completion_artifacts import NATIVE_COMPLETION_ARTIFACT_TYPE
+from eom_orchestrator.local_embedding_completion_artifacts import (
+    NATIVE_COMPLETION_ARTIFACT_TYPE,
+    QUERY_COMPLETION_ARTIFACT_TYPE,
+)
+from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.local_embedding_workflow_receipt import (
     MAX_LOCAL_EMBEDDING_WORKFLOW_RECEIPT_BYTES,
     LocalEmbeddingStepOutput,
@@ -15,9 +20,19 @@ from eom_workflow.local_embedding_workflow_receipt import (
     parse_local_embedding_workflow_receipt,
     validate_local_embedding_step_output,
 )
+from eom_workflow.reference_query_execution import (
+    ReferenceQueryStepOutput,
+    ReferenceQueryWorkflowReceipt,
+    parse_reference_query_step_output,
+    parse_reference_query_workflow_receipt,
+    validate_reference_query_step_output,
+)
 from sqlalchemy.orm import Session
 
-from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
+from eom_catalog_service.pinned_artifact_resolution import (
+    PinnedArtifactMember,
+    PinnedArtifactReadContext,
+)
 from eom_catalog_service.settings import CatalogSettings
 
 
@@ -31,20 +46,12 @@ def resolve_native_embedding_completion(
     the supported Catalog registration-observation use case in the SAME root.
     """
     output = parse_local_embedding_step_output(output)
-    pointer = output.receipt
-    reader = PinnedArtifactReadContext(session, settings)
-    reader.prefetch(((pointer.artifact_id, pointer.artifact_revision_id),))
-    reader.require_file_set(
-        pointer.artifact_id,
-        pointer.artifact_revision_id,
-        ("receipt.json",),
-        manifest_version=CONTROL_FILE_SET_PROTOCOL,
-    )
-    materialized = reader.read_pinned(
-        **pointer.model_dump(mode="python"),
-        expected_artifact_types=(NATIVE_COMPLETION_ARTIFACT_TYPE,),
-        expected_primary_file="receipt.json",
-        max_bytes=MAX_LOCAL_EMBEDDING_WORKFLOW_RECEIPT_BYTES,
+    materialized = _read_receipt(
+        session,
+        settings,
+        output.receipt,
+        NATIVE_COMPLETION_ARTIFACT_TYPE,
+        MAX_LOCAL_EMBEDDING_WORKFLOW_RECEIPT_BYTES,
     )
     body = json.loads(materialized.payload)
     if canonical_json_bytes(body) != materialized.payload:
@@ -54,3 +61,58 @@ def resolve_native_embedding_completion(
         raise ValueError("LOCAL_EMBEDDING_RECEIPT_PRODUCER_MISMATCH")
     validate_local_embedding_step_output(output, receipt)
     return receipt
+
+
+def resolve_native_reference_query_completion(
+    session: Session, settings: CatalogSettings, output: ReferenceQueryStepOutput
+) -> ReferenceQueryWorkflowReceipt:
+    """Canonical read only; caller must separately validate current source/Job closure."""
+    output = parse_reference_query_step_output(output)
+    materialized = _read_receipt(
+        session,
+        settings,
+        output.receipt,
+        QUERY_COMPLETION_ARTIFACT_TYPE,
+        MAX_REFERENCE_QUERY_BYTES,
+    )
+    body = json.loads(materialized.payload)
+    if canonical_json_bytes(body) != materialized.payload:
+        raise ValueError("REFERENCE_QUERY_RECEIPT_NONCANONICAL")
+    receipt = parse_reference_query_workflow_receipt(body)
+    if (
+        materialized.producer_job_id != receipt.receipt_owner_job_id
+        or len(
+            {
+                receipt.receipt_owner_job_id,
+                receipt.query_artifact_owner_job_id,
+                receipt.native_launch_job_id,
+            }
+        )
+        != 3
+    ):
+        raise ValueError("REFERENCE_QUERY_RECEIPT_PRODUCER_MISMATCH")
+    validate_reference_query_step_output(output, receipt)
+    return receipt
+
+
+def _read_receipt(
+    session: Session,
+    settings: CatalogSettings,
+    pointer: ArtifactMemberPointer,
+    artifact_type: str,
+    maximum: int,
+) -> PinnedArtifactMember:
+    reader = PinnedArtifactReadContext(session, settings)
+    reader.prefetch(((pointer.artifact_id, pointer.artifact_revision_id),))
+    reader.require_file_set(
+        pointer.artifact_id,
+        pointer.artifact_revision_id,
+        ("receipt.json",),
+        manifest_version=CONTROL_FILE_SET_PROTOCOL,
+    )
+    return reader.read_pinned(
+        **pointer.model_dump(mode="python"),
+        expected_artifact_types=(artifact_type,),
+        expected_primary_file="receipt.json",
+        max_bytes=maximum,
+    )

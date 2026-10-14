@@ -31,6 +31,7 @@ def setup_launcher(
     monkeypatch.setattr(launcher, "require_fixed_cpu_unit_template", lambda *_a: None)
     monkeypatch.setattr(launcher, "require_native_cpu_environment_file", lambda *_a: None)
     monkeypatch.setattr(launcher, "require_native_cpu_runtime_roots", lambda: None)
+    monkeypatch.setattr(launcher, "claim_native_cpu_dispatch", lambda *_a, **_kw: None)
     monkeypatch.setattr(cpu, "require_no_active_native_cpu_execution", lambda: None)
     monkeypatch.setattr(cpu, "require_empty_native_cpu_cgroup", lambda *_a: None)
     reads = iter(states)
@@ -186,4 +187,52 @@ def test_schema_failure_has_stable_redacted_launch_error_and_no_restart(
     monkeypatch.setattr(launcher, "materialize_native_query_output", corrupt)
     with pytest.raises(launcher.NativeQueryLaunchError, match=r"^NATIVE_QUERY_UNCERTAIN$"):
         adapter.run(prepared())
+    assert calls == []
+
+
+@pytest.mark.parametrize("fault", (None, "running", "invocation", "order", "boot", "runtime"))
+def test_completion_observation_pins_exact_successful_invocations_not_result_bytes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fault: str | None,
+) -> None:
+    from tests.unit.test_reference_query_execution_contracts import case
+
+    adapter, calls = setup_launcher(tmp_path, monkeypatch, [])
+    prepare = observation("success")
+    query = replace(
+        observation("running" if fault == "running" else "success", main=True),
+        invocation_id="a" * 32 if fault == "invocation" else "b" * 32,
+        status=replace(
+            observation("running" if fault == "running" else "success", main=True).status,
+            exec_main_started_monotonic=15 if fault == "order" else 21,
+        ),
+        exited_monotonic=40,
+    )
+    monkeypatch.setattr(launcher.FixedNativeQueryLauncher, "_observe", lambda *_: (prepare, query))
+    reads = iter(
+        (
+            "11111111-1111-1111-1111-111111111111",
+            "22222222-2222-2222-2222-222222222222"
+            if fault == "boot"
+            else "11111111-1111-1111-1111-111111111111",
+        )
+    )
+    monkeypatch.setattr(Path, "read_text", lambda *_a, **_kw: next(reads))
+    if fault == "runtime":
+        monkeypatch.setattr(
+            launcher,
+            "require_native_cpu_runtime_roots",
+            lambda: (_ for _ in ()).throw(ValueError("synthetic runtime drift")),
+        )
+    if fault:
+        with pytest.raises(ValueError):
+            adapter.completion_observation(prepared(), case().result)
+    else:
+        completed = adapter.completion_observation(prepared(), case().result)
+        assert completed.query.invocation_id == "b" * 32
+        assert completed.query.started_monotonic == 21
+        assert completed.cpu_environment_sha256 == "sha256:" + "a" * 64
+        assert completed.owner_environment_sha256 == "sha256:" + "b" * 64
+        assert completed.result_sha256 == case().result.result_sha256
     assert calls == []

@@ -318,6 +318,7 @@ class EmbeddingArtifactStore:
         request: EmbeddingReferenceQueryInputV11,
         workspace: Path,
         created_at: datetime,
+        identity: ControlFileSetIdentity | None = None,
     ) -> PublishedReferenceQueryArtifacts:
         """Commit supplied QUERY closure; the calling owner retains current auth/lease checks."""
         try:
@@ -329,6 +330,15 @@ class EmbeddingArtifactStore:
             validate_reference_query_launch_association(
                 launch, workflow_request, policy, bundle, request
             )
+            if identity is not None:
+                if (
+                    type(identity) is not ControlFileSetIdentity
+                    or identity.job_id == request.job_id
+                ):
+                    raise ValueError("QUERY publication identity differs")
+                identity = ControlFileSetIdentity(
+                    identity.job_id, identity.artifact_id, identity.artifact_revision_id
+                )
             timestamp = TypeAdapter(UtcDatetime).validate_python(created_at, strict=True)
             if timestamp < launch.launched_at:
                 raise ValueError("publication precedes its launch association")
@@ -407,7 +417,12 @@ class EmbeddingArtifactStore:
                         "application/octet-stream",
                     ),
                 )
-                receipt = self.publisher.publish(
+                publish = (
+                    self.publisher.publish
+                    if identity is None
+                    else partial(self.publisher.publish_identified, identity=identity)
+                )
+                receipt = publish(
                     members=members,
                     primary_file="result.json",
                     artifact_type=EMBEDDING_REFERENCE_QUERY_ARTIFACT_TYPE,
@@ -424,6 +439,15 @@ class EmbeddingArtifactStore:
                     if (
                         receipt.primary_file != "result.json"
                         or receipt.primary_sha256 != members[1].sha256
+                        or (
+                            identity is not None
+                            and (
+                                receipt.job_id != identity.job_id
+                                or receipt.artifact_id != identity.artifact_id
+                                or receipt.artifact_revision_id != identity.artifact_revision_id
+                                or receipt.job_id == request.job_id
+                            )
+                        )
                     ):
                         raise ValueError("QUERY owner receipt differs")
                     pointers = tuple(

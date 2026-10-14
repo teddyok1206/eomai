@@ -277,6 +277,83 @@ def test_query_current_owner_only_allows_terminal_transition_inside_acquired_roo
 
 
 @pytest.mark.parametrize(
+    "fault",
+    (
+        None,
+        "workflow",
+        "step_workflow",
+        "key",
+        "attempt",
+        "state",
+        "role",
+        "result",
+        "input",
+    ),
+)
+def test_execution_source_fence_requires_exact_current_step(source, monkeypatch, fault):
+    session, _command, workflow, lease = mutation_rows(source, monkeypatch)
+    workflow.state = "RUNNING"
+    step = WorkflowStepRunRecord(
+        step_run_id="steprun_" + "d" * 32,
+        workflow_id=workflow.workflow_id,
+        step_key="encode_reference_query",
+        step_type="application",
+        worker_role=None,
+        attempt=1,
+        state="RUNNING",
+        result_schema="embedding-reference-query-result@1.0",
+        input_pointer_manifest={"workflow_request_sha256": source.request.request_sha256},
+    )
+    original_get = session.get
+    monkeypatch.setattr(
+        session,
+        "get",
+        lambda model, *a, **kw: (
+            step if model is WorkflowStepRunRecord else original_get(model, *a, **kw)
+        ),
+    )
+    if fault == "workflow":
+        workflow.state = "CANCELLED"
+    if fault == "step_workflow":
+        step.workflow_id = "workflow_" + "f" * 32
+    if fault == "key":
+        step.step_key = "encode_batch"
+    if fault == "attempt":
+        step.attempt = 2
+    if fault == "state":
+        step.state = "FAILED"
+    if fault == "role":
+        step.worker_role = "authoring"
+    if fault == "result":
+        step.result_schema = "incremental-embedding-result@1.0"
+    if fault == "input":
+        step.input_pointer_manifest = {"changed": True}
+    try:
+        if fault:
+            with pytest.raises(ValueError, match="CURRENT_STEP_INVALID"):
+                source.owner.resolve_execution_sources(
+                    session,
+                    source.request,
+                    lease,
+                    workflow_id=workflow.workflow_id,
+                    step_run_id=step.step_run_id,
+                )
+        else:
+            assert (
+                source.owner.resolve_execution_sources(
+                    session,
+                    source.request,
+                    lease,
+                    workflow_id=workflow.workflow_id,
+                    step_run_id=step.step_run_id,
+                ).request
+                == source.request
+            )
+    finally:
+        session.close()
+
+
+@pytest.mark.parametrize(
     "field,value",
     [
         ("lease_owner", "other"),

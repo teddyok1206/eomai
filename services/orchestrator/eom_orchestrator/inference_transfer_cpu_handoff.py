@@ -298,8 +298,8 @@ def create_protected_cpu_handoff_member(
 
 def write_protected_cpu_owner_member(
     directory: int, name: str, payload: bytes, *, owner: CpuHandoffIdentity
-) -> None:
-    """Private local staging: exclusive creation or exact same-byte replay, never repair."""
+) -> bool:
+    """True for exclusive creation, False for exact replay; never overwrite or repair."""
     if (
         os.geteuid() != owner.owner_uid
         or not name
@@ -322,7 +322,7 @@ def write_protected_cpu_owner_member(
         )
         if existing != payload:
             raise CpuHandoffError("NATIVE_CPU_OWNER_MEMBER_CONFLICT") from None
-        return
+        return False
     try:
         os.fchmod(descriptor, 0o600)
         remaining = memoryview(payload)
@@ -347,6 +347,31 @@ def write_protected_cpu_owner_member(
         os.fsync(directory)
     finally:
         os.close(descriptor)
+    return True
+
+
+def claim_native_cpu_dispatch(
+    workspace: Path, association_sha256: str, *, owner: CpuHandoffIdentity
+) -> None:
+    """Consume one durable dispatch, including when systemd later forgets the unit."""
+    if (
+        type(association_sha256) is not str
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", association_sha256, re.ASCII) is None
+    ):
+        raise CpuHandoffError("NATIVE_CPU_DISPATCH_INVALID")
+    with protected_cpu_handoff_directory(
+        workspace, owner=owner, uid=owner.owner_uid, gid=owner.owner_gid, mode=0o700
+    ) as directory:
+        payload = association_sha256.encode("ascii")
+        marker = read_protected_cpu_handoff_member(
+            directory, ".launch-started", uid=owner.owner_uid, gid=owner.owner_gid, mode=0o600
+        )
+        if marker != payload:
+            raise CpuHandoffError("NATIVE_CPU_DISPATCH_INVALID")
+        if not write_protected_cpu_owner_member(
+            directory, ".dispatch-attempted", payload, owner=owner
+        ):
+            raise CpuHandoffError("NATIVE_CPU_DISPATCH_ALREADY_ATTEMPTED")
 
 
 def ensure_protected_cpu_owner_workspace(

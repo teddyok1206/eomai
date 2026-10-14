@@ -890,6 +890,54 @@ def validate_native_embedding_coordinator_message(value: object) -> None:
         raise LocalEmbeddingAdmissionContractError("LOCAL_EMBEDDING_CONTRACT_INVALID") from None
 
 
+NATIVE_REFERENCE_QUERY_COORDINATOR_SCHEMA_RESOURCE = (
+    "native-reference-query-coordinator-v1.schema.json",
+    "eom://schemas/workflow/native-reference-query-coordinator/1.0",
+    "sha256:b3711bf1f8722b9a0b884dac7f3ef032c0bd28bd4e76351f3d7ee4d1e0f17745",
+)
+
+
+@cache
+def _native_reference_query_coordinator_schema() -> dict[str, Any]:
+    filename, schema_id, expected = NATIVE_REFERENCE_QUERY_COORDINATOR_SCHEMA_RESOURCE
+    try:
+        with WORKFLOW_RESOURCE_ROOT.joinpath(filename).open("rb") as stream:
+            payload = stream.read(16 * 1024 + 1)
+        if not 0 < len(payload) <= 16 * 1024 or sha256_bytes(payload) != expected:
+            raise ValueError("QUERY checkpoint schema differs")
+        document = json.loads(payload)
+        if not isinstance(document, dict) or document.get("$id") != schema_id:
+            raise ValueError("QUERY checkpoint schema identity differs")
+        Draft202012Validator.check_schema(document)
+        return document
+    except Exception:
+        raise ReferenceQueryContractError("REFERENCE_QUERY_SCHEMA_UNAVAILABLE") from None
+
+
+def load_native_reference_query_coordinator_schema() -> dict[str, Any]:
+    return copy.deepcopy(_native_reference_query_coordinator_schema())
+
+
+def validate_native_reference_query_checkpoint(value: object) -> None:
+    try:
+        document = raw_similarity_contract_value(value)
+        if len(canonical_json_bytes(document)) > 16 * 1024:
+            raise ValueError("QUERY checkpoint metadata exceeds its bound")
+        registry = _reference_query_execution_registry().with_resource(
+            NATIVE_EMBEDDING_COORDINATOR_SCHEMA_RESOURCE[1],
+            Resource.from_contents(_native_embedding_coordinator_schema()),
+        )
+        Draft202012Validator(
+            _native_reference_query_coordinator_schema(),
+            registry=registry,
+            format_checker=FormatChecker(),
+        ).validate(document)
+    except ReferenceQueryContractError:
+        raise
+    except Exception:
+        raise ReferenceQueryContractError("REFERENCE_QUERY_CHECKPOINT_INVALID") from None
+
+
 def load_json_schema(resource: Traversable, logical_name: str) -> dict[str, Any]:
     try:
         raw: object = json.loads(resource.read_text(encoding="utf-8"))
