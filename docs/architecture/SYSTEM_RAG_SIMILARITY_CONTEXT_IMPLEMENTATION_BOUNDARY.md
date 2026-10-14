@@ -2513,3 +2513,17 @@ Rollback selects DISABLED and the prior compatible installed release, not a data
 rewrite. Current original canary/API/owner pins remain untouched pending its result.
 Full-goal actual QUERY/replay, variation/review/API activation, remaining consumers,
 continuous coverage and measured CPU/CUDA/default selection remain open.
+
+Candidate `bfdd28321af6b7f83419158befb182322222030e` passed the complete three-wheel
+build/RECORD inspection and independent isolated owner-pair/explicit-three-wheel
+probes. They resolve the new configuration schema/hash and local references, actual
+Catalog runner factory and closed incomplete-enable guard entirely from selected
+archives. Disabled factory evaluation performs no DB/file operation. EOM imports
+from checkout, installed prefix or undeclared wheels and ML fallback are forbidden.
+These are package checks, not protected installation or actual function admission.
+
+Raw wheel SHA: platform `7fb5d152f73a652dce26c9ba4961c5022c60c68f8c4dd5edc12e974613e8f9d4`;
+contracts `23a57ed25f270f69095eb32471ef5b15d8b03c11b72ca1475bc1c4f848b46f25`;
+API `9e3d29a273ad6d557bceef4bd62a8e9509b8fd7126c08546ab47c298144088ba`.
+Evidence suffixes: `release-build.log`, `owner-pair-proof.log`, `three-wheel-proof.log`
+under the same runtime evidence prefix. The candidate is pushed, not installed.
