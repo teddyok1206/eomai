@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryLookup
-from eom_workflow.local_embedding_request import LocalEmbeddingWorkflowRequestV11
+from eom_workflow.local_embedding_request import LocalEmbeddingExecutableRequest
 from sqlalchemy.orm import Session
 
 from eom_workflow_runner.local_embedding_owner_admission import (
@@ -15,7 +15,7 @@ from eom_workflow_runner.repository import CommandLeaseIdentity, require_command
 
 
 def native_embedding_registry_scope(
-    request: LocalEmbeddingWorkflowRequestV11,
+    request: LocalEmbeddingExecutableRequest,
 ) -> EmbeddingRegistryLookup:
     """Small exact request selection, never source or publisher authority."""
     return EmbeddingRegistryLookup(
@@ -33,7 +33,7 @@ def resolve_native_execution_sources(
     *,
     workflow_id: str,
     step_run_id: str,
-    request: LocalEmbeddingWorkflowRequestV11,
+    request: LocalEmbeddingExecutableRequest,
     lease: CommandLeaseIdentity,
 ) -> ResolvedLocalEmbeddingSources:
     sources = owner.resolve_mutation_sources(session, request, lease)

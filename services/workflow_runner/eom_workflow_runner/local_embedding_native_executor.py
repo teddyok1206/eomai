@@ -1,4 +1,4 @@
-"""Concrete operator-seed CPU composition using existing owners and fixed native units."""
+"""Concrete bounded CPU composition using existing owners and fixed native units."""
 
 from __future__ import annotations
 
@@ -6,9 +6,6 @@ from datetime import UTC, datetime
 
 from eom_catalog_contracts.inference_transfer_embedding import (
     IncrementalEmbeddingResult,
-)
-from eom_catalog_service.embedding_registry_ports import (
-    EmbeddingRegistryCaller,
 )
 from eom_catalog_service.local_embedding_encoding_artifacts import (
     CatalogLocalEmbeddingEncodingArtifacts,
@@ -46,8 +43,8 @@ from eom_workflow.local_embedding_encoding_job import (
 )
 from eom_workflow.local_embedding_execution_policy import LocalEmbeddingRuntimeProfile
 from eom_workflow.local_embedding_request import (
-    LocalEmbeddingWorkflowRequestV11,
-    require_local_embedding_operator_seed,
+    LocalEmbeddingExecutableRequest,
+    parse_local_embedding_executable_request,
 )
 from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
 from eom_workflow.local_embedding_workflow_receipt import (
@@ -171,9 +168,9 @@ class CatalogNativeEmbeddingExecutor:
         self.source_commit = source_commit
         self._index_completion = NativeEmbeddingIndexCompletion(owner, publisher, launcher)
 
-    def evaluate(self, request: LocalEmbeddingWorkflowRequestV11) -> RuntimeReadinessReport:
+    def evaluate(self, request: LocalEmbeddingExecutableRequest) -> RuntimeReadinessReport:
         try:
-            require_local_embedding_operator_seed(request)
+            request = parse_local_embedding_executable_request(request)
             profile = self.runtime_profile
             if (
                 request.space != profile.space
@@ -209,7 +206,7 @@ class CatalogNativeEmbeddingExecutor:
         *,
         workflow_id: str,
         step_run_id: str,
-        request: LocalEmbeddingWorkflowRequestV11,
+        request: LocalEmbeddingExecutableRequest,
         lease: CommandLeaseIdentity,
     ) -> ResolvedLocalEmbeddingSources:
         return resolve_native_execution_sources(
@@ -223,7 +220,7 @@ class CatalogNativeEmbeddingExecutor:
 
     def _reservations(
         self,
-        request: LocalEmbeddingWorkflowRequestV11,
+        request: LocalEmbeddingExecutableRequest,
         intent: LocalEmbeddingLaunchIntent,
         lease: CommandLeaseIdentity,
     ) -> EmbeddingEncodingReservations:
@@ -239,7 +236,7 @@ class CatalogNativeEmbeddingExecutor:
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: LocalEmbeddingWorkflowRequestV11,
+        request: LocalEmbeddingExecutableRequest,
         command_lease: CommandLeaseIdentity,
         idempotency_key: str,
         fenced_transaction: NativeFencedRunnerTransaction,
@@ -250,7 +247,7 @@ class CatalogNativeEmbeddingExecutor:
         )
         if not self.evaluate(request).ready or idempotency_key != expected_key:
             raise ValueError("LOCAL_EMBEDDING_EXECUTOR_CONTEXT_INVALID")
-        caller = EmbeddingRegistryCaller(require_local_embedding_operator_seed(request).operator_id)
+        caller = self.owner.registry_caller(request)
         with fenced_transaction() as session:
             sources = self._current(
                 session,
@@ -437,7 +434,7 @@ class CatalogNativeEmbeddingExecutor:
         session: Session,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: LocalEmbeddingWorkflowRequestV11,
+        request: LocalEmbeddingExecutableRequest,
         command_lease: CommandLeaseIdentity,
         output: LocalEmbeddingStepOutput,
     ) -> LocalEmbeddingStepOutput:

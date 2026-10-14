@@ -1,4 +1,4 @@
-"""Concrete current operator/command/source admission for the existing encoding owner."""
+"""Current actor/command/source admission for the same existing encoding owner."""
 
 from __future__ import annotations
 
@@ -28,8 +28,8 @@ from eom_workflow.local_embedding_encoding_job import (
     validate_local_embedding_launch_association,
 )
 from eom_workflow.local_embedding_request import (
-    LocalEmbeddingWorkflowRequestV11,
-    require_local_embedding_operator_seed,
+    LocalEmbeddingExecutableRequest,
+    parse_local_embedding_executable_request,
 )
 from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
 from sqlalchemy import select
@@ -48,13 +48,12 @@ from eom_workflow_runner.repository import CommandLeaseIdentity, require_command
 class CurrentEncodingExecution:
     """Trusted composition values; intent is audit, not current lease/authentication."""
 
-    request: LocalEmbeddingWorkflowRequestV11
+    request: LocalEmbeddingExecutableRequest
     intent: LocalEmbeddingLaunchIntent
     command_lease: CommandLeaseIdentity
 
     def __post_init__(self) -> None:
-        request = LocalEmbeddingWorkflowRequestV11.model_validate(self.request)
-        require_local_embedding_operator_seed(request)
+        request = parse_local_embedding_executable_request(self.request)
         intent = LocalEmbeddingLaunchIntent.model_validate(self.intent)
         if (
             intent.workflow_request_sha256 != request.request_sha256
@@ -111,9 +110,7 @@ class CatalogEncodingOwnerAdmission:
     ) -> ResolvedLocalEmbeddingSources:
         context = self.execution
         # Fence actual caller before even revealing Workflow/launch existence.
-        self.owner.identity.fence_current_operator(
-            session, require_local_embedding_operator_seed(context.request).operator_id
-        )
+        self.owner.fence_current_actor(session, context.request)
         workflow = session.scalar(
             select(WorkflowInstanceRecord)
             .where(WorkflowInstanceRecord.workflow_id == context.intent.workflow_id)
@@ -250,7 +247,5 @@ class CatalogEncodingOwnerAdmission:
             except WorkflowError:
                 uncertain.add(self.execution.intent.native_launch_job_id)
         # Late current authorization also catches expiry consumed by Artifact/OS reads.
-        self.owner.identity.fence_current_operator(
-            session, require_local_embedding_operator_seed(self.execution.request).operator_id
-        )
+        self.owner.fence_current_actor(session, self.execution.request)
         return ObservedEncodingReads(self.execution.intent, frozenset(uncertain))

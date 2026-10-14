@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from eom_workflow.compiler import CompiledWorkflowDefinition
-from eom_workflow.local_embedding_request import LocalEmbeddingWorkflowRequestV11
+from eom_workflow.local_embedding_request import LocalEmbeddingExecutableRequest
 from eom_workflow.local_embedding_workflow import LocalEmbeddingWorkflowDefinition
 from eom_workflow.local_embedding_workflow_receipt import (
     LocalEmbeddingStepOutput,
@@ -53,7 +53,7 @@ def _native_step(session: Session, workflow_id: str) -> WorkflowStepRunRecord | 
     return native_application_step(session, workflow_id, "encode_batch")
 
 
-def _checked_step(step: WorkflowStepRunRecord, request: LocalEmbeddingWorkflowRequestV11) -> None:
+def _checked_step(step: WorkflowStepRunRecord, request: LocalEmbeddingExecutableRequest) -> None:
     if (
         step.step_key != "encode_batch"
         or step.attempt != 1
@@ -78,7 +78,7 @@ def _checked_completion(
     executor: LocalEmbeddingNativeExecutor,
     workflow: WorkflowInstanceRecord,
     step: WorkflowStepRunRecord,
-    request: LocalEmbeddingWorkflowRequestV11,
+    request: LocalEmbeddingExecutableRequest,
     lease: CommandLeaseIdentity,
     output: LocalEmbeddingStepOutput,
 ) -> LocalEmbeddingStepOutput:
@@ -111,7 +111,7 @@ def advance_local_embedding_step(
     *,
     workflow: WorkflowInstanceRecord,
     compiled: CompiledWorkflowDefinition,
-    request: LocalEmbeddingWorkflowRequestV11,
+    request: LocalEmbeddingExecutableRequest,
     lease: CommandLeaseIdentity,
     owner: LocalEmbeddingOwnerAdmission,
     executor: LocalEmbeddingNativeExecutor,
@@ -319,7 +319,7 @@ def advance_local_embedding_step(
 def complete_local_embedding_terminal(
     *,
     workflow_id: str,
-    request: LocalEmbeddingWorkflowRequestV11,
+    request: LocalEmbeddingExecutableRequest,
     lease: CommandLeaseIdentity,
     executor: LocalEmbeddingNativeExecutor,
     fenced_transaction: NativeFencedRunnerTransaction,

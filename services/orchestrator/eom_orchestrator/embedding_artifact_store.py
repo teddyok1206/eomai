@@ -51,10 +51,10 @@ from eom_workflow.local_embedding_encoding_job import (
     LocalEmbeddingLaunchAssociation,
     validate_local_embedding_launch_association,
 )
-from eom_workflow.local_embedding_execution_policy import LocalEmbeddingExecutionPolicy
+from eom_workflow.local_embedding_execution_policy import LocalEmbeddingExecutablePolicy
 from eom_workflow.local_embedding_request import (
-    LocalEmbeddingWorkflowRequestV11,
-    parse_local_embedding_workflow_request_v11,
+    LocalEmbeddingExecutableRequest,
+    parse_local_embedding_executable_request,
     validate_local_embedding_request_references,
 )
 from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
@@ -654,21 +654,21 @@ class EmbeddingArtifactStore:
     def publish_owned_batch(
         self,
         *,
-        workflow_request: LocalEmbeddingWorkflowRequestV11,
+        workflow_request: LocalEmbeddingExecutableRequest,
         plan: LocalEmbeddingSourcePlan,
-        policy: LocalEmbeddingExecutionPolicy,
+        policy: LocalEmbeddingExecutablePolicy,
         association: LocalEmbeddingLaunchAssociation,
         request: IncrementalEmbeddingInput,
         workspace: Path,
         created_at: datetime,
     ) -> PublishedEmbeddingArtifacts:
-        """Publish the separately owned subset while preserving original1.1 intent.
+        """Publish the separately owned subset while preserving the exact original intent.
 
         The current source/command owner authorizes this use case. Pure value
         checks here cannot replace that authority or establish launch provenance.
         """
         try:
-            workflow_request = parse_local_embedding_workflow_request_v11(
+            workflow_request = parse_local_embedding_executable_request(
                 workflow_request.model_dump(mode="json")
             )
             validate_local_embedding_request_references(workflow_request, plan, policy)

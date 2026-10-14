@@ -19,8 +19,11 @@ from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_protocol.models import JobId
 from eom_workflow.local_embedding_execution_policy import (
     LOCAL_EMBEDDING_POLICY_SCHEMA_REF,
+    LOCAL_EMBEDDING_SERVICE_POLICY_SCHEMA_REF,
     LocalEmbeddingExecutionPolicy,
+    LocalEmbeddingServiceExecutionPolicy,
     parse_local_embedding_execution_policy,
+    parse_local_embedding_service_execution_policy,
 )
 from eom_workflow.local_embedding_source_plan import (
     LOCAL_EMBEDDING_SOURCE_PLAN_SCHEMA_REF,
@@ -96,6 +99,26 @@ class LocalEmbeddingControlArtifactPublisher:
             semantic_sha256=checked.policy_sha256,
             member="policy.json",
             schema=LOCAL_EMBEDDING_POLICY_SCHEMA_REF,
+            artifact_type=EXECUTION_POLICY_ARTIFACT_TYPE,
+            idempotency_key=idempotency_key,
+            created_at=created_at,
+        )
+
+    def publish_service_policy(
+        self,
+        policy: LocalEmbeddingServiceExecutionPolicy,
+        *,
+        idempotency_key: str,
+        created_at: datetime,
+    ) -> PublishedLocalEmbeddingControl:
+        """Explicit successor; never reinterpret an operator policy or self-activate it."""
+        checked = LocalEmbeddingServiceExecutionPolicy.model_validate(policy)
+        checked = parse_local_embedding_service_execution_policy(checked.model_dump(mode="json"))
+        return self._publish(
+            raw=canonical_json_bytes(checked.model_dump(mode="json")),
+            semantic_sha256=checked.policy_sha256,
+            member="policy.json",
+            schema=LOCAL_EMBEDDING_SERVICE_POLICY_SCHEMA_REF,
             artifact_type=EXECUTION_POLICY_ARTIFACT_TYPE,
             idempotency_key=idempotency_key,
             created_at=created_at,

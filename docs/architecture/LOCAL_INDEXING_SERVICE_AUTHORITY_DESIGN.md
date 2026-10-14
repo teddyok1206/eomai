@@ -612,3 +612,8 @@ No migration or dependency is planned for this actor/control change. Schema2020-
 and packaged mirrors precede models/behavior. Source tests and disposable SQL prove
 only their explicit seams; real service installation and bounded processing remain
 separate required acceptance.
+
+The successor controls and shared Runner composition are now implemented in source;
+executed gates, preserved failed attempts and remaining installation boundaries are
+recorded in the [Runner checkpoint](../status/LOCAL_INDEXING_RUNNER_SERVICE_CHECKPOINT_2026-10-14.md).
+This does not activate a service grant or automatic missing-binding processing.

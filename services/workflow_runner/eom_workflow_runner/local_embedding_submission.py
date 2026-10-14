@@ -1,10 +1,10 @@
-"""Atomic operator-seed submission; no claim, runtime launch or authority default."""
+"""Atomic bounded native submission; no claim, runtime launch or authority default."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from eom_workflow.local_embedding_request import LocalEmbeddingWorkflowRequestV11
+from eom_workflow.local_embedding_request import LocalEmbeddingExecutableRequest
 from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
 from sqlalchemy.orm import Session
 
@@ -56,7 +56,7 @@ def start_local_embedding_in_session(
     session: Session,
     *,
     definition: WorkflowDefinitionRecord,
-    request: LocalEmbeddingWorkflowRequestV11,
+    request: LocalEmbeddingExecutableRequest,
     idempotency_key: str,
     actor_type: str,
     actor_id: str,

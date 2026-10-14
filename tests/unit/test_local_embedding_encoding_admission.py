@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, Mock
 import pytest
 from eom_orchestrator.embedding_encoding_reservations import EncodingReadTarget
 from eom_orchestrator.native_embedding_launch_identity import NativeEmbeddingLaunchObservation
+from eom_workflow.local_embedding_request import require_local_embedding_operator_seed
 from eom_workflow_runner import local_embedding_encoding_admission as admission
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
 from eom_workflow_runner.local_embedding_admission import ResolvedLocalEmbeddingAdmission
@@ -23,6 +24,11 @@ def current(monkeypatch):
     fixture = native_fixture()
     intent = fixture.association.intent
     owner, launcher = Mock(), Mock()
+    owner.fence_current_actor.side_effect = lambda session, request: (
+        owner.identity.fence_current_operator(
+            session, require_local_embedding_operator_seed(request).operator_id
+        )
+    )
     sources = ResolvedLocalEmbeddingSources(
         ResolvedLocalEmbeddingAdmission(fixture.request, fixture.plan, fixture.policy),
         fixture.entries,

@@ -16,7 +16,7 @@ from eom_catalog_service.embedding_registry_application import (
     verify_embedding_index_registration_observation,
 )
 from eom_catalog_service.embedding_registry_ports import (
-    EmbeddingRegistryCaller,
+    EmbeddingRegistryActor,
 )
 from eom_catalog_service.local_embedding_completion_artifacts import (
     resolve_native_embedding_completion,
@@ -57,8 +57,7 @@ from eom_workflow.local_embedding_encoding_job import (
     LocalEmbeddingLaunchIntent,
 )
 from eom_workflow.local_embedding_request import (
-    LocalEmbeddingWorkflowRequestV11,
-    require_local_embedding_operator_seed,
+    LocalEmbeddingExecutableRequest,
 )
 from eom_workflow.local_embedding_workflow_receipt import (
     LocalEmbeddingStepOutput,
@@ -115,7 +114,7 @@ class NativeEmbeddingIndexCompletion:
         *,
         workflow_id: str,
         step_run_id: str,
-        request: LocalEmbeddingWorkflowRequestV11,
+        request: LocalEmbeddingExecutableRequest,
         lease: CommandLeaseIdentity,
     ) -> ResolvedLocalEmbeddingSources:
         return resolve_native_execution_sources(
@@ -129,7 +128,7 @@ class NativeEmbeddingIndexCompletion:
 
     def _reservations(
         self,
-        request: LocalEmbeddingWorkflowRequestV11,
+        request: LocalEmbeddingExecutableRequest,
         intent: LocalEmbeddingLaunchIntent,
         lease: CommandLeaseIdentity,
     ) -> EmbeddingEncodingReservations:
@@ -144,9 +143,9 @@ class NativeEmbeddingIndexCompletion:
         self,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: LocalEmbeddingWorkflowRequestV11,
+        request: LocalEmbeddingExecutableRequest,
         lease: CommandLeaseIdentity,
-        caller: EmbeddingRegistryCaller,
+        caller: EmbeddingRegistryActor,
         coordinator: NativeEmbeddingCoordinator,
         allocation: NativeCoordinatorAllocation,
         readings: tuple[EmbeddingEncodingReadResult, ...],
@@ -394,7 +393,7 @@ class NativeEmbeddingIndexCompletion:
         session: Session,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: LocalEmbeddingWorkflowRequestV11,
+        request: LocalEmbeddingExecutableRequest,
         command_lease: CommandLeaseIdentity,
         output: LocalEmbeddingStepOutput,
     ) -> LocalEmbeddingStepOutput:
@@ -438,7 +437,7 @@ class NativeEmbeddingIndexCompletion:
             )
         ):
             raise ValueError("LOCAL_EMBEDDING_EXECUTOR_COMPLETION_PRODUCER_MISMATCH")
-        caller = EmbeddingRegistryCaller(require_local_embedding_operator_seed(request).operator_id)
+        caller = self.owner.registry_caller(request)
         resolved = verify_embedding_index_registration_observation(
             session,
             caller,

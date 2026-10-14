@@ -9,8 +9,8 @@ from typing import Protocol
 
 from eom_orchestrator.database import transaction
 from eom_workflow.local_embedding_request import (
-    LocalEmbeddingWorkflowRequestV11,
-    parse_local_embedding_workflow_request_v11,
+    LocalEmbeddingExecutableRequest,
+    parse_local_embedding_executable_request,
 )
 from eom_workflow.reference_query_execution import (
     ReferenceQueryWorkflowRequest,
@@ -24,7 +24,7 @@ from eom_workflow_runner.models import WorkflowCommandRecord, WorkflowInstanceRe
 from eom_workflow_runner.repository import CommandLeaseIdentity, require_command_lease
 from eom_workflow_runner.state_machine import CommandState
 
-type NativeWorkflowRequest = LocalEmbeddingWorkflowRequestV11 | ReferenceQueryWorkflowRequest
+type NativeWorkflowRequest = LocalEmbeddingExecutableRequest | ReferenceQueryWorkflowRequest
 
 
 class NativeWorkflowMutationOwner[Request: NativeWorkflowRequest](Protocol):
@@ -60,7 +60,7 @@ def native_fenced_runner_transaction[Request: NativeWorkflowRequest](
         original = (
             parse_reference_query_workflow_request(workflow.initial_request)
             if query
-            else parse_local_embedding_workflow_request_v11(workflow.initial_request)
+            else parse_local_embedding_executable_request(workflow.initial_request)
         )
         if (
             command.workflow_id != workflow_id

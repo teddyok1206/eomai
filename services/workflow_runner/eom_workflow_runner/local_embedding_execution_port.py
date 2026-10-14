@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
 from eom_workflow.local_embedding_encoding_job import EmbeddingEncodingReadResult
-from eom_workflow.local_embedding_request import LocalEmbeddingWorkflowRequestV11
+from eom_workflow.local_embedding_request import LocalEmbeddingExecutableRequest
 from eom_workflow.local_embedding_workflow_receipt import LocalEmbeddingStepOutput
 from sqlalchemy.orm import Session
 
@@ -52,14 +52,14 @@ class LocalEmbeddingNativeExecutor(Protocol):
     does not return a completion carrier or authorize another inference.
     """
 
-    def evaluate(self, request: LocalEmbeddingWorkflowRequestV11) -> RuntimeReadinessReport: ...
+    def evaluate(self, request: LocalEmbeddingExecutableRequest) -> RuntimeReadinessReport: ...
 
     def execute(
         self,
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: LocalEmbeddingWorkflowRequestV11,
+        request: LocalEmbeddingExecutableRequest,
         command_lease: CommandLeaseIdentity,
         idempotency_key: str,
         fenced_transaction: NativeFencedRunnerTransaction,
@@ -79,7 +79,7 @@ class LocalEmbeddingNativeExecutor(Protocol):
         session: Session,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: LocalEmbeddingWorkflowRequestV11,
+        request: LocalEmbeddingExecutableRequest,
         command_lease: CommandLeaseIdentity,
         output: LocalEmbeddingStepOutput,
     ) -> LocalEmbeddingStepOutput:

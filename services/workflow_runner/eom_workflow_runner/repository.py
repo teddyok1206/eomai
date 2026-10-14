@@ -30,8 +30,10 @@ from eom_workflow.identifiers import (
 from eom_workflow.inference_transfer import TRANSFER_PAIR_WORKFLOW_KEY
 from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
 from eom_workflow.local_embedding_request import (
+    LocalEmbeddingExecutableRequest,
+    LocalEmbeddingServiceWorkflowRequest,
     LocalEmbeddingWorkflowRequestV11,
-    parse_local_embedding_workflow_request_v11,
+    parse_local_embedding_executable_request,
 )
 from eom_workflow.local_embedding_workflow import (
     LOCAL_EMBEDDING_EXECUTION_PROTOCOL,
@@ -163,7 +165,7 @@ class CommandCandidate:
     current_step_key: str
     workflow_state: str
     workflow_lock_version: int
-    native_request: LocalEmbeddingWorkflowRequestV11 | ReferenceQueryWorkflowRequest | None
+    native_request: LocalEmbeddingExecutableRequest | ReferenceQueryWorkflowRequest | None
 
 
 def _native_workflow_filter() -> ColumnElement[bool]:
@@ -279,7 +281,7 @@ def _command_candidate(
     workflow: WorkflowInstanceRecord,
     family: CommandExecutionFamily,
 ) -> CommandCandidate:
-    native_request: LocalEmbeddingWorkflowRequestV11 | ReferenceQueryWorkflowRequest | None = None
+    native_request: LocalEmbeddingExecutableRequest | ReferenceQueryWorkflowRequest | None = None
     query_marked = (
         family is CommandExecutionFamily.REFERENCE_QUERY
         or workflow.definition_key == REFERENCE_QUERY_WORKFLOW_KEY
@@ -536,16 +538,17 @@ def workflow_request_storage_document(
     request: (
         WorkflowRequest
         | InferenceTransferWorkflowRequest
-        | LocalEmbeddingWorkflowRequestV11
+        | LocalEmbeddingExecutableRequest
         | ReferenceQueryWorkflowRequest
     ),
 ) -> dict[str, Any]:
     """Serialize a request without dropping schema-required nullable values."""
     if isinstance(request, ReferenceQueryWorkflowRequest):
         return parse_reference_query_workflow_request(request).model_dump(mode="json")
-    if isinstance(request, LocalEmbeddingWorkflowRequestV11):
-        checked = LocalEmbeddingWorkflowRequestV11.model_validate(request)
-        checked = parse_local_embedding_workflow_request_v11(checked.model_dump(mode="json"))
+    if isinstance(
+        request, (LocalEmbeddingWorkflowRequestV11, LocalEmbeddingServiceWorkflowRequest)
+    ):
+        checked = parse_local_embedding_executable_request(request)
         return checked.model_dump(mode="json")
     if isinstance(request, InferenceTransferWorkflowRequest):
         # Profiles' canonical hashes include explicit extraction/source nulls. This
@@ -698,19 +701,19 @@ def inference_transfer_business_fingerprint(
 
 def load_persisted_local_embedding_workflow_request(
     document: dict[str, Any],
-) -> LocalEmbeddingWorkflowRequestV11:
-    """Read exact1.1 bytes; never upgrade1.0 history, repair nulls or resolve latest."""
-    return parse_local_embedding_workflow_request_v11(document)
+) -> LocalEmbeddingExecutableRequest:
+    """Read exact supported1.1/1.2; never upgrade history, repair nulls or use latest."""
+    return parse_local_embedding_executable_request(document)
 
 
 def local_embedding_business_fingerprint(
     definition: WorkflowDefinitionRecord,
-    request: LocalEmbeddingWorkflowRequestV11,
+    request: LocalEmbeddingExecutableRequest,
     *,
     actor_type: str,
     actor_id: str,
 ) -> str:
-    """Operator-bound Workflow equivalence, separate from per-encoding computation."""
+    """Exact actor-bound equivalence, separate from per-encoding computation."""
     return content_sha256(
         {
             "definition_key": definition.definition_key,
@@ -727,7 +730,7 @@ def validate_local_embedding_workflow_submission(
     workflow: WorkflowInstanceRecord,
     *,
     definition: WorkflowDefinitionRecord,
-    request: LocalEmbeddingWorkflowRequestV11,
+    request: LocalEmbeddingExecutableRequest,
     actor_type: str,
     actor_id: str,
 ) -> WorkflowInstanceRecord:
@@ -891,7 +894,7 @@ def create_workflow_instance(
     request: (
         WorkflowRequest
         | InferenceTransferWorkflowRequest
-        | LocalEmbeddingWorkflowRequestV11
+        | LocalEmbeddingExecutableRequest
         | ReferenceQueryWorkflowRequest
     ),
     idempotency_key: str,
@@ -978,11 +981,15 @@ def create_workflow_instance(
             "reference query owner cannot admit another workflow purpose",
         )
     if (
-        isinstance(request, LocalEmbeddingWorkflowRequestV11)
+        isinstance(
+            request, (LocalEmbeddingWorkflowRequestV11, LocalEmbeddingServiceWorkflowRequest)
+        )
         or definition.definition_key == LOCAL_EMBEDDING_WORKFLOW_KEY
     ):
         if (
-            not isinstance(request, LocalEmbeddingWorkflowRequestV11)
+            not isinstance(
+                request, (LocalEmbeddingWorkflowRequestV11, LocalEmbeddingServiceWorkflowRequest)
+            )
             or definition.definition_key != LOCAL_EMBEDDING_WORKFLOW_KEY
         ):
             raise WorkflowError(
@@ -1080,7 +1087,7 @@ def _persist_workflow_instance(
     request: (
         WorkflowRequest
         | InferenceTransferWorkflowRequest
-        | LocalEmbeddingWorkflowRequestV11
+        | LocalEmbeddingExecutableRequest
         | ReferenceQueryWorkflowRequest
     ),
     idempotency_key: str,
@@ -1098,7 +1105,9 @@ def _persist_workflow_instance(
         else local_embedding_business_fingerprint(
             definition, request, actor_type=actor_type, actor_id=actor_id
         )
-        if isinstance(request, LocalEmbeddingWorkflowRequestV11)
+        if isinstance(
+            request, (LocalEmbeddingWorkflowRequestV11, LocalEmbeddingServiceWorkflowRequest)
+        )
         else inference_transfer_business_fingerprint(
             definition, request, actor_type=actor_type, actor_id=actor_id
         )
@@ -1129,7 +1138,14 @@ def _persist_workflow_instance(
             WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID,
             "stored definition has no start step",
         )
-    if isinstance(request, (LocalEmbeddingWorkflowRequestV11, ReferenceQueryWorkflowRequest)):
+    if isinstance(
+        request,
+        (
+            LocalEmbeddingWorkflowRequestV11,
+            LocalEmbeddingServiceWorkflowRequest,
+            ReferenceQueryWorkflowRequest,
+        ),
+    ):
         role_schema_version = _stored_role_protocol(definition)
     else:
         role_protocols = {
@@ -1157,7 +1173,12 @@ def _persist_workflow_instance(
         stage=(
             WorkflowStage.LOCAL_EMBEDDING.value
             if isinstance(
-                request, (LocalEmbeddingWorkflowRequestV11, ReferenceQueryWorkflowRequest)
+                request,
+                (
+                    LocalEmbeddingWorkflowRequestV11,
+                    LocalEmbeddingServiceWorkflowRequest,
+                    ReferenceQueryWorkflowRequest,
+                ),
             )
             else WorkflowStage.INFERENCE_TRANSFER.value
             if isinstance(request, InferenceTransferWorkflowRequest)
@@ -1522,7 +1543,10 @@ def claim_command_candidate(
             )
         else:
             assert local_embedding_owner is not None
-            assert isinstance(candidate.native_request, LocalEmbeddingWorkflowRequestV11)
+            assert isinstance(
+                candidate.native_request,
+                (LocalEmbeddingWorkflowRequestV11, LocalEmbeddingServiceWorkflowRequest),
+            )
             local_embedding_owner.fence_mutation(
                 session, candidate.native_request, command_lease_identity(command)
             )
@@ -1536,7 +1560,7 @@ def _validate_local_embedding_claim(
     command: WorkflowCommandRecord,
     workflow: WorkflowInstanceRecord,
     definition: WorkflowDefinitionRecord,
-    request: LocalEmbeddingWorkflowRequestV11,
+    request: LocalEmbeddingExecutableRequest,
     owner: LocalEmbeddingOwnerAdmission,
 ) -> None:
     if (

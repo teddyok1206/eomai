@@ -10,8 +10,8 @@ from eom_workflow.local_embedding_encoding_job import (
     LocalEmbeddingLaunchIntent,
 )
 from eom_workflow.local_embedding_request import (
-    LocalEmbeddingWorkflowRequestV11,
-    parse_local_embedding_workflow_request_v11,
+    LocalEmbeddingExecutableRequest,
+    parse_local_embedding_executable_request,
 )
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -58,13 +58,13 @@ def native_embedding_launch_key(workflow_id: str, step_run_id: str, request_sha2
 def read_native_embedding_launch(
     session: Session,
     *,
-    request: LocalEmbeddingWorkflowRequestV11,
+    request: LocalEmbeddingExecutableRequest,
     workflow_id: str,
     step_run_id: str,
 ) -> NativeEmbeddingLaunchObservation | None:
     """Read one pinned coordinator context; caller fences current authority BEFORE this read."""
     _require_owner_root(session)
-    request = parse_local_embedding_workflow_request_v11(request.model_dump(mode="json"))
+    request = parse_local_embedding_executable_request(request.model_dump(mode="json"))
     EmbeddingEncodingReservationStorage.require_protocol(session)
     row = session.scalar(
         select(JobRecord).where(
@@ -88,7 +88,7 @@ def read_native_embedding_launch(
 
 
 def read_native_embedding_launch_association(
-    session: Session, intent: LocalEmbeddingLaunchIntent, request: LocalEmbeddingWorkflowRequestV11
+    session: Session, intent: LocalEmbeddingLaunchIntent, request: LocalEmbeddingExecutableRequest
 ) -> LocalEmbeddingLaunchAssociation | None:
     """Exact owner association, not a source or current lease grant."""
     require_native_embedding_launch(session, intent, request)
@@ -103,7 +103,7 @@ def read_native_embedding_launch_association(
 def create_native_embedding_launch(
     session: Session,
     *,
-    request: LocalEmbeddingWorkflowRequestV11,
+    request: LocalEmbeddingExecutableRequest,
     workflow_id: str,
     step_run_id: str,
     command_id: str,
@@ -117,7 +117,7 @@ def create_native_embedding_launch(
     This primitive grants neither source permission nor permission to start a unit.
     """
     _require_owner_root(session)
-    request = parse_local_embedding_workflow_request_v11(request.model_dump(mode="json"))
+    request = parse_local_embedding_executable_request(request.model_dump(mode="json"))
     EmbeddingEncodingReservationStorage.require_protocol(session)
     key = native_embedding_launch_key(workflow_id, step_run_id, request.request_sha256)
     existing = session.scalar(
@@ -186,12 +186,12 @@ def create_native_embedding_launch(
 def require_native_embedding_launch(
     session: Session,
     intent: LocalEmbeddingLaunchIntent,
-    request: LocalEmbeddingWorkflowRequestV11,
+    request: LocalEmbeddingExecutableRequest,
 ) -> NativeEmbeddingLaunchObservation:
     """Check owner-selected request/key/task and allocations, never trust Job existence."""
     _require_owner_root(session)
     intent = LocalEmbeddingLaunchIntent.model_validate(intent)
-    request = parse_local_embedding_workflow_request_v11(request.model_dump(mode="json"))
+    request = parse_local_embedding_executable_request(request.model_dump(mode="json"))
     EmbeddingEncodingReservationStorage.require_protocol(session)
     row = session.scalar(
         select(JobRecord)

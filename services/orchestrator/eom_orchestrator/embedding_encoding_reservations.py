@@ -27,10 +27,13 @@ from eom_workflow.local_embedding_encoding_job import (
     validate_embedding_encoding_completions,
     validate_local_embedding_launch_association,
 )
-from eom_workflow.local_embedding_execution_policy import LocalEmbeddingExecutionPolicy
+from eom_workflow.local_embedding_execution_policy import (
+    LocalEmbeddingExecutablePolicy,
+    parse_local_embedding_executable_policy,
+)
 from eom_workflow.local_embedding_request import (
-    LocalEmbeddingWorkflowRequestV11,
-    require_local_embedding_operator_seed,
+    LocalEmbeddingExecutableRequest,
+    parse_local_embedding_executable_request,
     validate_local_embedding_request_references,
 )
 from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
@@ -50,9 +53,9 @@ from eom_orchestrator.state_machine import JobState
 
 @dataclass(frozen=True, slots=True)
 class ResolvedEncodingScope:
-    workflow_request: LocalEmbeddingWorkflowRequestV11
+    workflow_request: LocalEmbeddingExecutableRequest
     plan: LocalEmbeddingSourcePlan
-    policy: LocalEmbeddingExecutionPolicy
+    policy: LocalEmbeddingExecutablePolicy
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,10 +165,9 @@ def _scope(
     requests: tuple[EmbeddingEncodingJobRequest, ...],
 ) -> None:
     try:
-        request = LocalEmbeddingWorkflowRequestV11.model_validate(proof.workflow_request)
+        request = parse_local_embedding_executable_request(proof.workflow_request)
         plan = LocalEmbeddingSourcePlan.model_validate(proof.plan)
-        policy = LocalEmbeddingExecutionPolicy.model_validate(proof.policy)
-        require_local_embedding_operator_seed(request)
+        policy = parse_local_embedding_executable_policy(proof.policy)
         validate_local_embedding_request_references(request, plan, policy)
         planned = {demand.encoding.encoding_sha256: demand.encoding for demand in plan.demands}
         if (

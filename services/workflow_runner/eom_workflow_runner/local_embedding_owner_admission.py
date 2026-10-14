@@ -1,4 +1,4 @@
-"""Concrete authenticated operator-seed composition; never an implicit production default."""
+"""One native owner application with explicit operator or service authentication."""
 
 from __future__ import annotations
 
@@ -9,11 +9,13 @@ from datetime import UTC, datetime
 from eom_catalog_contracts.inference_transfer_experiment import StagedExperimentEntry
 from eom_catalog_contracts.models import Sha256
 from eom_catalog_service.embedding_registry_catalog_adapter import (
-    CatalogEmbeddingRegistryVerifier,
     EmbeddingRegistryOwnerConfiguration,
 )
+from eom_catalog_service.embedding_registry_indexing_authority import (
+    CatalogIndexingRegistrySourceAuthority,
+)
 from eom_catalog_service.embedding_registry_ports import (
-    EmbeddingRegistryCaller,
+    EmbeddingRegistryActor,
     EmbeddingRegistryLookup,
 )
 from eom_catalog_service.local_embedding_source_plan import build_local_embedding_source_plan
@@ -36,12 +38,13 @@ from eom_orchestrator.native_embedding_launch_identity import read_native_embedd
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.local_embedding_execution_policy import (
     LOCAL_EMBEDDING_POLICY_SCHEMA_REF,
-    parse_local_embedding_execution_policy,
+    LOCAL_EMBEDDING_SERVICE_POLICY_SCHEMA_REF,
+    parse_local_embedding_executable_policy,
 )
 from eom_workflow.local_embedding_request import (
-    LocalEmbeddingWorkflowRequestV11,
-    parse_local_embedding_workflow_request_v11,
-    require_local_embedding_operator_seed,
+    LocalEmbeddingExecutableRequest,
+    local_embedding_request_actor,
+    parse_local_embedding_executable_request,
 )
 from eom_workflow.local_embedding_source_plan import parse_local_embedding_source_plan
 from pydantic import TypeAdapter
@@ -49,6 +52,11 @@ from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session, object_session
 
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
+from eom_workflow_runner.local_embedding_actor_authority import (
+    LocalEmbeddingActorAuthority,
+    OperatorLocalEmbeddingActorAuthority,
+    ServiceLocalEmbeddingActorAuthority,
+)
 from eom_workflow_runner.local_embedding_admission import ResolvedLocalEmbeddingAdmission
 from eom_workflow_runner.models import (
     WorkflowCommandRecord,
@@ -85,7 +93,8 @@ class LocalEmbeddingOwnerConfiguration:
         )
         if (
             pointer.member_path != "policy.json"
-            or pointer.schema_ref != LOCAL_EMBEDDING_POLICY_SCHEMA_REF
+            or pointer.schema_ref
+            not in {LOCAL_EMBEDDING_POLICY_SCHEMA_REF, LOCAL_EMBEDDING_SERVICE_POLICY_SCHEMA_REF}
             or pointer.media_type != "application/json"
         ):
             raise ValueError("LOCAL_EMBEDDING_OWNER_CONFIGURATION_INVALID")
@@ -102,7 +111,7 @@ class ResolvedLocalEmbeddingSources:
 
 
 class CatalogLocalEmbeddingOwnerAdmission:
-    """Use current Identity and official Catalog boundaries for a bounded operator seed.
+    """Use current Identity/Catalog authority for the existing bounded native workflow.
 
     Production still requires an admitted owner connection/provider, selected
     released controls and native executor. Expired acquisitions need supported
@@ -114,35 +123,93 @@ class CatalogLocalEmbeddingOwnerAdmission:
         engine: Engine,
         configuration: LocalEmbeddingOwnerConfiguration,
         *,
+        actor_authority: LocalEmbeddingActorAuthority,
+        settings: CatalogSettings | None = None,
+    ) -> None:
+        configuration.__post_init__()
+        if (
+            type(actor_authority)
+            not in {OperatorLocalEmbeddingActorAuthority, ServiceLocalEmbeddingActorAuthority}
+            or configuration.native_execution_policy.schema_ref != actor_authority.policy_schema_ref
+        ):
+            raise ValueError("LOCAL_EMBEDDING_OWNER_CONFIGURATION_INVALID")
+        self.configuration = configuration
+        self.settings = settings or CatalogSettings.from_environment()
+        self._actor_authority = actor_authority
+        self.catalog = actor_authority.catalog(engine, configuration.registry, self.settings)
+        self._command_fence = NativeCommandMutationFence()
+
+    @classmethod
+    def for_operator(
+        cls,
+        engine: Engine,
+        configuration: LocalEmbeddingOwnerConfiguration,
+        *,
         capture: AuthenticatedOperatorSession,
         session_fence: AuthenticatedSessionFence,
         settings: CatalogSettings | None = None,
-    ) -> None:
-        self.configuration = configuration
-        self.settings = settings or CatalogSettings.from_environment()
-        self.identity = CapturedOperatorAuthorizationFence(
-            capture, session_fence, PermissionKey.WORKFLOW_START
-        )
-        self.catalog = CatalogEmbeddingRegistryVerifier(
+    ) -> CatalogLocalEmbeddingOwnerAdmission:
+        return cls(
             engine,
-            configuration.registry,
-            identity_fence=self.identity,
-            settings=self.settings,
+            configuration,
+            actor_authority=OperatorLocalEmbeddingActorAuthority(
+                CapturedOperatorAuthorizationFence(
+                    capture, session_fence, PermissionKey.WORKFLOW_START
+                )
+            ),
+            settings=settings,
         )
-        self._command_fence = NativeCommandMutationFence()
+
+    @classmethod
+    def for_indexing_service(
+        cls,
+        engine: Engine,
+        configuration: LocalEmbeddingOwnerConfiguration,
+        *,
+        source_authority: CatalogIndexingRegistrySourceAuthority,
+        settings: CatalogSettings | None = None,
+    ) -> CatalogLocalEmbeddingOwnerAdmission:
+        if (
+            type(source_authority) is not CatalogIndexingRegistrySourceAuthority
+            or source_authority.native_execution_policy_sha256
+            != configuration.native_execution_policy_sha256
+        ):
+            raise ValueError("LOCAL_EMBEDDING_OWNER_CONFIGURATION_MISMATCH")
+        return cls(
+            engine,
+            configuration,
+            actor_authority=ServiceLocalEmbeddingActorAuthority(
+                source_authority, configuration.registry
+            ),
+            settings=settings,
+        )
+
+    @property
+    def identity(self) -> CapturedOperatorAuthorizationFence:
+        """Existing human owner observation only; no machine-to-user impersonation."""
+        if not isinstance(self._actor_authority, OperatorLocalEmbeddingActorAuthority):
+            raise ValueError("LOCAL_EMBEDDING_OPERATOR_UNAVAILABLE")
+        return self._actor_authority.identity
+
+    def registry_caller(self, request: LocalEmbeddingExecutableRequest) -> EmbeddingRegistryActor:
+        return self._actor_authority.registry_caller(request)
+
+    def fence_current_actor(
+        self, session: Session, request: LocalEmbeddingExecutableRequest
+    ) -> None:
+        self._actor_authority.fence(session, request)
 
     def resolve_submission(
-        self, session: Session, request: LocalEmbeddingWorkflowRequestV11
+        self, session: Session, request: LocalEmbeddingExecutableRequest
     ) -> ResolvedLocalEmbeddingAdmission:
         return self.resolve_sources(session, request).admission
 
     def resolve_sources(
-        self, session: Session, request: LocalEmbeddingWorkflowRequestV11
+        self, session: Session, request: LocalEmbeddingExecutableRequest
     ) -> ResolvedLocalEmbeddingSources:
-        request = parse_local_embedding_workflow_request_v11(request.model_dump(mode="json"))
-        operator = require_local_embedding_operator_seed(request).operator_id
+        request = parse_local_embedding_executable_request(request)
         # No control/source bytes are read for a stale capture or a substituted actor.
-        self.identity.fence_current_operator(session, operator)
+        self.fence_current_actor(session, request)
         config = self.configuration
         if (
             request.native_execution_policy != config.native_execution_policy
@@ -159,7 +226,7 @@ class CatalogLocalEmbeddingOwnerAdmission:
             request.access_policy_revision_id,
             request.access_policy_sha256,
         )
-        caller = EmbeddingRegistryCaller(operator)
+        caller = self.registry_caller(request)
         # Current read policy must admit the scope before even metadata-only
         # plan bytes are dereferenced. This public phase performs no source IO.
         self.catalog.authorize_scope(session, caller, query)
@@ -189,7 +256,7 @@ class CatalogLocalEmbeddingOwnerAdmission:
                 raise ValueError("LOCAL_EMBEDDING_CONTROL_BYTES_INVALID")
             return value
 
-        policy = parse_local_embedding_execution_policy(
+        policy = parse_local_embedding_executable_policy(
             read(request.native_execution_policy, EXECUTION_POLICY_ARTIFACT_TYPE, 64 * 1024)
         )
         plan = parse_local_embedding_source_plan(
@@ -210,7 +277,7 @@ class CatalogLocalEmbeddingOwnerAdmission:
         selected = tuple(by_source[d.source_revision_id] for d in plan.demands)
         # Reading/resolving may consume time. Never let an old successful check
         # stand in for the actual session's expiry/permission check at return.
-        self.identity.fence_current_operator(session, operator)
+        self.fence_current_actor(session, request)
         return ResolvedLocalEmbeddingSources(scope, selected)
 
     @staticmethod
@@ -218,9 +285,9 @@ class CatalogLocalEmbeddingOwnerAdmission:
         session: Session,
         command: WorkflowCommandRecord,
         workflow: WorkflowInstanceRecord,
-        request: LocalEmbeddingWorkflowRequestV11,
+        request: LocalEmbeddingExecutableRequest,
     ) -> None:
-        operator = require_local_embedding_operator_seed(request).operator_id
+        actor_type, actor_id = local_embedding_request_actor(request)
         definition = session.get(WorkflowDefinitionRecord, workflow.definition_id)
         if (
             object_session(command) is not session
@@ -242,8 +309,8 @@ class CatalogLocalEmbeddingOwnerAdmission:
             workflow,
             definition=definition,
             request=request,
-            actor_type="human",
-            actor_id=operator,
+            actor_type=actor_type,
+            actor_id=actor_id,
         )
 
     def resolve_claim(
@@ -252,11 +319,9 @@ class CatalogLocalEmbeddingOwnerAdmission:
         *,
         command: WorkflowCommandRecord,
         workflow: WorkflowInstanceRecord,
-        request: LocalEmbeddingWorkflowRequestV11,
+        request: LocalEmbeddingExecutableRequest,
     ) -> ResolvedLocalEmbeddingAdmission:
-        self.identity.fence_current_operator(
-            session, require_local_embedding_operator_seed(request).operator_id
-        )
+        self.fence_current_actor(session, request)
         self._require_rows(session, command, workflow, request)
         if command.state != CommandState.PENDING.value or command.attempts != 0:
             # Current source/session authority is still required; original intent
@@ -316,16 +381,14 @@ class CatalogLocalEmbeddingOwnerAdmission:
                     WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
                     "native recovery requires allocated, non-failed original execution history",
                 )
-            self.identity.fence_current_operator(
-                session, require_local_embedding_operator_seed(request).operator_id
-            )
+            self.fence_current_actor(session, request)
             return scope
         return self.resolve_submission(session, request)
 
     def fence_mutation(
         self,
         session: Session,
-        request: LocalEmbeddingWorkflowRequestV11,
+        request: LocalEmbeddingExecutableRequest,
         lease: CommandLeaseIdentity,
     ) -> None:
         self.resolve_mutation_sources(session, request, lease)
@@ -333,12 +396,10 @@ class CatalogLocalEmbeddingOwnerAdmission:
     def resolve_mutation_sources(
         self,
         session: Session,
-        request: LocalEmbeddingWorkflowRequestV11,
+        request: LocalEmbeddingExecutableRequest,
         lease: CommandLeaseIdentity,
     ) -> ResolvedLocalEmbeddingSources:
-        self.identity.fence_current_operator(
-            session, require_local_embedding_operator_seed(request).operator_id
-        )
+        self.fence_current_actor(session, request)
         command = self._command_fence.acquire(session, request.request_sha256, lease)
         # Runner has already locked Workflow then command. Do not acquire these
         # in the reverse order; an unattached/different Workflow is not accepted.

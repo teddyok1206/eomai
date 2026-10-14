@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 
 from eom_catalog_contracts.embedding_registry import RegisterEmbeddingIndexCommand
+from eom_catalog_contracts.local_indexing_policy import LocalIndexingAccessPolicy
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.embedding_registry_ports import (
@@ -58,17 +59,13 @@ class CatalogIndexingRegistrySourceAuthority:
         ):
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_CONFIGURATION_INVALID")
 
-    def capture(
+    def source_intent(
         self,
-        session: Session,
         caller: EmbeddingRegistryServiceCaller,
         intent: RegisterEmbeddingIndexCommand | EmbeddingRegistryLookup,
         configuration: EmbeddingRegistryOwnerConfiguration,
-        *,
-        sources: CatalogInferenceTransferSnapshotSourceAdapter,
-        artifact_reader: PinnedArtifactReadContext,
-        phase: InferenceTransferSessionCapturePhase,
-    ) -> LocalIndexingSessionCapture:
+    ) -> LocalIndexingSourceReadIntent:
+        """Exact immutable selection only, never current authorization."""
         validate_embedding_registry_actor(caller)
         if caller.service != self.authority.service_fence.pin.service:
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN")
@@ -91,9 +88,34 @@ class CatalogIndexingRegistrySourceAuthority:
         )
         if selection.maximum_candidates > self.maximum_sources:
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN")
+        return selection
+
+    def authorize_scope(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryServiceCaller,
+        intent: RegisterEmbeddingIndexCommand | EmbeddingRegistryLookup,
+        configuration: EmbeddingRegistryOwnerConfiguration,
+    ) -> LocalIndexingAccessPolicy:
+        """Fresh actual service/data fence, no population/file materialization."""
+        return self.authority.authorize_scope(
+            session, self.source_intent(caller, intent, configuration)
+        )
+
+    def capture(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryServiceCaller,
+        intent: RegisterEmbeddingIndexCommand | EmbeddingRegistryLookup,
+        configuration: EmbeddingRegistryOwnerConfiguration,
+        *,
+        sources: CatalogInferenceTransferSnapshotSourceAdapter,
+        artifact_reader: PinnedArtifactReadContext,
+        phase: InferenceTransferSessionCapturePhase,
+    ) -> LocalIndexingSessionCapture:
         return sources.capture_indexing_in_session(
             session,
-            selection,
+            self.source_intent(caller, intent, configuration),
             authority=self.authority,
             artifact_reader=artifact_reader,
             phase=phase,

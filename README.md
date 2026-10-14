@@ -308,15 +308,20 @@ Catalog 서비스 자료 정책1.1·공식 owner 발행·Registry 등록 연결�
 서비스 grant와 기존 자료 정책1.0을 분리했고, 서비스 등록 권한은 사용자 QUERY 권한이 아닙니다.
 사람 계정이나 역할을 대신 쓰지 않으며 기존 operator seed의 의미는 유지합니다.
 
-최신85-suite 회귀2,304개·strict mypy50 모듈·Ruff91 파일이 PASS했습니다.
-현재 코드 후보의3개 wheel/RECORD·독립 wheel-only42 모듈 검증도 PASS했습니다.
-실제 임시 DB의 Registry30개는 등록·재전송·중복/경합과 권한 거부 순서를 검증하지만,
-합성 IAM/source seam을 실제 서비스 인증으로 확대 해석하지 않습니다. 선행 신원/자료 정책/
-발행 DB70개와 당시3개 wheel·41-module 검증은 별도 역사적 증거로 보존합니다.
+서비스 전용 요청1.2·실행 정책1.1을 추가하고 기존 명령/claim/lease/복구/실행기에
+연결했습니다. 사람 로그인과 서비스 인증은 명시적으로 분리하며, 기존 operator 요청1.1의
+미래 서비스 audit는 여전히 실행을 허용하지 않습니다. 기존4개 계약과 수치 DAG는 보존합니다.
+최신87-suite 회귀2,340개·strict mypy67 모듈·Ruff113 파일이 PASS했습니다.
+임시 DB의 claim/runner61개·Registry/native-flow30개·encoding reservation9개도
+PASS했습니다. 합성 IAM/source/
+수치 계산 seam은 실제 서비스 인증·모델 실행 증거가 아닙니다. 선행 Registry30개와
+당시3개 wheel/RECORD·독립 wheel-only42 모듈 검증, 신원/자료 정책/발행 DB70개는
+별도 역사적 증거로 보존하며 현재 후보의 설치 승인으로 확대 해석하지 않습니다.
 0055 전용 배포 계약1.4는 정확한0054에서만 갱신하며 운영 migration을 뜻하지 않습니다.
 
 **운영 서비스 활성화·자동 증분 처리·실제 seed/delta/QUERY·CPU/GPU 비교는 아직 남아 있습니다.**
-다음은 기존 명령/claim/lease/실행기 경로에 서비스 전용 실행 계약을 연결하는 단계입니다.
+다음은 실제 서비스 entry/provider 설치와 공식 missing-binding reconciliation 연결입니다.
+[서비스 Runner 구현·검증 기록](docs/status/LOCAL_INDEXING_RUNNER_SERVICE_CHECKPOINT_2026-10-14.md),
 [현재 Registry checkpoint](docs/status/LOCAL_INDEXING_REGISTRY_SERVICE_CHECKPOINT_2026-10-14.md),
 [정책 발행 증거](docs/status/LOCAL_INDEXING_POLICY_PUBLICATION_CHECKPOINT_2026-10-14.md),
 [신원·runtime·후속 실행 설계](docs/architecture/LOCAL_INDEXING_SERVICE_AUTHORITY_DESIGN.md)에

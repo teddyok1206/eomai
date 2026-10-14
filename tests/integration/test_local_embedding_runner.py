@@ -17,9 +17,14 @@ from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
+from eom_operator_identity import LocalIndexingServiceReference
 from eom_orchestrator.database import build_engine, build_session_factory
 from eom_workflow.compiler import compile_definition
-from eom_workflow.local_embedding_request import LocalEmbeddingWorkflowRequestV11
+from eom_workflow.local_embedding_request import (
+    LocalEmbeddingExecutableRequest,
+    LocalEmbeddingWorkflowRequestV11,
+    local_embedding_request_actor,
+)
 from eom_workflow_runner.engine import WorkflowRunner
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
 from eom_workflow_runner.local_embedding_admission import ResolvedLocalEmbeddingAdmission
@@ -53,6 +58,7 @@ from tests.integration.test_inference_transfer_stage_migration import (
     stage_owner_connection as stage_owner_connection,
 )
 from tests.unit.inference_transfer_embedding_fixtures import seal
+from tests.unit.local_embedding_service_fixtures import service_fixture
 from tests.unit.test_local_embedding_runner_admission import scope_fixture
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
@@ -66,7 +72,7 @@ class SyntheticOwner:
     late_denied: bool = False
 
     def resolve_submission(
-        self, session: Session, request: LocalEmbeddingWorkflowRequestV11
+        self, session: Session, request: LocalEmbeddingExecutableRequest
     ) -> ResolvedLocalEmbeddingAdmission:
         assert session.get_transaction() is not None and request == self.scope.request
         return self.scope
@@ -77,7 +83,7 @@ class SyntheticOwner:
         *,
         command: WorkflowCommandRecord,
         workflow: WorkflowInstanceRecord,
-        request: LocalEmbeddingWorkflowRequestV11,
+        request: LocalEmbeddingExecutableRequest,
     ) -> ResolvedLocalEmbeddingAdmission:
         assert session.get_transaction() is not None and request == self.scope.request
         assert command.workflow_id == workflow.workflow_id
@@ -91,7 +97,7 @@ class SyntheticOwner:
     def fence_mutation(
         self,
         session: Session,
-        request: LocalEmbeddingWorkflowRequestV11,
+        request: LocalEmbeddingExecutableRequest,
         lease: CommandLeaseIdentity,
     ) -> None:
         assert session.get_transaction() is not None and request == self.scope.request
@@ -132,16 +138,30 @@ class ClaimFixture:
         )
 
 
-@pytest.fixture
-def claim_fixture(stage_owner_connection: Connection) -> ClaimFixture:
+@pytest.fixture(params=["operator", "service"])
+def claim_fixture(
+    stage_owner_connection: Connection, request: pytest.FixtureRequest
+) -> ClaimFixture:
     engine = stage_owner_connection.engine
     sessions = build_session_factory(engine)
     scope, compiled = scope_fixture()
-    actor_id = "operator_" + uuid4().hex
-    body = scope.request.model_dump(mode="json")
-    body["actor_context"]["operator_id"] = actor_id
-    request = LocalEmbeddingWorkflowRequestV11.model_validate(seal(body, "request_sha256"))
-    scope = ResolvedLocalEmbeddingAdmission(request, scope.plan, scope.policy)
+    if request.param == "service":
+        native = service_fixture(
+            workflow_definition_sha256=compiled.sha256,
+            service=LocalIndexingServiceReference(
+                service_id="localindexservice_" + uuid4().hex,
+                service_revision_id="localindexservicerev_" + uuid4().hex,
+                service_identity_sha256="sha256:" + uuid4().hex * 2,
+            ),
+        )
+        message = native.request
+        scope = ResolvedLocalEmbeddingAdmission(message, native.base.plan, native.policy)
+    else:
+        body = scope.request.model_dump(mode="json")
+        body["actor_context"]["operator_id"] = "operator_" + uuid4().hex
+        message = LocalEmbeddingWorkflowRequestV11.model_validate(seal(body, "request_sha256"))
+        scope = ResolvedLocalEmbeddingAdmission(message, scope.plan, scope.policy)
+    actor_type, actor_id = local_embedding_request_actor(message)
     owner = SyntheticOwner(scope)
     executor = cast(LocalEmbeddingNativeExecutor, Mock(spec=LocalEmbeddingNativeExecutor))
     with sessions.begin() as session:
@@ -149,9 +169,9 @@ def claim_fixture(stage_owner_connection: Connection) -> ClaimFixture:
         submitted = start_local_embedding_in_session(
             session,
             definition=definition,
-            request=request,
+            request=message,
             idempotency_key="synthetic-guarded-native:" + uuid4().hex,
-            actor_type="human",
+            actor_type=actor_type,
             actor_id=actor_id,
             owner=owner,
             executor=executor,

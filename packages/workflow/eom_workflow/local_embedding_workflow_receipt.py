@@ -25,9 +25,13 @@ from eom_workflow.local_embedding_encoding_job import (
     LocalEmbeddingLaunchAssociation,
     validate_local_embedding_launch_association,
 )
-from eom_workflow.local_embedding_execution_policy import LocalEmbeddingExecutionPolicy
+from eom_workflow.local_embedding_execution_policy import (
+    LocalEmbeddingExecutablePolicy,
+    parse_local_embedding_executable_policy,
+)
 from eom_workflow.local_embedding_request import (
-    LocalEmbeddingWorkflowRequestV11,
+    LocalEmbeddingExecutableRequest,
+    parse_local_embedding_executable_request,
     validate_local_embedding_request_references,
 )
 from eom_workflow.local_embedding_source_plan import (
@@ -201,9 +205,9 @@ def validate_local_embedding_step_output(
 
 def validate_local_embedding_workflow_receipt(
     receipt: LocalEmbeddingWorkflowReceipt,
-    request: LocalEmbeddingWorkflowRequestV11,
+    request: LocalEmbeddingExecutableRequest,
     plan: LocalEmbeddingSourcePlan,
-    policy: LocalEmbeddingExecutionPolicy,
+    policy: LocalEmbeddingExecutablePolicy,
     *,
     workflow_id: str,
     step_run_id: str,
@@ -219,9 +223,9 @@ def validate_local_embedding_workflow_receipt(
     source, finite binary and canonical committed Artifact checks belong to actual owners.
     """
     receipt = parse_local_embedding_workflow_receipt(receipt)
-    request = LocalEmbeddingWorkflowRequestV11.model_validate(request)
+    request = parse_local_embedding_executable_request(request)
     plan = LocalEmbeddingSourcePlan.model_validate(plan)
-    policy = LocalEmbeddingExecutionPolicy.model_validate(policy)
+    policy = parse_local_embedding_executable_policy(policy)
     validate_local_embedding_request_references(request, plan, policy)
     expected_ids = (
         TypeAdapter(WorkflowId).validate_python(workflow_id),

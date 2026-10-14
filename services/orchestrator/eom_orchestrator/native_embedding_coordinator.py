@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from eom_identifiers import content_sha256
 from eom_workflow.local_embedding_encoding_job import LocalEmbeddingLaunchIntent
-from eom_workflow.local_embedding_request import LocalEmbeddingWorkflowRequestV11
+from eom_workflow.local_embedding_request import LocalEmbeddingExecutableRequest
 from eom_workflow.native_embedding_coordinator import (
     NativeCoordinatorIndexPrepared,
     NativeCoordinatorPhase,
@@ -58,7 +58,7 @@ class NativeEmbeddingCoordinator:
     """Caller retains fresh Workflow/command/source fences in each non-savepoint root."""
 
     def __init__(
-        self, intent: LocalEmbeddingLaunchIntent, request: LocalEmbeddingWorkflowRequestV11
+        self, intent: LocalEmbeddingLaunchIntent, request: LocalEmbeddingExecutableRequest
     ) -> None:
         self.intent, self.request = intent, request
 

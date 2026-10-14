@@ -33,7 +33,10 @@ from eom_orchestrator.local_embedding_control_artifacts import (
     LocalEmbeddingControlArtifactPublisher,
 )
 from eom_orchestrator.models import ArtifactRevisionRecord
-from eom_workflow.local_embedding_request import LocalEmbeddingWorkflowRequestV11
+from eom_workflow.local_embedding_request import (
+    LocalEmbeddingWorkflowRequestV11,
+    local_embedding_request_actor,
+)
 from eom_workflow_runner import local_embedding_owner_admission as owner_module
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
 from eom_workflow_runner.local_embedding_admission import ResolvedLocalEmbeddingAdmission
@@ -109,7 +112,7 @@ def source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> OwnerFixture:
         policy.member,
         policy.semantic_sha256,
     )
-    owner = CatalogLocalEmbeddingOwnerAdmission(
+    owner = CatalogLocalEmbeddingOwnerAdmission.for_operator(
         publisher.engine,
         configuration,
         capture=capture,
@@ -264,6 +267,7 @@ def mutation_rows(
 ) -> tuple[Session, WorkflowCommandRecord, WorkflowInstanceRecord, CommandLeaseIdentity]:
     """Attached ORM rows with synthetic query results; real lease/root code is exercised."""
     request = source.scope.request
+    actor_type, actor_id = local_embedding_request_actor(request)
     session = Session()
     definition = WorkflowDefinitionRecord(
         definition_id="wfdef_" + "a" * 32,
@@ -279,12 +283,12 @@ def mutation_rows(
         definition_hash=request.workflow_definition_sha256,
         protocol_version="1.0.1",
         role_schema_version="local-embedding/1.0",
-        created_actor_type="human",
-        created_actor_id=request.actor_context.operator_id,
+        created_actor_type=actor_type,
+        created_actor_id=actor_id,
         initial_request=request.model_dump(mode="json"),
         request_payload=request.model_dump(mode="json"),
         request_hash=local_embedding_business_fingerprint(
-            definition, request, actor_type="human", actor_id=request.actor_context.operator_id
+            definition, request, actor_type=actor_type, actor_id=actor_id
         ),
     )
     lease = CommandLeaseIdentity("wfcommand_" + "b" * 32, "native-runner", "wflease_" + "c" * 32, 1)

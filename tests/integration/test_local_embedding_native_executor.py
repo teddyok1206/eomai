@@ -25,6 +25,7 @@ from eom_catalog_service.embedding_registry_catalog_adapter import (
     EmbeddingRegistryOwnerConfiguration,
 )
 from eom_catalog_service.embedding_registry_ports import (
+    EmbeddingRegistryCaller,
     EmbeddingRegistryLookup,
     ResolvedEmbeddingLookup,
 )
@@ -59,7 +60,10 @@ from eom_orchestrator.settings import Settings
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.local_embedding_encoding_job import EMBEDDING_ENCODING_IDEMPOTENCY_PREFIX
 from eom_workflow.local_embedding_execution_policy import LocalEmbeddingExecutionPolicy
-from eom_workflow.local_embedding_request import LocalEmbeddingWorkflowRequestV11
+from eom_workflow.local_embedding_request import (
+    LocalEmbeddingWorkflowRequestV11,
+    require_local_embedding_operator_seed,
+)
 from eom_workflow.native_embedding_coordinator import (
     NativeArtifactProducerIdentity,
     NativeCoordinatorAllocation,
@@ -272,6 +276,18 @@ def execution(guarded_engine: Engine, tmp_path: Path, monkeypatch: pytest.Monkey
 
         def __init__(self):
             self.catalog, self.settings = catalog, settings
+
+        def registry_caller(self, supplied):
+            return EmbeddingRegistryCaller(
+                require_local_embedding_operator_seed(supplied).operator_id
+            )
+
+        def fence_current_actor(self, session, supplied):
+            # Explicit synthetic IAM seam; keep late source revocation effective.
+            assert session.in_transaction() and current.allowed
+            caller = self.registry_caller(supplied)
+            self.identity.fence_current_operator(session, caller.operator_id)
+            assert supplied == admitted[supplied.request_sha256][0]
 
         def resolve_submission(self, session, supplied):
             assert session.in_transaction() and current.allowed
