@@ -183,6 +183,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | 실제 disposable PostgreSQL |0052 registry/application16·reservation8·limited IAM6,0053 stage18+runner10·Identity11 PASS; migration·cleanup PASS |
 | CPU/CUDA 실행 환경 준비 | 실제 CPU 설치·inventory·수치 증명·비특권 격리 시험·최종 설치 기록 PASS; source/Job 실행 연결 남음, CUDA 미게시 |
 | CPU 기준 전체 후보 순위 비교 | SOURCE_PASS; 고정 오차·CPU 동점 묶음으로 전체 후보/모든 쌍·상위5 경계를 비교. 관련449 PASS, 후보e874268d의 wheel/RECORD·owner용2개 wheel만의 격리 import PASS. 실제 GPU benchmark/기본값 전환은 미실행. [비교 설계·증거](docs/architecture/INCREMENTAL_EMBEDDING_DEVICE_BENCHMARK_PROPOSAL.md#full-rank-order-comparison-before-native-owner-integration--2026-10-14) |
+| benchmark 실행 입구·메모리 감시 | SOURCE_PASS; 기존 identity guard/worker에 실행별 host 감시와 모델 계산 전 채널 일치 확인을 연결. 관련804 PASS·strict type6·후보44404192의3-wheel/RECORD·owner용2-wheel 격리 import PASS. 실제6회 실행 owner/launcher·설치·측정은 미완료. [설계·검증](docs/architecture/INCREMENTAL_EMBEDDING_DEVICE_BENCHMARK_PROPOSAL.md#own-unit-host-memory-observation-before-native-entry-composition--2026-10-14) |
 | 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | seed+delta PASS(2/520, 첫 벡터 보존); QUERY/공통 소비자·CPU/GPU 비교·GPU 기본값은 미완료 |
 
 2026-10-13 11:04 UTC 기준 `3be2949b`의 실제 CPU 전체 설치 검증과 결과 저장·재조회를

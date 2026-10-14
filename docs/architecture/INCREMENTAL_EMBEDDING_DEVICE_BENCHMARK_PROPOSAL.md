@@ -2,7 +2,8 @@
 
 2026-10-12 UTC. **SOURCE_CONTRACTS_ONLY / NOT_INSTALLED / NOT_EXECUTED / NOT_ACTIVE**.
 This dated initial status is historical. As of2026-10-14, the source worker,
-fixed local files, checkpoint/ACK channel and full rank comparator also exist;
+fixed local files, checkpoint/ACK channel, full rank comparator and native
+library entry/host-memory adapter also exist;
 their focused verification is recorded below. The real six-launch owner/launcher,
 installed benchmark admission and CPU/CUDA measurement are still incomplete.
 This is the next concrete route to the requested actual benchmark and, if CUDA is superior and
@@ -489,3 +490,14 @@ role/unit mutation, source grant, real corpus/model/GPU execution or runtime ins
 occurred. PostgreSQL tests are not rerun for this local-read/worker-composition-only
 diff. Actual owner/launcher/physical lease and six measured launches remain incomplete.
 Evidence: `/tmp/eom-identity-provider-install.nAaycoDM/benchmark-{host-memory,native-entry}-*.log`.
+
+Candidate `44404192eed29b53636834ce97e331b0eb50aeac` passed the existing complete
+three-wheel build/RECORD/application-contract inventory and a two-wheel-only
+transitive EOM import proof for entry/host/worker/channel. The single host port
+retains its former worker-module import alias. No checkout/API-wheel/prefix fallback
+or ML import was allowed, and no production main/default authority was introduced.
+Platform raw `446de4abf3840361d32318d5d2ac9dd22e6e1aeb2e36864cd670fe75c6ad1057`;
+API-contract raw `929317d7289bff4ca570b8af9a1398744e43470f0befc11d2620d928b68f871e`.
+Build/pair evidence: `benchmark-native-entry-{release-build,owner-pair-proof}.log`
+under the same local directory. This is NOT an installed benchmark release.
+The current API/owner pair and original finite QUERY handle were not changed.
