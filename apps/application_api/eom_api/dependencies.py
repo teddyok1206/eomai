@@ -42,10 +42,15 @@ def get_authentication(
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise unauthorized()
     services = get_services(request)
-    authentication = services.auth.authenticate_access(credentials.credentials)
     context = get_request_context(request)
-    context.authentication = authentication
     operation_id = getattr(request.scope.get("route"), "operation_id", "")
+    if operation_id == "workflow_start":
+        observed = services.auth.authenticate_and_capture_access(credentials.credentials)
+        authentication = observed.authentication
+        context.authenticated_access = observed
+    else:
+        authentication = services.auth.authenticate_access(credentials.credentials)
+    context.authentication = authentication
     if authentication.password_change_required and operation_id not in {
         "auth_me",
         "auth_account",

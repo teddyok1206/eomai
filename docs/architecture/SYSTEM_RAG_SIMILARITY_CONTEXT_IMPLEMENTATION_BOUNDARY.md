@@ -1968,3 +1968,83 @@ does not call a DB/source capture/publication/model. Platform raw wheel SHA:
 contracts raw SHA: `d826b3062d2598deddf7dd98901228a9e96b1981f4d09eb839099205d7194050`.
 Evidence: `similarity-item-preparation-{release-build,owner-pair-proof}.log` in the
 same prefix directory. The candidate is not installed or activated.
+
+## 23. Authenticated API request → owner preparation handoff
+
+2026-10-14 UTC. The existing API→Catalog Unix socket is the transport owner; do
+not add a daemon, generic RPC framework, API NAS access or an API model executor.
+The current API `AccessAuthentication` is a presentation projection, not an opaque
+Identity capture. Reconstructing authority from its operator/session IDs, reading
+private capture fields, or sharing a process-global captured user is prohibited.
+
+The immediate required seam is one real HMAC authentication that returns both the
+existing projection and its genuine opaque capture. Identity owns that pair, which
+is a small frozen operation-local value, not a wire schema/receipt or a durable grant.
+The existing capture-only entrypoints delegate to the same implementation. Normal
+non-owner API requests keep their existing path. For `workflow_start`, the dependency
+retains the pair in the current RequestContext only; no bearer/password is retained
+and no token/session TTL or permission rule changes. Rate limiting, forced-password
+change and audit still use the original projection. No new DB/registry/index is
+needed: existing token-selector/session/Operator lookups are unchanged in count and
+lock order, and auth commits before command or Catalog side effects.
+
+Only Identity's HMAC path creates the capture. The API does not construct/import it
+from an HTTP body. A missing/mismatched request capture is an explicit unavailable
+owner boundary, not permission to fall back to a saved actor. Context display/audit
+must not serialize or reveal the opaque pair. A failed authentication yields neither
+component, and supported logout/rotation/current-session fences still revoke access.
+Returning the pair does not export it to Catalog or enable a new operation.
+
+Next, the existing fixed-peer Catalog transport needs a bounded challenge/response
+that independently observes the actual admitted API peer/provider before importing
+the existing closed capture values. No parsed DTO is authority by itself. Reuse the
+installed provider/current-session checks and original expiry; installation/privilege
+admission is separate. The recipient constructs an owner for that request/session,
+not an unbounded cache of users. No capture, verifier digest or bearer enters the DB,
+NAS, logs, Slack or a worker workspace.
+
+Automatic native QUERY must remain asynchronous through its supported admitted
+Workflow/START/claim/lease path. HTTP timeout is not proof of no submission. Preserve
+the existing transport replay identity and pin controls before the first authoring
+plan; do not wait for model work inside an API transaction, persist plan19 and later
+mutate it to23, or add fake production fields to a single Item. A protocol-first
+pending preparation/continuation must account for crash/replay and current-owner
+reauthorization before the shared API feature can be activated. The auth seam alone
+is not that completed asynchronous integration or evidence of live activation.
+
+### 23.1 Single-auth request seam verification — 2026-10-14 UTC
+
+`SessionTokenService.authenticate_and_capture_access` and its transactional
+`AuthService` use case return one `AuthenticatedAccess` local value. Both existing
+capture-only entrypoints delegate to the same verified path. API `workflow_start`
+retains that pair only in its current RequestContext; other operations keep their
+ordinary authentication path. Its owner accessor refuses an absent, swapped,
+fake or other-operator capture and never reconstructs authority from actor IDs.
+No transport/export/worker execution has been added by this seam.
+
+Final18-suite source regression: **349 PASS /14.19s**; strict mypy4 and Ruff/format7
+PASS. Real source HMAC with synthetic DB rows proves permission dependency and
+endpoint share one verification/root, the genuine capture passes the existing
+current owner fence, ordinary requests do not capture, repeated requests obtain
+distinct operation-local captures without extending the access-token lifetime,
+and expiry/revocation/password/permission/rate guards stop owner work. Responses
+and context repr do not expose bearer/verifier values; no auth material is logged.
+
+The expanded regression initially found four old Graph-miss fixtures missing a
+definition key required by the existing admission check. They now use an actual
+transient `WorkflowDefinitionRecord`; no guard/admission/source code was weakened.
+A forced-password test also showed that opaque capture rejection happened before
+the friendly API guard: the combined use case now rejects that known condition
+with existing Identity `AUTH_PASSWORD_CHANGE_REQUIRED`/403 before creating a capture.
+
+The supported marker-guarded disposable PostgreSQL `authenticated-session-tests`
+passed **20 tests /8.52s**, including the new real combined-auth/session/fence test
+and existing supported-writer concurrency negatives. The prior19-test run overlaps
+and is not additive. The new test proves one actual HMAC authentication, the same
+API session/access expiry and successful current-root fencing with no second HMAC.
+Environment: `/tmp/eom-api-testdb-20261007114938_c6970ffc`, head0055; no production
+DB, new migration or schema/policy/role alteration. This is session-fence acceptance,
+not new plan23 persistence, private RPC peer admission or shared API Item acceptance.
+Evidence prefix: `/tmp/eom-identity-provider-install.nAaycoDM/similarity-api-owner-auth-`.
+The existing held genuine QUERY/captured-provider release stays unchanged; no new
+capture/login or model was executed in production during this source checkpoint.

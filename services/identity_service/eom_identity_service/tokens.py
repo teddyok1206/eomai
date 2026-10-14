@@ -75,6 +75,14 @@ class AccessAuthentication:
     password_change_required: bool
 
 
+@dataclass(frozen=True, slots=True)
+class AuthenticatedAccess:
+    """One HMAC observation and its opaque owner capture, never serialized authority."""
+
+    authentication: AccessAuthentication
+    capture: AuthenticatedOperatorSession
+
+
 @dataclass(frozen=True)
 class RefreshOutcome:
     pair: IssuedTokenPair | None
@@ -168,8 +176,21 @@ class SessionTokenService:
 
     def capture_access(self, session: Session, raw_token: str) -> AuthenticatedOperatorSession:
         """Mint only from the same actual HMAC validation, never an authentication DTO."""
+        return self.authenticate_and_capture_access(session, raw_token).capture
+
+    def authenticate_and_capture_access(
+        self, session: Session, raw_token: str
+    ) -> AuthenticatedAccess:
+        """Authenticate once; do not reconstitute a capture from the returned projection."""
         authentication, api_session, token = self._authenticate_access(session, raw_token)
-        return _capture_verified_access(authentication, api_session, token)
+        if authentication.password_change_required:
+            raise IdentityError(
+                IdentityErrorCode.AUTH_PASSWORD_CHANGE_REQUIRED,
+                "The temporary password must be changed before owner work.",
+            )
+        return AuthenticatedAccess(
+            authentication, _capture_verified_access(authentication, api_session, token)
+        )
 
     def _authenticate_access(
         self, session: Session, raw_token: str, *, now: datetime | None = None

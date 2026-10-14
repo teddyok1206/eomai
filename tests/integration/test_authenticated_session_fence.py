@@ -216,6 +216,30 @@ def test_actual_capture_and_same_root_fence_do_not_touch_activity(
         assert tuple((token.api_token_id, token.last_used_at) for token in tokens) == token_times
 
 
+def test_actual_combined_authentication_returns_one_session_and_current_fence(
+    prepared: PreparedSessionFence, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[None] = []
+    matches = prepared.auth.tokens.codec.matches
+
+    def verify(verifier: str, expected_hash: str) -> bool:
+        calls.append(None)
+        return matches(verifier, expected_hash)
+
+    monkeypatch.setattr(prepared.auth.tokens.codec, "matches", verify)
+    observed = prepared.auth.authenticate_and_capture_access(prepared.pair.access_token)
+    assert calls == [None]
+    assert observed.authentication.session_id == prepared.authentication.session_id
+    assert observed.authentication.access_expires_at == prepared.pair.access_expires_at
+    assert observed.capture.operator_id == prepared.target_id
+    with Session(prepared.engine) as session, session.begin():
+        AuthenticatedSessionFence(prepared.pin).assert_current(
+            session, observed.capture, required_permission=PermissionKey.WORKFLOW_START
+        )
+    assert calls == [None]  # The owner check never reauthenticates or touches the token TTL.
+    assert prepared.pair.access_token not in repr(observed)
+
+
 @pytest.mark.parametrize(
     "action", ["logout", "logout_all", "refresh", "password", "role", "disable", "delete", "access"]
 )

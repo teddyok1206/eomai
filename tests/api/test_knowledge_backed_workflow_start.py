@@ -17,7 +17,7 @@ from eom_operator_identity import (
     PermissionKey,
 )
 from eom_workflow import compile_definition
-from eom_workflow_runner.models import WorkflowInstanceRecord
+from eom_workflow_runner.models import WorkflowDefinitionRecord, WorkflowInstanceRecord
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -143,10 +143,15 @@ def test_graph_miss_happens_before_workflow_transaction_or_worker_claim_and_pins
         ROOT / "config" / "workflows" / definition_name,
         {"authoring", "image", "review", "item_management"},
     )
-    definition = SimpleNamespace(
+    definition = WorkflowDefinitionRecord(
+        definition_id="wfdef_" + "7" * 32,
+        definition_key=compiled.definition.definition_key,
+        definition_version=compiled.definition.definition_version,
+        schema_version=compiled.definition.schema_version,
         canonical_definition=compiled.as_dict(),
         source_path=compiled.source_path,
         definition_hash=compiled.sha256,
+        active=True,
     )
     adapter = object.__new__(CommandAdapter)
     adapter.sessions = lambda: _ReadSession(definition)  # type: ignore[method-assign]

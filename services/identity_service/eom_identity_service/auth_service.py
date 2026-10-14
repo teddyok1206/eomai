@@ -22,6 +22,7 @@ from eom_identity_service.repository import (
 )
 from eom_identity_service.tokens import (
     AccessAuthentication,
+    AuthenticatedAccess,
     IssuedTokenPair,
     RefreshOutcome,
     SessionTokenService,
@@ -142,18 +143,22 @@ class AuthService:
 
     def capture_access(self, raw_token: str) -> AuthenticatedOperatorSession:
         """One official authentication transaction; no permanent credential continuation."""
-        capture: AuthenticatedOperatorSession | None = None
+        return self.authenticate_and_capture_access(raw_token).capture
+
+    def authenticate_and_capture_access(self, raw_token: str) -> AuthenticatedAccess:
+        """Return the projection and genuine capture from one closed auth transaction."""
+        result: AuthenticatedAccess | None = None
         error: IdentityError | None = None
         with transaction(self.sessions) as session:
             try:
-                capture = self.tokens.capture_access(session, raw_token)
+                result = self.tokens.authenticate_and_capture_access(session, raw_token)
             except IdentityError as exc:
                 error = exc
         if error is not None:
             raise error
-        if capture is None:
+        if result is None:
             raise RuntimeError("access capture completed without a result")
-        return capture
+        return result
 
     def logout(self, api_session_id: str, operator_id: str) -> None:
         timestamp = datetime.now(UTC)
