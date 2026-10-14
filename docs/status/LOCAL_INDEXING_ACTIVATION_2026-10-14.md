@@ -708,3 +708,12 @@ The owner is deliberately quiescent for the next compatible release/runtime
 preparation. Native QUERY policy/definition publication, actual operator capture,
 genuine QUERY/replay/consumer read, larger automatic coverage/other views and
 CPU/GPU admission/comparison/default remain the ORIGINAL outstanding goal gates.
+
+The first full4f0e4dc7 build passed wheel RECORD but correctly stopped at
+`workflow admission policy does not match the installed definitions`: its
+independent inspector still staged only native INDEX. The correction stages and
+explicitly transports/compiles the already-frozen QUERY definition with zero Codex
+roles through the SAME gate. Exact admission-map equality remains mandatory.
+Release inventory/native-protocol/owner-boundary source gate109 PASS; no production
+installation, source repair, test DB bypass or model execution occurred in this
+failed build. Retained log:`reference-query-exact-admission-release-build.log`.

@@ -39,6 +39,14 @@ Workflow/Job/Artifact identity checks are unchanged; this is not a new role,
 protocol, source permission or comparison acceptance. The existing registry-
 equality regression and explicit native-carrier negatives protect the boundary.
 
+The independent installed-wheel gate must materialize the frozen QUERY definition
+alongside INDEX, pass it explicitly into its isolated inspector and compile it
+with no Codex roles. Keep the EXACT compiled-definition/protocol map equality
+against the admission table. The first4f0e4dc7 build correctly refused its omitted
+QUERY inventory; do not omit the new admission or skip equality to make it pass.
+The existing AST inventory test now covers both native families and their staged,
+passed, parsed and compiled variables. No runtime checkout dependency is added.
+
 2026-10-13 UTC. Continuation of the original system-RAG/incremental-index design.
 This note does not activate QUERY, a service identity, a consumer or a numerical runtime.
 

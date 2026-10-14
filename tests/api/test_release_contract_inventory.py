@@ -157,6 +157,7 @@ def test_installed_support_admission_covers_materialized_workflow_contracts() ->
         "customer-support",
         "item-inference-transfer-comparison",
         "local-embedding-index",
+        "local-embedding-reference-query",
     }
     fixed_prefixes = tuple(f"{name}." for name in sorted(fixed_families))
     staged = {
@@ -214,14 +215,27 @@ def test_installed_support_admission_covers_materialized_workflow_contracts() ->
     assert actual == expected
 
 
-def test_installed_admission_uses_native_definition_protocol_without_codex_role() -> None:
+@pytest.mark.parametrize(
+    ("filename", "variable", "protocol"),
+    (
+        ("local-embedding-index.v1.yaml", "local_embedding_definition", "local-embedding/1.0"),
+        (
+            "local-embedding-reference-query.v1.yaml",
+            "reference_query_definition",
+            "reference-query/1.0",
+        ),
+    ),
+)
+def test_installed_admission_uses_native_definition_protocol_without_codex_role(
+    filename: str, variable: str, protocol: str
+) -> None:
     """Application-only definitions must be inspected, not omitted or inferred as a role."""
-    compiled = compile_definition(ROOT / "config/workflows/local-embedding-index.v1.yaml", set())
+    compiled = compile_definition(ROOT / "config/workflows" / filename, set())
     assert not any(isinstance(step, AgentStep) for step in compiled.definition.steps)
-    assert definition_execution_protocol(compiled.definition) == "local-embedding/1.0"
+    assert definition_execution_protocol(compiled.definition) == protocol
     source = installed_workflow_inspector_source()
     assert "definition_execution_protocol(compiled.definition)" in source
-    assert "compile_definition(Path(local_embedding_definition), set())" in source
+    assert f"compile_definition(Path({variable}), set())" in source
 
 
 def test_wheel_catalog_resource_inventory_matches_canonical_contracts() -> None:
