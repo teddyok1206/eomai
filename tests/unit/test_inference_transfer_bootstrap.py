@@ -167,7 +167,11 @@ def fixture(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     )
     manifest = bootstrap_manifest(workflow_definition_sha256=compiled.sha256)
     session = FakeSession()
-    session.definition = SimpleNamespace(
+    session.definition = WorkflowDefinitionRecord(
+        definition_key=compiled.definition.definition_key,
+        definition_version=compiled.definition.definition_version,
+        schema_version=compiled.definition.schema_version,
+        active=True,
         canonical_definition=compiled.as_dict(),
         source_path="installed://synthetic-definition",
         definition_hash=compiled.sha256,

@@ -830,3 +830,41 @@ latest bytes. A fail-on-total-bytes cache is simpler but incorrectly rejects a
 valid bounded corpus; unbounded retention or a larger arbitrary limit is unsafe.
 Synthetic1024-member coverage asserts bounded retention and no additional SQL;
 LRU/tamper/distinct-budget cases protect reread and lifecycle invariants.
+
+### Native definition read-lock capability
+
+The actual ac8c8c7d owner completed population preparation and then PostgreSQL
+rejected `FOR SHARE` on `workflow_definitions` (42501,11:33:48UTC). Catalog has
+SELECT but deliberately no UPDATE on definitions. Unlike append-only policies,
+a definition has a mutable `active` flag: removing this lock or merely reading
+twice would permit deactivation to race admission. Do not grant UPDATE or change
+the service's signed DB principal to the unrestricted owner.
+
+Runner owns one fixed SECURITY DEFINER SQL read-lock primitive for the two
+released native definition keys/versions only. It accepts the exact definition
+ID/key/version/hash, validates active/schema and retains a shared row lock in
+the caller's root transaction. It returns no content, mutates no row and grants
+no Identity/source/Job authority. Existing current actor/source fences and
+Python definition compilation/hash checks remain mandatory before submission,
+claim and effects. The definition owner installs it explicitly through a
+supported owner operation; PUBLIC execution is revoked and only that owner and
+the existing Catalog runtime role can execute it. No new credential, table,
+queue, schema message or history migration is necessary.
+
+Runtime composition checks the function's exact body, owner, signature,
+search_path and ACL; absent/drifted installation fails closed. INDEX admission,
+QUERY admission and native claim share the same small mechanical adapter rather
+than independent locking rules. The existing writer's UPDATE/DELETE conflicts
+with the retained FOR SHARE lock, so writer behavior needs no replacement.
+The access pattern is one exact PK lookup/lock, O(log N), constant result space;
+there is no scan or persistent cache. Current root ownership and PostgreSQL
+locks supply transaction/concurrency semantics. Retry after known rollback
+uses the existing exact request, never a new execution key. An installer replays
+only an exact existing function; it never silently replaces unknown SQL bytes.
+
+Required tests: actual restricted login can lock but cannot UPDATE/INSERT/DELETE
+definitions; a concurrent owner deactivation waits until the root ends; wrong
+key/version/hash/inactive/missing definition and ungranted/assumed roles fail;
+body/ACL/owner drift fails; all three native callers use this boundary, and
+ordinary role Workflows remain unchanged. Source and disposable tests precede
+the explicit installed capability check. An installed unit alone is not PASS.

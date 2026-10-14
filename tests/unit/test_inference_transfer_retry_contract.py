@@ -115,6 +115,14 @@ def test_all_preexisting_catalog_resources_retain_metadata_and_exact_bytes() -> 
         "item-inference-transfer-embedding",
         "embedding-registry",
         "embedding-runtime-bundle",
+        "embedding-installed-runtime-proof",
+        "embedding-device-benchmark",
+        "embedding-native-runtime-config",
+        "system-rag-similarity-context",
+        "embedding-reference-query",
+        "embedding-reference-query-input-v1.1",
+        "embedding-native-cpu-probe",
+        "education-retrieval-access-policy-v1.1",
     }
     old = {name: entry for name, entry in CATALOG_SCHEMA_RESOURCES.items() if name not in additions}
     assert len(old) == OLD_RESOURCE_COUNT

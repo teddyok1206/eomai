@@ -225,3 +225,30 @@ materializations. Keep the distinct-member budget independent of cache eviction
 and physically revalidate evicted bytes. Source tests197 PASS and separate
 runtime/dependency93 PASS belong to895cb571; the retention correction needs its
 own tests and installed acceptance before being considered effective.
+
+## Retention successor and exact definition-lock denial
+
+ac8c8c7d was built/RECORD/pair verified and activated as revision8/resource16,
+controls`/var/lib/eom-local-indexing-activation.ac8c8c7d-foqpe0ap`.
+Invocation`9107936f68514d7b9941070992a372e8` passed startup at11:27:56UTC and
+stopped11:33:48 with42501. Server-error-only filtered evidence identifies
+`permission denied for table workflow_definitions`; source code retains a
+FOR SHARE read in native admission while Catalog intentionally has no UPDATE.
+No full server statement, SQL parameters or source content were collected.
+Peak process memory899.1MiB; this is not a cache-size or performance claim.
+Actual11:34:18 counts encoding/binding/index0, service Workflows0. Control-plan
+publication can precede submission and must not be relabeled model/index success.
+
+Retention focused222 PASS, strict mypy/Ruff/format/diff and owner-pair PASS.
+Wider regression initially4071 PASS/35 FAIL:33 stale synthetic definition rows
+lacked actual ORM fields, and two frozen-inventory tests omitted explicit later
+schema additions. Replace those fixture rows with the real mapped record and
+exclude only those named successors; original frozen counts/digests/bytes remain
+unchanged. Focused227 PASS, then full reviewed regression4106 PASS/3 preexisting
+warnings. No runtime rule or old schema was changed to satisfy these tests.
+
+The original nine services/API remain separate; the added unit is failed with
+Restart=no, no automatic retry or boot enable. The next required change is the
+narrow native definition read-lock capability documented in the authority design,
+not UPDATE privilege, an unlocked active-flag read, a new DB identity or repeated
+blind starts. Seed/delta/replay/QUERY/consumer/GPU gates remain pending.

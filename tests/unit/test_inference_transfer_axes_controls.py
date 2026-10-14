@@ -36,6 +36,7 @@ from eom_workflow.inference_transfer_control_invocation import (
     parse_inference_transfer_release_result_v11,
     validate_inference_transfer_release_result_context_v11,
 )
+from eom_workflow_runner.models import WorkflowDefinitionRecord
 from eomctl import inference_transfer_controls as cli
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError as SchemaValidationError
@@ -151,7 +152,11 @@ def axes_bootstrap_fixture(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     compiled = compile_definition(
         Path("config/workflows/item-inference-transfer-comparison.v1_1.yaml"), {"support"}
     )
-    value.session.definition = SimpleNamespace(
+    value.session.definition = WorkflowDefinitionRecord(
+        definition_key=compiled.definition.definition_key,
+        definition_version=compiled.definition.definition_version,
+        schema_version=compiled.definition.schema_version,
+        active=True,
         canonical_definition=compiled.as_dict(),
         source_path="installed://synthetic-v11",
         definition_hash=compiled.sha256,
