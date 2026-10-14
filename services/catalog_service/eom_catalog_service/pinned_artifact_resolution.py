@@ -41,6 +41,22 @@ class PinnedArtifactResolutionError(ValueError):
     """The pinned Artifact identity, provenance, manifest, or bytes did not resolve."""
 
 
+def artifact_identity_hints(value: object) -> set[tuple[str, str]]:
+    """Collect JSON pointer identities only, never validate or authorize a source."""
+    found: set[tuple[str, str]] = set()
+    pending = [value]
+    while pending:
+        node = pending.pop()
+        if isinstance(node, dict):
+            artifact, revision = node.get("artifact_id"), node.get("artifact_revision_id")
+            if isinstance(artifact, str) and isinstance(revision, str):
+                found.add((artifact, revision))
+            pending.extend(node.values())
+        elif isinstance(node, list):
+            pending.extend(node)
+    return found
+
+
 @dataclass(frozen=True)
 class _CapturedArtifactMetadata:
     logical: ArtifactRecord
@@ -578,5 +594,6 @@ __all__ = [
     "PinnedArtifactMember",
     "PinnedArtifactReadContext",
     "PinnedArtifactResolutionError",
+    "artifact_identity_hints",
     "resolve_pinned_artifact_member",
 ]

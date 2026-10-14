@@ -90,3 +90,34 @@ Current unit has Restart=no and is failed, not silently retrying. Stop/disable
 the added owner through systemd and the supported Identity owner operation if
 withdrawal is needed; preserve all revisions, grants, receipts and failures.
 Do not downgrade production0055 or disturb the nine original services.
+
+## Diagnostic successor and exact missing closure — 10:40 UTC
+
+Actual owner sourcef2772657, service revision3/resource-version6 and a new native
+policy/owner configuration were installed through the same supported boundaries.
+Platform raw wheel`ee21d3c6021f41af2d264691429ce405db6f070863cb7a020c9000972d4c47c7`,
+API-contract raw wheel`c33ddb764c4b73494cc7f07cebe840ed4f012d932b975cd1f5529f62c604859f`.
+Actual unit invocation`6fe6e427fce14846b9ccfe7ab64e37f5` passed startup and stopped
+at10:30:32 with inner`PinnedArtifactResolutionError`, exact EOM site
+`pinned_artifact_resolution:537`: metadata was not captured before read_member.
+The new safe diagnostic exposed no source content or exception text.
+
+The canonical past-exam resolver reads extraction batch/acceptance/result/layout
+and original-page evidence in addition to the analysis/report/Item pointers that
+capture had prefetched. The new bounded Catalog preparation adapter closes that
+metadata chain using existing typed provenance decoders and the same root reader.
+It does not replace source authorization, reimplement lineage acceptance, add a
+lazy SQL fallback, expand roles or relax the strict missing-pointer rejection.
+
+Source tests171 PASS reproduce the missing capture, complete the closure and
+then re-run the unchanged source validator. Later decision rejection still fails.
+Four set-based metadata queries and three bounded prefetch phases are independent
+of repeated input count;1/520 synthetic hints have the same query count. These are
+synthetic SQL/physical-reader seams, not live source acceptance.
+Strict mypy3 and Ruff/format/diff PASS, dependency gate6 PASS. Repeated disposable
+model-free persistence/native suite32 PASS. f2772657's wider regression1609 PASS
+is separate from the new closure candidate's final regression result.
+
+Current installed owner is stillf2772657 and failed; the closure candidate is not
+yet installed. All vectors/bindings/indexes remain uncreated by these starts.
+Do not label the new source tests as real seed/delta/replay/QUERY or GPU evidence.

@@ -781,3 +781,26 @@ The installed service's existing sanitized error event may include a bounded
 inner exception class, whitelisted stable code and EOM module/line site. Never
 include exception text, source paths, locals, SQL parameters or a full traceback.
 This is an internal diagnostic field, not authority, a wire contract or retry.
+
+### Exact past-exam provenance prefetch closure
+
+The actual f2772657 invocation identified `PinnedArtifactReadContext.read_member`
+rejecting missing captured metadata (line537). Snapshot capture had prefetched
+analysis/report/Item pointers, but the canonical past-exam resolver additionally
+reads extraction batch, acceptance, result, layout and original PDF/PNG evidence.
+Do not weaken that resolver or add lazy per-member DB queries.
+
+Catalog owns a bounded preparation adapter over the same caller-root context.
+Canonical sources remain the pinned Item revision, existing extraction records
+and schema/hash-validated provenance Artifacts. No new entity/revision or DB row.
+Use sets/maps and four set-based metadata queries (acceptances, accepted work
+units, batches, layouts), then staged exact Artifact metadata prefetch. Decode
+the existing versioned batch/acceptance/result/layout contracts to collect their
+pointer identities; pointer hints never constitute eligibility or permission.
+Complexity is O(selected metadata + bounded provenance JSON), not one SQL lookup
+per pointer. Keep the existing context's member/revision/byte budgets and indexes.
+The adapter neither commits, creates a job, writes NAS nor authorizes a source.
+Original per-source current approval, lineage, hash/media/schema and late service
+fences remain mandatory. Missing/ambiguous/oversized closure fails explicitly;
+no latest substitution, automatic retry or alternate reader. A lazy fallback is
+simpler but breaks the caller-root batching and closed-resolution invariants.

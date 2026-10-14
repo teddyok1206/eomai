@@ -1,0 +1,151 @@
+"""Synthetic caller-root metadata; real typed provenance decoding, no DB/NAS/model."""
+
+from __future__ import annotations
+
+from typing import Any, cast
+
+import pytest
+from eom_catalog_service import knowledge_analysis_sources as sources
+from eom_catalog_service.legacy_assessment_models import (
+    AssessmentLayoutObservationRecord,
+    LegacyItemExtractionAcceptanceRecord,
+)
+from eom_catalog_service.legacy_item_extraction_batch_models import (
+    LegacyItemExtractionBatchRecord,
+    LegacyItemExtractionBatchWorkUnitRecord,
+)
+from eom_catalog_service.models import ItemRevisionRecord
+from eom_catalog_service.past_exam_artifact_prefetch import prefetch_past_exam_artifact_closure
+from eom_catalog_service.pinned_artifact_resolution import (
+    PinnedArtifactReadContext,
+    PinnedArtifactResolutionError,
+    artifact_identity_hints,
+)
+
+from tests.unit.test_past_exam_source_provenance import _source_fixture
+
+
+class ClosedMetadataReader:
+    MAX_REVISIONS = 4096
+
+    def __init__(self, session, delegate):
+        self.session, self.delegate = session, delegate
+        self.settings = delegate.settings
+        self.captured: set[tuple[str, str]] = set()
+        self.batches: list[tuple[tuple[str, str], ...]] = []
+
+    def require_session(self, session):
+        if session is not self.session:
+            raise PinnedArtifactResolutionError("different root")
+
+    def prefetch(self, identities):
+        self.batches.append(identities)
+        self.captured.update(identities)
+        assert len(self.captured) <= self.MAX_REVISIONS
+
+    def read_member(self, **kwargs):
+        if (kwargs["artifact_id"], kwargs["revision_id"]) not in self.captured:
+            raise PinnedArtifactResolutionError("pinned Artifact metadata was not captured")
+        return self.delegate.read_member(**kwargs)
+
+    def verify_member(self, **kwargs):
+        assert (kwargs["artifact_id"], kwargs["revision_id"]) in self.captured
+
+
+@pytest.fixture
+def closure(monkeypatch):
+    session, original, state = _source_fixture(monkeypatch)
+    fake = cast(Any, session)
+    queries = []
+    previous = fake.scalars
+
+    def scalars(statement):
+        entity = statement.column_descriptions[0]["entity"]
+        if entity in {
+            LegacyItemExtractionAcceptanceRecord,
+            LegacyItemExtractionBatchRecord,
+            AssessmentLayoutObservationRecord,
+        }:
+            queries.append(statement)
+            return (fake.records[entity],)
+        if entity is LegacyItemExtractionBatchWorkUnitRecord:
+            queries.append(statement)
+            return (fake.unit,)
+        return previous(statement)
+
+    fake.scalars = scalars
+    reader = ClosedMetadataReader(session, original)
+    return session, reader, state, queries
+
+
+def prepare(case, count=1):
+    session, reader, state, _queries = case
+    prefetch_past_exam_artifact_closure(
+        session,
+        (cast(ItemRevisionRecord, state["revision"]),) * count,
+        cast(PinnedArtifactReadContext, reader),
+    )
+
+
+def resolve(case):
+    session, reader, state, _queries = case
+    return sources.resolve_historically_approved_item_source(
+        session,
+        artifacts=reader,
+        item_revision_id=state["item_revision_id"],
+        source_class="PAST_EXAM",
+    )
+
+
+@pytest.mark.parametrize("count", [1, 520])
+def test_exact_extraction_closure_fixes_missing_metadata_with_four_set_queries(closure, count):
+    _session, reader, _state, queries = closure
+    with pytest.raises(sources.KnowledgeAnalysisSourceError):
+        resolve(closure)
+    queries.clear()
+    prepare(closure, count)
+    assert len(queries) == 4
+    assert len(reader.batches) == 3
+    assert "ACCEPTED" in queries[1].compile().params.values()
+    assert all(batch == tuple(sorted(set(batch))) for batch in reader.batches)
+    assert resolve(closure).page_image_count >= 1
+
+
+def test_preparation_is_not_source_approval_or_a_current_decision_cache(closure):
+    prepare(closure)
+    closure[2]["decision"].decision = "REJECT"
+    with pytest.raises(sources.KnowledgeAnalysisSourceError):
+        resolve(closure)
+
+
+def test_wrong_root_fails_before_any_metadata_or_bytes(closure):
+    session, reader, state, queries = closure
+    reader.session = object()
+    with pytest.raises(PinnedArtifactResolutionError, match="different root"):
+        prepare(closure)
+    assert not queries and not reader.delegate.calls and not reader.batches
+    reader.session = session
+    assert state["revision"].metadata_json["source_kind"] == "PAST_EXAM"
+
+
+def test_no_past_exam_revisions_need_no_extra_metadata_read(closure):
+    _session, reader, state, queries = closure
+    state["revision"].metadata_json["source_kind"] = "GENERATED"
+    prepare(closure)
+    assert not queries and not reader.delegate.calls
+
+
+def test_changed_member_hash_is_not_ignored_or_replaced_with_latest(closure):
+    reader = closure[1]
+    reader.delegate.payloads["batch.json"] += b" "
+    with pytest.raises(ValueError, match="hash/size"):
+        prepare(closure)
+    assert len(reader.delegate.calls) == 1
+
+
+def test_hint_collection_is_deduplicated_and_not_a_permission_contract():
+    pointer = {"artifact_id": "not-a-valid-artifact", "artifact_revision_id": "not-a-revision"}
+    assert artifact_identity_hints({"a": pointer, "b": [pointer], "text": "secret"}) == {
+        ("not-a-valid-artifact", "not-a-revision")
+    }
+    assert artifact_identity_hints({"artifact_id": "x", "artifact_revision_id": None}) == set()

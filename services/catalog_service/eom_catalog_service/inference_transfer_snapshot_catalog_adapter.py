@@ -76,7 +76,11 @@ from eom_catalog_service.local_indexing_source_ports import (
     LocalIndexingSourceReadIntent,
 )
 from eom_catalog_service.models import ItemComponentRecord, ItemRecord, ItemRevisionRecord
-from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
+from eom_catalog_service.past_exam_artifact_prefetch import prefetch_past_exam_artifact_closure
+from eom_catalog_service.pinned_artifact_resolution import (
+    PinnedArtifactReadContext,
+    artifact_identity_hints,
+)
 from eom_catalog_service.settings import CatalogSettings
 
 _MAXIMUM_ITEM_MEMBER_BYTES = 16 * 1024**2
@@ -135,26 +139,6 @@ class LocalIndexingSessionCapture:
     scope: LocalIndexingSourceReadIntent
     corpus: AdmittedInferenceTransferCorpus | None = None
     entries: tuple[StagedExperimentEntry, ...] = ()
-
-
-def _metadata_artifact_identities(value: object) -> set[tuple[str, str]]:
-    """Prefetch hints only; these values grant no source/member eligibility.
-
-    Canonical requests remain untrusted until the existing official resolver
-    parses and checks them. Only Artifact identity pairs are collected, not text.
-    """
-    found: set[tuple[str, str]] = set()
-    pending = [value]
-    while pending:
-        node = pending.pop()
-        if isinstance(node, dict):
-            artifact, revision = node.get("artifact_id"), node.get("artifact_revision_id")
-            if isinstance(artifact, str) and isinstance(revision, str):
-                found.add((artifact, revision))
-            pending.extend(node.values())
-        elif isinstance(node, list):
-            pending.extend(node)
-    return found
 
 
 class CatalogInferenceTransferSnapshotSourceAdapter:
@@ -429,7 +413,7 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
             | {(row.artifact_id, row.artifact_revision_id) for row in components}
         )
         for run in runs:
-            identities.update(_metadata_artifact_identities(run.canonical_request))
+            identities.update(artifact_identity_hints(run.canonical_request))
             for artifact, revision in (
                 (run.accepted_result_artifact_id, run.accepted_result_artifact_revision_id),
                 (run.proposal_artifact_id, run.proposal_artifact_revision_id),
@@ -449,6 +433,9 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
             schema_ref=graph_member.schema_ref,
             media_type=graph_member.media_type,
             max_bytes=64 * 1024**2,
+        )
+        prefetch_past_exam_artifact_closure(
+            session, tuple(revision for _item, revision in source_rows), artifact_reader
         )
         pool = read_pool()
         if pool.truncated:
