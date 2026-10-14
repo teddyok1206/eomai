@@ -113,6 +113,13 @@ frozen Workflow request1.1 retain their previous bytes and meanings.
 - Protocol-only diff: no migration/DB mutation, service/role activation, model/GPU
   inference or change to the existing operator-seed service-audit rejection.
   Prior actual disposable PostgreSQL acceptance is not relabeled as service IAM proof.
+- Code candidate `24336eaa64f4c9ce4285db5feb97430c05d3adb4`: all3 release
+  wheels built and RECORD verification PASS. An existing immutable operator
+  interpreter, isolated from source checkout and without package installation,
+  imported the previous25 modules and the new public identity/contract modules
+  from those wheels. Packaged schema SHA, all3 canonical wire shapes, inactive
+  metadata/copied-model rejection and unchanged unoffered QUERY admission PASS.
+  This is package verification, not an installed service/DB/runtime grant.
 
 `SERVICE_IDENTITY_PERSISTENCE=NOT_IMPLEMENTED`,
 `SERVICE_RUNTIME_AUTHENTICATION=NOT_IMPLEMENTED`,
