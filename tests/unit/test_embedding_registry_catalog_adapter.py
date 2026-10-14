@@ -1157,12 +1157,12 @@ def _document_for_test_shard(root: Path, pointer: Any) -> dict[str, Any]:
 
 
 @pytest.mark.parametrize("revoked_at_end", [False, True])
-@pytest.mark.parametrize("caller_root", [False, True])
+@pytest.mark.parametrize("entrypoint", ["separate_root", "caller_root", "combined_root"])
 def test_similarity_batch_reuses_decode_but_recaptures_full_population_at_end(
     owner: tuple[Any, ...],
     monkeypatch: pytest.MonkeyPatch,
     revoked_at_end: bool,
-    caller_root: bool,
+    entrypoint: str,
 ) -> None:
     from contextlib import nullcontext
     from dataclasses import replace
@@ -1198,7 +1198,7 @@ def test_similarity_batch_reuses_decode_but_recaptures_full_population_at_end(
             )
         return value
 
-    if caller_root:
+    if entrypoint != "separate_root":
         prepared = verifier.prepare_similarity_context_in_session(session, CALLER, request)
         # Opening another root would release or replace the native owner's fences.
         monkeypatch.setattr(verifier, "sessions", Mock(side_effect=AssertionError("second root")))
@@ -1227,7 +1227,13 @@ def test_similarity_batch_reuses_decode_but_recaptures_full_population_at_end(
     monkeypatch.setattr(module, "read_pinned_embedding_index", application_read)
 
     def read_views():
-        if caller_root:
+        if entrypoint == "combined_root":
+            actual, values = verifier.prepare_and_read_similarity_context_in_session(
+                session, CALLER, request
+            )
+            assert actual == prepared
+            return values
+        if entrypoint == "caller_root":
             return verifier.read_similarity_views_in_session(session, CALLER, request, prepared)
         return verifier.read_similarity_views(CALLER, request, prepared)
 
@@ -1262,6 +1268,7 @@ def test_similarity_caller_root_guard_denies_before_source_io(
     monkeypatch.setattr(verifier.sources, "capture_in_session", capture)
     for operation in (
         lambda: verifier.prepare_similarity_context_in_session(session, CALLER, request),
+        lambda: verifier.prepare_and_read_similarity_context_in_session(session, CALLER, request),
         lambda: verifier.read_similarity_views_in_session(
             session, CALLER, request, sources.prepared
         ),
@@ -1270,6 +1277,112 @@ def test_similarity_caller_root_guard_denies_before_source_io(
             operation()
         assert failure.value.code == "AUTHORITY_UNAVAILABLE"
     capture.assert_not_called()
+
+
+@pytest.mark.parametrize("pointer", ["source", "profile", "report"])
+def test_combined_preparation_denies_stale_anchor_before_index_io(
+    owner: tuple[Any, ...], monkeypatch: pytest.MonkeyPatch, pointer: str
+) -> None:
+    from contextlib import nullcontext
+
+    from eom_catalog_contracts.similarity_context import parse_similarity_context_request
+    from eom_catalog_service import embedding_registry_catalog_adapter as module
+    from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
+
+    from tests.unit.test_similarity_context_service import CALLER, case
+
+    verifier, session, *_ = owner
+    request, _sources, _query = case()
+    monkeypatch.setattr(session, "no_autoflush", nullcontext(), raising=False)
+    baseline = verifier.prepare_similarity_context_in_session(session, CALLER, request)
+    actual = next(value for value in baseline.sources if value.profile is not None)
+    anchor = request.anchor.model_dump(mode="json") | {
+        "source": actual.source.model_dump(mode="json"),
+        "profile": actual.profile.model_dump(mode="json"),
+        "solution_evidence": actual.solution_evidence.model_dump(mode="json"),
+    }
+    if pointer == "source":
+        anchor["source"]["item_revision_id"] = "itemrev_" + "f" * 32
+    elif pointer == "profile":
+        anchor["profile"]["profile_sha256"] = "sha256:" + "f" * 64
+    else:
+        anchor["solution_evidence"] = seal(
+            anchor["solution_evidence"] | {"solution_result_sha256": "sha256:" + "f" * 64},
+            "pointer_sha256",
+        )
+    changed = parse_similarity_context_request(
+        seal(request.model_dump(mode="json") | {"anchor": anchor}, "request_sha256")
+    )
+    read = Mock(side_effect=AssertionError("index IO before exact anchor validation"))
+    monkeypatch.setattr(module, "read_pinned_embedding_index", read)
+    with pytest.raises(SimilarityContextReadError) as error:
+        verifier.prepare_and_read_similarity_context_in_session(session, CALLER, changed)
+    assert error.value.code == "SOURCE_POINTER_INVALID"
+    read.assert_not_called()
+
+
+def test_combined_read_fences_unindexed_no_report_member_at_end(
+    owner: tuple[Any, ...], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from contextlib import nullcontext
+    from dataclasses import replace
+
+    from eom_catalog_service import embedding_registry_catalog_adapter as module
+    from eom_catalog_service.embedding_registry_ports import ResolvedPinnedEmbeddingIndex
+    from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
+
+    from tests.unit.test_similarity_context_service import CALLER, case
+
+    verifier, session, *_ = owner
+    request, _sources, _query = case()
+    monkeypatch.setattr(session, "no_autoflush", nullcontext(), raising=False)
+    original_capture = verifier.sources.capture_in_session
+    population_reads = []
+
+    def capture(*arguments: Any, **options: Any) -> InferenceTransferSessionCapture:
+        value = cast(InferenceTransferSessionCapture, original_capture(*arguments, **options))
+        if options["phase"] is not InferenceTransferSessionCapturePhase.CAPTURE_POPULATION:
+            return value
+        assert value.corpus is not None
+        population_reads.append(value)
+        if len(population_reads) == 1:
+            original = value.corpus.sources[0]
+            extra = AdmittedInferenceTransferSource(
+                "analysisrun_" + "f" * 32,
+                original.source.model_copy(
+                    update={
+                        "item_id": "item_" + "f" * 32,
+                        "item_revision_id": "itemrev_" + "f" * 32,
+                    }
+                ),
+            )
+            return replace(
+                value,
+                corpus=replace(
+                    value.corpus,
+                    sources=(*value.corpus.sources, extra),
+                    missing_solution_reports=1,
+                ),
+            )
+        # Only the extra member is revoked: the anchor/profile/index remain unchanged.
+        return value
+
+    def read(_session: Any, caller: Any, intent: Any, read_owner: Any):
+        read_owner.authorize_scope(_session, caller, intent.scope)
+        reader, actual = read_owner._capture(
+            _session, caller, intent.scope, InferenceTransferSessionCapturePhase.CAPTURE_POPULATION
+        )
+        reader.require_session(_session)
+        assert actual.corpus is not None and len(actual.corpus.sources) == 2
+        return ResolvedPinnedEmbeddingIndex(
+            intent, tuple(value.source for value in actual.corpus.sources), (), (), ()
+        )
+
+    monkeypatch.setattr(verifier.sources, "capture_in_session", capture)
+    monkeypatch.setattr(module, "read_pinned_embedding_index", read)
+    with pytest.raises(SimilarityContextReadError) as error:
+        verifier.prepare_and_read_similarity_context_in_session(session, CALLER, request)
+    assert error.value.code == "SOURCE_REVOKED" and len(population_reads) == 2
 
 
 def test_similarity_owner_without_actual_identity_fence_is_not_a_source_grant(
@@ -1287,6 +1400,10 @@ def test_similarity_owner_without_actual_identity_fence_is_not_a_source_grant(
     monkeypatch.setattr(session, "begin", lambda: nullcontext(), raising=False)
     monkeypatch.setattr(session, "no_autoflush", nullcontext(), raising=False)
     verifier.identity_fence = None
-    with pytest.raises(SimilarityContextReadError) as error:
-        verifier.prepare_similarity_context(CALLER, request)
-    assert error.value.code == "AUTHORITY_UNAVAILABLE"
+    for operation in (
+        lambda: verifier.prepare_similarity_context(CALLER, request),
+        lambda: verifier.prepare_and_read_similarity_context_in_session(session, CALLER, request),
+    ):
+        with pytest.raises(SimilarityContextReadError) as error:
+            operation()
+        assert error.value.code == "AUTHORITY_UNAVAILABLE"

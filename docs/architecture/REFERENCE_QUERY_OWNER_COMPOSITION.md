@@ -1,5 +1,57 @@
 # Current-owner reference QUERY composition
 
+## One caller-root preparation/read boundary — 2026-10-14
+
+The native QUERY owner currently prepares the full authorized population once,
+then immediately enters a read method that captures it again at start and end.
+The first two captures are adjacent in the SAME retained caller root. Add one
+Catalog public prepare-and-read operation, sharing the existing private read
+window with the old read entrypoint: two full captures instead of three, while
+all per-view and final population/session checks remain mandatory.
+
+Canonical sources, exact source/report/Graph/policy/index revisions and hashes
+are unchanged. The new return is an owner-local immutable preparation plus a
+tuple of validated reads, not a wire message, persisted aggregate or permission.
+Existing keyed views/maps, batched Artifact reads and registry indexes remain;
+bounded O(P + V*P*d) work and memory are unchanged, with one fewer O(P) physical
+capture per native root. No new DB/index/cache/migration/schema/dependency.
+Catalog owns the operation; the native owner consumes its public interface.
+It never opens/commits a second root, retains authority across inference, or
+reduces source scope to the anchor. Missing/nested/ended roots, late membership,
+report or permission drift still fail; no fallback, new retry or latest lookup.
+Simply caching preparation across roots or skipping the final capture would
+violate current authorization. Tests count both full captures and per-view
+scope checks, including final revocation of unselected population members.
+Historical entrypoints keep their signatures and checks. Installed5018ad2d and
+the finite live canary remain pinned until a separately reviewed owner release.
+
+Source verification:14-suite regression **376 PASS /185.01s**; the additional
+unindexed-member/stale-pointer/absent-Identity focused set **5 PASS /4.46s**
+overlaps that regression and is not summed. Strict mypy2, Ruff/format/diff PASS.
+The counter test retains TWO physical population captures and NINE per-view
+scope checks for three views; native-owner tests forbid the old separate calls.
+The first139-case run found validation moving after index IO (138 PASS/1 fail).
+Reuse the authoritative preparation validator BEFORE the combined read, rather
+than weakening that early-stale-anchor test. Three structurally valid stale
+source/profile/report references are rejected before index IO, and final
+revocation of an unindexed/no-report member still refuses the whole result.
+One new report-pointer fixture initially used an undeclared field; its corrected
+valid successor pointer is tested without changing the schema or source rule.
+
+The existing guarded PostgreSQL stage/claim/submission suite passed68/45.62s;
+no production pytest, schema/role/runtime change or model call occurred for this
+source refactor. Local evidence is under
+`/tmp/eom-identity-provider-install.nAaycoDM/query-combined-root-*.log`.
+These are source/transaction tests, not a latency benchmark or live activation.
+
+The separate finite QUERY canary passed actual UID990/current installed API
+provider+peer, CPU installation and non-superuser controller-role/OID0055
+preflight at15:48–15:49 UTC. It pins the EXISTING immutable index revision2 and
+one actual source; no DOCUMENT re-encoding or new source policy is requested.
+The live process is waiting for ONE guiadmin login in the original sudo pane;
+no credential is saved and no source capture/QUERY forward has started. This
+wait is not a successful QUERY/consumer result or a state-machine failure.
+
 ## Exact QUERY admission after concrete owner implementation — 2026-10-14
 
 The typed current-source owner, fixed-purpose executor, durable launch/checkpoint

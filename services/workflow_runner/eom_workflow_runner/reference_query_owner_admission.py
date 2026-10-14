@@ -445,11 +445,10 @@ class CatalogReferenceQueryOwnerAdmission:
             raise ValueError("REFERENCE_QUERY_BUNDLE_INVALID")
         bundle = parse_embedding_runtime_bundle(raw_bundle)
         validate_reference_query_request_references(request, policy, bundle)
-        prepared = self.catalog.prepare_similarity_context_in_session(session, caller, context)
+        prepared, _reads = self.catalog.prepare_and_read_similarity_context_in_session(
+            session, caller, context
+        )
         result = ResolvedReferenceQuerySources(request, policy, bundle, prepared)
-        # Resolve exact document-index pointers now, before numerical resource use.
-        # The Catalog owner retains its per-view and final source checks in this root.
-        self.catalog.read_similarity_views_in_session(session, caller, context, prepared)
         self.identity.fence_current_operator(session, caller.operator_id)
         return result
 

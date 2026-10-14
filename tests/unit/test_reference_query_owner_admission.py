@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
@@ -189,10 +190,20 @@ def source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> OwnerFixture:
             result.deny = True
         return ()  # Explicit unit index-validation seam, NOT a real registered index.
 
+    def prepare_and_read(
+        session: Session, caller: Any, current: Any
+    ) -> tuple[PreparedSimilarityContext, tuple[Any, ...]]:
+        prepared = prepare(session, caller, current)
+        module.validate_similarity_preparation(current, prepared)
+        return prepared, read(session, caller, current, prepared)
+
     monkeypatch.setattr(AuthenticatedSessionFence, "assert_current", identity)
     monkeypatch.setattr(owner.catalog, "authorize_scope", authorize)
     monkeypatch.setattr(owner.catalog, "prepare_similarity_context_in_session", prepare)
     monkeypatch.setattr(owner.catalog, "read_similarity_views_in_session", read)
+    monkeypatch.setattr(
+        owner.catalog, "prepare_and_read_similarity_context_in_session", prepare_and_read
+    )
     return result
 
 
@@ -695,7 +706,18 @@ def test_recovery_requires_current_scope_and_original_allocated_history(
 
 def test_source_preparation_keeps_one_root_and_actual_capture_then_checks_late(
     source: OwnerFixture,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        source.owner.catalog,
+        "prepare_similarity_context_in_session",
+        Mock(side_effect=AssertionError("redundant source preparation")),
+    )
+    monkeypatch.setattr(
+        source.owner.catalog,
+        "read_similarity_views_in_session",
+        Mock(side_effect=AssertionError("separate index-read root")),
+    )
     with source.publisher.sessions() as session, session.begin():
         result = source.owner.resolve_sources(session, source.request)
         assert result.policy == source.policy and result.prepared == source.prepared
