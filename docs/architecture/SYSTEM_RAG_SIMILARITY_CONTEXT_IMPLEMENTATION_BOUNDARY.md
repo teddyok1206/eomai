@@ -2144,3 +2144,39 @@ API/owner/Pack/Graph change was made here. Next remains the closed Item preparat
 RPC/client/server handshake plus asynchronous native QUERY/continuation, current
 multi-user scope and actual installed Item acceptance. Other consumers, persistent
 coverage and actual CPU/GPU/default-device gates remain in the full active goal.
+
+Candidate `5f9444a3b6c0a9af24c871001c805e3f2bafd4d8` passed full three-wheel/RECORD
+build and isolated owner-pair/explicit-three-wheel import proofs, including the actual
+receiver method and independent eleven-member code inventory. No checkout, undeclared
+wheel, installed EOM-prefix fallback or ML import was admitted; no DB/provider capture,
+publication or model was called by these proofs. Raw SHA: platform
+`4198403601526e8389f95d9d007e1c86cfef99f3e562e3fba774d14c593fe6a5`;
+contracts `9a6576b3c1c41bebb1661db6a1f2722834a061bc21d72acce6b849675a496041`;
+API `ad8bcf9920992f208ee2f7e99c5d8f7e091eb9b3396b4a29cb29dea18f1533b7`.
+Evidence: `similarity-catalog-owner-peer-{release-build,owner-pair-proof,three-wheel-proof}.log`.
+The candidate is not installed or activated.
+
+### 24.2 Deployment ownership discovery before RPC composition
+
+Read-only actual unit inventory at20:15–20:17 UTC confirms:
+
+- Catalog application is active as `eom-catalog-manager:eom-api`, with its fixed
+  fragment and no drop-ins. Its installer selects `eom_catalog_manager_runtime`.
+- The separate installed index owner is inactive as `eom-workflow-runner:eom`, with
+  its fixed fragment and no drop-ins. Its source runtime accepts only INDEX commands,
+  service authority and CPU. It is not a QUERY or human-session owner by implication.
+- That native unit denies API config/secrets and other privileged paths. The existing
+  protected provider-observation opener separately requires a root-held scope; the
+  new receiver method does not open those handles or alter these restrictions.
+
+Consequently, the earlier intention to reuse the Catalog socket is a transport
+direction, NOT proof that the running Catalog process can construct the privileged
+native QUERY/captured-session owner. Do not attach a privileged engine to the API,
+grant Catalog/INDEX new permissions, reinterpret the INDEX service grant as QUERY,
+or introduce a root broker merely to make this helper callable. First reconcile
+the ordinary official Catalog authenticated-read boundary with the separately admitted
+native execution/current-owner composition and its durable asynchronous lifecycle.
+Any required purpose successor or installed privilege change must be explicit and
+tested before activation. No installed authority/migration/service was changed here.
+This is a remaining implementation dependency in the full goal, not a source PASS
+for the live RPC path and not a reason to weaken source/session/policy gates.
