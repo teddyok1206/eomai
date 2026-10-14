@@ -2896,3 +2896,19 @@ still at its original Studio input gate, with no capture/model forward. No resta
 duplicate login prompt or command sent into that prompt occurred. Next observation
 is at/after23:03:40 UTC. Real owner transport/automatic preparation, compatible
 installation, C2 item acceptance, continuous coverage and device evaluation remain.
+
+Candidate `7d426e2eec56c0f8d046f9c88db0fd9d44f1b8cd` passed full three-wheel/RECORD
+inspection and independent isolated owner-pair/explicit-three-wheel probes. The owner
+pair verifies the exact eight-field frozen handoff, including actual operator. The
+three-wheel probe constructs the actual packaged app and checks its private command
+parameter, separate public DTO, acceptance helper exports and complete unchanged
+OpenAPI snapshot. All EOM imports resolve only from the selected archives; no checkout,
+installed-prefix, undeclared wheel or ML fallback is allowed. No DB/current source,
+HMAC capture, publication, model or runtime mutation is executed by these probes.
+Focused21 PASS /11.81s after the identifier typing change overlaps the full431 gate.
+
+Raw wheel SHA: platform `51bcbb00018b8fa158ac4f6cd0091ed827cbd65422cc56fe7051fc18d957ccaa`;
+contracts `319283dc134753cde0996859b1db11c00996db7a5acfbcedfada9db59df4470f`;
+API `6ea8c719122f45481b0e767b3e5ae2703e3273124b7ba7badfe8c34069add3b7`.
+Logs `release-build`, `owner-pair-proof`, `three-wheel-proof` share the evidence
+prefix above. The candidate is pushed, not installed/activated.
