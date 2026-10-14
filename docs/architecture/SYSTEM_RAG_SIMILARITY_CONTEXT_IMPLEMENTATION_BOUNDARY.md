@@ -2,7 +2,7 @@
 
 Written: 2026-10-12 UTC. Inspected Git base: `550a239cac74b8255bf33467b78671b6d37f811f`.
 Status: **DESIGN + CONTRACT / PINNED-READ / COMPOSER / DELIVERY SOURCE CHECKPOINTS; NOT ACTIVATED**.
-The separately approved source steps are recorded in sections 8–18. Source observations are not
+The separately approved source steps are recorded in sections 8–19. Source observations are not
 installed-runtime, production permission, performance, or educational-quality evidence.
 This note implements no authority, provider, schema, API, worker, database, model, or release.
 The root implementer must read this complete note before changing the common-context boundary.
@@ -1572,7 +1572,7 @@ Execution still requires its real current reader. New source tests exercise both
 authoring and full V12 review receipt creation, exact plan23 SHA and original Evidence,
 then the registration source pointer. They use synthetic source/publication/control
 fixtures, not production IAM, PostgreSQL plan persistence, a model or actual worker.
-The initial review test correctly rejected an APPPROVED_ITEM-only verification target
+The initial review test correctly rejected an APPROVED_ITEM-only verification target
 against its PAST_EXAM fixture; the target fixture was corrected, not the source-class
 validator. That failure is retained in the initial focused log.
 
@@ -1591,3 +1591,13 @@ original login; no restart/retry/second submit. API75fdc265/owner5018ad2d remain
 Still required: compatible Pack/instructions, actual API preparation/publication and
 current-reader composition into the Orchestrator worker callback, genuine QUERY and
 bounded variation acceptance. This is not a completed or active C2 consumer path.
+
+Candidate `3038bdf20a011e6ca8207b6c3303982598990fe6` passed the complete existing
+three-wheel/RECORD build and strict two-wheel-only transitive imports for the shared
+plan selector/preparation, actual resolver, scoped Evidence query, receipt validator,
+review and registration readers. No checkout/API wheel/prefix fallback or ML import
+was admitted, and no model/DB/source/publication method was invoked by this proof.
+Platform raw `befdbe92ca1aabc1ffdb14caff9d1d9709033d232c3db8a56da7cce4feff73f0`;
+API-contract raw `bf6d3ea7e2aa78772348aabeebe8ef7e8e4787d01f46694026998deaf1e25436`.
+Evidence: `similarity-plan-runtime-{release-build,owner-pair-proof}.log`. Source
+candidate is not installed; actual API preparation and role callback remain unwired.
