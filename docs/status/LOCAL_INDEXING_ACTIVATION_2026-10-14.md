@@ -1,6 +1,6 @@
 # Actual local indexing activation — 2026-10-14
 
-13:08 UTC checkpoint (chronology retained below). Actual control installation and source validation are
+13:12 UTC checkpoint (chronology retained below). Actual control installation and source validation are
 separate from successful seed/delta/QUERY. The full goal remains ACTIVE.
 
 ## Actual changes
@@ -378,3 +378,38 @@ actor/policy pins or submit a successor to hide the nonterminal original.
 See `../architecture/LOCAL_INDEXING_SELECTION_AND_INITIALIZATION.md` and
 `../operations/GRAPH_QUERY_STATISTICS_MAINTENANCE.md` for scope and evidence.
 The full seed/delta/query/GPU goal remains ACTIVE and incomplete.
+
+## Installed inactive candidate and measured live metadata — 13:12 UTC
+
+Source`f0efefe8cc5155102dec92724ad542f7d174c3b4` is committed/pushed and
+build/RECORD/isolated two-wheel closure PASS. The protected owner installer staged
+it at`/opt/eom/embedding-owner-releases/f0efefe8cc5155102dec92724ad542f7d174c3b4`
+WITHOUT activation. Platform wheel raw SHA
+`abd7b18e7df5b316948f8ce8ba619c3f6abf400fea533cf1d0b5d88f9ec778ec`,
+API-contract wheel raw SHA
+`d5b2c1c93ee960630f58fb5429575ebe1a89924b68ac3ad4dfed7aa39c7a82a8`.
+The first installer invocation omitted bash for its read-only script and failed
+before execution; the corrected protected bash invocation succeeded. No files
+were made executable or overwritten to work around that invocation error.
+
+At13:10:22 the same actual Catalog login, pinned Graph, saved Workflow request
+and installed candidate's official population statement completed EXPLAIN ANALYZE
+in**85.391ms** (planning8.434ms), returning520 rows with one520-row CTE evaluation.
+Before correction the same query exceeded10s after statistics maintenance.
+Pinned Graph metadata counts remain17390/1040/72869/520 for nodes/associations/
+pointers/occurrences. This proves the metadata query boundary only, not full
+canonical source resolution, model throughput, educational quality or seed.
+
+At13:10:39 the actual DB/table-owner login explicitly prepared the exact installed
+`embedding-encoding-job/1.0` protocol, SHA
+`sha256:8ee755604333e84772d62c037d2487ead6f6f4b25a71eb92fa05c12bda748549`.
+Created=true; Workflow mutation/Job creation/model forward/privilege change=0.
+Runtime reads did not self-register it. Service Identity revision9/runtime/grant
+and its stopped original invocation are unchanged. Ordinary API readiness PASS.
+
+Evidence in`/tmp/eom-identity-provider-install.nAaycoDM/`:
+`native-selection-{initialization-wheel-build,owner-pair-import,owner-install-corrected,
+live-query-and-protocol-result}.log`; final disposable inspection0055/0 other
+connections. Protocol/reservation11 PASS, bounded candidate68 PASS and native
+stage67 PASS are preserved separately. No source-upgrade adoption, new request,
+vector publication, QUERY activation or GPU/default claim is made here.
