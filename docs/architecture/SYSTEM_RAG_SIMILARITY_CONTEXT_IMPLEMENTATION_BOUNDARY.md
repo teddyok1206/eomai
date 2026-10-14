@@ -2983,3 +2983,122 @@ package evidence. No redundant runtime build/install, DB migration, privilege ch
 new native/model/GPU run or operating-corpus mutation was performed. Ordinary HTTP
 preparation/owner composition, actual QUERY/replay, installed activation, continuous
 coverage and measured CPU/CUDA comparison remain open. This gate is not C2 live PASS.
+
+## 33. Ordinary role runner → Catalog current-source materialization
+
+Implementation design, 2026-10-14 UTC; not installed or live acceptance:
+
+1. Responsibility: the ordinary command/Job owner retains its existing app-role
+   transaction. Catalog owns source/IAM/provenance reads in a separate Catalog-role
+   root. Neither credential is shared or made to impersonate the other role.
+2. Canonical source: stored human-created Workflow, active authoring/review step,
+   immutable plan23, exact completed QUERY and existing approved context Artifact.
+3. Request identity: Workflow ID, step-run ID, plan ID/hash and exact QUERY selection.
+   No caller-supplied actor, permission, content, path, native capture or latest lookup.
+4. Catalog derives the operator from the stored Workflow, rechecks the role/definition/
+   request, fences that operator, resolves the original QUERY and current sources,
+   and validates context member, producer and bounded question-only materials.
+5. Access patterns: constant indexed Workflow/step/plan/query lookups, existing
+   bounded source/member batches and at most eight reference projections. No list
+   discovery, new index/table, queue, persistent cache or generic RPC framework.
+6. A new closed JSON Schema 2020-12 contract precedes behavior. Small requests are
+   metadata-only. Context/material values cross only the explicit workspace input
+   boundary, with independent existing limits and a bounded reply envelope.
+7. The runner validates local role/query metadata as expectations, not source
+   authority. Its read adapter calls Catalog again at actual materialization; no
+   earlier response or preparation fingerprint grants current source access.
+8. The Catalog root covers current Identity/source checks, exact member IO and late
+   checks. The existing Orchestrator root still owns the command/Job boundary.
+   This is not a distributed atomic transaction or a transferable authorization receipt.
+9. Reuse the existing private Catalog server, fixed server peer and a runner-only
+   operation. API/chat/worker peers cannot use it as an actor override. If enabled,
+   only named runner access to the runtime directory/socket is needed; no group or
+   secret grant, worker permission or broader Catalog operation is authorized.
+10. Reads create/claim/launch nothing, have no automatic retry and fail closed on
+    stale role/plan/selector, revoked sources, unavailable owner or invalid bytes.
+    Default-disabled composition preserves legacy/non-plan23 behavior. Installation
+    and exact OS/SQL/runtime proofs remain separate from source tests.
+11. Directly injecting the Catalog-only provider into the app-role runner is simpler
+    but fails the installed DB fence. Giving the runner Catalog credentials or
+    weakening that fence is not an acceptable alternative. Reuse current owners
+    and one narrow materialization operation rather than a new service principal.
+
+### Source implementation and guarded verification — 2026-10-14 UTC
+
+The closed `system-rag-workflow-similarity-read/1.0` schema was defined before
+behavior, mirrored as a packaged resource and pinned at raw SHA
+`4173690a974ae475f4dcaca9404003a16d644b37b8d970eb798515c72ad6a384`.
+It permits only exact Workflow/step-run/plan/hash/QUERY selection. The 2KiB request
+has no actor, permission, path, content, native capture or execution command. The
+5MiB reply is an explicit temporary input boundary for the independently bounded
+512KiB context and4MiB question-only materials, not a persistent authority cache.
+The existing API read contract, released plans/prompts and source schemas are unchanged.
+
+`CatalogSocketSimilarityRoleContextProvider` binds existing app-root role/query
+metadata as expectations. Its operation-local reader calls the existing fixed
+Catalog socket at actual Orchestrator materialization and checks exact request/
+operator/context/source/plan closure. It does not dereference the supplied NAS root,
+construct a privileged engine, retain another user's selector or cache responses.
+The extracted `require_completed_query_selection_metadata` is a pure binder; the
+existing current-owner reader still invokes Identity fencing before it.
+
+`CatalogWorkflowSimilarityReadService` derives the human operator from stored
+Workflow metadata and reuses the existing role provider/current source/member
+materializer within its own Catalog-owned root. Active role/step/plan/QUERY checks
+are repeated after materialization. The ordinary runner's command/Job transaction
+remains separate. The authorized read snapshot is linearized in Catalog; no old
+response grants a later read, no cross-service distributed transaction is claimed,
+and existing final Evidence/registration validation remains mandatory.
+
+The existing private server recognizes one runner-only operation. API/chat peers
+cannot invoke it; the runner cannot invoke other Catalog operations. A separately
+enabled constructor grants a named runner UID access only to the current runtime
+directory/socket, preserving0750/0660 and existing group permissions. Both targets
+are validated before either write. Exact ACL replay is allowed; unknown/default
+grants, wrong ownership/type/mode and changed nodes fail closed. No OS group,
+secret-file, DB grant, worker permission, dependency, service principal or new
+queue/server framework was added. Linux POSIX ACL support uses the existing stdlib
+OS adapter and is tested on temporary local objects only.
+
+Activation is separately controlled by `EOM_WORKFLOW_SIMILARITY_READ_MODE`, default
+`DISABLED`, in each process's existing protected environment. Catalog also requires
+the existing `EOM_SIMILARITY_READ_MODE=ENABLED` and its independently verified
+configuration/DB fence. Merely enabling the older API reader does not grant runner
+access. The ordinary composition builds the unprivileged socket provider only when
+explicitly enabled; existing trusted injected providers and legacy paths are preserved.
+
+The main **361-test source regression /112.42s** includes new contracts/real Unix
+framing, concurrent operators, review2/3, wrong replies/peers, stale/cancelled roles,
+current Identity failure, flags, legacy/HTTP/Artifact/workspace/resource/dependency
+regressions. Actual constructor/ACL startup tests then passed10 /2.56s, eight of
+which overlap that regression. Two constructor cases are additional, not10 extra.
+Ruff/format15 Python files, strict mypy12 production files and diff checks passed.
+The existing independently guarded PostgreSQL0055 path passed74 /49.30s and its
+final read-only inspection confirmed the disposable identity/head and zero other
+connections. No test ran against the operating DB.
+
+The real-socket tests run as the actual local test process with deliberately
+assigned peer-role labels, not installed API/chat/worker identities. Metadata uses
+actual SQLite roots, with synthetic Identity/source/member observations. Local
+POSIX ACL tests do not prove actual systemd/UID/DB-fence isolation. Earlier failures
+are retained:21 constructor-value fixture failures because required raw version/
+operation fields were omitted,13 fixture errors using the wrong projection key,
+and4 assertions matching exception prose instead of stable `.code`. These were
+corrected without relaxing schemas, source guards or production error semantics;
+the overlapping earlier passes are not added to the final totals.
+
+Evidence prefix: `/tmp/eom-identity-provider-install.nAaycoDM/workflow-similarity-rpc-`.
+No installed prefix, original finite QUERY process, API/provider pins, native/GPU
+execution, corpus, operating DB, runtime directory ACL or activation changed here.
+Still required: original genuine QUERY/replay, API preparation owner/transport,
+compatible coordinated installation and actual current-actor/source materialization
+of a newly accepted plan23. Then proceed with other consumers, continued coverage
+and measured CPU/CUDA/default selection; this source gate is not overall completion.
+
+Future rollout order: finish the original finite QUERY before replacing its pinned
+runtime, verify compatible installed wheels and current Catalog SQL/source reads,
+enable Catalog's new operation, then enable the ordinary runner. Verify actual
+peer/permission/negative/materialization behavior before submitting a bounded new
+item. Rollback drains or retains a compatible runtime for accepted plan23 work,
+disables the runner feature before the Catalog operation and preserves all immutable
+history; it never rewrites plan23 to plan19 or disables source checks to continue.

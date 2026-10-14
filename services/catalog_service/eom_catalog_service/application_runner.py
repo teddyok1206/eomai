@@ -85,6 +85,7 @@ from eom_catalog_service.runtime_privileges import catalog_runtime_privileges_re
 from eom_catalog_service.similarity_read_runtime import (
     SimilarityReaderRuntimeError,
     build_catalog_similarity_context_reads,
+    build_catalog_workflow_similarity_reads,
 )
 
 _RUNTIME_MODEL_TABLES = (
@@ -274,6 +275,10 @@ def serve() -> int:
             chat_rag=ChatRagResolutionService(engine),
             inference_transfer_metadata=CatalogInferenceTransferMetadataService(engine),
             similarity_context_reads=similarity_reads,
+            workflow_similarity_reads=build_catalog_workflow_similarity_reads(
+                mode=os.environ.get("EOM_WORKFLOW_SIMILARITY_READ_MODE", "DISABLED"),
+                context_reads=similarity_reads,
+            ),
             inference_transfer_snapshot=InferenceTransferSnapshotApplicationService(
                 CatalogInferenceTransferSnapshotSourceAdapter(engine),
             ),

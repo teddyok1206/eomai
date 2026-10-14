@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/system-rag-workflow-similarity-read/1.0",
+  "title": "Stored workflow-role current similarity materialization V1",
+  "description": "Runner-only private read. Catalog derives actual operator from stored Workflow and reauthorizes sources. No model actor, execution, implicit latest, or persistent cache.",
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "error": {
+      "enum": [
+        "SOURCE_ACCESS_DENIED",
+        "SOURCE_REVOKED",
+        "SOURCE_POINTER_INVALID",
+        "SOURCE_HASH_MISMATCH",
+        "INDEX_POINTER_INVALID",
+        "INDEX_HASH_MISMATCH",
+        "QUERY_RESULT_INVALID",
+        "AUTHORITY_UNAVAILABLE",
+        "WORKFLOW_SIMILARITY_REQUEST_INVALID",
+        "WORKFLOW_SIMILARITY_BINDING_INVALID",
+        "WORKFLOW_SIMILARITY_UNAVAILABLE",
+        "WORKFLOW_SIMILARITY_BUDGET_EXCEEDED"
+      ]
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workflow_id",
+        "step_run_id",
+        "plan_id",
+        "plan_sha256",
+        "query"
+      ],
+      "properties": {
+        "workflow_id": {
+          "type": "string",
+          "pattern": "^workflow_[0-9a-f]{32}$"
+        },
+        "step_run_id": {
+          "type": "string",
+          "pattern": "^steprun_[0-9a-f]{32}$"
+        },
+        "plan_id": {
+          "type": "string",
+          "pattern": "^execplan_[0-9a-f]{32}$"
+        },
+        "plan_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "query": {
+          "$ref": "eom://schemas/knowledge/system-rag-similarity-read/1.0#/$defs/selection"
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "operation",
+        "selection"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "system-rag-workflow-similarity-read-request/1.0"
+        },
+        "operation": {
+          "const": "READ_WORKFLOW_SIMILARITY_MATERIALS"
+        },
+        "selection": {
+          "$ref": "#/$defs/selection"
+        }
+      }
+    },
+    "reply": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "operation",
+        "status",
+        "request_sha256",
+        "operator_id",
+        "context",
+        "materials",
+        "error_code"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "system-rag-workflow-similarity-read-reply/1.0"
+        },
+        "operation": {
+          "const": "READ_WORKFLOW_SIMILARITY_MATERIALS"
+        },
+        "status": {
+          "enum": [
+            "SUCCESS",
+            "FAILED"
+          ]
+        },
+        "request_sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "operator_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^operator_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "context": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/result"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "materials": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/knowledge/system-rag-similarity-materials/1.0"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "SUCCESS"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "request_sha256": {
+                "$ref": "#/$defs/hash"
+              },
+              "operator_id": {
+                "type": "string",
+                "pattern": "^operator_[0-9a-f]{32}$"
+              },
+              "context": {
+                "allOf": [
+                  {
+                    "$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/result"
+                  },
+                  {
+                    "properties": {
+                      "status": {
+                        "not": {
+                          "const": "FAILED"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "materials": {
+                "$ref": "eom://schemas/knowledge/system-rag-similarity-materials/1.0"
+              },
+              "error_code": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "operator_id": {
+                "type": "null"
+              },
+              "context": {
+                "type": "null"
+              },
+              "materials": {
+                "type": "null"
+              },
+              "error_code": {
+                "$ref": "#/$defs/error"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/selection"
+    },
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/reply"
+    }
+  ]
+}

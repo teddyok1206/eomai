@@ -33,6 +33,9 @@ from eom_workflow_runner.readiness import WorkflowRuntimeReadiness
 from eom_workflow_runner.reference_query_admission import ReferenceQueryOwnerAdmission
 from eom_workflow_runner.reference_query_execution_port import ReferenceQueryNativeExecutor
 from eom_workflow_runner.settings import WorkflowSettings
+from eom_workflow_runner.similarity_role_catalog_client import (
+    CatalogSocketSimilarityRoleContextProvider,
+)
 from eom_workflow_runner.similarity_role_context import SimilarityRoleContextProvider
 
 
@@ -65,6 +68,12 @@ def build_workflow_runtime(
         raise ValueError("QUERY owner and executor must be supplied together")
     actual_engine = engine or build_engine()
     actual_workflow_settings = workflow_settings or WorkflowSettings.from_environment()
+    actual_similarity_provider = similarity_context_provider
+    if (
+        actual_similarity_provider is None
+        and actual_workflow_settings.similarity_read_mode == "ENABLED"
+    ):
+        actual_similarity_provider = CatalogSocketSimilarityRoleContextProvider()
     actual_platform_settings = platform_settings or Settings.from_environment()
     registry = resolve_worker_configuration(actual_platform_settings).registry
     available_roles = frozenset(slot.role for slot in registry.config.slots if slot.enabled)
@@ -73,7 +82,7 @@ def build_workflow_runtime(
         actual_engine,
         actual_workflow_settings,
         orchestrator,
-        similarity_context_provider=similarity_context_provider,
+        similarity_context_provider=actual_similarity_provider,
     )
     actual_catalog_settings = catalog_settings or CatalogSettings.from_environment()
     catalog = WorkflowCatalogService(actual_engine, actual_catalog_settings)

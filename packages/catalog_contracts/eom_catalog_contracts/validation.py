@@ -30,6 +30,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "system-rag-workflow-similarity-read": CatalogSchemaResource(
+            "schemas/knowledge/system-rag-workflow-similarity-read-v1.schema.json",
+            "resources/knowledge/system-rag-workflow-similarity-read-v1.schema.json",
+            "1.0",
+            "sha256:4173690a974ae475f4dcaca9404003a16d644b37b8d970eb798515c72ad6a384",
+        ),
         "system-rag-similarity-reader-configuration": CatalogSchemaResource(
             "schemas/knowledge/system-rag-similarity-reader-configuration-v1.schema.json",
             "resources/knowledge/system-rag-similarity-reader-configuration-v1.schema.json",

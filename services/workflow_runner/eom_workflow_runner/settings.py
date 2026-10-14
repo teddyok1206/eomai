@@ -6,6 +6,7 @@ import os
 import stat
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -68,8 +69,11 @@ class WorkflowSettings:
     actor_config_path: Path = DEFAULT_HUMAN_ACTOR_CONFIG
     runner_config_path: Path = DEFAULT_WORKFLOW_RUNNER_CONFIG
     prompt_root: Path = DEFAULT_WORKFLOW_PROMPT_ROOT
+    similarity_read_mode: Literal["DISABLED", "ENABLED"] = "DISABLED"
 
     def __post_init__(self) -> None:
+        if self.similarity_read_mode not in {"DISABLED", "ENABLED"}:
+            raise ValueError("EOM_WORKFLOW_SIMILARITY_READ_MODE must be DISABLED or ENABLED")
         configured = {
             "EOM_WORKFLOW_DEFINITION": self.definition_path,
             "EOM_HUMAN_ACTOR_CONFIG": self.actor_config_path,
@@ -82,7 +86,11 @@ class WorkflowSettings:
 
     @classmethod
     def from_environment(cls) -> WorkflowSettings:
+        similarity_mode = os.environ.get("EOM_WORKFLOW_SIMILARITY_READ_MODE", "DISABLED")
+        if similarity_mode not in {"DISABLED", "ENABLED"}:
+            raise ValueError("EOM_WORKFLOW_SIMILARITY_READ_MODE must be DISABLED or ENABLED")
         return cls(
+            similarity_read_mode="ENABLED" if similarity_mode == "ENABLED" else "DISABLED",
             definition_path=Path(
                 os.environ.get(
                     "EOM_WORKFLOW_DEFINITION",

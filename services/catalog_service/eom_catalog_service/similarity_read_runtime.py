@@ -30,6 +30,9 @@ from sqlalchemy import Engine, text
 from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryOwnerConfiguration
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.similarity_read_service import CatalogSimilarityContextReadService
+from eom_catalog_service.workflow_similarity_read_service import (
+    CatalogWorkflowSimilarityReadService,
+)
 
 SIMILARITY_READER_CONFIGURATION_PATH = Path("/etc/eom/catalog-similarity-read.json")
 
@@ -37,6 +40,17 @@ SIMILARITY_READER_CONFIGURATION_PATH = Path("/etc/eom/catalog-similarity-read.js
 class SimilarityReaderRuntimeError(ValueError):
     def __init__(self) -> None:
         super().__init__("CATALOG_SIMILARITY_READ_UNAVAILABLE")
+
+
+def build_catalog_workflow_similarity_reads(
+    *, mode: str, context_reads: CatalogSimilarityContextReadService | None
+) -> CatalogWorkflowSimilarityReadService | None:
+    """Separately enable the runner operation; the existing API flag grants no new peer."""
+    if mode == "DISABLED":
+        return None
+    if mode != "ENABLED" or not isinstance(context_reads, CatalogSimilarityContextReadService):
+        raise SimilarityReaderRuntimeError()
+    return CatalogWorkflowSimilarityReadService(context_reads.owner)
 
 
 def _directory_identity(value: os.stat_result) -> tuple[int, ...]:

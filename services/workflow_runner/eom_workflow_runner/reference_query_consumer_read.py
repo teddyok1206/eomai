@@ -41,6 +41,35 @@ from eom_workflow_runner.reference_query_publication_read import resolve_referen
 from eom_workflow_runner.reference_query_source_read import ReferenceQuerySourceOwner
 
 
+def require_completed_query_selection_metadata(
+    row: WorkflowInstanceRecord | None,
+    caller: EmbeddingRegistryCaller,
+    selection: CompletedSimilarityQuerySelection,
+) -> ReferenceQueryWorkflowRequest:
+    """Pure exact metadata binding, never Identity/source authority or Artifact access."""
+    if type(caller) is not EmbeddingRegistryCaller:
+        raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
+    validate_embedding_registry_actor(caller)
+    selection = CompletedSimilarityQuerySelection.model_validate(selection)
+    if (
+        row is None
+        or row.workflow_id != selection.workflow_id
+        or row.created_actor_type != "human"
+        or row.created_actor_id != caller.operator_id
+    ):
+        raise SimilarityContextReadError("SOURCE_ACCESS_DENIED")
+    if row.state != "COMPLETED" or row.initial_request != row.request_payload:
+        raise SimilarityContextReadError("QUERY_RESULT_INVALID")
+    original = parse_reference_query_workflow_request(row.initial_request)
+    if (
+        original.operator_audit.operator_id != caller.operator_id
+        or original.request_sha256 != selection.workflow_request_sha256
+        or original.context_request.request_sha256 != selection.context_request_sha256
+    ):
+        raise SimilarityContextReadError("QUERY_RESULT_INVALID")
+    return original
+
+
 def select_completed_reference_query_request(
     session: Session,
     owner: ReferenceQuerySourceOwner,
@@ -63,24 +92,8 @@ def select_completed_reference_query_request(
         owner.identity.fence_current_operator(session, caller.operator_id)
         with session.no_autoflush:
             row = session.get(WorkflowInstanceRecord, selection.workflow_id, populate_existing=True)
-        # Verify creator before parsing private content. ADMIN/read permissions do
-        # not authorize impersonation of the original query's actual operator.
-        if (
-            row is None
-            or row.created_actor_type != "human"
-            or row.created_actor_id != caller.operator_id
-        ):
-            raise SimilarityContextReadError("SOURCE_ACCESS_DENIED")
-        if row.state != "COMPLETED" or row.initial_request != row.request_payload:
-            raise SimilarityContextReadError("QUERY_RESULT_INVALID")
-        original = parse_reference_query_workflow_request(row.initial_request)
-        if (
-            original.operator_audit.operator_id != caller.operator_id
-            or original.request_sha256 != selection.workflow_request_sha256
-            or original.context_request.request_sha256 != selection.context_request_sha256
-        ):
-            raise SimilarityContextReadError("QUERY_RESULT_INVALID")
-        return original
+        # The pure binder is shared with runner expectations, not its authority.
+        return require_completed_query_selection_metadata(row, caller, selection)
     except SimilarityContextReadError:
         raise
     except OperatorAuthorizationFenceError:

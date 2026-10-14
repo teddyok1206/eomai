@@ -104,6 +104,7 @@ from eom_catalog_service.approved_item_graph_publication_service import (
     ApprovedItemGraphPublicationError,
     ApprovedItemGraphPublicationService,
 )
+from eom_catalog_service.catalog_workflow_socket_access import grant_catalog_workflow_socket_access
 from eom_catalog_service.chat_knowledge_resolution import (
     ChatKnowledgeResolutionError,
     ChatKnowledgeResolutionService,
@@ -169,6 +170,12 @@ from eom_catalog_service.pdf_document_review_intake import (
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.similarity_read_dispatch import dispatch_similarity_read_frame
 from eom_catalog_service.similarity_read_service import CatalogSimilarityContextReadService
+from eom_catalog_service.workflow_similarity_read_dispatch import (
+    dispatch_workflow_similarity_read_frame,
+)
+from eom_catalog_service.workflow_similarity_read_service import (
+    CatalogWorkflowSimilarityReadService,
+)
 
 CATALOG_APPLICATION_SOCKET = Path(CATALOG_APPLICATION_SOCKET_PATH)
 MAX_MESSAGE_BYTES = CATALOG_APPLICATION_MAX_MESSAGE_BYTES
@@ -203,6 +210,14 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 raise ValueError
             raw_operation = value.get("operation")
             if not self.server.peer_can_operate(self.request, raw_operation):
+                return
+            if raw_operation == "READ_WORKFLOW_SIMILARITY_MATERIALS":
+                self.wfile.write(
+                    dispatch_workflow_similarity_read_frame(
+                        self.server.workflow_similarity_reads, raw
+                    )
+                )
+                self.wfile.flush()
                 return
             if raw_operation == "READ_SIMILARITY_CONTEXT":
                 self.wfile.write(
@@ -1272,6 +1287,8 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         chat_rag: ChatRagResolutionService | None = None,
         inference_transfer_metadata: CatalogInferenceTransferMetadataService | None = None,
         similarity_context_reads: CatalogSimilarityContextReadService | None = None,
+        workflow_similarity_reads: CatalogWorkflowSimilarityReadService | None = None,
+        workflow_runner_uid: int | None = None,
         inference_transfer_snapshot: InferenceTransferSnapshotApplicationService | None = None,
         inference_transfer_workflow_reads: CatalogInferenceTransferWorkflowReadService
         | None = None,
@@ -1298,6 +1315,8 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.chat_rag = chat_rag
         self.inference_transfer_metadata = inference_transfer_metadata
         self.similarity_context_reads = similarity_context_reads
+        self.workflow_similarity_reads = workflow_similarity_reads
+        self.workflow_runner_uid = None
         self.inference_transfer_snapshot = inference_transfer_snapshot
         self.inference_transfer_workflow_reads = inference_transfer_workflow_reads
         self.chat_search = (
@@ -1309,6 +1328,19 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.chat_owner_uid = chat_owner_uid
         self.socket_path = socket_path
         self.allowed_uid = pwd.getpwnam("eom-api").pw_uid if allowed_uid is None else allowed_uid
+        if workflow_similarity_reads is not None:
+            actual_runner_uid = (
+                pwd.getpwnam("eom-workflow-runner").pw_uid
+                if workflow_runner_uid is None
+                else workflow_runner_uid
+            )
+            if (
+                type(actual_runner_uid) is not int
+                or actual_runner_uid <= 0
+                or actual_runner_uid in {self.allowed_uid, self.chat_owner_uid, os.geteuid()}
+            ):
+                raise ValueError("CATALOG_WORKFLOW_SOCKET_IDENTITY_INVALID")
+            self.workflow_runner_uid = actual_runner_uid
         self.expected_uid = os.geteuid() if expected_uid is None else expected_uid
         self.expected_gid = grp.getgrnam("eom-api").gr_gid if expected_gid is None else expected_gid
         self._validate_runtime_directory()
@@ -1325,6 +1357,17 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         ):
             self.server_close()
             raise RuntimeError("Catalog application socket metadata mismatch")
+        if self.workflow_runner_uid is not None:
+            try:
+                grant_catalog_workflow_socket_access(
+                    self.socket_path,
+                    runner_uid=self.workflow_runner_uid,
+                    owner_uid=self.expected_uid,
+                    group_gid=self.expected_gid,
+                )
+            except Exception:
+                self.server_close()
+                raise RuntimeError("Catalog workflow socket access unavailable") from None
 
     def _validate_runtime_directory(self) -> None:
         parent = self.socket_path.parent
@@ -1350,7 +1393,11 @@ class CatalogApplicationServer(_ThreadingUnixServer):
             _pid, uid, _gid = cast(tuple[int, int, int], struct.unpack("3i", raw))
         except (OSError, struct.error):
             return False
-        return uid == self.allowed_uid or uid == self.chat_owner_uid
+        return (
+            uid == self.allowed_uid
+            or uid == self.chat_owner_uid
+            or (self.workflow_similarity_reads is not None and uid == self.workflow_runner_uid)
+        )
 
     def peer_can_operate(self, connection: socket.socket, operation: object) -> bool:
         try:
@@ -1360,6 +1407,8 @@ class CatalogApplicationServer(_ThreadingUnixServer):
             _pid, uid, _gid = struct.unpack("3i", raw)
         except (OSError, struct.error):
             return False
+        if operation == "READ_WORKFLOW_SIMILARITY_MATERIALS":
+            return self.workflow_similarity_reads is not None and uid == self.workflow_runner_uid
         return uid == self.allowed_uid or (
             uid == self.chat_owner_uid
             and operation in {"RESOLVE_CHAT_KNOWLEDGE", "SEARCH_CHAT_KNOWLEDGE", "CHAT_RAG"}
