@@ -302,41 +302,24 @@ IAM/수치 seam을 구분하며, 실제 사용자·모델/GPU·운영 QUERY 활�
 [QUERY owner 구현·검증 기록](docs/architecture/REFERENCE_QUERY_OWNER_COMPOSITION.md)에
 단계별 증거와 남은 운영 경계를 구분했습니다.
 
-후속 Identity 신원 저장 구현으로 source head는0055가 됐습니다. 작은 신원 개정·현재
-활성 상태·append-only 이력을 저장하며 등록만으로 활성화하지 않습니다. 잠금 오류를
-보강했고 최종 소스1,958개·실제 신원 DB29개를 통과했으며 기존 임베딩 DB90개도0055에서
-다시 통과했습니다.0055 전용 배포 계약1.4는 기존 계약을 유지하고 정확한0054에서만
-갱신하도록 검증했습니다. source/임시 DB 검증이며 운영 마이그레이션·machine 인증·Catalog 자료
-grant나 자동 갱신 활성화는 아닙니다. 실제 잠금 초과 오류가 정리 코드에 가려지던 문제도
-재현·수정했고, 기존 실패 기록과 임시 DB의 합성 이력은 보존했습니다.
+자동 인덱싱의 현재 source 후보는 Identity 신원 저장0055, 실제 runtime/DB 확인,
+Catalog 서비스 자료 정책1.1·공식 owner 발행·Registry 등록 연결까지 구현했습니다.
+같은 Graph/source/승인 보고서·Artifact 검증기를 재사용하며 새 관리 DB·검색 엔진은 없습니다.
+서비스 grant와 기존 자료 정책1.0을 분리했고, 서비스 등록 권한은 사용자 QUERY 권한이 아닙니다.
+사람 계정이나 역할을 대신 쓰지 않으며 기존 operator seed의 의미는 유지합니다.
 
-이어서 자동 인덱싱 서비스의 실제 프로세스·설치 파일 확인과 DB 접속 주체/현재 신원
-잠금을 연결하는 경계를 구현했습니다. 새 source146개와 일회용 PostgreSQL42개
-(기존 신원29·새 SQL 의미13)가 PASS했습니다. 테스트용 OS/서비스 seam과 실제 DB owner
-검증을 운영 Catalog 로그인으로 확대 해석하지 않습니다. 전용 서비스 설치·자료 grant·
-진짜 seed/delta/조회와 CPU/GPU 비교는 아직 남아 있으며 운영 활성화 완료는 아닙니다.
-전체 source 회귀2,104개·strict mypy40 모듈·Ruff74 파일과3개 wheel/RECORD·독립
-wheel-only34 모듈 import도 PASS했습니다. 새 인증 경계는 소스·패키지 후보 검증입니다.
-[신원·runtime 경계와 검증 범위](docs/architecture/LOCAL_INDEXING_SERVICE_AUTHORITY_DESIGN.md)에
-정확히 구분했습니다.
+최신85-suite 회귀2,304개·strict mypy48 모듈·Ruff89 파일이 PASS했습니다.
+실제 임시 DB의 Registry30개는 등록·재전송·중복/경합과 권한 거부 순서를 검증하지만,
+합성 IAM/source seam을 실제 서비스 인증으로 확대 해석하지 않습니다. 선행 신원/자료 정책/
+발행 DB70개와 당시3개 wheel·41-module 검증은 별도 역사적 증거로 보존합니다.
+0055 전용 배포 계약1.4는 정확한0054에서만 갱신하며 운영 migration을 뜻하지 않습니다.
 
-Catalog의 서비스 전용 자료 정책1.1과 별도 조회 입구도 추가했습니다. 기존 자료 정책1.0을
-그대로 참조하므로 서비스 grant가 사용자 조회 정책을 대신하지 않습니다. 두 경로는 같은
-Graph/source/승인 보고서 resolver를 사용하며 fake ADMIN/WORKER나 별도 검색 엔진은 없습니다.
-새 집중 테스트77개·실제 임시 DB51개(기존42+정책 읽기9)가 PASS했습니다. 정책 발행 control,
-Registry/Runner의 서비스 목적 연결과 운영 활성화는 당시 미구현이었습니다. 실제 DB에서 찾은
-기존 정책 parser의 JSON Schema 오류 변환 누락도 해당 책임 경계에서 수정했습니다.
-해당 변경의 전체83-suite 회귀2,275개·strict mypy46 모듈·Ruff83 파일도 PASS했습니다.
-3개 wheel/RECORD와 독립 wheel-only40 모듈·schema reference 검증도 PASS했습니다.
-
-후속으로 공식 owner 정책 발행 API를 구현했습니다. revision/hash 재전송·동시 발행·현재
-신원/자료 정책·corpus 확인과 bounded wait를 기존 관계에서 처리하며 새 관리 DB는 없습니다.
-실제 임시 DB70개(기존51+발행19)가 PASS했고, 6회 동시 발행과 잠금 만료 후 재전송을
-확인했습니다. 운영 정책 발행·서비스 활성화·실제 seed/delta/조회는 아직 수행하지 않았습니다.
-최종84-suite 회귀2,283개·strict mypy47 모듈·Ruff86 파일도 PASS했습니다.
-해당 코드의3개 wheel/RECORD 및 독립 wheel-only41 모듈·schema 검증도 PASS했습니다.
-[정책 발행 checkpoint](docs/status/LOCAL_INDEXING_POLICY_PUBLICATION_CHECKPOINT_2026-10-14.md)에
-실행 증거와 남은 Registry/Runner 연결을 구분합니다.
+**운영 서비스 활성화·자동 증분 처리·실제 seed/delta/QUERY·CPU/GPU 비교는 아직 남아 있습니다.**
+다음은 기존 명령/claim/lease/실행기 경로에 서비스 전용 실행 계약을 연결하는 단계입니다.
+[현재 Registry checkpoint](docs/status/LOCAL_INDEXING_REGISTRY_SERVICE_CHECKPOINT_2026-10-14.md),
+[정책 발행 증거](docs/status/LOCAL_INDEXING_POLICY_PUBLICATION_CHECKPOINT_2026-10-14.md),
+[신원·runtime·후속 실행 설계](docs/architecture/LOCAL_INDEXING_SERVICE_AUTHORITY_DESIGN.md)에
+구현·합성 검증·실제 활성화의 경계를 구분했습니다.
 
 최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와
 strict type/lint/format PASS입니다. 실제 임시 DB28개 사례에는 독립 실행기 claim 경쟁과

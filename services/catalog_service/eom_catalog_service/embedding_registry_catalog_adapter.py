@@ -1,11 +1,11 @@
-"""Current-operator Catalog composition; no transport, IAM grant or background admission."""
+"""Catalog Registry composition over the same canonical source/member validators."""
 
 from __future__ import annotations
 
 import json
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any
 
 from eom_catalog_contracts.embedding_registry import (
     EmbeddingIndexNamespace,
@@ -61,13 +61,18 @@ from eom_catalog_service.embedding_incremental_plan import (
 )
 from eom_catalog_service.embedding_index_assembly import PreparedEmbeddingIndexBasis
 from eom_catalog_service.embedding_registry_application import read_pinned_embedding_index
+from eom_catalog_service.embedding_registry_indexing_authority import (
+    CatalogIndexingRegistrySourceAuthority,
+)
 from eom_catalog_service.embedding_registry_ports import (
     AuthorizedEmbeddingReadProfile,
     EmbeddingBindingOrigin,
+    EmbeddingRegistryActor,
     EmbeddingRegistryCaller,
     EmbeddingRegistryError,
     EmbeddingRegistryLookup,
     EmbeddingRegistryRead,
+    EmbeddingRegistryServiceCaller,
     MaterializedEmbeddingReadRow,
     RegisteredEmbeddingIndexRead,
     ResolvedEmbeddingBindingOrigin,
@@ -75,6 +80,10 @@ from eom_catalog_service.embedding_registry_ports import (
     ResolvedEmbeddingReferences,
     ResolvedEmbeddingRegistration,
     ResolvedPinnedEmbeddingIndex,
+    validate_embedding_registry_actor,
+)
+from eom_catalog_service.embedding_registry_ports import (
+    EmbeddingRegistryOwnerConfiguration as EmbeddingRegistryOwnerConfiguration,
 )
 from eom_catalog_service.embedding_registry_repository import (
     EmbeddingRegistryRepository,
@@ -89,6 +98,7 @@ from eom_catalog_service.inference_transfer_snapshot_catalog_adapter import (
     CatalogInferenceTransferSnapshotSourceAdapter,
     InferenceTransferSessionCapture,
     InferenceTransferSessionCapturePhase,
+    LocalIndexingSessionCapture,
 )
 from eom_catalog_service.knowledge_graph_models import (
     KnowledgeCorpusRecord,
@@ -97,6 +107,7 @@ from eom_catalog_service.knowledge_graph_models import (
 )
 from eom_catalog_service.knowledge_retrieval_service import KnowledgeRetrievalServiceError
 from eom_catalog_service.local_embedding_source_plan import build_local_embedding_source_plan
+from eom_catalog_service.local_indexing_source_ports import LocalIndexingSourceError
 from eom_catalog_service.pinned_artifact_resolution import (
     PinnedArtifactReadContext,
     PinnedArtifactResolutionError,
@@ -111,23 +122,12 @@ from eom_catalog_service.similarity_context_ports import (
 
 
 @dataclass(frozen=True, slots=True)
-class EmbeddingRegistryOwnerConfiguration:
-    """Owner numerical/isolation configuration, never a source permission grant."""
-
-    corpus_id: str
-    namespace: EmbeddingIndexNamespace
-    space: EmbeddingSpace
-    recipe: ExperimentViewRecipe
-    source_classes: tuple[Literal["APPROVED_ITEM", "PAST_EXAM"], ...]
-
-
-@dataclass(frozen=True, slots=True)
 class _SimilarityReadWindow:
     """Owner-private bounded decode reuse, not a current authority/membership cache."""
 
     session: Session
     transaction: object
-    caller: EmbeddingRegistryCaller
+    caller: EmbeddingRegistryActor
     reader: PinnedArtifactReadContext
     capture: InferenceTransferSessionCapture
 
@@ -192,42 +192,106 @@ class CatalogEmbeddingRegistryVerifier:
         self.settings = settings or CatalogSettings.from_environment()
         self.identity_fence = identity_fence
         self.sources = CatalogInferenceTransferSnapshotSourceAdapter(engine, self.settings)
+        self._indexing_source_authority: CatalogIndexingRegistrySourceAuthority | None = None
+
+    @classmethod
+    def for_indexing_service(
+        cls,
+        engine: Engine,
+        configuration: EmbeddingRegistryOwnerConfiguration,
+        *,
+        source_authority: CatalogIndexingRegistrySourceAuthority,
+        settings: CatalogSettings | None = None,
+    ) -> CatalogEmbeddingRegistryVerifier:
+        """Explicit service owner, never inferred from caller identity or missing user auth."""
+        if type(source_authority) is not CatalogIndexingRegistrySourceAuthority:
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE")
+        source_authority.__post_init__()
+        owner = cls(engine, configuration, identity_fence=None, settings=settings)
+        owner._indexing_source_authority = source_authority
+        return owner
+
+    def _capture_source(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryActor,
+        intent: RegisterEmbeddingIndexCommand | EmbeddingRegistryLookup,
+        *,
+        artifact_reader: PinnedArtifactReadContext,
+        phase: InferenceTransferSessionCapturePhase,
+    ) -> InferenceTransferSessionCapture | LocalIndexingSessionCapture:
+        validate_embedding_registry_actor(caller)
+        if isinstance(caller, EmbeddingRegistryServiceCaller):
+            if self._indexing_source_authority is None or self._similarity_read_window is not None:
+                raise EmbeddingRegistryError("EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE")
+            return self._indexing_source_authority.capture(
+                session,
+                caller,
+                intent,
+                self.configuration,
+                sources=self.sources,
+                artifact_reader=artifact_reader,
+                phase=phase,
+            )
+        if self.identity_fence is None or self._indexing_source_authority is not None:
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE")
+        return self.sources.capture_in_session(
+            session,
+            InferenceTransferCorpusReadCommand(
+                actor_id=caller.operator_id,
+                graph_snapshot=intent.graph_snapshot,
+                access_policy_revision_id=intent.policy_revision_id,
+                access_policy_sha256=intent.policy_sha256,
+                source_classes=self.configuration.source_classes,
+                maximum_candidates=1024
+                if isinstance(intent, RegisterEmbeddingIndexCommand)
+                else intent.maximum_sources,
+                population_scope=InferenceTransferPopulationScope(
+                    intent.namespace.population_scope
+                ),
+                top_k=1
+                if self._similarity_requested_top_k is None
+                else self._similarity_requested_top_k,
+            ),
+            self.configuration.recipe,
+            identity_fence=self.identity_fence,
+            artifact_reader=artifact_reader,
+            phase=phase,
+        )
+
+    @staticmethod
+    def _require_publication_authority(
+        caller: EmbeddingRegistryActor,
+        capture: InferenceTransferSessionCapture | LocalIndexingSessionCapture,
+    ) -> None:
+        if isinstance(caller, EmbeddingRegistryServiceCaller):
+            if type(capture) is not LocalIndexingSessionCapture:
+                raise EmbeddingRegistryError("EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE")
+        elif not isinstance(capture, InferenceTransferSessionCapture):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE")
+        elif "knowledge_graph:publish" not in capture.scope.requester_permission_keys:
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN")
 
     def _capture(
         self,
         session: Session,
-        caller: EmbeddingRegistryCaller,
+        caller: EmbeddingRegistryActor,
         intent: RegisterEmbeddingIndexCommand | EmbeddingRegistryLookup,
         phase: InferenceTransferSessionCapturePhase,
-    ) -> tuple[PinnedArtifactReadContext, InferenceTransferSessionCapture]:
-        if self.identity_fence is None:
-            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE")
+    ) -> tuple[
+        PinnedArtifactReadContext, InferenceTransferSessionCapture | LocalIndexingSessionCapture
+    ]:
         if (
             intent.corpus_id != self.configuration.corpus_id
             or intent.namespace != self.configuration.namespace
         ):
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
         reader = PinnedArtifactReadContext(session, self.settings)
-        command = InferenceTransferCorpusReadCommand(
-            actor_id=caller.operator_id,
-            graph_snapshot=intent.graph_snapshot,
-            access_policy_revision_id=intent.policy_revision_id,
-            access_policy_sha256=intent.policy_sha256,
-            source_classes=self.configuration.source_classes,
-            maximum_candidates=1024
-            if isinstance(intent, RegisterEmbeddingIndexCommand)
-            else intent.maximum_sources,
-            population_scope=InferenceTransferPopulationScope(intent.namespace.population_scope),
-            top_k=1
-            if self._similarity_requested_top_k is None
-            else self._similarity_requested_top_k,
-        )
         window = self._similarity_read_window
-        capture = self.sources.capture_in_session(
+        capture = self._capture_source(
             session,
-            command,
-            self.configuration.recipe,
-            identity_fence=self.identity_fence,
+            caller,
+            intent,
             artifact_reader=reader if window is None else window.reader,
             phase=phase if window is None else InferenceTransferSessionCapturePhase.AUTHORIZE_SCOPE,
         )
@@ -244,11 +308,8 @@ class CatalogEmbeddingRegistryVerifier:
             reader = window.reader
             if phase is InferenceTransferSessionCapturePhase.CAPTURE_POPULATION:
                 capture = window.capture
-        if (
-            isinstance(intent, RegisterEmbeddingIndexCommand)
-            and "knowledge_graph:publish" not in capture.scope.requester_permission_keys
-        ):
-            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN")
+        if isinstance(intent, RegisterEmbeddingIndexCommand):
+            self._require_publication_authority(caller, capture)
         corpus = session.scalar(
             select(KnowledgeCorpusRecord)
             .where(KnowledgeCorpusRecord.corpus_id == intent.corpus_id)
@@ -416,10 +477,15 @@ class CatalogEmbeddingRegistryVerifier:
         return owner
 
     def _similarity_capture(
-        self, session: Session, caller: EmbeddingRegistryCaller, request: SimilarityContextRequest
+        self, session: Session, caller: EmbeddingRegistryActor, request: SimilarityContextRequest
     ) -> tuple[
         CatalogEmbeddingRegistryVerifier, PinnedArtifactReadContext, InferenceTransferSessionCapture
     ]:
+        if (
+            type(caller) is not EmbeddingRegistryCaller
+            or self._indexing_source_authority is not None
+        ):
+            raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
         if any(
             selection.recipe != self.configuration.recipe
             or (
@@ -443,6 +509,8 @@ class CatalogEmbeddingRegistryVerifier:
                 session, caller, scope, InferenceTransferSessionCapturePhase.CAPTURE_POPULATION
             )
         )
+        if not isinstance(capture, InferenceTransferSessionCapture):
+            raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
         return owner, reader, capture
 
     @staticmethod
@@ -486,7 +554,7 @@ class CatalogEmbeddingRegistryVerifier:
         )
 
     def prepare_similarity_context(
-        self, caller: EmbeddingRegistryCaller, request: SimilarityContextRequest
+        self, caller: EmbeddingRegistryActor, request: SimilarityContextRequest
     ) -> PreparedSimilarityContext:
         """Capture once through the official owner; only anchor text leaves preparation."""
         with self.sessions() as session, session.begin():
@@ -501,7 +569,7 @@ class CatalogEmbeddingRegistryVerifier:
     def prepare_similarity_context_in_session(
         self,
         session: Session,
-        caller: EmbeddingRegistryCaller,
+        caller: EmbeddingRegistryActor,
         request: SimilarityContextRequest,
     ) -> PreparedSimilarityContext:
         """Preserve the current native owner's root; never open or commit another root."""
@@ -516,7 +584,7 @@ class CatalogEmbeddingRegistryVerifier:
 
     def read_similarity_views(
         self,
-        caller: EmbeddingRegistryCaller,
+        caller: EmbeddingRegistryActor,
         request: SimilarityContextRequest,
         prepared: PreparedSimilarityContext,
     ) -> tuple[ResolvedPinnedEmbeddingIndex, ...]:
@@ -527,7 +595,7 @@ class CatalogEmbeddingRegistryVerifier:
     def read_similarity_views_in_session(
         self,
         session: Session,
-        caller: EmbeddingRegistryCaller,
+        caller: EmbeddingRegistryActor,
         request: SimilarityContextRequest,
         prepared: PreparedSimilarityContext,
     ) -> tuple[ResolvedPinnedEmbeddingIndex, ...]:
@@ -581,7 +649,7 @@ class CatalogEmbeddingRegistryVerifier:
 
     def reauthorize_similarity_context(
         self,
-        caller: EmbeddingRegistryCaller,
+        caller: EmbeddingRegistryActor,
         request: SimilarityContextRequest,
         prepared: PreparedSimilarityContext,
     ) -> None:
@@ -593,7 +661,7 @@ class CatalogEmbeddingRegistryVerifier:
     def authorize_scope(
         self,
         session: Session,
-        caller: EmbeddingRegistryCaller,
+        caller: EmbeddingRegistryActor,
         intent: RegisterEmbeddingIndexCommand | EmbeddingRegistryLookup,
     ) -> None:
         self._guard(
@@ -621,6 +689,13 @@ class CatalogEmbeddingRegistryVerifier:
             raise EmbeddingRegistryError(code) from None
         except IdentityError:
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN") from None
+        except LocalIndexingSourceError as error:
+            code = (
+                "EMBEDDING_REGISTRY_FORBIDDEN"
+                if error.code == "LOCAL_INDEXING_SOURCE_FORBIDDEN"
+                else "EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE"
+            )
+            raise EmbeddingRegistryError(code) from None
         except InferenceTransferServiceError as error:
             code = (
                 "EMBEDDING_REGISTRY_FORBIDDEN"
@@ -642,7 +717,7 @@ class CatalogEmbeddingRegistryVerifier:
     def resolve_registration(
         self,
         session: Session,
-        caller: EmbeddingRegistryCaller,
+        caller: EmbeddingRegistryActor,
         command: RegisterEmbeddingIndexCommand,
     ) -> ResolvedEmbeddingRegistration:
         def resolve() -> ResolvedEmbeddingRegistration:
@@ -659,20 +734,12 @@ class CatalogEmbeddingRegistryVerifier:
                 else (index.previous_manifest, self._read_index(reader, index.previous_manifest))
             )
             # Source/lifecycle eligibility stays with the same official owner and root Session.
-            capture = self.sources.capture_in_session(
+            capture = self._capture_source(
                 session,
-                InferenceTransferCorpusReadCommand(
-                    caller.operator_id,
-                    command.graph_snapshot,
-                    command.policy_revision_id,
-                    command.policy_sha256,
-                    self.configuration.source_classes,
-                    1024,
-                    InferenceTransferPopulationScope(command.namespace.population_scope),
-                ),
-                self.configuration.recipe,
-                identity_fence=self.identity_fence,
+                caller,
+                command,
                 artifact_reader=reader,
+                phase=InferenceTransferSessionCapturePhase.CAPTURE_POPULATION,
             )
             assert capture.corpus is not None
             sources = tuple(
@@ -688,7 +755,7 @@ class CatalogEmbeddingRegistryVerifier:
         return self._guard(resolve)
 
     def require_index_publication_scope(
-        self, session: Session, caller: EmbeddingRegistryCaller, query: EmbeddingRegistryLookup
+        self, session: Session, caller: EmbeddingRegistryActor, query: EmbeddingRegistryLookup
     ) -> None:
         """Admit the real publish permission BEFORE native allocation/model work."""
 
@@ -696,15 +763,14 @@ class CatalogEmbeddingRegistryVerifier:
             _reader, capture = self._capture(
                 session, caller, query, InferenceTransferSessionCapturePhase.AUTHORIZE_SCOPE
             )
-            if "knowledge_graph:publish" not in capture.scope.requester_permission_keys:
-                raise EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN")
+            self._require_publication_authority(caller, capture)
 
         self._guard(admit)
 
     def resolve_prepared_index(
         self,
         session: Session,
-        caller: EmbeddingRegistryCaller,
+        caller: EmbeddingRegistryActor,
         command: RegisterEmbeddingIndexCommand,
         index: EmbeddingIndexManifest,
     ) -> ResolvedEmbeddingRegistration:
@@ -734,20 +800,12 @@ class CatalogEmbeddingRegistryVerifier:
                     self._read_index(reader, checked.previous_manifest),
                 )
             )
-            capture = self.sources.capture_in_session(
+            capture = self._capture_source(
                 session,
-                InferenceTransferCorpusReadCommand(
-                    caller.operator_id,
-                    command.graph_snapshot,
-                    command.policy_revision_id,
-                    command.policy_sha256,
-                    self.configuration.source_classes,
-                    1024,
-                    InferenceTransferPopulationScope(command.namespace.population_scope),
-                ),
-                self.configuration.recipe,
-                identity_fence=self.identity_fence,
+                caller,
+                command,
                 artifact_reader=reader,
+                phase=InferenceTransferSessionCapturePhase.CAPTURE_POPULATION,
             )
             assert capture.corpus is not None
             return ResolvedEmbeddingRegistration(
@@ -769,7 +827,7 @@ class CatalogEmbeddingRegistryVerifier:
     def resolve_optional_index_publication(
         self,
         session: Session,
-        caller: EmbeddingRegistryCaller,
+        caller: EmbeddingRegistryActor,
         command: RegisterEmbeddingIndexCommand,
     ) -> ResolvedEmbeddingRegistration | None:
         """Only absence of BOTH exact metadata identities means not yet published.
@@ -801,7 +859,7 @@ class CatalogEmbeddingRegistryVerifier:
         return self._guard(resolve)
 
     def resolve_lookup(
-        self, session: Session, caller: EmbeddingRegistryCaller, query: EmbeddingRegistryLookup
+        self, session: Session, caller: EmbeddingRegistryActor, query: EmbeddingRegistryLookup
     ) -> ResolvedEmbeddingLookup:
         def resolve() -> ResolvedEmbeddingLookup:
             _reader, capture = self._capture(
@@ -819,7 +877,7 @@ class CatalogEmbeddingRegistryVerifier:
         return self._guard(resolve)
 
     def prepare_index_basis(
-        self, session: Session, caller: EmbeddingRegistryCaller, query: EmbeddingRegistryLookup
+        self, session: Session, caller: EmbeddingRegistryActor, query: EmbeddingRegistryLookup
     ) -> PreparedEmbeddingIndexBasis:
         """Capture full current eligibility and reusable rows once before index assembly.
 
@@ -900,13 +958,18 @@ class CatalogEmbeddingRegistryVerifier:
     def resolve_pinned_read(
         self,
         session: Session,
-        caller: EmbeddingRegistryCaller,
+        caller: EmbeddingRegistryActor,
         intent: EmbeddingRegistryRead,
         registered: RegisteredEmbeddingIndexRead,
     ) -> ResolvedPinnedEmbeddingIndex:
         """Use the existing actual read owner, never registration/write authority."""
 
         def resolve() -> ResolvedPinnedEmbeddingIndex:
+            if (
+                type(caller) is not EmbeddingRegistryCaller
+                or self._indexing_source_authority is not None
+            ):
+                raise EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN")
             reader, capture = self._capture(
                 session,
                 caller,
@@ -1012,7 +1075,7 @@ class CatalogEmbeddingRegistryVerifier:
     def verify_registered_references(
         self,
         session: Session,
-        caller: EmbeddingRegistryCaller,
+        caller: EmbeddingRegistryActor,
         intent: RegisterEmbeddingIndexCommand | EmbeddingRegistryLookup,
         rows: tuple[RegisteredEmbeddingRow, ...],
         origins: tuple[EmbeddingBindingOrigin, ...],

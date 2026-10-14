@@ -522,3 +522,60 @@ this single control operation; existing typed policies/relations are reused.
 Implementation and actual disposable owner evidence are in the
 [publication checkpoint](../status/LOCAL_INDEXING_POLICY_PUBLICATION_CHECKPOINT_2026-10-14.md).
 The supported control API is implemented; service/runtime activation is not.
+
+## Registry service-purpose composition — implementation plan
+
+1. Catalog's existing Registry application remains the one owner of exact encoding/
+   binding lookup, registration/CAS/replay and Artifact validation. A narrow trusted
+   source adapter adds service-purpose admission, not a second Registry/search engine.
+2. Canonical source stays the existing Graph/source/accepted-report resolver and
+   committed Artifact. Service identity and policy stay at their existing owners.
+3. No new logical entity/revision/table is needed. An owner-local service caller holds
+   only the exact public service reference. It is audit/selection, never authority.
+4. The installed authority must match that reference and freshly fence actual runtime/
+   DB identity plus service grant for every capture. Source bindings keep parent1.0
+   policy pins, not the service1.1 grant. Missing/stale/hash/revoked references fail.
+5. Access remains indexed encoding/binding lookup, immutable Artifact iteration and
+   current-source capture. Service discovery/publication cannot become user QUERY.
+6. Use a closed operator-or-service caller value, one dedicated indexing source
+   adapter and the existing map/set/indexed repositories. No new queue or IAM layer.
+7. Preserve current bounded1024-source scale and O(S+V) materialization. Scope-only
+   admission reads no file; exact-byte/numeric validation is still shared.
+8. Current authority locks are obtained before Registry's savepoint and rechecked
+   under the same caller root. Numerical work and Artifact publication retain their
+   current separate owner/transaction boundaries.
+9. Composition is Catalog infrastructure/application over public Identity contracts.
+   Human authorization and read APIs retain actual-operator semantics; no fake role.
+10. Same-key replay still reauthorizes and never rewinds history. Revocation fails
+    before Registry writes; failures preserve original rows/results. No automatic
+    retry, latest substitution or failed-history reinterpretation is introduced.
+11. Passing a service ID as an operator, skipping publish permission globally, or
+    copying registration/materialization code is simpler only superficially and
+    violates authority/maintenance boundaries. The separate typed entry reuses the
+    existing validator and source materializer instead.
+
+This is an in-process owner composition change. There is no new wire message;
+existing frozen JSON Schemas retain their bytes/meaning. Runner service execution
+still requires explicit successor request/execution controls and actual installation.
+
+### Next execution-control decision (not activated)
+
+Use a service-only request1.2 and execution-policy1.1, leaving request1.1's future
+service-audit rejection and `OPERATOR_SEED_ONLY` policy1.0 unchanged. Policy1.1 pins
+the exact service reference, not the service grant hash: Catalog's grant pins the
+native policy, so the reverse reference would create a hash cycle. Its profiles,
+numerical input/output, CPU/GPU resource limits and explicit current-owner checks
+reuse the existing owners. An audit hash is never runtime/source authorization.
+
+The fixed `local-embedding-index@1.0.0` DAG has no actor rule: it declares the same
+encode/complete operations and one-attempt limits. Reuse its unchanged bytes/hash;
+new actor admission belongs in the successor control contracts, not a second DAG,
+new queue or resealed numerical environment. Existing completion/launch contracts
+already pin the exact Workflow request SHA and need no actor-only format change.
+
+The existing Workflow actor columns admit the50-character logical service ID and
+a purpose-specific actor type within their bounds. Do not pass it as an operator or
+generic SYSTEM. Extend the existing owner/claim/lease/recovery/executor path with
+explicit typed dispatch and fresh service fencing; do not create a target-scanning
+parallel runner. Old request hashes/business fingerprints remain exact. Any claimed
+runtime compatibility or activation still needs its own installed/actual evidence.

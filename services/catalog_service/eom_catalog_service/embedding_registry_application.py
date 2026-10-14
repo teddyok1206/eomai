@@ -60,6 +60,7 @@ from eom_catalog_service.embedding_registry_models import (
 from eom_catalog_service.embedding_registry_ports import (
     AuthorizedEmbeddingReadProfile,
     EmbeddingBindingLookupKey,
+    EmbeddingRegistryActor,
     EmbeddingRegistryCaller,
     EmbeddingRegistryError,
     EmbeddingRegistryLookup,
@@ -70,6 +71,7 @@ from eom_catalog_service.embedding_registry_ports import (
     RegisteredEmbeddingIndexRead,
     ResolvedEmbeddingRegistration,
     ResolvedPinnedEmbeddingIndex,
+    validate_embedding_registry_actor,
 )
 from eom_catalog_service.embedding_registry_repository import (
     EmbeddingRegistryRepository,
@@ -198,15 +200,12 @@ def validate_resolved_embedding_registration(
 
 def _context(
     session: Session,
-    caller: EmbeddingRegistryCaller,
+    caller: EmbeddingRegistryActor,
     verification: EmbeddingRegistryVerificationPort | None,
 ) -> EmbeddingRegistryVerificationPort:
     if verification is None:
         _fail("EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE")
-    if type(caller.operator_id) is not str or not re.fullmatch(
-        r"operator_[0-9a-f]{32}", caller.operator_id
-    ):
-        _fail("EMBEDDING_REGISTRY_CALLER_INVALID")
+    validate_embedding_registry_actor(caller)
     if not session.in_transaction():
         _fail("EMBEDDING_REGISTRY_TRANSACTION_REQUIRED")
     assert verification is not None
@@ -219,7 +218,7 @@ def _matches(row: object, expected: dict[str, Any]) -> bool:
 
 def _components(
     session: Session,
-    caller: EmbeddingRegistryCaller,
+    caller: EmbeddingRegistryActor,
     command: RegisterEmbeddingIndexCommand,
     resolved: ResolvedEmbeddingRegistration,
     repository: EmbeddingRegistryRepository,
@@ -294,7 +293,7 @@ def _receipt(
 
 def verify_embedding_index_registration_observation(
     session: Session,
-    caller: EmbeddingRegistryCaller,
+    caller: EmbeddingRegistryActor,
     command: RegisterEmbeddingIndexCommand,
     result: EmbeddingIndexRegistrationResult,
     verification: EmbeddingRegistryVerificationPort | None,
@@ -358,7 +357,7 @@ def verify_embedding_index_registration_observation(
 
 def _registration(
     session: Session,
-    caller: EmbeddingRegistryCaller,
+    caller: EmbeddingRegistryActor,
     command: RegisterEmbeddingIndexCommand,
     verification: EmbeddingRegistryVerificationPort,
     now: datetime,
@@ -485,7 +484,7 @@ def _registration(
 
 def register_embedding_index(
     session: Session,
-    caller: EmbeddingRegistryCaller,
+    caller: EmbeddingRegistryActor,
     command: RegisterEmbeddingIndexCommand,
     verification: EmbeddingRegistryVerificationPort | None,
     *,
@@ -527,7 +526,7 @@ def register_embedding_index(
 
 def _lookup_missing_embedding_bindings(
     session: Session,
-    caller: EmbeddingRegistryCaller,
+    caller: EmbeddingRegistryActor,
     query: EmbeddingRegistryLookup,
     verification: EmbeddingRegistryVerificationPort | None,
 ) -> MissingEmbeddingBindings:
@@ -654,7 +653,7 @@ def _lookup_missing_embedding_bindings(
 
 def lookup_missing_embedding_bindings(
     session: Session,
-    caller: EmbeddingRegistryCaller,
+    caller: EmbeddingRegistryActor,
     query: EmbeddingRegistryLookup,
     verification: EmbeddingRegistryVerificationPort | None,
 ) -> MissingEmbeddingBindings:
@@ -814,7 +813,7 @@ def _validate_resolved_pinned_read(
 
 def read_pinned_embedding_index(
     session: Session,
-    caller: EmbeddingRegistryCaller,
+    caller: EmbeddingRegistryActor,
     intent: EmbeddingRegistryRead,
     verification: EmbeddingRegistryVerificationPort | None,
 ) -> ResolvedPinnedEmbeddingIndex:
@@ -824,6 +823,9 @@ def read_pinned_embedding_index(
     root transaction; no returned count, pointer or numeric row is reusable authority.
     """
     try:
+        # Indexing's derived-publication grant is not a consumer/user query grant.
+        if type(caller) is not EmbeddingRegistryCaller:
+            _fail("EMBEDDING_REGISTRY_FORBIDDEN")
         intent = _validate_pinned_read_intent(intent)
         owner = _context(session, caller, verification)
         if session.in_nested_transaction() or not callable(

@@ -46,6 +46,7 @@ from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
     EmbeddingRegistryError,
     EmbeddingRegistryLookup,
+    EmbeddingRegistryServiceCaller,
     ResolvedEmbeddingRegistration,
 )
 from eom_catalog_service.embedding_registry_repository import (
@@ -55,6 +56,7 @@ from eom_catalog_service.embedding_registry_repository import (
 from eom_catalog_service.knowledge_graph_models import KnowledgeGraphSnapshotRecord
 from eom_catalog_service.models import ItemRecord, ItemRevisionRecord
 from eom_identifiers import canonical_json_bytes, content_sha256
+from eom_operator_identity import LocalIndexingServiceReference
 from eom_orchestrator.database import build_engine
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
@@ -418,6 +420,84 @@ def test_actual_bounded_lookup_statement_count_and_index_antijoin(guarded_engine
     assert len(statements) == 3
     assert "VALUES" in statements[-1] and "NOT (EXISTS" in statements[-1]
     assert "metadata_json" not in statements[-1] and "vectors" not in statements[-1]
+
+
+def test_service_actor_uses_same_real_registration_replay_and_missing_lookup(
+    guarded_engine: Engine,
+) -> None:
+    """Actual Registry SQL, explicitly synthetic service IAM/source admission only."""
+    command, capture = _fixture(guarded_engine)
+    caller = EmbeddingRegistryServiceCaller(
+        LocalIndexingServiceReference(
+            service_id="localindexservice_" + uuid4().hex,
+            service_revision_id="localindexservicerev_" + uuid4().hex,
+            service_identity_sha256="sha256:" + "a" * 64,
+        )
+    )
+    verifier = MetadataVerifier(capture)
+
+    def check_selection(session, actual, _intent):
+        assert session.in_transaction() and actual == caller
+        assert not hasattr(actual, "operator_id")
+
+    verifier.authorize_scope = Mock(side_effect=check_selection)
+    with Session(guarded_engine) as session, session.begin():
+        first = register_embedding_index(session, caller, command, verifier, now=NOW)
+    with Session(guarded_engine) as session, session.begin():
+        replay = register_embedding_index(session, caller, command, verifier, now=NOW)
+        query = EmbeddingRegistryLookup(
+            command.corpus_id,
+            command.namespace,
+            command.graph_snapshot,
+            command.policy_revision_id,
+            command.policy_sha256,
+        )
+        missing = lookup_missing_embedding_bindings(session, caller, query, verifier)
+        assert not first.replayed and replay.replayed and replay.is_current
+        assert first.registered_at == replay.registered_at
+        assert not missing.missing and len(missing.reusable_rows) == 1
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(EmbeddingIndexRevisionRecord)
+                .where(EmbeddingIndexRevisionRecord.index_id == command.index_id)
+            )
+            == 1
+        )
+    assert verifier.authorize_scope.call_count >= 3
+
+
+def test_revoked_service_replay_fails_before_registry_sql(guarded_engine: Engine) -> None:
+    """A denial from the trusted test port must precede metadata disclosure/mutation."""
+    command, capture = _fixture(guarded_engine)
+    verifier = MetadataVerifier(capture)
+    caller = EmbeddingRegistryServiceCaller(
+        LocalIndexingServiceReference(
+            service_id="localindexservice_" + uuid4().hex,
+            service_revision_id="localindexservicerev_" + uuid4().hex,
+            service_identity_sha256="sha256:" + "b" * 64,
+        )
+    )
+    verifier.authorize_scope = Mock()
+    with Session(guarded_engine) as session, session.begin():
+        register_embedding_index(session, caller, command, verifier, now=NOW)
+    verifier.authorize_scope.side_effect = EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN")
+    statements = []
+
+    def observe(_connection, _cursor, statement, _parameters, _context, _many):
+        statements.append(statement)
+
+    event.listen(guarded_engine, "before_cursor_execute", observe)
+    try:
+        with (
+            Session(guarded_engine) as session,
+            session.begin(),
+            pytest.raises(EmbeddingRegistryError, match="FORBIDDEN"),
+        ):
+            register_embedding_index(session, caller, command, verifier, now=NOW)
+    finally:
+        event.remove(guarded_engine, "before_cursor_execute", observe)
+    assert not statements
 
 
 def test_actual_antijoin_has_exact_btree_index_path(guarded_engine: Engine) -> None:

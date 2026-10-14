@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 
 from eom_catalog_contracts.embedding_registry import (
     EmbeddingIndexNamespace,
@@ -23,6 +24,7 @@ from eom_catalog_contracts.inference_transfer_experiment import (
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
 from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
 from eom_catalog_contracts.similarity_context import SimilarityViewSelection
+from eom_operator_identity import LocalIndexingServiceReference, local_indexing_service_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from sqlalchemy.orm import Session
 
@@ -40,10 +42,50 @@ class EmbeddingRegistryCaller:
     """Captured by the authentication owner, never parsed from a worker/request DTO.
 
     Identity possession is not a grant; the verification owner checks current
-    actual operator permissions. Background service identity is not supported here.
+    actual operator permissions. It is not a background service identity.
     """
 
     operator_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class EmbeddingRegistryServiceCaller:
+    """Exact owner-local selection/audit only; actual runtime/data fences are mandatory."""
+
+    service: LocalIndexingServiceReference
+
+
+type EmbeddingRegistryActor = EmbeddingRegistryCaller | EmbeddingRegistryServiceCaller
+
+
+def validate_embedding_registry_actor(caller: EmbeddingRegistryActor) -> None:
+    """Validate a closed small value, NOT authenticate or authorize an operation."""
+    if type(caller) is EmbeddingRegistryCaller:
+        if type(caller.operator_id) is str and re.fullmatch(
+            r"operator_[0-9a-f]{32}", caller.operator_id
+        ):
+            return
+    elif (
+        type(caller) is EmbeddingRegistryServiceCaller
+        and type(caller.service) is LocalIndexingServiceReference
+    ):
+        try:
+            local_indexing_service_bytes(caller.service)
+            return
+        except ValueError:
+            pass
+    raise EmbeddingRegistryError("EMBEDDING_REGISTRY_CALLER_INVALID")
+
+
+@dataclass(frozen=True, slots=True)
+class EmbeddingRegistryOwnerConfiguration:
+    """Owner numerical/isolation configuration, never a source permission grant."""
+
+    corpus_id: str
+    namespace: EmbeddingIndexNamespace
+    space: EmbeddingSpace
+    recipe: ExperimentViewRecipe
+    source_classes: tuple[Literal["APPROVED_ITEM", "PAST_EXAM"], ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,7 +260,7 @@ class EmbeddingRegistryVerificationPort(Protocol):
     def authorize_scope(
         self,
         session: Session,
-        caller: EmbeddingRegistryCaller,
+        caller: EmbeddingRegistryActor,
         intent: RegisterEmbeddingIndexCommand | EmbeddingRegistryLookup,
     ) -> None:
         """Authenticate/currently authorize this exact intent before any registry lookup.
@@ -231,21 +273,21 @@ class EmbeddingRegistryVerificationPort(Protocol):
     def resolve_registration(
         self,
         session: Session,
-        caller: EmbeddingRegistryCaller,
+        caller: EmbeddingRegistryActor,
         command: RegisterEmbeddingIndexCommand,
     ) -> ResolvedEmbeddingRegistration: ...
 
     def resolve_lookup(
         self,
         session: Session,
-        caller: EmbeddingRegistryCaller,
+        caller: EmbeddingRegistryActor,
         query: EmbeddingRegistryLookup,
     ) -> ResolvedEmbeddingLookup: ...
 
     def resolve_pinned_read(
         self,
         session: Session,
-        caller: EmbeddingRegistryCaller,
+        caller: EmbeddingRegistryActor,
         intent: EmbeddingRegistryRead,
         registered: RegisteredEmbeddingIndexRead,
     ) -> ResolvedPinnedEmbeddingIndex:
@@ -260,7 +302,7 @@ class EmbeddingRegistryVerificationPort(Protocol):
     def verify_registered_references(
         self,
         session: Session,
-        caller: EmbeddingRegistryCaller,
+        caller: EmbeddingRegistryActor,
         intent: RegisterEmbeddingIndexCommand | EmbeddingRegistryLookup,
         rows: tuple[RegisteredEmbeddingRow, ...],
         origins: tuple[EmbeddingBindingOrigin, ...],
