@@ -33,7 +33,7 @@ MAX_PAST_EXAM_PROVENANCE_CACHE_MEMBERS = 1024
 MAX_PAST_EXAM_PROVENANCE_CACHE_INDEX_ROWS = 100_000
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class PastExamProvenanceMember:
     artifact_id: str
     artifact_revision_id: str

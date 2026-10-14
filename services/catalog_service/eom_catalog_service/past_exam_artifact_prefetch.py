@@ -83,35 +83,35 @@ def prefetch_past_exam_artifact_closure(
     )
     batch_members = {
         row.extraction_batch_id: PastExamProvenanceMember(
-            row.manifest_artifact_id,
-            row.manifest_artifact_revision_id,
-            row.manifest_artifact_member_path,
-            row.manifest_artifact_sha256,
-            row.manifest_artifact_media_type,
-            row.manifest_artifact_schema_ref,
-            MAX_DOCUMENT_JSON_BYTES,
+            artifact_id=row.manifest_artifact_id,
+            artifact_revision_id=row.manifest_artifact_revision_id,
+            member_path=row.manifest_artifact_member_path,
+            sha256=row.manifest_artifact_sha256,
+            schema_ref=row.manifest_artifact_schema_ref,
+            media_type=row.manifest_artifact_media_type,
+            max_bytes=MAX_DOCUMENT_JSON_BYTES,
         )
         for row in batches
     }
     accepted_members = tuple(
         (
             PastExamProvenanceMember(
-                row.acceptance_artifact_id,
-                row.acceptance_artifact_revision_id,
-                row.acceptance_artifact_member_path,
-                row.acceptance_artifact_sha256,
-                row.acceptance_artifact_media_type,
-                row.acceptance_artifact_schema_ref,
-                MAX_DOCUMENT_JSON_BYTES,
+                artifact_id=row.acceptance_artifact_id,
+                artifact_revision_id=row.acceptance_artifact_revision_id,
+                member_path=row.acceptance_artifact_member_path,
+                sha256=row.acceptance_artifact_sha256,
+                schema_ref=row.acceptance_artifact_schema_ref,
+                media_type=row.acceptance_artifact_media_type,
+                max_bytes=MAX_DOCUMENT_JSON_BYTES,
             ),
             PastExamProvenanceMember(
-                row.result_artifact_id,
-                row.result_artifact_revision_id,
-                row.result_artifact_member_path,
-                row.result_artifact_sha256,
-                row.result_artifact_media_type,
-                row.result_artifact_schema_ref,
-                MAX_DOCUMENT_JSON_BYTES,
+                artifact_id=row.result_artifact_id,
+                artifact_revision_id=row.result_artifact_revision_id,
+                member_path=row.result_artifact_member_path,
+                sha256=row.result_artifact_sha256,
+                schema_ref=row.result_artifact_schema_ref,
+                media_type=row.result_artifact_media_type,
+                max_bytes=MAX_DOCUMENT_JSON_BYTES,
             ),
         )
         for row in acceptances
@@ -156,13 +156,13 @@ def prefetch_past_exam_artifact_closure(
     )
     layout_members = tuple(
         PastExamProvenanceMember(
-            row.artifact_id,
-            row.artifact_revision_id,
-            row.artifact_member_path,
-            row.artifact_sha256,
-            row.artifact_media_type,
-            row.artifact_schema_ref,
-            MAX_DOCUMENT_JSON_BYTES,
+            artifact_id=row.artifact_id,
+            artifact_revision_id=row.artifact_revision_id,
+            member_path=row.artifact_member_path,
+            sha256=row.artifact_sha256,
+            schema_ref=row.artifact_schema_ref,
+            media_type=row.artifact_media_type,
+            max_bytes=MAX_DOCUMENT_JSON_BYTES,
         )
         for row in layouts
     )

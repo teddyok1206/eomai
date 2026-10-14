@@ -156,3 +156,30 @@ Slack delivery at10:45 described source capture in progress; a separate terminal
 update at10:50 explicitly corrected that to FAILED with model/native/Workflow0.
 Both reports remain. Full goal ACTIVE; seed/delta/reuse/QUERY, automatic full
 coverage, consumer activation and CPU/GPU comparison remain genuine next gates.
+
+## Descriptor cause isolated — 11:06 UTC
+
+Diagnostic sourceca506187 was installed as revision5/resource-version10, not an
+in-place patch. Invocation`d9e75c27324f400698efa9c49a989b58` stopped at11:01:50
+with closed reason`PINNED_ARTIFACT_DESCRIPTOR_SCHEMA_MEDIA` and exact Artifact
+`artifact_4e878a1711164233ba2af3b5bccd7c59` /
+`rev_cb465dc80dae4204aef38aca523cb69a`. Read-only metadata confirms its batch
+member is612299bytes, application/json and the released1.1 extraction-batch schema.
+
+The mismatch was introduced by the new closure adapter: positional arguments
+swapped schema_ref and media_type, both Python strings. The first synthetic
+reader checked hash/size but omitted descriptor-field equality, so earlier PASS
+counts did not catch it. No original descriptor/data is being repaired.
+
+Correct all four constructions to explicit named fields and make this small
+immutable provenance value keyword-only. Existing canonical resolver callers
+already use named fields. This changes no wire/schema bytes or stored identity.
+Strengthen the synthetic reader to compare actual schema/media metadata and add
+a swap reproduction plus a positional-construction denial. Existing source,
+approval and hash checks remain. Focused173 PASS, strict mypy3/Ruff/format/diff PASS.
+The new correction is a source candidate until its own installation/acceptance.
+
+The preceding ca506187 pointer/diagnostic regression1671 PASS is historical and
+does not count as the corrected candidate's production acceptance. Current
+installed unit is failed/Restart=no with no successful source seed. The next
+authorized step is the exact owner successor and bounded real recheck.

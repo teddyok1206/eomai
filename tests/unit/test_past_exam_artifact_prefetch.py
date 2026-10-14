@@ -16,6 +16,7 @@ from eom_catalog_service.legacy_item_extraction_batch_models import (
 )
 from eom_catalog_service.models import ItemRevisionRecord
 from eom_catalog_service.past_exam_artifact_prefetch import prefetch_past_exam_artifact_closure
+from eom_catalog_service.past_exam_source_provenance import PastExamProvenanceMember
 from eom_catalog_service.pinned_artifact_resolution import (
     PinnedArtifactReadContext,
     PinnedArtifactResolutionError,
@@ -28,8 +29,9 @@ from tests.unit.test_past_exam_source_provenance import _source_fixture
 class ClosedMetadataReader:
     MAX_REVISIONS = 4096
 
-    def __init__(self, session, delegate):
+    def __init__(self, session, delegate, expected_metadata):
         self.session, self.delegate = session, delegate
+        self.expected_metadata = expected_metadata
         self.settings = delegate.settings
         self.captured: set[tuple[str, str]] = set()
         self.batches: list[tuple[tuple[str, str], ...]] = []
@@ -46,6 +48,11 @@ class ClosedMetadataReader:
     def read_member(self, **kwargs):
         if (kwargs["artifact_id"], kwargs["revision_id"]) not in self.captured:
             raise PinnedArtifactResolutionError("pinned Artifact metadata was not captured")
+        expected = self.expected_metadata[
+            (kwargs["artifact_id"], kwargs["revision_id"], kwargs["member_path"])
+        ]
+        if (kwargs["schema_ref"], kwargs["media_type"]) != expected:
+            raise PinnedArtifactResolutionError("pinned Artifact member descriptor differs")
         return self.delegate.read_member(**kwargs)
 
     def verify_member(self, **kwargs):
@@ -74,7 +81,22 @@ def closure(monkeypatch):
         return previous(statement)
 
     fake.scalars = scalars
-    reader = ClosedMetadataReader(session, original)
+    expected = {}
+    for model, prefix in (
+        (LegacyItemExtractionBatchRecord, "manifest_artifact_"),
+        (LegacyItemExtractionAcceptanceRecord, "acceptance_artifact_"),
+        (LegacyItemExtractionAcceptanceRecord, "result_artifact_"),
+        (AssessmentLayoutObservationRecord, "artifact_"),
+    ):
+        row = fake.records[model]
+        expected[
+            (
+                getattr(row, prefix + "id"),
+                getattr(row, prefix + "revision_id"),
+                getattr(row, prefix + "member_path"),
+            )
+        ] = (getattr(row, prefix + "schema_ref"), getattr(row, prefix + "media_type"))
+    reader = ClosedMetadataReader(session, original, expected)
     return session, reader, state, queries
 
 
@@ -141,6 +163,23 @@ def test_changed_member_hash_is_not_ignored_or_replaced_with_latest(closure):
     with pytest.raises(ValueError, match="hash/size"):
         prepare(closure)
     assert len(reader.delegate.calls) == 1
+
+
+def test_source_member_values_are_keyword_only_to_prevent_string_field_swaps():
+    with pytest.raises(TypeError):
+        PastExamProvenanceMember("a", "b", "c", "d", "e", "f", 1)
+
+
+def test_closed_reader_reproduces_schema_media_swap_even_with_correct_hash(closure):
+    prepare(closure)
+    reader = closure[1]
+    arguments = dict(reader.delegate.calls[0])
+    arguments["schema_ref"], arguments["media_type"] = (
+        arguments["media_type"],
+        arguments["schema_ref"],
+    )
+    with pytest.raises(PinnedArtifactResolutionError, match="descriptor differs"):
+        reader.read_member(**arguments)
 
 
 def test_hint_collection_is_deduplicated_and_not_a_permission_contract():
