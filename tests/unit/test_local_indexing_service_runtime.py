@@ -181,6 +181,23 @@ def test_failure_detail_bounds_exception_cycles_and_redacts_noncode_attributes()
     }
 
 
+def test_failure_detail_exposes_only_uuid_pointer_ids_not_names_or_invalid_input():
+    from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactResolutionError
+
+    error = PinnedArtifactResolutionError(
+        "SECRET original filename",
+        descriptor_reason="SCHEMA_MEDIA",
+        artifact_id="artifact_" + "a" * 32,
+        artifact_revision_id="rev_" + "b" * 32,
+    )
+    detail = entry._failure_detail(error)
+    assert detail["cause_artifact_id"] == error.artifact_id
+    assert detail["cause_artifact_revision_id"] == error.artifact_revision_id
+    assert "SECRET" not in json.dumps(detail)
+    error.artifact_id = "SECRET filename"
+    assert "cause_artifact_id" not in entry._failure_detail(error)
+
+
 def test_stop_after_idle_peek_does_not_start_new_observation():
     stop = Event()
 

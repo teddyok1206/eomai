@@ -40,6 +40,33 @@ class PinnedArtifactMember:
 class PinnedArtifactResolutionError(ValueError):
     """The pinned Artifact identity, provenance, manifest, or bytes did not resolve."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        descriptor_reason: str | None = None,
+        artifact_id: str | None = None,
+        artifact_revision_id: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = (
+            "PINNED_ARTIFACT_DESCRIPTOR_" + descriptor_reason
+            if descriptor_reason
+            in {
+                "HASH",
+                "BYTES_TYPE",
+                "NEGATIVE_BYTES",
+                "EMPTY",
+                "SIZE_LIMIT",
+                "SCHEMA_MEDIA",
+                "PRIMARY_HASH",
+                "PRIMARY_BYTES",
+            }
+            else None
+        )
+        self.artifact_id = artifact_id
+        self.artifact_revision_id = artifact_revision_id
+
 
 def artifact_identity_hints(value: object) -> set[tuple[str, str]]:
     """Collect JSON pointer identities only, never validate or authorize a source."""
@@ -203,17 +230,26 @@ def _resolve_pinned_artifact_member(
         and "schema_ref" not in entry
         and "media_type" not in entry
     )
-    if (
-        entry.get("sha256") != sha256
-        or type(size) is not int
-        or size < 0
-        or (size == 0 and (not allow_empty or member_path == expected_primary_file))
-        or size > max_bytes
-        or not (metadata_matches or historical_contract)
-        or (member_path == expected_primary_file and revision.content_hash != sha256)
-        or (member_path == expected_primary_file and revision.content_bytes != size)
-    ):
-        raise PinnedArtifactResolutionError("pinned Artifact member descriptor differs")
+    # Keep the same closed checks, with safe reason metadata instead of payload
+    # text. Evaluate numeric comparisons only for an exact integer descriptor.
+    descriptor_checks = (
+        (entry.get("sha256") != sha256, "HASH"),
+        (type(size) is not int, "BYTES_TYPE"),
+        (type(size) is int and size < 0, "NEGATIVE_BYTES"),
+        (size == 0 and (not allow_empty or member_path == expected_primary_file), "EMPTY"),
+        (type(size) is int and size > max_bytes, "SIZE_LIMIT"),
+        (not (metadata_matches or historical_contract), "SCHEMA_MEDIA"),
+        (member_path == expected_primary_file and revision.content_hash != sha256, "PRIMARY_HASH"),
+        (member_path == expected_primary_file and revision.content_bytes != size, "PRIMARY_BYTES"),
+    )
+    reason = next((reason for failed, reason in descriptor_checks if failed), None)
+    if reason is not None:
+        raise PinnedArtifactResolutionError(
+            "pinned Artifact member descriptor differs",
+            descriptor_reason=reason,
+            artifact_id=artifact_id,
+            artifact_revision_id=artifact_revision_id,
+        )
 
     if materialized is not None:
         if (

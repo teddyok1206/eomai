@@ -121,3 +121,38 @@ is separate from the new closure candidate's final regression result.
 Current installed owner is stillf2772657 and failed; the closure candidate is not
 yet installed. All vectors/bindings/indexes remain uncreated by these starts.
 Do not label the new source tests as real seed/delta/replay/QUERY or GPU evidence.
+
+## Closure installation and next descriptor check — 10:58 UTC
+
+Closure source8b6e26c0 was built/RECORD verified, owner-pair import validated,
+installed and activated through service revision4/resource-version8. It did not
+replace a previous release, policy or existing data. Actual controls remain in
+`/var/lib/eom-local-indexing-activation.8b6e26c0-rbgez5gb`.
+Platform wheel raw`3b4e723262e464ce93d55eec564e7e53a29746e325d500d47a3d74075e1a61fb`,
+API-contract raw`d99a1d58e8ee27689647cb93aded30213da0c7f1ed6f09571326eae5c0dbea4a`.
+Closure regression1649 PASS in133.07s; focused171/dependency6/persistence32 are
+overlapping or separate environment evidence, not one additive test total.
+
+Actual invocation`e0c21691615f403d81af11f766e07aea` started at10:44:29 and stopped
+at10:45:06. It advanced from missing captured metadata to descriptor validation
+at`pinned_artifact_resolution:216`. Current owner is8b6e26c0 and failed, with
+Restart=no and no automatic retry. Source/API/DB records were not repaired.
+
+Read-only DB descriptor inventory found exact schema/media/hash and primary
+hash/size agreement for batch/acceptance/result/layout, Item content, declared
+bundle sources, current Graph manifest and accepted base-result pointers. These
+are metadata checks, not claims that every underlying byte/pixel was inspected.
+Evidence: `local-indexing-{provenance-descriptors,provenance-descriptors-expanded,
+source-descriptors}.log`. The exact failing member/field is still being isolated.
+
+The next source candidate adds closed reason codes for the existing eight
+descriptor comparisons plus strictly UUID-shaped Artifact IDs and an EOM entry
+site to the internal error event. No arbitrary filename, exception text, SQL
+parameters, model result or source content is logged, and no condition is waived.
+Pointer/runtime/redaction regressions103 PASS; strict mypy2/Ruff/format/diff PASS.
+This diagnostic source is not yet the installed owner or a seed success.
+
+Slack delivery at10:45 described source capture in progress; a separate terminal
+update at10:50 explicitly corrected that to FAILED with model/native/Workflow0.
+Both reports remain. Full goal ACTIVE; seed/delta/reuse/QUERY, automatic full
+coverage, consumer activation and CPU/GPU comparison remain genuine next gates.

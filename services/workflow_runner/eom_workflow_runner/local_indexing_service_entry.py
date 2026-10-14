@@ -81,13 +81,30 @@ def _failure_detail(error: Exception) -> dict[str, str | int | None]:
     if type(code) is not str or re.fullmatch(r"[A-Z][A-Z0-9_]{1,95}", code) is None:
         code = None
     site = None
+    entry_site = None
     frame = current.__traceback__
     while frame is not None:
         module = frame.tb_frame.f_globals.get("__name__")
         if type(module) is str and re.fullmatch(r"eom_[a-z0-9_.]{1,120}", module):
             site = f"{module}:{frame.tb_lineno}"
+            if entry_site is None:
+                entry_site = site
         frame = frame.tb_next
-    return {"cause_type": type(current).__name__, "cause_code": code, "cause_site": site}
+    result: dict[str, str | int | None] = {
+        "cause_type": type(current).__name__,
+        "cause_code": code,
+        "cause_site": site,
+    }
+    if entry_site is not None:
+        result["cause_entry_site"] = entry_site
+    for attribute, pattern in (
+        ("artifact_id", r"artifact_[0-9a-f]{32}"),
+        ("artifact_revision_id", r"rev_[0-9a-f]{32}"),
+    ):
+        value = getattr(current, attribute, None)
+        if type(value) is str and re.fullmatch(pattern, value):
+            result["cause_" + attribute] = value
+    return result
 
 
 def serve_local_indexing(runtime: LocalIndexingServiceRuntime, stop: Event) -> None:

@@ -126,6 +126,48 @@ def test_resolves_exact_member_and_full_provenance(tmp_path: Path) -> None:
     assert resolved.producer_job_id == "job_" + "3" * 32
 
 
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "HASH",
+        "BYTES_TYPE",
+        "NEGATIVE_BYTES",
+        "EMPTY",
+        "SIZE_LIMIT",
+        "SCHEMA_MEDIA",
+        "PRIMARY_HASH",
+        "PRIMARY_BYTES",
+    ],
+)
+def test_descriptor_failures_keep_closed_checks_and_report_safe_reason(tmp_path, reason):
+    session, settings, arguments = _fixture(tmp_path)
+    revision = session.get(ArtifactRevisionRecord, str(arguments["artifact_revision_id"]))
+    entry = revision.manifest["files"][0]
+    if reason == "HASH":
+        arguments["sha256"] = "sha256:" + "f" * 64
+    elif reason in {"BYTES_TYPE", "NEGATIVE_BYTES", "EMPTY"}:
+        entry["bytes"] = {"BYTES_TYPE": "10", "NEGATIVE_BYTES": -1, "EMPTY": 0}[reason]
+    elif reason == "SIZE_LIMIT":
+        arguments["max_bytes"] = 1
+    elif reason == "SCHEMA_MEDIA":
+        arguments["schema_ref"] = "eom://schemas/fixture/different/1.0"
+    elif reason == "PRIMARY_HASH":
+        revision.content_hash = "sha256:" + "f" * 64
+    else:
+        revision.content_bytes += 1
+    revision.manifest_hash = content_sha256(revision.manifest)
+    with pytest.raises(PinnedArtifactResolutionError, match="descriptor differs") as caught:
+        resolve_pinned_artifact_member(session, settings, **arguments)
+    assert caught.value.code == "PINNED_ARTIFACT_DESCRIPTOR_" + reason
+    assert caught.value.artifact_id == arguments["artifact_id"]
+    assert caught.value.artifact_revision_id == arguments["artifact_revision_id"]
+
+
+def test_descriptor_reason_is_a_closed_code_not_free_text():
+    error = PinnedArtifactResolutionError("safe", descriptor_reason="SECRET_VALUE")
+    assert error.code is None
+
+
 def test_empty_non_primary_member_requires_explicit_allowance(tmp_path: Path) -> None:
     session, settings, arguments = _fixture(tmp_path)
     revision = session.get(ArtifactRevisionRecord, str(arguments["artifact_revision_id"]))
