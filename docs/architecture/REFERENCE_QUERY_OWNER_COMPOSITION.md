@@ -408,3 +408,14 @@ workspace as `query-canonical-final-regression.log` and
 `QUERY_JOB_HISTORY_STORAGE=SOURCE_PASS`, `QUERY_COMPLETION_OWNER=SOURCE_PASS`,
 `QUERY_EXECUTOR_COMPOSITION=NOT_CONNECTED`, `QUERY_CLAIM_RECOVERY=NOT_IMPLEMENTED`,
 `QUERY_UNIT_INSTALLATION=NOT_PERFORMED`, `GENUINE_QUERY_CONSUMER_READ=NOT_ACTIVE`.
+
+Post-commit packaging: source `3fecb3f332024768fc58150cbbd7a9168d94f1bc`
+produced the existing three-wheel release set; build/RECORD/installed simulation
+PASS. A separate `-I -B` import in the immutable operator Conda environment loaded
+all10 selected modules only from those wheels and validated a synthetic checkpoint
+against the packaged/pinned schema and local reference closure. No checkout import,
+runtime installation, DB/auth/unit or model action. Evidence remains in
+`query-canonical-wheel-build.log` and `query-canonical-wheel-import.log`; wheel set
+`/tmp/eom-api-build/3fecb3f332024768fc58150cbbd7a9168d94f1bc.yKggmi/dist`.
+All9 actual long-running services were active at final read-only verification.
+This documentation follow-up does not replace the tested code candidate or activate it.

@@ -292,6 +292,8 @@ INDEX/QUERY 모두 실행 직전 durable marker를 소모해 재부팅으로 uni
 이번 source 작업에서 변경하지 않았습니다.
 이 최신57-suite1,382 PASS·strict type14·lint/format22 PASS는 실제 임시 Job/Artifact/파일
 검증이며, 운영 사용자 인증·실제 임베딩 계산·GPU 성능 검증과는 구분합니다.
+code candidate `3fecb3f3`의3-wheel build/RECORD와 격리된 wheel-only10개 module import·
+packaged schema 검증도 PASS했으며, 실제 설치/활성화는 수행하지 않았습니다.
 [QUERY owner 연결 범위](docs/architecture/REFERENCE_QUERY_OWNER_COMPOSITION.md)에 source
 검증과 아직 없는 운영 경계를 구분했습니다. 기존 서비스·CPU 모델 환경은 바꾸지 않았습니다.
 
