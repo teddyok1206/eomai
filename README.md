@@ -169,6 +169,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | 계약·registry·Artifact·수치 검증·atomic submission·exact claim/native dispatch | SOURCE_PASS; 실제 seed와 delta 모두 계산·Job·Workflow/START 성공. vector/binding 각2건, 같은 논리 인덱스의 불변 revision2(coverage2/520), 첫 벡터/연결 재사용 확인. 실제 same-key replay·QUERY는 미완료 |
 | exact pinned index read | SOURCE_PASS; 현재 권한 재확인·일괄 binding 조회·선택된 벡터 읽기 구현, 공통 검색/QUERY 소비는 미활성 |
 | 공통 유사도 context 조립 | SOURCE_PASS; 기출변형용 승인 anchor·3개 독립 view·현재 권한 재확인334 PASS, 실제 QUERY 실행·소비자 연결은 미활성 |
+| 유사도 결과의 실행계획 전달 준비 | SOURCE_PASS; 정본 context1.0을 기존 Orchestrator 게시자로 저장하고 raw/request/context 해시를 구분한 작은 불변 참조 제공. 관련347 PASS·타입4·후보07c25268의3-wheel/RECORD·owner용2-wheel 격리 검증 PASS. 실행계획/워크스페이스/프롬프트 전달과 운영 활성화는 아직 미연결. [전달 계약·게시 검증](docs/architecture/SYSTEM_RAG_SIMILARITY_CONTEXT_IMPLEMENTATION_BOUNDARY.md#16-c2-immutable-context-delivery--protocol-first-publication-boundary) |
 | genuine QUERY 입력·encoder/handoff·실행 계약 | SOURCE_PASS; 정본4파일·기존 큐의 QUERY별 claim/완료 검증. 정확한 QUERY 정의 접수 허용 후보 회귀718·임시 DB68 PASS. 실제 정의/정책 활성화·정본 계산·소비자 조회는 미완료 |
 | 고정 CPU QUERY 실행 어댑터 | SOURCE_PASS; private/root handoff·공통 capacity·재시작 중복 차단. 고정 unit/설정/polkit 설치·UID990 수치 사전확인·실제 owner 허용/거부7 PASS. 실제 QUERY 모델 계산·사용자 권한 검증은 별도 |
 | QUERY Job·실행·정본 완료 조회 | SOURCE_PASS; 원 Job/4개 checkpoint·claim 복구·현재 권한/정본 완료 조회 구현. 후속 caller-root 준비·읽기는 전체 capture3→2로 중복만 제거하고 시작/종료·각 view 검증 유지(source376·추가 focused5 PASS, 중복 합산 안 함). 실제 계산·소비 활성화는 미검증 |

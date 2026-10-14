@@ -1283,3 +1283,13 @@ claimed from the local SQLite fixture. The genuine QUERY handle remained untouch
 and was verified alive at16:45 UTC awaiting its original single login. Next: a
 separately versioned grounded plan, authorized materialization and prompt delivery;
 actual variation and the other consumers remain unconnected at this checkpoint.
+
+Candidate `07c25268af7a4d3f1aad8de77f647ab024fe404d` passed the complete existing
+three-wheel/RECORD/application-contract build and a two-wheel-only transitive EOM
+import/schema-reference check. The packaged resource raw hash, public exports,
+copied-pin revalidation and authority-field rejection were checked with no checkout,
+Application API wheel, prefix fallback or ML imports. Platform raw
+`1f4e24d4ce380e7c1858a34e697ab13a0f30abbf64a01008bdec33bcf613ed91`;
+API-contract raw `307b371555bd62320d400a73542b8a6453e2bfcaa222d6847addeec2ce1db850`.
+Evidence: `similarity-delivery-{release-build,owner-pair-proof}.log` in the same local
+directory. Candidate is NOT installed; current API75fdc265/owner5018ad2d are unchanged.
