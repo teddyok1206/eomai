@@ -16,6 +16,25 @@ from eom_identity_service.installed_owner_session_provider import (
     identity_provider_code_members,
     open_installed_identity_provider_observation,
 )
+from eom_identity_service.local_indexing_fence_sql import (
+    LOCAL_INDEXING_FENCE_BODY,
+    LOCAL_INDEXING_FENCE_BODY_SHA256,
+    LOCAL_INDEXING_FENCE_CALL_SQL,
+    LOCAL_INDEXING_FENCE_CREATE_SQL,
+    LOCAL_INDEXING_FENCE_EXECUTE_ROLE,
+    LOCAL_INDEXING_FENCE_GRANT_SQL,
+    LOCAL_INDEXING_FENCE_REVOKE_PUBLIC_SQL,
+    LOCAL_INDEXING_FENCE_SIGNATURE,
+    LocalIndexingFenceError,
+    LocalIndexingFenceOwnerPin,
+    require_local_indexing_fence_installation,
+)
+from eom_identity_service.local_indexing_runtime import (
+    AuthenticatedLocalIndexingRuntime,
+    IndexingRuntimeAdmissionError,
+    LocalIndexingRuntimePin,
+    capture_local_indexing_runtime,
+)
 from eom_identity_service.local_indexing_service_registry import (
     LocalIndexingControlOperation,
     LocalIndexingControlResult,
@@ -50,6 +69,7 @@ from eom_identity_service.owner_session_transport import (
     import_owner_session_capture,
     observe_owner_session_transport,
 )
+from eom_identity_service.postgres_local_indexing_fence import PostgresLocalIndexingServiceFence
 from eom_identity_service.postgres_operator_authorization_fence import (
     OPERATOR_AUTHORIZATION_FENCE_LOCK_TIMEOUT_MS,
     OPERATOR_AUTHORIZATION_FENCE_STATEMENT_TIMEOUT_MS,
@@ -57,6 +77,14 @@ from eom_identity_service.postgres_operator_authorization_fence import (
 )
 
 __all__ = [
+    "LOCAL_INDEXING_FENCE_BODY",
+    "LOCAL_INDEXING_FENCE_BODY_SHA256",
+    "LOCAL_INDEXING_FENCE_CALL_SQL",
+    "LOCAL_INDEXING_FENCE_CREATE_SQL",
+    "LOCAL_INDEXING_FENCE_EXECUTE_ROLE",
+    "LOCAL_INDEXING_FENCE_GRANT_SQL",
+    "LOCAL_INDEXING_FENCE_REVOKE_PUBLIC_SQL",
+    "LOCAL_INDEXING_FENCE_SIGNATURE",
     "OPERATOR_AUTHORIZATION_FENCE_BODY",
     "OPERATOR_AUTHORIZATION_FENCE_BODY_SHA256",
     "OPERATOR_AUTHORIZATION_FENCE_CALL_SQL",
@@ -69,6 +97,7 @@ __all__ = [
     "OPERATOR_AUTHORIZATION_FENCE_SIGNATURE",
     "OPERATOR_AUTHORIZATION_FENCE_STATEMENT_TIMEOUT_MS",
     "OWNER_SESSION_TRANSPORT_SECONDS",
+    "AuthenticatedLocalIndexingRuntime",
     "AuthenticatedOperatorSession",
     "AuthenticatedSessionFence",
     "AuthenticatedSessionFenceError",
@@ -77,18 +106,24 @@ __all__ = [
     "FixedIdentityProviderPin",
     "HeldIdentityProviderFile",
     "IdentityOwnerSessionProviderAdmission",
+    "IndexingRuntimeAdmissionError",
     "InstalledIdentityProviderObservation",
     "LocalIndexingControlOperation",
     "LocalIndexingControlResult",
+    "LocalIndexingFenceError",
+    "LocalIndexingFenceOwnerPin",
+    "LocalIndexingRuntimePin",
     "OperatorAuthorizationFence",
     "OperatorAuthorizationFenceError",
     "OperatorAuthorizationFenceOwnerPin",
     "OwnerSessionTransportError",
     "OwnerSessionTransportObservation",
+    "PostgresLocalIndexingServiceFence",
     "PostgresOperatorAuthorizationFence",
     "ProtectedInstalledIdentityProviderAdmission",
     "activate_local_indexing_service",
     "assert_identity_provider_current",
+    "capture_local_indexing_runtime",
     "disable_local_indexing_service",
     "export_owner_session_capture",
     "identity_provider_code_members",
@@ -97,5 +132,6 @@ __all__ = [
     "observe_owner_session_transport",
     "open_installed_identity_provider_observation",
     "register_local_indexing_service",
+    "require_local_indexing_fence_installation",
     "require_operator_authorization_fence_installation",
 ]

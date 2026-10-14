@@ -245,3 +245,115 @@ were verified without a DB connection or installation. QUERY remains globally
 unoffered. This package proof does not activate the new root context, service
 authentication, Catalog grant or automatic reconciliation. The initial failed
 7bf24aea build and lock-error reproduction logs were retained separately.
+
+## Actual runtime admission boundary
+
+Use one fixed, root-managed `eom-embedding-index-owner.service` under the existing
+infrastructure user `eom-workflow-runner`, with the existing restricted Catalog DB
+role. This is not a Codex/numerical worker and consumes no Codex slot. Ordinary
+systemd EnvironmentFile loading supplies the existing Catalog credential; it is
+not put into a new config, argv, worker input or user-session store. No new IAM,
+credential registry, broker, queue or generic daemon framework is introduced.
+
+Before Identity can admit a service operation, verify the **actual current process**
+against the root-owned unit: MainPID, user, invocation, cgroup, fixed entrypoint,
+isolated interpreter and immutable installed owner release. A root-owned small
+runtime config binds the exact service reference, source commit and raw wheel,
+interpreter and unit hashes. A separately released Catalog grant pins that config's
+raw SHA; parsing or supplying these values alone never authenticates a caller.
+The unit does not contain the config SHA, avoiding a config/unit hash cycle.
+
+Owner release files must match the retained root-published platform/API-contract
+wheels. Capture and recheck file epochs, namespace closure, actual unit/process
+identity and boot lifetime. Files newer than process startup are not accepted as
+proof of already-loaded code. No source checkout/Git, arbitrary unit/path/role or
+model-supplied observation is admitted. Ambient UID alone is explicitly insufficient.
+Code/root-config replacement or restart invalidates the old capture; supported
+restart captures the newly installed instance. Current DB head/policy/source checks
+and numerical CPU/GPU admission remain separate and are repeated per SQL root.
+
+Identity's later narrow SECURITY DEFINER routine retains the same shared head lock
+used by supported control writers and returns only bounded typed metadata. Catalog
+receives no Identity table writes. Its actual authenticated DB principal and the
+non-transferable current runtime capture must both match the registered identity;
+a metadata DTO or generic SYSTEM/ADMIN actor is not a substitute. Runtime config
+schema precedes the observation behavior. This remains uninstalled until the
+compatible release/privileged acceptance gates pass; no deployment is inferred.
+
+The narrow DB interface is `public.eom_fence_local_indexing_service_v1(text,text,text,text)`.
+Only the actual `eom_catalog_manager_runtime` login, without `SET ROLE`, may invoke
+it. It takes exact service/revision/identity-hash/source pins, locks the one indexed
+head `FOR SHARE`, and returns only the existing closed identity/status metadata.
+Disabled, stale or different-principal identities fail; it does not return a data
+grant. Both metadata documents are revalidated, including their semantic hash.
+The caller must retain its explicit READ COMMITTED root, and may not acquire this
+lock first inside a savepoint. Waits are bounded; failure requires root rollback,
+not implicit retry. A root-local witness may only be reused by the same Session,
+connection, transaction and thread, with a fresh current runtime recheck.
+
+Installing the exact function/ACL is a separately admitted owner operation, not
+an import side effect or Catalog self-grant. Before each use inspect exact function
+signature, body, definer, fixed search path, ACL, table/schema owners and the
+runtime's absence of Identity table privileges. The existing metadata tables do
+not change, and no extra registry/table/credential is introduced by this interface.
+
+### Runtime and DB fence implementation checkpoint — 2026-10-14
+
+The closed non-secret `local-indexing-runtime/1.0` schema/resource and strict frozen
+model are implemented. They bind an exact service reference/source and raw wheel,
+interpreter and unit hashes, not credentials or permissions. Canonical bounded
+parsing rejects duplicate keys, nonfinite/extra data and forged copied models.
+The mirrored schema raw SHA is
+`db53688fbf73d082cab552b696c59788aa0fbc7d404077f3610b91b81ef2756f`.
+
+The Identity infrastructure observer checks the actual current unit/process,
+isolated interpreter, immutable root files and retained wheel namespace closure.
+Its same-process capture rejects serialization and rechecks unit/boot/file epochs
+at use time. Ordinary developer execution is rejected before protected config IO.
+The SQL fence binds that capture to the actual authenticated DB principal, exact
+active Identity revision and retained root lock; it never returns a Catalog data
+grant or substitutes an operator role. First acquisition inside a savepoint,
+implicit/autocommit/wrong-role roots and cross-thread/root reuse fail explicitly.
+
+Validation so far:
+
+- New focused source tests:146 PASS. OS/unit/runtime and SQL responses are explicitly
+  synthetic seams; actual temporary file/hash/descriptor checks run, but this is
+  **not** root/systemd/Catalog authentication acceptance.
+- The official guarded disposable PostgreSQL purpose:42 PASS, comprising existing
+  Identity metadata29 and new exact SQL semantics13. New routine DDL/ACL exists
+  only in rolled-back roots; committed synthetic registry history is retained.
+  Exact pin/NULL/stale/SET ROLE/actual-principal mismatch denials and a shared-lock
+  timeout/replay with the supported control writer are exercised in PostgreSQL.
+- These13 SQL tests use the actual disposable **owner**, with that identity
+  registered accordingly. They do not impersonate or prove the production Catalog
+  login, least-privilege installed fence, root runtime capture or data scope.
+- The initial PostgreSQL run had one test-invocation syntax failure
+  (`SET LOCAL ROLE CURRENT_USER`); the fixture now uses the supported bound server
+  setting.40 PASS/1 failure remains in its original log;42 PASS is the reviewed run.
+
+No new service/entrypoint/config/routine/data grant is installed by these changes.
+Source migration head remains0055 and no production migration/role change occurs.
+Required next boundaries remain the executable service composition, actual narrow
+DB installation/admission, successor Catalog service data grant/official source
+resolution, then genuine bounded seed/delta/replay/QUERY and CPU/GPU comparison.
+The full incremental-embedding goal is not complete.
+
+Final source gate for this checkpoint:77 focused suites /2,104 PASS in277.12s;
+strict mypy40 modules and Ruff lint/format74 Python files PASS. The SQL body is
+frozen with raw SHA
+`eba4706dc13f62c8546fd4d1dc7390179057d944da475720eefae2b6cd885c85`.
+Shell syntax and `git diff --check` PASS. The guarded read-only postcheck confirms
+disposable identity, head0055 and0 other connections. Logs are retained under
+`/tmp/eom-identity-provider-install.nAaycoDM/`:
+
+- `local-indexing-service-auth-regression.log`
+- `local-indexing-service-auth-{mypy,ruff,format}.log`
+- `local-indexing-service-auth-postgres-reviewed.log`
+- `local-indexing-service-auth-inspect.log`
+
+Initial runtime-fixture failures remain in
+`local-indexing-runtime-focused.log`: its test-owned directories inherited group
+write from the developer umask. The fixture now sets nonwritable modes; production
+ownership/write-bit checks were not weakened. No actual runtime grant was tested
+by that fixture correction.

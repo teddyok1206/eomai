@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/identity/local-indexing-runtime/1.0",
+  "title": "Local indexing runtime configuration, not authenticated runtime authority",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "service",
+    "runtime_source_commit",
+    "platform_wheel_sha256",
+    "api_contracts_wheel_sha256",
+    "interpreter_sha256",
+    "unit_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-indexing-runtime/1.0"
+    },
+    "service": {
+      "$ref": "eom://schemas/identity/local-indexing-service/1.0#/$defs/reference"
+    },
+    "runtime_source_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "minLength": 40,
+      "maxLength": 40
+    },
+    "platform_wheel_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "api_contracts_wheel_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "interpreter_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "unit_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "minLength": 71,
+      "maxLength": 71
+    }
+  }
+}

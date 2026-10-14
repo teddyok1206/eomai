@@ -13,6 +13,15 @@ from eom_operator_identity.contracts import (
     validate_display_name,
     validate_username,
 )
+from eom_operator_identity.local_indexing_runtime import (
+    LOCAL_INDEXING_RUNTIME_SCHEMA_REF,
+    MAX_LOCAL_INDEXING_RUNTIME_BYTES,
+    LocalIndexingRuntimeConfiguration,
+    LocalIndexingRuntimeContractError,
+    local_indexing_runtime_bytes,
+    local_indexing_runtime_schema,
+    parse_local_indexing_runtime_configuration,
+)
 from eom_operator_identity.local_indexing_service import (
     LOCAL_INDEXING_SERVICE_SCHEMA_REF,
     MAX_LOCAL_INDEXING_SERVICE_BYTES,
@@ -47,7 +56,9 @@ from eom_operator_identity.owner_session_capture import (
 from eom_operator_identity.passwords import PasswordPolicy, PasswordService
 
 __all__ = [
+    "LOCAL_INDEXING_RUNTIME_SCHEMA_REF",
     "LOCAL_INDEXING_SERVICE_SCHEMA_REF",
+    "MAX_LOCAL_INDEXING_RUNTIME_BYTES",
     "MAX_LOCAL_INDEXING_SERVICE_BYTES",
     "MAX_OWNER_SESSION_CAPTURE_REQUEST_BYTES",
     "MAX_OWNER_SESSION_CAPTURE_RESPONSE_BYTES",
@@ -56,6 +67,8 @@ __all__ = [
     "ActorContext",
     "ActorSource",
     "ActorType",
+    "LocalIndexingRuntimeConfiguration",
+    "LocalIndexingRuntimeContractError",
     "LocalIndexingServiceError",
     "LocalIndexingServiceErrorCode",
     "LocalIndexingServiceIdentity",
@@ -69,6 +82,8 @@ __all__ = [
     "PasswordService",
     "PermissionKey",
     "RoleKey",
+    "local_indexing_runtime_bytes",
+    "local_indexing_runtime_schema",
     "local_indexing_service_bytes",
     "local_indexing_service_identity_sha256",
     "local_indexing_service_reference",
@@ -77,6 +92,7 @@ __all__ = [
     "owner_session_capture_bytes",
     "owner_session_capture_request_sha256",
     "owner_session_capture_schema",
+    "parse_local_indexing_runtime_configuration",
     "parse_local_indexing_service_identity",
     "parse_local_indexing_service_reference",
     "parse_local_indexing_service_status",

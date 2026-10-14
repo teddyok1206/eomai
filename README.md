@@ -310,6 +310,14 @@ IAM/수치 seam을 구분하며, 실제 사용자·모델/GPU·운영 QUERY 활�
 grant나 자동 갱신 활성화는 아닙니다. 실제 잠금 초과 오류가 정리 코드에 가려지던 문제도
 재현·수정했고, 기존 실패 기록과 임시 DB의 합성 이력은 보존했습니다.
 
+이어서 자동 인덱싱 서비스의 실제 프로세스·설치 파일 확인과 DB 접속 주체/현재 신원
+잠금을 연결하는 경계를 구현했습니다. 새 source146개와 일회용 PostgreSQL42개
+(기존 신원29·새 SQL 의미13)가 PASS했습니다. 테스트용 OS/서비스 seam과 실제 DB owner
+검증을 운영 Catalog 로그인으로 확대 해석하지 않습니다. 전용 서비스 설치·자료 grant·
+진짜 seed/delta/조회와 CPU/GPU 비교는 아직 남아 있으며 운영 활성화 완료는 아닙니다.
+[신원·runtime 경계와 검증 범위](docs/architecture/LOCAL_INDEXING_SERVICE_AUTHORITY_DESIGN.md)에
+정확히 구분했습니다.
+
 최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와
 strict type/lint/format PASS입니다. 실제 임시 DB28개 사례에는 독립 실행기 claim 경쟁과
 기존 실행 경로 분리가 포함됩니다. 합성 owner 콜백과 source 검증은 실제 사용자 권한이나

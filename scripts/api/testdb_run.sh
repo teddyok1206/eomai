@@ -242,7 +242,8 @@ if [[ "${action}" == "local-indexing-service-tests" ]]; then
   export EOM_RUN_API_INTEGRATION=1
   export EOM_RUN_LOCAL_INDEXING_SERVICE_INTEGRATION=1
   export EOM_API_TEST_STATE="${state_directory}"
-  "${PYTHON}" -m pytest -q tests/integration/test_local_indexing_service_registry.py
+  "${PYTHON}" -m pytest -q tests/integration/test_local_indexing_service_registry.py \
+    tests/integration/test_local_indexing_fence_sql.py
   printf 'Disposable Identity indexing-service registry tests passed.\n'
   exit 0
 fi

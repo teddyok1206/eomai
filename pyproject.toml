@@ -16,7 +16,7 @@ dependencies = [
   # Create and verify standard PDF annotation objects for the native review comment panel.
   "PyMuPDF>=1.26.7,<1.27",
   "PyYAML>=6.0,<7",
-  # Resolve pinned cross-schema Catalog protocol references without network access.
+  # Resolve pinned cross-schema Catalog/Identity references without network access.
   "referencing>=0.36,<1",
   "SQLAlchemy>=2.0,<3",
   "typer>=0.16,<1",
@@ -100,6 +100,7 @@ eom_image_contracts = ["schemas/*.json"]
 eom_operator_identity = [
   "resources/operator-owner-session-capture-v1.schema.json",
   "resources/local-indexing-service-v1.schema.json",
+  "resources/local-indexing-runtime-v1.schema.json",
 ]
 
 [tool.pytest.ini_options]
