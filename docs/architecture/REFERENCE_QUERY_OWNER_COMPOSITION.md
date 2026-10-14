@@ -52,6 +52,17 @@ The live process is waiting for ONE guiadmin login in the original sudo pane;
 no credential is saved and no source capture/QUERY forward has started. This
 wait is not a successful QUERY/consumer result or a state-machine failure.
 
+Candidate `175545bb224e3545488d428df5892010fa0bc0b8` passed the complete
+three-wheel build/RECORD/installed application-contract/definition inventory and
+the owner-pair-only transitive import proof, including the new Catalog method.
+Platform raw `18fb5f61cdd2cc6d0b56fbb8a205c29c4e0927f9191b4bd4982d7b1ef1376ae1`;
+API-contract raw `878af73aa0f308b03264563707f03fd81d9a15e6ea8e594f664f29da5694d614`.
+The final current-source PostgreSQL stage run is **68 PASS /45.24s**.
+Build and pair-only logs: `query-combined-root-{release-build,owner-pair-proof}.log`.
+This candidate is NOT installed/activated. API75fdc265, owner5018ad2d and the
+existing finite QUERY process remain unchanged; do not send a shell command into
+its waiting password prompt or request another login while that handle lives.
+
 ## Exact QUERY admission after concrete owner implementation — 2026-10-14
 
 The typed current-source owner, fixed-purpose executor, durable launch/checkpoint
