@@ -1515,3 +1515,79 @@ particular, evidence validation also calls the shared allowlist without a simila
 context; do not activate the new plan after testing only the workspace leaf. Preserve
 current actor/source fences, original evidence usage and late review validation while
 closing that actual end-to-end path.
+
+## 19. Plan23 preparation, replay and Evidence-result compatibility
+
+2026-10-14 UTC. Keep existing wire schemas and workflow1.16. Source candidate
+plan23 is not activated until the actual runtime/Pack path and canary are closed.
+
+1. **Responsibility:** Extend existing grounded plan resolution/replay and its actual
+   response/receipt/registration readers. No second workflow or result-validation path.
+2. **Canonical source:** Existing plan/control records, pinned context delivery, Item,
+   original Evidence Bundle and role result remain authoritative in their own scope.
+3. **Identity:** The new plan is constructed only before first persistence; exact
+   replay returns the original stored version/hash. A caller cannot upgrade plan19
+   or change a stored plan23's context by supplying different preparation inputs.
+4. **Pointers:** One frozen local preparation value pairs the checked context and
+   delivery; it is not a source grant. Current producer/source/operator fences still
+   belong to the real owner. All plan19/23 readers use one explicit family selector.
+5. **Access:** Indexed workflow/plan key lookup, one exact schema selection, existing
+   instruction/reference bundle lookups and bounded Evidence re-resolution.
+6. **Structures:** Two-member frozen schema set, typed parser/preparation value and
+   existing revision references/unique workflow constraint. No DB/schema/index/cache.
+7. **Cost:** O(plan+bundle members) and existing bounded Evidence validation; no model
+   run, native query or candidate material read during result receipt verification.
+8. **Transactions:** Existing plan record/unique-workflow boundary is retained. The
+   execution materializer continues requiring its actual current similarity reader.
+9. **Dependencies:** Workflow contract helper is IO-free. Orchestrator owns the scoped
+   Evidence-only allowlist query and shared bundle checks; runtime adapters remain
+   outside it. No new dependency or Catalog infrastructure import into Orchestrator.
+10. **Failure/replay:** Evidence verification never obtains the auxiliary sidecar
+    allowlist or substitutes it for a Graph receipt. Missing current execution reader
+    still prevents materialization; bad plan/hash/step/bundle/Evidence fails explicitly.
+    Historical plan19 replay and all released schemas/Pack bytes are preserved.
+11. **Alternative:** Passing a synthetic similarity-authority context to an Evidence
+    receipt check would conflate unrelated permissions. A narrow Evidence-only query
+    with the same shared bundle validation suffices; do not add bypass flags to the
+    execution allowlist or weaken its current reader requirement.
+
+### 19.1 Source plan/receipt compatibility checkpoint — 2026-10-14 UTC
+
+The shared explicit plan19/23 selector is now used by resolution/replay, worker
+response constraints, materialization, review escalation, Evidence-result validation
+and variation registration. Existing V19 parsing is unchanged; malformed plan23
+normalizes to an explicit invalid-plan error rather than an ungrounded result.
+`PreparedSimilarityPlan` is a local frozen pair of already validated context/delivery
+values, not a publication, permission or Pack-compatibility grant.
+
+The existing grounded resolver can bind this pair to its UNPERSISTED V19 candidate
+before the one normal plan-record call. It never records19 then upgrades it. Stored
+V23 checks row ID/workflow/hash and reuses its exact context without current preset
+lookups; a different Artifact pin or adding context to an old stored plan conflicts.
+Without preparation, existing new-plan19 behavior and historical replay are preserved.
+
+The Evidence-only query resolves the exact plan/step and the SAME shared released
+instruction/reference-bundle checks but obtains no auxiliary context member grant.
+Execution still requires its real current reader. New source tests exercise both
+authoring and full V12 review receipt creation, exact plan23 SHA and original Evidence,
+then the registration source pointer. They use synthetic source/publication/control
+fixtures, not production IAM, PostgreSQL plan persistence, a model or actual worker.
+The initial review test correctly rejected an APPPROVED_ITEM-only verification target
+against its PAST_EXAM fixture; the target fixture was corrected, not the source-class
+validator. That failure is retained in the initial focused log.
+
+Final30-suite regression: **764 PASS /51.71s**; strict mypy7, Ruff/format8 and diff
+checks PASS. The new13 source cases include first persistence, immutable replay,
+changed-pointer conflict, stale row headers, malformed response plans, restricted
+Evidence-only scope, bundle/step refusal, both receipts and registration linkage.
+Overlapping earlier101/11 gates are not additive. Evidence prefix:
+`/tmp/eom-identity-provider-install.nAaycoDM/similarity-plan-runtime-`.
+Read-only disposable guard inspection separately passed: current head0055 and zero
+other connections. No new plan23 PostgreSQL mutation test is claimed from that check.
+
+No production schema/DB/service/policy/Pack activation or actual model/query execution.
+The existing QUERY handles were both verified S+ at18:19:32 UTC, still awaiting the
+original login; no restart/retry/second submit. API75fdc265/owner5018ad2d remain pinned.
+Still required: compatible Pack/instructions, actual API preparation/publication and
+current-reader composition into the Orchestrator worker callback, genuine QUERY and
+bounded variation acceptance. This is not a completed or active C2 consumer path.

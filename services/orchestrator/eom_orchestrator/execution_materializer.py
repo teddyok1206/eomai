@@ -81,7 +81,9 @@ from eom_workflow.inference_transfer_materialization import (
 from eom_workflow.models import RoleWorkerInput
 from eom_workflow.schemas import validate_role_input
 from eom_workflow.similarity_control import (
+    POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS,
     ResolvedExecutionPlanV23,
+    parse_post_registration_grounded_plan,
     parse_similarity_execution_plan,
 )
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
@@ -275,12 +277,10 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV17.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/18.0":
         plan = ResolvedExecutionPlanV18.model_validate(plan_record.canonical_document)
-    elif plan_schema_version == "resolved-execution-plan/19.0":
-        plan = ResolvedExecutionPlanV19.model_validate(plan_record.canonical_document)
+    elif plan_schema_version in POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS:
+        plan = parse_post_registration_grounded_plan(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/20.0":
         plan = ResolvedExecutionPlanV20.model_validate(plan_record.canonical_document)
-    elif plan_schema_version == "resolved-execution-plan/23.0":
-        plan = parse_similarity_execution_plan(plan_record.canonical_document)
     elif plan_schema_version in {"resolved-execution-plan/21.0", "resolved-execution-plan/22.0"}:
         plan = _validated_transfer_materialization_plan(
             plan_record.canonical_document,
@@ -871,12 +871,13 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV17.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/18.0":
         plan = ResolvedExecutionPlanV18.model_validate(plan_record.canonical_document)
-    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/19.0":
-        plan = ResolvedExecutionPlanV19.model_validate(plan_record.canonical_document)
+    elif (
+        plan_record.canonical_document.get("schema_version")
+        in POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS
+    ):
+        plan = parse_post_registration_grounded_plan(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/20.0":
         plan = ResolvedExecutionPlanV20.model_validate(plan_record.canonical_document)
-    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/23.0":
-        plan = parse_similarity_execution_plan(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") in {
         "resolved-execution-plan/21.0",
         "resolved-execution-plan/22.0",
@@ -980,6 +981,47 @@ def authorized_execution_artifact_revisions(
                 plan.evidence_context_artifact.artifact_revision_id,
             }
         )
+    revision_ids.update(_authorized_step_bundle_revisions(session, step))
+    return frozenset(revision_ids)
+
+
+def authorized_evidence_artifact_revisions(
+    session: Session, *, plan_id: str, step_key: str
+) -> frozenset[str]:
+    """Exact Evidence/control pins only; never an auxiliary source/materialization grant."""
+    record = session.get(ResolvedExecutionPlanRecord, plan_id)
+    if record is None:
+        raise ControlPlaneError("CONTROL_PLAN_MISSING", "resolved execution plan is missing")
+    if record.canonical_document.get("schema_version") != "resolved-execution-plan/23.0":
+        return authorized_execution_artifact_revisions(session, plan_id=plan_id, step_key=step_key)
+    plan = parse_similarity_execution_plan(record.canonical_document)
+    if (
+        plan.plan_id != plan_id
+        or plan.workflow_id != record.workflow_id
+        or plan.plan_sha256 != record.plan_sha256
+    ):
+        raise ControlPlaneError("CONTROL_PLAN_HASH_MISMATCH", "resolved plan record is stale")
+    matches = tuple(step for step in plan.steps if step.step_key == step_key)
+    if len(matches) != 1 or matches[0].role not in {"authoring", "review"}:
+        raise ControlPlaneError("CONTROL_PLAN_STEP_MISSING", "Evidence validation step differs")
+    step = matches[0]
+    if step.evidence_access != "EVIDENCE_CONTEXT":
+        raise ControlPlaneError(
+            "CONTROL_PLAN_INVALID", "Evidence validation requires Graph context"
+        )
+    return frozenset(
+        {
+            plan.evidence_manifest_artifact.artifact_revision_id,
+            plan.evidence_context_artifact.artifact_revision_id,
+        }
+    ) | _authorized_step_bundle_revisions(session, step)
+
+
+def _authorized_step_bundle_revisions(
+    session: Session, step: ResolvedStepExecution
+) -> frozenset[str]:
+    """One shared exact released-bundle check for execution and Evidence-only reads."""
+    revision_ids: set[str] = set()
     bundles: list[tuple[BundleRevisionPointer, str]] = [(step.instruction_bundle, "INSTRUCTION")]
     if step.reference_bundle is not None:
         bundles.append((step.reference_bundle, "REFERENCE"))

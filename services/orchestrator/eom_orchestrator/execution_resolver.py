@@ -62,6 +62,14 @@ from eom_workflow.document_review import (
     PdfDocumentReviewRequest,
 )
 from eom_workflow.models import CustomerSupportCase
+from eom_workflow.similarity_control import (
+    POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS,
+    PreparedSimilarityPlan,
+    ResolvedExecutionPlanV23,
+    bind_similarity_execution_plan,
+    parse_post_registration_grounded_plan,
+    validate_similarity_plan_context,
+)
 from eom_workflow.single_document_review_contract import (
     single_document_review_contract_for_definition,
 )
@@ -261,6 +269,7 @@ def resolve_knowledge_backed_execution_plan(
     dependencies: ResolvedPlanDependencyEvidence,
     steps: tuple[ExecutionStepRequirement, ...],
     resolved_at: datetime | None = None,
+    similarity: PreparedSimilarityPlan | None = None,
 ) -> (
     ResolvedExecutionPlanV3
     | ResolvedExecutionPlanV16
@@ -271,6 +280,15 @@ def resolve_knowledge_backed_execution_plan(
 
     if not steps:
         raise ControlPlaneError("CONTROL_PLAN_STEPS_MISSING", "execution plan has no steps")
+    if similarity is not None:
+        try:
+            if not isinstance(similarity, PreparedSimilarityPlan):
+                raise ValueError("SIMILARITY_PLAN_PREPARATION_INVALID")
+            similarity.__post_init__()
+        except (ValueError, TypeError, JsonSchemaValidationError):
+            raise ControlPlaneError(
+                "CONTROL_SIMILARITY_CONTEXT_INVALID", "similarity preparation is invalid"
+            ) from None
     existing = session.scalar(
         select(ResolvedExecutionPlanRecord).where(
             ResolvedExecutionPlanRecord.workflow_id == dependencies.workflow_id
@@ -278,8 +296,36 @@ def resolve_knowledge_backed_execution_plan(
     )
     if existing is not None:
         try:
-            if existing.canonical_document.get("schema_version") == "resolved-execution-plan/19.0":
-                return ResolvedExecutionPlanV19.model_validate(existing.canonical_document)
+            if (
+                existing.canonical_document.get("schema_version")
+                in POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS
+            ):
+                replay = parse_post_registration_grounded_plan(existing.canonical_document)
+                if isinstance(replay, ResolvedExecutionPlanV23):
+                    if (
+                        replay.plan_id != existing.plan_id
+                        or replay.workflow_id != existing.workflow_id
+                        or replay.workflow_id != dependencies.workflow_id
+                        or replay.plan_sha256 != existing.plan_sha256
+                    ):
+                        raise ValueError("stored similarity plan identity is stale")
+                    if similarity is not None:
+                        if replay.similarity_delivery != similarity.delivery:
+                            raise ControlPlaneError(
+                                "CONTROL_PLAN_CONFLICT",
+                                "existing plan pins another reference context",
+                            )
+                        validate_similarity_plan_context(replay, similarity.context)
+                elif similarity is not None:
+                    raise ControlPlaneError(
+                        "CONTROL_PLAN_CONFLICT",
+                        "existing plan cannot acquire a new reference context",
+                    )
+                return replay
+            if similarity is not None:
+                raise ControlPlaneError(
+                    "CONTROL_PLAN_CONFLICT", "existing plan cannot acquire a new reference context"
+                )
             if existing.canonical_document.get("schema_version") == "resolved-execution-plan/17.0":
                 return ResolvedExecutionPlanV17.model_validate(existing.canonical_document)
             if existing.canonical_document.get("schema_version") == "resolved-execution-plan/16.0":
@@ -519,13 +565,24 @@ def resolve_knowledge_backed_execution_plan(
         raise ControlPlaneError(
             "CONTROL_PLAN_INVALID", "resolved knowledge-backed execution plan is invalid"
         ) from exc
+    if similarity is not None:
+        if not isinstance(model, ResolvedExecutionPlanV19):
+            raise ControlPlaneError(
+                "CONTROL_SIMILARITY_PLAN_UNSUPPORTED", "similarity requires the grounded 1.16 plan"
+            )
+        try:
+            model = bind_similarity_execution_plan(model, similarity.delivery, similarity.context)
+        except (ValueError, TypeError, JsonSchemaValidationError):
+            raise ControlPlaneError(
+                "CONTROL_SIMILARITY_CONTEXT_INVALID", "similarity differs from the resolved plan"
+            ) from None
     record = record_knowledge_backed_execution_plan(
         session,
         document=model.model_dump(mode="json"),
         dependencies=dependencies,
     )
     if post_registration_successor:
-        return ResolvedExecutionPlanV19.model_validate(record.canonical_document)
+        return parse_post_registration_grounded_plan(record.canonical_document)
     if natural_presentation_successor:
         return ResolvedExecutionPlanV17.model_validate(record.canonical_document)
     if variation_successor:

@@ -69,7 +69,6 @@ from eom_workflow import (
     ItemBriefV2,
     ResolvedExecutionPlanV16,
     ResolvedExecutionPlanV17,
-    ResolvedExecutionPlanV19,
     ResolvedStepExecutionV12,
     ReviewPolicyCorrectionRequired,
     WorkflowRequest,
@@ -117,6 +116,10 @@ from eom_workflow.schemas import (
     load_review_correction_directive_schema,
     validate_role_result,
     validate_schema_message,
+)
+from eom_workflow.similarity_control import (
+    POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS,
+    parse_post_registration_grounded_plan,
 )
 from eom_workflow_runner import validate_review_correction_step_binding
 from eom_workflow_runner.catalog_port import (
@@ -1934,8 +1937,9 @@ class WorkflowCatalogService:
             if record is None:
                 raise ValueError("past-exam variation execution plan is missing")
             plan = (
-                ResolvedExecutionPlanV19.model_validate(record.canonical_document)
-                if record.canonical_document.get("schema_version") == "resolved-execution-plan/19.0"
+                parse_post_registration_grounded_plan(record.canonical_document)
+                if record.canonical_document.get("schema_version")
+                in POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS
                 else ResolvedExecutionPlanV17.model_validate(record.canonical_document)
                 if record.canonical_document.get("schema_version") == "resolved-execution-plan/17.0"
                 else ResolvedExecutionPlanV16.model_validate(record.canonical_document)

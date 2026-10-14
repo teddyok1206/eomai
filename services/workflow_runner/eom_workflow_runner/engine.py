@@ -82,8 +82,9 @@ from eom_workflow.reference_query_execution import (
 )
 from eom_workflow.reference_query_workflow import ReferenceQueryWorkflowDefinition
 from eom_workflow.similarity_control import (
+    POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS,
     ResolvedExecutionPlanV23,
-    parse_similarity_execution_plan,
+    parse_post_registration_grounded_plan,
 )
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -292,12 +293,10 @@ def _parse_review_escalation_plan(
         return ResolvedExecutionPlanV17.model_validate(document)
     if schema_version == "resolved-execution-plan/18.0":
         return ResolvedExecutionPlanV18.model_validate(document)
-    if schema_version == "resolved-execution-plan/19.0":
-        return ResolvedExecutionPlanV19.model_validate(document)
+    if schema_version in POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS:
+        return parse_post_registration_grounded_plan(document)
     if schema_version == "resolved-execution-plan/20.0":
         return ResolvedExecutionPlanV20.model_validate(document)
-    if schema_version == "resolved-execution-plan/23.0":
-        return parse_similarity_execution_plan(document)
     raise ValueError("review escalation plan family is unsupported")
 
 

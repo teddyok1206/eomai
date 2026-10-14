@@ -35,7 +35,6 @@ from eom_workflow import (
     ResolvedExecutionPlanV12,
     ResolvedExecutionPlanV16,
     ResolvedExecutionPlanV17,
-    ResolvedExecutionPlanV19,
     ReviewEvidenceUsageValidationReceipt,
     ReviewEvidenceUsageValidationReceiptV2,
     ReviewEvidenceUsageValidationReceiptV3,
@@ -54,6 +53,10 @@ from eom_workflow.models import (
     RoleWorkerInput,
 )
 from eom_workflow.schemas import WorkflowSchemaError, validate_role_result
+from eom_workflow.similarity_control import (
+    POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS,
+    parse_post_registration_grounded_plan,
+)
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
@@ -62,7 +65,7 @@ from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.execution_materializer import (
     ResolvedEvidenceMaterials,
-    authorized_execution_artifact_revisions,
+    authorized_evidence_artifact_revisions,
     plan_stages_evidence_manifest,
     resolve_evidence_materials,
 )
@@ -288,7 +291,7 @@ def validate_evidence_usage_for_commit(
             "resolved-execution-plan/12.0",
             "resolved-execution-plan/16.0",
             "resolved-execution-plan/17.0",
-            "resolved-execution-plan/19.0",
+            *POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS,
         }
         if verification_planned
         else {"resolved-execution-plan/11.0"}
@@ -314,8 +317,8 @@ def validate_evidence_usage_for_commit(
         return None
     try:
         plan = (
-            ResolvedExecutionPlanV19.model_validate(plan_document)
-            if plan_schema == "resolved-execution-plan/19.0"
+            parse_post_registration_grounded_plan(plan_document)
+            if plan_schema in POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS
             else ResolvedExecutionPlanV17.model_validate(plan_document)
             if plan_schema == "resolved-execution-plan/17.0"
             else ResolvedExecutionPlanV16.model_validate(plan_document)
@@ -326,7 +329,7 @@ def validate_evidence_usage_for_commit(
             if successor
             else ResolvedExecutionPlanV3.model_validate(plan_document)
         )
-    except ValidationError as exc:
+    except ValueError as exc:
         raise EvidenceUsageValidationError(
             "EVIDENCE_PLAN_INVALID", "evidence validation plan is invalid"
         ) from exc
@@ -364,7 +367,7 @@ def validate_evidence_usage_for_commit(
         return None
 
     try:
-        authorized = authorized_execution_artifact_revisions(
+        authorized = authorized_evidence_artifact_revisions(
             session, plan_id=plan_id, step_key=step_key
         )
         materials = resolve_evidence_materials(

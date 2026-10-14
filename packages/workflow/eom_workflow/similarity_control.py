@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Literal
 
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.inference_transfer_experiment import PopulationSource
 from eom_catalog_contracts.knowledge import EducationalRetrievalRequirementV2
+from eom_catalog_contracts.models import FrozenModel
 from eom_catalog_contracts.similarity_context import (
     SimilarityContext,
     SimilarityContextRequest,
@@ -19,12 +21,34 @@ from eom_catalog_contracts.similarity_delivery import (
     validate_similarity_context_delivery,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256
+from jsonschema.exceptions import ValidationError as SchemaValidationError
 from pydantic import ConfigDict, TypeAdapter, model_validator
 
 from eom_workflow.control_plane import ResolvedExecutionPlanV19
 from eom_workflow.control_schemas import validate_control_contract
 
 MAX_SIMILARITY_EXECUTION_PLAN_BYTES = 1024 * 1024
+POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS = frozenset(
+    {"resolved-execution-plan/19.0", "resolved-execution-plan/23.0"}
+)
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedSimilarityPlan:
+    """Checked immutable values only; actual publication/source/Pack authority stays with owner."""
+
+    delivery: SimilarityContextDelivery
+    context: SimilarityContext
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.delivery, SimilarityContextDelivery) or not isinstance(
+            self.context, FrozenModel
+        ):
+            raise ValueError("SIMILARITY_PLAN_PREPARATION_INVALID")
+        context = parse_similarity_context(self.context)
+        validate_similarity_context_delivery(
+            self.delivery, context, expected_request=context.request
+        )
 
 
 class ResolvedExecutionPlanV23(ResolvedExecutionPlanV19):
@@ -65,6 +89,21 @@ class ResolvedExecutionPlanV23(ResolvedExecutionPlanV19):
 
 def parse_similarity_execution_plan(value: object) -> ResolvedExecutionPlanV23:
     return ResolvedExecutionPlanV23.model_validate(value)
+
+
+def parse_post_registration_grounded_plan(
+    document: dict[str, object],
+) -> ResolvedExecutionPlanV19 | ResolvedExecutionPlanV23:
+    """One explicit family choice for existing consumers, without rewriting old plan values."""
+    schema = document.get("schema_version")
+    if schema == "resolved-execution-plan/23.0":
+        try:
+            return parse_similarity_execution_plan(document)
+        except SchemaValidationError:
+            raise ValueError("POST_REGISTRATION_GROUNDED_PLAN_INVALID") from None
+    if schema == "resolved-execution-plan/19.0":
+        return ResolvedExecutionPlanV19.model_validate(document)
+    raise ValueError("POST_REGISTRATION_GROUNDED_PLAN_UNSUPPORTED")
 
 
 def validate_similarity_plan_context(

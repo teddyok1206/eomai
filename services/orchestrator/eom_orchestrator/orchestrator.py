@@ -47,7 +47,6 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV12,
     ResolvedExecutionPlanV16,
     ResolvedExecutionPlanV17,
-    ResolvedExecutionPlanV19,
 )
 from eom_workflow.document_review import (
     PairedDocumentReviewWorkerRequest,
@@ -110,6 +109,10 @@ from eom_workflow.schemas import (
     role_schema_bundle_hash,
     validate_role_input,
     validate_role_result,
+)
+from eom_workflow.similarity_control import (
+    POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS,
+    parse_post_registration_grounded_plan,
 )
 from pydantic import ValidationError
 from sqlalchemy import Engine, select
@@ -182,7 +185,7 @@ RETRYABLE_CONTROL_ADMISSION_ERRORS = frozenset(
         "CONTROL_ELIGIBLE_SLOT_UNAVAILABLE",
     }
 )
-_EVIDENCE_ACCESS_PLAN_SCHEMA_VERSIONS = frozenset(
+_EVIDENCE_ACCESS_PLAN_SCHEMA_VERSIONS = POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS | frozenset(
     {
         "resolved-execution-plan/3.0",
         "resolved-execution-plan/11.0",
@@ -191,7 +194,6 @@ _EVIDENCE_ACCESS_PLAN_SCHEMA_VERSIONS = frozenset(
         "resolved-execution-plan/16.0",
         "resolved-execution-plan/17.0",
         "resolved-execution-plan/18.0",
-        "resolved-execution-plan/19.0",
         "resolved-execution-plan/20.0",
     }
 )
@@ -263,18 +265,19 @@ def _resolved_evidence_plan_for_response(
             if isinstance(plan_document, dict) and plan_document.get("schema_version") in {
                 "resolved-execution-plan/16.0",
                 "resolved-execution-plan/17.0",
-                "resolved-execution-plan/19.0",
+                *POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS,
             }:
                 return (
-                    ResolvedExecutionPlanV19.model_validate(plan_document)
-                    if plan_document.get("schema_version") == "resolved-execution-plan/19.0"
+                    parse_post_registration_grounded_plan(plan_document)
+                    if plan_document.get("schema_version")
+                    in POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS
                     else ResolvedExecutionPlanV17.model_validate(plan_document)
                     if plan_document.get("schema_version") == "resolved-execution-plan/17.0"
                     else ResolvedExecutionPlanV16.model_validate(plan_document)
                 )
             return ResolvedExecutionPlanV12.model_validate(plan_document)
         return ResolvedExecutionPlanV3.model_validate(plan_document)
-    except ValidationError as exc:
+    except ValueError as exc:
         raise ControlPlaneError(
             "CONTROL_EVIDENCE_PLAN_INVALID",
             "evidence-enabled workflow result requires an exact V3 plan",
