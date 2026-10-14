@@ -373,3 +373,35 @@ dependency, DB/index, worker transport, model run, Artifact or default activatio
 The HOST_L2 module's source SHA changes in a successor runtime descriptor; historical installed
 bytes/proofs are not edited or silently treated as the new proof. This is a narrow supported reuse
 seam, not a second encoder/ranking implementation or completed device comparator.
+
+### Full rank-order comparison before native owner integration — 2026-10-14
+
+Extend the SAME pure ranking module with bounded comparison against the owner-sealed
+CPU reference. Canonical inputs remain currently authorized real row/profile/view/text
+identities and independently validated float64 scores. No new wire schema, registry,
+Artifact model, DB, transport, dependency, model call or runtime activation is needed.
+The owner must still prove that the CPU reference was committed BEFORE CUDA; a tuple
+or a passing arithmetic comparison is not that provenance or source permission.
+
+Operations are exact keyed row/position lookup, set membership and all candidate-pair
+comparisons (N≤17). Use maps/sets and CPU-only complete-span clusters, O(N² + N) time
+and bounded O(N²) local scalar observations; do not replace real rows or round scores.
+Compare identical full row sets, not just top5 overlap. Retain the fixed2e-5 score
+tolerance and4e-5 CPU cluster span. Cross-cluster reversals, wide-gap reversals and
+loss of the CPU exact-tie stable order fail separately. A top5 replacement is allowed
+only with the same CPU-cluster membership counts, never a transitive close-score chain.
+
+The return contains frozen local scalar/row-pair observations and integer failure
+counts for the existing owner evidence writer; floats stay out of JSON/DB. Source,
+byte/hash/space/token/vector-norm/cosine/component checks and the existing timing gate
+remain independent required checks. Invalid/missing/duplicate/stale row sets fail;
+there is no repair, fallback, retry or claim of CUDA superiority/default activation.
+The application module remains IO-free and below owner adapters. A top-K-only overlap
+check is simpler but cannot prove pair order, exact ties or near-tie boundary semantics.
+
+Source verification: the ranking/contracts/performance/worker/files/channel/dependency
+regression is **449 PASS /39.16s**, with strict mypy for the changed implementation,
+Ruff/format and diff checks passing. The focused rank suite is67 cases. All inputs
+are synthetic and no GPU/model/Artifact/DB operation or device activation occurred.
+These checks prove the arithmetic source seam, not the missing native benchmark
+owner/launcher, actual CPU-before-CUDA evidence publication or a device verdict.

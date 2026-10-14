@@ -12,8 +12,10 @@ from eom_catalog_contracts.embedding_device_benchmark import BenchmarkRowRef, be
 from eom_catalog_contracts.inference_transfer_experiment import profile_key
 from eom_catalog_service.embedding_benchmark_ranking import (
     CPU_NEAR_TIE_MAX_SPAN,
+    QUERY_SCORE_ABSOLUTE_TOLERANCE,
     ScoredBenchmarkRow,
     cluster_cpu_benchmark_rows,
+    compare_benchmark_row_rankings,
     rank_benchmark_rows,
 )
 from eom_catalog_service.inference_transfer_vectors import (
@@ -218,3 +220,153 @@ def test_rank_requires_exact_real_six_profile_scope(case: str) -> None:
         candidates = candidates[:6]
     with pytest.raises(ValueError, match=r"RANK_(INPUT_INVALID|COVERAGE_INSUFFICIENT)"):
         rank_benchmark_rows(query, vector(), candidates)
+
+
+def scored_matrix(scores: tuple[float, ...] | None = None) -> tuple[ScoredBenchmarkRow, ...]:
+    plan = owner_request()
+    ranked = rank_benchmark_rows(plan.query_rows[0], vector(), rows())
+    values = scores if scores is not None else tuple(0.9 - index * 0.03 for index in range(15))
+    assert len(values) == len(ranked)
+    return tuple(
+        replace(value, cosine_similarity=score) for value, score in zip(ranked, values, strict=True)
+    )
+
+
+def changed_scores(
+    values: tuple[ScoredBenchmarkRow, ...], changes: dict[int, float]
+) -> tuple[ScoredBenchmarkRow, ...]:
+    return tuple(
+        sorted(
+            (
+                replace(value, cosine_similarity=changes.get(index, value.cosine_similarity))
+                for index, value in enumerate(values)
+            ),
+            key=lambda value: (-value.cosine_similarity, *benchmark_row_key(value.row)),
+        )
+    )
+
+
+def test_identity_rank_comparison_retains_all_real_rows_and_pair_scores() -> None:
+    baseline = scored_matrix()
+    result = compare_benchmark_row_rankings(baseline, baseline)
+    assert result.ranks_equivalent_within_tolerance
+    assert len(result.observations) == 105  # All15 rows, not just the top5.
+    assert all(value.order_preserved and value.top5_same_cluster for value in result.observations)
+    by_row = {value.row.row_sha256: value.cosine_similarity for value in baseline}
+    for value in result.observations:
+        assert value.cpu_left_score == value.observed_left_score == by_row[value.left_row_sha256]
+        assert value.cpu_right_score == value.observed_right_score == by_row[value.right_row_sha256]
+        assert value.gap_class == "WIDE_GAP"
+
+
+def test_same_cpu_cluster_can_swap_top5_boundary_within_fixed_score_tolerance() -> None:
+    gap = 2.0**-16
+    baseline = scored_matrix(
+        (
+            0.95,
+            0.9,
+            0.85,
+            0.8,
+            0.5 + gap / 2,
+            0.5 - gap / 2,
+            *(0.4 - index * 0.03 for index in range(9)),
+        )
+    )
+    observed = changed_scores(
+        baseline, {4: baseline[5].cosine_similarity, 5: baseline[4].cosine_similarity}
+    )
+    result = compare_benchmark_row_rankings(baseline, observed)
+    assert result.ranks_equivalent_within_tolerance and result.top5_boundary_failures == 0
+    swaps = tuple(value for value in result.observations if not value.order_preserved)
+    assert len(swaps) == 1 and swaps[0].gap_class == "NEAR_TIE" and swaps[0].top5_same_cluster
+
+
+@pytest.mark.parametrize("at_top5_boundary", [False, True])
+def test_transitive_near_score_chain_cannot_excuse_cross_cluster_swap(
+    at_top5_boundary: bool,
+) -> None:
+    gap = 2.0**-16
+    prefix = (0.95, 0.9, 0.85) if at_top5_boundary else ()
+    rest = tuple(0.4 - index * 0.03 for index in range(12 - len(prefix)))
+    baseline = scored_matrix((*prefix, 0.5 + 2 * gap, 0.5, 0.5 - gap, *rest))
+    left, right = len(prefix) + 1, len(prefix) + 2
+    observed = changed_scores(
+        baseline, {left: baseline[right].cosine_similarity, right: baseline[left].cosine_similarity}
+    )
+    result = compare_benchmark_row_rankings(baseline, observed)
+    assert not result.ranks_equivalent_within_tolerance
+    assert result.query_score_failures == result.wide_gap_order_failures == 0
+    assert result.cluster_order_failures == 1
+    assert result.top5_boundary_failures == int(at_top5_boundary)
+    if at_top5_boundary:
+        assert any(not value.top5_same_cluster for value in result.observations)
+
+
+def test_wide_gap_swaps_outside_top5_are_still_detected() -> None:
+    baseline = scored_matrix()
+    observed = changed_scores(
+        baseline, {10: baseline[11].cosine_similarity, 11: baseline[10].cosine_similarity}
+    )
+    result = compare_benchmark_row_rankings(baseline, observed)
+    assert result.top5_boundary_failures == 0
+    assert result.query_score_failures == 2
+    assert result.wide_gap_order_failures == result.cluster_order_failures == 1
+    assert not result.ranks_equivalent_within_tolerance
+
+
+def test_cpu_exact_tie_stable_order_is_not_waived_by_close_cuda_scores() -> None:
+    baseline = scored_matrix((0.9, 0.9, *(0.8 - index * 0.03 for index in range(13))))
+    observed = changed_scores(baseline, {1: 0.9 + 2.0**-16})
+    result = compare_benchmark_row_rankings(baseline, observed)
+    assert result.query_score_failures == result.wide_gap_order_failures == 0
+    assert result.cluster_order_failures == 1 and not result.ranks_equivalent_within_tolerance
+    assert any(
+        value.gap_class == "EXACT_TIE" and not value.order_preserved
+        for value in result.observations
+    )
+
+
+@pytest.mark.parametrize("outside", [False, True])
+def test_score_absolute_tolerance_is_inclusive_without_rounding(outside: bool) -> None:
+    baseline = ranked_single_views()
+    score = (
+        math.nextafter(QUERY_SCORE_ABSOLUTE_TOLERANCE, math.inf)
+        if outside
+        else QUERY_SCORE_ABSOLUTE_TOLERANCE
+    )
+    observed = changed_scores(baseline, {0: score})
+    result = compare_benchmark_row_rankings(baseline, observed)
+    assert result.query_score_failures == int(outside)
+
+
+@pytest.mark.parametrize("case", ["missing", "duplicate", "changed_text", "unordered", "list"])
+def test_comparator_requires_identical_full_real_row_sets_and_valid_order(case: str) -> None:
+    baseline = scored_matrix()
+    observed = baseline
+    if case == "missing":
+        observed = observed[1:]
+    elif case == "duplicate":
+        observed = (*observed, observed[-1])
+    elif case == "changed_text":
+        body = observed[-1].row.model_dump(mode="json")
+        body["input_text_sha256"] = content_sha256("a different synthetic source text")
+        observed = (
+            *observed[:-1],
+            replace(observed[-1], row=BenchmarkRowRef.model_validate(seal(body, "row_sha256"))),
+        )
+    elif case == "unordered":
+        observed = tuple(reversed(observed))
+    else:
+        observed = list(observed)
+    with pytest.raises(ValueError, match=r"RANK_(INPUT_INVALID|COVERAGE_INSUFFICIENT)"):
+        compare_benchmark_row_rankings(baseline, observed)
+
+
+@pytest.mark.parametrize("bad", [True, 1, float("nan"), float("inf"), 1.01, -1.01])
+@pytest.mark.parametrize("side", ["reference", "observed"])
+def test_comparison_revalidates_raw_score_types_on_both_sides(bad: Any, side: str) -> None:
+    baseline = scored_matrix()
+    invalid = (replace(baseline[0], cosine_similarity=bad), *baseline[1:])
+    reference, observed = (invalid, baseline) if side == "reference" else (baseline, invalid)
+    with pytest.raises(ValueError, match="RANK_INPUT_INVALID"):
+        compare_benchmark_row_rankings(reference, observed)

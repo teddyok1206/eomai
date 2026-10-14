@@ -68,7 +68,7 @@ and proves cleanup/lease fencing and image regressions. Mixed legacy/shared acti
 not coordinated by this source-only change. CPU-only embedding remains the safe admitted option
 when this boundary cannot be established.
 
-## Packaging / release blocker
+## Packaging boundary and source-only release closure
 
 `eom-gpu-lease` is the one canonical standalone wheel. It is deliberately **not** included in
 `eom-platform` package discovery: installing both ownership records for the same module in a prefix
@@ -85,14 +85,15 @@ Core source references found during review are trainer CPU crop helpers and a PD
 trainer package `__init__` itself imports no CLI/provider. This is source evidence, not a complete
 installed dependency or runtime-import acceptance.
 
-The existing image build scripts currently archive/build only image contracts/provider/trainer;
-the deployment scripts use `--no-deps`. They have not been updated or run in this source-only leaf.
-Consequently these new provider/trainer wheels are **NOT_RELEASE_READY** until a compatible release
-includes and validates the pinned standalone lease wheel/dependency closure before any installed
-package mutation. Do not deploy a candidate with the unchanged scripts, install dependencies from
-an arbitrary online index, or treat source tests as proof of installed wheel ownership. The next
-release gate must verify that only the standalone distribution owns `eom_gpu_lease` files in each
-prefix, plus the drained physical-lease migration and unit/group/device policy described above.
+The initial lease-only leaf did not update image build/deploy scripts. The subsequent
+[image release closure](IMAGE_GPU_LEASE_RELEASE_BOUNDARY.md), implemented in `98ed3036`,
+now archives, builds and verifies the standalone wheel with the provider/trainer cohorts,
+and checks protected admission and installed RECORD ownership before import. Do not duplicate
+that implementation or mistake its source tests for an installed release or physical migration.
+No arbitrary online dependency installation is supported. Only the standalone distribution may
+own `eom_gpu_lease` files in each prefix. Actual compatible image installation, all-entrypoint
+drain, shared inode provisioning and unit/group/device/cleanup acceptance remain separate gates;
+this document does not claim they have occurred.
 
 ## Verification scope
 
