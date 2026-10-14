@@ -24,7 +24,6 @@ from eom_catalog_service.pinned_artifact_resolution import (
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.similarity_context_ports import (
     SimilarityContextReadError,
-    SimilarityContextReadPort,
 )
 from eom_identifiers import canonical_json_bytes
 from eom_orchestrator.control_service import ControlPlaneError
@@ -44,6 +43,8 @@ from eom_workflow.similarity_control import (
 from jsonschema.exceptions import ValidationError as SchemaError
 from sqlalchemy.orm import Session
 
+from eom_workflow_runner.similarity_role_context import SimilaritySessionContextReader
+
 
 class CatalogSimilarityMaterializationReader(SimilarityMaterializationReadPort):
     """Bound to the actual captured caller and common application, not model authority."""
@@ -51,12 +52,12 @@ class CatalogSimilarityMaterializationReader(SimilarityMaterializationReadPort):
     def __init__(
         self,
         caller: EmbeddingRegistryCaller,
-        reader: SimilarityContextReadPort,
+        reader: SimilaritySessionContextReader,
         materials_reader: SimilarityMaterialsReadPort,
     ) -> None:
         if (
             not isinstance(caller, EmbeddingRegistryCaller)
-            or not callable(getattr(reader, "compose", None))
+            or not callable(getattr(reader, "compose_in_session", None))
             or not callable(getattr(materials_reader, "read_similarity_materials_in_session", None))
         ):
             raise ValueError("SIMILARITY_MATERIALIZATION_CONTEXT_INVALID")
@@ -66,10 +67,12 @@ class CatalogSimilarityMaterializationReader(SimilarityMaterializationReadPort):
         self.materials_reader = materials_reader
 
     def _current_context(
-        self, plan: ResolvedExecutionPlanV23, request: SimilarityContextRequest
+        self, session: Session, plan: ResolvedExecutionPlanV23, request: SimilarityContextRequest
     ) -> SimilarityContext:
         try:
-            current = parse_similarity_context(self.reader.compose(self.caller, request))
+            current = parse_similarity_context(
+                self.reader.compose_in_session(session, self.caller, request)
+            )
             if current.status == "FAILED":
                 if current.error_code in {"SOURCE_ACCESS_DENIED", "SOURCE_REVOKED"}:
                     raise ControlPlaneError(
@@ -110,7 +113,7 @@ class CatalogSimilarityMaterializationReader(SimilarityMaterializationReadPort):
             raise ControlPlaneError(
                 "CONTROL_POINTER_PERMISSION_DENIED", "similarity member is not authorized"
             )
-        first = self._current_context(checked, request)
+        first = self._current_context(session, checked, request)
         try:
             validate_similarity_original_source(checked, first, original_source)
         except (ValueError, TypeError, SchemaError):
@@ -144,7 +147,7 @@ class CatalogSimilarityMaterializationReader(SimilarityMaterializationReadPort):
                 ),
                 first,
             )
-            late = self._current_context(checked, request)
+            late = self._current_context(session, checked, request)
             if late != first:
                 raise ValueError("SIMILARITY_MATERIALIZATION_CURRENT_CHANGED")
             final_member = reader.read_pinned(**arguments)

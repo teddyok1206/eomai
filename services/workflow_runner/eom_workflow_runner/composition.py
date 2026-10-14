@@ -33,6 +33,7 @@ from eom_workflow_runner.readiness import WorkflowRuntimeReadiness
 from eom_workflow_runner.reference_query_admission import ReferenceQueryOwnerAdmission
 from eom_workflow_runner.reference_query_execution_port import ReferenceQueryNativeExecutor
 from eom_workflow_runner.settings import WorkflowSettings
+from eom_workflow_runner.similarity_role_context import SimilarityRoleContextProvider
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,7 @@ def build_workflow_runtime(
     local_embedding_executor: LocalEmbeddingNativeExecutor | None = None,
     reference_query_owner: ReferenceQueryOwnerAdmission | None = None,
     reference_query_executor: ReferenceQueryNativeExecutor | None = None,
+    similarity_context_provider: SimilarityRoleContextProvider | None = None,
 ) -> WorkflowRuntime:
     """Build the complete production runner graph without presentation-layer wiring."""
     if (local_embedding_owner is None) != (local_embedding_executor is None):
@@ -71,6 +73,7 @@ def build_workflow_runtime(
         actual_engine,
         actual_workflow_settings,
         orchestrator,
+        similarity_context_provider=similarity_context_provider,
     )
     actual_catalog_settings = catalog_settings or CatalogSettings.from_environment()
     catalog = WorkflowCatalogService(actual_engine, actual_catalog_settings)

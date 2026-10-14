@@ -1706,3 +1706,119 @@ did not call DB/source/publication/model operations. Platform raw
 API-contract raw `7fba99f40a256224adb2a78fe836608031e15bbbeef706bb80017355b4f1ed91`.
 Evidence: `similarity-reference-pack-{release-build,owner-pair-proof}.log`.
 Candidate is not installed; runtime activation and actual consumer acceptance remain open.
+
+## 21. Trusted role execution composition into the real Orchestrator callback
+
+2026-10-14 UTC. Connect the existing two-file materializer to the actual executor,
+not a second worker path. Existing plan23/delivery/materials schemas are the wire
+contract; the added port/context is owner-local, not a new worker protocol.
+
+1. **Responsibility:** WorkflowRunner prepares the current role's trusted context;
+   Orchestrator passes it to its existing allowlist and materialization callback.
+2. **Canonical source:** Attached stored Workflow/step, immutable plan23 and the
+   existing exact completed QUERY reader. No caller dictionary grants authority.
+3. **Identity:** Reuse Workflow/step/plan/query identities. No new request tracker,
+   persistent registry or re-created native query. The immutable creator, not the
+   command processor or worker role, selects the actual operator.
+4. **Pointers:** Validate exact stored request, running step/attempt, plan pin and
+   compatible Pack17 before constructing the small local context. Its request must
+   be the exact completed QUERY context, never a latest or DOCUMENT substitute.
+5. **Access:** Indexed Workflow/step/plan lookups at the command-fenced root. Existing
+   materializer performs current full source/Evidence/Artifact checks at staging.
+6. **Structures:** A narrow preparation port and existing frozen context; explicit
+   production composition injection. No mutable global map or parallel queue.
+7. **Cost:** Bounded plan/request validation, no model, source scan or binary read
+   at preparation. Existing full source reauthorization remains at materialization.
+8. **Transactions:** Re-read attached rows under the existing command lease fence.
+   Preserve Job/step binding, failure receipts, capacity and actual worker launch.
+9. **Dependencies:** Runner owns the port/concrete Catalog adapter; Orchestrator
+   receives only its own local materialization context and never imports Catalog.
+10. **Failure/replay:** Missing composition remains unavailable, not a source grant.
+    Actor mismatch, expired actual session, changed request/step/plan or withdrawn
+    source fails explicitly. The existing captured owner/session is reused without
+    extending its TTL. Historical role execution with no context remains unchanged.
+11. **Alternative:** Letting worker input carry operator/policy or copying Catalog
+    IO into Orchestrator would break authority/dependency boundaries. Explicit
+    owner-local composition suffices; do not add global identity impersonation.
+
+First composition binds one trusted completed QUERY reader/current captured owner
+to a bounded runtime. Another operator/request cannot borrow it. This does NOT yet
+activate shared API preparation or supply a durable multi-user owner-session
+selection; that remaining production boundary must use official current captures,
+not saved grants, background service impersonation or a relaxed session fence.
+
+### 21.1 Retained Identity fence and caller-owned read root
+
+Integration inspection exposed an unnecessary cross-root dependency: selected
+materials are resolved in the materializer's root and retain its current Identity
+fence, but its late common-context read opened another root. Inspection of the
+actual Identity implementation confirms shared read locks (`FOR SHARE`), so two
+ordinary readers alone do NOT prove a self-deadlock. A queued writer or bounded
+connection pool can make separate roots matter, but no production deadlock was
+observed/reproduced here. Treat this as root ownership/connection-pressure hardening,
+not a confirmed live incident or a measured performance improvement. Synthetic IAM
+fixtures do not demonstrate live lock safety.
+
+Use one caller-owned root for first/late common composition, completed QUERY reads,
+canonical context bytes and selected materials. Extend the existing completed QUERY
+reader with an explicit root-local entrypoint; its ordinary entrypoint still opens
+one root and delegates. A Runner-owned session adapter supplies Catalog's existing
+in-session source/view methods to the SAME pure common application. No source fence,
+full-population late check, QUERY provenance or session expiry is removed. The pure
+application/Orchestrator do not import this infrastructure or acquire another DB
+connection. Tests must reject missing/nested roots and prove no inner session opens;
+this source/root-identity evidence is not a new production PostgreSQL acceptance.
+
+### 21.2 Role composition/root-local read checkpoint — 2026-10-14 UTC
+
+The actual `PlatformRoleJobExecutor` now prepares a context through a narrow
+explicitly injected port and passes it to `Orchestrator.submit_workflow_role`.
+The existing Orchestrator callback gives that SAME value to both its allowlist and
+workspace materializer. It still owns Job creation/binding, capacity, worker launch,
+failure evidence and Artifact commit; no parallel execution path was introduced.
+Default composition has no provider and does not activate plan23 or invent authority.
+
+The concrete provider re-reads attached Workflow/step/definition/plan at the existing
+command-fenced root, checks running role/attempt, exact definition and stored request
+business fingerprint, Pack17/hash and plan pins, then uses the immutable creator's
+actual current captured owner. A command processor, saved operator ID, other user's
+QUERY or changed context cannot substitute. Preparation does not run QUERY, scan
+the corpus or read vector/image bytes. The captured session's original expiry stays
+enforced, and default/legacy execution still uses its original path.
+
+Root-local common composition supplies the existing pure application with bounded
+Catalog in-session source/view adapters and the existing completed QUERY reader's
+new in-session entrypoint. Ordinary completed reads still open one root and delegate.
+First/late current checks, QUERY checkpoints/bytes and selected materials retain
+one caller root without opening inner sessions. No current source fence or full
+population late check was replaced by cached authority. The source uses small
+per-read adapter values, not a global registry, long-lived Session or new dependency.
+
+Final38-suite source regression: **801 PASS /211.81s**; strict mypy8 and Ruff/format12
+PASS. Actual callback tests materialize both auxiliary files plus the original
+variation/Evidence files in temporary workspaces before a synthetic worker stops;
+no real model/process/result publication is claimed. They also verify missing or
+foreign context refusal. Other tests cover current actor/session denial before Job
+submission, roles/review tiers, original binding, exact request/plan failure, explicit
+production injection, same-root identical ranking and late-source withdrawal.
+The completed-reader same-root test uses actual temporary SQLite Artifact/Job bytes
+and synthetic IAM; it forbids opening another root. This is NOT live IAM acceptance.
+
+Separately, the guarded existing disposable PostgreSQL native-stage suite passed
+**68 tests /45.61s** across its six existing files. Before/after inspections confirm
+head0055, correct disposable identity and zero other connections. This is regression
+for native persistence/submission/reconciliation, NOT a new plan23 PostgreSQL or C2
+runtime acceptance. No production DB/migration/role/policy/Pack change was made.
+Initial fixture failures (missing preset/header, and a negative image-mode test
+that reused the original value) and the nullable-result-schema type-check failure
+are retained in logs; fixtures and explicit narrowing were fixed without weakening
+the underlying validators. Overlapping50/127 gates are not additive totals.
+Evidence prefix: `/tmp/eom-identity-provider-install.nAaycoDM/similarity-role-composition-`.
+
+The same genuine QUERY root/owner handles were verified S+ at19:00 UTC, still waiting
+on the original Studio login; no restart, new capture, model/GPU run or corpus
+re-encoding occurred. Still required: actual compatible Pack/instruction publication,
+API/native QUERY preparation/context publication and durable multi-user selection
+of an official current owner, then installed bounded variation acceptance. The new
+bounded runtime injection is not represented as that completed shared API path.
+Remaining consumers and actual CPU/GPU comparison/default selection stay in the goal.

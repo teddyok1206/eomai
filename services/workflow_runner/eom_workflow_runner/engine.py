@@ -162,6 +162,7 @@ from eom_workflow_runner.role_execution_binding import (
 )
 from eom_workflow_runner.role_execution_port import RoleExecutionResult
 from eom_workflow_runner.settings import RunnerConfig, WorkflowSettings
+from eom_workflow_runner.similarity_role_context import SimilarityRoleContextProvider
 from eom_workflow_runner.state_machine import (
     SUCCESSFUL_TERMINAL_WORKFLOW_STATES,
     UNSUCCESSFUL_TERMINAL_WORKFLOW_STATES,
@@ -416,10 +417,13 @@ class PlatformRoleJobExecutor:
         engine: Engine,
         workflow_settings: WorkflowSettings,
         orchestrator: Orchestrator | None = None,
+        *,
+        similarity_context_provider: SimilarityRoleContextProvider | None = None,
     ) -> None:
         self.sessions = build_session_factory(engine)
         self.orchestrator = orchestrator or Orchestrator(engine)
         self.workflow_settings = workflow_settings
+        self.similarity_context_provider = similarity_context_provider
 
     def execute(
         self,
@@ -465,6 +469,17 @@ class PlatformRoleJobExecutor:
                     job_id=job_id,
                 )
 
+        similarity_context = None
+        if (
+            self.similarity_context_provider is not None
+            and isinstance(request, WorkerRequest)
+            and step.worker_role in {"authoring", "review"}
+        ):
+            with _command_fenced_transaction(self.sessions) as session:
+                similarity_context = self.similarity_context_provider.prepare(
+                    session, workflow=workflow, step=step, request=request
+                )
+
         job = self.orchestrator.submit_workflow_role(
             workflow_id=workflow.workflow_id,
             step_run_id=step.step_run_id,
@@ -478,6 +493,7 @@ class PlatformRoleJobExecutor:
             prompt_path=prompt_path,
             prompt_text=prompt_text,
             material_requirement=material_requirement,
+            similarity_context=similarity_context,
             before_execute=bind_platform_job,
             execution_tier=(
                 "ESCALATED"

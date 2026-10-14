@@ -164,6 +164,7 @@ from eom_orchestrator.repository import (
 )
 from eom_orchestrator.runtime_configuration import resolve_worker_configuration
 from eom_orchestrator.settings import Settings
+from eom_orchestrator.similarity_materialization import SimilarityMaterializationContext
 from eom_orchestrator.state_machine import JobState, transition_job
 from eom_orchestrator.svg_label_layout_validation import (
     svg_label_layout_event_data,
@@ -674,6 +675,7 @@ class Orchestrator:
         transfer_core_prompt_sha256: str | None = None,
         transfer_workflow_request: InferenceTransferWorkflowRequest | None = None,
         execution_tier: Literal["PRIMARY", "ESCALATED"] = "PRIMARY",
+        similarity_context: SimilarityMaterializationContext | None = None,
     ) -> JobRecord:
         if (prompt_path is None) == (prompt_text is None):
             raise ValueError("exactly one workflow prompt source is required")
@@ -980,6 +982,7 @@ class Orchestrator:
                                 plan_id=plan_id,
                                 step_key=str(plan_step["step_key"]),
                                 inference_transfer_context=transfer_materialization_context,
+                                similarity_context=similarity_context,
                             )
                             evidence = materialize_execution_step(
                                 materialization_session,
@@ -991,6 +994,7 @@ class Orchestrator:
                                 authorized_artifact_revision_ids=authorized,
                                 execution_tier=execution_tier,
                                 inference_transfer_context=transfer_materialization_context,
+                                similarity_context=similarity_context,
                             )
                         event_data: dict[str, object] = dict(evidence.event_data())
                         if not is_transfer:

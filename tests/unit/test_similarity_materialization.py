@@ -38,9 +38,11 @@ class CurrentReader:
         self.current = context
         self.late = context
         self.calls = []
+        self.sessions = []
         self.on_late = None
 
-    def compose(self, caller, request):
+    def compose_in_session(self, session, caller, request):
+        self.sessions.append(session)
         self.calls.append((caller, request))
         if len(self.calls) == 2:
             if self.on_late is not None:
@@ -130,6 +132,7 @@ def test_exact_member_is_read_between_two_current_checks_without_query_or_write(
         case["references"].model_dump(mode="json")
     )
     assert case["reader"].calls == [(case["caller"], case["context"].request)] * 2
+    assert case["reader"].sessions == [session, session]
     assert path.stat() == before
 
 

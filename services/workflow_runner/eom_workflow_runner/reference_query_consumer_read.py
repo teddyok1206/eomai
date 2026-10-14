@@ -30,6 +30,7 @@ from eom_workflow.reference_query_execution import (
 )
 from jsonschema.exceptions import ValidationError as JsonSchemaError
 from pydantic import TypeAdapter
+from sqlalchemy.orm import Session
 
 from eom_workflow_runner.errors import WorkflowError
 from eom_workflow_runner.reference_query_completion import NativeReferenceQueryCompletion
@@ -63,6 +64,20 @@ class CatalogCompletedReferenceQueryRead:
         request: SimilarityContextRequest,
         prepared: PreparedSimilarityContext,
     ) -> VerifiedReferenceQueryRead:
+        with self.sessions.begin() as session:
+            return self.resolve_reference_query_in_session(session, caller, request, prepared)
+
+    def resolve_reference_query_in_session(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        request: SimilarityContextRequest,
+        prepared: PreparedSimilarityContext,
+    ) -> VerifiedReferenceQueryRead:
+        """Same caller-owned root through Identity/source/history/member and late checks."""
+        root = session.get_transaction()
+        if root is None or not root.is_active or session.in_nested_transaction():
+            raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
         request = parse_similarity_context_request(request)
         validate_similarity_preparation(request, prepared)
         if (
@@ -72,40 +87,38 @@ class CatalogCompletedReferenceQueryRead:
         ):
             raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
         try:
-            with self.sessions.begin() as session:
-                current = self.owner.resolve_completed_sources(
-                    session, caller, self.request, workflow_id=self.workflow_id
-                )
-                if current.sources.prepared != prepared:
-                    raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
-                canonical, history = self.completion.resolve_publication(
-                    session=session,
-                    workflow=current.workflow,
-                    step=current.step,
-                    sources=current.sources,
-                    output=current.output,
-                )
-                if (
-                    history.state != "SUCCEEDED"
-                    or len(history.records) != 4
-                    or history.records[3].payload != NativeQueryCompleted(output=current.output)
-                ):
-                    raise SimilarityContextReadError("QUERY_RESULT_INVALID")
-                # Re-resolve after bounded member reads, not an authority cache hit.
-                late = self.owner.resolve_completed_sources(
-                    session, caller, self.request, workflow_id=self.workflow_id
-                )
-                if late.sources != current.sources or late.output != current.output:
-                    raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
-                publication = history.records[2].payload
-                assert isinstance(publication, NativeQueryPublished)
-                return VerifiedReferenceQueryRead(
-                    canonical.request,
-                    canonical.result,
-                    publication.result,
-                    publication.shard,
-                    canonical.binary,
-                )
+            current = self.owner.resolve_completed_sources(
+                session, caller, self.request, workflow_id=self.workflow_id
+            )
+            if current.sources.prepared != prepared:
+                raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
+            canonical, history = self.completion.resolve_publication(
+                session=session,
+                workflow=current.workflow,
+                step=current.step,
+                sources=current.sources,
+                output=current.output,
+            )
+            if (
+                history.state != "SUCCEEDED"
+                or len(history.records) != 4
+                or history.records[3].payload != NativeQueryCompleted(output=current.output)
+            ):
+                raise SimilarityContextReadError("QUERY_RESULT_INVALID")
+            late = self.owner.resolve_completed_sources(
+                session, caller, self.request, workflow_id=self.workflow_id
+            )
+            if late.sources != current.sources or late.output != current.output:
+                raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
+            publication = history.records[2].payload
+            assert isinstance(publication, NativeQueryPublished)
+            return VerifiedReferenceQueryRead(
+                canonical.request,
+                canonical.result,
+                publication.result,
+                publication.shard,
+                canonical.binary,
+            )
         except SimilarityContextReadError:
             raise
         except OperatorAuthorizationFenceError:

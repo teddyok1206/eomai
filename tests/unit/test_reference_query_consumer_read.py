@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 from eom_catalog_contracts.embedding_vector_binary import read_unit_vectors
@@ -110,6 +111,48 @@ def test_completed_read_is_current_canonical_and_does_not_launch_write_or_need_a
         expected_sha256=first.result.shard.binary.sha256,
     )
     completed.value.launcher.run.assert_called_once()
+
+
+def test_root_local_completed_read_never_opens_an_inner_root(completed, monkeypatch):
+    before = counts(completed.value)
+    with completed.reader.sessions.begin() as session:
+        forbidden = Mock(side_effect=AssertionError("inner session must not open"))
+        monkeypatch.setattr(completed.reader, "sessions", SimpleNamespace(begin=forbidden))
+        first = completed.reader.resolve_reference_query_in_session(
+            session,
+            completed.caller,
+            completed.value.request.context_request,
+            completed.value.sources.prepared,
+        )
+        assert (
+            completed.reader.resolve_reference_query_in_session(
+                session,
+                completed.caller,
+                completed.value.request.context_request,
+                completed.value.sources.prepared,
+            )
+            == first
+        )
+        assert completed.calls == [session] * 4
+        forbidden.assert_not_called()
+    assert counts(completed.value) == before
+    assert len(completed.value.runs) == 1
+
+
+@pytest.mark.parametrize("nested", (False, True))
+def test_root_local_completed_read_requires_an_active_non_nested_root(completed, nested):
+    with completed.reader.sessions() as session:
+        if nested:
+            session.begin()
+            session.begin_nested()
+        with pytest.raises(SimilarityContextReadError, match="AUTHORITY_UNAVAILABLE"):
+            completed.reader.resolve_reference_query_in_session(
+                session,
+                completed.caller,
+                completed.value.request.context_request,
+                completed.value.sources.prepared,
+            )
+    assert completed.calls == []
 
 
 @pytest.mark.parametrize("fault", ("caller", "context", "prepared"))
