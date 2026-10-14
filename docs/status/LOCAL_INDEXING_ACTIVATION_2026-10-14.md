@@ -1,10 +1,12 @@
 # Actual local indexing activation — 2026-10-14
 
-14:10 UTC checkpoint (chronology retained below). The first real encoding Job and
-its native launch Job have succeeded; one vector encoding, one source binding and
-one immutable PARTIAL index (1/520 eligible sources) exist. The outer Workflow's
-final command completion is still pending. Delta/replay/QUERY, consumer activation
-and CPU/GPU comparison are not yet live acceptance. The full goal remains ACTIVE.
+14:22 UTC checkpoint (chronology retained below). The first real encoding/launch
+Jobs, Workflow and START all succeeded; one vector encoding, one source binding
+and one immutable PARTIAL index (1/520 eligible sources) exist. Its exact owner
+drained normally. The reviewed sourceae8f8bf6/service revision11 is active and its
+normal reconciliation observes519 missing bindings, selecting only the next1.
+Delta completion/replay/QUERY, consumer activation and CPU/GPU comparison are not
+yet live acceptance. The full goal remains ACTIVE.
 
 ## Actual changes
 
@@ -569,3 +571,61 @@ Evidence: `native-indexing-successor-{after-compute,registry,drain}-observation.
 `native-indexing-graceful-drain-signal.log` and
 `native-selected-source-{full-regression-reviewed,postgres-reviewed,
 embedding-persistence,final-mypy}.log` in the same temporary evidence root.
+
+## Terminal first seed and exact-target successor — 14:22 UTC
+
+At14:17:20 read-only metadata confirms the original START is SUCCEEDED,
+attempts/generation1, Workflow COMPLETED/COMPLETED and both numerical/launch Jobs
+SUCCEEDED. The owner is inactive/dead, MainPID0, Result=success. Its graceful
+handler finished the SAME operation before exit; no extra Workflow was admitted.
+The1/520 index and all previous failures/pins remain. The37-minute Workflow span
+includes source validation/publication/finalization; numerical execution was about
+67s. Do not present that span as model inference time or the full520 seed as done.
+
+Candidate`ae8f8bf669be4224d87f97fd67e2de5b79a94840` built/RECORD/pair-only imports
+PASS and is installed without modifying the numerical prefix or operating API.
+Platform wheel raw`ac99960c979bc2f428eeb7ab6da424834d8edffb35101684d3ce5d1032a21612`,
+API-contract raw`9f9057c5a4191b38078091c924f92247abfde05e9cbcd31ebeec2d9008bfad50`.
+Existing UID990 Orchestrator committed native policy Job
+`job_602f1c26b49e45f9b3c5c94597bc3395`, Artifact
+`artifact_4972fa21878c4d5396f73c05b06b24bb` /
+`rev_6373c50e4b6840a28ec2c62c870f770a`, raw
+`sha256:01c9c9559eb8d69e6b6882df6338cc6b0fd4b3959e07c87a88e6a6c1d5795820`,
+semantic`sha256:bc3e8cd89eb2d2f35b7634d27be26ce3f6192cdecf02f8d2113240627253f1a1`.
+
+Only after exact terminal/no-process/no-executable-command checks, the supported
+Identity register/activate and Catalog publication selected revision11
+`localindexservicerev_2e56cbf71dc24741a5ec19014a2d8e77`, identity SHA
+`sha256:1171c2442ac69951b57ce074dd6b11650db24837771b2a3c3a5ac018c3e2ec5e`,
+resource-version22. Grant`accessrev_9d312de9c4ed46d694077132f890fe84`, SHA
+`sha256:6b97a3d521ab7a4b217be3273e31e6c61a50da15abb27560331cc71fb4361f44`.
+Frozen controls:`/var/lib/eom-local-indexing-activation.ae8f8bf6-lxgcjk68`.
+Installed raw hashes: runtime`75c047294ad88aae921fbe83dd5b56ae0cfa280af761ab526396852bd7a94068`,
+owner`836cef3b4102751e6aed5c5d88c69ff016b526a258ee0affdaf3a5387af671f2`,
+unit`be2334040afb186fb9905f5d7402d027efe9ad3a5684f673712827f67f25c0c5`.
+
+The first new startup at14:18:27 was denied BEFORE runtime construction/DB work:
+the fixed unit file was installed at14:18:27.001, while the current runtime guard
+uses the conservative second-granular systemd start epoch14:18:27.000. Preserve
+invocation`7696157620264252835440ce51524afc` and the closed runtime-unavailable
+event. Metadata proves no new Workflow/Job/encoding/index. After verifying the
+SAME file hashes, zero process and terminal history, the same configuration was
+started after that epoch boundary. No guard, permission, timeout or data was
+weakened; future installation must finish all protected-file writes before the
+whole-second startup boundary. This was a corrected startup invocation, not model
+or uncertain execution retry.
+
+Actual invocation`b183d35726304d7587c8d142e3280405`, PID3993439 passed startup
+at14:21:07.889967. At14:22:09.606547 normal reconciliation sees520 eligible,
+missing reports0, unavailable0 and missing bindings519; selects1, rather than
+rebuilding the first completed source. It queues Workflow
+`workflow_f9f8cbd70dac45c5ab10a12b785ab268` /
+START`wfcmd_84a3ded5ded24a12aa11595936c0935e`. This is a real missing-binding
+delta admission, not yet completed encoding/reuse acceptance. Poll1800/maximum1,
+Restart=no/boot disabled, CPU configuration/model/space/recipe and0055 remain.
+
+Evidence: `native-indexing-first-seed-terminal-confirmed.log`,
+`native-selected-source-{owner-pair-proof,inactive-install,preparation,
+policy-publication-start,activation,controls-and-unit-start,start-diagnostic,
+pre-restart-proof,start-fixed-epoch,first-delta-admission}.log`. Source/push and
+installed activation are distinct; no fresh25-item generation/HWPX was required.
