@@ -2627,3 +2627,71 @@ contracts `2db479ae497329dcf79d05229c66c4b1ca1c85be1495256a417ef5a239b4472c`;
 API `3c3b94196b688c415384e3ec5daafb1731ec1c2112b0938c3cc35bf4dedc4303`.
 Evidence suffixes: `release-build.log`, `owner-pair-proof.log`, `three-wheel-proof.log`
 under the API evidence prefix. The candidate is pushed, not installed/activated.
+
+## 29. Authoring preparation must not inherit read-only authority
+
+Design before change, 2026-10-14 UTC:
+
+1. Boundary: the existing item-similarity preparation use case may publish through
+   the Orchestrator; completed QUERY reads do not permit that side effect.
+2. Canonical authority: current Identity role assignments/permissions in the same
+   fenced root, not a caller field, stored role or successful earlier read.
+3. Identity: preserve actual operator, original QUERY and all immutable source pins.
+4. Checks: require current WORKFLOW_START after fencing the actual operator, before
+   context composition/publication and again before returning a prepared plan.
+5. Access: reuse Identity's indexed `effective_permissions` query; no source scan.
+6. Structures: existing frozen permission set and IAM indexes, no cache or schema.
+7. Cost: two bounded permission queries per preparation; no per-candidate lookup,
+   new binary materialization, dependency or performance claim.
+8. Concurrency: retain the existing operator fence through the caller-owned root;
+   supported IAM writers cooperate with that fence. The separate Orchestrator
+   publication remains independently committed, not a distributed transaction.
+9. Ownership: runner application calls the existing Identity repository interface;
+   read-only Catalog context operations remain unchanged and need no start grant.
+10. Failure: absent/revoked start authority denies handoff, including late failure.
+    Preserve any independently committed publication and its original replay key.
+    IAM unavailable is explicit unavailable, never a permission or latest fallback.
+11. Alternative: rejecting read-only owners entirely couples reads to native launch
+    admission. Trusting that every injected owner implicitly requires start authority
+    is insufficient after the explicit read/execution split. Check the actual action
+    in its owning use case rather than broadening the reader or SQL fence.
+
+Separately, move exact completed-QUERY selection into one public runner read helper
+for both Catalog and subsequent consumers. Preserve creator-before-content checks,
+canonical three-field validation, active non-nested root and indexed Workflow lookup.
+This is selection metadata, not permission, execution admission or a worker tool.
+No server-side selector storage or global multi-workflow provider is introduced by
+this local guard/refactor, and no existing runtime or released schema is rewritten.
+
+### 29.1 Source verification checkpoint
+
+The read-only-owner/action gap was reproduced in two real temporary IAM-table cases:
+missing WORKFLOW_START before composition and removal after publication. Both
+incorrectly returned a prepared result before the fix. The original capture/source
+observations are synthetic, so these tests do not claim a production authorization
+exploit. The preparation owner now uses the existing current permission query in
+the same fenced root at entry and final handoff. Late denial preserves the committed
+publication; restoring authority replays the same Job/member without rewriting it.
+
+Completed selection is now the public `select_completed_reference_query_request`
+helper in the existing runner read module. Catalog's first and late reads use that
+one rule. Active root, closed selector/caller values, exact hashes and creator-before-
+content checks are covered; ordinary reads still require no WORKFLOW_START.
+A focused refactor regression initially remapped SOURCE_ACCESS_DENIED to a generic
+invalid-query error because the stable exception inherits ValueError. The explicit
+stable-error pass-through fixes this without weakening denials or schemas.
+
+Final19-file source regression: **324 PASS /159.92s**; strict mypy3, Ruff/format5 and
+diff checks PASS. Focused50 and earlier failures overlap this total and are retained,
+not added. Tests use actual SQLite IAM joins, publisher/replay, exact Workflow lookup,
+temporary Artifact/socket/file behavior, API validation and dependency guards; source
+and current Identity admission seams remain explicitly synthetic. The sole warning
+is the existing Starlette/httpx TestClient deprecation.
+
+Evidence prefix: `/tmp/eom-identity-provider-install.nAaycoDM/similarity-authoring-read-guard-`.
+Logs include `red`, `reproduced`, `focused`, `focused-final`, `acceptance` and
+`mypy-final`. The first red run had a fixture-only enum typo; the next reproduced
+the actual missing action check. No production DB/grant/schema, Artifact, installed
+service, source coverage, Pack/policy or native/model/device execution changed.
+This does not complete automatic item-start/native admission, shared multi-workflow
+selection/consumer activation or the original CPU/CUDA comparison requirement.

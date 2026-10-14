@@ -11,12 +11,18 @@ import pytest
 from eom_catalog_contracts.similarity_context import parse_similarity_context
 from eom_catalog_contracts.similarity_read import SimilarityContextReadRequest
 from eom_catalog_service import similarity_read_service as module
-from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryError
+from eom_catalog_service.embedding_registry_ports import (
+    EmbeddingRegistryCaller,
+    EmbeddingRegistryError,
+)
 from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
 from eom_catalog_service.similarity_read_service import CatalogSimilarityContextReadService
 from eom_identifiers import content_sha256
 from eom_identity_service import OperatorAuthorizationFenceError
 from eom_workflow_runner.models import WorkflowDefinitionRecord, WorkflowInstanceRecord
+from eom_workflow_runner.reference_query_consumer_read import (
+    select_completed_reference_query_request,
+)
 from sqlalchemy import event
 
 from tests.unit.test_reference_query_owner_admission import mutation_rows
@@ -154,6 +160,61 @@ def change(value, **fields):
         row = session.get(WorkflowInstanceRecord, value.request.selection.workflow_id)
         for name, field in fields.items():
             setattr(row, name, field)
+
+
+@pytest.mark.parametrize("nested", (False, True))
+def test_shared_selector_requires_an_active_non_nested_caller_root(selected, nested):
+    value = selected
+    with value.service.sessions() as session:
+        if nested:
+            session.begin()
+            session.begin_nested()
+        with pytest.raises(SimilarityContextReadError, match="AUTHORITY_UNAVAILABLE"):
+            select_completed_reference_query_request(
+                session,
+                value.owner,
+                EmbeddingRegistryCaller(value.request.actor_id),
+                value.request.selection,
+            )
+    value.owner.identity.fence_current_operator.assert_not_called()
+    value.common.assert_not_called()
+
+
+def test_shared_selector_returns_only_exact_request_metadata_without_source_or_numeric_work(
+    selected,
+):
+    value = selected
+    with value.service.sessions.begin() as session:
+        root = session.get_transaction()
+        original = select_completed_reference_query_request(
+            session,
+            value.owner,
+            EmbeddingRegistryCaller(value.request.actor_id),
+            value.request.selection,
+        )
+        assert original == value.source.request
+        assert session.get_transaction() is root and root.is_active
+        assert not session.new and not session.dirty and not session.deleted
+    assert not value.calls
+    value.common.assert_not_called()
+
+
+@pytest.mark.parametrize("fault", ("authority_extra", "malformed_actor", "wrong_caller_kind"))
+def test_shared_selector_does_not_trust_model_copies_or_non_human_callers(selected, fault):
+    value = selected
+    caller = EmbeddingRegistryCaller(value.request.actor_id)
+    selection = value.request.selection
+    if fault == "authority_extra":
+        selection = selection.model_copy(update={"role": "ADMIN"})
+    elif fault == "malformed_actor":
+        caller = EmbeddingRegistryCaller("not-an-operator")
+    else:
+        caller = SimpleNamespace(operator_id=value.request.actor_id)
+    with value.service.sessions.begin() as session, pytest.raises(SimilarityContextReadError):
+        select_completed_reference_query_request(session, value.owner, caller, selection)
+    value.owner.identity.fence_current_operator.assert_not_called()
+    assert not value.calls
+    value.common.assert_not_called()
 
 
 def test_exact_stored_query_uses_one_root_and_rechecks_without_writes_or_model(selected):

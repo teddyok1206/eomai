@@ -1,4 +1,4 @@
-"""Current native owner → canonical reference context → checked plan value, never API privilege."""
+"""Current source/action authority → canonical reference context → checked plan value."""
 
 from __future__ import annotations
 
@@ -25,7 +25,9 @@ from eom_catalog_service.embedding_registry_ports import (
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_identity_service import OperatorAuthorizationFenceError
+from eom_identity_service.repository import effective_permissions
 from eom_image_contracts import SVG_LABEL_LAYOUT_PACK_BUNDLES
+from eom_operator_identity import PermissionKey
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.execution_resolver import validate_educational_retrieval_policy
 from eom_orchestrator.file_set_control_artifacts import (
@@ -43,6 +45,8 @@ from eom_workflow.models import ExpectedWorkflowResolution, WorkflowId, Workflow
 from eom_workflow.similarity_control import PreparedSimilarityPlan
 from jsonschema.exceptions import ValidationError as SchemaError
 from pydantic import TypeAdapter
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from eom_workflow_runner.reference_query_consumer_read import CatalogCompletedReferenceQueryRead
 from eom_workflow_runner.similarity_context_session_reader import (
@@ -98,6 +102,18 @@ class CatalogItemSimilarityPreparation:
         self.query = query
         self.publisher = publisher
         self.source_commit = source_commit
+
+    def _require_start_permission(self, session: Session, caller: EmbeddingRegistryCaller) -> None:
+        self.query.owner.identity.fence_current_operator(session, caller.operator_id)
+        try:
+            with session.no_autoflush:
+                permissions = effective_permissions(session, caller.operator_id)
+        except (SQLAlchemyError, ValueError):
+            raise OperatorAuthorizationFenceError(
+                "OPERATOR_AUTHORIZATION_FENCE_UNAVAILABLE"
+            ) from None
+        if PermissionKey.WORKFLOW_START not in permissions:
+            raise OperatorAuthorizationFenceError("OPERATOR_AUTHORIZATION_FENCE_FORBIDDEN")
 
     def prepare(
         self,
@@ -179,7 +195,7 @@ class CatalogItemSimilarityPreparation:
         common = CatalogSimilaritySessionContextReader(self.query)
         with self.query.sessions.begin() as session:
             try:
-                self.query.owner.identity.fence_current_operator(session, caller.operator_id)
+                self._require_start_permission(session, caller)
                 context = _current_context(
                     common.compose_in_session(session, caller, context_request), context_request
                 )
@@ -223,6 +239,7 @@ class CatalogItemSimilarityPreparation:
                 reader.revalidate_provenance()
                 if reader.read_pinned(**read_arguments).payload != member.payload:
                     raise ValueError("ITEM_SIMILARITY_PREPARATION_MEMBER_CHANGED")
+                self._require_start_permission(session, caller)
                 return PreparedItemSimilarity(
                     PreparedSimilarityPlan(publication.delivery, context),
                     publication,

@@ -6,9 +6,11 @@ from eom_catalog_contracts.similarity_context import (
     SimilarityContextRequest,
     parse_similarity_context_request,
 )
+from eom_catalog_contracts.similarity_read import CompletedSimilarityQuerySelection
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
     EmbeddingRegistryError,
+    validate_embedding_registry_actor,
 )
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.similarity_context_ports import (
@@ -34,16 +36,68 @@ from pydantic import TypeAdapter
 from sqlalchemy.orm import Session
 
 from eom_workflow_runner.errors import WorkflowError
+from eom_workflow_runner.models import WorkflowInstanceRecord
 from eom_workflow_runner.reference_query_publication_read import resolve_reference_query_publication
 from eom_workflow_runner.reference_query_source_read import ReferenceQuerySourceOwner
+
+
+def select_completed_reference_query_request(
+    session: Session,
+    owner: ReferenceQuerySourceOwner,
+    caller: EmbeddingRegistryCaller,
+    selection: CompletedSimilarityQuerySelection,
+) -> ReferenceQueryWorkflowRequest:
+    """Select original metadata in the actual caller root, not transferable read authority.
+
+    Consumers must still resolve current sources and the terminal publication. This
+    function never dereferences an Artifact or chooses an implicit latest QUERY.
+    """
+    root = session.get_transaction()
+    if root is None or not root.is_active or session.in_nested_transaction():
+        raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
+    if type(caller) is not EmbeddingRegistryCaller:
+        raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
+    try:
+        validate_embedding_registry_actor(caller)
+        selection = CompletedSimilarityQuerySelection.model_validate(selection)
+        owner.identity.fence_current_operator(session, caller.operator_id)
+        with session.no_autoflush:
+            row = session.get(WorkflowInstanceRecord, selection.workflow_id, populate_existing=True)
+        # Verify creator before parsing private content. ADMIN/read permissions do
+        # not authorize impersonation of the original query's actual operator.
+        if (
+            row is None
+            or row.created_actor_type != "human"
+            or row.created_actor_id != caller.operator_id
+        ):
+            raise SimilarityContextReadError("SOURCE_ACCESS_DENIED")
+        if row.state != "COMPLETED" or row.initial_request != row.request_payload:
+            raise SimilarityContextReadError("QUERY_RESULT_INVALID")
+        original = parse_reference_query_workflow_request(row.initial_request)
+        if (
+            original.operator_audit.operator_id != caller.operator_id
+            or original.request_sha256 != selection.workflow_request_sha256
+            or original.context_request.request_sha256 != selection.context_request_sha256
+        ):
+            raise SimilarityContextReadError("QUERY_RESULT_INVALID")
+        return original
+    except SimilarityContextReadError:
+        raise
+    except OperatorAuthorizationFenceError:
+        raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE") from None
+    except EmbeddingRegistryError as error:
+        raise similarity_context_error_from_registry(error) from None
+    except (JsonSchemaError, ValueError, TypeError, KeyError, WorkflowError):
+        raise SimilarityContextReadError("QUERY_RESULT_INVALID") from None
 
 
 class CatalogCompletedReferenceQueryRead:
     """One trusted, exact completed Workflow selection; no launch, retry or latest lookup.
 
-    The actual captured operator and installed controls live in the owner. A model
-    cannot supply this adapter or turn its result/source pointers into authority.
-    Reading uses a fresh root, not a mutable command lease or surviving unit state.
+    Trusted composition supplies the actual caller and installed current read owner.
+    A model cannot supply this adapter or turn result/source pointers into authority.
+    Reading uses current Identity/source checks, not an expired execution capture,
+    mutable command lease or surviving unit state.
     """
 
     def __init__(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError, replace
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -11,7 +12,15 @@ from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryCaller
 from eom_catalog_service.settings import CatalogSettings
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_identity_service import OperatorAuthorizationFenceError
+from eom_identity_service.models import (
+    OperatorRecord,
+    OperatorRoleAssignmentRecord,
+    PermissionRecord,
+    RolePermissionRecord,
+    RoleRecord,
+)
 from eom_image_contracts import SVG_LABEL_LAYOUT_PACK_BUNDLES
+from eom_operator_identity import PermissionKey
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
 from eom_workflow.control_plane import ExecutionPresetRevisionV2
@@ -20,6 +29,7 @@ from eom_workflow.similarity_control import PreparedSimilarityPlan
 from eom_workflow_runner import item_similarity_preparation as module
 from eom_workflow_runner.item_similarity_preparation import CatalogItemSimilarityPreparation
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.test_knowledge_backed_execution import _Session
@@ -58,6 +68,55 @@ def preparation_case(tmp_path, monkeypatch):
     publication = tmp_path / "publication"
     publication.mkdir()
     publisher = publisher_for(publication)
+    for model in (
+        OperatorRecord,
+        RoleRecord,
+        PermissionRecord,
+        RolePermissionRecord,
+        OperatorRoleAssignmentRecord,
+    ):
+        model.__table__.create(publisher.engine)
+    with publisher.sessions.begin() as session:
+        session.add(
+            OperatorRecord(
+                operator_id=value.workflow.created_actor_id,
+                username="synthetic-author",
+                normalized_username="synthetic-author",
+                display_name="Synthetic author",
+                status="ACTIVE",
+                must_change_password=False,
+                created_by="synthetic-test",
+            )
+        )
+        session.add(
+            RoleRecord(
+                role_id="role_" + "a" * 32,
+                role_key="AUTHOR",
+                display_name="Synthetic author",
+                description="Test-local authoring capability",
+            )
+        )
+        for index, key in enumerate(
+            (PermissionKey.WORKFLOW_START, PermissionKey.KNOWLEDGE_GRAPH_RETRIEVE)
+        ):
+            permission_id = "permission_" + str(index) * 32
+            session.add(
+                PermissionRecord(
+                    permission_id=permission_id, permission_key=key.value, description="Test only"
+                )
+            )
+            session.add(
+                RolePermissionRecord(role_id="role_" + "a" * 32, permission_id=permission_id)
+            )
+        session.add(
+            OperatorRoleAssignmentRecord(
+                operator_role_assignment_id="assignment_" + "a" * 32,
+                operator_id=value.workflow.created_actor_id,
+                role_id="role_" + "a" * 32,
+                assigned_by="synthetic-test",
+                assigned_at=datetime.now(UTC),
+            )
+        )
     value.query.sessions = publisher.sessions
     value.query.workflow_id = "workflow_" + "9" * 32
     value.query.owner.settings = CatalogSettings(
@@ -147,6 +206,97 @@ def test_owner_publication_replay_preserves_one_canonical_artifact_and_same_root
     assert member.read_bytes() == canonical_json_bytes(first.plan.context.model_dump(mode="json"))
     with pytest.raises(FrozenInstanceError):
         first.evidence_result_sha256 = "sha256:" + "0" * 64
+
+
+@pytest.mark.parametrize("late", (False, True))
+def test_read_only_owner_cannot_prepare_after_start_permission_is_removed(
+    tmp_path, monkeypatch, late
+):
+    case = preparation_case(tmp_path, monkeypatch)
+    context = case.value.case["context"]
+
+    def withdraw_start():
+        with case.publisher.sessions.begin() as session:
+            session.delete(
+                session.get(RolePermissionRecord, ("role_" + "a" * 32, "permission_" + "0" * 32))
+            )
+        return context
+
+    if late:
+        case.hooks.extend((lambda: context, withdraw_start))
+    else:
+        withdraw_start()
+    # The synthetic current-operator fence remains valid. Actual temporary IAM
+    # rows retain read permission but no longer authorize the publishing action.
+    with pytest.raises(ControlPlaneError) as error:
+        prepare(case)
+    assert error.value.code == "CONTROL_SIMILARITY_AUTHORITY_DENIED"
+    assert counts(case) == ((1, 1) if late else (0, 0))
+    if not late:
+        assert case.calls == []
+    else:
+        (member,) = tuple(case.publisher.settings.nas_artifact_root.rglob("context.json"))
+        before = member.stat()
+        with case.publisher.sessions.begin() as session:
+            original_job_id = session.scalar(select(JobRecord.job_id))
+            session.add(
+                RolePermissionRecord(
+                    role_id="role_" + "a" * 32, permission_id="permission_" + "0" * 32
+                )
+            )
+        assert prepare(case).publication.owner_job_id == original_job_id
+        assert counts(case) == (1, 1) and member.stat() == before
+
+
+def test_revoked_assignment_is_not_replaced_by_the_role_permission(tmp_path, monkeypatch):
+    case = preparation_case(tmp_path, monkeypatch)
+    with case.publisher.sessions.begin() as session:
+        assignment = session.get(OperatorRoleAssignmentRecord, "assignment_" + "a" * 32)
+        assignment.revoked_at = datetime.now(UTC)
+    with pytest.raises(ControlPlaneError) as error:
+        prepare(case)
+    assert error.value.code == "CONTROL_SIMILARITY_AUTHORITY_DENIED"
+    assert case.calls == [] and counts(case) == (0, 0)
+
+
+@pytest.mark.parametrize("late", (False, True))
+def test_permission_repository_failure_is_unavailable_not_read_authority(
+    tmp_path, monkeypatch, late
+):
+    case = preparation_case(tmp_path, monkeypatch)
+    actual = module.effective_permissions
+    calls = []
+
+    def unavailable(session, operator_id):
+        calls.append(session)
+        if len(calls) == (2 if late else 1):
+            raise SQLAlchemyError("synthetic-unavailable-do-not-disclose")
+        return actual(session, operator_id)
+
+    monkeypatch.setattr(module, "effective_permissions", unavailable)
+    with pytest.raises(ControlPlaneError) as error:
+        prepare(case)
+    assert error.value.code == "CONTROL_SIMILARITY_AUTHORITY_UNAVAILABLE"
+    assert "do-not-disclose" not in str(error.value)
+    assert counts(case) == ((1, 1) if late else (0, 0))
+
+
+def test_action_permission_is_rechecked_in_the_original_root_without_caching(tmp_path, monkeypatch):
+    case = preparation_case(tmp_path, monkeypatch)
+    actual = module.effective_permissions
+    calls = []
+
+    def observed(session, operator_id):
+        calls.append((session, session.get_transaction(), operator_id))
+        return actual(session, operator_id)
+
+    monkeypatch.setattr(module, "effective_permissions", observed)
+    first = prepare(case)
+    assert prepare(case) == first
+    assert len(calls) == 4
+    assert calls[0] == calls[1] and calls[2] == calls[3]
+    assert calls[0][0] is not calls[2][0] and calls[0][1] is not calls[2][1]
+    assert {operator for _, _, operator in calls} == {case.caller.operator_id}
 
 
 @pytest.mark.parametrize(
