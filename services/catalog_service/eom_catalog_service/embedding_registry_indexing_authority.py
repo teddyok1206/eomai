@@ -67,11 +67,15 @@ class CatalogIndexingRegistrySourceAuthority:
         caller: EmbeddingRegistryServiceCaller,
         intent: RegisterEmbeddingIndexCommand | EmbeddingRegistryLookup,
         configuration: EmbeddingRegistryOwnerConfiguration,
+        *,
+        source_revision_ids: tuple[str, ...] = (),
     ) -> LocalIndexingSourceReadIntent:
         """Exact immutable selection only, never current authorization."""
         validate_embedding_registry_actor(caller)
         if caller.service != self.authority.service_fence.pin.service:
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN")
+        if source_revision_ids and isinstance(intent, RegisterEmbeddingIndexCommand):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
         selection = LocalIndexingSourceReadIntent(
             corpus_id=intent.corpus_id,
             graph_snapshot=intent.graph_snapshot,
@@ -88,6 +92,7 @@ class CatalogIndexingRegistrySourceAuthority:
             maximum_candidates=self.maximum_sources
             if isinstance(intent, RegisterEmbeddingIndexCommand)
             else intent.maximum_sources,
+            source_revision_ids=source_revision_ids,
         )
         if selection.maximum_candidates > self.maximum_sources:
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN")
@@ -147,10 +152,13 @@ class CatalogIndexingRegistrySourceAuthority:
         sources: CatalogInferenceTransferSnapshotSourceAdapter,
         artifact_reader: PinnedArtifactReadContext,
         phase: InferenceTransferSessionCapturePhase,
+        source_revision_ids: tuple[str, ...] = (),
     ) -> LocalIndexingSessionCapture:
         return sources.capture_indexing_in_session(
             session,
-            self.source_intent(caller, intent, configuration),
+            self.source_intent(
+                caller, intent, configuration, source_revision_ids=source_revision_ids
+            ),
             authority=self.authority,
             artifact_reader=artifact_reader,
             phase=phase,

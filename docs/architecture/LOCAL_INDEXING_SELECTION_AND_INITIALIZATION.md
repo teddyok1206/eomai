@@ -151,3 +151,52 @@ The retirement schema/validator lives only in its removable owner-maintenance
 contract module. It does not extend any existing runtime admission schema family,
 registry or released bundle hash. Actual new-service execution still uses the
 unchanged1.2 service request and1.1 native policy contracts.
+
+## Target-scoped physical reads for native execution
+
+The corrected service's metadata query is85ms, but the first1-target Workflow still
+spends minutes before model allocation. Code inspection identifies a separate
+linear-cost boundary: every native command/lease/source fence calls full-corpus
+`resolve_lookup`, physically parsing all520 approved sources/reports, then discards
+all but the immutable plan's selected targets. Concurrent heartbeat roots repeat
+that work and approach the existing1GiB owner limit. No claim is made that every
+remaining CPU second has been profiled or that model computation is the bottleneck.
+
+Keep full population discovery/missing-binding reconciliation, index preparation,
+registration/coverage and user retrieval unchanged. Add one internal frozen
+`SelectedEmbeddingSources` value (original lookup scope + sorted bounded revision
+IDs) and an explicit Catalog `resolve_selected_sources` operation. It is not a
+wire/worker message, source grant, new query engine/cache or global lookup flag.
+Only after original policy/plan pointers pass their existing checks may a native
+execution fence select EXACTLY `plan.sources`. Current actual actor/service/policy
+authorization runs each root as before; the pinned Graph and all selected source,
+report, occurrence, lifecycle, schema/media/hash and late lease checks remain.
+
+Pass the small revision selection through the existing operator/service capture
+paths into the same official candidate statement BEFORE the limit and physical
+prefetch. The existing `(source_kind, source_revision_id)` lookup index and Graph
+keys support this access pattern. A missing/ineligible selected revision must
+fail explicitly; never substitute all/latest. A valid report wait remains distinct
+from an available profile. The full-population APIs do not accept the selected
+value and cannot use a partial read as global coverage. No persistent cache, DB
+index/migration or released schema/Artifact/identity/hash meaning changes.
+
+For N eligible sources, k pinned targets and M execution roots, physical source
+work changes from O(MN) to O(Mk). Initial discovery and final full index assembly
+remain O(N). Metadata selection is indexed/bounded; immutable source pointers and
+ordered tuple/set comparisons preserve exactness. No data is persisted and no
+authorization survives a root. Each read joins the caller transaction and rechecks
+actual policy/permission/revocation; existing claim/lease/idempotency own effects.
+Failure/replay behavior is unchanged, with no inference retry or larger resource
+budget. Layers remain application → typed owner contracts/domain; Catalog owns
+the query/prefetch adapters and Runner supplies only verified plan identities.
+
+Tests must prove selection propagation for BOTH actual-principal branches, source
+class/answer/occurrence/lifecycle predicates before limit, exact missing/stale/hash
+failure, k-source physical reads among a larger synthetic corpus, report waits,
+and unchanged global discovery/registration/coverage. The simpler metadata-only
+optimization is insufficient because these repeated physical reads remain; a
+long-lived parsed-Artifact/auth cache would add invalidation/security complexity.
+The current installed Workflow is not restarted or modified to install this
+candidate. Actual latency/memory improvement needs its own compatible release
+after the current execution is terminal or safely drained.

@@ -65,6 +65,7 @@ class InferenceTransferCorpusReadCommand:
     maximum_candidates: int
     population_scope: InferenceTransferPopulationScope
     top_k: int = 1
+    source_revision_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,6 +137,11 @@ class CatalogInferenceTransferSourceAdapter:
             evidence_budget=policy.maximum_budget,
             maximum_candidates=command.maximum_candidates,
             analysis_run_ids=analysis_run_ids,
+            source_revision_ids=(
+                command.source_revision_ids
+                if isinstance(command, InferenceTransferCorpusReadCommand)
+                else ()
+            ),
             population_scope=command.population_scope,
         )
 

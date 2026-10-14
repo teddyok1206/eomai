@@ -210,6 +210,22 @@ def test_stop_after_idle_peek_does_not_start_new_observation():
     runtime.reconciliation.run_once.assert_not_called()
 
 
+def test_stop_during_active_command_finishes_it_without_another_claim_or_discovery(capsys):
+    stop = Event()
+    command = SimpleNamespace(workflow_id="workflow", command_id="command", state="SUCCEEDED")
+
+    def finish_current():
+        stop.set()
+        return command
+
+    runtime = SimpleNamespace(runner=Mock(), reconciliation=Mock())
+    runtime.runner.run_once.side_effect = finish_current
+    entry.serve_local_indexing(runtime, stop)
+    runtime.runner.run_once.assert_called_once()
+    runtime.reconciliation.run_once.assert_not_called()
+    assert capsys.readouterr().out.count("LOCAL_INDEXING_COMMAND_OBSERVED") == 1
+
+
 def test_queue_is_drained_before_reconciliation_without_independent_claim(capsys):
     stop = Event()
     command = SimpleNamespace(

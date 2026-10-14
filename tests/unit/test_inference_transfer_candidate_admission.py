@@ -127,6 +127,22 @@ def test_source_class_lifecycle_answer_bearing_exists_precedes_source_limit() ->
     assert "assessment_item_occurrence_references" not in sql
 
 
+def test_exact_revision_selection_stays_in_official_prelimit_predicates():
+    selected = ("itemrev_" + "a" * 32,)
+    scope = replace(admission_scope(role="EDITOR"), source_revision_ids=selected)
+    statement = KnowledgeRetrievalApplicationService.candidate_pool_analysis_statement(
+        scope, allow_answer_bearing=False
+    )
+    sql = str(
+        statement.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
+    )
+    assert "knowledge_snapshot_analyses.source_revision_id IN ('" + selected[0] + "')" in sql
+    assert sql.index("knowledge_snapshot_analyses.source_revision_id IN") < sql.index("LIMIT")
+    assert "knowledge_nodes.answer_bearing IS false" in sql
+    assert "items.lifecycle_state = 'ACTIVE'" in sql
+    assert "knowledge_analysis_runs.state = 'ACCEPTED'" in sql
+
+
 def test_occurrence_membership_is_exact_and_prelimit_without_waiving_authority() -> None:
     scope = admission_scope(
         role="EDITOR",

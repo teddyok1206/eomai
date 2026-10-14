@@ -19,6 +19,7 @@ from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryActor,
     EmbeddingRegistryLookup,
     EmbeddingRegistryServiceCaller,
+    SelectedEmbeddingSources,
 )
 from eom_catalog_service.local_embedding_source_plan import build_local_embedding_source_plan
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
@@ -326,7 +327,13 @@ class CatalogLocalEmbeddingOwnerAdmission:
             self._read_control(reader, request.source_plan, SOURCE_PLAN_ARTIFACT_TYPE, 64 * 1024**2)
         )
         scope = ResolvedLocalEmbeddingAdmission(request, plan, policy)
-        current = self.catalog.resolve_lookup(session, caller, query)
+        current = self.catalog.resolve_selected_sources(
+            session,
+            caller,
+            SelectedEmbeddingSources(
+                query, tuple(source.item_revision_id for source in plan.sources)
+            ),
+        )
         rebuilt = build_local_embedding_source_plan(
             query,
             current,

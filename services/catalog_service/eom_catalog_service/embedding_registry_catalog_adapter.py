@@ -80,6 +80,7 @@ from eom_catalog_service.embedding_registry_ports import (
     ResolvedEmbeddingReferences,
     ResolvedEmbeddingRegistration,
     ResolvedPinnedEmbeddingIndex,
+    SelectedEmbeddingSources,
     validate_embedding_registry_actor,
 )
 from eom_catalog_service.embedding_registry_ports import (
@@ -219,6 +220,7 @@ class CatalogEmbeddingRegistryVerifier:
         *,
         artifact_reader: PinnedArtifactReadContext,
         phase: InferenceTransferSessionCapturePhase,
+        source_revision_ids: tuple[str, ...] = (),
     ) -> InferenceTransferSessionCapture | LocalIndexingSessionCapture:
         validate_embedding_registry_actor(caller)
         if isinstance(caller, EmbeddingRegistryServiceCaller):
@@ -232,6 +234,7 @@ class CatalogEmbeddingRegistryVerifier:
                 sources=self.sources,
                 artifact_reader=artifact_reader,
                 phase=phase,
+                source_revision_ids=source_revision_ids,
             )
         if self.identity_fence is None or self._indexing_source_authority is not None:
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE")
@@ -252,6 +255,7 @@ class CatalogEmbeddingRegistryVerifier:
                 top_k=1
                 if self._similarity_requested_top_k is None
                 else self._similarity_requested_top_k,
+                source_revision_ids=source_revision_ids,
             ),
             self.configuration.recipe,
             identity_fence=self.identity_fence,
@@ -278,9 +282,16 @@ class CatalogEmbeddingRegistryVerifier:
         caller: EmbeddingRegistryActor,
         intent: RegisterEmbeddingIndexCommand | EmbeddingRegistryLookup,
         phase: InferenceTransferSessionCapturePhase,
+        *,
+        source_revision_ids: tuple[str, ...] = (),
     ) -> tuple[
         PinnedArtifactReadContext, InferenceTransferSessionCapture | LocalIndexingSessionCapture
     ]:
+        if source_revision_ids and (
+            isinstance(intent, RegisterEmbeddingIndexCommand)
+            or self._similarity_read_window is not None
+        ):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
         if (
             intent.corpus_id != self.configuration.corpus_id
             or intent.namespace != self.configuration.namespace
@@ -294,6 +305,7 @@ class CatalogEmbeddingRegistryVerifier:
             intent,
             artifact_reader=reader if window is None else window.reader,
             phase=phase if window is None else InferenceTransferSessionCapturePhase.AUTHORIZE_SCOPE,
+            source_revision_ids=source_revision_ids,
         )
         if window is not None:
             if (
@@ -873,6 +885,45 @@ class CatalogEmbeddingRegistryVerifier:
                 self.configuration.space,
                 self.configuration.recipe,
                 tuple(value.source for value in capture.corpus.sources),
+                capture.entries,
+            )
+
+        return self._guard(resolve)
+
+    def resolve_selected_sources(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryActor,
+        selection: SelectedEmbeddingSources,
+    ) -> ResolvedEmbeddingLookup:
+        """Exact native-plan targets; never use this result as full index coverage."""
+
+        def resolve() -> ResolvedEmbeddingLookup:
+            if type(selection) is not SelectedEmbeddingSources:
+                raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+            selection.__post_init__()
+            _reader, capture = self._capture(
+                session,
+                caller,
+                selection.scope,
+                InferenceTransferSessionCapturePhase.CAPTURE_POPULATION,
+                source_revision_ids=selection.source_revision_ids,
+            )
+            if capture.corpus is None:
+                raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+            sources = tuple(value.source for value in capture.corpus.sources)
+            actual = tuple(value.item_revision_id for value in sources)
+            if (
+                set(actual) != set(selection.source_revision_ids)
+                or len(actual) != len(selection.source_revision_ids)
+                or capture.corpus.truncated
+            ):
+                raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+            return ResolvedEmbeddingLookup(
+                selection.scope.corpus_id,
+                self.configuration.space,
+                self.configuration.recipe,
+                sources,
                 capture.entries,
             )
 

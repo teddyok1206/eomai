@@ -148,8 +148,11 @@ def service_owner(case, tmp_path, monkeypatch):
         assert type(caller) is EmbeddingRegistryServiceCaller and not hasattr(caller, "operator_id")
         gate.authorize_scope(session, caller, query, config.registry)
 
-    def lookup(session, caller, query):
-        authorize(session, caller, query)
+    def lookup(session, caller, selection):
+        authorize(session, caller, selection.scope)
+        assert selection.source_revision_ids and set(selection.source_revision_ids).issubset(
+            value.item_revision_id for value in result.scope.plan.sources
+        )
         result.calls.append(("lookup", session))
         if result.deny_after_lookup:
             result.deny = True
@@ -157,7 +160,7 @@ def service_owner(case, tmp_path, monkeypatch):
 
     monkeypatch.setattr(CatalogLocalIndexingSourceAuthority, "authorize_scope", source_io)
     monkeypatch.setattr(owner.catalog, "authorize_scope", authorize)
-    monkeypatch.setattr(owner.catalog, "resolve_lookup", lookup)
+    monkeypatch.setattr(owner.catalog, "resolve_selected_sources", lookup)
     return result
 
 

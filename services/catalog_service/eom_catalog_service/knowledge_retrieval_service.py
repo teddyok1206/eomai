@@ -68,7 +68,10 @@ from eom_catalog_service.artifacts import (
     CatalogArtifactReader,
     CatalogArtifactService,
 )
-from eom_catalog_service.inference_transfer_scope import InferenceTransferPopulationScope
+from eom_catalog_service.inference_transfer_scope import (
+    InferenceTransferPopulationScope,
+    require_item_revision_selection,
+)
 from eom_catalog_service.knowledge_analysis_sources import (
     EducationalDocumentSourceResolutionCache,
     KnowledgeAnalysisSourceError,
@@ -297,8 +300,10 @@ class ReadOnlyCandidatePoolScope:
     population_scope: InferenceTransferPopulationScope = (
         InferenceTransferPopulationScope.ALL_ADMITTED_GRAPH_ITEMS
     )
+    source_revision_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
+        require_item_revision_selection(self.source_revision_ids)
         if not isinstance(self.population_scope, InferenceTransferPopulationScope):
             raise ValueError("candidate pool population scope must be a typed value")
         if type(self.maximum_candidates) is not int or not 1 <= self.maximum_candidates <= 1024:
@@ -311,6 +316,7 @@ class ReadOnlyCandidatePoolScope:
         if (
             self.analysis_run_ids != tuple(sorted(set(self.analysis_run_ids)))
             or len(self.analysis_run_ids) > self.maximum_candidates
+            or len(self.source_revision_ids) > self.maximum_candidates
         ):
             raise ValueError("candidate pool exact analysis selection is invalid")
 
@@ -1411,6 +1417,10 @@ class KnowledgeRetrievalApplicationService:
         )
         if scope.analysis_run_ids:
             statement = statement.where(association.analysis_run_id.in_(scope.analysis_run_ids))
+        if scope.source_revision_ids:
+            statement = statement.where(
+                association.source_revision_id.in_(scope.source_revision_ids)
+            )
         if occurrence_scoped:
             occurrence = AssessmentItemOccurrenceReferenceRecord
             exact_occurrence = (

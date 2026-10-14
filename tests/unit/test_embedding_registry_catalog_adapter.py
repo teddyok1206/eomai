@@ -38,6 +38,7 @@ from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryLookup,
     EmbeddingRegistryRead,
     RegisteredEmbeddingIndexRead,
+    SelectedEmbeddingSources,
 )
 from eom_catalog_service.inference_transfer_catalog_adapter import (
     AcceptedInferenceTransferProfileInput,
@@ -565,6 +566,72 @@ def test_lookup_is_read_scoped_and_retained_reference_values_are_revalidated(
         )
     with pytest.raises(EmbeddingRegistryError, match="SOURCE_PIN_MISMATCH"):
         verifier.resolve_lookup(session, caller, replace(query, corpus_id="corpus_" + "f" * 32))
+
+
+def test_selected_source_read_propagates_exact_ids_without_changing_global_lookup(owner):
+    verifier, session, command, _index, binding, _scope, _root = owner
+    query = EmbeddingRegistryLookup(
+        command.corpus_id,
+        command.namespace,
+        command.graph_snapshot,
+        command.policy_revision_id,
+        command.policy_sha256,
+    )
+    caller = EmbeddingRegistryCaller("operator_" + "1" * 32)
+    selection = SelectedEmbeddingSources(query, (binding.source.item_revision_id,))
+    assert verifier.resolve_selected_sources(session, caller, selection).sources == (
+        binding.source,
+    )
+    narrow = verifier.sources.capture_in_session.call_args.args[1]
+    assert narrow.source_revision_ids == selection.source_revision_ids
+    assert narrow.access_policy_revision_id == query.policy_revision_id
+    assert narrow.graph_snapshot == query.graph_snapshot
+    verifier.resolve_lookup(session, caller, query)
+    assert verifier.sources.capture_in_session.call_args.args[1].source_revision_ids == ()
+
+
+def test_selected_source_missing_is_not_full_population_or_latest_fallback(owner):
+    verifier, session, command, _index, _binding, _scope, _root = owner
+    query = EmbeddingRegistryLookup(
+        command.corpus_id,
+        command.namespace,
+        command.graph_snapshot,
+        command.policy_revision_id,
+        command.policy_sha256,
+    )
+    selection = SelectedEmbeddingSources(query, ("itemrev_" + "f" * 32,))
+    with pytest.raises(EmbeddingRegistryError, match="SOURCE_PIN_MISMATCH"):
+        verifier.resolve_selected_sources(
+            session, EmbeddingRegistryCaller("operator_" + "1" * 32), selection
+        )
+    assert (
+        verifier.sources.capture_in_session.call_args.args[1].source_revision_ids
+        == selection.source_revision_ids
+    )
+
+
+@pytest.mark.parametrize("case", ["empty", "duplicate", "reverse", "list", "bad_id", "budget"])
+def test_selected_source_value_is_bounded_and_canonical(owner, case):
+    _verifier, _session, command, _index, binding, _scope, _root = owner
+    query = EmbeddingRegistryLookup(
+        command.corpus_id,
+        command.namespace,
+        command.graph_snapshot,
+        command.policy_revision_id,
+        command.policy_sha256,
+        maximum_sources=1,
+    )
+    source = binding.source.item_revision_id
+    values = {
+        "empty": (),
+        "duplicate": (source, source),
+        "reverse": ("itemrev_" + "b" * 32, "itemrev_" + "a" * 32),
+        "list": [source],
+        "bad_id": ("latest",),
+        "budget": ("itemrev_" + "a" * 32, "itemrev_" + "b" * 32),
+    }[case]
+    with pytest.raises(ValueError):
+        SelectedEmbeddingSources(query, values)
 
 
 def _scope_owner(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, ...]:

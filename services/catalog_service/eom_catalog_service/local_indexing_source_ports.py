@@ -13,7 +13,10 @@ from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
 from eom_catalog_contracts.local_indexing_policy import LocalIndexingAccessPolicy
 from sqlalchemy.orm import Session
 
-from eom_catalog_service.inference_transfer_scope import InferenceTransferPopulationScope
+from eom_catalog_service.inference_transfer_scope import (
+    InferenceTransferPopulationScope,
+    require_item_revision_selection,
+)
 
 type LocalIndexingSourceErrorCode = Literal[
     "LOCAL_INDEXING_SOURCE_FORBIDDEN",
@@ -46,8 +49,13 @@ class LocalIndexingSourceReadIntent:
     resource_profile_sha256: str
     maximum_candidates: int = 1024
     analysis_run_ids: tuple[str, ...] = ()
+    source_revision_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
+        try:
+            require_item_revision_selection(self.source_revision_ids)
+        except ValueError:
+            raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_SCOPE_INVALID") from None
         if (
             type(self.corpus_id) is not str
             or re.fullmatch(r"corpus_[0-9a-f]{32}", self.corpus_id) is None
@@ -78,6 +86,7 @@ class LocalIndexingSourceReadIntent:
             )
             or self.analysis_run_ids != tuple(sorted(set(self.analysis_run_ids)))
             or len(self.analysis_run_ids) > self.maximum_candidates
+            or len(self.source_revision_ids) > self.maximum_candidates
         ):
             raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_SCOPE_INVALID")
         for name, model in (

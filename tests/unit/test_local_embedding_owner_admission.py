@@ -18,6 +18,7 @@ from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryError,
     EmbeddingRegistryLookup,
     ResolvedEmbeddingLookup,
+    SelectedEmbeddingSources,
 )
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactResolutionError
 from eom_catalog_service.settings import CatalogSettings
@@ -148,10 +149,13 @@ def source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> OwnerFixture:
             raise AuthenticatedSessionFenceError("AUTHENTICATED_SESSION_FORBIDDEN")
 
     def current_source(
-        session: Session, caller: EmbeddingRegistryCaller, query: EmbeddingRegistryLookup
+        session: Session, caller: EmbeddingRegistryCaller, selection: SelectedEmbeddingSources
     ) -> ResolvedEmbeddingLookup:
         assert caller.operator_id == capture.operator_id
-        assert query.graph_snapshot == request.graph_snapshot
+        assert selection.scope.graph_snapshot == request.graph_snapshot
+        assert selection.source_revision_ids and set(selection.source_revision_ids).issubset(
+            value.item_revision_id for value in result.scope.plan.sources
+        )
         result.calls.append(("catalog", session))
         if result.deny_after_lookup:
             result.deny = True
@@ -166,7 +170,7 @@ def source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> OwnerFixture:
 
     monkeypatch.setattr(AuthenticatedSessionFence, "assert_current", authenticated_leaf)
     monkeypatch.setattr(owner.catalog, "authorize_scope", scope_before_bytes)
-    monkeypatch.setattr(owner.catalog, "resolve_lookup", current_source)
+    monkeypatch.setattr(owner.catalog, "resolve_selected_sources", current_source)
     return result
 
 

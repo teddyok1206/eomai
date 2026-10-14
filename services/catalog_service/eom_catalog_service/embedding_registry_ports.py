@@ -29,6 +29,7 @@ from eom_protocol.artifact_members import ArtifactMemberPointer
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.embedding_incremental_plan import RegisteredEmbeddingRow
+from eom_catalog_service.inference_transfer_scope import require_item_revision_selection
 
 
 class EmbeddingRegistryError(ValueError):
@@ -119,6 +120,23 @@ class ResolvedEmbeddingLookup:
     sources: tuple[PopulationSource, ...]
     entries: tuple[StagedExperimentEntry, ...]
     truncated: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class SelectedEmbeddingSources:
+    """Native plan targets, NOT a full-population/coverage query or authority grant."""
+
+    scope: EmbeddingRegistryLookup
+    source_revision_ids: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        require_item_revision_selection(self.source_revision_ids)
+        if (
+            type(self.scope) is not EmbeddingRegistryLookup
+            or not self.source_revision_ids
+            or len(self.source_revision_ids) > self.scope.maximum_sources
+        ):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
 
 
 @dataclass(frozen=True, slots=True)

@@ -166,14 +166,14 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 
 | 증분 인덱스 경계 | 현재 검증·활성 상태 |
 | --- | --- |
-| 계약·registry·Artifact·수치 검증·atomic submission·exact claim/native dispatch | SOURCE_PASS; 실제 서비스 owner/source 검증과 첫 native 1건 접수 PASS. 수치 결과·인덱스 저장의 운영 검증은 진행 중 |
+| 계약·registry·Artifact·수치 검증·atomic submission·exact claim/native dispatch | SOURCE_PASS; 실제 native 계산·encoding/launch Job SUCCEEDED, vector/binding/불변 PARTIAL index 각1건 저장(coverage1/520). 외부 Workflow 최종 완료·delta/replay·QUERY는 별도 진행 중 |
 | exact pinned index read | SOURCE_PASS; 현재 권한 재확인·일괄 binding 조회·선택된 벡터 읽기 구현, 공통 검색/QUERY 소비는 미활성 |
 | 공통 유사도 context 조립 | SOURCE_PASS; 기출변형용 승인 anchor·3개 독립 view·현재 권한 재확인334 PASS, 실제 QUERY 실행·소비자 연결은 미활성 |
 | genuine QUERY 입력·encoder/handoff·실행 계약 | SOURCE_PASS; 현재 자료·정본4파일과 기존 큐의 QUERY별 claim/완료 검증 연결. 실제 고정 unit·정본 실행·소비자 조회는 미활성 |
 | 고정 CPU QUERY 실행 어댑터 | SOURCE_PASS; private/root handoff·공통 capacity·재시작 후 중복 dispatch 차단·정확한 실행 관찰 구현. QUERY unit/polkit은 미설치, 실제 계산은 미검증 |
 | QUERY Job·실행·정본 완료 조회 | SOURCE_PASS; 원 Job/4개 checkpoint·실행기·원 claim 복구와 현재 권한/정본 완료 조회 구현. 운영 설치·실제 계산·소비 활성화는 미검증 |
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
-| 자동 인덱싱 전용 신원·저장 | 운영0055·source07fd3059/신원 revision10 활성화. 원래 계산 전 실패는 FAILED 이력/정확한 영수증 보존 후 정식 인계 완료. 동일 자료 계획·Graph·출처 정책을 고정한 후속1건을 정상 큐에 접수하고 유효 claim 확보. metadata 조회85ms/520개 PASS; 벡터·binding·index 저장과 seed/delta·자동 갱신 완료는 아직 아님. [실제 활성화 기록](docs/status/LOCAL_INDEXING_ACTIVATION_2026-10-14.md) |
+| 자동 인덱싱 전용 신원·저장 | 운영0055·source07fd3059/신원 revision10. 원래 계산 전 실패 이력/영수증 보존 후 동일 자료 계획의 후속1건을 정식 실행. 실제 vector/binding/index 각1건, coverage1/520; 외부 Workflow 완료·증분/재사용·전체 자동 갱신은 미완료. 반복 전체 읽기를 exact-target 조회로 줄이는 후보 회귀1297·임시 PostgreSQL77/32 PASS; 현재 건 완료 후 교체 예정. [실제 활성화 기록](docs/status/LOCAL_INDEXING_ACTIVATION_2026-10-14.md) |
 | 인증된 owner/session 전달 | 수신 API 설치·실제 UID990의 provider/process/config/key-metadata 검증 PASS; 실제 사용자 capture·seed는 별도 실행 gate |
 | 현재 사용자·자료의 native 작업 접수 연결 | SOURCE_IMPLEMENTED; 실제 인증 capture→기존 Catalog 검증·계획 재구성·잠금 확인을 연결, 운영 provider/실행기 연결은 미활성 |
 | Native INDEX 파일 전달·입력/결과 저장 | SOURCE_PASS; 실제 계정 권한4·설치된 시작 권한9·CPU 합성 입력2개×1024차원·동일 실행 재조회 PASS, 실제 자료/Job/binding 연결은 미활성 |

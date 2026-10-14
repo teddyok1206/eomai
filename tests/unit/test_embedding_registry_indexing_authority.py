@@ -26,6 +26,7 @@ from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryError,
     EmbeddingRegistryLookup,
     EmbeddingRegistryServiceCaller,
+    SelectedEmbeddingSources,
     validate_embedding_registry_actor,
 )
 from eom_catalog_service.inference_transfer_service import (
@@ -101,6 +102,45 @@ def service_case(registry_owner, source_owner, monkeypatch: pytest.MonkeyPatch):
             command.policy_sha256,
         ),
     )
+
+
+def test_service_selected_source_read_retains_actual_authority_and_exact_pins(service_case):
+    c = service_case
+    selection = SelectedEmbeddingSources(c.query, (c.binding.source.item_revision_id,))
+    resolved = c.verifier.resolve_selected_sources(c.session, c.caller, selection)
+    assert resolved.sources == (c.binding.source,)
+    intent = c.population.call_args.args[1]
+    assert intent.source_revision_ids == selection.source_revision_ids
+    assert intent.graph_snapshot == c.query.graph_snapshot
+    assert intent.access_policy_revision_id == c.query.policy_revision_id
+    assert intent.service_policy_revision_id == c.policy.access_policy_revision_id
+    assert c.source.iam.called
+    c.verifier.resolve_lookup(c.session, c.caller, c.query)
+    assert c.population.call_args.args[1].source_revision_ids == ()
+
+
+def test_service_selected_read_does_not_waive_current_denial(service_case):
+    c = service_case
+    c.source.iam.side_effect = LocalIndexingFenceError("LOCAL_INDEXING_FENCE_FORBIDDEN")
+    with pytest.raises(EmbeddingRegistryError):
+        c.verifier.resolve_selected_sources(
+            c.session,
+            c.caller,
+            SelectedEmbeddingSources(c.query, (c.binding.source.item_revision_id,)),
+        )
+    c.population.assert_not_called()
+
+
+def test_service_cannot_supply_subset_as_registration_population(service_case):
+    c = service_case
+    with pytest.raises(EmbeddingRegistryError, match="SOURCE_PIN_MISMATCH"):
+        c.gate.source_intent(
+            c.caller,
+            c.command,
+            c.base.configuration,
+            source_revision_ids=(c.binding.source.item_revision_id,),
+        )
+    c.population.assert_not_called()
 
 
 def test_service_reuses_canonical_registration_and_separate_source_policy(service_case) -> None:

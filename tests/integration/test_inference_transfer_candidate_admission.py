@@ -93,6 +93,10 @@ def pool_database():
             "CREATE INDEX ON pg_temp.knowledge_node_source_pointers "
             "(graph_snapshot_revision_id,source_class,source_revision_id)"
         )
+        connection.exec_driver_sql(
+            "CREATE INDEX selected_source_revision_lookup ON pg_temp.knowledge_snapshot_analyses "
+            "(source_kind,source_revision_id)"
+        )
         connection.exec_driver_sql("SET statement_timeout='20s'")
         connection.execute(
             text("""
@@ -311,8 +315,14 @@ def test_real_postgres_prefetch_does_not_count_additive_reports_as_original_targ
     assert cte[0]["Actual Rows"] == plan["Plan"]["Actual Rows"] == 520
     # This bounded metadata benchmark is not full source/Artifact acceptance.
     assert plan["Execution Time"] < 10000
-    # Keep the admitted-source limit: a caller budget of519 still exposes a
-    # 520th member as overflow rather than silently accepting an incomplete set.
+    target = "itemrev_" + "1".zfill(32)
+    selected_scope = replace(scope, source_revision_ids=(target,))
+    narrowed = tuple(pool_database.scalars(population_membership_statement(selected_scope)))
+    assert len(narrowed) == 1 and narrowed[0].source_revision_id == target
+    assert narrowed[0].analysis_run_id == "analysisrun_" + "1".zfill(32)
+    # Full population discovery remains unchanged after this target-local read.
+    assert len(tuple(pool_database.scalars(population_membership_statement(scope)))) == 520
+    # The full-scope limit still exposes the520th member as overflow.
     assert (
         len(
             tuple(
@@ -323,6 +333,14 @@ def test_real_postgres_prefetch_does_not_count_additive_reports_as_original_targ
         )
         == 520
     )
+
+
+@pytest.mark.parametrize("target", [1, 2, 3, 4, 5, 6, 7, 8, 99])
+def test_revision_subset_keeps_occurrence_lifecycle_and_answer_predicates(pool_database, target):
+    scope = replace(occurrence_scope(), source_revision_ids=("itemrev_" + str(target).zfill(32),))
+    result = service(scope).admit_read_only_candidate_pool(pool_database, scope)
+    expected = ("analysisrun_" + str(target).zfill(32),) if target in {6, 7} else ()
+    assert tuple(value.analysis_run_id for value in result.candidates) == expected
 
 
 @pytest.mark.parametrize("allow_answers", [False, True])

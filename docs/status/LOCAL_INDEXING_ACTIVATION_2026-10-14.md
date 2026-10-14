@@ -1,7 +1,10 @@
 # Actual local indexing activation — 2026-10-14
 
-13:40 UTC checkpoint (chronology retained below). Actual control installation and source validation are
-separate from successful seed/delta/QUERY. The full goal remains ACTIVE.
+14:10 UTC checkpoint (chronology retained below). The first real encoding Job and
+its native launch Job have succeeded; one vector encoding, one source binding and
+one immutable PARTIAL index (1/520 eligible sources) exist. The outer Workflow's
+final command completion is still pending. Delta/replay/QUERY, consumer activation
+and CPU/GPU comparison are not yet live acceptance. The full goal remains ACTIVE.
 
 ## Actual changes
 
@@ -527,3 +530,42 @@ Evidence:`native-indexing-corrected-handoff-pins.log` and
 `native-indexing-successor-1339-observation.log` in the same temporary evidence
 root. Preserve the live exact handle and queue identities for the next numerical
 result/commit observation; do not create another key on a slow observation.
+
+## First real encoding and partial index — 14:10 UTC
+
+The same release07fd3059/process3963123/Workflow1b7c completed native prepare
+at13:50:03 and numerical CPU execution at13:51:10 (about67 seconds, not a warm
+throughput/quality benchmark). Encoding Job`job_500fb9e1469f487d800f04765a58af21`
+and launch Job`job_458be245f0e140b08bc7798398c402ff` are SUCCEEDED. The numerical
+worker wrote only its local result; the existing Orchestrator committed it.
+
+At14:09:35 the registry contains one encoding, one binding and index
+`embeddingindex_e8a00544f6304ded82e1a5bb8f8e4131`, revision1
+`embeddingindexrev_56ec66cd1dbe484e94740a3f05d98ba9`: binding_count1,
+eligible_source_count520. This is real persisted PARTIAL coverage, not a520-source
+seed completion. The exact START remains PROCESSING with a valid renewed lease;
+outer Workflow finalization must be observed separately. No Job was resubmitted.
+
+Actual source revalidation repeatedly hydrates all520 sources although this plan
+contains one target. The reviewed candidate selects exact immutable plan targets
+through the SAME Catalog query before its limit, rechecks the SAME source/report/
+Graph/policy/actor boundary and rejects missing/duplicate/truncated selections.
+Global discovery, coverage/registration and user retrieval remain full-population.
+No schema/migration/index/queue, permission, resource or numerical runtime change.
+Design: `../architecture/LOCAL_INDEXING_SELECTION_AND_INITIALIZATION.md`.
+
+Candidate validation: final wider regression1297 PASS/123.30s, actual guarded
+PostgreSQL source/query77 PASS/14.26s and model-free registry/native persistence32
+PASS/83.74s; strict mypy8 and Ruff/format/diff PASS. The two initial test-only
+fixture failures and their successful replacements remain in the evidence root;
+these test results are not installed/live performance evidence. A separate18-test
+runtime gate proves an active command finishes after the stop event without
+another claim/discovery. SIGTERM was sent only to the exact owner main process,
+using its existing graceful event handler, not a timed systemctl stop or numeric
+worker cancellation. It will exit naturally AFTER current completion, allowing
+the reviewed successor to activate without changing this Workflow's pinned actor.
+
+Evidence: `native-indexing-successor-{after-compute,registry,drain}-observation.log`,
+`native-indexing-graceful-drain-signal.log` and
+`native-selected-source-{full-regression-reviewed,postgres-reviewed,
+embedding-persistence,final-mypy}.log` in the same temporary evidence root.
