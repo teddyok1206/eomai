@@ -2042,9 +2042,24 @@ passed **20 tests /8.52s**, including the new real combined-auth/session/fence t
 and existing supported-writer concurrency negatives. The prior19-test run overlaps
 and is not additive. The new test proves one actual HMAC authentication, the same
 API session/access expiry and successful current-root fencing with no second HMAC.
-Environment: `/tmp/eom-api-testdb-20261007114938_c6970ffc`, head0055; no production
-DB, new migration or schema/policy/role alteration. This is session-fence acceptance,
+Environment: `/tmp/eom-api-testdb-20261007114938_c6970ffc`, head0055; before/after
+identity PASS and zero other connections. Only synthetic disposable fixtures changed;
+no production DB/schema/policy/role or migration changed. This is session-fence acceptance,
 not new plan23 persistence, private RPC peer admission or shared API Item acceptance.
 Evidence prefix: `/tmp/eom-identity-provider-install.nAaycoDM/similarity-api-owner-auth-`.
 The existing held genuine QUERY/captured-provider release stays unchanged; no new
 capture/login or model was executed in production during this source checkpoint.
+
+Candidate `657951b7b124545b147dddfb060c9c2d2c85b33a` passed full three-wheel/RECORD
+build and two isolated import proofs: owner code from platform+contracts only, and
+actual API dependency/RequestContext from the explicitly selected three archives.
+No checkout, undeclared wheel, installed EOM-prefix fallback or ML import was allowed;
+the proofs made no DB/capture/publication/model call. A negative request-local accessor
+also refuses missing authentication rather than deriving it from IDs. No installed
+runtime or active policy changed; new API+new platform are one compatible candidate,
+not authorization to replace the provider held by the pending genuine QUERY.
+
+Raw wheel SHA: platform `aea6f8df227450e0dfd8c58b80bc37e978d766b703fe83910dc3dd40c3074e35`;
+contracts `f41f922eae8a82576010e5993531bdb41e0541fec0b5be00fc48581c77ae46f3`;
+API `a46cdbc7665f0d21242093875b9c893a29111b9c6bf3ea9d157b9ef66122ce84`.
+Evidence: `similarity-api-owner-auth-{release-build,owner-pair-proof,three-wheel-proof-final}.log`.
