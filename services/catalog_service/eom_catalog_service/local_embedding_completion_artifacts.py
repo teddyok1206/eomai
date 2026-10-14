@@ -64,7 +64,11 @@ def resolve_native_embedding_completion(
 
 
 def resolve_native_reference_query_completion(
-    session: Session, settings: CatalogSettings, output: ReferenceQueryStepOutput
+    session: Session,
+    settings: CatalogSettings,
+    output: ReferenceQueryStepOutput,
+    *,
+    artifact_reader: PinnedArtifactReadContext | None = None,
 ) -> ReferenceQueryWorkflowReceipt:
     """Canonical read only; caller must separately validate current source/Job closure."""
     output = parse_reference_query_step_output(output)
@@ -74,6 +78,7 @@ def resolve_native_reference_query_completion(
         output.receipt,
         QUERY_COMPLETION_ARTIFACT_TYPE,
         MAX_REFERENCE_QUERY_BYTES,
+        artifact_reader=artifact_reader,
     )
     body = json.loads(materialized.payload)
     if canonical_json_bytes(body) != materialized.payload:
@@ -101,8 +106,15 @@ def _read_receipt(
     pointer: ArtifactMemberPointer,
     artifact_type: str,
     maximum: int,
+    *,
+    artifact_reader: PinnedArtifactReadContext | None = None,
 ) -> PinnedArtifactMember:
-    reader = PinnedArtifactReadContext(session, settings)
+    reader = (
+        PinnedArtifactReadContext(session, settings) if artifact_reader is None else artifact_reader
+    )
+    reader.require_session(session)
+    if reader.settings != settings:
+        raise ValueError("NATIVE_COMPLETION_READ_SETTINGS_MISMATCH")
     reader.prefetch(((pointer.artifact_id, pointer.artifact_revision_id),))
     reader.require_file_set(
         pointer.artifact_id,

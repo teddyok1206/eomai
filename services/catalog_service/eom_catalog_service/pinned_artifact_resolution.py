@@ -86,6 +86,18 @@ def artifact_identity_hints(value: object) -> set[tuple[str, str]]:
 
 
 @dataclass(frozen=True)
+class _ArtifactProvenance:
+    logical_artifact_id: str
+    revision_id: str
+    producer_job_id: str
+    artifact_type: str
+    content_hash: str
+    manifest_hash: str
+    content_bytes: int
+    nas_path: str
+
+
+@dataclass(frozen=True)
 class _CapturedArtifactMetadata:
     logical: ArtifactRecord
     revision: ArtifactRevisionRecord
@@ -94,6 +106,7 @@ class _CapturedArtifactMetadata:
     manifest_hash: str
     entry_count: int
     members: dict[str, tuple[dict[str, object], ...]]
+    provenance: _ArtifactProvenance
 
 
 def _capture_metadata(
@@ -121,6 +134,16 @@ def _capture_metadata(
         manifest_hash,
         len(entries),
         {name: tuple(values) for name, values in groups.items()},
+        _ArtifactProvenance(
+            logical.logical_artifact_id,
+            revision.revision_id,
+            revision.job_id,
+            logical.artifact_type,
+            revision.content_hash,
+            manifest_hash,
+            revision.content_bytes,
+            revision.nas_path,
+        ),
     )
 
 
@@ -491,7 +514,9 @@ class PinnedArtifactReadContext:
             return
         logical_ids = tuple(sorted({key[0] for key in self._metadata}))
         revision_ids = tuple(sorted({key[1] for key in self._metadata}))
-        job_ids = tuple(sorted({value.revision.job_id for value in self._metadata.values()}))
+        job_ids = tuple(
+            sorted({value.provenance.producer_job_id for value in self._metadata.values()})
+        )
         with self._session.no_autoflush:
             logicals = {
                 row.logical_artifact_id: (row.job_id, row.artifact_type, row.approved)
@@ -545,23 +570,23 @@ class PinnedArtifactReadContext:
         ):
             raise PinnedArtifactResolutionError("pinned Artifact current provenance is missing")
         for identity, captured in self._metadata.items():
-            revision = captured.revision
+            original = captured.provenance
             if (
-                logicals[identity[0]] != (revision.job_id, captured.logical.artifact_type, True)
+                logicals[identity[0]] != (original.producer_job_id, original.artifact_type, True)
                 or revisions[identity]
                 != (
-                    revision.job_id,
-                    revision.content_hash,
-                    captured.manifest_hash,
-                    revision.content_bytes,
-                    revision.nas_path,
+                    original.producer_job_id,
+                    original.content_hash,
+                    original.manifest_hash,
+                    original.content_bytes,
+                    original.nas_path,
                     True,
                 )
-                or jobs[revision.job_id]
+                or jobs[original.producer_job_id]
                 != (
-                    identity[0],
-                    identity[1],
-                    captured.logical.artifact_type,
+                    original.logical_artifact_id,
+                    original.revision_id,
+                    original.artifact_type,
                     "SUCCEEDED",
                 )
             ):

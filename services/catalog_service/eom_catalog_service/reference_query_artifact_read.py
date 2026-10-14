@@ -52,8 +52,21 @@ class CatalogReferenceQueryArtifacts:
     latest or returns the consumer's stronger VerifiedReferenceQueryRead capability.
     """
 
-    def __init__(self, session: Session, settings: CatalogSettings) -> None:
-        self.reader = PinnedArtifactReadContext(session, settings)
+    def __init__(
+        self,
+        session: Session,
+        settings: CatalogSettings,
+        *,
+        artifact_reader: PinnedArtifactReadContext | None = None,
+    ) -> None:
+        self.reader = (
+            PinnedArtifactReadContext(session, settings)
+            if artifact_reader is None
+            else artifact_reader
+        )
+        self.reader.require_session(session)
+        if self.reader.settings != settings:
+            raise ValueError("REFERENCE_QUERY_READ_SETTINGS_MISMATCH")
 
     def resolve_publication(
         self,

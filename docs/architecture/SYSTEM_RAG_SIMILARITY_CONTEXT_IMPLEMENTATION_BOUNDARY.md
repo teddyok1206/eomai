@@ -2180,3 +2180,135 @@ Any required purpose successor or installed privilege change must be explicit an
 tested before activation. No installed authority/migration/service was changed here.
 This is a remaining implementation dependency in the full goal, not a source PASS
 for the live RPC path and not a reason to weaken source/session/policy gates.
+
+## 25. Separate immutable completed reads from native execution authority
+
+2026-10-14 UTC. Source inspection confirms the existing Identity-owned operator
+fence declares `eom_catalog_manager_runtime` as its admitted execute role; the adapter
+must independently revalidate actual installation rather than assuming it here. Official Catalog
+source capture accepts that actual current-root fence and performs its own current
+role/policy/source/report checks. The main design §6 authenticates callers at the
+API/application boundary and §8 requires each result read to reauthorize that caller.
+A committed QUERY's execution audit is provenance, not the new reader's session.
+
+1. Responsibility: expose a read-only QUERY source owner using the same official
+   Catalog registry/resolver and an explicitly supplied current Identity fence.
+   Keep the existing native owner exclusively responsible for claim/launch/mutation.
+2. Canonical source: current authenticated caller/source authorization plus exact
+   committed Workflow, four checkpoints, receipt and canonical member bytes. Never
+   use a historical execution session or a stored operator ID as current authority.
+3. Identity: preserve original execution audit, Workflow/step/Job/Artifact/revisions
+   and all raw/semantic hashes. New current read authority does not rewrite history.
+4. Pointers: retain original control/source/input/producer and terminal closure;
+   same caller as the original QUERY, same exact request, fresh first/late checks.
+5. Access: existing indexed Workflow/definition/step lookups and bounded official
+   source/view resolution. No launch, checkpoint write, native lease or model.
+6. Structures: one explicit read-owner interface and shared source-resolution and
+   canonical-publication functions used by both actual owners. No inheritance from
+   the execution owner, fake capture, service impersonation or second result reader.
+7. Cost: same bounded source/control/member work as before; no new cache, tables,
+   scans, file copies or claimed latency improvement.
+8. Transaction: retain one caller-owned current root and late reauthorization. The
+   API authenticates every read; accepted background role use also needs its actual
+   command/Workflow authority. This new port is not an unauthenticated ID lookup.
+9. Dependencies: Runner infrastructure composes official Catalog/Identity; no domain
+   infrastructure import. Share immutable local source values; preserve previous
+   public imports so existing native clients retain the same behavior.
+10. Failure/replay: absent/foreign/currently denied read authority, changed source or
+    nonterminal/tampered execution fails. No automatic fallback from an expired
+    native capture to this read owner. A trusted caller must explicitly compose a
+    fresh supported current read boundary. Execution and retry still require the
+    original genuine captured-session owner, policy/lease/admission and checkpoints.
+11. Alternative: sending Root/native authority into ordinary Catalog just to read
+    a committed Artifact conflates read permission with execution privilege. Keeping
+    a native owner behind every completed read also couples long-lived immutable
+    evidence to a short-lived execution session. Separate the two actual use cases
+    without removing either's checks or activating an unsupported runtime.
+
+No wire schema or released protocol meaning changes. Existing schemas are validated
+by the same functions. This source separation does not establish the installed
+authenticated RPC or automatically offer a QUERY operation to the INDEX service.
+
+### 25.1 Verified late QUERY Artifact lifecycle gap
+
+A new separate-Session SQLite regression withdraws QUERY revision approval during
+the late source callback. The reader still returned verified bytes (DID NOT RAISE):
+late source checks covered sources/controls, not that already-read QUERY Artifact.
+The same risk applies to its separate completion receipt. Preserve this failing
+evidence; do not label it a reproduced production incident.
+
+Use the existing root-local `PinnedArtifactReadContext` for both receipt and QUERY
+members, with explicit same-root/settings validation. The shared canonical closure
+and consumer's final source handoff call its existing small scalar provenance
+refresh. Current approval/producer/identity metadata is canonical; cached immutable
+bytes are not current permission. No new persistent state, cache/framework, wire,
+dependency, source grant or permission is introduced. All exact member IDs/revisions,
+schema/media/hash/producer checks stay with their existing owners. Metadata remains
+bounded by the few pinned Artifacts, using three primary-key batches per check, not
+per-member SQL or repeated file IO. The same active root owns the read window; a
+missing/changed/withdrawn member fails without repair, re-encoding or new submission.
+Clearing byte caches or running another model would not address this mutable-metadata
+boundary and is not a simpler correct alternative. This is a point-in-time late
+check, not distributed atomicity or an authorization receipt transferable to callers.
+
+The additional baseline regression confirms two issues in the owning metadata reader:
+refreshing an ORM row could also change the supposed original hash comparison value;
+expiring four captured ORM rows caused11 queries rather than three scalar batches.
+Capture the small immutable provenance fields as a frozen local value at initial
+prefetch, distinct from live ORM objects retained for ordinary leaf checks. IDs,
+producer/type/hash/size/path are original comparison values; approvals and producer
+state still come from current canonical scalar reads. No schema, authority, lifecycle,
+cache or storage change is needed. The snapshot is bounded O(n) small metadata, not
+a second Artifact or persistent derived value. Current Root checks and pending-write
+refusal remain. Tests reject changed original values even after ORM refresh and keep
+the three-query bound after ORM expiry. This fixes the owner rather than clearing
+caches or adding caller-specific refresh workarounds.
+
+### 25.2 Read/execution separation and lifecycle source checkpoint — 2026-10-14 UTC
+
+`CatalogReferenceQueryReadOwner` now supplies the explicit current read boundary;
+it has no submission/claim/launch/mutation methods and does not inherit from the
+native owner. Shared source/config/input functions retain the original checks and
+public native imports. Native execution still constructs the original genuine
+captured-session owner and keeps its lease/policy/admission/recovery rules. No
+expired native owner automatically becomes a new read owner.
+
+The consumer now calls one shared read-only checkpoint/receipt/member resolver
+rather than constructing an execution-completion object. Native completion uses
+that same canonical closure. One root-local provenance context covers both QUERY
+and receipt Artifacts and is refreshed after the final current source check.
+Small original provenance values are frozen independently of refreshable ORM rows.
+
+Final33-suite source regression was split into disjoint17/16-file groups:
+**312 PASS /138.52s +371 PASS /77.49s =683 PASS**. Strict mypy11 and Ruff/format14
+PASS. File groups are stored with the execution evidence, not overlapping counts.
+New tests cover explicit fresh read authority while the native port denies, missing
+or late-denied current authority, preserved public aliases, terminal-closure negatives
+through both owners, canonical consumer delivery without an execution constructor,
+shared-reader root/settings mismatch, and external late QUERY/receipt approval or
+producer changes. SQLite publication/member bytes are actual; current Identity,
+Workflow/source/launcher seams remain explicitly synthetic where stated.
+
+Additional metadata regressions reproduce original-hash comparison loss after ORM
+refresh and11 queries after expiring four rows. With the immutable local baseline,
+both pass and provenance remains three scalar batches without file rehash. Focused
+40/85 and earlier681 counts overlap the final683 and are not additional totals.
+The retained initial fixture failures were stale monkeypatch locations after moving
+source/canonical functions, not a reason to weaken their guards; fixtures now patch
+the actual owning functions. The three real negative regression failures are retained.
+
+After the final metadata change, the existing guarded disposable native-stage suite
+passed **68 tests /46.61s**. Before/after inspections verify disposable identity,
+head0055 and zero other connections. Earlier68 is not additive. This proves existing
+native persistence/submission/recovery regression, not new live authenticated RPC,
+actual QUERY forward or new plan23 persistence. No production DB, runtime, migration,
+policy, Pack, Graph, model or corpus-encoding change occurred.
+
+Evidence prefix: `/tmp/eom-identity-provider-install.nAaycoDM/similarity-read-owner-split-`.
+At20:33:24 UTC the original QUERY root/child were again S+ in the same live pane,
+still awaiting its original Studio input; no restart/capture/forward was performed.
+Next: select an exact stored completed QUERY through an authenticated read use case,
+compose the closed Catalog RPC and current actor/fence, then finish shared API/role
+activation and actual bounded acceptance. Native submission remains a separate
+supported asynchronous owner path; INDEX authority is not broadened. Other consumers,
+coverage and actual CPU/GPU/default-device requirements remain in the active goal.

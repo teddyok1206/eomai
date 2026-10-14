@@ -105,6 +105,53 @@ def test_external_lifecycle_or_lineage_change_is_not_hidden_by_captured_orm_meta
             reader.revalidate_provenance()
 
 
+def test_refreshed_orm_state_does_not_redefine_the_original_immutable_hash(tmp_path):
+    publisher, (output,) = publications(tmp_path)
+    pin = output.delivery.context_member
+    with publisher.sessions.begin() as session:
+        reader = PinnedArtifactReadContext(
+            session, CatalogSettings(nas_artifact_root=publisher.settings.nas_artifact_root)
+        )
+        reader.prefetch(((pin.artifact_id, pin.artifact_revision_id),))
+        row = session.get(ArtifactRevisionRecord, pin.artifact_revision_id)
+        with publisher.sessions.begin() as other:
+            other.get(ArtifactRevisionRecord, pin.artifact_revision_id).content_hash = (
+                "sha256:" + "0" * 64
+            )
+        session.refresh(row)
+        with pytest.raises(PinnedArtifactResolutionError, match="current provenance"):
+            reader.revalidate_provenance()
+
+
+def test_expired_orm_metadata_cannot_add_lazy_reads_to_the_three_batch_check(tmp_path):
+    publisher, outputs = publications(tmp_path, 4)
+    statements = []
+
+    def observe(connection, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    with publisher.sessions.begin() as session:
+        reader = PinnedArtifactReadContext(
+            session, CatalogSettings(nas_artifact_root=publisher.settings.nas_artifact_root)
+        )
+        reader.prefetch(
+            tuple(
+                (
+                    p.delivery.context_member.artifact_id,
+                    p.delivery.context_member.artifact_revision_id,
+                )
+                for p in outputs
+            )
+        )
+        session.expire_all()
+        event.listen(publisher.engine, "before_cursor_execute", observe)
+        try:
+            reader.revalidate_provenance()
+        finally:
+            event.remove(publisher.engine, "before_cursor_execute", observe)
+        assert len(statements) == 3
+
+
 def test_late_check_refuses_pending_writes_without_flushing_them(tmp_path):
     publisher, (output,) = publications(tmp_path)
     pin = output.delivery.context_member

@@ -10,6 +10,7 @@ from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
     EmbeddingRegistryError,
 )
+from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.similarity_context_ports import (
     PreparedSimilarityContext,
     SimilarityContextReadError,
@@ -33,8 +34,8 @@ from pydantic import TypeAdapter
 from sqlalchemy.orm import Session
 
 from eom_workflow_runner.errors import WorkflowError
-from eom_workflow_runner.reference_query_completion import NativeReferenceQueryCompletion
-from eom_workflow_runner.reference_query_owner_admission import CatalogReferenceQueryOwnerAdmission
+from eom_workflow_runner.reference_query_publication_read import resolve_reference_query_publication
+from eom_workflow_runner.reference_query_source_read import ReferenceQuerySourceOwner
 
 
 class CatalogCompletedReferenceQueryRead:
@@ -47,7 +48,7 @@ class CatalogCompletedReferenceQueryRead:
 
     def __init__(
         self,
-        owner: CatalogReferenceQueryOwnerAdmission,
+        owner: ReferenceQuerySourceOwner,
         *,
         workflow_id: str,
         request: ReferenceQueryWorkflowRequest,
@@ -56,7 +57,6 @@ class CatalogCompletedReferenceQueryRead:
         self.workflow_id = TypeAdapter(WorkflowId).validate_python(workflow_id)
         self.request = parse_reference_query_workflow_request(request)
         self.sessions = build_session_factory(owner.catalog.engine)
-        self.completion = NativeReferenceQueryCompletion(owner)
 
     def resolve_reference_query(
         self,
@@ -92,12 +92,15 @@ class CatalogCompletedReferenceQueryRead:
             )
             if current.sources.prepared != prepared:
                 raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
-            canonical, history = self.completion.resolve_publication(
+            provenance = PinnedArtifactReadContext(session, self.owner.settings)
+            canonical, history = resolve_reference_query_publication(
+                self.owner.settings,
                 session=session,
                 workflow=current.workflow,
                 step=current.step,
                 sources=current.sources,
                 output=current.output,
+                artifact_reader=provenance,
             )
             if (
                 history.state != "SUCCEEDED"
@@ -110,6 +113,7 @@ class CatalogCompletedReferenceQueryRead:
             )
             if late.sources != current.sources or late.output != current.output:
                 raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
+            provenance.revalidate_provenance()
             publication = history.records[2].payload
             assert isinstance(publication, NativeQueryPublished)
             return VerifiedReferenceQueryRead(

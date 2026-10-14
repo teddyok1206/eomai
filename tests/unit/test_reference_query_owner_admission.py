@@ -50,6 +50,7 @@ from eom_workflow.reference_query_execution import (
     parse_reference_query_workflow_request,
 )
 from eom_workflow_runner import reference_query_owner_admission as module
+from eom_workflow_runner import reference_query_source_read as read_module
 from eom_workflow_runner.errors import WorkflowError
 from eom_workflow_runner.models import (
     WorkflowCommandRecord,
@@ -194,7 +195,7 @@ def source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> OwnerFixture:
         session: Session, caller: Any, current: Any
     ) -> tuple[PreparedSimilarityContext, tuple[Any, ...]]:
         prepared = prepare(session, caller, current)
-        module.validate_similarity_preparation(current, prepared)
+        read_module.validate_similarity_preparation(current, prepared)
         return prepared, read(session, caller, current, prepared)
 
     monkeypatch.setattr(AuthenticatedSessionFence, "assert_current", identity)
@@ -395,10 +396,22 @@ def test_execution_source_fence_requires_exact_current_step(source, monkeypatch,
         "terminal_state",
     ),
 )
+@pytest.mark.parametrize("owner_kind", ("native", "read_only"))
 def test_completed_query_read_requires_exact_terminal_history_not_an_execution_lease(
-    source, monkeypatch, fault
+    source, monkeypatch, fault, owner_kind
 ):
     session, command, workflow, _lease = mutation_rows(source, monkeypatch)
+    owner = source.owner
+    if owner_kind == "read_only":
+        owner = read_module.CatalogReferenceQueryReadOwner(
+            source.publisher.engine,
+            source.owner.configuration,
+            identity_fence=source.owner.identity,
+            settings=source.owner.settings,
+        )
+        # Keep the existing explicitly synthetic source-resolution seam; terminal
+        # row/attempt/producer checks run through the real shared implementation.
+        monkeypatch.setattr(owner, "resolve_sources", source.owner.resolve_sources)
     output = parse_reference_query_step_output(
         seal(
             case().output.model_dump(mode="json") | {"workflow_id": workflow.workflow_id},
@@ -495,11 +508,11 @@ def test_completed_query_read_requires_exact_terminal_history_not_an_execution_l
     try:
         if fault:
             with pytest.raises((ValueError, WorkflowError)):
-                source.owner.resolve_completed_sources(
+                owner.resolve_completed_sources(
                     session, caller, source.request, workflow_id=workflow.workflow_id
                 )
         else:
-            current = source.owner.resolve_completed_sources(
+            current = owner.resolve_completed_sources(
                 session, caller, source.request, workflow_id=workflow.workflow_id
             )
             assert current.sources.request == source.request and current.output == output
@@ -749,7 +762,7 @@ def test_stale_or_substituted_actor_denies_before_any_control_read(
             )
         )
     monkeypatch.setattr(
-        module, "PinnedArtifactReadContext", lambda *_args: pytest.fail("read before Identity")
+        read_module, "PinnedArtifactReadContext", lambda *_args: pytest.fail("read before Identity")
     )
     with (
         source.publisher.sessions() as session,
@@ -767,7 +780,7 @@ def test_current_scope_denial_precedes_control_bytes(
 
     monkeypatch.setattr(source.owner.catalog, "authorize_scope", deny)
     monkeypatch.setattr(
-        module, "PinnedArtifactReadContext", lambda *_args: pytest.fail("read before scope")
+        read_module, "PinnedArtifactReadContext", lambda *_args: pytest.fail("read before scope")
     )
     with (
         source.publisher.sessions() as session,

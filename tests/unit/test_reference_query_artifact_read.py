@@ -10,7 +10,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactResolutionError
+from eom_catalog_service.pinned_artifact_resolution import (
+    PinnedArtifactReadContext,
+    PinnedArtifactResolutionError,
+)
 from eom_catalog_service.reference_query_artifact_read import CatalogReferenceQueryArtifacts
 from eom_catalog_service.settings import CatalogSettings
 from eom_identifiers import canonical_json_bytes
@@ -98,6 +101,26 @@ def reader(publication: Publication, session: Any) -> CatalogReferenceQueryArtif
     return CatalogReferenceQueryArtifacts(
         session, CatalogSettings(nas_artifact_root=publication.publisher.settings.nas_artifact_root)
     )
+
+
+def test_shared_artifact_reader_requires_its_exact_root_and_settings(publication: Publication):
+    settings = CatalogSettings(nas_artifact_root=publication.publisher.settings.nas_artifact_root)
+    with publication.publisher.sessions.begin() as session:
+        shared = PinnedArtifactReadContext(session, settings)
+        value = CatalogReferenceQueryArtifacts(session, settings, artifact_reader=shared)
+        assert value.reader is shared
+        assert (
+            value.resolve_publication(**arguments(publication)).binary == publication.value.binary
+        )
+        shared.revalidate_provenance()
+        with (
+            publication.publisher.sessions.begin() as other,
+            pytest.raises(PinnedArtifactResolutionError, match="transaction"),
+        ):
+            CatalogReferenceQueryArtifacts(other, settings, artifact_reader=shared)
+        different = CatalogSettings(nas_artifact_root=settings.nas_artifact_root / "different-root")
+        with pytest.raises(ValueError, match="REFERENCE_QUERY_READ_SETTINGS_MISMATCH"):
+            CatalogReferenceQueryArtifacts(session, different, artifact_reader=shared)
 
 
 def test_exact_committed_members_actual_producer_and_replay(publication: Publication) -> None:

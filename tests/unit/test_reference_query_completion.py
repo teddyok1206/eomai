@@ -15,7 +15,7 @@ from eom_orchestrator.native_reference_query_coordinator import (
     create_native_reference_query_launch,
 )
 from eom_workflow.native_reference_query_coordinator import reference_query_checkpoint_receipt
-from eom_workflow_runner import reference_query_completion as module
+from eom_workflow_runner import reference_query_publication_read as read_module
 from eom_workflow_runner.models import WorkflowStepRunRecord
 from eom_workflow_runner.reference_query_completion import NativeReferenceQueryCompletion
 from sqlalchemy import select
@@ -96,7 +96,7 @@ def completion(tmp_path, monkeypatch):
     )
     # Derivation itself has separate exact current-source tests; this is storage/completion closure.
     monkeypatch.setattr(
-        module, "build_reference_query_native_input", lambda *_a, **_kw: current.native_input
+        read_module, "build_reference_query_native_input", lambda *_a, **_kw: current.native_input
     )
     return SimpleNamespace(
         publisher=publisher,
@@ -171,7 +171,9 @@ def test_changed_history_bytes_or_current_authority_never_return_success(
 
         value.owner.fence_mutation = deny
     if fault == "derivation":
-        monkeypatch.setattr(module, "build_reference_query_native_input", lambda *_a, **_kw: None)
+        monkeypatch.setattr(
+            read_module, "build_reference_query_native_input", lambda *_a, **_kw: None
+        )
     with value.publisher.sessions.begin() as session:
         if fault == "native_failed":
             session.get(JobRecord, value.current.launch.native_launch_job_id).status = "FAILED"

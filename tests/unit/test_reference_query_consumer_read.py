@@ -25,6 +25,7 @@ from eom_workflow_runner.reference_query_consumer_read import CatalogCompletedRe
 from eom_workflow_runner.reference_query_owner_admission import (
     ResolvedCompletedReferenceQuerySources,
 )
+from eom_workflow_runner.reference_query_source_read import CatalogReferenceQueryReadOwner
 from sqlalchemy import func, select
 
 from tests.unit.inference_transfer_embedding_fixtures import seal
@@ -273,3 +274,70 @@ def test_each_damaged_canonical_member_fails_without_repair_or_reencoding(comple
         read(completed)
     assert counts(completed.value) == before and len(completed.value.runs) == 1
     assert output.binary
+
+
+@pytest.mark.parametrize(
+    "target", ("query_revision", "receipt_revision", "query_job", "receipt_job")
+)
+def test_late_external_query_approval_withdrawal_is_not_hidden_by_verified_bytes(completed, target):
+    published = completed.value.history().records[2].payload
+
+    def withdraw():
+        with completed.value.publisher.sessions.begin() as other:
+            if target.endswith("revision"):
+                pointer = (
+                    published.result if target == "query_revision" else completed.output.receipt
+                )
+                other.get(ArtifactRevisionRecord, pointer.artifact_revision_id).approved = False
+            else:
+                job_id = (
+                    published.query_owner_job_id
+                    if target == "query_job"
+                    else completed.output.receipt_owner_job_id
+                )
+                other.get(JobRecord, job_id).status = "FAILED"
+
+    completed.hooks.extend((lambda: None, withdraw))
+    with pytest.raises(SimilarityContextReadError):
+        read(completed)
+
+
+def test_read_only_owner_reaches_canonical_consumer_without_constructing_execution_owner(
+    completed, monkeypatch
+):
+    from eom_workflow_runner.reference_query_completion import NativeReferenceQueryCompletion
+
+    observed = []
+
+    def current_identity(session, operator_id):
+        assert operator_id == completed.caller.operator_id
+        observed.append(session)
+
+    owner = CatalogReferenceQueryReadOwner(
+        completed.value.publisher.engine,
+        completed.value.owner.configuration,
+        identity_fence=SimpleNamespace(fence_current_operator=current_identity),
+        settings=completed.value.owner.settings,
+    )
+    current = completed.value.owner.resolve_completed_sources
+
+    def checked(session, caller, request, *, workflow_id):
+        owner.identity.fence_current_operator(session, caller.operator_id)
+        # Reuse the existing explicit synthetic Workflow/source seam; actual
+        # checkpoint/Job/Artifact bytes below are the real temporary publication.
+        return current(session, caller, request, workflow_id=workflow_id)
+
+    monkeypatch.setattr(owner, "resolve_completed_sources", checked)
+    forbidden = Mock(side_effect=AssertionError("read must not construct a native execution owner"))
+    monkeypatch.setattr(NativeReferenceQueryCompletion, "__init__", forbidden)
+    query = CatalogCompletedReferenceQueryRead(
+        owner, workflow_id=completed.value.workflow.workflow_id, request=completed.value.request
+    )
+    before = counts(completed.value)
+    result = query.resolve_reference_query(
+        completed.caller, completed.value.request.context_request, completed.value.sources.prepared
+    )
+    assert isinstance(result, VerifiedReferenceQueryRead)
+    assert len(observed) == 2 and observed[0] is observed[1]
+    assert counts(completed.value) == before and len(completed.value.runs) == 1
+    forbidden.assert_not_called()
