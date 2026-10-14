@@ -420,3 +420,72 @@ API-contract raw `99f2436e8b5f5645f752f316d888ae9d8213ef1f7f9f87b68eeeb1d92b3f8e
 Local evidence: `/tmp/eom-identity-provider-install.nAaycoDM/benchmark-full-rank-*.log`.
 This candidate is NOT installed. API75fdc265 and owner5018ad2d remain unchanged;
 the original finite QUERY handle is preserved while awaiting its single operator login.
+
+### Own-unit host-memory observation before native entry composition — 2026-10-14
+
+The worker already requires a host OOM observation port; its synthetic observer is
+not an installed implementation. Implement the missing read-only infrastructure
+adapter, not another resource monitor, queue or benchmark protocol. Canonical input
+is the current process's kernel cgroup-v2 membership and that exact fixed benchmark
+unit's `memory.events`, captured before backend/model entry. The trusted device and
+execution ID select only the fixed CPU/CUDA benchmark unit; no arbitrary path is
+accepted. There is no persistent entity, revision, DB/index or source permission.
+Future fixed benchmark templates must explicitly use `Slice=system.slice`, as the
+existing fixed CPU units do; another slice is not silently discovered or accepted.
+
+Capture bounded kernel mount metadata, the protected named file/directory identities,
+the original PID/UID and initial counters. Revalidate them around every bounded
+live read. Counter names use a map; monotonic counters and original membership
+are mandatory, with bounded storage and O(mount-record bytes + counters + path depth)
+work; the existing kernel read caps bound every observation independently of corpus size.
+An observation error poisons the handle; never return a fabricated zero or rebase
+the counters after a reset, unit replacement or process migration. No transaction,
+subprocess, GPU call, file mutation, retry or authority cache is introduced.
+The existing execution-port module owns the error/interface; the adapter implements
+it and the worker preserves its stable failure code through the existing result path.
+
+Kernel `oom_kill` counts tasks killed by any OOM killer; it is NOT necessarily a
+subset of this cgroup's local-limit `oom` count. Return the actual `oom` delta, but
+fail explicitly if either kill counter advances. Do not add kill counters and
+double-count events, nor permit a global OOM kill to disappear behind `oom=0`.
+Require hierarchical cgroup-v2 accounting (`memory_localevents` is unsupported).
+The owner still independently observes unit failure/termination, including a killed
+worker that cannot publish its own result. This adapter alone proves neither cleanup
+nor absence of other consumers. Silently defaulting to zero is simpler but invalid.
+Kernel semantics: [cgroup-v2 memory events](https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html#memory-interface-files).
+
+The narrow `embedding_benchmark_entrypoint.run_native_embedding_benchmark` library
+composition connects this concrete observer to the existing worker. It first uses
+the SAME stdlib native identity/capability guard, then validates the already-captured
+exact local-files/channel types and profile, captures host counters, and invokes the
+existing backend-scope/worker program unchanged. Host capture precedes model entry;
+all early failures close both local resources. A small public diagnostic-discard
+scope is shared with INDEX/QUERY while their descriptor ownership stays unchanged.
+The entry imports no Pydantic/ML at initial import and introduces no CLI, default
+backend, socket authority, owner callback, installed unit or alternative encoder.
+Actual root-installed main, socket/handoff admission and six-launch owner remain
+mandatory. This library connection must not be reported as an executed benchmark.
+
+Entry review also found that the existing worker checked channel association only
+at its first cold checkpoint, after model work. Reuse the channel's own exact
+invocation/phase/peer fence in one public `assert_initial_invocation` check before
+staged text/model entry. A different, consumed, closed or revoked channel fails
+and is poisoned through the SAME existing failure path, without another transport,
+authority source, registry or change to checkpoint/ACK wire bytes.
+
+Verification of this combined source boundary: **804 PASS /46.61s** across13
+ranking/contracts/performance/host-memory/entry/worker/files/channel/factory/backend/
+INDEX/QUERY identity/composition/dependency suites. Earlier focused280 and regression720
+runs overlap and are not added to that total. Strict mypy6 and Ruff/format10 files,
+diff checks PASS. The first host-memory fixture run had19 failures because newly
+created test directories inherited group-write mode; fixtures now use protected0700
+directories, without weakening production ownership/path checks. Stable host-failure
+result codes and the original worker's full21-checkpoint program are exercised over
+real temporary FDs/Unix sockets with explicitly synthetic numerical/identity captures.
+
+An actual unprivileged ambient process also failed host capture before any model
+import/forward; this negative is not installed benchmark acceptance. No DB/schema/
+role/unit mutation, source grant, real corpus/model/GPU execution or runtime install
+occurred. PostgreSQL tests are not rerun for this local-read/worker-composition-only
+diff. Actual owner/launcher/physical lease and six measured launches remain incomplete.
+Evidence: `/tmp/eom-identity-provider-install.nAaycoDM/benchmark-{host-memory,native-entry}-*.log`.

@@ -72,6 +72,39 @@ def complete_checkpoints(
 
 
 @pytest.mark.parametrize("ordinal", range(1, 7))
+def test_original_invocation_is_peer_checked_before_any_phase_or_model(ordinal: int) -> None:
+    with endpoints(ordinal) as (worker, owner):
+        worker.assert_initial_invocation(worker_invocation(ordinal))
+        # This read-only assertion creates no checkpoint or continuation ACK.
+        with pytest.raises(BenchmarkChannelError, match="INCOMPLETE"):
+            owner.transcript()
+
+
+@pytest.mark.parametrize("fault", ("foreign", "pending", "completed", "closed", "revoked"))
+def test_foreign_or_consumed_channel_cannot_start_another_invocation(fault: str) -> None:
+    with endpoints(3) as (worker, owner):
+        expected = worker_invocation(3)
+        if fault == "foreign":
+            expected = worker_invocation(4)
+        elif fault == "pending":
+            worker.send_checkpoint(session(3).checkpoints[0])
+        elif fault == "completed":
+            complete_checkpoints(worker, owner, 3)
+        elif fault == "closed":
+            worker.close()
+        else:
+
+            def revoked(_peer: BenchmarkUnixPeer) -> None:
+                raise ValueError("synthetic late peer revocation")
+
+            worker._exchange.frames.peer_fence = revoked
+        with pytest.raises(BenchmarkChannelError, match="INITIAL_INVOCATION_INVALID"):
+            worker.assert_initial_invocation(expected)
+        with pytest.raises(BenchmarkChannelError, match="INITIAL_INVOCATION_INVALID"):
+            worker.assert_initial_invocation(worker_invocation(3))
+
+
+@pytest.mark.parametrize("ordinal", range(1, 7))
 def test_one_terminal_resource_roundtrip_preserves_historical_checkpoint_program(
     ordinal: int,
 ) -> None:

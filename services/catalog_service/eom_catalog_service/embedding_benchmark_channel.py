@@ -295,6 +295,25 @@ class BenchmarkWorkerChannel:
             _Frames(connection, expected_peer, peer_fence, expires_ns), invocation
         )
 
+    def assert_initial_invocation(self, invocation: BenchmarkWorkerInvocation) -> None:
+        """Bind the staged invocation before model entry; this is not a source grant."""
+        try:
+            checked = BenchmarkWorkerInvocation.model_validate(invocation)
+            if (
+                checked != self._exchange.invocation
+                or self._exchange.frames.failed
+                or self._exchange.sequence != 1
+                or self._exchange.pending is not None
+                or self._exchange.checkpoints
+                or self._exchange.acks
+                or self._exchange.resources_started
+            ):
+                raise BenchmarkChannelError("EMBEDDING_BENCHMARK_INITIAL_INVOCATION_INVALID")
+            self._exchange.frames.check()
+        except Exception:
+            self._exchange.fail()
+            raise BenchmarkChannelError("EMBEDDING_BENCHMARK_INITIAL_INVOCATION_INVALID") from None
+
     def send_checkpoint(self, value: BenchmarkCheckpoint) -> None:
         try:
             self._exchange.begin()

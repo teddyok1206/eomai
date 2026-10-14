@@ -79,15 +79,11 @@ def require_native_embedding_identity(profile: str) -> None:
 
 
 @contextmanager
-def _quiet_channels() -> Iterator[tuple[int, int]]:
-    owned: list[int] = []
+def discard_native_embedding_diagnostics() -> Iterator[None]:
+    """Silence the native leaf before optional imports; never restore result descriptors."""
+    sink = -1
     try:
-        result = fcntl.fcntl(1, fcntl.F_DUPFD_CLOEXEC, 3)
-        owned.append(result)
-        vectors = fcntl.fcntl(2, fcntl.F_DUPFD_CLOEXEC, 3)
-        owned.append(vectors)
         sink = os.open("/dev/null", os.O_WRONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
-        owned.append(sink)
         value = os.fstat(sink)
         if not stat.S_ISCHR(value.st_mode) or (
             os.major(value.st_rdev),
@@ -98,7 +94,22 @@ def _quiet_channels() -> Iterator[tuple[int, int]]:
         os.dup2(sink, 2)
         sys.stdout.flush()
         sys.stderr.flush()
-        yield result, vectors
+        yield
+    finally:
+        if sink >= 0:
+            os.close(sink)
+
+
+@contextmanager
+def _quiet_channels() -> Iterator[tuple[int, int]]:
+    owned: list[int] = []
+    try:
+        result = fcntl.fcntl(1, fcntl.F_DUPFD_CLOEXEC, 3)
+        owned.append(result)
+        vectors = fcntl.fcntl(2, fcntl.F_DUPFD_CLOEXEC, 3)
+        owned.append(vectors)
+        with discard_native_embedding_diagnostics():
+            yield result, vectors
     finally:
         # Never restore ordinary diagnostics to root-owned result/binary descriptors.
         failed = False

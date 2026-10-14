@@ -22,6 +22,8 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     parse_embedding_device_benchmark_bytes,
 )
 from eom_catalog_contracts.inference_transfer_embedding import EmbeddingExecutionRuntime
+from eom_catalog_service import embedding_benchmark_entrypoint as native_entry
+from eom_catalog_service import embedding_benchmark_host_memory as host_memory
 from eom_catalog_service.embedding_benchmark_channel import (
     BenchmarkOwnerChannel,
     BenchmarkUnixPeer,
@@ -32,6 +34,7 @@ from eom_catalog_service.embedding_device_benchmark_worker import (
     run_embedding_device_benchmark,
 )
 from eom_catalog_service.embedding_execution_ports import (
+    BenchmarkHostObservationError,
     BenchmarkNativeEmbeddingBackend,
     NativeAllocatorPeaks,
     NativeObservedEncoding,
@@ -191,6 +194,15 @@ def run_scenario(
     events: list[str] = []
     backend = FakeBackend(worker_invocation(ordinal), events)
     host = HostObserver(events)
+    if fault == "native_entry":
+
+        @contextmanager
+        def quiet() -> Iterator[None]:
+            yield
+
+        monkeypatch.setattr(native_entry, "discard_native_embedding_diagnostics", quiet)
+        monkeypatch.setattr(native_entry, "require_native_embedding_identity", lambda _: None)
+        monkeypatch.setattr(host_memory, "OwnBenchmarkHostOomObserver", lambda **_: host)
     synthetic_clock = [time.perf_counter_ns()]
     if fault == "clock":
 
@@ -257,7 +269,11 @@ def run_scenario(
             raise ValueError("synthetic revoked current authorization")
 
     worker = BenchmarkWorkerChannel(
-        left, invocation, expected_peer=peer(), peer_fence=fence, expires_ns=deadline
+        left,
+        worker_invocation(4) if fault == "channel_capture" else invocation,
+        expected_peer=peer(),
+        peer_fence=fence,
+        expires_ns=deadline,
     )
     owner = BenchmarkOwnerChannel(
         right,
@@ -293,14 +309,24 @@ def run_scenario(
     result: Any
     try:
         try:
-            result = run_embedding_device_benchmark(
-                files,
-                scope,
-                worker,
-                entry_started_ns=time.perf_counter_ns() - 1_000_000,
-                expires_ns=deadline,
-                host_oom_observer=host,
-            )
+            if fault == "native_entry":
+                result = native_entry.run_native_embedding_benchmark(
+                    files,
+                    scope,
+                    worker,
+                    profile=files.profile,
+                    entry_started_ns=time.perf_counter_ns() - 1_000_000,
+                    expires_ns=deadline,
+                )
+            else:
+                result = run_embedding_device_benchmark(
+                    files,
+                    scope,
+                    worker,
+                    entry_started_ns=time.perf_counter_ns() - 1_000_000,
+                    expires_ns=deadline,
+                    host_oom_observer=host,
+                )
         except BenchmarkWorkerError as error:
             if fault != "capture":
                 raise
@@ -422,6 +448,43 @@ def test_resource_oom_counts_are_actual_distinct_host_plus_allocator_not_gate_su
     result, _, _, _, _ = run_scenario(tmp_path, monkeypatch, 3, fault="oom_counts")
     assert result.status == "COMPLETED" and result.resources.oom_count == 3
     # Leaf completion preserves failing observations; owner decides OOM=0 gate separately.
+
+
+def test_host_observation_failure_preserves_specific_code_and_cannot_be_completion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def killed(_self: HostObserver) -> int:
+        raise BenchmarkHostObservationError("BENCHMARK_HOST_OOM_KILL_DETECTED")
+
+    monkeypatch.setattr(HostObserver, "observe_delta", killed)
+    result, _, events, root, _ = run_scenario(tmp_path, monkeypatch, 3)
+    assert result.status == "FAILED"
+    assert result.reason_codes == ("BENCHMARK_HOST_OOM_KILL_DETECTED",)
+    assert "constructor" not in events
+    assert (root / "outputs/worker-result.json").stat().st_size > 0
+
+
+def test_native_library_composition_runs_same_full_worker_program_over_real_local_fds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    result, backend, _, root, checkpoints = run_scenario(
+        tmp_path, monkeypatch, 1, fault="native_entry"
+    )
+    assert result.status == "COMPLETED" and backend.closed
+    assert len(checkpoints) == 21
+    assert (root / "outputs/worker-result.json").stat().st_size > 0
+    # Identity/host capture and numerical backend are synthetic, not production admission.
+
+
+def test_foreign_channel_invocation_fails_before_backend_construction(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    result, _, events, _, checkpoints = run_scenario(
+        tmp_path, monkeypatch, 3, fault="channel_capture"
+    )
+    assert result.status == "FAILED"
+    assert result.reason_codes == ("EMBEDDING_BENCHMARK_INITIAL_INVOCATION_INVALID",)
+    assert "constructor" not in events and not checkpoints
 
 
 @pytest.mark.parametrize("case", ("host", "clock", "deadline"))

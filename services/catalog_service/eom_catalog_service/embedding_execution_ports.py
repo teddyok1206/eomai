@@ -19,6 +19,24 @@ from eom_catalog_contracts.inference_transfer_embedding import (
 from eom_catalog_service.inference_transfer_ports import LocalTextEmbeddingBackend
 
 
+class BenchmarkHostObservationError(ValueError):
+    """Stable host-observation failure; never permission or evidence of safe cleanup."""
+
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(code)
+
+
+class BenchmarkHostOomObserver(Protocol):
+    def observe_delta(self) -> int:
+        """Actual own-unit memory.events oom delta from a pre-entry baseline.
+
+        Capture/membership/epochs are mandatory. Kill events must not be double-counted
+        or hidden when the local-limit oom counter stays zero. No default is supplied.
+        """
+        ...
+
+
 class NativeEmbeddingBackend(LocalTextEmbeddingBackend, Protocol):
     @property
     def batch_size(self) -> int:

@@ -7,7 +7,7 @@ import time
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol
+from typing import Any, Literal
 
 from eom_catalog_contracts.embedding_device_benchmark import (
     BenchmarkCapacitySample,
@@ -42,21 +42,13 @@ from eom_catalog_service.embedding_device_benchmark_files import (
     BenchmarkWorkerLocalFiles,
 )
 from eom_catalog_service.embedding_execution_ports import (
+    BenchmarkHostObservationError,
+    BenchmarkHostOomObserver,
     BenchmarkNativeEmbeddingBackend,
     NativeObservedEncoding,
 )
 from eom_catalog_service.embedding_native_factory import NativeEmbeddingFactoryError
 from eom_catalog_service.embedding_offline_backend import NativeEmbeddingBackendError
-
-
-class BenchmarkHostOomObserver(Protocol):
-    def observe_delta(self) -> int:
-        """Actual own-cgroup memory.events oom delta; capture/baseline/epochs are mandatory.
-
-        Installed composition binds the exact own unit and pre-entry baseline, not a model
-        path. Counts never additionally include the oom_kill subset. No default is supplied.
-        """
-        ...
 
 
 class BenchmarkWorkerError(ValueError):
@@ -395,6 +387,7 @@ def run_embedding_device_benchmark(
         files.__enter__()
         entered = True
         invocation = files.read_invocation()
+        channel.assert_initial_invocation(invocation)
         inputs = files.read_inputs(invocation)
         check()
         host_count()
@@ -628,6 +621,7 @@ def run_embedding_device_benchmark(
                 error,
                 (
                     BenchmarkWorkerError,
+                    BenchmarkHostObservationError,
                     BenchmarkFilesError,
                     BenchmarkChannelError,
                     NativeEmbeddingFactoryError,
