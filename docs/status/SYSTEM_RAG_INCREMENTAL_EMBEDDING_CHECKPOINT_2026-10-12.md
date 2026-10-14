@@ -2452,3 +2452,10 @@ declarative YAML은 frozen 계약과 같지만 여전히 미허용/미설치다.
 seed/delta/reuse/query, service 자동 갱신, 공통 소비자, CPU/GPU/default 선택은 남아 있다.
 `GOAL=ACTIVE`, `QUERY_EXECUTOR_COMPOSITION=SOURCE_PASS`, `QUERY_CLAIM_RECOVERY=SOURCE_PASS`,
 `QUERY_GLOBAL_ADMISSION=UNOFFERED`, `GENUINE_QUERY_CONSUMER_READ=NOT_ACTIVE`.
+
+후속 build-only에서 code candidate `16fb1fec2f95f99e1200b20a86305cd0fbebd432`의
+기존3개 wheel/RECORD/installed simulation이 PASS했다. 실제 보호된 operator Conda의
+`-I -B` 실행으로 QUERY/executor/publication17개 module을 wheel에서만 import하고 packaged
+checkpoint schema/hash/ref closure를 검증했다. 설치·DB·auth·모델·unit 변경은 없다.
+01:39 UTC 기존 유한 controller는 살아 있으나 원 log는 여전히0 bytes였다. 인증/seed의
+성공으로 해석하지 않으며 기존 세션을 교체하거나 추가 로그인 창을 만들지 않았다.

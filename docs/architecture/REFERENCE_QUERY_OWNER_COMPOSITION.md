@@ -515,3 +515,11 @@ QUERY unit/polkit installation or credential change was performed by this source
 work. No default executor/admission was silently activated. The full goal remains
 active; source verification does not close its installed, genuine read, automatic
 service, consumer or CPU/GPU/default-selection gates.
+
+Build-only verification of code candidate
+`16fb1fec2f95f99e1200b20a86305cd0fbebd432` produced the existing three release
+wheels and passed RECORD/installed simulation. An isolated `-I -B` invocation of
+the immutable operator Conda interpreter imported17 QUERY/executor/publication
+modules from those wheels only and validated the packaged checkpoint schema/hash
+and reference closure. No checkout import, installation, database/auth/model/unit
+mutation occurred. This documentation follow-up is not another code release.
