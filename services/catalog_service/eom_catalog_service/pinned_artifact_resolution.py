@@ -384,8 +384,8 @@ class PinnedArtifactReadContext:
     """Bounded root-Session immutable decoding reuse, never a permission cache.
 
     Prefetch exact metadata in sets before public reads. No lazy per-pointer SQL
-    or exported validated flag exists. Current provenance state is still checked
-    by the shared scalar leaf; current source/IAM/policy checks stay with Catalog.
+    or exported validated flag exists. Owners revalidate mutable provenance at the
+    late handoff boundary; current source/IAM/policy checks stay with Catalog.
     """
 
     MAX_REVISIONS = 4096
@@ -472,6 +472,100 @@ class PinnedArtifactReadContext:
                 logical, revision, jobs.get(revision.job_id)
             )
         self._metadata.update(captured)
+
+    def revalidate_provenance(self) -> None:
+        """Refresh only small current lineage/lifecycle values, not immutable bytes/JSON.
+
+        READ COMMITTED alone does not refresh captured ORM objects. This explicit
+        boundary is three indexed batches regardless of member count, not an
+        authority cache or a new locking/permission requirement.
+        """
+        self.require_session(self._session)
+        if any(
+            isinstance(row, (ArtifactRecord, ArtifactRevisionRecord, JobRecord))
+            for rows in (self._session.new, self._session.dirty, self._session.deleted)
+            for row in rows
+        ):
+            raise PinnedArtifactResolutionError("pinned Artifact read has pending mutations")
+        if not self._metadata:
+            return
+        logical_ids = tuple(sorted({key[0] for key in self._metadata}))
+        revision_ids = tuple(sorted({key[1] for key in self._metadata}))
+        job_ids = tuple(sorted({value.revision.job_id for value in self._metadata.values()}))
+        with self._session.no_autoflush:
+            logicals = {
+                row.logical_artifact_id: (row.job_id, row.artifact_type, row.approved)
+                for row in self._session.execute(
+                    select(
+                        ArtifactRecord.logical_artifact_id,
+                        ArtifactRecord.job_id,
+                        ArtifactRecord.artifact_type,
+                        ArtifactRecord.approved,
+                    ).where(ArtifactRecord.logical_artifact_id.in_(logical_ids))
+                )
+            }
+            revisions = {
+                (row.logical_artifact_id, row.revision_id): (
+                    row.job_id,
+                    row.content_hash,
+                    row.manifest_hash,
+                    row.content_bytes,
+                    row.nas_path,
+                    row.approved,
+                )
+                for row in self._session.execute(
+                    select(
+                        ArtifactRevisionRecord.logical_artifact_id,
+                        ArtifactRevisionRecord.revision_id,
+                        ArtifactRevisionRecord.job_id,
+                        ArtifactRevisionRecord.content_hash,
+                        ArtifactRevisionRecord.manifest_hash,
+                        ArtifactRevisionRecord.content_bytes,
+                        ArtifactRevisionRecord.nas_path,
+                        ArtifactRevisionRecord.approved,
+                    ).where(ArtifactRevisionRecord.revision_id.in_(revision_ids))
+                )
+            }
+            jobs = {
+                row.job_id: (row.logical_artifact_id, row.revision_id, row.task_type, row.status)
+                for row in self._session.execute(
+                    select(
+                        JobRecord.job_id,
+                        JobRecord.logical_artifact_id,
+                        JobRecord.revision_id,
+                        JobRecord.task_type,
+                        JobRecord.status,
+                    ).where(JobRecord.job_id.in_(job_ids))
+                )
+            }
+        if (
+            set(logicals) != set(logical_ids)
+            or set(revisions) != set(self._metadata)
+            or set(jobs) != set(job_ids)
+        ):
+            raise PinnedArtifactResolutionError("pinned Artifact current provenance is missing")
+        for identity, captured in self._metadata.items():
+            revision = captured.revision
+            if (
+                logicals[identity[0]] != (revision.job_id, captured.logical.artifact_type, True)
+                or revisions[identity]
+                != (
+                    revision.job_id,
+                    revision.content_hash,
+                    captured.manifest_hash,
+                    revision.content_bytes,
+                    revision.nas_path,
+                    True,
+                )
+                or jobs[revision.job_id]
+                != (
+                    identity[0],
+                    identity[1],
+                    captured.logical.artifact_type,
+                    "SUCCEEDED",
+                )
+            ):
+                raise PinnedArtifactResolutionError("pinned Artifact current provenance differs")
 
     def require_file_set(
         self,

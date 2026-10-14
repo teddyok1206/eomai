@@ -1833,3 +1833,128 @@ Platform raw `0e2f174f353f10657d133ac9eb0f89794f2e815f3999eee86f0f4df7434fe139`;
 API-contract raw `e05a96a8aedd99bd095a132ab29f93975f976325a510e645f28dc5823ad2a4b4`.
 Evidence: `similarity-role-composition-{release-build,owner-pair-proof}.log`.
 Candidate is not installed; this is not shared API or actual variation activation.
+
+## 22. Owner-held item-reference preparation before API plan persistence
+
+2026-10-14 UTC. API inventory confirms `start_workflow` resolves Evidence outside its
+write transaction, then creates one plan and START command. The API cannot acquire
+the protected native-owner DB identity, launch native units or commit NAS Artifacts.
+Do not turn an injected Python callback into an API privilege expansion. Automatic
+native execution needs an owner RPC/queued handoff; it is not implemented by merely
+adding a constructor argument to the API.
+
+1. **Responsibility:** First close the real owner use case: an exact completed QUERY
+   read scope → current common context → Orchestrator-owned canonical publication
+   → prepared plan value. This is a callable production component, not a mock port.
+2. **Canonical source:** Actual captured owner/current Catalog sources and the
+   original immutable QUERY, Evidence result, preset and expected resolution.
+   Context publication does not replace any of these or create Evidence IDs.
+3. **Identity:** No new lifecycle/registry/schema family for local checked values.
+   Preserve separate owner Job, Artifact/revision, raw and semantic context hashes.
+4. **Pointers:** Before publication, revalidate existing typed input contracts and
+   exact original/Graph/policy/preset/Pack17 pins. Resolve canonical context bytes
+   after publication, then repeat the full current common read in the same root.
+5. **Access:** Indexed current control/Artifact resolution and existing bounded
+   source/QUERY/vector reads; no native execution, HTTP login or corpus re-encoding.
+6. **Structures:** One small frozen result and existing publisher/reader interfaces.
+   Publication key derives from actual operator, exact native QUERY Workflow and
+   context-request SHA, not a changed result or HTTP transport key. Multiple Item
+   workflows reusing that same query reference one canonical context. No map/cache.
+7. **Cost:** Existing O(bounded source/view rows) common composition and bounded
+   canonical member IO. No constant-time claim or measured performance improvement.
+8. **Transactions:** Retain the current source/Identity read root across publication
+   and late checks. The Orchestrator publisher owns its independent commit. A late
+   failure may leave a valid committed Artifact but MUST NOT return a prepared plan
+   or promote a Workflow. Preserve/reconcile the original query-owned key, not
+   delete/relabel it. API transport idempotency remains the existing API's concern.
+9. **Dependencies:** Runner application coordinates the existing Catalog session
+   reader and Orchestrator publisher. The API still receives no NAS/native/secret
+   capability. No domain import of DB/filesystem and no new dependency.
+10. **Failure/replay:** Invalid inputs/current capture fail before publication.
+    Same-key exact retry reuses immutable bytes/time; changed context/provenance
+    conflicts explicitly. Raw-byte/hash/lifecycle or late source mismatch refuses
+    handoff. Native failures/history, session expiry and original query pins remain.
+11. **Alternative:** Performing model computation in the API write transaction or
+    constructing the privileged native owner inside API breaks latency/isolation.
+    Use the concrete owner preparation component behind a later protocol-first
+    challenge/owner-command adapter; do not present this local use case as the
+    completed asynchronous multi-user API path.
+
+Follow-up API work must preserve immediate asynchronous submission, existing
+transport replay/accepted-resolution pins and one plan-before-first-authoring.
+Native QUERY must run through its existing admitted Workflow/command/lease owner,
+not a model call inside HTTP/DB transactions. A restart must recover exact owner
+work/keys, not store bearer tokens/passwords or reinterpret saved IDs as grants.
+
+API model inspection also confirms `WorkflowRequest.expected_resolution` is paired
+with `production_occurrence`; it is NOT a normal single-item option. Pass the same
+existing typed resolution value explicitly from trusted preflight to preparation,
+without inserting either production field into an ordinary request. If a production
+request already pins it, the two values must match. Return that small exact resolution
+alongside local preparation metadata so a later API transaction can reject drift.
+
+### 22.1 Explicit late provenance refresh without re-reading immutable payloads
+
+The new preparation test used a separate SQLite connection to withdraw a canonical
+Artifact approval after its first read. A second `read_pinned` reused captured ORM
+metadata and did not see that external update; earlier same-Session mutation tests
+did not cover this. Fix the owning reader, not each caller with ad hoc SQL.
+
+1. Responsibility: existing `PinnedArtifactReadContext` owns a late provenance check.
+2. Canonical source: current Artifact/revision approvals and producing Job rows.
+3. Identity: same exact captured IDs/revisions, no current/latest substitution.
+4. Pointers: compare lineage/type/status/hash metadata with the captured values.
+5. Access: three indexed scalar batch queries; no per-member lazy/N+1 reads.
+6. Structures: bounded identity sets/maps over at most4096 captured revisions.
+7. Complexity: O(n) metadata time/space; no manifest/blob reload, decode or file rehash.
+8. Transaction: same active root, no autoflush/write or new row-lock privilege;
+   pending Artifact/Job mutations are refused. This is a late point-in-time check,
+   not a transferable permission receipt or a distributed atomicity claim.
+9. Dependencies: infrastructure reader only; no new domain/DB schema/dependency.
+10. Failure: missing/changed/withdrawn provenance fails; canonical bytes/history stay.
+11. Alternative: clearing immutable byte caches or refreshing every member would
+    add repeated IO and N+1 work. One explicit handoff-boundary check suffices.
+
+Both new owner preparation and existing C2 workspace delivery call this check after
+their late current source read. Other immutable payload reuse and actual current
+IAM/source fences retain their existing ownership. Source tests prove separate-root
+withdrawal and batch bounds; they do not claim a new production PostgreSQL acceptance.
+
+### 22.2 Concrete preparation and late-provenance source checkpoint — 2026-10-14 UTC
+
+`CatalogItemSimilarityPreparation` now implements the owner use case above. The
+existing closed schemas are validated before behavior; no new wire/DB schema,
+dependency, privilege, migration or worker protocol was introduced. A frozen local
+result retains the exact Workflow-request/Evidence/preset hashes and trusted
+preflight resolution, alongside the one canonical publication and plan value.
+
+Final42-suite source regression: **863 PASS /216.23s**. Strict mypy6 and Ruff/format6
+PASS. The focused73-test result overlaps this regression and is not an additional
+total. New preparation tests use the real publisher, temporary SQLite and actual
+canonical member bytes; Identity/source/QUERY observations remain synthetic. They
+cover same-query replay, distinct private briefs sharing the same publication,
+raw-model copy rejection, original/Pack/preset/Graph/source-class pins, expired or
+foreign authority, late denial with preserved committed history, canonical approval
+withdrawal, and binding the real published delivery to plan23 before a single record
+call. The last record call is captured, not PostgreSQL persistence acceptance.
+
+New provenance tests use separate temporary SQLite Sessions to change approval,
+producer state, manifest hash, path or existence. One or four captured revisions
+still use exactly three scalar `IN` queries over primary-key columns; file/content
+hash calls are forbidden during this check. Pending writes are refused without
+flushing, and the original active root is required. Existing C2 materialization now
+also refuses externally withdrawn target approval before returning workspace bytes.
+
+Initial failures are retained: an incorrectly paired production fixture, a fixture
+preset that did not allow its own auxiliary source classes, the real stale-ORM
+provenance defect, and a misplaced test assertion. The input contracts/source-class
+guard were not loosened; fixtures and the owning late-read boundary were corrected.
+Evidence prefix: `/tmp/eom-identity-provider-install.nAaycoDM/similarity-item-preparation-`.
+
+This is source acceptance only. No production rows/Artifact, installed runtime,
+active Pack/policy, model invocation, native QUERY or corpus encoding changed.
+The earlier68-test disposable native-stage PASS remains historical regression, not
+a new plan23 persistence result. Owner RPC/queue and actual session-scoped shared API
+selection, compatible publication/activation and installed bounded Item acceptance
+remain open. Chat/exam consumers and actual CPU/GPU measurements/default-device
+decision also remain in the active goal; this checkpoint does not close them.

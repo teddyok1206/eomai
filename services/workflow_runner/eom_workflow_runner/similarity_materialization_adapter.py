@@ -150,6 +150,7 @@ class CatalogSimilarityMaterializationReader(SimilarityMaterializationReadPort):
             late = self._current_context(session, checked, request)
             if late != first:
                 raise ValueError("SIMILARITY_MATERIALIZATION_CURRENT_CHANGED")
+            reader.revalidate_provenance()
             final_member = reader.read_pinned(**arguments)
             if final_member.payload != member.payload:
                 raise ValueError("SIMILARITY_MATERIALIZATION_BYTES_CHANGED")

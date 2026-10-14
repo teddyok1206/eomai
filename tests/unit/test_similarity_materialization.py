@@ -257,13 +257,24 @@ def test_pinned_target_integrity_and_lifecycle_are_checked_at_actual_reader(
     assert len(case["reader"].calls) == 1
 
 
-@pytest.mark.parametrize("change", ("context", "target_lifecycle"))
+@pytest.mark.parametrize("change", ("context", "target_lifecycle", "external_target_lifecycle"))
 def test_late_change_cannot_publish_stale_workspace_bytes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str
 ) -> None:
     case = materialization_case(tmp_path, monkeypatch)
     with case["publisher"].sessions.begin() as session:
-        if change == "target_lifecycle":
+        if change == "external_target_lifecycle":
+
+            def revoke_external():
+                with case["publisher"].sessions.begin() as other:
+                    row = other.get(
+                        ArtifactRevisionRecord,
+                        case["receipt"].delivery.context_member.artifact_revision_id,
+                    )
+                    row.approved = False
+
+            case["reader"].on_late = revoke_external
+        elif change == "target_lifecycle":
             revision = session.get(
                 ArtifactRevisionRecord, case["receipt"].delivery.context_member.artifact_revision_id
             )
