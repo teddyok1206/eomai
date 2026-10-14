@@ -1,11 +1,13 @@
 # Reference QUERY / device comparison owner-session checkpoint
 
-2026-10-14 UTC. Source implementation and isolated tests, **not live activation**.
+2026-10-14 UTC. Receiver/API installation is live as recorded below;
+**genuine QUERY execution and consumer activation are not complete**.
 
 The current genuine persistent seed and bounded delta remain completed; vectors/
 bindings2, immutable revisions2, coverage2/520. The owner is quiescent after a
 graceful drain. No new native QUERY, GPU forward, source authorization or production
-DB update was performed for this checkpoint.
+DB business-state update was performed for the initial source checkpoint. Later
+compatible receiver deployment uses the existing protected release callbacks.
 
 ## Exact change
 
@@ -122,3 +124,39 @@ replace a packaged file behind5018ad2d's RECORD or call this a new QUERY executi
 
 Corrected source regression, including the actual OpenAPI equality and release
 inventory: **424 PASS /44.80s** (overlaps392). Ruff/format/shell syntax/diff PASS.
+
+## Corrected installed contract — 15:39 UTC
+
+API/shared runtime now source `75fdc2655e9f904987038cf01f8434cadf9d50f2`,
+tree `24889876f674daa50ff4f45494762cf6bfa96055`. The new build gate executed
+successfully in both independent build and standard install. Installed routes,
+packaged OpenAPI and checksum were also independently compared offline after
+installation: PASS, no DB connection. Existing owner5018ad2d remains a compatible
+inactive pair; no code or model was installed into either numerical/operator
+interpreter. The actual UID990 provider/9 code pins/fixed API peer proof was
+repeated against the new receiver and passed; actual user capture remains absent.
+
+| Latest actual delivery wheel | Raw SHA256 |
+| --- | --- |
+| platform | `4de6b4827cd14f047ba357e8b01dec02ebd6b64fd7a66f1b2285128d3989de07` |
+| API contracts | `f0948ca1f984a37d3a0743f65b70548ce5f22507b953666a4ece3a261710c8e6` |
+| API | `3ae7d696c7a84c3305caef6c7af5c18eee0bc41322f78e5d6c30bdf2d72a2416` |
+
+Root-private context `/var/lib/eom-release-operator-stage.75fdc265-mtgwnzqp/`,
+raw SHA256 `b0628630b26dc3a716ebd38824388e146783512a29622748b4c4a743699f6ad8`;
+rollback metadata `/var/lib/eom-api/deployments/75fdc2655e9f904987038cf01f8434cadf9d50f2.json`.
+Migration head remains0055; all9 original services active, API LIVE/READY PASS.
+There was no new password request, TTL expansion, DB test against production,
+native QUERY/GPU forward, per-source policy grant or historical-workflow repair.
+
+The15:39:06 UTC read-only observer confirms exact equality of pre/post encoding
+rows, binding rows and immutable index lineage: encodings2, bindings2, revisions2,
+logical index1, coverage2/520. Both original successful Workflows stay COMPLETED;
+the retired predecessor stays FAILED. No larger coverage is claimed.
+
+Latest logs: `query-purpose-openapi-aligned-{build,stage,admission,install,
+provider-preflight,installed-contract-proof}.log` and
+`query-purpose-final-preserved-index-observation.log`. Original and corrected
+invocation/test evidence remain separate. The full original goal remains active:
+genuine QUERY/replay/consumer reads, continuous remaining source/view coverage,
+feature connections and CPU/GPU comparison/default selection are still required.
