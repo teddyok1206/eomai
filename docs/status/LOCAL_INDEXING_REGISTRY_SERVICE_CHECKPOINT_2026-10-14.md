@@ -36,8 +36,9 @@ actual runtime/DB/service-grant/source-policy gate under the same root Session.
 ## Executed evidence
 
 Final source regression: **85 suites /2,304 PASS** in295.20s. Focused Registry/service/
-source tests:149 PASS, including21 new cases. Strict mypy48 modules and Ruff lint/
-format89 files PASS. Existing operator source/consumer/native boundaries are included.
+source tests:149 PASS, including21 new cases. Final strict mypy50 modules and Ruff
+lint/format91 files PASS, explicitly including the widened ports/application files.
+Existing operator source/consumer/native boundaries are included.
 
 Marker-guarded disposable PostgreSQL: **30 PASS** in78.38s (existing28 +2 service-actor
 application cases). The new two verify actual Registry registration/replay/missing
@@ -51,7 +52,7 @@ Evidence directory: `/tmp/eom-identity-provider-install.nAaycoDM/`.
 
 - `local-indexing-registry-unit-reviewed.log`
 - `local-indexing-registry-regression.log`
-- `local-indexing-registry-mypy.log`
+- `local-indexing-registry-final-mypy.log`
 - `local-indexing-registry-final-{ruff,format}.log`
 - `local-indexing-registry-postgres.log`
 - `local-indexing-registry-inspect.log`
@@ -61,6 +62,22 @@ failures. One supposed foreign-view fixture selected its unchanged current view;
 one old human-only synthetic verifier accessed `operator_id` on the service actor.
 The tests now choose a genuinely different view and an explicitly synthetic service
 verification seam. Production guards were not relaxed to repair either fixture.
+
+## Package candidate, not runtime activation
+
+Code candidate `146d45d2a92c129aec52e6ad3594d81b81a89ab1` built all3 release
+wheels with RECORD verification PASS. The existing immutable operator interpreter
+imported42 named modules directly from these wheels under `-I -B`, without checkout,
+PYTHONPATH or environment installation. Public service composition/closed caller,
+schema/reference closure, hidden-role rejection and service-to-consumer denial PASS.
+The probe touched no DB, source file, unit, grant, model or GPU. Evidence:
+
+- `local-indexing-registry-wheel-build.log`
+- `local-indexing-registry-wheel-import.log`
+
+API `/api/v1/health/ready` returned READY at06:45 UTC. The first read-only check used
+the incorrect unprefixed `/health/ready` and received API_ROUTE_NOT_FOUND; no runtime
+change was made or needed. Health is not service-purpose feature acceptance.
 
 ## Remaining work, not claimed complete
 

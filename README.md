@@ -308,7 +308,8 @@ Catalog 서비스 자료 정책1.1·공식 owner 발행·Registry 등록 연결�
 서비스 grant와 기존 자료 정책1.0을 분리했고, 서비스 등록 권한은 사용자 QUERY 권한이 아닙니다.
 사람 계정이나 역할을 대신 쓰지 않으며 기존 operator seed의 의미는 유지합니다.
 
-최신85-suite 회귀2,304개·strict mypy48 모듈·Ruff89 파일이 PASS했습니다.
+최신85-suite 회귀2,304개·strict mypy50 모듈·Ruff91 파일이 PASS했습니다.
+현재 코드 후보의3개 wheel/RECORD·독립 wheel-only42 모듈 검증도 PASS했습니다.
 실제 임시 DB의 Registry30개는 등록·재전송·중복/경합과 권한 거부 순서를 검증하지만,
 합성 IAM/source seam을 실제 서비스 인증으로 확대 해석하지 않습니다. 선행 신원/자료 정책/
 발행 DB70개와 당시3개 wheel·41-module 검증은 별도 역사적 증거로 보존합니다.
