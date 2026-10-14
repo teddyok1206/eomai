@@ -2708,3 +2708,86 @@ contracts `4d081e4aee37fa5f23b79f7d8b3b145c6a4ef5896ec6b101133b72eb2e604a77`;
 API `0b0b2d515f591ac9abaaa4299d3e8ff0cb603e6212e6461ef93168bd885c66b9`.
 Logs `release-build`, `owner-pair-proof` and `three-wheel-proof` share the evidence
 prefix above. Source/build is pushed; production installation/activation is separate.
+
+## 30. Per-Workflow completed QUERY selection for concurrent role delivery
+
+Design before implementation, 2026-10-14 UTC:
+
+1. Boundary: replace neither native QUERY execution nor worker protocols. Add a
+   multi-Workflow application adapter to the existing optional role-context port.
+2. Canonical source: stored item Workflow/plan23 plus the original completed QUERY,
+   current Catalog source owner and committed context Artifact, not process state.
+3. Identity: retain Workflow logical identity, original QUERY Workflow ID, original
+   request SHA and context-request SHA. No process-global actor/query fallback.
+4. Pointer: reuse the existing closed three-field CompletedSimilarityQuerySelection
+   as `runtime_context.similarity_query`. It is a selector, never a permission grant.
+   Validate the item creator and plan/context hash before exact QUERY selection;
+   staging retains current source, terminal history and canonical byte checks.
+5. Access: indexed primary-key Workflow/step/plan/definition/QUERY lookup in the
+   existing caller root. No latest scan, list search or reverse artifact discovery.
+6. Structures: existing JSON metadata column and frozen selector; no new schema
+   family, migration, cache, queue, index or dependency. Share role-binding rules
+   with the existing fixed-query adapter rather than copying them.
+7. Cost: constant bounded metadata lookups per role; source staging keeps its
+   existing bounded per-candidate behavior. No measured latency claim.
+8. Concurrency: each preparation uses its own caller-owned active root, actual
+   stored creator and exact selection. A shared provider retains only trusted owner
+   configuration. Existing command/step fencing and max-three-review flow remain.
+9. Ownership: runner owns Workflow selection/binding; Identity and Catalog own
+   actual current authorization/source resolution. Orchestrator owns materialization.
+10. Failure: plan23 with absent/changed/foreign/nonterminal selector fails explicitly.
+    Legacy no-plan/plan19 paths remain unchanged; never infer a query or upgrade history.
+    The fixed-query adapter stays available for its existing bounded acceptance path.
+11. Alternative: one fixed QUERY in a long-running shared provider cannot service
+    unrelated concurrent items. A global query cache, new plan successor just for
+    selection, or reading context bytes before original creator checks is unnecessary.
+
+Only a trusted creation/preparation boundary may persist this small selector with
+the first plan. This source step does not yet add a public selector to item requests,
+rewrite old plan23 history, enable a production provider or claim that the ordinary
+runner DB role can use the Catalog-only SQL fence. Compatible owner/runtime admission
+and the actual API preparation transaction are still required before activation.
+
+The owner preparation result carries this existing frozen selector alongside its
+checked plan/publication and request/Evidence/preset hashes. It does not serialize
+an actor grant, add public HTTP fields or alter plan23 bytes. A missing/invalid
+original QUERY hash fails before composition/publication. Persisting the selector
+in the actual creation transaction remains the next API integration step; the role
+adapter must not compensate by scanning for a recent or matching query.
+
+### 30.1 Shared-provider source checkpoint — 2026-10-14 UTC
+
+`CatalogWorkflowSimilarityRoleContextProvider` implements the existing role port
+using each stored Workflow's closed selector and actual creator. The bounded fixed-
+QUERY adapter remains supported. Both share one role/definition/request/plan binding
+rule; the shared adapter retains only its trusted read owner, not users or queries.
+Original metadata selection is the same public runner helper used by Catalog reads.
+Canonical source/terminal/member verification still occurs during existing common
+context materialization; metadata selection alone is not that verification.
+
+Final21-file regression: **379 PASS /171.35s**; strict mypy2, Ruff/format4 and diff
+checks PASS. The earlier existing63 and focused78 overlap this result and are not
+added. Two real temporary SQLite roots use one provider concurrently for different
+creators, item/query IDs and authoring/review roles. Cross-creator, missing/extra/
+changed selector, changed plan hash and nonterminal/divergent original queries fail.
+Review attempts2/3 retain their original selector, and no-plan/plan19 retain the
+original non-similarity path. A SQL trace observes14 SELECTs for two preparations:
+two caller loads plus five exact indexed provider reads each, no write or query scan.
+
+The temporary plan table deliberately omits PostgreSQL-only DDL constraints. IAM,
+native source/terminal execution and control publication are synthetic in these new
+metadata tests; they do not prove PostgreSQL constraints, a genuine completed QUERY
+or live consumer activation. Existing artifact/receipt/materialization regressions
+remain separate evidence. The sole warning is the existing TestClient deprecation.
+Initial fixture errors retained in logs were missing native indexes, inconsistent
+unavailable-view reasons and a nested Graph revision field. The actual schema was
+not relaxed to accept them. The SQL-count expectation was corrected from16 to the
+observed14, not by adding queries to satisfy the test.
+
+Evidence prefix: `/tmp/eom-identity-provider-install.nAaycoDM/similarity-workflow-role-`;
+`existing`, `focused`, `fixture-*`, `focused-final`, `acceptance`, `mypy-final`.
+No production install, DB/grant/migration/schema, Artifact, native/ML/device operation
+or historical selector/plan rewrite occurred. API transactional selector persistence,
+admitted ordinary-runner owner composition and actual C2 item acceptance remain open.
+The genuine QUERY operation retains its original authentication-input gate and
+processes; its30-minute observation cadence is not replaced by these source tests.

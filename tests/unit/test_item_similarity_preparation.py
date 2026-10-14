@@ -119,6 +119,8 @@ def preparation_case(tmp_path, monkeypatch):
         )
     value.query.sessions = publisher.sessions
     value.query.workflow_id = "workflow_" + "9" * 32
+    # Original QUERY metadata remains a synthetic observation in this fixture.
+    value.query.request.request_sha256 = "sha256:" + "9" * 64
     value.query.owner.settings = CatalogSettings(
         nas_artifact_root=publisher.settings.nas_artifact_root
     )
@@ -195,6 +197,9 @@ def test_owner_publication_replay_preserves_one_canonical_artifact_and_same_root
     assert first.evidence_result_sha256 == case.evidence.result_sha256
     assert first.preset_content_sha256 == case.preset.content_sha256
     assert first.resolution == case.resolution
+    assert first.query_selection.workflow_id == case.value.query.workflow_id
+    assert first.query_selection.workflow_request_sha256 == case.value.query.request.request_sha256
+    assert first.query_selection.context_request_sha256 == first.plan.context.request.request_sha256
     assert case.request.production_occurrence is None and case.request.expected_resolution is None
     (member,) = tuple(case.publisher.settings.nas_artifact_root.rglob("context.json"))
     before = member.stat()
@@ -303,6 +308,7 @@ def test_action_permission_is_rechecked_in_the_original_root_without_caching(tmp
     "fault",
     (
         "query_identity",
+        "query_hash",
         "other_actor",
         "expected_missing",
         "pack_version",
@@ -322,6 +328,8 @@ def test_bad_scope_or_raw_model_copies_never_create_a_publication(tmp_path, monk
     changes = {}
     if fault == "query_identity":
         case.value.query.workflow_id = True
+    elif fault == "query_hash":
+        case.value.query.request.request_sha256 = "not-a-sha256"
     elif fault == "other_actor":
         case.caller = EmbeddingRegistryCaller("operator_" + "0" * 32)
     elif fault == "expected_missing":

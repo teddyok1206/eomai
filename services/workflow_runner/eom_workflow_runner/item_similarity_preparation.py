@@ -18,6 +18,7 @@ from eom_catalog_contracts.similarity_delivery import (
     validate_deliverable_similarity_context,
     validate_similarity_context_delivery,
 )
+from eom_catalog_contracts.similarity_read import CompletedSimilarityQuerySelection
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
     validate_embedding_registry_actor,
@@ -64,6 +65,7 @@ class PreparedItemSimilarity:
     evidence_result_sha256: str
     preset_content_sha256: str
     resolution: ExpectedWorkflowResolution
+    query_selection: CompletedSimilarityQuerySelection
 
 
 def _current_context(
@@ -129,6 +131,11 @@ class CatalogItemSimilarityPreparation:
             validate_embedding_registry_actor(caller)
             query_workflow_id = TypeAdapter(WorkflowId).validate_python(
                 self.query.workflow_id, strict=True
+            )
+            query_selection = CompletedSimilarityQuerySelection(
+                workflow_id=query_workflow_id,
+                workflow_request_sha256=self.query.request.request_sha256,
+                context_request_sha256=self.query.request.context_request.request_sha256,
             )
             if type(caller) is not EmbeddingRegistryCaller or (
                 caller.operator_id != self.query.request.operator_audit.operator_id
@@ -247,6 +254,7 @@ class CatalogItemSimilarityPreparation:
                     evidence.result_sha256,
                     preset.content_sha256,
                     expected,
+                    query_selection,
                 )
             except OperatorAuthorizationFenceError as error:
                 raise ControlPlaneError(
