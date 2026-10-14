@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/system-rag-similarity-delivery/1.0",
+  "title": "Pinned auxiliary similarity context delivery V1",
+  "description": "Small immutable context reference, not Evidence, authority, target resolution or consumer activation. Raw member SHA and request/context semantic hashes remain separate.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "context_member", "request_sha256", "context_sha256"],
+  "properties": {
+    "schema_version": {"const": "system-rag-similarity-delivery/1.0"},
+    "context_member": {
+      "allOf": [
+        {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"},
+        {
+          "type": "object",
+          "properties": {
+            "member_path": {"const": "context.json"},
+            "schema_ref": {"const": "eom://schemas/knowledge/system-rag-similarity-context/1.0"},
+            "media_type": {"const": "application/json"}
+          }
+        }
+      ]
+    },
+    "request_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"},
+    "context_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"}
+  }
+}

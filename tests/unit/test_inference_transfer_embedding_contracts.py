@@ -101,6 +101,7 @@ def test_all_preexisting_schema_registry_metadata_and_resource_bytes_are_frozen(
             "embedding-device-benchmark",
             "embedding-native-runtime-config",
             "system-rag-similarity-context",
+            "system-rag-similarity-delivery",
             "embedding-reference-query",
             "embedding-reference-query-input-v1.1",
             "embedding-native-cpu-probe",

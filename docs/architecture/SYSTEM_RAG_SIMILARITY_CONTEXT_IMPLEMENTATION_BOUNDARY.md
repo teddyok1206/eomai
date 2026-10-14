@@ -1191,3 +1191,95 @@ the prior source freeze in §15.1, is **499 PASS in 54.80s**, skip zero. Strict 
 format check **the same three Python paths PASS**; gate start/end Python raw hashes agree. No
 counts are added across overlapping runs. This is still **SOURCE_ONLY / NOT_ACTIVE /
 QUERY_NOT_ADMITTED**, with no operational, migration, runtime, model or authority change.
+
+## 16. C2 immutable context delivery — protocol-first publication boundary
+
+2026-10-14 UTC. First consumer is still exact-source past-exam variation. Current
+source already has the genuine QUERY owner/committed read; its finite live canary
+is separate from this step. Do not reinterpret older dated NOT_ADMITTED checkpoints.
+
+1. **Responsibility:** Define the small delivery value needed to pin the SAME
+   validated common context in a later execution-plan/materialization successor.
+   Orchestrator alone publishes its canonical JSON through the existing file-set
+   owner. Catalog still owns compose/current source reauthorization; no new searcher.
+2. **Canonical source:** One `context.json` member with the existing context1.0
+   bytes. Source/report/Graph/policy/query/index pins remain inside that canonical
+   value, not copied into another Item/report corpus. Similarity is not Evidence.
+3. **Identity:** Delivery has an Artifact member pointer (including raw SHA), exact
+   request SHA and semantic context SHA. It is a small frozen value without a new
+   logical entity, revision, own hash, registry or independent lifecycle. Publisher
+   Job/Artifact/revision and outer manifest hash remain separate local owner output.
+4. **Resolution:** New closed `system-rag-similarity-delivery/1.0` schema precedes
+   model/behavior. Pure association checks exact expected request, member schema/
+   media/path/raw SHA and context semantic SHA. They do NOT prove target existence,
+   committed lifecycle, current permission, raw storage integrity or native execution;
+   actual owners must still resolve those before staging/disclosure.
+5. **Access:** Exact small pointer lookup, bounded canonical serialization and
+   same-key immutable file-set publication/replay. No corpus scan or vector compute.
+6. **Structures:** Reuse public Artifact pointer, existing context/request parsers,
+   frozen values and file-set publication. No DB/index/queue/cache or new framework.
+7. **Cost:** Delivery≤8KiB; canonical context≤512KiB. O(context bytes) at the explicit
+   local materialization/publication boundary, with no repeated Item/report copies.
+8. **Transactions:** Caller retains actual current operator/source authorization
+   across this bounded publication and late checks; no inference under a DB root.
+   This low-level leaf cannot grant or capture that authority. The existing publisher
+   owns create/replay/atomic commit and uncertain-publication recovery.
+9. **Dependencies:** Pure Catalog contracts→public types/schema helpers only;
+   Orchestrator adapter→contracts and existing `ControlFileSetPublisher`. No ML/API/
+   Catalog private resolver imports, additional dependency or alternate NAS writer.
+10. **Failure:** FAILED contexts never become a delivered fallback. OPTIONAL ordinary
+    unavailability stays explicit; REQUIRED vector unavailability is not deliverable.
+    Hash/pointer/request/source integrity failures fail closed. Same immutable key
+    and first-observation UTC time replay without inventing dates, latest or retry.
+    Publication receipt failure may follow a commit; preserve and reconcile it.
+11. **Alternative:** Passing an untyped context dictionary into old plan19 or Evidence
+    changes released meaning. A small pointer value is sufficient and reusable; no
+    nested base-plan copy, embedded full context or independent delivery registry.
+
+Keep all old plan/role/request/Pack schema bytes unchanged. Plans21/22 already belong
+to inference-transfer comparison, so they must NOT be reused for variation. A new
+grounded plan successor, source-owned preparation/current identity, worker workspace
+aliases and prompt/Pack changes are the subsequent integration; this publication
+leaf activates none of them. No consumer tool, production canary or new model run is
+implied. Other consumers/private query bases and full goal completion remain open.
+
+### 16.1 Delivery/publication source checkpoint — 2026-10-14 UTC
+
+One new closed2020-12 resource/mirror is registered with raw SHA
+`sha256:c403071c18e44cdad39d96ccb7e6c6454ac27fd76c83d7ac6e98e4b938c3fa65`.
+The old296-resource inventory/count/hash and all released context/query/plan/Pack
+bytes are preserved. The frozen public delivery model revalidates raw nested
+copies/constructs before coercion/dump. Supplied hash/request mismatch is not repaired;
+OPTIONAL absence remains explicit, FAILED and REQUIRED-vector absence are rejected.
+Pure closure validation does not claim current source permission or target resolution.
+
+The Orchestrator leaf publishes ONE `context.json` as
+`control_system_rag_similarity_context` through the SAME file-set publisher and its
+first actual UTC observation. No new NAS writer, time/identity source or DB aggregate.
+The caller must derive/reuse its operation key from the actual actor and exact
+request, hold current source/operator fences, and perform late checks; a wire request
+or this leaf is not such authority. The returned local publication value separates
+owner Job, delivery pin and outer manifest hash. Invalid returned type/identity/hash
+is an explicit receipt error; it never means that the prior commit did not happen.
+
+Final15-suite source regression: **347 PASS /77.98s**; strict mypy4, Ruff/format7
+Python files and diff checks PASS. The publication fixtures use the actual existing
+publisher, local SQLite, temporary Artifact bytes and official pinned reader. Same-key
+replay retains one Job/revision and inode/mtime/bytes; conflicting content is refused,
+Job requests omit full context/candidates/vectors, and seven post-commit receipt
+failures preserve the original output for explicit same-key recovery. Current IAM,
+source and genuine QUERY provenance are synthetic fixtures, NOT live acceptance.
+
+Initial tests exposed the leaf's non-`control_` Artifact kind; only the new leaf was
+corrected to the existing publisher's accepted kind, not by widening its guard.
+Two fixture expectations were corrected: `model_construct` drops unknown fields,
+so raw declared bool corruption is now tested; Job's actual field is `status`.
+Those failures are retained in local logs, not rewritten as historical successes.
+Evidence: `/tmp/eom-identity-provider-install.nAaycoDM/similarity-delivery-*.log`.
+
+No operational DB/schema/role/unit/runtime/Pack/plan change, source grant, actual
+corpus/model/GPU run or consumer activation occurred. PostgreSQL testing is not
+claimed from the local SQLite fixture. The genuine QUERY handle remained untouched
+and was verified alive at16:45 UTC awaiting its original single login. Next: a
+separately versioned grounded plan, authorized materialization and prompt delivery;
+actual variation and the other consumers remain unconnected at this checkpoint.

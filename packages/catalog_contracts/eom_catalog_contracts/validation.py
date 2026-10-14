@@ -48,6 +48,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:7d1d4bb07964060143acacb32a3dad8ccbc41519d5847742ffe5deb739b57b20",
         ),
+        "system-rag-similarity-delivery": CatalogSchemaResource(
+            "schemas/knowledge/system-rag-similarity-delivery-v1.schema.json",
+            "resources/knowledge/system-rag-similarity-delivery-v1.schema.json",
+            "1.0",
+            "sha256:c403071c18e44cdad39d96ccb7e6c6454ac27fd76c83d7ac6e98e4b938c3fa65",
+        ),
         "embedding-reference-query": CatalogSchemaResource(
             "schemas/knowledge/embedding-reference-query-v1.schema.json",
             "resources/knowledge/embedding-reference-query-v1.schema.json",
