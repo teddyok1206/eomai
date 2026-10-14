@@ -2695,3 +2695,16 @@ the actual missing action check. No production DB/grant/schema, Artifact, instal
 service, source coverage, Pack/policy or native/model/device execution changed.
 This does not complete automatic item-start/native admission, shared multi-workflow
 selection/consumer activation or the original CPU/CUDA comparison requirement.
+
+Candidate `e668e671f7aaaedd1763ab931551b45bbb60eb0a` passed the full three-wheel
+build/RECORD check plus isolated owner-pair and explicit-three-wheel probes. The
+public selector helper, preparation action guard and actual Catalog consumer resolve
+from those selected archives. The packaged API app/OpenAPI equality still passes;
+no source checkout, installed-prefix/undeclared-wheel or ML import fallback is
+allowed. These inspect packaged composition, not runtime IAM/DB/model execution.
+
+Raw wheel SHA: platform `fdab2989ae7d7df1d67983f96376657861d4e7478d7e9d19cf5cf9e3d3b82ef1`;
+contracts `4d081e4aee37fa5f23b79f7d8b3b145c6a4ef5896ec6b101133b72eb2e604a77`;
+API `0b0b2d515f591ac9abaaa4299d3e8ff0cb603e6212e6461ef93168bd885c66b9`.
+Logs `release-build`, `owner-pair-proof` and `three-wheel-proof` share the evidence
+prefix above. Source/build is pushed; production installation/activation is separate.
