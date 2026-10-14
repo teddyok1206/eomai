@@ -24,7 +24,12 @@ from eom_identity_service.owner_session_transport import (
 from eom_operator_identity.owner_session_capture import (
     MAX_OWNER_SESSION_CAPTURE_RESPONSE_BYTES,
     OwnerSessionCaptureRequest,
-    owner_session_capture_bytes,
+)
+from eom_operator_identity.owner_session_capture_v11 import (
+    OwnerSessionCapturePurposeV11,
+    OwnerSessionCaptureRequestV11,
+    SupportedOwnerSessionCaptureRequest,
+    supported_owner_session_capture_bytes,
 )
 
 from eom_orchestrator.inference_transfer_control_auth import (
@@ -58,6 +63,21 @@ class FixedIdentityOwnerSessionProvider:
 
     def capture_access_from_fd(self, descriptor: int) -> AuthenticatedOperatorSession:
         """Consume exactly one inherited FD and one exchange; never refresh/cache/reconnect."""
+        return self._capture_access(descriptor, purpose=None)
+
+    def capture_reference_query_access_from_fd(
+        self, descriptor: int
+    ) -> AuthenticatedOperatorSession:
+        return self._capture_access(descriptor, purpose="REFERENCE_QUERY")
+
+    def capture_device_benchmark_access_from_fd(
+        self, descriptor: int
+    ) -> AuthenticatedOperatorSession:
+        return self._capture_access(descriptor, purpose="LOCAL_EMBEDDING_DEVICE_BENCHMARK")
+
+    def _capture_access(
+        self, descriptor: int, *, purpose: OwnerSessionCapturePurposeV11 | None
+    ) -> AuthenticatedOperatorSession:
         connection: http.client.HTTPConnection | None = None
         peer: socket.socket | None = None
         consumed = False
@@ -69,13 +89,22 @@ class FixedIdentityOwnerSessionProvider:
             bearer = read_control_bearer_fd(descriptor)
             started_at, began = datetime.now(UTC), time.monotonic()
             deadline = began + OWNER_SESSION_TRANSPORT_SECONDS
-            request = OwnerSessionCaptureRequest(
-                schema_version="operator-owner-session-capture-request/1.0",
-                request_id="ownercapture_" + secrets.token_hex(16),
-                nonce=secrets.token_hex(32),
-                purpose="LOCAL_EMBEDDING_OPERATOR_SEED",
-            )
-            body = owner_session_capture_bytes(request)
+            request: SupportedOwnerSessionCaptureRequest
+            if purpose is None:
+                request = OwnerSessionCaptureRequest(
+                    schema_version="operator-owner-session-capture-request/1.0",
+                    request_id="ownercapture_" + secrets.token_hex(16),
+                    nonce=secrets.token_hex(32),
+                    purpose="LOCAL_EMBEDDING_OPERATOR_SEED",
+                )
+            else:
+                request = OwnerSessionCaptureRequestV11(
+                    schema_version="operator-owner-session-capture-request/1.1",
+                    request_id="ownercapture_" + secrets.token_hex(16),
+                    nonce=secrets.token_hex(32),
+                    purpose=purpose,
+                )
+            body = supported_owner_session_capture_bytes(request)
             connection = http.client.HTTPConnection(
                 _HOST, _PORT, timeout=OWNER_SESSION_TRANSPORT_SECONDS
             )

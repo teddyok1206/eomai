@@ -13,8 +13,16 @@ from eom_identity_service.owner_session_transport import (
     export_owner_session_capture,
 )
 from eom_operator_identity.owner_session_capture import (
-    owner_session_capture_bytes,
-    parse_owner_session_capture_request,
+    OwnerSessionCaptureRequest,
+)
+from eom_operator_identity.owner_session_capture_v11 import (
+    OwnerSessionCaptureRequestV11,
+)
+from eom_operator_identity.owner_session_capture_v11 import (
+    parse_supported_owner_session_capture_request as parse_owner_session_capture_request,
+)
+from eom_operator_identity.owner_session_capture_v11 import (
+    supported_owner_session_capture_bytes as owner_session_capture_bytes,
 )
 from eom_orchestrator import identity_owner_session_provider as provider
 
@@ -96,6 +104,19 @@ def forward(
             request = parse_owner_session_capture_request(body)
             captured["request"] = request
             raw = owner_session_capture_bytes(export_owner_session_capture(request, capture))
+            if fault == "wrong_purpose":
+                reply = export_owner_session_capture(request, capture).model_copy(
+                    update={"purpose": "LOCAL_EMBEDDING_DEVICE_BENCHMARK"}
+                )
+                raw = owner_session_capture_bytes(reply)
+            if fault == "legacy_response":
+                legacy = OwnerSessionCaptureRequest(
+                    schema_version="operator-owner-session-capture-request/1.0",
+                    purpose="LOCAL_EMBEDDING_OPERATOR_SEED",
+                    request_id=request.request_id,
+                    nonce=request.nonce,
+                )
+                raw = owner_session_capture_bytes(export_owner_session_capture(legacy, capture))
             if fault == "canonical":
                 raw = b" " + raw
             if fault == "hash":
@@ -142,6 +163,49 @@ def test_fixed_forward_fd_peer_before_bearer_exact_pins_genuine_import_and_clean
         os.fstat(fd)
     assert captured["request"].nonce and token not in repr(value)
     assert len(admission.calls) >= 3
+
+
+@pytest.mark.parametrize(
+    "method,purpose",
+    (
+        ("capture_reference_query_access_from_fd", "REFERENCE_QUERY"),
+        ("capture_device_benchmark_access_from_fd", "LOCAL_EMBEDDING_DEVICE_BENCHMARK"),
+    ),
+)
+def test_explicit_purpose_provider_uses_new_exchange_without_seed_fallback(
+    monkeypatch, method, purpose
+):
+    token, events, sockets, admission, captured = forward(monkeypatch)
+    fd = token_fd(token)
+    client = provider.FixedIdentityOwnerSessionProvider(PIN, admission)
+    value = getattr(client, method)(fd)
+    assert value.operator_id == "operator_" + "a" * 32
+    request = captured["request"]
+    assert isinstance(request, OwnerSessionCaptureRequestV11)
+    assert request.purpose == purpose
+    assert events.count("connect") == events.count("send") == events.count("read") == 1
+    assert all(sock.fileno() == -1 for sock in sockets)
+    with pytest.raises(OSError):
+        os.fstat(fd)
+
+
+@pytest.mark.parametrize(
+    "fault", ("wrong_purpose", "legacy_response", "hash", "canonical", "cleanup", "denied")
+)
+def test_query_provider_denies_other_purpose_version_and_failed_transport_without_retry(
+    monkeypatch, fault
+):
+    token, events, sockets, admission, _captured = forward(monkeypatch, fault)
+    fd = token_fd(token)
+    with pytest.raises(OwnerSessionTransportError) as failure:
+        provider.FixedIdentityOwnerSessionProvider(
+            PIN, admission
+        ).capture_reference_query_access_from_fd(fd)
+    assert token not in str(failure.value)
+    assert events.count("connect") == events.count("send") == 1
+    assert all(sock.fileno() == -1 for sock in sockets)
+    with pytest.raises(OSError):
+        os.fstat(fd)
 
 
 @pytest.mark.parametrize(

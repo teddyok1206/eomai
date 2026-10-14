@@ -17,9 +17,14 @@ from weakref import ReferenceType, ref
 from eom_operator_identity.owner_session_capture import (
     OwnerSessionCaptureRequest,
     OwnerSessionCaptureResponse,
-    owner_session_capture_request_sha256,
-    parse_owner_session_capture_response,
-    validate_owner_session_capture_response,
+)
+from eom_operator_identity.owner_session_capture_v11 import (
+    OwnerSessionCaptureResponseV11,
+    SupportedOwnerSessionCaptureRequest,
+    SupportedOwnerSessionCaptureResponse,
+    parse_supported_owner_session_capture_response,
+    supported_owner_session_capture_request_sha256,
+    validate_supported_owner_session_capture_response,
 )
 
 from eom_identity_service.authenticated_session_fence import (
@@ -101,26 +106,36 @@ def assert_identity_provider_current(
 
 
 def export_owner_session_capture(
-    request: OwnerSessionCaptureRequest, capture: AuthenticatedOperatorSession
-) -> OwnerSessionCaptureResponse:
+    request: SupportedOwnerSessionCaptureRequest, capture: AuthenticatedOperatorSession
+) -> SupportedOwnerSessionCaptureResponse:
     """Read a genuine Identity-created capture only, after the existing HMAC path."""
     try:
-        request_sha = owner_session_capture_request_sha256(request)
+        request_sha = supported_owner_session_capture_request_sha256(request)
         values = _capture_values(capture)
-        return OwnerSessionCaptureResponse(
-            schema_version="operator-owner-session-capture-response/1.0",
-            request_sha256=request_sha,
-            observed_at=datetime.now(UTC),
-            operator_id=values.operator_id,
-            session_id=values.session_id,
-            access_token_id=values.token_id,
-            verifier_digest=values.verifier_hash,
-            issued_at=values.issued_at,
-            access_expires_at=values.access_expires_at,
-            authenticated_at=values.authenticated_at,
-            absolute_expires_at=values.absolute_expires_at,
-            idle_expires_at=values.idle_expires_at,
-            refresh_generation=values.refresh_generation,
+        shared = {
+            "request_sha256": request_sha,
+            "observed_at": datetime.now(UTC),
+            "operator_id": values.operator_id,
+            "session_id": values.session_id,
+            "access_token_id": values.token_id,
+            "verifier_digest": values.verifier_hash,
+            "issued_at": values.issued_at,
+            "access_expires_at": values.access_expires_at,
+            "authenticated_at": values.authenticated_at,
+            "absolute_expires_at": values.absolute_expires_at,
+            "idle_expires_at": values.idle_expires_at,
+            "refresh_generation": values.refresh_generation,
+        }
+        if isinstance(request, OwnerSessionCaptureRequest):
+            return OwnerSessionCaptureResponse.model_validate(
+                shared | {"schema_version": "operator-owner-session-capture-response/1.0"}
+            )
+        return OwnerSessionCaptureResponseV11.model_validate(
+            shared
+            | {
+                "schema_version": "operator-owner-session-capture-response/1.1",
+                "purpose": request.purpose,
+            }
         )
     except Exception:
         raise OwnerSessionTransportError("OWNER_SESSION_EXPORT_INVALID") from None
@@ -159,8 +174,8 @@ def _socket_epoch(connection: socket.socket) -> tuple[object, ...]:
 @dataclass(slots=True, repr=False)
 class _ObservationOrigin:
     observation: ReferenceType[OwnerSessionTransportObservation]
-    request: OwnerSessionCaptureRequest
-    response: OwnerSessionCaptureResponse
+    request: SupportedOwnerSessionCaptureRequest
+    response: SupportedOwnerSessionCaptureResponse
     response_identity: tuple[object, ...]
     connection: socket.socket
     epoch: tuple[object, ...]
@@ -190,7 +205,7 @@ class OwnerSessionTransportObservation:
         return "<OwnerSessionTransportObservation>"
 
 
-def _response_identity(response: OwnerSessionCaptureResponse) -> tuple[object, ...]:
+def _response_identity(response: SupportedOwnerSessionCaptureResponse) -> tuple[object, ...]:
     return tuple(getattr(response, name) for name in type(response).model_fields)
 
 
@@ -206,7 +221,7 @@ def _current(origin: _ObservationOrigin) -> None:
         or _response_identity(origin.response) != origin.response_identity
     ):
         raise OwnerSessionTransportError("OWNER_SESSION_OBSERVATION_INVALID")
-    checked = validate_owner_session_capture_response(origin.request, origin.response)
+    checked = validate_supported_owner_session_capture_response(origin.request, origin.response)
     now = datetime.now(UTC)
     if (
         origin.started_at.utcoffset() != timedelta(0)
@@ -221,7 +236,7 @@ def _current(origin: _ObservationOrigin) -> None:
 
 def observe_owner_session_transport(
     *,
-    request: OwnerSessionCaptureRequest,
+    request: SupportedOwnerSessionCaptureRequest,
     response_raw: bytes,
     connection: socket.socket,
     pin: FixedIdentityProviderPin,
@@ -239,9 +254,8 @@ def observe_owner_session_transport(
         assert_identity_provider_current(pin, admission)
         epoch = _socket_epoch(connection)
         verify_peer(connection)
-        request = OwnerSessionCaptureRequest.model_validate(request)
-        response = validate_owner_session_capture_response(
-            request, parse_owner_session_capture_response(response_raw)
+        response = validate_supported_owner_session_capture_response(
+            request, parse_supported_owner_session_capture_response(response_raw)
         )
         if (
             type(started_at) is not datetime

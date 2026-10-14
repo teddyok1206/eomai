@@ -33,6 +33,8 @@ _CODE_MEMBERS = frozenset(
         "eom_identity_service/auth_service.py",
         "eom_identity_service/authenticated_session_fence.py",
         "eom_identity_service/owner_session_transport.py",
+        "eom_operator_identity/owner_session_capture.py",
+        "eom_operator_identity/owner_session_capture_v11.py",
     }
 )
 _UNIT_PROPERTIES = frozenset(

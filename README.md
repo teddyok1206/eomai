@@ -172,9 +172,9 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | genuine QUERY 입력·encoder/handoff·실행 계약 | SOURCE_PASS; 정본4파일·기존 큐의 QUERY별 claim/완료 검증. 정확한 QUERY 정의 접수 허용 후보 회귀718·임시 DB68 PASS. 실제 정의/정책 활성화·정본 계산·소비자 조회는 미완료 |
 | 고정 CPU QUERY 실행 어댑터 | SOURCE_PASS; private/root handoff·공통 capacity·재시작 중복 차단. 고정 unit/설정/polkit 설치·UID990 수치 사전확인·실제 owner 허용/거부7 PASS. 실제 QUERY 모델 계산·사용자 권한 검증은 별도 |
 | QUERY Job·실행·정본 완료 조회 | SOURCE_PASS; 원 Job/4개 checkpoint·실행기·원 claim 복구와 현재 권한/정본 완료 조회 구현. 운영 설치·실제 계산·소비 활성화는 미검증 |
-| authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
+| authenticated owner/session fence | SOURCE_PASS; QUERY/성능 비교용 명시적 전달1.1을 추가하고 기존 seed1.0 유지. 관련 source392·실제 disposable 세션/동시성19 PASS; 새 API/owner 조합은 아직 설치 전 |
 | 자동 인덱싱 전용 신원·저장 | 운영0055·sourceae8f8bf6/신원 revision11. 실제 seed+delta 성공, 첫 벡터/연결과 이전 revision 보존, coverage2/520. 다음 release/runtime 준비를 위해 현재 건 완료 후 정상 종료; 상시 자동 인덱싱은 아직 재개 전. 전체/다른 view·실제 replay·소비 연결은 미완료. [실제 활성화 기록](docs/status/LOCAL_INDEXING_ACTIVATION_2026-10-14.md) |
-| 인증된 owner/session 전달 | 수신 API 설치·실제 UID990의 provider/process/config/key-metadata 검증 PASS; 실제 사용자 capture·seed는 별도 실행 gate |
+| 인증된 owner/session 전달 | 기존 수신 API·실제 UID990의 provider/process/config/key-metadata 검증 PASS. 신규 QUERY/성능 비교 전달은 목적·요청 hash를 함께 확인하며 현재 권한/만료를 확장하지 않음; 실제 사용자 QUERY capture는 미실행 |
 | 현재 사용자·자료의 native 작업 접수 연결 | SOURCE_IMPLEMENTED; 실제 인증 capture→기존 Catalog 검증·계획 재구성·잠금 확인을 연결, 운영 provider/실행기 연결은 미활성 |
 | Native INDEX 파일 전달·입력/결과 저장 | SOURCE_PASS; 실제 계정 권한4·설치된 시작 권한9·CPU 합성 입력2개×1024차원·동일 실행 재조회 PASS, 실제 자료/Job/binding 연결은 미활성 |
 | 실행 bundle의 정본 저장 | 실제 Orchestrator Job/Artifact1건 게시·exact pointer 검증·보호된 bundle/config 설치 PASS; 임시 DB19 PASS 유지 |
@@ -182,7 +182,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | 고정 CPU 실행 입구·설정 게시 CLI | CPU에 c2f8eef8 설치·격리 probe·설치 seal PASS; INDEX 고정 실행 단위 설치·합성 수치 계산 확인, QUERY 연결은 미완료 |
 | 실제 disposable PostgreSQL |0052 registry/application16·reservation8·limited IAM6,0053 stage18+runner10·Identity11 PASS; migration·cleanup PASS |
 | CPU/CUDA 실행 환경 준비 | 실제 CPU 설치·inventory·수치 증명·비특권 격리 시험·최종 설치 기록 PASS; source/Job 실행 연결 남음, CUDA 미게시 |
-| 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | NOT_ACTIVE / NOT_EVALUATED |
+| 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | seed+delta PASS(2/520, 첫 벡터 보존); QUERY/공통 소비자·CPU/GPU 비교·GPU 기본값은 미완료 |
 
 2026-10-13 11:04 UTC 기준 `3be2949b`의 실제 CPU 전체 설치 검증과 결과 저장·재조회를
 통과했습니다. 같은 검사에서 얻은30,669개 항목/356개 ELF의 식별·해시 정보를 보존하고,
@@ -339,8 +339,8 @@ encoding reservation9개, 서로 다른178개가 PASS했습니다.
 Application API wheel fallback을 금지하고 설정/schema/정본 unit 템플릿을 확인했습니다.
 0055 전용 배포 계약1.4는 정확한0054에서만 갱신하며 운영 migration을 뜻하지 않습니다.
 
-**정상 자동 증분 처리·실제 seed/delta/QUERY·CPU/GPU 비교는 아직 남아 있습니다.**
-다음은 구현된 서비스 entry/provider를 실제로 설치·승인하고 연결하는 단계입니다.
+**실제 bounded seed+delta는 성공했으며, 상시 자동 처리 재개·QUERY·공통 소비자·CPU/GPU 비교는 남아 있습니다.**
+다음은 현재 권한을 유지하는 QUERY 전달·실행을 검증하고 소비자에 연결하는 단계입니다.
 후속 Identity 소유자 설치 경계는 고정 DB 함수의 생성·정확한 재실행·동시 설치 차단을
 지원하며 기존 drift를 덮거나 권한을 자동 복구하지 않습니다. 실패한 생성/권한 변경은
 savepoint로 되돌립니다. 관련 source195개와 실제 임시 DB80개가 PASS했습니다.
@@ -351,9 +351,11 @@ owner 설치 도구도 보호된 interpreter/libexec만 실행하도록 보강�
 API/공유 런타임`4cf6ac9a` 배포·격리 검증을 완료했습니다. 관련9개 서비스와
 API LIVE/READY를 확인했습니다. 이후 인덱싱 전용 신원/자료 정책과 고정 unit을 설치했습니다.
 실제 시작 검증에서 찾은 불변 기록의 불필요한 쓰기 잠금은 SELECT-only 경로로 수정했고,
-새 설치본의 서비스 인증·시작을 확인했습니다. 첫 모집단 읽기의 pointer 오류를 진단 중이며
-아직 실제 seed/delta/QUERY를 완료하지 않았습니다. [활성화 기록과 남은 gate](docs/status/LOCAL_INDEXING_ACTIVATION_2026-10-14.md)를
-따릅니다. 이 설치를 자동 처리 완료로 표시하지 않습니다.
+새 설치본의 서비스 인증·시작을 확인했습니다. 이후 pointer/정의 조회와 exact-target 경계를
+수정하여 실제 seed와 delta를 완료했습니다. 현재 coverage2/520이며 다음 호환 release 준비를
+위해 owner는 정상 종료 상태입니다. [활성화 기록과 남은 gate](docs/status/LOCAL_INDEXING_ACTIVATION_2026-10-14.md)와
+[명시적 QUERY 인증 전달 검증](docs/status/REFERENCE_QUERY_OWNER_SESSION_CHECKPOINT_2026-10-14.md)을
+따릅니다. 부분 coverage를 전체 corpus 또는 상시 자동 처리 완료로 표시하지 않습니다.
 [서비스 Runner 구현·검증 기록](docs/status/LOCAL_INDEXING_RUNNER_SERVICE_CHECKPOINT_2026-10-14.md),
 [현재 Registry checkpoint](docs/status/LOCAL_INDEXING_REGISTRY_SERVICE_CHECKPOINT_2026-10-14.md),
 [정책 발행 증거](docs/status/LOCAL_INDEXING_POLICY_PUBLICATION_CHECKPOINT_2026-10-14.md),

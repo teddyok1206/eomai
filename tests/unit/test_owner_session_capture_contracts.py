@@ -97,6 +97,7 @@ def test_exact_schema_mirror_registration_and_packaging() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())
     assert project["tool"]["setuptools"]["package-data"]["eom_operator_identity"] == [
         "resources/operator-owner-session-capture-v1.schema.json",
+        "resources/operator-owner-session-capture-v1_1.schema.json",
         "resources/local-indexing-service-v1.schema.json",
         "resources/local-indexing-runtime-v1.schema.json",
     ]

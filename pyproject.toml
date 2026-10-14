@@ -100,6 +100,7 @@ eom_catalog_contracts = [
 eom_image_contracts = ["schemas/*.json"]
 eom_operator_identity = [
   "resources/operator-owner-session-capture-v1.schema.json",
+  "resources/operator-owner-session-capture-v1_1.schema.json",
   "resources/local-indexing-service-v1.schema.json",
   "resources/local-indexing-runtime-v1.schema.json",
 ]

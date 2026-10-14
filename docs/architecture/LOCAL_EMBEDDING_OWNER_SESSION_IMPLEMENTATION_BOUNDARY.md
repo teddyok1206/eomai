@@ -1,5 +1,57 @@
 # Native embedding owner/session boundary — Identity source foundation
 
+## Explicit QUERY/benchmark exchange successor — 2026-10-14
+
+Before genuine QUERY, preserve the released seed-only1.0 wire/schema/parser and
+add one closed1.1 exchange for the TWO actual remaining use cases:
+`REFERENCE_QUERY` and `LOCAL_EMBEDDING_DEVICE_BENCHMARK`. Do not label a QUERY as
+an operator seed or turn a parsed audit/DTO into authentication.
+
+1. Identity owns verified access-token capture; the existing fixed API exporter
+   and Orchestrator provider own the same one-use held-peer exchange. No new IAM,
+   queue, service, DB relation, grant or credential store.
+2. Canonical sources remain actual operator/session/ACCESS-token rows and the
+   independently observed installed API/code/config/key metadata. Purpose is an
+   explicit exchange label, NOT a native execution permission or capability.
+3. Request ID/nonce, exact version/purpose/request SHA, actual Identity IDs and
+   UTC expiries stay separate. No new logical/revision aggregate is needed for
+   these small operation-local immutable values.
+4. JSON Schema2020-12 precedes behavior. Both versions retain exact flat fields,
+   canonical bytes, bounded IDs/scalars, duplicate/extra/unknown-version denial.
+   New response additionally binds the exact declared purpose; cross-version or
+   cross-purpose exchange fails. Existing fresh peer/provider and10s single-use
+   checks remain, including on import.
+5. Operations are O(1) exact version dispatch, one bounded HTTP exchange and
+   indexed existing Identity lookups. Reuse pure canonical/scalar mechanics;
+   do not duplicate authentication or create a plugin/version registry.
+6. Frozen models/closed unions and fixed lookup choices bound request4KiB and
+   response8KiB. No large bytes, vector, prompt, NAS path or credential enters DB.
+7. Authentication finishes BEFORE owner SQL. Existing current-session fences,
+   lock order, revocation, permission, fresh-auth and expiry checks are unchanged.
+   No SQL transaction, cached authority or purpose grant survives inference.
+8. Dependencies remain contracts → pure values; Identity owns capture minting;
+   API authenticates; the installed provider observes/transfers. Public purpose-
+   specific provider methods select the fixed request, not a worker/model actor.
+9. Preserve1.0 serialization/parser/schema hashes and legacy method behavior.
+   Add literal version dispatch at the transport/API boundary; do not widen the
+   old parser or infer a new version/purpose on failure.
+10. Any wrong version/purpose/hash/peer/provider/expiry fails explicitly. No
+    reconnect/login/retry/refresh is added INSIDE this exchange. The actual
+    operator's supported refresh, if needed, remains outside SQL and uses a new
+    challenge/capture; no token persistence or TTL/permission expansion.
+11. Permanently refusing QUERY or pretending it is a seed cannot meet the goal.
+    A small literal successor on the existing exchange is sufficient; a generic
+    delegated-auth service/framework would be unnecessary here. The opaque
+    Identity session stays general verified authentication, not a purpose grant;
+    native owners independently authorize their actual use cases every root.
+
+Tests: frozen predecessor bytes, both new purposes, canonical raw-value negatives,
+cross-version/purpose/hash/replay, real exporter/importer provenance, provider
+fixed method selection and single-FD cleanup, API401/422/rate-limit/redaction,
+installed-code closure and unchanged current-session revocation/expiry behavior.
+Source PASS is not activation. Compatible API/owner installation and actual
+provider observation must precede one user login and genuine QUERY/consumer read.
+
 2026-10-13 UTC. SOURCE_FOUNDATION_IMPLEMENTED / NOT_INSTALLED_PROVIDER / NOT_ACTIVE.
 This note records the smallest authenticated continuation foundation for the merged native
 submission/dispatch. Only the approved Identity capture/fence and source tests below are implemented.

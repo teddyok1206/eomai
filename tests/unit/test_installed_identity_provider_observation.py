@@ -242,8 +242,10 @@ def test_root_capture_factory_never_opens_paths_for_nonroot(monkeypatch):
 def test_fixed_code_inventory_contains_no_key_or_caller_selected_member():
     members = module.identity_provider_code_members()
     assert members == tuple(sorted(set(members)))
-    assert len(members) == 7
+    assert len(members) == 9
     assert "eom_api/routers/owner_session_capture.py" in members
+    assert "eom_operator_identity/owner_session_capture.py" in members
+    assert "eom_operator_identity/owner_session_capture_v11.py" in members
     assert all(
         name.endswith(".py") and ".." not in name and "secrets" not in name for name in members
     )

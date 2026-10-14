@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/identity/operator-owner-session-capture/1.1",
+  "title": "Explicit QUERY and device-benchmark owner session exchanges, not execution grants",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/response"
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "minLength": 71,
+      "maxLength": 71
+    },
+    "utcDatetime": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$",
+      "minLength": 20,
+      "maxLength": 27
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "request_id",
+        "nonce",
+        "purpose"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "operator-owner-session-capture-request/1.1"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^ownercapture_[0-9a-f]{32}$",
+          "minLength": 45,
+          "maxLength": 45
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "minLength": 64,
+          "maxLength": 64
+        },
+        "purpose": {
+          "enum": [
+            "REFERENCE_QUERY",
+            "LOCAL_EMBEDDING_DEVICE_BENCHMARK"
+          ]
+        }
+      }
+    },
+    "response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "purpose",
+        "request_sha256",
+        "observed_at",
+        "operator_id",
+        "session_id",
+        "access_token_id",
+        "verifier_digest",
+        "issued_at",
+        "access_expires_at",
+        "authenticated_at",
+        "absolute_expires_at",
+        "idle_expires_at",
+        "refresh_generation"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "operator-owner-session-capture-response/1.1"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/utcDatetime"
+        },
+        "operator_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$",
+          "minLength": 41,
+          "maxLength": 41
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$",
+          "minLength": 43,
+          "maxLength": 43
+        },
+        "access_token_id": {
+          "type": "string",
+          "pattern": "^apitoken_[0-9a-f]{32}$",
+          "minLength": 41,
+          "maxLength": 41
+        },
+        "verifier_digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "issued_at": {
+          "$ref": "#/$defs/utcDatetime"
+        },
+        "access_expires_at": {
+          "$ref": "#/$defs/utcDatetime"
+        },
+        "authenticated_at": {
+          "$ref": "#/$defs/utcDatetime"
+        },
+        "absolute_expires_at": {
+          "$ref": "#/$defs/utcDatetime"
+        },
+        "idle_expires_at": {
+          "$ref": "#/$defs/utcDatetime"
+        },
+        "refresh_generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "purpose": {
+          "enum": [
+            "REFERENCE_QUERY",
+            "LOCAL_EMBEDDING_DEVICE_BENCHMARK"
+          ]
+        }
+      }
+    }
+  }
+}

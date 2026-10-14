@@ -12,9 +12,13 @@ from eom_operator_identity.errors import IdentityError
 from eom_operator_identity.owner_session_capture import (
     MAX_OWNER_SESSION_CAPTURE_REQUEST_BYTES,
     OwnerSessionCaptureResponse,
-    owner_session_capture_bytes,
     owner_session_capture_schema,
-    parse_owner_session_capture_request,
+)
+from eom_operator_identity.owner_session_capture_v11 import (
+    OwnerSessionCaptureResponseV11,
+    owner_session_capture_v11_schema,
+    parse_supported_owner_session_capture_request,
+    supported_owner_session_capture_bytes,
 )
 from fastapi import APIRouter, Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials
@@ -36,12 +40,19 @@ def _failure(status: int, code: str) -> ApiError:
 @router.post(
     "/owner-session-capture",
     operation_id="auth_owner_session_capture",
-    response_model=OwnerSessionCaptureResponse,
+    response_model=OwnerSessionCaptureResponse | OwnerSessionCaptureResponseV11,
     openapi_extra={
         "requestBody": {
             "required": True,
             "content": {
-                "application/json": {"schema": owner_session_capture_schema()["$defs"]["request"]}
+                "application/json": {
+                    "schema": {
+                        "oneOf": [
+                            owner_session_capture_schema()["$defs"]["request"],
+                            owner_session_capture_v11_schema()["$defs"]["request"],
+                        ]
+                    }
+                }
             },
         }
     },
@@ -79,7 +90,7 @@ async def capture_owner_session(
         if size != int(length):
             raise _failure(422, "OWNER_SESSION_REQUEST_INVALID")
         try:
-            checked = parse_owner_session_capture_request(b"".join(chunks))
+            checked = parse_supported_owner_session_capture_request(b"".join(chunks))
         except Exception:
             raise _failure(422, "OWNER_SESSION_REQUEST_INVALID") from None
         services = get_services(request)
@@ -96,7 +107,7 @@ async def capture_owner_session(
         if not decision.allowed:
             raise _failure(429, "API_RATE_LIMITED")
         return Response(
-            owner_session_capture_bytes(response),
+            supported_owner_session_capture_bytes(response),
             media_type="application/json",
             headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
         )

@@ -14,6 +14,11 @@ from eom_operator_identity.owner_session_capture import (
     parse_owner_session_capture_response,
     validate_owner_session_capture_response,
 )
+from eom_operator_identity.owner_session_capture_v11 import (
+    parse_supported_owner_session_capture_response,
+    supported_owner_session_capture_bytes,
+    validate_supported_owner_session_capture_response,
+)
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -21,6 +26,7 @@ from tests.api.test_auth_unit import source_auth
 from tests.api.test_token_unit import TokenMutationSession
 from tests.unit.test_authenticated_session_fence import verified_capture
 from tests.unit.test_owner_session_capture_contracts import request
+from tests.unit.test_owner_session_capture_v11_contracts import request_v11
 
 
 def api(
@@ -85,15 +91,59 @@ def test_exact_one_official_capture_canonical_reply_no_store_closed_auth_root(
     assert "x-eom-permission" not in operation
 
 
+@pytest.mark.parametrize("purpose", ("REFERENCE_QUERY", "LOCAL_EMBEDDING_DEVICE_BENCHMARK"))
+def test_explicit_purpose_route_uses_same_actual_auth_and_exact_expiries(monkeypatch, purpose):
+    client, source, calls, roots = api(monkeypatch)
+    checked = request_v11(purpose)
+    with client:
+        response = client.post(
+            "/api/v1/auth/owner-session-capture",
+            content=supported_owner_session_capture_bytes(checked),
+            headers={
+                "Authorization": "Bearer " + source.raw_token,
+                "Content-Type": "application/json",
+            },
+        )
+    assert response.status_code == 200
+    reply = parse_supported_owner_session_capture_response(response.content)
+    validate_supported_owner_session_capture_response(checked, reply)
+    assert reply.schema_version == "operator-owner-session-capture-response/1.1"
+    assert reply.purpose == purpose
+    assert reply.access_expires_at == source.token.expires_at
+    assert calls == ["capture"] and roots == ["begin", "end"]
+    assert source.raw_token not in response.text and response.headers["cache-control"] == "no-store"
+
+
+@pytest.mark.parametrize("purpose", ("LOCAL_EMBEDDING_OPERATOR_SEED", "ADMIN", "ALL"))
+def test_new_version_never_infers_seed_or_broader_authority_before_auth(monkeypatch, purpose):
+    import json
+
+    client, source, calls, _roots = api(monkeypatch)
+    body = request_v11().model_dump(mode="json") | {"purpose": purpose}
+    with client:
+        response = client.post(
+            "/api/v1/auth/owner-session-capture",
+            content=json.dumps(body, sort_keys=True, separators=(",", ":")).encode(),
+            headers={
+                "Authorization": "Bearer " + source.raw_token,
+                "Content-Type": "application/json",
+            },
+        )
+    assert response.status_code == 422 and not calls
+
+
 @pytest.mark.parametrize("fault,status", [("revoked", 401), ("unexpected", 503), ("rate", 429)])
+@pytest.mark.parametrize("purpose", (None, "REFERENCE_QUERY", "LOCAL_EMBEDDING_DEVICE_BENCHMARK"))
 def test_auth_errors_are_content_free_and_not_retried(
-    monkeypatch: pytest.MonkeyPatch, fault: str, status: int
+    monkeypatch: pytest.MonkeyPatch, fault: str, status: int, purpose: str | None
 ) -> None:
     client, source, calls, _roots = api(monkeypatch, fault)
     with client:
         result = client.post(
             "/api/v1/auth/owner-session-capture",
-            content=owner_session_capture_bytes(request()),
+            content=supported_owner_session_capture_bytes(
+                request() if purpose is None else request_v11(purpose)
+            ),
             headers={
                 "Authorization": "Bearer " + source.raw_token,
                 "Content-Type": "application/json",
@@ -131,19 +181,23 @@ def test_bounded_invalid_raw_request_never_authenticates_or_echoes(
     assert source.raw_token not in result.text
 
 
+@pytest.mark.parametrize("purpose", (None, "REFERENCE_QUERY", "LOCAL_EMBEDDING_DEVICE_BENCHMARK"))
 def test_missing_bearer_and_transfer_encoding_never_capture(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, purpose: str | None
 ) -> None:
     client, source, calls, _roots = api(monkeypatch)
+    body = supported_owner_session_capture_bytes(
+        request() if purpose is None else request_v11(purpose)
+    )
     with client:
         missing = client.post(
             "/api/v1/auth/owner-session-capture",
-            content=owner_session_capture_bytes(request()),
+            content=body,
             headers={"Content-Type": "application/json"},
         )
         chunked = client.post(
             "/api/v1/auth/owner-session-capture",
-            content=owner_session_capture_bytes(request()),
+            content=body,
             headers={
                 "Authorization": "Bearer " + source.raw_token,
                 "Content-Type": "application/json",
