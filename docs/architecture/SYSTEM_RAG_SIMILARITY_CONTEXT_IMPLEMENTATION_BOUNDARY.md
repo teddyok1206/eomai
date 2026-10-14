@@ -1822,3 +1822,14 @@ API/native QUERY preparation/context publication and durable multi-user selectio
 of an official current owner, then installed bounded variation acceptance. The new
 bounded runtime injection is not represented as that completed shared API path.
 Remaining consumers and actual CPU/GPU comparison/default selection stay in the goal.
+
+Candidate `99d42aa59da478a048747d82855ee9798880176d` passed the existing complete
+three-wheel/RECORD build and strict platform+contracts-only transitive import proof.
+Actual executor/Orchestrator/composition signatures, current-capture provider,
+root-local common/QUERY reader and existing materialization/receipt dependencies
+resolve from those two archives alone. No checkout/API-wheel/prefix fallback or ML
+import was allowed; the import proof made no DB/source/publication/model call.
+Platform raw `0e2f174f353f10657d133ac9eb0f89794f2e815f3999eee86f0f4df7434fe139`;
+API-contract raw `e05a96a8aedd99bd095a132ab29f93975f976325a510e645f28dc5823ad2a4b4`.
+Evidence: `similarity-role-composition-{release-build,owner-pair-proof}.log`.
+Candidate is not installed; this is not shared API or actual variation activation.
