@@ -244,3 +244,19 @@ The original finite operator controller was observed alive at2026-10-14 08:59 UT
 with no terminal output. No replacement, extension or inferred success occurred.
 Genuine bounded persistent seed, source-add delta, same-key replay/QUERY, downstream
 consumers and CPU/GPU comparison remain required by the active goal.
+
+Source candidate `9730bf95fe4b45012f217c916a68258554c9a3d0` built all3 release
+wheels with RECORD verification PASS. Fixed dist:
+`/tmp/eom-api-build/9730bf95fe4b45012f217c916a68258554c9a3d0.lC9v1e/dist`.
+The actual owner installation pair (platform + API-contracts, **without** the
+Application API wheel) independently passed RECORD verification and `-I -B`
+imports under the immutable operator interpreter. A meta-path guard denied every
+transitive EOM import outside those two wheels; there was no old installed-prefix
+or checkout fallback. Canonical configuration transport, schema/ref closure,
+closed actual-runtime factory, family/actor defaults, explicit privilege matrix
+and the single packaged unit template PASS. Synthetic metadata still fails actual
+capture; zip/developer entry launch remains denied. This is package closure, not
+installation, service activation, runtime-role GRANT or numeric execution.
+
+Evidence: `local-index-owner-wheel-build.log`, `local-index-owner-pair-record.log`
+and `local-index-owner-pair-import.log` in the same evidence directory.
