@@ -2312,3 +2312,16 @@ compose the closed Catalog RPC and current actor/fence, then finish shared API/r
 activation and actual bounded acceptance. Native submission remains a separate
 supported asynchronous owner path; INDEX authority is not broadened. Other consumers,
 coverage and actual CPU/GPU/default-device requirements remain in the active goal.
+
+Candidate `873c5bab30e66ca86a9fa127fe949e47d73762e3` passed full three-wheel/RECORD
+build and isolated owner-pair/explicit-three-wheel import proofs. Actual read owner,
+shared canonical reader, unchanged public native aliases, API and existing schema
+closures resolve only from the selected archives. The read owner has no execution
+methods/inheritance; no DB/capture/publication/model was called by the proofs.
+No checkout, undeclared wheel, installed EOM-prefix or ML fallback was permitted.
+Raw SHA: platform `1c57f601e56b06a7f6f0537b9b76408f76072438e4f0410bb64efdd91bd5d840`;
+contracts `cf47f5ca180c3483cd190fec575fe5a358b225841899cf02838db7bcecee4a8c`;
+API `19fad5bfa0c173bfcd847f860f78d17f34d3735a8fa66ed77f2fc0a1a0c5bc21`.
+Evidence: `similarity-read-owner-split-{release-build,owner-pair-proof,three-wheel-proof}.log`;
+exact disjoint file groups/counts: `similarity-read-owner-split-test-groups.json`.
+The candidate is not installed or activated; current provider/owner pins are preserved.
