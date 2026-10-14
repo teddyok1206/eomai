@@ -22,7 +22,6 @@ from eom_catalog_service.past_exam_source_provenance import (
 from eom_catalog_service.pinned_artifact_resolution import (
     PinnedArtifactReadContext,
     PinnedArtifactResolutionError,
-    artifact_identity_hints,
 )
 
 
@@ -119,7 +118,6 @@ def prefetch_past_exam_artifact_closure(
     members = (*batch_members.values(), *(member for pair in accepted_members for member in pair))
     reader.prefetch(tuple(sorted({(m.artifact_id, m.artifact_revision_id) for m in members})))
     cache = PastExamSourceResolutionCache()
-    hints: set[tuple[str, str]] = set()
     layout_ids: set[str] = set()
     for unit in units:
         member = batch_members.get(unit.extraction_batch_id)
@@ -130,19 +128,7 @@ def prefetch_past_exam_artifact_closure(
         if len(selected) != 1:
             raise PinnedArtifactResolutionError("past-exam batch work unit is ambiguous")
         request = selected[0].request
-        hints.update(artifact_identity_hints(request.model_dump(mode="json")))
         layout_ids.add(request.layout_observation.assessment_layout_observation_id)
-    for acceptance_member, result_member in accepted_members:
-        hints.update(
-            artifact_identity_hints(
-                cache.acceptance(reader, acceptance_member).value.model_dump(mode="json")
-            )
-        )
-        hints.update(
-            artifact_identity_hints(
-                cache.result(reader, result_member).value.model_dump(mode="json")
-            )
-        )
     layouts = tuple(
         session.scalars(
             select(AssessmentLayoutObservationRecord)
@@ -166,11 +152,15 @@ def prefetch_past_exam_artifact_closure(
         )
         for row in layouts
     )
-    hints.update((m.artifact_id, m.artifact_revision_id) for m in layout_members)
-    reader.prefetch(tuple(sorted(hints)))
+    reader.prefetch(
+        tuple(sorted({(m.artifact_id, m.artifact_revision_id) for m in layout_members}))
+    )
     page_hints: set[tuple[str, str]] = set()
     for member in layout_members:
-        page_hints.update(
-            artifact_identity_hints(cache.layout(reader, member).value.model_dump(mode="json"))
-        )
+        # Only canonical source/page images are read by the existing resolver.
+        # Draft proposal content can legitimately contain unpromoted media refs;
+        # recursively treating them as resolution demands would invent a gate.
+        for page in cache.layout(reader, member).value.pages:
+            for pointer in (page.page.source, page.page.image):
+                page_hints.add((pointer.artifact_id, pointer.artifact_revision_id))
     reader.prefetch(tuple(sorted(page_hints)))

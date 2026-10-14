@@ -183,3 +183,28 @@ The preceding ca506187 pointer/diagnostic regression1671 PASS is historical and
 does not count as the corrected candidate's production acceptance. Current
 installed unit is failed/Restart=no with no successful source seed. The next
 authorized step is the exact owner successor and bounded real recheck.
+
+## Canonical closure boundary correction
+
+Source69e808dd was built, RECORD/pair validated, installed and activated as
+service revision6/resource-version12. Controls are retained at
+`/var/lib/eom-local-indexing-activation.69e808dd-0rrf2jih`.
+Invocation`d00a6c9c865e407c9acb1aac5e058484` passed startup at11:11:19 UTC,
+then stopped at11:11:59 with missing Artifact metadata in prefetch. The
+schema/media field-order defect is no longer the reported failure. Its wider
+source regression1673 PASS remains distinct from actual source acceptance.
+
+Review found the new preparation adapter recursively followed every draft
+proposal/request pointer, whereas the established provenance resolver reads
+only exact batch/acceptance/result/layout and original PDF/PNG evidence. Narrow
+the preparation closure to that existing read boundary, without skipping missing
+canonical pages or relaxing downstream acceptance/hash/schema checks. Missing
+prefetch metadata now retains a bounded UUID-shaped identity for diagnosis; the
+previous event did not identify which missing reference caused it, so no claim
+is made that a particular historical draft was the observed failure.
+
+Focused196 PASS and strict mypy2 PASS cover the corrected closure, unchanged
+canonical rejection of corrupt result bytes, and missing canonical page denial.
+This correction is not a completed seed. The installed69e808dd unit remains
+failed/Restart=no, not enabled for boot. No new model dispatch or committed
+encoding/binding/index is established by that invocation.

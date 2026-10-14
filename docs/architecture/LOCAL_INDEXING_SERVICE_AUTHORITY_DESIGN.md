@@ -795,8 +795,12 @@ Canonical sources remain the pinned Item revision, existing extraction records
 and schema/hash-validated provenance Artifacts. No new entity/revision or DB row.
 Use sets/maps and four set-based metadata queries (acceptances, accepted work
 units, batches, layouts), then staged exact Artifact metadata prefetch. Decode
-the existing versioned batch/acceptance/result/layout contracts to collect their
-pointer identities; pointer hints never constitute eligibility or permission.
+the existing versioned batch/layout contracts to locate layouts and their exact
+original PDF/PNG references. Prepare acceptance/result metadata, but leave their
+decoding and validation to the canonical resolver. Do not recursively demand
+registration of unused draft-proposal media inside those documents: that would
+add a source-admission gate the canonical resolver does not own. Pointer hints
+never constitute eligibility or permission; missing canonical pages still fail.
 Complexity is O(selected metadata + bounded provenance JSON), not one SQL lookup
 per pointer. Keep the existing context's member/revision/byte budgets and indexes.
 The adapter neither commits, creates a job, writes NAS nor authorizes a source.

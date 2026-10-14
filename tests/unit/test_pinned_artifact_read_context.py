@@ -76,6 +76,27 @@ def test_cached_bytes_never_cache_approval_or_terminal_producer_state(tmp_path: 
         context.read_pinned(**arguments)  # type: ignore[arg-type]
 
 
+def test_missing_prefetch_retains_exact_identity_without_skipping(tmp_path: Path) -> None:
+    _original, settings, _arguments = _fixture(tmp_path)
+    session = MetadataSession()
+    context = PinnedArtifactReadContext(cast(Session, session), settings)
+    identity = ("artifact_" + "f" * 32, "rev_" + "e" * 32)
+    with pytest.raises(PinnedArtifactResolutionError, match="does not resolve") as failure:
+        context.prefetch((identity,))
+    assert failure.value.artifact_id == identity[0]
+    assert failure.value.artifact_revision_id == identity[1]
+    with pytest.raises(PinnedArtifactResolutionError, match="not captured"):
+        context.read_member(
+            artifact_id=identity[0],
+            revision_id=identity[1],
+            member_path="missing.json",
+            sha256="sha256:" + "0" * 64,
+            schema_ref="eom://schemas/fixture/1.0",
+            media_type="application/json",
+            max_bytes=1024,
+        )
+
+
 def test_context_denies_other_session_root_end_and_wrong_thread(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

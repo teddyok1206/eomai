@@ -453,7 +453,12 @@ class PinnedArtifactReadContext:
         }
         found = {(row.logical_artifact_id, row.revision_id) for row in revisions}
         if found != set(selected):
-            raise PinnedArtifactResolutionError("pinned Artifact provenance does not resolve")
+            missing = sorted(set(selected) - found)
+            raise PinnedArtifactResolutionError(
+                "pinned Artifact provenance does not resolve",
+                artifact_id=missing[0][0] if missing else None,
+                artifact_revision_id=missing[0][1] if missing else None,
+            )
         captured = {}
         for revision in revisions:
             logical = logicals.get(revision.logical_artifact_id)

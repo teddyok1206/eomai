@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 import pytest
+from eom_catalog_contracts import AssessmentLayoutObservation
 from eom_catalog_service import knowledge_analysis_sources as sources
 from eom_catalog_service.legacy_assessment_models import (
     AssessmentLayoutObservationRecord,
@@ -32,6 +33,13 @@ class ClosedMetadataReader:
     def __init__(self, session, delegate, expected_metadata):
         self.session, self.delegate = session, delegate
         self.expected_metadata = expected_metadata
+        self.known = {(key[0], key[1]) for key in expected_metadata}
+        layout = AssessmentLayoutObservation.model_validate_json(delegate.payloads["layout.json"])
+        for page in layout.pages:
+            self.known.update(
+                (pointer.artifact_id, pointer.artifact_revision_id)
+                for pointer in (page.page.source, page.page.image)
+            )
         self.settings = delegate.settings
         self.captured: set[tuple[str, str]] = set()
         self.batches: list[tuple[tuple[str, str], ...]] = []
@@ -41,6 +49,8 @@ class ClosedMetadataReader:
             raise PinnedArtifactResolutionError("different root")
 
     def prefetch(self, identities):
+        if not set(identities).issubset(self.known):
+            raise PinnedArtifactResolutionError("unregistered metadata identity")
         self.batches.append(identities)
         self.captured.update(identities)
         assert len(self.captured) <= self.MAX_REVISIONS
@@ -180,6 +190,25 @@ def test_closed_reader_reproduces_schema_media_swap_even_with_correct_hash(closu
     )
     with pytest.raises(PinnedArtifactResolutionError, match="descriptor differs"):
         reader.read_member(**arguments)
+
+
+def test_preparation_does_not_admit_or_eagerly_decode_draft_proposal_content(closure):
+    reader = closure[1]
+    # Raw acceptance/result bytes are for the canonical resolver, not the
+    # metadata preparation adapter. Corruption is still rejected by that owner.
+    reader.delegate.payloads["result.json"] += b"untrusted draft"
+    prepare(closure)
+    assert {call["member_path"] for call in reader.delegate.calls} == {"batch.json", "layout.json"}
+    with pytest.raises(sources.KnowledgeAnalysisSourceError):
+        resolve(closure)
+
+
+def test_missing_canonical_page_reference_is_not_skipped(closure):
+    reader = closure[1]
+    page_id = next(iter(reader.known - {(k[0], k[1]) for k in reader.expected_metadata}))
+    reader.known.remove(page_id)
+    with pytest.raises(PinnedArtifactResolutionError, match="unregistered"):
+        prepare(closure)
 
 
 def test_hint_collection_is_deduplicated_and_not_a_permission_contract():
