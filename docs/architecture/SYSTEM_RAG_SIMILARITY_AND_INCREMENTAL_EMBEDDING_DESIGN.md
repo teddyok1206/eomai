@@ -294,6 +294,10 @@ released 목적별 indexing service identity/정책이 필요하면 공식 contr
 명시 등록한다. 이것은 새 authority 설계이며 현재 활성화 사실이 아니다. worker에 ADMIN을
 사칭하게 하거나 sudo/Docker/eom group·NAS 접근을 부여하지 않는다.
 
+목적별 신원·정확한 개정 참조·현재 상태 계약과 검증 경계는
+[자동 인덱싱 서비스 권한 설계](LOCAL_INDEXING_SERVICE_AUTHORITY_DESIGN.md)에 기록한다.
+이 메타데이터의 유효성은 실제 서비스 인증·자료 접근 권한이나 자동 실행 활성화를 뜻하지 않는다.
+
 각 검색은 실제 사용자 권한으로 재인가한다. background job의 실행 권한을 사용자에게
 양도하지 않는다. query 결과·cache hit·source count에서 비허용 source의 존재도 노출하지 않는다.
 

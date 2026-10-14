@@ -173,6 +173,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | 고정 CPU QUERY 실행 어댑터 | SOURCE_PASS; private/root handoff·공통 capacity·재시작 후 중복 dispatch 차단·정확한 실행 관찰 구현. QUERY unit/polkit은 미설치, 실제 계산은 미검증 |
 | QUERY Job·실행·정본 완료 조회 | SOURCE_PASS; 원 Job/4개 checkpoint·실행기·원 claim 복구와 현재 권한/정본 완료 조회 구현. 운영 설치·실제 계산·소비 활성화는 미검증 |
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
+| 자동 인덱싱 전용 신원 계약 | SOURCE_PASS; [개정·해시·활성 상태 메타데이터](docs/architecture/LOCAL_INDEXING_SERVICE_AUTHORITY_DESIGN.md)만 검증. 실제 신원 등록·자료 grant·자동 실행은 미활성 |
 | 인증된 owner/session 전달 | 수신 API 설치·실제 UID990의 provider/process/config/key-metadata 검증 PASS; 실제 사용자 capture·seed는 별도 실행 gate |
 | 현재 사용자·자료의 native 작업 접수 연결 | SOURCE_IMPLEMENTED; 실제 인증 capture→기존 Catalog 검증·계획 재구성·잠금 확인을 연결, 운영 provider/실행기 연결은 미활성 |
 | Native INDEX 파일 전달·입력/결과 저장 | SOURCE_PASS; 실제 계정 권한4·설치된 시작 권한9·CPU 합성 입력2개×1024차원·동일 실행 재조회 PASS, 실제 자료/Job/binding 연결은 미활성 |

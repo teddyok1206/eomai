@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/identity/local-indexing-service/1.0",
+  "title": "Local indexing service metadata, not authority",
+  "description": "Parsing does not authenticate a principal, activate a service or grant source access.",
+  "oneOf": [
+    {"$ref": "#/$defs/identity"},
+    {"$ref": "#/$defs/reference"},
+    {"$ref": "#/$defs/status"}
+  ],
+  "$defs": {
+    "service_id": {
+      "type": "string",
+      "pattern": "^localindexservice_[0-9a-f]{32}$",
+      "minLength": 50,
+      "maxLength": 50
+    },
+    "revision_id": {
+      "type": "string",
+      "pattern": "^localindexservicerev_[0-9a-f]{32}$",
+      "minLength": 53,
+      "maxLength": 53
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "minLength": 71,
+      "maxLength": 71
+    },
+    "utc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$",
+      "minLength": 20,
+      "maxLength": 27
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "service_id", "service_revision_id",
+        "previous_service_revision_id", "revision_number", "purpose",
+        "runtime_user", "database_role", "runtime_source_commit",
+        "created_at", "content_sha256"
+      ],
+      "properties": {
+        "schema_version": {"const": "local-indexing-service-identity/1.0"},
+        "service_id": {"$ref": "#/$defs/service_id"},
+        "service_revision_id": {"$ref": "#/$defs/revision_id"},
+        "previous_service_revision_id": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/revision_id"}]
+        },
+        "revision_number": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+        "purpose": {"const": "LOCAL_EMBEDDING_INDEX"},
+        "runtime_user": {"const": "eom-workflow-runner"},
+        "database_role": {
+          "type": "string", "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "not": {"pattern": "\\n"},
+          "minLength": 1, "maxLength": 63
+        },
+        "runtime_source_commit": {
+          "type": "string", "pattern": "^[0-9a-f]{40}$",
+          "minLength": 40, "maxLength": 40
+        },
+        "created_at": {"$ref": "#/$defs/utc"},
+        "content_sha256": {"$ref": "#/$defs/sha256"}
+      },
+      "allOf": [{
+        "if": {"properties": {"revision_number": {"const": 1}}},
+        "then": {"properties": {"previous_service_revision_id": {"type": "null"}}},
+        "else": {"properties": {"previous_service_revision_id": {"$ref": "#/$defs/revision_id"}}}
+      }]
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service_id", "service_revision_id", "service_identity_sha256"],
+      "properties": {
+        "service_id": {"$ref": "#/$defs/service_id"},
+        "service_revision_id": {"$ref": "#/$defs/revision_id"},
+        "service_identity_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "service_id", "state", "current", "resource_version", "updated_at"],
+      "properties": {
+        "schema_version": {"const": "local-indexing-service-status/1.0"},
+        "service_id": {"$ref": "#/$defs/service_id"},
+        "state": {"enum": ["ACTIVE", "DISABLED"]},
+        "current": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/reference"}]},
+        "resource_version": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+        "updated_at": {"$ref": "#/$defs/utc"}
+      },
+      "allOf": [{
+        "if": {"properties": {"state": {"const": "ACTIVE"}}},
+        "then": {"properties": {"current": {"$ref": "#/$defs/reference"}}}
+      }]
+    }
+  }
+}
