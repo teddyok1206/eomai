@@ -315,6 +315,8 @@ grant나 자동 갱신 활성화는 아닙니다. 실제 잠금 초과 오류가
 (기존 신원29·새 SQL 의미13)가 PASS했습니다. 테스트용 OS/서비스 seam과 실제 DB owner
 검증을 운영 Catalog 로그인으로 확대 해석하지 않습니다. 전용 서비스 설치·자료 grant·
 진짜 seed/delta/조회와 CPU/GPU 비교는 아직 남아 있으며 운영 활성화 완료는 아닙니다.
+전체 source 회귀2,104개·strict mypy40 모듈·Ruff74 파일과3개 wheel/RECORD·독립
+wheel-only34 모듈 import도 PASS했습니다. 새 인증 경계는 소스·패키지 후보 검증입니다.
 [신원·runtime 경계와 검증 범위](docs/architecture/LOCAL_INDEXING_SERVICE_AUTHORITY_DESIGN.md)에
 정확히 구분했습니다.
 

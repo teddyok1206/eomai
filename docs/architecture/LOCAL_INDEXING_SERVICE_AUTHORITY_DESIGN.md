@@ -357,3 +357,16 @@ Initial runtime-fixture failures remain in
 write from the developer umask. The fixture now sets nonwritable modes; production
 ownership/write-bit checks were not weakened. No actual runtime grant was tested
 by that fixture correction.
+
+Package candidate `40e130d362898731a09c233bac482f08a1ee2ba8` also passes the normal
+three-wheel build/RECORD and installed simulation gate. Its fixed dist is
+`/tmp/eom-api-build/40e130d362898731a09c233bac482f08a1ee2ba8.0t5hh9/dist`.
+An independent immutable operator interpreter `-I -B` imports34 named modules from
+those wheels, resolves the packaged local-only schema references, verifies the SQL
+body/schema hashes and refuses ambient-process runtime admission. No repository
+module, DB/session, service installation or model/GPU execution is used by that
+probe. QUERY global admission remains UNOFFERED. Logs:
+`local-indexing-service-auth-wheel-build.log` and
+`local-indexing-service-auth-wheel-import.log` in the same evidence directory.
+Production API readiness was read-only READY at2026-10-14 05:10:43 UTC; this is a
+service health observation, not acceptance or activation of the new boundary.
