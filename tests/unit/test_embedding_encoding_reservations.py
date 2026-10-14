@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from inspect import Parameter, signature
+from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import MagicMock, Mock
 
@@ -186,6 +187,20 @@ def test_required_owner_admission_has_no_default_or_null_fallback() -> None:
     assert (
         signature(EmbeddingEncodingReservations).parameters["admission"].default is Parameter.empty
     )
+
+
+@pytest.mark.parametrize("fault", ["no_root", "inactive_root", "savepoint", "dialect", "owner"])
+def test_protocol_preparation_refuses_nonowner_or_nonroot_before_insert(fault: str) -> None:
+    session = Mock(spec=Session)
+    session.get_transaction.return_value = (
+        None if fault == "no_root" else SimpleNamespace(is_active=fault != "inactive_root")
+    )
+    session.in_nested_transaction.return_value = fault == "savepoint"
+    session.get_bind.return_value.dialect.name = "sqlite" if fault == "dialect" else "postgresql"
+    session.scalar.return_value = fault != "owner"
+    with pytest.raises(EmbeddingEncodingReservationError, match="PROTOCOL_OWNER_REQUIRED"):
+        EmbeddingEncodingReservationStorage.prepare_protocol(session)
+    session.execute.assert_not_called()
 
 
 def test_reservation_fences_exact_scope_before_writes_and_late_before_commit(

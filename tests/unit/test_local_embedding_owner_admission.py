@@ -408,7 +408,19 @@ def test_claim_does_not_reinterpret_expired_previous_execution_as_safe(
 
 
 @pytest.mark.parametrize(
-    "history", ["valid", "missing", "unallocated", "failed", "bad_step", "denied"]
+    "history",
+    [
+        "valid",
+        "missing",
+        "missing_completed",
+        "missing_job",
+        "missing_output",
+        "missing_empty_output",
+        "unallocated",
+        "failed",
+        "bad_step",
+        "denied",
+    ],
 )
 def test_expired_claim_can_only_rejoin_verified_original_context(
     source: OwnerFixture, monkeypatch: pytest.MonkeyPatch, history: str
@@ -418,7 +430,21 @@ def test_expired_claim_can_only_rejoin_verified_original_context(
     request = source.scope.request
     step = SimpleNamespace(
         step_run_id="steprun_" + "e" * 32,
-        state="FAILED" if history == "bad_step" else "RUNNING",
+        state=(
+            "FAILED"
+            if history == "bad_step"
+            else "SUCCEEDED"
+            if history == "missing_completed"
+            else "RUNNING"
+        ),
+        platform_job_id="job_" + "e" * 32 if history == "missing_job" else None,
+        output_pointer_manifest=(
+            {"saved": True}
+            if history == "missing_output"
+            else {}
+            if history == "missing_empty_output"
+            else None
+        ),
         step_type="application",
         worker_role=None,
         result_schema="incremental-embedding-result@1.0",
@@ -438,7 +464,7 @@ def test_expired_claim_can_only_rejoin_verified_original_context(
         ),
     )
     original = SimpleNamespace(intent=object())
-    read = Mock(return_value=None if history == "missing" else original)
+    read = Mock(return_value=None if history.startswith("missing") else original)
     coordinator = Mock()
     coordinator.return_value.read.return_value = SimpleNamespace(
         state="FAILED" if history == "failed" else "RUNNING",
@@ -449,7 +475,7 @@ def test_expired_claim_can_only_rejoin_verified_original_context(
     if history == "denied":
         source.deny = True
     try:
-        if history == "valid":
+        if history in {"valid", "missing"}:
             assert (
                 source.owner.resolve_claim(
                     session, command=command, workflow=workflow, request=request
@@ -462,6 +488,8 @@ def test_expired_claim_can_only_rejoin_verified_original_context(
                 workflow_id=workflow.workflow_id,
                 step_run_id=step.step_run_id,
             )
+            if history == "missing":
+                coordinator.assert_not_called()
         else:
             with pytest.raises((WorkflowError, OperatorAuthorizationFenceError)):
                 source.owner.resolve_claim(

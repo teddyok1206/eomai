@@ -21,6 +21,7 @@ from eom_orchestrator.embedding_encoding_reservation_storage import (
     ENCODING_PROTOCOL_VERSION,
     OWNED_EVENT,
     EmbeddingEncodingReservationError,
+    EmbeddingEncodingReservationStorage,
 )
 from eom_orchestrator.embedding_encoding_reservations import (
     EmbeddingEncodingReservations,
@@ -32,6 +33,7 @@ from eom_orchestrator.models import (
     ArtifactRevisionRecord,
     JobEventRecord,
     JobRecord,
+    ProtocolVersionRecord,
 )
 from eom_orchestrator.native_embedding_launch_identity import (
     create_native_embedding_launch,
@@ -65,6 +67,57 @@ from tests.unit.local_embedding_admission_fixtures import NativeAdmissionFixture
 from tests.unit.test_embedding_encoding_reservations import SyntheticAdmission
 
 pytestmark = pytest.mark.integration
+
+
+def test_explicit_protocol_preparation_is_owner_only_exact_and_replayable(
+    guarded_engine: Engine,
+) -> None:
+    # Transactional pg_temp shadow: never delete/change an existing protocol or
+    # immutable history in the disposable application schema.
+    with guarded_engine.connect() as connection:
+        connection.exec_driver_sql(
+            "CREATE TEMP TABLE protocol_versions "
+            "(LIKE app.protocol_versions INCLUDING ALL) ON COMMIT DROP"
+        )
+        with Session(bind=connection) as session:
+            with pytest.raises(EmbeddingEncodingReservationError, match="PROTOCOL_UNAVAILABLE"):
+                EmbeddingEncodingReservationStorage.require_protocol(session)
+            assert session.scalar(select(func.count()).select_from(ProtocolVersionRecord)) == 0
+            EmbeddingEncodingReservationStorage.prepare_protocol(session)
+            EmbeddingEncodingReservationStorage.prepare_protocol(session)
+            assert session.scalar(select(func.count()).select_from(ProtocolVersionRecord)) == 1
+            session.execute(
+                text("UPDATE pg_temp.protocol_versions SET schema_sha256=:hash"),
+                {"hash": "sha256:" + "f" * 64},
+            )
+            with pytest.raises(EmbeddingEncodingReservationError, match="PROTOCOL_UNAVAILABLE"):
+                EmbeddingEncodingReservationStorage.prepare_protocol(session)
+            assert session.get(ProtocolVersionRecord, ENCODING_PROTOCOL_VERSION).schema_sha256 == (
+                "sha256:" + "f" * 64
+            )
+        connection.rollback()
+
+
+def test_actual_nonowner_database_login_cannot_prepare_protocol(guarded_engine: Engine) -> None:
+    state = validate_state_directory(Path(os.environ["EOM_API_TEST_STATE"]))
+    manifest = DisposableManifest.load(state / "manifest.json")
+    values = dict(line.split("=", 1) for line in (state / "runtime.env").read_text().splitlines())
+    url = make_url(values["EOM_API_DATABASE_URL"])
+    assert url.username == manifest.runtime_role and url.database == manifest.database
+    runtime = build_engine(
+        url.set(query={"options": "-csearch_path=app,pg_catalog"}).render_as_string(
+            hide_password=False
+        )
+    )
+    try:
+        with (
+            Session(runtime) as session,
+            session.begin(),
+            pytest.raises(EmbeddingEncodingReservationError, match="PROTOCOL_OWNER_REQUIRED"),
+        ):
+            EmbeddingEncodingReservationStorage.prepare_protocol(session)
+    finally:
+        runtime.dispose()
 
 
 def _fixture(

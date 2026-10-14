@@ -92,15 +92,19 @@ def population_membership_statement(
 ) -> Select[tuple[KnowledgeSnapshotAnalysisRecord]]:
     """Bound metadata hints by official eligibility; this query grants no access."""
     association = KnowledgeSnapshotAnalysisRecord
-    selection = KnowledgeRetrievalApplicationService.candidate_pool_analysis_statement(
-        scope, allow_answer_bearing=True
+    selection = (
+        KnowledgeRetrievalApplicationService.candidate_pool_analysis_statement(
+            scope, allow_answer_bearing=True
+        )
+        .cte("eligible_snapshot_analyses")
+        .prefix_with("MATERIALIZED", dialect="postgresql")
     )
     return (
         select(association)
+        .join(selection, selection.c.analysis_run_id == association.analysis_run_id)
         .where(
             association.graph_snapshot_revision_id
             == scope.graph_snapshot.graph_snapshot_revision_id,
-            association.analysis_run_id.in_(selection),
         )
         .order_by(association.analysis_run_id)
         .limit(scope.maximum_candidates + 1)

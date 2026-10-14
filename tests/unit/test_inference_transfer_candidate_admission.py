@@ -107,7 +107,7 @@ def test_limit_counts_sources_not_pointer_rows_and_explicitly_marks_truncation()
     assert {candidate.analysis_run_id for candidate in result.candidates} == set(runs[:2])
 
 
-def test_source_class_lifecycle_answer_bearing_filter_precedes_grouped_limit() -> None:
+def test_source_class_lifecycle_answer_bearing_exists_precedes_source_limit() -> None:
     scope = admission_scope(role="EDITOR")
     session = AdmissionSession((), ())
     result = admission_service(scope).admit_read_only_candidate_pool(cast(Session, session), scope)
@@ -121,8 +121,9 @@ def test_source_class_lifecycle_answer_bearing_filter_precedes_grouped_limit() -
     assert "knowledge_node_source_pointers.source_class IN ('PAST_EXAM')" in sql
     assert "items.lifecycle_state = 'ACTIVE'" in sql
     assert "knowledge_analysis_runs.state = 'ACCEPTED'" in sql
-    assert "GROUP BY knowledge_snapshot_analyses.analysis_run_id" in sql
-    assert sql.index("WHERE") < sql.index("GROUP BY") < sql.index("LIMIT 3")
+    assert "GROUP BY" not in sql
+    assert "EXISTS (SELECT knowledge_node_source_pointers.pointer_id" in sql
+    assert sql.index("knowledge_nodes.answer_bearing IS false") < sql.index("LIMIT 3")
     assert "assessment_item_occurrence_references" not in sql
 
 
@@ -156,7 +157,8 @@ def test_occurrence_membership_is_exact_and_prelimit_without_waiving_authority()
     assert "assessment_item_occurrence_references.item_id = item_revisions.item_id" in sql
     assert "knowledge_nodes.answer_bearing IS false" in sql
     assert "knowledge_node_source_pointers.source_class = 'PAST_EXAM'" in sql
-    assert sql.index("EXISTS") < sql.index("GROUP BY") < sql.index("LIMIT 3")
+    assert "GROUP BY" not in sql
+    assert sql.index("EXISTS") < sql.index("LIMIT 3")
     assert "current_revision_id" not in sql
 
 

@@ -74,6 +74,26 @@ def pool_database():
             connection.exec_driver_sql(
                 f"CREATE TEMP TABLE {table} AS SELECT * FROM app.{table} WITH NO DATA"
             )
+        # Preserve the production key lookup shape, especially for the 72k
+        # pointer fixture. CREATE TABLE AS does not copy any source indexes.
+        for table, columns in (
+            ("knowledge_snapshot_analyses", "graph_snapshot_revision_id,analysis_run_id"),
+            ("knowledge_nodes", "graph_snapshot_revision_id,node_id"),
+            ("knowledge_analysis_runs", "analysis_run_id"),
+            ("item_revisions", "item_revision_id"),
+            ("items", "item_id"),
+        ):
+            connection.exec_driver_sql(f"CREATE UNIQUE INDEX ON pg_temp.{table} ({columns})")
+        connection.exec_driver_sql(
+            "CREATE INDEX ON pg_temp.knowledge_node_source_pointers "
+            "(graph_snapshot_revision_id,node_id,analysis_run_id,source_revision_id,"
+            "artifact_revision_id,member_path,anchor_id)"
+        )
+        connection.exec_driver_sql(
+            "CREATE INDEX ON pg_temp.knowledge_node_source_pointers "
+            "(graph_snapshot_revision_id,source_class,source_revision_id)"
+        )
+        connection.exec_driver_sql("SET statement_timeout='20s'")
         connection.execute(
             text("""
             INSERT INTO pg_temp.items(item_id,lifecycle_state)
@@ -160,6 +180,8 @@ def pool_database():
         """),
             {"snapshot": admission_scope().graph_snapshot.graph_snapshot_revision_id},
         )
+        for table in TABLES:
+            connection.exec_driver_sql(f"ANALYZE pg_temp.{table}")
         connection.commit()
         with Session(bind=connection) as session:
             yield session
@@ -247,6 +269,8 @@ def test_real_postgres_prefetch_does_not_count_additive_reports_as_original_targ
     )
     for statement in statements:
         pool_database.execute(text(statement), {"snapshot": snapshot})
+    for table in TABLES:
+        pool_database.execute(text(f"ANALYZE pg_temp.{table}"))
     scope = occurrence_scope(maximum=1024)
     selection = KnowledgeRetrievalApplicationService.candidate_pool_analysis_statement(
         scope, allow_answer_bearing=True
@@ -256,6 +280,37 @@ def test_real_postgres_prefetch_does_not_count_additive_reports_as_original_targ
     assert len(selected) == len(members) == 520
     assert tuple(row.analysis_run_id for row in members) == selected
     assert len({row.source_revision_id for row in members}) == 520
+    # Many matching pointers must not multiply the outer source relation. This
+    # fixture deliberately has no FK, so an orphan node must still be rejected.
+    pool_database.execute(
+        text(
+            "INSERT INTO pg_temp.knowledge_node_source_pointers(pointer_id,"
+            "graph_snapshot_revision_id,analysis_run_id,node_id,anchor_id,source_class) "
+            "SELECT 1040+i,:snapshot,'analysisrun_'||lpad(((i-1)%520+1)::text,32,'0'),"
+            "'knode_'||((i-1)%520+1),'duplicate_'||i,'PAST_EXAM' "
+            "FROM generate_series(1,72800) i"
+        ),
+        {"snapshot": snapshot},
+    )
+    pool_database.execute(text("ANALYZE pg_temp.knowledge_node_source_pointers"))
+    assert tuple(pool_database.scalars(selection)) == selected
+    compiled = str(
+        population_membership_statement(scope).compile(
+            dialect=pool_database.get_bind().dialect, compile_kwargs={"literal_binds": True}
+        )
+    )
+    plan = pool_database.scalar(text("EXPLAIN (ANALYZE, FORMAT JSON, TIMING FALSE) " + compiled))[0]
+    pending = [plan["Plan"]]
+    cte = []
+    while pending:
+        node = pending.pop()
+        pending.extend(node.get("Plans", ()))
+        if node.get("Subplan Name") == "CTE eligible_snapshot_analyses":
+            cte.append(node)
+    assert len(cte) == 1 and cte[0]["Actual Loops"] == 1
+    assert cte[0]["Actual Rows"] == plan["Plan"]["Actual Rows"] == 520
+    # This bounded metadata benchmark is not full source/Artifact acceptance.
+    assert plan["Execution Time"] < 10000
     # Keep the admitted-source limit: a caller budget of519 still exposes a
     # 520th member as overflow rather than silently accepting an incomplete set.
     assert (
@@ -268,6 +323,22 @@ def test_real_postgres_prefetch_does_not_count_additive_reports_as_original_targ
         )
         == 520
     )
+
+
+@pytest.mark.parametrize("allow_answers", [False, True])
+def test_pointer_exists_requires_same_eligible_node_not_just_source_class(
+    pool_database, allow_answers
+):
+    scope = replace(occurrence_scope(maximum=8), analysis_run_ids=("analysisrun_" + "6".zfill(32),))
+    statement = KnowledgeRetrievalApplicationService.candidate_pool_analysis_statement(
+        scope, allow_answer_bearing=allow_answers
+    )
+    expected = ("analysisrun_" + "6".zfill(32),)
+    assert tuple(pool_database.scalars(statement)) == expected
+    pool_database.execute(
+        text("DELETE FROM pg_temp.knowledge_nodes WHERE node_id LIKE 'knode_6_%'")
+    )
+    assert tuple(pool_database.scalars(statement)) == ()
 
 
 def test_real_postgres_occurrence_scope_excludes_canary_and_wrong_historical_revision(

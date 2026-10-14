@@ -1368,18 +1368,30 @@ class KnowledgeRetrievalApplicationService:
         pointer = KnowledgeNodeSourcePointerRecord
         node = KnowledgeNodeRecord
         run = KnowledgeAnalysisRunRecord
-        statement = (
-            select(association.analysis_run_id)
-            .join(
-                pointer,
-                (pointer.graph_snapshot_revision_id == association.graph_snapshot_revision_id)
-                & (pointer.analysis_run_id == association.analysis_run_id),
-            )
+        eligible_pointer = (
+            select(pointer.pointer_id)
+            .select_from(pointer)
             .join(
                 node,
                 (node.graph_snapshot_revision_id == pointer.graph_snapshot_revision_id)
                 & (node.node_id == pointer.node_id),
             )
+            .where(
+                pointer.graph_snapshot_revision_id == association.graph_snapshot_revision_id,
+                pointer.analysis_run_id == association.analysis_run_id,
+                pointer.source_class.in_(scope.source_classes),
+            )
+            .correlate(association)
+        )
+        if not allow_answer_bearing:
+            eligible_pointer = eligible_pointer.where(node.answer_bearing.is_(False))
+        occurrence_scoped = (
+            scope.population_scope == InferenceTransferPopulationScope.OCCURRENCE_BACKED_PAST_EXAM
+        )
+        if occurrence_scoped:
+            eligible_pointer = eligible_pointer.where(pointer.source_class == "PAST_EXAM")
+        statement = (
+            select(association.analysis_run_id)
             .join(run, run.analysis_run_id == association.analysis_run_id)
             .join(
                 ItemRevisionRecord,
@@ -1389,22 +1401,16 @@ class KnowledgeRetrievalApplicationService:
             .where(
                 association.graph_snapshot_revision_id == snapshot_id,
                 association.source_kind == "APPROVED_ITEM_REVISION",
-                pointer.source_class.in_(scope.source_classes),
+                eligible_pointer.exists(),
                 run.state == "ACCEPTED",
                 ItemRecord.lifecycle_state == "ACTIVE",
                 ItemRevisionRecord.revision_state.in_(("APPROVED", "SUPERSEDED", "RETIRED")),
             )
-            .group_by(association.analysis_run_id)
             .order_by(association.analysis_run_id)
             .limit(scope.maximum_candidates + 1)
         )
-        if not allow_answer_bearing:
-            statement = statement.where(node.answer_bearing.is_(False))
         if scope.analysis_run_ids:
             statement = statement.where(association.analysis_run_id.in_(scope.analysis_run_ids))
-        occurrence_scoped = (
-            scope.population_scope == InferenceTransferPopulationScope.OCCURRENCE_BACKED_PAST_EXAM
-        )
         if occurrence_scoped:
             occurrence = AssessmentItemOccurrenceReferenceRecord
             exact_occurrence = (
@@ -1420,7 +1426,7 @@ class KnowledgeRetrievalApplicationService:
             )
             # EXISTS restricts the original population before LIMIT without
             # duplicate placements multiplying sources or waiving authority.
-            statement = statement.where(pointer.source_class == "PAST_EXAM", exact_occurrence)
+            statement = statement.where(exact_occurrence)
         return statement
 
     def _read_candidate_pool(

@@ -21,6 +21,9 @@ from eom_identity_service.local_indexing_runtime import (
     LocalIndexingRuntimePin,
 )
 from eom_orchestrator.database import build_native_embedding_controller_engine
+from eom_orchestrator.embedding_encoding_reservation_storage import (
+    EmbeddingEncodingReservationStorage,
+)
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.native_embedding_index_systemd import FixedNativeIndexLauncher
 from eom_orchestrator.settings import Settings
@@ -119,6 +122,9 @@ def build_local_indexing_service_runtime(
             fence.fence_current_service(session)
             if not catalog_runtime_privileges_ready(session.connection()):
                 raise ValueError("LOCAL_INDEXING_SERVICE_PRIVILEGES_UNAVAILABLE")
+            # A missing deployment prerequisite must fail before any queue claim,
+            # not strand a RUNNING application step at its first allocation.
+            EmbeddingEncodingReservationStorage.require_protocol(session)
         authority = CatalogIndexingRegistrySourceAuthority(
             CatalogLocalIndexingSourceAuthority(
                 KnowledgeRetrievalApplicationService(engine, catalog_settings), fence

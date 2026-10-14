@@ -24,7 +24,8 @@ from eom_workflow.local_embedding_encoding_job import (
 )
 from eom_workflow.schemas import LOCAL_EMBEDDING_SCHEMA_RESOURCES
 from pydantic import BaseModel
-from sqlalchemy import func, insert, select
+from sqlalchemy import func, insert, select, text
+from sqlalchemy.dialects.postgresql import insert as postgres_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -112,6 +113,41 @@ def _is_key_race(error: IntegrityError) -> bool:
 
 class EmbeddingEncodingReservationStorage:
     """One coherent storage leaf, not a scheduler, registry or public permission port."""
+
+    @staticmethod
+    def prepare_protocol(session: Session) -> None:
+        """Explicit deployment-owner initialization, NEVER called by runtime reads.
+
+        Only the actual table-owner login may prepare the released hash. An
+        existing different hash is an error, not an upsert or migration.
+        """
+        root = session.get_transaction()
+        if (
+            root is None
+            or not root.is_active
+            or session.in_nested_transaction()
+            or session.get_bind().dialect.name != "postgresql"
+        ):
+            raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_PROTOCOL_OWNER_REQUIRED")
+        owner = session.scalar(
+            text(
+                "SELECT SESSION_USER = CURRENT_USER AND SESSION_USER = "
+                "pg_catalog.pg_get_userbyid(relation.relowner) "
+                "FROM pg_catalog.pg_class relation "
+                "WHERE relation.oid = 'app.protocol_versions'::regclass"
+            )
+        )
+        if owner is not True:
+            raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_PROTOCOL_OWNER_REQUIRED")
+        expected = next(
+            row[3] for row in LOCAL_EMBEDDING_SCHEMA_RESOURCES if row[0] == "encoding-job"
+        )
+        session.execute(
+            postgres_insert(ProtocolVersionRecord)
+            .values(version=ENCODING_PROTOCOL_VERSION, schema_sha256=expected)
+            .on_conflict_do_nothing(index_elements=[ProtocolVersionRecord.version])
+        )
+        EmbeddingEncodingReservationStorage.require_protocol(session)
 
     @staticmethod
     def require_protocol(session: Session) -> None:

@@ -434,9 +434,21 @@ class CatalogLocalEmbeddingOwnerAdmission:
                 step_run_id=step.step_run_id,
             )
             if launch is None:
+                # Allocation commits the deterministic launch key before ANY
+                # reservation, Artifact publication, staging or numerical start.
+                # Under the existing Workflow/command locks, a still-empty exact
+                # step can therefore re-enter allocation, not restart computation.
+                # The former runner is fenced by expiry and the next generation.
+                if (
+                    step.state == "RUNNING"
+                    and step.platform_job_id is None
+                    and step.output_pointer_manifest is None
+                ):
+                    self.fence_current_actor(session, request)
+                    return scope
                 raise WorkflowError(
                     WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
-                    "native recovery cannot substitute a vanished execution identity",
+                    "native recovery cannot replace a missing launch with existing output",
                 )
             history = NativeEmbeddingCoordinator(launch.intent, request).read(session)
             if not history.records or history.state in {"FAILED", "CANCELLED"}:

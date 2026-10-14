@@ -1,6 +1,6 @@
 # Actual local indexing activation — 2026-10-14
 
-12:23 UTC checkpoint (chronology retained below). Actual control installation and source validation are
+13:08 UTC checkpoint (chronology retained below). Actual control installation and source validation are
 separate from successful seed/delta/QUERY. The full goal remains ACTIVE.
 
 ## Actual changes
@@ -338,3 +338,43 @@ Memory stayed within the existing1GiB unit limit (reclaim reached its cap). Keep
 this measured preparation cost visible for later batching/profiling, not a reason
 to skip evidence, current permission or late fences. Native execution/commit,
 delta/reuse/QUERY, automatic full coverage, consumers and CPU/GPU remain pending.
+
+## First execution stopped before native allocation — 13:08 UTC
+
+The same invocation reached RUNNING/encode_batch at12:37:54, then stopped at
+12:44:35 with `EMBEDDING_ENCODING_PROTOCOL_UNAVAILABLE`. A12:57:48 read-only
+inventory proves the protocol row is absent, native launch/encoding Job counts0,
+all four vector/binding/index counters0. The original START is PROCESSING with
+expired generation1; the Workflow remains RUNNING, not successful or terminal.
+No new Workflow/key or direct row repair has been submitted.
+
+The exact metadata population query still hit its10s execution timeout after
+column-only planner-statistics maintenance. A proposed EXISTS-only rewrite and
+then a plain derived-table JOIN also failed the synthetic PostgreSQL scale gate;
+those failed observations remain in evidence and were not installed. Bounded
+MATERIALIZED selection plus a keyed hydration JOIN passes, retaining canonical
+source/lifecycle/occurrence/answer/limit rules. The fixture includes520 bases,
+520 additive reports and72,800 duplicate pointers; actual EXPLAIN ANALYZE asserts
+one selection evaluation and520 output rows. This is not a live source latency
+or numerical seed PASS.
+
+The source correction also provides explicit actual-table-owner-only exact
+protocol initialization, a read-only startup prerequisite before any claim, and
+same-authority preallocation recovery only when the exact RUNNING step has no
+committed launch, platform Job or output (strict NULL). Allocated/failed/missing
+output histories remain denied or use their existing exact recovery rules.
+
+Verification: broader focused1425 PASS/115.93s; bounded SQL/chat/query68
+PASS/13.80s; actual owner/nonowner/protocol/reservation11 PASS/12.63s; native
+stage/queue/concurrency67 PASS/44.60s; strict mypy5 source files PASS. After the
+strict-NULL refinement, owner-focused28 PASS/7.61s. These overlapping gates are
+not an additive total. No migration/index/DB privilege/worker protocol change.
+
+The current service pins Identity revision9 and the old runtime/grant in its
+immutable request. Activating a new source revision does NOT authorize treating
+that old request as the new Identity. Keep its original request/history and the
+stopped service until an explicit supported handoff; do not silently replace
+actor/policy pins or submit a successor to hide the nonterminal original.
+See `../architecture/LOCAL_INDEXING_SELECTION_AND_INITIALIZATION.md` and
+`../operations/GRAPH_QUERY_STATISTICS_MAINTENANCE.md` for scope and evidence.
+The full seed/delta/query/GPU goal remains ACTIVE and incomplete.
