@@ -184,6 +184,7 @@ def test_1024_members_share_one_manifest_hash_map_and_three_sql_queries(
 
     monkeypatch.setattr(module, "content_sha256", count_manifest)
     context = PinnedArtifactReadContext(cast(Session, session), settings)
+    context.MAX_RETAINED_BYTES = 512
     context.prefetch(((str(arguments["artifact_id"]), revision.revision_id),))
     for descriptor in files:
         context.read_member(
@@ -195,4 +196,61 @@ def test_1024_members_share_one_manifest_hash_map_and_three_sql_queries(
             media_type=descriptor["media_type"],
             max_bytes=1024,
         )
+        assert context._retained_bytes <= 512
     assert calls == 1 and len(session.statements) == 3 and session.get_calls == 0
+    assert len(context._seen_members) == 1024 and len(context._members) < 1024
+
+
+def _eviction_fixture(tmp_path: Path):
+    original, settings, arguments = _fixture(tmp_path)
+    revision = original.get(ArtifactRevisionRecord, str(arguments["artifact_revision_id"]))
+    assert revision is not None
+    requests = [arguments]
+    for number in range(1, 4):
+        name = f"evidence/value-{number}.json"
+        payload = f'{{"value":{number}}}'.encode()
+        (Path(revision.nas_path) / name).write_bytes(payload)
+        revision.manifest["files"].append(
+            {
+                "file_name": name,
+                "bytes": len(payload),
+                "sha256": sha256_bytes(payload),
+                "schema_ref": arguments["schema_ref"],
+                "media_type": "application/json",
+            }
+        )
+        requests.append(arguments | {"member_path": name, "sha256": sha256_bytes(payload)})
+    revision.manifest_hash = content_sha256(revision.manifest)
+    session = MetadataSession(*original.records.values())
+    context = PinnedArtifactReadContext(cast(Session, session), settings)
+    context.MAX_RETAINED_BYTES = 2 * len(b'{"value":1}')
+    context.prefetch(((str(arguments["artifact_id"]), revision.revision_id),))
+    return context, requests, revision
+
+
+def test_lru_eviction_rereads_bytes_and_rejects_tampering(tmp_path: Path, monkeypatch):
+    context, requests, revision = _eviction_fixture(tmp_path)
+    physical_hash = Mock(wraps=module.sha256_file)
+    monkeypatch.setattr(module, "sha256_file", physical_hash)
+    for number in (0, 1, 0, 2):
+        context.read_pinned(**requests[number])
+    assert physical_hash.call_count == 3
+    assert [key[2] for key in context._members] == [requests[n]["member_path"] for n in (0, 2)]
+    context.read_pinned(**requests[1])
+    assert physical_hash.call_count == 4
+    assert context._retained_bytes <= context.MAX_RETAINED_BYTES
+    # Reading 1 evicted 0. Reopening 0 must not use an old validation flag.
+    (Path(revision.nas_path) / str(requests[0]["member_path"])).write_bytes(b"tampered")
+    with pytest.raises(PinnedArtifactResolutionError, match="materialization"):
+        context.read_pinned(**requests[0])
+
+
+def test_eviction_does_not_reset_distinct_member_budget(tmp_path: Path):
+    context, requests, _revision = _eviction_fixture(tmp_path)
+    context.MAX_RETAINED_BYTES //= 2
+    context.MAX_MEMBERS = 3
+    for number in (0, 1, 0, 2, 1):
+        context.read_pinned(**requests[number])
+    assert len(context._members) == 1 and len(context._seen_members) == 3
+    with pytest.raises(PinnedArtifactResolutionError, match="member budget"):
+        context.read_pinned(**requests[3])

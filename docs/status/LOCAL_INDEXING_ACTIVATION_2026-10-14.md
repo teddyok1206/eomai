@@ -208,3 +208,20 @@ canonical rejection of corrupt result bytes, and missing canonical page denial.
 This correction is not a completed seed. The installed69e808dd unit remains
 failed/Restart=no, not enabled for boot. No new model dispatch or committed
 encoding/binding/index is established by that invocation.
+
+## Canonical source progressed to bounded-retention failure
+
+Source895cb571 installed and activated as revision7/resource-version14, with
+controls`/var/lib/eom-local-indexing-activation.895cb571-tupof7sz`.
+Invocation`e840276786e740c7853cd3683ea38792` started11:21:04UTC, then stopped
+11:22:49 at`pinned_artifact_resolution:553`:128MiB retained-payload cache exceeded.
+This is not another missing Artifact and does not justify skipping PDF/PNG
+validation. Actual11:23:06 metadata still shows encoding/binding/index counts0
+and no service Workflow. API/shared runtime, DB0055 and original services stay
+unchanged. Owner unit failed with Restart=no; there is no automatic retry.
+
+Use bounded request-local LRU eviction, not a higher memory cap, for validated
+materializations. Keep the distinct-member budget independent of cache eviction
+and physically revalidate evicted bytes. Source tests197 PASS and separate
+runtime/dependency93 PASS belong to895cb571; the retention correction needs its
+own tests and installed acceptance before being considered effective.

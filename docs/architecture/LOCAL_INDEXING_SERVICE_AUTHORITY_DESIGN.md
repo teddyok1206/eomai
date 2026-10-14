@@ -808,3 +808,25 @@ Original per-source current approval, lineage, hash/media/schema and late servic
 fences remain mandatory. Missing/ambiguous/oversized closure fails explicitly;
 no latest substitution, automatic retry or alternate reader. A lazy fallback is
 simpler but breaks the caller-root batching and closed-resolution invariants.
+
+### Request-local retention is not aggregate corpus admission
+
+Actual bounded source capture exceeded the128MiB byte-retention cache while
+validating canonical original PDF/PNG evidence. Do not enlarge the cache or
+waive source verification. The same Catalog root reader uses an OrderedDict LRU
+for immutable materializations and a bounded set for distinct member identities.
+Indexed metadata remains canonical for this root, and every use rechecks current
+approval/producer provenance; an evicted member must pass physical file/hash/
+descriptor checks again. Single-member size,4096revision and8192distinct-member
+limits remain unchanged. Neither this cache nor its seen set grants permission.
+
+Reads are O(1) cache lookup with O(1) eviction per removed entry; total eviction
+work is amortized O(reads). Retained payload is at most128MiB plus the existing
+bounded single-read materialization overhead, not the sum of corpus bytes.
+No DB/schema/protocol/index or other-owner transaction changes. The cache dies
+with its caller root, so there is no invalidation/background framework. On
+validation failure, propagate the same explicit error; eviction never substitutes
+latest bytes. A fail-on-total-bytes cache is simpler but incorrectly rejects a
+valid bounded corpus; unbounded retention or a larger arbitrary limit is unsafe.
+Synthetic1024-member coverage asserts bounded retention and no additional SQL;
+LRU/tamper/distinct-budget cases protect reread and lifecycle invariants.

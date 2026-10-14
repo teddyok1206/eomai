@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import stat
+from collections import OrderedDict
 from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -400,7 +401,10 @@ class PinnedArtifactReadContext:
         self._thread_id = get_ident()
         self.settings = settings
         self._metadata: dict[tuple[str, str], _CapturedArtifactMetadata] = {}
-        self._members: dict[tuple[str, str, str, str, str, str], PinnedArtifactMember] = {}
+        self._members: OrderedDict[tuple[str, str, str, str, str, str], PinnedArtifactMember] = (
+            OrderedDict()
+        )
+        self._seen_members: set[tuple[str, str, str, str, str, str]] = set()
         self._retained_bytes = 0
 
     def require_session(self, session: Session) -> None:
@@ -545,12 +549,17 @@ class PinnedArtifactReadContext:
         key = artifact_id, artifact_revision_id, member_path, sha256, schema_ref, media_type
         cached = self._members.get(key)
         if cached is None:
-            if len(self._members) >= self.MAX_MEMBERS:
+            if key not in self._seen_members and len(self._seen_members) >= self.MAX_MEMBERS:
                 raise PinnedArtifactResolutionError("pinned Artifact member budget is exceeded")
             descriptors = captured.members.get(member_path, ())
             size = descriptors[0].get("bytes") if len(descriptors) == 1 else None
-            if type(size) is int and self._retained_bytes + size > self.MAX_RETAINED_BYTES:
+            if type(size) is int and size > self.MAX_RETAINED_BYTES:
                 raise PinnedArtifactResolutionError("pinned Artifact byte budget is exceeded")
+            # Retention is a memory bound, not a corpus-size admission limit.
+            # Evicted bytes must pass the same physical checks on their next use.
+            while type(size) is int and self._retained_bytes + size > self.MAX_RETAINED_BYTES:
+                _evicted_key, evicted = self._members.popitem(last=False)
+                self._retained_bytes -= len(evicted.payload)
         member = _resolve_pinned_artifact_member(
             self._session,
             self.settings,
@@ -568,12 +577,12 @@ class PinnedArtifactReadContext:
             materialized=cached,
         )
         if cached is not None:
+            self._members.move_to_end(key)
             return member
-        if len(self._members) >= self.MAX_MEMBERS:
-            raise PinnedArtifactResolutionError("pinned Artifact member budget is exceeded")
         if self._retained_bytes + len(member.payload) > self.MAX_RETAINED_BYTES:
             raise PinnedArtifactResolutionError("pinned Artifact byte budget is exceeded")
         self._members[key] = member
+        self._seen_members.add(key)
         self._retained_bytes += len(member.payload)
         return member
 
