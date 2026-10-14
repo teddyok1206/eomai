@@ -142,7 +142,7 @@ Final DB inspection: marker/owner PASS,0055,0 other connections, read-only.
 Final follow-up regression: **88 suites /2,370 PASS** in306.40s. Strict mypy69 source
 modules, Ruff lint/format120 Python files, additional disposable-tooling89 source
 tests, shell syntax and diff checks PASS. The new unit cases are included in that
-2,370, not summed again. Package evidence is added after its build gate completes.
+2,370, not summed again.
 Evidence in the same directory:
 
 - `local-embedding-reconcile-focused{,-reviewed}.log`
@@ -164,3 +164,13 @@ fallback, distinguishes the new unattended path. All original failed logs remain
 This is a callable source application, **not an activated automatic service**.
 Actual installed entry/provider, least-privilege admission, bounded genuine seed,
 source-add delta, replay/QUERY, consumers and CPU/GPU comparison remain required.
+
+Code candidate `703f05571c43a9c843d6d393a1b2ca2c7a9e41bc` built all3 wheels with
+RECORD verification PASS. Fixed dist:
+`/tmp/eom-api-build/703f05571c43a9c843d6d393a1b2ca2c7a9e41bc.S3gsS6/dist`.
+The existing immutable interpreter under `-I -B` imported the prior named modules
+and new reconciliation application from these wheels only. Successor schema/ref
+closure, old audit-only rejection, frozen observations, no default authority and
+the distinct observed-time/fixed-time publication APIs PASS. No source checkout,
+package installation, DB connection, unit change or numerical execution occurred.
+Evidence: `local-embedding-reconcile-wheel-{build,import}.log` in the same directory.
