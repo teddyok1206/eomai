@@ -72,6 +72,8 @@ from eom_api.services.pdf_document_review_service import PdfDocumentReviewApplic
 from eom_api.services.pdf_upload_stager import PdfUploadStager
 from eom_api.services.preset_model_selection_adapter import PresetModelSelectionAdapter
 from eom_api.services.query_adapter import QueryAdapter
+from eom_api.services.similarity_context_client import CatalogSimilarityContextClient
+from eom_api.services.similarity_context_read import SimilarityContextReadApplicationService
 from eom_api.settings import ApiSecrets, ApiSettings, load_secrets, load_settings
 
 
@@ -104,6 +106,9 @@ class AppServices:
         self.catalog_application = CatalogApplicationClient()
         self.inference_transfer_metadata = InferenceTransferMetadataApplicationService(
             CatalogInferenceTransferMetadataClient()
+        )
+        self.similarity_context_reads = SimilarityContextReadApplicationService(
+            CatalogSimilarityContextClient()
         )
         self.inference_transfer_snapshots = InferenceTransferSnapshotApplicationService(
             CatalogInferenceTransferSnapshotClient()

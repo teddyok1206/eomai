@@ -2527,3 +2527,87 @@ contracts `23a57ed25f270f69095eb32471ef5b15d8b03c11b72ca1475bc1c4f848b46f25`;
 API `9e3d29a273ad6d557bceef4bd62a8e9509b8fd7126c08546ab47c298144088ba`.
 Evidence suffixes: `release-build.log`, `owner-pair-proof.log`, `three-wheel-proof.log`
 under the same runtime evidence prefix. The candidate is pushed, not installed.
+
+## 28. Authenticated API common-context read — design before implementation
+
+1. Boundary: reuse the existing inference-transfer router, API authentication and
+   private Catalog client; this readonly operation launches/submits nothing.
+2. Canonical source: exact completed Workflow/QUERY and current Catalog source read,
+   not the public body or an API-side database/NAS/embedding search.
+3. Identity: public body is only the existing three-field immutable selector.
+4. Checks: actual authenticated actor and current read permissions first; exact
+   selector/context hash and closed result/error validation before returning.
+5. Access: one fixed Catalog RPC per read; repeats reauthorize rather than cache.
+6. Structures: existing frozen selector/context, small error-status map; no storage,
+   queue, idempotency claim, token persistence, new schema family or dependency.
+7. Scale: public selector body at most4KiB; existing context/frame bounds apply.
+8. Concurrency: independent ordinary authenticated requests and Catalog roots; no
+   API transaction/lease survives network or model execution because neither starts.
+9. Ownership: router handles presentation limits; API use case supplies actual
+   actor and permission checks; Catalog retains source/Artifact/Identity authority.
+10. Failure: expired login/denied/missing or corrupt pins/unavailable owner are safe
+    explicit errors. No latest, model retry, stale context or partial result fallback.
+11. Alternative: a new search API/framework or direct Catalog DB access would
+    duplicate the completed common read and breach the existing owner boundary.
+
+This first approved-reference binding requires past-exam/source read permissions,
+matching the currently admitted PAST_EXAM_VARIATION adapter. It is not new-item
+generation, worker-tool activation or proof that the production reader is enabled.
+Export and compare the actual OpenAPI snapshot after adding the readonly route;
+preserve all released predecessor schemas and existing mutation semantics.
+
+### 28.1 Implemented API/read gate — 2026-10-14 UTC
+
+The existing router now exposes readonly POST
+`/api/v1/knowledge/inference-transfer/similarity-context`, operation
+`inference_transfer_similarity_context_read`. Its only public body is the canonical
+three-field selector. The existing application composition injects the fixed Catalog
+client and actual authenticated operator; it does not construct a Catalog/native
+owner in the API. Existing comparison1.0/1.1 and this read share one public
+`authorize_inference_transfer_read` rule. The current past-exam binding additionally
+requires CONTENT_INTAKE_READ before dispatch. No workflow start/approval/claim or
+Idempotency-Key is used. Repeat reads reauthorize; successful responses use no-store.
+
+A reproduced seven-case input regression showed that the canonical model's JSON
+Schema exception was not an HTTP/Pydantic input exception. The API contract now
+inherits that exact selector and wraps only schema-validation exceptions into a
+generic input ValueError. It duplicates no fields/rules, relaxes no schema and adds
+no global exception handler that could misclassify corrupt owner results as client
+errors. Missing/extra/invalid authority or pointer fields return safe422 rather
+than an internal exception. Owner/result validation still has its separate closed
+403/409/422/503 meaning and returns no partial context on failure.
+
+Final13-file source gate: **308 PASS /85.28s**, strict mypy5, Ruff/format7 and diff
+checks PASS. This includes actual FastAPI parsing/routing/OpenAPI, synthetic
+authenticated identities and Catalog ports, original metadata/snapshot/comparison/
+retry regressions, actual temporary private socket/file/SQLite read cases and
+resource/dependency guards. These are not live token/session, source or operator-RPC
+acceptance. The earlier38, initial31 PASS/7 FAIL and previous308 execution overlap
+the final gate and are not additional totals; failure logs remain preserved.
+The sole warning is the existing Starlette/httpx TestClient deprecation, not a
+new dependency problem or reason to change runtime packages.
+
+The actual offline OpenAPI exporter regenerated the snapshot/hash. Its raw SHA is
+`6aa72d9da03a0fe4245601b9fea04a8adfa99d7453dc93c79224ecf5133dbe09`;
+the existing breaking-change comparator reports no predecessor break. Route versus
+snapshot equality and deterministic export also pass. The Identity provider's pinned
+`eom_api/lifespan.py` member changes in this candidate, so future installation must
+admit the exact new compatible provider release, not reuse old loaded-code evidence.
+
+Evidence prefix: `/tmp/eom-identity-provider-install.nAaycoDM/similarity-read-api-`;
+`acceptance-final.log`, `mypy-final.log`, `openapi-export-final.log`,
+`openapi-compatibility.log` and preserved initial/focused logs.
+At21:33:38 UTC both original QUERY processes were S+ in the same live pane and its
+log still ended at the original Studio-input gate. This respected the30-minute
+cadence; no restart, new login request, capture or native forward occurred.
+
+No production install, DB/schema/migration, Identity grant, control/Pack, native
+execution or GPU operation changed. The public read connection is not automatic
+item-start preparation, a worker tool or live activation. Next actual steps remain
+genuine QUERY/replay, independently admitted Catalog configuration/function, compatible
+API/provider release and exact-reference item preparation/role activation. In
+particular the root-only native provider observation must not be simulated inside
+the unprivileged API/Catalog or bypassed to force new QUERY submission to succeed.
+Use the existing supported Orchestrator/native boundary; do not expand INDEX
+authority or add a parallel queue/root broker. All original consumers, continuous
+coverage and measured device/default requirements remain in the active full goal.

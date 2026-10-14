@@ -14,6 +14,7 @@ from eom_api_contracts.inference_transfer import (
     InferenceTransferWorkflowReadResult,
     InferenceTransferWorkflowReadResultV11,
 )
+from eom_api_contracts.similarity_context import SimilarityContextReadSelection
 from eom_catalog_contracts.inference_transfer_invocation import InferenceTransferWorkflowReadMode
 from eom_catalog_contracts.inference_transfer_metadata import (
     MAX_METADATA_FRAME_BYTES,
@@ -24,16 +25,52 @@ from eom_catalog_contracts.inference_transfer_snapshot import (
     InferenceTransferSnapshotRequest,
     InferenceTransferSnapshotResult,
 )
+from eom_catalog_contracts.similarity_context import SimilarityContext
 from eom_identifiers import content_sha256
 from eom_operator_identity import PermissionKey
-from fastapi import APIRouter, Depends, Path, Query, Request
+from fastapi import APIRouter, Depends, Path, Query, Request, Response
 from pydantic import ValidationError
 
 from eom_api.dependencies import Auth, ExpectedVersion, IdempotencyKey, require_permission
 from eom_api.errors import ApiError
 from eom_api.routers.common import one, run_command
+from eom_api.services.similarity_context_read import MAX_PUBLIC_SIMILARITY_SELECTOR_BYTES
 
 router = APIRouter(tags=["inference-transfer"])
+
+
+@router.post(
+    "/knowledge/inference-transfer/similarity-context",
+    operation_id="inference_transfer_similarity_context_read",
+    response_model=SingleResponse[SimilarityContext],
+    dependencies=[Depends(require_permission(PermissionKey.KNOWLEDGE_GRAPH_RETRIEVE))],
+    openapi_extra={
+        "x-eom-read-only": True,
+        "x-eom-additional-permissions": [
+            PermissionKey.WORKFLOW_READ.value,
+            PermissionKey.ITEM_READ.value,
+            PermissionKey.KNOWLEDGE_ANALYSIS_READ.value,
+            PermissionKey.CONTENT_INTAKE_READ.value,
+        ],
+    },
+)
+async def read_similarity_context(
+    request: Request,
+    body: SimilarityContextReadSelection,
+    response: Response,
+    authentication: Auth,
+) -> SingleResponse[SimilarityContext]:
+    if len(await request.body()) > MAX_PUBLIC_SIMILARITY_SELECTOR_BYTES:
+        raise ApiError(
+            422,
+            "SIMILARITY_CONTEXT_BUDGET_EXCEEDED",
+            "Similarity selector too large",
+            "The exact selector exceeds its fixed public byte budget.",
+        )
+    response.headers["Cache-Control"] = "no-store"
+    return one(
+        request, request.app.state.services.similarity_context_reads.read(authentication, body)
+    )
 
 
 @router.post(

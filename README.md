@@ -387,6 +387,8 @@ API LIVE/READY를 확인했습니다. 이후 인덱싱 전용 신원/자료 정�
 소스에 추가했습니다. 현재 사용자 권한·자료 상태를 재검사하며, API는 벡터나 NAS를
 직접 읽지 않습니다. 기존 Catalog 실행기와 선택적 운영 설정의 연결도 소스에 반영했으며,
 기본값은 꺼짐입니다. 실제 설정 설치·Identity 함수 확인·운영 활성화는 아직 완료하지 않았습니다.
+기존 근거 조회 API에도 인증된 완료 검색 조회를 연결했습니다. 정확한 참조만 받고 매번
+현재 권한으로 확인하는 읽기 전용 경로이며, 새 검색 실행이나 출제 시작 자동 연동은 아닙니다.
 [조회 계약과 검증 경계](docs/architecture/SYSTEM_RAG_SIMILARITY_CONTEXT_IMPLEMENTATION_BOUNDARY.md#26-exact-completed-query-catalog-read-binding--design-before-implementation)를 따릅니다.
 [서비스 Runner 구현·검증 기록](docs/status/LOCAL_INDEXING_RUNNER_SERVICE_CHECKPOINT_2026-10-14.md),
 [현재 Registry checkpoint](docs/status/LOCAL_INDEXING_REGISTRY_SERVICE_CHECKPOINT_2026-10-14.md),

@@ -62,7 +62,7 @@ class InferenceTransferWorkflowReadApplicationService:
     def execute(
         self, authentication: AccessAuthentication, request: InferenceTransferWorkflowReadRequest
     ) -> InferenceTransferWorkflowReadResult:
-        _authorize_read(authentication)
+        authorize_inference_transfer_read(authentication)
         try:
             checked = parse_workflow_read_request(request.model_dump(mode="json"))
         except (ValueError, SchemaError) as exc:
@@ -101,7 +101,7 @@ class InferenceTransferWorkflowReadApplicationService:
         return result
 
 
-def _authorize_read(authentication: AccessAuthentication) -> None:
+def authorize_inference_transfer_read(authentication: AccessAuthentication) -> None:
     required = {
         PermissionKey.WORKFLOW_READ,
         PermissionKey.ITEM_READ,
@@ -126,7 +126,7 @@ class InferenceTransferWorkflowReadApplicationServiceV11:
     def execute(
         self, authentication: AccessAuthentication, request: InferenceTransferWorkflowReadRequestV11
     ) -> InferenceTransferWorkflowReadResultV11:
-        _authorize_read(authentication)
+        authorize_inference_transfer_read(authentication)
         try:
             checked = parse_workflow_read_request_v11(request.model_dump(mode="json"))
         except (ValueError, SchemaError) as exc:
