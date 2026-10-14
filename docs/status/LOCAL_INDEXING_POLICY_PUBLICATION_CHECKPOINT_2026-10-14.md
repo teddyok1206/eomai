@@ -59,6 +59,17 @@ actual read-only inspection transaction. Evidence directory:
 - `local-indexing-policy-publication-final-{mypy,ruff,format,inspect}.log`
 - `local-indexing-policy-publication-final-regression.log`
 
+Installed-candidate boundary: source `70a53c50ac818d8f2598f9383269fd61e46b7c3e`
+build-only produced the three release wheels with RECORD verification PASS. The
+immutable operator interpreter imported41 modules directly from those wheels under
+`-I -B`, without checkout/PYTHONPATH or environment installation. Packaged schema
+hash/local-reference closure, owner publication exports, shared source-policy
+compatibility, and no implicit root/autobegin PASS. This ran no database, runtime
+grant, unit, model or GPU operation. Evidence:
+
+- `local-indexing-policy-publication-wheel-build.log`
+- `local-indexing-policy-publication-wheel-import.log`
+
 Preserved development failures:
 
 - `local-indexing-policy-publication-postgres.log`: prior51 PASS, then10 default

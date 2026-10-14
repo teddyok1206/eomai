@@ -334,6 +334,7 @@ Registry/Runner의 서비스 목적 연결과 운영 활성화는 당시 미구�
 실제 임시 DB70개(기존51+발행19)가 PASS했고, 6회 동시 발행과 잠금 만료 후 재전송을
 확인했습니다. 운영 정책 발행·서비스 활성화·실제 seed/delta/조회는 아직 수행하지 않았습니다.
 최종84-suite 회귀2,283개·strict mypy47 모듈·Ruff86 파일도 PASS했습니다.
+해당 코드의3개 wheel/RECORD 및 독립 wheel-only41 모듈·schema 검증도 PASS했습니다.
 [정책 발행 checkpoint](docs/status/LOCAL_INDEXING_POLICY_PUBLICATION_CHECKPOINT_2026-10-14.md)에
 실행 증거와 남은 Registry/Runner 연결을 구분합니다.
 
