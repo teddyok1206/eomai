@@ -2525,3 +2525,9 @@ read-only였고02:14 UTC 운영 API LIVE/READY도 정상이다. 운영 migration
 `POSTGRES_EMBEDDING_BOUNDARIES=PASS`, `REAL_SEED_DELTA=PENDING`,
 `GENUINE_QUERY_CONSUMER_READ=NOT_ACTIVE`, `QUERY_GLOBAL_ADMISSION=UNOFFERED`.
 실제 자료 seed/delta/reuse/query, service 자동화·소비자 활성화와 CPU/GPU/default gate는 남아 있다.
+
+후속 package proof는 code candidate `af0b042d1658f56ab76a50b874359c72b5122997`의
+기존3개 wheel/RECORD/installed simulation, 격리 wheel-only21-module import·packaged
+schema/hash/ref closure PASS다. 저장 key가 실제 column의32자 제한 안에 들어가고 불변 JSON
+schema와 구분됨을 package에서 확인했다. QUERY global admission도 미허용임을 확인했다.
+이 검증의 실제 설치·DB·auth·model 변경은 없고 문서 후속 커밋과 code candidate를 구분한다.

@@ -675,3 +675,12 @@ performed.
 `POSTGRES_QUERY_CHECK=PASS`, `POSTGRES_QUERY_PERSISTENCE=PASS`,
 `POSTGRES_EMBEDDING_BOUNDARIES=PASS`, `QUERY_GLOBAL_ADMISSION=UNOFFERED`,
 `GENUINE_QUERY_CONSUMER_READ=NOT_ACTIVE`, `REAL_SEED_DELTA=PENDING`.
+
+Code candidate `af0b042d1658f56ab76a50b874359c72b5122997` passed the existing
+three-wheel build/RECORD/installed simulation. An isolated operator `-I -B` run
+imported21 modules from those wheels only, validated the packaged immutable
+checkpoint schema/hash/refs and asserted the distinct registry key fits the model's
+actual32-character column. It also verified global QUERY admission remains
+unoffered. No source import, installation, runtime/database/auth/model mutation
+was used by this package proof. The follow-up documentation commit is separate
+from the inspected code candidate.

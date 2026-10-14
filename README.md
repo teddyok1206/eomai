@@ -281,7 +281,7 @@ SQL 밖에서 계산하고, 원 Job/4개 checkpoint와 지정 producer의4파일
 
 최신60-suite **1,501 PASS**·strict type24·lint/format39·shell/diff PASS입니다.
 실제 임시 Job/Artifact/파일·중단 복구 검증이며 IAM/자료/수치 계산의 합성 seam과 구분합니다.
-code candidate `0d4ad538`의3개 wheel/RECORD·격리21-module import도 PASS했지만 실제
+code candidate `af0b042d`의3개 wheel/RECORD·격리21-module import도 PASS했지만 실제
 설치/활성화는 아닙니다. 문서 후속 커밋과 검증된 code candidate를 구분합니다.
 QUERY 정의/실행 단위는 아직 미허용·미설치이고, 실제 실행·소비자 연결은 후속 검증입니다.
 source head는0054, 운영 DB는0053이며 기존 계약·명령·CPU 설치·서비스는 변경하지 않았습니다.
