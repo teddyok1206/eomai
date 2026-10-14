@@ -16,7 +16,10 @@ from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
 from eom_catalog_service.embedding_registry_catalog_adapter import (
     EmbeddingRegistryOwnerConfiguration,
 )
-from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryError
+from eom_catalog_service.embedding_registry_ports import (
+    EmbeddingRegistryCaller,
+    EmbeddingRegistryError,
+)
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactResolutionError
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.similarity_context_ports import (
@@ -42,6 +45,7 @@ from eom_workflow.reference_query_execution import (
     ReferenceQueryExecutionPolicy,
     ReferenceQueryWorkflowRequest,
     parse_reference_query_execution_policy,
+    parse_reference_query_step_output,
     parse_reference_query_workflow_request,
 )
 from eom_workflow_runner import reference_query_owner_admission as module
@@ -349,6 +353,147 @@ def test_execution_source_fence_requires_exact_current_step(source, monkeypatch,
                 ).request
                 == source.request
             )
+    finally:
+        session.close()
+
+
+@pytest.mark.parametrize(
+    "fault",
+    (
+        None,
+        "caller",
+        "workflow_missing",
+        "definition_missing",
+        "definition_hash",
+        "workflow_running",
+        "workflow_stage",
+        "workflow_key",
+        "step_missing",
+        "step_role",
+        "step_result",
+        "step_attempt",
+        "step_input",
+        "step_output",
+        "step_failed",
+        "step_error",
+        "step_superseded",
+        "producer",
+        "final_pointer",
+        "terminal_missing",
+        "terminal_attempt",
+        "terminal_state",
+    ),
+)
+def test_completed_query_read_requires_exact_terminal_history_not_an_execution_lease(
+    source, monkeypatch, fault
+):
+    session, command, workflow, _lease = mutation_rows(source, monkeypatch)
+    output = parse_reference_query_step_output(
+        seal(
+            case().output.model_dump(mode="json") | {"workflow_id": workflow.workflow_id},
+            "output_sha256",
+        )
+    )
+    step = WorkflowStepRunRecord(
+        step_run_id=output.step_run_id,
+        workflow_id=workflow.workflow_id,
+        step_key="encode_reference_query",
+        step_type="application",
+        worker_role=None,
+        result_schema="embedding-reference-query-result@1.0",
+        attempt=1,
+        state="SUCCEEDED",
+        platform_job_id=output.receipt_owner_job_id,
+        input_pointer_manifest={"workflow_request_sha256": source.request.request_sha256},
+        output_pointer_manifest=output.model_dump(mode="json"),
+    )
+    terminal = WorkflowStepRunRecord(
+        step_run_id="steprun_" + "e" * 32,
+        workflow_id=workflow.workflow_id,
+        step_key="complete",
+        step_type="terminal",
+        attempt=1,
+        state="SUCCEEDED",
+        input_pointer_manifest={},
+    )
+    session.add_all((step, terminal))
+    workflow.state = workflow.stage = "COMPLETED"
+    workflow.current_step_key = "complete"
+    workflow.runtime_context = {
+        "final_pointer_manifest": {"reference_query_receipt": output.model_dump(mode="json")}
+    }
+    # A completed read must not acquire or revive this historical command.
+    command.state = "COMPLETED"
+    command.lease_owner = command.lease_token = command.lease_expires_at = None
+    caller = EmbeddingRegistryCaller(source.request.operator_audit.operator_id)
+    original_get = session.get
+
+    def get(model, *args, **kwargs):
+        if fault == "workflow_missing" and model is WorkflowInstanceRecord:
+            return None
+        if fault == "definition_missing" and model is WorkflowDefinitionRecord:
+            return None
+        return original_get(model, *args, **kwargs)
+
+    def scalar(query, **_kwargs):
+        entity = query.column_descriptions[0]["entity"]
+        if entity is WorkflowInstanceRecord:
+            return workflow
+        assert entity is WorkflowStepRunRecord
+        key = query.compile().params["step_key_1"]
+        if key == "complete":
+            return None if fault == "terminal_missing" else terminal
+        return None if fault == "step_missing" else step
+
+    monkeypatch.setattr(session, "get", get)
+    monkeypatch.setattr(session, "scalar", scalar)
+    if fault == "caller":
+        caller = EmbeddingRegistryCaller("operator_" + "0" * 32)
+    elif fault == "definition_hash":
+        workflow.definition_hash = "sha256:" + "0" * 64
+    elif fault == "workflow_running":
+        workflow.state = "RUNNING"
+    elif fault == "workflow_stage":
+        workflow.stage = "LOCAL_EMBEDDING"
+    elif fault == "workflow_key":
+        workflow.current_step_key = "encode_reference_query"
+    elif fault == "step_role":
+        step.worker_role = "review"
+    elif fault == "step_result":
+        step.result_schema = "incremental-embedding-result@1.0"
+    elif fault == "step_attempt":
+        step.attempt = 2
+    elif fault == "step_input":
+        step.input_pointer_manifest = {}
+    elif fault == "step_output":
+        step.output_pointer_manifest = None
+    elif fault == "step_failed":
+        step.state = "FAILED"
+    elif fault == "step_error":
+        step.error_code = "synthetic failure"
+    elif fault == "step_superseded":
+        step.superseded_by_step_run_id = terminal.step_run_id
+    elif fault == "producer":
+        step.platform_job_id = "job_" + "0" * 32
+    elif fault == "final_pointer":
+        workflow.runtime_context = {}
+    elif fault == "terminal_attempt":
+        terminal.attempt = 2
+    elif fault == "terminal_state":
+        terminal.state = "RUNNING"
+    try:
+        if fault:
+            with pytest.raises((ValueError, WorkflowError)):
+                source.owner.resolve_completed_sources(
+                    session, caller, source.request, workflow_id=workflow.workflow_id
+                )
+        else:
+            current = source.owner.resolve_completed_sources(
+                session, caller, source.request, workflow_id=workflow.workflow_id
+            )
+            assert current.sources.request == source.request and current.output == output
+            assert current.workflow is workflow and current.step is step
+            assert command.state == "COMPLETED" and command.lease_token is None
     finally:
         session.close()
 

@@ -90,7 +90,7 @@ class NativeReferenceQueryHistory:
 def read_native_reference_query_launch(
     session: Session, *, request: ReferenceQueryWorkflowRequest, workflow_id: str, step_run_id: str
 ) -> ReferenceQueryLaunchAssociation | None:
-    """Caller must fence its actual current Workflow/command/source before this lookup."""
+    """Caller fences the actual Workflow and current execution/read authority first."""
     _root(session)
     request = parse_reference_query_workflow_request(request)
     job = session.scalar(

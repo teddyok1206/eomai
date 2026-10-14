@@ -7,10 +7,14 @@ from datetime import UTC, datetime
 from eom_catalog_service.local_embedding_completion_artifacts import (
     resolve_native_reference_query_completion,
 )
-from eom_catalog_service.reference_query_artifact_read import CatalogReferenceQueryArtifacts
+from eom_catalog_service.reference_query_artifact_read import (
+    CatalogReferenceQueryArtifacts,
+    ResolvedReferenceQueryArtifacts,
+)
 from eom_orchestrator.native_embedding_query_handoff import PreparedNativeQuery
 from eom_orchestrator.native_reference_query_coordinator import (
     NativeReferenceQueryCoordinator,
+    NativeReferenceQueryHistory,
     read_native_reference_query_launch,
 )
 from eom_workflow.native_reference_query_coordinator import (
@@ -37,6 +41,7 @@ from eom_workflow_runner.local_embedding_publications import (
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from eom_workflow_runner.reference_query_owner_admission import (
     CatalogReferenceQueryOwnerAdmission,
+    ResolvedReferenceQuerySources,
     build_reference_query_native_input,
     validate_current_reference_query_input,
 )
@@ -46,9 +51,10 @@ from eom_workflow_runner.repository import CommandLeaseIdentity
 class NativeReferenceQueryCompletion:
     """No numerical launch, current-authority cache or storage-only verified read.
 
-    The caller holds an actual current command root. Completed unit observations
-    are immutable provenance: reading a committed result must not rerun the model
-    or require a historical systemd unit to survive forever.
+    Execution callers hold an actual current command root; completed readers hold
+    freshly resolved current read authority and terminal Workflow closure instead.
+    Completed unit observations are immutable provenance: reading a committed
+    result must not rerun the model or require a historical unit to survive forever.
     """
 
     def __init__(self, owner: CatalogReferenceQueryOwnerAdmission) -> None:
@@ -211,6 +217,30 @@ class NativeReferenceQueryCompletion:
             workflow_id=workflow.workflow_id,
             step_run_id=step.step_run_id,
         )
+        self.resolve_publication(
+            session=session, workflow=workflow, step=step, sources=sources, output=output
+        )
+        self.owner.fence_mutation(session, request, command_lease)
+        return output
+
+    def resolve_publication(
+        self,
+        *,
+        session: Session,
+        workflow: WorkflowInstanceRecord,
+        step: WorkflowStepRunRecord,
+        sources: ResolvedReferenceQuerySources,
+        output: ReferenceQueryStepOutput,
+    ) -> tuple[ResolvedReferenceQueryArtifacts, NativeReferenceQueryHistory]:
+        """Shared canonical closure; caller retains actual current owner root and late fence.
+
+        This alone is not the consumer read capability. Before publication the
+        history may legitimately have only three checkpoints; a completed reader
+        additionally requires the exact successful terminal Workflow and fourth
+        checkpoint under freshly resolved read authority.
+        """
+        output = parse_reference_query_step_output(output)
+        request = sources.request
         launch = read_native_reference_query_launch(
             session,
             request=request,
@@ -271,5 +301,4 @@ class NativeReferenceQueryCompletion:
             or executed.result_sha256 != resolved.result.result_sha256
         ):
             raise ValueError("REFERENCE_QUERY_COMPLETION_CURRENT_INPUT_MISMATCH")
-        self.owner.fence_mutation(session, request, command_lease)
-        return output
+        return resolved, history

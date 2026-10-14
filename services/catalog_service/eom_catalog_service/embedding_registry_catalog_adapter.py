@@ -106,6 +106,7 @@ from eom_catalog_service.similarity_context_ports import (
     PreparedSimilarityContext,
     PreparedSimilaritySource,
     SimilarityContextReadError,
+    similarity_context_error_from_registry,
 )
 
 
@@ -484,14 +485,6 @@ class CatalogEmbeddingRegistryVerifier:
             truncated=capture.corpus.truncated,
         )
 
-    @staticmethod
-    def _similarity_read_error(error: EmbeddingRegistryError) -> SimilarityContextReadError:
-        if error.code == "EMBEDDING_REGISTRY_FORBIDDEN":
-            return SimilarityContextReadError("SOURCE_ACCESS_DENIED")
-        if error.code == "EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE":
-            return SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
-        return SimilarityContextReadError("SOURCE_POINTER_INVALID")
-
     def prepare_similarity_context(
         self, caller: EmbeddingRegistryCaller, request: SimilarityContextRequest
     ) -> PreparedSimilarityContext:
@@ -519,7 +512,7 @@ class CatalogEmbeddingRegistryVerifier:
                 _owner, _reader, capture = self._similarity_capture(session, caller, request)
                 return self._prepare_similarity_capture(request, capture)
         except EmbeddingRegistryError as error:
-            raise self._similarity_read_error(error) from None
+            raise similarity_context_error_from_registry(error) from None
 
     def read_similarity_views(
         self,
@@ -575,7 +568,7 @@ class CatalogEmbeddingRegistryVerifier:
                             "EMBEDDING_REGISTRY_FORBIDDEN",
                             "EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE",
                         }:
-                            raise self._similarity_read_error(error) from None
+                            raise similarity_context_error_from_registry(error) from None
                         raise SimilarityContextReadError("INDEX_POINTER_INVALID") from None
                 # READ COMMITTED or shared Session is not immutable source membership.
                 # Re-resolve every current source/report before returning any rows/counts.
@@ -584,7 +577,7 @@ class CatalogEmbeddingRegistryVerifier:
                     raise SimilarityContextReadError("SOURCE_REVOKED")
                 return tuple(results)
         except EmbeddingRegistryError as error:
-            raise self._similarity_read_error(error) from None
+            raise similarity_context_error_from_registry(error) from None
 
     def reauthorize_similarity_context(
         self,

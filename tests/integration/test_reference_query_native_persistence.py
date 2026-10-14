@@ -20,6 +20,7 @@ from sqlalchemy import Engine, func, select
 from tests.integration.test_preset_model_validation_persistence import (
     guarded_engine as guarded_engine,
 )
+from tests.unit.test_reference_query_consumer_read import make_completed_read_case, read
 from tests.unit.test_reference_query_native_executor import ExecutorCase, make_executor_case
 
 pytestmark = pytest.mark.integration
@@ -76,6 +77,14 @@ def test_postgres_query_checkpoint_commit_receipt_and_exact_replay(query):
     history = query.history()
     assert query.execute(generation=2) == output
     assert query.history() == history and len(query.runs) == 1
+    assert_exact_completed_producers(query)
+
+
+def test_postgres_completed_query_read_uses_original_job_and_canonical_members(query, monkeypatch):
+    current = make_completed_read_case(query, monkeypatch)
+    first = read(current)
+    assert read(current) == first and len(query.runs) == 1
+    assert first.request.job_id == query.history().launch.native_launch_job_id
     assert_exact_completed_producers(query)
 
 

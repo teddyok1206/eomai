@@ -56,8 +56,10 @@ from eom_workflow.reference_query_execution import (
     REFERENCE_QUERY_POLICY_REF,
     ReferenceQueryExecutionPolicy,
     ReferenceQueryLaunchAssociation,
+    ReferenceQueryStepOutput,
     ReferenceQueryWorkflowRequest,
     parse_reference_query_execution_policy,
+    parse_reference_query_step_output,
     parse_reference_query_workflow_request,
     validate_reference_query_launch_association,
     validate_reference_query_request_references,
@@ -77,7 +79,10 @@ from eom_workflow_runner.native_command_fence import (
     NativeCommandMutationFence,
     require_unexpired_native_command,
 )
-from eom_workflow_runner.native_step_completion import native_application_step
+from eom_workflow_runner.native_step_completion import (
+    native_application_step,
+    validate_completed_native_workflow,
+)
 from eom_workflow_runner.reference_query_admission import ResolvedReferenceQueryAdmission
 from eom_workflow_runner.repository import (
     CommandLeaseIdentity,
@@ -135,6 +140,16 @@ class ResolvedReferenceQuerySources:
         object.__setattr__(self, "request", request)
         object.__setattr__(self, "policy", policy)
         object.__setattr__(self, "bundle", bundle)
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedCompletedReferenceQuerySources:
+    """Root-local attached records and exact values, never a durable read permission."""
+
+    sources: ResolvedReferenceQuerySources
+    workflow: WorkflowInstanceRecord
+    step: WorkflowStepRunRecord
+    output: ReferenceQueryStepOutput
 
 
 def build_reference_query_native_input(
@@ -437,3 +452,50 @@ class CatalogReferenceQueryOwnerAdmission:
         self.catalog.read_similarity_views_in_session(session, caller, context, prepared)
         self.identity.fence_current_operator(session, caller.operator_id)
         return result
+
+    def resolve_completed_sources(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        request: ReferenceQueryWorkflowRequest,
+        *,
+        workflow_id: str,
+    ) -> ResolvedCompletedReferenceQuerySources:
+        """Current read authority, never a new claim or a completed-command lease."""
+        request = parse_reference_query_workflow_request(request)
+        if (
+            not isinstance(caller, EmbeddingRegistryCaller)
+            or caller.operator_id != request.operator_audit.operator_id
+        ):
+            raise ValueError("REFERENCE_QUERY_READ_CALLER_INVALID")
+        self.identity.fence_current_operator(session, caller.operator_id)
+        workflow = session.get(WorkflowInstanceRecord, workflow_id, populate_existing=True)
+        if workflow is None or object_session(workflow) is not session:
+            raise ValueError("REFERENCE_QUERY_READ_WORKFLOW_MISSING")
+        definition = session.get(WorkflowDefinitionRecord, workflow.definition_id)
+        if definition is None:
+            raise ValueError("REFERENCE_QUERY_READ_DEFINITION_MISSING")
+        validate_reference_query_workflow_submission(
+            session,
+            workflow,
+            definition=definition,
+            request=request,
+            actor_type="human",
+            actor_id=caller.operator_id,
+        )
+        step = native_application_step(session, workflow_id, "encode_reference_query")
+        if step is None or (
+            step.step_type != "application"
+            or step.worker_role is not None
+            or step.result_schema != "embedding-reference-query-result@1.0"
+            or step.attempt != 1
+            or step.input_pointer_manifest != {"workflow_request_sha256": request.request_sha256}
+            or step.output_pointer_manifest is None
+            or step.error_code is not None
+            or step.superseded_by_step_run_id is not None
+        ):
+            raise ValueError("REFERENCE_QUERY_READ_STEP_INVALID")
+        output = parse_reference_query_step_output(step.output_pointer_manifest)
+        validate_completed_native_workflow(session, workflow, step, output)
+        sources = self.resolve_sources(session, request)
+        return ResolvedCompletedReferenceQuerySources(sources, workflow, step, output)

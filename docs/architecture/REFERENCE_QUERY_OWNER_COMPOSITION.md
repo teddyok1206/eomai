@@ -523,3 +523,78 @@ the immutable operator Conda interpreter imported17 QUERY/executor/publication
 modules from those wheels only and validated the packaged checkpoint schema/hash
 and reference closure. No checkout import, installation, database/auth/model/unit
 mutation occurred. This documentation follow-up is not another code release.
+
+## Completed QUERY consumer read — implementation decision
+
+1. Responsibility: a Runner composition adapter implements Catalog's existing
+   `SimilarityReferenceQueryReadPort`; Catalog must not import Runner tables.
+2. Canonical source: the exact completed Workflow, original native Job's four
+   checkpoints, committed receipt and query file set, plus current official sources.
+3. Identity: trusted composition pins one Workflow ID and exact request; it never
+   looks up latest or accepts arbitrary Artifact paths/producer claims from a model.
+4. Resolution: actual captured operator, installed policy/bundle, current source/
+   index preparation, terminal Workflow/step, native admission provenance and all
+   canonical member hashes must match before returning the stronger read value.
+5. Access: primary-key Workflow lookup, unique step lookup, indexed original Job
+   identity and bounded immutable file-set reads. No scan for an equivalent result.
+6. Structures: existing frozen pointers/DTOs and original checkpoint tuple; no new
+   DB table, registry, cache, queue or wire schema. This is an internal read port.
+7. Complexity: bounded preparation/index validation and O(query rows × dimension)
+   file verification; bytes exist only at the declared local numerical boundary.
+8. Transaction: one fresh read root, current identity before any history read and
+   a late identity/source fence before return. No lease acquisition or writes.
+9. Dependencies: Runner composes Catalog/Orchestrator public reads; shared canonical
+   completion logic is reused instead of duplicating storage/lifecycle rules.
+10. Failure: missing/stale/revoked/mismatched/unfinished history fails explicitly;
+    read never starts a unit, creates a Job, repairs history or renews a session.
+11. Simpler alternative: storage-only reading cannot prove actual current authority
+    or genuine QUERY execution. Conversely, requiring a live execution command
+    lease to read a completed result would force unnecessary execution/recovery.
+
+The adapter alone does not offer the QUERY workflow or activate any consumer. Its
+tests distinguish actual temporary Job/Artifact bytes from synthetic IAM/Workflow
+SQL/numerical seams; live source and installed purpose gates remain mandatory.
+
+### Completed-read source implementation
+
+`CatalogCompletedReferenceQueryRead` pins one trusted Workflow/request and implements
+the existing Catalog port. Each call resolves actual current operator and official
+source/control/index scope in a fresh root, checks the exact successful terminal
+Workflow/step and original four-checkpoint native Job, and reads the canonical
+receipt/four-member file set through the existing owner readers. It rechecks the
+current source/terminal closure after materialization before returning the stronger
+read value. There is no latest lookup, cached grant, command acquisition, unit-state
+requirement, numerical invocation, registration or history repair.
+
+`NativeReferenceQueryCompletion.resolve_publication` is shared by completion and
+read composition: storage producer/manifest/hash/current-input derivation checks
+have one implementation. `validate_completed_native_workflow` shares the terminal
+shape/pointer checks with INDEX/QUERY terminal replay. The completed reader alone
+requires the fourth checkpoint; a publisher legitimately validates the first three
+before it appends completion. Scope errors use one public registry-to-context mapping
+at both adapters; Identity/terminal errors become stable context failures, not raw
+Workflow exceptions or uncaught API errors. No old guard was removed.
+
+The guarded PostgreSQL suite now has6 cases, including original completed-query
+read/replay. These remain collection-only; this source implementation does not
+replace the official PostgreSQL/IAM/installed-purpose/model/consumer gates.
+
+`COMPLETED_QUERY_READ_ADAPTER=SOURCE_PASS`,
+`GENUINE_QUERY_CONSUMER_READ=NOT_ACTIVE`, `QUERY_GLOBAL_ADMISSION=UNOFFERED`.
+
+Final60-suite **1,499 PASS**,264.06s; strict mypy24, Ruff/format36, shell syntax
+and diff PASS. The earlier1494/134/69 results overlap and are not summed. Tests
+cover actual temporary Job/Artifact/file reads and immutable original identities;
+current Workflow SQL/IAM and numerical execution remain explicit synthetic seams.
+The6 PostgreSQL cases collected in0.52s and were NOT run; the old13 CHECK cases
+also remain unexecuted. A test-only invalid constant import and old error-message
+compatibility assertions were corrected before the final gate; no invariant or
+negative test was weakened. The shared adapter maps owner/Identity failures into
+stable context errors, and tests cover canonical member corruption, partial/failed
+history, foreign context/operator and revocation/source change during reading.
+
+This work changes no released schema, DB head, installed runtime, service, native
+unit/polkit rule, production Job/Artifact, model/GPU or credentials. Existing live
+canary/session handles were not replaced. Actual seed/delta/reuse/query, compatible
+QUERY installation/admission, automatic service reconciliation, consumer activation
+and CPU/GPU/default policy remain separate required goal gates.

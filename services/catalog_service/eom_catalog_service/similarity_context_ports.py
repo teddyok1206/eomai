@@ -21,6 +21,7 @@ from eom_protocol.artifact_members import ArtifactMemberPointer
 
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
+    EmbeddingRegistryError,
     ResolvedPinnedEmbeddingIndex,
 )
 
@@ -29,6 +30,17 @@ class SimilarityContextReadError(ValueError):
     def __init__(self, code: SimilarityFailureCode) -> None:
         self.code = code
         super().__init__(code)
+
+
+def similarity_context_error_from_registry(
+    error: EmbeddingRegistryError,
+) -> SimilarityContextReadError:
+    """Keep official registry denial/unavailability meanings at both read adapters."""
+    if error.code == "EMBEDDING_REGISTRY_FORBIDDEN":
+        return SimilarityContextReadError("SOURCE_ACCESS_DENIED")
+    if error.code == "EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE":
+        return SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
+    return SimilarityContextReadError("SOURCE_POINTER_INVALID")
 
 
 @dataclass(frozen=True, slots=True)

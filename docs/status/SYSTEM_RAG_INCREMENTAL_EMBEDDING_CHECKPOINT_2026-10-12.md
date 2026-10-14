@@ -2459,3 +2459,27 @@ seed/delta/reuse/query, service 자동 갱신, 공통 소비자, CPU/GPU/default
 checkpoint schema/hash/ref closure를 검증했다. 설치·DB·auth·모델·unit 변경은 없다.
 01:39 UTC 기존 유한 controller는 살아 있으나 원 log는 여전히0 bytes였다. 인증/seed의
 성공으로 해석하지 않으며 기존 세션을 교체하거나 추가 로그인 창을 만들지 않았다.
+
+## 2026-10-14 UTC — 완료된 QUERY의 현재 사용자 조회 source
+
+공통 유사도 context의 기존 read port를 구현했다. 신뢰된 owner가 고정한 Workflow/request를
+현재 사용자로 다시 확인하고, 종료된 Workflow/step·원 native Job의4개 checkpoint·정본
+영수증/4개 파일·현재 입력을 대조한 뒤 반환 직전에 자료/권한을 재확인한다. 완료된 결과를
+읽으려고 새 Job/claim/lease를 만들거나 unit·모델을 다시 실행하지 않는다. 같은 읽기를
+반복해도 실제 임시 Job/Artifact/event 수와 실행 수가 증가하지 않음을 확인했다.
+
+완료 처리와 조회의 정본 검증은 한 구현을 공유하며, INDEX/QUERY terminal replay도 같은
+종료 shape/pointer 검증을 재사용한다. Catalog가 Runner 내부 테이블을 직접 읽지 않는다.
+기존 registry 오류 의미를 public mapping 한 곳에서 재사용하고, 권한/종료 오류가 raw
+Workflow 예외로 API 밖에 나가지 않도록 안정된 context 오류로 반환한다.
+
+최종60-suite **1,499 PASS**,264.06s; strict mypy24·Ruff/format36·shell/diff PASS다.
+앞1494/134/69개 결과는 중복이므로 합산하지 않는다. 실제 임시 Job/Artifact/파일과 합성
+IAM/Workflow SQL/수치 seam을 구분한다. PostgreSQL commit/crash/read/replay는6개 collection
+0.52s만 확인했으며 아직 미실행이다. 이전 CHECK13개도 미실행이며 운영 DB로 테스트하지 않았다.
+
+기존 운영 controller/session을 교체하지 않았고 이 작업의 DB/migration·서비스·unit/polkit·
+운영 Job/Artifact·모델/GPU·credential 변경은0이다. `GOAL=ACTIVE`,
+`COMPLETED_QUERY_READ_ADAPTER=SOURCE_PASS`, `GENUINE_QUERY_CONSUMER_READ=NOT_ACTIVE`,
+`QUERY_GLOBAL_ADMISSION=UNOFFERED`다. 실제 seed/delta/reuse/query, QUERY 호환 설치/admission,
+service 자동 갱신, 소비자 활성화와 CPU/GPU 성능/default gate는 원래 목표대로 남아 있다.

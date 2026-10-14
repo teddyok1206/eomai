@@ -57,6 +57,63 @@ def native_application_step(
     )
 
 
+def _require_terminal_shape(terminal: WorkflowStepRunRecord | None) -> None:
+    if terminal is None or (
+        terminal.attempt != 1
+        or terminal.step_type != "terminal"
+        or terminal.worker_role is not None
+        or terminal.result_schema is not None
+        or terminal.input_pointer_manifest != {}
+        or terminal.output_pointer_manifest is not None
+        or terminal.platform_job_id is not None
+        or terminal.state != StepState.SUCCEEDED.value
+    ):
+        raise WorkflowError(
+            WorkflowErrorCode.LOCAL_EMBEDDING_OUTCOME_INVALID,
+            "native terminal step history differs",
+        )
+
+
+def validate_completed_native_workflow(
+    session: Session,
+    workflow: WorkflowInstanceRecord,
+    step: WorkflowStepRunRecord,
+    output: NativeStepOutput,
+) -> None:
+    """Read-only terminal closure; actual current source/IAM remains the owner's duty."""
+    manifest_key, _event = _TERMINAL_KEYS[output.step_key]
+    if (
+        workflow.state != WorkflowState.COMPLETED.value
+        or workflow.stage != WorkflowStage.COMPLETED.value
+        or workflow.current_step_key != "complete"
+        or output.workflow_id != workflow.workflow_id
+        or step.workflow_id != workflow.workflow_id
+        or step.step_key != output.step_key
+        or step.step_run_id != output.step_run_id
+        or step.state != StepState.SUCCEEDED.value
+        or step.attempt != output.attempt
+        or step.platform_job_id != output.receipt_owner_job_id
+        or step.output_pointer_manifest != output.model_dump(mode="json")
+        or workflow.runtime_context.get("final_pointer_manifest")
+        != {manifest_key: output.model_dump(mode="json")}
+    ):
+        raise WorkflowError(
+            WorkflowErrorCode.LOCAL_EMBEDDING_OUTCOME_INVALID,
+            "native terminal replay pointer differs",
+        )
+    terminal = session.scalar(
+        select(WorkflowStepRunRecord)
+        .where(
+            WorkflowStepRunRecord.workflow_id == workflow.workflow_id,
+            WorkflowStepRunRecord.step_key == "complete",
+        )
+        .order_by(WorkflowStepRunRecord.attempt.desc())
+        .limit(1)
+        .execution_options(populate_existing=True)
+    )
+    _require_terminal_shape(terminal)
+
+
 def complete_native_terminal(
     *,
     workflow_id: str,
@@ -106,6 +163,9 @@ def complete_native_terminal(
                 "native terminal receipt has a different step/producer identity",
             )
         expected = {manifest_key: output.model_dump(mode="json")}
+        if workflow.state == WorkflowState.COMPLETED.value:
+            validate_completed_native_workflow(session, workflow, step, output)
+            return
         terminal = session.scalar(
             select(WorkflowStepRunRecord)
             .where(
@@ -116,16 +176,7 @@ def complete_native_terminal(
             .limit(1)
             .execution_options(populate_existing=True)
         )
-        if workflow.state == WorkflowState.COMPLETED.value:
-            if (
-                workflow.runtime_context.get("final_pointer_manifest") != expected
-                or terminal is None
-            ):
-                raise WorkflowError(
-                    WorkflowErrorCode.LOCAL_EMBEDDING_OUTCOME_INVALID,
-                    "native terminal replay pointer differs",
-                )
-        elif terminal is None:
+        if terminal is None:
             terminal = create_step_run(
                 session,
                 workflow_id=workflow_id,
@@ -140,23 +191,7 @@ def complete_native_terminal(
             transition_step(terminal, StepState.RUNNING)
             transition_step(terminal, StepState.SUCCEEDED)
             terminal.finished_at = datetime.now(UTC)
-        if (
-            terminal is None
-            or terminal.attempt != 1
-            or terminal.step_type != "terminal"
-            or terminal.worker_role is not None
-            or terminal.result_schema is not None
-            or terminal.input_pointer_manifest != {}
-            or terminal.output_pointer_manifest is not None
-            or terminal.platform_job_id is not None
-            or terminal.state != StepState.SUCCEEDED.value
-        ):
-            raise WorkflowError(
-                WorkflowErrorCode.LOCAL_EMBEDDING_OUTCOME_INVALID,
-                "native terminal step history differs",
-            )
-        if workflow.state == WorkflowState.COMPLETED.value:
-            return
+        _require_terminal_shape(terminal)
         workflow.runtime_context = workflow.runtime_context | {"final_pointer_manifest": expected}
         transition_stage(
             session,

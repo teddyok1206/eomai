@@ -171,7 +171,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | 공통 유사도 context 조립 | SOURCE_PASS; 기출변형용 승인 anchor·3개 독립 view·현재 권한 재확인334 PASS, 실제 QUERY 실행·소비자 연결은 미활성 |
 | genuine QUERY 입력·encoder/handoff·실행 계약 | SOURCE_PASS; 현재 자료·정본4파일과 기존 큐의 QUERY별 claim/완료 검증 연결. 실제 고정 unit·정본 실행·소비자 조회는 미활성 |
 | 고정 CPU QUERY 실행 어댑터 | SOURCE_PASS; private/root handoff·공통 capacity·재시작 후 중복 dispatch 차단·정확한 실행 관찰 구현. QUERY unit/polkit은 미설치, 실제 계산은 미검증 |
-| QUERY Job·실행·정본 완료 검증 | SOURCE_PASS; 원 Job/4개 checkpoint·실행기 조립·현재 권한/자료/정본 완료 검증·원 claim 복구 구현. 운영 설치·실제 계산·소비 연결은 미검증 |
+| QUERY Job·실행·정본 완료 조회 | SOURCE_PASS; 원 Job/4개 checkpoint·실행기·원 claim 복구와 현재 권한/정본 완료 조회 구현. 운영 설치·실제 계산·소비 활성화는 미검증 |
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
 | 인증된 owner/session 전달 | 수신 API 설치·실제 UID990의 provider/process/config/key-metadata 검증 PASS; 실제 사용자 capture·seed는 별도 실행 gate |
 | 현재 사용자·자료의 native 작업 접수 연결 | SOURCE_IMPLEMENTED; 실제 인증 capture→기존 Catalog 검증·계획 재구성·잠금 확인을 연결, 운영 provider/실행기 연결은 미활성 |
@@ -274,13 +274,17 @@ seed/delta/query·자동 service indexing의 완료 증거는 아닙니다. 실�
 SQL 밖에서 계산하고, 원 Job/4개 checkpoint와 지정 producer의4파일·영수증을 검증합니다.
 대기·중단 복구는 원래 identity를 재사용하며, 재부팅으로 unit 기록이 사라져도 같은 계산을
 다시 시작하지 않습니다. 확정 실패만 안정된 관찰 뒤 실패 이력으로 보존합니다.
+완료된 QUERY를 공통 검색에 전달하는 read adapter도 추가했습니다. 동일 사용자의 현재
+권한·원 Workflow의 종료 상태·원 실행 이력·정본 파일을 확인하고 반환 직전 재확인합니다.
+이미 끝난 검색을 읽기 위해 새 Job/lease나 모델 실행을 요구하지 않습니다. Catalog가 Runner
+테이블을 직접 읽지 않으며, 완료 처리와 조회가 같은 정본 검증 규칙을 재사용합니다.
 
-최신59-suite **1,459 PASS**·strict type20·lint/format31·shell/diff PASS입니다.
+최신60-suite **1,499 PASS**·strict type24·lint/format36·shell/diff PASS입니다.
 실제 임시 Job/Artifact/파일·중단 복구 검증이며 IAM/자료/수치 계산의 합성 seam과 구분합니다.
 이전 단계의 build/RECORD·격리 wheel import도 기록했지만 실제 설치/활성화는 아닙니다.
 QUERY 정의/실행 단위는 아직 미허용·미설치이고, 실제 실행·소비자 연결은 후속 검증입니다.
 source head는0054, 운영 DB는0053이며 기존 계약·명령·CPU 설치·서비스는 변경하지 않았습니다.
-보호된 임시 DB 경로에 QUERY CHECK13개와 commit/crash/replay5개를 넣었으나 아직
+보호된 임시 DB 경로에 QUERY CHECK13개와 commit/crash/read/replay6개를 넣었으나 아직
 collection만 확인했습니다. 실제 DB/IAM/모델·GPU 검증 PASS로 확대하지 않습니다.
 [QUERY owner 구현·검증 기록](docs/architecture/REFERENCE_QUERY_OWNER_COMPOSITION.md)에
 단계별 증거와 남은 운영 경계를 구분했습니다.
