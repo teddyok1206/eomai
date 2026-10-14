@@ -413,3 +413,31 @@ live-query-and-protocol-result}.log`; final disposable inspection0055/0 other
 connections. Protocol/reservation11 PASS, bounded candidate68 PASS and native
 stage67 PASS are preserved separately. No source-upgrade adoption, new request,
 vector publication, QUERY activation or GPU/default claim is made here.
+
+## Explicit preallocation retirement candidate — 13:30 UTC
+
+The source-only successor cannot inherit the old runtime/grant pins. A bounded
+owner-maintenance contract/use case now resolves this without an adoption or
+force-retry framework: diagnose the known missing-protocol failure, then retire
+only the exact expired PROCESSING START/RUNNING application step whose indexed
+deterministic launch key has NEVER been allocated. Extra work, output, committed
+launch, active lease, wrong/stale actor/hash/generation and nonowners are denied.
+Original request/hash/keys/lease audit and source/report/Graph/policy stay intact;
+existing state machines append FAILED history and a typed immutable receipt.
+Nothing is marked successful. Only a later ordinary corrected release may
+authorize its own successor request after the original is terminal.
+
+The schema/parser is an independent removable maintenance leaf, not a new runtime
+admission family/bundle hash. No migration, index, new queue, numerical worker
+protocol, service/worker privilege or original Item/analysis change.
+Broader regression1423 PASS/268.98s; final isolated leaf/compatibility/dependency77
+PASS/11.09s; actual disposable Identity/retirement96 PASS/11.22s and publication19
+PASS/3.48s; strict mypy2/Ruff/format/diff/shell parse PASS. A first DB test exposed
+UTC `+00:00`→`Z` canonical hash normalization and was corrected before installation.
+An initial regression invocation had an unmatched filename glob and ran no tests;
+the reviewed inventory above is its actual successful replacement.
+
+The13:25:16 actual read-only preflight still proves exact protocol registration,
+native Job0/vector0/index0 and the original expired command. This candidate is
+not yet a live retirement, new service activation or successful seed. Procedure:
+`../operations/LOCAL_INDEXING_PREALLOCATION_RETIREMENT.md`.

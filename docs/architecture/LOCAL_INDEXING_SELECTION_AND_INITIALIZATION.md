@@ -89,3 +89,65 @@ or submit another source list to bypass the original. The current process is
 already stopped; preserve that Workflow while an explicit supported release
 handoff is established. Installing an inactive wheel and metadata benchmarking
 does not perform that handoff, and must be reported separately from seed success.
+
+## Bounded preallocation retirement for a corrected release
+
+An incompatible Identity/runtime/grant successor cannot adopt the original audit
+pins. Rather than invent cross-release authority, add one explicit deployment-owner
+maintenance use case: retire ONLY an exact PROCESSING, expired native START whose
+exact RUNNING application step has never allocated its deterministic launch Job.
+This is NOT timeout-based retry, failed-history repair, force-cancel or automatic
+recovery. The observed missing-protocol failure is the closed reason. The owner
+supplies the exact request/hash, command/lease generation, current service reference
+and intended successor source commit. A closed JSON Schema2020-12 command/receipt
+precedes implementation. Both are bounded metadata, not worker input or a grant.
+
+Canonical sources are the original immutable request/START/step, current Identity
+metadata and indexed native-launch key. Existing Workflow events store the typed
+receipt and its semantic hash; no new registry, queue, binary, migration or NAS
+copy. Original IDs, request/source/report/Graph/space/policy pins, START fingerprint
+and lease audit stay unchanged. Exact lookup uses PKs and the existing workflow
+command/event indexes; a bounded two-row read detects extra commands/steps/events.
+Time is O(log N + H) keyed lookup and a workflow-local event scan/append (H is this
+single-step Workflow's small history); returned metadata memory is O(1).
+Existing Workflow/command/step locks serialize against claims. NOWAIT
+locks refuse live races rather than forcing a lease. Existing source fences prevent
+an expired prior runner from allocating after these locks are acquired.
+
+The actual PostgreSQL table-owner login (not SET ROLE, ADMIN or a model actor) is
+verified for the four affected Workflow tables. On a first mutation, the public
+Identity owner operation locks/revalidates the exact current service metadata.
+Require the canonical service-only definition, original request/hash/fingerprint,
+one exact START and one exact RUNNING step, elapsed lease, no output/platform Job,
+and absent exact launch key. A committed launch, unknown outcome, live lease,
+extra command/attempt, output, wrong actor/hash/revision or terminal history denies
+the operation. No source grant is expanded and no model or Artifact is started.
+
+Use the existing state machines to mark that START, step, Workflow and stage
+FAILED with `EMBEDDING_ENCODING_PROTOCOL_UNAVAILABLE`, plus an immutable retirement
+receipt that records the intended corrected release. This makes an already
+observed failure explicit; it never marks it successful or deletes it. All effects
+share one caller-owned root and roll back together. Same command replay returns
+the original exact receipt without adding events; a changed command conflicts.
+Historical replay remains owner-only and does not require reactivating the old
+Identity. No transaction/capability is cached. Dependencies stay application →
+contracts/domain and existing public Identity control boundary.
+
+Only AFTER the original is terminal may the normal release controls activate a
+successor, and the existing missing-binding reconciler produce its newly authorized
+request. That new request is an explicit corrected-release successor, not a retry
+with substituted old pins or a bypass of nonterminal/uncertain work. Keep the old
+receipt/source/Workflow linked in operational evidence; the actual new request
+must still pass ordinary source, current grant, native execution and idempotency
+checks. Retiring alone does not grant future submission or prove a successful seed.
+
+The simpler same-authority recovery is insufficient because it cannot run a fixed
+source with the old source's immutable runtime identity. A general adoption or
+force-resume framework would broaden authority unnecessarily. Tests must cover
+actual owner/nonowner, exact replay/conflict, concurrent retire/claim, all negative
+preallocation predicates, rollback and unchanged request/lease/Job/Artifact state.
+
+The retirement schema/validator lives only in its removable owner-maintenance
+contract module. It does not extend any existing runtime admission schema family,
+registry or released bundle hash. Actual new-service execution still uses the
+unchanged1.2 service request and1.1 native policy contracts.
