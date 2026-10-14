@@ -82,6 +82,10 @@ from eom_catalog_service.office_document_review_intake import OfficeDocumentRevi
 from eom_catalog_service.pdf_document_review_intake import PdfDocumentReviewIntakeService
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.runtime_privileges import catalog_runtime_privileges_ready
+from eom_catalog_service.similarity_read_runtime import (
+    SimilarityReaderRuntimeError,
+    build_catalog_similarity_context_reads,
+)
 
 _RUNTIME_MODEL_TABLES = (
     OperatorRecord.__table__,
@@ -255,6 +259,11 @@ def serve() -> int:
         from eom_catalog_service.chat_knowledge_resolution import ChatKnowledgeResolutionService
         from eom_catalog_service.chat_rag_resolution import ChatRagResolutionService
 
+        similarity_reads = build_catalog_similarity_context_reads(
+            engine,
+            mode=os.environ.get("EOM_SIMILARITY_READ_MODE", "DISABLED"),
+            configuration_raw_sha256=os.environ.get("EOM_SIMILARITY_READ_CONFIG_SHA256"),
+        )
         server = CatalogApplicationServer(
             StructuredItemContentImportService(engine),
             RegistryService(engine),
@@ -264,6 +273,7 @@ def serve() -> int:
             chat_knowledge=ChatKnowledgeResolutionService(engine),
             chat_rag=ChatRagResolutionService(engine),
             inference_transfer_metadata=CatalogInferenceTransferMetadataService(engine),
+            similarity_context_reads=similarity_reads,
             inference_transfer_snapshot=InferenceTransferSnapshotApplicationService(
                 CatalogInferenceTransferSnapshotSourceAdapter(engine),
             ),
@@ -307,6 +317,9 @@ def serve() -> int:
                 # The manifest, claim, and workflow receipts own recovery; keep logs content-free.
                 print("LEGACY_ITEM_EXTRACTION_BATCH_RUNNER_ERROR", flush=True)
         return 0
+    except SimilarityReaderRuntimeError:
+        print("CATALOG_SIMILARITY_READ_UNAVAILABLE", flush=True)
+        return 1
     except Exception:
         return 1
     finally:

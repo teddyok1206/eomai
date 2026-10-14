@@ -126,6 +126,10 @@ def test_catalog_manager_unit_owns_nas_commit_boundary_without_api_secret() -> N
     api_unit = (REPOSITORY_ROOT / "infra/systemd/eom-api.service").read_text(encoding="utf-8")
 
     assert "EnvironmentFile=/etc/eom/secrets/catalog-manager.env" in catalog_unit
+    assert "EnvironmentFile=-/etc/eom/catalog-similarity-read.env" in catalog_unit
+    assert "ReadOnlyPaths=-/etc/eom/catalog-similarity-read.env" in catalog_unit
+    assert "ReadOnlyPaths=-/etc/eom/catalog-similarity-read.json" in catalog_unit
+    assert "EOM_SIMILARITY_READ_MODE=ENABLED" not in catalog_unit
     assert "User=eom-catalog-manager" in catalog_unit
     assert "SupplementaryGroups=eom" in catalog_unit
     assert "Environment=EOM_CATALOG_STAGING_ROOT=/var/lib/eom-catalog-api/staging" in catalog_unit

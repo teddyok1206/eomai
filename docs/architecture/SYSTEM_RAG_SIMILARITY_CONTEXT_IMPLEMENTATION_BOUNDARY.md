@@ -2421,3 +2421,95 @@ API `41c2da6edf0f21cc29da6b3cd55423ee67020ea182a57e9a6e769f546806614f`.
 Evidence suffixes under the same prefix: `release-build.log`, `owner-pair-proof.log`,
 `three-wheel-proof.log`, `acceptance.log`, `existing-regression.log`,
 `resource-boundaries.log`, `mypy-seven.log`. The candidate is pushed, not installed.
+
+## 27. Existing Catalog runtime composition — design before implementation
+
+1. Boundary: optionally compose the completed-read service in the existing Catalog
+   process; keep its same DB role/socket/sandbox, with no native launcher or claims.
+2. Canonical inputs: root-protected non-secret released reader configuration and
+   independently installed Identity function, plus the existing canonical reads.
+3. Identity: configuration schema/raw SHA pin numerical namespace and original
+   QUERY controls; the database owner role/name OID is a pin, not an operator grant.
+4. Resolution: fixed no-follow configuration file, root-owned protected ancestors,
+   bounded stable descriptor/raw SHA, closed schema/canonical bytes; validate the
+   actual installed function against its independent owner before constructing.
+5. Access: load one small configuration at startup, then exact QUERY lookups with
+   a fresh root/current caller on every request; no latest/corpus scan at startup.
+6. Structures: frozen configuration and existing owner/service objects. No table,
+   index, queue, registration, persistent cache or new dependency.
+7. Scale: one current configured compatible namespace/control set; file at most64KiB.
+   Startup cost is bounded configuration parse and fixed SQL security inspection.
+8. Transactions: startup inspection is read-only; each RPC retains its existing
+   independent root. No operator is authorized by startup and no session retained.
+9. Ownership: pure schema/model in catalog contracts; protected file/composition
+   adapter in Catalog; the existing runner passes the optional service to its socket.
+10. Failure: disabled by default with no file/DB access. Explicit enable with invalid
+    configuration/function fails closed before serving; a closed diagnostic is
+    emitted without raw config, database URL or exception text. Rollback disables
+    the optional mode and restarts the same compatible service; history is untouched.
+11. Alternative: deriving controls/OID from the requesting model or silently choosing
+    current/latest would remove the independent trusted selection. A new root broker,
+    queue or INDEX service privilege would be unnecessary for completed reads.
+
+The optional systemd environment file contains only mode and raw configuration SHA.
+No credential is added or stored. Installing/enabling it remains a separate explicit
+release step; no actual admission is inferred from source or synthetic IO tests.
+
+### 27.1 Implemented source and tests — 2026-10-14 UTC
+
+`system-rag-similarity-reader-configuration/1.0` is registered with a matching
+canonical/package resource (raw SHA `56e414955beda6fd1c9abf05e7acc77175c60c0374caf0e615496a5c73cec2a9`).
+The pure model pins corpus/namespace/document space/recipe/source classes, exact
+original QUERY policy/bundle and independent database owner name/OID. It refuses
+extra actor/permission/secret/path fields, namespace mismatch and ambiguous bytes.
+It authenticates no operator and grants/installs nothing.
+
+The actual existing Catalog runner now passes the optional service to its existing
+socket. Default `EOM_SIMILARITY_READ_MODE=DISABLED` does not load the configuration
+or contact a database on behalf of this feature. `ENABLED` additionally requires
+`EOM_SIMILARITY_READ_CONFIG_SHA256` and the exact canonical non-secret file
+`/etc/eom/catalog-similarity-read.json`. The loader uses no-follow descriptor-relative
+ancestor traversal, protected root ownership, bounded regular-file bytes, exact SHA,
+and stable file/named-entry/ancestor identity. It accepts root-owned0640/0644 only.
+There is no alternate request path or source/worker-selected filename.
+
+Before building `CatalogReferenceQueryReadOwner`, startup verifies PostgreSQL and
+actual current DB role `eom_catalog_manager_runtime`, then independently inspects
+the existing Identity function using its exact owner pin. Only the existing
+`PostgresOperatorAuthorizationFence` is composed. No native owner, captured session,
+claim, launcher, role expansion, model lookup or current/latest index is created.
+An explicit invalid enable fails before serving and emits only
+`CATALOG_SIMILARITY_READ_UNAVAILABLE`. The standard unit gains optional readonly
+environment/config paths, not another unit, UID, group, secret or writable area.
+
+Final one-process source gate: **148 PASS /48.03s** across12 distinct files; strict
+mypy4, Ruff/format10 and `systemd-analyze verify` PASS. The earlier35,52,68,77 and3
+focused counts overlap this final gate and are not additional totals. Tests cover
+the actual runner's enabled/disabled/invalid forwarding, true readonly factory
+composition after synthetic installation observations, role/dialect/function denials,
+and two users' overlapping actual SQLite PK reads with separate creator/session/root.
+Actual temporary file descriptors exercise symlink/hardlink, mode, size, hash, leaf/
+ancestor replacement, mid-read mutation and descriptor cleanup. Root ownership and
+directory-protection observations in those filesystem tests are explicitly synthetic;
+they do not establish live protected installation. IAM/source/numeric and startup
+function inspection seams are also synthetic where documented in each test file.
+
+Evidence prefix: `/tmp/eom-identity-provider-install.nAaycoDM/similarity-read-runtime-`;
+`acceptance.log`, `mypy-final.log`, `unit-verify.log`. No production DB, migration,
+function/ACL, policy/Pack, service restart, native QUERY or CUDA operation ran.
+The actual installed Identity function/current owner remains **NOT_REVALIDATED**;
+source existence is not live admission. The standalone noninteractive sudo probe
+required a password; no TTL/grant change or repeated password request was attempted.
+The original genuine QUERY handle was not re-polled inside its30-minute cadence.
+
+Deployment still requires the compatible release/rollback window and trusted values
+from the actual published QUERY controls and independent DB owner. Install the exact
+non-secret canonical JSON and root-protected optional environment with only the two
+mode/SHA settings, then restart the existing Catalog through the standard installer.
+Do not enable it from a synthetic example or manufacture the function/OID to pass.
+If independently inspected prerequisites are absent/drifted, leave mode disabled
+and use the official Identity-owner installation boundary; never run ad-hoc repair.
+Rollback selects DISABLED and the prior compatible installed release, not a data
+rewrite. Current original canary/API/owner pins remain untouched pending its result.
+Full-goal actual QUERY/replay, variation/review/API activation, remaining consumers,
+continuous coverage and measured CPU/CUDA/default selection remain open.

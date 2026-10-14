@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -265,3 +267,71 @@ def test_late_completed_source_or_output_change_fails_without_returning_context(
     with pytest.raises(SimilarityContextReadError, match="QUERY_RESULT_INVALID"):
         value.service.read(value.request)
     value.common.assert_called_once()
+
+
+def test_concurrent_users_keep_exact_creator_and_root_separate_on_one_service(
+    selected, monkeypatch
+):
+    value = selected
+    first = value.request
+    second_actor = "operator_" + "f" * 32
+    body = value.source.request.model_dump(mode="json")
+    body["operator_audit"]["operator_id"] = second_actor
+    body["request_sha256"] = content_sha256(
+        {key: child for key, child in body.items() if key != "request_sha256"}
+    )
+    second_workflow = "workflow_" + "f" * 32
+    with value.service.sessions.begin() as session:
+        template = session.get(WorkflowInstanceRecord, first.selection.workflow_id)
+        fields = {
+            column.name: getattr(template, column.name)
+            for column in template.__table__.columns
+            if getattr(template, column.name) is not None
+        }
+        fields.update(
+            workflow_id=second_workflow,
+            created_actor_id=second_actor,
+            initial_request=body,
+            request_payload=body,
+            request_hash="sha256:" + "f" * 64,
+            idempotency_key="synthetic-other-user-query",
+        )
+        session.add(WorkflowInstanceRecord(**fields))
+    second = SimilarityContextReadRequest.model_validate(
+        first.model_dump(mode="json")
+        | {
+            "actor_id": second_actor,
+            "selection": first.selection.model_dump(mode="json")
+            | {"workflow_id": second_workflow, "workflow_request_sha256": body["request_sha256"]},
+        }
+    )
+    barrier = Barrier(2)
+    observations = []
+
+    def current(session, caller, original, *, workflow_id):
+        assert caller.operator_id == original.operator_audit.operator_id
+        assert workflow_id == (
+            first.selection.workflow_id if caller.operator_id == first.actor_id else second_workflow
+        )
+        return SimpleNamespace(sources="same-pinned-sources", output="same-output")
+
+    def compose(reader, session, caller, context):
+        assert reader.query.request.operator_audit.operator_id == caller.operator_id
+        assert context == reader.query.request.context_request
+        root = session.get_transaction()
+        assert root is not None and root.is_active
+        observations.append((caller.operator_id, session, root))
+        barrier.wait(timeout=10)
+        return value.result
+
+    value.owner.resolve_completed_sources = current
+    monkeypatch.setattr(module.CatalogSimilaritySessionContextReader, "compose_in_session", compose)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(value.service.read, request) for request in (first, second)]
+        assert tuple(future.result(timeout=20) for future in futures) == (
+            value.result,
+            value.result,
+        )
+    assert {actor for actor, _session, _root in observations} == {first.actor_id, second.actor_id}
+    assert observations[0][1] is not observations[1][1]
+    assert observations[0][2] is not observations[1][2]
