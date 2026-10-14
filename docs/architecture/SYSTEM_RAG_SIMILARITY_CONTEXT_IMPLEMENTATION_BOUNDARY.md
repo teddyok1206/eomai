@@ -2791,3 +2791,21 @@ or historical selector/plan rewrite occurred. API transactional selector persist
 admitted ordinary-runner owner composition and actual C2 item acceptance remain open.
 The genuine QUERY operation retains its original authentication-input gate and
 processes; its30-minute observation cadence is not replaced by these source tests.
+
+Candidate `2d3c8b39c61ce41d147b5c1ad8e896d40e344e9c` passed the full three-wheel
+build/RECORD gate and isolated owner-pair/explicit-three-wheel import probes. They
+resolve the shared provider, original bounded provider and frozen selector handoff
+from selected archives only. Pack/schema pins and actual packaged API/OpenAPI remain
+consistent, with no checkout, installed-prefix, undeclared wheel or ML fallback.
+The probes perform no current source/IAM/model operation and do not activate the adapter.
+
+Initial package probes correctly refused the old six-field local preparation-result
+expectation after adding `query_selection`. Their logs remain preserved. The exact
+seven-field expectation was updated and both probes rerun against the same unmodified
+candidate wheels, not weakened to accept arbitrary fields or changed runtime bytes.
+
+Raw wheel SHA: platform `2e9afb696cd33d00e4bdf83066f5a66c169db9f5199c9a84c09793ee81164e95`;
+contracts `57904cbb77d218b529417310b25378cec416e4adafa2db3e164a068426c4eea1`;
+API `93391139e6edf911c18c83dd9485a7e93f16e0a4fdf94d2deeec5f62394d0d7d`.
+Logs `release-build`, `owner-pair-proof-final`, `three-wheel-proof-final` share the
+source evidence prefix above. This candidate is pushed, not installed/activated.
