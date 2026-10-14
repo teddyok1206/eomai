@@ -61,6 +61,24 @@ def test_embedded_release_inspector_has_no_undefined_names() -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_installed_release_compares_generated_routes_not_only_snapshot_hashes() -> None:
+    source = installed_workflow_inspector_source()
+    tree = ast.parse(source)
+    comparisons = [node for node in ast.walk(tree) if isinstance(node, ast.Compare)]
+    assert any(
+        isinstance(node.left, ast.Name)
+        and node.left.id == "generated_openapi"
+        and len(node.ops) == 1
+        and isinstance(node.ops[0], ast.NotEq)
+        and isinstance(node.comparators[0], ast.Name)
+        and node.comparators[0].id == "packaged_openapi"
+        for node in comparisons
+    )
+    assert "generated_openapi = create_app(contract_services).openapi()" in source
+    assert '"postgresql+psycopg://invalid:invalid@127.0.0.1:1/invalid"' in source
+    assert "contract_services.engine.dispose()" in source
+
+
 def test_model_selection_runtime_is_required_in_release_wheel_inventory() -> None:
     assignments = {
         node.targets[0].id: ast.literal_eval(node.value)

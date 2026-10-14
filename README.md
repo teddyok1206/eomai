@@ -172,9 +172,9 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | genuine QUERY 입력·encoder/handoff·실행 계약 | SOURCE_PASS; 정본4파일·기존 큐의 QUERY별 claim/완료 검증. 정확한 QUERY 정의 접수 허용 후보 회귀718·임시 DB68 PASS. 실제 정의/정책 활성화·정본 계산·소비자 조회는 미완료 |
 | 고정 CPU QUERY 실행 어댑터 | SOURCE_PASS; private/root handoff·공통 capacity·재시작 중복 차단. 고정 unit/설정/polkit 설치·UID990 수치 사전확인·실제 owner 허용/거부7 PASS. 실제 QUERY 모델 계산·사용자 권한 검증은 별도 |
 | QUERY Job·실행·정본 완료 조회 | SOURCE_PASS; 원 Job/4개 checkpoint·실행기·원 claim 복구와 현재 권한/정본 완료 조회 구현. 운영 설치·실제 계산·소비 활성화는 미검증 |
-| authenticated owner/session fence | SOURCE_PASS; QUERY/성능 비교용 명시적 전달1.1을 추가하고 기존 seed1.0 유지. 관련 source392·실제 disposable 세션/동시성19 PASS; 새 API/owner 조합은 아직 설치 전 |
+| authenticated owner/session fence | QUERY/성능 비교용 명시적 전달1.1과 기존 seed1.0 유지. source392·실제 disposable 세션/동시성19 PASS; API/owner5018ad2d 설치·UID990의 실제 provider/code9/peer 검증 PASS. 실제 사용자 QUERY capture는 미실행 |
 | 자동 인덱싱 전용 신원·저장 | 운영0055·sourceae8f8bf6/신원 revision11. 실제 seed+delta 성공, 첫 벡터/연결과 이전 revision 보존, coverage2/520. 다음 release/runtime 준비를 위해 현재 건 완료 후 정상 종료; 상시 자동 인덱싱은 아직 재개 전. 전체/다른 view·실제 replay·소비 연결은 미완료. [실제 활성화 기록](docs/status/LOCAL_INDEXING_ACTIVATION_2026-10-14.md) |
-| 인증된 owner/session 전달 | 기존 수신 API·실제 UID990의 provider/process/config/key-metadata 검증 PASS. 신규 QUERY/성능 비교 전달은 목적·요청 hash를 함께 확인하며 현재 권한/만료를 확장하지 않음; 실제 사용자 QUERY capture는 미실행 |
+| 인증된 owner/session 전달 | 수신 API5018ad2d와 비활성 owner 설치·실제 UID990의 provider/process/config/key-metadata 검증 PASS. QUERY/성능 비교 전달은 목적·요청 hash를 함께 확인하며 현재 권한/만료를 확장하지 않음. 정본 API 설명 파일 보정·새 배포 gate는 후속 호환 release 대상으로 구분 |
 | 현재 사용자·자료의 native 작업 접수 연결 | SOURCE_IMPLEMENTED; 실제 인증 capture→기존 Catalog 검증·계획 재구성·잠금 확인을 연결, 운영 provider/실행기 연결은 미활성 |
 | Native INDEX 파일 전달·입력/결과 저장 | SOURCE_PASS; 실제 계정 권한4·설치된 시작 권한9·CPU 합성 입력2개×1024차원·동일 실행 재조회 PASS, 실제 자료/Job/binding 연결은 미활성 |
 | 실행 bundle의 정본 저장 | 실제 Orchestrator Job/Artifact1건 게시·exact pointer 검증·보호된 bundle/config 설치 PASS; 임시 DB19 PASS 유지 |

@@ -60,3 +60,65 @@ are still original goal tasks, not completed by the transport tests.
 
 Design: [owner/session boundary](../architecture/LOCAL_EMBEDDING_OWNER_SESSION_IMPLEMENTATION_BOUNDARY.md).
 Preserved live evidence: [seed/delta activation](LOCAL_INDEXING_ACTIVATION_2026-10-14.md).
+
+## Actual compatible receiver/owner installation — 15:31 UTC
+
+Source `5018ad2df4d4f882b2d843876fedf38190e4db43` passed the complete independent
+release build/RECORD/definition inventory and owner-pair-only transitive import
+proof. Its protected owner pair is installed INACTIVE; numerical CPU/operator
+prefixes and source policies are unchanged.
+
+The standard shared API release is installed with schema head0055 unchanged.
+The existing protected release-operator context1.4 verified the migration, native
+PDF runtime, API/Catalog/HWPX roles and API isolation; no migration upgrade ran.
+The exact supported quiescence projection found no executable work/leases/chat,
+active Workflow commands0 or PROCESSING API idempotency0 before the window.
+All9 original services are active again, no daemon reload pending, API LIVE/READY
+PASS. The actual index owner `eom-embedding-index-owner.service` remains inactive,
+disabled and successfully drained; that is not an automatic-coverage completion.
+
+| Actual delivery wheel | Raw SHA256 |
+| --- | --- |
+| platform | `682d0d9ced677e82fa7dd45cbf7bbb16917bc1af1e5e65adc03ee5fc223f89c7` |
+| API contracts | `b1b35ed86e7ecfd3df0ea4390f8207f97b5285bc3e6fa18668667137bd164c41` |
+| API | `e3b29f4c74bcbd118d11115793629a20ac791048ef650300420e466bcf1a54e4` |
+
+Actual UID990/no supplementary groups verified the protected installed provider,
+all9 exact code pins and real fixed API socket peer. Both new purpose methods
+are present. Missing-bearer HTTP smoke returns401. **No genuine operator capture,
+QUERY/GPU forward or current-source permission is established by these probes.**
+Rollback metadata: `/var/lib/eom-api/deployments/5018ad2df4d4f882b2d843876fedf38190e4db43.json`.
+Independent root-private context: `/var/lib/eom-release-operator-stage.5018ad2d-1xn2j23m/`,
+raw context SHA256 `f4b45eeb23d33850117b8e9f9775f89daf5cdd30a6a49a312764a2e18a6d9142`.
+Build-only and actual delivery wheel hashes differ; source/tree/archive and
+reviewed code members were independently checked, not assumed from filenames.
+
+Two operational invocation failures are retained: the first pre-stop probe used
+an incorrect unit name and refused before changing services; the next isolated
+`runuser` deployment child could not reuse the original sudo TTY ticket and
+refused before replacing packages. The unchanged services were then updated by
+the standard deploy from the ORIGINAL tmux pane, without another password,
+sudo policy/TTL change or credential storage. These were not source/state bugs.
+
+Evidence: `query-purpose-{owner-inactive-install,owner-pair-proof,release-stage,
+release-admission,live-preflight,compatible-release-window-reviewed,
+compatible-api-install-reviewed,installed-provider-preflight}.log` in the same
+evidence directory. Slack milestone `devreport_b1802f0cfbdc407fbc0b15cc58782ee3`
+reported installation separately from remaining QUERY/consumer/GPU work.
+
+### Final contract-alignment follow-up
+
+The wider OpenAPI inventory correctly found an omitted generated snapshot update
+(30 PASS/1 failure); runtime calls and the new receiver code worked, but packaged
+documentation still described only1.0. Regenerate the canonical snapshot/hash
+with the existing offline exporter. Preserve the predecessor wire schema bytes.
+The independent installed-wheel inspector now constructs the ACTUAL installed
+application with explicit synthetic invalid DB credentials, compares its routes
+with the packaged snapshot, and disposes its unconnected engine. Merely comparing
+two identical stale snapshot/hash files can no longer pass the release gate.
+No production settings, credentials or DB connection are needed for that check.
+The corrected snapshot belongs to the next exact compatible release; do not
+replace a packaged file behind5018ad2d's RECORD or call this a new QUERY execution.
+
+Corrected source regression, including the actual OpenAPI equality and release
+inventory: **424 PASS /44.80s** (overlaps392). Ruff/format/shell syntax/diff PASS.

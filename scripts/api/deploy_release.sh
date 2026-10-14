@@ -2040,6 +2040,31 @@ if (
     or build_info.source_archive_sha256 != expected_archive_sha256
 ):
     raise SystemExit("installed-wheel API release source identity mismatch")
+# Matching two stale snapshot files does not prove that current routes match them.
+# Construct the installed application offline; never load production credentials
+# or open a database connection to inspect its public contract.
+from eom_api.app import create_app
+from eom_api.lifespan import build_services
+from eom_api.settings import ApiSecrets, ApiSettings
+from pydantic import SecretStr
+
+contract_services = build_services(
+    ApiSettings(),
+    ApiSecrets(
+        database_url=SecretStr("postgresql+psycopg://invalid:invalid@127.0.0.1:1/invalid"),
+        token_hash_key=SecretStr("contract-inspection-token-key-not-a-runtime-secret"),
+        fingerprint_key=SecretStr("contract-inspection-fingerprint-key-not-a-runtime-secret"),
+    ),
+)
+try:
+    generated_openapi = create_app(contract_services).openapi()
+    packaged_openapi = json.loads(
+        (installed_root / "eom_api/openapi/eom-api-v1.openapi.json").read_bytes()
+    )
+    if generated_openapi != packaged_openapi:
+        raise SystemExit("installed-wheel OpenAPI does not match current application routes")
+finally:
+    contract_services.engine.dispose()
 if mock_exam_production_is_terminal.__module__ != "eom_api_contracts.mock_exam_execution":
     raise SystemExit("mock-exam terminal-state contract export is incomplete")
 execution_discriminator = TypeAdapter(MockExamProductionExecution).json_schema().get(
