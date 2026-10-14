@@ -1,11 +1,15 @@
 # Native CPU/CUDA device benchmark — protocol and owner-path proposal
 
 2026-10-12 UTC. **SOURCE_CONTRACTS_ONLY / NOT_INSTALLED / NOT_EXECUTED / NOT_ACTIVE**.
+This dated initial status is historical. As of2026-10-14, the source worker,
+fixed local files, checkpoint/ACK channel and full rank comparator also exist;
+their focused verification is recorded below. The real six-launch owner/launcher,
+installed benchmark admission and CPU/CUDA measurement are still incomplete.
 This is the next concrete route to the requested actual benchmark and, if CUDA is superior and
 all other gates pass, actual default activation. A proposal or performance verdict is not completion.
-Only the additive schema/mirror/frozen values/registration and synthetic contract tests now exist.
-No worker/owner, migration, install, model/GPU invocation or runtime change is made here.
-The small source-only real-row ranking seam below is now implemented; it is not an executed benchmark.
+The original contract-only leaf added the schema/mirror/frozen values/registration and
+synthetic contract tests, not worker/owner behavior, migration, installation or model/GPU work.
+The subsequent source-only implementation remains distinct from an executed benchmark.
 
 Authoritative criteria are [GPU runtime design §§6–8](INCREMENTAL_EMBEDDING_GPU_RUNTIME_DESIGN.md#6-실행-전에-pin하는-작은-benchmark-protocol)
 and the existing pure `embedding_device_comparison.compare_embedding_device_performance`.
@@ -405,3 +409,14 @@ Ruff/format and diff checks passing. The focused rank suite is67 cases. All inpu
 are synthetic and no GPU/model/Artifact/DB operation or device activation occurred.
 These checks prove the arithmetic source seam, not the missing native benchmark
 owner/launcher, actual CPU-before-CUDA evidence publication or a device verdict.
+
+Candidate `e874268d79cf4ed354ab41942c525b9688eda2be` also passed the existing
+complete three-wheel build/RECORD/installed application-contract inventory. An isolated
+two-wheel-only import proof confirmed this comparator and the combined Catalog
+prepare/read method, with no checkout, Application API wheel, existing-prefix EOM
+fallback or ML imports. Platform raw
+`cfcd0f46383d5a06d9dececf3a632e9ebc2a06d699735b8c0116b63bc0dc468b`;
+API-contract raw `99f2436e8b5f5645f752f316d888ae9d8213ef1f7f9f87b68eeeb1d92b3f8ef2`.
+Local evidence: `/tmp/eom-identity-provider-install.nAaycoDM/benchmark-full-rank-*.log`.
+This candidate is NOT installed. API75fdc265 and owner5018ad2d remain unchanged;
+the original finite QUERY handle is preserved while awaiting its single operator login.

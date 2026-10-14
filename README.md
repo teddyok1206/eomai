@@ -182,6 +182,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | 고정 CPU 실행 입구·설정 게시 CLI | CPU에 c2f8eef8 설치·격리 probe·설치 seal PASS; INDEX 고정 실행 단위 설치·합성 수치 계산 확인, QUERY 연결은 미완료 |
 | 실제 disposable PostgreSQL |0052 registry/application16·reservation8·limited IAM6,0053 stage18+runner10·Identity11 PASS; migration·cleanup PASS |
 | CPU/CUDA 실행 환경 준비 | 실제 CPU 설치·inventory·수치 증명·비특권 격리 시험·최종 설치 기록 PASS; source/Job 실행 연결 남음, CUDA 미게시 |
+| CPU 기준 전체 후보 순위 비교 | SOURCE_PASS; 고정 오차·CPU 동점 묶음으로 전체 후보/모든 쌍·상위5 경계를 비교. 관련449 PASS, 후보e874268d의 wheel/RECORD·owner용2개 wheel만의 격리 import PASS. 실제 GPU benchmark/기본값 전환은 미실행. [비교 설계·증거](docs/architecture/INCREMENTAL_EMBEDDING_DEVICE_BENCHMARK_PROPOSAL.md#full-rank-order-comparison-before-native-owner-integration--2026-10-14) |
 | 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | seed+delta PASS(2/520, 첫 벡터 보존); QUERY/공통 소비자·CPU/GPU 비교·GPU 기본값은 미완료 |
 
 2026-10-13 11:04 UTC 기준 `3be2949b`의 실제 CPU 전체 설치 검증과 결과 저장·재조회를
