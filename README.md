@@ -327,6 +327,7 @@ Graph/source/승인 보고서 resolver를 사용하며 fake ADMIN/WORKER나 별�
 Registry/Runner의 서비스 목적 연결과 운영 활성화는 아직 남아 있습니다. 실제 DB에서 찾은
 기존 정책 parser의 JSON Schema 오류 변환 누락도 해당 책임 경계에서 수정했습니다.
 해당 변경의 전체83-suite 회귀2,275개·strict mypy46 모듈·Ruff83 파일도 PASS했습니다.
+3개 wheel/RECORD와 독립 wheel-only40 모듈·schema reference 검증도 PASS했습니다.
 
 최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와
 strict type/lint/format PASS입니다. 실제 임시 DB28개 사례에는 독립 실행기 claim 경쟁과

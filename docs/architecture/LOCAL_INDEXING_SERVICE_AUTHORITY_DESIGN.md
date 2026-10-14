@@ -479,3 +479,15 @@ is relabeled as an executed live permission or model test. Evidence under the sa
 
 This is source/package-read preparation plus actual disposable owner policy reads,
 not the completed incremental-index goal or production service activation.
+
+Package candidate `ac7df7db935d636218c053c01de54c6440f77b48` passes the3-wheel
+build/RECORD and installed simulation. Fixed dist:
+`/tmp/eom-api-build/ac7df7db935d636218c053c01de54c6440f77b48.UeXkNf/dist`.
+The immutable operator interpreter `-I -B` imports40 named modules from wheels
+only, resolves the new schema's packaged local reference closure, round-trips the
+synthetic service policy and preserves separate service/source policy references.
+It rejects human-policy reinterpretation, a missing actual service fence and
+ambient-process runtime admission. No DB connection, service/policy publication,
+installation, model/GPU run or source-checkout dependency is used. QUERY global
+admission remains UNOFFERED. Evidence:
+`local-indexing-source-policy-wheel-{build,import}.log` in the same directory.
