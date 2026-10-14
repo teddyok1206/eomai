@@ -59,7 +59,7 @@ from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecor
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
-from sqlalchemy import Engine, distinct, func, or_, select, text
+from sqlalchemy import Engine, Select, distinct, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, SessionTransaction
 
@@ -1352,18 +1352,18 @@ class KnowledgeRetrievalApplicationService:
             raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_UNAVAILABLE")
         return result
 
-    def _read_candidate_pool(
-        self,
-        session: Session,
+    @staticmethod
+    def candidate_pool_analysis_statement(
         scope: ReadOnlyCandidatePoolScope | LocalIndexingSourceReadIntent,
         *,
-        snapshot: KnowledgeGraphSnapshotPointer,
         allow_answer_bearing: bool,
-        reuse_context: ReadOnlyKnowledgeReuseContext | None = None,
-        artifact_reader: CatalogArtifactReader | None = None,
-    ) -> ReadOnlyKnowledgeCandidatePool:
-        """Shared bounded source selection AFTER the purpose-specific authority gate."""
-        snapshot_id = snapshot.graph_snapshot_revision_id
+    ) -> Select[tuple[str]]:
+        """Bounded metadata selection, NOT authorization or source materialization.
+
+        The same predicates must bound capture prefetch and the official pool;
+        raw Graph analyses include additive reports outside occurrence scope.
+        """
+        snapshot_id = scope.graph_snapshot.graph_snapshot_revision_id
         association = KnowledgeSnapshotAnalysisRecord
         pointer = KnowledgeNodeSourcePointerRecord
         node = KnowledgeNodeRecord
@@ -1421,6 +1421,27 @@ class KnowledgeRetrievalApplicationService:
             # EXISTS restricts the original population before LIMIT without
             # duplicate placements multiplying sources or waiving authority.
             statement = statement.where(pointer.source_class == "PAST_EXAM", exact_occurrence)
+        return statement
+
+    def _read_candidate_pool(
+        self,
+        session: Session,
+        scope: ReadOnlyCandidatePoolScope | LocalIndexingSourceReadIntent,
+        *,
+        snapshot: KnowledgeGraphSnapshotPointer,
+        allow_answer_bearing: bool,
+        reuse_context: ReadOnlyKnowledgeReuseContext | None = None,
+        artifact_reader: CatalogArtifactReader | None = None,
+    ) -> ReadOnlyKnowledgeCandidatePool:
+        """Shared bounded source selection AFTER the purpose-specific authority gate."""
+        snapshot_id = snapshot.graph_snapshot_revision_id
+        pointer, node = KnowledgeNodeSourcePointerRecord, KnowledgeNodeRecord
+        occurrence_scoped = (
+            scope.population_scope == InferenceTransferPopulationScope.OCCURRENCE_BACKED_PAST_EXAM
+        )
+        statement = self.candidate_pool_analysis_statement(
+            scope, allow_answer_bearing=allow_answer_bearing
+        )
         selected = tuple(str(value) for value in session.scalars(statement))
         truncated = len(selected) > scope.maximum_candidates
         run_ids = selected[: scope.maximum_candidates]

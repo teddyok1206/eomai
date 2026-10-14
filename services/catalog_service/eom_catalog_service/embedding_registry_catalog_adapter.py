@@ -700,6 +700,8 @@ class CatalogEmbeddingRegistryVerifier:
             code = (
                 "EMBEDDING_REGISTRY_FORBIDDEN"
                 if error.code == "INFERENCE_TRANSFER_FORBIDDEN"
+                else "EMBEDDING_REGISTRY_SCOPE_LIMIT"
+                if error.code == "INFERENCE_TRANSFER_SNAPSHOT_POPULATION_TRUNCATED"
                 else "EMBEDDING_REGISTRY_POINTER_INVALID"
             )
             raise EmbeddingRegistryError(code) from None

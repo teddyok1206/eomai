@@ -29,6 +29,7 @@ from eom_catalog_service.inference_transfer_service import (
 )
 from eom_catalog_service.inference_transfer_snapshot_catalog_adapter import (
     CatalogInferenceTransferSnapshotSourceAdapter,
+    population_membership_statement,
 )
 from eom_catalog_service.inference_transfer_snapshot_service import (
     InferenceTransferSnapshotApplicationService,
@@ -172,7 +173,9 @@ def service(scope):
     value = cast(Any, result)
     value.resolve_snapshot_pointer = Mock(return_value=scope.graph_snapshot)
     value.resolve_access_policy = Mock(
-        return_value=SimpleNamespace(answer_bearing_roles=("ADMIN",))
+        return_value=SimpleNamespace(
+            answer_bearing_roles=("ADMIN",), content_sha256=scope.access_policy_sha256
+        )
     )
     value._authorize = Mock()
     value._snapshot_source_resolution_cache = Mock(return_value=None)
@@ -209,6 +212,61 @@ def occurrence_scope(*, maximum: int = 8, role: str = "ADMIN"):
         maximum=maximum,
         role=role,
         population_scope=InferenceTransferPopulationScope.OCCURRENCE_BACKED_PAST_EXAM,
+    )
+
+
+def test_real_postgres_prefetch_does_not_count_additive_reports_as_original_targets(pool_database):
+    """SQL-only scale fixture; pg_temp metadata is NOT canonical source authority."""
+    for table in TABLES:
+        pool_database.execute(text(f"TRUNCATE pg_temp.{table}"))
+    snapshot = admission_scope().graph_snapshot.graph_snapshot_revision_id
+    statements = (
+        "INSERT INTO pg_temp.items(item_id,lifecycle_state) "
+        "SELECT 'item_'||lpad(i::text,32,'0'),'ACTIVE' FROM generate_series(1,520) i",
+        "INSERT INTO pg_temp.item_revisions(item_revision_id,item_id,revision_state) "
+        "SELECT 'itemrev_'||lpad(i::text,32,'0'),'item_'||lpad(i::text,32,'0'),'APPROVED' "
+        "FROM generate_series(1,520) i",
+        "INSERT INTO pg_temp.knowledge_analysis_runs(analysis_run_id,state) "
+        "SELECT 'analysisrun_'||lpad(i::text,32,'0'),'ACCEPTED' FROM generate_series(1,1040) i",
+        "INSERT INTO pg_temp.knowledge_snapshot_analyses(snapshot_analysis_id,"
+        "graph_snapshot_revision_id,analysis_run_id,source_kind,source_revision_id) "
+        "SELECT i,:snapshot,'analysisrun_'||lpad(i::text,32,'0'),'APPROVED_ITEM_REVISION',"
+        "'itemrev_'||lpad(((i-1)%520+1)::text,32,'0') FROM generate_series(1,1040) i",
+        "INSERT INTO pg_temp.knowledge_nodes(graph_snapshot_revision_id,node_id,"
+        "node_type,label,answer_bearing) SELECT :snapshot,'knode_'||i,'CONCEPT','synthetic',false "
+        "FROM generate_series(1,1040) i",
+        "INSERT INTO pg_temp.knowledge_node_source_pointers(pointer_id,"
+        "graph_snapshot_revision_id,analysis_run_id,node_id,anchor_id,source_class) "
+        "SELECT i,:snapshot,'analysisrun_'||lpad(i::text,32,'0'),'knode_'||i,'anchor_'||i,"
+        "'PAST_EXAM' FROM generate_series(1,1040) i",
+        "INSERT INTO pg_temp.assessment_item_occurrence_references(graph_snapshot_revision_id,"
+        "placement_node_id,analysis_run_id,item_id,item_revision_id) "
+        "SELECT :snapshot,'placement_'||i,'analysisrun_'||lpad(i::text,32,'0'),"
+        "'item_'||lpad(i::text,32,'0'),'itemrev_'||lpad(i::text,32,'0') "
+        "FROM generate_series(1,520) i",
+    )
+    for statement in statements:
+        pool_database.execute(text(statement), {"snapshot": snapshot})
+    scope = occurrence_scope(maximum=1024)
+    selection = KnowledgeRetrievalApplicationService.candidate_pool_analysis_statement(
+        scope, allow_answer_bearing=True
+    )
+    selected = tuple(pool_database.scalars(selection))
+    members = tuple(pool_database.scalars(population_membership_statement(scope)))
+    assert len(selected) == len(members) == 520
+    assert tuple(row.analysis_run_id for row in members) == selected
+    assert len({row.source_revision_id for row in members}) == 520
+    # Keep the admitted-source limit: a caller budget of519 still exposes a
+    # 520th member as overflow rather than silently accepting an incomplete set.
+    assert (
+        len(
+            tuple(
+                pool_database.scalars(
+                    population_membership_statement(replace(scope, maximum_candidates=519))
+                )
+            )
+        )
+        == 520
     )
 
 

@@ -764,6 +764,23 @@ def test_identity_fence_failure_is_not_misreported_as_invalid_artifact(
     assert caught.value.__suppress_context__
 
 
+@pytest.mark.parametrize(
+    "source_code,registry_code",
+    [
+        ("INFERENCE_TRANSFER_FORBIDDEN", "EMBEDDING_REGISTRY_FORBIDDEN"),
+        ("INFERENCE_TRANSFER_SNAPSHOT_POPULATION_TRUNCATED", "EMBEDDING_REGISTRY_SCOPE_LIMIT"),
+        ("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH", "EMBEDDING_REGISTRY_POINTER_INVALID"),
+    ],
+)
+def test_source_scope_limit_is_distinct_from_invalid_pointer(source_code, registry_code):
+    def denied():
+        raise InferenceTransferServiceError(source_code)
+
+    with pytest.raises(EmbeddingRegistryError) as caught:
+        CatalogEmbeddingRegistryVerifier._guard(denied)
+    assert caught.value.code == registry_code and caught.value.__suppress_context__
+
+
 def test_injected_reader_cannot_replace_existing_historical_reuse_context() -> None:
     application = object.__new__(KnowledgeRetrievalApplicationService)
     with pytest.raises(KnowledgeRetrievalServiceError) as error:

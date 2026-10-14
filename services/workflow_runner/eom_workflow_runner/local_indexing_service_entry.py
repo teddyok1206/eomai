@@ -67,6 +67,29 @@ def _emit(event: str, **metadata: str | int | None) -> None:
     )
 
 
+def _failure_detail(error: Exception) -> dict[str, str | int | None]:
+    """Bounded code/site metadata only; never exception messages, locals or a full trace."""
+    current: BaseException = error
+    seen = {id(current)}
+    for _ in range(4):
+        related = current.__cause__ or current.__context__
+        if related is None or id(related) in seen:
+            break
+        seen.add(id(related))
+        current = related
+    code = getattr(current, "code", None)
+    if type(code) is not str or re.fullmatch(r"[A-Z][A-Z0-9_]{1,95}", code) is None:
+        code = None
+    site = None
+    frame = current.__traceback__
+    while frame is not None:
+        module = frame.tb_frame.f_globals.get("__name__")
+        if type(module) is str and re.fullmatch(r"eom_[a-z0-9_.]{1,120}", module):
+            site = f"{module}:{frame.tb_lineno}"
+        frame = frame.tb_next
+    return {"cause_type": type(current).__name__, "cause_code": code, "cause_site": site}
+
+
 def serve_local_indexing(runtime: LocalIndexingServiceRuntime, stop: Event) -> None:
     """Drain this actor's existing queue before another bounded source observation."""
     deadline = 0.0
@@ -155,7 +178,12 @@ def main() -> int:
             code = "LOCAL_INDEXING_SERVICE_UNAVAILABLE"
         # Never print exception text/tracebacks: SQL/HTTP exceptions can carry
         # credentials or materialized source data even in a failed startup.
-        _emit("LOCAL_INDEXING_SERVICE_STOPPED", code=code, error_type=type(error).__name__)
+        _emit(
+            "LOCAL_INDEXING_SERVICE_STOPPED",
+            code=code,
+            error_type=type(error).__name__,
+            **_failure_detail(error),
+        )
         return 1
     finally:
         if runtime is not None:

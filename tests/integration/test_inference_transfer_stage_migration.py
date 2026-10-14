@@ -176,7 +176,7 @@ def test_downgrade_refuses_current_comparison_and_rollback_preserves_row_and_hea
         == "INFERENCE_TRANSFER"
     )
     assert stage_owner_connection.scalar(text("SELECT version_num FROM app.alembic_version")) == (
-        "20261010_0051"
+        CURRENT_MIGRATION_REVISION
     )
     definition = stage_owner_connection.scalar(
         text(

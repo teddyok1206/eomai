@@ -758,3 +758,26 @@ not cover that restricted-login boundary.
 
 The simpler-looking alternative of granting UPDATE to make row locks pass would
 violate the existing append-only privilege boundary and is rejected.
+
+Review of the first actual population failure also exposed a distinct potential
+boundary: raw Graph analysis membership is not the admitted Item population. A Graph may contain both
+base analyses and additive reports; occurrence-backed selection must apply before
+the limit and prefetch. Reuse one public, pure Catalog SQL statement builder for
+both candidate selection and capture metadata hints, retaining all source-class,
+lifecycle, exact occurrence, explicit-run and answer-bearing predicates. The
+statement grants no access; existing purpose-specific authorization still runs
+before use and the canonical resolver still validates source/report/Artifact bytes.
+This avoids duplicated eligibility logic, overbroad prefetch and a larger magic
+limit. Indexed filtering and distinct analysis ordering stay unchanged. Test the
+SQL shape and an actual disposable 520-base/520-report metadata population; no
+runtime schema, population policy or numeric limit is relaxed.
+
+Actual read-only metadata is1040 analyses/555 Item revisions, with source-pointer
+membership PAST_EXAM520 and APPROVED_ITEM25. These are distinct denominators.
+Therefore the new prefetch consistency test is not evidence that the current
+`EMBEDDING_REGISTRY_POINTER_INVALID` was caused by a1024 overflow. Preserve that
+failure and diagnose its exact pointer boundary before claiming it fixed.
+The installed service's existing sanitized error event may include a bounded
+inner exception class, whitelisted stable code and EOM module/line site. Never
+include exception text, source paths, locals, SQL parameters or a full traceback.
+This is an internal diagnostic field, not authority, a wire contract or retry.

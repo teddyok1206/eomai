@@ -36,7 +36,7 @@ from eom_orchestrator.control_artifact_resolution import (
 )
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_protocol.artifact_members import ArtifactMemberPointer
-from sqlalchemy import Engine, or_, select, text
+from sqlalchemy import Engine, Select, or_, select, text
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.artifacts import CatalogArtifactReader
@@ -60,11 +60,11 @@ from eom_catalog_service.inference_transfer_snapshot_service import (
 )
 from eom_catalog_service.item_content_contract import ITEM_CONTENT_SCHEMAS, read_item_content
 from eom_catalog_service.knowledge_graph_models import (
-    KnowledgeNodeSourcePointerRecord,
     KnowledgeSnapshotAnalysisRecord,
 )
 from eom_catalog_service.knowledge_graph_projection import knowledge_node_terms
 from eom_catalog_service.knowledge_retrieval_service import (
+    KnowledgeRetrievalApplicationService,
     KnowledgeRetrievalServiceError,
     ReadOnlyCandidatePoolScope,
     ReadOnlyKnowledgeCandidatePool,
@@ -81,6 +81,26 @@ from eom_catalog_service.settings import CatalogSettings
 
 _MAXIMUM_ITEM_MEMBER_BYTES = 16 * 1024**2
 _MAXIMUM_ARTIFACT_BATCH_BYTES = 128 * 1024**2
+
+
+def population_membership_statement(
+    scope: ReadOnlyCandidatePoolScope | LocalIndexingSourceReadIntent,
+) -> Select[tuple[KnowledgeSnapshotAnalysisRecord]]:
+    """Bound metadata hints by official eligibility; this query grants no access."""
+    association = KnowledgeSnapshotAnalysisRecord
+    selection = KnowledgeRetrievalApplicationService.candidate_pool_analysis_statement(
+        scope, allow_answer_bearing=True
+    )
+    return (
+        select(association)
+        .where(
+            association.graph_snapshot_revision_id
+            == scope.graph_snapshot.graph_snapshot_revision_id,
+            association.analysis_run_id.in_(selection),
+        )
+        .order_by(association.analysis_run_id)
+        .limit(scope.maximum_candidates + 1)
+    )
 
 
 def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -353,27 +373,8 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
     ) -> tuple[AdmittedInferenceTransferCorpus, tuple[StagedExperimentEntry, ...]]:
         """Common lock/prefetch/physical-byte/accepted-report path after owner admission."""
         recipe = ExperimentViewRecipe.model_validate(recipe.model_dump(mode="json"))
-        association, pointer = KnowledgeSnapshotAnalysisRecord, KnowledgeNodeSourcePointerRecord
-        memberships = tuple(
-            session.scalars(
-                select(association)
-                .join(
-                    pointer,
-                    (pointer.graph_snapshot_revision_id == association.graph_snapshot_revision_id)
-                    & (pointer.analysis_run_id == association.analysis_run_id),
-                )
-                .where(
-                    association.graph_snapshot_revision_id
-                    == scope.graph_snapshot.graph_snapshot_revision_id,
-                    association.source_kind == "APPROVED_ITEM_REVISION",
-                    pointer.source_class.in_(scope.source_classes),
-                )
-                .distinct()
-                .order_by(association.analysis_run_id)
-                .limit(1025)
-            )
-        )
-        if len(memberships) > 1024:
+        memberships = tuple(session.scalars(population_membership_statement(scope)))
+        if len(memberships) > scope.maximum_candidates:
             raise InferenceTransferServiceError("INFERENCE_TRANSFER_SNAPSHOT_POPULATION_TRUNCATED")
         revisions = tuple(sorted({row.source_revision_id for row in memberships}))
         source_rows = tuple(

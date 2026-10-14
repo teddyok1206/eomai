@@ -173,7 +173,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | 고정 CPU QUERY 실행 어댑터 | SOURCE_PASS; private/root handoff·공통 capacity·재시작 후 중복 dispatch 차단·정확한 실행 관찰 구현. QUERY unit/polkit은 미설치, 실제 계산은 미검증 |
 | QUERY Job·실행·정본 완료 조회 | SOURCE_PASS; 원 Job/4개 checkpoint·실행기·원 claim 복구와 현재 권한/정본 완료 조회 구현. 운영 설치·실제 계산·소비 활성화는 미검증 |
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
-| 자동 인덱싱 전용 신원·저장 | SOURCE_PASS; [신원·개정·상태·이력과 owner 잠금](docs/architecture/LOCAL_INDEXING_SERVICE_AUTHORITY_DESIGN.md)을 실제 임시 DB29개 시험으로 검증. 운영 등록·실행 인증·자료 grant·자동 실행은 미활성 |
+| 자동 인덱싱 전용 신원·저장 | 운영0055의 신원·서비스 자료 grant 등록, 고정 unit 설치와 실제 시작 인증 PASS. 최초 모집단 검증에서 pointer 오류로 중단; seed/delta·자동 갱신 완료는 아님. [실제 활성화 기록](docs/status/LOCAL_INDEXING_ACTIVATION_2026-10-14.md) |
 | 인증된 owner/session 전달 | 수신 API 설치·실제 UID990의 provider/process/config/key-metadata 검증 PASS; 실제 사용자 capture·seed는 별도 실행 gate |
 | 현재 사용자·자료의 native 작업 접수 연결 | SOURCE_IMPLEMENTED; 실제 인증 capture→기존 Catalog 검증·계획 재구성·잠금 확인을 연결, 운영 provider/실행기 연결은 미활성 |
 | Native INDEX 파일 전달·입력/결과 저장 | SOURCE_PASS; 실제 계정 권한4·설치된 시작 권한9·CPU 합성 입력2개×1024차원·동일 실행 재조회 PASS, 실제 자료/Job/binding 연결은 미활성 |
@@ -320,7 +320,8 @@ Catalog 서비스 자료 정책1.1·공식 owner 발행·Registry 등록 연결�
 현재 후보에는 고정 설치 entry·비밀값 없는 owner 설정·정본 systemd 템플릿을 추가했습니다.
 기존 Runner를 인덱싱 전용으로 구성하며 같은 큐의 실행 주체 필터는 권한으로 취급하지 않습니다.
 실제 프로세스 확인 이후 설정을 읽고 변경을 감지하며, Codex 역할/슬롯을 만들지 않습니다.
-Catalog 권한 계약에 필요한 embedding/native 명령 권한만 추가했으며 실제 GRANT는 미적용입니다.
+Catalog 권한 계약에는 필요한 embedding/native 명령 권한만 추가했습니다. 후속 운영 배포에서
+실제 권한 정합을 적용했으며, 정책·출판 기록의 UPDATE 권한은 주지 않습니다.
 
 서비스 구성 후보`9730bf95`의93-suite 회귀2,427개·strict mypy74 모듈·Ruff131 파일이 PASS했습니다.
 이후 추가된 정본 unit 템플릿 사례도 별도62-case gate에서 PASS했으며 중복 합산하지 않습니다.
@@ -338,7 +339,7 @@ encoding reservation9개, 서로 다른178개가 PASS했습니다.
 Application API wheel fallback을 금지하고 설정/schema/정본 unit 템플릿을 확인했습니다.
 0055 전용 배포 계약1.4는 정확한0054에서만 갱신하며 운영 migration을 뜻하지 않습니다.
 
-**운영 서비스 활성화·자동 증분 처리·실제 seed/delta/QUERY·CPU/GPU 비교는 아직 남아 있습니다.**
+**정상 자동 증분 처리·실제 seed/delta/QUERY·CPU/GPU 비교는 아직 남아 있습니다.**
 다음은 구현된 서비스 entry/provider를 실제로 설치·승인하고 연결하는 단계입니다.
 후속 Identity 소유자 설치 경계는 고정 DB 함수의 생성·정확한 재실행·동시 설치 차단을
 지원하며 기존 drift를 덮거나 권한을 자동 복구하지 않습니다. 실패한 생성/권한 변경은
@@ -348,8 +349,11 @@ owner 설치 도구도 보호된 interpreter/libexec만 실행하도록 보강�
 후속 실제 배포에서는 보호된 owner 코드`4cf6ac9a` 설치, 새 DB 백업,
 정식`0053→0054→0055` 갱신, 고정 Identity 함수와 Catalog 권한 정합,
 API/공유 런타임`4cf6ac9a` 배포·격리 검증을 완료했습니다. 관련9개 서비스와
-API LIVE/READY를 확인했습니다. 인덱싱 전용 서비스의 신원/자료 정책 활성화와
-실제 seed/delta/QUERY는 아직 수행하지 않았습니다. 이 설치를 자동 처리 완료로 표시하지 않습니다.
+API LIVE/READY를 확인했습니다. 이후 인덱싱 전용 신원/자료 정책과 고정 unit을 설치했습니다.
+실제 시작 검증에서 찾은 불변 기록의 불필요한 쓰기 잠금은 SELECT-only 경로로 수정했고,
+새 설치본의 서비스 인증·시작을 확인했습니다. 첫 모집단 읽기의 pointer 오류를 진단 중이며
+아직 실제 seed/delta/QUERY를 완료하지 않았습니다. [활성화 기록과 남은 gate](docs/status/LOCAL_INDEXING_ACTIVATION_2026-10-14.md)를
+따릅니다. 이 설치를 자동 처리 완료로 표시하지 않습니다.
 [서비스 Runner 구현·검증 기록](docs/status/LOCAL_INDEXING_RUNNER_SERVICE_CHECKPOINT_2026-10-14.md),
 [현재 Registry checkpoint](docs/status/LOCAL_INDEXING_REGISTRY_SERVICE_CHECKPOINT_2026-10-14.md),
 [정책 발행 증거](docs/status/LOCAL_INDEXING_POLICY_PUBLICATION_CHECKPOINT_2026-10-14.md),

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from threading import Event
 from types import SimpleNamespace
@@ -149,6 +150,35 @@ def test_developer_entry_denies_before_configuration_and_redacts_error(monkeypat
     output = capsys.readouterr().out
     assert "synthetic credential" not in output
     assert "LOCAL_INDEXING_SERVICE_UNAVAILABLE" in output
+
+
+def test_failure_detail_preserves_safe_context_even_when_traceback_display_is_suppressed():
+    from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactResolutionError
+
+    try:
+        try:
+            raise PinnedArtifactResolutionError("SECRET source bytes and credential")
+        except PinnedArtifactResolutionError:
+            raise ValueError("SECRET wrapper payload") from None
+    except ValueError as error:
+        detail = entry._failure_detail(error)
+    assert detail == {
+        "cause_type": "PinnedArtifactResolutionError",
+        "cause_code": None,
+        "cause_site": None,
+    }
+    assert "SECRET" not in json.dumps(detail)
+
+
+def test_failure_detail_bounds_exception_cycles_and_redacts_noncode_attributes():
+    error = ValueError("SECRET")
+    error.__context__ = error
+    error.code = "SECRET value must not leak"
+    assert entry._failure_detail(error) == {
+        "cause_type": "ValueError",
+        "cause_code": None,
+        "cause_site": None,
+    }
 
 
 def test_stop_after_idle_peek_does_not_start_new_observation():
