@@ -214,3 +214,24 @@ Next is the separately admitted least-privilege runtime fence and Catalog indexi
 source grant. The owner-only metadata lock must not be called a machine-authentication
 capability or be exposed as runtime owner privilege. Source head0055 does not imply
 that production has been migrated; installed release alignment remains required.
+
+### Release admission successor
+
+The first7bf24aea package attempt correctly stopped at the existing0054 admission
+guard. Add JSON Schema `release-operator-context/1.4` and its admission receipt for
+exact0055, using the existing protected operator boundary and immutable source/
+archive/wheel/runtime pins. The new fixed VERIFY/UPGRADE0055 callbacks accept
+only0055 itself or, for an upgrade, exact0054. They do not skip the production0053
+predecessor; a separately pinned0054 release must perform that earlier step.
+Old context1.0–1.3 schema bytes, callback targets, owner checks and the historical
+0051 migration wrapper retain their meanings. No generic `head` callback or role
+override is added. The build's installed-head gate advances only with the tested
+new admission family. Failed build evidence is preserved. This source change is
+not an installed/admitted root operator, production migration or service data grant.
+
+The new1.4 family and existing1.0–1.3 regressions passed in the final73-suite
+**1,958 PASS** gate (276.70s), with strict type36 modules and lint/format65 files.
+The actual DB119-case proof above is unchanged. Callback tests use explicitly
+synthetic protected-runtime/owner-DB seams; they are not root installation proof.
+The exact schema raw SHA is
+`af03ddeccb0cab48f60341121c987e05733e18aba1986c06408d835953eacb79`.
