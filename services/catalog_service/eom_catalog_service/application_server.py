@@ -167,6 +167,8 @@ from eom_catalog_service.pdf_document_review_intake import (
     PdfDocumentReviewIntakeService,
 )
 from eom_catalog_service.registry_service import RegistryService
+from eom_catalog_service.similarity_read_dispatch import dispatch_similarity_read_frame
+from eom_catalog_service.similarity_read_service import CatalogSimilarityContextReadService
 
 CATALOG_APPLICATION_SOCKET = Path(CATALOG_APPLICATION_SOCKET_PATH)
 MAX_MESSAGE_BYTES = CATALOG_APPLICATION_MAX_MESSAGE_BYTES
@@ -201,6 +203,12 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 raise ValueError
             raw_operation = value.get("operation")
             if not self.server.peer_can_operate(self.request, raw_operation):
+                return
+            if raw_operation == "READ_SIMILARITY_CONTEXT":
+                self.wfile.write(
+                    dispatch_similarity_read_frame(self.server.similarity_context_reads, raw)
+                )
+                self.wfile.flush()
                 return
             if raw_operation == "INFERENCE_TRANSFER_METADATA_RESOLVE":
                 self.wfile.write(
@@ -1263,6 +1271,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         chat_knowledge: ChatKnowledgeResolutionService | None = None,
         chat_rag: ChatRagResolutionService | None = None,
         inference_transfer_metadata: CatalogInferenceTransferMetadataService | None = None,
+        similarity_context_reads: CatalogSimilarityContextReadService | None = None,
         inference_transfer_snapshot: InferenceTransferSnapshotApplicationService | None = None,
         inference_transfer_workflow_reads: CatalogInferenceTransferWorkflowReadService
         | None = None,
@@ -1288,6 +1297,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.chat_knowledge = chat_knowledge
         self.chat_rag = chat_rag
         self.inference_transfer_metadata = inference_transfer_metadata
+        self.similarity_context_reads = similarity_context_reads
         self.inference_transfer_snapshot = inference_transfer_snapshot
         self.inference_transfer_workflow_reads = inference_transfer_workflow_reads
         self.chat_search = (

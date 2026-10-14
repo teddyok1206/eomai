@@ -2325,3 +2325,83 @@ API `19fad5bfa0c173bfcd847f860f78d17f34d3735a8fa66ed77f2fc0a1a0c5bc21`.
 Evidence: `similarity-read-owner-split-{release-build,owner-pair-proof,three-wheel-proof}.log`;
 exact disjoint file groups/counts: `similarity-read-owner-split-test-groups.json`.
 The candidate is not installed or activated; current provider/owner pins are preserved.
+
+## 26. Exact completed-QUERY Catalog read binding — design before implementation
+
+1. Responsibility: authenticated API-to-Catalog read on the existing private socket;
+   no model execution, submission, recovery or INDEX-service privilege expansion.
+2. Canonical source: existing Workflow initial request, terminal history, official
+   source/index registry and committed QUERY/receipt Artifacts.
+3. Identity: exact Workflow ID plus original request and context-request semantic
+   SHA values. Neither an Artifact path nor a newest-successful lookup selects it.
+4. Resolution: current actual actor, own creator, original request equality/hash,
+   terminal closure, current source/Graph/policy permissions and canonical member
+   provenance remain mandatory. A new read fence is not an old execution capture.
+5. Access: primary-key Workflow lookup and bounded ordered candidate composition;
+   no scanning other users' requests or copying vector/full Item bytes over RPC.
+6. Structures: existing PK/FK/checkpoint indexes, frozen typed selector and existing
+   common context. No table, index, queue, cache or dependency is added.
+7. Scale: one selected Workflow, at most1024 scoped sources and64 candidates under
+   existing limits. Selection is indexed; numeric ranking keeps its existing bound.
+8. Transaction: one caller-owned root for current Identity/source/terminal checks
+   and common context; late selection/source/provenance checks before returning.
+9. Ownership: schema/Pydantic values in contracts; Catalog read service composes
+   existing Workflow read adapters; API adapter only transports authenticated actor.
+   Native execution constructors are not part of the read service.
+10. Failure: closed metadata-only errors, no data on failure, no retry submission or
+    latest fallback. Repeated reads reauthorize exact pins and make no writes.
+11. Alternative: sending the whole stored Workflow request or scanning latest is
+    larger and permits ambiguous selection. A three-field exact selector suffices.
+
+The existing API-only peer gate applies. The chat-owner UID retains only its
+existing chat operations; this RPC does not expose a worker tool or public endpoint.
+Optional composition fails unavailable until independently admitted current Identity
+fence and trusted released configuration are supplied. Source tests cannot activate
+the SQL owner function, service grants or native QUERY execution.
+
+### 26.1 Source implementation and verification — 2026-10-14 UTC
+
+Schema-first `system-rag-similarity-read/1.0` is registered with identical canonical
+and package resources (raw SHA `6cdf5bf757b524968f7ffa5fe7dae093f7ca01cf28bd5fc20708c27e4e687dbe`).
+The three-field selector pins Workflow ID, original Workflow-request SHA and
+context-request SHA. Only the fixed API peer can use `READ_SIMILARITY_CONTEXT`;
+the chat UID's existing allowlist is unchanged. Reply binding covers the actual
+actor and entire request hash, with exact context-request identity and closed errors.
+
+`CatalogSimilarityContextReadService` selects the actual stored initial request
+by primary key only after its explicit current Identity fence. It rejects missing
+or foreign creators, non-completed/divergent requests, changed pins and terminal
+source/output changes. The existing common composer and canonical QUERY reader
+retain the same root and source/index/Graph/policy checks. The optional outer
+Artifact reader is checked against that root/settings and revalidates QUERY/receipt
+provenance after the final outer checks without re-reading model bytes. There is
+no native execution constructor, old session/capture reuse, latest query search,
+new table, mutation, dependency, vector RPC payload or source-policy expansion.
+
+Disjoint source groups: **62 PASS /31.88s** (four new read contract/boundary/service/
+provenance suites), **60 PASS /82.15s** (four existing consumer/read-owner/session/
+Catalog-boundary suites), **23 PASS /12.17s** (three resource/dependency/consumer
+boundary suites): **145 distinct tests**. Strict mypy7 and Ruff/format11 PASS.
+Earlier21/58 and intermediate failing invocations overlap these groups and are
+not additional totals. Initial test-fixture errors were corrected without weakening
+contract, owner, root or provenance checks; their logs are retained.
+
+Tests include actual temporary SQLite PK lookup (two SELECTs per service read at
+the explicitly synthetic owner boundary), repeat reads with no writes, actual Unix
+socket round trips and wrong server/client UID rejection, chat-peer refusal, altered
+actor/request/context replies, malformed/oversize frames, current and late denial,
+changed terminal sources/output, shared-root/settings negatives, and actual temporary
+QUERY/receipt Artifact bytes withdrawn after the canonical consumer returns.
+Identity/source/Workflow and numeric seams remain synthetic where each suite says so.
+No PostgreSQL persistence behavior changed. Existing disposable68 evidence remains
+historical; these source tests are not fresh PostgreSQL or actual operator-RPC proof.
+
+Evidence prefix: `/tmp/eom-identity-provider-install.nAaycoDM/similarity-read-rpc-`.
+No production deployment, control/Pack publication, admission, QUERY forward, seed/
+delta rerun or GPU benchmark occurred. At21:03:31 UTC the original genuine QUERY
+process pair remained S+ in its original live pane, still at the original Studio
+input gate. It was not restarted or supplied commands. Installed source pins remain
+unchanged. Production composition must still supply independently admitted Identity
+function owner and trusted released read configuration; default unavailable is not
+silently converted to an authority grant. Full-goal consumer activation, actual QUERY,
+automatic coverage and CPU/GPU/default-device requirements remain open.

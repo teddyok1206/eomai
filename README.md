@@ -383,6 +383,10 @@ API LIVE/READY를 확인했습니다. 이후 인덱싱 전용 신원/자료 정�
 위해 owner는 정상 종료 상태입니다. [활성화 기록과 남은 gate](docs/status/LOCAL_INDEXING_ACTIVATION_2026-10-14.md)와
 [명시적 QUERY 인증 전달 검증](docs/status/REFERENCE_QUERY_OWNER_SESSION_CHECKPOINT_2026-10-14.md)을
 따릅니다. 부분 coverage를 전체 corpus 또는 상시 자동 처리 완료로 표시하지 않습니다.
+완료된 QUERY를 정확한 ID·원래 요청 검증값으로 읽는 공통 Catalog 조회 연결도
+소스에 추가했습니다. 현재 사용자 권한·자료 상태를 재검사하며, API는 벡터나 NAS를
+직접 읽지 않습니다. 이 선택적 연결의 운영 구성·활성화는 아직 완료하지 않았습니다.
+[조회 계약과 검증 경계](docs/architecture/SYSTEM_RAG_SIMILARITY_CONTEXT_IMPLEMENTATION_BOUNDARY.md#26-exact-completed-query-catalog-read-binding--design-before-implementation)를 따릅니다.
 [서비스 Runner 구현·검증 기록](docs/status/LOCAL_INDEXING_RUNNER_SERVICE_CHECKPOINT_2026-10-14.md),
 [현재 Registry checkpoint](docs/status/LOCAL_INDEXING_REGISTRY_SERVICE_CHECKPOINT_2026-10-14.md),
 [정책 발행 증거](docs/status/LOCAL_INDEXING_POLICY_PUBLICATION_CHECKPOINT_2026-10-14.md),

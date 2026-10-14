@@ -52,10 +52,12 @@ class CatalogCompletedReferenceQueryRead:
         *,
         workflow_id: str,
         request: ReferenceQueryWorkflowRequest,
+        artifact_reader: PinnedArtifactReadContext | None = None,
     ) -> None:
         self.owner = owner
         self.workflow_id = TypeAdapter(WorkflowId).validate_python(workflow_id)
         self.request = parse_reference_query_workflow_request(request)
+        self.artifact_reader = artifact_reader
         self.sessions = build_session_factory(owner.catalog.engine)
 
     def resolve_reference_query(
@@ -92,7 +94,14 @@ class CatalogCompletedReferenceQueryRead:
             )
             if current.sources.prepared != prepared:
                 raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
-            provenance = PinnedArtifactReadContext(session, self.owner.settings)
+            provenance = (
+                PinnedArtifactReadContext(session, self.owner.settings)
+                if self.artifact_reader is None
+                else self.artifact_reader
+            )
+            provenance.require_session(session)
+            if provenance.settings != self.owner.settings:
+                raise SimilarityContextReadError("QUERY_RESULT_INVALID")
             canonical, history = resolve_reference_query_publication(
                 self.owner.settings,
                 session=session,
