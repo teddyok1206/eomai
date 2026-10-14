@@ -144,8 +144,11 @@ def test_existing_completed_execution_reuses_result_without_another_start(
 def test_existing_uncertain_or_failed_handle_is_not_restarted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, state: str
 ) -> None:
-    adapter, calls = setup_launcher(tmp_path, monkeypatch, [("success", state)])
-    with pytest.raises(launcher.NativeIndexLaunchError, match="UNCERTAIN"):
+    states = [("success", state)] * (2 if state == "failed" else 1)
+    adapter, calls = setup_launcher(tmp_path, monkeypatch, states)
+    with pytest.raises(
+        launcher.NativeIndexLaunchError, match="KNOWN_FAILED" if state == "failed" else "UNCERTAIN"
+    ):
         adapter.run(prepared())
     assert calls == []
 

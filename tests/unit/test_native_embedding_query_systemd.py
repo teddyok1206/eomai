@@ -108,8 +108,11 @@ def test_uncertain_failed_or_active_existing_handle_never_restarts(
     monkeypatch: pytest.MonkeyPatch,
     state: str,
 ) -> None:
-    adapter, calls = setup_launcher(tmp_path, monkeypatch, [("success", state)])
-    with pytest.raises(launcher.NativeQueryLaunchError, match="UNCERTAIN"):
+    states = [("success", state)] * (2 if state == "failed" else 1)
+    adapter, calls = setup_launcher(tmp_path, monkeypatch, states)
+    with pytest.raises(
+        launcher.NativeQueryLaunchError, match="KNOWN_FAILED" if state == "failed" else "UNCERTAIN"
+    ):
         adapter.run(prepared())
     assert calls == []
 

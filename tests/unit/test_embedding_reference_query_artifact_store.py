@@ -178,6 +178,21 @@ def publish(value: PreparedQuery, **changes: Any) -> PublishedReferenceQueryArti
     return value.store.publish_reference_query(**arguments)
 
 
+@pytest.mark.parametrize("digest", ("sha256:" + "f" * 64, True, "not-a-hash"))
+def test_observed_completion_hash_is_checked_before_any_publication(tmp_path, query_case, digest):
+    value = prepare(tmp_path, query_case)
+    with pytest.raises(EmbeddingArtifactStoreError):
+        publish(value, expected_result_sha256=digest)
+    assert value.publisher.calls == []
+
+
+def test_exact_observed_completion_hash_keeps_existing_publication_contract(tmp_path, query_case):
+    value = prepare(tmp_path, query_case)
+    result = publish(value, expected_result_sha256=value.result.result_sha256)
+    assert result.result.member_path == "result.json"
+    assert len(value.publisher.calls) == 1
+
+
 def replace_binary(value: PreparedQuery, payload: bytes, *, rehash: bool) -> None:
     write_member(value.workspace / "vectors.f32", payload)
     if rehash:

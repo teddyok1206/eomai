@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
+from eom_orchestrator.native_reference_query_coordinator import (
+    NativeReferenceQueryCoordinator,
+    read_native_reference_query_launch,
+)
 from eom_workflow.compiler import CompiledWorkflowDefinition
+from eom_workflow.native_reference_query_coordinator import NativeQueryCompleted
 from eom_workflow.reference_query_execution import (
     ReferenceQueryStepOutput,
     ReferenceQueryWorkflowRequest,
@@ -27,8 +32,16 @@ from eom_workflow_runner.reference_query_admission import (
     ReferenceQueryOwnerAdmission,
     validate_reference_query_runner_admission,
 )
-from eom_workflow_runner.reference_query_execution_port import ReferenceQueryNativeExecutor
-from eom_workflow_runner.repository import CommandLeaseIdentity, create_step_run
+from eom_workflow_runner.reference_query_execution_port import (
+    ReferenceQueryNativeExecutor,
+    ReferenceQueryStepPending,
+)
+from eom_workflow_runner.repository import (
+    CommandLeaseIdentity,
+    CommandType,
+    create_step_run,
+    enqueue_command,
+)
 from eom_workflow_runner.state_machine import (
     StepState,
     WorkflowState,
@@ -99,7 +112,8 @@ def advance_reference_query_step(
     fenced_transaction: NativeFencedRunnerTransaction,
     actor_type: str,
     actor_id: str,
-) -> None:
+    poll_interval_seconds: int = 30,
+) -> bool:
     if not isinstance(compiled.definition, ReferenceQueryWorkflowDefinition):
         raise WorkflowError(
             WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID, "QUERY fixed definition differs"
@@ -164,7 +178,7 @@ def advance_reference_query_step(
                     "QUERY step replay receipt could not be validated",
                 ) from exc
             current.current_step_key = "complete"
-            return
+            return True
         if step.state == StepState.READY.value:
             transition_step(step, StepState.RUNNING)
             step.started_at = datetime.now(UTC)
@@ -210,6 +224,31 @@ def advance_reference_query_step(
                 "QUERY completion lost its original current step",
             )
         _checked_step(step, request)
+        if isinstance(outcome, ReferenceQueryStepPending):
+            try:
+                completed = _checked_pending(session, request, workflow_id, step_run_id, outcome)
+            except (ValueError, TypeError) as error:
+                raise WorkflowError(
+                    WorkflowErrorCode.LOCAL_EMBEDDING_OUTCOME_INVALID,
+                    "QUERY pending outcome differs from its original execution",
+                ) from error
+            if completed is None:
+                enqueue_command(
+                    session,
+                    workflow_id=workflow_id,
+                    command_type=CommandType.ADVANCE_WORKFLOW,
+                    payload={"step_run_id": step_run_id},
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                    source="reference-query-owner",
+                    idempotency_key=f"reference-query-pending:{step_run_id}:{lease.command_id}",
+                    available_at=datetime.now(UTC)
+                    + timedelta(seconds=min(60, max(5, poll_interval_seconds))),
+                )
+                return False
+            # Another owner may have completed the same Job since the pending read.
+            # Adopt only that exact canonical result via the normal completion fence.
+            outcome = completed
         if not isinstance(outcome, ReferenceQueryStepOutput):
             raise WorkflowError(
                 WorkflowErrorCode.LOCAL_EMBEDDING_OUTCOME_INVALID,
@@ -244,6 +283,36 @@ def advance_reference_query_step(
             command_id=lease.command_id,
             step_key="encode_reference_query",
         )
+        return True
+
+
+def _checked_pending(
+    session: Session,
+    request: ReferenceQueryWorkflowRequest,
+    workflow_id: str,
+    step_run_id: str,
+    outcome: ReferenceQueryStepPending,
+) -> ReferenceQueryStepOutput | None:
+    pending = ReferenceQueryStepPending(
+        outcome.native_launch_job_id, outcome.association_sha256, outcome.reason
+    )
+    launch = read_native_reference_query_launch(
+        session, request=request, workflow_id=workflow_id, step_run_id=step_run_id
+    )
+    if launch is None or (
+        launch.native_launch_job_id != pending.native_launch_job_id
+        or launch.association_sha256 != pending.association_sha256
+    ):
+        raise ValueError("QUERY pending original launch differs")
+    history = NativeReferenceQueryCoordinator(request, launch).read(session)
+    if not history.records or history.state in {"FAILED", "CANCELLED"}:
+        raise ValueError("QUERY pending requires allocated nonfailed original history")
+    if len(history.records) == 4:
+        completed = history.records[3].payload
+        if not isinstance(completed, NativeQueryCompleted):
+            raise ValueError("QUERY terminal checkpoint differs")
+        return completed.output
+    return None
 
 
 def complete_reference_query_terminal(

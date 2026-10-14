@@ -13,12 +13,7 @@ from eom_catalog_service.embedding_registry_ports import (
 from eom_catalog_service.local_embedding_encoding_artifacts import (
     CatalogLocalEmbeddingEncodingArtifacts,
 )
-from eom_identifiers import (
-    content_sha256,
-    new_job_id,
-    new_logical_artifact_id,
-    new_revision_id,
-)
+from eom_identifiers import content_sha256
 from eom_orchestrator.embedding_artifact_store import (
     PublishedEmbeddingArtifacts,
 )
@@ -59,7 +54,6 @@ from eom_workflow.local_embedding_workflow_receipt import (
     LocalEmbeddingStepOutput,
 )
 from eom_workflow.native_embedding_coordinator import (
-    NativeArtifactProducerIdentity,
     NativeCoordinatorAllocation,
     NativeCoordinatorCompleted,
     native_coordinator_checkpoint,
@@ -83,7 +77,10 @@ from eom_workflow_runner.local_embedding_owner_admission import (
     CatalogLocalEmbeddingOwnerAdmission,
     ResolvedLocalEmbeddingSources,
 )
-from eom_workflow_runner.local_embedding_publications import native_embedding_publications
+from eom_workflow_runner.local_embedding_publications import (
+    native_embedding_publications,
+    new_native_artifact_producer,
+)
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from eom_workflow_runner.readiness import (
     ReadinessStatus,
@@ -91,14 +88,6 @@ from eom_workflow_runner.readiness import (
     RuntimeReadinessReport,
 )
 from eom_workflow_runner.repository import CommandLeaseIdentity
-
-
-def _producer() -> NativeArtifactProducerIdentity:
-    return NativeArtifactProducerIdentity(
-        job_id=new_job_id(),
-        artifact_id=new_logical_artifact_id(),
-        artifact_revision_id=new_revision_id(),
-    )
 
 
 def _encoding_requests(plan: LocalEmbeddingSourcePlan) -> tuple[EmbeddingEncodingJobRequest, ...]:
@@ -288,8 +277,8 @@ class CatalogNativeEmbeddingExecutor:
                 raise ValueError("LOCAL_EMBEDDING_EXECUTOR_TERMINAL_HISTORY")
             if not history.records:
                 allocation = NativeCoordinatorAllocation(
-                    index_producer=_producer(),
-                    receipt_producer=_producer(),
+                    index_producer=new_native_artifact_producer(),
+                    receipt_producer=new_native_artifact_producer(),
                     created_at=datetime.now(UTC),
                     source_commit=self.source_commit,
                 )

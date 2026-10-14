@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+from eom_identifiers import new_job_id, new_logical_artifact_id, new_revision_id
 from eom_orchestrator.embedding_artifact_store import EmbeddingArtifactStore
 from eom_orchestrator.file_set_control_artifacts import (
     ControlFileSetIdentity,
@@ -25,6 +26,15 @@ class NativeEmbeddingPublications:
 
 def native_publication_identity(value: NativeArtifactProducerIdentity) -> ControlFileSetIdentity:
     return ControlFileSetIdentity(value.job_id, value.artifact_id, value.artifact_revision_id)
+
+
+def new_native_artifact_producer() -> NativeArtifactProducerIdentity:
+    """Allocation only; the current owner separately authorizes a publication."""
+    return NativeArtifactProducerIdentity(
+        job_id=new_job_id(),
+        artifact_id=new_logical_artifact_id(),
+        artifact_revision_id=new_revision_id(),
+    )
 
 
 def native_embedding_publications(

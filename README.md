@@ -171,7 +171,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | 공통 유사도 context 조립 | SOURCE_PASS; 기출변형용 승인 anchor·3개 독립 view·현재 권한 재확인334 PASS, 실제 QUERY 실행·소비자 연결은 미활성 |
 | genuine QUERY 입력·encoder/handoff·실행 계약 | SOURCE_PASS; 현재 자료·정본4파일과 기존 큐의 QUERY별 claim/완료 검증 연결. 실제 고정 unit·정본 실행·소비자 조회는 미활성 |
 | 고정 CPU QUERY 실행 어댑터 | SOURCE_PASS; private/root handoff·공통 capacity·재시작 후 중복 dispatch 차단·정확한 실행 관찰 구현. QUERY unit/polkit은 미설치, 실제 계산은 미검증 |
-| QUERY Job·정본 완료 검증 | SOURCE_PASS; 원래 Job/4개 checkpoint·고정 producer 게시·현재 권한/자료/입력/정본 파일 완료 검증 구현. 실제 executor 조립·claim 복구·운영 소비 연결은 미완료 |
+| QUERY Job·실행·정본 완료 검증 | SOURCE_PASS; 원 Job/4개 checkpoint·실행기 조립·현재 권한/자료/정본 완료 검증·원 claim 복구 구현. 운영 설치·실제 계산·소비 연결은 미검증 |
 | authenticated owner/session fence | SOURCE_PASS; 실제 disposable writer 경쟁·만료 rollback11 PASS, production provider 연결은 미활성 |
 | 인증된 owner/session 전달 | 수신 API 설치·실제 UID990의 provider/process/config/key-metadata 검증 PASS; 실제 사용자 capture·seed는 별도 실행 gate |
 | 현재 사용자·자료의 native 작업 접수 연결 | SOURCE_IMPLEMENTED; 실제 인증 capture→기존 Catalog 검증·계획 재구성·잠금 확인을 연결, 운영 provider/실행기 연결은 미활성 |
@@ -268,34 +268,22 @@ seed/delta/query·자동 service indexing의 완료 증거는 아닙니다. 실�
 이 확인은 인증된 실제 자료 실행·자동 증분 갱신의 완료 증거가 아닙니다. 제한된 실제
 기출 seed1→추가1→같은 요청 재전송은 동일 사용자 인증 뒤 실행하도록 준비했습니다.
 
-인증 대기 중에는 검색용 QUERY의 현재 사용자·자료 연결을 구현했습니다. 기존 입력1.0은
-그대로 두고 실제 배치4 설정의 입력1.1을 공통 context 조립기에 명시적으로 연결하며,
-같은 transaction 안에서 자료·보고서·인덱스와 현재 권한을 확인합니다. 정본4파일과 실제
-게시 Job을 읽는 경로도 추가했지만, 이것만으로 실제 QUERY 실행이 승인됐다고 판단하지
-않습니다. 이 source 연결의24-suite657 PASS 이후, 기존 큐에 QUERY 전용 준비·claim·완료/
-재전송 경계를 추가했습니다. 같은 큐에서 준비되지 않은 QUERY가 INDEX나 출제를 막지
-않도록 실행 종류를 분리하고 공통 root/lease/terminal 검사는 공유합니다. 실제 고정 unit·
-genuine 실행·기출변형 등 소비자 활성화는 아직 후속 작업입니다. source migration은
-QUERY의 정확한 step/result CHECK만 추가하는0054이며, 운영 DB는0053 그대로입니다.
-새 protected release context1.3은0053→0054만 허용하고 기존 계약/명령의 의미는 보존합니다.
-이 후속38-suite1,004 PASS·strict type16·lint/format31 PASS입니다. 새 PostgreSQL13개
-사례는 공식 임시 DB 실행 경로에 추가했지만 아직 미실행이며 운영 활성화 증거가 아닙니다.
-이후 고정 CPU QUERY의5개 기존 계약 staging·3-descriptor root 전달·결과 검증을 구현하고
-INDEX와 실행/capacity 처리를 공유했습니다. 실제 systemd의 INDEX prepare가 별도 template
-slice를 쓰는 점도 확인해 두 경로의 잔여 프로세스를 검사합니다.50-suite1,263 PASS,
-strict type8·lint/format14·새 unit verify와 실제 커널의 읽기 전용 점검 PASS입니다.
-이어서 원래 QUERY Job과4개 checkpoint, 지정 producer로 게시하는4파일·영수증, 현재
-사용자/자료/정확한 입력/정본 파일을 다시 확인하는 완료 owner를 구현했습니다. source의
-INDEX/QUERY 모두 실행 직전 durable marker를 소모해 재부팅으로 unit 기록이 사라져도
-같은 계산을 다시 시작하지 않습니다. 실제 executor 조립·claim 복구·소비자 연결은 아직
-남아 있으며, 새 QUERY unit/권한도 미설치입니다. CPU 설치·INDEX unit·운영 서비스·DB는
-이번 source 작업에서 변경하지 않았습니다.
-이 최신57-suite1,382 PASS·strict type14·lint/format22 PASS는 실제 임시 Job/Artifact/파일
-검증이며, 운영 사용자 인증·실제 임베딩 계산·GPU 성능 검증과는 구분합니다.
-code candidate `3fecb3f3`의3-wheel build/RECORD와 격리된 wheel-only10개 module import·
-packaged schema 검증도 PASS했으며, 실제 설치/활성화는 수행하지 않았습니다.
-[QUERY owner 연결 범위](docs/architecture/REFERENCE_QUERY_OWNER_COMPOSITION.md)에 source
-검증과 아직 없는 운영 경계를 구분했습니다. 기존 서비스·CPU 모델 환경은 바꾸지 않았습니다.
+검색용 QUERY는 현재 사용자·자료·보고서·인덱스 확인부터 고정 CPU 실행기와 정본 완료
+검증까지 코드상 연결했습니다. 기존 입력1.0은 유지하고 입력1.1의 실제 배치4를 사용합니다.
+기존 큐에서 ROLE/INDEX/QUERY를 분리하므로 준비되지 않은 QUERY가 다른 실행을 막지 않습니다.
+SQL 밖에서 계산하고, 원 Job/4개 checkpoint와 지정 producer의4파일·영수증을 검증합니다.
+대기·중단 복구는 원래 identity를 재사용하며, 재부팅으로 unit 기록이 사라져도 같은 계산을
+다시 시작하지 않습니다. 확정 실패만 안정된 관찰 뒤 실패 이력으로 보존합니다.
+
+최신59-suite **1,459 PASS**·strict type20·lint/format31·shell/diff PASS입니다.
+실제 임시 Job/Artifact/파일·중단 복구 검증이며 IAM/자료/수치 계산의 합성 seam과 구분합니다.
+이전 단계의 build/RECORD·격리 wheel import도 기록했지만 실제 설치/활성화는 아닙니다.
+QUERY 정의/실행 단위는 아직 미허용·미설치이고, 실제 실행·소비자 연결은 후속 검증입니다.
+source head는0054, 운영 DB는0053이며 기존 계약·명령·CPU 설치·서비스는 변경하지 않았습니다.
+보호된 임시 DB 경로에 QUERY CHECK13개와 commit/crash/replay5개를 넣었으나 아직
+collection만 확인했습니다. 실제 DB/IAM/모델·GPU 검증 PASS로 확대하지 않습니다.
+[QUERY owner 구현·검증 기록](docs/architecture/REFERENCE_QUERY_OWNER_COMPOSITION.md)에
+단계별 증거와 남은 운영 경계를 구분했습니다.
 
 최근 독립 source gate는 whole-prefix1057·Identity246·pinned-read270 PASS와
 strict type/lint/format PASS입니다. 실제 임시 DB28개 사례에는 독립 실행기 claim 경쟁과

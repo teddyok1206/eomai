@@ -306,3 +306,29 @@ class NativeReferenceQueryCoordinator:
         )
         session.flush()
         return self.read(session)
+
+    def record_known_failure(self, session: Session) -> NativeReferenceQueryHistory:
+        """Only the observed fixed-unit failure; never timeout, repair or retry authority."""
+        _root(session)
+        job = session.scalar(
+            select(JobRecord)
+            .where(JobRecord.job_id == self.launch.native_launch_job_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        history = self.read(session)
+        code = "NATIVE_QUERY_KNOWN_FAILED"
+        if job is not None and history.state == JobState.FAILED.value and job.error_code == code:
+            return history
+        if job is None or history.state != JobState.RUNNING.value or len(history.records) != 1:
+            raise NativeReferenceQueryHistoryError("REFERENCE_QUERY_FAILURE_TERMINAL_OR_FOREIGN")
+        job = transition_job(
+            session,
+            job.job_id,
+            JobState.FAILED,
+            "REFERENCE_QUERY_NATIVE_EXECUTION_FAILED",
+            data={"code": code},
+        )
+        job.error_code, job.error_message = code, "fixed CPU QUERY unit failed"
+        session.flush()
+        return self.read(session)

@@ -1005,7 +1005,7 @@ class WorkflowRunner:
         if workflow.state in {WorkflowState.FAILED.value, WorkflowState.CANCELLED.value}:
             return
         if workflow.current_step_key == "encode_reference_query":
-            advance_reference_query_step(
+            continued = advance_reference_query_step(
                 workflow=workflow,
                 compiled=compiled,
                 request=request,
@@ -1015,7 +1015,10 @@ class WorkflowRunner:
                 fenced_transaction=self._fenced_transaction,
                 actor_type=actor_type,
                 actor_id=actor_id,
+                poll_interval_seconds=self.runner_config.poll_interval_seconds,
             )
+            if not continued:
+                return
         complete_reference_query_terminal(
             workflow_id=workflow.workflow_id,
             request=request,

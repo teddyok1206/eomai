@@ -268,6 +268,13 @@ def run_fixed_native_cpu[Result](
                 if observe(execution_id) != before:
                     raise NativeCpuExecutionError("NATIVE_CPU_UNCERTAIN")
                 return result
+            if before[1].failed or (before[0].failed and not before[1].status.process_started):
+                for unit in units:
+                    require_empty_native_cpu_cgroup(unit)
+                assert_runtime()
+                if observe(execution_id) != before:
+                    raise NativeCpuExecutionError("NATIVE_CPU_UNCERTAIN")
+                raise NativeCpuExecutionError("NATIVE_CPU_KNOWN_FAILED")
             if not all(row.fresh for row in before):
                 raise NativeCpuExecutionError("NATIVE_CPU_UNCERTAIN")
             require_no_active_native_cpu_execution()
@@ -292,6 +299,11 @@ def run_fixed_native_cpu[Result](
                     raise NativeCpuExecutionError("NATIVE_CPU_UNCERTAIN")
                 return result
             if after[1].failed or (after[0].failed and not after[1].status.process_started):
+                for unit in units:
+                    require_empty_native_cpu_cgroup(unit)
+                assert_runtime()
+                if observe(execution_id) != after:
+                    raise NativeCpuExecutionError("NATIVE_CPU_UNCERTAIN")
                 raise NativeCpuExecutionError("NATIVE_CPU_KNOWN_FAILED")
             raise NativeCpuExecutionError("NATIVE_CPU_UNCERTAIN")
     except NativeCpuExecutionError:

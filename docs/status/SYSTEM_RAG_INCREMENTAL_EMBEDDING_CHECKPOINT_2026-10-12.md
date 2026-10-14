@@ -2417,3 +2417,38 @@ read가 아직 남고, 실제 seed/delta/reuse·자동 service reconciliation·�
 외부 ref closure로 합성 checkpoint를 검증했다. source checkout import·실제 설치·모델/
 auth·DB·unit mutation은 없다. 최종 읽기 전용 점검에서 관련9개 서비스는 모두 active다.
 문서 후속 커밋과 검증된 code candidate를 구별하며, 이 결과로 운영 활성화를 주장하지 않는다.
+
+## 2026-10-14 UTC — QUERY 실제 실행기 조립·원 실행 재개 source
+
+[QUERY owner 설계/구현](../architecture/REFERENCE_QUERY_OWNER_COMPOSITION.md)의 후속11개
+결정에 따라 현재 source owner→고정 QUERY launcher→정본 publication/completion을 연결했다.
+계산/관찰은 SQL root 밖에서 수행한다. 1/2/3개 view 모두 실제 batch4를 유지하고,
+중단·재전송 시 원 native Job과 query/receipt producer를 재사용한다. 관찰한 수치 결과
+hash가 다른 파일은 게시 전에 거부하며, 실제 원본·권한은 게시/완료 경계에서 재확인한다.
+
+실제 SQLite 통합 시험에서 발견한 두 게시자의 transaction 순서 충돌은 query PUBLISHED
+기록을 commit한 뒤 receipt owner를 호출하도록 책임/짧은 root를 분리해 고쳤다. 재시도
+특례나 DB별 우회는 추가하지 않았다. 게시 전/후 네 지점의 controller 중단, 늦은 권한
+철회와 파일 교체에서도 정본 출력이 중복 생성되거나 다시 계산되지 않음을 회귀했다.
+
+BUSY/불확실/용량 조회 불가는 원래 Job의 typed pending으로 남기고 기존 큐에서5–60초
+뒤 이어간다. step은 RUNNING이며 늦게 완료된 같은 Job은 canonical 완료 검증을 통과해야
+채택한다. fresh poll/만료 claim도 정확한 원 step·nonfailed allocated history와 현재 권한이
+있어야 하며 만료만으로 새 실행을 허용하지 않는다. 확정 실패는 Orchestrator의 지원된
+coordinator에서 code와 함께 보존한다. INDEX/QUERY 모두 안정된 invocation/빈 cgroup/
+현재 runtime이 확인된 failure만 확정하고 timeout·잔존 자식·변경된 invocation은 불확실로 둔다.
+
+최종59-suite **1,459 PASS**,205.70s; strict mypy20·Ruff/format31·shell/diff PASS다.
+source helper/공식 테스트 경로 보강 후 전체 gate를 다시 실행했다. 앞1459/168/114/47/39/
+14개 결과와 합산하지 않는다. actual 임시 SQLite/Job/Artifact/파일과 합성 IAM/Workflow
+SQL/source/numerical seam을 구분하며 실제 운영 권한/계산 성공으로 주장하지 않는다.
+새 PostgreSQL commit/crash/replay5개는 보호된 `embedding-stage-tests`에 연결하고 collection
+확인만 했다. 이전 QUERY CHECK13개도 미실행이다. 운영 DB를 테스트에 사용하지 않았다.
+
+00:54 UTC 기존 controller3416211/3416258이 살아 있고 기존 log는0 bytes인 것을 확인했다.
+이를 인증/seed 완료로 추정하지 않았고 교체·재로그인·credential 저장을 하지 않았다.
+이 source 작업에서 운영 Job/Artifact·migration·서비스·모델/GPU 변경은 없다. QUERY
+declarative YAML은 frozen 계약과 같지만 여전히 미허용/미설치다. 원래 목표의 actual
+seed/delta/reuse/query, service 자동 갱신, 공통 소비자, CPU/GPU/default 선택은 남아 있다.
+`GOAL=ACTIVE`, `QUERY_EXECUTOR_COMPOSITION=SOURCE_PASS`, `QUERY_CLAIM_RECOVERY=SOURCE_PASS`,
+`QUERY_GLOBAL_ADMISSION=UNOFFERED`, `GENUINE_QUERY_CONSUMER_READ=NOT_ACTIVE`.

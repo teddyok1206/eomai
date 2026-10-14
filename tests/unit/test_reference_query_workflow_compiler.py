@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 import pytest
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_workflow.admission import workflow_admission, workflow_definition_is_admitted
-from eom_workflow.compiler import WorkflowDefinitionError, compile_definition_data
+from eom_workflow.compiler import (
+    WorkflowDefinitionError,
+    compile_definition,
+    compile_definition_data,
+)
 from eom_workflow.definition_execution_protocol import (
     DefinitionExecutionProtocolError,
     definition_execution_protocol,
@@ -42,6 +47,20 @@ def test_fixed_query_compiles_without_a_codex_role_and_replays_exactly() -> None
     assert not workflow_definition_is_admitted(REFERENCE_QUERY_WORKFLOW_KEY, "1.0.0")
     assert workflow_admission(REFERENCE_QUERY_WORKFLOW_KEY, "1.0.0") is None
     assert "embedding-reference-query-result@1.0" not in RESULT_SCHEMA_FILES
+
+
+def test_declared_query_candidate_matches_frozen_contract_without_activating_it() -> None:
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "config/workflows/local-embedding-reference-query.v1.yaml"
+    )
+    compiled = compile_definition(path, set())
+    assert compiled.as_dict() == definition_body()
+    assert (
+        compiled.sha256 == compile_definition_data(definition_body(), "typed-query", set()).sha256
+    )
+    assert definition_execution_protocol(compiled.definition) == REFERENCE_QUERY_EXECUTION_PROTOCOL
+    assert workflow_admission(REFERENCE_QUERY_WORKFLOW_KEY, "1.0.0") is None
 
 
 @pytest.mark.parametrize(

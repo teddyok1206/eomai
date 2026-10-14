@@ -294,6 +294,44 @@ def test_conflict_skip_and_terminal_job_never_rewrite_history(tmp_path):
         assert session.scalar(select(func.count()).select_from(JobRecord)) == 1
 
 
+def test_known_failure_uses_the_supported_job_owner_and_preserves_error_on_replay(tmp_path):
+    publisher, _ = _publisher(tmp_path)
+    value = case()
+    owner = NativeReferenceQueryCoordinator(value.request, value.launch)
+    with publisher.sessions.begin() as session:
+        create_native_reference_query_launch(session, request=value.request, launch=value.launch)
+        owner.append(session, query_records(value)[0])
+        failed = owner.record_known_failure(session)
+        assert failed.state == "FAILED" and len(failed.records) == 1
+    with publisher.sessions.begin() as session:
+        assert owner.record_known_failure(session) == failed
+        job = session.get(JobRecord, value.launch.native_launch_job_id)
+        assert job.error_code == "NATIVE_QUERY_KNOWN_FAILED"
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(JobEventRecord)
+                .where(JobEventRecord.event == "REFERENCE_QUERY_NATIVE_EXECUTION_FAILED")
+            )
+            == 1
+        )
+
+
+@pytest.mark.parametrize("phase", (0, 2, 3, 4))
+def test_known_failure_never_reinterprets_unlaunched_or_observed_success(tmp_path, phase):
+    publisher, _ = _publisher(tmp_path)
+    value = case()
+    owner = NativeReferenceQueryCoordinator(value.request, value.launch)
+    with publisher.sessions.begin() as session:
+        create_native_reference_query_launch(session, request=value.request, launch=value.launch)
+        for record in query_records(value)[:phase]:
+            owner.append(session, record)
+        original = owner.read(session)
+        with pytest.raises(ValueError, match="TERMINAL_OR_FOREIGN"):
+            owner.record_known_failure(session)
+        assert owner.read(session) == original
+
+
 @pytest.mark.parametrize("nested", [False, True])
 def test_no_autobegin_or_savepoint_as_current_owner_root(tmp_path, nested):
     publisher, _ = _publisher(tmp_path)

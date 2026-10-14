@@ -22,6 +22,7 @@ from eom_workflow.admission import workflow_definition_is_admitted
 from eom_workflow.compiler import CompiledWorkflowDefinition, compile_definition_data
 from eom_workflow.reference_query_execution import validate_reference_query_step_output
 from eom_workflow_runner import reference_query_admission, repository
+from eom_workflow_runner import reference_query_step_execution as step_module
 from eom_workflow_runner.engine import WorkflowRunner
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
 from eom_workflow_runner.models import (
@@ -41,7 +42,10 @@ from eom_workflow_runner.reference_query_admission import (
     ResolvedReferenceQueryAdmission,
     validate_reference_query_runner_admission,
 )
-from eom_workflow_runner.reference_query_execution_port import ReferenceQueryNativeExecutor
+from eom_workflow_runner.reference_query_execution_port import (
+    ReferenceQueryNativeExecutor,
+    ReferenceQueryStepPending,
+)
 from eom_workflow_runner.reference_query_step_execution import (
     advance_reference_query_step,
     complete_reference_query_terminal,
@@ -59,6 +63,7 @@ from eom_workflow_runner.repository import (
 from sqlalchemy import Engine, Table
 from sqlalchemy.orm import Session, sessionmaker
 
+from tests.unit.native_reference_query_coordinator_fixtures import query_records
 from tests.unit.test_control_file_set_publication import _publisher
 from tests.unit.test_reference_query_execution_contracts import Case, case
 from tests.unit.test_reference_query_workflow_contracts import definition_body
@@ -341,6 +346,90 @@ def test_fixed_lifecycle_closes_sql_before_inference_and_revalidates_terminal_re
     final = source.workflow.runtime_context["final_pointer_manifest"]
     assert set(final) == {"reference_query_receipt"}
     assert "text" not in str(final) and "vectors" not in str(final)
+
+
+@pytest.mark.parametrize("completed", (False, True))
+def test_pending_keeps_original_step_or_adopts_exact_late_completion(
+    source, monkeypatch, completed
+):
+    records = query_records(source.case)
+    pending = ReferenceQueryStepPending(
+        source.case.launch.native_launch_job_id, source.case.launch.association_sha256, "UNCERTAIN"
+    )
+    source.executor.execute.side_effect = lambda **_: pending
+    monkeypatch.setattr(
+        step_module, "read_native_reference_query_launch", lambda *_a, **_kw: source.case.launch
+    )
+    from types import SimpleNamespace
+
+    history = SimpleNamespace(
+        state="SUCCEEDED" if completed else "RUNNING", records=records if completed else records[:1]
+    )
+    monkeypatch.setattr(
+        step_module,
+        "NativeReferenceQueryCoordinator",
+        lambda *_: SimpleNamespace(read=lambda _: history),
+    )
+    source.advance()
+    queued = [
+        r for r in source.rows if isinstance(r, WorkflowCommandRecord) and r is not source.command
+    ]
+    if completed:
+        assert not queued and source.step.state == "SUCCEEDED"
+        assert source.workflow.current_step_key == "complete"
+        source.executor.validate_completion.assert_called_once()
+    else:
+        assert (
+            source.step.state == "RUNNING"
+            and source.workflow.current_step_key == "encode_reference_query"
+        )
+        assert len(queued) == 1 and queued[0].source == "reference-query-owner"
+        assert queued[0].payload == {"step_run_id": source.step.step_run_id}
+        assert 0 < (queued[0].available_at - datetime.now(UTC)).total_seconds() <= 60
+        assert source.step.output_pointer_manifest is None
+        source.executor.validate_completion.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "fault", ("missing", "job", "association", "failed", "unallocated", "scalar")
+)
+def test_invalid_pending_does_not_enqueue_or_mark_success(source, monkeypatch, fault):
+    from types import SimpleNamespace
+
+    launch = source.case.launch
+    pending = ReferenceQueryStepPending(
+        launch.native_launch_job_id, launch.association_sha256, "BUSY"
+    )
+    if fault == "job":
+        pending = replace(pending, native_launch_job_id="job_" + "f" * 32)
+    if fault == "association":
+        pending = replace(pending, association_sha256="sha256:" + "f" * 64)
+    if fault == "scalar":
+        object.__setattr__(pending, "native_launch_job_id", True)
+    source.executor.execute.side_effect = lambda **_: pending
+    monkeypatch.setattr(
+        step_module,
+        "read_native_reference_query_launch",
+        lambda *_a, **_kw: None if fault == "missing" else launch,
+    )
+    history = SimpleNamespace(
+        state="FAILED" if fault == "failed" else "RUNNING",
+        records=() if fault == "unallocated" else query_records(source.case)[:1],
+    )
+    monkeypatch.setattr(
+        step_module,
+        "NativeReferenceQueryCoordinator",
+        lambda *_: SimpleNamespace(read=lambda _: history),
+    )
+    with pytest.raises(WorkflowError) as error:
+        source.advance()
+    assert error.value.code == WorkflowErrorCode.LOCAL_EMBEDDING_OUTCOME_INVALID
+    assert source.step.state != "SUCCEEDED"
+    assert not [
+        r for r in source.rows if isinstance(r, WorkflowCommandRecord) and r is not source.command
+    ]
+    assert len([row for row in source.rows if isinstance(row, WorkflowStepRunRecord)]) == 1
+    assert "final_pointer_manifest" not in (source.workflow.runtime_context or {})
 
 
 @pytest.mark.parametrize("change", ("input", "attempt", "role", "result", "type"))

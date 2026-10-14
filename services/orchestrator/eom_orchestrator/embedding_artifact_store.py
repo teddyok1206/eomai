@@ -319,6 +319,7 @@ class EmbeddingArtifactStore:
         workspace: Path,
         created_at: datetime,
         identity: ControlFileSetIdentity | None = None,
+        expected_result_sha256: str | None = None,
     ) -> PublishedReferenceQueryArtifacts:
         """Commit supplied QUERY closure; the calling owner retains current auth/lease checks."""
         try:
@@ -330,6 +331,8 @@ class EmbeddingArtifactStore:
             validate_reference_query_launch_association(
                 launch, workflow_request, policy, bundle, request
             )
+            if expected_result_sha256 is not None:
+                TypeAdapter(Sha256).validate_python(expected_result_sha256, strict=True)
             if identity is not None:
                 if (
                     type(identity) is not ControlFileSetIdentity
@@ -365,6 +368,11 @@ class EmbeddingArtifactStore:
                 document = json.loads(result_bytes, object_pairs_hook=_unique_object)
                 result = parse_embedding_reference_query_result(document)
                 validate_reference_query_result_v11(request, result)
+                if (
+                    expected_result_sha256 is not None
+                    and result.result_sha256 != expected_result_sha256
+                ):
+                    raise ValueError("QUERY result differs from the actual completion observation")
                 if result_bytes != canonical_json_bytes(result.model_dump(mode="json")):
                     raise ValueError("QUERY result is not exact canonical JSON")
             except (ValueError, TypeError, JsonSchemaValidationError, RecursionError):

@@ -447,6 +447,107 @@ def test_fresh_command_cannot_bypass_an_existing_query_attempt(
         session.close()
 
 
+@pytest.mark.parametrize("kind", ("fresh_poll", "expired_processing", "expired_leased"))
+@pytest.mark.parametrize(
+    "fault", (None, "missing_launch", "unallocated", "failed", "step", "live_lease")
+)
+def test_recovery_requires_current_scope_and_original_allocated_history(
+    source, monkeypatch, kind, fault
+):
+    from eom_orchestrator.native_reference_query_coordinator import NativeReferenceQueryHistory
+    from eom_workflow.native_reference_query_coordinator import (
+        NativeQueryAllocation,
+        native_reference_query_checkpoint,
+    )
+    from eom_workflow.reference_query_execution import parse_reference_query_launch_association
+
+    session, command, workflow, _lease = mutation_rows(source, monkeypatch)
+    if kind == "fresh_poll":
+        command.state, command.attempts, command.lease_generation = "PENDING", 0, 0
+        command.lease_owner = command.lease_token = command.lease_expires_at = None
+        if fault == "live_lease":
+            command.lease_expires_at = datetime.now(UTC) + timedelta(seconds=60)
+    else:
+        command.state = "LEASED" if kind == "expired_leased" else "PROCESSING"
+        command.lease_expires_at = datetime.now(UTC) + timedelta(
+            seconds=60 if fault == "live_lease" else -1
+        )
+    step = WorkflowStepRunRecord(
+        step_run_id="steprun_" + "d" * 32,
+        workflow_id=workflow.workflow_id,
+        step_key="encode_reference_query",
+        step_type="application",
+        worker_role=None,
+        attempt=1,
+        state="RUNNING",
+        result_schema="embedding-reference-query-result@1.0",
+        input_pointer_manifest={"workflow_request_sha256": source.request.request_sha256},
+    )
+    if fault == "step":
+        step.attempt = 2
+    monkeypatch.setattr(module, "native_application_step", lambda *_: step)
+    original = case().launch.model_dump(mode="json")
+    original.update(
+        workflow_id=workflow.workflow_id,
+        step_run_id=step.step_run_id,
+        workflow_request_sha256=source.request.request_sha256,
+        context_request_sha256=source.request.context_request.request_sha256,
+        runtime_bundle=source.request.runtime_bundle.model_dump(mode="json"),
+        resource_profile_sha256=source.request.resource_profile.resource_profile_sha256,
+    )
+    launch = parse_reference_query_launch_association(seal(original, "association_sha256"))
+    allocation = NativeQueryAllocation.model_validate(
+        {
+            "query_producer": {
+                "job_id": "job_" + "b" * 32,
+                "artifact_id": "artifact_" + "b" * 32,
+                "artifact_revision_id": "rev_" + "b" * 32,
+            },
+            "receipt_producer": {
+                "job_id": "job_" + "c" * 32,
+                "artifact_id": "artifact_" + "c" * 32,
+                "artifact_revision_id": "rev_" + "c" * 32,
+            },
+            "created_at": datetime.now(UTC),
+            "source_commit": "a" * 40,
+        }
+    )
+    records = (
+        ()
+        if fault == "unallocated"
+        else (native_reference_query_checkpoint(launch, "ALLOCATION", allocation),)
+    )
+    history = NativeReferenceQueryHistory(
+        "FAILED" if fault == "failed" else "RUNNING", launch, records
+    )
+    monkeypatch.setattr(
+        module,
+        "read_native_reference_query_launch",
+        lambda *_a, **_kw: None if fault == "missing_launch" else launch,
+    )
+    monkeypatch.setattr(
+        module,
+        "NativeReferenceQueryCoordinator",
+        lambda *_: SimpleNamespace(read=lambda _: history),
+    )
+    try:
+        if fault:
+            with pytest.raises(WorkflowError):
+                source.owner.resolve_claim(
+                    session, command=command, workflow=workflow, request=source.request
+                )
+        else:
+            assert (
+                source.owner.resolve_claim(
+                    session, command=command, workflow=workflow, request=source.request
+                ).request
+                == source.request
+            )
+        assert command.lease_generation == (0 if kind == "fresh_poll" else 1)
+    finally:
+        session.close()
+
+
 def test_source_preparation_keeps_one_root_and_actual_capture_then_checks_late(
     source: OwnerFixture,
 ) -> None:

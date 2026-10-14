@@ -419,3 +419,99 @@ runtime installation, DB/auth/unit or model action. Evidence remains in
 `/tmp/eom-api-build/3fecb3f332024768fc58150cbbd7a9168d94f1bc.yKggmi/dist`.
 All9 actual long-running services were active at final read-only verification.
 This documentation follow-up does not replace the tested code candidate or activate it.
+
+## Concrete QUERY executor and original recovery — 2026-10-14 decision
+
+1. Responsibility: compose the existing current Catalog owner, fixed QUERY launcher,
+   Job checkpoints and canonical publishers inside Runner; no second numerical path.
+2. Canonical source: current official sources/index plus original Job/launch and
+   committed artifacts. Local staged bytes are explicit temporary materialization.
+3. Identity: allocate native/query/receipt identities once; every later acquisition
+   rejoins the exact Workflow/step/request and original launch, never a new attempt.
+4. Resolution: derive native input from current sources using original IDs; compare
+   launch/input hashes, runtime/policy/bundle and published result/receipt closure.
+5. Access: one indexed launch lookup and bounded four-event prefix per fenced root;
+   ready-queue polling reuses the existing command queue and unique operation keys.
+6. Structures: existing frozen checkpoint union and an internal typed BUSY/UNCERTAIN
+   pending value. No new worker/wire schema, DB table, queue, registry or dependency.
+7. Complexity: bounded native input (three views), O(log J + H) history H<=4; current
+   source/index preparation retains its existing bounded cost. No DOCUMENT encoding.
+8. Transaction: fresh Workflow→command→Job locks and actual source/session checks
+   surround short mutations. Run/observe numerical units only outside SQL roots.
+9. Dependency: Runner owns composition, current claim and continuation; Orchestrator
+   alone dispatches/publishes; Catalog owns canonical reads. No domain adapter import.
+10. Failure/replay: busy/uncertain remains pending for the same Job. Durable dispatch
+    consumption prevents a fresh-looking old unit from rerunning. Known failure is
+    terminal and preserved; malformed, revoked or changed current inputs fail closed.
+    Claim recovery requires original nonfailed allocated history, not mere expiry.
+11. Alternative: treating a timeout as failure/retry, using INDEX results or returning
+    a synthetic success loses original ownership. Extend existing native step/claim
+    behavior with the purpose-specific owner; keep global admission unoffered until
+    the actual installed QUERY/release and consumer gates are verified.
+
+## Concrete executor, pending and recovery — source implementation
+
+- `CatalogNativeReferenceQueryExecutor` composes the actual source owner, fixed
+  QUERY launcher and canonical completion owner through the existing Runner port.
+  Constructor rejects different DB/NAS owners; readiness reads configured controls
+  and exact fixed CPU limits without creating a Job or authenticating a caller.
+- Execution allocates once, derives current native input using original IDs, stages
+  only under a fresh owner root, then runs/observes units outside every SQL root.
+  One/two/three available views retain the configured batch4 instead of resizing.
+  Successful proof is checkpointed once; repeated observers must match the same
+  invocation/environment/result, not overwrite its original observation time.
+- Canonical query publication and receipt completion have separate short roots.
+  A real SQLite composition test exposed a write-lock conflict when a second owner
+  committed while PUBLISHED was uncommitted. Splitting the responsibilities/roots
+  fixed it without DB-specific retries, weaker isolation or changing publisher rules.
+  Publication checks the observed result hash before any commit. Four before/after
+  publication crash cases preserve original producers and never reencode.
+- BUSY, uncertain observation and unavailable capacity retain original Job identity.
+  The internal pending value is not a worker/wire result. Runner validates its actual
+  original history, defers on the same indexed queue (5–60s), and keeps the step
+  RUNNING. A late exact completion is canonically validated, not treated as failure.
+- Current claims allow a fresh poll or an expired acquisition only with the exact
+  original application step and nonfailed allocated history. Expiry alone is never
+  proof of nonexecution. Current user/source checks precede recovery and repeat late.
+  No new native attempt, identity or direct row repair is used.
+- Known failure is recorded only through Orchestrator's supported coordinator,
+  including its stable Job error code. Existing failed history is never repaired.
+  The shared INDEX/QUERY adapter recognizes already-failed and newly-failed units
+  only after empty cgroups, stable invocation and current runtime checks. Timeout,
+  changed invocation or surviving children remain uncertain; none authorize restart.
+- The declarative QUERY YAML matches the frozen definition/protocol and is still
+  unoffered/uninstalled. No new dependency, schema meaning, table, migration, queue,
+  numerical code, CPU installation or installed INDEX template was changed.
+
+Actual temporary Job/Artifact/FS tests are distinct from their explicitly synthetic
+IAM, Workflow SQL/source and numerical seams. The official disposable
+`embedding-stage-tests` gate now includes5 QUERY PostgreSQL commit/crash/replay
+cases behind its existing owner/marker/head checks. They were collected, not run;
+the prior13 QUERY CHECK cases remain unexecuted too. No production DB is a test
+target, and none of these source checks prove genuine numerical or IAM acceptance.
+
+The existing finite INDEX controller3416211/3416258 was confirmed live at00:54 UTC;
+its original output log still had0 bytes. This is not proof of a completed capture
+or seed/delta; their acceptance remains pending. No replacement process,
+new login window or credential persistence was introduced. The full goal still
+includes actual seed/delta/reuse/query, official service reconciliation, consumers,
+CPU/GPU performance/default selection, installed release and genuine read gates.
+
+`QUERY_EXECUTOR_COMPOSITION=SOURCE_PASS`, `QUERY_CLAIM_RECOVERY=SOURCE_PASS`,
+`QUERY_GLOBAL_ADMISSION=UNOFFERED`, `QUERY_UNIT_INSTALLATION=NOT_PERFORMED`,
+`GENUINE_QUERY_CONSUMER_READ=NOT_ACTIVE`, `POSTGRES_QUERY_PERSISTENCE=NOT_RUN`.
+
+Final59-suite **1,459 PASS**,205.70s; strict mypy20 source modules, Ruff/format31
+Python files, shell syntax and diff PASS. The prior205.77s run had the same count;
+after extracting one test factory for SQLite/PostgreSQL and adding the guarded
+test-harness branch, the complete gate was rerun. Earlier168/14/39/47/114/focused
+results overlap and are not summed. The initial actual SQLite lock ordering bug
+was fixed by splitting publication roots; fixture/import and assertion-placement
+failures were corrected before the final full gate, without loosening source guards.
+The5 new PostgreSQL cases collected in0.50s and were NOT executed.
+
+No production Job/Artifact, migration, service restart, numerical forward, GPU work,
+QUERY unit/polkit installation or credential change was performed by this source
+work. No default executor/admission was silently activated. The full goal remains
+active; source verification does not close its installed, genuine read, automatic
+service, consumer or CPU/GPU/default-selection gates.

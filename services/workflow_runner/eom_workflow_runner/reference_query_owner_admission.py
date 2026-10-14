@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from eom_catalog_contracts.embedding_reference_query import (
     ReferenceQueryTextInput,
@@ -46,13 +47,19 @@ from eom_operator_identity import PermissionKey
 from eom_orchestrator.embedding_runtime_bundle_artifacts import RUNTIME_BUNDLE_ARTIFACT_TYPE
 from eom_orchestrator.file_set_control_artifacts import CONTROL_FILE_SET_PROTOCOL
 from eom_orchestrator.local_embedding_control_artifacts import REFERENCE_QUERY_POLICY_ARTIFACT_TYPE
+from eom_orchestrator.native_reference_query_coordinator import (
+    NativeReferenceQueryCoordinator,
+    read_native_reference_query_launch,
+)
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.reference_query_execution import (
     REFERENCE_QUERY_POLICY_REF,
     ReferenceQueryExecutionPolicy,
+    ReferenceQueryLaunchAssociation,
     ReferenceQueryWorkflowRequest,
     parse_reference_query_execution_policy,
     parse_reference_query_workflow_request,
+    validate_reference_query_launch_association,
     validate_reference_query_request_references,
 )
 from pydantic import TypeAdapter
@@ -171,6 +178,22 @@ def build_reference_query_native_input(
     )
 
 
+def validate_current_reference_query_input(
+    sources: ResolvedReferenceQuerySources,
+    launch: ReferenceQueryLaunchAssociation,
+    native_input: EmbeddingReferenceQueryInputV11,
+) -> None:
+    """Exact current derivation under original IDs; not authority or a launch grant."""
+    current = build_reference_query_native_input(
+        sources, job_id=launch.native_launch_job_id, query_request_id=launch.query_request_id
+    )
+    validate_reference_query_launch_association(
+        launch, sources.request, sources.policy, sources.bundle, current
+    )
+    if current != native_input:
+        raise ValueError("REFERENCE_QUERY_EXECUTOR_CURRENT_INPUT_CHANGED")
+
+
 class CatalogReferenceQueryOwnerAdmission:
     """Actual Identity and official Catalog scope, before any QUERY side effect.
 
@@ -242,27 +265,60 @@ class CatalogReferenceQueryOwnerAdmission:
         request = parse_reference_query_workflow_request(request)
         self.identity.fence_current_operator(session, request.operator_audit.operator_id)
         self._require_rows(session, command, workflow, request)
-        if (
-            command.state != CommandState.PENDING.value
-            or command.attempts != 0
-            or command.lease_generation != 0
-            or command.lease_owner is not None
-            or command.lease_token is not None
-            or command.lease_expires_at is not None
-        ):
-            # Expiry cannot prove the original physical execution did not run.
-            # Durable QUERY checkpoint recovery must precede any later reclaim.
+        fresh = (
+            command.state == CommandState.PENDING.value
+            and command.attempts == 0
+            and command.lease_generation == 0
+            and command.lease_owner is None
+            and command.lease_token is None
+            and command.lease_expires_at is None
+        )
+        expired = (
+            command.state in {CommandState.LEASED.value, CommandState.PROCESSING.value}
+            and command.attempts >= 1
+            and command.lease_generation >= 1
+            and command.lease_expires_at is not None
+            and command.lease_expires_at <= datetime.now(UTC)
+        )
+        if not fresh and not expired:
             raise WorkflowError(
                 WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
                 "QUERY acquisition requires supported original-execution reconciliation",
             )
+        scope = self.resolve_submission(session, request)
         step = native_application_step(session, workflow.workflow_id, "encode_reference_query")
-        if step is not None and step.state != "SUCCEEDED":
+        if fresh and step is None:
+            return scope
+        if step is None or (
+            step.workflow_id != workflow.workflow_id
+            or step.step_key != "encode_reference_query"
+            or step.attempt != 1
+            or step.state not in {"RUNNING", "SUCCEEDED"}
+            or step.step_type != "application"
+            or step.worker_role is not None
+            or step.result_schema != "embedding-reference-query-result@1.0"
+            or step.input_pointer_manifest != {"workflow_request_sha256": request.request_sha256}
+        ):
             raise WorkflowError(
                 WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
-                "QUERY prior attempt requires supported original-execution reconciliation",
+                "QUERY original-execution reconciliation lacks its exact prior attempt",
             )
-        return self.resolve_submission(session, request)
+        launch = read_native_reference_query_launch(
+            session, request=request, workflow_id=workflow.workflow_id, step_run_id=step.step_run_id
+        )
+        if launch is None:
+            raise WorkflowError(
+                WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                "QUERY recovery cannot replace a vanished original execution",
+            )
+        history = NativeReferenceQueryCoordinator(request, launch).read(session)
+        if not history.records or history.state in {"FAILED", "CANCELLED"}:
+            raise WorkflowError(
+                WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                "QUERY recovery requires allocated nonfailed original history",
+            )
+        self.identity.fence_current_operator(session, request.operator_audit.operator_id)
+        return scope
 
     def fence_mutation(
         self, session: Session, request: ReferenceQueryWorkflowRequest, lease: CommandLeaseIdentity
