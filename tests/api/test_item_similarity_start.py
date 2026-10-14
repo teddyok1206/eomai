@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import replace
-from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -17,17 +16,16 @@ from unittest.mock import Mock
 import pytest
 from eom_api.errors import ApiError
 from eom_api.services import command_adapter as module
-from eom_api.services.command_adapter import CommandAdapter, _workflow_request_from_api
+from eom_api.services.command_adapter import CommandAdapter
 from eom_api.services.item_similarity_start import (
     SIMILARITY_PREPARATION_ACCEPTANCE_KEY,
     check_similarity_start,
 )
 from eom_api_contracts.workflows import WorkflowStartRequest
 from eom_identifiers import canonical_json_bytes
-from eom_operator_identity import ActorContext, ActorSource, ActorType, PermissionKey
+from eom_operator_identity import PermissionKey
 from eom_orchestrator import execution_resolver as resolver_module
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
-from eom_workflow import compile_definition
 from eom_workflow.similarity_control import parse_post_registration_grounded_plan
 from eom_workflow_runner.models import (
     WorkflowCommandRecord,
@@ -40,7 +38,8 @@ from pydantic import ValidationError
 from sqlalchemy import Column, MetaData, Table, event, func, select
 
 from tests.unit.inference_transfer_embedding_fixtures import seal
-from tests.unit.test_item_similarity_preparation import preparation_case, prepare
+from tests.unit.item_similarity_start_fixtures import start_source
+from tests.unit.test_item_similarity_preparation import prepare
 from tests.unit.test_knowledge_backed_execution import _Session
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -49,65 +48,10 @@ KEY = "api:" + "7" * 64
 
 @pytest.fixture
 def start_case(tmp_path, monkeypatch):
-    source = preparation_case(tmp_path, monkeypatch)
-    compiled = compile_definition(
-        ROOT / "config/workflows/generic-item-development.v1.16.yaml",
-        {"authoring", "image", "review", "item_management"},
-    )
-    brief = source.request.item_brief.model_dump(mode="json")
-    brief.pop("curriculum_scope")
-    brief["curriculum_selected_unit_key"] = "eom.is.middle.1-1"
-    api_request = WorkflowStartRequest.model_validate(
-        {
-            "definition_key": compiled.definition.definition_key,
-            "definition_version": compiled.definition.definition_version,
-            "request_name": source.request.request_name,
-            "image_mode": source.request.image_mode,
-            "pack_key": source.request.content_pack.pack_key,
-            "environment": source.request.content_pack.environment,
-            "execution_preset_key": source.request.execution_preset_key,
-            "item_brief": brief,
-            "educational_retrieval": source.request.educational_retrieval.model_dump(mode="json"),
-        }
-    )
-    source.request = _workflow_request_from_api(api_request)
-    preset_body = source.preset.model_dump(mode="json")
-    for role in ("image", "item_management"):
-        policy = deepcopy(preset_body["role_policies"][0])
-        policy.update(role=role, worker_pool_key=role, evidence_access="NONE")
-        preset_body["role_policies"].append(policy)
-    source.preset = type(source.preset).model_validate(seal(preset_body, "content_sha256"))
-    source.resolution = source.resolution.model_copy(
-        update={
-            "workflow_definition_sha256": compiled.sha256,
-            "execution_preset_content_sha256": source.preset.content_sha256,
-        }
-    )
+    data = start_source(tmp_path, monkeypatch)
+    source, api_request = data.source, data.request
     prepared = prepare(source)
-    actor = ActorContext(
-        actor_type=ActorType.OPERATOR,
-        operator_id=source.caller.operator_id,
-        session_id="apisession_" + "8" * 32,
-        request_id="request_" + "9" * 32,
-        authentication_time=datetime(2026, 10, 14, tzinfo=UTC),
-        permissions=frozenset(PermissionKey),
-        source=ActorSource.APPLICATION_API,
-    )
-    runtime = deepcopy(source.value.workflow.runtime_context)
-    runtime.pop("execution_plan")
-    runtime["content_pack"]["source_tree_sha256"] = (
-        source.resolution.content_pack_source_tree_sha256
-    )
-    definition = WorkflowDefinitionRecord(
-        definition_id="wfdef_" + "c" * 32,
-        definition_key=compiled.definition.definition_key,
-        definition_version=compiled.definition.definition_version,
-        definition_hash=compiled.sha256,
-        schema_version=compiled.definition.schema_version,
-        canonical_definition=compiled.as_dict(),
-        source_path=compiled.source_path,
-        active=True,
-    )
+    actor, runtime, definition = data.actor, data.runtime, data.definition
     engine, sessions = source.publisher.engine, source.publisher.sessions
     for model in (
         WorkflowDefinitionRecord,

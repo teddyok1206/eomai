@@ -2912,3 +2912,74 @@ contracts `319283dc134753cde0996859b1db11c00996db7a5acfbcedfada9db59df4470f`;
 API `6ea8c719122f45481b0e767b3e5ae2703e3273124b7ba7badfe8c34069add3b7`.
 Logs `release-build`, `owner-pair-proof`, `three-wheel-proof` share the evidence
 prefix above. The candidate is pushed, not installed/activated.
+
+## 32. Actual PostgreSQL plan23/selector persistence gate
+
+Test-boundary design, 2026-10-14 UTC:
+
+1. Reuse the existing guarded `embedding-stage-tests` purpose and independent
+   disposable owner/schema/marker/head checks before any test write.
+2. Run the real API command, repository, resolver and plan-record owner against
+   actual PostgreSQL tables, foreign keys, unique constraints and immutable triggers.
+3. Use fresh UUID-based synthetic controls/keys; never alter production controls,
+   source/Graph/corpus, IAM grants or a native admission.
+4. Reuse one source-input fixture for SQLite and PostgreSQL rather than layering a
+   PostgreSQL test on the SQLite record-owner mock.
+5. Seed typed instruction/capacity/preset dependencies with existing control services;
+   mark control file metadata and source Evidence as synthetic, not real materialization.
+6. Publish the test context through the actual Orchestrator into a temporary local
+   artifact root. No NAS access, model forward or worker process is part of this gate.
+7. Verify first plan/selector/fingerprint/START, exact replay, conflict and rollback,
+   plus real concurrent same-key creation and relevant native FK/immutability negatives.
+8. Concurrency uses two independent real transactions; only the protected disposable
+   database receives committed synthetic setup/history. Never relabel old failures.
+9. Keep shared fixture responsibility limited to checked source input; ownership of
+   actual DB seeding/constraints stays in the integration test.
+10. No production migration, dependency, schema family, queue or privilege is needed.
+    This proves storage behavior, not actual source/HMAC/native/model activation.
+11. SQLite was insufficient for PostgreSQL FK/unique/immutable-trigger and concurrency
+    claims. Reuse the existing opt-in gate instead of a new runner or unguarded DSN.
+
+### Actual disposable PostgreSQL results — 2026-10-14 23:03 UTC
+
+The supported read-only inspection confirmed the independent disposable identity,
+schema migration head `20261014_0055` and zero other connections before the test run.
+The guarded `embedding-stage-tests` path passed **74 tests /49.41s**, including the
+existing68 and these six new PostgreSQL tests:
+
+- first plan23, exact selector/fingerprint, four real step rows and one START command;
+- same-key concurrent starts return one accepted Workflow/plan/command;
+- changed preparation cannot replace the previously accepted binding;
+- different valid synthetic selectors racing for one key accept one binding and
+  reject the other with `CONTROL_SIMILARITY_PREPARATION_CONFLICT`;
+- final enqueue failure removes the provisional Workflow, plan, steps, events and
+  command while preserving the independently published context Artifact;
+- actual PostgreSQL immutable-update trigger, per-Workflow unique and foreign-key
+  constraints reject mutation/duplicate/dangling records.
+
+The shared-input extraction and guarded-purpose source tests passed **26 /12.02s**;
+Ruff check/format4 files, strict mypy3 relevant production files, shell syntax and
+diff checks passed. A final supported read-only inspection reconfirmed the same
+disposable identity/head and zero other connections. No cleanup of failed evidence
+or synthetic committed history was performed.
+
+The first run retained **68 PASS /5 fixture errors** because the synthetic capacity
+used4 against the existing policy1.0 ceiling3. Only that fixture was corrected to3;
+no schema/capacity guard was relaxed. The corrected initial five-case suite passed
+73 /49.69s before the final competing-binding test and stronger rollback assertions.
+These earlier runs overlap the final74 and are not additional acceptance counts.
+
+Evidence prefix: `/tmp/eom-identity-provider-install.nAaycoDM/similarity-pg-start-`;
+logs `initial`, `capacity-fixed`, `final`, `source-final`, `type-final` remain separate.
+Catalog Evidence, current operator authentication, native QUERY selection and control
+file metadata are deliberately synthetic; control recording/publication, API conversion,
+resolver, plan-record owner and PostgreSQL constraints are real. The Orchestrator
+publishes the test context to a temporary local artifact root, never production NAS.
+
+This change is limited to tests, existing guarded test routing and documentation.
+There is no diff in `apps/`, `packages/` or `services/` from the previously verified
+runtime candidate; its `7d426e2e` wheel/RECORD proofs remain the applicable source
+package evidence. No redundant runtime build/install, DB migration, privilege change,
+new native/model/GPU run or operating-corpus mutation was performed. Ordinary HTTP
+preparation/owner composition, actual QUERY/replay, installed activation, continuous
+coverage and measured CPU/CUDA comparison remain open. This gate is not C2 live PASS.
