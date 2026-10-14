@@ -137,7 +137,7 @@ def resolve_reference_query_submission_controls(
     current = session.scalar(
         select(WorkflowDefinitionRecord)
         .where(WorkflowDefinitionRecord.definition_id == definition.definition_id)
-        .with_for_update(read=True)
+        # The immutable-definition trigger covers active as well as its snapshot.
         .execution_options(populate_existing=True)
     )
     if current is None or current.active is not True:

@@ -1512,7 +1512,7 @@ def claim_command_candidate(
         definition = session.scalar(
             select(WorkflowDefinitionRecord)
             .where(WorkflowDefinitionRecord.definition_id == workflow.definition_id)
-            .with_for_update(read=True)
+            # Immutable definition metadata needs a fresh read, not UPDATE rights.
             .execution_options(populate_existing=True)
         )
         if definition is None or definition.definition_hash != workflow.definition_hash:

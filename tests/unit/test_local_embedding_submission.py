@@ -569,7 +569,7 @@ def test_native_definition_and_replay_reads_request_identity_map_refresh() -> No
     assert definition_queries and workflow_pk_queries
     for query in definition_queries:
         assert query.get_execution_options()["populate_existing"] is True
-        assert query._for_update_arg.read is True
+        assert query._for_update_arg is None
     for query in workflow_pk_queries:
         assert query.get_execution_options()["populate_existing"] is True
 

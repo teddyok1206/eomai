@@ -186,7 +186,8 @@ def resolve_local_embedding_submission_controls(
     current = session.scalar(
         select(WorkflowDefinitionRecord)
         .where(WorkflowDefinitionRecord.definition_id == definition.definition_id)
-        .with_for_update(read=True)
+        # Definitions (including active) are DB-enforced immutable revisions.
+        # A row lock requires UPDATE privilege without adding protection here.
         .execution_options(populate_existing=True)
     )
     if current is None or (

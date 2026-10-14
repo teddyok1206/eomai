@@ -1,6 +1,6 @@
 # Actual local indexing activation — 2026-10-14
 
-10:24 UTC checkpoint. Actual control installation and source validation are
+12:04 UTC checkpoint (chronology retained below). Actual control installation and source validation are
 separate from successful seed/delta/QUERY. The full goal remains ACTIVE.
 
 ## Actual changes
@@ -252,3 +252,40 @@ Restart=no, no automatic retry or boot enable. The next required change is the
 narrow native definition read-lock capability documented in the authority design,
 not UPDATE privilege, an unlocked active-flag read, a new DB identity or repeated
 blind starts. Seed/delta/replay/QUERY/consumer/GPU gates remain pending.
+
+## Corrected premise: definitions are already DB-immutable
+
+The preceding lock-capability plan inferred mutability from the ORM active field;
+that inference was wrong. Its disposable concurrency test reached the existing
+owner trigger and failed with `workflow definitions are immutable`, not a mutable
+deactivation. Migration0002 already rejects every UPDATE/DELETE, including active.
+Live read-only metadata at11:58:05UTC confirms the enabled exact frozen trigger
+body, row UPDATE/DELETE event mask27, owner and invoker-function identity; Catalog
+UPDATE/DELETE/TRUNCATE remain denied. The rejected capability function is absent.
+Evidence:`native-definition-live-immutability.log`.
+
+Remove the uncommitted SECURITY DEFINER proposal and its temporary fixture code.
+It was never installed in production, changed no production grant/row and created
+no runtime compatibility requirement. Preserve the rejected candidate's initial
+80 source PASS and85 disposable PASS/2 failed concurrency cases as diagnostic
+evidence only; the broader source run was explicitly interrupted after rejecting
+its premise and is not a regression acceptance. Its disposable fixture removed
+the exact test routine and restored its temporary execute grant; no trigger was
+disabled or source/history rewritten.
+
+The correction removes only three unnecessary FOR SHARE reads on immutable
+Workflow definitions (INDEX submission, QUERY submission, native claim), retaining
+populate_existing, exact PK/schema/compile/hash/active-at-import and current
+code-admission checks. Mutable Workflow/command/lease/source/Identity locks remain.
+No new helper/framework, SQL function, credential, grant, schema or migration.
+Current full owner/source authorization is still mandatory.
+
+Corrected disposable suite76+19 PASS (95 distinct cases), including8 new actual
+restricted SELECT/write-denial/owner-trigger/concurrent-owner cases across INDEX
+and QUERY. Positive native INDEX admission uses real SQL and an explicitly
+synthetic owner/source seam; it is not actual service or source admission.
+Strict mypy3/Ruff/format/diff PASS. The separate native stage/claim suite and
+source regression are separate: native stage/claim67 PASS and corrected source
+regression1050 PASS in260.46s. Disposable inspection confirms marker/head0055 and
+zero other connections. Installed ac8c8c7d remains failed until its reviewed
+successor is installed. Original seed/delta/reuse/QUERY/consumer/GPU gates remain.
