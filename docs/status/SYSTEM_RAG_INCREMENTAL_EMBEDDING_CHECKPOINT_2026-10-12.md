@@ -2483,3 +2483,9 @@ IAM/Workflow SQL/수치 seam을 구분한다. PostgreSQL commit/crash/read/repla
 `COMPLETED_QUERY_READ_ADAPTER=SOURCE_PASS`, `GENUINE_QUERY_CONSUMER_READ=NOT_ACTIVE`,
 `QUERY_GLOBAL_ADMISSION=UNOFFERED`다. 실제 seed/delta/reuse/query, QUERY 호환 설치/admission,
 service 자동 갱신, 소비자 활성화와 CPU/GPU 성능/default gate는 원래 목표대로 남아 있다.
+
+code candidate `0d4ad53858855e998da2cc665dcd0eb9f1f1deab`의3개 release wheel/RECORD/
+installed simulation과 격리 `-I -B` wheel-only21-module import/schema/ref 검증이 PASS했다.
+source checkout import나 실제 설치를 하지 않았다. 01:57 UTC 관련9개 서비스는 read-only
+조회에서 모두 active였다. 이 건강 상태를 실제 QUERY/seed/delta·소비자 승인으로 확대하지
+않는다. 문서 후속 커밋과 패키지 검증 대상 code candidate는 별개로 기록한다.

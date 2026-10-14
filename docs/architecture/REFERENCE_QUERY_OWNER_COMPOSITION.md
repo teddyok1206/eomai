@@ -598,3 +598,12 @@ unit/polkit rule, production Job/Artifact, model/GPU or credentials. Existing li
 canary/session handles were not replaced. Actual seed/delta/reuse/query, compatible
 QUERY installation/admission, automatic service reconciliation, consumer activation
 and CPU/GPU/default policy remain separate required goal gates.
+
+Build-only verification of code candidate
+`0d4ad53858855e998da2cc665dcd0eb9f1f1deab` passed the existing three-wheel build,
+RECORD and installed simulation. The immutable operator interpreter imported21
+modules from those wheels only under `-I -B`, including the new consumer adapter,
+shared terminal validator and Catalog error mapping, and validated packaged schema/
+hash/reference closure. No checkout import or installed/runtime/model mutation was
+used. A final read-only systemd check at01:57 UTC found all9 related services active;
+this is service health, not genuine QUERY/seed/delta or consumer acceptance.
