@@ -198,15 +198,19 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 
 10/15에는 실제 사용자 인증으로 원 QUERY 작업을 이어서 완료했고, 같은 key 재전송과
 정본 QUERY→공통 유사도 context 조회까지 통과했습니다. 당시 인덱스2/520에서 조회한 결과는
-`PARTIAL`입니다. 이후 한 번의4건 증분 처리로 현재 CONTENT_ONLY 인덱스는 **6/520**이 되었고,
-원래2건의 벡터·연결과 이전 revision은 보존했습니다. 상시 인덱싱은 아직 재개 전입니다.
+`PARTIAL`입니다. 이후 한 번의4건 증분 처리 검증에서 CONTENT_ONLY 인덱스 **6/520**을 확인했고,
+원래2건의 벡터·연결과 이전 revision은 보존했습니다. 현재는 새 신원12/소스d4846220으로
+세 검색 표현을 각1건씩 처리하는 제한 실행 중이며, 상시 인덱싱·전체 coverage 완료는 아닙니다.
 이후 API와 전용 상주 owner의 호환 설치·실제 기동까지 확인했지만,
 일반 웹 요청의 자동 준비·다른 소비자/GPU 활성화 완료는 아닙니다.
 [실제 완료·재전송·부분 coverage 증거](docs/status/REFERENCE_QUERY_LIVE_ACCEPTANCE_2026-10-15.md)를 참고하세요.
 
 아래 표는 경계별 누적 검증 기록도 포함합니다. 이전 행의 소스 검증 당시 ‘미활성’은
 뒤에 기록된 운영 활성화를 취소하는 뜻이 아닙니다. 현재 운영 coverage는 CONTENT_ONLY6/520,
-인덱싱 owner는 정상 종료 상태이며, 일반 소비자·추가 표현·GPU 기본값은 아직 미활성입니다.
+인덱싱 owner는 세 표현의 제한 실행 중입니다. 일반 소비자·GPU 기본값은 아직 미활성이고,
+추가 표현은 접수·처리 중이지 저장·완료 검증을 마친 상태가 아닙니다.
+[전체 목표의 요구사항·증거·남은 작업](docs/status/SYSTEM_RAG_GOAL_REQUIREMENT_AUDIT_2026-10-15.md)을
+별도로 대조하며, 이 표의 일부 PASS를 전체 완료로 사용하지 않습니다.
 
 | 증분 인덱스 경계 | 검증 증거와 명시된 시점의 활성 상태 |
 | --- | --- |
@@ -233,8 +237,8 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | 일반 기출변형 요청의 비동기 준비 연결 | SOURCE_PASS; 별도 닫힌 응답으로 준비 중/제작 접수를 구분하고 동일 요청·key로 이어 최초 plan23을 저장. 기존 API claim만 잠시 반환하며 새 큐/DB 변경 없음. 소스160·배포/계층100·임시 PostgreSQL125·strict type18·실제 Chromium 합성 응답 PASS. 후보7fc8e79c의 API3-wheel/Web build·RECORD·격리 import PASS. API/Web 기본 꺼짐; 실제 로그인 기반 준비·일반 문항/검토 소비와 운영 활성화는 별도 미완료. [설계·검증·활성 순서](docs/architecture/REFERENCE_ITEM_ASYNC_START_DESIGN.md) |
 | QUERY 전용 staging 사전검사 | SOURCE_PASS; 실제로 발견한 누락 폴더를 기존 실행 계정의0700 전용 공간으로 준비. 소스는 동일 FD 경계로 missing/symlink/권한 오류를 실행 전 거부하며 자동 생성·수선하지 않음. QUERY/INDEX 회귀120·strict type2 PASS. 공유 서비스 변경 없음, 새 guard는 아직 운영 미설치. [원인·수정·검증 구분](docs/status/REFERENCE_QUERY_STAGING_CHECKPOINT_2026-10-15.md#scoped-correction-and-source-regression) |
 | authenticated owner/session fence | QUERY/성능 비교 전달1.1과 seed1.0 유지. source424·실제 disposable 세션/동시성19 PASS; workspace/namespace·root-only/savepoint 수정 검증(main222·PG78 PASS). API75fdc265/호환 owner517e4551의 실제 capture·QUERY 완료·재전송·정본 조회 증거 보존. 이후12-member API2857bf77/native8c411041 설치·기동 PASS; 이 조합의 실제 인증 HTTP 검증은 별도 대기. [기존 완료](docs/status/REFERENCE_QUERY_LIVE_ACCEPTANCE_2026-10-15.md)·[현재 설치](docs/operations/REFERENCE_QUERY_SERVICE_LIVE_RELEASE_2026-10-15.md) |
-| 자동 인덱싱 전용 신원·저장 | 운영0055·sourceae8f8bf6/신원 revision11. 후속4건을1회 계산해 CONTENT_ONLY6/520; 기존2건과 이전 revision 보존. 현재 owner는 정상 종료·boot 비활성, 선택은4건/1800초이며 상시 재개/전체/다른 view·실제 replay·소비 연결은 미완료. 반복 파일 검사는 관측당 중복만 줄이는 소스 수정·테스트 완료, 운영 속도 개선은 미검증. [증분·관측 비용 기록](docs/status/LOCAL_INDEXING_FOUR_TARGET_DELTA_2026-10-15.md) |
-| 세 표현의 자동 증분 처리 구성 | SOURCE_PASS; 설정1.0 보존·닫힌2.0 successor·표현별 exact queue 선택·기존 Runner의 순차 순환 구성. 공유 엔진/신원/launcher와 표현별 재인가 유지. 소스333·임시 PostgreSQL126·strict type4 PASS. 후보d4846220의3-wheel/RECORD·독립2-wheel 검증 및 보호 prefix 비활성 설치 완료; 실제 추가 표현·상시 자동화 활성화는 미완료. [설계·검증·운영 구분](docs/architecture/LOCAL_INDEXING_MULTIVIEW_OWNER_DESIGN.md) |
+| 자동 인덱싱 전용 신원·저장 | 운영0055·신원12/resource24·source d4846220의 공식 세 표현 정책을 선택하고 제한 기동·세 원래 START 접수 확인. boot 비활성·표현당1건/1800초. 마지막 확정 영속 baseline은 CONTENT_ONLY6/520이며 기존 벡터 보존; 현재 건의 저장/재사용·다른 view·상시 처리·소비 연결은 별도 검증 중. [활성화·실패 보존·캐시 복구 기록](docs/operations/LOCAL_INDEXING_MULTIVIEW_ACTIVATION_2026-10-15.md) |
+| 세 표현의 자동 증분 처리 구성 | SOURCE_PASS; 설정1.0 보존·닫힌2.0 successor·표현별 exact queue·기존 Runner 순환 구성. 공유 엔진/신원/launcher·재인가 유지. 소스333·임시 PostgreSQL126·strict type4,3-wheel/RECORD·독립2-wheel 검증 PASS. d4846220의 실제 신원/자료 정책 선택·기동·접수 완료; 세 표현 저장/terminal·상시 처리는 아직 검증 중. [설계](docs/architecture/LOCAL_INDEXING_MULTIVIEW_OWNER_DESIGN.md)·[운영](docs/operations/LOCAL_INDEXING_MULTIVIEW_ACTIVATION_2026-10-15.md) |
 | 인증된 owner/session 전달 | 수신 API75fdc265와 비활성 owner5018ad2d 설치·실제 UID990의 provider/process/config/key-metadata 검증 PASS. QUERY/성능 비교 전달은 목적·요청 hash를 함께 확인하며 현재 권한/만료를 확장하지 않음. 실제 설치 route/정본 API 설명·hash 일치 PASS; 이 검사를 배포 gate에 추가 |
 | 현재 사용자·자료의 native 작업 접수 연결 | SOURCE_IMPLEMENTED; 실제 인증 capture→기존 Catalog 검증·계획 재구성·잠금 확인을 연결, 운영 provider/실행기 연결은 미활성 |
 | Native INDEX 파일 전달·입력/결과 저장 | SOURCE_PASS; 실제 계정 권한4·설치된 시작 권한9·CPU 합성 입력2개×1024차원·동일 실행 재조회 PASS, 실제 자료/Job/binding 연결은 미활성 |
