@@ -133,3 +133,31 @@ Temporary verification logs:
 `/tmp/eom-identity-provider-install.nAaycoDM/query-native-transport-shared-regression-final.log`,
 and the preserved `query-native-transport-focused-initial.log` in the same workspace.
 These logs contain synthetic test diagnostics, not stored credentials or prompts.
+
+## Package gate
+
+Candidate `6bad5a4aae97c209550febc9c1430d6ac588b21b`, tree
+`27f263d6de10a26f7f56bb42138e7e4e7c1acb63`: complete three-wheel build and RECORD
+verification PASS. Dist:
+`/tmp/eom-api-build/6bad5a4aae97c209550febc9c1430d6ac588b21b.W9KBoA/dist`.
+
+Isolated `python -I -B` checks PASS with only the selected archives: owner pair
+(platform/API-contracts) and full trio including the API client. Checkout imports,
+installed-prefix fallback and numerical-library imports were forbidden. Changed
+source/resource-byte closure is19 members for the pair,20 with the API client.
+Provider inventory is12; this is not an observation or installation of the live
+provider/client family. No model, database or authentication was invoked.
+
+Wheel SHA-256 values:
+
+- platform: `9bc2d0d503c63c2ce451f70783a1ce3c58e7a1800710167e3ba9038eafcf225b`
+- API contracts: `9e54971012e21cfcb53519cb09d088c03c9b0851ffb0a150b67e31b77bf47f61`
+- application API: `a3c83e45b07fcbdb81fff5da86bfd083446d9620761333202d24c784dc00d945`
+
+The initial archive probe looked for Catalog contracts in the API-contracts wheel;
+the established build owns those members in the platform wheel. The probe was
+corrected to that actual ownership, without adding an ambient/fallback import or
+rebuilding/modifying any wheel. Both failed probe logs are preserved alongside
+the passing `query-native-transport-owner-pair-package-final.log` and
+`query-native-transport-api-package-final.log`. Active services and the original
+QUERY recovery handle were not changed by this package gate.
