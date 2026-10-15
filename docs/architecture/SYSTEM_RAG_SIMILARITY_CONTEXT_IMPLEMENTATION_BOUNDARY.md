@@ -3688,3 +3688,34 @@ Install/check the owner-only successor and preflight before asking for fresh
 authentication. Shared API/Web/runner, original numerical runtime and service
 activation remain outside this candidate's mutation scope. The full goal remains
 open, including historical-state handling and all other original requirements.
+
+Installation/preflight checkpoint17:01:38 UTC: main candidate7616fd61 passed the
+full3-wheel/RECORD build and strict archive-only owner-pair proof; the atomic
+backport517e4551 passed its2-wheel/RECORD,6 source-member byte closure, atomic-root
+AST and original9-member provider proof. Its exact immutable owner prefix is now
+installed, not selected by any shared service. API/Catalog/ordinary runner PIDs
+4155215/4155153/4155182 remain active and unchanged; CPU bundle/runtime/index
+coverage2/520 remain unchanged. Main candidate dist
+`/tmp/eom-api-build/7616fd61f05b973138351f24f8ed19ed86aa3898.SZuzki/dist`;
+backport dist
+`/tmp/eom-api-build/517e45510ee230d547f5d3b784c355002e6f30f9.2T7wif/dist`.
+
+Protected independent canary `/var/lib/eom-reference-query-atomic.ON4XSuwR/canary.py`
+SHA `711eb5da8528d183b70708928f1c5012f0fe50c0b80e4c69973eab4b94114cc6`;
+helper SHA `265f8b78a373bbd6181346c3f4fd9fb59ff0e65ed5144a617f885967b1818650`.
+Actual UID990 preflight PASS: exact index/bindings/shard/result/numeric members,
+existing policy replay only, private scratch and root/provider metadata checks.
+No source capture, user authentication, Workflow submission, model forward or
+Artifact publication yet. The declaration explicitly preserves the original
+Workflow and labels this a distinct second-anchor query, not its retry.
+
+Root/UID990 child782883/782890 are confirmed live in tmux EOM:1
+`rag-service-release`, at the17:01:38 single Studio guiadmin input gate. Read-only
+tail handle16207 follows that same child; do not restart after an observation
+timeout or send shell commands into the password prompt. New execution log
+`genuine-reference-query-atomic-execution.log` is separate from the old failure.
+One necessary fresh-auth request is sent only after installation/preflight; no
+credential persistence or deadline extension is used. First installer invocation
+failed before its body because its protected0444 script was invoked directly.
+The reviewed wrapper invokes the same hashed script through Bash, without chmod
+or protected edits; original failure and successful logs are both retained.
