@@ -70,3 +70,25 @@ PostgreSQL correctly rejected it. The harness now uses read-only metadata and pu
 contract validation before authentication; the actual runner retains its official
 locking and current-authority checks. That harness failure is not a runtime
 state-machine defect or permission to relax the read-only diagnostic.
+
+Candidate `4f1231b081a792cf7afd618e6d7424b3baae5928`: complete three-wheel build,
+RECORD inspection and strict isolated owner-pair import/source-byte closure PASS
+(including both changed Orchestrator modules). No numerical, checkout or installed
+fallback imports. Build:
+`/tmp/eom-api-build/4f1231b081a792cf7afd618e6d7424b3baae5928.QD4eJr/dist`.
+This is a source/package gate, not installation of the new guard.
+
+At17:49:42 UTC the corrected, read-only original-recovery preflight passed under
+actual UID990: same Workflow/START/Job, validated original ALLOCATION, both units
+never started, zero database mutation/model execution. The prior command lease
+had not yet expired, so no takeover was attempted. Supported continuation must
+wait for expiry and capture genuine current authority; the terminated controller's
+in-memory credentials are not retained or resurrected. Preserve original pins/key
+and let the existing owner/runner revalidate and reclaim; do not modify timestamps
+or create a replacement Workflow. Same-key replay and final context remain
+NOT_RUN at this checkpoint.
+
+Recovery harness (root-owned0444, no credential persistence):
+`/var/lib/eom-reference-query-resume.S1BMKDvn/resume.py`, raw SHA256
+`62bf373f3283b95d92e53cade5928927f4e840d58cb134b958a6fcf092b06b2c`.
+The main source/preparer is not substituted into this compatible9-member owner.
