@@ -3255,11 +3255,10 @@ ordering, source regression222 /65.13s and guarded PostgreSQL78 /51.12s passed.
 The PostgreSQL suite includes four new caught-error rollback cases; its final
 read-only inspection confirms disposable identity/head0055 and zero other
 connections. These tests do not execute models, production queries or NAS writes.
-Ruff/format and strict mypy on both changed production modules pass. The first
+Ruff/format and strict mypy on both changed production modules pass.
 Additional legacy submission/dependency regression passed41 /16.24s (separate
 files, not another run of the222-test set). No dependency direction changed.
-The first
-source regression had six synthetic-fixture failures because its rollback cleared
+The first source regression had six synthetic-fixture failures because its rollback cleared
 previously committed mock history; per-call root snapshots corrected that fixture,
 not production history or checks. Earlier logs are preserved, not added to totals.
 
@@ -3269,3 +3268,61 @@ Actual QUERY/replay/context and the broader goal remain incomplete. Release shou
 prefer the smallest compatible correction on the installed owner base; unrelated
 API/provider, consumer flags, models, policies, migrations and services need not
 be upgraded merely to run this bounded QUERY canary.
+
+### Minimal compatible owner release
+
+Main correction is `2941723dbf77ceb7035bc9d1435702d8dbe96da6`. A separate
+maintenance branch, `release/reference-query-root-20261015`, backports only those
+two production-module edits and focused tests onto the actually installed owner
+base5018ad2d. Its exact commit is `047611bb30300d13218364e058337b7092cb9edb`.
+Main and installed history are not reset or rewritten. This avoids pulling the
+newer11-member provider/role-RPC implementation into an unrelated API upgrade
+merely to repair the finite QUERY submission.
+
+The backport's own source regression194 /54.60s, Ruff/format and strict mypy pass.
+An exact Git-archive build produced an owner platform/contracts pair. Full RECORD
+verification passed after applying the verifier's required0600 modes to the two
+new wheel files; the initial file-identity rejection is retained. The isolated
+selected-wheel import proof checks six actual modules, the original9-member
+provider inventory and AST equality of the patched QUERY branch/submission with
+main. Checkout/installed-prefix fallback, model forwards and DB mutations are
+forbidden in that proof. Main's PostgreSQL78 remains separately scoped evidence,
+not a claim that the entire guarded suite ran from the older maintenance branch.
+
+Raw wheel SHA: platform
+`391e49a47e9157fddbd0aefd8cb3ac8fd160a18af08733da0a51f4e1f1de38fc`;
+contracts `77030defae4aa94fc9be58884c87025d15b454b27047d3398b5a0cd510906aea`.
+The existing protected owner installer published this pair into a new inactive
+prefix, preserving all original prefixes and numerical files. No shared service,
+API prefix/configuration, source policy, DB migration or consumer feature flag
+was changed. API75fdc265 still has the same PID4155215/start time and its public
+API health remains READY (the health request itself does not require login).
+
+The successor finite canary explicitly pins that owner, the corrected exact
+corpus partition, the original API75fdc265 and unchanged numerical/configuration
+pins. Its preflight now includes owner-UID registered index/member/binary checks
+before login. It requires the previously committed QUERY policy to exist and
+replays its exact original request/provenance; it cannot publish a new control
+under the old producer identity. It does not replace an index or choose latest.
+
+Protected code: `/var/lib/eom-reference-query-root.LXwHShn5/canary.py`, SHA
+`5363360ebe77cbcb0b0ffc020aa158883aa69398b352da9bb108f27f9bc2446c`;
+adjacent read-only helper SHA
+`d581a9142485f312724133e61d6dde9e300dadfcf0a6d5dd7ab26878a92f5cc0`.
+Actual UID990 preflight passed at14:45:48 and again at14:46:36 before the run,
+with no source capture, model execution or DB mutation. Root/child708363/708374
+are the successor handles in the same `EOM:1 rag-service-release` pane. Earlier
+failed process handles are terminal and are not reused. Authenticated query,
+exact replay and canonical context are still unverified at this checkpoint.
+The successor reached its single Studio login input gate at14:46:48. A fresh
+input question was issued only after that actual live gate was observed. No sudo
+reauthentication, credential recovery/persistence, TTL change or extra execution
+was requested; the earlier process's in-memory authentication cannot be retained
+after its terminal failure. Routine observation remains30-minute cadence or a
+direct user input-complete reply.
+
+Evidence: `query-root-backport-{regression,mypy,wheel-build,pair-proof,inactive-install}.log`
+and `genuine-reference-query-root-{preflight,execution}.log` under the existing
+evidence directory. The maintenance worktree/build are recoverable release inputs,
+not currently unnecessary files to delete during an active gate. Retire only after
+the actual bounded canary and its evidence have been resolved and archived.
