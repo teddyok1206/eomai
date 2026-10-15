@@ -36,6 +36,15 @@ from eom_workflow_runner.settings import RunnerConfig, WorkflowSettings
 from sqlalchemy import create_engine
 
 
+def scheduled_runtime(**values):
+    leaf = SimpleNamespace(
+        runner=values.pop("runner"),
+        reconciliation=values.pop("reconciliation"),
+        namespace=SimpleNamespace(view="CONTENT_ONLY"),
+    )
+    return SimpleNamespace(namespaces=(leaf,), **values)
+
+
 def native_runner(monkeypatch, **changes):
     engine = create_engine("sqlite+pysqlite:///:memory:")
     monkeypatch.setattr(
@@ -205,9 +214,9 @@ def test_stop_after_idle_peek_does_not_start_new_observation():
         stop.set()
         return None
 
-    runtime = SimpleNamespace(runner=SimpleNamespace(run_once=idle), reconciliation=Mock())
+    runtime = scheduled_runtime(runner=SimpleNamespace(run_once=idle), reconciliation=Mock())
     entry.serve_local_indexing(runtime, stop)
-    runtime.reconciliation.run_once.assert_not_called()
+    runtime.namespaces[0].reconciliation.run_once.assert_not_called()
 
 
 def test_stop_during_active_command_finishes_it_without_another_claim_or_discovery(capsys):
@@ -218,11 +227,11 @@ def test_stop_during_active_command_finishes_it_without_another_claim_or_discove
         stop.set()
         return command
 
-    runtime = SimpleNamespace(runner=Mock(), reconciliation=Mock())
-    runtime.runner.run_once.side_effect = finish_current
+    runtime = scheduled_runtime(runner=Mock(), reconciliation=Mock())
+    runtime.namespaces[0].runner.run_once.side_effect = finish_current
     entry.serve_local_indexing(runtime, stop)
-    runtime.runner.run_once.assert_called_once()
-    runtime.reconciliation.run_once.assert_not_called()
+    runtime.namespaces[0].runner.run_once.assert_called_once()
+    runtime.namespaces[0].reconciliation.run_once.assert_not_called()
     assert capsys.readouterr().out.count("LOCAL_INDEXING_COMMAND_OBSERVED") == 1
 
 
@@ -239,7 +248,7 @@ def test_queue_is_drained_before_reconciliation_without_independent_claim(capsys
         stop.set()
         return observation
 
-    runtime = SimpleNamespace(
+    runtime = scheduled_runtime(
         runner=runner,
         reconciliation=SimpleNamespace(run_once=reconcile),
         configuration=SimpleNamespace(poll_interval_seconds=60),
@@ -263,17 +272,17 @@ def test_unchanged_reconciliation_does_not_spam_journal(monkeypatch, capsys):
             stop.set()
 
     monkeypatch.setattr(stop, "wait", wait)
-    runtime = SimpleNamespace(
+    runtime = scheduled_runtime(
         runner=Mock(),
         reconciliation=Mock(),
         configuration=SimpleNamespace(poll_interval_seconds=60),
     )
-    runtime.runner.run_once.return_value = None
-    runtime.reconciliation.run_once.return_value = LocalEmbeddingReconciliationResult(
+    runtime.namespaces[0].runner.run_once.return_value = None
+    runtime.namespaces[0].reconciliation.run_once.return_value = LocalEmbeddingReconciliationResult(
         ReconciliationState.NO_PUBLISHED_GRAPH, None
     )
     entry.serve_local_indexing(runtime, stop)
-    assert runtime.reconciliation.run_once.call_count == 2
+    assert runtime.namespaces[0].reconciliation.run_once.call_count == 2
     assert capsys.readouterr().out.count("RECONCILIATION_OBSERVED") == 1
     assert all(0 < seconds <= 5 for seconds in waits)
 

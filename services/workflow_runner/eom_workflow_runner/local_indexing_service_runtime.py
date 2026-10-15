@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
 from eom_catalog_service.embedding_registry_indexing_authority import (
     CatalogIndexingRegistrySourceAuthority,
 )
@@ -28,7 +29,7 @@ from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.native_embedding_index_systemd import FixedNativeIndexLauncher
 from eom_orchestrator.settings import Settings
 from eom_workflow.local_indexing_owner_configuration import (
-    LocalIndexingOwnerConfiguration,
+    LocalIndexingOwnerSelection,
     parse_local_indexing_owner_configuration,
 )
 from sqlalchemy import Engine
@@ -75,11 +76,17 @@ class IndexingRoleExecutionDisabled:
 
 
 @dataclass(frozen=True, slots=True)
-class LocalIndexingServiceRuntime:
-    engine: Engine
+class LocalIndexingNamespaceRuntime:
+    namespace: EmbeddingIndexNamespace
     runner: WorkflowRunner
     reconciliation: LocalEmbeddingServiceReconciliation
-    configuration: LocalIndexingOwnerConfiguration
+
+
+@dataclass(frozen=True, slots=True)
+class LocalIndexingServiceRuntime:
+    engine: Engine
+    namespaces: tuple[LocalIndexingNamespaceRuntime, ...]
+    configuration: LocalIndexingOwnerSelection
 
 
 def build_local_indexing_service_runtime(
@@ -135,26 +142,6 @@ def build_local_indexing_service_runtime(
             selection.runtime_profile.resource_profile.resource_profile_sha256,
             selection.maximum_sources,
         )
-        owner = CatalogLocalEmbeddingOwnerAdmission.for_indexing_service(
-            engine,
-            LocalEmbeddingOwnerConfiguration(
-                EmbeddingRegistryOwnerConfiguration(
-                    selection.corpus_id,
-                    selection.namespace,
-                    selection.runtime_profile.space,
-                    selection.recipe,
-                    selection.source_classes,
-                ),
-                selection.native_execution_policy,
-                selection.native_execution_policy_sha256,
-            ),
-            source_authority=authority,
-            settings=catalog_settings,
-        )
-        with publisher.sessions.begin() as session:
-            query = owner.current_reconciliation_lookup(session)
-            if query is not None:
-                owner.resolve_reconciliation_controls(session, query, selection.runtime_profile)
         verifier = FixedIndexingRuntimeVerification(selection.runtime_verifier)
         launcher = FixedNativeIndexLauncher(
             selection.cpu_environment_raw_sha256.removeprefix("sha256:"),
@@ -162,40 +149,79 @@ def build_local_indexing_service_runtime(
             verifier.assert_current,
         )
         launcher.assert_current_runtime()
-        executor = CatalogNativeEmbeddingExecutor(
-            owner=owner,
-            publisher=publisher,
-            launcher=launcher,
-            runtime_profile=selection.runtime_profile,
-            source_commit=pin.runtime_source_commit,
+        namespaces = tuple(
+            _build_namespace_runtime(
+                engine, publisher, authority, selection, namespace, pin, catalog_settings, launcher
+            )
+            for namespace in selection.namespaces
         )
-        runner = WorkflowRunner(
-            engine,
-            settings=WorkflowSettings(),
-            catalog=WorkflowCatalogService(engine, catalog_settings),
-            actor_authorizer=OperatorIdentityWorkflowActorAuthorizer(
-                SqlAlchemyOperatorActorSource(engine)
-            ),
-            readiness=IndexingRoleExecutionDisabled(),
-            available_roles=frozenset(),
-            local_embedding_owner=owner,
-            local_embedding_executor=executor,
-            command_families=frozenset({CommandExecutionFamily.LOCAL_EMBEDDING}),
-            command_actor_selection=NativeCommandActorSelection(
-                "local_indexing_service", pin.service.service_id
-            ),
-            runner_config=RunnerConfig(
-                version=1,
-                poll_interval_seconds=5,
-                command_lease_seconds=900,
-                command_lease_heartbeat_seconds=30,
-                max_commands_per_run=64,
-            ),
-        )
-        reconciliation = LocalEmbeddingServiceReconciliation(
-            executor, maximum_targets=selection.maximum_targets
-        )
-        return LocalIndexingServiceRuntime(engine, runner, reconciliation, selection)
+        return LocalIndexingServiceRuntime(engine, namespaces, selection)
     except Exception:
         engine.dispose()
         raise
+
+
+def _build_namespace_runtime(
+    engine: Engine,
+    publisher: ControlFileSetPublisher,
+    authority: CatalogIndexingRegistrySourceAuthority,
+    selection: LocalIndexingOwnerSelection,
+    namespace: EmbeddingIndexNamespace,
+    pin: LocalIndexingRuntimePin,
+    catalog_settings: CatalogSettings,
+    launcher: FixedNativeIndexLauncher,
+) -> LocalIndexingNamespaceRuntime:
+    owner = CatalogLocalEmbeddingOwnerAdmission.for_indexing_service(
+        engine,
+        LocalEmbeddingOwnerConfiguration(
+            EmbeddingRegistryOwnerConfiguration(
+                selection.corpus_id,
+                namespace,
+                selection.runtime_profile.space,
+                selection.recipe,
+                selection.source_classes,
+            ),
+            selection.native_execution_policy,
+            selection.native_execution_policy_sha256,
+        ),
+        source_authority=authority,
+        settings=catalog_settings,
+    )
+    with publisher.sessions.begin() as session:
+        query = owner.current_reconciliation_lookup(session)
+        if query is not None:
+            owner.resolve_reconciliation_controls(session, query, selection.runtime_profile)
+    executor = CatalogNativeEmbeddingExecutor(
+        owner=owner,
+        publisher=publisher,
+        launcher=launcher,
+        runtime_profile=selection.runtime_profile,
+        source_commit=pin.runtime_source_commit,
+    )
+    runner = WorkflowRunner(
+        engine,
+        settings=WorkflowSettings(),
+        catalog=WorkflowCatalogService(engine, catalog_settings),
+        actor_authorizer=OperatorIdentityWorkflowActorAuthorizer(
+            SqlAlchemyOperatorActorSource(engine)
+        ),
+        readiness=IndexingRoleExecutionDisabled(),
+        available_roles=frozenset(),
+        local_embedding_owner=owner,
+        local_embedding_executor=executor,
+        command_families=frozenset({CommandExecutionFamily.LOCAL_EMBEDDING}),
+        command_actor_selection=NativeCommandActorSelection(
+            "local_indexing_service", pin.service.service_id, namespace
+        ),
+        runner_config=RunnerConfig(
+            version=1,
+            poll_interval_seconds=5,
+            command_lease_seconds=900,
+            command_lease_heartbeat_seconds=30,
+            max_commands_per_run=64,
+        ),
+    )
+    reconciliation = LocalEmbeddingServiceReconciliation(
+        executor, maximum_targets=selection.maximum_targets
+    )
+    return LocalIndexingNamespaceRuntime(namespace, runner, reconciliation)

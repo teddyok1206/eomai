@@ -39,8 +39,13 @@ from eom_workflow_runner.local_embedding_owner_admission import (
 )
 from eom_workflow_runner.local_embedding_service_reconciliation import ReconciliationState
 from eom_workflow_runner.models import WorkflowCommandRecord, WorkflowInstanceRecord
-from eom_workflow_runner.repository import import_workflow_definition
-from sqlalchemy import select
+from eom_workflow_runner.repository import (
+    CommandExecutionFamily,
+    NativeCommandActorSelection,
+    import_workflow_definition,
+    peek_command_candidate,
+)
+from sqlalchemy import event, select
 
 from tests.integration.test_preset_model_validation_persistence import (
     guarded_engine as guarded_engine,
@@ -188,6 +193,55 @@ def test_actual_bounded_submission_revalidates_only_its_selected_targets(reconci
     assert result.state is ReconciliationState.QUEUED
     assert result.eligible_source_count == 2 and result.selected_target_count == 1
     assert app.run_once().state is ReconciliationState.REPLAYED
+    c.launcher.run.assert_not_called()
+
+
+def test_actual_service_namespace_queue_selection_cannot_take_another_view(reconciliation):
+    c = reconciliation
+    result = c.app.run_once()
+    request = c.source.scope.request
+    namespace = request.namespace
+    other = namespace.model_copy(
+        update={"view": "METADATA_ONLY" if namespace.view != "METADATA_ONLY" else "CONTENT_ONLY"}
+    )
+    statements = []
+
+    def capture(_connection, _cursor, statement, parameters, _context, _many):
+        statements.append((statement, parameters))
+
+    event.listen(c.publisher.engine, "before_cursor_execute", capture)
+    try:
+        with c.publisher.sessions() as session:
+            for selected_namespace, expected in ((namespace, True), (other, False)):
+                selected = peek_command_candidate(
+                    session,
+                    family=CommandExecutionFamily.LOCAL_EMBEDDING,
+                    # Retained synthetic cohorts deliberately reuse one service
+                    # ID. Scope this assertion to its immutable Workflow rather
+                    # than deleting old pending test evidence to change FIFO.
+                    workflow_id=result.workflow_id,
+                    actor_selection=NativeCommandActorSelection(
+                        "local_indexing_service",
+                        request.actor_context.service_id,
+                        selected_namespace,
+                    ),
+                )
+                assert (selected is not None) is expected
+                if selected is not None:
+                    assert selected.command_id == result.command_id
+    finally:
+        event.remove(c.publisher.engine, "before_cursor_execute", capture)
+    assert len(statements) == 2
+    with c.publisher.engine.connect() as connection:
+        for statement, parameters in statements:
+            plan = connection.exec_driver_sql(
+                "EXPLAIN (FORMAT JSON) " + statement, parameters
+            ).scalar_one()
+            assert plan[0]["Plan"]["Node Type"] == "Limit"
+            assert "initial_request" in statement and "workflow_events" not in statement
+    with c.publisher.sessions() as session:
+        command = session.get(WorkflowCommandRecord, result.command_id)
+        assert command.state == "PENDING" and command.attempts == 0
     c.launcher.run.assert_not_called()
 
 

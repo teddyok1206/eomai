@@ -204,7 +204,11 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 일반 웹 요청의 자동 준비·다른 소비자/GPU 활성화 완료는 아닙니다.
 [실제 완료·재전송·부분 coverage 증거](docs/status/REFERENCE_QUERY_LIVE_ACCEPTANCE_2026-10-15.md)를 참고하세요.
 
-| 증분 인덱스 경계 | 현재 검증·활성 상태 |
+아래 표는 경계별 누적 검증 기록도 포함합니다. 이전 행의 소스 검증 당시 ‘미활성’은
+뒤에 기록된 운영 활성화를 취소하는 뜻이 아닙니다. 현재 운영 coverage는 CONTENT_ONLY6/520,
+인덱싱 owner는 정상 종료 상태이며, 일반 소비자·추가 표현·GPU 기본값은 아직 미활성입니다.
+
+| 증분 인덱스 경계 | 검증 증거와 명시된 시점의 활성 상태 |
 | --- | --- |
 | 계약·registry·Artifact·수치 검증·atomic submission·exact claim/native dispatch | SOURCE_PASS; 실제 seed+delta와 후속4건 증분 처리 성공. vector/binding 각6건, 불변 index revision3(CONTENT_ONLY6/520), 기존2건 재사용 확인. 별도 QUERY의 실제 완료·같은 key 재전송·context 조회 PASS; INDEX 자체의 실제 same-key replay와 상시 연결은 별도 |
 | exact pinned index read | SOURCE_PASS; 현재 권한 재확인·일괄 binding 조회·선택된 벡터 읽기 구현. 실제 QUERY→context에서 exact index와2/520 coverage 읽기 PASS; 일반 웹 소비는 미활성 |
@@ -230,6 +234,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | QUERY 전용 staging 사전검사 | SOURCE_PASS; 실제로 발견한 누락 폴더를 기존 실행 계정의0700 전용 공간으로 준비. 소스는 동일 FD 경계로 missing/symlink/권한 오류를 실행 전 거부하며 자동 생성·수선하지 않음. QUERY/INDEX 회귀120·strict type2 PASS. 공유 서비스 변경 없음, 새 guard는 아직 운영 미설치. [원인·수정·검증 구분](docs/status/REFERENCE_QUERY_STAGING_CHECKPOINT_2026-10-15.md#scoped-correction-and-source-regression) |
 | authenticated owner/session fence | QUERY/성능 비교 전달1.1과 seed1.0 유지. source424·실제 disposable 세션/동시성19 PASS; workspace/namespace·root-only/savepoint 수정 검증(main222·PG78 PASS). API75fdc265/호환 owner517e4551의 실제 capture·QUERY 완료·재전송·정본 조회 증거 보존. 이후12-member API2857bf77/native8c411041 설치·기동 PASS; 이 조합의 실제 인증 HTTP 검증은 별도 대기. [기존 완료](docs/status/REFERENCE_QUERY_LIVE_ACCEPTANCE_2026-10-15.md)·[현재 설치](docs/operations/REFERENCE_QUERY_SERVICE_LIVE_RELEASE_2026-10-15.md) |
 | 자동 인덱싱 전용 신원·저장 | 운영0055·sourceae8f8bf6/신원 revision11. 후속4건을1회 계산해 CONTENT_ONLY6/520; 기존2건과 이전 revision 보존. 현재 owner는 정상 종료·boot 비활성, 선택은4건/1800초이며 상시 재개/전체/다른 view·실제 replay·소비 연결은 미완료. 반복 파일 검사는 관측당 중복만 줄이는 소스 수정·테스트 완료, 운영 속도 개선은 미검증. [증분·관측 비용 기록](docs/status/LOCAL_INDEXING_FOUR_TARGET_DELTA_2026-10-15.md) |
+| 세 표현의 자동 증분 처리 구성 | SOURCE_PASS; 설정1.0 보존·닫힌2.0 successor·표현별 exact queue 선택·기존 Runner의 순차 순환 구성. 공유 엔진/신원/launcher를 유지하고 각 표현별 권한을 재확인. 소스333·임시 PostgreSQL126·strict type4 PASS; 실제 추가 표현·상시 자동화 활성화는 미완료. [설계·검증·운영 구분](docs/architecture/LOCAL_INDEXING_MULTIVIEW_OWNER_DESIGN.md) |
 | 인증된 owner/session 전달 | 수신 API75fdc265와 비활성 owner5018ad2d 설치·실제 UID990의 provider/process/config/key-metadata 검증 PASS. QUERY/성능 비교 전달은 목적·요청 hash를 함께 확인하며 현재 권한/만료를 확장하지 않음. 실제 설치 route/정본 API 설명·hash 일치 PASS; 이 검사를 배포 gate에 추가 |
 | 현재 사용자·자료의 native 작업 접수 연결 | SOURCE_IMPLEMENTED; 실제 인증 capture→기존 Catalog 검증·계획 재구성·잠금 확인을 연결, 운영 provider/실행기 연결은 미활성 |
 | Native INDEX 파일 전달·입력/결과 저장 | SOURCE_PASS; 실제 계정 권한4·설치된 시작 권한9·CPU 합성 입력2개×1024차원·동일 실행 재조회 PASS, 실제 자료/Job/binding 연결은 미활성 |

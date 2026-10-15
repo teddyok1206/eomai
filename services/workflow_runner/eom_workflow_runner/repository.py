@@ -9,6 +9,8 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any, Literal
 
+from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
+from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
 from eom_identifiers import content_sha256
 from eom_operator_identity.contracts import OperatorId
 from eom_operator_identity.local_indexing_service import ServiceId
@@ -151,6 +153,7 @@ class NativeCommandActorSelection:
 
     actor_type: Literal["human", "local_indexing_service"]
     actor_id: str
+    namespace: EmbeddingIndexNamespace | None = None
 
     def __post_init__(self) -> None:
         if self.actor_type == "human":
@@ -159,6 +162,10 @@ class NativeCommandActorSelection:
             TypeAdapter(ServiceId).validate_python(self.actor_id, strict=True)
         else:
             raise ValueError("NATIVE_COMMAND_ACTOR_SELECTION_INVALID")
+        if self.namespace is not None:
+            if self.actor_type != "local_indexing_service":
+                raise ValueError("NATIVE_COMMAND_ACTOR_SELECTION_INVALID")
+            EmbeddingIndexNamespace.model_validate(raw_similarity_contract_value(self.namespace))
 
 
 @dataclass(frozen=True, slots=True)
@@ -1405,6 +1412,13 @@ def peek_command_candidate(
             WorkflowCommandRecord.actor_type == actor_selection.actor_type,
             WorkflowCommandRecord.actor_id == actor_selection.actor_id,
         )
+        if actor_selection.namespace is not None:
+            if family is not CommandExecutionFamily.LOCAL_EMBEDDING:
+                raise ValueError("NATIVE_COMMAND_ACTOR_SELECTION_INVALID")
+            query = query.where(
+                WorkflowInstanceRecord.initial_request["namespace"]
+                == actor_selection.namespace.model_dump(mode="json")
+            )
     row = session.execute(query).one_or_none()
     if row is None:
         return None

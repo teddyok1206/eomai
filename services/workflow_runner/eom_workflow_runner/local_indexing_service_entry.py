@@ -108,24 +108,29 @@ def _failure_detail(error: Exception) -> dict[str, str | int | None]:
 
 
 def serve_local_indexing(runtime: LocalIndexingServiceRuntime, stop: Event) -> None:
-    """Drain this actor's existing queue before another bounded source observation."""
-    deadline = 0.0
-    last: tuple[object, ...] | None = None
+    """Round-robin exact namespaces; each drains its queue before new discovery."""
+    deadlines = [0.0] * len(runtime.namespaces)
+    last: list[tuple[object, ...] | None] = [None] * len(runtime.namespaces)
+    cursor = 0
     while not stop.is_set():
-        command = runtime.runner.run_once()
+        index = cursor
+        cursor = (cursor + 1) % len(runtime.namespaces)
+        namespace = runtime.namespaces[index]
+        command = namespace.runner.run_once()
         if command is not None:
             _emit(
                 "LOCAL_INDEXING_COMMAND_OBSERVED",
                 workflow_id=command.workflow_id,
                 command_id=command.command_id,
                 state=command.state,
+                view=namespace.namespace.view,
             )
             continue
         if stop.is_set():
             break
         now = time.monotonic()
-        if now >= deadline:
-            observed = runtime.reconciliation.run_once()
+        if now >= deadlines[index]:
+            observed = namespace.reconciliation.run_once()
             signature = (
                 observed.state,
                 observed.graph_snapshot_revision_id,
@@ -133,7 +138,7 @@ def serve_local_indexing(runtime: LocalIndexingServiceRuntime, stop: Event) -> N
                 observed.missing_report_revision_ids,
                 observed.workflow_id,
             )
-            if signature != last:
+            if signature != last[index]:
                 _emit(
                     "LOCAL_INDEXING_RECONCILIATION_OBSERVED",
                     state=observed.state.value,
@@ -145,14 +150,15 @@ def serve_local_indexing(runtime: LocalIndexingServiceRuntime, stop: Event) -> N
                     selected_targets=observed.selected_target_count,
                     workflow_id=observed.workflow_id,
                     command_id=observed.command_id,
+                    view=namespace.namespace.view,
                 )
-                last = signature
-            deadline = time.monotonic() + runtime.configuration.poll_interval_seconds
+                last[index] = signature
+            deadlines[index] = time.monotonic() + runtime.configuration.poll_interval_seconds
             # A newly submitted command gets an immediate iteration. No target
             # list is scanned or claimed independently of the existing Runner.
             if observed.workflow_id is not None and observed.state.value == "QUEUED":
                 continue
-        stop.wait(min(5.0, max(0.1, deadline - time.monotonic())))
+        stop.wait(min(5.0, max(0.1, min(deadlines) - time.monotonic())))
 
 
 def main() -> int:

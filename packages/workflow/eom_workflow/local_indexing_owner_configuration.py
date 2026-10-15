@@ -26,6 +26,12 @@ LOCAL_INDEXING_OWNER_SCHEMA_SHA256 = (
 )
 MAX_LOCAL_INDEXING_OWNER_BYTES = 64 * 1024
 _RESOURCE = "local-indexing-owner-configuration-v1.schema.json"
+LOCAL_INDEXING_MULTIVIEW_OWNER_SCHEMA_REF = (
+    "eom://schemas/workflow/local-indexing-owner-configuration/2.0"
+)
+LOCAL_INDEXING_MULTIVIEW_OWNER_SCHEMA_SHA256 = (
+    "sha256:5c2f1945c7d670b3affb8cc5c2bb987108905f33492584953c49fdcc307ed43f"
+)
 
 
 class LocalIndexingOwnerConfigurationError(ValueError):
@@ -59,6 +65,43 @@ def _validator() -> Draft202012Validator:
     return Draft202012Validator(schema, registry=registry)
 
 
+@lru_cache(maxsize=1)
+def _multiview_validator() -> Draft202012Validator:
+    with (
+        files("eom_workflow")
+        .joinpath("resources", "local-indexing-owner-configuration-v2.schema.json")
+        .open("rb") as stream
+    ):
+        raw = stream.read(32 * 1024 + 1)
+    if len(raw) > 32 * 1024 or sha256_bytes(raw) != LOCAL_INDEXING_MULTIVIEW_OWNER_SCHEMA_SHA256:
+        raise LocalIndexingOwnerConfigurationError()
+    schema = json.loads(raw)
+    if schema.get("$id") != LOCAL_INDEXING_MULTIVIEW_OWNER_SCHEMA_REF:
+        raise LocalIndexingOwnerConfigurationError()
+    Draft202012Validator.check_schema(schema)
+    registry = local_embedding_admission_schema_registry().with_resources(
+        (
+            (
+                LOCAL_INDEXING_OWNER_SCHEMA_REF,
+                Resource.from_contents(local_indexing_owner_configuration_schema()),
+            ),
+            (LOCAL_INDEXING_MULTIVIEW_OWNER_SCHEMA_REF, Resource.from_contents(schema)),
+        )
+    )
+    return Draft202012Validator(schema, registry=registry)
+
+
+def _validate_document(value: object, validator: Draft202012Validator) -> Any:
+    try:
+        document = raw_similarity_contract_value(value)
+        if len(canonical_json_bytes(document)) > MAX_LOCAL_INDEXING_OWNER_BYTES:
+            raise LocalIndexingOwnerConfigurationError()
+        validator.validate(document)
+        return document
+    except Exception:
+        raise LocalIndexingOwnerConfigurationError() from None
+
+
 class _OwnerValue(BaseModel):
     model_config = ConfigDict(
         extra="forbid", frozen=True, revalidate_instances="always", hide_input_in_errors=True
@@ -80,10 +123,8 @@ class LocalIndexingRuntimeVerifierPin(_OwnerValue):
     script_raw_sha256: Sha256
 
 
-class LocalIndexingOwnerConfiguration(_OwnerValue):
-    schema_version: Literal["local-indexing-owner-configuration/1.0"]
+class _OwnerSelectionFields(_OwnerValue):
     corpus_id: str = Field(strict=True, pattern=r"^corpus_[0-9a-f]{32}$")
-    namespace: EmbeddingIndexNamespace
     recipe: ExperimentViewRecipe
     source_classes: tuple[Literal["APPROVED_ITEM", "PAST_EXAM"], ...]
     service_policy_revision_id: str = Field(strict=True, pattern=r"^accessrev_[0-9a-f]{32}$")
@@ -99,24 +140,10 @@ class LocalIndexingOwnerConfiguration(_OwnerValue):
     maximum_targets: int = Field(strict=True, ge=1, le=1024)
     maximum_sources: int = Field(strict=True, ge=1, le=1024)
 
-    @model_validator(mode="before")
-    @classmethod
-    def schema_first(cls, value: object) -> Any:
-        try:
-            document = raw_similarity_contract_value(value)
-            if len(canonical_json_bytes(document)) > MAX_LOCAL_INDEXING_OWNER_BYTES:
-                raise LocalIndexingOwnerConfigurationError()
-            _validator().validate(document)
-            return document
-        except Exception:
-            raise LocalIndexingOwnerConfigurationError() from None
-
     @model_validator(mode="after")
-    def exact_selection(self) -> Self:
+    def common_selection(self) -> Self:
         if (
-            self.namespace.space_sha256 != self.runtime_profile.space.space_sha256
-            or self.namespace.recipe_sha256 != self.recipe.recipe_sha256
-            or self.source_classes != tuple(sorted(set(self.source_classes)))
+            self.source_classes != tuple(sorted(set(self.source_classes)))
             or self.database_owner.role_name == "eom_catalog_manager_runtime"
             or self.maximum_targets > self.maximum_sources
         ):
@@ -124,11 +151,76 @@ class LocalIndexingOwnerConfiguration(_OwnerValue):
         return self
 
 
-def local_indexing_owner_configuration_bytes(value: LocalIndexingOwnerConfiguration) -> bytes:
+class LocalIndexingOwnerConfiguration(_OwnerSelectionFields):
+    schema_version: Literal["local-indexing-owner-configuration/1.0"]
+    namespace: EmbeddingIndexNamespace
+
+    @model_validator(mode="before")
+    @classmethod
+    def schema_first(cls, value: object) -> Any:
+        return _validate_document(value, _validator())
+
+    @model_validator(mode="after")
+    def exact_selection(self) -> Self:
+        if (
+            self.namespace.space_sha256 != self.runtime_profile.space.space_sha256
+            or self.namespace.recipe_sha256 != self.recipe.recipe_sha256
+        ):
+            raise LocalIndexingOwnerConfigurationError()
+        return self
+
+    @property
+    def namespaces(self) -> tuple[EmbeddingIndexNamespace, ...]:
+        return (self.namespace,)
+
+
+class LocalIndexingMultiviewOwnerConfiguration(_OwnerSelectionFields):
+    schema_version: Literal["local-indexing-owner-configuration/2.0"]
+    namespace: EmbeddingIndexNamespace
+    additional_namespaces: tuple[EmbeddingIndexNamespace, ...] = Field(min_length=1, max_length=2)
+
+    @model_validator(mode="before")
+    @classmethod
+    def schema_first(cls, value: object) -> Any:
+        return _validate_document(value, _multiview_validator())
+
+    @model_validator(mode="after")
+    def exact_namespaces(self) -> Self:
+        if len({namespace.view for namespace in self.namespaces}) != len(self.namespaces):
+            raise LocalIndexingOwnerConfigurationError()
+        for namespace in self.namespaces:
+            if (
+                namespace.space_sha256 != self.runtime_profile.space.space_sha256
+                or namespace.recipe_sha256 != self.recipe.recipe_sha256
+                or namespace.projection_version != self.namespace.projection_version
+                or namespace.storage_partition != self.namespace.storage_partition
+                or namespace.population_scope != self.namespace.population_scope
+            ):
+                raise LocalIndexingOwnerConfigurationError()
+        return self
+
+    @property
+    def namespaces(self) -> tuple[EmbeddingIndexNamespace, ...]:
+        return (self.namespace, *self.additional_namespaces)
+
+
+LocalIndexingOwnerSelection = (
+    LocalIndexingOwnerConfiguration | LocalIndexingMultiviewOwnerConfiguration
+)
+
+
+def _parse_value(value: object) -> LocalIndexingOwnerSelection:
+    document = raw_similarity_contract_value(value)
+    if not isinstance(document, dict):
+        raise LocalIndexingOwnerConfigurationError()
+    if document.get("schema_version") == "local-indexing-owner-configuration/2.0":
+        return LocalIndexingMultiviewOwnerConfiguration.model_validate(document)
+    return LocalIndexingOwnerConfiguration.model_validate(document)
+
+
+def local_indexing_owner_configuration_bytes(value: LocalIndexingOwnerSelection) -> bytes:
     try:
-        checked = LocalIndexingOwnerConfiguration.model_validate(
-            raw_similarity_contract_value(value)
-        )
+        checked = _parse_value(value)
         return canonical_json_bytes(raw_similarity_contract_value(checked))
     except Exception:
         raise LocalIndexingOwnerConfigurationError() from None
@@ -147,14 +239,14 @@ def _reject_constant(_value: str) -> object:
     raise LocalIndexingOwnerConfigurationError()
 
 
-def parse_local_indexing_owner_configuration(raw: bytes) -> LocalIndexingOwnerConfiguration:
+def parse_local_indexing_owner_configuration(raw: bytes) -> LocalIndexingOwnerSelection:
     if type(raw) is not bytes or not 0 < len(raw) <= MAX_LOCAL_INDEXING_OWNER_BYTES:
         raise LocalIndexingOwnerConfigurationError()
     try:
         value: object = json.loads(
             raw, object_pairs_hook=_unique_object, parse_constant=_reject_constant
         )
-        checked = LocalIndexingOwnerConfiguration.model_validate(value)
+        checked = _parse_value(value)
         if local_indexing_owner_configuration_bytes(checked) != raw:
             raise LocalIndexingOwnerConfigurationError()
         return checked
