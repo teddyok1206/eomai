@@ -102,9 +102,45 @@ Retained private logs in the current development window:
 `multiview-owner-disposable-stage-{first,final,reviewed}.log`. The middle DB log is
 the failed fixture experiment; it is not overwritten by the reviewed PASS.
 
-Deployment remains separate: installed ownerae8f8bf6 is inactive after the actual
+Activation remains separate: selected ownerae8f8bf6 is inactive after the actual
 four-target delta, current operating CONTENT_ONLY coverage6/520. This source
 neither activates configuration2.0 nor authorizes extra namespaces, and does not
 replace the held HTTP canary or the inactive83bad API/provider candidate. Select
 an explicitly reviewed INDEX-owner successor and compatible current grant/identity
-before protected installation; never silently pick latest or patch the old prefix.
+before activation; never silently pick latest or patch the old prefix.
+
+## Packaged and installed inactive candidate
+
+Reviewed INDEX candidate`d4846220f1afbebaa8bb79507297eed42cea9219` passed the official
+API build-only/RECORD/source inventory/installed simulation. Its dist directory is
+`/tmp/eom-api-build/d4846220f1afbebaa8bb79507297eed42cea9219.uaPiGK/dist`.
+
+| Wheel | Raw SHA-256 |
+| --- | --- |
+| Platform | `5a8e74bfefee586845b04d6f09ba7444482d776267f092ef998651d48ad492f3` |
+| API contracts | `3fcbca8d71eb49f06faf0fe3ef30c549f96d5770372f2857e98d3b06e02177b1` |
+| API (built, not installed) | `d167e5f0138bf056429d9a26bf880f1cbbc688a65ddd823765177812905597b9` |
+
+Independent isolated two-wheel import/source proof28 plus7 changed INDEX members
+PASS. The latter also round-trips both configurations from a content-free synthetic
+selection, imports the actual scheduler/factory and checks exact per-view selection.
+Checkout imports, old installed EOM fallback, API-wheel fallback and numerical ML
+imports are denied; no DB/login/model/service operation is performed by this proof.
+These are member/import checks, not additional pytest cases.
+
+At23:13 UTC the existing root-protected no-clobber installer published this exact
+owner pair under`/opt/eom/embedding-owner-releases/d4846220f1afbebaa8bb79507297eed42cea9219`.
+Root ownership, directory0755, retained wheel hashes and terminal installer result
+were checked. **OWNER_ACTIVATION=NOT_PERFORMED; CPU_RUNTIME=UNCHANGED**. The active
+API/platform2857bf77, native QUERY owner8c411041, old INDEX selectionae8f8bf6,
+identity revision11, data/native policies, configuration and migration0055 remain.
+The separate reviewed83bad API/provider staging is not silently replaced by this
+INDEX-only candidate. Future documentation commits do not change these pins.
+
+The first direct installer invocation failed before entry because the protected
+script is intentionally0444, not executable. Its log is retained; the supported
+explicit`sudo -n /bin/bash <protected installer>` invocation then succeeded without
+changing file permissions, credential TTLs or the user authentication process.
+Logs:`multiview-owner-release-build.log`, `multiview-owner-pair-closure.log`,
+`multiview-owner-inactive-install.log`(failed invocation) and
+`multiview-owner-inactive-install-reviewed.log`(successful inactive install).
