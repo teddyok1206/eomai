@@ -108,3 +108,25 @@ No production database mutation, actual model inference, new protocol/schema,
 migration, worker behavior, runtime package installation or activation was performed
 for this source gate. The existing live QUERY and its authentication prompt remain
 on their original protected program/compatible owner.
+
+Candidate `8160a31448aba4e604742881ee4ba23edfa02f7d`: complete API/platform/contracts
+wheel build and RECORD gate PASS. Strict isolated owner-pair imports and twelve
+production-member byte comparisons against the exact source archive PASS; checkout,
+installed-prefix and numerical-module fallbacks are denied. Dependency-boundary
+regression: six PASS in4.46s. This main candidate's11-member Identity family is not
+installed into the active API9-member/compatible517e4551 canary release.
+
+Build: `/tmp/eom-api-build/8160a31448aba4e604742881ee4ba23edfa02f7d.3xRg8i/dist`.
+Sanitized logs: `query-initial-context-release-build.log`,
+`query-initial-context-owner-pair.log`, `query-initial-context-regression-reviewed.log`,
+`query-initial-context-postgres-registry.log`,
+`query-initial-context-postgres-stage-reviewed.log` and
+`query-initial-context-dependency-boundaries.log`, all under the existing checkpoint
+directory `/tmp/eom-identity-provider-install.nAaycoDM`.
+
+At18:22:33 UTC the same protected original-recovery parent825932/child825987 were
+confirmed live, still at the17:52:26 genuine-login input gate. No new capture/model
+event occurred. The process/prompt was retained and no repeated input request was
+sent. Next routine observation is no earlier than18:52:33 UTC unless user input or
+a specific execution-completion event arrives. The ordinary API connection, actual
+QUERY completion, continuous coverage and CPU/CUDA evaluation remain open.
