@@ -3561,3 +3561,35 @@ No production transaction/hash checks were relaxed. Slack discovery report
 `devreport_6a5294c54f9f4bc4be6735a4b7c6a5f0` SENT/SAVED. API75fdc265, original
 immutable owner047611bb, model/device, index coverage2/520 and service activation
 remain unchanged. The full goal remains active and incomplete.
+
+Release candidate `a689415efd3b98dcf1cddd4fc2da2b7a3df5c44c` is pushed to main.
+Its full3-wheel/RECORD build and strict2-wheel import/source-byte closure pass.
+Dist `/tmp/eom-api-build/a689415efd3b98dcf1cddd4fc2da2b7a3df5c44c.e8VLJ5/dist`;
+raw SHA platform `ac64b4533e518aab026be40aab8e724f1d0b164550f26b2c4a085c46aed5b126`,
+contracts `32672e72c05434782e1fa8641514bde579d5ecac95d6d6db3851ef368d15aa43`,
+API `b9accdafa2e363a0f393c19fbf8de1e1a20700eed08b8d28eaa5d54b2559adfb`.
+
+The separate owner-only backport `02ca9201742f3ac7b4da1bf34a513a388b69381b`
+is pushed on `release/reference-query-root-20261015`. It retains the installed
+API's original9-member Identity-provider family, versus main's11, and shares the
+same exact-anchor/index/late checks. Owner regression183 /95.25s and final anchor
+suite12 /5.81s pass (11 overlap;184 distinct), strict mypy3/lint/format pass.
+Its2-wheel/RECORD and strict archive-only source closure pass; no checkout,
+installed-prefix or numerical-model fallback. Dist
+`/tmp/eom-api-build/02ca9201-owner.G55tk5/dist`, archive SHA
+`4b2225444a1eed427861eda4b975eb6dcd8b7b769747872f4ee7b3c5d7eb749c`,
+platform `4f84b155cc2a8fbda318d15ed105711dbc146f0835625c877f862acfb337dbf1`,
+contracts `889fefbdca294e82776bf6a3158cf6b5d7f8d6bbf5b5bb80c5081dd5c0516ffa`.
+An initial build invocation from the worktree still selected main because the
+standard API script deliberately pins `/home/eom/EOM`; that output's actual source
+was checked and was never called a backport or installed. The corrected owner
+build uses the exact backport Git archive and existing owner-pair RECORD gate.
+Both build outputs are preserved; no build-script policy was relaxed.
+
+Neither candidate is installed or activated. The operating API/Catalog/ordinary
+runner remain active with original PIDs4155215/4155153/4155182. Next work is the
+supported pre-allocation recovery boundary, not another login or replacement key.
+The original expired/uncertain command must not be forced to success, fabricated
+into allocated history or bypassed by an unrelated request. Continuous indexing,
+real QUERY/current context, consumer activation and CPU/CUDA measurements remain
+explicitly open under the original goal.
