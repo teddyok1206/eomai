@@ -110,4 +110,31 @@ DB row fix or source permission expansion is introduced. No code was changed
 behind any installed immutable prefix. Earlier failure/probe logs are retained.
 
 Corrected source tests79 PASS/19.81s (includes previous68), Ruff/format/type1 PASS.
-Actual corrected installed startup and operator preparation remain pending.
+
+## Corrected native owner — live at21:12 UTC
+
+Owner source `8c4110412bb60e940ef07ea497c4eef3f3ea5253` was separately built,
+RECORD checked and admitted through the isolated28-member owner-pair byte closure.
+The existing owner installer installed a new immutable prefix; API2857bf77,
+the numerical environment, database schema and all source/control pins are unchanged.
+
+- Configuration raw SHA:
+  `1a1d5761aff96306569894ab5b5e38d093c5724c4458342495eb08920d481f24`.
+- Unit raw SHA:
+  `d30cbb37edeb91615ce31de7819dbfff768e65e2438c33ce66ac6f11ccf0aaa0`.
+- Start21:12:21; `REFERENCE_QUERY_OWNER_READY`21:12:37.848890 UTC.
+- Actual supervisor PID1064946: UID/GID0, bounded/permitted/effective0xc4,
+  ambient0x80, NoNewPrivs1. It holds metadata only and does not listen for requests.
+- Actual serving child PID1064962: all real/effective/saved/filesystem UIDs990,
+  GIDs1000, supplementary groups empty, permitted/effective/ambient capabilities0,
+  NoNewPrivs1 and Seccomp2. Its inherited0x80 alone confers no executable privilege;
+  nonroot saved IDs and NoNewPrivs prevent recovering privileges through exec.
+- Socket parent native-owner:eom-api2750; socket native-owner:eom-api0660.
+  No supplementary group was added. Unit enabled after readiness/credential checks.
+- Original eight services and Scientific Studio (`eom-web-gui`) remain active.
+
+`NATIVE_QUERY_OWNER_STARTUP=PASS` is narrower than genuine authenticated preparation
+or a consumer acceptance. No new QUERY/model run or authentication capture occurred
+in this startup verification. Actual API preparation/replay, Catalog completed read,
+ordinary workflow consumers, automatic index coverage and GPU admission remain open.
+The failed predecessor starts and their evidence are preserved, not reclassified.
