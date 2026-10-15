@@ -50,6 +50,11 @@ class ChatSocketEndpoint:
     path: Path
     owner_uid: int
     group_gid: int
+    parent_mode: Literal[0o750, 0o2750] = 0o750
+
+    def __post_init__(self) -> None:
+        if type(self.parent_mode) is not int or self.parent_mode not in {0o750, 0o2750}:
+            raise ChatTransportError("INVALID")
 
     def require_parent(self) -> None:
         try:
@@ -60,7 +65,7 @@ class ChatSocketEndpoint:
                 or not stat.S_ISDIR(parent.st_mode)
                 or parent.st_uid != self.owner_uid
                 or parent.st_gid != self.group_gid
-                or stat.S_IMODE(parent.st_mode) != 0o750
+                or stat.S_IMODE(parent.st_mode) != self.parent_mode
             ):
                 raise ChatTransportError("INVALID")
         except FileNotFoundError:
@@ -197,7 +202,10 @@ def bind_chat_listener(endpoint: ChatSocketEndpoint, *, backlog: int) -> socket.
     listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
         listener.bind(str(endpoint.path))
-        os.chown(endpoint.path, -1, endpoint.group_gid)
+        # A root-provisioned SGID parent can supply the socket group without
+        # granting that group (and its private files) to the owner process.
+        if endpoint.path.lstat().st_gid != endpoint.group_gid:
+            os.chown(endpoint.path, -1, endpoint.group_gid)
         endpoint.path.chmod(0o660)
         endpoint.require_socket()
         listener.listen(backlog)
@@ -230,21 +238,51 @@ def _receive_exact(connection: socket.socket, size: int, deadline: float) -> byt
 
 
 def receive_chat_stream(
-    connection: socket.socket, *, deadline: float, magic: bytes | None = None
+    connection: socket.socket,
+    *,
+    deadline: float,
+    magic: bytes | None = None,
+    limit: int = WORKER_FRAME_LIMIT,
 ) -> dict[str, object]:
+    return decode_chat_frame(
+        receive_chat_stream_payload(
+            connection,
+            deadline=deadline,
+            magic=magic,
+            limit=limit,
+        )
+    )
+
+
+def receive_chat_stream_payload(
+    connection: socket.socket,
+    *,
+    deadline: float,
+    magic: bytes | None = None,
+    limit: int = WORKER_FRAME_LIMIT,
+) -> bytes:
+    """Keep literal bytes for canonical/security parsers on the existing EOM3 carrier."""
+    if type(limit) is not int or not 1 <= limit <= WORKER_FRAME_LIMIT:
+        raise ChatTransportError("INVALID")
     if (magic if magic is not None else _receive_exact(connection, 4, deadline)) != STREAM_MAGIC:
         raise ChatTransportError("INVALID")
     size = struct.unpack("!I", _receive_exact(connection, 4, deadline))[0]
-    if not 0 < size <= WORKER_FRAME_LIMIT:
+    if not 0 < size <= limit:
         raise ChatTransportError("INVALID")
-    return decode_chat_frame(_receive_exact(connection, size, deadline))
+    return _receive_exact(connection, size, deadline)
 
 
 def send_chat_stream(
-    connection: socket.socket, document: dict[str, object], *, deadline: float
+    connection: socket.socket,
+    document: dict[str, object],
+    *,
+    deadline: float,
+    limit: int = WORKER_FRAME_LIMIT,
 ) -> None:
+    if type(limit) is not int or not 1 <= limit <= WORKER_FRAME_LIMIT:
+        raise ChatTransportError("INVALID")
     payload = canonical_json_bytes(document)
-    if not 0 < len(payload) <= WORKER_FRAME_LIMIT:
+    if not 0 < len(payload) <= limit:
         raise ChatTransportError("INVALID")
     remaining = deadline - monotonic()
     if remaining <= 0:

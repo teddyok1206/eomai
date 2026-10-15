@@ -38,6 +38,7 @@ _CODE_MEMBERS = frozenset(
         "eom_api/settings.py",
         "eom_api/dependencies.py",
         "eom_api/request_context.py",
+        "eom_api/services/reference_query_prepare_client.py",
         "eom_identity_service/tokens.py",
         "eom_identity_service/auth_service.py",
         "eom_identity_service/authenticated_session_fence.py",

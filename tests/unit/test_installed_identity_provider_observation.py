@@ -246,6 +246,7 @@ def test_fixed_code_inventory_contains_no_key_or_caller_selected_member():
         "eom_api/dependencies.py",
         "eom_api/lifespan.py",
         "eom_api/request_context.py",
+        "eom_api/services/reference_query_prepare_client.py",
         "eom_api/routers/owner_session_capture.py",
         "eom_api/settings.py",
         "eom_identity_service/auth_service.py",
