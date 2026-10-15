@@ -3121,3 +3121,68 @@ contracts `6390032344a0d36c13257363251b245d3a6c02c251801c04a5bc09bb80cffe02`;
 API `5c7d8b2184855323ed112142559561e2b1df8888198ba05bf47f50abc33b0f49`.
 Logs `release-build`, `owner-pair-proof`, `three-wheel-proof` share the evidence
 prefix above. These candidate wheels were built/verified, not installed or activated.
+
+## 34. Actual QUERY authentication and private-workspace composition repair
+
+2026-10-15 UTC. The formerly waiting original finite execution is now terminal,
+not timed out or assumed stopped: its processes are gone and the original log
+records genuine operator capture PASS at13:58:05, then PermissionError at13:58:06.
+The exact failing call is `LocalEmbeddingControlArtifactPublisher._publish`'s
+local `TemporaryDirectory`, before its file-set publisher call. The approved
+maintenance script used `Settings(runtime_source_commit=...)` without explicit
+local paths, selecting `/srv/eom/workspaces` (root:root0711), which UID990 cannot
+write. Staging also retained an unsuitable shared default. This is an operational
+composition error, not evidence of a schema, state-machine or encoder defect.
+
+The original protected script and failure log are preserved. The readable source
+copy matched its recorded SHA
+`b2faee1b470e789d78f94636a5331bfb513715bb758abea9433ac14e1b1d8622` before editing.
+A successor explicitly selects staging/workspaces below the existing owner state
+directory `/var/lib/eom-workflow-runner/reference-query-canary`. It verifies actual
+owner UID/GID,0700 modes, directory types and no symlinks, then performs local
+temporary-directory creation/cleanup before asking for login. Both publication
+paths use that same configuration. Shared worker roots are not made writable.
+No generic core API, DB schema, execution policy, source/index/Graph pin, native
+budget, runtime wheel, authentication rule, slot or service-principal scope changed.
+
+Root staging copied only reviewed successor bytes into a new protected directory;
+the protected predecessor was not overwritten. Successor source SHA is
+`f21dc1f4aaaa07b9c2bb5e80d5cadc7b2146dad013b1b3143a335ee1429d5e1a`.
+The actual UID990 preflight passed at14:05:03, and again before the successor run
+at14:07:19, including owner-private write/cleanup, original runtime/control checks
+and PostgreSQL head0055. These preflights performed no model forward, source
+capture, Workflow submission, control Artifact publication or DB mutation. Only
+the explicitly bounded local scratch directories/probes were created and cleaned.
+
+The original login PASS is authentication evidence only. Failure preceded QUERY
+submission/model execution; it is not a completed native query or replay. Login
+itself legitimately created Identity/session audit state, so the failed authenticated
+attempt is not globally described as zero database writes. Its process exited
+without persisting credentials or a transferable bearer, so that lost in-memory
+authentication is not reconstructed, impersonated or replayed from metadata.
+
+The successor run was started in the same `EOM:1 rag-service-release` pane with
+existing sudo authentication. At14:08:02, root PID685745/UID990 child685754 were
+confirmed live at the single existing Studio `guiadmin` input gate. A necessary
+fresh Studio-input request was presented, not another Linux/sudo prompt. No command
+is sent into that prompt, and no repeated/new execution is started while it waits.
+Routine observation remains30-minute cadence unless the user supplies the input.
+The resumed goal's blocked audit is fresh; prior blocked-turn counts are not reused.
+
+Verification: the bounded maintenance script passes Ruff/format and shell syntax.
+An isolated AST/function test with a synthetic local UID verifies syntax, explicit
+private paths, successful write/cleanup, exact repeat, rejection of bad mode and
+symlink, and preflight ordering before login. That test performs no DB/model/NAS
+or authentication work; it does not replace the actual UID990 preflight above.
+Production core code is unchanged, so unrelated model/DB/regression suites were
+not rerun merely to increase counts. Existing source/package/PG proofs are retained.
+
+Evidence: original `genuine-reference-query-execution.log`, successor
+`genuine-reference-query-workspace-{preflight,execution,source-check}.log` under
+`/tmp/eom-identity-provider-install.nAaycoDM/`; protected successor
+`/var/lib/eom-reference-query-canary.YZQMzsjb/canary.py`. These maintenance programs
+are bounded canaries, not a permanent API owner or a replacement production service.
+Retire the program after its QUERY/replay/current-read gate closes, preserving
+failure/output lineage; normal API preparation/installed consumer activation still
+requires its supported implementation and separate verification. Coverage2/520 and
+the CPU default are unchanged; GPU comparison and the full goal remain incomplete.
