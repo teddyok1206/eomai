@@ -87,22 +87,20 @@ def _current_context(
     return validate_deliverable_similarity_context(checked, expected_request=expected_request)
 
 
-def validate_item_similarity_scope(
+def validate_item_similarity_start_inputs(
     *,
     workflow_request: WorkflowRequest,
     expected_resolution: ExpectedWorkflowResolution,
     evidence: EvidenceBundlePublicationResultV5,
     preset: ExecutionPresetRevisionV2,
-    context_request: SimilarityContextRequest,
 ) -> tuple[
     WorkflowRequest,
     ExpectedWorkflowResolution,
     EvidenceBundlePublicationResultV5,
     ExecutionPresetRevisionV2,
 ]:
-    """Pure item/QUERY/control binding, never current authority or native admission."""
+    """Shared compatible item/control preflight, before any native side effect."""
     try:
-        context_request = parse_similarity_context_request(context_request)
         raw_evidence = raw_similarity_contract_value(evidence)
         raw_preset = raw_similarity_contract_value(preset)
         validate_contract("evidence-bundle-publication-result-v5", raw_evidence)
@@ -137,18 +135,54 @@ def validate_item_similarity_scope(
             or policy is None
             or workflow_request.content_pack is None
             or workflow_request.content_pack.pack_key != expected.content_pack_key
+            or policy.access_policy_revision_id != evidence.access_policy_revision_id
+            or policy.access_policy_sha256 != evidence.access_policy_sha256
+        ):
+            raise ValueError("ITEM_SIMILARITY_PREPARATION_SCOPE_MISMATCH")
+        validate_educational_retrieval_policy(preset, requirement)
+        return workflow_request, expected, evidence, preset
+    except (ValueError, TypeError, SchemaError):
+        raise ControlPlaneError(
+            "CONTROL_SIMILARITY_PREPARATION_INVALID", "item preparation inputs differ"
+        ) from None
+
+
+def validate_item_similarity_scope(
+    *,
+    workflow_request: WorkflowRequest,
+    expected_resolution: ExpectedWorkflowResolution,
+    evidence: EvidenceBundlePublicationResultV5,
+    preset: ExecutionPresetRevisionV2,
+    context_request: SimilarityContextRequest,
+) -> tuple[
+    WorkflowRequest,
+    ExpectedWorkflowResolution,
+    EvidenceBundlePublicationResultV5,
+    ExecutionPresetRevisionV2,
+]:
+    """Pure item/QUERY/control binding, never current authority or native admission."""
+    workflow_request, expected, evidence, preset = validate_item_similarity_start_inputs(
+        workflow_request=workflow_request,
+        expected_resolution=expected_resolution,
+        evidence=evidence,
+        preset=preset,
+    )
+    try:
+        context_request = parse_similarity_context_request(context_request)
+        requirement = workflow_request.educational_retrieval
+        policy = preset.retrieval_policy
+        if (
+            not isinstance(requirement, EducationalRetrievalRequirementV2)
+            or policy is None
             or context_request.consumer_purpose != "PAST_EXAM_VARIATION"
             or requirement.past_exam_variation.source_item_revision_id
             != context_request.anchor.source.item_revision_id
             or evidence.graph_snapshot != context_request.graph_snapshot
             or evidence.access_policy_revision_id != context_request.policy_revision_id
             or evidence.access_policy_sha256 != context_request.policy_sha256
-            or policy.access_policy_revision_id != evidence.access_policy_revision_id
-            or policy.access_policy_sha256 != evidence.access_policy_sha256
             or not set(context_request.source_classes).issubset(policy.allowed_source_classes)
         ):
             raise ValueError("ITEM_SIMILARITY_PREPARATION_SCOPE_MISMATCH")
-        validate_educational_retrieval_policy(preset, requirement)
         return workflow_request, expected, evidence, preset
     except (ValueError, TypeError, SchemaError):
         raise ControlPlaneError(

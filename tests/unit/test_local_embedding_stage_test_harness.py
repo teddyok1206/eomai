@@ -41,6 +41,7 @@ def test_native_stage_branch_stays_after_exact_disposable_owner_preflight() -> N
     assert "tests/integration/test_reference_query_prepare_application.py" in leaf
     assert "tests/integration/test_similarity_item_start_persistence.py" in leaf
     assert "tests/integration/test_operator_fence_installation.py" in leaf
+    assert "tests/integration/test_reference_start_idempotency.py" in leaf
     assert "EOM_RUN_OPERATOR_FENCE_INSTALLATION_TESTS=1" in leaf
     assert 'EOM_API_TEST_STATE="${state_directory}"' in leaf
     assert "EOM_RUN_INTEGRATION=1" in leaf

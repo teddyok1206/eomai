@@ -189,6 +189,63 @@ assert.equal(formFields.authoring_guidance.value, guidance);
     )
 
 
+def test_pending_reference_start_reuses_snapshot_and_key_until_accepted() -> None:
+    _run_browser_checks(r"""
+let observations = 0;
+context.setTimeout = callback => callback();
+const originalApi = context.api;
+context.api = async (path, options) => {
+  if (!path.endsWith('/submissions')) return originalApi(path, options);
+  calls.push({path, options});
+  observations++;
+  return observations < 3
+    ? {preparation_status: 'PENDING', command: null}
+    : {command: {resource_id: workflowId}, replayed: false};
+};
+await context.submitDraft();
+assert.equal(submissionCalls().length, 3);
+assert.equal(new Set(submissionCalls().map(call => call.options.body.idempotency_key)).size, 1);
+assert.equal(workflowLoads, 1);
+assert.equal(state.draftAction, null);
+assert.equal(nodes.get('#workflow-id').value, workflowId);
+""")
+
+
+def test_pending_reference_edit_stops_continuation_without_starting_an_item() -> None:
+    _run_browser_checks(r"""
+context.setTimeout = callback => {state.draftEditorRevision++; callback();};
+const originalApi = context.api;
+context.api = async (path, options) => {
+  if (!path.endsWith('/submissions')) return originalApi(path, options);
+  calls.push({path, options});
+  return {preparation_status: 'PENDING', command: null};
+};
+await context.submitDraft();
+assert.equal(submissionCalls().length, 1);
+assert.equal(workflowLoads, 0);
+assert.equal(state.draftAction, null);
+assert.match(nodes.get('#draft-message').textContent, /자동 접수를 멈췄/);
+""")
+
+
+def test_pending_reference_observation_window_is_bounded_and_not_failure() -> None:
+    _run_browser_checks(r"""
+context.setTimeout = callback => callback();
+const originalApi = context.api;
+context.api = async (path, options) => {
+  if (!path.endsWith('/submissions')) return originalApi(path, options);
+  calls.push({path, options});
+  return {preparation_status: 'PENDING', command: null};
+};
+await context.submitDraft();
+assert.equal(submissionCalls().length, 31);
+assert.equal(workflowLoads, 0);
+assert.equal(state.draftAction, null);
+assert.equal(new Set(submissionCalls().map(call => call.options.body.idempotency_key)).size, 1);
+assert.match(nodes.get('#draft-message').textContent, /확인이 아직 진행 중/);
+""")
+
+
 def test_resumed_draft_retains_legacy_metadata_without_a_preset_control() -> None:
     _run_browser_checks(
         r"""

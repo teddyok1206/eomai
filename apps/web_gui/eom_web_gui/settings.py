@@ -73,6 +73,7 @@ class WebSettings(StrictSettings):
     server: ServerSettings = ServerSettings()
     upstreams: UpstreamSettings = UpstreamSettings()
     sessions: SessionSettings = SessionSettings()
+    reference_item_start_enabled: bool = False
 
 
 class WebSecrets(StrictSettings):

@@ -34,6 +34,7 @@ from eom_catalog_contracts import (
     DocumentReviewEvidenceSource,
     EducationalRetrievalRequirement,
     EducationalRetrievalRequirementV2,
+    EvidenceBundlePublicationResultV5,
     FulfillUsagePlan,
     IntegratedScienceCurriculumContractError,
     IntegratedScienceCurriculumScope,
@@ -104,7 +105,12 @@ from eom_api.services.item_similarity_start import (
     check_similarity_start,
     require_similarity_start_replay,
     require_similarity_start_resolution,
+    selected_workflow_resolution,
     similarity_start_context,
+)
+from eom_api.services.reference_item_start_ports import (
+    ReferenceItemStartPending,
+    ReferenceItemStartPreparationPort,
 )
 
 
@@ -285,6 +291,42 @@ class CommandAdapter:
         idempotency_key: str,
         prepared_similarity: PreparedItemSimilarity | None = None,
     ) -> tuple[str, str, int]:
+        result = self._start_workflow(
+            request,
+            actor,
+            idempotency_key=idempotency_key,
+            prepared_similarity=prepared_similarity,
+            reference_preparation=None,
+        )
+        assert isinstance(result, tuple)
+        return result
+
+    def start_reference_workflow(
+        self,
+        request: WorkflowStartRequest,
+        actor: ActorContext,
+        *,
+        idempotency_key: str,
+        preparation: ReferenceItemStartPreparationPort,
+    ) -> tuple[str, str, int] | ReferenceItemStartPending:
+        """Pending auxiliary work never creates an authoring Workflow or first plan."""
+        return self._start_workflow(
+            request,
+            actor,
+            idempotency_key=idempotency_key,
+            prepared_similarity=None,
+            reference_preparation=preparation,
+        )
+
+    def _start_workflow(
+        self,
+        request: WorkflowStartRequest,
+        actor: ActorContext,
+        *,
+        idempotency_key: str,
+        prepared_similarity: PreparedItemSimilarity | None,
+        reference_preparation: ReferenceItemStartPreparationPort | None,
+    ) -> tuple[str, str, int] | ReferenceItemStartPending:
         workflow_request = _workflow_request_from_api(request)
         # Private trusted producer handoff only; never a public request field,
         # source permission grant or native executor constructed inside the API.
@@ -307,6 +349,7 @@ class CommandAdapter:
         knowledge_preset = None
         knowledge_evidence = None
         compiled_item_definition = None
+        preflight_definition: WorkflowDefinitionRecord | None = None
         preflight_definition_hash: str | None = None
         if workflow_request.educational_retrieval is not None:
             with self.sessions() as preflight_session:
@@ -424,6 +467,44 @@ class CommandAdapter:
             knowledge_evidence = self.catalog_application.create_item_production_evidence(
                 evidence_command
             )
+        if reference_preparation is not None:
+            if (
+                knowledge_preset is None
+                or preflight_definition is None
+                or not isinstance(knowledge_evidence, EvidenceBundlePublicationResultV5)
+                or workflow_request.execution_preset_key is None
+            ):
+                raise ApiError(
+                    409,
+                    "CONTROL_SIMILARITY_PREPARATION_INVALID",
+                    "Reference preparation unavailable",
+                    "A compatible reference request and accepted Evidence are required.",
+                )
+            with self.sessions() as selection_session:
+                selection_context = self.catalog.bind_request(
+                    workflow_request,
+                    definition_key=request.definition_key,
+                    definition_version=request.definition_version,
+                    past_exam_source_material_requirement=past_exam_source_material_requirement,
+                    session=selection_session,
+                )
+                selected_resolution = selected_workflow_resolution(
+                    definition=preflight_definition,
+                    runtime_context=selection_context,
+                    preset=knowledge_preset,
+                    preset_key=workflow_request.execution_preset_key,
+                )
+            reference = reference_preparation.prepare(
+                actor,
+                workflow_request=workflow_request,
+                expected_resolution=selected_resolution,
+                evidence=knowledge_evidence,
+                preset=knowledge_preset,
+                idempotency_key=idempotency_key,
+            )
+            if isinstance(reference, ReferenceItemStartPending):
+                return reference
+            checked_similarity = check_similarity_start(reference, workflow_request, actor)
         with transaction(self.sessions) as session:
             definition = admitted_workflow_definition(
                 session,

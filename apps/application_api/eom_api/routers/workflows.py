@@ -5,6 +5,7 @@ from __future__ import annotations
 from eom_api_contracts import CommandResult, ListResponse, SingleResponse
 from eom_api_contracts.common import EmptyRequest
 from eom_api_contracts.events import EventView
+from eom_api_contracts.workflow_reference_start import WorkflowReferenceStartReply
 from eom_api_contracts.workflows import (
     WorkflowActionRequest,
     WorkflowStartRequest,
@@ -14,10 +15,12 @@ from eom_api_contracts.workflows import (
 from eom_operator_identity import PermissionKey
 from eom_workflow_runner.repository import CommandType
 from fastapi import APIRouter, Depends, Query, Request, Response
+from starlette.concurrency import run_in_threadpool
 
 from eom_api.dependencies import Auth, ExpectedVersion, IdempotencyKey, etag, require_permission
 from eom_api.errors import ApiError
 from eom_api.routers.common import many, one, run_command
+from eom_api.services.reference_item_start import REFERENCE_ITEM_START_OPERATION
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 
@@ -101,6 +104,48 @@ def start_workflow(
             response_status=202,
         ),
     )
+
+
+@router.post(
+    "/reference-starts",
+    operation_id=REFERENCE_ITEM_START_OPERATION,
+    status_code=202,
+    response_model=SingleResponse[WorkflowReferenceStartReply],
+    dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_START, fresh=True))],
+    openapi_extra={
+        "x-eom-additional-permissions": [
+            PermissionKey.ITEM_READ.value,
+            PermissionKey.KNOWLEDGE_GRAPH_RETRIEVE.value,
+            PermissionKey.KNOWLEDGE_ANALYSIS_READ.value,
+            PermissionKey.CONTENT_INTAKE_READ.value,
+        ],
+    },
+)
+async def start_reference_workflow(
+    request: Request,
+    body: WorkflowStartRequest,
+    response: Response,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+) -> SingleResponse[WorkflowReferenceStartReply]:
+    del authentication
+    if len(await request.body()) > 16 * 1024:
+        raise ApiError(
+            422,
+            "REFERENCE_ITEM_START_REQUEST_INVALID",
+            "Reference Item request too large",
+            "The bounded reference start body exceeds its byte limit.",
+        )
+    result = await run_in_threadpool(
+        request.app.state.services.reference_item_starts.start,
+        request.state.request_context,
+        body,
+        idempotency_key=idempotency_key,
+    )
+    response.headers["Cache-Control"] = "no-store"
+    if result.status == "PENDING":
+        response.headers["Retry-After"] = "20"
+    return one(request, result)
 
 
 @router.get(

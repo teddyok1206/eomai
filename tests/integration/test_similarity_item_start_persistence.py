@@ -21,6 +21,7 @@ from eom_api.errors import ApiError
 from eom_api.services import command_adapter as module
 from eom_api.services.command_adapter import CommandAdapter, _workflow_request_from_api
 from eom_api.services.item_similarity_start import SIMILARITY_PREPARATION_ACCEPTANCE_KEY
+from eom_api.services.reference_item_start_ports import ReferenceItemStartPending
 from eom_catalog_contracts.similarity_read import CompletedSimilarityQuerySelection
 from eom_identifiers import content_sha256
 from eom_orchestrator.control_models import (
@@ -255,6 +256,41 @@ def start(value):
         value.data.actor,
         idempotency_key=value.key,
         prepared_similarity=value.prepared,
+    )
+
+
+def test_actual_postgres_pending_has_no_item_then_first_plan23_and_original_replay(item):
+    preparation = Mock()
+    preparation.prepare.return_value = ReferenceItemStartPending(
+        item.prepared.query_selection.workflow_id
+    )
+    for _ in range(2):
+        result = item.adapter.start_reference_workflow(
+            item.request, item.data.actor, idempotency_key=item.key, preparation=preparation
+        )
+        assert isinstance(result, ReferenceItemStartPending)
+        with item.sessions() as session:
+            assert (
+                session.scalar(
+                    select(WorkflowInstanceRecord.workflow_id).where(
+                        WorkflowInstanceRecord.idempotency_key == item.key
+                    )
+                )
+                is None
+            )
+    preparation.prepare.return_value = item.prepared
+    result = item.adapter.start_reference_workflow(
+        item.request, item.data.actor, idempotency_key=item.key, preparation=preparation
+    )
+    assert isinstance(result, tuple)
+    assert_rows(item, result)
+    preparation.prepare.side_effect = AssertionError("accepted domain receipt skips preparation")
+    item.client.create_item_production_evidence.side_effect = AssertionError("no mutable Evidence")
+    assert (
+        item.adapter.start_reference_workflow(
+            item.request, item.data.actor, idempotency_key=item.key, preparation=preparation
+        )
+        == result
     )
 
 

@@ -202,6 +202,26 @@ class IdempotencyService:
             record.updated_at = now
             record.completed_at = now
 
+    def defer(self, claim: IdempotencyClaim) -> None:
+        """Yield a short request lease while its existing asynchronous work is pending.
+
+        Keep the full request hash and PROCESSING state. No result/failure is
+        cached; an exact same-key claim may continue and old callbacks lose ownership.
+        """
+        now = datetime.now(UTC)
+        with transaction(self.sessions) as session:
+            record = session.get(ApiIdempotencyRecord, claim.record_id, with_for_update=True)
+            if record is None or not self._claim_owns_record(record, claim):
+                raise ApiError(
+                    409,
+                    "API_IDEMPOTENCY_CLAIM_LOST",
+                    "Idempotency claim lost",
+                    "The pending request no longer owns its processing lease.",
+                )
+            record.lease_owner = None
+            record.lease_expires_at = now
+            record.updated_at = now
+
     def fail_final(self, claim: IdempotencyClaim, error_code: str) -> None:
         now = datetime.now(UTC)
         with transaction(self.sessions) as session:

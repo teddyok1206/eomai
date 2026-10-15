@@ -31,6 +31,7 @@ REQUIRED_RUNTIME_FILES = frozenset(
         "redaction.py",
         "release_integrity.py",
         "request_drafts.py",
+        "reference_item_contracts.py",
         "resources.py",
         "services.py",
         "sessions.py",

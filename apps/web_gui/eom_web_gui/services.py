@@ -257,6 +257,21 @@ class WebServices:
             workflow_start_payload(draft, graph_corpus_key=graph_corpus_key),
             idempotency_key,
         )
+        if (
+            command.get("schema_version") == "workflow-reference-start-reply/1.0"
+            and command.get("status") == "PENDING"
+        ):
+            # Preparation is not a completed submission; retain the draft/key but
+            # never put this transient response in the accepted-result replay cache.
+            return {
+                "mode": "KNOWLEDGE_ITEM",
+                "request_draft_id": draft.request_draft_id,
+                "request_sha256": draft.original_request_sha256,
+                "draft_spec_sha256": draft.draft_spec_sha256,
+                "preparation_status": "PENDING",
+                "command": None,
+                "replayed": False,
+            }
         result = {
             "mode": "KNOWLEDGE_ITEM",
             "request_draft_id": draft.request_draft_id,

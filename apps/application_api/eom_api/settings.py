@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 
 class SettingsError(RuntimeError):
@@ -96,6 +96,13 @@ class ApiSettings(StrictSettings):
     openapi: OpenApiSettings = OpenApiSettings()
     pdf_document_review: PdfDocumentReviewSettings = PdfDocumentReviewSettings()
     reference_query_preparation_enabled: bool = False
+    reference_item_start_enabled: bool = False
+
+    @model_validator(mode="after")
+    def reference_start_requires_native_preparation(self) -> ApiSettings:
+        if self.reference_item_start_enabled and not self.reference_query_preparation_enabled:
+            raise ValueError("reference Item start requires the compatible native preparation")
+        return self
 
 
 class ApiSecrets(StrictSettings):

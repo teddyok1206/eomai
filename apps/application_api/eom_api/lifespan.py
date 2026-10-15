@@ -76,6 +76,7 @@ from eom_api.services.pdf_document_review_service import PdfDocumentReviewApplic
 from eom_api.services.pdf_upload_stager import PdfUploadStager
 from eom_api.services.preset_model_selection_adapter import PresetModelSelectionAdapter
 from eom_api.services.query_adapter import QueryAdapter
+from eom_api.services.reference_item_start import ReferenceItemStartApplicationService
 from eom_api.services.reference_query_preparation import ReferenceQueryPreparationApplicationService
 from eom_api.services.reference_query_prepare_client import NativeReferenceQueryPrepareClient
 from eom_api.services.similarity_context_client import CatalogSimilarityContextClient
@@ -184,6 +185,14 @@ class AppServices:
         self.preset_models = PresetModelSelectionAdapter(engine)
         self.idempotency = IdempotencyService(engine, token_key)
         self.audit = AuditService(engine)
+        self.reference_item_starts = ReferenceItemStartApplicationService(
+            enabled=settings.reference_item_start_enabled,
+            commands=self.commands,
+            queries=self.reference_query_preparation,
+            items=self.item_similarity_start_preparation,
+            idempotency=self.idempotency,
+            audit=self.audit,
+        )
         self.general_chat = GeneralChatApplicationService(GeneralChatOwnerClient())
         self.chat_knowledge = ChatKnowledgeApplicationService(
             ChatKnowledgeQueryAdapter(engine, self.queries.item_revision_views)

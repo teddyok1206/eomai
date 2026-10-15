@@ -967,9 +967,25 @@ async function submitDraft() {
     setStatus($("#draft-state"), "success", "✓", "저장됨");
     const key = `studio:${draft.request_draft_id}:${draft.draft_spec_sha256}`;
     showMessage($("#draft-message"), "원본 근거와 실행 설정을 확인하고 있습니다.");
-    const result = await api(`/request-drafts/${encodeURIComponent(draft.request_draft_id)}/submissions`, {
+    const submit = () => api(`/request-drafts/${encodeURIComponent(draft.request_draft_id)}/submissions`, {
       method: "POST", mutation: true, body: {idempotency_key: key},
     });
+    let result = await submit();
+    for (let observation = 0; result.preparation_status === "PENDING"; observation += 1) {
+      showMessage($("#draft-message"), "관련 기출을 살펴보고 있습니다. 준비가 끝나면 문항 제작을 시작합니다.");
+      if (observation >= 30) {
+        showMessage($("#draft-message"), "기출 확인이 아직 진행 중입니다. 요청은 저장되어 있으니, 잠시 후 같은 내용으로 ‘문항 제작 시작’을 눌러 이어가세요.");
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, 20000));
+      if (state.draft?.request_draft_id !== draft.request_draft_id
+          || editorRevision !== state.draftEditorRevision
+          || !hasPermission(state.operator, "workflow:start")) {
+        showMessage($("#draft-message"), "작성 내용이나 로그인 상태가 변경되어 자동 접수를 멈췄습니다. 내용을 확인한 뒤 다시 시작해주세요.");
+        return;
+      }
+      result = await submit();
+    }
     const workflowId = result.command && result.command.resource_id;
     showMessage($("#draft-message"), result.replayed ? "동일 요청 결과를 안전하게 재표시했습니다." : "문항 제작 요청이 접수되었습니다.", "success");
     if (typeof workflowId === "string") {

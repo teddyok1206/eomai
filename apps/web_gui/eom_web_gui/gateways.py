@@ -93,6 +93,7 @@ from eom_web_gui.item_preview_projection import (
     resolve_content_capability,
 )
 from eom_web_gui.redaction import sanitize_mapping
+from eom_web_gui.reference_item_contracts import ReferenceItemStartReply
 from eom_web_gui.sessions import ApiTokens, WebSession
 
 ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]{7,127}$")
@@ -1007,6 +1008,7 @@ class HttpApplicationGateway:
         timeout: float,
         observability_access_token: str | None,
         workflow_start_timeout: float = 150.0,
+        reference_item_start_enabled: bool = False,
         transport: httpx.AsyncBaseTransport | None = None,
         observability_transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
@@ -1018,6 +1020,7 @@ class HttpApplicationGateway:
             transport=transport,
         )
         self._workflow_start_timeout = workflow_start_timeout
+        self._reference_item_start_enabled = reference_item_start_enabled
         self.observe = ObserveClient(
             base_url=observability_url,
             timeout=timeout,
@@ -1330,6 +1333,14 @@ class HttpApplicationGateway:
     async def start_workflow(
         self, session: WebSession, payload: dict[str, object], idempotency_key: str
     ) -> dict[str, Any]:
+        retrieval = payload.get("educational_retrieval")
+        reference = (
+            self._reference_item_start_enabled
+            and isinstance(retrieval, dict)
+            and retrieval.get("schema_version") == "educational-retrieval-requirement/2.0"
+        )
+        if reference:
+            return await self._start_reference_workflow(session, payload, idempotency_key)
         response = await self._authorized(
             session,
             "POST",
@@ -1339,6 +1350,26 @@ class HttpApplicationGateway:
             timeout=self._workflow_start_timeout,
         )
         return sanitize_mapping(self._data(response))
+
+    async def _start_reference_workflow(
+        self, session: WebSession, payload: dict[str, object], idempotency_key: str
+    ) -> dict[str, Any]:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/workflows/reference-starts",
+            json=payload,
+            headers={"Idempotency-Key": idempotency_key},
+            timeout=self._workflow_start_timeout,
+        )
+        try:
+            value = ReferenceItemStartReply.model_validate(self._data(response))
+            if value.status == "PENDING":
+                return value.model_dump(mode="json")
+            assert value.command is not None
+            return value.command.model_dump(mode="json")
+        except ValueError:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from None
 
     async def create_customer_support_case(
         self,

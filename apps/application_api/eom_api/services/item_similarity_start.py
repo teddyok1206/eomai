@@ -54,6 +54,34 @@ def _invalid() -> ApiError:
     )
 
 
+def selected_workflow_resolution(
+    *,
+    definition: WorkflowDefinitionRecord,
+    runtime_context: dict[str, Any],
+    preset: ExecutionPresetRevisionV2,
+    preset_key: str,
+) -> ExpectedWorkflowResolution:
+    """One pure mapping for preflight expectations and actual transaction checks."""
+    try:
+        pack = runtime_context["content_pack"]
+        return ExpectedWorkflowResolution(
+            workflow_definition_key=definition.definition_key,
+            workflow_definition_version=definition.definition_version,
+            workflow_definition_sha256=definition.definition_hash,
+            content_pack_release_id=pack["release_id"],
+            content_pack_key=pack["pack_key"],
+            content_pack_version=pack["version"],
+            content_pack_bundle_sha256=pack["release_sha256"],
+            content_pack_source_tree_sha256=pack["source_tree_sha256"],
+            execution_preset_id=preset.preset_id,
+            execution_preset_revision_id=preset.preset_revision_id,
+            execution_preset_key=preset_key,
+            execution_preset_content_sha256=preset.content_sha256,
+        )
+    except (ValueError, TypeError, AttributeError, KeyError):
+        raise _invalid() from None
+
+
 def check_similarity_start(
     preparation: PreparedItemSimilarity, request: WorkflowRequest, actor: ActorContext
 ) -> CheckedSimilarityStart:
@@ -138,21 +166,12 @@ def require_similarity_start_resolution(
         validate_contract("evidence-bundle-publication-result-v5", raw_evidence)
         current_preset = ExecutionPresetRevisionV2.model_validate(raw_preset)
         current_evidence = EvidenceBundlePublicationResultV5.model_validate(raw_evidence)
-        pack = runtime_context["content_pack"]
         expected = checked.preparation.resolution
-        current = ExpectedWorkflowResolution(
-            workflow_definition_key=definition.definition_key,
-            workflow_definition_version=definition.definition_version,
-            workflow_definition_sha256=definition.definition_hash,
-            content_pack_release_id=pack["release_id"],
-            content_pack_key=pack["pack_key"],
-            content_pack_version=pack["version"],
-            content_pack_bundle_sha256=pack["release_sha256"],
-            content_pack_source_tree_sha256=pack["source_tree_sha256"],
-            execution_preset_id=current_preset.preset_id,
-            execution_preset_revision_id=current_preset.preset_revision_id,
-            execution_preset_key=expected.execution_preset_key,
-            execution_preset_content_sha256=current_preset.content_sha256,
+        current = selected_workflow_resolution(
+            definition=definition,
+            runtime_context=runtime_context,
+            preset=current_preset,
+            preset_key=expected.execution_preset_key,
         )
         if (
             current != expected

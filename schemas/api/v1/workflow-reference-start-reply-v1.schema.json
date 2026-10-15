@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/v1/workflow-reference-start-reply/1.0",
+  "title": "Reference Item Start Pending or Accepted Reply",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "reference_query_workflow_id", "command"],
+  "properties": {
+    "schema_version": {"const": "workflow-reference-start-reply/1.0"},
+    "status": {"enum": ["PENDING", "ACCEPTED"]},
+    "reference_query_workflow_id": {"type": ["string", "null"], "pattern": "^workflow_[0-9a-f]{32}$"},
+    "command": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["command_id", "resource_type", "resource_id", "status", "resource_version", "status_url"],
+          "properties": {
+            "command_id": {"type": "string", "minLength": 1, "maxLength": 128},
+            "resource_type": {"const": "workflow"},
+            "resource_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+            "status": {"const": "ACCEPTED"},
+            "resource_version": {"type": "integer", "minimum": 1},
+            "status_url": {"type": "string", "pattern": "^/api/v1/workflows/workflow_[0-9a-f]{32}$"}
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "PENDING"}}},
+      "then": {"properties": {"reference_query_workflow_id": {"type": "string"}, "command": {"type": "null"}}},
+      "else": {"properties": {"reference_query_workflow_id": {"type": "null"}, "command": {"type": "object"}}}
+    }
+  ]
+}

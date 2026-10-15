@@ -28,7 +28,11 @@ const drafts = new Map();
 const fixture = window.requestFixture = {
   state, calls: [], workflowLoads: 0, draftSequence: 0, submissions: [],
   holdNext: null, release: null, blocked: false,
+  pendingReplies: 0, preparationKeys: [],
 };
+const actualTimeout = window.setTimeout.bind(window);
+window.setTimeout = (callback, milliseconds, ...args) =>
+  actualTimeout(callback, milliseconds === 20000 ? 0 : milliseconds, ...args);
 class StudioApiError extends Error {}
 function setStatus(node, tone, icon, label) {node.textContent = label; node.dataset.tone = tone;}
 function showMessage(node, text) {node.textContent = text;}
@@ -78,6 +82,11 @@ async function api(path, options = {}) {
   if (path.endsWith('/submissions')) {
     const expectedKey = 'studio:' + id + ':' + stored.draft_spec_sha256;
     if (options.body.idempotency_key !== expectedKey) throw new Error('FIXTURE_STALE_SPEC');
+    if (fixture.pendingReplies > 0) {
+      fixture.pendingReplies--;
+      fixture.preparationKeys.push(expectedKey);
+      return {preparation_status: 'PENDING', command: null, replayed: false};
+    }
     fixture.submissions.push({id, snapshot: structuredClone(stored), key: expectedKey});
     return {replayed: false, command: {resource_id: 'workflow_' + fixture.submissions.length.toString(16).padStart(32, '0')}};
   }
@@ -210,6 +219,15 @@ try {
   await page.locator("#draft-submit").click(); await ready();
   assert.equal(await page.evaluate(() => window.requestFixture.submissions.at(-1).snapshot.past_exam_variation), null);
 
+  await openRequest();
+  await page.evaluate(() => {window.requestFixture.pendingReplies = 2;});
+  const beforePrepared = await page.evaluate(() => window.requestFixture.submissions.length);
+  await page.locator("#draft-submit").click(); await ready();
+  assert.equal(await page.evaluate(() => window.requestFixture.submissions.length), beforePrepared + 1);
+  assert.equal(await page.evaluate(() => window.requestFixture.preparationKeys.length), 2);
+  assert.equal(await page.evaluate(() => new Set([
+    ...window.requestFixture.preparationKeys, window.requestFixture.submissions.at(-1).key,
+  ]).size), 1);
   await openRequest();
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({width, height: 850});
