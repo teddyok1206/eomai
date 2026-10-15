@@ -3441,3 +3441,32 @@ Still required: genuine QUERY/replay/current context, authenticated native produ
 integration in the ordinary request path, compatible activation and bounded actual
 plan23 materialization. The larger goal also retains continuous coverage, other
 consumers and the actual CPU/CUDA benchmark/default decision.
+
+Candidate `82be6af504536589441a431d3d701a4bdd0e6a91` passed the standard full
+three-wheel/RECORD build and independently isolated owner-pair/three-wheel probes.
+The probes import the actual new contract, dispatcher, publication owner, private
+API producer, fixed clients and optional runtime composition from only selected
+archives. They check packaged schema SHA/offline references, raw required fields,
+pointer-only values, original public DTO separation, disabled-no-IO behavior,
+unchanged released predecessors, actual packaged app and complete unchanged
+OpenAPI. Checkout/undeclared installed-prefix fallback and ML imports are refused.
+They do not construct current authentication, access the operating DB/NAS, launch
+models or enable a service. Their first run failed an old source-location assertion
+expecting the action guard inside `prepare`; the reviewed probe now follows that
+method's call to `publish_context` and verifies both actual pre/late guards there.
+Production guards were not removed or relaxed to satisfy a package probe.
+
+Raw wheel SHA: platform
+`9637ef88f419d79a76c4e8e9ff8d2c8f3fe9eff1ef386f0972807c4dcf0daea8`;
+contracts `fb9b0b19454b689539d3febae2524a59f40fb860192d7ff70f2f6517023b7870`;
+API `59c3b4260cbd4b84741832b928a98ec1394c994d0a8cf50bfaf1e20ab8371a39`.
+Logs `release-build`, `owner-pair-proof-reviewed`, `three-wheel-proof-reviewed`
+share the evidence prefix above. These wheels were built/verified, not installed.
+
+At15:17:33 UTC the original successor handles708363/708374 were both live and
+still at the single14:46:48 Studio input gate. The30-minute check did not restart
+them, submit another request, send a shell command into the prompt or issue another
+login question. The previous goal turn was progress (root submission repair and
+minimal owner release); this turn also changes authoritative source/package
+evidence while the authenticated native gate waits. The overall goal stays active
+and incomplete; no prior blocked-run audit count or old process handle is reused.
