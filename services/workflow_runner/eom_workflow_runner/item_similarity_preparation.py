@@ -13,6 +13,7 @@ from eom_catalog_contracts.similarity_context import (
     SimilarityContext,
     SimilarityContextRequest,
     parse_similarity_context,
+    parse_similarity_context_request,
 )
 from eom_catalog_contracts.similarity_delivery import (
     validate_deliverable_similarity_context,
@@ -86,6 +87,75 @@ def _current_context(
     return validate_deliverable_similarity_context(checked, expected_request=expected_request)
 
 
+def validate_item_similarity_scope(
+    *,
+    workflow_request: WorkflowRequest,
+    expected_resolution: ExpectedWorkflowResolution,
+    evidence: EvidenceBundlePublicationResultV5,
+    preset: ExecutionPresetRevisionV2,
+    context_request: SimilarityContextRequest,
+) -> tuple[
+    WorkflowRequest,
+    ExpectedWorkflowResolution,
+    EvidenceBundlePublicationResultV5,
+    ExecutionPresetRevisionV2,
+]:
+    """Pure item/QUERY/control binding, never current authority or native admission."""
+    try:
+        context_request = parse_similarity_context_request(context_request)
+        raw_evidence = raw_similarity_contract_value(evidence)
+        raw_preset = raw_similarity_contract_value(preset)
+        validate_contract("evidence-bundle-publication-result-v5", raw_evidence)
+        validate_control_contract("execution-preset-revision-v2", raw_preset)
+        evidence = EvidenceBundlePublicationResultV5.model_validate(raw_evidence)
+        preset = ExecutionPresetRevisionV2.model_validate(raw_preset)
+        workflow_request = WorkflowRequest.model_validate(
+            raw_similarity_contract_value(workflow_request)
+        )
+        expected = ExpectedWorkflowResolution.model_validate(
+            raw_similarity_contract_value(expected_resolution)
+        )
+        requirement = workflow_request.educational_retrieval
+        policy = preset.retrieval_policy
+        if (
+            not isinstance(requirement, EducationalRetrievalRequirementV2)
+            or (
+                workflow_request.expected_resolution is not None
+                and workflow_request.expected_resolution != expected
+            )
+            or expected.workflow_definition_key != "generic-item-development"
+            or expected.workflow_definition_version != "1.16.0"
+            or expected.content_pack_key != "generated-knowledge-item"
+            or expected.content_pack_version != "1.20.17"
+            or expected.content_pack_bundle_sha256 != SVG_LABEL_LAYOUT_PACK_BUNDLES["1.20.17"]
+            or expected.execution_preset_id != preset.preset_id
+            or expected.execution_preset_revision_id != preset.preset_revision_id
+            or expected.execution_preset_content_sha256 != preset.content_sha256
+            or expected.execution_preset_key != workflow_request.execution_preset_key
+            or "workflow-role/1.24.0" not in preset.compatible_workflow_protocols
+            or preset.state != "RELEASED"
+            or policy is None
+            or workflow_request.content_pack is None
+            or workflow_request.content_pack.pack_key != expected.content_pack_key
+            or context_request.consumer_purpose != "PAST_EXAM_VARIATION"
+            or requirement.past_exam_variation.source_item_revision_id
+            != context_request.anchor.source.item_revision_id
+            or evidence.graph_snapshot != context_request.graph_snapshot
+            or evidence.access_policy_revision_id != context_request.policy_revision_id
+            or evidence.access_policy_sha256 != context_request.policy_sha256
+            or policy.access_policy_revision_id != evidence.access_policy_revision_id
+            or policy.access_policy_sha256 != evidence.access_policy_sha256
+            or not set(context_request.source_classes).issubset(policy.allowed_source_classes)
+        ):
+            raise ValueError("ITEM_SIMILARITY_PREPARATION_SCOPE_MISMATCH")
+        validate_educational_retrieval_policy(preset, requirement)
+        return workflow_request, expected, evidence, preset
+    except (ValueError, TypeError, SchemaError):
+        raise ControlPlaneError(
+            "CONTROL_SIMILARITY_PREPARATION_INVALID", "item preparation inputs differ"
+        ) from None
+
+
 class CatalogItemSimilarityPreparation:
     """Owner-only composition. Never construct this privileged graph inside the isolated API."""
 
@@ -143,56 +213,51 @@ class CatalogItemSimilarityPreparation:
                 caller.operator_id != self.query.request.operator_audit.operator_id
             ):
                 raise ValueError("ITEM_SIMILARITY_PREPARATION_CALLER_INVALID")
-            raw_evidence = raw_similarity_contract_value(evidence)
-            raw_preset = raw_similarity_contract_value(preset)
-            validate_contract("evidence-bundle-publication-result-v5", raw_evidence)
-            validate_control_contract("execution-preset-revision-v2", raw_preset)
-            evidence = EvidenceBundlePublicationResultV5.model_validate(raw_evidence)
-            preset = ExecutionPresetRevisionV2.model_validate(raw_preset)
-            workflow_request = WorkflowRequest.model_validate(
-                raw_similarity_contract_value(workflow_request)
+            workflow_request, expected, evidence, preset = validate_item_similarity_scope(
+                workflow_request=workflow_request,
+                expected_resolution=expected_resolution,
+                evidence=evidence,
+                preset=preset,
+                context_request=self.query.request.context_request,
             )
-            expected = ExpectedWorkflowResolution.model_validate(
-                raw_similarity_contract_value(expected_resolution)
-            )
-            requirement = workflow_request.educational_retrieval
-            context_request = self.query.request.context_request
-            policy = preset.retrieval_policy
-            if (
-                not isinstance(requirement, EducationalRetrievalRequirementV2)
-                or (
-                    workflow_request.expected_resolution is not None
-                    and workflow_request.expected_resolution != expected
-                )
-                or expected.workflow_definition_key != "generic-item-development"
-                or expected.workflow_definition_version != "1.16.0"
-                or expected.content_pack_key != "generated-knowledge-item"
-                or expected.content_pack_version != "1.20.17"
-                or expected.content_pack_bundle_sha256 != SVG_LABEL_LAYOUT_PACK_BUNDLES["1.20.17"]
-                or expected.execution_preset_id != preset.preset_id
-                or expected.execution_preset_revision_id != preset.preset_revision_id
-                or expected.execution_preset_content_sha256 != preset.content_sha256
-                or expected.execution_preset_key != workflow_request.execution_preset_key
-                or "workflow-role/1.24.0" not in preset.compatible_workflow_protocols
-                or preset.state != "RELEASED"
-                or policy is None
-                or workflow_request.content_pack is None
-                or workflow_request.content_pack.pack_key != expected.content_pack_key
-                or context_request.consumer_purpose != "PAST_EXAM_VARIATION"
-                or requirement.past_exam_variation.source_item_revision_id
-                != context_request.anchor.source.item_revision_id
-                or evidence.graph_snapshot != context_request.graph_snapshot
-                or evidence.access_policy_revision_id != context_request.policy_revision_id
-                or evidence.access_policy_sha256 != context_request.policy_sha256
-                or policy.access_policy_revision_id != evidence.access_policy_revision_id
-                or policy.access_policy_sha256 != evidence.access_policy_sha256
-                or not set(context_request.source_classes).issubset(policy.allowed_source_classes)
-            ):
-                raise ValueError("ITEM_SIMILARITY_PREPARATION_SCOPE_MISMATCH")
-            validate_educational_retrieval_policy(preset, requirement)
         except (ValueError, TypeError, SchemaError):
             raise ControlPlaneError(
                 "CONTROL_SIMILARITY_PREPARATION_INVALID", "item preparation inputs differ"
+            ) from None
+        plan, publication = self.publish_context(caller)
+        return PreparedItemSimilarity(
+            plan,
+            publication,
+            content_sha256(workflow_request.model_dump(mode="json")),
+            evidence.result_sha256,
+            preset.content_sha256,
+            expected,
+            query_selection,
+            caller.operator_id,
+        )
+
+    def publish_context(
+        self, caller: EmbeddingRegistryCaller
+    ) -> tuple[PreparedSimilarityPlan, PublishedSimilarityContext]:
+        """Publish current exact QUERY context only, never accept an item request.
+
+        This is shared by the checked local item entry and private Catalog transport.
+        Their later item request/Evidence/control binding remains independently required.
+        """
+        try:
+            validate_embedding_registry_actor(caller)
+            query_workflow_id = TypeAdapter(WorkflowId).validate_python(
+                self.query.workflow_id, strict=True
+            )
+            context_request = self.query.request.context_request
+            if type(caller) is not EmbeddingRegistryCaller or (
+                caller.operator_id != self.query.request.operator_audit.operator_id
+                or context_request.consumer_purpose != "PAST_EXAM_VARIATION"
+            ):
+                raise ValueError("ITEM_SIMILARITY_PREPARATION_CALLER_INVALID")
+        except (ValueError, TypeError, SchemaError):
+            raise ControlPlaneError(
+                "CONTROL_SIMILARITY_PREPARATION_INVALID", "context publication scope differs"
             ) from None
         key = "item-similarity:" + content_sha256(
             {
@@ -249,16 +314,7 @@ class CatalogItemSimilarityPreparation:
                 if reader.read_pinned(**read_arguments).payload != member.payload:
                     raise ValueError("ITEM_SIMILARITY_PREPARATION_MEMBER_CHANGED")
                 self._require_start_permission(session, caller)
-                return PreparedItemSimilarity(
-                    PreparedSimilarityPlan(publication.delivery, context),
-                    publication,
-                    content_sha256(workflow_request.model_dump(mode="json")),
-                    evidence.result_sha256,
-                    preset.content_sha256,
-                    expected,
-                    query_selection,
-                    caller.operator_id,
-                )
+                return PreparedSimilarityPlan(publication.delivery, context), publication
             except OperatorAuthorizationFenceError as error:
                 raise ControlPlaneError(
                     "CONTROL_SIMILARITY_AUTHORITY_DENIED"

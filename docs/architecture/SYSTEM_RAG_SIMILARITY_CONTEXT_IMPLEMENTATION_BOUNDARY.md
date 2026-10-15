@@ -3326,3 +3326,118 @@ and `genuine-reference-query-root-{preflight,execution}.log` under the existing
 evidence directory. The maintenance worktree/build are recoverable release inputs,
 not currently unnecessary files to delete during an active gate. Retire only after
 the actual bounded canary and its evidence have been resolved and archived.
+
+## 36. API → Catalog preparation publication transport
+
+Design note, 2026-10-15 UTC, before the new cross-service contract:
+
+1. The next missing boundary is publication of an existing completed QUERY's
+   auxiliary context for item-start acceptance. Catalog owns current source reads;
+   the existing Orchestrator publisher alone commits the canonical Artifact.
+2. Canonical inputs are the exact stored human-created QUERY, its request/context
+   hashes, current source/IAM checks and existing immutable output. No request
+   supplies a replacement context, path, permissions, role or native command.
+3. API supplies its authenticated operator and exact completed QUERY selector over
+   the existing API-only private Catalog socket. JSON Schema2020-12 is defined
+   before behavior; released read/material/Workflow contracts stay unchanged.
+4. Replies contain only the existing context delivery/member pointer, producer Job
+   ID and manifest hash. No full Workflow request, Evidence, preset, context,
+   source/report text or binary is copied into a second wire schema.
+5. Both first publication and replay require current source and WORKFLOW_START
+   authority, original operator/QUERY closure and PAST_EXAM_VARIATION purpose.
+   Publication is not item acceptance; existing request/Evidence/preset/plan23
+   checks still bind the actual item transaction independently.
+6. Reuse the existing item preparation's publication/late-check implementation,
+   separating that public owner-local method from pure item-input validation.
+   The old item-specific entry keeps all its guards and calls the same method.
+7. Dominant operations are indexed exact IDs, bounded current source/member reads
+   and one immutable publication. Existing deterministic operator/QUERY/context
+   key, set/map batching, unique constraints and publisher replay remain in use.
+   There is no new table/index/cache/queue/registry or asymptotic cost change.
+8. Catalog fences its current root before and after the independently committed
+   Artifact. A later error can leave a valid Artifact; do not report zero writes,
+   invent a new key, or repair historical success/failure. This is not distributed
+   atomicity and a publication receipt is not reusable authorization.
+9. API's fixed-socket adapter has no source DB/NAS/native-owner access. Existing
+   Catalog composition is the receiver. Worker/chat/runner peers cannot invoke
+   this write operation; enabling read support alone does not enable publication.
+10. Test exact wire bounds, actor/request/query reply binding, schema/resource
+    parity, unauthorized peers, stale/revoked sources, publication replay and late
+    failure without duplicate Artifact; preserve existing item-preparation tests.
+11. Sending the entire item request/Evidence/control state is simpler but duplicates
+    contracts and large values. A generic command RPC or injecting privileged
+    Catalog/native owners into the API would broaden authority. Neither is needed.
+
+This transport does not itself create/claim/launch a QUERY or activate ordinary
+API item-start preparation. Those integrations and compatible runtime activation
+remain required; a sender/receiver source test is not whole-goal completion.
+
+### Source implementation and verification
+
+The new closed schema is mirrored as a package resource and pinned at raw SHA
+`38eeb30316421482d0770dc5e97cf014738a967277ed5c662dab0fd044ae001a`.
+Requests are bounded2KiB operator/QUERY selections. Replies are bounded4KiB and
+contain only producer Job, manifest SHA and existing delivery/member pointers.
+Actor, request hash and QUERY/context hash must agree; required wire fields cannot
+be omitted, and partial/failure replies cannot disclose a publication receipt.
+
+The existing private Catalog server dispatches `PUBLISH_ITEM_SIMILARITY_CONTEXT`
+only after its API peer gate. Chat and ordinary role-runner peers cannot invoke
+it, even when their own read operations are enabled. The shared owner-local
+`CatalogItemSimilarityPreparation.publish_context` retains current WORKFLOW_START,
+QUERY/purpose/source/member checks, original deterministic publication key and
+late checks. The original item-specific entry retains its full validation and
+uses that same publisher implementation. No parallel context publisher exists.
+
+`validate_item_similarity_scope` is the extracted pure item/QUERY/Evidence/preset/
+resolution rule, used by both the trusted local entry and new API preparation
+application. The API uses a fixed Catalog publication client, then one current
+context read at its explicit validation boundary, validates the canonical delivery
+and constructs the existing eight-field private handoff. It has no privileged
+engine, NAS IO or native launcher. An initial prototype read context both before
+and after publication; the pre-read was unnecessary authority/IO because Catalog
+already fences publication and the subsequent current read validates the exact
+published context. Removing that extra full read is an obvious operation-count
+reduction, not a measured latency claim or a new authorization cache.
+
+Auxiliary publication is independent of item acceptance: invalid later item scope
+or a failed current read can leave an authorized canonical Artifact, but never an
+accepted item/plan. Preserve it and replay the original key. Existing accepted
+Workflow replay still returns its receipt without new Catalog/control reads;
+future automatic producer integration must preserve that ordering rather than
+unconditionally preparing before looking for the original acceptance.
+
+Runtime composition has a separate default-disabled
+`EOM_ITEM_SIMILARITY_PUBLICATION_MODE`. The older read or runner flag alone cannot
+enable publication. Explicit enable requires the verified read owner, exact
+`EOM_RUNTIME_SOURCE_COMMIT`, and owner-private0700 purpose staging/workspace paths
+below the existing Catalog staging root. Ancestor/leaf symlinks, wrong owner/mode
+and writable parents fail closed; shared roots are not repaired or broadened.
+No DB migration, new privilege, worker permission or dependency is added.
+
+Final source regression262 /71.71s covers the new wire contract, real Unix framing,
+peer denial, disabled/unsafe runtime composition, actual temporary Artifact
+publication/replay, current action revocation, no retry after uncertain transport,
+late read failure, original owner behavior, legacy Catalog and dependency boundaries.
+A real-socket API producer feeds the actual item-start/resolver path and commits
+one first plan23/Workflow/START; exact receipt replay creates none. QUERY/IAM/source
+observations and resolver's test control adapter remain synthetic. Temporary SQLite
+storage and file bytes are real, not production PostgreSQL or installed isolation.
+
+Additional API contract/resolution/provenance regression47 /4.98s is separate from
+that262-test set. The guarded disposable PostgreSQL0055 suite passed78 /51.08s;
+final read-only inspection confirms identity/head and zero other connections.
+No pytest touched the operating DB. Strict mypy11 production modules, Ruff/format17
+Python files, exact schema/resource SHA and diff checks pass. Earlier focused103,
+owner29, API33 and first-plan26 runs overlap the final262 and are not additive.
+Three initial API tests asserted nonexistent `ApiError.code/status_code`; correcting
+them to actual `error_code/status` fixed test code without changing error semantics.
+
+Evidence prefix: `/tmp/eom-identity-provider-install.nAaycoDM/item-similarity-publication-`.
+No runtime prefix, current finite canary, API/provider pins, feature flag, source
+corpus, numerical model/device or indexing-service activation changed. This is
+SOURCE_PASS, not ordinary HTTP auto-preparation or live consumer acceptance.
+Still required: genuine QUERY/replay/current context, authenticated native producer
+integration in the ordinary request path, compatible activation and bounded actual
+plan23 materialization. The larger goal also retains continuous coverage, other
+consumers and the actual CPU/CUDA benchmark/default decision.

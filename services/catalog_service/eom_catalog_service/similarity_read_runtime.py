@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import stat
 from pathlib import Path
 
@@ -20,6 +21,8 @@ from eom_identity_service import (
 from eom_identity_service.operator_authorization_fence_sql import (
     OPERATOR_AUTHORIZATION_FENCE_EXECUTE_ROLE,
 )
+from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
+from eom_orchestrator.settings import Settings
 from eom_workflow_runner.reference_query_source_read import (
     CatalogReferenceQueryReadOwner,
     ReferenceQueryOwnerConfiguration,
@@ -28,6 +31,9 @@ from pydantic import TypeAdapter
 from sqlalchemy import Engine, text
 
 from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryOwnerConfiguration
+from eom_catalog_service.item_similarity_publication_service import (
+    CatalogItemSimilarityPublicationService,
+)
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.similarity_read_service import CatalogSimilarityContextReadService
 from eom_catalog_service.workflow_similarity_read_service import (
@@ -40,6 +46,62 @@ SIMILARITY_READER_CONFIGURATION_PATH = Path("/etc/eom/catalog-similarity-read.js
 class SimilarityReaderRuntimeError(ValueError):
     def __init__(self) -> None:
         super().__init__("CATALOG_SIMILARITY_READ_UNAVAILABLE")
+
+
+def build_catalog_item_similarity_publications(
+    *,
+    mode: str,
+    context_reads: CatalogSimilarityContextReadService | None,
+    source_commit: str | None,
+) -> CatalogItemSimilarityPublicationService | None:
+    """Explicit publication enable; old read/runner flags alone grant no writes."""
+    if mode == "DISABLED":
+        return None
+    if (
+        mode != "ENABLED"
+        or not isinstance(context_reads, CatalogSimilarityContextReadService)
+        or source_commit is None
+        or re.fullmatch(r"[0-9a-f]{40}", source_commit) is None
+    ):
+        raise SimilarityReaderRuntimeError()
+    owner = context_reads.owner
+    settings = owner.settings
+    try:
+        parent = settings.staging_root.lstat()
+        if (
+            not settings.staging_root.is_absolute()
+            or settings.staging_root.resolve(strict=True) != settings.staging_root
+            or settings.staging_root.is_symlink()
+            or not stat.S_ISDIR(parent.st_mode)
+            or parent.st_uid != os.geteuid()
+            or parent.st_mode & 0o022
+        ):
+            raise SimilarityReaderRuntimeError()
+        root = settings.staging_root / "item-similarity-publication"
+        for path in (root, root / "workspaces", root / "staging"):
+            path.mkdir(mode=0o700, exist_ok=True)
+            metadata = path.lstat()
+            if (
+                path.is_symlink()
+                or not stat.S_ISDIR(metadata.st_mode)
+                or (metadata.st_uid, metadata.st_gid) != (os.geteuid(), os.getegid())
+                or stat.S_IMODE(metadata.st_mode) != 0o700
+            ):
+                raise SimilarityReaderRuntimeError()
+        publisher = ControlFileSetPublisher(
+            owner.catalog.engine,
+            Settings(
+                staging_root=root / "staging",
+                workspace_root=root / "workspaces",
+                nas_artifact_root=settings.nas_artifact_root,
+                runtime_source_commit=source_commit,
+            ),
+        )
+        return CatalogItemSimilarityPublicationService(
+            owner, publisher, source_commit=source_commit
+        )
+    except OSError:
+        raise SimilarityReaderRuntimeError() from None
 
 
 def build_catalog_workflow_similarity_reads(

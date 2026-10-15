@@ -7,6 +7,8 @@ owner remain explicit synthetic seams. No production database or model is used.
 
 from __future__ import annotations
 
+import os
+import threading
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
@@ -17,15 +19,25 @@ import pytest
 from eom_api.errors import ApiError
 from eom_api.services import command_adapter as module
 from eom_api.services.command_adapter import CommandAdapter
+from eom_api.services.item_similarity_preparation import ItemSimilarityStartPreparationService
+from eom_api.services.item_similarity_publication_client import (
+    CatalogItemSimilarityPublicationClient,
+)
 from eom_api.services.item_similarity_start import (
     SIMILARITY_PREPARATION_ACCEPTANCE_KEY,
     check_similarity_start,
 )
+from eom_api.services.similarity_context_client import CatalogSimilarityContextClient
 from eom_api_contracts.workflows import WorkflowStartRequest
+from eom_catalog_service import item_similarity_publication_service as publication_module
+from eom_catalog_service.item_similarity_publication_service import (
+    CatalogItemSimilarityPublicationService,
+)
 from eom_identifiers import canonical_json_bytes
 from eom_operator_identity import PermissionKey
 from eom_orchestrator import execution_resolver as resolver_module
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
+from eom_orchestrator.general_chat_socket import ChatSocketEndpoint
 from eom_workflow.similarity_control import parse_post_registration_grounded_plan
 from eom_workflow_runner.models import (
     WorkflowCommandRecord,
@@ -39,8 +51,10 @@ from sqlalchemy import Column, MetaData, Table, event, func, select
 
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.item_similarity_start_fixtures import start_source
+from tests.unit.test_catalog_application_boundary import _server
 from tests.unit.test_item_similarity_preparation import prepare
 from tests.unit.test_knowledge_backed_execution import _Session
+from tests.unit.test_similarity_context_artifact import SOURCE
 
 ROOT = Path(__file__).resolve().parents[2]
 KEY = "api:" + "7" * 64
@@ -176,6 +190,58 @@ def test_first_start_commits_one_plan23_selector_acceptance_and_start_together(s
         assert item.runtime_context[SIMILARITY_PREPARATION_ACCEPTANCE_KEY] == checked.fingerprint
         assert "candidates" not in canonical_json_bytes(item.runtime_context).decode()
         assert "query_execution" not in canonical_json_bytes(item.runtime_context).decode()
+
+
+def test_socket_preparation_producer_is_accepted_as_the_first_and_only_plan23(
+    start_case, tmp_path, monkeypatch
+):
+    value = start_case
+    query = value.source.value.query
+    query.owner.catalog.engine = value.engine
+    # This fixture's original native QUERY/current sources are deliberately synthetic.
+    # Keep real Unix framing, API preparation, publisher and item-start/plan owners.
+    monkeypatch.setattr(
+        publication_module,
+        "select_completed_reference_query_request",
+        Mock(return_value=query.request),
+    )
+    monkeypatch.setattr(
+        publication_module, "CatalogCompletedReferenceQueryRead", Mock(return_value=query)
+    )
+    server = _server(tmp_path)
+    server.item_similarity_publications = CatalogItemSimilarityPublicationService(
+        query.owner, value.source.publisher, source_commit=SOURCE
+    )
+    server.similarity_context_reads = SimpleNamespace(
+        read=Mock(return_value=value.prepared.plan.context)
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        endpoint = ChatSocketEndpoint(server.socket_path, os.getuid(), os.getgid())
+        producer = ItemSimilarityStartPreparationService(
+            CatalogItemSimilarityPublicationClient(endpoint),
+            CatalogSimilarityContextClient(endpoint),
+        )
+        produced = producer.prepare(
+            value.actor,
+            value.prepared.query_selection,
+            workflow_request=value.source.request,
+            expected_resolution=value.source.resolution,
+            evidence=value.source.evidence,
+            preset=value.source.preset,
+        )
+        assert produced == value.prepared
+        receipt = value.adapter.start_workflow(
+            value.request, value.actor, idempotency_key=KEY, prepared_similarity=produced
+        )
+        assert receipt == start(value)
+        assert row_counts(value) == (1, 1, 1)
+        assert [schema for schema, _, _ in value.records] == ["resolved-execution-plan/23.0"]
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
 
 
 @pytest.mark.parametrize("with_preparation", (False, True))

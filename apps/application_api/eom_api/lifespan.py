@@ -65,6 +65,10 @@ from eom_api.services.inference_transfer_workflow_read import (
     InferenceTransferWorkflowReadApplicationServiceV11,
 )
 from eom_api.services.item_approval_service import ItemApprovalApplicationService
+from eom_api.services.item_similarity_preparation import ItemSimilarityStartPreparationService
+from eom_api.services.item_similarity_publication_client import (
+    CatalogItemSimilarityPublicationClient,
+)
 from eom_api.services.paired_document_review_service import (
     PairedDocumentReviewApplicationService,
 )
@@ -107,8 +111,13 @@ class AppServices:
         self.inference_transfer_metadata = InferenceTransferMetadataApplicationService(
             CatalogInferenceTransferMetadataClient()
         )
+        similarity_context_client = CatalogSimilarityContextClient()
         self.similarity_context_reads = SimilarityContextReadApplicationService(
-            CatalogSimilarityContextClient()
+            similarity_context_client
+        )
+        self.item_similarity_publications = CatalogItemSimilarityPublicationClient()
+        self.item_similarity_start_preparation = ItemSimilarityStartPreparationService(
+            self.item_similarity_publications, similarity_context_client
         )
         self.inference_transfer_snapshots = InferenceTransferSnapshotApplicationService(
             CatalogInferenceTransferSnapshotClient()

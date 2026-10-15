@@ -139,6 +139,12 @@ from eom_catalog_service.inference_transfer_workflow_read import (
     CatalogInferenceTransferWorkflowReadService,
 )
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
+from eom_catalog_service.item_similarity_publication_dispatch import (
+    dispatch_item_similarity_publication_frame,
+)
+from eom_catalog_service.item_similarity_publication_service import (
+    CatalogItemSimilarityPublicationService,
+)
 from eom_catalog_service.knowledge_analysis_batch_service import (
     KnowledgeAnalysisBatchService,
     KnowledgeAnalysisBatchServiceError,
@@ -222,6 +228,14 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             if raw_operation == "READ_SIMILARITY_CONTEXT":
                 self.wfile.write(
                     dispatch_similarity_read_frame(self.server.similarity_context_reads, raw)
+                )
+                self.wfile.flush()
+                return
+            if raw_operation == "PUBLISH_ITEM_SIMILARITY_CONTEXT":
+                self.wfile.write(
+                    dispatch_item_similarity_publication_frame(
+                        self.server.item_similarity_publications, raw
+                    )
                 )
                 self.wfile.flush()
                 return
@@ -1287,6 +1301,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         chat_rag: ChatRagResolutionService | None = None,
         inference_transfer_metadata: CatalogInferenceTransferMetadataService | None = None,
         similarity_context_reads: CatalogSimilarityContextReadService | None = None,
+        item_similarity_publications: CatalogItemSimilarityPublicationService | None = None,
         workflow_similarity_reads: CatalogWorkflowSimilarityReadService | None = None,
         workflow_runner_uid: int | None = None,
         inference_transfer_snapshot: InferenceTransferSnapshotApplicationService | None = None,
@@ -1315,6 +1330,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.chat_rag = chat_rag
         self.inference_transfer_metadata = inference_transfer_metadata
         self.similarity_context_reads = similarity_context_reads
+        self.item_similarity_publications = item_similarity_publications
         self.workflow_similarity_reads = workflow_similarity_reads
         self.workflow_runner_uid = None
         self.inference_transfer_snapshot = inference_transfer_snapshot
