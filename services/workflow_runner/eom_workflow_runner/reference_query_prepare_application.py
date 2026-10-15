@@ -1,0 +1,232 @@
+"""Authenticated reference preparation → original QUERY admission/read + finite drive offer."""
+
+from __future__ import annotations
+
+from typing import Literal, Protocol
+
+from eom_catalog_contracts.embedding_reference_query import ReferenceQuerySpaces
+from eom_catalog_contracts.inference_transfer_experiment import VIEWS
+from eom_catalog_contracts.reference_query_prepare import (
+    ReferenceQueryPrepareErrorCode,
+    ReferenceQueryPrepareReply,
+    ReferenceQueryPrepareRequest,
+)
+from eom_catalog_contracts.similarity_read import CompletedSimilarityQuerySelection
+from eom_catalog_service.embedding_registry_ports import (
+    EmbeddingRegistryCaller,
+    EmbeddingRegistryError,
+    EmbeddingRegistryLookup,
+    ReferenceQueryContextPreparation,
+    SelectedEmbeddingSources,
+    validate_embedding_registry_actor,
+)
+from eom_catalog_service.similarity_context_ports import (
+    SimilarityContextReadError,
+    similarity_context_error_from_registry,
+)
+from eom_identifiers import content_sha256
+from eom_identity_service import OperatorAuthorizationFenceError
+from eom_orchestrator.database import build_session_factory
+from eom_workflow.reference_query_execution import parse_reference_query_workflow_request
+from sqlalchemy import select
+
+from eom_workflow_runner.engine import WorkflowRunner
+from eom_workflow_runner.models import WorkflowCommandRecord
+from eom_workflow_runner.reference_query_consumer_read import CatalogCompletedReferenceQueryRead
+from eom_workflow_runner.reference_query_execution_port import ReferenceQueryNativeExecutor
+from eom_workflow_runner.reference_query_owner_admission import CatalogReferenceQueryOwnerAdmission
+from eom_workflow_runner.reference_query_preparation import (
+    ReferenceQueryPreparationUnavailable,
+    prepare_and_start_reference_query_selection_in_session,
+)
+from eom_workflow_runner.repository import CommandExecutionFamily, NativeCommandActorSelection
+
+type ReferenceQueryDriveOffer = Literal["STARTED", "ALREADY_ACTIVE", "BUSY", "UNAVAILABLE"]
+
+
+class ReferenceQueryPrepareDrivePort(Protocol):
+    """Application-owned finite offer boundary; not a queue or execution authority."""
+
+    def offer(self, workflow_id: str, runner: WorkflowRunner) -> ReferenceQueryDriveOffer: ...
+
+
+def require_reference_query_prepare_runner(runner: WorkflowRunner) -> None:
+    """Composition checks only; every actual claim still needs current owner authority."""
+    if type(runner) is not WorkflowRunner:
+        raise ValueError("REFERENCE_QUERY_PREPARE_RUNNER_INVALID")
+    owner = runner.reference_query_owner
+    if (
+        type(owner) is not CatalogReferenceQueryOwnerAdmission
+        or runner.reference_query_executor is None
+        or runner.engine is not owner.catalog.engine
+        or runner.command_families != frozenset({CommandExecutionFamily.REFERENCE_QUERY})
+        or runner.command_actor_selection
+        != NativeCommandActorSelection("human", owner.identity.capture.operator_id)
+        or runner.available_roles
+        or runner.executor is not None
+    ):
+        raise ValueError("REFERENCE_QUERY_PREPARE_RUNNER_INVALID")
+
+
+def reference_query_prepare_identity(operator_id: str, original_key: str) -> tuple[str, str]:
+    """Stable native key/logical context ID, never authority or a content-hash identity."""
+    validate_embedding_registry_actor(EmbeddingRegistryCaller(operator_id))
+    scope = {"operator_id": operator_id, "original_key": original_key}
+    native = content_sha256({"purpose": "REFERENCE_QUERY_PREPARE_KEY/1.0", **scope})
+    logical = content_sha256({"purpose": "REFERENCE_QUERY_PREPARE_CONTEXT/1.0", **scope})
+    return (
+        "reference-query-prepare:" + native.removeprefix("sha256:"),
+        "similarityrequest_" + logical.removeprefix("sha256:")[:32],
+    )
+
+
+def _failure(
+    request: ReferenceQueryPrepareRequest,
+    code: ReferenceQueryPrepareErrorCode,
+) -> ReferenceQueryPrepareReply:
+    return ReferenceQueryPrepareReply(
+        schema_version="system-rag-reference-query-prepare-reply/1.0",
+        operation="PREPARE_REFERENCE_QUERY",
+        operation_id=request.operation_id,
+        request_sha256=request.request_sha256,
+        status="FAILED",
+        workflow_id=None,
+        selection=None,
+        error_code=code,
+    )
+
+
+class NativeReferenceQueryPreparation:
+    """One current capture, trusted numerical settings and existing atomic use case.
+
+    This object is operation-local. Only the service-owned driver is shared; it
+    never turns an Actor, stored metadata or prior success into authority.
+    """
+
+    def __init__(
+        self,
+        *,
+        owner: CatalogReferenceQueryOwnerAdmission,
+        executor: ReferenceQueryNativeExecutor,
+        runner: WorkflowRunner,
+        driver: ReferenceQueryPrepareDrivePort,
+        spaces: ReferenceQuerySpaces,
+    ) -> None:
+        require_reference_query_prepare_runner(runner)
+        spaces = ReferenceQuerySpaces.model_validate(spaces)
+        if (
+            runner.reference_query_owner is not owner
+            or runner.reference_query_executor is not executor
+            or spaces.document != owner.configuration.registry.space
+            or not callable(getattr(driver, "offer", None))
+        ):
+            raise ValueError("REFERENCE_QUERY_PREPARE_COMPOSITION_INVALID")
+        self.owner, self.executor, self.runner = owner, executor, runner
+        self.driver, self.spaces = driver, spaces
+        self.sessions = build_session_factory(owner.catalog.engine)
+
+    def prepare(self, request: ReferenceQueryPrepareRequest) -> ReferenceQueryPrepareReply:
+        request = ReferenceQueryPrepareRequest.model_validate(request)
+        caller = EmbeddingRegistryCaller(self.owner.identity.capture.operator_id)
+        key, context_id = reference_query_prepare_identity(
+            caller.operator_id, request.idempotency_key
+        )
+        config = self.owner.configuration.registry
+        preparation = ReferenceQueryContextPreparation(
+            context_id,
+            SelectedEmbeddingSources(
+                EmbeddingRegistryLookup(
+                    config.corpus_id,
+                    config.namespace,
+                    request.graph_snapshot,
+                    request.policy_revision_id,
+                    request.policy_sha256,
+                    1024,
+                ),
+                (request.source_item_revision_id,),
+            ),
+            self.spaces,
+            VIEWS,
+            "OPTIONAL",
+            8,
+        )
+        try:
+            with self.sessions.begin() as session:
+                submitted = prepare_and_start_reference_query_selection_in_session(
+                    session,
+                    caller=caller,
+                    preparation=preparation,
+                    idempotency_key=key,
+                    owner=self.owner,
+                    executor=self.executor,
+                )
+                workflow = submitted.workflow
+                original = parse_reference_query_workflow_request(workflow.initial_request)
+                selection = None
+                error_code: ReferenceQueryPrepareErrorCode | None = None
+                status: Literal["READY", "FAILED", "PENDING"]
+                if workflow.state == "COMPLETED":
+                    prepared = self.owner.catalog.prepare_reference_query_anchor_in_session(
+                        session, caller, original.context_request
+                    )
+                    CatalogCompletedReferenceQueryRead(
+                        self.owner, workflow_id=workflow.workflow_id, request=original
+                    ).resolve_reference_query_in_session(
+                        session, caller, original.context_request, prepared
+                    )
+                    selection = CompletedSimilarityQuerySelection(
+                        workflow_id=workflow.workflow_id,
+                        workflow_request_sha256=original.request_sha256,
+                        context_request_sha256=original.context_request.request_sha256,
+                    )
+                    status = "READY"
+                elif workflow.state not in {"REQUESTED", "RUNNING", "FAILED", "CANCELLED"}:
+                    status, error_code = "FAILED", "QUERY_RESULT_INVALID"
+                elif (
+                    workflow.state in {"FAILED", "CANCELLED"}
+                    or session.scalar(
+                        select(WorkflowCommandRecord.command_id)
+                        .where(
+                            WorkflowCommandRecord.workflow_id == workflow.workflow_id,
+                            WorkflowCommandRecord.state.in_(("FAILED", "CANCELLED")),
+                        )
+                        .limit(1)
+                    )
+                    is not None
+                ):
+                    status, error_code = "FAILED", "REFERENCE_QUERY_EXECUTION_FAILED"
+                else:
+                    status = "PENDING"
+                reply = ReferenceQueryPrepareReply(
+                    schema_version="system-rag-reference-query-prepare-reply/1.0",
+                    operation="PREPARE_REFERENCE_QUERY",
+                    operation_id=request.operation_id,
+                    request_sha256=request.request_sha256,
+                    status=status,
+                    workflow_id=workflow.workflow_id,
+                    selection=selection,
+                    error_code=error_code,
+                )
+            # The atomic Workflow/START root is closed before physical dispatch.
+            # A busy/unavailable driver does not erase or re-key queued work.
+            if reply.status == "PENDING":
+                assert reply.workflow_id is not None
+                self.driver.offer(reply.workflow_id, self.runner)
+            return reply
+        except ReferenceQueryPreparationUnavailable as absent:
+            return ReferenceQueryPrepareReply(
+                schema_version="system-rag-reference-query-prepare-reply/1.0",
+                operation="PREPARE_REFERENCE_QUERY",
+                operation_id=request.operation_id,
+                request_sha256=request.request_sha256,
+                status="UNAVAILABLE",
+                workflow_id=None,
+                selection=None,
+                error_code=absent.code,
+            )
+        except SimilarityContextReadError as error:
+            return _failure(request, error.code)
+        except EmbeddingRegistryError as error:
+            return _failure(request, similarity_context_error_from_registry(error).code)
+        except OperatorAuthorizationFenceError:
+            return _failure(request, "AUTHORITY_UNAVAILABLE")

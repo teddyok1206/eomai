@@ -94,7 +94,43 @@ API exchange, existing-item HTTP preparation/poll/replay, private checked plan2.
 handoff, role consumption and full live acceptance. No 25-item/HWPX regeneration
 is required for this native preparation boundary.
 
-## Source checkpoint and exact unproven scope
+## Bound application/driver implementation decision
+
+The next application binds a genuine captured owner, exact native executor and
+QUERY-only Runner. Trusted composition supplies the policy-derived query/document
+spaces; the wire never selects them. Owner configuration plus fixed three views,
+OPTIONAL mode/top8/maximum1024 are fed to the existing initial-selection use case.
+The native key uses a full domain-separated SHA of actual operator/original key;
+the context logical ID uses a separately domain-separated128-bit digest. Changed
+source/Graph/policy under that key is a conflict, not a new execution.
+
+Admission/replay and terminal read stay in one caller root. Known report/index
+absence rolls back without queue work. COMPLETED alone is insufficient: the
+existing canonical completed QUERY reader must verify source and result/receipt
+members before READY. Failed/cancelled Workflow or command history is preserved
+and returned as failure, not restarted by this adapter. A completed canonical
+read does not need a live command lease and does not invoke the driver.
+
+Only after commit may the shared driver offer exactly `runner.run_once(workflow)`
+on one non-daemon thread. No thread pool/backlog/poll loop or second queue is
+introduced. Existing native unit deadlines and Runner claim/lease/current fences
+bound that invocation; this is not a new840-second authority grant. Pending/busy
+work remains durable for the same-key HTTP poll, which may offer the original
+Workflow again through supported claim/recovery. A physical timeout is never a
+new-key or model-restart permission. An active handle is reused without replacing
+its capture; the Thread releases its runner/capture arguments when it exits.
+Driver observations use the actual thread handle and redacted outcome only;
+they are not persisted authority, workflow status or proof of completion.
+The finite-drive port belongs to the preparation application; the Thread adapter
+depends on that public application boundary, not the reverse. Trusted service
+composition must share one driver across current-capture application instances.
+
+Access remains exact unique key/PK and per-Workflow indexed command existence,
+plus bounded current source reads. Memory is O(1) driver handles and the existing
+bounded request/read materialization; database metadata stays pointer-only. No
+schema/migration/new dependency or change to historical artifacts is needed.
+
+## Transport-only source checkpoint and exact unproven scope (6bad5a4a)
 
 Implemented: closed schema plus byte-identical packaged resource/hash, frozen
 Pydantic messages, request/reply hash pairing, one accepted-connection native
@@ -161,3 +197,55 @@ rebuilding/modifying any wheel. Both failed probe logs are preserved alongside
 the passing `query-native-transport-owner-pair-package-final.log` and
 `query-native-transport-api-package-final.log`. Active services and the original
 QUERY recovery handle were not changed by this package gate.
+
+## Native preparation application and finite driver checkpoint
+
+The bound `NativeReferenceQueryPreparation` now implements the existing prepare
+port. It derives caller scope from the genuine captured owner, constructs the
+fixed initial selection and reuses the supported canonical admission/replay root.
+PENDING has the real original Workflow ID; FAILED/CANCELLED history never invokes
+the driver; unrelated human-approval stages fail explicitly. READY is constructed
+only after the concrete canonical completed QUERY reader has returned in that
+same root. It does not replace Catalog current-context publication/ranking.
+
+`ReferenceQueryPrepareDriver` implements the application-owned finite-drive port.
+It runs exactly one original-Workflow `runner.run_once` per offer on at most one
+live non-daemon Thread. Same active Workflow reuses that handle; other work returns
+BUSY without a memory backlog. A failed start or invocation is a redacted local
+observation, not a DB state repair/retry. The actual Thread handle, rather than an
+early IDLE flag, controls admission. Python Thread releases its runner/capture
+arguments at exit. Required QUERY-only family/actual operator/engine/owner/executor
+composition is checked before dispatch; actual claim and source authority are
+still revalidated by the existing Runner.
+
+Verification2026-10-15 UTC:
+
+- Focused application/driver23 PASS in8.90s, strict mypy9 production modules PASS,
+  Ruff/format6 changed Python files and shell parse PASS.
+- Guarded disposable PostgreSQL stage102 PASS in91.88s, including12 new application
+  cases. Actual Workflow/START commit-before-offer, same-key replay and simultaneous
+  first admission, changed source/Graph/policy, absence without work, late current
+  denial/full rollback and terminal-state-without-canonical-result are covered.
+- The shared test DB was inspected before and after: exact disposable identity,
+  migration20261014_0055, read-only inspection, zero other connections. No production
+  DB was a pytest target and no new migration was needed.
+- IAM/source/driver observations are synthetic in this PostgreSQL gate. Temporary
+  real control/Artifact bytes and actual transactions do not establish installed
+  API identity, actual numerical inference or production activation.
+- Initial fixture failures are preserved: JSON Schema exception type, missing
+  imported guarded-engine fixture, and an invalid step-state name used as a
+  Workflow state. The DB correctly rejected that last injection; the fixture now
+  uses the actual unrelated AWAITING_HUMAN_APPROVAL Workflow state. No schema,
+  constraint, authority check or historical result was weakened to pass tests.
+
+Logs in the existing temporary verification workspace include
+`query-native-prepare-application-focused-final.log` and
+`query-native-prepare-application-postgres-final-reviewed.log`. The earlier runs
+remain separate, not overwritten or counted as new runtime acceptance.
+
+Still unimplemented/unactivated: protected listener/runtime composition and socket
+provisioning, actual installed API/client exchange, ordinary HTTP preparation/poll,
+private checked plan2.3 consumption, and remaining role/consumer/GPU acceptance.
+The current original QUERY/auth handle is unchanged. Coverage is still2/520; CPU
+default and the safely drained indexing service are unchanged. This source step
+does not close the full goal or consume a new live-model execution.

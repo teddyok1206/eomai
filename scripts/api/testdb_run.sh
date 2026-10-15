@@ -262,6 +262,7 @@ if [[ "${action}" == "embedding-stage-tests" ]]; then
     tests/integration/test_reference_query_step_migration.py \
     tests/integration/test_reference_query_native_persistence.py \
     tests/integration/test_reference_query_submission.py \
+    tests/integration/test_reference_query_prepare_application.py \
     tests/integration/test_local_embedding_runner.py \
     tests/integration/test_local_embedding_service_reconciliation.py \
     tests/integration/test_similarity_item_start_persistence.py
