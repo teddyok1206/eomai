@@ -31,6 +31,7 @@ def setup_launcher(
     monkeypatch.setattr(launcher, "require_fixed_cpu_unit_template", lambda *_a: None)
     monkeypatch.setattr(launcher, "require_native_cpu_environment_file", lambda *_a: None)
     monkeypatch.setattr(launcher, "require_native_cpu_runtime_roots", lambda: None)
+    monkeypatch.setattr(launcher, "require_native_query_owner_root", lambda: None)
     monkeypatch.setattr(launcher, "claim_native_cpu_dispatch", lambda *_a, **_kw: None)
     monkeypatch.setattr(cpu, "require_no_active_native_cpu_execution", lambda: None)
     monkeypatch.setattr(cpu, "require_empty_native_cpu_cgroup", lambda *_a: None)
@@ -167,6 +168,25 @@ def test_query_owner_environment_and_template_seal_are_required_before_start(
         Path("/etc/eom/embedding-native-query-owner.env"),
     ]
     assert calls == []
+
+
+def test_missing_actual_staging_root_fails_preflight_before_any_unit_observation_or_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from eom_orchestrator import native_embedding_query_handoff as handoff
+
+    adapter, calls = setup_launcher(tmp_path, monkeypatch, [])
+    missing = tmp_path / "missing-query"
+    monkeypatch.setattr(handoff, "OWNER_ROOT", missing)
+    monkeypatch.setattr(
+        handoff, "fixed_owner_identity", lambda: CpuHandoffIdentity(os.geteuid(), os.getegid())
+    )
+    monkeypatch.setattr(
+        launcher, "require_native_query_owner_root", handoff.require_native_query_owner_root
+    )
+    with pytest.raises(handoff.NativeQueryHandoffError, match="NATIVE_QUERY_OWNER_LAYOUT_INVALID"):
+        adapter.assert_current_runtime()
+    assert calls == [] and not missing.exists()
 
 
 def test_bootstrap_preserves_legacy_index_arity_and_requires_explicit_query_purpose() -> None:

@@ -119,6 +119,22 @@ def _owner() -> CpuHandoffIdentity:
     return owner
 
 
+def require_native_query_owner_root() -> None:
+    """Read-only deployment prerequisite, before numerical launch/allocation.
+
+    Do not silently create or repair the controller-owned root during a query.
+    Retained ancestor descriptors enforce the same layout as actual staging.
+    """
+    owner = fixed_owner_identity()
+    try:
+        with protected_cpu_handoff_directory(
+            OWNER_ROOT, owner=owner, uid=owner.owner_uid, gid=owner.owner_gid, mode=0o700
+        ):
+            pass
+    except CpuHandoffError:
+        raise NativeQueryHandoffError("NATIVE_QUERY_OWNER_LAYOUT_INVALID") from None
+
+
 def _write(directory: int, name: str, raw: bytes, owner: CpuHandoffIdentity) -> None:
     try:
         write_protected_cpu_owner_member(directory, name, raw, owner=owner)

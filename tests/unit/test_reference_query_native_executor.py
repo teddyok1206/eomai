@@ -250,6 +250,26 @@ def executor(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ExecutorCase:
     return make_executor_case(tmp_path, monkeypatch)
 
 
+def test_actual_missing_query_root_is_not_ready_and_cannot_allocate(
+    executor, tmp_path, monkeypatch
+):
+    value = executor
+    missing = tmp_path / "missing-query-root"
+    monkeypatch.setattr(handoff, "OWNER_ROOT", missing)
+    value.launcher.assert_current_runtime.side_effect = handoff.require_native_query_owner_root
+    report = value.service.evaluate(value.request)
+    assert not report.ready
+    assert report.checks[0].code == "LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE"
+    with value.root() as session:
+        before = session.scalar(select(func.count()).select_from(JobRecord))
+    with value.root() as session, pytest.raises(ValueError, match="EXECUTOR_CONTEXT_INVALID"):
+        value.allocate(session)
+    with value.root() as session:
+        assert session.scalar(select(func.count()).select_from(JobRecord)) == before
+    assert not missing.exists() and value.runs == []
+    value.launcher.run.assert_not_called()
+
+
 def test_allocation_only_is_committed_without_staging_and_reused_by_physical_execution(
     executor, monkeypatch
 ):

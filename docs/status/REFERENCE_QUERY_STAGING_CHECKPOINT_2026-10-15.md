@@ -38,3 +38,35 @@ Evidence (local sanitized metadata, not credentials/item text):
 - `/tmp/eom-identity-provider-install.nAaycoDM/genuine-reference-query-atomic-execution.log`
 - `/tmp/eom-identity-provider-install.nAaycoDM/query-workspace-layout-diagnosis.log`
 - `/tmp/eom-identity-provider-install.nAaycoDM/query-atomic-stopped-metadata.log`
+
+## Scoped correction and source regression
+
+The absent `query` directory was created exclusively with mode0700 by the actual
+`eom-workflow-runner` account. No existing directory, ACL, group membership,
+installed prefix, CPU environment, DB row or service activation was changed.
+Root layout inspection confirmed its expected owner/group/mode. The existing
+installed owner/runtime/index preflight passed again at17:45:09 UTC without
+authentication, database mutation or model execution.
+
+The source QUERY launcher now checks its fixed owner staging root using the same
+retained-ancestor-FD boundary used by actual staging. This is a read-only runtime
+prerequisite, not a source permission or native launch grant. Missing, symlink,
+file and unsafe-mode roots are rejected without creation/repair. It is checked by
+executor readiness before the atomic RUNNING/allocation commit. Workflow request
+admission remains separate; it does not gain filesystem side effects.
+
+Affected QUERY/INDEX handoff, shared CPU lifecycle and native executor regression:
+120 PASS in67.57s. This includes the missing-root reproduction, preserved layout,
+redacted not-ready result and absence of native allocation/model execution. Strict
+mypy: two production modules PASS; Ruff/format: five Python files PASS. No DB
+schema, protocol, policy, template bytes, dependency or queue changed; the earlier
+87-test PostgreSQL gate is referenced, not rerun as a new filesystem proof.
+
+The source guard is not yet installed in the compatible517e4551 owner. Current
+recovery preparation instead verifies the corrected folder explicitly using that
+installed owner's supported FD boundary and keeps its exact package pins. A
+read-only diagnostic initially invoked an execution-owner read that uses FOR SHARE;
+PostgreSQL correctly rejected it. The harness now uses read-only metadata and pure
+contract validation before authentication; the actual runner retains its official
+locking and current-authority checks. That harness failure is not a runtime
+state-machine defect or permission to relax the read-only diagnostic.

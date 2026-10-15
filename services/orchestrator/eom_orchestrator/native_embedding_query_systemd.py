@@ -32,6 +32,7 @@ from eom_orchestrator.native_embedding_cpu_execution import (
 from eom_orchestrator.native_embedding_query_handoff import (
     PreparedNativeQuery,
     materialize_native_query_output,
+    require_native_query_owner_root,
     validate_native_query_execution_id,
 )
 
@@ -76,6 +77,7 @@ class FixedNativeQueryLauncher:
             Path("/etc/eom/embedding-native-query-owner.env"), self.owner_environment_sha256
         )
         require_native_cpu_runtime_roots()
+        require_native_query_owner_root()
         self.assert_runtime_current()
 
     def _observe(self, execution_id: str) -> tuple[CpuUnitObservation, CpuUnitObservation]:

@@ -82,3 +82,17 @@ The installed independent QUERY uses the previously pinned owner517e4551, not
 this new preparer. Its genuine login/submission succeeded, then staging stopped
 because the fixed QUERY owner directory was missing. This source checkpoint is
 not its runtime recovery, model acceptance or ordinary HTTP activation.
+
+Candidate `9fb4ace6b32d23a3e21a59142c603a2ae8c199e8`: complete API/platform/contracts
+wheel build and RECORD inspection PASS. Isolated owner-pair imports and seven
+production-member byte comparisons against that exact source archive PASS; checkout,
+installed-prefix and numerical-import fallbacks are denied. The new preparer is
+included and the existing atomic execution boundary is preserved. This candidate
+uses the main11-member Identity family; the installed canary remains on its
+separately verified9-member compatible owner, so these are not a mixed release set.
+
+Build evidence:
+`/tmp/eom-api-build/9fb4ace6b32d23a3e21a59142c603a2ae8c199e8.tWYCJP/dist`;
+`query-request-preparation-release-build.log` and
+`query-request-preparation-owner-pair.log` under the existing sanitized checkpoint
+directory `/tmp/eom-identity-provider-install.nAaycoDM`.

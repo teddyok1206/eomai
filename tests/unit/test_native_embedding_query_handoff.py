@@ -79,6 +79,39 @@ def prepared() -> handoff.PreparedNativeQuery:
     )
 
 
+@pytest.mark.parametrize("layout", ("valid", "missing", "file", "symlink", "writable"))
+def test_owner_root_preflight_uses_real_layout_without_creation_or_repair(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, layout: str
+) -> None:
+    root = tmp_path / "query"
+    if layout == "file":
+        root.write_bytes(b"not a directory")
+    elif layout == "symlink":
+        target = tmp_path / "other"
+        target.mkdir(mode=0o700)
+        root.symlink_to(target, target_is_directory=True)
+    elif layout != "missing":
+        root.mkdir(mode=0o700)
+        if layout == "writable":
+            root.chmod(0o770)
+    monkeypatch.setattr(handoff, "OWNER_ROOT", root)
+    monkeypatch.setattr(
+        handoff, "fixed_owner_identity", lambda: CpuHandoffIdentity(os.geteuid(), os.getegid())
+    )
+    before = root.lstat() if layout != "missing" else None
+    if layout == "valid":
+        handoff.require_native_query_owner_root()
+        assert tuple(root.iterdir()) == ()
+    else:
+        with pytest.raises(handoff.NativeQueryHandoffError) as raised:
+            handoff.require_native_query_owner_root()
+        assert raised.value.code == "NATIVE_QUERY_OWNER_LAYOUT_INVALID"
+        assert str(root) not in str(raised.value)
+    assert (root.lstat() if layout != "missing" else None) == before
+    if layout == "missing":
+        assert not root.exists()
+
+
 @pytest.fixture
 def staged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> handoff.PreparedNativeQuery:
     owner = tmp_path / "owner"
