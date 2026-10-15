@@ -92,3 +92,12 @@ Recovery harness (root-owned0444, no credential persistence):
 `/var/lib/eom-reference-query-resume.S1BMKDvn/resume.py`, raw SHA256
 `62bf373f3283b95d92e53cade5928927f4e840d58cb134b958a6fcf092b06b2c`.
 The main source/preparer is not substituted into this compatible9-member owner.
+
+## Subsequent supported continuation completed
+
+The same original Workflow/START/Job completed at18:57:53 UTC, followed by exact
+same-key replay and canonical common-context read PASS at18:59:11 UTC. The original
+staging failure and earlier unallocated Workflow remain unchanged. Coverage is
+still2/520 and context status is PARTIAL; this is not full indexing or HTTP/consumer
+activation. Actual terminal-handle observation, exact pins and preserved log hash
+are in [the bounded live acceptance](REFERENCE_QUERY_LIVE_ACCEPTANCE_2026-10-15.md).

@@ -196,26 +196,32 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 같은 요청은 원래 작업을 재사용하고, 신규 입력이 없으면 Workflow를 만들지 않습니다.
 기존 source·report·Graph·정책과 현재 사용자 권한은 대체하지 않습니다.
 
+10/15에는 실제 사용자 인증으로 원 QUERY 작업을 이어서 완료했고, 같은 key 재전송과
+정본 QUERY→공통 유사도 context 조회까지 통과했습니다. 현재 인덱스는2/520이며 결과도
+`PARTIAL`로 표시합니다. 이는 호환 owner의 bounded canary 검증으로, 일반 웹 요청의
+자동 준비·상주 실행기·다른 소비자/GPU 활성화 완료는 아닙니다.
+[실제 완료·재전송·부분 coverage 증거](docs/status/REFERENCE_QUERY_LIVE_ACCEPTANCE_2026-10-15.md)를 참고하세요.
+
 | 증분 인덱스 경계 | 현재 검증·활성 상태 |
 | --- | --- |
-| 계약·registry·Artifact·수치 검증·atomic submission·exact claim/native dispatch | SOURCE_PASS; 실제 seed와 delta 모두 계산·Job·Workflow/START 성공. vector/binding 각2건, 같은 논리 인덱스의 불변 revision2(coverage2/520), 첫 벡터/연결 재사용 확인. 실제 same-key replay·QUERY는 미완료 |
-| exact pinned index read | SOURCE_PASS; 현재 권한 재확인·일괄 binding 조회·선택된 벡터 읽기 구현, 공통 검색/QUERY 소비는 미활성 |
-| 공통 유사도 context 조립 | SOURCE_PASS; 기출변형용 승인 anchor·3개 독립 view·현재 권한 재확인334 PASS, 실제 QUERY 실행·소비자 연결은 미활성 |
+| 계약·registry·Artifact·수치 검증·atomic submission·exact claim/native dispatch | SOURCE_PASS; 실제 seed와 delta 모두 계산·Job·Workflow/START 성공. vector/binding 각2건, 불변 index revision2(coverage2/520), 첫 벡터/연결 재사용 확인. 별도 QUERY의 실제 완료·같은 key 재전송·context 조회 PASS; INDEX 자체의 실제 same-key replay와 상시 연결은 별도 |
+| exact pinned index read | SOURCE_PASS; 현재 권한 재확인·일괄 binding 조회·선택된 벡터 읽기 구현. 실제 QUERY→context에서 exact index와2/520 coverage 읽기 PASS; 일반 웹 소비는 미활성 |
+| 공통 유사도 context 조립 | SOURCE_PASS; 기출변형용 승인 anchor·3개 독립 view·현재 권한 재확인334 PASS. 실제 bounded QUERY에서 권한 있는520개/연결2개·후보1개를 PARTIAL로 조회 PASS; 일반 소비자 연결은 미활성 |
 | 유사도 결과의 실행계획 전달 준비 | SOURCE_PASS; plan23은 workflow1.16·원문·Evidence를 유지하며 출제/검토에만 보조 context와 선택 후보 자료를 전달. 최초 계획 저장·정확한 재실행·출제/검토 영수증·등록 출처의 plan23 호환과 Evidence-only 조회 분리까지 관련764 PASS·타입7·후보3038bdf2의3-wheel/RECORD·owner용2-wheel 검증 PASS. 아직 호환 Pack·실제 API/작업 실행기 연결·운영 활성화는 미완료. [계획·영수증 연결 경계](docs/architecture/SYSTEM_RAG_SIMILARITY_CONTEXT_IMPLEMENTATION_BOUNDARY.md#19-plan23-preparation-replay-and-evidence-result-compatibility) |
 | 신규 문항 최초 저장의 실제 DB 검증 | DISPOSABLE_DB_PASS; 실제 API·resolver·plan 저장을 PostgreSQL0055에서 검증. 신규6건을 포함한 기존 보호 실행 경로74 PASS, 소스26 PASS·strict type3 PASS. 동시 동일 요청/다른 준비값 경쟁, 정확한 재전송, 전체 롤백, 불변·FK·unique 제약 확인. 인증·Evidence·QUERY 선택은 합성 입력이며 실제 사용자 조회나 운영 활성화 증거가 아님. [검증 경계](docs/architecture/SYSTEM_RAG_SIMILARITY_CONTEXT_IMPLEMENTATION_BOUNDARY.md#32-actual-postgresql-plan23selector-persistence-gate) |
 | API–Catalog의 문항 제작용 유사도 준비 전달 | SOURCE_PASS; 완료된 QUERY의 결과를 기존 owner로 게시하고 API는 작은 파일 참조와 현재 결과를 검증해 기존 private handoff 생성. 실소켓→실제 첫 plan23 저장/재전송, 권한 철회·실패 후 중복 방지 포함262 PASS; 별도 API47·PG78 PASS. 별도 opt-in 기본 꺼짐이며 일반 HTTP 자동 준비·native QUERY 생산·운영 활성화는 아직 미완료. [연결 경계](docs/architecture/SYSTEM_RAG_SIMILARITY_CONTEXT_IMPLEMENTATION_BOUNDARY.md#36-api--catalog-preparation-publication-transport) |
 | 일반 출제·검토 실행기의 Catalog 자료 읽기 | SOURCE_PASS; app-role 실행기가 고정 소켓으로 저장된 plan23/단계/QUERY만 선택하고 Catalog가 실제 작성 요청자와 현재 자료를 재인가. 기존 DB fence·최대3교·Evidence 경계 유지. 별도 opt-in과 runner-only operation/임시 소켓 ACL 구현, 기본 꺼짐. 소스361·기동 ACL10(8개 중복)·strict type12 및 PG74 PASS. 실소켓/로컬 ACL은 시험했지만 IAM/source/계정 역할은 합성 입력이므로 운영 신원·소비자 활성화 증거는 아님. [소유권 연결 경계](docs/architecture/SYSTEM_RAG_SIMILARITY_CONTEXT_IMPLEMENTATION_BOUNDARY.md#33-ordinary-role-runner--catalog-current-source-materialization) |
-| genuine QUERY 입력·encoder/handoff·실행 계약 | SOURCE_PASS; 정본4파일·기존 큐의 QUERY별 claim/완료 검증. 정확한 QUERY 정의 접수 허용 후보 회귀718·임시 DB68 PASS. 실제 정의/정책 활성화·정본 계산·소비자 조회는 미완료 |
-| 고정 CPU QUERY 실행 어댑터 | SOURCE_PASS; private/root handoff·공통 capacity·재시작 중복 차단. 고정 unit/설정/polkit 설치·UID990 수치 사전확인·실제 owner 허용/거부7 PASS. 실제 QUERY 모델 계산·사용자 권한 검증은 별도 |
-| QUERY Job·실행·정본 완료 조회 | SOURCE_PASS; 원 Job/4개 checkpoint·claim 복구·현재 권한/정본 완료 조회 구현. 후속 caller-root 준비·읽기는 전체 capture3→2로 중복만 제거하고 시작/종료·각 view 검증 유지(source376·추가 focused5 PASS, 중복 합산 안 함). 실제 계산·소비 활성화는 미검증 |
+| genuine QUERY 입력·encoder/handoff·실행 계약 | SOURCE_PASS; 정본4파일·기존 큐의 QUERY별 claim/완료 검증. 회귀718·임시 DB68 PASS. 호환 owner의 실제 정의/정책·계산·정본 context 검증 PASS; 새 상주 서비스와 일반 소비자 활성화는 별도 |
+| 고정 CPU QUERY 실행 어댑터 | SOURCE_PASS; private/root handoff·공통 capacity·재시작 중복 차단. 고정 unit/설정/polkit 설치·UID990 사전확인·실제 owner 허용/거부7 PASS. 실제 사용자 capture로 원 QUERY 계산·완료·정본 읽기 PASS |
+| QUERY Job·실행·정본 완료 조회 | SOURCE_PASS; 원 Job/4개 checkpoint·claim 복구·현재 권한/정본 완료 조회 구현. caller-root capture3→2 보완(source376·추가 focused5 PASS, 중복 합산 안 함). 호환 owner에서 실제 Job/Workflow 완료·same-key replay·정본 context PASS; 일반 소비자는 미활성 |
 | QUERY 입력 준비의 전체 자료 반복 읽기 제거 | SOURCE_PASS; 조회 대상1개만 기존 selected-source 경계로 준비하고 등록 인덱스·벡터·권한 검증은 유지. 검색 결과의 전체 모집단/coverage·늦은 재인가는 그대로 유지. 합성2/520/1024 자료 operation-count·정본 입력 bytes 동일성 포함359 PASS, 임시 DB78·strict type3 PASS. 실제 실행 지연을 발견해 수정한 후보이며 운영 성능 개선 완료로 주장하지 않음. [지연·검증 범위 기록](docs/architecture/SYSTEM_RAG_SIMILARITY_CONTEXT_IMPLEMENTATION_BOUNDARY.md#37-anchor-bounded-native-query-source-validation-2026-10-15) |
-| QUERY 시작·실행 식별 기록의 원자적 저장 | SOURCE_PASS; RUNNING 단계와 원 launch/ALLOCATION을 같은 fenced root에서 저장한 뒤 SQL 밖에서만 실제 실행. 중간 실패 시 함께 rollback, 같은 요청은 원 identity 재사용. source309·임시 DB82(실제 commit/rollback 신규4건)·strict type3 PASS. 과거의 할당 기록 없는 작업을 재실행하는 권한은 아니며 운영 미활성. [원자성 검증](docs/architecture/SYSTEM_RAG_SIMILARITY_CONTEXT_IMPLEMENTATION_BOUNDARY.md#38-atomic-step-start-and-native-allocation-2026-10-15-design) |
-| 원자적 QUERY owner 설치·사전검사 | 호환 backport517e4551의2-wheel/RECORD·격리 import·source bytes·원자적 경계 검사 PASS. 독립 QUERY의 실제 사용자 인증·접수와 원 launch/ALLOCATION 저장은 성공했으나 누락된 owner staging 폴더 때문에 모델 시작 전에 중단. 공유 API/runner는 유지하며 기존 중단 건의 복구/성공으로 간주하지 않음. 계산·재전송·정본 context는 미완료. [실제 중단 원인](docs/status/REFERENCE_QUERY_STAGING_CHECKPOINT_2026-10-15.md) |
+| QUERY 시작·실행 식별 기록의 원자적 저장 | SOURCE_PASS; RUNNING 단계와 원 launch/ALLOCATION을 같은 fenced root에서 저장한 뒤 SQL 밖에서 실행. source309·임시 DB82·strict type3 PASS. 호환 owner의 실제 원 ALLOCATION 기반 재개/완료 PASS; 과거 할당 없는 다른 작업은 보존. [원자성 검증](docs/architecture/SYSTEM_RAG_SIMILARITY_CONTEXT_IMPLEMENTATION_BOUNDARY.md#38-atomic-step-start-and-native-allocation-2026-10-15-design) |
+| 원자적 QUERY owner 설치·사전검사 | 호환 backport517e4551의2-wheel/RECORD·격리 import·source bytes 검증 PASS. staging 누락 중단 후 같은 원 Workflow/START/Job을 지원 경계로 이어 완료, 동일 key 재전송과 정본 context PASS. 별도의 과거 unallocated 작업과 실패 기록은 보존. 공유 API/runner 변경 없음. [실제 완료 증거](docs/status/REFERENCE_QUERY_LIVE_ACCEPTANCE_2026-10-15.md) |
 | QUERY 요청 준비 공통 application | SOURCE_PASS; 실제 operator와 이미 pin된 context/설정으로 기존 정본 요청을 구성하고 atomic 접수 재사용. 동일 key는 원 audit/pin 유지, 현재 권한 재검증. source273·임시 DB87(동시 최초 준비 포함)·strict type2 PASS. 새 schema/queue/권한 없음; 일반 HTTP의 자동 준비·native 생산 연결·운영 활성화는 미완료. [책임·검증 범위](docs/architecture/REFERENCE_QUERY_REQUEST_PREPARATION.md) |
 | 기출 기준 최초 QUERY 선택·접수 연결 | SOURCE_PASS; 공식 선택 자료 조회로 기출1개의 source/report와 세 view의 현재 인덱스를 최초1회 고정하고 기존 QUERY/START에 연결. 재전송은 원 요청을 재사용하며 없는 보고서/인덱스는 작업 생성 전 구분. 실제 파일·DB의 잠금/재전송 검증 포함source404·임시 DB 등록33/단계90·strict type5 PASS. 신원/원문 선택 seam은 합성이며 일반 HTTP·native transport·운영 소비자 활성화는 미완료. [최초 선택 경계](docs/architecture/REFERENCE_QUERY_INITIAL_CONTEXT_CAPTURE.md) |
 | API→native QUERY 준비·접수·유한 실행 | SOURCE_PASS; 기존 로그인 상태를 전달하는 Unix 소켓 계약/client/handler와 실제 QUERY 접수 application·단일 실행 드라이버 구현. 저장 후에만 기존 Runner를 호출하며 같은 key의 동시 접수/재조회·권한 철회/롤백과 정본 없는 완료 상태 거부를 임시 PostgreSQL102건에서 검증. 공유 회귀784·strict type9·3-wheel/RECORD·격리 import/소스 일치 PASS. 실제 로컬 소켓/HMAC은 검증했지만 신원·source/model seam은 합성이며 보호된 상주 서비스·일반 HTTP·운영 소비자 연결은 미완료. 기존9-member 설치와 신규12-member source witness를 혼합하지 않음. [검증·남은 범위](docs/architecture/REFERENCE_QUERY_NATIVE_PREPARATION_TRANSPORT.md) |
 | QUERY 전용 staging 사전검사 | SOURCE_PASS; 실제로 발견한 누락 폴더를 기존 실행 계정의0700 전용 공간으로 준비. 소스는 동일 FD 경계로 missing/symlink/권한 오류를 실행 전 거부하며 자동 생성·수선하지 않음. QUERY/INDEX 회귀120·strict type2 PASS. 공유 서비스 변경 없음, 새 guard는 아직 운영 미설치. [원인·수정·검증 구분](docs/status/REFERENCE_QUERY_STAGING_CHECKPOINT_2026-10-15.md#scoped-correction-and-source-regression) |
-| authenticated owner/session fence | QUERY/성능 비교용 명시적 전달1.1과 기존 seed1.0 유지. source424·실제 disposable 세션/동시성19 PASS; 실제 사용자 QUERY capture PASS(10/15). 검증용 workspace/namespace 오류와 root-only 조회·savepoint 충돌을 확인·수정(main source222·임시 DB78 PASS). 기존 API75fdc265를 유지한 최소 호환 owner047611bb 비활성 설치 및 실제 UID990 사전검사 PASS(backport source194·wheel/RECORD/코드 일치). QUERY 계산·재전송·정본 조회는 미완료. [접수 수정 기록](docs/architecture/SYSTEM_RAG_SIMILARITY_CONTEXT_IMPLEMENTATION_BOUNDARY.md#35-pinned-query-namespace-and-root-only-submission-correction) |
+| authenticated owner/session fence | QUERY/성능 비교 전달1.1과 seed1.0 유지. source424·실제 disposable 세션/동시성19 PASS; workspace/namespace·root-only/savepoint 수정 검증(main222·PG78 PASS). API75fdc265를 유지한 호환 owner517e4551에서 실제 사용자 capture·QUERY 완료·재전송·정본 조회 PASS. 신규12-member 서비스는 미설치. [실제 완료 증거](docs/status/REFERENCE_QUERY_LIVE_ACCEPTANCE_2026-10-15.md) |
 | 자동 인덱싱 전용 신원·저장 | 운영0055·sourceae8f8bf6/신원 revision11. 실제 seed+delta 성공, 첫 벡터/연결과 이전 revision 보존, coverage2/520. 다음 release/runtime 준비를 위해 현재 건 완료 후 정상 종료; 상시 자동 인덱싱은 아직 재개 전. 전체/다른 view·실제 replay·소비 연결은 미완료. [실제 활성화 기록](docs/status/LOCAL_INDEXING_ACTIVATION_2026-10-14.md) |
 | 인증된 owner/session 전달 | 수신 API75fdc265와 비활성 owner5018ad2d 설치·실제 UID990의 provider/process/config/key-metadata 검증 PASS. QUERY/성능 비교 전달은 목적·요청 hash를 함께 확인하며 현재 권한/만료를 확장하지 않음. 실제 설치 route/정본 API 설명·hash 일치 PASS; 이 검사를 배포 gate에 추가 |
 | 현재 사용자·자료의 native 작업 접수 연결 | SOURCE_IMPLEMENTED; 실제 인증 capture→기존 Catalog 검증·계획 재구성·잠금 확인을 연결, 운영 provider/실행기 연결은 미활성 |
@@ -227,14 +233,17 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | CPU/CUDA 실행 환경 준비 | 실제 CPU 설치·inventory·수치 증명·비특권 격리 시험·최종 설치 기록 PASS; source/Job 실행 연결 남음, CUDA 미게시 |
 | CPU 기준 전체 후보 순위 비교 | SOURCE_PASS; 고정 오차·CPU 동점 묶음으로 전체 후보/모든 쌍·상위5 경계를 비교. 관련449 PASS, 후보e874268d의 wheel/RECORD·owner용2개 wheel만의 격리 import PASS. 실제 GPU benchmark/기본값 전환은 미실행. [비교 설계·증거](docs/architecture/INCREMENTAL_EMBEDDING_DEVICE_BENCHMARK_PROPOSAL.md#full-rank-order-comparison-before-native-owner-integration--2026-10-14) |
 | benchmark 실행 입구·메모리 감시 | SOURCE_PASS; 기존 identity guard/worker에 실행별 host 감시와 모델 계산 전 채널 일치 확인을 연결. 관련804 PASS·strict type6·후보44404192의3-wheel/RECORD·owner용2-wheel 격리 import PASS. 실제6회 실행 owner/launcher·설치·측정은 미완료. [설계·검증](docs/architecture/INCREMENTAL_EMBEDDING_DEVICE_BENCHMARK_PROPOSAL.md#own-unit-host-memory-observation-before-native-entry-composition--2026-10-14) |
-| 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | seed+delta PASS(2/520, 첫 벡터 보존); QUERY/공통 소비자·CPU/GPU 비교·GPU 기본값은 미완료 |
+| 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | seed+delta PASS(2/520, 첫 벡터 보존); bounded QUERY 완료/replay/current context PASS(PARTIAL, 후보1). 상시 인덱싱 재개·일반 소비자·CPU/GPU 비교·조건부 GPU 기본값은 미완료 |
 
-10/15 실제 사용자 QUERY 접수는 성공했지만, 전체 자료의 반복 검증 중 인증 유효 창을
-넘겨 중단됐습니다. 읽기 전용 확인에서 원 Workflow/START와 RUNNING 단계는 남아 있고,
-native launch Job·출력은 없습니다. 기존 복구 규칙은 원 실행 기록이 없는 상태를 자동
-재실행하지 않습니다. 이 기록은 보존하며 새 key·DB 직접 수정·인증 만료 연장으로
-우회하지 않습니다. QUERY 계산·같은 key 재전송·정본 context의 실제 acceptance와
-나머지 소비자/GPU 검증은 여전히 미완료입니다.
+10/15 최초 QUERY는 전체 자료의 반복 검증 중 인증 창을 넘겼고 native allocation이 없어
+그대로 보존합니다. 이후 별도 독립 QUERY는 원 ALLOCATION을 먼저 저장했고, staging 폴더
+누락 중단을 같은 Workflow/START/Job으로 이어18:57 UTC 완료했습니다.18:59에는 같은 key
+재전송·정본 결과와 현재 권한을 이용한 context 조회도 통과했습니다. 새 key·DB 직접 수정·
+인증 만료 연장으로 복구하지 않았습니다. 서로 다른 두 이력을 합치거나 과거 실패를
+성공으로 바꾸지 않습니다. 일반 소비자 연결과 GPU 검증은 여전히 미완료입니다.
+
+아래는 날짜·후보별 역사적 구현 기록입니다. 당시의 미완료 표기는 현재 종합 상태와
+구별하며, 최신 실제 실행·활성화 범위는 위 표와 연결된 상태 문서를 기준으로 합니다.
 
 2026-10-13 11:04 UTC 기준 `3be2949b`의 실제 CPU 전체 설치 검증과 결과 저장·재조회를
 통과했습니다. 같은 검사에서 얻은30,669개 항목/356개 ELF의 식별·해시 정보를 보존하고,
