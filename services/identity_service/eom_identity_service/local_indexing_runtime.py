@@ -125,9 +125,18 @@ class _ProtectedFiles:
         return value
 
     def ancestors(self, path: Path) -> None:
-        if not path.is_absolute() or ".." in path.parts:
-            raise _unavailable()
-        for parent in reversed(path.parents):
+        self.ancestors_many((path,))
+
+    def ancestors_many(self, paths: tuple[Path, ...]) -> None:
+        # Deduplicate path names only within this observation, never filesystem
+        # attributes or authority across fences. Shared parents remain rechecked.
+        parents: dict[Path, None] = {}
+        for path in paths:
+            if not path.is_absolute() or ".." in path.parts:
+                raise _unavailable()
+            for parent in reversed(path.parents):
+                parents[parent] = None
+        for parent in parents:
             # Ancestor directory contents need not be immutable: /etc and /opt
             # can receive unrelated releases. Their ownership/mode still must be safe.
             value = parent.lstat()
@@ -161,8 +170,9 @@ class _ProtectedFiles:
         return raw
 
     def assert_current(self) -> None:
-        for path, expected in tuple(self.epochs.items()):
-            self.ancestors(path)
+        captured = tuple(self.epochs.items())
+        self.ancestors_many(tuple(path for path, _expected in captured))
+        for path, expected in captured:
             if _epoch(path.lstat()) != expected:
                 raise _unavailable()
 
@@ -293,6 +303,7 @@ def _closed_namespaces(
 
 
 def _loaded_code(files: _ProtectedFiles, site: Path, members: set[str]) -> None:
+    external: dict[Path, None] = {}
     for name, module in tuple(sys.modules.items()):
         if module is None:
             continue
@@ -312,7 +323,9 @@ def _loaded_code(files: _ProtectedFiles, site: Path, members: set[str]) -> None:
             raise _unavailable()
         if not path.is_relative_to(_PREFIX):
             raise _unavailable()
-        files.ancestors(path)
+        external[path] = None
+    files.ancestors_many(tuple(external))
+    for path in external:
         files.observe(path)
 
 

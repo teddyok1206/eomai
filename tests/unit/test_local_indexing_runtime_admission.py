@@ -108,6 +108,10 @@ def installed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]
             if not stat.S_ISDIR(value.st_mode) or value.st_mode & 0o022 or parent.is_symlink():
                 raise runtime._unavailable()
 
+    def synthetic_ancestors_many(self: object, paths: tuple[Path, ...]) -> None:
+        for path in paths:
+            synthetic_ancestors(self, path)
+
     monkeypatch.setattr(runtime, "_ROOT_UID", os.getuid())
     monkeypatch.setattr(runtime, "_PREFIX", prefix)
     monkeypatch.setattr(runtime, "_RELEASES", releases)
@@ -118,6 +122,7 @@ def installed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]
     monkeypatch.setattr(runtime, "_self_unit", lambda: (dict(unit), started))
     monkeypatch.setattr(runtime, "_live", lambda _path, _maximum: boot[0])
     monkeypatch.setattr(runtime._ProtectedFiles, "ancestors", synthetic_ancestors)
+    monkeypatch.setattr(runtime._ProtectedFiles, "ancestors_many", synthetic_ancestors_many)
     return dict(
         pin=pin,
         config=config,

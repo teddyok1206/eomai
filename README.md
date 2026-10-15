@@ -197,14 +197,16 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 기존 source·report·Graph·정책과 현재 사용자 권한은 대체하지 않습니다.
 
 10/15에는 실제 사용자 인증으로 원 QUERY 작업을 이어서 완료했고, 같은 key 재전송과
-정본 QUERY→공통 유사도 context 조회까지 통과했습니다. 현재 인덱스는2/520이며 결과도
-`PARTIAL`로 표시합니다. 이후 API와 전용 상주 owner의 호환 설치·실제 기동까지 확인했지만,
+정본 QUERY→공통 유사도 context 조회까지 통과했습니다. 당시 인덱스2/520에서 조회한 결과는
+`PARTIAL`입니다. 이후 한 번의4건 증분 처리로 현재 CONTENT_ONLY 인덱스는 **6/520**이 되었고,
+원래2건의 벡터·연결과 이전 revision은 보존했습니다. 상시 인덱싱은 아직 재개 전입니다.
+이후 API와 전용 상주 owner의 호환 설치·실제 기동까지 확인했지만,
 일반 웹 요청의 자동 준비·다른 소비자/GPU 활성화 완료는 아닙니다.
 [실제 완료·재전송·부분 coverage 증거](docs/status/REFERENCE_QUERY_LIVE_ACCEPTANCE_2026-10-15.md)를 참고하세요.
 
 | 증분 인덱스 경계 | 현재 검증·활성 상태 |
 | --- | --- |
-| 계약·registry·Artifact·수치 검증·atomic submission·exact claim/native dispatch | SOURCE_PASS; 실제 seed와 delta 모두 계산·Job·Workflow/START 성공. vector/binding 각2건, 불변 index revision2(coverage2/520), 첫 벡터/연결 재사용 확인. 별도 QUERY의 실제 완료·같은 key 재전송·context 조회 PASS; INDEX 자체의 실제 same-key replay와 상시 연결은 별도 |
+| 계약·registry·Artifact·수치 검증·atomic submission·exact claim/native dispatch | SOURCE_PASS; 실제 seed+delta와 후속4건 증분 처리 성공. vector/binding 각6건, 불변 index revision3(CONTENT_ONLY6/520), 기존2건 재사용 확인. 별도 QUERY의 실제 완료·같은 key 재전송·context 조회 PASS; INDEX 자체의 실제 same-key replay와 상시 연결은 별도 |
 | exact pinned index read | SOURCE_PASS; 현재 권한 재확인·일괄 binding 조회·선택된 벡터 읽기 구현. 실제 QUERY→context에서 exact index와2/520 coverage 읽기 PASS; 일반 웹 소비는 미활성 |
 | 공통 유사도 context 조립 | SOURCE_PASS; 기출변형용 승인 anchor·3개 독립 view·현재 권한 재확인334 PASS. 실제 bounded QUERY에서 권한 있는520개/연결2개·후보1개를 PARTIAL로 조회 PASS; 일반 소비자 연결은 미활성 |
 | 유사도 결과의 실행계획 전달 준비 | SOURCE_PASS; plan23은 workflow1.16·원문·Evidence를 유지하며 출제/검토에만 보조 context와 선택 후보 자료를 전달. 최초 계획 저장·정확한 재실행·출제/검토 영수증·등록 출처의 plan23 호환과 Evidence-only 조회 분리까지 관련764 PASS·타입7·후보3038bdf2의3-wheel/RECORD·owner용2-wheel 검증 PASS. 아직 호환 Pack·실제 API/작업 실행기 연결·운영 활성화는 미완료. [계획·영수증 연결 경계](docs/architecture/SYSTEM_RAG_SIMILARITY_CONTEXT_IMPLEMENTATION_BOUNDARY.md#19-plan23-preparation-replay-and-evidence-result-compatibility) |
@@ -227,7 +229,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | 일반 기출변형 요청의 비동기 준비 연결 | SOURCE_PASS; 별도 닫힌 응답으로 준비 중/제작 접수를 구분하고 동일 요청·key로 이어 최초 plan23을 저장. 기존 API claim만 잠시 반환하며 새 큐/DB 변경 없음. 소스160·배포/계층100·임시 PostgreSQL125·strict type18·실제 Chromium 합성 응답 PASS. 후보7fc8e79c의 API3-wheel/Web build·RECORD·격리 import PASS. API/Web 기본 꺼짐; 실제 로그인 기반 준비·일반 문항/검토 소비와 운영 활성화는 별도 미완료. [설계·검증·활성 순서](docs/architecture/REFERENCE_ITEM_ASYNC_START_DESIGN.md) |
 | QUERY 전용 staging 사전검사 | SOURCE_PASS; 실제로 발견한 누락 폴더를 기존 실행 계정의0700 전용 공간으로 준비. 소스는 동일 FD 경계로 missing/symlink/권한 오류를 실행 전 거부하며 자동 생성·수선하지 않음. QUERY/INDEX 회귀120·strict type2 PASS. 공유 서비스 변경 없음, 새 guard는 아직 운영 미설치. [원인·수정·검증 구분](docs/status/REFERENCE_QUERY_STAGING_CHECKPOINT_2026-10-15.md#scoped-correction-and-source-regression) |
 | authenticated owner/session fence | QUERY/성능 비교 전달1.1과 seed1.0 유지. source424·실제 disposable 세션/동시성19 PASS; workspace/namespace·root-only/savepoint 수정 검증(main222·PG78 PASS). API75fdc265/호환 owner517e4551의 실제 capture·QUERY 완료·재전송·정본 조회 증거 보존. 이후12-member API2857bf77/native8c411041 설치·기동 PASS; 이 조합의 실제 인증 HTTP 검증은 별도 대기. [기존 완료](docs/status/REFERENCE_QUERY_LIVE_ACCEPTANCE_2026-10-15.md)·[현재 설치](docs/operations/REFERENCE_QUERY_SERVICE_LIVE_RELEASE_2026-10-15.md) |
-| 자동 인덱싱 전용 신원·저장 | 운영0055·sourceae8f8bf6/신원 revision11. 실제 seed+delta 성공, 첫 벡터/연결과 이전 revision 보존, coverage2/520. 다음 release/runtime 준비를 위해 현재 건 완료 후 정상 종료; 상시 자동 인덱싱은 아직 재개 전. 전체/다른 view·실제 replay·소비 연결은 미완료. [실제 활성화 기록](docs/status/LOCAL_INDEXING_ACTIVATION_2026-10-14.md) |
+| 자동 인덱싱 전용 신원·저장 | 운영0055·sourceae8f8bf6/신원 revision11. 후속4건을1회 계산해 CONTENT_ONLY6/520; 기존2건과 이전 revision 보존. 현재 owner는 정상 종료·boot 비활성, 선택은4건/1800초이며 상시 재개/전체/다른 view·실제 replay·소비 연결은 미완료. 반복 파일 검사는 관측당 중복만 줄이는 소스 수정·테스트 완료, 운영 속도 개선은 미검증. [증분·관측 비용 기록](docs/status/LOCAL_INDEXING_FOUR_TARGET_DELTA_2026-10-15.md) |
 | 인증된 owner/session 전달 | 수신 API75fdc265와 비활성 owner5018ad2d 설치·실제 UID990의 provider/process/config/key-metadata 검증 PASS. QUERY/성능 비교 전달은 목적·요청 hash를 함께 확인하며 현재 권한/만료를 확장하지 않음. 실제 설치 route/정본 API 설명·hash 일치 PASS; 이 검사를 배포 gate에 추가 |
 | 현재 사용자·자료의 native 작업 접수 연결 | SOURCE_IMPLEMENTED; 실제 인증 capture→기존 Catalog 검증·계획 재구성·잠금 확인을 연결, 운영 provider/실행기 연결은 미활성 |
 | Native INDEX 파일 전달·입력/결과 저장 | SOURCE_PASS; 실제 계정 권한4·설치된 시작 권한9·CPU 합성 입력2개×1024차원·동일 실행 재조회 PASS, 실제 자료/Job/binding 연결은 미활성 |
@@ -238,7 +240,7 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 | CPU/CUDA 실행 환경 준비 | 실제 CPU 설치·inventory·수치 증명·비특권 격리 시험·최종 설치 기록 PASS; source/Job 실행 연결 남음, CUDA 미게시 |
 | CPU 기준 전체 후보 순위 비교 | SOURCE_PASS; 고정 오차·CPU 동점 묶음으로 전체 후보/모든 쌍·상위5 경계를 비교. 관련449 PASS, 후보e874268d의 wheel/RECORD·owner용2개 wheel만의 격리 import PASS. 실제 GPU benchmark/기본값 전환은 미실행. [비교 설계·증거](docs/architecture/INCREMENTAL_EMBEDDING_DEVICE_BENCHMARK_PROPOSAL.md#full-rank-order-comparison-before-native-owner-integration--2026-10-14) |
 | benchmark 실행 입구·메모리 감시 | SOURCE_PASS; 기존 identity guard/worker에 실행별 host 감시와 모델 계산 전 채널 일치 확인을 연결. 관련804 PASS·strict type6·후보44404192의3-wheel/RECORD·owner용2-wheel 격리 import PASS. 실제6회 실행 owner/launcher·설치·측정은 미완료. [설계·검증](docs/architecture/INCREMENTAL_EMBEDDING_DEVICE_BENCHMARK_PROPOSAL.md#own-unit-host-memory-observation-before-native-entry-composition--2026-10-14) |
-| 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | seed+delta PASS(2/520, 첫 벡터 보존); bounded QUERY 완료/replay/current context PASS(PARTIAL, 후보1). 상시 인덱싱 재개·일반 소비자·CPU/GPU 비교·조건부 GPU 기본값은 미완료 |
+| 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | seed+delta 및 후속4건 PASS(CONTENT_ONLY6/520, 기존2건 보존); 과거 bounded QUERY 완료/replay/current context PASS(PARTIAL, 당시2/520·후보1). 상시 인덱싱 재개·일반 소비자·CPU/GPU 비교·조건부 GPU 기본값은 미완료 |
 
 10/15 최초 QUERY는 전체 자료의 반복 검증 중 인증 창을 넘겼고 native allocation이 없어
 그대로 보존합니다. 이후 별도 독립 QUERY는 원 ALLOCATION을 먼저 저장했고, staging 폴더
@@ -418,8 +420,9 @@ API/공유 런타임`4cf6ac9a` 배포·격리 검증을 완료했습니다. 관�
 API LIVE/READY를 확인했습니다. 이후 인덱싱 전용 신원/자료 정책과 고정 unit을 설치했습니다.
 실제 시작 검증에서 찾은 불변 기록의 불필요한 쓰기 잠금은 SELECT-only 경로로 수정했고,
 새 설치본의 서비스 인증·시작을 확인했습니다. 이후 pointer/정의 조회와 exact-target 경계를
-수정하여 실제 seed와 delta를 완료했습니다. 현재 coverage2/520이며 다음 호환 release 준비를
-위해 owner는 정상 종료 상태입니다. [활성화 기록과 남은 gate](docs/status/LOCAL_INDEXING_ACTIVATION_2026-10-14.md)와
+수정하여 실제 seed와 delta를 완료했습니다. 이후4건 증분으로 현재 CONTENT_ONLY coverage6/520이며
+owner는 현재 건을 마친 뒤 정상 종료 상태입니다. [후속 증분·관측 비용 기록](docs/status/LOCAL_INDEXING_FOUR_TARGET_DELTA_2026-10-15.md),
+[활성화 기록과 남은 gate](docs/status/LOCAL_INDEXING_ACTIVATION_2026-10-14.md)와
 [명시적 QUERY 인증 전달 검증](docs/status/REFERENCE_QUERY_OWNER_SESSION_CHECKPOINT_2026-10-14.md)을
 따릅니다. 부분 coverage를 전체 corpus 또는 상시 자동 처리 완료로 표시하지 않습니다.
 완료된 QUERY를 정확한 ID·원래 요청 검증값으로 읽는 공통 Catalog 조회 연결도
