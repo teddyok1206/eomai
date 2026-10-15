@@ -117,3 +117,27 @@ The old completed QUERY acceptance is not reopened. New source flags remain off;
 build/installed compatibility, actual HTTP acceptance and actual Item/role
 consumption are separate gates. No new migration, dependency, broker, authority,
 credential store, Item generation or coverage expansion was introduced here.
+
+### Built compatible candidate, not installed
+
+Source `7fc8e79c5dcac67dd12bf79231792a641f9f569b` was committed/pushed, then built
+using the existing API build-only and Web release builders. Both exit0. API
+RECORD/source archive/OpenAPI/installed simulation and Web inventory/RECORD/
+actual Web-runtime import/48-file installed simulation PASS. Strict isolated
+owner-pair closure28 and API trio closure32 PASS; the latter also verifies all12
+changed/new Python members plus the new closed reply schema. These closures
+overlap, are not test counts, and deny checkout/ambient EOM and numerical imports.
+
+| Candidate wheel | Raw SHA-256 |
+| --- | --- |
+| Platform | `90b2485404df1c6f1600fe17ef4ad9acdee0e71be7d32523124caf3cebfaf3b0` |
+| API contracts | `e97e1a9ba4da1434beff12864e5b00040dca543a9eb2aee41887cc9be5dd21ff` |
+| API | `376ba2535d8adf369b1addf15895208d4741c939dd1bd555eaf058eb81d73261` |
+| Web | `874dfd9c92f1b364692352b3e20620edbf501cf48ef3705930dd48f69dde3ffa` |
+
+Local build-only directories are
+`/tmp/eom-api-build/7fc8e79c5dcac67dd12bf79231792a641f9f569b.m7jp2c/dist`
+and `/tmp/eom-web-gui-build/7fc8e79c5dcac67dd12bf79231792a641f9f569b.ZXRmY3/dist`.
+No candidate runtime flag or installed API/provider was changed. The authenticated
+HTTP preparation/read and ordinary Item/role gates remain pending, and the full
+goal, seed/delta expansion, other consumers and CPU/GPU gate remain incomplete.
