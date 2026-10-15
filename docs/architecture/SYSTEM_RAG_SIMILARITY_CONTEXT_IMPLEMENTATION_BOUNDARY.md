@@ -3470,3 +3470,94 @@ login question. The previous goal turn was progress (root submission repair and
 minimal owner release); this turn also changes authoritative source/package
 evidence while the authenticated native gate waits. The overall goal stays active
 and incomplete; no prior blocked-run audit count or old process handle is reused.
+
+## 37. Anchor-bounded native QUERY source validation (2026-10-15)
+
+The genuine run authenticated at16:05:52 UTC and submitted Workflow
+`workflow_38a7254f053449739ef31f5d535ff604` / command
+`wfcmd_bba47b0da06b4e5a9de61ee64a13475e` at16:09:41. Submission alone took
+216.65s after preparation. At16:21:04 the current source fence denied access after
+the original900-second fresh-auth window; no terminal success/replay/context
+acceptance was emitted. Persisted Workflow/command/checkpoint/model state must be
+inspected before retry. Authentication expiry must not be extended or bypassed.
+
+Design before implementation:
+
+1. **Responsibility/boundary:** the existing Catalog owner prepares the exact
+   anchor for native QUERY provenance; common context composition still captures
+   the full authorized population for ranking, coverage and late reauthorization.
+2. **Canonical source:** existing approved Item, accepted profile/report, Graph,
+   policy, registered index and committed Artifact members; no authority cache.
+3. **Identity/revisions:** original request, Workflow/command, anchor revision and
+   native launch/input identities remain separate and immutable. No new schema,
+   DB migration, queue, protocol, dependency or key is needed.
+4. **Pointers/checks:** retain real current operator, root transaction, current
+   source/profile/report, Graph/policy, exact index registry/member/binding and
+   numerical integrity checks. Select the request's exact anchor before source
+   materialization, with no latest/full-population fallback.
+5. **Access patterns:** exact anchor key lookup for QUERY; bounded ordered full
+   population traversal only for consumer ranking. Index manifest validation is
+   still bounded by the selected immutable index; do not claim constant total IO.
+6. **Structures/indexes:** reuse the existing selected-source predicate and its
+   indexed source-revision lookup. A root-local read window carries its immutable
+   selected scope so all current scope checks and final recapture use the same
+   selection. Full consumer windows keep the empty/full scope.
+7. **Complexity/scale:** reduce repeated source/profile materialization from O(N)
+   for up to1024 sources to O(1) anchor sources per native source fence. Preserve
+   index-manifest/shard validation cost; verify operation counts and unchanged
+   native input bytes rather than inventing an end-to-end speedup.
+8. **Concurrency:** retain caller-owned root, actual start/end fences and existing
+   claim/lease/idempotency boundaries; no session grant survives the root.
+9. **Dependencies:** Catalog owns selected-source/member resolution; runner uses
+   its supported anchor entry. Pure preparation validation stays in Catalog.
+10. **Failure/retry:** missing/stale/denied anchor or index fails explicitly.
+    Consumer provenance compares exact validated anchor/query text/request pins,
+    not unrelated population membership; full ranking has its own complete late
+    fence. Preserve the current failed/uncertain run and inspect before replay.
+11. **Simpler alternative:** merely increasing authentication TTL hides repeated
+    work and weakens security. Dropping source/index checks is also unacceptable.
+    A separate anchor entry sharing the existing verifier is smaller than a new
+    cache, framework or native protocol successor.
+
+Required proof: selected scope reaches admission before IO; caller/full consumer
+scope is unchanged; exact anchor and index negative tests; late revocation; same
+native canonical bytes/hash for fixed launch IDs; synthetic2/520/1024 corpus
+operation counts; strict typing/lint and focused/disposable persistence gates.
+This section is a design and observed failure record, not live acceptance.
+
+Implemented source proof:359 tests /204.65s pass across concrete Catalog/member
+read, QUERY owner/read/consumer/executor/submission/completion, full context and
+official selected-source admission suites. The existing guarded PostgreSQL0055
+stage suite passes78 /51.10s; final identity/head/zero-other-connections inspection
+passes. No pytest touched production. Strict mypy3 production modules and
+Ruff/format7 Python files pass. The final native-input route assertion was tightened
+after the359 run and passes separately1 /4.63s (overlap, not an additional case).
+
+Synthetic operation-count tests at2/520/1024 sources show two captures of exactly
+one anchor for native preparation versus two full captures for common composition;
+all9 per-view scope authorizations retain the same selected/full scope. Exact
+native input canonical bytes/hash remain identical for the same launch IDs.
+Actual temporary index/shard/result/vector bytes are checked through the original
+registry application with synthetic IAM/SQL metadata; missing index, wrong index
+hash, damaged binary, stale anchor/profile/report and final source revocation
+remain denied. These are not installed live or real-IAM proofs.
+
+The16:23:49 read-only operating metadata is explicit: Workflow RUNNING, original
+START PROCESSING attempt1/generation1, lease still valid then, application step
+RUNNING attempt1 without output, **no original native launch Job**. The process
+has exited. Existing `resolve_claim` correctly refuses missing original launch
+history, even after lease expiry; normal replay/reconcile cannot currently resume
+this pre-allocation crash gap. Do not disguise it as an allocated execution or
+weaken that guard to get a green canary. Safe supported recovery needs a separate
+review of the persisted pre-allocation/physical-launch boundary. No second submit,
+model launch, row repair, automatic retry or new authentication was requested.
+
+Evidence prefix `/tmp/eom-identity-provider-install.nAaycoDM/query-anchor-`;
+original execution `genuine-reference-query-root-execution.log` and read-only state
+`genuine-reference-query-stopped-metadata.log` remain preserved. The first two new
+numeric-route tests lacked the synthetic Session's `in_transaction` method; fixing
+that test seam and using explicit synthetic registry rows produced24 PASS /10.04s.
+No production transaction/hash checks were relaxed. Slack discovery report
+`devreport_6a5294c54f9f4bc4be6735a4b7c6a5f0` SENT/SAVED. API75fdc265, original
+immutable owner047611bb, model/device, index coverage2/520 and service activation
+remain unchanged. The full goal remains active and incomplete.

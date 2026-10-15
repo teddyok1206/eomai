@@ -191,21 +191,55 @@ def source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> OwnerFixture:
             result.deny = True
         return ()  # Explicit unit index-validation seam, NOT a real registered index.
 
-    def prepare_and_read(
-        session: Session, caller: Any, current: Any
-    ) -> tuple[PreparedSimilarityContext, tuple[Any, ...]]:
+    def prepare_anchor(session: Session, caller: Any, current: Any) -> PreparedSimilarityContext:
         prepared = prepare(session, caller, current)
         read_module.validate_similarity_preparation(current, prepared)
-        return prepared, read(session, caller, current, prepared)
+        read(session, caller, current, prepared)
+        return prepared
 
     monkeypatch.setattr(AuthenticatedSessionFence, "assert_current", identity)
     monkeypatch.setattr(owner.catalog, "authorize_scope", authorize)
     monkeypatch.setattr(owner.catalog, "prepare_similarity_context_in_session", prepare)
     monkeypatch.setattr(owner.catalog, "read_similarity_views_in_session", read)
-    monkeypatch.setattr(
-        owner.catalog, "prepare_and_read_similarity_context_in_session", prepare_and_read
-    )
+    monkeypatch.setattr(owner.catalog, "prepare_reference_query_anchor_in_session", prepare_anchor)
     return result
+
+
+def test_native_input_bytes_ignore_unrelated_population_but_retain_exact_anchor(
+    source, monkeypatch
+):
+    from eom_identifiers import canonical_json_bytes
+    from eom_workflow_runner.reference_query_source_read import build_reference_query_native_input
+
+    monkeypatch.setattr(
+        source.owner.catalog,
+        "prepare_and_read_similarity_context_in_session",
+        lambda *_a: pytest.fail("native QUERY must not materialize the ranking population"),
+    )
+    with source.publisher.sessions.begin() as session:
+        full = source.owner.resolve_sources(session, source.request)
+    prepared = full.prepared
+    anchor_id = full.request.context_request.anchor.source.item_revision_id
+    anchor = replace(
+        full,
+        prepared=replace(
+            prepared,
+            sources=tuple(
+                value for value in prepared.sources if value.source.item_revision_id == anchor_id
+            ),
+            graph_scores=(),
+            graph_evidence=None,
+            truncated=False,
+        ),
+    )
+    assert len(anchor.prepared.sources) == 1 < len(full.prepared.sources)
+    identifiers = {"job_id": "job_" + "e" * 32, "query_request_id": "embeddingquery_" + "e" * 32}
+    original = build_reference_query_native_input(full, **identifiers)
+    narrowed = build_reference_query_native_input(anchor, **identifiers)
+    assert canonical_json_bytes(narrowed.model_dump(mode="json")) == canonical_json_bytes(
+        original.model_dump(mode="json")
+    )
+    assert narrowed.request_sha256 == original.request_sha256
 
 
 def mutation_rows(

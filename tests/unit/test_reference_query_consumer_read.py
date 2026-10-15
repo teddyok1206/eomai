@@ -140,6 +140,31 @@ def test_root_local_completed_read_never_opens_an_inner_root(completed, monkeypa
     assert len(completed.value.runs) == 1
 
 
+def test_native_anchor_provenance_accepts_full_consumer_population_without_reencoding(completed):
+    value = completed.value
+    full_prepared = value.sources.prepared
+    anchor_id = value.request.context_request.anchor.source.item_revision_id
+    value.sources = replace(
+        value.sources,
+        prepared=replace(
+            full_prepared,
+            sources=tuple(
+                item for item in full_prepared.sources if item.source.item_revision_id == anchor_id
+            ),
+            graph_scores=(),
+            graph_evidence=None,
+            truncated=False,
+        ),
+    )
+    assert len(value.sources.prepared.sources) == 1 < len(full_prepared.sources)
+    before = counts(value)
+    result = completed.reader.resolve_reference_query(
+        completed.caller, value.request.context_request, full_prepared
+    )
+    assert isinstance(result, VerifiedReferenceQueryRead)
+    assert counts(value) == before and len(value.runs) == 1
+
+
 @pytest.mark.parametrize("nested", (False, True))
 def test_root_local_completed_read_requires_an_active_non_nested_root(completed, nested):
     with completed.reader.sessions() as session:

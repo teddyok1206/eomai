@@ -30,7 +30,7 @@ def read_owner(source, monkeypatch):
         settings=source.owner.settings,
     )
     # Scope/index behavior remains explicitly synthetic; control file bytes are real.
-    for name in ("authorize_scope", "prepare_and_read_similarity_context_in_session"):
+    for name in ("authorize_scope", "prepare_reference_query_anchor_in_session"):
         monkeypatch.setattr(owner.catalog, name, getattr(source.owner.catalog, name))
     return owner, state, observations
 
@@ -81,14 +81,14 @@ def test_denied_current_read_authority_stays_denied_without_an_execution_fallbac
 ):
     owner, state, observations = read_owner(source, monkeypatch)
     if late:
-        original = owner.catalog.prepare_and_read_similarity_context_in_session
+        original = owner.catalog.prepare_reference_query_anchor_in_session
 
         def revoke(*args):
             result = original(*args)
             state.denied = True
             return result
 
-        monkeypatch.setattr(owner.catalog, "prepare_and_read_similarity_context_in_session", revoke)
+        monkeypatch.setattr(owner.catalog, "prepare_reference_query_anchor_in_session", revoke)
     else:
         state.denied = True
         monkeypatch.setattr(

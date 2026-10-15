@@ -325,9 +325,7 @@ def resolve_reference_query_sources(
         raise ValueError("REFERENCE_QUERY_BUNDLE_INVALID")
     bundle = parse_embedding_runtime_bundle(raw_bundle)
     validate_reference_query_request_references(request, policy, bundle)
-    prepared, _reads = owner.catalog.prepare_and_read_similarity_context_in_session(
-        session, caller, context
-    )
+    prepared = owner.catalog.prepare_reference_query_anchor_in_session(session, caller, context)
     result = ResolvedReferenceQuerySources(request, policy, bundle, prepared)
     owner.identity.fence_current_operator(session, caller.operator_id)
     return result
