@@ -138,3 +138,62 @@ Selected wheel SHA-256 (raw, no `sha256:` prefix):
 Local package directory:
 `/tmp/eom-api-build/a0082e2f4571b3169769ddd49db20bf064f7098d.H0sy7w/dist`.
 No auth/capture, database mutation or numerical execution occurs in this probe.
+
+## HTTP preparation boundary
+
+The next adapter reuses the released closed preparation request/reply schema,
+without a new selection, queue, artifact or DB model. A protected
+`POST /api/v1/knowledge/reference-queries/preparation` accepts only the existing
+source/Graph/policy pins, request hash and original key. Its Idempotency-Key
+header must equal the body key; the native application already namespaces that
+key by the actual operator. A changed correlation ID cannot authorize new work.
+
+The API authenticates and captures the actual current Identity pair for this
+operation, requires WORKFLOW_START and existing fresh-auth policy, and passes it
+to the fixed native client. It does not ask for another password, mint an Actor,
+keep captures, read Catalog files or execute models. A default-off API setting
+controls this adapter until the compatible protected service is ready.
+
+Preparation is a state-changing, exact-key re-observation: PENDING returns202,
+other canonical states return200, all no-store. Do not use the API's cached
+command response: caching the first PENDING would conceal later READY. Every
+explicit poll reauthenticates and reauthorizes the same original selection via
+the owner; timeout does not trigger a transport retry/new key. The API creates
+neither a Workflow nor an accepted item itself. Completed selection is output
+only, not caller authority to skip canonical result or item-scope validation.
+
+Wire limit8KiB includes HTTP whitespace. The presentation model translates
+jsonschema failures to sanitized HTTP422 without weakening the canonical schema.
+No new index or query scan is needed; lookups and concurrency remain owned by
+the existing native preparation application. Blocking socket exchange is run
+outside the HTTP event loop. Browser BFF forwarding must separately use its
+existing session/CSRF boundary before this route becomes a user-facing action.
+
+### HTTP source verification — 2026-10-15 20:31 UTC
+
+The default-off composition, presentation wrapper and protected HTTP operation
+are implemented. The current authentication dependency captures the actual
+Identity pair for this operation, not merely an Actor. OpenAPI documents both
+PENDING202 and canonical200 responses; all successful observations are no-store.
+
+**339 PASS** in35.28s cover HTTP, actual Unix/HMAC exchange, same-key explicit
+polls reaching READY without cached PENDING, missing permission/login/freshness,
+forced password change, key mismatch, closed/malformed/oversized input, redacted
+unknown transport outcomes, shared authentication and release/security inventory.
+Identity/kernel/source observations in the socket test remain synthetic. Real
+protected API/service activation and browser forwarding are not proven by it.
+Strict mypy7 production modules, Ruff/format11 files, shell syntax and diff PASS.
+
+Earlier failures are preserved in local logs. Three deployment tests still
+expected0053 rather than the already implemented0055 callback family; expectations
+were aligned without changing any migration/grant/runtime callback. One OpenAPI
+test raced a response-metadata export during development and was rerun against the
+frozen final source. The added one-exchange socket harness initially timed out
+its250ms idle accept during cold HTTP startup; it now permits a bounded10s accept,
+like the actual server's idle retry loop. Actual capture10s and transport30s
+limits, provider checks and production socket behavior were not relaxed.
+
+The existing105-test disposable PostgreSQL evidence covers the unchanged native
+preparation/startup/driver persistence code; this HTTP change adds no DB state or
+schema. The whole goal is not complete: protected service activation, automatic
+missing-binding reconciliation, normal consumers and CPU/CUDA comparison remain.

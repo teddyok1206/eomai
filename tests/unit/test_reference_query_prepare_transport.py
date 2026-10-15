@@ -58,7 +58,7 @@ def api_context(monkeypatch):
     return source, context
 
 
-def exchange(observation, monkeypatch, *, fault=""):
+def exchange(observation, monkeypatch, *, fault="", through_http=False):
     source, context = api_context(monkeypatch)
     request = ReferenceQueryPrepareRequest.model_validate(request_body())
     application_calls = []
@@ -117,6 +117,10 @@ def exchange(observation, monkeypatch, *, fault=""):
             parent / "owner.sock", os.geteuid(), os.getegid(), parent_mode=0o2750
         )
         listener = carrier.bind_chat_listener(endpoint, backlog=1)
+        # A real server retries its 250ms idle accept. This one-exchange harness
+        # must also allow cold HTTP application startup before the first connect;
+        # capture and transport deadlines below remain unchanged.
+        listener.settimeout(10)
         try:
             installed = ProtectedInstalledIdentityProviderAdmission(observation[0])
 
@@ -144,7 +148,56 @@ def exchange(observation, monkeypatch, *, fault=""):
             with ThreadPoolExecutor(max_workers=1) as pool:
                 future = pool.submit(serve)
                 try:
-                    reply = NativeReferenceQueryPrepareClient(endpoint).prepare(context, request)
+                    native = NativeReferenceQueryPrepareClient(endpoint)
+                    if through_http:
+                        from eom_api.app import create_app
+                        from eom_api.services.reference_query_preparation import (
+                            ReferenceQueryPreparationApplicationService,
+                        )
+                        from fastapi.testclient import TestClient
+
+                        from tests.api.helpers import disconnected_services
+                        from tests.api.test_hwpx_endpoints import FakeAudit
+
+                        services = disconnected_services()
+                        services.audit = FakeAudit()
+                        services.auth = Mock()
+                        services.auth.authenticate_and_capture_access.return_value = (
+                            context.authenticated_access
+                        )
+                        services.auth.authenticate_access.side_effect = AssertionError(
+                            "HTTP must use current capture"
+                        )
+                        services.reference_query_preparation = (
+                            ReferenceQueryPreparationApplicationService(native)
+                        )
+                        try:
+                            with TestClient(
+                                create_app(services), base_url="http://localhost"
+                            ) as http:
+                                response = http.post(
+                                    "/api/v1/knowledge/reference-queries/preparation",
+                                    json=request.model_dump(mode="json"),
+                                    headers={
+                                        "Authorization": "Bearer synthetic-HTTP-only-token",
+                                        "Idempotency-Key": request.idempotency_key,
+                                    },
+                                )
+                            future.result(timeout=10)
+                            assert response.status_code == 202, {
+                                "preparation_sends": len(preparation_sends),
+                                "final_statuses": [value["status"] for value in final_sends],
+                                "application_calls": len(application_calls),
+                            }
+                            assert response.headers["Cache-Control"] == "no-store"
+                            reply = ReferenceQueryPrepareReply.model_validate(
+                                response.json()["data"]
+                            )
+                            services.auth.authenticate_and_capture_access.assert_called_once()
+                        finally:
+                            services.engine.dispose()
+                    else:
+                        reply = native.prepare(context, request)
                 except ReferenceQueryPrepareClientError:
                     reply = None
                 future.result(timeout=10)
@@ -162,6 +215,11 @@ def test_real_handshake_imports_same_current_capture_before_application(observat
     assert reply is not None and reply.status == "PENDING" and reply.selection is None
     assert calls == [source.operator.operator_id]
     assert source.raw_token not in repr(reply) and source.token.verifier_hash not in repr(reply)
+
+
+def test_http_to_real_unix_handshake_preserves_actual_current_capture(observation, monkeypatch):
+    source, reply, calls = exchange(observation, monkeypatch, through_http=True)
+    assert reply.status == "PENDING" and calls == [source.operator.operator_id]
 
 
 @pytest.mark.parametrize("fault", ("pid", "uid"))

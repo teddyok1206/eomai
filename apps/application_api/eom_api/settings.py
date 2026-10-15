@@ -95,6 +95,7 @@ class ApiSettings(StrictSettings):
     pagination: PaginationSettings = PaginationSettings()
     openapi: OpenApiSettings = OpenApiSettings()
     pdf_document_review: PdfDocumentReviewSettings = PdfDocumentReviewSettings()
+    reference_query_preparation_enabled: bool = False
 
 
 class ApiSecrets(StrictSettings):

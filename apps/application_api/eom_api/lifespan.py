@@ -76,6 +76,8 @@ from eom_api.services.pdf_document_review_service import PdfDocumentReviewApplic
 from eom_api.services.pdf_upload_stager import PdfUploadStager
 from eom_api.services.preset_model_selection_adapter import PresetModelSelectionAdapter
 from eom_api.services.query_adapter import QueryAdapter
+from eom_api.services.reference_query_preparation import ReferenceQueryPreparationApplicationService
+from eom_api.services.reference_query_prepare_client import NativeReferenceQueryPrepareClient
 from eom_api.services.similarity_context_client import CatalogSimilarityContextClient
 from eom_api.services.similarity_context_read import SimilarityContextReadApplicationService
 from eom_api.settings import ApiSecrets, ApiSettings, load_secrets, load_settings
@@ -118,6 +120,11 @@ class AppServices:
         self.item_similarity_publications = CatalogItemSimilarityPublicationClient()
         self.item_similarity_start_preparation = ItemSimilarityStartPreparationService(
             self.item_similarity_publications, similarity_context_client
+        )
+        self.reference_query_preparation = ReferenceQueryPreparationApplicationService(
+            NativeReferenceQueryPrepareClient()
+            if settings.reference_query_preparation_enabled
+            else None
         )
         self.inference_transfer_snapshots = InferenceTransferSnapshotApplicationService(
             CatalogInferenceTransferSnapshotClient()

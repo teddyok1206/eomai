@@ -101,6 +101,24 @@ def test_model_selection_runtime_is_required_in_release_wheel_inventory() -> Non
     } <= assignments["control_plane_runtime"]
 
 
+def test_query_preparation_http_runtime_is_required_in_release_wheels() -> None:
+    assignments = {
+        node.targets[0].id: ast.literal_eval(node.value)
+        for node in ast.walk(ast.parse(release_inspector_source()))
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id in {"required", "required_contract_runtime"}
+        and isinstance(node.value, ast.Set)
+    }
+    assert {
+        "eom_api/routers/reference_queries.py",
+        "eom_api/services/reference_query_preparation.py",
+        "eom_api/services/reference_query_prepare_client.py",
+    } <= assignments["required"]
+    assert "eom_api_contracts/reference_queries.py" in assignments["required_contract_runtime"]
+
+
 def test_transfer_source_candidate_is_complete_in_release_runtime_inventory() -> None:
     assignments = {
         node.targets[0].id: ast.literal_eval(node.value)

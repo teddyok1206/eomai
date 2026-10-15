@@ -44,7 +44,7 @@ def get_authentication(
     services = get_services(request)
     context = get_request_context(request)
     operation_id = getattr(request.scope.get("route"), "operation_id", "")
-    if operation_id == "workflow_start":
+    if operation_id in {"workflow_start", "reference_query_prepare"}:
         observed = services.auth.authenticate_and_capture_access(credentials.credentials)
         authentication = observed.authentication
         context.authenticated_access = observed
