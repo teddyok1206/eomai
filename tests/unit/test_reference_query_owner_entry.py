@@ -42,6 +42,25 @@ def test_logs_never_include_exception_text_or_traceback(capsys):
     assert "RuntimeError" in output and "private data" not in output and "Traceback" not in output
 
 
+def test_startup_diagnostic_has_only_errno_and_bounded_owned_module_location(capsys):
+    namespace = {"__name__": "eom_workflow_runner.synthetic_startup"}
+    try:
+        exec(
+            compile(
+                "raise PermissionError(13, 'synthetic private details', '/synthetic/private/file')",
+                "/synthetic/private/source.py",
+                "exec",
+            ),
+            namespace,
+        )
+    except PermissionError as error:
+        module._emit("REFERENCE_QUERY_OWNER_STOPPED", error=error)
+    output = capsys.readouterr().out
+    assert '"errno": "13"' in output
+    assert "eom_workflow_runner.synthetic_startup:1" in output
+    assert "private" not in output and "Traceback" not in output
+
+
 def test_uid_drop_and_fork_signal_order_precede_request_handling():
     child = ast.parse(inspect.getsource(module._serve_child))
     calls = sorted(

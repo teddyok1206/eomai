@@ -138,6 +138,20 @@ def _emit(event: str, *, error: BaseException | None = None) -> None:
     metadata: dict[str, str] = {"event": event, "at": datetime.now(UTC).isoformat()}
     if error is not None:
         metadata["error_type"] = type(error).__name__
+        # Installed startup failures need a bounded source location, not opaque
+        # retries or a traceback that could retain credentials/path arguments.
+        if isinstance(error, OSError) and type(error.errno) is int:
+            metadata["errno"] = str(error.errno)
+        frame = error.__traceback__
+        for _ in range(32):
+            if frame is None:
+                break
+            module = frame.tb_frame.f_globals.get("__name__")
+            if module == "__main__":
+                module = "eom_workflow_runner.reference_query_owner_entry"
+            if type(module) is str and re.fullmatch(r"eom_[a-z0-9_.]{1,120}", module):
+                metadata["error_site"] = f"{module}:{frame.tb_lineno}"
+            frame = frame.tb_next
         code = getattr(error, "code", None)
         if type(code) is str and re.fullmatch(r"[A-Z][A-Z0-9_]{1,95}", code):
             metadata["code"] = code

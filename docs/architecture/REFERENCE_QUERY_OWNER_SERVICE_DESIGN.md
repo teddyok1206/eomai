@@ -228,3 +228,13 @@ unit, run actual child/provider/control readiness and then enable HTTP. Do not
 mix the old live9-member observation with the new12-member owner/client family.
 Existing sudo authentication was reused in EOM:1; no new Studio login was asked
 for, no credential was stored and no old QUERY was restarted.
+
+### Actual startup diagnostics
+
+The first installed service attempt failed before child UID drop with a raw
+PermissionError, without any request/model execution. Add only bounded errno and
+owned-module/line fields to the existing sanitized event. Exception messages,
+filesystem filenames, locals and full tracebacks remain excluded. This supports
+diagnosis instead of granting more privileges or blind restart. Actual release
+and incomplete startup evidence are recorded in
+[the operational checkpoint](../operations/REFERENCE_QUERY_SERVICE_LIVE_RELEASE_2026-10-15.md).
