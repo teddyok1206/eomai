@@ -13,6 +13,7 @@ from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
+from eom_catalog_service.embedding_registry_catalog_adapter import CatalogEmbeddingRegistryVerifier
 from eom_workflow.admission import workflow_definition_is_admitted
 from eom_workflow.compiler import compile_definition_data
 from eom_workflow.reference_query_execution import parse_reference_query_workflow_request
@@ -101,6 +102,8 @@ def atomic(guarded_engine):
     executor = Mock(spec=ReferenceQueryNativeExecutor)
 
     def current(session, request):
+        # Retain the actual Catalog root-only guard; do not mock away transaction depth.
+        CatalogEmbeddingRegistryVerifier._require_similarity_root(session)
         assert session.get_transaction() is not None and request == scope.request
         return scope
 
@@ -157,6 +160,43 @@ def test_postgres_late_owner_denial_rolls_back_workflow_and_command(atomic):
     assert_absent(atomic)
 
 
+@pytest.mark.parametrize("when", (2, 3, 4))
+def test_postgres_caught_owner_denial_still_discards_entire_submission_root(atomic, when):
+    count = 0
+    roots = []
+
+    def current(session, request):
+        nonlocal count
+        CatalogEmbeddingRegistryVerifier._require_similarity_root(session)
+        assert request == atomic.scope.request
+        roots.append(session.get_transaction())
+        count += 1
+        if count == when:
+            raise ValueError("SYNTHETIC_CAUGHT_OWNER_DENIAL")
+        return atomic.scope
+
+    atomic.owner.resolve_submission.side_effect = current
+    with Session(atomic.engine) as session, session.begin():
+        with pytest.raises(ValueError, match="CAUGHT_OWNER_DENIAL"):
+            atomic.submit(session)
+        assert not session.in_transaction()
+    assert count == when and all(root is roots[0] for root in roots)
+    assert_absent(atomic)
+
+
+def test_postgres_caught_queue_failure_discards_released_workflow_savepoint(atomic, monkeypatch):
+    monkeypatch.setattr(
+        native_start_command,
+        "enqueue_command",
+        Mock(side_effect=ValueError("SYNTHETIC_CAUGHT_QUEUE_FAILURE")),
+    )
+    with Session(atomic.engine) as session, session.begin():
+        with pytest.raises(ValueError, match="CAUGHT_QUEUE_FAILURE"):
+            atomic.submit(session)
+        assert not session.in_transaction()
+    assert_absent(atomic)
+
+
 def test_postgres_queue_failure_rolls_back_the_new_workflow(atomic, monkeypatch):
     monkeypatch.setattr(
         native_start_command,
@@ -176,6 +216,7 @@ def test_postgres_concurrent_exact_query_start_returns_original_ids_once(atomic)
     barrier, thread = Barrier(2), local()
 
     def current(_session, _request):
+        CatalogEmbeddingRegistryVerifier._require_similarity_root(_session)
         if not getattr(thread, "started", False):
             thread.started = True
             barrier.wait(timeout=10)

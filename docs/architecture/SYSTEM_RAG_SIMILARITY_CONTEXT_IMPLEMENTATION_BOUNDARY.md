@@ -3186,3 +3186,86 @@ Retire the program after its QUERY/replay/current-read gate closes, preserving
 failure/output lineage; normal API preparation/installed consumer activation still
 requires its supported implementation and separate verification. Coverage2/520 and
 the CPU default are unchanged; GPU comparison and the full goal remain incomplete.
+
+## 35. Pinned QUERY namespace and root-only submission correction
+
+Design note, 2026-10-15 UTC, before changing core submission behavior:
+
+1. Responsibility remains the existing QUERY submission use case and repository;
+   Catalog owns current source/index authorization. This is not a new protocol,
+   authentication broker, queue, permission or native execution mode.
+2. Canonical inputs remain the exact request, immutable definition/policy/bundle,
+   registered index revision and committed Artifact members. Diagnostic metadata
+   is not a user grant or an alternative retrieval result.
+3. The finite canary used the example partition `shared-approved-science`, whereas
+   the pinned registered revision and both existing encodings use the exact corpus
+   ID as their partition. The actual owner correctly rejected this mismatch at
+   submission, after successful real login. Do not change the index, bypass the
+   comparison or silently select latest; correct the canary's selected namespace.
+4. Before another authenticated execution, inspect the exact registered metadata
+   and immutable index/shard/result/binary bytes as the actual owner UID. This
+   bounded operational read has no model, Workflow submission, source grant or DB
+   mutation. It must not be represented as current-user retrieval authorization.
+5. A separate source defect is reproduced: atomic submission nests the repository
+   call and late owner reads inside SQL savepoints, but the actual Catalog reader
+   explicitly requires a root transaction. Existing mock owners accepted those
+   depths and concealed the integration conflict. Keep Catalog/Identity guards.
+6. Perform each fresh pre/late owner read in the same caller-owned root, outside
+   savepoints. Savepoints protect only indexed row persistence/unique races and
+   command persistence. If a late read or enqueue fails after a savepoint has
+   released, roll back the entire caller root before propagating the failure.
+   Callers must not combine unrelated writes into this submission transaction.
+7. Logical Workflow/command IDs, request hashes, idempotency keys, source revisions
+   and output Artifact identity are unchanged. Same-key replay returns original
+   IDs; missing/changed history is still refused, not repaired or regenerated.
+8. Access remains constant indexed identity lookups, bounded source/member reads
+   and append-only events. No DB schema/index, cache, new persistent object,
+   dependency or asymptotic complexity change is needed.
+9. Dependency direction is unchanged. The application owns rollback; repository
+   persistence does not gain source authority. Numerical inference remains outside
+   SQL roots and no new native attempt is caused by this correction itself.
+10. Tests must enforce the actual root-only Catalog guard, same-root observations,
+    exact replay, concurrent same-key creation, queue failure, pre/late revocation
+    and no surviving new Workflow/command if a caller catches the exception.
+11. Allowing Catalog reads in arbitrary savepoints is simpler but weakens the
+    existing owner contract. Retrying with a fresh key or bypassing the owner would
+    hide the defect and can duplicate work; neither is acceptable.
+
+### Diagnosis and source verification
+
+The second protected canary captured actual operator access at14:26:05, prepared
+its fixed request at14:26:18, and terminated at14:26:54 with
+`INDEX_POINTER_INVALID`. Its process is gone. A read-only exact-request lookup
+confirmed zero matching Workflow submissions. Policy publication and immutable
+definition import had already occurred; do not describe this whole attempt as
+zero database writes. No QUERY model forward was reached.
+
+At14:33:01 the actual UID990 operational diagnostic verified the exact registered
+metadata, index raw/semantic SHA, binding-set hash, both original result/shard
+members and both float32 binary members through the installed pinned Artifact
+reader and existing codecs. The recorded partition is
+`corpus_3cf035f062019645f6fbadc11d6b0737`, not the canary's example partition.
+This is immutable-byte/metadata integrity, not fresh operator/source authorization.
+The first diagnostic invocation omitted reader prefetch and failed closed before
+member IO; the corrected invocation and both logs are retained separately.
+
+The root-only submission regression failed before the core correction with the
+actual Catalog guard's `AUTHORITY_UNAVAILABLE`. After correcting persistence/read
+ordering, source regression222 /65.13s and guarded PostgreSQL78 /51.12s passed.
+The PostgreSQL suite includes four new caught-error rollback cases; its final
+read-only inspection confirms disposable identity/head0055 and zero other
+connections. These tests do not execute models, production queries or NAS writes.
+Ruff/format and strict mypy on both changed production modules pass. The first
+Additional legacy submission/dependency regression passed41 /16.24s (separate
+files, not another run of the222-test set). No dependency direction changed.
+The first
+source regression had six synthetic-fixture failures because its rollback cleared
+previously committed mock history; per-call root snapshots corrected that fixture,
+not production history or checks. Earlier logs are preserved, not added to totals.
+
+Evidence prefix: `/tmp/eom-identity-provider-install.nAaycoDM/query-root-submission-`;
+metadata/member diagnostic `genuine-reference-query-pointer-diagnostic-prefetched.log`.
+Actual QUERY/replay/context and the broader goal remain incomplete. Release should
+prefer the smallest compatible correction on the installed owner base; unrelated
+API/provider, consumer flags, models, policies, migrations and services need not
+be upgraded merely to run this bounded QUERY canary.
