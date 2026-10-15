@@ -199,3 +199,54 @@ routing now includes this suite. The full marked native-stage/runner/persistence
 regression passed119/92.89s (previous105 plus14 installation cases, not an extra
 independent133). Final read-only disposable identity/head/other-connection
 inspection is required again before deployment. No production pytest was used.
+
+### Installed prerequisite — 21:30 UTC
+
+Source `5b0804f0690c8dfb1abb320a5ff751e2ed70bbe1` passed the standard three-wheel
+build/RECORD/installed simulation, isolated28-member owner pair and three explicit
+Identity installer/SQL/public-export wheel-to-source comparisons. Platform raw SHA
+`48d0afb614e1509cc5fc4285045083c00720af433a69c9a8ee063d2bf0d5bfe4`,
+contracts `65e8f3ed3ad810c3ec9677cd22df9e143299cb0499b247022ab16b464f617d5a`.
+Only a separate immutable owner prefix was installed; API2857bf77, live owner8c411041
+and CPU runtime were not replaced or restarted.
+
+The protected finite Identity owner operation created the fixed routine at
+21:30:37.814349 UTC, actual eom_app/OID16385. Independent postcommit inspection
+PASS; body SHA `df9f676d1cb4c587598ee81d22c68a7a21b81deb0e4da28aa01e26c446fa9801`.
+Only fixed routine CREATE/PUBLIC EXECUTE revoke/Catalog EXECUTE grant occurred;
+no IAM table/schema/cluster-role/policy/data modification, model or operator capture.
+The new routine is not automatically dropped as a rollback: feature activation can
+be disabled without deleting this reviewed prerequisite or any accepted history.
+Root-private receipt is retained with the existing deployment stage. Actual
+Catalog-role post-install finite preflight then PASS/3.831s, including existing
+reader/workflow/publication composition and private publication staging readiness.
+Configuration raw SHA:
+`ee9e749d902981c5c175d9192b096f41b6c47bf3af47d046960216f026a37223`.
+The final disposable inspection confirmed the exact identity/head0055 and zero
+other connections. These checks still do not claim genuine source read acceptance.
+
+### Catalog composition enabled — 21:32 UTC
+
+The root-owned0644 drop-in `40-eom-similarity.conf` has raw SHA
+`3883b37b4e5e0362c0c0da4694827164fd3db3ef6dd0f285a99b33da133538ed`.
+It selects the verified reader config and separately enables existing completed
+reads, context publication and runner-only materialization. Catalog source stays
+2857bf77; ordinary runner consumption remains disabled. No Pack/plan was activated.
+Only Catalog was gracefully restarted: old PID1045340 exited normally21:32:03,
+new PID1078492 active with NRestarts0. API PID1045380 and native supervisor1064946
+are unchanged. All original eight services, Scientific Studio and native owner
+are active; the existing official API health-only smoke PASS.
+
+Actual manager socket remains catalog-manager:eom-api0660, directory0750.
+The separately enabled existing server added only the named runner990 ACL
+(directory r-x, socket rw-), preserving group/mask/other permissions. This grants
+no group membership, DB secret or source authority. Schema/readiness/ACL activation
+is not a genuine authenticated preparation or current-source read PASS. One bounded
+ordinary HTTP preparation/replay/read canary is prepared, but no Studio credential
+has been requested or captured at this checkpoint; no new QUERY/model has run.
+
+The actual named runner UID990 socket probe confirmed READ_SIMILARITY_CONTEXT and
+PUBLISH_ITEM_SIMILARITY_CONTEXT connections close before dispatch. Its separately
+allowed READ_WORKFLOW_SIMILARITY_MATERIALS reached only schema rejection for a
+deliberately incomplete frame, no source/DB/model read. These three OS-peer probes
+do not prove a valid role request's current source/plan authorization.
