@@ -38,3 +38,27 @@ Existing recovery intentionally refuses an expired command with a RUNNING step
 but no original native launch Job. This backport does not change that guard,
 repair operating rows, submit another key or claim live model acceptance. It is
 an inactive compatible candidate only, not automatic recovery authorization.
+
+## Atomic start/allocation successor
+
+The existing QUERY executor port now explicitly allocates its original launch and
+ALLOCATION checkpoint in the same caller-fenced root as first RUNNING step state.
+Concrete native execution remains outside SQL. The actual source/member/lease,
+original unique Job key, same-key replay, owner Engine and active/nonnested root
+checks remain. Early/late failure rolls both step start and allocation back; a
+post-commit crash retains the original allocated history. This adds no JSON wire
+schema, migration, permission, default flag or physical launcher behavior.
+
+These three production modules and the new model-free PG tests are byte-identical
+to main's implementation (only source-read composition remains intentionally in
+the older9-member compatible owner family). Backport focused regression186 /154.73s
+and strict mypy3/lint/format pass. Main's guarded PostgreSQL0055 suite82 /58.07s
+includes four new actual step/Job commit/rollback cases; this is referenced main
+evidence, not a claim that PostgreSQL ran under this backport source path.
+
+The historical unallocated first-anchor request is not repaired, retried or
+reclassified. The next bounded live validation selects the other already indexed
+anchor under a distinct declared logical query, with the same immutable2-source
+index/Graph/policy. It is not a retry/substitution for the old request. Keep both
+outcomes and full-goal remaining requirements explicit. Install only this owner
+successor, not shared API/Web/numerical runtime; run preflight before authentication.

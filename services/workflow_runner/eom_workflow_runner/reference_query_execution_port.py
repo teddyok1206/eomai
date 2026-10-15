@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Literal, Protocol
 from eom_catalog_contracts.models import Sha256
 from eom_workflow.models import JobId
 from eom_workflow.reference_query_execution import (
+    ReferenceQueryLaunchAssociation,
     ReferenceQueryStepOutput,
     ReferenceQueryWorkflowRequest,
 )
@@ -47,6 +48,22 @@ class ReferenceQueryNativeExecutor(Protocol):
     """
 
     def evaluate(self, request: ReferenceQueryWorkflowRequest) -> RuntimeReadinessReport: ...
+
+    def allocate_execution(
+        self,
+        *,
+        session: Session,
+        workflow: WorkflowInstanceRecord,
+        step: WorkflowStepRunRecord,
+        request: ReferenceQueryWorkflowRequest,
+        command_lease: CommandLeaseIdentity,
+    ) -> ReferenceQueryLaunchAssociation:
+        """Persist original launch/allocation in the step-start fenced root.
+
+        Current source/member IO remains checked. Never commit this root or start
+        physical work. Step and allocation both roll back if the owner/root fails.
+        """
+        ...
 
     def execute(
         self,
