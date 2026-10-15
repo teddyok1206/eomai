@@ -6,6 +6,31 @@ paths remain frozen. No migration number is reserved and no
 `CURRENT_MIGRATION` change is proposed here. Read with the native Runner admission proposal and
 incremental embedding registry design. Background service admission remains explicitly unavailable.
 
+## Owner-install operation follow-up — 2026-10-15 UTC
+
+The actual Catalog-role preflight found the fixed routine absent (zero overloads),
+while file/schema/hash and actual role checks passed. Runtime composition remains
+disabled; this is not a reason to weaken the read adapter or add IAM table writes.
+Add `install_operator_authorization_fence(session, owner)` within Identity, using
+the frozen SQL/signature/body and existing exact installation inspector below.
+No cross-service message or persistent schema changes: a small frozen internal
+result reports CREATED/REPLAYED, the pinned owner and body hash, not a grant.
+
+Responsibility/canonical source/pins/indexed access/dependency/concurrency remain
+the eleven points below. Installation additionally requires a clean explicit root,
+actual SESSION_USER=CURRENT_USER=pinned schema/operator-table owner and OID, no
+SET ROLE, read-committed writable PostgreSQL/psycopg and bounded waits no weaker
+than caller limits. A fixed nonblocking transaction advisory lock serializes this
+one routine name; one savepoint contains CREATE, default PUBLIC EXECUTE revoke,
+fixed Catalog EXECUTE grant and exact final inspection. Caller owns root commit.
+Existing exact installation replays with no DDL; overload/owner/body/ACL drift
+aborts without OR REPLACE or repairs. Installation failure rolls back new DDL/ACL.
+No automatic schema-USAGE repair, cluster role change, IAM grants, arbitrary SQL
+input, worker access, source reads, model execution or new dependency is permitted.
+The actual installed/runtime proof is separate from source and disposable tests.
+Reusing raw constants in an ad hoc release script would omit owner/replay/atomic
+validation; extending Identity's existing supported control boundary is sufficient.
+
 ## Eleven-point boundary
 
 1. **Responsibility:** implement the existing public

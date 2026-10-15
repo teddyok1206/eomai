@@ -138,3 +138,64 @@ or a consumer acceptance. No new QUERY/model run or authentication capture occur
 in this startup verification. Actual API preparation/replay, Catalog completed read,
 ordinary workflow consumers, automatic index coverage and GPU admission remain open.
 The failed predecessor starts and their evidence are preserved, not reclassified.
+
+## Next bounded activation: Catalog reader selection
+
+This is configuration of the existing Catalog composition, not a new search,
+registry, queue, wire schema or database migration. Canonical source remains the
+registered completed QUERY and exact source/Graph/policy/index revisions. The
+nonsecret reader configuration copies only the installed owner's reviewed
+corpus/namespace/recipe/policy/bundle/database-owner selection; document space is
+resolved through the existing pinned control reader, not guessed from dimensions.
+Configuration raw SHA is a deployment selection, not operator/source authority.
+
+The existing Catalog runtime role independently inspects Identity's installed
+authorization fence before composing completed reads. No role/ACL/IAM changes are
+allowed to make this inspection pass. Primary operations remain exact indexed
+selection and bounded source resolution; no new data structure or cache is added.
+Publication uses its existing Artifact owner and dedicated staging folders;
+workflow reads retain their separate existing flag and runner-only peer boundary.
+
+Sequence: canonical/schema/config check; finite installed preflight under the
+actual Catalog identity; existing supported quiescence check; select a small
+systemd drop-in and restart Catalog only; verify socket and original services.
+Only then use the genuine authenticated API for preparation/replay/completed read.
+An independent config preflight is not a source authorization or live read PASS.
+Rollback removes only the new drop-in, restarts the original Catalog composition,
+and preserves all QUERY, Artifact and failed execution history. Unsupported
+selectors or timeouts keep their original key and fail explicitly; no automatic
+new QUERY, latest substitution or direct database result repair is permitted.
+
+### Preflight discovery — activation held, existing runtime unchanged
+
+Actual restricted Catalog preflight passed file/schema/raw hash and actual database
+role checks but failed the independent Identity routine admission. Read-only
+inventory then found **zero** `public.eom_fence_operator_authorization_v1` routines.
+This is a missing installation prerequisite, not evidence of corrupt source data
+or failed native execution. Reader flags remain disabled; no restart or login.
+
+The next source step is an Identity-owned install operation for the existing fixed
+SQL contract: clean actual pinned owner root, bounded installation lock, atomic
+CREATE/PUBLIC revoke/fixed Catalog EXECUTE grant, exact post-inspection and no-write
+replay. Existing drift/overload fails without repair. No table/schema grants,
+credentials, role membership, permission policy, new migration/table/index or
+runtime self-installation. The original fence proposal already assigns this to
+the release owner; read-only runtime admission must not install it as a fallback.
+Source and disposable DDL/replay/drift/rollback/concurrency tests precede an
+independent protected owner installation. This discovery changes the immediate
+dependency from configuration-only activation; it does not reopen native readiness.
+
+Identity owner-install source verification:119 focused tests/4.85s,44 dependency/
+related owner regressions/12.88s,94 test-harness/profile tests/1.16s, strict mypy1,
+Ruff/format4 production/test files PASS. The marked disposable standalone suite
+passed14/0.48s, including actual DDL/replay/drift/concurrent-lock and late-failure
+rollback. The first run exposed lazy Session savepoint enlistment: issuing DDL on
+the pre-savepoint Connection did not activate the savepoint. The implementation
+now enlists via `session.connection()` inside the nested boundary before DDL;
+the test proves new function/ACL absence after failed final inspection. That
+failure and an independent unbound unit-fixture teardown error are retained in
+local logs. Neither occurred on the operating database. Existing testdb stage
+routing now includes this suite. The full marked native-stage/runner/persistence
+regression passed119/92.89s (previous105 plus14 installation cases, not an extra
+independent133). Final read-only disposable identity/head/other-connection
+inspection is required again before deployment. No production pytest was used.

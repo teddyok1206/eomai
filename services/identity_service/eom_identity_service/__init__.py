@@ -46,6 +46,10 @@ from eom_identity_service.local_indexing_service_registry import (
     register_local_indexing_service,
 )
 from eom_identity_service.operator_authorization_fence import OperatorAuthorizationFence
+from eom_identity_service.operator_authorization_fence_installation import (
+    OperatorAuthorizationFenceInstallationResult,
+    install_operator_authorization_fence,
+)
 from eom_identity_service.operator_authorization_fence_sql import (
     OPERATOR_AUTHORIZATION_FENCE_BODY,
     OPERATOR_AUTHORIZATION_FENCE_BODY_SHA256,
@@ -118,6 +122,7 @@ __all__ = [
     "LocalIndexingRuntimePin",
     "OperatorAuthorizationFence",
     "OperatorAuthorizationFenceError",
+    "OperatorAuthorizationFenceInstallationResult",
     "OperatorAuthorizationFenceOwnerPin",
     "OwnerSessionTransportError",
     "OwnerSessionTransportObservation",
@@ -132,6 +137,7 @@ __all__ = [
     "identity_provider_code_members",
     "import_owner_session_capture",
     "install_local_indexing_service_fence",
+    "install_operator_authorization_fence",
     "lock_current_local_indexing_service_metadata",
     "observe_owner_session_transport",
     "open_installed_identity_provider_observation",

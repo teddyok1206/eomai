@@ -255,6 +255,7 @@ fi
 if [[ "${action}" == "embedding-stage-tests" ]]; then
   export EOM_RUN_INTEGRATION=1
   export EOM_RUN_API_INTEGRATION=1
+  export EOM_RUN_OPERATOR_FENCE_INSTALLATION_TESTS=1
   export EOM_API_TEST_STATE="${state_directory}"
   # Reuse the existing official stage-owner fixture and its exact disposable guards.
   export EOM_CHAT_KNOWLEDGE_TEST_STATE="${state_directory}"
@@ -265,7 +266,8 @@ if [[ "${action}" == "embedding-stage-tests" ]]; then
     tests/integration/test_reference_query_prepare_application.py \
     tests/integration/test_local_embedding_runner.py \
     tests/integration/test_local_embedding_service_reconciliation.py \
-    tests/integration/test_similarity_item_start_persistence.py
+    tests/integration/test_similarity_item_start_persistence.py \
+    tests/integration/test_operator_fence_installation.py
   printf 'Disposable model-free native embedding stage and runner tests passed.\n'
   exit 0
 fi
