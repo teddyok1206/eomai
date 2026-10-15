@@ -306,7 +306,14 @@ def source() -> QueryFixture:
 
     def execute(**_kwargs: Any) -> Any:
         assert fixture.depth == 0, "a SQL/source root survived inference"
+        assert executor.allocate_execution.called
         return base.output
+
+    def allocate(**kwargs: Any) -> Any:
+        assert fixture.depth == 1, "allocation escaped the step-start root"
+        assert kwargs["session"] is session
+        assert kwargs["step"] is step and step.state == "RUNNING"
+        return base.launch
 
     def validate(**kwargs: Any) -> Any:
         assert fixture.depth == 1
@@ -317,6 +324,7 @@ def source() -> QueryFixture:
     owner.resolve_submission.return_value = scope
     owner.resolve_claim.return_value = scope
     executor.execute.side_effect = execute
+    executor.allocate_execution.side_effect = allocate
     executor.validate_completion.side_effect = validate
     return fixture
 
@@ -338,11 +346,25 @@ def test_fixed_lifecycle_closes_sql_before_inference_and_revalidates_terminal_re
     source.complete()
     assert source.workflow.state == source.workflow.stage == "COMPLETED"
     assert source.executor.execute.call_count == 1
+    source.executor.allocate_execution.assert_called_once()
     assert source.executor.validate_completion.call_count == 3
     assert len([row for row in source.rows if isinstance(row, WorkflowStepRunRecord)]) == 2
     final = source.workflow.runtime_context["final_pointer_manifest"]
     assert set(final) == {"reference_query_receipt"}
     assert "text" not in str(final) and "vectors" not in str(final)
+
+
+@pytest.mark.parametrize("failure", ("allocation", "late_root"))
+def test_allocation_failure_cannot_commit_a_running_step_or_reach_inference(source, failure):
+    if failure == "allocation":
+        source.executor.allocate_execution.side_effect = ValueError("synthetic allocation denied")
+    else:
+        source.deny_at_exit = 1
+    with pytest.raises((ValueError, WorkflowError)):
+        source.advance()
+    assert source.workflow.state == "REQUESTED" and source.step.state == "READY"
+    assert not any(isinstance(row, WorkflowEventRecord) for row in source.rows)
+    source.executor.execute.assert_not_called()
 
 
 @pytest.mark.parametrize("completed", (False, True))

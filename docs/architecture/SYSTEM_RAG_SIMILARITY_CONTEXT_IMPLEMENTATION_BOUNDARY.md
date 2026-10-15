@@ -3593,3 +3593,80 @@ The original expired/uncertain command must not be forced to success, fabricated
 into allocated history or bypassed by an unrelated request. Continuous indexing,
 real QUERY/current context, consumer activation and CPU/CUDA measurements remain
 explicitly open under the original goal.
+
+## 38. Atomic step-start and native allocation (2026-10-15 design)
+
+Current source inspection reproduces a real crash gap: the runner commits a
+RUNNING application step, then the executor opens another root to persist its
+original launch Job and ALLOCATION. A source/auth failure between them leaves a
+RUNNING step without original launch history; correct recovery admission refuses
+it. The already observed old run must stay denied, not be fabricated into history.
+
+1. **Boundary:** extend the existing QUERY executor application port with explicit
+   `allocate_execution`, called in the same fenced root as first step start. It
+   persists launch identity and ALLOCATION only, never staging, model IO or units.
+2. **Canonical source:** original Workflow/request/command/step and existing
+   append-only native coordinator Job/checkpoints. No auxiliary recovery registry.
+3. **Identity:** preserve original IDs/keys and attempt1; allocate one first launch
+   under its existing unique deterministic key, return its typed association.
+4. **Pointers:** retain current owner/lease/source/control/input checks before
+   allocation. Root rollback removes both new step state and new launch/allocation;
+   exact replay keeps the original identity and checkpoint bytes.
+5. **Access patterns:** indexed exact launch key, one step lookup, monotonic append
+   and replay of at most4 checkpoints. Physical execution remains outside SQL.
+6. **Structures/indexes:** reuse existing unique Job key, Workflow step uniqueness,
+   append-only sequence and frozen association. No new index/table/migration.
+7. **Complexity:** existing bounded anchor/index validation plus O(1) identities and
+   at most4 checkpoints. No source lists, new cache or unbounded scans.
+8. **Concurrency:** existing Workflow→command lock, generation/lease, fenced root
+   pre/late authorization and rollback remain authoritative. The start event and
+   allocation commit together, before any physical execution may be invoked.
+9. **Dependencies:** runner application calls its typed executor port; concrete
+   executor retains native persistence and launcher ownership. No worker DB/NAS IO.
+10. **Failure/retry:** pre-allocation or late-root failure rolls the start back;
+    post-commit crash leaves allocated original history for supported claim.
+    Failed/vanished histories and the existing unallocated historical run remain
+    rejected. No automatic restart/new key, auth TTL extension or row repair.
+11. **Alternative:** accepting a missing launch as proof of nonexecution would
+    weaken the current fail-closed rule. Making the first allocation atomic closes
+    the future gap without that ambiguity or a new recovery framework.
+
+Protocol-first scope: the internal application port adds a typed operation before
+implementation; existing released JSON Schema2020-12 request/association/
+checkpoint/input/result bytes are unchanged. This is not a new worker message or
+cross-service wire operation and does not activate any runtime capability.
+
+Required tests: reproduce the current start-before-allocation gap; allocation and
+start rollback together on early/late failure; committed allocated state before
+physical invocation; exact same-key allocation replay; no stage/marker/model call
+during allocation; current/foreign-root denial; real disposable PostgreSQL atomic
+commit/rollback. Keep the old missing-launch recovery negatives passing.
+
+Implementation proof: the new protocol operation was added first; the unchanged
+runner then failed the lifecycle reproduction because physical execution was
+reached without any allocation call. The concrete executor now shares one
+allocation implementation between its explicit preparation operation and execute.
+It requires an active, nonnested root bound to its actual owner Engine, current
+source/lease checks and the original coordinator. The runner flushes step start
+and allocates in that same fenced root before detaching any records. No launch,
+staging, physical marker, model call or SQL commit occurs in allocation itself.
+
+Focused70 /64.08s and final regression309 /208.64s pass (overlap, not additive),
+including original missing-launch recovery denial. The guarded PostgreSQL0055
+stage suite passes82 /58.07s, including four new real Workflow/command claim/step/
+Job atomic-root cases: commit before physical invocation, allocation admission
+failure, failure after allocation, and final root denial. Synthetic IAM/source/
+runtime observations are explicitly retained; actual SQL identities, states,
+transactions and checkpoint bytes are real. No pytest targets production.
+
+The first PostgreSQL run had4 new fixture failures and78 PASS: its synthetic policy
+still pinned a different Workflow definition. Rebuilding that synthetic control
+pointer/hash/config closure (with fresh artifact identities) fixed the fixture;
+production validators were unchanged. The final test checks absence by the exact
+indexed launch key, not a full JSON payload scan. Strict mypy3 production modules,
+Ruff/format6 Python files and diff checks pass. Original failure, focused,
+regression and PG logs use `query-allocation-atomic-` in the existing evidence root.
+
+This fixes future atomic start; it does not authorize restoring the historical
+unallocated RUNNING step or mark its old request successful. No runtime change,
+new submission, model call or authentication was performed in this source gate.

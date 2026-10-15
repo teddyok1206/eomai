@@ -31,6 +31,7 @@ from eom_workflow.native_reference_query_coordinator import (
     native_reference_query_checkpoint,
 )
 from eom_workflow.reference_query_execution import (
+    ReferenceQueryLaunchAssociation,
     ReferenceQueryStepOutput,
     ReferenceQueryWorkflowRequest,
     parse_reference_query_launch_association,
@@ -58,6 +59,12 @@ from eom_workflow_runner.reference_query_owner_admission import (
     validate_current_reference_query_input,
 )
 from eom_workflow_runner.repository import CommandLeaseIdentity
+
+
+def _require_allocation_root(session: Session) -> None:
+    root = session.get_transaction()
+    if root is None or not root.is_active or session.in_nested_transaction():
+        raise ValueError("REFERENCE_QUERY_ALLOCATION_ROOT_REQUIRED")
 
 
 class CatalogNativeReferenceQueryExecutor:
@@ -230,6 +237,57 @@ class CatalogNativeReferenceQueryExecutor:
             reason,
         )
 
+    def _allocate_in_session(
+        self,
+        session: Session,
+        request: ReferenceQueryWorkflowRequest,
+        lease: CommandLeaseIdentity,
+        workflow_id: str,
+        step_run_id: str,
+    ) -> tuple[PreparedNativeQuery, NativeReferenceQueryHistory]:
+        """One original allocation path, never staging or physical execution."""
+        _require_allocation_root(session)
+        if session.get_bind() is not self.publisher.engine:
+            raise ValueError("REFERENCE_QUERY_ALLOCATION_OWNER_MISMATCH")
+        sources = self._current(session, request, lease, workflow_id, step_run_id)
+        prepared = self._prepared(session, sources, workflow_id, step_run_id, lease)
+        coordinator = NativeReferenceQueryCoordinator(request, prepared.association)
+        history = self._history(coordinator, session)
+        if not history.records:
+            history = coordinator.append(
+                session,
+                native_reference_query_checkpoint(
+                    prepared.association,
+                    "ALLOCATION",
+                    NativeQueryAllocation(
+                        query_producer=new_native_artifact_producer(),
+                        receipt_producer=new_native_artifact_producer(),
+                        created_at=datetime.now(UTC),
+                        source_commit=self.source_commit,
+                    ),
+                ),
+            )
+        return prepared, history
+
+    def allocate_execution(
+        self,
+        *,
+        session: Session,
+        workflow: WorkflowInstanceRecord,
+        step: WorkflowStepRunRecord,
+        request: ReferenceQueryWorkflowRequest,
+        command_lease: CommandLeaseIdentity,
+    ) -> ReferenceQueryLaunchAssociation:
+        """Persist allocation in the caller's step-start root, without launch or commit."""
+        _require_allocation_root(session)
+        request = parse_reference_query_workflow_request(request)
+        if not self.evaluate(request).ready:
+            raise ValueError("REFERENCE_QUERY_EXECUTOR_CONTEXT_INVALID")
+        prepared, _history = self._allocate_in_session(
+            session, request, command_lease, workflow.workflow_id, step.step_run_id
+        )
+        return prepared.association
+
     def execute(
         self,
         *,
@@ -248,28 +306,10 @@ class CatalogNativeReferenceQueryExecutor:
         if not self.evaluate(request).ready or idempotency_key != expected_key:
             raise ValueError("REFERENCE_QUERY_EXECUTOR_CONTEXT_INVALID")
         with fenced_transaction() as session:
-            sources = self._current(
+            prepared, history = self._allocate_in_session(
                 session, request, command_lease, workflow.workflow_id, step.step_run_id
             )
-            prepared = self._prepared(
-                session, sources, workflow.workflow_id, step.step_run_id, command_lease
-            )
             coordinator = NativeReferenceQueryCoordinator(request, prepared.association)
-            history = self._history(coordinator, session)
-            if not history.records:
-                history = coordinator.append(
-                    session,
-                    native_reference_query_checkpoint(
-                        prepared.association,
-                        "ALLOCATION",
-                        NativeQueryAllocation(
-                            query_producer=new_native_artifact_producer(),
-                            receipt_producer=new_native_artifact_producer(),
-                            created_at=datetime.now(UTC),
-                            source_commit=self.source_commit,
-                        ),
-                    ),
-                )
             allocation = history.records[0].payload
             assert isinstance(allocation, NativeQueryAllocation)
             if len(history.records) == 4:

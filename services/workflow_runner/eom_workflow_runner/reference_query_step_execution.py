@@ -196,6 +196,17 @@ def advance_reference_query_step(
                 WorkflowErrorCode.WORKFLOW_INVALID_TRANSITION,
                 "QUERY cannot restart a failed or cancelled attempt",
             )
+        # The original launch/allocation and first RUNNING state must commit
+        # together. A crash before physical execution then retains recoverable
+        # original history instead of a RUNNING step with no launch identity.
+        session.flush()
+        executor.allocate_execution(
+            session=session,
+            workflow=current,
+            step=step,
+            request=request,
+            command_lease=lease,
+        )
         step_run_id = step.step_run_id
         session.expunge(current)
         session.expunge(step)

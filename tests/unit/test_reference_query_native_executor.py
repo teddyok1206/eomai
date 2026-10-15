@@ -123,6 +123,17 @@ class ExecutorCase:
             assert launch is not None
             return NativeReferenceQueryCoordinator(self.request, launch).read(session)
 
+    def allocate(self, session, *, generation=1):
+        return self.service.allocate_execution(
+            session=session,
+            workflow=self.workflow,
+            step=self.step,
+            request=self.request,
+            command_lease=CommandLeaseIdentity(
+                "wfcmd_" + str(generation) * 32, "synthetic-query-runner", "lease", generation
+            ),
+        )
+
 
 def make_executor_case(
     tmp_path: Path,
@@ -237,6 +248,78 @@ def make_executor_case(
 @pytest.fixture
 def executor(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ExecutorCase:
     return make_executor_case(tmp_path, monkeypatch)
+
+
+def test_allocation_only_is_committed_without_staging_and_reused_by_physical_execution(
+    executor, monkeypatch
+):
+    from eom_workflow_runner import reference_query_native_executor as module
+
+    value = executor
+    before = tuple(value.publisher.settings.workspace_root.rglob("*"))
+    with monkeypatch.context() as patch:
+        patch.setattr(module, "stage_native_query", Mock(side_effect=AssertionError("stage")))
+        patch.setattr(
+            module, "mark_native_query_launch_started", Mock(side_effect=AssertionError("launch"))
+        )
+        with value.root() as session:
+            association = value.allocate(session)
+        original = value.history()
+        assert original.launch == association and len(original.records) == 1
+        assert original.state == "RUNNING"
+        with value.root() as session:
+            assert value.allocate(session, generation=2) == association
+        assert value.history() == original
+    assert tuple(value.publisher.settings.workspace_root.rglob("*")) == before
+    assert value.runs == []
+    value.launcher.run.assert_not_called()
+    assert isinstance(value.execute(generation=2), ReferenceQueryStepOutput)
+    assert value.history().launch == association
+    assert value.history().records[:1] == original.records
+    assert len(value.runs) == 1
+
+
+@pytest.mark.parametrize("failure", ("before", "after", "late_root"))
+def test_allocation_failure_rolls_back_original_job_and_checkpoint_without_model(executor, failure):
+    value = executor
+    with pytest.raises(ValueError), value.root() as session:
+        if failure == "before":
+            value.deny = True
+        value.allocate(session)
+        if failure == "after":
+            raise ValueError("synthetic caller root aborted after allocation")
+        value.deny = True
+    value.deny = False
+    with value.root() as session:
+        assert (
+            read_native_reference_query_launch(
+                session,
+                request=value.request,
+                workflow_id=value.workflow.workflow_id,
+                step_run_id=value.step.step_run_id,
+            )
+            is None
+        )
+        assert session.scalar(select(func.count()).select_from(JobRecord)) == 0
+    assert value.runs == []
+    value.launcher.run.assert_not_called()
+
+
+@pytest.mark.parametrize("root_state", ("missing", "nested", "foreign"))
+def test_allocation_cannot_use_missing_nested_or_foreign_root(executor, monkeypatch, root_state):
+    value = executor
+    value.owner.resolve_execution_sources = Mock(side_effect=AssertionError("owner IO"))
+    with value.publisher.sessions() as session:
+        if root_state == "nested":
+            session.begin()
+            session.begin_nested()
+        elif root_state == "foreign":
+            session.begin()
+            monkeypatch.setattr(session, "get_bind", lambda: object())
+        with pytest.raises(ValueError, match="REFERENCE_QUERY_ALLOCATION_"):
+            value.allocate(session)
+    value.owner.resolve_execution_sources.assert_not_called()
+    assert value.runs == []
 
 
 @pytest.mark.parametrize("view_count", (1, 2, 3))
