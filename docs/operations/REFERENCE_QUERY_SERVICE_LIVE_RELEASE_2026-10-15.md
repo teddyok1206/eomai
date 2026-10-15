@@ -80,3 +80,34 @@ Existing QUERY acceptance5fc6d194 and its9-member owner517 remain historical;
 this new release uses the12-member family and never borrows old success as proof.
 Automatic indexing remains inactive/disabled with last accepted coverage2/520;
 CPU is default and GPU comparison/default admission remain incomplete.
+
+## Startup cause isolated — 21:09 UTC
+
+Diagnostic successor9badb032 was built/RECORD checked, isolated owner-pair byte
+closure28 PASS, and installed separately without replacing API2857bf77. The
+first diagnostic run identified entry183/setresuid, EPERM. Its config raw SHA
+`9d52fc37d1b518a0b4fac840ff2c7f068be6fdddb6b1bff44c96383b4d3ded9b`,
+unit `c9f4f5bc1f85e0933856570952af3763d440eb29fe9707ebc7db1f02bde947d9`.
+An instrumented startup read only proc UID/GID/capability fields (no env/memory):
+the actual supervisor/child bounding set was0xc4, but permitted/effective were0x44
+before the drop. CAP_SETUID0x80 was absent, so UID0 alone was not sufficient.
+
+Finite transient probes, without data, database, model or auth captures:
+
+| Exact observed boundary | Outcome |
+|---|---|
+| Same three bounded caps, implicit root | UID drop PASS, child permitted/effective0 |
+| Owner imports and then full hardening/path/resource profile | PASS, child permitted/effective0 |
+| Actual installed provider FDs plus fork/signal masking | PASS; no key bytes read |
+| Explicit User=root/Group=root, ambient empty | FAIL: permitted/effective0x44, UID drop EPERM |
+| Explicit root, only CAP_SETUID ambient, unchanged bounding0xc4 | PASS: parent0xc4, child990/1000, empty groups, permitted/effective0, NoNewPrivs1 |
+
+The correction therefore preserves the existing bounded capability set and
+explicit root supervisor identity, passes only the intended UID switch through
+exec, and adds a fail-closed child privilege guard before application imports.
+No root listener, new worker groups, saved root identity, fresh-auth extension,
+DB row fix or source permission expansion is introduced. No code was changed
+behind any installed immutable prefix. Earlier failure/probe logs are retained.
+
+Corrected source tests79 PASS/19.81s (includes previous68), Ruff/format/type1 PASS.
+Actual corrected installed startup and operator preparation remain pending.

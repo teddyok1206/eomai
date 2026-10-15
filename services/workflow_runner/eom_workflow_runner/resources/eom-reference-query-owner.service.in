@@ -32,7 +32,9 @@ RestrictSUIDSGID=yes
 LockPersonality=yes
 RestrictRealtime=yes
 CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_DAC_READ_SEARCH
-AmbientCapabilities=
+# Preserve the already bounded UID switch across explicit User=root execution.
+# The child clears all root IDs; startup verifies zero permitted/effective/ambient caps.
+AmbientCapabilities=CAP_SETUID
 SystemCallArchitectures=native
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 IPAddressDeny=any

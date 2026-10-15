@@ -164,6 +164,14 @@ def _serve_child(
     raw_sha256: str,
     restore_mask: set[int | signal.Signals],
 ) -> int:
+    owner = pwd.getpwnam("eom-workflow-runner")
+    api = pwd.getpwnam("eom-api")
+    os.setgroups([])
+    os.setresgid(owner.pw_gid, owner.pw_gid, owner.pw_gid)
+    os.setresuid(owner.pw_uid, owner.pw_uid, owner.pw_uid)
+    _require_dropped_identity(owner.pw_uid, owner.pw_gid)
+
+    # Application/adapter imports run only after the verified privilege drop.
     from eom_catalog_contracts.reference_query_prepare import REFERENCE_QUERY_PREPARE_SOCKET
     from eom_catalog_service.embedding_runtime_files import NumericalRuntimeFileSnapshots
     from eom_identity_service.installed_owner_session_provider import (
@@ -176,11 +184,6 @@ def _serve_child(
         build_reference_query_owner_runtime,
     )
 
-    owner = pwd.getpwnam("eom-workflow-runner")
-    api = pwd.getpwnam("eom-api")
-    os.setgroups([])
-    os.setresgid(owner.pw_gid, owner.pw_gid, owner.pw_gid)
-    os.setresuid(owner.pw_uid, owner.pw_uid, owner.pw_uid)
     stop = Event()
     server = None
     runtime = None
@@ -225,6 +228,40 @@ def _serve_child(
             server.close()
         if runtime is not None:
             runtime.close()
+
+
+def _require_dropped_identity(uid: int, gid: int) -> None:
+    """No saved root identity/capability may reach application imports or requests."""
+    if (
+        type(uid) is not int
+        or type(gid) is not int
+        or uid <= 0
+        or gid <= 0
+        or os.getresuid() != (uid, uid, uid)
+        or os.getresgid() != (gid, gid, gid)
+        or os.getgroups()
+    ):
+        raise ValueError("REFERENCE_QUERY_OWNER_CHILD_PRIVILEGES_RETAINED")
+    with Path("/proc/self/status").open("rb") as stream:
+        raw = stream.read(8193)
+    fields: dict[bytes, bytes] = {}
+    expected = {b"CapPrm", b"CapEff", b"CapAmb", b"NoNewPrivs"}
+    for row in raw.splitlines():
+        name, _, value = row.partition(b":")
+        if name in expected:
+            if name in fields:
+                raise ValueError("REFERENCE_QUERY_OWNER_CHILD_PRIVILEGES_RETAINED")
+            fields[name] = value.strip()
+    if (
+        len(raw) > 8192
+        or set(fields) != expected
+        or fields[b"NoNewPrivs"] != b"1"
+        or any(
+            re.fullmatch(rb"0{1,32}", fields[name]) is None
+            for name in (b"CapPrm", b"CapEff", b"CapAmb")
+        )
+    ):
+        raise ValueError("REFERENCE_QUERY_OWNER_CHILD_PRIVILEGES_RETAINED")
 
 
 def main() -> int:

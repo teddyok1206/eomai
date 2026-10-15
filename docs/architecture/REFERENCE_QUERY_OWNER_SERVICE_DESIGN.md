@@ -59,9 +59,14 @@ API/provider replacement invalidates the held observation and requires a reviewe
 restart with current exact pins, not silent rebinding to another process.
 
 The service template reuses the existing controller database environment, blocks
-repository/worker homes/Codex auth and image resources, has no ambient capabilities,
-and retains only root-supervisor UID/GID/drop and read-search capabilities. Child
-UID drop clears effective privileges. Provider config/code/secret names must not
+repository/worker homes/Codex auth and image resources, and retains only the same
+three bounded supervisor UID/GID/drop and read-search capabilities. On the installed
+systemd255, explicit User=root with empty ambient omitted effective CAP_SETUID;
+the supervisor therefore explicitly carries only CAP_SETUID through its exec.
+Child startup requires all real/effective/saved UID/GIDs to be native, groups empty,
+permitted/effective/ambient capability sets zero and NoNewPrivs=1 before application
+imports or request handling. No additional bounded capability or worker privilege
+is granted. Provider config/code/secret names must not
 be individually masked or bind-mounted: that could hide actual replacement epochs.
 ProtectSystem=strict supplies read-only access without per-file snapshot aliases.
 The root supervisor's secret descriptor remains O_PATH, never secret bytes.
@@ -238,3 +243,25 @@ filesystem filenames, locals and full tracebacks remain excluded. This supports
 diagnosis instead of granting more privileges or blind restart. Actual release
 and incomplete startup evidence are recorded in
 [the operational checkpoint](../operations/REFERENCE_QUERY_SERVICE_LIVE_RELEASE_2026-10-15.md).
+
+### Verified UID-drop correction
+
+Actual transient, no-data/no-model probes isolated the installed service-manager
+behavior: implicit-root profile passes; explicit User=root/Group=root with empty
+ambient has bounding0xc4 but permitted/effective0x44, and setresuid returns EPERM.
+Explicit supervisor AmbientCapabilities=CAP_SETUID restores the same bounded0xc4;
+the native child then has UID990/GID1000, empty groups, zero permitted/effective
+capabilities and NoNewPrivs=1. This is observed systemd255 behavior, not a claim
+that a bounding declaration alone proves actual privileges.
+
+Use the existing systemd mechanism, not root request handling or larger bounding
+sets. The retained-privilege guard is added before any application imports, with
+negative tests for saved root IDs, groups, permitted/effective/ambient caps,
+NoNewPrivs, missing/duplicate/oversized proc metadata. Source79 PASS/19.81s and
+strict type1/lint/format PASS. Existing SQL105 evidence is unchanged; this fix does
+not change DB schema, control/source policies or request/capture semantics.
+The installed start remains a separate required gate. Background numerical
+workers keep their separate fixed unit, identity and privilege boundary.
+
+Primary reference for the configuration mechanism:
+[systemd255 capabilities/security documentation](https://raw.githubusercontent.com/systemd/systemd/v255/man/systemd.exec.xml).

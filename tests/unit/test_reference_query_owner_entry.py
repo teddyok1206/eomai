@@ -3,7 +3,9 @@
 import ast
 import inspect
 from importlib.machinery import ModuleSpec
+from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from eom_workflow_runner import reference_query_owner_entry as module
@@ -71,6 +73,13 @@ def test_uid_drop_and_fork_signal_order_precede_request_handling():
     names = [name for _line, name in calls]
     assert names.index("os.setgroups") < names.index("os.setresgid") < names.index("os.setresuid")
     assert names.index("os.setresuid") < names.index("ReferenceQueryOwnerServer")
+    assert names.index("os.setresuid") < names.index("_require_dropped_identity")
+    drop_line = next(line for line, name in calls if name == "_require_dropped_identity")
+    assert all(
+        node.lineno > drop_line
+        for node in ast.walk(child)
+        if isinstance(node, ast.ImportFrom) and node.module.startswith("eom_")
+    )
     parent = inspect.getsource(module.main)
     assert parent.index("signal.SIG_BLOCK") < parent.index("os.fork()")
     assert parent.index("REFERENCE_QUERY_OWNER_PRELOADED_IMPORT_UNAVAILABLE") < parent.index(
@@ -91,7 +100,10 @@ def test_service_template_isolated_supervisor_without_provider_file_shadowing():
     assert (
         "User=root" in template and "Restart=no" in template and "NoNewPrivileges=yes" in template
     )
-    assert "KillMode=control-group" in template and "AmbientCapabilities=\n" in template
+    assert "KillMode=control-group" in template
+    assert "AmbientCapabilities=CAP_SETUID\n" in template
+    assert "CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_DAC_READ_SEARCH\n" in template
+    assert "CAP_DAC_OVERRIDE" not in template and "CAP_SYS_ADMIN" not in template
     assert "-I -B /opt/eom/embedding-owner-releases/@SOURCE_COMMIT@/" in template
     assert "EOM_REFERENCE_QUERY_CONFIGURATION_SHA256=@CONFIGURATION_SHA256@" in template
     assert "InaccessiblePaths=/home/eom/EOM /home/eom/EOMIS /root/.codex" in template
@@ -100,3 +112,53 @@ def test_service_template_isolated_supervisor_without_provider_file_shadowing():
     assert "ReadOnlyPaths=/srv/eom/conda/envs/eom-api" not in template
     tmpfiles = (root / "infra/tmpfiles/eom-reference-query-owner.conf").read_text()
     assert "d /run/eom-reference-query-owner 2750 eom-workflow-runner eom-api - -" in tmpfiles
+
+
+@pytest.mark.parametrize(
+    "fault",
+    (
+        "",
+        "saved_uid",
+        "saved_gid",
+        "groups",
+        "permitted",
+        "effective",
+        "ambient",
+        "nnp",
+        "missing",
+        "duplicate",
+        "oversized",
+    ),
+)
+def test_child_has_no_saved_root_ids_or_retained_capabilities(monkeypatch, fault):
+    monkeypatch.setattr(
+        module.os, "getresuid", lambda: (990, 990, 0 if fault == "saved_uid" else 990)
+    )
+    monkeypatch.setattr(
+        module.os, "getresgid", lambda: (1000, 1000, 0 if fault == "saved_gid" else 1000)
+    )
+    monkeypatch.setattr(module.os, "getgroups", lambda: [985] if fault == "groups" else [])
+    fields = {
+        "CapPrm": "0000000000000000",
+        "CapEff": "0000000000000000",
+        "CapAmb": "0000000000000000",
+        "NoNewPrivs": "1",
+    }
+    for field, changed in (("CapPrm", "permitted"), ("CapEff", "effective"), ("CapAmb", "ambient")):
+        if fault == changed:
+            fields[field] = "0000000000000080"
+    if fault == "nnp":
+        fields["NoNewPrivs"] = "0"
+    if fault == "missing":
+        del fields["CapAmb"]
+    raw = "\n".join(f"{name}:\t{value}" for name, value in fields.items()).encode()
+    if fault == "duplicate":
+        raw += b"\nCapPrm:\t0000000000000000"
+    elif fault == "oversized":
+        raw += b"\n" + b"x" * 8193
+    monkeypatch.setattr(module, "Path", lambda _: SimpleNamespace(open=lambda *_: BytesIO(raw)))
+    if fault:
+        with pytest.raises(ValueError, match="CHILD_PRIVILEGES_RETAINED"):
+            module._require_dropped_identity(990, 1000)
+    else:
+        module._require_dropped_identity(990, 1000)
