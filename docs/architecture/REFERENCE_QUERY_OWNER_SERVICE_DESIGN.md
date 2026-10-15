@@ -115,3 +115,26 @@ and same-key browser preparation remain pending. Index coverage remains2/520;
 automatic indexing is drained and CPU remains the default. No model/GPU execution,
 new source encoding, item generation or privileged service activation occurred in
 this source checkpoint.
+
+### Packaged source closure
+
+Candidate `a0082e2f4571b3169769ddd49db20bf064f7098d` was built with the existing
+`scripts/api/deploy_release.sh --build-only` path (exit0; wheel RECORD PASS).
+The platform/API-contract pair passes strict isolated imports and exact source
+byte comparison for28 members; selecting the API wheel adds its actual client
+for29. Both deny checkout/ambient installed fallback and numerical imports;
+the selected provider inventory is12. This is offline package closure, not service
+installation or actual root/UID admission. The probe was corrected to parse only
+Python members as AST, not the newly included JSON schema or systemd template.
+
+Selected wheel SHA-256 (raw, no `sha256:` prefix):
+
+| Wheel | SHA-256 |
+|---|---|
+| eom_platform | `91c11068bfd243543738ffd3e04c2802162b8ef195b37cd06c69cedcf778af87` |
+| eom_api_contracts | `55ad0dfb526473dc5eb434bb3e05c2c19a5065ecff79c5369dc223ec582c7c06` |
+| eom_application_api | `2f71d0133b131ad010fbbe4aa74b8d7771859a8432d5f15ba4393f45a8d6f909` |
+
+Local package directory:
+`/tmp/eom-api-build/a0082e2f4571b3169769ddd49db20bf064f7098d.H0sy7w/dist`.
+No auth/capture, database mutation or numerical execution occurs in this probe.
