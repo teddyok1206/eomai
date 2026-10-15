@@ -557,7 +557,7 @@ def test_submission_reuses_the_same_workflow_and_checks_owner_before_and_after_s
     first, created = source.submit()
     second, repeated = source.submit()
     assert created and not repeated and first is second
-    assert depths == [0, 1, 0, 1]
+    assert depths == [0, 0, 0, 0]
     assert len([row for row in source.rows if isinstance(row, WorkflowInstanceRecord)]) == 1
     assert source.executor.mock_calls == []
     assert first.role_schema_version == "reference-query/1.0" and first.stage == "LOCAL_EMBEDDING"
@@ -569,6 +569,7 @@ def test_late_submission_revocation_rolls_back_new_rows_and_does_not_execute(
     admitted_query_definition: None,
 ) -> None:
     source.rows.clear()
+    source.session.rollback.side_effect = source.rows.clear
     source.owner.resolve_submission.side_effect = [source.scope, ValueError("synthetic revoked")]
     with pytest.raises(ValueError, match="revoked"):
         source.submit()

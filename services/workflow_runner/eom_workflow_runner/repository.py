@@ -966,23 +966,26 @@ def create_workflow_instance(
             owner=reference_query_owner,
             executor=reference_query_executor,
         )
-        with session.begin_nested():
-            result = _persist_workflow_instance(
-                session,
-                definition=definition,
-                request=scope_query.request,
-                idempotency_key=idempotency_key,
-                actor_type=actor_type,
-                actor_id=actor_id,
-            )
-            workflow = validate_reference_query_workflow_submission(
-                session,
-                result[0],
-                definition=definition,
-                request=scope_query.request,
-                actor_type=actor_type,
-                actor_id=actor_id,
-            )
+        try:
+            with session.begin_nested():
+                result = _persist_workflow_instance(
+                    session,
+                    definition=definition,
+                    request=scope_query.request,
+                    idempotency_key=idempotency_key,
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                )
+                workflow = validate_reference_query_workflow_submission(
+                    session,
+                    result[0],
+                    definition=definition,
+                    request=scope_query.request,
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                )
+            # Catalog's current-source reader requires the actual caller root.
+            # A late denial must also discard the released persistence savepoint.
             late_query = resolve_reference_query_submission_controls(
                 session,
                 definition=definition,
@@ -995,6 +998,9 @@ def create_workflow_instance(
             if late_query != scope_query:
                 raise ValueError("REFERENCE_QUERY_SUBMISSION_CONTEXT_INVALID")
             return workflow, result[1]
+        except BaseException:
+            session.rollback()
+            raise
     if reference_query_owner is not None or reference_query_executor is not None:
         raise WorkflowError(
             WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,

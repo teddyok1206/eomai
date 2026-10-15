@@ -46,10 +46,12 @@ def start_reference_query_in_session(
     owner: ReferenceQueryOwnerAdmission,
     executor: ReferenceQueryNativeExecutor,
 ) -> ReferenceQueryWorkflowSubmitted:
-    """Current owner before savepoints and late; caller owns the root transaction.
+    """Current owner reads stay in the caller root, outside persistence savepoints.
 
     Numerical launch/readiness and consumer reads are separate use cases. No
     service/operator grant or default QUERY configuration is inferred here.
+    Any post-admission failure rolls back this entire root, including a Workflow
+    whose persistence savepoint has released; callers must not mix unrelated writes.
     """
     if session.in_nested_transaction():
         raise WorkflowError(
@@ -65,7 +67,7 @@ def start_reference_query_in_session(
         owner=owner,
         executor=executor,
     )
-    with session.begin_nested():
+    try:
         workflow, created = create_workflow_instance(
             session,
             definition=definition,
@@ -76,14 +78,15 @@ def start_reference_query_in_session(
             reference_query_owner=owner,
             reference_query_executor=executor,
         )
-        command, command_created = resolve_native_start_command(
-            session,
-            workflow=workflow,
-            workflow_created=created,
-            actor_type=actor_type,
-            actor_id=actor_id,
-            source=REFERENCE_QUERY_SUBMISSION_SOURCE,
-        )
+        with session.begin_nested():
+            command, command_created = resolve_native_start_command(
+                session,
+                workflow=workflow,
+                workflow_created=created,
+                actor_type=actor_type,
+                actor_id=actor_id,
+                source=REFERENCE_QUERY_SUBMISSION_SOURCE,
+            )
         late = resolve_reference_query_submission_controls(
             session,
             definition=definition,
@@ -96,3 +99,6 @@ def start_reference_query_in_session(
         if late != scope:
             raise ValueError("REFERENCE_QUERY_SUBMISSION_CONTEXT_INVALID")
         return ReferenceQueryWorkflowSubmitted(workflow, command, created, command_created)
+    except BaseException:
+        session.rollback()
+        raise

@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import Mock
 
 import pytest
+from eom_catalog_service.embedding_registry_catalog_adapter import CatalogEmbeddingRegistryVerifier
 from eom_identifiers import content_sha256
 from eom_workflow_runner import native_start_command
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
@@ -40,6 +41,13 @@ def test_shared_command_hash_preserves_the_original_exact_serialization(source):
 
 
 def submit(value, *, key="synthetic-atomic-query"):
+    # A new synthetic call models a new caller root with already committed history.
+    before = tuple(value.rows)
+
+    def rollback():
+        value.rows[:] = before
+
+    value.session.rollback.side_effect = rollback
     return start_reference_query_in_session(
         value.session,
         definition=value.definition,
@@ -56,6 +64,22 @@ def fresh(value):
     value.rows.clear()
     value.owner.reset_mock()
     return value
+
+
+def test_atomic_submission_preserves_catalog_root_only_read_contract(source):
+    fresh(source)
+
+    def current(session, request):
+        CatalogEmbeddingRegistryVerifier._require_similarity_root(session)
+        assert request == source.scope.request
+        return source.scope
+
+    source.owner.resolve_submission.side_effect = current
+    first = submit(source)
+    replay = submit(source)
+    assert first.workflow_created and first.command_created
+    assert not replay.workflow_created and not replay.command_created
+    assert replay.workflow is first.workflow and replay.command is first.command
 
 
 def test_admitted_query_still_requires_current_owner_before_atomic_start(source):
@@ -92,8 +116,7 @@ def test_atomic_query_creates_once_and_replays_original_command_without_launch(
     assert len([row for row in source.rows if isinstance(row, WorkflowCommandRecord)]) == 1
     assert first.command.source == "reference_query_submission"
     assert first.command.idempotency_key == f"start:{first.workflow.workflow_id}"
-    assert depths[:4] == [0, 1, 2, 1]
-    assert all(depth == 0 for depth in depths[::4])
+    assert depths == [0] * 12
     source.executor.execute.assert_not_called()
     source.executor.evaluate.assert_not_called()
     source.session.commit.assert_not_called()
