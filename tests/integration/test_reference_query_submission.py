@@ -51,6 +51,211 @@ from tests.unit.test_reference_query_workflow_contracts import definition_body
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
 
+@pytest.fixture
+def prepared_query(guarded_engine, tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryCaller
+    from eom_operator_identity import PermissionKey
+    from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
+    from eom_orchestrator.settings import Settings
+    from eom_workflow_runner import reference_query_preparation
+
+    from tests.unit.test_reference_query_owner_admission import make_source_case
+
+    (tmp_path / "artifacts").mkdir(mode=0o700)
+    (tmp_path / "workspace").mkdir(mode=0o700)
+    publisher = ControlFileSetPublisher(
+        guarded_engine,
+        Settings(
+            staging_root=tmp_path / "staging",
+            nas_artifact_root=tmp_path / "artifacts",
+            workspace_root=tmp_path / "workspace",
+        ),
+    )
+    value = make_source_case(tmp_path, monkeypatch, publisher=publisher, control_seed=uuid4().hex)
+    compiled = compile_definition_data(definition_body(), "synthetic/query-preparation", set())
+    with Session(guarded_engine) as session, session.begin():
+        import_workflow_definition(session, compiled)
+    monkeypatch.setattr(
+        reference_query_preparation,
+        "effective_permissions",
+        lambda *_: frozenset({PermissionKey.WORKFLOW_START}),
+    )
+    return SimpleNamespace(
+        source=value,
+        engine=guarded_engine,
+        caller=EmbeddingRegistryCaller(value.request.operator_audit.operator_id),
+        context=value.request.context_request,
+        executor=Mock(spec=ReferenceQueryNativeExecutor),
+        key="synthetic-prepared-query:" + uuid4().hex,
+    )
+
+
+def prepare_query(value, session):
+    from eom_workflow_runner.reference_query_preparation import (
+        prepare_and_start_reference_query_in_session,
+    )
+
+    return prepare_and_start_reference_query_in_session(
+        session,
+        caller=value.caller,
+        context=value.context,
+        idempotency_key=value.key,
+        owner=value.source.owner,
+        executor=value.executor,
+    )
+
+
+def test_postgres_preparation_uses_canonical_controls_and_original_workflow_start(
+    prepared_query, monkeypatch
+):
+    from eom_workflow_runner import reference_query_preparation as preparation
+
+    value = prepared_query
+    with Session(value.engine, expire_on_commit=False) as session, session.begin():
+        submitted = prepare_query(value, session)
+        identity = submitted.workflow.workflow_id, submitted.command.command_id
+        original = submitted.workflow.initial_request
+        assert submitted.workflow_created and submitted.command_created
+        assert original["context_request"] == value.context.model_dump(mode="json")
+    for name in ("effective_permissions", "read_pinned_reference_query_controls"):
+        monkeypatch.setattr(
+            preparation, name, Mock(side_effect=AssertionError("rebuilding original request"))
+        )
+    with Session(value.engine) as session, session.begin():
+        replay = prepare_query(value, session)
+        assert (replay.workflow.workflow_id, replay.command.command_id) == identity
+        assert replay.workflow.initial_request == original
+        assert not replay.workflow_created and not replay.command_created
+    value.executor.execute.assert_not_called()
+    value.executor.allocate_execution.assert_not_called()
+
+
+@pytest.mark.parametrize("when", (1, 4))
+def test_postgres_preparation_preserves_full_root_rollback_on_current_denial(
+    prepared_query, monkeypatch, when
+):
+    value = prepared_query
+    current = value.source.owner.resolve_submission
+    observed = 0
+
+    def revoke(session, request):
+        nonlocal observed
+        observed += 1
+        if observed == when:
+            value.source.deny = True
+        return current(session, request)
+
+    monkeypatch.setattr(value.source.owner, "resolve_submission", revoke)
+    with Session(value.engine) as session, pytest.raises(ValueError), session.begin():
+        prepare_query(value, session)
+    with Session(value.engine) as session:
+        assert not session.scalar(
+            select(WorkflowInstanceRecord.workflow_id).where(
+                WorkflowInstanceRecord.idempotency_key == value.key
+            )
+        )
+    assert observed == when
+    value.executor.execute.assert_not_called()
+
+
+def test_postgres_preparation_rejects_changed_context_without_another_workflow(prepared_query):
+    from eom_catalog_contracts.similarity_context import parse_similarity_context_request
+
+    value = prepared_query
+    with Session(value.engine, expire_on_commit=False) as session, session.begin():
+        first = prepare_query(value, session)
+        workflow_id = first.workflow.workflow_id
+    value.context = parse_similarity_context_request(
+        seal(
+            value.context.model_dump(mode="json") | {"top_k": value.context.top_k + 1},
+            "request_sha256",
+        )
+    )
+    with (
+        Session(value.engine) as session,
+        session.begin(),
+        pytest.raises(ValueError, match="REFERENCE_QUERY_PREPARATION_REPLAY_MISMATCH"),
+    ):
+        prepare_query(value, session)
+    with Session(value.engine) as session:
+        assert (
+            session.scalar(
+                select(WorkflowInstanceRecord.workflow_id).where(
+                    WorkflowInstanceRecord.idempotency_key == value.key
+                )
+            )
+            == workflow_id
+        )
+        assert (
+            len(
+                tuple(
+                    session.scalars(
+                        select(WorkflowCommandRecord).where(
+                            WorkflowCommandRecord.workflow_id == workflow_id
+                        )
+                    )
+                )
+            )
+            == 1
+        )
+
+
+def test_postgres_concurrent_preparation_reuses_one_original_workflow_and_start(
+    prepared_query, monkeypatch
+):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    from eom_workflow_runner import reference_query_preparation as preparation
+
+    value = prepared_query
+    both_first_reads = Barrier(2)
+    read = preparation.read_pinned_reference_query_controls
+
+    def concurrent_controls(*args):
+        controls = read(*args)
+        both_first_reads.wait(timeout=10)
+        return controls
+
+    monkeypatch.setattr(preparation, "read_pinned_reference_query_controls", concurrent_controls)
+
+    def submit():
+        with Session(value.engine, expire_on_commit=False) as session, session.begin():
+            result = prepare_query(value, session)
+            return (
+                result.workflow.workflow_id,
+                result.command.command_id,
+                result.workflow_created,
+                result.command_created,
+            )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = tuple(pool.submit(submit) for _ in range(2))
+        outcomes = tuple(future.result(timeout=30) for future in futures)
+    assert outcomes[0][:2] == outcomes[1][:2]
+    assert sorted(outcome[2:] for outcome in outcomes) == [(False, False), (True, True)]
+    with Session(value.engine) as session:
+        workflows = tuple(
+            session.scalars(
+                select(WorkflowInstanceRecord).where(
+                    WorkflowInstanceRecord.idempotency_key == value.key
+                )
+            )
+        )
+        commands = tuple(
+            session.scalars(
+                select(WorkflowCommandRecord).where(
+                    WorkflowCommandRecord.workflow_id == outcomes[0][0]
+                )
+            )
+        )
+        assert len(workflows) == len(commands) == 1
+    value.executor.execute.assert_not_called()
+    value.executor.allocate_execution.assert_not_called()
+
+
 @dataclass
 class AtomicCase:
     engine: Engine

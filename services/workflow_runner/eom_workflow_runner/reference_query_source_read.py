@@ -265,32 +265,12 @@ class CatalogReferenceQueryReadOwner:
         )
 
 
-def resolve_reference_query_sources(
-    owner: ReferenceQuerySourceOwner, session: Session, request: ReferenceQueryWorkflowRequest
-) -> ResolvedReferenceQuerySources:
-    request = parse_reference_query_workflow_request(request)
-    caller = EmbeddingRegistryCaller(request.operator_audit.operator_id)
-    owner.identity.fence_current_operator(session, caller.operator_id)
-    config, context = owner.configuration, request.context_request
-    if (
-        request.native_execution_policy != config.native_execution_policy
-        or request.native_execution_policy_sha256 != config.native_execution_policy_sha256
-        or request.runtime_bundle != config.runtime_bundle
-    ):
-        raise ValueError("REFERENCE_QUERY_OWNER_CONFIGURATION_MISMATCH")
-    owner.catalog.authorize_scope(
-        session,
-        caller,
-        EmbeddingRegistryLookup(
-            config.registry.corpus_id,
-            config.registry.namespace,
-            context.graph_snapshot,
-            context.policy_revision_id,
-            context.policy_sha256,
-            context.maximum_sources,
-        ),
-    )
-    reader = PinnedArtifactReadContext(session, owner.settings)
+def read_pinned_reference_query_controls(
+    reader: PinnedArtifactReadContext,
+    config: ReferenceQueryOwnerConfiguration,
+) -> tuple[ReferenceQueryExecutionPolicy, EmbeddingRuntimeBundle]:
+    """Configured control bytes only; caller owns current authority and request closure."""
+    config.__post_init__()
     pointers = (config.native_execution_policy, config.runtime_bundle.manifest_member)
     reader.prefetch(tuple((p.artifact_id, p.artifact_revision_id) for p in pointers))
     pointer = config.native_execution_policy
@@ -324,6 +304,37 @@ def resolve_reference_query_sources(
     if not isinstance(raw_bundle, dict):
         raise ValueError("REFERENCE_QUERY_BUNDLE_INVALID")
     bundle = parse_embedding_runtime_bundle(raw_bundle)
+    return policy, bundle
+
+
+def resolve_reference_query_sources(
+    owner: ReferenceQuerySourceOwner, session: Session, request: ReferenceQueryWorkflowRequest
+) -> ResolvedReferenceQuerySources:
+    request = parse_reference_query_workflow_request(request)
+    caller = EmbeddingRegistryCaller(request.operator_audit.operator_id)
+    owner.identity.fence_current_operator(session, caller.operator_id)
+    config, context = owner.configuration, request.context_request
+    if (
+        request.native_execution_policy != config.native_execution_policy
+        or request.native_execution_policy_sha256 != config.native_execution_policy_sha256
+        or request.runtime_bundle != config.runtime_bundle
+    ):
+        raise ValueError("REFERENCE_QUERY_OWNER_CONFIGURATION_MISMATCH")
+    owner.catalog.authorize_scope(
+        session,
+        caller,
+        EmbeddingRegistryLookup(
+            config.registry.corpus_id,
+            config.registry.namespace,
+            context.graph_snapshot,
+            context.policy_revision_id,
+            context.policy_sha256,
+            context.maximum_sources,
+        ),
+    )
+    policy, bundle = read_pinned_reference_query_controls(
+        PinnedArtifactReadContext(session, owner.settings), config
+    )
     validate_reference_query_request_references(request, policy, bundle)
     prepared = owner.catalog.prepare_reference_query_anchor_in_session(session, caller, context)
     result = ResolvedReferenceQuerySources(request, policy, bundle, prepared)

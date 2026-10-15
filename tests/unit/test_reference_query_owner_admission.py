@@ -93,13 +93,36 @@ class OwnerFixture:
 
 @pytest.fixture
 def source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> OwnerFixture:
+    return make_source_case(tmp_path, monkeypatch)
+
+
+def make_source_case(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    publisher: ControlFileSetPublisher | None = None,
+    control_seed: str | None = None,
+) -> OwnerFixture:
     compiled = compile_definition_data(definition_body(), "synthetic-current-query-owner", set())
     base = case(definition_sha256=compiled.sha256)
-    publisher, _engine = _publisher(tmp_path)
+    if publisher is None:
+        publisher, _engine = _publisher(tmp_path)
     publisher.settings = replace(publisher.settings, workspace_root=tmp_path)
+    bundle = base.bundle
+    if control_seed is not None:
+        bundle = type(bundle).model_validate(
+            seal(
+                bundle.model_dump(mode="json")
+                | {
+                    "bundle_id": "embeddingbundle_" + control_seed,
+                    "bundle_revision_id": "embeddingbundlerev_" + control_seed,
+                },
+                "bundle_sha256",
+            )
+        )
     saved_bundle = EmbeddingRuntimeBundleArtifactPublisher(
         ControlArtifactPublisher(publisher.engine, publisher.settings), source_commit="a" * 40
-    ).publish(base.bundle, created_at=NOW)
+    ).publish(bundle, created_at=NOW)
     policy = parse_reference_query_execution_policy(
         seal(
             base.policy.model_dump(mode="json")
@@ -110,7 +133,9 @@ def source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> OwnerFixture:
     saved_policy = LocalEmbeddingControlArtifactPublisher(
         publisher, source_commit="a" * 40
     ).publish_reference_query_policy(
-        policy, idempotency_key="synthetic-query-policy:" + "b" * 32, created_at=NOW
+        policy,
+        idempotency_key="synthetic-query-policy:" + (control_seed or "b" * 32),
+        created_at=NOW,
     )
     _rows, capture = verified_capture(monkeypatch)
     request = parse_reference_query_workflow_request(
