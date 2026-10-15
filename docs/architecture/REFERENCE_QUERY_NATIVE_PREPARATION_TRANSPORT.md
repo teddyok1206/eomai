@@ -249,3 +249,29 @@ private checked plan2.3 consumption, and remaining role/consumer/GPU acceptance.
 The current original QUERY/auth handle is unchanged. Coverage is still2/520; CPU
 default and the safely drained indexing service are unchanged. This source step
 does not close the full goal or consume a new live-model execution.
+
+Final source/package evidence for this checkpoint:
+
+- Candidate `0ddf15c5d93b5f3cfd6a0e48c7e04f5d1d912a6c`, tree
+  `00670c16022f241630d9729c6c9d765adb6a3623`.
+- Shared source regression784 PASS in214.96s, including the23 focused cases above.
+  The preceding783-test run was before the final port-direction/fixture review;
+  these overlapping runs are not summed. The final run has the same pre-existing
+  httpx/Starlette deprecation warning as the transport checkpoint.
+- Three-wheel build/RECORD and strict isolated pair/trio imports PASS. Source-byte
+  closure is21 members in the owner pair and22 with the API client. The genuine
+  provider inventory remains12, without installing or mixing it into the active9
+  family. No checkout, installed-prefix or numerical-library fallback was allowed.
+- Dist:
+  `/tmp/eom-api-build/0ddf15c5d93b5f3cfd6a0e48c7e04f5d1d912a6c.XDkk6X/dist`.
+- Platform raw SHA256:
+  `71cfdd2bf89af8fa5bd420e52859f9994f579937445753991121107df08b7c4e`.
+- API-contracts raw SHA256:
+  `2ea4880ab39321f1ddd139b83e7d5819b43209cb276a5fff5258a14bfe219bbc`.
+- Application-API raw SHA256:
+  `30f0cfa76b172313aa072724acd5b7a72e2d0e6441e60da6d4a884965d8eba2e`.
+
+Passing logs are `query-native-prepare-application-source-final-reviewed.log`,
+`query-native-prepare-application-owner-package.log` and
+`query-native-prepare-application-api-package.log` in the same temporary verification
+workspace. Installation/activation and the full goal remain unproven.
