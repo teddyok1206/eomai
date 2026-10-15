@@ -197,3 +197,34 @@ The existing105-test disposable PostgreSQL evidence covers the unchanged native
 preparation/startup/driver persistence code; this HTTP change adds no DB state or
 schema. The whole goal is not complete: protected service activation, automatic
 missing-binding reconciliation, normal consumers and CPU/CUDA comparison remain.
+
+### Installed-but-inactive owner and HTTP package
+
+The existing protected owner installer (raw SHA
+`559ada516fe9d46f57926aad70699e81deba5f1a18b4e25e3f6e6bcdf1384b71`)
+installed the previously verified a0082e2f platform/contracts pair into its
+separate immutable prefix. Root-owned release0755 and entry0444 were observed;
+RECORD/pair installation PASS, `OWNER_ACTIVATION=NOT_PERFORMED` and numerical CPU
+runtime unchanged. Existing owner517e4551 and API75fdc265 are not replaced by
+this inactive installation. No new service, request or model was started.
+
+HTTP candidate `86506f59181a92adb74c60e26a5ce5f76f8b0f41`, tree
+`92deaaf997c6a8339a170b1cc04730d39013c717`, passes the complete build-only
+three-wheel/RECORD/installed-contract simulation. Strict isolated selected-wheel
+imports and byte closure PASS for28 pair members and32 with the HTTP/API wheel,
+including the presentation wrapper, application and router. Provider family12;
+checkout/ambient EOM fallback and numerical imports denied. Package directory:
+`/tmp/eom-api-build/86506f59181a92adb74c60e26a5ce5f76f8b0f41.gAIuac/dist`.
+
+| HTTP candidate wheel | Raw SHA-256 |
+|---|---|
+| eom_platform | `2b8eef15668de0ee51cb2fe8c8873612a9826acb805d065f7486b31a7fb51f5c` |
+| eom_api_contracts | `e4b194eab5ed5213fc32590a8876e51e95832c3408e25d6b60fc102c71439744` |
+| eom_application_api | `bd325bfa6990f1f3e14a6815be9e291c5b68d8420534a7dfceec67cb3f712f54` |
+
+These offline candidates are not the active API/provider. A compatible release
+must select actual API/config/code pins, provision fixed private directories and
+unit, run actual child/provider/control readiness and then enable HTTP. Do not
+mix the old live9-member observation with the new12-member owner/client family.
+Existing sudo authentication was reused in EOM:1; no new Studio login was asked
+for, no credential was stored and no old QUERY was restarted.
