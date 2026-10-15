@@ -64,7 +64,7 @@ class CatalogCompletedReferenceQueryRead:
         prepared: PreparedSimilarityContext,
     ) -> VerifiedReferenceQueryRead:
         request = parse_similarity_context_request(request)
-        validate_similarity_preparation(request, prepared)
+        consumer_sources = validate_similarity_preparation(request, prepared)
         if (
             not isinstance(caller, EmbeddingRegistryCaller)
             or caller.operator_id != self.request.operator_audit.operator_id
@@ -76,7 +76,15 @@ class CatalogCompletedReferenceQueryRead:
                 current = self.owner.resolve_completed_sources(
                     session, caller, self.request, workflow_id=self.workflow_id
                 )
-                if current.sources.prepared != prepared:
+                current_prepared = current.sources.prepared
+                anchor_sources = validate_similarity_preparation(request, current_prepared)
+                anchor_id = request.anchor.source.item_revision_id
+                # Native QUERY encodes the exact anchor, not the ranking population.
+                # The common context owner retains its complete start/end source fences.
+                if (
+                    anchor_sources[anchor_id] != consumer_sources[anchor_id]
+                    or current_prepared.query_texts != prepared.query_texts
+                ):
                     raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
                 canonical, history = self.completion.resolve_publication(
                     session=session,

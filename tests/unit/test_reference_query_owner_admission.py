@@ -193,6 +193,16 @@ def source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> OwnerFixture:
     monkeypatch.setattr(owner.catalog, "authorize_scope", authorize)
     monkeypatch.setattr(owner.catalog, "prepare_similarity_context_in_session", prepare)
     monkeypatch.setattr(owner.catalog, "read_similarity_views_in_session", read)
+
+    def prepare_anchor(session: Session, caller: Any, current: Any) -> PreparedSimilarityContext:
+        from eom_catalog_service.similarity_context_service import validate_similarity_preparation
+
+        prepared = prepare(session, caller, current)
+        validate_similarity_preparation(current, prepared)
+        read(session, caller, current, prepared)
+        return prepared
+
+    monkeypatch.setattr(owner.catalog, "prepare_reference_query_anchor_in_session", prepare_anchor)
     return result
 
 
