@@ -6,6 +6,10 @@ import re
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
+from eom_catalog_contracts.embedding_reference_query import (
+    ReferenceQuerySpaces,
+    raw_similarity_contract_value,
+)
 from eom_catalog_contracts.embedding_registry import (
     EmbeddingIndexNamespace,
     RegisterEmbeddingIndexCommand,
@@ -17,6 +21,8 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingVectorShardManifest,
 )
 from eom_catalog_contracts.inference_transfer_experiment import (
+    VIEWS,
+    ExperimentView,
     ExperimentViewRecipe,
     PopulationSource,
     StagedExperimentEntry,
@@ -138,6 +144,38 @@ class SelectedEmbeddingSources:
             or len(self.source_revision_ids) > self.scope.maximum_sources
         ):
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+
+
+@dataclass(frozen=True, slots=True)
+class ReferenceQueryContextPreparation:
+    """Initial owner-local selection only; never authority, wire input or replay state."""
+
+    request_id: str
+    selection: SelectedEmbeddingSources
+    spaces: ReferenceQuerySpaces
+    views: tuple[ExperimentView, ...]
+    vector_mode: Literal["OPTIONAL", "REQUIRED"]
+    top_k: int
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.request_id) is not str
+            or re.fullmatch(r"similarityrequest_[0-9a-f]{32}", self.request_id) is None
+            or type(self.selection) is not SelectedEmbeddingSources
+            or len(self.selection.source_revision_ids) != 1
+            or type(self.views) is not tuple
+            or not self.views
+            or self.views != tuple(view for view in VIEWS if view in self.views)
+            or self.vector_mode not in {"OPTIONAL", "REQUIRED"}
+            or type(self.top_k) is not int
+            or not 1 <= self.top_k <= 64
+            or type(self.selection.scope.maximum_sources) is not int
+            or not 1 <= self.selection.scope.maximum_sources <= 1024
+        ):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_REQUEST_INVALID")
+        self.selection.__post_init__()
+        spaces = ReferenceQuerySpaces.model_validate(raw_similarity_contract_value(self.spaces))
+        object.__setattr__(self, "spaces", spaces)
 
 
 class SimilarityMaterialsReadPort(Protocol):

@@ -22,6 +22,7 @@ from eom_catalog_contracts.embedding_registry import (
 from eom_catalog_contracts.inference_transfer_embedding import (
     MAX_EMBEDDING_ROWS,
     EmbeddingEncodingIdentity,
+    EmbeddingIndexManifest,
     EmbeddingSourceBinding,
     EmbeddingVectorRowRef,
     parse_embedding_binding,
@@ -715,7 +716,7 @@ def _validate_pinned_read_intent(intent: EmbeddingRegistryRead) -> EmbeddingRegi
     return intent
 
 
-def _validate_registered_pinned_read(
+def validate_registered_embedding_index_read(
     intent: EmbeddingRegistryRead, registered: RegisteredEmbeddingIndexRead | None
 ) -> RegisteredEmbeddingIndexRead:
     pin = intent.selection.index
@@ -737,6 +738,38 @@ def _validate_registered_pinned_read(
         _fail("EMBEDDING_REGISTRY_POINTER_INVALID")
     TypeAdapter(Sha256).validate_python(registered.binding_set_sha256)
     return registered
+
+
+def validate_registered_embedding_index_manifest(
+    registered: RegisteredEmbeddingIndexRead, index: EmbeddingIndexManifest
+) -> None:
+    """Pure registered/member closure shared by initial, pinned and predecessor reads.
+
+    The owner first validates the canonical Artifact bytes and actual authority.
+    This check neither dereferences a member nor grants access to any binding.
+    """
+    namespace = registered.namespace
+    if (
+        index.index_id != registered.index_id
+        or index.index_revision_id != registered.index_revision_id
+        or index.index_sha256 != registered.index_sha256
+        or index.storage_partition != namespace.storage_partition
+        or index.space.space_sha256 != namespace.space_sha256
+        or index.recipe.recipe_sha256 != namespace.recipe_sha256
+        or index.view != namespace.view
+        or len(index.bindings) != registered.binding_count
+        or content_sha256([binding.binding_sha256 for binding in index.bindings])
+        != registered.binding_set_sha256
+        or any(
+            binding.graph_snapshot.graph_snapshot_revision_id
+            != registered.graph_snapshot_revision_id
+            or binding.policy_revision_id != registered.policy_revision_id
+            or binding.policy_sha256 != registered.policy_sha256
+            or binding.projection_version != namespace.projection_version
+            for binding in index.bindings
+        )
+    ):
+        _fail("EMBEDDING_REGISTRY_POINTER_INVALID")
 
 
 def _validate_resolved_pinned_read(
@@ -850,7 +883,7 @@ def read_pinned_embedding_index(
             repository = EmbeddingRegistryRepository(session)
             pin = intent.selection.index
             assert pin is not None
-            registered = _validate_registered_pinned_read(
+            registered = validate_registered_embedding_index_read(
                 intent, repository.read_pinned_revision(pin.index_id, pin.index_revision_id)
             )
             resolved = _validate_resolved_pinned_read(

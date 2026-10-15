@@ -48,8 +48,11 @@ before use. The new internal application function has typed arguments and return
 the existing ReferenceQueryWorkflowSubmitted value. There is no new wire message
 or worker behavior, so no speculative schema/version is created.
 
-This does not yet select initial index/source/report pins from a public Item
-request, expose a native socket, transfer the real API capture, run a native query,
+Initial owner-local source/report/view-index selection is now composed through the
+[initial context capture application](REFERENCE_QUERY_INITIAL_CONTEXT_CAPTURE.md),
+which also reuses the original stored request on replay. This still does not
+select pins from an ordinary public Item HTTP request, expose a native socket,
+transfer the real API capture, run a native query,
 or automatically connect HTTP item start. Those are still required next boundaries;
 an actor projection cannot substitute for the real request capture. The current
 repository API implementation already keeps one genuine Identity capture for workflow_start, and the

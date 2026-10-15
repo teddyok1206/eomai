@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from eom_catalog_contracts.similarity_context import (
     SimilarityContextRequest,
     parse_similarity_context_request,
@@ -9,12 +11,17 @@ from eom_catalog_contracts.similarity_context import (
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
     EmbeddingRegistryLookup,
+    ReferenceQueryContextPreparation,
     validate_embedding_registry_actor,
 )
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
+from eom_catalog_service.reference_query_context_preparation import (
+    validate_reference_query_context_preparation,
+)
 from eom_identifiers import content_sha256
 from eom_identity_service.repository import effective_permissions
 from eom_workflow.reference_query_execution import (
+    ReferenceQueryWorkflowRequest,
     parse_reference_query_workflow_request,
     validate_reference_query_request_references,
 )
@@ -31,21 +38,19 @@ from eom_workflow_runner.reference_query_submission import (
 )
 
 
-def prepare_and_start_reference_query_in_session(
-    session: Session,
-    *,
-    caller: EmbeddingRegistryCaller,
-    context: SimilarityContextRequest,
-    idempotency_key: str,
-    owner: CatalogReferenceQueryOwnerAdmission,
-    executor: ReferenceQueryNativeExecutor,
-) -> ReferenceQueryWorkflowSubmitted:
-    """Own request construction, not another queue or a substitute for current admission.
+class ReferenceQueryPreparationUnavailable(ValueError):
+    """Known absent auxiliary input, not permission to ignore corrupt/revoked pointers."""
 
-    A repeated key reuses its exact stored request/audit. Existing atomic admission
-    still checks the current authority and original START in this caller-owned root.
-    No model, index selection, implicit latest, commit or automatic retry occurs.
-    """
+    def __init__(self, code: Literal["ANCHOR_REPORT_MISSING", "INDEX_NOT_PREPARED"]) -> None:
+        self.code = code
+        super().__init__(code)
+
+
+def _require_preparation_root(
+    session: Session,
+    owner: CatalogReferenceQueryOwnerAdmission,
+    caller: EmbeddingRegistryCaller,
+) -> None:
     root = session.get_transaction()
     if (
         not session.is_active
@@ -57,22 +62,115 @@ def prepare_and_start_reference_query_in_session(
     ):
         raise ValueError("REFERENCE_QUERY_PREPARATION_ROOT_INVALID")
     validate_embedding_registry_actor(caller)
-    context = parse_similarity_context_request(context)
+
+
+def _current_query_request(
+    session: Session,
+    owner: CatalogReferenceQueryOwnerAdmission,
+    caller: EmbeddingRegistryCaller,
+    idempotency_key: str,
+) -> ReferenceQueryWorkflowRequest | None:
     owner.identity.fence_current_operator(session, caller.operator_id)
     existing = session.scalar(
         select(WorkflowInstanceRecord)
         .where(WorkflowInstanceRecord.idempotency_key == idempotency_key)
         .execution_options(populate_existing=True)
     )
-    if existing is not None:
-        request = parse_reference_query_workflow_request(existing.initial_request)
-        if (
-            existing.created_actor_type != "human"
-            or existing.created_actor_id != caller.operator_id
-            or request.operator_audit.operator_id != caller.operator_id
-            or request.context_request != context
-        ):
-            raise ValueError("REFERENCE_QUERY_PREPARATION_REPLAY_MISMATCH")
+    if existing is None:
+        return None
+    request = parse_reference_query_workflow_request(existing.initial_request)
+    if (
+        existing.created_actor_type != "human"
+        or existing.created_actor_id != caller.operator_id
+        or request.operator_audit.operator_id != caller.operator_id
+    ):
+        raise ValueError("REFERENCE_QUERY_PREPARATION_REPLAY_MISMATCH")
+    return request
+
+
+def prepare_and_start_reference_query_selection_in_session(
+    session: Session,
+    *,
+    caller: EmbeddingRegistryCaller,
+    preparation: ReferenceQueryContextPreparation,
+    idempotency_key: str,
+    owner: CatalogReferenceQueryOwnerAdmission,
+    executor: ReferenceQueryNativeExecutor,
+) -> ReferenceQueryWorkflowSubmitted:
+    """Selected reference → initial pins → canonical QUERY/START; replay never reselects.
+
+    The actual native owner runs this use case, not the isolated API. There is no
+    commit, encoder operation, new queue or substitute for real current authority.
+    """
+    _require_preparation_root(session, owner, caller)
+    validate_reference_query_context_preparation(preparation, owner.configuration.registry)
+    original = _current_query_request(session, owner, caller, idempotency_key)
+    context = (
+        owner.catalog.prepare_reference_query_context_in_session(session, caller, preparation)
+        if original is None
+        else original.context_request
+    )
+    validate_reference_query_context_preparation(preparation, owner.configuration.registry, context)
+    if original is None:
+        # Only an initial context captured by the actual Catalog source owner can
+        # establish absence. A supplied/replayed context is not an absence grant.
+        if context.anchor.profile is None:
+            raise ReferenceQueryPreparationUnavailable("ANCHOR_REPORT_MISSING")
+        if not any(row.index is not None for row in context.views):
+            raise ReferenceQueryPreparationUnavailable("INDEX_NOT_PREPARED")
+    return _start_with_pinned_context(
+        session,
+        caller=caller,
+        context=context,
+        original=original,
+        idempotency_key=idempotency_key,
+        owner=owner,
+        executor=executor,
+    )
+
+
+def prepare_and_start_reference_query_in_session(
+    session: Session,
+    *,
+    caller: EmbeddingRegistryCaller,
+    context: SimilarityContextRequest,
+    idempotency_key: str,
+    owner: CatalogReferenceQueryOwnerAdmission,
+    executor: ReferenceQueryNativeExecutor,
+) -> ReferenceQueryWorkflowSubmitted:
+    """Own request construction from existing pins, without index selection or model use.
+
+    Repeated keys retain the original audit/pins and reauthorize through existing
+    atomic admission. Both preparation entrypoints share this single start path.
+    """
+    _require_preparation_root(session, owner, caller)
+    context = parse_similarity_context_request(context)
+    original = _current_query_request(session, owner, caller, idempotency_key)
+    return _start_with_pinned_context(
+        session,
+        caller=caller,
+        context=context,
+        original=original,
+        idempotency_key=idempotency_key,
+        owner=owner,
+        executor=executor,
+    )
+
+
+def _start_with_pinned_context(
+    session: Session,
+    *,
+    caller: EmbeddingRegistryCaller,
+    context: SimilarityContextRequest,
+    original: ReferenceQueryWorkflowRequest | None,
+    idempotency_key: str,
+    owner: CatalogReferenceQueryOwnerAdmission,
+    executor: ReferenceQueryNativeExecutor,
+) -> ReferenceQueryWorkflowSubmitted:
+    if original is not None and original.context_request != context:
+        raise ValueError("REFERENCE_QUERY_PREPARATION_REPLAY_MISMATCH")
+    if original is not None:
+        request = original
     else:
         config = owner.configuration
         owner.catalog.authorize_scope(

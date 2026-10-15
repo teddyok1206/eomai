@@ -322,6 +322,149 @@ class MetadataVerifier(SyntheticVerifier):
 CALLER = EmbeddingRegistryCaller("operator_" + "1" * 32)
 
 
+def test_initial_query_capture_reads_actual_index_artifact_and_does_not_lock_current_head(
+    guarded_engine: Engine,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Real SQL/file-set; initial source/IAM only are explicit synthetic seams."""
+    from eom_catalog_contracts.embedding_reference_query import ReferenceQuerySpaces
+    from eom_catalog_contracts.inference_transfer_experiment import VIEWS
+    from eom_catalog_service.embedding_registry_catalog_adapter import (
+        CatalogEmbeddingRegistryVerifier,
+        EmbeddingRegistryOwnerConfiguration,
+    )
+    from eom_catalog_service.embedding_registry_ports import (
+        ReferenceQueryContextPreparation,
+        ResolvedEmbeddingLookup,
+        SelectedEmbeddingSources,
+    )
+    from eom_catalog_service.settings import CatalogSettings
+    from eom_orchestrator.embedding_artifact_store import (
+        EmbeddingArtifactStore,
+        EmbeddingIndexPublicationScope,
+    )
+    from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
+    from eom_orchestrator.settings import Settings
+
+    command, capture = _fixture(guarded_engine)
+    settings = Settings(
+        nas_artifact_root=tmp_path / "artifacts",
+        workspace_root=tmp_path / "workspaces",
+        staging_root=tmp_path / "staging",
+    )
+    settings.nas_artifact_root.mkdir(mode=0o700)
+    settings.workspace_root.mkdir(mode=0o700)
+    workspace = settings.workspace_root / "index"
+    workspace.mkdir(mode=0o700)
+    published = EmbeddingArtifactStore(
+        ControlFileSetPublisher(guarded_engine, settings),
+        source_commit="a" * 40,
+    ).publish_index(
+        index=capture.index,
+        shards=capture.shards,
+        previous=None,
+        scope=EmbeddingIndexPublicationScope(
+            command.graph_snapshot,
+            command.policy_revision_id,
+            command.policy_sha256,
+        ),
+        workspace=workspace,
+    )
+    command = RegisterEmbeddingIndexCommand.model_validate(
+        seal(
+            command.model_dump(mode="json")
+            | {"index_manifest": published.index_manifest.model_dump(mode="json")},
+            "request_sha256",
+        )
+    )
+    with Session(guarded_engine) as session, session.begin():
+        register_embedding_index(session, CALLER, command, SyntheticVerifier(capture), now=NOW)
+    verifier = CatalogEmbeddingRegistryVerifier(
+        guarded_engine,
+        EmbeddingRegistryOwnerConfiguration(
+            command.corpus_id,
+            command.namespace,
+            capture.index.space,
+            capture.index.recipe,
+            ("PAST_EXAM",),
+        ),
+        identity_fence=Mock(),
+        settings=CatalogSettings(nas_artifact_root=settings.nas_artifact_root),
+    )
+    scope = EmbeddingRegistryLookup(
+        command.corpus_id,
+        command.namespace,
+        command.graph_snapshot,
+        command.policy_revision_id,
+        command.policy_sha256,
+    )
+    chosen = SelectedEmbeddingSources(scope, (capture.sources[0].item_revision_id,))
+    captures = 0
+
+    def source(_session, caller, selection):
+        nonlocal captures
+        assert _session.get_transaction().is_active and not _session.in_nested_transaction()
+        assert caller == CALLER and selection == chosen
+        captures += 1
+        if captures == 2:
+            # The reader keeps its pinned revision, not a lock on the mutable head.
+            with Session(guarded_engine) as writer, writer.begin():
+                assert (
+                    writer.scalar(
+                        select(EmbeddingIndexRecord)
+                        .where(
+                            EmbeddingIndexRecord.index_id == command.index_id,
+                        )
+                        .with_for_update(nowait=True)
+                    )
+                    is not None
+                )
+        return ResolvedEmbeddingLookup(
+            command.corpus_id,
+            capture.index.space,
+            capture.index.recipe,
+            capture.sources,
+            capture.entries,
+        )
+
+    monkeypatch.setattr(verifier, "resolve_selected_sources", source)
+    query_space = type(capture.index.space).model_validate(
+        seal(
+            capture.index.space.model_dump(mode="json") | {"purpose": "QUERY"},
+            "space_sha256",
+        )
+    )
+    preparation = ReferenceQueryContextPreparation(
+        "similarityrequest_" + uuid4().hex,
+        chosen,
+        ReferenceQuerySpaces(query=query_space, document=capture.index.space),
+        VIEWS,
+        "OPTIONAL",
+        8,
+    )
+    statements = []
+
+    def observe(_connection, _cursor, statement, _parameters, _context, _many):
+        statements.append(statement.upper())
+
+    event.listen(guarded_engine, "before_cursor_execute", observe)
+    try:
+        with Session(guarded_engine) as session, session.begin():
+            result = verifier.prepare_reference_query_context_in_session(
+                session, CALLER, preparation
+            )
+    finally:
+        event.remove(guarded_engine, "before_cursor_execute", observe)
+    assert captures == 2 and result.anchor.source == capture.sources[0]
+    indexes = tuple(row.index for row in result.views if row.index is not None)
+    assert len(indexes) == 1 and indexes[0].index_manifest == published.index_manifest
+    assert indexes[0].index_revision_id == command.index_revision_id
+    assert not any(s.lstrip().startswith(("INSERT", "UPDATE", "DELETE")) for s in statements)
+    # The only write-style lock belongs to the independent writer used above.
+    assert sum("FOR UPDATE NOWAIT" in s for s in statements) == 1
+
+
 def test_atomic_registration_historical_replay_and_stale_identity_map(
     guarded_engine: Engine,
 ) -> None:

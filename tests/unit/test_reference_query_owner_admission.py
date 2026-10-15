@@ -167,7 +167,7 @@ def make_source_case(
             namespace,
             policy.spaces.document,
             context.views[0].recipe,
-            ("PAST_EXAM",),
+            context.source_classes,
         ),
         saved_policy.member,
         policy.policy_sha256,

@@ -1,11 +1,18 @@
 """Real pinned control bytes, explicit synthetic Identity/Workflow metadata seams."""
 
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
 from eom_catalog_contracts.similarity_context import parse_similarity_context_request
-from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryCaller
+from eom_catalog_service.embedding_registry_ports import (
+    EmbeddingRegistryCaller,
+    EmbeddingRegistryError,
+    EmbeddingRegistryLookup,
+    ReferenceQueryContextPreparation,
+    SelectedEmbeddingSources,
+)
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactResolutionError
 from eom_identifiers import content_sha256
 from eom_identity_service import AuthenticatedSessionFenceError
@@ -72,6 +79,103 @@ def prepare(value, session, *, caller=None, context=None):
     )
 
 
+def context_selection(source):
+    context = source.request.context_request
+    config = source.owner.configuration.registry
+    return ReferenceQueryContextPreparation(
+        context.request_id,
+        SelectedEmbeddingSources(
+            EmbeddingRegistryLookup(
+                config.corpus_id,
+                config.namespace,
+                context.graph_snapshot,
+                context.policy_revision_id,
+                context.policy_sha256,
+                context.maximum_sources,
+            ),
+            (context.anchor.source.item_revision_id,),
+        ),
+        source.policy.spaces,
+        tuple(row.view for row in context.views),
+        context.vector_mode,
+        context.top_k,
+    )
+
+
+def prepare_selection(value, session, selection):
+    return module.prepare_and_start_reference_query_selection_in_session(
+        session,
+        caller=EmbeddingRegistryCaller(value.source.request.operator_audit.operator_id),
+        preparation=selection,
+        idempotency_key="synthetic-selected-query-preparation",
+        owner=value.source.owner,
+        executor=value.executor,
+    )
+
+
+def test_selected_source_initial_capture_and_replay_share_canonical_start(preparation, monkeypatch):
+    value = preparation
+    selection = context_selection(value.source)
+    capture = Mock(return_value=value.source.request.context_request)
+    monkeypatch.setattr(
+        value.source.owner.catalog, "prepare_reference_query_context_in_session", capture
+    )
+    with value.source.publisher.sessions.begin() as session:
+        assert prepare_selection(value, session, selection).workflow_created
+    original = value.received[0]["request"]
+    value.existing = SimpleNamespace(
+        initial_request=original.model_dump(mode="json"),
+        created_actor_type="human",
+        created_actor_id=original.operator_audit.operator_id,
+    )
+    capture.side_effect = AssertionError("reselecting current index on replay")
+    for name in ("read_pinned_reference_query_controls", "effective_permissions"):
+        monkeypatch.setattr(module, name, Mock(side_effect=AssertionError("rebuilding audit/pins")))
+    with value.source.publisher.sessions.begin() as session:
+        assert not prepare_selection(value, session, selection).workflow_created
+    assert capture.call_count == 1 and len(value.received) == 2
+    assert value.received[1]["request"] == original
+    value.executor.execute.assert_not_called()
+    value.executor.allocate_execution.assert_not_called()
+
+
+@pytest.mark.parametrize("change", ("top_k", "source", "request_id", "policy"))
+def test_selected_source_changed_replay_fails_without_initial_recapture(
+    preparation, monkeypatch, change
+):
+    value = preparation
+    request = value.source.request
+    value.existing = SimpleNamespace(
+        initial_request=request.model_dump(mode="json"),
+        created_actor_type="human",
+        created_actor_id=request.operator_audit.operator_id,
+    )
+    selection = context_selection(value.source)
+    if change == "top_k":
+        selection = replace(selection, top_k=selection.top_k + 1)
+    elif change == "request_id":
+        selection = replace(selection, request_id="similarityrequest_" + "f" * 32)
+    else:
+        chosen = selection.selection
+        chosen = (
+            SelectedEmbeddingSources(chosen.scope, ("itemrev_" + "f" * 32,))
+            if change == "source"
+            else SelectedEmbeddingSources(
+                replace(chosen.scope, policy_sha256="sha256:" + "f" * 64),
+                chosen.source_revision_ids,
+            )
+        )
+        selection = replace(selection, selection=chosen)
+    capture = Mock(side_effect=AssertionError("recapturing a replay"))
+    monkeypatch.setattr(
+        value.source.owner.catalog, "prepare_reference_query_context_in_session", capture
+    )
+    with value.source.publisher.sessions.begin() as session, pytest.raises(EmbeddingRegistryError):
+        prepare_selection(value, session, selection)
+    capture.assert_not_called()
+    assert value.received == []
+
+
 def test_constructs_existing_request_from_actual_subject_and_exact_canonical_control_bytes(
     preparation,
 ):
@@ -87,6 +191,38 @@ def test_constructs_existing_request_from_actual_subject_and_exact_canonical_con
         assert value.received[0]["actor_id"] == actual.operator_audit.operator_id
         assert value.received[0]["actor_type"] == "human"
         assert value.received[0]["definition"] is value.definition
+    value.executor.execute.assert_not_called()
+    value.executor.allocate_execution.assert_not_called()
+
+
+@pytest.mark.parametrize("missing", ("report", "index"))
+def test_known_absent_auxiliary_input_does_not_create_workflow_or_start(
+    preparation, monkeypatch, missing
+):
+    value = preparation
+    context = value.source.request.context_request.model_dump(mode="json")
+    if missing == "report":
+        context["anchor"]["profile"] = None
+        context["anchor"]["solution_evidence"] = None
+    else:
+        for view in context["views"]:
+            view["index"] = None
+    context = parse_similarity_context_request(seal(context, "request_sha256"))
+    capture = Mock(return_value=context)
+    monkeypatch.setattr(
+        value.source.owner.catalog, "prepare_reference_query_context_in_session", capture
+    )
+    with (
+        value.source.publisher.sessions.begin() as session,
+        pytest.raises(module.ReferenceQueryPreparationUnavailable) as raised,
+    ):
+        prepare_selection(value, session, context_selection(value.source))
+    assert raised.value.code == (
+        "ANCHOR_REPORT_MISSING" if missing == "report" else "INDEX_NOT_PREPARED"
+    )
+    assert value.received == []
+    assert value.observations == [WorkflowInstanceRecord]
+    assert capture.call_count == 1
     value.executor.execute.assert_not_called()
     value.executor.allocate_execution.assert_not_called()
 

@@ -7,7 +7,7 @@ Workflow/command evidence remains in this disposable DB, never deleted on retry.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from threading import Barrier, local
 from unittest.mock import Mock
 from uuid import uuid4
@@ -128,6 +128,107 @@ def test_postgres_preparation_uses_canonical_controls_and_original_workflow_star
         assert (replay.workflow.workflow_id, replay.command.command_id) == identity
         assert replay.workflow.initial_request == original
         assert not replay.workflow_created and not replay.command_created
+    value.executor.execute.assert_not_called()
+    value.executor.allocate_execution.assert_not_called()
+
+
+def test_postgres_reference_selection_replay_never_recaptures_or_changes_original(
+    prepared_query, monkeypatch
+):
+    from eom_workflow_runner.reference_query_preparation import (
+        prepare_and_start_reference_query_selection_in_session,
+    )
+
+    from tests.unit.test_reference_query_preparation import context_selection
+
+    value = prepared_query
+    selection = context_selection(value.source)
+    capture = Mock(return_value=value.context)
+    monkeypatch.setattr(
+        value.source.owner.catalog, "prepare_reference_query_context_in_session", capture
+    )
+
+    def submit(session, current):
+        return prepare_and_start_reference_query_selection_in_session(
+            session,
+            caller=value.caller,
+            preparation=current,
+            idempotency_key=value.key,
+            owner=value.source.owner,
+            executor=value.executor,
+        )
+
+    with Session(value.engine, expire_on_commit=False) as session, session.begin():
+        first = submit(session, selection)
+        identity = first.workflow.workflow_id, first.command.command_id
+        original = first.workflow.initial_request
+    capture.side_effect = AssertionError("initial source selection repeated on replay")
+    with Session(value.engine) as session, session.begin():
+        replay = submit(session, selection)
+        assert not replay.workflow_created and not replay.command_created
+        assert (replay.workflow.workflow_id, replay.command.command_id) == identity
+        assert replay.workflow.initial_request == original
+    with (
+        Session(value.engine) as session,
+        session.begin(),
+        pytest.raises(ValueError, match="EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH"),
+    ):
+        submit(session, replace(selection, top_k=selection.top_k + 1))
+    assert capture.call_count == 1
+    value.executor.execute.assert_not_called()
+    value.executor.allocate_execution.assert_not_called()
+
+
+@pytest.mark.parametrize("missing", ("report", "index"))
+def test_postgres_initial_absence_does_not_persist_workflow_start_or_launch(
+    prepared_query, monkeypatch, missing
+):
+    from eom_catalog_contracts.similarity_context import parse_similarity_context_request
+    from eom_workflow_runner.reference_query_preparation import (
+        ReferenceQueryPreparationUnavailable,
+        prepare_and_start_reference_query_selection_in_session,
+    )
+
+    from tests.unit.test_reference_query_preparation import context_selection
+
+    value = prepared_query
+    body = value.context.model_dump(mode="json")
+    if missing == "report":
+        body["anchor"]["profile"] = body["anchor"]["solution_evidence"] = None
+    else:
+        for row in body["views"]:
+            row["index"] = None
+    context = parse_similarity_context_request(seal(body, "request_sha256"))
+    capture = Mock(return_value=context)
+    monkeypatch.setattr(
+        value.source.owner.catalog, "prepare_reference_query_context_in_session", capture
+    )
+    with (
+        Session(value.engine) as session,
+        session.begin(),
+        pytest.raises(ReferenceQueryPreparationUnavailable) as raised,
+    ):
+        prepare_and_start_reference_query_selection_in_session(
+            session,
+            caller=value.caller,
+            preparation=context_selection(value.source),
+            idempotency_key=value.key,
+            owner=value.source.owner,
+            executor=value.executor,
+        )
+    assert raised.value.code == (
+        "ANCHOR_REPORT_MISSING" if missing == "report" else "INDEX_NOT_PREPARED"
+    )
+    with Session(value.engine) as session:
+        assert (
+            session.scalar(
+                select(WorkflowInstanceRecord).where(
+                    WorkflowInstanceRecord.idempotency_key == value.key,
+                )
+            )
+            is None
+        )
+    assert capture.call_count == 1
     value.executor.execute.assert_not_called()
     value.executor.allocate_execution.assert_not_called()
 
