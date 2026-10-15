@@ -58,10 +58,10 @@ class ReferenceQueryNativeExecutor(Protocol):
         request: ReferenceQueryWorkflowRequest,
         command_lease: CommandLeaseIdentity,
     ) -> ReferenceQueryLaunchAssociation:
-        """Persist original launch/allocation in the step-start fenced root, without IO.
+        """Persist original launch/allocation in the step-start fenced root.
 
-        Never commit this caller-owned root or start physical work. Both the step
-        and this allocation must roll back if the current owner or root fails.
+        Current source/member IO remains checked. Never commit this root or start
+        physical work. Step and allocation both roll back if the owner/root fails.
         """
         ...
 

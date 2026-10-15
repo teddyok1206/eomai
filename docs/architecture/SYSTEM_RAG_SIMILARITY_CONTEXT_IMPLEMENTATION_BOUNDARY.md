@@ -3670,3 +3670,21 @@ regression and PG logs use `query-allocation-atomic-` in the existing evidence r
 This fixes future atomic start; it does not authorize restoring the historical
 unallocated RUNNING step or mark its old request successful. No runtime change,
 new submission, model call or authentication was performed in this source gate.
+
+Backport successor `517e45510ee230d547f5d3b784c355002e6f30f9` retains the original
+API-compatible9-member provider family and the prior exact-anchor correction.
+Its own regression186 /154.73s and strict mypy3/lint pass. Shared allocation port,
+executor, step handler and PG test code are identical to main. PG82 above ran on
+main, not under the backport path; do not merge those evidence scopes.
+
+Next bounded operating validation is an **independent query on the other already
+indexed anchor**, `itemrev_008cbb47ed2c4b4db2d1bf063e4b964e`, logical request
+`similarityrequest_e711ec88127547a2882ac865d1fbfde7`. Same pinned index/Graph/policy
+and original control publication are reused, but the original first-anchor request
+is neither retried, mutated, retired nor relabelled successful. The new output
+cannot prove that historical run recovered. Its declared budget is one numerical
+QUERY plus exact same-key replay/current context; no seed/delta regeneration.
+Install/check the owner-only successor and preflight before asking for fresh
+authentication. Shared API/Web/runner, original numerical runtime and service
+activation remain outside this candidate's mutation scope. The full goal remains
+open, including historical-state handling and all other original requirements.
