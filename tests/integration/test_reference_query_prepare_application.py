@@ -21,7 +21,7 @@ from eom_workflow_runner.reference_query_prepare_application import (
     reference_query_prepare_identity,
 )
 from eom_workflow_runner.reference_query_prepare_driver import ReferenceQueryPrepareDriver
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from tests.integration.test_preset_model_validation_persistence import (
@@ -29,9 +29,155 @@ from tests.integration.test_preset_model_validation_persistence import (
 )
 from tests.integration.test_reference_query_submission import prepared_query as prepared_query
 from tests.unit.inference_transfer_embedding_fixtures import seal
+from tests.unit.test_installed_identity_provider_observation import observation as observation
 from tests.unit.test_reference_query_prepare_application import query_runner, wire_request
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
+
+
+def test_startup_control_read_uses_real_read_only_root_without_any_queue_work(prepared_query):
+    from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
+    from eom_orchestrator.models import ArtifactRevisionRecord, JobRecord
+    from eom_workflow_runner.reference_query_source_read import (
+        read_selected_reference_query_controls,
+    )
+
+    value = prepared_query
+    config = value.source.owner.configuration
+
+    def counts():
+        with Session(value.engine) as session:
+            return tuple(
+                session.scalar(select(func.count()).select_from(model))
+                for model in (
+                    JobRecord,
+                    ArtifactRevisionRecord,
+                    WorkflowInstanceRecord,
+                    WorkflowCommandRecord,
+                )
+            )
+
+    before = counts()
+    with Session(value.engine) as session, session.begin():
+        session.execute(text("SET TRANSACTION READ ONLY"))
+        assert session.scalar(text("SHOW transaction_read_only")) == "on"
+        policy, bundle = read_selected_reference_query_controls(
+            PinnedArtifactReadContext(session, value.source.owner.settings),
+            policy_member=config.native_execution_policy,
+            policy_sha256=config.native_execution_policy_sha256,
+            runtime_bundle=config.runtime_bundle,
+        )
+        assert (
+            policy == value.source.policy
+            and bundle.bundle_sha256 == config.runtime_bundle.bundle_sha256
+        )
+    assert counts() == before and value.source.calls == []
+    value.executor.execute.assert_not_called()
+
+
+@pytest.mark.parametrize("fault", ("none", "space"))
+def test_owner_runtime_boot_is_read_only_and_validates_controls_before_launcher(
+    prepared_query, observation, monkeypatch, tmp_path, fault
+):
+    """Real PG/controls/FD layout; account, installed-provider and launcher remain synthetic."""
+    import os
+
+    from eom_identity_service.installed_owner_session_provider import (
+        ProtectedInstalledIdentityProviderAdmission,
+    )
+    from eom_orchestrator.inference_transfer_cpu_handoff import CpuHandoffIdentity
+    from eom_orchestrator.local_embedding_control_artifacts import (
+        LocalEmbeddingControlArtifactPublisher,
+    )
+    from eom_orchestrator.models import ArtifactRevisionRecord, JobRecord
+    from eom_workflow.reference_query_execution import parse_reference_query_execution_policy
+    from eom_workflow.reference_query_owner_configuration import ReferenceQueryServiceConfiguration
+    from eom_workflow_runner import reference_query_owner_runtime as runtime_module
+
+    from tests.unit.test_reference_query_owner_runtime import configuration
+
+    value = prepared_query
+    # This older generic fixture has300s/32-task/16MiB resources. Publish a new
+    # disposable control with the actual fixed CPU recipe; never relax the guard
+    # or rewrite the original policy to make a bootstrap test pass.
+    body = value.source.policy.model_dump(mode="json")
+    body["resource_profile"] = seal(
+        body["resource_profile"]
+        | {"timeout_seconds": 180, "tasks_max": 64, "output_max_bytes": 64 * 1024**2},
+        "resource_profile_sha256",
+    )
+    policy = parse_reference_query_execution_policy(seal(body, "policy_sha256"))
+    published = LocalEmbeddingControlArtifactPublisher(
+        value.source.publisher, source_commit="a" * 40
+    ).publish_reference_query_policy(
+        policy, idempotency_key="synthetic-service-boot:" + value.key, created_at=policy.created_at
+    )
+    body = configuration(value.source, observation).model_dump(mode="json")
+    body["native_execution_policy"] = published.member.model_dump(mode="json")
+    body["native_execution_policy_sha256"] = policy.policy_sha256
+    selected = ReferenceQueryServiceConfiguration.model_validate(body)
+    if fault == "space":
+        body = selected.model_dump(mode="json")
+        body["namespace"]["space_sha256"] = "sha256:" + "0" * 64
+        selected = ReferenceQueryServiceConfiguration.model_validate(body)
+    state = tmp_path / "service-state"
+    state.mkdir(mode=0o700)
+    (state / "workspaces").mkdir(mode=0o700)
+    (state / "staging").mkdir(mode=0o700)
+    monkeypatch.setattr(runtime_module, "REFERENCE_QUERY_SERVICE_STATE_ROOT", state)
+    monkeypatch.setattr(
+        runtime_module,
+        "fixed_owner_identity",
+        lambda: CpuHandoffIdentity(os.geteuid(), os.getegid()),
+    )
+    monkeypatch.setattr(runtime_module.os, "getgroups", lambda: [])
+    monkeypatch.setattr(
+        runtime_module, "build_native_embedding_controller_engine", lambda: value.engine
+    )
+    monkeypatch.setattr(
+        runtime_module,
+        "Settings",
+        lambda **kwargs: replace(value.source.publisher.settings, **kwargs),
+    )
+    verifier = Mock(spec=runtime_module.FixedIndexingRuntimeVerification)
+    launcher = Mock(spec=runtime_module.FixedNativeQueryLauncher)
+    monkeypatch.setattr(
+        runtime_module, "FixedIndexingRuntimeVerification", Mock(return_value=verifier)
+    )
+    monkeypatch.setattr(runtime_module, "FixedNativeQueryLauncher", Mock(return_value=launcher))
+    dispose = Mock(wraps=value.engine.dispose)
+    monkeypatch.setattr(value.engine, "dispose", dispose)
+
+    def counts():
+        with Session(value.engine) as session:
+            return tuple(
+                session.scalar(select(func.count()).select_from(model))
+                for model in (
+                    JobRecord,
+                    ArtifactRevisionRecord,
+                    WorkflowInstanceRecord,
+                    WorkflowCommandRecord,
+                )
+            )
+
+    before = counts()
+    admission = ProtectedInstalledIdentityProviderAdmission(observation[0])
+    if fault == "space":
+        with pytest.raises(ValueError, match="OWNER_SPACE_UNAVAILABLE"):
+            runtime_module.build_reference_query_owner_runtime(selected, admission)
+        launcher.assert_current_runtime.assert_not_called()
+        dispose.assert_called_once()
+    else:
+        runtime = runtime_module.build_reference_query_owner_runtime(selected, admission)
+        launcher.assert_current_runtime.assert_called_once()
+        launcher.run.assert_not_called()
+        first = runtime.application(value.source.owner.identity.capture)
+        second = runtime.application(value.source.owner.identity.capture)
+        assert first.owner is not second.owner and first.driver is runtime.driver is second.driver
+        assert not runtime.driver.observe().active
+        runtime.close()
+        dispose.assert_called_once()
+    assert counts() == before and value.source.calls == []
 
 
 @pytest.fixture

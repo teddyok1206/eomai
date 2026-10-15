@@ -282,6 +282,28 @@ def parse_reference_query_step_output(value: object) -> ReferenceQueryStepOutput
         raise ReferenceQueryContractError("REFERENCE_QUERY_CONTRACT_INVALID") from None
 
 
+def validate_reference_query_policy_bundle(
+    policy: ReferenceQueryExecutionPolicy,
+    bundle: EmbeddingRuntimeBundle,
+) -> tuple[ReferenceQueryExecutionPolicy, EmbeddingRuntimeBundle]:
+    """Shared pure control closure for startup and actual requests; never authority."""
+    policy = parse_reference_query_execution_policy(policy)
+    bundle = EmbeddingRuntimeBundle.model_validate(raw_similarity_contract_value(bundle))
+    validate_embedding_runtime_bundle_pointer(
+        bundle, policy.runtime_bundle, embedding_runtime_bundle_bytes(bundle)
+    )
+    runtime, resources = bundle.numerical_runtime, policy.resource_profile
+    if (
+        policy.spaces.query.model_spec != bundle.execution_model_spec
+        or policy.spaces.query.runtime.execution_runtime_sha256 != runtime.runtime_sha256
+        or resources.device != runtime.device.kind
+        or resources.batch_size != runtime.recipe.batch_size
+        or resources.threads != runtime.recipe.threads
+    ):
+        raise ValueError("reference QUERY control/bundle closure differs")
+    return policy, bundle
+
+
 def validate_reference_query_request_references(
     request: ReferenceQueryWorkflowRequest,
     policy: ReferenceQueryExecutionPolicy,
@@ -289,12 +311,7 @@ def validate_reference_query_request_references(
 ) -> None:
     """Pure supplied-pointer closure; installed files and current source rights are not checked."""
     request = parse_reference_query_workflow_request(request)
-    policy = parse_reference_query_execution_policy(policy)
-    bundle = EmbeddingRuntimeBundle.model_validate(raw_similarity_contract_value(bundle))
-    validate_embedding_runtime_bundle_pointer(
-        bundle, request.runtime_bundle, embedding_runtime_bundle_bytes(bundle)
-    )
-    runtime, resources = bundle.numerical_runtime, request.resource_profile
+    policy, bundle = validate_reference_query_policy_bundle(policy, bundle)
     if (
         request.native_execution_policy_sha256 != policy.policy_sha256
         or request.native_execution_policy.sha256
@@ -306,11 +323,6 @@ def validate_reference_query_request_references(
             view.index is not None and view.index.spaces != policy.spaces
             for view in request.context_request.views
         )
-        or policy.spaces.query.model_spec != bundle.execution_model_spec
-        or policy.spaces.query.runtime.execution_runtime_sha256 != runtime.runtime_sha256
-        or resources.device != runtime.device.kind
-        or resources.batch_size != runtime.recipe.batch_size
-        or resources.threads != runtime.recipe.threads
     ):
         raise ValueError("reference QUERY control/bundle closure differs")
 

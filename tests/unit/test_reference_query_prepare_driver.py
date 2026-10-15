@@ -1,7 +1,7 @@
 """Actual single Thread handle; exact Runner target is simulated, never live inference."""
 
 from concurrent.futures import ThreadPoolExecutor
-from threading import Barrier, Event
+from threading import Barrier, Event, Timer
 from unittest.mock import Mock
 
 import pytest
@@ -84,6 +84,30 @@ def test_thread_start_failure_retains_no_queued_runner_or_exception(source, monk
     assert not driver.observe().active and driver.observe().outcome == "START_FAILED"
     assert driver._thread is None and not hasattr(driver, "runner")
     run.assert_not_called()
+
+
+def test_close_drains_original_handle_and_never_accepts_another_offer(source, monkeypatch):
+    runner = query_runner(source.owner, Mock(spec=ReferenceQueryNativeExecutor))
+    entered, release = Event(), Event()
+
+    def run_once(_workflow):
+        entered.set()
+        assert release.wait(timeout=3)
+        return None
+
+    monkeypatch.setattr(runner, "run_once", run_once)
+    driver = ReferenceQueryPrepareDriver()
+    workflow = "workflow_" + "a" * 32
+    assert driver.offer(workflow, runner) == "STARTED" and entered.wait(timeout=3)
+    timer = Timer(0.05, release.set)
+    timer.start()
+    try:
+        driver.close()
+    finally:
+        release.set()
+        timer.join(timeout=3)
+    assert not driver.observe().active
+    assert driver.offer(workflow, runner) == "UNAVAILABLE"
 
 
 @pytest.mark.parametrize("fault", ("family", "actor", "role", "owner", "workflow"))

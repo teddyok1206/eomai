@@ -53,6 +53,7 @@ from eom_workflow.reference_query_execution import (
     parse_reference_query_step_output,
     parse_reference_query_workflow_request,
     validate_reference_query_launch_association,
+    validate_reference_query_policy_bundle,
     validate_reference_query_request_references,
 )
 from pydantic import TypeAdapter
@@ -271,9 +272,38 @@ def read_pinned_reference_query_controls(
 ) -> tuple[ReferenceQueryExecutionPolicy, EmbeddingRuntimeBundle]:
     """Configured control bytes only; caller owns current authority and request closure."""
     config.__post_init__()
-    pointers = (config.native_execution_policy, config.runtime_bundle.manifest_member)
+    return read_selected_reference_query_controls(
+        reader,
+        policy_member=config.native_execution_policy,
+        policy_sha256=config.native_execution_policy_sha256,
+        runtime_bundle=config.runtime_bundle,
+    )
+
+
+def read_selected_reference_query_controls(
+    reader: PinnedArtifactReadContext,
+    *,
+    policy_member: ArtifactMemberPointer,
+    policy_sha256: str,
+    runtime_bundle: EmbeddingRuntimeBundlePointer,
+) -> tuple[ReferenceQueryExecutionPolicy, EmbeddingRuntimeBundle]:
+    """Canonical system controls without inventing a source/user context for startup."""
+    policy_member = ArtifactMemberPointer.model_validate(
+        raw_similarity_contract_value(policy_member)
+    )
+    runtime_bundle = EmbeddingRuntimeBundlePointer.model_validate(
+        raw_similarity_contract_value(runtime_bundle)
+    )
+    TypeAdapter(Sha256).validate_python(policy_sha256)
+    if (
+        policy_member.member_path != "policy.json"
+        or policy_member.schema_ref != REFERENCE_QUERY_POLICY_REF
+        or policy_member.media_type != "application/json"
+    ):
+        raise ValueError("REFERENCE_QUERY_CONTROL_SELECTION_INVALID")
+    pointers = (policy_member, runtime_bundle.manifest_member)
     reader.prefetch(tuple((p.artifact_id, p.artifact_revision_id) for p in pointers))
-    pointer = config.native_execution_policy
+    pointer = policy_member
     reader.require_file_set(
         pointer.artifact_id,
         pointer.artifact_revision_id,
@@ -294,17 +324,19 @@ def read_pinned_reference_query_controls(
         return value
 
     policy = parse_reference_query_execution_policy(
-        read(config.native_execution_policy, REFERENCE_QUERY_POLICY_ARTIFACT_TYPE, 64 * 1024)
+        read(policy_member, REFERENCE_QUERY_POLICY_ARTIFACT_TYPE, 64 * 1024)
     )
     raw_bundle = read(
-        config.runtime_bundle.manifest_member,
+        runtime_bundle.manifest_member,
         RUNTIME_BUNDLE_ARTIFACT_TYPE,
         MAX_RUNTIME_BUNDLE_BYTES,
     )
     if not isinstance(raw_bundle, dict):
         raise ValueError("REFERENCE_QUERY_BUNDLE_INVALID")
     bundle = parse_embedding_runtime_bundle(raw_bundle)
-    return policy, bundle
+    if policy.policy_sha256 != policy_sha256 or policy.runtime_bundle != runtime_bundle:
+        raise ValueError("REFERENCE_QUERY_CONTROL_SELECTION_INVALID")
+    return validate_reference_query_policy_bundle(policy, bundle)
 
 
 def resolve_reference_query_sources(

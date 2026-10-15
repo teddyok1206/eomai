@@ -1,0 +1,69 @@
+[Unit]
+Description=EOM current-operator reference QUERY owner
+After=eom-api.service systemd-tmpfiles-setup.service
+Requires=eom-api.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/var/lib/eom-workflow-runner/reference-query-owner
+EnvironmentFile=/etc/eom/secrets/catalog-manager.env
+Environment=EOM_REFERENCE_QUERY_CONFIGURATION_SHA256=@CONFIGURATION_SHA256@
+Environment=TZ=UTC
+Environment=LANG=C.UTF-8
+Environment=PATH=/usr/bin:/bin
+UnsetEnvironment=PYTHONPATH PYTHONHOME PYTHONSTARTUP PYTHONUSERBASE LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT
+ExecStart=/opt/eom/conda/envs/eom-embedding-experiment/bin/python -I -B /opt/eom/embedding-owner-releases/@SOURCE_COMMIT@/site-packages/eom_workflow_runner/reference_query_owner_entry.py
+Restart=no
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_DAC_READ_SEARCH
+AmbientCapabilities=
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+# Keep provider paths in the real filesystem view: per-file bind masking would
+# hide replacement epochs. ProtectSystem already makes them read-only here.
+ReadWritePaths=/run/eom-reference-query-owner
+ReadWritePaths=/var/lib/eom-workflow-runner/reference-query-owner
+ReadWritePaths=/var/lib/eom-workflow-runner/incremental-embeddings/query
+ReadWritePaths=/mnt/nas/eom/artifacts
+InaccessiblePaths=/home/eom/EOM /home/eom/EOMIS /root/.codex
+InaccessiblePaths=/srv/eom/worker-homes /srv/eom/models/image
+InaccessiblePaths=/srv/eom/workspaces /srv/eom/image-workspaces /srv/eom/image-reference-workspaces
+InaccessiblePaths=/etc/eom/workflow-runtime.env
+InaccessiblePaths=/etc/eom/secrets/postgres.env /etc/eom/secrets/catalog-manager.env
+InaccessiblePaths=/etc/eom/secrets/hwpx-manager.env /etc/eom/secrets/observe.env
+InaccessiblePaths=/etc/eom/secrets/web-gui.env
+InaccessiblePaths=-/etc/eom/secrets/dev-slack.env -/var/run/docker.sock
+
+UMask=0077
+MemoryMax=1G
+CPUQuota=200%
+TasksMax=64
+TimeoutStartSec=90
+TimeoutStopSec=360
+KillMode=control-group
+LimitCORE=0
+StandardInput=null
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

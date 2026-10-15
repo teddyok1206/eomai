@@ -40,6 +40,15 @@ class ReferenceQueryPrepareDriver:
         self._thread: Thread | None = None
         self._workflow_id: str | None = None
         self._outcome: ReferenceQueryDriveOutcome | None = None
+        self._closed = False
+
+    def close(self) -> None:
+        """Stop offers and drain only the existing bounded invocation; never cancel/retry it."""
+        with self._lock:
+            self._closed = True
+            thread = self._thread
+        if thread is not None:
+            thread.join()
 
     def observe(self) -> ReferenceQueryDriveObservation:
         with self._lock:
@@ -53,6 +62,8 @@ class ReferenceQueryPrepareDriver:
         workflow_id = TypeAdapter(WorkflowId).validate_python(workflow_id, strict=True)
         require_reference_query_prepare_runner(runner)
         with self._lock:
+            if self._closed:
+                return "UNAVAILABLE"
             if self._thread is not None and self._thread.is_alive():
                 return "ALREADY_ACTIVE" if self._workflow_id == workflow_id else "BUSY"
             self._workflow_id, self._outcome = workflow_id, None
