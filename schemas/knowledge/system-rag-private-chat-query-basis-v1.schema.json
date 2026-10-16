@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/system-rag-private-chat-query-basis/1.0",
+  "title": "Exact owned user-message basis for private Chat similarity queries",
+  "description": "Immutable pointers and hashes, not ownership, retrieval or native execution authority. No corpus enrollment or accepted Item/report claim.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "basis", "consumer_purpose", "conversation_id", "turn_id", "message", "query_recipe", "query_text_sha256", "basis_sha256"],
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "message": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "artifact_revision_id", "member_path", "schema_ref", "media_type", "sha256"],
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {"const": "chat/evidence.json"},
+        "schema_ref": {"enum": ["eom://schemas/general-chat/message/1.0", "eom://schemas/general-chat/message/2.0"]},
+        "media_type": {"const": "application/json"},
+        "sha256": {"$ref": "#/$defs/hash"}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "system-rag-private-chat-query-basis/1.0"},
+    "basis": {"const": "PRIVATE_CHAT_QUERY"},
+    "consumer_purpose": {"const": "GENERAL_CHAT_READ"},
+    "conversation_id": {"type": "string", "pattern": "^chat_[0-9a-f]{32}$"},
+    "turn_id": {"type": "string", "pattern": "^chatturn_[0-9a-f]{32}$"},
+    "message": {"$ref": "#/$defs/message"},
+    "query_recipe": {"const": "private-chat-exact-user-text/1.0"},
+    "query_text_sha256": {"$ref": "#/$defs/hash"},
+    "basis_sha256": {"$ref": "#/$defs/hash"}
+  }
+}

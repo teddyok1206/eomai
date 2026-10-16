@@ -8,6 +8,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 PURE_MODULES = (
+    "packages/catalog_contracts/eom_catalog_contracts/private_chat_query_basis.py",
     "packages/catalog_contracts/eom_catalog_contracts/item_inference_transfer.py",
     "packages/catalog_contracts/eom_catalog_contracts/inference_transfer_experiment.py",
     "packages/catalog_contracts/eom_catalog_contracts/inference_transfer_snapshot.py",

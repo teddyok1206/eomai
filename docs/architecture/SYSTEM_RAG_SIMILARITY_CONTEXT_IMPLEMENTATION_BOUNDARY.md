@@ -82,6 +82,12 @@ their actual intent. Every consumer records which basis it used and whether its 
 consumer target remains open until its requested basis, delivery, prompts and activation are
 implemented and verified; a matrix of planned adapters is not a completion claim.
 
+2026-10-16 concrete private-Chat leaf: the
+[owned user-message basis](PRIVATE_CHAT_SIMILARITY_QUERY_BASIS.md) now has a closed
+schema and an Orchestrator-owned, one-message canonical read with fresh ownership
+fencing. Source/guarded PostgreSQL validation is not private context/QUERY admission,
+Chat tool activation or C4 acceptance. Approved-anchor request1.0 remains unchanged.
+
 ## 4. Protocol-first minimum source changes
 
 The following names/versions are **proposed**, not existing registered schemas. Root review must

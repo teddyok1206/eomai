@@ -924,6 +924,11 @@ from eom_catalog_contracts.pdf_learning_completion import (
     verify_graph_past_exam_sources,
     verify_protocol_documents,
 )
+from eom_catalog_contracts.private_chat_query_basis import (
+    PrivateChatQueryBasis,
+    build_private_chat_query_basis,
+    private_chat_query_text_sha256,
+)
 from eom_catalog_contracts.science_assessment_corpus import (
     ScienceAssessmentAcquisitionCandidate,
     ScienceAssessmentAcquisitionFailureObservation,
@@ -1716,6 +1721,7 @@ __all__ = [
     "PdfSource",
     "PreviewMockExamAssemblyPlan",
     "PreviewMockExamAssemblyPlanCommand",
+    "PrivateChatQueryBasis",
     "ProductUsageGraphEdgeV1",
     "ProductUsageGraphNodeV1",
     "ProductUsageGraphProjectionV1",
@@ -1815,6 +1821,7 @@ __all__ = [
     "build_integrated_science_mock_exam_production_plan_v5",
     "build_mock_exam_assembly_cohort",
     "build_mock_exam_assembly_plan",
+    "build_private_chat_query_basis",
     "build_similarity_materials",
     "candidate_visible_image_instruction_paths",
     "catalog_application_schema_route",
@@ -1870,6 +1877,7 @@ __all__ = [
     "parse_similarity_context_request",
     "parse_similarity_materials",
     "parse_supported_reference_query_input",
+    "private_chat_query_text_sha256",
     "resolve_integrated_science_curriculum_scope",
     "validate_assessment_page_observation_anchors",
     "validate_benchmark_ack",
