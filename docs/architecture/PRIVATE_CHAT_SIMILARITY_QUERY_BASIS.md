@@ -153,8 +153,11 @@ The source owner checks that its exact question agrees with both, without trimmi
 summarizing, generating facets or adding assistant/history text.
 
 The preparation function accepts an already owned projection and an exact pinned
-CONTENT_ONLY index selection. Reject absent index, mismatched space/recipe,
-invalid/copied basis, changed text and unoffered view before backend invocation.
+CONTENT_ONLY index selection. Reject absent index, invalid/copied basis, changed
+text and unoffered view locally. Actual backend model/runtime/batch/thread closure
+is checked before and after encoding. Canonical index/space/document-recipe
+resolution remains the owner's mandatory check, not something a pure builder can
+prove from a pointer alone.
 The parent context hash is an association, not proof that the parent exists or is
 authorized. Actual private-context/Workflow admission must resolve/revalidate that
 parent and its operator/session/purpose before staging or launching this envelope.
@@ -218,3 +221,26 @@ No new dependency, public corpus entry, query cache or production mutation occur
 Bounded source/test logs:`private-chat-query-encoding-focused.log`,
 `private-chat-numeric-library-{regression,type,boundaries}.log` in the existing
 temporary operator directory. Full goal/C4 remain **NOT_COMPLETE / NOT_ACTIVE**.
+
+Candidate`1cfe5686d1bea78a66e5611fe4ac74540872a2a2` passed three-wheel build,
+RECORD and contract inventory. Exact platform raw:
+`fa5d4bffd988d85b8ed69673394a8e1da76445ef07c0b0b92ad864c1aa1929a4`;
+API-contract raw:`2928b36c752c8a11a3d184ceaf2e61a538bf5c47b417562f7d9bcc699920cde2`.
+The new code remains uninstalled; older operating INDEX/reference services retain
+their exact source/config/permissions and do not accept private-question input.
+
+Independent isolated proof imported200 EOM modules from those two exact archives,
+with no checkout/installed-prefix runtime fallback. Explicit checkout test fixtures
+provided only synthetic input/backend data. One synthetic QUERY encode passed
+private input/result/shard/binary closure; real model/DB/activation calls and optional
+ML imports0. Packaged private library entries/resources are present. This does not
+prove actual UID/unit/source admission or a usable Chat tool.
+Evidence:`private-chat-numeric-library-release-build.log` and
+`private-chat-numeric-library-owner-pair-proof.log` in the existing temporary directory.
+
+Actual Workflow connection also has an explicit remaining persistence boundary:
+the current `workflow_step_runs` CHECK admits only the released INDEX/reference
+application result schemas. A private result must not be mislabeled as one of them.
+Before admitting a private Workflow, define its exact context/policy/check/output
+successors and corresponding guarded migration through the existing Runner queue.
+No CHECK, DB head, runtime or source policy was changed by this source library.
