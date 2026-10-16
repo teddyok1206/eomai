@@ -1,7 +1,12 @@
 # Automatic indexing: OS loader-cache drift
 
-2026-10-16 UTC. Current operating incident, not a lost corpus or failed Item.
-Full incremental-RAG goal stays ACTIVE and incomplete. No automatic restart/retry.
+2026-10-16 UTC. Chronological incident and recovery record, not a lost corpus or failed Item.
+Full incremental-RAG goal stays ACTIVE and incomplete. No blind automatic restart/retry.
+Latest recovery checkpoint: QUERY READY10:25 UTC; INDEX identity14 started10:59 UTC
+and first missing-binding request QUEUED11:00 UTC. Earlier stopped/pending observations
+below are historical, not the current service selection. New terminal encoding and
+full coverage were not yet observed at that checkpoint. Authenticated HTTP continuation
+stopped at login11:09 UTC; a subsequent input-validated observer is waiting in EOM1.
 
 ## Observed state and preserved work
 
@@ -447,3 +452,109 @@ Candidate e6e9b926's owner pair is now installed INACTIVE and an exact command i
 prepared, but no operating cancellation/identity activation has occurred. The
 shared numerical prefix stays b41b3cb4 and QUERY remains on its recovered b41b3cb4
 release. This never changes failed history to success.
+
+### Supported cancellation, identity14 and actual INDEX startup —11:00 UTC
+
+The reviewed optional owner release remains pinned to
+`e6e9b926c5c6811478dd56d8d88c682d1312e3f3`; subsequent documentation commits do not
+change this selected source. The protected INDEX numerical prefix and QUERY remain
+on b41b3cb4. No shared API/Catalog release or numerical bundle/proof/space changed.
+
+Before activation, a READ ONLY canonical count observed101 encodings,101 source
+bindings,32 immutable index revisions and6 logical indexes at10:46 UTC. These are
+registry rows, not unique Item coverage or a claim that all520 targets are indexed.
+
+The actual Orchestrator UID990 published the exact new native control policy through
+its existing Job/Artifact boundary, not a worker NAS write:
+
+- Job:`job_6547bef2e96246c4babf2dcdf91abc90`;
+- Artifact:`artifact_9db642f6ebd24457ac376ef1ca3d00ec`;
+- revision:`rev_7ed4ece08a30475da57f46841a258dd7`;
+- policy raw:`febc5646c1e6481b5def65fe3a61464268661ec13b153769e78925eb4186be00`;
+- policy semantic:`e62f6776dedc9fa38671d78433adb10e9e77665a1d42d58667ff48db2bb0c4b9`;
+- manifest:`c731da69b7f221d4fff63069541cf49fa45a45df133e239b120f62bc84892f64`.
+
+An initial finite publication invocation rejected `setresuid` before Python, with
+no Job or publication output. It is preserved. The corrected invocation dropped
+to UID990/GID1000/empty supplementary groups before EOM imports, asserted zero
+permitted/effective/ambient capabilities and NoNewPrivs, and reused the original
+policy idempotency key. This was control publication, not a model/encoder launch.
+The public Catalog read independently checked the actual Artifact producer,
+manifest, policy bytes and hashes before any identity activation.
+
+At`2026-10-16T10:55:55.043161Z`, the installed public
+`cancel_unstarted_indexing_workflow` application, under the actual database-owner
+principal`eom_app`, terminally cancelled only the original never-claimed request:
+
+- Workflow:`workflow_d9dfdd0ba988482892ce84d4b4d48e7c`;
+- command:`wfcmd_dbf2b31a80eb4e55ab2dc23991a3efa2`;
+- request SHA:`4e4b2ef8c10ccf722d81f13365200a194433594166651507742e7f044cd136f1`;
+- receipt raw:`394288af7df9a6fc2a4dd454faf200bf0a69d6d6a2ff5d80bc89130831ca29b7`;
+- receipt semantic:`5e2c31f0ab02e69c73e4dc87754ab3ad4eedb945d7f10922686a3a6d15f9037c`.
+
+Workflow, stage and START command are truthfully CANCELLED, not successful.
+Request bytes/hash/key/service13 remain immutable; attempts/generation stay0,
+all lease fields remain absent and no step/Job/Artifact/model was created by
+cancellation. Historical failed work is unchanged. Identity activation independently
+checked this exact receipt and the absence of other executable service commands.
+
+Existing public Identity register/activate/grant applications selected service
+revision14, resource version28:
+`localindexservicerev_63713ee227a04e3388f04ca65d6aa895`, semantic
+`0ec80f58b7b14b09cf0b709eae06b2d8c259f511d36de1f9c53e17583ec88b32`.
+Grant revision:`accessrev_2cf7c934457e47f79d4e997fbbdcb683`.
+Source classes, namespaces, source-access policy, model/bundle/space/recipe,
+maximum4 targets and60-second discovery interval are unchanged. This is no new
+queue, schema migration, source permission or direct row-repair operation.
+
+After inspecting the stopped owner and exact selected files, the operator started
+INDEX once. Actual PID1953488/invocation`36f20dd36c444cc780b52fe8eed41fbe`
+reported`LOCAL_INDEXING_SERVICE_STARTED` at`2026-10-16T10:59:33.123850Z`.
+First actual reconciliation at`2026-10-16T11:00:27.273584Z` observed:
+
+| Field | Actual observation |
+| --- | --- |
+| View/state | CONTENT_ONLY / QUEUED |
+| Eligible sources |545 |
+| Missing accepted reports |25, separately waiting; not fabricated |
+| Missing bindings |481 |
+| Selected targets |4 |
+| Workflow | `workflow_29e2bf3e901f4098b823857d269d1872` |
+| Command | `wfcmd_4508178810d944bfac6d063d6bb12a73` |
+
+This proves startup and normal missing-binding admission, **not new terminal
+encoding, full coverage or full-goal acceptance**. Subsequent progress observation
+is limited to30-minute intervals after the initial11:00:44 UTC startup gate.
+No `reset-failed`, old-row success reinterpretation or speculative new HTTP key.
+
+Root selection/evidence:`/var/lib/eom-indexing-host-e6e9b926` and the original
+root-only cancellation stage. Selected runtime raw:
+`8cdbcc0334a07ac91850e1da5db4e841bf31d35d01f7d3e621368387b81e54e8`;
+owner raw:`e0bf66ef3b69d3d3893add2c97999085302a91f3c86581eb93eece019cc7f1eb`;
+unit raw:`4a7a8ba8423a28fd376419a2422676513975d300160e9b181ee79a15e98f8154`.
+Temporary bounded logs remain under`/tmp/eom-cpu-host-successor-Z1YMaK2I`:
+policy publication attempts, original unstarted cancellation preparation/execution,
+INDEX control preparation/activation/selection, startup and first observation.
+
+### Original HTTP continuation stopped before login —11:09 UTC
+
+The existing EOM1 observer PID1937790 was still waiting in getpass when the user
+reported entering the password. Completing that pending input produced HTTP422
+`API_REQUEST_INVALID` at11:09:16 UTC, before an authenticated operator or query
+submission. The observer exited; its stale local LOGIN marker is not a live prompt.
+No password/token was persisted, new query/key created or model call made. This
+does not establish wrong credentials: input/request validation and authentication
+failure are different. The original request/key/operation and all previous failed
+observations remain preserved. Authentication HTTP C1 is still incomplete.
+
+The finite local observer was then corrected to validate the existing `LoginRequest`
+before network entry and refuse empty/oversized input locally. Its new observation
+state/log is separate from the preserved failed observation; request bytes, key and
+operation are unchanged. Actual PID1961407 is waiting for getpass in the same EOM1
+pane; the user has been told the exact Studio password prompt, not a sudo prompt.
+No operating authentication policy, TTL, stored credential or source code changed.
+The old EXIT/LOGIN marker is not used as current liveness evidence.
+
+README/runtime-documentation and original-design/layer-boundary checks:31 PASS
+in5.17s; `git diff --check` PASS. These documentation checks are not runtime or
+authenticated HTTP acceptance and do not add to the overlapping core suite totals.

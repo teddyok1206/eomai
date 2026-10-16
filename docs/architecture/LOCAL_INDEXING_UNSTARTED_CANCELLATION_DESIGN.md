@@ -143,3 +143,23 @@ Root preparation evidence:
 Next prepare/review the compatible INDEX identity14/runtime/grant selection before
 applying this supported cancellation and normal reconciliation. Do not allocate a
 synthetic lease, directly modify rows or treat this preparation as a receipt.
+
+## Actual supported execution —2026-10-16 10:55 UTC
+
+The prepared exact command was subsequently executed once through the installed
+e6e9b926 public application, under actual DB-owner principal`eom_app`.
+Original workflow`workflow_d9dfdd0ba988482892ce84d4b4d48e7c`, stage and command
+`wfcmd_dbf2b31a80eb4e55ab2dc23991a3efa2` became CANCELLED at
+`2026-10-16T10:55:55.043161Z`; attempts/generation0, absent lease, zero steps and
+the original request bytes/hash/key/service13 were preserved. No new Job,
+Artifact or model execution came from cancellation; failed history was not changed.
+Receipt raw:`394288af7df9a6fc2a4dd454faf200bf0a69d6d6a2ff5d80bc89130831ca29b7`;
+semantic:`5e2c31f0ab02e69c73e4dc87754ab3ad4eedb945d7f10922686a3a6d15f9037c`.
+
+Only after independently reading that receipt did supported identity14/grant
+activation and stopped-owner file selection proceed. Normal reconciliation then
+queued four missing CONTENT_ONLY targets after the actual owner started10:59 UTC.
+This is a truthful terminal cancellation plus new-service discovery, not an
+uncertain started request bypassed with a replacement key. New encoding completion,
+coverage, consumer integration and CPU/CUDA comparison are separate unfinished gates.
+See the [chronological operating record](../operations/LOCAL_INDEXING_HOST_CACHE_DRIFT_2026-10-16.md#supported-cancellation-identity14-and-actual-index-startup--1100-utc).
