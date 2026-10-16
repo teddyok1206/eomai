@@ -164,6 +164,41 @@ protected installation of these reviewed installer bytes, exact successor inputs
 for the already built platform23/leasec9 pair and one observed whole-prefix audit.
 No existing B41 inventory is reused as evidence for those changed bytes.
 
+### Protected successor operation started —22:17 UTC
+
+Same EOM2 operator pane/cached sudo installed the exact reviewed installer at
+`/usr/local/libexec/eom-release-operator-indexing-4cf6ac9a/install-index-runtime-0f8c70f0.sh`;
+root:root0444/nlink1 and raw260808d0 match. No password prompt, saved credential,
+session/TTL change, API deployment or worker-role grant was used.
+
+New canonical audit-input1.2 is20012 bytes, raw
+`89521b72dad0c7d035d034be6c5b525a2cec9dae0a8eb3dbda7bb26257e0175f`.
+It pins the unchanged70 public archives/Conda/host closure and explicit platform
+`23dce821fa0918c81bb5510f055a5c141a64b7af` / lease
+`c9ab75c344570f69c95ff09853c8001e753f4650` source/wheel successors, helper79e22063
+and the exact nine bootstrap files. Existing Catalog registry validation and the
+pure installed-input reader PASS. An initial bare JSON Schema invocation lacked
+the official cross-schema registry and failed resolving an `eom://` reference;
+corrected the invocation to existing `validate_contract`, not the schema/guard.
+This validation is metadata only, not publication or numerical authority.
+
+Actual unit `eom-cuda-private-successor-0f8c70f0.service`, invocation
+`dc4a360a76384c6cae3606d1703955e4`, PID3016900 was confirmed alive/activating at
+22:20:12. Its `Result=success`/status0 while activating is **not terminal evidence**.
+The existing protected host cache is actually bound read-only; OLD, CPU and model
+paths are read-only. Observed policy: private network/devices, NoNewPrivileges,
+ProtectSystem=strict, only CHOWN/DAC_READ_SEARCH capabilities, CPU quota100%,
+memory2GiB and idle I/O. No GPU device is exposed to this installation operation.
+
+Evidence directory `/tmp/eom-cuda-private-successor-fwwaCsRn` contains the exact
+launch plan, input and logs. The existing prefix tree pin remains the original
+`8d60b3cf18302c2b776e789d51508dd43291e4438cfd6d771854e5110a9a4f67`.
+Current status: **INSTALLER_INSTALLED / SUCCESSOR_RUNNING / NOT_ADMITTED /
+NOT_PROBED**. Reobserve this same handle/log/phase before any next mutation;
+never repeat a publication on observation timeout or claim a new inventory before
+the actual OLD whole-prefix auditor terminates successfully. CPU/C1–C5 and the
+six real numerical comparisons remain independent, still open full-goal gates.
+
 ## Implemented metadata slice —2026-10-16 UTC
 
 Defined the unregistered ROOTLOCAL receipt2.0 JSON Schema2020-12 **before** its
