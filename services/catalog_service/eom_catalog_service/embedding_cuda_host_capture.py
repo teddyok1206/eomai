@@ -58,6 +58,19 @@ def _hash(raw: bytes) -> str:
     return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
+def validate_cuda_host_configuration_identity(
+    configuration_id: object, configuration_revision_id: object
+) -> None:
+    _require(
+        type(configuration_id) is str
+        and re.fullmatch(r"embeddingcudahost_[0-9a-f]{32}", configuration_id) is not None
+        and type(configuration_revision_id) is str
+        and re.fullmatch(r"embeddingcudahostrev_[0-9a-f]{32}", configuration_revision_id)
+        is not None,
+        "POINTER_INVALID",
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class CudaHostExtensionPin:
     schema_ref: str
@@ -68,15 +81,13 @@ class CudaHostExtensionPin:
     snapshot_sha256: str
 
     def __post_init__(self) -> None:
+        validate_cuda_host_configuration_identity(
+            self.configuration_id, self.configuration_revision_id
+        )
         _require(
             type(self.schema_ref) is str
             and self.schema_ref
             == "eom://schemas/knowledge/embedding-cuda-host-extension/1.0#/$defs/snapshot"
-            and type(self.configuration_id) is str
-            and re.fullmatch(r"embeddingcudahost_[0-9a-f]{32}", self.configuration_id) is not None
-            and type(self.configuration_revision_id) is str
-            and re.fullmatch(r"embeddingcudahostrev_[0-9a-f]{32}", self.configuration_revision_id)
-            is not None
             and type(self.manifest_byte_count) is int
             and 0 < self.manifest_byte_count <= _MAX_MANIFEST
             and _sha(self.manifest_raw_sha256)

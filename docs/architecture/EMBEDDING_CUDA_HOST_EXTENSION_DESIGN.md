@@ -334,3 +334,75 @@ preflight, and implement/observe a **separate CUDA** sealed receipt/probe/device
 lease admission before any candidate/model execution. The CPU-only receipt remains
 insufficient. Continue original C1–C5 and the six real frozen comparisons/conditional
 GPU default; source/native file composition alone does not finish the goal.
+
+## Private cache publication boundary
+
+Use the installed static`/usr/sbin/ldconfig.real`, not the387-byte dpkg-trigger
+wrapper and not a second hand-written cache serializer/sort implementation. Its
+local official man page and installed help confirm`-r` private root,`-C` private
+cache,`-f` private configuration,`-X` no symlink changes and`-i` ignored auxiliary
+cache. Reviewed tool1051280bytes/raw
+`d879c9a8a41240aeb7fd0f3221116fc4cf41cc6c64c24e10541d1bafbe537ab1`.
+Never invoke it without explicit private-root/cache arguments.
+
+The existing installation owner will publish the extension, not a worker or a new
+application registry. Use the existing CUDA prefix-publication lock. Copy each of
+the six approved, hash-pinned sources once into fresh root-owned stage inodes;
+never chown user-held inputs, hardlink shared CPU files, change global loader
+files or install OS packages. Source locations are not identity. The immutable
+role/size/hash recipe is independent of source paths, and the optional rdmacm
+input remains untrusted until its approved122144-byte content hash matches.
+
+Generate the cache in one finite administrative unit with private mounts/network/
+devices and only CAP_SYS_CHROOT, not a model worker. Its private chroot-shaped tree
+contains read-only bind views of15 existing CPU library routes and the six staged
+CUDA libraries at their final declared revision paths. This keeps the real cache
+generator's format/order without copying the CPU payloads or changing the host
+cache. Cache/config/auxiliary writes are confined to the private build root.
+The selected static utility itself is copied from a held verified FD to a fresh
+protected executable inode before use; do not execute a mutable path after hashing.
+
+After terminal unit success, validate the exact21 routes, create canonical1.0
+manifest/host/semantic hashes and atomically publish the exactly eight-member
+root-local revision. Retain operation stage/unit/failure evidence outside that
+canonical namespace. Missing/hash/source/permission failures never publish; an
+unknown unit outcome never starts a replacement. Same valid revision may be
+read/reused; a conflicting or incomplete revision is an explicit error, not an
+overwrite. Existing root/file/FD/mount owners and schema remain authoritative;
+no new wire schema, queue, database or model/device grant is needed for this local
+administrative materialization. Separate native CUDA probe/lease admission still
+precedes any candidate/model execution.
+
+### Publication source checkpoint —2026-10-16 17:25 UTC
+
+The stdlib-only `embedding_cuda_host_publication` administrative adapter now
+implements this boundary. Its protected installed entry requires root, the OLD
+Python3.12.13 with isolated/no-site/no-bytecode flags, and an immutable installed
+owner-release path. The existing reviewed wheel installer remains code authority;
+a source path or self-reported hash does not grant privilege. The publication
+command is an internal frozen value, not a new cross-service wire protocol.
+
+Fresh focused filesystem/contract/dependency tests169 PASS in14.83seconds; strict
+type checking of the two changed production modules, Ruff and format PASS. Tests
+include busy locks, source/size/hash substitution, incomplete/conflicting revision
+rejection, valid reuse without another unit, exact21 readonly binds in one systemd
+property, unit-state ambiguity, terminal failure/timeout evidence, bounded cache
+output and stdlib-only import. They use temporary synthetic ownership and mocked
+systemd execution; they do not prove an actual root publication or CUDA admission.
+
+Trials exposed implicit group-writable parent modes under the caller's umask and
+cross-parent rename of an already0555 directory. Production now creates every
+private parent explicitly0700 and moves the complete private0700 revision before
+sealing0555. A crash leaving an unsealed final revision is rejected, never silently
+sealed/reused. Other trial failures were fixture ownership/argument-count issues;
+the production owner guards were not loosened. Earlier truncated test output was
+not counted: the fresh169-case run above supplies the recorded outcome.
+
+The preceding4b51b533 standard three-wheel build/RECORD/OpenAPI gate also passed
+at `/tmp/eom-api-build/4b51b533b45963d50551c1f0215abbbeba9534e8.dQ2SXg/dist`.
+It predates this publisher and cannot be used to install it. A fresh reviewed
+commit/build and existing protected owner-wheel installation must precede actual
+publication. No root publication, OS/driver/cache change, model/GPU execution,
+database mutation, API/Web release or service selection occurred in this slice.
+Full C1–C5, original authenticated context verification and the six real fixed
+CPU/CUDA comparisons remain open; CPU remains the operating default.

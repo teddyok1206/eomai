@@ -9,6 +9,18 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Source checkpoint17:25 UTC: explicit root-local CUDA host publisher now passes
+  fresh169 focused filesystem/contract/dependency tests, strict2/Ruff/format.
+  It reuses the existing publication lock and root owner-wheel boundary, generates
+  the cache only in a bounded private static-ldconfig unit and rejects incomplete,
+  conflicting or unknown outcomes without replay. Synthetic source tests are not
+  actual publication/native admission. Prior4b51 standard three-wheel build PASS
+  does not contain this new publisher; fresh commit/build/install is next. No
+  shared API/Web/DB/OS/model/GPU mutation. Original HTTP observer2391005 remains
+  alive at LOGIN with empty output; no new question/session/request. Normal INDEX
+  observation17:18:21 found the same PID/invocation active; next≥17:48:21, not fresh
+  canonical coverage evidence. C1–C5/six real comparisons/conditional default stay
+  open. [Publication design and exact source scope](../architecture/EMBEDDING_CUDA_HOST_EXTENSION_DESIGN.md#private-cache-publication-boundary).
 - Source checkpoint16:31 UTC: CUDA-only native config/prefix input1.2, exact nine
   pre-import module pins, composite host/file/version/mapped-FD checks and shared
   bounded readelf parser implemented. Fresh combined1327 PASS; expanded CUDA35
