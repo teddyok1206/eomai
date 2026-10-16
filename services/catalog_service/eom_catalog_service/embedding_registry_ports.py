@@ -65,6 +65,13 @@ class EmbeddingRegistryServiceCaller:
 
 type EmbeddingRegistryActor = EmbeddingRegistryCaller | EmbeddingRegistryServiceCaller
 
+type AuthoringReferencePurpose = Literal["PAST_EXAM_VARIATION", "ITEM_AUTHORING", "ITEM_REVIEW"]
+AUTHORING_REFERENCE_PURPOSES: tuple[AuthoringReferencePurpose, ...] = (
+    "PAST_EXAM_VARIATION",
+    "ITEM_AUTHORING",
+    "ITEM_REVIEW",
+)
+
 
 def validate_embedding_registry_actor(caller: EmbeddingRegistryActor) -> None:
     """Validate a closed small value, NOT authenticate or authorize an operation."""
@@ -156,6 +163,7 @@ class ReferenceQueryContextPreparation:
     views: tuple[ExperimentView, ...]
     vector_mode: Literal["OPTIONAL", "REQUIRED"]
     top_k: int
+    consumer_purpose: AuthoringReferencePurpose = "PAST_EXAM_VARIATION"
 
     def __post_init__(self) -> None:
         if (
@@ -171,6 +179,8 @@ class ReferenceQueryContextPreparation:
             or not 1 <= self.top_k <= 64
             or type(self.selection.scope.maximum_sources) is not int
             or not 1 <= self.selection.scope.maximum_sources <= 1024
+            or type(self.consumer_purpose) is not str
+            or self.consumer_purpose not in AUTHORING_REFERENCE_PURPOSES
         ):
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_REQUEST_INVALID")
         self.selection.__post_init__()

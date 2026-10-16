@@ -28,8 +28,8 @@ from eom_workflow.native_reference_query_coordinator import (
     NativeQueryPublished,
 )
 from eom_workflow.reference_query_execution import (
-    ReferenceQueryWorkflowRequest,
-    parse_reference_query_workflow_request,
+    SupportedReferenceQueryWorkflowRequest,
+    parse_supported_reference_query_workflow_request,
 )
 from jsonschema.exceptions import ValidationError as JsonSchemaError
 from pydantic import TypeAdapter
@@ -45,7 +45,7 @@ def require_completed_query_selection_metadata(
     row: WorkflowInstanceRecord | None,
     caller: EmbeddingRegistryCaller,
     selection: CompletedSimilarityQuerySelection,
-) -> ReferenceQueryWorkflowRequest:
+) -> SupportedReferenceQueryWorkflowRequest:
     """Pure exact metadata binding, never Identity/source authority or Artifact access."""
     if type(caller) is not EmbeddingRegistryCaller:
         raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
@@ -60,7 +60,7 @@ def require_completed_query_selection_metadata(
         raise SimilarityContextReadError("SOURCE_ACCESS_DENIED")
     if row.state != "COMPLETED" or row.initial_request != row.request_payload:
         raise SimilarityContextReadError("QUERY_RESULT_INVALID")
-    original = parse_reference_query_workflow_request(row.initial_request)
+    original = parse_supported_reference_query_workflow_request(row.initial_request)
     if (
         original.operator_audit.operator_id != caller.operator_id
         or original.request_sha256 != selection.workflow_request_sha256
@@ -75,7 +75,7 @@ def select_completed_reference_query_request(
     owner: ReferenceQuerySourceOwner,
     caller: EmbeddingRegistryCaller,
     selection: CompletedSimilarityQuerySelection,
-) -> ReferenceQueryWorkflowRequest:
+) -> SupportedReferenceQueryWorkflowRequest:
     """Select original metadata in the actual caller root, not transferable read authority.
 
     Consumers must still resolve current sources and the terminal publication. This
@@ -118,12 +118,12 @@ class CatalogCompletedReferenceQueryRead:
         owner: ReferenceQuerySourceOwner,
         *,
         workflow_id: str,
-        request: ReferenceQueryWorkflowRequest,
+        request: SupportedReferenceQueryWorkflowRequest,
         artifact_reader: PinnedArtifactReadContext | None = None,
     ) -> None:
         self.owner = owner
         self.workflow_id = TypeAdapter(WorkflowId).validate_python(workflow_id)
-        self.request = parse_reference_query_workflow_request(request)
+        self.request = parse_supported_reference_query_workflow_request(request)
         self.artifact_reader = artifact_reader
         self.sessions = build_session_factory(owner.catalog.engine)
 

@@ -14,9 +14,9 @@ from eom_workflow.admission import workflow_definition_is_admitted
 from eom_workflow.compiler import CompiledWorkflowDefinition, compile_definition_data
 from eom_workflow.reference_query_execution import (
     ReferenceQueryExecutionPolicy,
-    ReferenceQueryWorkflowRequest,
+    SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_execution_policy,
-    parse_reference_query_workflow_request,
+    parse_supported_reference_query_workflow_request,
     validate_reference_query_request_references,
 )
 from eom_workflow.reference_query_workflow import ReferenceQueryWorkflowDefinition
@@ -39,12 +39,12 @@ if TYPE_CHECKING:
 class ResolvedReferenceQueryAdmission:
     """Exact immutable controls only, not a retained source/session capability."""
 
-    request: ReferenceQueryWorkflowRequest
+    request: SupportedReferenceQueryWorkflowRequest
     policy: ReferenceQueryExecutionPolicy
     bundle: EmbeddingRuntimeBundle
 
     def __post_init__(self) -> None:
-        request = parse_reference_query_workflow_request(self.request)
+        request = parse_supported_reference_query_workflow_request(self.request)
         policy = parse_reference_query_execution_policy(self.policy)
         bundle = parse_embedding_runtime_bundle(raw_similarity_contract_value(self.bundle))
         validate_reference_query_request_references(request, policy, bundle)
@@ -61,7 +61,7 @@ class ReferenceQueryOwnerAdmission(Protocol):
     """
 
     def resolve_submission(
-        self, session: Session, request: ReferenceQueryWorkflowRequest
+        self, session: Session, request: SupportedReferenceQueryWorkflowRequest
     ) -> ResolvedReferenceQueryAdmission: ...
 
     def resolve_claim(
@@ -70,11 +70,14 @@ class ReferenceQueryOwnerAdmission(Protocol):
         *,
         command: WorkflowCommandRecord,
         workflow: WorkflowInstanceRecord,
-        request: ReferenceQueryWorkflowRequest,
+        request: SupportedReferenceQueryWorkflowRequest,
     ) -> ResolvedReferenceQueryAdmission: ...
 
     def fence_mutation(
-        self, session: Session, request: ReferenceQueryWorkflowRequest, lease: CommandLeaseIdentity
+        self,
+        session: Session,
+        request: SupportedReferenceQueryWorkflowRequest,
+        lease: CommandLeaseIdentity,
     ) -> None: ...
 
 
@@ -105,7 +108,7 @@ def resolve_reference_query_submission_controls(
     session: Session,
     *,
     definition: WorkflowDefinitionRecord,
-    request: ReferenceQueryWorkflowRequest,
+    request: SupportedReferenceQueryWorkflowRequest,
     actor_type: str,
     actor_id: str,
     owner: ReferenceQueryOwnerAdmission | None,
@@ -129,7 +132,7 @@ def resolve_reference_query_submission_controls(
             WorkflowErrorCode.ACTOR_AUTHORIZATION_UNAVAILABLE,
             "reference query requires an active caller-owned root transaction",
         )
-    request = parse_reference_query_workflow_request(request)
+    request = parse_supported_reference_query_workflow_request(request)
     scope = owner.resolve_submission(session, request)
     scope = ResolvedReferenceQueryAdmission(scope.request, scope.policy, scope.bundle)
     if scope.request != request:

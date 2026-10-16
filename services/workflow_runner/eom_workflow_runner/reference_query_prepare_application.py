@@ -27,7 +27,7 @@ from eom_catalog_service.similarity_context_ports import (
 from eom_identifiers import content_sha256
 from eom_identity_service import OperatorAuthorizationFenceError
 from eom_orchestrator.database import build_session_factory
-from eom_workflow.reference_query_execution import parse_reference_query_workflow_request
+from eom_workflow.reference_query_execution import parse_supported_reference_query_workflow_request
 from sqlalchemy import select
 
 from eom_workflow_runner.engine import WorkflowRunner
@@ -161,7 +161,9 @@ class NativeReferenceQueryPreparation:
                     executor=self.executor,
                 )
                 workflow = submitted.workflow
-                original = parse_reference_query_workflow_request(workflow.initial_request)
+                original = parse_supported_reference_query_workflow_request(
+                    workflow.initial_request
+                )
                 selection = None
                 error_code: ReferenceQueryPrepareErrorCode | None = None
                 status: Literal["READY", "FAILED", "PENDING"]

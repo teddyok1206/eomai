@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from eom_workflow.reference_query_execution import ReferenceQueryWorkflowRequest
+from eom_workflow.reference_query_execution import SupportedReferenceQueryWorkflowRequest
 from sqlalchemy.orm import Session
 
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
@@ -39,7 +39,7 @@ def start_reference_query_in_session(
     session: Session,
     *,
     definition: WorkflowDefinitionRecord,
-    request: ReferenceQueryWorkflowRequest,
+    request: SupportedReferenceQueryWorkflowRequest,
     idempotency_key: str,
     actor_type: str,
     actor_id: str,

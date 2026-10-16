@@ -13,9 +13,9 @@ from eom_workflow.native_reference_query_coordinator import (
 )
 from eom_workflow.reference_query_execution import (
     ReferenceQueryLaunchAssociation,
-    ReferenceQueryWorkflowRequest,
+    SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_launch_association,
-    parse_reference_query_workflow_request,
+    parse_supported_reference_query_workflow_request,
 )
 from eom_workflow.reference_query_workflow import REFERENCE_QUERY_EXECUTION_PROTOCOL
 from eom_workflow.schemas import (
@@ -90,11 +90,15 @@ class NativeReferenceQueryHistory:
 
 
 def read_native_reference_query_launch(
-    session: Session, *, request: ReferenceQueryWorkflowRequest, workflow_id: str, step_run_id: str
+    session: Session,
+    *,
+    request: SupportedReferenceQueryWorkflowRequest,
+    workflow_id: str,
+    step_run_id: str,
 ) -> ReferenceQueryLaunchAssociation | None:
     """Caller fences the actual Workflow and current execution/read authority first."""
     _root(session)
-    request = parse_reference_query_workflow_request(request)
+    request = parse_supported_reference_query_workflow_request(request)
     job = session.scalar(
         select(JobRecord)
         .where(
@@ -153,7 +157,7 @@ def read_native_reference_query_launch(
 def create_native_reference_query_launch(
     session: Session,
     *,
-    request: ReferenceQueryWorkflowRequest,
+    request: SupportedReferenceQueryWorkflowRequest,
     launch: ReferenceQueryLaunchAssociation,
 ) -> ReferenceQueryLaunchAssociation:
     """Within held Workflow→command locks, create or return ONLY the original launch.
@@ -162,7 +166,7 @@ def create_native_reference_query_launch(
     The owner must validate the complete prepared handoff before physical launch.
     """
     _root(session)
-    request = parse_reference_query_workflow_request(request)
+    request = parse_supported_reference_query_workflow_request(request)
     launch = parse_reference_query_launch_association(launch)
     existing = read_native_reference_query_launch(
         session, request=request, workflow_id=launch.workflow_id, step_run_id=launch.step_run_id
@@ -215,9 +219,11 @@ class NativeReferenceQueryCoordinator:
     """No current-auth defaults: caller retains fresh actual owner fences per root."""
 
     def __init__(
-        self, request: ReferenceQueryWorkflowRequest, launch: ReferenceQueryLaunchAssociation
+        self,
+        request: SupportedReferenceQueryWorkflowRequest,
+        launch: ReferenceQueryLaunchAssociation,
     ) -> None:
-        self.request = parse_reference_query_workflow_request(request)
+        self.request = parse_supported_reference_query_workflow_request(request)
         self.launch = parse_reference_query_launch_association(launch)
 
     def read(self, session: Session) -> NativeReferenceQueryHistory:

@@ -20,6 +20,7 @@ from eom_catalog_contracts.embedding_reference_query_v11 import (
 from eom_catalog_contracts.embedding_runtime_bundle import EmbeddingRuntimeBundle
 from eom_catalog_contracts.inference_transfer_embedding import SHARD_SCHEMA_REF, EmbeddingSpace
 from eom_catalog_contracts.models import FrozenModel
+from eom_catalog_contracts.similarity_context import SimilarityConsumerPurpose
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow import (
@@ -30,11 +31,13 @@ from eom_workflow import (
     ReferenceQueryStepOutput,
     ReferenceQueryWorkflowReceipt,
     ReferenceQueryWorkflowRequest,
+    SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_execution_policy,
     parse_reference_query_launch_association,
     parse_reference_query_step_output,
     parse_reference_query_workflow_receipt,
     parse_reference_query_workflow_request,
+    parse_supported_reference_query_workflow_request,
     validate_reference_query_launch_association,
     validate_reference_query_request_references,
     validate_reference_query_step_output,
@@ -66,7 +69,7 @@ def pointer(
 class Case:
     bundle: EmbeddingRuntimeBundle
     policy: ReferenceQueryExecutionPolicy
-    request: ReferenceQueryWorkflowRequest
+    request: SupportedReferenceQueryWorkflowRequest
     launch: ReferenceQueryLaunchAssociation
     native_input: EmbeddingReferenceQueryInputV11
     result: EmbeddingReferenceQueryResult
@@ -74,7 +77,11 @@ class Case:
     output: ReferenceQueryStepOutput
 
 
-def case(*, definition_sha256: str | None = None) -> Case:
+def case(
+    *,
+    definition_sha256: str | None = None,
+    consumer_purpose: SimilarityConsumerPurpose = "PAST_EXAM_VARIATION",
+) -> Case:
     profile, bundle = runtime_profile("CPU"), _bundle("CPU")
     query = EmbeddingSpace.model_validate(
         seal(profile.space.model_dump(mode="json") | {"purpose": "QUERY"}, "space_sha256")
@@ -84,6 +91,7 @@ def case(*, definition_sha256: str | None = None) -> Case:
         "document": profile.space.model_dump(mode="json"),
     }
     context = context_request_body()
+    context["consumer_purpose"] = consumer_purpose
     for index, view in enumerate(context["views"]):
         view["index"]["spaces"] = spaces
         view["index"]["index_id"] = "embeddingindex_" + str(index + 1) * 32
@@ -104,10 +112,12 @@ def case(*, definition_sha256: str | None = None) -> Case:
             "policy_sha256",
         )
     )
-    request = parse_reference_query_workflow_request(
+    request = parse_supported_reference_query_workflow_request(
         seal(
             {
-                "schema_version": "reference-query-workflow-request/1.0",
+                "schema_version": "reference-query-workflow-request/1.0"
+                if consumer_purpose == "PAST_EXAM_VARIATION"
+                else "reference-query-workflow-request/1.1",
                 "request_name": "REFERENCE_QUERY_WORKFLOW_REQUEST",
                 "purpose": "REFERENCE_QUERY",
                 "workflow_definition_key": "local-embedding-reference-query",

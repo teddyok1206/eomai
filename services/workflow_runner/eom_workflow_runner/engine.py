@@ -77,8 +77,8 @@ from eom_workflow.inference_transfer import (
 from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
 from eom_workflow.local_embedding_workflow import LocalEmbeddingWorkflowDefinition
 from eom_workflow.reference_query_execution import (
-    ReferenceQueryWorkflowRequest,
-    parse_reference_query_workflow_request,
+    SupportedReferenceQueryWorkflowRequest,
+    parse_supported_reference_query_workflow_request,
 )
 from eom_workflow.reference_query_workflow import ReferenceQueryWorkflowDefinition
 from eom_workflow.similarity_control import (
@@ -694,7 +694,7 @@ class WorkflowRunner:
         for candidate in sorted(candidates, key=lambda row: (row.created_at, row.command_id)):
             if candidate.family is CommandExecutionFamily.ROLE:
                 report = self.readiness.evaluate()
-            elif isinstance(candidate.native_request, ReferenceQueryWorkflowRequest):
+            elif isinstance(candidate.native_request, SupportedReferenceQueryWorkflowRequest):
                 if self.reference_query_owner is None or self.reference_query_executor is None:
                     report = _local_embedding_unavailable_report(
                         WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
@@ -1055,7 +1055,7 @@ class WorkflowRunner:
             or lease.command_id != command_id
             or native is None
             or native[0] != workflow.workflow_id
-            or not isinstance(native[1], ReferenceQueryWorkflowRequest)
+            or not isinstance(native[1], SupportedReferenceQueryWorkflowRequest)
             or self.reference_query_owner is None
             or self.reference_query_executor is None
         ):
@@ -1063,7 +1063,7 @@ class WorkflowRunner:
                 WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
                 "QUERY advancement requires its actual leased owner context",
             )
-        request = parse_reference_query_workflow_request(workflow.initial_request)
+        request = parse_supported_reference_query_workflow_request(workflow.initial_request)
         if request != native[1]:
             raise WorkflowError(
                 WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT, "QUERY original request changed"
@@ -3483,7 +3483,7 @@ class WorkflowRunner:
         self, native: tuple[str, NativeWorkflowRequest, CommandLeaseIdentity]
     ) -> Iterator[Session]:
         workflow_id, request, lease = native
-        if isinstance(request, ReferenceQueryWorkflowRequest):
+        if isinstance(request, SupportedReferenceQueryWorkflowRequest):
             if self.reference_query_owner is None:
                 raise WorkflowError(
                     WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,

@@ -21,8 +21,8 @@ from eom_catalog_service.reference_query_context_preparation import (
 from eom_identifiers import content_sha256
 from eom_identity_service.repository import effective_permissions
 from eom_workflow.reference_query_execution import (
-    ReferenceQueryWorkflowRequest,
-    parse_reference_query_workflow_request,
+    SupportedReferenceQueryWorkflowRequest,
+    parse_supported_reference_query_workflow_request,
     validate_reference_query_request_references,
 )
 from sqlalchemy import select
@@ -69,7 +69,7 @@ def _current_query_request(
     owner: CatalogReferenceQueryOwnerAdmission,
     caller: EmbeddingRegistryCaller,
     idempotency_key: str,
-) -> ReferenceQueryWorkflowRequest | None:
+) -> SupportedReferenceQueryWorkflowRequest | None:
     owner.identity.fence_current_operator(session, caller.operator_id)
     existing = session.scalar(
         select(WorkflowInstanceRecord)
@@ -78,7 +78,7 @@ def _current_query_request(
     )
     if existing is None:
         return None
-    request = parse_reference_query_workflow_request(existing.initial_request)
+    request = parse_supported_reference_query_workflow_request(existing.initial_request)
     if (
         existing.created_actor_type != "human"
         or existing.created_actor_id != caller.operator_id
@@ -162,7 +162,7 @@ def _start_with_pinned_context(
     *,
     caller: EmbeddingRegistryCaller,
     context: SimilarityContextRequest,
-    original: ReferenceQueryWorkflowRequest | None,
+    original: SupportedReferenceQueryWorkflowRequest | None,
     idempotency_key: str,
     owner: CatalogReferenceQueryOwnerAdmission,
     executor: ReferenceQueryNativeExecutor,
@@ -189,7 +189,9 @@ def _start_with_pinned_context(
             PinnedArtifactReadContext(session, owner.settings), config
         )
         body = {
-            "schema_version": "reference-query-workflow-request/1.0",
+            "schema_version": "reference-query-workflow-request/1.0"
+            if context.consumer_purpose == "PAST_EXAM_VARIATION"
+            else "reference-query-workflow-request/1.1",
             "request_name": "REFERENCE_QUERY_WORKFLOW_REQUEST",
             "purpose": "REFERENCE_QUERY",
             "workflow_definition_key": "local-embedding-reference-query",
@@ -208,7 +210,7 @@ def _start_with_pinned_context(
             "native_execution_policy": config.native_execution_policy.model_dump(mode="json"),
             "native_execution_policy_sha256": config.native_execution_policy_sha256,
         }
-        request = parse_reference_query_workflow_request(
+        request = parse_supported_reference_query_workflow_request(
             body | {"request_sha256": content_sha256(body)}
         )
         validate_reference_query_request_references(request, policy, bundle)

@@ -7,6 +7,11 @@ installed-runtime, production permission, performance, or educational-quality ev
 This note implements no authority, provider, schema, API, worker, database, model, or release.
 The root implementer must read this complete note before changing the common-context boundary.
 
+2026-10-16 source continuation: the main implementer has read this complete historical
+note. The cohesive current [authoring-reference delta](SYSTEM_RAG_AUTHORING_REFERENCE_CONTEXT.md)
+records shared authoring/review reference reads and the additive native request1.1.
+It does not activate consumers, add private-query semantics or supersede old evidence.
+
 This is the consumer-side boundary for
 [the agreed design](SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md), not a replacement
 for it. Persistent vector execution, host/runtime closure, actual Identity fences, service IAM,

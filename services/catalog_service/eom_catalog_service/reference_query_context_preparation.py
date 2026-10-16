@@ -33,7 +33,7 @@ def validate_reference_query_context_preparation(
     request = parse_similarity_context_request(request)
     if (
         request.request_id != preparation.request_id
-        or request.consumer_purpose != "PAST_EXAM_VARIATION"
+        or request.consumer_purpose != preparation.consumer_purpose
         or request.anchor.source.item_revision_id != preparation.selection.source_revision_ids[0]
         or request.anchor.source.source_class != "PAST_EXAM"
         or request.graph_snapshot != scope.graph_snapshot

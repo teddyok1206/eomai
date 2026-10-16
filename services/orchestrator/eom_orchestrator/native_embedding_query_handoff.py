@@ -31,10 +31,10 @@ from eom_identifiers import canonical_json_bytes
 from eom_workflow.reference_query_execution import (
     ReferenceQueryExecutionPolicy,
     ReferenceQueryLaunchAssociation,
-    ReferenceQueryWorkflowRequest,
+    SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_execution_policy,
     parse_reference_query_launch_association,
-    parse_reference_query_workflow_request,
+    parse_supported_reference_query_workflow_request,
     validate_reference_query_launch_association,
 )
 
@@ -72,7 +72,7 @@ class PreparedNativeQuery:
     """Five existing literal contracts at an explicit temporary materialization boundary."""
 
     execution_id: str
-    workflow_request: ReferenceQueryWorkflowRequest
+    workflow_request: SupportedReferenceQueryWorkflowRequest
     policy: ReferenceQueryExecutionPolicy
     bundle: EmbeddingRuntimeBundle
     association: ReferenceQueryLaunchAssociation
@@ -80,7 +80,7 @@ class PreparedNativeQuery:
 
     def __post_init__(self) -> None:
         validate_native_query_execution_id(self.execution_id)
-        workflow = parse_reference_query_workflow_request(self.workflow_request)
+        workflow = parse_supported_reference_query_workflow_request(self.workflow_request)
         policy = parse_reference_query_execution_policy(self.policy)
         bundle = parse_embedding_runtime_bundle(raw_similarity_contract_value(self.bundle))
         association = parse_reference_query_launch_association(self.association)
@@ -184,7 +184,7 @@ def _read_prepared(execution_id: str, owner: CpuHandoffIdentity) -> PreparedNati
 
         return PreparedNativeQuery(
             execution_id,
-            parse_reference_query_workflow_request(read("workflow.json")),
+            parse_supported_reference_query_workflow_request(read("workflow.json")),
             parse_reference_query_execution_policy(read("policy.json")),
             parse_embedding_runtime_bundle(read("bundle.json")),
             parse_reference_query_launch_association(read("association.json")),

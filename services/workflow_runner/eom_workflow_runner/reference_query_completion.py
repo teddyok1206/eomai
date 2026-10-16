@@ -23,7 +23,7 @@ from eom_workflow.native_reference_query_coordinator import (
 )
 from eom_workflow.reference_query_execution import (
     ReferenceQueryStepOutput,
-    ReferenceQueryWorkflowRequest,
+    SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_step_output,
 )
 from sqlalchemy.orm import Session
@@ -60,7 +60,7 @@ class NativeReferenceQueryCompletion:
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: ReferenceQueryWorkflowRequest,
+        request: SupportedReferenceQueryWorkflowRequest,
         command_lease: CommandLeaseIdentity,
         prepared: PreparedNativeQuery,
         coordinator: NativeReferenceQueryCoordinator,
@@ -200,7 +200,7 @@ class NativeReferenceQueryCompletion:
         session: Session,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: ReferenceQueryWorkflowRequest,
+        request: SupportedReferenceQueryWorkflowRequest,
         command_lease: CommandLeaseIdentity,
         output: ReferenceQueryStepOutput,
     ) -> ReferenceQueryStepOutput:

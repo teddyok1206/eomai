@@ -65,10 +65,10 @@ from eom_workflow.local_embedding_workflow import (
 from eom_workflow.reference_query_execution import (
     ReferenceQueryExecutionPolicy,
     ReferenceQueryLaunchAssociation,
-    ReferenceQueryWorkflowRequest,
+    SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_execution_policy,
     parse_reference_query_launch_association,
-    parse_reference_query_workflow_request,
+    parse_supported_reference_query_workflow_request,
     validate_reference_query_launch_association,
 )
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
@@ -311,7 +311,7 @@ class EmbeddingArtifactStore:
     def publish_reference_query(
         self,
         *,
-        workflow_request: ReferenceQueryWorkflowRequest,
+        workflow_request: SupportedReferenceQueryWorkflowRequest,
         policy: ReferenceQueryExecutionPolicy,
         bundle: EmbeddingRuntimeBundle,
         launch: ReferenceQueryLaunchAssociation,
@@ -324,7 +324,7 @@ class EmbeddingArtifactStore:
         """Commit supplied QUERY closure; the calling owner retains current auth/lease checks."""
         try:
             # Parse raw instances before serialization so model_copy cannot discard bad extras.
-            workflow_request = parse_reference_query_workflow_request(workflow_request)
+            workflow_request = parse_supported_reference_query_workflow_request(workflow_request)
             policy = parse_reference_query_execution_policy(policy)
             launch = parse_reference_query_launch_association(launch)
             request = parse_embedding_reference_query_input_v11(request)

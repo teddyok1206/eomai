@@ -99,6 +99,7 @@ def context_selection(source):
         tuple(row.view for row in context.views),
         context.vector_mode,
         context.top_k,
+        context.consumer_purpose,
     )
 
 
@@ -139,7 +140,7 @@ def test_selected_source_initial_capture_and_replay_share_canonical_start(prepar
     value.executor.allocate_execution.assert_not_called()
 
 
-@pytest.mark.parametrize("change", ("top_k", "source", "request_id", "policy"))
+@pytest.mark.parametrize("change", ("top_k", "source", "request_id", "policy", "purpose"))
 def test_selected_source_changed_replay_fails_without_initial_recapture(
     preparation, monkeypatch, change
 ):
@@ -155,6 +156,8 @@ def test_selected_source_changed_replay_fails_without_initial_recapture(
         selection = replace(selection, top_k=selection.top_k + 1)
     elif change == "request_id":
         selection = replace(selection, request_id="similarityrequest_" + "f" * 32)
+    elif change == "purpose":
+        selection = replace(selection, consumer_purpose="ITEM_AUTHORING")
     else:
         chosen = selection.selection
         chosen = (

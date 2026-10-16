@@ -225,6 +225,19 @@ private socket은 하나의 framed protocol이다. operation별 request/response
 문서를 그 뒤에 맞춘다. 문서만 보고 runtime을 선택하지 않으며, runtime의 `latest`를 암묵적으로
 해석하지 않는다.
 
+## 임베딩 QUERY 입력의 호환 후보 —2026-10-16 UTC
+
+기출변형의 `reference-query-workflow-request/1.0`과 엄격한 parser는 그대로 보존한다.
+신규 출제·검토의 **승인 참고 문항** 조회에는 additive 입력 `1.1`을 추가했다.
+동일 definition `local-embedding-reference-query@1.0.0`, protocol `reference-query/1.0`,
+policy/launch/receipt/result 및 numerical input은 유지하며 새 입력의 purpose/hash를
+구분한다. 새 버전 번호는 새 Workflow topology·실행 권한·private 초안 검색을 뜻하지 않는다.
+
+현재 상태는 repository/source + disposable PostgreSQL PASS이며 운영 미설치·미활성이다.
+실제 QUERY owner `8c411041`, INDEX `2a4843c3`/Identity13, API/Web/Pack 선택은 바뀌지 않았다.
+상세한 입력 의미·보존 검사·남은 소비 연결은
+[authoring-reference 구현 경계](SYSTEM_RAG_AUTHORING_REFERENCE_CONTEXT.md)를 따른다.
+
 ## 보존·정리 규칙
 
 - immutable row, manifest, receipt, release, Workflow, Item Revision 또는 rebuild/validation 경로가

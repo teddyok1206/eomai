@@ -10,7 +10,7 @@ from eom_workflow.models import JobId
 from eom_workflow.reference_query_execution import (
     ReferenceQueryLaunchAssociation,
     ReferenceQueryStepOutput,
-    ReferenceQueryWorkflowRequest,
+    SupportedReferenceQueryWorkflowRequest,
 )
 from pydantic import TypeAdapter
 from sqlalchemy.orm import Session
@@ -47,7 +47,9 @@ class ReferenceQueryNativeExecutor(Protocol):
     at step success, terminal completion and replay. This port has no default.
     """
 
-    def evaluate(self, request: ReferenceQueryWorkflowRequest) -> RuntimeReadinessReport: ...
+    def evaluate(
+        self, request: SupportedReferenceQueryWorkflowRequest
+    ) -> RuntimeReadinessReport: ...
 
     def allocate_execution(
         self,
@@ -55,7 +57,7 @@ class ReferenceQueryNativeExecutor(Protocol):
         session: Session,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: ReferenceQueryWorkflowRequest,
+        request: SupportedReferenceQueryWorkflowRequest,
         command_lease: CommandLeaseIdentity,
     ) -> ReferenceQueryLaunchAssociation:
         """Persist original launch/allocation in the step-start fenced root.
@@ -70,7 +72,7 @@ class ReferenceQueryNativeExecutor(Protocol):
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: ReferenceQueryWorkflowRequest,
+        request: SupportedReferenceQueryWorkflowRequest,
         command_lease: CommandLeaseIdentity,
         idempotency_key: str,
         fenced_transaction: NativeFencedRunnerTransaction,
@@ -82,7 +84,7 @@ class ReferenceQueryNativeExecutor(Protocol):
         session: Session,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: ReferenceQueryWorkflowRequest,
+        request: SupportedReferenceQueryWorkflowRequest,
         command_lease: CommandLeaseIdentity,
         output: ReferenceQueryStepOutput,
     ) -> ReferenceQueryStepOutput: ...

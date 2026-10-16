@@ -25,7 +25,7 @@ from eom_workflow.reference_query_execution import (
     ReferenceQueryExecutionPolicy,
     ReferenceQueryLaunchAssociation,
     ReferenceQueryWorkflowReceipt,
-    ReferenceQueryWorkflowRequest,
+    SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_workflow_receipt,
     validate_reference_query_workflow_receipt,
 )
@@ -71,7 +71,7 @@ class CatalogReferenceQueryArtifacts:
     def resolve_publication(
         self,
         *,
-        workflow_request: ReferenceQueryWorkflowRequest,
+        workflow_request: SupportedReferenceQueryWorkflowRequest,
         policy: ReferenceQueryExecutionPolicy,
         bundle: EmbeddingRuntimeBundle,
         launch: ReferenceQueryLaunchAssociation,

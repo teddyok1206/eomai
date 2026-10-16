@@ -8,7 +8,7 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
-- Repository main`4abafd2c` before this evidence checkpoint; reviewed INDEX
+- Repository main`aba066a2` before this source checkpoint; reviewed INDEX
   code`2a4843c3` is independently packaged/installed. Documentation successors do
   not silently select another source release.
 - API/platform/contracts2857bf77 and native QUERY owner8c411041 remain selected.
@@ -22,8 +22,17 @@ summed into a single acceptance count. This ledger does not grant authority.
   longer selected: the same identity now selects both Item classes and all three
   ALL_ADMITTED_GRAPH_ITEMS views, targets4/poll60. Genuine full-grant three-view
   admission and first PROCESSING/RUNNING attempt1/lease1 observed02:43:54 UTC;
-  unit active/success/boot enabled, Restart=no. The new numeric requests remain
-  nonterminal at this checkpoint. [Current exact gate and evidence](../operations/LOCAL_INDEXING_MEMBERSHIP_REFRESH_ACTIVATION_2026-10-16.md).
+  unit active/success/boot enabled, Restart=no. At03:15:25 UTC all three original
+  numeric STARTs/Workflows were SUCCEEDED/COMPLETED attempts1/generation1, and the
+  same service had automatically admitted the next original missing-vector job.
+  This is terminal/automatic-follow-on evidence, not a new canonical byte/count
+  audit or full-corpus completion. [Current exact gate and evidence](../operations/LOCAL_INDEXING_MEMBERSHIP_REFRESH_ACTIVATION_2026-10-16.md).
+- The new authoring/review reference source foundation adds native request1.1
+  without widening strict1.0. Source regression1971, final affected boundary234,
+  handoff47 and guarded PG132 PASS (overlapping inventories not summed), strict
+  mypy26 PASS. Legacy eight-member canonical bytes match aba066a2 exactly.
+  It is not installed/activated; ordinary consumer preparation/delivery and private
+  intent/result query bases stay open. [Exact scope/evidence](../architecture/SYSTEM_RAG_AUTHORING_REFERENCE_CONTEXT.md).
 - The following revision12 records are preserved historical acceptance, not the
   current selected runtime/config or a replacement for the latest audit.
 - INDEX service revision12/resource version24/source d4846220 completed the original
@@ -68,7 +77,7 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 | Requirement | Existing implementation/evidence | Remaining concrete action |
 | --- | --- | --- |
-| B1. Commit-based missing-binding reconciliation, no new queue/outbox framework | Official current Graph lookup, existing native START admission, actual seed/delta; empty/report/view/no-Graph source tests. Full-scope unattended discovery and three genuine1.2 admissions observed02:41–02:43, first actual claim1; boot enabled with Restart=no | CONTINUOUS_START_ACTUAL_PASS, not full coverage. Observe completion/reuse and eventual no-op; interruption must retain original commands. Boot enable is read back, not a simulated reboot test. |
+| B1. Commit-based missing-binding reconciliation, no new queue/outbox framework | Official Graph/missing-binding lookup and existing START. Full-scope first three genuine1.2 requests completed once by03:15:25; same invocation automatically admitted the next missing-vector request, no manual target list/restart. Boot enabled, Restart=no | CONTINUOUS_FIRST_COHORT_AND_FOLLOW_ON_ACTUAL_PASS, not full coverage/no-op. Latest canonical vector audit remains02:39:30; subsequent numeric bytes/counts need their own audit. Interruption retains original commands. |
 | B2. Three independent views with exact queue selection | Closed configurationV2, shared engine/publisher/authority/launcher and round-robin333 source/126 actual PG checks; genuine revision12 numerical execution and revision13 metadata-only terminal receipts/current heads audited. Full-scope continuous service actual admission/claim and enabled read-back verified | CONTINUOUS_START_ACTUAL_PASS; last audited occurrence11/5/5 of520 and ALL11/5/5 of545. Original three new numeric requests processing/queued; full coverage and terminal/no-op inspection are not complete. |
 | B3. Original past exams AND approved generated Item lifecycle | Existing source policy permits both classes; d484/service12 admitted-Item grant/three namespaces completed a genuine bounded trial, current coverage11/5/5 of545, prior9 numeric/binding identities preserved | BOUNDED_ACTUAL_PASS. Later accepted-report arrival, source withdrawal/current refresh and continuous policy still need full lifecycle acceptance. |
 | B4. Accepted V10 report wait, unavailable concrete evidence, separate denominators | Typed reconciliation/source tests; actual new-grant CONTENT_ONLY discovery545 eligible/25 missing reports/7 existing bindings/513 missing, targets4 at10/16 00:26:41. Original occurrence-backed520 remains separate | Explicit wait observed. Inspect exact waiting source-class pointers and later accepted-report reconciliation; confirm user projection separates learning from vector readiness. Do not infer the25 source classes from counts alone. |
@@ -83,7 +92,7 @@ summed into a single acceptance count. This ledger does not grant authority.
 | --- | --- | --- |
 | C1. One common candidate/evidence boundary | Common Catalog context and original bounded native QUERY→same-key replay→exact context read accepted at partial2/520; new protected HTTP route/service installed | Finish the held actual HTTP preparation/replay/current-read gate. Keep source authorization and Evidence receipts distinct from scores/model hypotheses. |
 | C2. 1:1 reference variation | Source/API/BFF/browser/disposable plan23 tests and inactive compatible83bad release; Pack1.20.17 released inactive | Activate reviewed compatible components in dependency order after held HTTP terminal; run one bounded genuine Item and inspect actual author/review context and maximum-three-pass behavior. Only then enable Web flag. |
-| C3. New authoring and review | Shared context/plan23 plumbing and all five purpose enum values exist, but automatic ordinary authoring/review preparation and consumer release are not proved | Reuse existing purpose/pointer contracts where their actual input meaning fits; add a successor only for genuinely missing query semantics. Connect the supported adapter, preserve old prompts/definitions/Evidence, then test/activate bounded actual use. Reference-only success is insufficient. |
+| C3. New authoring and review | Shared approved-reference composer/current materials now supports both purposes; additive native request1.1 closes the previous PAV-only request mismatch. Source, current-source/late-denial, fixed handoff and actual PG create/replay/concurrent/query-routing gates PASS; strict1.0 and eight legacy canonical members preserved | SOURCE_AND_DISPOSABLE_PASS, NOT_INSTALLED/ACTIVE. Ordinary consumer preparation/delivery and private intent/result bases remain open; plan23/publication stay variation-only. Reference foundation is not completion of private-draft comparison or live authoring/review consumption. |
 | C4. General→ChatGPT read-only discovery | Existing textbook/past-exam GraphRAG tools remain available; this goal's vector candidate tool/use-case is not implemented/activated | Connect the same official context with actual chat operator permissions, citations, explicit partial/unavailable and no Item write/approval/delete authority. |
 | C5. Exam repetition observations | Historical approved25 Item/Assembly/HWPX acceptance is preserved, not new similarity-consumer evidence | Add bounded same-concept versus same-inference repetition observations to the existing composition path, without automatic rejection/full regeneration or changed approval meaning. Verify against an existing fixed cohort. |
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Final, Literal
+from typing import Final, Literal, Self, TypeAlias
 
 from eom_catalog_contracts.embedding_reference_query import (
     EmbeddingReferenceQueryResult,
@@ -33,10 +33,18 @@ from pydantic import ConfigDict, Field, TypeAdapter, ValidationError, model_vali
 from eom_workflow.local_embedding_execution_policy import LocalEmbeddingResourceProfile
 from eom_workflow.local_embedding_request import LocalEmbeddingOperatorAudit
 from eom_workflow.models import JobId, StepRunId, WorkflowId
-from eom_workflow.schemas import ReferenceQueryContractError, validate_reference_query_message
+from eom_workflow.schemas import (
+    ReferenceQueryContractError,
+    validate_reference_query_message,
+    validate_reference_query_request_v11,
+)
 
 REFERENCE_QUERY_POLICY_REF: Final = "eom://schemas/workflow/reference-query-execution-policy/1.0"
 REFERENCE_QUERY_RECEIPT_REF: Final = "eom://schemas/workflow/reference-query-workflow-receipt/1.0"
+REFERENCE_QUERY_REQUEST_VERSIONS: Final = (
+    "reference-query-workflow-request/1.0",
+    "reference-query-workflow-request/1.1",
+)
 _BINARY_REF = "eom://schemas/knowledge/embedding-f32le-l2-row-major/1.0"
 
 
@@ -52,11 +60,8 @@ def _member(
         raise ValueError("reference QUERY member closure differs")
 
 
-class ReferenceQueryWorkflowRequest(FrozenModel):
+class _ReferenceQueryRequestFields(FrozenModel):
     model_config = ConfigDict(revalidate_instances="always")
-    schema_version: Literal["reference-query-workflow-request/1.0"] = (
-        "reference-query-workflow-request/1.0"
-    )
     request_name: Literal["REFERENCE_QUERY_WORKFLOW_REQUEST"] = "REFERENCE_QUERY_WORKFLOW_REQUEST"
     purpose: Literal["REFERENCE_QUERY"] = "REFERENCE_QUERY"
     workflow_definition_key: Literal["local-embedding-reference-query"] = (
@@ -72,14 +77,8 @@ class ReferenceQueryWorkflowRequest(FrozenModel):
     native_execution_policy_sha256: Sha256
     request_sha256: Sha256
 
-    @model_validator(mode="before")
-    @classmethod
-    def schema_first(cls, value: object) -> object:
-        validate_reference_query_message("request", value)
-        return raw_similarity_contract_value(value)
-
     @model_validator(mode="after")
-    def exact_request(self) -> ReferenceQueryWorkflowRequest:
+    def exact_request(self) -> Self:
         _member(self.native_execution_policy, "policy.json", REFERENCE_QUERY_POLICY_REF)
         indexes = tuple(view.index for view in self.context_request.views if view.index is not None)
         if (
@@ -93,6 +92,37 @@ class ReferenceQueryWorkflowRequest(FrozenModel):
             raise ValueError("reference QUERY context lacks a single pinned runtime/recipe")
         _hash(self, "request_sha256")
         return self
+
+
+class ReferenceQueryWorkflowRequest(_ReferenceQueryRequestFields):
+    schema_version: Literal["reference-query-workflow-request/1.0"] = (
+        "reference-query-workflow-request/1.0"
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def schema_first(cls, value: object) -> object:
+        validate_reference_query_message("request", value)
+        return raw_similarity_contract_value(value)
+
+
+class ReferenceQueryWorkflowRequestV11(_ReferenceQueryRequestFields):
+    schema_version: Literal["reference-query-workflow-request/1.1"] = (
+        "reference-query-workflow-request/1.1"
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def schema_first(cls, value: object) -> object:
+        validate_reference_query_request_v11(value)
+        return raw_similarity_contract_value(value)
+
+
+# Keep a runtime union: the fixed Runner dispatch uses isinstance as well as typing.
+# PEP695's TypeAliasType cannot serve that runtime boundary.
+SupportedReferenceQueryWorkflowRequest: TypeAlias = (  # noqa: UP040 -- used by runtime isinstance
+    ReferenceQueryWorkflowRequest | ReferenceQueryWorkflowRequestV11
+)
 
 
 class ReferenceQueryExecutionPolicy(FrozenModel):
@@ -250,6 +280,31 @@ def parse_reference_query_workflow_request(value: object) -> ReferenceQueryWorkf
         raise ReferenceQueryContractError("REFERENCE_QUERY_CONTRACT_INVALID") from None
 
 
+def parse_reference_query_workflow_request_v11(value: object) -> ReferenceQueryWorkflowRequestV11:
+    validate_reference_query_request_v11(value)
+    try:
+        return ReferenceQueryWorkflowRequestV11.model_validate(value)
+    except ValidationError:
+        raise ReferenceQueryContractError("REFERENCE_QUERY_CONTRACT_INVALID") from None
+
+
+def parse_supported_reference_query_workflow_request(
+    value: object,
+) -> SupportedReferenceQueryWorkflowRequest:
+    """Select exactly one literal parser; never relabel a historical request."""
+    try:
+        document = raw_similarity_contract_value(value)
+    except (ValueError, TypeError):
+        raise ReferenceQueryContractError("REFERENCE_QUERY_CONTRACT_INVALID") from None
+    if isinstance(document, dict):
+        match document.get("schema_version"):
+            case "reference-query-workflow-request/1.0":
+                return parse_reference_query_workflow_request(document)
+            case "reference-query-workflow-request/1.1":
+                return parse_reference_query_workflow_request_v11(document)
+    raise ReferenceQueryContractError("REFERENCE_QUERY_CONTRACT_INVALID")
+
+
 def parse_reference_query_execution_policy(value: object) -> ReferenceQueryExecutionPolicy:
     validate_reference_query_message("policy", value)
     try:
@@ -305,12 +360,12 @@ def validate_reference_query_policy_bundle(
 
 
 def validate_reference_query_request_references(
-    request: ReferenceQueryWorkflowRequest,
+    request: SupportedReferenceQueryWorkflowRequest,
     policy: ReferenceQueryExecutionPolicy,
     bundle: EmbeddingRuntimeBundle,
 ) -> None:
     """Pure supplied-pointer closure; installed files and current source rights are not checked."""
-    request = parse_reference_query_workflow_request(request)
+    request = parse_supported_reference_query_workflow_request(request)
     policy, bundle = validate_reference_query_policy_bundle(policy, bundle)
     if (
         request.native_execution_policy_sha256 != policy.policy_sha256
@@ -329,13 +384,13 @@ def validate_reference_query_request_references(
 
 def validate_reference_query_launch_association(
     launch: ReferenceQueryLaunchAssociation,
-    request: ReferenceQueryWorkflowRequest,
+    request: SupportedReferenceQueryWorkflowRequest,
     policy: ReferenceQueryExecutionPolicy,
     bundle: EmbeddingRuntimeBundle,
     native_input: EmbeddingReferenceQueryInputV11,
 ) -> None:
     launch = parse_reference_query_launch_association(launch)
-    request = parse_reference_query_workflow_request(request)
+    request = parse_supported_reference_query_workflow_request(request)
     policy = parse_reference_query_execution_policy(policy)
     native_input = parse_embedding_reference_query_input_v11(native_input)
     validate_reference_query_request_references(request, policy, bundle)
@@ -369,7 +424,7 @@ def validate_reference_query_launch_association(
 
 def validate_reference_query_workflow_receipt(
     receipt: ReferenceQueryWorkflowReceipt,
-    request: ReferenceQueryWorkflowRequest,
+    request: SupportedReferenceQueryWorkflowRequest,
     policy: ReferenceQueryExecutionPolicy,
     bundle: EmbeddingRuntimeBundle,
     launch: ReferenceQueryLaunchAssociation,
@@ -383,7 +438,7 @@ def validate_reference_query_workflow_receipt(
 ) -> None:
     """Exact historical values; supplied owner IDs are expectations, never authority grants."""
     receipt = parse_reference_query_workflow_receipt(receipt)
-    request = parse_reference_query_workflow_request(request)
+    request = parse_supported_reference_query_workflow_request(request)
     launch = parse_reference_query_launch_association(launch)
     native_input = parse_embedding_reference_query_input_v11(native_input)
     native_result = parse_embedding_reference_query_result(native_result)

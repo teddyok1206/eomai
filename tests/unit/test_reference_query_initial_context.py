@@ -22,6 +22,9 @@ from eom_catalog_service.embedding_registry_ports import (
 from eom_catalog_service.inference_transfer_snapshot_catalog_adapter import (
     InferenceTransferSessionCapturePhase,
 )
+from eom_catalog_service.reference_query_context_preparation import (
+    validate_reference_query_context_preparation,
+)
 from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_identity_service import OperatorAuthorizationFenceError
@@ -160,6 +163,36 @@ def test_initial_scope_pins_exact_source_report_and_available_index_without_full
     assert available[0].index_sha256 == value.index.index_sha256
     assert len(value.captures) == 2 and len(value.reads) == 3
     assert len(value.session.statements) == 3  # one present index's bounded metadata prefetch
+
+
+@pytest.mark.parametrize("purpose", ("ITEM_AUTHORING", "ITEM_REVIEW"))
+def test_initial_authoring_reference_preserves_purpose_and_exact_current_sources(initial, purpose):
+    value = initial
+    selected = replace(value.request, consumer_purpose=purpose)
+    result = prepare(value, request=selected)
+    assert result.consumer_purpose == purpose
+    assert result.anchor.basis == "APPROVED_REFERENCE_ITEM"
+    assert result.anchor.source == value.binding.source
+    assert result.anchor.profile == value.binding.profile
+    assert result.anchor.solution_evidence == value.binding.solution_evidence
+    assert result.graph_snapshot == value.command.graph_snapshot
+    assert result.policy_sha256 == value.command.policy_sha256
+    assert len(value.captures) == 2 and len(value.reads) == 3
+    validate_reference_query_context_preparation(selected, value.verifier.configuration, result)
+    with pytest.raises(EmbeddingRegistryError, match="SOURCE_PIN_MISMATCH"):
+        validate_reference_query_context_preparation(
+            value.request, value.verifier.configuration, result
+        )
+
+
+@pytest.mark.parametrize(
+    "purpose", ("GENERAL_CHAT_READ", "MOCK_EXAM_OBSERVATION", "PRIVATE_CHAT_QUERY", True, [], None)
+)
+def test_preparation_rejects_unoffered_or_untyped_purpose_before_source_io(initial, purpose):
+    value = initial
+    with pytest.raises(EmbeddingRegistryError, match="REQUEST_INVALID"):
+        replace(value.request, consumer_purpose=purpose)
+    assert not value.captures and not value.reads and not value.session.statements
 
 
 @pytest.mark.parametrize("required", (False, True))

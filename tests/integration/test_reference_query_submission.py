@@ -52,7 +52,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
 
 @pytest.fixture
-def prepared_query(guarded_engine, tmp_path, monkeypatch):
+def prepared_query(guarded_engine, tmp_path, monkeypatch, request):
     from types import SimpleNamespace
 
     from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryCaller
@@ -73,7 +73,13 @@ def prepared_query(guarded_engine, tmp_path, monkeypatch):
             workspace_root=tmp_path / "workspace",
         ),
     )
-    value = make_source_case(tmp_path, monkeypatch, publisher=publisher, control_seed=uuid4().hex)
+    value = make_source_case(
+        tmp_path,
+        monkeypatch,
+        publisher=publisher,
+        control_seed=uuid4().hex,
+        consumer_purpose=getattr(request, "param", "PAST_EXAM_VARIATION"),
+    )
     compiled = compile_definition_data(definition_body(), "synthetic/query-preparation", set())
     with Session(guarded_engine) as session, session.begin():
         import_workflow_definition(session, compiled)
@@ -107,6 +113,9 @@ def prepare_query(value, session):
     )
 
 
+@pytest.mark.parametrize(
+    "prepared_query", ("PAST_EXAM_VARIATION", "ITEM_AUTHORING", "ITEM_REVIEW"), indirect=True
+)
 def test_postgres_preparation_uses_canonical_controls_and_original_workflow_start(
     prepared_query, monkeypatch
 ):
@@ -119,6 +128,30 @@ def test_postgres_preparation_uses_canonical_controls_and_original_workflow_star
         original = submitted.workflow.initial_request
         assert submitted.workflow_created and submitted.command_created
         assert original["context_request"] == value.context.model_dump(mode="json")
+        assert original["schema_version"] == (
+            "reference-query-workflow-request/1.0"
+            if value.context.consumer_purpose == "PAST_EXAM_VARIATION"
+            else "reference-query-workflow-request/1.1"
+        )
+        from eom_workflow_runner.repository import CommandExecutionFamily, peek_command_candidate
+
+        query = peek_command_candidate(
+            session, family=CommandExecutionFamily.REFERENCE_QUERY, workflow_id=identity[0]
+        )
+        assert query is not None
+        assert query.native_request.context_request == value.context
+        assert (
+            peek_command_candidate(
+                session, family=CommandExecutionFamily.ROLE, workflow_id=identity[0]
+            )
+            is None
+        )
+        assert (
+            peek_command_candidate(
+                session, family=CommandExecutionFamily.LOCAL_EMBEDDING, workflow_id=identity[0]
+            )
+            is None
+        )
     for name in ("effective_permissions", "read_pinned_reference_query_controls"):
         monkeypatch.setattr(
             preparation, name, Mock(side_effect=AssertionError("rebuilding original request"))
@@ -303,6 +336,9 @@ def test_postgres_preparation_rejects_changed_context_without_another_workflow(p
         )
 
 
+@pytest.mark.parametrize(
+    "prepared_query", ("PAST_EXAM_VARIATION", "ITEM_AUTHORING", "ITEM_REVIEW"), indirect=True
+)
 def test_postgres_concurrent_preparation_reuses_one_original_workflow_and_start(
     prepared_query, monkeypatch
 ):

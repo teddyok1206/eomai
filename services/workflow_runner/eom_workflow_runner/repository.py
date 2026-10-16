@@ -44,8 +44,9 @@ from eom_workflow.local_embedding_workflow import (
     LOCAL_EMBEDDING_WORKFLOW_KEY,
 )
 from eom_workflow.reference_query_execution import (
-    ReferenceQueryWorkflowRequest,
-    parse_reference_query_workflow_request,
+    REFERENCE_QUERY_REQUEST_VERSIONS,
+    SupportedReferenceQueryWorkflowRequest,
+    parse_supported_reference_query_workflow_request,
 )
 from eom_workflow.reference_query_workflow import (
     REFERENCE_QUERY_EXECUTION_PROTOCOL,
@@ -191,7 +192,7 @@ class CommandCandidate:
     current_step_key: str
     workflow_state: str
     workflow_lock_version: int
-    native_request: LocalEmbeddingExecutableRequest | ReferenceQueryWorkflowRequest | None
+    native_request: LocalEmbeddingExecutableRequest | SupportedReferenceQueryWorkflowRequest | None
 
 
 def _native_workflow_filter() -> ColumnElement[bool]:
@@ -201,7 +202,7 @@ def _native_workflow_filter() -> ColumnElement[bool]:
         "local-embedding-workflow-request/1.1",
         "local-embedding-workflow-request/1.2",
         "local-embedding-workflow-request/1.3",
-        "reference-query-workflow-request/1.0",
+        *REFERENCE_QUERY_REQUEST_VERSIONS,
     )
     native_keys = (LOCAL_EMBEDDING_WORKFLOW_KEY, REFERENCE_QUERY_WORKFLOW_KEY)
     native_protocols = (LOCAL_EMBEDDING_EXECUTION_PROTOCOL, REFERENCE_QUERY_EXECUTION_PROTOCOL)
@@ -280,10 +281,12 @@ def _query_workflow_filter() -> ColumnElement[bool]:
         or_(
             WorkflowInstanceRecord.definition_key == REFERENCE_QUERY_WORKFLOW_KEY,
             WorkflowInstanceRecord.role_schema_version == REFERENCE_QUERY_EXECUTION_PROTOCOL,
-            WorkflowInstanceRecord.initial_request["schema_version"].as_string()
-            == "reference-query-workflow-request/1.0",
-            WorkflowInstanceRecord.request_payload["schema_version"].as_string()
-            == "reference-query-workflow-request/1.0",
+            WorkflowInstanceRecord.initial_request["schema_version"]
+            .as_string()
+            .in_(REFERENCE_QUERY_REQUEST_VERSIONS),
+            WorkflowInstanceRecord.request_payload["schema_version"]
+            .as_string()
+            .in_(REFERENCE_QUERY_REQUEST_VERSIONS),
             WorkflowInstanceRecord.initial_request["purpose"].as_string() == "REFERENCE_QUERY",
             WorkflowInstanceRecord.request_payload["purpose"].as_string() == "REFERENCE_QUERY",
             definition.exists(),
@@ -309,7 +312,9 @@ def _command_candidate(
     workflow: WorkflowInstanceRecord,
     family: CommandExecutionFamily,
 ) -> CommandCandidate:
-    native_request: LocalEmbeddingExecutableRequest | ReferenceQueryWorkflowRequest | None = None
+    native_request: (
+        LocalEmbeddingExecutableRequest | SupportedReferenceQueryWorkflowRequest | None
+    ) = None
     query_marked = (
         family is CommandExecutionFamily.REFERENCE_QUERY
         or workflow.definition_key == REFERENCE_QUERY_WORKFLOW_KEY
@@ -317,7 +322,7 @@ def _command_candidate(
         or any(
             isinstance(document, dict)
             and (
-                document.get("schema_version") == "reference-query-workflow-request/1.0"
+                document.get("schema_version") in REFERENCE_QUERY_REQUEST_VERSIONS
                 or document.get("purpose") == "REFERENCE_QUERY"
             )
             for document in (workflow.initial_request, workflow.request_payload)
@@ -327,7 +332,7 @@ def _command_candidate(
         # Invalid native metadata remains native/unavailable, never a role fallback.
         with suppress(ValueError):
             native_request = (
-                parse_reference_query_workflow_request(workflow.initial_request)
+                parse_supported_reference_query_workflow_request(workflow.initial_request)
                 if query_marked
                 else load_persisted_local_embedding_workflow_request(workflow.initial_request)
             )
@@ -567,12 +572,12 @@ def workflow_request_storage_document(
         WorkflowRequest
         | InferenceTransferWorkflowRequest
         | LocalEmbeddingExecutableRequest
-        | ReferenceQueryWorkflowRequest
+        | SupportedReferenceQueryWorkflowRequest
     ),
 ) -> dict[str, Any]:
     """Serialize a request without dropping schema-required nullable values."""
-    if isinstance(request, ReferenceQueryWorkflowRequest):
-        return parse_reference_query_workflow_request(request).model_dump(mode="json")
+    if isinstance(request, SupportedReferenceQueryWorkflowRequest):
+        return parse_supported_reference_query_workflow_request(request).model_dump(mode="json")
     if isinstance(
         request, (LocalEmbeddingWorkflowRequestV11, LocalEmbeddingServiceWorkflowRequest)
     ):
@@ -791,7 +796,7 @@ def validate_local_embedding_workflow_submission(
 
 def reference_query_business_fingerprint(
     definition: WorkflowDefinitionRecord,
-    request: ReferenceQueryWorkflowRequest,
+    request: SupportedReferenceQueryWorkflowRequest,
     *,
     actor_type: str,
     actor_id: str,
@@ -813,12 +818,12 @@ def validate_reference_query_workflow_submission(
     workflow: WorkflowInstanceRecord,
     *,
     definition: WorkflowDefinitionRecord,
-    request: ReferenceQueryWorkflowRequest,
+    request: SupportedReferenceQueryWorkflowRequest,
     actor_type: str,
     actor_id: str,
 ) -> WorkflowInstanceRecord:
     """Canonical submission closure, not authority from an old request or receipt."""
-    request = parse_reference_query_workflow_request(request)
+    request = parse_supported_reference_query_workflow_request(request)
     current = session.scalar(
         select(WorkflowInstanceRecord)
         .where(WorkflowInstanceRecord.workflow_id == workflow.workflow_id)
@@ -923,7 +928,7 @@ def create_workflow_instance(
         WorkflowRequest
         | InferenceTransferWorkflowRequest
         | LocalEmbeddingExecutableRequest
-        | ReferenceQueryWorkflowRequest
+        | SupportedReferenceQueryWorkflowRequest
     ),
     idempotency_key: str,
     actor_type: str,
@@ -937,11 +942,11 @@ def create_workflow_instance(
     reference_query_executor: ReferenceQueryNativeExecutor | None = None,
 ) -> tuple[WorkflowInstanceRecord, bool]:
     if (
-        isinstance(request, ReferenceQueryWorkflowRequest)
+        isinstance(request, SupportedReferenceQueryWorkflowRequest)
         or definition.definition_key == REFERENCE_QUERY_WORKFLOW_KEY
     ):
         if (
-            not isinstance(request, ReferenceQueryWorkflowRequest)
+            not isinstance(request, SupportedReferenceQueryWorkflowRequest)
             or definition.definition_key != REFERENCE_QUERY_WORKFLOW_KEY
         ):
             raise WorkflowError(
@@ -1122,7 +1127,7 @@ def _persist_workflow_instance(
         WorkflowRequest
         | InferenceTransferWorkflowRequest
         | LocalEmbeddingExecutableRequest
-        | ReferenceQueryWorkflowRequest
+        | SupportedReferenceQueryWorkflowRequest
     ),
     idempotency_key: str,
     actor_type: str,
@@ -1135,7 +1140,7 @@ def _persist_workflow_instance(
         reference_query_business_fingerprint(
             definition, request, actor_type=actor_type, actor_id=actor_id
         )
-        if isinstance(request, ReferenceQueryWorkflowRequest)
+        if isinstance(request, SupportedReferenceQueryWorkflowRequest)
         else local_embedding_business_fingerprint(
             definition, request, actor_type=actor_type, actor_id=actor_id
         )
@@ -1177,7 +1182,7 @@ def _persist_workflow_instance(
         (
             LocalEmbeddingWorkflowRequestV11,
             LocalEmbeddingServiceWorkflowRequest,
-            ReferenceQueryWorkflowRequest,
+            SupportedReferenceQueryWorkflowRequest,
         ),
     ):
         role_schema_version = _stored_role_protocol(definition)
@@ -1211,7 +1216,7 @@ def _persist_workflow_instance(
                 (
                     LocalEmbeddingWorkflowRequestV11,
                     LocalEmbeddingServiceWorkflowRequest,
-                    ReferenceQueryWorkflowRequest,
+                    SupportedReferenceQueryWorkflowRequest,
                 ),
             )
             else WorkflowStage.INFERENCE_TRANSFER.value
@@ -1451,7 +1456,7 @@ def claim_command_candidate(
     native = candidate.family is not CommandExecutionFamily.ROLE
     query_request = (
         candidate.native_request
-        if isinstance(candidate.native_request, ReferenceQueryWorkflowRequest)
+        if isinstance(candidate.native_request, SupportedReferenceQueryWorkflowRequest)
         else None
     )
     if native and (
@@ -1548,7 +1553,9 @@ def claim_command_candidate(
             )
         if query_request is not None:
             assert reference_query_owner is not None
-            request_query = parse_reference_query_workflow_request(workflow.initial_request)
+            request_query = parse_supported_reference_query_workflow_request(
+                workflow.initial_request
+            )
             if definition.definition_key != REFERENCE_QUERY_WORKFLOW_KEY:
                 raise WorkflowError(
                     WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,

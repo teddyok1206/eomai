@@ -529,6 +529,11 @@ REFERENCE_QUERY_EXECUTION_SCHEMA_RESOURCE = (
     "eom://schemas/workflow/reference-query-execution/1.0",
     "sha256:68e741506fec708956096aa5af6199e7c03821219385775cf9623aea88246c9b",
 )
+REFERENCE_QUERY_REQUEST_V11_SCHEMA_RESOURCE = (
+    "reference-query-workflow-request-v1_1.schema.json",
+    "eom://schemas/workflow/reference-query-workflow-request/1.1",
+    "sha256:4b52a34d7970189de9d6447a5ebdd2b073b1999059f5e2a9c9263b0f9e890ae3",
+)
 type ReferenceQueryMessageName = Literal[
     "definition", "request", "policy", "launch", "receipt", "step-output"
 ]
@@ -541,9 +546,8 @@ class ReferenceQueryContractError(ValueError):
     """Stable content-free contract failure; no permission or runtime claim."""
 
 
-@cache
-def _reference_query_execution_schema() -> dict[str, Any]:
-    filename, schema_id, expected = REFERENCE_QUERY_EXECUTION_SCHEMA_RESOURCE
+def _load_pinned_reference_query_schema(resource: tuple[str, str, str]) -> dict[str, Any]:
+    filename, schema_id, expected = resource
     try:
         with WORKFLOW_RESOURCE_ROOT.joinpath(filename).open("rb") as stream:
             payload = stream.read(64 * 1024 + 1)
@@ -556,6 +560,20 @@ def _reference_query_execution_schema() -> dict[str, Any]:
         return raw
     except Exception:
         raise ReferenceQueryContractError("REFERENCE_QUERY_SCHEMA_UNAVAILABLE") from None
+
+
+@cache
+def _reference_query_execution_schema() -> dict[str, Any]:
+    return _load_pinned_reference_query_schema(REFERENCE_QUERY_EXECUTION_SCHEMA_RESOURCE)
+
+
+@cache
+def _reference_query_request_v11_schema() -> dict[str, Any]:
+    return _load_pinned_reference_query_schema(REFERENCE_QUERY_REQUEST_V11_SCHEMA_RESOURCE)
+
+
+def load_reference_query_request_v11_schema() -> dict[str, Any]:
+    return copy.deepcopy(_reference_query_request_v11_schema())
 
 
 def load_reference_query_execution_schema() -> dict[str, Any]:
@@ -605,6 +623,33 @@ def validate_reference_query_message(name: ReferenceQueryMessageName, value: obj
         Draft202012Validator(
             {"$ref": REFERENCE_QUERY_EXECUTION_SCHEMA_RESOURCE[1] + "#/$defs/" + name},
             registry=_reference_query_execution_registry(),
+            format_checker=FormatChecker(),
+        ).validate(document)
+    except ReferenceQueryContractError:
+        raise
+    except Exception:
+        raise ReferenceQueryContractError("REFERENCE_QUERY_CONTRACT_INVALID") from None
+
+
+@cache
+def _reference_query_request_v11_registry() -> Registry[Any]:
+    registry: Registry[Any] = _reference_query_execution_registry().with_resource(
+        REFERENCE_QUERY_REQUEST_V11_SCHEMA_RESOURCE[1],
+        Resource.from_contents(_reference_query_request_v11_schema()),
+    )
+    return registry
+
+
+def validate_reference_query_request_v11(value: object) -> None:
+    """Literal input1.1 only; existing request1.0 and other frames stay unchanged."""
+    try:
+        document = raw_similarity_contract_value(value)
+        if len(canonical_json_bytes(document)) > 64 * 1024:
+            raise ValueError("QUERY request exceeds its bound")
+        _reference_query_request_v11_schema()
+        Draft202012Validator(
+            {"$ref": REFERENCE_QUERY_REQUEST_V11_SCHEMA_RESOURCE[1]},
+            registry=_reference_query_request_v11_registry(),
             format_checker=FormatChecker(),
         ).validate(document)
     except ReferenceQueryContractError:

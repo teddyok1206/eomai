@@ -801,7 +801,9 @@ def test_actual_sqlite_routing_separates_three_families_and_quarantines_partial_
     families: dict[str, CommandExecutionFamily] = {}
     try:
         with sessions.begin() as session:
-            for index, marker in enumerate(("role", "index", "query", "partial", "step"), start=1):
+            for index, marker in enumerate(
+                ("role", "index", "query", "partial", "step", "query_v11"), start=1
+            ):
                 seed = str(index) * 32
                 key = {
                     "index": "local-embedding-index",
@@ -829,7 +831,11 @@ def test_actual_sqlite_routing_separates_three_families_and_quarantines_partial_
                     stage="AUTHORING",
                     current_step_key="synthetic",
                     initial_request={},
-                    request_payload={"purpose": "REFERENCE_QUERY"} if marker == "partial" else {},
+                    request_payload={"purpose": "REFERENCE_QUERY"}
+                    if marker == "partial"
+                    else {"schema_version": "reference-query-workflow-request/1.1"}
+                    if marker == "query_v11"
+                    else {},
                     runtime_context={},
                     idempotency_key="synthetic-routing:" + marker,
                     request_hash="sha256:" + seed * 2,

@@ -51,6 +51,7 @@ from pydantic import TypeAdapter
 
 from eom_catalog_service.embedding_incremental_plan import RegisteredEmbeddingRow
 from eom_catalog_service.embedding_registry_ports import (
+    AUTHORING_REFERENCE_PURPOSES,
     AuthorizedEmbeddingReadProfile,
     EmbeddingRegistryCaller,
     EmbeddingRegistryLookup,
@@ -348,7 +349,7 @@ class SimilarityContextApplicationService:
                         "reauthorize_similarity_context",
                     )
                 )
-                or request.consumer_purpose != "PAST_EXAM_VARIATION"
+                or request.consumer_purpose not in AUTHORING_REFERENCE_PURPOSES
                 or request.anchor.source.source_class != "PAST_EXAM"
                 or request.topics
                 or request.unit_ids

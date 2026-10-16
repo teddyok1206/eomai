@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from eom_catalog_contracts.similarity_context import SimilarityConsumerPurpose
 from eom_catalog_service.embedding_encoder_adapter import encode_reference_query_batch
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_orchestrator import native_embedding_query_handoff as handoff
@@ -20,7 +21,7 @@ from eom_workflow.local_embedding_execution_policy import LocalEmbeddingResource
 from eom_workflow.reference_query_execution import (
     parse_reference_query_execution_policy,
     parse_reference_query_launch_association,
-    parse_reference_query_workflow_request,
+    parse_supported_reference_query_workflow_request,
 )
 from jsonschema.exceptions import ValidationError as SchemaError
 
@@ -29,8 +30,10 @@ from tests.unit.test_embedding_incremental_encoding import SyntheticNativeBacken
 from tests.unit.test_reference_query_execution_contracts import case
 
 
-def prepared() -> handoff.PreparedNativeQuery:
-    base = case()
+def prepared(
+    *, consumer_purpose: SimilarityConsumerPurpose = "PAST_EXAM_VARIATION"
+) -> handoff.PreparedNativeQuery:
+    base = case(consumer_purpose=consumer_purpose)
     resources = LocalEmbeddingResourceProfile.model_validate(
         seal(
             base.policy.resource_profile.model_dump(mode="json")
@@ -48,7 +51,7 @@ def prepared() -> handoff.PreparedNativeQuery:
     pointer = base.request.native_execution_policy.model_dump(mode="json") | {
         "sha256": sha256_bytes(canonical_json_bytes(policy.model_dump(mode="json")))
     }
-    request = parse_reference_query_workflow_request(
+    request = parse_supported_reference_query_workflow_request(
         seal(
             base.request.model_dump(mode="json")
             | {
@@ -113,7 +116,9 @@ def test_owner_root_preflight_uses_real_layout_without_creation_or_repair(
 
 
 @pytest.fixture
-def staged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> handoff.PreparedNativeQuery:
+def staged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> handoff.PreparedNativeQuery:
     owner = tmp_path / "owner"
     owner.mkdir(mode=0o700)
     monkeypatch.setattr(handoff, "OWNER_ROOT", owner)
@@ -121,7 +126,7 @@ def staged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> handoff.PreparedN
     monkeypatch.setattr(
         handoff, "fixed_owner_identity", lambda: CpuHandoffIdentity(os.geteuid(), os.getegid())
     )
-    result = prepared()
+    result = prepared(consumer_purpose=getattr(request, "param", "PAST_EXAM_VARIATION"))
     handoff.stage_native_query(result)
     return result
 
@@ -159,6 +164,9 @@ def synthetic_output(value: handoff.PreparedNativeQuery, monkeypatch: pytest.Mon
     return encoded.vectors
 
 
+@pytest.mark.parametrize(
+    "staged", ("PAST_EXAM_VARIATION", "ITEM_AUTHORING", "ITEM_REVIEW"), indirect=True
+)
 def test_five_typed_controls_staged_exactly_but_no_launch_or_actor_sent_to_worker(
     staged: handoff.PreparedNativeQuery,
 ) -> None:
@@ -202,6 +210,9 @@ def test_nonroot_cannot_prepare_or_make_a_runtime_handoff(
     assert not handoff.RUNTIME_ROOT.exists()
 
 
+@pytest.mark.parametrize(
+    "staged", ("PAST_EXAM_VARIATION", "ITEM_AUTHORING", "ITEM_REVIEW"), indirect=True
+)
 def test_exact_query_result_copies_once_and_replay_reuses_same_bytes(
     staged: handoff.PreparedNativeQuery,
     monkeypatch: pytest.MonkeyPatch,

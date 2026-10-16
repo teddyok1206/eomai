@@ -33,9 +33,9 @@ from eom_workflow.native_reference_query_coordinator import (
 from eom_workflow.reference_query_execution import (
     ReferenceQueryLaunchAssociation,
     ReferenceQueryStepOutput,
-    ReferenceQueryWorkflowRequest,
+    SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_launch_association,
-    parse_reference_query_workflow_request,
+    parse_supported_reference_query_workflow_request,
 )
 from sqlalchemy.orm import Session
 
@@ -89,9 +89,9 @@ class CatalogNativeReferenceQueryExecutor:
         self.source_commit = source_commit
         self.completion = NativeReferenceQueryCompletion(owner)
 
-    def evaluate(self, request: ReferenceQueryWorkflowRequest) -> RuntimeReadinessReport:
+    def evaluate(self, request: SupportedReferenceQueryWorkflowRequest) -> RuntimeReadinessReport:
         try:
-            request = parse_reference_query_workflow_request(request)
+            request = parse_supported_reference_query_workflow_request(request)
             config = self.owner.configuration
             indexes = tuple(v.index for v in request.context_request.views if v.index is not None)
             if (
@@ -122,7 +122,7 @@ class CatalogNativeReferenceQueryExecutor:
     def _current(
         self,
         session: Session,
-        request: ReferenceQueryWorkflowRequest,
+        request: SupportedReferenceQueryWorkflowRequest,
         lease: CommandLeaseIdentity,
         workflow_id: str,
         step_run_id: str,
@@ -210,7 +210,7 @@ class CatalogNativeReferenceQueryExecutor:
         prepared: PreparedNativeQuery,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: ReferenceQueryWorkflowRequest,
+        request: SupportedReferenceQueryWorkflowRequest,
         lease: CommandLeaseIdentity,
         fenced: NativeFencedRunnerTransaction,
         reason: Literal["BUSY", "UNCERTAIN"],
@@ -240,7 +240,7 @@ class CatalogNativeReferenceQueryExecutor:
     def _allocate_in_session(
         self,
         session: Session,
-        request: ReferenceQueryWorkflowRequest,
+        request: SupportedReferenceQueryWorkflowRequest,
         lease: CommandLeaseIdentity,
         workflow_id: str,
         step_run_id: str,
@@ -275,12 +275,12 @@ class CatalogNativeReferenceQueryExecutor:
         session: Session,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: ReferenceQueryWorkflowRequest,
+        request: SupportedReferenceQueryWorkflowRequest,
         command_lease: CommandLeaseIdentity,
     ) -> ReferenceQueryLaunchAssociation:
         """Persist allocation in the caller's step-start root, without launch or commit."""
         _require_allocation_root(session)
-        request = parse_reference_query_workflow_request(request)
+        request = parse_supported_reference_query_workflow_request(request)
         if not self.evaluate(request).ready:
             raise ValueError("REFERENCE_QUERY_EXECUTOR_CONTEXT_INVALID")
         prepared, _history = self._allocate_in_session(
@@ -293,12 +293,12 @@ class CatalogNativeReferenceQueryExecutor:
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: ReferenceQueryWorkflowRequest,
+        request: SupportedReferenceQueryWorkflowRequest,
         command_lease: CommandLeaseIdentity,
         idempotency_key: str,
         fenced_transaction: NativeFencedRunnerTransaction,
     ) -> ReferenceQueryStepOutput | ReferenceQueryStepPending:
-        request = parse_reference_query_workflow_request(request)
+        request = parse_supported_reference_query_workflow_request(request)
         expected_key = (
             f"reference-query-step:{workflow.workflow_id}:encode_reference_query:1:"
             f"{request.workflow_definition_sha256}"
@@ -407,7 +407,7 @@ class CatalogNativeReferenceQueryExecutor:
         session: Session,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: ReferenceQueryWorkflowRequest,
+        request: SupportedReferenceQueryWorkflowRequest,
         command_lease: CommandLeaseIdentity,
         output: ReferenceQueryStepOutput,
     ) -> ReferenceQueryStepOutput:

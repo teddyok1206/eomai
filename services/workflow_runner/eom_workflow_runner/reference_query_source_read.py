@@ -48,10 +48,10 @@ from eom_workflow.reference_query_execution import (
     ReferenceQueryExecutionPolicy,
     ReferenceQueryLaunchAssociation,
     ReferenceQueryStepOutput,
-    ReferenceQueryWorkflowRequest,
+    SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_execution_policy,
     parse_reference_query_step_output,
-    parse_reference_query_workflow_request,
+    parse_supported_reference_query_workflow_request,
     validate_reference_query_launch_association,
     validate_reference_query_policy_bundle,
     validate_reference_query_request_references,
@@ -108,13 +108,13 @@ class ReferenceQueryOwnerConfiguration:
 class ResolvedReferenceQuerySources:
     """Exact current-root values only; never a cached authority or claim grant."""
 
-    request: ReferenceQueryWorkflowRequest
+    request: SupportedReferenceQueryWorkflowRequest
     policy: ReferenceQueryExecutionPolicy
     bundle: EmbeddingRuntimeBundle
     prepared: PreparedSimilarityContext
 
     def __post_init__(self) -> None:
-        request = parse_reference_query_workflow_request(self.request)
+        request = parse_supported_reference_query_workflow_request(self.request)
         policy = parse_reference_query_execution_policy(self.policy)
         bundle = parse_embedding_runtime_bundle(raw_similarity_contract_value(self.bundle))
         validate_reference_query_request_references(request, policy, bundle)
@@ -207,14 +207,14 @@ class ReferenceQuerySourceOwner(Protocol):
     def catalog(self) -> CatalogEmbeddingRegistryVerifier: ...
 
     def resolve_sources(
-        self, session: Session, request: ReferenceQueryWorkflowRequest
+        self, session: Session, request: SupportedReferenceQueryWorkflowRequest
     ) -> ResolvedReferenceQuerySources: ...
 
     def resolve_completed_sources(
         self,
         session: Session,
         caller: EmbeddingRegistryCaller,
-        request: ReferenceQueryWorkflowRequest,
+        request: SupportedReferenceQueryWorkflowRequest,
         *,
         workflow_id: str,
     ) -> ResolvedCompletedReferenceQuerySources: ...
@@ -249,7 +249,7 @@ class CatalogReferenceQueryReadOwner:
         )
 
     def resolve_sources(
-        self, session: Session, request: ReferenceQueryWorkflowRequest
+        self, session: Session, request: SupportedReferenceQueryWorkflowRequest
     ) -> ResolvedReferenceQuerySources:
         return resolve_reference_query_sources(self, session, request)
 
@@ -257,7 +257,7 @@ class CatalogReferenceQueryReadOwner:
         self,
         session: Session,
         caller: EmbeddingRegistryCaller,
-        request: ReferenceQueryWorkflowRequest,
+        request: SupportedReferenceQueryWorkflowRequest,
         *,
         workflow_id: str,
     ) -> ResolvedCompletedReferenceQuerySources:
@@ -340,9 +340,11 @@ def read_selected_reference_query_controls(
 
 
 def resolve_reference_query_sources(
-    owner: ReferenceQuerySourceOwner, session: Session, request: ReferenceQueryWorkflowRequest
+    owner: ReferenceQuerySourceOwner,
+    session: Session,
+    request: SupportedReferenceQueryWorkflowRequest,
 ) -> ResolvedReferenceQuerySources:
-    request = parse_reference_query_workflow_request(request)
+    request = parse_supported_reference_query_workflow_request(request)
     caller = EmbeddingRegistryCaller(request.operator_audit.operator_id)
     owner.identity.fence_current_operator(session, caller.operator_id)
     config, context = owner.configuration, request.context_request
@@ -378,12 +380,12 @@ def resolve_completed_reference_query_sources(
     owner: ReferenceQuerySourceOwner,
     session: Session,
     caller: EmbeddingRegistryCaller,
-    request: ReferenceQueryWorkflowRequest,
+    request: SupportedReferenceQueryWorkflowRequest,
     *,
     workflow_id: str,
 ) -> ResolvedCompletedReferenceQuerySources:
     """Current read authority, never a new claim or a completed-command lease."""
-    request = parse_reference_query_workflow_request(request)
+    request = parse_supported_reference_query_workflow_request(request)
     if (
         not isinstance(caller, EmbeddingRegistryCaller)
         or caller.operator_id != request.operator_audit.operator_id

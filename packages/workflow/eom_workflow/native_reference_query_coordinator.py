@@ -18,10 +18,10 @@ from eom_workflow.reference_query_execution import (
     ReferenceQueryLaunchAssociation,
     ReferenceQueryStepOutput,
     ReferenceQueryWorkflowReceipt,
-    ReferenceQueryWorkflowRequest,
+    SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_launch_association,
     parse_reference_query_workflow_receipt,
-    parse_reference_query_workflow_request,
+    parse_supported_reference_query_workflow_request,
     validate_reference_query_step_output,
 )
 from eom_workflow.schemas import (
@@ -193,7 +193,7 @@ def native_reference_query_checkpoint(
 
 
 def reference_query_checkpoint_receipt(
-    request: ReferenceQueryWorkflowRequest,
+    request: SupportedReferenceQueryWorkflowRequest,
     launch: ReferenceQueryLaunchAssociation,
     allocation: NativeQueryAllocation,
     executed: NativeQueryExecuted,
@@ -236,10 +236,10 @@ def reference_query_checkpoint_receipt(
 def validate_native_reference_query_history(
     records: tuple[NativeReferenceQueryCheckpoint, ...],
     launch: ReferenceQueryLaunchAssociation,
-    request: ReferenceQueryWorkflowRequest,
+    request: SupportedReferenceQueryWorkflowRequest,
 ) -> None:
     launch = parse_reference_query_launch_association(launch)
-    request = parse_reference_query_workflow_request(request)
+    request = parse_supported_reference_query_workflow_request(request)
     if (
         len(records) > 4
         or tuple(r.record_type for r in records) != NATIVE_QUERY_PHASES[: len(records)]

@@ -13,8 +13,8 @@ from eom_workflow.local_embedding_request import (
     parse_local_embedding_executable_request,
 )
 from eom_workflow.reference_query_execution import (
-    ReferenceQueryWorkflowRequest,
-    parse_reference_query_workflow_request,
+    SupportedReferenceQueryWorkflowRequest,
+    parse_supported_reference_query_workflow_request,
 )
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
@@ -24,7 +24,9 @@ from eom_workflow_runner.models import WorkflowCommandRecord, WorkflowInstanceRe
 from eom_workflow_runner.repository import CommandLeaseIdentity, require_command_lease
 from eom_workflow_runner.state_machine import CommandState
 
-type NativeWorkflowRequest = LocalEmbeddingExecutableRequest | ReferenceQueryWorkflowRequest
+type NativeWorkflowRequest = (
+    LocalEmbeddingExecutableRequest | SupportedReferenceQueryWorkflowRequest
+)
 
 
 class NativeWorkflowMutationOwner[Request: NativeWorkflowRequest](Protocol):
@@ -56,9 +58,9 @@ def native_fenced_runner_transaction[Request: NativeWorkflowRequest](
             raise WorkflowError(WorkflowErrorCode.WORKFLOW_NOT_FOUND, "native workflow disappeared")
         command = require_command_lease(session, lease, for_update=True)
         initial_command_state = command.state
-        query = isinstance(request, ReferenceQueryWorkflowRequest)
+        query = isinstance(request, SupportedReferenceQueryWorkflowRequest)
         original = (
-            parse_reference_query_workflow_request(workflow.initial_request)
+            parse_supported_reference_query_workflow_request(workflow.initial_request)
             if query
             else parse_local_embedding_executable_request(workflow.initial_request)
         )

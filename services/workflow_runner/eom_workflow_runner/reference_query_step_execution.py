@@ -12,7 +12,7 @@ from eom_workflow.compiler import CompiledWorkflowDefinition
 from eom_workflow.native_reference_query_coordinator import NativeQueryCompleted
 from eom_workflow.reference_query_execution import (
     ReferenceQueryStepOutput,
-    ReferenceQueryWorkflowRequest,
+    SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_step_output,
 )
 from eom_workflow.reference_query_workflow import (
@@ -51,7 +51,9 @@ from eom_workflow_runner.state_machine import (
 )
 
 
-def _checked_step(step: WorkflowStepRunRecord, request: ReferenceQueryWorkflowRequest) -> None:
+def _checked_step(
+    step: WorkflowStepRunRecord, request: SupportedReferenceQueryWorkflowRequest
+) -> None:
     if (
         step.step_key != "encode_reference_query"
         or step.attempt != 1
@@ -72,7 +74,7 @@ def _checked_completion(
     executor: ReferenceQueryNativeExecutor,
     workflow: WorkflowInstanceRecord,
     step: WorkflowStepRunRecord,
-    request: ReferenceQueryWorkflowRequest,
+    request: SupportedReferenceQueryWorkflowRequest,
     lease: CommandLeaseIdentity,
     output: ReferenceQueryStepOutput,
 ) -> ReferenceQueryStepOutput:
@@ -105,7 +107,7 @@ def advance_reference_query_step(
     *,
     workflow: WorkflowInstanceRecord,
     compiled: CompiledWorkflowDefinition,
-    request: ReferenceQueryWorkflowRequest,
+    request: SupportedReferenceQueryWorkflowRequest,
     lease: CommandLeaseIdentity,
     owner: ReferenceQueryOwnerAdmission,
     executor: ReferenceQueryNativeExecutor,
@@ -299,7 +301,7 @@ def advance_reference_query_step(
 
 def _checked_pending(
     session: Session,
-    request: ReferenceQueryWorkflowRequest,
+    request: SupportedReferenceQueryWorkflowRequest,
     workflow_id: str,
     step_run_id: str,
     outcome: ReferenceQueryStepPending,
@@ -329,7 +331,7 @@ def _checked_pending(
 def complete_reference_query_terminal(
     *,
     workflow_id: str,
-    request: ReferenceQueryWorkflowRequest,
+    request: SupportedReferenceQueryWorkflowRequest,
     lease: CommandLeaseIdentity,
     executor: ReferenceQueryNativeExecutor,
     fenced_transaction: NativeFencedRunnerTransaction,

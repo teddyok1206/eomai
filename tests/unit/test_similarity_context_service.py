@@ -31,6 +31,7 @@ from eom_catalog_contracts.inference_transfer_experiment import (
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
 from eom_catalog_contracts.similarity_context import (
     ApprovedReferenceItemAnchor,
+    SimilarityConsumerPurpose,
     SimilarityContextRequest,
     SimilarityIndexPin,
     SimilarityVectorObservation,
@@ -112,7 +113,9 @@ class Query:
 
 
 def case(
-    *, missing_view: ExperimentView | None = None
+    *,
+    missing_view: ExperimentView | None = None,
+    consumer_purpose: SimilarityConsumerPurpose = "PAST_EXAM_VARIATION",
 ) -> tuple[SimilarityContextRequest, Sources, Query]:
     entries = tuple(embedding_entry(seed) for seed in "abc")
     prepared_sources = tuple(
@@ -197,7 +200,7 @@ def case(
     body = {
         "schema_version": "system-rag-similarity-request/1.0",
         "request_id": "similarityrequest_" + "a" * 32,
-        "consumer_purpose": "PAST_EXAM_VARIATION",
+        "consumer_purpose": consumer_purpose,
         "anchor": ApprovedReferenceItemAnchor(
             source=prepared_sources[0].source,
             profile=prepared_sources[0].profile,

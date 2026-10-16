@@ -23,11 +23,14 @@ from tests.unit.test_embedding_registry_catalog_adapter import owner as owner
 from tests.unit.test_similarity_materials_contracts import materials_case
 
 
-def selected_case(owner, monkeypatch, *, fault=None, missing_anchor=False):
+def selected_case(
+    owner, monkeypatch, *, fault=None, missing_anchor=False, purpose="PAST_EXAM_VARIATION"
+):
     verifier, session, _command, _index, _binding, scope, _root = owner
     context, anchor, entries = materials_case(count=2, missing_anchor=missing_anchor)
     raw = context.model_dump(mode="json")
     raw["request"]["source_classes"] = ["PAST_EXAM"]
+    raw["request"]["consumer_purpose"] = purpose
     raw["request"] = seal(raw["request"], "request_sha256")
     context = parse_similarity_context(seal(raw, "context_sha256"))
     values = (
@@ -73,6 +76,20 @@ def selected_case(owner, monkeypatch, *, fault=None, missing_anchor=False):
 
     monkeypatch.setattr(verifier.sources, "capture_in_session", Mock(side_effect=capture))
     return verifier, session, context, entries, calls
+
+
+@pytest.mark.parametrize("purpose", ("ITEM_AUTHORING", "ITEM_REVIEW"))
+def test_authoring_reference_materials_use_same_actual_caller_and_selected_source_boundary(
+    owner, monkeypatch, purpose
+):
+    verifier, session, context, entries, calls = selected_case(owner, monkeypatch, purpose=purpose)
+    caller = EmbeddingRegistryCaller("operator_" + "1" * 32)
+    materials = verifier.read_similarity_materials_in_session(session, caller, context)
+    assert validate_similarity_materials(materials, context) == materials
+    assert materials.entries == entries
+    assert context.request.consumer_purpose == purpose
+    assert len(calls) == 1 and calls[0].actor_id == caller.operator_id
+    assert calls[0].source_classes == ("PAST_EXAM",)
 
 
 @pytest.mark.parametrize("missing_anchor", (False, True))

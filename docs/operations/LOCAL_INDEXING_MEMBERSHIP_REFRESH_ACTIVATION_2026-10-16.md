@@ -228,6 +228,18 @@ The original human HTTP canary PID1079683 is still held separately without a
 replacement key/session or copied credentials. No source/API/QUERY/Web feature
 flag, consumer release or CPU/CUDA default is changed by this INDEX milestone.
 
+At the next scheduled30-minute observation,03:15:25 UTC, all three original full-
+grant numeric STARTs/Workflows above were SUCCEEDED/COMPLETED, each attempts1/
+generation1. The SAME active/success/enabled PID/invocation, with Restart=no, had
+automatically queued its next CONTENT_ONLY request:
+Workflow`workflow_a2d957bfd9ef4274be195d925b065765`,
+START`wfcmd_15b08e3fca124503a84425709d3b5c5c`, attempts/generation0.
+Evidence:`continuous-progress-0315-2a4843c3.log` through the same fixed read-only
+observer. No target list, manual new key, restart or source selection was used.
+This proves genuine terminal progression and unattended follow-on discovery, not
+another canonical vector-byte/reuse/count audit or whole-corpus coverage. Subsequent
+source candidate request1.1 work does not replace this running2a4843c3 installation.
+
 ## Subsequent continuous selection gate
 
 After the three original commands and the canonical storage audit pass, select

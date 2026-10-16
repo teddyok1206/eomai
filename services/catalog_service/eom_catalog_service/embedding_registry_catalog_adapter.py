@@ -80,6 +80,7 @@ from eom_catalog_service.embedding_registry_indexing_authority import (
     CatalogIndexingRegistrySourceAuthority,
 )
 from eom_catalog_service.embedding_registry_ports import (
+    AUTHORING_REFERENCE_PURPOSES,
     AuthorizedEmbeddingReadProfile,
     EmbeddingBindingOrigin,
     EmbeddingRegistryActor,
@@ -486,7 +487,7 @@ class CatalogEmbeddingRegistryVerifier:
     ) -> CatalogEmbeddingRegistryVerifier:
         config = self.configuration
         if (
-            request.consumer_purpose != "PAST_EXAM_VARIATION"
+            request.consumer_purpose not in AUTHORING_REFERENCE_PURPOSES
             or request.anchor.source.source_class != "PAST_EXAM"
             or request.topics
             or request.unit_ids
@@ -1107,7 +1108,7 @@ class CatalogEmbeddingRegistryVerifier:
             body = {
                 "schema_version": "system-rag-similarity-request/1.0",
                 "request_id": preparation.request_id,
-                "consumer_purpose": "PAST_EXAM_VARIATION",
+                "consumer_purpose": preparation.consumer_purpose,
                 "anchor": {
                     "basis": "APPROVED_REFERENCE_ITEM",
                     "source": source.model_dump(mode="json"),

@@ -22,8 +22,8 @@ from eom_orchestrator.native_reference_query_coordinator import (
     read_native_reference_query_launch,
 )
 from eom_workflow.reference_query_execution import (
-    ReferenceQueryWorkflowRequest,
-    parse_reference_query_workflow_request,
+    SupportedReferenceQueryWorkflowRequest,
+    parse_supported_reference_query_workflow_request,
 )
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, object_session
@@ -98,7 +98,7 @@ class CatalogReferenceQueryOwnerAdmission:
         self._command_fence = NativeCommandMutationFence()
 
     def resolve_submission(
-        self, session: Session, request: ReferenceQueryWorkflowRequest
+        self, session: Session, request: SupportedReferenceQueryWorkflowRequest
     ) -> ResolvedReferenceQueryAdmission:
         sources = self.resolve_sources(session, request)
         return ResolvedReferenceQueryAdmission(sources.request, sources.policy, sources.bundle)
@@ -108,7 +108,7 @@ class CatalogReferenceQueryOwnerAdmission:
         session: Session,
         command: WorkflowCommandRecord,
         workflow: WorkflowInstanceRecord,
-        request: ReferenceQueryWorkflowRequest,
+        request: SupportedReferenceQueryWorkflowRequest,
     ) -> None:
         definition = session.get(WorkflowDefinitionRecord, workflow.definition_id)
         if (
@@ -136,9 +136,9 @@ class CatalogReferenceQueryOwnerAdmission:
         *,
         command: WorkflowCommandRecord,
         workflow: WorkflowInstanceRecord,
-        request: ReferenceQueryWorkflowRequest,
+        request: SupportedReferenceQueryWorkflowRequest,
     ) -> ResolvedReferenceQueryAdmission:
-        request = parse_reference_query_workflow_request(request)
+        request = parse_supported_reference_query_workflow_request(request)
         self.identity.fence_current_operator(session, request.operator_audit.operator_id)
         self._require_rows(session, command, workflow, request)
         fresh = (
@@ -197,14 +197,20 @@ class CatalogReferenceQueryOwnerAdmission:
         return scope
 
     def fence_mutation(
-        self, session: Session, request: ReferenceQueryWorkflowRequest, lease: CommandLeaseIdentity
+        self,
+        session: Session,
+        request: SupportedReferenceQueryWorkflowRequest,
+        lease: CommandLeaseIdentity,
     ) -> None:
         self.resolve_mutation_sources(session, request, lease)
 
     def resolve_mutation_sources(
-        self, session: Session, request: ReferenceQueryWorkflowRequest, lease: CommandLeaseIdentity
+        self,
+        session: Session,
+        request: SupportedReferenceQueryWorkflowRequest,
+        lease: CommandLeaseIdentity,
     ) -> ResolvedReferenceQuerySources:
-        request = parse_reference_query_workflow_request(request)
+        request = parse_supported_reference_query_workflow_request(request)
         self.identity.fence_current_operator(session, request.operator_audit.operator_id)
         command = self._command_fence.acquire(session, request.request_sha256, lease)
         workflow = session.get(WorkflowInstanceRecord, command.workflow_id)
@@ -218,7 +224,7 @@ class CatalogReferenceQueryOwnerAdmission:
     def resolve_execution_sources(
         self,
         session: Session,
-        request: ReferenceQueryWorkflowRequest,
+        request: SupportedReferenceQueryWorkflowRequest,
         lease: CommandLeaseIdentity,
         *,
         workflow_id: str,
@@ -247,7 +253,7 @@ class CatalogReferenceQueryOwnerAdmission:
         return sources
 
     def resolve_sources(
-        self, session: Session, request: ReferenceQueryWorkflowRequest
+        self, session: Session, request: SupportedReferenceQueryWorkflowRequest
     ) -> ResolvedReferenceQuerySources:
         return resolve_reference_query_sources(self, session, request)
 
@@ -255,7 +261,7 @@ class CatalogReferenceQueryOwnerAdmission:
         self,
         session: Session,
         caller: EmbeddingRegistryCaller,
-        request: ReferenceQueryWorkflowRequest,
+        request: SupportedReferenceQueryWorkflowRequest,
         *,
         workflow_id: str,
     ) -> ResolvedCompletedReferenceQuerySources:

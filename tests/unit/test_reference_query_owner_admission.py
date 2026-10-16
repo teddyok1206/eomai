@@ -14,6 +14,7 @@ from unittest.mock import Mock
 
 import pytest
 from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
+from eom_catalog_contracts.similarity_context import SimilarityConsumerPurpose
 from eom_catalog_service.embedding_registry_catalog_adapter import (
     EmbeddingRegistryOwnerConfiguration,
 )
@@ -44,10 +45,10 @@ from eom_orchestrator.local_embedding_control_artifacts import (
 from eom_workflow.compiler import compile_definition_data
 from eom_workflow.reference_query_execution import (
     ReferenceQueryExecutionPolicy,
-    ReferenceQueryWorkflowRequest,
+    SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_execution_policy,
     parse_reference_query_step_output,
-    parse_reference_query_workflow_request,
+    parse_supported_reference_query_workflow_request,
 )
 from eom_workflow_runner import reference_query_owner_admission as module
 from eom_workflow_runner import reference_query_source_read as read_module
@@ -83,7 +84,7 @@ from tests.unit.test_similarity_context_service import case as context_case
 class OwnerFixture:
     owner: CatalogReferenceQueryOwnerAdmission
     publisher: ControlFileSetPublisher
-    request: ReferenceQueryWorkflowRequest
+    request: SupportedReferenceQueryWorkflowRequest
     policy: ReferenceQueryExecutionPolicy
     prepared: PreparedSimilarityContext
     deny: bool = False
@@ -102,9 +103,10 @@ def make_source_case(
     *,
     publisher: ControlFileSetPublisher | None = None,
     control_seed: str | None = None,
+    consumer_purpose: SimilarityConsumerPurpose = "PAST_EXAM_VARIATION",
 ) -> OwnerFixture:
     compiled = compile_definition_data(definition_body(), "synthetic-current-query-owner", set())
-    base = case(definition_sha256=compiled.sha256)
+    base = case(definition_sha256=compiled.sha256, consumer_purpose=consumer_purpose)
     if publisher is None:
         publisher, _engine = _publisher(tmp_path)
     publisher.settings = replace(publisher.settings, workspace_root=tmp_path)
@@ -138,7 +140,7 @@ def make_source_case(
         created_at=NOW,
     )
     _rows, capture = verified_capture(monkeypatch)
-    request = parse_reference_query_workflow_request(
+    request = parse_supported_reference_query_workflow_request(
         seal(
             base.request.model_dump(mode="json")
             | {
@@ -180,7 +182,7 @@ def make_source_case(
         session_fence=AuthenticatedSessionFence(PIN),
         settings=CatalogSettings(nas_artifact_root=publisher.settings.nas_artifact_root),
     )
-    _context, sources, _query = context_case()
+    _context, sources, _query = context_case(consumer_purpose=consumer_purpose)
     selected_views = {selection.view for selection in context.views}
     prepared = replace(
         sources.prepared,
@@ -228,6 +230,29 @@ def make_source_case(
     monkeypatch.setattr(owner.catalog, "read_similarity_views_in_session", read)
     monkeypatch.setattr(owner.catalog, "prepare_reference_query_anchor_in_session", prepare_anchor)
     return result
+
+
+@pytest.mark.parametrize("purpose", ("ITEM_AUTHORING", "ITEM_REVIEW"))
+def test_authoring_reference_native_input_uses_exact_new_context_without_document_encoding(
+    tmp_path, monkeypatch, purpose
+):
+    value = make_source_case(tmp_path, monkeypatch, consumer_purpose=purpose)
+    with value.publisher.sessions.begin() as session:
+        sources = value.owner.resolve_sources(session, value.request)
+    native = build_reference_query_native_input(
+        sources, job_id="job_" + "e" * 32, query_request_id="embeddingquery_" + "e" * 32
+    )
+    assert sources.request.context_request.consumer_purpose == purpose
+    assert sources.request.context_request.anchor.basis == "APPROVED_REFERENCE_ITEM"
+    assert native.context_request_sha256 == value.request.context_request.request_sha256
+    assert native.spaces.query.purpose == "QUERY"
+    assert native.spaces.document == value.policy.spaces.document
+    texts = dict(value.prepared.query_texts)
+    assert {row.view: row.text for row in native.rows} == texts
+    assert {row.view for row in native.rows} == {
+        row.view for row in value.request.context_request.views
+    }
+    assert value.calls and all(root is session for _name, root in value.calls)
 
 
 def test_native_input_bytes_ignore_unrelated_population_but_retain_exact_anchor(
@@ -810,7 +835,7 @@ def test_stale_or_substituted_actor_denies_before_any_control_read(
     source.deny = not actor
     request = source.request
     if actor:
-        request = parse_reference_query_workflow_request(
+        request = parse_supported_reference_query_workflow_request(
             seal(
                 request.model_dump(mode="json")
                 | {
@@ -903,7 +928,7 @@ def test_exact_native_rows_use_query_purpose_and_configured_batch_not_row_count(
         resolved = source.owner.resolve_sources(session, source.request)
     context = source.request.context_request.model_dump(mode="json")
     context["views"] = context["views"][:1]
-    request = parse_reference_query_workflow_request(
+    request = parse_supported_reference_query_workflow_request(
         seal(
             source.request.model_dump(mode="json")
             | {"context_request": seal(context, "request_sha256")},

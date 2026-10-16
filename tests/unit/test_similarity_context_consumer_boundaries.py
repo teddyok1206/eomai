@@ -15,9 +15,7 @@ from tests.unit.test_similarity_context_service import CALLER, case
 ROOT = Path(__file__).resolve().parents[2]
 
 
-@pytest.mark.parametrize(
-    "purpose", ["ITEM_AUTHORING", "ITEM_REVIEW", "GENERAL_CHAT_READ", "MOCK_EXAM_OBSERVATION"]
-)
+@pytest.mark.parametrize("purpose", ["GENERAL_CHAT_READ", "MOCK_EXAM_OBSERVATION"])
 def test_unconnected_consumers_have_no_authority_or_implicit_variation_fallback(
     purpose: str,
 ) -> None:
@@ -29,6 +27,40 @@ def test_unconnected_consumers_have_no_authority_or_implicit_variation_fallback(
     assert result.status == "FAILED" and result.error_code == "AUTHORITY_UNAVAILABLE"
     assert not source.calls and query.calls == 0
     assert not result.candidates and result.population is None
+
+
+@pytest.mark.parametrize("purpose", ["ITEM_AUTHORING", "ITEM_REVIEW"])
+def test_authoring_reference_uses_same_composer_without_claiming_private_query(purpose):
+    request, source, query = case(consumer_purpose=purpose)
+    result = SimilarityContextApplicationService(source, query).compose(CALLER, request)
+    assert result.status == "READY" and result.error_code is None
+    assert result.request.consumer_purpose == purpose
+    assert result.request.anchor.basis == "APPROVED_REFERENCE_ITEM"
+    assert result.candidates and result.query_execution is not None
+    assert source.calls == ["prepare", "read", "reauthorize"] and query.calls == 1
+    old, _, _ = case()
+    assert old.request_id == request.request_id
+    assert old.request_sha256 != request.request_sha256
+
+
+@pytest.mark.parametrize("purpose", ["ITEM_AUTHORING", "ITEM_REVIEW"])
+def test_authoring_reference_cannot_relabel_completed_variation_query(purpose):
+    request, source, _query = case(consumer_purpose=purpose)
+    _old, _old_source, old_query = case()
+    result = SimilarityContextApplicationService(source, old_query).compose(CALLER, request)
+    assert result.status == "FAILED" and result.error_code == "QUERY_RESULT_INVALID"
+    assert not result.candidates and result.population is None
+    assert "read" not in source.calls
+
+
+@pytest.mark.parametrize("purpose", ["ITEM_AUTHORING", "ITEM_REVIEW"])
+def test_authoring_reference_rechecks_late_source_permission(purpose):
+    request, source, query = case(consumer_purpose=purpose)
+    source.denial = "synthetic revocation"
+    result = SimilarityContextApplicationService(source, query).compose(CALLER, request)
+    assert result.status == "FAILED" and result.error_code == "SOURCE_REVOKED"
+    assert not result.candidates and result.population is None
+    assert source.calls == ["prepare", "read", "reauthorize"]
 
 
 def test_core_has_no_database_filesystem_ml_worker_or_private_owner_calls() -> None:
