@@ -546,8 +546,17 @@ def _string(raw: bytes, offset: int, end: int) -> str:
     return value
 
 
-def validate_embedding_loader_cache(raw: bytes) -> None:
-    """Fixed ABI/routes only; parsing never replaces raw hash or host admission."""
+@dataclass(frozen=True, slots=True)
+class EmbeddingLoaderCacheEntry:
+    name: str
+    path: str
+    abi: int
+    osversion: int
+    hardware: int
+
+
+def read_embedding_loader_cache_entries(raw: bytes) -> tuple[EmbeddingLoaderCacheEntry, ...]:
+    """Bounded existing cache ABI parser; returned paths are data, never resolution grants."""
     _require(type(raw) is bytes and 48 <= len(raw) <= 128 * 1024, "CACHE_INVALID")
     magic, count, strings, flags, extension = struct.unpack_from("<20sIIB3xI", raw)
     start = 48 + count * 24
@@ -562,15 +571,35 @@ def validate_embedding_loader_cache(raw: bytes) -> None:
         and start + strings <= extension <= len(raw),
         "CACHE_INVALID",
     )
-    observed: dict[str, list[tuple[int, str, int, int]]] = {}
+    entries: list[EmbeddingLoaderCacheEntry] = []
     for index in range(count):
         abi, key, value, osversion, hardware = struct.unpack_from("<IIIIQ", raw, 48 + index * 24)
         _require(
             start <= key < start + strings and start <= value < start + strings, "CACHE_INVALID"
         )
         name, path = _string(raw, key, start + strings), _string(raw, value, start + strings)
+        entries.append(EmbeddingLoaderCacheEntry(name, path, abi, osversion, hardware))
+    return tuple(entries)
+
+
+def embedding_host_loader_cache_routes() -> tuple[tuple[str, str], ...]:
+    """The unchanged CPU base routes; CUDA may validate but never modify this table."""
+    return tuple(
+        (name, "/lib/x86_64-linux-gnu/" + name)
+        for name in _SONAMES
+        if name != "ld-linux-x86-64.so.2"
+    )
+
+
+def validate_embedding_loader_cache(raw: bytes) -> None:
+    """Keep the released CPU interpretation, including ignoring unrelated cache names."""
+    observed: dict[str, list[tuple[int, str, int, int]]] = {}
+    for entry in read_embedding_loader_cache_entries(raw):
+        name = entry.name
         if name in _SONAMES and name != "ld-linux-x86-64.so.2":
-            observed.setdefault(name, []).append((abi, path, osversion, hardware))
+            observed.setdefault(name, []).append(
+                (entry.abi, entry.path, entry.osversion, entry.hardware)
+            )
     _require(set(observed) == set(_SONAMES) - {"ld-linux-x86-64.so.2"}, "CACHE_SET_MISMATCH")
     for name, entries in observed.items():
         _require(entries == [(0x303, "/lib/x86_64-linux-gnu/" + name, 0, 0)], "CACHE_ROUTE_INVALID")

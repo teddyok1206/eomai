@@ -9,6 +9,17 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Source checkpoint16:02 UTC: stdlib-only fixed-root CUDA extension file capture,
+  schema adapter, exact closed21-entry cache and existing kernel-witness interface
+  now combined781/strict3/Ruff PASS (overlapping earlier suites). Unchanged CPU
+  seed/cache interpretation/SONAME tables, no runtime/DB/model/GPU mutation.
+  Source tests use synthetic file/kernel ports; no protected publication, actual
+  cache mount, complete ELF composition, CUDA receipt/probe or device/lease grant.
+  Explicit native-config/prefix/bootstrap integration and six real comparisons
+  remain next. Existing auth observer2391005 is live at LOGIN, exact pane/terminal
+  match and input enabled/no copy mode; no re-login process/question was created.
+  INDEX's next normal check remains16:16:38; canonical coverage not reaudited.
+  Full C1–C5 remains open. [Actual source scope and next boundary](../architecture/EMBEDDING_CUDA_HOST_EXTENSION_DESIGN.md).
 - Latest source checkpoint15:49 UTC: explicit CUDA-only private host extension
   design, exact six-member schema/mirror/pointer/frozen values and base/seed/raw/
   semantic closure now source174/strict1/Ruff PASS. All322 predecessor schema

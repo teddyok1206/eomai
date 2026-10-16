@@ -76,6 +76,19 @@ operation is live. File presence alone grants no loading or device permission.
 
 ## Protocol first and integration order
 
+**Cache composition invariant:** the base snapshot pointer is immutable provenance,
+not a claim that its CPU cache is mounted in a CUDA process. Its source manifest/
+cache must still resolve and match their own unchanged seed. CUDA instead witnesses
+its declared private cache at the actual read-only`/etc/ld.so.cache` binding. Later
+host capture reuses the fixed CPU file/tool/alias checks with the explicitly declared
+CUDA cache, then adds the six checked library descriptors. Never feed the combined
+CUDA seed to the CPU-only snapshot capturer or accept the base cache mount as a CUDA
+mount witness. The private cache must resolve all unchanged CPU names to their
+existing fixed routes and the six CUDA names to this exact extension revision;
+unknown, duplicated, hardware-specific or alternative ABI entries are rejected.
+Publication/cache generation and actual ELF/mapped/device proof remain separate
+from resolving this metadata/file set. No global cache update is needed.
+
 1. Define `embedding-cuda-host-extension/1.0`: exact six named library members,
    driver release, unchanged base snapshot pointer/seed, CUDA-local cache metadata,
    deterministic extension/host hashes and typed pointer. Metadata is never a grant.
@@ -142,3 +155,59 @@ configuration/prefix/bootstrap integration, then independently admit the CUDA-on
 probe/receipt and perform the six real comparisons. Do not deploy metadata alone
 or bypass a dependency gate to call the GPU path complete. The original C1–C5
 consumer and GPU-default requirements remain unchanged.
+
+## Implemented file capture —2026-10-16,16:02 UTC
+
+**SOURCE_PASS / NOT_INSTALLED / NOT_ACTIVE**. The stdlib-only
+`embedding_cuda_host_capture` owner now resolves the exact six-field extension
+pointer at its fixed protected root and the existing base CPU snapshot through its
+unchanged supported resolver. The normal schema boundary in
+`embedding_cuda_host_files` reuses that exact owner, rather than implementing a
+second filesystem verifier. The new capture module imports no contracts, Pydantic,
+JSON Schema, model, tensor or database package; an actual`-I -S -B` import test
+checks that boundary. This is not yet a selected protected bootstrap release.
+
+The owner checks canonical/raw/semantic/seed/identity closure, UTC and exact role
+order, root-owned0444 single-link files with no named ACL/capability, protected
+ancestor FDs, streaming member SHA/size and an exactly eight-member namespace
+(manifest, cache, six libraries; no extra files/directories). Member permissions/
+identity are compared before/after byte verification. The96MiB driver is not
+retained as a Python bytes value; its own128MiB bound is independent of the unchanged
+CPU and other-library8MiB bounds. Rechecks retain epochs, not repeated parsing,
+hashes or copies. No filesystem path from model output selects a different root.
+
+The existing cache parser now has one shared immutable entry representation.
+The released CPU validator retains its existing interpretation, including ignoring
+unrelated cache names, and its fixed seed/SONAME tables remain unchanged. CUDA
+validates a separate closed cache with exactly the unchanged15 CPU routes and six
+private-revision routes: no duplicate/unknown name, wrong ABI, OS/hardware variant
+or other revision. Initial cache parsing is O(m), bounded at4,096 entries/128KiB;
+the closed CUDA set is21 entries. This is not a new search/queue/cache service.
+The generic existing own-FD/read-only kernel mount witness can observe this
+capture's declared CUDA cache; a synthetic test distinguishes it from the base
+CPU cache and rejects a writable mount. Synthetic ports are **not** actual root,
+kernel or device acceptance.
+
+Final combined capture/contract/base-host/prefix/wheel/installation/resource/
+dependency suite:781 PASS in36.14seconds. Final narrow regression213 PASS,
+strict3 production modules PASS, Ruff/format/diff checks PASS. These overlap the
+earlier780/205/174 inventories and are not added. The initial21 test failures
+identified group-writable implicit test ancestors and JSON-Schema exception
+expectations; fixtures were corrected without relaxing production checks. Tests
+also cover corrupt bytes/recomputed cache hashes, changed base/pointers, extra/
+missing/linked members, ACL/capability, mutated constructed pins, bounded hostile
+JSON, metadata-parser parity, no byte rehash on recheck and retained epoch changes.
+
+No root extension was published, cache generated/mounted, prefix reinstalled,
+service restarted, DB mutated, candidate interpreter/model/GPU executed or request
+re-keyed. The existing original HTTP observer remains alive on EOM1, at LOGIN;
+its pane has input enabled, is not in copy mode and owns the matching terminal.
+No additional authentication window/question was created. Full C1–C5 remains open.
+
+Next concrete boundary: explicit CUDA-native configuration and prefix/bootstrap
+successors selecting this exact pointer and **actual CUDA cache**. Only then may
+the protected owner compose existing CPU tool/file/alias checks with the six
+actually captured ELF descriptors and independently admit versions, mappings,
+driver/kernel/devices and shared GPU lease. The CUDA-specific native sealed
+receipt/probe must not reuse or relabel the CPU-only receipt. Six real comparisons
+and conditional GPU-default activation remain required, not replaced by file tests.
