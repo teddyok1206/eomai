@@ -8,6 +8,13 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Actual protected no-site host preflight08:28:07: real1.1/seven-module root input,
+  old interpreter `-I -S -B`, missing binding denied/exit1; exact pre-exec snapshot
+  binding/fixed host closure PASS/exit0. Sourcebd293690 build/RECORD/OpenAPI PASS.
+  No prefix publication/inventory output/model/GPU/DB/ordinary restart; original
+  accepted input and pending identity preserved. Native proof/full candidate-prefix
+  audit/units/admission/recovery remain open; this is not INDEX recovery or C1 PASS.
+  [Actual finite proof](../architecture/EMBEDDING_HOST_CONFIGURATION_SNAPSHOT_DESIGN.md#actual-protected-no-site-preflight-2026-10-16-082807-utc).
 - Protected-bootstrap successor source now shares the same stdlib-only snapshot/
   kernel capture as the schema adapter. Input1.1 pins seven modules before import;
   strict1.0 still uses six and never imports the new module. Existing installer runs

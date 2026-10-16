@@ -311,6 +311,10 @@ factory를 연결했다. 엄격한1.0 읽기/직렬화와 과거317개 계약 by
 읽기 전용 host 사전검사를 추가했고 결합 회귀1621·strict8·shell syntax PASS다.
 실제 보호 prefix 설치와 고정 unit 선택/기동은 여전히 미완료다.
 
+sourcebd293690의 실제 보호 no-site 사전검사도08:28:07 통과했다. 고정 설정 미연결은
+거부/exit1, 정확한 pre-exec 연결은 exit0이었다. 기존 prefix·원 입력·서비스는 보존했다.
+이 결과는 host 사전검사이며 전체 prefix byte audit/설치 승인이나 INDEX 복구가 아니다.
+
 ## 보존·정리 규칙
 
 - immutable row, manifest, receipt, release, Workflow, Item Revision 또는 rebuild/validation 경로가

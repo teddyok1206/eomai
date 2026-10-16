@@ -318,3 +318,37 @@ prefix before replacement. These tests use synthetic archive/kernel ports; no fu
 operating prefix was installed or native service restarted by them. The next actual
 gate is finite root no-site host preflight, then compatible full prefix installation,
 fixed-unit pre-exec binding and fresh native admission before original-work recovery.
+
+### Actual protected no-site preflight —2026-10-16 08:28:07 UTC
+
+Source`bd2936903215a5096ef959d9c49541430e2b94de` standard3-wheel/RECORD/OpenAPI
+build PASS. A finite root helper independently checked the historical accepted input
+raw`aa76df631f816ba244de647436307adcafc2090696bfc40ad2bc8af8b93a3868` from the
+retained`glj1CaKp` installation. It preserved that input and every existing prefix.
+The exact seven reviewed source modules and audit leaf were copied root0600 into
+`/opt/eom/.embedding-index-install-169e6281`; the new1.1 host-only input raw is
+`8edfc2de41dd2860244e12281dddf08549e42580253e310b3d266d4b9638b474`.
+Its archive metadata still describes the accepted historical CPU prefix; this is
+not the future candidate prefix's full byte audit or a new installation selection.
+
+The real old bootstrap interpreter executed the real`admit.py host-bytes` path with
+`-I -S -B`, root/no capabilities/NoNewPrivileges, private network/devices, read-only
+system, hidden repository/NAS/secrets/models, and no inventory output descriptor.
+
+- Unbound finite unit`eom-host-bootstrap-unbound-bd293690.service`: expected denial,
+  exit1/`HOST_CONFIGURATION_MOUNT_INVALID`; no success output.
+- Exact pre-exec snapshot-bound unit`eom-host-bootstrap-bound-bd293690.service`:
+  exit0 and exact bounded`EMBEDDING_HOST_BYTES_AUDIT_PASS_NOT_ADMITTED`/target seed.
+- No prefix publication, inventory output, native admission, model/GPU run, DB write,
+  ordinary service restart, new workflow key or original pending-state mutation.
+  API/Catalog/QUERY retain PIDs1045380/1078492/1496865 and original invocations;
+  INDEX remains its original failed invocation, not recovered yet.
+
+Root helper raw`d4cebb22cce5ada56ffb8e11c7b910e99ff4f0610edf3fb36ed395a561b42349`
+is retained root0444. Small root receipt:
+`/var/lib/eom-release-operator-stage.2857bf77-6g9mpdap/host-bootstrap-bd293690.json`.
+Bounded temporary log:`/tmp/eom-identity-provider-install.nAaycoDM/host-bootstrap-actual-preflight.log`.
+Next is the compatible numerical-prefix candidate and its full protected byte audit,
+fixed units/namespace selection, native proof/probe/receipt, then original-work
+recovery. This actual preflight closes the bootstrap-host blocker, not the whole
+installation or original HTTP/consumer/CPU-CUDA/default-device gates.
