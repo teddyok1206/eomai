@@ -112,3 +112,15 @@ Protected one-off operator programs retain exact source hashes:
 
 No API/QUERY/Web/Pack selection was changed. The original held HTTP canary remains
 separate; a running machine identity is not a replacement human session.
+
+At00:26:41 UTC, the actual installed owner admitted the first original new-grant
+CONTENT_ONLY request: Workflow`workflow_c247b620b6e54940b4ad06b263236e6f`,
+START`wfcmd_05e16f66f58b4698947c9f84afe07412`.
+Its typed reconciliation reports eligible545, missing accepted reports25,
+missing bindings513, selected targets4, unavailable views0. These denominators
+are consistent:545−25−7 existing available bindings=513 missing. The original
+occurrence-backed520 target is unchanged;545 is the larger admitted-Item scope,
+not a revised count of original past exams. Do not infer a source-class breakdown
+for the25 waiting revisions without inspecting their official source pointers.
+This confirms explicit report-wait observation, not completion of those reports,
+new vector persistence or all three namespaces. Service startup and API health PASS.
