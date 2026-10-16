@@ -105,3 +105,38 @@ not a new authentication failure, accepted login or current-context PASS. Keep
 its process/request/history; do not create another prompt/key or rerun numerical
 QUERY. Next routine observation is no earlier21:59:33 UTC. Foreground operations
 are observed separately; no credentials/token/session TTL were read or changed.
+
+## Scheduled observation —21:59:34 UTC
+
+INDEX retained PID2893747 and the same invocation, active/running. The bounded
+21:29:33–21:59:34 journal window contains two additional SUCCEEDED commands:
+CONCRETE_FACETS `wfcmd_216ef25aa2de446db4fcd0ae6502f7ae` and METADATA_ONLY
+`wfcmd_c06f2fb7d8ec4c83b7547cbc866798d6`. Subsequent per-view discovery frames
+each selected4 targets from545 eligible sources, with25 missing reports and0
+unavailable views; missing bindings were409/419/427 for CONTENT_ONLY,
+CONCRETE_FACETS/METADATA_ONLY respectively. These are time-separated discovery
+frames, not a coherent current coverage snapshot or terminal states of the newly
+queued commands. The first diagnostic journal filter used incorrect event names;
+its zero matching frames were not evidence of inactivity. The corrected filter
+uses the existing service's two explicit observation event names and emits only
+allowlisted metadata.
+
+The existing HTTP observer PID2895440 remains foreground on `/dev/pts/4`, with
+state LOGIN, log0 bytes and no acceptance file. Terminal echo is disabled by
+the existing password prompt; no credential or terminal input was read. The
+user's input-completion reply therefore does not establish a successful server
+login. No new prompt, login attempt, request identity or numerical job was made.
+Keep the same observer available rather than replacing it or claiming acceptance.
+Next routine INDEX/auth observation: no earlier22:29:34 UTC; foreground completion
+of this already-open observer may be handled when it occurs.
+
+Inspection also confirmed a concrete remaining CUDA preparation boundary:
+`install_index_runtime.sh publish` accepts a developer-owned original prefix,
+whereas `audit-staged` only verifies the existing root-owned bytes.
+`index_runtime_main` checks installed private source against pinned archives;
+it does not install a private-code successor. Thus neither existing operation
+silently updates the B41 candidate to owner23's code or the new lease adapter.
+No unsupported command, protected-prefix edit, candidate instruction or CUDA
+model run was attempted. The original audited B41 inventory remains valid only
+for its original bytes. Actual successor preparation still needs an explicit
+supported installation operation and a fresh complete audit before execution.
