@@ -18,6 +18,10 @@ summed into a single acceptance count. This ledger does not grant authority.
   Its first build refused stale exported OpenAPI metadata. Official deterministic
   export plus explicit version-discriminator coverage correct the candidate;
   HTTP/OpenAPI/release/deployment112 PASS. No installation/activation occurred.
+  Corrected candidate`8f7da6ab` is committed/pushed; standard build/three RECORDs/
+  installed-wheel OpenAPI and source-free two-wheel297-module purpose proof PASS.
+  Legacy1.0 wire and native-key identity match baseline15ffdef5 exactly. All of
+  these remain source/package evidence, not current-IAM or runtime activation.
   Reviewed INDEX
   code`2a4843c3` is independently packaged/installed. Documentation successors do
   not silently select another source release.

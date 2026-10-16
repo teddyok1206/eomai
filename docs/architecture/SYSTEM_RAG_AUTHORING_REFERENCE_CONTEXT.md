@@ -426,3 +426,35 @@ its SHA file. An explicit two-version request-body/discriminator test was added;
 OpenAPI, HTTP preparation, release inventory and deployment-boundary tests passed
 112/21.47s. This corrects release metadata, not runtime authority or protocol
 semantics. A corrected immutable candidate must pass the standard build again.
+
+### Purpose-preparation immutable candidate
+
+Corrected source`8f7da6abd44064801991d0e27cd8dc761b86914c` is committed/pushed.
+Standard build, all three wheel RECORDs and installed-wheel/current OpenAPI
+equality PASS. Retained build:
+`/tmp/eom-api-build/8f7da6abd44064801991d0e27cd8dc761b86914c.dtpdrn`.
+
+| Immutable build member | Raw SHA-256 |
+| --- | --- |
+| `source.tar` | `2902e7e08ecbf0fa0c0c488a1a4830f22e768e618fdff3372554d0f28b8ad16a` |
+| `eom_platform-0.1.0-py3-none-any.whl` | `c1a7c0687c29608c4ac43d2ca387920b3bbffde42b463ef5aebc8c27dc009395` |
+| `eom_api_contracts-0.1.0-py3-none-any.whl` | `fceb1214dfc4769ed668a769b5719e6387aa0702d19b458f7efb248d28debd37` |
+| `eom_application_api-0.1.0-py3-none-any.whl` | `43990e96e567b7ef079cc52b48b4e3f80bb30bdb2ee32fbbb8e9293a32a70224` |
+
+Separate unprivileged Conda `-I -B` baseline/candidate processes admitted only
+their exact platform/contracts archives and imported297 EOM modules exclusively
+from those wheels; checkout imports0. The candidate validated implicit PAV1.0,
+explicit authoring/review1.1 and all bound reply states. Original canonical frame
+SHA`674238c6aa2efbebd2d873d72b8fac595d4e82836be80d570b2b6dc914799b85`
+and actual-operator/original-key-derived identity match baseline15ffdef5 exactly.
+No test/checkout/ML imports, current IAM/DB/source lookup, model or activation calls
+were made. Bounded staged synthetic input and its original1e44fe23… hash remain
+unchanged. This is package composition, not installed operator/source permission.
+
+Evidence: `purpose-preparation-baseline-wheel.log`,
+`purpose-preparation-candidate-wheel.log`,
+`purpose-preparation-release-build-corrected.log`, same evidence directory.
+An initial command supplied an incorrectly truncated expected synthetic-input
+hash and failed before any EOM import; the refusal is retained separately and the
+expected full input hash was corrected, not a validation rule or input byte.
+No selected API/QUERY/INDEX/Pack/Web configuration changed.
