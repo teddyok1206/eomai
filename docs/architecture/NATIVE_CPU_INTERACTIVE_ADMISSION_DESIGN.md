@@ -91,3 +91,25 @@ Logs are in the temporary operator directory
 This is **SOURCE_PASS / POSTGRES_PASS / NOT_ACTIVE**. Existing operating INDEX
 identity14 and original QUERY allocation remain unchanged by these tests. A source
 PASS is not proof of physical CPU fairness or completed authenticated delivery.
+
+### Bounded installation/drain plan —13:38 UTC
+
+Candidate`c69833324f4ba16d7b51a04c633c1ef61a36c263` was built with the existing
+three-wheel/RECORD gate. Stage only its platform/API-contract pair through the
+existing protected owner installer; keep the CPU numerical environment and
+operating QUERY release unchanged. Staging does not activate a service identity.
+
+For the operating INDEX, match PID1953488, invocation
+`36f20dd36c444cc780b52fe8eed41fbe`, Restart=no and all three selected file hashes
+before requesting its existing SIGTERM stop Event on the main process only. Do not
+issue a systemd stop job with its four-minute kill deadline: the current command
+may legitimately take longer. No native child signal, forced termination, DB state
+repair, new execution identity or automatic retry is part of this drain request.
+The current pinned command must finish naturally before checking terminal states.
+
+Only after actual main-process exit and no unfinished old-identity commands may
+the existing Identity/Catalog control publication select a compatible successor.
+If a queued command remains, keep the old identity/pins and resolve it through
+supported original execution or unstarted cancellation, not a rewritten request.
+Retain current files/releases as rollback evidence. Drain failure means no file
+selection or identity change; it does not authorize timeout escalation.
