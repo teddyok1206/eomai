@@ -17,6 +17,14 @@ summed into a single acceptance count. This ledger does not grant authority.
   integration and actual protected namespace/admission before recovery or login.
   No model/GPU/DB mutation/restart/new HTTP key in this source slice.
   [Source ownership, evidence and remaining integration](../architecture/EMBEDDING_HOST_CONFIGURATION_SNAPSHOT_DESIGN.md).
+- Actual narrow host snapshot proof07:42:52: exact source75856bfc wheels/RECORD,
+  root0444 fixed-path cache/manifest and UID978 pre-exec read-only mount PASS;
+  same23-file host closure, write denial and legacy raw-pin rejection PASS, no ML/DB
+  imports. Native admission/selection remains NOT_GRANTED/UNCHANGED. The first
+  helper timestamp/canonical-hash invocation failure is preserved; corrected helper
+  reverified the same staged wheel bytes before its sole successful finite unit.
+  Original INDEX remains failed and original pending work unchanged. This closes a
+  recovery prerequisite, not C1 or the full native recovery/CPU-CUDA/default gate.
 - New actual operating stop: INDEX source2a4843c3 exited06:29/status1, no restart.
   READ ONLY06:53 inspection finds20 SUCCEEDED/COMPLETED and one PENDING/REQUESTED
   attempt/generation0, no failed command/control mismatch. Actual UID990 verifier

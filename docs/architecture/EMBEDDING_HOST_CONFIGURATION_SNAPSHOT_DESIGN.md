@@ -1,6 +1,7 @@
 # Immutable embedding host-configuration snapshot
 
-2026-10-16 UTC. FIRST_SOURCE_SLICE_IMPLEMENTED / NOT_INSTALLED / NOT_ACTIVE.
+2026-10-16 UTC. FIRST_SOURCE_SLICE_IMPLEMENTED / FINITE_MOUNT_PROBE_PASS /
+NATIVE_INTEGRATION_NOT_INSTALLED / NOT_ACTIVE.
 This is a scoped continuation of the original incremental-RAG runtime goal, prompted
 by the [observed OS cache drift](../operations/LOCAL_INDEXING_HOST_CACHE_DRIFT_2026-10-16.md).
 It authorizes no new role, source access, model run or operating-system update policy.
@@ -120,3 +121,49 @@ Source ownership: schema and frozen values in `eom_catalog_contracts`; fixed-pat
 materialization/mount witness in `embedding_host_configuration_files.py`; fixed host
 closure in `embedding_runtime_host_closure.py`. No new dependency, database object,
 queue, model payload, worker access or deployment selection is introduced.
+
+## Actual narrow protected proof —2026-10-16 07:42:52 UTC
+
+Source`75856bfcea63277d6be538a5a88bca09ba01125e` standard3-wheel build,
+RECORD and OpenAPI inspection PASS. Platform raw
+`2c75cfa8f95287eadecca8606855b6c48df69dff4c9766573548a294069b3833`,
+API-contracts raw`e95a5ede743e436fddc1ca476e26db0c6250fe12ff12840af954351ee1b381ab`.
+The exact wheel files were materialized in a separate root-owned finite-probe
+directory, not installed into or selected by any existing service/native prefix.
+
+The actual current cache was materialized root:root0444 with a canonical721-byte
+manifest under one fixed logical/revision location:
+
+- logical`embeddinghostconfig_bd45d90830dc453086a8ce96b60084aa`;
+- revision`embeddinghostconfigrev_afbed0b6bf854d9e8c59d43be9aa337d`;
+- manifest raw`c0f405d73d460325edc22f54524f7d35c5cca2a4e5bbc241382ef2759be93d83`;
+- cache45467bytes/raw`a36a656bcbec4f29f8200d6c89e1432b38c1bb6b9959e8039cf71c1cc3b1866e`;
+- target host seed`sha256:d52b3bc5593883e94a24ae4a1ca363ac934d292032bf3a201e6d5391551685d3`.
+
+A finite fixed systemd invocation under actual CPU identity UID978/GID975, no
+additional group access, empty capability sets/NoNewPrivileges, private devices/
+network and read-only system bound this exact member to`/etc/ld.so.cache` before
+Python exec. Actual FD/mount identity and read-only flag, all23 fixed host entries,
+aliases/dependencies/symbols, later epoch checks and write-open denial PASS.
+The old fixed-host entry point still rejects the changed cache hash as required.
+No torch/Transformers/NumPy/SQLAlchemy/psycopg import, inference, DB write or ordinary
+service restart occurred. This is not fresh native installation/encoder admission.
+
+The first finite helper stopped before snapshot creation or unit execution because
+its input timestamp used`+00:00` when hashing rather than the model's canonical`Z`.
+This invocation bug was reproduced locally; its root helper and log are preserved.
+The corrected helper reused only exact-hash checked staged wheel files, normalized
+the timestamp before hashing, and completed one actual probe. No original workflow
+or HTTP identity was replaced. Helpers raw`4afd72b3189f1336a67d54a323716834d55e001a6f451a5db21286a70f63e460`
+(first) and`a88c16d353993abc1ee3dd35e57cfe467a4b5c55e915ae8f1bba751a80b1a6d8`
+(corrected) remain root0444. Root evidence:
+`/var/lib/eom-release-operator-stage.2857bf77-6g9mpdap/host-snapshot-75856bfc.json`.
+
+INDEX remains the original failed invocation, with its pending request untouched.
+API/Catalog/QUERY original PIDs1045380/1078492/1496865 remain active without restart.
+Next: compatible native configuration/receipt/factory/unit integration and actual
+admission, then supported original-work recovery; no new login before readiness.
+
+README/version/goal-ledger documentation tests3 PASS. Milestone Slack report
+`devreport_7c3a9ec093bf411c9b06f888b5883943` delivered once07:44:56, beginning with
+the Korean summary and explicitly keeping native recovery/full-goal gates open.
