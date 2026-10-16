@@ -1,4 +1,4 @@
-"""O_PATH resource observations only: no device R/W, CUDA ownership, lease release or grant."""
+"""Distinct PATH observations and post-ACK probe R/W access; no installation or model grant."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from eom_catalog_contracts.embedding_cuda_installation_evidence import (
     validate_rootlocal_cuda_resource_file_metadata,
 )
 from eom_catalog_contracts.embedding_installed_runtime_proof import CudaRuntimeDeviceCapture
+from eom_catalog_contracts.embedding_native_cuda_probe import NativeCudaProbeResourceDescriptors
 
 from eom_catalog_service.embedding_native_entrypoint import require_native_embedding_identity
 from eom_catalog_service.embedding_runtime_files import read_live_runtime_os_file
@@ -203,6 +204,18 @@ class CapturedCudaProbeResourceFiles:
         self.assert_current()
         return self._lease_metadata
 
+    @property
+    def resource_descriptors(self) -> NativeCudaProbeResourceDescriptors:
+        """Typed hints only; the root observer must inspect these actual open descriptions."""
+        self.assert_current()
+        return NativeCudaProbeResourceDescriptors(
+            nvidia0_fd=self._devices[0].descriptor,
+            nvidiactl_fd=self._devices[1].descriptor,
+            nvidia_uvm_fd=self._devices[2].descriptor,
+            nvidia_uvm_tools_fd=self._devices[3].descriptor,
+            lease_fd=self._lease_fd,
+        )
+
     def __enter__(self) -> CapturedCudaProbeResourceFiles:
         try:
             self.assert_current()
@@ -236,6 +249,86 @@ def _close(descriptors: tuple[int, ...]) -> None:
             failed = True
     if failed:
         raise CudaProbeResourceFilesError("NATIVE_CUDA_RESOURCE_FILES_CLEANUP_UNCERTAIN")
+
+
+class OpenedCudaProbeDeviceAccess:
+    """Probe-only R/W descriptor and physical lease checks; never installation admission.
+
+    Unlike PATH-only capture this actually opens the four permitted devices R/W.
+    The caller must already have received root's independent pre-init ACK; this
+    object does not issue that ACK, release the store or authorize model use.
+    """
+
+    def __init__(self, files: CapturedCudaProbeResourceFiles, descriptors: tuple[int, ...]) -> None:
+        self._files, self._descriptors, self._closed = files, descriptors, False
+
+    def assert_owned(self) -> None:
+        _require(not self._closed)
+        _require(type(self._files) is CapturedCudaProbeResourceFiles)
+        _require(type(self._descriptors) is tuple and len(self._descriptors) == 4)
+        _require(all(type(fd) is int and fd >= 3 for fd in self._descriptors))
+        _require(len(set(self._descriptors)) == 4)
+        self._files.assert_current()
+        for device, descriptor in zip(self._files._devices, self._descriptors, strict=True):
+            value = os.fstat(descriptor)
+            named = os.stat(
+                Path(device.metadata.path).name,
+                dir_fd=self._files._directories[0].descriptor,
+                follow_symlinks=False,
+            )
+            _require(_epoch(value) == device.metadata.epoch == _epoch(named))
+            _require(
+                (os.major(value.st_rdev), os.minor(value.st_rdev))
+                == (device.metadata.rdev_major, device.metadata.rdev_minor)
+            )
+            flags = fcntl.fcntl(descriptor, fcntl.F_GETFL)
+            _require(flags & os.O_ACCMODE == os.O_RDWR and not flags & os.O_PATH)
+            _require(bool(fcntl.fcntl(descriptor, fcntl.F_GETFD) & fcntl.FD_CLOEXEC))
+        self._files.assert_current()
+
+    def close(self) -> None:
+        if not self._closed:
+            try:
+                self.assert_owned()
+            finally:
+                self._closed = True
+                _close(self._descriptors)
+
+    def __enter__(self) -> OpenedCudaProbeDeviceAccess:
+        try:
+            self.assert_owned()
+            return self
+        except BaseException:
+            self.close()
+            raise
+
+    def __exit__(self, *_args: object) -> None:
+        self.close()
+
+
+def open_cuda_probe_device_access(
+    files: CapturedCudaProbeResourceFiles,
+) -> OpenedCudaProbeDeviceAccess:
+    """After root ACK only: prove actual device DAC/cgroup R/W access, with no CUDA import."""
+    descriptors: list[int] = []
+    try:
+        _require(type(files) is CapturedCudaProbeResourceFiles)
+        files.assert_current()
+        for device in files._devices:
+            descriptor = os.open(
+                Path(device.metadata.path).name,
+                os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
+                dir_fd=files._directories[0].descriptor,
+            )
+            descriptors.append(descriptor)
+        value = OpenedCudaProbeDeviceAccess(files, tuple(descriptors))
+        value.assert_owned()
+        return value
+    except BaseException as error:
+        _close(tuple(descriptors))
+        if isinstance(error, Exception):
+            raise CudaProbeResourceFilesError("NATIVE_CUDA_PROBE_DEVICE_ACCESS_INVALID") from None
+        raise
 
 
 def capture_cuda_probe_resource_files(

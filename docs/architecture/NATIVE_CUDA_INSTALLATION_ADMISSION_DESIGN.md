@@ -413,3 +413,89 @@ The standalone lease wheel was built from that exact archived source, not a muta
 runtime directory. Raw SHA `3b09712240ce6bc489cd3bf2ea66aad778cf5b98e2221da44ca2a0cecea4cf03`;
 metadata/no dependencies, every RECORD/member SHA, source equality, Python3.11 AST
 and isolated wheel-only import passed. No operating image/CUDA prefix was installed.
+
+## Pre-initialization ready phase before the existing final report
+
+1. Add a separate lease-ready1.0 schema, not an edit to input/result1.0 or CPU1.0.
+   Worker reports retention requested, never store accepted or compute admitted.
+2. Root input/config/proof/bundle and actual live unit/PID1/FD observations remain
+   canonical. The ready frame binds exact raw input, configuration, PID/start,
+   worker/group, payload hash, expected device and the five actual retained FD hints.
+3. Ready is a small immutable per-execution observation, not a registry/entity or
+   another Job. Keep execution/logical/revision/raw/semantic identities separate.
+4. Final report must preserve ready's process, input, configuration lineage,
+   groups/device and FD identities. Unknown fields, ready CUDA/model calls,
+   alternate frame/schema or a forged terminal/sealed state fail explicitly.
+5. Access is fixed-key equality and ordered phases: STAGED → READY_WAIT →
+   OBSERVED_WAIT → EXIT. No workers communicate with each other or write NAS.
+6. Three distinct root-owned regular0600/nlink1 descriptors hold input, ready and
+   final report. Never overwrite ready with final or restore library diagnostics
+   onto either channel. The owner alone stages/observes/commits evidence.
+7. Ready <=16KiB, final <=64KiB, O(B) canonical parsing and O(1) phase/FD checks.
+   Reuse existing root-local codec, typed FD values and CPU transport invariants.
+8. Block both signals before library threads. Root's SIGUSR1 is pre-initialization
+   ACK; SIGUSR2 is final observation/exit ACK. Reject early final ACK and unprivileged
+   signals. No optional ML import or device R/W access occurs before the first ACK.
+9. Worker owns local execution only; existing root prepare/probe owner independently
+   verifies current unit/invocation/maps/store/name/inode, then the final runtime and
+   termination/cgroup/GPU clients. Sending a notification is not that verification.
+10. Timeout/wrong identity/late mutation keeps failure evidence and any PID1 copy;
+    no automatic release, re-execution or success rewrite. Explicit retirement stays
+    with the authorized root owner after actual cleanup; workers cannot clear stores.
+11. Reusing one result file or one indistinguishable ACK makes stale/early approval
+    ambiguous. One additive ready record and distinct fixed signals preserve the
+    existing transport/manager and avoid a new socket server or queue/framework.
+
+This is a source implementation boundary. No standalone CUDA candidate may execute
+until the exact reviewed worker/observer/unit/private code is staged and fully
+audited; source-only readiness never activates GPU or bypasses the original goal.
+
+### Worker composition and borrowed resource lifetime
+
+The source worker now composes that two-phase protocol with the existing protected
+runtime observer and no-model/no-forward recipe. Optional ML libraries are not
+imported at worker-module import or preparation. The three fixed FD channels,
+bounded reads/writes and root-only signal validation are shared with the existing
+CPU probe in `embedding_native_probe_transport`; CPU schema bytes, signal meaning
+and stable error prefixes are unchanged. This is a two-consumer adapter extraction,
+not another execution framework or protocol for CPU.
+
+Before the first ACK, the worker retains only the four device O_PATH observations
+and actual shared-lock descriptor. After the ACK, a separate R/W access scope opens
+the same four fixed character nodes through the held `/dev` parent and rechecks
+the node epochs, device numbers, FD flags, process start and borrowed live lock.
+Only that scope implements `assert_owned`; the PATH-only capture still cannot
+authorize the numerical observer. Partial-open and late-validation failures close
+only owned R/W descriptors, never the caller's lock or PID1's retained copy. The
+PATH/file/bundle observations remain held through the final observation ACK.
+
+The final metadata validator additionally closes `checked_model_members` against
+the pinned payload file tuple plus its manifest. A schema-valid range alone was
+insufficient: the synthetic contract fixture claimed8 while its payload held5
+members. The fixture now derives6 from its exact input; wrong in-range counts are
+rejected. No historical actual probe result or model output is reinterpreted.
+
+Execution tests use real temporary FD channels with synthetic root metadata and
+ACK/compute ports; device access tests replace only kernel ports. They verify
+phase ordering, alias/mode/offset/append rejection, input drift before any compute,
+ready/final timeout evidence, root-only signals, retention failure cleanup and
+quiet independent result channels. These are source tests, not real CUDA compute,
+independent owner acceptance, installation admission or benchmark evidence.
+
+Source validation on2026-10-16: related contracts/resources/native CPU+CUDA/
+transport/installed-observer/schema/wheel/dependency suite **886 PASS37.15s**;
+separate explicit image-test environment's shared-lease/image-adapter/release suite
+**130 PASS2.38s**. Earlier focused runs overlap and are not added. Strict typing
+passed for5 changed implementation/contract modules; Ruff/format/diff passed.
+The first broad run found a historical317-predecessor test deriving its population
+from the growing live registry. It now uses the already frozen323-name fixture
+minus its six exact successors, preserving the original317 count and
+`fbd8a1580577dd0ba0c3a68d6509b4d57e3ed6e2852d0a2e53ca5ef0df46e23b`
+aggregate hash. The intermediate fixture edit was corrected before the final
+886-pass run; no schema hash or production check was relaxed. Early fixture import
+and formatting failures were corrected and are not counted as successful runs.
+
+Operating API/Catalog remains e132c1aa; this source does not replace the audited
+B41 prefix or select a CUDA device/profile. Actual independent root ready/final
+observation, all-entrypoint lease migration, full successor-prefix audit and
+six CPU/CUDA comparisons remain open.

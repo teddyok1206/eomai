@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
@@ -66,16 +67,18 @@ def test_v11_closed_schema_mirror_and_317_predecessor_resources_are_frozen() -> 
         ).read_bytes()
     )
     assert sha256_bytes(raw) == resource.sha256
+    # Pin historical membership; future additive schemas are not predecessors.
+    names = json.loads(
+        (ROOT / "tests/fixtures/embedding_predecessor_schema_names_323.json").read_bytes()
+    )
     previous = {
-        name: item
-        for name, item in CATALOG_SCHEMA_RESOURCES.items()
+        name: CATALOG_SCHEMA_RESOURCES[name]
+        for name in names
         if name
         not in {
             EMBEDDING_NATIVE_RUNTIME_CONFIG_V11_SCHEMA,
             "embedding-prefix-audit-input-v1.1",
             "embedding-cuda-host-extension",
-            "embedding-native-runtime-config-v1.2",
-            "embedding-prefix-audit-input-v1.2",
             "system-rag-private-chat-similarity",
             "embedding-private-chat-query",
             "system-rag-private-chat-query-basis",

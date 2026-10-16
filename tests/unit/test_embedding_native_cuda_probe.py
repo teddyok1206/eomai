@@ -65,7 +65,7 @@ def case():
             "worker_uid": 3456,
             "worker_gid": 3456,
             "supplementary_gids": [2468],
-            "checked_model_members": 8,
+            "checked_model_members": len(bundle.payload_model_spec.files) + 1,
             "payload_file_set_sha256": request.payload.file_set_sha256,
             "denials": {name: "DENIED" for name in NativeProbeFilesystemDenials.model_fields},
             "numerical_runtime": bundle.numerical_runtime.model_dump(mode="json"),
@@ -237,6 +237,17 @@ def test_cuda_device_uuid_is_closed_even_when_numeric_device_is_identical(case):
     body = result.model_dump(mode="json")
     body["device_capture"]["gpu_uuid"] = "GPU-ffffffff-ffff-ffff-ffff-ffffffffffff"
     changed = NativeCudaProbeResult.model_validate(body)
+    with pytest.raises(ValueError, match="REFERENCE"):
+        validate_native_cuda_probe_references(request, raw, changed, **references)
+
+
+@pytest.mark.parametrize("count", (2, 8, 32))
+def test_checked_members_must_match_the_pinned_payload_not_just_the_range(case, count):
+    request, raw, result, references = case
+    assert count != result.checked_model_members
+    changed = NativeCudaProbeResult.model_validate(
+        result.model_dump(mode="json") | {"checked_model_members": count}
+    )
     with pytest.raises(ValueError, match="REFERENCE"):
         validate_native_cuda_probe_references(request, raw, changed, **references)
 

@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import errno
 import fcntl
 import os
 import re
 import signal
-import stat
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -15,6 +13,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from eom_catalog_service.embedding_native_entrypoint import require_native_embedding_identity
+from eom_catalog_service.embedding_native_probe_transport import (
+    capture_native_probe_descriptors,
+    native_probe_file_epoch,
+    read_native_probe_input,
+    require_native_probe_write_denied,
+    wait_native_probe_owner_ack,
+    write_native_probe_report,
+)
 
 if TYPE_CHECKING:
     from eom_catalog_contracts.embedding_native_cpu_probe import (
@@ -25,60 +31,19 @@ if TYPE_CHECKING:
 PROBE_ROOT = Path("/run/eom-embedding-native-probe")
 MODEL_ROOT = Path("/opt/eom/embedding-models")
 PROFILE: Final = "CPU_INDEX_FP32"
-_MAX_BYTES = 64 * 1024
-_OWNER_RELEASE_SECONDS = 30
 
 
 def _epoch(value: os.stat_result) -> tuple[int, ...]:
-    return (
-        value.st_dev,
-        value.st_ino,
-        value.st_uid,
-        value.st_gid,
-        value.st_mode,
-        value.st_nlink,
-        value.st_size,
-        value.st_mtime_ns,
-        value.st_ctime_ns,
-    )
+    return native_probe_file_epoch(value)
 
 
 def _descriptors(input_fd: int, result_fd: int) -> tuple[os.stat_result, os.stat_result]:
-    values = os.fstat(input_fd), os.fstat(result_fd)
-    if (
-        any(
-            not stat.S_ISREG(value.st_mode)
-            or value.st_uid != 0
-            or value.st_nlink != 1
-            or stat.S_IMODE(value.st_mode) != 0o600
-            for value in values
-        )
-        or (values[0].st_dev, values[0].st_ino) == (values[1].st_dev, values[1].st_ino)
-        or not 0 < values[0].st_size <= _MAX_BYTES
-        or values[1].st_size != 0
-    ):
-        raise ValueError("NATIVE_CPU_PROBE_DESCRIPTORS_INVALID")
-    for descriptor, mode in ((input_fd, os.O_RDONLY), (result_fd, os.O_WRONLY)):
-        flags = fcntl.fcntl(descriptor, fcntl.F_GETFL)
-        if (
-            flags & os.O_ACCMODE != mode
-            or flags & (os.O_APPEND | os.O_NONBLOCK)
-            or os.lseek(descriptor, 0, os.SEEK_CUR) != 0
-        ):
-            raise ValueError("NATIVE_CPU_PROBE_DESCRIPTORS_INVALID")
-    return values
+    initial, outputs = capture_native_probe_descriptors(PROFILE, input_fd, (result_fd,))
+    return initial, outputs[0]
 
 
 def _denied_write(path: Path) -> None:
-    """Open only: never create, truncate or change even an unexpectedly writable target."""
-    try:
-        descriptor = os.open(path, os.O_WRONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
-    except OSError as exc:
-        if exc.errno in {errno.EACCES, errno.EPERM, errno.EROFS}:
-            return
-        raise ValueError("NATIVE_CPU_PROBE_WRITE_CHECK_INVALID") from None
-    os.close(descriptor)
-    raise ValueError("NATIVE_CPU_PROBE_WRITE_ALLOWED")
+    require_native_probe_write_denied(PROFILE, path)
 
 
 @contextmanager
@@ -181,28 +146,11 @@ def observe_native_cpu_probe(
 
 
 def _write_report(descriptor: int, raw: bytes, initial: os.stat_result) -> None:
-    if not 0 < len(raw) <= _MAX_BYTES or _epoch(os.fstat(descriptor)) != _epoch(initial):
-        raise ValueError("NATIVE_CPU_PROBE_OUTPUT_CHANGED")
-    remaining = memoryview(raw)
-    while remaining:
-        written = os.write(descriptor, remaining)
-        if written <= 0:
-            raise ValueError("NATIVE_CPU_PROBE_OUTPUT_FAILED")
-        remaining = remaining[written:]
-    os.fsync(descriptor)
-    final = os.fstat(descriptor)
-    if (
-        _epoch(final)[:6] != _epoch(initial)[:6]
-        or final.st_size != len(raw)
-        or os.lseek(descriptor, 0, os.SEEK_CUR) != len(raw)
-    ):
-        raise ValueError("NATIVE_CPU_PROBE_OUTPUT_CHANGED")
+    write_native_probe_report(PROFILE, descriptor, raw, initial)
 
 
 def _wait_owner_release() -> None:
-    received = signal.sigtimedwait({signal.SIGUSR1}, _OWNER_RELEASE_SECONDS)
-    if received is None or received.si_signo != signal.SIGUSR1 or received.si_uid != 0:
-        raise ValueError("NATIVE_CPU_PROBE_OWNER_OBSERVATION_MISSING")
+    wait_native_probe_owner_ack(PROFILE, signal.SIGUSR1)
 
 
 def run_native_cpu_probe(execution_id: str, *, input_fd: int, result_fd: int) -> None:
@@ -213,9 +161,7 @@ def run_native_cpu_probe(execution_id: str, *, input_fd: int, result_fd: int) ->
     # independently observing the exact running unit, process start time and ELF maps.
     signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGUSR1})
     initial, output = _descriptors(input_fd, result_fd)
-    raw = os.read(input_fd, initial.st_size + 1)
-    if len(raw) != initial.st_size or _epoch(os.fstat(input_fd)) != _epoch(initial):
-        raise ValueError("NATIVE_CPU_PROBE_INPUT_CHANGED")
+    raw = read_native_probe_input(PROFILE, input_fd, initial)
     from eom_catalog_contracts.embedding_native_cpu_probe import parse_native_cpu_probe_input
     from eom_identifiers import canonical_json_bytes
 

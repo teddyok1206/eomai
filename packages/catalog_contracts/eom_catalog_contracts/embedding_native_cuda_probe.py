@@ -37,6 +37,8 @@ from eom_catalog_contracts.models import FrozenModel, Sha256
 
 CUDA_PROBE_SCHEMA = "embedding-native-cuda-probe"
 MAX_CUDA_PROBE_BYTES = 64 * 1024
+CUDA_PROBE_READY_SCHEMA = "embedding-native-cuda-probe-lease-ready"
+MAX_CUDA_PROBE_READY_BYTES = 16 * 1024
 type _Gid = Annotated[int, Field(ge=1, le=4294967294, strict=True)]
 type _Fd = Annotated[int, Field(ge=3, le=1048575, strict=True)]
 type _Zero = Annotated[int, Field(ge=0, le=0, strict=True)]
@@ -123,9 +125,47 @@ class NativeCudaProbeResult(_CudaProbeEnvelope):
         return self
 
 
-def _canonical_document(raw: bytes) -> object:
+class NativeCudaProbeLeaseReady(FrozenModel):
+    """Pre-initialization request only; root must independently observe the store then ACK."""
+
+    model_config = ConfigDict(revalidate_instances="always")
+    schema_version: Literal["embedding-native-cuda-probe-lease-ready/1.0"]
+    evidence_state: Literal["RETENTION_REQUESTED_NOT_CUDA_ADMITTED"]
+    execution_id: ExecutionId
+    input_raw_sha256: Sha256
+    configuration: RootLocalNativeConfigurationPin
+    fdstore_name: Literal["eom-gpu0-lease"]
+    pid: int = Field(ge=1, le=2147483647, strict=True)
+    start_time_ticks: int = Field(ge=1, le=18446744073709551615, strict=True)
+    worker_uid: int = Field(ge=1, le=4294967294, strict=True)
+    worker_gid: _Gid
+    supplementary_gids: tuple[_Gid, ...] = Field(min_length=1, max_length=1)
+    payload_file_set_sha256: Sha256
+    resource_fds: NativeCudaProbeResourceDescriptors
+    expected_device_capture: CudaRuntimeDeviceCapture
+    cuda_initialization_calls: _Zero
+    cuda_synchronize_calls: _Zero
+    model_constructor_calls: _Zero
+    tokenizer_constructor_calls: _Zero
+    forward_calls: _Zero
+
+    @model_validator(mode="before")
+    @classmethod
+    def exact_wire_values(cls, value: object) -> object:
+        return similarity_contract_document(
+            value, CUDA_PROBE_READY_SCHEMA, MAX_CUDA_PROBE_READY_BYTES
+        )
+
+    @model_validator(mode="after")
+    def distinct_primary_group(self) -> NativeCudaProbeLeaseReady:
+        if self.worker_gid in self.supplementary_gids:
+            raise ValueError("native CUDA readiness shared group equals primary group")
+        return self
+
+
+def _canonical_document(raw: bytes, maximum: int = MAX_CUDA_PROBE_BYTES) -> object:
     try:
-        document = parse_rootlocal_evidence_document(raw, MAX_CUDA_PROBE_BYTES)
+        document = parse_rootlocal_evidence_document(raw, maximum)
         if canonical_json_bytes(document) != raw:
             raise ValueError("noncanonical CUDA probe metadata")
         return document
@@ -139,6 +179,12 @@ def parse_native_cuda_probe_input(raw: bytes) -> NativeCudaProbeInput:
 
 def parse_native_cuda_probe_result(raw: bytes) -> NativeCudaProbeResult:
     return NativeCudaProbeResult.model_validate(_canonical_document(raw))
+
+
+def parse_native_cuda_probe_lease_ready(raw: bytes) -> NativeCudaProbeLeaseReady:
+    return NativeCudaProbeLeaseReady.model_validate(
+        _canonical_document(raw, MAX_CUDA_PROBE_READY_BYTES)
+    )
 
 
 def validate_native_cuda_probe_association(
@@ -157,10 +203,8 @@ def validate_native_cuda_probe_association(
         raise ValueError("NATIVE_CUDA_PROBE_ASSOCIATION_INVALID")
 
 
-def validate_native_cuda_probe_references(
+def validate_native_cuda_probe_configuration(
     request: NativeCudaProbeInput,
-    request_raw: bytes,
-    result: NativeCudaProbeResult,
     *,
     configuration: InstalledEmbeddingNativeRuntimeConfig,
     configuration_raw: bytes,
@@ -169,14 +213,8 @@ def validate_native_cuda_probe_references(
     proof: EmbeddingInstalledRuntimeProof,
     proof_raw: bytes,
 ) -> None:
-    """Pure exact metadata closure, not prefix/host/unit admission or a sealed receipt.
-
-    The owner separately resolves config1.2's pinned host and independently observes
-    actual process/maps/device/lease/cleanup. These values cannot perform that work.
-    """
+    """Common exact config/proof/bundle closure; never prefix/host/unit admission."""
     request = NativeCudaProbeInput.model_validate(request)
-    result = NativeCudaProbeResult.model_validate(result)
-    validate_native_cuda_probe_association(request, request_raw, result)
     config = parse_installed_embedding_native_runtime_config(configuration)
     if not isinstance(config, EmbeddingNativeRuntimeConfigV12):
         raise ValueError("NATIVE_CUDA_PROBE_CONFIGURATION_INVALID")
@@ -193,7 +231,111 @@ def validate_native_cuda_probe_references(
         != (config.configuration_id, config.configuration_revision_id, config.config_sha256)
         or config.installed_proof != request.installed_proof
         or request.payload != bundle.payload_pointer
-        or result.numerical_runtime != bundle.numerical_runtime
-        or result.device_capture != proof.device_capture
     ):
         raise ValueError("NATIVE_CUDA_PROBE_REFERENCE_INVALID")
+
+
+def validate_native_cuda_probe_references(
+    request: NativeCudaProbeInput,
+    request_raw: bytes,
+    result: NativeCudaProbeResult,
+    *,
+    configuration: InstalledEmbeddingNativeRuntimeConfig,
+    configuration_raw: bytes,
+    bundle: EmbeddingRuntimeBundle,
+    bundle_raw: bytes,
+    proof: EmbeddingInstalledRuntimeProof,
+    proof_raw: bytes,
+) -> None:
+    """Pure exact metadata closure; actual unit/host/lease observation stays with root."""
+    request = NativeCudaProbeInput.model_validate(request)
+    result = NativeCudaProbeResult.model_validate(result)
+    validate_native_cuda_probe_association(request, request_raw, result)
+    validate_native_cuda_probe_configuration(
+        request,
+        configuration=configuration,
+        configuration_raw=configuration_raw,
+        bundle=bundle,
+        bundle_raw=bundle_raw,
+        proof=proof,
+        proof_raw=proof_raw,
+    )
+    if (
+        result.numerical_runtime != bundle.numerical_runtime
+        or result.device_capture != proof.device_capture
+        or result.checked_model_members != len(bundle.payload_model_spec.files) + 1
+    ):
+        raise ValueError("NATIVE_CUDA_PROBE_REFERENCE_INVALID")
+
+
+def validate_native_cuda_probe_ready_association(
+    request: NativeCudaProbeInput, request_raw: bytes, ready: NativeCudaProbeLeaseReady
+) -> None:
+    request = NativeCudaProbeInput.model_validate(request)
+    ready = NativeCudaProbeLeaseReady.model_validate(ready)
+    if (
+        parse_native_cuda_probe_input(request_raw) != request
+        or ready.execution_id != request.execution_id
+        or ready.input_raw_sha256 != sha256_bytes(request_raw)
+        or ready.configuration != request.configuration
+        or ready.payload_file_set_sha256 != request.payload.file_set_sha256
+        or ready.supplementary_gids != (request.shared_lease_gid,)
+    ):
+        raise ValueError("NATIVE_CUDA_PROBE_READY_ASSOCIATION_INVALID")
+
+
+def validate_native_cuda_probe_progression(
+    request: NativeCudaProbeInput,
+    request_raw: bytes,
+    ready: NativeCudaProbeLeaseReady,
+    result: NativeCudaProbeResult,
+) -> None:
+    """No PID/descriptor/authority substitution between the two independently observed phases."""
+    ready = NativeCudaProbeLeaseReady.model_validate(ready)
+    result = NativeCudaProbeResult.model_validate(result)
+    validate_native_cuda_probe_ready_association(request, request_raw, ready)
+    validate_native_cuda_probe_association(request, request_raw, result)
+    fields = (
+        "execution_id",
+        "input_raw_sha256",
+        "pid",
+        "start_time_ticks",
+        "worker_uid",
+        "worker_gid",
+        "supplementary_gids",
+        "payload_file_set_sha256",
+        "resource_fds",
+    )
+    if (
+        any(getattr(ready, name) != getattr(result, name) for name in fields)
+        or ready.expected_device_capture != result.device_capture
+    ):
+        raise ValueError("NATIVE_CUDA_PROBE_PHASE_SUBSTITUTION")
+
+
+def validate_native_cuda_probe_ready_references(
+    request: NativeCudaProbeInput,
+    request_raw: bytes,
+    ready: NativeCudaProbeLeaseReady,
+    *,
+    configuration: InstalledEmbeddingNativeRuntimeConfig,
+    configuration_raw: bytes,
+    bundle: EmbeddingRuntimeBundle,
+    bundle_raw: bytes,
+    proof: EmbeddingInstalledRuntimeProof,
+    proof_raw: bytes,
+) -> None:
+    """Expected device is a pinned pre-init claim, never a CUDA hardware observation."""
+    ready = NativeCudaProbeLeaseReady.model_validate(ready)
+    validate_native_cuda_probe_ready_association(request, request_raw, ready)
+    validate_native_cuda_probe_configuration(
+        request,
+        configuration=configuration,
+        configuration_raw=configuration_raw,
+        bundle=bundle,
+        bundle_raw=bundle_raw,
+        proof=proof,
+        proof_raw=proof_raw,
+    )
+    if ready.expected_device_capture != proof.device_capture:
+        raise ValueError("NATIVE_CUDA_PROBE_READY_REFERENCE_INVALID")
