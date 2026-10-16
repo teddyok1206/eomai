@@ -386,3 +386,61 @@ QUERY remain their original failed/PID0 invocations. No new login, worker Job,
 DB mutation, command identity or model forward was introduced by this window.
 README/documentation checks3 PASS in1.78s. Same temporary evidence directory also
 contains `owner-installation-b41b3cb4-v2.log` and `installed-owner-import.log`.
+
+### Coherent native selection and QUERY service READY —10:25:41 UTC
+
+Without changing the INDEX identity, original pending request or source policy,
+the deployment owner prepared/selected a compatible native/QUERY set. It updates
+the four source-fixed INDEX/QUERY templates, three non-secret native environment
+files and the QUERY owner configuration/unit together, while both old owners were
+stopped and actual native Jobs/units/prefix users were absent. Existing files are
+retained under the root-only stage:
+`/var/lib/eom-release-operator-stage.2857bf77-6g9mpdap/native-host-query-b41b3cb4`.
+Manifest raw:`9fb15552fde9290594ffbefde0ba65516767720f3a166758beaa1b3eec20935c`.
+No schema, queue, DB row, source permission or numerical bundle changes occurred.
+
+The b41b3cb4 release's protected no-forward verifier pins the new1.1 configuration
+and receipt; raw`588355859a967ac3bc50ce70079766c4e9ddbca399bf0c67b090cf4bef96cf49`.
+The existing stdlib INDEX/QUERY preparation bootstrap was materialized unchanged
+under that same protected release. Staged unit analysis PASS. Actual UID990
+verification in the mandatory snapshot namespace completed successfully with no
+capabilities/model calls, invocation`b09629b382aa45f4ade400ca04813336`/exit0.
+Its `RemainAfterExit` observer remained live after the process exited; only after
+recording PID0/success/empty cgroup was that wait interrupted and the completed
+probe unit stopped. The accidentally typed subsequent command had not run
+(no unit/log/selection receipt); selection then ran once through its original
+prepared manifest. No native model execution was repeated.
+
+Selected non-secret file raw pins:
+
+- CPU environment:`52b283d1bb9a4bb04101ea5f3d60cba826e5588fe15311f743e7fcdd697d9e29`;
+- INDEX preparation environment:
+  `b80b97cce7b1d7f237dec36f85fa5624777aceeaefe46c8254d82d2bf533ccdc`;
+- QUERY preparation environment:
+  `be4d1374a042496959eb5321be977c86685afcedff5b305ca30d9d36c1683afa`;
+- QUERY owner configuration:
+  `b3a1de9c1c24351cea7e56518ab3b6f3ec1af685f12293c0dabcdeb33e5450d9`;
+- QUERY owner unit:
+  `135fe7015470fe3d0a2221f3c205b235f7e576ea7b4812fa8f614c7b5508a0e7`.
+
+The QUERY owner was started once after all readbacks/preflight completed. Actual
+PID1937196/invocation`2a0f502082014dbf9a679b57f3bf6115` reported
+`REFERENCE_QUERY_OWNER_READY` at`2026-10-16T10:25:41.529558Z`. Its actual child
+PID1937251 has all real/effective/saved UIDs990 and GIDs1000, empty supplementary
+groups, NoNewPrivs1 and zero permitted/effective/ambient capabilities. Inheritable
+and bounding sets are not claimed to be zero. API/Catalog retain their original
+active PIDs/invocations. The old QUERY failure/invocation/history remains preserved.
+
+This is **QUERY_OWNER_READY**, not authenticated common HTTP acceptance or full
+goal completion. A new in-memory login observer is waiting in the existing EOM1
+pane for the same original HTTP key/request/operation. No token is saved and no
+new query identity is fabricated; no actual human HTTP result is yet accepted.
+
+The original INDEX request was re-read through a read-only transaction: exactly
+one PENDING START with attempts/generation0/no lease, no steps and only the initial
+event, pinned to still-current service revision13/resource version26. Thus the
+expired PROCESSING/RUNNING retirement1.0 contract does not apply. INDEX remains
+stopped with its original failure invocation. The additive, tested
+[unstarted cancellation design](../architecture/LOCAL_INDEXING_UNSTARTED_CANCELLATION_DESIGN.md)
+provides the truthful owner-maintenance boundary before an INDEX identity successor;
+it is not yet installed/applied and never changes failed history to success.

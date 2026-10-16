@@ -246,6 +246,7 @@ if [[ "${action}" == "local-indexing-service-tests" ]]; then
     tests/integration/test_local_indexing_fence_sql.py \
     tests/integration/test_native_definition_read.py \
     tests/integration/test_local_indexing_preallocation_retirement.py \
+    tests/integration/test_local_indexing_unstarted_cancellation.py \
     tests/integration/test_local_indexing_source_policy.py
   "${PYTHON}" -m pytest -q tests/integration/test_local_indexing_policy_publication.py
   printf 'Disposable Identity indexing-service registry tests passed.\n'
