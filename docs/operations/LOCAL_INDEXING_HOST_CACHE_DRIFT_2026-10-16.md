@@ -2,11 +2,12 @@
 
 2026-10-16 UTC. Chronological incident and recovery record, not a lost corpus or failed Item.
 Full incremental-RAG goal stays ACTIVE and incomplete. No blind automatic restart/retry.
-Latest recovery checkpoint: QUERY READY10:25 UTC; INDEX identity14 started10:59 UTC
-and first missing-binding request QUEUED11:00 UTC. Earlier stopped/pending observations
-below are historical, not the current service selection. New terminal encoding and
-full coverage were not yet observed at that checkpoint. Authenticated HTTP continuation
-stopped at login11:09 UTC; a subsequent input-validated observer is waiting in EOM1.
+Latest recovery checkpoint: QUERY READY10:25 UTC; INDEX identity14 started10:59 UTC;
+all three first four-row batches have canonical terminal/numeric acceptance11:36 UTC.
+Earlier stopped/pending observations below are historical, not the current selection.
+Full coverage, common consumer acceptance and actual CPU/CUDA comparison remain open.
+Authenticated HTTP continuation stopped at login11:09 UTC; a subsequent input-validated
+observer is waiting in EOM1.
 
 ## Observed state and preserved work
 
@@ -558,3 +559,61 @@ The old EXIT/LOGIN marker is not used as current liveness evidence.
 README/runtime-documentation and original-design/layer-boundary checks:31 PASS
 in5.17s; `git diff --check` PASS. These documentation checks are not runtime or
 authenticated HTTP acceptance and do not add to the overlapping core suite totals.
+
+### First recovered three-view batches: independent canonical audit —11:36 UTC
+
+The scheduled30-minute observation ran at11:30:59 UTC, not repeated progress polls.
+Actual INDEX PID1953488/invocation`36f20dd36c444cc780b52fe8eed41fbe` was active,
+NRestarts0. Closed metadata journal filtering confirmed CONTENT_ONLY and
+CONCRETE_FACETS STARTs succeeded11:12:40/11:23:19 UTC. A bounded follow-up canonical
+audit at`2026-10-16T11:36:49.507293Z` also found METADATA_ONLY complete, then checked
+all three original workflows/STARTs/encode_batch steps. Each is COMPLETED/SUCCEEDED
+with attempt1/lease generation1; none was restarted or re-keyed by observation.
+
+| View | Original Workflow suffix | New rows | Prior bindings preserved | Registered bindings / eligible sources | New index revision suffix |
+| --- | --- | ---: | ---: | ---: | --- |
+| CONTENT_ONLY | `29e2bf3e901f4098b823857d269d1872` |4 |39 |43 /545 | `fa6a509a07fe710c41acbdcc46d820fe` |
+| CONCRETE_FACETS | `a41872d72e124b3aa9c1d9bb9716c614` |4 |33 |37 /545 | `bb1c82a5fc9fe82d55ca07311afa72db` |
+| METADATA_ONLY | `ab656fe40a8240a08090354ebd2d2002` |4 |29 |33 /545 | `9f13b15a08204c0677c57debe9308f4d` |
+
+The12 new rows are **not12 distinct new Items**: three separate views were processed.
+Global canonical rows are now113 encodings/113 bindings/35 immutable index revisions/
+6 indexes, versus101/101/32/6 before recovery. Per-view global binding counts match
+43/37/33 at this snapshot. The545 denominator is the published eligible population;
+the25 missing accepted reports were separately observed and were not manufactured.
+Do not label113/520 corpus completion or equate registry rows with Item coverage.
+
+The audit used READ ONLY, REPEATABLE READ connections and the installed public
+Orchestrator bounded Artifact resolver. It validated exact typed step/completion
+receipts and their hashes; the registered current-output index and predecessor;
+preservation of every prior binding; each new source-to-shard row identity; and
+the committed result/shard/binary file set. Each new shard has four1024-dimensional
+vectors with exact raw SHA, shape, finite components and L2 unit norm. No optional
+ML import, model call, new Job, query submission, retry or DB write was introduced.
+This validates committed provenance/integrity, not current source retrieval permission
+or educational quality; authenticated C1 and per-consumer reauthorization remain open.
+
+Completion receipt Artifact/revision/raw-member SHA:
+
+- CONTENT_ONLY:`artifact_cbcea32c4e064e7496d94aaceb3f08bd` /
+  `rev_7dbc2e7bb38e4a0f8979f36ed6865479` /
+  `b9f3d14cbafecf250af777b519e54dc452ca8f42bc1fba77e3b61688353a1316`;
+- CONCRETE_FACETS:`artifact_e112fff2b2c245389ff9d42e4a61686d` /
+  `rev_8fa3ff59182d44a6b7137c095e2137db` /
+  `ffe710b23f2ed4fad723b0bf52b59be923328197a5bb05fbf3eed539c065a364`;
+- METADATA_ONLY:`artifact_25777f11910043f286c4d71eab52b3f7` /
+  `rev_2a57286468c04d0894e0e4375150a224` /
+  `f65466f4032ed835a0236787ef5eee84ea548bf1263cac7f9b05393b1ba75895`.
+
+Bounded evidence:`index-recovery-30min-observation.log` and
+`index-recovery-canonical-audit-v4.log` in the existing temporary evidence directory.
+Protected finite audit raw:
+`9782b03ec68506adde78d4d13c206f2c90d2cb1afb5d2e21a71420e8881a96dc`.
+Earlier read-only audit versions/logs remain preserved: the first two mistakenly
+included terminal step rows in their expected encode-step count; the third equated
+native result identity with the separate Artifact publisher Job. The final audit
+uses the exact START/encode_batch and original native launch identity, matching
+the existing contracts. These were diagnostic assumptions, not production state
+defects; no runtime source, row, lease, Job or Artifact was repaired/re-executed.
+Next routine observation is no earlier than12:06:49 UTC (30 minutes after this
+last canonical observation). CPU/CUDA timing/default and C1–C5 remain unfinished.
