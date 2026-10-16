@@ -8,8 +8,9 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
-- Repository source candidate`4f302b99` is committed/pushed and standard build/
-  selected-archive EOM import composition PASS; it is NOT_INSTALLED/ACTIVE.
+- Repository source candidate`15ffdef5` is committed/pushed and standard build/
+  source-free two-wheel207-EOM-module/117-schema composition PASS; it is
+  NOT_INSTALLED/ACTIVE. Prior input1.1 foundation4f302b99 evidence remains.
   Reviewed INDEX
   code`2a4843c3` is independently packaged/installed. Documentation successors do
   not silently select another source release.

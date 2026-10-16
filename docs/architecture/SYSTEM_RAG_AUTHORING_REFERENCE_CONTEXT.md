@@ -307,3 +307,42 @@ is retained, and the full relevant inventory is rerun after this correction.
 from the focused tests above. This advances ordinary reference delivery; private
 brief/draft query semantics, actual HTTP/start/worker activation, chat/exam consumers
 and physical CPU/CUDA comparison remain open in the original goal ledger.
+
+### Ordinary delivery immutable candidate build
+
+Source`15ffdef5697fd1ec0512c3c3dde9499caa49c46b` is committed/pushed.
+Standard `scripts/api/deploy_release.sh --build-only` and three-wheel/RECORD
+inspection PASS. Retained build:
+`/tmp/eom-api-build/15ffdef5697fd1ec0512c3c3dde9499caa49c46b.J3TY7E`.
+
+| Immutable build member | Raw SHA-256 |
+| --- | --- |
+| `source.tar` | `9618b67052a7115f0280be89e507cb042a816a6b6ec00f4a933fc8344a23c98c` |
+| `eom_platform-0.1.0-py3-none-any.whl` | `63ad4147716e9d8f2970a4036f4c9c309e46e48565d060f90183f412af165050` |
+| `eom_api_contracts-0.1.0-py3-none-any.whl` | `ba30b67ff904ac16ad64ed4dc6a58911d0bca9ae4c11279f393df9578640179d` |
+| `eom_application_api-0.1.0-py3-none-any.whl` | `bd8c7a9a2583a20a3ed8f85727538dc6597771dd3722dc06dedfacad9d222252` |
+
+A separate unprivileged API-Conda `-I -B` process admitted only these platform/
+contract archives, independently rechecked their hashes, imported all207 EOM
+modules exclusively from those two wheels, loaded117 pinned packaged control
+schemas and verified both strict plan families, exact reference/Evidence closure
+and review escalation dispatch. Legacy plan/instruction bytes still match the
+recorded hashes. No checkout/test module, ML import, DB/current-IAM/source lookup,
+model or runtime activation was used in this process. Its only input was bounded
+synthetic JSON produced separately from test constructors, raw SHA
+`1e44fe234fc1946205b223402f823f6997d84560ce1d7fb48092ef18d2bcede4`.
+This is source-free archive composition, not installed identity/permissions proof.
+
+The first package probe correctly refused a checkout **test fixture's** transitive
+API import; its failed log is preserved. Rather than allowing source/ambient/API
+imports into the owner proof, fixture construction was separated into synthetic
+JSON staging and the archive process validates those bytes/schema itself. No
+production import/dependency/privilege was changed for that probe.
+Evidence:`authoring-delivery-release-build.log`,
+`authoring-delivery-owner-isolated-proof.log` and the retained original
+`authoring-delivery-owner-archive-proof.log` failure, same evidence directory.
+
+Final documentation/guidance/resource checks39 PASS/8.17s. No operating selection
+was changed: INDEX2a4843c3/Identity13 continues, API2857bf77/QUERY8c411041 and
+Web/Pack flags stay selected as before. Actual public ordinary preparation/start,
+private-query bases and remaining original-goal gates are not inferred complete.
