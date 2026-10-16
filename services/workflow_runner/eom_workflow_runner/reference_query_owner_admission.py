@@ -10,6 +10,7 @@ from eom_catalog_service.embedding_registry_catalog_adapter import (
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
 )
+from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.settings import CatalogSettings
 from eom_identity_service import (
     AuthenticatedOperatorSession,
@@ -253,9 +254,15 @@ class CatalogReferenceQueryOwnerAdmission:
         return sources
 
     def resolve_sources(
-        self, session: Session, request: SupportedReferenceQueryWorkflowRequest
+        self,
+        session: Session,
+        request: SupportedReferenceQueryWorkflowRequest,
+        *,
+        artifact_reader: PinnedArtifactReadContext | None = None,
     ) -> ResolvedReferenceQuerySources:
-        return resolve_reference_query_sources(self, session, request)
+        return resolve_reference_query_sources(
+            self, session, request, artifact_reader=artifact_reader
+        )
 
     def resolve_completed_sources(
         self,
@@ -264,7 +271,8 @@ class CatalogReferenceQueryOwnerAdmission:
         request: SupportedReferenceQueryWorkflowRequest,
         *,
         workflow_id: str,
+        artifact_reader: PinnedArtifactReadContext | None = None,
     ) -> ResolvedCompletedReferenceQuerySources:
         return resolve_completed_reference_query_sources(
-            self, session, caller, request, workflow_id=workflow_id
+            self, session, caller, request, workflow_id=workflow_id, artifact_reader=artifact_reader
         )

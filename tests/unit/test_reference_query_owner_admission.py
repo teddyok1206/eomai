@@ -218,7 +218,11 @@ def make_source_case(
             result.deny = True
         return ()  # Explicit unit index-validation seam, NOT a real registered index.
 
-    def prepare_anchor(session: Session, caller: Any, current: Any) -> PreparedSimilarityContext:
+    def prepare_anchor(
+        session: Session, caller: Any, current: Any, *, artifact_reader: Any = None
+    ) -> PreparedSimilarityContext:
+        if artifact_reader is not None:
+            artifact_reader.require_session(session)
         prepared = prepare(session, caller, current)
         read_module.validate_similarity_preparation(current, prepared)
         read(session, caller, current, prepared)

@@ -207,7 +207,11 @@ class ReferenceQuerySourceOwner(Protocol):
     def catalog(self) -> CatalogEmbeddingRegistryVerifier: ...
 
     def resolve_sources(
-        self, session: Session, request: SupportedReferenceQueryWorkflowRequest
+        self,
+        session: Session,
+        request: SupportedReferenceQueryWorkflowRequest,
+        *,
+        artifact_reader: PinnedArtifactReadContext | None = None,
     ) -> ResolvedReferenceQuerySources: ...
 
     def resolve_completed_sources(
@@ -217,6 +221,7 @@ class ReferenceQuerySourceOwner(Protocol):
         request: SupportedReferenceQueryWorkflowRequest,
         *,
         workflow_id: str,
+        artifact_reader: PinnedArtifactReadContext | None = None,
     ) -> ResolvedCompletedReferenceQuerySources: ...
 
 
@@ -249,9 +254,15 @@ class CatalogReferenceQueryReadOwner:
         )
 
     def resolve_sources(
-        self, session: Session, request: SupportedReferenceQueryWorkflowRequest
+        self,
+        session: Session,
+        request: SupportedReferenceQueryWorkflowRequest,
+        *,
+        artifact_reader: PinnedArtifactReadContext | None = None,
     ) -> ResolvedReferenceQuerySources:
-        return resolve_reference_query_sources(self, session, request)
+        return resolve_reference_query_sources(
+            self, session, request, artifact_reader=artifact_reader
+        )
 
     def resolve_completed_sources(
         self,
@@ -260,9 +271,10 @@ class CatalogReferenceQueryReadOwner:
         request: SupportedReferenceQueryWorkflowRequest,
         *,
         workflow_id: str,
+        artifact_reader: PinnedArtifactReadContext | None = None,
     ) -> ResolvedCompletedReferenceQuerySources:
         return resolve_completed_reference_query_sources(
-            self, session, caller, request, workflow_id=workflow_id
+            self, session, caller, request, workflow_id=workflow_id, artifact_reader=artifact_reader
         )
 
 
@@ -343,6 +355,8 @@ def resolve_reference_query_sources(
     owner: ReferenceQuerySourceOwner,
     session: Session,
     request: SupportedReferenceQueryWorkflowRequest,
+    *,
+    artifact_reader: PinnedArtifactReadContext | None = None,
 ) -> ResolvedReferenceQuerySources:
     request = parse_supported_reference_query_workflow_request(request)
     caller = EmbeddingRegistryCaller(request.operator_audit.operator_id)
@@ -366,11 +380,20 @@ def resolve_reference_query_sources(
             context.maximum_sources,
         ),
     )
-    policy, bundle = read_pinned_reference_query_controls(
-        PinnedArtifactReadContext(session, owner.settings), config
+    reader = (
+        PinnedArtifactReadContext(session, owner.settings)
+        if artifact_reader is None
+        else artifact_reader
     )
+    reader.require_session(session)
+    if reader.settings != owner.settings:
+        raise ValueError("REFERENCE_QUERY_READ_ARTIFACT_CONTEXT_INVALID")
+    policy, bundle = read_pinned_reference_query_controls(reader, config)
     validate_reference_query_request_references(request, policy, bundle)
-    prepared = owner.catalog.prepare_reference_query_anchor_in_session(session, caller, context)
+    prepared = owner.catalog.prepare_reference_query_anchor_in_session(
+        session, caller, context, artifact_reader=reader
+    )
+    reader.revalidate_provenance()
     result = ResolvedReferenceQuerySources(request, policy, bundle, prepared)
     owner.identity.fence_current_operator(session, caller.operator_id)
     return result
@@ -383,6 +406,7 @@ def resolve_completed_reference_query_sources(
     request: SupportedReferenceQueryWorkflowRequest,
     *,
     workflow_id: str,
+    artifact_reader: PinnedArtifactReadContext | None = None,
 ) -> ResolvedCompletedReferenceQuerySources:
     """Current read authority, never a new claim or a completed-command lease."""
     request = parse_supported_reference_query_workflow_request(request)
@@ -420,5 +444,9 @@ def resolve_completed_reference_query_sources(
         raise ValueError("REFERENCE_QUERY_READ_STEP_INVALID")
     output = parse_reference_query_step_output(step.output_pointer_manifest)
     validate_completed_native_workflow(session, workflow, step, output)
-    sources = owner.resolve_sources(session, request)
+    sources = (
+        owner.resolve_sources(session, request)
+        if artifact_reader is None
+        else owner.resolve_sources(session, request, artifact_reader=artifact_reader)
+    )
     return ResolvedCompletedReferenceQuerySources(sources, workflow, step, output)

@@ -312,6 +312,7 @@ class CatalogEmbeddingRegistryVerifier:
         phase: InferenceTransferSessionCapturePhase,
         *,
         source_revision_ids: tuple[str, ...] = (),
+        artifact_reader: PinnedArtifactReadContext | None = None,
     ) -> tuple[
         PinnedArtifactReadContext, InferenceTransferSessionCapture | LocalIndexingSessionCapture
     ]:
@@ -325,18 +326,38 @@ class CatalogEmbeddingRegistryVerifier:
             or intent.namespace != self.configuration.namespace
         ):
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
-        reader = PinnedArtifactReadContext(session, self.settings)
         window = self._similarity_read_window
+        if artifact_reader is not None and (
+            not isinstance(artifact_reader, PinnedArtifactReadContext)
+            or isinstance(intent, RegisterEmbeddingIndexCommand)
+            or self._indexing_source_authority is not None
+            or (window is not None and artifact_reader is not window.reader)
+        ):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE")
+        reader = (
+            window.reader
+            if window is not None
+            else artifact_reader
+            if artifact_reader is not None
+            else PinnedArtifactReadContext(session, self.settings)
+        )
+        reader.require_session(session)
+        if reader.settings != self.settings:
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE")
         capture = self._capture_source(
             session,
             caller,
             intent,
-            artifact_reader=reader if window is None else window.reader,
+            artifact_reader=reader,
             phase=phase if window is None else InferenceTransferSessionCapturePhase.AUTHORIZE_SCOPE,
             source_revision_ids=source_revision_ids
             if window is None
             else window.source_revision_ids,
         )
+        if artifact_reader is not None and window is None:
+            # Immutable bytes may be reused; current Artifact/producer approval may not.
+            # This is three indexed metadata reads, not another physical materialization.
+            reader.revalidate_provenance()
         if window is not None:
             if (
                 isinstance(intent, RegisterEmbeddingIndexCommand)
@@ -537,6 +558,7 @@ class CatalogEmbeddingRegistryVerifier:
         request: SimilarityContextRequest,
         *,
         source_revision_ids: tuple[str, ...] = (),
+        artifact_reader: PinnedArtifactReadContext | None = None,
     ) -> tuple[
         CatalogEmbeddingRegistryVerifier, PinnedArtifactReadContext, InferenceTransferSessionCapture
     ]:
@@ -570,6 +592,7 @@ class CatalogEmbeddingRegistryVerifier:
                 scope,
                 InferenceTransferSessionCapturePhase.CAPTURE_POPULATION,
                 source_revision_ids=source_revision_ids,
+                artifact_reader=artifact_reader,
             )
         )
         if not isinstance(capture, InferenceTransferSessionCapture):
@@ -651,13 +674,17 @@ class CatalogEmbeddingRegistryVerifier:
         session: Session,
         caller: EmbeddingRegistryActor,
         request: SimilarityContextRequest,
+        *,
+        artifact_reader: PinnedArtifactReadContext | None = None,
     ) -> PreparedSimilarityContext:
         """Preserve the current native owner's root; never open or commit another root."""
         self._require_similarity_root(session)
         request = parse_similarity_context_request(request)
         try:
             with session.no_autoflush:
-                _owner, _reader, capture = self._similarity_capture(session, caller, request)
+                _owner, _reader, capture = self._similarity_capture(
+                    session, caller, request, artifact_reader=artifact_reader
+                )
                 return self._prepare_similarity_capture(request, capture)
         except EmbeddingRegistryError as error:
             raise similarity_context_error_from_registry(error) from None
@@ -678,13 +705,17 @@ class CatalogEmbeddingRegistryVerifier:
         caller: EmbeddingRegistryActor,
         request: SimilarityContextRequest,
         prepared: PreparedSimilarityContext,
+        *,
+        artifact_reader: PinnedArtifactReadContext | None = None,
     ) -> tuple[ResolvedPinnedEmbeddingIndex, ...]:
         """Same checked read window in a caller root, with fresh start/end source fences."""
         self._require_similarity_root(session)
         request = parse_similarity_context_request(request)
         try:
             with session.no_autoflush:
-                _owner, reader, capture = self._similarity_capture(session, caller, request)
+                _owner, reader, capture = self._similarity_capture(
+                    session, caller, request, artifact_reader=artifact_reader
+                )
                 if self._prepare_similarity_capture(request, capture) != prepared:
                     raise SimilarityContextReadError("SOURCE_REVOKED")
                 window = _SimilarityReadWindow(
@@ -708,12 +739,18 @@ class CatalogEmbeddingRegistryVerifier:
         session: Session,
         caller: EmbeddingRegistryActor,
         request: SimilarityContextRequest,
+        *,
+        artifact_reader: PinnedArtifactReadContext | None = None,
     ) -> PreparedSimilarityContext:
         """Validate QUERY's exact anchor and pinned indexes, never population coverage."""
         self._require_similarity_root(session)
         request = parse_similarity_context_request(request)
         prepared, _reads = self._prepare_and_read_similarity_scope(
-            session, caller, request, (request.anchor.source.item_revision_id,)
+            session,
+            caller,
+            request,
+            (request.anchor.source.item_revision_id,),
+            artifact_reader=artifact_reader,
         )
         if len(prepared.sources) != 1 or prepared.truncated:
             raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
@@ -725,13 +762,19 @@ class CatalogEmbeddingRegistryVerifier:
         caller: EmbeddingRegistryActor,
         request: SimilarityContextRequest,
         source_revision_ids: tuple[str, ...],
+        *,
+        artifact_reader: PinnedArtifactReadContext | None = None,
     ) -> tuple[PreparedSimilarityContext, tuple[ResolvedPinnedEmbeddingIndex, ...]]:
         self._require_similarity_root(session)
         request = parse_similarity_context_request(request)
         try:
             with session.no_autoflush:
                 _owner, reader, capture = self._similarity_capture(
-                    session, caller, request, source_revision_ids=source_revision_ids
+                    session,
+                    caller,
+                    request,
+                    source_revision_ids=source_revision_ids,
+                    artifact_reader=artifact_reader,
                 )
                 prepared = self._prepare_similarity_capture(request, capture)
                 validate_similarity_preparation(request, prepared)
@@ -777,7 +820,11 @@ class CatalogEmbeddingRegistryVerifier:
         # Re-resolve every source/report in this exact scope before returning.
         # Only QUERY input preparation is anchor-scoped; ranking remains full-population.
         _owner, _reader, final = self._similarity_capture(
-            session, caller, request, source_revision_ids=window.source_revision_ids
+            session,
+            caller,
+            request,
+            source_revision_ids=window.source_revision_ids,
+            artifact_reader=window.reader,
         )
         if self._prepare_similarity_capture(request, final) != prepared:
             raise SimilarityContextReadError("SOURCE_REVOKED")
@@ -823,6 +870,7 @@ class CatalogEmbeddingRegistryVerifier:
         )
         source_ids = tuple(sorted(member.item_revision_id for member in request.cohort.members))
         first = self._document_view_owner(request.source_classes, request.views[0], 25)
+        source_reader = PinnedArtifactReadContext(session, self.settings)
         scope = EmbeddingRegistryLookup(
             first.configuration.corpus_id,
             first.configuration.namespace,
@@ -843,6 +891,7 @@ class CatalogEmbeddingRegistryVerifier:
                     scope,
                     InferenceTransferSessionCapturePhase.CAPTURE_POPULATION,
                     source_revision_ids=source_ids,
+                    artifact_reader=source_reader,
                 )
             )
             self._require_similarity_root(session)

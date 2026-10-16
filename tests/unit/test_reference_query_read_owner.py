@@ -12,6 +12,36 @@ from eom_workflow_runner.reference_query_source_read import CatalogReferenceQuer
 from tests.unit.test_reference_query_owner_admission import source as source
 
 
+def test_repeated_root_control_reads_share_bytes_but_recheck_current_approval(source, monkeypatch):
+    from eom_catalog_service import pinned_artifact_resolution as pinned
+    from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
+    from eom_orchestrator.models import ArtifactRecord
+
+    original = pinned.sha256_file
+    paths, contexts = [], []
+    monkeypatch.setattr(pinned, "sha256_file", lambda path: (paths.append(path), original(path))[1])
+    prepare = source.owner.catalog.prepare_reference_query_anchor_in_session
+
+    def checked(session, caller, request, *, artifact_reader):
+        artifact_reader.require_session(session)
+        contexts.append(artifact_reader)
+        return prepare(session, caller, request, artifact_reader=artifact_reader)
+
+    monkeypatch.setattr(source.owner.catalog, "prepare_reference_query_anchor_in_session", checked)
+    with source.publisher.sessions.begin() as session:
+        reader = PinnedArtifactReadContext(session, source.owner.settings)
+        first = source.owner.resolve_sources(session, source.request, artifact_reader=reader)
+        second = source.owner.resolve_sources(session, source.request, artifact_reader=reader)
+        assert first == second and contexts == [reader, reader]
+        assert len(paths) == len(set(paths)) == 2  # fixed policy and bundle bytes only
+        with source.publisher.sessions.begin() as other:
+            other.get(
+                ArtifactRecord, source.request.native_execution_policy.artifact_id
+            ).approved = False
+        with pytest.raises(ValueError):
+            source.owner.resolve_sources(session, source.request, artifact_reader=reader)
+
+
 def read_owner(source, monkeypatch):
     observations = []
     state = SimpleNamespace(denied=False)
@@ -83,8 +113,8 @@ def test_denied_current_read_authority_stays_denied_without_an_execution_fallbac
     if late:
         original = owner.catalog.prepare_reference_query_anchor_in_session
 
-        def revoke(*args):
-            result = original(*args)
+        def revoke(*args, **kwargs):
+            result = original(*args, **kwargs)
             state.denied = True
             return result
 

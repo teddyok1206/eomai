@@ -7,6 +7,8 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
+from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
 from eom_catalog_service.similarity_context_service import SimilarityContextApplicationService
 from eom_workflow_runner.similarity_context_session_reader import (
@@ -21,11 +23,15 @@ def session_case():
     expected = SimilarityContextApplicationService(sources, numeric).compose(CALLER, request)
     calls = []
     roots = []
+    readers = []
     hooks = []
     root = SimpleNamespace(is_active=True)
     session = SimpleNamespace(get_transaction=lambda: root, in_nested_transaction=lambda: False)
 
-    def prepare(actual_session, caller, actual_request):
+    def prepare(actual_session, caller, actual_request, *, artifact_reader=None):
+        if artifact_reader is not None:
+            artifact_reader.require_session(actual_session)
+            readers.append(artifact_reader)
         assert caller == CALLER and actual_request == request
         roots.append(actual_session)
         calls.append("prepare")
@@ -33,7 +39,10 @@ def session_case():
             hooks.pop(0)()
         return sources.prepared
 
-    def read(actual_session, caller, actual_request, prepared):
+    def read(actual_session, caller, actual_request, prepared, *, artifact_reader=None):
+        if artifact_reader is not None:
+            artifact_reader.require_session(actual_session)
+            readers.append(artifact_reader)
         assert caller == CALLER and actual_request == request and prepared == sources.prepared
         roots.append(actual_session)
         calls.append("read")
@@ -54,6 +63,7 @@ def session_case():
 
     query = SimpleNamespace(
         owner=SimpleNamespace(catalog=catalog),
+        artifact_reader=None,
         resolve_reference_query_in_session=query_read,
         resolve_reference_query=Mock(side_effect=AssertionError("new root")),
     )
@@ -63,6 +73,7 @@ def session_case():
         expected=expected,
         calls=calls,
         roots=roots,
+        readers=readers,
         hooks=hooks,
         session=session,
         query=query,
@@ -80,6 +91,16 @@ def test_pure_common_composition_retains_one_root_and_identical_ranking():
     value.catalog.prepare_similarity_context.assert_not_called()
     value.catalog.read_similarity_views.assert_not_called()
     value.query.resolve_reference_query.assert_not_called()
+
+
+def test_common_source_ports_forward_the_same_root_local_reader_to_every_fresh_phase():
+    value = session_case()
+    reader = PinnedArtifactReadContext(value.session, CatalogSettings())
+    value.query.artifact_reader = reader
+    result = value.reader.compose_in_session(value.session, CALLER, value.request)
+    assert result == value.expected
+    assert value.readers == [reader, reader, reader]
+    assert value.calls == ["prepare", "query", "read", "prepare"]
 
 
 def test_same_root_does_not_replace_the_full_late_source_reauthorization():

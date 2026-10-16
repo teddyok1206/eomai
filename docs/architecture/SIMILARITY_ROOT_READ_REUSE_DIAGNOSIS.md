@@ -1,6 +1,6 @@
 # Same-root immutable read reuse: live timeout diagnosis
 
-2026-10-16 UTC. Investigation/design, not an implemented fix or operating PASS.
+2026-10-16 UTC. Source implementation/validation in progress, not an operating PASS.
 Actual evidence is in the
 [release preparation and C1 discovery](../operations/C5_OBSERVATION_RELEASE_PREPARATION_2026-10-16.md).
 
@@ -52,3 +52,50 @@ substitution, final reauthorization and unchanged exact results. Source call cou
 and isolated benchmarks do not establish live latency. Actual-user read/replay is
 still required after a compatible installed fix; preserve the prepared C5 candidate
 as evidence instead of relabeling its admission for different source/wheel bytes.
+
+## Implemented source boundary
+
+- `CatalogSimilarityContextReadService` creates one existing
+  `PinnedArtifactReadContext` for its root. It passes this through initial/late
+  completed-source reads, canonical QUERY publication reads and all common source
+  preparation/read/end phases. Native/read source-owner adapters accept that
+  optional typed owner-local value; it is not a wire input or permission flag.
+- `CatalogEmbeddingRegistryVerifier` checks root/thread/settings before using a
+  borrowed reader. Registration/indexing authority cannot borrow it. Each fresh
+  capture with reused bytes performs the existing three-batch current Artifact/
+  producer provenance recheck. Reference controls and the outer result boundary
+  independently retain their owned provenance checks.
+- All four population captures and view authority checks remain. Cached immutable
+  bytes do not replace source/report/membership resolution. A final current DB
+  approval withdrawal is rejected even when earlier ORM metadata and bytes are
+  still retained. C5's two exact-cohort captures reuse the same local reader too.
+- The native execution path's optional-reader default and all released wire,
+  receipt, policy, schema, claim/lease and output identities remain unchanged.
+  No service/worker permission, migration, model, source selection or timeout has
+  been changed. In particular the Catalog client's30s deadline is still30s.
+
+An isolated520-member/four-phase temporary-file benchmark measured2080 physical
+reads with independent readers versus520 with one root reader. One run measured
+230ms versus66ms. Immutable metadata **prefetch** calls were12 versus3; these are
+not total authorization/provenance SQL calls. Real fresh permission/source checks
+and additional current-provenance checks remain outside that microbenchmark.
+There is no timing threshold assertion. A real Catalog-adapter seam test retains
+four full captures/nine scope authorizations while its one temporary immutable
+member is physically read once; a late replaced approval row still fails.
+
+Initial regression fixture failures came from synthetic methods not forwarding the
+new typed internal keyword. Those seams now assert/forward the actual root reader;
+late-denial assertions were not removed. One interrupted diagnostic pytest run
+also hit pytest's temporary-fixture cleanup exception; no production service or
+database was touched. Terminal reruns, rather than that interrupted run, determine
+source acceptance. Full source/package gates and real installed latency remain
+separate; actual authenticated completion is still required.
+
+Final source checkpoint:404 related regression tests PASS in177.93s; independent
+schema-resource/wheel/dependency/API/OpenAPI suite81 PASS in32.68s. Inventories
+overlap and are not summed. Strict typing6 production modules, Ruff/format and
+diff checks pass. The new root-reuse suite also covers wrong root/settings/thread,
+registration denial, exact forwarding through every fresh phase, current control
+approval withdrawal and identical outputs. Wire/schema/OpenAPI bytes are unchanged.
+These are source/temporary-file/SQLite seam checks, not actual installed IAM,
+operating latency, full corpus coverage or full C1–C5 completion.

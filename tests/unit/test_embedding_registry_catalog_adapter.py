@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -95,6 +96,19 @@ class OwnerSession(MetadataSession):
             lifecycle_state="ACTIVE", graph_id=command.graph_snapshot.graph_id
         )
         self.graph = SimpleNamespace(graph_id=command.graph_snapshot.graph_id)
+        self.new: list[object] = []
+        self.dirty: list[object] = []
+        self.deleted: list[object] = []
+        self.no_autoflush = nullcontext()
+
+    def execute(self, statement: Any) -> list[Any]:
+        rows = MetadataSession.scalars(self, statement)
+        selected = next(iter(statement.compile().params.values()))
+        if rows and isinstance(rows[0], ArtifactRevisionRecord):
+            return [row for row in rows if row.revision_id in selected]
+        if rows and isinstance(rows[0], ArtifactRecord):
+            return [row for row in rows if row.logical_artifact_id in selected]
+        return [row for row in rows if row.job_id in selected]
 
     def in_nested_transaction(self) -> bool:
         return False

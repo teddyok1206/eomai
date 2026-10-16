@@ -156,8 +156,20 @@ class CatalogCompletedReferenceQueryRead:
         ):
             raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
         try:
+            provenance = (
+                PinnedArtifactReadContext(session, self.owner.settings)
+                if self.artifact_reader is None
+                else self.artifact_reader
+            )
+            provenance.require_session(session)
+            if provenance.settings != self.owner.settings:
+                raise SimilarityContextReadError("QUERY_RESULT_INVALID")
             current = self.owner.resolve_completed_sources(
-                session, caller, self.request, workflow_id=self.workflow_id
+                session,
+                caller,
+                self.request,
+                workflow_id=self.workflow_id,
+                artifact_reader=provenance,
             )
             current_prepared = current.sources.prepared
             anchor_sources = validate_similarity_preparation(request, current_prepared)
@@ -169,14 +181,6 @@ class CatalogCompletedReferenceQueryRead:
                 or current_prepared.query_texts != prepared.query_texts
             ):
                 raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
-            provenance = (
-                PinnedArtifactReadContext(session, self.owner.settings)
-                if self.artifact_reader is None
-                else self.artifact_reader
-            )
-            provenance.require_session(session)
-            if provenance.settings != self.owner.settings:
-                raise SimilarityContextReadError("QUERY_RESULT_INVALID")
             canonical, history = resolve_reference_query_publication(
                 self.owner.settings,
                 session=session,
@@ -193,7 +197,11 @@ class CatalogCompletedReferenceQueryRead:
             ):
                 raise SimilarityContextReadError("QUERY_RESULT_INVALID")
             late = self.owner.resolve_completed_sources(
-                session, caller, self.request, workflow_id=self.workflow_id
+                session,
+                caller,
+                self.request,
+                workflow_id=self.workflow_id,
+                artifact_reader=provenance,
             )
             if late.sources != current.sources or late.output != current.output:
                 raise SimilarityContextReadError("SOURCE_POINTER_INVALID")

@@ -10,6 +10,7 @@ from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
     ResolvedPinnedEmbeddingIndex,
 )
+from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.similarity_context_ports import (
     PreparedSimilarityContext,
     SimilarityContextReadError,
@@ -25,11 +26,16 @@ from eom_workflow_runner.reference_query_consumer_read import CatalogCompletedRe
 class _SessionSources:
     session: Session
     catalog: CatalogEmbeddingRegistryVerifier
+    artifact_reader: PinnedArtifactReadContext | None
 
     def prepare_similarity_context(
         self, caller: EmbeddingRegistryCaller, request: SimilarityContextRequest
     ) -> PreparedSimilarityContext:
-        return self.catalog.prepare_similarity_context_in_session(self.session, caller, request)
+        if self.artifact_reader is None:
+            return self.catalog.prepare_similarity_context_in_session(self.session, caller, request)
+        return self.catalog.prepare_similarity_context_in_session(
+            self.session, caller, request, artifact_reader=self.artifact_reader
+        )
 
     def read_similarity_views(
         self,
@@ -37,8 +43,12 @@ class _SessionSources:
         request: SimilarityContextRequest,
         prepared: PreparedSimilarityContext,
     ) -> tuple[ResolvedPinnedEmbeddingIndex, ...]:
+        if self.artifact_reader is None:
+            return self.catalog.read_similarity_views_in_session(
+                self.session, caller, request, prepared
+            )
         return self.catalog.read_similarity_views_in_session(
-            self.session, caller, request, prepared
+            self.session, caller, request, prepared, artifact_reader=self.artifact_reader
         )
 
     def reauthorize_similarity_context(
@@ -83,6 +93,6 @@ class CatalogSimilaritySessionContextReader:
         if root is None or not root.is_active or session.in_nested_transaction():
             raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
         return SimilarityContextApplicationService(
-            _SessionSources(session, self.query.owner.catalog),
+            _SessionSources(session, self.query.owner.catalog, self.query.artifact_reader),
             _SessionQuery(session, self.query),
         ).compose(caller, request)

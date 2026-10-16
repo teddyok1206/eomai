@@ -45,10 +45,14 @@ class CatalogSimilarityContextReadService:
                 original = select_completed_reference_query_request(
                     session, self.owner, caller, request.selection
                 )
-                current = self.owner.resolve_completed_sources(
-                    session, caller, original, workflow_id=request.selection.workflow_id
-                )
                 provenance = PinnedArtifactReadContext(session, self.owner.settings)
+                current = self.owner.resolve_completed_sources(
+                    session,
+                    caller,
+                    original,
+                    workflow_id=request.selection.workflow_id,
+                    artifact_reader=provenance,
+                )
                 query = CatalogCompletedReferenceQueryRead(
                     self.owner,
                     workflow_id=request.selection.workflow_id,
@@ -65,7 +69,11 @@ class CatalogSimilarityContextReadService:
                     session, self.owner, caller, request.selection
                 )
                 late = self.owner.resolve_completed_sources(
-                    session, caller, late_request, workflow_id=request.selection.workflow_id
+                    session,
+                    caller,
+                    late_request,
+                    workflow_id=request.selection.workflow_id,
+                    artifact_reader=provenance,
                 )
                 if (
                     late_request != original

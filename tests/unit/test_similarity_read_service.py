@@ -119,7 +119,9 @@ def selected(source, monkeypatch):
     result = parse_similarity_context(result_body)
     calls, hooks = [], []
 
-    def current(session, caller, original, *, workflow_id):
+    def current(session, caller, original, *, workflow_id, artifact_reader=None):
+        if artifact_reader is not None:
+            artifact_reader.require_session(session)
         assert original == source.request and workflow_id == request.selection.workflow_id
         assert caller.operator_id == request.actor_id
         assert session.get_transaction() is not None and not session.in_nested_transaction()
@@ -369,7 +371,9 @@ def test_concurrent_users_keep_exact_creator_and_root_separate_on_one_service(
     barrier = Barrier(2)
     observations = []
 
-    def current(session, caller, original, *, workflow_id):
+    def current(session, caller, original, *, workflow_id, artifact_reader=None):
+        if artifact_reader is not None:
+            artifact_reader.require_session(session)
         assert caller.operator_id == original.operator_audit.operator_id
         assert workflow_id == (
             first.selection.workflow_id if caller.operator_id == first.actor_id else second_workflow

@@ -45,7 +45,9 @@ def make_completed_read_case(value, monkeypatch):
     calls = []
     hooks = []
 
-    def current(session, caller, request, *, workflow_id):
+    def current(session, caller, request, *, workflow_id, artifact_reader=None):
+        if artifact_reader is not None:
+            artifact_reader.require_session(session)
         assert session.get_transaction() is not None and session.get_transaction().is_active
         assert caller.operator_id == request.operator_audit.operator_id
         assert workflow_id == value.workflow.workflow_id and request == value.request
@@ -346,11 +348,13 @@ def test_read_only_owner_reaches_canonical_consumer_without_constructing_executi
     )
     current = completed.value.owner.resolve_completed_sources
 
-    def checked(session, caller, request, *, workflow_id):
+    def checked(session, caller, request, *, workflow_id, artifact_reader=None):
         owner.identity.fence_current_operator(session, caller.operator_id)
         # Reuse the existing explicit synthetic Workflow/source seam; actual
         # checkpoint/Job/Artifact bytes below are the real temporary publication.
-        return current(session, caller, request, workflow_id=workflow_id)
+        return current(
+            session, caller, request, workflow_id=workflow_id, artifact_reader=artifact_reader
+        )
 
     monkeypatch.setattr(owner, "resolve_completed_sources", checked)
     forbidden = Mock(side_effect=AssertionError("read must not construct a native execution owner"))
