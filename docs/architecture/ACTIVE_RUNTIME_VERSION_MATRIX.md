@@ -258,6 +258,13 @@ API 전용 소켓·API client를 추가했다. 선택된 1건의 원본/보고�
 source-free2-wheel301-module 검증 PASS. 아직 운영 미설치·미활성이며 일반 시작 호출과
 정상적인 참고 없음 분기는 미연결이다. 소스 후보와 위 실제 운영 버전을 혼동하지 않는다.
 
+후속 일반 출제 caller는 동일 기본-꺼짐 Web/HTTP 경로에 연결했다. 공식 Evidence selector→
+준비1.1/ITEM_AUTHORING→최초 plan24와 기존 역할 전달을 사용하며, 참고 없음/초기 인덱스
+미준비만 명시적 audit 후 기존 plan19로 처리한다. 기출을 요청하지 않은 교과서·승인문항
+요청도 정상 GraphRAG 경로를 유지한다. source/report 변경·권한 거부·실패·PENDING은 이
+분기로 숨기지 않는다. 최종 집중112·임시 DB162·strict type8·Ruff13 PASS. 운영 선택은
+그대로이며 실제 사용자/원본 조회/worker/호환 활성화는 아직 완료되지 않았다.
+
 ## 보존·정리 규칙
 
 - immutable row, manifest, receipt, release, Workflow, Item Revision 또는 rebuild/validation 경로가

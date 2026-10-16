@@ -5,6 +5,7 @@ from __future__ import annotations
 from eom_api_contracts import CommandResult
 from eom_api_contracts.workflow_reference_start import WorkflowReferenceStartReply
 from eom_api_contracts.workflows import (
+    EducationalRetrievalIntentRequest,
     EducationalRetrievalIntentRequestV2,
     WorkflowStartRequest,
 )
@@ -17,7 +18,10 @@ from eom_api.services.command_adapter import CommandAdapter
 from eom_api.services.idempotency_service import IdempotencyService
 from eom_api.services.item_similarity_preparation import ItemSimilarityStartPreparationService
 from eom_api.services.reference_item_preparation import HttpReferenceItemStartPreparation
-from eom_api.services.reference_item_start_ports import ReferenceItemStartPending
+from eom_api.services.reference_item_start_ports import (
+    AuthoringReferenceSelectionPort,
+    ReferenceItemStartPending,
+)
 from eom_api.services.reference_query_preparation import ReferenceQueryPreparationApplicationService
 
 REFERENCE_ITEM_START_OPERATION = "workflow_reference_start"
@@ -33,9 +37,11 @@ class ReferenceItemStartApplicationService:
         items: ItemSimilarityStartPreparationService,
         idempotency: IdempotencyService,
         audit: AuditService,
+        references: AuthoringReferenceSelectionPort | None = None,
     ) -> None:
         self.enabled, self.commands, self.queries = enabled, commands, queries
         self.items, self.idempotency, self.audit = items, idempotency, audit
+        self.references = references
 
     def start(
         self, context: RequestContext, request: WorkflowStartRequest, *, idempotency_key: str
@@ -59,7 +65,10 @@ class ReferenceItemStartApplicationService:
                 "Bulk production retains its own application boundary.",
             )
         if (
-            not isinstance(request.educational_retrieval, EducationalRetrievalIntentRequestV2)
+            not isinstance(
+                request.educational_retrieval,
+                (EducationalRetrievalIntentRequest, EducationalRetrievalIntentRequestV2),
+            )
             or request.definition_key != "generic-item-development"
             or request.definition_version != "1.16.0"
         ):
@@ -67,7 +76,7 @@ class ReferenceItemStartApplicationService:
                 422,
                 "REFERENCE_ITEM_START_REQUEST_INVALID",
                 "Reference Item request required",
-                "This operation accepts only the supported exact-reference variation request.",
+                "This operation accepts supported ordinary or exact-reference Item requests.",
             )
         fingerprint = self.idempotency.request_hash(
             method=context.method,
@@ -119,7 +128,9 @@ class ReferenceItemStartApplicationService:
                 request,
                 actor,
                 idempotency_key=key,
-                preparation=HttpReferenceItemStartPreparation(context, self.queries, self.items),
+                preparation=HttpReferenceItemStartPreparation(
+                    context, self.queries, self.items, references=self.references, audit=self.audit
+                ),
             )
             if isinstance(result, ReferenceItemStartPending):
                 self.idempotency.defer(claim)

@@ -21,6 +21,7 @@ from sqlalchemy import Engine
 
 from eom_api.rate_limit import BoundedRateLimiter
 from eom_api.services.audit_service import AuditService
+from eom_api.services.authoring_reference_client import CatalogAuthoringReferenceClient
 from eom_api.services.catalog_application_client import CatalogApplicationClient
 from eom_api.services.chat_knowledge_query_adapter import ChatKnowledgeQueryAdapter
 from eom_api.services.chat_knowledge_service import ChatKnowledgeApplicationService
@@ -192,6 +193,7 @@ class AppServices:
             items=self.item_similarity_start_preparation,
             idempotency=self.idempotency,
             audit=self.audit,
+            references=CatalogAuthoringReferenceClient(),
         )
         self.general_chat = GeneralChatApplicationService(GeneralChatOwnerClient())
         self.chat_knowledge = ChatKnowledgeApplicationService(

@@ -603,3 +603,87 @@ package301-module proof cover the exact3fa9b958 candidate. Inventories overlap a
 are not added. Final documentation checks28 PASS/3.85s. The original full goal is
 still ACTIVE; no selected service, human session, native key, Pack or model default
 was changed by these source/package checks.
+
+## Ordinary reference-start caller — design before implementation
+
+1. Boundary: reuse the existing opt-in reference-start application/HTTP endpoint,
+   domain command adapter and Web gateway. Admit the already-schema-defined ordinary
+   retrieval1.0 input for generic-item-development1.16; preserve exact variation2.0.
+   No released JSON Schema bytes, reply1.0 shape, worker protocol or queue changes.
+2. Canonical source: the original CREATE_ITEM_PRODUCTION_EVIDENCE result5 and the
+   Catalog selector; no client Item ID, second search, private brief vector query,
+   mutable latest or role supplied by a model.
+3. Identity/pointers: preserve the actual API caller/capture, original full-request
+   idempotency key and pinned controls/Evidence. The ordinary native preparation1.1
+   declares ITEM_AUTHORING. Same key/purpose/source conflicts cannot create new work.
+4. Exact closure: before accepting READY, compare the checked plan's source revision,
+   original content SHA and solution-pointer SHA with the Catalog-selected pins.
+   A race changing the report/source between selector and QUERY is an explicit error,
+   not permission to accept unrelated or newer evidence.
+5. Optional absence: only selector REFERENCE_NOT_OFFERED and native initial
+   UNAVAILABLE/INDEX_NOT_PREPARED may use an explicit small frozen no-offer value.
+   ANCHOR_REPORT_MISSING contradicts the just-selected accepted report and must fail;
+   permission/source/hash/failure/timeout/PENDING never become absence.
+   Ordinary requests that do not request PAST_EXAM also take the explicit no-offer
+   branch after shared control/Evidence validation, without widening source classes
+   or contacting an irrelevant selector. Ready reference preparation remains strict
+   about the PAST_EXAM class; the shared control validator serves both real paths.
+6. History: the no-offer value binds exact Workflow-request and Evidence-result hashes.
+   The existing application audit records reason and original Evidence revision;
+   then the existing Evidence-only plan path runs, with no fabricated QUERY/context/
+   vector/receipt. Domain replay precedes selection and does not upgrade old work
+   after an index becomes available.
+7. Access patterns/scale: O(1) request/key/hash lookups and at most one selector and
+   one preparation exchange per current API attempt; existing bounded Catalog reads.
+   No DB/index/cache schema or generic framework. Long source bytes remain owner-local.
+8. Transactions/concurrency: keep existing API claim/defer/complete and atomic Item/
+   first-plan/START root. PENDING creates no Item work. A late pin mismatch can occur
+   after independent context Artifact publication; preserve that output, never claim
+   no side effect or auto-retry with a new identity.
+9. Dependencies: API application ports own the optional selector/read adapter and
+   no-offer value; Catalog client implements the port. Shared checked-start code owns
+   no-offer scope validation. Production composition supplies existing audit; no DB/
+   NAS/native owner is constructed by the API or browser.
+10. Presentation/activation: the existing disabled Web flag may route ordinary
+    generic1.16 retrieval1.0 to this same endpoint; older/default flows stay unchanged.
+    Missing compatible backend is not an automatic fallback. No flag/Pack/runtime
+    activation occurs in source work. Maximum-three-pass and Evidence-only receipts
+    remain unchanged; every review still reuses the original reference.
+11. Alternative: silently returning None loses the reason/pins and can hide denial;
+    rejecting all missing optional vectors breaks normal GraphRAG; a second start
+    implementation duplicates transaction/idempotency. The typed branch reuses the
+    existing owner and explicitly distinguishes absence, pending and failure.
+
+### Ordinary caller source/disposable checkpoint
+
+At2026-10-16 05:18 UTC, final focused HTTP/caller/Unix/publisher/first-plan/absence/
+legacy/Web checks112 PASS/33.27s; strict mypy8 production modules and Ruff/format13
+paths PASS. Web pending/browser/default-resolution42 PASS/5.31s is overlapping
+evidence, not an additional aggregate total. Full related91-file regression is
+running separately. No wire-schema bytes, worker prompt, model, DB schema or selected
+runtime/Pack/feature flag has changed.
+
+Final supported disposable `embedding-stage-tests`162 PASS/141.04s, with independent
+before/after database marker/identity/head20261014_0055/zero-other-connection guards.
+Ten new PG cases cover exact ordinary-only absence, wrong request/Evidence/reason,
+unchanged mandatory variation, first normal plan19, same-key concurrency/one plan/
+one START, normal-plan replay without reselecting/upgrading and source-class subset.
+Earlier161-case run predates the final shared-controls/non-PAST branch and is retained
+separately. Identity/source/Evidence/native completion seams are synthetic; actual
+transactions/constraints/temporary Artifact writes are real, with no operating DB,
+NAS, model or worker execution. This is not PG acceptance of the selector's current
+original-Evidence read, nor a genuine current-user source/worker activation gate.
+
+An actual source HTTP→real Catalog sockets→existing context publisher→atomic Item
+start case verified PENDING creates no Item, READY stores the first plan24, and the
+same accepted request replays without selector/QUERY calls. A first403 was a fixture
+problem: the transport-only synthetic account had only WORKFLOW_START, not GraphRAG
+access. The synthetic case now explicitly grants EDITOR retrieval/read capabilities
+before its capture; production authorization, role policy, fresh-auth and TTL were
+not weakened. Original failed log is retained. All evidence stages are under
+`/tmp/eom-identity-provider-install.nAaycoDM/ordinary-reference-start-*`.
+
+**SOURCE_AND_DISPOSABLE_PASS / NOT_INSTALLED / NOT_ACTIVE.** Private brief/draft
+query bases, actual compatible activation/worker acceptance and the rest of the
+original full-goal ledger remain open. Every review still receives the original
+ITEM_AUTHORING reference, not a claim that its latest draft has been vector-compared.

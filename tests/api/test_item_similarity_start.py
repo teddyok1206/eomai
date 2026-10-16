@@ -61,8 +61,8 @@ KEY = "api:" + "7" * 64
 
 
 @pytest.fixture
-def start_case(tmp_path, monkeypatch):
-    data = start_source(tmp_path, monkeypatch)
+def start_case(tmp_path, monkeypatch, request):
+    data = start_source(tmp_path, monkeypatch, ordinary=getattr(request, "param", False))
     source, api_request = data.source, data.request
     prepared = prepare(source)
     actor, runtime, definition = data.actor, data.runtime, data.definition

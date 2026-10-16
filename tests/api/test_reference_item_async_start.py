@@ -135,9 +135,9 @@ def test_malformed_control_selection_never_dispatches_native_preparation(start_c
 
 
 @pytest.fixture
-def application_case(tmp_path, monkeypatch):
+def application_case(tmp_path, monkeypatch, request):
     _source, context = api_context(monkeypatch)
-    data = start_source(tmp_path, monkeypatch)
+    data = start_source(tmp_path, monkeypatch, ordinary=getattr(request, "param", False))
     commands, queries, items, audit = Mock(), Mock(), Mock(), Mock()
     idempotency = IdempotencyService(create_engine("sqlite://"), b"synthetic-source-only" * 2)
     idempotency.claim = Mock(return_value=IdempotencyClaim("idem", lease_owner="current"))

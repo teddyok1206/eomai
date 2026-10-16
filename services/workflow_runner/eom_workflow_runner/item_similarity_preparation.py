@@ -90,7 +90,7 @@ def _current_context(
     return validate_deliverable_similarity_context(checked, expected_request=expected_request)
 
 
-def validate_item_similarity_start_inputs(
+def validate_item_similarity_start_controls(
     *,
     workflow_request: WorkflowRequest,
     expected_resolution: ExpectedWorkflowResolution,
@@ -122,7 +122,6 @@ def validate_item_similarity_start_inputs(
             not isinstance(
                 requirement, (EducationalRetrievalRequirement, EducationalRetrievalRequirementV2)
             )
-            or "PAST_EXAM" not in requirement.source_classes
             or (
                 workflow_request.expected_resolution is not None
                 and workflow_request.expected_resolution != expected
@@ -151,6 +150,35 @@ def validate_item_similarity_start_inputs(
         raise ControlPlaneError(
             "CONTROL_SIMILARITY_PREPARATION_INVALID", "item preparation inputs differ"
         ) from None
+
+
+def validate_item_similarity_start_inputs(
+    *,
+    workflow_request: WorkflowRequest,
+    expected_resolution: ExpectedWorkflowResolution,
+    evidence: EvidenceBundlePublicationResultV5,
+    preset: ExecutionPresetRevisionV2,
+) -> tuple[
+    WorkflowRequest,
+    ExpectedWorkflowResolution,
+    EvidenceBundlePublicationResultV5,
+    ExecutionPresetRevisionV2,
+]:
+    values = validate_item_similarity_start_controls(
+        workflow_request=workflow_request,
+        expected_resolution=expected_resolution,
+        evidence=evidence,
+        preset=preset,
+    )
+    requirement = values[0].educational_retrieval
+    assert isinstance(
+        requirement, (EducationalRetrievalRequirement, EducationalRetrievalRequirementV2)
+    )
+    if "PAST_EXAM" not in requirement.source_classes:
+        raise ControlPlaneError(
+            "CONTROL_SIMILARITY_PREPARATION_INVALID", "the reference class was not requested"
+        )
+    return values
 
 
 def validate_item_similarity_scope(

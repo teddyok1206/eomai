@@ -102,6 +102,7 @@ from eom_api.services.catalog_application_client import (
 )
 from eom_api.services.item_similarity_start import (
     CheckedSimilarityStart,
+    check_similarity_not_offered,
     check_similarity_start,
     require_similarity_start_replay,
     require_similarity_start_resolution,
@@ -109,6 +110,7 @@ from eom_api.services.item_similarity_start import (
     similarity_start_context,
 )
 from eom_api.services.reference_item_start_ports import (
+    ReferenceItemSimilarityNotOffered,
     ReferenceItemStartPending,
     ReferenceItemStartPreparationPort,
 )
@@ -504,7 +506,16 @@ class CommandAdapter:
             )
             if isinstance(reference, ReferenceItemStartPending):
                 return reference
-            checked_similarity = check_similarity_start(reference, workflow_request, actor)
+            if isinstance(reference, ReferenceItemSimilarityNotOffered):
+                check_similarity_not_offered(
+                    reference,
+                    request=workflow_request,
+                    expected_resolution=selected_resolution,
+                    evidence=knowledge_evidence,
+                    preset=knowledge_preset,
+                )
+            else:
+                checked_similarity = check_similarity_start(reference, workflow_request, actor)
         with transaction(self.sessions) as session:
             definition = admitted_workflow_definition(
                 session,

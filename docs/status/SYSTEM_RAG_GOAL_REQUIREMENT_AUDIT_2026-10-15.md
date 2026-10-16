@@ -8,6 +8,13 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Ordinary caller successor is source/disposable-verified, not installed/active:
+  Web/HTTP ordinary1.0→same original Evidence selector→preparation1.1/ITEM_AUTHORING
+  →first plan24 and existing delivery. Explicit exact-hash NOT_OFFERED/audit keeps
+  normal plan19 for no reference or initial missing index; unrequested PAST_EXAM
+  never broadens source classes. PENDING/denial/failure/stale pins do not bypass.
+  Final focused112/guarded PG162/type8 PASS; broad91-file regression is running.
+  Current source/IAM/Evidence metadata observations are synthetic, not live acceptance.
 - Latest repository selector candidate`3fa9b958` is committed/pushed. Standard
   three-wheel/RECORD/OpenAPI build and source-free two-wheel301-module/schema/
   disabled-owner proof PASS. It remains NOT_INSTALLED/ACTIVE. Final affected
@@ -59,6 +66,10 @@ summed into a single acceptance count. This ledger does not grant authority.
   SUCCEEDED/COMPLETED and the fourth METADATA_ONLY PROCESSING/REQUESTED, all
   attempts/generation1; same process/invocation, active/success/enabled, no restart.
   This updates command state only, not canonical vector bytes/counts/coverage.
+  Scheduled read-only observation05:16:42 UTC found13 SUCCEEDED/COMPLETED,
+  one PROCESSING/RUNNING (attempt/generation1) and one PENDING/REQUESTED (0/0).
+  Same process/invocation, active/success/enabled, no restart or manual submission;
+  this still does not update canonical vector bytes/counts/coverage.
 - The new authoring/review reference source foundation adds native request1.1
   without widening strict1.0. Source regression1971, final affected boundary234,
   handoff47 and guarded PG132 PASS (overlapping inventories not summed), strict

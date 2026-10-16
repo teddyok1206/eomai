@@ -1337,7 +1337,14 @@ class HttpApplicationGateway:
         reference = (
             self._reference_item_start_enabled
             and isinstance(retrieval, dict)
-            and retrieval.get("schema_version") == "educational-retrieval-requirement/2.0"
+            and (
+                retrieval.get("schema_version") == "educational-retrieval-requirement/2.0"
+                or (
+                    retrieval.get("schema_version") == "educational-retrieval-requirement/1.0"
+                    and payload.get("definition_key") == "generic-item-development"
+                    and payload.get("definition_version") == "1.16.0"
+                )
+            )
         )
         if reference:
             return await self._start_reference_workflow(session, payload, idempotency_key)

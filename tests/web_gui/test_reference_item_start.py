@@ -27,6 +27,64 @@ def test_api_reply_contract_is_consumable_without_api_runtime_dependency():
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    "enabled,version,key,expected_reference",
+    (
+        (False, "1.16.0", "generic-item-development", False),
+        (True, "1.16.0", "generic-item-development", True),
+        (True, "1.15.0", "generic-item-development", False),
+        (True, "1.16.0", "another-workflow", False),
+    ),
+)
+@pytest.mark.parametrize("state", ("PENDING", "ACCEPTED"))
+async def test_compatible_ordinary_request_uses_same_opt_in_endpoint_and_exact_key(
+    enabled, version, key, expected_reference, state
+):
+    observed = []
+    payload = {
+        "definition_key": key,
+        "definition_version": version,
+        "educational_retrieval": {"schema_version": "educational-retrieval-requirement/1.0"},
+    }
+
+    def handler(request):
+        observed.append(request)
+        assert request.url.path == (
+            "/api/v1/workflows/reference-starts" if expected_reference else "/api/v1/workflows"
+        )
+        assert request.headers["idempotency-key"] == "original-ordinary-key"
+        assert json.loads(request.content) == payload
+        body = pending() if state == "PENDING" else accepted()
+        return httpx.Response(
+            202,
+            json=_single(
+                body.model_dump(mode="json")
+                if expected_reference
+                else accepted().command.model_dump(mode="json")
+            ),
+        )
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        reference_item_start_enabled=enabled,
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        result = await gateway.start_workflow(_session(), payload, "original-ordinary-key")
+        assert result == (
+            pending().model_dump(mode="json")
+            if expected_reference and state == "PENDING"
+            else accepted().command.model_dump(mode="json")
+        )
+        assert len(observed) == 1
+    finally:
+        await gateway.close()
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize("enabled,variation", [(False, True), (True, True), (True, False)])
 async def test_only_explicitly_enabled_reference_requests_use_new_operation(enabled, variation):
     requests = []

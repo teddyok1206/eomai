@@ -9,13 +9,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from eom_catalog_contracts import EvidenceBundlePublicationResultV5, validate_contract
+from eom_catalog_contracts import (
+    EducationalRetrievalRequirementV2,
+    EvidenceBundlePublicationResultV5,
+    validate_contract,
+)
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.models import Sha256
 from eom_catalog_contracts.similarity_read import CompletedSimilarityQuerySelection
 from eom_identifiers import content_sha256
 from eom_operator_identity import ActorContext, ActorType, PermissionKey
 from eom_operator_identity.contracts import OperatorId
+from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.similarity_context_artifact import PublishedSimilarityContext
 from eom_protocol.models import JobId
 from eom_workflow.control_plane import ExecutionPresetRevisionV2
@@ -26,13 +31,17 @@ from eom_workflow.similarity_control import (
     SupportedSimilarityExecutionPlan,
     validate_similarity_plan_context,
 )
-from eom_workflow_runner.item_similarity_preparation import PreparedItemSimilarity
+from eom_workflow_runner.item_similarity_preparation import (
+    PreparedItemSimilarity,
+    validate_item_similarity_start_controls,
+)
 from eom_workflow_runner.models import WorkflowDefinitionRecord
 from eom_workflow_runner.similarity_role_preparation import SIMILARITY_QUERY_CONTEXT_KEY
 from jsonschema.exceptions import ValidationError as SchemaError
 from pydantic import TypeAdapter
 
 from eom_api.errors import ApiError
+from eom_api.services.reference_item_start_ports import ReferenceItemSimilarityNotOffered
 
 SIMILARITY_PREPARATION_ACCEPTANCE_KEY = "similarity_preparation_v1_sha256"
 
@@ -52,6 +61,35 @@ def _invalid() -> ApiError:
         "Similarity preparation differs",
         "The private preparation does not match the exact item request and resolution.",
     )
+
+
+def check_similarity_not_offered(
+    value: ReferenceItemSimilarityNotOffered,
+    *,
+    request: WorkflowRequest,
+    expected_resolution: ExpectedWorkflowResolution,
+    evidence: EvidenceBundlePublicationResultV5,
+    preset: ExecutionPresetRevisionV2,
+) -> None:
+    """Only exact compatible ordinary requests may take the existing Evidence-only path."""
+    try:
+        if type(value) is not ReferenceItemSimilarityNotOffered:
+            raise ValueError("invalid absence observation")
+        value.__post_init__()
+        request, _expected, evidence, _preset = validate_item_similarity_start_controls(
+            workflow_request=request,
+            expected_resolution=expected_resolution,
+            evidence=evidence,
+            preset=preset,
+        )
+        if (
+            isinstance(request.educational_retrieval, EducationalRetrievalRequirementV2)
+            or value.workflow_request_sha256 != content_sha256(request.model_dump(mode="json"))
+            or value.evidence_result_sha256 != evidence.result_sha256
+        ):
+            raise ValueError("absence scope differs")
+    except (ValueError, TypeError, AttributeError, ControlPlaneError, SchemaError):
+        raise _invalid() from None
 
 
 def selected_workflow_resolution(

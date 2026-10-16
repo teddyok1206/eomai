@@ -21,7 +21,10 @@ from eom_api.errors import ApiError
 from eom_api.services import command_adapter as module
 from eom_api.services.command_adapter import CommandAdapter, _workflow_request_from_api
 from eom_api.services.item_similarity_start import SIMILARITY_PREPARATION_ACCEPTANCE_KEY
-from eom_api.services.reference_item_start_ports import ReferenceItemStartPending
+from eom_api.services.reference_item_start_ports import (
+    ReferenceItemSimilarityNotOffered,
+    ReferenceItemStartPending,
+)
 from eom_catalog_contracts.similarity_read import CompletedSimilarityQuerySelection
 from eom_identifiers import content_sha256
 from eom_orchestrator.control_models import (
@@ -298,6 +301,150 @@ def test_actual_postgres_pending_has_no_item_then_first_plan23_and_original_repl
         )
         == result
     )
+
+
+@pytest.mark.parametrize("fault", ("none", "request", "evidence", "reason"))
+def test_actual_postgres_no_offer_is_ordinary_only_exact_and_keeps_normal_plan(item, fault):
+    value = ReferenceItemSimilarityNotOffered(
+        "REFERENCE_NOT_OFFERED",
+        content_sha256(_workflow_request_from_api(item.request).model_dump(mode="json")),
+        item.data.source.evidence.result_sha256,
+    )
+    if fault in {"request", "evidence"}:
+        value = replace(
+            value,
+            **{
+                "workflow_request_sha256"
+                if fault == "request"
+                else "evidence_result_sha256": "sha256:" + "f" * 64
+            },
+        )
+    elif fault == "reason":
+        object.__setattr__(value, "reason", "SOURCE_REVOKED")
+    preparation = Mock()
+    preparation.prepare.return_value = value
+    kwargs = dict(idempotency_key=item.key, preparation=preparation)
+    valid = fault == "none" and item.expected_plan_schema == "resolved-execution-plan/24.0"
+    if not valid:
+        with pytest.raises(ApiError, match="CONTROL_SIMILARITY_PREPARATION_INVALID"):
+            item.adapter.start_reference_workflow(item.request, item.data.actor, **kwargs)
+        with item.sessions() as session:
+            assert (
+                session.scalar(
+                    select(WorkflowInstanceRecord.workflow_id).where(
+                        WorkflowInstanceRecord.idempotency_key == item.key
+                    )
+                )
+                is None
+            )
+        return
+    result = item.adapter.start_reference_workflow(item.request, item.data.actor, **kwargs)
+    assert isinstance(result, tuple)
+    with item.sessions() as session:
+        workflow = session.get(WorkflowInstanceRecord, result[1])
+        plan = session.scalar(
+            select(ResolvedExecutionPlanRecord).where(
+                ResolvedExecutionPlanRecord.workflow_id == workflow.workflow_id
+            )
+        )
+        assert plan.canonical_document["schema_version"] == "resolved-execution-plan/19.0"
+        assert (
+            plan.canonical_document["evidence_bundle_revision_id"]
+            == item.data.source.evidence.evidence_bundle_revision_id
+        )
+        assert SIMILARITY_PREPARATION_ACCEPTANCE_KEY not in workflow.runtime_context
+        assert SIMILARITY_QUERY_CONTEXT_KEY not in workflow.runtime_context
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(WorkflowCommandRecord)
+                .where(WorkflowCommandRecord.workflow_id == workflow.workflow_id)
+            )
+            == 1
+        )
+    preparation.prepare.side_effect = AssertionError("normal-plan replay must not upgrade/select")
+    item.client.create_item_production_evidence.side_effect = AssertionError(
+        "no Evidence reselection"
+    )
+    assert item.adapter.start_reference_workflow(item.request, item.data.actor, **kwargs) == result
+
+
+@pytest.mark.parametrize("item", ("ITEM_AUTHORING",), indirect=True)
+def test_actual_postgres_concurrent_no_offer_accepts_one_normal_plan_and_command(item):
+    barrier = Barrier(2)
+    value = ReferenceItemSimilarityNotOffered(
+        "INDEX_NOT_PREPARED",
+        content_sha256(_workflow_request_from_api(item.request).model_dump(mode="json")),
+        item.data.source.evidence.result_sha256,
+    )
+    preparation = Mock()
+
+    def prepared(*_args, **_kwargs):
+        barrier.wait(timeout=20)
+        return value
+
+    preparation.prepare.side_effect = prepared
+
+    def submit():
+        return item.adapter.start_reference_workflow(
+            item.request, item.data.actor, idempotency_key=item.key, preparation=preparation
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = tuple(pool.map(lambda _index: submit(), range(2)))
+    assert results[0] == results[1]
+    with item.sessions() as session:
+        workflows = tuple(
+            session.scalars(
+                select(WorkflowInstanceRecord).where(
+                    WorkflowInstanceRecord.idempotency_key == item.key
+                )
+            )
+        )
+        assert len(workflows) == 1
+        workflow = workflows[0]
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(ResolvedExecutionPlanRecord)
+                .where(ResolvedExecutionPlanRecord.workflow_id == workflow.workflow_id)
+            )
+            == 1
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(WorkflowCommandRecord)
+                .where(WorkflowCommandRecord.workflow_id == workflow.workflow_id)
+            )
+            == 1
+        )
+
+
+@pytest.mark.parametrize("item", ("ITEM_AUTHORING",), indirect=True)
+def test_actual_postgres_unrequested_past_exam_class_stays_ordinary_evidence_only(item):
+    raw = item.request.model_dump(mode="json")
+    raw["educational_retrieval"]["source_classes"] = ["APPROVED_ITEM"]
+    item.request = item.request.model_validate(raw)
+    preparation = Mock()
+    preparation.prepare.return_value = ReferenceItemSimilarityNotOffered(
+        "REFERENCE_NOT_OFFERED",
+        content_sha256(_workflow_request_from_api(item.request).model_dump(mode="json")),
+        item.data.source.evidence.result_sha256,
+    )
+    result = item.adapter.start_reference_workflow(
+        item.request, item.data.actor, idempotency_key=item.key, preparation=preparation
+    )
+    with item.sessions() as session:
+        plan = session.scalar(
+            select(ResolvedExecutionPlanRecord).where(
+                ResolvedExecutionPlanRecord.workflow_id == result[1]
+            )
+        )
+        assert plan.canonical_document["schema_version"] == "resolved-execution-plan/19.0"
+        assert plan.canonical_document["retrieval_requirement"]["source_classes"] == [
+            "APPROVED_ITEM"
+        ]
 
 
 def assert_rows(value, receipt):
