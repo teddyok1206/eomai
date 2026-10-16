@@ -299,3 +299,109 @@ templates, both CLI executables in their distinct image/trainer prefixes, direct
 entry/lifecycle inventory and genuine mutual exclusion/cleanup acceptance. Keep
 CPU-only image helpers and external-reference download tools outside GPU grants.
 This observation created no group/lock/unit and did not run an image or model.
+
+## Preserve the physical lease through unit cleanup using existing PID1 fdstore
+
+1. Extend the existing stdlib shared-GPU adapter with an explicit retention request;
+   do not add a broker, daemon, registry or different mutex. Legacy claim/close stays
+   unchanged until a reviewed caller/unit explicitly selects this path.
+2. Canonical ownership remains the one actual flock open-file description. PID1 can
+   retain a duplicate via SCM_RIGHTS; the worker's original close does not unlock
+   that description. Never use LOCK_UN on a shared description.
+3. Pin the original unit/execution/invocation, physical lock inode and descriptor
+   name. A path, notification return or queue message is not accepted admission.
+4. Revalidate the concrete held lease, root-protected fixed notification endpoint,
+   exact unit policy and current named/FD epochs. Worker input chooses no address,
+   descriptor name, PID, cleanup command or authority.
+5. Operations are one descriptor transfer, one bounded notification barrier and
+   root indexed fixed-unit fdstore/terminal inspection, not global PID scans.
+6. Use two fixed byte messages and one pipe/FD tuple; no new dependency or JSON
+   storage. The existing systemd255 protocol owns notification transport.
+7. O(1) handles/bounded messages and at most10s barrier wait. Keep result metadata
+   separate from the live kernel handle; never persist an FD number as a grant.
+8. Root first verifies exactly one stored descriptor/name/inode and gives a
+   distinct pre-CUDA ACK. A barrier only proves processing, not acceptance. The
+   eventual probe needs an explicit typed ready phase before initialization, then
+   its existing final report/ACK. Do not initialize CUDA merely because send worked.
+9. The optional GPU adapter owns sending only. Existing root unit/prepare owner
+   owns policy, independent observation and cleanup; workers cannot remove stores.
+10. No automatic remove/retry on timeout. Keep stored ownership on uncertain exit.
+    Explicit RemainAfterExit=yes, CollectMode=inactive, Restart=no, bounded store1,
+    NotifyAccess=main and preserve=yes prevent normal-success/failed-unit GC from
+    silently releasing it. Root cleans only the exact retired invocation after
+    terminal/cgroup/driver-client cleanup. Clear fdstore, not audit/failed history.
+11. A parent-only duplicate can be lost with that parent. PID1 retention reuses the
+    existing service manager and survives ordinary worker/owner exits. Installed
+    image units currently lack these settings; source sending alone is not safety.
+
+Systemd255 installed manual and upstream
+[notification protocol](https://github.com/systemd/systemd/blob/v255/man/sd_notify.xml)
+define FDSTORE/FDNAME/FDPOLL and a separate BARRIER. The
+[implementation](https://github.com/systemd/systemd/blob/v255/src/libsystemd/sd-daemon/sd-daemon.c)
+passes a pipe writer and waits for EOF. A barrier is explicitly not a store-success
+receipt. `FileDescriptorStorePreserve=yes` alone is insufficient if a unit becomes
+unreferenced/inactive; keep a successful oneshot active and failed units retained.
+No current production template or group/lock is changed by designing this path.
+
+### Retention adapter and actual no-GPU fixture checkpoint
+
+Added explicit `request_unit_gpu_lease_retention(lease)` to the existing optional
+stdlib adapter. It accepts only its concrete lease, fixed root-protected
+`/run/systemd/notify`, FDSTORE capacity1 and fixed FDSTORE/FDNAME/FDPOLL messages,
+then a separate bounded pipe barrier. It returns no admission token. Root must
+independently observe store acceptance and ACK before CUDA initialization.
+Unknown outcomes retain any queued PID1 copy; no removal/unlock/borrowed-close or
+automatic retry occurs. Existing claim/close and legacy image branches are unchanged.
+
+Source checks: shared/image adapter/release150 PASS2.40s in the existing image-test
+Python; separate native-probe/resource/schema/dependency131 PASS16.50s in API
+development Python; strict2 modules, Ruff/format/diff PASS. Focused57 overlaps the
+150 and is not added. Real ordinary file descriptions demonstrate retained-copy
+contention/release in unit tests; endpoint, scalar/duck authority, short send,
+timeout, epoch change and pipe cleanup are negative cases.
+
+An actual **non-GPU** systemd255 fixture used one private empty tmpfs file per
+case, no production lock or group, and the already protected OLD Python under
+unprivileged UID1000 with PrivateDevices/PrivateNetwork/empty capabilities. Exact
+readonly helper/package snapshots were checked before use, outside both the
+unadmitted CUDA candidate and the operating image/runtime prefixes.
+
+- Normal unit `eom-fdstore-fixture-20261016-2026.service`, invocation
+  `4a70afd496c541878ea684c08ccc04bd`: worker exited0/MainPID0; active/exited and
+  NFileDescriptorStore1 remained. Another open could not flock the same file.
+- Failure unit `eom-fdstore-crash-fixture-20261016-2030.service`, invocation
+  `5ed34b036f8e40ba99abcb95edc156a3`: after observing store1 on PID2917031, only
+  that **isolated fixture** main received SIGKILL. Actual result signal/code2/status9,
+  MainPID0/empty cgroup/store1 and continued mutex contention were recorded. No
+  production/image/native encoder process was signalled.
+- Root's supported fdstore dump showed the fixed name, regular0640/readonly flags,
+  device0:25 and the exact dedicated inodes2570212/2570281. Its path is mount-relative;
+  identity is inode/device, not that display path. Unprivileged dump was denied;
+  no role/permission was broadened to make it succeed.
+- Cleanup exposed an important lifecycle detail: clean rejects a failed unit and
+  stopping that failed fixture is a no-op. Before retirement, its original SIGKILL
+  facts were preserved. **Only this deliberately created test fixture's volatile
+  failed-unit state** was retired using the supported reset; original journal and
+  saved terminal evidence remain, not relabelled as an exit0. Successful fixture
+  retirement and failed-fixture retirement allowed GC to drop their stores. Both
+  independent lock opens then succeeded. No user execution/history/DB row was reset.
+
+Do not translate this test retirement into blanket production reset-failed authority.
+The future root lifecycle owner must require its explicit terminal-retirement receipt
+and actual GPU-client cleanup before allowing unit retirement/store release. Keep
+uncertain units referenced/failed; store and notification processing alone do not
+prove cleanup or safe compute admission.
+
+Readonly fixture library versions: normal lease raw
+`60d1091f5f71a0da29ce981635c05f9acfd0e5975b2d17d2a787885508d4e382`;
+failure fixture raw `0d0e6331fefa290400a7fe329517f73034338a0bb254081dab778f2030e44dd6`.
+The latter includes the strict-typing local-list annotation correction. Original
+private copies are immutable; neither receipt is substituted for different bytes.
+Bounded evidence is `/tmp/eom-gpu-fdstore-probe-sZyvErE0`; dedicated empty files
+and readonly helpers are retained for reproducibility, with neither fdstore active.
+
+This is SOURCE_PASS plus a real PID1/file-lock mechanism check, **not** the actual
+CUDA probe/installation/GPU comparison. No GPU/model/device/group/production unit
+changed. Next define the pre-initialization ready/ACK contract, connect worker and
+independent unit/maps/store observer, then migrate actual GPU consumers and audit
+the reviewed private-code successor before any candidate instruction/model use.

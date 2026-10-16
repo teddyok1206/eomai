@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import array
 import fcntl
 import grp
 import os
+import select
+import socket
 import stat
 import sys
 from collections.abc import Iterator
@@ -16,6 +19,9 @@ from typing import Final, Literal
 SHARED_GPU_LOCK_PATH: Final = Path("/run/eom-gpu-lease/gpu0.lock")
 _GROUP_NAME: Final = "eom-gpu-lease"
 _MAX_MOUNTINFO_BYTES: Final = 1024 * 1024
+_NOTIFY_PATH: Final = Path("/run/systemd/notify")
+_STORE_MESSAGE: Final = b"FDSTORE=1\nFDNAME=eom-gpu0-lease\nFDPOLL=0"
+_BARRIER_MESSAGE: Final = b"BARRIER=1"
 
 
 class SharedGpuLeaseError(RuntimeError):
@@ -266,6 +272,76 @@ def _claim(policy: _LeasePolicy) -> SharedGpuLease:
 def acquire_shared_gpu_lease() -> SharedGpuLease:
     """Claim only the fixed root-provisioned lock, with no caller-supplied policy."""
     return _claim(_production_policy())
+
+
+def _notification_epochs() -> tuple[tuple[int, ...], ...]:
+    epochs: list[tuple[int, ...]] = []
+    for path in (Path("/"), Path("/run"), _NOTIFY_PATH.parent):
+        value = path.lstat()
+        if not stat.S_ISDIR(value.st_mode) or value.st_uid != 0 or value.st_mode & 0o022:
+            raise SharedGpuLeaseError("INVALID")
+        epochs.append(_directory_identity(value))
+    value = _NOTIFY_PATH.lstat()
+    if not stat.S_ISSOCK(value.st_mode) or value.st_uid != 0 or value.st_nlink != 1:
+        raise SharedGpuLeaseError("INVALID")
+    epochs.append(_file_identity(value))
+    return tuple(epochs)
+
+
+def _send_descriptor(channel: socket.socket, message: bytes, descriptor: int) -> None:
+    rights = array.array("i", [descriptor])
+    sent = channel.sendmsg([message], [(socket.SOL_SOCKET, socket.SCM_RIGHTS, rights)])
+    if sent != len(message):
+        raise SharedGpuLeaseError("INVALID")
+
+
+def _notification_barrier(channel: socket.socket) -> None:
+    reader, writer = os.pipe2(os.O_CLOEXEC)
+    try:
+        _send_descriptor(channel, _BARRIER_MESSAGE, writer)
+        selected, writer = writer, -1
+        os.close(selected)
+        poller = select.poll()
+        poller.register(reader, select.POLLHUP)
+        events = poller.poll(10000)
+        if events != [(reader, select.POLLHUP)] or os.read(reader, 1) != b"":
+            raise SharedGpuLeaseError("INVALID")
+    finally:
+        owned = (reader,) if writer < 0 else (reader, writer)
+        if not _close_descriptors(owned):
+            raise SharedGpuLeaseError("INVALID")
+
+
+def request_unit_gpu_lease_retention(lease: SharedGpuLease) -> None:
+    """Request fixed PID1 retention only; processing is NOT store acceptance or CUDA admission.
+
+    The root owner must observe this unit's exact stored descriptor and ACK before
+    CUDA initialization. It alone releases the store after unit/GPU cleanup. Even
+    on failure this function neither closes/unlocks the borrowed lease nor sends
+    FDSTOREREMOVE: a successfully queued store may already be retaining ownership.
+    """
+    try:
+        if (
+            type(lease) is not SharedGpuLease
+            or os.environ.get("NOTIFY_SOCKET") != str(_NOTIFY_PATH)
+            or os.environ.get("FDSTORE") != "1"
+        ):
+            raise SharedGpuLeaseError("INVALID")
+        lease.assert_valid()
+        descriptor = lease.fileno()
+        before = _notification_epochs()
+        with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM | socket.SOCK_CLOEXEC) as channel:
+            channel.settimeout(2.0)
+            channel.connect(str(_NOTIFY_PATH))
+            if _notification_epochs() != before:
+                raise SharedGpuLeaseError("INVALID")
+            _send_descriptor(channel, _STORE_MESSAGE, descriptor)
+            _notification_barrier(channel)
+        lease.assert_valid()
+        if lease.fileno() != descriptor or _notification_epochs() != before:
+            raise SharedGpuLeaseError("INVALID")
+    except (OSError, ValueError, TypeError, OverflowError, SharedGpuLeaseError) as error:
+        raise SharedGpuLeaseError("INVALID") from error
 
 
 @contextmanager

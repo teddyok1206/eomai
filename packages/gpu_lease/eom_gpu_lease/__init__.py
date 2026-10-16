@@ -5,6 +5,7 @@ from eom_gpu_lease.lease import (
     SharedGpuLease,
     SharedGpuLeaseError,
     acquire_shared_gpu_lease,
+    request_unit_gpu_lease_retention,
     shared_gpu_lease,
 )
 
@@ -13,5 +14,6 @@ __all__ = [
     "SharedGpuLease",
     "SharedGpuLeaseError",
     "acquire_shared_gpu_lease",
+    "request_unit_gpu_lease_retention",
     "shared_gpu_lease",
 ]
