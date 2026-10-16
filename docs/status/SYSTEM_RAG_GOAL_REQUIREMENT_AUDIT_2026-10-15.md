@@ -8,6 +8,15 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Latest bounded selection13:54 UTC: c6983332 cooperative CPU-admission source/
+  guarded PostgreSQL/build/installed-owner/control selection PASS; INDEX15/
+  resource30 is **SELECTED_NOT_STARTED**, not live priority acceptance. INDEX14
+  drained status0; only one never-claimed START was cancelled through supported
+  owner maintenance with its request/history preserved. QUERY still uses B41.
+  Actual12:38 login succeeded; original C1 remains unfinished after a real CPU wait
+  and later fresh-auth rejection. CUDA is ROOT_STAGED/BYTE_AUDIT_FAILED, no GPU
+  admission/model/benchmark/default. Full C1-C5 and the six-launch device gates
+  remain open. [Actual facts, failure preservation and next window](../architecture/NATIVE_CPU_INTERACTIVE_ADMISSION_DESIGN.md#operating-selection-evidence).
 - Actual protected no-site host preflight08:28:07: real1.1/seven-module root input,
   old interpreter `-I -S -B`, missing binding denied/exit1; exact pre-exec snapshot
   binding/fixed host closure PASS/exit0. Sourcebd293690 build/RECORD/OpenAPI PASS.

@@ -107,9 +107,80 @@ may legitimately take longer. No native child signal, forced termination, DB sta
 repair, new execution identity or automatic retry is part of this drain request.
 The current pinned command must finish naturally before checking terminal states.
 
+At13:43:29 UTC the original process was still naturally draining its PROCESSING
+command (attempt/generation1). Exactly one further START was PENDING with
+attempt/generation0, absent lease and zero steps: Workflow
+`workflow_da99e553b6484ef4a84db9c99ae156b1`, command
+`wfcmd_50bf70fafc694d45a288d4d13dba7736`, request SHA
+`2900c81e329764033a18ff3f8859bbdb566d697137c13d15f390909a392c1689`.
+Prepare its exact existing `local-indexing-unstarted-cancellation/1.0` command
+only after normal service exit, using the installed supported deployment-owner
+application. Execution, if its guards still pass, records truthful CANCELLED
+history, not success, with no claim/step/Job/model. Only subsequent normal
+missing-binding reconciliation can discover successor work. This is the
+previously specified unstarted branch, not permission to cancel active work.
+
 Only after actual main-process exit and no unfinished old-identity commands may
 the existing Identity/Catalog control publication select a compatible successor.
 If a queued command remains, keep the old identity/pins and resolve it through
 supported original execution or unstarted cancellation, not a rewritten request.
 Retain current files/releases as rollback evidence. Drain failure means no file
 selection or identity change; it does not authorize timeout escalation.
+
+### Operating selection evidence
+
+As of2026-10-16 13:54 UTC.
+
+The original INDEX invocation exited naturally at13:43:51 UTC, status0/success.
+At13:45:29.963866 UTC, the installed public cancellation application under actual
+DB-owner principal`eom_app` cancelled only the pinned never-started command above.
+Original request/key/service14, attempts/generation0 and zero steps were retained.
+Receipt semantic:`f7a514677ae2342b9cd16be0bf21cb9ef08f76e21fac4a80978fd01f225ebef0`;
+raw:`3ed46c30191bda4702b0cbeaab1ed2f4f510152bfb4205dedb80e4c960e5fe9a`.
+No Job, Artifact or model call was created by cancellation.
+
+The existing protected installer staged the exact c6983332 owner pair INACTIVE.
+Its installed import proof loaded213 EOM modules solely from that release; queue
+presence was synthetic SQL, with zero actual DB/model calls. The numerical CPU
+prefix, its B41 host seal and the operating QUERY owner did not change.
+
+Only actual Orchestrator UID990/GID1000/empty supplementary groups committed the
+new native control policy, with zero permitted/effective/ambient capabilities and
+NoNewPrivs1 before EOM imports. Job:`job_82d4251748f34a86a65b41e6e6b72ee0`;
+Artifact:`artifact_2e48c03cd60e43dc890c926d70014674`;
+revision:`rev_366d10ad73d64bbf9867acd54e9db94c`;
+policy raw:`4c8db635a9bbe23d40778eeebc86b62a0e6568b3f4859720d5f994f2fb305add`;
+semantic:`9fc767ff4853dfcf2070bc5bd89efe7fd5264a8346216eb8defc580f93e5b4ca`;
+manifest:`f0d5cdfca33bbcd72d50e38854349bfd78ed6d1ffe6bb81fe94ace740a1b49fb`.
+The first three finite operator launches failed before publisher imports/Job
+creation: missing effective UID-switch capability, a root-only diagnostic check
+inside a lower-UID0700 directory, then the same capability boundary. Actual own-
+process diagnostics showed bounding capability was not an effective grant. Reuse
+the existing QUERY supervisor's explicit bounded ambient UID-switch pattern;
+the finite proof verified zero capabilities after dropping IDs. No production
+rule, auth fence or service account membership was weakened. Failed units/logs
+remain; the fourth launch made the single actual policy publication.
+
+Public Catalog independently checked its producer, manifest, bytes and hashes.
+Public Identity operations registered/activated service revision15/resource30:
+`localindexservicerev_932e10f72a064234b6617c44333dc9ca`, semantic
+`9c2ffb5106d0517f8c01f353b9601adf36b4dbb82927ce4b3232ac3296e1d7c0`.
+The new grant is`accessrev_8b50aba2d58848e7b2f17cef105a03a5`, semantic
+`7926486d341ef55f5f025db3c0cb41544fd20a31289d26238b0c80d3347b7b95`.
+Namespaces, source classes, encoder space/profile, max4/poll60 and numerical
+environment/verifier are unchanged. Exactly four owner control-pointer fields
+changed; the unit differs only by its selected source commit.
+
+Stopped-owner file selection/readback PASS:
+runtime raw`cd1569f5f2aad33ffb9bd2671e71ce83e303c704d9162d9b1a7244304cfa34f2`,
+owner raw`c426bb831188b7167ddd935b61ff935f008c5e48ed3dcbe78e958bf9f584fb3e`,
+unit raw`6c3b5a5815789cdb23f068d29417aeb521fd1b7267b74546f9e49b63958015bc`.
+Root evidence/old files remain in`/var/lib/eom-indexing-priority-c6983332`.
+**SELECTED_NOT_STARTED**: keep INDEX paused for the original authenticated QUERY
+window, then observe its actual deferred/resumed behavior before claiming live
+priority acceptance. Source/PG/install/control selection is not that acceptance.
+
+At13:54:58 UTC read-only operator metadata still showed the exact original QUERY
+Workflow/step attempt1, original Job allocation1.1 only and no numerical completion.
+Its selected native policy/bundle still match. No request/key was regenerated.
+This metadata is not fresh user authorization or authenticated C1 acceptance.

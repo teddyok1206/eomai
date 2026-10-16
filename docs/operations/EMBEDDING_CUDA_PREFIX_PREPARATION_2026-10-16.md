@@ -5,12 +5,17 @@ full-goal acceptance. Source, protected staging and operating activation differ.
 
 ## Existing operating work remains independent
 
-The CPU INDEX owner retains PID1953488/invocation`36f20dd36c444cc780b52fe8eed41fbe`,
-identity14 and its existing scope. Routine observations12:37:52 and13:13:13 were
+Before the later controlled drain, CPU INDEX PID1953488/invocation
+`36f20dd36c444cc780b52fe8eed41fbe` retained identity14 and its existing scope.
+Routine observations12:37:52 and13:13:13 were
 more than30 minutes apart: active, no restart, additional original commands
 SUCCEEDED. Those journal observations are not a new canonical vector-count audit.
 The last independent canonical count remains113 encodings/bindings at11:36:49.
 Do not infer current coverage from journal successes or treat113 as Item count.
+That invocation subsequently drained normally13:43:51; source c6983332 controls/
+identity15 are selected but not started during the original query's CPU window.
+See the [separate CPU admission selection](../architecture/NATIVE_CPU_INTERACTIVE_ADMISSION_DESIGN.md#operating-selection-evidence).
+The CUDA rejection below is unchanged and grants no numerical execution.
 
 ## Actual CUDA candidate and strict publication outcome
 

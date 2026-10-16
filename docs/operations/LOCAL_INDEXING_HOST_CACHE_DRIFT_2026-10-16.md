@@ -2,12 +2,17 @@
 
 2026-10-16 UTC. Chronological incident and recovery record, not a lost corpus or failed Item.
 Full incremental-RAG goal stays ACTIVE and incomplete. No blind automatic restart/retry.
-Latest recovery checkpoint: QUERY READY10:25 UTC; INDEX identity14 started10:59 UTC;
+Recovery checkpoint: QUERY READY10:25 UTC; INDEX identity14 started10:59 UTC;
 all three first four-row batches have canonical terminal/numeric acceptance11:36 UTC.
+Later selection: identity14 drained normally13:43:51 UTC; the compatible identity15/
+resource30/c6983332 controls are selected, **NOT_STARTED**, while CPU is reserved
+for the original HTTP check. See the [priority selection record](../architecture/NATIVE_CPU_INTERACTIVE_ADMISSION_DESIGN.md#operating-selection-evidence).
 Earlier stopped/pending observations below are historical, not the current selection.
 Full coverage, common consumer acceptance and actual CPU/CUDA comparison remain open.
-Authenticated HTTP continuation stopped at login11:09 UTC; a subsequent input-validated
-observer is waiting in EOM1.
+The11:09 login-input rejection is historical. Actual login succeeded12:38; the
+original query waited for CPU and later fresh-auth403 was preserved, not bypassed.
+After the background drain, EOM1 has one fresh-auth input for the same original
+request/Workflow. No C1 authenticated completion is claimed yet.
 
 ## Observed state and preserved work
 
