@@ -22,6 +22,7 @@ from eom_catalog_service.embedding_runtime_files import (
 )
 from eom_catalog_service.embedding_runtime_host_closure import ProtectedEmbeddingHostClosure
 from eom_catalog_service.embedding_runtime_prefix_closure import PrefixRuntimeInventory
+from eom_catalog_service.embedding_runtime_process_identity import native_process_start_ticks
 
 CPU_PROBE_TEMPLATE = "eom-embedding-native-cpu-probe@.service"
 CPU_PROBE_TEMPLATE_SHA256 = (
@@ -158,21 +159,10 @@ def validate_native_executable_mappings(
 
 def native_probe_start_ticks(raw: bytes, pid: int) -> int:
     """Linux proc stat's comm may contain spaces or parentheses; split at its final boundary."""
-    if type(raw) is not bytes or not 0 < len(raw) <= 64 * 1024:
-        raise ValueError("NATIVE_CPU_PROBE_PROCESS_INVALID")
-    text = raw.decode("ascii", errors="strict")
-    _comm, separator, tail = text.rpartition(") ")
-    fields = tail.split()
-    if (
-        not text.startswith(f"{pid} (")
-        or not separator
-        or len(fields) < 20
-        or fields[0] not in {"R", "S", "D", "I"}
-        or re.fullmatch(r"[0-9]{1,20}", fields[19]) is None
-        or not 0 < int(fields[19]) <= 2**64 - 1
-    ):
-        raise ValueError("NATIVE_CPU_PROBE_PROCESS_INVALID")
-    return int(fields[19])
+    try:
+        return native_process_start_ticks(raw, pid)
+    except ValueError:
+        raise ValueError("NATIVE_CPU_PROBE_PROCESS_INVALID") from None
 
 
 def _unit(execution_id: str) -> tuple[str, str]:

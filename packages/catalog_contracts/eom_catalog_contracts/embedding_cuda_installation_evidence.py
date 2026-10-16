@@ -70,7 +70,7 @@ type _Zero = Annotated[int, Field(ge=0, le=0, strict=True)]
 type _One = Annotated[int, Field(ge=1, le=1, strict=True)]
 type _Utc = Annotated[str, Field(min_length=20, max_length=27, strict=True)]
 type CudaDeviceRole = Literal["NVIDIA0", "NVIDIACTL", "NVIDIA_UVM", "NVIDIA_UVM_TOOLS"]
-_NODES: Final = MappingProxyType(
+CUDA_DEVICE_NODE_SPECS: Final = MappingProxyType(
     {
         "NVIDIA0": ("/dev/nvidia0", 195, 0),
         "NVIDIACTL": ("/dev/nvidiactl", 195, 255),
@@ -89,7 +89,7 @@ class RootLocalCudaDeviceNode(RootLocalEvidenceValue):
 
     @model_validator(mode="after")
     def fixed_character_device(self) -> RootLocalCudaDeviceNode:
-        path, major, minor = _NODES[self.role]
+        path, major, minor = CUDA_DEVICE_NODE_SPECS[self.role]
         if (
             self.path != path
             or (major is not None and self.rdev_major != major)
@@ -139,6 +139,26 @@ class RootLocalCudaUnitProbeMetadata(RootLocalNativeUnitFacts):
     terminal_probe_gpu_client_count: _Zero
 
 
+def validate_rootlocal_cuda_resource_file_metadata(
+    nodes: tuple[RootLocalCudaDeviceNode, ...], lease: RootLocalCudaSharedGpuLease
+) -> None:
+    """One ordered-node/lease identity rule shared by metadata and actual FD capture."""
+    if type(nodes) is not tuple or len(nodes) != 4:
+        raise ValueError("CUDA resource file metadata frame differs")
+    nodes = tuple(RootLocalCudaDeviceNode.model_validate(node) for node in nodes)
+    lease = RootLocalCudaSharedGpuLease.model_validate(lease)
+    identities = {node.epoch[:2] for node in nodes}
+    if (
+        tuple(node.role for node in nodes) != tuple(CUDA_DEVICE_NODE_SPECS)
+        or len(identities) != 4
+        or lease.parent_epoch[:2] in identities
+        or lease.lock_epoch[:2] in identities
+        or len({(node.rdev_major, node.rdev_minor) for node in nodes}) != 4
+        or nodes[2].rdev_major != nodes[3].rdev_major
+    ):
+        raise ValueError("CUDA resource file metadata identity differs")
+
+
 class RootLocalCudaAdmissionReceiptMetadata(RootLocalEvidenceValue):
     """A parsed CUDA SEALED claim only; root observations/admission are separate prerequisites."""
 
@@ -166,14 +186,9 @@ class RootLocalCudaAdmissionReceiptMetadata(RootLocalEvidenceValue):
     @model_validator(mode="after")
     def exact_cuda_metadata(self) -> RootLocalCudaAdmissionReceiptMetadata:
         nodes, lease, probe = self.device_nodes, self.shared_gpu_lease, self.unit_probe
+        validate_rootlocal_cuda_resource_file_metadata(nodes, lease)
         if (
             self.installed_proof.profile != "CUDA_INDEX_FP32"
-            or tuple(node.role for node in nodes) != tuple(_NODES)
-            or len({node.epoch[:2] for node in nodes}) != 4
-            or lease.parent_epoch[:2] in {node.epoch[:2] for node in nodes}
-            or lease.lock_epoch[:2] in {node.epoch[:2] for node in nodes}
-            or len({(node.rdev_major, node.rdev_minor) for node in nodes}) != 4
-            or nodes[2].rdev_major != nodes[3].rdev_major
             or probe.supplementary_gids != (lease.lease_gid,)
             or probe.worker_gid == lease.lease_gid
             or (probe.pid, probe.start_time_ticks)

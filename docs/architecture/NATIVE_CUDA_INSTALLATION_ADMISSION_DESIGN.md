@@ -125,3 +125,82 @@ Do not patch the protected prefix ad hoc, import unchecked developer/owner paths
 as a fallback, or reuse the17:45 audit as proof for different bytes. Unchanged large
 public libraries/model payloads remain canonical references; an unrelated metadata
 or GUI commit alone must not change the numerical-space fingerprint.
+
+## Fixed resource-file capture (before the actual CUDA probe)
+
+1. Responsibility: the existing native-probe infrastructure captures four device
+   **O_PATH** handles and observes an already-held shared-lease FD. It neither
+   initializes CUDA nor opens a device for read/write, acquires/releases the lease,
+   launches a process or grants numerical ownership.
+2. Canonical sources are actual fstat/named inode/rdev/flags, fixed `/dev` and shared
+   lease parents, current proc process identity and that exact FD's `fdinfo` lock.
+3. These are boot/process-scoped frozen facts, not new persistent entities. Keep
+   native config/inventory/model identities separate; no new table or Artifact.
+4. Reuse receipt2.0 device/lease values and public fixed node specifications. Actual
+   UUID/PCI/model/minor/driver/boot readback reuses the installed-proof OS adapter;
+   proc readback alone does not establish compute capability or GPU accessibility.
+5. Access patterns: four fixed-key captures, named/FD equality, bounded per-FD
+   kernel record lookup and repeated liveness/epoch checks through caller scope.
+6. Ordered tuples plus held descriptor records; reuse the existing shared GPU
+   lease package as a borrowed concrete handle, without a second mutex/backend.
+7. O(4 + bounded16KiB fdinfo + the existing lease's bounded1MiB mountinfo) check,
+   not a global `/proc/locks` scan or model/prefix rehash. No payload copy or new
+   dependency is needed; the existing optional shared-lease package stays lazy.
+8. Acquire no new lock and never close/unlock the borrowed guard. Close every
+   owned O_PATH/directory FD, including partial capture/failure. Actual owner still
+   holds the lease through CUDA sync/teardown/process exit and cleanup fencing.
+9. Move the shared pure Linux proc-stat start parser out of the CPU/systemd owner
+   into a small process-identity module; CPU keeps its stable public wrapper/error.
+   The CUDA adapter imports no Orchestrator/systemd code. Contracts remain pure.
+10. Reject stale PID/start, changed handle/parent/node/rdev/flags, wrong/unheld/shared/
+    POSIX/OFD lock, mismatching group and ambiguous records. Never repair paths,
+    create lock files, chmod/chown device/input data or fall back to another FD.
+11. A filename plus process-level `/proc/locks` entry is insufficient: the same PID
+    can open another unheld description of that inode. Validate the actual borrowed
+    FD's lock record instead. Do not implement `CudaEmbeddingOwnership.assert_owned`
+    on this PATH-only capture or pass it to the model factory as a compute grant.
+
+Primary ABI evidence: Linux [`show_fd_locks` implementation](https://github.com/torvalds/linux/blob/v6.8/fs/locks.c)
+filters the file description, and [`flock(2)`](https://man7.org/linux/man-pages/man2/flock.2.html)
+defines duplicate-description lifetime. A local unprivileged temporary tmpfs fixture
+actually showed one lock record on the held FD and its duplicate, but none on a
+separate open of the same inode. This was not the production GPU lock or a device
+probe; it proves only the observed kernel distinction used by the regression.
+
+### Resource-file capture source checkpoint —2026-10-16 18:30 UTC
+
+Implemented the PATH-only capture plus shared pure process-start/fdinfo parser.
+The captured class intentionally has **no `assert_owned` method** and cannot
+substitute for `CudaEmbeddingOwnership` or installation admission. It holds only
+its six directory/O_PATH descriptors and borrows, never closes/unlocks, the caller's
+concrete shared lease. Exact PID/start, actual borrowed FD lock/flags, named/held
+parent/node inode/mode/rdev and OS UUID/PCI/driver/boot are rechecked throughout.
+Compute capability remains the expected proof value until the later actual CUDA
+probe reads hardware; PATH-only handles do not prove device DAC/cgroup R/W access.
+
+Fixed role/ordering/identity rules are shared by the receipt and OS adapter through
+one public frozen specification/validator. The process parser moved out of the
+CPU/systemd owner so this CUDA adapter imports no Orchestrator. CPU's existing
+public wrapper and stable error remain. The optional lease/model/SQL/Orchestrator
+packages are not imported merely by importing the adapter (fresh process test).
+The existing metadata2.0 JSON draft and all predecessor schema bytes are unchanged.
+
+Fresh related511 PASS in25.73seconds in explicit API development Python3.12.13;
+strict4 production modules, Ruff/format PASS. Separate image-test Python3.12.13
+ran unchanged shared-lease image adapters/release guards:93 PASS in2.28seconds.
+Earlier85 overlaps and is not added. These include real unprivileged temporary
+tmpfs FD-lock/dup/unlock behavior and fake device/process/lease lifecycle ports,
+not production GPU access, a sealed CUDA receipt or all-entrypoint migration.
+
+Initial broad collections failed on missing image source path and then Pillow in
+the deliberately lean API environment. Re-ran applicable source tests there and
+the image suites in the existing image-test environment; did not add Pillow/ML
+dependencies to API, weaken assertions or call the failed collections PASS.
+Additional regressions pin parent CLOEXEC and borrowed status flags, reject a
+same-inode unheld open, and verify every owned FD closes even after one close
+failure while the borrowed guard stays untouched.
+
+No root code/prefix, OS group/device, API/Web/worker/source policy or numerical
+space was installed/selected. Actual kernel/device R/W/cgroup probe/observer,
+lease-through-unit-exit cleanup fence and all GPU entrypoint migration are still
+required before any CUDA model/benchmark; existing CPU operation is preserved.

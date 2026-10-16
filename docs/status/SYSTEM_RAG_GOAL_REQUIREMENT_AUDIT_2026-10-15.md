@@ -9,6 +9,15 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Source checkpoint18:30 UTC: fixed CUDA resource O_PATH capture and exact borrowed
+  FD exclusive-flock/process/epoch witness now511 related tests PASS; separate
+  image-test adapter/release regression93 PASS, strict4/Ruff/format PASS. No lease
+  creation/release, device R/W, model/ownership grant or actual CUDA seal. Common
+  process parser and role rules reused without Orchestrator in the CUDA adapter;
+  CPU wrapper/schema bytes remain. Lean API/Pillow collection errors preserved,
+  corrected by explicit role-specific environments, no dependency added. Not an
+  all-entrypoint/device/cgroup/lifecycle acceptance; D2/D3/six runs/C1–C5 remain
+  open. [Exact source/real-fixture versus fake-port scope](../architecture/NATIVE_CUDA_INSTALLATION_ADMISSION_DESIGN.md#resource-file-capture-source-checkpoint-2026-10-16-1830-utc).
 - Source checkpoint18:04 UTC: protocol-first CUDA-only ROOTLOCAL receipt2.0,
   frozen device/shared-lease/process metadata and exact config/inventory/proof/
   bundle/host/base/raw/semantic reference closure now421 focused PASS, strict2/
