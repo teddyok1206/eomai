@@ -191,3 +191,33 @@ sys.stdout.buffer.write(Path(f'/proc/{os.getpid()}/fdinfo/{fd}').read_bytes())
             assert not result.stderr
         finally:
             os.close(held)
+
+
+def test_actual_retained_lock_still_reports_original_holder_after_that_process_exits():
+    """A remaining description must fence cleanup even after the process that flocked exits."""
+    if not Path("/dev/shm").is_dir():
+        pytest.skip("Linux tmpfs fixture required")
+    with tempfile.TemporaryDirectory(prefix="eom-fdinfo-exited-holder-", dir="/dev/shm") as folder:
+        held = os.open(
+            Path(folder) / "empty-lock", os.O_RDONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC, 0o600
+        )
+        try:
+            code = "import fcntl,sys; fcntl.flock(int(sys.argv[1]),fcntl.LOCK_EX|fcntl.LOCK_NB)"
+            child = subprocess.Popen(
+                [sys.executable, "-I", "-B", "-c", code, str(held)],
+                pass_fds=(held,),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            stdout, stderr = child.communicate(timeout=10)
+            assert child.returncode == 0 and not stdout and not stderr
+            value = os.fstat(held)
+            require_exclusive_flock_fdinfo(
+                Path(f"/proc/{os.getpid()}/fdinfo/{held}").read_bytes(),
+                pid=child.pid,
+                device=value.st_dev,
+                inode=value.st_ino,
+                descriptor_flags=fcntl.fcntl(held, fcntl.F_GETFL) | os.O_CLOEXEC,
+            )
+        finally:
+            os.close(held)

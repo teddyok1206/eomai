@@ -21,6 +21,7 @@ from tests.unit.test_embedding_native_cuda_probe import case as case
 from tests.unit.test_embedding_native_cuda_probe_ready import ready_case as ready_case
 from tests.unit.test_embedding_native_probe_observation import ledger as ledger
 from tests.unit.test_embedding_native_probe_observation import maps, process_stat, running
+from tests.unit.test_embedding_native_probe_observation import terminal as cpu_terminal
 
 ROOT = Path(__file__).resolve().parents[2]
 PREFIX = Path("/opt/eom/conda/envs/eom-embedding-cuda")
@@ -353,3 +354,80 @@ def test_account_and_template_are_observed_from_installed_root_inputs(monkeypatc
     else:
         assert owner.require_native_cuda_probe_unit() == (uid, gid, lease_gid)
         assert calls == ["unit", "cwd", "current"]
+
+
+@pytest.fixture
+def ended(process, monkeypatch):
+    from eom_catalog_service import embedding_cuda_probe_gpu_clients as clients
+
+    observed = observe(process, final=True)
+    state = process[4]
+    state["unit"] = replace(cpu_terminal(), fragment_path=state["unit"].fragment_path)
+    state["pids"] = ()
+    state["gpu_pids"] = ()
+    events = []
+
+    def retained(resources, *, unit):
+        assert resources == observed.resources and unit == process[-1]
+        events.append("retained")
+        return resources
+
+    def gpu(expected):
+        assert expected == process[1].device_capture
+        events.append("gpu")
+        return state["gpu_pids"]
+
+    monkeypatch.setattr(owner, "observe_cuda_probe_retained_resources", retained)
+    monkeypatch.setattr(clients, "observe_cuda_probe_gpu_clients", gpu)
+    monkeypatch.setattr(
+        owner.subprocess,
+        "run",
+        lambda *_a, **_kw: pytest.fail("terminal observation must not mutate any unit"),
+    )
+    return process, observed, state, events
+
+
+def test_terminal_requires_unit_cgroup_gpu_and_two_retained_fences_but_not_global_idle(ended):
+    process, observed, state, events = ended
+    state["gpu_pids"] = (203, 999)  # Other normal clients are not this completed probe.
+    result = owner.verify_native_cuda_probe_terminal(observed, process[1])
+    assert result.final_observation is observed and result.terminal_unit.succeeded
+    assert result.terminal_probe_gpu_client_count == 0 and result.terminated_at_utc.endswith("Z")
+    assert events == ["retained", "gpu", "retained"]
+
+
+@pytest.mark.parametrize(
+    "fault", ("running", "failed", "invocation", "cgroup", "probe_gpu", "report")
+)
+def test_unknown_or_remaining_work_cannot_be_terminal_success(ended, fault):
+    process, observed, state, _ = ended
+    report = process[1]
+    if fault == "running":
+        state["unit"] = replace(state["unit"], main_pid=123)
+    elif fault == "failed":
+        state["unit"] = replace(
+            state["unit"], status=replace(state["unit"].status, result="signal", exec_main_status=9)
+        )
+    elif fault == "invocation":
+        state["unit"] = replace(state["unit"], invocation_id="c" * 32)
+    elif fault == "cgroup":
+        state["pids"] = (123,)
+    elif fault == "probe_gpu":
+        state["gpu_pids"] = (123,)
+    else:
+        report = type(report).model_validate(
+            report.model_dump(mode="json")
+            | {"checked_model_members": report.checked_model_members + 1}
+        )
+    with pytest.raises(ValueError):
+        owner.verify_native_cuda_probe_terminal(observed, report)
+
+
+def test_known_terminal_unit_may_have_an_already_removed_empty_cgroup(ended, monkeypatch):
+    process, observed, _, _ = ended
+
+    def absent(_):
+        raise FileNotFoundError("synthetic already-removed cgroup")
+
+    monkeypatch.setattr(owner, "native_probe_cgroup_members", absent)
+    assert owner.verify_native_cuda_probe_terminal(observed, process[1]).terminal_unit.succeeded

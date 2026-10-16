@@ -204,3 +204,31 @@ def test_nonroot_and_unrelated_unit_have_no_resource_observation(kernel, monkeyp
     monkeypatch.setattr(owner.os, "getresuid", lambda: (1000, 1000, 1000))
     with pytest.raises(ValueError):
         observe(kernel)
+
+
+def test_retained_phase_needs_no_worker_fd_and_does_not_release_the_guard(kernel):
+    report, _, state, _ = kernel
+    observed = observe(kernel)
+    state["unheld_worker"] = True
+    assert (
+        owner.observe_cuda_probe_retained_resources(
+            observed, unit="eom-embedding-native-cuda-probe@" + report.execution_id + ".service"
+        )
+        == observed
+    )
+
+
+@pytest.mark.parametrize("fault", ("lost_lock", "descriptor_changed", "device_changed"))
+def test_retained_phase_rejects_lost_or_changed_physical_fence(kernel, fault):
+    report, k, state, _ = kernel
+    observed = observe(kernel)
+    if fault == "lost_lock":
+        state["unheld_pid1"] = True
+    elif fault == "descriptor_changed":
+        state["pid1"] = ["81"]
+    else:
+        k.named[20] = metadata(k.values[20].st_mode, 500, rdev=k.values[20].st_rdev)
+    with pytest.raises(ValueError):
+        owner.observe_cuda_probe_retained_resources(
+            observed, unit="eom-embedding-native-cuda-probe@" + report.execution_id + ".service"
+        )

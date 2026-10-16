@@ -17,12 +17,13 @@ from eom_catalog_contracts.embedding_native_cuda_probe import (
     NativeCudaProbeResult,
 )
 from eom_identifiers import canonical_json_bytes, sha256_bytes
-from eom_orchestrator.inference_transfer_cpu_systemd import inspect_cpu_unit
+from eom_orchestrator.inference_transfer_cpu_systemd import CpuUnitObservation, inspect_cpu_unit
 from pydantic import TypeAdapter
 
 from eom_catalog_service.embedding_cuda_probe_resource_observation import (
     CudaProbeResourceObservation,
     observe_cuda_probe_resources,
+    observe_cuda_probe_retained_resources,
 )
 from eom_catalog_service.embedding_native_probe_observation import (
     NativeExecutableMapping,
@@ -286,3 +287,69 @@ def acknowledge_native_cuda_probe_final(
         all(getattr(ready, key) == getattr(observed, key) for key in fields), "PROCESS_CHANGED"
     )
     _acknowledge_native_cuda_probe(observed, report, inventory=inventory, host=host)
+
+
+@dataclass(frozen=True, slots=True)
+class NativeCudaProbeTerminalObservation:
+    final_observation: NativeCudaProbeProcessObservation
+    terminal_unit: CpuUnitObservation
+    terminated_at_utc: str
+    terminal_probe_gpu_client_count: Literal[0] = 0
+
+
+def verify_native_cuda_probe_terminal(
+    observed: NativeCudaProbeProcessObservation,
+    report: NativeCudaProbeResult,
+) -> NativeCudaProbeTerminalObservation:
+    """Success requires actual unit/cgroup/retained-lock/GPU cleanup, never worker declarations."""
+    from datetime import UTC, datetime
+
+    from eom_catalog_service.embedding_cuda_probe_gpu_clients import observe_cuda_probe_gpu_clients
+
+    _require(os.getresuid() == (0, 0, 0), "OWNER_REQUIRED")
+    report = NativeCudaProbeResult.model_validate(report)
+    _require(
+        type(observed) is NativeCudaProbeProcessObservation and observed.phase == "FINAL",
+        "PHASE_INVALID",
+    )
+    _require(observed.report_sha256 == sha256_bytes(canonical_json_bytes(report)), "REPORT_CHANGED")
+    uid, gid, lease_gid = require_native_cuda_probe_unit()
+    _require(
+        (report.worker_uid, report.worker_gid, report.supplementary_gids)
+        == (uid, gid, (lease_gid,)),
+        "ACCOUNT_INVALID",
+    )
+    unit, cgroup = _unit(observed.execution_id)
+    before = inspect_cpu_unit(unit, template=CUDA_PROBE_TEMPLATE)
+
+    def terminal() -> None:
+        _require(
+            before.succeeded
+            and before.invocation_id == observed.invocation_id
+            and cgroup == observed.cgroup,
+            "TERMINATION_UNCERTAIN",
+        )
+        _require(
+            inspect_cpu_unit(unit, template=CUDA_PROBE_TEMPLATE) == before, "TERMINATION_UNCERTAIN"
+        )
+        try:
+            _require(native_probe_cgroup_members(cgroup) == (), "TERMINATION_UNCERTAIN")
+        except FileNotFoundError:
+            # As with CPU, systemd may remove a known empty terminal cgroup.
+            path = Path("/sys/fs/cgroup") / cgroup.removeprefix("/")
+            _require(not path.exists(), "TERMINATION_UNCERTAIN")
+
+    terminal()
+    observe_runtime_device(report.device_capture)
+    observe_cuda_probe_retained_resources(observed.resources, unit=unit)
+    _require(
+        report.pid not in observe_cuda_probe_gpu_clients(report.device_capture),
+        "GPU_CLEANUP_UNCERTAIN",
+    )
+    observe_cuda_probe_retained_resources(observed.resources, unit=unit)
+    terminal()
+    return NativeCudaProbeTerminalObservation(
+        observed,
+        before,
+        datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z"),
+    )

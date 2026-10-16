@@ -620,3 +620,73 @@ No torch/transformers/shared-GPU adapter was imported; candidate CUDA Python was
 not run. The CUDA probe unit is still absent from `/etc/systemd/system`.
 This is **OWNER_INSTALLED / NOT_ACTIVE**, not a CUDA prefix install/audit, real
 probe/ACK, sealed receipt or benchmark. Operating API/Catalog was not redeployed.
+
+## Terminal probe cleanup observation (before sealing or releasing the store)
+
+1. Extend the existing root probe owner with an independent terminal observation;
+   it neither retires units/releases locks nor accepts evidence from worker claims.
+2. Canonical sources are the same FINAL invocation, live systemd/cgroup state,
+   retained PID1 physical lock and an exact-UUID NVIDIA process query.
+3. A frozen terminal observation is a small per-execution value, not a Job, registry
+   or artifact revision. Existing receipt2.0 already has zero terminal probe clients.
+4. Retain original execution/invocation/PID-start/resource identities. Check pinned
+   GPU UUID/PCI/driver against the query and current OS; never use latest or GPU
+   index as identity. Query executable/file observations must remain unchanged.
+5. Access is fixed unit lookup, empty cgroup membership and target-PID set membership
+   in one GPU's bounded snapshot. Other normal GPU clients are not the probe.
+6. Use ordered tuples and a PID set, not process-name matching or repeated scans.
+7. Bound full XML to256KiB, depth64,16384 elements and1024 process rows; O(B+N).
+   Reject embedded entities/DTDs, unsupported/missing/duplicate critical fields.
+8. Require successful original invocation/MainPID0/empty cgroup on both sides of
+   the GPU/retained-lock checks. Keep PID1's store until a separate authorized
+   retirement; a successful observation does not itself close anything.
+9. NVIDIA's already-installed root-protected `nvidia-smi` is an OS adapter only;
+   no NVML/PyTorch/package dependency is added to API or numerical code.
+10. Nonzero/timeout, N/A, missing process section, changed GPU/host/unit/lock or a
+    remaining probe PID is explicit failure, never empty/success or auto-retry.
+11. `--query-compute-apps` alone excludes graphics. Use the full XML process list
+    so probe cleanup covers all listed context types without blocking unrelated
+    normal processes. [NVIDIA's process/query documentation](https://docs.nvidia.com/deploy/nvidia-smi/).
+
+Readonly physical inventory on2026-10-16 returned driver580.126.09, the expected
+RTX5080 UUID/PCI and vendor DTD13; its120426-byte full XML had one empty process
+container. This is format/hardware observation, not cleanup of an executed probe,
+GPU admission or model performance. No models or CUDA candidate Python were run.
+
+### Terminal observation source checkpoint —2026-10-16
+
+Implemented a fixed UUID-filtered readonly NVIDIA XML adapter and a terminal
+observation on the existing root probe owner. Full process XML is used rather
+than compute-only rows. Critical UUID/PCI/driver/process fields are unique and
+validated; DTD13 is the observed reviewed version, all embedded declarations/
+entities are rejected, and missing/N/A process data is not an empty success.
+The root-protected query tool and current device are checked before/after; no
+caller command, environment, filename, loop/reset flag or ML dependency is accepted.
+
+The terminal owner requires the same FINAL report hash/invocation, successful
+MainPID0, an actually empty (or already removed) terminal cgroup, two retained
+physical-resource fences and no original probe PID in any listed GPU process
+type. It returns a bounded frozen observation/UTC timestamp only. Other normal
+clients do not change the probe-specific zero count. Store querying was shared
+between live and retained phases; the retained phase never reads dead worker FDs
+and never stops/resets a unit, closes a store or creates success evidence itself.
+
+New real unprivileged tmpfs testing lets a child acquire the inherited description's
+lock and exit while the parent retains it; the parent still observes the exited
+child's original exclusive-flock PID. This verifies the kernel lifetime assumption
+used by retained readback, not actual PID1/GPU acceptance. The separate earlier
+PID1 normal-exit/SIGKILL mechanism evidence remains unchanged.
+
+The parser also accepted the actual120426-byte UUID-filtered NVIDIA XML with zero
+current PIDs. Its expected filter was the earlier readonly UUID/PCI/driver
+inventory, not a published installed CUDA proof. Compute capability was **not**
+measured and no actual probe-cleanup acceptance was run.
+
+Fresh related regression **991 PASS40.17s** includes the earlier948 inventory;
+overlapping focused133/30 runs are not added. Strict3 changed production modules,
+Ruff/format/diff passed. The only initial failures in this slice were formatting
+of new long test/source lines, corrected without weakening guards. This successor
+is **SOURCE_PASS / NOT_INSTALLED / NOT_ACTIVE**; protected owner b8a82765 remains
+the previous independent-observer implementation without this terminal adapter.
+Actual no-model probe, controlled retirement/seal/reader integration, reviewed
+private-prefix successor/full audit and six comparisons remain required.

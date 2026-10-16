@@ -145,6 +145,40 @@ def _observe_pid1_retained_lock(lease: RootLocalCudaSharedGpuLease) -> int:
     return matching[0]
 
 
+def _observe_retained_store_descriptor(lease: RootLocalCudaSharedGpuLease, unit: str) -> int:
+    result = subprocess.run(
+        ("/usr/bin/systemd-analyze", "--no-pager", "--json=short", "fdstore", unit),
+        capture_output=True,
+        check=False,
+        timeout=10,
+        env=_ENV,
+    )
+    _require(result.returncode == 0 and len(result.stderr) <= 16384)
+    validate_cuda_probe_fdstore(result.stdout, lease)
+    return _observe_pid1_retained_lock(lease)
+
+
+def observe_cuda_probe_retained_resources(
+    observed: CudaProbeResourceObservation, *, unit: str
+) -> CudaProbeResourceObservation:
+    """After worker exit, validate retained physical fencing without reading dead worker FDs."""
+    _require(os.getresuid() == (0, 0, 0) and type(observed) is CudaProbeResourceObservation)
+    _require(
+        re.fullmatch(r"eom-embedding-native-cuda-probe@[0-9a-f]{32}\.service", unit) is not None
+    )
+    lease = RootLocalCudaSharedGpuLease.model_validate(observed.shared_gpu_lease)
+    validate_rootlocal_cuda_resource_file_metadata(observed.device_nodes, lease)
+    _require(_epoch(_LOCK.lstat()) == lease.lock_epoch)
+    _require(_epoch(_LOCK.parent.lstat())[:5] == lease.parent_epoch)
+    _require_tmpfs_device(lease.lock_epoch[0])
+    _require(_observe_retained_store_descriptor(lease, unit) == observed.pid1_descriptor)
+    _require(_epoch(_LOCK.lstat()) == lease.lock_epoch)
+    _require(_epoch(_LOCK.parent.lstat())[:5] == lease.parent_epoch)
+    for node in observed.device_nodes:
+        _require(_epoch(Path(node.path).lstat()) == node.epoch)
+    return observed
+
+
 def observe_cuda_probe_resources(
     report: ProbeReport, *, unit: str, lease_gid: int
 ) -> CudaProbeResourceObservation:
@@ -209,16 +243,7 @@ def observe_cuda_probe_resources(
             )
         )
     validate_rootlocal_cuda_resource_file_metadata(tuple(nodes), lease)
-    result = subprocess.run(
-        ("/usr/bin/systemd-analyze", "--no-pager", "--json=short", "fdstore", unit),
-        capture_output=True,
-        check=False,
-        timeout=10,
-        env=_ENV,
-    )
-    _require(result.returncode == 0 and len(result.stderr) <= 16384)
-    validate_cuda_probe_fdstore(result.stdout, lease)
-    pid1_descriptor = _observe_pid1_retained_lock(lease)
+    pid1_descriptor = _observe_retained_store_descriptor(lease, unit)
     _require(
         _epoch(_LOCK.lstat()) == lease.lock_epoch
         and _epoch(_LOCK.parent.lstat())[:5] == lease.parent_epoch
