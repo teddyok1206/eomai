@@ -261,6 +261,42 @@ def test_terminal_failed_history_is_returned_not_replaced(reconciliation):
     assert counts(c) == before
 
 
+def test_new_key_does_not_bypass_successful_equivalence_for_same_original_intent(reconciliation):
+    """Actual SQLite Runner reuse; terminal fixtures are synthetic, not production repair."""
+    c = reconciliation
+    first = c.app.run_once()
+    with c.source.publisher.sessions.begin() as session:
+        workflow = session.get(WorkflowInstanceRecord, first.workflow_id)
+        command = session.get(WorkflowCommandRecord, first.command_id)
+        assert workflow is not None and command is not None
+        workflow.state = "COMPLETED"
+        command.state = "SUCCEEDED"
+    before = counts(c)
+    with c.source.publisher.sessions.begin() as session:
+        workflow = session.get(WorkflowInstanceRecord, first.workflow_id)
+        assert workflow is not None
+        definition = session.get(WorkflowDefinitionRecord, workflow.definition_id)
+        assert definition is not None
+        result = application.start_local_embedding_in_session(
+            session,
+            definition=definition,
+            request=application.parse_local_embedding_service_workflow_request(
+                workflow.initial_request
+            ),
+            idempotency_key="synthetic-new-key-must-not-rerun-success",
+            actor_type=workflow.created_actor_type,
+            actor_id=workflow.created_actor_id,
+            owner=c.app.owner,
+            executor=c.app.executor,
+        )
+        assert isinstance(result, application.LocalEmbeddingWorkflowSubmitted)
+        assert result.workflow.workflow_id == first.workflow_id
+        assert result.command.command_id == first.command_id
+        assert not result.workflow_created and not result.command_created
+    assert counts(c) == before
+    c.launcher.run.assert_not_called()
+
+
 @pytest.mark.parametrize("limit", [0, -1, True, 1025])
 def test_reconciliation_limit_is_typed_and_bounded(reconciliation, limit):
     with pytest.raises(ValueError, match="CONFIGURATION_INVALID"):

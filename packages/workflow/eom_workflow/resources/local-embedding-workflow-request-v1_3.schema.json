@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/local-embedding-workflow-request/1.3",
+  "title": "Service INDEX request with immutable membership-refresh intent",
+  "description": "Proposed additive contract only. Basis metadata is not current source authority or permission to execute. Old requests are not reinterpreted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "request_name", "purpose", "workflow_definition_key",
+    "workflow_definition_version", "workflow_definition_sha256", "actor_context",
+    "corpus_id", "graph_snapshot", "access_policy_revision_id", "access_policy_sha256",
+    "namespace", "space", "runtime_bundle", "source_plan", "source_plan_sha256",
+    "native_execution_policy", "native_execution_policy_sha256", "resource_profile",
+    "reconciliation_basis", "request_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "local-embedding-workflow-request/1.3"},
+    "request_name": {"$ref": "eom://schemas/workflow/local-embedding-workflow-request/1.2#/properties/request_name"},
+    "purpose": {"$ref": "eom://schemas/workflow/local-embedding-workflow-request/1.2#/properties/purpose"},
+    "workflow_definition_key": {"$ref": "eom://schemas/workflow/local-embedding-workflow-request/1.2#/properties/workflow_definition_key"},
+    "workflow_definition_version": {"$ref": "eom://schemas/workflow/local-embedding-workflow-request/1.2#/properties/workflow_definition_version"},
+    "workflow_definition_sha256": {"$ref": "eom://schemas/workflow/local-embedding-workflow-request/1.2#/properties/workflow_definition_sha256"},
+    "actor_context": {"$ref": "eom://schemas/workflow/local-embedding-workflow-request/1.2#/properties/actor_context"},
+    "corpus_id": {"$ref": "eom://schemas/workflow/local-embedding-workflow-request/1.2#/properties/corpus_id"},
+    "graph_snapshot": {"$ref": "eom://schemas/workflow/local-embedding-workflow-request/1.2#/properties/graph_snapshot"},
+    "access_policy_revision_id": {"$ref": "eom://schemas/workflow/local-embedding-workflow-request/1.2#/properties/access_policy_revision_id"},
+    "access_policy_sha256": {"$ref": "eom://schemas/workflow/local-embedding-workflow-request/1.2#/properties/access_policy_sha256"},
+    "namespace": {"$ref": "eom://schemas/workflow/local-embedding-workflow-request/1.2#/properties/namespace"},
+    "space": {"$ref": "eom://schemas/workflow/local-embedding-workflow-request/1.2#/properties/space"},
+    "runtime_bundle": {"$ref": "eom://schemas/workflow/local-embedding-workflow-request/1.2#/properties/runtime_bundle"},
+    "source_plan": {"$ref": "eom://schemas/workflow/local-embedding-workflow-request/1.2#/properties/source_plan"},
+    "source_plan_sha256": {"$ref": "eom://schemas/workflow/local-embedding-workflow-request/1.2#/properties/source_plan_sha256"},
+    "native_execution_policy": {"$ref": "eom://schemas/workflow/local-embedding-workflow-request/1.2#/properties/native_execution_policy"},
+    "native_execution_policy_sha256": {"$ref": "eom://schemas/workflow/local-embedding-workflow-request/1.2#/properties/native_execution_policy_sha256"},
+    "resource_profile": {"$ref": "eom://schemas/workflow/local-embedding-workflow-request/1.2#/properties/resource_profile"},
+    "reconciliation_basis": {"$ref": "#/$defs/basis"},
+    "request_sha256": {"$ref": "#/$defs/hash"}
+  },
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "basis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason", "previous_index_manifest", "previous_index_sha256",
+        "eligible_source_set_sha256", "eligible_source_count",
+        "available_binding_set_sha256", "available_binding_count"
+      ],
+      "properties": {
+        "reason": {"enum": ["MISSING_NAMESPACE_INDEX", "INDEX_MEMBERSHIP_CHANGED"]},
+        "previous_index_manifest": {
+          "oneOf": [
+            {"type": "null"},
+            {"allOf": [
+              {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"},
+              {"properties": {
+                "member_path": {"const": "index.json"},
+                "schema_ref": {"const": "eom://schemas/knowledge/embedding-index-manifest/1.0"},
+                "media_type": {"const": "application/json"}
+              }}
+            ]}
+          ]
+        },
+        "previous_index_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/hash"}]},
+        "eligible_source_set_sha256": {"$ref": "#/$defs/hash"},
+        "eligible_source_count": {"type": "integer", "minimum": 1, "maximum": 1024},
+        "available_binding_set_sha256": {"$ref": "#/$defs/hash"},
+        "available_binding_count": {"type": "integer", "minimum": 1, "maximum": 1024}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"reason": {"const": "MISSING_NAMESPACE_INDEX"}}},
+          "then": {"properties": {
+            "previous_index_manifest": {"type": "null"},
+            "previous_index_sha256": {"type": "null"}
+          }},
+          "else": {"properties": {
+            "previous_index_manifest": {"type": "object"},
+            "previous_index_sha256": {"type": "string"}
+          }}
+        }
+      ]
+    }
+  }
+}

@@ -217,6 +217,59 @@ def test_built_wheel_contains_workflow_schemas(platform_wheel: Path) -> None:
             assert member in record
 
 
+def test_installed_wheel_parses_refresh_intent_without_checkout(
+    installed_platform: Path, tmp_path: Path
+) -> None:
+    from eom_identifiers import canonical_json_bytes
+
+    from tests.unit.test_local_embedding_index_refresh_contracts import refresh_case
+
+    payload = tmp_path / "synthetic-index-refresh-request.json"
+    _, body, _, _ = refresh_case()
+    payload.write_bytes(canonical_json_bytes(body))
+    program = """
+import json
+import sys
+from pathlib import Path
+installed = Path(sys.argv[1]).resolve()
+sys.path.insert(0, str(installed))
+import eom_workflow.local_embedding_index_refresh as contract
+import eom_catalog_service.embedding_index_refresh_plan as planner
+from eom_workflow.local_embedding_request import parse_local_embedding_executable_request
+from eom_workflow.schemas import LocalEmbeddingAdmissionContractError
+for module in (contract, planner):
+    assert Path(module.__file__).resolve().is_relative_to(installed)
+raw = Path(sys.argv[2]).read_bytes()
+request = contract.parse_index_refresh_request(json.loads(raw))
+assert contract.index_refresh_request_bytes(request) == raw
+try:
+    parse_local_embedding_executable_request(request)
+except LocalEmbeddingAdmissionContractError:
+    pass
+else:
+    raise AssertionError("contract-only successor must not activate native dispatch")
+assert not any(Path(value).is_relative_to(sys.argv[3]) for value in sys.path if value)
+print("INSTALLED_REFRESH_CONTRACT=PASS; NATIVE_DISPATCH=STILL_DENIED")
+"""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-B",
+            "-c",
+            program,
+            str(installed_platform),
+            str(payload),
+            str(REPOSITORY_ROOT),
+        ],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "INSTALLED_REFRESH_CONTRACT=PASS" in result.stdout
+
+
 def test_installed_wheel_loads_schemas_without_source_checkout(
     installed_platform: Path, tmp_path: Path
 ) -> None:
