@@ -260,7 +260,8 @@ if [[ "${action}" == "embedding-stage-tests" ]]; then
   export EOM_API_TEST_STATE="${state_directory}"
   # Reuse the existing official stage-owner fixture and its exact disposable guards.
   export EOM_CHAT_KNOWLEDGE_TEST_STATE="${state_directory}"
-  "${PYTHON}" -m pytest -q tests/integration/test_local_embedding_stage_migration.py \
+  "${PYTHON}" -m pytest -q tests/integration/test_native_cpu_scheduling_read.py \
+    tests/integration/test_local_embedding_stage_migration.py \
     tests/integration/test_reference_query_step_migration.py \
     tests/integration/test_reference_query_native_persistence.py \
     tests/integration/test_reference_query_submission.py \

@@ -109,10 +109,29 @@ def _failure_detail(error: Exception) -> dict[str, str | int | None]:
 
 def serve_local_indexing(runtime: LocalIndexingServiceRuntime, stop: Event) -> None:
     """Round-robin exact namespaces; each drains its queue before new discovery."""
+    from eom_workflow_runner.native_cpu_scheduling_read import (
+        NativeCpuSchedulingReadUnavailable,
+        should_defer_background_cpu_claim,
+    )
+
     deadlines = [0.0] * len(runtime.namespaces)
     last: list[tuple[object, ...] | None] = [None] * len(runtime.namespaces)
     cursor = 0
+    deferred: str | None = None
     while not stop.is_set():
+        try:
+            reason = "ACTIVE_QUERY" if should_defer_background_cpu_claim(runtime.engine) else None
+        except NativeCpuSchedulingReadUnavailable:
+            reason = "OBSERVATION_UNAVAILABLE"
+        if reason is not None:
+            if reason != deferred:
+                _emit("LOCAL_INDEXING_CPU_ADMISSION_DEFERRED", state=reason)
+            deferred = reason
+            stop.wait(5.0)
+            continue
+        if deferred is not None:
+            _emit("LOCAL_INDEXING_CPU_ADMISSION_RESUMED", state="READY")
+            deferred = None
         index = cursor
         cursor = (cursor + 1) % len(runtime.namespaces)
         namespace = runtime.namespaces[index]

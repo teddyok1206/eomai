@@ -11,6 +11,7 @@ from unittest.mock import Mock
 import pytest
 from eom_workflow_runner import engine as engine_module
 from eom_workflow_runner import local_indexing_service_entry as entry
+from eom_workflow_runner import native_cpu_scheduling_read as scheduling
 from eom_workflow_runner.actor_authorization_adapters import (
     OperatorIdentityWorkflowActorAuthorizer,
     SqlAlchemyOperatorActorSource,
@@ -36,13 +37,20 @@ from eom_workflow_runner.settings import RunnerConfig, WorkflowSettings
 from sqlalchemy import create_engine
 
 
+@pytest.fixture(autouse=True)
+def synthetic_queue_read(monkeypatch):
+    read = Mock(return_value=False)
+    monkeypatch.setattr(scheduling, "should_defer_background_cpu_claim", read)
+    return read
+
+
 def scheduled_runtime(**values):
     leaf = SimpleNamespace(
         runner=values.pop("runner"),
         reconciliation=values.pop("reconciliation"),
         namespace=SimpleNamespace(view="CONTENT_ONLY"),
     )
-    return SimpleNamespace(namespaces=(leaf,), **values)
+    return SimpleNamespace(engine=Mock(), namespaces=(leaf,), **values)
 
 
 def native_runner(monkeypatch, **changes):
@@ -216,6 +224,52 @@ def test_stop_after_idle_peek_does_not_start_new_observation():
 
     runtime = scheduled_runtime(runner=SimpleNamespace(run_once=idle), reconciliation=Mock())
     entry.serve_local_indexing(runtime, stop)
+    runtime.namespaces[0].reconciliation.run_once.assert_not_called()
+
+
+@pytest.mark.parametrize("state", [True, "unavailable"])
+def test_current_query_or_unknown_queue_defers_claim_and_discovery(
+    monkeypatch, synthetic_queue_read, capsys, state
+):
+    stop = Event()
+    if state == "unavailable":
+        synthetic_queue_read.side_effect = scheduling.NativeCpuSchedulingReadUnavailable()
+    else:
+        synthetic_queue_read.return_value = True
+    waits = []
+
+    def wait(seconds):
+        waits.append(seconds)
+        stop.set()
+        return True
+
+    monkeypatch.setattr(stop, "wait", wait)
+    runtime = scheduled_runtime(runner=Mock(), reconciliation=Mock())
+    entry.serve_local_indexing(runtime, stop)
+    assert waits == [5.0]
+    runtime.namespaces[0].runner.run_once.assert_not_called()
+    runtime.namespaces[0].reconciliation.run_once.assert_not_called()
+    assert capsys.readouterr().out.count("LOCAL_INDEXING_CPU_ADMISSION_DEFERRED") == 1
+
+
+def test_query_completion_resumes_same_background_namespace_without_new_queue(
+    monkeypatch, synthetic_queue_read, capsys
+):
+    stop = Event()
+    synthetic_queue_read.side_effect = [True, True, False]
+    monkeypatch.setattr(stop, "wait", lambda _seconds: False)
+
+    def finish():
+        stop.set()
+        return SimpleNamespace(workflow_id="original", command_id="original", state="SUCCEEDED")
+
+    runtime = scheduled_runtime(runner=Mock(), reconciliation=Mock())
+    runtime.namespaces[0].runner.run_once.side_effect = finish
+    entry.serve_local_indexing(runtime, stop)
+    output = capsys.readouterr().out
+    assert output.count("LOCAL_INDEXING_CPU_ADMISSION_DEFERRED") == 1
+    assert output.count("LOCAL_INDEXING_CPU_ADMISSION_RESUMED") == 1
+    runtime.namespaces[0].runner.run_once.assert_called_once()
     runtime.namespaces[0].reconciliation.run_once.assert_not_called()
 
 
