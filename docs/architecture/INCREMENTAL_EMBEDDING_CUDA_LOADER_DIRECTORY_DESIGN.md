@@ -93,6 +93,26 @@ detecting every privileged within-clock-tick mutation.
 Evidence logs are temporarily retained under
 `/tmp/eom-identity-provider-install.nAaycoDM/cuda-empty-loader-*`.
 No production service, database, role, source policy, CPU environment, model,
-GPU lease or default device was changed by these source checks. Original HTTP
-continuation remains the same live process awaiting Studio authentication; this
-independent work does not create another human session or query identity.
+GPU lease or default device was changed by these source checks.
+
+## Actual fixed-directory prerequisite —06:45 UTC
+
+An independent fixed root operation prepared the empty directory root:root0555,
+then ran a finite probe under existing UID978/GID975 with NoNewPrivs, no retained
+capabilities, private network/devices and read-only filesystem. Exact cwd/FD/epoch,
+denied file creation, rejected wrong cwd and restored original empty inode PASS;
+no Torch/Transformers/NumPy/SQLAlchemy import, GPU/model or other service restart.
+This is deliberately not the absent CUDA identity or a CUDA-runtime/device gate.
+
+- Helper raw`c072dd4c2f9915df085a7ffab7434228d50853c52f861535058dd85f23ae3476`.
+- Selected runtime-file module raw`5d24c672e2a59365ef72f6a5f48696e014c881d0a7eaf708ca4d7134c3b4bda3`.
+- Unit`eom-cuda-empty-loader-prerequisite-8fcdd241.service`, exit0/success/no restart.
+- Root-private receipt at the existing deployment stage:
+  `cuda-empty-loader-8fcdd241.json`; public code copy is an explicit prerequisite
+  installation materialization, not a change behind an immutable CPU prefix.
+
+Separately, the old INDEX invocation stopped06:29 after OS loader-cache drift and
+the HTTP login continuation exited06:41:52 after authentication rejection. Those
+pre-date this06:45 probe; no process is now waiting for that login. The independent
+[host-cache incident](../operations/LOCAL_INDEXING_HOST_CACHE_DRIFT_2026-10-16.md)
+must be repaired before original native work or genuine HTTP acceptance resumes.

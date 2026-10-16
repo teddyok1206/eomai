@@ -278,6 +278,20 @@ PID/invocation은 보존했다. 과거 할당 없는 비종결 기록은 별도 
 않았다. 이 운영 접속 수정은 아직 같은 요청의 실제 HTTP 조회 검증 완료를 뜻하지 않는다.
 [현재 선택·실제 검증 구분](REFERENCE_QUERY_OWNER_SERVICE_DESIGN.md#actual-protected-selection).
 
+## 현재 native 준비 중단 —2026-10-16 06:29 UTC 이후
+
+INDEX source2a4843c3의 원 invocation은06:29/status1로 종료했다. OS 패키지 갱신의
+libc-bin trigger가 `/etc/ld.so.cache`를 다시 작성해 기존 host raw pin과 달라졌고,
+실제 UID990 verifier에서 해당 파일의 해시 불일치를 독립 확인했다.20개 COMPLETED와
+원래 다음1개 PENDING을 보존했으며 새 key/row 수정/재시작은 없다. API2857bf77,
+Catalog 및 QUERY1dd35b9a의 원 프로세스는 유지되지만 native 실행 준비 PASS는 현재
+성립하지 않는다. 재인증 전에 호환 설치/host configuration 검증을 먼저 복구해야 한다.
+
+CUDA loader 후속8fcdd241은 source/build3-wheel 검증과 고정0555 폴더의 비특권
+파일시스템 probe만 PASS다. 운영 CPU/CUDA prefix나 기존 서비스의 소스가 이 커밋으로
+자동 승격된 것은 아니다. [실제 현재 상태](../operations/LOCAL_INDEXING_HOST_CACHE_DRIFT_2026-10-16.md)·
+[설계된 호환 복구](EMBEDDING_HOST_CONFIGURATION_SNAPSHOT_DESIGN.md).
+
 ## 보존·정리 규칙
 
 - immutable row, manifest, receipt, release, Workflow, Item Revision 또는 rebuild/validation 경로가

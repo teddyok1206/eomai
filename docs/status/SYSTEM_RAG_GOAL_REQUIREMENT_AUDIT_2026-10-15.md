@@ -8,6 +8,21 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- New actual operating stop: INDEX source2a4843c3 exited06:29/status1, no restart.
+  READ ONLY06:53 inspection finds20 SUCCEEDED/COMPLETED and one PENDING/REQUESTED
+  attempt/generation0, no failed command/control mismatch. Actual UID990 verifier
+  identifies `/etc/ld.so.cache` raw-hash drift after06:25 dpkg/libc-bin trigger;
+  libc/loader bytes unchanged, full new host compatibility not yet accepted.
+  Existing API/Catalog/QUERY processes remain active. Do not restart/relax/re-key.
+  Original HTTP continuation1499680 separately rejected login06:41:52 and exited;
+  its stale local LOGIN file is not a live wait. No further login request until
+  native readiness is repaired. [Actual state/cause/next boundary](../operations/LOCAL_INDEXING_HOST_CACHE_DRIFT_2026-10-16.md).
+- CUDA loader source8fcdd241 is committed/pushed and standard3-wheel/RECORD/OpenAPI
+  build PASS; no shared runtime update. Source640/install779/type6 PASS, final
+  affected+documentation190 PASS (inventories overlap, not summed). Actual root0555
+  empty directory and finite UID978 read-only/wrong-cwd probe PASS06:45, without
+  any CUDA/model launch or ordinary service restart. This is not CUDA identity,
+  namespace/lease/installation or benchmark admission.
 - Current QUERY owner is now source1dd35b9a, actually selected/READY/enabled after
   the scoped credential-role correction. Actual UID990 startup/provider/control/
   launcher preflight PASS; API/Catalog/INDEX PIDs/invocations unchanged, no new query
@@ -16,8 +31,9 @@ summed into a single acceptance count. This ledger does not grant authority.
   non-secret rollback stage ends`query-controller-1dd35b9a`. Original pending row
   was independently identified as known unallocated pre-atomic history, expired
   lease/no launch/no active physical unit; it remains non-terminal and untouched.
-  Genuine original HTTP continuation is waiting for its one fresh Studio login
-  (PID1499680 at06:18 UTC), not accepted as a query/replay/current-read PASS.
+  At06:18 the genuine original HTTP continuation1499680 was waiting for login;
+  it subsequently rejected login06:41:52 and exited as recorded above, not accepted
+  as a query/replay/current-read PASS.
 - Original genuine HTTP gate at05:37:55 UTC: actual guiadmin login PASS; unchanged
   request preparation FAILED/AUTHORITY_UNAVAILABLE at05:37:59, workflow_id=null.
   No native run, replacement key or automatic login retry. The old process exited
@@ -171,7 +187,7 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 | Requirement | Existing implementation/evidence | Remaining concrete action |
 | --- | --- | --- |
-| B1. Commit-based missing-binding reconciliation, no new queue/outbox framework | Official Graph/missing-binding lookup and existing START. Full-scope first three genuine1.2 requests completed once by03:15:25; same invocation automatically admitted the next missing-vector request, no manual target list/restart. Boot enabled, Restart=no | CONTINUOUS_FIRST_COHORT_AND_FOLLOW_ON_ACTUAL_PASS, not full coverage/no-op. Latest canonical vector audit remains02:39:30; subsequent numeric bytes/counts need their own audit. Interruption retains original commands. |
+| B1. Commit-based missing-binding reconciliation, no new queue/outbox framework | Official Graph/missing-binding lookup and existing START. Full-scope first three genuine1.2 requests completed once by03:15:25 and automatically followed on;20 terminal commands preserved by06:53. Original unit stopped06:29 on independently confirmed OS loader-cache drift, one original unclaimed PENDING | FIRST_COHORT_AND_FOLLOW_ON_ACTUAL_PASS, CURRENT_RUNTIME_STOPPED. Repair/re-admit compatible host configuration through supported owners before recovery. Latest canonical vector audit remains02:39:30; terminal command counts do not establish vector coverage. |
 | B2. Three independent views with exact queue selection | Closed configurationV2, shared engine/publisher/authority/launcher and round-robin333 source/126 actual PG checks; genuine revision12 numerical execution and revision13 metadata-only terminal receipts/current heads audited. Same full-scope continuous invocation had five numeric commands terminal and one running at03:45:50 UTC | CONTINUOUS_START_AND_FOLLOW_ON_ACTUAL_PASS; last canonical byte/count audit remains occurrence11/5/5 of520 and ALL11/5/5 of545 at02:39:30. Full coverage and terminal/no-op inspection are not complete. |
 | B3. Original past exams AND approved generated Item lifecycle | Existing source policy permits both classes; d484/service12 admitted-Item grant/three namespaces completed a genuine bounded trial, current coverage11/5/5 of545, prior9 numeric/binding identities preserved | BOUNDED_ACTUAL_PASS. Later accepted-report arrival, source withdrawal/current refresh and continuous policy still need full lifecycle acceptance. |
 | B4. Accepted V10 report wait, unavailable concrete evidence, separate denominators | Typed reconciliation/source tests; actual new-grant CONTENT_ONLY discovery545 eligible/25 missing reports/7 existing bindings/513 missing, targets4 at10/16 00:26:41. Original occurrence-backed520 remains separate | Explicit wait observed. Inspect exact waiting source-class pointers and later accepted-report reconciliation; confirm user projection separates learning from vector readiness. Do not infer the25 source classes from counts alone. |
@@ -184,7 +200,7 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 | Consumer requirement | Current actual state | Next required end state |
 | --- | --- | --- |
-| C1. One common candidate/evidence boundary | Common context and prior bounded QUERY/replay/read accepted at partial2/520. Actual05:37 login PASS, original preparation FAILED before Workflow due confirmed wrong controller credential. QUERY-only1dd35b9a correction is now actually READY with UID990 preflight; other services unchanged | Finish the same original HTTP preparation/replay/current-read. Fresh one-login continuation waits in original pane and retains its session if observation stops; original failure/key/history preserved. READY startup is not a source/HTTP PASS. |
+| C1. One common candidate/evidence boundary | Common context and prior bounded QUERY/replay/read accepted at partial2/520. Original05:37 credential-role failure corrected by actual QUERY1dd35b9a selection; original continuation separately rejected login06:41:52 and exited. Native CPU verifier now blocked by OS cache drift | Repair/re-admit native host configuration first, then resume the same original HTTP key with one actual login and complete preparation/replay/current-read. No process is currently waiting; no token is saved. READY startup is not a source/HTTP PASS. |
 | C2. 1:1 reference variation | Source/API/BFF/browser/disposable plan23 tests and inactive compatible83bad release; Pack1.20.17 released inactive | Activate reviewed compatible components in dependency order after held HTTP terminal; run one bounded genuine Item and inspect actual author/review context and maximum-three-pass behavior. Only then enable Web flag. |
 | C3. New authoring and review | Web/HTTP ordinary start→official-Evidence selector→preparation1.1/ITEM_AUTHORING→first plan24→existing role delivery implemented. Explicit exact-hash no-offer/audit preserves normal plan19 for legitimate absence/unrequested class, never denial/PENDING. Candidate f37ae7be: source1856/final focused112/PG162/type8/build/API+Web wheels PASS, no count sum | SOURCE/DISPOSABLE/PACKAGE_PASS, NOT_INSTALLED/ACTIVE. Plan23/QUERY1.0 stay strict; every review shares the original reference, not private-draft vector comparison. Genuine current-user/source/worker acceptance and compatible activation remain required; private intent/result vector bases are NOT_IMPLEMENTED. |
 | C4. General→ChatGPT read-only discovery | Existing textbook/past-exam GraphRAG tools remain available; this goal's vector candidate tool/use-case is not implemented/activated | Connect the same official context with actual chat operator permissions, citations, explicit partial/unavailable and no Item write/approval/delete authority. |
