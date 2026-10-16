@@ -145,3 +145,87 @@ root reservation was verified and moved, not deleted or chmod-published, to
 `/opt/eom/embedding-runtime-archives/.incomplete-19fb4269-x6wGos7H`; the retained
 wheel/source were then prepared through the existing helper from a private input
 directory. Original runtime and production data were unchanged by preparation.
+
+### Actual stop/publication outcome —09:35 UTC
+
+At09:29:36 the requested stop of original QUERY invocation
+`de6e8fabd34c44a982bae93b569735a0` reached MainPID0/empty cgroup but recorded
+exit1: the root supervisor's`os.kill(child, signum)` at entry line319 raised
+PermissionError/EPERM after the child had dropped to UID990. The selected root
+unit bounds SETUID/SETGID/DAC_READ_SEARCH but omits KILL. Do not suppress this
+exception or reset the failed unit to manufacture a graceful success. The first
+operator helper's NOT_CHANGED label was set before its post-stop state assertion;
+it correctly preceded any prefix move but did **not** mean the QUERY stop had not
+occurred. Its original log is preserved; this is the explicit audit clarification.
+
+Revalidated absence of native Jobs/processes/physical units and the untouched
+original pending request allowed the publication window to continue. At09:33:19
+the original CPU directory was preserved at the exact planned sibling. The existing
+publisher then used the actual snapshot namespace and stopped at
+`BEFORE_OLD_PREFIX_BYTES_AUDIT / INSTALLED_RUNTIME_PREFIX_SOURCE_PROJECT_INVALID`.
+Its original unit`eom-cpu-runtime-publish-3346ae08` terminated09:35:00/exit1,
+invocation`7c3fb6870c9b463b8126e91155210063`. No NEW interpreter/helper, model,
+DB mutation or owner activation occurred. The staged3346ae08 directory and failed
+private input/inventory remain preserved, not accepted or automatically retried.
+
+The cause is reproducible in the source-project reader: only JSON package-data
+patterns are accepted, while the actual wheel newly includes the two owner
+`resources/*.service.in` templates. The matching next source fix declares those
+two exact literal files in pyproject and permits only those namespace/filename
+pairs in the existing source-byte closure; no arbitrary extension/glob, omitted
+wheel member or hash bypass. Add whole-prefix source/wheel/installed-member tests
+for both files, missing/changed/extra files and wrong namespaces before rebuilding.
+The original1.0/1.1 schema bytes remain unchanged; each bootstrap source member is
+still independently hash-pinned by the installation input.
+
+Separately, the root QUERY supervisor needs KILL only to signal its own unreaped
+fork child. Add that bounded parent capability, never an ambient child capability;
+retain the child's all-zero permitted/effective/ambient checks and no saved root
+identity. Source tests and finite real-UID negative/positive signal probes precede
+new owner selection. This is a lifecycle correction, not a user/worker permission
+grant or a reason to alter original Job/Workflow history. API/Catalog remain on
+their original active processes. Native recovery and the full goal remain open.
+
+### Corrective source and finite kernel evidence
+
+Whole-prefix regression first reproduced the actual SOURCE_PROJECT_INVALID rejection.
+The fixed package-data declaration lists exactly the two owner templates; the
+reader's existing literal-source/wheel/installed-byte checks now include those
+namespace/filename pairs only. General service globs remain rejected. Focused
+whole-prefix156 PASS covers both resources and missing/changed/extra/wrong-role
+negatives. The first green run's duplicate TOML-key test fixture was corrected
+without changing the production rule, then156/156 passed. Expanded source/install/
+host/closure/owner suite938 PASS, native receipt/admission suite300 PASS and
+dependency/QUERY/history/documentation suite46 PASS; counts overlap and are not
+added. Strict2 core files and formatter/linter PASS. No schema, DB migration,
+queue, dependency, model payload, numerical implementation or original request
+changes are part of these two corrections.
+
+Actual finite systemd probes with the same root bounds/ambient SETUID and actual
+UID990/GID1000 child independently reproduce the signal-permission boundary:
+
+- without bounded KILL: SIGTERM returns PermissionError as expected; child self-
+  terminates via its bounded timer, parent reaps it, terminal exit0;
+- with bounded KILL: the parent delivers SIGTERM to its owned fork child, which
+  exits0 and is reaped normally;
+- in both cases the existing installed `_require_dropped_identity` checks actual
+  saved IDs, empty supplementary groups, NoNewPrivs and all-zero permitted,
+  effective and ambient capabilities **inside the child** before its ready signal.
+
+Both10-second-bounded probes PASS, no current session/query/source capture, DB,
+model, GPU or worker permission change. Protected probe helper raw
+`addb2c19aafd09c7ac3a32d687d75748852b687d388168a968e7389677408738`.
+Evidence: `query-signal-old-proof.log`, `query-signal-successor-proof.log`,
+`unit-resource-regression-red.log`, `unit-resource-regression-final.log`,
+`native-recovery-successor-regression.log`,
+`native-recovery-successor-admission-regression.log`,
+`native-recovery-successor-boundaries.log` and `successor-final-strict.log`
+under the same temporary recovery directory.
+
+Failed publisher private directory`/opt/eom/.embedding-index-install-4NZqt8Wd`
+has a zero-byte inventory candidate and ends at BEFORE_OLD_PREFIX_BYTES_AUDIT;
+it never reached PREFIX_BYTES_AUDITED_NOT_ADMITTED/NEW. Preserve it and both CPU
+directory materializations. Build an explicit successor from the reviewed source,
+verify its **actual** archive→wheel payload including both literal templates before
+another supported publication, then perform fresh native configuration/probe/seal.
+Neither these source tests nor the finite signal probes are native recovery PASS.

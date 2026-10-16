@@ -105,7 +105,8 @@ def test_service_template_isolated_supervisor_without_provider_file_shadowing():
     assert "EnvironmentFile=/etc/eom/secrets/catalog-manager.env" not in template
     assert "InaccessiblePaths=/etc/eom/secrets/reference-query-owner.env\n" in template
     assert "AmbientCapabilities=CAP_SETUID\n" in template
-    assert "CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_DAC_READ_SEARCH\n" in template
+    assert "AmbientCapabilities=CAP_KILL" not in template
+    assert "CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_DAC_READ_SEARCH CAP_KILL\n" in template
     assert "CAP_DAC_OVERRIDE" not in template and "CAP_SYS_ADMIN" not in template
     assert "-I -B /opt/eom/embedding-owner-releases/@SOURCE_COMMIT@/" in template
     assert "EOM_REFERENCE_QUERY_CONFIGURATION_SHA256=@CONFIGURATION_SHA256@" in template
@@ -115,6 +116,33 @@ def test_service_template_isolated_supervisor_without_provider_file_shadowing():
     assert "ReadOnlyPaths=/srv/eom/conda/envs/eom-api" not in template
     tmpfiles = (root / "infra/tmpfiles/eom-reference-query-owner.conf").read_text()
     assert "d /run/eom-reference-query-owner 2750 eom-workflow-runner eom-api - -" in tmpfiles
+
+
+def test_parent_forwards_signals_only_to_its_owned_unreaped_child():
+    tree = ast.parse(inspect.getsource(module.main))
+    kills = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and ast.unparse(node.func) == "os.kill"
+    ]
+    assert len(kills) == 1
+    assert [ast.unparse(argument) for argument in kills[0].args] == ["child", "signum"]
+    source = inspect.getsource(module.main)
+    assert source.index("child = os.fork()") < source.index("os.kill(child, signum)")
+    assert source.index("os.kill(child, signum)") < source.index("os.waitpid(child, 0)")
+    assert "suppress(PermissionError)" not in source
+
+
+def test_signal_capability_is_not_added_to_native_units_or_index_owner():
+    root = Path(__file__).resolve().parents[2]
+    native = tuple((root / "infra/systemd").glob("eom-embedding-native-*.service"))
+    assert len(native) == 5
+    index = (
+        root
+        / "services/workflow_runner/eom_workflow_runner/resources"
+        / "eom-embedding-index-owner.service.in"
+    )
+    assert all("CAP_KILL" not in path.read_text() for path in (*native, index))
 
 
 @pytest.mark.parametrize(
@@ -127,6 +155,9 @@ def test_service_template_isolated_supervisor_without_provider_file_shadowing():
         "permitted",
         "effective",
         "ambient",
+        "kill_permitted",
+        "kill_effective",
+        "kill_ambient",
         "nnp",
         "missing",
         "duplicate",
@@ -150,6 +181,8 @@ def test_child_has_no_saved_root_ids_or_retained_capabilities(monkeypatch, fault
     for field, changed in (("CapPrm", "permitted"), ("CapEff", "effective"), ("CapAmb", "ambient")):
         if fault == changed:
             fields[field] = "0000000000000080"
+        if fault == "kill_" + changed:
+            fields[field] = "0000000000000020"
     if fault == "nnp":
         fields["NoNewPrivs"] = "0"
     if fault == "missing":

@@ -89,6 +89,15 @@ _BOOTSTRAP = frozenset(
     }
 )
 _SNAPSHOT_BOOTSTRAP = _BOOTSTRAP | {"embedding_host_configuration_capture.py"}
+# These two inert owner templates are the only non-JSON packaged resources in
+# the platform. Exact literal roles preserve full source/wheel coverage without
+# admitting executable suffixes, general globs or arbitrary service templates.
+_OWNER_UNIT_RESOURCES = frozenset(
+    {
+        "resources/eom-embedding-index-owner.service.in",
+        "resources/eom-reference-query-owner.service.in",
+    }
+)
 _MAX_MEMBERS = 100000
 _MAX_BYTES = 16 * 1024**3
 
@@ -686,6 +695,7 @@ def _source_payload(source: _Source, package: str) -> dict[str, tuple[str, int]]
                 and (
                     re.fullmatch(r"[A-Za-z0-9_/-]+/\*\.json", value)
                     or re.fullmatch(r"[A-Za-z0-9_/-]+/[A-Za-z0-9_.-]+\.json", value)
+                    or (namespace == "eom_workflow_runner" and value in _OWNER_UNIT_RESOURCES)
                 )
                 and not value.startswith("/")
                 and all(part not in {"", ".", ".."} for part in value.split("/"))

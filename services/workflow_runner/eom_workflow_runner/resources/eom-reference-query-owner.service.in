@@ -32,7 +32,9 @@ ProtectHostname=yes
 RestrictSUIDSGID=yes
 LockPersonality=yes
 RestrictRealtime=yes
-CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_DAC_READ_SEARCH
+# Root supervises one forked, lower-UID child and must forward stop signals.
+# The child drops all permitted/effective/ambient capabilities before serving.
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_DAC_READ_SEARCH CAP_KILL
 # Preserve the already bounded UID switch across explicit User=root execution.
 # The child clears all root IDs; startup verifies zero permitted/effective/ambient caps.
 AmbientCapabilities=CAP_SETUID

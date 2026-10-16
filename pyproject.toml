@@ -73,7 +73,10 @@ where = [
 
 [tool.setuptools.package-data]
 eom_protocol = ["schemas/*.json"]
-eom_workflow_runner = ["resources/*.service.in"]
+eom_workflow_runner = [
+  "resources/eom-embedding-index-owner.service.in",
+  "resources/eom-reference-query-owner.service.in",
+]
 eom_hwpx_contracts = ["schemas/*.json"]
 eom_workflow = [
   "resources/*.json",

@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tarfile
 import time
+import tomllib
 from contextlib import ExitStack
 from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
@@ -80,6 +81,7 @@ def _fixture(
     *,
     profile: Literal["CPU_INDEX_FP32", "CUDA_INDEX_FP32"] = "CPU_INDEX_FP32",
     literal_resource: bool = False,
+    owner_service_resources: bool = False,
 ) -> tuple[prefix.PrefixRuntimeAuditPlan, Any, host.ProtectedEmbeddingHostClosure, Path, Path]:
     actual_popen = subprocess.Popen
     staged = conda_fixture(tmp_path, monkeypatch, profile)
@@ -121,6 +123,19 @@ def _fixture(
         source[
             "packages/operator_identity/eom_operator_identity/resources/operator-owner-session-capture-v1.schema.json"
         ] = b'{"synthetic_schema":true}\n'
+    if owner_service_resources:
+        source["pyproject.toml"] += (
+            b'eom_workflow_runner=["resources/eom-embedding-index-owner.service.in",'
+            b'"resources/eom-reference-query-owner.service.in"]\n'
+        )
+        source["services/workflow_runner/eom_workflow_runner/__init__.py"] = b"# synthetic\n"
+        for name in (
+            "eom-embedding-index-owner.service.in",
+            "eom-reference-query-owner.service.in",
+        ):
+            source["services/workflow_runner/eom_workflow_runner/resources/" + name] = (
+                b"[Unit]\n# source data, never executed\n"
+            )
     for parent, name in prefix._LOCKS:
         source[parent + "/" + name] = b"# pinned synthetic lock\n"
         _put(lock_directory / name, source[parent + "/" + name])
@@ -144,6 +159,14 @@ def _fixture(
                     path.removeprefix("packages/operator_identity/"): raw
                     for path, raw in source.items()
                     if path.startswith("packages/operator_identity/")
+                }
+            )
+        if owner_service_resources:
+            payload.update(
+                {
+                    path.removeprefix("services/workflow_runner/"): raw
+                    for path, raw in source.items()
+                    if path.startswith("services/workflow_runner/")
                 }
             )
         if name == "eom-gpu-lease":
@@ -631,6 +654,76 @@ def test_literal_json_resource_is_source_exact_and_part_of_whole_prefix_closure(
             with pytest.raises(InstalledRuntimeProofError):
                 _audit(plan, staged, owned, helper, locks)
     assert not (tmp_path / "NEW_EXECUTED").exists()
+
+
+@pytest.mark.parametrize("fault", (None, "missing", "changed", "extra"))
+def test_exact_owner_unit_resources_are_part_of_whole_prefix_source_and_wheel_closure(
+    tmp_path,
+    monkeypatch,
+    fault,
+):
+    plan, staged, owned, helper, locks = _fixture(
+        tmp_path, monkeypatch, owner_service_resources=True
+    )
+    root = staged.prefix / "lib/python3.12/site-packages/eom_workflow_runner/resources"
+    selected = root / "eom-reference-query-owner.service.in"
+    if fault == "missing":
+        selected.unlink()
+    elif fault == "changed":
+        selected.write_bytes(b"[Service]\nExecStart=/untrusted\n")
+    elif fault == "extra":
+        _put(root / "unselected.service.in", b"[Unit]\n")
+    with owned:
+        if fault is None:
+            assert _audit(plan, staged, owned, helper, locks).regular_members > 0
+        else:
+            with pytest.raises(InstalledRuntimeProofError):
+                _audit(plan, staged, owned, helper, locks)
+    assert not (tmp_path / "NEW_EXECUTED").exists()
+
+
+def test_actual_project_declares_the_exact_two_owner_unit_resources():
+    project = tomllib.loads((Path(__file__).resolve().parents[2] / "pyproject.toml").read_text())
+    values = project["tool"]["setuptools"]["package-data"]["eom_workflow_runner"]
+    assert values == [
+        "resources/eom-embedding-index-owner.service.in",
+        "resources/eom-reference-query-owner.service.in",
+    ]
+
+
+@pytest.mark.parametrize(
+    "namespace,selector",
+    (
+        ("eom_workflow_runner", "resources/*.service.in"),
+        ("eom_workflow_runner", "resources/other.service.in"),
+        ("eom_workflow_runner", "resources/eom-reference-query-owner.service"),
+        ("eom_catalog_service", "resources/eom-reference-query-owner.service.in"),
+        ("eom_other", "resources/eom-reference-query-owner.service.in"),
+    ),
+)
+def test_owner_unit_role_does_not_allow_other_namespaces_extensions_or_globs(namespace, selector):
+    declaration = (namespace + "=" + json.dumps([selector]) + "\n").encode()
+    project = (
+        _project().replace(b"eom_catalog_service=['resources/*.json']\n", declaration)
+        if namespace == "eom_catalog_service"
+        else _project() + declaration
+    )
+    source = prefix._Source({}, {"pyproject.toml": project})
+    with pytest.raises(InstalledRuntimeProofError, match="SOURCE_PROJECT_INVALID"):
+        prefix._source_payload(source, "eom-platform")
+
+
+def test_declared_owner_template_cannot_be_missing_from_the_source_archive():
+    project = _project() + (
+        b'eom_workflow_runner=["resources/eom-embedding-index-owner.service.in",'
+        b'"resources/eom-reference-query-owner.service.in"]\n'
+    )
+    source = prefix._Source(
+        {"services/catalog_service/eom_catalog_service/__init__.py": (_hash(b""), 0)},
+        {"pyproject.toml": project},
+    )
+    with pytest.raises(InstalledRuntimeProofError, match="SOURCE_LITERAL_RESOURCE_MISSING"):
+        prefix._source_payload(source, "eom-platform")
 
 
 @pytest.mark.parametrize(
