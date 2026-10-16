@@ -17,6 +17,11 @@ summed into a single acceptance count. This ledger does not grant authority.
   fixed-unit pre-exec selection must still be implemented/verified before native
   recovery. The source/fake-port tests are not a fresh live admission.
   [Exact implementation and remaining boundary](../architecture/EMBEDDING_HOST_CONFIGURATION_SNAPSHOT_DESIGN.md#implementation-and-evidence).
+- Candidate8a62dcbb standard3-wheel/RECORD/OpenAPI and source-free63-module wheel
+  simulation PASS. Actual old configuration, exact root snapshot and bundle/proof
+  metadata close with an in-memory1.1 candidate. No new configuration was persisted
+  or selected; no ML/SQL import, DB mutation or model run. This is not bootstrap/
+  native execution admission and does not reopen the original login gate yet.
 - Host-configuration recovery source slice: closed snapshot/pointer schema and frozen
   values, exact fixed-path/owner/raw/semantic/seed closure, actual own-FD/read-only
   mount witness, shared fixed-host capture. Final focused298/expanded955/install279/

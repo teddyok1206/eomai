@@ -233,3 +233,19 @@ the changed global cache; this source integration does not weaken or bypass that
 bootstrap. Review a compatible snapshot-aware bootstrap input/capture and pre-exec
 selection through existing owners, preserving original prefixes/receipts/commands.
 Then perform fresh actual admission before recovering the original pending work.
+
+### Candidate package boundary
+
+Source`8a62dcbbdc5d6df9fd534b11f767e55c4ee2e13f` standard3-wheel/RECORD/OpenAPI
+inspection PASS. Platform raw`23d162331b8bf0366e56cb0287d8547eaccff22210ae888eeae77025c997161f`;
+API-contracts raw`9a7619a823435511670e1392c6ab59b366e4954cd2680dd7e3b527a3f91e3a66`.
+An isolated `-I -B` wheel-only simulation loaded63 EOM modules from its temporary
+installed package directory, not Git/source or old installed EOM leaves. It parsed
+and exactly reserialized the actual protected1.0 configuration, resolved the exact
+actual root444 host snapshot through the supported reader, and checked a1.1
+in-memory configuration against actual existing bundle/proof metadata. The candidate
+was not persisted or selected as a native configuration. No ML/SQL/psycopg import,
+model run, database mutation or service selection occurred. This is an installation-
+metadata/package proof, not prefix bootstrap/whole native admission or numerical
+execution acceptance. Temporary bounded evidence is
+`/tmp/eom-host-config-v11-wheel-h87LnS6o/proof.log`.
