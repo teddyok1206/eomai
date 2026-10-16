@@ -1,6 +1,7 @@
 # Cooperative CPU admission for interactive reference queries
 
-2026-10-16 UTC. Design before queue-read behavior. **NOT_ACTIVE**.
+2026-10-16 UTC. Design before queue-read behavior; operating updates below.
+**INDEX15_ACTIVE / LIVE_DEFERRAL_AND_RESUME_OBSERVED / C1_UNFINISHED**.
 This closes the original incremental RAG plan's interactive/background scheduling
 boundary; it does not replace the five consumers or the CPU/CUDA gates.
 
@@ -219,3 +220,61 @@ observer awaits fresh Studio authentication in EOM1; old successful login and
 later freshness rejection remain distinct evidence. Routine INDEX observation
 next no earlier than14:47:30 UTC; a bounded real-request/deployment check is a
 separate opt-in boundary, not permission for frequent corpus polling.
+
+### Actual human query and read-only shared-lock defect —14:33 UTC
+
+The original observer successfully authenticated at14:25:39.850058 UTC with the
+same request/key/Workflow and memory-only credentials. In the exact INDEX15
+invocation, the completed current command was followed by ACTIVE_QUERY deferral
+at14:28:54.166173 and READY resumption at14:29:49.191563. These are real admission
+transitions, not authenticated QUERY completion or a global priority guarantee.
+
+The original native units remain unused and its dispatch marker absent. A bounded
+UID990, empty-groups, NoNewPrivs diagnostic in the operating QUERY mount namespace
+verified the selected numerical/runtime preflight and fresh original units. Without
+acquiring any lock or writing bytes, opening the existing zero-byte shared capacity
+file READ_ONLY succeeded, while READ_WRITE returned errno30/EROFS. The QUERY unit
+intentionally makes INDEX storage read-only. Its shared mutex adapter nevertheless
+opens that existing inode O_RDWR, so uncertainty recovery cannot advance it. This
+is a current adapter/mount incompatibility, not invalid credentials or proof of a
+physical inference failure. No direct DB update, new key or dispatch occurred.
+
+**Small correction design before behavior:** the existing CPU-capacity adapter
+remains the single owner of the same flock/inode. Open an existing lock O_RDONLY;
+Linux flock exclusion does not require a writable descriptor. Preserve its full
+identity/mode/size/link/inode checks before/after locking, nonblocking BUSY meaning
+and finally-close. Only a genuinely missing inode uses the existing protected
+creation boundary; a read-only owner cannot initialize absent storage and must
+still fail closed. INDEX remains able to initialize a new empty lock. Do not grant
+QUERY write access to INDEX data, modify units/DB/protocols, replace the inode or
+introduce another lock. Key lookup, constant space and original transaction,
+dispatch and idempotency boundaries are unchanged. Test existing-file opens under
+a simulated EROFS write/create denial with real local flock contention/release,
+cold creation and existing pointer/layout negative tests. Installed acceptance
+still requires a compatible owner successor; source tests do not repair live work.
+
+Temporary diagnostic evidence: `original-query-capacity-open-no-write.log`,
+`original-query-mount-preflight-readonly-uid990.log` and the original HTTP observer
+log in the existing operator directory. No password, token or private source text
+is included. The normal-host verifier failure in a separate diagnostic is not
+the operating QUERY mount's verifier result; its protected-cache preflight passed.
+
+The initial new regression fails against the unmodified adapter with EROFS as
+expected; the correction passes it using actual local Linux flock contention and
+release. Related source regressions84 PASS/70.17seconds and strict type checking
+of the shared adapter PASS. A second missing-inode fixture initially expected
+ValueError instead of the existing CpuHandoffError(RuntimeError); only that
+expectation was corrected, retaining the protected directory's fail-closed error.
+No production error translation was weakened to satisfy the fixture.
+
+**Rollout boundary:** stage a normal immutable owner wheel pair; only the QUERY
+owner source selection/configuration hash and corresponding unit entry change.
+Keep its runtime-verifier pin, numerical prefix/space, native units/environment,
+policy, provider/session pins, original allocation and INDEX15 unchanged. Drain
+the exact old QUERY supervisor with its normal main SIGTERM handler and wait for
+natural status0/cgroup-empty termination, not a forced restart. Save both original
+files and install their checked successors only after drain. Verify actual READY
+and same original request handling before claiming C1. The existing observer's
+600-second window ended PENDING at14:35:40; its process has since exited and its
+state is STOPPED, not an active login prompt or retained authenticated session.
+Do not ask for another login before the corrected installed boundary is ready.

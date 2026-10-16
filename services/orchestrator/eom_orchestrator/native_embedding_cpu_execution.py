@@ -117,12 +117,15 @@ def native_cpu_capacity() -> Iterator[None]:
     with protected_cpu_handoff_directory(
         CAPACITY_ROOT, owner=owner, uid=owner.owner_uid, gid=owner.owner_gid, mode=0o700
     ) as directory:
-        descriptor = os.open(
-            ".cpu-capacity.lock",
-            os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC,
-            0o600,
-            dir_fd=directory,
-        )
+        flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
+        try:
+            # QUERY intentionally cannot write INDEX storage. flock needs only
+            # the existing inode, not a writable descriptor or writable mount.
+            descriptor = os.open(".cpu-capacity.lock", flags, dir_fd=directory)
+        except FileNotFoundError:
+            # Preserve cold initialization for the write-capable INDEX owner;
+            # absent storage on a read-only mount still fails closed.
+            descriptor = os.open(".cpu-capacity.lock", flags | os.O_CREAT, 0o600, dir_fd=directory)
         try:
             value = os.fstat(descriptor)
             named = os.stat(".cpu-capacity.lock", dir_fd=directory, follow_symlinks=False)

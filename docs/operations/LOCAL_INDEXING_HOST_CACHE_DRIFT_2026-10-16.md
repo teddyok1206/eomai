@@ -7,13 +7,18 @@ all three first four-row batches have canonical terminal/numeric acceptance11:36
 Later selection: identity14 drained normally13:43:51 UTC; the compatible identity15/
 resource30/c6983332 controls were selected after that drain. The bounded pause
 ended with actual restart14:15:21 and normal first discovery14:16:17 UTC.
-Live deferral and authenticated C1 remain unverified. See the [priority selection record](../architecture/NATIVE_CPU_INTERACTIVE_ADMISSION_DESIGN.md#operating-selection-evidence).
+Live deferral14:28:54 and resume14:29:49 were observed in the exact INDEX15 invocation.
+Authenticated C1 remains unfinished: the QUERY read-only mount rejects the shared
+mutex adapter's O_RDWR open with EROFS. The existing-inode read-only flock correction
+is source-tested, not yet installed. See the [priority selection record](../architecture/NATIVE_CPU_INTERACTIVE_ADMISSION_DESIGN.md#operating-selection-evidence).
 Earlier stopped/pending observations below are historical, not the current selection.
 Full coverage, common consumer acceptance and actual CPU/CUDA comparison remain open.
 The11:09 login-input rejection is historical. Actual login succeeded12:38; the
 original query waited for CPU and later fresh-auth403 was preserved, not bypassed.
-After the background drain, EOM1 has one fresh-auth input for the same original
-request/Workflow. No C1 authenticated completion is claimed yet.
+The new original-request login succeeded14:25:39; its600-second observation ended
+PENDING14:35:40 and that observer is now STOPPED, not waiting for login. Do not
+re-prompt before the corrected installed QUERY boundary is ready. No C1 authenticated
+completion is claimed yet.
 
 ## Observed state and preserved work
 

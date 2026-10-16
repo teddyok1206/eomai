@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import os
 import subprocess
 from pathlib import Path
@@ -10,7 +11,7 @@ from typing import Any
 
 import pytest
 from eom_orchestrator import native_embedding_cpu_execution as cpu
-from eom_orchestrator.inference_transfer_cpu_handoff import CpuHandoffIdentity
+from eom_orchestrator.inference_transfer_cpu_handoff import CpuHandoffError, CpuHandoffIdentity
 
 from tests.unit.test_native_embedding_query_handoff import prepared
 
@@ -112,6 +113,68 @@ def test_shared_flock_retains_existing_index_lock_path_and_denies_second_owner(
     assert (root / ".cpu-capacity.lock").stat().st_size == 0
     with cpu.native_cpu_capacity():
         pass
+
+
+def test_existing_shared_lock_needs_no_write_or_create_on_readonly_query_mount(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "owner"
+    root.mkdir(mode=0o700)
+    lock = root / ".cpu-capacity.lock"
+    lock.touch(mode=0o600)
+    before = lock.stat()
+    monkeypatch.setattr(cpu, "CAPACITY_ROOT", root)
+    monkeypatch.setattr(
+        cpu, "fixed_owner_identity", lambda: CpuHandoffIdentity(os.geteuid(), os.getegid())
+    )
+    actual_open = os.open
+    lock_flags: list[int] = []
+
+    def readonly_open(path: Any, flags: int, *args: Any, **kwargs: Any) -> int:
+        if path == ".cpu-capacity.lock":
+            lock_flags.append(flags)
+            if flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC):
+                raise OSError(errno.EROFS, "read-only query mount")
+        return actual_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(cpu.os, "open", readonly_open)
+    with (
+        cpu.native_cpu_capacity(),
+        pytest.raises(cpu.NativeCpuExecutionError, match="BUSY"),
+        cpu.native_cpu_capacity(),
+    ):
+        pytest.fail("a read-only descriptor must still exclude another owner")
+    with cpu.native_cpu_capacity():
+        pass
+    after = lock.stat()
+    assert len(lock_flags) == 3
+    assert (before.st_dev, before.st_ino, before.st_size) == (
+        after.st_dev,
+        after.st_ino,
+        after.st_size,
+    )
+
+
+def test_readonly_query_mount_cannot_initialize_missing_capacity_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "owner"
+    root.mkdir(mode=0o700)
+    monkeypatch.setattr(cpu, "CAPACITY_ROOT", root)
+    monkeypatch.setattr(
+        cpu, "fixed_owner_identity", lambda: CpuHandoffIdentity(os.geteuid(), os.getegid())
+    )
+    actual_open = os.open
+
+    def readonly_open(path: Any, flags: int, *args: Any, **kwargs: Any) -> int:
+        if path == ".cpu-capacity.lock" and flags & os.O_CREAT:
+            raise OSError(errno.EROFS, "read-only query mount")
+        return actual_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(cpu.os, "open", readonly_open)
+    with pytest.raises(CpuHandoffError, match="DIRECTORY_INVALID"), cpu.native_cpu_capacity():
+        pytest.fail("missing storage cannot grant capacity")
+    assert not (root / ".cpu-capacity.lock").exists()
 
 
 def test_resource_guard_revalidates_raw_values_without_silently_dropping_fields() -> None:
