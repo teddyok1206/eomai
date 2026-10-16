@@ -690,3 +690,11 @@ is **SOURCE_PASS / NOT_INSTALLED / NOT_ACTIVE**; protected owner b8a82765 remain
 the previous independent-observer implementation without this terminal adapter.
 Actual no-model probe, controlled retirement/seal/reader integration, reviewed
 private-prefix successor/full audit and six comparisons remain required.
+
+Candidate `3e8026cd1d3657cb8a0803f735fc604cd8b4784e` is committed/pushed.
+Standard build/RECORD passed at
+`/tmp/eom-api-build/3e8026cd1d3657cb8a0803f735fc604cd8b4784e.999Ku5/dist`.
+Its terminal/process-query/resource observer wheel members exactly matched source.
+Platform raw SHA `4152008b2e7e8b96200628f7763972df0f85d556d802ad8801cb3d87ba637005`.
+No operating or protected-owner installation was performed for this successor;
+the independently installed b8a82765 owner remains immutable and not activated.

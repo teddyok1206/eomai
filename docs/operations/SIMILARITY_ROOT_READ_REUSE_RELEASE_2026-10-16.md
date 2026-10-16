@@ -81,3 +81,27 @@ conflicting-header409. No operating latency improvement, HTTPS-browser PASS,
 full corpus coverage, C2–C5 activation or CUDA/default-device result is asserted.
 Temporary bounded evidence is under `/tmp/eom-read-reuse-release-WbsAfDVX`;
 credentials, prompts, item content and long logs are not committed or reported.
+
+## Bounded background observation —21:29:33 UTC
+
+The original INDEX PID2893747 was actually alive and its exact
+`eom-embedding-index-owner.service` remained active/running with invocation
+`99af6c0f884342abb8f0883eb4d878a6`. The bounded journal window20:59:02–21:29:33
+recorded SUCCEEDED commands for CONCRETE_FACETS21:00:12, METADATA_ONLY21:11:03
+and CONTENT_ONLY21:25:00. This is actual continued command completion, not merely
+an active-service inference or full-corpus acceptance.
+
+Time-separated reconciliation frames21:12:02/21:13:00/21:13:57 each reported
+545 eligible sources,25 missing reports,0 unavailable views and4 selected targets;
+missing bindings were413 CONTENT_ONLY,423 CONCRETE_FACETS and431 METADATA_ONLY.
+Do not sum these distinct view snapshots, interpret them as a single coherent
+coverage audit or overwrite the completed original520-report backfill status.
+The earlier CONTENT_ONLY command was SUCCEEDED by21:25:00; queued frames are not
+claimed to be the present state. No new tasks/retries were submitted by observation.
+
+The same original-request HTTP observer PID2895440 was actually alive in LOGIN
+with an empty log and no acceptance file at21:29:33. That is still input waiting,
+not a new authentication failure, accepted login or current-context PASS. Keep
+its process/request/history; do not create another prompt/key or rerun numerical
+QUERY. Next routine observation is no earlier21:59:33 UTC. Foreground operations
+are observed separately; no credentials/token/session TTL were read or changed.
