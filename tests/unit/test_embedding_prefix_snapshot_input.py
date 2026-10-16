@@ -83,6 +83,8 @@ def test_closed_schema_mirror_hash_and_318_predecessors_remain_frozen() -> None:
         not in {
             SCHEMA,
             "embedding-cuda-host-extension",
+            "embedding-native-runtime-config-v1.2",
+            "embedding-prefix-audit-input-v1.2",
             "system-rag-private-chat-similarity",
             "embedding-private-chat-query",
             "system-rag-private-chat-query-basis",

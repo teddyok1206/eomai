@@ -303,7 +303,12 @@ def test_all_predecessor_resource_metadata_and_bytes_remain_unchanged():
     previous = {
         name: asdict(value)
         for name, value in CATALOG_SCHEMA_RESOURCES.items()
-        if name != CUDA_HOST_SCHEMA
+        if name
+        not in {
+            CUDA_HOST_SCHEMA,
+            "embedding-native-runtime-config-v1.2",
+            "embedding-prefix-audit-input-v1.2",
+        }
     }
     # Pinned after independently inspecting the current predecessor registry.
     assert len(previous) == 322

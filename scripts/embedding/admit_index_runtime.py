@@ -28,6 +28,10 @@ _BOOTSTRAP = {
     "embedding_runtime_prefix_closure.py",
 }
 _SNAPSHOT_BOOTSTRAP = _BOOTSTRAP | {"embedding_host_configuration_capture.py"}
+_CUDA_BOOTSTRAP = _SNAPSHOT_BOOTSTRAP | {
+    "embedding_cuda_host_capture.py",
+    "embedding_cuda_host_closure.py",
+}
 
 
 def _root_bytes(path: Path, sha: str, maximum: int) -> tuple[bytes, dict[Path, tuple[int, ...]]]:
@@ -328,10 +332,20 @@ def main(argv: list[str] | None = None) -> int:
         if type(value) is not dict or value.get("schema_version") not in {
             "embedding-prefix-audit-input/1.0",
             "embedding-prefix-audit-input/1.1",
+            "embedding-prefix-audit-input/1.2",
         }:
             raise ValueError("invalid explicit bootstrap input version")
         snapshot = value["schema_version"] == "embedding-prefix-audit-input/1.1"
-        selected_bootstrap = _SNAPSHOT_BOOTSTRAP if snapshot else _BOOTSTRAP
+        cuda = value["schema_version"] == "embedding-prefix-audit-input/1.2"
+        if (
+            cuda
+            and raw
+            != json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+        ):
+            raise ValueError("CUDA owner input must use canonical bytes")
+        selected_bootstrap = (
+            _CUDA_BOOTSTRAP if cuda else _SNAPSHOT_BOOTSTRAP if snapshot else _BOOTSTRAP
+        )
         if (
             type(value) is not dict
             or set(value)
@@ -348,7 +362,8 @@ def main(argv: list[str] | None = None) -> int:
                 "helper",
                 "bootstrap",
             }
-            | ({"host_configuration"} if snapshot else set())
+            | ({"cuda_host_extension"} if cuda else {"host_configuration"} if snapshot else set())
+            or (cuda and value.get("profile") != "CUDA_INDEX_FP32")
             or type(value.get("bootstrap")) is not list
             or len(value["bootstrap"]) != len(selected_bootstrap)
         ):

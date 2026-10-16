@@ -1402,7 +1402,7 @@ def test_cli_is_owner_only_and_cannot_execute_successor(
 @pytest.mark.parametrize(
     "fault", ["extra", "duplicate", "float", "bootstrap_bool", "bootstrap_name", "raw_pin", "epoch"]
 )
-@pytest.mark.parametrize("version", ("1.0", "1.1"))
+@pytest.mark.parametrize("version", ("1.0", "1.1", "1.2"))
 def test_owner_leaf_denies_before_source_import_or_new_instruction(
     monkeypatch: pytest.MonkeyPatch, fault: str, version: str
 ) -> None:
@@ -1429,7 +1429,11 @@ def test_owner_leaf_denies_before_source_import_or_new_instruction(
         )
     }
     selected_bootstrap = (
-        namespace["_BOOTSTRAP"] if version == "1.0" else namespace["_SNAPSHOT_BOOTSTRAP"]
+        namespace["_BOOTSTRAP"]
+        if version == "1.0"
+        else namespace["_SNAPSHOT_BOOTSTRAP"]
+        if version == "1.1"
+        else namespace["_CUDA_BOOTSTRAP"]
     )
     value["bootstrap"] = [
         {"filename": name, "sha256": _hash(b""), "size_bytes": 0}
@@ -1438,17 +1442,21 @@ def test_owner_leaf_denies_before_source_import_or_new_instruction(
     value["schema_version"] = "embedding-prefix-audit-input/" + version
     if version == "1.1":
         value["host_configuration"] = None
+    elif version == "1.2":
+        value["profile"] = "CUDA_INDEX_FP32"
+        value["cuda_host_extension"] = None
     if fault == "extra":
         value["approved"] = True
     elif fault == "bootstrap_bool":
         value["bootstrap"][0]["size_bytes"] = False
     elif fault == "bootstrap_name":
         value["bootstrap"][0]["filename"] = "unapproved.py"
-    raw = json.dumps(value).encode()
+    raw = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
     if fault == "duplicate":
         raw = raw[:-1] + b',"bootstrap":[]}'
     elif fault == "float":
-        raw = raw.replace(b'"profile": null', b'"profile": 1.0')
+        value["profile"] = 1.0
+        raw = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
     stdout, stderr = io.StringIO(), io.StringIO()
     mocked_sys = SimpleNamespace(
         prefix="/opt/eom/conda/envs/eom-embedding-experiment",

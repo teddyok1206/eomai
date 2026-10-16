@@ -138,7 +138,13 @@ record_phase AUDIT_INPUT_COPY
 (set -o noclobber; timeout --signal=KILL 10 head -c 1048577 -- "$AUDIT_SOURCE" > "$PRIVATE/admit.py")
 [[ "$(stat -c %s "$PRIVATE/admit.py")" -le 1048576 && "$(sha256sum "$PRIVATE/admit.py" | cut -c 1-64)" == "$AUDIT_LEAF_SHA" ]] || fail EMBEDDING_INDEX_AUDIT_LEAF_HASH_MISMATCH
 mkdir -m 0700 "$PRIVATE/source" "$PRIVATE/source/eom_catalog_service"
-for name in __init__.py embedding_runtime_files.py embedding_runtime_wheel_closure.py embedding_runtime_host_closure.py embedding_conda_runtime_closure.py embedding_runtime_prefix_closure.py embedding_host_configuration_capture.py; do
+bootstrap_names=(__init__.py embedding_runtime_files.py embedding_runtime_wheel_closure.py embedding_runtime_host_closure.py embedding_conda_runtime_closure.py embedding_runtime_prefix_closure.py embedding_host_configuration_capture.py)
+# This byte-pinned canonical marker only selects two fixed copy names. The protected
+# OLD owner independently validates the full version/shape/module hashes before import.
+if grep -Fq '"schema_version":"embedding-prefix-audit-input/1.2"' "$PRIVATE/prefix-audit-input.json"; then
+  bootstrap_names+=(embedding_cuda_host_capture.py embedding_cuda_host_closure.py)
+fi
+for name in "${bootstrap_names[@]}"; do
   source_member="$REPOSITORY/services/catalog_service/eom_catalog_service/$name"
   [[ -f "$source_member" && ! -L "$source_member" && "$(stat -c %s "$source_member")" -le 1048576 ]] || fail EMBEDDING_INDEX_AUDIT_MODULE_INVALID
   (set -o noclobber; timeout --signal=KILL 10 head -c 1048577 -- "$source_member" > "$PRIVATE/source/eom_catalog_service/$name")

@@ -9,6 +9,20 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Source checkpoint16:31 UTC: CUDA-only native config/prefix input1.2, exact nine
+  pre-import module pins, composite host/file/version/mapped-FD checks and shared
+  bounded readelf parser implemented. Fresh combined1327 PASS; expanded CUDA35
+  PASS overlaps and is not added; strict7/Ruff/format/shell PASS. All323 previous
+  schema records/raw bytes remain. Actual unprivileged metadata inspection of six
+  real driver/RDMA/netlink source ELFs passes shape checks only; not a protected
+  closure/namespace/device grant and **not six CPU/CUDA benchmark runs**. No old
+  CPU receipt relabeling, OS driver/cache update, DB/model/GPU/service change or
+  operating activation. CPU-only sealed receipt remains insufficient. Next actual
+  CUDA cache/extension publication,1.2 OLD host/prefix preflight and separate CUDA
+  receipt/probe/device/lease admission remain required. Original C1–C5/full goal
+  stay open. Latest routine check16:16:42 found the same INDEX invocation active
+  and original auth observer alive at LOGIN; next normal check≥16:46:42.
+  [Implemented scope, actual-source pins and preserved failures](../architecture/EMBEDDING_CUDA_HOST_EXTENSION_DESIGN.md).
 - Source checkpoint16:02 UTC: stdlib-only fixed-root CUDA extension file capture,
   schema adapter, exact closed21-entry cache and existing kernel-witness interface
   now combined781/strict3/Ruff PASS (overlapping earlier suites). Unchanged CPU

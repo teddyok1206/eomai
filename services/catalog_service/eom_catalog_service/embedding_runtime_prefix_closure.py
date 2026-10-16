@@ -31,10 +31,11 @@ from eom_catalog_service.embedding_runtime_files import (
     fixed_native_embedding_profile,
     require_runtime_proof,
 )
+from eom_catalog_service.embedding_runtime_host_closure import EmbeddingElfMetadata as _Elf
 from eom_catalog_service.embedding_runtime_host_closure import (
-    MAX_READELF_OUTPUT_BYTES,
     ProtectedEmbeddingHostClosure,
     capture_protected_embedding_host,
+    parse_embedding_elf_metadata,
 )
 from eom_catalog_service.embedding_runtime_wheel_closure import (
     RuntimeWheelArchivePin,
@@ -44,6 +45,8 @@ from eom_catalog_service.embedding_runtime_wheel_closure import (
 )
 
 if TYPE_CHECKING:
+    from eom_catalog_service.embedding_cuda_host_capture import CudaHostExtensionPin
+    from eom_catalog_service.embedding_cuda_host_closure import ProtectedCudaEmbeddingHostClosure
     from eom_catalog_service.embedding_host_configuration_capture import (
         HostConfigurationSnapshotPin,
     )
@@ -89,6 +92,17 @@ _BOOTSTRAP = frozenset(
     }
 )
 _SNAPSHOT_BOOTSTRAP = _BOOTSTRAP | {"embedding_host_configuration_capture.py"}
+_CUDA_BOOTSTRAP = _SNAPSHOT_BOOTSTRAP | {
+    "embedding_cuda_host_capture.py",
+    "embedding_cuda_host_closure.py",
+}
+_INSTALLATION_INPUTS = types.MappingProxyType(
+    {
+        "embedding-prefix-audit-input/1.0": (_BOOTSTRAP, None),
+        "embedding-prefix-audit-input/1.1": (_SNAPSHOT_BOOTSTRAP, "host_configuration"),
+        "embedding-prefix-audit-input/1.2": (_CUDA_BOOTSTRAP, "cuda_host_extension"),
+    }
+)
 # These two inert owner templates are the only non-JSON packaged resources in
 # the platform. Exact literal roles preserve full source/wheel coverage without
 # admitting executable suffixes, general globs or arbitrary service templates.
@@ -396,6 +410,7 @@ class ConfiguredPrefixRuntimeAuditInput:
     host_seed_sha256: str
     bootstrap: tuple[tuple[str, str, int], ...]
     host_configuration: HostConfigurationSnapshotPin | None
+    cuda_host_extension: CudaHostExtensionPin | None = None
 
 
 def parse_installed_embedding_prefix_audit_input(raw: bytes) -> ConfiguredPrefixRuntimeAuditInput:
@@ -405,9 +420,27 @@ def parse_installed_embedding_prefix_audit_input(raw: bytes) -> ConfiguredPrefix
 
 def capture_prefix_audit_host(
     selected: ConfiguredPrefixRuntimeAuditInput, *, files: NumericalRuntimeFileSnapshots
-) -> ProtectedEmbeddingHostClosure:
+) -> ProtectedEmbeddingHostClosure | ProtectedCudaEmbeddingHostClosure:
     """Existing protected audit owner; do not import the seventh module for strict1.0."""
     _require(type(selected) is ConfiguredPrefixRuntimeAuditInput, "INPUT_INVALID")
+    if selected.cuda_host_extension is not None:
+        _require(
+            selected.plan.conda.profile == "CUDA_INDEX_FP32"
+            and selected.host_configuration is None,
+            "INPUT_INVALID",
+        )
+        from eom_catalog_service.embedding_cuda_host_capture import resolve_cuda_host_extension
+        from eom_catalog_service.embedding_cuda_host_closure import capture_cuda_embedding_host
+        from eom_catalog_service.embedding_host_configuration_capture import (
+            require_host_configuration_snapshot_mount,
+        )
+
+        captured_cuda = resolve_cuda_host_extension(selected.cuda_host_extension)
+        return capture_cuda_embedding_host(
+            expected_seed_sha256=selected.host_seed_sha256,
+            files=files,
+            snapshot_mount=require_host_configuration_snapshot_mount(captured_cuda),
+        )
     if selected.host_configuration is None:
         return capture_protected_embedding_host(
             expected_seed_sha256=selected.host_seed_sha256, files=files
@@ -462,13 +495,19 @@ def _parse_prefix_installation_input(
         version = document.get("schema_version")
         _require(
             type(version) is str
-            and version in {"embedding-prefix-audit-input/1.0", "embedding-prefix-audit-input/1.1"}
+            and version in _INSTALLATION_INPUTS
             and (expected_version is None or version == expected_version),
             "INPUT_INVALID",
         )
-        selected_bootstrap = (
-            _SNAPSHOT_BOOTSTRAP if version == "embedding-prefix-audit-input/1.1" else _BOOTSTRAP
-        )
+        selected_bootstrap, host_field = _INSTALLATION_INPUTS[cast(str, version)]
+        if version == "embedding-prefix-audit-input/1.2":
+            _require(
+                raw
+                == json.dumps(
+                    document, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+                ).encode(),
+                "INPUT_INVALID",
+            )
         item = closed(
             document,
             {
@@ -484,13 +523,17 @@ def _parse_prefix_installation_input(
                 "helper",
                 "bootstrap",
             }
-            | ({"host_configuration"} if version == "embedding-prefix-audit-input/1.1" else set()),
+            | ({host_field} if host_field is not None else set()),
         )
         _require(
             type(item["profile"]) is str
             and item["profile"] in _COUNTS
             and type(item["host_seed_sha256"]) is str
             and re.fullmatch(r"sha256:[0-9a-f]{64}", item["host_seed_sha256"]) is not None,
+            "INPUT_INVALID",
+        )
+        _require(
+            version != "embedding-prefix-audit-input/1.2" or item["profile"] == "CUDA_INDEX_FP32",
             "INPUT_INVALID",
         )
         for name, count in (
@@ -548,12 +591,19 @@ def _parse_prefix_installation_input(
             tuple(row[0] for row in bootstrap) == tuple(sorted(selected_bootstrap)), "INPUT_INVALID"
         )
         snapshot = None
+        cuda_extension = None
         if version == "embedding-prefix-audit-input/1.1":
             from eom_catalog_service.embedding_host_configuration_capture import (
                 parse_host_configuration_snapshot_pin,
             )
 
             snapshot = parse_host_configuration_snapshot_pin(item["host_configuration"])
+        elif version == "embedding-prefix-audit-input/1.2":
+            from eom_catalog_service.embedding_cuda_host_capture import (
+                parse_cuda_host_extension_pin,
+            )
+
+            cuda_extension = parse_cuda_host_extension_pin(item["cuda_host_extension"])
         plan = PrefixRuntimeAuditPlan(
             CondaRuntimeAuditPlan(
                 item["profile"], source.sha256, source.size_bytes, tuple(conda_pins), overlays
@@ -565,7 +615,7 @@ def _parse_prefix_installation_input(
             member(item["helper"]),
         )
         return ConfiguredPrefixRuntimeAuditInput(
-            plan, item["host_seed_sha256"], tuple(bootstrap), snapshot
+            plan, item["host_seed_sha256"], tuple(bootstrap), snapshot, cuda_extension
         )
     except InstalledRuntimeProofError:
         raise
@@ -799,134 +849,17 @@ def _tree(
     return epochs, size, regular
 
 
-@dataclass(frozen=True, slots=True)
-class _Elf:
-    path: Path
-    needed: tuple[str, ...]
-    soname: str | None
-    rpath: tuple[str, ...]
-    runpath: tuple[str, ...]
-    definitions: frozenset[str]
-    requirements: tuple[tuple[str, frozenset[str]], ...]
-
-
 def _readelf(path: Path, raw: bytes) -> _Elf:
-    _require(0 < len(raw) <= MAX_READELF_OUTPUT_BYTES, "ELF_INVALID")
-    text = raw.decode("ascii", "strict")
-    _require(
-        re.search(r"^\s*Class:\s+ELF64\s*$", text, re.M) is not None
-        and re.search(r"^\s*Data:\s+2's complement, little endian\s*$", text, re.M) is not None
-        and re.search(r"^\s*Machine:\s+Advanced Micro Devices X86-64\s*$", text, re.M) is not None,
-        "ELF_FOREIGN",
-    )
-    interpreters = re.findall(r"\[Requesting program interpreter: ([^\]]+)\]", text)
-    _require(interpreters in ([], ["/lib64/ld-linux-x86-64.so.2"]), "ELF_LOADER_INVALID")
-    needed = tuple(re.findall(r"\(NEEDED\)\s+Shared library: \[([^\]]+)\]", text))
-    _require(
-        len(needed) <= 64
-        and len(needed) == text.count("(NEEDED)")
-        and len(set(needed)) == len(needed)
-        and all(re.fullmatch(r"[A-Za-z0-9_.+-]{1,128}", value) for value in needed),
-        "ELF_INVALID",
-    )
-    sonames = re.findall(r"\(SONAME\)\s+Library soname: \[([^\]]+)\]", text)
-    _require(
-        len(sonames) <= 1
-        and len(sonames) == text.count("(SONAME)")
-        and all(re.fullmatch(r"[A-Za-z0-9_.+-]{1,128}", value) for value in sonames),
-        "ELF_INVALID",
-    )
-    routes = []
-    for tag in ("RPATH", "RUNPATH"):
-        values = re.findall(r"\(" + tag + r"\)\s+Library (?:rpath|runpath): \[([^\]]*)\]", text)
-        _require(len(values) <= 1 and len(values) == text.count(f"({tag})"), "ELF_ROUTE_INVALID")
-        routes.append(tuple(values[0].split(":")) if values else ())
-    _require(
-        not re.search(r"\((?:AUDIT|DEPAUDIT|FILTER|AUXILIARY|TEXTREL)\)", text), "ELF_FLAGS_INVALID"
-    )
-    for tag, allowed in (
-        ("FLAGS", {"SYMBOLIC", "BIND_NOW", "STATIC_TLS", "ORIGIN"}),
-        ("FLAGS_1", {"NOW", "NODELETE", "PIE", "ORIGIN"}),
-    ):
-        flags = re.findall(r"\(" + tag + r"\)[ \t]+(?:Flags:[ \t]*)?([^\n]*)", text)
-        _require(
-            len(flags) <= 1
-            and len(flags) == text.count(f"({tag})")
-            and all(set(value.split()) <= allowed for value in flags),
-            "ELF_FLAGS_INVALID",
-        )
-    definitions: set[str] = set()
-    base_definition: str | None = None
-    requirements: dict[str, set[str]] = {}
-    counts: dict[str, int] = {}
-    current: str | None = None
-    section: str | None = None
-    definition_count: int | None = None
-    requirement_count: int | None = None
-    for line in text.splitlines():
-        if line.startswith("Version definition section "):
-            match = re.search(r"contains ([0-9]+) entr(?:y|ies):$", line)
-            _require(match is not None and definition_count is None, "ELF_VERSION_INVALID")
-            assert match is not None
-            definition_count = int(match[1])
-            _require(0 < definition_count <= 4096, "ELF_VERSION_INVALID")
-            section, current = "definition", None
-        elif line.startswith("Version needs section "):
-            match = re.search(r"contains ([0-9]+) entr(?:y|ies):$", line)
-            _require(match is not None and requirement_count is None, "ELF_VERSION_INVALID")
-            assert match is not None
-            requirement_count = int(match[1])
-            _require(0 < requirement_count <= 64, "ELF_VERSION_INVALID")
-            section, current = "needs", None
-        elif line.startswith("Version symbols section "):
-            section, current = None, None
-        elif section == "definition":
-            # BASE identifies the build object, not an exported version or a loader path.
-            base = re.search(
-                r"\bFlags:\s+BASE\s+Index:\s+1\s+Cnt:\s+1\s+"
-                r"Name: ([A-Za-z0-9_./+-]{1,512})\s*$",
-                line,
-            )
-            if base:
-                _require(base_definition is None, "ELF_VERSION_INVALID")
-                base_definition = base[1]
-            else:
-                _require(not re.search(r"\bFlags:\s+BASE\b", line), "ELF_VERSION_INVALID")
-                match = re.search(r"\bName: ([A-Za-z0-9_.+-]{1,128})\s*$", line)
-                if match:
-                    _require(match[1] not in definitions, "ELF_VERSION_INVALID")
-                    definitions.add(match[1])
-        elif section == "needs":
-            file = re.search(r"\bFile: ([A-Za-z0-9_.+-]{1,128})\s+Cnt: ([0-9]+)\s*$", line)
-            if file:
-                _require(file[1] in needed and file[1] not in requirements, "ELF_VERSION_INVALID")
-                current = file[1]
-                requirements[current] = set()
-                counts[current] = int(file[2])
-                _require(0 < counts[current] <= 4096, "ELF_VERSION_INVALID")
-            elif current is not None:
-                match = re.search(r"\bName: ([A-Za-z0-9_.+-]{1,128})\s+Flags:", line)
-                if match:
-                    _require(match[1] not in requirements[current], "ELF_VERSION_INVALID")
-                    requirements[current].add(match[1])
-    _require(
-        (
-            definition_count is None
-            or definition_count == len(definitions) + (base_definition is not None)
-        )
-        and (requirement_count is None or requirement_count == len(requirements))
-        and all(len(requirements[name]) == count for name, count in counts.items()),
-        "ELF_VERSION_INVALID",
-    )
-    return _Elf(
-        path,
-        needed,
-        sonames[0] if sonames else None,
-        routes[0],
-        routes[1],
-        frozenset(definitions),
-        tuple((name, frozenset(values)) for name, values in requirements.items()),
-    )
+    """Keep historical prefix codes/output while sharing one bounded metadata parser."""
+    try:
+        return parse_embedding_elf_metadata(path, raw)
+    except InstalledRuntimeProofError as error:
+        prefix = "INSTALLED_RUNTIME_ELF_METADATA_"
+        if not error.code.startswith(prefix):
+            raise
+        raise InstalledRuntimeProofError(
+            "INSTALLED_RUNTIME_PREFIX_" + error.code.removeprefix(prefix)
+        ) from None
 
 
 def _routes(
@@ -935,7 +868,7 @@ def _routes(
     directories: set[Path],
     *,
     links: dict[Path, str],
-    host: ProtectedEmbeddingHostClosure,
+    host: ProtectedEmbeddingHostClosure | ProtectedCudaEmbeddingHostClosure,
     empty_directory: RuntimeFileEpoch | None = None,
 ) -> tuple[Path, ...]:
     values = elf.runpath or elf.rpath
@@ -999,7 +932,7 @@ def _elf_closure(
     inventory: set[Path],
     links: dict[Path, str],
     files: NumericalRuntimeFileSnapshots,
-    host: ProtectedEmbeddingHostClosure,
+    host: ProtectedEmbeddingHostClosure | ProtectedCudaEmbeddingHostClosure,
     deadline: float,
 ) -> tuple[str, int]:
     objects: dict[Path, _Elf] = {}
@@ -1128,7 +1061,7 @@ def audit_installed_embedding_prefix(
     helper_path: Path,
     lock_directory: Path,
     files: NumericalRuntimeFileSnapshots,
-    host: ProtectedEmbeddingHostClosure,
+    host: ProtectedEmbeddingHostClosure | ProtectedCudaEmbeddingHostClosure,
 ) -> PrefixRuntimeByteAudit:
     """Actual fixed whole-prefix bytes/ELF closure only; never execute NEW or grant IAM."""
     try:
@@ -1141,10 +1074,14 @@ def audit_installed_embedding_prefix(
                 for path in (prefix, archive_root, helper_path, lock_directory)
             )
         )
-        _require(
-            type(host) is ProtectedEmbeddingHostClosure
-            and type(files) is NumericalRuntimeFileSnapshots
-        )
+        _require(type(files) is NumericalRuntimeFileSnapshots)
+        if type(host) is not ProtectedEmbeddingHostClosure:
+            _require(plan.conda.profile == "CUDA_INDEX_FP32")
+            from eom_catalog_service.embedding_cuda_host_closure import (
+                ProtectedCudaEmbeddingHostClosure,
+            )
+
+            _require(type(host) is ProtectedCudaEmbeddingHostClosure)
         host.assert_current()
         ancestor_epochs = tuple(
             (path, _ancestor_identity(path.lstat())) for path in reversed(prefix.parents)

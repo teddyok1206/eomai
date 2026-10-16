@@ -74,6 +74,8 @@ def test_v11_closed_schema_mirror_and_317_predecessor_resources_are_frozen() -> 
             EMBEDDING_NATIVE_RUNTIME_CONFIG_V11_SCHEMA,
             "embedding-prefix-audit-input-v1.1",
             "embedding-cuda-host-extension",
+            "embedding-native-runtime-config-v1.2",
+            "embedding-prefix-audit-input-v1.2",
             "system-rag-private-chat-similarity",
             "embedding-private-chat-query",
             "system-rag-private-chat-query-basis",

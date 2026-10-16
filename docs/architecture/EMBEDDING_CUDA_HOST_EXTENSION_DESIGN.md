@@ -211,3 +211,126 @@ actually captured ELF descriptors and independently admit versions, mappings,
 driver/kernel/devices and shared GPU lease. The CUDA-specific native sealed
 receipt/probe must not reuse or relabel the CPU-only receipt. Six real comparisons
 and conditional GPU-default activation remain required, not replaced by file tests.
+
+### Explicit installation integration decision
+
+Add closed native-config1.2 and prefix-audit-input1.2 successors, CUDA-only. Each
+selects one`cuda_host_extension` pointer; its base CPU pointer remains inside the
+exact extension manifest rather than duplicated as an independently chosen value.
+Native config preserves the existing bundle/proof/numerical/resource hash rules;
+prefix input preserves source/archive/member/bootstrap byte closure. Neither is
+a root receipt or device grant. Old1.0/1.1 schemas, strict readers and six/seven
+bootstrap-module sets retain their meanings. The explicit1.2 prefix input pins
+nine modules: the existing seven plus CUDA capture and CUDA host closure; only
+that branch imports those two additional modules after their raw bytes are checked.
+
+Compose an owner-held CUDA host with the existing CPU tool/file/alias verifier,
+the actual CUDA cache witness, and six held byte-verified library FDs. Centralize
+the existing bounded readelf metadata parser in the already trusted host module
+so prefix and CUDA callers use the same ELF/version rules without a bootstrap
+module dependency cycle or a new parsing framework. Keep prefix parser errors
+and edge/digest output stable. CUDA additionally requires shared-object/no-extra-
+loader/no-rpath/runpath metadata and every needed/version to resolve in the exact
+six-member or unchanged CPU host graph. No96MiB Python bytes copy or mmap of an
+externally mutable file is necessary. All process execution remains the already
+captured fixed host readelf, never a candidate interpreter/library load.
+
+Exact-type gates accept the composite only on CUDA paths. Composition delegates
+tools/loader/absent-route checks and retains file/mount/FD epochs; it adds only
+declared version providers and exact mapped inode checks. Runtime admission still
+requires a separately observed CUDA sealed receipt/probe/device/lease and rejects
+CPU-only acceptance for1.2. No database/schema migration or operational activation
+is implied by adding these source interfaces.
+
+## Implemented CUDA installation composition —2026-10-16,16:31 UTC
+
+**SOURCE_PASS / NOT_INSTALLED / NOT_ACTIVE / CUDA_NOT_ADMITTED.** Native config1.2
+and prefix audit input1.2 now have separately registered exact schemas/package
+mirrors. Native config is CUDA-only, selects the extension pointer and reuses the
+same bundle/proof/resource/numerical/hash rules. The explicit installed reader
+handles1.2; strict1.0/1.1 readers still reject it. All323 predecessor resource
+records and bytes are preserved, including metadata digest
+`c56c4771df2bfd000a945c4820060afd1de5383ac7b9657f3e187851bd0d30df`.
+
+The existing prefix inventory1.0 already supports both CPU/CUDA profiles and
+continues to describe unadmitted candidate bytes; no new inventory version is
+needed. In contrast, the sealed native receipt1.0 is intentionally CPU-only. Its
+schema/domain rejection of the CUDA1.2 proof/config frame is explicitly tested;
+adding a configuration version does not broaden that receipt.
+
+Prefix input1.2 requires canonical JSON, one extension pointer and nine exact
+ordered module pins. The OLD owner checks all nine raw modules before importing
+CUDA capture/closure. Existing1.0/1.1 six/seven selected bootstrap sets remain;
+ordinary installer staging still copies the prior seven modules and adds the
+fixed two CUDA files only for the new canonical1.2 marker. That marker chooses
+fixed copy names, **not authority**; full raw/version/shape/module checks remain in
+the protected OLD owner. The synthetic shell test covers CPU, legacy CUDA and
+CUDA1.2 separately; its inert interpreter is not an actual native acceptance.
+
+The existing bounded readelf metadata parser now lives once in the already
+trusted host module. Prefix callers retain their stable errors and output edges/
+digests. CUDA composes the original fixed CPU tools/files/aliases with its actual
+private-cache mount witness and six held byte-verified library FDs. It requires
+shared-object/no-interpreter/no-extra-search-route metadata and resolves every
+needed/version against the six-member or unchanged CPU host graph. Exact-type
+gates reject that composite on CPU audit paths. FD/name/device/inode and all
+underlying mount/file epochs remain live; cleanup closes library and base FDs.
+No new abstraction framework, database, queue or binary dependency was introduced.
+
+Final combined regression1327 PASS in99.78seconds; final expanded CUDA
+closure/config tests35 PASS in3.98seconds (includes three later actual-source-
+inspired cases; overlapping runs are not summed). Strict7 production/owner modules,
+Ruff/format15 files, shell syntax/diff checks PASS. Tests cover legacy rejection,
+exact module order/canonical bytes, safe old/new shell selection, CUDA-to-CUDA
+versions, empty/unversioned versus missing providers, unknown routes, FD
+substitution, cleanup, wrong CPU cache mount and CPU-only receipt rejection.
+
+The first shared-parser trial exposed quadratic whitespace matching for optional
+ELF Type on a2MiB blank-line fixture. Its own synthetic pytest process was
+explicitly interrupted after185.57seconds/91 passes; it was not a runtime job or
+observation timeout. Horizontal-only matching fixes the cause; the same maximum
+input now passes a no-site subprocess deadline test. Subsequent trial failures
+were stale fixture copy-set/exception expectations, one missing test import and a
+legacy-only serializer in the new negative receipt fixture. Failures remain in
+execution history. A full fresh rerun produced the1327 PASS above; no assertion,
+receipt/profile gate, CPU bound or schema was loosened to declare success.
+
+### Actual six-library static source diagnostic —16:26 UTC
+
+A separate unprivileged no-site developer diagnostic used actual OS driver/RDMA/
+netlink files and the hash-checked archive's rdmacm ELF. It opened exact resolved
+regular-file FDs, streamed hashes, compared before/after identity and passed fixed
+readelf metadata through the new shared parser. All six actually report DYN,
+no interpreter and no RPATH/RUNPATH. No candidate interpreter, dlopen, tensor,
+model/GPU execution, DB mutation, OS/driver installation or service restart occurred.
+This diagnostic did **not** attest a protected namespace, complete provider/version
+resolution, selected loader cache, mappings, kernel/device/GPU lease or admission.
+**Six real static files are not the six CPU/CUDA benchmark launches.**
+
+| Role | Actual bytes | SHA-256 |
+| --- | ---: | --- |
+| CUDA_DRIVER | 96284520 | `e8e541166449da5a1278f40b27a28d072174b31f2941b101a9609b6d1d3aed32` |
+| RDMACM | 122144 | `18609553ba84c9206739d0a6d62ae5371d4713058ed4b68c665e627d967df648` |
+| IBVERBS | 138032 | `249242c3ba29d72b7a9be560b768bf43fc5924c8a166f4e3bbb224bd81ade3ab` |
+| MLX5 | 545464 | `61afce27090a889326a3a7eb5df44e003712503dbf31eb876fd3666578d2cfe6` |
+| NL_CORE | 133944 | `afcb69e2ef0b46c2ce7b7483848332fa9462776d33163f64209acf01f86eddd7` |
+| NL_ROUTE | 575344 | `088b0021d638306f5541e7baab06a0182b07db0a280e19b3b40c746f729b3773` |
+
+The actual unversioned driver/netlink metadata motivated explicit empty-provider
+regression; rdmacm/ibverbs/mlx5 version counts are inspected, not used as a substitute
+for the still-required protected transitive provider check. These small dependency
+pins are documentation, not Git-stored library binaries or runtime receipts.
+
+Latest normal INDEX observation16:16:42 found the same PID2387580/invocation active;
+next normal check no earlier than16:46:42 UTC. This is not a new vector coverage
+or Artifact/hash audit. Existing HTTP observer2391005 remained at LOGIN in that
+same check; no additional observer/question/key was created. No operating release,
+worker, numerical space, Graph/policy/source, current index or historical result
+was selected or altered by these source changes.
+
+Next: privately generate/publish the declared CUDA cache/extension through the
+supported protected owner, independently verify the actual1.2 OLD host/prefix
+preflight, and implement/observe a **separate CUDA** sealed receipt/probe/device/
+lease admission before any candidate/model execution. The CPU-only receipt remains
+insufficient. Continue original C1–C5 and the six real frozen comparisons/conditional
+GPU default; source/native file composition alone does not finish the goal.

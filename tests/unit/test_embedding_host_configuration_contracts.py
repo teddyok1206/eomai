@@ -124,6 +124,8 @@ def test_every_predecessor_schema_registry_entry_and_mirror_is_unchanged() -> No
         if name
         not in {
             "embedding-cuda-host-extension",
+            "embedding-native-runtime-config-v1.2",
+            "embedding-prefix-audit-input-v1.2",
             "system-rag-private-chat-similarity",
             "embedding-private-chat-query",
             "system-rag-private-chat-query-basis",

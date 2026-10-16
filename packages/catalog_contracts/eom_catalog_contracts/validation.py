@@ -30,6 +30,18 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "embedding-native-runtime-config-v1.2": CatalogSchemaResource(
+            "schemas/knowledge/embedding-native-runtime-config-v1.2.schema.json",
+            "resources/knowledge/embedding-native-runtime-config-v1.2.schema.json",
+            "1.2",
+            "sha256:d6d837969d4b40deeec8a4e03f4e5597852bc9df3ad71c87fa4fcf7768ac47fb",
+        ),
+        "embedding-prefix-audit-input-v1.2": CatalogSchemaResource(
+            "schemas/knowledge/embedding-prefix-audit-input-v1.2.schema.json",
+            "resources/knowledge/embedding-prefix-audit-input-v1.2.schema.json",
+            "1.2",
+            "sha256:c4b8baa130c032a7ef3513c37df849bf28fd20d500b767bf8eb7bf4e4c89cb9a",
+        ),
         "embedding-cuda-host-extension": CatalogSchemaResource(
             "schemas/knowledge/embedding-cuda-host-extension-v1.schema.json",
             "resources/knowledge/embedding-cuda-host-extension-v1.schema.json",

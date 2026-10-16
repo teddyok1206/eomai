@@ -9,6 +9,7 @@ from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from eom_catalog_contracts.embedding_cuda_host_extension import CudaHostExtensionPointer
 from eom_catalog_contracts.embedding_host_configuration import (
     EmbeddingHostConfigurationPointer,
     parse_host_configuration_pointer,
@@ -40,6 +41,10 @@ EMBEDDING_NATIVE_RUNTIME_CONFIG_V11_SCHEMA_REF: Final = (
     "eom://schemas/knowledge/embedding-native-runtime-config/1.1"
 )
 MAX_NATIVE_RUNTIME_CONFIG_BYTES: Final = 64 * 1024
+EMBEDDING_NATIVE_RUNTIME_CONFIG_V12_SCHEMA: Final = "embedding-native-runtime-config-v1.2"
+EMBEDDING_NATIVE_RUNTIME_CONFIG_V12_SCHEMA_REF: Final = (
+    "eom://schemas/knowledge/embedding-native-runtime-config/1.2"
+)
 
 
 def _named_values(value: object, expected: type[BaseModel]) -> dict[str, object]:
@@ -89,7 +94,10 @@ def _resource_values(value: object) -> dict[str, object]:
 
 def _config_values(value: object, *, expected: type[BaseModel] | None = None) -> dict[str, object]:
     values = _named_values(value, EmbeddingNativeRuntimeConfig if expected is None else expected)
-    _strings(values, {"bundle", "installed_proof", "resources", "host_configuration"})
+    _strings(
+        values,
+        {"bundle", "installed_proof", "resources", "host_configuration", "cuda_host_extension"},
+    )
     if "bundle" in values:
         bundle = _named_values(values["bundle"], EmbeddingRuntimeBundlePointer)
         _strings(bundle, {"manifest_member"})
@@ -107,6 +115,10 @@ def _config_values(value: object, *, expected: type[BaseModel] | None = None) ->
     if "host_configuration" in values:
         values["host_configuration"] = parse_host_configuration_pointer(
             values["host_configuration"]
+        ).model_dump(mode="json")
+    if "cuda_host_extension" in values:
+        values["cuda_host_extension"] = CudaHostExtensionPointer.model_validate(
+            values["cuda_host_extension"]
         ).model_dump(mode="json")
     return values
 
@@ -201,15 +213,24 @@ class EmbeddingNativeRuntimeConfigV11(_NativeRuntimeConfigurationFields):
     host_configuration: EmbeddingHostConfigurationPointer
 
 
+class EmbeddingNativeRuntimeConfigV12(_NativeRuntimeConfigurationFields):
+    """CUDA-only successor; neither this pointer nor a CPU receipt admits native execution."""
+
+    schema_resource = EMBEDDING_NATIVE_RUNTIME_CONFIG_V12_SCHEMA
+    schema_version: Literal["embedding-native-runtime-config/1.2"]
+    profile: Literal["CUDA_INDEX_FP32"]
+    cuda_host_extension: CudaHostExtensionPointer
+
+
 type InstalledEmbeddingNativeRuntimeConfig = (
-    EmbeddingNativeRuntimeConfig | EmbeddingNativeRuntimeConfigV11
+    EmbeddingNativeRuntimeConfig | EmbeddingNativeRuntimeConfigV11 | EmbeddingNativeRuntimeConfigV12
 )
 
 
 def parse_installed_embedding_native_runtime_config(
     document: object,
 ) -> InstalledEmbeddingNativeRuntimeConfig:
-    """Only this explicit installation-family reader supports the two released shapes."""
+    """Only this explicit installation-family reader dispatches the supported exact shapes."""
     if isinstance(document, BaseModel):
         version = document.__dict__.get("schema_version")
     elif isinstance(document, dict):
@@ -224,6 +245,8 @@ def parse_installed_embedding_native_runtime_config(
         return EmbeddingNativeRuntimeConfig.model_validate(values)
     if version == "embedding-native-runtime-config/1.1":
         return EmbeddingNativeRuntimeConfigV11.model_validate(document)
+    if version == "embedding-native-runtime-config/1.2":
+        return EmbeddingNativeRuntimeConfigV12.model_validate(document)
     raise ValueError("installed native configuration version is unsupported")
 
 

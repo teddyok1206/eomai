@@ -895,12 +895,20 @@ def _synthetic_shell(
     return script, prefix, args, marker
 
 
-@pytest.mark.parametrize("profile", ["CPU_INDEX_FP32", "CUDA_INDEX_FP32"])
+@pytest.mark.parametrize(
+    "profile,cuda_successor",
+    [("CPU_INDEX_FP32", False), ("CUDA_INDEX_FP32", False), ("CUDA_INDEX_FP32", True)],
+)
 def test_synthetic_shell_snapshot_hash_precedes_first_interpreter_instruction(
     tmp_path: Path,
     profile: Literal["CPU_INDEX_FP32", "CUDA_INDEX_FP32"],
+    cuda_successor: bool,
 ) -> None:
     script, prefix, args, marker = _synthetic_shell(tmp_path, profile=profile)
+    if cuda_successor:
+        owner = Path(args[14])
+        owner.write_bytes(b'{"schema_version":"embedding-prefix-audit-input/1.2"}')
+        args[15] = hashlib.sha256(owner.read_bytes()).hexdigest()
     # Temporary input-only wheelhouse placeholder; inert interpreter does not parse/install it.
     with tempfile.TemporaryDirectory(prefix="eom-index-source-") as temporary:
         args[-1] = temporary
@@ -940,7 +948,7 @@ def test_synthetic_shell_snapshot_hash_precedes_first_interpreter_instruction(
         ).read_bytes() == b"synthetic candidate metadata"
         assert (private / "prefix-audit-input.json").read_bytes() == Path(args[14]).read_bytes()
         copied = private / "source/eom_catalog_service"
-        assert {path.name for path in copied.iterdir()} == {
+        expected_modules = {
             "__init__.py",
             "embedding_runtime_files.py",
             "embedding_runtime_wheel_closure.py",
@@ -949,6 +957,9 @@ def test_synthetic_shell_snapshot_hash_precedes_first_interpreter_instruction(
             "embedding_runtime_prefix_closure.py",
             "embedding_host_configuration_capture.py",
         }
+        if cuda_successor:
+            expected_modules |= {"embedding_cuda_host_capture.py", "embedding_cuda_host_closure.py"}
+        assert {path.name for path in copied.iterdir()} == expected_modules
         assert all(path.stat().st_mode & 0o777 == 0o600 for path in copied.iterdir())
         assert (tmp_path / "old-arguments").read_text().splitlines() == [
             "-I",
