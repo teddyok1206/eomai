@@ -13,7 +13,8 @@ SUCCEEDED. Those journal observations are not a new canonical vector-count audit
 The last independent canonical count remains113 encodings/bindings at11:36:49.
 Do not infer current coverage from journal successes or treat113 as Item count.
 That invocation subsequently drained normally13:43:51; source c6983332 controls/
-identity15 are selected but not started during the original query's CPU window.
+identity15 were selected during a bounded query CPU window. Normal INDEX operation
+resumed14:15:21 UTC; actual human-query deferral/completion remain separate gates.
 See the [separate CPU admission selection](../architecture/NATIVE_CPU_INTERACTIVE_ADMISSION_DESIGN.md#operating-selection-evidence).
 The CUDA rejection below is unchanged and grants no numerical execution.
 

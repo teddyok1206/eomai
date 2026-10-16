@@ -198,3 +198,24 @@ The action uses no DB/Artifact/model API; the normal installed owner still owns
 every source/identity/claim/native check. If the human QUERY is then leased, its
 new preclaim gate must defer; otherwise normal bounded missing-binding work can
 resume. Scheduling/start requests alone are not READY or live-priority evidence.
+
+### Actual restart and initial discovery —14:17 UTC
+
+The fixed one-use timer invoked its checked helper at14:15:00.239952 UTC and
+exited successfully after exactly one start request. It made no DB/auth mutation,
+direct native/model launch, forced stop or boot-enable change. No permanent sudo
+grant, credential cache or authentication lifetime change was introduced.
+
+The actual c6983332 INDEX owner passed its installed/runtime composition and
+emitted SERVICE_STARTED at14:15:21.858162 UTC, PID2291322/invocation
+`e30682cfae184d7391936b3356ecb224`, active/success/NRestarts0. Its normal
+reconciliation queued original max4-target CONTENT_ONLY and CONCRETE_FACETS work
+at14:16:17 and14:17:12, using the same Graph and source scope. This proves actual
+startup and initial normal discovery, not completed new vectors or whole coverage.
+
+**STARTED / LIVE_DEFERRAL_UNVERIFIED / C1_UNFINISHED**. The new gate has not yet
+been observed while a real active human QUERY lease exists. The original HTTP
+observer awaits fresh Studio authentication in EOM1; old successful login and
+later freshness rejection remain distinct evidence. Routine INDEX observation
+next no earlier than14:47:30 UTC; a bounded real-request/deployment check is a
+separate opt-in boundary, not permission for frequent corpus polling.

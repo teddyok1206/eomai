@@ -5,8 +5,9 @@ Full incremental-RAG goal stays ACTIVE and incomplete. No blind automatic restar
 Recovery checkpoint: QUERY READY10:25 UTC; INDEX identity14 started10:59 UTC;
 all three first four-row batches have canonical terminal/numeric acceptance11:36 UTC.
 Later selection: identity14 drained normally13:43:51 UTC; the compatible identity15/
-resource30/c6983332 controls are selected, **NOT_STARTED**, while CPU is reserved
-for the original HTTP check. See the [priority selection record](../architecture/NATIVE_CPU_INTERACTIVE_ADMISSION_DESIGN.md#operating-selection-evidence).
+resource30/c6983332 controls were selected after that drain. The bounded pause
+ended with actual restart14:15:21 and normal first discovery14:16:17 UTC.
+Live deferral and authenticated C1 remain unverified. See the [priority selection record](../architecture/NATIVE_CPU_INTERACTIVE_ADMISSION_DESIGN.md#operating-selection-evidence).
 Earlier stopped/pending observations below are historical, not the current selection.
 Full coverage, common consumer acceptance and actual CPU/CUDA comparison remain open.
 The11:09 login-input rejection is historical. Actual login succeeded12:38; the

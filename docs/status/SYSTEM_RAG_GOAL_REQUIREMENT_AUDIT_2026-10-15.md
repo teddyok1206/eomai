@@ -1,7 +1,8 @@
 # Full incremental-RAG goal: requirement and evidence ledger
 
 2026-10-15 UTC; updated2026-10-16 UTC after source/disposable execution gates.
-Latest operating storage audit02:39:30 UTC. **GOAL_ACTIVE; FULL_COMPLETION_UNPROVEN.**
+Latest independent canonical storage audit11:36:49 UTC. Later registry row counts
+are not a fresh Artifact/hash/coverage audit. **GOAL_ACTIVE; FULL_COMPLETION_UNPROVEN.**
 Requirements come from the [original design](../architecture/SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md),
 not from whichever subset currently has passing tests. Historical tests are not
 summed into a single acceptance count. This ledger does not grant authority.
@@ -10,7 +11,8 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 - Latest bounded selection13:54 UTC: c6983332 cooperative CPU-admission source/
   guarded PostgreSQL/build/installed-owner/control selection PASS; INDEX15/
-  resource30 is **SELECTED_NOT_STARTED**, not live priority acceptance. INDEX14
+  resource30 was initially **SELECTED_NOT_STARTED**. Actual restart14:15:21 and
+  first normal discovery14:16:17 UTC now PASS, not live QUERY-priority acceptance. INDEX14
   drained status0; only one never-claimed START was cancelled through supported
   owner maintenance with its request/history preserved. QUERY still uses B41.
   Actual12:38 login succeeded; original C1 remains unfinished after a real CPU wait
