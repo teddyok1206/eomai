@@ -873,7 +873,7 @@ def test_prefix_readelf_accepts_both_gnu_dynamic_flag_labels(label: bytes) -> No
 def test_prefix_readelf_retains_versions_above_one_mib_within_shared_limit() -> None:
     raw = _elf_text(needed=("libc.so.6",), required=("libc.so.6", "GLIBC_2.14"))
     raw += b"\n" * (2 * 1024**2 - len(raw))
-    assert len(raw) == prefix.MAX_READELF_OUTPUT_BYTES
+    assert len(raw) == host.MAX_READELF_OUTPUT_BYTES
     assert prefix._readelf(Path("/prefix/lib/a.so"), raw).requirements == (
         ("libc.so.6", frozenset({"GLIBC_2.14"})),
     )
@@ -1211,6 +1211,70 @@ def test_elf_skips_vendor_route_only_with_host_absence_evidence(tmp_path: Path) 
     )
     with pytest.raises(InstalledRuntimeProofError, match="HOST_ROUTE_INVALID"):
         _graph(tmp_path / "denied", {"lib/a.so": _elf_text(runpath="/lib/intel64")})
+
+
+def test_cuda_empty_loader_component_uses_a_captured_empty_directory_and_keeps_real_edges(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from eom_catalog_service import embedding_runtime_files as runtime_files
+
+    directory = tmp_path / "loader-empty"
+    directory.mkdir(mode=0o555)
+    monkeypatch.setattr(runtime_files, "CUDA_LOADER_EMPTY_DIRECTORY", directory)
+    installed = tmp_path / "audit/prefix"
+    monkeypatch.setattr(
+        prefix,
+        "fixed_native_embedding_profile",
+        lambda _: FixedNativeEmbeddingProfile("CUDA_INDEX_FP32", installed, "synthetic", None),
+    )
+    metadata = {
+        "lib/a.so": _elf_text(needed=("b.so",), runpath="$ORIGIN:"),
+        "lib/b.so": _elf_text(soname="b.so"),
+    }
+    digest, count = _graph(tmp_path / "audit", metadata)
+    assert count == 2
+    assert digest != prefix._digest([("lib/a.so", "b.so", "lib/b.so", [])])
+    assert _graph(tmp_path / "audit", metadata) == (digest, count)
+    directory.chmod(0o755)
+    (directory / "b.so").write_bytes(b"must not shadow the real prefix library")
+    directory.chmod(0o555)
+    with pytest.raises(InstalledRuntimeProofError, match="EMPTY_DIRECTORY_NOT_EMPTY"):
+        _graph(tmp_path / "audit", metadata)
+
+
+def test_cpu_elf_digest_and_empty_component_rejection_are_unchanged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from eom_catalog_service import embedding_runtime_files as runtime_files
+
+    directory = tmp_path / "loader-empty"
+    directory.mkdir(mode=0o555)
+    monkeypatch.setattr(runtime_files, "CUDA_LOADER_EMPTY_DIRECTORY", directory)
+    digest, count = _graph(
+        tmp_path / "cpu",
+        {
+            "lib/a.so": _elf_text(needed=("b.so",), runpath="$ORIGIN"),
+            "lib/b.so": _elf_text(soname="b.so"),
+        },
+    )
+    assert count == 2
+    assert digest == prefix._digest([("lib/a.so", "b.so", "lib/b.so", [])])
+    with pytest.raises(InstalledRuntimeProofError, match="ELF_ROUTE_INVALID"):
+        _graph(tmp_path / "cpu-denied", {"lib/a.so": _elf_text(runpath="$ORIGIN:")})
+
+
+@pytest.mark.parametrize("route", ["$ORIGIN:.", "$ORIGIN:../other", "$ORIGIN:$LIB"])
+def test_cuda_empty_namespace_is_not_a_general_relative_route_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, route: str
+) -> None:
+    installed = tmp_path / "audit/prefix"
+    monkeypatch.setattr(
+        prefix,
+        "fixed_native_embedding_profile",
+        lambda _: FixedNativeEmbeddingProfile("CUDA_INDEX_FP32", installed, "synthetic", None),
+    )
+    with pytest.raises(InstalledRuntimeProofError, match="ELF_ROUTE_INVALID"):
+        _graph(tmp_path / "audit", {"lib/a.so": _elf_text(runpath=route)})
 
 
 def test_source_archive_bound_preserves_member_bound_and_rejects_bool() -> None:

@@ -36,6 +36,7 @@ from eom_catalog_service.embedding_offline_backend import OfflineNativeEmbedding
 from eom_catalog_service.embedding_runtime_files import (
     NumericalRuntimeFileSnapshots,
     fixed_native_embedding_profile,
+    require_cuda_loader_working_directory,
 )
 
 _CONFIG_ROOT = Path("/opt/eom/embedding-native-config")
@@ -147,6 +148,8 @@ def native_embedding_backend_scope(
 
         def check() -> None:
             captured.assert_current()
+            if profile == "CUDA_INDEX_FP32":
+                require_cuda_loader_working_directory(files)
             files.assert_unchanged()
             if resolved is not None:
                 resolved.assert_unchanged()

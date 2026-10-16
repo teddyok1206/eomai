@@ -37,6 +37,7 @@ NATIVE_EMBEDDING_PROFILES = MappingProxyType(
         ),
     }
 )
+CUDA_LOADER_EMPTY_DIRECTORY = Path("/opt/eom/embedding-cuda-loader-empty")
 
 
 def fixed_native_embedding_profile(profile: str) -> FixedNativeEmbeddingProfile:
@@ -105,7 +106,7 @@ class ObservedRuntimeMemberBytes:
 
 @contextmanager
 def _protected_open(
-    path: Path, owner_uid: int
+    path: Path, owner_uid: int, *, kind: Literal["REGULAR", "EMPTY_DIRECTORY"] = "REGULAR"
 ) -> Iterator[tuple[int, tuple[tuple[Path, tuple[int, ...]], ...]]]:
     _require(path.is_absolute() and ".." not in path.parts, "PATH_INVALID")
     descriptors: list[tuple[int, int | None, str, Path, tuple[int, ...]]] = []
@@ -132,19 +133,39 @@ def _protected_open(
             )
         leaf = os.open(
             path.name,
-            os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
+            os.O_RDONLY
+            | os.O_NOFOLLOW
+            | os.O_CLOEXEC
+            | os.O_NONBLOCK
+            | (os.O_DIRECTORY if kind == "EMPTY_DIRECTORY" else 0),
             dir_fd=descriptors[-1][0],
         )
         value = os.fstat(leaf)
-        _require(
-            stat.S_ISREG(value.st_mode)
-            and value.st_uid == owner_uid
-            and value.st_nlink == 1
-            and not value.st_mode & 0o6022,
-            "FILE_UNPROTECTED",
-        )
+        if kind == "EMPTY_DIRECTORY":
+            _require(
+                stat.S_ISDIR(value.st_mode)
+                and value.st_uid == owner_uid
+                and stat.S_IMODE(value.st_mode) == 0o555
+                and not {"system.posix_acl_access", "system.posix_acl_default"}.intersection(
+                    os.listxattr(leaf)
+                ),
+                "EMPTY_DIRECTORY_UNPROTECTED",
+            )
+            with os.scandir(leaf) as entries:
+                _require(next(entries, None) is None, "EMPTY_DIRECTORY_NOT_EMPTY")
+            _require(_identity(os.fstat(leaf)) == _identity(value), "EMPTY_DIRECTORY_CHANGED")
+        else:
+            _require(
+                stat.S_ISREG(value.st_mode)
+                and value.st_uid == owner_uid
+                and value.st_nlink == 1
+                and not value.st_mode & 0o6022,
+                "FILE_UNPROTECTED",
+            )
         ancestors = tuple((named, initial) for _fd, _parent, _name, named, initial in descriptors)
         yield leaf, ancestors
+        if kind == "EMPTY_DIRECTORY":
+            _require(_identity(os.fstat(leaf)) == _identity(value), "EMPTY_DIRECTORY_CHANGED")
         _require(
             _identity(os.fstat(leaf))
             == _identity(os.stat(path.name, dir_fd=descriptors[-1][0], follow_symlinks=False)),
@@ -176,6 +197,22 @@ class NumericalRuntimeFileSnapshots:
         self._observations: dict[Path, ObservedRuntimeMemberBytes] = {}
         self._observation_bytes = 0
 
+    def observe_empty_directory(self, path: Path) -> RuntimeFileEpoch:
+        """Capture a protected0555 empty namespace once; this is not a runtime grant."""
+        previous = self._epochs.get(path)
+        if previous is not None:
+            _require(
+                stat.S_ISDIR(previous.identity[4]) and previous.sha256 == "",
+                "EMPTY_DIRECTORY_REFERENCE_INVALID",
+            )
+            previous.assert_unchanged()
+            return previous
+        with _protected_open(path, self.owner_uid, kind="EMPTY_DIRECTORY") as (fd, ancestors):
+            epoch = RuntimeFileEpoch(path, _identity(os.fstat(fd)), ancestors, "")
+        epoch.assert_unchanged()
+        self._epochs[path] = epoch
+        return epoch
+
     def observe_protected_interpreter(self, path: Path) -> None:
         """Protect actual executable identity; full interpreter bytes belong to launch audit."""
         self.observe_protected_member_identity(path)
@@ -183,7 +220,9 @@ class NumericalRuntimeFileSnapshots:
     def observe_protected_member_identity(self, path: Path) -> None:
         """Retain protected file/ancestor epochs without claiming or repeating a byte hash."""
         if path in self._epochs:
-            self._epochs[path].assert_unchanged()
+            epoch = self._epochs[path]
+            _require(stat.S_ISREG(epoch.identity[4]), "FILE_UNPROTECTED")
+            epoch.assert_unchanged()
             return
         with _protected_open(path, self.owner_uid) as (descriptor, ancestors):
             epoch = RuntimeFileEpoch(path, _identity(os.fstat(descriptor)), ancestors, "")
@@ -362,6 +401,24 @@ class NumericalRuntimeFileSnapshots:
             epoch.assert_unchanged()
         for path, initial in self._namespace_directories.items():
             _require(_identity(path.lstat()) == initial, "NAMESPACE_CHANGED")
+
+
+def capture_cuda_loader_directory(files: NumericalRuntimeFileSnapshots) -> RuntimeFileEpoch:
+    """Fixed installation prerequisite; byte audit does not change or infer its own cwd."""
+    _require(type(files) is NumericalRuntimeFileSnapshots, "EMPTY_DIRECTORY_CAPTURE_INVALID")
+    return files.observe_empty_directory(CUDA_LOADER_EMPTY_DIRECTORY)
+
+
+def require_cuda_loader_working_directory(files: NumericalRuntimeFileSnapshots) -> None:
+    """CUDA execution must use the captured empty inode, not merely have one installed."""
+    epoch = capture_cuda_loader_directory(files)
+    try:
+        _require(_identity(os.stat(".")) == epoch.identity, "CUDA_WORKING_DIRECTORY_INVALID")
+    except OSError as exc:
+        raise InstalledRuntimeProofError(
+            "INSTALLED_RUNTIME_CUDA_WORKING_DIRECTORY_INVALID"
+        ) from exc
+    epoch.assert_unchanged()
 
 
 def read_live_runtime_os_file(path: Path, *, maximum: int, owner_uid: int = 0) -> bytes:

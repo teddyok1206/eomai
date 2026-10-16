@@ -8,6 +8,11 @@
 GPU가 동일 입력 비교에서 우수하고 모든 gate를 통과하면 **기본 활성화까지가 목표**다.
 비교만 완료한 상태를 요청 전체 완료로 보고하지 않는다.
 
+2026-10-16 source 후속: [CUDA loader 작업 폴더 경계](INCREMENTAL_EMBEDDING_CUDA_LOADER_DIRECTORY_DESIGN.md)는
+공식 cuSPARSELt의 빈 RUNPATH component를 고정0555 빈 폴더의 관측으로 해석하고,
+native CUDA factory에서 실제 cwd를 재검증한다. CPU의 거부 규칙과 digest는 유지한다.
+이는 CUDA 설치·namespace·공유 lease·실제6회 성능 비교나 기본 device 활성화의 증거가 아니다.
+
 ## 1. 현재 근거와 변경하지 않을 경계
 
 읽기 전용 inventory에서 전달된 장치는 RTX 5080, VRAM 16,303 MiB, driver 580.126.09이며

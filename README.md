@@ -260,7 +260,7 @@ CONTENT_ONLY7/520·CONCRETE_FACETS1/520·METADATA_ONLY1/520입니다.
 | 검증된 CPU 설치 기록의 실행 전 확인 | 실제 sealed receipt 게시·현재 파일/계정/boot·전용 UID 재조회 PASS; 실제 작업 실행기 연결은 미완료 |
 | 고정 CPU 실행 입구·설정 게시 CLI | CPU에 c2f8eef8 설치·격리 probe·설치 seal PASS; INDEX 고정 실행 단위 설치·합성 수치 계산 확인, QUERY 연결은 미완료 |
 | 실제 disposable PostgreSQL |0052 registry/application16·reservation8·limited IAM6,0053 stage18+runner10·Identity11 PASS; migration·cleanup PASS |
-| CPU/CUDA 실행 환경 준비 | 실제 CPU 설치·inventory·수치 증명·비특권 격리 시험·최종 설치 기록 PASS; source/Job 실행 연결 남음, CUDA 미게시 |
+| CPU/CUDA 실행 환경 준비 | 실제 CPU 설치·inventory·수치 증명·비특권 격리 시험·최종 설치 기록 PASS; CUDA 미게시. CUDA 공식 라이브러리의 빈 작업 폴더 검색 경로는 고정0555 빈 폴더의 FD/epoch와 실제 cwd를 확인하는 소스 경계로 보강. 관련 회귀640·설치 회귀779·strict type3 PASS(합산하지 않음). 실제 CUDA namespace/lease/6회 비교·기본값 전환은 아직 미완료. [경계와 남은 실제 gate](docs/architecture/INCREMENTAL_EMBEDDING_CUDA_LOADER_DIRECTORY_DESIGN.md) |
 | CPU 기준 전체 후보 순위 비교 | SOURCE_PASS; 고정 오차·CPU 동점 묶음으로 전체 후보/모든 쌍·상위5 경계를 비교. 관련449 PASS, 후보e874268d의 wheel/RECORD·owner용2개 wheel만의 격리 import PASS. 실제 GPU benchmark/기본값 전환은 미실행. [비교 설계·증거](docs/architecture/INCREMENTAL_EMBEDDING_DEVICE_BENCHMARK_PROPOSAL.md#full-rank-order-comparison-before-native-owner-integration--2026-10-14) |
 | benchmark 실행 입구·메모리 감시 | SOURCE_PASS; 기존 identity guard/worker에 실행별 host 감시와 모델 계산 전 채널 일치 확인을 연결. 관련804 PASS·strict type6·후보44404192의3-wheel/RECORD·owner용2-wheel 격리 import PASS. 실제6회 실행 owner/launcher·설치·측정은 미완료. [설계·검증](docs/architecture/INCREMENTAL_EMBEDDING_DEVICE_BENCHMARK_PROPOSAL.md#own-unit-host-memory-observation-before-native-entry-composition--2026-10-14) |
 | 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | 실제 seed/delta와3-view 제한 실행·21행 재사용 PASS. 기출·승인 문항 상시 인덱싱 서비스의 접수/claim·자동 기동 활성 확인; 전체 coverage는 처리 중. 과거 bounded QUERY 완료/replay/current context PASS(PARTIAL, 당시2/520·후보1). 일반 소비자·CPU/GPU 비교·조건부 GPU 기본값은 미완료 |
@@ -301,7 +301,8 @@ CPU 환경은 이 버전으로 고정하고, 다음에는 owner/native launcher�
 [현재 사용자·자료 연결 범위](docs/architecture/LOCAL_EMBEDDING_CURRENT_OWNER_COMPOSITION.md)에
 초기 접수와 만료된 실행의 구분, 현재 권한 재검증 및 남은 실행기 연결을 기록합니다.
 실제 seed/delta·공통 소비자 연결·CPU/GPU 비교와 조건부 기본값 전환도 미완료입니다.
-CUDA의 현재 작업 폴더 검색 경로는 고정 격리 폴더 검증을 연결하기 전까지 계속 차단합니다.
+CUDA의 현재 작업 폴더 검색 경로는 고정0555 빈 폴더의 실제 관측과 cwd 검증이 없으면
+계속 차단합니다. 이 소스 후속은 CUDA 설치·namespace·device/lease 승인이나 실측 완료가 아닙니다.
 
 후속17:48 UTC에는 보호된 owner 설치본 `28cfcfa0`과 기존 CPU `c2f8eef8`에서 실제
 INDEX 계산을 확인했습니다. 합성 입력2개가 각각1024차원으로 계산됐고, 같은 실행을

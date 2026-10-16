@@ -26,6 +26,8 @@ from eom_catalog_service.embedding_conda_runtime_closure import (
 from eom_catalog_service.embedding_runtime_files import (
     InstalledRuntimeProofError,
     NumericalRuntimeFileSnapshots,
+    RuntimeFileEpoch,
+    capture_cuda_loader_directory,
     fixed_native_embedding_profile,
     require_runtime_proof,
 )
@@ -846,10 +848,18 @@ def _routes(
     *,
     links: dict[Path, str],
     host: ProtectedEmbeddingHostClosure,
+    empty_directory: RuntimeFileEpoch | None = None,
 ) -> tuple[Path, ...]:
     values = elf.runpath or elf.rpath
     result: list[Path] = []
     for value in values:
+        if value == "":
+            _require(empty_directory is not None, "ELF_ROUTE_INVALID")
+            assert empty_directory is not None
+            empty_directory.assert_unchanged()
+            # ld.so really searches cwd. A captured empty immutable namespace
+            # proves no candidate there; it is not an ignored arbitrary route.
+            continue
         if value.startswith("/"):
             host.assert_absent_search_route(value)
             continue
@@ -914,6 +924,13 @@ def _elf_closure(
                     host.inspect_elf(descriptor, deadline=min(deadline, time.monotonic() + 90.0)),
                 )
     host.fixed_loader_path()
+    empty_directory = None
+    if any("" in (elf.runpath or elf.rpath) for elf in objects.values()):
+        _require(
+            prefix == fixed_native_embedding_profile("CUDA_INDEX_FP32").prefix,
+            "ELF_ROUTE_INVALID",
+        )
+        empty_directory = capture_cuda_loader_directory(files)
     directories = {
         parent for member in inventory for parent in member.parents if parent.is_relative_to(prefix)
     }
@@ -923,7 +940,7 @@ def _elf_closure(
     # One fixed Python process. RPATH is transitive; RUNPATH is direct-only.
     main = objects.get(prefix / "bin/python3.12")
     main_routes = (
-        _routes(main, prefix, directories, links=links, host=host)
+        _routes(main, prefix, directories, links=links, host=host, empty_directory=empty_directory)
         if main is not None and not main.runpath
         else ()
     )
@@ -955,7 +972,9 @@ def _elf_closure(
         seen.add((path, inherited))
         visited.add(path)
         elf = objects[path]
-        own = _routes(elf, prefix, directories, links=links, host=host)
+        own = _routes(
+            elf, prefix, directories, links=links, host=host, empty_directory=empty_directory
+        )
         search = own if elf.runpath else own + inherited
         for name in elf.needed:
             edge_count += 1
@@ -995,6 +1014,21 @@ def _elf_closure(
                 )
                 resolutions[path, name] = "FIXED_HOST"
                 result.append((str(path.relative_to(prefix)), name, "FIXED_HOST", sorted(required)))
+    if empty_directory is not None:
+        empty_directory.assert_unchanged()
+        return _digest(
+            {
+                "edges": sorted(result),
+                "empty_cuda_loader_directory": {
+                    "path": str(empty_directory.path),
+                    "identity": empty_directory.identity,
+                    "ancestors": tuple(
+                        (str(path), identity) for path, identity in empty_directory.ancestors
+                    ),
+                },
+            }
+        ), len(objects)
+    # Preserve the historical CPU digest when no empty search component was used.
     return _digest(sorted(result)), len(objects)
 
 

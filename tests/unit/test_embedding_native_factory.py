@@ -51,6 +51,7 @@ class Scenario:
     close_failed: bool = False
     observer_failed: bool = False
     backend_failed: bool = False
+    loader_directory_valid: bool = True
 
     def assert_current(
         self,
@@ -186,6 +187,14 @@ def scenario(
     monkeypatch.setattr(factory, "ProtectedInstalledEmbeddingRuntimeObserver", Observer)
     monkeypatch.setattr(factory, "OfflineNativeEmbeddingBackend", Backend)
 
+    def require_working_directory(files: object) -> None:
+        assert isinstance(files, Files)
+        state.events.append("cuda-cwd")
+        if not state.loader_directory_valid:
+            raise ValueError("synthetic CUDA working directory denied")
+
+    monkeypatch.setattr(factory, "require_cuda_loader_working_directory", require_working_directory)
+
     def resolve(*_args: object, observe_member_identity: Callable[[Path], None]) -> SimpleNamespace:
         for path in (
             resolved.manifest.path,
@@ -222,6 +231,10 @@ def test_scope_has_no_request_parameters_and_reuses_resolved_metadata(
     assert state.events.count("close-attempt") == 1
     if ownership is not None:
         assert ownership.valid and ownership.calls > 5
+        assert state.events.index("cuda-cwd") < state.events.index("config-read")
+        assert state.events.count("cuda-cwd") > 5
+    else:
+        assert "cuda-cwd" not in state.events
     with pytest.raises(TypeError):
         cast(Callable[..., object], scope)(state.config)
 
@@ -289,6 +302,27 @@ def test_cuda_lost_ownership_denies_before_observer(monkeypatch: pytest.MonkeyPa
     with pytest.raises(ValueError), scope():
         pytest.fail("lost ownership yielded")
     assert "observer-create" not in state.events
+
+
+def test_cuda_wrong_working_directory_denies_before_config_or_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state, scope, _ownership = scenario(monkeypatch, "CUDA_INDEX_FP32")
+    state.loader_directory_valid = False
+    with pytest.raises(ValueError), scope():
+        pytest.fail("foreign working directory yielded")
+    assert "cuda-cwd" in state.events
+    assert not {"config-read", "observer-create", "backend-create"}.intersection(state.events)
+
+
+def test_cuda_working_directory_drift_is_rechecked_during_encoding_and_teardown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state, scope, _ownership = scenario(monkeypatch, "CUDA_INDEX_FP32")
+    with pytest.raises(ValueError), scope() as backend:
+        state.loader_directory_valid = False
+        backend.encode(("no CUDA or model was executed",), purpose="QUERY")
+    assert "close-attempt" in state.events and state.events[-1] == "cuda-cwd"
 
 
 def test_admission_boolean_is_not_a_grant(monkeypatch: pytest.MonkeyPatch) -> None:
