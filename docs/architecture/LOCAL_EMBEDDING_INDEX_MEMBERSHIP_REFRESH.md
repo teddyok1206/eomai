@@ -249,8 +249,10 @@ Bounded logs remain in the existing temporary development window
 loop`index-refresh-service-loop-regression.log`, and first-through-fourth failures.
 These working logs are not registered production acceptance Artifacts.
 
-**Operating d4846220 remains unchanged.** A clean compatible candidate build,
-protected installation/source identity admission, immutable service-grant/config
+**Operating d4846220 remains unchanged.** A clean standard candidate build and
+16-module/four-schema archive→wheel byte closure now PASS for`bb17912b`;
+[exact immutable build selection](../operations/LOCAL_INDEXING_MEMBERSHIP_REFRESH_CANDIDATE_2026-10-16.md).
+Protected installation/source identity admission, immutable service-grant/config
 selection, rollback and bounded actual reuse acceptance remain necessary before
 declaring this correction live. This checkpoint does not enable continuous work,
 activate ordinary consumers or prove CPU/CUDA performance. The full goal remains
