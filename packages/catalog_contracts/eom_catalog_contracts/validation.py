@@ -132,6 +132,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:a81f556811c74a93faf8635e492ec92a5791948428f9995179b27dea77bc640b",
         ),
+        "embedding-native-cuda-probe": CatalogSchemaResource(
+            "schemas/knowledge/embedding-native-cuda-probe-v1.schema.json",
+            "resources/knowledge/embedding-native-cuda-probe-v1.schema.json",
+            "1.0",
+            "sha256:ee3b8ad46c92cf88995f351b63072fdccc0283457b49d614626bc3dab633cd8c",
+        ),
         "embedding-native-cpu-probe": CatalogSchemaResource(
             "schemas/knowledge/embedding-native-cpu-probe-v1.schema.json",
             "resources/knowledge/embedding-native-cpu-probe-v1.schema.json",

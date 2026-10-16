@@ -47,8 +47,8 @@ class NativeCpuProbeInput(_ProbeEnvelope):
         return self
 
 
-class NativeCpuProbeDenials(FrozenModel):
-    """Closed operation names; absence does not claim a DAC enforcement success."""
+class NativeProbeFilesystemDenials(FrozenModel):
+    """Shared negative names; absence does not claim a DAC enforcement success."""
 
     nas: Denial
     repository: Denial
@@ -61,13 +61,18 @@ class NativeCpuProbeDenials(FrozenModel):
     owner_workspace: Denial
     legacy_handoff: Denial
     probe_workspace: Denial
-    gpu: Denial
     postgres: Denial
     docker: Denial
     systemd: Denial
     dbus: Denial
     prefix_write: Literal["DENIED"]
     model_write: Literal["DENIED"]
+
+
+class NativeCpuProbeDenials(NativeProbeFilesystemDenials):
+    """The unchanged CPU recipe additionally requires GPU access to be unavailable."""
+
+    gpu: Denial
 
 
 class NativeCpuProbeResult(_ProbeEnvelope):

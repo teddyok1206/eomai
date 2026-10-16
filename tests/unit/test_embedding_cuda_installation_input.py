@@ -265,11 +265,14 @@ def test_cuda_prefix_input_rejects_malformed_shape_before_capture(tmp_path, monk
 
 
 def test_all_323_predecessor_schema_records_and_bytes_remain_pinned():
-    previous = {
-        name: asdict(value)
-        for name, value in CATALOG_SCHEMA_RESOURCES.items()
-        if name not in {NATIVE, PREFIX}
-    }
+    # Immutable historical membership: new additive contracts must not enter an
+    # old aggregate by exclusion-list accident. The original count/hash stay exact.
+    names = json.loads(
+        (ROOT / "tests/fixtures/embedding_predecessor_schema_names_323.json").read_bytes()
+    )
+    assert len(names) == len(set(names)) == 323
+    assert names == sorted(names)
+    previous = {name: asdict(CATALOG_SCHEMA_RESOURCES[name]) for name in names}
     assert len(previous) == 323
     assert content_sha256(previous) == (
         "sha256:c56c4771df2bfd000a945c4820060afd1de5383ac7b9657f3e187851bd0d30df"

@@ -204,3 +204,72 @@ No root code/prefix, OS group/device, API/Web/worker/source policy or numerical
 space was installed/selected. Actual kernel/device R/W/cgroup probe/observer,
 lease-through-unit-exit cleanup fence and all GPU entrypoint migration are still
 required before any CUDA model/benchmark; existing CPU operation is preserved.
+
+## Closed no-model CUDA probe input/result contract
+
+The next boundary is the existing fixed-unit installation probe, not an encoder
+Job or another admission service. Define its JSON Schema before worker behavior.
+
+1. Root composition pins one configuration1.2, installed proof and canonical payload;
+   the input supplies neither paths/commands nor operator/role/DB/network authority.
+2. Canonical sources remain protected config/proof/bundle/host and actual kernel
+   observations. Worker reports are untrusted observations, never sealed evidence.
+3. Configuration logical/revision IDs, raw/semantic hashes and execution ID remain
+   separate. A result binds the exact raw input and payload file-set hash.
+4. Reuse existing config/proof/bundle validators. Require CUDA profile, exact
+   numerical descriptor/device capture and singleton expected shared-lease group.
+   Independent host/prefix/unit/FD observation is still the root owner's job.
+5. Access is fixed-key comparison and a five-descriptor set, not corpus search.
+6. Frozen typed fields cover four PATH-only device handles and one borrowed lease
+   handle. Descriptor numbers are hints to independently inspect, not device grants.
+7. Bound canonical metadata to64KiB, depth16, one group and five unique FDs; O(B)
+   parsing and O(1) associations. Reuse the existing bounded ROOTLOCAL byte parser.
+8. Bind PID/start and exact input/execution. Report zero model/tokenizer/forward
+   calls and the fixed initialization/synchronization recipe. No new DB/queue.
+9. Contracts stay pure. Share the CPU's existing non-GPU denial value fields while
+   preserving every CPU1.0 schema byte, empty-group rule and canonical result.
+10. Wrong profile/pin/raw/descriptor/group/count fails; unknown outcomes are retained.
+    A report cannot claim termination/sealing or substitute for actual lease lifetime,
+    root ACK, unit exit, cgroup and driver-client cleanup. No automatic compute retry.
+11. Merely broadening the CPU probe would admit CUDA through an old deny-GPU recipe.
+    A separate additive CUDA protocol is smaller and safer than altering that meaning.
+
+This contract does not install probe code into the already-audited B41 prefix.
+The later actual worker/observer/unit must be independently reviewed and staged as
+a declared successor, audited before its first instruction, and retain the shared
+lease through acknowledged observation and process exit. No model is run here.
+
+### CUDA probe protocol source checkpoint
+
+Added canonical/packaged `embedding-native-cuda-probe/1.0` schema first, raw SHA
+`ee3b8ad46c92cf88995f351b63072fdccc0283457b49d614626bc3dab633cd8c`, then frozen
+input/result models and pure association/reference validation. Results explicitly
+remain OBSERVED_NOT_ADMITTED. They bind raw input/execution/payload/configuration,
+the entire pinned numerical descriptor and physical device capture. Config1.2 is
+mandatory; UUID mismatch fails even when numeric device fields match. Five unique
+bounded FD numbers are kernel-observation hints only, not owned descriptors or a
+`CudaEmbeddingOwnership` implementation. Reported termination/sealing fields,
+model/tokenizer/forward calls and copied unknown authority are rejected.
+
+Shared the existing non-GPU denial values between CPU/CUDA. CPU1.0 schema bytes,
+empty supplementary groups, deny-GPU meaning and canonical input/result are
+unchanged. An initial wider regression exposed a historical test that accidentally
+included every later additive schema in its old323-record aggregate. Its exact
+323 names are now a static test fixture, verified against the **unchanged** aggregate
+hash `c56c4771df2bfd000a945c4820060afd1de5383ac7b9657f3e187851bd0d30df`.
+New entries stay covered by the complete resource/mirror gate, rather than an
+ever-growing exclusion list or a rewritten predecessor hash.
+
+Final related regression507 PASS in28.91seconds; strict2 production modules,
+Ruff/format and diff checks PASS. Earlier focused137/81 overlap and are not added.
+Checks include real fresh-process import without ML/SQL/GPU lease/Orchestrator
+modules, schema/package mirrors, canonical/preallocation bounds, old CPU readers,
+config/proof/bundle raw and semantic closure, strict scalars, FD alias/group/device
+mismatches and copied/constructed models. Initial formatter/import-order issues
+were corrected without changing production invariants.
+
+This is SOURCE_PASS, not a running probe, kernel observation, root seal, installed
+receipt or permission grant. Actual CUDA worker/observer/unit/lease-through-exit
+composition, reviewed private-code successor and fresh whole-prefix audit remain
+required. The already-audited B41 bytes are unchanged. No model, GPU, protected
+prefix, service, OS group, device policy or default was changed by this checkpoint.
