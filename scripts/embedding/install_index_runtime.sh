@@ -62,6 +62,8 @@ case "$mode" in
     install -d -o eom -g eom -m 0700 "$PREFIX"
     printf '%s\n' EMBEDDING_INDEX_PREFIX_PREPARED_NO_EXECUTION; exit 0 ;;
   publish|audit-staged) ;;
+  publish-private-successor)
+    [[ "$profile" == CUDA_INDEX_FP32 ]] || fail EMBEDDING_INDEX_PRIVATE_SUCCESSOR_PROFILE_INVALID ;;
   *) fail EMBEDDING_INDEX_MODE_INVALID ;;
 esac
 
@@ -110,7 +112,7 @@ PRIVATE=$(mktemp -d /opt/eom/.embedding-index-install-XXXXXXXX)
 chmod 0700 "$PRIVATE"
 record_phase() { INSTALL_PHASE=$1; printf '%s\n' "$INSTALL_PHASE" >> "$PRIVATE/phase-receipt"; }
 trap 'printf "%s\n" "EMBEDDING_INDEX_STOPPED install_phase=$INSTALL_PHASE" >&2' ERR
-if [[ "$mode" == publish ]]; then
+if [[ "$mode" == publish || "$mode" == publish-private-successor ]]; then
   QUARANTINE=$(mktemp -d /opt/eom/conda/envs/.embedding-index-runtime-XXXXXXXX)
   chmod 0700 "$QUARANTINE"
   record_phase QUARANTINE_COPY
@@ -181,7 +183,18 @@ if ! (
 IFS= read -r HOST_AUDIT_STATUS < "$HOST_AUDIT_RECEIPT" || fail EMBEDDING_INDEX_HOST_PREFLIGHT_INVALID
 [[ "$HOST_AUDIT_STATUS" =~ ^EMBEDDING_HOST_BYTES_AUDIT_PASS_NOT_ADMITTED\ sha256:[0-9a-f]{64}$ && "$(stat -c %s "$HOST_AUDIT_RECEIPT")" -eq $((${#HOST_AUDIT_STATUS} + 1)) ]] || fail EMBEDDING_INDEX_HOST_PREFLIGHT_INVALID
 record_phase HOST_BYTES_PREFLIGHT_PASS_NOT_ADMITTED
-if [[ "$mode" == publish ]]; then
+if [[ "$mode" == publish-private-successor ]]; then
+  grep -Fq '"schema_version":"embedding-prefix-audit-input/1.2"' "$PRIVATE/prefix-audit-input.json" || fail EMBEDDING_INDEX_PRIVATE_SUCCESSOR_INPUT_REQUIRED
+  record_phase BEFORE_PRIVATE_SUCCESSOR_PREPARATION
+  timeout --signal=KILL 180 env -i PATH=/usr/bin:/bin TZ=UTC LANG=C.UTF-8 "$OLD_PREFIX/bin/python3.12" -I -S -B "$PRIVATE/install.py" index-private-successor \
+    --candidate "$QUARANTINE" --workspace "$PRIVATE" \
+    --platform-wheel "$PLATFORM_WHEEL" --platform-wheel-sha256 "$PLATFORM_SHA" \
+    --platform-source "$PLATFORM_SOURCE" --platform-source-sha256 "$PLATFORM_SOURCE_SHA" --platform-commit "$PLATFORM_COMMIT" \
+    --lease-wheel "$LEASE_WHEEL" --lease-wheel-sha256 "$LEASE_SHA" \
+    --lease-source "$LEASE_SOURCE" --lease-source-sha256 "$LEASE_SOURCE_SHA" --lease-commit "$LEASE_COMMIT"
+  record_phase PRIVATE_SUCCESSOR_PREPARED_NOT_AUDITED
+fi
+if [[ "$mode" == publish || "$mode" == publish-private-successor ]]; then
   BACKUP=/opt/eom/conda/envs/.embedding-index-prepublication-${profile}-$(basename "$PRIVATE")
   [[ ! -e "$BACKUP" && ! -L "$BACKUP" ]] || fail EMBEDDING_INDEX_BACKUP_EXISTS
   record_phase BEFORE_PREFIX_REPLACEMENT
@@ -209,10 +222,15 @@ IFS= read -r AUDIT_STATUS < "$AUDIT_RECEIPT" || fail EMBEDDING_INDEX_AUDIT_RECEI
 [[ -f "$AUDIT_INVENTORY" && ! -L "$AUDIT_INVENTORY" && "$(stat -c %u:%a:%h "$AUDIT_INVENTORY")" == 0:600:1 ]] || fail EMBEDDING_INDEX_INVENTORY_INVALID
 (( $(stat -c %s "$AUDIT_INVENTORY") > 0 && $(stat -c %s "$AUDIT_INVENTORY") <= 16777216 )) || fail EMBEDDING_INDEX_INVENTORY_INVALID
 record_phase PREFIX_BYTES_AUDITED_NOT_ADMITTED
-if [[ "$mode" == audit-staged ]]; then
+if [[ "$mode" == audit-staged || "$mode" == publish-private-successor ]]; then
   printf '%s\n' EMBEDDING_INDEX_AUDIT_STATUS=AUDITED_NOT_ADMITTED EMBEDDING_INDEX_PROBE_STATUS=NOT_PROBED \
-    "audit_input_sha256=sha256:$AUDIT_INPUT_SHA" "runtime_tree_sha256=sha256:$RUNTIME_SHA" \
+    "audit_input_sha256=sha256:$AUDIT_INPUT_SHA" \
     "audit_operation=$PRIVATE" "prefix_inventory=$AUDIT_INVENTORY"
+  if [[ "$mode" == publish-private-successor ]]; then
+    printf '%s\n' "private_successor=BYTE_AUDITED_NOT_ADMITTED" "predecessor_tree_sha256=sha256:$RUNTIME_SHA" "runtime_backup=$BACKUP"
+  else
+    printf '%s\n' "runtime_tree_sha256=sha256:$RUNTIME_SHA"
+  fi
   exit 0
 fi
 arguments=(index-runtime --profile "$profile" --lock-directory "$PRIVATE/locks"

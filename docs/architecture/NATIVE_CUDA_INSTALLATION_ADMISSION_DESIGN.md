@@ -78,6 +78,92 @@ floats, alternate raw JSON, CPU profiles or a wrong predecessor schema.
 CPU remains active throughout source-only work. No new model run, OS group/device
 grant, worker account or service activation follows from writing this document.
 
+## Private-code successor preparation in the existing installer
+
+The existing `publish` requires a developer-owned initial prefix; `audit-staged`
+is read-only. Neither can update the already protected B41 candidate. Extend that
+same installer with explicit CUDA-only `publish-private-successor`, not an ad-hoc
+prefix patch or a parallel runtime registry.
+
+1. Responsibility: mechanical offline private-wheel replacement in a root-private
+   quarantine, followed by the existing host/full-prefix audit. This operation
+   does not select a runtime, execute candidate Python, probe a GPU or seal a receipt.
+2. Canonical inputs: the independently pinned predecessor tree and retained source/
+   wheel archives. Reuse released `embedding-prefix-audit-input/1.2` JSON Schema
+   and parser for the successor's complete archive/bootstrap/host closure; no new
+   worker or cross-service message is introduced by the CLI mode.
+3. Keep predecessor and successor source commits/wheel hashes/inventories distinct.
+   The original prefix is retained as the existing publisher's prepublication
+   backup, and prior installation/audit receipts are never overwritten.
+4. Fixed CUDA profile/path only; raw predecessor tree hash, helper hash and both
+   private source/wheel pins are mandatory. Retain and verify archives before use.
+   A new inventory must come from a fresh complete OLD-interpreter audit, not a
+   derived edit of the predecessor inventory.
+5. Access patterns: one ordered tree copy/hash, keyed private namespace membership,
+   bounded wheel-member/console-script validation and deterministic RECORD output.
+6. Reuse the existing profile flock, archive retainer and source/wheel validators.
+   Sets/maps track namespaces and scripts. Only the two private EOM distributions
+   may change; public libraries, Conda metadata, model bytes and CPU paths may not.
+7. One full quarantine copy is an explicit candidate materialization boundary,
+   necessary to preserve the predecessor. No hard links, repeated public-package
+   installation or model copy. Private overlay work is O(private bytes + members);
+   full copy/hash/audit remains O(prefix bytes), bounded by existing limits.
+8. Hold the same root publication flock throughout. Prepare/validate the entire
+   private overlay using accepted OLD Python/pip, with no index/deps/compilation,
+   before moving original private namespaces/wrappers into a retained backup.
+   The existing host preflight precedes fixed-prefix replacement; the existing
+   full byte audit follows it. Operational quiescence remains the invoking root
+   maintenance owner's responsibility, not an implicit execution grant.
+9. Installation stays in the existing shell/stdlib bootstrap adapter. Neither
+   domain/contract code nor workers gain filesystem/persistence responsibilities.
+   Do not import candidate modules or execute their entrypoints during assembly.
+10. Reject unsafe ZIP paths, duplicate/foreign namespaces, unexpected scripts,
+    symlinks, bytecode and hash/source mismatches. Preserve partial quarantine,
+    overlay, phase log and original backup on failure; no automatic recovery or
+    replay. Success still exits BYTE_AUDITED / NOT_ADMITTED / NOT_PROBED without
+    entering the candidate interpreter.
+11. Patching the protected prefix in place would avoid a copy but loses clean
+    predecessor/recovery evidence and makes a failed update ambiguous. Rebuilding
+    all70 public packages or widening CPU admission is unnecessary. A single
+    explicit successor mode reuses the existing installation/audit boundary.
+
+### Private successor source checkpoint —22:13 UTC
+
+Implemented CUDA-only `publish-private-successor` in the existing installer and
+its stdlib bootstrap. Root OLD Python/pip prepares the two hash-pinned private
+wheels offline in a separate directory; no dependencies, package index, bytecode
+compilation or candidate entrypoints are used. ZIP names/types/counts/sizes,
+private namespaces, console entrypoints, payload hashes and deterministic
+installed RECORDs are checked. Only private roots/wrappers move; old ones remain
+in the operation's `prior-private-overlay`. The original complete prefix uses
+the existing prepublication backup. Root umask077 does not leave the installed
+payload unreadable: new private directories become0755, files0444 and wrappers0555,
+while the operation workspace remains0700. Public/CPU/model bytes are untouched.
+
+The same host preflight and whole-prefix OLD auditor are mandatory. Success exits
+before the existing candidate-interpreter call and does not activate/seal/probe.
+The predecessor tree pin is reported as a predecessor, never mislabeled as the
+changed successor's hash. CPU, missing1.2 input, stale pins and partial operations
+fail explicitly without automatic replay. Existing CPU helper AST fingerprint
+and predecessor schemas remain exact.
+
+Fresh combined1878 tests PASS in76.07seconds, including the prior1138 reader suite
+and installation/source/wheel/host/CPU suites; overlapping133/19 runs are not added.
+An explicitly opted-in tiny synthetic wheel test used the **actual accepted OLD
+pip** offline and passed. Ownership in that temporary fixture is substituted;
+it is not root publication, numerical admission or a GPU test. Strict bootstrap
+type check, Ruff/format, shell syntax and diff checks PASS. Initial developer
+failures were a test sys.argv substitution and ConfigParser typing, fixed without
+weakening production guards. No new dependency or protocol version was needed;
+released audit-input1.2 remains the full source/host/bootstrap closure.
+
+Installer raw SHA `260808d0eb3cf2fed3796127cb511cd5f688927968a0fdcea378ccb3f0e71644`;
+bootstrap raw SHA `79e22063886e3b90eee99a6122e2029efbb10d1098fa5be015d93ba4021c6d3d`.
+At this checkpoint this is **SOURCE_PASS / NOT_INSTALLED / NOT_ACTIVE**. Next is
+protected installation of these reviewed installer bytes, exact successor inputs
+for the already built platform23/leasec9 pair and one observed whole-prefix audit.
+No existing B41 inventory is reused as evidence for those changed bytes.
+
 ## Implemented metadata slice —2026-10-16 UTC
 
 Defined the unregistered ROOTLOCAL receipt2.0 JSON Schema2020-12 **before** its

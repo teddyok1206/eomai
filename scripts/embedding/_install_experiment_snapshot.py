@@ -1172,6 +1172,242 @@ def index_public_archives_main() -> int:
         return 1
 
 
+def _index_overlay_names(site: Path) -> set[str]:
+    """Only private distribution roots; public dependencies never enter the overlay."""
+    names = {path.name for path in site.iterdir()}
+    if not names or any(
+        re.fullmatch(r"eom_[a-z0-9_]+|eomctl|eom_(?:platform|gpu_lease)-0\.1\.0\.dist-info", name)
+        is None
+        or not (site / name).is_dir()
+        or (site / name).is_symlink()
+        for name in names
+    ):
+        raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_OVERLAY_INVALID")
+    return names
+
+
+def _index_console_entries(dist: Path) -> set[str]:
+    import configparser
+
+    path = dist / "entry_points.txt"
+    if not path.exists():
+        return set()
+    if path.is_symlink() or not 0 < path.stat().st_size <= 1024**2:
+        raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_ENTRYPOINT_INVALID")
+
+    class EntryMetadata(configparser.ConfigParser):
+        def optionxform(self, optionstr: str) -> str:
+            return optionstr
+
+    parser = EntryMetadata(interpolation=None, strict=True)
+    parser.read_string(path.read_text(encoding="utf-8"))
+    if set(parser.sections()) - {"console_scripts"}:
+        raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_ENTRYPOINT_INVALID")
+    result = set()
+    for name, value in parser.items("console_scripts") if parser.sections() else ():
+        if (
+            re.fullmatch(r"eom-[a-z0-9-]{1,80}|eomctl", name) is None
+            or re.fullmatch(r"(?:eom_[a-z_]+|eomctl)(?:\.[a-z_]+)*:[a-z_]+", value) is None
+        ):
+            raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_ENTRYPOINT_INVALID")
+        result.add(name)
+    return result
+
+
+def _index_prepare_private_overlay(
+    candidate: Path, workspace: Path, wheels: tuple[Path, Path]
+) -> None:
+    """Accepted OLD pip assembles inert wheels; candidate instructions are never run."""
+    import subprocess
+
+    stage = workspace / "private-successor"
+    stage.mkdir(mode=0o700)  # No replay into a partial operation.
+    site = stage / "lib/python3.12/site-packages"
+    for wheel in wheels:
+        _index_private_zip32(wheel)
+        with zipfile.ZipFile(wheel) as archive:
+            names = archive.namelist()
+            if (
+                len(names) != len(set(names))
+                or sum(row.file_size for row in archive.infolist()) > 64 * 1024**2
+            ):
+                raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_WHEEL_INVALID")
+            for row in archive.infolist():
+                relative = _relative(row.filename)
+                if (
+                    relative.as_posix() != row.filename.rstrip("/")
+                    or "\\" in row.filename
+                    or row.file_size > 1024**2
+                    or re.fullmatch(
+                        r"eom_[a-z0-9_]+|eomctl|eom_(?:platform|gpu_lease)-0\.1\.0\.dist-info",
+                        relative.parts[0],
+                    )
+                    is None
+                    or stat.S_IFMT(row.external_attr >> 16) not in {0, stat.S_IFREG, stat.S_IFDIR}
+                ):
+                    raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_WHEEL_INVALID")
+    subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-B",
+            "-m",
+            "pip",
+            "install",
+            "--no-deps",
+            "--no-index",
+            "--only-binary=:all:",
+            "--no-compile",
+            "--no-cache-dir",
+            "--target",
+            str(site),
+            *(str(wheel) for wheel in wheels),
+        ],
+        check=True,
+        timeout=120,
+        cwd=workspace,
+        env={"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"},
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    scripts = site / "bin"
+    if scripts.is_symlink() or not scripts.is_dir():
+        raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_ENTRYPOINT_INVALID")
+    scripts.rename(stage / "bin")
+    roots = _index_overlay_names(site)
+    expected_scripts: set[str] = set()
+    for wheel, dist_name in zip(wheels, ("eom_platform", "eom_gpu_lease"), strict=True):
+        dist = site / f"{dist_name}-0.1.0.dist-info"
+        entries = _index_console_entries(dist)
+        if expected_scripts & entries:
+            raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_ENTRYPOINT_INVALID")
+        expected_scripts.update(entries)
+        records: dict[str, Path] = {}
+        with zipfile.ZipFile(wheel) as archive:
+            for row in archive.infolist():
+                if not row.is_dir() and not row.filename.endswith(".dist-info/RECORD"):
+                    records[row.filename] = site / row.filename
+        for name in ("INSTALLER", "REQUESTED", "direct_url.json"):
+            records[f"{dist.name}/{name}"] = dist / name
+        for name in sorted(entries):
+            target = stage / "bin" / name
+            raw = target.read_bytes()
+            first, separator, remainder = raw.partition(b"\n")
+            if not separator or not first.startswith(b"#!/") or len(raw) > 16384:
+                raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_ENTRYPOINT_INVALID")
+            target.write_bytes(
+                f"#!{_INDEX_PREFIXES['CUDA_INDEX_FP32']}/bin/python3.12\n".encode() + remainder
+            )
+            records[f"../../../bin/{name}"] = target
+        output = io.StringIO(newline="")
+        writer = csv.writer(output, lineterminator="\n")
+        for name, target in sorted(records.items()):
+            digest = base64.urlsafe_b64encode(bytes.fromhex(_hash(target))).decode().rstrip("=")
+            writer.writerow((name, "sha256=" + digest, target.stat().st_size))
+        writer.writerow((f"{dist.name}/RECORD", "", ""))
+        (dist / "RECORD").write_text(output.getvalue(), encoding="utf-8", newline="")
+    if {path.name for path in (stage / "bin").iterdir()} != expected_scripts:
+        raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_ENTRYPOINT_INVALID")
+    validate_runtime_tree(stage)
+    _index_private_bytecode(stage)
+    verify_platform_wheel(stage, wheels[0], _hash(wheels[0]))
+    # The root-private bootstrap inherits umask077. Only the new private payload
+    # becomes readable in the numerical prefix; the operation workspace stays0700.
+    for path in stage.rglob("*"):
+        if path.is_symlink():
+            raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_OVERLAY_INVALID")
+        path.chmod(0o755 if path.is_dir() else 0o444, follow_symlinks=False)
+    for name in expected_scripts:
+        (stage / "bin" / name).chmod(0o555)
+    old_site = candidate / "lib/python3.12/site-packages"
+    old_roots = {
+        path.name
+        for path in old_site.iterdir()
+        if path.name.startswith("eom_") or path.name == "eomctl"
+    }
+    if not old_roots:
+        raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_OVERLAY_INVALID")
+    old_scripts: set[str] = set()
+    for dist_name in ("eom_platform", "eom_gpu_lease"):
+        old_scripts.update(_index_console_entries(old_site / f"{dist_name}-0.1.0.dist-info"))
+    for name in expected_scripts - old_scripts:
+        if os.path.lexists(candidate / "bin" / name):
+            raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_ENTRYPOINT_COLLISION")
+    backup = workspace / "prior-private-overlay"
+    backup.mkdir(mode=0o700)
+    for name in ("site", "bin"):
+        (backup / name).mkdir(mode=0o700)
+    for name in sorted(old_roots):
+        (old_site / name).rename(backup / "site" / name)
+    for name in sorted(old_scripts):
+        (candidate / "bin" / name).rename(backup / "bin" / name)
+    for name in sorted(roots):
+        (site / name).rename(old_site / name)
+    for name in sorted(expected_scripts):
+        (stage / "bin" / name).rename(candidate / "bin" / name)
+
+
+def index_private_successor_main() -> int:
+    """CUDA-only root quarantine assembly using the already accepted OLD interpreter."""
+    parser = argparse.ArgumentParser(description="Prepare a pinned private-code successor")
+    parser.add_argument("--candidate", type=Path, required=True)
+    parser.add_argument("--workspace", type=Path, required=True)
+    for name in ("platform", "lease"):
+        for field in ("wheel", "wheel-sha256", "source", "source-sha256", "commit"):
+            parser.add_argument(f"--{name}-{field}", required=True)
+    args = parser.parse_args(sys.argv[1:])
+    try:
+        if (
+            os.geteuid() != 0
+            or not sys.flags.isolated
+            or not sys.flags.no_site
+            or not sys.flags.dont_write_bytecode
+            or sys.version_info[:3] != (3, 12, 13)
+            or sys.platform != "linux"
+            or os.uname().machine != "x86_64"
+            or Path(sys.executable) != PREFIX / "bin/python3.12"
+            or args.candidate.parent != _INDEX_PREFIXES["CUDA_INDEX_FP32"].parent
+            or re.fullmatch(r"\.embedding-index-runtime-[A-Za-z0-9]{8}", args.candidate.name)
+            is None
+            or args.workspace.parent != Path("/opt/eom")
+            or re.fullmatch(r"\.embedding-index-install-[A-Za-z0-9]{8}", args.workspace.name)
+            is None
+        ):
+            raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_SUCCESSOR_CONTEXT_INVALID")
+        require_root_path(Path(__file__).resolve(strict=True), directory=False)
+        require_root_path(args.workspace)
+        validate_runtime_tree(args.candidate)
+        retained: list[tuple[Path, Path, str, str]] = []
+        for kind, package in (("platform", "eom_platform"), ("lease", "eom_gpu_lease")):
+            commit = getattr(args, f"{kind}_commit")
+            if re.fullmatch(r"[0-9a-f]{40}", commit) is None:
+                raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_PINS_REQUIRED")
+            wheel = retain_index_archive(
+                Path(getattr(args, f"{kind}_wheel")),
+                getattr(args, f"{kind}_wheel_sha256"),
+                f"{package}-0.1.0-py3-none-any.whl",
+                maximum=64 * 1024**2,
+            )
+            source = retain_index_archive(
+                Path(getattr(args, f"{kind}_source")),
+                getattr(args, f"{kind}_source_sha256"),
+                f"source-{commit}.tar",
+                maximum=256 * 1024**2,
+            )
+            retained.append((wheel, source, commit, package.replace("_", "-")))
+        _index_prepare_private_overlay(
+            args.candidate, args.workspace, (retained[0][0], retained[1][0])
+        )
+        for wheel, source, commit, package in retained:
+            _index_private_source(args.candidate, wheel, source, commit, package)
+        validate_runtime_tree(args.candidate)
+        print("EMBEDDING_INDEX_PRIVATE_SUCCESSOR_PREPARED_NOT_AUDITED")
+        return 0
+    except Exception:
+        print("EMBEDDING_INDEX_PRIVATE_SUCCESSOR_REJECTED", file=sys.stderr)
+        return 1
+
+
 def index_runtime_main() -> int:
     """No model/unit/factory/proof construction; installation is not authority."""
     parser = argparse.ArgumentParser(description="Fixed protected indexing snapshot bootstrap")
@@ -1277,6 +1513,9 @@ def index_runtime_main() -> int:
 
 
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["index-private-successor"]:
+        del sys.argv[1]
+        raise SystemExit(index_private_successor_main())
     if sys.argv[1:2] == ["index-public-archives"]:
         del sys.argv[1]
         raise SystemExit(index_public_archives_main())
