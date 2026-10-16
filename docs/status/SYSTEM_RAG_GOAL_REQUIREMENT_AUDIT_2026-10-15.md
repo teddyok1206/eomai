@@ -19,8 +19,11 @@ summed into a single acceptance count. This ledger does not grant authority.
   index, three revisions, six encodings/bindings, coverage6/520 original eligible
   sources. Later running commands do not by themselves prove new vector coverage.
 - Three genuine revision12 STARTs were observed queued by23:44:29. The original
-  CONTENT_ONLY command was PROCESSING/RUNNING by23:45:05. Actual model launches,
-  vector commits, other-view indexes and terminal success remain to be inspected.
+  CONTENT_ONLY Workflow/START completed by23:54:16; CONCRETE_FACETS also completed
+  and METADATA_ONLY was processing by10/16 00:04:46. The intended graceful drain
+  was requested during that third original command. Final actual model-launch
+  count, canonical vector/binding/index lineage and whole-window terminal success
+  remain to be inspected; two successful commands do not replace that proof.
 - The original HTTP canary process1079683 remains alive and waiting for its original
   Studio login. Its log still has no successful login/request at23:40:50. No new
   login/key/process was substituted. INDEX automation uses its separate supported

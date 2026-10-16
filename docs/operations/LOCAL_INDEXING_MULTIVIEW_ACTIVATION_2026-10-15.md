@@ -159,3 +159,19 @@ not an OOM report or a reason to silently increase the budget.
 Bounded model/index acceptance and continuous automation remain pending. The
 [full requirement ledger](../status/SYSTEM_RAG_GOAL_REQUIREMENT_AUDIT_2026-10-15.md)
 keeps the broader consumer, lifecycle and GPU/default work visible and unwaived.
+
+At23:54:16 UTC the original CONTENT_ONLY Workflow/START completed successfully.
+By00:04:46 UTC on10/16, CONCRETE_FACETS was also COMPLETED/SUCCEEDED and the
+original METADATA_ONLY START was PROCESSING/RUNNING. The bounded observer had
+issued the intended graceful stop Event while that third command was active;
+the same unit remains active to finish it, not deactivating or restarted. All
+observed admitted commands retain attempts/generation1. Final canonical vector/
+binding/index and native-launch count inspection still follows terminal drain.
+
+Phase timing identifies remaining controller work, not a claimed overall speedup:
+each initial full-population discovery took about51seconds. The first new native
+numeric unit was observed running23:46:28→23:47:31, exit0; its exact Job/receipt
+lineage is checked after drain. The first original command completed only at
+23:54:16. Numerical execution exit is not equivalent to Workflow completion,
+and the remaining post-compute source/index verification deserves measurement
+before raising resource limits, adding caches or claiming GPU will remove it.
