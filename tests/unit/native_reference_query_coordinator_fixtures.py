@@ -5,8 +5,10 @@ from eom_workflow.native_reference_query_coordinator import (
     NativeQueryAllocation,
     NativeQueryCompleted,
     NativeQueryExecuted,
+    NativeQueryExecutedV11,
     NativeQueryPublished,
     native_reference_query_checkpoint,
+    native_reference_query_continuation_checkpoint,
     reference_query_checkpoint_receipt,
 )
 from eom_workflow.reference_query_execution import parse_reference_query_step_output
@@ -16,7 +18,7 @@ from tests.unit.inference_transfer_fixtures import NOW, sha
 from tests.unit.test_reference_query_execution_contracts import Case, case
 
 
-def query_records(value: Case | None = None):
+def query_records(value: Case | None = None, *, version="native-reference-query-coordinator/1.0"):
     value = value or case()
     allocation = NativeQueryAllocation.model_validate(
         {
@@ -71,7 +73,7 @@ def query_records(value: Case | None = None):
     completed = NativeQueryCompleted(
         output=parse_reference_query_step_output(seal(body, "output_sha256"))
     )
-    return tuple(
+    records = tuple(
         native_reference_query_checkpoint(value.launch, phase, payload)
         for phase, payload in (
             ("ALLOCATION", allocation),
@@ -80,3 +82,31 @@ def query_records(value: Case | None = None):
             ("COMPLETED", completed),
         )
     )
+    if version == "native-reference-query-coordinator/1.0":
+        return records
+    assert version == "native-reference-query-coordinator/1.1"
+    metadata = executed.model_dump(mode="json") | {
+        "prepare_template_sha256": (
+            "sha256:bbd6ca87732f9a8f0c19e1a6892bdf8d41ed08b1f1473d50918dfde0e7890ec7"
+        ),
+        "query_template_sha256": (
+            "sha256:2335f5100b7678a202f67c334d2a8c196d04a77b2f2fa73d591a31a3a82533e8"
+        ),
+    }
+    successor = []
+    for record in records:
+        payload = (
+            NativeQueryExecutedV11.model_validate(metadata)
+            if record.record_type == "EXECUTED"
+            else record.payload
+        )
+        successor.append(
+            native_reference_query_continuation_checkpoint(
+                value.launch,
+                record.record_type,
+                payload,
+                previous=tuple(successor),
+                initial_version=version,
+            )
+        )
+    return tuple(successor)

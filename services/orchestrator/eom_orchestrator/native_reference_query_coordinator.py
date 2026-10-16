@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from eom_identifiers import content_sha256, new_logical_artifact_id, new_revision_id
 from eom_workflow.native_reference_query_coordinator import (
     NativeQueryPhase,
-    NativeReferenceQueryCheckpoint,
-    parse_native_reference_query_checkpoint,
+    SupportedNativeReferenceQueryCheckpoint,
+    parse_supported_native_reference_query_checkpoint,
     validate_native_reference_query_history,
 )
 from eom_workflow.reference_query_execution import (
@@ -42,6 +42,20 @@ _EVENTS = {"REFERENCE_QUERY_NATIVE_" + phase: phase for phase in _STAGES}
 # Registry keys and JSON schema versions are distinct identities. The former has
 # an existing VARCHAR(32) bound; the released checkpoint bytes/hash stay unchanged.
 NATIVE_REFERENCE_QUERY_COORDINATOR_PROTOCOL = "native-query-coordinator/1.0"
+
+
+def _checkpoint_protocol(record: SupportedNativeReferenceQueryCheckpoint) -> tuple[str, str]:
+    if record.schema_version == "native-reference-query-coordinator/1.1":
+        from eom_workflow.schemas import NATIVE_REFERENCE_QUERY_COORDINATOR_V11_SCHEMA_RESOURCE
+
+        return (
+            "native-query-coordinator/1.1",
+            NATIVE_REFERENCE_QUERY_COORDINATOR_V11_SCHEMA_RESOURCE[2],
+        )
+    return (
+        NATIVE_REFERENCE_QUERY_COORDINATOR_PROTOCOL,
+        NATIVE_REFERENCE_QUERY_COORDINATOR_SCHEMA_RESOURCE[2],
+    )
 
 
 class NativeReferenceQueryHistoryError(ValueError):
@@ -86,7 +100,7 @@ def native_reference_query_launch_key(
 class NativeReferenceQueryHistory:
     state: str
     launch: ReferenceQueryLaunchAssociation
-    records: tuple[NativeReferenceQueryCheckpoint, ...]
+    records: tuple[SupportedNativeReferenceQueryCheckpoint, ...]
 
 
 def read_native_reference_query_launch(
@@ -247,12 +261,13 @@ class NativeReferenceQueryCoordinator:
             )
         )
         try:
-            records = tuple(parse_native_reference_query_checkpoint(row.data) for row in rows)
+            records = tuple(
+                parse_supported_native_reference_query_checkpoint(row.data) for row in rows
+            )
             if records:
                 _protocol(
                     session,
-                    NATIVE_REFERENCE_QUERY_COORDINATOR_PROTOCOL,
-                    NATIVE_REFERENCE_QUERY_COORDINATOR_SCHEMA_RESOURCE[2],
+                    *_checkpoint_protocol(records[0]),
                 )
             validate_native_reference_query_history(records, original, self.request)
             for row, record in zip(rows, records, strict=True):
@@ -272,7 +287,7 @@ class NativeReferenceQueryCoordinator:
             ) from None
 
     def append(
-        self, session: Session, record: NativeReferenceQueryCheckpoint
+        self, session: Session, record: SupportedNativeReferenceQueryCheckpoint
     ) -> NativeReferenceQueryHistory:
         _root(session)
         # Same Workflow→command→Job lock order as the original INDEX owner.
@@ -283,7 +298,7 @@ class NativeReferenceQueryCoordinator:
             .execution_options(populate_existing=True)
         )
         history = self.read(session)
-        record = parse_native_reference_query_checkpoint(record)
+        record = parse_supported_native_reference_query_checkpoint(record)
         previous = {value.record_type: value for value in history.records}
         if record.record_type in previous:
             if previous[record.record_type] != record:
@@ -301,8 +316,7 @@ class NativeReferenceQueryCoordinator:
             raise NativeReferenceQueryHistoryError("REFERENCE_QUERY_CHECKPOINT_TERMINAL_OR_FOREIGN")
         _protocol(
             session,
-            NATIVE_REFERENCE_QUERY_COORDINATOR_PROTOCOL,
-            NATIVE_REFERENCE_QUERY_COORDINATOR_SCHEMA_RESOURCE[2],
+            *_checkpoint_protocol(record),
             create=True,
         )
         transition_job(

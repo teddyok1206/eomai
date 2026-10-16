@@ -253,6 +253,9 @@ def test_completion_observation_pins_exact_successful_invocations_not_result_byt
             adapter.completion_observation(prepared(), case().result)
     else:
         completed = adapter.completion_observation(prepared(), case().result)
+        assert adapter.checkpoint_schema_version == "native-reference-query-coordinator/1.1"
+        assert completed.prepare_template_sha256 == "sha256:" + launcher.PREPARE_TEMPLATE_SHA256
+        assert completed.query_template_sha256 == "sha256:" + launcher.QUERY_TEMPLATE_SHA256
         assert completed.query.invocation_id == "b" * 32
         assert completed.query.started_monotonic == 21
         assert completed.cpu_environment_sha256 == "sha256:" + "a" * 64

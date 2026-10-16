@@ -39,7 +39,10 @@ from eom_orchestrator.native_reference_query_coordinator import (
     NativeReferenceQueryCoordinator,
     read_native_reference_query_launch,
 )
-from eom_workflow.native_reference_query_coordinator import NativeQueryExecuted
+from eom_workflow.native_reference_query_coordinator import (
+    NativeQueryExecuted,
+    NativeQueryExecutedV11,
+)
 from eom_workflow.reference_query_execution import (
     ReferenceQueryStepOutput,
     parse_reference_query_workflow_request,
@@ -185,6 +188,8 @@ def make_executor_case(
         settings=CatalogSettings(nas_artifact_root=publisher.settings.nas_artifact_root),
     )
     launcher = Mock(spec=FixedNativeQueryLauncher)
+    # These pre-existing fixtures deliberately exercise released 1.0 history.
+    launcher.checkpoint_schema_version = "native-reference-query-coordinator/1.0"
     service = CatalogNativeReferenceQueryExecutor(
         owner=owner, publisher=publisher, launcher=launcher, source_commit="a" * 40
     )
@@ -236,9 +241,16 @@ def make_executor_case(
 
     def observation(_value, result):
         assert fixture.root_depth == 0, "SQL/source locks survived unit observation"
-        metadata = query_records(case())[1].payload.model_dump(mode="json")
+        metadata = query_records(case(), version=launcher.checkpoint_schema_version)[
+            1
+        ].payload.model_dump(mode="json")
         metadata.update(result_sha256=result.result_sha256, completed_observed_at=datetime.now(UTC))
-        return NativeQueryExecuted.model_validate(metadata)
+        model = (
+            NativeQueryExecutedV11
+            if launcher.checkpoint_schema_version == "native-reference-query-coordinator/1.1"
+            else NativeQueryExecuted
+        )
+        return model.model_validate(metadata)
 
     owner.resolve_execution_sources, owner.fence_mutation = resolve, fence
     launcher.run.side_effect, launcher.completion_observation.side_effect = run, observation
@@ -248,6 +260,61 @@ def make_executor_case(
 @pytest.fixture
 def executor(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ExecutorCase:
     return make_executor_case(tmp_path, monkeypatch)
+
+
+def test_successor_launch_completes_and_replays_without_reencoding(executor):
+    value = executor
+    value.launcher.checkpoint_schema_version = "native-reference-query-coordinator/1.1"
+    output = value.execute()
+    assert isinstance(output, ReferenceQueryStepOutput)
+    history = value.history()
+    assert all(
+        row.schema_version == value.launcher.checkpoint_schema_version for row in history.records
+    )
+    assert value.execute(generation=2) == output
+    assert value.history() == history and len(value.runs) == 1
+
+
+def test_legacy_unobserved_allocation_cannot_launch_under_successor_units(executor, monkeypatch):
+    from eom_workflow_runner import reference_query_native_executor as module
+
+    value = executor
+    with value.root() as session:
+        value.allocate(session)
+    original = value.history()
+    value.launcher.checkpoint_schema_version = "native-reference-query-coordinator/1.1"
+    monkeypatch.setattr(module, "stage_native_query", Mock(side_effect=AssertionError("stage")))
+    monkeypatch.setattr(
+        module, "mark_native_query_launch_started", Mock(side_effect=AssertionError("launch"))
+    )
+    pending = value.execute(generation=2)
+    assert isinstance(pending, ReferenceQueryStepPending)
+    assert pending.reason == "UNCERTAIN"
+    assert value.history() == original and not value.runs
+    value.launcher.run.assert_not_called()
+
+
+def test_legacy_observed_execution_finishes_metadata_only_after_release_change(
+    executor, monkeypatch
+):
+    value = executor
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            value.service.completion,
+            "publish",
+            Mock(side_effect=KeyboardInterrupt("synthetic interruption")),
+        )
+        with pytest.raises(KeyboardInterrupt):
+            value.execute()
+    original = value.history()
+    assert len(original.records) == 2
+    value.launcher.checkpoint_schema_version = "native-reference-query-coordinator/1.1"
+    assert isinstance(value.execute(generation=2), ReferenceQueryStepOutput)
+    final = value.history()
+    assert final.records[:2] == original.records and len(value.runs) == 1
+    assert all(
+        row.schema_version == "native-reference-query-coordinator/1.0" for row in final.records
+    )
 
 
 def test_actual_missing_query_root_is_not_ready_and_cannot_allocate(

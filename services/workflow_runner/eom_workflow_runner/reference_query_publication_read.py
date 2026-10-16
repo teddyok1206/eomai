@@ -20,6 +20,7 @@ from eom_workflow.native_reference_query_coordinator import (
     NativeQueryAllocation,
     NativeQueryCompleted,
     NativeQueryExecuted,
+    NativeQueryExecutedV11,
     NativeQueryPublished,
     reference_query_checkpoint_receipt,
 )
@@ -75,7 +76,7 @@ def resolve_reference_query_publication(
         raise ValueError("REFERENCE_QUERY_COMPLETION_NOT_PUBLISHED")
     allocation, executed, published = (r.payload for r in history.records[:3])
     assert isinstance(allocation, NativeQueryAllocation)
-    assert isinstance(executed, NativeQueryExecuted)
+    assert isinstance(executed, (NativeQueryExecuted, NativeQueryExecutedV11))
     assert isinstance(published, NativeQueryPublished)
     # Read the current step row, never trust a detached caller's producer field.
     current_step = session.get(WorkflowStepRunRecord, step.step_run_id, populate_existing=True)

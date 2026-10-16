@@ -7,10 +7,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import ClassVar
 
 from eom_catalog_contracts.embedding_reference_query import EmbeddingReferenceQueryResult
 from eom_catalog_contracts.embedding_reference_query_v11 import validate_reference_query_result_v11
-from eom_workflow.native_reference_query_coordinator import NativeQueryExecuted
+from eom_workflow.native_reference_query_coordinator import (
+    NativeQueryCheckpointVersion,
+    NativeQueryExecutedV11,
+)
 from jsonschema.exceptions import ValidationError as SchemaError
 
 from eom_orchestrator.inference_transfer_cpu_handoff import (
@@ -38,8 +42,8 @@ from eom_orchestrator.native_embedding_query_handoff import (
 
 PREPARE_TEMPLATE = "eom-embedding-native-query-prepare@.service"
 QUERY_TEMPLATE = "eom-embedding-native-cpu-query@.service"
-PREPARE_TEMPLATE_SHA256 = "4194d01ea9cffbc5468aac5f5f174303952e1008f8a8621ad1adea07ef76905f"
-QUERY_TEMPLATE_SHA256 = "1bd18e257988df4b3e39eb486e208b999ae7e9e897905ca07f513fc5f3e7893b"
+PREPARE_TEMPLATE_SHA256 = "bbd6ca87732f9a8f0c19e1a6892bdf8d41ed08b1f1473d50918dfde0e7890ec7"
+QUERY_TEMPLATE_SHA256 = "2335f5100b7678a202f67c334d2a8c196d04a77b2f2fa73d591a31a3a82533e8"
 
 
 class NativeQueryLaunchError(ValueError):
@@ -59,6 +63,9 @@ class FixedNativeQueryLauncher:
     cpu_environment_sha256: str
     owner_environment_sha256: str
     assert_runtime_current: Callable[[], None]
+    checkpoint_schema_version: ClassVar[NativeQueryCheckpointVersion] = (
+        "native-reference-query-coordinator/1.1"
+    )
 
     def __post_init__(self) -> None:
         if not callable(self.assert_runtime_current) or any(
@@ -96,7 +103,7 @@ class FixedNativeQueryLauncher:
 
     def completion_observation(
         self, prepared: PreparedNativeQuery, result: EmbeddingReferenceQueryResult
-    ) -> NativeQueryExecuted:
+    ) -> NativeQueryExecutedV11:
         """Observe successful original units, not a persisted-result or replay launch grant."""
         prepared.__post_init__()
         validate_reference_query_result_v11(prepared.request, result)
@@ -110,7 +117,7 @@ class FixedNativeQueryLauncher:
         ):
             raise NativeQueryLaunchError("NATIVE_QUERY_COMPLETION_UNCERTAIN")
         try:
-            return NativeQueryExecuted.model_validate(
+            return NativeQueryExecutedV11.model_validate(
                 {
                     "boot_id": boot_id,
                     "prepare": {

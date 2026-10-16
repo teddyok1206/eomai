@@ -83,6 +83,9 @@ def controls(session, preset):
     _seed_protocols_and_slots(session)
     for protocol in ("workflow-role/1.24.0", TRANSFER_PAIR_PROTOCOL):
         ensure_protocol_version(session, protocol, role_schema_bundle_hash(protocol))
+    # A fresh disposable DB has no prior protocol rows; persist FK parents
+    # before the metadata-only Artifact fixture flushes dependent Jobs.
+    session.flush()
     body = transfer_instruction().model_dump(mode="json")
     body.update(
         bundle_id="instrbundle_" + uuid4().hex, bundle_revision_id="instrrev_" + uuid4().hex

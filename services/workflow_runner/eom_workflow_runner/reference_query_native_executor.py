@@ -28,7 +28,8 @@ from eom_workflow.native_reference_query_coordinator import (
     NativeQueryAllocation,
     NativeQueryCompleted,
     NativeQueryExecuted,
-    native_reference_query_checkpoint,
+    NativeQueryExecutedV11,
+    native_reference_query_continuation_checkpoint,
 )
 from eom_workflow.reference_query_execution import (
     ReferenceQueryLaunchAssociation,
@@ -256,7 +257,7 @@ class CatalogNativeReferenceQueryExecutor:
         if not history.records:
             history = coordinator.append(
                 session,
-                native_reference_query_checkpoint(
+                native_reference_query_continuation_checkpoint(
                     prepared.association,
                     "ALLOCATION",
                     NativeQueryAllocation(
@@ -265,6 +266,8 @@ class CatalogNativeReferenceQueryExecutor:
                         created_at=datetime.now(UTC),
                         source_commit=self.source_commit,
                     ),
+                    previous=history.records,
+                    initial_version=self.launcher.checkpoint_schema_version,
                 ),
             )
         return prepared, history
@@ -324,6 +327,13 @@ class CatalogNativeReferenceQueryExecutor:
                     output=completed.output,
                 )
             if len(history.records) == 1:
+                if history.records[0].schema_version != self.launcher.checkpoint_schema_version:
+                    # Existing unknown physical work cannot be reinterpreted under new units.
+                    return ReferenceQueryStepPending(
+                        prepared.association.native_launch_job_id,
+                        prepared.association.association_sha256,
+                        "UNCERTAIN",
+                    )
                 stage_native_query(prepared)
                 mark_native_query_launch_started(prepared)
         # No Session/root/Workflow lock survives a numerical run or unit observation.
@@ -377,13 +387,17 @@ class CatalogNativeReferenceQueryExecutor:
                 if len(history.records) == 1:
                     history = coordinator.append(
                         session,
-                        native_reference_query_checkpoint(
-                            prepared.association, "EXECUTED", observed
+                        native_reference_query_continuation_checkpoint(
+                            prepared.association,
+                            "EXECUTED",
+                            observed,
+                            previous=history.records,
+                            initial_version=self.launcher.checkpoint_schema_version,
                         ),
                     )
                 else:
                     original = history.records[1].payload
-                    assert isinstance(original, NativeQueryExecuted)
+                    assert isinstance(original, (NativeQueryExecuted, NativeQueryExecutedV11))
                     if original.model_dump(
                         exclude={"completed_observed_at"}
                     ) != observed.model_dump(exclude={"completed_observed_at"}):

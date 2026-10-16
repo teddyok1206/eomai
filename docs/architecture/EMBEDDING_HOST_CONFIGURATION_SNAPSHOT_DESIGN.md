@@ -352,3 +352,94 @@ Next is the compatible numerical-prefix candidate and its full protected byte au
 fixed units/namespace selection, native proof/probe/receipt, then original-work
 recovery. This actual preflight closes the bootstrap-host blocker, not the whole
 installation or original HTTP/consumer/CPU-CUDA/default-device gates.
+
+## Fixed-unit namespace selection
+
+The root deployment owner selects one immutable cache member through
+`/opt/eom/embedding-host-configurations/selected-cache`. This is an explicit mutable
+installation selector, not snapshot identity or a history/latest resolver. The
+native1.1 configuration still pins the exact logical/revision/raw/semantic pointer;
+the actual target inode/read-only mount must match that immutable member. Changing
+the selector cannot retarget an already running namespace; inconsistent new starts
+fail closed rather than loading latest.
+
+The fixed probe, INDEX/QUERY, root handoffs and owner/verifier units bind that one
+selector read-only to`/etc/ld.so.cache` before their interpreter starts. The binding
+is mandatory, not prefixed with an optional`-`. Existing source-fixed unit hashes
+are updated with their templates. No caller/request path, native CLI parameter,
+capability, account/group membership or source permission is added. Activation must
+still drain actual work, preserve old units/prefix/receipts, publish a compatible
+native configuration and verify exact unit/alias/environment selection together.
+
+### QUERY checkpoint compatibility with the new fixed templates
+
+The first unit regression reproduced an actual contract mismatch: executed QUERY
+checkpoints1.0 pin the old prepare/QUERY template pair. Do not rewrite those schema
+bytes, old rows or their meaning to accept the new binding. Add an explicit1.1
+checkpoint family with the reviewed snapshot-bound pair; the other three small
+phase payloads and source/Artifact/receipt rules are unchanged.
+
+Responsibility stays in the existing pure workflow checkpoint/history rules and
+Orchestrator append/read boundary. Canonical state is the original append-only Job
+events and exact source/Artifact references. Each run pins its checkpoint family at
+its original ALLOCATION and keeps that version for every phase. The installed
+launcher declares its actual supported family. New allocation uses that declaration;
+resume uses its original family, never latest or a new identity.
+
+Read both families through an explicit supported parser; strict1.0 readers remain
+strict. Preserve completed1.0 reads and metadata-only publication/completion from
+already observed1.0 execution. A1.0 allocation with no execution observation cannot
+launch under1.1 units: return the existing UNCERTAIN pending state before staging or
+launch, without failing/re-keying/reinterpreting unknown physical work.
+
+Use the existing indexed protocol-version row and append/Job lock/lease transaction;
+register a distinct bounded1.1 protocol key/hash instead of changing the1.0 record.
+No migration, queue, payload table, binary DB value, worker permission or new result
+Artifact format. At most four ordered records per run: one tuple, phase-keyed map
+and two immutable version mappings suffice, O(1) bounds. Source-fixed launcher
+hashes and independently observed unit results, not a checkpoint's self-declaration,
+remain the execution proof owner. Schema-first, immutable-history, same-version
+continuation, mixed-family denial and real disposable-DB replay/concurrency tests
+precede installation. Two independently maintained coordinator frameworks or an
+untracked systemd drop-in would be less safe and are not introduced.
+
+### Source verification checkpoint —2026-10-16 UTC
+
+All seven source templates now require the fixed pre-exec read-only binding; the
+source owners pin the corresponding new probe/INDEX/QUERY hashes. The explicit
+QUERY checkpoint1.1 schema is mirrored in the installed resource package. Its
+registry key fits the existing32-character column. Released1.0 schema bytes and
+registry meaning are unchanged. New runs use1.1; observed1.0 execution can finish
+metadata publication under1.0, whereas an unobserved1.0 allocation returns
+UNCERTAIN without staging, launch, new Job, re-key or history repair.
+
+Verification evidence under`/tmp/eom-identity-provider-install.nAaycoDM/`:
+
+- `host-query-successor-tests-final.log`:163 focused tests PASS.
+- `host-query-successor-negative-final.log`:37 tests PASS, including additional
+  non-object/unknown-version rejection and the real launcher's fixed1.1 unit pins.
+  This overlaps the focused suite; counts are not added.
+- `host-fixed-units-owner-regression.log`:197 installation/owner regression tests PASS.
+- `host-query-successor-boundaries.log`:103 dependency/runner/contract tests PASS.
+- `host-query-successor-strict-final.log`:strict type checking of9 core files PASS;
+  formatter/linter and`git diff --check` PASS. No new dependency.
+- `host-query-successor-postgres-rerun.log`:190 guarded disposable PostgreSQL tests
+  PASS, including both checkpoint families, concurrent exact replay and crash
+  recovery without re-encoding. The initial full run had166 PASS and24 fixture
+  setup errors: its synthetic protocol parents had not been flushed before
+  dependent Jobs. Only that test fixture's FK-parent ordering was corrected;
+  production schema, constraints and runtime rules were not relaxed. The first
+  source run's wrong predecessor fixture filename was also corrected and rerun.
+
+Independent read-only byte comparison of the installed CPU and source FLOAT32_CODEC,
+HOST_L2 and OFFLINE_ENCODER modules matched all three pins. This is necessary
+numerical-code compatibility evidence, not complete new-prefix/library/model
+admission or a CPU/GPU benchmark. The original numerical bundle is not superseded
+merely because installation metadata changes.
+
+**Not active:** source verification does not select the root alias, replace any
+native prefix or installed unit, publish fresh installation proof/receipt, restart
+INDEX/QUERY, authenticate the original HTTP continuation, or complete C1–C5/GPU
+gates. The original stopped INDEX and pending request remain preserved. Next use
+the existing protected installer and actual quiescence/admission boundaries, then
+resume the original request; do not request another login to mask native unreadiness.

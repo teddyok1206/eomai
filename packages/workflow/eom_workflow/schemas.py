@@ -976,11 +976,18 @@ NATIVE_REFERENCE_QUERY_COORDINATOR_SCHEMA_RESOURCE = (
     "eom://schemas/workflow/native-reference-query-coordinator/1.0",
     "sha256:b3711bf1f8722b9a0b884dac7f3ef032c0bd28bd4e76351f3d7ee4d1e0f17745",
 )
+NATIVE_REFERENCE_QUERY_COORDINATOR_V11_SCHEMA_RESOURCE = (
+    "native-reference-query-coordinator-v1.1.schema.json",
+    "eom://schemas/workflow/native-reference-query-coordinator/1.1",
+    "sha256:a3f08ea22ec5f71582f86598f6fa16737115e23742a332173da034f59860e6ed",
+)
 
 
 @cache
-def _native_reference_query_coordinator_schema() -> dict[str, Any]:
-    filename, schema_id, expected = NATIVE_REFERENCE_QUERY_COORDINATOR_SCHEMA_RESOURCE
+def _native_reference_query_coordinator_schema(
+    resource: tuple[str, str, str] = NATIVE_REFERENCE_QUERY_COORDINATOR_SCHEMA_RESOURCE,
+) -> dict[str, Any]:
+    filename, schema_id, expected = resource
     try:
         with WORKFLOW_RESOURCE_ROOT.joinpath(filename).open("rb") as stream:
             payload = stream.read(16 * 1024 + 1)
@@ -1000,6 +1007,20 @@ def load_native_reference_query_coordinator_schema() -> dict[str, Any]:
 
 
 def validate_native_reference_query_checkpoint(value: object) -> None:
+    _validate_native_reference_query_checkpoint(
+        value, NATIVE_REFERENCE_QUERY_COORDINATOR_SCHEMA_RESOURCE
+    )
+
+
+def validate_native_reference_query_checkpoint_v11(value: object) -> None:
+    _validate_native_reference_query_checkpoint(
+        value, NATIVE_REFERENCE_QUERY_COORDINATOR_V11_SCHEMA_RESOURCE
+    )
+
+
+def _validate_native_reference_query_checkpoint(
+    value: object, resource: tuple[str, str, str]
+) -> None:
     try:
         document = raw_similarity_contract_value(value)
         if len(canonical_json_bytes(document)) > 16 * 1024:
@@ -1009,7 +1030,7 @@ def validate_native_reference_query_checkpoint(value: object) -> None:
             Resource.from_contents(_native_embedding_coordinator_schema()),
         )
         Draft202012Validator(
-            _native_reference_query_coordinator_schema(),
+            _native_reference_query_coordinator_schema(resource),
             registry=registry,
             format_checker=FormatChecker(),
         ).validate(document)

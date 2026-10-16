@@ -34,8 +34,8 @@ from eom_orchestrator.native_embedding_index_handoff import (
 
 PREPARE_TEMPLATE = "eom-embedding-native-index-prepare@.service"
 INDEX_TEMPLATE = "eom-embedding-native-cpu-index@.service"
-PREPARE_TEMPLATE_SHA256 = "d07b54290623ffef7997ac4a7bd0d836637da7e081fa0e95a13ac32dc794874c"
-INDEX_TEMPLATE_SHA256 = "ad7180dd2c962082a069be79f2255b8d378050d61dc86d442d16ebceb8ee9380"
+PREPARE_TEMPLATE_SHA256 = "a6af3404c41ea3297c551c72fadcb86eee8473bf61421cee1501e7b2bff56a42"
+INDEX_TEMPLATE_SHA256 = "ed6214e3af5ca9e8ea571481886778d55fd5187d7ab8c4b8fb79a481ce9cb713"
 
 
 class NativeIndexLaunchError(ValueError):

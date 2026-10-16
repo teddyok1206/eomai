@@ -5,9 +5,11 @@ seams. The existing marker/owner/schema/head guard is mandatory for all writes.
 """
 
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
+from threading import Barrier
 from uuid import uuid4
 
 import pytest
@@ -51,8 +53,10 @@ from tests.unit.test_reference_query_native_executor import ExecutorCase, make_e
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture
-def query(guarded_engine: Engine, tmp_path: Path, monkeypatch) -> ExecutorCase:
+@pytest.fixture(
+    params=("native-reference-query-coordinator/1.0", "native-reference-query-coordinator/1.1")
+)
+def query(guarded_engine: Engine, tmp_path: Path, monkeypatch, request) -> ExecutorCase:
     assert guarded_engine.dialect.name == "postgresql"
     assert not tmp_path.is_relative_to(Path("/mnt/nas"))
     artifacts, workspace = tmp_path / "artifacts", tmp_path / "workspace"
@@ -65,6 +69,7 @@ def query(guarded_engine: Engine, tmp_path: Path, monkeypatch) -> ExecutorCase:
         ),
     )
     value = make_executor_case(tmp_path, monkeypatch, publisher=publisher)
+    value.launcher.checkpoint_schema_version = request.param
     # The shared disposable DB retains prior tests; every context is a new identity.
     value.workflow.workflow_id, value.step.step_run_id = (
         "workflow_" + uuid4().hex,
@@ -102,6 +107,26 @@ def test_postgres_query_checkpoint_commit_receipt_and_exact_replay(query):
     history = query.history()
     assert query.execute(generation=2) == output
     assert query.history() == history and len(query.runs) == 1
+    assert_exact_completed_producers(query)
+
+
+def test_postgres_concurrent_checkpoint_replay_keeps_one_original_history(query):
+    assert isinstance(query.execute(), ReferenceQueryStepOutput)
+    original = query.history()
+    barrier = Barrier(2)
+
+    def replay():
+        barrier.wait(timeout=10)
+        with query.publisher.sessions.begin() as session:
+            owner = NativeReferenceQueryCoordinator(query.request, original.launch)
+            for record in original.records:
+                owner.append(session, record)
+            return owner.read(session)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = (pool.submit(replay), pool.submit(replay))
+        assert all(future.result(timeout=30) == original for future in futures)
+    assert query.history() == original and len(query.runs) == 1
     assert_exact_completed_producers(query)
 
 

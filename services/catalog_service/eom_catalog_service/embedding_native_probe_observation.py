@@ -25,7 +25,7 @@ from eom_catalog_service.embedding_runtime_prefix_closure import PrefixRuntimeIn
 
 CPU_PROBE_TEMPLATE = "eom-embedding-native-cpu-probe@.service"
 CPU_PROBE_TEMPLATE_SHA256 = (
-    "sha256:71b5f49cc2af7007f2a4df9897ad223a22ac7e70875530997d49c73b5dfd40a9"
+    "sha256:dcfa3596b92297ada1330c4393fb6a305c9703b3a1678476125f6f7eb96ae34f"
 )
 _PREFIX = Path("/opt/eom/conda/envs/eom-embedding-index-cpu")
 _CGROUP_ROOT = Path("/sys/fs/cgroup")

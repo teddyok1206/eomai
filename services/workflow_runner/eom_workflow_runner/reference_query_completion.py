@@ -17,8 +17,9 @@ from eom_workflow.native_reference_query_coordinator import (
     NativeQueryAllocation,
     NativeQueryCompleted,
     NativeQueryExecuted,
+    NativeQueryExecutedV11,
     NativeQueryPublished,
-    native_reference_query_checkpoint,
+    native_reference_query_continuation_checkpoint,
     reference_query_checkpoint_receipt,
 )
 from eom_workflow.reference_query_execution import (
@@ -93,7 +94,7 @@ class NativeReferenceQueryCompletion:
             ):
                 raise ValueError("REFERENCE_QUERY_COMPLETION_EXECUTION_NOT_OBSERVED")
             executed = history.records[1].payload
-            assert isinstance(executed, NativeQueryExecuted)
+            assert isinstance(executed, (NativeQueryExecuted, NativeQueryExecutedV11))
             if len(history.records) == 2:
                 saved = publications.artifacts.publish_reference_query(
                     workflow_request=request,
@@ -108,7 +109,7 @@ class NativeReferenceQueryCompletion:
                 )
                 coordinator.append(
                     session,
-                    native_reference_query_checkpoint(
+                    native_reference_query_continuation_checkpoint(
                         prepared.association,
                         "PUBLISHED",
                         NativeQueryPublished(
@@ -120,6 +121,8 @@ class NativeReferenceQueryCompletion:
                             manifest_sha256=saved.manifest_sha256,
                             published_observed_at=datetime.now(UTC),
                         ),
+                        previous=history.records,
+                        initial_version=history.records[0].schema_version,
                     ),
                 )
         # Commit PUBLISHED before the receipt owner's independent publication root.
@@ -152,7 +155,7 @@ class NativeReferenceQueryCompletion:
                     output=completed.output,
                 )
             executed, published = (row.payload for row in history.records[1:3])
-            assert isinstance(executed, NativeQueryExecuted)
+            assert isinstance(executed, (NativeQueryExecuted, NativeQueryExecutedV11))
             assert isinstance(published, NativeQueryPublished)
             receipt = reference_query_checkpoint_receipt(
                 request, prepared.association, allocation, executed, published
@@ -188,8 +191,12 @@ class NativeReferenceQueryCompletion:
             )
             coordinator.append(
                 session,
-                native_reference_query_checkpoint(
-                    prepared.association, "COMPLETED", NativeQueryCompleted(output=output)
+                native_reference_query_continuation_checkpoint(
+                    prepared.association,
+                    "COMPLETED",
+                    NativeQueryCompleted(output=output),
+                    previous=history.records,
+                    initial_version=history.records[0].schema_version,
                 ),
             )
             return output

@@ -21,6 +21,7 @@ PrivateTmp=yes
 PrivateNetwork=yes
 PrivateDevices=yes
 ProtectSystem=strict
+BindReadOnlyPaths=/opt/eom/embedding-host-configurations/selected-cache:/etc/ld.so.cache
 ProtectHome=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
