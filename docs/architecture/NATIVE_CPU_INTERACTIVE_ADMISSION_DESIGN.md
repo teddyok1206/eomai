@@ -4,6 +4,9 @@
 **INDEX15_ACTIVE / LIVE_DEFERRAL_AND_RESUME_OBSERVED / C1_UNFINISHED**.
 This closes the original incremental RAG plan's interactive/background scheduling
 boundary; it does not replace the five consumers or the CPU/CUDA gates.
+Latest operating reader alignment15:18 UTC and exact original Job completion:
+[coordinated release/current authenticated boundary](../operations/REFERENCE_QUERY_READER_ALIGNMENT_2026-10-16.md).
+The dated observations below remain historical, not replacement runtime selections.
 
 ## Observation and protected meaning
 

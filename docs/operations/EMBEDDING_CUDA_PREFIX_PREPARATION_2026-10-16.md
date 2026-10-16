@@ -84,6 +84,54 @@ proof that readable bytes cannot be copied or otherwise rematerialized executabl
 it is not justification to omit dependency validation. No such exception, new
 host profile, OS package/driver change or kernel proof is implemented here.
 
+## Complete static ELF inventory —15:05 UTC
+
+Finite unit`eom-cuda-static-elf-184d6dca.service`, invocation
+`80295480d69d40219e1673dadb294834`, completed status0 in2.616seconds. It used the
+accepted OLD Python and the existing public protected-host/snapshot/readelf FD
+adapters, with the exact accepted cache bound read-only. UID1000, NoNewPrivs, empty
+capability bounding set, private network/devices, read-only system and inaccessible
+NAS/secrets/source/worker-auth protected the inspection. No candidate interpreter,
+Torch/transformers/SQLAlchemy import, CUDA/model, DB or NAS operation occurred.
+Helper raw`f42444ddf1e548df349f7491d2366b36701cc696549fdb31efc1c89f0da25932`.
+
+The scan visited29,361 file entries and inspected287 ELF objects through bounded
+owner-held FDs. There are78 distinct DT_NEEDED names. The original report first
+classified only SONAME-bearing prefix objects; follow-up inspection of the same
+report found native `lib/libtcl8.6.so` and `lib/libtk8.6.so` without SONAME records.
+They are prefix basename candidates, **not missing host libraries**. Preserve that
+original report and this correction rather than rewriting its historical output.
+
+| Static presence class | Distinct names | Meaning / remaining proof |
+| --- | ---: | --- |
+| Prefix SONAME or ELF basename present |66| Presence only; exact search route/alias/version/bytes still require the existing full auditor |
+| Existing closed CPU host name |8| Captured host presence; per-caller version requirements are not newly accepted by this inventory |
+| Additional standard host candidates |3| `libcuda.so.1`, `libibverbs.so.1`, `libmlx5.so.1`; not added to CPU or CUDA admission |
+| Absent at checked standard host paths |1| `librdmacm.so.1`; not proof of absence everywhere or permission for arbitrary search paths |
+
+`libcuda.so.1` is a direct dependency of`torch/lib/libcaffe2_nvrtc.so`.
+The two RDMA host candidates and missing rdmacm are dependencies of the official
+cuFile RDMA library. Driver/dlopen dependencies, all transitive OS dependencies,
+route ordering, required symbol versions, file/alias/hash/mapping closure and actual
+device/lease/kernel compatibility remain separate checks. Candidate presence is
+not dependency resolution or permission to run it.
+
+Next remains **one explicit CUDA-only closed host successor**, reusing the existing
+capture/parser/auditor rather than successive allowlist exceptions. Keep the CPU
+seed/snapshot/released bytes unchanged. First classify the exact installed driver
+and RDMA transitive closure; select any needed dependency through a reviewed,
+hash-pinned provisioning boundary before execution. Compare a private auxiliary
+host materialization against a system-package change before selecting either;
+no new package, driver, host profile, relaxed checker or execution was introduced
+by this scan. A substantial profile/pointer/protocol change still needs its own
+eleven-point design and JSON Schema before behavior.
+
+Temporary report:`cuda-static-elf-inventory.log` in the existing operator directory.
+It contains one large metadata JSON line: use bounded parsed summaries, not raw
+tail/cat in conversation or Slack. The earlier failed publication/empty inventory
+and backup remain preserved. **CUDA is still ROOT_STAGED/BYTE_AUDIT_FAILED/
+NOT_ADMITTED; six real device comparisons and GPU default are not complete.**
+
 ## Original authenticated HTTP request
 
 The existing login succeeded12:38:00; it was not an incorrect-password case.

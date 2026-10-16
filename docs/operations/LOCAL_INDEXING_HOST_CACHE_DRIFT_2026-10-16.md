@@ -2,6 +2,12 @@
 
 2026-10-16 UTC. Chronological incident and recovery record, not a lost corpus or failed Item.
 Full incremental-RAG goal stays ACTIVE and incomplete. No blind automatic restart/retry.
+Latest compatible shared release15:18 UTC: API/Catalog184d6dca and QUERY0fab624c
+with actual new provider pins are active; INDEX15 resumed with unchanged controls
+after normal drain. Original QUERY Workflow/Job completed once; final authenticated
+context acceptance awaits one fresh input after actual freshness403. See the
+[current reader-alignment record](REFERENCE_QUERY_READER_ALIGNMENT_2026-10-16.md).
+Earlier14:43 and older observations below are chronological history.
 Recovery checkpoint: QUERY READY10:25 UTC; INDEX identity14 started10:59 UTC;
 all three first four-row batches have canonical terminal/numeric acceptance11:36 UTC.
 Later selection: identity14 drained normally13:43:51 UTC; the compatible identity15/
