@@ -273,3 +273,29 @@ receipt or permission grant. Actual CUDA worker/observer/unit/lease-through-exit
 composition, reviewed private-code successor and fresh whole-prefix audit remain
 required. The already-audited B41 bytes are unchanged. No model, GPU, protected
 prefix, service, OS group, device policy or default was changed by this checkpoint.
+
+The5ce96c67 standard three-wheel build/RECORD/package inspection passed and the
+source was pushed. This candidate was not installed over operating e132c1aa.
+
+### Read-only image entry inventory —2026-10-16 20:12 UTC
+
+Actual installed `/etc/systemd/system/eom-image-*.service` files include19 templates
+with NVIDIA DeviceAllow entries. Provider/trainer/reference/lineart/LoRA/subject
+variants still select `--gpu-lock /var/lib/eom-image/gpu0.lock`. The fixed provider
+and trainer templates use eom-image and do not declare the shared supplementary
+group. The shared `/run/eom-gpu-lease` parent/inode is absent. Independently read
+legacy metadata is UID984/GID980, parent0700, regular/nlink1/empty lock0600.
+Do not change those private attributes to grant embedding access.
+
+No running/activating/deactivating/reloading eom-image unit was listed in this
+observation. This does **not** attest driver clients, legacy flock ownership,
+arbitrary direct operator processes or migration quiescence. Template property
+queries require an instance, so this inventory reads fixed unit file fields;
+historical active/exited CPU handoff units are not GPU-running work.
+
+Consequently source shared-lease branch tests are not evidence of an installed
+single-lock policy. The later bounded migration must cover all19 observed GPU
+templates, both CLI executables in their distinct image/trainer prefixes, direct
+entry/lifecycle inventory and genuine mutual exclusion/cleanup acceptance. Keep
+CPU-only image helpers and external-reference download tools outside GPU grants.
+This observation created no group/lock/unit and did not run an image or model.
