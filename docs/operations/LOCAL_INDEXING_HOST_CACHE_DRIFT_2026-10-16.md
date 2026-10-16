@@ -287,3 +287,102 @@ preallocation maintenance and resume the original human-authenticated HTTP reque
 QUERY and INDEX remain their original FAILED/PID0 histories, not reset; API/Catalog
 keep original PIDs1045380/1078492 and invocations. C1–C5, full coverage and actual
 CPU/CUDA benchmark/default-device gates remain required by the unchanged goal.
+
+### Actual snapshot-bound native probe and independent seal PASS —10:12:30 UTC
+
+The installed b41b3cb4 CPU interpreter now has fresh installation acceptance,
+not merely source tests. Protected preparation used the supported numerical observer
+to compare the actual installed libraries, CPU identity and three implementation
+pins with the original bundle/proof. All matched. The original bundle, numerical
+runtime and vector space are reused; no re-encoding or replacement Artifact was
+invented for a host-configuration change.
+
+The new explicit configuration remains under logical ID
+`embeddingnativeconfig_b839a737216d4324869c7f9b62e98d8a`, with immutable revision
+`embeddingnativeconfigrev_927557e47c11457aa8f6a85bb9c044ec`:
+
+- family:`embedding-native-runtime-config/1.1`;
+- raw:`9160e25cba729b86b5dcc0bb7bf0342d23c816fb3839cb63e898aeb9dceea0a0`;
+- semantic:`a43792039f6415b6955bde3cb14d721ddf1ff3660302767735dc892c08848bac`;
+- runtime unchanged:`f02cfc2b977c262b2b20cf7a3cc07553ad41f718ca39334953fb11d7a6ab10fb`.
+
+The protected original configuration and receipt are not edited. Preparation's
+first finite invocation rejected opening the lock read-write in its read-only
+namespace before metadata writes. Its successor uses a read-only descriptor for
+the same exclusive flock. A second pre-write rejection identified an old operator
+assumption of ancestor `--x` ACLs; actual retained UID978 ACLs are `r-x` on those
+directories. They were inspected, recorded and preserved, not widened or changed.
+The third preparation completed with zero model calls/ML imports/DB writes.
+
+With real native Jobs/units/prefix users absent, the deployment owner selected the
+exact immutable cache member through the documented root-owned `selected-cache`
+installation selector and installed the reviewed mandatory-binding probe template
+raw`dcfa3596b92297ada1330c4393fb6a305c9703b3a1678476125f6f7eb96ae34f`.
+The old unit is preserved in
+`/opt/eom/.embedding-native-host-successor-b41b3cb4/prior-probe.service`.
+The first selection invocation found its template staging file absent and stopped
+before any selector/unit change; after that exact file was staged, selection
+completed. No ordinary service was restarted and no workflow was submitted.
+
+One actual fixed probe execution completed, without retry:
+
+- execution:`86b996ba62ac45afa1a10f3ae6edd981`;
+- UID/GID:`978/975`, no supplementary groups;
+- PID:`1930388`, invocation:`4b6205c5dfde4907a3ae72a54d8a5e9a`;
+- input raw:`e75b6aac9b9ad710de7450c67e09b1fe7f44efc024e84ea2d07b7b336f4087b5`;
+- result raw:`3eba912d84ed9c2e8edc82d9cbed8a21222722c93c7d4dc05f2b7a32340c4a31`;
+- owner observation raw:
+  `32d19bf98166fbbef50f60033dfb4b0ca7306a0841da341e4453aed461195fb2`;
+- effective policy, including actual mandatory read-only binding:
+  `bc29e56d0cf2b8de12585337988884ab10d2ce8b22948770dcffea18fe9c01ef`.
+
+The owner observed the actual live process/cgroup/start identity and executable
+mappings, checked the numerical descriptor and access denials, acknowledged that
+same invocation, then observed successful termination and an empty cgroup. Eight
+model payload members were checked; model/tokenizer constructors and forward
+calls were zero. Root optional ML imports were zero. Original failed and pending
+work was not reinterpreted or resubmitted.
+
+An independent root sealing pass reused that protected actual probe evidence,
+without re-executing it. Current `ProtectedNativeEmbeddingInstallationAdmission`
+then accepted the new exact configuration/inventory/host mount/receipt together:
+
+- status:`CPU_INSTALLATION_SEALED_AND_READER_PASS`;
+- sealed:`2026-10-16T10:12:30.096365Z`;
+- receipt raw:`2ce9852cc4904aa33a62b9dbbbb738efab661444e8c35e833787e6b526f7d2f1`;
+- receipt semantic:`49e80308fd5f4d4f0d100c6046767722ffdc6fc7b8a61585691ebe7758d889b9`;
+- inventory semantic:
+  `b2d1542719a59a52d64192234d98638a6cbff0de88345a1f9ba6553c9770f7f1`.
+
+Receipt/inventory live under the new configuration ID/revision in
+`/opt/eom/embedding-runtime-admission`; protected operator observations remain in
+`/opt/eom/.embedding-native-host-successor-b41b3cb4`. The existing shared schema
+files were equality-checked and left unchanged, not republished. Same-boundary
+snapshot admission/probe/unit tests:52 PASS in5.17s; this overlaps prior suites
+and is not added to their totals.
+
+**Native CPU installation acceptance is PASS; service recovery is not yet PASS.**
+Coherent owner release, verifier/native environment/units and service-identity
+selection remain before supported original-work recovery. The original human HTTP
+continuation is already terminal401; no login prompt/token is being retained and
+no new login is requested before native service readiness. Common HTTP/consumer
+activation, full coverage and the real CPU/CUDA comparison remain unfinished.
+
+The compatible owner pair from the same reviewed b41b3cb4 build was subsequently
+installed through the existing protected `install_owner_release.sh`, with its
+pre-exec snapshot binding and an allowed owner-release temporary directory.
+Actual wheel/RECORD verification and both package installations PASS; target:
+`/opt/eom/embedding-owner-releases/b41b3cb47f4d0dcfb25c08f46bc8ffd56388a595`.
+Platform raw is the776df86a pin above; API-contracts raw is
+`1b5856199176ad44be0deb88522441b388d1ab49e52548ab52913c7e23deed74`.
+An isolated installed import check loaded345 EOM modules, all from that exact
+release, with zero optional ML imports. The release remains **INACTIVE**.
+The initial systemd invocation rejected executing a non-executable protected
+shell script before any install mutation; explicitly invoking the existing script
+with Bash corrected that invocation without chmod, history reset or a new installer.
+
+Final observed API/Catalog PIDs/invocations remain unchanged and active; INDEX and
+QUERY remain their original failed/PID0 invocations. No new login, worker Job,
+DB mutation, command identity or model forward was introduced by this window.
+README/documentation checks3 PASS in1.78s. Same temporary evidence directory also
+contains `owner-installation-b41b3cb4-v2.log` and `installed-owner-import.log`.
