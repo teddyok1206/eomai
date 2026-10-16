@@ -97,6 +97,37 @@ floats, alternate raw JSON, CPU profiles or a wrong predecessor schema.
 CPU remains active throughout source-only work. No new model run, OS group/device
 grant, worker account or service activation follows from writing this document.
 
+### Existing OS facilities for the first CUDA probe
+
+The installation owner uses small declarative sysusers/tmpfiles inputs, not a new
+account manager or lock daemon. The dedicated numeric account has a private
+primary group, `/nonexistent` home, nologin shell and only `eom-gpu-lease` as its
+supplementary group; never sudo/Docker/eom. Sysusers performs the existing NSS
+creation/membership operation. Tmpfiles creates the fixed0750 parent and0640
+root/shared-group empty file at boot with `d`/`f`, never `f+`, removal or truncation.
+An existing live inode is not replaced to clear contention. Root preflight first
+checks absent names/paths and current GPU work; partial outcomes are inspected,
+not blindly replayed. The existing adapter remains consume-only and fail-closed.
+
+The fixed template's `selected-cache` is an explicit root-controlled storage
+selector pointing directly to the exact immutable CUDA snapshot cache, not a new
+identity or implicit latest. Use one root-owned symlink under the protected
+parent, then verify an OLD-only readonly bind of that selector with the existing
+host capture: the final `/etc/ld.so.cache` must be the canonical cache's SAME
+inode/epochs/hash. Copying the cache to a different inode is incorrect; a separate
+global mount or mount-service framework is unnecessary. Runtime config keeps
+the immutable CUDA snapshot pointer; changing the alias cannot change that pin
+and a mismatched binding must fail before candidate execution. No weights or
+libraries are copied by this selector.
+
+Access is fixed-name NSS lookup, one immutable metadata binding and one existing
+kernel flock; no DB/index/protocol changes. Source tests assert the closed account
+and boot records. Installing the unchanged probe template does not start it, grant
+admission or select GPU as default. Model ACL changes, if needed, occur only after
+supported CPU owner drain and are followed by fresh CPU readback/resume; never
+change a live model snapshot. Legacy image entrypoints still require their own
+drained shared-inode/lifetime migration before any CUDA model comparison.
+
 ## Private-code successor preparation in the existing installer
 
 The existing `publish` requires a developer-owned initial prefix; `audit-staged`

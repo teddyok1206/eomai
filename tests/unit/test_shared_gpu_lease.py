@@ -9,6 +9,7 @@ import grp
 import inspect
 import os
 import select
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -20,6 +21,36 @@ from eom_gpu_lease import SHARED_GPU_LOCK_PATH, SharedGpuLeaseError
 from eom_gpu_lease import lease as adapter
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def _installation_records(relative: str) -> list[list[str]]:
+    return [
+        shlex.split(line)
+        for line in (ROOT / relative).read_text().splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+
+
+def test_boot_inode_configuration_has_no_replace_truncate_or_cleanup_command() -> None:
+    assert _installation_records("infra/tmpfiles/eom-gpu-lease.conf") == [
+        ["d", str(SHARED_GPU_LOCK_PATH.parent), "0750", "root", "eom-gpu-lease", "-", "-"],
+        ["f", str(SHARED_GPU_LOCK_PATH), "0640", "root", "eom-gpu-lease", "-", "-"],
+    ]
+
+
+def test_numeric_account_has_only_its_private_primary_group_and_shared_lease() -> None:
+    assert _installation_records("infra/sysusers/eom-embedding-cuda.conf") == [
+        ["g", "eom-gpu-lease", "-"],
+        [
+            "u",
+            "eom-embedding-cuda",
+            "-",
+            "EOM CUDA embedding runtime",
+            "/nonexistent",
+            "/usr/sbin/nologin",
+        ],
+        ["m", "eom-embedding-cuda", "eom-gpu-lease"],
+    ]
 
 
 @pytest.fixture
