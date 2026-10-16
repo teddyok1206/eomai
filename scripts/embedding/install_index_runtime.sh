@@ -211,7 +211,8 @@ IFS= read -r AUDIT_STATUS < "$AUDIT_RECEIPT" || fail EMBEDDING_INDEX_AUDIT_RECEI
 record_phase PREFIX_BYTES_AUDITED_NOT_ADMITTED
 if [[ "$mode" == audit-staged ]]; then
   printf '%s\n' EMBEDDING_INDEX_AUDIT_STATUS=AUDITED_NOT_ADMITTED EMBEDDING_INDEX_PROBE_STATUS=NOT_PROBED \
-    "platform_source_commit=$PLATFORM_COMMIT" "audit_operation=$PRIVATE" "prefix_inventory=$AUDIT_INVENTORY"
+    "audit_input_sha256=sha256:$AUDIT_INPUT_SHA" "runtime_tree_sha256=sha256:$RUNTIME_SHA" \
+    "audit_operation=$PRIVATE" "prefix_inventory=$AUDIT_INVENTORY"
   exit 0
 fi
 arguments=(index-runtime --profile "$profile" --lock-directory "$PRIVATE/locks"

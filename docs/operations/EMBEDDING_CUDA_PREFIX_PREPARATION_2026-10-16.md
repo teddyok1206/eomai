@@ -3,6 +3,14 @@
 This is bounded operator evidence, not CUDA admission, benchmark, GPU-default or
 full-goal acceptance. Source, protected staging and operating activation differ.
 
+Current follow-up17:45:35 UTC: private CUDA host publication/protected static
+closure and the supported readonly `audit-staged` full-prefix operation PASS on
+the same original root prefix, without recopy/replacement/candidate execution.
+Current status ROOT_STAGED / BYTE_AUDITED / NOT_ADMITTED. Original failures
+below remain historical evidence, not permission to execute the prefix. Exact
+current pins and operation handle:
+[CUDA host and staged-audit evidence](../architecture/EMBEDDING_CUDA_HOST_EXTENSION_DESIGN.md#readonly-staged-prefix-re-audit-owner-boundary).
+
 ## Existing operating work remains independent
 
 Before the later controlled drain, CPU INDEX PID1953488/invocation

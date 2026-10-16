@@ -997,7 +997,16 @@ def test_staged_audit_preserves_prefix_and_never_copies_replaces_or_executes_it(
 ) -> None:
     script, prefix, args, marker = _synthetic_shell(tmp_path, profile=profile)
     prefix.chmod(0o755)
-    before = {path: (path.stat().st_ino, path.stat().st_mtime_ns) for path in prefix.rglob("*")}
+    members = (prefix, *prefix.rglob("*"))
+    before = {
+        path: (
+            path.stat().st_ino,
+            path.stat().st_mtime_ns,
+            path.stat().st_ctime_ns,
+            path.stat().st_mode,
+        )
+        for path in members
+    }
     with tempfile.TemporaryDirectory(prefix="eom-index-source-") as temporary:
         args[-1] = temporary
         args[0] = "audit-staged"
@@ -1012,10 +1021,19 @@ def test_staged_audit_preserves_prefix_and_never_copies_replaces_or_executes_it(
         )
     assert result.returncode == 0, result.stderr
     assert "AUDITED_NOT_ADMITTED" in result.stdout and "INSTALLED_NOT_ADMITTED" not in result.stdout
+    assert "audit_input_sha256=sha256:" + args[15] in result.stdout
+    assert "runtime_tree_sha256=sha256:" + args[2] in result.stdout
+    assert "platform_source_commit=" not in result.stdout
     assert not marker.exists()
     assert (tmp_path / "execution-order").read_text().splitlines() == ["HOST", "OLD"]
     assert before == {
-        path: (path.stat().st_ino, path.stat().st_mtime_ns) for path in prefix.rglob("*")
+        path: (
+            path.stat().st_ino,
+            path.stat().st_mtime_ns,
+            path.stat().st_ctime_ns,
+            path.stat().st_mode,
+        )
+        for path in members
     }
     assert not tuple(prefix.parent.glob(".embedding-index-runtime-*"))
     assert not tuple(prefix.parent.glob(".embedding-index-prepublication-*"))

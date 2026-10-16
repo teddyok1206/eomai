@@ -9,6 +9,17 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Actual checkpoint17:45:35 UTC: supported97cddd56 readonly staged-prefix audit
+  terminal exit0, host/full byte/ELF receipts PASS. Same B41/31Conda/70public/lease
+  prefix,31556 entries/27983 regular/287ELF/7084538375 payload bytes. New8.9MB
+  candidate inventory is root0600; original failed inventory independently still0
+  bytes. No recopy/replacement/candidate interpreter/model/GPU/API/DB or source
+  policy change. State ROOT_STAGED/BYTE_AUDITED/NOT_ADMITTED, not a sealed CUDA
+  receipt, kernel/device/shared-lease proof or six numerical runs. Source163 and
+  related327 tests pass independently/overlap, not summed; strict/Ruff/format/
+  shell/standard build PASS. Full C1–C5/actual comparisons/conditional default and
+  held sameoperator HTTP context remain open.
+  [Actual full-prefix facts and preserved failures](../architecture/EMBEDDING_CUDA_HOST_EXTENSION_DESIGN.md#actual-full-staged-prefix-audit-pass-174535-utc).
 - Actual checkpoint17:30 UTC: reviewed6f202b7c owner wheel installed, eight-member
   immutable CUDA host revision privately published and exact21-route cache/file
   validation PASS. Separate actual OLD/no-site/readonly-cache-bind/UID1000/private

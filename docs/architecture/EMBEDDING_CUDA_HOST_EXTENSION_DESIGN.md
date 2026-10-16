@@ -1,6 +1,7 @@
 # CUDA host extension: closed private libraries, not a CPU allowlist expansion
 
-2026-10-16 UTC. Design before protocol/behavior. SOURCE_CANDIDATE / NOT_ACTIVE.
+2026-10-16 UTC. Design before protocol/behavior. Source and protected host-only
+publication/capture PASS; full CUDA candidate/runtime/device admission NOT_ACTIVE.
 This is required by the original incremental-RAG CPU/CUDA experiment, not a new
 platform or a substitute for real C1–C5/device acceptance.
 
@@ -560,3 +561,74 @@ substitutions; they are not actual prefix closure/native/GPU proof. Ruff/format,
 shell syntax and diff checks pass. No new dependency, schema, database or runtime
 selection is introduced. The original full goal and separate device/lease gate
 remain open; actual protected staged audit is next, not inferred from these tests.
+
+Actual reviewed97cddd56 standard build/RECORD gate passed and its byte-pinned
+root-installed shell started the distinct readonly staged audit. Unit
+`eom-cuda-staged-audit-97cddd56.service`, invocation
+`73d85dcfbb974531a9cb06c7e66b57d0`, PID2545730 was confirmed live17:40:48 UTC.
+Input1.2 is20,012 canonical bytes/raw
+`f98bfe51b047b574e7f4d7520a21a0fd410d85d3eb13ddceddc4b25f48272071`;
+it preserves the31 Conda/70 public/B41 private/lease source pins, created-at/history/
+helper bytes, and selects the exact published CUDA snapshot plus nine current
+bootstrap module pins. It does not modify a numerical space or existing config.
+Fixed prefix/OLD/archive/source are readonly; only the CUDA profile lock and a
+fresh small audit directory are writable. CAP_DAC_READ_SEARCH permits reading
+declared caller-private inputs, not writing them; private devices/network and
+inaccessible NAS/secrets remain. The original failed stage/backup stay untouched.
+This paragraph records launch/liveness, not terminal PASS.
+
+Review tightened successor audit stdout to expose only actually checked input/tree
+hashes plus audit paths, not an unassociated caller CLI source-commit label. The
+running immutable97cddd56 owner is unchanged; its actual known B41 source is
+verified through the pinned input/inventory, not that descriptive stdout label.
+No redo of the expensive audit is needed solely for this presentation correction.
+
+### Actual full staged-prefix audit PASS —17:45:35 UTC
+
+The same confirmed unit terminated inactive/dead, MainPID0, Result=success and
+ExecMainStatus0. Its stdout explicitly reports AUDITED_NOT_ADMITTED/NOT_PROBED.
+Both protected host and full prefix byte receipts pass. New operation directory
+is`/opt/eom/.embedding-index-install-YC7k6rKQ`; original failedP301NWlp inventory
+remains root0600/single-link/**0 bytes**, independently re-observed unchanged.
+The new root0600/single-link candidate inventory is8,914,997bytes, raw
+`2f4a9c6d25d6be3e3d83b74f7f9d5d15013d9f91e050b1381af9589cd3b64c1b`.
+It is still CANDIDATE_NOT_ADMITTED, not a sealed native receipt.
+
+| Audited fact | Actual value |
+| --- | --- |
+| Entries / regular / links / ELF |31556 /27983 /1380 /287|
+| Regular payload bytes |7084538375|
+| Source closure SHA-256 |`e0bf9834c7c36c582f90d4fbfdc8d9d340ac2595f65c4e102652ad2efc75bca5`|
+| Member inventory SHA-256 |`fd2123c02eacf5bfaab24da2c86b5cb53efa78a54fe493984099d948ef241b62`|
+| Full byte closure SHA-256 |`08da7a22977a9fd25a2712839fae9d326f9708fd2b2da189b52c3a1b9accb1ff`|
+| ELF closure SHA-256 |`7b62805e3a02ac8bd2cab56484b0558fbd102c63dec064b53562f9f9533afac3`|
+| Semantic inventory SHA-256 |`a9a5007622396f2a566d41909afc0216987b5b72a481e435b73a4215de43601e`|
+
+The new input raw matches its pre-run20,012-byte pin and exact published CUDA
+host seed. Stage metadata/receipt inspection is bounded and readonly; a JSON
+summary alone is not additional native authority. The unit journal reports
+3min19.998s CPU and4.0G cgroup memory peak under its4GiB cap; that administrative
+measurement includes filesystem work/page cache, not model RSS or GPU capacity.
+No previous stage, numerical prefix, CPU/current index/source policy, worker,
+system package/cache or shared service was replaced. No candidate Python/helper,
+tensor, model, CUDA-device probe or benchmark was invoked. Status is now
+**ROOT_STAGED / BYTE_AUDITED / NOT_ADMITTED**, with the original byte-audit failure
+preserved as historical evidence. Next separate CUDA sealed receipt/probe/kernel/
+device/shared-lease acceptance must precede candidate/model use, followed by the
+original six frozen CPU/CUDA comparisons and conditional default/C1–C5 work.
+
+Final source presentation/metadata-preservation regression163 PASS in8.56seconds
+overlaps the earlier163 run; independent prefix/host/CUDA capture suites327 PASS
+in19.93seconds. Do not add these overlapping counts. Ruff/format/shell/strict
+unchanged OLD leaf checks pass; actual97cddd56 standard build/RECORD gate passed.
+
+Separate readonly accepted-OLD/installed-owner metadata validation subsequently
+read that exact8,914,997-byte raw-pinned inventory through held protected FDs and
+the existing pinned JSON Schema2020-12/Pydantic candidate parser. Its semantic
+inventory hash, profile, original owner-input hash, entry/ELF counts and final
+file epochs all pass: CONTRACT_PASS_NOT_NATIVE_ADMITTED. This does not relabel
+the CPU-only1.0 admission receipt or supply a missing CUDA kernel/device lease.
+Routine INDEX observation17:48:46 (over30minutes after the preceding17:18:21)
+found unchanged PID2387580/invocation active; not a new canonical vector coverage
+audit. Existing original HTTP observer2391005 is live at LOGIN with empty output;
+no new process/question/key was created. Next routine INDEX check≥18:18:46 UTC.
