@@ -229,3 +229,61 @@ directory materializations. Build an explicit successor from the reviewed source
 verify its **actual** archive→wheel payload including both literal templates before
 another supported publication, then perform fresh native configuration/probe/seal.
 Neither these source tests nor the finite signal probes are native recovery PASS.
+
+### Actual successor publication PASS —09:57:01 UTC
+
+Reviewed source`b41b3cb47f4d0dcfb25c08f46bc8ffd56388a595`, tree
+`af7297a6839792c15c5126d0ffb27ad4f4258a04`, standard three-wheel/RECORD inspection
+PASS. Build`/tmp/eom-api-build/b41b3cb47f4d0dcfb25c08f46bc8ffd56388a595.K49ny4`;
+platform raw`776df86a3635fd763696b0c892930c518748fb9d1ec9af1dd81b5aac39a781c9`,
+source archive raw`ab44f0bb8f7d78edba8ba818a11920cc4d9e055a7ff93c82fb63b26c827a471d`.
+Before publication, actual source archives and corresponding wheels were compared
+byte-for-byte by the corrected reader: original accepted c2f8eef8's1466 payload
+members and successor's1605 members PASS, including exactly two inert templates.
+All three numerical implementation pins match across those actual wheel files.
+This actual package proof did not execute NEW or replace native admission.
+
+The independent root input1.1 raw is
+`aca8c6dea404a234cff815ae2296d0c39b7a21683cd6ee85cf193b013c16bf52`/16392bytes.
+Only the reviewed prefix-reader bootstrap pin changes to
+`98d94b9be5db27f52fd2c4004b63e0a30803a846ce7be7d14558560431fadd30`;
+the other six bootstrap members, helper58e61d5e, snapshot/host seed, public archive
+closure and all existing historical input/config/schema bytes remain unchanged.
+Schema/parser validation and OLD-only candidate assembly PASS. Candidate tree
+`d0298a4d2e69938521a98f05739901a6d86ee6ecf449daed194cb862725136b5` was independently
+checked before any rename, while all actual native Jobs/units/prefix users were absent.
+
+The exact failed3346ae08 prefix was moved, not deleted or accepted, to
+`/opt/eom/conda/envs/.embedding-cpu-rejected-3346ae08-4NZqt8Wd`; the original c2f8eef8
+directory remains separately preserved at its earlier planned path. The supported
+publisher then ran once under the exact pre-exec snapshot binding, actual PID1835088/
+invocation`fa2c80adcc2349acb355ce661a522669`. Its terminal exit0 and protected phase
+receipt prove this sequence:
+
+```text
+HOST_BYTES_PREFLIGHT_PASS_NOT_ADMITTED
+STAGED_NOT_ADMITTED
+BEFORE_OLD_PREFIX_BYTES_AUDIT
+PREFIX_BYTES_AUDITED_NOT_ADMITTED
+INSTALLED_NOT_ADMITTED
+```
+
+Only after the full OLD byte/ELF audit did the existing NEW installation helper run.
+No model, tokenizer, numerical forward, DB mutation, worker Job, source capture,
+new HTTP key, owner activation or ordinary service restart occurred. Protected
+installation evidence is`/opt/eom/.embedding-index-install-RJO7Vx2Q`; inventory
+raw`57d720c59d108d895e7e9df77ce6a2d93063869f80cd1c79db289f41edd50bb5`,
+host-only receipt raw`93b079bb8de462ebc9b1fa60608ea4f3073d02a97adeaad0273fda10c81be0e5`,
+full-prefix receipt raw`f06b1af664e7e081b5fdd677d829625425765baa106d8b2891f8bb436ed2b2ee`.
+The retained developer input is
+`/opt/eom/conda/envs/.embedding-index-prepublication-CPU_INDEX_FP32-.embedding-index-install-RJO7Vx2Q`.
+Local bounded window:`/tmp/eom-cpu-host-successor-Z1YMaK2I`.
+
+Current status is **CPU_INSTALLED_NOT_ADMITTED**, not native/runtime/goal PASS.
+Fresh1.1 native configuration and exact snapshot selection, real UID978 installation
+probe, independent root receipt/seal and coherent owner/control selection are next.
+Only then recover the preserved original INDEX work through supported compatibility/
+preallocation maintenance and resume the original human-authenticated HTTP request.
+QUERY and INDEX remain their original FAILED/PID0 histories, not reset; API/Catalog
+keep original PIDs1045380/1078492 and invocations. C1–C5, full coverage and actual
+CPU/CUDA benchmark/default-device gates remain required by the unchanged goal.
