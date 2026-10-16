@@ -764,3 +764,28 @@ This is **SOURCE_PASS / NOT_INSTALLED / NOT_ACTIVE**. There is still no actual
 CUDA2.0 sealed receipt, accepted numerical-prefix successor/full audit, actual
 probe/two-ACK/terminal-retirement acceptance, all-entrypoint migration or six-run
 GPU benchmark/default activation. Protected owner b8a82765 remains unchanged.
+
+### Reader/terminal owner prepared —21:51 UTC
+
+Candidate `23dce821fa0918c81bb5510f055a5c141a64b7af` is committed/pushed and
+standard build/RECORD passed at
+`/tmp/eom-api-build/23dce821fa0918c81bb5510f055a5c141a64b7af.GJLSeD/dist`.
+Reader/resource/terminal/process-query wheel members exactly matched source.
+Platform raw SHA `4d8c0927c501ccbea0ce959957a62e1ca8cb94d7d93a4abd64bb231bf3cc16fb`;
+API-contract raw SHA `b0562aba3d23c5eab0cae8d11f3a6fb29fb5495e7e8e51f2eda01bb7a149aee2`.
+
+The unchanged protected installer559ada51 was invoked correctly through
+`/usr/bin/bash` in the same EOM2 TTY with existing sudo authentication, without a
+new password request or TTL change. It verified/staged both exact wheels and
+installed a new no-clobber readonly owner release at
+`/opt/eom/embedding-owner-releases/23dce821fa0918c81bb5510f055a5c141a64b7af`.
+Installed archive hashes equal the build pins; code is root:root0444/nlink1.
+Evidence: `/tmp/eom-cuda-reader-owner-3htMCGW6/owner-install.log`.
+Previous owner releases are retained unchanged; no numerical prefix/API was replaced.
+
+Fresh protected OLD Python3.12 `-I -B` imported both CPU/CUDA reader facades and
+the terminal observer from that exact installed owner release. CPU reader import
+loaded no CUDA infrastructure; neither phase imported torch/transformers/shared
+GPU code. Its329 packaged schemas remained complete. This is
+**OWNER_INSTALLED / NOT_ACTIVE**, not construction of an actual CUDA admission,
+a CUDA-prefix instruction, new receipt, unit execution or device default change.
