@@ -61,7 +61,7 @@ case "$mode" in
     getent passwd eom >/dev/null || fail EMBEDDING_INDEX_DEVELOPER_MISSING
     install -d -o eom -g eom -m 0700 "$PREFIX"
     printf '%s\n' EMBEDDING_INDEX_PREFIX_PREPARED_NO_EXECUTION; exit 0 ;;
-  publish) ;;
+  publish|audit-staged) ;;
   *) fail EMBEDDING_INDEX_MODE_INVALID ;;
 esac
 
@@ -99,27 +99,40 @@ fi
 exec {PUBLICATION_FD}<>"$PUBLICATION_LOCK"
 [[ "$(stat -Lc %d:%i /proc/$$/fd/$PUBLICATION_FD)" == "$(stat -c %d:%i "$PUBLICATION_LOCK")" ]] || fail EMBEDDING_INDEX_PUBLICATION_LOCK_INVALID
 flock -n "$PUBLICATION_FD" || fail EMBEDDING_INDEX_PUBLICATION_BUSY
-[[ -d "$PREFIX" && ! -L "$PREFIX" && "$(stat -c %u "$PREFIX")" == "$(id -u eom)" ]] || fail EMBEDDING_INDEX_RUNTIME_INPUT_INVALID
-
-QUARANTINE=$(mktemp -d /opt/eom/conda/envs/.embedding-index-runtime-XXXXXXXX)
+[[ -d "$PREFIX" && ! -L "$PREFIX" ]] || fail EMBEDDING_INDEX_RUNTIME_INPUT_INVALID
+if [[ "$mode" == publish ]]; then
+  [[ "$(stat -c %u "$PREFIX")" == "$(id -u eom)" ]] || fail EMBEDDING_INDEX_RUNTIME_INPUT_INVALID
+else
+  root_directory "$PREFIX"
+  [[ "$(stat -c %a "$PREFIX")" == 755 ]] || fail EMBEDDING_INDEX_STAGED_PREFIX_MODE_INVALID
+fi
 PRIVATE=$(mktemp -d /opt/eom/.embedding-index-install-XXXXXXXX)
-chmod 0700 "$QUARANTINE" "$PRIVATE"
+chmod 0700 "$PRIVATE"
 record_phase() { INSTALL_PHASE=$1; printf '%s\n' "$INSTALL_PHASE" >> "$PRIVATE/phase-receipt"; }
 trap 'printf "%s\n" "EMBEDDING_INDEX_STOPPED install_phase=$INSTALL_PHASE" >&2' ERR
-record_phase QUARANTINE_COPY
-timeout --signal=KILL 900 cp -a --no-preserve=links,ownership,xattr,context -- "$PREFIX/." "$QUARANTINE/"
-chown -hR root:root "$QUARANTINE"
-[[ "$(tree_digest "$QUARANTINE")" == "$RUNTIME_SHA" ]] || fail EMBEDDING_INDEX_RUNTIME_TREE_HASH_MISMATCH
+if [[ "$mode" == publish ]]; then
+  QUARANTINE=$(mktemp -d /opt/eom/conda/envs/.embedding-index-runtime-XXXXXXXX)
+  chmod 0700 "$QUARANTINE"
+  record_phase QUARANTINE_COPY
+  timeout --signal=KILL 900 cp -a --no-preserve=links,ownership,xattr,context -- "$PREFIX/." "$QUARANTINE/"
+  chown -hR root:root "$QUARANTINE"
+  CANDIDATE=$QUARANTINE
+else
+  record_phase EXISTING_ROOT_PREFIX_NOT_REPLACED
+  CANDIDATE=$PREFIX
+fi
+[[ "$(tree_digest "$CANDIDATE")" == "$RUNTIME_SHA" ]] || fail EMBEDDING_INDEX_RUNTIME_TREE_HASH_MISMATCH
 while IFS= read -r -d '' member; do
+  [[ "$(stat -c %u "$member")" == 0 ]] || fail EMBEDDING_INDEX_RUNTIME_OWNER_INVALID
   if [[ -L "$member" ]]; then
     target=$(realpath -e -- "$member")
-    [[ "$target" == "$QUARANTINE/"* ]] || fail EMBEDDING_INDEX_RUNTIME_LINK_ESCAPE
+    [[ "$target" == "$CANDIDATE/"* ]] || fail EMBEDDING_INDEX_RUNTIME_LINK_ESCAPE
   else
     [[ -d "$member" || -f "$member" ]] || fail EMBEDDING_INDEX_RUNTIME_MEMBER_INVALID
     (( (8#$(stat -c %a "$member") & 8#6022) == 0 )) || fail EMBEDDING_INDEX_RUNTIME_MODE_INVALID
   fi
-done < <(find -P "$QUARANTINE" -print0)
-[[ -f "$QUARANTINE/bin/python3.12" && ! -L "$QUARANTINE/bin/python3.12" && -x "$QUARANTINE/bin/python3.12" ]] || fail EMBEDDING_INDEX_INTERPRETER_INVALID
+done < <(find -P "$CANDIDATE" -print0)
+[[ -f "$CANDIDATE/bin/python3.12" && ! -L "$CANDIDATE/bin/python3.12" && -x "$CANDIDATE/bin/python3.12" ]] || fail EMBEDDING_INDEX_INTERPRETER_INVALID
 install -m 0600 -- "$HELPER_SOURCE" "$PRIVATE/install.py"
 [[ "$(sha256sum "$PRIVATE/install.py" | cut -c 1-64)" == "$HELPER_SHA" ]] || fail EMBEDDING_INDEX_HELPER_HASH_MISMATCH
 mkdir -m 0700 "$PRIVATE/locks"
@@ -168,16 +181,18 @@ if ! (
 IFS= read -r HOST_AUDIT_STATUS < "$HOST_AUDIT_RECEIPT" || fail EMBEDDING_INDEX_HOST_PREFLIGHT_INVALID
 [[ "$HOST_AUDIT_STATUS" =~ ^EMBEDDING_HOST_BYTES_AUDIT_PASS_NOT_ADMITTED\ sha256:[0-9a-f]{64}$ && "$(stat -c %s "$HOST_AUDIT_RECEIPT")" -eq $((${#HOST_AUDIT_STATUS} + 1)) ]] || fail EMBEDDING_INDEX_HOST_PREFLIGHT_INVALID
 record_phase HOST_BYTES_PREFLIGHT_PASS_NOT_ADMITTED
-BACKUP=/opt/eom/conda/envs/.embedding-index-prepublication-${profile}-$(basename "$PRIVATE")
-[[ ! -e "$BACKUP" && ! -L "$BACKUP" ]] || fail EMBEDDING_INDEX_BACKUP_EXISTS
-record_phase BEFORE_PREFIX_REPLACEMENT
-mv -T -- "$PREFIX" "$BACKUP"
-chmod 0700 "$BACKUP"
-record_phase PREFIX_ABSENT_RETAINED_QUARANTINE
-[[ ! -e "$PREFIX" && ! -L "$PREFIX" ]] || fail EMBEDDING_INDEX_TARGET_EXISTS
-mv -T -- "$QUARANTINE" "$PREFIX"
-chmod 0755 "$PREFIX"
-record_phase STAGED_NOT_ADMITTED
+if [[ "$mode" == publish ]]; then
+  BACKUP=/opt/eom/conda/envs/.embedding-index-prepublication-${profile}-$(basename "$PRIVATE")
+  [[ ! -e "$BACKUP" && ! -L "$BACKUP" ]] || fail EMBEDDING_INDEX_BACKUP_EXISTS
+  record_phase BEFORE_PREFIX_REPLACEMENT
+  mv -T -- "$PREFIX" "$BACKUP"
+  chmod 0700 "$BACKUP"
+  record_phase PREFIX_ABSENT_RETAINED_QUARANTINE
+  [[ ! -e "$PREFIX" && ! -L "$PREFIX" ]] || fail EMBEDDING_INDEX_TARGET_EXISTS
+  mv -T -- "$QUARANTINE" "$PREFIX"
+  chmod 0755 "$PREFIX"
+  record_phase STAGED_NOT_ADMITTED
+fi
 record_phase BEFORE_OLD_PREFIX_BYTES_AUDIT
 AUDIT_RECEIPT="$PRIVATE/prefix-bytes-audit.receipt"
 AUDIT_INVENTORY="$PRIVATE/prefix-inventory.candidate.json"
@@ -194,6 +209,11 @@ IFS= read -r AUDIT_STATUS < "$AUDIT_RECEIPT" || fail EMBEDDING_INDEX_AUDIT_RECEI
 [[ -f "$AUDIT_INVENTORY" && ! -L "$AUDIT_INVENTORY" && "$(stat -c %u:%a:%h "$AUDIT_INVENTORY")" == 0:600:1 ]] || fail EMBEDDING_INDEX_INVENTORY_INVALID
 (( $(stat -c %s "$AUDIT_INVENTORY") > 0 && $(stat -c %s "$AUDIT_INVENTORY") <= 16777216 )) || fail EMBEDDING_INDEX_INVENTORY_INVALID
 record_phase PREFIX_BYTES_AUDITED_NOT_ADMITTED
+if [[ "$mode" == audit-staged ]]; then
+  printf '%s\n' EMBEDDING_INDEX_AUDIT_STATUS=AUDITED_NOT_ADMITTED EMBEDDING_INDEX_PROBE_STATUS=NOT_PROBED \
+    "platform_source_commit=$PLATFORM_COMMIT" "audit_operation=$PRIVATE" "prefix_inventory=$AUDIT_INVENTORY"
+  exit 0
+fi
 arguments=(index-runtime --profile "$profile" --lock-directory "$PRIVATE/locks"
   --platform-wheel "$PLATFORM_WHEEL" --platform-wheel-sha256 "$PLATFORM_SHA"
   --platform-source "$PLATFORM_SOURCE" --platform-source-sha256 "$PLATFORM_SOURCE_SHA"

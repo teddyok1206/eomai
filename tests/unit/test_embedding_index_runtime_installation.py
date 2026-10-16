@@ -839,6 +839,10 @@ def _synthetic_shell(
         f'"$(stat -c %u "$OLD_PREFIX/bin/python3.12")" == {os.getuid()}',
     )
     text = text.replace(
+        '"$(stat -c %u "$member")" == 0',
+        f'"$(stat -c %u "$member")" == {os.getuid()}',
+    )
+    text = text.replace(
         '"$AUDIT_INPUT_SOURCE" =~ ^/tmp/eom-[A-Za-z0-9_.-]+/prefix-audit-input\\.json$',
         f'"$AUDIT_INPUT_SOURCE" == "{owner}"',
     )
@@ -985,6 +989,115 @@ def test_synthetic_shell_snapshot_hash_precedes_first_interpreter_instruction(
             < phases.index("PREFIX_BYTES_AUDITED_NOT_ADMITTED")
             < phases.index("INSTALLED_NOT_ADMITTED")
         )
+
+
+@pytest.mark.parametrize("profile", ["CPU_INDEX_FP32", "CUDA_INDEX_FP32"])
+def test_staged_audit_preserves_prefix_and_never_copies_replaces_or_executes_it(
+    tmp_path: Path, profile: Literal["CPU_INDEX_FP32", "CUDA_INDEX_FP32"]
+) -> None:
+    script, prefix, args, marker = _synthetic_shell(tmp_path, profile=profile)
+    prefix.chmod(0o755)
+    before = {path: (path.stat().st_ino, path.stat().st_mtime_ns) for path in prefix.rglob("*")}
+    with tempfile.TemporaryDirectory(prefix="eom-index-source-") as temporary:
+        args[-1] = temporary
+        args[0] = "audit-staged"
+        args[2] = subprocess.run(
+            ["/usr/bin/bash", str(script), "fingerprint", profile],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        result = subprocess.run(
+            ["/usr/bin/bash", str(script), *args], capture_output=True, text=True, check=False
+        )
+    assert result.returncode == 0, result.stderr
+    assert "AUDITED_NOT_ADMITTED" in result.stdout and "INSTALLED_NOT_ADMITTED" not in result.stdout
+    assert not marker.exists()
+    assert (tmp_path / "execution-order").read_text().splitlines() == ["HOST", "OLD"]
+    assert before == {
+        path: (path.stat().st_ino, path.stat().st_mtime_ns) for path in prefix.rglob("*")
+    }
+    assert not tuple(prefix.parent.glob(".embedding-index-runtime-*"))
+    assert not tuple(prefix.parent.glob(".embedding-index-prepublication-*"))
+    private = next((tmp_path / "opt/eom").glob(".embedding-index-install-*"))
+    phases = (private / "phase-receipt").read_text().splitlines()
+    assert phases[0] == "EXISTING_ROOT_PREFIX_NOT_REPLACED"
+    assert phases[-1] == "PREFIX_BYTES_AUDITED_NOT_ADMITTED"
+    assert "BEFORE_PREFIX_REPLACEMENT" not in phases and "INSTALLED_NOT_ADMITTED" not in phases
+    assert (
+        private / "prefix-inventory.candidate.json"
+    ).read_bytes() == b"synthetic candidate metadata"
+
+
+@pytest.mark.parametrize(
+    "fault", ["host_nonzero", "nonzero", "status", "inventory_empty", "inventory_link"]
+)
+def test_staged_audit_failures_retain_new_evidence_without_altering_prefix(
+    tmp_path: Path, fault: str
+) -> None:
+    script, prefix, args, marker = _synthetic_shell(tmp_path, audit_fault=fault)
+    prefix.chmod(0o755)
+    original = (prefix / "bin/python3.12").read_bytes()
+    inode = prefix.stat().st_ino
+    with tempfile.TemporaryDirectory(prefix="eom-index-source-") as temporary:
+        args[-1], args[0] = temporary, "audit-staged"
+        args[2] = subprocess.run(
+            ["/usr/bin/bash", str(script), "fingerprint", args[1]],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        result = subprocess.run(
+            ["/usr/bin/bash", str(script), *args], capture_output=True, text=True, check=False
+        )
+    assert result.returncode != 0 and "AUDITED_NOT_ADMITTED" not in result.stdout
+    assert not marker.exists() and prefix.stat().st_ino == inode
+    assert (prefix / "bin/python3.12").read_bytes() == original
+    assert not tuple(prefix.parent.glob(".embedding-index-runtime-*"))
+    assert not tuple(prefix.parent.glob(".embedding-index-prepublication-*"))
+    private = next((tmp_path / "opt/eom").glob(".embedding-index-install-*"))
+    assert (private / "phase-receipt").read_text().startswith("EXISTING_ROOT_PREFIX_NOT_REPLACED\n")
+    assert "INSTALLED_NOT_ADMITTED" not in (private / "phase-receipt").read_text()
+
+
+@pytest.mark.parametrize("fault", ["tree", "mode", "member_owner", "lock"])
+def test_staged_audit_early_denials_never_enter_old_or_candidate(
+    tmp_path: Path, fault: str
+) -> None:
+    script, prefix, args, marker = _synthetic_shell(tmp_path)
+    args[0] = "audit-staged"
+    prefix.chmod(0o700 if fault == "mode" else 0o755)
+    if fault == "member_owner":
+        script.write_text(
+            script.read_text().replace(
+                f'"$(stat -c %u "$member")" == {os.getuid()}',
+                f'"$(stat -c %u "$member")" == {os.getuid() + 1}',
+            )
+        )
+    with tempfile.TemporaryDirectory(prefix="eom-index-source-") as temporary:
+        args[-1] = temporary
+        args[2] = (
+            subprocess.run(
+                ["/usr/bin/bash", str(script), "fingerprint", args[1]],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            if fault != "tree"
+            else "0" * 64
+        )
+        lock = prefix.parent / ".embedding-index-CPU_INDEX_FP32.lock"
+        lock.touch(mode=0o600)
+        with lock.open("rb") as held:
+            if fault == "lock":
+                fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result = subprocess.run(
+                ["/usr/bin/bash", str(script), *args], capture_output=True, text=True, check=False
+            )
+    assert result.returncode != 0
+    assert not marker.exists() and not (tmp_path / "execution-order").exists()
+    assert not tuple(prefix.parent.glob(".embedding-index-runtime-*"))
+    assert not tuple(prefix.parent.glob(".embedding-index-prepublication-*"))
 
 
 @pytest.mark.parametrize(

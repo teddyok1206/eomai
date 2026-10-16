@@ -505,3 +505,58 @@ release or model execution occurred; CPU remains selected. Next use the declared
 snapshot in the protected1.2 OLD full-prefix owner boundary, preserving the original
 root-staged candidate and failed inventory. Do not recopy a large unchanged prefix
 or run its interpreter merely to bypass the existing developer-only publish path.
+
+## Readonly staged-prefix re-audit owner boundary
+
+1. Responsibility: extend the existing protected `install_index_runtime.sh` owner
+   with a distinct `audit-staged` command. It audits an already root-staged fixed
+   prefix; it neither republishes nor installs/adopts a numerical runtime.
+2. Canonical inputs remain immutable archive/source/lock/bootstrap pins and the
+   explicit1.2 CUDA host snapshot. A failed stage or directory fingerprint alone
+   is not authority to execute a candidate.
+3. The numerical prefix identity/profile and pinned source revisions remain the
+   same; each new audit gets a fresh existing-format private operation directory.
+   Original failure receipts/inventory are never overwritten.
+4. Reuse the existing typed prefix-audit input and protected OLD leaf. Validate
+   exact bytes/hash, profile, helper, nine bootstrap modules, host mount and every
+   archive/source/member/needed/version edge before emitting a new inventory.
+5. Access patterns are one lock claim, ordered bounded input copies, a full
+   streaming tree fingerprint, then the existing indexed archive/ELF audit.
+6. Reuse the existing fixed profile publication lock, source pin maps, frozen
+   archive plan and deterministic inventory manifest. No new queue/table/cache.
+7. Cost remains O(bytes + entries log entries) for the existing tree fingerprint
+   and archive/prefix verification, with bounded audit metadata. The upfront tree
+   check associates the expected previously staged input, while the full audit
+   independently proves archive/source closure. Avoid the multi-GB prefix copy.
+8. Hold the same profile lock throughout; require root-protected prefix ownership,
+   modes and contained links. The actual administrative unit must expose that
+   prefix read-only. A fresh stage holds only small input/receipt/inventory data.
+9. Shell remains the administrative filesystem adapter; the existing OLD Python
+   leaf owns protocol/hash/closure validation. Candidate Python is never called.
+10. Explicit terminal errors retain their new audit stage. No automatic rerun,
+    phase repair, failed-history promotion or activation. Successful output is
+    AUDITED_NOT_ADMITTED; native sealed proof/device/shared lease remain separate.
+11. The simpler developer-only publish path requires recopying or chowning an
+    already protected large prefix and then executes its installer. That is both
+    unnecessary and the wrong side effect for a readonly recovery audit. Add one
+    supported command to the existing owner, not an ad-hoc root recovery script
+    or parallel admission framework. CPU legacy publish behavior stays covered.
+
+### Staged-audit source verification —17:38 UTC
+
+The existing shell owner now implements `audit-staged` with that exact boundary.
+It shares the existing argument closure, lock, input copies, host preflight and
+full OLD prefix-audit leaf, but never creates a prefix quarantine, copies/chowns
+the candidate, replaces its directory or enters candidate Python. Fresh audit
+receipts/inventory are separate from every failed stage. Recursive root-owner
+checks reinforce the previous publication chown invariant for an existing prefix.
+
+Combined installation/CUDA-input/publication regression163 PASS in8.59seconds;
+includes old CPU/CUDA publish behavior, readonly staged success for both profiles,
+prefix inode/mtime/content preservation, OLD-only order, tree/mode/owner/busy-lock
+denials and host/audit/inventory failures without replacement/execution. These
+shell tests use inert interpreter surrogates and explicit synthetic UID/path
+substitutions; they are not actual prefix closure/native/GPU proof. Ruff/format,
+shell syntax and diff checks pass. No new dependency, schema, database or runtime
+selection is introduced. The original full goal and separate device/lease gate
+remain open; actual protected staged audit is next, not inferred from these tests.
