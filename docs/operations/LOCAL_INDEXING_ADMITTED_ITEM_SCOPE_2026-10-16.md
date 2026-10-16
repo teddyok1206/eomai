@@ -1,6 +1,6 @@
 # Admitted Item scope and four-target multiview continuation
 
-2026-10-16 UTC. **SELECTION_INSTALLED / BOUNDED_WINDOW_RUNNING; OUTPUT_AUDIT_PENDING.**
+2026-10-16 UTC. **BOUNDED_ADMITTED_ITEM_WINDOW=PASS; CONTINUOUS_INDEXING=NOT_ACTIVE.**
 Continuation of the original
 [full goal](../architecture/SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md),
 after the [actual three-view gate](LOCAL_INDEXING_MULTIVIEW_ACTIVATION_2026-10-15.md#terminal-window-and-independent-canonical-storage-audit).
@@ -124,3 +124,47 @@ not a revised count of original past exams. Do not infer a source-class breakdow
 for the25 waiting revisions without inspecting their official source pointers.
 This confirms explicit report-wait observation, not completion of those reports,
 new vector persistence or all three namespaces. Service startup and API health PASS.
+
+## Terminal result and canonical audit
+
+At00:59:29 UTC, all three original new-grant STARTs and Workflows completed,
+each attempts1/generation1. The same invocation drained normally; MainPID0,
+inactive/success. No fourth admission, boot enable, restart, new authority/key or
+failed-history rewrite was performed.
+
+| View | Original Workflow / START | Current ALL_ADMITTED_GRAPH_ITEMS revision | Bindings / eligible |
+| --- | --- | --- | ---: |
+| CONTENT_ONLY | `workflow_c247b620b6e54940b4ad06b263236e6f` / `wfcmd_05e16f66f58b4698947c9f84afe07412` | `embeddingindexrev_213d8981771d4a6aa3acd72e44689837` | 11 / 545 |
+| CONCRETE_FACETS | `workflow_55c47d247ac243fb8db89f91bec92c3e` / `wfcmd_ba1aedce0e5843138ce67affbb83aff1` | `embeddingindexrev_1a97a885434348ac82202c556307915a` | 5 / 545 |
+| METADATA_ONLY | `workflow_1208ade8c8fd41b6b3fac2115a2ccae8` / `wfcmd_51c4e907142c499ebfb87b1b8f704f3b` | `embeddingindexrev_15bc00a00710433ea2e3f0fcbb654769` | 5 / 545 |
+
+Independent READ ONLY storage-integrity audit at01:01:15 UTC:
+
+- Encodings21, bindings21, logical indexes6, immutable index revisions9.
+- All nine prior numeric rows/binding identities match their original canonical
+  index references; the six older baseline rows retain exact recorded metadata.
+- Original occurrence-only index heads remain exactly7/520,1/520,1/520. The new
+  namespace is separate, not a silent replacement of historical/QUERY pins.
+- Three genuine new native launch Jobs/units succeeded, each with four successful
+  owned encoding Jobs, exit0/restarts0. Thus12 new encoded inputs, not21 reencodings.
+- All nine referenced shards passed schema/raw hash/result equality/float32 finite/
+  L2/shape and index-reference checks; receipt/Workflow/request/grant/source-plan/
+  Graph/policy pins and current index registration match. API health PASS.
+
+This audit is operating metadata/control-Artifact integrity, **not fresh source
+retrieval authorization** or proof of scientific quality. The545/25 missing-report
+discovery was observed at00:26; the audit does not invent a later accepted-report
+projection or source-class breakdown. The original520 backfill denominator remains.
+
+Audit log:`admitted-item-terminal-storage-audit.log`. Protected one-off auditor
+`audit-admitted-item-terminal-d484.py`, raw SHA
+`e14cf1f1767c896cb59d5b2426dca4c53547872c3aa1008c933ce0a86ac995c7`,
+under the existing reviewed operator libexec directory. It pins the previous
+evidence file hashes before using them and performs no DB/model/unit mutation.
+
+The no-new-encoding membership-refresh gap was characterized while this window ran.
+[Contract/pure-plan and supported predecessor-read source](../architecture/LOCAL_EMBEDDING_INDEX_MEMBERSHIP_REFRESH.md)
+are verified candidates, not operating changes. Finish that existing-path wiring
+before continuous enable. Current d484 source/identity12/resource24/grant selection
+remains installed, unit stopped successfully. Human HTTP canary/consumer activation
+and actual CPU/CUDA comparison remain separate required work in the full goal.

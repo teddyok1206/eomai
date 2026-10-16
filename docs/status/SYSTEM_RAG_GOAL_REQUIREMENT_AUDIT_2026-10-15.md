@@ -1,6 +1,6 @@
 # Full incremental-RAG goal: requirement and evidence ledger
 
-2026-10-15 UTC; updated2026-10-16 00:25 UTC. **GOAL_ACTIVE; FULL_COMPLETION_UNPROVEN.**
+2026-10-15 UTC; updated2026-10-16 01:01 UTC. **GOAL_ACTIVE; FULL_COMPLETION_UNPROVEN.**
 Requirements come from the [original design](../architecture/SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md),
 not from whichever subset currently has passing tests. Historical tests are not
 summed into a single acceptance count. This ledger does not grant authority.
@@ -15,14 +15,17 @@ summed into a single acceptance count. This ledger does not grant authority.
 - INDEX service revision12/resource version24/source d4846220 completed the original
   three-view bounded window and drained successfully. A supported new immutable
   grant now selects both admitted Item classes and ALL_ADMITTED_GRAPH_ITEMS;
-  a second bounded maximum4-target/three-command window is running from00:25 UTC,
-  **not boot-enabled/continuous**. Output/reuse/report-wait audit is pending.
+  a second bounded maximum4-target/three-command window completed at00:59 UTC,
+  **not boot-enabled/continuous**. All original STARTs succeeded and the owner
+  drained. Actual canonical vector/binding/index/reuse audit PASS at01:01 UTC.
   [Exact admitted-Item selection](../operations/LOCAL_INDEXING_ADMITTED_ITEM_SCOPE_2026-10-16.md).
   [Exact files, policies, failures and recovery](../operations/LOCAL_INDEXING_MULTIVIEW_ACTIVATION_2026-10-15.md).
-- Latest fully inspected persistent state at10/16 00:14:23 UTC: three logical
-  indexes, six revisions, nine encodings/bindings. CONTENT_ONLY7/520,
-  CONCRETE_FACETS1/520 and METADATA_ONLY1/520, with all original six encoding and
-  binding rows preserved exactly. Nine vectors are not nine distinct Items.
+- Latest fully inspected persistent state at10/16 01:01:15 UTC: six logical
+  indexes, nine revisions,21 encodings/bindings. New ALL_ADMITTED_GRAPH_ITEMS
+  coverage CONTENT_ONLY11/545, CONCRETE_FACETS5/545 and METADATA_ONLY5/545;
+  all nine prior numeric/binding identities and old occurrence-only heads7/1/1
+  of520 are preserved. Three new native units/four owned encoding Jobs each,
+  all successful with no restart;12 new encoded inputs, not21 reencodings.
 - Three genuine revision12 STARTs were observed queued by23:44:29. The original
   CONTENT_ONLY Workflow/START completed by23:54:16; CONCRETE_FACETS also completed
   and METADATA_ONLY was processing by10/16 00:04:46. The intended graceful drain
@@ -53,7 +56,7 @@ summed into a single acceptance count. This ledger does not grant authority.
 | --- | --- | --- |
 | B1. Commit-based missing-binding reconciliation, no new queue/outbox framework | Official current Graph lookup, existing native START admission, actual seed/delta; empty/report/view/no-Graph source tests | Confirm unattended resumed discovery after the bounded window, no hidden manual target list, and restart with original commands. |
 | B2. Three independent views with exact queue selection | Closed configurationV2, shared engine/publisher/authority/launcher and round-robin333 source/126 actual PG checks; genuine three-view terminal STARTs and exact committed index/encoding receipts, all six shards verified | BOUNDED_ACTUAL_PASS, partial7/1/1 of520. Configure and verify continuous policy next; full coverage is not complete. |
-| B3. Original past exams AND approved generated Item lifecycle | Existing source policy was officially resolved and already permits both classes; unchanged d484/service12 now selects a supported immutable admitted-Item grant and all three ALL_ADMITTED_GRAPH_ITEMS namespaces, bounded trial running | Inspect actual original new-grant commands, report-wait and vector reuse/coverage. Operating selection/start is not full lifecycle acceptance. |
+| B3. Original past exams AND approved generated Item lifecycle | Existing source policy permits both classes; d484/service12 admitted-Item grant/three namespaces completed a genuine bounded trial, current coverage11/5/5 of545, prior9 numeric/binding identities preserved | BOUNDED_ACTUAL_PASS. Later accepted-report arrival, source withdrawal/current refresh and continuous policy still need full lifecycle acceptance. |
 | B4. Accepted V10 report wait, unavailable concrete evidence, separate denominators | Typed reconciliation/source tests; actual new-grant CONTENT_ONLY discovery545 eligible/25 missing reports/7 existing bindings/513 missing, targets4 at10/16 00:26:41. Original occurrence-backed520 remains separate | Explicit wait observed. Inspect exact waiting source-class pointers and later accepted-report reconciliation; confirm user projection separates learning from vector readiness. Do not infer the25 source classes from counts alone. |
 | B5. Same input/space/partition reused; Graph-only/source/report changes create associations, not repeated encoding | Existing reservation/registry keys and delta/assembly tests; actual first two encodings unchanged across two deltas. New characterization proves changing a key cannot bypass completed-request equivalence; proposed1.3 pins genuinely changed membership intent without copying the plan Artifact | Implement owner/admission/completion wiring and actual replay/reuse. [Refresh contract/pure-plan source266 and wheel3 PASS, not executable](../architecture/LOCAL_EMBEDDING_INDEX_MEMBERSHIP_REFRESH.md). |
 | B6. No-work creates no Workflow; reusable bindings do not masquerade as missing compute | Source-plan demands already support reusable rows. Additional characterization proves global bindings can all exist while a different namespace has no index; current missing-binding-only no-op does not establish index readiness | Connect the tested pure missing/changed/current membership planner and closed1.3 intent through the existing native path. Preserve genuine no-op, report wait and failed history; no parallel binding-only framework. Live correction remains pending. |
