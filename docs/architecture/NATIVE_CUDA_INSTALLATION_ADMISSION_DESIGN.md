@@ -499,3 +499,11 @@ Operating API/Catalog remains e132c1aa; this source does not replace the audited
 B41 prefix or select a CUDA device/profile. Actual independent root ready/final
 observation, all-entrypoint lease migration, full successor-prefix audit and
 six CPU/CUDA comparisons remain open.
+
+Candidate `d6436e3592cb562fb44f274ff57fc162ba725447` is committed/pushed.
+Its standard platform/API-contract/API build and RECORD inspection passed at
+`/tmp/eom-api-build/d6436e3592cb562fb44f274ff57fc162ba725447.87XuhV/dist`.
+The worker, shared transport and ready-schema wheel members exactly match that
+source. Platform wheel raw SHA
+`06ecd07b08d29e153fae9a99c29826492089e3c942784a3cb389936b830bbe55`.
+This build is not an installation, protected-prefix re-audit or probe execution.
