@@ -13,7 +13,8 @@ from eom_catalog_contracts.reference_query_prepare import (
     MAX_REFERENCE_QUERY_PREPARE_REQUEST_BYTES,
     REFERENCE_QUERY_PREPARE_SOCKET,
     ReferenceQueryPrepareReply,
-    ReferenceQueryPrepareRequest,
+    SupportedReferenceQueryPrepareRequest,
+    parse_supported_reference_query_prepare_request,
     validate_reference_query_prepare_reply,
 )
 from eom_identifiers import canonical_json_bytes
@@ -56,10 +57,10 @@ class NativeReferenceQueryPrepareClient:
     def prepare(
         self,
         context: RequestContext,
-        request: ReferenceQueryPrepareRequest,
+        request: SupportedReferenceQueryPrepareRequest,
     ) -> ReferenceQueryPrepareReply:
         try:
-            request = ReferenceQueryPrepareRequest.model_validate(request)
+            request = parse_supported_reference_query_prepare_request(request)
             if type(context) is not RequestContext:
                 raise ValueError("current request required")
             capture, actor = context.owner_capture(), context.actor()

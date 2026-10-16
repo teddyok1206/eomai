@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from eom_catalog_contracts.reference_query_prepare import (
     ReferenceQueryPrepareReply,
-    ReferenceQueryPrepareRequest,
+    SupportedReferenceQueryPrepareRequest,
 )
 
 from eom_api.errors import ApiError
@@ -22,7 +22,7 @@ class ReferenceQueryPreparationApplicationService:
     def prepare(
         self,
         context: RequestContext,
-        request: ReferenceQueryPrepareRequest,
+        request: SupportedReferenceQueryPrepareRequest,
         *,
         idempotency_key: str,
     ) -> ReferenceQueryPrepareReply:

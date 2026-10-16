@@ -6,7 +6,9 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
-from eom_catalog_contracts.reference_query_prepare import ReferenceQueryPrepareRequest
+from eom_catalog_contracts.reference_query_prepare import (
+    parse_supported_reference_query_prepare_request,
+)
 from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryError
 from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
@@ -77,25 +79,30 @@ def query_runner(owner, executor):
 
 def wire_request(source, *, key="synthetic-native-preparation:one", operation="a"):
     context = source.request.context_request
-    return ReferenceQueryPrepareRequest.model_validate(
-        seal(
-            {
-                "schema_version": "system-rag-reference-query-prepare-request/1.0",
-                "operation": "PREPARE_REFERENCE_QUERY",
-                "operation_id": "queryprepare_" + operation * 32,
-                "idempotency_key": key,
-                "source_item_revision_id": context.anchor.source.item_revision_id,
-                "graph_snapshot": context.graph_snapshot.model_dump(mode="json"),
-                "policy_revision_id": context.policy_revision_id,
-                "policy_sha256": context.policy_sha256,
-            },
-            "request_sha256",
+    body = {
+        "schema_version": "system-rag-reference-query-prepare-request/1.0",
+        "operation": "PREPARE_REFERENCE_QUERY",
+        "operation_id": "queryprepare_" + operation * 32,
+        "idempotency_key": key,
+        "source_item_revision_id": context.anchor.source.item_revision_id,
+        "graph_snapshot": context.graph_snapshot.model_dump(mode="json"),
+        "policy_revision_id": context.policy_revision_id,
+        "policy_sha256": context.policy_sha256,
+    }
+    if context.consumer_purpose != "PAST_EXAM_VARIATION":
+        body.update(
+            schema_version="system-rag-reference-query-prepare-request/1.1",
+            consumer_purpose=context.consumer_purpose,
         )
-    )
+    return parse_supported_reference_query_prepare_request(seal(body, "request_sha256"))
 
 
 @pytest.fixture
 def application(source, monkeypatch):
+    return make_application(source, monkeypatch)
+
+
+def make_application(source, monkeypatch):
     executor = Mock(spec=ReferenceQueryNativeExecutor)
     runner = query_runner(source.owner, executor)
     driver = ReferenceQueryPrepareDriver()
@@ -148,6 +155,29 @@ def application(source, monkeypatch):
 
     monkeypatch.setattr(app.sessions.class_, "scalar", scalar)
     return value
+
+
+@pytest.mark.parametrize("purpose", ("ITEM_AUTHORING", "ITEM_REVIEW"))
+def test_explicit_new_purpose_reaches_existing_preparation_without_new_native_key(
+    tmp_path, monkeypatch, purpose
+):
+    from tests.unit.test_reference_query_owner_admission import make_source_case
+
+    value = make_application(
+        make_source_case(tmp_path, monkeypatch, consumer_purpose=purpose), monkeypatch
+    )
+    request = wire_request(value.source)
+    reply = value.app.prepare(request)
+    assert reply.status == "PENDING"
+    received = value.admitted[0]
+    key, context_id = reference_query_prepare_identity(
+        value.source.owner.identity.capture.operator_id, request.idempotency_key
+    )
+    assert received["preparation"].consumer_purpose == purpose
+    assert received["preparation"].request_id == context_id
+    assert received["idempotency_key"] == key
+    value.executor.execute.assert_not_called()
+    value.executor.allocate_execution.assert_not_called()
 
 
 def test_pending_is_original_work_and_only_offers_driver_after_root_commit(application):

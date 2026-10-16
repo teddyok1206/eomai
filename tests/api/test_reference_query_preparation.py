@@ -18,6 +18,7 @@ from eom_api.settings import ApiSettings
 from eom_catalog_contracts.reference_query_prepare import (
     MAX_REFERENCE_QUERY_PREPARE_REQUEST_BYTES,
     ReferenceQueryPrepareReply,
+    parse_supported_reference_query_prepare_request,
 )
 from eom_identifiers import canonical_json_bytes
 from eom_operator_identity import PermissionKey
@@ -230,3 +231,34 @@ def test_operation_declares_fresh_mutation_not_read_only(setup):
     assert {"200", "202"} <= operation["responses"].keys()
     assert not operation.get("x-eom-read-only", False)
     assert any(parameter["name"] == "Idempotency-Key" for parameter in operation["parameters"])
+
+
+@pytest.mark.parametrize("purpose", ("ITEM_AUTHORING", "ITEM_REVIEW"))
+def test_explicit_successor_uses_same_authenticated_operation_and_bound_reply(setup, purpose):
+    app, services, native, pair = setup
+    body = request_body(consumer_purpose=purpose)
+    expected = parse_supported_reference_query_prepare_request(body)
+    native.prepare.return_value = ReferenceQueryPrepareReply.model_validate(reply_body(expected))
+    with TestClient(app, base_url="http://localhost") as client:
+        response = post(client, body=body)
+    assert response.status_code == 202 and response.headers["Cache-Control"] == "no-store"
+    current, request = native.prepare.call_args.args
+    assert current.authenticated_access is pair and request.consumer_purpose == purpose
+    assert request.model_dump(mode="json") == body
+    assert response.json()["data"]["request_sha256"] == expected.request_sha256
+    services.auth.authenticate_and_capture_access.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "purpose", ("PAST_EXAM_VARIATION", "GENERAL_CHAT_READ", "MOCK_EXAM_OBSERVATION")
+)
+def test_successor_unoffered_purpose_is_rejected_before_native_io(setup, purpose):
+    from tests.unit.inference_transfer_embedding_fixtures import seal
+
+    app, _services, native, _pair = setup
+    body = request_body(consumer_purpose="ITEM_AUTHORING")
+    body = seal(body | {"consumer_purpose": purpose}, "request_sha256")
+    with TestClient(app, base_url="http://localhost") as client:
+        response = post(client, body=body)
+    assert response.status_code == 422 and response.json()["error_code"] == "API_REQUEST_INVALID"
+    native.prepare.assert_not_called()

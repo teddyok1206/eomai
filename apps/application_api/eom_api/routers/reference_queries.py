@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from eom_api_contracts import SingleResponse
-from eom_api_contracts.reference_queries import ReferenceQueryPrepareInput
+from eom_api_contracts.reference_queries import SupportedReferenceQueryPrepareInput
 from eom_catalog_contracts.reference_query_prepare import (
     MAX_REFERENCE_QUERY_PREPARE_REQUEST_BYTES,
     ReferenceQueryPrepareReply,
@@ -39,7 +39,7 @@ router = APIRouter(prefix="/knowledge/reference-queries", tags=["reference-queri
 )
 async def prepare(
     request: Request,
-    body: ReferenceQueryPrepareInput,
+    body: SupportedReferenceQueryPrepareInput,
     response: Response,
     authentication: Auth,
     idempotency_key: IdempotencyKey,

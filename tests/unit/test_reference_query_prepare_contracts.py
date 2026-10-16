@@ -17,21 +17,24 @@ from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.test_similarity_context_contracts import context_request_body
 
 
-def request_body():
+def request_body(*, consumer_purpose="PAST_EXAM_VARIATION"):
     context = context_request_body()
-    return seal(
-        {
-            "schema_version": "system-rag-reference-query-prepare-request/1.0",
-            "operation": "PREPARE_REFERENCE_QUERY",
-            "operation_id": "queryprepare_" + "a" * 32,
-            "idempotency_key": "synthetic-item-start:original",
-            "source_item_revision_id": context["anchor"]["source"]["item_revision_id"],
-            "graph_snapshot": context["graph_snapshot"],
-            "policy_revision_id": context["policy_revision_id"],
-            "policy_sha256": context["policy_sha256"],
-        },
-        "request_sha256",
-    )
+    body = {
+        "schema_version": "system-rag-reference-query-prepare-request/1.0",
+        "operation": "PREPARE_REFERENCE_QUERY",
+        "operation_id": "queryprepare_" + "a" * 32,
+        "idempotency_key": "synthetic-item-start:original",
+        "source_item_revision_id": context["anchor"]["source"]["item_revision_id"],
+        "graph_snapshot": context["graph_snapshot"],
+        "policy_revision_id": context["policy_revision_id"],
+        "policy_sha256": context["policy_sha256"],
+    }
+    if consumer_purpose != "PAST_EXAM_VARIATION":
+        body.update(
+            schema_version="system-rag-reference-query-prepare-request/1.1",
+            consumer_purpose=consumer_purpose,
+        )
+    return seal(body, "request_sha256")
 
 
 def reply_body(request=None, *, status="PENDING"):

@@ -13,7 +13,8 @@ from eom_catalog_contracts.reference_query_prepare import (
     MAX_REFERENCE_QUERY_PREPARE_REPLY_BYTES,
     MAX_REFERENCE_QUERY_PREPARE_REQUEST_BYTES,
     ReferenceQueryPrepareReply,
-    ReferenceQueryPrepareRequest,
+    SupportedReferenceQueryPrepareRequest,
+    parse_supported_reference_query_prepare_request,
     validate_reference_query_prepare_reply,
 )
 from eom_identifiers import canonical_json_bytes
@@ -49,7 +50,7 @@ def handle_reference_query_prepare_connection(
     No authentication material is returned, persisted, logged or passed to a worker.
     An error after application entry is an unknown outcome, never a retry grant.
     """
-    request: ReferenceQueryPrepareRequest | None = None
+    request: SupportedReferenceQueryPrepareRequest | None = None
     deadline = monotonic() + 30.0
     try:
         if type(admission) is not ProtectedInstalledIdentityProviderAdmission:
@@ -67,7 +68,7 @@ def handle_reference_query_prepare_connection(
             deadline=deadline,
             limit=MAX_REFERENCE_QUERY_PREPARE_REQUEST_BYTES,
         )
-        parsed = ReferenceQueryPrepareRequest.model_validate(decode_chat_frame(raw))
+        parsed = parse_supported_reference_query_prepare_request(decode_chat_frame(raw))
         if canonical_json_bytes(parsed.model_dump(mode="json")) != raw:
             raise ValueError("noncanonical request")
         request = parsed

@@ -9,7 +9,9 @@ from eom_catalog_contracts.inference_transfer_experiment import VIEWS
 from eom_catalog_contracts.reference_query_prepare import (
     ReferenceQueryPrepareErrorCode,
     ReferenceQueryPrepareReply,
-    ReferenceQueryPrepareRequest,
+    ReferenceQueryPrepareRequestV11,
+    SupportedReferenceQueryPrepareRequest,
+    parse_supported_reference_query_prepare_request,
 )
 from eom_catalog_contracts.similarity_read import CompletedSimilarityQuerySelection
 from eom_catalog_service.embedding_registry_ports import (
@@ -81,7 +83,7 @@ def reference_query_prepare_identity(operator_id: str, original_key: str) -> tup
 
 
 def _failure(
-    request: ReferenceQueryPrepareRequest,
+    request: SupportedReferenceQueryPrepareRequest,
     code: ReferenceQueryPrepareErrorCode,
 ) -> ReferenceQueryPrepareReply:
     return ReferenceQueryPrepareReply(
@@ -125,8 +127,8 @@ class NativeReferenceQueryPreparation:
         self.driver, self.spaces = driver, spaces
         self.sessions = build_session_factory(owner.catalog.engine)
 
-    def prepare(self, request: ReferenceQueryPrepareRequest) -> ReferenceQueryPrepareReply:
-        request = ReferenceQueryPrepareRequest.model_validate(request)
+    def prepare(self, request: SupportedReferenceQueryPrepareRequest) -> ReferenceQueryPrepareReply:
+        request = parse_supported_reference_query_prepare_request(request)
         caller = EmbeddingRegistryCaller(self.owner.identity.capture.operator_id)
         key, context_id = reference_query_prepare_identity(
             caller.operator_id, request.idempotency_key
@@ -149,6 +151,11 @@ class NativeReferenceQueryPreparation:
             VIEWS,
             "OPTIONAL",
             8,
+            consumer_purpose=(
+                request.consumer_purpose
+                if isinstance(request, ReferenceQueryPrepareRequestV11)
+                else "PAST_EXAM_VARIATION"
+            ),
         )
         try:
             with self.sessions.begin() as session:

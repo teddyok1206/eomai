@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/system-rag-reference-query-prepare/1.1",
+  "title": "Explicit authoring/review approved-reference QUERY preparation input",
+  "description": "Input-only successor. Original implicit-variation request1.0, reply1.0, current Identity challenge, actual operator/key scope and native authority remain unchanged.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "operation",
+        "operation_id",
+        "idempotency_key",
+        "source_item_revision_id",
+        "graph_snapshot",
+        "policy_revision_id",
+        "policy_sha256",
+        "request_sha256",
+        "consumer_purpose"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "system-rag-reference-query-prepare-request/1.1"
+        },
+        "operation": {
+          "$ref": "eom://schemas/knowledge/system-rag-reference-query-prepare/1.0#/$defs/request/properties/operation"
+        },
+        "operation_id": {
+          "$ref": "eom://schemas/knowledge/system-rag-reference-query-prepare/1.0#/$defs/request/properties/operation_id"
+        },
+        "idempotency_key": {
+          "$ref": "eom://schemas/knowledge/system-rag-reference-query-prepare/1.0#/$defs/request/properties/idempotency_key"
+        },
+        "source_item_revision_id": {
+          "$ref": "eom://schemas/knowledge/system-rag-reference-query-prepare/1.0#/$defs/request/properties/source_item_revision_id"
+        },
+        "graph_snapshot": {
+          "$ref": "eom://schemas/knowledge/system-rag-reference-query-prepare/1.0#/$defs/request/properties/graph_snapshot"
+        },
+        "policy_revision_id": {
+          "$ref": "eom://schemas/knowledge/system-rag-reference-query-prepare/1.0#/$defs/request/properties/policy_revision_id"
+        },
+        "policy_sha256": {
+          "$ref": "eom://schemas/knowledge/system-rag-reference-query-prepare/1.0#/$defs/request/properties/policy_sha256"
+        },
+        "request_sha256": {
+          "$ref": "eom://schemas/knowledge/system-rag-reference-query-prepare/1.0#/$defs/request/properties/request_sha256"
+        },
+        "consumer_purpose": {
+          "enum": [
+            "ITEM_AUTHORING",
+            "ITEM_REVIEW"
+          ]
+        }
+      }
+    }
+  },
+  "$ref": "#/$defs/request"
+}

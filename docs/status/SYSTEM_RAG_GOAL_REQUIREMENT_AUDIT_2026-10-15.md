@@ -11,6 +11,10 @@ summed into a single acceptance count. This ledger does not grant authority.
 - Repository source candidate`15ffdef5` is committed/pushed and standard build/
   source-free two-wheel207-EOM-module/117-schema composition PASS; it is
   NOT_INSTALLED/ACTIVE. Prior input1.1 foundation4f302b99 evidence remains.
+  The following input-only HTTP/native preparation1.1 source candidate is under
+  review: explicit ITEM_AUTHORING/ITEM_REVIEW, same original operator/key identity,
+  strict implicit-variation1.0 unchanged. Related source1729, final subset110,
+  disposable PG152 and mypy9 PASS; overlapping inventories are not summed.
   Reviewed INDEX
   code`2a4843c3` is independently packaged/installed. Documentation successors do
   not silently select another source release.
@@ -32,7 +36,10 @@ summed into a single acceptance count. This ledger does not grant authority.
   audit or full-corpus completion. At03:45:50 UTC the same invocation had five
   original numeric commands SUCCEEDED/COMPLETED and the second METADATA_ONLY
   command PROCESSING/RUNNING, all attempts/generation1; unit still active/success/
-  enabled, Restart=no. [Current exact gate and evidence](../operations/LOCAL_INDEXING_MEMBERSHIP_REFRESH_ACTIVATION_2026-10-16.md).
+  enabled, Restart=no. At04:16:07 UTC, the same invocation had eight original
+  numeric commands SUCCEEDED/COMPLETED and the third METADATA_ONLY command
+  PROCESSING/RUNNING, attempts/generation1. This is not a new vector-count audit.
+  [Current exact gate and evidence](../operations/LOCAL_INDEXING_MEMBERSHIP_REFRESH_ACTIVATION_2026-10-16.md).
 - The new authoring/review reference source foundation adds native request1.1
   without widening strict1.0. Source regression1971, final affected boundary234,
   handoff47 and guarded PG132 PASS (overlapping inventories not summed), strict
@@ -98,7 +105,7 @@ summed into a single acceptance count. This ledger does not grant authority.
 | --- | --- | --- |
 | C1. One common candidate/evidence boundary | Common Catalog context and original bounded native QUERY→same-key replay→exact context read accepted at partial2/520; new protected HTTP route/service installed | Finish the held actual HTTP preparation/replay/current-read gate. Keep source authorization and Evidence receipts distinct from scores/model hypotheses. |
 | C2. 1:1 reference variation | Source/API/BFF/browser/disposable plan23 tests and inactive compatible83bad release; Pack1.20.17 released inactive | Activate reviewed compatible components in dependency order after held HTTP terminal; run one bounded genuine Item and inspect actual author/review context and maximum-three-pass behavior. Only then enable Web flag. |
-| C3. New authoring and review | Shared approved-reference/native request1.1 foundation plus new ordinary plan24, existing owner/API acceptance and Catalog Unix/workspace delivery implemented. Final relevant source1632 PASS; ordinary/PAV first-start/replay/concurrent/rollback/immutability PG139 PASS; strict mypy15 and Ruff/format PASS. Inventories overlap | SOURCE_AND_DISPOSABLE_PASS, NOT_INSTALLED/ACTIVE. Plan23 and QUERY1.0 stay strict; ordinary authoring/every review share one actual ITEM_AUTHORING reference, not a private-draft vector comparison. Real public HTTP preparation/automatic reference selection/worker activation and private intent/result bases remain open. |
+| C3. New authoring and review | Shared approved-reference/native request1.1 foundation, ordinary plan24 and owner/API/Catalog Unix/workspace delivery implemented. Input-only HTTP/native preparation1.1 now carries explicit authoring/review purpose; same-key purpose drift cannot replace work. Latest related source1729, final subset110, PG152 and strict mypy9 PASS. Inventories overlap | SOURCE_AND_DISPOSABLE_PASS, NOT_INSTALLED/ACTIVE. Plan23 and QUERY1.0 stay strict; ordinary authoring/every review share one ITEM_AUTHORING reference, not private-draft vector comparison. Official-Evidence automatic reference selection, ordinary start routing, genuine HTTP/worker activation and private intent/result bases remain open. |
 | C4. General→ChatGPT read-only discovery | Existing textbook/past-exam GraphRAG tools remain available; this goal's vector candidate tool/use-case is not implemented/activated | Connect the same official context with actual chat operator permissions, citations, explicit partial/unavailable and no Item write/approval/delete authority. |
 | C5. Exam repetition observations | Historical approved25 Item/Assembly/HWPX acceptance is preserved, not new similarity-consumer evidence | Add bounded same-concept versus same-inference repetition observations to the existing composition path, without automatic rejection/full regeneration or changed approval meaning. Verify against an existing fixed cohort. |
 

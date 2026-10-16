@@ -21,6 +21,7 @@ from eom_api.services.reference_query_prepare_client import (
 from eom_catalog_contracts.reference_query_prepare import (
     ReferenceQueryPrepareReply,
     ReferenceQueryPrepareRequest,
+    parse_supported_reference_query_prepare_request,
 )
 from eom_identifiers import canonical_json_bytes
 from eom_identity_service.installed_owner_session_provider import (
@@ -58,9 +59,18 @@ def api_context(monkeypatch):
     return source, context
 
 
-def exchange(observation, monkeypatch, *, fault="", through_http=False):
+def exchange(
+    observation,
+    monkeypatch,
+    *,
+    fault="",
+    through_http=False,
+    consumer_purpose="PAST_EXAM_VARIATION",
+):
     source, context = api_context(monkeypatch)
-    request = ReferenceQueryPrepareRequest.model_validate(request_body())
+    request = parse_supported_reference_query_prepare_request(
+        request_body(consumer_purpose=consumer_purpose)
+    )
     application_calls = []
     final_sends = []
     preparation_sends = []
@@ -77,7 +87,10 @@ def exchange(observation, monkeypatch, *, fault="", through_http=False):
         return response
 
     def client_send(connection, document, *, deadline, limit):
-        if document["schema_version"] == "system-rag-reference-query-prepare-request/1.0":
+        if document["schema_version"] in {
+            "system-rag-reference-query-prepare-request/1.0",
+            "system-rag-reference-query-prepare-request/1.1",
+        }:
             preparation_sends.append(document["operation_id"])
             if fault == "noncanonical_request":
                 raw = b" " + canonical_json_bytes(document)
@@ -210,15 +223,23 @@ def exchange(observation, monkeypatch, *, fault="", through_http=False):
             listener.close()
 
 
-def test_real_handshake_imports_same_current_capture_before_application(observation, monkeypatch):
-    source, reply, calls = exchange(observation, monkeypatch)
+@pytest.mark.parametrize("purpose", ("PAST_EXAM_VARIATION", "ITEM_AUTHORING", "ITEM_REVIEW"))
+def test_real_handshake_imports_same_current_capture_before_application(
+    observation, monkeypatch, purpose
+):
+    source, reply, calls = exchange(observation, monkeypatch, consumer_purpose=purpose)
     assert reply is not None and reply.status == "PENDING" and reply.selection is None
     assert calls == [source.operator.operator_id]
     assert source.raw_token not in repr(reply) and source.token.verifier_hash not in repr(reply)
 
 
-def test_http_to_real_unix_handshake_preserves_actual_current_capture(observation, monkeypatch):
-    source, reply, calls = exchange(observation, monkeypatch, through_http=True)
+@pytest.mark.parametrize("purpose", ("PAST_EXAM_VARIATION", "ITEM_AUTHORING", "ITEM_REVIEW"))
+def test_http_to_real_unix_handshake_preserves_actual_current_capture(
+    observation, monkeypatch, purpose
+):
+    source, reply, calls = exchange(
+        observation, monkeypatch, through_http=True, consumer_purpose=purpose
+    )
     assert reply.status == "PENDING" and calls == [source.operator.operator_id]
 
 

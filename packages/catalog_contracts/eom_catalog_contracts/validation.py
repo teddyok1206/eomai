@@ -30,6 +30,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "system-rag-reference-query-prepare-v1.1": CatalogSchemaResource(
+            "schemas/knowledge/system-rag-reference-query-prepare-v1_1.schema.json",
+            "resources/knowledge/system-rag-reference-query-prepare-v1_1.schema.json",
+            "1.1",
+            "sha256:d6a9e8f99ecd8173497d6283f8a8f58e9124a1890cee00fed795b2fc86d8cb0f",
+        ),
         "system-rag-reference-query-prepare": CatalogSchemaResource(
             "schemas/knowledge/system-rag-reference-query-prepare-v1.schema.json",
             "resources/knowledge/system-rag-reference-query-prepare-v1.schema.json",

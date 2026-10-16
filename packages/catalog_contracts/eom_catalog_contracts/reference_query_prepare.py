@@ -7,7 +7,10 @@ from typing import ClassVar, Literal
 from eom_identifiers import content_sha256
 from pydantic import ConfigDict, Field, model_validator
 
-from eom_catalog_contracts.embedding_reference_query import similarity_contract_document
+from eom_catalog_contracts.embedding_reference_query import (
+    raw_similarity_contract_value,
+    similarity_contract_document,
+)
 from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
 from eom_catalog_contracts.models import FrozenModel, Sha256
 from eom_catalog_contracts.similarity_context import SimilarityFailureCode
@@ -32,13 +35,14 @@ type ReferenceQueryPrepareErrorCode = (
 class _PrepareValue(FrozenModel):
     model_config = ConfigDict(revalidate_instances="always")
     maximum_bytes: ClassVar[int] = MAX_REFERENCE_QUERY_PREPARE_REPLY_BYTES
+    contract_schema: ClassVar[str] = "system-rag-reference-query-prepare"
 
     @model_validator(mode="before")
     @classmethod
     def schema_first(cls, value: object) -> object:
         return similarity_contract_document(
             value,
-            "system-rag-reference-query-prepare",
+            cls.contract_schema,
             cls.maximum_bytes,
         )
 
@@ -66,6 +70,32 @@ class ReferenceQueryPrepareRequest(_PrepareValue):
         return self
 
 
+class ReferenceQueryPrepareRequestV11(ReferenceQueryPrepareRequest):
+    """Explicit reference purpose only; does not grant source, identity or execution access."""
+
+    contract_schema: ClassVar[str] = "system-rag-reference-query-prepare-v1.1"
+    schema_version: Literal["system-rag-reference-query-prepare-request/1.1"]  # type: ignore[assignment]
+    consumer_purpose: Literal["ITEM_AUTHORING", "ITEM_REVIEW"]
+
+
+type SupportedReferenceQueryPrepareRequest = (
+    ReferenceQueryPrepareRequest | ReferenceQueryPrepareRequestV11
+)
+
+
+def parse_supported_reference_query_prepare_request(
+    value: object,
+) -> SupportedReferenceQueryPrepareRequest:
+    document = raw_similarity_contract_value(value)
+    if isinstance(document, dict):
+        version = document.get("schema_version")
+        if version == "system-rag-reference-query-prepare-request/1.0":
+            return ReferenceQueryPrepareRequest.model_validate(document)
+        if version == "system-rag-reference-query-prepare-request/1.1":
+            return ReferenceQueryPrepareRequestV11.model_validate(document)
+    raise ValueError("REFERENCE_QUERY_PREPARE_REQUEST_INVALID")
+
+
 class ReferenceQueryPrepareReply(_PrepareValue):
     schema_version: Literal["system-rag-reference-query-prepare-reply/1.0"]
     operation: Literal["PREPARE_REFERENCE_QUERY"]
@@ -84,10 +114,10 @@ class ReferenceQueryPrepareReply(_PrepareValue):
 
 
 def validate_reference_query_prepare_reply(
-    request: ReferenceQueryPrepareRequest,
+    request: SupportedReferenceQueryPrepareRequest,
     reply: ReferenceQueryPrepareReply,
 ) -> None:
-    request = ReferenceQueryPrepareRequest.model_validate(request)
+    request = parse_supported_reference_query_prepare_request(request)
     reply = ReferenceQueryPrepareReply.model_validate(reply)
     if reply.operation_id != request.operation_id or reply.request_sha256 != request.request_sha256:
         raise ValueError("REFERENCE_QUERY_PREPARE_REPLY_BINDING_INVALID")

@@ -245,6 +245,13 @@ policy/launch/receipt/result 및 numerical input은 유지하며 새 입력의 p
 가장하지 않는다. 소스 회귀1632/임시 DB139 PASS인 미설치·미활성 후보이며 위 운영 선택을
 변경하지 않는다. strict type15, Ruff/format 및 이전 plan23 bytes 보존을 검증했다.
 
+동일 HTTP/native 준비 경로의 입력 전용 successor1.1도 구현했다. ITEM_AUTHORING/
+ITEM_REVIEW 목적을 명시하며, 기존1.0의 암시적 기출변형 의미·reply1.0·실제 사용자와
+원래 key로 결정되는 native identity는 유지한다. purpose를 바꿔 같은 key를 보내면 기존
+작업을 재해석하거나 새 작업을 생성하지 않고 거부한다. 관련 회귀1729/임시 DB152 PASS,
+최종 HTTP·실소켓 subset110 및 strict type9 PASS. 소스 검증일 뿐 운영 미설치·미활성이며,
+공식 Evidence의 자동 참고 선택·일반 문항 시작과 실제 사용자 활성화 검증은 아직 남아 있다.
+
 ## 보존·정리 규칙
 
 - immutable row, manifest, receipt, release, Workflow, Item Revision 또는 rebuild/validation 경로가

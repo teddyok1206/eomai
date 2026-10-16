@@ -14,7 +14,7 @@ import pytest
 from eom_catalog_contracts.similarity_context import parse_similarity_context_request
 from eom_catalog_service.similarity_context_service import validate_similarity_preparation
 from eom_identity_service import OperatorAuthorizationFenceError
-from eom_workflow.reference_query_execution import parse_reference_query_workflow_request
+from eom_workflow.reference_query_execution import parse_supported_reference_query_workflow_request
 from eom_workflow_runner.models import WorkflowCommandRecord, WorkflowInstanceRecord
 from eom_workflow_runner.reference_query_prepare_application import (
     NativeReferenceQueryPreparation,
@@ -194,7 +194,7 @@ def prepared_application(prepared_query, monkeypatch):
     )
     context = parse_similarity_context_request(seal(context, "request_sha256"))
     value.context = context
-    value.source.request = parse_reference_query_workflow_request(
+    value.source.request = parse_supported_reference_query_workflow_request(
         seal(
             value.source.request.model_dump(mode="json")
             | {"context_request": context.model_dump(mode="json")},
@@ -263,6 +263,9 @@ def workflow_counts(case):
         )
 
 
+@pytest.mark.parametrize(
+    "prepared_query", ("PAST_EXAM_VARIATION", "ITEM_AUTHORING", "ITEM_REVIEW"), indirect=True
+)
 def test_real_application_commits_before_offer_and_replay_preserves_original(prepared_application):
     case = prepared_application
     first = case.app.prepare(case.wire)
@@ -283,6 +286,9 @@ def test_real_application_commits_before_offer_and_replay_preserves_original(pre
     case.value.executor.allocate_execution.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    "prepared_query", ("PAST_EXAM_VARIATION", "ITEM_AUTHORING", "ITEM_REVIEW"), indirect=True
+)
 def test_same_key_concurrent_application_uses_one_workflow_start(prepared_application):
     case = prepared_application
     barrier = Barrier(2)
@@ -301,6 +307,9 @@ def test_same_key_concurrent_application_uses_one_workflow_start(prepared_applic
 
 
 @pytest.mark.parametrize("field", ("source", "policy", "graph"))
+@pytest.mark.parametrize(
+    "prepared_query", ("PAST_EXAM_VARIATION", "ITEM_AUTHORING", "ITEM_REVIEW"), indirect=True
+)
 def test_changed_same_key_intent_never_creates_replacement_work(prepared_application, field):
     case = prepared_application
     first = case.app.prepare(case.wire)
@@ -311,12 +320,45 @@ def test_changed_same_key_intent_never_creates_replacement_work(prepared_applica
         body["policy_sha256"] = "sha256:" + "f" * 64
     else:
         body["graph_snapshot"]["graph_snapshot_revision_id"] = "graphrev_" + "f" * 32
-    from eom_catalog_contracts.reference_query_prepare import ReferenceQueryPrepareRequest
+    from eom_catalog_contracts.reference_query_prepare import (
+        parse_supported_reference_query_prepare_request,
+    )
 
-    changed = ReferenceQueryPrepareRequest.model_validate(seal(body, "request_sha256"))
+    changed = parse_supported_reference_query_prepare_request(seal(body, "request_sha256"))
     reply = case.app.prepare(changed)
     assert reply.status == "FAILED" and reply.selection is None
     assert workflow_counts(case) == (1, 1) and case.offers == [first.workflow_id]
+
+
+@pytest.mark.parametrize(
+    "prepared_query", ("PAST_EXAM_VARIATION", "ITEM_AUTHORING", "ITEM_REVIEW"), indirect=True
+)
+def test_same_key_purpose_change_cannot_relabel_or_replace_existing_work(prepared_application):
+    from eom_catalog_contracts.reference_query_prepare import (
+        parse_supported_reference_query_prepare_request,
+    )
+
+    case = prepared_application
+    first = case.app.prepare(case.wire)
+    with Session(case.value.engine) as session:
+        original = session.get(WorkflowInstanceRecord, first.workflow_id).initial_request
+    changed = case.wire.model_dump(mode="json") | {
+        "schema_version": "system-rag-reference-query-prepare-request/1.1",
+        "consumer_purpose": (
+            "ITEM_REVIEW"
+            if case.value.context.consumer_purpose == "ITEM_AUTHORING"
+            else "ITEM_AUTHORING"
+        ),
+    }
+    case.initial.side_effect = AssertionError("same-key replay must not capture another source")
+    reply = case.app.prepare(
+        parse_supported_reference_query_prepare_request(seal(changed, "request_sha256"))
+    )
+    assert reply.status == "FAILED" and reply.selection is None
+    assert reply.error_code == "SOURCE_POINTER_INVALID"
+    assert workflow_counts(case) == (1, 1) and case.offers == [first.workflow_id]
+    with Session(case.value.engine) as session:
+        assert session.get(WorkflowInstanceRecord, first.workflow_id).initial_request == original
 
 
 @pytest.mark.parametrize("missing", ("report", "index"))

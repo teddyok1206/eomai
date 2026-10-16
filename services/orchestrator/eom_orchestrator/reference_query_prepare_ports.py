@@ -4,11 +4,13 @@ from typing import Protocol
 
 from eom_catalog_contracts.reference_query_prepare import (
     ReferenceQueryPrepareReply,
-    ReferenceQueryPrepareRequest,
+    SupportedReferenceQueryPrepareRequest,
 )
 
 
 class ReferenceQueryPreparationPort(Protocol):
     """Trusted composition binds a genuine capture before exposing this operation."""
 
-    def prepare(self, request: ReferenceQueryPrepareRequest) -> ReferenceQueryPrepareReply: ...
+    def prepare(
+        self, request: SupportedReferenceQueryPrepareRequest
+    ) -> ReferenceQueryPrepareReply: ...

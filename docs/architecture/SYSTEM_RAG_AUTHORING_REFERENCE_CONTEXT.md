@@ -346,3 +346,74 @@ Final documentation/guidance/resource checks39 PASS/8.17s. No operating selectio
 was changed: INDEX2a4843c3/Identity13 continues, API2857bf77/QUERY8c411041 and
 Web/Pack flags stay selected as before. Actual public ordinary preparation/start,
 private-query bases and remaining original-goal gates are not inferred complete.
+
+## Native preparation purpose successor — design before schema/behavior
+
+1. Boundary: the existing authenticated HTTP→API client→fixed native owner still
+   defaults every preparation to variation. Extend this exact path; do not create
+   another owner, session cache, worker tool or queue.
+2. Canonical source: an exact approved-reference revision and pinned Graph/policy;
+   actual source/profile/index selection and current authority remain Catalog-owned.
+   No private brief/draft/chat text is accepted or compared by this operation.
+3. Identity: add closed input-only system-rag-reference-query-prepare-request1.1
+   carrying explicit ITEM_AUTHORING or ITEM_REVIEW. Keep implicit-variation input1.0
+   and its strict parser/bytes. Reply1.0 and native execution protocol remain valid:
+   the exact request hash already binds the extra purpose/version.
+4. Pointers: retain operation/source revision/Graph/policy/hash fields and limits.
+   A purpose is intent, not caller identity, source access, execution authority or
+   a replacement for the operator-session capture challenge.
+5. Access: exact original-key lookup, one captured current caller, current source
+   and immutable-index checks, canonical START/replay and bounded result inspection.
+6. Structures: explicit two-version schema/model/parser family and discriminated
+   HTTP input; existing native admission/claim/checkpoint/driver. No new DB schema,
+   registry, queue, cache or numerical member.
+7. Complexity: unchanged8192-byte request/4096-byte reply budgets, three views,
+   top8/maximum1024 sources. Purpose dispatch is O(1); no extra corpus/model scan.
+8. Concurrency: retain existing actual-operator/original-key identity unchanged.
+   Do not add purpose/version to that key: a changed purpose must conflict against
+   original work, not spawn a second job. Preserve root/claim/lease/replay behavior.
+9. Ownership: Catalog contracts own closed messages; API handles presentation;
+   native owner uses genuine current Identity capture and official Catalog ports.
+   Workers never receive a session, authority override, DB/NAS or caller path.
+10. Failure: unknown versions/purposes, same-key purpose drift, malformed raw values,
+    expired capture, denied/revoked source and foreign reply hashes fail explicitly.
+    Known missing report/index is UNAVAILABLE, not denial or an automatic retry.
+    PENDING retains the original durable job/key; timeout never creates a new key.
+11. Alternative: changing the default for old1.0 reinterprets history; inferring a
+    purpose from a client name/key is ambiguous. An input-only successor lets the
+    already implemented native request1.1/plan24 path receive its actual intent.
+
+No runtime/flag/Pack selection or model execution belongs to this source step.
+Official-Evidence automatic reference selection and ordinary Item-start routing
+remain the next consumer step; this does not pretend that the public route alone
+selects a reference or implements a private-query origin.
+
+### Preparation-purpose source and disposable evidence
+
+At2026-10-16 04:34 UTC, the affected source regression across84 files passed
+1729 tests/444.49s (one existing Starlette/httpx deprecation warning). After the
+last annotation-only simplification of the supported-request type alias, the
+final exact HTTP/native/contracts/Unix subset passed110/19.98s, strict mypy9
+production modules passed, and the final guarded disposable PostgreSQL stage
+suite passed152/138.65s. The independent adjacent API/start/release inventory
+passed41/8.50s. These inventories overlap and are not added together.
+
+The PG cases use actual transactions, unique native START identity and unchanged
+immutable initial requests; identity/source/executor seams remain synthetic.
+They cover three offered purposes, first/replay/concurrent preparation and changed
+source/Graph/policy/purpose under the same key. Purpose drift fails explicitly,
+without recapturing authority, relabeling history or creating replacement work.
+Before/after disposable inspection passed exact database identity, migration
+head20261014_0055 and zero other connections. No operating database was tested.
+
+New canonical/packaged input1.1 raw SHA-256 is
+`d6a9e8f99ecd8173497d6283f8a8f58e9124a1890cee00fed795b2fc86d8cb0f`.
+Original input1.0 remains byte-identical at
+`ebc804f035eae57c9b4a649316cd63471203218ecb04603454eb08f2bfa15720`.
+Ruff/format pass on all15 changed Python paths. No new dependency, DB migration,
+runtime activation, model execution or current-IAM acceptance is implied.
+
+Original contract RED and all subsequent evidence remain under
+`/tmp/eom-identity-provider-install.nAaycoDM/purpose-preparation-*`, including
+`source-regression.log`, `focused-final.log`, `mypy-final.log`, `stage-final.log`
+and `db-after-final.log`. **SOURCE_AND_DISPOSABLE_PASS / NOT_INSTALLED / NOT_ACTIVE.**
