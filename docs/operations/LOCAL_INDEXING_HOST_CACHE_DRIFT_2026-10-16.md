@@ -442,5 +442,8 @@ event, pinned to still-current service revision13/resource version26. Thus the
 expired PROCESSING/RUNNING retirement1.0 contract does not apply. INDEX remains
 stopped with its original failure invocation. The additive, tested
 [unstarted cancellation design](../architecture/LOCAL_INDEXING_UNSTARTED_CANCELLATION_DESIGN.md)
-provides the truthful owner-maintenance boundary before an INDEX identity successor;
-it is not yet installed/applied and never changes failed history to success.
+provides the truthful owner-maintenance boundary before an INDEX identity successor.
+Candidate e6e9b926's owner pair is now installed INACTIVE and an exact command is
+prepared, but no operating cancellation/identity activation has occurred. The
+shared numerical prefix stays b41b3cb4 and QUERY remains on its recovered b41b3cb4
+release. This never changes failed history to success.

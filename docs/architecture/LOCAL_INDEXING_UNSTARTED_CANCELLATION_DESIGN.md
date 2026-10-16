@@ -120,3 +120,26 @@ and an actual held-row lock. No operating request has been cancelled by those te
 Disposable database:`/tmp/eom-api-testdb-20261016103237_a4aad411`; actual operating
 head remains0055, with no new migration. Installation and actual owner-maintenance
 execution remain separate next gates.
+
+The reviewed source candidate is`e6e9b926c5c6811478dd56d8d88c682d1312e3f3`.
+Standard three-wheel build/RECORD verification PASS. Its protected owner pair was
+actually installed **INACTIVE**, without replacing the b41b3cb4 numerical prefix
+or recovered QUERY service. Platform raw:
+`5b1a3cf7aaae8456daa9abd9447f07d3140c78d0710c4c12bd99d33c1dc99f8c`;
+API-contracts raw:
+`17e68bb26fe660b82124b3aec2c6b7ba50677db394d651ff8676a6a545d4768e`.
+The disposable DB's guarded `--confirm` cleanup completed; no test rows remain in
+that disposable database. Operating DB migration/head and ordinary services are
+unchanged. The first cleanup invocation omitted the required confirmation flag
+and made no changes; only the guarded exact disposable target was then removed.
+
+An exact operating cancellation command was prepared using that installed public
+contract, but **not executed**: original workflow/request/command/service13 remain
+unchanged. Command semantic:
+`d5d4c26675855aec66c7419cbc7be14def9f43ebf77dc36c00aa87efa7dab597`;
+raw:`b8c8c3f68d883c7d833d5c69bb6de4d8c0f05c54fead9f78857ad912d3587c95`.
+Root preparation evidence:
+`/var/lib/eom-release-operator-stage.2857bf77-6g9mpdap/index-unstarted-e6e9b926`.
+Next prepare/review the compatible INDEX identity14/runtime/grant selection before
+applying this supported cancellation and normal reconciliation. Do not allocate a
+synthetic lease, directly modify rows or treat this preparation as a receipt.
