@@ -1,5 +1,9 @@
 # Original QUERY completion and compatible Catalog reader
 
+Later checkpoint: [actual19:02 login/READY/replay and30s read503 diagnosis](C5_OBSERVATION_RELEASE_PREPARATION_2026-10-16.md).
+The15:18 LOGIN state below is historical; the same process is now waiting for
+explicit replay. No fresh-auth failure is reclassified as an invalid password.
+
 2026-10-16 UTC, operating checkpoint15:18. Full incremental-RAG goal remains
 ACTIVE. This records installation and original numerical completion, not final
 authenticated common-context acceptance, browser acceptance or C2–C5 activation.
