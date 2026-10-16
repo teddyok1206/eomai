@@ -23,6 +23,7 @@ from eom_catalog_contracts.embedding_vector_binary import (
     EmbeddingVectorBinaryError,
     read_unit_vectors,
 )
+from eom_catalog_contracts.private_chat_similarity import PrivateChatSimilarityRequest
 from eom_catalog_contracts.similarity_context import SimilarityViewSelection
 from eom_catalog_contracts.validation import CATALOG_SCHEMA_RESOURCES, load_schema
 from eom_catalog_service.embedding_encoder_adapter import (
@@ -53,11 +54,33 @@ def selection():
     return SimilarityViewSelection.model_validate(context_request_body()["views"][0])
 
 
+def private_context_request(selected=None):
+    legacy = context_request_body()
+    return PrivateChatSimilarityRequest.model_validate(
+        seal(
+            {
+                "schema_version": "system-rag-private-chat-similarity-request/1.0",
+                "request_id": legacy["request_id"],
+                "consumer_purpose": "GENERAL_CHAT_READ",
+                "query_basis": basis().model_dump(mode="json"),
+                "graph_snapshot": legacy["graph_snapshot"],
+                "policy_revision_id": legacy["policy_revision_id"],
+                "policy_sha256": legacy["policy_sha256"],
+                "source_classes": legacy["source_classes"],
+                "views": [(selection() if selected is None else selected).model_dump(mode="json")],
+                "vector_mode": "REQUIRED",
+                "maximum_sources": 1024,
+                "top_k": 8,
+            },
+            "request_sha256",
+        )
+    )
+
+
 def request_body():
     return build_private_chat_query_encoding_input(
         PreparedPrivateChatQuery(basis(), TEXT),
-        selection(),
-        context_request_sha256="sha256:" + "6" * 64,
+        private_context_request(),
         job_id="job_" + "7" * 32,
         query_request_id="embeddingquery_" + "8" * 32,
         batch_size=4,
@@ -259,11 +282,10 @@ def test_owner_projection_rejects_absent_or_inapplicable_selection(fault):
         selected = selected.model_copy(update={"view": "METADATA_ONLY"})
     else:
         object.__setattr__(prepared, "text", TEXT + " changed")
-    with pytest.raises(ValueError):
+    with pytest.raises((ValueError, SchemaError)):
         build_private_chat_query_encoding_input(
             prepared,
-            selected,
-            context_request_sha256="sha256:" + "6" * 64,
+            private_context_request(selected),
             job_id="job_" + "7" * 32,
             query_request_id="embeddingquery_" + "8" * 32,
             batch_size=4,

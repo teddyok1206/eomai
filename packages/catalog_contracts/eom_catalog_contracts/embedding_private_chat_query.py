@@ -27,6 +27,7 @@ from eom_catalog_contracts.private_chat_query_basis import (
 )
 
 MAX_PRIVATE_CHAT_QUERY_BYTES = 128 * 1024
+PRIVATE_CHAT_QUERY_RESULT_REF = "eom://schemas/knowledge/embedding-private-chat-query-result/1.0"
 
 
 class _PrivateQueryValue(FrozenModel):

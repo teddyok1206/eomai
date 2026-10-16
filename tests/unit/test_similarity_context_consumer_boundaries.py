@@ -65,7 +65,13 @@ def test_authoring_reference_rechecks_late_source_permission(purpose):
 
 def test_core_has_no_database_filesystem_ml_worker_or_private_owner_calls() -> None:
     forbidden = {"sqlalchemy", "os", "pathlib", "subprocess", "torch", "transformers", "socket"}
-    for name in ("similarity_context_service.py", "similarity_context_ports.py"):
+    for name in (
+        "similarity_context_service.py",
+        "similarity_context_ports.py",
+        "private_chat_similarity_service.py",
+        "private_chat_similarity_ports.py",
+        "similarity_document_read_validation.py",
+    ):
         path = ROOT / "services/catalog_service/eom_catalog_service" / name
         tree = ast.parse(path.read_text())
         for node in ast.walk(tree):

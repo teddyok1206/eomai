@@ -934,6 +934,11 @@ from eom_catalog_contracts.private_chat_query_basis import (
     build_private_chat_query_basis,
     private_chat_query_text_sha256,
 )
+from eom_catalog_contracts.private_chat_similarity import (
+    PrivateChatSimilarityContext,
+    PrivateChatSimilarityRequest,
+    validate_private_chat_query_execution,
+)
 from eom_catalog_contracts.science_assessment_corpus import (
     ScienceAssessmentAcquisitionCandidate,
     ScienceAssessmentAcquisitionFailureObservation,
@@ -1729,6 +1734,8 @@ __all__ = [
     "PreviewMockExamAssemblyPlan",
     "PreviewMockExamAssemblyPlanCommand",
     "PrivateChatQueryBasis",
+    "PrivateChatSimilarityContext",
+    "PrivateChatSimilarityRequest",
     "ProductUsageGraphEdgeV1",
     "ProductUsageGraphNodeV1",
     "ProductUsageGraphProjectionV1",
@@ -1916,6 +1923,7 @@ __all__ = [
     "validate_legacy_item_extraction_result_for_request",
     "validate_mock_exam_placements",
     "validate_mock_exam_planned_placements",
+    "validate_private_chat_query_execution",
     "validate_private_chat_query_result",
     "validate_reference_query_result",
     "validate_reference_query_result_v11",

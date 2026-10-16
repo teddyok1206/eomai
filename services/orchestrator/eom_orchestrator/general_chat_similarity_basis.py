@@ -18,6 +18,7 @@ from eom_catalog_contracts.private_chat_query_basis import (
     build_private_chat_query_basis,
     private_chat_query_text_sha256,
 )
+from eom_catalog_contracts.private_chat_similarity import PrivateChatSimilarityRequest
 from eom_catalog_contracts.similarity_context import SimilarityViewSelection
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
@@ -121,9 +122,8 @@ def read_owned_private_chat_query(
 
 def build_private_chat_query_encoding_input(
     prepared: PreparedPrivateChatQuery,
-    selection: SimilarityViewSelection,
+    request: PrivateChatSimilarityRequest,
     *,
-    context_request_sha256: str,
     job_id: str,
     query_request_id: str,
     batch_size: int,
@@ -137,6 +137,10 @@ def build_private_chat_query_encoding_input(
     if type(prepared) is not PreparedPrivateChatQuery:
         raise ValueError("PRIVATE_CHAT_QUERY_PROJECTION_INVALID")
     prepared.__post_init__()
+    request = PrivateChatSimilarityRequest.model_validate(raw_similarity_contract_value(request))
+    if request.query_basis != prepared.basis:
+        raise ValueError("PRIVATE_CHAT_QUERY_BASIS_MISMATCH")
+    selection = request.views[0]
     selection = SimilarityViewSelection.model_validate(raw_similarity_contract_value(selection))
     if selection.view != "CONTENT_ONLY" or selection.index is None:
         raise ValueError("PRIVATE_CHAT_QUERY_INDEX_UNAVAILABLE")
@@ -154,7 +158,7 @@ def build_private_chat_query_encoding_input(
         "schema_version": "embedding-private-chat-query-input/1.0",
         "job_id": job_id,
         "query_request_id": query_request_id,
-        "context_request_sha256": context_request_sha256,
+        "context_request_sha256": request.request_sha256,
         "basis": prepared.basis.model_dump(mode="json"),
         "spaces": selection.index.spaces.model_dump(mode="json"),
         "document_recipe": selection.recipe.model_dump(mode="json"),

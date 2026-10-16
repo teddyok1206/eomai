@@ -244,3 +244,91 @@ application result schemas. A private result must not be mislabeled as one of th
 Before admitting a private Workflow, define its exact context/policy/check/output
 successors and corresponding guarded migration through the existing Runner queue.
 No CHECK, DB head, runtime or source policy was changed by this source library.
+
+## Private similarity context and common candidate composition
+
+Define a distinct closed `system-rag-private-chat-similarity/1.0` request/context
+before its read behavior. Request pins the private basis, Graph/policy and one
+CONTENT_ONLY index/recipe, source classes, maximum sources and top-k. No actor,
+raw question/history, fake approved anchor or unsupported metadata filter enters
+the wire. A private numeric input must derive from THIS exact parent, basis and
+index selection, not an arbitrary parent hash. Existing reference schemas stay strict.
+
+The result carries approved candidate pointers and independent vector observations
+only; it does not fabricate a Graph Evidence receipt or an approved-left-profile
+model comparison. Existing GraphRAG/textbook tools keep their separate evidence.
+All authorized documents may be scored, including1024: there is no approved query
+Item to subtract. Coverage inherits the existing denominator rules with this one
+explicit scored-count successor. Missing public reports, missing vectors and
+bounded population remain separate. Mandatory limitations identify the single
+private message, auxiliary-not-Evidence and not-equality/approval score meaning.
+
+The common Catalog application reuses official registry read DTOs, source-binding
+closure and the existing exact float ranking function. Extract the current
+document-read check behind a small typed scope Protocol for both real consumers,
+not a second search engine or public/private fake-anchor conversion. Owner ports
+must supply actual owned-message projection, current authorized population,
+committed private QUERY and exact index rows; absence fails closed. Reauthorize
+both private basis and full public population immediately before result delivery.
+The read is not publication, enrollment, execution admission or an authority cache.
+
+Use maps by source/profile/encoding and one bounded O(Nd + N log N) exact ranking pass. Result
+order uses full precision with the existing tie rule; rounded millionths are
+display only. Scope hash and ordered source/profile sets are deterministic. No
+new queue/cache/table or DB write; future private Workflow CHECK/migration remains
+an explicit separate dependency. Orchestrator owns private source materialization
+and Artifact commit, Catalog owns current source/index authorization, pure contracts
+own exact values, and adapters implement those interfaces. Fake ports in unit
+tests never establish operating permission/source/native acceptance.
+
+Tests must cover single/all1024 candidates without false self-exclusion, partial
+coverage and unavailable/no-query states; stale/foreign basis/index/QUERY/hash;
+full precision ranking; last-moment revocation with zero candidate/count leakage;
+forbidden fields/old parser rejection and exact parent-to-native derivation.
+This stage remains uninstalled until actual owner/session/policy/Workflow wiring
+and appropriate real-source/isolated-DB gates are verified.
+
+### Context/composer source checkpoint —2026-10-16 UTC
+
+Implemented the distinct request/result schema, private application read ports and
+candidate composer. Canonical schema and package mirror are byte-identical, raw:
+`884bc8b9d873746ffea5cfb5042859a61eaa5942a8f488f4fc3d2d76db14d586`.
+The owned query builder now accepts this typed parent rather than a free parent
+hash/selection pair. It rejects a changed private basis before numerical execution.
+No released predecessor schema bytes or native policy/configuration changed.
+
+Both actual source implementations use one extracted source/profile/report and
+document-binding/index validator. The approved-reference use case retains its
+anchor exclusion, Graph channel, purpose restrictions and output meaning. The
+private composer includes every authorized binding, uses the same exact floating
+ranking and only emits CONTENT_ONLY vector observations. It requires explicit
+owner ports for owned-message resolution, official population/index reads,
+committed private QUERY result and fresh private/public reauthorization. This is
+not an implemented production adapter or a default grant to read private Chat.
+
+Combined source regression:516 PASS in46.04s across17 suites. New private context
+suite48 PASS in13.89s includes a synthetic1,024-binding composition with one reused
+immutable encoding row, deterministic rank/ties, exact replay, explicit unavailable
+index/query/overflow, missing reports versus missing vectors, empty/truncated
+scope, stale/duplicate preparation, native/result/shard/raw-hash association,
+foreign/duplicate index reads and late authority revocation with no disclosed
+counts/candidates/execution. Fixture-local fabricated owner values test application
+composition only, never actual source authorization or registration. The earlier
+89-case focused subset and79-case legacy regression overlap; do not add them.
+
+Strict mypy6 source modules, Ruff/format13 files, original-design/previous-version
+and layer checks, repository boundary and diff checks PASS. The first focused run
+was41 PASS/1 FAIL because a fixture still expected only ValueError after the typed
+parent began rejecting an invalid view at JSON Schema validation. The test now
+accepts that stricter SchemaError too; no validator was weakened. Initial type
+annotation/format findings were corrected before the final gates. Logs are retained
+under the existing temporary operator directory as`private-context-*`.
+
+No DB schema/state/queue/persistence or production/runtime behavior changed;
+previous guarded59 PostgreSQL ownership-read cases remain historical evidence,
+not a new DB test execution. New dependency, production model/HTTP submission,
+Artifact commit and activation counts are all0 for this source change. Existing
+INDEX/QUERY/API/Catalog services remain on their independent installed releases.
+Remaining: private Workflow context/policy/result CHECK and actual admission,
+Orchestrator/Catalog/session adapters, native execution, tool delivery, installed
+release and real-source acceptance. Full goal/C4 remain**NOT_COMPLETE/NOT_ACTIVE**.

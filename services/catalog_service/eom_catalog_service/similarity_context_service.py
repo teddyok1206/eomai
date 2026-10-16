@@ -17,16 +17,10 @@ from eom_catalog_contracts.embedding_reference_query_v11 import (
 from eom_catalog_contracts.embedding_vector_binary import read_unit_vectors
 from eom_catalog_contracts.inference_transfer_embedding import (
     SHARD_SCHEMA_REF,
-    EmbeddingEncodingIdentity,
     EmbeddingVectorRowRef,
-    parse_embedding_binding,
 )
-from eom_catalog_contracts.inference_transfer_experiment import ExperimentView, PopulationSource
+from eom_catalog_contracts.inference_transfer_experiment import ExperimentView
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
-from eom_catalog_contracts.knowledge import (
-    ApprovedItemKnowledgeSourceV2,
-    KnowledgeSolutionEvidencePointer,
-)
 from eom_catalog_contracts.similarity_context import (
     SimilarityCandidate,
     SimilarityContext,
@@ -39,7 +33,6 @@ from eom_catalog_contracts.similarity_context import (
     SimilarityUnavailableReason,
     SimilarityVectorObservation,
     SimilarityViewCoverage,
-    SimilarityViewSelection,
     parse_similarity_context,
     parse_similarity_context_request,
     validate_similarity_query_execution,
@@ -47,16 +40,10 @@ from eom_catalog_contracts.similarity_context import (
 from eom_identifiers import content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from jsonschema.exceptions import ValidationError as JsonSchemaError
-from pydantic import TypeAdapter
 
-from eom_catalog_service.embedding_incremental_plan import RegisteredEmbeddingRow
 from eom_catalog_service.embedding_registry_ports import (
     AUTHORING_REFERENCE_PURPOSES,
-    AuthorizedEmbeddingReadProfile,
     EmbeddingRegistryCaller,
-    EmbeddingRegistryLookup,
-    EmbeddingRegistryRead,
-    MaterializedEmbeddingReadRow,
     ResolvedPinnedEmbeddingIndex,
 )
 from eom_catalog_service.inference_transfer_service import bounded_profile_channel_union
@@ -69,6 +56,10 @@ from eom_catalog_service.similarity_context_ports import (
     SimilarityQueryUnavailable,
     SimilarityReferenceQueryReadPort,
     VerifiedReferenceQueryRead,
+)
+from eom_catalog_service.similarity_document_read_validation import (
+    validate_prepared_similarity_sources,
+    validate_similarity_document_reads,
 )
 
 
@@ -90,33 +81,11 @@ def validate_similarity_preparation(
         )
     ):
         raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
-    sources: dict[str, PreparedSimilaritySource] = {}
-    for value in prepared.sources:
-        if not isinstance(value, PreparedSimilaritySource):
-            raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
-        source: PopulationSource = TypeAdapter(PopulationSource).validate_python(
-            raw_similarity_contract_value(value.source)
-        )
-        if (
-            source != value.source
-            or source.source_class not in request.source_classes
-            or (
-                source.item_revision_id in sources
-                or (value.profile is None) != (value.solution_evidence is None)
-            )
-        ):
-            raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
-        if value.profile is not None:
-            InferenceTransferProfilePointer.model_validate(
-                raw_similarity_contract_value(value.profile)
-            )
-            KnowledgeSolutionEvidencePointer.model_validate(
-                raw_similarity_contract_value(value.solution_evidence)
-            )
-        sources[source.item_revision_id] = value
-    profile_pins = tuple(value.profile for value in sources.values() if value.profile is not None)
-    if len(set(profile_pins)) != len(profile_pins):
-        raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
+    sources = validate_prepared_similarity_sources(
+        prepared.sources,
+        source_classes=request.source_classes,
+        maximum_sources=request.maximum_sources,
+    )
     anchor = sources.get(request.anchor.source.item_revision_id)
     if anchor is None or (
         anchor.source != request.anchor.source
@@ -196,102 +165,6 @@ def _validate_query(
         row_count=result.shard.row_count,
         expected_sha256=result.shard.binary.sha256,
     )
-
-
-def _validate_document_reads(
-    request: SimilarityContextRequest,
-    sources: dict[str, PreparedSimilaritySource],
-    reads: tuple[ResolvedPinnedEmbeddingIndex, ...],
-    expected_views: set[ExperimentView],
-) -> dict[ExperimentView, ResolvedPinnedEmbeddingIndex]:
-    if type(reads) is not tuple or len(reads) > 3:
-        raise SimilarityContextReadError("INDEX_POINTER_INVALID")
-    selections = {selection.view: selection for selection in request.views}
-    result: dict[ExperimentView, ResolvedPinnedEmbeddingIndex] = {}
-    expected_profiles = {
-        revision: source.profile
-        for revision, source in sources.items()
-        if source.profile is not None
-    }
-    for value in reads:
-        if not isinstance(value, ResolvedPinnedEmbeddingIndex) or (
-            not isinstance(value.intent, EmbeddingRegistryRead)
-            or not isinstance(value.intent.scope, EmbeddingRegistryLookup)
-            or not isinstance(value.intent.selection, SimilarityViewSelection)
-            or type(value.sources) is not tuple
-            or type(value.profiles) is not tuple
-            or type(value.bindings) is not tuple
-            or type(value.numerical_rows) is not tuple
-            or any(
-                not isinstance(row, MaterializedEmbeddingReadRow) for row in value.numerical_rows
-            )
-            or any(
-                not isinstance(source, ApprovedItemKnowledgeSourceV2) for source in value.sources
-            )
-            or any(
-                not isinstance(profile, AuthorizedEmbeddingReadProfile)
-                for profile in value.profiles
-            )
-        ):
-            raise SimilarityContextReadError("INDEX_POINTER_INVALID")
-        for row in value.numerical_rows:
-            if not isinstance(row.row, RegisteredEmbeddingRow) or (
-                not isinstance(row.row.encoding, EmbeddingEncodingIdentity)
-                or not isinstance(row.row.row_ref, EmbeddingVectorRowRef)
-            ):
-                raise SimilarityContextReadError("INDEX_POINTER_INVALID")
-            EmbeddingEncodingIdentity.model_validate(
-                raw_similarity_contract_value(row.row.encoding)
-            )
-            EmbeddingVectorRowRef.model_validate(raw_similarity_contract_value(row.row.row_ref))
-        view = value.intent.selection.view
-        if (
-            view in result
-            or view not in expected_views
-            or value.intent.selection != selections.get(view)
-            or (
-                value.intent.scope.graph_snapshot != request.graph_snapshot
-                or value.intent.scope.policy_revision_id != request.policy_revision_id
-                or value.intent.scope.policy_sha256 != request.policy_sha256
-                or {source.item_revision_id: source for source in value.sources}
-                != {revision: source.source for revision, source in sources.items()}
-                or len(value.sources) != len(sources)
-                or {row.source_item_revision_id: row.profile for row in value.profiles}
-                != expected_profiles
-                or len(value.profiles) != len(expected_profiles)
-            )
-        ):
-            raise SimilarityContextReadError("INDEX_POINTER_INVALID")
-        revisions: set[str] = set()
-        rows = {row.row.encoding.encoding_sha256: row.row for row in value.numerical_rows}
-        if len(rows) != len(value.numerical_rows):
-            raise SimilarityContextReadError("INDEX_POINTER_INVALID")
-        for original in value.bindings:
-            binding = parse_embedding_binding(raw_similarity_contract_value(original))
-            source = sources.get(binding.source.item_revision_id)
-            if (
-                source is None
-                or binding.source.item_revision_id in revisions
-                or (
-                    binding.source != source.source
-                    or binding.profile != source.profile
-                    or binding.solution_evidence != source.solution_evidence
-                    or binding.graph_snapshot != request.graph_snapshot
-                    or binding.policy_revision_id != request.policy_revision_id
-                    or binding.policy_sha256 != request.policy_sha256
-                    or binding.view != view
-                    or binding.recipe != value.intent.selection.recipe
-                    or binding.encoding.encoding_sha256 not in rows
-                    or rows[binding.encoding.encoding_sha256].encoding != binding.encoding
-                    or rows[binding.encoding.encoding_sha256].row_ref != binding.row_ref
-                )
-            ):
-                raise SimilarityContextReadError("INDEX_POINTER_INVALID")
-            revisions.add(binding.source.item_revision_id)
-        result[view] = value
-    if set(result) != expected_views:
-        raise SimilarityContextReadError("INDEX_POINTER_INVALID")
-    return result
 
 
 def _context(
@@ -388,7 +261,7 @@ class SimilarityContextApplicationService:
                 reads = (
                     {}
                     if query is None
-                    else _validate_document_reads(
+                    else validate_similarity_document_reads(
                         request,
                         sources,
                         self.sources.read_similarity_views(caller, request, prepared),
