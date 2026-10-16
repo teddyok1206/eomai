@@ -440,3 +440,68 @@ failure, permission bypass or reason to disable the guards. Build/install the
 reviewed successor before a new explicitly identified publication. Preserve both
 terminal attempts. Original HTTP authentication observer is unchanged; no extra
 login prompt/key/model request or shared-service restart was introduced.
+
+Successor6f202b7c standard build and protected owner installation passed; fresh
+expanded focused171 PASS. Its first actual publication copied the exact96,284,520
+driver bytes, then explicitly failed FILE_UNAVAILABLE on the next source. Bounded
+read-only stage metadata confirms only that driver file exists; no cache unit or
+canonical revision was created. The declared rdmacm input is inside an eom0700
+temporary parent, while the administrative unit intentionally has no capabilities.
+Root without DAC capabilities cannot traverse that caller-private directory.
+
+For the next known-terminal operation, retain the empty capability set and input
+privacy. Have the existing systemd mount owner expose **only that one declared
+untrusted file**, read-only, inside a fresh private temporary input mount. The
+publisher still requires its eom UID, fixed basename, byte count and independent
+hash before copying into a fresh root inode. Do not chmod/chown the caller tree,
+grant broad DAC authority or copy the archive to another canonical location.
+This is a narrow administrative staging view, not worker source/NAS permission
+or native admission. Preserve both failed logical/workspace identities; do not
+retry either same revision or silently mark the existing driver copy complete.
+
+### Actual publication and protected static closure PASS —17:30 UTC
+
+The successor finite unit with that single readonly input view completed and
+published the exact eight-member root-local revision. Every file is root0444,
+regular/single-link and the final revision directory is0555. The cache generator
+terminated successfully in its private chroot; installed capture independently
+validated all21 exact base/CUDA routes and canonical manifest/file hashes before
+returning CREATED. No OS package, system cache or original input tree was changed.
+
+| Identity | Actual value |
+| --- | --- |
+| Installed owner source | `6f202b7c3e5e85338a19693aa8fb73084c36c1a0` |
+| Platform wheel SHA-256 | `f300f96ae2d8b6ac986f4db6ac660520d059ca3a774e61533076437446e9339f` |
+| Logical extension | `embeddingcudahost_99ec37f55bbb42de8edb1e889c9d3a25` |
+| Immutable revision | `embeddingcudahostrev_3a79d32835b94a5e95532828fe324322` |
+| Manifest bytes/raw SHA-256 | 2166 / `b3ef4a05805fe60b8cd22f3fadc5a9836b34265a817ff9d33bf8da94f390036f` |
+| Semantic snapshot SHA-256 | `8cecc412c25268f58c1476d3aef742c42d03f596935799dd5ccfe8b6f78e7f7d` |
+| CUDA host seed SHA-256 | `1690844d36f4e8fcd59888896aaf2e248a1a3170c24f445559692fb1cfa48591` |
+| Cache bytes/raw SHA-256 | 2135 / `222b7ae7827ba996777b2f83fbc9f6757ebe1e013090e14868454711f18b7d8c` |
+
+Canonical fixed root is`/opt/eom/embedding-cuda-host-extensions`; identity remains
+logical ID plus revision, not that storage path. The accepted CPU snapshot/seed
+are unchanged and remain explicitly referenced provenance, not relabeled CUDA.
+
+A separate finite readonly installed-owner diagnostic then ran the accepted OLD
+interpreter with this exact CUDA cache bound **before exec**, UID1000, no
+capabilities, private devices/network, readonly system, fixed empty CUDA cwd and
+inaccessible source/NAS/secrets. The supported capture resolved the snapshot,
+checked real kernel cache mount/file epochs and fixed CPU tools/DSOs, held six
+library FDs and inspected all declared SONAME/needed/version edges with fixed
+readelf. Entry/exit epoch checks passed; terminal unit exit0 reported
+STATIC_PROTECTED_HOST_PASS_NOT_NATIVE_ADMITTED. This is the actual host-only
+namespace/byte/version composition, not the full candidate-prefix audit, nine
+bootstrap1.2 input, candidate/kernel mapping receipt, GPU device/lease proof or
+six numerical comparisons. Output zero-model/device fields describe the limited
+program scope, not an independently instrumented syscall audit.
+
+Operating evidence lives in the existing temporary operation directory:
+`cuda-host-publication-6f20-v2.log` and`cuda-host-closure-6f20.log`; failed99a1 and
+6f20 logs/workspaces remain separately retained. Source regression is now fresh
+171 PASS in14.81seconds; earlier170/169 overlapping runs are not summed. Standard
+successor build/installed-owner RECORD gate passed. No shared API/Web/INDEX/QUERY
+release or model execution occurred; CPU remains selected. Next use the declared
+snapshot in the protected1.2 OLD full-prefix owner boundary, preserving the original
+root-staged candidate and failed inventory. Do not recopy a large unchanged prefix
+or run its interpreter merely to bypass the existing developer-only publish path.

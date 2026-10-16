@@ -9,6 +9,17 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Actual checkpoint17:30 UTC: reviewed6f202b7c owner wheel installed, eight-member
+  immutable CUDA host revision privately published and exact21-route cache/file
+  validation PASS. Separate actual OLD/no-site/readonly-cache-bind/UID1000/private
+  devices host capture verifies six held ELF needed/version edges and epochs;
+  terminal exit0 STATIC_PROTECTED_HOST_PASS_NOT_NATIVE_ADMITTED. Fresh171 focused
+  tests/strict/Ruff and standard wheel build PASS. Prior failed installer and two
+  publication identities remain preserved. No CUDA candidate interpreter/model,
+  GPU device/lease, shared-service release, OS package/cache or DB mutation. This
+  is actual host preparation, not full1.2 prefix audit/native receipt or six
+  performance runs; full C1–C5 and conditional GPU default remain open.
+  [Exact identities, pins, scope and next boundary](../architecture/EMBEDDING_CUDA_HOST_EXTENSION_DESIGN.md#actual-publication-and-protected-static-closure-pass-1730-utc).
 - Actual checkpoint17:26 UTC: standard99a1c101 build and existing protected owner
   installation PASS, not activation/native admission. First installer failure2
   (pip temp) preserved; explicit TMPDIR in the existing writable owner namespace
