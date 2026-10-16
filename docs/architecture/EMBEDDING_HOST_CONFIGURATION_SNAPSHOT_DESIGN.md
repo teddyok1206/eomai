@@ -443,3 +443,39 @@ INDEX/QUERY, authenticate the original HTTP continuation, or complete C1–C5/GP
 gates. The original stopped INDEX and pending request remain preserved. Next use
 the existing protected installer and actual quiescence/admission boundaries, then
 resume the original request; do not request another login to mask native unreadiness.
+
+### Protected inactive owner installation —09:06 UTC
+
+Candidate`3346ae080bd4ec9b4d0d56b27aa5f56df39fb8f1`, tree
+`1507478af73befdcea0b44c33a8a39089d6d3f76`, is committed/pushed. The standard
+three-wheel build/RECORD inspection PASS; build directory:
+`/tmp/eom-api-build/3346ae080bd4ec9b4d0d56b27aa5f56df39fb8f1.gE0Fz8/dist`.
+Platform raw SHA`19fb4269c6ccbab1d06b241508d6f21d01ee96b94ae09b0a2e58b61942c30e91`;
+API-contracts raw SHA`204497bbb7f6ea0fbfb4ab7f869dafa30a666cb24dfcd398fd5f8e3f586bb38c`.
+
+The unchanged, independently hash-matched protected owner installer installed only
+this immutable release under`/opt/eom/embedding-owner-releases/3346ae080bd4ec9b4d0d56b27aa5f56df39fb8f1`.
+The finite root packaging unit bound the exact immutable cache before OLD interpreter
+execution. Network, model, NAS, repository and secrets access were unavailable.
+The first invocation stopped during pip preparation because the strict namespace
+had no writable default temporary directory. MainPID0/exit2 and absent final release
+were checked before the supported no-clobber installer was run once more, using
+TMPDIR inside its already-authorized owner-release write boundary. That run PASS;
+the failed unit/stage/log remain preserved. No runtime constraint was relaxed.
+
+The subsequent nonprivileged source-free import probe PASS:284 EOM modules resolve
+only inside this release, strict1.0 and successor1.1 readers load, the fixed launcher
+declares1.1, and no ML module was imported. Its initial shell-escaped inline
+invocation had a syntax error before imports; correcting only argument encoding
+passed, with both observations retained. Evidence logs:
+`host-query-successor-release-build.log`, `host-query-successor-owner-stage.log`,
+`host-query-successor-owner-stage-retry1.log`,
+`host-query-successor-installed-import.log` and
+`host-query-successor-installed-import-retry1.log` in the same temporary evidence directory.
+
+This is **OWNER_INSTALLED_INACTIVE / CPU_RUNTIME_UNCHANGED**, not fresh native-prefix
+admission, installed unit selection, source authority, model acceptance or recovery.
+The exact original API/Catalog/QUERY PIDs/invocations are unchanged; INDEX remains
+MainPID0/FAILED with its original invocation. No alias, DB row, Artifact, original
+HTTP key, service grant, worker permission or model state was changed. Disposable
+PostgreSQL cleanup PASS. Full-goal status remains ACTIVE, not COMPLETE.
