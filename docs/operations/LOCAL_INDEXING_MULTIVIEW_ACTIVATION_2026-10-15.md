@@ -1,6 +1,7 @@
 # Bounded multiview INDEX release selection
 
-2026-10-15 UTC. Bounded operating window; final numerical acceptance is still pending.
+2026-10-15 UTC; terminal audit2026-10-16 00:14 UTC.
+**BOUNDED_THREE_VIEW_WINDOW=PASS; CONTINUOUS_INDEXING=NOT_ACTIVE.**
 Parent: [multiview owner design](../architecture/LOCAL_INDEXING_MULTIVIEW_OWNER_DESIGN.md).
 Reviewed INDEX source: `d4846220f1afbebaa8bb79507297eed42cea9219`.
 Do not silently replace it with a later documentation commit or replace API/QUERY.
@@ -139,7 +140,7 @@ One supported start of the **same** source12/configuration from its known failed
 invocation then began at23:41:35, PID1201778,
 invocation`3cb026dbd8024ae5991d3f60637c4b76`. No publication/configuration was rerun,
 failed history was not reset and no new authority/operation key was substituted.
-`LOCAL_INDEXING_SERVICE_STARTED` followed at23:41:56. The bounded observer remains
+`LOCAL_INDEXING_SERVICE_STARTED` followed at23:41:56. The bounded observer initially remained
 alive (PID1201734), watching only its exact revision12 original STARTs and sending
 the existing graceful stop Event when the third one is active after two successes.
 
@@ -156,7 +157,7 @@ success is inferred from those states. The controller's observed memory peak
 reached its unchanged1GiB limit, memory.events max432 but oom/oom_kill0; this is
 not an OOM report or a reason to silently increase the budget.
 
-Bounded model/index acceptance and continuous automation remain pending. The
+At that checkpoint, bounded model/index acceptance and continuous automation remained pending. The
 [full requirement ledger](../status/SYSTEM_RAG_GOAL_REQUIREMENT_AUDIT_2026-10-15.md)
 keeps the broader consumer, lifecycle and GPU/default work visible and unwaived.
 
@@ -175,3 +176,49 @@ lineage is checked after drain. The first original command completed only at
 23:54:16. Numerical execution exit is not equivalent to Workflow completion,
 and the remaining post-compute source/index verification deserves measurement
 before raising resource limits, adding caches or claiming GPU will remove it.
+
+## Terminal window and independent canonical storage audit
+
+At2026-10-16 00:13:56 UTC, the exact original three Workflows were COMPLETED and
+their original START commands SUCCEEDED, each attempts1/lease generation1.
+The graceful stop Event drained the last command; the same INDEX invocation
+exited successfully, MainPID0/inactive. No fourth discovery/start was admitted.
+
+At00:14:23 UTC, an independent **read-only operator storage-integrity audit**
+checked the installed d4846220 contract/member readers. It did not authenticate
+as the INDEX service, read source question text, or claim fresh user retrieval
+authorization. All six original encoding rows and bindings matched the retained
+pre-window metadata exactly, including original Artifact/row/hash/time identity.
+
+| View | Current revision | Bindings / eligible sources | Native launch Job |
+| --- | --- | ---: | --- |
+| CONTENT_ONLY | `embeddingindexrev_ba3ec2a71b17442f9e59426ee83ad29e` (revision4) | 7 / 520 | `job_cf4cac86191c4bedbb496c04bc6abdb9` |
+| CONCRETE_FACETS | `embeddingindexrev_24d16277bd114d9eb811590916c52641` (revision1) | 1 / 520 | `job_eff9f354bfdb4fdc8ab78869e0cb25f6` |
+| METADATA_ONLY | `embeddingindexrev_446958f3804e434092ad53b34b90d568` (revision1) | 1 / 520 | `job_9dcba27580fd480d96a0e9aee7fdbb54` |
+
+Persistent totals are encoding9/binding9/logical indexes3/index revisions6.
+These are view-specific vectors/associations, **not nine distinct source Items**.
+Each new receipt resolves its original Workflow/step/request/source-plan and
+Graph/policy/namespace pins, successful producer, registration and exact current
+index revision. All six referenced immutable shards passed canonical schema/raw
+member SHA, result/shard equality, finite float32/L2 shape and index/previous-
+manifest reference validation. Registered numeric row pointers match the bindings.
+
+Each original native launch has exactly one owned encoding Job, both successful;
+the corresponding fixed CPU unit is terminal, exit0, restart count0. Three new
+encodings, three original native units and preserved older rows are the actual
+observations; command counts alone were not used as model-execution evidence.
+No DB mutation, new model launch, source-policy change or worker permission was
+performed by this audit. API health smoke remains PASS.
+
+Evidence files in the existing private development window:
+`multiview-bounded-after-cache-window.log` and
+`multiview-terminal-storage-audit.log`. The one-off protected audit is
+`/usr/local/libexec/eom-release-operator-indexing-4cf6ac9a/audit-multiview-terminal-d484.py`,
+raw SHA`cde91082257a7b10d0c7fa64d18c6938f9d5f6d34812637b9aabc7c5b24e5286`.
+It is operator tooling, not a new production queue or retrieval authority.
+
+Continuous policy, full coverage, approved-generated-Item/report lifecycle,
+INDEX same-request replay, consumer activation and actual CPU/CUDA measurement
+remain explicit next gates. Boot enable remains OFF; this success does not
+silently authorize a different batch size, source grant or encoder space.

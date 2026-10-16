@@ -1,6 +1,6 @@
 # Full incremental-RAG goal: requirement and evidence ledger
 
-2026-10-15 UTC. **GOAL_ACTIVE; FULL_COMPLETION_UNPROVEN.**
+2026-10-15 UTC; updated2026-10-16 00:14 UTC. **GOAL_ACTIVE; FULL_COMPLETION_UNPROVEN.**
 Requirements come from the [original design](../architecture/SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md),
 not from whichever subset currently has passing tests. Historical tests are not
 summed into a single acceptance count. This ledger does not grant authority.
@@ -13,17 +13,23 @@ summed into a single acceptance count. This ledger does not grant authority.
 - API/platform/contracts2857bf77 and native QUERY owner8c411041 remain selected.
   The separate83bad async Item-start candidate is staged, not activated.
 - INDEX service revision12/resource version24 and the three-view grant are selected;
-  source d4846220 is running a bounded window, **not boot-enabled/continuous**.
+  source d4846220 completed the bounded window and drained successfully,
+  **not boot-enabled/continuous**.
   [Exact files, policies, failures and recovery](../operations/LOCAL_INDEXING_MULTIVIEW_ACTIVATION_2026-10-15.md).
-- Latest fully inspected persistent baseline at23:29 UTC: one logical CONTENT_ONLY
-  index, three revisions, six encodings/bindings, coverage6/520 original eligible
-  sources. Later running commands do not by themselves prove new vector coverage.
+- Latest fully inspected persistent state at10/16 00:14:23 UTC: three logical
+  indexes, six revisions, nine encodings/bindings. CONTENT_ONLY7/520,
+  CONCRETE_FACETS1/520 and METADATA_ONLY1/520, with all original six encoding and
+  binding rows preserved exactly. Nine vectors are not nine distinct Items.
 - Three genuine revision12 STARTs were observed queued by23:44:29. The original
   CONTENT_ONLY Workflow/START completed by23:54:16; CONCRETE_FACETS also completed
   and METADATA_ONLY was processing by10/16 00:04:46. The intended graceful drain
   was requested during that third original command. Final actual model-launch
   count, canonical vector/binding/index lineage and whole-window terminal success
-  remain to be inspected; two successful commands do not replace that proof.
+  were subsequently verified at00:14:23. All three original Workflows/STARTs
+  finished by00:13:56, attempts/generation1; exactly three successful original
+  native units, one owned encoding each, no restarts. Six canonical referenced
+  shards passed raw hash/schema/finite/L2 and index-lineage checks. This is a
+  read-only storage-integrity audit, not fresh operator retrieval authorization.
 - The original HTTP canary process1079683 remains alive and waiting for its original
   Studio login. Its log still has no successful login/request at23:40:50. No new
   login/key/process was substituted. INDEX automation uses its separate supported
@@ -43,7 +49,7 @@ summed into a single acceptance count. This ledger does not grant authority.
 | Requirement | Existing implementation/evidence | Remaining concrete action |
 | --- | --- | --- |
 | B1. Commit-based missing-binding reconciliation, no new queue/outbox framework | Official current Graph lookup, existing native START admission, actual seed/delta; empty/report/view/no-Graph source tests | Confirm unattended resumed discovery after the bounded window, no hidden manual target list, and restart with original commands. |
-| B2. Three independent views with exact queue selection | Closed configurationV2, shared engine/publisher/authority/launcher and round-robin333 source/126 actual PG checks; genuine three-view queued STARTs | Inspect each original terminal Workflow/START and its committed index/encoding receipts. Configure and verify continuous policy only after bounded acceptance. |
+| B2. Three independent views with exact queue selection | Closed configurationV2, shared engine/publisher/authority/launcher and round-robin333 source/126 actual PG checks; genuine three-view terminal STARTs and exact committed index/encoding receipts, all six shards verified | BOUNDED_ACTUAL_PASS, partial7/1/1 of520. Configure and verify continuous policy next; full coverage is not complete. |
 | B3. Original past exams AND approved generated Item lifecycle | Source adapter/contract supports both; active trial is intentionally occurrence-backed PAST_EXAM only | Add/activate the proper admitted-source namespace and explicit minimal source grant. Do not label current occurrence-only policy as approved-Item automation. |
 | B4. Accepted V10 report wait, unavailable concrete evidence, separate denominators | Typed reconciliation states and source tests preserve missing report/view; original520 report corpus remains separate | Verify actual approved-Item report wait and later accepted-report reconciliation; confirm the user projection distinguishes learning from vector readiness where exposed. |
 | B5. Same input/space/partition reused; Graph-only/source/report changes create associations, not repeated encoding | Existing reservation/registry keys and delta/assembly tests; actual first two encodings unchanged across two deltas | Check live same-request INDEX replay and source/Graph/report change with encode counters and immutable row references. |
