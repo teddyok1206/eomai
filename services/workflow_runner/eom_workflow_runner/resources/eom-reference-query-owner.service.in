@@ -8,7 +8,7 @@ Type=simple
 User=root
 Group=root
 WorkingDirectory=/var/lib/eom-workflow-runner/reference-query-owner
-EnvironmentFile=/etc/eom/secrets/catalog-manager.env
+EnvironmentFile=/etc/eom/secrets/reference-query-owner.env
 Environment=EOM_REFERENCE_QUERY_CONFIGURATION_SHA256=@CONFIGURATION_SHA256@
 Environment=TZ=UTC
 Environment=LANG=C.UTF-8
@@ -51,6 +51,7 @@ InaccessiblePaths=/srv/eom/worker-homes /srv/eom/models/image
 InaccessiblePaths=/srv/eom/workspaces /srv/eom/image-workspaces /srv/eom/image-reference-workspaces
 InaccessiblePaths=/etc/eom/workflow-runtime.env
 InaccessiblePaths=/etc/eom/secrets/postgres.env /etc/eom/secrets/catalog-manager.env
+InaccessiblePaths=/etc/eom/secrets/reference-query-owner.env
 InaccessiblePaths=/etc/eom/secrets/hwpx-manager.env /etc/eom/secrets/observe.env
 InaccessiblePaths=/etc/eom/secrets/web-gui.env
 InaccessiblePaths=-/etc/eom/secrets/dev-slack.env -/var/run/docker.sock

@@ -265,3 +265,70 @@ workers keep their separate fixed unit, identity and privilege boundary.
 
 Primary reference for the configuration mechanism:
 [systemd255 capabilities/security documentation](https://raw.githubusercontent.com/systemd/systemd/v255/man/systemd.exec.xml).
+
+## Correct controller credential selection — 2026-10-16
+
+Actual05:37 UTC login succeeded but native preparation failed before any Workflow.
+The real service EnvironmentFile was subsequently reproduced under UID990 in a
+finite read-only unit: it selected eom_catalog_manager_runtime/OID94661, whereas
+the released owner configuration pins eom_app/OID16385. That Catalog role correctly
+cannot lock the three IAM session targets. Earlier outside-service probes used the
+native controller credential and therefore did not reproduce the service role.
+They remain metadata evidence, not proof of correct service credential selection.
+
+1. Responsibility/boundary: correct only this current-human native QUERY service's
+   existing configured controller connection. Do not change the working machine-
+   identity INDEX service or grant Catalog IAM UPDATE.
+2. Canonical source: existing protected native controller credential and the
+   released configuration's database-owner name/OID, not a user/model-supplied URL.
+3. Identity/revision: retain database owner, provider, source/policy/space/control
+   and historical request identities. A new owner wheel/unit is an explicit release.
+4. Pointer resolution: startup now compares actual CURRENT_USER/SESSION_USER/OID
+   with its existing owner pin in the existing READ ONLY preflight, before control
+   reads/launcher construction. This is connection compatibility, not human or
+   source authorization; every request still uses its full fresh Identity fence.
+5. Access pattern: one indexed pg_roles lookup on startup. No source scan, queue,
+   recurring work or model operation is needed to diagnose the connection.
+6. Structures/indexes: reuse the frozen owner pin and PostgreSQL role key; no new
+   DB/index/schema/wire contract, authority registry or dependency.
+7. Complexity: O(1) bounded startup metadata observation. Request work is unchanged.
+8. Transaction/concurrency: read-only root, no IAM locks or mutations. Publish a
+   root-only fixed service environment before selecting its new unit. No restart
+   while any original QUERY command/driver execution remains unresolved.
+9. Ownership/dependency: the protected release owner materializes the existing
+   controller URL only in `/etc/eom/secrets/reference-query-owner.env` (root0600).
+   PID1 loads it for this owner; the service cannot read that file directly.
+   API/Catalog/numerical workers get no credential or new privilege. Existing
+   sanitized native launch environments must remain unchanged.
+10. Failure/retry: missing/wrong connection fails at startup, not after another
+    user login. No source-policy/TTL/fence weakening, role grant or DB row repair.
+    Preserve original key and failure; rollback selects previous unit/config,
+    not data deletion. Never print/hash/archive secret environment contents.
+11. Simpler alternative: continuing to reuse the Catalog environment is invalid
+    for the already pinned direct caller-root session fence. Giving Catalog IAM
+    UPDATE would broaden an unrelated boundary. A second auth implementation or
+    SECURITY DEFINER session protocol is unnecessary for this scoped correction.
+
+The dedicated credential file is one explicit service-configuration materialization
+boundary, not a second canonical credential/identity. Its upstream remains the
+existing protected controller secret. Rotation must regenerate this derivative
+through the release owner before a compatible restart; stale/wrong-role values
+fail closed. A later general credential-delivery mechanism is not prebuilt here.
+
+Source verification:183 focused/source checks and strict mypy for the runtime
+module PASS. Final guarded PostgreSQL178 PASS/144.64s, with independent before/
+after owner/marker/head0055/zero-other-connection guards. Three direct READ ONLY
+checks exercise a real matching owner, wrong role and wrong OID. The older boot
+fixture explicitly maps its deployment-only eom_app pin to the guarded disposable
+owner; scientific source/provider/account observations remain synthetic. The first
+four boot tests correctly rejected putting a disposable role into the unchanged
+eom_app-only deployment schema. The fixture was corrected, not that released
+schema or any production role. Original failed log is preserved.
+
+The protected environment preparer stopped before creating any target file:
+read-only preflight found one existing non-terminal QUERY command. Inspection
+confirms the new secret file does not exist, and no service/role/DB state changed.
+This is not the latest HTTP call, which had workflow_id=null. Classify that
+original command/physical execution before any service restart or supported
+reconciliation; do not terminalize it or submit another key to satisfy deployment.
+Evidence prefix:`/tmp/eom-identity-provider-install.nAaycoDM/query-database-role-`.

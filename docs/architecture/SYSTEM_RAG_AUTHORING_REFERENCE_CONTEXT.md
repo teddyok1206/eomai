@@ -783,16 +783,23 @@ READ COMMITTED/app+pg_catalog/no temp schema/no superuser or bypass/autocommit,
 and all three IAM locking targets readable/lockable. The guiadmin operator was
 ACTIVE, not deleted or required to change password, with an unexpired recent
 session and actual workflow:start plus knowledge_graph:retrieve permissions.
-The probes minted no capture, read no source/credential bytes and performed no
-DB writes or launches. They exclude those metadata misconfigurations; they do
-not prove which later fence/source condition failed. No authority was loosened.
+The probes minted no capture, read no source content or printed credential bytes,
+and performed no DB writes or launches. They validate the native controller
+connection, **not the service's inherited credential selection**. The actual
+service EnvironmentFile was independently reproduced under UID990 at05:50:54:
+it selects eom_catalog_manager_runtime/OID94661, not pinned eom_app/OID16385,
+and cannot lock the three IAM targets. This explains the failed Identity context.
+No authority was loosened. [Scoped correction and startup guard](REFERENCE_QUERY_OWNER_SERVICE_DESIGN.md#correct-controller-credential-selection--2026-10-16).
 
 The preparation owner now emits a content-free rejection boundary, plus only the
 closed five-code Identity reason when that boundary throws its known exception.
 Unrecognized reasons become UNCLASSIFIED. No capture, traceback, SQL, arbitrary
 exception body, prompt, content or token is logged; public failure/retry meaning
 is unchanged. This diagnostic candidate is not yet installed/selected. Genuine
-failure remains open pending a reviewed correction and same-request continuation.
+failure remains open pending the reviewed credential-selection correction and
+same-request continuation. The separately installed62198a23 owner pair is inactive;
+its original template still selects the old environment. Do not activate that
+prefix as if it includes the later startup-role/template correction.
 
 Execution evidence prefix:
 `/tmp/eom-identity-provider-install.nAaycoDM/authoring-evidence-`.

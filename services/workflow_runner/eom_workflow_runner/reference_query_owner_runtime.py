@@ -29,8 +29,10 @@ from eom_orchestrator.inference_transfer_cpu_handoff import (
 from eom_orchestrator.native_embedding_cpu_execution import validate_fixed_native_cpu_resources
 from eom_orchestrator.native_embedding_query_systemd import FixedNativeQueryLauncher
 from eom_orchestrator.settings import Settings
+from eom_workflow.local_indexing_owner_configuration import LocalIndexingOwnerDatabasePin
 from eom_workflow.reference_query_owner_configuration import ReferenceQueryServiceConfiguration
 from sqlalchemy import Engine, text
+from sqlalchemy.orm import Session
 
 from eom_workflow_runner.actor_authorization_adapters import (
     OperatorIdentityWorkflowActorAuthorizer,
@@ -55,6 +57,25 @@ from eom_workflow_runner.repository import CommandExecutionFamily, NativeCommand
 from eom_workflow_runner.settings import RunnerConfig, WorkflowSettings
 
 REFERENCE_QUERY_SERVICE_STATE_ROOT = Path("/var/lib/eom-workflow-runner/reference-query-owner")
+
+
+def require_reference_query_database_owner(
+    session: Session, expected: LocalIndexingOwnerDatabasePin
+) -> None:
+    """Read-only connection compatibility; never an actual-human/source grant."""
+    role_name, session_role, role_oid = session.execute(
+        text(
+            "SELECT CURRENT_USER,SESSION_USER,role.oid::pg_catalog.int8 "
+            "FROM pg_catalog.pg_roles role WHERE role.rolname=CURRENT_USER"
+        )
+    ).one()
+    if (
+        role_name != session_role
+        or role_name != expected.role_name
+        or type(role_oid) is not int
+        or role_oid != expected.role_oid
+    ):
+        raise ValueError("REFERENCE_QUERY_OWNER_DATABASE_ROLE_MISMATCH")
 
 
 class ReferenceQueryRoleExecutionDisabled:
@@ -193,6 +214,7 @@ def build_reference_query_owner_runtime(
         catalog_settings = CatalogSettings(nas_artifact_root=settings.nas_artifact_root)
         with publisher.sessions.begin() as session:
             session.execute(text("SET TRANSACTION READ ONLY"))
+            require_reference_query_database_owner(session, configuration.database_owner)
             policy, _bundle = read_selected_reference_query_controls(
                 PinnedArtifactReadContext(session, catalog_settings),
                 policy_member=configuration.native_execution_policy,

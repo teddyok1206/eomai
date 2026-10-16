@@ -113,9 +113,32 @@ def test_owner_runtime_boot_is_read_only_and_validates_controls_before_launcher(
         policy, idempotency_key="synthetic-service-boot:" + value.key, created_at=policy.created_at
     )
     body = configuration(value.source, observation).model_dump(mode="json")
+    with Session(value.engine) as session, session.begin():
+        role_name, role_oid = session.execute(
+            text(
+                "SELECT CURRENT_USER,role.oid::pg_catalog.int8 "
+                "FROM pg_catalog.pg_roles role WHERE role.rolname=CURRENT_USER"
+            )
+        ).one()
     body["native_execution_policy"] = published.member.model_dump(mode="json")
     body["native_execution_policy_sha256"] = policy.policy_sha256
     selected = ReferenceQueryServiceConfiguration.model_validate(body)
+    from eom_workflow.local_indexing_owner_configuration import LocalIndexingOwnerDatabasePin
+
+    database_check = runtime_module.require_reference_query_database_owner
+
+    def check_disposable_connection(session, expected):
+        # The released deployment schema stays eom_app-only. This existing
+        # synthetic boot fixture maps that pin to its guarded test owner; it
+        # does not create/use a production role or weaken the schema.
+        assert expected == selected.database_owner
+        database_check(
+            session, LocalIndexingOwnerDatabasePin(role_name=role_name, role_oid=role_oid)
+        )
+
+    monkeypatch.setattr(
+        runtime_module, "require_reference_query_database_owner", check_disposable_connection
+    )
     if fault == "space":
         body = selected.model_dump(mode="json")
         body["namespace"]["space_sha256"] = "sha256:" + "0" * 64
@@ -178,6 +201,33 @@ def test_owner_runtime_boot_is_read_only_and_validates_controls_before_launcher(
         runtime.close()
         dispose.assert_called_once()
     assert counts() == before and value.source.calls == []
+
+
+@pytest.mark.parametrize("fault", ("none", "role", "oid"))
+def test_actual_read_only_connection_check_rejects_wrong_role_or_oid(guarded_engine, fault):
+    from eom_workflow.local_indexing_owner_configuration import LocalIndexingOwnerDatabasePin
+    from eom_workflow_runner.reference_query_owner_runtime import (
+        require_reference_query_database_owner,
+    )
+
+    with Session(guarded_engine) as session, session.begin():
+        session.execute(text("SET TRANSACTION READ ONLY"))
+        role_name, role_oid = session.execute(
+            text(
+                "SELECT CURRENT_USER,oid::pg_catalog.int8 FROM pg_roles WHERE rolname=CURRENT_USER"
+            )
+        ).one()
+        expected = LocalIndexingOwnerDatabasePin(
+            role_name="synthetic_wrong_owner" if fault == "role" else role_name,
+            role_oid=role_oid + 1 if fault == "oid" else role_oid,
+        )
+        if fault == "none":
+            require_reference_query_database_owner(session, expected)
+        else:
+            with pytest.raises(ValueError, match="DATABASE_ROLE_MISMATCH"):
+                require_reference_query_database_owner(session, expected)
+        assert session.scalar(text("SHOW transaction_read_only")) == "on"
+        assert not session.new and not session.dirty and not session.deleted
 
 
 @pytest.fixture

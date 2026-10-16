@@ -101,6 +101,9 @@ def test_service_template_isolated_supervisor_without_provider_file_shadowing():
         "User=root" in template and "Restart=no" in template and "NoNewPrivileges=yes" in template
     )
     assert "KillMode=control-group" in template
+    assert "EnvironmentFile=/etc/eom/secrets/reference-query-owner.env\n" in template
+    assert "EnvironmentFile=/etc/eom/secrets/catalog-manager.env" not in template
+    assert "InaccessiblePaths=/etc/eom/secrets/reference-query-owner.env\n" in template
     assert "AmbientCapabilities=CAP_SETUID\n" in template
     assert "CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_DAC_READ_SEARCH\n" in template
     assert "CAP_DAC_OVERRIDE" not in template and "CAP_SYS_ADMIN" not in template

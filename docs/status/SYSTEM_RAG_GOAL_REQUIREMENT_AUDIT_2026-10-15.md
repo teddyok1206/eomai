@@ -11,10 +11,23 @@ summed into a single acceptance count. This ledger does not grant authority.
 - Original genuine HTTP gate at05:37:55 UTC: actual guiadmin login PASS; unchanged
   request preparation FAILED/AUTHORITY_UNAVAILABLE at05:37:59, workflow_id=null.
   No native run, replacement key or automatic login retry. The old process exited
-  and credentials were not persisted. Independent installed-role metadata probes
-  found the expected role/OID/search path/isolation/locking privileges, active user,
-  unexpired session and required permissions. Exact failing condition remains OPEN.
-  Candidate adds closed owner-local rejection diagnostics, not a permission bypass.
+  and credentials were not persisted. Earlier outside-service native-controller
+  probes were healthy but did not reproduce the service's inherited credentials.
+  Actual UID990/same-EnvironmentFile read-only probe05:50:54 confirms the cause:
+  service uses Catalog runtime role/OID94661, not configured eom_app/OID16385,
+  and lacks the required IAM locking context. Current user/session/permissions
+  are valid. Scoped connection correction/startup guard is under verification;
+  no Catalog grants, IAM rows, TTL or source policy were changed.
+- Candidate62198a23 standard build/three RECORDs/OpenAPI and source-free301-module
+  proof PASS. Protected owner-pair installation PASS, INACTIVE. Its template is
+  still the pre-correction environment; it is not the corrected selected service.
+- Scoped role-selection successor: QUERY-only fixed protected environment and
+  actual role/OID READ ONLY startup check, source183/type1/guarded PG178 PASS.
+  The production eom_app-only schema is unchanged. Preparing its unused protected
+  credential environment STOPPED before file creation after discovering one
+  existing non-terminal QUERY command. No service restart, DB mutation, grant,
+  replacement key or runtime selection. Next classify that original command and
+  physical outcome, then use only supported reconciliation/compatible selection.
 - Added actual guarded V5 original-publication/read tests reproduce a source-only
   candidate missing-prefetch defect. Existing two-pair batched Artifact metadata
   prefetch fixes it without changing source/hash/permission rules. Corrected PG175
