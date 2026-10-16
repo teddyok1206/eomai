@@ -480,12 +480,13 @@ No selected API/QUERY/INDEX/Pack/Web configuration changed.
    API-only peer remains required. Chat/worker/runner peers cannot select for Item start.
 6. Selection: only non-answer-bearing PAST_EXAM/ITEM_REVISION/REFERENCE_PATTERN
    entries with accepted solution evidence are eligible. Use original manifest
-   relevance order, deduplicate by immutable source revision, then validate selected
-   source/report equality through one existing batch source read. No random/latest
+   relevance order, choose the first eligible immutable source revision, then validate
+   its source/report equality through one existing selected-source read. No random/latest
    source or private-brief/draft vector comparison is invented.
 7. Access patterns: bounded primary-key metadata reads, one bounded manifest/context
-   materialization and at most128 source IDs; dict/set joins and stable ordered
-   selection, O(n) time/space, existing PK/FK/unique indexes. No N+1 source read.
+   materialization, at most128 manifest entries and only one source ID; dict/set
+   joins and stable original order, O(n) manifest traversal, O(1) source materialization,
+   existing PK/FK/unique indexes. No unused Item bytes or N+1 source read.
 8. Transactions: use one Catalog-owned current root, read/shared locks as existing
    authority requires; no commit, new idempotency record or future permission cache.
    Immutable selection is reproducible. Native preparation keeps the original
@@ -534,3 +535,13 @@ production validator was relaxed. Original logs are retained under
 `/tmp/eom-identity-provider-install.nAaycoDM/authoring-reference-selection-*`.
 
 No install/activation or operating data mutation is part of this checkpoint.
+
+Final review narrowed source materialization to the single highest-ranked eligible
+original reference before calling the existing source owner. Up to128 manifest
+entries still undergo bounded identity/schema validation, but unused Item/report
+bytes are never loaded. This is an obvious O(n)-to-O(1) source-materialization
+improvement, not a measured latency claim. A denied/stale selected reference still
+fails; the selector does not quietly fall through to another source. The final
+selector/real-socket46 tests and strict mypy6 PASS after this change. The earlier
+e7b6bef4 standard three-wheel/RECORD/OpenAPI build passed; it remains a retained
+intermediate candidate, not the corrected single-source candidate or activation.

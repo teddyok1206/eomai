@@ -148,8 +148,8 @@ def case():
             "corpus_" + "a" * 32,
             embedding_space(),
             view_recipe(),
-            tuple(entry.profile.source_basis.source for entry in entries),
-            entries,
+            (entries[0].profile.source_basis.source,),
+            entries[:1],
         ),
         request=AuthoringReferenceRequest(
             schema_version="system-rag-authoring-reference-request/1.0",
@@ -176,7 +176,7 @@ def test_schema_and_packaged_bytes_are_closed_and_independently_pinned():
 
 def test_selection_keeps_official_relevance_order_not_sorted_revision_order():
     value = case()
-    assert authoring_reference_ids(value.manifest)[0] == "itemrev_" + "a" * 32
+    assert authoring_reference_ids(value.manifest) == ("itemrev_" + "b" * 32,)
     selected = select_authoring_reference(value.manifest, value.resolved)
     assert selected.source_item_revision_id == "itemrev_" + "b" * 32
     assert selected.evidence_id == value.manifest.entries[0].evidence_id
@@ -190,7 +190,7 @@ def test_foreign_missing_duplicate_or_changed_current_sources_cannot_be_selected
     value = case()
     resolved = value.resolved
     if change == "missing":
-        resolved = replace(resolved, entries=resolved.entries[:1])
+        resolved = replace(resolved, entries=())
     elif change == "extra":
         resolved = replace(
             resolved, sources=(*resolved.sources, embedding_entry("c").profile.source_basis.source)
@@ -218,7 +218,7 @@ def test_foreign_missing_duplicate_or_changed_current_sources_cannot_be_selected
         else:
             staged["content"]["original_source"] = raw["source_basis"]["source"]["artifact_member"]
         changed = entry.model_validate(staged)
-        resolved = replace(resolved, entries=(changed, resolved.entries[1]))
+        resolved = replace(resolved, entries=(changed,))
     with pytest.raises(SimilarityContextReadError):
         select_authoring_reference(value.manifest, resolved)
 

@@ -26,21 +26,18 @@ if TYPE_CHECKING:
 
 
 def authoring_reference_ids(manifest: EvidenceBundleManifestV5) -> tuple[str, ...]:
-    """Pure bounded eligibility hints, not a source/authority grant or new ranking."""
-    return tuple(
-        sorted(
-            {
-                entry.source.item_revision_id
-                for entry in manifest.entries
-                if isinstance(entry.source, ApprovedItemKnowledgeSourceV2)
-                and entry.source.source_class == "PAST_EXAM"
-                and entry.evidence_kind == "ITEM_REVISION"
-                and entry.use == "REFERENCE_PATTERN"
-                and not entry.answer_bearing
-                and entry.solution_evidence is not None
-            }
-        )
-    )
+    """First original eligible reference only; never materialize unused Item bytes."""
+    for entry in manifest.entries:
+        if (
+            isinstance(entry.source, ApprovedItemKnowledgeSourceV2)
+            and entry.source.source_class == "PAST_EXAM"
+            and entry.evidence_kind == "ITEM_REVISION"
+            and entry.use == "REFERENCE_PATTERN"
+            and not entry.answer_bearing
+            and entry.solution_evidence is not None
+        ):
+            return (entry.source.item_revision_id,)
+    return ()
 
 
 def select_authoring_reference(
