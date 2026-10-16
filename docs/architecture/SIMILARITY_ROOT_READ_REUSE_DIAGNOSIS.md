@@ -1,6 +1,8 @@
 # Same-root immutable read reuse: live timeout diagnosis
 
-2026-10-16 UTC. Source implementation/validation in progress, not an operating PASS.
+2026-10-16 UTC. Source PASS and compatible installation complete; actual-user
+context acceptance/latency remains pending. See the
+[exact operating release](../operations/SIMILARITY_ROOT_READ_REUSE_RELEASE_2026-10-16.md).
 Actual evidence is in the
 [release preparation and C1 discovery](../operations/C5_OBSERVATION_RELEASE_PREPARATION_2026-10-16.md).
 
