@@ -9,6 +9,17 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Actual checkpoint17:26 UTC: standard99a1c101 build and existing protected owner
+  installation PASS, not activation/native admission. First installer failure2
+  (pip temp) preserved; explicit TMPDIR in the existing writable owner namespace
+  fixed that invocation boundary. Actual publisher exited1 before copies because
+  root0077 umask narrowed a new0755 directory. Reproduced in a failing test and
+  fixed only for fresh held directory inodes; incomplete existing folders remain
+  errors. Fresh170 focused/strict1/Ruff PASS plus separate no-repair regression.
+  Failed logical folder/evidence retained, no cache/revision/model/GPU/DB/API
+  change. A reviewed successor build/install is required before the next actual
+  publication; full C1–C5 and actual six-run/device/default gates remain open.
+  [Actual trial and correction](../architecture/EMBEDDING_CUDA_HOST_EXTENSION_DESIGN.md#actual-protected-owner-install-and-publication-trial-1726-utc).
 - Source checkpoint17:25 UTC: explicit root-local CUDA host publisher now passes
   fresh169 focused filesystem/contract/dependency tests, strict2/Ruff/format.
   It reuses the existing publication lock and root owner-wheel boundary, generates

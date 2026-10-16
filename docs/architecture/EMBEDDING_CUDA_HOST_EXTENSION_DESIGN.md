@@ -406,3 +406,37 @@ publication. No root publication, OS/driver/cache change, model/GPU execution,
 database mutation, API/Web release or service selection occurred in this slice.
 Full C1–C5, original authenticated context verification and the six real fixed
 CPU/CUDA comparisons remain open; CPU remains the operating default.
+
+### Actual protected owner install and publication trial —17:26 UTC
+
+Publisher source99a1c101 was pushed and built through the standard three-wheel/
+RECORD gate. Platform wheel raw
+`1d30208f1a3357aba42c95c0029c6facdf99d3321bb4cb9cd330e5dcb5b6413d`.
+Existing root installer raw
+`559ada516fe9d46f57926aad70699e81deba5f1a18b4e25e3f6e6bcdf1384b71`
+verified and installed that exact wheel into its immutable owner-release directory,
+using the admitted OLD interpreter and a pre-exec readonly accepted CPU cache.
+No numerical prefix or shared API installation/activation occurred.
+
+The first finite installer unit exited2 because ProtectSystem=strict left pip no
+writable temporary directory. It published no final release. After confirming
+terminal failure and final-path absence, the second unit supplied TMPDIR within
+the already permitted root owner-release namespace and installed successfully;
+original stage/log/journal evidence remain. No global /tmp write exception or
+installer-source change was required.
+
+Actual publisher unit then exited1 with DIRECTORY_MODE_INVALID before any library
+copy/cache unit/model operation. Root0755 extension root exists; the new logical
+directory is root0700 because the administrative0077 umask narrowed mkdir0755.
+Failed logical ID`embeddingcudahost_8c38c43d910c4f6a869ea283d1c8eb3c` remains
+unmodified; no revision/workspace was published. A reproducing regression failed
+before the source correction. The creation helper now fchmods only its freshly
+opened no-follow owned inode to the declared mode; existing incomplete directories
+still fail and are never repaired. Fresh focused170 PASS/strict1/Ruff follow the
+fix, with one additional existing-directory regression checked separately.
+
+This is a source defect discovered by a real protected trial, not a CUDA model
+failure, permission bypass or reason to disable the guards. Build/install the
+reviewed successor before a new explicitly identified publication. Preserve both
+terminal attempts. Original HTTP authentication observer is unchanged; no extra
+login prompt/key/model request or shared-service restart was introduced.

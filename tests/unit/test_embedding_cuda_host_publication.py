@@ -97,6 +97,28 @@ def test_atomic_eight_member_publication_and_exact_idempotent_reuse(tmp_path, mo
     assert (final / "snapshot.json").read_bytes() == raw
 
 
+def test_publication_applies_explicit_modes_under_protected_owner_umask(tmp_path, monkeypatch):
+    request, root, _source, generated = fixture(tmp_path, monkeypatch)
+    previous = os.umask(0o077)
+    try:
+        result = publication.publish_cuda_host_extension(request)
+    finally:
+        os.umask(previous)
+    assert result.disposition == "CREATED" and len(generated) == 1
+    assert root.stat().st_mode & 0o777 == 0o755
+    assert (root / request.configuration_id).stat().st_mode & 0o777 == 0o755
+    assert (root / ".publication").stat().st_mode & 0o777 == 0o700
+
+
+def test_existing_narrow_directory_is_not_repaired_by_creation_helper(tmp_path, monkeypatch):
+    monkeypatch.setattr(publication, "_ROOT_UID", os.geteuid())
+    existing = tmp_path / "prior-incomplete-directory"
+    existing.mkdir(mode=0o700)
+    with pytest.raises(publication.CudaHostPublicationError, match="DIRECTORY_MODE_INVALID"):
+        publication._mkdir(existing)
+    assert existing.stat().st_mode & 0o777 == 0o700
+
+
 def test_source_mismatch_preserves_failed_workspace_and_never_replays_same_revision(
     tmp_path, monkeypatch
 ):

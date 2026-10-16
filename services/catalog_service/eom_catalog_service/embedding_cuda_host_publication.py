@@ -168,6 +168,16 @@ def _mkdir(path: Path, *, mode: int = 0o755) -> None:
     _directory(path.parent)
     if not path.exists():
         path.mkdir(mode=mode)
+        # Root's0077 umask may narrow a requested0755 directory. Correct only
+        # this fresh owned inode; never repair an existing incomplete directory.
+        descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            created = os.fstat(descriptor)
+            _require(created.st_uid == _ROOT_UID, "DIRECTORY_INVALID")
+            _require(_identity(created) == _identity(path.lstat()), "DIRECTORY_CHANGED")
+            os.fchmod(descriptor, mode)
+        finally:
+            os.close(descriptor)
     _directory(path)
     _require(stat.S_IMODE(path.lstat().st_mode) in {mode, 0o555}, "DIRECTORY_MODE_INVALID")
 
