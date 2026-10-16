@@ -131,3 +131,90 @@ Build path:`/tmp/eom-api-build/f92b6db93573e3ed1ae24a22af020885f379ecf3.rsDamC/d
 The guarded disposable database/roles were removed successfully; no operating DB
 was a test target. This candidate was not installed or activated, and existing
 INDEX/QUERY/API/Catalog releases were left unchanged.
+
+## Next boundary: distinct private-query numerical input/result
+
+The released approved-reference input/result must not be relabelled to accept a
+private question merely because their numerical fields look compatible. Add a
+closed `embedding-private-chat-query/1.0` input/result schema before behavior.
+One input pins the exact private basis, parent context-request hash, complementary
+QUERY/DOCUMENT spaces, **document** projection recipe, one CONTENT_ONLY text row
+and configured batch/thread recipe. One result pins those identities and one
+normal validated QUERY shard. The document recipe describes the candidate index;
+it is not a claim that a user question has an accepted solution report.
+
+Use the existing generic row/space/shard value objects and the SAME numerical
+backend check, one `backend.encode(..., purpose="QUERY")` and float32 packer.
+Do not implement a second tokenizer, pooling, prefix or normalization algorithm.
+One actual row retains the configured batch size (for example4), not batch1.
+The private basis hashes raw UTF-8 text; the existing encoding identity hashes the
+canonical JSON string. Keep those distinct hash domains and test their closure.
+The source owner checks that its exact question agrees with both, without trimming,
+summarizing, generating facets or adding assistant/history text.
+
+The preparation function accepts an already owned projection and an exact pinned
+CONTENT_ONLY index selection. Reject absent index, mismatched space/recipe,
+invalid/copied basis, changed text and unoffered view before backend invocation.
+The parent context hash is an association, not proof that the parent exists or is
+authorized. Actual private-context/Workflow admission must resolve/revalidate that
+parent and its operator/session/purpose before staging or launching this envelope.
+Neither DTO parsing nor a synthetic backend call supplies that missing authority.
+
+Ownership and source/Artifact identities remain with the existing Orchestrator;
+native code receives a bounded temporary text materialization and returns local
+binary/metadata only. No DB, source binding, index mutation, persistent private
+query cache or new queue. Operations are one key/hash check, one text-row projection
+and one bounded sequential numeric pack; metadata work O(text bytes + dimension),
+neural encode cost is separately measured. Existing locks/leases/commit and later
+admission own execution concurrency/idempotency, not this pure leaf.
+
+The old reference parsers/worker entry continue to reject this distinct schema.
+No CLI/installed unit/owner will execute it until a compatible private-purpose
+successor explicitly admits it; no old approved-reference policy is widened.
+Tests cover exact typed/hash/row closure, strict predecessor rejection, genuine
+QUERY purpose, actual backend mismatch before/after encode, row count and malformed
+vector failures, deterministic binary/hash, safe errors and no DB/ML imports.
+This is a necessary internal execution boundary, not C4 operating acceptance.
+
+The source-only native library connects that distinct envelope to the existing
+protected three-FD handoff: one bounded canonical input, initially empty separated
+result/vector descriptors, input/output epoch checks, binary fsync before result,
+and the same stdlib-first UID/profile/capability guard. Share canonical input reading
+across the real INDEX/reference/private cases instead of copying the parser. Do not
+add a generic dispatch registry or a request-selected executable/path/purpose switch.
+No production main, fixed unit, launcher or policy grants private-query admission.
+
+### Numerical/FD library source checkpoint
+
+The distinct `embedding-private-chat-query/1.0` schema and byte-identical package
+mirror are pinned raw:
+`50feda7efee0617663def17ab3684afba2580769c1a6454518d042520f75b75b`.
+The owned projection now builds the exact input, and the existing encoder adapter
+returns a dedicated private result through its SAME backend verification and shard
+packer. Existing numeric module implementations (float32 codec, host L2 and offline
+encoder) are unchanged; native prefix/config/space was not replaced or activated.
+
+The source private library writes only inherited local descriptors, with binary
+fsync before canonical result. INDEX/reference/private readers now share the
+bounded canonical parser; source-specific schemas remain strict. Old reference
+parsers AND the old reference FD entry reject the private envelope before backend
+construction. Its separate entry uses the same stdlib-first actual identity guard;
+no CLI mode, installed unit, native session capture or source policy was added.
+
+Combined regression:441 PASS in23.67s across15 suites, covering the new private
+contract/projection/numerics/FD leaf, previous Chat basis, INDEX/reference encoders,
+FD/identity controls, schema resources, common context, reference preparation, Chat
+owner, original-design/layer checks and README/version documentation. Focused222
+overlaps and is not added. Strict mypy6, Ruff/format11 files, repository/diff checks
+PASS. Synthetic backends and explicitly synthetic UID captures supply test data;
+real temporary FDs exercise input/output modes/epochs, duplicate JSON, wrong
+protocol, mutated input, binary order and descriptor cleanup. These are NOT actual
+model/GPU, root-unit, session/policy or private-context acceptance tests.
+
+The earlier59 guarded PostgreSQL ownership-read cases remain historical evidence
+for that unchanged read behavior. No DB/state/queue/persistence behavior changed in
+this numerical/FD leaf, so no mutating DB test was rerun or skipped as a fake PASS.
+No new dependency, public corpus entry, query cache or production mutation occurred.
+Bounded source/test logs:`private-chat-query-encoding-focused.log`,
+`private-chat-numeric-library-{regression,type,boundaries}.log` in the existing
+temporary operator directory. Full goal/C4 remain **NOT_COMPLETE / NOT_ACTIVE**.

@@ -87,6 +87,10 @@ implemented and verified; a matrix of planned adapters is not a completion claim
 schema and an Orchestrator-owned, one-message canonical read with fresh ownership
 fencing. Source/guarded PostgreSQL validation is not private context/QUERY admission,
 Chat tool activation or C4 acceptance. Approved-anchor request1.0 remains unchanged.
+Its distinct private numeric input/result and source-only native library now reuse
+the existing encoder/float32/FD/identity guards, without making old reference units
+accept private input. Private-context/actual admission and operating activation
+remain required; the numerical library is not a Chat tool or a source grant.
 
 ## 4. Protocol-first minimum source changes
 

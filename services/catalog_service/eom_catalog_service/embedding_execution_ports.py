@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from math import isfinite
 from typing import Literal, Protocol
 
+from eom_catalog_contracts.embedding_private_chat_query import EmbeddingPrivateChatQueryResult
 from eom_catalog_contracts.embedding_reference_query import EmbeddingReferenceQueryResult
 from eom_catalog_contracts.embedding_runtime_bundle import (
     EmbeddingNumericalDevice,
@@ -285,4 +286,12 @@ class EncodedReferenceQueryBatch:
     """Temporary genuine QUERY output, not a corpus binding or native admission receipt."""
 
     result: EmbeddingReferenceQueryResult
+    vectors: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class EncodedPrivateChatQueryBatch:
+    """Temporary private QUERY output; no enrollment or public query-cache identity."""
+
+    result: EmbeddingPrivateChatQueryResult
     vectors: bytes

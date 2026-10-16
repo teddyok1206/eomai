@@ -4,13 +4,24 @@ from __future__ import annotations
 
 from typing import Literal
 
-from eom_catalog_contracts.embedding_reference_query import EmbeddingReferenceQueryResult
+from eom_catalog_contracts.embedding_private_chat_query import (
+    EmbeddingPrivateChatQueryInput,
+    EmbeddingPrivateChatQueryResult,
+    validate_private_chat_query_result,
+)
+from eom_catalog_contracts.embedding_reference_query import (
+    EmbeddingReferenceQueryResult,
+    raw_similarity_contract_value,
+)
 from eom_catalog_contracts.embedding_reference_query_v11 import (
     EmbeddingReferenceQueryInputV11,
     parse_embedding_reference_query_input_v11,
     validate_reference_query_result_v11,
 )
-from eom_catalog_contracts.embedding_vector_binary import pack_unit_vectors
+from eom_catalog_contracts.embedding_vector_binary import (
+    EmbeddingVectorBinaryError,
+    pack_unit_vectors,
+)
 from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingBinaryMember,
     EmbeddingEncodingIdentity,
@@ -26,6 +37,7 @@ from eom_identifiers import content_sha256, sha256_bytes
 
 from eom_catalog_service.embedding_execution_ports import (
     EncodedEmbeddingBatch,
+    EncodedPrivateChatQueryBatch,
     EncodedReferenceQueryBatch,
     NativeEmbeddingBackend,
 )
@@ -38,6 +50,12 @@ class IncrementalEmbeddingEncodeError(ValueError):
 
 
 class ReferenceQueryEmbeddingEncodeError(ValueError):
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+class PrivateChatQueryEmbeddingEncodeError(ValueError):
     def __init__(self, code: str) -> None:
         super().__init__(code)
         self.code = code
@@ -183,3 +201,55 @@ def encode_reference_query_batch(
     )
     validate_reference_query_result_v11(request, result)
     return EncodedReferenceQueryBatch(result, payload)
+
+
+def _encode_private_chat_query(
+    request: EmbeddingPrivateChatQueryInput, backend: NativeEmbeddingBackend
+) -> EncodedPrivateChatQueryBatch:
+    """One distinct private QUERY through the same numerical backend/packer, never a launch."""
+    request = EmbeddingPrivateChatQueryInput.model_validate(raw_similarity_contract_value(request))
+
+    def require_backend() -> None:
+        mismatch = _actual_backend_mismatch(
+            request.spaces.query, request.batch_size, request.threads, backend
+        )
+        if mismatch is not None:
+            raise PrivateChatQueryEmbeddingEncodeError("PRIVATE_CHAT_QUERY_" + mismatch)
+
+    require_backend()
+    vectors = backend.encode((request.row.text,), purpose="QUERY")
+    require_backend()
+    if len(vectors) != 1:
+        raise PrivateChatQueryEmbeddingEncodeError("PRIVATE_CHAT_QUERY_ROW_COUNT_MISMATCH")
+    shard, payload = _pack_shard(
+        request.spaces.query, (request.row.encoding,), request.input_set_sha256, vectors
+    )
+    body = {
+        "schema_version": "embedding-private-chat-query-result/1.0",
+        "job_id": request.job_id,
+        "query_request_id": request.query_request_id,
+        "context_request_sha256": request.context_request_sha256,
+        "basis_sha256": request.basis.basis_sha256,
+        "request_sha256": request.request_sha256,
+        "spaces": request.spaces.model_dump(mode="json"),
+        "document_recipe": request.document_recipe.model_dump(mode="json"),
+        "input_set_sha256": request.input_set_sha256,
+        "shard": shard.model_dump(mode="json"),
+    }
+    result = EmbeddingPrivateChatQueryResult.model_validate(
+        body | {"result_sha256": content_sha256(body)}
+    )
+    validate_private_chat_query_result(request, result)
+    return EncodedPrivateChatQueryBatch(result, payload)
+
+
+def encode_private_chat_query(
+    request: EmbeddingPrivateChatQueryInput, backend: NativeEmbeddingBackend
+) -> EncodedPrivateChatQueryBatch:
+    """Keep untrusted/private text and third-party diagnostics out of failure labels."""
+    try:
+        return _encode_private_chat_query(request, backend)
+    except (PrivateChatQueryEmbeddingEncodeError, EmbeddingVectorBinaryError):
+        raise
+    except Exception:
+        raise PrivateChatQueryEmbeddingEncodeError("PRIVATE_CHAT_QUERY_ENCODING_FAILED") from None

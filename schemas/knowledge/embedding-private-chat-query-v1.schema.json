@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/embedding-private-chat-query/1.0",
+  "title": "Distinct private user-question QUERY input and result",
+  "description": "Numerical values only. Ownership, actual parent/context, operator/session, source/index and installed purpose admission remain mandatory. Not an approved Item/report or public corpus entry.",
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "job": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+    "query": {"type": "string", "pattern": "^embeddingquery_[0-9a-f]{32}$"},
+    "spaces": {"$ref": "eom://schemas/knowledge/embedding-reference-query/1.0#/$defs/spaces"},
+    "recipe": {"$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/recipe"},
+    "row": {
+      "allOf": [
+        {"$ref": "eom://schemas/knowledge/embedding-reference-query/1.0#/$defs/inputRow"},
+        {"properties": {"view": {"const": "CONTENT_ONLY"}}, "required": ["view"]}
+      ]
+    },
+    "input": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "job_id", "query_request_id", "context_request_sha256", "basis", "spaces", "document_recipe", "row", "batch_size", "threads", "input_set_sha256", "request_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-private-chat-query-input/1.0"},
+        "job_id": {"$ref": "#/$defs/job"},
+        "query_request_id": {"$ref": "#/$defs/query"},
+        "context_request_sha256": {"$ref": "#/$defs/hash"},
+        "basis": {"$ref": "eom://schemas/knowledge/system-rag-private-chat-query-basis/1.0"},
+        "spaces": {"$ref": "#/$defs/spaces"},
+        "document_recipe": {"$ref": "#/$defs/recipe"},
+        "row": {"$ref": "#/$defs/row"},
+        "batch_size": {"type": "integer", "minimum": 1, "maximum": 16},
+        "threads": {"type": "integer", "minimum": 1, "maximum": 16},
+        "input_set_sha256": {"$ref": "#/$defs/hash"},
+        "request_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "result": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "job_id", "query_request_id", "context_request_sha256", "basis_sha256", "request_sha256", "spaces", "document_recipe", "input_set_sha256", "shard", "result_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-private-chat-query-result/1.0"},
+        "job_id": {"$ref": "#/$defs/job"},
+        "query_request_id": {"$ref": "#/$defs/query"},
+        "context_request_sha256": {"$ref": "#/$defs/hash"},
+        "basis_sha256": {"$ref": "#/$defs/hash"},
+        "request_sha256": {"$ref": "#/$defs/hash"},
+        "spaces": {"$ref": "#/$defs/spaces"},
+        "document_recipe": {"$ref": "#/$defs/recipe"},
+        "input_set_sha256": {"$ref": "#/$defs/hash"},
+        "shard": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/shard"},
+        "result_sha256": {"$ref": "#/$defs/hash"}
+      }
+    }
+  },
+  "oneOf": [{"$ref": "#/$defs/input"}, {"$ref": "#/$defs/result"}]
+}

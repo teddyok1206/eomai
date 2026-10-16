@@ -4,13 +4,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
+from eom_catalog_contracts.embedding_private_chat_query import EmbeddingPrivateChatQueryInput
+from eom_catalog_contracts.embedding_reference_query import (
+    ReferenceQueryTextInput,
+    raw_similarity_contract_value,
+)
+from eom_catalog_contracts.inference_transfer_embedding import (
+    EmbeddingEncodingIdentity,
+    embedding_input_set_sha256,
+)
 from eom_catalog_contracts.private_chat_query_basis import (
     PrivateChatQueryBasis,
     build_private_chat_query_basis,
     private_chat_query_text_sha256,
 )
-from eom_identifiers import canonical_json_bytes
+from eom_catalog_contracts.similarity_context import SimilarityViewSelection
+from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_protocol.general_chat import CHAT_MESSAGE_SCHEMA
 from eom_protocol.general_chat_grounding import GROUNDED_MESSAGE_SCHEMA
@@ -108,3 +117,52 @@ def read_owned_private_chat_query(
     ):
         raise ChatError("GENERAL_CHAT_POINTER_INVALID")
     return result
+
+
+def build_private_chat_query_encoding_input(
+    prepared: PreparedPrivateChatQuery,
+    selection: SimilarityViewSelection,
+    *,
+    context_request_sha256: str,
+    job_id: str,
+    query_request_id: str,
+    batch_size: int,
+    threads: int,
+) -> EmbeddingPrivateChatQueryInput:
+    """Project one exact owned question; this does NOT admit/submit a private QUERY.
+
+    The future private-context owner must reauthorize the pinned parent/index and
+    this exact basis at admission and delivery. No old reference policy is borrowed.
+    """
+    if type(prepared) is not PreparedPrivateChatQuery:
+        raise ValueError("PRIVATE_CHAT_QUERY_PROJECTION_INVALID")
+    prepared.__post_init__()
+    selection = SimilarityViewSelection.model_validate(raw_similarity_contract_value(selection))
+    if selection.view != "CONTENT_ONLY" or selection.index is None:
+        raise ValueError("PRIVATE_CHAT_QUERY_INDEX_UNAVAILABLE")
+    encoding_body = {
+        "storage_partition": selection.index.storage_partition,
+        "space_sha256": selection.index.spaces.query.space_sha256,
+        # Encoding identity uses a canonical JSON string; the basis uses raw UTF-8.
+        "input_text_sha256": content_sha256(prepared.text),
+    }
+    encoding = EmbeddingEncodingIdentity.model_validate(
+        encoding_body | {"encoding_sha256": content_sha256(encoding_body)}
+    )
+    row = ReferenceQueryTextInput(view="CONTENT_ONLY", encoding=encoding, text=prepared.text)
+    body = {
+        "schema_version": "embedding-private-chat-query-input/1.0",
+        "job_id": job_id,
+        "query_request_id": query_request_id,
+        "context_request_sha256": context_request_sha256,
+        "basis": prepared.basis.model_dump(mode="json"),
+        "spaces": selection.index.spaces.model_dump(mode="json"),
+        "document_recipe": selection.recipe.model_dump(mode="json"),
+        "row": row.model_dump(mode="json"),
+        "batch_size": batch_size,
+        "threads": threads,
+        "input_set_sha256": embedding_input_set_sha256((encoding,)),
+    }
+    return EmbeddingPrivateChatQueryInput.model_validate(
+        body | {"request_sha256": content_sha256(body)}
+    )

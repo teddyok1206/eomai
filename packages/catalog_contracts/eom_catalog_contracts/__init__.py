@@ -361,6 +361,11 @@ from eom_catalog_contracts.embedding_native_runtime_config import (
     validate_installed_embedding_native_runtime_config_raw,
     validate_installed_embedding_native_runtime_config_references,
 )
+from eom_catalog_contracts.embedding_private_chat_query import (
+    EmbeddingPrivateChatQueryInput,
+    EmbeddingPrivateChatQueryResult,
+    validate_private_chat_query_result,
+)
 from eom_catalog_contracts.embedding_reference_query import (
     MAX_REFERENCE_QUERY_BYTES,
     REFERENCE_QUERY_INPUT_REF,
@@ -1348,6 +1353,8 @@ __all__ = [
     "EmbeddingNumericalDevice",
     "EmbeddingNumericalRecipe",
     "EmbeddingNumericalRuntimeDescriptor",
+    "EmbeddingPrivateChatQueryInput",
+    "EmbeddingPrivateChatQueryResult",
     "EmbeddingReferenceQueryInput",
     "EmbeddingReferenceQueryInputV11",
     "EmbeddingReferenceQueryResult",
@@ -1909,6 +1916,7 @@ __all__ = [
     "validate_legacy_item_extraction_result_for_request",
     "validate_mock_exam_placements",
     "validate_mock_exam_planned_placements",
+    "validate_private_chat_query_result",
     "validate_reference_query_result",
     "validate_reference_query_result_v11",
     "validate_reviewed_authoring_guidance",

@@ -11,6 +11,11 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from typing import Any
 
+from eom_catalog_contracts.embedding_private_chat_query import (
+    MAX_PRIVATE_CHAT_QUERY_BYTES,
+    EmbeddingPrivateChatQueryInput,
+    validate_private_chat_query_result,
+)
 from eom_catalog_contracts.embedding_reference_query import MAX_REFERENCE_QUERY_BYTES
 from eom_catalog_contracts.embedding_reference_query_v11 import (
     EmbeddingReferenceQueryInputV11,
@@ -30,11 +35,14 @@ from eom_catalog_contracts.inference_transfer_embedding import (
 )
 from eom_identifiers import canonical_json_bytes
 from jsonschema.exceptions import ValidationError as JsonSchemaError
+from pydantic import BaseModel
 
 from eom_catalog_service.embedding_encoder_adapter import (
     IncrementalEmbeddingEncodeError,
+    PrivateChatQueryEmbeddingEncodeError,
     ReferenceQueryEmbeddingEncodeError,
     encode_incremental_batch,
+    encode_private_chat_query,
     encode_reference_query_batch,
 )
 from eom_catalog_service.embedding_execution_ports import NativeEmbeddingBackend
@@ -126,10 +134,14 @@ def _read_payload(descriptor: int, initial: os.stat_result) -> tuple[bytes, dict
         raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_REQUEST_INVALID") from None
 
 
-def _read_request(descriptor: int, initial: os.stat_result) -> IncrementalEmbeddingInput:
+def _read_canonical_request[InputValue: BaseModel](
+    descriptor: int,
+    initial: os.stat_result,
+    parse: Callable[[dict[str, Any]], InputValue],
+) -> InputValue:
     payload, value = _read_payload(descriptor, initial)
     try:
-        request = parse_incremental_embedding_input(value)
+        request = parse(value)
         if payload != canonical_json_bytes(request.model_dump(mode="json")):
             raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_REQUEST_INVALID")
         return request
@@ -137,21 +149,16 @@ def _read_request(descriptor: int, initial: os.stat_result) -> IncrementalEmbedd
         raise
     except (JsonSchemaError, ValueError, TypeError, UnicodeError):
         raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_REQUEST_INVALID") from None
+
+
+def _read_request(descriptor: int, initial: os.stat_result) -> IncrementalEmbeddingInput:
+    return _read_canonical_request(descriptor, initial, parse_incremental_embedding_input)
 
 
 def _read_reference_query(
     descriptor: int, initial: os.stat_result
 ) -> EmbeddingReferenceQueryInputV11:
-    payload, value = _read_payload(descriptor, initial)
-    try:
-        request = parse_embedding_reference_query_input_v11(value)
-        if payload != canonical_json_bytes(request.model_dump(mode="json")):
-            raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_REQUEST_INVALID")
-        return request
-    except NativeEmbeddingHandoffError:
-        raise
-    except (JsonSchemaError, ValueError, TypeError, UnicodeError):
-        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_REQUEST_INVALID") from None
+    return _read_canonical_request(descriptor, initial, parse_embedding_reference_query_input_v11)
 
 
 def _unchanged_input(descriptor: int, initial: os.stat_result) -> None:
@@ -336,6 +343,41 @@ def run_native_reference_query_descriptors(
     except (
         NativeEmbeddingHandoffError,
         ReferenceQueryEmbeddingEncodeError,
+        EmbeddingVectorBinaryError,
+    ):
+        raise
+    except OSError:
+        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_IO_FAILED") from None
+    except Exception:
+        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_EXECUTION_FAILED") from None
+
+
+def run_native_private_chat_query_descriptors(
+    descriptors: NativeEmbeddingDescriptors,
+    backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
+) -> None:
+    """Distinct source-only private handoff; an old reference unit/policy is not a grant."""
+    try:
+        initial = _prepare_descriptors(descriptors, MAX_PRIVATE_CHAT_QUERY_BYTES)
+        request = _read_canonical_request(
+            descriptors.input, initial[0], EmbeddingPrivateChatQueryInput.model_validate
+        )
+        _ready_outputs(descriptors, initial)
+        with backend_scope() as backend:
+            _ready_outputs(descriptors, initial)
+            encoded = encode_private_chat_query(request, backend)
+            validate_private_chat_query_result(request, encoded.result)
+            _write_outputs(
+                descriptors,
+                initial,
+                encoded.result.shard,
+                encoded.vectors,
+                canonical_json_bytes(encoded.result),
+                MAX_PRIVATE_CHAT_QUERY_BYTES,
+            )
+    except (
+        NativeEmbeddingHandoffError,
+        PrivateChatQueryEmbeddingEncodeError,
         EmbeddingVectorBinaryError,
     ):
         raise

@@ -127,7 +127,7 @@ def test_identity_and_caps_drift_denies_before_any_native_leaf(
             entry.require_native_embedding_identity(profile)
 
 
-@pytest.mark.parametrize("operation", ["INDEX", "QUERY"])
+@pytest.mark.parametrize("operation", ["INDEX", "QUERY", "PRIVATE_CHAT_QUERY"])
 def test_saved_binary_and_result_fds_receive_only_explicit_leaf_writes_and_are_closed(
     tmp_path: Path,
     operation: str,
@@ -156,6 +156,9 @@ entry.require_native_embedding_identity=identity
 if sys.argv[3]=='QUERY':
     leaf.run_native_reference_query_descriptors=run
     entry.run_native_embedding_reference_query(profile='CPU_INDEX_FP32',backend_scope=lambda:None)
+elif sys.argv[3]=='PRIVATE_CHAT_QUERY':
+    leaf.run_native_private_chat_query_descriptors=run
+    entry.run_native_embedding_private_chat_query(profile='CPU_INDEX_FP32',backend_scope=lambda:None)
 else:
     leaf.run_native_embedding_descriptors=run
     entry.run_native_embedding_index(profile='CPU_INDEX_FP32',backend_scope=lambda:None)
@@ -183,7 +186,7 @@ os.write(1,b'after diagnostic'); os.write(2,b'after error')
     assert result.read_bytes() == b"{}" and vectors.read_bytes() == b"binary"
 
 
-@pytest.mark.parametrize("operation", ["INDEX", "QUERY"])
+@pytest.mark.parametrize("operation", ["INDEX", "QUERY", "PRIVATE_CHAT_QUERY"])
 def test_duplicate_partial_failure_closes_only_owned_fds(
     monkeypatch: pytest.MonkeyPatch, operation: str
 ) -> None:
@@ -201,16 +204,16 @@ def test_duplicate_partial_failure_closes_only_owned_fds(
         patch.setattr(fcntl, "fcntl", duplicate)
         patch.setattr(os, "close", closed.append)
         with pytest.raises(entry.NativeEmbeddingEntrypointError):
-            run = (
-                entry.run_native_embedding_reference_query
-                if operation == "QUERY"
-                else entry.run_native_embedding_index
-            )
+            run = {
+                "QUERY": entry.run_native_embedding_reference_query,
+                "INDEX": entry.run_native_embedding_index,
+                "PRIVATE_CHAT_QUERY": entry.run_native_embedding_private_chat_query,
+            }[operation]
             run(profile="CPU_INDEX_FP32", backend_scope=lambda: pytest.fail("no scope"))
     assert closed == [12345]
 
 
-@pytest.mark.parametrize("operation", ["INDEX", "QUERY"])
+@pytest.mark.parametrize("operation", ["INDEX", "QUERY", "PRIVATE_CHAT_QUERY"])
 def test_identity_failure_precedes_imported_leaf_and_scope(
     monkeypatch: pytest.MonkeyPatch, operation: str
 ) -> None:
@@ -230,11 +233,11 @@ def test_identity_failure_precedes_imported_leaf_and_scope(
     monkeypatch.setattr(entry, "_quiet_channels", quiet)
     monkeypatch.setattr(entry, "require_native_embedding_identity", denied)
     with pytest.raises(entry.NativeEmbeddingEntrypointError):
-        run = (
-            entry.run_native_embedding_reference_query
-            if operation == "QUERY"
-            else entry.run_native_embedding_index
-        )
+        run = {
+            "QUERY": entry.run_native_embedding_reference_query,
+            "INDEX": entry.run_native_embedding_index,
+            "PRIVATE_CHAT_QUERY": entry.run_native_embedding_private_chat_query,
+        }[operation]
         run(profile="CPU_INDEX_FP32", backend_scope=patch_scope)
 
 
