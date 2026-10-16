@@ -8,12 +8,17 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
-- Ordinary caller successor is source/disposable-verified, not installed/active:
+- Ordinary caller successor`f37ae7be` is committed/pushed, source/disposable/package-
+  verified, not installed/active:
   Web/HTTP ordinary1.0→same original Evidence selector→preparation1.1/ITEM_AUTHORING
   →first plan24 and existing delivery. Explicit exact-hash NOT_OFFERED/audit keeps
   normal plan19 for no reference or initial missing index; unrequested PAST_EXAM
   never broadens source classes. PENDING/denial/failure/stale pins do not bypass.
-  Final focused112/guarded PG162/type8 PASS; broad91-file regression is running.
+  Final focused112/guarded PG162/type8 PASS; exact broad91-file regression1856
+  PASS/464.77s, one existing Starlette/httpx warning. Inventories overlap.
+  API3-wheel/RECORD/OpenAPI and Web-wheel/actual Web-Conda import/installed simulation
+  PASS. Source-free2-wheel301-module proof preserves the native preparation/selector
+  foundation; it does not stand in for live API caller/source authorization.
   Current source/IAM/Evidence metadata observations are synthetic, not live acceptance.
 - Latest repository selector candidate`3fa9b958` is committed/pushed. Standard
   three-wheel/RECORD/OpenAPI build and source-free two-wheel301-module/schema/
@@ -135,7 +140,7 @@ summed into a single acceptance count. This ledger does not grant authority.
 | --- | --- | --- |
 | C1. One common candidate/evidence boundary | Common Catalog context and original bounded native QUERY→same-key replay→exact context read accepted at partial2/520; new protected HTTP route/service installed | Finish the held actual HTTP preparation/replay/current-read gate. Keep source authorization and Evidence receipts distinct from scores/model hypotheses. |
 | C2. 1:1 reference variation | Source/API/BFF/browser/disposable plan23 tests and inactive compatible83bad release; Pack1.20.17 released inactive | Activate reviewed compatible components in dependency order after held HTTP terminal; run one bounded genuine Item and inspect actual author/review context and maximum-three-pass behavior. Only then enable Web flag. |
-| C3. New authoring and review | Shared approved-reference/native request1.1, plan24, purpose1.1 HTTP preparation and owner/API/Catalog role delivery implemented. New official-Evidence-only selector/source/socket/API client3fa9b958: final affected179/type6/build/source-free301-module proof PASS. Prior preparation1729/PG152 remains distinct; inventories overlap | SOURCE/PACKAGE_PASS, NOT_INSTALLED/ACTIVE. Plan23 and QUERY1.0 stay strict; every review shares the original reference, not private-draft vector comparison. Ordinary start/optional-reference caller, genuine HTTP/worker/source acceptance and private intent/result bases remain open. |
+| C3. New authoring and review | Web/HTTP ordinary start→official-Evidence selector→preparation1.1/ITEM_AUTHORING→first plan24→existing role delivery implemented. Explicit exact-hash no-offer/audit preserves normal plan19 for legitimate absence/unrequested class, never denial/PENDING. Candidate f37ae7be: source1856/final focused112/PG162/type8/build/API+Web wheels PASS, no count sum | SOURCE/DISPOSABLE/PACKAGE_PASS, NOT_INSTALLED/ACTIVE. Plan23/QUERY1.0 stay strict; every review shares the original reference, not private-draft vector comparison. Genuine current-user/source/worker acceptance and compatible activation remain required; private intent/result vector bases are NOT_IMPLEMENTED. |
 | C4. General→ChatGPT read-only discovery | Existing textbook/past-exam GraphRAG tools remain available; this goal's vector candidate tool/use-case is not implemented/activated | Connect the same official context with actual chat operator permissions, citations, explicit partial/unavailable and no Item write/approval/delete authority. |
 | C5. Exam repetition observations | Historical approved25 Item/Assembly/HWPX acceptance is preserved, not new similarity-consumer evidence | Add bounded same-concept versus same-inference repetition observations to the existing composition path, without automatic rejection/full regeneration or changed approval meaning. Verify against an existing fixed cohort. |
 

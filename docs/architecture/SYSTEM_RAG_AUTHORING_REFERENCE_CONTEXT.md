@@ -687,3 +687,41 @@ not weakened. Original failed log is retained. All evidence stages are under
 query bases, actual compatible activation/worker acceptance and the rest of the
 original full-goal ledger remain open. Every review still receives the original
 ITEM_AUTHORING reference, not a claim that its latest draft has been vector-compared.
+
+### Ordinary caller immutable candidate and final regression
+
+Candidate`f37ae7be9910e5acfd64e9cb0d3bc65e13c0c8ee` is committed/pushed. Exact final
+related regression1856 PASS/464.77s across91 files (one existing Starlette/httpx
+deprecation warning), focused112/PG162/type8/Ruff13 and documentation28/3.89s PASS.
+These are overlapping inventories, not a combined execution count. Standard API
+build/three wheel RECORDs/installed OpenAPI and independent Web build/target Web
+Conda import/installed48-file simulation PASS; no operating installation ran.
+
+Retained API build:
+`/tmp/eom-api-build/f37ae7be9910e5acfd64e9cb0d3bc65e13c0c8ee.pMaLJ2`.
+Retained Web build:
+`/tmp/eom-web-gui-build/f37ae7be9910e5acfd64e9cb0d3bc65e13c0c8ee.uqZ4Ka`.
+
+| Immutable build member | Raw SHA-256 |
+| --- | --- |
+| `source.tar` | `f27ba0c7ebf4ced45d448cb6597ef7421c7978d07df3f5df4b5850408c89926d` |
+| `eom_platform-0.1.0-py3-none-any.whl` | `54df7e43de4c02ae1098952c9cfba6627f9f923bb361b579c0cd1dac8e2cfae4` |
+| `eom_api_contracts-0.1.0-py3-none-any.whl` | `2e610638abbbed7225b6d62a577df0a7b0c6bf3d8801fd7bd1be1d423e835f74` |
+| `eom_application_api-0.1.0-py3-none-any.whl` | `dfdce95964a9813e40ad61e9c556024e6a0585a3ac1d3e9a6604e79329eae3c1` |
+| `eom_web_gui-0.1.0-py3-none-any.whl` | `44517a1bcc3c01ee7b1732743fb178796a8c0abe6db83eaa822603382d868b5f` |
+
+The separate unprivileged Conda `-I -B` two-wheel proof loaded301 EOM modules only
+from the exact platform/contracts archives above, preserving the old canonical
+preparation1.0 frame SHA`674238c6aa2efbebd2d873d72b8fac595d4e82836be80d570b2b6dc914799b85`
+and original native identity, plus explicit1.1 and selector/Evidence5 schema and
+fail-closed composition. It makes no checkout/test/ML/DB/current-IAM/source/native
+or activation call. It proves this shared foundation, not the API caller's runtime
+authority; that caller is covered by the stated source HTTP/Unix tests and standard
+installed-wheel build, with genuine activation still pending.
+
+Evidence: `ordinary-reference-start-regression.log`, `focused-final.log`,
+`stage-final.log`, `db-before-final.log`, `db-after-final.log`, `mypy-final.log`,
+`release-build.log`, `web-build.log`, `wheel-proof.log`, `docs-final.log` under the
+same stated prefix. No selected API/QUERY/INDEX/Pack/Web flag changed. Original
+human canary process1079683 remained alive waiting on its original getpass at
+05:26 UTC; no new login/key/process was created or credential stored.
