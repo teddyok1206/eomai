@@ -42,6 +42,7 @@ from eom_workflow.local_embedding_encoding_job import (
     build_owned_incremental_embedding_input,
 )
 from eom_workflow.local_embedding_execution_policy import LocalEmbeddingRuntimeProfile
+from eom_workflow.local_embedding_index_refresh import LocalEmbeddingIndexRefreshRequest
 from eom_workflow.local_embedding_request import (
     LocalEmbeddingExecutableRequest,
     parse_local_embedding_executable_request,
@@ -296,6 +297,21 @@ class CatalogNativeEmbeddingExecutor:
                     command_lease=command_lease,
                     output=completed.output,
                 )
+        if isinstance(request, LocalEmbeddingIndexRefreshRequest):
+            # Reuse canonical registry rows directly. A membership-only request
+            # must never allocate encoding reservations or launch numerical work.
+            return self._index_completion.publish(
+                workflow,
+                step,
+                request,
+                command_lease,
+                caller,
+                coordinator,
+                allocation,
+                (),
+                fenced_transaction,
+                native_embedding_publications(self.publisher, allocation.source_commit),
+            )
         # Reservation API owns short independent roots. Never hold Workflow SQL locks here.
         reservations = self._reservations(request, launch.intent, command_lease)
         publications = native_embedding_publications(self.publisher, allocation.source_commit)

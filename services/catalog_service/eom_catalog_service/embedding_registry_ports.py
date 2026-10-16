@@ -316,6 +316,7 @@ class PreparedEmbeddingBindingLookup:
 
     observation: MissingEmbeddingBindings
     resolved: ResolvedEmbeddingLookup
+    bindings: tuple[EmbeddingSourceBinding, ...]
 
 
 class EmbeddingRegistryVerificationPort(Protocol):

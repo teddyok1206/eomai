@@ -135,6 +135,7 @@ def serve_local_indexing(runtime: LocalIndexingServiceRuntime, stop: Event) -> N
                 observed.state,
                 observed.graph_snapshot_revision_id,
                 observed.missing_binding_count,
+                observed.index_refresh_reason,
                 observed.missing_report_revision_ids,
                 observed.workflow_id,
             )
@@ -148,6 +149,7 @@ def serve_local_indexing(runtime: LocalIndexingServiceRuntime, stop: Event) -> N
                     unavailable_views=observed.unavailable_view_count,
                     missing_bindings=observed.missing_binding_count,
                     selected_targets=observed.selected_target_count,
+                    index_refresh_reason=observed.index_refresh_reason,
                     workflow_id=observed.workflow_id,
                     command_id=observed.command_id,
                     view=namespace.namespace.view,

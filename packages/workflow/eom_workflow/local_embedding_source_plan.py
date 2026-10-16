@@ -7,6 +7,7 @@ from typing import Annotated, Literal
 from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
 from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingEncodingIdentity,
+    EmbeddingIndexManifest,
     EmbeddingSpace,
     embedding_input_set_sha256,
 )
@@ -183,3 +184,28 @@ def validate_local_embedding_plan_entries(
             or demand.encoding.input_text_sha256 != content_sha256(text)
         ):
             raise ValueError("native demand differs from exact admitted profile/view values")
+
+
+def validate_local_embedding_selected_index_coverage(
+    plan: LocalEmbeddingSourcePlan, index: EmbeddingIndexManifest
+) -> None:
+    """Pure closure of already schema/hash-validated values, not source authority.
+
+    Share the exact selected-demand rule before publication and at receipt read.
+    Do not reparse the complete index again inside this current-root comparison.
+    """
+    sources = {value.item_revision_id: value for value in plan.sources}
+    bindings = {value.source.item_revision_id: value for value in index.bindings}
+    for demand in plan.demands:
+        binding = bindings.get(demand.source_revision_id)
+        if (
+            binding is None
+            or binding.source != sources[demand.source_revision_id]
+            or binding.encoding != demand.encoding
+            or binding.profile != demand.profile
+            or binding.solution_evidence != demand.solution_evidence
+            or binding.graph_snapshot != plan.graph_snapshot
+            or binding.policy_revision_id != plan.access_policy_revision_id
+            or binding.policy_sha256 != plan.access_policy_sha256
+        ):
+            raise ValueError("native completion index does not cover an exact selected demand")

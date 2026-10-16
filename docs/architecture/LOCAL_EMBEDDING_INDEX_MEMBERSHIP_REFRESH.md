@@ -1,7 +1,8 @@
 # Refresh index membership without recomputing existing vectors
 
-2026-10-16 UTC. **CONTRACT_AND_PURE_PLAN_SOURCE_PASS; NOT_EXECUTABLE/NOT_ACTIVE.**
-This closes original goal B5/B6/B8; it is not an unrelated index framework.
+2026-10-16 UTC. **SOURCE_AND_DISPOSABLE_EXECUTION_PASS; NOT_INSTALLED/NOT_ACTIVE.**
+This implements original goal B5/B6/B8 boundaries, not a separate index framework
+or a claim that the corresponding operating lifecycle is already complete.
 
 ## Evidence and bounded problem
 
@@ -35,19 +36,22 @@ Characterization tests must establish these premises before changing behavior.
    reauthorized; no untrusted DTO can declare its own current membership.
 6. Structures: frozen small basis, ordered immutable bindings and map/set lookup,
    existing native request/claim/reservation/checkpoint/CAS structures. No new DDL.
-7. Cost: O(N) membership comparison for N<=1024; bounded predecessor/member reads.
+7. Cost: O(N log N) canonical ordering and O(N) map/set comparison for N<=1024;
+   bounded predecessor/member reads.
    Reuse the already validated current-root capture and avoid a second full source
    projection/parse/hash pass. No cross-root authorization or filesystem cache.
 8. Transaction: compare after current owner admission; capture basis before
-   submission. Validate the exact basis at initial admission and predecessor CAS
-   at publication. Own committed successor must not make final receipt validation
-   fail by reinterpreting the old predecessor as a new current-head requirement.
+   submission. Admission reauthorizes current service/selected sources; validate
+   the full basis before staging and predecessor CAS at registration. Do not repeat
+   full corpus projection during every selected-source guard. Own committed
+   successor must not fail final receipt validation by reinterpreting the old
+   predecessor as a new current-head requirement.
 9. Ownership: pure contract below Catalog/Runner, adapters own SQL/Artifact IO.
    Numerical workers still receive staged local inputs; only Orchestrator commits.
 10. Retry: identical basis returns the original request/Workflow, including FAILED
     history. A genuinely changed source/index basis is a new request, not a retry
-    key workaround. Reuse existing encoding reservations; no model execution for
-    all-reusable refresh. Empty/no-available populations keep explicit waiting/
+    key workaround. Seed/delta retains existing encoding reservations; refresh
+    never reserves or runs numerical work. Empty populations keep explicit waiting/
     unavailable semantics; never create empty vector or index placeholders.
 11. Simpler alternative:1.2 has no immutable membership-change identity. Broadening
     its meaning, bypassing successful equivalence, or copying control Artifacts
@@ -69,7 +73,7 @@ Characterization tests must establish these premises before changing behavior.
 Source-only contract progress must not be reported as corrected live automation.
 Consumer connection and CPU/CUDA requirements remain open in the full goal ledger.
 
-## Source checkpoint
+## Initial contract-only source checkpoint —6631d467
 
 Characterization now executes the existing registry application against synthetic
 metadata: a namespace can have all reusable bindings but no namespace head.
@@ -80,8 +84,8 @@ another Job. These are explicitly synthetic source/IAM fixtures, not live author
 The closed1.3 source/mirror, independently pinned parser and frozen basis preserve
 the old1.2 source-plan Artifact pointer. A genuinely different membership basis
 changes the canonical request hash; no copied Artifact or fake retry key is needed.
-The existing executable dispatcher still rejects1.3, including preconstructed
-subclass instances. Schema parsing is not a service/runtime authorization grant.
+At this initial checkpoint the executable dispatcher still rejected1.3, including
+preconstructed subclass instances. Schema parsing is not a service/runtime grant.
 
 Catalog's pure`plan_index_membership_refresh` distinguishes missing index,
 changed membership and identical/no-available membership. It sorts bounded tuples
@@ -105,10 +109,10 @@ parser; production float/hash validation was not relaxed. Final source and wheel
 logs:`index-membership-refresh-leaf-reviewed-final.log` and
 `index-membership-refresh-installed-wheel.log` in the existing development window.
 
-Remaining implementation is explicit: supported Catalog current-namespace read
-and same-root observation,1.3 owner admission/execution/completion/replay wiring,
+At that checkpoint the remaining implementation was: supported Catalog current-
+namespace read and same-root observation,1.3 admission/execution/completion/replay,
 actual disposable-DB concurrency/crash/CAS and bounded operating acceptance. This
-checkpoint does not fix live no-work reporting or enable continuous indexing.
+checkpoint did not fix live no-work reporting or enable continuous indexing.
 
 ## Supported Catalog predecessor read — source checkpoint
 
@@ -132,3 +136,122 @@ This internal owner method is not yet selected by the operating d4846220 runtime
 The1.3 admission/execution/completion and actual PostgreSQL/lifecycle gates above
 remain necessary. A new source candidate must not replace current original
 commands while they are nonterminal.
+
+## Execution integration decisions
+
+- Preserve old public request imports/serialized1.1/1.2 values. Move the common
+  immutable request values to a dedicated contract module so1.3 and dispatch have
+  no circular import;1.3 remains a subtype of the service request family.
+- Return already verified binding values with the owner-local missing-binding
+  capture. Inspect the namespace predecessor only on no-missing-binding paths;
+  do not repeat full corpus projection or vector IO to plan a refresh.
+- A refresh selects one existing available source as its source-plan witness.
+  Its1.3 basis pins the whole desired membership. Same basis replays; changed
+  basis changes the canonical request, not just the key or copied Artifact.
+- Service admission still verifies actual current runtime/grant/selected source
+  and canonical control bytes. Validate the whole refresh basis in the existing
+  index-preparation root, before staging/publication. Its predecessor is an
+  initial publication CAS condition, not a permanent "must still be current"
+  check that would reject the Workflow's own committed successor on replay.
+-1.3 takes the existing coordinator/index/receipt path but **never calls encoding
+  reservations, dispatch or numerical launch**. All rows must already be canonical
+  registered rows from Catalog. No fake owned/completed encoding Job is created.
+- Validate selected-plan coverage before publication, sharing that pure rule with
+  the existing receipt validator. Keep the original coordinator/checkpoint/CAS/
+  receipt lifecycle and preserve partial Artifact publication on crash.
+- Existing missing-vector seed/delta requests retain1.2 behavior. No new queue,
+  migration, worker protocol, resource ceiling or source permission is introduced.
+
+### Coherent append-only registry observation
+
+Discovery uses READ COMMITTED and must not combine bindings from one SQL statement
+with an anti-join executed after another registration commits. Read the bounded
+binding rows first, then their immutable FK-backed encodings. Derive missing keys
+from that same verified binding map in O(N), not a later mutable observation. A
+binding committed after capture is work for the next observation; existing
+idempotency/claim/registration rules still prevent duplicate accepted outputs.
+This replaces three bounded lookup statements with two and adds no isolation,
+lock, retry or cache. Missing encoding provenance remains an explicit error, not
+a reason to retry arbitrary pointer corruption. Independent-writer tests must
+cover commits between both reads and prove the next observation sees the result.
+
+### Recovery before the prepared-index checkpoint
+
+The actual disposable interruption test reproduced a staged-file/checkpoint gap:
+index bytes can survive a root rollback before INDEX_PREPARED. Reassembly must not
+choose a new random revision/time while the create-once staged file remains. Use
+domain-separated identities derived from the already committed allocation's
+unique index-producer identity, and its pinned creation time. Existing prepared/
+registered/completed checkpoints still use their original stored identities.
+This needs no schema/DB change, file overwrite, row repair or external retry key.
+Changed current source/membership still fails validation or staged-byte identity;
+determinism is not authority to reuse changed inputs. Preserve failed test evidence.
+
+## Executable successor — source and disposable PostgreSQL checkpoint
+
+The generic executable parser now recognizes1.3; the released1.2-specific parser
+still rejects it. Public request imports remain compatible through a shared pure
+value module, avoiding a circular import. No old schema bytes, persisted request,
+Workflow/failed history, registry row or accepted Artifact was rewritten.
+
+Reconciliation reuses the verified binding capture, reads the official selected
+namespace predecessor and submits one stable available witness only when needed.
+The original plan publication identity is reused across genuinely different
+membership intents. Original successful-equivalence and failed-history behavior
+remain; no new-key bypass or copied source-plan Artifact was added.
+
+The executor bypasses numerical reservations/dispatch for1.3 and uses existing
+allocation, index preparation, registration CAS, receipt and terminal transitions.
+Selected-demand coverage is checked before staging and by the receipt reader
+using one pure rule. Full membership is checked against the immutable request
+basis, including the original predecessor, rather than requiring that predecessor
+to remain current after this Workflow's successful registration.
+
+Verified gates, not counts to sum:
+
+- Focused source regression **607 PASS/83.00s**.
+- Actual guarded PostgreSQL embedding/registry/completion suite **43 PASS/182.21s**.
+  This includes8 refresh cases: another valid population namespace with globally
+  reusable bindings, withdrawal, all3 checkpoint interruptions, and changed
+  source/binding/predecessor basis rejection before staging. They create no new
+  numerical encoding Job or launcher call during refresh. An earlier focused
+  confirmation was8 PASS/35 deselected, not another independent acceptance total.
+- The same PostgreSQL suite also proves coherent discovery when an independent
+  writer commits between binding/encoding reads, and confirms2 bounded lookup
+  statements rather than3. Source authorization is explicitly synthetic there.
+- Guarded native stage/Runner/reference compatibility **127 PASS/95.74s**,
+  including independent roots submitting one1.3 Workflow/START and exact service/
+  namespace queue routing. Final read-only disposable inspection: identity PASS,
+  head`20261014_0055`, other connections0. No production test target or migration.
+- Fresh temporary installed-wheel/RECORD and dependency-boundary gates
+  **16 PASS/28.71s**; no checkout imports, source/registry permission claims or
+  installed production release are inferred from these test wheels.
+- Existing service-loop/multiview owner regression **40 PASS/4.88s**; round-robin,
+  graceful drain, no-work behavior and observation logging remain compatible.
+- Strict mypy **13 production modules PASS**; Ruff, formatting and whitespace PASS.
+
+Preserved failures distinguish test-fixture mistakes from source defects. Initial
+service fixtures correctly failed the human/service capture-shape and missing
+service-source-owner guards; only the fixtures were corrected. An invalid
+occurrence-population fixture was replaced with closed, explicitly synthetic
+occurrence metadata, without weakening provenance requirements. Actual execution
+then exposed and reproduced two source defects: an empty new-numerical-shard read
+and the pre-INDEX_PREPARED staged-byte/checkpoint mismatch. Both were corrected
+without overwriting files, changing failed history or broadening permission.
+
+Bounded logs remain in the existing temporary development window
+`/tmp/eom-identity-provider-install.nAaycoDM/`: source
+`index-refresh-wiring-reviewed-final.log`, PostgreSQL
+`index-refresh-wiring-postgres-final.log`, focused refresh
+`index-refresh-wiring-postgres-focused-fifth.log`, wheel
+`index-refresh-post-recovery-boundaries-wheel.log`, strict
+`index-refresh-reviewed-strict.log`, stage`index-refresh-wiring-stage-final.log`,
+loop`index-refresh-service-loop-regression.log`, and first-through-fourth failures.
+These working logs are not registered production acceptance Artifacts.
+
+**Operating d4846220 remains unchanged.** A clean compatible candidate build,
+protected installation/source identity admission, immutable service-grant/config
+selection, rollback and bounded actual reuse acceptance remain necessary before
+declaring this correction live. This checkpoint does not enable continuous work,
+activate ordinary consumers or prove CPU/CUDA performance. The full goal remains
+active with those requirements in its separate ledger.

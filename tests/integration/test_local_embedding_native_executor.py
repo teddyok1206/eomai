@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Barrier
@@ -19,14 +20,24 @@ from uuid import uuid4
 import pytest
 from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
 from eom_catalog_contracts.inference_transfer_experiment import StagedExperimentEntry
+from eom_catalog_contracts.knowledge import ApprovedPastExamItemKnowledgeSourceV3
 from eom_catalog_service.embedding_encoder_adapter import encode_incremental_batch
+from eom_catalog_service.embedding_index_refresh_plan import plan_index_membership_refresh
+from eom_catalog_service.embedding_registry_application import prepare_missing_embedding_bindings
 from eom_catalog_service.embedding_registry_catalog_adapter import (
     CatalogEmbeddingRegistryVerifier,
     EmbeddingRegistryOwnerConfiguration,
 )
+from eom_catalog_service.embedding_registry_models import (
+    EmbeddingEncodingRecord,
+    EmbeddingIndexRecord,
+    EmbeddingIndexRevisionRecord,
+    EmbeddingSourceBindingRecord,
+)
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
     EmbeddingRegistryLookup,
+    EmbeddingRegistryServiceCaller,
     ResolvedEmbeddingLookup,
 )
 from eom_catalog_service.inference_transfer_service import (
@@ -35,12 +46,14 @@ from eom_catalog_service.inference_transfer_service import (
 )
 from eom_catalog_service.inference_transfer_snapshot_catalog_adapter import (
     InferenceTransferSessionCapture,
+    LocalIndexingSessionCapture,
 )
 from eom_catalog_service.knowledge_graph_models import (
     KnowledgeCorpusRevisionRecord,
     KnowledgeGraphSnapshotRecord,
 )
 from eom_catalog_service.local_embedding_source_plan import build_local_embedding_source_plan
+from eom_catalog_service.local_indexing_source_ports import LocalIndexingSourceReadIntent
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.settings import CatalogSettings
 from eom_identifiers import canonical_json_bytes, content_sha256
@@ -61,7 +74,10 @@ from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.local_embedding_encoding_job import EMBEDDING_ENCODING_IDEMPOTENCY_PREFIX
 from eom_workflow.local_embedding_execution_policy import LocalEmbeddingExecutionPolicy
 from eom_workflow.local_embedding_request import (
-    LocalEmbeddingWorkflowRequestV11,
+    LocalEmbeddingServiceWorkflowRequest,
+    local_embedding_request_actor,
+    local_embedding_request_service,
+    parse_local_embedding_executable_request,
     require_local_embedding_operator_seed,
 )
 from eom_workflow.native_embedding_coordinator import (
@@ -93,7 +109,7 @@ from eom_workflow_runner.repository import (
     peek_command_candidate,
     require_command_lease,
 )
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
 from tests.integration.test_embedding_registry_application import _artifact, _fixture
@@ -102,7 +118,9 @@ from tests.integration.test_preset_model_validation_persistence import (
 )
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.local_embedding_admission_fixtures import native_fixture
+from tests.unit.local_embedding_service_fixtures import service_fixture
 from tests.unit.test_embedding_incremental_encoding import SyntheticNativeBackend
+from tests.unit.test_inference_transfer_pair_source_authorization import accepted_input
 from tests.unit.test_local_embedding_runner_admission import scope_fixture
 
 pytestmark = pytest.mark.integration
@@ -157,8 +175,45 @@ def test_concurrent_first_native_checkpoint_registration_is_atomic(guarded_engin
 
 
 @pytest.fixture
-def execution(guarded_engine: Engine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def execution(
+    guarded_engine: Engine,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+):
+    service_mode = getattr(request, "param", "operator") == "service"
     command, capture = _fixture(guarded_engine)
+    if service_mode:
+        _extra_command, extra = _fixture(guarded_engine)
+        extra_body = extra.entries[0].model_dump(mode="json")
+        extra_body["profile"]["source_basis"].update(
+            graph_snapshot=command.graph_snapshot.model_dump(mode="json"),
+        )
+        extra_body["profile"] = seal(extra_body["profile"], "profile_sha256")
+        extra_entry = StagedExperimentEntry.model_validate(extra_body)
+        capture = replace(
+            capture,
+            entries=(*capture.entries, extra_entry),
+            sources=(*capture.sources, extra_entry.profile.source_basis.source),
+        )
+        occurrence_template = accepted_input("a")[1].source.model_dump(mode="json")
+        entries, sources = [], []
+        for original in capture.entries:
+            entry_body = original.model_dump(mode="json")
+            source = entry_body["profile"]["source_basis"]["source"]
+            source["artifact_member"].update(
+                materialized_path="source/item-content.json", logical_name="item-content.json"
+            )
+            entry_body["profile"] = seal(entry_body["profile"], "profile_sha256")
+            if entry_body["content"] is not None:
+                entry_body["content"]["original_source"] = source["artifact_member"]
+            entries.append(StagedExperimentEntry.model_validate(entry_body))
+            # Synthetic occurrence provenance is only a closed population fixture,
+            # never proof of actual page bytes or an operating source grant.
+            sources.append(
+                ApprovedPastExamItemKnowledgeSourceV3.model_validate(occurrence_template | source)
+            )
+        capture = replace(capture, entries=tuple(entries), sources=tuple(sources))
     native = native_fixture()
     _unused, compiled = scope_fixture()
     profile = native.policy.profiles[0]
@@ -209,7 +264,11 @@ def execution(guarded_engine: Engine, tmp_path: Path, monkeypatch: pytest.Monkey
             "policy_sha256",
         )
     )
-    saved_policy = controls.publish_policy(
+    service = service_fixture(base=native, workflow_definition_sha256=compiled.sha256)
+    if service_mode:
+        policy = service.policy
+    publish_policy = controls.publish_service_policy if service_mode else controls.publish_policy
+    saved_policy = publish_policy(
         policy, idempotency_key="test-policy:" + uuid4().hex, created_at=created
     )
     body = native.request.model_dump(mode="json")
@@ -225,7 +284,12 @@ def execution(guarded_engine: Engine, tmp_path: Path, monkeypatch: pytest.Monkey
         native_execution_policy=saved_policy.member.model_dump(mode="json"),
         native_execution_policy_sha256=policy.policy_sha256,
     )
-    request = LocalEmbeddingWorkflowRequestV11.model_validate(seal(body, "request_sha256"))
+    if service_mode:
+        body.update(
+            schema_version="local-embedding-workflow-request/1.2",
+            actor_context=service.request.actor_context.model_dump(mode="json"),
+        )
+    request = parse_local_embedding_executable_request(seal(body, "request_sha256"))
     settings = CatalogSettings(nas_artifact_root=root)
     fence = Mock()
     catalog = CatalogEmbeddingRegistryVerifier(
@@ -240,9 +304,9 @@ def execution(guarded_engine: Engine, tmp_path: Path, monkeypatch: pytest.Monkey
         tuple(
             AdmittedInferenceTransferSource(
                 e.profile.source_basis.solution_evidence.base_analysis_run_id,
-                e.profile.source_basis.source,
+                source,
             )
-            for e in capture.entries
+            for e, source in zip(capture.entries, capture.sources, strict=True)
         ),
     )
     current = SimpleNamespace(allowed=True, active_roots=0)
@@ -250,16 +314,41 @@ def execution(guarded_engine: Engine, tmp_path: Path, monkeypatch: pytest.Monkey
     admitted = {request.request_sha256: (request, plan)}
 
     def authorize(session, caller, intent, phase):
-        assert session.in_transaction() and caller.operator_id == request.actor_context.operator_id
+        assert session.in_transaction() and caller == owner.registry_caller(request)
         assert intent.corpus_id == query.corpus_id and intent.namespace == namespace
         if not current.allowed:
             raise ValueError("SYNTHETIC_CURRENT_PERMISSION_DENIED")
         actual_corpus, entries = captures[intent.graph_snapshot.graph_snapshot_revision_id]
-        return PinnedArtifactReadContext(session, settings), InferenceTransferSessionCapture(
-            scope, actual_corpus, entries
-        )
+        if service_mode:
+            # Closed service result shape, deliberately not actual runtime/source authority.
+            selected = LocalIndexingSourceReadIntent(
+                corpus_id=intent.corpus_id,
+                graph_snapshot=intent.graph_snapshot,
+                access_policy_revision_id=intent.policy_revision_id,
+                access_policy_sha256=intent.policy_sha256,
+                service_policy_revision_id=service.grant.access_policy_revision_id,
+                service_policy_sha256=service.grant.content_sha256,
+                source_classes=config.source_classes,
+                namespace=intent.namespace,
+                space=profile.space,
+                recipe=config.recipe,
+                native_execution_policy_sha256=policy.policy_sha256,
+                resource_profile_sha256=profile.resource_profile.resource_profile_sha256,
+            )
+            captured = LocalIndexingSessionCapture(selected, actual_corpus, entries)
+        else:
+            captured = InferenceTransferSessionCapture(scope, actual_corpus, entries)
+        return PinnedArtifactReadContext(session, settings), captured
 
     monkeypatch.setattr(catalog, "_capture", authorize)
+    if service_mode:
+        monkeypatch.setattr(
+            catalog,
+            "_capture_source",
+            lambda session, caller, intent, *, artifact_reader, phase, source_revision_ids=(): (
+                authorize(session, caller, intent, phase)[1]
+            ),
+        )
     monkeypatch.setattr(
         catalog.sources,
         "capture_in_session",
@@ -278,6 +367,8 @@ def execution(guarded_engine: Engine, tmp_path: Path, monkeypatch: pytest.Monkey
             self.catalog, self.settings = catalog, settings
 
         def registry_caller(self, supplied):
+            if isinstance(supplied, LocalEmbeddingServiceWorkflowRequest):
+                return EmbeddingRegistryServiceCaller(local_embedding_request_service(supplied))
             return EmbeddingRegistryCaller(
                 require_local_embedding_operator_seed(supplied).operator_id
             )
@@ -286,7 +377,10 @@ def execution(guarded_engine: Engine, tmp_path: Path, monkeypatch: pytest.Monkey
             # Explicit synthetic IAM seam; keep late source revocation effective.
             assert session.in_transaction() and current.allowed
             caller = self.registry_caller(supplied)
-            self.identity.fence_current_operator(session, caller.operator_id)
+            if isinstance(caller, EmbeddingRegistryServiceCaller):
+                self.identity.fence_current_service(session, caller.service)
+            else:
+                self.identity.fence_current_operator(session, caller.operator_id)
             assert supplied == admitted[supplied.request_sha256][0]
 
         def resolve_submission(self, session, supplied):
@@ -363,14 +457,15 @@ def execution(guarded_engine: Engine, tmp_path: Path, monkeypatch: pytest.Monkey
 
     def start():
         selected_request = request
+        actor_type, actor_id = local_embedding_request_actor(request)
         with sessions.begin() as session:
             supplied = start_local_embedding_in_session(
                 session,
                 definition=definition,
                 request=request,
                 idempotency_key="synthetic-full-native:" + uuid4().hex,
-                actor_type="human",
-                actor_id=request.actor_context.operator_id,
+                actor_type=actor_type,
+                actor_id=actor_id,
                 owner=owner,
                 executor=executor,
             )
@@ -410,7 +505,8 @@ def execution(guarded_engine: Engine, tmp_path: Path, monkeypatch: pytest.Monkey
         return workflow, lease, fenced
 
     def advance(workflow, lease, fenced):
-        selected_request = LocalEmbeddingWorkflowRequestV11.model_validate(workflow.initial_request)
+        selected_request = parse_local_embedding_executable_request(workflow.initial_request)
+        actor_type, actor_id = local_embedding_request_actor(selected_request)
         return advance_local_embedding_step(
             workflow=workflow,
             compiled=compiled,
@@ -420,20 +516,21 @@ def execution(guarded_engine: Engine, tmp_path: Path, monkeypatch: pytest.Monkey
             executor=executor,
             fenced_transaction=fenced,
             poll_interval_seconds=1,
-            actor_type="human",
-            actor_id=request.actor_context.operator_id,
+            actor_type=actor_type,
+            actor_id=actor_id,
         )
 
     def finish(workflow, lease, fenced):
-        selected_request = LocalEmbeddingWorkflowRequestV11.model_validate(workflow.initial_request)
+        selected_request = parse_local_embedding_executable_request(workflow.initial_request)
+        actor_type, actor_id = local_embedding_request_actor(selected_request)
         complete_local_embedding_terminal(
             workflow_id=workflow.workflow_id,
             request=selected_request,
             lease=lease,
             executor=executor,
             fenced_transaction=fenced,
-            actor_type="human",
-            actor_id=request.actor_context.operator_id,
+            actor_type=actor_type,
+            actor_id=actor_id,
         )
 
     def graph_delta():
@@ -531,7 +628,7 @@ def execution(guarded_engine: Engine, tmp_path: Path, monkeypatch: pytest.Monkey
             source_plan=saved.member.model_dump(mode="json"),
             source_plan_sha256=new_plan.plan_sha256,
         )
-        request = LocalEmbeddingWorkflowRequestV11.model_validate(seal(body, "request_sha256"))
+        request = parse_local_embedding_executable_request(seal(body, "request_sha256"))
         new_corpus = AdmittedInferenceTransferCorpus(
             tuple(e.profile for e in entries),
             (),
@@ -540,13 +637,75 @@ def execution(guarded_engine: Engine, tmp_path: Path, monkeypatch: pytest.Monkey
             tuple(
                 AdmittedInferenceTransferSource(
                     e.profile.source_basis.solution_evidence.base_analysis_run_id,
-                    e.profile.source_basis.source,
+                    source,
                 )
-                for e in entries
+                for e, source in zip(entries, capture.sources, strict=True)
             ),
         )
         captures[new_graph.graph_snapshot_revision_id] = (new_corpus, tuple(entries))
         admitted[request.request_sha256] = (request, new_plan)
+
+    def refresh_membership(
+        *, withdraw: bool = False, namespace_missing: bool = False, basis_fault: str | None = None
+    ):
+        """Synthetic source lifecycle, actual registered-row/predecessor reads and SQL."""
+        nonlocal request, namespace
+        assert service_mode
+        graph_revision = request.graph_snapshot.graph_snapshot_revision_id
+        corpus, entries = captures[graph_revision]
+        if withdraw:
+            entries = entries[:1]
+            corpus = replace(corpus, profiles=corpus.profiles[:1], sources=corpus.sources[:1])
+            captures[graph_revision] = (corpus, entries)
+        if namespace_missing:
+            # Namespace membership is independent from global encoding/binding reuse.
+            namespace = namespace.model_copy(
+                update={
+                    "population_scope": "OCCURRENCE_BACKED_PAST_EXAM"
+                    if namespace.population_scope == "ALL_ADMITTED_GRAPH_ITEMS"
+                    else "ALL_ADMITTED_GRAPH_ITEMS"
+                }
+            )
+            assert namespace != owner.configuration.registry.namespace
+            owner.configuration = replace(
+                owner.configuration,
+                registry=replace(owner.configuration.registry, namespace=namespace),
+            )
+            catalog.configuration = owner.configuration.registry
+        selected_query = replace(query, namespace=namespace)
+        caller = owner.registry_caller(request)
+        with sessions.begin() as session:
+            prepared = prepare_missing_embedding_bindings(session, caller, selected_query, catalog)
+            assert not prepared.observation.missing and prepared.bindings
+            # Actual head/row/Artifact preparation; IAM above remains explicitly synthetic.
+            previous = catalog.prepare_index_basis(session, caller, selected_query).previous
+            basis = plan_index_membership_refresh(
+                eligible_sources=prepared.resolved.sources,
+                available_bindings=prepared.bindings,
+                previous=previous,
+            )
+            assert basis is not None
+            witness = min(binding.source.item_revision_id for binding in prepared.bindings)
+            selected_plan = build_local_embedding_source_plan(
+                selected_query, prepared.resolved, target_revision_ids=(witness,)
+            )
+        saved = controls.publish_source_plan(
+            selected_plan,
+            idempotency_key="test-refresh-plan:" + uuid4().hex,
+            created_at=datetime.now(UTC),
+        )
+        body = request.model_dump(mode="json") | {
+            "schema_version": "local-embedding-workflow-request/1.3",
+            "namespace": namespace.model_dump(mode="json"),
+            "source_plan": saved.member.model_dump(mode="json"),
+            "source_plan_sha256": selected_plan.plan_sha256,
+            "reconciliation_basis": basis.model_dump(mode="json"),
+        }
+        if basis_fault is not None:
+            body["reconciliation_basis"][basis_fault] = "sha256:" + "f" * 64
+        request = parse_local_embedding_executable_request(seal(body, "request_sha256"))
+        admitted[request.request_sha256] = (request, selected_plan)
+        return request
 
     return SimpleNamespace(
         start=start,
@@ -561,6 +720,7 @@ def execution(guarded_engine: Engine, tmp_path: Path, monkeypatch: pytest.Monkey
         publisher=publisher,
         current=current,
         graph_delta=graph_delta,
+        refresh_membership=refresh_membership,
     )
 
 
@@ -626,3 +786,130 @@ def test_actual_interruption_resumes_same_outputs_without_reencoding(
     assert execution.advance(*started) is True
     execution.finish(*started)
     assert execution.launcher.forwards == 1
+
+
+def _refresh_counts(execution):
+    """Small indexed cohort counts, never count or mutate production history."""
+    with execution.sessions() as session:
+        encodings = tuple(
+            session.scalars(
+                select(EmbeddingEncodingRecord.encoding_sha256)
+                .where(
+                    EmbeddingEncodingRecord.storage_partition
+                    == execution.owner.configuration.registry.namespace.storage_partition
+                )
+                .order_by(EmbeddingEncodingRecord.encoding_sha256)
+            )
+        )
+        bindings = session.scalar(
+            select(func.count())
+            .select_from(EmbeddingSourceBindingRecord)
+            .where(EmbeddingSourceBindingRecord.encoding_sha256.in_(encodings))
+        )
+        jobs = session.scalar(
+            select(func.count())
+            .select_from(JobRecord)
+            .where(
+                JobRecord.idempotency_key.in_(
+                    [EMBEDDING_ENCODING_IDEMPOTENCY_PREFIX + key for key in encodings]
+                )
+            )
+        )
+        revisions = session.scalar(
+            select(func.count())
+            .select_from(EmbeddingIndexRevisionRecord)
+            .join(
+                EmbeddingIndexRecord,
+                EmbeddingIndexRecord.index_id == EmbeddingIndexRevisionRecord.index_id,
+            )
+            .where(EmbeddingIndexRecord.corpus_id == execution.request.corpus_id)
+        )
+        return encodings, bindings, jobs, revisions
+
+
+@pytest.mark.parametrize("execution", ["service"], indirect=True)
+@pytest.mark.parametrize("kind", ["missing_namespace", "withdrawal"])
+def test_actual_membership_refresh_uses_existing_rows_without_numeric_reservation(
+    execution, monkeypatch, kind
+):
+    seeded = execution.start()
+    assert execution.advance(*seeded) is True
+    execution.finish(*seeded)
+    before = _refresh_counts(execution)
+    forwards = execution.launcher.forwards
+    request = execution.refresh_membership(
+        withdraw=kind == "withdrawal", namespace_missing=kind == "missing_namespace"
+    )
+    assert request.reconciliation_basis.reason == (
+        "MISSING_NAMESPACE_INDEX" if kind == "missing_namespace" else "INDEX_MEMBERSHIP_CHANGED"
+    )
+    reservations = Mock(side_effect=AssertionError("refresh must not reserve numerical work"))
+    monkeypatch.setattr(execution.executor, "_reservations", reservations)
+    refreshed = execution.start()
+    assert execution.advance(*refreshed) is True
+    execution.finish(*refreshed)
+    assert execution.launcher.forwards == forwards
+    reservations.assert_not_called()
+    after = _refresh_counts(execution)
+    assert after[:3] == before[:3] and after[3] == before[3] + 1
+    with execution.sessions() as session:
+        for workflow, _lease, _fenced in (seeded, refreshed):
+            assert session.get(WorkflowInstanceRecord, workflow.workflow_id).state == "COMPLETED"
+
+
+@pytest.mark.parametrize("execution", ["service"], indirect=True)
+@pytest.mark.parametrize("phase", ["INDEX_PREPARED", "REGISTERED", "COMPLETED"])
+def test_actual_refresh_crash_recovery_preserves_registered_rows_and_own_successor(
+    execution, monkeypatch, phase
+):
+    seeded = execution.start()
+    assert execution.advance(*seeded) is True
+    execution.finish(*seeded)
+    before = _refresh_counts(execution)
+    forwards = execution.launcher.forwards
+    execution.refresh_membership(withdraw=True)
+    refreshed = execution.start()
+    original = NativeEmbeddingCoordinator.append
+    failed = False
+
+    def fail_once(self, session, checkpoint):
+        nonlocal failed
+        if checkpoint.record_type == phase and not failed:
+            failed = True
+            raise RuntimeError("synthetic refresh interruption")
+        return original(self, session, checkpoint)
+
+    monkeypatch.setattr(NativeEmbeddingCoordinator, "append", fail_once)
+    with pytest.raises(RuntimeError, match="refresh interruption"):
+        execution.advance(*refreshed)
+    assert execution.advance(*refreshed) is True
+    # This validates against the request's pinned predecessor, not the new current head.
+    execution.finish(*refreshed)
+    after = _refresh_counts(execution)
+    assert after[:3] == before[:3] and after[3] == before[3] + 1
+    assert execution.launcher.forwards == forwards
+
+
+@pytest.mark.parametrize("execution", ["service"], indirect=True)
+@pytest.mark.parametrize(
+    "fault",
+    ["eligible_source_set_sha256", "available_binding_set_sha256", "previous_index_sha256"],
+)
+def test_actual_refresh_rejects_stale_basis_before_index_artifact_publication(
+    execution, monkeypatch, fault
+):
+    seeded = execution.start()
+    assert execution.advance(*seeded) is True
+    execution.finish(*seeded)
+    before = _refresh_counts(execution)
+    forwards = execution.launcher.forwards
+    execution.refresh_membership(withdraw=True, basis_fault=fault)
+    stage = Mock(side_effect=AssertionError("stale basis must fail before staging"))
+    from eom_orchestrator.embedding_artifact_store import EmbeddingArtifactStore
+
+    monkeypatch.setattr(EmbeddingArtifactStore, "stage_index_manifest", stage)
+    refreshed = execution.start()
+    with pytest.raises(ValueError, match="INDEX_REFRESH_CONTRACT_INVALID"):
+        execution.advance(*refreshed)
+    stage.assert_not_called()
+    assert _refresh_counts(execution) == before and execution.launcher.forwards == forwards

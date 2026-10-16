@@ -24,7 +24,10 @@ from eom_workflow.local_embedding_index_refresh import (
     parse_index_refresh_request,
     validate_index_refresh_request_basis,
 )
-from eom_workflow.local_embedding_request import parse_local_embedding_executable_request
+from eom_workflow.local_embedding_request import (
+    parse_local_embedding_executable_request,
+    parse_local_embedding_service_workflow_request,
+)
 from eom_workflow.schemas import LocalEmbeddingAdmissionContractError
 from jsonschema import Draft202012Validator
 from sqlalchemy.orm import Session
@@ -91,7 +94,7 @@ def test_closed_schema_mirror_and_pin_precede_behavior():
 
 
 @pytest.mark.parametrize("changed", [False, True])
-def test_contract_roundtrip_preserves_plan_pointer_and_does_not_enable_execution(changed):
+def test_contract_roundtrip_preserves_plan_pointer_and_keeps_released_parser_strict(changed):
     fixture, body, bindings, previous = refresh_case(changed=changed)
     request = parse_index_refresh_request(body)
     assert request.source_plan == fixture.request.source_plan
@@ -106,11 +109,11 @@ def test_contract_roundtrip_preserves_plan_pointer_and_does_not_enable_execution
         available_bindings=bindings,
         previous=previous,
     )
-    # This explicit proposed parser is not the installed dispatch/admission path.
+    assert parse_local_embedding_executable_request(body) == request
+    assert parse_local_embedding_executable_request(request) == request
+    # 1.2 bytes/meaning remain closed; parsing1.3 still grants no runtime authority.
     with pytest.raises(LocalEmbeddingAdmissionContractError):
-        parse_local_embedding_executable_request(body)
-    with pytest.raises(LocalEmbeddingAdmissionContractError):
-        parse_local_embedding_executable_request(request)
+        parse_local_embedding_service_workflow_request(body)
 
 
 @pytest.mark.parametrize(

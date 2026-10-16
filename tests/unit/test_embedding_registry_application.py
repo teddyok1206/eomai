@@ -372,6 +372,31 @@ def test_prepared_missing_lookup_returns_the_same_once_materialized_population(m
     assert len(result.observation.missing) == 1
 
 
+@pytest.mark.parametrize("phase", ["bindings", "encodings"])
+def test_concurrent_append_does_not_mix_binding_observation_with_later_antijoin(
+    memory, monkeypatch, phase
+):
+    session, owner = memory
+    command, _capture = capture_pair()
+    original = getattr(MemoryRepository, phase)
+    inserted = False
+
+    def read_then_commit(repository, keys):
+        nonlocal inserted
+        captured = original(repository, keys)
+        if not inserted:
+            inserted = True
+            _register(session, owner, command)
+        return captured
+
+    monkeypatch.setattr(MemoryRepository, phase, read_then_commit)
+    first = application.prepare_missing_embedding_bindings(session, CALLER, _query(command), owner)
+    assert len(first.observation.missing) == 1 and not first.bindings
+    second = application.prepare_missing_embedding_bindings(session, CALLER, _query(command), owner)
+    assert not second.observation.missing and len(second.bindings) == 1
+    assert len(second.observation.reusable_rows) == 1
+
+
 def test_graph_only_binding_change_reuses_encoding_without_registering_rows(
     memory: MemoryFixture,
 ) -> None:

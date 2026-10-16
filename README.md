@@ -216,9 +216,10 @@ CONTENT_ONLY7/520·CONCRETE_FACETS1/520·METADATA_ONLY1/520입니다.
 확인했고, 원래 기출520개와 분모를 구분합니다. 저장 해시·수치·계보 검증 후 정상 종료했습니다.
 [승인 문항 연결 검증](docs/operations/LOCAL_INDEXING_ADMITTED_ITEM_SCOPE_2026-10-16.md).
 상시 처리·일반 소비자·GPU 기본값은 아직 미활성입니다.
-벡터 계산이 필요 없는 인덱스 구성 변경도 정확히 갱신하도록, 별도 불변 요청 계약과 판정 로직을
-소스 검증했습니다(266개·패키지 설치3개 PASS). 기존 요청과 중복 방지는 유지하며,
-[실제 실행 연결은 아직 진행 중](docs/architecture/LOCAL_EMBEDDING_INDEX_MEMBERSHIP_REFRESH.md)입니다.
+벡터가 이미 있어도 인덱스가 없거나 문항 구성이 바뀌면, 기존 벡터만 재사용해 갱신하는 경로를
+기존 작업 큐·등록·완료 기록까지 연결했습니다. 임시 PostgreSQL에서 새 계산 작업 없이 완료,
+중단 후 재개와 오래된 구성 거부를 검증했습니다. 기존 요청·중복 방지는 유지하며,
+[새 실행 경로의 운영 설치·활성화는 아직 별도](docs/architecture/LOCAL_EMBEDDING_INDEX_MEMBERSHIP_REFRESH.md)입니다.
 [전체 목표의 요구사항·증거·남은 작업](docs/status/SYSTEM_RAG_GOAL_REQUIREMENT_AUDIT_2026-10-15.md)을
 별도로 대조하며, 이 표의 일부 PASS를 전체 완료로 사용하지 않습니다.
 

@@ -236,20 +236,14 @@ sys.path.insert(0, str(installed))
 import eom_workflow.local_embedding_index_refresh as contract
 import eom_catalog_service.embedding_index_refresh_plan as planner
 from eom_workflow.local_embedding_request import parse_local_embedding_executable_request
-from eom_workflow.schemas import LocalEmbeddingAdmissionContractError
 for module in (contract, planner):
     assert Path(module.__file__).resolve().is_relative_to(installed)
 raw = Path(sys.argv[2]).read_bytes()
 request = contract.parse_index_refresh_request(json.loads(raw))
 assert contract.index_refresh_request_bytes(request) == raw
-try:
-    parse_local_embedding_executable_request(request)
-except LocalEmbeddingAdmissionContractError:
-    pass
-else:
-    raise AssertionError("contract-only successor must not activate native dispatch")
+assert parse_local_embedding_executable_request(request) == request
 assert not any(Path(value).is_relative_to(sys.argv[3]) for value in sys.path if value)
-print("INSTALLED_REFRESH_CONTRACT=PASS; NATIVE_DISPATCH=STILL_DENIED")
+print("INSTALLED_REFRESH_CONTRACT=PASS; PARSING_IS_NOT_AUTHORITY")
 """
     result = subprocess.run(
         [

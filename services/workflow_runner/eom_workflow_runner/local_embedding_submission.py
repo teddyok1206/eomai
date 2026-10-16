@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from eom_workflow.local_embedding_index_refresh import LocalEmbeddingIndexRefreshRequest
 from eom_workflow.local_embedding_request import LocalEmbeddingExecutableRequest
 from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
 from sqlalchemy.orm import Session
@@ -85,6 +86,8 @@ def start_local_embedding_in_session(
         executor=executor,
     )
     if not scope.plan.demands:
+        if isinstance(scope.request, LocalEmbeddingIndexRefreshRequest):
+            raise ValueError("LOCAL_EMBEDDING_REFRESH_AVAILABLE_WITNESS_REQUIRED")
         late = resolve_local_embedding_submission_controls(
             session,
             definition=definition,

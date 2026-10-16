@@ -29,6 +29,10 @@ from eom_workflow.local_embedding_execution_policy import (
     LocalEmbeddingExecutablePolicy,
     parse_local_embedding_executable_policy,
 )
+from eom_workflow.local_embedding_index_refresh import (
+    LocalEmbeddingIndexRefreshRequest,
+    validate_index_refresh_request_basis,
+)
 from eom_workflow.local_embedding_request import (
     LocalEmbeddingExecutableRequest,
     parse_local_embedding_executable_request,
@@ -37,6 +41,7 @@ from eom_workflow.local_embedding_request import (
 from eom_workflow.local_embedding_source_plan import (
     LOCAL_EMBEDDING_SOURCE_PLAN_SCHEMA_REF,
     LocalEmbeddingSourcePlan,
+    validate_local_embedding_selected_index_coverage,
 )
 from eom_workflow.models import JobId, StepRunId, WorkflowId
 from eom_workflow.schemas import (
@@ -61,6 +66,7 @@ class ResolvedNativeIndexCoverage:
 
     index: EmbeddingIndexManifest
     eligible_sources: tuple[PopulationSource, ...]
+    previous: tuple[ArtifactMemberPointer, EmbeddingIndexManifest] | None = None
 
 
 def _hash(value: NativeEmbeddingContract, field: str, maximum: int) -> None:
@@ -233,6 +239,10 @@ def validate_local_embedding_workflow_receipt(
         TypeAdapter(JobId).validate_python(receipt_owner_job_id),
     )
     command = receipt.registration_command
+    if isinstance(request, LocalEmbeddingIndexRefreshRequest) and (
+        index_coverage is None or launch_association is not None or owned_input is not None
+    ):
+        raise ValueError("membership refresh requires full canonical coverage and no encoding")
     if (
         (receipt.workflow_id, receipt.step_run_id, receipt.receipt_owner_job_id) != expected_ids
         or receipt.workflow_definition_sha256 != request.workflow_definition_sha256
@@ -293,19 +303,17 @@ def validate_local_embedding_workflow_receipt(
             )
         ):
             raise ValueError("native completion full index or corpus differs")
-        for demand in plan.demands:
-            binding = bindings.get(demand.source_revision_id)
-            if (
-                binding is None
-                or binding.source != sources[demand.source_revision_id]
-                or binding.encoding != demand.encoding
-                or binding.profile != demand.profile
-                or binding.solution_evidence != demand.solution_evidence
-                or binding.graph_snapshot != plan.graph_snapshot
-                or binding.policy_revision_id != plan.access_policy_revision_id
-                or binding.policy_sha256 != plan.access_policy_sha256
-            ):
-                raise ValueError("native completion index does not cover an exact selected demand")
+        validate_local_embedding_selected_index_coverage(plan, index)
+        if isinstance(request, LocalEmbeddingIndexRefreshRequest):
+            validate_index_refresh_request_basis(
+                request,
+                eligible_source_set_sha256=population_sha256(index_coverage.eligible_sources),
+                eligible_source_count=len(index_coverage.eligible_sources),
+                available_bindings=index.bindings,
+                previous=index_coverage.previous,
+            )
+            if index.previous_manifest != request.reconciliation_basis.previous_index_manifest:
+                raise ValueError("refresh receipt predecessor differs from original intent")
     if launch_association is not None:
         assert owned_input is not None
         association = LocalEmbeddingLaunchAssociation.model_validate(launch_association)

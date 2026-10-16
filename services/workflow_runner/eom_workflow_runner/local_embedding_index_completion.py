@@ -27,7 +27,6 @@ from eom_catalog_service.local_embedding_encoding_artifacts import (
 from eom_identifiers import (
     canonical_json_bytes,
     content_sha256,
-    new_revision_id,
     sha256_bytes,
 )
 from eom_orchestrator.embedding_artifact_store import (
@@ -56,8 +55,15 @@ from eom_workflow.local_embedding_encoding_job import (
     EmbeddingEncodingReadResult,
     LocalEmbeddingLaunchIntent,
 )
+from eom_workflow.local_embedding_index_refresh import (
+    LocalEmbeddingIndexRefreshRequest,
+    validate_index_refresh_request_basis,
+)
 from eom_workflow.local_embedding_request import (
     LocalEmbeddingExecutableRequest,
+)
+from eom_workflow.local_embedding_source_plan import (
+    validate_local_embedding_selected_index_coverage,
 )
 from eom_workflow.local_embedding_workflow_receipt import (
     LocalEmbeddingStepOutput,
@@ -153,7 +159,7 @@ class NativeEmbeddingIndexCompletion:
         publications: NativeEmbeddingPublications,
     ) -> LocalEmbeddingStepOutput:
         with fenced_transaction() as session:
-            self._current(
+            sources = self._current(
                 session,
                 workflow_id=workflow.workflow_id,
                 step_run_id=step.step_run_id,
@@ -171,9 +177,13 @@ class NativeEmbeddingIndexCompletion:
                 selected = tuple(
                     (r.owned_job, r.completion) for r in readings if r.completion is not None
                 )
-                new_shards = CatalogLocalEmbeddingEncodingArtifacts(
-                    session, self.owner.settings
-                ).resolve_shared_row_shards(selected)
+                new_shards = (
+                    CatalogLocalEmbeddingEncodingArtifacts(
+                        session, self.owner.settings
+                    ).resolve_shared_row_shards(selected)
+                    if selected
+                    else ()
+                )
                 rows = {r.encoding.encoding_sha256: r for r in basis.reusable_rows}
                 for reading in readings:
                     assert reading.completion is not None
@@ -189,13 +199,22 @@ class NativeEmbeddingIndexCompletion:
                     if pointer in shards and shards[pointer] != manifest:
                         raise ValueError("LOCAL_EMBEDDING_EXECUTOR_SHARD_CONFLICT")
                     shards[pointer] = manifest
-                created = datetime.now(UTC)
+                # A local file survives SQL rollback. Keep the candidate stable
+                # from the committed allocation, including a pre-checkpoint crash.
+                created = allocation.created_at
+                producer = allocation.index_producer.model_dump(mode="json")
                 index_id = (
-                    "embeddingindex_" + new_revision_id().removeprefix("rev_")
+                    "embeddingindex_"
+                    + content_sha256({"purpose": "NATIVE_INDEX_ENTITY", "producer": producer})[-32:]
                     if basis.previous is None
                     else basis.previous[1].index_id
                 )
-                revision_id = "embeddingindexrev_" + new_revision_id().removeprefix("rev_")
+                revision_id = (
+                    "embeddingindexrev_"
+                    + content_sha256({"purpose": "NATIVE_INDEX_REVISION", "producer": producer})[
+                        -32:
+                    ]
+                )
                 assembled = assemble_embedding_index_revision(
                     basis.full_plan,
                     available_rows=tuple(rows.values()),
@@ -205,6 +224,19 @@ class NativeEmbeddingIndexCompletion:
                     previous=basis.previous,
                     created_at=created,
                 )
+                validate_local_embedding_selected_index_coverage(
+                    sources.admission.plan, assembled.index
+                )
+                if isinstance(request, LocalEmbeddingIndexRefreshRequest):
+                    if readings:
+                        raise ValueError("LOCAL_EMBEDDING_REFRESH_ENCODING_FORBIDDEN")
+                    validate_index_refresh_request_basis(
+                        request,
+                        eligible_source_set_sha256=basis.full_plan.source_set_sha256,
+                        eligible_source_count=len(basis.full_plan.sources),
+                        available_bindings=assembled.index.bindings,
+                        previous=basis.previous,
+                    )
                 publications.artifacts.stage_index_manifest(
                     index=assembled.index, workspace=workspace
                 )
@@ -366,7 +398,9 @@ class NativeEmbeddingIndexCompletion:
                 receipt_owner_job_id=allocation.receipt_producer.job_id,
                 launch_association=association,
                 owned_input=native_input,
-                index_coverage=ResolvedNativeIndexCoverage(resolved.index, resolved.sources),
+                index_coverage=ResolvedNativeIndexCoverage(
+                    resolved.index, resolved.sources, resolved.previous
+                ),
             )
             output = publications.completions.publish(
                 receipt, identity=native_publication_identity(allocation.receipt_producer)
@@ -446,6 +480,8 @@ class NativeEmbeddingIndexCompletion:
             self.owner.catalog,
         )
         association = read_native_embedding_launch_association(session, launch.intent, request)
+        if isinstance(request, LocalEmbeddingIndexRefreshRequest) and association is not None:
+            raise ValueError("LOCAL_EMBEDDING_REFRESH_ENCODING_FORBIDDEN")
         native_input = None
         if association is not None:
             reservations = self._reservations(request, launch.intent, command_lease)
@@ -483,7 +519,9 @@ class NativeEmbeddingIndexCompletion:
             receipt_owner_job_id=allocation.receipt_producer.job_id,
             launch_association=association,
             owned_input=native_input,
-            index_coverage=ResolvedNativeIndexCoverage(resolved.index, resolved.sources),
+            index_coverage=ResolvedNativeIndexCoverage(
+                resolved.index, resolved.sources, resolved.previous
+            ),
         )
         self.owner.fence_mutation(session, request, command_lease)
         return output

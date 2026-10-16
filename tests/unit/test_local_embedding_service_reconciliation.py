@@ -11,6 +11,7 @@ from typing import cast
 from unittest.mock import Mock
 
 import pytest
+from eom_catalog_service.embedding_incremental_plan import RegisteredEmbeddingRow
 from eom_catalog_service.embedding_registry_indexing_authority import (
     CatalogIndexingRegistrySourceAuthority,
 )
@@ -22,6 +23,7 @@ from eom_catalog_service.embedding_registry_ports import (
 )
 from eom_orchestrator.models import ArtifactRevisionRecord, Base, JobRecord
 from eom_orchestrator.native_embedding_index_systemd import FixedNativeIndexLauncher
+from eom_workflow.local_embedding_request import parse_local_embedding_executable_request
 from eom_workflow_runner import local_embedding_service_reconciliation as application
 from eom_workflow_runner.local_embedding_native_executor import CatalogNativeEmbeddingExecutor
 from eom_workflow_runner.local_embedding_service_reconciliation import ReconciliationState
@@ -34,6 +36,11 @@ from eom_workflow_runner.models import (
 from eom_workflow_runner.repository import import_workflow_definition
 from sqlalchemy import Table, func, select
 
+from tests.unit.inference_transfer_embedding_fixtures import (
+    index_manifest,
+    index_pointer,
+    source_binding,
+)
 from tests.unit.test_local_embedding_runner_admission import scope_fixture
 from tests.unit.test_local_embedding_service_owner import service_owner as service_owner
 from tests.unit.test_local_indexing_runtime_admission import installed as installed
@@ -81,7 +88,24 @@ def reconciliation(service_owner, monkeypatch):
         )
         for demand in c.fixture.base.plan.demands
     )
-    current = SimpleNamespace(keys=keys, published=True, unavailable=False)
+    full_bindings = tuple(
+        sorted(
+            (
+                source_binding(entry, view=request.namespace.view, space=request.space)
+                for entry in c.current.entries
+            ),
+            key=lambda value: value.source.item_revision_id,
+        )
+    )
+    existing_index = index_manifest(
+        *full_bindings, view=request.namespace.view, space=request.space
+    )
+    current = SimpleNamespace(
+        keys=keys,
+        published=True,
+        unavailable=False,
+        previous=(index_pointer(existing_index), existing_index),
+    )
 
     def current_lookup(gate, session, configuration):
         gate.authorize_scope(session, c.owner.registry_caller(request), query, configuration)
@@ -90,18 +114,39 @@ def reconciliation(service_owner, monkeypatch):
     def prepare(session, caller, actual_query, verifier):
         assert actual_query == query and verifier is c.owner.catalog
         c.source_authority.authorize_scope(session, caller, query, c.owner.configuration.registry)
+        missing_ids = {key.item_revision_id for key in current.keys}
+        bindings = (
+            ()
+            if current.unavailable
+            else tuple(
+                source_binding(entry, view=request.namespace.view, space=request.space)
+                for entry in c.current.entries
+                if entry.profile.source_basis.source.item_revision_id not in missing_ids
+            )
+        )
         return PreparedEmbeddingBindingLookup(
             MissingEmbeddingBindings(
                 current.keys,
-                (),
+                tuple(
+                    RegisteredEmbeddingRow(binding.encoding, binding.row_ref)
+                    for binding in {
+                        value.encoding.encoding_sha256: value for value in bindings
+                    }.values()
+                ),
                 len(c.current.sources),
                 0 if current.unavailable else len(c.current.entries),
             ),
             c.current,
+            bindings,
         )
 
     monkeypatch.setattr(CatalogIndexingRegistrySourceAuthority, "current_lookup", current_lookup)
     monkeypatch.setattr(application, "prepare_missing_embedding_bindings", prepare)
+    monkeypatch.setattr(
+        c.owner.catalog,
+        "resolve_indexing_namespace_predecessor",
+        lambda session, caller, query: current.previous,
+    )
     launcher = Mock(spec=FixedNativeIndexLauncher)
     executor = CatalogNativeEmbeddingExecutor(
         owner=c.owner,
@@ -152,7 +197,7 @@ def test_bounded_targets_are_stable_and_exclude_already_bound_sources(reconcilia
         assert revision is not None
         actual = c.source.owner.resolve_submission(
             session,
-            application.parse_local_embedding_service_workflow_request(workflow.initial_request),
+            parse_local_embedding_executable_request(workflow.initial_request),
         )
         assert tuple(source.item_revision_id for source in actual.plan.sources) == (
             c.current.keys[0].item_revision_id,
@@ -196,6 +241,81 @@ def test_revocation_denies_even_noop_and_does_not_invent_success(reconciliation)
     with pytest.raises(ValueError, match="FORBIDDEN"):
         c.app.run_once()
     assert counts(c) == before
+
+
+@pytest.mark.parametrize("kind", ["missing", "withdrawal"])
+def test_registered_bindings_refresh_missing_or_changed_namespace_without_model(
+    reconciliation, kind
+):
+    c = reconciliation
+    c.current.keys = ()
+    if kind == "missing":
+        c.current.previous = None
+    else:
+        c.source.current = replace(
+            c.source.current,
+            sources=c.source.current.sources[:1],
+            entries=c.source.current.entries[:1],
+        )
+    before = counts(c)
+    first, second = c.app.run_once(), c.app.run_once()
+    assert first.state is ReconciliationState.QUEUED
+    assert second.state is ReconciliationState.REPLAYED
+    assert first.workflow_id == second.workflow_id and first.command_id == second.command_id
+    assert first.index_refresh_reason == (
+        "MISSING_NAMESPACE_INDEX" if kind == "missing" else "INDEX_MEMBERSHIP_CHANGED"
+    )
+    assert first.missing_binding_count == 0 and first.selected_target_count == 1
+    assert first.reusable_encoding_count > 0
+    assert counts(c) == (1, 1, before[2] + 1)
+    with c.source.publisher.sessions() as session:
+        workflow = session.get(WorkflowInstanceRecord, first.workflow_id)
+        request = parse_local_embedding_executable_request(workflow.initial_request)
+        assert request.schema_version == "local-embedding-workflow-request/1.3"
+        basis = request.reconciliation_basis
+        assert (
+            basis.eligible_source_count
+            == basis.available_binding_count
+            == (2 if kind == "missing" else 1)
+        )
+        assert (basis.previous_index_manifest is None) is (kind == "missing")
+    c.launcher.run.assert_not_called()
+
+
+def test_same_witness_plan_but_new_membership_is_not_old_success_equivalent(reconciliation):
+    """Terminal fixtures are synthetic; no production state is repaired."""
+    c = reconciliation
+    c.current.keys, c.current.previous = (), None
+    first = c.app.run_once()
+    with c.source.publisher.sessions.begin() as session:
+        workflow = session.get(WorkflowInstanceRecord, first.workflow_id)
+        command = session.get(WorkflowCommandRecord, first.command_id)
+        workflow.state, command.state = "COMPLETED", "SUCCEEDED"
+        old_plan = workflow.initial_request["source_plan"]
+    c.source.current = replace(
+        c.source.current,
+        sources=c.source.current.sources[:1],
+        entries=c.source.current.entries[:1],
+    )
+    second = c.app.run_once()
+    assert second.state is ReconciliationState.QUEUED
+    assert first.workflow_id != second.workflow_id and first.command_id != second.command_id
+    with c.source.publisher.sessions() as session:
+        workflow = session.get(WorkflowInstanceRecord, second.workflow_id)
+        assert workflow.initial_request["source_plan"] == old_plan
+        assert workflow.initial_request["reconciliation_basis"]["eligible_source_count"] == 1
+        assert session.get(WorkflowInstanceRecord, first.workflow_id).state == "COMPLETED"
+    c.launcher.run.assert_not_called()
+
+
+def test_missing_head_still_requires_current_permission_and_leaves_no_work(reconciliation):
+    c = reconciliation
+    c.current.keys, c.current.previous, c.source.deny = (), None, True
+    before = counts(c)
+    with pytest.raises(ValueError, match="FORBIDDEN"):
+        c.app.run_once()
+    assert counts(c) == before
+    c.launcher.run.assert_not_called()
 
 
 def test_accepted_report_arrival_becomes_new_work_without_fake_coverage(reconciliation):
@@ -246,8 +366,11 @@ def test_plan_survives_failure_before_submission_and_retry_reuses_it(reconciliat
     assert counts(c) == (1, 1, before[2] + 1)
 
 
-def test_terminal_failed_history_is_returned_not_replaced(reconciliation):
+@pytest.mark.parametrize("refresh", [False, True])
+def test_terminal_failed_history_is_returned_not_replaced(reconciliation, refresh):
     c = reconciliation
+    if refresh:
+        c.current.keys, c.current.previous = (), None
     first = c.app.run_once()
     # Unit-only terminal-state fixture; no production/history repair operation.
     with c.source.publisher.sessions.begin() as session:
@@ -280,9 +403,7 @@ def test_new_key_does_not_bypass_successful_equivalence_for_same_original_intent
         result = application.start_local_embedding_in_session(
             session,
             definition=definition,
-            request=application.parse_local_embedding_service_workflow_request(
-                workflow.initial_request
-            ),
+            request=parse_local_embedding_executable_request(workflow.initial_request),
             idempotency_key="synthetic-new-key-must-not-rerun-success",
             actor_type=workflow.created_actor_type,
             actor_id=workflow.created_actor_id,

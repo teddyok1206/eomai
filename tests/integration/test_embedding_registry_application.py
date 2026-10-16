@@ -534,7 +534,7 @@ def test_atomic_registration_historical_replay_and_stale_identity_map(
         )
 
 
-def test_actual_bounded_lookup_statement_count_and_index_antijoin(guarded_engine: Engine) -> None:
+def test_actual_bounded_lookup_reads_bindings_then_encodings_once(guarded_engine: Engine) -> None:
     command, capture = _fixture(guarded_engine)
     owner = MetadataVerifier(capture)
     with Session(guarded_engine) as session, session.begin():
@@ -560,9 +560,52 @@ def test_actual_bounded_lookup_statement_count_and_index_antijoin(guarded_engine
             assert not result.missing and len(result.reusable_rows) == 1
     finally:
         event.remove(guarded_engine, "before_cursor_execute", observe)
-    assert len(statements) == 3
-    assert "VALUES" in statements[-1] and "NOT (EXISTS" in statements[-1]
-    assert "metadata_json" not in statements[-1] and "vectors" not in statements[-1]
+    assert len(statements) == 2
+    assert "embedding_source_bindings" in statements[0] and " IN (" in statements[0]
+    assert "embedding_encodings" in statements[1] and " IN (" in statements[1]
+    assert not any(
+        "metadata_json" in statement or "vectors" in statement for statement in statements
+    )
+
+
+@pytest.mark.parametrize("phase", ["bindings", "encodings"])
+def test_actual_independent_writer_commit_keeps_discovery_coherent(
+    guarded_engine, monkeypatch, phase
+):
+    from eom_catalog_service.embedding_registry_application import (
+        prepare_missing_embedding_bindings,
+    )
+
+    command, capture = _fixture(guarded_engine)
+    owner = MetadataVerifier(capture)
+    query = EmbeddingRegistryLookup(
+        command.corpus_id,
+        command.namespace,
+        command.graph_snapshot,
+        command.policy_revision_id,
+        command.policy_sha256,
+    )
+    from eom_catalog_service.embedding_registry_repository import EmbeddingRegistryRepository
+
+    original = getattr(EmbeddingRegistryRepository, phase)
+    committed = False
+
+    def read_then_commit(repository, keys):
+        nonlocal committed
+        captured = original(repository, keys)
+        if not committed:
+            committed = True
+            with Session(guarded_engine) as writer, writer.begin():
+                register_embedding_index(writer, CALLER, command, owner, now=NOW)
+        return captured
+
+    monkeypatch.setattr(EmbeddingRegistryRepository, phase, read_then_commit)
+    with Session(guarded_engine) as reader, reader.begin():
+        first = prepare_missing_embedding_bindings(reader, CALLER, query, owner)
+        assert len(first.observation.missing) == 1 and not first.bindings
+        second = prepare_missing_embedding_bindings(reader, CALLER, query, owner)
+        assert not second.observation.missing and len(second.bindings) == 1
+        assert len(second.observation.reusable_rows) == 1
 
 
 def test_service_actor_uses_same_real_registration_replay_and_missing_lookup(

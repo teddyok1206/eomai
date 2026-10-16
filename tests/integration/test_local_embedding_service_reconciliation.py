@@ -50,6 +50,7 @@ from sqlalchemy import event, select
 from tests.integration.test_preset_model_validation_persistence import (
     guarded_engine as guarded_engine,
 )
+from tests.unit.inference_transfer_embedding_fixtures import source_binding
 from tests.unit.test_local_embedding_control_artifacts import NOW
 from tests.unit.test_local_embedding_runner_admission import scope_fixture
 from tests.unit.test_local_embedding_service_owner import service_owner as service_owner
@@ -132,19 +133,32 @@ def reconciliation(guarded_engine, service_owner, tmp_path, monkeypatch):
         )
         for demand in c.fixture.base.plan.demands
     )
+    observation = SimpleNamespace(missing=keys, previous=None)
 
     def prepare(session, supplied_caller, selected, verifier):
         assert verifier is owner.catalog
         authorize(session, supplied_caller, selected)
         return PreparedEmbeddingBindingLookup(
-            MissingEmbeddingBindings(keys, (), len(c.current.sources), len(keys)), c.current
+            MissingEmbeddingBindings(observation.missing, (), len(c.current.sources), len(keys)),
+            c.current,
+            ()
+            if observation.missing
+            else tuple(
+                source_binding(entry, view=request.namespace.view, space=request.space)
+                for entry in c.current.entries
+            ),
         )
+
+    def predecessor(session, supplied_caller, selected):
+        authorize(session, supplied_caller, selected)
+        return observation.previous
 
     monkeypatch.setattr(owner.catalog, "authorize_scope", authorize)
     monkeypatch.setattr(owner.catalog, "resolve_lookup", lookup)
     monkeypatch.setattr(owner.catalog, "resolve_selected_sources", selected_lookup)
     monkeypatch.setattr(CatalogIndexingRegistrySourceAuthority, "current_lookup", current_lookup)
     monkeypatch.setattr(application, "prepare_missing_embedding_bindings", prepare)
+    monkeypatch.setattr(owner.catalog, "resolve_indexing_namespace_predecessor", predecessor)
     _scope, compiled = scope_fixture()
     with publisher.sessions.begin() as session:
         import_workflow_definition(session, compiled)
@@ -157,7 +171,9 @@ def reconciliation(guarded_engine, service_owner, tmp_path, monkeypatch):
         source_commit=source_commit,
     )
     app = application.LocalEmbeddingServiceReconciliation(executor)
-    return SimpleNamespace(app=app, publisher=publisher, launcher=launcher, source=c)
+    return SimpleNamespace(
+        app=app, publisher=publisher, launcher=launcher, source=c, observation=observation
+    )
 
 
 def test_actual_independent_roots_reconcile_one_workflow_and_start(reconciliation):
@@ -183,6 +199,38 @@ def test_actual_independent_roots_reconcile_one_workflow_and_start(reconciliatio
         )
         assert workflow.created_actor_type == "local_indexing_service"
         assert len(commands) == 1 and commands[0].command_id == first.command_id
+    c.launcher.run.assert_not_called()
+
+
+def test_actual_independent_roots_submit_one_metadata_refresh_without_encoding(reconciliation):
+    c = reconciliation
+    c.observation.missing = ()
+    barrier = Barrier(2)
+
+    def run(_ordinal):
+        barrier.wait(timeout=30)
+        return c.app.run_once()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, second = tuple(pool.map(run, range(2)))
+    assert {first.state, second.state} == {ReconciliationState.QUEUED, ReconciliationState.REPLAYED}
+    assert first.workflow_id == second.workflow_id and first.command_id == second.command_id
+    assert first.missing_binding_count == second.missing_binding_count == 0
+    assert first.index_refresh_reason == second.index_refresh_reason == "MISSING_NAMESPACE_INDEX"
+    with c.publisher.sessions() as session:
+        workflow = session.get(WorkflowInstanceRecord, first.workflow_id)
+        assert workflow.initial_request["schema_version"] == "local-embedding-workflow-request/1.3"
+        selected = peek_command_candidate(
+            session,
+            family=CommandExecutionFamily.LOCAL_EMBEDDING,
+            workflow_id=workflow.workflow_id,
+            actor_selection=NativeCommandActorSelection(
+                "local_indexing_service",
+                workflow.created_actor_id,
+                c.source.scope.request.namespace,
+            ),
+        )
+        assert selected is not None and selected.command_id == first.command_id
     c.launcher.run.assert_not_called()
 
 

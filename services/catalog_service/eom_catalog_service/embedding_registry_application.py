@@ -610,8 +610,10 @@ def _prepare_missing_embedding_bindings(
         )
     selected = tuple(keys)
     repository = EmbeddingRegistryRepository(session)
-    encodings = repository.encodings(tuple(sorted({key.encoding_sha256 for key in selected})))
+    # Capture immutable associations first: their committed FK targets are visible
+    # to the next statement. Do not mix these origins with a later anti-join view.
     bindings = repository.bindings(selected)
+    encodings = repository.encodings(tuple(sorted({key.encoding_sha256 for key in selected})))
     origins = tuple(binding_origin(bindings[key]) for key in sorted(bindings))
     rows = tuple(registered_row(encodings[key]) for key in sorted(encodings))
     expected_encodings = {
@@ -628,6 +630,7 @@ def _prepare_missing_embedding_bindings(
         tuple(value.binding for value in verified.origins), checked_entries, verified.shards
     )
     selected_set = set(selected)
+    bound_keys: set[EmbeddingBindingLookupKey] = set()
     for value in verified.origins:
         binding = parse_embedding_binding(value.binding.model_dump(mode="json"))
         record = bindings.get(binding.binding_sha256)
@@ -637,9 +640,10 @@ def _prepare_missing_embedding_bindings(
             or _key(binding) not in selected_set
         ):
             _fail("EMBEDDING_REGISTRY_POINTER_INVALID")
-        row = encodings[binding.encoding.encoding_sha256]
+        row = encodings.get(binding.encoding.encoding_sha256)
         if (
-            registered_row(row).row_ref != binding.row_ref
+            row is None
+            or registered_row(row).row_ref != binding.row_ref
             or binding.graph_snapshot != query.graph_snapshot
         ):
             _fail("EMBEDDING_REGISTRY_POINTER_INVALID")
@@ -649,9 +653,17 @@ def _prepare_missing_embedding_bindings(
             or sources.get(binding.source.item_revision_id) != binding.source
         ):
             _fail("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
-    missing = repository.missing_bindings(selected)
+        bound_keys.add(_key(binding))
+    missing = tuple(key for key in selected if key not in bound_keys)
     return PreparedEmbeddingBindingLookup(
-        MissingEmbeddingBindings(missing, rows, len(sources), len(selected)), resolved
+        MissingEmbeddingBindings(missing, rows, len(sources), len(selected)),
+        resolved,
+        tuple(
+            sorted(
+                (value.binding for value in verified.origins),
+                key=lambda value: value.source.item_revision_id,
+            )
+        ),
     )
 
 

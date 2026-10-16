@@ -1,4 +1,4 @@
-"""Membership-refresh intent only; not registered with executable native dispatch."""
+"""Membership-refresh intent; only the actual current service owner may admit work."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from jsonschema.exceptions import ValidationError as SchemaError
 from pydantic import Field, model_validator
 from referencing import Resource
 
-from eom_workflow.local_embedding_request import LocalEmbeddingServiceWorkflowRequest
+from eom_workflow.local_embedding_request_values import LocalEmbeddingServiceWorkflowRequest
 from eom_workflow.schemas import NativeEmbeddingContract, local_embedding_admission_schema_registry
 
 INDEX_REFRESH_REQUEST_SCHEMA_REF = "eom://schemas/workflow/local-embedding-workflow-request/1.3"
@@ -110,7 +110,7 @@ class LocalEmbeddingIndexRefreshRequest(LocalEmbeddingServiceWorkflowRequest):
 
 
 def parse_index_refresh_request(value: object) -> LocalEmbeddingIndexRefreshRequest:
-    """Parse proposed metadata only; executable dispatch intentionally still denies1.3."""
+    """Parse metadata only; current runtime/source admission is always separate."""
     try:
         return LocalEmbeddingIndexRefreshRequest.model_validate(value)
     except Exception:

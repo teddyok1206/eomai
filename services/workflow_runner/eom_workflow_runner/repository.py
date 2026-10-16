@@ -200,6 +200,7 @@ def _native_workflow_filter() -> ColumnElement[bool]:
         "local-embedding-workflow-request/1.0",
         "local-embedding-workflow-request/1.1",
         "local-embedding-workflow-request/1.2",
+        "local-embedding-workflow-request/1.3",
         "reference-query-workflow-request/1.0",
     )
     native_keys = (LOCAL_EMBEDDING_WORKFLOW_KEY, REFERENCE_QUERY_WORKFLOW_KEY)
