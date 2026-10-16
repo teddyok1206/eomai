@@ -9,6 +9,15 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Source checkpoint18:04 UTC: protocol-first CUDA-only ROOTLOCAL receipt2.0,
+  frozen device/shared-lease/process metadata and exact config/inventory/proof/
+  bundle/host/base/raw/semantic reference closure now421 focused PASS, strict2/
+  Ruff/format PASS. CPU1.0 schema/raw/canonical semantics and strict rejection of
+  CUDA remain; no catalog registry/released schema rewrite. SOURCE_PASS only:
+  no actual seal/reader/probe/kernel/device/shared-lease or numerical authority.
+  All active CPU/API/INDEX/QUERY/source policies unchanged; C1–C5/six real runs/
+  conditional default remain open.
+  [Design, exact scope and next native boundary](../architecture/NATIVE_CUDA_INSTALLATION_ADMISSION_DESIGN.md).
 - Actual checkpoint17:45:35 UTC: supported97cddd56 readonly staged-prefix audit
   terminal exit0, host/full byte/ELF receipts PASS. Same B41/31Conda/70public/lease
   prefix,31556 entries/27983 regular/287ELF/7084538375 payload bytes. New8.9MB

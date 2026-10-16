@@ -195,13 +195,16 @@ def _validate_draft(
     ).validate(document)
 
 
-class _EvidenceValue(FrozenModel):
+class RootLocalEvidenceValue(FrozenModel):
     model_config = ConfigDict(revalidate_instances="always")
 
     @model_validator(mode="before")
     @classmethod
     def preserve_raw_fields(cls, value: object) -> object:
         return _raw_metadata(value)
+
+
+_EvidenceValue = RootLocalEvidenceValue
 
 
 def _hash(value: FrozenModel, field: str, maximum: int) -> None:
@@ -229,6 +232,14 @@ def _utc(value: str) -> str:
         raise ValueError("ROOTLOCAL UTC spelling differs")
     TypeAdapter(UtcDatetime).validate_python(value)
     return value
+
+
+# Explicit shared ROOTLOCAL codec: callers fix schema pins and bounds, never requests.
+parse_rootlocal_evidence_document = _document
+validate_rootlocal_evidence_schema = _validate_draft
+validate_rootlocal_evidence_hash = _hash
+validate_rootlocal_evidence_utc = _utc
+rootlocal_evidence_values = _raw_metadata
 
 
 class RootLocalPrefixInventoryEntry(_EvidenceValue):
@@ -352,17 +363,15 @@ class RootLocalPrefixInventoryPin(_EvidenceValue):
     inventory_sha256: _EvidenceSha
 
 
-class RootLocalNativeUnitProbeMetadata(_EvidenceValue):
-    """Declared unit facts, not independent observations or a successful execution grant."""
+class RootLocalNativeUnitFacts(_EvidenceValue):
+    """Shared declared process/runtime/termination facts, not an observed unit or grant."""
 
-    recipe: Literal["NATIVE_CPU_FIXED_UNIT_NO_MODEL_NO_FORWARD_NEGATIVES/1.0"]
     execution_id: str = Field(pattern=r"^[0-9a-f]{32}$", min_length=32, max_length=32)
     invocation_id: str = Field(pattern=r"^[0-9a-f]{32}$", min_length=32, max_length=32)
     pid: int = Field(ge=1, le=2147483647, strict=True)
     start_time_ticks: _Positive64
     worker_uid: int = Field(ge=1, le=4294967294, strict=True)
     worker_gid: int = Field(ge=1, le=4294967294, strict=True)
-    supplementary_gids: tuple[int, ...] = Field(max_length=0)
     unit_template_sha256: _EvidenceSha
     probe_code_sha256: _EvidenceSha
     effective_policy_sha256: _EvidenceSha
@@ -382,6 +391,13 @@ class RootLocalNativeUnitProbeMetadata(_EvidenceValue):
     @classmethod
     def valid_utc(cls, value: str) -> str:
         return _utc(value)
+
+
+class RootLocalNativeUnitProbeMetadata(RootLocalNativeUnitFacts):
+    """Strict CPU predecessor: neither its recipe nor empty groups admit CUDA."""
+
+    recipe: Literal["NATIVE_CPU_FIXED_UNIT_NO_MODEL_NO_FORWARD_NEGATIVES/1.0"]
+    supplementary_gids: tuple[int, ...] = Field(max_length=0)
 
 
 class RootLocalNativeAdmissionReceiptMetadata(_EvidenceValue):
