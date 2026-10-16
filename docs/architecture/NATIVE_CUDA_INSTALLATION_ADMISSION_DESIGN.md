@@ -698,3 +698,69 @@ Its terminal/process-query/resource observer wheel members exactly matched sourc
 Platform raw SHA `4152008b2e7e8b96200628f7763972df0f85d556d802ad8801cb3d87ba637005`.
 No operating or protected-owner installation was performed for this successor;
 the independently installed b8a82765 owner remains immutable and not activated.
+
+## Separate CUDA2.0 installation reader
+
+1. Extend the existing installation-admission reader with an explicit CUDA facade;
+   preserve CPU receipt1.0/config1.0–1.1 and its exact empty-group/prefix behavior.
+2. Canonical sources are root-protected independently accepted receipt/inventory,
+   exact config/proof/bundle/host snapshots, installed probe code/unit, current
+   boot/account and the same device/lease file identities.
+3. Keep config/receipt/inventory/proof/bundle logical/revision/raw/semantic pins
+   distinct. A reader is a held observation scope, not another registration/grant.
+4. Reuse pure CUDA2.0 reference closure, config1.2 and existing captured CUDA host
+   resolver/mount/ELF adapter. No latest fallback or default expected receipt hash.
+5. Fixed-key protected reads occur once; subsequent checks validate held epochs,
+   four node identities, one lease inode and account/boot without reparsing files.
+6. Share common metadata reads and inventory construction inside the existing
+   reader module. Reuse the existing resource-file adapter's PATH/directory checks
+   in a separate readonly capture that has no `assert_owned` or flock operation.
+7. Inventory construction is O(N) once, checks remain bounded existing O(N) plus
+   O(5) resource checks. Metadata bytes are temporary same-read references, not
+   copied artifacts/DB values or repeated model/member hashes.
+8. One facade owns its complete capture lifetime; construction/entry/current-state
+   failure closes all owned resource/host FDs, never another owner's physical lock.
+9. Readers neither import optional ML nor Orchestrator/process adapters, write,
+   publish/seal, submit work, acquire a GPU lease or activate a profile.
+10. Wrong family/config/raw/hash/host/mount/boot/group/node/closed state fails.
+    Receipt validation does not retroactively prove first-instruction safety;
+    current physical ownership remains mandatory in the separate native factory.
+11. Broadening CPU's existing reader or duplicating its protected-resolution code
+    would obscure family/ownership boundaries. Two explicit facades and shared
+    local IO primitives serve both real profiles without a new registry/framework.
+
+### Reader source checkpoint —2026-10-16
+
+Implemented `ProtectedNativeCudaEmbeddingInstallationAdmission` alongside the
+existing CPU-only facade in the existing admission module. The two share bounded
+inventory/config/proof/bundle reads and inventory construction, not profile policy.
+CUDA explicitly requires receipt2.0/config1.2 and independently supplied raw pin,
+validates CUDA/base host snapshot closure, holds the captured readonly cache/ELF
+host and rechecks boot/account/single lease group/current device/empty loader cwd.
+No default receipt, implicit profile dispatcher or runtime activation was added.
+
+The existing CUDA file adapter now supplies a separate installation-identity
+capture using its shared directory/PATH-device checks plus its own readonly lock
+file description. This scope acquires no flock and never treats the historical
+probe PID as the current owner. It has no `assert_owned`; a real factory integration
+test still rejects a valid reader when current physical ownership is absent.
+Its seven descriptors are owned/closed independently of any other process's lock.
+Both host/resource cleanup callbacks run after construction/entry/current-state
+failure even if one cleanup callback itself fails.
+
+Fresh combined source regression **1138 PASS51.62s** includes prior991; focused
+CPU57, combined97 and resource9 runs overlap and are not added. Strict2 changed
+production modules/Ruff/format/diff PASS. Fresh CPU-reader import loads neither
+CUDA infrastructure nor optional ML. All original CPU schema bytes, exact prefix,
+empty-group rule and no-reparse/epoch semantics remain unchanged.
+
+Early development issues were a misplaced class block before the CPU methods,
+a CPU-specific mount wrapper's incompatible CUDA type and missing interfaces on
+the fake kernel. Corrected placement and the existing generic mount adapter, then
+extended only the test double's missing flock/nonblock surface; production guards
+and existing CPU assertions were not weakened. Final full regression passed.
+
+This is **SOURCE_PASS / NOT_INSTALLED / NOT_ACTIVE**. There is still no actual
+CUDA2.0 sealed receipt, accepted numerical-prefix successor/full audit, actual
+probe/two-ACK/terminal-retirement acceptance, all-entrypoint migration or six-run
+GPU benchmark/default activation. Protected owner b8a82765 remains unchanged.

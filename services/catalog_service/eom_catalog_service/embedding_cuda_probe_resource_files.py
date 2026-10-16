@@ -251,6 +251,94 @@ def _close(descriptors: tuple[int, ...]) -> None:
         raise CudaProbeResourceFilesError("NATIVE_CUDA_RESOURCE_FILES_CLEANUP_UNCERTAIN")
 
 
+class CapturedCudaInstallationResourceFiles:
+    """Readonly installation identity only; no physical flock or numerical ownership interface."""
+
+    def __init__(
+        self,
+        directories: tuple[_Directory, _Directory],
+        devices: tuple[_Device, ...],
+        lease: RootLocalCudaSharedGpuLease,
+        lease_descriptor: int,
+    ) -> None:
+        self._directories, self._devices = directories, devices
+        self._lease, self._lease_descriptor, self._closed = lease, lease_descriptor, False
+
+    def assert_current(self) -> None:
+        _require(not self._closed)
+        for parent in self._directories:
+            parent.assert_current()
+        _require(self._directories[1].identity == self._lease.parent_epoch)
+        for device in self._devices:
+            device.assert_current(self._directories[0])
+        value = os.fstat(self._lease_descriptor)
+        named = os.stat("gpu0.lock", dir_fd=self._directories[1].descriptor, follow_symlinks=False)
+        _require(_epoch(value) == self._lease.lock_epoch == _epoch(named))
+        flags = fcntl.fcntl(self._lease_descriptor, fcntl.F_GETFL)
+        _require(flags & os.O_ACCMODE == os.O_RDONLY and not flags & os.O_PATH)
+        _require(bool(fcntl.fcntl(self._lease_descriptor, fcntl.F_GETFD) & fcntl.FD_CLOEXEC))
+
+    def close(self) -> None:
+        if not self._closed:
+            try:
+                self.assert_current()
+            finally:
+                self._closed = True
+                _close(
+                    tuple(d.descriptor for d in self._directories)
+                    + tuple(d.descriptor for d in self._devices)
+                    + (self._lease_descriptor,)
+                )
+
+
+def capture_cuda_installation_resource_files(
+    nodes: tuple[RootLocalCudaDeviceNode, ...],
+    lease: RootLocalCudaSharedGpuLease,
+) -> CapturedCudaInstallationResourceFiles:
+    """Hold the accepted installation's exact nodes/inode without acquiring any GPU lock."""
+    opened: list[int] = []
+    try:
+        nodes = tuple(RootLocalCudaDeviceNode.model_validate(node) for node in nodes)
+        lease = RootLocalCudaSharedGpuLease.model_validate(lease)
+        validate_rootlocal_cuda_resource_file_metadata(nodes, lease)
+        directories = []
+        for path in (_DEVICE_PARENT, _LEASE_PARENT):
+            descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+            opened.append(descriptor)
+            parent = _Directory(path, descriptor, _epoch(os.fstat(descriptor))[:5])
+            parent.assert_current()
+            directories.append(parent)
+        devices = []
+        for metadata in nodes:
+            descriptor = os.open(
+                Path(metadata.path).name,
+                os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC,
+                dir_fd=directories[0].descriptor,
+            )
+            opened.append(descriptor)
+            device = _Device(metadata, descriptor)
+            device.assert_current(directories[0])
+            devices.append(device)
+        descriptor = os.open(
+            "gpu0.lock",
+            os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
+            dir_fd=directories[1].descriptor,
+        )
+        opened.append(descriptor)
+        captured = CapturedCudaInstallationResourceFiles(
+            (directories[0], directories[1]), tuple(devices), lease, descriptor
+        )
+        captured.assert_current()
+        return captured
+    except BaseException as error:
+        _close(tuple(opened))
+        if isinstance(error, Exception):
+            raise CudaProbeResourceFilesError(
+                "NATIVE_CUDA_INSTALLATION_RESOURCE_CAPTURE_INVALID"
+            ) from None
+        raise
+
+
 class OpenedCudaProbeDeviceAccess:
     """Probe-only R/W descriptor and physical lease checks; never installation admission.
 
