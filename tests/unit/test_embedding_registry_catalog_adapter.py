@@ -37,6 +37,7 @@ from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryError,
     EmbeddingRegistryLookup,
     EmbeddingRegistryRead,
+    EmbeddingRegistryServiceCaller,
     RegisteredEmbeddingIndexRead,
     SelectedEmbeddingSources,
 )
@@ -69,7 +70,7 @@ from eom_identity_service import OperatorAuthorizationFenceError
 from eom_identity_service.operator_authorization_fence_sql import (
     OperatorAuthorizationFenceErrorCode,
 )
-from eom_operator_identity import PermissionKey
+from eom_operator_identity import LocalIndexingServiceReference, PermissionKey
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
 from sqlalchemy.orm import Session
 
@@ -443,6 +444,116 @@ def test_prepared_index_basis_uses_current_sources_and_exact_reusable_rows(
         InferenceTransferSessionCapturePhase.CAPTURE_POPULATION,
         InferenceTransferSessionCapturePhase.AUTHORIZE_SCOPE,
     ]
+
+
+@pytest.mark.parametrize(
+    "has_previous,fault",
+    [
+        (False, None),
+        (True, None),
+        (True, "raw"),
+        (True, "metadata"),
+        (True, "namespace"),
+        (True, "late"),
+    ],
+)
+def test_service_namespace_predecessor_reads_exact_member_without_corpus_projection(
+    owner: tuple[Any, ...], monkeypatch: pytest.MonkeyPatch, has_previous: bool, fault: str | None
+) -> None:
+    """Actual immutable member reader; service/source authority is explicitly synthetic."""
+    verifier, session, command, index, _binding, _scope, root = owner
+    caller = EmbeddingRegistryServiceCaller(
+        LocalIndexingServiceReference(
+            service_id="localindexservice_" + "1" * 32,
+            service_revision_id="localindexservicerev_" + "2" * 32,
+            service_identity_sha256="sha256:" + "3" * 64,
+        )
+    )
+    query = EmbeddingRegistryLookup(
+        command.corpus_id,
+        command.namespace,
+        command.graph_snapshot,
+        command.policy_revision_id,
+        command.policy_sha256,
+    )
+    registered = RegisteredEmbeddingIndexRead(
+        command.corpus_id,
+        command.namespace,
+        index.index_id,
+        index.index_revision_id,
+        command.index_manifest,
+        index.index_sha256,
+        command.graph_snapshot.graph_snapshot_revision_id,
+        command.policy_revision_id,
+        command.policy_sha256,
+        len(index.bindings),
+        command.binding_set_sha256,
+    )
+    if fault == "metadata":
+        registered = replace(registered, index_sha256="sha256:" + "0" * 64)
+    elif fault == "namespace":
+        registered = replace(
+            registered,
+            namespace=registered.namespace.model_copy(
+                update={"population_scope": "OCCURRENCE_BACKED_PAST_EXAM"}
+            ),
+        )
+    repository = Mock()
+    repository.current_namespace_revision.return_value = (registered, 2) if has_previous else None
+    monkeypatch.setattr(owner_module, "EmbeddingRegistryRepository", Mock(return_value=repository))
+    # This test injects a synthetic service capture, not a production credential.
+    verifier._indexing_source_authority = Mock()
+    capture = Mock(return_value=(PinnedArtifactReadContext(session, verifier.settings), None))
+    late = Mock()
+    monkeypatch.setattr(verifier, "_capture", capture)
+    monkeypatch.setattr(verifier, "authorize_scope", late)
+    if fault == "raw":
+        (
+            root
+            / command.index_manifest.artifact_id
+            / command.index_manifest.artifact_revision_id
+            / "index.json"
+        ).write_bytes(b"corrupt")
+    elif fault == "late":
+        late.side_effect = EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN")
+    if fault is not None:
+        with pytest.raises(EmbeddingRegistryError):
+            verifier.resolve_indexing_namespace_predecessor(session, caller, query)
+        repository.insert_components.assert_not_called()
+        repository.advance.assert_not_called()
+        return
+    previous = verifier.resolve_indexing_namespace_predecessor(session, caller, query)
+    assert previous == ((command.index_manifest, index) if has_previous else None)
+    capture.assert_called_once_with(
+        session, caller, query, InferenceTransferSessionCapturePhase.AUTHORIZE_SCOPE
+    )
+    late.assert_called_once_with(session, caller, query)
+    repository.current_namespace_revision.assert_called_once_with(
+        command.corpus_id, command.namespace
+    )
+    repository.encodings.assert_not_called()
+    repository.insert_components.assert_not_called()
+    repository.advance.assert_not_called()
+
+
+def test_operator_cannot_call_service_namespace_predecessor_before_any_io(
+    owner: tuple[Any, ...], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    verifier, session, command, _index, _binding, _scope, _root = owner
+    capture = Mock(side_effect=AssertionError("wrong authority cannot capture or read"))
+    monkeypatch.setattr(verifier, "_capture", capture)
+    query = EmbeddingRegistryLookup(
+        command.corpus_id,
+        command.namespace,
+        command.graph_snapshot,
+        command.policy_revision_id,
+        command.policy_sha256,
+    )
+    with pytest.raises(EmbeddingRegistryError, match="FORBIDDEN"):
+        verifier.resolve_indexing_namespace_predecessor(
+            session, EmbeddingRegistryCaller("operator_" + "1" * 32), query
+        )
+    capture.assert_not_called()
 
 
 @pytest.mark.parametrize("fault", ["row", "binary", "late_fence", "predecessor"])

@@ -109,3 +109,26 @@ Remaining implementation is explicit: supported Catalog current-namespace read
 and same-root observation,1.3 owner admission/execution/completion/replay wiring,
 actual disposable-DB concurrency/crash/CAS and bounded operating acceptance. This
 checkpoint does not fix live no-work reporting or enable continuous indexing.
+
+## Supported Catalog predecessor read — source checkpoint
+
+`CatalogEmbeddingRegistryVerifier.resolve_indexing_namespace_predecessor` now
+provides the missing service-only official read. It authenticates through the
+existing source owner before lookup, selects the exact unique namespace head
+once, validates its registered canonical member and reauthorizes before return.
+It performs no corpus projection, vector read, model execution or registry write.
+An ordinary operator cannot call this INDEX-only owner operation as a substitute
+for the supported user-facing read boundary.
+
+The existing index-publication basis and this new read share one predecessor
+validator; namespace/space/recipe/metadata/hash checks were not copied into another
+adapter. Missing head returns absence; corrupt bytes, mismatched registered
+metadata/namespace and a late permission denial fail explicitly. Actual service
+capture is synthetic in the unit fixture, while immutable member reads are real
+temporary files. **184 source tests PASS/18.78s**, strict mypy1 module and Ruff/
+format PASS. This overlaps earlier contract tests; counts are not added together.
+
+This internal owner method is not yet selected by the operating d4846220 runtime.
+The1.3 admission/execution/completion and actual PostgreSQL/lifecycle gates above
+remain necessary. A new source candidate must not replace current original
+commands while they are nonterminal.

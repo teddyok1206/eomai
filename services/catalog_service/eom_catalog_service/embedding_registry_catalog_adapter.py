@@ -1196,6 +1196,55 @@ class CatalogEmbeddingRegistryVerifier:
         except (ValueError, TypeError, JsonSchemaError):
             raise SimilarityContextReadError("SOURCE_POINTER_INVALID") from None
 
+    def _namespace_predecessor(
+        self,
+        reader: PinnedArtifactReadContext,
+        repository: EmbeddingRegistryRepository,
+        query: EmbeddingRegistryLookup,
+    ) -> tuple[tuple[ArtifactMemberPointer, EmbeddingIndexManifest] | None, int]:
+        selected = repository.current_namespace_revision(query.corpus_id, query.namespace)
+        if selected is None:
+            return None, 1
+        registered, version = selected
+        index = self._read_index(reader, registered.index_manifest)
+        validate_registered_embedding_index_manifest(registered, index)
+        if (
+            registered.corpus_id != query.corpus_id
+            or registered.namespace != query.namespace
+            or index.space != self.configuration.space
+            or index.recipe != self.configuration.recipe
+        ):
+            raise ValueError("registered predecessor differs from its immutable namespace")
+        return (registered.index_manifest, index), version
+
+    def resolve_indexing_namespace_predecessor(
+        self, session: Session, caller: EmbeddingRegistryActor, query: EmbeddingRegistryLookup
+    ) -> tuple[ArtifactMemberPointer, EmbeddingIndexManifest] | None:
+        """Service-only current head capture; not a public source-content read.
+
+        Reuse the caller's current-root source capture for membership planning;
+        this operation rechecks authority but does not project the corpus again.
+        Select one namespace head, pin it, and read its exact canonical member.
+        Absence is distinct from dangling/corrupt/retired Artifact provenance.
+        """
+
+        def resolve() -> tuple[ArtifactMemberPointer, EmbeddingIndexManifest] | None:
+            if (
+                type(caller) is not EmbeddingRegistryServiceCaller
+                or self._indexing_source_authority is None
+            ):
+                raise EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN")
+            reader, _capture = self._capture(
+                session, caller, query, InferenceTransferSessionCapturePhase.AUTHORIZE_SCOPE
+            )
+            previous, _version = self._namespace_predecessor(
+                reader, EmbeddingRegistryRepository(session), query
+            )
+            self.authorize_scope(session, caller, query)
+            return previous
+
+        return self._guard(resolve)
+
     def prepare_index_basis(
         self, session: Session, caller: EmbeddingRegistryActor, query: EmbeddingRegistryLookup
     ) -> PreparedEmbeddingIndexBasis:
@@ -1247,21 +1296,7 @@ class CatalogEmbeddingRegistryVerifier:
                     or shard.rows[row.row_ref.row_index] != row.encoding
                 ):
                     raise ValueError("registered row differs from exact committed ordinal")
-            selected = repository.current_namespace_revision(query.corpus_id, query.namespace)
-            previous = None
-            version = 1
-            if selected is not None:
-                registered, version = selected
-                index = self._read_index(reader, registered.index_manifest)
-                validate_registered_embedding_index_manifest(registered, index)
-                if (
-                    registered.corpus_id != query.corpus_id
-                    or registered.namespace != query.namespace
-                    or index.space != self.configuration.space
-                    or index.recipe != self.configuration.recipe
-                ):
-                    raise ValueError("registered predecessor differs from its immutable namespace")
-                previous = registered.index_manifest, index
+            previous, version = self._namespace_predecessor(reader, repository, query)
             # Recheck current caller/policy after filesystem reads; no corpus recapture.
             self.authorize_scope(session, caller, query)
             return PreparedEmbeddingIndexBasis(plan, rows, shards, previous, version)
