@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/embedding-native-runtime-config/1.1",
+  "title": "Immutable native embedding configuration V1.1 with pinned host snapshot",
+  "description": "Explicit successor configuration pins an immutable host configuration snapshot. No installation, mount, source permission, compute grant or activation is established by these metadata.",
+  "$defs": {
+    "sha": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "resources": {
+      "$ref": "eom://schemas/knowledge/embedding-native-runtime-config/1.0#/$defs/resources"
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "configuration_id",
+        "configuration_revision_id",
+        "profile",
+        "bundle",
+        "installed_proof",
+        "runtime_sha256",
+        "resources",
+        "config_sha256",
+        "host_configuration"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-native-runtime-config/1.1"
+        },
+        "configuration_id": {
+          "type": "string",
+          "pattern": "^embeddingnativeconfig_[0-9a-f]{32}$"
+        },
+        "configuration_revision_id": {
+          "type": "string",
+          "pattern": "^embeddingnativeconfigrev_[0-9a-f]{32}$"
+        },
+        "profile": {
+          "enum": [
+            "CPU_INDEX_FP32",
+            "CUDA_INDEX_FP32"
+          ]
+        },
+        "bundle": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/bundlePointer"
+        },
+        "installed_proof": {
+          "$ref": "eom://schemas/knowledge/embedding-installed-runtime-proof/1.0#/$defs/pointer"
+        },
+        "runtime_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "resources": {
+          "$ref": "#/$defs/resources"
+        },
+        "config_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "host_configuration": {
+          "$ref": "eom://schemas/knowledge/embedding-host-configuration-snapshot/1.0#/$defs/pointer"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "profile": {
+                "const": "CPU_INDEX_FP32"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "installed_proof": {
+                "properties": {
+                  "profile": {
+                    "const": "CPU_INDEX_FP32"
+                  }
+                }
+              },
+              "resources": {
+                "properties": {
+                  "vram_limit_bytes": {
+                    "const": 0
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "installed_proof": {
+                "properties": {
+                  "profile": {
+                    "const": "CUDA_INDEX_FP32"
+                  }
+                }
+              },
+              "resources": {
+                "properties": {
+                  "vram_limit_bytes": {
+                    "const": 8589934592
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$ref": "#/$defs/config"
+}

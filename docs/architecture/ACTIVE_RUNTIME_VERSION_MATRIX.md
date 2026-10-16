@@ -300,6 +300,12 @@ CUDA loader 후속8fcdd241은 source/build3-wheel 검증과 고정0555 폴더의
 07:42:52 PASS다. native config/receipt/factory/units 호환 연결·운영 선택은 미완료이며
 서비스 복구 완료가 아니다. API/Catalog/QUERY는 원 프로세스를 유지했다.
 
+후속 source는 실행 설정1.1의 필수 host snapshot 참조와 ROOTLOCAL 검증·admission·
+factory를 연결했다. 엄격한1.0 읽기/직렬화와 과거317개 계약 bytes를 보존하며,
+실제 기존1.0 설정의 raw/semantic hash도 재확인했다. 결합 회귀1560·strict8 PASS.
+보호 prefix의 stdlib bootstrap audit 및 고정 unit의 사전 마운트/운영 선택은 아직
+갱신하지 않았으므로 native 준비 정상이나 INDEX 재개로 해석하지 않는다.
+
 ## 보존·정리 규칙
 
 - immutable row, manifest, receipt, release, Workflow, Item Revision 또는 rebuild/validation 경로가

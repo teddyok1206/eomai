@@ -7,7 +7,7 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import pytest
 from eom_catalog_contracts.embedding_installed_runtime_proof import (
@@ -15,8 +15,9 @@ from eom_catalog_contracts.embedding_installed_runtime_proof import (
     installed_runtime_proof_bytes,
 )
 from eom_catalog_contracts.embedding_native_runtime_config import (
-    EmbeddingNativeRuntimeConfig,
+    InstalledEmbeddingNativeRuntimeConfig,
     embedding_native_runtime_config_bytes,
+    installed_embedding_native_runtime_config_bytes,
 )
 from eom_catalog_contracts.embedding_runtime_bundle import embedding_runtime_bundle_bytes
 from eom_catalog_contracts.inference_transfer_embedding import EmbeddingExecutionRuntime
@@ -38,12 +39,13 @@ from eom_identifiers import canonical_json_bytes, sha256_bytes
 
 from tests.unit.embedding_native_backend_fixtures import FakeOwnership
 from tests.unit.embedding_native_runtime_config_fixtures import native_config_metadata
+from tests.unit.embedding_native_runtime_config_v11_fixtures import native_config_metadata_v11
 from tests.unit.inference_transfer_embedding_fixtures import seal
 
 
 @dataclass
 class Scenario:
-    config: EmbeddingNativeRuntimeConfig
+    config: InstalledEmbeddingNativeRuntimeConfig
     raw: bytes
     events: list[str]
     epoch_valid: bool = True
@@ -73,12 +75,17 @@ class Scenario:
 
 
 def scenario(
-    monkeypatch: pytest.MonkeyPatch, profile: EmbeddingRuntimeProfile = "CPU_INDEX_FP32"
+    monkeypatch: pytest.MonkeyPatch,
+    profile: EmbeddingRuntimeProfile = "CPU_INDEX_FP32",
+    *,
+    version: Literal["1.0", "1.1"] = "1.0",
 ) -> tuple[
     Scenario, Callable[[], AbstractContextManager[NativeEmbeddingBackend]], FakeOwnership | None
 ]:
-    config, bundle, proof = native_config_metadata(profile)
-    state = Scenario(config, embedding_native_runtime_config_bytes(config), [])
+    config, bundle, proof = (
+        native_config_metadata_v11(profile) if version == "1.1" else native_config_metadata(profile)
+    )
+    state = Scenario(config, installed_embedding_native_runtime_config_bytes(config), [])
     ownership = FakeOwnership() if profile == "CUDA_INDEX_FP32" else None
     root = (
         Path("/opt/eom/embedding-models")
@@ -217,10 +224,13 @@ def scenario(
 
 
 @pytest.mark.parametrize("profile", ("CPU_INDEX_FP32", "CUDA_INDEX_FP32"))
+@pytest.mark.parametrize("version", ("1.0", "1.1"))
 def test_scope_has_no_request_parameters_and_reuses_resolved_metadata(
-    monkeypatch: pytest.MonkeyPatch, profile: EmbeddingRuntimeProfile
+    monkeypatch: pytest.MonkeyPatch,
+    profile: EmbeddingRuntimeProfile,
+    version: Literal["1.0", "1.1"],
 ) -> None:
-    state, scope, ownership = scenario(monkeypatch, profile)
+    state, scope, ownership = scenario(monkeypatch, profile, version=version)
     with scope() as backend:
         assert backend.batch_size == 4 and backend.threads == 4
         backend.encode(("synthetic input",), purpose="DOCUMENT")
@@ -242,10 +252,11 @@ def test_scope_has_no_request_parameters_and_reuses_resolved_metadata(
 @pytest.mark.parametrize(
     "failure", ("admitted", "epoch_valid", "observer_failed", "backend_failed")
 )
+@pytest.mark.parametrize("version", ("1.0", "1.1"))
 def test_preflight_failures_never_yield_an_encoder(
-    monkeypatch: pytest.MonkeyPatch, failure: str
+    monkeypatch: pytest.MonkeyPatch, failure: str, version: Literal["1.0", "1.1"]
 ) -> None:
-    state, scope, _ownership = scenario(monkeypatch)
+    state, scope, _ownership = scenario(monkeypatch, version=version)
     setattr(state, failure, failure.endswith("failed"))
     with pytest.raises(ValueError), scope():
         pytest.fail("invalid source context yielded")

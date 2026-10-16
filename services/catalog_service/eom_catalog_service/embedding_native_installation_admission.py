@@ -25,7 +25,8 @@ from eom_catalog_contracts.embedding_native_installation_evidence import (
 )
 from eom_catalog_contracts.embedding_native_runtime_config import (
     MAX_NATIVE_RUNTIME_CONFIG_BYTES,
-    parse_embedding_native_runtime_config_bytes,
+    EmbeddingNativeRuntimeConfigV11,
+    parse_installed_embedding_native_runtime_config_bytes,
 )
 from eom_catalog_contracts.embedding_runtime_bundle import (
     MAX_RUNTIME_BUNDLE_BYTES,
@@ -34,6 +35,11 @@ from eom_catalog_contracts.embedding_runtime_bundle import (
 from eom_catalog_contracts.models import Sha256
 from pydantic import TypeAdapter
 
+from eom_catalog_service.embedding_host_configuration_files import (
+    capture_snapshot_embedding_host,
+    require_host_configuration_snapshot_mount,
+    resolve_host_configuration_snapshot,
+)
 from eom_catalog_service.embedding_runtime_files import (
     NumericalRuntimeFileSnapshots,
     fixed_native_embedding_profile,
@@ -132,7 +138,7 @@ class ProtectedNativeEmbeddingInstallationAdmission:
                 sha256=self._configuration.configuration_raw_sha256,
                 maximum=MAX_NATIVE_RUNTIME_CONFIG_BYTES,
             )
-            config = parse_embedding_native_runtime_config_bytes(config_raw)
+            config = parse_installed_embedding_native_runtime_config_bytes(config_raw)
             proof_raw = self._files.read(
                 _PROOF_ROOT
                 / receipt.installed_proof.proof_id
@@ -191,9 +197,18 @@ class ProtectedNativeEmbeddingInstallationAdmission:
                 sha256=receipt.unit_probe.probe_code_sha256,
                 maximum=64 * 1024,
             )
-            self._host = capture_protected_embedding_host(
-                expected_seed_sha256=candidate.host_seed_sha256, files=self._files
-            )
+            if isinstance(config, EmbeddingNativeRuntimeConfigV11):
+                snapshot = resolve_host_configuration_snapshot(config.host_configuration)
+                mount = require_host_configuration_snapshot_mount(snapshot)
+                self._host = capture_snapshot_embedding_host(
+                    expected_seed_sha256=candidate.host_seed_sha256,
+                    files=self._files,
+                    snapshot_mount=mount,
+                )
+            else:
+                self._host = capture_protected_embedding_host(
+                    expected_seed_sha256=candidate.host_seed_sha256, files=self._files
+                )
             self._closed = False
             self._assert_current()
         except Exception:

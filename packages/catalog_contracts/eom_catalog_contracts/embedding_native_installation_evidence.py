@@ -23,10 +23,11 @@ from eom_catalog_contracts.embedding_installed_runtime_proof import (
     validate_installed_runtime_proof_pointer,
 )
 from eom_catalog_contracts.embedding_native_runtime_config import (
-    EmbeddingNativeRuntimeConfig,
-    parse_embedding_native_runtime_config_bytes,
-    validate_embedding_native_runtime_config_raw,
-    validate_embedding_native_runtime_config_references,
+    InstalledEmbeddingNativeRuntimeConfig,
+    parse_installed_embedding_native_runtime_config,
+    parse_installed_embedding_native_runtime_config_bytes,
+    validate_installed_embedding_native_runtime_config_raw,
+    validate_installed_embedding_native_runtime_config_references,
 )
 from eom_catalog_contracts.embedding_runtime_bundle import (
     MAX_RUNTIME_BUNDLE_BYTES,
@@ -488,7 +489,7 @@ def validate_rootlocal_native_installation_metadata_references(
     expected_receipt_raw_sha256: str,
     inventory: RootLocalPrefixInventoryCandidate,
     inventory_raw: bytes,
-    config: EmbeddingNativeRuntimeConfig,
+    config: InstalledEmbeddingNativeRuntimeConfig,
     config_raw: bytes,
     proof: EmbeddingInstalledRuntimeProof,
     proof_raw: bytes,
@@ -511,22 +512,22 @@ def validate_rootlocal_native_installation_metadata_references(
             or inventory.profile != receipt.profile
         ):
             raise ValueError("ROOTLOCAL receipt/inventory raw/semantic pin differs")
-        resolved_config = parse_embedding_native_runtime_config_bytes(config_raw)
+        resolved_config = parse_installed_embedding_native_runtime_config_bytes(config_raw)
         resolved_proof = parse_installed_runtime_proof(
             _document(proof_raw, MAX_INSTALLED_RUNTIME_PROOF_BYTES)
         )
         resolved_bundle = parse_embedding_runtime_bundle(
             _document(bundle_raw, MAX_RUNTIME_BUNDLE_BYTES)
         )
-        config = EmbeddingNativeRuntimeConfig.model_validate(_raw_metadata(config))
+        config = parse_installed_embedding_native_runtime_config(_raw_metadata(config))
         proof = EmbeddingInstalledRuntimeProof.model_validate(_raw_metadata(proof))
         bundle = EmbeddingRuntimeBundle.model_validate(_raw_metadata(bundle))
         if config != resolved_config or proof != resolved_proof or bundle != resolved_bundle:
             raise ValueError("ROOTLOCAL supplied metadata differs from actual raw references")
-        validate_embedding_native_runtime_config_raw(
+        validate_installed_embedding_native_runtime_config_raw(
             config, config_raw, receipt.configuration.configuration_raw_sha256
         )
-        validate_embedding_native_runtime_config_references(
+        validate_installed_embedding_native_runtime_config_references(
             config, bundle, bundle_raw, proof, proof_raw
         )
         validate_installed_runtime_proof_pointer(proof, receipt.installed_proof, proof_raw)

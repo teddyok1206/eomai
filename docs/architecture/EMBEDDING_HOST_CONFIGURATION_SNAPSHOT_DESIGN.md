@@ -1,7 +1,7 @@
 # Immutable embedding host-configuration snapshot
 
-2026-10-16 UTC. FIRST_SOURCE_SLICE_IMPLEMENTED / FINITE_MOUNT_PROBE_PASS /
-NATIVE_INTEGRATION_NOT_INSTALLED / NOT_ACTIVE.
+2026-10-16 UTC. SNAPSHOT_AND_CONFIG_ADMISSION_FACTORY_SOURCE_PASS /
+FINITE_MOUNT_PROBE_PASS / NATIVE_INTEGRATION_NOT_INSTALLED / NOT_ACTIVE.
 This is a scoped continuation of the original incremental-RAG runtime goal, prompted
 by the [observed OS cache drift](../operations/LOCAL_INDEXING_HOST_CACHE_DRIFT_2026-10-16.md).
 It authorizes no new role, source access, model run or operating-system update policy.
@@ -94,9 +94,10 @@ same held host descriptors. It does not generalize the host allowlist or admit a
 native installation. This small extraction serves two concrete capture paths, not a
 new loader/installer framework.
 
-The existing native configuration/receipt/factory/unit consumers are deliberately
-not redirected by this source slice. Their compatible configuration selection and
-pre-exec binding remain a separate required integration before any service restart.
+At this first source slice the native configuration/receipt/factory/unit consumers
+were not redirected. The later1.1 source integration below explicitly connects the
+configuration/receipt/factory; compatible protected installation, fixed units and
+pre-exec binding still precede any service restart.
 
 The filesystem adapter owns the snapshot entry point and calls the same package's
 private host-capture primitive. The fixed host module only receives a bound local
@@ -167,3 +168,68 @@ admission, then supported original-work recovery; no new login before readiness.
 README/version/goal-ledger documentation tests3 PASS. Milestone Slack report
 `devreport_7c3a9ec093bf411c9b06f888b5883943` delivered once07:44:56, beginning with
 the Korean summary and explicitly keeping native recovery/full-goal gates open.
+
+## Selected native-configuration integration (source successor)
+
+Add `embedding-native-runtime-config/1.1` with one required typed
+`host_configuration` pointer. Keep the strict1.0 schema/readers and all historical
+bytes unchanged. Shared immutable configuration fields and numerical closure checks
+remain authoritative; explicit installed-family readers dispatch only1.0/1.1.
+The added installation pointer changes the configuration's hash/revision, not the
+model payload, numerical recipe or encoder-space identity.
+
+The existing ROOTLOCAL receipt already independently pins the exact configuration
+raw/semantic hashes and prefix inventory, including its target host seed. Reuse that
+closure rather than introducing a second receipt/registry or an environment-variable
+collection of unrelated host hashes. The receipt reader resolves1.1's exact snapshot,
+requires the actual pre-exec read-only mount, and compares the snapshot target seed
+to the independently pinned inventory seed before capturing the same fixed host.
+Its held host witness is rechecked during admission/factory execution and teardown.
+The factory explicitly reads the supported installed configuration family; no model
+or ordinary caller chooses host paths, snapshot, installation authority or fallback.
+
+This source integration alone does not update any root bootstrap audit, installed
+numerical prefix, probe/INDEX/QUERY template or owner verifier namespace. Those
+existing owners still require reviewed compatible installation/selection and real
+admission before restart. A1.0 receipt cannot be made current by supplying a new
+snapshot ad hoc; its unchanged target host seed will not match.
+
+### Implementation and evidence
+
+The1.1 schema/mirror raw pin is
+`2dbd806065e6d9d9d852bd4fcc073d7d3bd8851fe7eeeb92d68a3469880b3a1c`.
+It reuses the original1.0 resource definition and adds only the required host pointer
+to the configuration. Shared frozen fields protect device/resource/hash rules;
+legacy1.0 parsers/serializers remain strict. The distinct installed-family parsers,
+raw/reference validators and public exports accept only explicit1.0/1.1 shapes.
+
+The ROOTLOCAL reference validator, protected admission reader and factory now use
+that explicit family. The1.1 reader resolves the exact snapshot, observes its actual
+read-only mount and captures the same host using the independent inventory seed.
+Failure never falls back to1.0. Admission retains that host/mount through current
+use and cleanup, without re-resolving metadata or inventing a second authority.
+No additional native CLI arguments, environment host-hash collection, DB table,
+queue, resource ceiling, permission, dependency or model payload was introduced.
+
+The final combined source/host/prefix/Conda/wheel/receipt/factory/probe/installer/
+INDEX/QUERY-template suite is1560 PASS/87.63s. It includes explicit1.1 round-trips,
+legacy rejection, device/numerical closure, constructed/extra/bool/float/stale-hash
+negatives, exact receipt/snapshot/mount composition, no repeated resolution and
+changed-namespace teardown. Strict mypy8 files and Ruff format/lint PASS. These are
+overlapping regression inventories, not1560 real model or production executions.
+All317 predecessor schema metadata/bytes and existing316/296 historical sets remain
+frozen at their original hashes. Persistence tests are inapplicable to this slice:
+there is no DB/state/schema/query change, and no operating DB was a test target.
+
+Actual existing protected1.0 configuration was read once with current source:
+strict1.0 and installed-family parse/serialize both exactly reproduce its existing
+raw`ff7a6943ab8b58322d509c009919aa1ae19a61f13ea2390ba78eb9c24d18f67c`
+and semantic`fb325aa159c42a303413a80801ea1e8b71a2e0ab99dbf826bd4eb81fed97241e`
+pins. This proves backward byte compatibility, not current native readiness.
+
+Required next boundary remains the existing protected prefix/bootstrap installation
+audit and fixed launcher units. Their current stdlib-only1.0 host capture still pins
+the changed global cache; this source integration does not weaken or bypass that
+bootstrap. Review a compatible snapshot-aware bootstrap input/capture and pre-exec
+selection through existing owners, preserving original prefixes/receipts/commands.
+Then perform fresh actual admission before recovering the original pending work.

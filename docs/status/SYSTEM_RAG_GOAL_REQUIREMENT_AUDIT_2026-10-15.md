@@ -8,6 +8,15 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Native configuration1.1 successor source now explicitly pins the host snapshot and
+  connects ROOTLOCAL reference validation, protected admission and factory. Strict1.0
+  readers/bytes and all317 predecessor resources are preserved; actual protected1.0
+  config parse/serialize/raw-pin check PASS. Combined source/host/prefix/install/
+  namespace-boundary suite1560 PASS, strict8 PASS. No DB/model/runtime selection.
+  This is NOT_INSTALLED/ACTIVE: snapshot-aware protected bootstrap/prefix audit and
+  fixed-unit pre-exec selection must still be implemented/verified before native
+  recovery. The source/fake-port tests are not a fresh live admission.
+  [Exact implementation and remaining boundary](../architecture/EMBEDDING_HOST_CONFIGURATION_SNAPSHOT_DESIGN.md#implementation-and-evidence).
 - Host-configuration recovery source slice: closed snapshot/pointer schema and frozen
   values, exact fixed-path/owner/raw/semantic/seed closure, actual own-FD/read-only
   mount witness, shared fixed-host capture. Final focused298/expanded955/install279/

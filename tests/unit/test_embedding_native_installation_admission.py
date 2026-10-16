@@ -205,7 +205,7 @@ def test_reads_exact_metadata_once_then_only_checks_current_epochs(
             "parse_rootlocal_native_admission_receipt_metadata",
             "parse_rootlocal_prefix_inventory_candidate",
             "validate_rootlocal_native_installation_metadata_references",
-            "parse_embedding_native_runtime_config_bytes",
+            "parse_installed_embedding_native_runtime_config_bytes",
             "parse_installed_runtime_proof",
             "parse_embedding_runtime_bundle",
         ):

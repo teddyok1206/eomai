@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Final, Literal
+from typing import Any, ClassVar, Final, Literal, Self
 
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from eom_catalog_contracts.embedding_host_configuration import (
+    EmbeddingHostConfigurationPointer,
+    parse_host_configuration_pointer,
+)
 from eom_catalog_contracts.embedding_installed_runtime_proof import (
     MAX_INSTALLED_RUNTIME_PROOF_BYTES,
     EmbeddingInstalledRuntimeProof,
@@ -30,6 +34,10 @@ from eom_catalog_contracts.validation import validate_contract
 EMBEDDING_NATIVE_RUNTIME_CONFIG_SCHEMA: Final = "embedding-native-runtime-config"
 EMBEDDING_NATIVE_RUNTIME_CONFIG_SCHEMA_REF: Final = (
     "eom://schemas/knowledge/embedding-native-runtime-config/1.0"
+)
+EMBEDDING_NATIVE_RUNTIME_CONFIG_V11_SCHEMA: Final = "embedding-native-runtime-config-v1.1"
+EMBEDDING_NATIVE_RUNTIME_CONFIG_V11_SCHEMA_REF: Final = (
+    "eom://schemas/knowledge/embedding-native-runtime-config/1.1"
 )
 MAX_NATIVE_RUNTIME_CONFIG_BYTES: Final = 64 * 1024
 
@@ -79,9 +87,9 @@ def _resource_values(value: object) -> dict[str, object]:
     return values
 
 
-def _config_values(value: object) -> dict[str, object]:
-    values = _named_values(value, EmbeddingNativeRuntimeConfig)
-    _strings(values, {"bundle", "installed_proof", "resources"})
+def _config_values(value: object, *, expected: type[BaseModel] | None = None) -> dict[str, object]:
+    values = _named_values(value, EmbeddingNativeRuntimeConfig if expected is None else expected)
+    _strings(values, {"bundle", "installed_proof", "resources", "host_configuration"})
     if "bundle" in values:
         bundle = _named_values(values["bundle"], EmbeddingRuntimeBundlePointer)
         _strings(bundle, {"manifest_member"})
@@ -96,6 +104,10 @@ def _config_values(value: object) -> dict[str, object]:
         values["installed_proof"] = proof
     if "resources" in values:
         values["resources"] = _resource_values(values["resources"])
+    if "host_configuration" in values:
+        values["host_configuration"] = parse_host_configuration_pointer(
+            values["host_configuration"]
+        ).model_dump(mode="json")
     return values
 
 
@@ -141,13 +153,11 @@ class EmbeddingNativeRuntimeResources(FrozenModel):
         return self
 
 
-class EmbeddingNativeRuntimeConfig(FrozenModel):
-    """Root-configured immutable references only; trusted owner pins raw bytes separately."""
+class _NativeRuntimeConfigurationFields(FrozenModel):
+    """One authoritative device/resource/hash rule for both explicit configuration versions."""
 
     model_config = ConfigDict(revalidate_instances="always")
-    schema_version: Literal["embedding-native-runtime-config/1.0"] = (
-        "embedding-native-runtime-config/1.0"
-    )
+    schema_resource: ClassVar[str | None] = None
     configuration_id: str = Field(pattern=r"^embeddingnativeconfig_[0-9a-f]{32}$")
     configuration_revision_id: str = Field(pattern=r"^embeddingnativeconfigrev_[0-9a-f]{32}$")
     profile: EmbeddingRuntimeProfile
@@ -160,16 +170,68 @@ class EmbeddingNativeRuntimeConfig(FrozenModel):
     @model_validator(mode="before")
     @classmethod
     def raw_configuration_fields(cls, value: object) -> object:
-        return _config_values(value)
+        values = _config_values(value, expected=cls)
+        if cls.schema_resource is not None:
+            validate_contract(cls.schema_resource, values)
+        return values
 
     @model_validator(mode="after")
-    def exact_configuration(self) -> EmbeddingNativeRuntimeConfig:
+    def exact_configuration(self) -> Self:
         if self.installed_proof.profile != self.profile or self.resources.vram_limit_bytes != (
             0 if self.profile == "CPU_INDEX_FP32" else 8 * 1024**3
         ):
             raise ValueError("native configuration proof/profile/resource device differs")
         _hash(self, "config_sha256")
         return self
+
+
+class EmbeddingNativeRuntimeConfig(_NativeRuntimeConfigurationFields):
+    """Strict1.0 metadata; snapshot fields remain invalid in the predecessor family."""
+
+    schema_version: Literal["embedding-native-runtime-config/1.0"] = (
+        "embedding-native-runtime-config/1.0"
+    )
+
+
+class EmbeddingNativeRuntimeConfigV11(_NativeRuntimeConfigurationFields):
+    """Explicit installed successor; metadata does not create or authorize its OS mount."""
+
+    schema_resource = EMBEDDING_NATIVE_RUNTIME_CONFIG_V11_SCHEMA
+    schema_version: Literal["embedding-native-runtime-config/1.1"]
+    host_configuration: EmbeddingHostConfigurationPointer
+
+
+type InstalledEmbeddingNativeRuntimeConfig = (
+    EmbeddingNativeRuntimeConfig | EmbeddingNativeRuntimeConfigV11
+)
+
+
+def parse_installed_embedding_native_runtime_config(
+    document: object,
+) -> InstalledEmbeddingNativeRuntimeConfig:
+    """Only this explicit installation-family reader supports the two released shapes."""
+    if isinstance(document, BaseModel):
+        version = document.__dict__.get("schema_version")
+    elif isinstance(document, dict):
+        version = document.get("schema_version")
+    else:
+        raise ValueError("installed native configuration requires a bounded object")
+    if type(version) is not str:
+        raise ValueError("installed native configuration requires an explicit version")
+    if version == "embedding-native-runtime-config/1.0":
+        values = _config_values(document)
+        validate_contract(EMBEDDING_NATIVE_RUNTIME_CONFIG_SCHEMA, values)
+        return EmbeddingNativeRuntimeConfig.model_validate(values)
+    if version == "embedding-native-runtime-config/1.1":
+        return EmbeddingNativeRuntimeConfigV11.model_validate(document)
+    raise ValueError("installed native configuration version is unsupported")
+
+
+def installed_embedding_native_runtime_config_bytes(
+    config: InstalledEmbeddingNativeRuntimeConfig,
+) -> bytes:
+    checked = parse_installed_embedding_native_runtime_config(config)
+    return canonical_json_bytes(checked.model_dump(mode="json"))
 
 
 def parse_embedding_native_runtime_config(document: dict[str, Any]) -> EmbeddingNativeRuntimeConfig:
@@ -240,6 +302,26 @@ def parse_embedding_native_runtime_config_bytes(raw: bytes) -> EmbeddingNativeRu
     return parse_embedding_native_runtime_config(_document(raw, MAX_NATIVE_RUNTIME_CONFIG_BYTES))
 
 
+def parse_installed_embedding_native_runtime_config_bytes(
+    raw: bytes,
+) -> InstalledEmbeddingNativeRuntimeConfig:
+    return parse_installed_embedding_native_runtime_config(
+        _document(raw, MAX_NATIVE_RUNTIME_CONFIG_BYTES)
+    )
+
+
+def validate_installed_embedding_native_runtime_config_raw(
+    config: InstalledEmbeddingNativeRuntimeConfig, raw: bytes, expected_raw_sha256: str
+) -> None:
+    if (
+        type(raw) is not bytes
+        or len(raw) > MAX_NATIVE_RUNTIME_CONFIG_BYTES
+        or raw != installed_embedding_native_runtime_config_bytes(config)
+        or sha256_bytes(raw) != expected_raw_sha256
+    ):
+        raise ValueError("installed configuration canonical bytes or independent raw pin differ")
+
+
 def validate_embedding_native_runtime_config_raw(
     config: EmbeddingNativeRuntimeConfig, raw: bytes, expected_raw_sha256: str
 ) -> None:
@@ -262,7 +344,33 @@ def validate_embedding_native_runtime_config_references(
 ) -> None:
     """Resolved metadata closure only; no protected installation, files, authority or live PASS."""
     config = EmbeddingNativeRuntimeConfig.model_validate(_config_values(config))
-    # Actual raw documents use the existing public schema/semantic/pointer validators.
+    _validate_native_runtime_references(config, bundle, bundle_raw, proof, proof_raw)
+
+
+def validate_installed_embedding_native_runtime_config_references(
+    config: InstalledEmbeddingNativeRuntimeConfig,
+    bundle: EmbeddingRuntimeBundle,
+    bundle_raw: bytes,
+    proof: EmbeddingInstalledRuntimeProof,
+    proof_raw: bytes,
+) -> None:
+    _validate_native_runtime_references(
+        parse_installed_embedding_native_runtime_config(config),
+        bundle,
+        bundle_raw,
+        proof,
+        proof_raw,
+    )
+
+
+def _validate_native_runtime_references(
+    config: InstalledEmbeddingNativeRuntimeConfig,
+    bundle: EmbeddingRuntimeBundle,
+    bundle_raw: bytes,
+    proof: EmbeddingInstalledRuntimeProof,
+    proof_raw: bytes,
+) -> None:
+    # Both families retain the same authoritative raw/numerical closure rules.
     resolved_bundle = parse_embedding_runtime_bundle(
         _document(bundle_raw, MAX_RUNTIME_BUNDLE_BYTES)
     )

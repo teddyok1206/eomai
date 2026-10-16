@@ -12,9 +12,9 @@ from typing import Protocol
 from eom_catalog_contracts.embedding_installed_runtime_proof import EmbeddingRuntimeProfile
 from eom_catalog_contracts.embedding_native_runtime_config import (
     MAX_NATIVE_RUNTIME_CONFIG_BYTES,
-    parse_embedding_native_runtime_config_bytes,
-    validate_embedding_native_runtime_config_raw,
-    validate_embedding_native_runtime_config_references,
+    parse_installed_embedding_native_runtime_config_bytes,
+    validate_installed_embedding_native_runtime_config_raw,
+    validate_installed_embedding_native_runtime_config_references,
 )
 
 from eom_catalog_service.embedding_bundle_resolver import (
@@ -160,8 +160,10 @@ def native_embedding_backend_scope(
             raw = files.read(
                 path, sha256=configuration_raw_sha256, maximum=MAX_NATIVE_RUNTIME_CONFIG_BYTES
             )
-            config = parse_embedding_native_runtime_config_bytes(raw)
-            validate_embedding_native_runtime_config_raw(config, raw, configuration_raw_sha256)
+            config = parse_installed_embedding_native_runtime_config_bytes(raw)
+            validate_installed_embedding_native_runtime_config_raw(
+                config, raw, configuration_raw_sha256
+            )
             if (
                 config.profile != profile
                 or config.configuration_id != configuration_id
@@ -179,7 +181,7 @@ def native_embedding_backend_scope(
                 configured, observe_member_identity=files.observe_protected_member_identity
             )
             check()
-            validate_embedding_native_runtime_config_references(
+            validate_installed_embedding_native_runtime_config_references(
                 config, resolved.bundle, resolved.manifest.raw, metadata.proof, metadata.raw
             )
             backend = OfflineNativeEmbeddingBackend(
