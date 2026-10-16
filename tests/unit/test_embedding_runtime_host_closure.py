@@ -250,6 +250,40 @@ def test_source_fixed_seed_has_exact_bounded_pins_and_no_native_admission() -> N
         for _path, size, sha in host._FILES
     )
     assert _hash(host._seed_bytes()) == host.FIXED_EMBEDDING_HOST_SEED_SHA256
+
+
+@pytest.mark.parametrize(
+    ("size", "sha"),
+    (
+        (True, "sha256:" + "e" * 64),
+        (47, "sha256:" + "e" * 64),
+        (128 * 1024 + 1, "sha256:" + "e" * 64),
+        (100, "e" * 64),
+        (100, True),
+    ),
+)
+def test_configuration_seed_never_coerces_unbounded_or_untyped_cache_metadata(
+    size: Any,
+    sha: Any,
+) -> None:
+    with pytest.raises(InstalledRuntimeProofError, match="SEED_INVALID"):
+        host.embedding_host_configuration_seed(cache_byte_count=size, cache_sha256=sha)
+
+
+def test_configuration_seed_replaces_only_cache_and_preserves_fixed_host_seed() -> None:
+    cache = next(row for row in host._FILES if row[0] == host._CACHE)
+    assert (
+        host.embedding_host_configuration_seed(
+            cache_byte_count=cache[1], cache_sha256="sha256:" + cache[2]
+        )
+        == host.FIXED_EMBEDDING_HOST_SEED_SHA256
+    )
+    changed = host._files_with_loader_cache(
+        cache_byte_count=50000, cache_sha256="sha256:" + "e" * 64
+    )
+    assert [row for row in changed if row[0] != host._CACHE] == [
+        row for row in host._FILES if row[0] != host._CACHE
+    ]
     assert not hasattr(host, "NativeEmbeddingInstallationAdmission")
 
 
@@ -529,7 +563,7 @@ def test_native_cache_never_guesses_or_accepts_competing_routes(
     elif fault == "count":
         struct.pack_into("<I", raw, 20, 2**32 - 1)
     with pytest.raises(InstalledRuntimeProofError):
-        host._cache(bytes(raw))
+        host.validate_embedding_loader_cache(bytes(raw))
 
 
 def _synthetic_child(monkeypatch: pytest.MonkeyPatch, script: str) -> list[subprocess.Popen[bytes]]:

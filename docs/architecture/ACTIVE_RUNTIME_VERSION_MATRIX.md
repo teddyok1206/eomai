@@ -292,6 +292,12 @@ CUDA loader 후속8fcdd241은 source/build3-wheel 검증과 고정0555 폴더의
 자동 승격된 것은 아니다. [실제 현재 상태](../operations/LOCAL_INDEXING_HOST_CACHE_DRIFT_2026-10-16.md)·
 [설계된 호환 복구](EMBEDDING_HOST_CONFIGURATION_SNAPSHOT_DESIGN.md).
 
+고정 host 설정 복구의 첫 소스는 구현했다: 닫힌 manifest/pointer 계약, root 고정 경로·
+해시/seed 관계 검증, 실제 FD·읽기 전용 마운트 관측, 기존 host 검사와 공유하는 capture.
+최종 focused298·확대955·설치 경계279·strict6 PASS이며 서로 합산하지 않는다.
+원 host seed/cache pin과 과거 계약 bytes는 유지했다. 실제 snapshot 설치·native config/
+receipt/factory/units 호환 연결·운영 선택은 미완료이며 서비스 복구 완료가 아니다.
+
 ## 보존·정리 규칙
 
 - immutable row, manifest, receipt, release, Workflow, Item Revision 또는 rebuild/validation 경로가

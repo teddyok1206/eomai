@@ -30,6 +30,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "embedding-host-configuration-snapshot": CatalogSchemaResource(
+            "schemas/knowledge/embedding-host-configuration-snapshot-v1.schema.json",
+            "resources/knowledge/embedding-host-configuration-snapshot-v1.schema.json",
+            "1.0",
+            "sha256:68db10c1af89fbc95ce977e9a6d4c6c1e10fb3fc543d927e04f2f18a73588221",
+        ),
         "system-rag-authoring-reference": CatalogSchemaResource(
             "schemas/knowledge/system-rag-authoring-reference-v1.schema.json",
             "resources/knowledge/system-rag-authoring-reference-v1.schema.json",

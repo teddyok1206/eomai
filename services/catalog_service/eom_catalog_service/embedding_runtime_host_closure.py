@@ -15,6 +15,7 @@ import stat
 import struct
 import subprocess
 import time
+from collections.abc import Callable
 from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
@@ -219,10 +220,13 @@ def _hash(raw: bytes) -> str:
     return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
-def _seed_bytes() -> bytes:
+def _seed_bytes(files: tuple[tuple[Path, int, str], ...] | None = None) -> bytes:
     return json.dumps(
         {
-            "files": [(str(path), size, "sha256:" + sha) for path, size, sha in _FILES],
+            "files": [
+                (str(path), size, "sha256:" + sha)
+                for path, size, sha in (_FILES if files is None else files)
+            ],
             "aliases": [(str(path), target) for path, target in _ALIASES],
             "absent_search_routes": [
                 (route, str(path)) for route, path in _ABSENT_SEARCH_ROUTES.items()
@@ -235,6 +239,36 @@ def _seed_bytes() -> bytes:
 
 
 FIXED_EMBEDDING_HOST_SEED_SHA256 = _hash(_seed_bytes())
+
+
+def _files_with_loader_cache(
+    *,
+    cache_byte_count: int,
+    cache_sha256: str,
+) -> tuple[tuple[Path, int, str], ...]:
+    _require(
+        type(cache_byte_count) is int
+        and 48 <= cache_byte_count <= 128 * 1024
+        and type(cache_sha256) is str
+        and re.fullmatch(r"sha256:[0-9a-f]{64}", cache_sha256) is not None,
+        "SEED_INVALID",
+    )
+    _require(sum(path == _CACHE for path, _size, _sha in _FILES) == 1, "SEED_INVALID")
+    return tuple(
+        (path, cache_byte_count, cache_sha256.removeprefix("sha256:"))
+        if path == _CACHE
+        else (path, size, sha)
+        for path, size, sha in _FILES
+    )
+
+
+def embedding_host_configuration_seed(*, cache_byte_count: int, cache_sha256: str) -> str:
+    """Pure target seed derivation; replacing metadata never admits bytes or a runtime."""
+    return _hash(
+        _seed_bytes(
+            _files_with_loader_cache(cache_byte_count=cache_byte_count, cache_sha256=cache_sha256)
+        )
+    )
 
 
 def _identity(value: os.stat_result) -> tuple[int, ...]:
@@ -512,8 +546,9 @@ def _string(raw: bytes, offset: int, end: int) -> str:
     return value
 
 
-def _cache(raw: bytes) -> None:
-    _require(48 <= len(raw) <= 128 * 1024, "CACHE_INVALID")
+def validate_embedding_loader_cache(raw: bytes) -> None:
+    """Fixed ABI/routes only; parsing never replaces raw hash or host admission."""
+    _require(type(raw) is bytes and 48 <= len(raw) <= 128 * 1024, "CACHE_INVALID")
     magic, count, strings, flags, extension = struct.unpack_from("<20sIIB3xI", raw)
     start = 48 + count * 24
     _require(
@@ -566,12 +601,14 @@ class ProtectedEmbeddingHostClosure:
         identities: dict[Path, tuple[int, ...]],
         seed_sha256: str,
         soname_versions: dict[str, frozenset[str]] | None = None,
+        assert_mount_current: Callable[[], None] | None = None,
     ) -> None:
         self._files, self._routes, self._stack = files, routes, stack
         self._descriptors, self._identities = descriptors, identities
         self.seed_sha256 = seed_sha256
         self._soname_versions = {} if soname_versions is None else dict(soname_versions)
         self._loader_path = _LOADER
+        self._assert_mount_current = assert_mount_current
         self._closed = False
 
     def __enter__(self) -> ProtectedEmbeddingHostClosure:
@@ -592,6 +629,8 @@ class ProtectedEmbeddingHostClosure:
     def assert_current(self) -> None:
         try:
             _require(not self._closed, "CLOSED")
+            if self._assert_mount_current is not None:
+                self._assert_mount_current()
             self._files.assert_unchanged()
             self._routes.assert_current()
             for path, descriptor in self._descriptors.items():
@@ -787,6 +826,18 @@ def capture_protected_embedding_host(
         and expected_seed_sha256 == _hash(_seed_bytes()),
         "SEED_PIN_INVALID",
     )
+    return _capture_embedding_host(
+        expected_seed_sha256=expected_seed_sha256, files=files, fixed_files=_FILES
+    )
+
+
+def _capture_embedding_host(
+    *,
+    expected_seed_sha256: str,
+    files: NumericalRuntimeFileSnapshots,
+    fixed_files: tuple[tuple[Path, int, str], ...],
+    assert_mount_current: Callable[[], None] | None = None,
+) -> ProtectedEmbeddingHostClosure:
     _require(
         type(files) is NumericalRuntimeFileSnapshots
         and type(files.owner_uid) is int
@@ -805,12 +856,12 @@ def capture_protected_embedding_host(
         for route in _ABSENT_SEARCH_ROUTES.values():
             routes.absence(route)
         host_files.require_closed_namespaces(
-            {_CONFIG}, {path for path, _size, _sha in _FILES if path.parent == _CONFIG}
+            {_CONFIG}, {path for path, _size, _sha in fixed_files if path.parent == _CONFIG}
         )
         descriptors: dict[Path, int] = {}
         identities: dict[Path, tuple[int, ...]] = {}
         objects: dict[Path, _Elf] = {}
-        for path, size, sha in _FILES:
+        for path, size, sha in fixed_files:
             routes.parent(path)
             _require(
                 type(size) is int
@@ -839,7 +890,7 @@ def capture_protected_embedding_host(
                         "ELF_LOADER_INVALID",
                     )
             elif path == _CACHE:
-                _cache(raw)
+                validate_embedding_loader_cache(raw)
         for current in objects.values():
             for name, required in current.requirements:
                 _require(required <= objects[_SONAMES[name]].definitions, "VERSION_UNAVAILABLE")
@@ -855,8 +906,9 @@ def capture_protected_embedding_host(
             stack,
             descriptors,
             identities,
-            _hash(_seed_bytes()),
+            expected_seed_sha256,
             {name: objects[path].definitions for name, path in _SONAMES.items()},
+            assert_mount_current,
         )
         result.assert_current()
         return result

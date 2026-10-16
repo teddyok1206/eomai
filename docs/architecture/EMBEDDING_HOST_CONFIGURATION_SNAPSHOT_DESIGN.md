@@ -1,6 +1,6 @@
 # Immutable embedding host-configuration snapshot
 
-2026-10-16 UTC. DESIGN / NOT_IMPLEMENTED / NOT_INSTALLED / NOT_ACTIVE.
+2026-10-16 UTC. FIRST_SOURCE_SLICE_IMPLEMENTED / NOT_INSTALLED / NOT_ACTIVE.
 This is a scoped continuation of the original incremental-RAG runtime goal, prompted
 by the [observed OS cache drift](../operations/LOCAL_INDEXING_HOST_CACHE_DRIFT_2026-10-16.md).
 It authorizes no new role, source access, model run or operating-system update policy.
@@ -75,3 +75,48 @@ It authorizes no new role, source access, model run or operating-system update p
 Rollback selects a compatible earlier runtime set only if its actual host assumptions
 still hold. Do not roll the OS cache backwards, delete new artifacts, amend old
 acceptance or label a still-invalid installation healthy.
+
+## First source slice and shared capture boundary
+
+The first source slice defines the closed manifest/pointer, fixed-path file resolver
+and actual own-FD/read-only-mount witness. It is not an installation receipt or an
+activation. Its manifest pins both the unchanged baseline host seed and the target
+seed calculated by substituting **only** the cache size/hash in that baseline.
+The resolver checks this relation, not merely the manifest's self-hash.
+
+Keep the original fixed-host capture entry point and seed bytes unchanged. A separate
+snapshot capture entry point requires an already observed exact read-only mount and
+an independently supplied expected target seed. Both paths use one private capture
+implementation for all executable, library, alias, absence, dependency and symbol
+version checks. The snapshot path rechecks its namespace/mount witness alongside the
+same held host descriptors. It does not generalize the host allowlist or admit a
+native installation. This small extraction serves two concrete capture paths, not a
+new loader/installer framework.
+
+The existing native configuration/receipt/factory/unit consumers are deliberately
+not redirected by this source slice. Their compatible configuration selection and
+pre-exec binding remain a separate required integration before any service restart.
+
+The filesystem adapter owns the snapshot entry point and calls the same package's
+private host-capture primitive. The fixed host module only receives a bound local
+mount recheck, stays stdlib-only under `-I -S -B`, and never imports the filesystem
+adapter, Pydantic, contracts or ML. There is no lazy/circular import workaround.
+
+### Source verification (not runtime recovery)
+
+- Final focused contracts/files/mount/shared-host and frozen-predecessor suite:
+  298 PASS. Closed schema/mirror/raw pin, 316 prior resource bytes and the original
+  296-resource acceptance remain frozen, without changing historical digests.
+- Expanded host/prefix/Conda/wheel/native-receipt/CUDA-directory suite:955 PASS;
+  it imported the source before the final malformed-JSON/missing-member additions.
+  The final focused suite covers those additions. Counts overlap; do not sum them.
+- Installed-release/factory/entry/probe/fixed INDEX/QUERY template regression:
+  279 PASS. No runtime unit or prefix was selected by these tests.
+- Strict type checks:6 files PASS; Ruff format/lint and diff whitespace PASS.
+- Synthetic filesystem/namespace tests are not a real root-held snapshot, pre-exec
+  mount or fresh native admission. No model, GPU, DB mutation or service restart.
+
+Source ownership: schema and frozen values in `eom_catalog_contracts`; fixed-path
+materialization/mount witness in `embedding_host_configuration_files.py`; fixed host
+closure in `embedding_runtime_host_closure.py`. No new dependency, database object,
+queue, model payload, worker access or deployment selection is introduced.

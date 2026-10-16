@@ -8,6 +8,15 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Host-configuration recovery source slice: closed snapshot/pointer schema and frozen
+  values, exact fixed-path/owner/raw/semantic/seed closure, actual own-FD/read-only
+  mount witness, shared fixed-host capture. Final focused298/expanded955/install279/
+  strict6 PASS (overlapping inventories, not summed). Legacy host seed/cache pins,
+  no-site stdlib imports and predecessor resource bytes remain unchanged. This is
+  NOT_INSTALLED/ACTIVE: native config/receipt/factory/units still require compatible
+  integration and actual protected namespace/admission before recovery or login.
+  No model/GPU/DB mutation/restart/new HTTP key in this source slice.
+  [Source ownership, evidence and remaining integration](../architecture/EMBEDDING_HOST_CONFIGURATION_SNAPSHOT_DESIGN.md).
 - New actual operating stop: INDEX source2a4843c3 exited06:29/status1, no restart.
   READ ONLY06:53 inspection finds20 SUCCEEDED/COMPLETED and one PENDING/REQUESTED
   attempt/generation0, no failed command/control mismatch. Actual UID990 verifier

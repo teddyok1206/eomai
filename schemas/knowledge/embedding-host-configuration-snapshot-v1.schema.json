@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/embedding-host-configuration-snapshot/1.0",
+  "title": "Immutable reviewed embedding host configuration snapshot V1",
+  "description": "Small installation metadata only. Does not authorize a host, source, process, unit, model or device. The installation owner pins raw manifest bytes and verifies exact namespace and host closure independently.",
+  "$defs": {
+    "sha": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "loaderCache": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "member_name",
+        "byte_count",
+        "sha256"
+      ],
+      "properties": {
+        "role": {
+          "const": "LD_SO_CACHE"
+        },
+        "member_name": {
+          "const": "ld.so.cache"
+        },
+        "byte_count": {
+          "type": "integer",
+          "minimum": 48,
+          "maximum": 131072
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "configuration_id",
+        "configuration_revision_id",
+        "captured_at",
+        "baseline_host_seed_sha256",
+        "host_seed_sha256",
+        "loader_cache",
+        "snapshot_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-host-configuration-snapshot/1.0"
+        },
+        "configuration_id": {
+          "type": "string",
+          "pattern": "^embeddinghostconfig_[0-9a-f]{32}$"
+        },
+        "configuration_revision_id": {
+          "type": "string",
+          "pattern": "^embeddinghostconfigrev_[0-9a-f]{32}$"
+        },
+        "captured_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "baseline_host_seed_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "host_seed_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "loader_cache": {
+          "$ref": "#/$defs/loaderCache"
+        },
+        "snapshot_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_ref",
+        "configuration_id",
+        "configuration_revision_id",
+        "manifest_byte_count",
+        "manifest_raw_sha256",
+        "snapshot_sha256"
+      ],
+      "properties": {
+        "schema_ref": {
+          "const": "eom://schemas/knowledge/embedding-host-configuration-snapshot/1.0#/$defs/snapshot"
+        },
+        "configuration_id": {
+          "type": "string",
+          "pattern": "^embeddinghostconfig_[0-9a-f]{32}$"
+        },
+        "configuration_revision_id": {
+          "type": "string",
+          "pattern": "^embeddinghostconfigrev_[0-9a-f]{32}$"
+        },
+        "manifest_byte_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8192
+        },
+        "manifest_raw_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "snapshot_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/snapshot"
+    },
+    {
+      "$ref": "#/$defs/pointer"
+    }
+  ]
+}
