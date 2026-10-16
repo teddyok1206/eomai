@@ -5,6 +5,11 @@ Source implementation is not an installed receipt, kernel/device proof or grant.
 The [original goal](SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md)
 still requires C1–C5 and six real CPU/CUDA comparisons/conditional default.
 
+Latest actual boundary22:45:20 UTC: the **new** private-code successor has passed
+the complete protected read-only prefix/source/ELF audit. It is BYTE_AUDITED /
+NOT_ADMITTED / NOT_PROBED, not the old B41 candidate and not GPU activation.
+See [the exact accepted operation and inventory](#source-closed-successor-audit-pass-224520-utc).
+
 ## Responsibility and required design procedure
 
 1. Extend the existing protected installation/admission boundary with an explicit
@@ -239,6 +244,70 @@ runtime/policy change. New log `successor-input2.log` is in the original operati
 evidence directory. It is still **RUNNING / NOT_ADMITTED / NOT_PROBED**, not a
 successful full-prefix audit. Reobserve this exact new handle, not the failed one,
 and do not submit another operation on a polling timeout.
+
+### Source-closed successor audit PASS —22:45:20 UTC
+
+The corrected-input publication prepared both private packages successfully,
+replaced the fixed CUDA candidate and retained the original B41 prefix. Its later
+whole audit correctly stopped at `INSTALLED_RUNTIME_PREFIX_HELPER_SOURCE_MISMATCH`:
+the platform23 source archive contained helper58e61d5e, while the reviewed new
+installer used helper79e22063 from core0f8c70f0. That failed operation was not reset,
+relabeled successful or replayed. At that point the new prefix was ROOT_STAGED /
+NOT_BYTE_AUDITED; no candidate instruction or GPU/model execution occurred.
+
+Fixed only the declared source provenance, without another private installation
+or prefix copy. Git comparison of ALL packaged roots and pyproject between23dce821
+and0f8c70f0 is empty; the exact built platform wheel4d8c0927 payload is unchanged.
+The explicitly pinned0f8c70f0 Git archive contains helper79e22063 and the same
+private payload. Raw archive SHA
+`f4da1d24e7b73f7d25608008c94d0e015503093a5adaa42bfd9bb363f31bba68`,61265920 bytes.
+A reviewed protected operator invoked the existing PUBLIC `retain_index_archive`
+under accepted OLD Python with both publication flocks. Actual retained file is
+root:root0644/nlink1 with the expected size. No ad-hoc prefix patch, guard change,
+new archive store or latest-source fallback was introduced.
+
+New canonical input1.2,20012 bytes, raw
+`aebace29b4eac852c8fea7c2bfdd00044294abb7e8583d953a532aea7c052d57`, explicitly pins
+platform source0f8c70f0/wheel4d8c0927, lease sourcec9ab75c3/wheel3b097122 and the same
+helper/host/bootstrap closure. Official Catalog registry plus pure input parser
+PASS. A separate protected read-only fingerprint observation returned
+`a7198a94e30c91e04ba295249139722a28da4ead42978a7d5cb1dafeaefa7047`.
+Its late FD3 check found the process already exited, so it supplies no separately
+observed lock proof. The following actual `audit-staged` independently held the
+normal profile lock and rechecked that exact tree before the whole byte audit.
+
+Actual read-only unit `eom-cuda-successor-source-audit-0f8c70f0.service`, invocation
+`775eb55886b6419d9836e2b0b74b05da`, PID3330265, terminated successfully22:45:20.155500.
+The same-invocation journal records Deactivated successfully/Finished, followed by
+normal unit collection. Stdout explicitly reports AUDITED_NOT_ADMITTED and
+NOT_PROBED, exact aebace29 input and a7198a94 tree. CPU, OLD, models, the CUDA
+prefix and archive store were read-only; no candidate interpreter was called.
+The two failed publications, their phase/input/backup evidence and the empty
+reservation's recoverable relocation remain historical facts.
+
+New operation `/opt/eom/.embedding-index-install-D0QsGnpF` produced a fresh inventory:
+
+| Exact new inventory fact | Verified value |
+| --- | --- |
+| Schema/state | inventory1.0 / CANDIDATE_NOT_ADMITTED |
+| Raw bytes/SHA | 8927754 / `62ad4ee23e8d288310809b6b499fa43e05605d35a0c5c1ef27f44b0d99cb094d` |
+| Semantic SHA | `08cd467c958e101e92d446f3cf9e00dd105679915348cb26ffecd5ba36d8ddd7` |
+| Entries/regular/links/ELF | 31596 /28023 /1380 /287 |
+| Payload bytes | 7084886547 |
+| Source closure | `50b272d95e7dd090418d4da5535b2d3ae0ee5221f1eef37d80ba94e90d927852` |
+
+The installed protected owner23 contract independently parsed this actual root
+inventory against the original protected inventory1.0 schema and exact input pin;
+Torch/transformers imports0. A parsed inventory is not a receipt/device grant.
+Original B41 inventory Y/2f4a9c6d remains historical, never substituted here.
+
+Read-only installed NVIDIA/proc metadata also reports RTX5080, capability12.0,
+driver580.126.09, UUID91c9316c-b28a-4192-2657-1f46f267b09e/PCI0000:01:00.0/minor0.
+This is not a Torch/CUDA probe, published installed proof or performance result.
+Native configuration/proof/bundle publication, actual fixed probe/two ACKs,
+device/shared-lease lifetime/terminal retirement/seal, all known GPU entrypoints,
+six frozen numerical comparisons and conditional default remain required.
+CPU/API/QUERY/INDEX activation and the original successful QUERY are unchanged.
 
 ## Implemented metadata slice —2026-10-16 UTC
 

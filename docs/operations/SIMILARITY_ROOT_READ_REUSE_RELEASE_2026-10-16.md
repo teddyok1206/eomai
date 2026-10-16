@@ -140,3 +140,24 @@ No unsupported command, protected-prefix edit, candidate instruction or CUDA
 model run was attempted. The original audited B41 inventory remains valid only
 for its original bytes. Actual successor preparation still needs an explicit
 supported installation operation and a fresh complete audit before execution.
+
+## Scheduled observation and input-wait diagnosis —22:30–22:43 UTC
+
+At22:30:16 the same INDEX PID2893747/invocation99af6c0f remained active/running.
+The bounded21:59:34–22:30:16 journal window recorded SUCCEEDED CONTENT_ONLY
+`wfcmd_6cf69580346844eda4febd9045945b75`, CONCRETE_FACETS
+`wfcmd_29317eb47f9446c185be8e68a24be21b` and METADATA_ONLY
+`wfcmd_cf5b003d4449457db16e79e0f5cbf406`. Following discovery frames each selected4
+targets from545 eligible sources,25 missing reports/0 unavailable views; missing
+bindings405/415/423 respectively. These are separate view snapshots, not a single
+coverage acceptance or the terminal state of newly queued commands. Original520
+solution-report completion is not reopened. Next routine observation23:00:16 UTC.
+
+The same user-auth observer2895440 was actually alive LOGIN/log0/no acceptance at
+22:30:16. To distinguish true input waiting from an HTTP hang, a bounded foreground
+diagnostic read **kernel syscall metadata and an FD symlink only**: syscall0/read
+FD4, type TERMINAL. No tty input, password/token, process memory, environment or
+socket contents were read. This confirms terminal input waiting, not a server-side
+login timeout or rejected password. No new prompt, login, request or numerical
+execution was created; keep the existing process. The successful numerical Job
+and exact same-key final-context verification remain distinct facts.
