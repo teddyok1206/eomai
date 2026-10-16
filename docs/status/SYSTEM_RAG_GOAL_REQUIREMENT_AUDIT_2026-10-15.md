@@ -11,10 +11,13 @@ summed into a single acceptance count. This ledger does not grant authority.
 - Repository source candidate`15ffdef5` is committed/pushed and standard build/
   source-free two-wheel207-EOM-module/117-schema composition PASS; it is
   NOT_INSTALLED/ACTIVE. Prior input1.1 foundation4f302b99 evidence remains.
-  The following input-only HTTP/native preparation1.1 source candidate is under
-  review: explicit ITEM_AUTHORING/ITEM_REVIEW, same original operator/key identity,
+  The input-only HTTP/native preparation1.1 source`a8238d7a` is committed/pushed:
+  explicit ITEM_AUTHORING/ITEM_REVIEW, same original operator/key identity,
   strict implicit-variation1.0 unchanged. Related source1729, final subset110,
   disposable PG152 and mypy9 PASS; overlapping inventories are not summed.
+  Its first build refused stale exported OpenAPI metadata. Official deterministic
+  export plus explicit version-discriminator coverage correct the candidate;
+  HTTP/OpenAPI/release/deployment112 PASS. No installation/activation occurred.
   Reviewed INDEX
   code`2a4843c3` is independently packaged/installed. Documentation successors do
   not silently select another source release.

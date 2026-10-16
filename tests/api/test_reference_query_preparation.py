@@ -233,6 +233,27 @@ def test_operation_declares_fresh_mutation_not_read_only(setup):
     assert any(parameter["name"] == "Idempotency-Key" for parameter in operation["parameters"])
 
 
+def test_openapi_declares_both_exact_inputs_without_reinterpreting_predecessor(setup):
+    app, _services, _native, _pair = setup
+    schema = app.openapi()
+    body = schema["paths"][PATH]["post"]["requestBody"]["content"]["application/json"]["schema"]
+    prefix = "#/components/schemas/ReferenceQueryPrepareInput"
+    assert body["discriminator"] == {
+        "propertyName": "schema_version",
+        "mapping": {
+            "system-rag-reference-query-prepare-request/1.0": prefix,
+            "system-rag-reference-query-prepare-request/1.1": prefix + "V11",
+        },
+    }
+    assert len(body["oneOf"]) == 2
+    old = schema["components"]["schemas"]["ReferenceQueryPrepareInput"]
+    new = schema["components"]["schemas"]["ReferenceQueryPrepareInputV11"]
+    assert "consumer_purpose" not in old["properties"]
+    assert new["properties"]["consumer_purpose"]["enum"] == ["ITEM_AUTHORING", "ITEM_REVIEW"]
+    assert "consumer_purpose" in new["required"]
+    assert old["additionalProperties"] is False and new["additionalProperties"] is False
+
+
 @pytest.mark.parametrize("purpose", ("ITEM_AUTHORING", "ITEM_REVIEW"))
 def test_explicit_successor_uses_same_authenticated_operation_and_bound_reply(setup, purpose):
     app, services, native, pair = setup

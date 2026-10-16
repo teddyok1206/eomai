@@ -417,3 +417,12 @@ Original contract RED and all subsequent evidence remain under
 `/tmp/eom-identity-provider-install.nAaycoDM/purpose-preparation-*`, including
 `source-regression.log`, `focused-final.log`, `mypy-final.log`, `stage-final.log`
 and `db-after-final.log`. **SOURCE_AND_DISPOSABLE_PASS / NOT_INSTALLED / NOT_ACTIVE.**
+
+The first immutable build of source`a8238d7a` correctly refused the stale committed
+OpenAPI snapshot after the new discriminated input. That failed build log is
+preserved as `purpose-preparation-release-build.log`; no install/activation ran.
+The existing official OpenAPI exporter regenerated the deterministic snapshot and
+its SHA file. An explicit two-version request-body/discriminator test was added;
+OpenAPI, HTTP preparation, release inventory and deployment-boundary tests passed
+112/21.47s. This corrects release metadata, not runtime authority or protocol
+semantics. A corrected immutable candidate must pass the standard build again.
