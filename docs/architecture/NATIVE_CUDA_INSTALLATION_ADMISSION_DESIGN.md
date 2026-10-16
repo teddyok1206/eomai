@@ -588,3 +588,35 @@ and two ACKs, final termination/cgroup/GPU-client cleanup, sealed CUDA2.0 reader
 and all-entrypoint lease migration before model comparison. No worker/client or
 metadata parser can skip those steps. Current operating API/Catalog stays e132c1aa
 and the CUDA candidate remains BYTE_AUDITED/NOT_ADMITTED for its old B41 bytes.
+
+### Protected owner installation, not CUDA activation —21:15 UTC
+
+Source `b8a8276547a0bb415b4175177be90e0c7ddd871b` is committed/pushed and its
+standard build/RECORD passed at
+`/tmp/eom-api-build/b8a8276547a0bb415b4175177be90e0c7ddd871b.vlAbKB/dist`.
+The three process/resource/map-observer wheel members exactly matched source.
+Platform raw SHA `73856002388cf9c883a5ffc7d2fcae88d0d268dd360547e17fde3b2ebad3b656`;
+paired API-contract raw SHA `3a509d984578e417dc60f0a350d27f624cf5b8156e7d931fcf084d450102b8c1`.
+
+The existing protected `install_owner_release.sh` matched repository raw SHA
+`559ada516fe9d46f57926aad70699e81deba5f1a18b4e25e3f6e6bcdf1384b71`.
+An initial direct invocation could not execute its deliberate0444 file and
+returned command-not-found before running the installer; no release existed.
+Used its supported `/usr/bin/bash` invocation without changing permissions.
+Same EOM2 TTY's existing sudo authentication was reused for that actual installation,
+not refreshed/extended by a keepalive and with no new password prompt.
+
+Owner pair RECORD verification/install passed once at
+`/opt/eom/embedding-owner-releases/b8a8276547a0bb415b4175177be90e0c7ddd871b`.
+Installed wheel hashes equal the above values; observer code is root:root0444,
+nlink1. Previous owner releases, OLD interpreter and CPU/CUDA numerical prefixes
+were not replaced. Installer reported `OWNER_ACTIVATION=NOT_PERFORMED` and
+`CPU_RUNTIME=UNCHANGED`. Temporary bounded operation evidence:
+`/tmp/eom-cuda-observer-owner-hVq0lPVH`; preserve both invocation outcomes.
+
+A fresh unprivileged import using protected OLD Python3.12 `-I -B` and this exact
+readonly owner release passed for both new observers and its329 packaged schemas.
+No torch/transformers/shared-GPU adapter was imported; candidate CUDA Python was
+not run. The CUDA probe unit is still absent from `/etc/systemd/system`.
+This is **OWNER_INSTALLED / NOT_ACTIVE**, not a CUDA prefix install/audit, real
+probe/ACK, sealed receipt or benchmark. Operating API/Catalog was not redeployed.
