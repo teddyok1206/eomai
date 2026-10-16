@@ -156,3 +156,31 @@ review plan preparation/delivery and private intent/result search still remain.
 Plan23/publication stay variation-only; no old plan/Pack/request is upgraded.
 API/QUERY/Web flags, source policy, numerical runtime/device and active INDEX
 release were not changed by this source work.
+
+## Immutable build and package composition
+
+Source commit `4f302b99284a7039845d6d6dee375f1f14a524b4` passed the standard
+`scripts/api/deploy_release.sh --build-only` gate. This is a build, not an install
+or activation. Retained build directory:
+`/tmp/eom-api-build/4f302b99284a7039845d6d6dee375f1f14a524b4.9NqFyM`.
+
+| Immutable build member | Raw SHA-256 |
+| --- | --- |
+| `source.tar` | `2d68b780f1289ca1ae2ef42d21c53e8d8ed6c0f782a785fce90e9a10ad9e8936` |
+| `eom_platform-0.1.0-py3-none-any.whl` | `b17a0dd2511fc07a9c813db7ae1fbe8de0c296cae71b59942bb905b968c12e57` |
+| `eom_api_contracts-0.1.0-py3-none-any.whl` | `ec1ae2a1fdeb79f724781c4938a4eb0628b3b224b4b377f0e9d4f35b0e1af238` |
+| `eom_application_api-0.1.0-py3-none-any.whl` | `a4d0df9e5679a878ef7cc551af799dcdfb1dbf0b8b6a49d73019d20dd095cb71` |
+
+An additional unprivileged `-I -B` API-Conda process verified the platform and
+contract archive hashes and restricted all142 imported EOM modules to those two
+selected wheels. Three purpose cases passed request/launch/receipt closure, and
+the strict predecessor parser refused both1.1 cases. The input constructors came
+explicitly from checkout test fixtures; this is **archive-only EOM runtime import
+composition**, not a claim that the entire test process had no checkout access.
+No DB, current-Identity/source lookup, model, GPU, service mutation or activation
+occurred. No ML package was imported. Evidence:
+`authoring-reference-release-build.log` and
+`authoring-reference-owner-archive-proof.log` under the evidence prefix above.
+
+The candidate is pushed to GitHub. The running INDEX remains source2a4843c3;
+API/QUERY/Web and ordinary consumer delivery are not selected by this build.

@@ -8,7 +8,9 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
-- Repository main`aba066a2` before this source checkpoint; reviewed INDEX
+- Repository source candidate`4f302b99` is committed/pushed and standard build/
+  selected-archive EOM import composition PASS; it is NOT_INSTALLED/ACTIVE.
+  Reviewed INDEX
   code`2a4843c3` is independently packaged/installed. Documentation successors do
   not silently select another source release.
 - API/platform/contracts2857bf77 and native QUERY owner8c411041 remain selected.
