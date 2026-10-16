@@ -30,6 +30,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "system-rag-exam-observation-read": CatalogSchemaResource(
+            "schemas/knowledge/system-rag-exam-observation-read-v1.schema.json",
+            "resources/knowledge/system-rag-exam-observation-read-v1.schema.json",
+            "1.0",
+            "sha256:78426f9b22d5f6e0b75d4d7fbb36e181265fb890aa1ce29c52db9c9f9bf261b1",
+        ),
         "system-rag-exam-observation": CatalogSchemaResource(
             "schemas/knowledge/system-rag-exam-observation-v1.schema.json",
             "resources/knowledge/system-rag-exam-observation-v1.schema.json",

@@ -36,6 +36,8 @@ from eom_api.services.document_review_correction_service import (
 from eom_api.services.educational_quality_service import (
     EducationalQualityReviewApplicationService,
 )
+from eom_api.services.exam_similarity_client import CatalogExamSimilarityClient
+from eom_api.services.exam_similarity_read import ExamSimilarityReadApplicationService
 from eom_api.services.general_chat_service import GeneralChatApplicationService
 from eom_api.services.hwpx_download_client import HwpxDownloadClient
 from eom_api.services.hwpx_item_revision_resolver import (
@@ -118,6 +120,9 @@ class AppServices:
         similarity_context_client = CatalogSimilarityContextClient()
         self.similarity_context_reads = SimilarityContextReadApplicationService(
             similarity_context_client
+        )
+        self.exam_similarity_reads = ExamSimilarityReadApplicationService(
+            CatalogExamSimilarityClient(), enabled=settings.exam_similarity_observation_enabled
         )
         self.item_similarity_publications = CatalogItemSimilarityPublicationClient()
         self.item_similarity_start_preparation = ItemSimilarityStartPreparationService(

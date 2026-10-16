@@ -126,6 +126,8 @@ from eom_catalog_service.document_review_pdf_annotation_service import (
     DocumentReviewPdfAnnotationServiceError,
 )
 from eom_catalog_service.errors import CatalogError
+from eom_catalog_service.exam_similarity_read_dispatch import dispatch_exam_similarity_read_frame
+from eom_catalog_service.exam_similarity_read_service import CatalogExamSimilarityReadService
 from eom_catalog_service.inference_transfer_metadata_dispatch import dispatch_metadata_frame
 from eom_catalog_service.inference_transfer_metadata_service import (
     CatalogInferenceTransferMetadataService,
@@ -218,6 +220,12 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 raise ValueError
             raw_operation = value.get("operation")
             if not self.server.peer_can_operate(self.request, raw_operation):
+                return
+            if raw_operation == "READ_EXAM_SIMILARITY_OBSERVATION":
+                self.wfile.write(
+                    dispatch_exam_similarity_read_frame(self.server.exam_similarity_reads, raw)
+                )
+                self.wfile.flush()
                 return
             if raw_operation == "SELECT_ITEM_AUTHORING_REFERENCE":
                 self.wfile.write(
@@ -1311,6 +1319,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         chat_rag: ChatRagResolutionService | None = None,
         inference_transfer_metadata: CatalogInferenceTransferMetadataService | None = None,
         similarity_context_reads: CatalogSimilarityContextReadService | None = None,
+        exam_similarity_reads: CatalogExamSimilarityReadService | None = None,
         item_similarity_publications: CatalogItemSimilarityPublicationService | None = None,
         workflow_similarity_reads: CatalogWorkflowSimilarityReadService | None = None,
         workflow_runner_uid: int | None = None,
@@ -1340,6 +1349,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.chat_rag = chat_rag
         self.inference_transfer_metadata = inference_transfer_metadata
         self.similarity_context_reads = similarity_context_reads
+        self.exam_similarity_reads = exam_similarity_reads
         self.authoring_reference_selection = (
             None
             if similarity_context_reads is None

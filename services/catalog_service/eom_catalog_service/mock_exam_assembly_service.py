@@ -291,6 +291,22 @@ class MockExamAssemblyService:
             return manifest
 
     @staticmethod
+    def inspect_observation_source(
+        session: Session, assembly_revision_id: str
+    ) -> MockExamAssemblyManifestContract | None:
+        """Current lifecycle for a pinned read; keep historical audit inspect unchanged."""
+        row = session.get(
+            AssessmentAssemblyRevisionRecord, assembly_revision_id, populate_existing=True
+        )
+        if row is None:
+            return None
+        if row.revision_state not in {"RELEASED", "SUPERSEDED"}:
+            raise MockExamAssemblyError(
+                "ASSEMBLY_REVISION_INELIGIBLE", "the pinned Assembly revision was withdrawn"
+            )
+        return MockExamAssemblyService.inspect(session, assembly_revision_id)
+
+    @staticmethod
     def inspect(
         session: Session, assembly_revision_id: str
     ) -> MockExamAssemblyManifestContract | None:

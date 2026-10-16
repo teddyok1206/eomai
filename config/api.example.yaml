@@ -1,5 +1,8 @@
 schema_version: 1
 
+# Independent read-only capability; Catalog enable and compatible release are also required.
+exam_similarity_observation_enabled: false
+
 server:
   host: "127.0.0.1"
   port: 8765

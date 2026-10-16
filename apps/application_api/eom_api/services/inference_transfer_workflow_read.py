@@ -23,6 +23,7 @@ from eom_operator_identity import PermissionKey
 from jsonschema.exceptions import ValidationError as SchemaError
 
 from eom_api.errors import ApiError
+from eom_api.services.operator_read_authorization import authorize_current_operator_read
 
 
 class InferenceTransferWorkflowReadError(RuntimeError):
@@ -108,13 +109,7 @@ def authorize_inference_transfer_read(authentication: AccessAuthentication) -> N
         PermissionKey.KNOWLEDGE_GRAPH_RETRIEVE,
         PermissionKey.KNOWLEDGE_ANALYSIS_READ,
     }
-    if (
-        authentication.operator.status != "ACTIVE"
-        or authentication.operator.must_change_password
-        or authentication.password_change_required
-        or not required.issubset(authentication.permissions)
-    ):
-        raise ApiError(403, "PERMISSION_DENIED", "Permission denied", "Comparison read denied.")
+    authorize_current_operator_read(authentication, required)
 
 
 class InferenceTransferWorkflowReadApplicationServiceV11:

@@ -14,13 +14,49 @@ from eom_api_contracts.assessment_assemblies import (
     MockExamAssemblyViewContract,
     PreviewMockExamAssemblyPlanRequest,
 )
+from eom_api_contracts.exam_similarity import ExamSimilarityReadSelection
+from eom_catalog_contracts.exam_similarity_observation import ExamSimilarityObservation
+from eom_catalog_contracts.exam_similarity_read import MAX_EXAM_READ_SELECTOR_BYTES
 from eom_operator_identity import PermissionKey
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 
 from eom_api.dependencies import Auth, IdempotencyKey, require_permission
+from eom_api.errors import ApiError
 from eom_api.routers.common import one, run_command
 
 router = APIRouter(prefix="/assessment-assemblies", tags=["assessment-assemblies"])
+
+
+@router.post(
+    "/similarity-observation",
+    operation_id="mock_exam_assembly_similarity_observation_read",
+    response_model=SingleResponse[ExamSimilarityObservation],
+    dependencies=[Depends(require_permission(PermissionKey.DELIVERABLE_READ))],
+    openapi_extra={
+        "x-eom-read-only": True,
+        "x-eom-additional-permissions": [
+            PermissionKey.ITEM_READ.value,
+            PermissionKey.KNOWLEDGE_ANALYSIS_READ.value,
+            PermissionKey.KNOWLEDGE_GRAPH_RETRIEVE.value,
+        ],
+        "x-eom-conditional-permissions": {"PAST_EXAM": [PermissionKey.CONTENT_INTAKE_READ.value]},
+    },
+)
+async def read_exam_similarity_observation(
+    request: Request,
+    body: ExamSimilarityReadSelection,
+    response: Response,
+    authentication: Auth,
+) -> SingleResponse[ExamSimilarityObservation]:
+    if len(await request.body()) > MAX_EXAM_READ_SELECTOR_BYTES:
+        raise ApiError(
+            422,
+            "EXAM_OBSERVATION_BUDGET_EXCEEDED",
+            "Exam selector too large",
+            "The exact selector exceeds its fixed public byte budget.",
+        )
+    response.headers["Cache-Control"] = "no-store"
+    return one(request, request.app.state.services.exam_similarity_reads.read(authentication, body))
 
 
 @router.get(

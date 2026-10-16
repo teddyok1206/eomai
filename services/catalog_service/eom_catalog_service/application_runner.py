@@ -84,6 +84,7 @@ from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.runtime_privileges import catalog_runtime_privileges_ready
 from eom_catalog_service.similarity_read_runtime import (
     SimilarityReaderRuntimeError,
+    build_catalog_exam_similarity_reads,
     build_catalog_item_similarity_publications,
     build_catalog_similarity_context_reads,
     build_catalog_workflow_similarity_reads,
@@ -276,6 +277,10 @@ def serve() -> int:
             chat_rag=ChatRagResolutionService(engine),
             inference_transfer_metadata=CatalogInferenceTransferMetadataService(engine),
             similarity_context_reads=similarity_reads,
+            exam_similarity_reads=build_catalog_exam_similarity_reads(
+                mode=os.environ.get("EOM_EXAM_SIMILARITY_READ_MODE", "DISABLED"),
+                context_reads=similarity_reads,
+            ),
             item_similarity_publications=build_catalog_item_similarity_publications(
                 mode=os.environ.get("EOM_ITEM_SIMILARITY_PUBLICATION_MODE", "DISABLED"),
                 context_reads=similarity_reads,

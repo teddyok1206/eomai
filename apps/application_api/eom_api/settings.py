@@ -97,6 +97,7 @@ class ApiSettings(StrictSettings):
     pdf_document_review: PdfDocumentReviewSettings = PdfDocumentReviewSettings()
     reference_query_preparation_enabled: bool = False
     reference_item_start_enabled: bool = False
+    exam_similarity_observation_enabled: bool = False
 
     @model_validator(mode="after")
     def reference_start_requires_native_preparation(self) -> ApiSettings:

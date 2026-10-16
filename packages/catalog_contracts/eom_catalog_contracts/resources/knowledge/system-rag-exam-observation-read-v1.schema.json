@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/system-rag-exam-observation-read/1.0",
+  "title": "API-only immutable Assembly observation read",
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "actor": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+    "selection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["assembly_revision_id", "assembly_manifest_sha256", "observation_request"],
+      "properties": {
+        "assembly_revision_id": {"type": "string", "pattern": "^assemblyrev_[0-9a-f]{32}$"},
+        "assembly_manifest_sha256": {"$ref": "#/$defs/hash"},
+        "observation_request": {"$ref": "eom://schemas/knowledge/system-rag-exam-observation/1.0#/$defs/request"}
+      }
+    },
+    "request": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "operation", "actor_id", "selection"],
+      "properties": {
+        "schema_version": {"const": "system-rag-exam-observation-read-request/1.0"},
+        "operation": {"const": "READ_EXAM_SIMILARITY_OBSERVATION"},
+        "actor_id": {"$ref": "#/$defs/actor"},
+        "selection": {"$ref": "#/$defs/selection"}
+      }
+    },
+    "error": {
+      "enum": ["SOURCE_ACCESS_DENIED", "SOURCE_REVOKED", "SOURCE_POINTER_INVALID", "SOURCE_HASH_MISMATCH", "INDEX_POINTER_INVALID", "INDEX_HASH_MISMATCH", "QUERY_RESULT_INVALID", "AUTHORITY_UNAVAILABLE", "EXAM_OBSERVATION_REQUEST_INVALID", "EXAM_OBSERVATION_UNAVAILABLE", "EXAM_OBSERVATION_BUDGET_EXCEEDED", "ASSEMBLY_REVISION_NOT_FOUND", "ASSEMBLY_OBSERVATION_PIN_MISMATCH"]
+    },
+    "reply": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "operation", "status", "actor_id", "request_sha256", "result", "error_code"],
+      "properties": {
+        "schema_version": {"const": "system-rag-exam-observation-read-reply/1.0"},
+        "operation": {"const": "READ_EXAM_SIMILARITY_OBSERVATION"},
+        "status": {"enum": ["SUCCESS", "FAILED"]},
+        "actor_id": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/actor"}]},
+        "request_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/hash"}]},
+        "result": {"oneOf": [{"type": "null"}, {"$ref": "eom://schemas/knowledge/system-rag-exam-observation/1.0#/$defs/result"}]},
+        "error_code": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/error"}]}
+      },
+      "allOf": [
+        {"if": {"properties": {"actor_id": {"type": "null"}}, "required": ["actor_id"]}, "then": {"properties": {"request_sha256": {"type": "null"}}}, "else": {"properties": {"request_sha256": {"$ref": "#/$defs/hash"}}}},
+        {"if": {"properties": {"status": {"const": "SUCCESS"}}, "required": ["status"]}, "then": {"properties": {"actor_id": {"$ref": "#/$defs/actor"}, "request_sha256": {"$ref": "#/$defs/hash"}, "result": {"$ref": "eom://schemas/knowledge/system-rag-exam-observation/1.0#/$defs/result"}, "error_code": {"type": "null"}}}, "else": {"properties": {"result": {"type": "null"}, "error_code": {"$ref": "#/$defs/error"}}}}
+      ]
+    }
+  },
+  "oneOf": [{"$ref": "#/$defs/selection"}, {"$ref": "#/$defs/request"}, {"$ref": "#/$defs/reply"}]
+}

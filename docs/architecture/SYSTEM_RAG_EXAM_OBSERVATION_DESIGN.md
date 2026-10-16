@@ -100,3 +100,68 @@ policy or insert historical data. No new25-item generation/HWPX cycle is require
   model or HWPX output was changed. Source and synthetic-owner tests are not an
   authenticated live C5 result. Next: existing Assembly read application/compatible
   transport exposure and bounded actual-user read under the unchanged policy.
+
+## Assembly read delivery delta
+
+The next source slice adds a separate `READ_EXAM_SIMILARITY_OBSERVATION` operation
+to the existing API-only Catalog Unix socket, not to released Assembly manifests.
+Its public selector pins an Assembly revision/hash and the observation request.
+The trusted API alone supplies the authenticated actor. Catalog resolves the
+Assembly through its supported inspection in the same root used by vector
+reads, then checks exact ordered membership and manifest identity/hash. Older released
+V1/V2/V3 manifests remain readable; a non25 Assembly is explicitly ineligible.
+The Assembly identity is an additional selection, not a substitute for the cohort.
+Its historical planning Graph and the observation's explicitly selected Graph are
+separate pinned concepts: the same exact Item revisions may be observed against a
+later, independently admitted Graph/index without changing the old Assembly. The
+document owner must resolve every selected source against that exact observation
+Graph/policy/index, never latest. Requiring the old planning Graph would wrongly
+make later incremental indexes unusable; silently replacing the requested Graph
+would also be wrong. No old Evidence receipt is relabeled as new evidence.
+`inspect_observation_source` refreshes only that exact immutable row and rejects
+WITHDRAWN revisions; SUPERSEDED historical pins remain readable. Existing generic
+audit inspection retains its old semantics. No current-head substitution occurs.
+
+Existing Identity fencing/current permissions protect the initial Assembly read
+and the final return; `DELIVERABLE_READ` is required in addition to actual Item/
+analysis/Graph/source rights checked by the existing document owner. No model-
+supplied role is accepted. No read can execute native computation. The transport
+is optional/default-off and must not activate merely because reference QUERY reads
+are enabled. Chat/worker peers cannot call the API-only operation. Public HTTP
+input contains no actor, and all responses are `no-store`.
+
+Access remains one indexed immutable Assembly lookup plus the existing bounded25
+capture, at most3 pinned reads and a final Assembly/permission recheck. No new DB
+objects, queue, cache or persisted observations are added; repeated reads reuse
+exact input pins under fresh authority. RPC replies bind exact actor/request hash
+and observation request. Frame limits include newline/envelope overhead, malformed
+or oversized input fails safely, and unknown exceptions never expose partial data.
+This reuses the current fixed Unix transport instead of a second server/framework.
+An actual authenticated read and coordinated release are still required after
+source/socket/API tests; source exposure is not installed activation.
+
+Enable requires both `ApiSettings.exam_similarity_observation_enabled=true` and
+Catalog `EOM_EXAM_SIMILARITY_READ_MODE=ENABLED`, backed by the existing admitted
+similarity-reader owner. Both default to disabled. Reference QUERY, workflow read,
+and publication switches grant no exam read capability. HTTP is the read-only
+POST `/api/v1/assessment-assemblies/similarity-observation`, with no idempotency
+claim or native job. Its body is the canonical selector, not arbitrary actor data.
+
+`CatalogExamSimilarityReadService` receives only the existing document owner and
+Identity fence. It has no reference-QUERY/workflow execution owner dependency or
+submission interface. The API's current-account/forced-password read guard is
+shared with existing inference-transfer reads, but required permission sets stay
+specific to each use case (C5 requires no synthetic WORKFLOW_READ permission).
+
+Source gates for this delivery slice: schema/service/real Unix socket/API/current
+permissions/Assembly V1–V3 regression235 PASS; independent OpenAPI/settings/route
+permissions/schema-resource/wheel/dependency suite54 PASS. Inventories overlap and
+are not summed. Strict typing15 production modules passes. OpenAPI export is
+deterministic and comparison to3532b9e9 finds zero breaking changes. Actual UID/
+Identity/source/database authority remains synthetic in these source tests; no
+production DB test, native execution or operating activation is claimed.
+
+Initial test failures were synthetic fixtures hashing `+00:00` before the canonical
+UTC `Z` serialization and an incorrect test-only ApiError attribute. Both fixtures
+were corrected, without weakening hashes, schemas or production errors. The
+Starlette/httpx test deprecation warning is retained; no dependency was added.

@@ -32,6 +32,7 @@ READ_ONLY_POSTS = {
     "inference_transfer_snapshot_read",
     "inference_transfer_metadata_resolve",
     "inference_transfer_similarity_context_read",
+    "mock_exam_assembly_similarity_observation_read",
 }
 
 

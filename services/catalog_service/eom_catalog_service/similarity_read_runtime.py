@@ -31,6 +31,7 @@ from pydantic import TypeAdapter
 from sqlalchemy import Engine, text
 
 from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryOwnerConfiguration
+from eom_catalog_service.exam_similarity_read_service import CatalogExamSimilarityReadService
 from eom_catalog_service.item_similarity_publication_service import (
     CatalogItemSimilarityPublicationService,
 )
@@ -46,6 +47,19 @@ SIMILARITY_READER_CONFIGURATION_PATH = Path("/etc/eom/catalog-similarity-read.js
 class SimilarityReaderRuntimeError(ValueError):
     def __init__(self) -> None:
         super().__init__("CATALOG_SIMILARITY_READ_UNAVAILABLE")
+
+
+def build_catalog_exam_similarity_reads(
+    *, mode: str, context_reads: CatalogSimilarityContextReadService | None
+) -> CatalogExamSimilarityReadService | None:
+    """Separate read-only enable; reference reads alone never activate exam delivery."""
+    if mode == "DISABLED":
+        return None
+    if mode != "ENABLED" or not isinstance(context_reads, CatalogSimilarityContextReadService):
+        raise SimilarityReaderRuntimeError()
+    return CatalogExamSimilarityReadService(
+        context_reads.owner.catalog, context_reads.owner.identity
+    )
 
 
 def build_catalog_item_similarity_publications(
