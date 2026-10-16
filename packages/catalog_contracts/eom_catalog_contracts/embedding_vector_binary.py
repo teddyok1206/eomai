@@ -30,9 +30,7 @@ def _require_shape(dimension: int, row_count: int) -> int:
     return dimension * row_count * VECTOR_ELEMENT_BYTES
 
 
-def validate_unit_vector(vector: tuple[float, ...], dimension: int) -> None:
-    """Check an already materialized row without normalization or binary copying."""
-    _require_shape(dimension, 1)
+def _require_unit_vector(vector: tuple[float, ...], dimension: int) -> None:
     if not isinstance(vector, tuple) or len(vector) != dimension:
         raise EmbeddingVectorBinaryError("EMBEDDING_VECTOR_VALUE_INVALID")
     try:
@@ -59,13 +57,13 @@ def pack_unit_vectors(vectors: tuple[tuple[float, ...], ...], *, dimension: int)
     row_codec = struct.Struct(f"<{dimension}f")
     payload = bytearray(expected_bytes)
     for ordinal, vector in enumerate(vectors):
-        validate_unit_vector(vector, dimension)
+        _require_unit_vector(vector, dimension)
         try:
             row_codec.pack_into(payload, ordinal * row_codec.size, *vector)
         except (struct.error, OverflowError) as exc:
             raise EmbeddingVectorBinaryError("EMBEDDING_VECTOR_VALUE_INVALID") from exc
         # The durable values are float32, not the higher precision input values.
-        validate_unit_vector(row_codec.unpack_from(payload, ordinal * row_codec.size), dimension)
+        _require_unit_vector(row_codec.unpack_from(payload, ordinal * row_codec.size), dimension)
     return bytes(payload)
 
 
@@ -85,5 +83,5 @@ def read_unit_vectors(
         raise EmbeddingVectorBinaryError("EMBEDDING_VECTOR_HASH_MISMATCH")
     rows = tuple(struct.iter_unpack(f"<{dimension}f", payload))
     for vector in rows:
-        validate_unit_vector(vector, dimension)
+        _require_unit_vector(vector, dimension)
     return rows

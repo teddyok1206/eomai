@@ -10,6 +10,14 @@ the complete protected read-only prefix/source/ELF audit. It is BYTE_AUDITED /
 NOT_ADMITTED / NOT_PROBED, not the old B41 candidate and not GPU activation.
 See [the exact accepted operation and inventory](#source-closed-successor-audit-pass-224520-utc).
 
+Subsequent source-only correction: C5's public row validator had changed the
+codec module fingerprint despite leaving the native arithmetic unchanged. Its
+[small contract-package facade](EMBEDDING_NUMERICAL_CODEC_INTERFACE_BOUNDARY.md)
+restores all three operating CPU implementation bytes without weakening the
+benchmark family or re-encoding CPU data. Fresh regression2149 PASS/one opt-in
+OLD-pip skip and strict2/lint/format PASS. That source is NOT_INSTALLED; the above
+actual audit still covers only its exact0f8 input/wheel, not this new payload.
+
 ## Responsibility and required design procedure
 
 1. Extend the existing protected installation/admission boundary with an explicit

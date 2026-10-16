@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import struct
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -11,9 +12,31 @@ from eom_catalog_contracts.embedding_vector_binary import (
     EmbeddingVectorBinaryError,
     pack_unit_vectors,
     read_unit_vectors,
-    validate_unit_vector,
 )
+from eom_catalog_contracts.embedding_vector_validation import validate_unit_vector
 from eom_identifiers import sha256_bytes
+
+
+def test_additive_read_api_preserves_the_installed_native_codec_bytes() -> None:
+    import eom_catalog_contracts.embedding_vector_binary as codec
+
+    assert codec.__file__ is not None
+    assert sha256_bytes(Path(codec.__file__).read_bytes()) == (
+        "sha256:3487cae0e2f21dbe2f95c58a278c083a181bea2255f023e00e53484ee2ebdb79"
+    )
+
+
+def test_public_row_validation_never_calls_binary_materialization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import eom_catalog_contracts.embedding_vector_binary as codec
+
+    def forbid(*args: Any, **kwargs: Any) -> None:
+        pytest.fail("row validation must not allocate serialized vector bytes")
+
+    monkeypatch.setattr(codec, "pack_unit_vectors", forbid)
+    monkeypatch.setattr(codec, "read_unit_vectors", forbid)
+    assert validate_unit_vector((0.6, 0.8), 2) is None
 
 
 @pytest.mark.parametrize("dimension", (False, True, 0, -1, 4097, 2.0))

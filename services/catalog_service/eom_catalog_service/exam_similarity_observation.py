@@ -4,10 +4,8 @@ from __future__ import annotations
 
 from itertools import combinations
 
-from eom_catalog_contracts.embedding_vector_binary import (
-    EmbeddingVectorBinaryError,
-    validate_unit_vector,
-)
+from eom_catalog_contracts.embedding_vector_binary import EmbeddingVectorBinaryError
+from eom_catalog_contracts.embedding_vector_validation import validate_unit_vector
 from eom_catalog_contracts.exam_similarity_observation import (
     ExamObservationMember,
     ExamObservationRequest,
