@@ -199,6 +199,47 @@ never repeat a publication on observation timeout or claim a new inventory befor
 the actual OLD whole-prefix auditor terminates successfully. CPU/C1–C5 and the
 six real numerical comparisons remain independent, still open full-goal gates.
 
+### Input-path rejection and corrected preparation —22:28 UTC
+
+The first actual unit terminated status1 (same dc4a360a invocation), before
+private-overlay preparation/fixed-prefix replacement. Its phase ends exactly at
+`BEFORE_PRIVATE_SUCCESSOR_PREPARATION`. Original CUDA prefix inode14683916 remains;
+failed stage `AWb1bSgc` and quarantine `IK5QhoNc` are retained, not declared usable.
+
+Cause is an **operator input materialization error**, not a state-machine defect:
+the chosen `/tmp/eom-api-build` root and its dist directory are0775, whereas the
+existing archive source reader requires a dedicated0700 top-level input directory
+and non-group-writable descendants. A read-only reproduction returned
+`EMBEDDING_INDEX_SOURCE_PATH_INVALID`; the correctly staged private input passed
+the SAME reader. No guard/permission was broadened and no global build-folder
+chmod was used. Four exact archives were materialized0600 under
+`/tmp/eom-cuda-successor-input-pwsBLiUN`0700; their independently pinned raw hashes
+are unchanged. No model/query/DB retry is involved.
+
+The retainer had reserved one **empty** root-private4d8c0927 directory before
+rejecting the original source. Its inode29797975, UID/GID0, mode0700, nlink2 and
+absence of children were observed; no archive member/payload was written. The
+reviewed protected operator helper raw
+`cd493827471648539422eb340aeea42342ce7b2758d7802d14b82385be2e3360`
+held BOTH existing CPU/CUDA publication flocks and rechecked the exact failed
+invocation, MainPID0/empty cgroup, six original phase lines, unchanged prefix inode,
+absent private overlays and exact empty reservation inode. It moved only that
+own-created empty reservation to `AWb1bSgc/empty-reservation-4d8c0927`, retaining the
+same inode/mode. Actual guarded retirement PASS: no bytes deleted, no accepted
+archive/phase/unit/DB history changed. This explicit operator cleanup is not an
+automatic retainer repair, failed-to-success reinterpretation or general reset.
+
+After these observations and the input fix, a distinct bounded preparation was
+submitted: `eom-cuda-private-successor-input2-0f8c70f0.service`, invocation
+`d71849c556be4c1aa50bdd528f9e02f2`, PID3143056 actually alive/activating22:28:04.
+Installer/helper/audit input/source/wheel pins and protected policies are unchanged;
+only input storage locations differ. First failure/log/plan remain untouched.
+Same EOM2 sudo was reused; no authentication request, model/GPU execution or CPU
+runtime/policy change. New log `successor-input2.log` is in the original operation
+evidence directory. It is still **RUNNING / NOT_ADMITTED / NOT_PROBED**, not a
+successful full-prefix audit. Reobserve this exact new handle, not the failed one,
+and do not submit another operation on a polling timeout.
+
 ## Implemented metadata slice —2026-10-16 UTC
 
 Defined the unregistered ROOTLOCAL receipt2.0 JSON Schema2020-12 **before** its
