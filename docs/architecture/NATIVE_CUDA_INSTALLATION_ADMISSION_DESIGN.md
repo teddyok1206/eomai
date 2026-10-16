@@ -5,18 +5,24 @@ Source implementation is not an installed receipt, kernel/device proof or grant.
 The [original goal](SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md)
 still requires C1–C5 and six real CPU/CUDA comparisons/conditional default.
 
-Latest actual boundary22:45:20 UTC: the **new** private-code successor has passed
+Previous actual boundary22:45:20 UTC: the **new** private-code successor has passed
 the complete protected read-only prefix/source/ELF audit. It is BYTE_AUDITED /
 NOT_ADMITTED / NOT_PROBED, not the old B41 candidate and not GPU activation.
 See [the exact accepted operation and inventory](#source-closed-successor-audit-pass-224520-utc).
 
-Subsequent source-only correction: C5's public row validator had changed the
+Subsequent correction: C5's public row validator had changed the
 codec module fingerprint despite leaving the native arithmetic unchanged. Its
 [small contract-package facade](EMBEDDING_NUMERICAL_CODEC_INTERFACE_BOUNDARY.md)
 restores all three operating CPU implementation bytes without weakening the
 benchmark family or re-encoding CPU data. Fresh regression2149 PASS/one opt-in
-OLD-pip skip and strict2/lint/format PASS. That source is NOT_INSTALLED; the above
-actual audit still covers only its exact0f8 input/wheel, not this new payload.
+OLD-pip skip and strict2/lint/format PASS. The above historical audit covers only
+its exact0f8 input/wheel. The successor69793b3e was separately built, installed
+through the existing protected owner/private-successor boundaries and whole-audited
+successfully23:14:13 UTC; actual inventory1.0 and all three operating CPU numeric
+pins independently verified. See the facade document's
+[exact operation evidence](EMBEDDING_NUMERICAL_CODEC_INTERFACE_BOUNDARY.md#actual-protected-installation-and-whole-prefix-audit).
+Latest state remains BYTE_AUDITED / NOT_ADMITTED / NOT_PROBED; no GPU model run,
+CPU space replacement or default activation follows from this audit.
 
 ## Responsibility and required design procedure
 

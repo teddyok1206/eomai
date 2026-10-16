@@ -63,3 +63,66 @@ The new family test reads the actual three source files, checks their frozen CPU
 raw hashes, then uses synthetic CPU/CUDA runtime values with those real pins.
 It confirms the old exact family rule accepts matching pins and rejects73b796b1.
 This is source/contract evidence, not an installed GPU performance measurement.
+
+## Actual protected installation and whole-prefix audit
+
+Source `69793b3edd5519dec56b7d9d60e821abed8d0460` is committed/pushed. Standard
+build/RECORD/OpenAPI verification PASS; dist is
+`/tmp/eom-api-build/69793b3edd5519dec56b7d9d60e821abed8d0460.BXplAg/dist`.
+Platform wheel raw54705fa1acebf4725fea498376af78531e94989e35489ff3548a4deb43f7ff44
+(3953105 bytes), API-contracts wheel
+b7d6165fbcf13b1512b7e0854d3b51204a805eb1b5f7fce5ee40db12dc5a29f5.
+The existing protected owner installer559ada51 installed this pair into a new
+immutable owner69793b3e, without selecting it or modifying API/CPU services.
+Actual protected OLD `-I -B` import under this owner confirmed all three CPU
+implementation pins and the public facade, zero optional ML imports and zero
+CUDA candidate-interpreter executions.
+
+Dedicated0700 input root `/tmp/eom-cuda-codec-input-ImphiyIh` contains exact new
+platform wheel/Git archive plus unchanged leasec9 wheel/source. New source raw
+a3441b3bb36aaf1dcff4fc775058e004dcbd902d2913e34a529543424f0d509a
+(61286400 bytes). Canonical input1.2 raw
+cce6e34e5370daf3e41c52ba1540473208fa99c2db01b919a4a8efca3dfff241
+changes only that private platform provenance. Existing protected installer
+260808d0/helper79e22063 and the current CUDA host/cache remain unchanged. Public
+wheels are reused; no download, public reinstall or candidate Python execution.
+
+Actual unit `eom-cuda-codec-successor-69793b3e.service`, invocation
+`64413c01db5948a79718d2a827fbfe1a`, PID3475755, started23:09:40 and completed
+**successfully23:14:13 UTC**. Its own journal records Finished/Deactivated
+successfully; later normal unit collection is not treated as separate evidence.
+The existing installer checked predecessor treea7198a94, retained the complete
+previous prefix and private overlay, prepared the new private code, then ran the
+whole source/byte/ELF audit with OLD. Original CPU/models/OLD were readonly and
+network/devices unavailable. Stdout explicitly reports AUDITED_NOT_ADMITTED and
+NOT_PROBED. No failure retry, profile guard relaxation, row mutation or original
+HTTP QUERY resubmission occurred.
+
+Operation `/opt/eom/.embedding-index-install-mFHwtZlb` contains the new inventory:
+
+| Actual new inventory fact | Verified value |
+| --- | --- |
+| Schema/state | inventory1.0 / CANDIDATE_NOT_ADMITTED |
+| Raw bytes/SHA |8928061 / `f8badb1751d8d9de9577c2f7b62379c54a676fcfd15fa65b4846d89a6d22584a` |
+| Semantic SHA | `af4366ffdc4fbfe6e1cd9d05228fb9d5e8a8bd30ec42302f2a9d49eca83d1321` |
+| Entries/regular/links/ELF |31597 /28024 /1380 /287 |
+| Payload bytes |7084887054 |
+| Source closure | `73c51cd04fcf36577c5b42c0644015d819609d18e542a16637d4ae074ff7d75d` |
+
+The protected owner697 parser independently validated that actual root inventory
+against the original protected schema and exact new input pin. Its actual entries
+contain codec3487cae0, HOST_L2 440d7406, encoderf667e54d and the new facade. The
+read-only operator rawbe955719 is protected root:root0444/nlink1 and loaded no ML.
+Logs/plan/summary: `/tmp/eom-cuda-codec-release-AUTDkmoU`. Full predecessor backup:
+`/opt/eom/conda/envs/.embedding-index-prepublication-CUDA_INDEX_FP32-.embedding-index-install-mFHwtZlb`.
+Nothing material was deleted. Active CPU service/config/space/index and earlier
+failed history remain untouched. The initial local input's trailing LF was
+correctly rejected, mechanically formatted before submission and parsed again;
+a diagnostic access to nonexistent `plan.profile` and operator-only Ruff line
+formatting were corrected before protected execution. No runtime guard changed.
+
+This closes only the real installation/byte-audit side of the numerical-family
+fix. Native CUDA proof/bundle/config, OS/device/shared-lease admission, no-model
+probe/termination/seal, all GPU entrypoints, six actual numerical comparisons,
+conditional default and C1–C5 live-consumer gates remain separate, unfinished
+parts of the original goal. No new source framework is required by this fix.
