@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import fcntl
 import os
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -153,3 +155,39 @@ def test_actual_open_description_lock_is_not_another_open_of_the_same_inode():
             for fd in (duplicate, other, held):
                 if fd >= 0:
                     os.close(fd)
+
+
+def test_actual_other_process_retained_description_reports_original_flock_holder():
+    """The PID1 readback relies on cross-process OFD visibility, not just same-process dup."""
+    if not Path("/dev/shm").is_dir():
+        pytest.skip("Linux tmpfs fixture required")
+    with tempfile.TemporaryDirectory(prefix="eom-fdinfo-cross-process-", dir="/dev/shm") as folder:
+        path = Path(folder) / "empty-lock"
+        held = os.open(path, os.O_RDONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC, 0o600)
+        try:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            code = """
+import fcntl, os, sys
+from pathlib import Path
+fd = int(sys.argv[1])
+fcntl.fcntl(fd, fcntl.F_SETFD, fcntl.FD_CLOEXEC)
+sys.stdout.buffer.write(Path(f'/proc/{os.getpid()}/fdinfo/{fd}').read_bytes())
+"""
+            result = subprocess.run(
+                [sys.executable, "-I", "-B", "-c", code, str(held)],
+                pass_fds=(held,),
+                capture_output=True,
+                check=True,
+                timeout=10,
+            )
+            value = os.fstat(held)
+            require_exclusive_flock_fdinfo(
+                result.stdout,
+                pid=os.getpid(),
+                device=value.st_dev,
+                inode=value.st_ino,
+                descriptor_flags=fcntl.fcntl(held, fcntl.F_GETFL) | os.O_CLOEXEC,
+            )
+            assert not result.stderr
+        finally:
+            os.close(held)

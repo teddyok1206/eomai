@@ -507,3 +507,84 @@ The worker, shared transport and ready-schema wheel members exactly match that
 source. Platform wheel raw SHA
 `06ecd07b08d29e153fae9a99c29826492089e3c942784a3cb389936b830bbe55`.
 This build is not an installation, protected-prefix re-audit or probe execution.
+
+## Independent CUDA probe observation and acknowledgement
+
+1. The existing root installation owner independently observes the fixed CUDA unit
+   before each ACK. This is not an encoder worker, new service, queue or grant.
+2. Canonical sources are the pinned installed unit, audited prefix/host ledgers,
+   live unit invocation/PID/start/cgroup/maps, fixed device/lock files, the worker's
+   actual FD records and PID1's named descriptor store and retained lock record.
+3. Keep execution/invocation/PID-start and resource inode identities distinct;
+   small frozen observations have no independent registry or persistent lifecycle.
+4. Worker FD integers remain untrusted hints. Resolve four exact device handles
+   and one lock, validate named/held epochs, flags and per-description flock, then
+   require one matching named PID1 store entry and an actual retained lock record.
+5. Access is four fixed lookups plus bounded PID1-FD iteration, equality and one
+   prefix-path map. No corpus/DB/NAS read or binary copying belongs here.
+6. Reuse CPU executable-map parsing/indexing and cgroup checks through explicit
+   public interfaces; CPU wrappers keep their exact prefix and stable errors.
+   CUDA uses the existing captured CUDA host closure, not a broader host allowlist.
+7. Bound PID1 iteration to4096 descriptors, proc files to existing limits and the
+   one-entry systemd JSON to16KiB. O(N_pid1 + N_maps + N_inventory), no nested scan.
+8. Observe unit/process/resource state on both sides; re-observe immediately before
+   signalling only that exact unit main process. READY gets SIGUSR1, final gets
+   SIGUSR2. Neither signal is sent from the worker or a model-supplied command.
+9. OS/systemd adapters own these checks; pure contracts remain side-effect free.
+   Unit template stays uninstalled until reviewed code/prefix admission is ready.
+10. Any malformed, missing, changed or ambiguous observation prevents ACK. No
+    restart, reset-failed, unit retirement, lock release or automatic retry occurs.
+    Terminal/cgroup/GPU-client cleanup is a separate required owner gate.
+11. A successful worker notification, FD name alone or named-path stat does not
+    independently prove retained physical locking. The additional kernel readback
+    protects failure/exit without introducing a second mutex/broker.
+
+Systemd255 semantics are taken from its pinned upstream
+[service options](https://raw.githubusercontent.com/systemd/systemd/v255/man/systemd.service.xml),
+[execution options](https://raw.githubusercontent.com/systemd/systemd/v255/man/systemd.exec.xml)
+and [fdstore projection](https://raw.githubusercontent.com/systemd/systemd/v255/src/analyze/analyze-fdstore.c).
+In particular PrivateDevices would remove the required physical nodes, so the
+uninstalled fixed CUDA template uses the existing image boundary's four explicit
+DeviceAllow entries with DevicePolicy=closed, no capabilities and no network.
+
+### Independent observer source checkpoint —2026-10-16
+
+Implemented the fixed CUDA template and root-only process/resource readback with
+separate READY/final ACK functions. The final ACK requires the earlier READY
+observation's exact execution, invocation, PID/start, cgroup and physical resource
+observations; it cannot replace them with a new observed process or guard. Both
+ACK functions re-observe immediately before signalling the exact fixed unit main.
+They do not dispatch, restart, stop, reset-failed, clear a store or seal admission.
+
+The resource reader requires both the exact worker FD's exclusive flock record
+and one actual retained PID1 descriptor with the same regular-file epoch and
+original holder's flock record, in addition to the one-entry named store query.
+Display paths are checked as bounded strings, never used as identity or opened.
+Four fixed device hints resolve to the actual held character-node inode/flags;
+root/worker identity, current cwd inode, singleton cgroup, executable maps and
+prefix/host ledger observations are checked independently on both sides. The
+root mountinfo path uses its explicit PID, not the `/proc/self` parent symlink
+that the existing protected-file reader deliberately rejects.
+
+CPU's map/ledger algorithm and cgroup observation are reused through explicit
+public functions; its wrapper remains exact-CPU-prefix-only. No CPU schema,
+numeric implementation/space or installed configuration changed. A developer
+trial incorrectly expected a CUDA-only start field on a CPU report; that test
+was invalid and removed, with no nonexistent CPU defect or protocol migration
+claimed. The CUDA report's actual start field is checked against live proc data.
+
+Fresh combined source regression **948 PASS39.14s**, strict3 production modules,
+Ruff/format/diff PASS. This includes the previous886 suite, not an additive second
+total. New focused125 tests overlap and are not added. Static `systemd-analyze
+verify --man=no` returned0 for the new uninstalled template. A real unprivileged
+tmpfs fixture passed its held description into a separate isolated Python process
+and confirmed that its fdinfo retains the original holder's exclusive flock PID.
+This proves that kernel mechanism, not actual PID1/GPU/production admission.
+Earlier PID1 normal-exit/SIGKILL retention evidence remains separately preserved.
+
+The remaining required owner integration is still explicit: protected source/wheel
+installation and independent full successor-prefix audit, actual fixed-unit probe
+and two ACKs, final termination/cgroup/GPU-client cleanup, sealed CUDA2.0 reader
+and all-entrypoint lease migration before model comparison. No worker/client or
+metadata parser can skip those steps. Current operating API/Catalog stays e132c1aa
+and the CUDA candidate remains BYTE_AUDITED/NOT_ADMITTED for its old B41 bytes.

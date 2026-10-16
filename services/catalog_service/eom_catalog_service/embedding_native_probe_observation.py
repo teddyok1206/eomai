@@ -10,6 +10,7 @@ import stat
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from eom_catalog_contracts.embedding_native_cpu_probe import ExecutionId, NativeCpuProbeResult
 from eom_identifiers import canonical_json_bytes, sha256_bytes
@@ -23,6 +24,9 @@ from eom_catalog_service.embedding_runtime_files import (
 from eom_catalog_service.embedding_runtime_host_closure import ProtectedEmbeddingHostClosure
 from eom_catalog_service.embedding_runtime_prefix_closure import PrefixRuntimeInventory
 from eom_catalog_service.embedding_runtime_process_identity import native_process_start_ticks
+
+if TYPE_CHECKING:
+    from eom_catalog_service.embedding_cuda_host_closure import ProtectedCudaEmbeddingHostClosure
 
 CPU_PROBE_TEMPLATE = "eom-embedding-native-cpu-probe@.service"
 CPU_PROBE_TEMPLATE_SHA256 = (
@@ -133,7 +137,32 @@ def validate_native_executable_mappings(
     raw: bytes, *, inventory: PrefixRuntimeInventory, host: ProtectedEmbeddingHostClosure
 ) -> tuple[NativeExecutableMapping, ...]:
     """Reuse the existing byte-audited prefix/host ledgers; do not parse ELF or hash again."""
-    if type(inventory) is not PrefixRuntimeInventory or inventory.prefix != _PREFIX:
+    return _validate_executable_mappings(raw, inventory=inventory, host=host, prefix=_PREFIX)
+
+
+def validate_native_cuda_executable_mappings(
+    raw: bytes, *, inventory: PrefixRuntimeInventory, host: ProtectedCudaEmbeddingHostClosure
+) -> tuple[NativeExecutableMapping, ...]:
+    """Same map/ledger algorithm, exact CUDA prefix and its separately captured host only."""
+    try:
+        return _validate_executable_mappings(
+            raw,
+            inventory=inventory,
+            host=host,
+            prefix=Path("/opt/eom/conda/envs/eom-embedding-cuda"),
+        )
+    except ValueError:
+        raise ValueError("NATIVE_CUDA_PROBE_MAPS_INVALID") from None
+
+
+def _validate_executable_mappings(
+    raw: bytes,
+    *,
+    inventory: PrefixRuntimeInventory,
+    host: ProtectedEmbeddingHostClosure | ProtectedCudaEmbeddingHostClosure,
+    prefix: Path,
+) -> tuple[NativeExecutableMapping, ...]:
+    if type(inventory) is not PrefixRuntimeInventory or inventory.prefix != prefix:
         raise ValueError("NATIVE_CPU_PROBE_PREFIX_INVALID")
     inventory.assert_unchanged()
     host.assert_current()
@@ -171,7 +200,14 @@ def _unit(execution_id: str) -> tuple[str, str]:
     return name, f"/system.slice/{name}"
 
 
-def _cgroup_members(cgroup: str) -> tuple[int, ...]:
+def native_probe_cgroup_members(cgroup: str) -> tuple[int, ...]:
+    if (
+        re.fullmatch(
+            r"/system\.slice/eom-embedding-native-(?:cpu|cuda)-probe@[0-9a-f]{32}\.service", cgroup
+        )
+        is None
+    ):
+        raise ValueError("NATIVE_CPU_PROBE_CGROUP_INVALID")
     path = _CGROUP_ROOT / cgroup.removeprefix("/")
     for directory in (path, *path.parents):
         value = directory.lstat()
@@ -192,6 +228,10 @@ def _cgroup_members(cgroup: str) -> tuple[int, ...]:
     if len(set(pids)) != len(pids) or len(pids) > 64:
         raise ValueError("NATIVE_CPU_PROBE_CGROUP_INVALID")
     return pids
+
+
+def _cgroup_members(cgroup: str) -> tuple[int, ...]:
+    return native_probe_cgroup_members(cgroup)
 
 
 def _require_root() -> None:
