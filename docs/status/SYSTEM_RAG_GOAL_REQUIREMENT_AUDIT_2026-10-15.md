@@ -1,18 +1,31 @@
 # Full incremental-RAG goal: requirement and evidence ledger
 
 2026-10-15 UTC; updated2026-10-16 UTC after source/disposable execution gates.
-Latest operating storage audit remains01:01 UTC. **GOAL_ACTIVE; FULL_COMPLETION_UNPROVEN.**
+Latest operating storage audit02:39:30 UTC. **GOAL_ACTIVE; FULL_COMPLETION_UNPROVEN.**
 Requirements come from the [original design](../architecture/SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md),
 not from whichever subset currently has passing tests. Historical tests are not
 summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
-- Repository main`5f97b1dd` before this implementation checkpoint; reviewed INDEX
-  code`d4846220` is independently packaged/installed. Documentation successors do
+- Repository main`4abafd2c` before this evidence checkpoint; reviewed INDEX
+  code`2a4843c3` is independently packaged/installed. Documentation successors do
   not silently select another source release.
 - API/platform/contracts2857bf77 and native QUERY owner8c411041 remain selected.
   The separate83bad async Item-start candidate is staged, not activated.
+- Latest INDEX selection is Identity13/resource26/source2a4843c3. Three genuine1.3
+  membership-refresh commands completed once and drained; independent READ ONLY
+  canonical audit PASS at02:39:30 UTC: encodings21/bindings21 preserved, logical
+  indexes6/revisions12, nine shards hash/schema/finite/L2/lineage PASS, numerical
+  associations/launches0, executable commands0. Occurrence heads now11/5/5 of520;
+  prior ALL heads remain11/5/5 of545. The temporary occurrence-only grant is no
+  longer selected: the same identity now selects both Item classes and all three
+  ALL_ADMITTED_GRAPH_ITEMS views, targets4/poll60. Genuine full-grant three-view
+  admission and first PROCESSING/RUNNING attempt1/lease1 observed02:43:54 UTC;
+  unit active/success/boot enabled, Restart=no. The new numeric requests remain
+  nonterminal at this checkpoint. [Current exact gate and evidence](../operations/LOCAL_INDEXING_MEMBERSHIP_REFRESH_ACTIVATION_2026-10-16.md).
+- The following revision12 records are preserved historical acceptance, not the
+  current selected runtime/config or a replacement for the latest audit.
 - INDEX service revision12/resource version24/source d4846220 completed the original
   three-view bounded window and drained successfully. A supported new immutable
   grant now selects both admitted Item classes and ALL_ADMITTED_GRAPH_ITEMS;
@@ -21,7 +34,7 @@ summed into a single acceptance count. This ledger does not grant authority.
   drained. Actual canonical vector/binding/index/reuse audit PASS at01:01 UTC.
   [Exact admitted-Item selection](../operations/LOCAL_INDEXING_ADMITTED_ITEM_SCOPE_2026-10-16.md).
   [Exact files, policies, failures and recovery](../operations/LOCAL_INDEXING_MULTIVIEW_ACTIVATION_2026-10-15.md).
-- Latest fully inspected persistent state at10/16 01:01:15 UTC: six logical
+- Prior fully inspected persistent state at10/16 01:01:15 UTC: six logical
   indexes, nine revisions,21 encodings/bindings. New ALL_ADMITTED_GRAPH_ITEMS
   coverage CONTENT_ONLY11/545, CONCRETE_FACETS5/545 and METADATA_ONLY5/545;
   all nine prior numeric/binding identities and old occurrence-only heads7/1/1
@@ -38,7 +51,7 @@ summed into a single acceptance count. This ledger does not grant authority.
   shards passed raw hash/schema/finite/L2 and index-lineage checks. This is a
   read-only storage-integrity audit, not fresh operator retrieval authorization.
 - The original HTTP canary process1079683 remains alive and waiting for its original
-  Studio login. Its log still has no successful login/request at23:40:50. No new
+  Studio login, observed again02:44 UTC. No successful login/request is recorded. No new
   login/key/process was substituted. INDEX automation uses its separate supported
   machine identity, never that person's session.
 
@@ -55,13 +68,13 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 | Requirement | Existing implementation/evidence | Remaining concrete action |
 | --- | --- | --- |
-| B1. Commit-based missing-binding reconciliation, no new queue/outbox framework | Official current Graph lookup, existing native START admission, actual seed/delta; empty/report/view/no-Graph source tests | Confirm unattended resumed discovery after the bounded window, no hidden manual target list, and restart with original commands. |
-| B2. Three independent views with exact queue selection | Closed configurationV2, shared engine/publisher/authority/launcher and round-robin333 source/126 actual PG checks; genuine three-view terminal STARTs and exact committed index/encoding receipts, all six shards verified | BOUNDED_ACTUAL_PASS, partial7/1/1 of520. Configure and verify continuous policy next; full coverage is not complete. |
+| B1. Commit-based missing-binding reconciliation, no new queue/outbox framework | Official current Graph lookup, existing native START admission, actual seed/delta; empty/report/view/no-Graph source tests. Full-scope unattended discovery and three genuine1.2 admissions observed02:41–02:43, first actual claim1; boot enabled with Restart=no | CONTINUOUS_START_ACTUAL_PASS, not full coverage. Observe completion/reuse and eventual no-op; interruption must retain original commands. Boot enable is read back, not a simulated reboot test. |
+| B2. Three independent views with exact queue selection | Closed configurationV2, shared engine/publisher/authority/launcher and round-robin333 source/126 actual PG checks; genuine revision12 numerical execution and revision13 metadata-only terminal receipts/current heads audited. Full-scope continuous service actual admission/claim and enabled read-back verified | CONTINUOUS_START_ACTUAL_PASS; last audited occurrence11/5/5 of520 and ALL11/5/5 of545. Original three new numeric requests processing/queued; full coverage and terminal/no-op inspection are not complete. |
 | B3. Original past exams AND approved generated Item lifecycle | Existing source policy permits both classes; d484/service12 admitted-Item grant/three namespaces completed a genuine bounded trial, current coverage11/5/5 of545, prior9 numeric/binding identities preserved | BOUNDED_ACTUAL_PASS. Later accepted-report arrival, source withdrawal/current refresh and continuous policy still need full lifecycle acceptance. |
 | B4. Accepted V10 report wait, unavailable concrete evidence, separate denominators | Typed reconciliation/source tests; actual new-grant CONTENT_ONLY discovery545 eligible/25 missing reports/7 existing bindings/513 missing, targets4 at10/16 00:26:41. Original occurrence-backed520 remains separate | Explicit wait observed. Inspect exact waiting source-class pointers and later accepted-report reconciliation; confirm user projection separates learning from vector readiness. Do not infer the25 source classes from counts alone. |
-| B5. Same input/space/partition reused; Graph-only/source/report changes create associations, not repeated encoding | Existing reservation/registry keys and actual prior-row reuse are preserved. Closed1.3 now runs through service admission, existing coordinator/index/receipt and replay; full membership basis changes request meaning without copying the witness-plan Artifact. Disposable execution verifies no extra numerical Job/launch, withdrawal, crash recovery and stale-basis rejection | SOURCE/DISPOSABLE_PASS; install an admitted compatible INDEX successor and verify bounded actual replay/reuse. [Execution boundaries and exact gates](../architecture/LOCAL_EMBEDDING_INDEX_MEMBERSHIP_REFRESH.md). Operating d484 is unchanged. |
-| B6. No-work creates no Workflow; reusable bindings do not masquerade as missing compute | Reconciliation now checks the official namespace predecessor when all bindings exist, submits one already-bound witness only for changed/missing membership, and preserves no-op/report wait/failed history.1.3 bypasses numerical reservations/dispatch entirely. Discovery uses one coherent binding observation with two bounded SQL lookups | SOURCE/DISPOSABLE_PASS; current live runtime has not selected this correction. Continuous reconciliation and actual lifecycle acceptance remain required, not waived by source tests. |
-| B7. Concurrent discovery, claim/lease, crash after Artifact commit and CAS conflict | Actual guarded PG stage/registry/reservation tests, current-source and lease negatives, immutable coordinator checkpoints. New registry/refresh43 PASS plus native-stage127 PASS cover independent discovery/registration/submission roots, exact1.3 queue routing, pre-INDEX_PREPARED rollback and post-registration recovery | Final boundary audit must match exact live release. Unknown outcomes retain original key/Job; no direct row repair/new-key bypass. New source recovery code is not installed yet. |
+| B5. Same input/space/partition reused; Graph-only/source/report changes create associations, not repeated encoding | Closed1.3 uses the same admission/coordinator/index/receipt. Its basis changes meaning without copying the witness-plan Artifact. Actual revision13 trial preserved21 encoding/binding/row identities, created3 index revisions, and made0 numerical launches. Disposable tests cover withdrawal, stale basis and crash recovery | BOUNDED_ACTUAL_REUSE_PASS; additional current source/report/Graph lifecycle acceptance remains required. [Exact source and operating evidence](../architecture/LOCAL_EMBEDDING_INDEX_MEMBERSHIP_REFRESH.md). |
+| B6. No-work creates no Workflow; reusable bindings do not masquerade as missing compute | Same-root predecessor/binding observation, explicit no-op/report wait/failed history, no numerical reservation/dispatch for1.3. Source2a4843c3 also prioritizes changed partial membership before remaining seed work; actual first discovery520 eligible/509 missing/one existing witness succeeded | SOURCE/DISPOSABLE_AND_BOUNDED_ACTUAL_PASS. Continuous full-scope discovery/no-op/restart and remaining lifecycle acceptance stay open; partial refresh does not mean520 completed. |
+| B7. Concurrent discovery, claim/lease, crash after Artifact commit and CAS conflict | Guarded PG source/lease/registry/reservation/CAS and immutable checkpoints. Registry/refresh43 and original native-stage127 PASS, later exact partial-priority source95/stage128 PASS. New protected2a4843c3 is selected; actual three commands attempts/generation1 and successful checkpoint/receipt lineage audited | Tested recovery code is installed. Unknown outcomes retain original key/Job; no direct row repair/new-key bypass. Preserve original failures; synthetic crash tests do not imply a production crash was induced. |
 | B8. Revoke/retire/space/recipe changes and recovery | Current-source/policy reauthorization, index namespace and encoding identity tests; existing historical manifests retained | Verify source lifecycle coverage and current lookup exclusions; different runtime/device space never mixes with CPU even at identical dimension. |
 
 ## C. All requested consumers, not only reference preparation

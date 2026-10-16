@@ -1,8 +1,11 @@
 # Refresh index membership without recomputing existing vectors
 
-2026-10-16 UTC. **SOURCE_AND_DISPOSABLE_EXECUTION_PASS; NOT_INSTALLED/NOT_ACTIVE.**
+2026-10-16 UTC. **SOURCE_AND_DISPOSABLE_PASS; BOUNDED_ACTUAL_REFRESH_PASS.**
 This implements original goal B5/B6/B8 boundaries, not a separate index framework
-or a claim that the corresponding operating lifecycle is already complete.
+or a claim that the full operating lifecycle/corpus is already complete.
+INDEX source2a4843c3/Identity13 executed the three genuine metadata-only requests
+and preserved all21 existing numeric rows/bindings without numerical launches.
+[Exact operating evidence and selected scope](../operations/LOCAL_INDEXING_MEMBERSHIP_REFRESH_ACTIVATION_2026-10-16.md).
 
 ## Evidence and bounded problem
 
@@ -12,7 +15,7 @@ different population namespace. All bindings may therefore be reusable even when
 the selected namespace has no current index. Source withdrawal can similarly
 change the desired membership without creating a new encoding demand.
 
-The current reconciler treats no missing associations as no work. Separately,
+The pre-correction reconciler treated no missing associations as no work. Separately,
 Runner's successful-equivalence lookup reuses a completed request even with a new
 idempotency key. Changing only the key, generating another copy of the same plan
 Artifact, or forcing a completed Workflow to run again is not a valid correction.
