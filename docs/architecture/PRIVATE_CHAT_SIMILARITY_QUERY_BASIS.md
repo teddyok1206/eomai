@@ -332,3 +332,19 @@ INDEX/QUERY/API/Catalog services remain on their independent installed releases.
 Remaining: private Workflow context/policy/result CHECK and actual admission,
 Orchestrator/Catalog/session adapters, native execution, tool delivery, installed
 release and real-source acceptance. Full goal/C4 remain**NOT_COMPLETE/NOT_ACTIVE**.
+
+Candidate`324bb973e8ecc56f8417690f7a96a8310933ca52` passed the standard
+three-wheel build, RECORD and contract inventory. Platform raw:
+`3699b276c942086cd5d599984b141fda97723c8e6cf8d79b2144f634a75cba37`;
+API-contract raw:`870bd72daba496ad33a70dbd2576b5559125ed80777f4111fd174eeab39141ec`.
+Build path:`/tmp/eom-api-build/324bb973e8ecc56f8417690f7a96a8310933ca52.MgZDms/dist`.
+
+An isolated two-wheel proof imported211 EOM runtime modules exclusively from those
+exact archives, rejecting checkout or installed-prefix fallback. Explicit synthetic
+test fixtures supplied input/backend/owner values only. Two synthetic QUERY calls
+in total covered the prior numerical leaf and one private context with all three
+candidate sources; request/result/member/binary closure and serialized roundtrip
+passed. Real model/DB/HTTP/activation calls and optional ML imports0. Package proof
+does not authorize a real private source or native unit. Evidence logs:
+`private-context-release-build.log` and`private-context-archive-proof.log` in the
+existing temporary operator directory. No installed service changed.
