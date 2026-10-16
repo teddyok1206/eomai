@@ -382,12 +382,14 @@ def test_disposable_modes_include_separate_opt_in_chat_role_suite() -> None:
     assert usage is not None
     assert set(usage.group(1).split("|")) == {
         "verify",
+        "inspect",
         "migrate",
         "hwpx-tests",
         "embedding-tests",
         "embedding-encoding-tests",
         "embedding-stage-tests",
         "authenticated-session-tests",
+        "local-indexing-service-tests",
         "pdf-review-tests",
         "quality-review-tests",
         "chat-tests",
@@ -401,6 +403,18 @@ def test_disposable_modes_include_separate_opt_in_chat_role_suite() -> None:
     assert "tests/integration/test_general_chat_runtime_privileges.py" in branch
     assert 'EOM_GENERAL_CHAT_TEST_STATE="${state_directory}"' in branch
     assert "runtime.env" not in branch
+
+
+def test_disposable_stage_checks_original_authoring_evidence_before_runtime_environment() -> None:
+    source = (REPOSITORY_ROOT / "scripts/api/testdb_run.sh").read_text(encoding="utf-8")
+    begin = source.index('if [[ "${action}" == "embedding-stage-tests" ]]')
+    end = source.index('if [[ "${action}" == "embedding-encoding-tests" ]]', begin)
+    branch = source[begin:end]
+    assert "tests/integration/test_authoring_evidence_persistence.py" in branch
+    assert 'export EOM_API_TEST_STATE="${state_directory}"' in branch
+    assert 'export EOM_CHAT_KNOWLEDGE_TEST_STATE="${state_directory}"' in branch
+    assert "runtime.env" not in branch
+    assert begin < source.rindex('runtime_environment="${state_directory}/runtime.env"')
 
 
 def test_cleanup_accepts_marked_database_after_failed_migration_without_runtime_role() -> None:

@@ -725,3 +725,74 @@ Evidence: `ordinary-reference-start-regression.log`, `focused-final.log`,
 same stated prefix. No selected API/QUERY/INDEX/Pack/Web flag changed. Original
 human canary process1079683 remained alive waiting on its original getpass at
 05:26 UTC; no new login/key/process was created or credential stored.
+
+## Original Evidence persistence verification boundary
+
+The additional opt-in `test_authoring_evidence_persistence.py` is included in the
+existing guarded `embedding-stage-tests` purpose, before any runtime credential
+environment. It introduces no new mode, queue, schema, dependency or production
+behavior. The original service actually publishes V5 context/manifest file sets
+through its existing Artifact owner and commits its request/bundle/revision/entry
+relations in disposable PostgreSQL. Independent reads use real READ ONLY roots
+and actual pinned file/hash/provenance resolution, not mocked publication rows.
+
+Scientific source/report admission and ranking remain explicit synthetic seams;
+the synthetic Graph fixture is not accepted scientific evidence or current-user
+authorization. These checks cannot close the held genuine HTTP gate. They test
+publication/replay/creation timestamps, exact identities/permission fingerprints,
+foreign-actor rejection, corrupted/missing members, foreign-root reader rejection
+and absence of new Jobs/Artifacts/Evidence during read or replay. Source rows and
+their accepted report semantics are still reauthorized by the existing Catalog
+owner before/after that reader.
+
+The first run stopped at the synthetic policy fixture: changing its allowed role
+without its answer-bearing role correctly failed the existing subset invariant.
+The fixture now uses its original EDITOR policy without any policy/validator or
+production-role change. Original failure evidence is retained. A separate old
+test expected a pre-existing shorter CLI mode inventory; comparison with the
+unchanged committed runner confirmed both `inspect` and
+`local-indexing-service-tests` already existed. The exact expected set now names
+them, plus a new assertion that this persistence file remains in the owner-only
+guarded stage branch and never sources `runtime.env`.
+
+The corrected fixture then reproduced a real source-candidate defect: the reader
+called `read_pinned` before `PinnedArtifactReadContext.prefetch`, which a mocked
+reader did not detect. Its original13-case run had174 PASS/1 FAIL. The production
+reader now prefetches just the two exact manifest/context Artifact pairs using
+the existing batched metadata reader, after matching original owner/publication
+metadata and before reading either payload. No source/policy validation, hash or
+file check is skipped; no permission, new cache or latest fallback is added.
+The corrected guarded suite175 PASS/142.86s includes all13 added cases. This is
+actual disposable DB/Artifact proof, not genuine source/IAM or a deployed fix.
+
+## Genuine HTTP gate observation — 2026-10-16 05:37 UTC
+
+The original canary successfully logged in at05:37:55 UTC after the user's input.
+Its unchanged key`goal-http-reference-query-20261015-01`, operation
+`queryprepare_a2c36b2744284b65971b6025f7356432` and pinned request hash
+`sha256:258c0567f807fb1e4c43b4107809acb7dec5a37add2c7c06082c2b26e3e0ae3f`
+are preserved under`/tmp/eom-query-http-canary-8oxU2rnJ`. The original preparation
+returned FAILED/AUTHORITY_UNAVAILABLE at05:37:59 UTC, workflow_id=null. The script
+exited without an automatic login retry, replacement key or model launch; it is
+no longer waiting at its former getpass. Credential material was not persisted.
+This is a failed genuine gate, not a source fixture failure or accepted QUERY.
+
+Independent root-owned/hash-pinned metadata-only probes of the installed8c411041
+owner at05:41:19 and05:43:13 UTC found the configured eom_app OID16385 matched,
+READ COMMITTED/app+pg_catalog/no temp schema/no superuser or bypass/autocommit,
+and all three IAM locking targets readable/lockable. The guiadmin operator was
+ACTIVE, not deleted or required to change password, with an unexpired recent
+session and actual workflow:start plus knowledge_graph:retrieve permissions.
+The probes minted no capture, read no source/credential bytes and performed no
+DB writes or launches. They exclude those metadata misconfigurations; they do
+not prove which later fence/source condition failed. No authority was loosened.
+
+The preparation owner now emits a content-free rejection boundary, plus only the
+closed five-code Identity reason when that boundary throws its known exception.
+Unrecognized reasons become UNCLASSIFIED. No capture, traceback, SQL, arbitrary
+exception body, prompt, content or token is logged; public failure/retry meaning
+is unchanged. This diagnostic candidate is not yet installed/selected. Genuine
+failure remains open pending a reviewed correction and same-request continuation.
+
+Execution evidence prefix:
+`/tmp/eom-identity-provider-install.nAaycoDM/authoring-evidence-`.

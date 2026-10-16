@@ -330,6 +330,12 @@ def test_original_evidence_read_closes_all_pins_and_one_manifest_context_materia
     value, _rows, session, reader, service = read_case(monkeypatch)
     assert read(value, session, reader, service) == value.manifest
     reader.require_session.assert_called_once_with(session)
+    reader.prefetch.assert_called_once_with(
+        tuple(
+            (pointer.artifact_id, pointer.artifact_revision_id)
+            for pointer in (value.publication.manifest_artifact, value.publication.context_artifact)
+        )
+    )
     assert reader.read_pinned.call_count == reader.require_file_set.call_count == 2
     service._result_v2.assert_called_once()
 

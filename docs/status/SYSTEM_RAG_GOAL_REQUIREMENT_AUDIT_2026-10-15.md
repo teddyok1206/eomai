@@ -8,6 +8,19 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Original genuine HTTP gate at05:37:55 UTC: actual guiadmin login PASS; unchanged
+  request preparation FAILED/AUTHORITY_UNAVAILABLE at05:37:59, workflow_id=null.
+  No native run, replacement key or automatic login retry. The old process exited
+  and credentials were not persisted. Independent installed-role metadata probes
+  found the expected role/OID/search path/isolation/locking privileges, active user,
+  unexpired session and required permissions. Exact failing condition remains OPEN.
+  Candidate adds closed owner-local rejection diagnostics, not a permission bypass.
+- Added actual guarded V5 original-publication/read tests reproduce a source-only
+  candidate missing-prefetch defect. Existing two-pair batched Artifact metadata
+  prefetch fixes it without changing source/hash/permission rules. Corrected PG175
+  PASS/142.86s includes13 new real publication/replay/READ ONLY/member-integrity
+  cases; scientific source/ranking and login remain synthetic in this suite.
+  This is not a deployed fix or a PASS of the genuine failed HTTP gate.
 - Ordinary caller successor`f37ae7be` is committed/pushed, source/disposable/package-
   verified, not installed/active:
   Web/HTTP ordinary1.0→same original Evidence selector→preparation1.1/ITEM_AUTHORING
@@ -24,8 +37,8 @@ summed into a single acceptance count. This ledger does not grant authority.
   three-wheel/RECORD/OpenAPI build and source-free two-wheel301-module/schema/
   disabled-owner proof PASS. It remains NOT_INSTALLED/ACTIVE. Final affected
   source/socket/guidance179 PASS and strict mypy6 PASS; original Evidence DB/IAM
-  observations are synthetic. The ordinary caller/optional-reference branch and
-  real authenticated source/Artifact acceptance are still open.
+  observations are synthetic. Its ordinary caller/optional-reference successor
+  is now f37ae7be above; real authenticated source/Artifact acceptance stays open.
   Broad87-file regression1782 PASS/446.84s imported the pre-single-source version;
   the final179/type6/package proof covers that last refinement. No count summation.
 - Predecessor ordinary-delivery source`15ffdef5` is committed/pushed and standard build/
@@ -79,8 +92,9 @@ summed into a single acceptance count. This ledger does not grant authority.
   without widening strict1.0. Source regression1971, final affected boundary234,
   handoff47 and guarded PG132 PASS (overlapping inventories not summed), strict
   mypy26 PASS. Legacy eight-member canonical bytes match aba066a2 exactly.
-  It is not installed/activated; ordinary consumer preparation/delivery and private
-  intent/result query bases stay open. [Exact scope/evidence](../architecture/SYSTEM_RAG_AUTHORING_REFERENCE_CONTEXT.md).
+  It is not installed/activated. Later ordinary preparation/delivery/caller source
+  successors are recorded above; private intent/result query bases remain
+  NOT_IMPLEMENTED. [Exact scope/evidence](../architecture/SYSTEM_RAG_AUTHORING_REFERENCE_CONTEXT.md).
 - The following revision12 records are preserved historical acceptance, not the
   current selected runtime/config or a replacement for the latest audit.
 - INDEX service revision12/resource version24/source d4846220 completed the original
@@ -107,10 +121,10 @@ summed into a single acceptance count. This ledger does not grant authority.
   native units, one owned encoding each, no restarts. Six canonical referenced
   shards passed raw hash/schema/finite/L2 and index-lineage checks. This is a
   read-only storage-integrity audit, not fresh operator retrieval authorization.
-- The original HTTP canary process1079683 remains alive and waiting for its original
-  Studio login, observed again02:44 UTC. No successful login/request is recorded. No new
-  login/key/process was substituted. INDEX automation uses its separate supported
-  machine identity, never that person's session.
+- Historical waiting observations of canary process1079683 ended with the genuine
+ 05:37 UTC login/preparation result recorded above. Its original request files and
+ failure are preserved, not a waiting login or accepted QUERY. INDEX automation
+ uses its separate supported machine identity, never that person's session.
 
 ## A. Common contracts and persistent first vertical path
 
@@ -138,7 +152,7 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 | Consumer requirement | Current actual state | Next required end state |
 | --- | --- | --- |
-| C1. One common candidate/evidence boundary | Common Catalog context and original bounded native QUERY→same-key replay→exact context read accepted at partial2/520; new protected HTTP route/service installed | Finish the held actual HTTP preparation/replay/current-read gate. Keep source authorization and Evidence receipts distinct from scores/model hypotheses. |
+| C1. One common candidate/evidence boundary | Common Catalog context and original bounded native QUERY→same-key replay→exact context read accepted at partial2/520; protected HTTP route/service installed. Actual05:37 login PASS but original preparation FAILED/AUTHORITY_UNAVAILABLE before Workflow/launch | Diagnose the exact owner authority failure, preserve original key/failed observation, then finish supported same-request preparation/replay/current-read. No automatic replacement login or authority bypass. |
 | C2. 1:1 reference variation | Source/API/BFF/browser/disposable plan23 tests and inactive compatible83bad release; Pack1.20.17 released inactive | Activate reviewed compatible components in dependency order after held HTTP terminal; run one bounded genuine Item and inspect actual author/review context and maximum-three-pass behavior. Only then enable Web flag. |
 | C3. New authoring and review | Web/HTTP ordinary start→official-Evidence selector→preparation1.1/ITEM_AUTHORING→first plan24→existing role delivery implemented. Explicit exact-hash no-offer/audit preserves normal plan19 for legitimate absence/unrequested class, never denial/PENDING. Candidate f37ae7be: source1856/final focused112/PG162/type8/build/API+Web wheels PASS, no count sum | SOURCE/DISPOSABLE/PACKAGE_PASS, NOT_INSTALLED/ACTIVE. Plan23/QUERY1.0 stay strict; every review shares the original reference, not private-draft vector comparison. Genuine current-user/source/worker acceptance and compatible activation remain required; private intent/result vector bases are NOT_IMPLEMENTED. |
 | C4. General→ChatGPT read-only discovery | Existing textbook/past-exam GraphRAG tools remain available; this goal's vector candidate tool/use-case is not implemented/activated | Connect the same official context with actual chat operator permissions, citations, explicit partial/unavailable and no Item write/approval/delete authority. |

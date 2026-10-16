@@ -897,6 +897,12 @@ class KnowledgeRetrievalApplicationService:
             raise KnowledgeRetrievalServiceError(
                 "KNOWLEDGE_RETRIEVAL_PUBLICATION_INVALID", "original Item evidence differs"
             )
+        artifact_reader.prefetch(
+            tuple(
+                (pointer.artifact_id, pointer.artifact_revision_id)
+                for pointer in (publication.manifest_artifact, publication.context_artifact)
+            )
+        )
         payloads: list[bytes] = []
         for pointer, kind in (
             (publication.manifest_artifact, "manifest"),

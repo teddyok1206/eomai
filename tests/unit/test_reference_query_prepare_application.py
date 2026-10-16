@@ -253,6 +253,36 @@ def test_denial_or_corruption_is_failure_not_auxiliary_absence(
     assert value.offers == []
 
 
+@pytest.mark.parametrize(
+    "reason,logged",
+    (
+        (
+            "OPERATOR_AUTHORIZATION_FENCE_CONTEXT_INVALID",
+            "OPERATOR_AUTHORIZATION_FENCE_CONTEXT_INVALID",
+        ),
+        ("OPERATOR_AUTHORIZATION_FENCE_FORBIDDEN", "OPERATOR_AUTHORIZATION_FENCE_FORBIDDEN"),
+        ("secret-do-not-echo", "UNCLASSIFIED"),
+    ),
+)
+def test_identity_diagnostics_are_closed_and_do_not_change_the_public_failure(
+    application, monkeypatch, caplog, reason, logged
+):
+    value = application
+    error = OperatorAuthorizationFenceError(reason)
+    monkeypatch.setattr(
+        module,
+        "prepare_and_start_reference_query_selection_in_session",
+        Mock(side_effect=error),
+    )
+    reply = value.app.prepare(wire_request(value.source))
+    assert reply.status == "FAILED" and reply.error_code == "AUTHORITY_UNAVAILABLE"
+    assert reply.workflow_id is None and reply.selection is None and value.offers == []
+    messages = [record.getMessage() for record in caplog.records if record.name == module.__name__]
+    assert messages == [f"REFERENCE_QUERY_PREPARATION_REJECTED boundary=IDENTITY reason={logged}"]
+    assert "secret-do-not-echo" not in caplog.text
+    assert all(record.exc_info is None for record in caplog.records)
+
+
 @pytest.mark.parametrize("state", ("FAILED", "CANCELLED", "failed_command"))
 def test_terminal_failed_history_is_not_retried(application, state):
     value = application

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Literal, Protocol
 
 from eom_catalog_contracts.embedding_reference_query import ReferenceQuerySpaces
@@ -44,6 +45,7 @@ from eom_workflow_runner.reference_query_preparation import (
 from eom_workflow_runner.repository import CommandExecutionFamily, NativeCommandActorSelection
 
 type ReferenceQueryDriveOffer = Literal["STARTED", "ALREADY_ACTIVE", "BUSY", "UNAVAILABLE"]
+_LOGGER = logging.getLogger(__name__)
 
 
 class ReferenceQueryPrepareDrivePort(Protocol):
@@ -234,8 +236,29 @@ class NativeReferenceQueryPreparation:
                 error_code=absent.code,
             )
         except SimilarityContextReadError as error:
+            _LOGGER.warning("REFERENCE_QUERY_PREPARATION_REJECTED boundary=SIMILARITY")
             return _failure(request, error.code)
         except EmbeddingRegistryError as error:
+            _LOGGER.warning("REFERENCE_QUERY_PREPARATION_REJECTED boundary=CATALOG")
             return _failure(request, similarity_context_error_from_registry(error).code)
-        except OperatorAuthorizationFenceError:
+        except OperatorAuthorizationFenceError as error:
+            # Public failure stays deliberately broad. The owner needs the
+            # closed local reason to distinguish a context defect from denial;
+            # never log the capture, exception body, SQL or an arbitrary code.
+            reason = (
+                error.code
+                if type(error.code) is str
+                and error.code
+                in {
+                    "OPERATOR_AUTHORIZATION_FENCE_CONFIGURATION_INVALID",
+                    "OPERATOR_AUTHORIZATION_FENCE_CONTEXT_INVALID",
+                    "OPERATOR_AUTHORIZATION_FENCE_OPERATOR_INVALID",
+                    "OPERATOR_AUTHORIZATION_FENCE_FORBIDDEN",
+                    "OPERATOR_AUTHORIZATION_FENCE_UNAVAILABLE",
+                }
+                else "UNCLASSIFIED"
+            )
+            _LOGGER.warning(
+                "REFERENCE_QUERY_PREPARATION_REJECTED boundary=IDENTITY reason=%s", reason
+            )
             return _failure(request, "AUTHORITY_UNAVAILABLE")
