@@ -119,3 +119,15 @@ under`/tmp/eom-cpu-host-successor-Z1YMaK2I/private-chat-query-*`. These fixtures
 use local synthetic artifacts and zero model inference, not real-user/RAG acceptance.
 Operating C1 authentication, all consumer activations, coverage and CPU/CUDA gates
 remain open; this leaf is **SOURCE_PASS / NOT_ACTIVE / C4_NOT_ACCEPTED**.
+
+Candidate`f92b6db93573e3ed1ae24a22af020885f379ecf3` subsequently passed the existing
+three-wheel build/RECORD/contract inventory. A separate isolated two-wheel proof
+imported190 EOM modules **only from the exact platform/API-contract archives**,
+without checkout or installed-prefix fallback. Both message families and the new
+resource/model roundtrip passed; optional ML imports, DB/model/activation calls0.
+Platform raw:`66ceac1681ebe149ddcee89b6f4ad61ddba222d4ed0a6c909b788cef31a516cd`;
+API-contract raw:`28c5d41dc1f3eadf16a6819ec2fece0e68c4308e5c513c4d6cf86f620a30632d`.
+Build path:`/tmp/eom-api-build/f92b6db93573e3ed1ae24a22af020885f379ecf3.rsDamC/dist`.
+The guarded disposable database/roles were removed successfully; no operating DB
+was a test target. This candidate was not installed or activated, and existing
+INDEX/QUERY/API/Catalog releases were left unchanged.
