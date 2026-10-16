@@ -210,7 +210,10 @@ CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소
 아래 표는 경계별 누적 검증 기록도 포함합니다. 이전 행의 소스 검증 당시 ‘미활성’은
 뒤에 기록된 운영 활성화를 취소하는 뜻이 아닙니다. 현재 운영 coverage는
 CONTENT_ONLY7/520·CONCRETE_FACETS1/520·METADATA_ONLY1/520입니다.
-인덱싱 owner는 제한 실행 후 정상 종료했으며, 상시 처리·일반 소비자·GPU 기본값은 아직 미활성입니다.
+첫 제한 실행은 정상 종료했습니다. 이후 기존 접근 정책을 그대로 둔 승인 문항+기출 범위의
+최대4건 제한 검증을 시작했으며, 새 출력·보고서 대기·재사용은 아직 검증 중입니다.
+[승인 문항 연결 검증](docs/operations/LOCAL_INDEXING_ADMITTED_ITEM_SCOPE_2026-10-16.md).
+상시 처리·일반 소비자·GPU 기본값은 아직 미활성입니다.
 [전체 목표의 요구사항·증거·남은 작업](docs/status/SYSTEM_RAG_GOAL_REQUIREMENT_AUDIT_2026-10-15.md)을
 별도로 대조하며, 이 표의 일부 PASS를 전체 완료로 사용하지 않습니다.
 

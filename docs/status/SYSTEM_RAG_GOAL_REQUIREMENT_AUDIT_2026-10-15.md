@@ -1,6 +1,6 @@
 # Full incremental-RAG goal: requirement and evidence ledger
 
-2026-10-15 UTC; updated2026-10-16 00:14 UTC. **GOAL_ACTIVE; FULL_COMPLETION_UNPROVEN.**
+2026-10-15 UTC; updated2026-10-16 00:25 UTC. **GOAL_ACTIVE; FULL_COMPLETION_UNPROVEN.**
 Requirements come from the [original design](../architecture/SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md),
 not from whichever subset currently has passing tests. Historical tests are not
 summed into a single acceptance count. This ledger does not grant authority.
@@ -12,9 +12,12 @@ summed into a single acceptance count. This ledger does not grant authority.
   not silently select another source release.
 - API/platform/contracts2857bf77 and native QUERY owner8c411041 remain selected.
   The separate83bad async Item-start candidate is staged, not activated.
-- INDEX service revision12/resource version24 and the three-view grant are selected;
-  source d4846220 completed the bounded window and drained successfully,
-  **not boot-enabled/continuous**.
+- INDEX service revision12/resource version24/source d4846220 completed the original
+  three-view bounded window and drained successfully. A supported new immutable
+  grant now selects both admitted Item classes and ALL_ADMITTED_GRAPH_ITEMS;
+  a second bounded maximum4-target/three-command window is running from00:25 UTC,
+  **not boot-enabled/continuous**. Output/reuse/report-wait audit is pending.
+  [Exact admitted-Item selection](../operations/LOCAL_INDEXING_ADMITTED_ITEM_SCOPE_2026-10-16.md).
   [Exact files, policies, failures and recovery](../operations/LOCAL_INDEXING_MULTIVIEW_ACTIVATION_2026-10-15.md).
 - Latest fully inspected persistent state at10/16 00:14:23 UTC: three logical
   indexes, six revisions, nine encodings/bindings. CONTENT_ONLY7/520,
@@ -50,7 +53,7 @@ summed into a single acceptance count. This ledger does not grant authority.
 | --- | --- | --- |
 | B1. Commit-based missing-binding reconciliation, no new queue/outbox framework | Official current Graph lookup, existing native START admission, actual seed/delta; empty/report/view/no-Graph source tests | Confirm unattended resumed discovery after the bounded window, no hidden manual target list, and restart with original commands. |
 | B2. Three independent views with exact queue selection | Closed configurationV2, shared engine/publisher/authority/launcher and round-robin333 source/126 actual PG checks; genuine three-view terminal STARTs and exact committed index/encoding receipts, all six shards verified | BOUNDED_ACTUAL_PASS, partial7/1/1 of520. Configure and verify continuous policy next; full coverage is not complete. |
-| B3. Original past exams AND approved generated Item lifecycle | Source adapter/contract supports both; active trial is intentionally occurrence-backed PAST_EXAM only | Add/activate the proper admitted-source namespace and explicit minimal source grant. Do not label current occurrence-only policy as approved-Item automation. |
+| B3. Original past exams AND approved generated Item lifecycle | Existing source policy was officially resolved and already permits both classes; unchanged d484/service12 now selects a supported immutable admitted-Item grant and all three ALL_ADMITTED_GRAPH_ITEMS namespaces, bounded trial running | Inspect actual original new-grant commands, report-wait and vector reuse/coverage. Operating selection/start is not full lifecycle acceptance. |
 | B4. Accepted V10 report wait, unavailable concrete evidence, separate denominators | Typed reconciliation states and source tests preserve missing report/view; original520 report corpus remains separate | Verify actual approved-Item report wait and later accepted-report reconciliation; confirm the user projection distinguishes learning from vector readiness where exposed. |
 | B5. Same input/space/partition reused; Graph-only/source/report changes create associations, not repeated encoding | Existing reservation/registry keys and delta/assembly tests; actual first two encodings unchanged across two deltas | Check live same-request INDEX replay and source/Graph/report change with encode counters and immutable row references. |
 | B6. No-work creates no Workflow; reusable bindings do not masquerade as missing compute | Reconciler excludes up-to-date/report-unavailable targets; source-plan `demands` describe binding targets, while reservation completion decides actual new model work | Do not invent a separate binding-only framework merely because `LocalEmbeddingCoverageOnly` exists. A changed Graph with reusable targets can still have binding demands and zero new encoding. Inspect the actual reservation/receipt path. |
