@@ -24,6 +24,14 @@ pins independently verified. See the facade document's
 Latest state remains BYTE_AUDITED / NOT_ADMITTED / NOT_PROBED; no GPU model run,
 CPU space replacement or default activation follows from this audit.
 
+Further actual installation23:20–23:30 UTC: static expected20-library proof and
+same CPU/GPU family were verified, the existing UID990 Orchestrator committed a
+real bundle Artifact, and config1.2 plus dedicated account/shared inode/fixed
+template were installed. Existing OLD host checks passed with the root-selected
+canonical cache alias actually mounted readonly. No candidate instruction or
+native CUDA probe has run; CPU/model ACLs and legacy image execution are unchanged.
+[Exact actual identities and remaining first-execution boundary](../operations/EMBEDDING_CUDA_CONFIGURATION_2026-10-16.md).
+
 ## Responsibility and required design procedure
 
 1. Extend the existing protected installation/admission boundary with an explicit

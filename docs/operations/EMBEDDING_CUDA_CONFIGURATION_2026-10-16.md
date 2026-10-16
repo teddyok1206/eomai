@@ -109,3 +109,53 @@ The initial relative-file sysusers dry run found no file; it was corrected befor
 any privileged mutation. Tmpfiles `--cat-config` is not syntax/runtime validation
 and is not counted as such. Current tool has no `--dry-run`; actual create remains
 an explicit scoped installation step after group creation, not a skipped success.
+
+## Actual OS bootstrap and selected-cache validation
+
+The reviewed bootstrap52239557de31a4ad2e9fd16674440748c5f30731d17d19f7a313a9cd57d4cef3
+was installed root:root0444/nlink1 and executed once through the existing operator
+pane, with actual noninteractive sudo reused and no credential/TTL change.
+It first checked absent accounts/targets and no active image/native-CUDA units.
+The missing `/etc/sysusers.d` parent was discovered read-only before execution
+and handled as a new root0755 directory, not an unexplained account failure.
+Exact committed config hashes242bfe1c/28826d01 and probe template911e3ef9 were
+verified before use. All existing files and accounts were left untouched.
+
+Actual sysusers created locked/nologin UID973/GID973 `eom-embedding-cuda` and
+shared GID974 `eom-gpu-lease`. Its actual groups are exactly973/974; no eom,
+sudo/Docker/video groups, home or credentials were added/copied. Actual tmpfiles
+create produced tmpfs parent root:GID9740750 and empty regular root:GID9740640,
+nlink1 inode2574220 on device25. No lock was claimed, truncated or replaced.
+The boot record creates only this fixed namespace and is installed separately
+from worker code. Image UID984 has not yet joined this group or migrated locks.
+
+The root-owned `selected-cache` symlink points directly to the exact already
+registered CUDA snapshot cache. Canonical cache bytes/inode/nlink were unchanged;
+there is no copied cache, hardlink or new global mount. The exact fixed probe
+template is installed root:root0644/nlink1 and daemon-reload completed. It is not
+enabled/started. Actual installed-template systemd verification PASS.
+
+Unit `eom-cuda-selected-cache-check-c56662c0.service` completed successfully
+23:30:11 UTC. It ran the existing root-staged `admit.py host-bytes` under protected
+OLD `-I -S -B`, read-only `/opt/eom`, private network/devices, and the NEW alias
+bound readonly to `/etc/ld.so.cache`. Existing kernel mount/FD/inode/hash/ELF
+checks returned `EMBEDDING_HOST_BYTES_AUDIT_PASS_NOT_ADMITTED` and exact host seed
+1690844d36f4e8fcd59888896aaf2e248a1a3170c24f445559692fb1cfa48591.
+This is actual validation of the selector, not just identical copied bytes or a
+schema-only test. No CUDA candidate interpreter, device R/W, model or forward.
+
+Model ACLs, CPU owners/config/default and all legacy image entrypoints remain
+UNCHANGED. Next: supported CPU drain, narrowly add readonly model access for973,
+fresh CPU resume/readback, then the existing real two-ACK no-model CUDA probe.
+The fixed probe requires root-independent lease/FDstore/maps/process checks
+before initial CUDA access and separately verified termination before seal.
+Do not equate bootstrap or alias validation with that still-unexecuted gate.
+
+Routine observation23:30:59 UTC: original INDEX PID2893747/invocation99af6c0f
+still active; CONTENT_ONLY a5f8f5c5 succeeded23:14:01 and CONCRETE_FACETS b108432e
+succeeded23:25:24. METADATA_ONLY a7285fba was queued in this window; no terminal
+result observed. This is not coherent global coverage. Original HTTP observer
+PID2895440 remains alive/LOGIN with no acceptance receipt; no new login request,
+key, token persistence, operation or numerical replay. Next routine observation
+is no earlier than2026-10-17 00:00:59 UTC; actual finite operation handles are
+observed independently. Original520 corpus work is not reopened.

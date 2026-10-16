@@ -1,7 +1,13 @@
-# Shared physical GPU lease — source-only boundary
+# Shared physical GPU lease boundary
 
 2026-10-12 UTC. Status: source implementation candidate, **NOT_INSTALLED / NOT_ACTIVE**.
 This additive branch does not migrate a user/group/unit, start a GPU process, or prove CUDA cleanup.
+
+The above is the historical source checkpoint. Actual2026-10-16 preparation has
+since provisioned only the dedicated CUDA numeric account/GID and fixed root-owned
+tmpfs inode/boot records, not migrated legacy image consumers or executed a GPU
+probe/model. See [the exact installed scope](../operations/EMBEDDING_CUDA_CONFIGURATION_2026-10-16.md).
+Do not treat provisioning one inode as all-entrypoint exclusion/lifetime acceptance.
 
 ## Design note before implementation
 
