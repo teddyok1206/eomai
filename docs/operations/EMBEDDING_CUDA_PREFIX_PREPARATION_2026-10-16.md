@@ -134,6 +134,16 @@ NOT_ADMITTED; six real device comparisons and GPU default are not complete.**
 
 ## Original authenticated HTTP request
 
+Latest CUDA source prerequisite15:49 UTC: the explicit
+[private host-extension design and closed protocol](../architecture/EMBEDDING_CUDA_HOST_EXTENSION_DESIGN.md)
+now preserve the CPU snapshot and define six exact library members plus a private
+cache. Source174 tests/strict1/Ruff PASS; all322 predecessor schema resources stay
+byte-pinned. The official rdmacm archive was acquired and statically extracted in
+an unprivileged temporary directory; actual raw hash/size match the pinned APT
+index. No OS installation, candidate interpreter/GPU/model, DB or service mutation.
+**This prerequisite is not protected capture, native admission, six-run performance
+acceptance or a GPU default.** The original failed stage remains preserved.
+
 The existing login succeeded12:38:00; it was not an incorrect-password case.
 The same original key/operation returned Workflow
 `workflow_a0833f96b5154c3da4c5e5961eb9a209`. Its original native Job is

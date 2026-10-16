@@ -9,6 +9,19 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Latest source checkpoint15:49 UTC: explicit CUDA-only private host extension
+  design, exact six-member schema/mirror/pointer/frozen values and base/seed/raw/
+  semantic closure now source174/strict1/Ruff PASS. All322 predecessor schema
+  records/bytes remain pinned; no CPU allowlist/8MiB bound expansion. Official
+  rdmacm archive actual70,698bytes/hash match; unprivileged static extraction only.
+  CUDA remains ROOT_STAGED/BYTE_AUDIT_FAILED/NOT_ADMITTED; capture/integration/
+  actual sealed CUDA probe, six real runs and conditional default remain open.
+  Normal INDEX observation15:46:38 found the same PID2387580/invocation active,
+  not new canonical coverage evidence; next normal check no earlier than16:16:38.
+  Existing observer2391005 remains at LOGIN without a server response; no new
+  observer, repeated login question, model request or runtime change was created.
+  Final authenticated context read/C1–C5/full-goal gates are still open.
+  [Source scope, evidence and next owner boundary](../architecture/EMBEDDING_CUDA_HOST_EXTENSION_DESIGN.md#implemented-protocol-slice-2026-10-161549-utc).
 - Latest operating checkpoint15:18 UTC: original HTTP Workflow/attempt1/native Job
   completed once, READY/same-key replay PASS14:50. Subsequent context409 exposed
   Catalog2857's strict checkpoint1.0 reader versus original1.1 history. Standard

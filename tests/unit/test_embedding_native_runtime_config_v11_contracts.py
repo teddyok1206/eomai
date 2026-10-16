@@ -70,7 +70,14 @@ def test_v11_closed_schema_mirror_and_317_predecessor_resources_are_frozen() -> 
         name: item
         for name, item in CATALOG_SCHEMA_RESOURCES.items()
         if name
-        not in {EMBEDDING_NATIVE_RUNTIME_CONFIG_V11_SCHEMA, "embedding-prefix-audit-input-v1.1"}
+        not in {
+            EMBEDDING_NATIVE_RUNTIME_CONFIG_V11_SCHEMA,
+            "embedding-prefix-audit-input-v1.1",
+            "embedding-cuda-host-extension",
+            "system-rag-private-chat-similarity",
+            "embedding-private-chat-query",
+            "system-rag-private-chat-query-basis",
+        }
     }
     assert len(previous) == 317
     assert content_sha256({name: asdict(item) for name, item in previous.items()}) == (

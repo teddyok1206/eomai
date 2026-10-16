@@ -30,6 +30,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "embedding-cuda-host-extension": CatalogSchemaResource(
+            "schemas/knowledge/embedding-cuda-host-extension-v1.schema.json",
+            "resources/knowledge/embedding-cuda-host-extension-v1.schema.json",
+            "1.0",
+            "sha256:19aa197a54a7bf8e50164094655522dd8c19dbcebe4dec922912634f9043da0b",
+        ),
         "system-rag-private-chat-similarity": CatalogSchemaResource(
             "schemas/knowledge/system-rag-private-chat-similarity-v1.schema.json",
             "resources/knowledge/system-rag-private-chat-similarity-v1.schema.json",

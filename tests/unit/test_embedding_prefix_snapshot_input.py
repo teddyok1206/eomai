@@ -76,7 +76,18 @@ def test_closed_schema_mirror_hash_and_318_predecessors_remain_frozen() -> None:
         ).read_bytes()
     )
     assert sha256_bytes(raw) == resource.sha256
-    previous = {name: item for name, item in CATALOG_SCHEMA_RESOURCES.items() if name != SCHEMA}
+    previous = {
+        name: item
+        for name, item in CATALOG_SCHEMA_RESOURCES.items()
+        if name
+        not in {
+            SCHEMA,
+            "embedding-cuda-host-extension",
+            "system-rag-private-chat-similarity",
+            "embedding-private-chat-query",
+            "system-rag-private-chat-query-basis",
+        }
+    }
     assert len(previous) == 318
     assert (
         content_sha256({name: asdict(item) for name, item in previous.items()})
