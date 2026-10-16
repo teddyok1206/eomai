@@ -405,3 +405,11 @@ CUDA probe/installation/GPU comparison. No GPU/model/device/group/production uni
 changed. Next define the pre-initialization ready/ACK contract, connect worker and
 independent unit/maps/store observer, then migrate actual GPU consumers and audit
 the reviewed private-code successor before any candidate instruction/model use.
+
+Candidate `c9ab75c344570f69c95ff09853c8001e753f4650` is committed/pushed.
+Standard platform/API-contract/API build and RECORD inspection passed at
+`/tmp/eom-api-build/c9ab75c344570f69c95ff09853c8001e753f4650.h3YZfj/dist`.
+The standalone lease wheel was built from that exact archived source, not a mutable
+runtime directory. Raw SHA `3b09712240ce6bc489cd3bf2ea66aad778cf5b98e2221da44ca2a0cecea4cf03`;
+metadata/no dependencies, every RECORD/member SHA, source equality, Python3.11 AST
+and isolated wheel-only import passed. No operating image/CUDA prefix was installed.
