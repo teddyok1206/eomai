@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import errno
+import fcntl
 import os
 import subprocess
 from pathlib import Path
@@ -175,6 +176,30 @@ def test_readonly_query_mount_cannot_initialize_missing_capacity_lock(
     with pytest.raises(CpuHandoffError, match="DIRECTORY_INVALID"), cpu.native_cpu_capacity():
         pytest.fail("missing storage cannot grant capacity")
     assert not (root / ".cpu-capacity.lock").exists()
+
+
+def test_readonly_query_lock_interoperates_with_unchanged_readwrite_index_owner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "owner"
+    root.mkdir(mode=0o700)
+    lock = root / ".cpu-capacity.lock"
+    lock.touch(mode=0o600)
+    monkeypatch.setattr(cpu, "CAPACITY_ROOT", root)
+    monkeypatch.setattr(
+        cpu, "fixed_owner_identity", lambda: CpuHandoffIdentity(os.geteuid(), os.getegid())
+    )
+    legacy_fd = os.open(lock, os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        fcntl.flock(legacy_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with pytest.raises(cpu.NativeCpuExecutionError, match="BUSY"), cpu.native_cpu_capacity():
+            pytest.fail("QUERY must not overlap a legacy INDEX lock")
+        fcntl.flock(legacy_fd, fcntl.LOCK_UN)
+        with cpu.native_cpu_capacity(), pytest.raises(BlockingIOError):
+            fcntl.flock(legacy_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(legacy_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    finally:
+        os.close(legacy_fd)
 
 
 def test_resource_guard_revalidates_raw_values_without_silently_dropping_fields() -> None:

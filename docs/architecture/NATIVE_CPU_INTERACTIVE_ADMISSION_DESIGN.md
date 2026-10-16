@@ -314,3 +314,39 @@ than overwriting old observations, keeps credentials only in memory and reads
 explicit observation-control replies from the terminal rather than launch stdin.
 One fresh-auth request was sent14:43 UTC. Do not recreate it or reask while live.
 Routine INDEX observation remains no earlier than14:47:30 UTC.
+
+### Original numerical completion and old Catalog reader —14:53 UTC
+
+The corrected observer authenticated14:46:09.738788 UTC. The same original
+Job`job_f66383a09bf643d7917d7b12db025fa4` dispatched once through its original
+native unit, prepare invocation`10b1f5c5b6644526b60988ef294e34b9` and CPU-query
+invocation`c95855eab1ab448eb23e5c3dd42833b5`, actual UID978. Numerical execution
+ended status0/success without restart. Original Workflow preparation became READY
+at14:50:02.242221; same-key replay matched. The subsequent common context HTTP
+read rejected409/QUERY_RESULT_INVALID14:50:34. No new key or inference was issued.
+The observer is alive at AWAIT_EXPLICIT_REPLAY with credentials still memory-only.
+
+Installed Catalog/API source2857bf77 has only native-reference-query-coordinator
+schema1.0 and its strict1.0 history parser, whereas the original accepted allocation
+and new native completion use released1.1. The protected QUERY owner understands
+and validates1.1, so READY alone did not prove the separately installed Catalog
+reader can decode it. Do not weaken either decoder, relabel1.1 as1.0, mutate the
+receipt or regenerate the successful numerical result.
+
+**Compatible release correction:** use the existing coordinated API/platform
+deployment for the shared API/Catalog interpreter, not an ad-hoc module overlay or
+second Catalog runtime. Preserve native prefixes, original outputs, INDEX15 and
+released policies. Drain the current QUERY supervisor normally before changing its
+protected API-provider installation, because its existing source/wheel/code pins
+must not silently accept changed API bytes. After the standard release gate,
+rebind only those provider pins from the actual installed API metadata and select
+the corresponding QUERY config/unit hash through the existing public configuration
+contract. No authority/TTL/permission change or new migration is intended. Recheck
+current service/command admission before the side effect; stop on an active
+incompatible consumer or unknown applied state. Resume only the same in-memory
+observer/key after both reader and provider compatibility are proved. A timeout
+does not authorize rerunning the already successful model.
+
+The additional real-file mixed-version regression20 PASS confirms unchanged INDEX
+O_RDWR and corrected QUERY O_RDONLY flock descriptors exclude one another in both
+directions and release correctly. This is not a Catalog compatibility test.
