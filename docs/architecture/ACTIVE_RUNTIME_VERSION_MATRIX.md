@@ -252,6 +252,12 @@ ITEM_REVIEW 목적을 명시하며, 기존1.0의 암시적 기출변형 의미·
 최종 HTTP·실소켓 subset110 및 strict type9 PASS. 소스 검증일 뿐 운영 미설치·미활성이며,
 공식 Evidence의 자동 참고 선택·일반 문항 시작과 실제 사용자 활성화 검증은 아직 남아 있다.
 
+후속 후보 `3fa9b958`은 원래 Evidence5에서만 참고 기출을 선택하는 Catalog 읽기·기존
+API 전용 소켓·API client를 추가했다. 선택된 1건의 원본/보고서만 검증하며 추가 검색이나
+수치 실행은 하지 않는다. 최종 관련179/strict type6, 표준3-wheel/RECORD/OpenAPI 및
+source-free2-wheel301-module 검증 PASS. 아직 운영 미설치·미활성이며 일반 시작 호출과
+정상적인 참고 없음 분기는 미연결이다. 소스 후보와 위 실제 운영 버전을 혼동하지 않는다.
+
 ## 보존·정리 규칙
 
 - immutable row, manifest, receipt, release, Workflow, Item Revision 또는 rebuild/validation 경로가

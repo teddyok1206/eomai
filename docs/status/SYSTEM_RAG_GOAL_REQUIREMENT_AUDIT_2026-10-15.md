@@ -8,7 +8,15 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
-- Repository source candidate`15ffdef5` is committed/pushed and standard build/
+- Latest repository selector candidate`3fa9b958` is committed/pushed. Standard
+  three-wheel/RECORD/OpenAPI build and source-free two-wheel301-module/schema/
+  disabled-owner proof PASS. It remains NOT_INSTALLED/ACTIVE. Final affected
+  source/socket/guidance179 PASS and strict mypy6 PASS; original Evidence DB/IAM
+  observations are synthetic. The ordinary caller/optional-reference branch and
+  real authenticated source/Artifact acceptance are still open.
+  Broad87-file regression1782 PASS/446.84s imported the pre-single-source version;
+  the final179/type6/package proof covers that last refinement. No count summation.
+- Predecessor ordinary-delivery source`15ffdef5` is committed/pushed and standard build/
   source-free two-wheel207-EOM-module/117-schema composition PASS; it is
   NOT_INSTALLED/ACTIVE. Prior input1.1 foundation4f302b99 evidence remains.
   The input-only HTTP/native preparation1.1 source`a8238d7a` is committed/pushed:
@@ -22,10 +30,6 @@ summed into a single acceptance count. This ledger does not grant authority.
   installed-wheel OpenAPI and source-free two-wheel297-module purpose proof PASS.
   Legacy1.0 wire and native-key identity match baseline15ffdef5 exactly. All of
   these remain source/package evidence, not current-IAM or runtime activation.
-  The next official-Evidence5 reference selector has closed schema/models, Catalog
-  read/selection, existing API-only socket and API client source151/type6 PASS.
-  Evidence DB/source/IAM seams are synthetic; ordinary start/optional absence and
-  real current-user/Artifact gates remain open. It is not installed/activated.
   Reviewed INDEX
   code`2a4843c3` is independently packaged/installed. Documentation successors do
   not silently select another source release.
@@ -120,7 +124,7 @@ summed into a single acceptance count. This ledger does not grant authority.
 | --- | --- | --- |
 | C1. One common candidate/evidence boundary | Common Catalog context and original bounded native QUERY→same-key replay→exact context read accepted at partial2/520; new protected HTTP route/service installed | Finish the held actual HTTP preparation/replay/current-read gate. Keep source authorization and Evidence receipts distinct from scores/model hypotheses. |
 | C2. 1:1 reference variation | Source/API/BFF/browser/disposable plan23 tests and inactive compatible83bad release; Pack1.20.17 released inactive | Activate reviewed compatible components in dependency order after held HTTP terminal; run one bounded genuine Item and inspect actual author/review context and maximum-three-pass behavior. Only then enable Web flag. |
-| C3. New authoring and review | Shared approved-reference/native request1.1 foundation, ordinary plan24 and owner/API/Catalog Unix/workspace delivery implemented. Input-only HTTP/native preparation1.1 now carries explicit authoring/review purpose; same-key purpose drift cannot replace work. Latest related source1729, final subset110, PG152 and strict mypy9 PASS. Inventories overlap | SOURCE_AND_DISPOSABLE_PASS, NOT_INSTALLED/ACTIVE. Plan23 and QUERY1.0 stay strict; ordinary authoring/every review share one ITEM_AUTHORING reference, not private-draft vector comparison. Official-Evidence automatic reference selection, ordinary start routing, genuine HTTP/worker activation and private intent/result bases remain open. |
+| C3. New authoring and review | Shared approved-reference/native request1.1, plan24, purpose1.1 HTTP preparation and owner/API/Catalog role delivery implemented. New official-Evidence-only selector/source/socket/API client3fa9b958: final affected179/type6/build/source-free301-module proof PASS. Prior preparation1729/PG152 remains distinct; inventories overlap | SOURCE/PACKAGE_PASS, NOT_INSTALLED/ACTIVE. Plan23 and QUERY1.0 stay strict; every review shares the original reference, not private-draft vector comparison. Ordinary start/optional-reference caller, genuine HTTP/worker/source acceptance and private intent/result bases remain open. |
 | C4. General→ChatGPT read-only discovery | Existing textbook/past-exam GraphRAG tools remain available; this goal's vector candidate tool/use-case is not implemented/activated | Connect the same official context with actual chat operator permissions, citations, explicit partial/unavailable and no Item write/approval/delete authority. |
 | C5. Exam repetition observations | Historical approved25 Item/Assembly/HWPX acceptance is preserved, not new similarity-consumer evidence | Add bounded same-concept versus same-inference repetition observations to the existing composition path, without automatic rejection/full regeneration or changed approval meaning. Verify against an existing fixed cohort. |
 

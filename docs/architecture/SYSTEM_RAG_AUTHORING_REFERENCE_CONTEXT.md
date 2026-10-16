@@ -488,7 +488,8 @@ No selected API/QUERY/INDEX/Pack/Web configuration changed.
    joins and stable original order, O(n) manifest traversal, O(1) source materialization,
    existing PK/FK/unique indexes. No unused Item bytes or N+1 source read.
 8. Transactions: use one Catalog-owned current root, read/shared locks as existing
-   authority requires; no commit, new idempotency record or future permission cache.
+   authority requires; the root closes normally, with no domain/Artifact write or
+   commit, new idempotency record or future permission cache.
    Immutable selection is reproducible. Native preparation keeps the original
    actual-operator/key and rejects changed purpose/source, so replay cannot re-key.
 9. Ownership: contracts own messages; Catalog owns resolution/selection; the API
@@ -545,3 +546,60 @@ fails; the selector does not quietly fall through to another source. The final
 selector/real-socket46 tests and strict mypy6 PASS after this change. The earlier
 e7b6bef4 standard three-wheel/RECORD/OpenAPI build passed; it remains a retained
 intermediate candidate, not the corrected single-source candidate or activation.
+
+### Next caller integration, not implemented by the selector checkpoint
+
+The existing opt-in reference-start operation can add an ordinary retrieval1.0
+branch without reinterpreting accepted variation2.0 requests. It must keep actual
+actor capture, fresh WORKFLOW_START, full-request idempotency claim and domain replay
+first. The ordinary adapter should call this exact official-Evidence selector,
+then preparation1.1/ITEM_AUTHORING with the same original domain key, and hand a
+READY result to the existing checked plan24 preparation. Pending must still create
+no authoring Workflow/plan/START. Denial/failure never becomes optional absence.
+
+A legitimate no-reference result requires an explicit typed NOT_OFFERED outcome,
+an append-only audit targeting the original Evidence revision, and the existing
+ordinary Evidence-only plan path. It must not invent a QUERY/context/receipt or
+block a valid ordinary request merely because no optional pattern was offered.
+The existing variation branch must remain mandatory/exact and byte-identical.
+This caller branch, UI routing, current-auth HTTP/worker acceptance and activation
+are still required; the selector or an unprivileged package proof cannot close them.
+
+### Single-source selector immutable candidate evidence
+
+Source`3fa9b958eefb8dd65516480b58881bc86dc9732a` is committed/pushed. Final affected
+source/Unix/Catalog/resource/guidance checks179 PASS/23.40s and strict mypy6 PASS;
+Ruff/format9 production/test paths PASS. Standard three-wheel build/RECORD and
+installed OpenAPI equality PASS. Retained build:
+`/tmp/eom-api-build/3fa9b958eefb8dd65516480b58881bc86dc9732a.OM3pZZ`.
+
+| Immutable build member | Raw SHA-256 |
+| --- | --- |
+| `source.tar` | `1738a1dbf5302ba2bda3b845460a63524930274cc5c025c42b8a664e7bfeeb64` |
+| `eom_platform-0.1.0-py3-none-any.whl` | `0d262f3cca08efc67ef1dc292ea3d7d49ec536e41e3b230a1bf51e6bda0dadbf` |
+| `eom_api_contracts-0.1.0-py3-none-any.whl` | `c2ec2e7f34a538c96431cee5c577d393f3c14a34105ce458d9b5666fc727497d` |
+| `eom_application_api-0.1.0-py3-none-any.whl` | `5c0384b3d980405fa94694391b3740722c154cb215d8aaf49ddfebfbc1397339` |
+
+Separate unprivileged Conda `-I -B` proof admits exactly the platform/contracts
+archives above, verifies their raw hashes, loads301 EOM modules only from those
+archives and validates Evidence5/selector request/selected-unavailable-failed reply
+composition. A missing owner fails closed. Predecessor preparation1.0 wire/native
+key and1.1 authoring/review behavior are preserved. No checkout/test module, ML,
+database/current-IAM/source read, queue submission or activation occurs. The same
+bounded synthetic1e44fe23… staged input is independently hash-checked; its synthetic
+publication pointers are never materialized or presented as real accepted sources.
+Log:`authoring-reference-selection-wheel-proof.log`, same evidence directory.
+
+The broad87-file regression was started before the last single-source refinement;
+its result is separate from the exact final179 tests. Neither is operating/current
+source authorization or a fresh disposable-PG acceptance of the new Evidence read.
+Those and the remaining caller/activation gates stay explicit rather than inheriting
+the preceding preparation-only PG152 result.
+
+The broad87-file run subsequently finished1782 PASS/446.84s, with one existing
+Starlette/httpx deprecation warning. It imported the pre-refinement selector and
+fixtures before the single-source change; the separate final179 tests/type6/
+package301-module proof cover the exact3fa9b958 candidate. Inventories overlap and
+are not added. Final documentation checks28 PASS/3.85s. The original full goal is
+still ACTIVE; no selected service, human session, native key, Pack or model default
+was changed by these source/package checks.
