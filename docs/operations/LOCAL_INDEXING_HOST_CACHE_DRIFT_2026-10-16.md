@@ -95,3 +95,53 @@ Temporary bounded operator files under`/tmp/eom-identity-provider-install.nAayco
 
 This incident changes the next required action; it does not waive C1–C5, automatic
 source lifecycle, genuine CPU/CUDA comparison or conditional GPU-default gates.
+
+## Compatible CPU publication window —prepared09:25 UTC
+
+Candidate source remains`3346ae080bd4ec9b4d0d56b27aa5f56df39fb8f1`; later document
+commits do not change this explicit selection. The existing protected owner copy
+is inactive. A separate1.2GiB developer materialization was assembled with OLD
+Python only: no candidate interpreter, model or numerical operation was executed.
+The seven unchanged console entrypoints retain their existing fixed native wrappers;
+their generated RECORD entries were mechanically relocated after OLD pip--prefix.
+The normal complete source/wheel/wrapper audit, not this assembly, admits bytes.
+
+Read-only09:21:46 preflight found no native unit, prefix user or nonterminal native
+Job. The original pending INDEX remains attempts/generation0 with no error. The
+old expired, never-allocated QUERY history remains unchanged. The unfiltered
+service command projection contained23 successful commands and1 pending; it is not
+the earlier START-only denominator or a vector-coverage measurement.
+
+Prepared input1.1 raw`2c85529c017abae2e54b6546ced6741b090d41920a82634ec3642e1e735dfa94`
+is16392bytes and passed Schema2020-12 plus the installed bootstrap parser. A fresh
+finite OLD no-site host-only preflight with this exact input and the actual snapshot
+mount PASS; this still does not admit the candidate prefix. Original/candidate
+tree fingerprints are respectively`5168f397b0515656580ec541a9f33d3c685e2ff20b8f4edcbd71b827aa6fbd2f`
+and`74e58fcca4fa6fa8a0ff6935f68f5c298c076a213a8d1117869019b32e7ebb14`.
+The independently implemented bounded read-only fingerprint matches the existing
+installer's original-tree result exactly. The three numerical implementation files
+also match the original bytes; complete new admission remains required.
+
+Execution boundary: gracefully stop only the exact original QUERY owner to prevent
+new numerical admissions, repeat read-only work/proc checks, and verify the snapshot
+host again before any prefix move. Hold the existing fixed publication lock while
+preserving the old CPU directory at the exact new sibling
+`/opt/eom/conda/envs/.embedding-cpu-preserved-3346ae08-x6wGos7H` and placing the
+developer input at the fixed CPU location. Then the unchanged supported publisher
+owns its own reservation, quarantine, host preflight, full OLD byte/ELF audit and
+only afterward NEW helper execution. Do not overwrite an existing destination.
+
+Old unit/config/receipt bytes and all original request identities are preserved.
+No automatic rollback to the known-invalid old host configuration, row repair,
+model run, source permission change, new key or owner activation is permitted.
+The QUERY owner stays stopped until coherent native admission/configuration/unit
+selection is verified. API/Catalog and unrelated services are not restarted.
+Publication success means INSTALLED_NOT_ADMITTED, not runtime recovery.
+
+Temporary explicit materialization/evidence boundary:
+`/tmp/eom-cpu-host-recovery-x6wGos7H`. The first archive-retention invocation
+rejected the non-private build-parent path before copying a member. Its exact empty
+root reservation was verified and moved, not deleted or chmod-published, to
+`/opt/eom/embedding-runtime-archives/.incomplete-19fb4269-x6wGos7H`; the retained
+wheel/source were then prepared through the existing helper from a private input
+directory. Original runtime and production data were unchanged by preparation.
