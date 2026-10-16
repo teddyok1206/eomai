@@ -138,14 +138,14 @@ def reconciliation(guarded_engine, service_owner, tmp_path, monkeypatch):
     def prepare(session, supplied_caller, selected, verifier):
         assert verifier is owner.catalog
         authorize(session, supplied_caller, selected)
+        missing_ids = {key.item_revision_id for key in observation.missing}
         return PreparedEmbeddingBindingLookup(
             MissingEmbeddingBindings(observation.missing, (), len(c.current.sources), len(keys)),
             c.current,
-            ()
-            if observation.missing
-            else tuple(
+            tuple(
                 source_binding(entry, view=request.namespace.view, space=request.space)
                 for entry in c.current.entries
+                if entry.profile.source_basis.source.item_revision_id not in missing_ids
             ),
         )
 
@@ -202,9 +202,12 @@ def test_actual_independent_roots_reconcile_one_workflow_and_start(reconciliatio
     c.launcher.run.assert_not_called()
 
 
-def test_actual_independent_roots_submit_one_metadata_refresh_without_encoding(reconciliation):
+@pytest.mark.parametrize("partial", [False, True])
+def test_actual_independent_roots_submit_one_metadata_refresh_without_encoding(
+    reconciliation, partial
+):
     c = reconciliation
-    c.observation.missing = ()
+    c.observation.missing = c.observation.missing[1:] if partial else ()
     barrier = Barrier(2)
 
     def run(_ordinal):
@@ -215,7 +218,7 @@ def test_actual_independent_roots_submit_one_metadata_refresh_without_encoding(r
         first, second = tuple(pool.map(run, range(2)))
     assert {first.state, second.state} == {ReconciliationState.QUEUED, ReconciliationState.REPLAYED}
     assert first.workflow_id == second.workflow_id and first.command_id == second.command_id
-    assert first.missing_binding_count == second.missing_binding_count == 0
+    assert first.missing_binding_count == second.missing_binding_count == (1 if partial else 0)
     assert first.index_refresh_reason == second.index_refresh_reason == "MISSING_NAMESPACE_INDEX"
     with c.publisher.sessions() as session:
         workflow = session.get(WorkflowInstanceRecord, first.workflow_id)

@@ -187,11 +187,20 @@ def test_observation_replays_actual_plan_and_atomic_workflow_without_model(recon
 def test_bounded_targets_are_stable_and_exclude_already_bound_sources(reconciliation):
     c = reconciliation
     c.current.keys = c.current.keys[1:]
+    binding = source_binding(
+        c.source.current.entries[0],
+        view=c.source.scope.request.namespace.view,
+        space=c.source.scope.request.space,
+    )
+    partial = index_manifest(binding, view=binding.view, space=c.source.scope.request.space)
+    c.current.previous = index_pointer(partial), partial
     c.app.maximum_targets = 1
     result = c.app.run_once()
     assert result.missing_binding_count == result.selected_target_count == 1
+    assert result.index_refresh_reason is None
     with c.source.publisher.sessions() as session:
         workflow = session.get(WorkflowInstanceRecord, result.workflow_id)
+        assert workflow.initial_request["schema_version"] == "local-embedding-workflow-request/1.2"
         plan_pointer = workflow.initial_request["source_plan"]
         revision = session.get(ArtifactRevisionRecord, plan_pointer["artifact_revision_id"])
         assert revision is not None
@@ -202,6 +211,24 @@ def test_bounded_targets_are_stable_and_exclude_already_bound_sources(reconcilia
         assert tuple(source.item_revision_id for source in actual.plan.sources) == (
             c.current.keys[0].item_revision_id,
         )
+
+
+def test_partial_new_namespace_refresh_precedes_missing_vector_seed(reconciliation):
+    c = reconciliation
+    c.current.keys, c.current.previous = c.current.keys[1:], None
+    observed = c.app.run_once()
+    assert observed.state is ReconciliationState.QUEUED
+    assert observed.missing_binding_count == observed.selected_target_count == 1
+    assert observed.index_refresh_reason == "MISSING_NAMESPACE_INDEX"
+    with c.source.publisher.sessions() as session:
+        workflow = session.get(WorkflowInstanceRecord, observed.workflow_id)
+        request = parse_local_embedding_executable_request(workflow.initial_request)
+        assert request.schema_version == "local-embedding-workflow-request/1.3"
+        assert request.reconciliation_basis.eligible_source_count == 2
+        assert request.reconciliation_basis.available_binding_count == 1
+        scope = c.source.owner.resolve_submission(session, request)
+        assert scope.plan.sources[0].item_revision_id != c.current.keys[0].item_revision_id
+    c.launcher.run.assert_not_called()
 
 
 @pytest.mark.parametrize("kind", ["complete", "report", "view", "empty", "no_graph"])

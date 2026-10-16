@@ -118,7 +118,7 @@ class LocalEmbeddingServiceReconciliation:
             ):
                 raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_SOURCE_MISMATCH")
             refresh: IndexMembershipRefreshBasis | None = None
-            if not targets and prepared.bindings:
+            if prepared.bindings:
                 previous = owner.catalog.resolve_indexing_namespace_predecessor(
                     session, controls.caller, query
                 )
@@ -129,7 +129,8 @@ class LocalEmbeddingServiceReconciliation:
                 )
                 if refresh is not None:
                     # One already available source witnesses this metadata-only
-                    # request; the basis pins the whole desired membership.
+                    # request, even while more sources need vectors. Publish
+                    # usable membership before the next ordinary seed/delta.
                     targets = (min(b.source.item_revision_id for b in prepared.bindings),)
             observed = LocalEmbeddingReconciliationResult(
                 state=ReconciliationState.UP_TO_DATE,

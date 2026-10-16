@@ -257,3 +257,30 @@ selection, rollback and bounded actual reuse acceptance remain necessary before
 declaring this correction live. This checkpoint does not enable continuous work,
 activate ordinary consumers or prove CPU/CUDA performance. The full goal remains
 active with those requirements in its separate ledger.
+
+## Partial membership must not wait for seed completion
+
+Operational preparation found a remaining scheduling boundary: another namespace
+can have reusable bindings while this namespace has no/currently stale index,
+even though additional sources still need vectors. Waiting for all missing
+encodings before refreshing membership delays usable partial coverage and source
+withdrawal reconciliation. The actual service identity permits only the fixed
+installed entry; an operator helper cannot impersonate it to force a test request.
+
+Use the same official bounded binding/predecessor observation whenever bindings
+are available, not only after the missing-vector list becomes empty. If membership
+differs, submit the existing metadata-only1.3 witness first. Its reported missing
+binding count stays honest. Once that index matches the available bindings, the
+next ordinary observation submits missing-vector1.2 work; no duplicate numerical
+job, parallel maintenance queue, new schema or automatic retry is introduced.
+No-available-binding seed and exact-current partial-head behavior remain unchanged.
+Add characterization and independent-root submission tests before activation.
+
+Characterization first reproduced the unwanted1.2 seed choice with partial
+bindings; its failed log remains. The one-condition scheduling correction now
+passes95 focused source/owner-loop tests and128 guarded PostgreSQL stage tests,
+including two independent roots submitting one1.3 request with an honest nonzero
+missing-vector count. An exact-current partial head still submits ordinary1.2
+missing work. Strict mypy1 module and Ruff/format PASS. No schema, permission,
+runtime-entry/fence, queue or numerical policy changed. This correction needs a
+new immutable candidate; the earlier bb17912b installation stays inactive.

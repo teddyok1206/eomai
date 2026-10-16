@@ -1,6 +1,6 @@
 # Membership-only INDEX candidate —2026-10-16 UTC
 
-**BUILD_AND_SOURCE_CLOSURE_PASS; NOT_INSTALLED/NOT_ACTIVE. GOAL_ACTIVE.**
+**INSTALLED_INACTIVE; NOT_SELECTED/NOT_ACTIVE. GOAL_ACTIVE.**
 
 Scope: the [membership-refresh design](../architecture/LOCAL_EMBEDDING_INDEX_MEMBERSHIP_REFRESH.md),
 original goal B5/B6/B7. This is an INDEX candidate, not an authorization to replace
@@ -39,6 +39,18 @@ commits do not change this selected source or authorize a rebuild substitution.
 - Strict13 production modules, Ruff/format/whitespace PASS.
 - Final disposable identity/head0055/other connections0 PASS, read-only inspection.
 - No production pytest, DDL, role change, model call, numerical launch or GPU run.
+
+The fixed protected installer subsequently installed this exact owner pair into
+its separate root-owned immutable prefix. The first direct invocation correctly
+failed because the protected script is0444, not executable; no installation
+occurred then. The supported explicit`/bin/bash` invocation passed wheel/RECORD
+verification and inactive installation. Fresh installed imports for10 relevant
+modules came only from that prefix; checkout fallback and numerical imports were
+absent. Numerical environments, API, QUERY and selected INDEX controls are unchanged.
+
+Operational preparation then characterized a partial-coverage priority gap. The
+source correction is documented in the linked design and requires a successor
+candidate. Do not activate bb17912b instead, delete it or overwrite its bytes.
 
 Original failed tests/logs remain preserved; no fixture-only guard failure is
 represented as a live runtime incident. The actual empty-shard and pre-checkpoint
