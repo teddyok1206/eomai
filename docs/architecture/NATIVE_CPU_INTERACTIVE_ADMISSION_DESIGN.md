@@ -184,3 +184,17 @@ At13:54:58 UTC read-only operator metadata still showed the exact original QUERY
 Workflow/step attempt1, original Job allocation1.1 only and no numerical completion.
 Its selected native policy/bundle still match. No request/key was regenerated.
 This metadata is not fresh user authorization or authenticated C1 acceptance.
+
+### Bounded end of the operator pause
+
+Do not starve automatic indexing while the operator is away. Schedule one standard
+systemd deployment action for2026-10-16 14:15 UTC (not a new production scheduler).
+The root-owned stdlib-only helper accepts no arguments, credentials or source
+input; it matches the three exact selected file hashes and requires inactive/
+success before starting only the existing INDEX unit once. Already active means
+no additional start. Failed/mismatched or execution after14:20 means refusal,
+not retry, reconfiguration or failed-history reset. No boot enable is changed.
+The action uses no DB/Artifact/model API; the normal installed owner still owns
+every source/identity/claim/native check. If the human QUERY is then leased, its
+new preclaim gate must defer; otherwise normal bounded missing-binding work can
+resume. Scheduling/start requests alone are not READY or live-priority evidence.

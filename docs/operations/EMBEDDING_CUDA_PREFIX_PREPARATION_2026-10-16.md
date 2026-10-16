@@ -74,6 +74,15 @@ host-closure design/verification that preserves the CPU host seed/digest and che
 all required file/alias/version/hash/mapping facts. Never globally allow unresolved
 SONAMEs or infer that an optional transport can be ignored without enforcement.
 
+Before another publication, inventory the complete CUDA ELF dependency graph and
+separate prefix-internal, existing closed-host and genuinely missing dependencies.
+Design one explicit CUDA host closure rather than adding names after each failure.
+CPU snapshot1.0, seed and active numerical files must stay unchanged. Preserve
+official wheel/RECORD bytes. A path-only `NoExecPaths` proposal is not by itself
+proof that readable bytes cannot be copied or otherwise rematerialized executable;
+it is not justification to omit dependency validation. No such exception, new
+host profile, OS package/driver change or kernel proof is implemented here.
+
 ## Original authenticated HTTP request
 
 The existing login succeeded12:38:00; it was not an incorrect-password case.
