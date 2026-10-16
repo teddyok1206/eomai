@@ -121,7 +121,12 @@ def test_every_predecessor_schema_registry_entry_and_mirror_is_unchanged() -> No
     previous = {
         name: resource
         for name, resource in CATALOG_SCHEMA_RESOURCES.items()
-        if name not in {HOST_CONFIGURATION_SCHEMA, "embedding-native-runtime-config-v1.1"}
+        if name
+        not in {
+            HOST_CONFIGURATION_SCHEMA,
+            "embedding-native-runtime-config-v1.1",
+            "embedding-prefix-audit-input-v1.1",
+        }
     }
     assert len(previous) == 316
     assert content_sha256({name: asdict(resource) for name, resource in previous.items()}) == (

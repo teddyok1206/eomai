@@ -16,7 +16,7 @@ from collections.abc import Callable
 from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from eom_catalog_service.embedding_conda_runtime_closure import (
     CondaRuntimeArchivePin,
@@ -34,6 +34,7 @@ from eom_catalog_service.embedding_runtime_files import (
 from eom_catalog_service.embedding_runtime_host_closure import (
     MAX_READELF_OUTPUT_BYTES,
     ProtectedEmbeddingHostClosure,
+    capture_protected_embedding_host,
 )
 from eom_catalog_service.embedding_runtime_wheel_closure import (
     RuntimeWheelArchivePin,
@@ -41,6 +42,11 @@ from eom_catalog_service.embedding_runtime_wheel_closure import (
     observe_runtime_wheel_installation,
     verify_installed_runtime_wheel,
 )
+
+if TYPE_CHECKING:
+    from eom_catalog_service.embedding_host_configuration_capture import (
+        HostConfigurationSnapshotPin,
+    )
 
 _COUNTS = {"CPU_INDEX_FP32": 55, "CUDA_INDEX_FP32": 70}
 _LOCKS = (
@@ -82,6 +88,7 @@ _BOOTSTRAP = frozenset(
         "embedding_runtime_prefix_closure.py",
     }
 )
+_SNAPSHOT_BOOTSTRAP = _BOOTSTRAP | {"embedding_host_configuration_capture.py"}
 _MAX_MEMBERS = 100000
 _MAX_BYTES = 16 * 1024**3
 
@@ -368,6 +375,51 @@ def parse_embedding_prefix_audit_input(
     raw: bytes,
 ) -> tuple[PrefixRuntimeAuditPlan, str, tuple[tuple[str, str, int], ...]]:
     """One bounded closed owner-value parser; fields confer no root/native authority."""
+    selected = _parse_prefix_installation_input(
+        raw, expected_version="embedding-prefix-audit-input/1.0"
+    )
+    return selected.plan, selected.host_seed_sha256, selected.bootstrap
+
+
+@dataclass(frozen=True, slots=True)
+class ConfiguredPrefixRuntimeAuditInput:
+    plan: PrefixRuntimeAuditPlan
+    host_seed_sha256: str
+    bootstrap: tuple[tuple[str, str, int], ...]
+    host_configuration: HostConfigurationSnapshotPin | None
+
+
+def parse_installed_embedding_prefix_audit_input(raw: bytes) -> ConfiguredPrefixRuntimeAuditInput:
+    """Explicit installation-family reader, never a grant or an implicit version upgrade."""
+    return _parse_prefix_installation_input(raw, expected_version=None)
+
+
+def capture_prefix_audit_host(
+    selected: ConfiguredPrefixRuntimeAuditInput, *, files: NumericalRuntimeFileSnapshots
+) -> ProtectedEmbeddingHostClosure:
+    """Existing protected audit owner; do not import the seventh module for strict1.0."""
+    _require(type(selected) is ConfiguredPrefixRuntimeAuditInput, "INPUT_INVALID")
+    if selected.host_configuration is None:
+        return capture_protected_embedding_host(
+            expected_seed_sha256=selected.host_seed_sha256, files=files
+        )
+    from eom_catalog_service.embedding_host_configuration_capture import (
+        capture_snapshot_embedding_host,
+        require_host_configuration_snapshot_mount,
+        resolve_host_configuration_snapshot,
+    )
+
+    captured = resolve_host_configuration_snapshot(selected.host_configuration)
+    return capture_snapshot_embedding_host(
+        expected_seed_sha256=selected.host_seed_sha256,
+        files=files,
+        snapshot_mount=require_host_configuration_snapshot_mount(captured),
+    )
+
+
+def _parse_prefix_installation_input(
+    raw: bytes, *, expected_version: str | None
+) -> ConfiguredPrefixRuntimeAuditInput:
     _require(type(raw) is bytes and 0 < len(raw) <= 128 * 1024, "INPUT_INVALID")
 
     def unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -393,8 +445,23 @@ def parse_embedding_prefix_audit_input(
         return RuntimeWheelArchivePin(item["filename"], item["sha256"], item["size_bytes"])
 
     try:
+        document: object = json.loads(
+            raw, object_pairs_hook=unique, parse_constant=reject, parse_float=reject
+        )
+        _require(type(document) is dict, "INPUT_INVALID")
+        assert isinstance(document, dict)
+        version = document.get("schema_version")
+        _require(
+            type(version) is str
+            and version in {"embedding-prefix-audit-input/1.0", "embedding-prefix-audit-input/1.1"}
+            and (expected_version is None or version == expected_version),
+            "INPUT_INVALID",
+        )
+        selected_bootstrap = (
+            _SNAPSHOT_BOOTSTRAP if version == "embedding-prefix-audit-input/1.1" else _BOOTSTRAP
+        )
         item = closed(
-            json.loads(raw, object_pairs_hook=unique, parse_constant=reject, parse_float=reject),
+            document,
             {
                 "schema_version",
                 "profile",
@@ -407,11 +474,11 @@ def parse_embedding_prefix_audit_input(
                 "history",
                 "helper",
                 "bootstrap",
-            },
+            }
+            | ({"host_configuration"} if version == "embedding-prefix-audit-input/1.1" else set()),
         )
         _require(
-            item["schema_version"] == "embedding-prefix-audit-input/1.0"
-            and type(item["profile"]) is str
+            type(item["profile"]) is str
             and item["profile"] in _COUNTS
             and type(item["host_seed_sha256"]) is str
             and re.fullmatch(r"sha256:[0-9a-f]{64}", item["host_seed_sha256"]) is not None,
@@ -421,7 +488,7 @@ def parse_embedding_prefix_audit_input(
             ("conda_archives", 31),
             ("public_archives", _COUNTS[item["profile"]]),
             ("private_archives", 1 if item["profile"] == "CPU_INDEX_FP32" else 2),
-            ("bootstrap", 6),
+            ("bootstrap", len(selected_bootstrap)),
         ):
             _require(type(item[name]) is list and len(item[name]) == count, "INPUT_INVALID")
         public = tuple(archive(value) for value in item["public_archives"])
@@ -460,7 +527,7 @@ def parse_embedding_prefix_audit_input(
             row = closed(value, {"filename", "sha256", "size_bytes"})
             _require(
                 type(row["filename"]) is str
-                and row["filename"] in _BOOTSTRAP
+                and row["filename"] in selected_bootstrap
                 and type(row["size_bytes"]) is int
                 and 0 <= row["size_bytes"] <= 1024**2
                 and type(row["sha256"]) is str
@@ -468,7 +535,16 @@ def parse_embedding_prefix_audit_input(
                 "INPUT_INVALID",
             )
             bootstrap.append((row["filename"], row["sha256"], row["size_bytes"]))
-        _require(tuple(row[0] for row in bootstrap) == tuple(sorted(_BOOTSTRAP)), "INPUT_INVALID")
+        _require(
+            tuple(row[0] for row in bootstrap) == tuple(sorted(selected_bootstrap)), "INPUT_INVALID"
+        )
+        snapshot = None
+        if version == "embedding-prefix-audit-input/1.1":
+            from eom_catalog_service.embedding_host_configuration_capture import (
+                parse_host_configuration_snapshot_pin,
+            )
+
+            snapshot = parse_host_configuration_snapshot_pin(item["host_configuration"])
         plan = PrefixRuntimeAuditPlan(
             CondaRuntimeAuditPlan(
                 item["profile"], source.sha256, source.size_bytes, tuple(conda_pins), overlays
@@ -479,7 +555,9 @@ def parse_embedding_prefix_audit_input(
             member(item["history"]),
             member(item["helper"]),
         )
-        return plan, item["host_seed_sha256"], tuple(bootstrap)
+        return ConfiguredPrefixRuntimeAuditInput(
+            plan, item["host_seed_sha256"], tuple(bootstrap), snapshot
+        )
     except InstalledRuntimeProofError:
         raise
     except Exception:

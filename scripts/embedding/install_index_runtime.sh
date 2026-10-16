@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fixed new-prefix bootstrap only. No package/model/unit installation or runtime admission.
+# Fixed protected-prefix publication; no model/unit installation or runtime admission.
 set -euo pipefail
 export PATH=/usr/bin:/bin TZ=UTC LANG=C.UTF-8 LC_ALL=C
 unset PYTHONPATH PYTHONHOME LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT BASH_ENV ENV
@@ -138,7 +138,7 @@ record_phase AUDIT_INPUT_COPY
 (set -o noclobber; timeout --signal=KILL 10 head -c 1048577 -- "$AUDIT_SOURCE" > "$PRIVATE/admit.py")
 [[ "$(stat -c %s "$PRIVATE/admit.py")" -le 1048576 && "$(sha256sum "$PRIVATE/admit.py" | cut -c 1-64)" == "$AUDIT_LEAF_SHA" ]] || fail EMBEDDING_INDEX_AUDIT_LEAF_HASH_MISMATCH
 mkdir -m 0700 "$PRIVATE/source" "$PRIVATE/source/eom_catalog_service"
-for name in __init__.py embedding_runtime_files.py embedding_runtime_wheel_closure.py embedding_runtime_host_closure.py embedding_conda_runtime_closure.py embedding_runtime_prefix_closure.py; do
+for name in __init__.py embedding_runtime_files.py embedding_runtime_wheel_closure.py embedding_runtime_host_closure.py embedding_conda_runtime_closure.py embedding_runtime_prefix_closure.py embedding_host_configuration_capture.py; do
   source_member="$REPOSITORY/services/catalog_service/eom_catalog_service/$name"
   [[ -f "$source_member" && ! -L "$source_member" && "$(stat -c %s "$source_member")" -le 1048576 ]] || fail EMBEDDING_INDEX_AUDIT_MODULE_INVALID
   (set -o noclobber; timeout --signal=KILL 10 head -c 1048577 -- "$source_member" > "$PRIVATE/source/eom_catalog_service/$name")
@@ -151,6 +151,17 @@ root_directory "$OLD_PREFIX/bin"
 [[ -f "$OLD_PREFIX/bin/python3.12" && ! -L "$OLD_PREFIX/bin/python3.12" && -x "$OLD_PREFIX/bin/python3.12" && "$(stat -c %u "$OLD_PREFIX/bin/python3.12")" == 0 && "$(stat -c %h "$OLD_PREFIX/bin/python3.12")" == 1 ]] || fail EMBEDDING_INDEX_OLD_BOOTSTRAP_INVALID
 (( (8#$(stat -c %a "$OLD_PREFIX/bin/python3.12") & 8#6022) == 0 )) || fail EMBEDDING_INDEX_OLD_BOOTSTRAP_INVALID
 record_phase AUDIT_INPUTS_COPIED
+# A missing snapshot namespace or changed host must fail before moving either prefix.
+record_phase BEFORE_HOST_BYTES_PREFLIGHT
+HOST_AUDIT_RECEIPT="$PRIVATE/host-bytes-audit.receipt"
+if ! (
+  set -o noclobber
+  timeout --signal=KILL 60 env -i PATH=/usr/bin:/bin TZ=UTC LANG=C.UTF-8 "$OLD_PREFIX/bin/python3.12" -I -S -B "$PRIVATE/admit.py" host-bytes --profile "$profile" --owner-input "$PRIVATE/prefix-audit-input.json" --owner-input-sha256 "sha256:$AUDIT_INPUT_SHA" | head -c 129 > "$HOST_AUDIT_RECEIPT"
+); then fail EMBEDDING_INDEX_HOST_PREFLIGHT_FAILED; fi
+[[ -f "$HOST_AUDIT_RECEIPT" && ! -L "$HOST_AUDIT_RECEIPT" && "$(stat -c %s "$HOST_AUDIT_RECEIPT")" -le 128 ]] || fail EMBEDDING_INDEX_HOST_PREFLIGHT_INVALID
+IFS= read -r HOST_AUDIT_STATUS < "$HOST_AUDIT_RECEIPT" || fail EMBEDDING_INDEX_HOST_PREFLIGHT_INVALID
+[[ "$HOST_AUDIT_STATUS" =~ ^EMBEDDING_HOST_BYTES_AUDIT_PASS_NOT_ADMITTED\ sha256:[0-9a-f]{64}$ && "$(stat -c %s "$HOST_AUDIT_RECEIPT")" -eq $((${#HOST_AUDIT_STATUS} + 1)) ]] || fail EMBEDDING_INDEX_HOST_PREFLIGHT_INVALID
+record_phase HOST_BYTES_PREFLIGHT_PASS_NOT_ADMITTED
 BACKUP=/opt/eom/conda/envs/.embedding-index-prepublication-${profile}-$(basename "$PRIVATE")
 [[ ! -e "$BACKUP" && ! -L "$BACKUP" ]] || fail EMBEDDING_INDEX_BACKUP_EXISTS
 record_phase BEFORE_PREFIX_REPLACEMENT

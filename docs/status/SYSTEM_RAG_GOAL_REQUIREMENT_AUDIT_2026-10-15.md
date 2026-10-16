@@ -8,6 +8,14 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Protected-bootstrap successor source now shares the same stdlib-only snapshot/
+  kernel capture as the schema adapter. Input1.1 pins seven modules before import;
+  strict1.0 still uses six and never imports the new module. Existing installer runs
+  read-only host preflight before swapping a prefix. Combined1621/type8/lint/shell
+  PASS, all318 predecessor resources preserved. No operating prefix selection or
+  service restart. Actual no-site protected host preflight and full native installation/
+  unit binding/admission remain required before original-work recovery.
+  [Implemented boundary](../architecture/EMBEDDING_HOST_CONFIGURATION_SNAPSHOT_DESIGN.md#implemented-protected-bootstrap-source).
 - Native configuration1.1 successor source now explicitly pins the host snapshot and
   connects ROOTLOCAL reference validation, protected admission and factory. Strict1.0
   readers/bytes and all317 predecessor resources are preserved; actual protected1.0

@@ -1309,8 +1309,9 @@ def test_cli_is_owner_only_and_cannot_execute_successor(
 @pytest.mark.parametrize(
     "fault", ["extra", "duplicate", "float", "bootstrap_bool", "bootstrap_name", "raw_pin", "epoch"]
 )
+@pytest.mark.parametrize("version", ("1.0", "1.1"))
 def test_owner_leaf_denies_before_source_import_or_new_instruction(
-    monkeypatch: pytest.MonkeyPatch, fault: str
+    monkeypatch: pytest.MonkeyPatch, fault: str, version: str
 ) -> None:
     leaf = runpy.run_path(
         str(Path(__file__).resolve().parents[2] / "scripts/embedding/admit_index_runtime.py")
@@ -1334,10 +1335,16 @@ def test_owner_leaf_denies_before_source_import_or_new_instruction(
             "bootstrap",
         )
     }
+    selected_bootstrap = (
+        namespace["_BOOTSTRAP"] if version == "1.0" else namespace["_SNAPSHOT_BOOTSTRAP"]
+    )
     value["bootstrap"] = [
         {"filename": name, "sha256": _hash(b""), "size_bytes": 0}
-        for name in sorted(namespace["_BOOTSTRAP"])
+        for name in sorted(selected_bootstrap)
     ]
+    value["schema_version"] = "embedding-prefix-audit-input/" + version
+    if version == "1.1":
+        value["host_configuration"] = None
     if fault == "extra":
         value["approved"] = True
     elif fault == "bootstrap_bool":
@@ -1396,7 +1403,9 @@ def test_owner_leaf_denies_before_source_import_or_new_instruction(
     )
     assert "AUDIT_INVALID" in stderr.getvalue() and stdout.getvalue() == ""
     assert mocked_sys.path == ["UNCHANGED"] and mocked_sys.modules == {}
-    assert len(calls) == (2 if fault == "raw_pin" else 7 if fault == "epoch" else 1)
+    assert len(calls) == (
+        2 if fault == "raw_pin" else 1 + len(selected_bootstrap) if fault == "epoch" else 1
+    )
 
 
 def test_actual_prefix_module_import_is_stdlib_only_no_site() -> None:

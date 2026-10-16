@@ -69,7 +69,8 @@ def test_v11_closed_schema_mirror_and_317_predecessor_resources_are_frozen() -> 
     previous = {
         name: item
         for name, item in CATALOG_SCHEMA_RESOURCES.items()
-        if name != EMBEDDING_NATIVE_RUNTIME_CONFIG_V11_SCHEMA
+        if name
+        not in {EMBEDDING_NATIVE_RUNTIME_CONFIG_V11_SCHEMA, "embedding-prefix-audit-input-v1.1"}
     }
     assert len(previous) == 317
     assert content_sha256({name: asdict(item) for name, item in previous.items()}) == (

@@ -27,6 +27,7 @@ _BOOTSTRAP = {
     "embedding_conda_runtime_closure.py",
     "embedding_runtime_prefix_closure.py",
 }
+_SNAPSHOT_BOOTSTRAP = _BOOTSTRAP | {"embedding_host_configuration_capture.py"}
 
 
 def _root_bytes(path: Path, sha: str, maximum: int) -> tuple[bytes, dict[Path, tuple[int, ...]]]:
@@ -271,13 +272,13 @@ def main(argv: list[str] | None = None) -> int:
     flags = {"--profile", "--owner-input", "--owner-input-sha256"}
     if (
         len(arguments) != 7
-        or arguments[0] not in {"conda31-bytes", "prefix-bytes"}
+        or arguments[0] not in {"conda31-bytes", "prefix-bytes", "host-bytes"}
         or set(arguments[1::2]) != flags
     ):
         print("EMBEDDING_CONDA_ARGUMENTS_INVALID", file=sys.stderr)
         return 1
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("conda31-bytes", "prefix-bytes"))
+    parser.add_argument("mode", choices=("conda31-bytes", "prefix-bytes", "host-bytes"))
     parser.add_argument("--profile", choices=("CPU_INDEX_FP32", "CUDA_INDEX_FP32"), required=True)
     parser.add_argument("--owner-input", required=True)
     parser.add_argument("--owner-input-sha256", required=True)
@@ -324,6 +325,13 @@ def main(argv: list[str] | None = None) -> int:
         value: Any = json.loads(
             raw, object_pairs_hook=unique, parse_float=reject, parse_constant=reject
         )
+        if type(value) is not dict or value.get("schema_version") not in {
+            "embedding-prefix-audit-input/1.0",
+            "embedding-prefix-audit-input/1.1",
+        }:
+            raise ValueError("invalid explicit bootstrap input version")
+        snapshot = value["schema_version"] == "embedding-prefix-audit-input/1.1"
+        selected_bootstrap = _SNAPSHOT_BOOTSTRAP if snapshot else _BOOTSTRAP
         if (
             type(value) is not dict
             or set(value)
@@ -340,12 +348,13 @@ def main(argv: list[str] | None = None) -> int:
                 "helper",
                 "bootstrap",
             }
+            | ({"host_configuration"} if snapshot else set())
             or type(value.get("bootstrap")) is not list
-            or len(value["bootstrap"]) != 6
+            or len(value["bootstrap"]) != len(selected_bootstrap)
         ):
             raise ValueError("invalid bootstrap values")
         pins = value["bootstrap"]
-        if [pin.get("filename") for pin in pins if type(pin) is dict] != sorted(_BOOTSTRAP):
+        if [pin.get("filename") for pin in pins if type(pin) is dict] != sorted(selected_bootstrap):
             raise ValueError("invalid bootstrap set")
         source = owner_input.parent / "source"
         for pin in pins:
@@ -375,21 +384,27 @@ def main(argv: list[str] | None = None) -> int:
             fixed_native_embedding_profile,
             read_live_runtime_os_file,
         )
-        from eom_catalog_service.embedding_runtime_host_closure import (
-            capture_protected_embedding_host,
-        )
         from eom_catalog_service.embedding_runtime_prefix_closure import (
             audit_installed_embedding_prefix,
-            parse_embedding_prefix_audit_input,
+            capture_prefix_audit_host,
+            parse_installed_embedding_prefix_audit_input,
         )
 
-        plan, host_sha, bootstrap = parse_embedding_prefix_audit_input(raw)
+        selected = parse_installed_embedding_prefix_audit_input(raw)
+        plan, host_sha, bootstrap = selected.plan, selected.host_seed_sha256, selected.bootstrap
         if plan.conda.profile != args.profile or bootstrap != tuple(
             (pin["filename"], pin["sha256"], pin["size_bytes"]) for pin in pins
         ):
             raise ValueError("owner input association mismatch")
         files = NumericalRuntimeFileSnapshots()
         _current(epochs)
+        if args.mode == "host-bytes":
+            with capture_prefix_audit_host(selected, files=files) as host:
+                host.assert_current()
+                files.assert_unchanged()
+                _current(epochs)
+            print("EMBEDDING_HOST_BYTES_AUDIT_PASS_NOT_ADMITTED", host_sha)
+            return 0
         inventory_path, inventory_identity = _inventory_descriptor(owner_input.parent)
         boot_id = (
             read_live_runtime_os_file(
@@ -398,7 +413,7 @@ def main(argv: list[str] | None = None) -> int:
             .decode("ascii")
             .strip()
         )
-        with capture_protected_embedding_host(expected_seed_sha256=host_sha, files=files) as host:
+        with capture_prefix_audit_host(selected, files=files) as host:
             audit = audit_installed_embedding_prefix(
                 plan,
                 prefix=fixed_native_embedding_profile(args.profile).prefix,

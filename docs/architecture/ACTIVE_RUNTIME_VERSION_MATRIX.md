@@ -306,6 +306,11 @@ factory를 연결했다. 엄격한1.0 읽기/직렬화와 과거317개 계약 by
 보호 prefix의 stdlib bootstrap audit 및 고정 unit의 사전 마운트/운영 선택은 아직
 갱신하지 않았으므로 native 준비 정상이나 INDEX 재개로 해석하지 않는다.
 
+후속 설치 검증 소스는 동일한 stdlib snapshot/마운트 검사를 공유하며1.1 입력의7개
+모듈을 import 전에 검증한다. 기존1.0/6개 모듈 경계는 유지했다. 설치 폴더 교체 전
+읽기 전용 host 사전검사를 추가했고 결합 회귀1621·strict8·shell syntax PASS다.
+실제 보호 prefix 설치와 고정 unit 선택/기동은 여전히 미완료다.
+
 ## 보존·정리 규칙
 
 - immutable row, manifest, receipt, release, Workflow, Item Revision 또는 rebuild/validation 경로가

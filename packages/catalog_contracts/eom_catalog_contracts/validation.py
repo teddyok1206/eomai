@@ -126,6 +126,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.1",
             "sha256:2dbd806065e6d9d9d852bd4fcc073d7d3bd8851fe7eeeb92d68a3469880b3a1c",
         ),
+        "embedding-prefix-audit-input-v1.1": CatalogSchemaResource(
+            "schemas/knowledge/embedding-prefix-audit-input-v1.1.schema.json",
+            "resources/knowledge/embedding-prefix-audit-input-v1.1.schema.json",
+            "1.1",
+            "sha256:cddd8cc3911a99a13614c95dde3e5cf697fc11d5b00c6416c82780a23b73d538",
+        ),
         "embedding-device-benchmark": CatalogSchemaResource(
             "schemas/knowledge/embedding-device-benchmark-v1.schema.json",
             "resources/knowledge/embedding-device-benchmark-v1.schema.json",

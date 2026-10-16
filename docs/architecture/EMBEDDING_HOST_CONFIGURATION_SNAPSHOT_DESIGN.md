@@ -249,3 +249,72 @@ model run, database mutation or service selection occurred. This is an installat
 metadata/package proof, not prefix bootstrap/whole native admission or numerical
 execution acceptance. Temporary bounded evidence is
 `/tmp/eom-host-config-v11-wheel-h87LnS6o/proof.log`.
+
+## Protected bootstrap integration boundary
+
+1. Existing installer/audit owns this change; no second bootstrap, service, queue or
+   source authority. Define explicit `embedding-prefix-audit-input/1.1` before its
+   reader. Preserve strict1.0's six-module input;1.1 adds the exact snapshot pointer
+   and one independently hash-pinned stdlib capture module (seven total).
+2. Canonical source remains the protected snapshot manifest/cache and pinned source
+   archives/wheels. No model, executable or corpus payload is copied into input JSON.
+3. Existing config/snapshot logical/revision/hash identities remain separate. The
+   bootstrap input is installation metadata, not a new mutable latest registry.
+4. Extract OS-only snapshot file/mount checks into one stdlib infrastructure module.
+   The normal schema/Pydantic adapter and protected `-I -S -B` bootstrap share it;
+   do not remove no-site isolation or load new third-party code before prefix audit.
+   The small frozen bootstrap pointer mirrors the existing wire contract; parity
+   tests enforce the same closed fields/bounds. Runtime workers still use schemas.
+5. Access is one bounded metadata/cache capture, then fixed-count epoch/mount checks;
+   exact source-module membership uses a set. No DB/source-corpus query is involved.
+6. Frozen pointer/capture and generic local mount witness serve the two real owners.
+   Existing numerical file snapshots retain OS ownership/FD/ancestor checks. There
+   is one implementation of kernel mount parsing and no circular import.
+7. Bounds remain8KiB manifest/128KiB cache/1MiB initial mountinfo/4KiB own-fdinfo.
+   Initial O(B), later O(1) at fixed count; do not reread/hash payload per text.
+8. Root verifies every selected bootstrap module before import. A read-only host
+   preflight runs before prefix replacement, so a missing/incorrect pre-exec binding
+   stops before swapping the target prefix. The existing installation lock/phase
+   record still owns publication; no distributed atomicity is invented.
+9. Contracts remain pure; OS module imports only stdlib plus existing stdlib host/
+   file adapters. The normal adapter adds schema/Pydantic validation. Root installer
+   selects namespace before exec; neither reader mounts or grants anything.
+10. Missing/hash/permission/namespace/seed mismatch fails closed without1.0 fallback.
+    No automatic service restart/re-key/retry or accepted receipt amendment. Failed
+    installation evidence and original pending command are retained.
+11. Keeping two independent kernel checkers would drift; loading Pydantic in the
+    pre-admission bootstrap would defeat its trust order. One OS-only capture with
+    two thin input boundaries is the smallest compatible implementation.
+
+### Implemented protected-bootstrap source
+
+`embedding_host_configuration_capture.py` now owns the OS-only bounded pointer/
+canonical-manifest/file capture and the single generic local kernel mount witness.
+The ordinary `embedding_host_configuration_files.py` is a schema/Pydantic adapter
+over that same implementation, not a second filesystem or mount checker. Actual
+`-I -S -B` child import confirms no contracts/Pydantic/jsonschema/ML/DB libraries.
+The existing fixed-host seed/23-file closure and strict1.0 input remain unchanged.
+
+The new root input schema/mirror raw is
+`cddd8cc3911a99a13614c95dde3e5cf697fc11d5b00c6416c82780a23b73d538`.
+The explicit installed input reader accepts1.0/six or1.1/seven bootstrap modules,
+never a new version with missing pins. `admit_index_runtime.py` independently
+verifies every selected module before importing the shared stdlib reader. Its new
+`host-bytes` mode captures only the actual host, without opening inventory output,
+executing NEW, instantiating a model or granting installation authority.
+
+The existing installer copies the selected-source support module and runs this host
+preflight **before prefix replacement**; an invalid/missing mount stops with the
+original prefix bytes/path intact. Its later full prefix inventory audit/output and
+publication lock retain their original owner. Strict1.0 never imports the seventh
+module or interprets a1.1 body as a normalized1.0 input.
+
+Combined source/host/prefix/Conda/wheel/receipt/factory/installer/fixed-unit regression
+1621 PASS/88.50s; strict8 files, Ruff and shell syntax PASS. Inventories overlap with
+earlier counts. New cases check schema/stdlib pointer parity, common mount witness,
+corrupt/rehashed manifests, all318 frozen predecessor resources, explicit seven-module
+selection and pre-import pin rejection, and failed preflight preserving the original
+prefix before replacement. These tests use synthetic archive/kernel ports; no full
+operating prefix was installed or native service restarted by them. The next actual
+gate is finite root no-site host preflight, then compatible full prefix installation,
+fixed-unit pre-exec binding and fresh native admission before original-work recovery.

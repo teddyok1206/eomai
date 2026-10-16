@@ -14,6 +14,7 @@ from eom_catalog_contracts.embedding_host_configuration import (
     host_configuration_snapshot_bytes,
     parse_host_configuration_snapshot,
 )
+from eom_catalog_service import embedding_host_configuration_capture as os_capture
 from eom_catalog_service import embedding_host_configuration_files as snapshots
 from eom_catalog_service import embedding_runtime_host_closure as host
 from eom_catalog_service.embedding_runtime_files import (
@@ -76,10 +77,10 @@ def _fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Fixture:
     manifest, member = directory / "snapshot.json", directory / "ld.so.cache"
     _write(manifest, host_configuration_snapshot_bytes(snapshot))
     _write(member, cache)
-    monkeypatch.setattr(snapshots, "_ROOT", root)
+    monkeypatch.setattr(os_capture, "_ROOT", root)
     # Actual nonroot files/FDs are used; this source fixture grants no real root identity.
     monkeypatch.setattr(
-        snapshots,
+        os_capture,
         "NumericalRuntimeFileSnapshots",
         lambda owner_uid: NumericalRuntimeFileSnapshots(os.geteuid()),
     )
@@ -211,8 +212,8 @@ def _mount_ports(monkeypatch: pytest.MonkeyPatch, fixture: Fixture) -> dict[str,
         "namespace": (99, 101),
         "mountinfo_calls": 0,
     }
-    monkeypatch.setattr(snapshots, "_CACHE", fixture.cache)
-    monkeypatch.setattr(snapshots, "_mount_namespace_identity", lambda: state["namespace"])
+    monkeypatch.setattr(os_capture, "_CACHE", fixture.cache)
+    monkeypatch.setattr(os_capture, "_mount_namespace_identity", lambda: state["namespace"])
     monkeypatch.setattr(
         os, "fstatvfs", lambda _: SimpleNamespace(f_flag=os.ST_RDONLY if state["readonly"] else 0)
     )
@@ -233,7 +234,7 @@ def _mount_ports(monkeypatch: pytest.MonkeyPatch, fixture: Fixture) -> dict[str,
         assert type(raw) is bytes
         return raw
 
-    monkeypatch.setattr(snapshots, "read_live_runtime_os_file", read)
+    monkeypatch.setattr(os_capture, "read_live_runtime_os_file", read)
     return state
 
 
@@ -293,7 +294,7 @@ def test_missing_wrong_writable_or_malformed_mount_never_counts_as_runtime_admis
     else:
         copy = fixture.cache.with_name("same-bytes-different-inode")
         _write(copy, fixture.cache.read_bytes())
-        monkeypatch.setattr(snapshots, "_CACHE", copy)
+        monkeypatch.setattr(os_capture, "_CACHE", copy)
     with pytest.raises(snapshots.HostConfigurationSnapshotError, match="MOUNT"):
         snapshots.require_host_configuration_snapshot_mount(resolved)
 
@@ -337,7 +338,6 @@ def test_snapshot_and_legacy_capture_share_all_host_guards_without_changing_lega
     original = host_fixture(tmp_path / "host", monkeypatch)
     (tmp_path / "host").chmod(0o700)
     monkeypatch.setattr(host, "FIXED_EMBEDDING_HOST_SEED_SHA256", original.expected)
-    monkeypatch.setattr(snapshots, "FIXED_EMBEDDING_HOST_SEED_SHA256", original.expected)
     fixture = _fixture(tmp_path / "snapshot", monkeypatch)
     resolved = fixture.resolve()
     target = resolved.snapshot.host_seed_sha256

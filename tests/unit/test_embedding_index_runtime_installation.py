@@ -796,7 +796,23 @@ def _synthetic_shell(
             'ln -s "$candidate.retained" "$candidate"\n'
         )
     old.write_text(
-        f"#!/usr/bin/bash\nprintf 'OLD\\n' >> '{order}'\n"
+        "#!/usr/bin/bash\n"
+        + (
+            f"if [[ \"$5\" == host-bytes ]]; then\nprintf 'HOST\\n' >> '{order}'\n"
+            + (
+                "printf '%s\\n' 'INVALID'\nexit 1\n"
+                if audit_fault == "host_nonzero"
+                else "printf '%s' ''\nexit 0\n"
+                if audit_fault == "host_empty"
+                else "printf '%s\\n' 'INVALID'\nexit 0\n"
+                if audit_fault == "host_receipt"
+                else "printf '%s\\n' 'EMBEDDING_HOST_BYTES_AUDIT_PASS_NOT_ADMITTED sha256:"
+                + "f" * 64
+                + "'\nexit 0\n"
+            )
+            + "fi\n"
+        )
+        + f"printf 'OLD\\n' >> '{order}'\n"
         f"printf '%s\\n' \"$@\" > '{root / 'old-arguments'}'\n"
         + pause
         + inventory
@@ -907,7 +923,7 @@ def test_synthetic_shell_snapshot_hash_precedes_first_interpreter_instruction(
         assert result.returncode == 0, result.stderr
         assert marker.exists() and "INSTALLED_NOT_ADMITTED" in result.stdout
         assert "NOT_PROBED" in result.stdout and "ACTIVE" not in result.stdout
-        assert (tmp_path / "execution-order").read_text().splitlines() == ["OLD", "NEW"]
+        assert (tmp_path / "execution-order").read_text().splitlines() == ["HOST", "OLD", "NEW"]
         private = Path(
             next(
                 line.removeprefix("installer_quarantine=")
@@ -931,6 +947,7 @@ def test_synthetic_shell_snapshot_hash_precedes_first_interpreter_instruction(
             "embedding_runtime_host_closure.py",
             "embedding_conda_runtime_closure.py",
             "embedding_runtime_prefix_closure.py",
+            "embedding_host_configuration_capture.py",
         }
         assert all(path.stat().st_mode & 0o777 == 0o600 for path in copied.iterdir())
         assert (tmp_path / "old-arguments").read_text().splitlines() == [
@@ -947,6 +964,11 @@ def test_synthetic_shell_snapshot_hash_precedes_first_interpreter_instruction(
             "sha256:" + args[15],
         ]
         phases = (private / "phase-receipt").read_text().splitlines()
+        assert (
+            phases.index("HOST_BYTES_PREFLIGHT_PASS_NOT_ADMITTED")
+            < phases.index("BEFORE_PREFIX_REPLACEMENT")
+            < phases.index("STAGED_NOT_ADMITTED")
+        )
         assert (
             phases.index("BEFORE_OLD_PREFIX_BYTES_AUDIT")
             < phases.index("PREFIX_BYTES_AUDITED_NOT_ADMITTED")
@@ -990,7 +1012,7 @@ def test_old_audit_failure_keeps_staged_evidence_and_never_enters_new(
             timeout=5,
         )
     assert result.returncode != 0 and not marker.exists() and prefix.exists()
-    assert (tmp_path / "execution-order").read_text().splitlines() == ["OLD"]
+    assert (tmp_path / "execution-order").read_text().splitlines() == ["HOST", "OLD"]
     assert len(tuple(prefix.parent.glob(".embedding-index-prepublication-*"))) == 1
     private = next((tmp_path / "opt/eom").glob(".embedding-index-install-*"))
     assert (private / "phase-receipt").read_text().endswith("BEFORE_OLD_PREFIX_BYTES_AUDIT\n")
@@ -1000,6 +1022,42 @@ def test_old_audit_failure_keeps_staged_evidence_and_never_enters_new(
         code in result.stderr
         for code in ("PREFIX_AUDIT_FAILED", "AUDIT_RECEIPT_INVALID", "INVENTORY_INVALID")
     )
+
+
+@pytest.mark.parametrize("fault", ("host_nonzero", "host_empty", "host_receipt"))
+def test_host_preflight_failure_preserves_original_prefix_before_replacement(
+    tmp_path: Path, fault: str
+) -> None:
+    script, prefix, args, marker = _synthetic_shell(tmp_path, audit_fault=fault)
+    with tempfile.TemporaryDirectory(prefix="eom-index-source-") as temporary:
+        args[-1] = temporary
+        before = subprocess.run(
+            ["/usr/bin/bash", str(script), "fingerprint", "CPU_INDEX_FP32"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        args[2] = before
+        result = subprocess.run(
+            ["/usr/bin/bash", str(script), *args],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+        after = subprocess.run(
+            ["/usr/bin/bash", str(script), "fingerprint", "CPU_INDEX_FP32"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    assert result.returncode != 0 and "HOST_PREFLIGHT" in result.stderr
+    assert before == after and prefix.exists() and not marker.exists()
+    assert not tuple(prefix.parent.glob(".embedding-index-prepublication-*"))
+    assert (tmp_path / "execution-order").read_text().splitlines() == ["HOST"]
+    private = next((tmp_path / "opt/eom").glob(".embedding-index-install-*"))
+    assert (private / "phase-receipt").read_text().endswith("BEFORE_HOST_BYTES_PREFLIGHT\n")
+    assert not (private / "prefix-inventory.candidate.json").exists()
 
 
 @pytest.mark.parametrize(
