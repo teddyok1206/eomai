@@ -238,6 +238,13 @@ policy/launch/receipt/result 및 numerical input은 유지하며 새 입력의 p
 상세한 입력 의미·보존 검사·남은 소비 연결은
 [authoring-reference 구현 경계](SYSTEM_RAG_AUTHORING_REFERENCE_CONTEXT.md)를 따른다.
 
+일반 출제의 참고 근거 전달에는 추가 후보 `resolved-execution-plan/24.0`을 구현했다.
+기존 educational retrieval1.0과 Evidence5를 유지하고 정확한 참고 기출 anchor와 보조 자료를
+별도 pin으로 묶는다. 기존 기출변형 plan23과 QUERY 입력1.0의 의미는 바꾸지 않는다.
+원래 ITEM_AUTHORING 참고 근거를 출제와 모든 검토 회차가 재사용하며 새 초안의 vector 비교로
+가장하지 않는다. 소스 회귀1632/임시 DB139 PASS인 미설치·미활성 후보이며 위 운영 선택을
+변경하지 않는다. strict type15, Ruff/format 및 이전 plan23 bytes 보존을 검증했다.
+
 ## 보존·정리 규칙
 
 - immutable row, manifest, receipt, release, Workflow, Item Revision 또는 rebuild/validation 경로가

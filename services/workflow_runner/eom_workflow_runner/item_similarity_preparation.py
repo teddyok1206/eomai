@@ -7,7 +7,10 @@ from dataclasses import dataclass
 
 from eom_catalog_contracts import EvidenceBundlePublicationResultV5, validate_contract
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
-from eom_catalog_contracts.knowledge import EducationalRetrievalRequirementV2
+from eom_catalog_contracts.knowledge import (
+    EducationalRetrievalRequirement,
+    EducationalRetrievalRequirementV2,
+)
 from eom_catalog_contracts.similarity_context import (
     MAX_SIMILARITY_CONTEXT_BYTES,
     SimilarityContext,
@@ -116,7 +119,10 @@ def validate_item_similarity_start_inputs(
         requirement = workflow_request.educational_retrieval
         policy = preset.retrieval_policy
         if (
-            not isinstance(requirement, EducationalRetrievalRequirementV2)
+            not isinstance(
+                requirement, (EducationalRetrievalRequirement, EducationalRetrievalRequirementV2)
+            )
+            or "PAST_EXAM" not in requirement.source_classes
             or (
                 workflow_request.expected_resolution is not None
                 and workflow_request.expected_resolution != expected
@@ -172,16 +178,21 @@ def validate_item_similarity_scope(
         requirement = workflow_request.educational_retrieval
         policy = preset.retrieval_policy
         if (
-            not isinstance(requirement, EducationalRetrievalRequirementV2)
-            or policy is None
-            or context_request.consumer_purpose != "PAST_EXAM_VARIATION"
-            or requirement.past_exam_variation.source_item_revision_id
-            != context_request.anchor.source.item_revision_id
+            policy is None
+            or context_request.anchor.source.source_class != "PAST_EXAM"
             or evidence.graph_snapshot != context_request.graph_snapshot
             or evidence.access_policy_revision_id != context_request.policy_revision_id
             or evidence.access_policy_sha256 != context_request.policy_sha256
             or not set(context_request.source_classes).issubset(policy.allowed_source_classes)
         ):
+            raise ValueError("ITEM_SIMILARITY_PREPARATION_SCOPE_MISMATCH")
+        if isinstance(requirement, EducationalRetrievalRequirementV2):
+            if context_request.consumer_purpose != "PAST_EXAM_VARIATION" or (
+                requirement.past_exam_variation.source_item_revision_id
+                != context_request.anchor.source.item_revision_id
+            ):
+                raise ValueError("ITEM_SIMILARITY_PREPARATION_SCOPE_MISMATCH")
+        elif context_request.consumer_purpose != "ITEM_AUTHORING":
             raise ValueError("ITEM_SIMILARITY_PREPARATION_SCOPE_MISMATCH")
         return workflow_request, expected, evidence, preset
     except (ValueError, TypeError, SchemaError):
@@ -286,7 +297,7 @@ class CatalogItemSimilarityPreparation:
             context_request = self.query.request.context_request
             if type(caller) is not EmbeddingRegistryCaller or (
                 caller.operator_id != self.query.request.operator_audit.operator_id
-                or context_request.consumer_purpose != "PAST_EXAM_VARIATION"
+                or context_request.consumer_purpose not in {"PAST_EXAM_VARIATION", "ITEM_AUTHORING"}
             ):
                 raise ValueError("ITEM_SIMILARITY_PREPARATION_CALLER_INVALID")
         except (ValueError, TypeError, SchemaError):

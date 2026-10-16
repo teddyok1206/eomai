@@ -33,7 +33,7 @@ from eom_workflow import (
     validate_control_contract,
 )
 from eom_workflow.control_plane import BundleRevisionPointer, WorkerRole
-from eom_workflow.similarity_control import ResolvedExecutionPlanV23
+from eom_workflow.similarity_control import ResolvedExecutionPlanV23, ResolvedExecutionPlanV24
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import and_, exists, func, select
@@ -1072,6 +1072,7 @@ def record_knowledge_backed_execution_plan(
         "resolved-execution-plan/17.0": "resolved-execution-plan-v17",
         "resolved-execution-plan/19.0": "resolved-execution-plan-v19",
         "resolved-execution-plan/23.0": "resolved-execution-plan-v23",
+        "resolved-execution-plan/24.0": "resolved-execution-plan-v24",
     }.get(str(schema_version), "resolved-execution-plan-v3")
     model_type: type[
         ResolvedExecutionPlanV3
@@ -1093,6 +1094,8 @@ def record_knowledge_backed_execution_plan(
         model_type = ResolvedExecutionPlanV19
     elif schema_version == "resolved-execution-plan/23.0":
         model_type = ResolvedExecutionPlanV23
+    elif schema_version == "resolved-execution-plan/24.0":
+        model_type = ResolvedExecutionPlanV24
     else:
         model_type = ResolvedExecutionPlanV3
     model, normalized = _validated_document(schema_name, document, model_type)

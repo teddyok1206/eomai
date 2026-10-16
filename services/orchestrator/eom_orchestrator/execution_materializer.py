@@ -82,9 +82,12 @@ from eom_workflow.models import RoleWorkerInput
 from eom_workflow.schemas import validate_role_input
 from eom_workflow.similarity_control import (
     POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS,
-    ResolvedExecutionPlanV23,
+    SIMILARITY_EXECUTION_PLAN_SCHEMAS,
+    ResolvedExecutionPlanV24,
+    SupportedSimilarityExecutionPlan,
     parse_post_registration_grounded_plan,
-    parse_similarity_execution_plan,
+    parse_supported_similarity_execution_plan,
+    select_similarity_evidence_source,
 )
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from sqlalchemy.orm import Session
@@ -101,6 +104,7 @@ from eom_orchestrator.control_service import (
 )
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 from eom_orchestrator.similarity_materialization import (
+    ORDINARY_SIMILARITY_ROLE_CONTRACT,
     SIMILARITY_MATERIALS_WORKSPACE_ALIAS,
     SIMILARITY_ROLE_CONTRACT,
     SIMILARITY_WORKSPACE_ALIAS,
@@ -241,7 +245,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV18
         | ResolvedExecutionPlanV20
         | ResolvedExecutionPlanV21
-        | ResolvedExecutionPlanV23
+        | SupportedSimilarityExecutionPlan
     )
     if plan_schema_version == "resolved-execution-plan/2.0":
         plan = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
@@ -295,7 +299,7 @@ def materialize_execution_step(
     if len(matching) != 1:
         raise ControlPlaneError("CONTROL_PLAN_STEP_MISSING", "resolved execution step is missing")
     step = matching[0]
-    if isinstance(plan, ResolvedExecutionPlanV23) and step.role in {"authoring", "review"}:
+    if isinstance(plan, SupportedSimilarityExecutionPlan) and step.role in {"authoring", "review"}:
         require_similarity_materialization_context(
             plan, step_key=step_key, context=similarity_context
         )
@@ -434,15 +438,24 @@ def materialize_execution_step(
                 total_bytes += len(evidence_materials.variation_request_payload)
                 total_bytes += len(evidence_materials.variation_source_payload)
                 member_count += 2
-            if isinstance(plan, ResolvedExecutionPlanV23) and step.role in {"authoring", "review"}:
-                original_source = next(
-                    entry.source
-                    for entry in evidence_materials.manifest.entries
-                    if isinstance(entry.source, ApprovedItemKnowledgeSourceV2)
-                    and entry.source.source_class == "PAST_EXAM"
-                    and entry.source.item_revision_id
-                    == plan.retrieval_requirement.past_exam_variation.source_item_revision_id
-                )
+            if isinstance(plan, SupportedSimilarityExecutionPlan) and step.role in {
+                "authoring",
+                "review",
+            }:
+                try:
+                    original_source = select_similarity_evidence_source(
+                        plan,
+                        tuple(
+                            entry.source
+                            for entry in evidence_materials.manifest.entries
+                            if isinstance(entry.source, ApprovedItemKnowledgeSourceV2)
+                        ),
+                    )
+                except ValueError:
+                    raise ControlPlaneError(
+                        "CONTROL_SIMILARITY_SOURCE_MISMATCH",
+                        "exact reference is not uniquely present in official Evidence",
+                    ) from None
                 similarity_materials = resolve_similarity_materials(
                     session,
                     plan=plan,
@@ -568,8 +581,12 @@ def materialize_execution_step(
         _require_total_size(total_bytes, analysis=True)
 
     agents_bytes = _agents_document(instruction_docs)
-    if isinstance(plan, ResolvedExecutionPlanV23) and step.role in {"authoring", "review"}:
-        agents_bytes += SIMILARITY_ROLE_CONTRACT
+    if isinstance(plan, SupportedSimilarityExecutionPlan) and step.role in {"authoring", "review"}:
+        agents_bytes += (
+            ORDINARY_SIMILARITY_ROLE_CONTRACT
+            if isinstance(plan, ResolvedExecutionPlanV24)
+            else SIMILARITY_ROLE_CONTRACT
+        )
     if isinstance(plan, (ResolvedExecutionPlanV13, ResolvedExecutionPlanV14)):
         agents_bytes += _admitted_document_review_contract(plan)
     total_bytes += len(agents_bytes)
@@ -837,7 +854,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV19
             | ResolvedExecutionPlanV20
             | ResolvedExecutionPlanV21
-            | ResolvedExecutionPlanV23
+            | SupportedSimilarityExecutionPlan
         ) = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/3.0":
         plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
@@ -902,7 +919,7 @@ def authorized_execution_artifact_revisions(
     if isinstance(plan, ResolvedExecutionPlanV21):
         return _authorized_transfer_control_revisions(session, plan)
     revision_ids: set[str] = set()
-    if isinstance(plan, ResolvedExecutionPlanV23) and step.role in {"authoring", "review"}:
+    if isinstance(plan, SupportedSimilarityExecutionPlan) and step.role in {"authoring", "review"}:
         require_similarity_materialization_context(
             plan, step_key=step_key, context=similarity_context
         )
@@ -992,9 +1009,9 @@ def authorized_evidence_artifact_revisions(
     record = session.get(ResolvedExecutionPlanRecord, plan_id)
     if record is None:
         raise ControlPlaneError("CONTROL_PLAN_MISSING", "resolved execution plan is missing")
-    if record.canonical_document.get("schema_version") != "resolved-execution-plan/23.0":
+    if record.canonical_document.get("schema_version") not in SIMILARITY_EXECUTION_PLAN_SCHEMAS:
         return authorized_execution_artifact_revisions(session, plan_id=plan_id, step_key=step_key)
-    plan = parse_similarity_execution_plan(record.canonical_document)
+    plan = parse_supported_similarity_execution_plan(record.canonical_document)
     if (
         plan.plan_id != plan_id
         or plan.workflow_id != record.workflow_id

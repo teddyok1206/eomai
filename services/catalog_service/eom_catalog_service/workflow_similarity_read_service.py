@@ -18,7 +18,7 @@ from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.similarity_materialization import resolve_similarity_materials
 from eom_workflow.models import WorkerRequest
-from eom_workflow.similarity_control import parse_similarity_execution_plan
+from eom_workflow.similarity_control import parse_supported_similarity_execution_plan
 from eom_workflow_runner.errors import WorkflowError
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from eom_workflow_runner.reference_query_source_read import ReferenceQuerySourceOwner
@@ -77,7 +77,7 @@ class CatalogWorkflowSimilarityReadService:
                     or record.plan_sha256 != selected.plan_sha256
                 ):
                     raise ValueError("stored role selection changed")
-                plan = parse_similarity_execution_plan(record.canonical_document)
+                plan = parse_supported_similarity_execution_plan(record.canonical_document)
                 pin = plan.similarity_delivery.context_member
                 materialized = resolve_similarity_materials(
                     session,

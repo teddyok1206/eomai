@@ -45,8 +45,8 @@ from eom_orchestrator.similarity_materialization import (
     SimilarityWorkspaceMaterials,
     resolve_similarity_materials,
 )
-from eom_workflow.reference_query_execution import parse_reference_query_workflow_request
-from eom_workflow.similarity_control import parse_similarity_execution_plan
+from eom_workflow.reference_query_execution import parse_supported_reference_query_workflow_request
+from eom_workflow.similarity_control import parse_supported_similarity_execution_plan
 from eom_workflow_runner.composition import build_workflow_runtime
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from eom_workflow_runner.settings import WorkflowSettings
@@ -68,7 +68,7 @@ def source_rpc(workflows, tmp_path, monkeypatch):
     with value.sessions() as session:
         for pointer in value.pointers:
             row = session.get(WorkflowInstanceRecord, pointer.query_id)
-            query = parse_reference_query_workflow_request(row.initial_request)
+            query = parse_supported_reference_query_workflow_request(row.initial_request)
             raw = deepcopy(value.template.case["context"].model_dump(mode="json"))
             raw["request"] = query.context_request.model_dump(mode="json")
             for view in raw["population"]["views"]:
@@ -132,7 +132,7 @@ def role_read(data, pointer):
             request=data.value.requests[pointer.item_id].worker_request(),
         )
         record = session.get(ResolvedExecutionPlanRecord, context.reader.selection.plan_id)
-        plan = parse_similarity_execution_plan(record.canonical_document)
+        plan = parse_supported_similarity_execution_plan(record.canonical_document)
         root = session.get_transaction()
         result = resolve_similarity_materials(
             session,

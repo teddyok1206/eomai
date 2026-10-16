@@ -35,7 +35,7 @@ from scripts.workflow.generate_similarity_reference_pack_v12017 import (
     tree_bytes,
 )
 from tests.unit.inference_transfer_embedding_fixtures import seal
-from tests.unit.similarity_plan_fixtures import similarity_case
+from tests.unit.similarity_plan_fixtures import ordinary_similarity_case, similarity_case
 from tests.unit.test_workflow_catalog_prompt_reuse import _fixture as pinned_prompt_fixture
 
 
@@ -152,8 +152,8 @@ def test_compatible_successors_retain_material_brief_and_exact_image_gate(tmp_pa
     assert not _enforces_svg_label_layout(workflow)
 
 
-def prompt_case(tmp_path, monkeypatch, schema="plan", role="authoring"):
-    case = similarity_case(tmp_path, monkeypatch)
+def prompt_case(tmp_path, monkeypatch, schema="plan", role="authoring", *, ordinary=False):
+    case = (ordinary_similarity_case if ordinary else similarity_case)(tmp_path, monkeypatch)
     plan = case[schema]
     document = plan.model_dump(mode="json")
     record = SimpleNamespace(

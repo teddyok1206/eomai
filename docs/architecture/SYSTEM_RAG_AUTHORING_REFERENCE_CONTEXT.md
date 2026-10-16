@@ -62,9 +62,9 @@ same-key replay conflict without recapture/submit, strict preparation values,
 missing accepted reports and unoffered consumers. Existing pointer/resource/layer,
 variation/materials/QUERY/source and maximum-three-review regressions remain.
 
-Plan23 and its item-specific publisher currently require exact variation lineage.
-Do not relax those guards or claim ordinary authoring/review workspace activation
-from this shared read foundation. Their actual consumer preparation/delivery and
+At the input1.1 foundation checkpoint4f302b99, plan23 and the item publisher were
+variation-only. Do not reinterpret that checkpoint as ordinary workspace delivery.
+The separate plan24 successor below extends the item owner without relaxing plan23;
 private brief/result query bases remain open in the requirement ledger. No runtime
 selection, source-policy change, model execution or human evaluation is part of
 this source step. The continuous INDEX service stays on its pinned release.
@@ -151,9 +151,10 @@ The early missing test filename executed no tests; the corrected exact inventory
 passed and both invocation logs remain. No validator, timeout or history was
 weakened to repair a fixture or get a green gate.
 
-**SOURCE_AND_DISPOSABLE_PASS / NOT_INSTALLED / NOT_ACTIVE.** Ordinary authoring/
-review plan preparation/delivery and private intent/result search still remain.
-Plan23/publication stay variation-only; no old plan/Pack/request is upgraded.
+**Input1.1 foundation4f302b99: SOURCE_AND_DISPOSABLE_PASS / NOT_INSTALLED / NOT_ACTIVE.**
+At this checkpoint ordinary plan delivery and private intent/result search remained
+open. The later ordinary delivery work is recorded below; plan23 is still
+variation-only and no old plan/Pack/request is upgraded.
 API/QUERY/Web flags, source policy, numerical runtime/device and active INDEX
 release were not changed by this source work.
 
@@ -184,3 +185,125 @@ occurred. No ML package was imported. Evidence:
 
 The candidate is pushed to GitHub. The running INDEX remains source2a4843c3;
 API/QUERY/Web and ordinary consumer delivery are not selected by this build.
+
+## Ordinary authoring/review delivery successor — design before schema/behavior
+
+1. Responsibility: extend the existing grounded execution-plan/resolver and
+   Catalog role-materialization path, not the released variation-only plan23 or
+   a parallel worker/search/approval framework. Source scope only until tested
+   and selected in a compatible release.
+2. Canonical input: a fresh ordinary educational-retrieval1.0 request, its official
+   Evidence5 manifest/context and one current-authorized approved-reference
+   similarity context. This context describes a reference, not a private brief
+   or the generated draft. Private-query bases remain a separate open requirement.
+3. Identity: new closed resolved-execution-plan24.0 pins an existing delivery and
+   its small typed reference anchor. Plan19/23 documents and canonical hashes are
+   never upgraded in place. Ordinary requests retain their retrieval1.0 meaning.
+4. Resolution: context request must be ITEM_AUTHORING, with the exact pinned anchor,
+   Graph and policy. Its selected PAST_EXAM source must occur exactly once in the
+   same official Evidence manifest and retain matching immutable Item/member/hash
+   identity. Current source, Identity and late-byte checks stay mandatory.
+5. Access patterns: exact plan/Workflow/QUERY lookup, bounded Evidence source
+   membership and two local payload materializations for authoring/review only.
+6. Structures: reuse immutable plan/delivery/anchor models, explicit supported-plan
+   literal dispatch, existing Artifact/plan PK/unique constraints and one bounded
+   source-membership pass. No DB table/index/queue/cache or numerical artifact copy.
+7. Scale/complexity: existing plan1MiB, context512KiB, materials and Evidence bounds;
+   one O(n) source-membership pass and O(1) selected lookup, with n already bounded
+   by the Evidence contract. No extra embedding or corpus scan per review round.
+8. Transactions: bind the successor before first plan persistence under the same
+   workflow root. Exact replay returns the original plan; changed delivery conflicts
+   without republishing. Artifact/source authority remains with existing owners.
+9. Dependency: workflow owns pure schema/value associations; Orchestrator owns
+   publication/staging; Catalog owns actual source/Identity/QUERY authorization.
+   Runner invokes these ports. Workers gain no DB/NAS/tool/other-worker authority.
+10. Failure/retry: missing/duplicate/foreign anchor, changed purpose, stale/revoked
+    source or missing current reader fail explicitly before auxiliary disclosure.
+    No-context legacy/general-knowledge paths retain their behavior. All primary/
+    escalated/rework review attempts use the same immutable reference context;
+    maximum-three-review and independent Evidence receipts remain unchanged.
+11. Simpler alternative: widening plan23 would rewrite variation semantics;
+    relabeling an old QUERY would falsify its purpose/hash. A small additive plan
+    can share the real materializer without either shortcut. A future private-
+    draft result must have its own actual origin/query, not this anchor's score.
+
+The ordinary successor does not expose a new user toggle, auto-select a reference,
+publish a new Pack, activate HTTP/Web, resume a held canary or run a model. Existing
+Pack1.20.17 auxiliary-reference availability is reused only where its exact stored
+plan declaration is checked. No-context/source-policy/default device changes.
+
+### Implemented ordinary-reference boundary and current evidence
+
+The new schema24.0 and exact packaged mirror have raw SHA
+`21c49d6a0a7e2a46ef0eca5cb02e1d4ac5f4685d692f1b27b577a13c334f699b`.
+Thirty existing plan fields reuse the predecessor's exact field schemas; only the
+version, resolver and ordinary retrieval1.0 are selected explicitly, plus two small
+delivery/reference pins. The predecessor schemas are byte-identical. No DDL, new
+queue, WorkerRequest, role/result, Evidence receipt or numerical contract change.
+
+The existing trusted item-preparation owner and API acceptance now handle the two
+explicit modes: retrieval2.0 with PAST_EXAM_VARIATION/plan23, or retrieval1.0 with
+ITEM_AUTHORING/plan24. ITEM_REVIEW is not silently relabeled as a fresh authoring
+request. Each review attempt consumes the original ITEM_AUTHORING reference; a
+future real private-draft query needs its own origin and result. Cross-purpose
+input conflicts before publication or workspace disclosure.
+
+The existing pointer-only publication RPC already selects an exact completed QUERY;
+it contains no purpose/input text or authority supplied by a model. It reuses the
+same operation/schema1.0 for a version1.1 QUERY, with independent current caller/
+start-permission/source/producer/Artifact checks. The owner-local preparation and
+plan consumer are extended; the old RPC bytes and strict QUERY1.0 stay unchanged.
+Current role reads continue over the existing runner-only Catalog Unix operation.
+The public HTTP reference-preparation route has not been activated for ordinary
+authoring, and no automatic reference selection or Web feature activation occurs.
+
+The actual local materializer stages official Evidence and two separate auxiliary
+payloads, never fake variation intent/source files for an ordinary request. The
+new ordinary staged instruction explicitly distinguishes this reference from the
+new draft. Image/registration do not gain auxiliary access; Evidence-only allowlists
+remain separate. Existing role escalation and maximum-three-review topology stay.
+
+Current executed gates (overlapping inventories are not added):
+
+- Guarded disposable PostgreSQL stage suite139 PASS/114.49s: includes seven new
+  ordinary-purpose versions of original first-plan/START, exact replay, concurrent
+  same-key/competing preparations, transaction rollback and DB immutability/FK
+  tests. Real transactions/control Artifact bytes; source/IAM/worker seams remain
+  explicitly synthetic. Independent before/after disposable identity/head0055 and
+  zero-other-connection inspections PASS.
+- Current affected contracts/materialization/role/owner/socket tests134 PASS/
+  75.64s; final transport/owner subset99 PASS/69.36s. Final full relevant source
+  regression1632 PASS/430.49s across80 files, including ordinary and variation
+  role/socket consumers, first binding/replay, Evidence-only receipt boundaries,
+  curriculum normalization, immutable schema packaging and bounded review rework.
+  One existing Starlette/httpx deprecation warning remains. Real local Artifact
+  reads/Unix sockets and these source tests are not installed-IAM/model acceptance.
+- Strict mypy15 changed production modules PASS. Ruff/format checks pass at the
+  final source checkpoint; all30 changed Python paths pass final Ruff/format.
+- Pure comparison with Git baseline18942f0f: legacy plan23 canonical bytes and
+  staged variation instructions identical. SHA values respectively
+  `0bcaa5416a8c463c8cdb50a6972e541e3a4d6ac8eb9bee52873ea52f63d315b8`
+  and `c315115b22f7212db8e9573b28a06f4a5995ac05762ffad7522b2c81b6caa23c`.
+  This is development/test data comparison, not a runtime dependency on Git.
+
+The first new tests exposed incomplete synthetic ordinary inputs (curriculum scope
+and external clients incorrectly sending an internal graph root), missing offline
+transitive schema resources, and assertions matching an error's message instead of
+its stable code. The schema registry includes the exact required offline resources;
+fixtures now obey the real curriculum/API normalization. No permission, schema,
+error check or published historical row was weakened to accommodate a fixture.
+Original failed invocation logs are retained under
+`/tmp/eom-identity-provider-install.nAaycoDM/authoring-delivery-*`.
+
+The broad source run also found a pre-existing stale resource-total assertion112:
+the preceding committed registry already had116 resources; this successor adds
+only plan24, giving117. The test now requires one-to-one equality with the actual
+canonical schema-file inventory, plus every packaged mirror/hash and explicit
+required-family names. Unregistered, missing or duplicated resources still fail;
+the obsolete constant is not a functional admission rule. The earlier failed run
+is retained, and the full relevant inventory is rerun after this correction.
+
+**SOURCE_AND_DISPOSABLE_PASS / NOT_INSTALLED / NOT_ACTIVE.** Remaining gates must not be inferred
+from the focused tests above. This advances ordinary reference delivery; private
+brief/draft query semantics, actual HTTP/start/worker activation, chat/exam consumers
+and physical CPU/CUDA comparison remain open in the original goal ledger.

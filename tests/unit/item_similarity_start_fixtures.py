@@ -17,8 +17,8 @@ from tests.unit.test_item_similarity_preparation import preparation_case
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def start_source(tmp_path, monkeypatch):
-    source = preparation_case(tmp_path, monkeypatch)
+def start_source(tmp_path, monkeypatch, *, ordinary=False):
+    source = preparation_case(tmp_path, monkeypatch, ordinary=ordinary)
     compiled = compile_definition(
         ROOT / "config/workflows/generic-item-development.v1.16.yaml",
         {"authoring", "image", "review", "item_management"},
@@ -26,6 +26,10 @@ def start_source(tmp_path, monkeypatch):
     brief = source.request.item_brief.model_dump(mode="json")
     brief.pop("curriculum_scope")
     brief["curriculum_selected_unit_key"] = "eom.is.middle.1-1"
+    retrieval = source.request.educational_retrieval.model_dump(mode="json")
+    if ordinary:
+        # Public clients select a unit; only the adapter resolves its canonical graph root.
+        retrieval["curriculum_root_key"] = None
     request = WorkflowStartRequest.model_validate(
         {
             "definition_key": compiled.definition.definition_key,
@@ -36,7 +40,7 @@ def start_source(tmp_path, monkeypatch):
             "environment": source.request.content_pack.environment,
             "execution_preset_key": source.request.execution_preset_key,
             "item_brief": brief,
-            "educational_retrieval": source.request.educational_retrieval.model_dump(mode="json"),
+            "educational_retrieval": retrieval,
         }
     )
     source.request = _workflow_request_from_api(request)

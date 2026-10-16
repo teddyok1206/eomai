@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+from eom_catalog_contracts import resolve_integrated_science_curriculum_scope
 from eom_identifiers import canonical_json_bytes
 from eom_identity_service import OperatorAuthorizationFenceError
 from eom_image_contracts import SVG_LABEL_LAYOUT_PACK_BUNDLES
@@ -42,8 +43,10 @@ from tests.unit.test_similarity_reference_pack import prompt_case
 from tests.unit.test_workflow_composition import _platform_settings, _workflow_settings
 
 
-def provider_case(tmp_path, monkeypatch, role="authoring"):
-    case, record, workflow, step, _old_session = prompt_case(tmp_path, monkeypatch, role=role)
+def provider_case(tmp_path, monkeypatch, role="authoring", *, ordinary=False):
+    case, record, workflow, step, _old_session = prompt_case(
+        tmp_path, monkeypatch, role=role, ordinary=ordinary
+    )
     raw = record.canonical_document | {
         "content_pack_sha256": SVG_LABEL_LAYOUT_PACK_BUNDLES["1.20.17"]
     }
@@ -58,6 +61,10 @@ def provider_case(tmp_path, monkeypatch, role="authoring"):
         "educational_retrieval": raw["retrieval_requirement"],
         "execution_preset_key": "standard-item",
     }
+    if ordinary:
+        document["item_brief"]["curriculum_scope"] = resolve_integrated_science_curriculum_scope(
+            "eom.is.middle.1-1"
+        ).model_dump(mode="json")
     request = WorkflowRequest.model_validate(document)
     workflow.initial_request = document
     workflow.request_payload = deepcopy(document)

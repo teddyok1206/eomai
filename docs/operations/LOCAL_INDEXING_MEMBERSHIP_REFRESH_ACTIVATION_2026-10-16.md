@@ -240,6 +240,18 @@ This proves genuine terminal progression and unattended follow-on discovery, not
 another canonical vector-byte/reuse/count audit or whole-corpus coverage. Subsequent
 source candidate request1.1 work does not replace this running2a4843c3 installation.
 
+At03:45:50 UTC, the same scheduled read-only observer found five original numeric
+STARTs/Workflows SUCCEEDED/COMPLETED, and the second METADATA_ONLY command
+PROCESSING/RUNNING. Every admitted command had attempts1/generation1; the same
+PID/invocation remained active/success/enabled, Restart=no. Second-cohort additions:
+CONCRETE_FACETS Workflow`workflow_7ce43df506474f79ab6300377fda962e`,
+START`wfcmd_a798d98544bb40ee8f5aa38ff0dd6c4a` (terminal), and METADATA_ONLY
+Workflow`workflow_78f54f4128cc41f4b27e4a539135446a`,
+START`wfcmd_9f5868a603614ee293884e7a0993d531` (running).
+Evidence:`continuous-progress-0345-2a4843c3.log`, same evidence directory/observer.
+This is not a new canonical byte/count audit, full coverage or completion of the
+running request. No new helper, manual submit, key or restart was introduced.
+
 ## Subsequent continuous selection gate
 
 After the three original commands and the canonical storage audit pass, select

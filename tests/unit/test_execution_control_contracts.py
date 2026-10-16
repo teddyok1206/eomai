@@ -411,7 +411,14 @@ def _codex_invocation() -> dict[str, object]:
 
 def test_control_schema_resources_are_immutable_and_packaged() -> None:
     entries = control_schema_inventory()
-    assert len(entries) == 112
+    # Cover the real canonical inventory instead of a historical total, which had
+    # already drifted before plan24. An unregistered or missing schema still fails.
+    canonical_paths = {entry.canonical_path for _, entry in entries}
+    assert len(canonical_paths) == len(entries)
+    assert canonical_paths == {
+        str(path.relative_to(REPOSITORY_ROOT))
+        for path in (REPOSITORY_ROOT / "schemas/workflow/control-plane").glob("*.schema.json")
+    }
     assert len({name for name, _ in entries}) == len(entries)
     assert {
         "codex-compatibility-request",
@@ -424,6 +431,8 @@ def test_control_schema_resources_are_immutable_and_packaged() -> None:
         "evidence-usage-validation-receipt",
         "execution-preset-revision-v2",
         "resolved-execution-plan-v21",
+        "resolved-execution-plan-v23",
+        "resolved-execution-plan-v24",
         "inference-transfer-control-bootstrap",
         "inference-transfer-control-invocation",
         "knowledge-item-control-bootstrap",

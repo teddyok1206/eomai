@@ -19,8 +19,8 @@ from tests.unit.test_item_similarity_preparation import counts, preparation_case
 from tests.unit.test_similarity_context_artifact import SOURCE
 
 
-def service_case(tmp_path, monkeypatch):
-    value = preparation_case(tmp_path, monkeypatch)
+def service_case(tmp_path, monkeypatch, *, ordinary=False):
+    value = preparation_case(tmp_path, monkeypatch, ordinary=ordinary)
     query = value.value.query
     query.owner.catalog.engine = value.publisher.engine
     # The original QUERY/capture are synthetic in this shared fixture. Keep the
@@ -44,10 +44,11 @@ def service_case(tmp_path, monkeypatch):
     return value, service, request, select_original
 
 
+@pytest.mark.parametrize("ordinary", (False, True))
 def test_transport_service_and_checked_local_entry_reuse_one_canonical_publication(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, ordinary
 ):
-    case, service, request, selected = service_case(tmp_path, monkeypatch)
+    case, service, request, selected = service_case(tmp_path, monkeypatch, ordinary=ordinary)
     first = service.publish(request)
     original = prepare(case)
     repeated = service.publish(request)
@@ -74,8 +75,9 @@ def test_selector_denial_precedes_any_publication_or_current_context(tmp_path, m
     assert case.calls == [] and counts(case) == (0, 0)
 
 
-def test_replay_still_requires_current_start_permission(tmp_path, monkeypatch):
-    case, service, request, _ = service_case(tmp_path, monkeypatch)
+@pytest.mark.parametrize("ordinary", (False, True))
+def test_replay_still_requires_current_start_permission(tmp_path, monkeypatch, ordinary):
+    case, service, request, _ = service_case(tmp_path, monkeypatch, ordinary=ordinary)
     first = service.publish(request)
     with case.publisher.sessions.begin() as session:
         session.delete(

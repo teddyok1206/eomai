@@ -38,10 +38,10 @@ from tests.unit.test_similarity_plan_execution_binding import creation_arguments
 from tests.unit.test_similarity_role_composition import provider_case
 
 
-def preparation_case(tmp_path, monkeypatch):
+def preparation_case(tmp_path, monkeypatch, *, ordinary=False):
     scope = tmp_path / "scope"
     scope.mkdir()
-    value = provider_case(scope, monkeypatch)
+    value = provider_case(scope, monkeypatch, ordinary=ordinary)
     arguments, preset = creation_arguments(value.case)
     preset_body = preset.model_dump(mode="json")
     # This synthetic control explicitly allows the auxiliary classes used by the fixture.
@@ -186,10 +186,11 @@ def failed_context(context, code="SOURCE_REVOKED"):
     return parse_similarity_context(seal(raw, "context_sha256"))
 
 
+@pytest.mark.parametrize("ordinary", (False, True))
 def test_owner_publication_replay_preserves_one_canonical_artifact_and_same_root(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, ordinary
 ):
-    case = preparation_case(tmp_path, monkeypatch)
+    case = preparation_case(tmp_path, monkeypatch, ordinary=ordinary)
     first = prepare(case)
     assert isinstance(first.plan, PreparedSimilarityPlan)
     assert first.plan.delivery == first.publication.delivery
@@ -465,12 +466,13 @@ def test_production_pin_must_match_explicit_preflight_without_changing_the_norma
     assert prepare(case, workflow_request=production).resolution == case.resolution
 
 
-def test_actual_published_context_binds_plan23_before_the_one_plan_record_call(
-    tmp_path, monkeypatch
+@pytest.mark.parametrize("ordinary", (False, True))
+def test_actual_published_context_binds_successor_before_the_one_plan_record_call(
+    tmp_path, monkeypatch, ordinary
 ):
     from eom_orchestrator.execution_resolver import resolve_knowledge_backed_execution_plan
 
-    case = preparation_case(tmp_path, monkeypatch)
+    case = preparation_case(tmp_path, monkeypatch, ordinary=ordinary)
     prepared = prepare(case)
     arguments, _original_preset = creation_arguments(case.value.case)
     arguments["dependencies"] = replace(
@@ -480,7 +482,9 @@ def test_actual_published_context_binds_plan23_before_the_one_plan_record_call(
 
     def record(session, *, document, dependencies):
         captures.append(document)
-        assert document["schema_version"] == "resolved-execution-plan/23.0"
+        assert document["schema_version"] == (
+            "resolved-execution-plan/24.0" if ordinary else "resolved-execution-plan/23.0"
+        )
         return SimpleNamespace(canonical_document=document)
 
     monkeypatch.setattr(

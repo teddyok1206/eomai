@@ -27,11 +27,12 @@ from tests.unit.test_execution_materializer import GROUP_ID, _workspace
 from tests.unit.test_similarity_materialization import materialization_case
 
 
-def workspace_case(tmp_path, monkeypatch):
-    case = materialization_case(tmp_path, monkeypatch)
+def workspace_case(tmp_path, monkeypatch, *, ordinary=False):
+    case = materialization_case(tmp_path, monkeypatch, ordinary=ordinary)
     record = case["session"].records[(ResolvedExecutionPlanRecord, case["plan_id"])]
     record.canonical_document = case["plan"].model_dump(mode="json")
     record.plan_sha256 = case["plan"].plan_sha256
+    record.workflow_id = case["plan"].workflow_id
     calls = []
 
     def resolved(session, **kwargs):

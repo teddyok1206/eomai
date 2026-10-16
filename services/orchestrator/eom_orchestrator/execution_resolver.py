@@ -65,7 +65,8 @@ from eom_workflow.models import CustomerSupportCase
 from eom_workflow.similarity_control import (
     POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS,
     PreparedSimilarityPlan,
-    ResolvedExecutionPlanV23,
+    SupportedSimilarityExecutionPlan,
+    bind_authoring_similarity_execution_plan,
     bind_similarity_execution_plan,
     parse_post_registration_grounded_plan,
     validate_similarity_plan_context,
@@ -301,7 +302,7 @@ def resolve_knowledge_backed_execution_plan(
                 in POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS
             ):
                 replay = parse_post_registration_grounded_plan(existing.canonical_document)
-                if isinstance(replay, ResolvedExecutionPlanV23):
+                if isinstance(replay, SupportedSimilarityExecutionPlan):
                     if (
                         replay.plan_id != existing.plan_id
                         or replay.workflow_id != existing.workflow_id
@@ -571,7 +572,14 @@ def resolve_knowledge_backed_execution_plan(
                 "CONTROL_SIMILARITY_PLAN_UNSUPPORTED", "similarity requires the grounded 1.16 plan"
             )
         try:
-            model = bind_similarity_execution_plan(model, similarity.delivery, similarity.context)
+            if similarity.context.request.consumer_purpose == "ITEM_AUTHORING":
+                model = bind_authoring_similarity_execution_plan(
+                    model, similarity.delivery, similarity.context
+                )
+            else:
+                model = bind_similarity_execution_plan(
+                    model, similarity.delivery, similarity.context
+                )
         except (ValueError, TypeError, JsonSchemaValidationError):
             raise ControlPlaneError(
                 "CONTROL_SIMILARITY_CONTEXT_INVALID", "similarity differs from the resolved plan"

@@ -36,7 +36,7 @@ from eom_orchestrator.similarity_materialization import (
 )
 from eom_workflow.models import WorkerRequest
 from eom_workflow.similarity_control import (
-    ResolvedExecutionPlanV23,
+    SupportedSimilarityExecutionPlan,
     validate_similarity_original_source,
     validate_similarity_plan_context,
     validate_similarity_plan_request,
@@ -72,7 +72,7 @@ class CatalogRoleSimilarityMaterialsReader:
         self,
         session: Session,
         *,
-        plan: ResolvedExecutionPlanV23,
+        plan: SupportedSimilarityExecutionPlan,
         operator_id: str,
         request: SimilarityContextRequest,
         original_source: PopulationSource,

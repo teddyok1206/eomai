@@ -34,8 +34,8 @@ from eom_orchestrator.similarity_materialization import (
     SimilarityWorkspaceMaterials,
 )
 from eom_workflow.similarity_control import (
-    ResolvedExecutionPlanV23,
-    parse_similarity_execution_plan,
+    SupportedSimilarityExecutionPlan,
+    parse_supported_similarity_execution_plan,
     validate_similarity_original_source,
     validate_similarity_plan_context,
     validate_similarity_plan_request,
@@ -67,7 +67,10 @@ class CatalogSimilarityMaterializationReader(SimilarityMaterializationReadPort):
         self.materials_reader = materials_reader
 
     def _current_context(
-        self, session: Session, plan: ResolvedExecutionPlanV23, request: SimilarityContextRequest
+        self,
+        session: Session,
+        plan: SupportedSimilarityExecutionPlan,
+        request: SimilarityContextRequest,
     ) -> SimilarityContext:
         try:
             current = parse_similarity_context(
@@ -94,7 +97,7 @@ class CatalogSimilarityMaterializationReader(SimilarityMaterializationReadPort):
         self,
         session: Session,
         *,
-        plan: ResolvedExecutionPlanV23,
+        plan: SupportedSimilarityExecutionPlan,
         operator_id: str,
         request: SimilarityContextRequest,
         original_source: PopulationSource,
@@ -102,7 +105,7 @@ class CatalogSimilarityMaterializationReader(SimilarityMaterializationReadPort):
         authorized_artifact_revision_ids: frozenset[str],
     ) -> SimilarityWorkspaceMaterials:
         """No model execution or writes; current common read before and after member IO."""
-        checked = parse_similarity_execution_plan(plan)
+        checked = parse_supported_similarity_execution_plan(plan)
         validate_similarity_plan_request(checked, request)
         if operator_id != self.caller.operator_id:
             raise ControlPlaneError(

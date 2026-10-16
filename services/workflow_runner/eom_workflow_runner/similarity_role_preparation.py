@@ -16,8 +16,9 @@ from eom_orchestrator.similarity_materialization import SimilarityMaterializatio
 from eom_workflow.models import WorkerRequest
 from eom_workflow.schemas import result_schema_protocol
 from eom_workflow.similarity_control import (
-    ResolvedExecutionPlanV23,
-    parse_similarity_execution_plan,
+    SIMILARITY_EXECUTION_PLAN_SCHEMAS,
+    SupportedSimilarityExecutionPlan,
+    parse_supported_similarity_execution_plan,
     validate_similarity_plan_request,
 )
 from jsonschema.exceptions import ValidationError as SchemaError
@@ -53,7 +54,7 @@ class _SimilarityRoleBinding:
     """Attached root-local records/values only, not stored authority or a grant."""
 
     workflow: WorkflowInstanceRecord
-    plan: ResolvedExecutionPlanV23
+    plan: SupportedSimilarityExecutionPlan
 
 
 def _bind_role(
@@ -94,7 +95,7 @@ def _bind_role(
         raise ControlPlaneError("CONTROL_PLAN_MISSING", "stored execution plan is missing")
     if not isinstance(record.canonical_document, dict):
         raise ControlPlaneError("CONTROL_SIMILARITY_CONTEXT_INVALID", "stored plan is invalid")
-    if record.canonical_document.get("schema_version") != "resolved-execution-plan/23.0":
+    if record.canonical_document.get("schema_version") not in SIMILARITY_EXECUTION_PLAN_SCHEMAS:
         return None
     try:
         declaration = read_similarity_prompt_context(
@@ -103,7 +104,7 @@ def _bind_role(
             step=current,
             pack_release_id=record.canonical_document["content_pack_release_id"],
         )
-        plan = parse_similarity_execution_plan(record.canonical_document)
+        plan = parse_supported_similarity_execution_plan(record.canonical_document)
         stored_request = load_persisted_workflow_request(actual.initial_request)
         definition = session.get(WorkflowDefinitionRecord, actual.definition_id)
         if (

@@ -23,10 +23,10 @@ from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.database import build_session_factory
 from eom_workflow.compiler import compile_definition_data
 from eom_workflow.models import WorkflowRequest
-from eom_workflow.reference_query_execution import ReferenceQueryWorkflowRequest
+from eom_workflow.reference_query_execution import parse_supported_reference_query_workflow_request
 from eom_workflow.similarity_control import (
     parse_post_registration_grounded_plan,
-    parse_similarity_execution_plan,
+    parse_supported_similarity_execution_plan,
 )
 from eom_workflow_runner import similarity_role_preparation as module
 from eom_workflow_runner.models import (
@@ -48,9 +48,10 @@ from tests.unit.test_reference_query_workflow_contracts import definition_body
 from tests.unit.test_similarity_role_composition import provider_case
 
 
-@pytest.fixture
-def workflows(tmp_path, monkeypatch):
-    template = provider_case(tmp_path, monkeypatch)
+@pytest.fixture(params=("PAST_EXAM_VARIATION", "ITEM_AUTHORING"))
+def workflows(tmp_path, monkeypatch, request):
+    purpose = request.param
+    template = provider_case(tmp_path, monkeypatch, ordinary=purpose == "ITEM_AUTHORING")
     monkeypatch.setattr(module, "object_session", object_session)
     engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'role-metadata.sqlite'}")
     for model in (WorkflowDefinitionRecord, WorkflowInstanceRecord, WorkflowStepRunRecord):
@@ -69,7 +70,7 @@ def workflows(tmp_path, monkeypatch):
     plan_metadata.create_all(engine)
     sessions = build_session_factory(engine)
     native = compile_definition_data(definition_body(), "synthetic-stored-query", set())
-    native_template = query_case(definition_sha256=native.sha256).request
+    native_template = query_case(definition_sha256=native.sha256, consumer_purpose=purpose).request
     # The older role fixture intentionally has no vector index. A genuine QUERY
     # request must instead pin an index/runtime; construct coherent synthetic
     # control values without pretending to have executed or published that QUERY.
@@ -118,7 +119,7 @@ def workflows(tmp_path, monkeypatch):
             raw_query = native_template.model_dump(mode="json")
             raw_query["context_request"] = context.request.model_dump(mode="json")
             raw_query["operator_audit"]["operator_id"] = operator_id
-            original = ReferenceQueryWorkflowRequest.model_validate(
+            original = parse_supported_reference_query_workflow_request(
                 seal(raw_query, "request_sha256")
             )
             selection = CompletedSimilarityQuerySelection(
@@ -135,7 +136,7 @@ def workflows(tmp_path, monkeypatch):
                 "plan_id": "execplan_" + seed * 32,
                 "similarity_delivery": delivery_body,
             }
-            plan = parse_similarity_execution_plan(seal(raw_plan, "plan_sha256"))
+            plan = parse_supported_similarity_execution_plan(seal(raw_plan, "plan_sha256"))
             runtime = deepcopy(template.workflow.runtime_context)
             runtime["execution_plan"] = {
                 key: getattr(plan, key)
@@ -379,6 +380,7 @@ def test_original_execution_without_similarity_never_invents_a_query(workflows, 
             record = session.get(ResolvedExecutionPlanRecord, runtime["execution_plan"]["plan_id"])
             raw = deepcopy(record.canonical_document)
             raw.pop("similarity_delivery")
+            raw.pop("similarity_reference", None)
             raw.update(schema_version="resolved-execution-plan/19.0", resolver_version="19.0.0")
             original = parse_post_registration_grounded_plan(seal(raw, "plan_sha256"))
             record.canonical_document = original.model_dump(mode="json")

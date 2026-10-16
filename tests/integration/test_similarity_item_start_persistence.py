@@ -177,10 +177,11 @@ def controls(session, preset):
     return key, resolved
 
 
-@pytest.fixture
-def item(guarded_engine: Engine, tmp_path, monkeypatch):
+@pytest.fixture(params=("PAST_EXAM_VARIATION", "ITEM_AUTHORING"))
+def item(guarded_engine: Engine, tmp_path, monkeypatch, request):
     assert guarded_engine.dialect.name == "postgresql"
-    data = start_source(tmp_path, monkeypatch)
+    purpose = request.param
+    data = start_source(tmp_path, monkeypatch, ordinary=purpose == "ITEM_AUTHORING")
     sessions = build_session_factory(guarded_engine)
     with sessions.begin() as session:
         key, preset = controls(session, data.source.preset)
@@ -247,6 +248,11 @@ def item(guarded_engine: Engine, tmp_path, monkeypatch):
         client=client,
         key="api:" + uuid4().hex * 2,
         publication=publication,
+        expected_plan_schema=(
+            "resolved-execution-plan/24.0"
+            if purpose == "ITEM_AUTHORING"
+            else "resolved-execution-plan/23.0"
+        ),
     )
 
 
@@ -302,7 +308,7 @@ def assert_rows(value, receipt):
                 ResolvedExecutionPlanRecord.workflow_id == workflow.workflow_id
             )
         )
-        assert record.canonical_document["schema_version"] == "resolved-execution-plan/23.0"
+        assert record.canonical_document["schema_version"] == value.expected_plan_schema
         assert record.plan_sha256 == workflow.runtime_context["execution_plan"]["plan_sha256"]
         assert workflow.runtime_context[
             SIMILARITY_QUERY_CONTEXT_KEY

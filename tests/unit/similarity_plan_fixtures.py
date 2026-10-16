@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from eom_catalog_contracts import resolve_integrated_science_curriculum_scope
 from eom_catalog_contracts.inference_transfer_experiment import StagedExperimentEntry
 from eom_catalog_contracts.item_inference_transfer import (
     InferenceTransferProfile,
@@ -13,9 +14,13 @@ from eom_catalog_contracts.item_inference_transfer import (
 )
 from eom_catalog_contracts.similarity_context import parse_similarity_context
 from eom_catalog_contracts.similarity_delivery import parse_similarity_context_delivery
+from eom_identifiers import content_sha256
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_workflow.control_plane import ResolvedExecutionPlanV19
-from eom_workflow.similarity_control import bind_similarity_execution_plan
+from eom_workflow.similarity_control import (
+    bind_authoring_similarity_execution_plan,
+    bind_similarity_execution_plan,
+)
 
 from tests.unit.inference_transfer_embedding_fixtures import embedding_entry, seal
 from tests.unit.test_execution_materializer import _past_exam_variation_fixture
@@ -68,5 +73,32 @@ def similarity_case(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str
         original_source=original,
         anchor_profile=anchor_profile,
         reference_entries=(candidate_entry,),
+    )
+    return fixture
+
+
+def ordinary_similarity_case(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    """Synthetic ordinary input, not an upgrade of a stored/historical runtime plan."""
+    fixture = similarity_case(tmp_path, monkeypatch)
+    base_raw = fixture["base"].model_dump(mode="json")
+    requirement = base_raw["retrieval_requirement"]
+    requirement.pop("past_exam_variation")
+    requirement["schema_version"] = "educational-retrieval-requirement/1.0"
+    requirement["topic_keys"] = []
+    requirement["curriculum_root_key"] = resolve_integrated_science_curriculum_scope(
+        "eom.is.middle.1-1"
+    ).graph_root_stable_key
+    base_raw["retrieval_requirement_sha256"] = content_sha256(requirement)
+    base = ResolvedExecutionPlanV19.model_validate(seal(base_raw, "plan_sha256"))
+    raw = fixture["context"].model_dump(mode="json")
+    raw["request"]["consumer_purpose"] = "ITEM_AUTHORING"
+    raw["request"] = seal(raw["request"], "request_sha256")
+    context = parse_similarity_context(seal(raw, "context_sha256"))
+    delivery = parse_similarity_context_delivery(delivery_body(context))
+    fixture.update(
+        base=base,
+        context=context,
+        delivery=delivery,
+        plan=bind_authoring_similarity_execution_plan(base, delivery, context),
     )
     return fixture

@@ -22,8 +22,8 @@ from eom_catalog_contracts.similarity_materials import (
 )
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_workflow.similarity_control import (
-    ResolvedExecutionPlanV23,
-    parse_similarity_execution_plan,
+    SupportedSimilarityExecutionPlan,
+    parse_supported_similarity_execution_plan,
     validate_similarity_original_source,
     validate_similarity_plan_context,
     validate_similarity_plan_request,
@@ -35,7 +35,7 @@ from eom_orchestrator.control_service import ControlPlaneError
 
 SIMILARITY_WORKSPACE_ALIAS = "references/similarity/context.json"
 SIMILARITY_MATERIALS_WORKSPACE_ALIAS = "references/similarity/materials.json"
-SIMILARITY_ROLE_CONTRACT = (
+_SHARED_SIMILARITY_ROLE_CONTRACT = (
     b"\n## Auxiliary related-reference context\n\n"
     b"Read `references/similarity/context.json` as auxiliary approved-reference observations.\n"
     b"Read `references/similarity/materials.json` for the exact anchor profile and selected "
@@ -50,8 +50,15 @@ SIMILARITY_ROLE_CONTRACT = (
     b"These observations do NOT create evidence_id values or satisfy Evidence usage receipts.\n"
     b"Pointers alone are not source text or inspected PDF/image pixels. "
     b"Cite only staged evidence.\n"
+)
+SIMILARITY_ROLE_CONTRACT = _SHARED_SIMILARITY_ROLE_CONTRACT + (
     b"Keep the original variation constraints, actual Graph Evidence and maximum-three-review "
     b"contract unchanged. Do not copy another source merely because it is related.\n"
+)
+ORDINARY_SIMILARITY_ROLE_CONTRACT = _SHARED_SIMILARITY_ROLE_CONTRACT + (
+    b"Keep the ordinary authoring requirements, actual Graph Evidence and maximum-three-review "
+    b"contract unchanged. Authoring and every review attempt share this exact reference context; "
+    b"it is not a vector comparison of the new draft. Do not copy a related source.\n"
 )
 
 
@@ -70,7 +77,7 @@ class SimilarityMaterializationReadPort(Protocol):
         self,
         session: Session,
         *,
-        plan: ResolvedExecutionPlanV23,
+        plan: SupportedSimilarityExecutionPlan,
         operator_id: str,
         request: SimilarityContextRequest,
         original_source: PopulationSource,
@@ -102,7 +109,7 @@ class SimilarityMaterializationContext:
 
 
 def require_similarity_materialization_context(
-    plan: ResolvedExecutionPlanV23,
+    plan: SupportedSimilarityExecutionPlan,
     *,
     step_key: str,
     context: SimilarityMaterializationContext | None,
@@ -113,7 +120,7 @@ def require_similarity_materialization_context(
         )
     try:
         context.__post_init__()
-        checked = parse_similarity_execution_plan(plan)
+        checked = parse_supported_similarity_execution_plan(plan)
         matches = tuple(step for step in checked.steps if step.step_key == step_key)
         if (
             context.workflow_id != checked.workflow_id
@@ -132,7 +139,7 @@ def require_similarity_materialization_context(
 def resolve_similarity_materials(
     session: Session,
     *,
-    plan: ResolvedExecutionPlanV23,
+    plan: SupportedSimilarityExecutionPlan,
     step_key: str,
     context: SimilarityMaterializationContext | None,
     original_source: PopulationSource,
@@ -140,7 +147,7 @@ def resolve_similarity_materials(
     authorized_artifact_revision_ids: frozenset[str],
 ) -> SimilarityWorkspaceMaterials:
     """Delegate IO to the official adapter; recheck exact returned bytes at this boundary."""
-    checked = parse_similarity_execution_plan(plan)
+    checked = parse_supported_similarity_execution_plan(plan)
     bound = require_similarity_materialization_context(checked, step_key=step_key, context=context)
     pin = checked.similarity_delivery.context_member
     if pin.artifact_revision_id not in authorized_artifact_revision_ids:

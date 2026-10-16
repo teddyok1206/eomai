@@ -22,14 +22,17 @@ from eom_orchestrator.similarity_materialization import (
     SimilarityWorkspaceMaterials,
     resolve_similarity_materials,
 )
-from eom_workflow.similarity_control import bind_similarity_execution_plan
+from eom_workflow.similarity_control import (
+    bind_authoring_similarity_execution_plan,
+    bind_similarity_execution_plan,
+)
 from eom_workflow_runner.similarity_materialization_adapter import (
     CatalogSimilarityMaterializationReader,
 )
 from pydantic import TypeAdapter
 
 from tests.unit.inference_transfer_embedding_fixtures import seal
-from tests.unit.similarity_plan_fixtures import similarity_case
+from tests.unit.similarity_plan_fixtures import ordinary_similarity_case, similarity_case
 from tests.unit.test_similarity_context_artifact import publish, publisher_for
 
 
@@ -51,15 +54,16 @@ class CurrentReader:
         return self.current
 
 
-def materialization_case(tmp_path, monkeypatch):
+def materialization_case(tmp_path, monkeypatch, *, ordinary=False):
     base = tmp_path / "base"
     base.mkdir()
-    case = similarity_case(base, monkeypatch)
+    case = (ordinary_similarity_case if ordinary else similarity_case)(base, monkeypatch)
     publication = tmp_path / "publication"
     publication.mkdir()
     publisher = publisher_for(publication)
     receipt = publish(publisher, case["context"])
-    plan = bind_similarity_execution_plan(case["base"], receipt.delivery, case["context"])
+    bind = bind_authoring_similarity_execution_plan if ordinary else bind_similarity_execution_plan
+    plan = bind(case["base"], receipt.delivery, case["context"])
     reader = CurrentReader(case["context"])
     caller = EmbeddingRegistryCaller("operator_" + "a" * 32)
     references = build_similarity_materials(

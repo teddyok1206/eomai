@@ -23,7 +23,7 @@ from eom_workflow.control_schemas import validate_control_contract
 from eom_workflow.models import ExpectedWorkflowResolution, WorkflowRequest
 from eom_workflow.similarity_control import (
     PreparedSimilarityPlan,
-    ResolvedExecutionPlanV23,
+    SupportedSimilarityExecutionPlan,
     validate_similarity_plan_context,
 )
 from eom_workflow_runner.item_similarity_preparation import PreparedItemSimilarity
@@ -189,7 +189,7 @@ def similarity_start_context(
 ) -> dict[str, Any]:
     """Small immutable acceptance metadata; caller commits it with plan and START."""
     try:
-        if not isinstance(plan, ResolvedExecutionPlanV23):
+        if not isinstance(plan, SupportedSimilarityExecutionPlan):
             raise ValueError("similarity plan not bound before persistence")
         validate_similarity_plan_context(plan, checked.preparation.plan.context)
         if plan.similarity_delivery != checked.preparation.plan.delivery:

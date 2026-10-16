@@ -11,7 +11,7 @@ from eom_workflow.control_plane import ResolvedExecutionPlanV19, ResolvedExecuti
 from eom_workflow.control_schemas import validate_control_contract
 from eom_workflow.similarity_control import (
     MAX_SIMILARITY_EXECUTION_PLAN_BYTES,
-    ResolvedExecutionPlanV23,
+    SupportedSimilarityExecutionPlan,
     parse_post_registration_grounded_plan,
 )
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
@@ -81,7 +81,7 @@ def read_similarity_prompt_context(
             len(canonical_json_bytes(document)) > MAX_SIMILARITY_EXECUTION_PLAN_BYTES
         ):
             raise ValueError("SIMILARITY_PROMPT_PLAN_TOO_LARGE")
-        plan: ResolvedExecutionPlanV19 | ResolvedExecutionPlanV20 | ResolvedExecutionPlanV23
+        plan: ResolvedExecutionPlanV19 | ResolvedExecutionPlanV20 | SupportedSimilarityExecutionPlan
         if document.get("schema_version") == "resolved-execution-plan/20.0":
             validate_control_contract("resolved-execution-plan-v20", document)
             plan = ResolvedExecutionPlanV20.model_validate(document)
@@ -112,7 +112,7 @@ def read_similarity_prompt_context(
     return SimilarityPromptContext(
         reference_mode=(
             "PINNED_REFERENCE_CONTEXT"
-            if isinstance(plan, ResolvedExecutionPlanV23)
+            if isinstance(plan, SupportedSimilarityExecutionPlan)
             else "NOT_OFFERED"
         ),
         plan_id=plan.plan_id,

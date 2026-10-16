@@ -83,7 +83,7 @@ from eom_workflow.reference_query_execution import (
 from eom_workflow.reference_query_workflow import ReferenceQueryWorkflowDefinition
 from eom_workflow.similarity_control import (
     POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS,
-    ResolvedExecutionPlanV23,
+    SupportedSimilarityExecutionPlan,
     parse_post_registration_grounded_plan,
 )
 from sqlalchemy import Engine, select
@@ -279,7 +279,7 @@ def _parse_review_escalation_plan(
     | ResolvedExecutionPlanV18
     | ResolvedExecutionPlanV19
     | ResolvedExecutionPlanV20
-    | ResolvedExecutionPlanV23
+    | SupportedSimilarityExecutionPlan
 ):
     """Parse schema-selected plan families that carry an escalatable review step."""
 

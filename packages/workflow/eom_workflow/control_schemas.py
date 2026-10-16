@@ -29,6 +29,12 @@ class ControlSchemaResource:
 
 CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType(
     {
+        "resolved-execution-plan-v24": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v24.schema.json",
+            "resources/control-plane/resolved-execution-plan-v24.schema.json",
+            "24.0",
+            "sha256:21c49d6a0a7e2a46ef0eca5cb02e1d4ac5f4685d692f1b27b577a13c334f699b",
+        ),
         "resolved-execution-plan-v23": ControlSchemaResource(
             "schemas/workflow/control-plane/resolved-execution-plan-v23.schema.json",
             "resources/control-plane/resolved-execution-plan-v23.schema.json",
@@ -824,6 +830,8 @@ def _control_schema_registry() -> Registry[Any]:
         "knowledge-analysis-types-v4",
         "knowledge-analysis-types-v5",
         "knowledge-analysis-solution-types-v1",
+        "knowledge-analysis-request-v9",
+        "evidence-bundle-manifest-v5",
         "item-origin-types",
         "legacy-assessment-types",
         "legacy-item-extraction-request",
@@ -832,8 +840,10 @@ def _control_schema_registry() -> Registry[Any]:
         "educational-retrieval-requirement",
         "educational-retrieval-requirement-v2",
         "item-inference-transfer",
+        "item-inference-transfer-experiment",
         "item-inference-transfer-embedding",
         "system-rag-similarity-delivery",
+        "system-rag-similarity-context",
     ):
         schema = load_schema(name)
         identifier = schema.get("$id")

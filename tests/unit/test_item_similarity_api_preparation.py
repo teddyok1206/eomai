@@ -47,8 +47,11 @@ def prepare(application, case, selection, **changes):
     return application.prepare(actor_for(case), selection, **values)
 
 
-def test_actual_socket_producer_builds_the_checked_private_item_handoff_once(tmp_path, monkeypatch):
-    case, publication, request, _selected = service_case(tmp_path, monkeypatch)
+@pytest.mark.parametrize("ordinary", (False, True))
+def test_actual_socket_producer_builds_the_checked_private_item_handoff_once(
+    tmp_path, monkeypatch, ordinary
+):
+    case, publication, request, _selected = service_case(tmp_path, monkeypatch, ordinary=ordinary)
     server = _server(tmp_path)
     reads = SimpleNamespace(read=Mock(return_value=case.value.case["context"]))
     server.similarity_context_reads = reads
@@ -109,8 +112,11 @@ def test_missing_action_permission_is_denied_before_any_transport(tmp_path, monk
     assert not publications.mock_calls and not contexts.mock_calls
 
 
-def test_late_context_failure_preserves_publication_and_exact_replay(tmp_path, monkeypatch):
-    case, publication, request, _selected = service_case(tmp_path, monkeypatch)
+@pytest.mark.parametrize("ordinary", (False, True))
+def test_late_context_failure_preserves_publication_and_exact_replay(
+    tmp_path, monkeypatch, ordinary
+):
+    case, publication, request, _selected = service_case(tmp_path, monkeypatch, ordinary=ordinary)
     server = _server(tmp_path)
     context = case.value.case["context"]
     reads = SimpleNamespace(read=Mock(side_effect=SimilarityContextReadError("SOURCE_REVOKED")))
