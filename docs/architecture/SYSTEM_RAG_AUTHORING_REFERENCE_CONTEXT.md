@@ -458,3 +458,79 @@ An initial command supplied an incorrectly truncated expected synthetic-input
 hash and failed before any EOM import; the refusal is retained separately and the
 expected full input hash was corrected, not a validation rule or input byte.
 No selected API/QUERY/INDEX/Pack/Web configuration changed.
+
+## Official Evidence reference selection — design before implementation
+
+1. Responsibility: ordinary authoring chooses an optional approved reference from
+   its own already-published official Evidence5. Never run a parallel lexical/vector
+   search or label an unrelated Item as a member of that Evidence.
+2. Canonical source: the pinned publication, original retrieval request, immutable
+   Evidence manifest/context and current official Catalog source/profile reader.
+   Neither a browser's Item ID nor a model's proposed authority selects the anchor.
+3. Revision model: retain Evidence logical/revision, original retrieval and Graph/
+   policy/result hashes. Add only a closed pointer-only SELECT_ITEM_AUTHORING_REFERENCE
+   read operation on the existing API-only Catalog socket, with no publication,
+   queue, registry, DB schema, Workflow definition or native execution change.
+4. Pointer closure: verify the original publication against its canonical DB rows,
+   requester, Artifact lifecycle/schema/media/raw hashes and exact manifest fields.
+   Return evidence ID, source Item revision/content hash and accepted report pointer
+   hash, not Item/report bytes. QUERY still resolves the same source independently.
+5. Access: current actual API actor and current Catalog Identity/permissions first;
+   the released pinned policy and original Graph are reauthorized, not broadened.
+   API-only peer remains required. Chat/worker/runner peers cannot select for Item start.
+6. Selection: only non-answer-bearing PAST_EXAM/ITEM_REVISION/REFERENCE_PATTERN
+   entries with accepted solution evidence are eligible. Use original manifest
+   relevance order, deduplicate by immutable source revision, then validate selected
+   source/report equality through one existing batch source read. No random/latest
+   source or private-brief/draft vector comparison is invented.
+7. Access patterns: bounded primary-key metadata reads, one bounded manifest/context
+   materialization and at most128 source IDs; dict/set joins and stable ordered
+   selection, O(n) time/space, existing PK/FK/unique indexes. No N+1 source read.
+8. Transactions: use one Catalog-owned current root, read/shared locks as existing
+   authority requires; no commit, new idempotency record or future permission cache.
+   Immutable selection is reproducible. Native preparation keeps the original
+   actual-operator/key and rejects changed purpose/source, so replay cannot re-key.
+9. Ownership: contracts own messages; Catalog owns resolution/selection; the API
+   gets pointers through its existing peer adapter and invokes preparation1.1.
+   The current API/QUERY/INDEX release selection remains unchanged in source work.
+10. Failures: missing/corrupt/stale/foreign requester/denied/revoked is FAILED with
+    no partial selection or retry. Legitimately no eligible reference is explicit
+    UNAVAILABLE/REFERENCE_NOT_OFFERED after authorization, not a fabricated result
+    or evidence receipt. Ordinary GraphRAG may continue only through a separately
+    explicit optional-reference branch; denial is never converted to absence.
+11. Simpler alternative: passing the first browser Item or doing another search is
+    fewer lines but loses original Evidence provenance. Repeating full corpus
+    retrieval copies work and can select different material. This one existing-
+    socket read keeps source ownership and leaves native numerical work unchanged.
+
+This is an implementation boundary, not activation approval or proof that ordinary
+Item-start routing, private-query semantics or remaining goal consumers are complete.
+
+### Official reference selector source checkpoint
+
+The closed selector schema, typed request/reply, current Catalog selection, exact
+original Evidence read, existing API-only socket dispatch and API peer client are
+implemented. The Catalog server composes this read-only operation only when its
+existing compatible similarity read owner is present. No additional runtime owner,
+queue, DB schema, model, generic search framework or public authority field exists.
+The ordinary Item-start caller/optional-reference branch is not connected yet.
+
+Canonical/packaged selector raw SHA-256:
+`fc2bee449016d3fb3de84be22b6a22f1cee55aa88aa2f79f085b661d2a4e9215`.
+At04:50 UTC, final focused/source/actual-Unix/adjacent Catalog/resource tests151
+PASS/22.94s, strict mypy6 production modules PASS, Ruff/format9 paths PASS. Original
+Evidence metadata/source/IAM/current report observations in these cases are
+synthetic, not PostgreSQL/current-user/NAS/model acceptance. The actual socket peer,
+frame limits, raw closed models and no-retry behavior are exercised. Positive,
+empty-offer and late-denial owner tests preserve one root and one batch read;
+even empty results reauthorize after IO. Malformed/hidden fields, foreign actor/
+request/Graph/context, duplicate or mismatched source/report, answer-bearing or
+nonreference entry, denied peer and source error cannot yield a partial selection.
+
+Initial fixture failures used noncanonical `+00:00` timestamps, inconsistent changed
+profile/content metadata and a plain Mock as a context manager. Fixtures now obey
+canonical `Z`, exact source/report closure and the context-manager protocol; no
+production validator was relaxed. Original logs are retained under
+`/tmp/eom-identity-provider-install.nAaycoDM/authoring-reference-selection-*`.
+
+No install/activation or operating data mutation is part of this checkpoint.

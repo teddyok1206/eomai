@@ -104,6 +104,8 @@ from eom_catalog_service.approved_item_graph_publication_service import (
     ApprovedItemGraphPublicationError,
     ApprovedItemGraphPublicationService,
 )
+from eom_catalog_service.authoring_reference_dispatch import dispatch_authoring_reference_frame
+from eom_catalog_service.authoring_reference_selection import CatalogAuthoringReferenceSelection
 from eom_catalog_service.catalog_workflow_socket_access import grant_catalog_workflow_socket_access
 from eom_catalog_service.chat_knowledge_resolution import (
     ChatKnowledgeResolutionError,
@@ -216,6 +218,14 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 raise ValueError
             raw_operation = value.get("operation")
             if not self.server.peer_can_operate(self.request, raw_operation):
+                return
+            if raw_operation == "SELECT_ITEM_AUTHORING_REFERENCE":
+                self.wfile.write(
+                    dispatch_authoring_reference_frame(
+                        self.server.authoring_reference_selection, raw
+                    )
+                )
+                self.wfile.flush()
                 return
             if raw_operation == "READ_WORKFLOW_SIMILARITY_MATERIALS":
                 self.wfile.write(
@@ -1330,6 +1340,11 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.chat_rag = chat_rag
         self.inference_transfer_metadata = inference_transfer_metadata
         self.similarity_context_reads = similarity_context_reads
+        self.authoring_reference_selection = (
+            None
+            if similarity_context_reads is None
+            else CatalogAuthoringReferenceSelection(similarity_context_reads.owner)
+        )
         self.item_similarity_publications = item_similarity_publications
         self.workflow_similarity_reads = workflow_similarity_reads
         self.workflow_runner_uid = None

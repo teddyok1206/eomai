@@ -22,6 +22,10 @@ summed into a single acceptance count. This ledger does not grant authority.
   installed-wheel OpenAPI and source-free two-wheel297-module purpose proof PASS.
   Legacy1.0 wire and native-key identity match baseline15ffdef5 exactly. All of
   these remain source/package evidence, not current-IAM or runtime activation.
+  The next official-Evidence5 reference selector has closed schema/models, Catalog
+  read/selection, existing API-only socket and API client source151/type6 PASS.
+  Evidence DB/source/IAM seams are synthetic; ordinary start/optional absence and
+  real current-user/Artifact gates remain open. It is not installed/activated.
   Reviewed INDEX
   code`2a4843c3` is independently packaged/installed. Documentation successors do
   not silently select another source release.
@@ -47,6 +51,10 @@ summed into a single acceptance count. This ledger does not grant authority.
   numeric commands SUCCEEDED/COMPLETED and the third METADATA_ONLY command
   PROCESSING/RUNNING, attempts/generation1. This is not a new vector-count audit.
   [Current exact gate and evidence](../operations/LOCAL_INDEXING_MEMBERSHIP_REFRESH_ACTIVATION_2026-10-16.md).
+  Scheduled read-only observation04:46:21 UTC found11 original numeric commands
+  SUCCEEDED/COMPLETED and the fourth METADATA_ONLY PROCESSING/REQUESTED, all
+  attempts/generation1; same process/invocation, active/success/enabled, no restart.
+  This updates command state only, not canonical vector bytes/counts/coverage.
 - The new authoring/review reference source foundation adds native request1.1
   without widening strict1.0. Source regression1971, final affected boundary234,
   handoff47 and guarded PG132 PASS (overlapping inventories not summed), strict

@@ -51,6 +51,7 @@ from eom_catalog_contracts import (
     KnowledgeGraphSnapshotPointer,
     validate_contract,
 )
+from eom_catalog_contracts.embedding_reference_query import similarity_contract_document
 from eom_catalog_contracts.local_indexing_policy import LocalIndexingAccessPolicy
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_identity_service.models import OperatorRecord
@@ -105,6 +106,7 @@ from eom_catalog_service.local_indexing_source_ports import (
 )
 from eom_catalog_service.models import ItemRecord, ItemRevisionRecord
 from eom_catalog_service.past_exam_source_provenance import PastExamSourceResolutionCache
+from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.solution_evidence_resolution import (
     ResolvedSolutionEvidence,
@@ -832,6 +834,119 @@ class KnowledgeRetrievalApplicationService:
                 required=solution_evidence_required,
             )
             return result
+
+    def read_published_item_evidence_in_session(
+        self,
+        session: Session,
+        publication: EvidenceBundlePublicationResultV5,
+        *,
+        requested_by: str,
+        artifact_reader: PinnedArtifactReadContext,
+    ) -> EvidenceBundleManifestV5:
+        """Resolve exact original evidence; caller owns current authority before/after IO.
+
+        This does not authorize an actor, change the Graph head, rerun retrieval,
+        publish or cache a permission. The shared Catalog root is mandatory.
+        """
+        _active_root_transaction(session)
+        artifact_reader.require_session(session)
+        raw = similarity_contract_document(
+            publication, "evidence-bundle-publication-result-v5", 8191
+        )
+        publication = EvidenceBundlePublicationResultV5.model_validate(raw)
+        bundle = session.get(EvidenceBundleRecord, publication.evidence_bundle_id)
+        revision = session.get(
+            EvidenceBundleRevisionRecord, publication.evidence_bundle_revision_id
+        )
+        request = session.get(EducationRetrievalRequestRecord, publication.retrieval_request_id)
+        if (
+            bundle is None
+            or revision is None
+            or request is None
+            or bundle.retrieval_request_id != request.retrieval_request_id
+            or bundle.created_by_operator_id != requested_by
+            or revision.evidence_bundle_id != bundle.evidence_bundle_id
+            or revision.retrieval_request_id != request.retrieval_request_id
+            or request.requester_operator_id != requested_by
+            or request.state != "PUBLISHED"
+            or revision.state != "PUBLISHED"
+        ):
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_PUBLICATION_INVALID", "original Item evidence differs"
+            )
+        original = EducationRetrievalRequestV2.model_validate(request.canonical_request)
+        if (
+            original.requester_operator_id != requested_by
+            or original.retrieval_request_id != request.retrieval_request_id
+            or original.query_kind != "ITEM_PREPARATION"
+            or request.query_kind != original.query_kind
+            or request.requester_role != original.requester_role
+            or original.target_item_revision_id is not None
+            or original.request_sha256 != request.request_sha256
+            or original.graph_snapshot != publication.graph_snapshot
+            or request.graph_snapshot_revision_id
+            != original.graph_snapshot.graph_snapshot_revision_id
+            or revision.graph_snapshot_revision_id
+            != original.graph_snapshot.graph_snapshot_revision_id
+            or request.access_policy_revision_id != original.access_policy_revision_id
+            or revision.access_policy_revision_id != original.access_policy_revision_id
+            or request.requester_permissions_sha256 != original.requester_permissions_sha256
+            or revision.requester_permissions_sha256 != original.requester_permissions_sha256
+            or self._result_v2(session, request, revision) != publication
+        ):
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_PUBLICATION_INVALID", "original Item evidence differs"
+            )
+        payloads: list[bytes] = []
+        for pointer, kind in (
+            (publication.manifest_artifact, "manifest"),
+            (publication.context_artifact, "context"),
+        ):
+            member = artifact_reader.read_pinned(
+                **pointer.model_dump(mode="python", exclude={"logical_name"}),
+                expected_artifact_types=(f"evidence-bundle-{kind}",),
+                expected_primary_file=pointer.member_path,
+                max_bytes=4 * 1024 * 1024,
+            )
+            artifact_reader.require_file_set(
+                pointer.artifact_id,
+                pointer.artifact_revision_id,
+                (pointer.member_path,),
+                manifest_version=f"evidence-bundle-{kind}-file-set/1.0",
+            )
+            payloads.append(member.payload)
+        document = json.loads(payloads[0])
+        validate_contract("evidence-bundle-manifest-v5", document)
+        manifest = EvidenceBundleManifestV5.model_validate(document)
+        if (
+            canonical_json_bytes(manifest) != payloads[0]
+            or any(
+                getattr(manifest, field) != getattr(publication, field)
+                for field in (
+                    "evidence_bundle_id",
+                    "evidence_bundle_revision_id",
+                    "revision_number",
+                    "retrieval_request_id",
+                    "retrieval_request_sha256",
+                    "graph_snapshot",
+                    "access_policy_revision_id",
+                    "access_policy_sha256",
+                    "requester_permissions_sha256",
+                    "budget",
+                    "manifest_sha256",
+                )
+            )
+            or manifest.materials.context_markdown != publication.context_artifact
+            or manifest.created_at != publication.published_at
+            or any(
+                entry.source.source_class not in original.source_classes
+                for entry in manifest.entries
+            )
+        ):
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_PUBLICATION_INVALID", "immutable Item evidence differs"
+            )
+        return manifest
 
     @staticmethod
     def _require_solution_evidence_result(

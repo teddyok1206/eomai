@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/system-rag-authoring-reference/1.0",
+  "title": "Pinned official Evidence reference selection for ordinary authoring",
+  "description": "Read-only API-to-Catalog pointer operation. Actor metadata is not authentication or authority. No vector query, publication, Item write or queue submission.",
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "actor": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+    "selection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["evidence_id", "source_item_revision_id", "source_sha256", "solution_pointer_sha256"],
+      "properties": {
+        "evidence_id": {"type": "string", "pattern": "^evidenceitem_[0-9a-f]{32}$"},
+        "source_item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+        "source_sha256": {"$ref": "#/$defs/hash"},
+        "solution_pointer_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "request": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "operation", "actor_id", "evidence"],
+      "properties": {
+        "schema_version": {"const": "system-rag-authoring-reference-request/1.0"},
+        "operation": {"const": "SELECT_ITEM_AUTHORING_REFERENCE"},
+        "actor_id": {"$ref": "#/$defs/actor"},
+        "evidence": {"$ref": "eom://schemas/knowledge/evidence-bundle-publication-result/5.0"}
+      }
+    },
+    "reply": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "operation", "status", "actor_id", "request_sha256", "selection", "error_code"],
+      "properties": {
+        "schema_version": {"const": "system-rag-authoring-reference-reply/1.0"},
+        "operation": {"const": "SELECT_ITEM_AUTHORING_REFERENCE"},
+        "status": {"enum": ["SELECTED", "UNAVAILABLE", "FAILED"]},
+        "actor_id": {"anyOf": [{"$ref": "#/$defs/actor"}, {"type": "null"}]},
+        "request_sha256": {"anyOf": [{"$ref": "#/$defs/hash"}, {"type": "null"}]},
+        "selection": {"anyOf": [{"$ref": "#/$defs/selection"}, {"type": "null"}]},
+        "error_code": {"enum": [null, "REFERENCE_NOT_OFFERED", "SOURCE_ACCESS_DENIED", "SOURCE_REVOKED", "SOURCE_POINTER_INVALID", "SOURCE_HASH_MISMATCH", "AUTHORITY_UNAVAILABLE", "AUTHORING_REFERENCE_REQUEST_INVALID", "AUTHORING_REFERENCE_UNAVAILABLE"]}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "SELECTED"}}, "required": ["status"]},
+          "then": {"properties": {"selection": {"$ref": "#/$defs/selection"}, "error_code": {"type": "null"}, "actor_id": {"$ref": "#/$defs/actor"}, "request_sha256": {"$ref": "#/$defs/hash"}}},
+          "else": {"properties": {"selection": {"type": "null"}, "error_code": {"type": "string"}}}
+        },
+        {
+          "if": {"properties": {"status": {"const": "UNAVAILABLE"}}, "required": ["status"]},
+          "then": {"properties": {"error_code": {"const": "REFERENCE_NOT_OFFERED"}, "actor_id": {"$ref": "#/$defs/actor"}, "request_sha256": {"$ref": "#/$defs/hash"}}}
+        },
+        {
+          "if": {"properties": {"status": {"const": "FAILED"}}, "required": ["status"]},
+          "then": {"properties": {"error_code": {"not": {"const": "REFERENCE_NOT_OFFERED"}}}}
+        },
+        {
+          "if": {"properties": {"actor_id": {"type": "null"}}, "required": ["actor_id"]},
+          "then": {"properties": {"request_sha256": {"type": "null"}}},
+          "else": {"properties": {"request_sha256": {"$ref": "#/$defs/hash"}}}
+        }
+      ]
+    }
+  },
+  "oneOf": [{"$ref": "#/$defs/selection"}, {"$ref": "#/$defs/request"}, {"$ref": "#/$defs/reply"}]
+}
