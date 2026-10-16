@@ -278,3 +278,39 @@ and same original request handling before claiming C1. The existing observer's
 600-second window ended PENDING at14:35:40; its process has since exited and its
 state is STOPPED, not an active login prompt or retained authenticated session.
 Do not ask for another login before the corrected installed boundary is ready.
+
+### Read-only mutex correction operating —14:43 UTC
+
+Candidate`0fab624c0cf0feee08431793861a9c2b9c8462f3` is pushed. Its normal three-wheel
+build/RECORD inspection passed; only the protected owner pair was installed.
+Platform wheel raw`5b5cd6ba35af00c5a74e586dbbe13564f6fc22da3512b5cd4967fbeeb0a640a5`,
+API-contract wheel raw`a457e949b32826b30a331f037f05de15246f5fb9620cc59e5490bdecbfee8d7e`.
+API/Web were not redeployed. The initial installer direct execution failed before
+installation because its protected script is0444; the existing explicit Bash
+invocation then passed. Script permissions were not widened and both logs remain.
+
+The finite selection helper raw`2f96b89a8d1de3b77585c1a90ce3e1cac5107572ee45f9ba29eea4b7d6fb62e6`
+saved both old files in`/var/lib/eom-query-readonly-0fab624c`. Its normal main-only
+SIGTERM drained the exact old QUERY invocation with status0/success and no remaining
+cgroup. Selection confirmed the original native units were never invoked and the
+dispatch marker absent; no DB/history repair occurred. Only the configuration's
+`owner_source_commit` changed. The unit differs only in source/configuration hash,
+not its permissions, mounts, CPU/runtime pins, provider or resource limits.
+
+New configuration raw`2a5986c33407cb3d9dc42843c8da36b1be54e7b5ac62200e69a25efc33878546`;
+unit raw`0165bced06d58127b3eb3dd713f686d6404ea925b448160123ce48c2364262ee`.
+Actual QUERY PID2312285/invocation`c0b2809fbe6b42f0ab7da4181ebfc9a4` emitted
+READY at14:41:20.667405 UTC, active/success/NRestarts0. In its real mount namespace,
+UID990/empty groups/NoNewPrivs confirmed ST_RDONLY on INDEX storage and successfully
+acquired/released the same mutex through the installed corrected adapter. This
+finite kernel-lock test made no DB write, native dispatch or model call. Additional
+owner/configuration/dependency tests30 PASS/14.98seconds; final focused28 PASS/
+6.60seconds overlap the earlier84 and must not be summed.
+
+**INSTALLED_READONLY_MUTEX_PASS / C1_AUTHENTICATED_COMPLETION_PENDING**. One new
+observer PID2313610 is alive at LOGIN in EOM1, after these actual prerequisites.
+It pins the same original request/key/Workflow, uses a new evidence file rather
+than overwriting old observations, keeps credentials only in memory and reads
+explicit observation-control replies from the terminal rather than launch stdin.
+One fresh-auth request was sent14:43 UTC. Do not recreate it or reask while live.
+Routine INDEX observation remains no earlier than14:47:30 UTC.

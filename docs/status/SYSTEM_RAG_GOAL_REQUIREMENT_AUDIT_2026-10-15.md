@@ -9,6 +9,18 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Latest operating correction14:43 UTC: QUERY owner0fab624c was built, protected
+  installed and selected after its exact old supervisor drained status0. Actual
+  READY14:41:20 and UID990/empty-groups/NoNewPrivs real flock acquired/released in
+  its read-only INDEX mount PASS. It corrects the existing adapter's O_RDWR/EROFS
+  mismatch without adding write access, changing numerical CPU/space/native pins,
+  INDEX15, API/Web, Graph/policy or any DB row. Source84+28+30 tests overlap and
+  are not summed; strict1/Ruff PASS. INDEX15's actual ACTIVE_QUERY deferral14:28
+  and READY resume14:29 are separately observed. Original HTTP authentication
+  succeeded14:25 but600-second observation ended PENDING; old process STOPPED.
+  One corrected same-key observer2313610 is now at LOGIN after installed gates;
+  no C1 completion claimed. CUDA remains NOT_ADMITTED; C1-C5/six real device
+  comparisons/full goal remain open. [Full operating correction](../architecture/NATIVE_CPU_INTERACTIVE_ADMISSION_DESIGN.md#read-only-mutex-correction-operating-1443-utc).
 - Latest bounded selection13:54 UTC: c6983332 cooperative CPU-admission source/
   guarded PostgreSQL/build/installed-owner/control selection PASS; INDEX15/
   resource30 was initially **SELECTED_NOT_STARTED**. Actual restart14:15:21 and
