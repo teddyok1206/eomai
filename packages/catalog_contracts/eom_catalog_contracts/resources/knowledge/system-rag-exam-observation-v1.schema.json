@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/system-rag-exam-observation/1.0",
+  "title": "Read-only fixed25 DOCUMENT pair observations",
+  "description": "No query execution, approval, same-solution judgement, or publication mutation.",
+  "$defs": {
+    "position": {"type": "integer", "minimum": 1, "maximum": 25},
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "consumer_purpose", "cohort", "graph_snapshot", "policy_revision_id", "policy_sha256", "source_classes", "views", "request_sha256"],
+      "properties": {
+        "schema_version": {"const": "system-rag-exam-observation-request/1.0"},
+        "consumer_purpose": {"const": "MOCK_EXAM_OBSERVATION"},
+        "cohort": {"$ref": "eom://schemas/assessment-assembly/mock-exam-assembly-cohort/1.0"},
+        "graph_snapshot": {"$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/request/properties/graph_snapshot"},
+        "policy_revision_id": {"$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/request/properties/policy_revision_id"},
+        "policy_sha256": {"$ref": "#/$defs/hash"},
+        "source_classes": {"$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/request/properties/source_classes"},
+        "views": {"type": "array", "minItems": 1, "maxItems": 3, "items": {"$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/viewSelection"}},
+        "request_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "member": {
+      "type": "object", "additionalProperties": false,
+      "required": ["position", "reference"],
+      "properties": {
+        "position": {"$ref": "#/$defs/position"},
+        "reference": {"$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/anchor"}
+      }
+    },
+    "row": {
+      "type": "object", "additionalProperties": false,
+      "required": ["position", "document_row"],
+      "properties": {
+        "position": {"$ref": "#/$defs/position"},
+        "document_row": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/rowRef"}
+      }
+    },
+    "pair": {
+      "type": "object", "additionalProperties": false,
+      "required": ["left_position", "right_position", "cosine_millionths"],
+      "properties": {
+        "left_position": {"$ref": "#/$defs/position"},
+        "right_position": {"$ref": "#/$defs/position"},
+        "cosine_millionths": {"type": "integer", "minimum": -1000000, "maximum": 1000000}
+      }
+    },
+    "view": {
+      "type": "object", "additionalProperties": false,
+      "required": ["view", "status", "rows", "pairs"],
+      "properties": {
+        "view": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/view"},
+        "status": {"enum": ["COMPLETE", "PARTIAL", "EMPTY", "INDEX_NOT_PREPARED"]},
+        "rows": {"type": "array", "maxItems": 25, "items": {"$ref": "#/$defs/row"}},
+        "pairs": {"type": "array", "maxItems": 300, "items": {"$ref": "#/$defs/pair"}}
+      }
+    },
+    "result": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "request", "status", "members", "views", "score_semantics", "result_sha256"],
+      "properties": {
+        "schema_version": {"const": "system-rag-exam-observation/1.0"},
+        "request": {"$ref": "#/$defs/request"},
+        "status": {"enum": ["READY", "PARTIAL", "EMPTY"]},
+        "members": {"type": "array", "minItems": 25, "maxItems": 25, "items": {"$ref": "#/$defs/member"}},
+        "views": {"type": "array", "minItems": 1, "maxItems": 3, "items": {"$ref": "#/$defs/view"}},
+        "score_semantics": {"const": "ROUNDED_DISPLAY_ONLY_NOT_SOLUTION_EQUALITY_OR_APPROVAL"},
+        "result_sha256": {"$ref": "#/$defs/hash"}
+      }
+    }
+  },
+  "oneOf": [{"$ref": "#/$defs/request"}, {"$ref": "#/$defs/result"}]
+}

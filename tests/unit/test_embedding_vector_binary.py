@@ -11,8 +11,23 @@ from eom_catalog_contracts.embedding_vector_binary import (
     EmbeddingVectorBinaryError,
     pack_unit_vectors,
     read_unit_vectors,
+    validate_unit_vector,
 )
 from eom_identifiers import sha256_bytes
+
+
+@pytest.mark.parametrize("dimension", (False, True, 0, -1, 4097, 2.0))
+def test_materialized_row_validation_keeps_the_same_bounded_shape_rule(dimension: Any) -> None:
+    with pytest.raises(EmbeddingVectorBinaryError, match="SHAPE_INVALID"):
+        validate_unit_vector((1.0, 0.0), dimension)
+
+
+def test_materialized_row_validation_neither_normalizes_nor_copies_binary() -> None:
+    values = (0.6, 0.8)
+    assert validate_unit_vector(values, 2) is None
+    assert values == (0.6, 0.8)
+    with pytest.raises(EmbeddingVectorBinaryError, match="NORM_INVALID"):
+        validate_unit_vector((3.0, 4.0), 2)
 
 
 def read(

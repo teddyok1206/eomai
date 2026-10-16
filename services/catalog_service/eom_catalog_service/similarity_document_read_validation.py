@@ -1,4 +1,4 @@
-"""Common exact source/binding/index closure for reference and private query consumers."""
+"""Exact source/binding/index closure for reference, private-query and exam consumers."""
 
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ def validate_prepared_similarity_sources(
     source_classes: tuple[str, ...],
     maximum_sources: int,
 ) -> dict[str, PreparedSimilaritySource]:
-    """The same exact metadata closure for both actually implemented query bases."""
+    """The same metadata closure for queries and fixed DOCUMENT cohort observations."""
     if type(values) is not tuple or len(values) > maximum_sources:
         raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
     sources: dict[str, PreparedSimilaritySource] = {}

@@ -12,6 +12,12 @@ note. The cohesive current [authoring-reference delta](SYSTEM_RAG_AUTHORING_REFE
 records shared authoring/review reference reads and the additive native request1.1.
 It does not activate consumers, add private-query semantics or supersede old evidence.
 
+The subsequent [fixed-cohort exam observation leaf](SYSTEM_RAG_EXAM_OBSERVATION_DESIGN.md)
+adds the distinct C5 DOCUMENT-to-DOCUMENT contract/composer and existing Catalog
+owner entrypoint. It does not pretend an approved document is a QUERY. Assembly/API
+exposure and installed authenticated acceptance remain pending; the historical
+consumer table below is not evidence of their activation.
+
 This is the consumer-side boundary for
 [the agreed design](SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md), not a replacement
 for it. Persistent vector execution, host/runtime closure, actual Identity fences, service IAM,

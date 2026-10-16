@@ -429,6 +429,12 @@ from eom_catalog_contracts.embedding_runtime_bundle import (
     validate_embedding_payload_manifest,
     validate_embedding_runtime_bundle_pointer,
 )
+from eom_catalog_contracts.exam_similarity_observation import (
+    ExamObservationRequest,
+    ExamSimilarityObservation,
+    parse_exam_observation_request,
+    parse_exam_similarity_observation,
+)
 from eom_catalog_contracts.guidance_document import (
     EOM_GUIDANCE_MARKDOWN_MAX_BYTES,
     EOM_GUIDANCE_MARKDOWN_MEDIA_TYPE,
@@ -1406,6 +1412,8 @@ __all__ = [
     "EvidenceEntryV3",
     "EvidenceEntryV4",
     "EvidenceEntryV5",
+    "ExamObservationRequest",
+    "ExamSimilarityObservation",
     "ExecuteKnowledgeAnalysisRange",
     "ExtractionValidationDiagnosis",
     "FailedSimilarityContext",
@@ -1905,6 +1913,8 @@ __all__ = [
     "parse_embedding_registration_command",
     "parse_embedding_registration_result",
     "parse_embedding_runtime_bundle",
+    "parse_exam_observation_request",
+    "parse_exam_similarity_observation",
     "parse_guidance_markdown",
     "parse_host_configuration_pointer",
     "parse_host_configuration_snapshot",

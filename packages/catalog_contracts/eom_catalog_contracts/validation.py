@@ -30,6 +30,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "system-rag-exam-observation": CatalogSchemaResource(
+            "schemas/knowledge/system-rag-exam-observation-v1.schema.json",
+            "resources/knowledge/system-rag-exam-observation-v1.schema.json",
+            "1.0",
+            "sha256:4eb128c0d2b38f785b00366dc8213f419adb06ae125fa147c29bc4c950db0c46",
+        ),
         "embedding-native-runtime-config-v1.2": CatalogSchemaResource(
             "schemas/knowledge/embedding-native-runtime-config-v1.2.schema.json",
             "resources/knowledge/embedding-native-runtime-config-v1.2.schema.json",
