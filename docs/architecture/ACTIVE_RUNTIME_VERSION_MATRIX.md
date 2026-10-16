@@ -268,6 +268,16 @@ source-free2-wheel301-module 검증 PASS. 아직 운영 미설치·미활성이�
 Web-Conda import/설치 시뮬레이션48파일 PASS. Native 준비·selector의 source-free2-wheel
 301-module 검사도 PASS이나 실제 운영 신원·caller 검증을 대체하지 않는다.
 
+QUERY 실행기 접속 수정 후속 `1dd35b9a`는 별도 보호 prefix로 설치하고 실제 선택했다.
+API/platform/contracts2857bf77, 자동 INDEX2a4843c3, Web/Pack 활성 선택은 변경하지 않았다.
+Catalog용 접속 자격을 잘못 사용하던 QUERY 서비스만 기존에 pin한 eom_app 역할로 맞췄고,
+실제 READ ONLY 기동 검사에서 role/OID를 먼저 확인한다. source183·임시 DB178·타입1,
+3-wheel/RECORD/OpenAPI·source-free2-wheel301-module 및 실제 UID990 사전검사 PASS.
+QUERY 서비스 READY/active/enabled, PID1496865/invocation de6e8fab…; 다른3개 서비스의
+PID/invocation은 보존했다. 과거 할당 없는 비종결 기록은 별도 분류해 보존하며 재실행하지
+않았다. 이 운영 접속 수정은 아직 같은 요청의 실제 HTTP 조회 검증 완료를 뜻하지 않는다.
+[현재 선택·실제 검증 구분](REFERENCE_QUERY_OWNER_SERVICE_DESIGN.md#actual-protected-selection).
+
 ## 보존·정리 규칙
 
 - immutable row, manifest, receipt, release, Workflow, Item Revision 또는 rebuild/validation 경로가

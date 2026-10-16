@@ -250,3 +250,36 @@ PUBLISH_ITEM_SIMILARITY_CONTEXT connections close before dispatch. Its separatel
 allowed READ_WORKFLOW_SIMILARITY_MATERIALS reached only schema rejection for a
 deliberately incomplete frame, no source/DB/model read. These three OS-peer probes
 do not prove a valid role request's current source/plan authorization.
+
+## 2026-10-16 scoped controller-role correction
+
+The original05:37 UTC HTTP login succeeded, but preparation stopped with
+AUTHORITY_UNAVAILABLE before creating a Workflow. A finite read-only unit using
+the service's actual EnvironmentFile confirmed eom_catalog_manager_runtime/OID94661
+instead of the configured eom_app/OID16385. The earlier outside-service native-
+controller probe was healthy but did not test that inherited credential selection.
+
+Source1dd35b9a adds a READ ONLY actual role/OID startup check and a QUERY-only
+fixed protected environment. Source183/type1 and final guarded PG178 PASS; strict
+eom_app-only deployment schema is preserved. Standard build/three RECORDs/OpenAPI,
+two-wheel301-module source-free composition, protected pair install and actual
+UID990/provider/control/launcher preflight PASS. Numerical/model/capture calls0.
+
+The initially counted PROCESSING row is the exact known pre-atomic historical
+workflow38a7254f, with expired lease/no original allocation/no current physical
+unit. It remains untouched/non-terminal, not recovered or made successful. Only
+after its fresh original-identity check did protected credential preparation and
+QUERY-only selection proceed. No Catalog IAM UPDATE, schema/grants, API/Catalog/
+INDEX credential or policy/TTL change. CPU and consumer feature flags unchanged.
+
+Current native QUERY source:`1dd35b9a859f499580f6b5704e873cb7625aec8c`.
+Active/success/enabled PID1496865, invocation`de6e8fabd34c44a982bae93b569735a0`.
+Config raw SHA`72c8b522949e3c3fb6d2644d363221ecd0b778399cfdc3ebfa607cdb26371494`;
+unit raw SHA`1587e09469ed8430ec9de6d0b16b933971f6a38e5b667e082463a960c7786fcb`.
+Other API/Catalog/INDEX PIDs/invocations were preserved. Rollback non-secret files
+and receipt:`/var/lib/eom-release-operator-stage.2857bf77-6g9mpdap/query-controller-1dd35b9a`.
+
+Same original HTTP request/key is now continued by a one-login in-memory operator
+program; it was waiting for Studio login at06:18 UTC. Original05:37 failed evidence
+is preserved. Deployment READY is not a genuine HTTP/source/worker acceptance.
+[Detailed design, closure and operational evidence](../architecture/REFERENCE_QUERY_OWNER_SERVICE_DESIGN.md#actual-protected-selection).

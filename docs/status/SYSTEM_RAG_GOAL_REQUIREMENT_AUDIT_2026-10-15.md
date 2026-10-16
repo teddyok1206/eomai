@@ -8,6 +8,16 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Current QUERY owner is now source1dd35b9a, actually selected/READY/enabled after
+  the scoped credential-role correction. Actual UID990 startup/provider/control/
+  launcher preflight PASS; API/Catalog/INDEX PIDs/invocations unchanged, no new query
+  or model run during deployment. The new fixed environment is root0600; no role,
+  policy, TTL, DB/schema or other credential change. Config raw72c8b522…/unit1587e094…;
+  non-secret rollback stage ends`query-controller-1dd35b9a`. Original pending row
+  was independently identified as known unallocated pre-atomic history, expired
+  lease/no launch/no active physical unit; it remains non-terminal and untouched.
+  Genuine original HTTP continuation is waiting for its one fresh Studio login
+  (PID1499680 at06:18 UTC), not accepted as a query/replay/current-read PASS.
 - Original genuine HTTP gate at05:37:55 UTC: actual guiadmin login PASS; unchanged
   request preparation FAILED/AUTHORITY_UNAVAILABLE at05:37:59, workflow_id=null.
   No native run, replacement key or automatic login retry. The old process exited
@@ -16,18 +26,20 @@ summed into a single acceptance count. This ledger does not grant authority.
   Actual UID990/same-EnvironmentFile read-only probe05:50:54 confirms the cause:
   service uses Catalog runtime role/OID94661, not configured eom_app/OID16385,
   and lacks the required IAM locking context. Current user/session/permissions
-  are valid. Scoped connection correction/startup guard is under verification;
-  no Catalog grants, IAM rows, TTL or source policy were changed.
+  are valid. The scoped correction/startup guard is now selected as above;
+  genuine HTTP end-to-end verification stays OPEN. No Catalog grants, IAM rows,
+  TTL or source policy were changed.
 - Candidate62198a23 standard build/three RECORDs/OpenAPI and source-free301-module
   proof PASS. Protected owner-pair installation PASS, INACTIVE. Its template is
   still the pre-correction environment; it is not the corrected selected service.
 - Scoped role-selection successor: QUERY-only fixed protected environment and
   actual role/OID READ ONLY startup check, source183/type1/guarded PG178 PASS.
   The production eom_app-only schema is unchanged. Preparing its unused protected
-  credential environment STOPPED before file creation after discovering one
-  existing non-terminal QUERY command. No service restart, DB mutation, grant,
-  replacement key or runtime selection. Next classify that original command and
-  physical outcome, then use only supported reconciliation/compatible selection.
+  credential environment initially STOPPED before file creation after discovering
+  one existing non-terminal QUERY command. That first STOP made no service/DB/
+  grant/selection change. Its exact historical unallocated/expired identity was
+  then independently verified and preserved before the explicit selection above;
+  the original failed preflight and all non-terminal history remain recorded.
 - Added actual guarded V5 original-publication/read tests reproduce a source-only
   candidate missing-prefetch defect. Existing two-pair batched Artifact metadata
   prefetch fixes it without changing source/hash/permission rules. Corrected PG175
@@ -71,8 +83,10 @@ summed into a single acceptance count. This ledger does not grant authority.
   Reviewed INDEX
   code`2a4843c3` is independently packaged/installed. Documentation successors do
   not silently select another source release.
-- API/platform/contracts2857bf77 and native QUERY owner8c411041 remain selected.
-  The separate83bad async Item-start candidate is staged, not activated.
+- API/platform/contracts2857bf77 remain selected. Native QUERY8c411041 is the
+  preserved predecessor, replaced only by the explicit1dd35b9a selection above.
+  The separate83bad async Item-start candidate is staged, not activated; API/Web
+  ordinary/reference flags and the active Content Pack remain unchanged.
 - Latest INDEX selection is Identity13/resource26/source2a4843c3. Three genuine1.3
   membership-refresh commands completed once and drained; independent READ ONLY
   canonical audit PASS at02:39:30 UTC: encodings21/bindings21 preserved, logical
@@ -101,6 +115,11 @@ summed into a single acceptance count. This ledger does not grant authority.
   one PROCESSING/RUNNING (attempt/generation1) and one PENDING/REQUESTED (0/0).
   Same process/invocation, active/success/enabled, no restart or manual submission;
   this still does not update canonical vector bytes/counts/coverage.
+  Scheduled read-only observation06:18:39 UTC found19 SUCCEEDED/COMPLETED,
+  one PROCESSING/REQUESTED and one PENDING/REQUESTED, maximum attempts1.
+  Same INDEX process/invocation, active/success/enabled, Restart=no. This is not
+  a canonical vector/count/coverage audit; next routine observation no earlier
+  than06:48:39 UTC.
 - The new authoring/review reference source foundation adds native request1.1
   without widening strict1.0. Source regression1971, final affected boundary234,
   handoff47 and guarded PG132 PASS (overlapping inventories not summed), strict
@@ -165,7 +184,7 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 | Consumer requirement | Current actual state | Next required end state |
 | --- | --- | --- |
-| C1. One common candidate/evidence boundary | Common Catalog context and original bounded native QUERY→same-key replay→exact context read accepted at partial2/520; protected HTTP route/service installed. Actual05:37 login PASS but original preparation FAILED/AUTHORITY_UNAVAILABLE before Workflow/launch | Diagnose the exact owner authority failure, preserve original key/failed observation, then finish supported same-request preparation/replay/current-read. No automatic replacement login or authority bypass. |
+| C1. One common candidate/evidence boundary | Common context and prior bounded QUERY/replay/read accepted at partial2/520. Actual05:37 login PASS, original preparation FAILED before Workflow due confirmed wrong controller credential. QUERY-only1dd35b9a correction is now actually READY with UID990 preflight; other services unchanged | Finish the same original HTTP preparation/replay/current-read. Fresh one-login continuation waits in original pane and retains its session if observation stops; original failure/key/history preserved. READY startup is not a source/HTTP PASS. |
 | C2. 1:1 reference variation | Source/API/BFF/browser/disposable plan23 tests and inactive compatible83bad release; Pack1.20.17 released inactive | Activate reviewed compatible components in dependency order after held HTTP terminal; run one bounded genuine Item and inspect actual author/review context and maximum-three-pass behavior. Only then enable Web flag. |
 | C3. New authoring and review | Web/HTTP ordinary start→official-Evidence selector→preparation1.1/ITEM_AUTHORING→first plan24→existing role delivery implemented. Explicit exact-hash no-offer/audit preserves normal plan19 for legitimate absence/unrequested class, never denial/PENDING. Candidate f37ae7be: source1856/final focused112/PG162/type8/build/API+Web wheels PASS, no count sum | SOURCE/DISPOSABLE/PACKAGE_PASS, NOT_INSTALLED/ACTIVE. Plan23/QUERY1.0 stay strict; every review shares the original reference, not private-draft vector comparison. Genuine current-user/source/worker acceptance and compatible activation remain required; private intent/result vector bases are NOT_IMPLEMENTED. |
 | C4. General→ChatGPT read-only discovery | Existing textbook/past-exam GraphRAG tools remain available; this goal's vector candidate tool/use-case is not implemented/activated | Connect the same official context with actual chat operator permissions, citations, explicit partial/unavailable and no Item write/approval/delete authority. |

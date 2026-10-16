@@ -294,7 +294,9 @@ They remain metadata evidence, not proof of correct service credential selection
 7. Complexity: O(1) bounded startup metadata observation. Request work is unchanged.
 8. Transaction/concurrency: read-only root, no IAM locks or mutations. Publish a
    root-only fixed service environment before selecting its new unit. No restart
-   while any original QUERY command/driver execution remains unresolved.
+   while an executable/current claim, driver or physical execution is unresolved.
+   Historical non-terminal rows require explicit original-allocation/lease/physical
+   classification, not blanket success, deletion or automatic retry.
 9. Ownership/dependency: the protected release owner materializes the existing
    controller URL only in `/etc/eom/secrets/reference-query-owner.env` (root0600).
    PID1 loads it for this owner; the service cannot read that file directly.
@@ -332,3 +334,44 @@ This is not the latest HTTP call, which had workflow_id=null. Classify that
 original command/physical execution before any service restart or supported
 reconciliation; do not terminalize it or submit another key to satisfy deployment.
 Evidence prefix:`/tmp/eom-identity-provider-install.nAaycoDM/query-database-role-`.
+
+### Actual protected selection
+
+The row was subsequently identified as the exact preserved pre-atomic
+`workflow_38a7254f053449739ef31f5d535ff604`/original command described in
+[the historical acceptance](../status/REFERENCE_QUERY_LIVE_ACCEPTANCE_2026-10-15.md).
+Fresh read-only inspection verifies its original request hash/step, expired
+lease since10/15 16:33:57 UTC, attempt/generation1, no output or native launch Job,
+and no active physical QUERY units. Thus executable QUERY work=0, preserved
+unallocated non-terminal history=1. None of those rows was edited or retried.
+
+The root-only fixed environment was then created0600 from the existing protected
+controller credential after exact role/OID checks. API/Catalog/INDEX credentials,
+roles/grants, schema and policies are unchanged. The first conservative STOP is
+preserved; it is not reclassified as a successful write. Corrected candidate
+`1dd35b9a859f499580f6b5704e873cb7625aec8c` passes standard3-wheel/RECORD/OpenAPI,
+source-free2-wheel301-module/legacy wire proof and protected pair installation.
+An actual fixed-systemd UID990/no-groups/no-retained-capabilities preflight passes
+the new startup role guard, installed provider, exact controls and physical
+launcher readiness, without a socket, human capture, claim or model launch.
+
+Only the QUERY service was then replaced and observed READY, active/success and
+still enabled: PID1496865, invocation`de6e8fabd34c44a982bae93b569735a0`.
+Configuration raw SHA`72c8b522949e3c3fb6d2644d363221ecd0b778399cfdc3ebfa607cdb26371494`;
+unit raw SHA`1587e09469ed8430ec9de6d0b16b933971f6a38e5b667e082463a960c7786fcb`.
+API/Catalog/INDEX process and invocation identities were independently preserved.
+Rollback non-secret unit/config/receipt:
+`/var/lib/eom-release-operator-stage.2857bf77-6g9mpdap/query-controller-1dd35b9a`.
+No source/DB state, old failure, Artifact, query key or numerical default changed.
+
+This closes the installed connection defect, not the full genuine HTTP/source
+gate. The first script had already exited and discarded its token. A continuation
+uses the exact original request/key and one fresh actual guiadmin login, retaining
+its session in memory if an observation stops. It supports only explicit same-key
+re-observation after diagnosis, no automatic login/new key/model retry. No password,
+token or cookie is written. It was waiting at its one new prompt at06:18 UTC.
+
+Actual evidence: `query-service-database-diagnosis.log`,
+`query-original-history-quiescence.log`, `query-controller-environment-prepared.log`,
+`query-controller-actual-preflight.log`, `query-controller-selection.log`, plus
+source/build/install logs under`/tmp/eom-identity-provider-install.nAaycoDM`.
