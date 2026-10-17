@@ -44,6 +44,18 @@ from eom_catalog_service.embedding_benchmark_launch import (
     benchmark_launch_environment_bytes,
 )
 from eom_catalog_service.embedding_benchmark_layout import BENCHMARK_HANDOFF_ROOT
+from eom_catalog_service.embedding_benchmark_unit_control import (
+    CUDA_BENCHMARK_SOCKET as CUDA_BENCHMARK_SOCKET,
+)
+from eom_catalog_service.embedding_benchmark_unit_control import (
+    CUDA_BENCHMARK_SOCKET_SHA256 as CUDA_BENCHMARK_SOCKET_SHA256,
+)
+from eom_catalog_service.embedding_benchmark_unit_control import (
+    CUDA_BENCHMARK_TEMPLATE as CUDA_BENCHMARK_TEMPLATE,
+)
+from eom_catalog_service.embedding_benchmark_unit_control import (
+    CUDA_BENCHMARK_TEMPLATE_SHA256 as CUDA_BENCHMARK_TEMPLATE_SHA256,
+)
 from eom_catalog_service.embedding_cuda_probe_gpu_clients import observe_cuda_probe_gpu_clients
 from eom_catalog_service.embedding_cuda_probe_resource_observation import (
     CudaProbeResourceObservation,
@@ -77,14 +89,6 @@ if TYPE_CHECKING:
     from eom_catalog_service.embedding_cuda_host_closure import ProtectedCudaEmbeddingHostClosure
     from eom_catalog_service.embedding_runtime_prefix_closure import PrefixRuntimeInventory
 
-CUDA_BENCHMARK_TEMPLATE = "eom-embedding-benchmark-cuda@.service"
-CUDA_BENCHMARK_SOCKET = "eom-embedding-benchmark-cuda@.socket"
-CUDA_BENCHMARK_TEMPLATE_SHA256 = (
-    "sha256:5955e54a578c5f547019298525eb44a8d8814fcbf8afb0070861a3b0a815b6eb"
-)
-CUDA_BENCHMARK_SOCKET_SHA256 = (
-    "sha256:81a5b7fb034402baf1255635321ef480f2b5a48cbbe35b050c6ceaa25dfa4b0f"
-)
 _ROOT = BENCHMARK_HANDOFF_ROOT
 _PREFIX = Path("/opt/eom/conda/envs/eom-embedding-cuda")
 _READY_IMPLEMENTATIONS = (

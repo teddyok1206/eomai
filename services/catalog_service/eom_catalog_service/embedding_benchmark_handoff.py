@@ -458,6 +458,54 @@ def prepare_benchmark_environment(
     )
 
 
+def capture_prepared_benchmark_environment(
+    invocation: BenchmarkWorkerInvocation,
+    environment: PreparedBenchmarkEnvironment,
+    *,
+    backend: NativeEmbeddingBackendPins,
+) -> NumericalRuntimeFileSnapshots:
+    """Read exact root launch/config/receipt epochs; no source, input text or unit effects.
+
+    Current owner/deadline and actual service admission are the calling driver's
+    responsibility. Keeping this read usable after expiry permits honest late cleanup.
+    """
+    if os.geteuid() != _ROOT_UID:
+        raise BenchmarkHandoffError("BENCHMARK_HANDOFF_ROOT_REQUIRED")
+    invocation_raw = embedding_device_benchmark_bytes(invocation)
+    _require(type(environment) is PreparedBenchmarkEnvironment)
+    pins = BenchmarkLaunchPins(
+        invocation.execution_id,
+        sha256_bytes(invocation_raw),
+        environment.owner_pid,
+        environment.expires_ns,
+        backend,
+    )
+    environment_raw = benchmark_launch_environment_bytes(pins)
+    _require(
+        environment.execution_id == invocation.execution_id
+        and environment.job_id == invocation.job_id
+        and environment.state == "STAGED_NOT_LAUNCHED"
+        and environment.environment_raw_sha256 == sha256_bytes(environment_raw)
+    )
+    files = NumericalRuntimeFileSnapshots(_ROOT_UID)
+    execution = _HANDOFF_ROOT / invocation.execution_id
+    for name, payload in (("invocation.json", invocation_raw), ("launch.env", environment_raw)):
+        path = execution / name
+        _require(
+            files.read(path, sha256=sha256_bytes(payload), maximum=MAX_BENCHMARK_ENVELOPE_BYTES)
+            == payload
+        )
+        metadata = path.lstat()
+        _require(
+            stat.S_IMODE(metadata.st_mode) == 0o600
+            and metadata.st_gid == _ROOT_GID
+            and not _ACL_NAMES.intersection(os.listxattr(path))
+        )
+    _validate_environment_installation(files, invocation, backend)
+    files.assert_unchanged()
+    return files
+
+
 def prepare_cpu_benchmark_environment(
     prepared: PreparedBenchmarkHandoff,
     invocation: BenchmarkWorkerInvocation,

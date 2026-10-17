@@ -88,6 +88,54 @@ def test_eight_exact_nonsecret_fields_roundtrip_into_existing_cpu_argument_parse
     assert path.stat().st_ino == inode and path.read_bytes() == raw
 
 
+def test_launch_capture_reuses_exact_root_environment_and_config_without_copying_inputs(
+    staged, monkeypatch
+):
+    root, metadata = staged
+    environment = prepare(metadata)
+    reads = []
+    original_read = handoff.NumericalRuntimeFileSnapshots.read
+
+    def read(files, path, **kwargs):
+        reads.append(path.name)
+        return original_read(files, path, **kwargs)
+
+    monkeypatch.setattr(handoff.NumericalRuntimeFileSnapshots, "read", read)
+    captured = handoff.capture_prepared_benchmark_environment(
+        metadata.invocation, environment, backend=metadata.backend
+    )
+    assert "benchmark-inputs.json" not in reads
+    captured.assert_unchanged()
+    # A captured epoch is not permission to silently accept a changed launch file.
+    (root / metadata.invocation.execution_id / "launch.env").chmod(0o640)
+    with pytest.raises(ValueError):
+        captured.assert_unchanged()
+    with pytest.raises(ValueError):
+        handoff.capture_prepared_benchmark_environment(
+            metadata.invocation, environment, backend=metadata.backend
+        )
+
+
+@pytest.mark.parametrize("fault", ("job", "hash", "state"))
+def test_launch_capture_rejects_foreign_environment_before_any_recovery(staged, fault):
+    root, metadata = staged
+    environment = prepare(metadata)
+    changed = replace(
+        environment,
+        **{
+            "job": {"job_id": "job_" + "a" * 32},
+            "hash": {"environment_raw_sha256": "sha256:" + "0" * 64},
+            "state": {"state": "ALREADY_LAUNCHED"},
+        }[fault],
+    )
+    before = (root / metadata.invocation.execution_id / "launch.env").read_bytes()
+    with pytest.raises(ValueError):
+        handoff.capture_prepared_benchmark_environment(
+            metadata.invocation, changed, backend=metadata.backend
+        )
+    assert (root / metadata.invocation.execution_id / "launch.env").read_bytes() == before
+
+
 def test_current_cpu_v11_configuration_stages_without_legacy_conversion(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

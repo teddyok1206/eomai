@@ -6,7 +6,8 @@ import struct
 from pathlib import Path
 from typing import Literal
 
-BENCHMARK_CUDA_LIFETIME_ROOT = Path("/opt/eom/embedding-benchmark-lifetimes")
+BENCHMARK_LIFETIME_ROOT = Path("/opt/eom/embedding-benchmark-lifetimes")
+BENCHMARK_CUDA_LIFETIME_ROOT = BENCHMARK_LIFETIME_ROOT
 BENCHMARK_HANDOFF_ROOT = Path("/run/eom-incremental-embeddings/benchmark")
 
 

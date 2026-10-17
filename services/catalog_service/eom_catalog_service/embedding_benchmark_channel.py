@@ -13,7 +13,9 @@ import stat
 import struct
 import time
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
+from typing import Self
 
 from eom_catalog_contracts.embedding_device_benchmark import (
     MAX_BENCHMARK_ENVELOPE_BYTES,
@@ -77,12 +79,14 @@ class _Frames:
         expires_ns: int,
         *,
         wait_observer: Callable[[], None] | None = None,
+        expected_sender: BenchmarkUnixPeer | None = None,
     ) -> None:
         self.connection = connection
         self.peer = expected_peer
         self.peer_fence = peer_fence
         self.expires_ns = expires_ns
         self.wait_observer = wait_observer
+        self.expected_sender = expected_sender
         self.failed = False
         self.closed = False
         try:
@@ -94,9 +98,12 @@ class _Frames:
                 or type(expires_ns) is not int
                 or not now < expires_ns <= now + 180 * 10**9
                 or (wait_observer is not None and not callable(wait_observer))
+                or (expected_sender is not None and type(expected_sender) is not BenchmarkUnixPeer)
             ):
                 raise BenchmarkChannelError("EMBEDDING_BENCHMARK_CHANNEL_INVALID")
             expected_peer.__post_init__()
+            if expected_sender is not None:
+                expected_sender.__post_init__()
             descriptor = connection.fileno()
             value = os.fstat(descriptor)
             if (
@@ -138,6 +145,11 @@ class _Frames:
         # MSG_DONTWAIT calls and can overrun the channel's absolute deadline.
         if self.connection.gettimeout() not in (None, 0.0):
             raise BenchmarkChannelError("EMBEDDING_BENCHMARK_CHANNEL_CHANGED")
+        if (
+            self.expected_sender is not None
+            and self.connection.getsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED) != 1
+        ):
+            raise BenchmarkChannelError("EMBEDDING_BENCHMARK_SENDER_CREDENTIALS_REQUIRED")
         descriptor = self.connection.fileno()
         value = os.fstat(descriptor)
         if self.identity != (descriptor, value.st_dev, value.st_ino, value.st_mode):
@@ -176,7 +188,11 @@ class _Frames:
         while remaining:
             self.check()
             try:
-                part = self.connection.recv(remaining, socket.MSG_DONTWAIT)
+                part = (
+                    self.connection.recv(remaining, socket.MSG_DONTWAIT)
+                    if self.expected_sender is None
+                    else self._read_sender_bytes(remaining)
+                )
             except BlockingIOError:
                 self.wait(selectors.EVENT_READ)
                 continue
@@ -186,6 +202,40 @@ class _Frames:
             remaining -= len(part)
         self.check()
         return b"".join(parts)
+
+    def _read_sender_bytes(self, count: int) -> bytes:
+        """SCM credentials attest the writer, independently of an inherited listener.
+
+        Unexpected SCM_RIGHTS already materialize owned duplicate FDs in this
+        process. Close every delivered duplicate before refusing ancillary data.
+        MSG_CMSG_CLOEXEC prevents a concurrent child from inheriting them.
+        """
+        part, ancillary, flags, _ = self.connection.recvmsg(
+            count,
+            socket.CMSG_SPACE(_CREDENTIALS.size) + socket.CMSG_SPACE(16 * 4),
+            socket.MSG_DONTWAIT | socket.MSG_CMSG_CLOEXEC,
+        )
+        unexpected = False
+        closed: set[int] = set()
+        for level, kind, value in ancillary:
+            if level == socket.SOL_SOCKET and kind == socket.SCM_RIGHTS:
+                unexpected = True
+                for (descriptor,) in struct.iter_unpack("=i", value[: len(value) // 4 * 4]):
+                    if descriptor not in closed:
+                        # Refuse the message after attempting every owned duplicate.
+                        with suppress(OSError):
+                            os.close(descriptor)
+                        closed.add(descriptor)
+        if (
+            unexpected
+            or flags & (socket.MSG_CTRUNC | socket.MSG_TRUNC)
+            or len(ancillary) != 1
+            or ancillary[0][:2] != (socket.SOL_SOCKET, socket.SCM_CREDENTIALS)
+            or len(ancillary[0][2]) != _CREDENTIALS.size
+            or BenchmarkUnixPeer(*_CREDENTIALS.unpack(ancillary[0][2])) != self.expected_sender
+        ):
+            raise BenchmarkChannelError("EMBEDDING_BENCHMARK_SENDER_CHANGED")
+        return part
 
     def _receive_message(self) -> BenchmarkCheckpoint | BenchmarkAck | BenchmarkResourceEvidence:
         count = _LENGTH.unpack(self.read(_LENGTH.size))[0]
@@ -450,11 +500,48 @@ class BenchmarkOwnerChannel:
         expires_ns: int,
     ) -> None:
         frames = _Frames(connection, expected_peer, peer_fence, expires_ns)
+        self._initialize(frames, invocation, continuation_fence)
+
+    def _initialize(
+        self,
+        frames: _Frames,
+        invocation: BenchmarkWorkerInvocation,
+        continuation_fence: ContinuationFence,
+    ) -> None:
         if not callable(continuation_fence):
             frames.invalidate()
             raise BenchmarkChannelError("EMBEDDING_BENCHMARK_CONTINUATION_REQUIRED")
         self._continuation = continuation_fence
         self._exchange = _Exchange(frames, invocation)
+
+    @classmethod
+    def from_activated_listener(
+        cls,
+        connection: socket.socket,
+        invocation: BenchmarkWorkerInvocation,
+        *,
+        expected_listener: BenchmarkUnixPeer,
+        expected_sender: BenchmarkUnixPeer,
+        peer_fence: PeerFence,
+        continuation_fence: ContinuationFence,
+        expires_ns: int,
+    ) -> Self:
+        """Keep actual listener SO_PEERCRED and actual per-message writer separate.
+
+        Trusted composition captures both identities and enables SO_PASSCRED before
+        connect. This factory never replaces an observed listener with a native PID,
+        derives authority from message claims or attests a live systemd unit itself.
+        """
+        frames = _Frames(
+            connection,
+            expected_listener,
+            peer_fence,
+            expires_ns,
+            expected_sender=expected_sender,
+        )
+        endpoint = cls.__new__(cls)
+        endpoint._initialize(frames, invocation, continuation_fence)
+        return endpoint
 
     def receive_checkpoint(self) -> BenchmarkCheckpoint:
         try:

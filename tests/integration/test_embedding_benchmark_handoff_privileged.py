@@ -17,7 +17,7 @@ from eom_catalog_contracts.embedding_device_benchmark import benchmark_sample_pr
 from eom_catalog_service import embedding_benchmark_activation as activation
 from eom_catalog_service import embedding_benchmark_handoff as handoff
 from eom_catalog_service import embedding_device_benchmark_files as capture
-from eom_catalog_service.embedding_benchmark_channel import BenchmarkUnixPeer
+from eom_catalog_service.embedding_benchmark_channel import BenchmarkOwnerChannel, BenchmarkUnixPeer
 from eom_catalog_service.embedding_device_benchmark_files import BenchmarkWorkerLocalFiles
 from eom_catalog_service.embedding_runtime_files import fixed_native_embedding_profile
 
@@ -27,6 +27,8 @@ from tests.unit.embedding_benchmark_environment_fixtures import (
 )
 from tests.unit.embedding_device_benchmark_fixtures import (
     owner_request,
+    resources,
+    session,
     staged_inputs,
     worker_invocation,
 )
@@ -181,6 +183,7 @@ def test_real_native_accepts_exact_workflow_owner_peer_without_binding_or_model(
         listener.listen(1)
         listener.setblocking(False)
         go_read, go_write = os.pipe2(os.O_CLOEXEC)
+        creator_pid = os.getpid()
         children: set[int] = set()
         try:
             owner_pid = os.fork()
@@ -191,11 +194,26 @@ def test_real_native_accepts_exact_workflow_owner_peer_without_binding_or_model(
                     os.setuid(owner.pw_uid)
                     listener.close()  # Owner is only the client, not an accept-capability holder.
                     os.close(go_write)
-                    assert os.read(go_read, 1) == b"1"
+                    native_sender = int(os.read(go_read, 64).decode("ascii").strip())
                     client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                    client.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
                     client.connect(str(path))
-                    assert client.recv(1) == b""
-                    client.close()
+                    channel = BenchmarkOwnerChannel.from_activated_listener(
+                        client,
+                        invocation,
+                        expected_listener=BenchmarkUnixPeer(creator_pid, 0, 0),
+                        expected_sender=BenchmarkUnixPeer(
+                            native_sender, native.pw_uid, native.pw_gid
+                        ),
+                        peer_fence=lambda actual: None,
+                        continuation_fence=lambda value: None,
+                        expires_ns=time.monotonic_ns() + 10 * 10**9,
+                    )
+                    for checkpoint in session(1).checkpoints:
+                        assert channel.receive_checkpoint() == checkpoint
+                        channel.acknowledge()
+                    assert channel.finalize_resources(finalizer=lambda value: value) == resources(1)
+                    channel.close()
                     os._exit(0)
                 except BaseException:
                     os._exit(1)
@@ -216,17 +234,21 @@ def test_real_native_accepts_exact_workflow_owner_peer_without_binding_or_model(
                         activation_fd=listener.fileno(),
                         expected_peer=BenchmarkUnixPeer(owner_pid, owner.pw_uid, owner.pw_gid),
                         peer_fence=lambda actual: None,
-                        expires_ns=time.monotonic_ns() + 3 * 10**9,
+                        expires_ns=time.monotonic_ns() + 10 * 10**9,
                     )
                     channel.assert_initial_invocation(invocation)
+                    for checkpoint in session(1).checkpoints:
+                        channel.send_checkpoint(checkpoint)
+                        channel.receive_ack()
+                    assert channel.exchange_resources(resources(1)) == resources(1)
                     channel.close()
                     assert listener.fileno() >= 0 and path.is_socket()
                     os._exit(0)
                 except BaseException:
                     os._exit(1)
             children.add(native_pid)
-            os.write(go_write, b"1")
-            deadline = time.monotonic() + 5
+            os.write(go_write, str(native_pid).encode("ascii") + b"\n")
+            deadline = time.monotonic() + 12
             while children and time.monotonic() < deadline:
                 for child in tuple(children):
                     finished, status = os.waitpid(child, os.WNOHANG)

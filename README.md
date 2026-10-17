@@ -317,8 +317,13 @@ CUDA 고정 실행기는 보호된 원래 실행을 받아 소켓·작업 시작
 (SOURCE_PASS/NOT_ACTIVE). 관련49 suites 1718 PASS·strict1·Ruff/format2 PASS입니다.
 오류 뒤 재시작하지 않으며, 시간 초과 후 정리를 확인해도 원래 실패를 성공으로 바꾸지 않습니다.
 양성 실행·GPU 관찰은 합성 fixture 검증이고 실제 모델 성능 측정은 아닙니다.
-원본 Job 실행 관리자는 소스로 연결했으며, 실제 고정 실행기 연결·관리자 보호 실행·호환 수치
-환경 갱신·6회 성능 비교·GPU 기본값
+CPU 실행기도 같은 고정 unit 제어를 재사용해 실제 종료와 재실행 방지 기록까지 소스 구현했습니다.
+상속된 소켓의 연결 상대와 실제 메시지 발신자는 별도로 확인합니다. 실제 fork 통신에서 이 차이를
+재현했고, 다른 발신자·예상 밖 파일 전달을 거부합니다. 비활성 비교용 소켓의 그룹도 기존 실행
+관리자의 그룹에 맞췄으며 worker 권한은 늘리지 않았습니다. 관련52 suites 1767 PASS·strict7·
+Ruff/format13·systemd 구문 검증 PASS입니다. root/unit 양성 및 자료 권한은 합성 값이며,
+실제 계정 분리 통신 검증과 모델 성능 검증은 별개입니다.
+원본 Job 관리자와 보호된 실행기의 실제 연결·결과 게시·호환 수치 환경 설치·6회 성능 비교·GPU 기본값
 전환은 아직 미완료이며 CPU 기본값을 유지합니다.
 [검증 범위와 남은 연결](docs/architecture/EMBEDDING_BENCHMARK_EXECUTION_COMPOSITION.md#pre-ack-terminal-recovery-source-checkpoint--2026-10-17)
 

@@ -9,7 +9,9 @@ from types import SimpleNamespace
 
 import pytest
 from eom_catalog_service import embedding_benchmark_cuda_driver as driver
+from eom_catalog_service import embedding_benchmark_unit_control as control
 from eom_catalog_service.embedding_benchmark_handoff import PreparedBenchmarkEnvironment
+from eom_catalog_service.embedding_benchmark_unit_control import CUDA_BENCHMARK_SOCKET
 from eom_orchestrator.inference_transfer_cpu_systemd import CpuUnitObservation
 from eom_orchestrator.worker_systemd import FixedUnitStatus
 
@@ -90,7 +92,7 @@ def lifecycle(monkeypatch, tmp_path):
 
     def command(arguments, **kwargs):
         assert arguments[0] == "/usr/bin/systemctl"
-        assert kwargs == dict(capture_output=True, check=False, timeout=10, env=driver._ENV)
+        assert kwargs == dict(capture_output=True, check=False, timeout=10, env=control._ENV)
         args = arguments[1:]
         record(tuple(args))
         if args[0] == "show":
@@ -99,7 +101,7 @@ def lifecycle(monkeypatch, tmp_path):
                 ActiveState="active" if state.socket_live else "inactive",
                 SubState="listening" if state.socket_live else "dead",
                 NeedDaemonReload="no",
-                FragmentPath="/etc/systemd/system/" + driver.CUDA_BENCHMARK_SOCKET,
+                FragmentPath="/etc/systemd/system/" + CUDA_BENCHMARK_SOCKET,
                 DropInPaths="",
                 Job="0",
             )
@@ -185,7 +187,9 @@ def lifecycle(monkeypatch, tmp_path):
         driver, "time", SimpleNamespace(monotonic_ns=lambda: state.now, sleep=sleep)
     )
     monkeypatch.setattr(
-        driver, "subprocess", SimpleNamespace(run=command, TimeoutExpired=subprocess.TimeoutExpired)
+        control,
+        "subprocess",
+        SimpleNamespace(run=command, TimeoutExpired=subprocess.TimeoutExpired),
     )
     monkeypatch.setattr(driver, "inspect_cpu_unit", inspect)
     monkeypatch.setattr(driver, "capture_benchmark_cuda_launch_files", capture)

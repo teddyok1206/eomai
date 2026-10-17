@@ -1360,6 +1360,127 @@ no torch/transformers/sentence-transformers/numpy imports. This verifies packagi
 closure, not installation/admission or numerical execution. No active or passive owner
 release, numerical prefix, unit, selector or default was installed/changed for this candidate.
 
+## CPU lifecycle and shared fixed-unit control — design before implementation
+
+The same original six-launch owner needs a real CPU lifecycle, not a CPU test double.
+Add a root-only CPU driver consuming the existing original invocation, root-prepared
+environment and selected backend. It owns no source authentication, Job reservation,
+worker transcript, NAS commit or GPU resource. Native workers still require the actual
+workflow-owner checkpoint channel; root process success alone cannot publish a result.
+
+Canonical inputs remain the registered input and original reservation. Reuse the
+existing environment/config/receipt validator to capture the exact root launch files
+before dispatch, without rereading/copying document text. Fresh unit, inactive socket,
+absent socket path, empty cgroup, current owner PID birth and deadline are checked
+before the two fixed starts. Observe only that original PID1 invocation. After actual
+terminal state, preserve its outcome, reserve the existing exclusive root retirement
+phase, write intent before stop/reset, prove zero stored descriptors and empty cgroup,
+then stop the socket. Partial intent/effect is not permission to repeat or claim success.
+Use the existing15s cleanup-only grace, not more compute time. Failures preserve state
+for supported original-execution reconciliation; no replacement Job or model retry.
+
+Both real drivers share fixed unit names/hashes, bounded root systemctl operations and
+socket-state parsing in one infrastructure module. Keep CUDA READY/ACK, independent
+GPU observations and physical lease retirement exclusively in the CUDA driver. Do not
+make a generic privileged broker or boolean device-fallback API. Existing constant
+import paths remain compatible aliases. Released native probe/INDEX/QUERY service bytes
+stay unchanged; the separately diagnosed inactive benchmark socket correction below
+advances that candidate's exact socket hash instead of reinterpreting a past release.
+
+Access is fixed-key lookup and ordered constant-size lifecycle; memory/time outside
+the actual workload and bounded polling are O(1). No DB/schema/index/queue/dependency
+changes. The existing root phase-file format and typed local observations are enough;
+neither is a transferable source/cleanup grant. Copying the CUDA driver or trusting
+worker status alone would duplicate rules or omit actual retirement. The application
+bridge, sealed output publication, coherent numerical releases and actual six-run
+comparison remain separate required work, not implied by this infrastructure change.
+
+## Activated listener sender identity — verified discovery and design before implementation
+
+A model-free real Linux fork/socket experiment confirmed a production transport gap:
+SO_PEERCRED on a client connecting to an inherited listener identifies the listener's
+creator, not the child which accepts and writes. The existing private child-created
+socket tests do not represent PID1 socket activation. Requiring the native child as
+the client's connection peer would reject the actual systemd path; substituting PID1
+alone would lose proof of the message sender. Neither is an acceptable fake success.
+
+Add an explicit activated-listener owner-channel factory. Keep actual listener peer
+and actual expected native sender as separate typed identities. The trusted installed
+owner pins both from its actual unit/listener observations, never model input. Existing
+direct channels are unchanged. For this mode, SO_PASSCRED must already be enabled on
+the client socket before connecting. Read framed bytes using recvmsg and require kernel
+SCM_CREDENTIALS matching the exact native PID/UID/GID on every receive, including split
+headers/bodies. The ordinary connection/FD/deadline and current-owner/source checkpoint
+fences remain in force; no expected native identity is presented as a SO_PEERCRED value.
+
+Canonical identity remains the actual kernel peer, actual kernel per-message sender and
+original invocation/transcript, not a sender claim in JSON. Framing/schema bytes do not
+change; no new worker protocol, dependency, DB or queue. Space/time stay O(frame bytes)
+with one bounded ancillary buffer and exact keyed comparisons. Reject missing/foreign/
+truncated/unexpected ancillary data and close only kernel-delivered SCM_RIGHTS duplicates
+before failure, never leak FDs or close caller-selected numbers. Poison the original
+channel on error; do not retry a worker or switch to a permissive peer check.
+
+Root-only listener creation and live EOM/PID1 activation remain distinct acceptance gates.
+Source fork tests can prove real sender-vs-creator behavior on an inherited listener,
+not root privilege, actual systemd activation, source authorization or model performance.
+The simpler connect-peer-only check is specifically contradicted by the real experiment.
+
+The same actual-host audit found that the inactive benchmark socket candidates selected
+`SocketGroup=eom-workflow-runner`, but that group does not exist. The installed workflow
+owner is UID990/GID1000 (`eom`), matching `eom-workflow-runner.service`'s explicit Group.
+Correct only these two inactive socket candidates to `SocketGroup=eom`, preserve0600 and
+SocketUser, and advance their exact hashes. No account, supplementary membership or
+worker permission changes: numerical workers are not added to `eom`. A portable source
+test must compare socket User/Group to the actual repository workflow-owner service
+contract, not just create a test socket with the desired chown and overlook deployment.
+This is not a rewrite of historical installed evidence or proof of live unit activation.
+
+### CPU lifecycle / activated transport source checkpoint — 2026-10-17
+
+Implemented concrete CPU start/terminal/retirement/socket-stop composition. Its original
+outcome survives cleanup, exclusive phase intent precedes stop/reset, partial files are
+preserved and no second call or unresolved intent can trigger a replacement execution.
+Exact environment/config/receipt capture reuses the existing root preparer without
+rereading input documents. Shared fixed-unit infrastructure owns both families' names,
+hashes, bounded commands and socket-state parser; CUDA-specific READY/ACK/GPU lifetime
+remains exclusively with its existing driver. No DB, queue, dependency, agent JSON
+schema bytes or numerical recipe changed.
+
+Activated owner channels separately pin actual connect-level listener and per-message
+native sender. SO_PASSCRED/SCM_CREDENTIALS cover every header/body read; direct channels
+retain their original behavior. Real fork tests cover all six checkpoint/resource
+programs, fragmentation, foreign/mid-body writer, missing credentials and1/16/64 unexpected
+SCM_RIGHTS transfers without FD leaks or closing the original descriptor. These prove
+actual kernel transport with synthetic checkpoints/authority, not a model or actual PID1
+unit. The existing opt-in private root/owner/native test now covers the inherited root
+listener and complete CPU checkpoint/resource exchange, not just worker-side connect.
+Its updated actual-UID case is not executed at this source checkpoint.
+
+Both inactive socket templates now use the existing owner's `eom` group and retain0600;
+portable tests compare User/Group with `eom-workflow-runner.service`. Actual NSS lookup
+confirmed UID990/GID1000/eom and absence of an eom-workflow-runner group. Socket raw SHAs
+advance to CPU `ea94f5a5bf5d28373dad0ae0260c0c7cc3c477216d4201e0e904e2d9245b3c02`,
+CUDA `63bfab8b2be928e92ccb8b8c500186e3b49cbdff1fd2e4b8f0aaec4df724c522`.
+No account/group membership or installed unit changed. Native probe/INDEX/QUERY templates
+remain untouched; historical candidate hashes/evidence are not rewritten.
+
+Final stable-source52 suites **1767 PASS154.46s**, strict7 production modules,
+Ruff/format13, diff and read-only systemd-analyze verify PASS. An intermediate running
+test had imported the old socket constants while the candidate files were corrected:
+its2 pin-mismatch failures are preserved, not reused as candidate evidence. The final
+fresh-interpreter run used stable matching files/pins. Positive root/unit/clock ports
+are synthetic; actual nonroot denials, local phase-file IO and kernel transport are real.
+Previous disposable21-case/past installed10-case evidence remains version-specific.
+
+11:16 UTC read-only stat confirmed the required benchmark CPU/CUDA .py entry files absent
+from their fixed numerical-prefix site-packages paths. Source packaging is not installation.
+The actual owner/root bridge, numerical successors/proofs, sealed output publication,
+six-run comparison and conditional GPU-default activation remain uncompleted requirements.
+No model/Job/GPU lease, production data, numerical prefix, selector or default changed.
+Original HTTP PID2895440 was confirmed live in LOGIN11:09:25; no new login/prompt/key or
+credential/TTL changes. Routine auth next>=11:39:25; index next>=11:20:29 UTC.
+
 ## Root resource relay — design before implementation
 
 The workflow-owner process must not manufacture independent GPU counters, impersonate UID0

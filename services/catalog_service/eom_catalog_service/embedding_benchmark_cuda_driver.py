@@ -7,7 +7,6 @@ import pwd
 import socket
 import stat
 import struct
-import subprocess
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
@@ -26,7 +25,6 @@ from eom_catalog_service.embedding_benchmark_cuda_lifetime import (
     retire_benchmark_cuda_unit,
 )
 from eom_catalog_service.embedding_benchmark_cuda_observation import (
-    CUDA_BENCHMARK_SOCKET,
     CUDA_BENCHMARK_TEMPLATE,
     BenchmarkCudaReadyObservation,
     capture_benchmark_cuda_launch_files,
@@ -42,6 +40,7 @@ from eom_catalog_service.embedding_benchmark_handoff import (
 )
 from eom_catalog_service.embedding_benchmark_layout import BENCHMARK_HANDOFF_ROOT
 from eom_catalog_service.embedding_benchmark_resource_relay import RootBenchmarkGpuResourceRelay
+from eom_catalog_service.embedding_benchmark_unit_control import FixedRootBenchmarkUnits
 from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
 from eom_catalog_service.gpu_unit_terminal_observation import gpu_unit_terminal_outcome
 
@@ -49,17 +48,7 @@ if TYPE_CHECKING:
     from eom_catalog_service.embedding_cuda_host_closure import ProtectedCudaEmbeddingHostClosure
     from eom_catalog_service.embedding_runtime_prefix_closure import PrefixRuntimeInventory
 
-_ENV = {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"}
 _CREDENTIALS = struct.Struct("=iII")
-_SOCKET_PROPERTIES = (
-    "LoadState",
-    "ActiveState",
-    "SubState",
-    "NeedDaemonReload",
-    "FragmentPath",
-    "DropInPaths",
-    "Job",
-)
 
 
 def _require(condition: bool, suffix: str) -> None:
@@ -137,12 +126,8 @@ class FixedRootBenchmarkCudaDriver:
             metadata = os.fstat(descriptor)
             _require(stat.S_ISSOCK(metadata.st_mode), "SOCKET_INVALID")
             self._socket_epoch = (descriptor, metadata.st_dev, metadata.st_ino)
-            self._unit = CUDA_BENCHMARK_TEMPLATE.replace(
-                "@.service", f"@{checked.execution_id}.service"
-            )
-            self._socket_unit = CUDA_BENCHMARK_SOCKET.replace(
-                "@.socket", f"@{checked.execution_id}.socket"
-            )
+            self._units = FixedRootBenchmarkUnits("CUDA", checked.execution_id)
+            self._unit = self._units.service
             self._used = False
             now = time.monotonic_ns()
             _require(now < environment.expires_ns <= now + 180 * 10**9, "EXPIRED")
@@ -177,56 +162,6 @@ class FixedRootBenchmarkCudaDriver:
             benchmark_owner_start_ticks(pid, uid=uid, gid=gid)
             == self._environment.owner_start_ticks,
             "OWNER_CHANGED",
-        )
-
-    def _command(self, arguments: tuple[str, ...]) -> bytes:
-        # Late retirement remains possible after compute admission expires. Every
-        # start/ACK is separately fenced; expiry must not prevent stopping a retired
-        # unit's socket. This helper never admits another numerical execution.
-        _require(
-            os.getresuid() == (0, 0, 0) and os.getresgid() == (0, 0, 0),
-            "ROOT_REQUIRED",
-        )
-        try:
-            result = subprocess.run(
-                ("/usr/bin/systemctl", *arguments),
-                capture_output=True,
-                check=False,
-                timeout=10,
-                env=_ENV,
-            )
-        except (OSError, subprocess.TimeoutExpired):
-            raise ValueError("BENCHMARK_CUDA_DRIVER_EFFECT_UNCERTAIN") from None
-        _require(
-            result.returncode == 0 and len(result.stdout) <= 16384 and len(result.stderr) <= 16384,
-            "EFFECT_UNCERTAIN",
-        )
-        return result.stdout
-
-    def _socket_state(self, *, active: bool) -> None:
-        raw = self._command(
-            ("show", self._socket_unit, *("--property=" + key for key in _SOCKET_PROPERTIES))
-        )
-        fields: dict[str, str] = {}
-        for line in raw.decode("ascii").splitlines():
-            key, separator, value = line.partition("=")
-            _require(
-                bool(separator) and key in _SOCKET_PROPERTIES and key not in fields,
-                "SOCKET_STATE_UNCERTAIN",
-            )
-            fields[key] = value
-        _require(
-            set(fields) == set(_SOCKET_PROPERTIES)
-            and fields["LoadState"] == "loaded"
-            and fields["ActiveState"] == ("active" if active else "inactive")
-            # Accept=no may already activate this same fresh service when the
-            # admitted owner connects; systemd then reports running, not listening.
-            and fields["SubState"] in ({"listening", "running"} if active else {"dead"})
-            and fields["NeedDaemonReload"] == "no"
-            and fields["FragmentPath"] == "/etc/systemd/system/" + CUDA_BENCHMARK_SOCKET
-            and fields["DropInPaths"] == ""
-            and fields["Job"] in {"", "0"},
-            "SOCKET_STATE_UNCERTAIN",
         )
 
     def _wait_ready(self) -> BenchmarkCudaReadyObservation:
@@ -321,7 +256,7 @@ class FixedRootBenchmarkCudaDriver:
                 inventory=self._inventory,
             )
             self._host.assert_current()
-            self._socket_state(active=False)
+            self._units.require_socket_state(active=False)
             _require(
                 inspect_cpu_unit(self._unit, template=CUDA_BENCHMARK_TEMPLATE).fresh,
                 "UNIT_NOT_FRESH",
@@ -337,10 +272,10 @@ class FixedRootBenchmarkCudaDriver:
             self._inventory.assert_unchanged()
             self._fence()
             started_ns = time.monotonic_ns()
-            self._command(("start", self._socket_unit))
-            self._socket_state(active=True)
+            self._units.start_socket()
+            self._units.require_socket_state(active=True)
             self._fence()
-            self._command(("--no-block", "start", self._unit))
+            self._units.start_service()
             ready = self._wait_ready()
             relay = RootBenchmarkGpuResourceRelay(
                 self._connection,
@@ -362,8 +297,8 @@ class FixedRootBenchmarkCudaDriver:
             relay.sample()
             resources = relay.serve()
             retirement = self._wait_terminal(ready)
-            self._command(("stop", self._socket_unit))
-            self._socket_state(active=False)
+            self._units.stop_socket()
+            self._units.require_socket_state(active=False)
             require_empty_benchmark_cuda_cgroup(self._unit)
             return RootBenchmarkCudaLaunch(
                 self._invocation.execution_id,
