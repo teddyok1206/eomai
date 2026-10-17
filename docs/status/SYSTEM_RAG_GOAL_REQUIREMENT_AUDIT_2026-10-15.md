@@ -1,6 +1,6 @@
 # Full incremental-RAG goal: requirement and evidence ledger
 
-2026-10-15 UTC; updated2026-10-16 UTC after source/disposable execution gates.
+2026-10-15 UTC; updated2026-10-17 UTC after image root-lifecycle source gates.
 Latest independent canonical storage audit11:36:49 UTC. Later registry row counts
 are not a fresh Artifact/hash/coverage audit. **GOAL_ACTIVE; FULL_COMPLETION_UNPROVEN.**
 Requirements come from the [original design](../architecture/SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md),
@@ -9,6 +9,20 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Source checkpoint2026-10-17: image root ready/terminal observation and explicit
+  ACK/outcome-specific retirement/read-only recovery now321 focused PASS; separate
+  image/shared/release317 PASS, strict7/Ruff/format/diff PASS. Exclusive per-unit/
+  invocation phase intents, actual retained-inode checks and original-outcome
+  classification preserve failure/timeout and reject uncertain effect replay.
+  Privileged/kernel ports are synthetic, record I/O is real temporary I/O. No
+  operating ACK/stop/reset, root lifecycle installation, model or default change.
+  Actual CUDA83d62d8d installation probe/seal/native reader/success-retirement PASS
+  remains distinct from model admission. All19 legacy image paths still require
+  coordinated guardian/migration/actual cleanup acceptance before any CUDA model
+  comparison. Original HTTP authentication was still LOGIN03:01; C1–C5/six real
+  comparisons/conditional GPU default/full goal remain open. Normal INDEX/QUERY
+  service readback03:04:02 stayed active; next routine≥03:34:02.
+  [Current design, evidence and remaining composition](../architecture/INCREMENTAL_EMBEDDING_GPU_RUNTIME_DESIGN.md#root-image-lifecycle-effects--design-before-implementation).
 - Source checkpoint18:30 UTC: fixed CUDA resource O_PATH capture and exact borrowed
   FD exclusive-flock/process/epoch witness now511 related tests PASS; separate
   image-test adapter/release regression93 PASS, strict4/Ruff/format PASS. No lease

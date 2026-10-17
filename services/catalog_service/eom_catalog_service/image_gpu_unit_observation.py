@@ -199,6 +199,34 @@ class ImageGpuUnitTerminalObservation:
     terminated_at_utc: str
 
 
+def image_gpu_unit_terminal_outcome(terminal: CpuUnitObservation) -> Literal["SUCCEEDED", "FAILED"]:
+    """One original-outcome rule for terminal capture and read-only recovery."""
+    _require(type(terminal) is CpuUnitObservation, "TERMINATION_UNCERTAIN")
+    if terminal.succeeded:
+        return "SUCCEEDED"
+    if (
+        terminal.main_pid == 0
+        and terminal.status.active_state == "failed"
+        and terminal.status.sub_state == "failed"
+        and terminal.status.process_started
+        and terminal.status.exec_main_code in {1, 2, 3}
+        and terminal.status.result
+        in {
+            "exit-code",
+            "signal",
+            "core-dump",
+            "timeout",
+            "watchdog",
+            "oom-kill",
+            "resources",
+            "protocol",
+        }
+        and terminal.exited_monotonic >= terminal.status.exec_main_started_monotonic
+    ):
+        return "FAILED"
+    raise ValueError("IMAGE_GPU_UNIT_TERMINATION_UNCERTAIN")
+
+
 def verify_image_gpu_unit_terminal(
     ready: ImageGpuUnitReadyObservation,
 ) -> ImageGpuUnitTerminalObservation:
@@ -226,31 +254,7 @@ def verify_image_gpu_unit_terminal(
         == ready.unit.status.exec_main_started_monotonic,
         "TERMINATION_UNCERTAIN",
     )
-    outcome: Literal["SUCCEEDED", "FAILED"]
-    if terminal.succeeded:
-        outcome = "SUCCEEDED"
-    elif (
-        terminal.main_pid == 0
-        and terminal.status.active_state == "failed"
-        and terminal.status.sub_state == "failed"
-        and terminal.status.process_started
-        and terminal.status.exec_main_code in {1, 2, 3}
-        and terminal.status.result
-        in {
-            "exit-code",
-            "signal",
-            "core-dump",
-            "timeout",
-            "watchdog",
-            "oom-kill",
-            "resources",
-            "protocol",
-        }
-        and terminal.exited_monotonic >= terminal.status.exec_main_started_monotonic
-    ):
-        outcome = "FAILED"
-    else:
-        raise ValueError("IMAGE_GPU_UNIT_TERMINATION_UNCERTAIN")
+    outcome = image_gpu_unit_terminal_outcome(terminal)
 
     def ended() -> None:
         original = Path("/proc") / str(ready.pid)

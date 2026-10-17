@@ -375,6 +375,70 @@ complete corpus denominator/metadata-command result is inferred. HTTP observer
 2895440 is still alive/LOGIN, without a new prompt/key/QUERY or accepted auth.
 Next routine readback is not before03:03:44 UTC. Full original goal remains ACTIVE.
 
+#### Root image lifecycle effects — design before implementation
+
+The next adapter composes the existing image readiness/terminal observations with
+the fixed systemd main-process signal and outcome-specific retirement already
+used by the native probe owner. It is root infrastructure, not a worker tool,
+admission receipt, new queue or product Artifact owner. The coordinated installer
+must still fence/drain all19 entries before activating a caller of this adapter.
+
+Canonical identities remain the actual closed unit name, invocation, PID/start,
+root-installed template/bootstrap pins and retained physical inode. Root-only
+records live under `/opt/eom/image-gpu-lifetimes/<unit>/<invocation>/`: separate
+exclusive `ack` and `retirement` reservations contain no-clobber, fsynced intent
+before the single effect and a result only after confirmed completion. These are
+local OS audit metadata, not copied image payloads or NAS product Artifacts.
+Records serialize the existing frozen observations with Pydantic TypeAdapter;
+no cross-service/worker format or DB schema changes. Directory lookup is bounded
+O(1), each observation remains O(F+T), and records are append-only per invocation.
+
+Root reobserves an identical readiness frame before SIGUSR1 to only the fixed
+unit main. Retirement preserves success versus failure/timeout and uses `stop`
+versus `reset-failed` only after original terminal evidence is durable and freshly
+confirmed. Post-checks require inactive/dead/Main0/store0, the original or cleared
+invocation, empty cgroup/GPU and actual exclusive reacquisition of the SAME inode
+held across checks. Unknown command outcome never auto-replays; an existing intent
+blocks another effect, with a separate read-only recovery path. No caller-supplied
+command, signal, path, history relabeling or borrowed-FD LOCK_UN is accepted.
+
+The simpler unrecorded signal/stop sequence loses the original failure and cannot
+distinguish an uncertain effect from an unsubmitted one. A new broker or general
+transaction framework is unnecessary: the existing OS observations and atomic
+per-invocation directory reservation provide the required local boundary.
+Actual controller dispatch, all19 source installation, pre-lease/cache exits and
+privileged lifecycle acceptance remain separate obligations, not source PASS.
+
+**Implemented source checkpoint2026-10-17:** `image_gpu_unit_lifetime` now owns
+the explicit root ACK, outcome-specific retirement and read-only post-retirement
+recovery APIs. One original-outcome classifier is reused by capture/recovery;
+recovery rejects success/failure relabeling. Atomic phase reservation prevents
+concurrent/second effects, including when a command or result-record write has
+an uncertain outcome. Intent failure submits nothing; result failure preserves
+the intent without replay. Root paths use no-follow directory FDs and protected
+metadata, records use O_EXCL/fsync, and the existing physical inode is actually
+held across post-checks. No borrowed descriptor is unlocked.
+
+Fresh root lifecycle/observation/resource/native-retirement/dependency suite:
+**321 PASS23.64s**, including47 new lifecycle cases. Separate existing image/
+shared-lease/release regression: **317 PASS14.32s**; strict7 source files,
+Ruff/format/diff PASS. These tests use synthetic privileged/kernel ports and real
+temporary record I/O; they do not send actual signals, stop operating units,
+create an installed lifecycle directory, run a model or claim19-entry acceptance.
+Package/numerical inputs are unchanged: the1a5c6b86 image package candidates and
+separate7edb475d bootstrap remain; installed numericalc499/admin-ownere5, CPU
+default, active services and all19 legacy image templates were not changed.
+
+Routine readback03:04:02 UTC found the same INDEX/QUERY PIDs/invocations active.
+METADATA2240521c, CONTENT7ba56f52 and CONCRETEc14b3131 completed at02:37/02:51/
+03:02 respectively. Separate queued view snapshots377/387/399 missing bindings
+are not one coherent corpus denominator; eligible545/report-missing25 is not a
+regression of the original520 backfill. Next routine check≥03:34:02 UTC. Original
+HTTP observer2895440 was still LOGIN at03:01, no accepted authentication or new
+request. The full goal remains ACTIVE: compose the fixed root guardian and
+pre-lease/cache exit handling, then coordinated19 migration/actual acceptance,
+six frozen comparisons/default decision and actual C1–C5 consumer verification.
+
 ## 5. 별도 protected CUDA 실행 leaf
 
 제안 prefix는 `/opt/eom/conda/envs/eom-embedding-cuda`, worker는 `eom-embedding-cuda`,
