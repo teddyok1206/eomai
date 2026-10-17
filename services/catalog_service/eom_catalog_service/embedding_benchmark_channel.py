@@ -80,6 +80,7 @@ class _Frames:
         *,
         wait_observer: Callable[[], None] | None = None,
         expected_sender: BenchmarkUnixPeer | None = None,
+        maximum_lifetime_seconds: int = 180,
     ) -> None:
         self.connection = connection
         self.peer = expected_peer
@@ -96,7 +97,9 @@ class _Frames:
                 or type(expected_peer) is not BenchmarkUnixPeer
                 or not callable(peer_fence)
                 or type(expires_ns) is not int
-                or not now < expires_ns <= now + 180 * 10**9
+                or type(maximum_lifetime_seconds) is not int
+                or maximum_lifetime_seconds not in (180, 210)
+                or not now < expires_ns <= now + maximum_lifetime_seconds * 10**9
                 or (wait_observer is not None and not callable(wait_observer))
                 or (expected_sender is not None and type(expected_sender) is not BenchmarkUnixPeer)
             ):
@@ -237,11 +240,14 @@ class _Frames:
             raise BenchmarkChannelError("EMBEDDING_BENCHMARK_SENDER_CHANGED")
         return part
 
-    def _receive_message(self) -> BenchmarkCheckpoint | BenchmarkAck | BenchmarkResourceEvidence:
+    def receive_raw(self) -> bytes:
         count = _LENGTH.unpack(self.read(_LENGTH.size))[0]
         if not 1 <= count <= MAX_BENCHMARK_ENVELOPE_BYTES:
             raise BenchmarkChannelError("EMBEDDING_BENCHMARK_FRAME_SIZE_INVALID")
-        raw = self.read(count)
+        return self.read(count)
+
+    def _receive_message(self) -> BenchmarkCheckpoint | BenchmarkAck | BenchmarkResourceEvidence:
+        raw = self.receive_raw()
         message = parse_embedding_device_benchmark_bytes(raw)
         if not isinstance(
             message, (BenchmarkCheckpoint, BenchmarkAck, BenchmarkResourceEvidence)
@@ -262,8 +268,10 @@ class _Frames:
         return message
 
     def send(self, message: BenchmarkCheckpoint | BenchmarkAck | BenchmarkResourceEvidence) -> None:
-        raw = embedding_device_benchmark_bytes(message)
-        if not 1 <= len(raw) <= MAX_BENCHMARK_ENVELOPE_BYTES:
+        self.send_raw(embedding_device_benchmark_bytes(message))
+
+    def send_raw(self, raw: bytes) -> None:
+        if type(raw) is not bytes or not 1 <= len(raw) <= MAX_BENCHMARK_ENVELOPE_BYTES:
             raise BenchmarkChannelError("EMBEDDING_BENCHMARK_FRAME_SIZE_INVALID")
         pending = memoryview(_LENGTH.pack(len(raw)) + raw)
         while pending:

@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/embedding-benchmark-launch-control/1.0",
+  "title": "Original benchmark launch owner/root control, never source authority",
+  "oneOf": [{"$ref": "#/$defs/association"}, {"$ref": "#/$defs/prepared"}, {"$ref": "#/$defs/completed"}, {"$ref": "#/$defs/uncertain"}],
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "execution": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "job": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+    "pid": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+    "ticks": {"type": "integer", "minimum": 1, "maximum": 9223372036854775807},
+    "requestMember": {
+      "type": "object", "additionalProperties": false, "required": ["member_name", "sha256", "byte_count"],
+      "properties": {"member_name": {"const": "owner-request.json"}, "sha256": {"$ref": "#/$defs/hash"}, "byte_count": {"type": "integer", "minimum": 1, "maximum": 65536}}
+    },
+    "invocationMember": {
+      "type": "object", "additionalProperties": false, "required": ["member_name", "sha256", "byte_count"],
+      "properties": {"member_name": {"const": "invocation.json"}, "sha256": {"$ref": "#/$defs/hash"}, "byte_count": {"type": "integer", "minimum": 1, "maximum": 65536}}
+    },
+    "inputMember": {
+      "type": "object", "additionalProperties": false, "required": ["member_name", "sha256", "byte_count"],
+      "properties": {"member_name": {"const": "benchmark-inputs.json"}, "sha256": {"$ref": "#/$defs/hash"}, "byte_count": {"type": "integer", "minimum": 1, "maximum": 67108864}}
+    },
+    "configuration": {
+      "type": "object", "additionalProperties": false,
+      "required": ["configuration_id", "configuration_revision_id", "configuration_sha256", "configuration_raw_sha256", "receipt_raw_sha256"],
+      "properties": {
+        "configuration_id": {"type": "string", "pattern": "^embeddingnativeconfig_[0-9a-f]{32}$"},
+        "configuration_revision_id": {"type": "string", "pattern": "^embeddingnativeconfigrev_[0-9a-f]{32}$"},
+        "configuration_sha256": {"$ref": "#/$defs/hash"}, "configuration_raw_sha256": {"$ref": "#/$defs/hash"}, "receipt_raw_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "association": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "record_type", "job_id", "execution_id", "device", "launch_ordinal", "invocation_sha256", "owner_request_sha256", "request", "invocation", "inputs", "owner_pid", "owner_start_ticks", "expires_ns", "association_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-benchmark-launch-control/1.0"}, "record_type": {"const": "ASSOCIATION"},
+        "job_id": {"$ref": "#/$defs/job"}, "execution_id": {"$ref": "#/$defs/execution"}, "device": {"enum": ["CPU", "CUDA"]},
+        "launch_ordinal": {"type": "integer", "minimum": 1, "maximum": 6},
+        "invocation_sha256": {"$ref": "#/$defs/hash"}, "owner_request_sha256": {"$ref": "#/$defs/hash"},
+        "request": {"$ref": "#/$defs/requestMember"}, "invocation": {"$ref": "#/$defs/invocationMember"}, "inputs": {"$ref": "#/$defs/inputMember"},
+        "owner_pid": {"$ref": "#/$defs/pid"}, "owner_start_ticks": {"$ref": "#/$defs/ticks"}, "expires_ns": {"$ref": "#/$defs/ticks"}, "association_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "prepared": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "record_type", "association_sha256", "job_id", "execution_id", "invocation_sha256", "environment_raw_sha256", "controller_release", "backend", "prepared_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-benchmark-launch-control/1.0"}, "record_type": {"const": "PREPARED"},
+        "association_sha256": {"$ref": "#/$defs/hash"}, "job_id": {"$ref": "#/$defs/job"}, "execution_id": {"$ref": "#/$defs/execution"}, "invocation_sha256": {"$ref": "#/$defs/hash"},
+        "environment_raw_sha256": {"$ref": "#/$defs/hash"}, "controller_release": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "backend": {"$ref": "#/$defs/configuration"}, "prepared_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "completed": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "record_type", "association_sha256", "prepared_sha256", "job_id", "execution_id", "invocation_sha256", "device", "launch_ordinal", "original_outcome", "cleanup", "started_ns", "completed_ns", "resources", "completion_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-benchmark-launch-control/1.0"}, "record_type": {"const": "COMPLETED"},
+        "association_sha256": {"$ref": "#/$defs/hash"}, "prepared_sha256": {"$ref": "#/$defs/hash"}, "job_id": {"$ref": "#/$defs/job"}, "execution_id": {"$ref": "#/$defs/execution"}, "invocation_sha256": {"$ref": "#/$defs/hash"},
+        "device": {"enum": ["CPU", "CUDA"]}, "launch_ordinal": {"type": "integer", "minimum": 1, "maximum": 6},
+        "original_outcome": {"enum": ["SUCCEEDED", "FAILED"]}, "cleanup": {"const": "CONFIRMED"},
+        "started_ns": {"$ref": "#/$defs/ticks"}, "completed_ns": {"$ref": "#/$defs/ticks"},
+        "resources": {"oneOf": [{"type": "null"}, {"$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/resources"}]}, "completion_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "uncertain": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "record_type", "association_sha256", "job_id", "execution_id", "invocation_sha256", "code", "uncertainty_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-benchmark-launch-control/1.0"}, "record_type": {"const": "UNCERTAIN"},
+        "association_sha256": {"$ref": "#/$defs/hash"}, "job_id": {"$ref": "#/$defs/job"}, "execution_id": {"$ref": "#/$defs/execution"}, "invocation_sha256": {"$ref": "#/$defs/hash"},
+        "code": {"const": "BENCHMARK_ROOT_EXECUTION_UNCERTAIN"}, "uncertainty_sha256": {"$ref": "#/$defs/hash"}
+      }
+    }
+  }
+}

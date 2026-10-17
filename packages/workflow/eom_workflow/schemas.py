@@ -660,6 +660,12 @@ def validate_reference_query_request_v11(value: object) -> None:
 
 LOCAL_EMBEDDING_SCHEMA_RESOURCES = (
     (
+        "benchmark-launch-control",
+        "embedding-benchmark-launch-control-v1.schema.json",
+        "eom://schemas/workflow/embedding-benchmark-launch-control/1.0",
+        "sha256:2ceb6cb0150ffc64f2b4e94fed17cff36181b486885c8f78d8e6c0cd4c34de27",
+    ),
+    (
         "request",
         "local-embedding-workflow-request-v1_1.schema.json",
         "eom://schemas/workflow/local-embedding-workflow-request/1.1",
@@ -700,6 +706,7 @@ LOCAL_EMBEDDING_SERVICE_SCHEMA_RESOURCES = (
     ),
 )
 type LocalEmbeddingSchemaName = Literal[
+    "benchmark-launch-control",
     "request",
     "source-plan",
     "encoding-job",
@@ -816,7 +823,13 @@ def validate_local_embedding_admission_message(
         maximum = (
             64 * 1024
             if name
-            in {"request", "execution-policy", "service-request", "service-execution-policy"}
+            in {
+                "request",
+                "execution-policy",
+                "service-request",
+                "service-execution-policy",
+                "benchmark-launch-control",
+            }
             else 64 * 1024**2
         )
         if len(canonical_json_bytes(value)) > maximum:

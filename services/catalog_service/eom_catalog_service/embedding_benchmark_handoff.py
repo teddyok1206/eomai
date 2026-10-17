@@ -15,6 +15,7 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     MAX_BENCHMARK_ENVELOPE_BYTES,
     MAX_BENCHMARK_STAGED_BYTES,
     BenchmarkOwnerRequest,
+    BenchmarkRuntime,
     BenchmarkStagedInputs,
     BenchmarkWorkerInvocation,
     benchmark_local_output_members,
@@ -282,7 +283,7 @@ _owner_start_ticks = benchmark_owner_start_ticks
 
 def _validate_environment_installation(
     files: NumericalRuntimeFileSnapshots,
-    invocation: BenchmarkWorkerInvocation,
+    runtime: BenchmarkRuntime,
     backend: NativeEmbeddingBackendPins,
 ) -> None:
     from eom_catalog_contracts.embedding_native_installation_evidence import (
@@ -322,7 +323,7 @@ def _validate_environment_installation(
     )
 
     receipt: RootLocalNativeAdmissionReceiptMetadata | CudaAdmissionReceiptMetadata
-    if invocation.device == "CPU":
+    if runtime.profile == "CPU_INDEX_FP32":
         receipt = parse_rootlocal_native_admission_receipt_metadata(
             files.read(
                 _EVIDENCE_ROOT
@@ -352,19 +353,37 @@ def _validate_environment_installation(
         assert isinstance(config, EmbeddingNativeRuntimeConfigV12 | EmbeddingNativeRuntimeConfigV13)
         _require(receipt.cuda_host_extension == config.cuda_host_extension)
     _require(
-        config.profile == invocation.runtime.profile
+        config.profile == runtime.profile
         and config.configuration_id == pin.configuration_id
         and config.configuration_revision_id == pin.configuration_revision_id
         and config.config_sha256 == pin.configuration_sha256
-        and config.bundle == invocation.runtime.bundle
-        and config.installed_proof == invocation.runtime.installed_proof
-        and config.runtime_sha256 == invocation.runtime.numerical_runtime.runtime_sha256
+        and config.bundle == runtime.bundle
+        and config.installed_proof == runtime.installed_proof
+        and config.runtime_sha256 == runtime.numerical_runtime.runtime_sha256
         and receipt.configuration == pin
         and receipt.bundle == config.bundle
         and receipt.installed_proof == config.installed_proof
         and receipt.runtime_sha256 == config.runtime_sha256
     )
     files.assert_unchanged()
+
+
+def capture_benchmark_runtime_installation(
+    runtime: BenchmarkRuntime,
+    *,
+    backend: NativeEmbeddingBackendPins,
+) -> NumericalRuntimeFileSnapshots:
+    """Read-only protected configuration/receipt closure, never compute admission.
+
+    The owner can preflight the exact selection before reserving an execution.
+    Root preparation and the native installation adapter still independently
+    verify their actual runtime, whole-prefix and sandbox boundaries.
+    """
+    runtime = BenchmarkRuntime.model_validate(runtime)
+    backend.__post_init__()
+    files = NumericalRuntimeFileSnapshots(_ROOT_UID)
+    _validate_environment_installation(files, runtime, backend)
+    return files
 
 
 def prepare_benchmark_environment(
@@ -400,7 +419,7 @@ def prepare_benchmark_environment(
     )
     start_ticks = _owner_start_ticks(owner_pid, uid=owner.pw_uid, gid=owner.pw_gid)
     installation = NumericalRuntimeFileSnapshots(_ROOT_UID)
-    _validate_environment_installation(installation, invocation, backend)
+    _validate_environment_installation(installation, invocation.runtime, backend)
     payload = benchmark_launch_environment_bytes(
         BenchmarkLaunchPins(
             prepared.execution_id, prepared.invocation_raw_sha256, owner_pid, expires_ns, backend
@@ -501,7 +520,7 @@ def capture_prepared_benchmark_environment(
             and metadata.st_gid == _ROOT_GID
             and not _ACL_NAMES.intersection(os.listxattr(path))
         )
-    _validate_environment_installation(files, invocation, backend)
+    _validate_environment_installation(files, invocation.runtime, backend)
     files.assert_unchanged()
     return files
 

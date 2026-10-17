@@ -1518,6 +1518,117 @@ these are not561 unique Items or complete coverage. The bounded latest5 workflow
 INDEX3633849/QUERY3633843 remained alive11h14m13. Same protected adapter and EOM2 sudo TTY,
 no execution restart/new query/key/credential/TTL. Next routine index check>=11:52:03 UTC.
 
+## Original-launch owner/root bridge — design before implementation
+
+The remaining execution port needs one actual owner/root handoff, not more independent
+guards. Use an explicitly installed root controller for one original reservation and
+the actual Orchestrator owner. Define a closed launch-control1.0 schema first, separate
+from released benchmark1.0: association, prepared, completed and uncertain messages.
+Only identity, hashes, bounded local member descriptors, owner PID/birth/deadline and
+root lifecycle observations cross this control channel. Existing request/invocation/
+inputs are materialized once into the protected owner staging boundary, not copied
+into control frames. Root checks the actual fixed owner peer and original staged pins;
+selected request/backend/release configuration is root-controlled, not model authority.
+
+Canonical source remains the official admitted input and original Job journal.
+Owner authorization is bound to that original invocation before effects/checkpoints/
+publication. Root only prepares local files and invokes the two concrete fixed drivers;
+it never authenticates a user, writes SQL/NAS or manufactures a source permission.
+Prepared metadata is not compute/cleanup approval. Completion is accepted only through
+the actual selected root socket and protected launch basis; parsing cleanup=CONFIRMED
+alone is not proof. Uncertainty preserves original identity/effects and forbids replay.
+
+Use the same direct root control connection for prepare/completion. During CUDA resource
+finalization, each side temporarily owns a duplicated FD for the existing resource-only
+exchange, then closes that duplicate. Exact bounded reads do not prefetch the next
+frame. The original control FD remains for the later completion, avoiding an extra
+broker/socket pool or reinterpretation of a resource message as a privileged command.
+Native checkpoint traffic stays on the separate PID1-activated channel with distinct
+listener/sender credentials. Only machine-control observation gets a210s transport
+ceiling for the existing180s compute plus cleanup/readback; inference/resource endpoints
+keep180s. No deadline renewal or added compute time.
+
+Dominant operations are fixed identity lookup, ordered per-launch frames and closed
+member manifests. Use immutable values and sets/maps; control memory is O(64KiB), local
+staging/output bytes remain bounded by the released benchmark limits. Existing Job locks,
+same-inode CPU capacity and no-clobber workspaces/phase records own concurrency/replay.
+There is no new DB, queue, registry or dependency. Root configuration and readback remain
+infrastructure adapters; domain contracts import neither filesystem nor subprocess code.
+The existing file-set publisher remains the sole NAS committer with a separate publication
+Job. Failure after dispatch is not proof of nonexecution or permission for another ID.
+
+The simpler parsed worker cleanup flag loses physical ownership proof; a generic privileged
+RPC service adds unnecessary authority. This single-purpose bridge is not source approval,
+six-run assessment, an automatic background benchmark or GPU-default activation.
+
+### Concrete original-launch execution and publication — source candidate, 2026-10-17
+
+`FixedBenchmarkLaunchExecution.run_and_publish` now supplies the previously missing
+owner port: exact installation preflight before reservation, private original request/
+invocation/input stage, one selected root connection, prepared backend/environment
+cross-check, actual PID1-listener/native-writer capture, the unchanged checkpoint and
+CUDA resource exchange, root completion, then the existing Artifact publisher. Root's
+one-shot entry is explicitly selected for an already admitted original execution;
+there is no automatic privileged broker, worker sudo, new queue or new identity retry.
+
+The native connector enables SO_PASSCRED before connecting, requires the actual
+listener peer `(PID1, UID0, GID0)`, captures the original MainPID/birth and exact system
+cgroup, and uses kernel credentials for every received fragment. After the final native
+resource record is validated, no more native input is accepted: the final response may
+race legitimate native exit/root socket unlink, so connected-FD/PID1 checks continue
+without pretending that the writer/path must remain alive. This transition does not
+attest cleanup. Root independently finishes its existing CPU/CUDA lifecycle and persists
+completion before sending it. It then waits for owner EOF, within the same absolute
+210s control budget, so its peer does not disappear before queued completion is read.
+EOF is neither a new command nor proof of publication. Compute remains bounded to180s.
+
+Publication reads only the fixed root-prepared/root-completion records and closed4/16
+native outputs through existing protected FD/epoch readers. It validates canonical
+schemas, raw and semantic hashes, normalized f32 ranges and contiguous supplementary
+offsets, original ordered source rows/purpose spaces, all real/synthetic/capacity token
+witnesses, native resources and checkpoint file bytes. Every whole binary is hashed
+once for its descriptor, not once per referenced sample. Sealed native bytes mean
+fsync/close plus verified process retirement, not silently chmodding files to0400.
+
+Owner cold time ends at cold ACK, not at the end of warm/query/capacity probes. Ten
+query measurements retain their individual authorization/encode/end-to-end clocks and
+are checked against native encode observations. These small records reference the
+existing benchmark schema fragments; the native result/token/resource bytes are never
+rewritten. Existing `ControlFileSetPublisher.publish_first_observation` allocates a
+**separate publication Job**, persists one immutable file set and returns receipt
+pointers. Source authority is rechecked immediately before and after that commit.
+This is not a distributed transaction: late revocation preserves the committed artifact,
+original idempotency key and unresolved reservation instead of deleting bytes, returning
+success or starting another model. Existing journal reconciliation remains necessary.
+
+The first focused workspace test reproduced a real composition error: the released
+parser accepts only declared fixed caller budgets, whereas the new reader passed a
+member's exact length as its parser budget. The fix preserves the descriptor's exact
+size/hash check and selects the existing64KiB/64MiB parser budget by closed member kind;
+it does not weaken schemas or let input choose its budget. Other fixture-only import,
+synthetic UID and Unix pathname-length errors were corrected as development failures,
+not retried live model executions. Actual temporary files, sockets/credential framing,
+six synthetic encoder programs, original-execution ordering and failure/no-retry cases
+are tested; positive root/systemd/source/GPU observations remain explicitly synthetic.
+
+Final source gate,12:14:56 UTC: **60 suites /1845 PASS**, strict mypy14 production
+modules, Ruff/format23 production/test files and diff checks PASS. This single final
+suite supersedes failed development invocations without adding their counts to PASS.
+No live model/GPU/HTTP submission, DB mutation, installation or default change was
+performed by these tests. The11:55:53 UTC protected read-only index observation separately
+reported569 encodings/bindings,149 index revisions,6 logical indexes, latest view
+coverage177/189/203 with545 eligible sources. These are not569 distinct Items or full
+coverage. The same original HTTP process2895440 was still in LOGIN at11:55 UTC;
+no replacement process, credential request, stored token or session renewal was created.
+
+**Not yet claimed:** protected numerical successor/proof installation, actual PID1
+benchmark model dispatch, actual six-run numerical/performance/resource/image gates,
+CPU near-tie reference publication before CUDA acceptance, actual benchmark Artifact
+publication under a genuine current administrator, or GPU-default activation. The
+passive77743a9b owner/actual-account10-test checkpoint above is historical evidence,
+not installation or execution evidence for this new candidate. No operating service,
+numerical prefix, policy selector, default device, DB schema or credential was changed.
+
 ## Root resource relay — design before implementation
 
 The workflow-owner process must not manufacture independent GPU counters, impersonate UID0

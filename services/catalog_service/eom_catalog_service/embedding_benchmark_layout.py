@@ -9,6 +9,7 @@ from typing import Literal
 BENCHMARK_LIFETIME_ROOT = Path("/opt/eom/embedding-benchmark-lifetimes")
 BENCHMARK_CUDA_LIFETIME_ROOT = BENCHMARK_LIFETIME_ROOT
 BENCHMARK_HANDOFF_ROOT = Path("/run/eom-incremental-embeddings/benchmark")
+BENCHMARK_CONTROL_ROOT = Path("/run/eom-incremental-embeddings/benchmark-control")
 
 
 def benchmark_read_acl(native_uid: int, kind: Literal["DIRECTORY", "INPUT"]) -> bytes:
