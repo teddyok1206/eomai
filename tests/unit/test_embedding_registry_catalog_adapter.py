@@ -79,7 +79,6 @@ from tests.unit.embedding_registry_application_fixtures import capture_pair
 from tests.unit.inference_transfer_embedding_fixtures import (
     embedding_entry,
     embedding_result,
-    embedding_space,
     index_pointer,
     seal,
     shard_pointer,
@@ -1007,7 +1006,13 @@ def _read_selection(
                 index_sha256=index.index_sha256,
                 storage_partition=index.storage_partition,
                 spaces=ReferenceQuerySpaces(
-                    query=embedding_space(purpose="QUERY"), document=index.space
+                    query=type(index.space).model_validate(
+                        seal(
+                            index.space.model_dump(mode="json") | {"purpose": "QUERY"},
+                            "space_sha256",
+                        )
+                    ),
+                    document=index.space,
                 ),
             ),
         ),

@@ -14,6 +14,7 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     BenchmarkExecutionPolicy,
     embedding_device_benchmark_bytes,
 )
+from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.inference_transfer_embedding import (
     INPUT_SCHEMA_REF,
     IncrementalEmbeddingInput,
@@ -36,11 +37,16 @@ from eom_workflow.local_embedding_source_plan import (
     LocalEmbeddingSourcePlan,
     parse_local_embedding_source_plan,
 )
+from eom_workflow.private_chat_query_execution import (
+    PRIVATE_CHAT_QUERY_POLICY_REF,
+    PrivateChatQueryExecutionPolicy,
+)
 from eom_workflow.reference_query_execution import (
     REFERENCE_QUERY_POLICY_REF,
     ReferenceQueryExecutionPolicy,
     parse_reference_query_execution_policy,
 )
+from jsonschema.exceptions import ValidationError as SchemaError
 from pydantic import TypeAdapter
 
 from eom_orchestrator.file_set_control_artifacts import (
@@ -53,6 +59,7 @@ from eom_orchestrator.file_set_control_artifacts import (
 SOURCE_PLAN_ARTIFACT_TYPE = "control_local_embedding_source_plan"
 EXECUTION_POLICY_ARTIFACT_TYPE = "control_local_embedding_execution_policy"
 REFERENCE_QUERY_POLICY_ARTIFACT_TYPE = "control_reference_query_execution_policy"
+PRIVATE_CHAT_QUERY_POLICY_ARTIFACT_TYPE = "control_private_chat_query_execution_policy"
 OWNED_INPUT_ARTIFACT_TYPE = "control_local_embedding_owned_input"
 
 
@@ -188,6 +195,30 @@ class LocalEmbeddingControlArtifactPublisher:
             member="policy.json",
             schema=REFERENCE_QUERY_POLICY_REF,
             artifact_type=REFERENCE_QUERY_POLICY_ARTIFACT_TYPE,
+            idempotency_key=idempotency_key,
+            created_at=created_at,
+        )
+
+    def publish_private_chat_query_policy(
+        self,
+        policy: PrivateChatQueryExecutionPolicy,
+        *,
+        idempotency_key: str,
+        created_at: datetime,
+    ) -> PublishedLocalEmbeddingControl:
+        """Private controls only; neither reference admission nor current Chat authority."""
+        try:
+            checked = PrivateChatQueryExecutionPolicy.model_validate(
+                raw_similarity_contract_value(policy)
+            )
+        except (ValueError, TypeError, SchemaError):
+            raise ValueError("PRIVATE_CHAT_QUERY_CONTROL_INVALID") from None
+        return self._publish(
+            raw=canonical_json_bytes(checked),
+            semantic_sha256=checked.policy_sha256,
+            member="policy.json",
+            schema=PRIVATE_CHAT_QUERY_POLICY_REF,
+            artifact_type=PRIVATE_CHAT_QUERY_POLICY_ARTIFACT_TYPE,
             idempotency_key=idempotency_key,
             created_at=created_at,
         )

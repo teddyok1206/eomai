@@ -449,6 +449,9 @@ NOT_IMPLEMENTED / NOT_EVALUATED`를 구분한다. 기존 corpus의 학습 완료
 - [채팅 질문의 공식 자료·인덱스 읽기](PRIVATE_CHAT_QUERY_CATALOG_READ_DESIGN.md):
   기존 Catalog 경계에서 공개 자료를 현재 권한으로 다시 확인한다. 원 채팅 소유권·claim과
   실제 QUERY 접수/계산/도구 전달은 별도 연결 단계이며, 소스 구현을 활성화로 간주하지 않는다.
+- [원 채팅·공개 자료·전용 설정의 조합](PRIVATE_CHAT_QUERY_OWNER_COMPOSITION.md):
+  실제 소유자 인터페이스를 재사용한 입력 구성과 교차 철회 검증, 원 작업 접수 전 대화 참조의
+  영속 고정 및 아직 남은 실행·활성화 경계를 구분한다.
 - `services/catalog_service/eom_catalog_service/knowledge_analysis_service.py`: 승인 분석·이벤트 transaction.
 - `services/catalog_service/eom_catalog_service/registry_service.py`: Item 승인·소유된 상태 변경.
 - `services/catalog_service/eom_catalog_service/knowledge_graph_publication_service.py`: source membership·Graph 출판 transaction.

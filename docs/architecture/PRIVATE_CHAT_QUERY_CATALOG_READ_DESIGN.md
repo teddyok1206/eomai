@@ -140,8 +140,10 @@ is import/package closure, not another numeric or Chat runtime acceptance.
 Proof `/tmp/eom-private-document-package.WrotY1u0/prove_archives.py`, raw
 `e5bbca3c7c3f53206c5ce618eb946c08def69022d8bb485b7d4a9fabcd0bef01`.
 
-Remaining next boundary: compose this public read owner with the actual Chat
-message/session/claim owner and original-command/root-bound private Runner
-submission/allocation/execution. Then verify protected installation and actual
+At the680849e9 checkpoint the next boundary was composition with the Chat source.
+That source/control composition is now implemented and separately verified in
+[Private Chat QUERY owner composition](PRIVATE_CHAT_QUERY_OWNER_COMPOSITION.md).
+Original-command/root-bound private Runner submission/allocation/execution still
+remain required. Then verify protected installation and actual
 tool delivery. The existing compiler/result CHECK is still intentionally closed
 to unimplemented execution. **NOT_INSTALLED / NOT_ACTIVE; C4 and full goal OPEN.**

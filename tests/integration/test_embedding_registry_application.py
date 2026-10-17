@@ -24,6 +24,7 @@ from eom_catalog_contracts.embedding_registry import RegisterEmbeddingIndexComma
 from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingIndexManifest,
     EmbeddingSourceBinding,
+    EmbeddingSpace,
     EmbeddingVectorShardManifest,
 )
 from eom_catalog_contracts.inference_transfer_experiment import (
@@ -137,9 +138,12 @@ def _artifact(session: Session, pointer: ArtifactMemberPointer, document: dict[s
 
 
 def _fixture(
-    engine: Engine, *, view: ExperimentView = "METADATA_ONLY"
+    engine: Engine,
+    *,
+    view: ExperimentView = "METADATA_ONLY",
+    space: EmbeddingSpace | None = None,
 ) -> tuple[RegisterEmbeddingIndexCommand, ResolvedEmbeddingRegistration]:
-    command, original = capture_pair(view=view)
+    command, original = capture_pair(view=view, space=space)
     with Session(engine) as session, session.begin():
         seed = _seed(session)
         item_id, item_revision, base_run, solution_run = _binding_source_ids(session, seed)

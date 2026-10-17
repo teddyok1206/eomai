@@ -16,6 +16,7 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     SHARD_SCHEMA_REF,
     EmbeddingIndexManifest,
     EmbeddingSourceBinding,
+    EmbeddingSpace,
     EmbeddingVectorShardManifest,
     IncrementalEmbeddingResult,
 )
@@ -77,7 +78,12 @@ def registered(
 ):
     assert guarded_engine.dialect.name == "postgresql"
     assert not tmp_path.is_relative_to(Path("/mnt/nas"))
-    command, capture = _fixture(guarded_engine, view="CONTENT_ONLY")
+    requested = getattr(request, "param", True)
+    command, capture = _fixture(
+        guarded_engine,
+        view="CONTENT_ONLY",
+        space=requested if isinstance(requested, EmbeddingSpace) else None,
+    )
     if getattr(request, "param", True):
         with Session(guarded_engine) as session, session.begin():
             corpus = session.get(KnowledgeCorpusRecord, command.corpus_id)

@@ -407,12 +407,13 @@ PASS이며 양성 root/systemd/source/GPU 값은 합성 fixture입니다. 이는
 인증 만료 연장으로 복구하지 않았습니다. 서로 다른 두 이력을 합치거나 과거 실패를
 성공으로 바꾸지 않습니다. 일반 소비자 연결과 GPU 검증은 여전히 미완료입니다.
 
-채팅 질문의 공개 자료·인덱스 읽기도 기존 Catalog 경계에 연결했습니다. 원 질문을 승인
-문항으로 꾸미지 않고 현재 자료·풀이보고서·권한을 읽기 전후에 확인하며, 등록 정보와
-실제 네 종류의 파일을 같은 기존 조회기로 검증합니다. 관련 소스318·strict type4·임시
-PostgreSQL64/no skips/cleanup PASS입니다. 실제 채팅 소유권·claim에 묶인 접수·실행과
-도구 전달·운영 활성화는 아직 남아 있습니다.
-[설계·실패 보존·검증 범위](docs/architecture/PRIVATE_CHAT_QUERY_CATALOG_READ_DESIGN.md)
+채팅 질문을 승인 문항으로 꾸미지 않고, 원 대화·질문·점유권과 현재 자료·풀이보고서·
+권한·인덱스·전용 실행 설정을 기존 소유자 경계로 확인하는 소스 구현을 연결했습니다.
+마지막 대화 확인 중 자료 철회도 재현해 차단했습니다. 관련 소스386·strict type2·임시
+PostgreSQL69/no skips/cleanup PASS입니다. 실제 원 작업에 묶인 접수·실행·도구 전달과
+보호 설치·운영 활성화는 아직 남아 있으며, 이 검증을 전체 C4 완료로 해석하지 않습니다.
+[자료 읽기](docs/architecture/PRIVATE_CHAT_QUERY_CATALOG_READ_DESIGN.md) ·
+[원 대화·설정 조합과 실패 보존·남은 경계](docs/architecture/PRIVATE_CHAT_QUERY_OWNER_COMPOSITION.md)
 
 아래는 날짜·후보별 역사적 구현 기록입니다. 당시의 미완료 표기는 현재 종합 상태와
 구별하며, 최신 실제 실행·활성화 범위는 위 표와 연결된 상태 문서를 기준으로 합니다.
