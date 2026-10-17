@@ -649,3 +649,20 @@ accepted Artifacts and historical failures are preserved. C1–C5 actual consume
 the full goal remain open. User replies saying authentication was entered are not counted
 as success while the original observer's published state is still LOGIN; no duplicate
 login process/request or credential persistence is introduced.
+
+The `eff3b87155be37126a78618c682dd449c8964134` candidate passed the standard three-wheel
+build and RECORD inspection. An isolated API-interpreter child imported the CUDA leaf
+directly from that platform wheel, compared all7 changed/new production members and the
+packaged readiness schema with the checkout, and rejected the actual wrong native identity
+before metadata/ML imports. It intentionally left stdout/stderr discarded; the independent
+parent observed exit0 and emitted only verification metadata. An earlier reporting wrapper
+incorrectly expected output after that deliberate quiet boundary; it exited0 with empty
+output and did not indicate a native/model failure. No leaf diagnostic restoration was added.
+
+Build-only directory:
+`/tmp/eom-api-build/eff3b87155be37126a78618c682dd449c8964134.CIRQrC/dist`.
+Raw platform wheel SHA `8c79174844af19d0131ba0e75c10b7fb7f2c4867ede780c7b0c9aa4ce8486d70`;
+API-contract wheel SHA `7fbce06c599aba2494a134f6663726dcf96e820343b8997c93495b7d3ba70cf7`.
+This is not installed prefix/source-authorized Job/GPU positive evidence. Milestone Slack
+sent `devreport_1433d08fc62e4f5a976d0871b9cb8b0c` at07:33:58 UTC explicitly retained that
+distinction and the outstanding six-launch/consumer/full-goal scope.
