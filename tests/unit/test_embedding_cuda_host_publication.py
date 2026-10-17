@@ -20,13 +20,14 @@ from tests.unit.test_embedding_host_configuration_files import _fixture, _write
 from tests.unit.test_embedding_runtime_host_closure import _cache
 
 
-def fixture(tmp_path, monkeypatch):
+def fixture(tmp_path, monkeypatch, *, schema_ref=capture.CUDA_HOST_SCHEMA_REF):
+    recipe = capture.cuda_host_library_recipe(schema_ref)
     base = _fixture(tmp_path / "base", monkeypatch)
     root = tmp_path / "published"
     source = tmp_path / "source"
     source.mkdir(mode=0o700)
     specs = {}
-    for role, _name, _maximum in capture._LIBRARIES:
+    for role, _name, _maximum in recipe.libraries:
         path = source / (role + ".so")
         raw = b"source-is-not-executable:" + role.encode()
         _write(path, raw)
@@ -52,16 +53,17 @@ def fixture(tmp_path, monkeypatch):
     )
     generated = []
 
-    def generate(workspace, final, stage, cpu_files):
+    def generate(workspace, final, stage, cpu_files, *, schema_ref):
+        assert capture.cuda_host_library_recipe(schema_ref) == recipe
         generated.append(workspace)
-        assert len(tuple(stage.iterdir())) == 6
+        assert len(tuple(stage.iterdir())) == len(recipe.libraries)
         assert all(p.stat().st_mode & 0o777 == 0o444 for p in stage.iterdir())
         return _cache(
             tuple(
                 (name, path, 0x303, 0, 0)
                 for name, path in (
                     *host.embedding_host_loader_cache_routes(),
-                    *((name, str(final / name)) for _role, name, _maximum in capture._LIBRARIES),
+                    *((name, str(final / name)) for _role, name, _maximum in recipe.libraries),
                 )
             )
         )
@@ -72,6 +74,7 @@ def fixture(tmp_path, monkeypatch):
         "embeddingcudahostrev_" + "2" * 32,
         base_capture.parse_host_configuration_snapshot_pin(base.pointer.model_dump(mode="json")),
         source / "RDMACM.so",
+        schema_ref,
     )
     return request, root, source, generated
 

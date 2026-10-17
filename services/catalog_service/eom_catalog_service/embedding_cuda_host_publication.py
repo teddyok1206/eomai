@@ -75,6 +75,11 @@ _SOURCES = MappingProxyType(
             575344,
             "088b0021d638306f5541e7baab06a0182b07db0a280e19b3b40c746f729b3773",
         ),
+        "CUDA_NVML": (
+            "libnvidia-ml.so.580.126.09",
+            2283608,
+            "7cf5b9e876f8a082616b5b632f426fdf2ac6fb2e04bfa90c5a3f4eebafe90910",
+        ),
     }
 )
 
@@ -118,11 +123,13 @@ class CudaHostPublicationRequest:
     configuration_revision_id: str
     base_configuration: base_capture.HostConfigurationSnapshotPin
     rdmacm_source: Path
+    schema_ref: str = capture.CUDA_HOST_SCHEMA_REF
 
     def __post_init__(self) -> None:
         capture.validate_cuda_host_configuration_identity(
             self.configuration_id, self.configuration_revision_id
         )
+        capture.cuda_host_library_recipe(self.schema_ref)
         _require(
             type(self.base_configuration) is base_capture.HostConfigurationSnapshotPin,
             "INPUT_INVALID",
@@ -330,8 +337,14 @@ def _prepare_cache_command(
 
 
 def _generate_cache(
-    workspace: Path, final: Path, stage: Path, cpu_files: NumericalRuntimeFileSnapshots
+    workspace: Path,
+    final: Path,
+    stage: Path,
+    cpu_files: NumericalRuntimeFileSnapshots,
+    *,
+    schema_ref: str = capture.CUDA_HOST_SCHEMA_REF,
 ) -> bytes:
+    recipe = capture.cuda_host_library_recipe(schema_ref)
     build = workspace / "build"
     for relative in ("etc", "var/cache/ldconfig", "lib", "usr/lib"):
         _private_parents(workspace, build / relative)
@@ -343,7 +356,7 @@ def _generate_cache(
         size, sha = fixed[source]
         cpu_files.verify(source, sha256="sha256:" + sha, size=size, maximum=8 * 1024**2)
         bindings.append((source, Path(route)))
-    bindings.extend((stage / name, final / name) for _role, name, _maximum in capture._LIBRARIES)
+    bindings.extend((stage / name, final / name) for _role, name, _maximum in recipe.libraries)
     command = _prepare_cache_command(workspace, final, tuple(bindings))
     _write(workspace / "unit-name", (_UNIT + "\n").encode(), mode=0o600)
     diagnostic_fd = os.open(
@@ -392,7 +405,7 @@ def _generate_cache(
     observed = NumericalRuntimeFileSnapshots(_ROOT_UID).observe_protected_member_bytes(
         build / "etc/ld.so.cache", maximum=128 * 1024
     )
-    capture.validate_cuda_host_loader_cache(observed.raw, final)
+    capture.validate_cuda_host_loader_cache(observed.raw, final, schema_ref=schema_ref)
     return observed.raw
 
 
@@ -449,7 +462,7 @@ def _pointer_from_raw(
         type(value) is dict and isinstance(value.get("snapshot_sha256"), str), "MANIFEST_INVALID"
     )
     return capture.CudaHostExtensionPin(
-        "eom://schemas/knowledge/embedding-cuda-host-extension/1.0#/$defs/snapshot",
+        request.schema_ref,
         request.configuration_id,
         request.configuration_revision_id,
         len(raw),
@@ -488,6 +501,7 @@ def publish_cuda_host_extension(
     _require(os.geteuid() == _ROOT_UID, "OWNER_REQUIRED")
     _require(type(request) is CudaHostPublicationRequest, "INPUT_INVALID")
     request.__post_init__()
+    recipe = capture.cuda_host_library_recipe(request.schema_ref)
     base = base_capture.resolve_host_configuration_snapshot(request.base_configuration)
     with _lock():
         _mkdir(_ROOT)
@@ -510,7 +524,7 @@ def publish_cuda_host_extension(
         stage = workspace / "revision"
         stage.mkdir(mode=0o700)
         libraries = []
-        for role, name, maximum in capture._LIBRARIES:
+        for role, name, maximum in recipe.libraries:
             physical, size, sha = _SOURCES[role]
             source = request.rdmacm_source if role == "RDMACM" else _SYSTEM_LIBRARIES / physical
             owner = pwd.getpwnam("eom").pw_uid if role == "RDMACM" else _ROOT_UID
@@ -528,10 +542,16 @@ def publish_cuda_host_extension(
             maximum=8 * 1024**2,
             mode=0o500,
         )
-        cache = _generate_cache(workspace, final, stage, NumericalRuntimeFileSnapshots(_ROOT_UID))
+        cache = _generate_cache(
+            workspace,
+            final,
+            stage,
+            NumericalRuntimeFileSnapshots(_ROOT_UID),
+            schema_ref=request.schema_ref,
+        )
         _write(stage / "ld.so.cache", cache)
         body = {
-            "schema_version": "embedding-cuda-host-extension/1.0",
+            "schema_version": recipe.schema_version,
             "configuration_id": request.configuration_id,
             "configuration_revision_id": request.configuration_revision_id,
             "captured_at": datetime.now(UTC)
@@ -567,7 +587,7 @@ def publish_cuda_host_extension(
         capture._manifest(raw, pointer)
         _write(stage / "snapshot.json", raw)
         base.assert_unchanged()
-        _require(len(tuple(stage.iterdir())) == 8, "MEMBER_SET_INVALID")
+        _require(len(tuple(stage.iterdir())) == len(recipe.libraries) + 2, "MEMBER_SET_INVALID")
         os.rename(stage, final)
         # Cross-parent directory rename needs write access to its '..' update.
         # Keep it private0700 until the complete immutable file set has moved.
@@ -617,6 +637,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--configuration-revision-id", required=True)
     parser.add_argument("--base-pointer-json", required=True)
     parser.add_argument("--rdmacm-source", type=Path, required=True)
+    parser.add_argument(
+        "--schema-ref",
+        choices=(capture.CUDA_HOST_SCHEMA_REF, capture.CUDA_HOST_NVML_SCHEMA_REF),
+        default=capture.CUDA_HOST_SCHEMA_REF,
+    )
     args = parser.parse_args(argv)
 
     def unique(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -633,7 +658,11 @@ def main(argv: list[str] | None = None) -> int:
         )
         result = publish_cuda_host_extension(
             CudaHostPublicationRequest(
-                args.configuration_id, args.configuration_revision_id, base, args.rdmacm_source
+                args.configuration_id,
+                args.configuration_revision_id,
+                base,
+                args.rdmacm_source,
+                args.schema_ref,
             )
         )
         print(

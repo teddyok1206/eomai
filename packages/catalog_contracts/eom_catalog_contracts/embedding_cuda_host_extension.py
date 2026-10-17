@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta
 from types import MappingProxyType
-from typing import Annotated, Any, ClassVar, Final, Literal
+from typing import Annotated, Any, ClassVar, Final, Literal, Self
 
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -22,6 +22,10 @@ from eom_catalog_contracts.validation import validate_contract
 CUDA_HOST_SCHEMA: Final = "embedding-cuda-host-extension"
 CUDA_HOST_MANIFEST_REF: Final = (
     "eom://schemas/knowledge/embedding-cuda-host-extension/1.0#/$defs/snapshot"
+)
+CUDA_HOST_NVML_SCHEMA: Final = "embedding-cuda-host-extension-v1.1"
+CUDA_HOST_NVML_MANIFEST_REF: Final = (
+    "eom://schemas/knowledge/embedding-cuda-host-extension/1.1#/$defs/snapshot"
 )
 MAX_CUDA_HOST_MANIFEST_BYTES: Final = 8192
 type CudaHostConfigurationId = Annotated[str, Field(pattern=r"^embeddingcudahost_[0-9a-f]{32}$")]
@@ -56,8 +60,8 @@ def _raw(value: object, depth: int = 0) -> Any:
             raise ValueError("CUDA host metadata object exceeds fixed shape")
         return {name: _raw(child, depth + 1) for name, child in value.items()}
     if isinstance(value, tuple | list):
-        if len(value) > 6:
-            raise ValueError("CUDA host metadata array exceeds six library members")
+        if len(value) > 7:
+            raise ValueError("CUDA host metadata array exceeds seven library members")
         return [_raw(child, depth + 1) for child in value]
     if isinstance(value, datetime):
         if value.tzinfo is None or value.utcoffset() != timedelta(0):
@@ -71,6 +75,7 @@ def _raw(value: object, depth: int = 0) -> Any:
 class _CudaHostValue(FrozenModel):
     model_config = ConfigDict(revalidate_instances="always")
     schema_root: ClassVar[bool] = False
+    schema_name: ClassVar[str] = CUDA_HOST_SCHEMA
 
     @model_validator(mode="before")
     @classmethod
@@ -82,7 +87,7 @@ class _CudaHostValue(FrozenModel):
         ):
             raise ValueError("CUDA host metadata exceeds fixed byte budget")
         if cls.schema_root:
-            validate_contract(CUDA_HOST_SCHEMA, raw)
+            validate_contract(cls.schema_name, raw)
         return raw
 
 
@@ -100,22 +105,29 @@ class CudaHostLibraryMember(_CudaHostValue):
         return self
 
 
-class CudaHostExtensionSnapshot(_CudaHostValue):
+class CudaHostNvmlLibraryMember(_CudaHostValue):
+    role: Literal["CUDA_NVML"]
+    member_name: Literal["libnvidia-ml.so.1"]
+    byte_count: int = Field(ge=1, le=8 * 1024 * 1024, strict=True)
+    sha256: Sha256
+
+
+class _CudaHostSnapshot(_CudaHostValue):
     schema_root = True
-    schema_version: Literal["embedding-cuda-host-extension/1.0"]
+    schema_version: str
     configuration_id: CudaHostConfigurationId
     configuration_revision_id: CudaHostConfigurationRevisionId
     captured_at: UtcDatetime
     base_configuration: EmbeddingHostConfigurationPointer
     base_host_seed_sha256: Sha256
     driver_release: str = Field(pattern=r"^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$")
-    libraries: tuple[CudaHostLibraryMember, ...] = Field(min_length=6, max_length=6)
+    libraries: tuple[CudaHostLibraryMember | CudaHostNvmlLibraryMember, ...]
     loader_cache: EmbeddingLoaderCacheMember
     host_seed_sha256: Sha256
     snapshot_sha256: Sha256
 
     @model_validator(mode="after")
-    def canonical_closure(self) -> CudaHostExtensionSnapshot:
+    def canonical_closure(self) -> Self:
         body = self.model_dump(mode="json")
         seed = {
             name: body[name]
@@ -130,9 +142,22 @@ class CudaHostExtensionSnapshot(_CudaHostValue):
         return self
 
 
-class CudaHostExtensionPointer(_CudaHostValue):
+class CudaHostExtensionSnapshot(_CudaHostSnapshot):
+    schema_version: Literal["embedding-cuda-host-extension/1.0"]
+    libraries: tuple[CudaHostLibraryMember, ...] = Field(min_length=6, max_length=6)
+
+
+class CudaHostExtensionSnapshotV11(_CudaHostSnapshot):
+    schema_name = CUDA_HOST_NVML_SCHEMA
+    schema_version: Literal["embedding-cuda-host-extension/1.1"]
+    libraries: tuple[CudaHostLibraryMember | CudaHostNvmlLibraryMember, ...] = Field(
+        min_length=7, max_length=7
+    )
+
+
+class _CudaHostPointer(_CudaHostValue):
     schema_root = True
-    schema_ref: Literal["eom://schemas/knowledge/embedding-cuda-host-extension/1.0#/$defs/snapshot"]
+    schema_ref: str
     configuration_id: CudaHostConfigurationId
     configuration_revision_id: CudaHostConfigurationRevisionId
     manifest_byte_count: int = Field(ge=1, le=MAX_CUDA_HOST_MANIFEST_BYTES, strict=True)
@@ -140,17 +165,43 @@ class CudaHostExtensionPointer(_CudaHostValue):
     snapshot_sha256: Sha256
 
 
-def cuda_host_extension_bytes(value: CudaHostExtensionSnapshot) -> bytes:
-    return canonical_json_bytes(
-        CudaHostExtensionSnapshot.model_validate(value).model_dump(mode="json")
-    )
+class CudaHostExtensionPointer(_CudaHostPointer):
+    schema_ref: Literal["eom://schemas/knowledge/embedding-cuda-host-extension/1.0#/$defs/snapshot"]
 
 
-def parse_cuda_host_extension_bytes(raw: bytes) -> CudaHostExtensionSnapshot:
+class CudaHostExtensionPointerV11(_CudaHostPointer):
+    schema_name = CUDA_HOST_NVML_SCHEMA
+    schema_ref: Literal["eom://schemas/knowledge/embedding-cuda-host-extension/1.1#/$defs/snapshot"]
+
+
+type CudaHostExtensionSnapshotValue = CudaHostExtensionSnapshot | CudaHostExtensionSnapshotV11
+type CudaHostExtensionPointerValue = CudaHostExtensionPointer | CudaHostExtensionPointerV11
+
+
+def _snapshot(value: object) -> CudaHostExtensionSnapshotValue:
+    raw = _raw(value)
+    if isinstance(raw, dict) and raw.get("schema_version") == "embedding-cuda-host-extension/1.1":
+        return CudaHostExtensionSnapshotV11.model_validate(raw)
+    return CudaHostExtensionSnapshot.model_validate(raw)
+
+
+def parse_cuda_host_extension_pointer(value: object) -> CudaHostExtensionPointerValue:
+    """Select only an explicitly named released format; never substitute latest."""
+    raw = _raw(value)
+    if isinstance(raw, dict) and raw.get("schema_ref") == CUDA_HOST_NVML_MANIFEST_REF:
+        return CudaHostExtensionPointerV11.model_validate(raw)
+    return CudaHostExtensionPointer.model_validate(raw)
+
+
+def cuda_host_extension_bytes(value: CudaHostExtensionSnapshotValue) -> bytes:
+    return canonical_json_bytes(_snapshot(value).model_dump(mode="json"))
+
+
+def parse_cuda_host_extension_bytes(raw: bytes) -> CudaHostExtensionSnapshotValue:
     if type(raw) is not bytes or not 0 < len(raw) <= MAX_CUDA_HOST_MANIFEST_BYTES:
         raise ValueError("CUDA host manifest bytes exceed fixed budget")
     try:
-        snapshot = CudaHostExtensionSnapshot.model_validate(json.loads(raw))
+        snapshot = _snapshot(json.loads(raw))
     except (RecursionError, UnicodeError):
         raise ValueError("CUDA host manifest is not bounded valid JSON") from None
     # Exact canonical bytes also reject duplicate keys, whitespace and alternate numbers.
@@ -160,19 +211,21 @@ def parse_cuda_host_extension_bytes(raw: bytes) -> CudaHostExtensionSnapshot:
 
 
 def validate_cuda_host_extension_pointer(
-    pointer: CudaHostExtensionPointer,
-    snapshot: CudaHostExtensionSnapshot,
+    pointer: CudaHostExtensionPointerValue,
+    snapshot: CudaHostExtensionSnapshotValue,
     raw: bytes,
     base_snapshot: EmbeddingHostConfigurationSnapshot,
     base_raw: bytes,
-) -> CudaHostExtensionSnapshot:
+) -> CudaHostExtensionSnapshotValue:
     """Pure pointer closure, not a filesystem, mapping, kernel or device permission grant."""
-    pointer = CudaHostExtensionPointer.model_validate(pointer)
-    snapshot = CudaHostExtensionSnapshot.model_validate(snapshot)
+    pointer = parse_cuda_host_extension_pointer(pointer)
+    snapshot = _snapshot(snapshot)
     base = validate_host_configuration_pointer(snapshot.base_configuration, base_snapshot, base_raw)
     if (
         type(raw) is not bytes
         or raw != cuda_host_extension_bytes(snapshot)
+        or pointer.schema_ref
+        != "eom://schemas/knowledge/" + snapshot.schema_version + "#/$defs/snapshot"
         or snapshot.base_host_seed_sha256 != base.host_seed_sha256
         or pointer.configuration_id != snapshot.configuration_id
         or pointer.configuration_revision_id != snapshot.configuration_revision_id

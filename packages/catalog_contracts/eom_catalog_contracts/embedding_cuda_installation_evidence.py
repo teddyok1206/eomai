@@ -14,7 +14,7 @@ from referencing.exceptions import Unresolvable
 
 from eom_catalog_contracts.embedding_cuda_host_extension import (
     CudaHostExtensionPointer,
-    CudaHostExtensionSnapshot,
+    CudaHostExtensionSnapshotValue,
     validate_cuda_host_extension_pointer,
 )
 from eom_catalog_contracts.embedding_host_configuration import EmbeddingHostConfigurationSnapshot
@@ -251,7 +251,7 @@ def validate_rootlocal_cuda_installation_metadata_references(
     proof_raw: bytes,
     bundle: EmbeddingRuntimeBundle,
     bundle_raw: bytes,
-    host_snapshot: CudaHostExtensionSnapshot,
+    host_snapshot: CudaHostExtensionSnapshotValue,
     host_snapshot_raw: bytes,
     base_snapshot: EmbeddingHostConfigurationSnapshot,
     base_snapshot_raw: bytes,

@@ -54,6 +54,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.2",
             "sha256:c4b8baa130c032a7ef3513c37df849bf28fd20d500b767bf8eb7bf4e4c89cb9a",
         ),
+        "embedding-cuda-host-extension-v1.1": CatalogSchemaResource(
+            "schemas/knowledge/embedding-cuda-host-extension-v1.1.schema.json",
+            "resources/knowledge/embedding-cuda-host-extension-v1.1.schema.json",
+            "1.1",
+            "sha256:b6362bdf94c1a7bd32afa252a5acdb3dca04e73b16bdca1ff9937e0a9aa68d0f",
+        ),
         "embedding-cuda-host-extension": CatalogSchemaResource(
             "schemas/knowledge/embedding-cuda-host-extension-v1.schema.json",
             "resources/knowledge/embedding-cuda-host-extension-v1.schema.json",

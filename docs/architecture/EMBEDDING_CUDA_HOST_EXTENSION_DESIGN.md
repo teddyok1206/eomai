@@ -5,6 +5,11 @@ FINAL rejected one uncaptured NVML dependency. It remains FAILED/NOT_ADMITTED;
 see the bounded successor design below and
 [actual operations](../operations/EMBEDDING_CUDA_CONFIGURATION_2026-10-16.md).
 
+NVML host1.1 source implementation now passes the focused source gates below;
+this is not protected-owner installation, actual host1.1 publication, a new CUDA
+probe/seal or activation. Existing config1.2/prefix-input1.2/receipt2.0 remain
+closed to host1.0; selecting the successor requires explicit compatible successors.
+
 2026-10-16 UTC. Design before protocol/behavior. Source and protected host-only
 publication/capture PASS; full CUDA candidate/runtime/device admission NOT_ACTIVE.
 This is required by the original incremental-RAG CPU/CUDA experiment, not a new
@@ -61,6 +66,53 @@ capture/publish through supported owners and independently audit/probe/observe.
 This design does not itself install a successor, release a lease, seal CUDA,
 run a model or change the default. Original C1–C5 and six frozen interleaved
 CPU/CUDA comparisons remain required; no human quality evaluation is added.
+
+## NVML host1.1 source checkpoint —2026-10-17
+
+Protocol-first JSON Schema2020-12 and identical packaged mirror add exactly one
+ordered `CUDA_NVML / libnvidia-ml.so.1` member, individually bounded8MiB, to the
+unchanged six roles. New schema raw
+b6362bdf94c1a7bd32afa252a5acdb3dca04e73b16bdca1ff9937e0a9aa68d0f.
+The predecessor1.0 schema/resource bytes and every329 preexisting registry entry
+are independently pinned, including whole metadata digest
+b7bb6abaa3dcccf8da91d3e462abee2b588a3b8858bc9c45cea790f9bb4cfd4d.
+The older322-entry family retains its original99eb601c digest as well. Its test
+initially counted five additive later entries; explicit successor exclusions
+corrected membership, not the old count/digest or schema bytes.
+
+Two explicit frozen pointer/snapshot types share one canonical hash/validation
+implementation. The stdlib owner uses a fixed schema-ref→frozen recipe mapping,
+not latest or a plugin registry. Shared resolver/publication/cache logic supports
+six/eight or seven/nine exact library/total-member sets. Existing unversioned
+stdlib pointer parsing still expects1.0; the schema-aware owner must explicitly
+select1.1. Old native1.2/audit1.2/receipt2.0 reject1.1, including constructed-copy,
+raw canonical and cross-version pointer mismatches. No wire predecessor was
+widened or reinterpreted; no DB/dependency/queue change.
+
+Synthetic tests cover exact schema/mirror/export, all predecessor bytes, missing/
+duplicate/reordered/oversized/boolean/path members, explicit unknown-version
+rejection, canonical/duplicate-key parsing, model-copy revalidation, revision vs
+runtime seed, readonly file identity/hash/symlink/closed namespace, wrong NVML
+cache route, and seven-library ELF/FD closure with no system-library fallback.
+The existing publication adapter's synthetic cache-unit ports prove nine-member
+publication, same-input reuse and refusal to relabel an existing revision. They
+do not constitute actual systemd/cache/GPU acceptance.
+
+Final focused CUDA/native/resources/dependency suite1275 PASS49.63s, strict type
+check9 source modules PASS, Ruff/format/diff PASS. The suite includes building the
+platform wheel, exact resource/RECORD inspection and installed-wheel schema reads
+without the source checkout. Earlier134/153/159/1272 runs overlap and are not
+summed. Actual source SHA verification reconfirms all three operating CPU numeric
+implementations3487cae0/440d7406/f667e54d unchanged; no CPU re-encoding or benchmark
+family weakening.
+
+Next: build/install only the reviewed protected administrative owner, publish
+the actual new host1.1 bytes through its existing adapter, and independently
+validate the readonly bound cache/ELF/FD closure with accepted OLD Python. Keep
+the current selected-cache alias, CPU runtime and failed retained probe untouched.
+Then explicit compatible native/audit/admission successors and supported terminal
+retirement precede any new candidate execution. C1–C5, image19-entry migration,
+six actual comparisons and conditional GPU default remain OPEN.
 
 ## Evidence and chosen boundary
 

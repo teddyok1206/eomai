@@ -12,8 +12,9 @@ from typing import Any
 import pytest
 from eom_catalog_contracts.embedding_cuda_host_extension import (
     CudaHostExtensionPointer,
-    CudaHostExtensionSnapshot,
+    CudaHostExtensionPointerValue,
     parse_cuda_host_extension_bytes,
+    parse_cuda_host_extension_pointer,
 )
 from eom_catalog_service import embedding_cuda_host_capture as capture
 from eom_catalog_service import embedding_cuda_host_files as adapter
@@ -23,7 +24,7 @@ from eom_catalog_service.embedding_runtime_host_closure import embedding_host_lo
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from jsonschema.exceptions import ValidationError as SchemaError
 
-from tests.unit.test_embedding_cuda_host_extension import body, pointer, rehash
+from tests.unit.test_embedding_cuda_host_extension import body, rehash
 from tests.unit.test_embedding_host_configuration_files import (
     _fixture as base_fixture,
 )
@@ -36,7 +37,7 @@ class Fixture:
     manifest: Path
     cache: Path
     libraries: tuple[Path, ...]
-    pointer: CudaHostExtensionPointer
+    pointer: CudaHostExtensionPointerValue
     base_manifest: Path
 
     def resolve(self):
@@ -46,7 +47,7 @@ class Fixture:
         raw = canonical_json_bytes(rehash(document))
         _write(self.manifest, raw)
         # Allows corruption fixtures rejected by both readers, not an acceptance grant.
-        self.pointer = CudaHostExtensionPointer.model_validate(
+        self.pointer = parse_cuda_host_extension_pointer(
             self.pointer.model_dump(mode="json")
             | {
                 "manifest_byte_count": len(raw),
@@ -56,10 +57,26 @@ class Fixture:
         )
 
 
-def fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Fixture:
+def fixture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    schema_ref: str = capture.CUDA_HOST_SCHEMA_REF,
+) -> Fixture:
+    recipe = capture.cuda_host_library_recipe(schema_ref)
     base = base_fixture(tmp_path / "base", monkeypatch)
     observed = base.resolve()
     document = body()
+    document["schema_version"] = recipe.schema_version
+    if schema_ref == capture.CUDA_HOST_NVML_SCHEMA_REF:
+        document["libraries"].append(
+            {
+                "role": "CUDA_NVML",
+                "member_name": "libnvidia-ml.so.1",
+                "byte_count": 1,
+                "sha256": "sha256:" + "3" * 64,
+            }
+        )
     document["base_configuration"] = base.pointer.model_dump(mode="json")
     document["base_host_seed_sha256"] = observed.host_seed_sha256
     root = tmp_path / "cuda"
@@ -87,7 +104,8 @@ def fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Fixture:
         )
     )
     document["loader_cache"].update(byte_count=len(cache), sha256=sha256_bytes(cache))
-    snapshot = CudaHostExtensionSnapshot.model_validate(rehash(document))
+    raw_manifest = canonical_json_bytes(rehash(document))
+    snapshot = parse_cuda_host_extension_bytes(raw_manifest)
     manifest, member = directory / "snapshot.json", directory / "ld.so.cache"
     _write(manifest, canonical_json_bytes(snapshot.model_dump(mode="json")))
     _write(member, cache)
@@ -97,7 +115,17 @@ def fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Fixture:
         "NumericalRuntimeFileSnapshots",
         lambda _: NumericalRuntimeFileSnapshots(os.geteuid()),
     )
-    return Fixture(manifest, member, tuple(libraries), pointer(snapshot), base.manifest)
+    selected = parse_cuda_host_extension_pointer(
+        {
+            "schema_ref": schema_ref,
+            "configuration_id": snapshot.configuration_id,
+            "configuration_revision_id": snapshot.configuration_revision_id,
+            "manifest_byte_count": len(raw_manifest),
+            "manifest_raw_sha256": sha256_bytes(raw_manifest),
+            "snapshot_sha256": snapshot.snapshot_sha256,
+        }
+    )
+    return Fixture(manifest, member, tuple(libraries), selected, base.manifest)
 
 
 def test_no_site_capture_import_has_no_model_contract_storage_or_execution_dependency():

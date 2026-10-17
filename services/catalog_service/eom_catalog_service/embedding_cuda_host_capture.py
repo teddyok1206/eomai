@@ -10,6 +10,7 @@ import stat
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from eom_catalog_service import embedding_host_configuration_capture as base_capture
@@ -33,6 +34,29 @@ _LIBRARIES = (
     ("NL_CORE", "libnl-3.so.200", 8 * 1024 * 1024),
     ("NL_ROUTE", "libnl-route-3.so.200", 8 * 1024 * 1024),
 )
+CUDA_HOST_SCHEMA_REF = "eom://schemas/knowledge/embedding-cuda-host-extension/1.0#/$defs/snapshot"
+CUDA_HOST_NVML_SCHEMA_REF = (
+    "eom://schemas/knowledge/embedding-cuda-host-extension/1.1#/$defs/snapshot"
+)
+
+
+@dataclass(frozen=True, slots=True)
+class CudaHostLibraryRecipe:
+    schema_version: str
+    libraries: tuple[tuple[str, str, int], ...]
+
+
+_RECIPES = MappingProxyType(
+    {
+        CUDA_HOST_SCHEMA_REF: CudaHostLibraryRecipe(
+            "embedding-cuda-host-extension/1.0", _LIBRARIES
+        ),
+        CUDA_HOST_NVML_SCHEMA_REF: CudaHostLibraryRecipe(
+            "embedding-cuda-host-extension/1.1",
+            (*_LIBRARIES, ("CUDA_NVML", "libnvidia-ml.so.1", 8 * 1024 * 1024)),
+        ),
+    }
+)
 
 
 class CudaHostExtensionError(ValueError):
@@ -44,6 +68,12 @@ class CudaHostExtensionError(ValueError):
 def _require(value: bool, code: str) -> None:
     if not value:
         raise CudaHostExtensionError("CUDA_HOST_EXTENSION_" + code)
+
+
+def cuda_host_library_recipe(schema_ref: str) -> CudaHostLibraryRecipe:
+    """Two explicit immutable formats; an unknown pointer never selects latest."""
+    _require(type(schema_ref) is str and schema_ref in _RECIPES, "POINTER_INVALID")
+    return _RECIPES[schema_ref]
 
 
 def _sha(value: object) -> bool:
@@ -86,8 +116,7 @@ class CudaHostExtensionPin:
         )
         _require(
             type(self.schema_ref) is str
-            and self.schema_ref
-            == "eom://schemas/knowledge/embedding-cuda-host-extension/1.0#/$defs/snapshot"
+            and self.schema_ref in _RECIPES
             and type(self.manifest_byte_count) is int
             and 0 < self.manifest_byte_count <= _MAX_MANIFEST
             and _sha(self.manifest_raw_sha256)
@@ -96,7 +125,10 @@ class CudaHostExtensionPin:
         )
 
 
-def parse_cuda_host_extension_pin(value: object) -> CudaHostExtensionPin:
+def parse_cuda_host_extension_pin(
+    value: object, *, expected_schema_ref: str = CUDA_HOST_SCHEMA_REF
+) -> CudaHostExtensionPin:
+    cuda_host_library_recipe(expected_schema_ref)
     _require(
         type(value) is dict
         and set(value)
@@ -111,7 +143,9 @@ def parse_cuda_host_extension_pin(value: object) -> CudaHostExtensionPin:
         "POINTER_INVALID",
     )
     assert isinstance(value, dict)
-    return CudaHostExtensionPin(**value)
+    pin = CudaHostExtensionPin(**value)
+    _require(pin.schema_ref == expected_schema_ref, "POINTER_INVALID")
+    return pin
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,6 +168,8 @@ class _Manifest:
 
 
 def _manifest(raw: bytes, pin: CudaHostExtensionPin) -> _Manifest:
+    recipe = cuda_host_library_recipe(pin.schema_ref)
+
     def unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
         result: dict[str, Any] = {}
         for name, value in pairs:
@@ -168,7 +204,7 @@ def _manifest(raw: bytes, pin: CudaHostExtensionPin) -> _Manifest:
             "MANIFEST_INVALID",
         )
         _require(
-            document["schema_version"] == "embedding-cuda-host-extension/1.0"
+            document["schema_version"] == recipe.schema_version
             and document["configuration_id"] == pin.configuration_id
             and document["configuration_revision_id"] == pin.configuration_revision_id
             and raw == _canonical(document)
@@ -193,9 +229,9 @@ def _manifest(raw: bytes, pin: CudaHostExtensionPin) -> _Manifest:
             "MANIFEST_INVALID",
         )
         rows = document["libraries"]
-        _require(type(rows) is list and len(rows) == 6, "MEMBER_SET_INVALID")
+        _require(type(rows) is list and len(rows) == len(recipe.libraries), "MEMBER_SET_INVALID")
         libraries = []
-        for row, (role, name, maximum) in zip(rows, _LIBRARIES, strict=True):
+        for row, (role, name, maximum) in zip(rows, recipe.libraries, strict=True):
             _require(
                 type(row) is dict
                 and set(row) == {"role", "member_name", "byte_count", "sha256"}
@@ -275,10 +311,13 @@ def _read_only(path: Path, owner_uid: int) -> tuple[int, ...]:
     )
 
 
-def validate_cuda_host_loader_cache(raw: bytes, root: Path) -> None:
-    """Exact base and six private routes, never a wildcard host SONAME permission."""
+def validate_cuda_host_loader_cache(
+    raw: bytes, root: Path, *, schema_ref: str = CUDA_HOST_SCHEMA_REF
+) -> None:
+    """Exact base and explicitly selected private routes, never wildcard host permission."""
+    recipe = cuda_host_library_recipe(schema_ref)
     expected = dict(embedding_host_loader_cache_routes())
-    expected.update((name, str(root / name)) for _role, name, _maximum in _LIBRARIES)
+    expected.update((name, str(root / name)) for _role, name, _maximum in recipe.libraries)
     seen: set[str] = set()
     try:
         entries = read_embedding_loader_cache_entries(raw)
@@ -303,7 +342,7 @@ def _closed_members(root: Path, expected: set[Path]) -> None:
     with os.scandir(root) as entries:
         for entry in entries:
             member = root / entry.name
-            _require(member in expected and len(observed) < 8, "MEMBER_SET_INVALID")
+            _require(member in expected and len(observed) < len(expected), "MEMBER_SET_INVALID")
             _require(entry.is_file(follow_symlinks=False), "MEMBER_SET_INVALID")
             observed.add(member)
     _require(observed == expected, "MEMBER_SET_INVALID")
@@ -357,10 +396,13 @@ def resolve_cuda_host_extension(pin: CudaHostExtensionPin) -> CapturedCudaHostEx
         )
         _require(_read_only(path, files.owner_uid) == manifest_identity, "CHANGED")
         manifest = _manifest(raw, pin)
+        recipe = cuda_host_library_recipe(pin.schema_ref)
         base = base_capture.resolve_host_configuration_snapshot(manifest.base_pin)
         _require(manifest.base_seed == base.host_seed_sha256, "BASE_SEED_INVALID")
         expected = {path, root / "ld.so.cache"}
-        for library, (_role, _name, maximum) in zip(manifest.libraries, _LIBRARIES, strict=True):
+        for library, (_role, _name, maximum) in zip(
+            manifest.libraries, recipe.libraries, strict=True
+        ):
             member = root / library.member_name
             initial = _read_only(member, files.owner_uid)
             files.verify(member, sha256=library.sha256, size=library.byte_count, maximum=maximum)
@@ -374,7 +416,7 @@ def resolve_cuda_host_extension(pin: CudaHostExtensionPin) -> CapturedCudaHostEx
             size=manifest.cache_byte_count,
             maximum=_MAX_CACHE,
         )
-        validate_cuda_host_loader_cache(cache, root)
+        validate_cuda_host_loader_cache(cache, root, schema_ref=pin.schema_ref)
         _closed_members(root, expected)
         files.require_closed_namespaces({root}, expected)
         _closed_members(root, expected)

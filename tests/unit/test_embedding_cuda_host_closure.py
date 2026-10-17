@@ -13,6 +13,7 @@ from eom_catalog_contracts.embedding_cuda_host_extension import parse_cuda_host_
 from eom_catalog_service import embedding_cuda_host_closure as cuda
 from eom_catalog_service import embedding_host_configuration_capture as capture
 from eom_catalog_service import embedding_runtime_host_closure as host
+from eom_catalog_service.embedding_cuda_host_capture import CUDA_HOST_SCHEMA_REF
 from eom_catalog_service.embedding_runtime_files import (
     InstalledRuntimeProofError,
     NumericalRuntimeFileSnapshots,
@@ -58,8 +59,8 @@ class FakeBase:
         raise InstalledRuntimeProofError("INSTALLED_RUNTIME_HOST_MAPPED_FILE_UNAVAILABLE")
 
 
-def ports(tmp_path, monkeypatch):
-    value = fixture(tmp_path, monkeypatch)
+def ports(tmp_path, monkeypatch, *, schema_ref=CUDA_HOST_SCHEMA_REF):
+    value = fixture(tmp_path, monkeypatch, schema_ref=schema_ref)
     document = parse_cuda_host_extension_bytes(value.manifest.read_bytes()).model_dump(mode="json")
     reports = {}
     for path, row in zip(value.libraries, document["libraries"], strict=True):
