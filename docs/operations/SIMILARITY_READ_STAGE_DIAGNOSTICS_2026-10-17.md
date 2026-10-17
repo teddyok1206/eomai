@@ -1,6 +1,7 @@
 # Installed bounded similarity-read timing; actual measurement pending
 
-2026-10-17 UTC. **INSTALLED / SERVICE_STARTUP_PASS / MEASUREMENT_AUTH_PENDING**.
+2026-10-17 UTC. **DF408FEF_INSTALLED / LOGGER_STARTUP_FIX_SOURCE_PASS /
+CONTEXT_MEASUREMENT_PENDING**.
 This is not original context-delivery acceptance or full incremental-RAG completion.
 The last actual context503 remains the7fcd0865 observation17:10:01. The later
 df408fef observation was stopped by authentication before reaching context read;
@@ -143,3 +144,35 @@ at least24h (not before2026-10-18 18:23 UTC)** while independent authorized work
 continues. It is not a successful login, a stored credential or permission to
 extend auth/sudo lifetimes. Preserve already successful and failed observations;
 leave genuinely credentialed checks pending instead of inventing acceptance.
+
+## Completed-read continuation is prepared without new login
+
+The temporary diagnostic now has a separate **completed-result-read-only** entry:
+`/tmp/eom-completed-context-read-WFk1Ch9h/read_original_completed_context.py`, raw
+`1f97d883f6cdb3a94e3399cf9de98c867ce594b657e453b8dfcaf7a0f5d33d37`.
+Default invocation validates only the exact saved canonical request and READY
+reply/workflow/selection hashes. Actual installed-Python input check PASS;
+HTTP calls/login prompts/model0. Saved READY is not current authorization.
+
+Its explicit future interactive mode cannot run before the user's no-prompt
+deadline. It uses one actual official login and the reviewed memory-only refresh
+helper, then only the existing completed-context route. It does not replay
+preparation, create another key/Workflow/query, extract another process's token,
+relax freshness or persist credentials. On failure it awaits an explicit READ
+in that same process; no automatic HTTP/model retry. Two successful reads must
+retain exact selection/context identity and deterministic context, with separate
+integer elapsed measurements. This does not claim fresh preparation replay PASS.
+
+Synthetic diagnostic/session regression **33 PASS/4.64s**, Ruff/format PASS.
+They cover denied HTTP, invalid/stale/nonready binding, schema/hash/cache failure,
+changed second read, bounded/no-follow external inputs, no default auth import,
+the no-prompt window, official refresh identity/expiry budget and memory cleanup.
+The fake-login wire test also checks that `SecretStr` is unwrapped only into the
+actual HTTP payload, never sent as its masked JSON representation or logged.
+No genuine login/session/HTTP/source permission is inferred from synthetic tests.
+Initial local test failures were fixture expectations (JSON Schema exception type
+and `sys.dont_write_bytecode` location); production validation was not loosened.
+
+The old observer and failed503 history are preserved. No new observer was started
+at getpass and no user input was requested. Source22ea9d14's logger startup fix is
+still not deployed, and actual context delivery/measurement remains unverified.

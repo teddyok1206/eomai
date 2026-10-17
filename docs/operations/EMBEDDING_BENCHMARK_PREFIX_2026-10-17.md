@@ -1,6 +1,7 @@
 # Fixed benchmark prefix preparation — 2026-10-17 UTC
 
-**CUDA BYTE_AUDITED / INDEPENDENT_READ_PASS / NOT_FRESHLY_ADMITTED.**
+**CUDA FRESH_ADMISSION_PASS / SUCCESSOR_POLICY_PUBLISHED / CPU_NOT_UPGRADED /
+SIX_RUNS_PENDING.** Earlier dated preparation/probe statuses below are historical.
 CPU operating prefix/config and model defaults are unchanged. This is not a
 six-run comparison or full-goal acceptance. The original HTTP context failure
 remains open and is prioritized before further consumer activation.
@@ -368,3 +369,107 @@ One due official read-only INDEX projection at18:22:38.540347 reports681 view
 encodings/681 bindings/177 immutable index revisions/six logical indexes. It
 submitted no claim, repair, retry or model work. This is not681 unique Items or
 full seed coverage. Next routine observation is no earlier18:52:38 UTC.
+
+### Successor control preparation before CPU maintenance
+
+Prepare the existing INDEX successor's small identity/policy/runtime values using
+the installed public parsers and exact predecessor15, without selecting any of
+them. The source is the already installed df408fef owner, not implicit latest.
+The actual Identity owner must still fence predecessor/resource version and
+register/activate/grant after fresh CPU admission and coherent stopped selection.
+
+Publish only the candidate service execution policy through the existing
+Orchestrator `ControlFileSetPublisher` as actual UID990/GID1000, no supplementary
+groups, NoNewPrivs1 and zero capabilities before EOM imports. Root may stage
+hash-pinned small local configuration and launch the fixed identity-drop entry;
+root does not read/write NAS or impersonate a human session. Canonical publication
+is the existing control Artifact/Job, not the local file. Source/namespace/model/
+resource meaning stays unchanged; only successor identity and timestamp/hash
+change. The resulting pointer is preparation, not an active grant or native run.
+
+Access is four keyed files and one existing idempotent control publication. No
+new schema, queue, DB table/index or dependency. Keep current service/prefix
+untouched; preserve original producer/manifest/hash receipts. Unknown publication
+outcome requires inspecting the original Job/key, not another identity or blind
+retry. Leave activation pending if fresh CPU evidence or coherence is unavailable.
+
+### Actual maintenance preflight and typed successor preparation
+
+The unchanged existing installer fingerprint operation completed read-only for
+the operating CPU tree: `d0298a4d2e69938521a98f05739901a6d86ee6ecf449daed194cb862725136b5`.
+This is a predecessor byte pin, not acceptance of an upgraded prefix or future
+permission to replace it without a fresh drain/epoch check.
+
+At18:27:33.024816 UTC, a fixed READ ONLY deployment observer saw current INDEX15
+still processing its original command at `complete`, two other unstarted
+current-identity requests, no nonterminal native Job, and the known expired old
+QUERY history. Actual QUERY/INDEX owners remained active. This is not quiescence:
+zero current model processes does not imply all owner work is finished. Do not
+cancel the two observed requests from a stale snapshot; only inspect them after
+normal drain and use supported exact unstarted cancellation if still eligible.
+Do not rewrite the historical expired QUERY or treat its age as permission to retry.
+Protected observer raw0f777acb; temporary results:
+`/tmp/eom-cpu-benchmark-maintenance-VfCRKQxQ/read-only-preflight-result.json`.
+
+The installed public parsers validated a candidate identity16/runtime/unit and
+native policy without DB/NAS access or activation. Identity revision
+`localindexservicerev_8c018aa27fce4a119a684deb9c8ca6a6`, semantic
+`3a529110b84c638f808a68cd767a7d6d9970a42436ee15709eca62d62cf604cf`.
+Identity/runtime/unit raw hashes are respectively ec2d474f/62a0f2a3/ec81bb7e in the
+temporary preparation and root intent. Public successor-chain validation and
+actual static unit verification PASS. Its namespace/model/resource semantics
+match the predecessor; only service/timestamp/hash change in its native policy.
+Fresh native environment/verifier and actual Identity registration/grant remain
+pending. One first local preparation failed before writing candidates because
+the identity hash helper requires its closed field set including the hash slot;
+using its existing documented full-body pattern fixed this. No schema was relaxed.
+
+### Actual Orchestrator publication and independent Catalog resolution —18:38–18:41 UTC
+
+The prepared native policy is now a **canonical committed control Artifact**,
+not merely a temporary candidate. It is still **NOT_ACTIVE** and identity16 is
+not registered or selected. Current service15 and all four operating service
+processes/invocations are unchanged; no drain, prefix swap, native model or new
+source permission occurred.
+
+- Owner Job: `job_f7fcb6e2e5184b1da92c36fcfd7ae408`.
+- Artifact/revision: `artifact_4ec1988b63e54d85a729f681f0acfee3` /
+  `rev_2ac08e80c63f466d84d2b2087ad8d42c`.
+- `policy.json` raw SHA:
+  `d54885ec938cb84726c2b049226e36d940aacd597a47c6551ee756633edcbdde`.
+- Policy semantic SHA:
+  `a672c106525c801cdd14c1651bd14d7ba16df2a42c8430b34e52b7dfdf051fc4`.
+- Manifest SHA:
+  `d083a635eac6f7fdd92bba2fd977f9697257e35611165eee5d4898d484e8a916`.
+
+Existing publication and UID-drop operator ASTs are identical after their exact
+source/path/hash pin substitutions. Protected root staging helper rawa94b2e0b;
+publisher rawbefba12e; fixed UID-drop entry raw5b6be175. Actual publication unit
+`eom-benchmark-index-policy-42a1c5c6.service`, invocation
+`20d6f4bcf3314f7d8f9e22faf9250dc2`, finished successfully. Actual UID990/GID1000,
+empty groups, NoNewPrivs1 and zero permitted/effective/ambient capabilities are
+verified before EOM imports. Only that Orchestrator commits to NAS; root stages
+small local values and does not access NAS. Receipt raw
+`a6cc181038f6920ef8d52385d2b5ddab6cb9d9d55edf762dd3c8d61d21a3c6e9`.
+
+A separate actual990 process used public Catalog `PinnedArtifactReadContext`
+under a READ ONLY transaction and read-only NAS mount. It checked exact member
+closure, manifest hash, producer Job/SUCCEEDED/approved lineage, raw bytes,
+policy schema/semantic hash and current provenance. Database mutations/model0.
+Unit `eom-benchmark-index-policy-catalog-read-42a1c5c6.service`, invocation
+`74ebff66e82c42d389add134eb69beea`, success; local proof raw
+`c9e14399e4b7ad8f9a6038bc71bf2fd81397d5cb1311f85b2ae78b2ffb11e3b5`.
+
+Independent root-local readback matched each receipt to its exact successful
+journal invocation; unloaded transient defaults alone were not used as proof.
+Its first Catalog readback incorrectly compared JSON key order as text; after
+preserving that failed diagnostic, parsed-object comparison passed against the
+same existing receipt/invocation. No publication, Catalog read or Job was rerun.
+
+Root intent/typed values/receipts are under
+`/var/lib/eom-indexing-benchmark-42a1c5c6`; temporary finite helpers/results are
+under `/tmp/eom-cpu-benchmark-maintenance-VfCRKQxQ`. These installation/control
+proofs do not prove a fresh CPU install, model comparison, GPU superiority,
+consumer activation or the original HTTP context delivery. The next boundary
+remains coherent normal drain → supported old-command handling → CPU successor/
+fresh admission → stopped configuration/Identity selection → normal resumption.
