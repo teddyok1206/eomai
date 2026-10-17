@@ -143,6 +143,20 @@ lease wheel and root lifetime owner installation/selection plus a fresh actual
 retained case are still required. The c499numerical prefix must not be rebuilt for
 these image-lifetime changes, and source PASS is not six CPU/CUDA model comparisons.
 
+Candidate checkpoint: standard provider/trainer builds and platform wheel/RECORD
+inspection completed at`e2326626aed396b3ccfd4d759a834a6e0d987794`. The canonical
+new standalone lease wheel SHA is
+`f527cc610b7df2a384e40f450d5758a87ad76ff9684a778201a43b60d4593763`;
+both builds produced the same bytes. The new root owner was actually installed at
+`/opt/eom/embedding-owner-releases/e2326626aed396b3ccfd4d759a834a6e0d987794/site-packages`
+using the existing protected installer. Platform/API-contract raw wheel SHA are
+`b9e2baac62db98560b32db9498b7e72f108893ba2ea43d3c95ae5d70f1603406`/
+`1a2d3f349100a51dff45960d3a6eaf03e60f7d4b81a83cc1dbd9481863e966ef`.
+This is INSTALLED_NOT_SELECTED; image worker lease replacement and exact root
+entry/config selection are pending. The source fixed entry now explicitly pins
+this reviewed owner, never latest. Old1031owner/nativee5/c499prefix remain intact.
+Changing this administrative entry requires no numerical rebuild or model rerun.
+
 2026-10-16 source 후속: [CUDA loader 작업 폴더 경계](INCREMENTAL_EMBEDDING_CUDA_LOADER_DIRECTORY_DESIGN.md)는
 공식 cuSPARSELt의 빈 RUNPATH component를 고정0555 빈 폴더의 관측으로 해석하고,
 native CUDA factory에서 실제 cwd를 재검증한다. CPU의 거부 규칙과 digest는 유지한다.

@@ -13,7 +13,7 @@ import stat
 import sys
 from pathlib import Path
 
-OWNER_RELEASE = "1031a2323d24cf2fcb968e1edd83a5e0cf5047a3"
+OWNER_RELEASE = "e2326626aed396b3ccfd4d759a834a6e0d987794"
 ENTRY_ROOT = Path("/usr/local/libexec/eom-image-runtime")
 OWNER_SITE = Path("/opt/eom/embedding-owner-releases") / OWNER_RELEASE / "site-packages"
 CONFIG_SCHEMA = {
