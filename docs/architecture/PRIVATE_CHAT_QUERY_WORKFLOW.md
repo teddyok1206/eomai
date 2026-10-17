@@ -80,3 +80,26 @@ test or migration is claimed. No runtime, service, authentication, model or sour
 policy was changed for this pure contract checkpoint. Actual owner admission,
 atomic origin/allocation, completion publication/checkpoint execution and Chat
 tool delivery remain necessary, alongside the unchanged full-goal gates.
+
+### Source-candidate packaging
+
+Candidate `fbda1ea7e6df97acbe8c726d2ce0a17ce9351b4c` is committed/pushed and passed
+the standard three-wheel build/RECORD gate, without installation or service action.
+Dist: `/tmp/eom-api-build/fbda1ea7e6df97acbe8c726d2ce0a17ce9351b4c.Fhla7p/dist`.
+
+- platform raw `35816a9b9a8a226d0dc62d2aa9b6252546ef8c032c57ae4f5e80c0723492dc94`;
+- API-contract raw `7d09406e6a9a190db3cfd4863fc06bea4ef6e7aa0fd871c75b5d26c4c8c8f46b`;
+- API raw `cf22b0037d2a986cb26d441b0e6364e2fe5323677420c50b45cc3349cc7ec75d`.
+
+An independent Conda `-I -S -B` process imported159 EOM modules exclusively from
+the exact platform/contracts archives. It validated definition/receipt/carrier and
+all supplied origin/request/native/result associations, and confirmed the compiler
+still refuses execution before owner composition. No checkout/test/ML/SQL/HTTP
+module or installed EOM fallback was imported. DB/model/activation calls0.
+The numerical values and origin are explicitly synthetic, not current authorization.
+
+Proof program and inputs remain under `/tmp/eom-private-query-workflow.Qf8DKy7z`;
+proof raw `893533f00c024745ad2b23ea814313a388bed3ccd9f68cfb7c19cf82764bc966`;
+synthetic input raw `2da0a8b2f064280b5117c69246f66730a06af3abcca81a1f731315c77ab5082d`.
+This closes packaging only; existing operating releases and remaining C4/overall
+goal acceptance are unchanged. No new authentication prompt was issued.
