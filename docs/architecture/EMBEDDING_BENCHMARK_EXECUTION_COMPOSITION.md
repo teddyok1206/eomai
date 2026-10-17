@@ -1007,3 +1007,12 @@ six frozen CPU/CUDA launches, performance/default selection and actual C1–C5 c
 remain. Current INDEX/QUERY requests and authentication processes were not restarted.
 No real signal/reset/clean, model execution, production Job/Artifact/default or protected
 runtime was changed by this checkpoint. Full goal remains ACTIVE/NOT_COMPLETE.
+
+Candidate `ea0bb6e459be08af160979b1cf5a27fbdd0b9d6c` passed standard three-wheel/RECORD
+build. An isolated actual API-interpreter process imported and byte-matched all8 changed/
+new production members from its platform wheel, checked the unchanged two native code pins,
+and proved7 actual nonroot entry denials without optional ML imports. Build:
+`/tmp/eom-api-build/ea0bb6e459be08af160979b1cf5a27fbdd0b9d6c.5Ja0w6/dist`.
+Raw platform SHA `20ab33cf649fc2b0e9f741735d78837447dd6ea2826d5c0257291faea756c961`;
+API-contract SHA `9be274e569807149eb3da4263b6ec5ddc3b53281ba88b8ca70a09ab7e483aa6e`.
+BUILD_ONLY / NOT_ACTIVE. No privileged helper install, activation or GPU positive occurred.
