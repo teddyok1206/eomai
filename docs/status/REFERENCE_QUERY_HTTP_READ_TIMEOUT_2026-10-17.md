@@ -1,6 +1,9 @@
 # Original HTTP QUERY: READY, result delivery still unavailable
 
-Observed2026-10-17 UTC. This is not full goal/consumer acceptance.
+Observed2026-10-17 UTC. This is not full goal/consumer acceptance. The sections
+below preserve successive observations, not claims that all older PIDs/sessions
+are still current. Latest7fcd0865 deployment/restoration and fresh original-request
+verification are in the [operating record](../operations/SHARED_PROVENANCE_READ_RELEASE_2026-10-17.md).
 
 The original continuation process remains alive; no replacement login, request,
 Workflow or idempotency key was created. Its fixed metadata log records:
@@ -83,3 +86,16 @@ port. Extend the same root model cache instead of inventing another cache or
 omitting full-scope validation. [Scoped follow-up design](../architecture/SCOPED_TYPED_ARTIFACT_DECODING.md#shared-past-exam-provenance-follow-up--design-before-implementation).
 This is a concrete repeat-work correction to test, not yet a proven complete
 explanation/fix of the actual deadline. Keep30s unchanged until further evidence.
+
+## Installed7fcd0865 original read still fails
+
+The [actual compatible release](../operations/SHARED_PROVENANCE_READ_RELEASE_2026-10-17.md)
+completed normal owner drain, installation, restoration and startup/health checks.
+The previous session actually expired401 and was terminated through QUIT.
+One failed fresh login remains recorded. At17:09:09 a new official login passed,
+and the unchanged original request/Workflow was READY17:09:21. Its context read
+returned503 `SIMILARITY_CONTEXT_UNAVAILABLE`17:10:01. No new key, numerical model
+execution, authority/TTL expansion or deadline increase was used. The live
+observer retains its same memory session at AWAIT_EXPLICIT_REPLAY; do not replace
+it simply because a read timed out. Shared decode source speedup is not sufficient
+evidence that the actual delivery bottleneck has been removed.

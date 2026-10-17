@@ -154,5 +154,9 @@ Both configurations emit identical value hashes and index cardinalities. Only
 existing root model retention was disabled for the baseline; source validators
 and raw reads remain real temporary-file operations with synthetic DB metadata.
 The benchmark measures neither operator authorization nor whole live latency.
-Follow-up code is not yet installed: installed API/Catalog remain4222ca9a, and the
-actual original context read is still unresolved, not relabeled as PASS.
+At that source checkpoint the follow-up was not installed. Subsequent actual
+7fcd0865 installation, normal drain/restoration and startup/health are recorded
+in the [operating release](../operations/SHARED_PROVENANCE_READ_RELEASE_2026-10-17.md).
+The actual original context read subsequently returned503 at17:10:01, so delivery
+acceptance remains unresolved. Source measurements and installed health are not
+relabeled as live latency PASS.

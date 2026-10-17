@@ -308,12 +308,14 @@ wheel 조립2건 포함)·strict type·Ruff/format·shell 검사 PASS입니다. 
 새 코드의 승인을 대신하지 않으며, 실제6회 비교도 아직입니다.
 [정확한 설치·보존·남은 승인 경계](docs/operations/EMBEDDING_BENCHMARK_PREFIX_2026-10-17.md).
 
-운영4222ca9a의 원 HTTP 참고 문항 읽기는 아직30초503입니다. 같은 로그인/원 요청의
-실측을 보존하고, 문항·보고서 외에 공통 기출 출처 기록의 반복 해석도 기존 root cache로
-연결했습니다(**SOURCE_PASS / NOT_INSTALLED**). 관련154 tests·strict2·Ruff/format PASS,
-합성4단계64/128개 작업 단위의 해석4→1회·출력 hash 동일. 이를 실제 지연 해결로
-주장하지 않습니다. [실패·실측](docs/status/REFERENCE_QUERY_HTTP_READ_TIMEOUT_2026-10-17.md) ·
-[후속 설계·검증](docs/architecture/SCOPED_TYPED_ARTIFACT_DECODING.md#shared-past-exam-provenance-follow-up--design-before-implementation).
+운영4222ca9a에서 발생한 원 HTTP 참고 문항 읽기의30초503 이력은 보존합니다.
+공통 기출 출처 기록의 반복 해석도 기존 root cache로 연결한7fcd0865를 실제 배포하고
+정상 drain·설치·서비스 복구·health를 확인했습니다(**INSTALLED / CONTEXT_FAIL503**).
+관련154 tests·strict2·Ruff/format PASS, 합성4단계 해석4→1회·출력 hash 동일이나
+실제 지연 해결 증거는 아닙니다. 새 공식 로그인으로 같은 원 요청 READY를 확인했지만
+17:10 UTC 실제 결과 조회도503이어서 추가 진단이 필요합니다. 인증 만료·권한·30초 제한은
+우회하지 않습니다. [실패·실측](docs/status/REFERENCE_QUERY_HTTP_READ_TIMEOUT_2026-10-17.md) ·
+[실제 배포·남은 조회 검증](docs/operations/SHARED_PROVENANCE_READ_RELEASE_2026-10-17.md).
 
 GPU 비교의 최신 구현은 **SOURCE_PASS / NOT_ACTIVE**입니다. 고정 CUDA 실행기, CPU/CUDA
 공통 설정 준비, 관리자 측 실행·프로세스·장치·양쪽 잠금 대조를 연결했습니다. 준비 파일의
