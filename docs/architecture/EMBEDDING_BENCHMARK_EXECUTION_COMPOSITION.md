@@ -809,3 +809,13 @@ failure codes, not a global zero-failure assertion. Original queries/Jobs were n
 This checkpoint is SOURCE_PASS, not installed activation or GPU performance/default PASS.
 Only ordinary local test/operational evidence was produced; no protected prefix/template,
 production Job, model, Artifact, policy or CPU default was changed by this implementation.
+
+Candidate `dd756f6a9b972a111efff730e7afae8005a1e304` passed standard three-wheel/RECORD
+build. An isolated API-interpreter process imported the actual wheel's observer, compared
+all8 changed/new production members with the checkout, checked the two native entry/writer
+code pins against wheel bytes and refused its actual nonroot identity before observation.
+No optional ML/GPU import occurred. This is BUILD_ONLY plus an OS identity negative, not
+an installed root/GPU positive. Build:
+`/tmp/eom-api-build/dd756f6a9b972a111efff730e7afae8005a1e304.UTxgWS/dist`.
+Raw platform wheel SHA `47691d6cd9ab961923c06dc9b964c76eedd6a8fb40b3b58467fcc9172600087f`;
+API-contract wheel SHA `3c191f2b38433cab6ad55730783bd2b223e923028018e099cc9af6aa14f18d36`.
