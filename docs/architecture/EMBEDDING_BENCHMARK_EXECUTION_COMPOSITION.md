@@ -1438,3 +1438,43 @@ different revision projections, not541 unique Items or complete coherent coverag
 OS checks confirmed the original INDEX3633849 and QUERY3633843 handles alive10h12m21.
 No restart/new query/key/Job was submitted. Next routine index check>=10:50:12 UTC; original
 HTTP LOGIN was last actually confirmed10:05:34, with next routine auth check>=10:35:40.
+
+### Packaged private root/workflow-owner resource exchange — 2026-10-17
+
+Candidate `dacb74195c179e08249d23be9f1fdb54f45c3e32` passed the standard three-wheel/
+RECORD build and was pushed clean. Build directory
+`/tmp/eom-api-build/dacb74195c179e08249d23be9f1fdb54f45c3e32.CHvz0v/dist`;
+platform raw SHA `cf296721f43be0d7ee0aa64a90cf7e3bd7dcd7b4793441ae75ef20ee522f2c94`;
+API-contract raw SHA `ed40898742d1d66bf700fe2eef811236988d01d12d9cdc9a34fa534ef1f3f30b`.
+
+The existing protected installer (raw SHA559ada516fe9d46f57926aad70699e81deba5f1a18b4e25e3f6e6bcdf1384b71)
+installed those exact wheels as a **passive owner only**, under
+`/opt/eom/embedding-owner-releases/dacb74195c179e08249d23be9f1fdb54f45c3e32`.
+Actual root imported/byte-matched all4 changed production members against the retained wheel;
+no optional ML library was imported. An exclusive protected fixture copy then ran against
+that installed candidate with no editable/Git module path: **10 privileged tests PASS**.
+
+The new case permanently drops a private child to the real workflow-owner UID/GID with no
+supplementary groups, connects to a private root process socket, and runs the actual packaged
+owner client. Both sides verify the kernel's exact PID/UID/GID, use the existing canonical
+resource protocol, invoke the synthetic original-invocation authorizer twice and close owned
+FDs. Other9 cases regress actual DAC, native/owner peer and environment/owner-exit handling.
+This is ACTUAL_UID_UNIX_RESOURCE_TRANSPORT_PASS. Counters and authorizer are explicitly
+synthetic; it is **not** actual independent GPU sampling, live source/IAM, a PID1 benchmark
+unit, physical lease cleanup, model execution, numerical/performance/default acceptance.
+
+Protected evidence:
+`/opt/eom/embedding-benchmark-os-evidence/dacb74195c179e08249d23be9f1fdb54f45c3e32/`
+contains intent, installer stdout/stderr, exact whitelisted fixtures, test stdout/stderr and
+immutable result. Test stdout raw SHA
+`ba258290023015edd41752667e8c74e916dae070c823e41b541ffc5ecab3bb25`;
+fixture archive raw SHA `3b494bf3a203bd9c8e7aad35f0c85a3080f9108174fe76eb617bc2c0a3ca9acc`.
+No-replay operator raw SHA
+`eefb40976da01e0cf841f799c486e57250c664c46f5a5080ea7b2d5f166f93cd`;
+local receipt `/tmp/eom-benchmark-relay-os.XDbsF2th/operator-result.json` returns0 with
+expected_ten_tests_passed=true. Same EOM2 sudo TTY was reused without new credentials or
+TTL changes. Only private /run fixture directories were created/removed by their test
+contexts; production handoff, original Jobs/Artifacts/INDEX/QUERY, numerical prefixes,
+active selectors, image runtime and CPU default were untouched. Models/GPU leases/new
+production Jobs/NAS publications:0. Actual root lifecycle driver and all remaining full
+benchmark/consumer/default gates stay open; whole goal remains ACTIVE, not complete.
