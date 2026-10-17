@@ -1,4 +1,4 @@
-"""Independent root readback of fixed CUDA probe FDs and PID1 retention; no release or launch."""
+"""Root physical-GPU FD readback shared by explicit CUDA probe and image unit owners."""
 
 from __future__ import annotations
 
@@ -31,6 +31,7 @@ from eom_catalog_service.embedding_runtime_process_identity import require_exclu
 _LOCK = Path("/run/eom-gpu-lease/gpu0.lock")
 _PID1_FDS = Path("/proc/1/fd")
 _MAX_PID1_FDS = 4096
+_MAX_IMAGE_WORKER_FDS = 4096
 _ENV = {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"}
 type ProbeReport = NativeCudaProbeLeaseReady | NativeCudaProbeResult
 
@@ -88,6 +89,18 @@ class CudaProbeResourceObservation:
     device_nodes: tuple[RootLocalCudaDeviceNode, ...]
     shared_gpu_lease: RootLocalCudaSharedGpuLease
     pid1_descriptor: int
+
+
+@dataclass(frozen=True, slots=True)
+class ImageUnitGpuResources:
+    """Image-only physical resource readback, not a fabricated native probe report."""
+
+    device_nodes: tuple[RootLocalCudaDeviceNode, ...]
+    shared_gpu_lease: RootLocalCudaSharedGpuLease
+    pid1_descriptor: int
+
+
+type _RetainedGpuUnitResources = CudaProbeResourceObservation | ImageUnitGpuResources
 
 
 def validate_cuda_probe_fdstore(raw: bytes, lease: RootLocalCudaSharedGpuLease) -> None:
@@ -169,6 +182,11 @@ def observe_cuda_probe_retained_resources(
     _require(
         re.fullmatch(r"eom-embedding-native-cuda-probe@[0-9a-f]{32}\.service", unit) is not None
     )
+    _assert_retained_resources(observed, unit)
+    return observed
+
+
+def _assert_retained_resources(observed: _RetainedGpuUnitResources, unit: str) -> None:
     lease = RootLocalCudaSharedGpuLease.model_validate(observed.shared_gpu_lease)
     validate_rootlocal_cuda_resource_file_metadata(observed.device_nodes, lease)
     _require(_epoch(_LOCK.lstat()) == lease.lock_epoch)
@@ -179,7 +197,6 @@ def observe_cuda_probe_retained_resources(
     _require(_epoch(_LOCK.parent.lstat())[:5] == lease.parent_epoch)
     for node in observed.device_nodes:
         _require(_epoch(Path(node.path).lstat()) == node.epoch)
-    return observed
 
 
 @contextmanager
@@ -188,6 +205,12 @@ def hold_released_cuda_probe_resources(
 ) -> Iterator[None]:
     """Root cleanup proof only: hold the same now-free inode across post-retirement checks."""
     _require(os.getresuid() == (0, 0, 0) and type(observed) is CudaProbeResourceObservation)
+    with _hold_released_resources(observed):
+        yield
+
+
+@contextmanager
+def _hold_released_resources(observed: _RetainedGpuUnitResources) -> Iterator[None]:
     lease = RootLocalCudaSharedGpuLease.model_validate(observed.shared_gpu_lease)
     validate_rootlocal_cuda_resource_file_metadata(observed.device_nodes, lease)
 
@@ -218,6 +241,126 @@ def hold_released_cuda_probe_resources(
         os.close(descriptor)
 
 
+def _current_lease(pid: int, start_ticks: int, lease_gid: int) -> RootLocalCudaSharedGpuLease:
+    parent, lock = _LOCK.parent.lstat(), _LOCK.lstat()
+    lease = RootLocalCudaSharedGpuLease.model_validate(
+        {
+            "source": "ROOT_PROVISIONED_TMPFS_READONLY_EXCLUSIVE_FLOCK/1.0",
+            "resource_id": "GPU0",
+            "lock_path": str(_LOCK),
+            "filesystem": "tmpfs",
+            "lease_gid": lease_gid,
+            "parent_epoch": _epoch(parent)[:5],
+            "lock_epoch": _epoch(lock),
+            "holder_pid": pid,
+            "holder_start_time_ticks": start_ticks,
+        }
+    )
+    _require_tmpfs_device(lock.st_dev)
+    return lease
+
+
+def _require_worker_lock(lease: RootLocalCudaSharedGpuLease, descriptor: int, uid: int) -> None:
+    held = Path("/proc") / str(lease.holder_pid) / "fd" / str(descriptor)
+    _require(_epoch(held.stat()) == lease.lock_epoch)
+    raw = _read_fdinfo(lease.holder_pid, descriptor, uid)
+    flags = _fd_flags(raw)
+    _require(flags & os.O_ACCMODE == os.O_RDONLY and not flags & os.O_PATH)
+    _require(bool(flags & os.O_CLOEXEC))
+    require_exclusive_flock_fdinfo(
+        raw,
+        pid=lease.holder_pid,
+        device=lease.lock_epoch[0],
+        inode=lease.lock_epoch[1],
+        descriptor_flags=flags,
+    )
+    _require(_epoch(held.stat()) == lease.lock_epoch)
+
+
+def _named_device_nodes() -> tuple[RootLocalCudaDeviceNode, ...]:
+    nodes = []
+    for role, (name, _major, _minor) in CUDA_DEVICE_NODE_SPECS.items():
+        named = Path(name).lstat()
+        nodes.append(
+            RootLocalCudaDeviceNode.model_validate(
+                {
+                    "role": role,
+                    "path": name,
+                    "epoch": _epoch(named),
+                    "rdev_major": os.major(named.st_rdev),
+                    "rdev_minor": os.minor(named.st_rdev),
+                }
+            )
+        )
+    return tuple(nodes)
+
+
+def observe_image_unit_gpu_resources(
+    *,
+    unit: str,
+    pid: int,
+    start_time_ticks: int,
+    worker_uid: int,
+    lease_gid: int,
+) -> ImageUnitGpuResources:
+    """Read real worker and PID1 locks; caller separately pins unit/process/policy.
+
+    No worker-supplied descriptor/report or arbitrary file bytes are accepted.
+    Only a root owner may call this. This function never signals, launches,
+    retires or grants runtime/source/model authority.
+    """
+    from eom_catalog_service.image_gpu_unit_identity import image_gpu_unit_template
+
+    _require(os.getresuid() == (0, 0, 0))
+    image_gpu_unit_template(unit)
+    _require(type(worker_uid) is int and 0 < worker_uid <= 4294967294)
+    lease = _current_lease(pid, start_time_ticks, lease_gid)
+    matches = []
+    with os.scandir(Path("/proc") / str(pid) / "fd") as entries:
+        for count, entry in enumerate(entries, 1):
+            _require(
+                count <= _MAX_IMAGE_WORKER_FDS
+                and re.fullmatch(r"[0-9]{1,7}", entry.name) is not None
+            )
+            descriptor = int(entry.name)
+            try:
+                value = (Path("/proc") / str(pid) / "fd" / entry.name).stat()
+            except FileNotFoundError:
+                continue
+            if _epoch(value) == lease.lock_epoch:
+                _require_worker_lock(lease, descriptor, worker_uid)
+                matches.append(descriptor)
+    _require(len(matches) == 1)
+    nodes = _named_device_nodes()
+    validate_rootlocal_cuda_resource_file_metadata(nodes, lease)
+    observed = ImageUnitGpuResources(nodes, lease, _observe_retained_store_descriptor(lease, unit))
+    _require_worker_lock(lease, matches[0], worker_uid)
+    _assert_retained_resources(observed, unit)
+    return observed
+
+
+def observe_image_unit_gpu_retained_resources(
+    observed: ImageUnitGpuResources,
+    *,
+    unit: str,
+) -> ImageUnitGpuResources:
+    """Recheck image fencing after worker exit without dereferencing dead worker FDs."""
+    from eom_catalog_service.image_gpu_unit_identity import image_gpu_unit_template
+
+    _require(os.getresuid() == (0, 0, 0) and type(observed) is ImageUnitGpuResources)
+    image_gpu_unit_template(unit)
+    _assert_retained_resources(observed, unit)
+    return observed
+
+
+@contextmanager
+def hold_released_image_unit_gpu_resources(observed: ImageUnitGpuResources) -> Iterator[None]:
+    """Verify same-inode exclusive reacquisition only after the root owner's cleanup."""
+    _require(os.getresuid() == (0, 0, 0) and type(observed) is ImageUnitGpuResources)
+    with _hold_released_resources(observed):
+        yield
+
+
 def observe_cuda_probe_resources(
     report: ProbeReport, *, unit: str, lease_gid: int
 ) -> CudaProbeResourceObservation:
@@ -233,31 +376,9 @@ def observe_cuda_probe_resources(
     else:
         raise ValueError("NATIVE_CUDA_PROBE_RESOURCE_OBSERVATION_INVALID")
     _require(type(lease_gid) is int and report.supplementary_gids == (lease_gid,))
-    parent = _LOCK.parent.lstat()
-    lock = _LOCK.lstat()
-    lease = RootLocalCudaSharedGpuLease.model_validate(
-        {
-            "source": "ROOT_PROVISIONED_TMPFS_READONLY_EXCLUSIVE_FLOCK/1.0",
-            "resource_id": "GPU0",
-            "lock_path": str(_LOCK),
-            "filesystem": "tmpfs",
-            "lease_gid": lease_gid,
-            "parent_epoch": _epoch(parent)[:5],
-            "lock_epoch": _epoch(lock),
-            "holder_pid": report.pid,
-            "holder_start_time_ticks": report.start_time_ticks,
-        }
-    )
-    _require_tmpfs_device(lock.st_dev)
+    lease = _current_lease(report.pid, report.start_time_ticks, lease_gid)
     held_lock = Path("/proc") / str(report.pid) / "fd" / str(report.resource_fds.lease_fd)
-    _require(_epoch(held_lock.stat()) == lease.lock_epoch)
-    raw = _read_fdinfo(report.pid, report.resource_fds.lease_fd, report.worker_uid)
-    flags = _fd_flags(raw)
-    _require(flags & os.O_ACCMODE == os.O_RDONLY and not flags & os.O_PATH)
-    _require(bool(flags & os.O_CLOEXEC))
-    require_exclusive_flock_fdinfo(
-        raw, pid=report.pid, device=lock.st_dev, inode=lock.st_ino, descriptor_flags=flags
-    )
+    _require_worker_lock(lease, report.resource_fds.lease_fd, report.worker_uid)
     nodes = []
     hints = report.resource_fds.model_dump()
     for (role, (name, _major, _minor)), field in zip(

@@ -15,6 +15,10 @@ from typing import TYPE_CHECKING
 from eom_catalog_contracts.embedding_native_cpu_probe import ExecutionId, NativeCpuProbeResult
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_orchestrator.inference_transfer_cpu_systemd import CpuUnitObservation, inspect_cpu_unit
+from eom_orchestrator.systemd_unit_processes import (
+    UnitProcessObservationError,
+    root_owned_unit_processes,
+)
 from pydantic import TypeAdapter
 
 from eom_catalog_service.embedding_runtime_files import (
@@ -208,26 +212,11 @@ def native_probe_cgroup_members(cgroup: str) -> tuple[int, ...]:
         is None
     ):
         raise ValueError("NATIVE_CPU_PROBE_CGROUP_INVALID")
-    path = _CGROUP_ROOT / cgroup.removeprefix("/")
-    for directory in (path, *path.parents):
-        value = directory.lstat()
-        if not stat.S_ISDIR(value.st_mode) or value.st_uid != 0 or value.st_mode & 0o022:
-            raise ValueError("NATIVE_CPU_PROBE_CGROUP_INVALID")
-    if any(child.is_dir() for child in path.iterdir()):
-        raise ValueError("NATIVE_CPU_PROBE_NESTED_CGROUP")
-    descriptor = os.open(path / "cgroup.procs", os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
     try:
-        raw = os.read(descriptor, 4097)
-    finally:
-        os.close(descriptor)
-    if len(raw) > 4096 or any(
-        re.fullmatch(rb"[1-9][0-9]{0,9}", line) is None for line in raw.splitlines()
-    ):
-        raise ValueError("NATIVE_CPU_PROBE_CGROUP_INVALID")
-    pids = tuple(int(line) for line in raw.splitlines())
-    if len(set(pids)) != len(pids) or len(pids) > 64:
-        raise ValueError("NATIVE_CPU_PROBE_CGROUP_INVALID")
-    return pids
+        return root_owned_unit_processes(cgroup.removeprefix("/system.slice/"))
+    except UnitProcessObservationError as error:
+        label = "NESTED_CGROUP" if error.code == "NESTED_CGROUP" else "CGROUP_INVALID"
+        raise ValueError("NATIVE_CPU_PROBE_" + label) from error
 
 
 def _cgroup_members(cgroup: str) -> tuple[int, ...]:

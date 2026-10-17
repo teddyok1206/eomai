@@ -43,11 +43,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False, exit_on_error=False)
     parser.add_argument("--gpu-lock", action="append")
     try:
-        selection, _ = parser.parse_known_args(sys.argv[2:])
+        selection, forwarded = parser.parse_known_args(sys.argv[2:])
     except argparse.ArgumentError as error:
         raise SystemExit("IMAGE_GPU_UNIT_BOOTSTRAP_INVALID") from error
-    if selection.gpu_lock != ["/run/eom-gpu-lease/gpu0.lock"]:
+    if selection.gpu_lock != ["/run/eom-gpu-lease/gpu0.lock"] or any(
+        option.startswith("--") and "--gpu-lock".startswith(option.partition("=")[0])
+        for option in forwarded
+    ):
         # The migrated unit must not select the retained legacy/rollback branch.
+        # The legacy CLI allows abbreviations; an unparsed --g could override
+        # the full flag later even though this small parser disables abbreviation.
         raise SystemExit("IMAGE_GPU_UNIT_BOOTSTRAP_INVALID")
     prefix, module, console = _ROLES[sys.argv[1]]
     try:

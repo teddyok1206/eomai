@@ -303,6 +303,78 @@ verifier packaged a root bootstrap it does not contain. Full root guard, exact
 bootstrap deployment, all19 lifecycle migration and actual image acceptance remain
 required before the already planned CUDA model comparisons/default decision.
 
+#### Root image unit readback checkpoint
+
+The next existing-owner building block is implemented as **read-only source**,
+not a dispatcher, ACK sender, installed guardian or model grant. It consumes no
+worker JSON/authority and changes no image input/output schema, DB or queue.
+The existing required-design note above still defines its responsibility/source,
+pointers, O(F+T) bounded FD/thread access and failure/concurrency boundaries.
+
+- `image_gpu_unit_identity` owns the closed19-template → three-role lookup;
+  names/instances cannot be arbitrary paths or implicit new GPU roles. All19
+  source executable bindings are independently compared with that lookup.
+- `image_gpu_unit_observation.observe_image_gpu_unit_ready` requires root, exact
+  caller-pinned installed template/bootstrap hashes, actual account/group, exact
+  activating unit/PID/start/invocation, pinned command/executable, effective
+  private-network/empty-capability/device/retention policy, sole cgroup process,
+  and reserved ACK signal in every bounded thread. Device/boot and empty GPU
+  clients are checked using existing readonly observers. It never sends ACK.
+- Existing physical-FD readback shares its canonical worker/PID1 flock, tmpfs,
+  inode/epoch/readonly/store-name validation with a distinct image resource type.
+  Image code does not fabricate a native installation-probe report. Independent
+  native/image dataclasses preserve the old probe fields and canonical bytes;
+  common private validators and same-inode reacquisition implementation are reused.
+- The protected cgroup reader was extracted once for actual CPU/CUDA/image use;
+  the native wrapper retains its strict identity and old error labels. Missing
+  trees stay explicit, and duplicates, non-root/writable/nested/symlink trees,
+  excessive counts and impossible PID ranges are refused. No caller can choose
+  an arbitrary cgroup directory or make a missing tree recreate itself.
+- `verify_image_gpu_unit_terminal` preserves original success/failure/timeout
+  separately, pins the original invocation/start, rechecks file/account/policy,
+  ended original process, empty/confirmed-absent cgroup, zero GPU clients and the
+  still-retained physical fence. PID reuse is tested by PID+start, not PID alone.
+  Unknown results or partial cleanup fail explicitly. It never stop/reset/retries
+  a unit, clears a store, changes history or marks an application Job successful.
+
+Found and reproduced an additional pre-installation bootstrap ambiguity: its
+non-abbreviating `parse_known_args` could forward a later `--g` that the original
+CLI then expands to --gpu-lock, overriding the earlier canonical shared path.
+Seven failing regressions reproduced it before correction. The bootstrap now
+rejects reserved-flag prefixes among forwarded arguments. Original provider and
+trainer abbreviation behavior is independently preserved/tested; no backend shim.
+**Current bootstrap raw7edb475db14b0e23d6a820781fee3813c7714cbe250ebd314b2abceec53b4cd7**;
+earlier2da0e3d7/668baed3 bootstrap candidates were never installed and must not
+be used for the later coordinated migration. Package wheels1a5c6b86 remain valid:
+only their separate root-bootstrap input changed, not their package source bytes.
+
+Latest source results in explicit Conda environments: root observation/resource/
+retirement/dependency suites **274 PASS20.25s**; image/shared-lease/release suites
+**317 PASS14.37s**; strict6 source modules, Ruff/format/diff PASS. Earlier overlapping
+runs are not added. Tests explicitly simulate root/systemd/kernel observations;
+the private cgroup fixture initially inherited group-writable mode and was correctly
+refused, then fixed to its declared protected0755 fixture without weakening code.
+No privileged image/GPU acceptance or model execution is claimed by these tests.
+No DB mutation changed, so no production/disposable DB test was introduced here.
+The three numerical implementations remain exact3487cae0/440d7406/f667e54d bytes.
+
+Still required: compose these reads with the existing root unit owner; capture
+all19 installed release pins and drained old invocations before any ACK; persist
+original readiness/terminal intent before effects; send only the exact original
+main ACK; perform supported outcome-specific terminal retirement and same-inode
+post-checks. A cache/busy/pre-lease exit must not clear another unit's store/lease.
+Package that owner and bootstrap with all19 source templates/group/lock settings
+in one bounded rollout. Do not deploy RemainAfterExit into the existing --wait
+launcher without the terminating owner. Actual cross-consumer/crash/timeout
+acceptance, six frozen comparisons/default decision and C1–C5 remain open.
+
+Routine readback02:33:42 UTC: original INDEX/QUERY PIDs3633849/3633843 and
+invocations7c9ea0c5/ae90dbc1 remain active/running. Subsequent CONTENT a9e2bc90
+and CONCRETE fcc0aad5 four-target commands succeeded02:14:11/02:25:49; no new
+complete corpus denominator/metadata-command result is inferred. HTTP observer
+2895440 is still alive/LOGIN, without a new prompt/key/QUERY or accepted auth.
+Next routine readback is not before03:03:44 UTC. Full original goal remains ACTIVE.
+
 ## 5. 별도 protected CUDA 실행 leaf
 
 제안 prefix는 `/opt/eom/conda/envs/eom-embedding-cuda`, worker는 `eom-embedding-cuda`,

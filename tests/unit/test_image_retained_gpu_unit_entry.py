@@ -349,6 +349,43 @@ def test_bootstrap_accepts_one_unambiguous_equals_form_without_rewriting_flags(f
     assert state.argv[-1] == "--gpu-lock=" + str(adapter.SHARED_GPU_LOCK_PATH)
 
 
+@pytest.mark.parametrize(
+    "abbreviated",
+    ["--g", "--gp", "--gpu", "--gpu-", "--gpu-l", "--gpu-loc", "--g=/var/lib/eom-image/gpu0.lock"],
+)
+def test_bootstrap_rejects_later_abbreviation_that_legacy_cli_would_expand(
+    fixed_bootstrap, abbreviated
+):
+    state, _, events = fixed_bootstrap
+    state.argv.extend([abbreviated, "/var/lib/eom-image/gpu0.lock"])
+    with pytest.raises(SystemExit, match="IMAGE_GPU_UNIT_BOOTSTRAP_INVALID"):
+        bootstrap.main()
+    assert not events
+
+
+@pytest.mark.parametrize("role", ["PROVIDER", "TRAINER"])
+def test_original_cli_abbreviation_remains_compatible_but_requires_bootstrap_fence(role):
+    if role == "PROVIDER":
+        from eom_image_provider.cli import _parser
+
+        arguments = ["generate-composite", "--request", "/tmp/test-request.json"]
+    else:
+        from eom_image_trainer.cli import _parser
+
+        arguments = ["train", "--command", "/tmp/test-command.json"]
+    arguments += [
+        "--workspace",
+        "/tmp/test-workspace",
+        "--model-store-root",
+        "/tmp/test-models",
+        "--gpu-lock",
+        str(adapter.SHARED_GPU_LOCK_PATH),
+        "--g",
+        "/var/lib/eom-image/gpu0.lock",
+    ]
+    assert _parser().parse_args(arguments).gpu_lock == Path("/var/lib/eom-image/gpu0.lock")
+
+
 _UNIT_ROOT = Path(__file__).resolve().parents[2] / "infra/systemd"
 _GPU_TEMPLATES = tuple(
     sorted(

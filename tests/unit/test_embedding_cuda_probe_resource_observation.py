@@ -22,7 +22,15 @@ from tests.unit.test_embedding_runtime_process_identity import fdinfo
 def kernel(monkeypatch, ready_case):
     report = ready_case[2]
     k = FakeKernel()
-    state = {"store": None, "pid1": ["80"], "unheld_pid1": False, "unheld_worker": False}
+    state = {
+        "store": None,
+        "pid1": ["80"],
+        "unheld_pid1": False,
+        "unheld_worker": False,
+        "worker_fds": ["14"],
+        "worker_lock_fds": {14},
+        "expected_unit": "eom-embedding-native-cuda-probe@" + report.execution_id + ".service",
+    }
     store = [
         {
             "fdname": "eom-gpu0-lease",
@@ -50,7 +58,7 @@ def kernel(monkeypatch, ready_case):
     def procstat(path, *args, **kwargs):
         if str(path).startswith("/proc/123/fd/"):
             n = int(path.name)
-            return k.values[99 if n == 14 else n + 10]
+            return k.values[99 if n in state["worker_lock_fds"] else n + 10]
         if str(path).startswith("/proc/1/fd/"):
             return k.values[99]
         return real_stat(path, *args, **kwargs)
@@ -62,7 +70,7 @@ def kernel(monkeypatch, ready_case):
         assert path.parent.name == "fdinfo" and maximum == 16384
         pid, number = int(path.parts[2]), int(path.name)
         assert owner_uid == (0 if pid == 1 else report.worker_uid)
-        if pid == 1 or number == 14:
+        if pid == 1 or number in state["worker_lock_fds"]:
             raw = fdinfo(report.pid, 2, 99, os.O_RDONLY | os.O_CLOEXEC | os.O_NONBLOCK)
             no_lock = state["unheld_pid1" if pid == 1 else "unheld_worker"]
             return raw.split(b"lock:")[0] if no_lock else raw
@@ -73,12 +81,13 @@ def kernel(monkeypatch, ready_case):
 
     @contextmanager
     def scan(path):
-        assert str(path) == "/proc/1/fd"
-        yield iter(SimpleNamespace(name=name) for name in state["pid1"])
+        assert str(path) in {"/proc/1/fd", "/proc/123/fd"}
+        names = state["pid1"] if str(path) == "/proc/1/fd" else state["worker_fds"]
+        yield iter(SimpleNamespace(name=name) for name in names)
 
     def command(args, **kwargs):
         assert args[:4] == ("/usr/bin/systemd-analyze", "--no-pager", "--json=short", "fdstore")
-        assert args[-1] == "eom-embedding-native-cuda-probe@" + report.execution_id + ".service"
+        assert args[-1] == state["expected_unit"]
         assert kwargs["timeout"] == 10
         return SimpleNamespace(returncode=0, stdout=state["store"], stderr=b"")
 
