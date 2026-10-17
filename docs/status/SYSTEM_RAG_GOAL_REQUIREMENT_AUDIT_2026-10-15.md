@@ -9,6 +9,21 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Actual coordinated image release2026-10-17:19GPU main templates plus fixed root
+  entry/guardian and both EOM-only wheel cohorts installed;26prefix entry fences
+  removed after installed checks. Scoped permission preparation376/349/12completed,
+  original shared inodes/snapshots/13failed histories preserved. Root/actual UID984
+  shared-mutex contention and bootstrap read in both prefixes PASS without model
+  imports; exact new directory traversal corrected after actual-UID check. Common
+  verifier398f2c71fixes Conda alias double-counting with85focused tests/strict typing
+  PASS. Three earlier preparation/dependency failures and exact continuation
+  receipts retained; no blind permission/pip replay. CPU default/native numeric
+  prefix/model binding unchanged. This supersedes earlier NOT_INSTALLED statements
+  for this subset only. Full image lifecycle/resource regression, six actual
+  comparisons/conditional default, original authenticated HTTP and actual C1–C5
+  consumers remain OPEN. **FULL_COMPLETION_UNPROVEN.**
+  [Actual operation and limitations](../architecture/INCREMENTAL_EMBEDDING_GPU_RUNTIME_DESIGN.md#actual-coordinated-image-installation-2026-10-17).
+
 - Template/preparation checkpoint2026-10-17: all19 source image GPU units and
   separate root guardian/fixed entry now have the reviewed shared lifecycle
   settings. Header2020-12/installation/Pydantic validation rejects extra authority,

@@ -8,6 +8,60 @@
 GPU가 동일 입력 비교에서 우수하고 모든 gate를 통과하면 **기본 활성화까지가 목표**다.
 비교만 완료한 상태를 요청 전체 완료로 보고하지 않는다.
 
+### Actual coordinated image installation —2026-10-17
+
+The opening status describes the original design snapshot, not today's whole goal.
+The image migration subset is now **INSTALLED_RELEASED / MODEL_LIFECYCLE_NOT_ACCEPTED**.
+At this checkpoint both fixed image Python3.11 prefixes contain the reviewed1a5c6b86
+EOM wheels; all19GPU templates, the fixed bootstrap and root guardian entry/template
+are installed. The protected guardian owner remains1031a232. The native e5owner,
+c499numerical prefix, embedding CPU default, model binding and historical failures
+were not changed by this operation. No model/tokenizer/forward ran in this step.
+
+The operation retained the original26templates and EOM namespace/metadata/console
+snapshots before entry fencing. All26prefix consumers were fenced, actual units
+drained and the existing legacy/shared physical locks held while permissions,
+EOM-only packages and the19unit set were changed. Scoped permission preparation
+completed376members/349protections/12private metadata entries; original shared
+Conda metadata inodes remain in the protected recovery workspace. No external
+library was reinstalled and no account gained permanent GPU group membership.
+Current image fences are removed; successful source/wheel/installed checks are
+separate from actual image lifecycle acceptance, which remains pending.
+
+Exact operation locations, not product Artifact identities:
+
+- root release:`/opt/eom/image-joint-runtime-releases/imagejoint-a610b0c7`;
+  `prepared.json`, `physical-drained.json`, `dependency-preflight.json`,
+  provider/trainer package intent/result pairs, `installed-fenced.json`,
+  `apply-result.json`, `worker-access-result.json`;
+- scoped permissions:`/opt/eom/image-runtime-preparations/imageprep_a610b0c7f2e1c2db62242cd5f17674e4/permissions`;
+- operator receipts:`/tmp/eom-image-joint-release.FLrlFoWI`;
+- installed configuration raw SHA:
+  `a53cf55fde2e92de7f565eadcfa6f507fe13617b5b3d72e318ad7e60c263ed53`;
+  bootstrap raw SHA remains`7edb475db14b0e23d6a820781fee3813c7714cbe250ebd314b2abceec53b4cd7`.
+
+Three failed preparation/dependency outcomes are preserved, not relabeled: private
+wheel staging0400instead of required0600(before live mutation); a33-character
+recovery-folder spelling instead of32(before permission mutation); and the existing
+Conda`python3.1 -> python3.11`alias causing lexical double-counting(after complete
+permission preparation but before pip). Read-only state/byte/epoch observations
+established each exact resume boundary. Permission preparation and package installs
+were not blindly replayed. The alias finding yielded common verifier398f2c71,
+85focused tests/strict typing/Ruff/shell gates PASS and four successor helper pins.
+It resolves only to the fixed protected Python3.11site; distinct/escaping sites
+remain denied and the actual Conda aliases are retained.
+
+Post-install actual UID984/GID980/ephemeral group974 checks in both prefixes passed
+bootstrap read, protected lease import and expected BUSY against the root-held same
+shared lease; no Torch/Transformers/Diffusers/image modules were imported. This
+probe caught the new root entry directory's creation umask077masking intended0755;
+only that exact newly created directory was corrected to0755with preserved intent
+and inode checks. Future installation must explicitly set/check directory modes,
+then test actual worker UID traversal, not infer it from root-only reads.
+These are file-access/mutex checks, **not** provider/trainer model success,
+crash/timeout/retained-store cleanup acceptance or six frozen CPU/CUDA comparisons.
+Those gates and actual C1–C5 consumers remain required before whole-goal completion.
+
 2026-10-16 source 후속: [CUDA loader 작업 폴더 경계](INCREMENTAL_EMBEDDING_CUDA_LOADER_DIRECTORY_DESIGN.md)는
 공식 cuSPARSELt의 빈 RUNPATH component를 고정0555 빈 폴더의 관측으로 해석하고,
 native CUDA factory에서 실제 cwd를 재검증한다. CPU의 거부 규칙과 digest는 유지한다.
