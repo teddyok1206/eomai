@@ -30,6 +30,7 @@ from eom_catalog_service.document_review_pdf_annotation_service import (
 from eom_catalog_service.inference_transfer_metadata_service import (
     CatalogInferenceTransferMetadataService,
 )
+from eom_catalog_service.inference_transfer_read_timing import configure_read_stage_logging
 from eom_catalog_service.inference_transfer_snapshot_catalog_adapter import (
     CatalogInferenceTransferSnapshotSourceAdapter,
 )
@@ -354,6 +355,7 @@ def main() -> None:
     arguments = parser.parse_args()
     if arguments.command != "serve":  # pragma: no cover - argparse owns the invariant
         parser.error("unsupported command")
+    configure_read_stage_logging()
     raise SystemExit(serve())
 
 

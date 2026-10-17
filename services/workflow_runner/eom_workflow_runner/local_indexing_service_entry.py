@@ -205,6 +205,8 @@ def main() -> int:
             "sha256:" + hashlib.sha256(raw).hexdigest(),
         )
         capture = capture_local_indexing_runtime(pin)
+        from eom_catalog_service.inference_transfer_read_timing import configure_read_stage_logging
+
         from eom_workflow_runner.local_indexing_service_runtime import (
             build_local_indexing_service_runtime,
         )
@@ -212,6 +214,7 @@ def main() -> int:
         stop = Event()
         signal.signal(signal.SIGTERM, lambda _signum, _frame: stop.set())
         signal.signal(signal.SIGINT, lambda _signum, _frame: stop.set())
+        configure_read_stage_logging()
         runtime = build_local_indexing_service_runtime(capture, pin)
         _emit("LOCAL_INDEXING_SERVICE_STARTED", pid=os.getpid())
         serve_local_indexing(runtime, stop)

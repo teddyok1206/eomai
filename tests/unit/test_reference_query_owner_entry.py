@@ -136,7 +136,14 @@ def test_parent_forwards_signals_only_to_its_owned_unreaped_child():
 def test_signal_capability_is_not_added_to_native_units_or_index_owner():
     root = Path(__file__).resolve().parents[2]
     native = tuple((root / "infra/systemd").glob("eom-embedding-native-*.service"))
-    assert len(native) == 5
+    assert {path.name for path in native} == {
+        "eom-embedding-native-cpu-index@.service",
+        "eom-embedding-native-index-prepare@.service",
+        "eom-embedding-native-cuda-probe@.service",
+        "eom-embedding-native-cpu-probe@.service",
+        "eom-embedding-native-query-prepare@.service",
+        "eom-embedding-native-cpu-query@.service",
+    }
     index = (
         root
         / "services/workflow_runner/eom_workflow_runner/resources"

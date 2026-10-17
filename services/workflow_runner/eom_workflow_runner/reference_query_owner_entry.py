@@ -174,6 +174,7 @@ def _serve_child(
     # Application/adapter imports run only after the verified privilege drop.
     from eom_catalog_contracts.reference_query_prepare import REFERENCE_QUERY_PREPARE_SOCKET
     from eom_catalog_service.embedding_runtime_files import NumericalRuntimeFileSnapshots
+    from eom_catalog_service.inference_transfer_read_timing import configure_read_stage_logging
     from eom_identity_service.installed_owner_session_provider import (
         ProtectedInstalledIdentityProviderAdmission,
     )
@@ -197,6 +198,7 @@ def _serve_child(
     signal.signal(signal.SIGINT, stop_child)
     signal.pthread_sigmask(signal.SIG_SETMASK, restore_mask)
     try:
+        configure_read_stage_logging()
         snapshots = NumericalRuntimeFileSnapshots()
         snapshots.read(_CONFIGURATION, sha256=raw_sha256, maximum=64 * 1024)
         admission = ProtectedInstalledIdentityProviderAdmission(observation)

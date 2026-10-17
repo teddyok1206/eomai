@@ -109,3 +109,37 @@ observer log/state remain under the original shared-provenance/canary directorie
 Only fixed metadata enters Git/Slack; no credentials, source bodies or full logs.
 GPU preparation/actual six-run/default and remaining C1–C5 activation are still
 required and incomplete. The complete goal is not marked achieved.
+
+## Narrow logger startup correction — source only
+
+Startup inspection found that the Catalog, INDEX and QUERY entrypoints do not
+configure the root logger. Consequently the new INFO stage observations may be
+filtered out even though their unit tests replace the logging call. This is a
+diagnostic wiring defect, not evidence of a new source-read failure or permission
+to change the thirty-second API deadline.
+
+Configure only the dedicated stage logger at these three composition roots,
+using the existing JSON formatter. Do not enable the root logger or third-party
+SQL/HTTP loggers. Repeated configuration must leave one handler, propagation is
+disabled, and setup failure cannot stop the business operation. No schema, DB,
+queue, native model, authority or request identity changes. Verify real stderr
+delivery with the root logger at WARNING, exact safe fields, no duplicate output,
+unchanged root/sibling configuration and failed diagnostic setup. Installed
+df408fef remains the operating release until a compatible deployment is verified.
+
+Focused regression **224 PASS/16.07s**, strict type checking of four production
+modules, Ruff/format and diff checks PASS. The first broader run was72 PASS/1 FAIL
+because an older security test expected five native service files; the later CPU
+probe made six. The assertion now enumerates the exact six reviewed templates and
+still denies CAP_KILL in every native/INDEX unit. No privilege rule was relaxed.
+The final224 include real success/failure stderr delivery with root WARNING,
+exact redacted fields, repeat configuration, failed setup and three composition
+roots. QUERY imports/configuration remain after verified UID/capability drop;
+INDEX configuration follows its actual runtime capture. These are source proofs,
+not a new installed measurement or resolution of the original503.
+
+The user's unattended-work request means **no new interactive login prompts for
+at least24h (not before2026-10-18 18:23 UTC)** while independent authorized work
+continues. It is not a successful login, a stored credential or permission to
+extend auth/sudo lifetimes. Preserve already successful and failed observations;
+leave genuinely credentialed checks pending instead of inventing acceptance.

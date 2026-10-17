@@ -333,3 +333,38 @@ owner-maintenance cancellation; never rewrite/re-key started work or infer that 
 new receipt retroactively validates old runtime captures. CPU private installation,
 fresh CPU admission/selection, source/Job-authorized six measurements, consumers,
 HTTP context measurement and conditional GPU default remain unfinished.
+
+### Compatible owner preparation without stopping production —18:19 UTC
+
+The existing protected installer559ada51 installed the exact **df408fef** owner
+pair INACTIVE from the already verified operating API build, not docs HEAD:
+
+- platform raw `018755d6eb5a4c5f079ea0f767cbe32021c7c222739be0bafebe16dac323089f`;
+- API contracts raw `83642598b7ccb1345c8f942229f6f7de5a7abc8dffae17c0bb51356392e0d37c`.
+
+Its normal no-clobber/offline/RECORD checks PASS. Independent isolated OLD-Python
+imports checked397 EOM modules, all from this one installed owner, including
+benchmark drivers/owner admission and INDEX runtime. No ML, DB, Job or activation.
+All four operating service PIDs/invocations were unchanged before/after; the
+CPU numerical prefix, current config/identity/verifier and query owner are intact.
+The three existing installer regressions also PASS.
+
+The initial invocation mistakenly treated the protected0444 shell file as an
+executable. Sudo returned `command not found` before the installer ran; this was
+not rejected authentication or a partial installation. The corrected explicit
+`/usr/bin/bash` invocation completed once. Both outcomes and separate logs remain
+at `/tmp/eom-inactive-owner-df408fef-88E9WGGz`; no automatic retry or overwritten
+failure record. No credential prompt, auth TTL change or privilege grant.
+
+The CPU native config candidate is still untrusted/unpublished:
+revision `embeddingnativeconfigrev_387a9b5d34b54298a4004dc0c1c20dce`, raw
+`d7a81c8a118136efa49bc932c4ae67a9095045866a4f869c7f5a7ed9b202af86`,
+semantic `2ca18183f3275c718730229db8485534aca31669fc7bbc3cc7989ae76123ec91`.
+Its logical identity and runtime `f02cfc2b977c262b2b20cf7a3cc07553ad41f718ca39334953fb11d7a6ab10fb`
+remain the predecessor; only config revision/hash differ. Preparation is not
+CPU byte audit, admission, owner selection or source/Job authorization.
+
+One due official read-only INDEX projection at18:22:38.540347 reports681 view
+encodings/681 bindings/177 immutable index revisions/six logical indexes. It
+submitted no claim, repair, retry or model work. This is not681 unique Items or
+full seed coverage. Next routine observation is no earlier18:52:38 UTC.

@@ -9,7 +9,7 @@ from enum import StrEnum
 from time import perf_counter_ns
 
 from eom_identifiers import canonical_json_bytes
-from eom_orchestrator.logging import log_event
+from eom_orchestrator.logging import JsonFormatter, log_event
 
 
 class InferenceTransferReadStage(StrEnum):
@@ -25,6 +25,16 @@ class InferenceTransferReadStage(StrEnum):
 
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def configure_read_stage_logging() -> None:
+    """Enable only this closed metadata channel, never root/SQL/HTTP logging."""
+    with suppress(Exception):
+        handler = logging.StreamHandler()
+        handler.setFormatter(JsonFormatter())
+        _LOGGER.handlers[:] = [handler]
+        _LOGGER.setLevel(logging.INFO)
+        _LOGGER.propagate = False
 
 
 @contextmanager
