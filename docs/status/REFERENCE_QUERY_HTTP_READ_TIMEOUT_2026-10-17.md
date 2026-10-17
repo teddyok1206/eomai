@@ -99,3 +99,15 @@ execution, authority/TTL expansion or deadline increase was used. The live
 observer retains its same memory session at AWAIT_EXPLICIT_REPLAY; do not replace
 it simply because a read timed out. Shared decode source speedup is not sufficient
 evidence that the actual delivery bottleneck has been removed.
+
+## Installed timing diagnostics; preparation fresh-auth gate
+
+df408fef adds only bounded stage-duration metadata and passed actual compatible
+installation/restoration/health. The same live observer's explicit17:31:32 replay
+received403 `AUTH_REAUTHENTICATION_REQUIRED` from preparation, before context.
+The new release is **not measured** by that denial: last real context503 is still
+7fcd0865 at17:10:01. The existing read-only completed-context route is separate
+from fresh-auth `WORKFLOW_START` preparation. Preserve both permission boundaries;
+fix the future diagnostic sequence rather than reducing auth freshness or
+claiming all reads require a new login. The user requested no interactive login
+while asleep. [Exact operating evidence and safe next actions](../operations/SIMILARITY_READ_STAGE_DIAGNOSTICS_2026-10-17.md).

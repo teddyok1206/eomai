@@ -203,3 +203,9 @@ No new mutating PostgreSQL test is required by a logging-only diff; previous
 persistence evidence is not presented as new execution. Actual install/observed
 stage times and HTTP delivery remain pending. This instrumentation is not a fix
 claim for the actual503.
+
+Subsequent df408fef actual installation/restoration and health PASS are recorded
+in the [operating evidence](../operations/SIMILARITY_READ_STAGE_DIAGNOSTICS_2026-10-17.md).
+The existing observer's preparation replay was denied403 at its fresh-auth gate,
+before context read. Actual per-stage measurement therefore remains pending;
+do not report the new release as either measured503 or latency PASS.
