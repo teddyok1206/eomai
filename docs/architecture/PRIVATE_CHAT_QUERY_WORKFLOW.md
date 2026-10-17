@@ -765,3 +765,25 @@ or user-tool acceptance. No migration, DB CHECK, definition admission, source/
 execution policy, model, operating service, login or runtime activation changed.
 Actual supported atomic submission, private step CHECK successor and installed
 private owner/executor/tool composition remain required; the full goal is OPEN.
+
+#### Runner archive verification
+
+Source candidate `5484e83004883a886d0b37794aac58f269f01fab` (tree
+`ad41d361f93a0f3d31bde8d0ab31e8ddbd5bda52`) passed the standard three-wheel build
+and RECORD gate. Build-only output:
+`/tmp/eom-api-build/5484e83004883a886d0b37794aac58f269f01fab.eOrcAG/dist`.
+
+- platform raw `3abc6a56765cfa1069f68bb749db0a43af4de6d5a166bb3f0a563af8fe4495cc`;
+- API-contract raw `a4df5477295d7ea64bfcc9d4f2f15598d55c0ea6ec1dc9cdd77ee3dfbae0a308`;
+- API raw `584003b80954fe30a32aed2e7c4030df9e56242060a6e8b3d719f3190c207e30`.
+
+Separate explicit Conda `-I -S -B` archive-only proof imported395 EOM modules
+exclusively from the exact platform/contracts archives, including Runner, production
+composition and private owner/executor/step adapters. It compiled the synthetic
+fixed1.3 graph, verified paired-port signatures/unchanged default families and
+retained closed private definition admission. No tests/checkout/installed EOM or
+optional ML fallback was imported; DB/model/unit observations/activation calls0.
+This verifies package dependency closure, not actual private submission or runtime
+authority. Proof script:
+`/tmp/eom-private-runner-package.PyGehQxA/prove_runner_archives.py`, raw
+`14ef637595e5b1dd02814a91e52bdbf4a0cf1dcd3ba0a69c5170ecc5446046f1`.

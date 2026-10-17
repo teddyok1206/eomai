@@ -19,6 +19,11 @@ summed into a single acceptance count. This ledger does not grant authority.
   remain closed; no migration/operating DB/model/login/install/activation occurred.
   Original atomic supported submission, SQL successor and actual runtime/tool
   delivery remain OPEN; this is not C4 or full goal completion.
+  Source candidate5484e830 also passed standard three-wheel/RECORD and isolated
+  archive-only395-module import/compile/default-family/closed-admission proof;
+  no checkout/installed EOM/ML fallback, DB/model/unit or activation call. Built,
+  not installed or selected. Exact wheel/proof hashes are recorded with the
+  linked architecture evidence, not promoted to current source/runtime authority.
   [Source boundary and retained fixture failures](../architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#runner-source-verification-2026-10-17).
 - Due read-only INDEX projection23:39:07 UTC:757 encodings/757 bindings/196 index
   revisions/6 logical indexes; latest three per-index snapshots257/545,267/545 and
