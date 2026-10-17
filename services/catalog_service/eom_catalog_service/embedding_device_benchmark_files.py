@@ -479,6 +479,7 @@ class BenchmarkWorkerLocalFiles:
                 and not os.get_inheritable(descriptor)
             )
             _no_acl(descriptor)
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
             remaining = memoryview(raw)
             while remaining:
                 count = os.write(descriptor, remaining)

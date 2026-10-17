@@ -23,6 +23,10 @@ from eom_catalog_contracts.embedding_device_benchmark import (
 )
 from eom_identifiers import sha256_bytes
 
+from eom_catalog_service.embedding_benchmark_launch import (
+    BenchmarkLaunchPins,
+    benchmark_launch_environment_bytes,
+)
 from eom_catalog_service.embedding_benchmark_layout import benchmark_read_acl
 from eom_catalog_service.embedding_device_benchmark_files import BenchmarkWorkerLocalFiles
 from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
@@ -249,7 +253,7 @@ def prepare_benchmark_handoff(
     return _prepared_handoff(invocation, sha256_bytes(invocation_raw))
 
 
-def _owner_start_ticks(pid: int, *, uid: int, gid: int) -> int:
+def benchmark_owner_start_ticks(pid: int, *, uid: int, gid: int) -> int:
     """Fresh kernel reads only; no cmdline, environment, credentials or caller role claim."""
     process = Path("/proc") / str(pid)
     first = native_process_start_ticks(
@@ -268,6 +272,9 @@ def _owner_start_ticks(pid: int, *, uid: int, gid: int) -> int:
     )
     _require(first == last)
     return first
+
+
+_owner_start_ticks = benchmark_owner_start_ticks
 
 
 def _validate_environment_installation(
@@ -391,17 +398,11 @@ def prepare_benchmark_environment(
     start_ticks = _owner_start_ticks(owner_pid, uid=owner.pw_uid, gid=owner.pw_gid)
     installation = NumericalRuntimeFileSnapshots(_ROOT_UID)
     _validate_environment_installation(installation, invocation, backend)
-    fields = (
-        ("EOM_BENCHMARK_INVOCATION_RAW_SHA256", prepared.invocation_raw_sha256),
-        ("EOM_BENCHMARK_OWNER_PID", str(owner_pid)),
-        ("EOM_BENCHMARK_EXPIRES_NS", str(expires_ns)),
-        ("EOM_EMBEDDING_CONFIGURATION_ID", backend.configuration_id),
-        ("EOM_EMBEDDING_CONFIGURATION_REVISION_ID", backend.configuration_revision_id),
-        ("EOM_EMBEDDING_CONFIGURATION_SHA256", backend.configuration_sha256),
-        ("EOM_EMBEDDING_CONFIGURATION_RAW_SHA256", backend.configuration_raw_sha256),
-        ("EOM_EMBEDDING_RECEIPT_RAW_SHA256", backend.receipt_raw_sha256),
+    payload = benchmark_launch_environment_bytes(
+        BenchmarkLaunchPins(
+            prepared.execution_id, prepared.invocation_raw_sha256, owner_pid, expires_ns, backend
+        )
     )
-    payload = "".join(f"{key}={value}\n" for key, value in fields).encode("ascii")
     try:
         with ExitStack() as stack:
             root = _fixed_root(stack)

@@ -37,7 +37,12 @@ from eom_catalog_service.embedding_runtime_files import (
     read_live_runtime_os_file,
 )
 from eom_catalog_service.embedding_runtime_os_identity import observe_runtime_device
-from eom_catalog_service.embedding_runtime_process_identity import native_process_start_ticks
+from eom_catalog_service.embedding_runtime_process_identity import (
+    native_process_start_ticks,
+)
+from eom_catalog_service.embedding_runtime_process_identity import (
+    require_native_cuda_process_status as _require_status,
+)
 
 if TYPE_CHECKING:
     from eom_catalog_service.embedding_cuda_host_closure import ProtectedCudaEmbeddingHostClosure
@@ -86,32 +91,6 @@ def require_native_cuda_probe_unit() -> tuple[int, int, int]:
     )
     files.assert_unchanged()
     return user.pw_uid, group.gr_gid, lease
-
-
-def _require_status(raw: bytes, *, uid: int, gid: int, lease_gid: int) -> None:
-    fields: dict[str, str] = {}
-    for line in raw.decode("ascii").splitlines():
-        key, separator, value = line.partition(":")
-        _require(bool(separator) and key not in fields, "PROCESS_IDENTITY_INVALID")
-        fields[key] = value.strip()
-    _require(
-        fields.get("Uid", "").split() == [str(uid)] * 4
-        and fields.get("Gid", "").split() == [str(gid)] * 4
-        and fields.get("NoNewPrivs") == "1"
-        and all(
-            fields.get(k) == "0000000000000000"
-            for k in ("CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb")
-        ),
-        "PROCESS_IDENTITY_INVALID",
-    )
-    groups = fields.get("Groups", "").split()
-    _require(
-        all(re.fullmatch(r"[0-9]{1,10}", n) is not None for n in groups), "PROCESS_IDENTITY_INVALID"
-    )
-    values = {int(n) for n in groups}
-    _require(
-        len(values) == len(groups) and values - {gid} == {lease_gid}, "PROCESS_IDENTITY_INVALID"
-    )
 
 
 @dataclass(frozen=True, slots=True)

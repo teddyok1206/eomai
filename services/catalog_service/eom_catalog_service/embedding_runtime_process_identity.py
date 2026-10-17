@@ -6,6 +6,41 @@ import os
 import re
 
 
+def require_native_cuda_process_status(raw: bytes, *, uid: int, gid: int, lease_gid: int) -> None:
+    """Same native probe/benchmark credential rule; not unit, signal or GPU authority."""
+    if (
+        type(raw) is not bytes
+        or not 0 < len(raw) <= 128 * 1024
+        or any(
+            type(value) is not int or not 0 < value <= 4294967294 for value in (uid, gid, lease_gid)
+        )
+        or gid == lease_gid
+    ):
+        raise ValueError("NATIVE_CUDA_PROBE_PROCESS_IDENTITY_INVALID")
+    fields: dict[str, str] = {}
+    for line in raw.decode("ascii").splitlines():
+        key, separator, value = line.partition(":")
+        if not separator or key in fields:
+            raise ValueError("NATIVE_CUDA_PROBE_PROCESS_IDENTITY_INVALID")
+        fields[key] = value.strip()
+    if (
+        fields.get("Uid", "").split() != [str(uid)] * 4
+        or fields.get("Gid", "").split() != [str(gid)] * 4
+        or fields.get("NoNewPrivs") != "1"
+        or any(
+            fields.get(key) != "0000000000000000"
+            for key in ("CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb")
+        )
+    ):
+        raise ValueError("NATIVE_CUDA_PROBE_PROCESS_IDENTITY_INVALID")
+    groups = fields.get("Groups", "").split()
+    if not all(re.fullmatch(r"[0-9]{1,10}", value) is not None for value in groups):
+        raise ValueError("NATIVE_CUDA_PROBE_PROCESS_IDENTITY_INVALID")
+    values = {int(value) for value in groups}
+    if len(values) != len(groups) or values - {gid} != {lease_gid}:
+        raise ValueError("NATIVE_CUDA_PROBE_PROCESS_IDENTITY_INVALID")
+
+
 def native_process_start_ticks(raw: bytes, pid: int) -> int:
     if (
         type(raw) is not bytes

@@ -16,7 +16,6 @@ from typing import Literal
 
 from eom_catalog_contracts.embedding_installed_runtime_proof import CudaRuntimeDeviceCapture
 from eom_catalog_contracts.models import Sha256
-from eom_identifiers import sha256_bytes
 from eom_orchestrator.inference_transfer_cpu_systemd import CpuUnitObservation, inspect_cpu_unit
 from eom_orchestrator.systemd_unit_processes import root_owned_unit_processes
 from pydantic import TypeAdapter
@@ -33,6 +32,7 @@ from eom_catalog_service.embedding_runtime_files import (
 )
 from eom_catalog_service.embedding_runtime_os_identity import observe_runtime_device
 from eom_catalog_service.embedding_runtime_process_identity import native_process_start_ticks
+from eom_catalog_service.gpu_unit_policy_observation import observe_gpu_unit_policy
 from eom_catalog_service.image_gpu_unit_identity import image_gpu_unit_role, image_gpu_unit_template
 
 _BOOTSTRAP = Path("/usr/local/libexec/eom-image-runtime/run_gpu_unit.py")
@@ -81,64 +81,15 @@ def _status(raw: bytes, *, pid: int, tid: int, uid: int, gid: int, lease_gid: in
 
 
 def _policy(unit: str) -> str:
-    expected = {
-        "User": "eom-image",
-        "Group": "eom-image",
-        "SupplementaryGroups": "eom-gpu-lease",
-        "Type": "oneshot",
-        "RemainAfterExit": "yes",
-        "NotifyAccess": "main",
-        "FileDescriptorStoreMax": "1",
-        "FileDescriptorStorePreserve": "yes",
-        "CollectMode": "inactive",
-        "Restart": "no",
-        "KillMode": "control-group",
-        "NoNewPrivileges": "yes",
-        "PrivateNetwork": "yes",
-        "PrivateDevices": "no",
-        "DevicePolicy": "closed",
-        "CapabilityBoundingSet": "",
-        "AmbientCapabilities": "",
-    }
-    result = subprocess.run(
-        (
-            "/usr/bin/systemctl",
-            "show",
-            unit,
-            *("--property=" + field for field in (*expected, "DeviceAllow")),
-        ),
-        capture_output=True,
-        check=False,
-        timeout=10,
-        env=_ENV,
-    )
-    _require(
-        result.returncode == 0 and len(result.stdout) <= 16384 and len(result.stderr) <= 16384,
-        "POLICY_UNAVAILABLE",
-    )
-    fields, devices = {}, []
-    for line in result.stdout.decode("ascii").splitlines():
-        key, separator, value = line.partition("=")
-        _require(bool(separator), "POLICY_INVALID")
-        if key == "DeviceAllow":
-            devices.append(value)
-        else:
-            _require(key in expected and key not in fields, "POLICY_INVALID")
-            fields[key] = value
-    _require(
-        fields == expected
-        and len(devices) == 5
-        and set(devices)
-        == {
-            "char-rtc r",
-            "/dev/nvidia0 rw",
-            "/dev/nvidiactl rw",
-            "/dev/nvidia-uvm rw",
-            "/dev/nvidia-uvm-tools rw",
-        },
-        "POLICY_INVALID",
-    )
-    return sha256_bytes(result.stdout)
+    try:
+        return observe_gpu_unit_policy(unit, worker_account="eom-image")
+    except ValueError as error:
+        suffix = (
+            "POLICY_UNAVAILABLE"
+            if str(error) == "GPU_UNIT_POLICY_UNAVAILABLE"
+            else "POLICY_INVALID"
+        )
+        raise ValueError("IMAGE_GPU_UNIT_" + suffix) from None
 
 
 def image_gpu_unit_arguments(raw: bytes, unit: str) -> tuple[str, ...]:

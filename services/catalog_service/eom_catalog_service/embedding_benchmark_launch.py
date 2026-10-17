@@ -53,6 +53,40 @@ def parse_benchmark_launch_pins(arguments: tuple[str, ...]) -> BenchmarkLaunchPi
     )
 
 
+def benchmark_launch_arguments(pins: BenchmarkLaunchPins) -> tuple[str, ...]:
+    if type(pins) is not BenchmarkLaunchPins:
+        raise ValueError("BENCHMARK_OWNER_PINS_INVALID")
+    pins.__post_init__()
+    return (
+        pins.execution_id,
+        pins.invocation_raw_sha256,
+        str(pins.owner_pid),
+        str(pins.expires_ns),
+        pins.backend.configuration_id,
+        pins.backend.configuration_revision_id,
+        pins.backend.configuration_sha256,
+        pins.backend.configuration_raw_sha256,
+        pins.backend.receipt_raw_sha256,
+    )
+
+
+def benchmark_launch_environment_bytes(pins: BenchmarkLaunchPins) -> bytes:
+    arguments = benchmark_launch_arguments(pins)
+    fields = (
+        "EOM_BENCHMARK_INVOCATION_RAW_SHA256",
+        "EOM_BENCHMARK_OWNER_PID",
+        "EOM_BENCHMARK_EXPIRES_NS",
+        "EOM_EMBEDDING_CONFIGURATION_ID",
+        "EOM_EMBEDDING_CONFIGURATION_REVISION_ID",
+        "EOM_EMBEDDING_CONFIGURATION_SHA256",
+        "EOM_EMBEDDING_CONFIGURATION_RAW_SHA256",
+        "EOM_EMBEDDING_RECEIPT_RAW_SHA256",
+    )
+    return "".join(
+        f"{key}={value}\n" for key, value in zip(fields, arguments[1:], strict=True)
+    ).encode("ascii")
+
+
 @contextmanager
 def benchmark_socket_activation(pins: BenchmarkLaunchPins) -> Iterator[None]:
     if type(pins) is not BenchmarkLaunchPins:

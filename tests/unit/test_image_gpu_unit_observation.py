@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import shlex
 import signal
+import subprocess
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from eom_catalog_service import gpu_unit_policy_observation as gpu_policy
 from eom_catalog_service import image_gpu_unit_observation as owner
 from eom_catalog_service.embedding_cuda_probe_resource_observation import ImageUnitGpuResources
 from eom_catalog_service.image_gpu_unit_identity import image_gpu_unit_role, image_gpu_unit_template
@@ -168,6 +170,11 @@ def image(monkeypatch):
     monkeypatch.setattr(owner, "root_owned_unit_processes", lambda _: state["pids"])
     monkeypatch.setattr(owner, "read_live_runtime_os_file", read)
     monkeypatch.setattr(owner, "subprocess", SimpleNamespace(run=command))
+    monkeypatch.setattr(
+        gpu_policy,
+        "subprocess",
+        SimpleNamespace(run=command, TimeoutExpired=subprocess.TimeoutExpired),
+    )
     monkeypatch.setattr(owner, "observe_runtime_device", lambda _: None)
     monkeypatch.setattr(owner, "observe_cuda_probe_gpu_clients", lambda _: state["gpu_clients"])
     monkeypatch.setattr(

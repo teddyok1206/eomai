@@ -13,6 +13,7 @@ import pytest
 from eom_catalog_service.embedding_runtime_process_identity import (
     native_process_start_ticks,
     require_exclusive_flock_fdinfo,
+    require_native_cuda_process_status,
 )
 
 
@@ -27,6 +28,69 @@ def fdinfo(pid=123, device=None, inode=3001, flags=os.O_RDONLY | os.O_CLOEXEC):
         f"lock:\t1: FLOCK  ADVISORY  WRITE {pid} "
         f"{os.major(device):02x}:{os.minor(device):02x}:{inode} 0 EOF\n"
     ).encode()
+
+
+def cuda_status():
+    return (
+        b"Uid:\t1234 1234 1234 1234\nGid:\t1234 1234 1234 1234\n"
+        b"Groups:\t1234 2468\nNoNewPrivs:\t1\n"
+        + b"\n".join(
+            name + b":\t0000000000000000"
+            for name in (b"CapInh", b"CapPrm", b"CapEff", b"CapBnd", b"CapAmb")
+        )
+        + b"\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "fault",
+    (
+        None,
+        "empty",
+        "oversize",
+        "duplicate",
+        "uid",
+        "gid",
+        "groups",
+        "duplicate_group",
+        "privilege",
+        "capability",
+        "bad_group",
+    ),
+)
+def test_same_cuda_credential_rule_is_closed_and_bounded(fault):
+    raw = cuda_status()
+    changes = {
+        "uid": (b"Uid:\t1234", b"Uid:\t1235"),
+        "gid": (b"Gid:\t1234", b"Gid:\t1235"),
+        "groups": (b"Groups:\t1234 2468", b"Groups:\t1234 2468 9999"),
+        "duplicate_group": (b"Groups:\t1234 2468", b"Groups:\t2468 2468"),
+        "bad_group": (b"Groups:\t1234 2468", b"Groups:\t1234 invalid"),
+        "privilege": (b"NoNewPrivs:\t1", b"NoNewPrivs:\t0"),
+        "capability": (b"CapAmb:\t0000000000000000", b"CapAmb:\t0000000000000001"),
+    }
+    if fault in changes:
+        raw = raw.replace(*changes[fault])
+    elif fault == "empty":
+        raw = b""
+    elif fault == "oversize":
+        raw = b"x" * (128 * 1024 + 1)
+    elif fault == "duplicate":
+        raw += b"NoNewPrivs:\t1\n"
+    if fault is None:
+        require_native_cuda_process_status(raw, uid=1234, gid=1234, lease_gid=2468)
+    else:
+        with pytest.raises(ValueError, match="NATIVE_CUDA_PROBE_PROCESS_IDENTITY_INVALID"):
+            require_native_cuda_process_status(raw, uid=1234, gid=1234, lease_gid=2468)
+
+
+@pytest.mark.parametrize("field", ("uid", "gid", "lease_gid"))
+@pytest.mark.parametrize("value", (True, 0, -1, 4294967295, "1234"))
+def test_cuda_expected_ids_are_not_coerced(field, value):
+    ids = dict(uid=1234, gid=1234, lease_gid=2468)
+    ids[field] = value
+    with pytest.raises(ValueError):
+        require_native_cuda_process_status(cuda_status(), **ids)
 
 
 def test_live_own_process_start_and_exact_bounded_flock_parser():

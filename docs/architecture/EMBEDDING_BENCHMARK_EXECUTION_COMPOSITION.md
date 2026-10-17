@@ -723,3 +723,89 @@ Build `/tmp/eom-api-build/94b901bed02e837af404da94ce6acdd16d37533c.mdvUkN/dist`;
 platform raw SHA `d9ec41f3b1641c235ff9d2b53909e3e30e09b88694575b568c28343cb945ed86`,
 API-contract raw SHA `b245929dbcf33d80c650c5c3e43d6e3b636c29c1b69d6917e3162d57c8c490b5`.
 BUILD_ONLY: neither this import nor metadata preparation is protected runtime activation.
+
+### Benchmark CUDA root readiness observation — design before implementation
+
+Add a benchmark-specific read-only root observation, not a relabelled installation probe
+or image unit. Bind exact installed service/socket bytes, protected per-execution invocation/
+launch.env and native-owned ready member, actual unit invocation/MainPID/birth, reserved
+signal, argv, UID/GID/capabilities, empty loader cwd, cgroup and executable mappings. Reuse
+existing host/prefix ledgers, physical worker/PID1 FD observer and GPU-client query. Pin the
+root-selected configuration/receipt/device independently of ready claims. Recheck both
+sides of every live observation and hold captured file epochs through the caller's final
+readback. A typed observation is OS evidence only; it does not validate an original Job or
+replace actual operator/source authorization, installation admission or the later ACK owner.
+
+Two existing responsibilities become shared without widening their callers: native CUDA
+UID/GID/capability parsing is a pure process-identity function, and image/benchmark effective
+GPU unit policy uses one bounded reader with two explicit account/template families. Keep
+old image/probe wrappers/error meanings and exact old positive/negative tests. No arbitrary
+unit registry, device allowlist, callback-granted authority or new queue/framework.
+
+Dominant access is fixed keyed filesystem/unit lookup and a bounded ordered kernel snapshot;
+file epochs and immutable mapping/FD values avoid repeated prefix/ELF hashing or model/text
+copying. No DB/migration/worker wire schema changes. Only root can observe these properties;
+all external files/kernel output remain untrusted. Missing, changed, late, competing-client,
+wrong-peer/source or unknown cleanup blocks ACK; an observation never resets/stops a unit,
+signals a process, mutates a Job, releases the lease or fabricates an Artifact. The simpler
+fake-probe conversion would conflate installation testing and model computation and is
+therefore not used. Effect/retirement composition must retain distinct original outcomes.
+
+Readiness publication must not race a partial write to the precreated member. The native
+writer holds a separate exclusive flock on that readiness file until its successful close;
+this is not the GPU lease and never replaces/unlocks that physical guard. Root first treats
+an empty file as NOT_READY without locking it, then uses a nonblocking shared file lock to
+read a nonempty member. A writer-held lock is also NOT_READY, not malformed JSON or permission
+to restart. Thus the writer cannot conflict with root reading the initial empty file and
+root cannot parse partial bytes. Named/held epochs and canonical/hash validation still apply;
+all owned readiness descriptors close on every outcome. Released worker wire bytes and
+the numerical output namespace do not change. Unexpected concurrent writers fail closed.
+
+### Root readiness observation source checkpoint — 2026-10-17
+
+Implemented the distinct read-only benchmark observer. It binds installed service/socket
+raw hashes, root0600 invocation/environment, configuration/receipt/runtime pointers and
+native0640 readiness, actual MainPID/birth/cgroup/argv/cwd, reserved single-thread pre-init
+frame, effective policy, executable ledger, worker/PID1 physical locks and no GPU clients.
+Checks are repeated before return. It never signals/stops a unit, registers a Job or grants
+source/model permission. The guarded launcher still needs actual operator/source/Job
+admission and a separate durable ACK/terminal-retirement owner before six model launches.
+
+Pure CUDA credential validation and the two closed GPU policy families are shared with
+the existing probe/image observers; their old refusal cases/error meanings are preserved.
+The eight-field environment encoding and nine CLI arguments also have one authoritative
+serializer. Two reviewed Python entry/publication member hashes are checked against the
+existing prefix inventory in addition to executable mappings: Python source does not
+appear in /proc executable maps. Old/missing writer code cannot silently opt into the new
+readiness-flock protocol. That metadata match is necessary, not proof of a full byte audit.
+
+Final17 related suites: **681 PASS45.74s**, strict8 production modules, Ruff/format13 and
+diff PASS. Included42 observer cases,28 shared-policy cases,8 actual unprivileged readiness
+file/flock cases and the existing image ACK/retirement, probe and CPU/CUDA regression tests.
+Actual local IO proves partial native writes stay exclusively locked, root shared readers
+wait without parsing, borrowed writer locks survive failed reads, empty/locked files are
+pending, invalid shapes are refused, owned read locks close, and competing writers poison
+their scope without overwriting. A fresh actual API-identity child is refused at the root
+guard before file/process observation, with no optional ML imports. Positive root/unit/
+GPU/resource cases are explicitly synthetic; they are not actual root/GPU acceptance.
+
+The first image-fixture run still mocked the old subprocess boundary after policy extraction,
+causing13 failures and possible ordinary-UID read-only systemctl show calls; no start/stop/
+signal was issued. Its fixture now mocks the actual shared adapter, preserving all negative
+assertions. A fresh-process test's initially missing os import was corrected; final681 is
+from one complete subsequent run. No guard, old schema/hash or numeric rule was loosened.
+
+Routine-read diagnosis also found a scratch operator.py shadowing Python's standard operator
+module when maintenance scripts were invoked without isolation. Use the explicit interpreter
+with **-I -B** for standalone scratch-directory operators. The failed non-TTY sudo attempt
+remains `/tmp/eom-image-joint-release.FLrlFoWI/index-observation-0742.json` with auth-required
+return1; credentials were not requested or stored. Corrected same-TTY execution reused the
+already installed observer and succeeded at08:08:29 UTC without new root helper installation:
+`index-observation-0808.json`. Counts501 encodings/bindings,132 index revisions/6 logical
+indexes; latest per-view counts169/179/153 with eligible545 are not501 unique Items or a
+coherent full-corpus snapshot. Latest bounded workflows show4 completed and1 running without
+failure codes, not a global zero-failure assertion. Original queries/Jobs were not restarted.
+
+This checkpoint is SOURCE_PASS, not installed activation or GPU performance/default PASS.
+Only ordinary local test/operational evidence was produced; no protected prefix/template,
+production Job, model, Artifact, policy or CPU default was changed by this implementation.
