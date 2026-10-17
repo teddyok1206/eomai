@@ -84,3 +84,37 @@ root OS test (`EOM_RUN_BENCHMARK_HANDOFF_PRIVILEGED=1`). It prepares only privat
 fixtures, permanently drops child UID/groups, and tests actual native-account access and
 other-account denial. It does not create production Jobs/Artifacts or exercise GPU/models,
 and must not be reported as six-launch numerical/performance acceptance.
+
+## Actual private filesystem gate — 2026-10-17 05:44 UTC
+
+Candidate source `aca170cccdbfaddad884fb8c316cf0a606023e71` passed the standard API
+build/RECORD gate. A passive owner release was installed with the existing protected
+installer; **no active owner selector or numerical prefix was changed**. The same EOM2
+sudo authorization was reused, without a new login prompt, TTL change or saved credential.
+
+Wheel raw SHA-256 (not semantic request or Artifact hashes):
+
+- platform: `c10a57c10bc6061c69aeeb1e3124a1a6b029fb2e1efcef908f291db5eedad009`;
+- API contracts: `3ef98394dc7d05639270caa861a2ec97727000539af60cd4fbe55d28bced2f8b`.
+
+The fixed root operator ran the six opt-in OS cases against the installed candidate, with
+real UID0 preparation and permanently unprivileged CPU/CUDA-account children. Private
+`/run` fixture directories were the only overridden location; expected UIDs/GIDs and
+permission rules were not replaced. Exact output write/read succeeded; global listing,
+path-based invocation reads, input modification, extra member creation/unlink and the other
+native account's execution access were rejected. All **6 cases PASS**, separate from the
+526 source tests. The test deliberately uses synthetic bytes, not numerical/model evidence.
+
+Protected OS-local evidence (not a product Artifact or a NAS output):
+`/opt/eom/embedding-benchmark-os-evidence/aca170cccdbfaddad884fb8c316cf0a606023e71/`
+contains the prior intent, installation stdout/stderr, exact source fixtures, test stdout/
+stderr and result. Test stdout raw SHA-256:
+`5e6cca423a80a1ca132a69af27d5623259df8e2e80cc73885e45395d5be837e2`.
+The no-replay local operator receipt is
+`/tmp/eom-benchmark-handoff-os.o5HRuMIF/operator-result.json` (`returncode=0`).
+
+Models/GPU executions/production Jobs/Artifacts/new authentication prompts: **0**.
+The production handoff root and running INDEX/QUERY work were untouched. Active image
+guardian selection remains the previously verified e232/c203 pair. Actual source-admitted
+benchmark Jobs, fixed six-launch runtime/channel composition, regression gates and measured
+CPU/CUDA comparison remain pending; the full goal is not completed by this OS gate.
