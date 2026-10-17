@@ -454,6 +454,12 @@ format17 PASS를 확인했습니다. 앞선81 PASS/233 PASS·16 FAIL 기록도 �
 실제 채팅 접수·전체 Runner 연결·전용 단계 DB 허용·운영 설치/활성화와 전체 목표는 아직
 미완료입니다. [명령·단계·컴파일러의 정확한 검증 범위](docs/architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#continuationstep-source-checkpoint)
 
+후속으로 전용 채팅 작업을 기존 Runner의 준비 확인·점유·짧은 DB 처리·단계 완료 흐름에
+연결했습니다. 소스417/18묶음·strict4·lint/format4 PASS이며, 전용 처리 31개 시험에는 원본
+명령 완료·재조회·사용자/점유권 불일치·실패 보존·다른 인덱싱 작업의 처리 지속을 포함합니다.
+이 시험의 DB·권한·채팅·실제 계산은 대역입니다. 실제 접수·전용 DB 단계 허용·설치/활성화는
+남아 있고 운영 설정은 변경하지 않았습니다. [Runner 검증 범위](docs/architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#runner-source-verification-2026-10-17)
+
 아래는 날짜·후보별 역사적 구현 기록입니다. 당시의 미완료 표기는 현재 종합 상태와
 구별하며, 최신 실제 실행·활성화 범위는 위 표와 연결된 상태 문서를 기준으로 합니다.
 

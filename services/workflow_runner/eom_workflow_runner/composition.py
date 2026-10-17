@@ -29,6 +29,8 @@ from eom_workflow_runner.engine import PlatformRoleJobExecutor, WorkflowRunner
 from eom_workflow_runner.inference_transfer_executor import PlatformInferenceTransferExecutor
 from eom_workflow_runner.local_embedding_admission import LocalEmbeddingOwnerAdmission
 from eom_workflow_runner.local_embedding_execution_port import LocalEmbeddingNativeExecutor
+from eom_workflow_runner.private_chat_query_admission import PrivateChatQueryOwnerAdmission
+from eom_workflow_runner.private_chat_query_execution_port import PrivateChatQueryNativeExecutor
 from eom_workflow_runner.readiness import WorkflowRuntimeReadiness
 from eom_workflow_runner.reference_query_admission import ReferenceQueryOwnerAdmission
 from eom_workflow_runner.reference_query_execution_port import ReferenceQueryNativeExecutor
@@ -59,6 +61,8 @@ def build_workflow_runtime(
     local_embedding_executor: LocalEmbeddingNativeExecutor | None = None,
     reference_query_owner: ReferenceQueryOwnerAdmission | None = None,
     reference_query_executor: ReferenceQueryNativeExecutor | None = None,
+    private_chat_query_owner: PrivateChatQueryOwnerAdmission | None = None,
+    private_chat_query_executor: PrivateChatQueryNativeExecutor | None = None,
     similarity_context_provider: SimilarityRoleContextProvider | None = None,
 ) -> WorkflowRuntime:
     """Build the complete production runner graph without presentation-layer wiring."""
@@ -66,6 +70,8 @@ def build_workflow_runtime(
         raise ValueError("native owner and executor must be supplied together")
     if (reference_query_owner is None) != (reference_query_executor is None):
         raise ValueError("QUERY owner and executor must be supplied together")
+    if (private_chat_query_owner is None) != (private_chat_query_executor is None):
+        raise ValueError("private QUERY owner and executor must be supplied together")
     actual_engine = engine or build_engine()
     actual_workflow_settings = workflow_settings or WorkflowSettings.from_environment()
     actual_similarity_provider = similarity_context_provider
@@ -134,6 +140,8 @@ def build_workflow_runtime(
         local_embedding_executor=local_embedding_executor,
         reference_query_owner=reference_query_owner,
         reference_query_executor=reference_query_executor,
+        private_chat_query_owner=private_chat_query_owner,
+        private_chat_query_executor=private_chat_query_executor,
     )
     return WorkflowRuntime(
         engine=actual_engine,

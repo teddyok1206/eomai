@@ -847,6 +847,8 @@ def test_busy_native_exact_claim_uses_new_root_for_ready_legacy(
     runner.local_embedding_executor = cast(LocalEmbeddingNativeExecutor, source.executor)
     runner.reference_query_owner = None
     runner.reference_query_executor = None
+    runner.private_chat_query_owner = None
+    runner.private_chat_query_executor = None
     session = Mock(spec=Session)
     session.get.return_value = command
     session.execute.return_value.scalar_one_or_none.return_value = command

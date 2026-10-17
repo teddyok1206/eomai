@@ -9,6 +9,26 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Latest Runner source checkpoint2026-10-17 23:41 UTC: dedicated paired private
+  ports now connect composition→readiness→claim→short mutation root→private step/
+  terminal. Original actor/request/lease identity, failed history, context replay,
+  stable redacted errors and no starvation/public-purpose fallback are covered.
+  Combined417 tests/18 suites (including31 new Runner cases), strict4/Ruff/format4/
+  diff PASS; prior144 and371 overlap and are not summed. SQL/current IAM/Chat/source/
+  physical executor seams are synthetic. Static admission and private SQL CHECK
+  remain closed; no migration/operating DB/model/login/install/activation occurred.
+  Original atomic supported submission, SQL successor and actual runtime/tool
+  delivery remain OPEN; this is not C4 or full goal completion.
+  [Source boundary and retained fixture failures](../architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#runner-source-verification-2026-10-17).
+- Due read-only INDEX projection23:39:07 UTC:757 encodings/757 bindings/196 index
+  revisions/6 logical indexes; latest three per-index snapshots257/545,267/545 and
+  233/545 remain PARTIAL. Not757 Items, full coverage or a fresh Artifact/hash audit.
+  Latest five workflows:4 COMPLETED/1 RUNNING, each failure_code null; no global
+  failure-free assertion. Same existing protected read-only observer in original
+  operator pane, no claim/replay/restart/login prompt. Next routine observation
+  no earlier2026-10-18 00:09:07 UTC. Local sanitized evidence:
+  `/tmp/eom-private-runner-observation.AkoUsA8A/index-observation.json`.
+
 - Latest source checkpoint2026-10-17 23:32 UTC: original private START/ADVANCE
   lineage, family quarantine and context-preserving application/terminal use case
   now pass combined371 tests/16 suites, strict8/Ruff/format17/bash/diff. Main's

@@ -76,7 +76,11 @@ from eom_workflow.inference_transfer import (
 )
 from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
 from eom_workflow.local_embedding_workflow import LocalEmbeddingWorkflowDefinition
-from eom_workflow.private_chat_query_execution import PrivateChatQueryWorkflowRequest
+from eom_workflow.private_chat_query_execution import (
+    PrivateChatQueryWorkflowRequest,
+    parse_private_chat_query_workflow_request,
+)
+from eom_workflow.private_chat_query_workflow import PrivateChatQueryWorkflowDefinition
 from eom_workflow.reference_query_execution import (
     SupportedReferenceQueryWorkflowRequest,
     parse_supported_reference_query_workflow_request,
@@ -120,6 +124,12 @@ from eom_workflow_runner.models import (
 from eom_workflow_runner.native_workflow_transaction import (
     NativeWorkflowRequest,
     native_fenced_runner_transaction,
+)
+from eom_workflow_runner.private_chat_query_admission import PrivateChatQueryOwnerAdmission
+from eom_workflow_runner.private_chat_query_execution_port import PrivateChatQueryNativeExecutor
+from eom_workflow_runner.private_chat_query_step_execution import (
+    advance_private_chat_query_step,
+    complete_private_chat_query_terminal,
 )
 from eom_workflow_runner.readiness import (
     ReadinessStatus,
@@ -525,6 +535,8 @@ class WorkflowRunner:
         local_embedding_executor: LocalEmbeddingNativeExecutor | None = None,
         reference_query_owner: ReferenceQueryOwnerAdmission | None = None,
         reference_query_executor: ReferenceQueryNativeExecutor | None = None,
+        private_chat_query_owner: PrivateChatQueryOwnerAdmission | None = None,
+        private_chat_query_executor: PrivateChatQueryNativeExecutor | None = None,
         runner_id: str | None = None,
         command_families: frozenset[CommandExecutionFamily] = frozenset(
             {
@@ -557,6 +569,8 @@ class WorkflowRunner:
             raise ValueError("native owner and executor must be supplied together")
         if (reference_query_owner is None) != (reference_query_executor is None):
             raise ValueError("QUERY owner and executor must be supplied together")
+        if (private_chat_query_owner is None) != (private_chat_query_executor is None):
+            raise ValueError("private QUERY owner and executor must be supplied together")
         if not role_enabled and (
             executor is not None
             or (
@@ -566,6 +580,10 @@ class WorkflowRunner:
             or (
                 CommandExecutionFamily.REFERENCE_QUERY in command_families
                 and reference_query_owner is None
+            )
+            or (
+                CommandExecutionFamily.PRIVATE_CHAT_QUERY in command_families
+                and private_chat_query_owner is None
             )
         ):
             raise ValueError("native-only execution requires actual owners and no role executor")
@@ -595,6 +613,8 @@ class WorkflowRunner:
         self.local_embedding_executor = local_embedding_executor
         self.reference_query_owner = reference_query_owner
         self.reference_query_executor = reference_query_executor
+        self.private_chat_query_owner = private_chat_query_owner
+        self.private_chat_query_executor = private_chat_query_executor
 
     def run_once(self, workflow_id: str | None = None) -> WorkflowCommandRecord | None:
         skipped_families: set[CommandExecutionFamily] = set()
@@ -616,6 +636,8 @@ class WorkflowRunner:
                         local_embedding_executor=self.local_embedding_executor,
                         reference_query_owner=self.reference_query_owner,
                         reference_query_executor=self.reference_query_executor,
+                        private_chat_query_owner=self.private_chat_query_owner,
+                        private_chat_query_executor=self.private_chat_query_executor,
                     )
                     if command is not None:
                         command_id = command.command_id
@@ -704,10 +726,18 @@ class WorkflowRunner:
             elif candidate.family is CommandExecutionFamily.PRIVATE_CHAT_QUERY or isinstance(
                 candidate.native_request, PrivateChatQueryWorkflowRequest
             ):
-                report = _local_embedding_unavailable_report(
-                    WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
-                    "private QUERY execution is not yet offered by this Runner composition",
-                )
+                if (
+                    candidate.family is not CommandExecutionFamily.PRIVATE_CHAT_QUERY
+                    or not isinstance(candidate.native_request, PrivateChatQueryWorkflowRequest)
+                    or self.private_chat_query_owner is None
+                    or self.private_chat_query_executor is None
+                ):
+                    report = _local_embedding_unavailable_report(
+                        WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                        "actual private QUERY owner, executor or exact request unavailable",
+                    )
+                else:
+                    report = self.private_chat_query_executor.evaluate(candidate.native_request)
             elif isinstance(candidate.native_request, SupportedReferenceQueryWorkflowRequest):
                 if self.reference_query_owner is None or self.reference_query_executor is None:
                     report = _local_embedding_unavailable_report(
@@ -910,6 +940,11 @@ class WorkflowRunner:
             if isinstance(compiled.definition, ReferenceQueryWorkflowDefinition):
                 self._advance_reference_query(workflow, compiled, command_id, actor_type, actor_id)
                 return
+            if isinstance(compiled.definition, PrivateChatQueryWorkflowDefinition):
+                self._advance_private_chat_query(
+                    workflow, compiled, command_id, actor_type, actor_id
+                )
+                return
             if CommandExecutionFamily.ROLE not in self.command_families:
                 raise WorkflowError(
                     WorkflowErrorCode.WORKFLOW_INVALID_TRANSITION,
@@ -1052,6 +1087,77 @@ class WorkflowRunner:
             actor_type=actor_type,
             actor_id=actor_id,
         )
+
+    def _advance_private_chat_query(
+        self,
+        workflow: WorkflowInstanceRecord,
+        compiled: CompiledWorkflowDefinition,
+        command_id: str | None,
+        actor_type: str,
+        actor_id: str,
+    ) -> None:
+        lease = _ACTIVE_COMMAND_LEASE.get()
+        native = _ACTIVE_NATIVE_REQUEST.get()
+        if (
+            CommandExecutionFamily.PRIVATE_CHAT_QUERY not in self.command_families
+            or command_id is None
+            or lease is None
+            or lease.command_id != command_id
+            or native is None
+            or native[0] != workflow.workflow_id
+            or native[2] != lease
+            or not isinstance(native[1], PrivateChatQueryWorkflowRequest)
+            or not isinstance(compiled.definition, PrivateChatQueryWorkflowDefinition)
+            or self.private_chat_query_owner is None
+            or self.private_chat_query_executor is None
+        ):
+            raise WorkflowError(
+                WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                "private QUERY advancement requires its actual leased owner context",
+            )
+        try:
+            request = parse_private_chat_query_workflow_request(workflow.initial_request)
+            if (
+                request != native[1]
+                or actor_type != "human"
+                or workflow.created_actor_type != actor_type
+                or workflow.created_actor_id != actor_id
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
+                    "private QUERY original request or actor changed",
+                )
+            if workflow.state in {WorkflowState.FAILED.value, WorkflowState.CANCELLED.value}:
+                return
+            if workflow.current_step_key == "encode_private_chat_query":
+                continued = advance_private_chat_query_step(
+                    workflow=workflow,
+                    definition=compiled.definition,
+                    request=request,
+                    lease=lease,
+                    owner=self.private_chat_query_owner,
+                    executor=self.private_chat_query_executor,
+                    fenced_transaction=self._fenced_transaction,
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                    poll_interval_seconds=self.runner_config.poll_interval_seconds,
+                )
+                if not continued:
+                    return
+            complete_private_chat_query_terminal(
+                workflow_id=workflow.workflow_id,
+                request=request,
+                lease=lease,
+                executor=self.private_chat_query_executor,
+                fenced_transaction=self._fenced_transaction,
+                actor_type=actor_type,
+                actor_id=actor_id,
+            )
+        except (ValueError, TypeError):
+            raise WorkflowError(
+                WorkflowErrorCode.LOCAL_EMBEDDING_OUTCOME_INVALID,
+                "private QUERY request or execution context could not be validated",
+            ) from None
 
     def _advance_reference_query(
         self,
@@ -3179,7 +3285,11 @@ class WorkflowRunner:
             compiled = self._compiled_for_record(session, workflow)
             if native and not isinstance(
                 compiled.definition,
-                (LocalEmbeddingWorkflowDefinition, ReferenceQueryWorkflowDefinition),
+                (
+                    LocalEmbeddingWorkflowDefinition,
+                    ReferenceQueryWorkflowDefinition,
+                    PrivateChatQueryWorkflowDefinition,
+                ),
             ):
                 raise WorkflowError(
                     WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
@@ -3498,10 +3608,23 @@ class WorkflowRunner:
     ) -> Iterator[Session]:
         workflow_id, request, lease = native
         if isinstance(request, PrivateChatQueryWorkflowRequest):
-            raise WorkflowError(
-                WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
-                "private QUERY requires its own offered Runner composition",
-            )
+            if (
+                CommandExecutionFamily.PRIVATE_CHAT_QUERY not in self.command_families
+                or self.private_chat_query_owner is None
+                or self.private_chat_query_executor is None
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                    "private QUERY family or actual paired owner/executor is unavailable",
+                )
+            with native_fenced_runner_transaction(
+                self.sessions,
+                owner=self.private_chat_query_owner,
+                workflow_id=workflow_id,
+                request=request,
+                lease=lease,
+            ) as session:
+                yield session
         elif isinstance(request, SupportedReferenceQueryWorkflowRequest):
             if self.reference_query_owner is None:
                 raise WorkflowError(

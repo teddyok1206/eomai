@@ -720,3 +720,48 @@ same allocation. A generic-role or INDEX fallback would violate those boundaries
 hand-creating private rows outside supported submission would skip concurrency
 and source checks. Staged compiler/persistence support remains source-only until
 the compatible installed composition and actual release gates are satisfied.
+
+### Explicit Runner composition before admission
+
+The next Runner change uses its existing constructor and native transaction
+adapter, not a separate scheduler. Private owner/executor ports must be paired;
+explicit private-only processing requires both and cannot borrow role/INDEX/
+reference ports. The existing default family selection stays unchanged. Candidate
+readiness uses the exact private request and its physical adapter; claim keeps
+static admission and current-source/lease checks separate. Loaded private graphs
+dispatch only to the private step/terminal use case, with original request/actor/
+command identity checked before progression. Current source errors are mapped to
+stable redacted workflow errors, not question content or adapter tracebacks.
+
+The existing Workflow→command short-root fence is reused for every private
+mutation and lease renewal; numerical execution stays outside SQL roots. Replay,
+pending, failure history and immutable context use the existing private owner and
+step implementation. Dominant access patterns remain PK/FIFO/step-map and bounded
+original Job history; no DB schema/index, queue, protocol or mutable registry is
+added by this composition. Static admission/private SQL CHECK and actual installed
+configuration remain closed pending their paired changes and verification.
+
+#### Runner source verification —2026-10-17
+
+Explicit paired ports are now passed through production composition and exact
+claim, readiness and private mutation roots. The private graph dispatches to its
+own application/terminal use case and preserves original context on replay. The
+private-only constructor does not create a Codex role executor; old default family
+selection is unchanged. An unavailable private candidate does not starve ready
+existing INDEX work, and private data under a public family cannot borrow its
+readiness/authority. Original FAILED/CANCELLED work is not revived.
+
+Combined final source417 PASS/18 suites, strict4/Ruff/format4/diff PASS includes31
+new Runner cases. Earlier144/six-suite and prior371 inventories overlap; they are
+not additional coverage. The draft119 PASS/8 FAIL is preserved in the test record:
+six new readiness fixtures used a plain Mock as a context manager, and two old
+constructor-bypassing fixtures omitted the new explicitly initialized None ports.
+Only fixture context/initialization was corrected, not source or lease rules.
+
+The test runs real Runner dispatch, private step/terminal orchestration and command
+state transitions, but SQL roots, current IAM/Chat/source and physical executor
+seams are synthetic. It is not actual PostgreSQL private-step, protected-runtime
+or user-tool acceptance. No migration, DB CHECK, definition admission, source/
+execution policy, model, operating service, login or runtime activation changed.
+Actual supported atomic submission, private step CHECK successor and installed
+private owner/executor/tool composition remain required; the full goal is OPEN.
