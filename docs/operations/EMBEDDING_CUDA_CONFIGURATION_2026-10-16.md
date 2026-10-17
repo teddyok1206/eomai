@@ -293,3 +293,70 @@ four-target reconciliation in the three views00:09–00:11. These per-view windo
 are not a coherent global coverage/terminal snapshot or new HTTP acceptance.
 The original authenticated HTTP observer is still
 LOGIN without an acceptance receipt; no new login prompt/key/numerical QUERY.
+
+## Actual NVML host1.1 publication and independent capture —00:25–00:30 UTC
+
+The source checkpoint in the host design preserves all329 preexisting resource
+records/bytes and the unchanged CPU numeric implementation hashes. Final1275
+source tests, strict9 modules and source Ruff/format/diff passed. The normal
+`scripts/api/deploy_release.sh --build-only` then built/inspected commit
+ce08f60388c072f96c1c43a1dd2ea5e7dcacf666 with wheel RECORD verification PASS;
+build-only did not deploy the API or any service. Wheel directory
+`/tmp/eom-api-build/ce08f60388c072f96c1c43a1dd2ea5e7dcacf666.rjw28s/dist`:
+platform rawfdb75465e79f2f3a0baae14461a7d849df988615771acb1a9876d54b9d856e6d;
+API-contracts rawd1ed7e938be3c8954a46a80df09908730d6d0b926ac173b9aab9c502004cae5a.
+
+The unchanged protected owner installer559ada51 verified/installed exactly that
+pair under `/opt/eom/embedding-owner-releases/ce08f60388c072f96c1c43a1dd2ea5e7dcacf666`.
+Actual root0444/nlink1 package source was checked; no numerical prefix, running
+API/Catalog/INDEX/QUERY release or runtime selection was replaced. Same existing
+operator pane's legitimate noninteractive sudo was reused, without auth/TTL edits.
+The122,144-byte previously verified RDMA member was materialized once from its
+canonical local predecessor into a fixed untrusted input, with its independent
+18609553 source hash rechecked; no network download or model copy.
+
+Actual OLD3.12.13 `-I -S -B` root publication used the installed existing CLI
+with explicit host1.1 and the SAME base snapshot, not latest. Reviewed protected
+operator raw9d681811c194d7f5d742db822b05e96ba9f7bd0229afb223f65c3c4ff4b68936
+ran in private network/devices with writes limited to the existing private host
+store, its publication mutex and a private root audit stage. The canonical cache
+builder ran in its existing isolated unit. No physical GPU/device grant was used.
+Unit `eom-cuda-nvml-host-publication-ce08f603.service` / actual invocation
+1780bcfeb5004b4fb7451f212c7560ff completed successfully00:27:18 UTC, returning
+CREATED / ROOTLOCAL_AVAILABLE_NOT_NATIVE_ADMITTED:
+
+| Identity | Actual value |
+| --- | --- |
+| Logical host configuration | `embeddingcudahost_99ec37f55bbb42de8edb1e889c9d3a25` |
+| New immutable revision | `embeddingcudahostrev_b1039162e377418e9e478f9afdf35997` |
+| Schema | host-extension1.1, exactly7 libraries /9 total members |
+| Manifest byte count/raw SHA | 2325 / `f2b240450ad2742e9bb574b60aea1b8ccb7df9b6572ae10caf55eeeb906e4c3f` |
+| Semantic snapshot SHA | `0a04c4b009434130350a13e3748ac3db4680f5b5051e71ff23b731f4aaf81f0e` |
+| Host seed SHA | `92e83a3e0677842574ac5712855eef6eea7613a884f982d67f94a27f0ac752bd` |
+| Cache byte count/raw SHA | 2319 / `7276f7a0f80cbcb2cf877a51021f96b0f2f9ea4ca553e061b4f38146c6fb6d20` |
+
+Independent unit `eom-cuda-nvml-host-check-ce08f603.service` / invocation
+994f0c6edf0d4890a9d51b4d0cf19858 completed successfully00:28:57 UTC. Its exact
+protected OLD-only wrapper raw2f566a274c9d775735b7f7da6f94c56ca4cfe43ea1e2c77ab33eaa61523c1fa2
+resolved all actual readonly file hashes, witnessed the NEW canonical cache bound
+readonly to `/etc/ld.so.cache` in that unit's own mount namespace and checked the
+seven held library FDs, exact SONAME/dependencies/symbol versions with the existing
+captured readelf/base closure. Private devices, empty capability set and no ML/
+Pydantic/SQL imports; candidate/model/device access0. This is real cache/ELF/FD
+capture, NOT observation that a new Torch process loaded the right mapping.
+The global selected-cache alias was explicitly checked unchanged on the OLD
+3a79d328 revision before and after. No prior failed unit/FD store was reset or
+retired and no new native probe/installation seal/default activation was performed.
+
+The installed owner's public JSON Schema/Pydantic reader also checked the actual
+new raw snapshot and its raw/semantic/base pointer closure under accepted OLD
+Python, without importing ML libraries. Local input/operator evidence:
+`/tmp/eom-cuda-nvml-host-WTAGzcgR`; protected scripts stay under the existing
+root operator directory, root audit output under
+`/opt/eom/.embedding-cuda-nvml-host-ce08f603`.
+
+Next: explicit compatible native/audit/admission successors, failed-probe terminal
+retirement, whole-prefix verification and a distinct real two-ACK probe/seal/
+reader. Then all19 image entrypoints/lifetime fences, six frozen CPU/CUDA
+comparisons/conditional default and C1–C5 actual consumers remain required.
+The original full goal is ACTIVE, not completed by this host-only checkpoint.

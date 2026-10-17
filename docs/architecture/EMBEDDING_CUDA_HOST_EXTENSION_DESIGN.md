@@ -5,10 +5,13 @@ FINAL rejected one uncaptured NVML dependency. It remains FAILED/NOT_ADMITTED;
 see the bounded successor design below and
 [actual operations](../operations/EMBEDDING_CUDA_CONFIGURATION_2026-10-16.md).
 
-NVML host1.1 source implementation now passes the focused source gates below;
-this is not protected-owner installation, actual host1.1 publication, a new CUDA
-probe/seal or activation. Existing config1.2/prefix-input1.2/receipt2.0 remain
-closed to host1.0; selecting the successor requires explicit compatible successors.
+NVML host1.1 source gates passed, protected ownerce08f603 was installed, actual
+host1.1 was published00:27:18 UTC and independent OLD-only bytes/cache/ELF/FD
+capture passed00:28:57. No candidate/model was run or old selector changed.
+This is still NOT_NATIVE_ADMITTED; existing config1.2/prefix-input1.2/receipt2.0
+remain closed to host1.0. Explicit compatible successors and retained-probe
+terminal retirement still precede a new GPU probe. See the actual operation
+checkpoint at the end of the linked operation document.
 
 2026-10-16 UTC. Design before protocol/behavior. Source and protected host-only
 publication/capture PASS; full CUDA candidate/runtime/device admission NOT_ACTIVE.
