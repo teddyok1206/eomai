@@ -905,6 +905,23 @@ def benchmark_sample_program(launch_ordinal: int) -> tuple[BenchmarkSampleKey, .
     return _sample_program(launch_ordinal)
 
 
+def benchmark_local_output_members(launch_ordinal: int) -> tuple[str, ...]:
+    """Closed local member layout of the released sample program, not a path grant."""
+    if type(launch_ordinal) is not int or not 1 <= launch_ordinal <= 6:
+        raise ValueError("benchmark launch ordinal must be an exact integer1..6")
+    if launch_ordinal not in (1, 2):
+        return "cold-documents.f32", "token-witness.json", "resources.json", "worker-result.json"
+    return (
+        "cold-documents.f32",
+        "supplementary-documents.f32",
+        *(f"query-{query}-{repetition}.f32" for query in (1, 2) for repetition in range(1, 6)),
+        "token-witness.json",
+        "timings.json",
+        "resources.json",
+        "worker-result.json",
+    )
+
+
 class BenchmarkVectorSample(_BenchmarkContract):
     """Closed ranges in immutable local members; byte/norm verification belongs to owner."""
 

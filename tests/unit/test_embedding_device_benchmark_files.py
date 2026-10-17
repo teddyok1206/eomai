@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 from eom_catalog_contracts.embedding_device_benchmark import (
+    benchmark_local_output_members,
     benchmark_sample_program,
     embedding_device_benchmark_bytes,
 )
@@ -61,7 +62,7 @@ def stage_files(
     input_path.write_bytes(embedding_device_benchmark_bytes(staged_inputs()))
     input_path.chmod(0o640)
     set_acl(input_path, directory=False)
-    for name in module._output_names(ordinal):
+    for name in benchmark_local_output_members(ordinal):
         path = execution / "outputs" / name
         path.touch(mode=0o640)
         path.chmod(0o640)
@@ -107,6 +108,24 @@ def test_fixed_file_capture_read_once_seal_no_clobber_and_borrowed_fd(
         assert os.fstat(borrowed).st_size > 0 and os.lseek(borrowed, 0, os.SEEK_CUR) == 0
         files.close()
     finally:
+        os.close(borrowed)
+
+
+def test_traversal_does_not_require_listing_global_execution_parent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    files, execution, borrowed = stage_files(tmp_path, monkeypatch)
+    parent = execution.parent
+    parent.chmod(0o111)
+    try:
+        with pytest.raises(PermissionError):
+            os.listdir(parent)
+        with files:
+            invocation = files.read_invocation()
+            assert files.read_inputs(invocation) == staged_inputs()
+            files.assert_current()
+    finally:
+        parent.chmod(0o700)
         os.close(borrowed)
 
 

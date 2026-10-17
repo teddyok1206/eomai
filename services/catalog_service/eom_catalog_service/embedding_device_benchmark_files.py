@@ -8,7 +8,6 @@ import os
 import pwd
 import re
 import stat
-import struct
 from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
@@ -28,20 +27,20 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     BenchmarkTokenWitness,
     BenchmarkWorkerInvocation,
     BenchmarkWorkerResult,
+    benchmark_local_output_members,
     embedding_device_benchmark_bytes,
     parse_embedding_device_benchmark_bytes,
 )
 from eom_catalog_contracts.embedding_installed_runtime_proof import EmbeddingRuntimeProfile
 from eom_identifiers import sha256_bytes
 
+from eom_catalog_service.embedding_benchmark_layout import benchmark_read_acl
 from eom_catalog_service.embedding_runtime_files import fixed_native_embedding_profile
 
 _HANDOFF_ROOT = Path("/run/eom-incremental-embeddings/benchmark")
 _ROOT_UID = 0
 _ROOT_GID = 0
 _CHUNK = 64 * 1024
-_ACL_ENTRY = struct.Struct("<HHI")
-_ACL_UNDEFINED = 2**32 - 1
 type BenchmarkLocalEvidence = (
     BenchmarkTokenWitness
     | BenchmarkInvocationTimings
@@ -74,17 +73,8 @@ def _directory_identity(value: os.stat_result) -> tuple[int, ...]:
 
 
 def _acl(descriptor: int, uid: int, *, directory: bool, group: int) -> None:
-    permissions = 5 if directory else 4
-    expected = struct.pack("<I", 2) + b"".join(
-        _ACL_ENTRY.pack(tag, permission, identity)
-        for tag, permission, identity in (
-            (1, 7 if directory else 6, _ACL_UNDEFINED),
-            (2, permissions, uid),
-            (4, group, _ACL_UNDEFINED),
-            (16, permissions, _ACL_UNDEFINED),
-            (32, 0, _ACL_UNDEFINED),
-        )
-    )
+    _require(group == (5 if directory else 4))
+    expected = benchmark_read_acl(uid, "DIRECTORY" if directory else "INPUT")
     # Small closed xattr, not a model path/allowlist. Reject other named/default grants.
     _require(os.getxattr(descriptor, "system.posix_acl_access") == expected)
     _require("system.posix_acl_default" not in os.listxattr(descriptor))
@@ -95,20 +85,6 @@ def _no_acl(descriptor: int) -> None:
         not {"system.posix_acl_access", "system.posix_acl_default"}.intersection(
             os.listxattr(descriptor)
         )
-    )
-
-
-def _output_names(ordinal: int) -> tuple[str, ...]:
-    if ordinal not in (1, 2):
-        return "cold-documents.f32", "token-witness.json", "resources.json", "worker-result.json"
-    return (
-        "cold-documents.f32",
-        "supplementary-documents.f32",
-        *(f"query-{query}-{repetition}.f32" for query in (1, 2) for repetition in range(1, 6)),
-        "token-witness.json",
-        "timings.json",
-        "resources.json",
-        "worker-result.json",
     )
 
 
@@ -236,10 +212,12 @@ class BenchmarkWorkerLocalFiles:
 
     def _open_directory(self, path: Path, *, narrow: bool) -> int:
         parent: int | None = None
-        for component in path.parts:
+        for index, component in enumerate(path.parts):
+            # Traversal needs search permission, not permission to list every execution.
+            access = os.O_RDONLY if index == len(path.parts) - 1 else os.O_PATH
             descriptor = os.open(
                 component,
-                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                access | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
                 dir_fd=parent,
             )
             initial = os.fstat(descriptor)
@@ -311,7 +289,7 @@ class BenchmarkWorkerLocalFiles:
         self._output_directory = self._open_directory(
             _HANDOFF_ROOT / self.execution_id / "outputs", narrow=True
         )
-        expected = set(_output_names(invocation.launch_ordinal))
+        expected = set(benchmark_local_output_members(invocation.launch_ordinal))
         observed: set[str] = set()
         with os.scandir(self._output_directory) as entries:
             for entry in entries:
@@ -319,7 +297,7 @@ class BenchmarkWorkerLocalFiles:
                 observed.add(entry.name)
         _require(observed == expected)
         inodes = {(self._invocation_epoch[0], self._invocation_epoch[1])}
-        for name in _output_names(invocation.launch_ordinal):
+        for name in benchmark_local_output_members(invocation.launch_ordinal):
             descriptor = os.open(
                 name,
                 os.O_WRONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
