@@ -36,6 +36,67 @@ A local in-memory list is simpler but loses the original execution identity on c
 allocating another Job/queue or editing status rows would lose idempotency and failure
 history. Existing typed messages and the Job event stream are sufficient instead.
 
+## Manual execution owner — design before implementation
+
+The native manual owner composes the existing current-source admission, original Job
+journal, installed CPU capacity and fixed runtime adapters. Its responsibility is one
+six-launch series, not automatic indexing, Codex slots, a generic benchmark framework or
+device-default activation. It stops at VALIDATING_RESULT: numerical/performance/regression
+assessment and final report publication must still finish before the parent can succeed.
+
+Reviewed owner composition selects an exact registered benchmark policy member and one
+request hash. Publication alone does not select it. The existing released benchmark-policy
+schema is sufficient; its purpose/resource limits remain separate from actual current
+administrator/session authorization. A concrete Catalog adapter checks Identity's real
+opaque capture and fresh-session fence with EXECUTION_PRESET_MANAGE in addition to the
+existing WORKFLOW_START/source fences, and current ADMIN membership under that same fence.
+It resolves the policy Artifact through the official pinned reader, requiring canonical
+bytes, schema/media/producer/lifecycle/raw and semantic hashes and exact request-policy
+equality. Selected policy changes or revocation fail explicitly; no latest substitution.
+
+Dominant operations remain exact original Job lookup, bounded ordered six-launch iteration,
+append-only events, and same-inode nonblocking CPU capacity exclusion. CPU and CUDA both
+consume the existing four-thread capacity; surviving units are checked by the existing
+orphan inventory before creating/claiming a Job. Job row locks and short fenced roots
+serialize claims/events; no SQL transaction remains open through model execution. Actual
+resource ownership and installed readiness remain the concrete launch adapter's duties.
+Application ports separate the fixed runner/publication adapter from the pure ordering
+logic, not another queue or mutable registry. Workers never publish or choose authority.
+
+Before each launch, checkpoint and publication, the owner must reauthorize the original
+request. Checkpoint callbacks are bound owner methods retaining the actual Job/invocation,
+not worker-provided grants. Runtime readiness is required before Job creation/claim and
+again before each new reservation. First reserve a fresh invocation durably, then call
+the concrete launch/publication adapter once. Exact replay cannot launch that invocation
+again. A reservation without a receipt is an explicit reconciliation requirement even if
+no unit is currently visible; timeout does not prove non-execution. Existing complete
+receipts can advance to the next unstarted ordinal, under current authorization.
+
+Artifact results use an explicit in-session reader interface so the actual source/Identity
+root, rather than an ambient DB session, governs dereferencing. Readers must restrict result
+schema/member/producer type and source admission as well as all pinned Artifact checks.
+Failure after a launch/publication call preserves its original reservation and failure
+evidence; it does not mark it successful, allocate a replacement identity or retry a model.
+All six receipts and worker results must be complete and cleanup-confirmed before the
+parent transitions to VALIDATING_RESULT. Replay at that stage reads/revalidates the same
+six references without creating Jobs or executing models. Such completed replay rechecks
+actual current authorization/Artifact pins but does not require today's numerical adapter
+or acquire CPU capacity, so an unrelated encode or runtime upgrade cannot trigger a rerun.
+
+This is O(6 + bounded source/result bytes), with fixed tuples/maps and no new DB tables,
+indexes, migration, schema family or dependency. A single giant transaction or anonymous
+callback authorizer would be simpler to type but would hold IAM locks through inference or
+lose the original authorization/root boundary; neither is acceptable.
+
+The first real local policy-publication test exposed an existing producer/consumer mismatch:
+released benchmark pointers use `#/$defs/...`, while ControlFileSetPublisher rejected every
+fragment before creating a Job. Do not rewrite the pointer as another schema or loosen the
+benchmark contract. Extend that existing syntactic reference guard narrowly to the already
+supported eom schema URI plus a single named `$defs` fragment, retaining the256-character
+Artifact-pointer bound. No external URI, percent encoding, empty/nested fragment or payload
+validation bypass is admitted. Existing schema bytes/file-set identity and request hashing
+remain unchanged; related publisher negative/replay tests must cover the shared correction.
+
 This closes the execution composition described in
 `INCREMENTAL_EMBEDDING_GPU_RUNTIME_DESIGN.md`, without changing the released
 `embedding-device-benchmark/1.0` schema or its numerical/performance thresholds.
@@ -1226,3 +1287,64 @@ No passive/active owner installation, numerical-prefix update, benchmark Job sub
 runtime selection was performed for this candidate. Milestone Slack report
 `devreport_8ce8af46dbd74a158438b3b6ff3235da` was SENT09:43:42 UTC with the Korean summary
 first and source/live/remaining gates separated. Whole goal remains ACTIVE, not completed.
+
+## Manual owner source and real disposable Identity checkpoint — 2026-10-17
+
+Implemented the manual-series application owner, concrete Catalog control/source/result
+admission and policy publication through the existing file-set owner. Selected configuration
+pins one request and exact policy Artifact/raw and semantic hashes. Real Identity's opaque
+capture, current fresh session, EXECUTION_PRESET_MANAGE, current ADMIN membership and the
+existing official source admission are distinct checks. A source-read-only adapter has no
+manual execution entry. No new schema family/bytes, queue, table, migration or dependency.
+
+The application retains the existing actual CPU-capacity context and orphan inventory,
+checks the supplied installed execution adapter before Job creation/claim, transitions only
+the genuine original Job through its domain states and dispatches each newly reserved
+invocation once. Every launch and checkpoint is bound to the original Job/invocation and
+current root's authority. All six valid worker results and cleanup-confirmed receipts are
+needed for VALIDATING_RESULT; this stage is **not** parent success, numerical/performance
+acceptance or GPU default approval. Completed replay revalidates references without today's
+execution adapter, a CPU-capacity acquisition, model dispatch or a new Job. A crash or failed
+publication/fence after reservation stays unresolved until supported original-execution
+reconciliation; no replacement identity/model retry or historical success rewrite occurs.
+
+The result-reader interface now receives the explicit caller Session and original request,
+not an ambient connection. Its concrete Catalog adapter enforces the benchmark worker-result
+member/schema/media/producer kind and current scope, then official pinned Artifact resolution;
+the journal independently checks canonical bytes, raw hash and invocation closure.
+No text/vector/worker-result body is added to DB events. Publication Jobs and the numerical
+parent remain separate; only the Orchestrator can publish. The fixed launch/publication
+adapter is still an explicit missing production composition, **not** implemented by a test
+double or activated merely by this owner class. Root guardian transport/actual six launches,
+coherent numerical-prefix successors, final comparison and conditional default remain open.
+
+Thirteen related source suites: **407 PASS44.46s**, including the323/66 subsets, not summed.
+Strict mypy6 changed production modules and separate concrete-to-application port compatibility,
+Ruff/format11, shell syntax and diff pass. Real local-file/SQLite policy publication and exact
+Artifact reads cover the fragment guard correction; URI negatives include external schemes,
+empty/nested/encoded fragments, newline and overlong references. The initial14 setup errors
+exposed the real fragment mismatch; after correcting it,3 new positive URI fixtures still had
+group-writable source files. Setting those fixture files0600 fixed the test setup without
+relaxing production permissions. Initial extra mypy command-mode invocation collided with
+configured file targets; the explicitly isolated compatibility invocation passed afterward.
+
+The supported disposable PostgreSQL purpose additionally enables its existing authenticated
+session fixture gate. **21 tests PASS / cleanup PASS** include prior reservation/concurrency
+cases, the six-launch application series and no-dispatch replay, timeout/original-identity
+retention, and real Identity/registered-policy composition. The last two create only disposable
+test accounts with synthetic credentials through official AuthService, obtain genuine opaque
+session captures and check actual session/role/permission fences: ADMIN accepted; AUTHOR denied
+before source read. Actual DB locks and Artifact bytes are exercised. Graph/source and numerical
+execution/capacity remain explicitly synthetic in these tests; no live IAM, Graph, installed
+runtime, unit, model or GPU acceptance is claimed.
+
+Protected gate evidence:
+`/opt/eom/embedding-benchmark-os-evidence/manual-owner-XJc7pYbW/` contains intent, pinned source,
+prepare/migrate/reconcile/test/inspect/cleanup results. Test stdout raw SHA
+`6915d561e08ae669431f75b4906683740926315f065931c8cd2ab88109f1bb44`.
+Local no-replay receipt `/tmp/eom-benchmark-owner-db.XJc7pYbW/operator-result.json` reports0;
+reviewed operator raw SHA
+`faad0a140ea62e882e9f2f281a57555620999a182b05daa7c7f72d8dc5292b61`.
+Same EOM2 sudo TTY reused without a new prompt, saved credential or TTL changes. Only that
+marker-identified disposable DB and temporary roles/state were removed; another fixture can
+recreate them. No production DB/Job/Item/NAS Artifact, model, runtime selector or default changed.

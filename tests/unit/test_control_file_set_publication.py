@@ -313,6 +313,52 @@ def test_control_file_set_rejects_hash_drift(tmp_path: Path) -> None:
         raise AssertionError("hash drift was accepted")
 
 
+@pytest.mark.parametrize(
+    "reference,accepted",
+    (
+        ("eom://schemas/test/value/1.0", True),
+        ("eom://schemas/test/value/1.0#/$defs/value", True),
+        ("eom://schemas/test/value/1.0#/$defs/workerResult_1", True),
+        ("eom://schemas/test/value/1.0#/$defs/", False),
+        ("eom://schemas/test/value/1.0#/properties/value", False),
+        ("eom://schemas/test/value/1.0#/$defs/value/nested", False),
+        ("eom://schemas/test/value/1.0#/$defs/a#/$defs/b", False),
+        ("eom://schemas/test/value/1.0#/$defs/%76alue", False),
+        ("https://example.test/schema#/$defs/value", False),
+        ("eom://schemas/test/value/1.0#/$defs/value\n", False),
+        ("eom://schemas/" + "x" * 220 + "#/$defs/" + "x" * 64, False),
+    ),
+)
+def test_file_set_accepts_only_bounded_local_named_definition_fragments(
+    tmp_path: Path, reference: str, accepted: bool
+) -> None:
+    publisher, engine = _publisher(tmp_path)
+    source = tmp_path / "result.json"
+    source.write_bytes(b"{}")
+    source.chmod(0o600)
+    member = ControlFileSetMember(
+        "result.json", source, sha256_file(source), 2, reference, "application/json"
+    )
+    parameters = dict(
+        members=(member,),
+        primary_file="result.json",
+        artifact_type="control_test_file_set",
+        manifest_version="test-file-set/1.0",
+        idempotency_key="synthetic-schema-fragment",
+        source_commit="b" * 40,
+        created_at=datetime(2026, 10, 17, 9, 0, tzinfo=UTC),
+    )
+    if accepted:
+        receipt = publisher.publish(**parameters)
+        assert publisher.publish(**parameters) == receipt
+    else:
+        with pytest.raises(ControlPlaneError, match="file-set member is invalid"):
+            publisher.publish(**parameters)
+        with publisher.sessions() as session:
+            assert session.scalar(select(func.count()).select_from(JobRecord)) == 0
+    engine.dispose()
+
+
 def test_control_file_set_accepts_bounded_visual_output_scale(tmp_path: Path) -> None:
     publisher, _engine = _publisher(tmp_path)
     source_root = tmp_path / "visual-output-sources"

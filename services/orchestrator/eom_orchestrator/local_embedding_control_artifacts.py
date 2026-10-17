@@ -8,6 +8,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from eom_catalog_contracts.embedding_device_benchmark import (
+    BENCHMARK_POLICY_ARTIFACT_TYPE,
+    BENCHMARK_POLICY_SCHEMA_REF,
+    BenchmarkExecutionPolicy,
+    embedding_device_benchmark_bytes,
+)
 from eom_catalog_contracts.inference_transfer_embedding import (
     INPUT_SCHEMA_REF,
     IncrementalEmbeddingInput,
@@ -182,6 +188,25 @@ class LocalEmbeddingControlArtifactPublisher:
             member="policy.json",
             schema=REFERENCE_QUERY_POLICY_REF,
             artifact_type=REFERENCE_QUERY_POLICY_ARTIFACT_TYPE,
+            idempotency_key=idempotency_key,
+            created_at=created_at,
+        )
+
+    def publish_benchmark_policy(
+        self,
+        policy: BenchmarkExecutionPolicy,
+        *,
+        idempotency_key: str,
+        created_at: datetime,
+    ) -> PublishedLocalEmbeddingControl:
+        """A candidate Artifact, never administrator authentication or activation."""
+        raw = embedding_device_benchmark_bytes(policy)
+        return self._publish(
+            raw=raw,
+            semantic_sha256=policy.policy_sha256,
+            member="policy.json",
+            schema=BENCHMARK_POLICY_SCHEMA_REF,
+            artifact_type=BENCHMARK_POLICY_ARTIFACT_TYPE,
             idempotency_key=idempotency_key,
             created_at=created_at,
         )

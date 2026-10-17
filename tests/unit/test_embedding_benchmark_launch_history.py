@@ -36,7 +36,8 @@ class SyntheticResultReader:
         self.members = {}
         self.reads = []
 
-    def read(self, pointer):
+    def read_in_session(self, session, request, pointer):
+        assert session.get_transaction() is not None and not session.in_nested_transaction()
         self.reads.append(pointer)
         return self.members[pointer.sha256]
 

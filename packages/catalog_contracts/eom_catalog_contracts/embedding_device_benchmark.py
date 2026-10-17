@@ -44,6 +44,9 @@ EMBEDDING_DEVICE_BENCHMARK_SCHEMA: Final = "embedding-device-benchmark"
 EMBEDDING_DEVICE_BENCHMARK_SCHEMA_REF: Final = (
     "eom://schemas/knowledge/embedding-device-benchmark/1.0"
 )
+BENCHMARK_POLICY_SCHEMA_REF: Final = EMBEDDING_DEVICE_BENCHMARK_SCHEMA_REF + "#/$defs/policy"
+BENCHMARK_POLICY_ARTIFACT_TYPE: Final = "control_embedding_benchmark_policy"
+BENCHMARK_LAUNCH_ARTIFACT_TYPE: Final = "control_embedding_benchmark_launch"
 MAX_BENCHMARK_ENVELOPE_BYTES: Final = 64 * 1024
 MAX_BENCHMARK_STAGED_BYTES: Final = 64 * 1024**2
 MAX_BENCHMARK_OUTPUT_BYTES: Final = 16 * 1024**2

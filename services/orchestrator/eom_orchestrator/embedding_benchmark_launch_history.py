@@ -35,7 +35,9 @@ RECORDED_EVENT = "BENCHMARK_LAUNCH_RECORDED"
 
 
 class BenchmarkResultReader(Protocol):
-    def read(self, pointer: ArtifactMemberPointer) -> bytes:
+    def read_in_session(
+        self, session: Session, request: BenchmarkOwnerRequest, pointer: ArtifactMemberPointer
+    ) -> bytes:
         """Resolve the authorized exact registered revision/schema/media/lifecycle/hash."""
         ...
 
@@ -161,9 +163,13 @@ class BenchmarkLaunchJournal:
         self.source_admission, self.result_reader = source_admission, result_reader
 
     def _result(
-        self, invocation: BenchmarkWorkerInvocation, receipt: BenchmarkLaunchReceipt
+        self,
+        session: Session,
+        request: BenchmarkOwnerRequest,
+        invocation: BenchmarkWorkerInvocation,
+        receipt: BenchmarkLaunchReceipt,
     ) -> BenchmarkWorkerResult:
-        raw = self.result_reader.read(receipt.worker_result)
+        raw = self.result_reader.read_in_session(session, request, receipt.worker_result)
         result = parse_embedding_device_benchmark_bytes(raw)
         if (
             not isinstance(result, BenchmarkWorkerResult)
@@ -209,7 +215,10 @@ class BenchmarkLaunchJournal:
                 receipt = previous.receipt
                 if receipt is None or receipt.cleanup != "CONFIRMED":
                     raise BenchmarkJobAdmissionError("BENCHMARK_LAUNCH_PREVIOUS_UNRESOLVED")
-                if self._result(previous.invocation, receipt).status != "COMPLETED":
+                if (
+                    self._result(session, request, previous.invocation, receipt).status
+                    != "COMPLETED"
+                ):
                     raise BenchmarkJobAdmissionError("BENCHMARK_LAUNCH_PREVIOUS_NOT_COMPLETED")
             if invocation.execution_id in {row.invocation.execution_id for row in history.launches}:
                 raise BenchmarkJobAdmissionError("BENCHMARK_LAUNCH_EXECUTION_REUSED")
@@ -234,6 +243,28 @@ class BenchmarkLaunchJournal:
             if job.status != JobState.RUNNING:
                 raise BenchmarkJobAdmissionError("BENCHMARK_LAUNCH_NOT_RUNNABLE")
             # Retain valid FAILED/UNCERTAIN evidence, but never invent a published result.
-            self._result(prior.invocation, receipt)
+            self._result(session, request, prior.invocation, receipt)
             _append(session, job, RECORDED_EVENT, receipt)
             return _history(session, job, request, inputs), True
+
+    def require_completed(
+        self, session: Session, request: BenchmarkOwnerRequest, *, job_id: str
+    ) -> tuple[BenchmarkLaunchReceipt, ...]:
+        """Current exact evidence for all six launches, not parent success or device approval."""
+        with self.source_admission.admit_in_session(session, request) as inputs:
+            job = require_benchmark_job_in_session(session, request, job_id=job_id)
+            history = _history(session, job, request, inputs)
+            if len(history.launches) != 6:
+                raise BenchmarkJobAdmissionError("BENCHMARK_LAUNCH_SERIES_INCOMPLETE")
+            receipts: list[BenchmarkLaunchReceipt] = []
+            for launch in history.launches:
+                receipt = launch.receipt
+                if (
+                    receipt is None
+                    or receipt.cleanup != "CONFIRMED"
+                    or self._result(session, request, launch.invocation, receipt).status
+                    != "COMPLETED"
+                ):
+                    raise BenchmarkJobAdmissionError("BENCHMARK_LAUNCH_SERIES_INCOMPLETE")
+                receipts.append(receipt)
+            return tuple(receipts)

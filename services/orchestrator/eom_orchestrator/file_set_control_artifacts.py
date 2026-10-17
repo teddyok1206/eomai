@@ -380,7 +380,15 @@ class ControlFileSetPublisher:
                 or metadata.st_size != member.bytes
                 or sha256_file(member.source) != member.sha256
                 or re.fullmatch(r"sha256:[0-9a-f]{64}", member.sha256) is None
-                or re.fullmatch(r"eom://schemas/[A-Za-z0-9._/-]{1,220}", member.schema_ref) is None
+                # Released member pointers may name one definition, not a different
+                # schema alias. Keep the URI local and its pointer-sized bound closed.
+                or len(member.schema_ref) > 256
+                or re.fullmatch(
+                    r"eom://schemas/[A-Za-z0-9._/-]{1,220}"
+                    r"(?:#/\$defs/[A-Za-z][A-Za-z0-9_]{0,63})?",
+                    member.schema_ref,
+                )
+                is None
                 or re.fullmatch(
                     r"[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*",
                     member.media_type,

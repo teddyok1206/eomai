@@ -1,21 +1,44 @@
 """Marker-guarded PostgreSQL Job concurrency; synthetic source admission, no live model."""
 
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+from datetime import UTC, datetime
 from threading import Event
+from types import SimpleNamespace
 
 import pytest
 from eom_catalog_contracts.embedding_device_benchmark import BenchmarkOwnerRequest
+from eom_catalog_service.embedding_benchmark_owner_admission import (
+    BenchmarkOwnerConfiguration,
+    CatalogBenchmarkOwnerAdmission,
+)
+from eom_catalog_service.settings import CatalogSettings
+from eom_identity_service import AuthenticatedSessionFence
+from eom_identity_service.models import OperatorRecord
+from eom_orchestrator import embedding_device_benchmark_owner as owner_module
 from eom_orchestrator.embedding_benchmark_jobs import (
     BenchmarkJobAdmissionError,
     benchmark_job_key,
     submit_benchmark_job_in_session,
 )
 from eom_orchestrator.embedding_benchmark_launch_history import BenchmarkLaunchJournal
+from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkExecutionOwner
+from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
+from eom_orchestrator.local_embedding_control_artifacts import (
+    LocalEmbeddingControlArtifactPublisher,
+)
 from eom_orchestrator.models import ArtifactRecord, JobEventRecord, JobRecord
+from eom_orchestrator.settings import Settings
 from eom_orchestrator.state_machine import JobState, transition_job
 from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from tests.integration.test_authenticated_session_fence import (
+    owner_engine as owner_engine,
+)
+from tests.integration.test_authenticated_session_fence import (
+    prepared as prepared,
+)
 from tests.integration.test_preset_model_validation_persistence import (
     guarded_engine as guarded_engine,
 )
@@ -25,6 +48,10 @@ from tests.unit.test_embedding_benchmark_launch_history import (
     SyntheticResultReader,
     invocation_for,
     receipt_for,
+)
+from tests.unit.test_embedding_device_benchmark_owner import (
+    SyntheticExecution,
+    SyntheticOwnerAdmission,
 )
 
 
@@ -251,3 +278,144 @@ def test_postgres_six_launches_remain_one_job_and_late_failure_rolls_back(guarde
             )
             == 0
         )
+
+
+def _manual_owner_case(engine, monkeypatch):
+    request, inputs = benchmark_case()
+    reader = SyntheticResultReader()
+    admission = SyntheticOwnerAdmission(request, inputs, reader)
+    state = SimpleNamespace(
+        request=request,
+        inputs=inputs,
+        admission=admission,
+        reader=reader,
+        sessions=sessionmaker(engine, expire_on_commit=False),
+        capacity=[False],
+    )
+
+    @contextmanager
+    def synthetic_capacity():
+        state.capacity[0] = True
+        try:
+            yield
+        finally:
+            state.capacity[0] = False
+
+    monkeypatch.setattr(owner_module, "native_cpu_capacity", synthetic_capacity)
+    monkeypatch.setattr(owner_module, "require_no_active_native_cpu_execution", lambda: None)
+    state.execution = SyntheticExecution(state)
+    state.owner = BenchmarkExecutionOwner(
+        state.sessions, admission=admission, execution=state.execution
+    )
+    state.storage = (state.sessions, admission, reader, state.owner.journal, None)
+    return state
+
+
+def test_postgres_manual_owner_series_commits_short_roots_and_replays_no_dispatch(
+    guarded_engine: Engine,
+    monkeypatch,
+):
+    state = _manual_owner_case(guarded_engine, monkeypatch)
+    result = state.owner.run_launches(state.request)
+    assert result.dispatch_count == 6 and result.state == "VALIDATING_RESULT"
+    assert len({value.execution_id for value in state.execution.calls}) == 6
+    state.owner.execution = None
+    replay = state.owner.run_launches(state.request)
+    assert replay.receipts == result.receipts and replay.dispatch_count == 0
+    with state.sessions() as session:
+        assert session.get(JobRecord, result.job_id).status == "VALIDATING_RESULT"
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(JobEventRecord)
+                .where(JobEventRecord.job_id == result.job_id)
+            )
+            == 18
+        )
+
+
+def test_postgres_manual_owner_does_not_replace_an_uncertain_original_execution(
+    guarded_engine: Engine,
+    monkeypatch,
+):
+    state = _manual_owner_case(guarded_engine, monkeypatch)
+    state.execution.fail_ordinal = 2
+    with pytest.raises(ValueError, match="EXECUTION_UNCERTAIN"):
+        state.owner.run_launches(state.request)
+    before = tuple(state.execution.calls)
+    state.execution.fail_ordinal = None
+    with pytest.raises(ValueError, match="ORIGINAL_EXECUTION_UNRESOLVED"):
+        state.owner.run_launches(state.request)
+    assert tuple(state.execution.calls) == before and len(before) == 2
+    with state.sessions() as session:
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(JobRecord)
+                .where(JobRecord.idempotency_key == benchmark_job_key(state.request))
+            )
+            == 1
+        )
+
+
+@pytest.mark.api_integration
+@pytest.mark.parametrize("actor", ("admin", "author"))
+def test_real_identity_capture_and_registered_policy_gate_the_manual_benchmark(
+    prepared,
+    tmp_path,
+    actor,
+):
+    """Real disposable Identity/Artifact fences; source port is explicitly synthetic."""
+    capture = prepared.capture
+    if actor == "admin":
+        with Session(prepared.engine) as session:
+            username = session.get(OperatorRecord, prepared.admin.operator_id).username
+        pair = prepared.auth.login(
+            username=username, password=prepared.password, client_name="Synthetic benchmark gate"
+        ).pair
+        capture = prepared.auth.capture_access(pair.access_token)
+    request, inputs = benchmark_case()
+    body = request.model_dump(mode="json")
+    body["operator_audit_id"] = capture.operator_id
+    request = BenchmarkOwnerRequest.model_validate(seal(body, "request_sha256"))
+    workspace, artifacts = tmp_path / "workspace", tmp_path / "artifacts"
+    workspace.mkdir(mode=0o700)
+    artifacts.mkdir(mode=0o700)
+    publisher = ControlFileSetPublisher(
+        prepared.engine, Settings(workspace_root=workspace, nas_artifact_root=artifacts)
+    )
+    published = LocalEmbeddingControlArtifactPublisher(
+        publisher, source_commit="a" * 40
+    ).publish_benchmark_policy(
+        request.execution_policy,
+        idempotency_key="synthetic-native-policy:" + request.benchmark_id,
+        created_at=datetime.now(UTC),
+    )
+    owner = CatalogBenchmarkOwnerAdmission(
+        prepared.engine,
+        BenchmarkOwnerConfiguration(
+            request.request_sha256, published.member, published.semantic_sha256
+        ),
+        capture=capture,
+        session_fence=AuthenticatedSessionFence(prepared.pin),
+        settings=CatalogSettings(nas_artifact_root=artifacts),
+    )
+    synthetic_source = SyntheticBenchmarkAdmission(request, inputs)
+    owner._source = synthetic_source
+    if actor == "admin":
+        with (
+            Session(prepared.engine) as session,
+            session.begin(),
+            owner.admit_execution_in_session(session, request) as admitted,
+        ):
+            assert admitted == inputs
+        assert synthetic_source.entered == synthetic_source.exited == 1
+    else:
+        with (
+            pytest.raises(ValueError),
+            Session(prepared.engine) as session,
+            session.begin(),
+            owner.admit_execution_in_session(session, request),
+        ):
+            pytest.fail("an AUTHOR capture cannot authorize benchmark compute")
+        assert synthetic_source.entered == 0

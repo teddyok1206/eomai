@@ -279,6 +279,7 @@ fi
 if [[ "${action}" == "embedding-encoding-tests" ]]; then
   export EOM_RUN_INTEGRATION=1
   export EOM_RUN_API_INTEGRATION=1
+  export EOM_RUN_AUTHENTICATED_SESSION_INTEGRATION=1
   export EOM_API_TEST_STATE="${state_directory}"
   "${PYTHON}" -m pytest -q tests/integration/test_embedding_encoding_reservations.py \
     tests/integration/test_embedding_benchmark_jobs.py
