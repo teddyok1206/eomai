@@ -1,4 +1,7 @@
-"""One owner-local benchmark materialization; no Job allocation, unit or NAS effects."""
+"""One owner-local benchmark materialization; no Job allocation, unit or NAS effects.
+
+Concrete owner adapter; state/Artifact commit remain Orchestrator responsibilities.
+"""
 
 from __future__ import annotations
 
@@ -18,16 +21,7 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     parse_embedding_device_benchmark_bytes,
     validate_benchmark_invocation,
 )
-from eom_catalog_service.embedding_benchmark_handoff import benchmark_owner_start_ticks
 from eom_identifiers import content_sha256, sha256_bytes
-from eom_workflow.embedding_benchmark_launch_control import (
-    MAX_LAUNCH_CONTROL_BYTES,
-    BenchmarkLaunchAssociation,
-    benchmark_launch_control_bytes,
-    parse_benchmark_launch_control_bytes,
-    validate_benchmark_launch_association,
-)
-
 from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkLaunchAuthorization
 from eom_orchestrator.inference_transfer_cpu_handoff import (
     ensure_protected_cpu_owner_workspace,
@@ -36,6 +30,15 @@ from eom_orchestrator.inference_transfer_cpu_handoff import (
     read_protected_cpu_handoff_member,
     write_protected_cpu_owner_member,
 )
+from eom_workflow.embedding_benchmark_launch_control import (
+    MAX_LAUNCH_CONTROL_BYTES,
+    BenchmarkLaunchAssociation,
+    benchmark_launch_control_bytes,
+    parse_benchmark_launch_control_bytes,
+    validate_benchmark_launch_association,
+)
+
+from eom_catalog_service.embedding_benchmark_handoff import benchmark_owner_start_ticks
 
 BENCHMARK_OWNER_ROOT = Path("/var/lib/eom-workflow-runner/embedding-benchmarks")
 

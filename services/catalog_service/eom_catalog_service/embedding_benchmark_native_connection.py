@@ -1,4 +1,7 @@
-"""Actual PID1 listener and native writer capture for one original benchmark execution."""
+"""Actual PID1 listener and native writer capture for one original benchmark execution.
+
+Concrete owner adapter; state/Artifact commit remain Orchestrator responsibilities.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +16,13 @@ import time
 from pathlib import Path
 
 from eom_catalog_contracts.embedding_device_benchmark import BenchmarkWorkerInvocation
+from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkLaunchAuthorization
+from eom_orchestrator.inference_transfer_cpu_handoff import (
+    fixed_owner_identity,
+    protected_cpu_handoff_directory,
+)
+from eom_orchestrator.inference_transfer_cpu_systemd import inspect_cpu_unit
+
 from eom_catalog_service.embedding_benchmark_channel import BenchmarkUnixPeer
 from eom_catalog_service.embedding_benchmark_handoff import benchmark_owner_start_ticks
 from eom_catalog_service.embedding_benchmark_layout import BENCHMARK_HANDOFF_ROOT
@@ -24,13 +34,6 @@ from eom_catalog_service.embedding_runtime_files import (
     fixed_native_embedding_profile,
     read_live_runtime_os_file,
 )
-
-from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkLaunchAuthorization
-from eom_orchestrator.inference_transfer_cpu_handoff import (
-    fixed_owner_identity,
-    protected_cpu_handoff_directory,
-)
-from eom_orchestrator.inference_transfer_cpu_systemd import inspect_cpu_unit
 
 
 class CapturedBenchmarkNativeConnection:

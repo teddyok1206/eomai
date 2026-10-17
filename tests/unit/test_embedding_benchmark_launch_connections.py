@@ -7,9 +7,9 @@ import time
 from pathlib import Path
 
 import pytest
+from eom_catalog_service import embedding_benchmark_native_connection as native
+from eom_catalog_service import embedding_benchmark_root_connection as owner
 from eom_catalog_service import embedding_benchmark_root_socket as root
-from eom_orchestrator import embedding_benchmark_native_connection as native
-from eom_orchestrator import embedding_benchmark_root_connection as owner
 from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkLaunchAuthorization
 from eom_orchestrator.inference_transfer_cpu_handoff import (
     CpuHandoffIdentity,

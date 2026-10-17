@@ -276,7 +276,7 @@ def test_real_workflow_owner_resource_client_authenticates_root_peer_without_mod
         pytest.skip("explicit private benchmark filesystem OS gate required")
     assert os.getresuid() == (0, 0, 0)
     from eom_catalog_service.embedding_benchmark_channel import BenchmarkResourceChannel
-    from eom_orchestrator.embedding_benchmark_gpu_resource_client import (
+    from eom_catalog_service.embedding_benchmark_gpu_resource_client import (
         OwnerBenchmarkGpuResourceClient,
     )
     from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkLaunchAuthorization

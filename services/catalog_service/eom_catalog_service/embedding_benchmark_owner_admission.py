@@ -13,6 +13,7 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     EMBEDDING_DEVICE_BENCHMARK_SCHEMA_REF,
     MAX_BENCHMARK_ENVELOPE_BYTES,
     BenchmarkExecutionPolicy,
+    BenchmarkNearTieReference,
     BenchmarkOwnerRequest,
     BenchmarkStagedInputs,
     embedding_device_benchmark_bytes,
@@ -32,6 +33,10 @@ from pydantic import TypeAdapter
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
+from eom_catalog_service.embedding_benchmark_cpu_reference import (
+    CPU_REFERENCE_SCHEMA,
+    validate_cpu_benchmark_reference,
+)
 from eom_catalog_service.embedding_benchmark_sources import CatalogBenchmarkSourceAdmission
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.settings import CatalogSettings
@@ -143,9 +148,12 @@ class CatalogBenchmarkOwnerAdmission:
     ) -> bytes:
         """The journal's explicit current root, never an ambient or captured SQL session."""
         pointer = ArtifactMemberPointer.model_validate(pointer.model_dump(mode="json"))
+        expected_schemas = {
+            "worker-result.json": EMBEDDING_DEVICE_BENCHMARK_SCHEMA_REF + "#/$defs/workerResult",
+            "near-tie-reference.json": CPU_REFERENCE_SCHEMA,
+        }
         if (
-            pointer.member_path != "worker-result.json"
-            or pointer.schema_ref != EMBEDDING_DEVICE_BENCHMARK_SCHEMA_REF + "#/$defs/workerResult"
+            pointer.schema_ref != expected_schemas.get(pointer.member_path)
             or pointer.media_type != "application/json"
         ):
             raise ValueError("BENCHMARK_OWNER_RESULT_POINTER_INVALID")
@@ -158,5 +166,19 @@ class CatalogBenchmarkOwnerAdmission:
                 expected_primary_file="worker-result.json",
                 max_bytes=MAX_BENCHMARK_ENVELOPE_BYTES,
             ).payload
+            if pointer.member_path == "near-tie-reference.json":
+                reference = parse_embedding_device_benchmark_bytes(raw)
+                if not isinstance(reference, BenchmarkNearTieReference) or (
+                    reference.score_binary.artifact_id,
+                    reference.score_binary.artifact_revision_id,
+                ) != (pointer.artifact_id, pointer.artifact_revision_id):
+                    raise ValueError("BENCHMARK_CPU_REFERENCE_CLOSURE_INVALID")
+                binary = reader.read_pinned(
+                    **reference.score_binary.model_dump(mode="python"),
+                    expected_artifact_types=(BENCHMARK_LAUNCH_ARTIFACT_TYPE,),
+                    expected_primary_file="worker-result.json",
+                    max_bytes=272,
+                ).payload
+                validate_cpu_benchmark_reference(request, pointer, raw, binary)
             reader.require_session(session)
             return raw

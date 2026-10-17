@@ -233,3 +233,88 @@ def test_result_reader_rejects_wrong_member_contract_before_artifact_io(admitted
     ):
         admitted.owner.read_in_session(session, admitted.request, pointer)
     assert admitted.owner._source.entered == 0
+
+
+@pytest.mark.parametrize("fault", (None, "bytes", "role", "foreign-artifact"))
+def test_cpu_reference_reader_uses_registered_same_artifact_scores_and_current_authority(
+    admitted, tmp_path, fault
+):
+    from pathlib import Path
+
+    from eom_catalog_contracts.embedding_device_benchmark import BenchmarkWorkerInvocation
+    from eom_orchestrator.file_set_control_artifacts import ControlFileSetIdentity
+
+    from tests.unit.embedding_device_benchmark_fixtures import worker_invocation
+    from tests.unit.inference_transfer_embedding_fixtures import seal
+    from tests.unit.test_embedding_benchmark_cpu_reference import cpu_reference
+
+    value = admitted
+    body = worker_invocation(1).model_dump(mode="json")
+    inputs_raw = embedding_device_benchmark_bytes(value.inputs)
+    body.update(
+        benchmark_id=value.request.benchmark_id,
+        benchmark_revision_id=value.request.benchmark_revision_id,
+        owner_request_sha256=value.request.request_sha256,
+        local_input=dict(
+            member_name="benchmark-inputs.json",
+            sha256=sha256_bytes(inputs_raw),
+            byte_count=len(inputs_raw),
+        ),
+    )
+    invocation = BenchmarkWorkerInvocation.model_validate(seal(body, "invocation_sha256"))
+    identity = ControlFileSetIdentity("job_" + "c" * 32, "artifact_" + "d" * 32, "rev_" + "e" * 32)
+    reference, pointer, raw, scores = cpu_reference(
+        invocation, value.request, identity.artifact_id, identity.artifact_revision_id
+    )
+    if fault == "foreign-artifact":
+        body = reference.model_dump(mode="json")
+        body["score_binary"]["artifact_id"] = "artifact_" + "f" * 32
+        from eom_catalog_contracts.embedding_device_benchmark import BenchmarkNearTieReference
+
+        reference = BenchmarkNearTieReference.model_validate(seal(body, "reference_sha256"))
+        raw = embedding_device_benchmark_bytes(reference)
+        pointer = pointer.model_copy(update={"sha256": sha256_bytes(raw)})
+    members = []
+    result_schema = EMBEDDING_DEVICE_BENCHMARK_SCHEMA_REF + "#/$defs/workerResult"
+    for name, payload, schema, media in (
+        (
+            "worker-result.json",
+            embedding_device_benchmark_bytes(worker_result()),
+            result_schema,
+            "application/json",
+        ),
+        ("near-tie-reference.json", raw, pointer.schema_ref, "application/json"),
+        (
+            "rank-evidence.f64",
+            scores,
+            reference.score_binary.schema_ref,
+            "application/octet-stream",
+        ),
+    ):
+        path = tmp_path / name
+        path.write_bytes(payload)
+        path.chmod(0o600)
+        members.append(
+            ControlFileSetMember(name, path, sha256_bytes(payload), len(payload), schema, media)
+        )
+    published = value.publisher.publish_identified_first_observation(
+        identity=identity,
+        members=tuple(sorted(members, key=lambda member: member.file_name)),
+        primary_file="worker-result.json",
+        artifact_type=BENCHMARK_LAUNCH_ARTIFACT_TYPE,
+        manifest_version=CONTROL_FILE_SET_PROTOCOL,
+        idempotency_key="synthetic-cpu-reference-reader",
+        source_commit="a" * 40,
+    )
+    if fault == "bytes":
+        location = Path(published.nas_path) / "rank-evidence.f64"
+        location.chmod(0o600)
+        location.write_bytes(b"\x00" * len(scores))
+    elif fault == "role":
+        value.roles[:] = []
+    with value.publisher.sessions() as session, session.begin():
+        if fault is None:
+            assert value.owner.read_in_session(session, value.request, pointer) == raw
+        else:
+            with pytest.raises((ValueError, RuntimeError)):
+                value.owner.read_in_session(session, value.request, pointer)

@@ -38,7 +38,11 @@ class BenchmarkResultReader(Protocol):
     def read_in_session(
         self, session: Session, request: BenchmarkOwnerRequest, pointer: ArtifactMemberPointer
     ) -> bytes:
-        """Resolve the authorized exact registered revision/schema/media/lifecycle/hash."""
+        """Resolve exact authorized fixed members, never arbitrary worker-chosen paths.
+
+        CPU near-tie reference reads additionally validate their same-Artifact f64
+        member, original source/space closure and frozen complete-span clustering.
+        """
         ...
 
 

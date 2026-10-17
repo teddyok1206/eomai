@@ -1644,6 +1644,122 @@ passive77743a9b owner/actual-account10-test checkpoint above is historical evide
 not installation or execution evidence for this new candidate. No operating service,
 numerical prefix, policy selector, default device, DB schema or credential was changed.
 
+## CPU reference seal and frozen clocks — design before implementation
+
+Responsibility: finish the original six-launch benchmark rather than introduce another
+store or gate framework. Canonical source is CPU launch1's validated f32 bytes and the
+original authorized request/receipt. Reuse released benchmark1.0 `nearTieReference`,
+cluster, f64-pointer and launch-receipt schemas unchanged. The CPU file set gains two
+small members: `rank-evidence.f64` and `near-tie-reference.json`. Its first receipt's
+generic owner-evidence pointer selects that exact reference; root completion remains
+an independently named immutable member of the same Artifact. Other launches keep
+their existing root-completion evidence. Historical receipts parse unchanged; missing
+pre-CUDA reference is explicit, never inferred after a CUDA result or backfilled.
+
+The reference uses each requested query's first CPU repetition, a recipe choice fixed
+before any actual benchmark result. Existing exact row ranking excludes all views of
+the query profile; existing complete-span4e-5 clustering and stable row keys are reused.
+Scores are raw little-endian f64, never rounded JSON/DB summaries. Validate every row,
+purpose space, ordered query, finite scalar, aligned contiguous offset, complete scope,
+cluster span and hash on read. At most2×17 scores: O(Nd+N log N) construction,
+O(N log N) bounded revalidation, O(N) metadata; no ANN or new dependency.
+
+Keep one CPU Artifact, not a parallel copy of its vectors. Its self-identifying f64
+pointer needs identities before serialization, not its outer manifest hash. Derive
+separate publication Job/Artifact/revision IDs from the original invocation under
+distinct purpose/role domains; retain full input/content hashes separately. Extend the
+existing identified publication API with named first-observation time allocation,
+using its existing lock, timestamp replay, unique constraints and commit machinery.
+There is no new table/queue/registry. A changed output/source/identity conflicts rather
+than overwriting an existing publication. Late revocation preserves original effects.
+
+The bound launch authorization reads the original Job history and first receipt in a
+short actual source-fenced transaction, then resolves only the whitelisted reference
+and f64 members through Catalog's existing pinned Artifact reader. Both must belong
+to that first CPU Artifact/revision and match the original request/family/spaces/rows.
+Later launches require that committed reference **before any local staging or root
+connection**, so ordering is operational, not a timestamp assertion or parsed flag.
+Failure preserves the reservation and creates no replacement execution. Contracts
+remain IO-free; owner application owns history/authorization, Catalog owns resolution,
+and the existing Orchestrator publisher remains the only NAS writer.
+
+Also restore the original proposal's timing boundaries before live measurement:
+start owner cold time before its current admission/staging, not at the later root
+unit driver; stop cold/query clocks after validation/ranking but **before** continuation
+ACK. Query authorization_ns measures the pre-encode authorization inside that span;
+the additional late result-ACK authorization remains mandatory but outside the stopped
+clock. Provisional measurements are discarded if that late authorization fails.
+The simpler root-lifecycle duration omits owner work and includes unrelated probes;
+post-ACK end clocks contaminate the prescribed measurement. Root start/end observations
+remain independent machine-lifecycle evidence, not performance substitutes. No frozen
+recipe threshold, repetition, native numerical code or past Artifact is changed.
+
+### Dependency direction correction before activation
+
+The unchanged repository architecture test additionally caught concrete benchmark
+adapters importing Catalog infrastructure from the Orchestrator package. The earlier
+6513badd source candidate had this placement defect; its focused suites did not cover
+that global architecture test. Do not waive the rule or hide imports dynamically.
+Move the seven concrete `embedding_benchmark_{gpu_resource_client,launch_execution,
+launch_publication,launch_workspace,native_connection,native_observation,root_connection}`
+modules to `eom_catalog_service`, the existing runtime composition layer. The stable
+application owner/authorization, original Job journal and sole Artifact committer stay
+in `eom_orchestrator`; actual Orchestrator UID/GID and source fences still apply to
+the moved adapters. Package placement grants no Catalog runtime or worker NAS writes.
+Root control imports its local Catalog workspace adapter instead of reaching back
+into a platform package for Catalog-dependent behavior. No new port framework or
+dependency exception is introduced.
+
+This is a source-candidate import-path change, not relocation of canonical data,
+process identities, socket paths or operating services. Update current source callers
+and opt-in test imports together; no alias back to Catalog is left in Orchestrator.
+Earlier protected77743a9b installation, old wheel bytes and archived test programs
+remain unchanged and retain their historical import paths. A future installation
+must select a coherent new release rather than mix old/new adapter objects.
+
+The new actual file-set integration test also reproduced a publication defect in the
+prior candidate: native program order is not lexical file-set member order. Preserve
+the former inside typed worker results; sort the unique publication member manifest
+for the existing publisher. Tests now exercise that real publisher (temporary local
+NAS simulation), not just a recording stub, for CPU1 and cold-only CPU outputs, with
+late-revocation behavior and the self-identifying reference. Neither source failure
+was a live model retry or a change to released benchmark schemas.
+
+### CPU reference source and real disposable PostgreSQL checkpoint
+
+Final65-suite regression after relocation: **1988 PASS in248.14s**,14 production
+modules strict mypy PASS,27 production/test files Ruff/format PASS, unchanged dependency
+and design-boundary tests included. A further26 dependency/connection/ordering tests
+passed after mechanical test import formatting; do not sum overlapping gate counts.
+The pre-relocation1948-test pass was not sufficient architecture evidence: the separate
+dependency gate correctly failed before the placement fix. Released schemas and three
+numerical implementation files were not edited. Current import-path compatibility is
+documented above; old inactive installed candidates are preserved, not reclassified.
+
+Actual disposable PostgreSQL gate **22 PASS / cleanup PASS** used the existing guarded
+prepare→migration-cycle→role-reconcile→encoding/benchmark tests→inspect→cleanup scripts
+from the existing EOM2 sudo TTY. The added test exercises concurrent identified first-
+observation publication with one Job/Artifact/revision/timestamp and exact replay.
+Existing original-Job, actual test-Identity and registered-Artifact checks also passed;
+Graph/source/compute remain synthetic. Operational DB, model and installed runtime
+mutations0. Only this fresh marked disposable DB/roles were removed; failed development
+invocations and protected operational logs are preserved.
+
+Gate evidence: `/opt/eom/embedding-benchmark-os-evidence/cpu-reference-JmUVvEwa`;
+operator raw SHA256 `cc9dc5a127bdd76f895e5015d0b56a7c8c164aace80a12fb16a0d2c27534fd73`;
+test stdout SHA256 `0458305a955574f48c93e8ae1ed8de14a452ddd69421c4acfa9d038850a23431`.
+Unprivileged result: `/tmp/eom-benchmark-cpu-reference-db.JmUVvEwa/operator-result.json`.
+All18 exercised source pins were rechecked unchanged after adapter relocation, so that
+PG evidence remains exact for its actual boundary, not proof of a live benchmark.
+
+At12:25:34 UTC, independent read-only projection:577 encodings/bindings,151 index
+revisions,6 logical indexes, latest view coverage181/193/203 of545 eligible sources;
+not577 unique Items or complete coverage. INDEX3633849 and QUERY3633843 were actually
+alive12h17m44. Original HTTP process2895440 remained live in LOGIN; no replacement
+request/login/identity/key, credential extraction or TTL change. Next routine auth/
+index check no earlier than12:55:54 UTC. Full goal stays ACTIVE: protected numerical
+successors, genuine operator live six-run gates and C1–C5 activation remain unproven.
+
 ## Root resource relay — design before implementation
 
 The workflow-owner process must not manufacture independent GPU counters, impersonate UID0

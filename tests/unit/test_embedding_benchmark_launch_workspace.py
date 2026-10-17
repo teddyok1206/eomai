@@ -4,7 +4,7 @@ import os
 import time
 
 import pytest
-from eom_orchestrator import embedding_benchmark_launch_workspace as stage
+from eom_catalog_service import embedding_benchmark_launch_workspace as stage
 from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkLaunchAuthorization
 from eom_orchestrator.inference_transfer_cpu_handoff import CpuHandoffIdentity
 

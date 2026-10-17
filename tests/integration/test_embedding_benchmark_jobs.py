@@ -3,7 +3,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import UTC, datetime
-from threading import Event
+from threading import Barrier, Event
 from types import SimpleNamespace
 
 import pytest
@@ -13,9 +13,11 @@ from eom_catalog_service.embedding_benchmark_owner_admission import (
     CatalogBenchmarkOwnerAdmission,
 )
 from eom_catalog_service.settings import CatalogSettings
+from eom_identifiers import new_job_id, new_logical_artifact_id, new_revision_id, sha256_bytes
 from eom_identity_service import AuthenticatedSessionFence
 from eom_identity_service.models import OperatorRecord
 from eom_orchestrator import embedding_device_benchmark_owner as owner_module
+from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.embedding_benchmark_jobs import (
     BenchmarkJobAdmissionError,
     benchmark_job_key,
@@ -23,11 +25,21 @@ from eom_orchestrator.embedding_benchmark_jobs import (
 )
 from eom_orchestrator.embedding_benchmark_launch_history import BenchmarkLaunchJournal
 from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkExecutionOwner
-from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
+from eom_orchestrator.file_set_control_artifacts import (
+    CONTROL_FILE_SET_PROTOCOL,
+    ControlFileSetIdentity,
+    ControlFileSetMember,
+    ControlFileSetPublisher,
+)
 from eom_orchestrator.local_embedding_control_artifacts import (
     LocalEmbeddingControlArtifactPublisher,
 )
-from eom_orchestrator.models import ArtifactRecord, JobEventRecord, JobRecord
+from eom_orchestrator.models import (
+    ArtifactRecord,
+    ArtifactRevisionRecord,
+    JobEventRecord,
+    JobRecord,
+)
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.state_machine import JobState, transition_job
 from sqlalchemy import Engine, func, select
@@ -68,6 +80,102 @@ def _launch_storage(engine):
 
 
 pytestmark = pytest.mark.integration
+
+
+def test_postgres_identified_cpu_reference_publication_has_one_timestamp_and_allocation(
+    guarded_engine, tmp_path
+):
+    """Actual PG/file-set commit and replay; CPU vectors/source grant remain synthetic."""
+    from eom_catalog_contracts.embedding_device_benchmark import embedding_device_benchmark_bytes
+
+    from tests.unit.embedding_device_benchmark_fixtures import worker_result
+    from tests.unit.test_embedding_benchmark_cpu_reference import cpu_reference
+
+    nas = tmp_path / "nas"
+    nas.mkdir()
+    publisher = ControlFileSetPublisher(
+        guarded_engine, Settings(staging_root=tmp_path / "staging", nas_artifact_root=nas)
+    )
+    identity = ControlFileSetIdentity(new_job_id(), new_logical_artifact_id(), new_revision_id())
+    reference, pointer, raw, scores = cpu_reference(
+        artifact_id=identity.artifact_id, artifact_revision_id=identity.artifact_revision_id
+    )
+    members = []
+    for name, payload, schema, media in (
+        (
+            "worker-result.json",
+            embedding_device_benchmark_bytes(worker_result()),
+            "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/workerResult",
+            "application/json",
+        ),
+        ("near-tie-reference.json", raw, pointer.schema_ref, "application/json"),
+        (
+            "rank-evidence.f64",
+            scores,
+            reference.score_binary.schema_ref,
+            "application/octet-stream",
+        ),
+    ):
+        path = tmp_path / name
+        path.write_bytes(payload)
+        path.chmod(0o600)
+        members.append(
+            ControlFileSetMember(name, path, sha256_bytes(payload), len(payload), schema, media)
+        )
+    key = "synthetic-cpu-reference:" + identity.job_id
+    arguments = dict(
+        identity=identity,
+        members=tuple(sorted(members, key=lambda member: member.file_name)),
+        primary_file="worker-result.json",
+        artifact_type="control_embedding_benchmark_launch",
+        manifest_version=CONTROL_FILE_SET_PROTOCOL,
+        idempotency_key=key,
+        source_commit="a" * 40,
+    )
+    barrier = Barrier(2)
+
+    def publish():
+        barrier.wait(timeout=5)
+        try:
+            return publisher.publish_identified_first_observation(**arguments)
+        except ControlPlaneError as error:
+            assert error.code == "CONTROL_FILE_SET_BUSY"
+            return None
+
+    before = datetime.now(UTC)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = tuple(pool.map(lambda _: publish(), range(2)))
+    assert any(result is not None for result in results)
+    first = publisher.publish_identified_first_observation(**arguments)
+    after = datetime.now(UTC)
+    assert all(result is None or result == first for result in results)
+    assert (first.job_id, first.artifact_id, first.artifact_revision_id) == (
+        identity.job_id,
+        identity.artifact_id,
+        identity.artifact_revision_id,
+    )
+    with Session(guarded_engine) as session:
+        job = session.get(JobRecord, identity.job_id)
+        assert (
+            before
+            <= datetime.fromisoformat(job.request["created_at_utc"].replace("Z", "+00:00"))
+            <= after
+        )
+        assert (
+            session.scalar(
+                select(func.count()).select_from(JobRecord).where(JobRecord.idempotency_key == key)
+            )
+            == 1
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(ArtifactRevisionRecord)
+                .where(ArtifactRevisionRecord.job_id == identity.job_id)
+            )
+            == 1
+        )
+    assert publisher.publish_identified_first_observation(**arguments) == first
 
 
 def test_postgres_same_identity_replay_has_one_original_job_and_two_events(guarded_engine: Engine):

@@ -6,14 +6,16 @@ from types import SimpleNamespace
 
 import pytest
 from eom_catalog_contracts.embedding_device_benchmark import embedding_device_benchmark_bytes
+from eom_catalog_service import embedding_benchmark_launch_execution as execution
 from eom_catalog_service.embedding_benchmark_launch import (
     BenchmarkLaunchPins,
     benchmark_launch_environment_bytes,
 )
+from eom_catalog_service.embedding_benchmark_launch_publication import (
+    BenchmarkLaunchArtifactPublisher,
+)
 from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
 from eom_identifiers import sha256_bytes
-from eom_orchestrator import embedding_benchmark_launch_execution as execution
-from eom_orchestrator.embedding_benchmark_launch_publication import BenchmarkLaunchArtifactPublisher
 from eom_workflow.embedding_benchmark_launch_control import BenchmarkLaunchPrepared
 
 from tests.unit.embedding_benchmark_control_fixtures import association, completed, prepared
@@ -111,6 +113,11 @@ def composition(monkeypatch):
             assert invocation == worker_invocation(invocation.launch_ordinal)
             events.append("authorize")
 
+        def require_cpu_reference(self):
+            events.append("cpu-reference")
+            if state.fault == "reference":
+                raise ValueError("synthetic original CPU reference unavailable")
+
     def observe(*args, **kwargs):
         events.append("observe")
         return object()
@@ -142,6 +149,18 @@ def test_all_original_launches_reach_same_owner_publication_once(composition, or
         assert events.index("resource-return") < events.index("completed")
     else:
         assert "resource-borrow" not in events
+    if ordinal > 1:
+        assert events.index("cpu-reference") < events.index("stage")
+    else:
+        assert "cpu-reference" not in events
+
+
+def test_later_launch_cannot_stage_or_connect_before_original_cpu_seal(composition):
+    adapter, authorization, state, events = composition
+    state.fault = "reference"
+    with pytest.raises(ValueError, match="CPU reference unavailable"):
+        adapter.run_and_publish(worker_invocation(2), staged_inputs(), authorization)
+    assert "cpu-reference" in events and "stage" not in events and "root-connect" not in events
 
 
 @pytest.mark.parametrize("fault", ("connect", "selection", "completion"))

@@ -1,4 +1,7 @@
-"""Concrete original-launch owner composition; no worker sudo, new queue or model retries."""
+"""Concrete original-launch owner composition; no worker sudo, new queue or model retries.
+
+Concrete owner adapter; state/Artifact commit remain Orchestrator responsibilities.
+"""
 
 from __future__ import annotations
 
@@ -15,11 +18,30 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     embedding_device_benchmark_bytes,
     validate_benchmark_invocation,
 )
+from eom_identifiers import sha256_bytes
+from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkLaunchAuthorization
+from eom_orchestrator.inference_transfer_cpu_handoff import fixed_owner_identity
+from eom_workflow.embedding_benchmark_launch_control import BenchmarkLaunchPrepared
+
+from eom_catalog_service.embedding_benchmark_gpu_resource_client import (
+    OwnerBenchmarkGpuResourceClient,
+)
 from eom_catalog_service.embedding_benchmark_handoff import capture_benchmark_runtime_installation
 from eom_catalog_service.embedding_benchmark_launch import (
     BenchmarkLaunchPins,
     benchmark_launch_environment_bytes,
 )
+from eom_catalog_service.embedding_benchmark_launch_publication import (
+    BenchmarkLaunchArtifactPublisher,
+)
+from eom_catalog_service.embedding_benchmark_launch_workspace import stage_owner_benchmark_launch
+from eom_catalog_service.embedding_benchmark_native_connection import (
+    CapturedBenchmarkNativeConnection,
+)
+from eom_catalog_service.embedding_benchmark_native_observation import (
+    observe_benchmark_native_session,
+)
+from eom_catalog_service.embedding_benchmark_root_connection import connect_benchmark_root
 from eom_catalog_service.embedding_benchmark_unit_control import (
     CPU_BENCHMARK_SOCKET,
     CPU_BENCHMARK_SOCKET_SHA256,
@@ -35,17 +57,6 @@ from eom_catalog_service.embedding_runtime_files import (
     NumericalRuntimeFileSnapshots,
     fixed_native_embedding_profile,
 )
-from eom_identifiers import sha256_bytes
-from eom_workflow.embedding_benchmark_launch_control import BenchmarkLaunchPrepared
-
-from eom_orchestrator.embedding_benchmark_gpu_resource_client import OwnerBenchmarkGpuResourceClient
-from eom_orchestrator.embedding_benchmark_launch_publication import BenchmarkLaunchArtifactPublisher
-from eom_orchestrator.embedding_benchmark_launch_workspace import stage_owner_benchmark_launch
-from eom_orchestrator.embedding_benchmark_native_connection import CapturedBenchmarkNativeConnection
-from eom_orchestrator.embedding_benchmark_native_observation import observe_benchmark_native_session
-from eom_orchestrator.embedding_benchmark_root_connection import connect_benchmark_root
-from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkLaunchAuthorization
-from eom_orchestrator.inference_transfer_cpu_handoff import fixed_owner_identity
 
 
 class FixedBenchmarkLaunchExecution:
@@ -117,9 +128,12 @@ class FixedBenchmarkLaunchExecution:
         inputs: BenchmarkStagedInputs,
         authorization: BenchmarkLaunchAuthorization,
     ) -> BenchmarkLaunchReceipt:
+        owner_started_ns = time.monotonic_ns()
         self.assert_installed(self._request)
         validate_benchmark_invocation(self._request, invocation, inputs)
         authorization.assert_invocation(invocation)
+        if invocation.launch_ordinal > 1:
+            authorization.require_cpu_reference()
         expires = time.monotonic_ns() + 180 * 10**9
         staged = stage_owner_benchmark_launch(
             self._request, invocation, inputs, authorization=authorization, expires_ns=expires
@@ -159,7 +173,12 @@ class FixedBenchmarkLaunchExecution:
             )
             if invocation.device == "CPU":
                 observed = observe_benchmark_native_session(
-                    transport, invocation, inputs, authorization=authorization, expires_ns=expires
+                    transport,
+                    invocation,
+                    inputs,
+                    authorization=authorization,
+                    expires_ns=expires,
+                    owner_started_ns=owner_started_ns,
                 )
             else:
                 with control.resources() as duplicate:
@@ -177,6 +196,7 @@ class FixedBenchmarkLaunchExecution:
                         authorization=authorization,
                         expires_ns=expires,
                         gpu_resources=resources,
+                        owner_started_ns=owner_started_ns,
                     )
             completion = control.receive_completed()
             authorization.assert_invocation(invocation)

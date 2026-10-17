@@ -1,4 +1,7 @@
-"""Workflow-owner resource client; independent GPU fields come only from its root peer."""
+"""Workflow-owner resource client; independent GPU fields come only from its root peer.
+
+Concrete owner adapter; state/Artifact commit remain Orchestrator responsibilities.
+"""
 
 from __future__ import annotations
 
@@ -13,13 +16,13 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     validate_benchmark_local_resources,
     validate_benchmark_resource_finalization,
 )
+from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkLaunchAuthorization
+from eom_orchestrator.inference_transfer_cpu_handoff import fixed_owner_identity
+
 from eom_catalog_service.embedding_benchmark_channel import (
     BenchmarkResourceChannel,
     BenchmarkUnixPeer,
 )
-
-from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkLaunchAuthorization
-from eom_orchestrator.inference_transfer_cpu_handoff import fixed_owner_identity
 
 
 class OwnerBenchmarkGpuResourceClient:

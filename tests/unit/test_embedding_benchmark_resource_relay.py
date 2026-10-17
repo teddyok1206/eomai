@@ -13,16 +13,18 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     BenchmarkResourceEvidence,
     embedding_device_benchmark_bytes,
 )
+from eom_catalog_service import embedding_benchmark_gpu_resource_client as owner_module
 from eom_catalog_service import embedding_benchmark_resource_relay as root_module
 from eom_catalog_service.embedding_benchmark_channel import (
     BenchmarkChannelError,
     BenchmarkResourceChannel,
     BenchmarkUnixPeer,
 )
+from eom_catalog_service.embedding_benchmark_gpu_resource_client import (
+    OwnerBenchmarkGpuResourceClient,
+)
 from eom_catalog_service.embedding_benchmark_handoff import PreparedBenchmarkEnvironment
 from eom_catalog_service.embedding_benchmark_resource_relay import RootBenchmarkGpuResourceRelay
-from eom_orchestrator import embedding_benchmark_gpu_resource_client as owner_module
-from eom_orchestrator.embedding_benchmark_gpu_resource_client import OwnerBenchmarkGpuResourceClient
 from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkLaunchAuthorization
 
 from tests.unit.embedding_device_benchmark_fixtures import resources, session, worker_invocation

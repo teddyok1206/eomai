@@ -1,4 +1,7 @@
-"""Actual fixed-owner connection to a protected original-execution root controller."""
+"""Actual fixed-owner connection to a protected original-execution root controller.
+
+Concrete owner adapter; state/Artifact commit remain Orchestrator responsibilities.
+"""
 
 from __future__ import annotations
 
@@ -10,17 +13,17 @@ import stat
 import struct
 import time
 
-from eom_catalog_service.embedding_benchmark_channel import BenchmarkUnixPeer
-from eom_catalog_service.embedding_benchmark_control_channel import BenchmarkLaunchControlChannel
-from eom_catalog_service.embedding_benchmark_handoff import benchmark_owner_start_ticks
-from eom_catalog_service.embedding_benchmark_layout import BENCHMARK_CONTROL_ROOT
-from eom_workflow.embedding_benchmark_launch_control import BenchmarkLaunchAssociation
-
 from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkLaunchAuthorization
 from eom_orchestrator.inference_transfer_cpu_handoff import (
     fixed_owner_identity,
     protected_cpu_handoff_directory,
 )
+from eom_workflow.embedding_benchmark_launch_control import BenchmarkLaunchAssociation
+
+from eom_catalog_service.embedding_benchmark_channel import BenchmarkUnixPeer
+from eom_catalog_service.embedding_benchmark_control_channel import BenchmarkLaunchControlChannel
+from eom_catalog_service.embedding_benchmark_handoff import benchmark_owner_start_ticks
+from eom_catalog_service.embedding_benchmark_layout import BENCHMARK_CONTROL_ROOT
 
 
 def connect_benchmark_root(

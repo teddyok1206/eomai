@@ -1,4 +1,7 @@
-"""Observe one fixed native program through actual owner authorization and local vectors."""
+"""Observe one fixed native program through actual owner authorization and local vectors.
+
+Concrete owner adapter; state/Artifact commit remain Orchestrator responsibilities.
+"""
 
 from __future__ import annotations
 
@@ -19,19 +22,23 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     embedding_device_benchmark_bytes,
 )
 from eom_catalog_contracts.embedding_vector_binary import read_unit_vectors
-from eom_catalog_service.embedding_benchmark_channel import BenchmarkOwnerChannel
-from eom_catalog_service.embedding_benchmark_layout import BENCHMARK_HANDOFF_ROOT
-from eom_catalog_service.embedding_benchmark_ranking import rank_benchmark_rows
-from eom_catalog_service.embedding_runtime_files import fixed_native_embedding_profile
-
-from eom_orchestrator.embedding_benchmark_gpu_resource_client import OwnerBenchmarkGpuResourceClient
-from eom_orchestrator.embedding_benchmark_native_connection import CapturedBenchmarkNativeConnection
 from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkLaunchAuthorization
 from eom_orchestrator.inference_transfer_cpu_handoff import (
     fixed_owner_identity,
     protected_cpu_handoff_directory,
     read_protected_cpu_handoff_member,
 )
+
+from eom_catalog_service.embedding_benchmark_channel import BenchmarkOwnerChannel
+from eom_catalog_service.embedding_benchmark_gpu_resource_client import (
+    OwnerBenchmarkGpuResourceClient,
+)
+from eom_catalog_service.embedding_benchmark_layout import BENCHMARK_HANDOFF_ROOT
+from eom_catalog_service.embedding_benchmark_native_connection import (
+    CapturedBenchmarkNativeConnection,
+)
+from eom_catalog_service.embedding_benchmark_ranking import rank_benchmark_rows
+from eom_catalog_service.embedding_runtime_files import fixed_native_embedding_profile
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +47,7 @@ class ObservedBenchmarkNativeSession:
     resources: BenchmarkResourceEvidence
     cold_completed_ns: int
     queries: tuple[BenchmarkQueryTiming, ...]
+    owner_started_ns: int
 
 
 def read_benchmark_ready_vectors(
@@ -87,6 +95,7 @@ def observe_benchmark_native_session(
     inputs: BenchmarkStagedInputs,
     *,
     authorization: BenchmarkLaunchAuthorization,
+    owner_started_ns: int,
     expires_ns: int,
     gpu_resources: OwnerBenchmarkGpuResourceClient | None = None,
 ) -> ObservedBenchmarkNativeSession:
@@ -106,6 +115,8 @@ def observe_benchmark_native_session(
             or type(transport) is not CapturedBenchmarkNativeConnection
         ):
             raise ValueError("BENCHMARK_NATIVE_OWNER_REQUIRED")
+        if type(owner_started_ns) is not int or not 0 < owner_started_ns < time.monotonic_ns():
+            raise ValueError("BENCHMARK_NATIVE_OWNER_CLOCK_INVALID")
         if (
             invocation.device == "CUDA"
             and type(gpu_resources) is not OwnerBenchmarkGpuResourceClient
@@ -118,9 +129,12 @@ def observe_benchmark_native_session(
             started = time.monotonic_ns()
             authorization.authorize_checkpoint(checkpoint)
             elapsed = time.monotonic_ns() - started
-            if checkpoint.query_ordinal is not None and checkpoint.query_repetition is not None:
+            if checkpoint.phase == "QUERY_PREPARED":
+                assert (
+                    checkpoint.query_ordinal is not None and checkpoint.query_repetition is not None
+                )
                 key = checkpoint.query_ordinal, checkpoint.query_repetition
-                authorization_ns[key] = authorization_ns.get(key, 0) + elapsed
+                authorization_ns[key] = elapsed
 
         channel = BenchmarkOwnerChannel.from_activated_listener(
             transport.connection,
@@ -164,9 +178,11 @@ def observe_benchmark_native_session(
                     rank_benchmark_rows(
                         inputs.queries[checkpoint.query_ordinal - 1].row, rows[0], cold
                     )
+            # Freeze the original prescribed end before result/cold continuation.
+            completed_ns = time.monotonic_ns()
             channel.acknowledge()
             if checkpoint.phase == "COLD_READY":
-                cold_completed_ns = time.monotonic_ns()
+                cold_completed_ns = completed_ns
             elif checkpoint.phase == "QUERY_READY":
                 assert (
                     checkpoint.query_ordinal is not None and checkpoint.query_repetition is not None
@@ -180,7 +196,7 @@ def observe_benchmark_native_session(
                         repetition=key[1],
                         authorization_ns=authorization_ns[key],
                         encode_ns=checkpoint.encode_duration_ns,
-                        end_to_end_ns=time.monotonic_ns() - query_started[key],
+                        end_to_end_ns=completed_ns - query_started[key],
                     )
                 )
         authorization.assert_invocation(invocation)
@@ -194,7 +210,7 @@ def observe_benchmark_native_session(
 
         resources = channel.finalize_resources(finalizer=finalize)
         return ObservedBenchmarkNativeSession(
-            channel.transcript(), resources, cold_completed_ns, tuple(timings)
+            channel.transcript(), resources, cold_completed_ns, tuple(timings), owner_started_ns
         )
     finally:
         if channel is not None:

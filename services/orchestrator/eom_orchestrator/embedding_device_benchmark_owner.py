@@ -11,13 +11,16 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     BENCHMARK_DEVICE_SEQUENCE,
     BenchmarkCheckpoint,
     BenchmarkLaunchReceipt,
+    BenchmarkNearTieReference,
     BenchmarkOwnerRequest,
     BenchmarkStagedInputs,
     BenchmarkWorkerInvocation,
     embedding_device_benchmark_bytes,
+    parse_embedding_device_benchmark_bytes,
     validate_benchmark_checkpoint,
 )
 from eom_identifiers import content_sha256, sha256_bytes
+from eom_protocol.artifact_members import ArtifactMemberPointer
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -28,6 +31,7 @@ from eom_orchestrator.embedding_benchmark_jobs import (
     submit_benchmark_job_in_session,
 )
 from eom_orchestrator.embedding_benchmark_launch_history import (
+    BenchmarkLaunchHistory,
     BenchmarkLaunchJournal,
     BenchmarkResultReader,
 )
@@ -101,14 +105,60 @@ class BenchmarkLaunchAuthorization:
     def assert_current(self) -> None:
         """Required before a child effect/publication; no cached grant is returned."""
         with self._sessions() as session, session.begin():
-            history = self._journal.read(session, self._request, job_id=self._invocation.job_id)
+            self._current_history(session)
+
+    def _current_history(self, session: Session) -> BenchmarkLaunchHistory:
+        history = self._journal.read(session, self._request, job_id=self._invocation.job_id)
+        if (
+            history.job_state != JobState.RUNNING
+            or len(history.launches) != self._invocation.launch_ordinal
+            or history.launches[-1].invocation != self._invocation
+            or history.launches[-1].receipt is not None
+        ):
+            raise BenchmarkOwnerError("BENCHMARK_OWNER_LAUNCH_AUTHORIZATION_INVALID")
+        return history
+
+    def require_cpu_reference(self) -> ArtifactMemberPointer:
+        """Resolve CPU1's already committed seal before a later launch can stage/start.
+
+        Catalog's reader validates the referenced f64 and complete-span clusters in
+        this same current source root. A parsed timestamp or local file is no substitute.
+        """
+        with self._sessions() as session, session.begin():
+            history = self._current_history(session)
+            first = history.launches[0]
+            receipt = first.receipt
             if (
-                history.job_state != JobState.RUNNING
-                or len(history.launches) != self._invocation.launch_ordinal
-                or history.launches[-1].invocation != self._invocation
-                or history.launches[-1].receipt is not None
+                self._invocation.launch_ordinal <= 1
+                or first.invocation.device != "CPU"
+                or first.invocation.launch_ordinal != 1
+                or receipt is None
+                or receipt.cleanup != "CONFIRMED"
+                or receipt.evidence.member_path != "near-tie-reference.json"
+                or receipt.evidence.schema_ref
+                != "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/nearTieReference"
+                or receipt.evidence.media_type != "application/json"
+                or (receipt.evidence.artifact_id, receipt.evidence.artifact_revision_id)
+                != (receipt.worker_result.artifact_id, receipt.worker_result.artifact_revision_id)
             ):
-                raise BenchmarkOwnerError("BENCHMARK_OWNER_LAUNCH_AUTHORIZATION_INVALID")
+                raise BenchmarkOwnerError("BENCHMARK_OWNER_CPU_REFERENCE_REQUIRED")
+            raw = self._journal.result_reader.read_in_session(
+                session, self._request, receipt.evidence
+            )
+            reference = parse_embedding_device_benchmark_bytes(raw)
+            if (
+                not isinstance(reference, BenchmarkNearTieReference)
+                or embedding_device_benchmark_bytes(reference) != raw
+                or sha256_bytes(raw) != receipt.evidence.sha256
+                or reference.request_sha256 != self._request.request_sha256
+                or reference.input_set_sha256 != self._request.input_set_sha256
+                or reference.family_sha256 != self._request.family.family_sha256
+                or reference.cpu_document_space_sha256
+                != self._request.cpu.spaces.document.space_sha256
+                or reference.cpu_query_space_sha256 != self._request.cpu.spaces.query.space_sha256
+            ):
+                raise BenchmarkOwnerError("BENCHMARK_OWNER_CPU_REFERENCE_INVALID")
+            return receipt.evidence
 
     def authorize_checkpoint(self, checkpoint: BenchmarkCheckpoint) -> None:
         """The fixed channel still owns peer, sequence, deadline and transcript checks."""

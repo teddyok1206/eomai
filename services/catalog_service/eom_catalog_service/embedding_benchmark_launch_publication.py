@@ -1,11 +1,16 @@
-"""Validate original native bytes and publish once through the existing Artifact owner."""
+"""Validate original native bytes and publish once through the existing Artifact owner.
+
+Concrete owner adapter; state/Artifact commit remain Orchestrator responsibilities.
+"""
 
 from __future__ import annotations
 
 import os
 import pwd
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
+from typing import TypedDict
 
 from eom_catalog_contracts.embedding_device_benchmark import (
     BENCHMARK_LAUNCH_ARTIFACT_TYPE,
@@ -23,20 +28,11 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     parse_embedding_device_benchmark_bytes,
 )
 from eom_catalog_contracts.embedding_vector_binary import read_unit_vectors
-from eom_catalog_service.embedding_benchmark_layout import BENCHMARK_HANDOFF_ROOT
-from eom_catalog_service.embedding_runtime_files import fixed_native_embedding_profile
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
-from eom_protocol.artifact_members import ArtifactMemberPointer
-from eom_workflow.embedding_benchmark_launch_control import (
-    BenchmarkLaunchCompleted,
-    BenchmarkLaunchPrepared,
-    benchmark_launch_control_bytes,
-)
-
-from eom_orchestrator.embedding_benchmark_native_observation import ObservedBenchmarkNativeSession
 from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkLaunchAuthorization
 from eom_orchestrator.file_set_control_artifacts import (
     CONTROL_FILE_SET_PROTOCOL,
+    ControlFileSetIdentity,
     ControlFileSetMember,
     ControlFileSetPublisher,
 )
@@ -45,6 +41,23 @@ from eom_orchestrator.inference_transfer_cpu_handoff import (
     protected_cpu_handoff_directory,
     read_protected_cpu_handoff_member,
 )
+from eom_protocol.artifact_members import ArtifactMemberPointer
+from eom_workflow.embedding_benchmark_launch_control import (
+    BenchmarkLaunchCompleted,
+    BenchmarkLaunchPrepared,
+    benchmark_launch_control_bytes,
+)
+
+from eom_catalog_service.embedding_benchmark_cpu_reference import (
+    CPU_SCORE_SCHEMA,
+    BenchmarkRowVector,
+    build_cpu_benchmark_reference,
+)
+from eom_catalog_service.embedding_benchmark_layout import BENCHMARK_HANDOFF_ROOT
+from eom_catalog_service.embedding_benchmark_native_observation import (
+    ObservedBenchmarkNativeSession,
+)
+from eom_catalog_service.embedding_runtime_files import fixed_native_embedding_profile
 
 _JSON_DEFINITIONS = {
     "worker-result.json": "workerResult",
@@ -53,7 +66,43 @@ _JSON_DEFINITIONS = {
     "token-witness.json": "tokenWitness",
     "session.json": "session",
     "cold-timing.json": "coldTiming",
+    "near-tie-reference.json": "nearTieReference",
 }
+
+
+class _PublicationArguments(TypedDict):
+    members: tuple[ControlFileSetMember, ...]
+    primary_file: str
+    artifact_type: str
+    manifest_version: str
+    idempotency_key: str
+    source_commit: str
+
+
+@dataclass(frozen=True, slots=True)
+class ValidatedBenchmarkOutput:
+    """One local validation boundary; retain only matrices needed by CPU reference."""
+
+    result: BenchmarkWorkerResult
+    documents: tuple[BenchmarkRowVector, ...]
+    queries: tuple[BenchmarkRowVector, ...]
+
+
+def _cpu_publication_identity(invocation: BenchmarkWorkerInvocation) -> ControlFileSetIdentity:
+    """Separate typed identities, stable for this original invocation, not content hashes."""
+
+    def suffix(role: str) -> str:
+        return content_sha256(
+            {
+                "purpose": "CPU_FIRST_BENCHMARK_PUBLICATION_IDENTITY",
+                "invocation_sha256": invocation.invocation_sha256,
+                "role": role,
+            }
+        ).removeprefix("sha256:")[:32]
+
+    return ControlFileSetIdentity(
+        "job_" + suffix("JOB"), "artifact_" + suffix("ARTIFACT"), "rev_" + suffix("REVISION")
+    )
 
 
 def validate_benchmark_output_bytes(
@@ -62,7 +111,7 @@ def validate_benchmark_output_bytes(
     observed: ObservedBenchmarkNativeSession,
     completion: BenchmarkLaunchCompleted,
     members: dict[str, bytes],
-) -> BenchmarkWorkerResult:
+) -> ValidatedBenchmarkOutput:
     """One explicit bounded result materialization, O(total bytes + samples*d).
 
     Caller owns root origin/unit cleanup and protected file capture. This function
@@ -102,7 +151,13 @@ def validate_benchmark_output_bytes(
         or session.launch_ordinal != invocation.launch_ordinal
         or result.resources != observed.resources
         or (invocation.device == "CUDA" and completion.resources != observed.resources)
-        or not completion.started_ns < observed.cold_completed_ns <= completion.completed_ns
+        or type(observed.owner_started_ns) is not int
+        or type(observed.cold_completed_ns) is not int
+        or not 0
+        < observed.owner_started_ns
+        <= completion.started_ns
+        < observed.cold_completed_ns
+        <= completion.completed_ns
     ):
         raise ValueError("BENCHMARK_PUBLICATION_OWNER_EVIDENCE_INVALID")
     resources = parse_embedding_device_benchmark_bytes(members["resources.json"])
@@ -138,6 +193,8 @@ def validate_benchmark_output_bytes(
         name: sha256_bytes(raw) for name, raw in members.items() if name.endswith(".f32")
     }
     supplementary_offset = 0
+    documents: tuple[BenchmarkRowVector, ...] = ()
+    queries: list[BenchmarkRowVector] = []
     for vector, tokens in zip(result.vectors, witness.samples, strict=True):
         key = vector.key
         if key != tokens.key:
@@ -187,12 +244,19 @@ def validate_benchmark_output_bytes(
         ):
             raise ValueError("BENCHMARK_PUBLICATION_VECTOR_ASSOCIATION_INVALID")
         sample = raw[vector.byte_offset : vector.byte_offset + vector.byte_count]
-        read_unit_vectors(
+        decoded = read_unit_vectors(
             sample,
             dimension=1024,
             row_count=vector.row_count,
             expected_sha256=sha256_bytes(sample),
         )
+        if invocation.launch_ordinal == 1 and key.phase == "COLD_DOCUMENT":
+            documents = tuple(
+                (row.row, values) for row, values in zip(inputs.documents, decoded, strict=True)
+            )
+        elif invocation.launch_ordinal == 1 and key.phase == "QUERY" and key.repetition == 1:
+            assert key.query_ordinal is not None
+            queries.append((inputs.queries[key.query_ordinal - 1].row, decoded[0]))
     if supplementary_offset != len(members.get("supplementary-documents.f32", b"")):
         raise ValueError("BENCHMARK_PUBLICATION_VECTOR_RANGE_INVALID")
     # Checkpoint vector hashes must identify the exact committed cold/query files.
@@ -204,7 +268,7 @@ def validate_benchmark_output_bytes(
                 raw
             ):
                 raise ValueError("BENCHMARK_PUBLICATION_CHECKPOINT_BYTES_INVALID")
-    return result
+    return ValidatedBenchmarkOutput(result, documents, tuple(queries))
 
 
 class BenchmarkLaunchArtifactPublisher:
@@ -264,11 +328,14 @@ class BenchmarkLaunchArtifactPublisher:
                 )
                 for name in names
             }
-        result = validate_benchmark_output_bytes(invocation, inputs, observed, completion, members)
+        validated = validate_benchmark_output_bytes(
+            invocation, inputs, observed, completion, members
+        )
+        result = validated.result
         assert result.timings is not None
         cold = BenchmarkColdTiming(
             launch_ordinal=invocation.launch_ordinal,
-            end_to_end_ns=observed.cold_completed_ns - completion.started_ns,
+            end_to_end_ns=observed.cold_completed_ns - observed.owner_started_ns,
             startup_ns=result.timings.startup_ns,
             load_hash_ns=result.timings.load_hash_ns,
             encode_ns=result.timings.cold_encode_ns,
@@ -281,6 +348,18 @@ class BenchmarkLaunchArtifactPublisher:
                 "cold-timing.json": canonical_json_bytes(cold.model_dump(mode="json")),
             }
         )
+        identity = None
+        if invocation.launch_ordinal == 1:
+            identity = _cpu_publication_identity(invocation)
+            reference, scores = build_cpu_benchmark_reference(
+                invocation,
+                validated.documents,
+                validated.queries,
+                artifact_id=identity.artifact_id,
+                artifact_revision_id=identity.artifact_revision_id,
+            )
+            members["near-tie-reference.json"] = embedding_device_benchmark_bytes(reference)
+            members["rank-evidence.f64"] = scores
         members.update(
             {
                 f"query-timing-{t.query_ordinal}-{t.repetition}.json": canonical_json_bytes(
@@ -299,6 +378,8 @@ class BenchmarkLaunchArtifactPublisher:
                 )
             if name.endswith(".f32"):
                 return "eom://schemas/knowledge/embedding-f32le-l2-row-major/1.0"
+            if name == "rank-evidence.f64":
+                return CPU_SCORE_SCHEMA
             definition = (
                 "queryTiming" if name.startswith("query-timing-") else _JSON_DEFINITIONS[name]
             )
@@ -309,7 +390,10 @@ class BenchmarkLaunchArtifactPublisher:
             prefix="benchmark-publication-", dir=self.publisher.settings.workspace_root
         ) as temporary:
             files = []
-            for name, raw in members.items():
+            # The existing file-set protocol requires unique lexical member order.
+            # Native program order is a different invariant and stays in its result.
+            for name in sorted(members):
+                raw = members[name]
                 path = Path(temporary) / name
                 path.write_bytes(raw)
                 path.chmod(0o600)
@@ -320,11 +404,13 @@ class BenchmarkLaunchArtifactPublisher:
                         sha256_bytes(raw),
                         len(raw),
                         schema(name),
-                        "application/octet-stream" if name.endswith(".f32") else "application/json",
+                        "application/octet-stream"
+                        if name.endswith((".f32", ".f64"))
+                        else "application/json",
                     )
                 )
             authorization.assert_invocation(invocation)
-            published = self.publisher.publish_first_observation(
+            arguments: _PublicationArguments = dict(
                 members=tuple(files),
                 primary_file="worker-result.json",
                 artifact_type=BENCHMARK_LAUNCH_ARTIFACT_TYPE,
@@ -333,12 +419,24 @@ class BenchmarkLaunchArtifactPublisher:
                 + invocation.invocation_sha256.removeprefix("sha256:"),
                 source_commit=self.source_commit,
             )
+            if identity is None:
+                published = self.publisher.publish_first_observation(**arguments)
+            else:
+                published = self.publisher.publish_identified_first_observation(
+                    identity=identity, **arguments
+                )
             # Commit is not a distributed transaction with the source grant. A late
             # revocation preserves committed bytes/key and the unresolved original;
             # it never triggers another model run or an invented rollback deletion.
             authorization.assert_invocation(invocation)
         if published.job_id == invocation.job_id:
             raise ValueError("BENCHMARK_PUBLICATION_JOB_MUST_BE_SEPARATE")
+        if identity is not None and (
+            published.job_id,
+            published.artifact_id,
+            published.artifact_revision_id,
+        ) != (identity.job_id, identity.artifact_id, identity.artifact_revision_id):
+            raise ValueError("BENCHMARK_CPU_REFERENCE_PUBLICATION_IDENTITY_CHANGED")
 
         def pointer(name: str) -> dict[str, str]:
             return ArtifactMemberPointer(
@@ -360,7 +458,9 @@ class BenchmarkLaunchArtifactPublisher:
             observed_runtime_sha256=invocation.runtime.numerical_runtime.runtime_sha256,
             worker_result=pointer("worker-result.json"),
             session=pointer("session.json"),
-            evidence=pointer("root-completion.json"),
+            evidence=pointer(
+                "near-tie-reference.json" if identity is not None else "root-completion.json"
+            ),
             cleanup="CONFIRMED",
         )
         return BenchmarkLaunchReceipt.model_validate(

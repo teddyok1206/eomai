@@ -334,10 +334,16 @@ PASS이며 양성 root/systemd/source/GPU 값은 합성 fixture입니다. 이는
 아닙니다. 호환 수치 환경 설치·실제6회 성능 비교·GPU 기본값 전환은 미완료이며 CPU 기본값을 유지합니다.
 후보6513badd의 표준3-wheel/RECORD와 source/Git·ML import 없는14개 모듈의 독립 패키지 검사도
 통과했습니다. 운영 설치·활성화는 하지 않았습니다.
+후속 후보에서는 첫 CPU 결과와 비교 기준을 같은 Artifact에 저장하고, 뒤 실행은 등록된 기준을
+현재 권한으로 재확인한 후 시작하도록 연결했습니다. 원 설계대로 준비 시간을 포함하고 ACK 전
+측정을 끝내며, 실제 저장기 통합 검사에서 발견한 파일 순서 오류도 수정했습니다. 연결 모듈은
+기존 계층 규칙에 맞춰 Catalog 구성 계층으로 옮겼고, Orchestrator의 실행·저장 책임과 UID 검사는
+유지했습니다. **65 suites1988 PASS·strict14·Ruff/format27·임시 PostgreSQL22 PASS/정리 PASS**이며
+운영 모델 실행·수치 환경 갱신·GPU 기본값 활성화는 아직 미완료입니다.
 [검증 범위와 남은 연결](docs/architecture/EMBEDDING_BENCHMARK_EXECUTION_COMPOSITION.md#pre-ack-terminal-recovery-source-checkpoint--2026-10-17)
 
-기존 자동 인덱싱은11:55:53 UTC 조회에서 연결569건/인덱스 개정149건으로 진행됐습니다.
-최신 view별177/189/203건은 서로 다른 개정의 집계이며,569개 고유 문항이나 전체545개
+기존 자동 인덱싱은12:25:34 UTC 조회에서 연결577건/인덱스 개정151건으로 진행됐습니다.
+최신 view별181/193/203건은 서로 다른 개정의 집계이며,577개 고유 문항이나 전체545개
 완료라는 뜻이 아닙니다. 실제 사용자 인증 조회와 공통 소비자 연결도 별도로 검증 중입니다.
 
 10/15 최초 QUERY는 전체 자료의 반복 검증 중 인증 창을 넘겼고 native allocation이 없어

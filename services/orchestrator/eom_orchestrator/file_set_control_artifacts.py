@@ -219,6 +219,36 @@ class ControlFileSetPublisher:
             identity=None,
         )
 
+    def publish_identified_first_observation(
+        self,
+        *,
+        identity: ControlFileSetIdentity,
+        members: tuple[ControlFileSetMember, ...],
+        primary_file: str,
+        artifact_type: str,
+        manifest_version: str,
+        idempotency_key: str,
+        source_commit: str,
+    ) -> PublishedControlFileSet:
+        """Self-identifying immutable content with the existing timestamp/replay lock.
+
+        Identity is selected before serialization; first-observation time is allocated
+        once by this owner. Neither caller time nor replay silently replaces it.
+        """
+        identity = ControlFileSetIdentity(
+            identity.job_id, identity.artifact_id, identity.artifact_revision_id
+        )
+        return self._publish(
+            members=members,
+            primary_file=primary_file,
+            artifact_type=artifact_type,
+            manifest_version=manifest_version,
+            idempotency_key=idempotency_key,
+            source_commit=source_commit,
+            created_at=ControlPublicationTime.FIRST_OBSERVATION,
+            identity=identity,
+        )
+
     def _publish(
         self,
         *,

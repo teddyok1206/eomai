@@ -12,8 +12,8 @@ from eom_catalog_service.embedding_benchmark_channel import (
     BenchmarkUnixPeer,
 )
 from eom_catalog_service.embedding_benchmark_control_channel import BenchmarkLaunchControlChannel
+from eom_catalog_service.embedding_benchmark_launch_workspace import StagedOwnerBenchmarkLaunch
 from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
-from eom_orchestrator.embedding_benchmark_launch_workspace import StagedOwnerBenchmarkLaunch
 
 from tests.unit.embedding_benchmark_control_fixtures import association, prepared
 from tests.unit.embedding_device_benchmark_fixtures import (

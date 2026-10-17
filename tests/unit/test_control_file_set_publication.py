@@ -164,6 +164,34 @@ def test_fixed_time_publication_none_never_selects_first_observation(tmp_path, i
         assert session.scalar(select(func.count()).select_from(JobRecord)) == 0
 
 
+def test_identified_first_observation_uses_existing_time_identity_and_replay_lock(tmp_path):
+    publisher, _engine = _publisher(tmp_path)
+    arguments = _arguments(tmp_path)
+    arguments.pop("created_at")
+    identity = ControlFileSetIdentity("job_" + "c" * 32, "artifact_" + "d" * 32, "rev_" + "e" * 32)
+    before = datetime.now(UTC)
+    first = publisher.publish_identified_first_observation(identity=identity, **arguments)
+    after = datetime.now(UTC)
+    assert (first.job_id, first.artifact_id, first.artifact_revision_id) == (
+        identity.job_id,
+        identity.artifact_id,
+        identity.artifact_revision_id,
+    )
+    assert publisher.publish_identified_first_observation(identity=identity, **arguments) == first
+    assert publisher.publish_first_observation(**arguments) == first
+    with publisher.sessions() as session:
+        original = session.get(JobRecord, first.job_id)
+        observed = datetime.fromisoformat(original.request["created_at_utc"].replace("Z", "+00:00"))
+        assert before <= observed <= after
+        assert session.scalar(select(func.count()).select_from(JobRecord)) == 1
+        assert session.scalar(select(func.count()).select_from(ArtifactRevisionRecord)) == 1
+    changed = ControlFileSetIdentity(
+        "job_" + "f" * 32, identity.artifact_id, identity.artifact_revision_id
+    )
+    with pytest.raises(ControlPlaneError, match="existing allocation differs"):
+        publisher.publish_identified_first_observation(identity=changed, **arguments)
+
+
 def test_identified_publication_preserves_allocation_and_legacy_replay(tmp_path: Path) -> None:
     publisher, _engine = _publisher(tmp_path)
     identity = ControlFileSetIdentity("job_" + "c" * 32, "artifact_" + "d" * 32, "rev_" + "e" * 32)

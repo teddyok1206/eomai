@@ -10,9 +10,11 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     BenchmarkSession,
     benchmark_ack_for_checkpoint,
 )
+from eom_catalog_service import embedding_benchmark_launch_publication as publication
+from eom_catalog_service.embedding_benchmark_native_observation import (
+    ObservedBenchmarkNativeSession,
+)
 from eom_identifiers import canonical_json_bytes
-from eom_orchestrator import embedding_benchmark_launch_publication as publication
-from eom_orchestrator.embedding_benchmark_native_observation import ObservedBenchmarkNativeSession
 from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkLaunchAuthorization
 from eom_orchestrator.file_set_control_artifacts import PublishedControlFileSet
 from eom_orchestrator.inference_transfer_cpu_handoff import (
@@ -64,6 +66,7 @@ def output_bundle(tmp_path, monkeypatch, ordinal):
             )
             for query in timings.query_encode_ns
         ),
+        50,
     )
     value = association(ordinal)
     before = prepared(value)
@@ -94,7 +97,7 @@ def test_all_six_programs_validate_real_f32_token_resource_and_checkpoint_bytes(
     assert (
         publication.validate_benchmark_output_bytes(
             bundle.invocation, bundle.inputs, bundle.observed, bundle.completion, bundle.members
-        )
+        ).result
         == bundle.result
     )
 
@@ -164,10 +167,12 @@ def test_correctly_rehashed_but_overlapping_supplementary_ranges_are_rejected(
 
 
 @pytest.mark.parametrize("revoke_after_commit", (False, True))
+@pytest.mark.parametrize("ordinal", (1, 4))
+@pytest.mark.parametrize("local_owner", (False, True))
 def test_publication_uses_one_separate_job_preserves_bytes_and_late_revocation(
-    tmp_path, monkeypatch, revoke_after_commit
+    tmp_path, monkeypatch, revoke_after_commit, ordinal, local_owner, request
 ):
-    bundle = output_bundle(tmp_path, monkeypatch, 4)
+    bundle = output_bundle(tmp_path, monkeypatch, ordinal)
     workspace = tmp_path / "publication"
     workspace.mkdir(mode=0o700)
     owner_identity = CpuHandoffIdentity(os.getuid(), os.getgid())
@@ -196,6 +201,14 @@ def test_publication_uses_one_separate_job_preserves_bytes_and_late_revocation(
         path.write_bytes(benchmark_launch_control_bytes(record))
         path.chmod(0o640)
     calls, published_members = [], []
+    actual_owner = None
+    if local_owner:
+        from tests.unit.test_control_file_set_publication import _publisher
+
+        owner_root = tmp_path / "actual-file-set-owner"
+        owner_root.mkdir()
+        actual_owner, engine = _publisher(owner_root)
+        request.addfinalizer(engine.dispose)
     authorization = object.__new__(BenchmarkLaunchAuthorization)
 
     def authorize(_self, invocation):
@@ -210,7 +223,10 @@ def test_publication_uses_one_separate_job_preserves_bytes_and_late_revocation(
         calls.append("publish")
         assert kwargs["primary_file"] == "worker-result.json"
         assert kwargs["artifact_type"] == "control_embedding_benchmark_launch"
-        assert len(kwargs["members"]) == 8
+        assert len(kwargs["members"]) == (32 if ordinal == 1 else 8)
+        assert tuple(member.file_name for member in kwargs["members"]) == tuple(
+            sorted(member.file_name for member in kwargs["members"])
+        )
         for member in kwargs["members"]:
             raw = member.source.read_bytes()
             assert member.sha256 == publication.sha256_bytes(raw)
@@ -220,10 +236,15 @@ def test_publication_uses_one_separate_job_preserves_bytes_and_late_revocation(
                     member.schema_ref == "eom://schemas/knowledge/embedding-f32le-l2-row-major/1.0"
                 )
             published_members.append((member.file_name, raw))
+        identity = kwargs.get("identity")
+        if actual_owner is not None:
+            if identity is not None:
+                return actual_owner.publish_identified_first_observation(**kwargs)
+            return actual_owner.publish_first_observation(**kwargs)
         return PublishedControlFileSet(
-            "job_" + "f" * 32,
-            "artifact_" + "f" * 32,
-            "rev_" + "f" * 32,
+            identity.job_id if identity else "job_" + "f" * 32,
+            identity.artifact_id if identity else "artifact_" + "f" * 32,
+            identity.artifact_revision_id if identity else "rev_" + "f" * 32,
             "worker-result.json",
             publication.sha256_bytes(bundle.members["worker-result.json"]),
             "sha256:" + "a" * 64,
@@ -232,7 +253,9 @@ def test_publication_uses_one_separate_job_preserves_bytes_and_late_revocation(
 
     publisher = publication.BenchmarkLaunchArtifactPublisher(
         SimpleNamespace(
-            settings=SimpleNamespace(workspace_root=workspace), publish_first_observation=publish
+            settings=SimpleNamespace(workspace_root=workspace),
+            publish_first_observation=publish,
+            publish_identified_first_observation=publish,
         ),
         source_commit="a" * 40,
     )
@@ -258,7 +281,29 @@ def test_publication_uses_one_separate_job_preserves_bytes_and_late_revocation(
         assert receipt.job_id == bundle.invocation.job_id
         assert receipt.worker_result.artifact_id == receipt.evidence.artifact_id
         assert receipt.session.artifact_revision_id == receipt.evidence.artifact_revision_id
+        if ordinal == 1:
+            from eom_catalog_service.embedding_benchmark_cpu_reference import (
+                validate_cpu_benchmark_reference,
+            )
+
+            from tests.unit.embedding_device_benchmark_fixtures import owner_request
+
+            saved = dict(published_members)
+            reference = validate_cpu_benchmark_reference(
+                owner_request(),
+                receipt.evidence,
+                saved["near-tie-reference.json"],
+                saved["rank-evidence.f64"],
+            )
+            assert reference.score_binary.artifact_id == receipt.worker_result.artifact_id
     assert calls == ["authorize", "authorize", "publish", "authorize"]
+    import json
+
+    cold = json.loads(dict(published_members)["cold-timing.json"])
+    assert (
+        cold["end_to_end_ns"]
+        == bundle.observed.cold_completed_ns - bundle.observed.owner_started_ns
+    )
     assert all(dict(published_members)[name] == raw for name, raw in bundle.members.items())
     assert all(
         (bundle.root / "outputs" / name).read_bytes() == raw for name, raw in bundle.members.items()

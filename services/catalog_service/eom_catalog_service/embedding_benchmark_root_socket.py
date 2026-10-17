@@ -9,7 +9,6 @@ import stat
 import struct
 import time
 
-from eom_orchestrator.embedding_benchmark_launch_workspace import read_owner_benchmark_launch
 from eom_orchestrator.inference_transfer_cpu_handoff import (
     fixed_owner_identity,
     protected_cpu_handoff_directory,
@@ -18,6 +17,7 @@ from eom_workflow.embedding_benchmark_launch_control import BenchmarkLaunchCompl
 
 from eom_catalog_service.embedding_benchmark_channel import BenchmarkUnixPeer
 from eom_catalog_service.embedding_benchmark_handoff import benchmark_owner_start_ticks
+from eom_catalog_service.embedding_benchmark_launch_workspace import read_owner_benchmark_launch
 from eom_catalog_service.embedding_benchmark_layout import BENCHMARK_CONTROL_ROOT
 from eom_catalog_service.embedding_benchmark_root_control import (
     RootBenchmarkCudaRuntime,

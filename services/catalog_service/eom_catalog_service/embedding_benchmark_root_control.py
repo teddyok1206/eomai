@@ -7,7 +7,6 @@ import socket
 from dataclasses import dataclass
 
 from eom_identifiers import content_sha256
-from eom_orchestrator.embedding_benchmark_launch_workspace import StagedOwnerBenchmarkLaunch
 from eom_orchestrator.inference_transfer_cpu_handoff import (
     create_protected_cpu_handoff_member,
     fixed_owner_identity,
@@ -30,6 +29,7 @@ from eom_catalog_service.embedding_benchmark_handoff import (
     prepare_benchmark_environment,
     prepare_benchmark_handoff,
 )
+from eom_catalog_service.embedding_benchmark_launch_workspace import StagedOwnerBenchmarkLaunch
 from eom_catalog_service.embedding_benchmark_layout import BENCHMARK_HANDOFF_ROOT
 from eom_catalog_service.embedding_benchmark_unit_control import require_root_benchmark_control
 from eom_catalog_service.embedding_cuda_host_closure import ProtectedCudaEmbeddingHostClosure
