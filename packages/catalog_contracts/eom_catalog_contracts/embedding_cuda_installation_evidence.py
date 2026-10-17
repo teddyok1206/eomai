@@ -77,6 +77,12 @@ type _Tick = Annotated[int, Field(ge=1, le=18446744073709551615, strict=True)]
 type _Zero = Annotated[int, Field(ge=0, le=0, strict=True)]
 type _One = Annotated[int, Field(ge=1, le=1, strict=True)]
 type _Utc = Annotated[str, Field(min_length=20, max_length=27, strict=True)]
+# Compile the same immutable physical type descriptions once, not on every FD recheck.
+_LEASE_PARENT_ADAPTER: Final[TypeAdapter[RootLocalAncestorEpoch]] = TypeAdapter(
+    RootLocalAncestorEpoch
+)
+_LEASE_LOCK_ADAPTER: Final[TypeAdapter[RootLocalStatEpoch]] = TypeAdapter(RootLocalStatEpoch)
+_LEASE_GID_ADAPTER: Final[TypeAdapter[int]] = TypeAdapter(_Gid)
 type CudaDeviceRole = Literal["NVIDIA0", "NVIDIACTL", "NVIDIA_UVM", "NVIDIA_UVM_TOOLS"]
 CUDA_DEVICE_NODE_SPECS: Final = MappingProxyType(
     {
@@ -125,18 +131,29 @@ class RootLocalCudaSharedGpuLease(RootLocalEvidenceValue):
 
     @model_validator(mode="after")
     def exact_root_tmpfs_frame(self) -> RootLocalCudaSharedGpuLease:
-        parent, lock = self.parent_epoch, self.lock_epoch
-        if (
-            parent[4] != stat.S_IFDIR | 0o750
-            or lock[4] != stat.S_IFREG | 0o640
-            or parent[3] != self.lease_gid
-            or lock[3] != self.lease_gid
-            or parent[0] != lock[0]
-            or parent[:2] == lock[:2]
-            or lock[5:7] != (1, 0)
-        ):
-            raise ValueError("CUDA receipt shared lease frame differs")
+        validate_rootlocal_cuda_lease_file_identity(
+            self.parent_epoch, self.lock_epoch, self.lease_gid
+        )
         return self
+
+
+def validate_rootlocal_cuda_lease_file_identity(
+    parent: RootLocalAncestorEpoch, lock: RootLocalStatEpoch, lease_gid: int
+) -> None:
+    """Physical-only identity, not a claim about an ended process's unavailable birth."""
+    parent = _LEASE_PARENT_ADAPTER.validate_python(parent, strict=True)
+    lock = _LEASE_LOCK_ADAPTER.validate_python(lock, strict=True)
+    lease_gid = _LEASE_GID_ADAPTER.validate_python(lease_gid, strict=True)
+    if (
+        parent[4] != stat.S_IFDIR | 0o750
+        or lock[4] != stat.S_IFREG | 0o640
+        or parent[3] != lease_gid
+        or lock[3] != lease_gid
+        or parent[0] != lock[0]
+        or parent[:2] == lock[:2]
+        or lock[5:7] != (1, 0)
+    ):
+        raise ValueError("CUDA receipt shared lease frame differs")
 
 
 class RootLocalCudaUnitProbeMetadata(RootLocalNativeUnitFacts):
@@ -151,16 +168,29 @@ def validate_rootlocal_cuda_resource_file_metadata(
     nodes: tuple[RootLocalCudaDeviceNode, ...], lease: RootLocalCudaSharedGpuLease
 ) -> None:
     """One ordered-node/lease identity rule shared by metadata and actual FD capture."""
+    lease = RootLocalCudaSharedGpuLease.model_validate(lease)
+    validate_rootlocal_cuda_resource_file_identity(
+        nodes, lease.parent_epoch, lease.lock_epoch, lease.lease_gid
+    )
+
+
+def validate_rootlocal_cuda_resource_file_identity(
+    nodes: tuple[RootLocalCudaDeviceNode, ...],
+    parent: RootLocalAncestorEpoch,
+    lock: RootLocalStatEpoch,
+    lease_gid: int,
+) -> None:
+    """Ordered physical node/lease identity shared by live and pre-ready terminal readback."""
+    validate_rootlocal_cuda_lease_file_identity(parent, lock, lease_gid)
     if type(nodes) is not tuple or len(nodes) != 4:
         raise ValueError("CUDA resource file metadata frame differs")
     nodes = tuple(RootLocalCudaDeviceNode.model_validate(node) for node in nodes)
-    lease = RootLocalCudaSharedGpuLease.model_validate(lease)
     identities = {node.epoch[:2] for node in nodes}
     if (
         tuple(node.role for node in nodes) != tuple(CUDA_DEVICE_NODE_SPECS)
         or len(identities) != 4
-        or lease.parent_epoch[:2] in identities
-        or lease.lock_epoch[:2] in identities
+        or parent[:2] in identities
+        or lock[:2] in identities
         or len({(node.rdev_major, node.rdev_minor) for node in nodes}) != 4
         or nodes[2].rdev_major != nodes[3].rdev_major
     ):

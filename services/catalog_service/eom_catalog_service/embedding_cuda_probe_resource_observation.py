@@ -16,6 +16,8 @@ from eom_catalog_contracts.embedding_cuda_installation_evidence import (
     CUDA_DEVICE_NODE_SPECS,
     RootLocalCudaDeviceNode,
     RootLocalCudaSharedGpuLease,
+    validate_rootlocal_cuda_lease_file_identity,
+    validate_rootlocal_cuda_resource_file_identity,
     validate_rootlocal_cuda_resource_file_metadata,
 )
 from eom_catalog_contracts.embedding_native_cuda_probe import (
@@ -23,6 +25,8 @@ from eom_catalog_contracts.embedding_native_cuda_probe import (
     NativeCudaProbeResult,
 )
 from eom_catalog_contracts.embedding_native_installation_evidence import (
+    RootLocalAncestorEpoch,
+    RootLocalStatEpoch,
     parse_rootlocal_evidence_document,
 )
 from jsonschema.exceptions import ValidationError as JsonSchemaError
@@ -46,7 +50,7 @@ def _require(condition: bool) -> None:
         raise ValueError("NATIVE_CUDA_PROBE_RESOURCE_OBSERVATION_INVALID")
 
 
-def _epoch(value: os.stat_result) -> tuple[int, ...]:
+def _epoch(value: os.stat_result) -> RootLocalStatEpoch:
     return (
         value.st_dev,
         value.st_ino,
@@ -105,22 +109,52 @@ class ImageUnitGpuResources:
     pid1_descriptor: int
 
 
-type _RetainedGpuUnitResources = CudaProbeResourceObservation | ImageUnitGpuResources
+@dataclass(frozen=True, slots=True)
+class TerminalCudaLeaseIdentity:
+    """Physical terminal fence only; never invent an unavailable process birth."""
+
+    lease_gid: int
+    parent_epoch: RootLocalAncestorEpoch
+    lock_epoch: RootLocalStatEpoch
+    holder_pid: int
+
+    def __post_init__(self) -> None:
+        validate_rootlocal_cuda_lease_file_identity(
+            self.parent_epoch, self.lock_epoch, self.lease_gid
+        )
+        _require(type(self.holder_pid) is int and 0 < self.holder_pid <= 2147483647)
+
+
+@dataclass(frozen=True, slots=True)
+class UnacknowledgedBenchmarkGpuResources:
+    device_nodes: tuple[RootLocalCudaDeviceNode, ...]
+    shared_gpu_lease: TerminalCudaLeaseIdentity
+    pid1_descriptor: int
+
+
+type _RetainedGpuUnitResources = (
+    CudaProbeResourceObservation | ImageUnitGpuResources | UnacknowledgedBenchmarkGpuResources
+)
+type _RetainedLease = RootLocalCudaSharedGpuLease | TerminalCudaLeaseIdentity
 
 
 def validate_cuda_probe_fdstore(raw: bytes, lease: RootLocalCudaSharedGpuLease) -> None:
     """Validate the fixed systemd255 projection; a display path is never inode identity."""
+    _validate_gpu_unit_fdstore(raw, lease.lock_epoch)
+
+
+def _validate_gpu_unit_fdstore(raw: bytes, lock_epoch: RootLocalStatEpoch) -> None:
     _require(type(raw) is bytes and 0 < len(raw) <= 16 * 1024)
     # Reuse the bounded/duplicate/depth/integer-safe codec for an external array.
     rows = parse_rootlocal_evidence_document(b'{"store":' + raw + b"}", 16 * 1024 + 16)["store"]
     _require(type(rows) is list and len(rows) == 1 and type(rows[0]) is dict)
     row = rows[0]
     _require(set(row) == {"fdname", "type", "devno", "inode", "rdevno", "path", "flags"})
-    device, inode = lease.lock_epoch[:2]
+    device, inode = lock_epoch[:2]
     _require(
         row["fdname"] == "eom-gpu0-lease"
         and type(row["type"]) is int
-        and row["type"] == lease.lock_epoch[4]
+        and row["type"] == lock_epoch[4]
         and type(row["inode"]) is int
         and row["inode"] == inode
         and type(row["devno"]) is list
@@ -136,7 +170,7 @@ def validate_cuda_probe_fdstore(raw: bytes, lease: RootLocalCudaSharedGpuLease) 
     )
 
 
-def _observe_pid1_retained_lock(lease: RootLocalCudaSharedGpuLease) -> int:
+def _observe_pid1_retained_lock(lease: _RetainedLease) -> int:
     """Read lock records, never open/dereference arbitrary stored file content."""
     matching: list[int] = []
     with os.scandir(_PID1_FDS) as entries:
@@ -166,7 +200,7 @@ def _observe_pid1_retained_lock(lease: RootLocalCudaSharedGpuLease) -> int:
     return matching[0]
 
 
-def _observe_retained_store_descriptor(lease: RootLocalCudaSharedGpuLease, unit: str) -> int:
+def _observe_retained_store_descriptor(lease: _RetainedLease, unit: str) -> int:
     result = subprocess.run(
         ("/usr/bin/systemd-analyze", "--no-pager", "--json=short", "fdstore", unit),
         capture_output=True,
@@ -175,7 +209,7 @@ def _observe_retained_store_descriptor(lease: RootLocalCudaSharedGpuLease, unit:
         env=_ENV,
     )
     _require(result.returncode == 0 and len(result.stderr) <= 16384)
-    validate_cuda_probe_fdstore(result.stdout, lease)
+    _validate_gpu_unit_fdstore(result.stdout, lease.lock_epoch)
     return _observe_pid1_retained_lock(lease)
 
 
@@ -209,8 +243,7 @@ def observe_benchmark_cuda_retained_resources(
 
 
 def _assert_retained_resources(observed: _RetainedGpuUnitResources, unit: str) -> None:
-    lease = RootLocalCudaSharedGpuLease.model_validate(observed.shared_gpu_lease)
-    validate_rootlocal_cuda_resource_file_metadata(observed.device_nodes, lease)
+    lease = _validated_retained_lease(observed)
     _require(_epoch(_LOCK.lstat()) == lease.lock_epoch)
     _require(_epoch(_LOCK.parent.lstat())[:5] == lease.parent_epoch)
     _require_tmpfs_device(lease.lock_epoch[0])
@@ -219,6 +252,57 @@ def _assert_retained_resources(observed: _RetainedGpuUnitResources, unit: str) -
     _require(_epoch(_LOCK.parent.lstat())[:5] == lease.parent_epoch)
     for node in observed.device_nodes:
         _require(_epoch(Path(node.path).lstat()) == node.epoch)
+
+
+def _validated_retained_lease(observed: _RetainedGpuUnitResources) -> _RetainedLease:
+    if type(observed) is UnacknowledgedBenchmarkGpuResources:
+        lease = observed.shared_gpu_lease
+        _require(type(lease) is TerminalCudaLeaseIdentity)
+        lease.__post_init__()
+        validate_rootlocal_cuda_resource_file_identity(
+            observed.device_nodes, lease.parent_epoch, lease.lock_epoch, lease.lease_gid
+        )
+        return lease
+    original = RootLocalCudaSharedGpuLease.model_validate(observed.shared_gpu_lease)
+    validate_rootlocal_cuda_resource_file_metadata(observed.device_nodes, original)
+    return original
+
+
+def observe_unacknowledged_benchmark_gpu_resources(
+    *, unit: str, terminal_pid: int, lease_gid: int
+) -> UnacknowledgedBenchmarkGpuResources:
+    """Actual unit/PID1 physical fence; caller proves failed terminal and absent ACK."""
+    try:
+        _require(os.getresuid() == (0, 0, 0))
+        _require(
+            type(unit) is str
+            and re.fullmatch(r"eom-embedding-benchmark-cuda@[0-9a-f]{32}\.service", unit)
+            is not None
+        )
+        lease = TerminalCudaLeaseIdentity(
+            lease_gid, _epoch(_LOCK.parent.lstat())[:5], _epoch(_LOCK.lstat()), terminal_pid
+        )
+        nodes = _named_device_nodes()
+        validate_rootlocal_cuda_resource_file_identity(
+            nodes, lease.parent_epoch, lease.lock_epoch, lease.lease_gid
+        )
+        _require_tmpfs_device(lease.lock_epoch[0])
+        observed = UnacknowledgedBenchmarkGpuResources(
+            nodes, lease, _observe_retained_store_descriptor(lease, unit)
+        )
+        _assert_retained_resources(observed, unit)
+        return observed
+    except (ValueError, OSError, subprocess.TimeoutExpired, JsonSchemaError):
+        raise ValueError("BENCHMARK_CUDA_RESOURCE_OBSERVATION_INVALID") from None
+
+
+@contextmanager
+def hold_released_unacknowledged_benchmark_resources(
+    observed: UnacknowledgedBenchmarkGpuResources,
+) -> Iterator[None]:
+    _require(os.getresuid() == (0, 0, 0) and type(observed) is UnacknowledgedBenchmarkGpuResources)
+    with _hold_released_resources(observed):
+        yield
 
 
 @contextmanager
@@ -233,8 +317,7 @@ def hold_released_cuda_probe_resources(
 
 @contextmanager
 def _hold_released_resources(observed: _RetainedGpuUnitResources) -> Iterator[None]:
-    lease = RootLocalCudaSharedGpuLease.model_validate(observed.shared_gpu_lease)
-    validate_rootlocal_cuda_resource_file_metadata(observed.device_nodes, lease)
+    lease = _validated_retained_lease(observed)
 
     def current() -> None:
         _require(_epoch(_LOCK.lstat()) == lease.lock_epoch)

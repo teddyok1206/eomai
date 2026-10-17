@@ -944,3 +944,66 @@ the new resource reader plus all3 root lifetime entries, with no optional ML imp
 Raw platform SHA `83c708bc50a6c479549d2f9be4658325048c124091d3a3ab759e46f918b050dc`;
 API-contract SHA `6fc906022ef463ae190d21ac08c509da12695de8a67015eb53db74d7eaacd98d`.
 BUILD_ONLY / NOT_ACTIVE; no numerical-prefix or active-owner switch was performed.
+
+### Pre-ACK terminal recovery — design before implementation
+
+A failed benchmark can retain its physical GPU file before writing a complete ready
+message. Introduce a distinct root-only unacknowledged terminal observation, not a fake
+ready/probe or an unleased assertion. Reuse pinned launch/config/receipt capture without
+reading readiness as a required schema. Preserve the actual bounded readiness bytes only
+as raw hash/size; do not parse a partial message as a grant. Bind the exact terminal unit's
+InvocationID/start timestamp/ExecMainPID and descriptor count, repeated empty-cgroup,
+current device/prefix/host and driver-idle checks. No live deadline or actor extension.
+
+Require the protected original ACK phase to be absent; any intent, even incomplete, sends
+the operation to explicit uncertain/normal recovery instead. An absent phase is not itself
+physical proof. With store1, independently read actual unit fdstore and PID1 exclusive lock
+against current fixed device/lease epochs and the terminal unit's ExecMainPID. The original
+process birth is unavailable after a pre-ready exit: do not invent it or borrow the probe's
+birth. A small physical-only value omits birth and is never source/compute admission. Store0
+has no retained resource value and never touches another holder's lock.
+
+Share existing pure node/lease-file identity validation and bounded physical readback, not
+worker protocols or authority. Fixed-key protected audit lookup and one O_EXCL retirement
+reservation retain existing intent-before-effect/no-replay behavior. Stop/reset/clean target
+only the exact original unit, never a PID or global GPU. Recheck absent ACK and original
+terminal state immediately before effects, preserve FAILED/timeout, and prove stopped/store0
+plus same-inode independent reacquisition after a retained release. Unknown cleanup blocks
+the next launch. Read-only recovery never repeats effects. Existing successful inputs,
+Jobs/Artifacts and numerical bytes remain untouched. No DB/migration/worker schema changes;
+ROOTLOCAL internal frozen values and existing phase records are sufficient. The simpler fake
+ready would require invented PID birth/hash/initialization facts and is explicitly rejected.
+
+### Pre-ACK terminal recovery source checkpoint — 2026-10-17
+
+Implemented the distinct unacknowledged failed-terminal observer and exact-unit retirement/
+read-only recovery. Shared launch metadata capture does not require a valid ready message.
+Empty/partial readiness is pinned by raw hash/size, never parsed as a successful grant.
+Terminal ExecMainPID/invocation/start/store count and empty cgroup are read repeatedly; an
+existing ACK phase (including an incomplete phase/intent or a dangling phase symlink)
+refuses the pre-ACK lane. A new late ACK phase before cleanup also prevents store cleaning.
+
+For retained exits, physical-only values omit unknown process birth. Shared pure node/
+lease-file validation and the real unit fdstore/PID1 lock readback still require the same
+fixed device/lease inode and original terminal ExecMainPID. Successful retirement separately
+holds a newly opened same-inode lease across stopped/store0/current-device checks. Unleased
+exits do not open/reacquire a competing lease or require another legitimate GPU user to be
+idle. Original FAILED/timeout remains recorded; no failure becomes a completed benchmark.
+No new worker schema, dependency, DB/migration, queue or generic dispatcher was introduced.
+Existing receipt/schema bytes and numerical entry/encoder/codec behavior are unchanged.
+
+Final27 source suites **1042 PASS83.36s**, strict8 production modules, Ruff/format12 and diff
+PASS. Included original image/probe/readiness/CPU/CUDA regressions plus empty/partial messages,
+absent/present/partial ACK phase, terminal metadata/timeouts, real temporary audit no-clobber,
+concurrent retirement, uncertain before/after reset/clean, partial intent/result, independent
+release uncertainty and competing-holder isolation. Fresh actual isolated nonroot execution
+refuses7 root entries before file/command access and imports no optional ML/GPU packages.
+Its file/command hooks would fail the test if a root guard were late. Root/kernel/GPU
+positive paths remain synthetic; do not combine overlapping earlier test totals.
+
+This closes the pre-ACK recovery **source** gap, not its actual privileged/GPU acceptance.
+Actual original-Job execution composition, compatible owner/numerical-prefix activation,
+six frozen CPU/CUDA launches, performance/default selection and actual C1–C5 consumer gates
+remain. Current INDEX/QUERY requests and authentication processes were not restarted.
+No real signal/reset/clean, model execution, production Job/Artifact/default or protected
+runtime was changed by this checkpoint. Full goal remains ACTIVE/NOT_COMPLETE.

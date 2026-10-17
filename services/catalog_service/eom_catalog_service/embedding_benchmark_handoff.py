@@ -27,7 +27,10 @@ from eom_catalog_service.embedding_benchmark_launch import (
     BenchmarkLaunchPins,
     benchmark_launch_environment_bytes,
 )
-from eom_catalog_service.embedding_benchmark_layout import benchmark_read_acl
+from eom_catalog_service.embedding_benchmark_layout import (
+    BENCHMARK_HANDOFF_ROOT,
+    benchmark_read_acl,
+)
 from eom_catalog_service.embedding_device_benchmark_files import BenchmarkWorkerLocalFiles
 from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
 from eom_catalog_service.embedding_runtime_files import (
@@ -37,7 +40,7 @@ from eom_catalog_service.embedding_runtime_files import (
 )
 from eom_catalog_service.embedding_runtime_process_identity import native_process_start_ticks
 
-_HANDOFF_ROOT = Path("/run/eom-incremental-embeddings/benchmark")
+_HANDOFF_ROOT = BENCHMARK_HANDOFF_ROOT
 _ROOT_UID = 0
 _ROOT_GID = 0
 _OPEN_DIRECTORY = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC

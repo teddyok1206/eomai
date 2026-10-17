@@ -43,6 +43,7 @@ from eom_catalog_service.embedding_benchmark_launch import (
     benchmark_launch_arguments,
     benchmark_launch_environment_bytes,
 )
+from eom_catalog_service.embedding_benchmark_layout import BENCHMARK_HANDOFF_ROOT
 from eom_catalog_service.embedding_cuda_probe_gpu_clients import observe_cuda_probe_gpu_clients
 from eom_catalog_service.embedding_cuda_probe_resource_observation import (
     CudaProbeResourceObservation,
@@ -84,7 +85,7 @@ CUDA_BENCHMARK_TEMPLATE_SHA256 = (
 CUDA_BENCHMARK_SOCKET_SHA256 = (
     "sha256:81a5b7fb034402baf1255635321ef480f2b5a48cbbe35b050c6ceaa25dfa4b0f"
 )
-_ROOT = Path("/run/eom-incremental-embeddings/benchmark")
+_ROOT = BENCHMARK_HANDOFF_ROOT
 _PREFIX = Path("/opt/eom/conda/envs/eom-embedding-cuda")
 _READY_IMPLEMENTATIONS = (
     (
@@ -167,6 +168,24 @@ def _read_ready_member(
 
 
 @dataclass(frozen=True, slots=True)
+class CapturedBenchmarkCudaLaunchFiles:
+    """Common immutable launch basis; does not require or fabricate readiness."""
+
+    pins: BenchmarkLaunchPins
+    configuration: RootLocalNativeConfigurationPin
+    device: CudaRuntimeDeviceCapture
+    worker_uid: int
+    worker_gid: int
+    lease_gid: int
+    owner_uid: int
+    owner_gid: int
+    files: NumericalRuntimeFileSnapshots
+
+    def assert_current(self) -> None:
+        self.files.assert_unchanged()
+
+
+@dataclass(frozen=True, slots=True)
 class CapturedBenchmarkCudaPinnedFiles:
     """Pinned file-epoch resources, not live-process or source/installation admission."""
 
@@ -183,14 +202,14 @@ class CapturedBenchmarkCudaPinnedFiles:
         self.ready_files.assert_unchanged()
 
 
-def capture_benchmark_cuda_pinned_files(
+def capture_benchmark_cuda_launch_files(
     invocation: BenchmarkWorkerInvocation,
     environment: PreparedBenchmarkEnvironment,
     *,
     backend: NativeEmbeddingBackendPins,
     inventory: PrefixRuntimeInventory,
-) -> CapturedBenchmarkCudaPinnedFiles:
-    """Same immutable basis for live/late checks; no live-owner/deadline grant."""
+) -> CapturedBenchmarkCudaLaunchFiles:
+    """Pinned launch/configuration only, shared by ready and unacknowledged cleanup."""
     _require(os.getresuid() == (0, 0, 0), "ROOT_REQUIRED")
     invocation_raw = embedding_device_benchmark_bytes(invocation)
     _require(
@@ -281,30 +300,64 @@ def capture_benchmark_cuda_pinned_files(
         and set(os.getgrouplist(user.pw_name, user.pw_gid)) == {group.gr_gid, lease_gid},
         "ACCOUNT_INVALID",
     )
-    ready_files = NumericalRuntimeFileSnapshots(user.pw_uid)
+    captured = CapturedBenchmarkCudaLaunchFiles(
+        pins,
+        configuration,
+        receipt.device_capture,
+        user.pw_uid,
+        group.gr_gid,
+        lease_gid,
+        owner.pw_uid,
+        owner.pw_gid,
+        files,
+    )
+    captured.assert_current()
+    inventory.assert_unchanged()
+    return captured
+
+
+def capture_benchmark_cuda_pinned_files(
+    invocation: BenchmarkWorkerInvocation,
+    environment: PreparedBenchmarkEnvironment,
+    *,
+    backend: NativeEmbeddingBackendPins,
+    inventory: PrefixRuntimeInventory,
+) -> CapturedBenchmarkCudaPinnedFiles:
+    """Same immutable basis for live/late ready checks; no live-owner/deadline grant."""
+    launch = capture_benchmark_cuda_launch_files(
+        invocation, environment, backend=backend, inventory=inventory
+    )
+    ready_files = NumericalRuntimeFileSnapshots(launch.worker_uid)
+    execution = _ROOT / invocation.execution_id
     ready_path = execution / "cuda-ready.json"
     ready_member = _read_ready_member(ready_path, ready_files)
     ready = parse_benchmark_cuda_ready(ready_member.raw)
     value = ready_path.lstat()
     _require(
         stat.S_IMODE(value.st_mode) == 0o640
-        and value.st_gid == owner.pw_gid
+        and value.st_gid == launch.owner_gid
         and not {"system.posix_acl_access", "system.posix_acl_default"}.intersection(
             os.listxattr(ready_path)
         )
         and (ready.worker_uid, ready.worker_gid, ready.supplementary_gids)
-        == (user.pw_uid, group.gr_gid, (lease_gid,)),
+        == (launch.worker_uid, launch.worker_gid, (launch.lease_gid,)),
         "READY_INVALID",
     )
     validate_benchmark_cuda_ready(
         invocation,
         ready,
-        configuration=configuration,
+        configuration=launch.configuration,
         receipt_raw_sha256=backend.receipt_raw_sha256,
-        expected_device=receipt.device_capture,
+        expected_device=launch.device,
     )
     captured = CapturedBenchmarkCudaPinnedFiles(
-        pins, ready, ready_member.sha256, owner.pw_uid, owner.pw_gid, files, ready_files
+        launch.pins,
+        ready,
+        ready_member.sha256,
+        launch.owner_uid,
+        launch.owner_gid,
+        launch.files,
+        ready_files,
     )
     captured.assert_current()
     inventory.assert_unchanged()

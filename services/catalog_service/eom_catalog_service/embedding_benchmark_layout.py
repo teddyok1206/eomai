@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import struct
+from pathlib import Path
 from typing import Literal
+
+BENCHMARK_CUDA_LIFETIME_ROOT = Path("/opt/eom/embedding-benchmark-lifetimes")
+BENCHMARK_HANDOFF_ROOT = Path("/run/eom-incremental-embeddings/benchmark")
 
 
 def benchmark_read_acl(native_uid: int, kind: Literal["DIRECTORY", "INPUT"]) -> bytes:

@@ -21,10 +21,9 @@ def _require(condition: bool, code: str) -> None:
         raise UnitEffectRecordError(code)
 
 
-def reserve_unit_effect_phase(
+def _require_record_identity(
     root: Path, unit: str, invocation: str, phase: Literal["ack", "retirement"]
-) -> int:
-    """Own the returned directory FD; caller validates the specific unit/phase authority."""
+) -> None:
     _require(os.getresuid() == (0, 0, 0), "OWNER_REQUIRED")
     _require(
         isinstance(root, Path)
@@ -39,6 +38,34 @@ def reserve_unit_effect_phase(
         and phase in {"ack", "retirement"},
         "IDENTITY_INVALID",
     )
+
+
+def require_unit_effect_phase_absent(
+    root: Path, unit: str, invocation: str, phase: Literal["ack", "retirement"]
+) -> None:
+    """Read-only absence; even an incomplete existing intent prohibits this path."""
+    _require_record_identity(root, unit, invocation, phase)
+    for path in (*reversed(root.parents), root, root / unit, root / unit / invocation):
+        try:
+            value = path.lstat()
+        except FileNotFoundError:
+            return  # Its first missing ancestor was protected; never follow a dangling symlink.
+        _require(
+            stat.S_ISDIR(value.st_mode) and value.st_uid == 0 and not value.st_mode & 0o022,
+            "RECORD_DIRECTORY_INVALID",
+        )
+    try:
+        (root / unit / invocation / phase).lstat()
+    except FileNotFoundError:
+        return
+    raise UnitEffectRecordError("RECORD_PHASE_PRESENT")
+
+
+def reserve_unit_effect_phase(
+    root: Path, unit: str, invocation: str, phase: Literal["ack", "retirement"]
+) -> int:
+    """Own the returned directory FD; caller validates the specific unit/phase authority."""
+    _require_record_identity(root, unit, invocation, phase)
     for ancestor in (*reversed(root.parents), root):
         if ancestor == root:
             with suppress(FileExistsError):

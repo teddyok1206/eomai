@@ -5,9 +5,9 @@ from __future__ import annotations
 import os
 import re
 import subprocess
-from dataclasses import dataclass
+from contextlib import nullcontext
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from eom_catalog_contracts.embedding_device_benchmark import BenchmarkWorkerInvocation
@@ -24,11 +24,22 @@ from eom_catalog_service.embedding_benchmark_cuda_observation import (
     require_benchmark_cuda_processes_ended,
     verify_benchmark_cuda_terminal,
 )
+from eom_catalog_service.embedding_benchmark_cuda_unacknowledged import (
+    UnacknowledgedBenchmarkCudaTerminal,
+    capture_unacknowledged_benchmark_files,
+    observe_unacknowledged_benchmark_cuda_terminal,
+    require_empty_benchmark_cuda_cgroup,
+    require_unacknowledged_benchmark_ack_absent,
+    require_unacknowledged_benchmark_basis,
+)
 from eom_catalog_service.embedding_benchmark_handoff import PreparedBenchmarkEnvironment
+from eom_catalog_service.embedding_benchmark_layout import BENCHMARK_CUDA_LIFETIME_ROOT
 from eom_catalog_service.embedding_cuda_probe_gpu_clients import observe_cuda_probe_gpu_clients
 from eom_catalog_service.embedding_cuda_probe_resource_observation import (
     hold_released_cuda_probe_resources,
+    hold_released_unacknowledged_benchmark_resources,
     observe_benchmark_cuda_retained_resources,
+    observe_unacknowledged_benchmark_gpu_resources,
 )
 from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
 from eom_catalog_service.embedding_runtime_os_identity import observe_runtime_device
@@ -47,7 +58,7 @@ if TYPE_CHECKING:
     from eom_catalog_service.embedding_cuda_host_closure import ProtectedCudaEmbeddingHostClosure
     from eom_catalog_service.embedding_runtime_prefix_closure import PrefixRuntimeInventory
 
-_ROOT = Path("/opt/eom/embedding-benchmark-lifetimes")
+_ROOT = BENCHMARK_CUDA_LIFETIME_ROOT
 _ENV = {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"}
 
 
@@ -69,6 +80,13 @@ class BenchmarkCudaRetirement:
     observed_at_utc: str
 
 
+@dataclass(frozen=True, slots=True)
+class UnacknowledgedBenchmarkCudaRetirement:
+    original_terminal: UnacknowledgedBenchmarkCudaTerminal
+    retired_unit: StoppedGpuUnit
+    observed_at_utc: str
+
+
 def _save(
     directory: int,
     name: Literal["intent.json", "result.json"],
@@ -76,7 +94,9 @@ def _save(
     observation: BenchmarkCudaReadyObservation
     | BenchmarkCudaAcknowledgement
     | BenchmarkCudaTerminalObservation
-    | BenchmarkCudaRetirement,
+    | BenchmarkCudaRetirement
+    | UnacknowledgedBenchmarkCudaTerminal
+    | UnacknowledgedBenchmarkCudaRetirement,
 ) -> None:
     # The same existing ROOTLOCAL envelope; not a worker/model source receipt.
     raw = canonical_json_bytes(
@@ -96,8 +116,12 @@ def _save(
 
 def _reserve(ready: BenchmarkCudaReadyObservation, phase: Literal["ack", "retirement"]) -> int:
     unit = CUDA_BENCHMARK_TEMPLATE.replace("@.service", f"@{ready.execution_id}.service")
+    return _reserve_original_unit(unit, ready.unit.invocation_id, phase)
+
+
+def _reserve_original_unit(unit: str, invocation: str, phase: Literal["ack", "retirement"]) -> int:
     try:
-        return reserve_unit_effect_phase(_ROOT, unit, ready.unit.invocation_id, phase)
+        return reserve_unit_effect_phase(_ROOT, unit, invocation, phase)
     except FileExistsError:
         raise ValueError("BENCHMARK_CUDA_LIFETIME_EFFECT_ALREADY_RESERVED") from None
     except UnitEffectRecordError as error:
@@ -288,6 +312,129 @@ def retire_benchmark_cuda_unit(
             terminal, invocation, environment, backend=backend, inventory=inventory, host=host
         )
         _save(directory, "result.json", "BENCHMARK_CUDA_RETIRED_NOT_ADMITTED", result)
+        return result
+    finally:
+        try:
+            os.close(directory)
+        except OSError:
+            raise ValueError("BENCHMARK_CUDA_LIFETIME_RECORD_UNCERTAIN") from None
+
+
+def observe_retired_unacknowledged_benchmark_cuda_unit(
+    terminal: UnacknowledgedBenchmarkCudaTerminal,
+    invocation: BenchmarkWorkerInvocation,
+    environment: PreparedBenchmarkEnvironment,
+    *,
+    backend: NativeEmbeddingBackendPins,
+    inventory: PrefixRuntimeInventory,
+    host: ProtectedCudaEmbeddingHostClosure,
+) -> UnacknowledgedBenchmarkCudaRetirement:
+    """Read-only original pre-ACK failure recovery, never a second cleanup command."""
+    _require(os.getresuid() == (0, 0, 0), "ROOT_REQUIRED")
+    _require(type(terminal) is UnacknowledgedBenchmarkCudaTerminal, "IDENTITY_INVALID")
+    files = capture_unacknowledged_benchmark_files(
+        invocation, environment, backend=backend, inventory=inventory
+    )
+    unit = require_unacknowledged_benchmark_basis(terminal, files)
+
+    def stopped() -> StoppedGpuUnit:
+        require_unacknowledged_benchmark_basis(terminal, files)
+        require_empty_benchmark_cuda_cgroup(unit)
+        value = observe_stopped_gpu_unit(
+            unit, template=CUDA_BENCHMARK_TEMPLATE, invocation=terminal.terminal_unit.invocation_id
+        )
+        _require(value.stored_descriptors == 0, "RETIREMENT_UNCERTAIN")
+        return value
+
+    before = stopped()
+    observe_runtime_device(terminal.device)
+    # An unleased exit must not open or acquire a competing image/embedding lease.
+    guard = (
+        nullcontext()
+        if terminal.resources is None
+        else hold_released_unacknowledged_benchmark_resources(terminal.resources)
+    )
+    with guard:
+        if terminal.resources is not None:
+            _require(observe_cuda_probe_gpu_clients(terminal.device) == (), "RETIREMENT_UNCERTAIN")
+        _require(stopped() == before, "RETIREMENT_UNCERTAIN")
+        files.assert_current()
+        inventory.assert_unchanged()
+        host.assert_current()
+        observe_runtime_device(terminal.device)
+        _require(stopped() == before, "RETIREMENT_UNCERTAIN")
+    return UnacknowledgedBenchmarkCudaRetirement(
+        terminal,
+        before,
+        datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z"),
+    )
+
+
+def retire_unacknowledged_benchmark_cuda_unit(
+    terminal: UnacknowledgedBenchmarkCudaTerminal,
+    invocation: BenchmarkWorkerInvocation,
+    environment: PreparedBenchmarkEnvironment,
+    *,
+    backend: NativeEmbeddingBackendPins,
+    inventory: PrefixRuntimeInventory,
+    host: ProtectedCudaEmbeddingHostClosure,
+) -> UnacknowledgedBenchmarkCudaRetirement:
+    """One exact-unit cleanup; preserve original pre-ACK FAILED/timeout and absent ACK."""
+    _require(os.getresuid() == (0, 0, 0), "ROOT_REQUIRED")
+    _require(type(terminal) is UnacknowledgedBenchmarkCudaTerminal, "IDENTITY_INVALID")
+
+    def recheck() -> None:
+        fresh = observe_unacknowledged_benchmark_cuda_terminal(
+            invocation,
+            environment,
+            expected_unit=terminal.terminal_unit,
+            backend=backend,
+            inventory=inventory,
+            host=host,
+        )
+        _require(
+            replace(fresh, observed_at_utc=terminal.observed_at_utc) == terminal, "IDENTITY_CHANGED"
+        )
+
+    recheck()
+    unit = CUDA_BENCHMARK_TEMPLATE.replace("@.service", f"@{terminal.execution_id}.service")
+    directory = _reserve_original_unit(unit, terminal.terminal_unit.invocation_id, "retirement")
+    try:
+        _save(directory, "intent.json", "BENCHMARK_CUDA_UNACKNOWLEDGED_RETIREMENT_INTENT", terminal)
+        recheck()
+        _effect("RESET_FAILED", unit)
+        stopped = observe_stopped_gpu_unit(
+            unit, template=CUDA_BENCHMARK_TEMPLATE, invocation=terminal.terminal_unit.invocation_id
+        )
+        if stopped.stored_descriptors == 1:
+            _require(terminal.resources is not None, "RETIREMENT_UNCERTAIN")
+            assert terminal.resources is not None
+            require_unacknowledged_benchmark_ack_absent(terminal)
+            require_empty_benchmark_cuda_cgroup(unit)
+            observed = observe_unacknowledged_benchmark_gpu_resources(
+                unit=unit,
+                terminal_pid=terminal.terminal_pid,
+                lease_gid=terminal.resources.shared_gpu_lease.lease_gid,
+            )
+            _require(observed == terminal.resources, "RETIREMENT_UNCERTAIN")
+            _require(observe_cuda_probe_gpu_clients(terminal.device) == (), "RETIREMENT_UNCERTAIN")
+            _require(
+                observe_stopped_gpu_unit(
+                    unit,
+                    template=CUDA_BENCHMARK_TEMPLATE,
+                    invocation=terminal.terminal_unit.invocation_id,
+                )
+                == stopped,
+                "RETIREMENT_UNCERTAIN",
+            )
+            require_unacknowledged_benchmark_ack_absent(terminal)
+            _effect("CLEAN_FDSTORE", unit)
+        result = observe_retired_unacknowledged_benchmark_cuda_unit(
+            terminal, invocation, environment, backend=backend, inventory=inventory, host=host
+        )
+        _save(
+            directory, "result.json", "BENCHMARK_CUDA_UNACKNOWLEDGED_RETIRED_NOT_ADMITTED", result
+        )
         return result
     finally:
         try:

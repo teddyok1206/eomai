@@ -298,10 +298,13 @@ GPU 비교의 최신 구현은 **SOURCE_PASS / NOT_ACTIVE**입니다. 고정 CUD
 한 번만 실행하고 결과가 불명확하면 반복하지 않습니다. 늦은 정리는 실행 승인 연장과
 분리하고 원래 실패·시간 초과를 보존합니다. 종료 확인은 설치검사 함수가 아닌 비교 실행
 전용 경계를 사용하며, 실제 unit 이름 검사까지 회귀합니다. 관련746 tests·strict3·Ruff/format6 PASS;
+준비 메시지 전 실패도 별도 경로로 관찰·정리하며, 없는 준비 메시지나 프로세스 시작 시각을
+만들어 넣지 않습니다. 계산 허가 기록이 있으면 이 경로를 거부하고, 잠금 획득 전 종료는
+다른 GPU 작업의 잠금을 건드리지 않습니다. 최신 관련1042 tests·strict8·Ruff/format12 PASS;
 실제 일반 계정의 거부·로컬 파일 잠금은 확인했지만 root/GPU 양성 사례는 합성 fixture입니다.
-준비 메시지 전 실패 처리·실제 관리자 실행·호환 수치 환경 갱신·6회 성능 비교·GPU 기본값
+실제 관리자 실행·호환 수치 환경 갱신·6회 성능 비교·GPU 기본값
 전환은 아직 미완료이며 CPU 기본값을 유지합니다.
-[검증 범위와 남은 연결](docs/architecture/EMBEDDING_BENCHMARK_EXECUTION_COMPOSITION.md#durable-ack-and-after-ready-retirement-source-checkpoint--2026-10-17)
+[검증 범위와 남은 연결](docs/architecture/EMBEDDING_BENCHMARK_EXECUTION_COMPOSITION.md#pre-ack-terminal-recovery-source-checkpoint--2026-10-17)
 
 기존 자동 인덱싱은08:38:39 UTC 조회에서 연결509건/인덱스 개정134건으로 진행됐습니다.
 최신 view별183/157/169건은 서로 다른 개정의 집계이며,509개 고유 문항이나 전체545개

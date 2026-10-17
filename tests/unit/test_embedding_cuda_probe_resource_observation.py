@@ -241,6 +241,41 @@ def test_benchmark_retained_metadata_timeout_is_uncertain_not_cleanup_permission
         owner.observe_benchmark_cuda_retained_resources(observed, unit=unit)
 
 
+def test_pre_ready_terminal_resources_have_no_invented_birth_or_worker_fd_read(kernel):
+    report = benchmark_report(kernel)
+    kernel[2]["unheld_worker"] = True
+    observed = owner.observe_unacknowledged_benchmark_gpu_resources(
+        unit=kernel[2]["expected_unit"], terminal_pid=report.pid, lease_gid=2468
+    )
+    assert observed.pid1_descriptor == 80 and observed.shared_gpu_lease.holder_pid == report.pid
+    assert not hasattr(observed.shared_gpu_lease, "holder_start_time_ticks")
+    assert not hasattr(observed, "assert_owned")
+
+
+@pytest.mark.parametrize("fault", ("pid", "group", "probe", "pid1", "store", "root"))
+def test_pre_ready_terminal_resources_require_exact_unit_physical_identity(
+    kernel, monkeypatch, fault
+):
+    report = benchmark_report(kernel)
+    unit, pid, gid = kernel[2]["expected_unit"], report.pid, 2468
+    if fault == "pid":
+        pid += 1
+    elif fault == "group":
+        gid += 1
+    elif fault == "probe":
+        unit = f"eom-embedding-native-cuda-probe@{report.execution_id}.service"
+    elif fault == "pid1":
+        kernel[2]["unheld_pid1"] = True
+    elif fault == "store":
+        kernel[2]["store"] = b"[]"
+    else:
+        monkeypatch.setattr(owner.os, "getresuid", lambda: (1000,) * 3)
+    with pytest.raises(ValueError, match="BENCHMARK_CUDA_RESOURCE_OBSERVATION_INVALID"):
+        owner.observe_unacknowledged_benchmark_gpu_resources(
+            unit=unit, terminal_pid=pid, lease_gid=gid
+        )
+
+
 @pytest.mark.parametrize(
     "fault", ("probe_report", "probe_unit", "other_execution", "group", "pid1", "worker", "store")
 )
