@@ -164,3 +164,31 @@ not modify its reader or DB behavior and no new migration/persistence gate is
 claimed. Protected installed-host/source-socket verification and private numeric
 admission/execution/tool delivery remain required, as do other consumers and the
 CPU/CUDA comparison.
+
+### Package and background observation — 14:20 UTC
+
+Candidate `94540009fe4ccfca6be5fe9d0177836b623917e9` passed the standard
+`scripts/api/deploy_release.sh --build-only` three-wheel/RECORD gate. The isolated
+`python -I -S -B` archive proof loaded **225 EOM modules exclusively from two pinned
+wheels**, validated the source contract's canonical worker-ticket dependency and
+default-off/READ_ONLY host configuration, and imported the new host/source adapters.
+No checkout/test/ML imports, database/socket/model calls or installed-runtime changes
+were made by that proof. This is packaging evidence, not native admission or a
+running channel.
+
+- platform wheel raw SHA-256:
+  `3366d0a8c6d9ee64b288b73e80e42801404f887f0a49daab026e68becf77a691`.
+- API-contract wheel raw SHA-256:
+  `c6d251ee741184cb660d1e2ee6f7bce337b86846b82430f3d75a4a2d39dfaef8`.
+- application-API wheel raw SHA-256:
+  `1195bf115e31c7c0c554c112446e30c40c8d6cf43bdef6f05be4e035213fa6cf`.
+- archive proof script raw SHA-256:
+  `cae05ba94bd953dfc6314c996c2cbe0d25b0d5523eb5d7da519a5effd2d06eb8`.
+
+The separately running indexer was observed read-only at14:20:09 UTC through the
+existing protected observer: aggregate encodings/bindings **613 each**,160 immutable
+index revisions/six logical indexes, latest three view binding counts193/205/215
+against545 eligible sources per view. The latest five work rows were two REQUESTED
+and three COMPLETED, with no failure code on those five. These metadata counts are
+not unique Item totals, full coverage, a new vector-integrity audit or a global
+failure-free claim. No workflow was submitted/restarted to obtain this observation.
