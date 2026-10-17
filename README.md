@@ -437,6 +437,14 @@ Chat/IAM/문항 모집단과 선언된 작업은 합성 fixture이며 실제 채
 이 변경의 PostgreSQL 조합 검증·설치·비공개 채팅 실행 활성화는 아직 남아 있습니다.
 [실행 경계와 검증 범위](docs/architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#executor-source-verification-2026-10-17)
 
+후속 임시 PostgreSQL 조합 검증246/no skips/정리 PASS와 완료 처리 회귀108 PASS를
+확인했습니다. 질문 계산은 재사용해도 현재 철회된 공개 자료의 접근 권한은 재사용하지 않으며,
+채팅 완료 시 원본 참조는 그대로 보존합니다. 최초244 PASS/1 FAIL은 두 철회 시점을 혼동한
+테스트 기대값으로 기록을 보존했고, 권한 규칙을 완화하지 않고 두 경우를 나눠 검증했습니다.
+이 검증에서도 Chat/IAM/문항 모집단·Workflow 조회·실행 단위·계산은 합성이며, 실제 채팅
+접수·명령 연결·운영 설치/활성화는 미완료입니다.
+[최종 조합 증거](docs/architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#guarded-executor-test-correction-and-terminal-source-checkpoint)
+
 아래는 날짜·후보별 역사적 구현 기록입니다. 당시의 미완료 표기는 현재 종합 상태와
 구별하며, 최신 실제 실행·활성화 범위는 위 표와 연결된 상태 문서를 기준으로 합니다.
 

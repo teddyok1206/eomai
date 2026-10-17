@@ -126,6 +126,19 @@ summed into a single acceptance count. This ledger does not grant authority.
   PostgreSQL proof is promoted to cover it. No private compiler/result CHECK,
   installed runtime, async routing, Chat tool or operating policy is opened.
   Full goal remains OPEN. [Exact source scope](../architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#executor-source-verification-2026-10-17).
+- Follow-up executor/terminal checkpoint: guarded PostgreSQL246/no skips/cleanup
+  PASS (11 private composition cases plus existing stage regression), source108/
+  six suites including7 private terminal/dependency/harness cases; strict10/Ruff/
+  format15 PASS. Existing common terminal now preserves private original context
+  and revalidates every replay, with old INDEX/reference final pointers unchanged.
+  First244 PASS/1 FAIL/cleanup PASS remains failed evidence: the draft expectation
+  confused empty newly authorized scope between requests with within-root late
+  withdrawal. Corrected separate cases verify both without changing source rules.
+  Actual registered index/controls/Job/event/Artifact SQL and files, synthetic
+  Chat/IAM/population/Workflow views/units/numerics. No operating migration/install/
+  admission, real private turn or tool activation. Async command/step admission
+  and actual consumers/six real CPU–CUDA/default/rollback remain OPEN.
+  [Final and retained failed evidence](../architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#guarded-executor-test-correction-and-terminal-source-checkpoint).
 - Latest bounded read-only INDEX projection22:38:25 UTC:741 encodings/741 bindings/
   192 immutable index revisions/6 logical indexes; latest per-index snapshots
   263/545,229/545,249/545 remain PARTIAL, not741 Items or a full integrity audit.

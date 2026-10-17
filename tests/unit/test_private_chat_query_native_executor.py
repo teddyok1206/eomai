@@ -135,14 +135,15 @@ class PrivateExecutorCase:
             return launch, NativePrivateChatQueryCoordinator(self.request, launch).read(session)
 
 
-def make_private_executor_case(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    definition = PrivateChatQueryWorkflowDefinition.model_validate(definition_body())
-    source = make_private_source_case(
-        tmp_path,
-        monkeypatch,
-        definition_sha256=sha256_bytes(canonical_json_bytes(definition)),
-        resource_profile=reference_prepared().workflow_request.resource_profile,
-    )
+def make_private_executor_case(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, source=None):
+    if source is None:
+        definition = PrivateChatQueryWorkflowDefinition.model_validate(definition_body())
+        source = make_private_source_case(
+            tmp_path,
+            monkeypatch,
+            definition_sha256=sha256_bytes(canonical_json_bytes(definition)),
+            resource_profile=reference_prepared().workflow_request.resource_profile,
+        )
     staging = tmp_path / "private-native-owner"
     staging.mkdir(mode=0o700)
     monkeypatch.setattr(handoff, "OWNER_ROOT", staging)

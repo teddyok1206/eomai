@@ -521,3 +521,77 @@ storage/owner tests do not prove it. No operating DB mutation, model inference,
 protected install, private-unit activation or authentication prompt was made in
 this source gate. Original HTTP delivery, async ADVANCE lineage, immutable-context
 terminal, private CHECK/compiler/routing and genuine Chat delivery remain OPEN.
+
+## Private terminal and asynchronous continuation boundary
+
+The existing Runner remains the sole command/step state owner. Terminal completion
+reuses `native_step_completion`, not a second completion service. Its legacy INDEX
+and reference final-pointer behavior stays unchanged. Private submission context
+is the immutable original source, never a result cache: private terminal success
+must leave its exact bytes untouched. The successful private application step,
+receipt producer and existing terminal step/history carry the final result.
+
+Required pointers are the original Workflow/step/attempt, canonical receipt and
+origin/request controls. The purpose executor reauthorizes current Chat/public
+sources and canonical bytes in the caller's fenced root before every completion
+or completed replay; the common terminal helper checks identity, closed original
+context and terminal shape without inventing authority. Lookups remain indexed
+by Workflow/step with bounded history; O(1) metadata state work, no new table or
+large payload. The existing Workflow→command lock order, transaction rollback and
+append-only events apply. No source/runtime/network adapter enters contracts.
+
+An asynchronous continuation must use the existing ADVANCE command with its exact
+step pointer, original actor and purpose-specific source/key. It must prove the
+original successful parent command and its allocated nonfailed private execution;
+an arbitrary ADVANCE or expired command cannot create a replacement original Job.
+One supported continuation per parent key is sufficient; no new retry queue or
+worker protocol is needed. Source/lease failures remain failures, not auth refresh.
+
+Opening private compiler/step CHECK/claim routing requires a separate tested
+successor and actual release. This source terminal extension alone grants none of
+them. Copying a final pointer into private runtime context would violate its
+closed contract and existing immutable-origin trigger, so it is not a fallback.
+
+### Guarded executor test correction and terminal source checkpoint
+
+First guarded composition run retained at
+`/opt/eom/embedding-benchmark-os-evidence/private-executor-MBLaPcc8`:
+244 PASS/1 FAIL, no skips, cleanup PASS; helper raw
+`5d1ac294f116c818eb242cb164ccfa977bf5a2172b26f64c042a2df5f4eb5e29`,
+test stdout raw `c71377204b59698bcabf3fe88ba6fb2b021a7b5fd9fe8c2fde1e78a589979f30`.
+Do not relabel this first run PASS. Its failed expectation incorrectly required a
+previously calculated private question vector to fail whenever the public scope
+became empty **between requests**. Such a vector contains only the question, not
+public document content. Current reauthorization may legitimately produce an
+empty candidate scope without recomputing the question or retaining public access.
+
+The corrected inventory separately asserts that empty newly authorized scope,
+and rejects a **within-root** public withdrawal between capture and final private
+authorization. No production source/permission rule was relaxed to fix the test.
+This is not an excuse to return previously authorized document candidates.
+
+The existing common terminal helper now supports the private purpose without
+changing its closed submission context. Seven new synthetic terminal cases cover
+exact context preservation, replay/current callback, bad origin/actor/request/
+extra final pointer and terminal shape. Final source108 PASS/six suites (including
+those7, six dependency and five harness cases); separate execution/source-owner51
+PASS overlaps historical inventories. Strict10/Ruff/format15 PASS. An initial
+terminal mock incorrectly forwarded the repository-only `max_attempts` argument
+to an ORM row; it was corrected without changing repository/model constraints.
+
+Latest exact95-pin successor at
+`/opt/eom/embedding-benchmark-os-evidence/private-executor-final-y6cLrgey` completed:
+**246 PASS/no skips/cleanup PASS**, including11 private composition cases. Helper
+raw `2888b03f857a4e31a771769a07e02380e7ddac5f27c68cf15f3bd92bd9186f97`;
+test stdout raw `12fabc13c7a8ac6ac5422e0e9cf08da441c3576b6787ccb678b289894d190121`.
+Final source108 PASS and strict10/Ruff/format15 above cover this source snapshot.
+Published controls/registered index/Job/event/Artifact SQL and files are actual;
+Chat/IAM/public population/Workflow views/unit observations/numerics are synthetic.
+The fixture's between-request scope is demonstrably empty; within-request late
+withdrawal refuses delivery. No production admission is inferred from either test.
+
+Original failed evidence and both completed cleanups are preserved. No operating
+DB/model/installation/private claim or Chat tool activation occurs in either gate.
+Actual private Workflow SQL terminal admission, async routing and consumer delivery
+are still required. Operating migration remains the last verified0055; source
+head0056 is unchanged and no new migration is introduced here.

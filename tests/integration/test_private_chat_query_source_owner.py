@@ -22,6 +22,7 @@ from eom_orchestrator.local_embedding_control_artifacts import (
     LocalEmbeddingControlArtifactPublisher,
 )
 from eom_orchestrator.models import ArtifactRevisionRecord, JobRecord
+from eom_workflow.local_embedding_execution_policy import LocalEmbeddingResourceProfile
 from eom_workflow.private_chat_query_execution import (
     PrivateChatQueryExecutionPolicy,
     PrivateChatQueryWorkflowRequest,
@@ -56,6 +57,12 @@ pytestmark = [
 
 @pytest.fixture
 def owned(registered, guarded_engine):
+    return make_owned_private_source(registered, guarded_engine)
+
+
+def make_owned_private_source(
+    registered, guarded_engine, *, resource_profile: LocalEmbeddingResourceProfile | None = None
+):
     public = registered
     assert guarded_engine.dialect.name == "postgresql"
     publisher = ControlFileSetPublisher(guarded_engine, public.settings)
@@ -89,6 +96,9 @@ def owned(registered, guarded_engine):
             | {
                 "spaces": public.request.views[0].index.spaces.model_dump(mode="json"),
                 "runtime_bundle": saved_bundle.bundle.model_dump(mode="json"),
+                "resource_profile": (resource_profile or policy.resource_profile).model_dump(
+                    mode="json"
+                ),
             },
             "policy_sha256",
         )
@@ -118,6 +128,7 @@ def owned(registered, guarded_engine):
                 "native_execution_policy": saved.member.model_dump(mode="json"),
                 "native_execution_policy_sha256": policy.policy_sha256,
                 "runtime_bundle": saved_bundle.bundle.model_dump(mode="json"),
+                "resource_profile": policy.resource_profile.model_dump(mode="json"),
             },
             "request_sha256",
         )
@@ -156,6 +167,7 @@ def owned(registered, guarded_engine):
         owner=owner,
         request=request,
         origin=projection.origin,
+        projection=projection,
         publisher=publisher,
         policy=policy,
         fault=fault,

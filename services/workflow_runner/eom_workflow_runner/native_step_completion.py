@@ -1,4 +1,4 @@
-"""Common terminal persistence for the two fixed native embedding workflows."""
+"""Common native terminal persistence, preserving immutable private source context."""
 
 from __future__ import annotations
 
@@ -7,8 +7,16 @@ from datetime import UTC, datetime
 from types import MappingProxyType
 from typing import Literal
 
+from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_workflow.local_embedding_workflow_receipt import LocalEmbeddingStepOutput
+from eom_workflow.private_chat_query_execution import parse_private_chat_query_workflow_request
+from eom_workflow.private_chat_query_submission_context import (
+    parse_private_chat_query_submission_context,
+    validate_private_chat_query_submission_context,
+)
+from eom_workflow.private_chat_query_workflow import PrivateChatQueryStepOutput
 from eom_workflow.reference_query_execution import ReferenceQueryStepOutput
+from jsonschema.exceptions import ValidationError as SchemaError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -25,8 +33,10 @@ from eom_workflow_runner.state_machine import (
     transition_workflow,
 )
 
-type NativeStepKey = Literal["encode_batch", "encode_reference_query"]
-type NativeStepOutput = LocalEmbeddingStepOutput | ReferenceQueryStepOutput
+type NativeStepKey = Literal["encode_batch", "encode_reference_query", "encode_private_chat_query"]
+type NativeStepOutput = (
+    LocalEmbeddingStepOutput | ReferenceQueryStepOutput | PrivateChatQueryStepOutput
+)
 type ValidateNativeCompletion = Callable[
     [Session, WorkflowInstanceRecord, WorkflowStepRunRecord], NativeStepOutput
 ]
@@ -38,6 +48,7 @@ _TERMINAL_KEYS = MappingProxyType(
             "reference_query_receipt",
             "REFERENCE_QUERY_COMPLETION_STAGE_ENTERED",
         ),
+        "encode_private_chat_query": (None, "PRIVATE_CHAT_QUERY_COMPLETION_STAGE_ENTERED"),
     }
 )
 
@@ -45,7 +56,7 @@ _TERMINAL_KEYS = MappingProxyType(
 def native_application_step(
     session: Session,
     workflow_id: str,
-    step_key: NativeStepKey | Literal["encode_private_chat_query"],
+    step_key: NativeStepKey,
 ) -> WorkflowStepRunRecord | None:
     return session.scalar(
         select(WorkflowStepRunRecord)
@@ -76,6 +87,33 @@ def _require_terminal_shape(terminal: WorkflowStepRunRecord | None) -> None:
         )
 
 
+def _require_private_terminal_context(
+    workflow: WorkflowInstanceRecord, output: NativeStepOutput
+) -> None:
+    """Original metadata closure only; the callback owns current permission/receipt checks."""
+    try:
+        if not isinstance(output, PrivateChatQueryStepOutput):
+            raise ValueError()
+        PrivateChatQueryStepOutput.model_validate(raw_similarity_contract_value(output))
+        request = parse_private_chat_query_workflow_request(workflow.initial_request)
+        context = validate_private_chat_query_submission_context(
+            request, parse_private_chat_query_submission_context(workflow.runtime_context)
+        )
+        if (
+            workflow.created_actor_type != "human"
+            or workflow.created_actor_id != context.origin.actor_id
+            or workflow.definition_key != request.workflow_definition_key
+            or workflow.definition_version != request.workflow_definition_version
+            or workflow.definition_hash != request.workflow_definition_sha256
+        ):
+            raise ValueError()
+    except (ValueError, TypeError, SchemaError):
+        raise WorkflowError(
+            WorkflowErrorCode.LOCAL_EMBEDDING_OUTCOME_INVALID,
+            "private native terminal original context differs",
+        ) from None
+
+
 def validate_completed_native_workflow(
     session: Session,
     workflow: WorkflowInstanceRecord,
@@ -96,13 +134,18 @@ def validate_completed_native_workflow(
         or step.attempt != output.attempt
         or step.platform_job_id != output.receipt_owner_job_id
         or step.output_pointer_manifest != output.model_dump(mode="json")
-        or workflow.runtime_context.get("final_pointer_manifest")
-        != {manifest_key: output.model_dump(mode="json")}
+        or (
+            manifest_key is not None
+            and workflow.runtime_context.get("final_pointer_manifest")
+            != {manifest_key: output.model_dump(mode="json")}
+        )
     ):
         raise WorkflowError(
             WorkflowErrorCode.LOCAL_EMBEDDING_OUTCOME_INVALID,
             "native terminal replay pointer differs",
         )
+    if manifest_key is None:
+        _require_private_terminal_context(workflow, output)
     terminal = session.scalar(
         select(WorkflowStepRunRecord)
         .where(
@@ -164,7 +207,8 @@ def complete_native_terminal(
                 WorkflowErrorCode.LOCAL_EMBEDDING_OUTCOME_INVALID,
                 "native terminal receipt has a different step/producer identity",
             )
-        expected = {manifest_key: output.model_dump(mode="json")}
+        if manifest_key is None:
+            _require_private_terminal_context(workflow, output)
         if workflow.state == WorkflowState.COMPLETED.value:
             validate_completed_native_workflow(session, workflow, step, output)
             return
@@ -194,7 +238,10 @@ def complete_native_terminal(
             transition_step(terminal, StepState.SUCCEEDED)
             terminal.finished_at = datetime.now(UTC)
         _require_terminal_shape(terminal)
-        workflow.runtime_context = workflow.runtime_context | {"final_pointer_manifest": expected}
+        if manifest_key is not None:
+            workflow.runtime_context = workflow.runtime_context | {
+                "final_pointer_manifest": {manifest_key: output.model_dump(mode="json")}
+            }
         transition_stage(
             session,
             workflow_id,
