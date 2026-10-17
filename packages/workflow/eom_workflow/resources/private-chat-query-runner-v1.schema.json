@@ -1,0 +1,378 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/private-chat-query-runner/1.0",
+  "title": "Private Chat QUERY fixed definition and completion provenance",
+  "description": "Closed immutable values only, never current Chat ownership, public source permission, native admission or a new execution grant.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/definition"
+    },
+    {
+      "$ref": "#/$defs/receipt"
+    },
+    {
+      "$ref": "#/$defs/step-output"
+    }
+  ],
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "definition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "definition_key",
+        "definition_version",
+        "start_step",
+        "limits",
+        "steps"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.3"
+        },
+        "definition_key": {
+          "const": "local-embedding-private-chat-query"
+        },
+        "definition_version": {
+          "const": "1.0.0"
+        },
+        "start_step": {
+          "const": "encode_private_chat_query"
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "max_rework_cycles",
+            "max_step_attempts"
+          ],
+          "properties": {
+            "max_rework_cycles": {
+              "type": "integer",
+              "const": 0
+            },
+            "max_step_attempts": {
+              "type": "integer",
+              "const": 1
+            }
+          }
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "key",
+                "type",
+                "operation",
+                "result_schema",
+                "on_success"
+              ],
+              "properties": {
+                "key": {
+                  "const": "encode_private_chat_query"
+                },
+                "type": {
+                  "const": "application"
+                },
+                "operation": {
+                  "const": "BUILD_PRIVATE_CHAT_QUERY_EMBEDDINGS"
+                },
+                "result_schema": {
+                  "const": "embedding-private-chat-query-result@1.0"
+                },
+                "on_success": {
+                  "const": "complete"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "key",
+                "type",
+                "terminal_status"
+              ],
+              "properties": {
+                "key": {
+                  "const": "complete"
+                },
+                "type": {
+                  "const": "terminal"
+                },
+                "terminal_status": {
+                  "const": "COMPLETED"
+                }
+              }
+            }
+          ],
+          "items": false
+        }
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "purpose",
+        "workflow_id",
+        "step_run_id",
+        "step_key",
+        "attempt",
+        "receipt_owner_job_id",
+        "execution_result_schema",
+        "receipt_sha256",
+        "workflow_definition_sha256",
+        "workflow_request_sha256",
+        "context_request_sha256",
+        "origin_sha256",
+        "query_artifact_owner_job_id",
+        "native_launch_job_id",
+        "launch_association_sha256",
+        "execution_record",
+        "query_execution",
+        "shard",
+        "binary",
+        "runtime_bundle",
+        "resource_profile_sha256",
+        "published_at"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "private-chat-query-workflow-receipt/1.0"
+        },
+        "purpose": {
+          "const": "PRIVATE_CHAT_QUERY"
+        },
+        "workflow_id": {
+          "type": "string",
+          "pattern": "^workflow_[0-9a-f]{32}$"
+        },
+        "step_run_id": {
+          "type": "string",
+          "pattern": "^steprun_[0-9a-f]{32}$"
+        },
+        "step_key": {
+          "const": "encode_private_chat_query"
+        },
+        "attempt": {
+          "type": "integer",
+          "const": 1
+        },
+        "receipt_owner_job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9a-f]{32}$"
+        },
+        "execution_result_schema": {
+          "const": "embedding-private-chat-query-result@1.0"
+        },
+        "receipt_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "workflow_definition_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "workflow_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "context_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "origin_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "query_artifact_owner_job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9a-f]{32}$"
+        },
+        "native_launch_job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9a-f]{32}$"
+        },
+        "launch_association_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "execution_record": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            },
+            {
+              "properties": {
+                "member_path": {
+                  "const": "intent.json"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/workflow/private-chat-query-execution-record/1.0"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              },
+              "required": [
+                "member_path",
+                "schema_ref",
+                "media_type"
+              ]
+            }
+          ]
+        },
+        "query_execution": {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-similarity/1.0#/$defs/execution"
+        },
+        "shard": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            },
+            {
+              "properties": {
+                "member_path": {
+                  "const": "shard.json"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/knowledge/embedding-vector-shard/1.0"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              },
+              "required": [
+                "member_path",
+                "schema_ref",
+                "media_type"
+              ]
+            }
+          ]
+        },
+        "binary": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            },
+            {
+              "properties": {
+                "member_path": {
+                  "const": "vectors.f32"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/knowledge/embedding-f32le-l2-row-major/1.0"
+                },
+                "media_type": {
+                  "const": "application/octet-stream"
+                }
+              },
+              "required": [
+                "member_path",
+                "schema_ref",
+                "media_type"
+              ]
+            }
+          ]
+        },
+        "runtime_bundle": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/bundlePointer"
+        },
+        "resource_profile_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "published_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "step-output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "purpose",
+        "workflow_id",
+        "step_run_id",
+        "step_key",
+        "attempt",
+        "receipt_owner_job_id",
+        "execution_result_schema",
+        "receipt_sha256",
+        "receipt_schema",
+        "receipt",
+        "output_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "private-chat-query-step-output/1.0"
+        },
+        "purpose": {
+          "const": "PRIVATE_CHAT_QUERY"
+        },
+        "workflow_id": {
+          "type": "string",
+          "pattern": "^workflow_[0-9a-f]{32}$"
+        },
+        "step_run_id": {
+          "type": "string",
+          "pattern": "^steprun_[0-9a-f]{32}$"
+        },
+        "step_key": {
+          "const": "encode_private_chat_query"
+        },
+        "attempt": {
+          "type": "integer",
+          "const": 1
+        },
+        "receipt_owner_job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9a-f]{32}$"
+        },
+        "execution_result_schema": {
+          "const": "embedding-private-chat-query-result@1.0"
+        },
+        "receipt_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "receipt_schema": {
+          "const": "eom://schemas/workflow/private-chat-query-workflow-receipt/1.0"
+        },
+        "receipt": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            },
+            {
+              "properties": {
+                "member_path": {
+                  "const": "receipt.json"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/workflow/private-chat-query-workflow-receipt/1.0"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              },
+              "required": [
+                "member_path",
+                "schema_ref",
+                "media_type"
+              ]
+            }
+          ]
+        },
+        "output_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    }
+  }
+}

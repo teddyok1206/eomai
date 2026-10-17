@@ -1,6 +1,6 @@
 # Full incremental-RAG goal: requirement and evidence ledger
 
-2026-10-15 UTC; updated2026-10-17 UTC after image root-lifecycle source gates.
+2026-10-15 UTC; updated2026-10-17 UTC after CPU owner recovery/private-query contract gates.
 Latest independent canonical storage audit11:36:49 UTC. Later registry row counts
 are not a fresh Artifact/hash/coverage audit. **GOAL_ACTIVE; FULL_COMPLETION_UNPROVEN.**
 Requirements come from the [original design](../architecture/SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md),
@@ -8,6 +8,28 @@ not from whichever subset currently has passing tests. Historical tests are not
 summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
+
+- Latest operating checkpoint19:26 UTC: CPU/CUDA private benchmark code42a1c5c6
+  both have actual fresh no-model installation admission. After normal drain and
+  zero remaining INDEX commands, supported Identity/Catalog operations selected
+  INDEX16/resource32/ownerdf408fef and the exact new CPU receipt. QUERY retains
+  owner0fab624c and its new coherent native pins. Actual QUERY READY/INDEX STARTED
+  and unchanged APIdf408fef/Catalog processes PASS. No cancellation or row repair.
+  Operational counts19:26:55:689 encodings/689 bindings/179 revisions/6 indexes,
+  not689 Items, full coverage or a fresh all-Artifact integrity audit. Full6-run
+  model comparison/default selection and actual consumers remain open.
+  [Exact installed pins, failures and resumption](../operations/EMBEDDING_BENCHMARK_PREFIX_2026-10-17.md#actual-cpu-publication-fresh-installation-admission-and-owner-resumption).
+- User unattended constraint: no new interactive login before2026-10-18 18:23 UTC;
+  continue independent authorized work, never simulate authentication, copy tokens
+  or change freshness/TTL. Original HTTP read remains unverified, not a verified
+  wait on a login prompt. The existing memory observer is preserved, not exported.
+- C4 workflow completion contract: fixed private graph/receipt/carrier now have
+  closed2020-12 schema, exact original origin/actor/basis/launch and four-member
+  Artifact closure. Final source402 PASS/strict2/Ruff/format PASS. Compiler/Runner
+  still explicitly reject admission until source/checkpoint execution is connected;
+  no result CHECK, migration, runtime or policy changed. This closes a necessary
+  contract prerequisite, **not C4 activation or full goal completion**.
+  [Contract and remaining implementation](../architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md).
 
 - Actual corrected retained negative2026-10-17: fixed root entryc2034177now selects
   installed ownere2326626; newf527cc61standalone lease installed and verified in both
