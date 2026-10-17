@@ -9,6 +9,18 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Actual corrected retained negative2026-10-17: fixed root entryc2034177now selects
+  installed ownere2326626; newf527cc61standalone lease installed and verified in both
+  image prefixes without reinstalling other libraries.19main/guardian slices and
+  model binding preserved;26entry fences removed. New synthetic missing-model OS
+  case9585cb0fpassed actual READY/root ACK/expected unavailable-model failure,
+  automatic preserved-failure retirement/store0 and same-inode reacquisition;
+  GPU/model/Job/Artifact generation0. This supersedes the temporary repair-fenced
+  state below, not the original failed histories. CPU default/nativee5/numericc499
+  unchanged. Actual model success/trainer/cache/crash/timeout and six real comparisons
+  plus C1–C5 remain OPEN. No source-only test is counted as that remaining acceptance.
+  [Exact selected versions and operating evidence](../architecture/INCREMENTAL_EMBEDDING_GPU_RUNTIME_DESIGN.md#actual-corrected-retained-negative-gate-2026-10-17).
+
 - Actual image lifecycle follow-up2026-10-17: the corrected unleased invalid-input
   OS case passed namespace/CLI failure/root retirement while another holder's lease
   stayed unchanged. All19main/root guardian units then received explicit system.slice

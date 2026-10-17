@@ -157,6 +157,47 @@ entry/config selection are pending. The source fixed entry now explicitly pins
 this reviewed owner, never latest. Old1031owner/nativee5/c499prefix remain intact.
 Changing this administrative entry requires no numerical rebuild or model rerun.
 
+### Actual corrected retained negative gate —2026-10-17
+
+The successor is now **INSTALLED_SELECTED_RELEASED** for the image guardian only:
+owner`e2326626aed396b3ccfd4d759a834a6e0d987794`, fixed entry source
+`c203417746409ed751bcb7135e02e614b476a17b`/raw
+`788816a97b50b35f9af4444fa9fa1e5198851195c88afbdea2cf4130c8c7a249`,
+both image prefixes' standalone lease wheel`f527cc61…`. Only that standalone package
+was replaced; existing provider/trainer/contracts, PEFT/BNB, model binding, main
+templates73013dd5and bootstrap34796a43were reverified and preserved. Full installed
+source/namespace/RECORD gates in both prefixes passed. The nativee5owner, c499numeric
+prefix and CPU default remain unchanged. All26temporary entry fences are removed.
+Installed root configuration raw SHA:
+`ac6b361fa6a0038de43cf73b1be8af8a9d6f23c9efbdcd17341fb6a1fb7215ad`.
+
+The fresh OS-only negative case
+`eom-image-provider@imageleasemissing_9585cb0f1fe543d68109f2058c1cf5f6.service`
+passed the actual automatic path: protected root READY observation → real SIGUSR1
+ACK → expected`LOCAL_IMAGE_MODEL_UNAVAILABLE`for the deliberately absent model
+pointer → original FAILED outcome preserved → automatic root retirement/store0 →
+same physical inode reacquired with no GPU clients. Both old failed acceptance
+cases remain failed; no model weight, Job, Artifact or generated image was produced.
+This verifies a retained failure and its root lifetime, not image model success,
+cache replay, trainer success, crash/timeout or six CPU/CUDA benchmark runs.
+
+Exact private OS evidence under the existing release root:
+
+- `invalid-input-v2/`: actual no-lease invalid-input retirement PASS, including
+  untouched external/root-held lease and no fabricated ACK;
+- `explicit-slice-result.json`: all19main plus guardian placement/pin update;
+- `unack-os-fd-clean-{intent,result}.json`: explicit exact predecessor recovery,
+  absent READY kept absent and same-inode reacquisition; no automated PASS relabel;
+- `wait-and-retirement-successor/`: preparation/import, both prefix backup and
+  lease-only install intent/result pairs, old entry/config backups and selection;
+- `retained-missing-model-v2/{intent,observations,result}.json`: new actual retained
+  failure PASS; local receipt`corrected-retained-result.json`returned0;
+- `/opt/eom/image-gpu-lifetimes/<new-unit>/<actual-invocation>/ack`and`retirement`:
+  immutable actual root intent/result records, not product Artifact identities.
+
+Source379related tests/strict4and separate entry/guardian/lifetime96tests remain
+separate evidence scopes. Whole-goal completion and GPU default change are unproven.
+
 2026-10-16 source 후속: [CUDA loader 작업 폴더 경계](INCREMENTAL_EMBEDDING_CUDA_LOADER_DIRECTORY_DESIGN.md)는
 공식 cuSPARSELt의 빈 RUNPATH component를 고정0555 빈 폴더의 관측으로 해석하고,
 native CUDA factory에서 실제 cwd를 재검증한다. CPU의 거부 규칙과 digest는 유지한다.
