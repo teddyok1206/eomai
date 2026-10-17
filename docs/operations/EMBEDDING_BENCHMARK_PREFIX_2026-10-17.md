@@ -145,3 +145,107 @@ guardians must still block. Preserve actual worker/PID1 physical lock and GPU
 client checks in the unchanged root probe. This is a verified stale launcher
 assumption after the19-entry lifecycle migration, not permission to ignore an
 active GPU owner. No probe submission is authorized by terminal metadata alone.
+
+## Fresh42a1c5c6 no-model admission, reader and retirement PASS —17:43–17:52 UTC
+
+This supersedes NOT_SUBMITTED/NOT_FRESHLY_ADMITTED above for the new CUDA config,
+not the CPU prefix or historical old-config results. **ACTUAL_PROBE_PASS /
+SEALED_V21 / ACTUAL_NATIVE_READER_PASS / EXACT_RETIREMENT_RECHECK_PASS**.
+It is not a benchmark model run or GPU-default activation. CPU INDEX continued.
+
+### Operator preflight correction before first submission
+
+Only the temporary operator preflight changed. Its bounded map/set metadata check
+accepts the exact five historical guardian rows: loaded/active/exited/success,
+MainPID0, descriptor store0, empty cgroup/job/drop-ins, fixed template and no
+daemon reload. It rejects unknown/running/activating units, a live PID, held FD,
+nonempty cgroup, changed template, unsuccessful active guardian, incomplete or
+duplicate metadata, oversize and observation failure. Eighteen synthetic tests
+PASS; actual read reported QUIESCENT/5 terminal guardians/ownership NOT_GRANTED.
+The same unchanged root probe still checks actual GPU clients and physical lease.
+No historical unit was stopped/reset. Preflight raw
+`a7e89d536fc598ec08c4bed64f75c4bd9d320a1dacb0aea0f19510e270cbe12b`.
+
+### One actual probe and independent terminal metadata
+
+Execution `6668438a50434ce593836cf61b4e3fa7` ran once in fixed native template911e3ef9,
+as UID/GID973/shared974, under the exact42a1c5c6 inventory219758a1/config864d6a8f.
+Original root unit `eom-benchmark-cuda-probe-owner-6668438a.service`, invocation
+`7d54aaeb5a8643f8bab2e7119be9def2`; actual native PID912516/invocation
+`caad398159264db9a07fa4fa31b3cb9c`.
+
+| Root-observed event | UTC |
+| --- | --- |
+| Submission |17:43:32.495155 |
+| READY / first ACK |17:43:40.157624 |
+| FINAL / second ACK |17:44:39.929024 |
+| Successful terminal/resource check |17:44:41.289041 |
+
+READY raw `15166404b5de12134fc5e7025d69d01d4c0efd9ede6d02f32d2d4411a9a65595`;
+FINAL raw `7e3248c778a068ec9970207d6cef6f9583bd25b680bddd36e81761e937106581`;
+root summary raw `e102d8de376f32515e1a055be800f1da21c7f6e35a04a4c58dcd53cb3479931d`.
+Actual CUDA initialization1/synchronization1, model/tokenizer/forward0, terminated
+probe GPU clients0. PID1 retained the physical FD through sealing and readback.
+
+An independent temporary observer initially made an incorrect cgroup-path
+expectation. The actual successful RemainAfterExit probe is active/exited with
+MainPID0/empty cgroup property/store1; this is distinct from retirement's
+inactive/dead/store0. The existing native terminal validator already handles
+success correctly and was not changed. The failed observer source was preserved,
+fixed metadata diagnostic retained, expectation corrected and readback PASS.
+There was no second probe/model execution, permission change or result rewrite.
+
+### New immutable seal and actual native account reader
+
+Existing sealer with only fixed pins changed, raw
+`89e252fdf5f981cfc53e1adb5ca04d65d8be7ee1020fac90b8870a78093ca7b1`, revalidated
+real root observations, terminal state, current prefix/host/config/proof/bundle,
+device/retained inode and effective policy. New receipt2.1 was sealed17:47:54.390627:
+
+- raw `1c82acd08833f27da5b4319c4710c0ecd5c15afad7b40248433b9ed4d1cec032`;
+- semantic `83925feed2891080ecc64ec91404b41bc760714f48200a6a0ce968d51722c8ce`;
+- directory `/opt/eom/embedding-runtime-admission/embeddingnativeconfig_3e98a13d3d164e2db5f861c2e5f73e08/embeddingnativeconfigrev_864d6a8f021d47359013fecf4660fa8d`.
+
+Actual CUDA-prefix Python ran the non-owning reader as UID/GID973, PID916271,
+invocation `02e604bf37974d5fbab4bfcee44cf29e`, PASS17:49:00.723399. Reader helper raw
+`737a7742cf93f530da9938a32aa4719be4a00869c69b12afa221e4b609d653db`;
+root-owned reader-log raw
+`b455dc29c3239bf41ca520b622be50e56b3955e21463ffc1d838086308af3279`.
+Protected admission was checked twice; all four device O_RDWR attempts were
+denied and factory creation without ownership was denied before ML import.
+Optional ML/model runs0. Independent readback also checked that exact reader
+invocation's successful systemd journal, not an unloaded unit's default fields.
+
+### Supported successful retirement, no lingering physical lease
+
+Only after seal and actual reader PASS, existing installed successful-retirement
+and read-only recheck ran once. Helper raw
+`f8baa897adb4ef695c97ac4776a138ef900c3bfda70710786e7556c89ac8db11`;
+unit `eom-benchmark-cuda-retirement-6668438a.service`, invocation
+`2ee14c7470e247df9e7e6137f27a983f`, completed17:50:49.249850.
+Original SUCCESS is preserved. Exact native unit is inactive/dead/MainPID0/store0,
+empty cgroup; same-inode exclusive acquisition and separate read-only recheck PASS.
+No broad cleanup, failed-state reset, re-encode or GPU-default change.
+
+Protected retirement intent raw
+`2f7f7b52109614a07560c0b753d2d067995eda165c0474020e65b4c60f0696c8`;
+result raw `8126665c722a69f33c7cba58be0b10f849e3dad9a6fd6d640ca94f308cddae76`.
+They remain under `/opt/eom/embedding-probe-retirements/6668438a50434ce593836cf61b4e3fa7`.
+Independent retirement event/journal/record-hash readback also PASS. Temporary
+operator evidence: `/tmp/eom-benchmark-cuda-probe-5lLVE1Tu`; protected probe records:
+`/opt/eom/.embedding-benchmark-cuda-probe-6668438a`. Full logs/results are not in Git.
+
+### Remaining whole-goal work and due INDEX observation
+
+The CUDA benchmark entry exists and this new prefix/config now has fresh native
+installation acceptance. Four inactive benchmark templates, CPU private successor/
+admission, actual original-Job/source owner authorization, remaining image/trainer
+lifetime regressions, six frozen real measurements and conditional default still
+require execution. No benchmark score or superiority is inferred from initialization.
+The original HTTP measurement and C1–C5 consumer activation remain separate.
+
+Due read-only INDEX observation17:52:13 reports669 encodings/669 bindings,
+174 immutable index revisions/six logical indexes; all four API/Catalog/QUERY/INDEX
+services remain active. These are view relations, not669 distinct Items or full
+coverage. No observation-triggered admission/retry/encoding. Next routine
+observation is no earlier18:22:13 UTC.
