@@ -114,6 +114,20 @@ def test_legacy_configuration_bytes_and_selected_runtime_configuration_are_disti
     )
 
 
+def test_source_option_is_explicit_nonsecret_and_never_enables_without_rag() -> None:
+    target = installation.CONFIG_ROOT / "general-chat-model.env"
+    disabled = installation.configuration_payloads(COMMIT, MODEL, rag_policy=POLICY)
+    enabled = installation.configuration_payloads(
+        COMMIT, MODEL, rag_policy=POLICY, private_query_source=True
+    )
+    assert (
+        enabled[target] == disabled[target] + b"EOM_GENERAL_CHAT_PRIVATE_QUERY_SOURCE=READ_ONLY\n"
+    )
+    assert set(enabled) == set(disabled)
+    with pytest.raises(ChatError, match="CONFIGURATION_INVALID"):
+        installation.configuration_payloads(COMMIT, MODEL, private_query_source=True)
+
+
 @dataclass
 class InstallationHarness:
     events: list[str]
@@ -324,6 +338,82 @@ def test_future_runtime_repin_uses_current_model_digest_without_a_new_source_rel
     assert value.target.read_bytes() == expected
     assert value.release.read_bytes() == f"EOM_RUNTIME_SOURCE_COMMIT={COMMIT}\n".encode()
     assert value.events.count("write-config") == 1
+
+
+def test_codex_repin_preserves_enabled_source_and_exact_replay_does_not_reprovision(
+    installed_runtime: InstallationHarness, monkeypatch, tmp_path
+) -> None:
+    value = installed_runtime
+    flag = b"EOM_GENERAL_CHAT_PRIVATE_QUERY_SOURCE=READ_ONLY\n"
+    value.target.write_bytes(value.desired + flag)
+    existing = value.target.read_bytes()
+    calls = []
+    monkeypatch.setattr(
+        installation, "source_endpoint_preflight", lambda _: (b"fixed-source-policy", True)
+    )
+    monkeypatch.setattr(
+        installation, "source_endpoint", lambda: SimpleNamespace(path=tmp_path / "source.sock")
+    )
+    monkeypatch.setattr(
+        installation, "stage_source_endpoint", lambda *_a, **_k: calls.append("mutation")
+    )
+    installation.stage(
+        COMMIT,
+        MODEL,
+        pin_codex_runtime=True,
+        previous_model_config_sha256=sha256_bytes(existing),
+    )
+    assert value.target.read_bytes() == existing and not calls
+    assert "write-config" not in value.events and "daemon-reload" not in value.events
+    value.guard.identity = IDENTITY.model_copy(update={"cli_version": "0.163.0"})
+    installation.stage(
+        COMMIT,
+        MODEL,
+        pin_codex_runtime=True,
+        previous_model_config_sha256=sha256_bytes(existing),
+    )
+    assert value.target.read_bytes().endswith(flag) and not calls
+
+
+def test_codex_only_repin_cannot_be_used_to_change_source_selection(
+    installed_runtime: InstallationHarness,
+) -> None:
+    value = installed_runtime
+    with pytest.raises(ChatError, match="TARGET_CONFLICT"):
+        installation.stage(
+            COMMIT,
+            MODEL,
+            pin_codex_runtime=True,
+            private_query_source=True,
+            previous_model_config_sha256=sha256_bytes(value.before),
+        )
+    assert value.target.read_bytes() == value.before
+    assert "write-config" not in value.events and "capture-cli" not in value.events
+
+
+def test_source_provisioning_conflict_precedes_model_release_and_unit_writes(
+    installed_runtime: InstallationHarness, monkeypatch
+) -> None:
+    value = installed_runtime
+    previous = "d" * 40
+    value.release.write_bytes(f"EOM_RUNTIME_SOURCE_COMMIT={previous}\n".encode())
+
+    def conflict(_):
+        raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
+
+    monkeypatch.setattr(installation, "source_endpoint_preflight", conflict)
+    with pytest.raises(ChatError, match="TARGET_CONFLICT"):
+        installation.stage(
+            COMMIT,
+            MODEL,
+            previous_runtime_commit=previous,
+            rag_policy=POLICY,
+            previous_model_config_sha256=sha256_bytes(value.before),
+            private_query_source=True,
+        )
+    assert value.target.read_bytes() == value.before
+    assert value.release.read_bytes() == f"EOM_RUNTIME_SOURCE_COMMIT={previous}\n".encode()
+    assert "write-config" not in value.events and "daemon-reload" not in value.events
 
 
 def test_application_release_advance_remains_separate_from_native_selection_cas(

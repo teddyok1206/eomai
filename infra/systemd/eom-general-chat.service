@@ -47,6 +47,7 @@ InaccessiblePaths=/home/eom/EOM /home/eom/EOMIS /srv/eom/worker-homes
 InaccessiblePaths=/etc/eom/secrets /srv/eom/workspaces
 InaccessiblePaths=-/var/run/docker.sock -/srv/eom/models -/var/lib/eom-api
 ReadWritePaths=/mnt/nas/eom/artifacts
+ReadWritePaths=-/run/eom-general-chat-query-read
 
 UMask=0007
 MemoryMax=2G

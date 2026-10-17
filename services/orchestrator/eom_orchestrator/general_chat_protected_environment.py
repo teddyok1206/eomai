@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import stat
 from pathlib import Path
+from typing import Literal
 from uuid import uuid4
 
 from eom_orchestrator.general_chat_state import ChatError
@@ -61,15 +62,24 @@ def read_chat_environment(path: Path, *, uid: int, gid: int, mode: int) -> dict[
         raise ChatError("GENERAL_CHAT_PROTECTED_ENVIRONMENT_INVALID") from None
 
 
-def install_chat_environment(path: Path, payload: bytes, *, uid: int, gid: int) -> None:
+def install_chat_environment(
+    path: Path, payload: bytes, *, uid: int, gid: int, mode: Literal[0o600, 0o644] = 0o600
+) -> None:
     """No-replace durable first installation; exact existing bytes are retained."""
-    if not 0 < len(payload) <= ENVIRONMENT_LIMIT:
+    if (
+        not 0 < len(payload) <= ENVIRONMENT_LIMIT
+        or type(mode) is not int
+        or mode not in {0o600, 0o644}
+    ):
         raise ChatError("GENERAL_CHAT_PROTECTED_ENVIRONMENT_INVALID")
     temporary = path.with_name("." + path.name + "." + uuid4().hex)
     descriptor = -1
     try:
         descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
         os.fchown(descriptor, uid, gid)
+        # Publish the intended metadata atomically with the bytes, even under a
+        # restrictive umask. Secrets keep the existing private default.
+        os.fchmod(descriptor, mode)
         offset = 0
         while offset < len(payload):
             count = os.write(descriptor, payload[offset:])

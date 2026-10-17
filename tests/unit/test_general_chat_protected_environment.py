@@ -22,6 +22,38 @@ def test_secret_first_install_is_durable_private_and_never_replaces_existing(tmp
     assert target.read_bytes() == payload and list(tmp_path.iterdir()) == [target]
 
 
+@pytest.mark.parametrize("mode", [0o600, 0o644])
+def test_intended_mode_is_complete_before_no_replace_publication(tmp_path, monkeypatch, mode):
+    target = tmp_path / "prepared.conf"
+    original_link = os.link
+    seen = []
+
+    def link(source, destination, **kwargs):
+        assert source.stat().st_mode & 0o777 == mode
+        assert source.stat().st_nlink == 1
+        seen.append(mode)
+        original_link(source, destination, **kwargs)
+
+    monkeypatch.setattr(os, "link", link)
+    previous = os.umask(0o077)
+    try:
+        install_chat_environment(
+            target, b"SYNTHETIC=nonsecret\n", uid=os.getuid(), gid=os.getgid(), mode=mode
+        )
+    finally:
+        os.umask(previous)
+    assert seen == [mode] and target.stat().st_mode & 0o777 == mode
+
+
+@pytest.mark.parametrize("mode", [True, 0o666, 0o777, "0644"])
+def test_arbitrary_permission_modes_never_create_a_file(tmp_path, mode):
+    with pytest.raises(ChatError, match="ENVIRONMENT_INVALID"):
+        install_chat_environment(
+            tmp_path / "no-file", b"X=y\n", uid=os.getuid(), gid=os.getgid(), mode=mode
+        )
+    assert not list(tmp_path.iterdir())
+
+
 @pytest.mark.parametrize(
     "change", ["mode", "symlink", "fifo", "oversize", "duplicate", "syntax", "encoding", "hardlink"]
 )

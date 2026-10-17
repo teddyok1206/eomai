@@ -96,3 +96,71 @@ installed/live acceptance. This checkpoint does not close C4, other consumers,
 CPU/CUDA comparison or the full incremental-RAG goal. The separate original HTTP
 canary still reported LOGIN at 14:05 UTC; this source gate did not use or replace
 that human session or submit another HTTP preparation request.
+
+## Installed host composition — design before behavior
+
+Extend the existing owner configuration with an explicit
+`EOM_GENERAL_CHAT_PRIVATE_QUERY_SOURCE=READ_ONLY` opt-in; absent/DISABLED retains
+the old behavior and old generated configuration bytes. Reject other spellings
+and require the already-pinned RAG protocol/policy when enabled. This setting is
+not a model/tool parameter and conveys no numeric execution authority.
+
+The owner main composes a second instance of its existing RPC adapter with
+`owner=None`, no API peers and exactly the `eom-workflow-runner` kernel UID. The
+fixed endpoint remains owned by `eom-general-chat`, group `eom`, in an explicitly
+root-provisioned 0750 parent. No caller-selected path/user/group is accepted.
+Reuse the same execution application and its current SQL/Artifact guards.
+The second listener has its own bounded pool (two read requests); total SQL pool
+capacity remains bounded and no transaction spans file IO.
+
+The API listener remains on the main thread. An explicitly enabled source
+listener failure stops the host with a stable error rather than leaving a falsely
+healthy enabled channel; native-worker unavailability continues to leave normal
+owner reads available as before. SIGTERM/normal exit stops both listeners, joins
+the source thread, waits for in-flight socket work and coordinator, then disposes
+SQL engines. Partial construction must also close the already-bound API socket.
+
+Protected staging must provision only the fixed source directory, and configure
+its writable sandbox path, before enabling the option. The listener refuses
+wrong owner/group/mode, symlinks and an existing socket; it never unlinks a stale
+socket to claim authority. Provisioning/installation/live activation are separate
+gates; no enabled config is emitted by default or claimed active from unit tests.
+No schema, DB, queue, claim/lease or original request identity changes are needed
+for this host/configuration composition. Rollback disables the option and uses a
+compatible prior installed release, preserving all conversations and executions.
+
+## Host and staging source checkpoint — 2026-10-17 14:18 UTC
+
+HOST_COMPOSED_SOURCE / STAGING_SOURCE_PASS / NOT_INSTALLED / NOT_ACTIVE.
+The prior NOT_COMPOSED checkpoint above is historical, not the current source
+state. Main now composes the enabled source profile, fixed peer, shared application
+and bounded two-request listener; disabled configuration retains the original one
+listener. Current-source **297 focused tests**, strict **4 files**, Ruff/format and
+diff checks pass. This count overlaps the preceding source suites; do not sum them.
+
+The original installer stages the fixed root-owned tmpfiles policy and validates
+the exact parent before enabling READ_ONLY. All conflicts precede configuration/
+unit/release writes; foreign/stale endpoint paths are refused, never reclaimed.
+Only the owner unit gains an optional writable path. No worker groups, worker unit,
+DB grants, schema or claim/lease behavior changed. Codex-only repins preserve the
+current source setting and cannot use the repin operation to change it. Exact
+configuration replay with an already prepared parent does not reprovision it.
+
+Failure injection reproduced source-close exceptions aborting the rest of host
+cleanup. Main now closes the API, coordinator and both SQL engines independently
+and returns a stable failure without raw exception text. The existing bounded
+no-replace file installer additionally supports explicitly public 0644 preparation
+files, setting metadata before atomic publication; its secret default remains0600.
+Actual local tests check the mode at the publication boundary under umask0077,
+invalid modes, no-replace semantics and old secret handling.
+
+Host threads/configuration, root/tmpfiles commands, DB and native execution are
+explicit synthetic adapters in these host/staging tests. They do not prove an OS
+sandbox, protected directory installation or operating source channel. No running
+service was stopped/restarted, config changed, credential transferred, model
+executed or HTTP query submitted for this checkpoint. The previous actual64-case
+disposable source/claim/Artifact test remains separately scoped; these changes do
+not modify its reader or DB behavior and no new migration/persistence gate is
+claimed. Protected installed-host/source-socket verification and private numeric
+admission/execution/tool delivery remain required, as do other consumers and the
+CPU/CUDA comparison.

@@ -29,12 +29,14 @@ from eom_orchestrator.general_chat_owner_runtime import (
     chat_owner_engine,
     require_chat_owner_database,
 )
+from eom_orchestrator.general_chat_private_query_client import PRIVATE_CHAT_QUERY_SOURCE_SOCKET
 from eom_orchestrator.general_chat_protected_environment import (
     install_chat_environment,
     read_chat_environment,
     read_chat_preparation_file,
 )
 from eom_orchestrator.general_chat_runtime_selection import RUNTIME_ENVIRONMENT_KEYS
+from eom_orchestrator.general_chat_socket import ChatSocketEndpoint
 from eom_orchestrator.general_chat_state import ChatError, safe_chat_error_code
 from eom_protocol.general_chat_rag_knowledge import ChatRagPolicy
 from eom_protocol.general_chat_worker_messages import CodexCliIdentity
@@ -44,6 +46,7 @@ PYTHON = "/srv/eom/conda/envs/eom-api/bin/python"
 UNITS = ("eom-general-chat-worker.service", "eom-general-chat.service")
 UNIT_ROOT = Path("/etc/systemd/system")
 CONFIG_ROOT = Path("/etc/eom")
+SOURCE_TMPFILE = Path("/etc/tmpfiles.d/eom-general-chat-query-read.conf")
 SECRET = CONFIG_ROOT / "secrets/general-chat.env"
 AUTH = Path("/srv/eom/worker-homes/eom-cdx-chat/.codex/auth.json")
 CODEX_BINARY = Path("/usr/local/bin/codex")
@@ -127,6 +130,7 @@ def configuration_payloads(
     *,
     rag_policy: ChatRagPolicy | None = None,
     native_runtime: CodexCliIdentity | None = None,
+    private_query_source: bool = False,
 ) -> dict[Path, bytes]:
     model_value = f"EOM_GENERAL_CHAT_MODEL={model}\n"
     if rag_policy is not None:
@@ -145,6 +149,10 @@ def configuration_payloads(
         model_value += "".join(
             f"{key}={runtime_values[field]}\n" for field, key in RUNTIME_ENVIRONMENT_KEYS.items()
         )
+    if private_query_source:
+        if rag_policy is None:
+            raise ChatError("GENERAL_CHAT_OWNER_CONFIGURATION_INVALID")
+        model_value += "EOM_GENERAL_CHAT_PRIVATE_QUERY_SOURCE=READ_ONLY\n"
     return {
         CONFIG_ROOT / "general-chat-model.env": model_value.encode(),
         CONFIG_ROOT / "general-chat-release.env": f"EOM_RUNTIME_SOURCE_COMMIT={commit}\n".encode(),
@@ -157,7 +165,7 @@ def require_pinned_model_selection(
     rag_policy: ChatRagPolicy | None,
     secret: dict[str, str],
     source_commit: str,
-) -> ChatRagPolicy:
+) -> ChatOwnerConfiguration:
     """Pin-only selection preserves the existing released model and RAG authority."""
     values = read_chat_environment(CONFIG_ROOT / "general-chat-model.env", uid=0, gid=0, mode=0o600)
     allowed = {
@@ -166,6 +174,7 @@ def require_pinned_model_selection(
         "EOM_GENERAL_CHAT_RAG_POLICY_REVISION_ID",
         "EOM_GENERAL_CHAT_RAG_POLICY_SHA256",
         *NATIVE_RUNTIME_KEYS,
+        "EOM_GENERAL_CHAT_PRIVATE_QUERY_SOURCE",
     }
     if set(values) - allowed:
         raise ChatError("GENERAL_CHAT_OWNER_CONFIGURATION_INVALID")
@@ -178,7 +187,49 @@ def require_pinned_model_selection(
         or (rag_policy is not None and rag_policy != current.rag_policy)
     ):
         raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
-    return current.rag_policy
+    return current
+
+
+def source_endpoint_preflight(commit: str) -> tuple[bytes, bool]:
+    """Exact fixed tmpfiles policy; conflict checks precede all staging mutations."""
+    require_root_directory(SOURCE_TMPFILE.parent)
+    require_root_directory(Path("/run"))
+    payload = subprocess.check_output(
+        [
+            "git",
+            "-C",
+            str(REPOSITORY),
+            "show",
+            f"{commit}:infra/tmpfiles/eom-general-chat-query-read.conf",
+        ],
+        timeout=20,
+    )
+    present = require_replay(SOURCE_TMPFILE, payload, mode=0o644)
+    endpoint = source_endpoint()
+    if endpoint.path.parent.exists() or endpoint.path.parent.is_symlink():
+        endpoint.require_parent()
+    # Never reclaim an existing or substituted endpoint, even if services appear stopped.
+    if endpoint.path.exists() or endpoint.path.is_symlink():
+        raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
+    return payload, present
+
+
+def source_endpoint() -> ChatSocketEndpoint:
+    import grp
+
+    return ChatSocketEndpoint(
+        PRIVATE_CHAT_QUERY_SOURCE_SOCKET,
+        pwd.getpwnam("eom-general-chat").pw_uid,
+        grp.getgrnam("eom").gr_gid,
+    )
+
+
+def stage_source_endpoint(payload: bytes, *, present: bool) -> None:
+    if not present:
+        install_chat_environment(SOURCE_TMPFILE, payload, uid=0, gid=0, mode=0o644)
+    require_replay(SOURCE_TMPFILE, payload, mode=0o644)
+    subprocess.run(["systemd-tmpfiles", "--create", str(SOURCE_TMPFILE)], timeout=20, check=True)
+    source_endpoint().require_parent()
 
 
 def require_compatible_runtime(commit: str, runtime_commit: str) -> None:
@@ -203,6 +254,7 @@ def require_compatible_runtime(commit: str, runtime_commit: str) -> None:
             "services/orchestrator",
             "infra/chat",
             "infra/systemd",
+            "infra/tmpfiles/eom-general-chat-query-read.conf",
         ],
         timeout=20,
         check=True,
@@ -267,6 +319,7 @@ def stage(
     rag_policy: ChatRagPolicy | None = None,
     previous_model_config_sha256: str | None = None,
     pin_codex_runtime: bool = False,
+    private_query_source: bool | None = None,
 ) -> None:
     require_source(commit, model)
     selected = runtime_commit or commit
@@ -289,15 +342,20 @@ def stage(
         raise ChatError("GENERAL_CHAT_OWNER_CONFIGURATION_INVALID")
     native_guard: CodexCliIdentityGuard | None = None
     if pin_codex_runtime:
-        rag_policy = require_pinned_model_selection(
+        pinned = require_pinned_model_selection(
             model, rag_policy=rag_policy, secret=secret, source_commit=selected
         )
+        if private_query_source is not None and private_query_source != pinned.private_query_source:
+            raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
+        rag_policy = pinned.rag_policy
+        private_query_source = pinned.private_query_source
         native_guard = capture_codex_cli_identity(CODEX_BINARY)
     configs = configuration_payloads(
         selected,
         model,
         rag_policy=rag_policy,
         native_runtime=native_guard.identity if native_guard is not None else None,
+        private_query_source=private_query_source is True,
     )
     model_settings = dict(
         line.split("=", 1)
@@ -382,6 +440,10 @@ def stage(
                 existing_units[target] = True
                 continue
         existing_units[target] = require_replay(target, payload, mode=0o644)
+    source_prepared = source_endpoint_preflight(commit) if config.private_query_source else None
+    source_needs_staging = source_prepared is not None and (
+        not source_prepared[1] or not source_endpoint().path.parent.exists()
+    )
     if native_guard is not None:
         # Capture is not permission to race service startup or a CLI replacement.
         # Recheck the same file epoch and stopped services before any mutation.
@@ -392,8 +454,12 @@ def stage(
             and all(existing_units.values())
             and not updates
             and not advance_release
+            and not source_needs_staging
         ):
             return
+    if source_needs_staging:
+        assert source_prepared is not None
+        stage_source_endpoint(source_prepared[0], present=source_prepared[1])
     for target, payload in configs.items():
         if not existing_configs[target]:
             install_chat_environment(target, payload, uid=0, gid=0)
@@ -477,6 +543,11 @@ def main() -> int:
     parser.add_argument("--rag-policy-sha256")
     parser.add_argument("--previous-model-config-sha256")
     parser.add_argument(
+        "--private-query-source",
+        choices=("DISABLED", "READ_ONLY"),
+        help="Explicit source-only socket selection; Codex-only repins preserve the current value",
+    )
+    parser.add_argument(
         "--pin-codex-runtime",
         action="store_true",
         help="Pin the protected installed CLI while preserving the existing protocol-4 model/RAG",
@@ -499,6 +570,11 @@ def main() -> int:
             rag_policy=rag_policy,
             previous_model_config_sha256=args.previous_model_config_sha256,
             pin_codex_runtime=args.pin_codex_runtime,
+            private_query_source=(
+                None
+                if args.private_query_source is None
+                else args.private_query_source == "READ_ONLY"
+            ),
         )
         if args.action == "activate":
             activate()

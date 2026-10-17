@@ -38,6 +38,7 @@ class ChatOwnerConfiguration:
     model: str
     rag_policy: ChatRagPolicy | None = None
     native_runtime: CodexCliIdentity | None = None
+    private_query_source: bool = False
 
     @classmethod
     def from_environment(cls, values: Mapping[str, str]) -> ChatOwnerConfiguration:
@@ -57,6 +58,11 @@ class ChatOwnerConfiguration:
             elif protocol != "3" or revision is not None or digest is not None:
                 raise ValueError()
             native_runtime = native_runtime_from_environment(values)
+            source_mode = values.get("EOM_GENERAL_CHAT_PRIVATE_QUERY_SOURCE", "DISABLED")
+            if source_mode not in {"DISABLED", "READ_ONLY"} or (
+                source_mode == "READ_ONLY" and rag_policy is None
+            ):
+                raise ValueError()
             if (
                 url.drivername != "postgresql+psycopg"
                 or url.username != OWNER_DATABASE_ROLE
@@ -69,7 +75,7 @@ class ChatOwnerConfiguration:
                 or re.fullmatch(r"[A-Za-z0-9._-]{1,128}", model) is None
             ):
                 raise ValueError()
-            return cls(url, commit, model, rag_policy, native_runtime)
+            return cls(url, commit, model, rag_policy, native_runtime, source_mode == "READ_ONLY")
         except (KeyError, ValueError):
             raise ChatError("GENERAL_CHAT_OWNER_CONFIGURATION_INVALID") from None
 
