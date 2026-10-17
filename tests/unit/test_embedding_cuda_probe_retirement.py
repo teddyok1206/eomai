@@ -15,7 +15,9 @@ from eom_catalog_service import embedding_cuda_probe_retirement as owner
 from eom_catalog_service.embedding_native_cuda_probe_observation import (
     NativeCudaProbeFailedTerminalObservation,
     verify_native_cuda_probe_failed_terminal,
+    verify_native_cuda_probe_terminal,
 )
+from eom_identifiers import canonical_json_bytes, sha256_bytes
 from pydantic import TypeAdapter
 
 from tests.unit.test_embedding_native_cuda_probe import case as case
@@ -60,9 +62,14 @@ def retirement(failed_ended, monkeypatch, tmp_path):
 
     def command(args, **kwargs):
         if args[1] == "--no-ask-password":
-            assert args == ("/usr/bin/systemctl", "--no-ask-password", "reset-failed", process[-1])
+            assert args == (
+                "/usr/bin/systemctl",
+                "--no-ask-password",
+                state.get("action", "reset-failed"),
+                process[-1],
+            )
             assert (tmp_path / ready.execution_id / "intent.json").is_file()
-            events.append("reset")
+            events.append(state.get("action_label", "reset"))
             state["retired"] = True
             return SimpleNamespace(returncode=0)
         assert args[:3] == ("/usr/bin/systemctl", "show", process[-1])
@@ -348,3 +355,121 @@ def test_record_creation_is_no_clobber_and_directory_is_real_not_symlink(tmp_pat
     monkeypatch.setattr(owner, "_ROOT", linked)
     with pytest.raises(ValueError, match="RECORD_DIRECTORY_INVALID"):
         owner._records("b" * 32)
+
+
+@pytest.fixture
+def successful_retirement(retirement, process):
+    failed, _, state, events, tmp = retirement
+    report = process[1]
+    state["unit"] = replace(
+        state["unit"],
+        status=replace(
+            state["unit"].status,
+            active_state="active",
+            sub_state="exited",
+            result="success",
+            exec_main_status=0,
+        ),
+    )
+    final = replace(
+        failed.ready_observation,
+        phase="FINAL",
+        report_sha256=sha256_bytes(canonical_json_bytes(report)),
+    )
+    successful = verify_native_cuda_probe_terminal(final, report)
+    state["action"], state["action_label"] = "stop", "stop"
+    return successful, report, state, events, tmp
+
+
+def test_success_cleanup_uses_stop_and_preserves_success_not_failed_history(successful_retirement):
+    successful, report, state, events, tmp = successful_retirement
+    result = owner.retire_successful_native_cuda_probe(successful, report)
+    assert type(result) is owner.SuccessfulNativeCudaProbeRetirementObservation
+    assert result.original_success.terminal_unit.succeeded
+    assert not isinstance(result, owner.NativeCudaProbeRetirementObservation)
+    assert events.count("stop") == 1 and "reset" not in events and not state["fence_held"]
+    intent = json.loads((tmp / report.execution_id / "intent.json").read_bytes())
+    final = json.loads((tmp / report.execution_id / "result.json").read_bytes())
+    assert intent["event"] == "SUCCESSFUL_PROBE_RETIREMENT_INTENT"
+    assert final["event"] == "SUCCESSFUL_PROBE_RETIRED_NOT_GRANTED"
+    assert final["admission_granted"] is False
+    assert (
+        TypeAdapter(owner.SuccessfulNativeCudaProbeRetirementObservation).validate_python(
+            final["observation"]
+        )
+        == result
+    )
+
+
+def test_failed_value_cannot_be_sent_through_success_cleanup(retirement):
+    failed, report, _, events, _ = retirement
+    with pytest.raises(ValueError, match="IDENTITY_INVALID"):
+        owner.retire_successful_native_cuda_probe(failed, report)
+    assert "reset" not in events and "stop" not in events
+
+
+@pytest.mark.parametrize("fault", ("phase", "invocation", "gpu", "running", "report"))
+def test_success_cleanup_rechecks_actual_terminal_before_intent(successful_retirement, fault):
+    successful, report, state, events, tmp = successful_retirement
+    if fault == "phase":
+        successful = replace(
+            successful, final_observation=replace(successful.final_observation, phase="READY")
+        )
+    elif fault == "invocation":
+        state["unit"] = replace(state["unit"], invocation_id="c" * 32)
+    elif fault == "gpu":
+        state["gpu_pids"] = (report.pid,)
+    elif fault == "running":
+        state["unit"] = replace(state["unit"], main_pid=report.pid)
+    else:
+        successful = replace(
+            successful,
+            final_observation=replace(
+                successful.final_observation, report_sha256="sha256:" + "0" * 64
+            ),
+        )
+    with pytest.raises(ValueError):
+        owner.retire_successful_native_cuda_probe(successful, report)
+    assert "stop" not in events and not (tmp / report.execution_id).exists()
+
+
+@pytest.mark.parametrize("fault", ("timeout", "nonzero", "os_error"))
+def test_uncertain_success_stop_is_not_retried_or_reported_as_release(
+    successful_retirement, monkeypatch, fault
+):
+    successful, report, _, _, tmp = successful_retirement
+    calls = []
+
+    def uncertain(args, **kwargs):
+        calls.append(args)
+        if fault == "timeout":
+            raise owner.subprocess.TimeoutExpired(args, 10)
+        if fault == "os_error":
+            raise OSError("synthetic transport error")
+        return SimpleNamespace(returncode=1)
+
+    monkeypatch.setattr(owner.subprocess, "run", uncertain)
+    with pytest.raises(ValueError, match="OUTCOME_UNCERTAIN"):
+        owner.retire_successful_native_cuda_probe(successful, report)
+    assert len(calls) == 1 and calls[0][2] == "stop"
+    assert (tmp / report.execution_id / "intent.json").is_file()
+    assert not (tmp / report.execution_id / "result.json").exists()
+
+
+def test_success_readonly_recovery_never_stops_the_unit_twice(successful_retirement):
+    successful, report, state, events, _ = successful_retirement
+    state["retired"] = True
+    result = owner.observe_retired_successful_native_cuda_probe(successful, report)
+    assert result.original_success == successful and "stop" not in events and "reset" not in events
+
+
+def test_success_intent_storage_failure_cannot_stop_a_unit(successful_retirement, monkeypatch):
+    successful, report, _, events, _ = successful_retirement
+
+    def denied(*_args):
+        raise OSError("synthetic evidence failure")
+
+    monkeypatch.setattr(owner, "_save_record", denied)
+    with pytest.raises(OSError):
+        owner.retire_successful_native_cuda_probe(successful, report)
+    assert "stop" not in events

@@ -1,4 +1,4 @@
-"""Root-only, failure-preserving retirement of one terminal fixed CUDA probe."""
+"""Root-only retirement of exact terminal CUDA probes, preserving distinct original outcomes."""
 
 from __future__ import annotations
 
@@ -12,8 +12,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from eom_catalog_contracts.embedding_native_cuda_probe import NativeCudaProbeLeaseReady
+from eom_catalog_contracts.embedding_native_cuda_probe import (
+    NativeCudaProbeLeaseReady,
+    NativeCudaProbeResult,
+)
 from eom_identifiers import canonical_json_bytes, sha256_bytes
+from eom_orchestrator.inference_transfer_cpu_systemd import CpuUnitObservation
 from pydantic import TypeAdapter
 
 from eom_catalog_service.embedding_cuda_probe_gpu_clients import observe_cuda_probe_gpu_clients
@@ -23,9 +27,12 @@ from eom_catalog_service.embedding_cuda_probe_resource_observation import (
 from eom_catalog_service.embedding_native_cuda_probe_observation import (
     CUDA_PROBE_TEMPLATE,
     NativeCudaProbeFailedTerminalObservation,
+    NativeCudaProbeProcessObservation,
+    NativeCudaProbeTerminalObservation,
     require_native_cuda_probe_empty_cgroup,
     require_native_cuda_probe_unit,
     verify_native_cuda_probe_failed_terminal,
+    verify_native_cuda_probe_terminal,
 )
 from eom_catalog_service.embedding_runtime_files import NumericalRuntimeFileSnapshots
 from eom_catalog_service.embedding_runtime_os_identity import observe_runtime_device
@@ -60,6 +67,13 @@ class RetiredCudaProbeUnit:
 @dataclass(frozen=True, slots=True)
 class NativeCudaProbeRetirementObservation:
     original_failure: NativeCudaProbeFailedTerminalObservation
+    retired_unit: RetiredCudaProbeUnit
+    observed_at_utc: str
+
+
+@dataclass(frozen=True, slots=True)
+class SuccessfulNativeCudaProbeRetirementObservation:
+    original_success: NativeCudaProbeTerminalObservation
     retired_unit: RetiredCudaProbeUnit
     observed_at_utc: str
 
@@ -118,41 +132,74 @@ def observe_retired_native_cuda_probe(
         and type(report) is NativeCudaProbeLeaseReady,
         "IDENTITY_INVALID",
     )
-    report = NativeCudaProbeLeaseReady.model_validate(report)
-    ready = failed.ready_observation
+    _require(failed.failed_unit.failed, "IDENTITY_INVALID")
+    unit, timestamp = _observe_retired_probe(failed.ready_observation, failed.failed_unit, report)
+    return NativeCudaProbeRetirementObservation(failed, unit, timestamp)
+
+
+def observe_retired_successful_native_cuda_probe(
+    successful: NativeCudaProbeTerminalObservation,
+    report: NativeCudaProbeResult,
+) -> SuccessfulNativeCudaProbeRetirementObservation:
+    """Observe success cleanup without stopping twice or relabeling a failed probe."""
+    _require(os.getresuid() == (0, 0, 0), "OWNER_REQUIRED")
+    _require(
+        type(successful) is NativeCudaProbeTerminalObservation
+        and type(report) is NativeCudaProbeResult,
+        "IDENTITY_INVALID",
+    )
+    _require(successful.terminal_unit.succeeded, "IDENTITY_INVALID")
+    unit, timestamp = _observe_retired_probe(
+        successful.final_observation, successful.terminal_unit, report
+    )
+    return SuccessfulNativeCudaProbeRetirementObservation(successful, unit, timestamp)
+
+
+def _observe_retired_probe(
+    observed: NativeCudaProbeProcessObservation,
+    terminal_unit: CpuUnitObservation,
+    report: NativeCudaProbeLeaseReady | NativeCudaProbeResult,
+) -> tuple[RetiredCudaProbeUnit, str]:
+    if type(report) is NativeCudaProbeLeaseReady:
+        report = NativeCudaProbeLeaseReady.model_validate(report)
+        expected_phase = "READY"
+        device = report.expected_device_capture
+    elif type(report) is NativeCudaProbeResult:
+        report = NativeCudaProbeResult.model_validate(report)
+        expected_phase = "FINAL"
+        device = report.device_capture
+    else:
+        raise ValueError("NATIVE_CUDA_PROBE_RETIREMENT_IDENTITY_INVALID")
     uid, gid, lease_gid = require_native_cuda_probe_unit()
     unit = CUDA_PROBE_TEMPLATE.replace("@.service", f"@{report.execution_id}.service")
     _require(
-        failed.failed_unit.failed
-        and failed.failed_unit.invocation_id == ready.invocation_id
-        and ready.phase == "READY"
-        and ready.execution_id == report.execution_id
-        and ready.report_sha256 == sha256_bytes(canonical_json_bytes(report))
-        and (ready.pid, ready.start_time_ticks) == (report.pid, report.start_time_ticks)
-        and ready.cgroup == "/system.slice/" + unit
+        terminal_unit.invocation_id == observed.invocation_id
+        and observed.phase == expected_phase
+        and observed.execution_id == report.execution_id
+        and observed.report_sha256 == sha256_bytes(canonical_json_bytes(report))
+        and (observed.pid, observed.start_time_ticks) == (report.pid, report.start_time_ticks)
+        and observed.cgroup == "/system.slice/" + unit
         and (report.worker_uid, report.worker_gid, report.supplementary_gids)
         == (uid, gid, (lease_gid,)),
         "IDENTITY_INVALID",
     )
 
     def ended() -> None:
-        _require(not (Path("/proc") / str(ready.pid)).exists(), "OUTCOME_UNCERTAIN")
-        require_native_cuda_probe_empty_cgroup(ready.cgroup)
+        _require(not (Path("/proc") / str(observed.pid)).exists(), "OUTCOME_UNCERTAIN")
+        require_native_cuda_probe_empty_cgroup(observed.cgroup)
 
-    before = _retired_unit(unit, ready.invocation_id)
+    before = _retired_unit(unit, observed.invocation_id)
     ended()
-    observe_runtime_device(report.expected_device_capture)
-    with hold_released_cuda_probe_resources(ready.resources):
+    observe_runtime_device(device)
+    with hold_released_cuda_probe_resources(observed.resources):
         _require(
-            report.pid not in observe_cuda_probe_gpu_clients(report.expected_device_capture),
+            report.pid not in observe_cuda_probe_gpu_clients(device),
             "OUTCOME_UNCERTAIN",
         )
         ended()
-        observe_runtime_device(report.expected_device_capture)
-        _require(_retired_unit(unit, ready.invocation_id) == before, "OUTCOME_UNCERTAIN")
-    return NativeCudaProbeRetirementObservation(
-        failed, before, datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
-    )
+        observe_runtime_device(device)
+        _require(_retired_unit(unit, observed.invocation_id) == before, "OUTCOME_UNCERTAIN")
+    return before, datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
 @contextmanager
@@ -205,7 +252,12 @@ def _save_record(
     directory: int,
     name: str,
     event: str,
-    observed: NativeCudaProbeFailedTerminalObservation | NativeCudaProbeRetirementObservation,
+    observed: (
+        NativeCudaProbeFailedTerminalObservation
+        | NativeCudaProbeRetirementObservation
+        | NativeCudaProbeTerminalObservation
+        | SuccessfulNativeCudaProbeRetirementObservation
+    ),
 ) -> None:
     raw = canonical_json_bytes(
         {
@@ -264,6 +316,42 @@ def retire_failed_native_cuda_probe(
             _require(reset.returncode == 0, "OUTCOME_UNCERTAIN")
             result = observe_retired_native_cuda_probe(fresh, report)
             _save_record(directory, "result.json", "FAILED_PROBE_RETIRED_NOT_ADMITTED", result)
+            return result
+        finally:
+            os.close(directory)
+
+
+def retire_successful_native_cuda_probe(
+    successful: NativeCudaProbeTerminalObservation,
+    report: NativeCudaProbeResult,
+) -> SuccessfulNativeCudaProbeRetirementObservation:
+    """After root sealing/readback, stop only this ended success; grant no model authority."""
+    _require(os.getresuid() == (0, 0, 0), "OWNER_REQUIRED")
+    _require(type(successful) is NativeCudaProbeTerminalObservation, "IDENTITY_INVALID")
+    with _publication_guard():
+        fresh = verify_native_cuda_probe_terminal(successful.final_observation, report)
+        _require(fresh.terminal_unit == successful.terminal_unit, "IDENTITY_CHANGED")
+        directory = _records(fresh.final_observation.execution_id)
+        try:
+            _save_record(directory, "intent.json", "SUCCESSFUL_PROBE_RETIREMENT_INTENT", fresh)
+            rechecked = verify_native_cuda_probe_terminal(successful.final_observation, report)
+            _require(rechecked.terminal_unit == fresh.terminal_unit, "IDENTITY_CHANGED")
+            unit = CUDA_PROBE_TEMPLATE.replace(
+                "@.service", f"@{fresh.final_observation.execution_id}.service"
+            )
+            try:
+                stopped = subprocess.run(
+                    ("/usr/bin/systemctl", "--no-ask-password", "stop", unit),
+                    capture_output=True,
+                    check=False,
+                    timeout=10,
+                    env=_ENV,
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                raise ValueError("NATIVE_CUDA_PROBE_RETIREMENT_OUTCOME_UNCERTAIN") from None
+            _require(stopped.returncode == 0, "OUTCOME_UNCERTAIN")
+            result = observe_retired_successful_native_cuda_probe(fresh, report)
+            _save_record(directory, "result.json", "SUCCESSFUL_PROBE_RETIRED_NOT_GRANTED", result)
             return result
         finally:
             os.close(directory)

@@ -1113,6 +1113,35 @@ admission. Unknown reset outcomes retain the intent; a separate observation meth
 performs no second reset. The shared terminal-cgroup rule remains authoritative.
 No worker/schema/DB/queue/dependency/default changes were needed.
 
+### Successful-probe retirement uses the same owner, not failed-history conversion
+
+The controlled retirement design above also has one concrete successful use case:
+after accepted FINAL/terminal evidence has been sealed and independently read,
+release that successful probe's retained lease before later bounded computation.
+Use a distinct typed successful terminal/retirement value and `stop` on the exact
+active/exited unit, never manufacture a failed value or use `reset-failed` here.
+Canonical sources are the original root-observed FINAL/hash/invocation and the
+fresh successful terminal observation; preserve a separate success intent/result.
+Keep old failed record fields/bytes and their parsers unchanged. Reuse the same
+fixed publication flock, no-clobber per-execution records, one authoritative
+post-unit/process/cgroup/device/physical-lock observer and uncertainty policy.
+No new schema/DB/queue/index/artifact entity, dependency or worker message is
+needed: this is root OS lifecycle, not numerical admission. The root installation
+composition owns seal/read-before-retire ordering; the cleanup value cannot grant
+model execution. A successful unit must not retain the physical lease forever,
+and a generic reset/boolean success override would obscure the original outcome.
+
+Successful cleanup source checkpoint: separate typed success result and fixed
+unit `stop` share one post-retirement identity/resource observer with the existing
+failure path. Failure's `original_failure` record layout/events are preserved;
+success stores `original_success` under distinct intent/result events. Tests cover
+success-before-stop recheck, failed-value rejection, changed phase/invocation/GPU/
+process/report, storage failure, timeout/nonzero/OS uncertainty, no automatic stop
+replay and readonly recovery. Focused141 PASS16.42s; broad1682 PASS79.69s plus one
+opt-in OLD tiny-wheel test skipped (its unchanged helper already ran/PASS in the
+preceding c499 checkpoint). Strict1, Ruff/format/diff PASS. This is source evidence,
+not actual successful CUDA probe/sealing/cleanup or a model grant.
+
 Validation: broad native/CUDA/prefix/resource/dependency suite1670 PASS77.16s plus
 one opt-in OLD tiny-wheel assembly test separately RUN/PASS1.87s; no GPU/model used.
 After extracting the shared cgroup rule, focused129 PASS14.44s; strict3, Ruff/format/

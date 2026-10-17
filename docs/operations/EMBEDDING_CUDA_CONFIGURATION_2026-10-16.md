@@ -447,3 +447,68 @@ the existing NVML host1.1 and exact three CPU numerical bytes, then run the dist
 fixed two-ACK probe/terminal/seal/reader. Before model comparisons, finish all19
 image entrypoint/physical-lifetime migration. Six actual CPU/CUDA comparisons and
 C1–C5 actual consumers remain open under the unchanged full active goal.
+
+## NVML prefix successor preparation —2026-10-17
+
+Owner source/wheel remains exactly c499e3bd above. Existing source script
+`install_index_runtime.sh` rawa0e5f960 and root2.1 schema raw30d10fe4 were installed
+as NEW root:root0444/nlink1 files; old installer260808d0 and existing schemas were
+not overwritten. Audit leaf880a701f/helper79e22063 and nine pinned bootstrap members
+remain explicit. Input1.3,20012 bytes, raw
+`457960bee4f576128ab45a4931923b0a9ce58aba57811e2210b95d5bf21bdaef`
+pins actual NVML host1.1/b1039162, new platformc499, unchanged leasec9/public70
+archives and the same runtime/Conda closure. JSON Schema/public stdlib parser and
+focused NVML/installer138 tests PASS11.78s. Source archivec499 raw
+`2fcbf3156b68bac3abeff69003e9d138539da42a45d801f2d76c5565bdcff830`,61491200 bytes;
+platform wheel raw0174bfbe,3963281 bytes. Existing OLD fingerprint observed current
+CUDA tree `e11f2e197c41e5d1670776c811d290f81bb76bf569aa18a59a2df11e2c77f4e6`.
+
+First actual preparation unit `eom-cuda-nvml-prefix-c499e3bd.service`, invocation
+`16716c77944b4128957d0455a4526f54`, failed BEFORE_PRIVATE_SUCCESSOR_PREPARATION,
+before any prefix replacement/private overlay. The operator incorrectly supplied
+the platform wheel/source directly beneath `/tmp/eom-api-build` (0775). Existing
+archive input metadata policy requires a dedicated0700 first `eom-*` directory.
+This exact `EMBEDDING_INDEX_SOURCE_PATH_INVALID` was reproduced readonly; the
+producer guard is correct and was not weakened. No state-machine/source defect
+was inferred and no failed unit/history was reset.
+
+Actual failed workspace `/opt/eom/.embedding-index-install-MLLaEOGd` (inode31087638)
+and quarantine `.embedding-index-runtime-FWjdcu35` remain. Independent root readback
+verified original invocation, failed/MainPID0/cgroupempty, the exact six phase lines,
+no private/prior overlay, unchanged prefix inode18788758 and one empty archive
+reservation inode29798241/root0700/nlink2 with no children. Reviewed protected
+operator raw866b9d09 held BOTH existing CPU/CUDA publication flocks and moved only
+that own-created empty directory into the failed workspace as
+`empty-reservation-0174bfbe`. Same inode/mode retained; no bytes or accepted archives
+deleted, no original phase/history or prefix modified. This is not retainer auto-repair.
+
+The SAME two platform/source payloads were then materialized0600 once into the
+dedicated0700 `/tmp/eom-cuda-nvml-prefix-jKsQtDH8`. Their full independent hashes
+match; all four platform/source/lease input metadata paths passed the unchanged
+checker. Build-folder permissions and other users' files were not changed.
+Before another expensive prefix copy, protected OLD operator rawe71610e3 invoked
+the existing PUBLIC `retain_index_archive` under both publication flocks. Unit
+`eom-cuda-nvml-input-retention-c499e3bd.service`, invocation
+`6ca686db0871477e9fcf6d402900c1ad`, actually retained/reused all four exact inputs in
+238ms. New canonical platform/source archives are root0644/nlink1 beneath their
+exact hash directories; no parallel archive store or private service-table write.
+
+A distinct corrected preparation, NOT a blind replay, was submitted only after
+those observations: `eom-cuda-nvml-prefix-staged-c499e3bd.service`, invocation
+`bb15f777e56c4f7bb77a9753569c462e`, PID3887266, actually activating/started01:25:53.
+Installer/helper/source/wheel/input/schema/host pins and sandbox are unchanged;
+only input locations and the operation identity/log differ. Bind the new canonical
+cache only in that unit; global selector remains OLD3a79d328. Network/devices are
+private, CPU/OLD/models readonly, NAS/auth/secrets inaccessible. Observe this exact
+handle, never retry because an observation window expires. At this submission
+checkpoint the new preparation is IN_PROGRESS, not BYTE_AUDITED or admitted.
+
+Also prepared an untrusted config1.3 candidate for the same logical config with
+new revision `embeddingnativeconfigrev_6107b4788260479c9ac0d69fbdfa7f7a`; canonical
+raw `2fd09bfe1c2569ce87492a4cad9fe0ae23d5b80d8843a361c92d7da916ab0562`,2618 bytes,
+semantic `6754cd09bfd04fbfc014d9c1067587b544102f19ff61335b8a6106ca10a91f08`.
+Schema/Pydantic/canonical/hash validation PASS. Only schema/revision/NVML host pin
+change; resources, official bundle Artifact/proof/runtime pins are exact old values.
+This is **NOT_PUBLISHED / NOT_SELECTED / NOT_ADMITTED**, not a new numerical space
+or model payload. Its root publication helper still has an explicit UNSELECTED
+audit placeholder and is not installed/executed until actual audit evidence pins it.
