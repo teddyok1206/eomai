@@ -32,6 +32,9 @@ def main() -> int:
         elif len(sys.argv) == 3 and sys.argv[1] == "QUERY":
             sys.argv.pop(1)
             from eom_orchestrator.native_embedding_query_handoff import main as prepare
+        elif len(sys.argv) == 3 and sys.argv[1] == "PRIVATE_CHAT_QUERY":
+            sys.argv.pop(1)
+            from eom_orchestrator.native_private_chat_query_handoff import main as prepare
         else:
             return 1
 

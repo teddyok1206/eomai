@@ -1,0 +1,53 @@
+[Unit]
+Description=EOM fixed private Chat QUERY root handoff %i
+StartLimitIntervalSec=infinity
+StartLimitBurst=1
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+Group=root
+Slice=system.slice
+WorkingDirectory=/
+EnvironmentFile=/etc/eom/embedding-native-private-chat-query-owner.env
+Environment=PATH=/usr/bin:/bin
+Environment=TZ=UTC
+Environment=LANG=C.UTF-8
+UnsetEnvironment=LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT PYTHONPATH PYTHONHOME PYTHONSTARTUP PYTHONUSERBASE
+ExecStart=/opt/eom/conda/envs/eom-embedding-index-cpu/bin/python3.12 -I -B ${EOM_EMBEDDING_QUERY_PREPARE_ENTRYPOINT} PRIVATE_CHAT_QUERY %i
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+PrivateDevices=yes
+ProtectSystem=strict
+BindReadOnlyPaths=/opt/eom/embedding-host-configurations/selected-cache:/etc/ld.so.cache
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_READ_SEARCH
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX
+SystemCallArchitectures=native
+ReadOnlyPaths=/var/lib/eom-workflow-runner/incremental-embeddings/private-chat-query
+ReadOnlyPaths=/opt/eom/embedding-owner-releases
+ReadWritePaths=/run/eom-embedding-native-private-chat-query
+InaccessiblePaths=/mnt/nas /home/eom/EOM /home/eom/EOMIS
+InaccessiblePaths=/root/.codex /srv/eom/worker-homes /srv/eom/models/image
+InaccessiblePaths=/opt/eom/embedding-models
+InaccessiblePaths=-/var/run/docker.sock -/run/postgresql -/run/systemd/private
+UMask=0077
+TimeoutStartSec=30
+TimeoutStopSec=5
+KillMode=control-group
+Restart=no
+LimitCORE=0
+StandardOutput=null
+StandardError=null

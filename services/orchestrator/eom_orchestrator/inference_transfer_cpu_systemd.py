@@ -218,6 +218,7 @@ def require_native_cpu_environment_file(path: Path, expected_sha256: str) -> Non
             Path("/etc/eom/embedding-native-cpu.env"),
             Path("/etc/eom/embedding-native-owner.env"),
             Path("/etc/eom/embedding-native-query-owner.env"),
+            Path("/etc/eom/embedding-native-private-chat-query-owner.env"),
         }
         or re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None
     ):

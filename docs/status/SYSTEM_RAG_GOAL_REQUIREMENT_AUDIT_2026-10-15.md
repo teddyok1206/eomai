@@ -46,6 +46,18 @@ summed into a single acceptance count. This ledger does not grant authority.
   two-archive176-module synthetic-port materialization/cleanup proof. It is not
   installed or active; the archive proof makes no DB/source/model/activation call.
   [Exact final/failed evidence](../architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#completion-owner-implementation--source-checkpoint).
+- C4 private CPU execution prerequisite: explicit fixed-purpose bootstrap/numeric
+  entry, separate protected five-contract staging/descriptor/output adapter and
+  two new unit templates now reuse the same CPU mutex/lifecycle and numeric leaf.
+  Active/orphan discovery includes private names; old INDEX/reference unit bytes
+  are unchanged. Source494 PASS, final private46 PASS including actual local
+  handoff→synthetic existing publisher composition, strict5/Ruff/format/unit syntax
+  PASS (overlapping counts not summed). No database change, model call, protected
+  install, service action or activation. Current original Chat origin/claim-bound
+  submission/checkpoints and purpose admission/installed isolation remain required
+  before any actual private launch. Old compiler/Runner stays closed; C4/full goal
+  remain OPEN, not a relabeled reference execution.
+  [Source scope and installation preconditions](../architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#fixed-private-cpu-source-checkpoint).
 
 - Actual corrected retained negative2026-10-17: fixed root entryc2034177now selects
   installed ownere2326626; newf527cc61standalone lease installed and verified in both

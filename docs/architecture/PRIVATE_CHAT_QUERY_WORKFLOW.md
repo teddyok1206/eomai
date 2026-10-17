@@ -216,3 +216,89 @@ The preceding immutable synthetic values file was reused, not copied. Follow-up
 documentation27 PASS includes the24 private unit cases and is not added to397.
 No interactive authentication was requested. The user's unattended window is
 recorded through2026-10-18 20:01 UTC; it never constitutes login or TTL extension.
+
+## Fixed private CPU execution — design before behavior
+
+The next actual execution prerequisite is a distinct protected CPU entry, not
+admission through the released reference QUERY units. Reuse the existing private
+input/result schemas, descriptor-only numeric entry, protected handoff primitives
+and original INDEX/QUERY CPU-capacity mutex/lifecycle. Keep the reference unit
+bytes and its five-member handoff contract unchanged. No new external wire schema
+is needed: this is composition of already-defined immutable input/launch values.
+
+Canonical source remains the owned Chat message; the five local control files
+are temporary execution materialization, not canonical private-question storage.
+Only input.json contains the question, only at the private controller workspace
+and root descriptor handoff. Worker namespace receives three fixed descriptors,
+not paths, credentials, actor policy or DB/NAS access. Original Job/execution ID,
+Workflow/step, launch association, result/shard/binary hashes remain distinct.
+
+Private workspaces and runtime directories, fixed prepare/numeric unit names and
+owner environment are separate from reference QUERY. Reconstruct and validate
+all five contracts before staging, marking, root transfer or result readback.
+Root is checked before reading input; file ownership/mode/symlink/size/canonical
+hash checks reuse the existing descriptor primitives. A changed file is rejected,
+never overwritten. Result validation binds the exact private input and verifies
+the one float32/L2 row before staging the result for Orchestrator publication.
+
+Access is a fixed five-name tuple and one indexed execution directory, O(bounded
+input/result bytes + one vector dimension). No DB/schema/index/cache/queue change,
+corpus scan, new dependency or broad service authority. The caller must commit
+the original origin/command/launch under its SQL fences **before** durable launch
+marking. No transaction survives inference. The same existing CPU flock protects
+INDEX, reference QUERY, private QUERY and benchmarks; active/orphan unit discovery
+must include the private names. A consumed start marker, running/failed/unknown
+handle or observation timeout cannot authorize another start or identity.
+
+The typed private adapter is separate because reference rows/input publication
+are not private question/intent publication. It reuses shared low-level filesystem,
+numeric and lifecycle behavior rather than copying a second queue/Runner or
+making mutable strategy registries. Fixed unit templates stay uninstalled until
+compatible owner/numerical packages, source admission, policy/ACL and actual-UID
+isolation gates are verified. Source tests/synthetic process observations alone
+do not activate a Chat tool or establish current user authority. Required tests:
+exact/changed controls, owner/root/size/symlink denial, result/hash/vector identity,
+resource and mixed-purpose denial, one-start/exact-replay, uncertain/failed
+nonrestart, shared capacity and private unit orphan discovery, fixed isolation
+templates and original INDEX/reference regression.
+
+### Fixed private CPU source checkpoint
+
+The existing protected root bootstrap and numerical CPU composition now recognize
+the explicit `PRIVATE_CHAT_QUERY` owner argument, never a purpose from worker JSON.
+Two new fixed private unit templates, five-contract staging/root descriptor transfer,
+one-row output validation/materialization and a typed launcher use the existing
+handoff primitives, fixed resource checks and shared lifecycle/mutex. The global
+active/orphan discovery now includes both private prepare and numeric names.
+Reference/INDEX unit bytes and original namespace, hashes, output contracts and
+durable dispatch semantics remain unchanged. No model/numerical implementation,
+database, queue, protocol, policy permission or dependency was added.
+
+Source regression **494 PASS/86.45s across17 suites** includes the new private
+execution tests and original INDEX/reference/owner-release/resource/dependency
+gates. One additional handoff→existing Artifact publisher composition case was
+then added; the final private suite **46 PASS/26.16s** includes it. Those suites
+overlap; do not add their counts. Strict mypy5 production modules, Ruff/format7
+files, both fixed systemd unit syntax checks and diff checks PASS.
+
+The first137-case run passed118/failed19. Failures were in new test assumptions:
+raw multiline text is escaped in canonical JSON, `CpuHandoffError` is not a
+`ValueError`, and the physical start test lacked the required original launch
+marker/used the wrong durable dispatch filename. Tests now assert the actual
+contract and required marker, without weakening filesystem checks or dispatch
+semantics. Extra-row output is rejected by the existing descriptor size guard.
+The actual handoff→Artifact composition verifies that only intent/result/shard/
+binary are committed through the existing owner; the question input is not in
+that file set. That publisher and all native/OS observations are synthetic ports,
+not actual user/source/launch authorization or NAS/model acceptance.
+
+This is **SOURCE_PASS / NOT_INSTALLED / NOT_ACTIVE**. No service was stopped,
+started or installed; no unit/ACL/polkit/group/credential/default/corpus was changed.
+No DB behavior changed in this source slice, so another PostgreSQL run is not
+claimed or needed for it. The prior56-case persistence evidence remains scoped
+to completion publication/read. Installation must select compatible CPU code and
+all controller copies of the shared capacity guard; an old INDEX/QUERY controller
+must not race private work using an inventory that predates its unit names.
+Current origin/claim-bound private submission/allocation/checkpoints, protected
+purpose admission/installation/isolation, numerical execution and Chat tool
+delivery remain required; old compiler/Runner admission remains closed.

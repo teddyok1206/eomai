@@ -27,7 +27,7 @@ from eom_orchestrator.inference_transfer_cpu_handoff import (
 )
 from eom_orchestrator.inference_transfer_cpu_systemd import CpuUnitObservation
 
-type NativeCpuPurpose = Literal["INDEX", "QUERY"]
+type NativeCpuPurpose = Literal["INDEX", "QUERY", "PRIVATE_CHAT_QUERY"]
 type NativeCpuObservations = tuple[CpuUnitObservation, CpuUnitObservation]
 
 # Retain the existing lock inode/location across the owner-release transition.
@@ -35,7 +35,7 @@ CAPACITY_ROOT = Path("/var/lib/eom-workflow-runner/incremental-embeddings/index"
 CGROUP_ROOT = Path("/sys/fs/cgroup/system.slice")
 _ENV = {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "TZ": "UTC"}
 _UNIT = re.compile(
-    r"(?:eom-embedding-native-(?:cpu-(?:index|query)|(?:index|query)-prepare)"
+    r"(?:eom-embedding-native-(?:cpu-(?:index|query|private-chat-query)|(?:index|query|private-chat-query)-prepare)"
     r"|eom-embedding-benchmark-(?:cpu|cuda))@[0-9a-f]{32}\.service\Z",
     re.ASCII,
 )
@@ -44,6 +44,8 @@ _UNIT_GLOBS = (
     "eom-embedding-native-index-prepare@*.service",
     "eom-embedding-native-cpu-query@*.service",
     "eom-embedding-native-query-prepare@*.service",
+    "eom-embedding-native-cpu-private-chat-query@*.service",
+    "eom-embedding-native-private-chat-query-prepare@*.service",
     "eom-embedding-benchmark-cpu@*.service",
     "eom-embedding-benchmark-cuda@*.service",
 )
@@ -79,12 +81,12 @@ def validate_fixed_native_cpu_resources(value: LocalEmbeddingResourceProfile) ->
 
 def native_cpu_unit_names(purpose: NativeCpuPurpose, execution_id: str) -> tuple[str, str]:
     if (
-        purpose not in {"INDEX", "QUERY"}
+        purpose not in {"INDEX", "QUERY", "PRIVATE_CHAT_QUERY"}
         or type(execution_id) is not str
         or re.fullmatch(r"[0-9a-f]{32}", execution_id, re.ASCII) is None
     ):
         raise NativeCpuExecutionError("NATIVE_CPU_EXECUTION_ID_INVALID")
-    key = purpose.lower()
+    key = purpose.lower().replace("_", "-")
     return (
         f"eom-embedding-native-{key}-prepare@{execution_id}.service",
         f"eom-embedding-native-cpu-{key}@{execution_id}.service",
