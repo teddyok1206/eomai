@@ -27,13 +27,74 @@ change adds no filesystem or permission cache across requests.
   report consumers, retained four-capture authority tests and dependency rules.
   JUnit raw SHA `8f9e8b65a0a624451c8ccf0f792be45498fb362175c314d34655066a0f2f370f`.
 - Strict typing:4 production modules PASS. Ruff/format/diff checks PASS.
-- Guarded disposable PostgreSQL: IN_PROGRESS; not substituted by synthetic tests.
-- Compatible build/installation: NOT_YET_VERIFIED for this change.
+- Guarded disposable PostgreSQL:47 embedding-storage/registry tests PASS, followed
+  by213 execution/prepare/concurrency tests PASS; no skips. The original47-test
+  process exited0, but its operator wrapper failed while interpreting the summary
+  because of an over-escaped regex. That failed wrapper/evidence was preserved.
+  A separate continuation verified its exact stdout hash and empty guarded DB,
+  ran only the not-yet-run213 suite, inspected and removed the same disposable DB.
+  This was not a product failure, model retry or reinterpretation of failed history.
+- Compatible3-wheel build/RECORD: PASS for main f5994de2. Archive-only182-module
+  import and optional-port/two-consumer smoke PASS, with synthetic Session/bytes
+  and no checkout/test/ML imports or actual DB/NAS/socket/model/install calls.
+- Operating installation: NOT_YET_PERFORMED for this change.
 - Original HTTP delivery: NOT_YET_VERIFIED after this change.
 
 JUnit/evidence staging: `/tmp/eom-scoped-model-benchmark.qm1UD6ca`.
 Initial test failures and earlier evidence are preserved; only final gate runs
 establish this checkpoint. No operating DB, model, Workflow or HWPX was mutated.
+
+Disposable DB continuation evidence:
+`/opt/eom/embedding-benchmark-os-evidence/scoped-model-decoding-continuation-8re3M4kj`.
+213-test stdout raw SHA
+`c23b810cb857e38a0a0a181536b1ca7c74b0bb305ff65c802ad84454a28113ec`;
+prior47-test stdout raw SHA
+`967aff33025db0e7d2ed0c7f856ba237ac3b0bf9103fbfa1b509e00318eb80c8`.
+The original failed operator's evidence is under the sibling
+`scoped-model-decoding-GJafimza`. Exact guarded test state
+`/tmp/eom-api-testdb-20261017150629_106a9b6a` was removed by supported cleanup;
+operating data and protected evidence were not deleted.
+
+## Package and release preparation
+
+Source candidate `f5994de26407f2f6e8a17e1c56740d6868e4f57f`, tree
+`759c0c9b0c4ee39bf5612b9ceaf62e98f25f1bfc`, pushed to main.
+Archive raw SHA `60b74d6667f87e15e8e1a6845db7dd22764ca44290beb70cec27528dfb790079`.
+Build directory:
+`/tmp/eom-api-build/f5994de26407f2f6e8a17e1c56740d6868e4f57f.ytM5gc/dist`.
+
+| Wheel | Raw SHA-256 |
+| --- | --- |
+| platform | `62bc1b030bb28ac5d375f6697c0b6aa16fc82cd9169870531f8303a10006b74a` |
+| API contracts | `a900be1274a033f47dbb74a4c21b8cd1be5e0f5677104c87012a0eb4ab467ba4` |
+| API | `bec43906b44a98baff8b20e5efdb29c2c0d626a136f88fc64c78921177674c1e` |
+
+Isolated package checker raw SHA
+`b1cc1668fca5489b27532d4f228166eb4ccc7ab53265cf89ff094c6bf6a6afe8`.
+Its fake member resolver is explicitly **not** provenance/real-session acceptance;
+those are separate source/PG gates above. Optional frozen-model reuse and both
+actual consumer imports load entirely from the two pinned wheels with `-I -S -B`.
+
+The existing materializer AST is unchanged except reviewed SPECS/EVIDENCE
+constants. Protected helper raw SHA
+`347bae1a19ca11d3449a92dc113fbe3aaa841d02571bff53b699a86e8f4470c0`.
+It staged the pinned archive/wheels at
+`/var/lib/eom-release-operator-stage.f5994de2-p0dqwbwj`; context1.4 raw SHA
+`dbcf30a10a72dc7e372f9d9eb92e82990cee568377a0abccdfff5cd7b5926699`.
+Materialization PASS was followed by the existing protected runtime/launcher's
+`ADMIT_PASS callback=ADMIT`. Admission stdout raw SHA
+`472b19a1a7bcd6a8fa177e0367393ad1249b61c29db54eb653641fad92abc93c`.
+It verified the exact prefix/context/source/wheel preparation; no EXECUTE callback,
+installation, service change, DB mutation or model execution was performed.
+The admitted identity is f5994de2, not a subsequent documentation-only HEAD.
+Standard installation must use an exactly matching clean source/admitted release;
+do not reuse this receipt to authorize different source archive bytes.
+
+A separate minimal candidate `7eea7b83` backports only the identical four runtime
+changes to installed e132c1aa.80 focused installed-base source tests and strict4
+PASS. It is retained in `/tmp/eom-scoped-read-release.cLXdKzkl/source`, not built,
+selected or installed. The verified main candidate above remains distinct; no
+unfinished private Chat/exam feature is activated by staging either candidate.
 
 ## Synthetic benchmark, not live latency
 
