@@ -264,6 +264,45 @@ launch/drain/template migration and independent terminal cleanup remain required
 No installed GPU account, unit, image prefix, numerical CUDA/CPU prefix, index,
 default, model output or authentication/session was changed at this checkpoint.
 
+#### Installed entry inventory correction and package candidates
+
+Read-only02:19 UTC inventory reconfirmed19 installed NVIDIA-granting image
+templates, all still legacy and with no active/activating/deactivating/reloading
+image unit in that observation. This is not driver-client/migration acceptance.
+The actual executable inventory exposed three bindings, not two: provider CLI in
+the image prefix, trainer CLI in the trainer prefix, and **provider CLI in the
+trainer prefix** (lineart extraction, learned comparison, LoRA evaluation).
+The initial bootstrap candidate668baed3 did not represent the third binding and
+was **never installed**. Replace that bootstrap candidate, not the valid wheels.
+
+The corrected immutable lookup includes PROVIDER_IN_TRAINER and stores prefix,
+module and console-name together, without a role-name conditional. Current
+bootstrap raw `2da0e3d7a8ba729e5a73ef29208bd1cf49e3ae394d35beea5c965095321aed55`.
+A fixed expected inventory plus one case per source template prevents empty
+selection, an unmapped execution combination or silent GPU-entry expansion.
+Latest related regression: **308 PASS in14.18s**, including60 new entry/inventory
+cases; strict4/Ruff/format/diff PASS. Earlier overlapping runs are not added.
+These identity/root-signal cases remain synthetic, not actual image unit admission.
+
+Standard immutable builds for code `1a5c6b86598c0eec301c23851a85e80d25123d43`
+passed both existing source/ZIP/RECORD/dependency gates. Exact candidates:
+
+- Provider stage `/tmp/eom-image-provider-build/1a5c6b86598c0eec301c23851a85e80d25123d43.NL0k0B`.
+- Trainer stage `/tmp/eom-image-trainer-build/1a5c6b86598c0eec301c23851a85e80d25123d43.DUhDJi`.
+- Common lease wheel raw `c72b90e3b2a7ed2a3abdbcc9ea1eff54376e148ea874622a90389d7dc2a0bdbf`.
+- Contracts wheel raw `4eb98940e36d63ab224af79b5bb5dab2be4a913b0dbb5b79cff80230ea43e156`.
+- Provider wheel raw `624cb44d0d708da84fb769ac842acad8bcea5906560d25a72a57e9aafe9ca37c`.
+- Trainer wheel raw `b2614f1e9d6ec98120d3de8c301e1ed704411ac4e75b02e2d922c1ac1bbbe522`.
+
+Shared wheel bytes match across the two independently verified build boundaries.
+Both report GPU_SHARED_LEASE_MIGRATION_VERIFIED=NO. The later correction changes
+only the separately installed root bootstrap and tests; these package sources
+and wheel hashes remain valid, so no repeat wheel/model/prefix copy is justified.
+Do not install the stale bootstrap from that source commit or claim the wheel
+verifier packaged a root bootstrap it does not contain. Full root guard, exact
+bootstrap deployment, all19 lifecycle migration and actual image acceptance remain
+required before the already planned CUDA model comparisons/default decision.
+
 ## 5. 별도 protected CUDA 실행 leaf
 
 제안 prefix는 `/opt/eom/conda/envs/eom-embedding-cuda`, worker는 `eom-embedding-cuda`,

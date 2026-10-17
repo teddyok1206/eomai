@@ -18,8 +18,21 @@ from types import MappingProxyType
 
 _ROLES = MappingProxyType(
     {
-        "PROVIDER": (Path("/srv/eom/conda/envs/eom-image"), "eom_image_provider.cli"),
-        "TRAINER": (Path("/srv/eom/conda/envs/eom-image-trainer"), "eom_image_trainer.cli"),
+        "PROVIDER": (
+            Path("/srv/eom/conda/envs/eom-image"),
+            "eom_image_provider.cli",
+            "eom-local-image",
+        ),
+        "TRAINER": (
+            Path("/srv/eom/conda/envs/eom-image-trainer"),
+            "eom_image_trainer.cli",
+            "eom-local-image-trainer",
+        ),
+        "PROVIDER_IN_TRAINER": (
+            Path("/srv/eom/conda/envs/eom-image-trainer"),
+            "eom_image_provider.cli",
+            "eom-local-image",
+        ),
     }
 )
 
@@ -36,7 +49,7 @@ def main() -> None:
     if selection.gpu_lock != ["/run/eom-gpu-lease/gpu0.lock"]:
         # The migrated unit must not select the retained legacy/rollback branch.
         raise SystemExit("IMAGE_GPU_UNIT_BOOTSTRAP_INVALID")
-    prefix, module = _ROLES[sys.argv[1]]
+    prefix, module, console = _ROLES[sys.argv[1]]
     try:
         user = pwd.getpwnam("eom-image")
         lease_gid = grp.getgrnam("eom-gpu-lease").gr_gid
@@ -67,14 +80,7 @@ def main() -> None:
     # Do this before either CLI's imports can create native library threads.
     # The fixed root observer owns ACK and retirement; no signal means no model.
     signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGUSR1})
-    sys.argv = [
-        str(
-            prefix
-            / "bin"
-            / ("eom-local-image" if sys.argv[1] == "PROVIDER" else "eom-local-image-trainer")
-        ),
-        *sys.argv[2:],
-    ]
+    sys.argv = [str(prefix / "bin" / console), *sys.argv[2:]]
     runpy.run_module(module, run_name="__main__", alter_sys=True)
 
 

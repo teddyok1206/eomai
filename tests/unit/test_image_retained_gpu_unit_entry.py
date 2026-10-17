@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import inspect
 import os
+import shlex
 import signal
 from pathlib import Path
 from types import SimpleNamespace
@@ -282,6 +283,7 @@ def fixed_bootstrap(monkeypatch):
     [
         ("PROVIDER", "eom-image", "eom_image_provider.cli", "eom-local-image"),
         ("TRAINER", "eom-image-trainer", "eom_image_trainer.cli", "eom-local-image-trainer"),
+        ("PROVIDER_IN_TRAINER", "eom-image-trainer", "eom_image_provider.cli", "eom-local-image"),
     ],
 )
 def test_fixed_bootstrap_blocks_ack_before_importing_cli(
@@ -345,6 +347,57 @@ def test_bootstrap_accepts_one_unambiguous_equals_form_without_rewriting_flags(f
     bootstrap.main()
     assert events[0] == ("BLOCK", signal.SIG_BLOCK, {signal.SIGUSR1})
     assert state.argv[-1] == "--gpu-lock=" + str(adapter.SHARED_GPU_LOCK_PATH)
+
+
+_UNIT_ROOT = Path(__file__).resolve().parents[2] / "infra/systemd"
+_GPU_TEMPLATES = tuple(
+    sorted(
+        path
+        for path in _UNIT_ROOT.glob("eom-image-*.service")
+        if any(
+            line.startswith("DeviceAllow=") and "nvidia" in line
+            for line in path.read_text().splitlines()
+        )
+    )
+)
+
+
+def test_source_gpu_inventory_is_not_empty_or_silently_expanded():
+    assert {path.name for path in _GPU_TEMPLATES} == {
+        "eom-image-provider@.service",
+        "eom-image-reference-provider@.service",
+        "eom-image-reference-style-provider@.service",
+        "eom-image-reference-base-provider@.service",
+        "eom-image-sdxl-lineart-probe@.service",
+        "eom-image-sdxl-lora-evaluation@.service",
+        "eom-image-sdxl-learned-comparison@.service",
+        "eom-image-informative-lineart-extraction@.service",
+        "eom-image-trainer@.service",
+        "eom-image-lora-micro-probe@.service",
+        "eom-image-lora-micro-evaluation@.service",
+        "eom-image-science-lora-micro-probe@.service",
+        "eom-image-science-lora-micro-evaluation@.service",
+        "eom-image-science-campaign-lora-micro-probe@.service",
+        "eom-image-science-campaign-lora-micro-evaluation@.service",
+        "eom-image-sdxl-lora-micro-probe@.service",
+        "eom-image-sdxl-native-lora@.service",
+        "eom-image-science-subject-benchmark@.service",
+        "eom-image-science-subject-multiseed@.service",
+    }
+
+
+@pytest.mark.parametrize("template", _GPU_TEMPLATES, ids=lambda path: path.name)
+def test_every_source_gpu_template_has_one_explicit_bootstrap_binding(template):
+    lines = template.read_text().splitlines()
+    starts = [line.removeprefix("ExecStart=") for line in lines if line.startswith("ExecStart=")]
+    assert len(starts) == 1
+    executable = Path(shlex.split(starts[0])[0])
+    matches = [
+        (role, module)
+        for role, (prefix, module, console) in bootstrap._ROLES.items()
+        if executable == prefix / "bin" / console
+    ]
+    assert len(matches) == 1, f"unmapped or ambiguous unit executable: {template.name}"
 
 
 @pytest.mark.parametrize(
