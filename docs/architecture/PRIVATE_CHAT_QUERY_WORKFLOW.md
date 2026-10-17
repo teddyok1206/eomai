@@ -191,3 +191,28 @@ This is not private Workflow submission, result-CHECK admission, actual numerica
 execution or Chat tool activation. The old Runner/compiler remains closed, and
 no operating service, corpus, original HTTP request, authentication or model
 default was changed. Full C1–C5 and CPU/CUDA/default gates remain open.
+
+### Completion owner package verification
+
+Candidate `ab996967616bf1ed84be5e7ed73e154bf81a2d42` passed the standard three-wheel
+build and RECORD verification. It was built only, not installed or activated.
+Dist: `/tmp/eom-api-build/ab996967616bf1ed84be5e7ed73e154bf81a2d42.NZdqrR/dist`.
+
+- platform raw `7a2d65cc24f89efd139759e65b3155877843abf36e04e5ccd7cfe9edeff5898a`;
+- API-contract raw `f0e7f140bde62982175ddef069f78ffc83b223c074dc7885ee2f346de5f2c26a`;
+- API raw `8c31ef008c58fa65d2480c67d1c09c514a1249145e43d25a07ba8ead6b61cc19`.
+
+An isolated Conda `-I -S -B` process imported176 EOM modules exclusively from the
+exact platform/contracts archives. It exercised the actual new publisher's local
+receipt materialization against a clearly synthetic publication port, validated
+the exact original typed output and automatic temporary-workspace cleanup, and
+imported the Catalog resolver. No checkout/installed-EOM fallback, ML module,
+database call, native model execution or runtime activation occurred. This is
+not another PostgreSQL gate or actual Artifact publication acceptance.
+
+Proof: `/tmp/eom-private-completion-package.8dTxmLr6/prove_archives.py`, raw
+`4852c5a5b32f40ed2e62b637c6cc8283d8049a77e1f9242dfcad828c84a7041a`.
+The preceding immutable synthetic values file was reused, not copied. Follow-up
+documentation27 PASS includes the24 private unit cases and is not added to397.
+No interactive authentication was requested. The user's unattended window is
+recorded through2026-10-18 20:01 UTC; it never constitutes login or TTL extension.

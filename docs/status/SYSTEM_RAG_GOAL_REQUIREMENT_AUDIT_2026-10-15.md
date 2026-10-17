@@ -42,6 +42,9 @@ summed into a single acceptance count. This ledger does not grant authority.
   disposable-persistence acceptance only: compiler/result-CHECK admission, actual
   private owner/checkpoint execution and Chat tool delivery remain OPEN. Existing
   operating CPU/QUERY/INDEX selections are unchanged.
+  Candidateab996967 also passed the standard three-wheel/RECORD gate and isolated
+  two-archive176-module synthetic-port materialization/cleanup proof. It is not
+  installed or active; the archive proof makes no DB/source/model/activation call.
   [Exact final/failed evidence](../architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#completion-owner-implementation--source-checkpoint).
 
 - Actual corrected retained negative2026-10-17: fixed root entryc2034177now selects
