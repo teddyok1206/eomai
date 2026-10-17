@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/private-chat-query-execution/1.0",
+  "title": "Owned private Chat QUERY intent and execution policy",
+  "description": "Supplied pointer closure only, never current ownership/session/source/runtime admission or a reference-query authority grant.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/policy"
+    }
+  ],
+  "$defs": {
+    "request": {
+      "$id": "eom://schemas/workflow/private-chat-query-workflow-request/1.0",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "request_name",
+        "purpose",
+        "workflow_definition_key",
+        "workflow_definition_version",
+        "workflow_definition_sha256",
+        "operator_audit",
+        "context_request",
+        "runtime_bundle",
+        "resource_profile",
+        "native_execution_policy",
+        "native_execution_policy_sha256",
+        "request_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "private-chat-query-workflow-request/1.0"
+        },
+        "request_name": {
+          "const": "PRIVATE_CHAT_QUERY_WORKFLOW_REQUEST"
+        },
+        "purpose": {
+          "const": "PRIVATE_CHAT_QUERY"
+        },
+        "workflow_definition_key": {
+          "const": "local-embedding-private-chat-query"
+        },
+        "workflow_definition_version": {
+          "const": "1.0.0"
+        },
+        "workflow_definition_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "operator_audit": {
+          "$ref": "eom://schemas/workflow/local-embedding-workflow-request/1.1#/$defs/operatorAudit"
+        },
+        "context_request": {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-similarity/1.0#/$defs/request"
+        },
+        "runtime_bundle": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/bundlePointer"
+        },
+        "resource_profile": {
+          "$ref": "eom://schemas/workflow/local-embedding-execution-policy/1.0#/$defs/resourceProfile"
+        },
+        "native_execution_policy": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            },
+            {
+              "properties": {
+                "member_path": {
+                  "const": "policy.json"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/workflow/private-chat-query-execution-policy/1.0"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "native_execution_policy_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "request_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        }
+      }
+    },
+    "policy": {
+      "$id": "eom://schemas/workflow/private-chat-query-execution-policy/1.0",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "purpose",
+        "continuation_mode",
+        "workflow_definition_sha256",
+        "spaces",
+        "runtime_bundle",
+        "resource_profile",
+        "gpu_busy",
+        "created_at",
+        "policy_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "private-chat-query-execution-policy/1.0"
+        },
+        "purpose": {
+          "const": "PRIVATE_CHAT_QUERY"
+        },
+        "continuation_mode": {
+          "const": "OPERATOR_REQUEST_ONLY"
+        },
+        "workflow_definition_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "spaces": {
+          "$ref": "eom://schemas/knowledge/embedding-reference-query/1.0#/$defs/spaces"
+        },
+        "runtime_bundle": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/bundlePointer"
+        },
+        "resource_profile": {
+          "$ref": "eom://schemas/workflow/local-embedding-execution-policy/1.0#/$defs/resourceProfile"
+        },
+        "gpu_busy": {
+          "const": "WAIT"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "policy_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        }
+      }
+    }
+  }
+}

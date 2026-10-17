@@ -20,8 +20,6 @@ from eom_catalog_contracts.embedding_reference_query_v11 import (
 from eom_catalog_contracts.embedding_runtime_bundle import (
     EmbeddingRuntimeBundle,
     EmbeddingRuntimeBundlePointer,
-    embedding_runtime_bundle_bytes,
-    validate_embedding_runtime_bundle_pointer,
 )
 from eom_catalog_contracts.inference_transfer_embedding import SHARD_SCHEMA_REF
 from eom_catalog_contracts.models import FrozenModel, Sha256, UtcDatetime
@@ -30,7 +28,10 @@ from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from pydantic import ConfigDict, Field, TypeAdapter, ValidationError, model_validator
 
-from eom_workflow.local_embedding_execution_policy import LocalEmbeddingResourceProfile
+from eom_workflow.local_embedding_execution_policy import (
+    LocalEmbeddingResourceProfile,
+    validate_query_runtime_bundle,
+)
 from eom_workflow.local_embedding_request import LocalEmbeddingOperatorAudit
 from eom_workflow.models import JobId, StepRunId, WorkflowId
 from eom_workflow.schemas import (
@@ -343,19 +344,12 @@ def validate_reference_query_policy_bundle(
 ) -> tuple[ReferenceQueryExecutionPolicy, EmbeddingRuntimeBundle]:
     """Shared pure control closure for startup and actual requests; never authority."""
     policy = parse_reference_query_execution_policy(policy)
-    bundle = EmbeddingRuntimeBundle.model_validate(raw_similarity_contract_value(bundle))
-    validate_embedding_runtime_bundle_pointer(
-        bundle, policy.runtime_bundle, embedding_runtime_bundle_bytes(bundle)
-    )
-    runtime, resources = bundle.numerical_runtime, policy.resource_profile
-    if (
-        policy.spaces.query.model_spec != bundle.execution_model_spec
-        or policy.spaces.query.runtime.execution_runtime_sha256 != runtime.runtime_sha256
-        or resources.device != runtime.device.kind
-        or resources.batch_size != runtime.recipe.batch_size
-        or resources.threads != runtime.recipe.threads
-    ):
-        raise ValueError("reference QUERY control/bundle closure differs")
+    try:
+        bundle = validate_query_runtime_bundle(
+            policy.spaces, policy.runtime_bundle, policy.resource_profile, bundle
+        )
+    except ValueError:
+        raise ValueError("reference QUERY control/bundle closure differs") from None
     return policy, bundle
 
 

@@ -348,3 +348,77 @@ passed. Real model/DB/HTTP/activation calls and optional ML imports0. Package pr
 does not authorize a real private source or native unit. Evidence logs:
 `private-context-release-build.log` and`private-context-archive-proof.log` in the
 existing temporary operator directory. No installed service changed.
+
+## Private execution intent and control closure — before implementation
+
+1. Boundary: connect the owned-message projection to a distinct private QUERY
+   execution intent. Reuse the existing Orchestrator preparation function, native
+   numerical contract and shared runtime/resource values; do not borrow an
+   approved-reference execution policy or add another search/queue framework.
+2. Canonical source: the immutable owned user-message basis and exact private
+   context request. This step validates supplied values, not current ownership,
+   session, Graph permission or installed-runtime admission.
+3. Identity: add closed private-chat-query-workflow-request/1.0 and
+   private-chat-query-execution-policy/1.0. Keep original request, context, basis,
+   policy semantic hashes and policy member raw hash separate. Existing reference
+   request/policy/schema bytes and meaning remain unchanged.
+4. Resolution: require one CONTENT_ONLY pinned index, exact QUERY/DOCUMENT spaces,
+   document recipe, storage partition, model/runtime bundle and resource recipe.
+   Validate native input against this exact parent and private basis, including
+   batch/thread settings, before any later dispatch.
+5. Access pattern: bounded typed key/hash equality and one owned text projection;
+   no corpus scan, DB query, Artifact read/write or network operation is added.
+6. Structure: frozen values and the existing packaged schema registry. No table,
+   cache, index, mutable registry, migration or authority field from the model.
+7. Complexity: O(context metadata + bounded question bytes), one native row and
+   at most64KiB execution metadata. No claim of measured inference improvement.
+8. Concurrency: existing owner/claim/lease/atomic allocation remains the future
+   admission boundary; this pure preparation cannot submit, retry or allocate.
+9. Ownership: workflow/contracts own closure; Orchestrator prepares native input.
+   Share runtime-bundle numerical closure with the real approved-reference path
+   through one pure function, not cross-imported infrastructure or a fake anchor.
+10. Failure: malformed/cross-bound values fail before preparation returns. A
+    copied private basis, changed recipe/partition/model/runtime, policy pointer
+    or resource setting cannot reuse another execution. Errors contain no text.
+    Current authority must still be rechecked by the eventual admitted owner.
+11. Simpler alternative: passing free batch/thread parameters or a bare parent
+    hash loses the execution-policy association; relabeling a reference policy
+    contradicts its source contract. This narrow typed preparation closes that
+    association without prematurely admitting an unsupported Runner result.
+
+This stage does **not** admit the new Workflow, widen the existing step-result
+CHECK, select a runtime, publish a private result or expose a Chat tool. Actual
+admission/receipt/atomic allocation/native execution and current-user delivery
+remain necessary before C4 can be marked active. They will use the existing
+Runner/Orchestrator boundary; no rejected old result is reinterpreted as private.
+
+### Execution-intent source checkpoint —2026-10-17 UTC
+
+The closed intent/control schema and byte-identical packaged resource are pinned
+raw `b1a2d42eb5d7ed9ce8b6447e7524a90121820961a22882d5b91f331312609a6f`.
+The existing Orchestrator question preparation now has a typed selected-control
+entry, sharing numerical runtime-bundle closure with the approved-reference
+implementation. Batch/thread values come from those controls, not free caller
+parameters. A separate supplied-native-input validator binds the exact parent,
+private basis, document recipe and partition; malformed native errors suppress
+JSON Schema's default representation of the private question.
+
+Final related regression:701 PASS/36.35s across18 suites, strict mypy5 production
+modules and Ruff/format6 paths PASS. These are source/synthetic-pointer tests, not
+current-user ownership, real corpus/model, protected unit or operating acceptance.
+No DB/state/queue/persistence behavior changed; no new migration or mutating DB
+test ran. Earlier guarded59 ownership-read tests remain historical evidence only.
+
+Initial new tests exposed fixture assumptions about the frozen recipe fields and
+the stricter SchemaError type; fixtures were corrected without weakening parsers.
+The wider run also exposed the existing benchmark control entry in the original
+four-member DOCUMENT inventory (present before this change). Both benchmark and
+private resources now have distinct named entries in the SAME registry; the
+unchanged old-inventory tests pass without assertion changes. Existing benchmark
+schema bytes/hash and its supported parser remain unchanged. No mutable registry,
+new search framework, optional dependency or public authority override was added.
+
+Status: **SOURCE_PASS / NOT_INSTALLED / NOT_ACTIVE / C4_NOT_ACCEPTED**. Actual
+private Workflow admission/result CHECK, publication receipt, atomic allocation,
+native execution and Chat tool delivery remain open. No old reference policy,
+selected runtime, model default, original request/key or authentication changed.

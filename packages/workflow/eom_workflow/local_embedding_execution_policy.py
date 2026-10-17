@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
+from eom_catalog_contracts.embedding_reference_query import (
+    ReferenceQuerySpaces,
+    raw_similarity_contract_value,
+)
 from eom_catalog_contracts.embedding_runtime_bundle import (
     EmbeddingRuntimeBundle,
     EmbeddingRuntimeBundlePointer,
@@ -73,6 +77,34 @@ class LocalEmbeddingRuntimeProfile(NativeEmbeddingContract):
         ):
             raise ValueError("native resource profile and document space differ")
         return self
+
+
+def validate_query_runtime_bundle(
+    spaces: ReferenceQuerySpaces,
+    pointer: EmbeddingRuntimeBundlePointer,
+    resources: LocalEmbeddingResourceProfile,
+    bundle: EmbeddingRuntimeBundle,
+) -> EmbeddingRuntimeBundle:
+    """Shared numerical closure for both real QUERY families, never source authority."""
+    spaces = ReferenceQuerySpaces.model_validate(raw_similarity_contract_value(spaces))
+    pointer = EmbeddingRuntimeBundlePointer.model_validate(raw_similarity_contract_value(pointer))
+    resources = LocalEmbeddingResourceProfile.model_validate(
+        raw_similarity_contract_value(resources)
+    )
+    bundle = EmbeddingRuntimeBundle.model_validate(raw_similarity_contract_value(bundle))
+    validate_embedding_runtime_bundle_pointer(
+        bundle, pointer, embedding_runtime_bundle_bytes(bundle)
+    )
+    runtime = bundle.numerical_runtime
+    if (
+        spaces.query.model_spec != bundle.execution_model_spec
+        or spaces.query.runtime.execution_runtime_sha256 != runtime.runtime_sha256
+        or resources.device != runtime.device.kind
+        or resources.batch_size != runtime.recipe.batch_size
+        or resources.threads != runtime.recipe.threads
+    ):
+        raise ValueError("QUERY control/bundle closure differs")
+    return bundle
 
 
 class _LocalEmbeddingExecutionPolicyBody(NativeEmbeddingContract):

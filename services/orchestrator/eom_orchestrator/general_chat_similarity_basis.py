@@ -9,6 +9,7 @@ from eom_catalog_contracts.embedding_reference_query import (
     ReferenceQueryTextInput,
     raw_similarity_contract_value,
 )
+from eom_catalog_contracts.embedding_runtime_bundle import EmbeddingRuntimeBundle
 from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingEncodingIdentity,
     embedding_input_set_sha256,
@@ -24,6 +25,11 @@ from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_protocol.general_chat import CHAT_MESSAGE_SCHEMA
 from eom_protocol.general_chat_grounding import GROUNDED_MESSAGE_SCHEMA
+from eom_workflow.private_chat_query_execution import (
+    PrivateChatQueryExecutionPolicy,
+    PrivateChatQueryWorkflowRequest,
+    validate_private_chat_query_request_references,
+)
 
 from eom_orchestrator.general_chat_artifacts import ChatEvidencePort
 from eom_orchestrator.general_chat_evidence import chat_pointer, require_evidence, user_evidence
@@ -169,4 +175,29 @@ def build_private_chat_query_encoding_input(
     }
     return EmbeddingPrivateChatQueryInput.model_validate(
         body | {"request_sha256": content_sha256(body)}
+    )
+
+
+def prepare_private_chat_query_execution_input(
+    prepared: PreparedPrivateChatQuery,
+    request: PrivateChatQueryWorkflowRequest,
+    policy: PrivateChatQueryExecutionPolicy,
+    bundle: EmbeddingRuntimeBundle,
+    *,
+    job_id: str,
+    query_request_id: str,
+) -> EmbeddingPrivateChatQueryInput:
+    """Use the selected private controls, not free batch/thread or a reference policy.
+
+    Supplied values are not current ownership/session/native admission. The owner
+    must acquire that authority independently before any staging or execution.
+    """
+    request, _ = validate_private_chat_query_request_references(request, policy, bundle)
+    return build_private_chat_query_encoding_input(
+        prepared,
+        request.context_request,
+        job_id=job_id,
+        query_request_id=query_request_id,
+        batch_size=request.resource_profile.batch_size,
+        threads=request.resource_profile.threads,
     )
