@@ -497,3 +497,78 @@ def test_terminal_recovery_does_not_confuse_reused_pid_number_with_original_proc
     image["process_exists"] = True
     image["start"] = ready.start_time_ticks + 1
     assert owner.verify_image_gpu_unit_terminal(ready).original_outcome == "SUCCEEDED"
+
+
+def test_unleased_exit_does_not_claim_ready_or_require_another_gpu_holder_idle(image, monkeypatch):
+    ended = replace(terminal_unit(), fragment_path="/etc/systemd/system/" + TEMPLATE)
+    image["unit"], image["pids"] = ended, ()
+    monkeypatch.setattr(owner, "image_gpu_unit_descriptor_count", lambda _: 0)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("a no-lease exit must not touch/query another physical GPU holder")
+
+    monkeypatch.setattr(owner, "observe_runtime_device", forbidden)
+    monkeypatch.setattr(owner, "observe_cuda_probe_gpu_clients", forbidden)
+    monkeypatch.setattr(owner, "observe_image_unit_gpu_resources", forbidden)
+    result = owner.observe_unleased_image_gpu_unit_terminal(
+        UNIT,
+        template_sha256=sha256_bytes(image["template"]),
+        bootstrap_sha256=sha256_bytes(image["bootstrap"]),
+        expected_unit=ended,
+    )
+    assert result.terminal_unit == ended and result.original_outcome == "SUCCEEDED"
+    assert not hasattr(result, "ready") and not hasattr(result, "resources")
+
+
+@pytest.mark.parametrize("fault", ("store", "child", "invocation", "source", "policy"))
+def test_unleased_exit_requires_exact_empty_store_cgroup_source_and_terminal(
+    image, monkeypatch, fault
+):
+    ended = replace(terminal_unit(), fragment_path="/etc/systemd/system/" + TEMPLATE)
+    image["unit"], image["pids"] = ended, ()
+    monkeypatch.setattr(
+        owner, "image_gpu_unit_descriptor_count", lambda _: 1 if fault == "store" else 0
+    )
+    if fault == "child":
+        image["pids"] = (500,)
+    elif fault == "invocation":
+        image["unit"] = replace(ended, invocation_id="f" * 32)
+    elif fault == "source":
+        image["changed"] = True
+    elif fault == "policy":
+        image["policy"] = image["policy"].replace(b"Restart=no", b"Restart=always")
+    with pytest.raises(ValueError):
+        owner.observe_unleased_image_gpu_unit_terminal(
+            UNIT,
+            template_sha256=sha256_bytes(image["template"]),
+            bootstrap_sha256=sha256_bytes(image["bootstrap"]),
+            expected_unit=ended,
+        )
+
+
+@pytest.mark.parametrize("raw,expected", ((b"0\n", 0), (b"1\n", 1)))
+def test_root_descriptor_count_uses_only_fixed_bounded_systemctl_read(
+    image, monkeypatch, raw, expected
+):
+    calls = []
+
+    def command(arguments, **kwargs):
+        calls.append(arguments)
+        return SimpleNamespace(returncode=0, stdout=raw, stderr=b"")
+
+    monkeypatch.setattr(owner.subprocess, "run", command)
+    assert owner.image_gpu_unit_descriptor_count(UNIT) == expected
+    assert calls == [
+        ("/usr/bin/systemctl", "show", UNIT, "--property=NFileDescriptorStore", "--value")
+    ]
+
+
+@pytest.mark.parametrize("raw", (b"2\n", b"1\n0\n", b"1", b"-1\n", b"garbage\n"))
+def test_descriptor_count_rejects_unknown_or_multiple_retained_handles(image, monkeypatch, raw):
+    monkeypatch.setattr(
+        owner.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout=raw, stderr=b""),
+    )
+    with pytest.raises(ValueError, match="STORE_UNAVAILABLE"):
+        owner.image_gpu_unit_descriptor_count(UNIT)

@@ -47,3 +47,8 @@ def image_gpu_unit_template(unit: str) -> str:
 
 def image_gpu_unit_role(unit: str) -> ImageGpuUnitRole:
     return _TEMPLATES[image_gpu_unit_template(unit)]
+
+
+def image_gpu_unit_templates() -> tuple[str, ...]:
+    """Stable closed installation inventory; no added runtime registration or grant."""
+    return tuple(_TEMPLATES)

@@ -141,7 +141,7 @@ def _policy(unit: str) -> str:
     return sha256_bytes(result.stdout)
 
 
-def _arguments(raw: bytes, unit: str) -> tuple[str, ...]:
+def image_gpu_unit_arguments(raw: bytes, unit: str) -> tuple[str, ...]:
     text = raw.decode("utf-8", errors="strict")
     starts = [
         line.removeprefix("ExecStart=")
@@ -197,6 +197,88 @@ class ImageGpuUnitTerminalObservation:
     terminal_unit: CpuUnitObservation
     original_outcome: Literal["SUCCEEDED", "FAILED"]
     terminated_at_utc: str
+
+
+@dataclass(frozen=True, slots=True)
+class ImageGpuUnitUnleasedTerminalObservation:
+    unit_name: str
+    template_sha256: str
+    bootstrap_sha256: str
+    effective_policy_sha256: str
+    terminal_unit: CpuUnitObservation
+    original_outcome: Literal["SUCCEEDED", "FAILED"]
+    terminated_at_utc: str
+
+
+def image_gpu_unit_descriptor_count(unit: str) -> int:
+    """Actual fixed-unit store count only; never infer another unit's GPU ownership."""
+    _require(os.getresuid() == (0, 0, 0), "OWNER_REQUIRED")
+    image_gpu_unit_template(unit)
+    try:
+        result = subprocess.run(
+            ("/usr/bin/systemctl", "show", unit, "--property=NFileDescriptorStore", "--value"),
+            capture_output=True,
+            check=False,
+            timeout=10,
+            env=_ENV,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        raise ValueError("IMAGE_GPU_UNIT_STORE_UNAVAILABLE") from None
+    _require(
+        result.returncode == 0
+        and result.stdout in {b"0\n", b"1\n"}
+        and len(result.stderr) <= 16384,
+        "STORE_UNAVAILABLE",
+    )
+    return int(result.stdout)
+
+
+def observe_unleased_image_gpu_unit_terminal(
+    unit: str,
+    *,
+    template_sha256: str,
+    bootstrap_sha256: str,
+    expected_unit: CpuUnitObservation,
+) -> ImageGpuUnitUnleasedTerminalObservation:
+    """A cache/input/busy exit has no READY lease and must never fake one."""
+    _require(os.getresuid() == (0, 0, 0), "OWNER_REQUIRED")
+    template = image_gpu_unit_template(unit)
+    _require(
+        type(expected_unit) is CpuUnitObservation
+        and re.fullmatch(r"[0-9a-f]{32}", expected_unit.invocation_id) is not None,
+        "IDENTITY_INVALID",
+    )
+    outcome = image_gpu_unit_terminal_outcome(expected_unit)
+    files = NumericalRuntimeFileSnapshots(0)
+    raw = files.read(Path("/etc/systemd/system") / template, sha256=template_sha256, maximum=65536)
+    image_gpu_unit_arguments(raw, unit)
+    files.read(_BOOTSTRAP, sha256=bootstrap_sha256, maximum=128 * 1024)
+    policy = _policy(unit)
+    for _ in range(2):
+        _require(
+            inspect_cpu_unit(unit, template=template) == expected_unit
+            and image_gpu_unit_descriptor_count(unit) == 0,
+            "TERMINATION_UNCERTAIN",
+        )
+        try:
+            members = root_owned_unit_processes(unit)
+        except FileNotFoundError:
+            _require(
+                not (Path("/sys/fs/cgroup/system.slice") / unit).exists(), "TERMINATION_UNCERTAIN"
+            )
+            members = ()
+        _require(members == (), "TERMINATION_UNCERTAIN")
+    _require(_policy(unit) == policy, "POLICY_CHANGED")
+    files.assert_unchanged()
+    return ImageGpuUnitUnleasedTerminalObservation(
+        unit,
+        template_sha256,
+        bootstrap_sha256,
+        policy,
+        expected_unit,
+        outcome,
+        datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z"),
+    )
 
 
 def image_gpu_unit_terminal_outcome(terminal: CpuUnitObservation) -> Literal["SUCCEEDED", "FAILED"]:
@@ -322,7 +404,7 @@ def observe_image_gpu_unit_ready(
     template_raw = files.read(
         Path("/etc/systemd/system") / template, sha256=template_sha256, maximum=65536
     )
-    expected_arguments = _arguments(template_raw, unit)
+    expected_arguments = image_gpu_unit_arguments(template_raw, unit)
     files.read(_BOOTSTRAP, sha256=bootstrap_sha256, maximum=128 * 1024)
     user, group = pwd.getpwnam("eom-image"), grp.getgrnam("eom-image")
     lease_gid = grp.getgrnam("eom-gpu-lease").gr_gid

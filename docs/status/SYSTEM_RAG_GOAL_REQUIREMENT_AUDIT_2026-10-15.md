@@ -9,6 +9,17 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Source guardian checkpoint2026-10-17: fixed root dispatch/frozen19-template
+  source capture/bounded invocation watcher now compose the implemented ACK and
+  retirement. Cache/input/busy no-lease exits use separate store0/cgroup/policy
+  observations and never touch another physical holder. Unobserved retained
+  pre-ACK crashes remain fenced, not fabricated READY or automatic reset. Related
+  root361 PASS25.45s, separate image317 PASS14.35s, strict8/Ruff/format/diff PASS.
+  All privilege/dispatch ports are synthetic; actual systemd-escape identity read
+  is not a launch. No installed unit/prefix/account/default/service/DB/model change.
+  Root entry/template/hooks and coordinated19 deployment/actual acceptance remain
+  required, followed by real comparisons/default decision and full C1–C5.
+  [Exact implemented and remaining scope](../architecture/INCREMENTAL_EMBEDDING_GPU_RUNTIME_DESIGN.md#fixed-guardian-composition--design-before-implementation).
 - Source checkpoint2026-10-17: image root ready/terminal observation and explicit
   ACK/outcome-specific retirement/read-only recovery now321 focused PASS; separate
   image/shared/release317 PASS, strict7/Ruff/format/diff PASS. Exclusive per-unit/

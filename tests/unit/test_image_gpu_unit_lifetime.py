@@ -454,6 +454,57 @@ def test_failed_intent_record_does_not_submit_any_effect(lifetime, monkeypatch, 
     assert state["commands"] == []
 
 
+@pytest.mark.parametrize("failed", (False, True))
+def test_no_lease_exit_retirement_never_touches_another_gpu_holder(lifetime, monkeypatch, failed):
+    ready, terminal, state, tmp = lifetime
+    ended = terminal.terminal_unit
+    if failed:
+        ended = replace(
+            ended,
+            status=replace(
+                ended.status,
+                active_state="failed",
+                sub_state="failed",
+                result="exit-code",
+                exec_main_status=1,
+            ),
+        )
+    unleased = observation.ImageGpuUnitUnleasedTerminalObservation(
+        ready.unit_name,
+        ready.template_sha256,
+        ready.bootstrap_sha256,
+        ready.effective_policy_sha256,
+        ended,
+        "FAILED" if failed else "SUCCEEDED",
+        "2026-10-17T03:00:00Z",
+    )
+    reserve = owner._reserve
+
+    def unleased_reserve(value, phase):
+        assert value is unleased and phase == "retirement"
+        return reserve(ready, phase)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("no-lease terminal must not release or inspect another GPU lease")
+
+    monkeypatch.setattr(owner, "_reserve", unleased_reserve)
+    monkeypatch.setattr(
+        owner, "observe_unleased_image_gpu_unit_terminal", lambda *args, **kwargs: unleased
+    )
+    monkeypatch.setattr(owner, "hold_released_image_unit_gpu_resources", forbidden)
+    monkeypatch.setattr(owner, "observe_runtime_device", forbidden)
+    monkeypatch.setattr(owner, "observe_cuda_probe_gpu_clients", forbidden)
+    result = owner.retire_unleased_image_gpu_unit(unleased)
+    assert result.original_terminal == unleased
+    assert state["events"] == ["reset-failed" if failed else "stop"]
+    assert json.loads((tmp / "retirement" / "intent.json").read_bytes())["observation"][
+        "original_outcome"
+    ] == ("FAILED" if failed else "SUCCEEDED")
+    state["commands"].clear()
+    assert owner.observe_retired_unleased_image_gpu_unit(unleased).original_terminal == unleased
+    assert all(args[1] == "show" for args in state["commands"])
+
+
 @pytest.mark.parametrize("level", ("root", "unit", "invocation"))
 def test_record_tree_rejects_symlink_and_writable_or_wrong_mode(record_tree, level):
     ready, root = record_tree

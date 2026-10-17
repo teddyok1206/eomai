@@ -439,6 +439,77 @@ request. The full goal remains ACTIVE: compose the fixed root guardian and
 pre-lease/cache exit handling, then coordinated19 migration/actual acceptance,
 six frozen comparisons/default decision and actual C1–C5 consumer verification.
 
+#### Fixed guardian composition — design before implementation
+
+The root guardian observes one already-starting fixed unit; it neither launches
+models nor creates a queue. Its input is a frozen internal installation value:
+the exact19 template/hash pairs, separate bootstrap hash and physical device
+capture. These are caller-pinned protected installation inputs, not worker JSON
+or proof that a deployment/drain has happened. The coordinated installer still
+owns package/source verification and draining the old legacy entrypoints.
+
+At guardian entry, capture all19 protected template bytes and the bootstrap once,
+validate every command against the same closed role/lock rule, and retain file
+epochs throughout. A keyed tuple/map gives O(19) initial validation and O(1)
+selection. A bounded watcher pins the one actual invocation, waits for the main
+process/PID1 retained descriptor, invokes the existing root ACK exactly once,
+then the existing terminal verification/retirement. Fixed unit TimeoutStartSec
+and TimeoutStopSec bound the observation; missing/drifting/unknown states stop
+observation, not the worker, without automatic replay or history repair.
+
+Cache hits, input errors and lease contention can terminate without acquiring a
+GPU lease. They require a distinct frozen terminal observation: original success/
+failure, exact source/unit/invocation/start, empty cgroup and actual descriptor
+store0, all rechecked. Their root intent/retirement uses the same exclusive phase
+reservation and fixed stop/reset rule, but never borrows or clears another unit's
+physical fence and does not require an unrelated GPU holder to be idle. Reusing a
+fake READY observation here would conflate two different ownership states.
+
+The existing root infrastructure owns this adapter; domain/worker formats, DB,
+NAS ownership and numerical code remain unchanged. No generic state-machine,
+broker or new runtime registry is required: two real ownership states, existing
+typed OS observations, one bounded loop and existing root effects suffice.
+Installing template hooks/root launcher remains a coordinated deployment step;
+source composition alone must not enable CUDA comparisons or change defaults.
+
+**Implemented source checkpoint2026-10-17:** the fixed root guardian adapter now
+captures all19 caller-pinned protected templates and the bootstrap once, validates
+every command through the public closed role/lock rule, retains file epochs, pins
+the actual invocation/start and composes ACK → terminal → retirement. Its timeout
+comes from the pinned finite unit limits, not a caller override. Fast0.2s checks
+apply only before ACK; running work uses1s checks, avoiding five systemctl launches
+per second. No whole-prefix or payload rehash is repeated by this watcher.
+
+Cache/input/busy exits have a distinct no-lease terminal observation with actual
+store0 and repeated empty-cgroup/unit/policy/file checks. Their retirement reuses
+the existing exclusive intent/result and fixed effect machinery, but never reads,
+releases or waits for another GPU holder. If a process dies with a retained store
+before READY was observed, the guardian explicitly leaves it fenced for supported
+recovery; it does not fabricate a PID/start/READY observation or clear the fence.
+
+The explicit root dispatch adapter checks the protected caller-pinned guardian
+template, fixed systemd-escape identity and actual fresh guardian unit before one
+nonblocking start. Existing/failed/running guardians are not restarted. Timeout
+or nonzero submission is uncertain, not permission to submit again. Actual
+unprivileged systemd-escape output was checked for a representative original unit;
+this is an identity-only read, not privileged launch/activation evidence.
+
+Fresh ten-suite root/guardian/resource/native/dependency regression **361 PASS
+25.45s**, separate image/shared/release **317 PASS14.35s**, strict8/Ruff/format/diff
+PASS. Initial launcher-test failures were a missing fixture `Path` import, fixed
+without weakening production checks. Root/kernel/dispatch ports remain synthetic;
+no actual signal, root guardian start, main stop/reset, model or DB operation.
+Source bootstrap7edb475d and package candidates1a5c6b86 remain unchanged; current
+installed services, numericalc499, admin-ownere5 and all19 legacy templates remain.
+
+Still next: install a reviewed protected root entry that supplies these exact
+installation values; wire its guardian template and all19 pre-entry hooks/bootstrap/
+per-unit supplementary group in a drained coordinated rollout with rollback.
+Then execute actual cross-consumer/crash/timeout/cleanup acceptance before six
+CPU/CUDA numerical comparisons and conditional default. C1–C5 and the original
+authenticated HTTP acceptance remain part of the full ACTIVE goal. Next routine
+INDEX/auth observation remains≥03:34:02 UTC, not another login prompt or QUERY.
+
 ## 5. 별도 protected CUDA 실행 leaf
 
 제안 prefix는 `/opt/eom/conda/envs/eom-embedding-cuda`, worker는 `eom-embedding-cuda`,
