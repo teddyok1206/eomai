@@ -1760,6 +1760,21 @@ request/login/identity/key, credential extraction or TTL change. Next routine au
 index check no earlier than12:55:54 UTC. Full goal stays ACTIVE: protected numerical
 successors, genuine operator live six-run gates and C1–C5 activation remain unproven.
 
+Source **547066f3964dbcb0d164bbcd907bb0b495a1031a** committed/pushed after those gates.
+Standard build-only three-wheel/RECORD PASS; output:
+`/tmp/eom-api-build/547066f3964dbcb0d164bbcd907bb0b495a1031a.G7MBXo/dist`.
+Raw SHA256 platform `0f1eeb48a8f9f6de607f443daed6fd72583de71e321ae8a4ad74ced5819c8ce6`,
+contracts `c67ac39ce75339244ee5681c3a089bc3377ecd2443c0c168db9cb8061a2e712a`,
+API `19fb5396fe709e0844e4a54738a6722303c11d58a75e548ded85e9d946e974a0`.
+At12:54 UTC explicit isolated/no-site/no-bytecode Conda verification imported19
+production modules, including all new Catalog adapter locations, CPU reference,
+actual Catalog reader and unchanged Orchestrator ports/publisher, directly from the
+hash-verified wheels. New control schema resource PASS; all loaded EOM code came from
+these wheels, with no source/Git or torch/numpy/transformers/sentence-transformers import.
+Script: `/tmp/eom-cpu-reference-package.uFDOqcWS/check_candidate.py`.
+**No protected installation, model forward, operating service/default/policy update or
+production DB mutation.** Package closure is not actual benchmark admission or PASS.
+
 ## Root resource relay — design before implementation
 
 The workflow-owner process must not manufacture independent GPU counters, impersonate UID0
