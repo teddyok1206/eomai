@@ -332,6 +332,8 @@ Ruff/format13·systemd 구문 검증 PASS입니다. root/unit 양성 및 자료 
 불명확한 결과를 새 실행으로 우회하지 않습니다. 관련60 suites1845 PASS·strict14·Ruff/format23
 PASS이며 양성 root/systemd/source/GPU 값은 합성 fixture입니다. 이는 아직 운영 설치·실제 모델 측정의 완료가
 아닙니다. 호환 수치 환경 설치·실제6회 성능 비교·GPU 기본값 전환은 미완료이며 CPU 기본값을 유지합니다.
+후보6513badd의 표준3-wheel/RECORD와 source/Git·ML import 없는14개 모듈의 독립 패키지 검사도
+통과했습니다. 운영 설치·활성화는 하지 않았습니다.
 [검증 범위와 남은 연결](docs/architecture/EMBEDDING_BENCHMARK_EXECUTION_COMPOSITION.md#pre-ack-terminal-recovery-source-checkpoint--2026-10-17)
 
 기존 자동 인덱싱은11:55:53 UTC 조회에서 연결569건/인덱스 개정149건으로 진행됐습니다.

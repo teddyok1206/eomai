@@ -1621,6 +1621,21 @@ coverage177/189/203 with545 eligible sources. These are not569 distinct Items or
 coverage. The same original HTTP process2895440 was still in LOGIN at11:55 UTC;
 no replacement process, credential request, stored token or session renewal was created.
 
+Source **6513badde0d4c8e7f29e9ab51e281ba74e5ce36e** was committed/pushed to main after
+the final source gate. Standard `deploy_release.sh --build-only` produced/inspected
+three wheels and verified RECORD, without deployment. Candidate directory:
+`/tmp/eom-api-build/6513badde0d4c8e7f29e9ab51e281ba74e5ce36e.glHuXi/dist`.
+Raw SHA-256: platform `49fbecdcb241c1481c4cda103987a1ece50a06b25a0591444920a5b51c54c731`,
+contracts `565f69aea7d55e240f422816f7e72b79ccdc10cc71aeff623d27fcb272a7ccfa`,
+API `582fbd02027a308ba993a737b484d7fed1c902e7acc9d5b6ade5c0b9fa473166`.
+At12:18 UTC an explicit isolated/no-site/no-bytecode Conda process imported all14
+production modules directly from those hash-verified wheels and loaded the new schema
+resource. Every imported EOM module came from the candidate wheels; no source/Git
+import or torch/numpy/transformers/sentence-transformers import occurred. Script:
+`/tmp/eom-benchmark-bridge-package.5saHplr9/check_candidate.py`.
+This is package closure evidence only, **not a protected installation, actual source
+grant, PID1 model dispatch, six-run performance result or default activation**.
+
 **Not yet claimed:** protected numerical successor/proof installation, actual PID1
 benchmark model dispatch, actual six-run numerical/performance/resource/image gates,
 CPU near-tie reference publication before CUDA acceptance, actual benchmark Artifact
