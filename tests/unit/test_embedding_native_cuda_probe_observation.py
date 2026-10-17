@@ -14,7 +14,7 @@ from eom_catalog_service.embedding_cuda_probe_resource_observation import (
 from eom_catalog_service.embedding_native_probe_observation import (
     validate_native_executable_mappings,
 )
-from eom_identifiers import sha256_bytes
+from eom_identifiers import canonical_json_bytes, sha256_bytes
 
 from tests.unit.test_embedding_cuda_installation_evidence import metadata
 from tests.unit.test_embedding_native_cuda_probe import case as case
@@ -358,9 +358,12 @@ def test_account_and_template_are_observed_from_installed_root_inputs(monkeypatc
 
 @pytest.fixture
 def ended(process, monkeypatch):
+    return end_process(process, monkeypatch, observe(process, final=True))
+
+
+def end_process(process, monkeypatch, observed):
     from eom_catalog_service import embedding_cuda_probe_gpu_clients as clients
 
-    observed = observe(process, final=True)
     state = process[4]
     state["unit"] = replace(cpu_terminal(), fragment_path=state["unit"].fragment_path)
     state["pids"] = ()
@@ -431,3 +434,137 @@ def test_known_terminal_unit_may_have_an_already_removed_empty_cgroup(ended, mon
 
     monkeypatch.setattr(owner, "native_probe_cgroup_members", absent)
     assert owner.verify_native_cuda_probe_terminal(observed, process[1]).terminal_unit.succeeded
+
+
+@pytest.fixture
+def failed_ended(process, monkeypatch):
+    observed = observe(process)
+    result = end_process(process, monkeypatch, observed)
+    state = process[4]
+    state["unit"] = replace(
+        state["unit"],
+        status=replace(
+            state["unit"].status,
+            active_state="failed",
+            sub_state="failed",
+            result="exit-code",
+            exec_main_status=1,
+        ),
+    )
+    state["proc_exists"] = False
+    original_exists = Path.exists
+
+    def exists(path, *args, **kwargs):
+        if path == Path("/proc/123"):
+            return state["proc_exists"]
+        return original_exists(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "exists", exists)
+    return result
+
+
+def test_failed_terminal_preserves_failure_and_ready_without_seal_or_release(failed_ended):
+    process, observed, state, events = failed_ended
+    state["gpu_pids"] = (203, 999)
+    result = owner.verify_native_cuda_probe_failed_terminal(observed, process[0])
+    assert type(result) is owner.NativeCudaProbeFailedTerminalObservation
+    assert not isinstance(result, owner.NativeCudaProbeTerminalObservation)
+    assert result.ready_observation is observed
+    assert result.failed_unit.failed and not result.failed_unit.succeeded
+    assert result.observed_at_utc.endswith("Z")
+    assert result.terminal_probe_gpu_client_count == 0
+    assert events == ["retained", "gpu", "retained"]
+
+
+@pytest.mark.parametrize(
+    "fault",
+    (
+        "owner",
+        "running",
+        "successful",
+        "invocation",
+        "cgroup",
+        "process",
+        "probe_gpu",
+        "report",
+        "phase",
+        "execution",
+        "pid",
+        "start",
+        "account",
+        "observed_cgroup",
+    ),
+)
+def test_failed_terminal_rejects_changed_or_unfinished_identity(failed_ended, monkeypatch, fault):
+    process, observed, state, _ = failed_ended
+    report = process[0]
+    if fault == "owner":
+        monkeypatch.setattr(owner.os, "getresuid", lambda: (1000, 1000, 1000))
+    elif fault == "running":
+        state["unit"] = replace(state["unit"], main_pid=123)
+    elif fault == "successful":
+        state["unit"] = replace(cpu_terminal(), fragment_path=state["unit"].fragment_path)
+    elif fault == "invocation":
+        state["unit"] = replace(state["unit"], invocation_id="c" * 32)
+    elif fault == "cgroup":
+        state["pids"] = (123,)
+    elif fault == "process":
+        state["proc_exists"] = True
+    elif fault == "probe_gpu":
+        state["gpu_pids"] = (123,)
+    elif fault == "report":
+        observed = replace(observed, report_sha256="sha256:" + "0" * 64)
+    elif fault == "phase":
+        observed = replace(observed, phase="FINAL")
+    elif fault == "execution":
+        observed = replace(observed, execution_id="c" * 32)
+    elif fault == "pid":
+        observed = replace(observed, pid=124)
+    elif fault == "start":
+        observed = replace(observed, start_time_ticks=observed.start_time_ticks + 1)
+    elif fault == "account":
+        monkeypatch.setattr(owner, "require_native_cuda_probe_unit", lambda: (1, 2, 3))
+    else:
+        observed = replace(observed, cgroup="/other")
+    with pytest.raises(ValueError):
+        owner.verify_native_cuda_probe_failed_terminal(observed, report)
+
+
+def test_rejected_final_report_cannot_become_failed_terminal_authority(failed_ended):
+    process, observed, _, _ = failed_ended
+    with pytest.raises(ValueError, match="PHASE_INVALID"):
+        owner.verify_native_cuda_probe_failed_terminal(observed, process[1])
+
+
+def test_failed_terminal_detects_unit_change_during_gpu_observation(failed_ended, monkeypatch):
+    from eom_catalog_service import embedding_cuda_probe_gpu_clients as clients
+
+    process, observed, state, _ = failed_ended
+
+    def changed(_):
+        state["unit"] = replace(state["unit"], invocation_id="c" * 32)
+        return ()
+
+    monkeypatch.setattr(clients, "observe_cuda_probe_gpu_clients", changed)
+    with pytest.raises(ValueError, match="TERMINATION_UNCERTAIN"):
+        owner.verify_native_cuda_probe_failed_terminal(observed, process[0])
+
+
+def test_failed_terminal_does_not_swallow_lost_fencing(failed_ended, monkeypatch):
+    process, observed, _, _ = failed_ended
+
+    def lost(*_args, **_kwargs):
+        raise ValueError("NATIVE_CUDA_PROBE_RESOURCE_OBSERVATION_INVALID")
+
+    monkeypatch.setattr(owner, "observe_cuda_probe_retained_resources", lost)
+    with pytest.raises(ValueError, match="RESOURCE_OBSERVATION_INVALID"):
+        owner.verify_native_cuda_probe_failed_terminal(observed, process[0])
+
+
+def test_failure_observation_never_satisfies_successful_final_terminal_gate(failed_ended):
+    process, observed, _, _ = failed_ended
+    forged_final = replace(
+        observed, phase="FINAL", report_sha256=sha256_bytes(canonical_json_bytes(process[1]))
+    )
+    with pytest.raises(ValueError, match="TERMINATION_UNCERTAIN"):
+        owner.verify_native_cuda_probe_terminal(forged_final, process[1])

@@ -1023,6 +1023,46 @@ not run. The CUDA probe unit is still absent from `/etc/systemd/system`.
 This is **OWNER_INSTALLED / NOT_ACTIVE**, not a CUDA prefix install/audit, real
 probe/ACK, sealed receipt or benchmark. Operating API/Catalog was not redeployed.
 
+## Failed-probe termination observation — scoped design, 2026-10-17
+
+1. Responsibility: extend the existing root-only probe observation adapter, not the
+   worker, scheduler or numerical runtime. This step observes; it cannot release
+   the PID1 store, reset a unit, retry a probe or grant model execution.
+2. Canonical sources: the previously root-accepted READY observation and its exact
+   report bytes, current systemd/cgroup/proc state, retained physical lease and
+   existing fixed-UUID NVIDIA process query. A rejected FINAL report is not proof.
+3. Identity: preserve execution/invocation/PID/start/boot/device/resource identities;
+   failure remains failure. There is no new entity, revision or Artifact.
+4. Pointers: require the READY hash, original invocation and cgroup, pinned installed
+   unit/account, physical device/lease observations and absence of the old PID.
+5. Access: one fixed unit lookup, empty-cgroup lookup and bounded PID membership.
+6. Structures: frozen internal observation and existing bounded tuples/PID snapshot;
+   no table, index, queue, registry, cross-service message or worker schema change.
+7. Complexity: O(B+N) for the existing bounded vendor XML; constant unit/proc checks.
+8. Concurrency: bracket resource/GPU checks with unchanged terminal-unit checks.
+   A reused PID is conservatively uncertain, not proof of cleanup.
+9. Dependency: infrastructure composes existing OS/resource observers; domain and
+   contract packages gain no subprocess or filesystem behavior.
+10. Failure: missing READY, changed invocation, running process/cgroup, remaining GPU
+    client or changed fencing is explicit rejection. No automatic retry or write.
+11. Simpler alternative: the successful-FINAL observer cannot accept this case;
+    loosening it would turn a failed admission into success. A distinct failure
+    value preserves that boundary. Controlled retirement remains a separate step
+    with preserved failure evidence, fresh checks and a post-release observation.
+
+Implementation/test status below must not be read as actual failed-unit retirement.
+
+Source checkpoint: distinct `NativeCudaProbeFailedTerminalObservation` and
+`verify_native_cuda_probe_failed_terminal` reuse the existing resource/device/
+GPU query adapters and the authoritative empty-cgroup check. The successful FINAL
+observer still rejects failure. Root ownership, original READY hash/phase/account/
+execution/PID-start/cgroup/invocation, process absence and before/after terminal
+identity are required. No rejected FINAL report can authorize this observation.
+Focused regression232 PASS (including19 added failure-observer cases), strict
+type check1 PASS, Ruff/format/diff PASS. Tests use synthetic OS ports, not the actual
+retained failed unit. No root retirement, fdstore reset, retry, new GPU execution,
+sealing, selector/default change or production installation has occurred here.
+
 ## Terminal probe cleanup observation (before sealing or releasing the store)
 
 1. Extend the existing root probe owner with an independent terminal observation;

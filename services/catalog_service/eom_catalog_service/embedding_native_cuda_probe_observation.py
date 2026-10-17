@@ -297,6 +297,15 @@ class NativeCudaProbeTerminalObservation:
     terminal_probe_gpu_client_count: Literal[0] = 0
 
 
+def _require_empty_probe_cgroup(cgroup: str) -> None:
+    try:
+        _require(native_probe_cgroup_members(cgroup) == (), "TERMINATION_UNCERTAIN")
+    except FileNotFoundError:
+        # A known terminal cgroup may already have been removed by systemd.
+        path = Path("/sys/fs/cgroup") / cgroup.removeprefix("/")
+        _require(not path.exists(), "TERMINATION_UNCERTAIN")
+
+
 def verify_native_cuda_probe_terminal(
     observed: NativeCudaProbeProcessObservation,
     report: NativeCudaProbeResult,
@@ -332,12 +341,7 @@ def verify_native_cuda_probe_terminal(
         _require(
             inspect_cpu_unit(unit, template=CUDA_PROBE_TEMPLATE) == before, "TERMINATION_UNCERTAIN"
         )
-        try:
-            _require(native_probe_cgroup_members(cgroup) == (), "TERMINATION_UNCERTAIN")
-        except FileNotFoundError:
-            # As with CPU, systemd may remove a known empty terminal cgroup.
-            path = Path("/sys/fs/cgroup") / cgroup.removeprefix("/")
-            _require(not path.exists(), "TERMINATION_UNCERTAIN")
+        _require_empty_probe_cgroup(cgroup)
 
     terminal()
     observe_runtime_device(report.device_capture)
@@ -349,6 +353,77 @@ def verify_native_cuda_probe_terminal(
     observe_cuda_probe_retained_resources(observed.resources, unit=unit)
     terminal()
     return NativeCudaProbeTerminalObservation(
+        observed,
+        before,
+        datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z"),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class NativeCudaProbeFailedTerminalObservation:
+    """Failure-preserving OS observation, deliberately not an admission/sealing value."""
+
+    ready_observation: NativeCudaProbeProcessObservation
+    failed_unit: CpuUnitObservation
+    observed_at_utc: str
+    terminal_probe_gpu_client_count: Literal[0] = 0
+
+
+def verify_native_cuda_probe_failed_terminal(
+    observed: NativeCudaProbeProcessObservation,
+    report: NativeCudaProbeLeaseReady,
+) -> NativeCudaProbeFailedTerminalObservation:
+    """Verify a failed original invocation has ended without releasing its physical fence."""
+    from datetime import UTC, datetime
+
+    from eom_catalog_service.embedding_cuda_probe_gpu_clients import observe_cuda_probe_gpu_clients
+
+    _require(os.getresuid() == (0, 0, 0), "OWNER_REQUIRED")
+    _require(
+        type(observed) is NativeCudaProbeProcessObservation
+        and observed.phase == "READY"
+        and type(report) is NativeCudaProbeLeaseReady,
+        "PHASE_INVALID",
+    )
+    report = NativeCudaProbeLeaseReady.model_validate(report)
+    _require(observed.report_sha256 == sha256_bytes(canonical_json_bytes(report)), "REPORT_CHANGED")
+    uid, gid, lease_gid = require_native_cuda_probe_unit()
+    _require(
+        (report.worker_uid, report.worker_gid, report.supplementary_gids)
+        == (uid, gid, (lease_gid,)),
+        "ACCOUNT_INVALID",
+    )
+    unit, cgroup = _unit(report.execution_id)
+    _require(
+        observed.execution_id == report.execution_id
+        and observed.pid == report.pid
+        and observed.start_time_ticks == report.start_time_ticks
+        and observed.cgroup == cgroup,
+        "PROCESS_CHANGED",
+    )
+    before = inspect_cpu_unit(unit, template=CUDA_PROBE_TEMPLATE)
+
+    def terminal() -> None:
+        _require(
+            before.failed
+            and before.invocation_id == observed.invocation_id
+            and inspect_cpu_unit(unit, template=CUDA_PROBE_TEMPLATE) == before,
+            "TERMINATION_UNCERTAIN",
+        )
+        _require(not (Path("/proc") / str(observed.pid)).exists(), "TERMINATION_UNCERTAIN")
+        _require_empty_probe_cgroup(cgroup)
+
+    terminal()
+    observe_runtime_device(report.expected_device_capture)
+    observe_cuda_probe_retained_resources(observed.resources, unit=unit)
+    _require(
+        report.pid not in observe_cuda_probe_gpu_clients(report.expected_device_capture),
+        "GPU_CLEANUP_UNCERTAIN",
+    )
+    observe_cuda_probe_retained_resources(observed.resources, unit=unit)
+    observe_runtime_device(report.expected_device_capture)
+    terminal()
+    return NativeCudaProbeFailedTerminalObservation(
         observed,
         before,
         datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z"),
