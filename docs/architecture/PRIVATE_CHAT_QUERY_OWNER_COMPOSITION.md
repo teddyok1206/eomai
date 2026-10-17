@@ -145,3 +145,27 @@ test stdout raw SHA256
 Operating DB tests, model calls, service restarts and activation0. No new login
 prompt, credential persistence, TTL modification or query re-key occurred.
 **SOURCE_PASS / DISPOSABLE_DB_PASS / NOT_INSTALLED / NOT_ACTIVE; C4/full goal OPEN.**
+
+## Candidate archive closure
+
+Code candidate `3e14579681003d35af0ccdb65001ba6605fae4cf` was committed/pushed and
+passed standard three-wheel build/RECORD verification without installation.
+Dist `/tmp/eom-api-build/3e14579681003d35af0ccdb65001ba6605fae4cf.EN0Lmq/dist`.
+
+- platform raw `4a1f833a3bd672421bd6549b222b2bdd4e3850acae8f2a6eb89ba8432ea45061`;
+- API-contract raw `68f9ea9b40b56d6097b3719dc01f2ba82201bb42b784323f8c2312bfdba46758`;
+- API raw `7bd13a21f22aabfb8b06b13d50f30c65a3fd2c23409f3368a85864101dce092b`.
+
+The explicit Conda `-I -S -B` archive proof imported307 EOM modules exclusively
+from the pinned platform/contracts archives. Synthetic immutable source/control
+metadata reconstructed the exact same native private question input; the source
+value's repr did not include question text. Config/private publisher/client public
+interfaces were present. No checkout, installed EOM fallback, tests or optional ML
+module was imported. DB/model/socket/activation calls0. This does not prove a
+current Chat grant, native launch or protected runtime installation.
+
+Proof `/tmp/eom-private-source-owner-package.h8u90lfj/prove_archives.py`, raw
+`4d5af800416377d0907108286f663009c9ea285044a78eea3758ae343053cef6`;
+synthetic metadata raw
+`7a7eb93230b43049a3a5cac9c167a1884667c37ccc328b95c0bc437ddfa7625f`.
+Metadata is a local temporary synthetic fixture, not public corpus evidence.
