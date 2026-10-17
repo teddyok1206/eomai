@@ -35,6 +35,7 @@ def lifetime(image, monkeypatch, tmp_path):
         "ready": ready,
         "terminal": terminal,
         "retired": False,
+        "store": 1,
         "held": False,
         "commands": [],
         "events": [],
@@ -62,6 +63,10 @@ def lifetime(image, monkeypatch, tmp_path):
             state["events"].append(args[2])
             if args[2] in {"stop", "reset-failed"}:
                 state["retired"] = True
+            elif args[2] == "clean":
+                assert args[3:] == ("--what=fdstore", UNIT)
+                assert state["retired"] and state["store"] == 1
+                state["store"] = 0
             return SimpleNamespace(returncode=0)
         assert args[:3] == ("/usr/bin/systemctl", "show", UNIT)
         assert state["retired"]
@@ -70,11 +75,13 @@ def lifetime(image, monkeypatch, tmp_path):
             "ActiveState": "inactive",
             "SubState": "dead",
             "MainPID": "0",
-            "NFileDescriptorStore": "0",
+            "NFileDescriptorStore": str(state["store"]),
             "InvocationID": "",
             "NeedDaemonReload": "no",
             "FragmentPath": ready.unit.fragment_path,
             "DropInPaths": "",
+            "Job": "",
+            "ControlGroup": "",
         } | state["changes"]
         return SimpleNamespace(
             returncode=0,
@@ -84,7 +91,7 @@ def lifetime(image, monkeypatch, tmp_path):
 
     @contextmanager
     def released(resources):
-        assert resources == ready.resources and state["retired"]
+        assert resources == ready.resources and state["retired"] and state["store"] == 0
         state["events"].append("hold")
         state["held"] = True
         try:
@@ -94,7 +101,9 @@ def lifetime(image, monkeypatch, tmp_path):
             state["events"].append("close")
 
     def clients(device):
-        assert device == ready.device and state["held"]
+        assert device == ready.device and (
+            state["held"] or (state["retired"] and state["store"] == 1)
+        )
         return state["gpu_clients"]
 
     monkeypatch.setattr(owner.os, "getresuid", lambda: (0, 0, 0))
@@ -103,6 +112,13 @@ def lifetime(image, monkeypatch, tmp_path):
     monkeypatch.setattr(owner, "verify_image_gpu_unit_terminal", lambda _: state["terminal"])
     monkeypatch.setattr(owner.subprocess, "run", command)
     monkeypatch.setattr(owner, "hold_released_image_unit_gpu_resources", released)
+
+    def retained(resources, *, unit):
+        assert resources == ready.resources and unit == UNIT
+        assert state["retired"] and state["store"] == 1
+        return resources
+
+    monkeypatch.setattr(owner, "observe_image_unit_gpu_retained_resources", retained)
     monkeypatch.setattr(owner, "observe_cuda_probe_gpu_clients", clients)
     monkeypatch.setattr(owner, "observe_runtime_device", lambda _: None)
     monkeypatch.setattr(owner, "root_owned_unit_processes", lambda _: state["pids"])
@@ -233,6 +249,7 @@ def test_retirement_preserves_original_success_failure_timeout(lifetime, outcome
     assert observation_result.original_terminal == terminal
     assert state["events"] == [
         "stop" if outcome == "SUCCEEDED" else "reset-failed",
+        "clean",
         "hold",
         "close",
     ]
@@ -256,6 +273,8 @@ def test_retirement_preserves_original_success_failure_timeout(lifetime, outcome
         ("NeedDaemonReload", "yes"),
         ("DropInPaths", "/tmp/override.conf"),
         ("FragmentPath", "/tmp/other.service"),
+        ("Job", "71 /org/freedesktop/systemd1/job/71"),
+        ("ControlGroup", "/system.slice/other.service"),
     ),
 )
 def test_uncertain_post_state_keeps_original_intent_not_result(lifetime, field, value):
@@ -270,9 +289,47 @@ def test_uncertain_post_state_keeps_original_intent_not_result(lifetime, field, 
 
 def test_collected_unit_is_allowed_without_losing_original_terminal(lifetime):
     _, terminal, state, _ = lifetime
+    state["store"] = 0  # A genuinely collected unit cannot still own a PID1 store.
     state["changes"] = {"LoadState": "not-found", "FragmentPath": ""}
     result = owner.retire_image_gpu_unit(terminal)
     assert result.retired_unit.load_state == "not-found" and result.original_terminal == terminal
+
+
+def test_readonly_recovery_with_retained_store_never_cleans_it_implicitly(lifetime):
+    _, terminal, state, _ = lifetime
+    state["retired"] = True
+    with pytest.raises(ValueError, match="RETIREMENT_UNCERTAIN"):
+        owner.observe_retired_image_gpu_unit(terminal)
+    assert state["store"] == 1 and state["events"] == []
+
+
+@pytest.mark.parametrize("fault", ["timeout", "nonzero"])
+def test_uncertain_explicit_store_clean_is_not_replayed(lifetime, monkeypatch, fault):
+    _, terminal, state, tmp = lifetime
+    original = owner.subprocess.run
+
+    def fail_clean(arguments, **kwargs):
+        if arguments[1:4] == ("--no-ask-password", "clean", "--what=fdstore"):
+            state["events"].append("clean_uncertain")
+            if fault == "timeout":
+                raise owner.subprocess.TimeoutExpired(arguments, 10)
+            return SimpleNamespace(returncode=1)
+        return original(arguments, **kwargs)
+
+    monkeypatch.setattr(owner.subprocess, "run", fail_clean)
+    with pytest.raises(ValueError, match="EFFECT_UNCERTAIN"):
+        owner.retire_image_gpu_unit(terminal)
+    assert (tmp / "retirement/intent.json").exists()
+    assert not (tmp / "retirement/result.json").exists()
+    assert state["events"] == ["stop", "clean_uncertain"] and state["store"] == 1
+    with pytest.raises(FileExistsError):
+        owner.retire_image_gpu_unit(terminal)
+    assert state["events"] == ["stop", "clean_uncertain"]
+    # Only read-only recovery after independently observed completion, no retry.
+    state["store"] = 0
+    recovered = owner.observe_retired_image_gpu_unit(terminal)
+    assert recovered.original_terminal == terminal
+    assert "clean" not in state["events"]
 
 
 @pytest.mark.parametrize("fault", ("gpu", "child", "lease", "source"))
@@ -303,6 +360,7 @@ def test_post_cleanup_failure_never_records_retirement_success(lifetime, monkeyp
 def test_readonly_recovery_never_repeats_stop_or_reset(lifetime):
     _, terminal, state, _ = lifetime
     state["retired"] = True
+    state["store"] = 0
     result = owner.observe_retired_image_gpu_unit(terminal)
     assert result.original_terminal == terminal and state["events"] == ["hold", "close"]
     assert all(args[1] == "show" for args in state["commands"])
@@ -457,6 +515,7 @@ def test_failed_intent_record_does_not_submit_any_effect(lifetime, monkeypatch, 
 @pytest.mark.parametrize("failed", (False, True))
 def test_no_lease_exit_retirement_never_touches_another_gpu_holder(lifetime, monkeypatch, failed):
     ready, terminal, state, tmp = lifetime
+    state["store"] = 0
     ended = terminal.terminal_unit
     if failed:
         ended = replace(

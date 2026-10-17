@@ -5,8 +5,12 @@ from __future__ import annotations
 import ast
 import inspect
 import os
+import selectors
 import shlex
 import signal
+import subprocess
+import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -34,7 +38,7 @@ def unit_entry(policy, monkeypatch):
         events.append("RETENTION_REQUESTED")
 
     def acknowledge(selected, timeout):
-        assert selected == {signal.SIGUSR1} and timeout == 30
+        assert selected == {signal.SIGUSR1} and timeout == 0
         assert events[-1] == "RETENTION_REQUESTED"
         with pytest.raises(adapter.SharedGpuLeaseError, match="BUSY"):
             adapter.acquire_shared_gpu_lease()
@@ -45,6 +49,15 @@ def unit_entry(policy, monkeypatch):
     monkeypatch.setattr(signal, "sigpending", lambda: set())
     monkeypatch.setattr(adapter, "request_unit_gpu_lease_retention", retain)
     monkeypatch.setattr(signal, "sigtimedwait", acknowledge)
+    clock = {"value": 0.0}
+    monkeypatch.setattr(
+        adapter,
+        "time",
+        SimpleNamespace(
+            monotonic=lambda: clock["value"],
+            sleep=lambda seconds: clock.update(value=clock["value"] + 30),
+        ),
+    )
     try:
         yield policy, retained, events
     finally:
@@ -62,6 +75,58 @@ def test_root_ack_precedes_yield_and_worker_close_does_not_release_retained_copy
     os.close(retained.pop())
     with adapter.shared_gpu_lease():
         pass
+
+
+@pytest.mark.skipif(
+    sys.platform != "linux" or os.geteuid() == 0,
+    reason="Own-child Linux mask observation needs a non-root signal sender",
+)
+def test_actual_kernel_mask_stays_reserved_while_waiting_and_nonroot_ack_is_rejected():
+    package = Path(adapter.__file__).resolve().parents[1]
+    code = r"""
+import signal,sys
+from types import SimpleNamespace
+sys.path.insert(0,sys.argv[1])
+from eom_gpu_lease import lease
+signal.pthread_sigmask(signal.SIG_BLOCK,{signal.SIGUSR1})
+lease.acquire_shared_gpu_lease=lambda: SimpleNamespace(assert_valid=lambda:None,close=lambda:None)
+lease.request_unit_gpu_lease_retention=lambda value: print('READY',flush=True)
+try:
+    lease.acquire_retained_unit_gpu_lease()
+except lease.SharedGpuLeaseError as error:
+    assert error.code=='INVALID'
+    print('NONROOT_ACK_REJECTED',flush=True)
+else:
+    raise AssertionError('non-root signal admitted work')
+"""
+    with subprocess.Popen(
+        (sys.executable, "-I", "-B", "-c", code, str(package)),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    ) as child:
+        try:
+            assert child.stdout is not None
+            with selectors.DefaultSelector() as selector:
+                selector.register(child.stdout, selectors.EVENT_READ)
+                assert selector.select(3), "child did not reach signal wait"
+            assert child.stdout.readline(128).strip() == "READY"
+            for _ in range(5):
+                time.sleep(0.03)
+                fields = dict(
+                    line.split(":", 1)
+                    for line in (Path("/proc") / str(child.pid) / "status").read_text().splitlines()
+                    if ":" in line
+                )
+                assert int(fields["SigBlk"].strip(), 16) & (1 << (signal.SIGUSR1 - 1))
+            child.send_signal(signal.SIGUSR1)
+            output, error = child.communicate(timeout=3)
+            assert child.returncode == 0, error
+            assert output.strip() == "NONROOT_ACK_REJECTED"
+        finally:
+            if child.poll() is None:
+                child.kill()
+                child.wait(timeout=3)
 
 
 @pytest.mark.parametrize(

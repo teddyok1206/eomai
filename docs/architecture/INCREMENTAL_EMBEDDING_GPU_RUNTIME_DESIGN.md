@@ -99,6 +99,50 @@ matching the already-installed native CUDA probe. This changes only unit placeme
 the actual `/proc`/cgroup checks, resource limits, UID and shared inode invariants
 are not loosened. The all19source gate now requires this explicit placement.
 
+### Retained handshake and explicit fdstore release — source correction
+
+The first retained, deliberately missing-model OS case failed before root ACK with
+`IMAGE_GPU_UNIT_ACK_SIGNAL_NOT_RESERVED`. No real model/Artifact was authorized.
+A separate non-root own-child kernel reproduction established that blocking
+`sigtimedwait(...,30)`temporarily removes the awaited bit from observable`SigBlk`.
+The bootstrap reservation itself was not missing. Weakening root's thread-mask
+check would hide this mismatch. The standalone lease now consumes with zero-time
+`sigtimedwait`and bounded50ms sleeps until the same30sdeadline; before ACK the mask
+remains observable. Sender UID0/PID/signo and pre-existing-pending checks stay strict.
+An actual own-child`/proc`test observes the blocked mask and rejects a real non-root
+signal; mocks alone are not used as proof of kernel behavior. This adds no thread,
+dependency or generic event framework: ≤600short polls/30s, O(1)space, at most50ms
+additional ACK observation latency, only before model work.
+
+The failed case retained its PID1 descriptor as intended. Actual stop did not free
+it: installed`systemd.service(5)`documents`FileDescriptorStorePreserve=yes`keeping
+the store until collection or explicit`systemctl clean --what=fdstore`. After exact
+MainPID0/empty cgroup/no GPU clients/no ACK checks, an explicitly recorded recovery
+reset/cleaned only this no-model OS case; same physical inode reacquisition passed.
+Original FAILED outcome and absent READY remain unchanged; no fabricated observation,
+new Job, model retry or automatic retirement PASS is recorded. All26image entry
+fences remain for the reviewed successor installation.
+
+The existing lifetime owner now distinguishes a stopped unit from a retired one
+with a small frozen internal value, not a new worker message/registry. It requires
+no queued Job and empty ControlGroup. After the same outcome-specific stop/reset,
+store1is revalidated against the original retained resources/device/invocation and
+idle GPU, then only that unit's fdstore is cleaned. Store0needs no cleanup. Final
+same-inode acquisition and postchecks still decide retirement; unleased exits must
+never inspect/clean another holder. One durable retirement intent precedes both
+effects, uncertain stop/clean is not replayed, and read-only recovery never performs
+cleanup. Source fixtures now model Preserve=yes retaining store1across stop/reset,
+including timeout/nonzero clean failures and actual completion followed by read-only
+recovery. Identity, source/template/Artifact pins, existing immutable records and
+dependency direction remain unchanged. No DB/schema migration, queue or framework
+is added. Implicit stop-release and blocking-signal wait are the simpler alternatives
+but contradicted the actual OS evidence.
+
+Related379source tests PASS13.96s and strict4source files PASS. New standalone
+lease wheel and root lifetime owner installation/selection plus a fresh actual
+retained case are still required. The c499numerical prefix must not be rebuilt for
+these image-lifetime changes, and source PASS is not six CPU/CUDA model comparisons.
+
 2026-10-16 source 후속: [CUDA loader 작업 폴더 경계](INCREMENTAL_EMBEDDING_CUDA_LOADER_DIRECTORY_DESIGN.md)는
 공식 cuSPARSELt의 빈 RUNPATH component를 고정0555 빈 폴더의 관측으로 해석하고,
 native CUDA factory에서 실제 cwd를 재검증한다. CPU의 거부 규칙과 digest는 유지한다.

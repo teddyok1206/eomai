@@ -11,6 +11,7 @@ import signal
 import socket
 import stat
 import sys
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -365,7 +366,16 @@ def acquire_retained_unit_gpu_lease() -> SharedGpuLease:
     lease = acquire_shared_gpu_lease()
     try:
         request_unit_gpu_lease_retention(lease)
-        received = signal.sigtimedwait({signal.SIGUSR1}, 30)
+        # A blocking rt_sigtimedwait temporarily removes the awaited bit from
+        # /proc's effective SigBlk while sleeping. Keep the reservation observable
+        # before root ACK: zero-time consumption never enters that kernel wait.
+        deadline = time.monotonic() + 30
+        received = None
+        while time.monotonic() < deadline:
+            received = signal.sigtimedwait({signal.SIGUSR1}, 0)
+            if received is not None:
+                break
+            time.sleep(min(0.05, max(0.0, deadline - time.monotonic())))
         if (
             received is None
             or received.si_signo != signal.SIGUSR1

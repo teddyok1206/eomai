@@ -23,6 +23,7 @@ from pydantic import TypeAdapter
 from eom_catalog_service.embedding_cuda_probe_gpu_clients import observe_cuda_probe_gpu_clients
 from eom_catalog_service.embedding_cuda_probe_resource_observation import (
     hold_released_image_unit_gpu_resources,
+    observe_image_unit_gpu_retained_resources,
 )
 from eom_catalog_service.embedding_runtime_files import NumericalRuntimeFileSnapshots
 from eom_catalog_service.embedding_runtime_os_identity import observe_runtime_device
@@ -49,6 +50,8 @@ _PROPERTIES = (
     "NeedDaemonReload",
     "FragmentPath",
     "DropInPaths",
+    "Job",
+    "ControlGroup",
 )
 
 
@@ -150,6 +153,13 @@ class RetiredImageGpuUnit:
 
 
 @dataclass(frozen=True, slots=True)
+class _StoppedImageGpuUnit:
+    load_state: str
+    invocation_id: str
+    stored_descriptors: Literal[0, 1]
+
+
+@dataclass(frozen=True, slots=True)
 class ImageGpuUnitRetirement:
     original_terminal: ImageGpuUnitTerminalObservation | ImageGpuUnitUnleasedTerminalObservation
     retired_unit: RetiredImageGpuUnit
@@ -237,9 +247,9 @@ def acknowledge_image_gpu_unit_ready(
         os.close(directory)
 
 
-def _retired_unit(
+def _stopped_unit(
     observed: ImageGpuUnitReadyObservation | ImageGpuUnitUnleasedTerminalObservation,
-) -> RetiredImageGpuUnit:
+) -> _StoppedImageGpuUnit:
     unit_name, invocation = _record_identity(observed)
     template = image_gpu_unit_template(unit_name)
     try:
@@ -279,14 +289,29 @@ def _retired_unit(
         and values["ActiveState"] == "inactive"
         and values["SubState"] == "dead"
         and values["MainPID"] == "0"
-        and values["NFileDescriptorStore"] == "0"
+        and values["NFileDescriptorStore"] in {"0", "1"}
+        and (loaded or values["NFileDescriptorStore"] == "0")
         and values["InvocationID"] in {"", invocation}
         and values["NeedDaemonReload"] == "no"
         and values["DropInPaths"] == ""
+        and values["Job"] in {"", "0"}
+        and values["ControlGroup"] == ""
         and values["FragmentPath"] == ("/etc/systemd/system/" + template if loaded else ""),
         "RETIREMENT_UNCERTAIN",
     )
-    return RetiredImageGpuUnit(values["LoadState"], values["InvocationID"])
+    return _StoppedImageGpuUnit(
+        values["LoadState"],
+        values["InvocationID"],
+        0 if values["NFileDescriptorStore"] == "0" else 1,
+    )
+
+
+def _retired_unit(
+    observed: ImageGpuUnitReadyObservation | ImageGpuUnitUnleasedTerminalObservation,
+) -> RetiredImageGpuUnit:
+    stopped = _stopped_unit(observed)
+    _require(stopped.stored_descriptors == 0, "RETIREMENT_UNCERTAIN")
+    return RetiredImageGpuUnit(stopped.load_state, stopped.invocation_id)
 
 
 def observe_retired_image_gpu_unit(
@@ -363,6 +388,19 @@ def retire_image_gpu_unit(terminal: ImageGpuUnitTerminalObservation) -> ImageGpu
             "stop" if terminal.original_outcome == "SUCCEEDED" else "reset-failed",
             terminal.ready.unit_name,
         )
+        stopped = _stopped_unit(terminal.ready)
+        if stopped.stored_descriptors == 1:
+            # Preserve=yes survives stop/reset. Release only the same retained
+            # physical descriptor after stopped/empty cgroup/device rechecks.
+            observe_runtime_device(terminal.ready.device)
+            observe_image_unit_gpu_retained_resources(
+                terminal.ready.resources, unit=terminal.ready.unit_name
+            )
+            _require(
+                observe_cuda_probe_gpu_clients(terminal.ready.device) == (), "RETIREMENT_UNCERTAIN"
+            )
+            _require(_stopped_unit(terminal.ready) == stopped, "RETIREMENT_UNCERTAIN")
+            _effect("clean", "--what=fdstore", terminal.ready.unit_name)
         result = observe_retired_image_gpu_unit(terminal)
         _save(directory, "result.json", "IMAGE_GPU_RETIRED_NOT_ADMITTED", result)
         return result

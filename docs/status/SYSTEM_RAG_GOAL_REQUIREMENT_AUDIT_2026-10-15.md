@@ -9,6 +9,20 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Actual image lifecycle follow-up2026-10-17: the corrected unleased invalid-input
+  OS case passed namespace/CLI failure/root retirement while another holder's lease
+  stayed unchanged. All19main/root guardian units then received explicit system.slice
+  placement matching the existing process/cgroup contract, template-only install
+  PASS. The retained missing-model case found a kernel signal-wait mask mismatch
+  before ACK and Preserve=yes keeping PID1store1after stop; no actual model ran.
+  Exact no-ACK/empty-cgroup/GPU-idle OS recovery cleaned only that failed case and
+  proved same-inode reacquisition. All26image entry fences are currently retained.
+  Source fixes retain strict thread-mask/UID checks, use bounded nonblocking ACK
+  observation and explicit stopped-unit-only fdstore cleanup. Related379tests and
+  strict4source gates PASS. New lease/root owner install and actual retained/crash/
+  timeout gates remain OPEN; no numerical-prefix rebuild or full-goal claim.
+  [Actual evidence and successor boundary](../architecture/INCREMENTAL_EMBEDDING_GPU_RUNTIME_DESIGN.md#retained-handshake-and-explicit-fdstore-release--source-correction).
+
 - Actual coordinated image release2026-10-17:19GPU main templates plus fixed root
   entry/guardian and both EOM-only wheel cohorts installed;26prefix entry fences
   removed after installed checks. Scoped permission preparation376/349/12completed,
