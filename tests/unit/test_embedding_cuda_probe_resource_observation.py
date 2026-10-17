@@ -232,3 +232,59 @@ def test_retained_phase_rejects_lost_or_changed_physical_fence(kernel, fault):
         owner.observe_cuda_probe_retained_resources(
             observed, unit="eom-embedding-native-cuda-probe@" + report.execution_id + ".service"
         )
+
+
+@pytest.fixture
+def released(kernel, monkeypatch):
+    observed = observe(kernel)
+    _, k, state, _ = kernel
+    events = []
+
+    def opened(path, flags):
+        assert path == owner._LOCK
+        assert flags == os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
+        events.append("open")
+        return 700
+
+    def flock(descriptor, flags):
+        assert descriptor == 700 and flags == owner.fcntl.LOCK_EX | owner.fcntl.LOCK_NB
+        events.append("flock")
+        if state.get("still_retained"):
+            raise BlockingIOError("synthetic retained open description")
+
+    monkeypatch.setattr(owner.os, "open", opened, raising=False)
+    monkeypatch.setattr(owner.os, "fstat", lambda fd: k.values[99], raising=False)
+    monkeypatch.setattr(owner.os, "close", lambda fd: events.append("close"), raising=False)
+    for name in ("O_NOFOLLOW", "O_NONBLOCK"):
+        monkeypatch.setattr(owner.os, name, getattr(os, name), raising=False)
+    monkeypatch.setattr(owner.fcntl, "flock", flock)
+    return observed, k, state, events
+
+
+def test_released_lock_holds_new_description_through_post_checks_and_only_closes_it(released):
+    observed, _, _, events = released
+    with owner.hold_released_cuda_probe_resources(observed):
+        assert events == ["open", "flock"]
+        events.append("post-checks")
+    assert events == ["open", "flock", "post-checks", "close"]
+
+
+def test_retained_lock_prevents_release_proof_without_unlock_or_reset(released):
+    observed, _, state, events = released
+    state["still_retained"] = True
+    with (
+        pytest.raises(ValueError, match="RELEASE_UNCERTAIN"),
+        owner.hold_released_cuda_probe_resources(observed),
+    ):
+        pytest.fail("retained flock cannot authorize post-retirement success")
+    assert events == ["open", "flock", "close"]
+
+
+def test_released_lock_drift_and_body_failure_still_close_only_new_description(released):
+    observed, k, _, events = released
+    with (
+        pytest.raises(ValueError, match="RESOURCE_OBSERVATION_INVALID"),
+        owner.hold_released_cuda_probe_resources(observed),
+    ):
+        k.named[99] = metadata(k.values[99].st_mode, 100, device=2, gid=2468)
+    assert events[-1] == "close"

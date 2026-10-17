@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import fcntl
 import os
 import re
 import subprocess
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -177,6 +180,42 @@ def observe_cuda_probe_retained_resources(
     for node in observed.device_nodes:
         _require(_epoch(Path(node.path).lstat()) == node.epoch)
     return observed
+
+
+@contextmanager
+def hold_released_cuda_probe_resources(
+    observed: CudaProbeResourceObservation,
+) -> Iterator[None]:
+    """Root cleanup proof only: hold the same now-free inode across post-retirement checks."""
+    _require(os.getresuid() == (0, 0, 0) and type(observed) is CudaProbeResourceObservation)
+    lease = RootLocalCudaSharedGpuLease.model_validate(observed.shared_gpu_lease)
+    validate_rootlocal_cuda_resource_file_metadata(observed.device_nodes, lease)
+
+    def current() -> None:
+        _require(_epoch(_LOCK.lstat()) == lease.lock_epoch)
+        _require(_epoch(_LOCK.parent.lstat())[:5] == lease.parent_epoch)
+        for node in observed.device_nodes:
+            _require(_epoch(Path(node.path).lstat()) == node.epoch)
+
+    current()
+    _require_tmpfs_device(lease.lock_epoch[0])
+    descriptor = os.open(_LOCK, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
+    try:
+        _require(_epoch(os.fstat(descriptor)) == lease.lock_epoch)
+        # A separate open description cannot acquire this while PID1 retains the old flock.
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise ValueError("NATIVE_CUDA_PROBE_RESOURCE_RELEASE_UNCERTAIN") from None
+        current()
+        try:
+            yield
+        finally:
+            _require(_epoch(os.fstat(descriptor)) == lease.lock_epoch)
+            current()
+    finally:
+        # Close only our new description. Never LOCK_UN on the old retained description.
+        os.close(descriptor)
 
 
 def observe_cuda_probe_resources(

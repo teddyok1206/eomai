@@ -297,7 +297,8 @@ class NativeCudaProbeTerminalObservation:
     terminal_probe_gpu_client_count: Literal[0] = 0
 
 
-def _require_empty_probe_cgroup(cgroup: str) -> None:
+def require_native_cuda_probe_empty_cgroup(cgroup: str) -> None:
+    """One terminal-cgroup rule shared by successful, failed and retired observations."""
     try:
         _require(native_probe_cgroup_members(cgroup) == (), "TERMINATION_UNCERTAIN")
     except FileNotFoundError:
@@ -341,7 +342,7 @@ def verify_native_cuda_probe_terminal(
         _require(
             inspect_cpu_unit(unit, template=CUDA_PROBE_TEMPLATE) == before, "TERMINATION_UNCERTAIN"
         )
-        _require_empty_probe_cgroup(cgroup)
+        require_native_cuda_probe_empty_cgroup(cgroup)
 
     terminal()
     observe_runtime_device(report.device_capture)
@@ -411,7 +412,7 @@ def verify_native_cuda_probe_failed_terminal(
             "TERMINATION_UNCERTAIN",
         )
         _require(not (Path("/proc") / str(observed.pid)).exists(), "TERMINATION_UNCERTAIN")
-        _require_empty_probe_cgroup(cgroup)
+        require_native_cuda_probe_empty_cgroup(cgroup)
 
     terminal()
     observe_runtime_device(report.expected_device_capture)

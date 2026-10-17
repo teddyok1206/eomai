@@ -1063,6 +1063,66 @@ type check1 PASS, Ruff/format/diff PASS. Tests use synthetic OS ports, not the a
 retained failed unit. No root retirement, fdstore reset, retry, new GPU execution,
 sealing, selector/default change or production installation has occurred here.
 
+### Controlled failed-probe retirement — design before implementation
+
+- Boundary/canonical source: a separate root OS lifecycle adapter consumes the
+  existing failure observation and re-observes its original READY/unit/resources.
+  No worker, DB state or rejected FINAL claim authorizes release.
+- Identity/pointers: keep execution/invocation/PID-start/resource epochs and the
+  original failure in root-local operational records. These records are not
+  product Artifacts, admission receipts or a cross-service/worker protocol.
+- Access/structures/scale: fixed execution lookup and append-only per-execution
+  intent/result files; O(bounded observation bytes), no new DB/index/queue/cache.
+- Concurrency: hold the existing CUDA prefix publication flock used by the probe
+  owner and installer. Preserve/fsync a no-clobber intent before rechecking and
+  resetting **only** this terminal failed unit. Never reset-all or restart it.
+- Release proof: require inactive/dead/MainPID0/store0 and unchanged fixed unit
+  policy (or its collected not-found state), absent original process/cgroup/GPU
+  client, and a genuine exclusive nonblocking acquisition of the same physical
+  lock inode. Hold that temporary root descriptor across post-unit checks, then
+  close it; this does not authorize model execution or change the lock file.
+- Ownership/dependencies: existing infrastructure adapters own filesystem,
+  systemd and physical-lock behavior. Reuse bounded OS/resource/query checks.
+- Failure/retry: pre-write or recheck failure causes no reset. Timeout/nonzero or
+  uncertain post-state is retained and never automatically resubmitted. A later
+  readonly verification can resolve an uncertain outcome without another reset.
+  Never alter the original failed unit report/journal into successful admission.
+- Simpler alternative: ad-hoc `reset-failed` lacks preserved prior failure and
+  physical post-release checks; weakening the success observer is also wrong.
+  This fixed adapter is the existing boundary's lifecycle completion, not a
+  generic process manager or new scheduling framework.
+
+Actual preceding readonly check, 2026-10-17 01:00 UTC: installed owner12cc56ac,
+unit `eom-cuda-failed-terminal-check-12cc56ac.service`, invocation
+`5bcc592ee00f4985ac9a854a4635039c`, independently accepted the original
+db5a25ee READY record and failed invocation/MainPID0/empty cgroup/absent process/
+GPU-client/retained physical lease. Root record
+`/opt/eom/.embedding-cuda-retirement-db5a25ee/failed-terminal-observation.json`
+preserves the observation; store release=false, model executions0. This actual
+check does not constitute retirement. Numerical prefix/selector/default remain
+unchanged. The administrative owner installation did not activate a service.
+
+Source implementation checkpoint: `embedding_cuda_probe_retirement` owns the
+fixed root lifecycle boundary. It takes the same CUDA publication flock as the
+existing installer/probe owner, fsyncs a no-clobber root-local intent with the
+original failure, independently rechecks, submits exactly one unit-specific
+`reset-failed`, and writes a separate result only after actual post-unit/process/
+cgroup/device/GPU-client checks under a newly acquired same-inode exclusive flock.
+It never calls restart, removes a lock file, rewrites the original report or grants
+admission. Unknown reset outcomes retain the intent; a separate observation method
+performs no second reset. The shared terminal-cgroup rule remains authoritative.
+No worker/schema/DB/queue/dependency/default changes were needed.
+
+Validation: broad native/CUDA/prefix/resource/dependency suite1670 PASS77.16s plus
+one opt-in OLD tiny-wheel assembly test separately RUN/PASS1.87s; no GPU/model used.
+After extracting the shared cgroup rule, focused129 PASS14.44s; strict3, Ruff/format/
+diff PASS. Synthetic retirement tests include intent fsync/write failure, changed
+invocation after intent, uncertain timeout/nonzero/OS transport, duplicate intent,
+malformed/duplicate/oversized unit fields, changed policy/client/PID/cgroup after
+reset, collected unit recovery, readonly follow-up and real independent flock
+contention on a temporary non-production file. These are source tests, not actual
+retirement or native numerical admission. No new physical lease is a model grant.
+
 ## Terminal probe cleanup observation (before sealing or releasing the store)
 
 1. Extend the existing root probe owner with an independent terminal observation;
