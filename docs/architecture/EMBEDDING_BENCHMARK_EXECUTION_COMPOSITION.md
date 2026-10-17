@@ -189,3 +189,44 @@ No benchmark template is installed, no numerical prefix is upgraded and no Job i
 at this source checkpoint. **Still required:** supported source/real-Job owner composition,
 root per-launch environment preparation, admitted prefix successor, actual PID1/runtime
 activation, CUDA ownership/entry, six measurements, original regression gates and C1–C5.
+
+### Actual native/workflow-owner peer capture — 2026-10-17 06:18 UTC
+
+Source candidate `5ef60fc36d67299277286f48d4efc77cf8f029e0` passed the standard API
+three-wheel/RECORD build and was installed as a **passive owner** only. Numerical prefixes,
+active CPU jobs, root GPU guardian selection, service templates and activation were not
+changed. Existing EOM2 sudo authentication was reused; no fresh prompt or credential save.
+
+Platform raw wheel SHA:
+`f38dd3bbc348f40809fbf7db93ade4f5b1985622fa3c2569263929e33a16dcbf`;
+API-contract raw wheel SHA:
+`0ff7ec39617cc24ded79c0ddf45d59704f7e4ccf9a7b0e4e6fe059cd759d81f9`.
+Build directory:
+`/tmp/eom-api-build/5ef60fc36d67299277286f48d4efc77cf8f029e0.bMGoVP/dist`.
+
+The exact source fixtures ran against that installed owner with no optional ML import:
+**7 privileged cases PASS**, distinct from the689 source tests. Six reproduce actual
+root/native-account DAC. The seventh permanently drops a real native CPU child and a
+separate real workflow-owner client to their actual UIDs/GIDs, and verifies the kernel's
+exact owner PID/UID/GID through the production Unix channel capture. The owner has only
+the client connection, not the inherited listener; the native child cannot list the global
+parent, owns only accepted/captured descriptors, leaves the borrowed listener intact and
+closes its endpoint. No source/Job/Artifact authority or model is synthesized by this test.
+
+This is **actual filesystem/Unix peer evidence**, not an actual PID1 activation, complete
+namespace/sandbox proof, numerical-prefix admission, model timing or full benchmark PASS.
+OS-local protected evidence:
+`/opt/eom/embedding-benchmark-os-evidence/5ef60fc36d67299277286f48d4efc77cf8f029e0/`.
+Test stdout raw SHA:
+`5eaec871b7792ef1070a6b95b1b013c3c50bf6997ac63a362685176bd6ed0bdd`.
+No-replay root operator raw SHA:
+`e4d5d4a4d245d3f5fc3897c09570be879897541cdb9dcd01abfa241ace2d16ea`;
+local exit receipt `/tmp/eom-benchmark-cpu-os.3hTrb8kq/operator-result.json` reports0 and
+`expected_seven_tests_passed=true`. All remaining execution responsibilities above stay open.
+
+Routine observation06:10:42 UTC separately confirmed the existing INDEX/QUERY handles
+remain live; read-only metadata showed later completed workflows and immutable revisions.
+Encoding/binding rows465 and eligible-source545 are different denominators, not465/545
+completion. The latest per-view revision rows are not a coherent whole-corpus coverage
+audit. Original HTTP observer2895440 remains live/LOGIN; no new key, query, authentication
+prompt or worker restart was submitted. Next routine observation not before06:40:42 UTC.
