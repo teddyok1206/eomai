@@ -1481,6 +1481,43 @@ No model/Job/GPU lease, production data, numerical prefix, selector or default c
 Original HTTP PID2895440 was confirmed live in LOGIN11:09:25; no new login/prompt/key or
 credential/TTL changes. Routine auth next>=11:39:25; index next>=11:20:29 UTC.
 
+### Installed private activated-listener UID checkpoint — 2026-10-17
+
+Source `77743a9bc6b168648372209d37c230425e98d910` passed the standard three-wheel/
+RECORD build and main push. Build directory
+`/tmp/eom-api-build/77743a9bc6b168648372209d37c230425e98d910.pWRlei/dist`;
+platform raw SHA `1eb769fc2bb6d0578b999422eeea23be1a42cdb55584b5604596062beff4fc44`;
+API-contract raw SHA `cc5ddfd373150aa617a1f96cd3750c761ae26f8c90bcf208c498ec09b0c5ae51`.
+
+The existing pinned installer created only the passive owner release at
+`/opt/eom/embedding-owner-releases/77743a9bc6b168648372209d37c230425e98d910`.
+Actual UID0 imported/byte-matched all7 changed production modules against the retained
+wheel without ML imports. The10 private OS tests then passed, including the strengthened
+actual root-listener-creator/actual workflow-owner client/actual native CPU sender full
+checkpoint/resource exchange. Actual UIDs and kernel connection/per-message credentials
+are covered, not only a synthetic parser. Checkpoints, source authority and GPU counters
+are synthetic; the creator is a private root parent, not an actual PID1 service. This
+does not prove model execution, sandbox/unit activation or educational correctness.
+
+Protected evidence:
+`/opt/eom/embedding-benchmark-os-evidence/77743a9bc6b168648372209d37c230425e98d910/`.
+Test stdout raw SHA `696bff66349462e6d19fad170dca1023a6d8e0e3c85f41fbf6078a4cbe07ca6f`;
+fixture archive raw SHA `9833b795ddf3945e81e679e9f56588b0a52847900ae321a38965e8116e0ab4e3`;
+reviewed operator raw SHA `8781317edf44c60e92d71bece33160afdb038c90c38fb8fab8a95e8111db7e17`.
+Local no-replay receipt `/tmp/eom-benchmark-activated-os.hHfGBJrd/operator-result.json`
+returned0 at11:19:59 UTC; no failed install/test was retried. Same EOM2 sudo TTY was
+reused without a new authentication prompt or TTL change. Only private temporary /run
+fixture workspaces were created/removed by normal test cleanup. No production handoff,
+DB/Job/Artifact, numerical prefix, model/GPU lease, installed unit, runtime selector or
+default changed. Previous release evidence remains immutable/version-specific.
+
+The due11:22:02 UTC read-only projection reported561 binding/encoding rows,147 index
+revisions and6 logical indexes. Latest views173/189/199 each report545 eligible sources;
+these are not561 unique Items or complete coverage. The bounded latest5 workflows were
+3 completed/1 running/1 requested without failure codes, not global zero failures. Actual
+INDEX3633849/QUERY3633843 remained alive11h14m13. Same protected adapter and EOM2 sudo TTY,
+no execution restart/new query/key/credential/TTL. Next routine index check>=11:52:03 UTC.
+
 ## Root resource relay — design before implementation
 
 The workflow-owner process must not manufacture independent GPU counters, impersonate UID0
