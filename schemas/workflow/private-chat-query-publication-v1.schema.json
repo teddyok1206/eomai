@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/private-chat-query-publication/1.0",
+  "title": "Private Chat QUERY launch and text-free execution record",
+  "description": "Supplied immutable provenance only, never actual owned-message/session/native execution authority. The original message remains canonical; no private question text is copied into this publication record.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/launch"
+    },
+    {
+      "$ref": "#/$defs/record"
+    }
+  ],
+  "$defs": {
+    "launch": {
+      "$id": "eom://schemas/workflow/private-chat-query-launch-association/1.0",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "purpose",
+        "workflow_id",
+        "step_run_id",
+        "step_key",
+        "attempt",
+        "workflow_request_sha256",
+        "context_request_sha256",
+        "basis_sha256",
+        "native_launch_job_id",
+        "query_request_id",
+        "query_request_sha256",
+        "query_input_set_sha256",
+        "recipe_sha256",
+        "runtime_bundle",
+        "resource_profile_sha256",
+        "original_command_id",
+        "original_command_generation",
+        "launched_at",
+        "association_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "private-chat-query-launch-association/1.0"
+        },
+        "purpose": {
+          "const": "PRIVATE_CHAT_QUERY"
+        },
+        "workflow_id": {
+          "type": "string",
+          "pattern": "^workflow_[0-9a-f]{32}$"
+        },
+        "step_run_id": {
+          "type": "string",
+          "pattern": "^steprun_[0-9a-f]{32}$"
+        },
+        "step_key": {
+          "const": "encode_private_chat_query"
+        },
+        "attempt": {
+          "type": "integer",
+          "const": 1
+        },
+        "workflow_request_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "context_request_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "basis_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "native_launch_job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9a-f]{32}$"
+        },
+        "query_request_id": {
+          "type": "string",
+          "pattern": "^embeddingquery_[0-9a-f]{32}$"
+        },
+        "query_request_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "query_input_set_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "recipe_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "runtime_bundle": {
+          "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/bundlePointer"
+        },
+        "resource_profile_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        },
+        "original_command_id": {
+          "type": "string",
+          "pattern": "^wfcmd_[0-9a-f]{32}$"
+        },
+        "original_command_generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "launched_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "association_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        }
+      }
+    },
+    "record": {
+      "$id": "eom://schemas/workflow/private-chat-query-execution-record/1.0",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "purpose",
+        "workflow_request",
+        "launch",
+        "record_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "private-chat-query-execution-record/1.0"
+        },
+        "purpose": {
+          "const": "PRIVATE_CHAT_QUERY"
+        },
+        "workflow_request": {
+          "$ref": "eom://schemas/workflow/private-chat-query-execution/1.0#/$defs/request"
+        },
+        "launch": {
+          "$ref": "eom://schemas/workflow/private-chat-query-publication/1.0#/$defs/launch"
+        },
+        "record_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        }
+      }
+    }
+  }
+}

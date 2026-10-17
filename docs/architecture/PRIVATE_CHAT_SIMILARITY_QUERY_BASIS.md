@@ -439,3 +439,8 @@ DB/model/activation calls0. Synthetic input was staged separately, pinned raw
 The read-only proof and staged input remain under
 `/tmp/eom-private-query-intent.gyMCBX4F`; they are not source/IAM/native acceptance.
 No protected prefix, service, policy, original request or selected device changed.
+
+The next [private result publication boundary](PRIVATE_CHAT_QUERY_PUBLICATION.md)
+uses the same Orchestrator Artifact owner and a text-free execution record. Its
+implementation/tests are tracked separately from the earlier intent checkpoint;
+the original user-message remains the canonical private question.

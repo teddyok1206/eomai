@@ -705,6 +705,12 @@ PRIVATE_CHAT_QUERY_EXECUTION_SCHEMA_RESOURCE = (
     "eom://schemas/workflow/private-chat-query-execution/1.0",
     "sha256:b1a2d42eb5d7ed9ce8b6447e7524a90121820961a22882d5b91f331312609a6f",
 )
+PRIVATE_CHAT_QUERY_PUBLICATION_SCHEMA_RESOURCE = (
+    "private-chat-publication",
+    "private-chat-query-publication-v1.schema.json",
+    "eom://schemas/workflow/private-chat-query-publication/1.0",
+    "sha256:0e1282a4f912a4aaa25cb7cb4062179742a5d8165a875c3b17d101547eaacf0a",
+)
 EMBEDDING_BENCHMARK_LAUNCH_CONTROL_SCHEMA_RESOURCE = (
     "benchmark-launch-control",
     "embedding-benchmark-launch-control-v1.schema.json",
@@ -712,6 +718,7 @@ EMBEDDING_BENCHMARK_LAUNCH_CONTROL_SCHEMA_RESOURCE = (
     "sha256:2ceb6cb0150ffc64f2b4e94fed17cff36181b486885c8f78d8e6c0cd4c34de27",
 )
 type LocalEmbeddingSchemaName = Literal[
+    "private-chat-publication",
     "private-chat-execution",
     "benchmark-launch-control",
     "request",
@@ -769,6 +776,7 @@ def _local_embedding_admission_schema(name: LocalEmbeddingSchemaName) -> dict[st
                 *LOCAL_EMBEDDING_SCHEMA_RESOURCES,
                 *LOCAL_EMBEDDING_SERVICE_SCHEMA_RESOURCES,
                 PRIVATE_CHAT_QUERY_EXECUTION_SCHEMA_RESOURCE,
+                PRIVATE_CHAT_QUERY_PUBLICATION_SCHEMA_RESOURCE,
                 EMBEDDING_BENCHMARK_LAUNCH_CONTROL_SCHEMA_RESOURCE,
             )
             if entry[0] == name
@@ -805,6 +813,7 @@ def _local_embedding_admission_schema_registry() -> Registry[Any]:
             *LOCAL_EMBEDDING_SCHEMA_RESOURCES,
             *LOCAL_EMBEDDING_SERVICE_SCHEMA_RESOURCES,
             PRIVATE_CHAT_QUERY_EXECUTION_SCHEMA_RESOURCE,
+            PRIVATE_CHAT_QUERY_PUBLICATION_SCHEMA_RESOURCE,
             EMBEDDING_BENCHMARK_LAUNCH_CONTROL_SCHEMA_RESOURCE,
         )
     )
@@ -823,6 +832,7 @@ def local_embedding_admission_schema_registry() -> Registry[Any]:
             *LOCAL_EMBEDDING_SCHEMA_RESOURCES,
             *LOCAL_EMBEDDING_SERVICE_SCHEMA_RESOURCES,
             PRIVATE_CHAT_QUERY_EXECUTION_SCHEMA_RESOURCE,
+            PRIVATE_CHAT_QUERY_PUBLICATION_SCHEMA_RESOURCE,
             EMBEDDING_BENCHMARK_LAUNCH_CONTROL_SCHEMA_RESOURCE,
         )
     )
@@ -843,6 +853,7 @@ def validate_local_embedding_admission_message(
                 "service-execution-policy",
                 "benchmark-launch-control",
                 "private-chat-execution",
+                "private-chat-publication",
             }
             else 64 * 1024**2
         )

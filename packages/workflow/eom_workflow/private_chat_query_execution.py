@@ -123,7 +123,7 @@ def validate_private_chat_query_execution_input(
     policy: PrivateChatQueryExecutionPolicy,
     bundle: EmbeddingRuntimeBundle,
     native: EmbeddingPrivateChatQueryInput,
-) -> None:
+) -> EmbeddingPrivateChatQueryInput:
     """Bind the exact owned question, parent, DOCUMENT recipe and selected QUERY recipe."""
     request, policy = validate_private_chat_query_request_references(request, policy, bundle)
     try:
@@ -146,3 +146,4 @@ def validate_private_chat_query_execution_input(
         or native.threads != request.resource_profile.threads
     ):
         raise ValueError("private QUERY native input differs from exact execution intent")
+    return native

@@ -14,10 +14,18 @@ from functools import partial
 from pathlib import Path
 from typing import Annotated, Any
 
+from eom_catalog_contracts.embedding_private_chat_query import (
+    MAX_PRIVATE_CHAT_QUERY_BYTES,
+    PRIVATE_CHAT_QUERY_RESULT_REF,
+    EmbeddingPrivateChatQueryInput,
+    EmbeddingPrivateChatQueryResult,
+    validate_private_chat_query_result,
+)
 from eom_catalog_contracts.embedding_reference_query import (
     MAX_REFERENCE_QUERY_BYTES,
     REFERENCE_QUERY_RESULT_REF,
     parse_embedding_reference_query_result,
+    raw_similarity_contract_value,
 )
 from eom_catalog_contracts.embedding_reference_query_v11 import (
     REFERENCE_QUERY_INPUT_V11_REF,
@@ -46,7 +54,7 @@ from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
 from eom_catalog_contracts.models import Sha256, UtcDatetime
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
-from eom_protocol.models import JobId
+from eom_protocol.models import ArtifactId, JobId, RevisionId
 from eom_workflow.local_embedding_encoding_job import (
     LocalEmbeddingLaunchAssociation,
     validate_local_embedding_launch_association,
@@ -61,6 +69,15 @@ from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
 from eom_workflow.local_embedding_workflow import (
     LocalEmbeddingWorkflowRequest,
     parse_local_embedding_workflow_request,
+)
+from eom_workflow.private_chat_query_execution import (
+    PrivateChatQueryExecutionPolicy,
+    PrivateChatQueryWorkflowRequest,
+)
+from eom_workflow.private_chat_query_publication import (
+    PRIVATE_CHAT_QUERY_RECORD_REF,
+    PrivateChatQueryLaunchAssociation,
+    validate_private_chat_query_launch,
 )
 from eom_workflow.reference_query_execution import (
     ReferenceQueryExecutionPolicy,
@@ -85,11 +102,19 @@ from eom_orchestrator.file_set_control_artifacts import (
 EMBEDDING_INDEX_ARTIFACT_TYPE = "control_embedding_index"
 EMBEDDING_RESULT_ARTIFACT_TYPE = "control_incremental_embedding"
 EMBEDDING_REFERENCE_QUERY_ARTIFACT_TYPE = "control_embedding_reference_query"
+EMBEDDING_PRIVATE_CHAT_QUERY_ARTIFACT_TYPE = "control_embedding_private_chat_query"
 EMBEDDING_INDEX_MANIFEST_VERSION = CONTROL_FILE_SET_PROTOCOL
 EMBEDDING_INDEX_PRIMARY_MEMBER = "index.json"
 EMBEDDING_INDEX_MEMBER_NAMES = (EMBEDDING_INDEX_PRIMARY_MEMBER,)
 _MEMBERS = frozenset(
-    {"input.json", "result.json", "shard.json", "vectors.f32", EMBEDDING_INDEX_PRIMARY_MEMBER}
+    {
+        "input.json",
+        "intent.json",
+        "result.json",
+        "shard.json",
+        "vectors.f32",
+        EMBEDDING_INDEX_PRIMARY_MEMBER,
+    }
 )
 _MAX_BINARY_BYTES = 16 * 1024**2
 _BINARY_SCHEMA_REF = "eom://schemas/knowledge/embedding-f32le-l2-row-major/1.0"
@@ -120,6 +145,19 @@ class PublishedReferenceQueryArtifacts:
     owner_job_id: str
     logical_query_job_id: str
     input: ArtifactMemberPointer
+    result: ArtifactMemberPointer
+    shard: ArtifactMemberPointer
+    binary: ArtifactMemberPointer
+    manifest_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class PublishedPrivateChatQueryArtifacts:
+    """Private pointer-only publication; the original message remains canonical text."""
+
+    owner_job_id: str
+    logical_query_job_id: str
+    intent: ArtifactMemberPointer
     result: ArtifactMemberPointer
     shard: ArtifactMemberPointer
     binary: ArtifactMemberPointer
@@ -252,7 +290,7 @@ def _member(directory: int, name: str, maximum_bytes: int) -> Iterator[bytes]:
 
 def _materialize_manifest(directory: int, name: str, payload: bytes) -> None:
     """Create once; a partial or conflicting preexisting file is never overwritten."""
-    if name not in {"shard.json", EMBEDDING_INDEX_PRIMARY_MEMBER}:
+    if name not in {"intent.json", "shard.json", EMBEDDING_INDEX_PRIMARY_MEMBER}:
         raise EmbeddingArtifactStoreError("EMBEDDING_ARTIFACT_MEMBER_INVALID")
     descriptor: int | None = None
     try:
@@ -425,63 +463,233 @@ class EmbeddingArtifactStore:
                         "application/octet-stream",
                     ),
                 )
-                publish = (
-                    self.publisher.publish
-                    if identity is None
-                    else partial(self.publisher.publish_identified, identity=identity)
-                )
-                receipt = publish(
+                receipt = self._publish_query_members(
                     members=members,
-                    primary_file="result.json",
                     artifact_type=EMBEDDING_REFERENCE_QUERY_ARTIFACT_TYPE,
-                    manifest_version=CONTROL_FILE_SET_PROTOCOL,
                     idempotency_key=key,
-                    source_commit=self.source_commit,
                     created_at=timestamp,
+                    logical_query_job_id=request.job_id,
+                    identity=identity,
+                    receipt_error="EMBEDDING_REFERENCE_QUERY_RECEIPT_INVALID",
                 )
-                try:
-                    if not isinstance(receipt, PublishedControlFileSet):
-                        raise ValueError("QUERY owner receipt type differs")
-                    owner_job_id = TypeAdapter(JobId).validate_python(receipt.job_id)
-                    manifest_sha256 = TypeAdapter(Sha256).validate_python(receipt.manifest_sha256)
-                    if (
-                        receipt.primary_file != "result.json"
-                        or receipt.primary_sha256 != members[1].sha256
-                        or (
-                            identity is not None
-                            and (
-                                receipt.job_id != identity.job_id
-                                or receipt.artifact_id != identity.artifact_id
-                                or receipt.artifact_revision_id != identity.artifact_revision_id
-                                or receipt.job_id == request.job_id
-                            )
-                        )
-                    ):
-                        raise ValueError("QUERY owner receipt differs")
-                    pointers = tuple(
-                        ArtifactMemberPointer(
-                            artifact_id=receipt.artifact_id,
-                            artifact_revision_id=receipt.artifact_revision_id,
-                            member_path=member.file_name,
-                            schema_ref=member.schema_ref,
-                            media_type=member.media_type,
-                            sha256=member.sha256,
-                        )
-                        for member in members
+                pointers = self._query_member_pointers(receipt, members)
+                return PublishedReferenceQueryArtifacts(
+                    receipt.job_id, request.job_id, *pointers, receipt.manifest_sha256
+                )
+
+    def _publish_query_members(
+        self,
+        *,
+        members: tuple[ControlFileSetMember, ...],
+        artifact_type: str,
+        idempotency_key: str,
+        created_at: datetime,
+        logical_query_job_id: str,
+        identity: ControlFileSetIdentity | None,
+        receipt_error: str,
+    ) -> PublishedControlFileSet:
+        """One commit/receipt rule for two distinct QUERY file-set contracts."""
+        if len(members) != 4 or members[1].file_name != "result.json":
+            raise EmbeddingArtifactStoreError(receipt_error)
+        publish = (
+            self.publisher.publish
+            if identity is None
+            else partial(self.publisher.publish_identified, identity=identity)
+        )
+        receipt = publish(
+            members=members,
+            primary_file="result.json",
+            artifact_type=artifact_type,
+            manifest_version=CONTROL_FILE_SET_PROTOCOL,
+            idempotency_key=idempotency_key,
+            source_commit=self.source_commit,
+            created_at=created_at,
+        )
+        try:
+            if not isinstance(receipt, PublishedControlFileSet):
+                raise ValueError("QUERY owner receipt type differs")
+            TypeAdapter(JobId).validate_python(receipt.job_id)
+            TypeAdapter(Sha256).validate_python(receipt.manifest_sha256)
+            # Validate Artifact IDs even when the existing publisher allocated them.
+            TypeAdapter(ArtifactId).validate_python(receipt.artifact_id, strict=True)
+            TypeAdapter(RevisionId).validate_python(receipt.artifact_revision_id, strict=True)
+            if (
+                receipt.primary_file != "result.json"
+                or receipt.primary_sha256 != members[1].sha256
+                or (
+                    identity is not None
+                    and (
+                        (receipt.job_id, receipt.artifact_id, receipt.artifact_revision_id)
+                        != (identity.job_id, identity.artifact_id, identity.artifact_revision_id)
+                        or receipt.job_id == logical_query_job_id
                     )
-                    return PublishedReferenceQueryArtifacts(
-                        owner_job_id,
-                        request.job_id,
-                        pointers[0],
-                        pointers[1],
-                        pointers[2],
-                        pointers[3],
-                        manifest_sha256,
-                    )
-                except (ValueError, TypeError):
+                )
+            ):
+                raise ValueError("QUERY owner receipt differs")
+        except (ValueError, TypeError):
+            raise EmbeddingArtifactStoreError(receipt_error) from None
+        return receipt
+
+    @staticmethod
+    def _query_member_pointers(
+        receipt: PublishedControlFileSet, members: tuple[ControlFileSetMember, ...]
+    ) -> tuple[
+        ArtifactMemberPointer, ArtifactMemberPointer, ArtifactMemberPointer, ArtifactMemberPointer
+    ]:
+        pointers = tuple(
+            ArtifactMemberPointer(
+                artifact_id=receipt.artifact_id,
+                artifact_revision_id=receipt.artifact_revision_id,
+                member_path=member.file_name,
+                schema_ref=member.schema_ref,
+                media_type=member.media_type,
+                sha256=member.sha256,
+            )
+            for member in members
+        )
+        return pointers[0], pointers[1], pointers[2], pointers[3]
+
+    def publish_private_chat_query(
+        self,
+        *,
+        workflow_request: PrivateChatQueryWorkflowRequest,
+        policy: PrivateChatQueryExecutionPolicy,
+        bundle: EmbeddingRuntimeBundle,
+        launch: PrivateChatQueryLaunchAssociation,
+        request: EmbeddingPrivateChatQueryInput,
+        workspace: Path,
+        created_at: datetime,
+        identity: ControlFileSetIdentity,
+        expected_result_sha256: str,
+    ) -> PublishedPrivateChatQueryArtifacts:
+        """Commit text-free provenance and vectors, not another copy of the owned question.
+
+        This store validates supplied values only. Actual owned-message/session,
+        command/lease and native execution admission remain the calling owner's duty.
+        """
+        try:
+            request = EmbeddingPrivateChatQueryInput.model_validate(
+                raw_similarity_contract_value(request)
+            )
+            record = validate_private_chat_query_launch(
+                launch, workflow_request, policy, bundle, request
+            )
+            TypeAdapter(Sha256).validate_python(expected_result_sha256, strict=True)
+            if type(identity) is not ControlFileSetIdentity:
+                raise ValueError("private QUERY publication identity differs")
+            identity = ControlFileSetIdentity(
+                TypeAdapter(JobId).validate_python(identity.job_id, strict=True),
+                TypeAdapter(ArtifactId).validate_python(identity.artifact_id, strict=True),
+                TypeAdapter(RevisionId).validate_python(identity.artifact_revision_id, strict=True),
+            )
+            if identity.job_id == request.job_id:
+                raise ValueError("private QUERY publication identity differs")
+            timestamp = TypeAdapter(UtcDatetime).validate_python(created_at, strict=True)
+            if timestamp < record.launch.launched_at:
+                raise ValueError("private QUERY publication precedes launch")
+            input_bytes = canonical_json_bytes(request)
+            intent_bytes = canonical_json_bytes(record)
+        except (ValueError, TypeError, JsonSchemaValidationError):
+            raise EmbeddingArtifactStoreError(
+                "EMBEDDING_PRIVATE_CHAT_QUERY_CONTEXT_INVALID"
+            ) from None
+        key = "embedding-private-chat-query-artifact:" + content_sha256(
+            {
+                "logical_query_job_id": request.job_id,
+                "native_request_sha256": request.request_sha256,
+                "workflow_request_sha256": record.workflow_request.request_sha256,
+                "launch_association_sha256": record.launch.association_sha256,
+            }
+        ).removeprefix("sha256:")
+        with (
+            _directory(workspace) as directory,
+            _member(directory, "input.json", MAX_PRIVATE_CHAT_QUERY_BYTES) as saved_input,
+            _member(directory, "result.json", MAX_PRIVATE_CHAT_QUERY_BYTES) as result_bytes,
+            _member(
+                directory, "vectors.f32", request.spaces.query.model_spec.dimension * 4
+            ) as binary_bytes,
+        ):
+            if saved_input != input_bytes:
+                raise EmbeddingArtifactStoreError("EMBEDDING_PRIVATE_CHAT_QUERY_INPUT_INVALID")
+            try:
+                result = EmbeddingPrivateChatQueryResult.model_validate(
+                    json.loads(result_bytes, object_pairs_hook=_unique_object)
+                )
+                validate_private_chat_query_result(request, result)
+                if (
+                    result.result_sha256 != expected_result_sha256
+                    or result_bytes != canonical_json_bytes(result)
+                ):
+                    raise ValueError("private QUERY actual result differs")
+            except (ValueError, TypeError, JsonSchemaValidationError, RecursionError):
+                raise EmbeddingArtifactStoreError(
+                    "EMBEDDING_PRIVATE_CHAT_QUERY_RESULT_INVALID"
+                ) from None
+            shard = result.shard
+            read_unit_vectors(
+                binary_bytes,
+                dimension=shard.dimension,
+                row_count=1,
+                expected_sha256=shard.binary.sha256,
+            )
+            shard_bytes = canonical_json_bytes(shard)
+            _materialize_manifest(directory, "intent.json", intent_bytes)
+            _materialize_manifest(directory, "shard.json", shard_bytes)
+            with (
+                _member(directory, "intent.json", 64 * 1024) as saved_intent,
+                _member(directory, "shard.json", MAX_PRIVATE_CHAT_QUERY_BYTES) as saved_shard,
+            ):
+                if saved_intent != intent_bytes or saved_shard != shard_bytes:
                     raise EmbeddingArtifactStoreError(
-                        "EMBEDDING_REFERENCE_QUERY_RECEIPT_INVALID"
-                    ) from None
+                        "EMBEDDING_PRIVATE_CHAT_QUERY_MEMBER_CONFLICT"
+                    )
+                members = (
+                    ControlFileSetMember(
+                        "intent.json",
+                        workspace / "intent.json",
+                        sha256_bytes(saved_intent),
+                        len(saved_intent),
+                        PRIVATE_CHAT_QUERY_RECORD_REF,
+                        "application/json",
+                    ),
+                    ControlFileSetMember(
+                        "result.json",
+                        workspace / "result.json",
+                        sha256_bytes(result_bytes),
+                        len(result_bytes),
+                        PRIVATE_CHAT_QUERY_RESULT_REF,
+                        "application/json",
+                    ),
+                    ControlFileSetMember(
+                        "shard.json",
+                        workspace / "shard.json",
+                        sha256_bytes(saved_shard),
+                        len(saved_shard),
+                        SHARD_SCHEMA_REF,
+                        "application/json",
+                    ),
+                    ControlFileSetMember(
+                        "vectors.f32",
+                        workspace / "vectors.f32",
+                        shard.binary.sha256,
+                        len(binary_bytes),
+                        _BINARY_SCHEMA_REF,
+                        "application/octet-stream",
+                    ),
+                )
+                receipt = self._publish_query_members(
+                    members=members,
+                    artifact_type=EMBEDDING_PRIVATE_CHAT_QUERY_ARTIFACT_TYPE,
+                    idempotency_key=key,
+                    created_at=timestamp,
+                    logical_query_job_id=request.job_id,
+                    identity=identity,
+                    receipt_error="EMBEDDING_PRIVATE_CHAT_QUERY_RECEIPT_INVALID",
+                )
+                pointers = self._query_member_pointers(receipt, members)
+                return PublishedPrivateChatQueryArtifacts(
+                    receipt.job_id, request.job_id, *pointers, receipt.manifest_sha256
+                )
 
     def publish_index(
         self,
