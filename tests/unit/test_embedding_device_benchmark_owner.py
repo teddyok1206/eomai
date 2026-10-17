@@ -200,3 +200,31 @@ def test_failed_preflight_or_current_authority_creates_no_job(owner_case, monkey
     with case.sessions() as session:
         assert session.scalar(select(func.count()).select_from(JobRecord)) == 0
     assert not case.execution.calls and not case.capacity[0]
+
+
+def test_resource_authorization_cannot_borrow_a_different_invocation(owner_case, monkeypatch):
+    from eom_catalog_contracts.embedding_device_benchmark import BenchmarkWorkerInvocation
+
+    from tests.unit.inference_transfer_embedding_fixtures import seal
+
+    case, captured = owner_case, []
+    original = case.execution.run_and_publish
+
+    def capture(invocation, inputs, authorization):
+        captured.append(authorization)
+        return original(invocation, inputs, authorization)
+
+    monkeypatch.setattr(case.execution, "run_and_publish", capture)
+    case.execution.fail_ordinal = 1
+    with pytest.raises(ValueError, match="EXECUTION_UNCERTAIN"):
+        case.owner.run_launches(case.request)
+    authorization = captured[0]
+    invocation = case.execution.calls[0]
+    authorization.assert_invocation(invocation)
+    before = case.admission.entered
+    body = invocation.model_dump(mode="json")
+    body["execution_id"] = "f" * 32
+    other = BenchmarkWorkerInvocation.model_validate(seal(body, "invocation_sha256"))
+    with pytest.raises(ValueError, match="LAUNCH_AUTHORIZATION_INVALID"):
+        authorization.assert_invocation(other)
+    assert case.admission.entered == before

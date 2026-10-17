@@ -115,6 +115,13 @@ class BenchmarkLaunchAuthorization:
         validate_benchmark_checkpoint(self._invocation, checkpoint, checkpoint.sequence)
         self.assert_current()
 
+    def assert_invocation(self, invocation: BenchmarkWorkerInvocation) -> None:
+        """A resource/OS adapter cannot reuse another invocation's current authorization."""
+        embedding_device_benchmark_bytes(invocation)
+        if invocation != self._invocation:
+            raise BenchmarkOwnerError("BENCHMARK_OWNER_LAUNCH_AUTHORIZATION_INVALID")
+        self.assert_current()
+
 
 def _invocation(
     request: BenchmarkOwnerRequest, inputs: BenchmarkStagedInputs, job_id: str, ordinal: int

@@ -1359,3 +1359,82 @@ directly from that wheel (not Git/editable source), byte-matched each member and
 no torch/transformers/sentence-transformers/numpy imports. This verifies packaging/import
 closure, not installation/admission or numerical execution. No active or passive owner
 release, numerical prefix, unit, selector or default was installed/changed for this candidate.
+
+## Root resource relay — design before implementation
+
+The workflow-owner process must not manufacture independent GPU counters, impersonate UID0
+or stop sampling while it waits for a model. Add a resource-only Unix exchange between that
+actual owner and the actual root GPU observer, reusing exactly the released local/finalized
+ResourceEvidence1.0 messages. The relay itself neither launches/ACKs a unit nor grants source,
+Job, capacity or cleanup authority. The existing root lifecycle composition must retain the
+original invocation, prepare/ready/ACK/retirement responsibilities independently.
+
+Use the current length-prefixed bounded Unix framing and exact SO_PEERCRED/FD/deadline checks.
+A public resource-only endpoint owns one send and one receive, validates the pinned invocation,
+and refuses duplicate/foreign exchanges. The existing worker checkpoint/ACK protocol stays
+unchanged. An optional transport wait observer is an infrastructure scheduling hook, not a
+callback granting permission: only the concrete root relay supplies its real observer.sample.
+While a read/write is blocked it wakes at most every250ms to sample on the same control
+thread. Existing2s maximum observation-gap/peak/overlap bounds are not relaxed.
+
+Root relay construction requires actual root and the exact original workflow-owner PID/UID/
+GID/start/deadline from root-prepared environment, then constructs the concrete existing GPU
+observer before any compute ACK. Root caller must continue sampling through any intervening
+work; the relay does not hide ACK/preparation delays or treat a missing baseline as valid.
+Each wait checks peer/current owner before sampling. Received local evidence is validated,
+finalized by the same actual observer and returned through the same socket, with no model,
+DB, NAS publication, new queue/schema/dependency or implicit device fallback.
+
+The owner client requires its actual fixed OS account, the exact root peer and a bound
+current original-Job authorizer. It reauthorizes before sending and after receiving, validates
+the exact allowed resource-field changes and never fills missing GPU fields locally. Root
+loss, peer/source/identity change, timeout, malformed/duplicate exchange or a sampling error
+poisons/closes the owned channel; none means compute never happened or permits a retry.
+
+Operations are one fixed peer/FD lookup and one bounded frame per direction, with O(frame
+bytes) space/time and O(1) sampling state. No DB schema/index is involved. The simpler direct
+model-reported counters are insufficient: they cannot establish whole-process/device usage
+or independent overlap. A second encoder, queue or generic RPC framework is unnecessary.
+
+### Resource relay source checkpoint — 2026-10-17
+
+Implemented the concrete root relay and fixed-owner client, reusing ResourceEvidence1.0,
+length-prefixed framing, peer/FD/deadline fences and existing independent GPU finalization.
+The root relay constructs the actual observer before ACK and exposes same-thread sampling
+for the real lifecycle composition; blocked resource IO samples every250ms. Frozen reply
+backpressure checks peer/deadline without sampling/mutating finalized metrics. Owner client
+checks its actual local UID/GID and exact root peer, binds both current-authority checks to
+the original invocation, and compares the reply with a canonical local input snapshot so
+a late caller mutation cannot alter validation. No actor/role claim in a payload is used.
+All errors close only owned socket FDs, not physical GPU ownership or another unit's state.
+
+Related48 source suites **1691 PASS150.21s** include earlier1290/407 subsets, not summed.
+Strict mypy4 changed production modules, Ruff/format7 and diff pass. Actual unprivileged
+Unix sockets exercise kernel SO_PEERCRED, bounded resource roundtrip, same-control-thread
+wait observation, duplicate/foreign/non-resource/oversize/EOF refusal and nonrenewed deadline.
+Actual nonroot/wrong-owner processes are refused before root observation/frames/auth.
+Positive GPU observers, root/client identities and source authorizers are synthetic fixtures,
+not actual root unit/GPU/model or source authorization acceptance. Resource return-type
+checking caught the observer's snapshot-returning method; its explicit void scheduling
+wrapper preserves the transport hook type rather than relaxing finalization semantics.
+
+New opt-in privileged case uses actual root/actual workflow-owner UIDs and the packaged
+owner resource client on a private Unix socket, with synthetic counters and authorizer.
+It has not been executed at this source checkpoint. Existing9 DAC/environment/peer cases
+remain separate; their previous PASS is not claimed for a new installed candidate.
+No DB write/schema boundary changed here: previous0e3b8940 disposable21-case Identity/Job/
+policy evidence remains referenced, not falsely counted as a new DB run.
+
+No schema bytes, dependency, migration, queue, model execution, protected prefix or runtime
+selection changed. This bridge does not implement the actual fixed prepare/launch/ACK/
+retirement driver, cleanup evidence, numerical output validation/publication or six-run
+assessment. It must be connected by that trusted owner before any actual benchmark/default
+acceptance; root relay construction/data alone grants none of those permissions.
+
+The due read-only checkpoint10:20:11 UTC reused the same protected adapter/EOM2 sudo pane
+without prompting or changing TTL. It reported541 binding/encoding rows,142 revisions,
+6 logical indexes; latest per-view169/181/191 each report545 eligible sources. These are
+different revision projections, not541 unique Items or complete coherent coverage. Direct
+OS checks confirmed the original INDEX3633849 and QUERY3633843 handles alive10h12m21.
+No restart/new query/key/Job was submitted. Next routine index check>=10:50:12 UTC; original
+HTTP LOGIN was last actually confirmed10:05:34, with next routine auth check>=10:35:40.

@@ -246,6 +246,102 @@ def test_real_native_accepts_exact_workflow_owner_peer_without_binding_or_model(
             listener.close()
 
 
+def test_real_workflow_owner_resource_client_authenticates_root_peer_without_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Real UID0/owner credentials and frames; synthetic counters/authorizer, not GPU/IAM."""
+    if os.environ.get("EOM_RUN_BENCHMARK_HANDOFF_PRIVILEGED") != "1":
+        pytest.skip("explicit private benchmark filesystem OS gate required")
+    assert os.getresuid() == (0, 0, 0)
+    from eom_catalog_service.embedding_benchmark_channel import BenchmarkResourceChannel
+    from eom_orchestrator.embedding_benchmark_gpu_resource_client import (
+        OwnerBenchmarkGpuResourceClient,
+    )
+    from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkLaunchAuthorization
+
+    from tests.unit.embedding_device_benchmark_fixtures import resources
+    from tests.unit.test_embedding_benchmark_channel import local_resources
+
+    owner = pwd.getpwnam("eom-workflow-runner")
+    root_pid = os.getpid()
+    invocation = worker_invocation(2)
+    authorizations: list[str] = []
+
+    def synthetic_authorize(_self: object, actual: object) -> None:
+        assert actual == invocation
+        authorizations.append(invocation.invocation_sha256)
+
+    monkeypatch.setattr(BenchmarkLaunchAuthorization, "assert_invocation", synthetic_authorize)
+    with tempfile.TemporaryDirectory(prefix="eom-bench-resource-", dir="/run") as directory:
+        root = Path(directory)
+        root.chmod(0o711)
+        path = root / "root.sock"
+        listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        listener.bind(str(path))
+        os.chown(path, owner.pw_uid, owner.pw_gid)
+        path.chmod(0o600)
+        listener.listen(1)
+        listener.settimeout(5)
+        child = os.fork()
+        if child == 0:
+            try:
+                listener.close()
+                os.setgroups([])
+                os.setgid(owner.pw_gid)
+                os.setuid(owner.pw_uid)
+                connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                connection.connect(str(path))
+                client = OwnerBenchmarkGpuResourceClient(
+                    connection,
+                    invocation,
+                    root_peer=BenchmarkUnixPeer(root_pid, 0, 0),
+                    authorization=object.__new__(BenchmarkLaunchAuthorization),
+                    expires_ns=time.monotonic_ns() + 3 * 10**9,
+                )
+                assert client.finalize(local_resources(2)) == resources(2)
+                assert len(authorizations) == 2 and connection.fileno() == -1
+                assert not os.getgroups()
+                os._exit(0)
+            except BaseException:
+                os._exit(1)
+        reaped = False
+        endpoint = None
+        try:
+            connection, _ = listener.accept()
+            connection.settimeout(None)
+            expected = BenchmarkUnixPeer(child, owner.pw_uid, owner.pw_gid)
+
+            def fence(actual: BenchmarkUnixPeer) -> None:
+                assert actual == expected
+
+            endpoint = BenchmarkResourceChannel(
+                connection,
+                invocation,
+                expected_peer=expected,
+                peer_fence=fence,
+                expires_ns=time.monotonic_ns() + 3 * 10**9,
+            )
+            assert endpoint.receive_resources() == local_resources(2)
+            endpoint.send_resources(resources(2))
+            endpoint.close()
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                finished, status = os.waitpid(child, os.WNOHANG)
+                if finished:
+                    reaped = True
+                    assert os.waitstatus_to_exitcode(status) == 0
+                    break
+                time.sleep(0.01)
+            assert reaped
+        finally:
+            if not reaped:
+                os.kill(child, signal.SIGKILL)
+                os.waitpid(child, 0)
+            if endpoint is not None:
+                endpoint.close()
+            listener.close()
+
+
 @pytest.mark.parametrize("late_owner_exit", (False, True))
 def test_real_root_environment_private_access_and_process_exit_fence(
     monkeypatch: pytest.MonkeyPatch,

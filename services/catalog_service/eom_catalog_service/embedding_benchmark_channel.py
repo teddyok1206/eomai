@@ -75,11 +75,14 @@ class _Frames:
         expected_peer: BenchmarkUnixPeer,
         peer_fence: PeerFence,
         expires_ns: int,
+        *,
+        wait_observer: Callable[[], None] | None = None,
     ) -> None:
         self.connection = connection
         self.peer = expected_peer
         self.peer_fence = peer_fence
         self.expires_ns = expires_ns
+        self.wait_observer = wait_observer
         self.failed = False
         self.closed = False
         try:
@@ -90,6 +93,7 @@ class _Frames:
                 or not callable(peer_fence)
                 or type(expires_ns) is not int
                 or not now < expires_ns <= now + 180 * 10**9
+                or (wait_observer is not None and not callable(wait_observer))
             ):
                 raise BenchmarkChannelError("EMBEDDING_BENCHMARK_CHANNEL_INVALID")
             expected_peer.__post_init__()
@@ -151,9 +155,19 @@ class _Frames:
         self.check()
         with selectors.DefaultSelector() as selector:
             selector.register(self.connection, event)
-            remaining = (self.expires_ns - time.monotonic_ns()) / 10**9
-            if remaining <= 0 or not selector.select(remaining):
-                raise BenchmarkChannelError("EMBEDDING_BENCHMARK_CHANNEL_EXPIRED")
+            while True:
+                if self.wait_observer is not None:
+                    self.wait_observer()
+                    self.check()
+                remaining = (self.expires_ns - time.monotonic_ns()) / 10**9
+                if remaining <= 0:
+                    raise BenchmarkChannelError("EMBEDDING_BENCHMARK_CHANNEL_EXPIRED")
+                timeout = remaining if self.wait_observer is None else min(remaining, 0.25)
+                if selector.select(timeout):
+                    break
+                if self.wait_observer is None:
+                    raise BenchmarkChannelError("EMBEDDING_BENCHMARK_CHANNEL_EXPIRED")
+                self.check()
         self.check()
 
     def read(self, count: int) -> bytes:
@@ -213,6 +227,69 @@ class _Frames:
                 raise BenchmarkChannelError("EMBEDDING_BENCHMARK_CHANNEL_EOF")
             pending = pending[count:]
         self.check()
+
+
+class BenchmarkResourceChannel:
+    """One resource-only exchange; framing/peer validation does not grant authority.
+
+    Each endpoint owns its connection, can send and receive once, and never accepts
+    checkpoint/control frames. Root sampling remains the concrete root relay's duty.
+    """
+
+    def __init__(
+        self,
+        connection: socket.socket,
+        invocation: BenchmarkWorkerInvocation,
+        *,
+        expected_peer: BenchmarkUnixPeer,
+        peer_fence: PeerFence,
+        expires_ns: int,
+        wait_observer: Callable[[], None] | None = None,
+    ) -> None:
+        self._frames = _Frames(
+            connection, expected_peer, peer_fence, expires_ns, wait_observer=wait_observer
+        )
+        self._sent = self._received = False
+        try:
+            self._invocation = BenchmarkWorkerInvocation.model_validate(invocation)
+        except Exception:
+            self._frames.invalidate()
+            raise BenchmarkChannelError("EMBEDDING_BENCHMARK_INVOCATION_INVALID") from None
+
+    def _check(self, value: BenchmarkResourceEvidence) -> None:
+        if (
+            value.invocation_sha256 != self._invocation.invocation_sha256
+            or value.launch_ordinal != self._invocation.launch_ordinal
+            or value.device != self._invocation.device
+        ):
+            raise BenchmarkChannelError("EMBEDDING_BENCHMARK_RESOURCE_ASSOCIATION_INVALID")
+
+    def send_resources(self, value: BenchmarkResourceEvidence) -> None:
+        try:
+            if self._sent:
+                raise BenchmarkChannelError("EMBEDDING_BENCHMARK_EXCHANGE_ORDER_INVALID")
+            value = BenchmarkResourceEvidence.model_validate(value)
+            self._check(value)
+            self._sent = True
+            self._frames.send(value)
+        except Exception:
+            self._frames.invalidate()
+            raise BenchmarkChannelError("EMBEDDING_BENCHMARK_RESOURCE_SEND_FAILED") from None
+
+    def receive_resources(self) -> BenchmarkResourceEvidence:
+        try:
+            if self._received:
+                raise BenchmarkChannelError("EMBEDDING_BENCHMARK_EXCHANGE_ORDER_INVALID")
+            self._received = True
+            value = self._frames.receive_resources()
+            self._check(value)
+            return value
+        except Exception:
+            self._frames.invalidate()
+            raise BenchmarkChannelError("EMBEDDING_BENCHMARK_RESOURCE_RECEIVE_FAILED") from None
+
+    def close(self) -> None:
+        self._frames.close()
 
 
 class _Exchange:
