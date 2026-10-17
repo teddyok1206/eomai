@@ -904,6 +904,42 @@ reported result. This correction is **source-only until coordinated trainer inst
 Crash/timeout and successful trainer execution, six actual CPU/CUDA benchmark launches,
 conditional default activation and C1–C5 operational acceptance remain open.
 
+#### Trainer-only installed correction — 2026-10-17 05:56 UTC
+
+The preceding source-only status is superseded for this one CLI correction, not for the
+remaining regression/benchmark gates. Candidate `bf533010e2524aca151492b44a62ee3277fd57d4`
+passed the standard four-wheel trainer build. Diff from installed e232 image sources is
+exactly the eight-line CLI boundary; standalone lease, image contracts/provider, models,
+dependencies, root owner/entries/templates and numerical prefixes are unchanged.
+
+Before mutation, the existing protected coordinator captured rollback wheel/source backups,
+verified current package RECORDs and candidate dependency/source closure, fenced all19
+image entry templates, rechecked zero live processes/stored FDs/jobs/cgroups, and held both
+legacy and shared physical leases. It reinstalled **only** the trainer wheel, then verified
+the complete installed trainer cohort/source and unchanged19 template/config pins before
+removing the fence. Old failed execution/history/receipts were never modified or retried.
+
+Trainer wheel raw SHA:
+`b39ff7807150165e177e655b13dfa9429589b5e602f83b560dcc8b1ee3fc18cc`.
+Standard build directory:
+`/tmp/eom-image-trainer-build/bf533010e2524aca151492b44a62ee3277fd57d4.9YjBGb/dist`.
+Protected coordinator raw SHA:
+`200a4446970d3d77e1619da2a1ab93f7daf33a46737a0dd828368077a2300d78`.
+Evidence/rollback:
+`/opt/eom/image-joint-runtime-releases/imagejoint-a610b0c7/trainer-cli-boundary-bf533010/`.
+Local no-replay exit receipt:
+`/tmp/eom-image-joint-release.FLrlFoWI/trainer-cli-boundary-result.json` (`returncode=0`).
+
+A separate installed CLI negative ran under the real UID984 with the original private
+negative input and another owner's physical lease held. It returned exactly code1 and
+`IMAGE_TRAINING_GPU_BUSY` stderr, with no stdout/traceback, new unit, model, dataset read,
+training step or output. A second claimant remained BUSY while the parent's held lease
+stayed valid; no GPU clients appeared. This is actual presentation/pre-lease evidence,
+**not** a successful training/model run or a rerun that turns the historical unit green.
+Post-release unit readback shows no drop-ins, RefuseManualStart=no and no reload pending.
+CPU remains default; CUDA benchmark/default, successful trainer/crash/timeout and consumer
+operational gates remain incomplete under the original full goal.
+
 ## 5. 별도 protected CUDA 실행 leaf
 
 제안 prefix는 `/opt/eom/conda/envs/eom-embedding-cuda`, worker는 `eom-embedding-cuda`,
