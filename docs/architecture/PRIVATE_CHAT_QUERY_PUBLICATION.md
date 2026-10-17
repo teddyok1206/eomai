@@ -88,3 +88,38 @@ First proof: `/opt/eom/embedding-benchmark-os-evidence/private-query-Yh9bNn4J`.
 The original marked DB and its dedicated roles were removed; source/log evidence
 is retained. The current final gate uses20 exact source pins, a fresh marked
 database and the existing `embedding-tests` purpose, not a new test/queue framework.
+
+### Final source-candidate verification
+
+Candidate `b8c1f4aad445aaf7fb9dfe2832cd70a07b8ceb8c` is committed/pushed.
+The separate final20-pin disposable run also completed **47 PASS / cleanup PASS**,
+including all four new private cases. The exact final production source was
+unchanged through preparation, migration/reconciliation, tests, inspection and
+cleanup. Final protected evidence:
+`/opt/eom/embedding-benchmark-os-evidence/private-query-final-iFAgy711`;
+operator raw `f1800492abb5e68388233377a6f885bcbb6b74f00139bc283d0fc52571ad04a7`;
+test stdout raw `cb2f15d7f325e9e95e57ea70b5407544025835b400787177346d32e8958f49f7`.
+The first47 result is retained separately, not added to this test count. Both
+disposable databases/roles were removed; no operating DB or original history changed.
+
+Standard three-wheel build/RECORD passed. Dist:
+`/tmp/eom-api-build/b8c1f4aad445aaf7fb9dfe2832cd70a07b8ceb8c.FijGgA/dist`.
+Raw platform `a3b2ce099c5b73f8f60afa590d08f4672c1a4ecd2a54f975a7d6087d7a6c07a2`;
+contracts `538d23031cdb04e3e589bf920def34ddd6686fa888fb0e1c56d3dc28f3f2d885`;
+API `8cf707550f9ff6e78d4550e0d09366de1dd27397d79757408fae298836fb85b6`.
+
+Separate unprivileged Conda `-I -S -B` archive proof imported163 EOM modules
+exclusively from the exact platform/contracts wheels, with source/test/optional-ML
+imports0. It exercised text-free private publication and the unchanged shared
+reference closure using a clearly synthetic publisher; actual DB/NAS/model/
+activation calls0. Synthetic input was staged separately, raw
+`f064b020f063c70a2ed9adeae81c4700880de134d1ab9b01dce592b10885f205`.
+Proof programs/materialization remain under `/tmp/eom-private-query-publication.Yh9bNn4J`.
+The real transaction/concurrency evidence is the guarded47 suite, not this fake publisher.
+
+Status: **SOURCE_PASS / DISPOSABLE_DB_PASS / NOT_INSTALLED / NOT_ACTIVE /
+C4_NOT_ACCEPTED**. Actual private numerical admission, current owned-work/authority
+composition, result delivery and Chat tool activation remain required. The full
+goal also still requires remaining consumer/live gates and actual CPU/CUDA
+comparison/default selection. No original HTTP request/process/key, protected
+runtime, active service, source policy or device default was replaced for this work.
