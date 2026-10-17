@@ -935,3 +935,12 @@ were red because the benchmark retained API did not exist, then all passed with 
 and caller correction. Positive root/GPU/kernel cases remain synthetic; this corrects an
 actual source boundary mismatch, not an installed GPU acceptance. No real signal, unit
 cleanup, model, new Job/request, policy/default or protected prefix was changed.
+
+Candidate `2e1523719c460ab34344e0d8506fe21e7695469a` passed standard three-wheel/RECORD
+build at `/tmp/eom-api-build/2e1523719c460ab34344e0d8506fe21e7695469a.FJUzjZ/dist`.
+An isolated actual API-interpreter child compared all3 changed production members with
+wheel bytes, checked both native implementation pins and proved actual nonroot refusal at
+the new resource reader plus all3 root lifetime entries, with no optional ML imports.
+Raw platform SHA `83c708bc50a6c479549d2f9be4658325048c124091d3a3ab759e46f918b050dc`;
+API-contract SHA `6fc906022ef463ae190d21ac08c509da12695de8a67015eb53db74d7eaacd98d`.
+BUILD_ONLY / NOT_ACTIVE; no numerical-prefix or active-owner switch was performed.
