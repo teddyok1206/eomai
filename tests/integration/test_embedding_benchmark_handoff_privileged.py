@@ -4,13 +4,18 @@ from __future__ import annotations
 
 import os
 import pwd
+import signal
+import socket
 import tempfile
+import time
 from pathlib import Path
 
 import pytest
 from eom_catalog_contracts.embedding_device_benchmark import benchmark_sample_program
+from eom_catalog_service import embedding_benchmark_activation as activation
 from eom_catalog_service import embedding_benchmark_handoff as handoff
 from eom_catalog_service import embedding_device_benchmark_files as capture
+from eom_catalog_service.embedding_benchmark_channel import BenchmarkUnixPeer
 from eom_catalog_service.embedding_device_benchmark_files import BenchmarkWorkerLocalFiles
 from eom_catalog_service.embedding_runtime_files import fixed_native_embedding_profile
 
@@ -91,3 +96,94 @@ def test_real_native_uid_uses_inherited_input_and_only_precreated_outputs(
             assert (execution / "outputs/cold-documents.f32").stat().st_size == 6 * 4096
         finally:
             os.close(borrowed)
+
+
+def test_real_native_accepts_exact_workflow_owner_peer_without_binding_or_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if os.environ.get("EOM_RUN_BENCHMARK_HANDOFF_PRIVILEGED") != "1":
+        pytest.skip("explicit private benchmark filesystem OS gate required")
+    assert os.geteuid() == 0
+    native = pwd.getpwnam("eom-embedding-index-cpu")
+    owner = pwd.getpwnam("eom-workflow-runner")
+    invocation = worker_invocation()
+    with tempfile.TemporaryDirectory(prefix="eom-bench-peer-", dir="/run") as directory:
+        root = Path(directory)
+        root.chmod(0o711)
+        namespace = root / "b"
+        namespace.mkdir(mode=0o711)
+        namespace.chmod(0o711)
+        monkeypatch.setattr(handoff, "_HANDOFF_ROOT", namespace)
+        monkeypatch.setattr(activation, "_HANDOFF_ROOT", namespace)
+        handoff.prepare_benchmark_handoff(owner_request(), invocation, staged_inputs())
+        path = namespace / invocation.execution_id / "control.sock"
+        listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        listener.bind(str(path))
+        os.chown(path, owner.pw_uid, owner.pw_gid)
+        path.chmod(0o600)
+        listener.listen(1)
+        listener.setblocking(False)
+        go_read, go_write = os.pipe2(os.O_CLOEXEC)
+        children: set[int] = set()
+        try:
+            owner_pid = os.fork()
+            if owner_pid == 0:
+                try:
+                    os.setgroups([])
+                    os.setgid(owner.pw_gid)
+                    os.setuid(owner.pw_uid)
+                    listener.close()  # Owner is only the client, not an accept-capability holder.
+                    os.close(go_write)
+                    assert os.read(go_read, 1) == b"1"
+                    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                    client.connect(str(path))
+                    assert client.recv(1) == b""
+                    client.close()
+                    os._exit(0)
+                except BaseException:
+                    os._exit(1)
+            children.add(owner_pid)
+            native_pid = os.fork()
+            if native_pid == 0:
+                try:
+                    os.setgroups([])
+                    os.setgid(native.pw_gid)
+                    os.setuid(native.pw_uid)
+                    os.close(go_read)
+                    os.close(go_write)
+                    assert os.getuid() == native.pw_uid != owner.pw_uid
+                    with pytest.raises(PermissionError):
+                        os.listdir(namespace)
+                    channel = activation.capture_benchmark_worker_channel(
+                        invocation,
+                        activation_fd=listener.fileno(),
+                        expected_peer=BenchmarkUnixPeer(owner_pid, owner.pw_uid, owner.pw_gid),
+                        peer_fence=lambda actual: None,
+                        expires_ns=time.monotonic_ns() + 3 * 10**9,
+                    )
+                    channel.assert_initial_invocation(invocation)
+                    channel.close()
+                    assert listener.fileno() >= 0 and path.is_socket()
+                    os._exit(0)
+                except BaseException:
+                    os._exit(1)
+            children.add(native_pid)
+            os.write(go_write, b"1")
+            deadline = time.monotonic() + 5
+            while children and time.monotonic() < deadline:
+                for child in tuple(children):
+                    finished, status = os.waitpid(child, os.WNOHANG)
+                    if finished:
+                        children.remove(child)
+                        assert os.waitstatus_to_exitcode(status) == 0
+                if children:
+                    time.sleep(0.01)
+            assert not children
+        finally:
+            # Only this test's unreaped fork children; these PIDs cannot be reused yet.
+            for child in children:
+                os.kill(child, signal.SIGKILL)
+                os.waitpid(child, 0)
+            os.close(go_read)
+            os.close(go_write)
+            listener.close()

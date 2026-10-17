@@ -118,3 +118,74 @@ The production handoff root and running INDEX/QUERY work were untouched. Active 
 guardian selection remains the previously verified e232/c203 pair. Actual source-admitted
 benchmark Jobs, fixed six-launch runtime/channel composition, regression gates and measured
 CPU/CUDA comparison remain pending; the full goal is not completed by this OS gate.
+
+## Fixed CPU entry and socket activation — design before implementation
+
+The next concrete executable is a CPU-only benchmark leaf, not another queue or grant.
+Its existing1.0 invocation arrives on PID1-opened stdin; its one Unix listener arrives via
+systemd socket activation. PID1 creates `control.sock` in the protected execution directory,
+owned by the workflow owner with mode0600. The native user can accept on the inherited FD
+but cannot create/unlink that member or connect as an owner. The existing channel validates
+actual SO_PEERCRED against an exact owner PID/UID/GID, not a model-supplied actor.
+
+The trusted root launch composition must write a root-only per-execution environment file
+containing the invocation raw hash, actual owner PID and absolute monotonic deadline.
+The owner captures the existing protected CPU installation pins into that exact launch
+file; the unit never reads a mutable global environment as an implicit latest. CLI parsing is a small
+frozen internal value, not a new worker JSON message; request semantics remain the released
+JSON Schema2020-12 invocation/input protocol. A listener or prepared file is never source/
+Job authorization. The launcher must admit the actual operator and genuine Job before
+starting the socket; the owner must stop the service before removing its socket on cleanup.
+
+The unit explicitly bounds CPU/memory/tasks/time/output, disables network/GPU/DB/NAS/auth
+access, and permits writes only to precreated output members. A private tmpfs hides the
+shared handoff parent; only this execution is rebound into the worker namespace. Root-owned
+directories/inputs and the closed ACLs prevent creation/removal or input writes even though
+the precise bind is writable for the existing output inodes. No model or policy is selected
+from worker text. It accepts only CPU ordinals1/4/5 and exact installed configuration pins;
+CUDA remains a separate mandatory physical-ownership composition, never a CPU fallback.
+
+Both the existing INDEX/QUERY leaf and this benchmark leaf use one public CPU backend
+composition, retaining mandatory installed admission and late optional ML imports. No
+numerical encoding/codec/hash rule changes. Main reads the bounded invocation envelope for
+channel construction; the existing worker capture independently rechecks the same stdin
+identity/raw pin before reading documents or entering the backend. That is a separate
+validation boundary, not repeated corpus/model materialization.
+
+Dominant operations are exact FD/path/peer identity checks and one deadline-bounded accept;
+fixed tuples and one selector suffice (O(path depth + envelope bytes), bounded memory).
+No DB/index/migration/cache/dependency is added. A failed connection, changed socket,
+expired deadline or wrong peer closes owned descriptors and fails before model entry;
+it never restarts a unit or chooses another owner. Installed-prefix updates and current
+source-admitted six-launch acceptance remain separate, explicit requirements. Socket and
+service templates are source candidates only until their reviewed release is activated.
+Benchmark admission must hold the existing owner CPU-capacity lock, not a new lock inode.
+The existing stale-execution monitor must recognize this fixed benchmark unit too, so an
+owner crash releasing flock cannot let INDEX/QUERY overlap its surviving worker. Extending
+that deny/observation inventory is not a new dispatch or source-authority grant.
+
+### CPU executable source checkpoint — 2026-10-17
+
+Implemented the stdlib-first fixed CPU executable, exact nine owner arguments, bounded
+stdin envelope adaptation, inherited nonblocking listener capture, real SO_PEERCRED plus
+socket-epoch fencing, deadline/owned-FD cleanup and late admitted backend composition.
+The old CPU INDEX/QUERY entry uses the same public backend composition with its original
+arguments and receipt checks. No encoding/codec rule or released JSON Schema bytes changed.
+The shared capacity monitor recognizes a surviving benchmark worker, but the old INDEX/
+QUERY dispatcher still explicitly rejects a benchmark purpose.
+
+Twelve related suites: **689 PASS41.02s**; strict mypy5 production modules, Ruff/format9,
+both candidate unit syntax checks and diff checks pass. Source cases include wrong owner/
+mode/deadline/socket mutation, real local Unix connections, missing/extra/invalid pins,
+stdin identity/hash/CPU-only checks, lazy backend and close-on-failure paths, plus active/
+orphan benchmark capacity refusal. The first Unix fixtures exceeded sockaddr_un's pathname
+bound; short private paths fixed that. Their intermediate parent also inherited the shell's
+group-writable umask; explicit private parent creation fixed the fixture, not production
+permissions. Initial failures are not counted as PASS or kernel/root admission.
+
+The opt-in root test adds a real native-UID acceptor and a separate workflow-owner UID/PID
+client. It exercises only protected files/Unix peer capture, not PID1 activation or a model.
+No benchmark template is installed, no numerical prefix is upgraded and no Job is submitted
+at this source checkpoint. **Still required:** supported source/real-Job owner composition,
+root per-launch environment preparation, admitted prefix successor, actual PID1/runtime
+activation, CUDA ownership/entry, six measurements, original regression gates and C1–C5.

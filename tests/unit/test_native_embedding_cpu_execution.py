@@ -37,6 +37,7 @@ def test_fixed_unit_names_are_purpose_bound_and_no_arbitrary_units(
         "eom-embedding-native-index-prepare@",
         "eom-embedding-native-cpu-query@",
         "eom-embedding-native-query-prepare@",
+        "eom-embedding-benchmark-cpu@",
     ),
 )
 def test_active_prepare_or_worker_of_either_purpose_blocks_new_inference(
@@ -76,7 +77,7 @@ def test_empty_active_list_still_checks_both_prepare_and_worker_cgroups(
     reads: list[str] = []
     monkeypatch.setattr(cpu, "require_empty_native_cpu_cgroup", reads.append)
     cpu.require_no_active_native_cpu_execution()
-    assert set(reads) == set(groups) and len(reads) == 4
+    assert set(reads) == set(groups) and len(reads) == len(cpu._UNIT_GLOBS)
 
 
 @pytest.mark.parametrize(
@@ -215,16 +216,24 @@ def test_resource_guard_revalidates_raw_values_without_silently_dropping_fields(
 
 
 @pytest.mark.parametrize("nested", (False, True))
+@pytest.mark.parametrize(
+    "prefix",
+    (
+        "eom-embedding-native-index-prepare",
+        "eom-embedding-benchmark-cpu",
+    ),
+)
 def test_actual_file_reads_detect_surviving_child_in_flat_or_default_template_slice(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     nested: bool,
+    prefix: str,
 ) -> None:
     """Actual temporary file reads; only root UID metadata is a synthetic seam."""
-    unit = "eom-embedding-native-index-prepare@" + "a" * 32 + ".service"
+    unit = prefix + "@" + "a" * 32 + ".service"
     parent = tmp_path
     if nested:
-        parent = tmp_path / r"system-eom\x2dembedding\x2dnative\x2dindex\x2dprepare.slice"
+        parent = tmp_path / ("system-" + prefix.replace("-", r"\x2d") + ".slice")
         parent.mkdir()
     group = parent / unit
     group.mkdir()
@@ -240,6 +249,11 @@ def test_actual_file_reads_detect_surviving_child_in_flat_or_default_template_sl
         cpu.require_no_active_native_cpu_execution()
     (group / "cgroup.procs").write_bytes(b"")
     cpu.require_no_active_native_cpu_execution()
+
+
+def test_observing_benchmark_capacity_never_grants_index_query_dispatch() -> None:
+    with pytest.raises(cpu.NativeCpuExecutionError):
+        cpu.native_cpu_unit_names("BENCHMARK", "a" * 32)  # type: ignore[arg-type]
 
 
 def test_missing_kernel_base_or_symlinked_slice_is_not_a_quiescence_proof(
