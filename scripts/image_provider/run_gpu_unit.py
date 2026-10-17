@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import argparse
 import grp
+import importlib
 import os
 import pwd
-import runpy
 import signal
 import sys
 from pathlib import Path
@@ -86,7 +86,9 @@ def main() -> None:
     # The fixed root observer owns ACK and retirement; no signal means no model.
     signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGUSR1})
     sys.argv = [str(prefix / "bin" / console), *sys.argv[2:]]
-    runpy.run_module(module, run_name="__main__", alter_sys=True)
+    # Invoke the console entrypoint explicitly. Provider CLI modules expose main
+    # for wheel entry_points but need not contain a __main__ execution guard.
+    importlib.import_module(module).main()
 
 
 if __name__ == "__main__":

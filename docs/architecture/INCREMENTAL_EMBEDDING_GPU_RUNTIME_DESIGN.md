@@ -62,6 +62,33 @@ These are file-access/mutex checks, **not** provider/trainer model success,
 crash/timeout/retained-store cleanup acceptance or six frozen CPU/CUDA comparisons.
 Those gates and actual C1–C5 consumers remain required before whole-goal completion.
 
+### Actual lifecycle follow-up — root namespace and console entry
+
+The first dedicated OS-only invalid-input case failed acceptance. The root guardian
+exited226/NAMESPACE because the optional`/srv/eom/models/image-style`child does not
+exist. Separately, the main provider exited0without parsing the deliberately invalid
+input: its console module exposes`main()`but has no`if __name__ == '__main__'`guard.
+The bootstrap's`runpy.run_module`therefore imported definitions without executing
+the worker. No Job/Artifact or product success was registered by this OS probe.
+The earlier UID/lock check did not cover CLI dispatch and is not reinterpreted as
+runtime success. Original failed test and guardian histories are retained.
+
+The correction keeps the existing closed three-role mapping and pre-import signal
+mask, imports the selected CLI and calls its console`main()`exactly once. Console
+errors propagate. Root guardian denies the existing`/srv/eom/models`parent instead
+of enumerating a possibly absent child; future children are also inaccessible,
+without suppressing a missing-path error globally. No schema, model, owner package,
+numerical prefix, third-party wheel or authority change is required. Synthetic
+tests now assert actual MAIN execution for all three roles and console failure
+propagation; related254tests and strict2entry scripts PASS.
+
+Current repair boundary: all26prefix entry fences are installed while the corrected
+bootstrap, guardian-template and exact installation hashes are prepared. The first
+no-op OS probe's true process outcome remains SUCCEEDED, but its acceptance is FAIL;
+it must not be relabeled an expected invalid-input failure. The failed guardian is
+not restarted. A fresh changed-source negative case is required after installation.
+The original full-release snapshots and known failed smoke remain recoverable.
+
 2026-10-16 source 후속: [CUDA loader 작업 폴더 경계](INCREMENTAL_EMBEDDING_CUDA_LOADER_DIRECTORY_DESIGN.md)는
 공식 cuSPARSELt의 빈 RUNPATH component를 고정0555 빈 폴더의 관측으로 해석하고,
 native CUDA factory에서 실제 cwd를 재검증한다. CPU의 거부 규칙과 digest는 유지한다.

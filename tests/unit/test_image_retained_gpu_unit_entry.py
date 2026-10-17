@@ -268,13 +268,12 @@ def fixed_bootstrap(monkeypatch):
             pthread_sigmask=lambda how, mask: events.append(("BLOCK", how, mask)),
         ),
     )
-    monkeypatch.setattr(
-        bootstrap,
-        "runpy",
-        SimpleNamespace(
-            run_module=lambda module, **kwargs: events.append(("IMPORT", module, kwargs))
-        ),
-    )
+
+    def import_cli(module):
+        events.append(("IMPORT", module))
+        return SimpleNamespace(main=lambda: events.append(("MAIN", module)))
+
+    monkeypatch.setattr(bootstrap, "importlib", SimpleNamespace(import_module=import_cli))
     return state, identity, events
 
 
@@ -296,7 +295,8 @@ def test_fixed_bootstrap_blocks_ack_before_importing_cli(
     bootstrap.main()
     assert events == [
         ("BLOCK", signal.SIG_BLOCK, {signal.SIGUSR1}),
-        ("IMPORT", module, {"run_name": "__main__", "alter_sys": True}),
+        ("IMPORT", module),
+        ("MAIN", module),
     ]
     assert state.argv == [
         state.prefix + "/bin/" + entry,
@@ -305,6 +305,26 @@ def test_fixed_bootstrap_blocks_ack_before_importing_cli(
         "--gpu-lock",
         str(adapter.SHARED_GPU_LOCK_PATH),
     ]
+
+
+def test_bootstrap_preserves_console_main_failure_instead_of_import_only_success(
+    fixed_bootstrap, monkeypatch
+):
+    _, _, events = fixed_bootstrap
+
+    def console_main():
+        events.append(("MAIN_FAILED",))
+        raise SystemExit(9)
+
+    monkeypatch.setattr(
+        bootstrap,
+        "importlib",
+        SimpleNamespace(import_module=lambda module: SimpleNamespace(main=console_main)),
+    )
+    with pytest.raises(SystemExit) as failure:
+        bootstrap.main()
+    assert failure.value.code == 9
+    assert events == [("BLOCK", signal.SIG_BLOCK, {signal.SIGUSR1}), ("MAIN_FAILED",)]
 
 
 @pytest.mark.parametrize(
@@ -502,7 +522,10 @@ def test_guardian_has_only_root_observation_access_not_models_auth_nas_or_db():
     assert not any("eom-image-trainer/bin" in value or "eom-image/bin" in value for value in lines)
     assert "InaccessiblePaths=/mnt/nas /home/eom/EOM /home/eom/EOMIS" in lines
     assert "InaccessiblePaths=/opt/eom/embedding-models /etc/eom" in lines
-    assert "InaccessiblePaths=/srv/eom/models/image /srv/eom/models/image-style" in lines
+    # Deny the existing model parent, including absent/future style children;
+    # a missing optional child must not prevent the root observer from starting.
+    assert "InaccessiblePaths=/srv/eom/models" in lines
+    assert not any("InaccessiblePaths=" in line and "/srv/eom/models/" in line for line in lines)
     assert "InaccessiblePaths=/root/.codex /srv/eom/worker-homes /srv/eom/workspaces" in lines
 
 
