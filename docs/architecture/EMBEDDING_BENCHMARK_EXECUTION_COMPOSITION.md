@@ -1085,3 +1085,44 @@ A fresh isolated actual nonroot process is refused before command access with no
 ML imports. Root/kernel/unit positive cases remain synthetic. No numerical workload, Job,
 default, runtime selector or protected prefix was changed. Source readiness is not actual
 whole-invocation measurement or an activated six-launch owner; those gates remain open.
+
+### Package and actual passive-owner hardware read — 2026-10-17 09:27 UTC
+
+Candidate `12161ebcaebf8a251f3c7890ec4eee987396a732` passed the standard three-wheel/
+RECORD gate. An isolated actual API-interpreter child imported and byte-matched all3 changed/
+new production members from the wheel, then refused its actual nonroot identity at the
+sampler and GPU-memory entry before commands, with no optional ML imports.
+Build `/tmp/eom-api-build/12161ebcaebf8a251f3c7890ec4eee987396a732.Wr095S/dist`;
+platform raw SHA `8ccb8fde8c84719161ad34896404140486459d8840d390c9c49febc9f960c790`;
+API-contract raw SHA `8462ff3e5812ba456a1ceede78c955e3dc8e7e530a74bba22ba0fb41f510985c`.
+
+The existing protected installer (raw SHA559ada516fe9d46f57926aad70699e81deba5f1a18b4e25e3f6e6bcdf1384b71)
+staged the exact pair under `/opt/eom/embedding-owner-releases/12161ebcaebf8a251f3c7890ec4eee987396a732`.
+This was a passive installation only: no active owner selector or numerical prefix changed.
+Same EOM2 TTY/noninteractive sudo was reused, without credentials, new prompts or TTL changes.
+The reviewed fixed root operator was copied protected and verified by raw
+SHAa4a19657b45111d2f4fdcccaec7c49a0d701131b720d7ae1966d167219480f02 before execution.
+
+Actual UID0 imported the installed members, checked their protected bytes against retained
+wheel members, resolved the exact existing CUDA proof ID/revision and raw/semantic hashes
+from the configuration record, then called the real fixed NVIDIA memory adapter once.
+At09:27:55 UTC it returned total upper bound17095983103 bytes, used upper bound3145727 bytes
+and0 process rows. These are conservative MiB-display bounds, not exact NVML bytes or a
+whole-invocation peak. No model/tokenizer/forward, CUDA workload, GPU lease acquisition,
+Job/Artifact/DB/NAS publication or active policy/default change occurred. No optional ML
+framework was imported. This is ACTUAL_ROOT_READONLY_GPU_QUERY_PASS, **not** actual sampler/
+unit/cold-warm/capacity/performance/default acceptance.
+
+Protected OS evidence (not a product Artifact):
+`/opt/eom/embedding-benchmark-resource-evidence/12161ebcaebf8a251f3c7890ec4eee987396a732/`
+contains intent, install stdout/stderr and immutable result. Operator receipt:
+`/tmp/eom-benchmark-memory-os.tRNO69Tg/operator-result.json`, return0, stdout raw
+SHA55bb038b1c4016c742c4fac1e0bd0b062e76b84b86c4213e69ad7c356b110506.
+No automatic retry or existing release overwrite was performed.
+
+The due30-minute observation at09:10:51 used the same protected read-only index adapter:
+521 encodings/bindings,137 revisions/6 logical indexes; per-view187/161/173 each report545
+eligible sources. These are not521 unique Items or a coherent complete index. Bounded latest
+workflows2 completed/1 running/2 requested had no failure code, not a global zero-failure claim.
+Original HTTP PID2895440 was actually live at09:05:01 and still LOGIN, state timestamp unchanged;
+no new authentication or request was created. Full goal remains ACTIVE/NOT_COMPLETE.
