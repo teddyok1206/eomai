@@ -140,7 +140,7 @@ INDEX configuration follows its actual runtime capture. These are source proofs,
 not a new installed measurement or resolution of the original503.
 
 The user's unattended-work request means **no new interactive login prompts for
-at least24h (not before2026-10-18 18:23 UTC)** while independent authorized work
+at least24h (renewed at2026-10-17 21:43 UTC; not before2026-10-18 21:43 UTC)** while independent authorized work
 continues. It is not a successful login, a stored credential or permission to
 extend auth/sudo lifetimes. Preserve already successful and failed observations;
 leave genuinely credentialed checks pending instead of inventing acceptance.

@@ -29,7 +29,7 @@ summed into a single acceptance count. This ledger does not grant authority.
   authentication prompt. Next routine observation no earlier than20:58:11 UTC.
   Local sanitized evidence:
   `/tmp/eom-private-checkpoint-db.IljUOOv7/index-observation.json`.
-- User unattended constraint: no new interactive login before2026-10-18 20:01 UTC;
+- User unattended constraint, renewed21:43 UTC: no new interactive login before2026-10-18 21:43 UTC;
   continue independent authorized work, never simulate authentication, copy tokens
   or change freshness/TTL. Original HTTP read remains unverified, not a verified
   wait on a login prompt. The existing memory observer is preserved, not exported.
@@ -86,6 +86,20 @@ summed into a single acceptance count. This ledger does not grant authority.
   182-module full synthetic checkpoint-prefix/receipt/adapter import proof. DB,
   model, unit observations and runtime activation0 in that proof; no installation.
   [Design, final proof and failed fixture history](../architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#original-private-history-implementation-and-guarded-persistence).
+
+- C4 original pre-allocation submission context: closed schema/typed text-free
+  metadata, request/actor/basis fingerprint and one original actor/conversation/
+  turn identity now have a private-only CHECK, immutable origin/audit/payload/
+  DELETE trigger and partial unique B-tree. Source538/19 suites, separate6/6
+  dependency checks, strict4/Ruff/format/shell PASS. Corrected guarded PostgreSQL
+  235/no skips/cleanup PASS; first228 PASS/7 FAIL is preserved (new draft SQL
+  incorrectly used `chatconv_`, corrected to the existing closed `chat_` pattern).
+  Exact migration0056 and additive release context/admission1.5 do not retarget
+  old receipts. Operating migration remains0055; no runtime install, compiler/
+  result-CHECK admission, real private execution or Chat tool activation follows
+  from these synthetic metadata tests. Actual original-command submission and
+  executor/consumer still required; full goal OPEN.
+  [Design and immutable final/failed evidence](../architecture/PRIVATE_CHAT_QUERY_SUBMISSION_CONTEXT.md).
 
 - Actual corrected retained negative2026-10-17: fixed root entryc2034177now selects
   installed ownere2326626; newf527cc61standalone lease installed and verified in both

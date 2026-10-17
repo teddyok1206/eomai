@@ -415,6 +415,14 @@ PostgreSQL69/no skips/cleanup PASS입니다. 실제 원 작업에 묶인 접수�
 [자료 읽기](docs/architecture/PRIVATE_CHAT_QUERY_CATALOG_READ_DESIGN.md) ·
 [원 대화·설정 조합과 실패 보존·남은 경계](docs/architecture/PRIVATE_CHAT_QUERY_OWNER_COMPOSITION.md)
 
+첫 실행 배정 전에 중단되어도 원 대화 요청 정보가 사라지지 않도록, 기존 Workflow 메타데이터에
+원본 요청을 고정하는 별도 계약과 전용 불변·중복 방지 제약을 추가했습니다. 새 접수 계약은
+질문 원문을 복제하지 않으며, 같은 사용자의 같은 대화 차례는 다른 key나 점유권으로도
+두 번째 원본 작업을 만들 수 없도록 설계했습니다. 소스 회귀538·strict type4 PASS입니다.
+임시 PostgreSQL235/no skips/cleanup도 통과했습니다. 새 migration0056은 임시 DB에서만 검증했고,
+운영 DB 적용·설치·private 실행 활성화는 아직 하지 않았습니다.
+[원본 접수 계약과 검증 범위](docs/architecture/PRIVATE_CHAT_QUERY_SUBMISSION_CONTEXT.md)
+
 아래는 날짜·후보별 역사적 구현 기록입니다. 당시의 미완료 표기는 현재 종합 상태와
 구별하며, 최신 실제 실행·활성화 범위는 위 표와 연결된 상태 문서를 기준으로 합니다.
 

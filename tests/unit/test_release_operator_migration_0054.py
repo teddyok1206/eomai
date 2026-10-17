@@ -155,13 +155,13 @@ def test_receipt_pin_is_versioned_and_old_context_is_not_reused(
         operator.verify_admission(path, context, digest)
 
 
-def test_current_selector_is0055_and_historical_wrapper_stays0051() -> None:
+def test_current_selector_is0056_and_historical_wrapper_stays0051() -> None:
     for name in ("release_operator_runtime.sh", "release_operator_boundary.sh"):
         source = (ROOT / "scripts/api" / name).read_text()
         for suffix in ("0052", "0053", "0054"):
             assert f"MIGRATION_VERIFY_{suffix}|MIGRATION_UPGRADE_{suffix}" in source
     deploy = (ROOT / "scripts/api/deploy_release.sh").read_text()
-    assert 'run_release_operator MIGRATION_VERIFY_0055 "${COMMIT}"' in deploy
-    assert 'if CURRENT_MIGRATION_REVISION != "20261014_0055":' in deploy
+    assert 'run_release_operator MIGRATION_VERIFY_0056 "${COMMIT}"' in deploy
+    assert 'if CURRENT_MIGRATION_REVISION != "20261017_0056":' in deploy
     old = (ROOT / "scripts/api/migrate_release.sh").read_text()
     assert "MIGRATION_UPGRADE_0051" in old and "MIGRATION_UPGRADE_0054" not in old

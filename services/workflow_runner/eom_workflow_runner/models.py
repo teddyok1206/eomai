@@ -24,6 +24,12 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from eom_workflow_runner.private_chat_query_persistence_guards import (
+    PRIVATE_CHAT_QUERY_CONTEXT_CHECK,
+    PRIVATE_CHAT_QUERY_CONTEXT_PREDICATE,
+    PRIVATE_CHAT_QUERY_TURN_INDEX,
+)
+
 WORKFLOW_STATES = (
     "REQUESTED",
     "RUNNING",
@@ -89,6 +95,18 @@ class WorkflowDefinitionRecord(Base):
 class WorkflowInstanceRecord(Base):
     __tablename__ = "workflow_instances"
     __table_args__ = (
+        CheckConstraint(
+            PRIVATE_CHAT_QUERY_CONTEXT_PREDICATE,
+            name=PRIVATE_CHAT_QUERY_CONTEXT_CHECK,
+        ).ddl_if(dialect="postgresql"),
+        Index(
+            PRIVATE_CHAT_QUERY_TURN_INDEX,
+            "created_actor_id",
+            text("(runtime_context #>> '{origin,basis,conversation_id}')"),
+            text("(runtime_context #>> '{origin,basis,turn_id}')"),
+            unique=True,
+            postgresql_where=text("definition_key = 'local-embedding-private-chat-query'"),
+        ).ddl_if(dialect="postgresql"),
         CheckConstraint(
             "state IN ('REQUESTED','RUNNING','AWAITING_HUMAN_APPROVAL','REWORK_REQUESTED',"
             "'APPROVED','REGISTERING','COMPLETED','FAILED','CANCELLED')",
