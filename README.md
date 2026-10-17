@@ -423,6 +423,13 @@ PostgreSQL69/no skips/cleanup PASS입니다. 실제 원 작업에 묶인 접수�
 운영 DB 적용·설치·private 실행 활성화는 아직 하지 않았습니다.
 [원본 접수 계약과 검증 범위](docs/architecture/PRIVATE_CHAT_QUERY_SUBMISSION_CONTEXT.md)
 
+원본 채팅 요청을 기존 명령 점유권·트랜잭션 검사에 연결하고, 질문을 복사하지 않는
+계산 결과 읽기도 추가했습니다. 소스434·strict5·최종 임시 DB79와 별도 실행 회귀235/
+정리 PASS입니다(79에는 이전76이 포함됩니다). 실제 명령·파일 읽기는 검증했지만,
+Chat/IAM/문항 모집단과 선언된 작업은 합성 fixture이며 실제 채팅 계산·도구 전달·운영
+활성화는 아직 미완료입니다. [명령 경계](docs/architecture/PRIVATE_CHAT_QUERY_SUBMISSION_CONTEXT.md#original-command-owner-verification) ·
+[결과 읽기](docs/architecture/PRIVATE_CHAT_QUERY_PUBLICATION.md#canonical-read-implementation-and-verification)
+
 아래는 날짜·후보별 역사적 구현 기록입니다. 당시의 미완료 표기는 현재 종합 상태와
 구별하며, 최신 실제 실행·활성화 범위는 위 표와 연결된 상태 문서를 기준으로 합니다.
 

@@ -123,3 +123,62 @@ composition, result delivery and Chat tool activation remain required. The full
 goal also still requires remaining consumer/live gates and actual CPU/CUDA
 comparison/default selection. No original HTTP request/process/key, protected
 runtime, active service, source policy or device default was replaced for this work.
+
+## Canonical private numerical read for the original executor
+
+The Catalog read adapter reuses `PinnedArtifactReadContext`, not a second storage
+or search layer. Its canonical source is the committed four-member private QUERY
+file set and the original owned-message input reconstructed by the current owner.
+It accepts exact Workflow/step/origin/producer and mandatory manifest SHA pins;
+logical IDs, Artifact revisions, raw bytes and semantic hashes remain separate.
+It never recovers question text from a copied `input.json` or resolves latest.
+
+Access is one indexed/prefetched Artifact identity and four ordered members;
+bounded metadata plus one vector are O(bytes + dimension), without a corpus scan,
+new index/table/queue or retained permission. The existing caller root and reader
+must stay clean, nonnested and identical around IO. Current Chat/IAM/public-scope
+and command authorization belongs to the upstream owner before/after the read.
+The returned frozen materialization is not the stronger consumer authorization
+capability and excludes private input/binary from repr.
+
+Decode the existing closed intent/result/shard contracts, compare the intent to
+the exact current native input and launch, validate receipt/source/result/hash
+closure, single producer, float32 shape/finite/norm and late mutable provenance.
+No DB mutation, commit, model execution or retry is part of the adapter. Stable
+errors must not render untrusted private data. The simpler reference reader is
+insufficient because it expects an approved-Item input file and different result/
+receipt purpose; both readers share the existing Artifact resolution machinery.
+No new schema bytes or dependency are needed for this read of released values.
+
+### Canonical read implementation and verification
+
+`CatalogPrivateChatQueryArtifacts` now reads the exact private intent/result/
+shard/binary through the shared pinned Artifact context. It requires a manifest
+hash, current reconstructed input and original origin/Workflow/step/receipt-owner
+pins; validates the result before reading a dimension-bounded binary; checks the
+single actual producer and revalidates provenance after the final member. The
+frozen local result excludes question/vector bytes from repr and grants no source
+or native authority. No new schema, migration, query engine or dependency.
+
+Final combined source regression **434 PASS/16 suites**, strict5 and Ruff/format13
+PASS; private file-read inventory24/24 is included, not added. Tests cover all
+four missing/corrupt members, wrong purpose/producer/approval/manifest, mixed
+origin/input/Workflow, closed untrusted copies, current root/settings and an
+explicit late-producer witness after the fourth read.
+
+Actual guarded PostgreSQL final **79/79, no skips, cleanup PASS**: previous76
+Artifact/index/source-owner/command tests plus3 new private numeric read cases.
+They prove repeatable real canonical four-member read without writes, independently
+committed producer withdrawal after the final read, and rejection of a read context
+from another SQL root. Original Chat/source/native execution remain synthetic.
+The separate235-stage regression still covers the unchanged shared transaction
+and workflow guards; it was not rerun as part of79. These are not model or live
+Chat integration acceptance results.
+
+Evidence: `/opt/eom/embedding-benchmark-os-evidence/private-query-read-4nSMXC02`;
+finite helper raw `19af011a4f195674eb717506fefbdcc70a6555e6d422afe8089d8225b1233893`;
+test stdout raw `0f22afe462b74d2a75a09f4a76a7f7290df58d550aad60690742db0f5b5f117b`.
+No new login, credential persistence, TTL change, operating DB mutation, model,
+service restart or activation. **SOURCE_PASS / DISPOSABLE_DB_PASS / NOT_INSTALLED /
+NOT_ACTIVE; C4 and full original goal OPEN.** The actual original executor,
+async command/terminal composition and Chat tool delivery remain required.

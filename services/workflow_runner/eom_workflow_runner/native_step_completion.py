@@ -43,7 +43,9 @@ _TERMINAL_KEYS = MappingProxyType(
 
 
 def native_application_step(
-    session: Session, workflow_id: str, step_key: NativeStepKey
+    session: Session,
+    workflow_id: str,
+    step_key: NativeStepKey | Literal["encode_private_chat_query"],
 ) -> WorkflowStepRunRecord | None:
     return session.scalar(
         select(WorkflowStepRunRecord)

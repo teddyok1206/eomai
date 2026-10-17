@@ -114,8 +114,17 @@ class SourceRepository:
         return self.conversation_record(session, conversation_id)
 
 
-def source_case(*, original_text=None, question=None):
+def source_case(*, original_text=None, question=None, identity_seed: str | None = None):
     prepared = rag_request()
+    if identity_seed is not None:
+        prepared = RagChatTurnInput.model_validate(
+            prepared.model_dump(mode="json")
+            | {
+                "conversation_id": "chat_" + identity_seed,
+                "turn_id": "chatturn_" + identity_seed,
+                "claim_id": "chatclaim_" + identity_seed,
+            }
+        )
     if question is not None:
         messages = [{"role": "user", "text": question}]
         prepared = RagChatTurnInput.model_validate(

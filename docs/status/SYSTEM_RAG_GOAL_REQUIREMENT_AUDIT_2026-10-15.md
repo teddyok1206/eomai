@@ -104,6 +104,18 @@ summed into a single acceptance count. This ledger does not grant authority.
   calls0 and no installation/activation. This is not original private execution.
   [Design and immutable final/failed evidence](../architecture/PRIVATE_CHAT_QUERY_SUBMISSION_CONTEXT.md).
 
+- C4 original-command owner/canonical numeric read: source434/16 suites (including
+  6 dependency checks), strict5/Ruff/format13 PASS. Actual guarded owner76 plus
+  stage235 passed/cleaned in separate databases; final numeric-read79 includes76
+  plus3 actual committed-file/provenance/root cases and cleanup PASS, not79 more.
+  Current Chat/IAM/population/declared Workflow authority is synthetic, while
+  Artifact files, SQL command/lease/root behavior and rollback are real. No model,
+  install, live private turn, compiler/result CHECK opening or activation. Private
+  START lineage is enforced; async ADVANCE, actual executor, immutable-context-
+  preserving terminal and Chat delivery remain required. Full goal OPEN.
+  [Owner evidence](../architecture/PRIVATE_CHAT_QUERY_SUBMISSION_CONTEXT.md#original-command-owner-verification),
+  [numeric read evidence](../architecture/PRIVATE_CHAT_QUERY_PUBLICATION.md#canonical-read-implementation-and-verification).
+
 - Actual corrected retained negative2026-10-17: fixed root entryc2034177now selects
   installed ownere2326626; newf527cc61standalone lease installed and verified in both
   image prefixes without reinstalling other libraries.19main/guardian slices and

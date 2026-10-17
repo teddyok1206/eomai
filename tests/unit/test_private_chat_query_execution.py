@@ -38,8 +38,8 @@ from tests.unit.test_private_chat_query_basis import TEXT, basis
 from tests.unit.test_reference_query_execution_contracts import case
 
 
-def execution_case():
-    legacy = case()
+def execution_case(*, definition_sha256: str | None = None):
+    legacy = case() if definition_sha256 is None else case(definition_sha256=definition_sha256)
     policy_body = legacy.policy.model_dump(mode="json") | {
         "schema_version": "private-chat-query-execution-policy/1.0",
         "purpose": "PRIVATE_CHAT_QUERY",

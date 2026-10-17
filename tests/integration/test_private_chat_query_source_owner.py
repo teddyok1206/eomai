@@ -12,6 +12,7 @@ from uuid import uuid4
 import pytest
 from eom_catalog_contracts.private_chat_similarity import PrivateChatSimilarityRequest
 from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
+from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_orchestrator.control_artifacts import ControlArtifactPublisher
 from eom_orchestrator.embedding_runtime_bundle_artifacts import (
     EmbeddingRuntimeBundleArtifactPublisher,
@@ -26,6 +27,7 @@ from eom_workflow.private_chat_query_execution import (
     PrivateChatQueryWorkflowRequest,
     validate_private_chat_query_request_references,
 )
+from eom_workflow.private_chat_query_workflow import PrivateChatQueryWorkflowDefinition
 from eom_workflow_runner.private_chat_query_source_read import (
     CatalogPrivateChatQuerySourceOwner,
     PrivateChatQueryOwnerConfiguration,
@@ -44,6 +46,7 @@ from tests.unit.local_embedding_admission_fixtures import runtime_profile
 from tests.unit.test_private_chat_query_basis import TEXT
 from tests.unit.test_private_chat_query_execution import execution_case
 from tests.unit.test_private_chat_query_source import source_case
+from tests.unit.test_private_chat_query_workflow import definition_body
 
 pytestmark = [
     pytest.mark.integration,
@@ -56,7 +59,10 @@ def owned(registered, guarded_engine):
     public = registered
     assert guarded_engine.dialect.name == "postgresql"
     publisher = ControlFileSetPublisher(guarded_engine, public.settings)
-    request, policy, bundle = execution_case()
+    fixed = PrivateChatQueryWorkflowDefinition.model_validate(definition_body())
+    request, policy, bundle = execution_case(
+        definition_sha256=sha256_bytes(canonical_json_bytes(fixed))
+    )
     bundle_seed = uuid4().hex
     bundle = type(bundle).model_validate(
         seal(
@@ -91,7 +97,7 @@ def owned(registered, guarded_engine):
     saved = controls.publish_private_chat_query_policy(
         policy, idempotency_key="private-source-policy:" + uuid4().hex, created_at=NOW
     )
-    chat = source_case(question=TEXT)
+    chat = source_case(question=TEXT, identity_seed=uuid4().hex)
     # Set the synthetic conversation owner before its first canonical origin capture.
     chat.repository.owner = CALLER.operator_id
     projection = chat.execution.materialize_live_private_query(chat.ticket)

@@ -159,6 +159,86 @@ Synthetic input raw
 This is package closure, not an installed migration/private Workflow, real Chat
 ownership/claim, numerical acceptance, six-run comparison or full-goal completion.
 
+## Original-command Runner owner: implementation boundary
+
+The next application owner composes the existing live Chat/public-source owner,
+the immutable submitted context and `NativeCommandMutationFence`. Canonical
+origin remains `runtime_context`; a later/current ticket never replaces it.
+Definition/Workflow/command/step reads are primary-key/index lookups, with one
+root-local source resolution rather than a parallel queue/authorization cache.
+Small context validation is bounded; public-source work keeps its existing
+bounded cost. No new table, wire schema, model dependency or source class is needed.
+
+The actual attached rows must match the fixed private definition/hash, original
+request/context fingerprint, trusted turn key and START actor/payload/source.
+Fresh claims require an unused pending command; reclaimed claims require the
+exact prior step, launch and nonfailed allocation with the same original origin.
+Mutation/execution re-resolves actual Chat ownership plus public controls/scope
+in the caller's current root, then checks the command lease again after IO.
+The existing shared fenced transaction gains the explicit private request family;
+it still releases every SQL root before inference and rechecks authority on exit.
+
+The source owner's clean-root precondition becomes a named supported function,
+reused before row reads to prevent autoflush of unadmitted caller writes. No
+private-module import or independent rule/queue is introduced. This owner does
+not commit, submit/claim a command, launch a unit or grant compiler admission.
+Definition/request/context mismatches fail content-free; expiry/unknown physical
+outcomes retain their original identity. A metadata-only owner that never revisits
+the live Chat/source and command lease would be the simpler but unsafe alternative.
+Full private submission, executor, result-CHECK/claim routing and Chat delivery
+still need to compose this owner before runtime activation.
+
+Two concrete integration constraints remain part of that same full private
+vertical, not new product requirements: the closed immutable private
+`runtime_context` cannot receive the existing terminal helper's mutable
+`final_pointer_manifest`; the canonical private receipt must instead be resolved
+from its successful step (and exact terminal history), preserving the origin.
+Likewise async `ADVANCE_WORKFLOW` must be bound to its original private step and
+pending command lineage, not mislabeled as a new START/numerical request. Until
+those actual executor/terminal/routing pieces are implemented, this owner only
+accepts the original START shape and private compiler/result-CHECK admission stays
+closed. Do not enable the private runtime based on these source-owner tests.
+
+## Original-command owner verification
+
+`CatalogPrivateChatQueryOwnerAdmission` now validates attached fixed-definition/
+request/context/fingerprint/turn-key and original START actor/source/payload/hash
+before using the existing live Chat/public-source owner. Reclaimed work requires
+its exact allocated nonfailed private history and original origin, not a new
+attempt. Every mutation reuses `NativeCommandMutationFence` and checks expiry
+after source IO. The shared fenced transaction explicitly recognizes the private
+request, redacts invalid stored schema errors, retains its Workflow→command lock
+order and rechecks current authority at commit. The public step reader recognizes
+the private key; compiler and private step/result admission are still closed.
+
+The first unit run16 PASS/2 FAIL correctly rejected a fixture that changed its
+definition hash without changing its immutable execution policy. Test factories
+now accept an explicit exact definition pin; their prior defaults are unchanged.
+The guarded owner fixture uses that genuine fixed private definition hash and a
+new canonical synthetic Chat identity before capture. No production policy or
+pointer check was relaxed. After the guarded owner run, one fixture formatting
+change was verified to have identical Python AST:
+`16dd9a8874f1fa6e625b481b4566f3c15c47e58f6eaf54435cf48c6b43905720`.
+The final source regression then passed434 tests across16 suites (including6
+dependency tests), strict mypy5 production modules, Ruff/format13 files and shell/
+diff checks. Earlier23/102/345/89 overlap; do not add them to434.
+
+Actual PostgreSQL owner gate passed **76/76 plus235/235 in two separate guarded
+databases, no skips; both cleanup PASS**. The7 new owner cases cover registered
+index/control reads, read-only fresh claim, actual per-root command witness,
+terminal-witness nonreuse, late claim loss, expiry after IO, changed generation,
+rollback and prevention of autoflush/unallocated recovery. SQL, local Artifact
+files and command locks are real; Chat/IAM/population and declared Workflow/START
+remain synthetic, not genuine compiler/native admission. No model/service call.
+
+Evidence:
+`/opt/eom/embedding-benchmark-os-evidence/private-command-owner-GnP4PiCZ`;
+finite helper raw `cf697186c3aa522e956ac57b6dd34302581ff415ab02163dd2d760f1ba6a12b1`;
+76 stdout raw `da467328fba715e28fd164138bc735718a2c8e8ab62a3461b0ac371a6b4e4e47`;
+235 stdout raw `adc8febc29bce33148ecfbbff3979b73c90ee36d2253de364d317c6c1553183e`.
+The later79-case numeric-read gate includes these76; it is not79 more owner cases.
+Source owner/executor admission and full C4/runtime/goal completion remain separate.
+
 No application compiler/result CHECK is opened. No operating database migration,
 service restart, private model/QUERY, unit installation or Chat tool activation
 follows from source checks or synthetic metadata fixtures.

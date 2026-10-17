@@ -141,7 +141,8 @@ def build_private_chat_query_native_input(
         raise ValueError("PRIVATE_CHAT_QUERY_CURRENT_INPUT_INVALID") from None
 
 
-def _require_root(session: Session) -> object:
+def require_private_chat_query_source_root(session: Session) -> object:
+    """Require the same clean caller root before reads can autoflush pending writes."""
     root = session.get_transaction()
     if (
         not session.is_active
@@ -236,7 +237,7 @@ class CatalogPrivateChatQuerySourceOwner:
         *,
         artifact_reader: PinnedArtifactReadContext | None = None,
     ) -> ResolvedPrivateChatQuerySources:
-        root = _require_root(session)
+        root = require_private_chat_query_source_root(session)
         try:
             request = PrivateChatQueryWorkflowRequest.model_validate(
                 raw_similarity_contract_value(request)
@@ -253,14 +254,14 @@ class CatalogPrivateChatQuerySourceOwner:
                 raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
             with session.no_autoflush:
                 self.identity.fence_current_operator(session, origin.actor_id)
-                if _require_root(session) is not root:
+                if require_private_chat_query_source_root(session) is not root:
                     raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
                 projection = LiveChatQueryProjection.model_validate(
                     raw_similarity_contract_value(self.chat.materialize(origin.ticket))
                 )
                 if projection.origin != origin:
                     raise SimilarityContextReadError("SOURCE_REVOKED")
-                if _require_root(session) is not root:
+                if require_private_chat_query_source_root(session) is not root:
                     raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
                 reader = (
                     PinnedArtifactReadContext(session, self.settings)
@@ -289,7 +290,7 @@ class CatalogPrivateChatQuerySourceOwner:
                 )
                 if final_origin != origin:
                     raise SimilarityContextReadError("SOURCE_REVOKED")
-                if _require_root(session) is not root:
+                if require_private_chat_query_source_root(session) is not root:
                     raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
                 self.identity.fence_current_operator(session, origin.actor_id)
                 # The private owner RPC may overlap a public-source revocation.
@@ -300,7 +301,7 @@ class CatalogPrivateChatQuerySourceOwner:
                 if final_documents != documents:
                     raise SimilarityContextReadError("SOURCE_REVOKED")
                 reader.revalidate_provenance()
-                if _require_root(session) is not root:
+                if require_private_chat_query_source_root(session) is not root:
                     raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
                 return result
         except SimilarityContextReadError:

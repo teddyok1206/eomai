@@ -50,9 +50,13 @@ from tests.unit.test_private_chat_query_source import source_case
 
 @pytest.fixture
 def source(tmp_path, monkeypatch):
+    return make_private_source_case(tmp_path, monkeypatch)
+
+
+def make_private_source_case(tmp_path, monkeypatch, *, definition_sha256: str | None = None):
     publisher, _ = _publisher(tmp_path)
     publisher.settings = replace(publisher.settings, workspace_root=tmp_path)
-    request, policy, bundle = execution_case()
+    request, policy, bundle = execution_case(definition_sha256=definition_sha256)
     saved_bundle = EmbeddingRuntimeBundleArtifactPublisher(
         ControlArtifactPublisher(publisher.engine, publisher.settings), source_commit="a" * 40
     ).publish(bundle, created_at=NOW)

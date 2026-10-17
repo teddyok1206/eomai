@@ -12,10 +12,12 @@ from eom_workflow.local_embedding_request import (
     LocalEmbeddingExecutableRequest,
     parse_local_embedding_executable_request,
 )
+from eom_workflow.private_chat_query_execution import PrivateChatQueryWorkflowRequest
 from eom_workflow.reference_query_execution import (
     SupportedReferenceQueryWorkflowRequest,
     parse_supported_reference_query_workflow_request,
 )
+from jsonschema.exceptions import ValidationError as SchemaError
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -25,7 +27,9 @@ from eom_workflow_runner.repository import CommandLeaseIdentity, require_command
 from eom_workflow_runner.state_machine import CommandState
 
 type NativeWorkflowRequest = (
-    LocalEmbeddingExecutableRequest | SupportedReferenceQueryWorkflowRequest
+    LocalEmbeddingExecutableRequest
+    | SupportedReferenceQueryWorkflowRequest
+    | PrivateChatQueryWorkflowRequest
 )
 
 
@@ -58,19 +62,29 @@ def native_fenced_runner_transaction[Request: NativeWorkflowRequest](
             raise WorkflowError(WorkflowErrorCode.WORKFLOW_NOT_FOUND, "native workflow disappeared")
         command = require_command_lease(session, lease, for_update=True)
         initial_command_state = command.state
-        query = isinstance(request, SupportedReferenceQueryWorkflowRequest)
-        original = (
-            parse_supported_reference_query_workflow_request(workflow.initial_request)
-            if query
-            else parse_local_embedding_executable_request(workflow.initial_request)
-        )
+        if isinstance(request, PrivateChatQueryWorkflowRequest):
+            try:
+                original: NativeWorkflowRequest = PrivateChatQueryWorkflowRequest.model_validate(
+                    workflow.initial_request
+                )
+            except (ValueError, TypeError, SchemaError):
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
+                    "private native mutation original request is invalid",
+                ) from None
+            protocol = "private-chat-query/1.0"
+        elif isinstance(request, SupportedReferenceQueryWorkflowRequest):
+            original = parse_supported_reference_query_workflow_request(workflow.initial_request)
+            protocol = "reference-query/1.0"
+        else:
+            original = parse_local_embedding_executable_request(workflow.initial_request)
+            protocol = "local-embedding/1.0"
         if (
             command.workflow_id != workflow_id
             or workflow.definition_key != request.workflow_definition_key
             or workflow.definition_version != request.workflow_definition_version
             or workflow.definition_hash != request.workflow_definition_sha256
-            or workflow.role_schema_version
-            != ("reference-query/1.0" if query else "local-embedding/1.0")
+            or workflow.role_schema_version != protocol
             or workflow.protocol_version != "1.0.1"
             or original != request
             or workflow.request_payload != workflow.initial_request
