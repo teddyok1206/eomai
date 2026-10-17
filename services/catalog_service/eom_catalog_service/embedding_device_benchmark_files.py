@@ -11,7 +11,7 @@ import stat
 from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
-from typing import Literal, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
 
 from eom_catalog_contracts.embedding_device_benchmark import (
     EMBEDDING_DEVICE_BENCHMARK_SCHEMA_REF,
@@ -36,6 +36,9 @@ from eom_identifiers import sha256_bytes
 
 from eom_catalog_service.embedding_benchmark_layout import benchmark_read_acl
 from eom_catalog_service.embedding_runtime_files import fixed_native_embedding_profile
+
+if TYPE_CHECKING:
+    from eom_catalog_contracts.embedding_benchmark_cuda_ready import BenchmarkCudaReady
 
 _HANDOFF_ROOT = Path("/run/eom-incremental-embeddings/benchmark")
 _ROOT_UID = 0
@@ -156,6 +159,8 @@ class BenchmarkWorkerLocalFiles:
         self._execution_directory = -1
         self._inputs_directory = -1
         self._budget = 0
+        self._ready_state: Literal["EMPTY", "WRITING", "SEALED", "POISONED"] = "EMPTY"
+        self._ready_epoch: tuple[int, ...] | None = None
         self._closed = False
 
     @property
@@ -369,6 +374,16 @@ class BenchmarkWorkerLocalFiles:
 
     def assert_current(self) -> None:
         _require(not self._closed and self._input >= 0)
+        _require(self._ready_state in {"EMPTY", "SEALED"})
+        if self._ready_epoch is not None:
+            _require(
+                _epoch(
+                    os.stat(
+                        "cuda-ready.json", dir_fd=self._execution_directory, follow_symlinks=False
+                    )
+                )
+                == self._ready_epoch
+            )
         for descriptor, parent, name, initial in self._directories:
             _require(
                 not os.get_inheritable(descriptor)
@@ -421,6 +436,78 @@ class BenchmarkWorkerLocalFiles:
                     and os.lseek(member.descriptor, 0, os.SEEK_CUR) == member.byte_count
                 )
                 _no_acl(member.descriptor)
+
+    def write_cuda_ready(self, ready: BenchmarkCudaReady) -> None:
+        """Seal one precreated operational member; never alter numerical output/budget."""
+        _require(self.profile == "CUDA_INDEX_FP32" and self._ready_state == "EMPTY")
+        from eom_catalog_contracts.embedding_benchmark_cuda_ready import (
+            BenchmarkCudaReady,
+            benchmark_cuda_ready_bytes,
+        )
+
+        _require(type(ready) is BenchmarkCudaReady)
+        raw = benchmark_cuda_ready_bytes(ready)
+        invocation = self.read_invocation()
+        _require(
+            ready.execution_id == self.execution_id
+            and ready.job_id == invocation.job_id
+            and ready.invocation_raw_sha256 == self.raw_pin
+            and ready.pid == os.getpid()
+            and os.getresuid() == (self.native_uid,) * 3
+            and ready.worker_uid == self.native_uid
+            and os.getresgid() == (ready.worker_gid,) * 3
+            and tuple(sorted(set(os.getgroups()) - {ready.worker_gid})) == ready.supplementary_gids
+        )
+        descriptor = -1
+        self._ready_state = "WRITING"
+        try:
+            descriptor = os.open(
+                "cuda-ready.json",
+                os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
+                dir_fd=self._execution_directory,
+            )
+            before = os.fstat(descriptor)
+            _require(
+                stat.S_ISREG(before.st_mode)
+                and before.st_uid == self.native_uid
+                and before.st_gid == self.owner_gid
+                and stat.S_IMODE(before.st_mode) == 0o640
+                and before.st_nlink == 1
+                and before.st_size == 0
+                and self._flags(descriptor) == os.O_RDWR
+                and os.lseek(descriptor, 0, os.SEEK_CUR) == 0
+                and not os.get_inheritable(descriptor)
+            )
+            _no_acl(descriptor)
+            remaining = memoryview(raw)
+            while remaining:
+                count = os.write(descriptor, remaining)
+                _require(type(count) is int and 0 < count <= len(remaining))
+                remaining = remaining[count:]
+            os.fsync(descriptor)
+            after = os.fstat(descriptor)
+            _require(_identity(after) == _identity(before) and after.st_size == len(raw))
+            _require(os.pread(descriptor, len(raw) + 1, 0) == raw)
+            _require(
+                _epoch(
+                    os.stat(
+                        "cuda-ready.json", dir_fd=self._execution_directory, follow_symlinks=False
+                    )
+                )
+                == _epoch(after)
+            )
+            self._ready_epoch, self._ready_state = _epoch(after), "SEALED"
+            self.assert_current()
+        except Exception:
+            self._ready_state = "POISONED"
+            raise BenchmarkFilesError("BENCHMARK_CUDA_READY_WRITE_UNCERTAIN") from None
+        finally:
+            if descriptor >= 0:
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    self._ready_state = "POISONED"
+                    raise BenchmarkFilesError("BENCHMARK_CUDA_READY_CLOSE_UNCERTAIN") from None
 
     def _write(self, name: str, payload: bytes) -> _Member:
         self.assert_current()

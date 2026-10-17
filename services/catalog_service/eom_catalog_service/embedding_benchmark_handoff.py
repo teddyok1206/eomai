@@ -215,6 +215,9 @@ def prepare_benchmark_handoff(
             staged = _new_directory(stack, execution, "inputs", owner.pw_gid)
             outputs = _new_directory(stack, execution, "outputs", owner.pw_gid)
             _new_member(execution, "invocation.json", invocation_raw, _ROOT_UID, _ROOT_GID, 0o600)
+            if invocation.device == "CUDA":
+                # Operational pre-init metadata, outside the frozen numerical output namespace.
+                _new_member(execution, "cuda-ready.json", b"", native.pw_uid, owner.pw_gid, 0o640)
             _new_member(staged, "benchmark-inputs.json", input_raw, _ROOT_UID, owner.pw_gid, 0o640)
             input_fd = os.open(
                 "benchmark-inputs.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=staged

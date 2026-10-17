@@ -2,34 +2,18 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
+
+from eom_catalog_service.embedding_native_backend_pins import (
+    NativeEmbeddingBackendPins as NativeCpuBackendPins,
+)
+
+__all__ = ("NativeCpuBackendPins", "native_cpu_backend_scope")
 
 if TYPE_CHECKING:
     from eom_catalog_service.embedding_execution_ports import BenchmarkNativeEmbeddingBackend
-
-
-@dataclass(frozen=True, slots=True)
-class NativeCpuBackendPins:
-    configuration_id: str
-    configuration_revision_id: str
-    configuration_sha256: str
-    configuration_raw_sha256: str
-    receipt_raw_sha256: str
-
-    def __post_init__(self) -> None:
-        for value, pattern in (
-            (self.configuration_id, r"embeddingnativeconfig_[0-9a-f]{32}"),
-            (self.configuration_revision_id, r"embeddingnativeconfigrev_[0-9a-f]{32}"),
-            (self.configuration_sha256, r"sha256:[0-9a-f]{64}"),
-            (self.configuration_raw_sha256, r"sha256:[0-9a-f]{64}"),
-            (self.receipt_raw_sha256, r"sha256:[0-9a-f]{64}"),
-        ):
-            if type(value) is not str or re.fullmatch(pattern, value, re.ASCII) is None:
-                raise ValueError("NATIVE_CPU_OWNER_PINS_INVALID")
 
 
 @contextmanager

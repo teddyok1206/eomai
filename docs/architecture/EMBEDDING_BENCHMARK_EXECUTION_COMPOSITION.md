@@ -593,3 +593,59 @@ per-view rows175/149/161 with eligible545 do not prove whole-corpus coverage or4
 Two newer workflows completed, one is RUNNING and two REQUESTED with no failure code in
 that bounded projection. Original HTTP observer2895440 remains live/LOGIN; no authentication
 success, new prompt/key/request or restart is claimed. Next routine check≥07:42:24 UTC.
+
+### CUDA executable and fixed unit source checkpoint — 2026-10-17
+
+The fixed CUDA leaf now composes the existing physical GPU lease, PID1 retention request,
+typed readiness writer, root-only ACK wait, opened-device scope, exact workflow-owner peer
+and existing benchmark worker/backend. The order is retention → sealed readiness → root
+ACK → device R/W ownership → exact peer/channel → model scope. Backend/channel/device
+resources close before the process's original lease; PID1's retained copy is never unlocked
+or removed by the worker. Failure never falls back to CPU, reconnects, creates another Job,
+renews a deadline or represents an installation-probe outcome as benchmark success.
+
+Readiness is one precreated native-owned, workflow-readable 0640 member in the execution
+root, not a numerical output. The writer validates actual process credentials, invocation/
+Job identity, descriptor/name epochs, no symlink/hardlink/ACL and initially empty bytes. It
+writes canonical bounded bytes once, fsyncs and reads them back; partial IO/uncertain close
+poisons the local scope and preserves the failed bytes. Subsequent mutation is refused.
+The frozen numerical output set remains exactly4/16 members, with its original byte budget.
+
+CPU/CUDA now share only the small stdlib launch/config pin values, exact nine-argument
+parser and owned activation-FD lifetime. The existing public CPU pin name is a compatibility
+alias. CPU input/backend logic, numerical codecs, float32 rules and existing released
+request/result/channel schemas are unchanged. The CUDA source templates use the exact
+execution's protected launch.env, private handoff-parent mount, one PID1 listener, four
+explicit GPU device rules and existing resource bounds. They have not been installed or
+activated. No new dependency is added: only the existing optional GPU-runtime lease package
+is used in the selected CUDA leaf; API/CPU fresh imports do not load it or optional ML.
+
+ACK waiting keeps SIGUSR1 reserved and observable in /proc by consuming with zero-time
+sigtimedwait rather than blocking in that syscall. It rejects a preexisting signal at main
+entry and later checks the actual sender's UID0/PID and the earlier of the absolute deadline
+and30seconds. A legitimate root ACK already queued after readiness is accepted, rather than
+mistakenly rejected as stale. No model code runs on missing/nonroot/late ACK. A real ordinary-
+UID child test samples its /proc SigBlk five times during the wait and proves that this
+process's nonroot signal is refused. That is an actual OS **negative**, not a root/GPU
+positive. Source positive ordering/lifetime cases use explicitly synthetic doubles.
+
+Nineteen focused/regression suites: **885 PASS53.39s**, strict mypy7 production modules,
+Ruff/format10, exact diff checks and both CUDA source-unit syntax checks PASS. Coverage
+includes constructor/body/close/retention/ACK/device/channel failures, fixed file IO and
+replacement, invalid activation/deadline pins and borrowed lease/descriptor lifetime. Fresh
+API-interpreter import/bad-CLI/wrong-native-identity negatives import neither Pydantic nor
+optional ML/GPU packages before the guard. The initial three handoff layout fixture failures
+were the expected newly declared CUDA operational member; the corrected test checks its
+exact conditional presence, empty bytes/mode/link count without relaxing numerical members.
+One malformed-proof fixture expected ValueError instead of the existing JSON Schema error;
+only that expectation was corrected. No parser/authorization guard was weakened.
+
+This checkpoint is **SOURCE_PASS / NOT_ACTIVE**. It does not claim a real source-authorized
+Job/model, root signal, PID1 socket activation, CUDA performance measurement or installation
+receipt. The remaining mandatory composition is the actual root unit/process/host/source
+ACK owner, protected CUDA launch environment and terminal retirement bridge, compatible
+numerical-prefix successor and all six fixed launches. Existing INDEX/QUERY, CPU default,
+accepted Artifacts and historical failures are preserved. C1–C5 actual consumer gates and
+the full goal remain open. User replies saying authentication was entered are not counted
+as success while the original observer's published state is still LOGIN; no duplicate
+login process/request or credential persistence is introduced.

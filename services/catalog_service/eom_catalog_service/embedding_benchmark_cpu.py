@@ -6,15 +6,19 @@ import fcntl
 import hashlib
 import os
 import pwd
-import re
 import stat
 import sys
 import time
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from eom_catalog_service.embedding_benchmark_launch import (
+    BenchmarkLaunchPins as _LaunchPins,
+)
+from eom_catalog_service.embedding_benchmark_launch import (
+    benchmark_socket_activation,
+    parse_benchmark_launch_pins,
+)
 from eom_catalog_service.embedding_native_cpu_backend import (
-    NativeCpuBackendPins,
     native_cpu_backend_scope,
 )
 from eom_catalog_service.embedding_native_entrypoint import (
@@ -26,30 +30,8 @@ if TYPE_CHECKING:
     from eom_catalog_contracts.embedding_device_benchmark import BenchmarkWorkerInvocation
 
 
-@dataclass(frozen=True, slots=True)
-class _LaunchPins:
-    execution_id: str
-    invocation_raw_sha256: str
-    owner_pid: int
-    expires_ns: int
-    backend: NativeCpuBackendPins
-
-
 def _arguments(arguments: tuple[str, ...]) -> _LaunchPins:
-    if type(arguments) is not tuple or len(arguments) != 9:
-        raise ValueError("BENCHMARK_CPU_OWNER_PINS_INVALID")
-    execution, raw_hash, pid, expires, *backend = arguments
-    for value, pattern in (
-        (execution, r"[0-9a-f]{32}"),
-        (raw_hash, r"sha256:[0-9a-f]{64}"),
-        (pid, r"[1-9][0-9]{0,9}"),
-        (expires, r"[1-9][0-9]{0,18}"),
-    ):
-        if type(value) is not str or re.fullmatch(pattern, value, re.ASCII) is None:
-            raise ValueError("BENCHMARK_CPU_OWNER_PINS_INVALID")
-    if int(pid) > 2**31 - 1:
-        raise ValueError("BENCHMARK_CPU_OWNER_PINS_INVALID")
-    return _LaunchPins(execution, raw_hash, int(pid), int(expires), NativeCpuBackendPins(*backend))
+    return parse_benchmark_launch_pins(arguments)
 
 
 def _invocation(pins: _LaunchPins) -> BenchmarkWorkerInvocation:
@@ -92,18 +74,8 @@ def _invocation(pins: _LaunchPins) -> BenchmarkWorkerInvocation:
 
 
 def _execute(pins: _LaunchPins, started_ns: int) -> int:
-    now = time.monotonic_ns()
-    if not now < pins.expires_ns <= now + 180 * 10**9 or (
-        os.environ.get("LISTEN_PID") != str(os.getpid())
-        or os.environ.get("LISTEN_FDS") != "1"
-        or os.environ.get("LISTEN_FDNAMES") != "benchmark-control"
-    ):
-        raise ValueError("BENCHMARK_CPU_ACTIVATION_INVALID")
-    try:
+    with benchmark_socket_activation(pins):
         return _run(pins, started_ns)
-    finally:
-        # PID1 transferred this process's activation FD; close it even if header capture fails.
-        os.close(3)
 
 
 def _run(pins: _LaunchPins, started_ns: int) -> int:

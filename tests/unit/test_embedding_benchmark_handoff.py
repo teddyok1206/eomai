@@ -68,11 +68,13 @@ def test_prepare_then_existing_capture_exact_layout_and_separate_hashes(
     assert prepared.input_set_sha256 == inputs.input_set_sha256
     assert prepared.input_raw_sha256 == invocation.local_input.sha256
     execution = root / invocation.execution_id
-    assert sorted(path.name for path in execution.iterdir()) == [
-        "inputs",
-        "invocation.json",
-        "outputs",
-    ]
+    expected_members = ["inputs", "invocation.json", "outputs"]
+    if invocation.device == "CUDA":
+        expected_members.insert(0, "cuda-ready.json")
+        ready = (execution / "cuda-ready.json").stat()
+        assert ready.st_size == 0 and ready.st_nlink == 1
+        assert stat.S_IMODE(ready.st_mode) == 0o640
+    assert sorted(path.name for path in execution.iterdir()) == expected_members
     assert tuple(sorted(path.name for path in (execution / "outputs").iterdir())) == tuple(
         sorted(benchmark_local_output_members(ordinal))
     )

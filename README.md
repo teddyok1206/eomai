@@ -291,6 +291,13 @@ CONTENT_ONLY7/520·CONCRETE_FACETS1/520·METADATA_ONLY1/520입니다.
 | CUDA benchmark 준비 통신 | SOURCE_PASS/NOT_ACTIVE; 설치검사와 구분한 새 준비 메시지를 먼저 정의하고 원본 Job/실행/config·receipt/process/장치 pin과 초기화0을 묶음. 별도 root 관찰 입구는 자기 실행 unit·worker/PID1 양쪽 실제 잠금 확인을 같은 기존 코드로 수행. 관련425 PASS/strict3, 별도 계약·패키지 자원268 PASS(중복 합산 금지). 실제 unit/GPU 양성 검증이 아닌 합성 source 검증이며 CUDA 실행기·root ACK·prefix/6회 비교는 미완료. [계약·공유 경계·검증](docs/architecture/EMBEDDING_BENCHMARK_EXECUTION_COMPOSITION.md#cuda-readiness-protocol-and-shared-root-fd-observation-source-checkpoint) |
 | 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | 실제 seed/delta·과거 QUERY 완료/replay/current context PASS 보존. CPU 설치 seal/reader·QUERY READY와 INDEX 신원14 복구 후3-view 각4행 완료/독립 정본 감사도 PASS. [미실행 취소 계약](docs/architecture/LOCAL_INDEXING_UNSTARTED_CANCELLATION_DESIGN.md)의 원 START CANCELLED 영수증과 이력 보존(관련106·임시 DB113+19·strict2 PASS, 중복 합산 안 함). 전체 coverage·인증 HTTP C1/일반 소비자·실제6회 CPU/GPU 비교·조건부 GPU 기본값은 여전히 미완료. 같은 수치 bundle/proof/벡터 공간 유지; hash 우회나 OS 업데이트 중지는 하지 않음. [단계별 실제 증거·관찰 시각](docs/operations/LOCAL_INDEXING_HOST_CACHE_DRIFT_2026-10-16.md) |
 
+CUDA 고정 실행기도 **SOURCE_PASS / NOT_ACTIVE**입니다. 준비 파일을 한 번만 기록하고
+물리 잠금 보존 → 관리자 ACK → 장치 소유 → 정확한 peer → 모델 순서를 연결했습니다.
+관련885 tests·strict7·Ruff/format10·unit 구문 PASS; 실제 일반 계정 자식 프로세스의
+신호 예약 유지/비관리자 ACK 거부도 확인했습니다. 양성 lifecycle은 합성 fixture이며,
+아직 실제 root ACK·호환 수치 환경 갱신·6회 성능 비교·GPU 기본값 전환은 아닙니다.
+[구현 범위와 남은 연결](docs/architecture/EMBEDDING_BENCHMARK_EXECUTION_COMPOSITION.md#cuda-executable-and-fixed-unit-source-checkpoint--2026-10-17)
+
 10/15 최초 QUERY는 전체 자료의 반복 검증 중 인증 창을 넘겼고 native allocation이 없어
 그대로 보존합니다. 이후 별도 독립 QUERY는 원 ALLOCATION을 먼저 저장했고, staging 폴더
 누락 중단을 같은 Workflow/START/Job으로 이어18:57 UTC 완료했습니다.18:59에는 같은 key
