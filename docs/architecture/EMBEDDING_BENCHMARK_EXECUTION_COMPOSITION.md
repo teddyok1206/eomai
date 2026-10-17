@@ -280,3 +280,32 @@ after the candidate wheel is built and installed passively. Source/real-Job admi
 compatible numerical prefix, PID1 activation, CUDA entry, six measurements and C1–C5 remain
 open. Existing active services, model defaults, historical outputs and authentication are
 unchanged by this source checkpoint.
+
+### Actual root environment gate — 2026-10-17 06:35 UTC
+
+Candidate `409e19879760fb49bf9e690877d91ecfa904d39b` passed the standard three-wheel/
+RECORD build and was installed as a **passive owner only**. The same protected OS suite
+now passes **9 cases** against the installed wheel, without optional ML imports. Besides
+the seven earlier DAC/actual-peer cases, it verifies an exclusive root600 environment for
+a real exec'd workflow-owner child, refusal of named reads by both worker accounts, and
+owner exit after writing: that candidate remains private and no launch receipt is returned.
+Synthetic configuration metadata remains synthetic even in these actual OS cases.
+
+Existing EOM2 sudo authentication was reused without another prompt. No active service,
+numerical prefix, template, source/Job permission or CPU/GPU default was changed. No model,
+benchmark invocation, DB Job or NAS Artifact was created. This is not full source/Job
+admission, actual PID1 activation, numerical-prefix admission or six-launch acceptance.
+
+Build: `/tmp/eom-api-build/409e19879760fb49bf9e690877d91ecfa904d39b.dPwYFv/dist`.
+Platform raw wheel SHA:
+`01650b822934309af91025a29531e6bc987166d58854ce5eb4ff183613b61615`;
+API-contract raw wheel SHA:
+`9718ec9af938fcb721963cc63610cd611f1a086558f1df4fb5b928cd8bbcf91f`.
+Protected OS evidence:
+`/opt/eom/embedding-benchmark-os-evidence/409e19879760fb49bf9e690877d91ecfa904d39b/`.
+Test stdout raw SHA:
+`f344ebc87c313af7ebeb2e68fd1392e2e1cde3c3568c60f3524729e5e31239bd`.
+No-replay operator raw SHA:
+`6813fa26f8d5794ac58f104db134b3a3d4e81bea501ec1bf33b942662a442d86`;
+local exit receipt `/tmp/eom-benchmark-environment-os.nMcR7mq1/operator-result.json`
+reports0 and `expected_nine_tests_passed=true`. Earlier evidence remains unchanged.
