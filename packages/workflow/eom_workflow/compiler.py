@@ -29,6 +29,10 @@ from eom_workflow.models import (
     TerminalStep,
     WorkflowDefinition,
 )
+from eom_workflow.private_chat_query_workflow import (
+    PrivateChatQueryStep,
+    PrivateChatQueryWorkflowDefinition,
+)
 from eom_workflow.reference_query_workflow import (
     ReferenceQueryStep,
     ReferenceQueryWorkflowDefinition,
@@ -86,7 +90,8 @@ class CompiledWorkflowDefinition:
         | HumanGateStep
         | TerminalStep
         | LocalEmbeddingStep
-        | ReferenceQueryStep,
+        | ReferenceQueryStep
+        | PrivateChatQueryStep,
     ]:
         return {step.key: step for step in self.definition.steps}
 
@@ -119,12 +124,21 @@ def compile_definition_data(
             definition = parse_local_embedding_workflow_definition(raw)
         elif raw.get("schema_version") == "1.2":
             definition = parse_reference_query_workflow_definition(raw)
+        elif raw.get("schema_version") == "1.3":
+            definition = PrivateChatQueryWorkflowDefinition.model_validate(raw)
         else:
             validate_schema_message(load_definition_schema(), raw, "workflow-definition")
             definition = WorkflowDefinition.model_validate(raw)
     except (ValidationError, ValueError) as exc:
         raise WorkflowDefinitionError("workflow definition failed schema validation") from exc
-    if isinstance(definition, (LocalEmbeddingWorkflowDefinition, ReferenceQueryWorkflowDefinition)):
+    if isinstance(
+        definition,
+        (
+            LocalEmbeddingWorkflowDefinition,
+            ReferenceQueryWorkflowDefinition,
+            PrivateChatQueryWorkflowDefinition,
+        ),
+    ):
         # The native contract fixes both ordered steps, their transition and
         # purpose. It neither needs a Codex slot nor activates a runtime adapter.
         try:

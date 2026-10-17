@@ -10,6 +10,7 @@ from uuid import uuid4
 import pytest
 from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
 from eom_workflow.admission import workflow_definition_is_admitted
+from eom_workflow.private_chat_query_execution import PrivateChatQueryWorkflowRequest
 from eom_workflow_runner import native_command_fence as fence_module
 from eom_workflow_runner.errors import WorkflowError
 from eom_workflow_runner.models import WorkflowCommandRecord, WorkflowInstanceRecord
@@ -17,7 +18,13 @@ from eom_workflow_runner.native_workflow_transaction import native_fenced_runner
 from eom_workflow_runner.private_chat_query_owner_admission import (
     CatalogPrivateChatQueryOwnerAdmission,
 )
-from eom_workflow_runner.repository import CommandLeaseIdentity
+from eom_workflow_runner.repository import (
+    CommandExecutionFamily,
+    CommandLeaseIdentity,
+    claim_command_candidate,
+    peek_command_candidate,
+    workflow_requires_local_embedding,
+)
 
 from tests.integration.test_preset_model_validation_persistence import (
     guarded_engine as guarded_engine,
@@ -174,3 +181,35 @@ def test_postgres_pending_caller_write_cannot_autoflush_before_source_admission(
             )
         assert not declared.source.fault.final_authorization_reached
         session.rollback()
+
+
+def test_postgres_private_workflow_is_never_selected_as_role_index_or_reference(declared):
+    with declared.source.publisher.sessions.begin() as session:
+        for family in CommandExecutionFamily:
+            candidate = peek_command_candidate(
+                session, family=family, workflow_id=declared.workflow_id
+            )
+            if family is CommandExecutionFamily.PRIVATE_CHAT_QUERY:
+                assert candidate is not None
+                assert isinstance(candidate.native_request, PrivateChatQueryWorkflowRequest)
+            else:
+                assert candidate is None
+        assert workflow_requires_local_embedding(session, workflow_id=declared.workflow_id)
+
+
+def test_postgres_private_selection_does_not_grant_unsupported_step_or_lease(declared):
+    with declared.source.publisher.sessions.begin() as session:
+        candidate = peek_command_candidate(
+            session,
+            family=CommandExecutionFamily.PRIVATE_CHAT_QUERY,
+            workflow_id=declared.workflow_id,
+        )
+        assert candidate is not None
+        with pytest.raises(WorkflowError, match="private QUERY claim"):
+            claim_command_candidate(
+                session, candidate, runner_id="not-offered-private-runner", lease_seconds=60
+            )
+        command = session.get(WorkflowCommandRecord, declared.command_id)
+        assert (
+            command.state == "PENDING" and command.attempts == 0 and command.lease_generation == 0
+        )

@@ -12,7 +12,7 @@ from eom_catalog_contracts.private_chat_query_read import ChatPrivateQueryOrigin
 from eom_catalog_service.embedding_encoder_adapter import encode_private_chat_query
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_workflow.admission import workflow_definition_is_admitted
-from eom_workflow.compiler import WorkflowDefinitionError, compile_definition_data
+from eom_workflow.compiler import compile_definition_data
 from eom_workflow.private_chat_query_workflow import (
     PRIVATE_CHAT_QUERY_RECEIPT_REF,
     PrivateChatQueryStepOutput,
@@ -225,8 +225,9 @@ def test_fixed_definition_hash_and_no_implicit_compiler_or_execution_admission(c
     assert not workflow_definition_is_admitted(
         definition.definition_key, definition.definition_version
     )
-    with pytest.raises(WorkflowDefinitionError):
-        compile_definition_data(definition_body(), "synthetic-private-definition", set())
+    compiled = compile_definition_data(definition_body(), "synthetic-private-definition", set())
+    assert compiled.definition == definition
+    assert compiled.sha256 == request.workflow_definition_sha256
 
 
 @pytest.mark.parametrize(

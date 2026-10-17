@@ -244,6 +244,7 @@ def test_query_markers_are_quarantined_by_the_same_total_routing_predicate(opera
         CommandExecutionFamily.ROLE,
         CommandExecutionFamily.LOCAL_EMBEDDING,
         CommandExecutionFamily.REFERENCE_QUERY,
+        CommandExecutionFamily.PRIVATE_CHAT_QUERY,
     }
 
 

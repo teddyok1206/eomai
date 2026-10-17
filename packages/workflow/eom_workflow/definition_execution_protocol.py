@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
+from jsonschema.exceptions import ValidationError as SchemaError
+
 from eom_workflow.local_embedding_workflow import (
     LOCAL_EMBEDDING_EXECUTION_PROTOCOL,
     LocalEmbeddingWorkflowDefinition,
 )
 from eom_workflow.models import AgentStep, WorkflowDefinition
+from eom_workflow.private_chat_query_workflow import (
+    PRIVATE_CHAT_QUERY_EXECUTION_PROTOCOL,
+    PrivateChatQueryWorkflowDefinition,
+)
 from eom_workflow.reference_query_workflow import (
     REFERENCE_QUERY_EXECUTION_PROTOCOL,
     ReferenceQueryWorkflowDefinition,
@@ -15,7 +22,10 @@ from eom_workflow.reference_query_workflow import (
 from eom_workflow.schemas import result_schema_protocol
 
 type ExecutionWorkflowDefinition = (
-    WorkflowDefinition | LocalEmbeddingWorkflowDefinition | ReferenceQueryWorkflowDefinition
+    WorkflowDefinition
+    | LocalEmbeddingWorkflowDefinition
+    | ReferenceQueryWorkflowDefinition
+    | PrivateChatQueryWorkflowDefinition
 )
 
 
@@ -30,6 +40,16 @@ def definition_execution_protocol(definition: ExecutionWorkflowDefinition) -> st
     Revalidation also protects repository callers from a forged frozen copy. Old
     definitions keep their exact single-agent-family rule and meaning.
     """
+    if isinstance(definition, PrivateChatQueryWorkflowDefinition):
+        try:
+            PrivateChatQueryWorkflowDefinition.model_validate(
+                raw_similarity_contract_value(definition)
+            )
+        except (ValueError, TypeError, SchemaError):
+            raise DefinitionExecutionProtocolError(
+                "private query definition execution protocol is invalid"
+            ) from None
+        return PRIVATE_CHAT_QUERY_EXECUTION_PROTOCOL
     if isinstance(definition, ReferenceQueryWorkflowDefinition):
         try:
             parse_reference_query_workflow_definition(definition)

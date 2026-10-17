@@ -445,6 +445,15 @@ Chat/IAM/문항 모집단과 선언된 작업은 합성 fixture이며 실제 채
 접수·명령 연결·운영 설치/활성화는 미완료입니다.
 [최종 조합 증거](docs/architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#guarded-executor-test-correction-and-terminal-source-checkpoint)
 
+원 채팅 작업이 대기 후 이어질 때에도 같은 최초 작업·질문 참조·사용자를 확인하는 명령 연결과
+전용 처리 경로를 추가했습니다. 기출 QUERY나 일반 작업으로 잘못 처리되지 않도록 분리하며,
+완료 단계는 원본 참조를 그대로 보존합니다. 고정된 소스의 임시 PostgreSQL84/246·각 정리
+PASS를 확인한 뒤, 별도 개발 폴더에서 준비한 컴파일러 연결을 합쳐 소스371·strict8·lint/
+format17 PASS를 확인했습니다. 앞선81 PASS/233 PASS·16 FAIL 기록도 보존했습니다.
+컴파일러 연결은 비활성 정의 준비까지만 허용하며 새 실행 권한을 부여하지 않습니다.
+실제 채팅 접수·전체 Runner 연결·전용 단계 DB 허용·운영 설치/활성화와 전체 목표는 아직
+미완료입니다. [명령·단계·컴파일러의 정확한 검증 범위](docs/architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#continuationstep-source-checkpoint)
+
 아래는 날짜·후보별 역사적 구현 기록입니다. 당시의 미완료 표기는 현재 종합 상태와
 구별하며, 최신 실제 실행·활성화 범위는 위 표와 연결된 상태 문서를 기준으로 합니다.
 

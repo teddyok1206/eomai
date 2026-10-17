@@ -9,6 +9,24 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Latest source checkpoint2026-10-17 23:32 UTC: original private START/ADVANCE
+  lineage, family quarantine and context-preserving application/terminal use case
+  now pass combined371 tests/16 suites, strict8/Ruff/format17/bash/diff. Main's
+  prior exact104-pin guarded snapshot passed embedding84 and stage246/no skips,
+  each in its own disposable DB with cleanup PASS. Earlier81 PASS plus233 PASS/
+  16 FAIL remains preserved: new declared-owner fixtures shared a DB with an
+  empty-history/inactive-definition migration fixture. The correction separates
+  those cases using existing purposes, not history deletion or weaker guards.
+  Compiler staging was developed in a separate worktree while104 pins were held
+  unchanged and transferred only after the DB gate ended; its follow-up source
+  PASS is not promoted to a new combined DB proof. Closed private1.3 compiles and
+  imports inactive with its correct protocol, but static definition admission,
+  private result CHECK, complete Runner composition, supported private submission,
+  installed execution and Chat tool delivery remain OPEN. No operating DB/model/
+  install/activation, new authentication, TTL change or credential transfer.
+  C1–C5/full seed–delta/six real CPU–CUDA/default/rollback are still OPEN.
+  [Exact source, final/failed evidence and next boundary](../architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#continuationstep-source-checkpoint).
+
 - Latest operating checkpoint19:26 UTC: CPU/CUDA private benchmark code42a1c5c6
   both have actual fresh no-model installation admission. After normal drain and
   zero remaining INDEX commands, supported Identity/Catalog operations selected
@@ -29,10 +47,13 @@ summed into a single acceptance count. This ledger does not grant authority.
   authentication prompt. Next routine observation no earlier than20:58:11 UTC.
   Local sanitized evidence:
   `/tmp/eom-private-checkpoint-db.IljUOOv7/index-observation.json`.
-- User unattended constraint, renewed2026-10-17 22:36 UTC: no new interactive
-  login before2026-10-18 22:36 UTC;
+- User unattended constraint, renewed2026-10-17 23:28 UTC: no new interactive
+  login before2026-10-18 23:28 UTC (at least24 hours from this renewal);
   continue independent authorized work, never simulate authentication, copy tokens
-  or change freshness/TTL. Original HTTP read remains unverified, not a verified
+  or change freshness/TTL. This is permission to continue work, not an authenticated
+  user session or authority to bypass authentication. Operations requiring expired
+  credentials remain pending while independent work continues. Original HTTP read
+  remains unverified, not a verified
   wait on a login prompt. The existing memory observer is preserved, not exported.
 - C4 workflow completion contract: fixed private graph/receipt/carrier now have
   closed2020-12 schema, exact original origin/actor/basis/launch and four-member

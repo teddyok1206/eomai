@@ -38,6 +38,12 @@ from eom_workflow_runner.native_command_fence import (
     require_unexpired_native_command,
 )
 from eom_workflow_runner.native_step_completion import native_application_step
+from eom_workflow_runner.private_chat_query_command_lineage import (
+    PRIVATE_CHAT_QUERY_SUBMISSION_SOURCE as PRIVATE_CHAT_QUERY_SUBMISSION_SOURCE,
+)
+from eom_workflow_runner.private_chat_query_command_lineage import (
+    require_private_chat_query_command,
+)
 from eom_workflow_runner.private_chat_query_source_read import (
     CatalogPrivateChatQuerySourceOwner,
     ResolvedPrivateChatQuerySources,
@@ -45,12 +51,8 @@ from eom_workflow_runner.private_chat_query_source_read import (
 )
 from eom_workflow_runner.repository import (
     CommandLeaseIdentity,
-    CommandType,
-    command_business_fingerprint,
     require_command_lease,
 )
-
-PRIVATE_CHAT_QUERY_SUBMISSION_SOURCE = "private_chat_query_submission"
 
 
 def validate_private_chat_query_workflow_submission(
@@ -110,29 +112,6 @@ def validate_private_chat_query_workflow_submission(
         raise ValueError("PRIVATE_CHAT_QUERY_WORKFLOW_CONTEXT_INVALID") from None
 
 
-def _require_command(workflow: WorkflowInstanceRecord, command: WorkflowCommandRecord) -> None:
-    key = f"start:{workflow.workflow_id}"
-    if (
-        command.workflow_id != workflow.workflow_id
-        or command.command_type != CommandType.START_WORKFLOW.value
-        or command.payload != {}
-        or command.actor_type != workflow.created_actor_type
-        or command.actor_id != workflow.created_actor_id
-        or command.source != PRIVATE_CHAT_QUERY_SUBMISSION_SOURCE
-        or command.idempotency_key != key
-        or command.request_hash
-        != command_business_fingerprint(
-            workflow_id=workflow.workflow_id,
-            command_type=CommandType.START_WORKFLOW,
-            payload={},
-            actor_type=workflow.created_actor_type,
-            actor_id=workflow.created_actor_id,
-            source=PRIVATE_CHAT_QUERY_SUBMISSION_SOURCE,
-        )
-    ):
-        raise ValueError("PRIVATE_CHAT_QUERY_COMMAND_CONTEXT_INVALID")
-
-
 def validate_private_chat_query_execution_step(
     step: WorkflowStepRunRecord,
     workflow: WorkflowInstanceRecord,
@@ -187,7 +166,7 @@ class CatalogPrivateChatQueryOwnerAdmission:
         if object_session(command) is not session:
             raise ValueError("PRIVATE_CHAT_QUERY_COMMAND_CONTEXT_INVALID")
         context = validate_private_chat_query_workflow_submission(session, workflow, request)
-        _require_command(workflow, command)
+        require_private_chat_query_command(session, workflow, command, request)
         return context
 
     def resolve_claim(

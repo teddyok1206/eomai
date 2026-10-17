@@ -76,6 +76,7 @@ from eom_workflow.inference_transfer import (
 )
 from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
 from eom_workflow.local_embedding_workflow import LocalEmbeddingWorkflowDefinition
+from eom_workflow.private_chat_query_execution import PrivateChatQueryWorkflowRequest
 from eom_workflow.reference_query_execution import (
     SupportedReferenceQueryWorkflowRequest,
     parse_supported_reference_query_workflow_request,
@@ -525,7 +526,13 @@ class WorkflowRunner:
         reference_query_owner: ReferenceQueryOwnerAdmission | None = None,
         reference_query_executor: ReferenceQueryNativeExecutor | None = None,
         runner_id: str | None = None,
-        command_families: frozenset[CommandExecutionFamily] = frozenset(CommandExecutionFamily),
+        command_families: frozenset[CommandExecutionFamily] = frozenset(
+            {
+                CommandExecutionFamily.ROLE,
+                CommandExecutionFamily.LOCAL_EMBEDDING,
+                CommandExecutionFamily.REFERENCE_QUERY,
+            }
+        ),
         command_actor_selection: NativeCommandActorSelection | None = None,
         runner_config: RunnerConfig | None = None,
     ) -> None:
@@ -694,6 +701,13 @@ class WorkflowRunner:
         for candidate in sorted(candidates, key=lambda row: (row.created_at, row.command_id)):
             if candidate.family is CommandExecutionFamily.ROLE:
                 report = self.readiness.evaluate()
+            elif candidate.family is CommandExecutionFamily.PRIVATE_CHAT_QUERY or isinstance(
+                candidate.native_request, PrivateChatQueryWorkflowRequest
+            ):
+                report = _local_embedding_unavailable_report(
+                    WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                    "private QUERY execution is not yet offered by this Runner composition",
+                )
             elif isinstance(candidate.native_request, SupportedReferenceQueryWorkflowRequest):
                 if self.reference_query_owner is None or self.reference_query_executor is None:
                     report = _local_embedding_unavailable_report(
@@ -3483,7 +3497,12 @@ class WorkflowRunner:
         self, native: tuple[str, NativeWorkflowRequest, CommandLeaseIdentity]
     ) -> Iterator[Session]:
         workflow_id, request, lease = native
-        if isinstance(request, SupportedReferenceQueryWorkflowRequest):
+        if isinstance(request, PrivateChatQueryWorkflowRequest):
+            raise WorkflowError(
+                WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+                "private QUERY requires its own offered Runner composition",
+            )
+        elif isinstance(request, SupportedReferenceQueryWorkflowRequest):
             if self.reference_query_owner is None:
                 raise WorkflowError(
                     WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,

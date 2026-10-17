@@ -69,6 +69,19 @@ def test_session_fence_purpose_uses_existing_owner_guard_and_exact_opt_in() -> N
     assert '"$1" != "authenticated-session-tests"' in source
 
 
+def test_private_declared_workflows_do_not_share_the_empty_history_migration_database() -> None:
+    source = SCRIPT.read_text()
+    stage_start = source.index('if [[ "${action}" == "embedding-stage-tests" ]]')
+    stage = source[stage_start : source.index('if [[ "${action}" == "embedding-encoding-tests" ]]')]
+    owner_start = source.index('if [[ "${action}" == "embedding-tests" ]]')
+    owner = source[owner_start : source.index('if [[ "${action}" == "chat-knowledge-tests" ]]')]
+    assert "test_private_chat_query_context_persistence.py" in stage
+    assert "test_private_chat_query_command_lineage.py" not in stage
+    assert "test_private_chat_query_command_lineage.py" in owner
+    assert "test_private_chat_query_owner_admission.py" in owner
+    assert "test_private_chat_query_context_persistence.py" not in owner
+
+
 def test_shell_parses_without_running_any_database_action() -> None:
     result = subprocess.run(
         ["/usr/bin/bash", "-n", str(SCRIPT)],

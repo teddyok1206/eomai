@@ -595,3 +595,128 @@ DB/model/installation/private claim or Chat tool activation occurs in either gat
 Actual private Workflow SQL terminal admission, async routing and consumer delivery
 are still required. Operating migration remains the last verified0055; source
 head0056 is unchanged and no new migration is introduced here.
+
+## Original continuation and queue-family integration
+
+1. Existing Runner repository owns FIFO selection/claim; the private owner owns
+   current source/Chat authority. A separate PRIVATE_CHAT_QUERY family prevents
+   private or malformed markers from falling into ROLE, INDEX or reference QUERY.
+2. Canonical continuation proof is the original Workflow/START, immutable origin,
+   original native launch/checkpoints and current actor; queued metadata alone
+   grants nothing. Native/result/source hashes keep their separate meanings.
+3. Existing ADVANCE payload contains exactly its original step-run ID. Its trusted
+   pending key binds that step and the predecessor command, not another model run.
+4. Current and predecessor command payload/source/actor/fingerprint must match;
+   predecessor must be SUCCEEDED. The original successful START and original
+   launch/generation are also checked. A pending parent never grants its child.
+5. Access is bounded PK lookups plus the existing original Job's bounded history;
+   no recursive chain scan, new queue, event tracker, cache or question copy.
+6. Existing command unique key, Workflow→command locks, lease generations and
+   original native allocation own concurrency. One pending child per parent key.
+7. Catalog/current identity and physical launcher admission stay separate from
+   candidate projection. Reclaim/replay reauthorize, never reuse an old grant.
+8. Private submission context remains immutable. Failed original history cannot
+   be replaced through a fresh continuation or another key; uncertainty retains
+   the same original launch and one physical attempt.
+9. Purpose-owner interfaces live above contracts and below Runner composition;
+   repository must not import the concrete owner that itself uses repository.
+10. This uses existing closed request/ADVANCE contracts. No released schema or DB
+    migration changes here; private definition/result admission remains closed
+    until complete Runner/step support is tested. No operating activation follows.
+11. Treating private markers as generic INDEX is simpler but routes a user's
+    question through the wrong authority. Parent-key-only checks without original
+    source/START/launch closure are likewise insufficient.
+
+### Continuation/step source checkpoint
+
+The working tree now has the private queue-family quarantine, typed owner port,
+original START/ADVANCE linkage and a private Runner step/terminal use case. The
+existing Runner default remains the prior three families; it explicitly refuses
+private execution until complete composition/admission is offered. At this exact
+database-gate snapshot the compiler, private SQL result CHECK, definition admission
+and operating release remained closed. Separate subsequent compiler staging is
+recorded below; it is not inferred from this gate.
+
+Source244 PASS/11 suites includes20 original-lineage,12 routing and16 private-step
+cases, existing native/role/preclaim regressions and six dependency checks. Those
+subsets overlap this inventory, not additional aggregate counts. Six separate
+harness cases also PASS. Strict6/Ruff/format12 PASS. Step progression includes
+source resolution before state writes, atomic initial allocation, no SQL through
+execution, immutable context, original-history pending checks and actor/result/
+rollback negatives. Its owner/step/physical seams are synthetic; no actual private
+Workflow admission or execution is inferred.
+
+First dual DB gate retained at
+`/opt/eom/embedding-benchmark-os-evidence/private-lineage-sVZncBXF`:
+embedding81 PASS/cleanup PASS; stage233 PASS/16 FAIL/cleanup PASS. All16 failures
+were in the empty-history/inactive-definition migration fixture after three new
+continuation fixtures had committed declared private Workflows. Reordering alone
+is insufficient: the migration fixture also commits an intentionally inactive
+different definition. Do not delete/rewrite immutable history or loosen guards.
+
+The correction puts continuation/declared-owner cases in the existing embedding
+owner-purpose DB; empty-history migration cases remain in the separate stage DB.
+A source harness test pins that separation. This introduces neither a testing
+purpose nor another queue/framework. The exact104-pin successor at
+`/opt/eom/embedding-benchmark-os-evidence/private-lineage-final-0b3I53Ri` completed
+with84 PASS and246 PASS in separate fresh databases, zero skips and both cleanups
+PASS; independently read back2026-10-17 23:30 UTC. Source files were held unchanged
+through termination. Cohort stdout raw hashes:
+
+- embedding84: `e60d04899056d8832d32bb61156657661fbef8f14c315a88e7dd8a25c4024ff6`.
+- stage246: `911d1ad6c8da6791d5fa2ddba0b8f7c12fe290b7f617e7d22543de47fc5906d6`.
+
+Helper raw `174cff705eae6ad57b7fd00d59db73813e8164975288e976bd92d7d68fb01013`.
+Earlier failure and both cleanups remain preserved. No production DB, model,
+installation, API or Chat tool activation occurs in these gates.
+
+### Fixed private compiler staging — after the guarded snapshot
+
+The compiler now accepts only the existing closed private1.3 graph and calculates
+its own canonical hash and `private-chat-query/1.0` execution protocol. Revalidation
+rejects unvalidated model copies, altered purpose/role/attempt/terminal/extra
+authority. Definition import can stage it inactive and report the correct protocol;
+it does not add the key to static admission or enable Runner's private family.
+No released schema bytes, role capabilities, SQL CHECK, migration, execution policy
+or operating installation changed. Existing native INDEX/reference and role paths
+keep their semantics.
+
+This compiler work was first tested in a detached development worktree while the
+104-pin PostgreSQL gate was still using main's frozen inputs:127 tests/5 suites,
+strict4/Ruff/format6 PASS. Main changes were applied only after that gate terminated.
+The PostgreSQL evidence above therefore covers its earlier exact snapshot, not an
+unexecuted combined compiler/persistence gate. Combined main source regression:
+371 PASS/16 suites, strict8/Ruff/format17/bash syntax/diff PASS. That inventory
+includes the earlier244 and compiler/workflow cases plus the separate harness;
+overlapping historical counts must not be summed into additional coverage.
+Real private owner/executor composition,
+supported submission/claim/advance and application-step persistence admission are
+still needed before deployment; C4 and the original full goal remain OPEN.
+
+## Next complete admission boundary
+
+The next change must join compiler, private application-step persistence and
+actual Runner composition before offering new work. Closed private1.3 definition
+and native request/receipt schemas already exist; do not change their bytes or
+reuse reference/index purpose identifiers. Compiler support alone does not admit
+new jobs. The exact key/version/protocol admission entry is added only with the
+paired owner/executor, submission, claim, advance and terminal paths tested.
+
+Canonical source remains immutable Workflow definition/request/context and its
+original native Job history. Existing IDs/member pointers and hashes are reused;
+no new queue, registry, worker protocol, storage format or binary DB column.
+Dominant operations stay indexed FIFO/PK/step lookups and bounded original history.
+The private step CHECK successor permits only the exact private application key,
+schema, role-null and attempt1 tuple, preserving the existing null/legacy branches.
+Its downgrade refuses retained private step history before DDL instead of changing
+rows. Existing Workflow→command locking, unique step/key constraints and the
+private context immutability/turn index remain authoritative.
+
+Repository/Runner owns state transitions, while current Catalog/Chat and physical
+launch stay at their independent adapters. Current authority is rechecked before
+and after mutations; no SQL root crosses numerical work. Existing definitions
+and failed histories keep their meaning, and pending reobservations reuse the
+same allocation. A generic-role or INDEX fallback would violate those boundaries;
+hand-creating private rows outside supported submission would skip concurrency
+and source checks. Staged compiler/persistence support remains source-only until
+the compatible installed composition and actual release gates are satisfied.

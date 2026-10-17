@@ -43,6 +43,17 @@ from eom_workflow.local_embedding_workflow import (
     LOCAL_EMBEDDING_EXECUTION_PROTOCOL,
     LOCAL_EMBEDDING_WORKFLOW_KEY,
 )
+from eom_workflow.private_chat_query_execution import (
+    PrivateChatQueryWorkflowRequest,
+    parse_private_chat_query_workflow_request,
+)
+from eom_workflow.private_chat_query_workflow import (
+    PRIVATE_CHAT_QUERY_EXECUTION_PROTOCOL,
+    PRIVATE_CHAT_QUERY_RESULT_SCHEMA,
+    PRIVATE_CHAT_QUERY_WORKFLOW_KEY,
+    PrivateChatQueryWorkflowDefinition,
+    validate_private_chat_query_definition,
+)
 from eom_workflow.reference_query_execution import (
     REFERENCE_QUERY_REQUEST_VERSIONS,
     SupportedReferenceQueryWorkflowRequest,
@@ -83,6 +94,8 @@ from eom_workflow_runner.models import (
     WorkflowInstanceRecord,
     WorkflowStepRunRecord,
 )
+from eom_workflow_runner.private_chat_query_admission import PrivateChatQueryOwnerAdmission
+from eom_workflow_runner.private_chat_query_execution_port import PrivateChatQueryNativeExecutor
 from eom_workflow_runner.reference_query_admission import (
     ReferenceQueryOwnerAdmission,
     resolve_reference_query_submission_controls,
@@ -146,6 +159,7 @@ class CommandExecutionFamily(StrEnum):
     ROLE = "ROLE"
     LOCAL_EMBEDDING = "LOCAL_EMBEDDING"
     REFERENCE_QUERY = "REFERENCE_QUERY"
+    PRIVATE_CHAT_QUERY = "PRIVATE_CHAT_QUERY"
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,7 +206,12 @@ class CommandCandidate:
     current_step_key: str
     workflow_state: str
     workflow_lock_version: int
-    native_request: LocalEmbeddingExecutableRequest | SupportedReferenceQueryWorkflowRequest | None
+    native_request: (
+        LocalEmbeddingExecutableRequest
+        | SupportedReferenceQueryWorkflowRequest
+        | PrivateChatQueryWorkflowRequest
+        | None
+    )
 
 
 def _native_workflow_filter() -> ColumnElement[bool]:
@@ -203,10 +222,19 @@ def _native_workflow_filter() -> ColumnElement[bool]:
         "local-embedding-workflow-request/1.2",
         "local-embedding-workflow-request/1.3",
         *REFERENCE_QUERY_REQUEST_VERSIONS,
+        "private-chat-query-workflow-request/1.0",
     )
-    native_keys = (LOCAL_EMBEDDING_WORKFLOW_KEY, REFERENCE_QUERY_WORKFLOW_KEY)
-    native_protocols = (LOCAL_EMBEDDING_EXECUTION_PROTOCOL, REFERENCE_QUERY_EXECUTION_PROTOCOL)
-    native_purposes = ("LOCAL_EMBEDDING", "REFERENCE_QUERY")
+    native_keys = (
+        LOCAL_EMBEDDING_WORKFLOW_KEY,
+        REFERENCE_QUERY_WORKFLOW_KEY,
+        PRIVATE_CHAT_QUERY_WORKFLOW_KEY,
+    )
+    native_protocols = (
+        LOCAL_EMBEDDING_EXECUTION_PROTOCOL,
+        REFERENCE_QUERY_EXECUTION_PROTOCOL,
+        PRIVATE_CHAT_QUERY_EXECUTION_PROTOCOL,
+    )
+    native_purposes = ("LOCAL_EMBEDDING", "REFERENCE_QUERY", "PRIVATE_CHAT_QUERY")
     definition = select(WorkflowDefinitionRecord.definition_id).where(
         WorkflowDefinitionRecord.definition_id == WorkflowInstanceRecord.definition_id,
         or_(
@@ -220,9 +248,15 @@ def _native_workflow_filter() -> ColumnElement[bool]:
         WorkflowStepRunRecord.workflow_id == WorkflowInstanceRecord.workflow_id,
         or_(
             WorkflowStepRunRecord.step_type == "application",
-            WorkflowStepRunRecord.step_key == "encode_reference_query",
+            WorkflowStepRunRecord.step_key.in_(
+                ("encode_reference_query", "encode_private_chat_query")
+            ),
             WorkflowStepRunRecord.result_schema.in_(
-                ("incremental-embedding-result@1.0", REFERENCE_QUERY_RESULT_SCHEMA)
+                (
+                    "incremental-embedding-result@1.0",
+                    REFERENCE_QUERY_RESULT_SCHEMA,
+                    PRIVATE_CHAT_QUERY_RESULT_SCHEMA,
+                )
             ),
         ),
     )
@@ -241,6 +275,13 @@ def _native_workflow_filter() -> ColumnElement[bool]:
             WorkflowInstanceRecord.request_payload["purpose"].as_string().in_(native_purposes),
             definition.exists(),
             step.exists(),
+            WorkflowInstanceRecord.initial_request["request_name"].as_string()
+            == "PRIVATE_CHAT_QUERY_WORKFLOW_REQUEST",
+            WorkflowInstanceRecord.request_payload["request_name"].as_string()
+            == "PRIVATE_CHAT_QUERY_WORKFLOW_REQUEST",
+            WorkflowInstanceRecord.runtime_context["purpose"].as_string() == "PRIVATE_CHAT_QUERY",
+            WorkflowInstanceRecord.runtime_context["schema_version"].as_string()
+            == "private-chat-query-submission-context/1.0",
         ),
         False,
     )
@@ -296,14 +337,61 @@ def _query_workflow_filter() -> ColumnElement[bool]:
     )
 
 
+def _private_query_workflow_filter() -> ColumnElement[bool]:
+    """Total private quarantine, including contradictory/unparseable metadata."""
+    definition = select(WorkflowDefinitionRecord.definition_id).where(
+        WorkflowDefinitionRecord.definition_id == WorkflowInstanceRecord.definition_id,
+        or_(
+            WorkflowDefinitionRecord.definition_key == PRIVATE_CHAT_QUERY_WORKFLOW_KEY,
+            WorkflowDefinitionRecord.canonical_definition["definition_key"].as_string()
+            == PRIVATE_CHAT_QUERY_WORKFLOW_KEY,
+        ),
+    )
+    step = select(WorkflowStepRunRecord.step_run_id).where(
+        WorkflowStepRunRecord.workflow_id == WorkflowInstanceRecord.workflow_id,
+        or_(
+            WorkflowStepRunRecord.step_key == "encode_private_chat_query",
+            WorkflowStepRunRecord.result_schema == PRIVATE_CHAT_QUERY_RESULT_SCHEMA,
+        ),
+    )
+    return func.coalesce(
+        or_(
+            WorkflowInstanceRecord.definition_key == PRIVATE_CHAT_QUERY_WORKFLOW_KEY,
+            WorkflowInstanceRecord.role_schema_version == PRIVATE_CHAT_QUERY_EXECUTION_PROTOCOL,
+            WorkflowInstanceRecord.initial_request["schema_version"].as_string()
+            == "private-chat-query-workflow-request/1.0",
+            WorkflowInstanceRecord.request_payload["schema_version"].as_string()
+            == "private-chat-query-workflow-request/1.0",
+            WorkflowInstanceRecord.initial_request["purpose"].as_string() == "PRIVATE_CHAT_QUERY",
+            WorkflowInstanceRecord.request_payload["purpose"].as_string() == "PRIVATE_CHAT_QUERY",
+            WorkflowInstanceRecord.initial_request["request_name"].as_string()
+            == "PRIVATE_CHAT_QUERY_WORKFLOW_REQUEST",
+            WorkflowInstanceRecord.request_payload["request_name"].as_string()
+            == "PRIVATE_CHAT_QUERY_WORKFLOW_REQUEST",
+            WorkflowInstanceRecord.runtime_context["purpose"].as_string() == "PRIVATE_CHAT_QUERY",
+            WorkflowInstanceRecord.runtime_context["schema_version"].as_string()
+            == "private-chat-query-submission-context/1.0",
+            definition.exists(),
+            step.exists(),
+        ),
+        False,
+    )
+
+
 def _execution_family_filter(family: CommandExecutionFamily) -> ColumnElement[bool]:
-    native, query = _native_workflow_filter(), _query_workflow_filter()
+    native, query, private = (
+        _native_workflow_filter(),
+        _query_workflow_filter(),
+        _private_query_workflow_filter(),
+    )
     if family is CommandExecutionFamily.ROLE:
         return not_(native)
     if family is CommandExecutionFamily.REFERENCE_QUERY:
-        return native & query
+        return native & query & not_(private)
     if family is CommandExecutionFamily.LOCAL_EMBEDDING:
-        return native & not_(query)
+        return native & not_(query) & not_(private)
+    if family is CommandExecutionFamily.PRIVATE_CHAT_QUERY:
+        return native & private
     raise ValueError("WORKFLOW_COMMAND_EXECUTION_FAMILY_INVALID")
 
 
@@ -313,7 +401,10 @@ def _command_candidate(
     family: CommandExecutionFamily,
 ) -> CommandCandidate:
     native_request: (
-        LocalEmbeddingExecutableRequest | SupportedReferenceQueryWorkflowRequest | None
+        LocalEmbeddingExecutableRequest
+        | SupportedReferenceQueryWorkflowRequest
+        | PrivateChatQueryWorkflowRequest
+        | None
     ) = None
     query_marked = (
         family is CommandExecutionFamily.REFERENCE_QUERY
@@ -332,7 +423,9 @@ def _command_candidate(
         # Invalid native metadata remains native/unavailable, never a role fallback.
         with suppress(ValueError):
             native_request = (
-                parse_supported_reference_query_workflow_request(workflow.initial_request)
+                parse_private_chat_query_workflow_request(workflow.initial_request)
+                if family is CommandExecutionFamily.PRIVATE_CHAT_QUERY
+                else parse_supported_reference_query_workflow_request(workflow.initial_request)
                 if query_marked
                 else load_persisted_local_embedding_workflow_request(workflow.initial_request)
             )
@@ -452,7 +545,11 @@ def workflow_definition_admission_statuses(
 
 
 def _stored_role_protocol(record: WorkflowDefinitionRecord) -> str:
-    if record.definition_key in {LOCAL_EMBEDDING_WORKFLOW_KEY, REFERENCE_QUERY_WORKFLOW_KEY}:
+    if record.definition_key in {
+        LOCAL_EMBEDDING_WORKFLOW_KEY,
+        REFERENCE_QUERY_WORKFLOW_KEY,
+        PRIVATE_CHAT_QUERY_WORKFLOW_KEY,
+    }:
         try:
             compiled = compile_definition_data(
                 record.canonical_definition, record.source_path, set()
@@ -1442,6 +1539,8 @@ def claim_command_candidate(
     local_embedding_executor: LocalEmbeddingNativeExecutor | None = None,
     reference_query_owner: ReferenceQueryOwnerAdmission | None = None,
     reference_query_executor: ReferenceQueryNativeExecutor | None = None,
+    private_chat_query_owner: PrivateChatQueryOwnerAdmission | None = None,
+    private_chat_query_executor: PrivateChatQueryNativeExecutor | None = None,
 ) -> WorkflowCommandRecord | None:
     """Exact-ID root claim; never replace a changed or locked FIFO candidate.
 
@@ -1454,6 +1553,11 @@ def claim_command_candidate(
     ):
         raise ValueError("WORKFLOW_COMMAND_EXECUTION_FAMILY_INVALID")
     native = candidate.family is not CommandExecutionFamily.ROLE
+    private_request = (
+        candidate.native_request
+        if isinstance(candidate.native_request, PrivateChatQueryWorkflowRequest)
+        else None
+    )
     query_request = (
         candidate.native_request
         if isinstance(candidate.native_request, SupportedReferenceQueryWorkflowRequest)
@@ -1461,10 +1565,23 @@ def claim_command_candidate(
     )
     if native and (
         (candidate.family is CommandExecutionFamily.REFERENCE_QUERY) != (query_request is not None)
+        or (candidate.family is CommandExecutionFamily.PRIVATE_CHAT_QUERY)
+        != (private_request is not None)
     ):
         raise WorkflowError(
             WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
             "native candidate request does not match its exact execution family",
+        )
+    if private_request is not None and (
+        private_chat_query_owner is None
+        or private_chat_query_executor is None
+        or not workflow_definition_is_admitted(
+            private_request.workflow_definition_key, private_request.workflow_definition_version
+        )
+    ):
+        raise WorkflowError(
+            WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
+            "private QUERY claim needs admitted definition and actual private owner/executor",
         )
     if (
         native
@@ -1484,6 +1601,7 @@ def claim_command_candidate(
     if (
         native
         and query_request is None
+        and private_request is None
         and (local_embedding_owner is None or local_embedding_executor is None)
     ):
         raise WorkflowError(
@@ -1551,7 +1669,32 @@ def claim_command_candidate(
                 WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID,
                 "native exact definition snapshot is not an object",
             )
-        if query_request is not None:
+        if private_request is not None:
+            assert private_chat_query_owner is not None
+            current_private = parse_private_chat_query_workflow_request(workflow.initial_request)
+            private_scope = private_chat_query_owner.resolve_claim(
+                session, command=command, workflow=workflow, request=current_private
+            )
+            private_scope.__post_init__()
+            fixed_private = PrivateChatQueryWorkflowDefinition.model_validate(
+                definition.canonical_definition
+            )
+            validate_private_chat_query_definition(fixed_private, current_private)
+            if (
+                private_scope.request != private_request
+                or current_private != private_request
+                or definition.definition_key != PRIVATE_CHAT_QUERY_WORKFLOW_KEY
+                or definition.definition_version != fixed_private.definition_version
+                or definition.schema_version != fixed_private.schema_version
+                or definition.active is not True
+                or definition.definition_hash != current_private.workflow_definition_sha256
+                or command.request_hash != candidate.command_contents_hash
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+                    "private QUERY exact candidate closure differs",
+                )
+        elif query_request is not None:
             assert reference_query_owner is not None
             request_query = parse_supported_reference_query_workflow_request(
                 workflow.initial_request
@@ -1597,7 +1740,12 @@ def claim_command_candidate(
             )
     _assign_command_lease(session, command, runner_id, lease_seconds, datetime.now(UTC))
     if native:
-        if query_request is not None:
+        if private_request is not None:
+            assert private_chat_query_owner is not None
+            private_chat_query_owner.fence_mutation(
+                session, private_request, command_lease_identity(command)
+            )
+        elif query_request is not None:
             assert reference_query_owner is not None
             reference_query_owner.fence_mutation(
                 session, query_request, command_lease_identity(command)
