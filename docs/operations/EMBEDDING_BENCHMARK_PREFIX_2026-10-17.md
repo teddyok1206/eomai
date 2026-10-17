@@ -84,3 +84,64 @@ candidate verification, inactive installation, input summaries, submission/resul
 logs and independent inventory read. These local preparation/diagnostic files are
 not registered canonical Artifacts or source/compute authority. Source gate352 PASS
 and the actual root audit above are different gates, not interchangeable counts.
+
+## Actual immutable configuration publication —17:36 UTC
+
+This supersedes the earlier prepared-only configuration snapshot, not historical
+probe/admission results for the old configuration or prefix.
+
+The previously prepared config1.3 revision864d6a8f is now installed through the
+existing fixed root publication composition. It is still **NOT_SELECTED /
+NOT_ADMITTED**. Only configuration revision/hash differ from6107b478; bundle,
+proof, runtime/model/resources and exact host1.1 remain unchanged. The old
+configuration comparison whitelist was narrowed to those two fields, not widened.
+
+Config logical `embeddingnativeconfig_3e98a13d3d164e2db5f861c2e5f73e08`, revision
+`embeddingnativeconfigrev_864d6a8f021d47359013fecf4660fa8d`:
+
+- raw `4705ee7bddaf00f5eb7515e9d9b0b84d8a82b97b83bfdad9616f15e4813a6386`;
+- semantic `9931f4779d782be91774c4dd52cb35b8a31a9fd06f8a84278471ffae2d7fdf8a`;
+- unchanged runtime `d0887315a3b7afd0d86dceb10228c157c72f7161dbdbb01a582d97be1d8c7560`.
+
+Protected publication helper raw
+`05edfe09ca470d58db69fe21e2965b55b149029301f645e34c7c0f781955e553` used the exact
+42a1c5c6 owner, retained audit stageEdPwVMWW and original typed host/proof/bundle
+validators. Read-only installation namespace, private network/devices, fixed
+host1.1 cache and no secret/NAS access were retained. No candidate Python, model,
+tokenizer or vector execution occurred. Existing CPU INDEX continued unchanged.
+
+Original unit `eom-benchmark-cuda-configuration-42a1c5c6.service`, invocation
+`ae1ea016864e40edae668587ac5ac485` actually completed. Independent readback checked
+root444/nlink1 files, exact raw config, root publication record and successful
+deactivation/Finished journal events at17:36:29. Blank transient InvocationID by
+itself was not taken as proof. Record raw
+`9ca6eced186184c91dab31fd6ae16f2ac0d6c88bf32b80672523ecafc617d056`;
+protected record directory `/opt/eom/.embedding-benchmark-cuda-config-42a1c5c6`.
+The actual public config also passed the installed42 parser independently with
+no ML imports. Temporary metadata evidence is in
+`/tmp/eom-benchmark-cuda-config-gKXNoIMF`. A first unprivileged log read was denied
+by expected root permissions; this was not a publication failure. The subsequent
+fixed root metadata observer read only approved summary fields, not full logs.
+
+### Next probe preflight: terminal lifetime guardians are not active GPU work
+
+New execution6668438a50434ce593836cf61b4e3fa7 is prepared but **NOT_SUBMITTED**.
+Local `/tmp/eom-benchmark-cuda-probe-5lLVE1Tu` reuses the existing two-ACK probe;
+only string pins change (AST equality after pin normalization, Ruff/shell PASS).
+Helper raw `2ff6fef3855e5ee0098c628ce8074b8045c1fa34d7378c618eb11f1e6fbcb2ee`.
+No failed new probe or CUDA/model run is implied by preparing these files.
+
+Before submission, read-only discovery found the old pre-migration launcher's
+blanket `eom-image-*.service active` check also matches five **terminal** lifetime
+guardians. Each is active/exited, MainPID0, NFileDescriptorStore0, empty cgroup,
+Result=success; actual NVIDIA compute-client listing is empty. Two historical
+failed guardians also have no PID/store/cgroup and remain failures. Do not stop,
+reset or erase these units merely to make a preflight list empty.
+
+Adapt only the operator preflight, with tests, to distinguish this exact retired
+guardian shape from running/activating/deactivating workers or retained FD stores.
+Unknown units, nonzero PIDs/stores, nonempty cgroups or unsuccessful active
+guardians must still block. Preserve actual worker/PID1 physical lock and GPU
+client checks in the unchanged root probe. This is a verified stale launcher
+assumption after the19-entry lifecycle migration, not permission to ignore an
+active GPU owner. No probe submission is authorized by terminal metadata alone.

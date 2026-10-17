@@ -306,6 +306,9 @@ wheel 조립2건 포함)·strict type·Ruff/format·shell 검사 PASS입니다. 
 독립 읽기 검증을 통과했습니다(**BYTE_AUDITED / NOT_FRESHLY_ADMITTED**).
 기존 환경은 백업으로 보존했고 CPU·모델·기본값은 바꾸지 않았습니다. 옛 GPU 승인 기록이
 새 코드의 승인을 대신하지 않으며, 실제6회 비교도 아직입니다.
+후속 immutable 설정 개정도 실제 설치·독립 재조회를 통과했지만 아직 미선택·미승인입니다.
+모델 실행0이며, 다음 설치 검사 전 종료된 이미지 관리 unit과 실제 GPU 작업을 구분하는
+운영 사전검사를 보강합니다. 과거 unit 기록을 지우거나 실제 잠금 검사를 생략하지 않습니다.
 [정확한 설치·보존·남은 승인 경계](docs/operations/EMBEDDING_BENCHMARK_PREFIX_2026-10-17.md).
 
 운영4222ca9a에서 발생한 원 HTTP 참고 문항 읽기의30초503 이력은 보존합니다.
