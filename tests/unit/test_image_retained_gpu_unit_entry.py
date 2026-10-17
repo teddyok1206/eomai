@@ -489,6 +489,7 @@ def test_every_gpu_template_reserves_retention_and_root_lifecycle_without_broad_
         "StartLimitBurst=1",
         "CollectMode=inactive",
         "RemainAfterExit=yes",
+        "Slice=system.slice",
         "NotifyAccess=main",
         "FileDescriptorStoreMax=1",
         "FileDescriptorStorePreserve=yes",
@@ -507,6 +508,7 @@ def test_guardian_has_only_root_observation_access_not_models_auth_nas_or_db():
     lines = (_UNIT_ROOT / "eom-image-gpu-lifetime@.service").read_text().splitlines()
     for value in {
         "User=root",
+        "Slice=system.slice",
         "Group=root",
         "PrivateNetwork=yes",
         "NoNewPrivileges=yes",

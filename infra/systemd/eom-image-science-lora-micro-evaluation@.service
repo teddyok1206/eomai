@@ -9,6 +9,7 @@ ConditionPathIsReadWrite=/srv/eom/image-training-workspaces/%i
 
 [Service]
 Type=oneshot
+Slice=system.slice
 RemainAfterExit=yes
 NotifyAccess=main
 FileDescriptorStoreMax=1

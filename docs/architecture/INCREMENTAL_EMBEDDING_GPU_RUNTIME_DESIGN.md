@@ -89,6 +89,16 @@ it must not be relabeled an expected invalid-input failure. The failed guardian 
 not restarted. A fresh changed-source negative case is required after installation.
 The original full-release snapshots and known failed smoke remain recoverable.
 
+The source-corrected no-model invalid-input case then passed actual root namespace,
+CLI failure, no-ACK/store0 retirement and preservation of the other root-held GPU
+lease. Its journal also established that systemd's implicit per-template slice put
+the image PID below`/system.slice/system-eom…slice/<unit>`, whereas the existing
+ready/terminal/resource contract requires`/system.slice/<unit>`. Before any retained
+case, all19main templates and the root guardian explicitly select`Slice=system.slice`,
+matching the already-installed native CUDA probe. This changes only unit placement;
+the actual `/proc`/cgroup checks, resource limits, UID and shared inode invariants
+are not loosened. The all19source gate now requires this explicit placement.
+
 2026-10-16 source 후속: [CUDA loader 작업 폴더 경계](INCREMENTAL_EMBEDDING_CUDA_LOADER_DIRECTORY_DESIGN.md)는
 공식 cuSPARSELt의 빈 RUNPATH component를 고정0555 빈 폴더의 관측으로 해석하고,
 native CUDA factory에서 실제 cwd를 재검증한다. CPU의 거부 규칙과 digest는 유지한다.
