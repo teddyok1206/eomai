@@ -78,3 +78,81 @@ reuse. No dependency, wire/schema, database or execution deadline changed.
 Synthetic operation counts and bounded allocation measurements, rather than a
 live-latency claim, are recorded in the
 [checkpoint](../status/SCOPED_ARTIFACT_MODEL_REUSE_CHECKPOINT_2026-10-17.md).
+
+## Shared past-exam provenance follow-up — design before implementation
+
+Actual installed4222ca9a still returns the original context read503 at the30s
+deadline. A same-session, same-key replay reproduced it while pidstat observed
+substantial Catalog CPU usage; the sampled disk counters did not establish an
+I/O bottleneck. A read-only metadata check found521 accepted reports/6,462,310 raw
+bytes, not evidence of exceeding the32MiB model charge. A separately bounded
+profile of request/result/receipt metadata is not a profile of the actual whole
+read and must not be presented as its full cause or as RAG authorization.
+
+One concrete uncovered repeated path remains: each fresh population capture
+creates its own `PastExamSourceResolutionCache`. Its BATCH/ACCEPTANCE/RESULT/LAYOUT
+values are not the canonical Item/solution-report decoders added above. Further,
+the existing request-local Artifact wrapper does not forward the optional model
+read port. Thus root raw-byte reuse does not reuse these shared, immutable source
+models across phases. Preserve the four current whole-population captures and
+their per-Item/run/Graph/IAM/source/report checks; do not cache resolved admission.
+
+Extend the existing wrapper to forward the existing optional typed model port
+(or decode via its existing bounded raw read when the delegate lacks that port).
+Split the four existing provenance parsers into stable frozen-model decoders and
+the same per-capture map/tuple indexes. The provenance cache still owns its64MiB/
+1024-member/100,000-row limits and current max-byte checks. Only model parsing is
+reused by the existing root reader, under its unchanged six-field key, decoder,
+root/thread,32MiB/2048-member and raw-coeviction rules. No new cache, session-info
+registry, DB/schema/worker protocol, dependency, authority grant or timeout.
+
+Dominant access remains exact pointer lookup and O(member rows) index assembly;
+four phases should parse retained shared members once rather than four times.
+New-root/missing/hash/withdrawal and decoder/budget failures remain explicit.
+Legacy scalar readers retain the original parse path. Validate forwarding,
+identical indexes, wrong schema/kind/bounds and failed-decode nonretention, then
+measure representative shared provenance and re-run the actual original request.
+This follow-up alone is not proof that all live latency is corrected.
+
+### Follow-up implementation/source evidence
+
+The request-local wrapper now preserves the existing optional model read port.
+For scalar delegates it uses the original raw read/decoder. One exact-size alias
+references the SAME already retained bytes, so the typed fallback does not read
+the scalar adapter twice. Aliases consume the existing4096-member key budget,
+not an extra payload-byte charge; at the bound, normal validated nonretention
+still applies. No unbounded secondary cache or global state was introduced.
+
+The four provenance kinds have fixed trusted frozen-model decoders plus the same
+map/tuple index assembly. Each phase retains its own indexes and still reads
+current membership/source relations. Canonical Item/solution-report consumers
+also keep their existing decoder identity and root checks through the wrapper.
+
+Final focused gate: **154 PASS /23.30s** across shared provenance/root model reuse,
+legacy provenance, scoped decoding, full-scope reader reuse, pinned context,
+prefetch, retrieval, similarity-read service and dependency suites. JUnit at
+`/tmp/eom-cpu-private-successor-J6OYgqP1/provenance-source-final.xml`.
+Strict mypy2, Ruff/check/format3 and diff checks PASS. No schema/state/migration
+changed and no new mutating PostgreSQL gate ran; previous DB evidence is separate.
+
+An initial invocation referenced a nonexistent test filename and collected none.
+The first corrected89-test run found a genuine scalar double-read introduced by
+the narrower typed bound, plus a fixture expecting ValueError instead of the
+preserved JSON Schema error. The bounded alias fixes the double-read; the fixture
+now accepts the existing error type. The final154 includes both alias-capacity/
+single-byte-charge tests and the unchanged scalar one-read-per-phase assertion.
+Earlier overlapping58/89/152/18 results are not added to the final count.
+
+Synthetic valid shared-batch/four-fresh-phase measurements (not live timings):
+
+| Units / raw JSON | Model reuse off | Model reuse on | Full schema validations |
+| --- | ---: | ---: | ---: |
+|64 /241,688 bytes|188.2ms|55.3ms|4 →1|
+|128 /482,576 bytes|475.2ms|108.6ms|4 →1|
+
+Both configurations emit identical value hashes and index cardinalities. Only
+existing root model retention was disabled for the baseline; source validators
+and raw reads remain real temporary-file operations with synthetic DB metadata.
+The benchmark measures neither operator authorization nor whole live latency.
+Follow-up code is not yet installed: installed API/Catalog remain4222ca9a, and the
+actual original context read is still unresolved, not relabeled as PASS.

@@ -6,6 +6,7 @@ import json
 import re
 import tempfile
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -58,8 +59,9 @@ from eom_identity_service.models import OperatorRecord
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
+from eom_protocol.artifact_members import ArtifactMemberPointer
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import Engine, Select, distinct, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, SessionTransaction
@@ -68,6 +70,7 @@ from eom_catalog_service.artifacts import (
     CatalogArtifact,
     CatalogArtifactReader,
     CatalogArtifactService,
+    CatalogModelArtifactReader,
 )
 from eom_catalog_service.inference_transfer_scope import (
     InferenceTransferPopulationScope,
@@ -454,7 +457,43 @@ class _RequestScopedArtifactValidationCache:
         ):
             self._member_bytes[key] = value
             self._member_bytes_total += len(value)
+            # The typed port asks for the exact size after a bounded provenance
+            # read. An alias to the SAME bytes avoids another scalar-adapter IO;
+            # it grants no broader bound and consumes the existing member budget.
+            exact = replace(key, max_bytes=len(value))
+            if exact not in self._verified_members and (
+                len(self._verified_members) < MAX_REQUEST_ARTIFACT_CACHE_MEMBERS
+            ):
+                self._verified_members.add(exact)
+                self._member_bytes[exact] = value
         return value
+
+    def read_model_member[Model: BaseModel](
+        self,
+        pointer: ArtifactMemberPointer,
+        *,
+        expected_bytes: int,
+        decoder: Callable[[str, bytes], Model],
+    ) -> Model:
+        """Keep the root reader's optional decoding capability through this wrapper."""
+        if type(expected_bytes) is not int or expected_bytes <= 0:
+            raise ValueError("immutable Artifact member byte count differs")
+        if isinstance(self._delegate, CatalogModelArtifactReader):
+            return self._delegate.read_model_member(
+                pointer, expected_bytes=expected_bytes, decoder=decoder
+            )
+        payload = self.read_member(
+            artifact_id=pointer.artifact_id,
+            revision_id=pointer.artifact_revision_id,
+            member_path=pointer.member_path,
+            sha256=pointer.sha256,
+            media_type=pointer.media_type,
+            schema_ref=pointer.schema_ref,
+            max_bytes=expected_bytes,
+        )
+        if len(payload) != expected_bytes:
+            raise ValueError("immutable Artifact member byte count differs")
+        return decoder(pointer.schema_ref, payload)
 
     def verify_member(
         self,

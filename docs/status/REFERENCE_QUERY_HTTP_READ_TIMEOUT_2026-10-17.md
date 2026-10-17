@@ -45,3 +45,41 @@ verification when a valid supported operator session is available.
 This does not reopen completed corpus/HWPX work or change the scope. It prioritizes
 an observed delivery failure over activating further consumers. Private native
 admission/tool delivery and CPU/CUDA comparison remain required and incomplete.
+
+## Installed4222ca9a follow-up, actual same-session evidence
+
+The original old observer was stopped through its supported QUIT after its
+actual403; its history remains. Replacement PID496875 authenticated successfully
+at16:11:33, with credentials only in memory, and read the SAME original Workflow/
+request/key as READY at16:11:45. Context still returned503 at16:12:26;
+API request `req_58728b6b35eb653c14f909b7cee33dbd` lasted30,441.107ms.
+Thus the installed root/raw/frozen Item/report reuse is not live delivery PASS.
+
+One explicit same-memory-session replay for resource diagnosis read READY again
+at16:22:03; context `req_994f3f65711e41407a0b4f43f3623f7f` returned503 at16:22:43,
+30,037.944ms. No new key, QUERY computation, model or automatic retry. The same
+process remains at its supported AWAIT_EXPLICIT_REPLAY prompt, not LOGIN.
+
+An actual65-second pidstat observer (PID748885, normal terminal completion) read
+kernel process-resource metadata only, not process memory/credentials/stacks.
+The40 samples16:22:04–43 showed mean52.15%/max97% Catalog CPU, max838,984KiB RSS
+and zero sampled block-read kB/s. These aggregate counters do not prove there
+was no NAS access or identify an individual function. The observation includes
+the preceding preparation replay; it is not isolated context-only CPU timing.
+
+Read-only metadata inventory found521 accepted V10 reports totaling6,462,310 raw
+bytes, max17,314: no evidence of a32MiB **report** model-charge overflow. These
+521 are not a new backfill denominator or full current Item/model-cache size.
+A separate read-only521-row request/result/receipt metadata profile measured
+7,354ms with cProfile overhead (5,860ms JSON Schema,1,494ms typed-model stages).
+It read no NAS/source bodies, mutated no DB rows, and establishes neither whole
+request latency nor current-user/source authority. Other-role pg_stat_activity
+fields were redacted by PostgreSQL; null is UNKNOWN, not proof of no wait.
+
+Source inspection found another repeated immutable decoding path: shared legacy
+batch/acceptance/extraction/layout models are reconstructed in each fresh
+population cache, and the intervening Artifact wrapper loses the optional model
+port. Extend the same root model cache instead of inventing another cache or
+omitting full-scope validation. [Scoped follow-up design](../architecture/SCOPED_TYPED_ARTIFACT_DECODING.md#shared-past-exam-provenance-follow-up--design-before-implementation).
+This is a concrete repeat-work correction to test, not yet a proven complete
+explanation/fix of the actual deadline. Keep30s unchanged until further evidence.

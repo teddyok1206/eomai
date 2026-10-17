@@ -302,6 +302,19 @@ CPU/GPU 비교용 코드 설치 도구도 기존 경계 안에서 CPU까지 확�
 wheel 조립2건 포함)·strict type·Ruff/format·shell 검사 PASS입니다. 이는 실제 모델 비교나
 기본값 변경 증거가 아닙니다. [설계·검증·남은 설치 경계](docs/architecture/EMBEDDING_CPU_PRIVATE_SUCCESSOR_DESIGN.md).
 
+후속으로 CUDA 비교 환경의 코드42a1c5c6를 실제 게시하고 전체31,656항목/ELF287 감사와
+독립 읽기 검증을 통과했습니다(**BYTE_AUDITED / NOT_FRESHLY_ADMITTED**).
+기존 환경은 백업으로 보존했고 CPU·모델·기본값은 바꾸지 않았습니다. 옛 GPU 승인 기록이
+새 코드의 승인을 대신하지 않으며, 실제6회 비교도 아직입니다.
+[정확한 설치·보존·남은 승인 경계](docs/operations/EMBEDDING_BENCHMARK_PREFIX_2026-10-17.md).
+
+운영4222ca9a의 원 HTTP 참고 문항 읽기는 아직30초503입니다. 같은 로그인/원 요청의
+실측을 보존하고, 문항·보고서 외에 공통 기출 출처 기록의 반복 해석도 기존 root cache로
+연결했습니다(**SOURCE_PASS / NOT_INSTALLED**). 관련154 tests·strict2·Ruff/format PASS,
+합성4단계64/128개 작업 단위의 해석4→1회·출력 hash 동일. 이를 실제 지연 해결로
+주장하지 않습니다. [실패·실측](docs/status/REFERENCE_QUERY_HTTP_READ_TIMEOUT_2026-10-17.md) ·
+[후속 설계·검증](docs/architecture/SCOPED_TYPED_ARTIFACT_DECODING.md#shared-past-exam-provenance-follow-up--design-before-implementation).
+
 GPU 비교의 최신 구현은 **SOURCE_PASS / NOT_ACTIVE**입니다. 고정 CUDA 실행기, CPU/CUDA
 공통 설정 준비, 관리자 측 실행·프로세스·장치·양쪽 잠금 대조를 연결했습니다. 준비 파일의
 부분 쓰기는 별도 파일 잠금으로 구분하고, 옛 실행기와의 혼합도 코드 해시로 거부합니다.
