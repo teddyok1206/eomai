@@ -294,10 +294,13 @@ CONTENT_ONLY7/520·CONCRETE_FACETS1/520·METADATA_ONLY1/520입니다.
 GPU 비교의 최신 구현은 **SOURCE_PASS / NOT_ACTIVE**입니다. 고정 CUDA 실행기, CPU/CUDA
 공통 설정 준비, 관리자 측 실행·프로세스·장치·양쪽 잠금 대조를 연결했습니다. 준비 파일의
 부분 쓰기는 별도 파일 잠금으로 구분하고, 옛 실행기와의 혼합도 코드 해시로 거부합니다.
-현재 관련681 tests·strict8·Ruff/format13 PASS; 실제 일반 계정의 거부·로컬 파일 잠금은
-확인했지만 root/GPU 양성 사례는 합성 fixture입니다. 실제 관리자 신호·종료 정리·호환
-수치 환경 갱신·6회 성능 비교·GPU 기본값 전환은 아직 미완료이며 CPU 기본값을 유지합니다.
-[실행기·공유 설정·관찰의 검증 범위와 남은 연결](docs/architecture/EMBEDDING_BENCHMARK_EXECUTION_COMPOSITION.md#root-readiness-observation-source-checkpoint--2026-10-17)
+관리자 ACK·종료 정리는 기존 이미지 실행과 파일 기록/종료 판정을 공유하며, 의도 기록 후
+한 번만 실행하고 결과가 불명확하면 반복하지 않습니다. 늦은 정리는 실행 승인 연장과
+분리하고 원래 실패·시간 초과를 보존합니다. 관련734 tests·strict6·Ruff/format10 PASS;
+실제 일반 계정의 거부·로컬 파일 잠금은 확인했지만 root/GPU 양성 사례는 합성 fixture입니다.
+준비 메시지 전 실패 처리·실제 관리자 실행·호환 수치 환경 갱신·6회 성능 비교·GPU 기본값
+전환은 아직 미완료이며 CPU 기본값을 유지합니다.
+[검증 범위와 남은 연결](docs/architecture/EMBEDDING_BENCHMARK_EXECUTION_COMPOSITION.md#durable-ack-and-after-ready-retirement-source-checkpoint--2026-10-17)
 
 기존 자동 인덱싱은08:08:29 UTC 조회에서 연결501건/인덱스 개정132건으로 진행됐습니다.
 최신 view별169/179/153건은 서로 다른 개정의 집계이며,501개 고유 문항이나 전체545개

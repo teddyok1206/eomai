@@ -259,7 +259,14 @@ def benchmark(monkeypatch, ledger):
 
     monkeypatch.setattr(owner.os, "getresuid", lambda: (0, 0, 0))
     monkeypatch.setattr(owner.os, "getgrouplist", lambda *_a: [1234, 2468])
-    monkeypatch.setattr(owner.os, "listdir", lambda _p: state.tasks)
+    original_listdir = os.listdir
+    monkeypatch.setattr(
+        owner.os,
+        "listdir",
+        lambda path: (
+            state.tasks if Path(path) == Path("/proc/123/task") else original_listdir(path)
+        ),
+    )
     monkeypatch.setattr(
         owner.os,
         "listxattr",

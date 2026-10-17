@@ -11,11 +11,13 @@ import signal
 import stat
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from eom_catalog_contracts.embedding_benchmark_cuda_ready import (
     MAX_BENCHMARK_CUDA_READY_BYTES,
+    BenchmarkCudaReady,
     parse_benchmark_cuda_ready,
     validate_benchmark_cuda_ready,
 )
@@ -45,6 +47,7 @@ from eom_catalog_service.embedding_cuda_probe_gpu_clients import observe_cuda_pr
 from eom_catalog_service.embedding_cuda_probe_resource_observation import (
     CudaProbeResourceObservation,
     observe_benchmark_cuda_ready_resources,
+    observe_cuda_probe_retained_resources,
 )
 from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
 from eom_catalog_service.embedding_native_installation_admission import (
@@ -67,6 +70,7 @@ from eom_catalog_service.embedding_runtime_process_identity import (
     require_native_cuda_process_status,
 )
 from eom_catalog_service.gpu_unit_policy_observation import observe_gpu_unit_policy
+from eom_catalog_service.gpu_unit_terminal_observation import gpu_unit_terminal_outcome
 
 if TYPE_CHECKING:
     from eom_catalog_service.embedding_cuda_host_closure import ProtectedCudaEmbeddingHostClosure
@@ -162,15 +166,31 @@ def _read_ready_member(
         os.close(descriptor)
 
 
-def observe_benchmark_cuda_ready(
+@dataclass(frozen=True, slots=True)
+class CapturedBenchmarkCudaPinnedFiles:
+    """Pinned file-epoch resources, not live-process or source/installation admission."""
+
+    pins: BenchmarkLaunchPins
+    ready: BenchmarkCudaReady
+    ready_raw_sha256: str
+    owner_uid: int
+    owner_gid: int
+    root_files: NumericalRuntimeFileSnapshots
+    ready_files: NumericalRuntimeFileSnapshots
+
+    def assert_current(self) -> None:
+        self.root_files.assert_unchanged()
+        self.ready_files.assert_unchanged()
+
+
+def capture_benchmark_cuda_pinned_files(
     invocation: BenchmarkWorkerInvocation,
     environment: PreparedBenchmarkEnvironment,
     *,
     backend: NativeEmbeddingBackendPins,
     inventory: PrefixRuntimeInventory,
-    host: ProtectedCudaEmbeddingHostClosure,
-) -> BenchmarkCudaReadyObservation:
-    """Re-observe before effects; neither parsed metadata nor this value grants compute."""
+) -> CapturedBenchmarkCudaPinnedFiles:
+    """Same immutable basis for live/late checks; no live-owner/deadline grant."""
     _require(os.getresuid() == (0, 0, 0), "ROOT_REQUIRED")
     invocation_raw = embedding_device_benchmark_bytes(invocation)
     _require(
@@ -283,6 +303,28 @@ def observe_benchmark_cuda_ready(
         receipt_raw_sha256=backend.receipt_raw_sha256,
         expected_device=receipt.device_capture,
     )
+    captured = CapturedBenchmarkCudaPinnedFiles(
+        pins, ready, ready_member.sha256, owner.pw_uid, owner.pw_gid, files, ready_files
+    )
+    captured.assert_current()
+    inventory.assert_unchanged()
+    return captured
+
+
+def observe_benchmark_cuda_ready(
+    invocation: BenchmarkWorkerInvocation,
+    environment: PreparedBenchmarkEnvironment,
+    *,
+    backend: NativeEmbeddingBackendPins,
+    inventory: PrefixRuntimeInventory,
+    host: ProtectedCudaEmbeddingHostClosure,
+) -> BenchmarkCudaReadyObservation:
+    """Re-observe before effects; neither parsed metadata nor this value grants compute."""
+    captured = capture_benchmark_cuda_pinned_files(
+        invocation, environment, backend=backend, inventory=inventory
+    )
+    ready, pins = captured.ready, captured.pins
+    uid, gid, lease_gid = ready.worker_uid, ready.worker_gid, ready.supplementary_gids[0]
     unit = CUDA_BENCHMARK_TEMPLATE.replace("@.service", f"@{invocation.execution_id}.service")
     cgroup = "/system.slice/" + unit
     before = inspect_cpu_unit(unit, template=CUDA_BENCHMARK_TEMPLATE)
@@ -307,12 +349,14 @@ def observe_benchmark_cuda_ready(
     )
 
     def read(name: str, maximum: int = 128 * 1024) -> bytes:
-        return read_live_runtime_os_file(process / name, maximum=maximum, owner_uid=user.pw_uid)
+        return read_live_runtime_os_file(process / name, maximum=maximum, owner_uid=uid)
 
     def current() -> None:
         _require(time.monotonic_ns() < pins.expires_ns, "EXPIRED")
         _require(
-            benchmark_owner_start_ticks(pins.owner_pid, uid=owner.pw_uid, gid=owner.pw_gid)
+            benchmark_owner_start_ticks(
+                pins.owner_pid, uid=captured.owner_uid, gid=captured.owner_gid
+            )
             == environment.owner_start_ticks,
             "OWNER_CHANGED",
         )
@@ -326,9 +370,7 @@ def observe_benchmark_cuda_ready(
             "CGROUP_CHANGED",
         )
         status = read("status")
-        require_native_cuda_process_status(
-            status, uid=user.pw_uid, gid=group.gr_gid, lease_gid=lease_gid
-        )
+        require_native_cuda_process_status(status, uid=uid, gid=gid, lease_gid=lease_gid)
         fields = dict(line.split(":", 1) for line in status.decode("ascii").splitlines())
         mask = fields.get("SigBlk", "").strip()
         _require(
@@ -347,16 +389,15 @@ def observe_benchmark_cuda_ready(
         expected, cwd = CUDA_LOADER_EMPTY_DIRECTORY.lstat(), (process / "cwd").stat()
         _require((expected.st_dev, expected.st_ino) == (cwd.st_dev, cwd.st_ino), "CWD_CHANGED")
         _require(inspect_cpu_unit(unit, template=CUDA_BENCHMARK_TEMPLATE) == before, "UNIT_CHANGED")
-        files.assert_unchanged()
-        ready_files.assert_unchanged()
+        captured.assert_current()
 
     current()
-    observe_runtime_device(receipt.device_capture)
+    observe_runtime_device(ready.expected_device_capture)
     members = validate_native_cuda_executable_mappings(
         read("maps", 2 * 1024**2), inventory=inventory, host=host
     )
     resources = observe_benchmark_cuda_ready_resources(ready, unit=unit, lease_gid=lease_gid)
-    _require(observe_cuda_probe_gpu_clients(receipt.device_capture) == (), "GPU_BUSY")
+    _require(observe_cuda_probe_gpu_clients(ready.expected_device_capture) == (), "GPU_BUSY")
     current()
     _require(
         parse_native_executable_mappings(read("maps", 2 * 1024**2)) == members
@@ -367,8 +408,8 @@ def observe_benchmark_cuda_ready(
     )
     inventory.assert_unchanged()
     host.assert_current()
-    observe_runtime_device(receipt.device_capture)
-    _require(observe_cuda_probe_gpu_clients(receipt.device_capture) == (), "GPU_BUSY")
+    observe_runtime_device(ready.expected_device_capture)
+    _require(observe_cuda_probe_gpu_clients(ready.expected_device_capture) == (), "GPU_BUSY")
     current()
     return BenchmarkCudaReadyObservation(
         invocation.execution_id,
@@ -378,7 +419,7 @@ def observe_benchmark_cuda_ready(
         ready.start_time_ticks,
         cgroup,
         pins.invocation_raw_sha256,
-        ready_member.sha256,
+        captured.ready_raw_sha256,
         environment.environment_raw_sha256,
         policy,
         sha256_bytes(
@@ -391,5 +432,125 @@ def observe_benchmark_cuda_ready(
         ),
         members,
         resources,
-        receipt.device_capture,
+        ready.expected_device_capture,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkCudaTerminalObservation:
+    ready: BenchmarkCudaReadyObservation
+    terminal_unit: CpuUnitObservation
+    original_outcome: Literal["SUCCEEDED", "FAILED"]
+    observed_at_utc: str
+
+
+def require_benchmark_cuda_observation_basis(
+    ready: BenchmarkCudaReadyObservation, captured: CapturedBenchmarkCudaPinnedFiles
+) -> str:
+    """Pure pinned linkage, not process, source, model or installation authority."""
+    _require(
+        type(ready) is BenchmarkCudaReadyObservation
+        and type(captured) is CapturedBenchmarkCudaPinnedFiles,
+        "IDENTITY_INVALID",
+    )
+    _require(
+        (ready.execution_id, ready.job_id, ready.pid, ready.start_time_ticks)
+        == (
+            captured.ready.execution_id,
+            captured.ready.job_id,
+            captured.ready.pid,
+            captured.ready.start_time_ticks,
+        )
+        and ready.invocation_raw_sha256 == captured.pins.invocation_raw_sha256
+        and ready.environment_raw_sha256
+        == sha256_bytes(benchmark_launch_environment_bytes(captured.pins))
+        and ready.ready_raw_sha256 == captured.ready_raw_sha256
+        and ready.device == captured.ready.expected_device_capture,
+        "PINNED_BASIS_CHANGED",
+    )
+    unit = CUDA_BENCHMARK_TEMPLATE.replace("@.service", f"@{ready.execution_id}.service")
+    _require(ready.cgroup == "/system.slice/" + unit, "IDENTITY_INVALID")
+    return unit
+
+
+def require_benchmark_cuda_processes_ended(ready: BenchmarkCudaReadyObservation) -> None:
+    """Original PID/birth and exact empty-cgroup proof; never control a reused PID."""
+    _require(os.getresuid() == (0, 0, 0), "ROOT_REQUIRED")
+    _require(type(ready) is BenchmarkCudaReadyObservation, "IDENTITY_INVALID")
+    unit = CUDA_BENCHMARK_TEMPLATE.replace("@.service", f"@{ready.execution_id}.service")
+    _require(ready.cgroup == "/system.slice/" + unit, "IDENTITY_INVALID")
+    original = Path("/proc") / str(ready.pid)
+    try:
+        uid = original.lstat().st_uid
+        raw = read_live_runtime_os_file(original / "stat", maximum=65536, owner_uid=uid)
+    except FileNotFoundError:
+        pass
+    else:
+        _require(
+            native_process_start_ticks(raw, ready.pid) != ready.start_time_ticks,
+            "TERMINATION_UNCERTAIN",
+        )
+    try:
+        members = root_owned_unit_processes(unit)
+    except FileNotFoundError:
+        _require(not (Path("/sys/fs/cgroup/system.slice") / unit).exists(), "TERMINATION_UNCERTAIN")
+        members = ()
+    _require(members == (), "TERMINATION_UNCERTAIN")
+
+
+def verify_benchmark_cuda_terminal(
+    ready: BenchmarkCudaReadyObservation,
+    invocation: BenchmarkWorkerInvocation,
+    environment: PreparedBenchmarkEnvironment,
+    *,
+    backend: NativeEmbeddingBackendPins,
+    inventory: PrefixRuntimeInventory,
+    host: ProtectedCudaEmbeddingHostClosure,
+) -> BenchmarkCudaTerminalObservation:
+    """Read-only late cleanup proof, independent of live deadlines or actor authorization."""
+    _require(os.getresuid() == (0, 0, 0), "ROOT_REQUIRED")
+    _require(type(ready) is BenchmarkCudaReadyObservation, "IDENTITY_INVALID")
+    captured = capture_benchmark_cuda_pinned_files(
+        invocation, environment, backend=backend, inventory=inventory
+    )
+    unit = require_benchmark_cuda_observation_basis(ready, captured)
+    before = inspect_cpu_unit(unit, template=CUDA_BENCHMARK_TEMPLATE)
+    _require(
+        before.invocation_id == ready.unit.invocation_id
+        and before.status.exec_main_started_monotonic
+        == ready.unit.status.exec_main_started_monotonic,
+        "TERMINATION_UNCERTAIN",
+    )
+    try:
+        outcome = gpu_unit_terminal_outcome(before)
+    except ValueError:
+        raise ValueError("BENCHMARK_CUDA_OBSERVATION_TERMINATION_UNCERTAIN") from None
+
+    def ended() -> None:
+        require_benchmark_cuda_processes_ended(ready)
+        _require(
+            inspect_cpu_unit(unit, template=CUDA_BENCHMARK_TEMPLATE) == before,
+            "TERMINATION_UNCERTAIN",
+        )
+
+    ended()
+    observe_runtime_device(ready.device)
+    observe_cuda_probe_retained_resources(ready.resources, unit=unit)
+    _require(observe_cuda_probe_gpu_clients(ready.device) == (), "GPU_CLEANUP_UNCERTAIN")
+    observe_cuda_probe_retained_resources(ready.resources, unit=unit)
+    _require(
+        observe_gpu_unit_policy(unit, worker_account="eom-embedding-cuda")
+        == ready.effective_policy_sha256,
+        "POLICY_CHANGED",
+    )
+    captured.assert_current()
+    inventory.assert_unchanged()
+    host.assert_current()
+    observe_runtime_device(ready.device)
+    ended()
+    return BenchmarkCudaTerminalObservation(
+        ready,
+        before,
+        outcome,
+        datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z"),
     )

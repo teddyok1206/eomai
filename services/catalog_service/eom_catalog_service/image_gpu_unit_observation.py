@@ -33,6 +33,7 @@ from eom_catalog_service.embedding_runtime_files import (
 from eom_catalog_service.embedding_runtime_os_identity import observe_runtime_device
 from eom_catalog_service.embedding_runtime_process_identity import native_process_start_ticks
 from eom_catalog_service.gpu_unit_policy_observation import observe_gpu_unit_policy
+from eom_catalog_service.gpu_unit_terminal_observation import gpu_unit_terminal_outcome
 from eom_catalog_service.image_gpu_unit_identity import image_gpu_unit_role, image_gpu_unit_template
 
 _BOOTSTRAP = Path("/usr/local/libexec/eom-image-runtime/run_gpu_unit.py")
@@ -234,30 +235,10 @@ def observe_unleased_image_gpu_unit_terminal(
 
 def image_gpu_unit_terminal_outcome(terminal: CpuUnitObservation) -> Literal["SUCCEEDED", "FAILED"]:
     """One original-outcome rule for terminal capture and read-only recovery."""
-    _require(type(terminal) is CpuUnitObservation, "TERMINATION_UNCERTAIN")
-    if terminal.succeeded:
-        return "SUCCEEDED"
-    if (
-        terminal.main_pid == 0
-        and terminal.status.active_state == "failed"
-        and terminal.status.sub_state == "failed"
-        and terminal.status.process_started
-        and terminal.status.exec_main_code in {1, 2, 3}
-        and terminal.status.result
-        in {
-            "exit-code",
-            "signal",
-            "core-dump",
-            "timeout",
-            "watchdog",
-            "oom-kill",
-            "resources",
-            "protocol",
-        }
-        and terminal.exited_monotonic >= terminal.status.exec_main_started_monotonic
-    ):
-        return "FAILED"
-    raise ValueError("IMAGE_GPU_UNIT_TERMINATION_UNCERTAIN")
+    try:
+        return gpu_unit_terminal_outcome(terminal)
+    except ValueError:
+        raise ValueError("IMAGE_GPU_UNIT_TERMINATION_UNCERTAIN") from None
 
 
 def verify_image_gpu_unit_terminal(

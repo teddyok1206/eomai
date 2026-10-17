@@ -819,3 +819,72 @@ an installed root/GPU positive. Build:
 `/tmp/eom-api-build/dd756f6a9b972a111efff730e7afae8005a1e304.UTxgWS/dist`.
 Raw platform wheel SHA `47691d6cd9ab961923c06dc9b964c76eedd6a8fb40b3b58467fcc9172600087f`;
 API-contract wheel SHA `3c191f2b38433cab6ad55730783bd2b223e923028018e099cc9af6aa14f18d36`.
+
+### Durable ACK and terminal cleanup — design before implementation
+
+Use the existing image lifetime design: reserve an original unit/invocation/phase once,
+fsync intent before a single effect, reobserve identity immediately before the effect,
+then fsync the result. Extract only its protected phase-directory and exclusive small-file
+IO into a shared infrastructure adapter used by image and benchmark owners. Callers retain
+typed observation validation, fixed roots, event meaning and serialization; the byte writer
+grants no unit/source/Job permission. No broker, queue, mutable registry or new worker wire
+protocol is needed. Preserve existing image record bytes and stable error meanings.
+
+The benchmark ACK is a distinct typed root observation/result, never an image/probe value.
+It reobserves exact pinned files/live frame before emitting SIGUSR1 only to the original
+fixed unit main. Existing operator/source/Job admission stays with the Orchestrator caller.
+An uncertain command or record write retains the intent; O_EXCL prevents automatic replay.
+Cleanup has separate terminal evidence and preserves actual success/failure/timeout status,
+empty cgroup, retained physical descriptor and driver-idle proof before any stop/reset/clean.
+After release, independently acquire the same inode and recheck actual stopped state. Never
+unlock a borrowed GPU description, rewrite a failure, or infer cleanup from an observation
+timeout. A failure after retention but before readiness needs its own evidence; it is not
+an unleased exit and must not fabricate readiness to enter the normal cleanup path.
+
+Late terminal checks cannot call the live-ready observer (its process/deadline legitimately
+ended). Reuse a shared pinned-file capture and separate live-frame/terminal observations;
+immutable source/code/config/receipt hashes still match. Authorization expiration does not
+prevent hardware cleanup, but does prevent publication or further model work. Dominant
+operations are bounded keyed metadata lookup, one atomic directory reservation, two
+append-only records and fixed systemd read/effect calls. Existing current source, original
+Job, numerical outputs and all canonical Artifacts remain outside this OS audit adapter.
+
+### Durable ACK and after-ready retirement source checkpoint — 2026-10-17
+
+Implemented the distinct benchmark root ACK and after-ready terminal/retirement owner.
+Its fixed unit/main signal, stop/reset and optional retained-FD cleanup all require the
+original immutable execution/unit invocation. Atomic phase reservation and durable intent
+precede effects; ambiguous commands or partial intent/result writes remain uncertain and
+cannot replay. Read-only reconciliation can prove that the original store is already gone,
+but cannot silently issue a second cleanup or manufacture the missing result record.
+
+The image and benchmark owners share only protected phase/file IO and bounded terminal/
+stopped-unit parsing. Image callers keep their fixed family, old record envelope, outcome
+rules and error meanings. Benchmark-specific typed observations remain distinct; sharing
+small physical-resource values does not relabel the benchmark as an installation probe.
+Late cleanup reuses pinned-file capture without requiring the expired live window or an
+already-ended actor; actual original PID/birth, empty cgroup, stopped state, retained
+descriptor, no driver clients and independently acquired same-inode lease remain required.
+No borrowed lease is unlocked and original timeout/failure is never rewritten as success.
+
+Final20 related suites: **734 PASS67.02s**, strict6 production modules, Ruff/format10 and
+diff PASS. New coverage includes ACK no-clobber/concurrency, partial writes, identity drift,
+success/failure/timeout cleanup, retained-store cleanup, uncertain before/after-effect
+outcomes, read-only recovery, busy/replaced resources and reused PID handling. Existing
+image, installation-probe, readiness-file, CPU/CUDA and launch regressions are included,
+not added to overlapping earlier totals. Fresh isolated actual nonroot execution also
+refused all three root ACK/retirement/reconciliation entries before metadata or effects,
+without importing optional ML packages. Positive root/kernel/GPU cases remain synthetic.
+
+The initial new retirement fixture missed the extracted device-observer mock, producing
+8 failures before the expected command/result branches. Corrected only the fixture port,
+added a device-drift case and asserted each expected failure reason; no production guard
+was relaxed. The final734 is from one subsequent complete run. Earlier ACK fixture import/
+directory-listing issues were also corrected in fixtures, not by weakening validation.
+
+This is **SOURCE_PASS / NOT_ACTIVE**, not actual root ACK, model execution, throughput or
+GPU-default evidence. Failure after PID1 retention but before any ready message still needs
+distinct supported evidence/recovery; the current API must not fake readiness or classify
+it as an unleased exit. Actual original-Job orchestration, compatible numerical-prefix
+activation, that failure branch, six frozen model launches and C1–C5 actual consumer gates
+remain open. No protected template/prefix/default, canonical Job or Artifact was changed.
