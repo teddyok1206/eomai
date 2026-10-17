@@ -360,3 +360,90 @@ retirement, whole-prefix verification and a distinct real two-ACK probe/seal/
 reader. Then all19 image entrypoints/lifetime fences, six frozen CPU/CUDA
 comparisons/conditional default and C1–C5 actual consumers remain required.
 The original full goal is ACTIVE, not completed by this host-only checkpoint.
+
+## Actual failed-probe retirement —2026-10-17 01:09 UTC
+
+This closes only the original db5a25ee retained physical-fence cleanup. It does
+not admit a CUDA runtime, rerun a probe/model, activate the new host/cache, change
+CPU indexing/query services or choose a GPU default.
+
+The existing protected owner installer raw
+`559ada516fe9d46f57926aad70699e81deba5f1a18b4e25e3f6e6bcdf1384b71`
+installed the reviewed administrative owner pair from source
+`c499e3bdbdd4cab03870450d5581004943df9967`, build directory
+`/tmp/eom-api-build/c499e3bdbdd4cab03870450d5581004943df9967.AUIHoL/dist`:
+
+- Platform wheel raw `0174bfbececf5dc87bd67468cd9da827ff1ae090bbed41ca172b9557b6363bea`.
+- API-contracts wheel raw `46bbba494d77e14a38e89c2f1bbac12db4c4f461683c6df3ab50e43410ebf305`.
+- Exact installed root path `/opt/eom/embedding-owner-releases/c499e3bdbdd4cab03870450d5581004943df9967/site-packages`.
+
+This was an owner-only no-dependency/no-index installation and wheel/RECORD check,
+not numerical-prefix replacement or an API/service deployment. Previous owner
+releases, CUDA69793b3e prefix, native config1.2, selected OLD host cache, bundle,
+model bytes and all three operating CPU numerical implementation hashes remain.
+Validation:1670 broad tests PASS plus the separately RUN tiny synthetic OLD-pip
+test1 PASS; subsequent shared-cgroup extraction focused129 PASS, strict3 and
+Ruff/format/diff PASS. Standard release build/RECORD PASS. These source tests are
+not counted as actual GPU numerical comparisons.
+
+Before any release, installed owner12cc56ac independently observed original
+root-accepted READY/raw, invocation `b838ba107792441399a749699ba1da7c`, PID3634333
+absence, actual failed MainPID0/empty cgroup, no original GPU client and retained
+same-inode lease. Unit `eom-cuda-failed-terminal-check-12cc56ac.service`, invocation
+`5bcc592ee00f4985ac9a854a4635039c`, passed. Its original root-local observation
+raw is `aee5b2fd086f9979dcdab108022af33e119dcdbd55f3ac39c7991b6db1df291c`.
+The completed readonly observer was active/exited/MainPID0/store0; only its waiting
+terminal client was interrupted to free the same operator pane. No original GPU
+worker was signalled or restarted.
+
+Controlled retirement used installed c499e3bd and reviewed protected helper raw
+`0047b14dd53fe1664de3988b32dc756c0c270c870fb64678b08070099a91a08e`.
+Unit `eom-cuda-failed-probe-retirement-c499e3bd.service`, actual invocation
+`5184d71391fc47f68bc7fcad45e1c91d`, succeeded in4.404s. While holding the existing
+CUDA publication flock, it reverified the original failure, saved/fsynced a
+no-clobber intent, reverified again, reset only
+`eom-embedding-native-cuda-probe@db5a25eec7b248f9b77eaf9969a67e05.service`
+and accepted post-state only after inactive/dead/MainPID0/store0, process/cgroup/
+original GPU-client absence, unchanged device facts and an actual new exclusive
+nonblocking acquisition of the SAME physical lock description's inode.
+It closed only that new verification descriptor; no LOCK_UN on the original,
+lock replacement/truncation/permission change, reset-all, retry or admission.
+
+Preserved root-local operational records (not product/NAS Artifact identities):
+
+| Record | Actual raw SHA-256 |
+| --- | --- |
+| `/opt/eom/embedding-probe-retirements/db5a25eec7b248f9b77eaf9969a67e05/intent.json` | `97c35e8f991016123b884a9e1ac638164485ab8acdddd5d80aed83bb5fe682b7` |
+| Same directory `result.json` | `93efdded109581bc343a2092d88a503f03a2cdd624c70028898abbf97fd8be4d` |
+
+The intent retains the original invocation/exit-code1/failed unit and its original
+READY identities. Result explicitly says `FAILED_PROBE_RETIRED_NOT_ADMITTED`.
+Systemd's volatile unit is now inactive/dead/store0 and may display result success
+after the supported reset; this is **not** reinterpretation of the original
+execution as successful admission. Its original journal still shows exit1/FAILURE
+and failed start, independently read after retirement; original request/READY/
+rejected FINAL/maps/controller evidence files remain untouched.
+
+Independent installed-owner follow-up unit
+`eom-cuda-retired-probe-check-c499e3bd.service`, invocation
+`1bf41d0f7a074700ac023baf994bb23b`, passed in3.950s with protected helper raw
+`fc8dedda8b3290977c16b37a4151951a4221873017920c5adbbb661796edb5b2`.
+It parsed/validated intent and result, matched their original failure and hashes,
+re-observed actual retired unit/process/cgroup/device/GPU state and reacquired
+the same free inode. It submitted **zero** resets. Physical dev/inode25:2574220,
+root:GID974/0640/empty/nlink1 and selected-cache OLD3a79d328 were unchanged.
+An unprivileged path-stat remained permission denied as expected; no role/group
+or TTL was broadened to make readback pass. Existing sudo in EOM2 was reused.
+
+Local bounded operator evidence is `/tmp/eom-cuda-retirement-skcfvUex`; root
+observation/operation summary remains `/opt/eom/.embedding-cuda-retirement-db5a25ee`.
+Models/tokenizers/forward0; no candidate interpreter executed in this cleanup.
+Total prior candidate probe executions remain two FAILED histories, not zero or
+two accepted probes. CUDA admission/default/benchmark remain unproven.
+
+Next: install the supported1.3 audit/bootstrap input and root2.1 receipt schema;
+publish a source/wheel-closed private CUDA prefix successor, whole-audit it against
+the existing NVML host1.1 and exact three CPU numerical bytes, then run the distinct
+fixed two-ACK probe/terminal/seal/reader. Before model comparisons, finish all19
+image entrypoint/physical-lifetime migration. Six actual CPU/CUDA comparisons and
+C1–C5 actual consumers remain open under the unchanged full active goal.
