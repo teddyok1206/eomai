@@ -9,6 +9,17 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Actual guardian preparation03:26 UTC:1031a232 standard build/RECORD and separate
+  OLD owner-pair import PASS; existing protected owner installer published a new
+  immutable root-owned owner using EOM2 authorization. Actual root0444 source SHA
+  and installed-path/no-ML import independently PASS. Initial direct invocation of
+  the0444 shell installer was refused before mutation; failed helper/result kept,
+  correct explicit interpreter invocation succeeded without permission relaxation.
+  OWNER_INSTALLED/NOT_SELECTED/NOT_ACTIVE only: no main/guardian unit, image prefix,
+  group, nativee5/numericalc499, API/service/default/model change. Source361/image317
+  gates remain distinct from privileged lifecycle acceptance.19 hooks/root entry/
+  actual cleanup, six model comparisons and C1–C5 stay open.
+  [Actual pins and limits](../architecture/INCREMENTAL_EMBEDDING_GPU_RUNTIME_DESIGN.md#actual-guardian-owner-preparation0326-utc).
 - Source guardian checkpoint2026-10-17: fixed root dispatch/frozen19-template
   source capture/bounded invocation watcher now compose the implemented ACK and
   retirement. Cache/input/busy no-lease exits use separate store0/cgroup/policy

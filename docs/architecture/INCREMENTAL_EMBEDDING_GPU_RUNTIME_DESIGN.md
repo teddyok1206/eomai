@@ -510,6 +510,39 @@ CPU/CUDA numerical comparisons and conditional default. C1–C5 and the original
 authenticated HTTP acceptance remain part of the full ACTIVE goal. Next routine
 INDEX/auth observation remains≥03:34:02 UTC, not another login prompt or QUERY.
 
+##### Actual guardian owner preparation03:26 UTC
+
+Source `1031a2323d24cf2fcb968e1edd83a5e0cf5047a3` was committed/pushed clean.
+Standard build/three-wheel RECORD/source/OpenAPI inspection passed at
+`/tmp/eom-api-build/1031a2323d24cf2fcb968e1edd83a5e0cf5047a3.Hq4FL0/dist`.
+Owner platform wheel SHA is
+`e707b88d9fea4fbae6a4d54d87441d47c01194d96730debebaeb9872a540e76c`;
+paired API contracts wheel SHA is
+`8877cf604763ba7e1d3f53bebb508cede89f5ee6bbe708cf5c1abf81e9e7089f`.
+Separate unprivileged OLD-interpreter installation/import from
+`/tmp/eom-image-guardian-import.HAgcR7ln` passed with no optional ML imports/effects.
+
+The first operator attempted to execute the intentionally0444 protected shell
+installer directly; sudo refused before execution (`command not found`), target
+absent and no mutation. Its original helper/result remain under
+`/tmp/eom-image-guardian-owner.JVPNajsd`. After confirming unchanged installer SHA
+559ada51 and absent target, the corrected explicit `/bin/bash` invocation used the
+same EOM2/pts5 authorization with no password prompt or retry of an uncertain
+effect. Supported owner-only install exited0 at03:25:58 UTC. Old releases remain;
+new root-owned0755 owner is
+`/opt/eom/embedding-owner-releases/1031a2323d24cf2fcb968e1edd83a5e0cf5047a3`.
+
+Independent actual readback found root0444/nlink1 guardian/lifetime modules,
+respectively SHA `c6e777430bdf1f19fd1b06a716e0366192d997ff6fc6add1f32b3298a7255c7c`
+and `45fef85e578485dd2e61a71d9f107b92330769975db86fdc28fab08addd21622`.
+OLD-interpreter imports resolve from that installed owner with optional ML0 and
+no privileged effects. This is **OWNER_INSTALLED / NOT_SELECTED / NOT_ACTIVE**,
+not an operating guardian or migration/model grant. Native administrativee5,
+numericalc499, image packages/bootstrap/templates, application/services and
+CPU defaults were not changed. No new numerical-prefix audit/rebuild is needed
+for this administrative-only installation. Important Slack milestone delivered
+`devreport_58eb654fe94f4238b5bf9584bdc4346f`03:26:50 UTC, Korean summary first.
+
 ## 5. 별도 protected CUDA 실행 leaf
 
 제안 prefix는 `/opt/eom/conda/envs/eom-embedding-cuda`, worker는 `eom-embedding-cuda`,
