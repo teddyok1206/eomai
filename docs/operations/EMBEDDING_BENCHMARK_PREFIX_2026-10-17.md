@@ -249,3 +249,87 @@ Due read-only INDEX observation17:52:13 reports669 encodings/669 bindings,
 services remain active. These are view relations, not669 distinct Items or full
 coverage. No observation-triggered admission/retry/encoding. Next routine
 observation is no earlier18:22:13 UTC.
+
+## Next fixed-template installation boundary — design before effects
+
+Install only the four already reviewed CPU/CUDA benchmark service/socket files
+from exact42a1c5c6 archive3875289a, with the hashes in the installed public
+`embedding_benchmark_unit_control` interface. Canonical source is that retained
+source revision, not current Git/latest. Unit-family filename and raw content hash
+remain distinct from a future execution/Job identity; installing files grants no
+source, GPU ownership or model execution.
+
+Access is bounded four-key lookup and ordered installation, O(1) metadata plus
+one bounded archive read. Validate stable archive FD/hash, exact unique regular
+members, fixed parent ownership, absent targets, actual account names and static
+unit syntax before effects. Use no-clobber creation and fsync, retain root intent/
+result and all previous units. No DB/index/queue or new dependency. Existing
+Catalog fixed-template/root preparation and source/Job guards remain authoritative.
+
+The multi-file OS install is not atomic. Unexpected/partial installation fails
+closed and is inspected, not blindly overwritten or auto-retried. The existing
+root unit interface requires both exact service/socket hashes before execution;
+no enable/start/listen or fake Job is added. After installation, reload metadata,
+recheck four exact files and unchanged active service identities. No CPU prefix,
+configuration, model, worker account/group, device default or ongoing job changes.
+Rollback, if needed, concerns only these exact newly created files and retains
+evidence; never stop/reset historical GPU units to make a list empty. Reusing the
+existing fixed templates is simpler than introducing another benchmark launcher.
+
+### Actual four-template installation —18:01 UTC
+
+**INSTALLED_VERIFIED / NOT_ENABLED / NOT_STARTED.** Existing fixed-unit control
+regressions17 PASS/1.73s, explicit Conda Ruff/format, and actual read-only
+`systemd-analyze --generators=no verify` PASS before effects. Installer
+`b6a75938be3fd2315db7a8a9a5f37536f86647dc123a1d2f8c725acc49ce33d5` used exact
+archive42a1c5c6/3875289a and public installed template pins, not current Git.
+It validates a stable no-follow archive FD/hash, map-indexed unique members,
+root-safe parents, absent targets and actual nonroot account names. Four-key
+selection is one O(N) archive scan, not repeated list searches. Access time is
+excluded from mutation epochs; device/inode/owner/mode/link/size/mtime/ctime are not.
+
+At18:01:46.792028 it completed no-clobber root0644/nlink1 installation, fsync,
+metadata reload, post-install syntax and protected-file hash checks:
+
+| File under `/etc/systemd/system` | Raw SHA-256 |
+| --- | --- |
+| `eom-embedding-benchmark-cpu@.service` | `512d2b563c8e73ec0cc39a4679f7acb9bb1ccf4a380eeb22a417a1c6cc275350` |
+| `eom-embedding-benchmark-cpu@.socket` | `ea94f5a5bf5d28373dad0ae0260c0c7cc3c477216d4201e0e904e2d9245b3c02` |
+| `eom-embedding-benchmark-cuda@.service` | `5955e54a578c5f547019298525eb44a8d8814fcbf8afb0070861a3b0a815b6eb` |
+| `eom-embedding-benchmark-cuda@.socket` | `63bfab8b2be928e92ccb8b8c500186e3b49cbdff1fd2e4b8f0aaec4df724c522` |
+
+The actual API/Catalog/QUERY/INDEX PIDs and invocations are unchanged before/after
+(900537/900493/902791/903039). All remain active/running/NeedDaemonReload=no.
+Independent normal-user readback confirms all four hashes/root ownership and
+unit-file state `static`; no benchmark service/socket instance is loaded. A
+preliminary `systemctl show` of a bare template name was rejected as invalid;
+filesystem/stat and unit-file inventory, not that rejection, prove absence/install.
+
+Root intent/result remain at
+`/var/lib/eom-benchmark-template-install.42a1c5c6-20261017`; temporary gate/results
+at `/tmp/eom-benchmark-templates-MNaDaUgc`. Model runs/Job creation/enable/start0;
+no numerical prefix, config, account/group or default was changed. Installing
+four files is not actual PID1 benchmark dispatch or source authorization.
+
+### Read-only CPU operating pins, no premature prefix mutation
+
+Before preparing the CPU successor, a fixed metadata-only observer used installed
+public configuration parsers and the official nonsecret numerical environment
+file guard. No DB/NAS/secret/model read or authority was inferred. Evidence:
+`/tmp/eom-cpu-benchmark-operating-qf1Eaz6A/current-operating-pins.json`.
+
+Current INDEX is still c6983332/service revision932e10f7, with current native CPU
+config927557e4 raw9160e25c, receipt raw2ce9852c and b41b3cb4 verifier58835585.
+QUERY0fab624c and INDEX use the same CPU environment raw52b283d1. Current document
+space8a2fcad6 and three namespaces remain unchanged; these metadata pointers are
+not a source or execution grant. The CPU benchmark module is still physically
+absent, while the audited CUDA module exists. Templates alone cannot close that gap.
+
+Do not replace the shared CPU prefix while INDEX/QUERY can dispatch into it.
+Prepare a compatible owner/config/verifier selection and inspect original pending
+work first. Preserve request pins, exact source/policy/bundle/space and existing
+vectors. Use supported normal drain and, only where applicable, existing unstarted
+owner-maintenance cancellation; never rewrite/re-key started work or infer that a
+new receipt retroactively validates old runtime captures. CPU private installation,
+fresh CPU admission/selection, source/Job-authorized six measurements, consumers,
+HTTP context measurement and conditional GPU default remain unfinished.
