@@ -17,6 +17,12 @@ from eom_workflow.local_embedding_workflow_receipt import (
     parse_local_embedding_workflow_receipt,
     validate_local_embedding_step_output,
 )
+from eom_workflow.private_chat_query_workflow import (
+    PRIVATE_CHAT_QUERY_RECEIPT_REF,
+    PrivateChatQueryStepOutput,
+    PrivateChatQueryWorkflowReceipt,
+    validate_private_chat_query_step_output,
+)
 from eom_workflow.reference_query_execution import (
     REFERENCE_QUERY_RECEIPT_REF,
     ReferenceQueryStepOutput,
@@ -35,6 +41,7 @@ from eom_orchestrator.file_set_control_artifacts import (
 
 NATIVE_COMPLETION_ARTIFACT_TYPE = "control_local_embedding_completion"
 QUERY_COMPLETION_ARTIFACT_TYPE = "control_reference_query_completion"
+PRIVATE_CHAT_QUERY_COMPLETION_ARTIFACT_TYPE = "control_private_chat_query_completion"
 
 
 class NativeEmbeddingCompletionPublisher:
@@ -150,6 +157,67 @@ class NativeEmbeddingCompletionPublisher:
         }
         output = parse_reference_query_step_output(body | {"output_sha256": content_sha256(body)})
         validate_reference_query_step_output(output, receipt)
+        return output
+
+    def publish_private_chat_query(
+        self, receipt: PrivateChatQueryWorkflowReceipt, *, identity: ControlFileSetIdentity
+    ) -> PrivateChatQueryStepOutput:
+        """Commit validated metadata only; caller retains original live-source/native fences."""
+        receipt = PrivateChatQueryWorkflowReceipt.model_validate(receipt)
+        identity = ControlFileSetIdentity(
+            identity.job_id, identity.artifact_id, identity.artifact_revision_id
+        )
+        if receipt.receipt_owner_job_id != identity.job_id:
+            raise ValueError("PRIVATE_CHAT_QUERY_RECEIPT_PRODUCER_MISMATCH")
+        raw = canonical_json_bytes(receipt)
+        body = {
+            "schema_version": "private-chat-query-step-output/1.0",
+            "purpose": "PRIVATE_CHAT_QUERY",
+            **{
+                field: getattr(receipt, field)
+                for field in (
+                    "workflow_id",
+                    "step_run_id",
+                    "step_key",
+                    "attempt",
+                    "receipt_owner_job_id",
+                    "execution_result_schema",
+                    "receipt_sha256",
+                )
+            },
+            "receipt_schema": PRIVATE_CHAT_QUERY_RECEIPT_REF,
+            "receipt": ArtifactMemberPointer(
+                artifact_id=identity.artifact_id,
+                artifact_revision_id=identity.artifact_revision_id,
+                member_path="receipt.json",
+                schema_ref=PRIVATE_CHAT_QUERY_RECEIPT_REF,
+                media_type="application/json",
+                sha256=sha256_bytes(raw),
+            ).model_dump(mode="json"),
+        }
+        output = PrivateChatQueryStepOutput.model_validate(
+            body | {"output_sha256": content_sha256(body)}
+        )
+        # A four-member numeric file set cannot be reused as the one-member receipt set.
+        validate_private_chat_query_step_output(output, receipt)
+        key = "native-private-chat-query-receipt:" + content_sha256(
+            {
+                "workflow_id": receipt.workflow_id,
+                "step_run_id": receipt.step_run_id,
+                "attempt": receipt.attempt,
+            }
+        ).removeprefix("sha256:")
+        pointer = self._publish_receipt(
+            raw,
+            identity=identity,
+            key=key,
+            artifact_type=PRIVATE_CHAT_QUERY_COMPLETION_ARTIFACT_TYPE,
+            schema_ref=PRIVATE_CHAT_QUERY_RECEIPT_REF,
+            created_at=receipt.published_at,
+            mismatch_code="PRIVATE_CHAT_QUERY_RECEIPT_PUBLICATION_MISMATCH",
+        )
+        if pointer != output.receipt:
+            raise ValueError("PRIVATE_CHAT_QUERY_RECEIPT_PUBLICATION_MISMATCH")
         return output
 
     def _publish_receipt(

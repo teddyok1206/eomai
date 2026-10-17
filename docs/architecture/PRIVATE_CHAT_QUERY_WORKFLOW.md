@@ -57,6 +57,40 @@ copies, exact original origin/actor/basis/launch and file-set closure, raw versu
 semantic hashes, wrong producer IDs, timestamps, and old parser/compiler rejection.
 No model execution or mutating DB test is implied by these pure-value tests.
 
+## Completion publication/read composition — before implementation
+
+Extend the existing `NativeEmbeddingCompletionPublisher`, not a new store. The
+private method validates its closed receipt and preallocated identity, constructs
+the small output and checks its file-set separation **before publication**. It
+then reuses the same protected temporary materialization and existing identified
+file-set commit/receipt verification as INDEX/reference. Canonical owner remains
+Orchestrator; one local receipt copy exists only at this explicit commit boundary.
+
+The new private key binds original Workflow/step/attempt, not request/origin hashes:
+changing immutable intent or claim must conflict with the same original operation,
+not allocate another producer through a new key. Existing reference keys/bytes
+stay unchanged. Expected work is one indexed unique-key lookup plus one small
+receipt file; O(receipt bytes), no corpus/history scan or DB/index/schema migration.
+Existing publisher locks/unique constraints and preallocated Job/Artifact identities
+own concurrency/recovery. An observation lost after commit requires exact replay,
+not model execution, another timestamp or another identity.
+
+Catalog exposes a separate private completion resolver over the existing pinned
+Artifact reader. It requires the caller's active nonnested root and no pending
+writes; validates exact receipt file set/type/schema/media/raw hash/canonical bytes,
+actual approved successful producer and the private output-to-receipt closure;
+then verifies the original root is retained. It never resolves an implicit latest
+or treats this receipt as current Chat/public-corpus/native admission. Those
+checks remain mandatory in the future private owner before execution/delivery.
+
+Existing publisher/reader adapters retain their dependency direction and shared
+mechanics; the new values remain pure. No new library, registry or generic
+dispatch framework. This publication leaf still cannot submit an unsupported
+private Workflow or bypass the old result CHECK. Tests cover actual temporary
+file/SQLite readbacks and guarded disposable PostgreSQL concurrent publication,
+same-key conflict, interrupted commit and exact replay. Synthetic source/native
+fixtures do not establish current permissions or a live Chat tool.
+
 ## Contract checkpoint
 
 The distinct packaged schema and frozen definition/receipt/step-output are now
@@ -103,3 +137,57 @@ proof raw `893533f00c024745ad2b23ea814313a388bed3ccd9f68cfb7c19cf82764bc966`;
 synthetic input raw `2da0a8b2f064280b5117c69246f66730a06af3abcca81a1f731315c77ab5082d`.
 This closes packaging only; existing operating releases and remaining C4/overall
 goal acceptance are unchanged. No new authentication prompt was issued.
+
+## Completion owner implementation — source checkpoint
+
+`NativeEmbeddingCompletionPublisher.publish_private_chat_query` now uses the
+existing identified file-set owner and returns the already-defined private output.
+Its original key is Workflow/step/attempt only. A changed request, origin, timestamp
+or producer cannot escape an existing operation by using a new intent-dependent
+key. Output/producer/file-set separation is validated before the commit boundary.
+Shared INDEX/reference publication mechanics and their original keys stay unchanged.
+
+`resolve_native_private_chat_query_completion` uses the existing pinned reader in
+the caller's clean nonnested root. It reads the exact canonical private receipt,
+checks its real successful producer/output association and **revalidates current
+provenance before returning**, without rereading large binary data. This is three
+bounded indexed metadata reads in the existing reader, not another cache/search
+engine. It does not resolve private ownership or public retrieval permissions for
+the caller; that remains the actual private owner/admission responsibility.
+
+Final related source regression **397 PASS/86.22s across14 suites**, including24
+new completion-publication/read cases and the preceding55 contract cases. Strict
+mypy3 production files, Ruff/format5 files, shell syntax and diff checks PASS.
+The preliminary141/394 subsets overlap and are not added to this count.
+
+A new negative test first reproduced a late-provenance gap: changing the producer
+Job's DB state during materialization was not rejected by the initial read alone.
+The new resolver now calls the supported `revalidate_provenance` before delivery.
+All three disposable-SQLite corruption variants passed after that change; these
+synthetic tamper cases do not claim that approved Artifacts are legally mutable.
+
+The first actual PostgreSQL suite passed54/cleanup, before the additional late
+checks. A later run passed55 and failed1/cleanup: its new test tried to modify an
+approved Artifact revision. The existing `reject_approved_artifact_mutation`
+trigger correctly rejected that test with its original immutable-artifact message.
+The fixture now requires SQLSTATE P0001 and that exact guard message, retains the
+unchanged readable revision, and separately tests another transaction's producer
+state change. No trigger, schema, grant or immutable-history rule was weakened.
+Final source-pinned PostgreSQL revalidation passed **56/56, no skips, cleanup
+PASS**. Nine new private persistence cases cover concurrent one-producer replay,
+lost commit observation, changed immutable inputs/identity at the original key,
+late producer-state revocation and the unchanged approved-Artifact trigger.
+The native/source values are explicitly synthetic; no operating DB, model launch
+or user permission was exercised. Final protected evidence:
+`/opt/eom/embedding-benchmark-os-evidence/private-query-completion-accepted-fA7BZQpc`;
+test stdout raw SHA-256
+`4d33f5bf132c21e2e50143edf37d792972fc22e14f7ed862529998846b0a0444`;
+operator helper raw
+`a3449e69fa67251c5c4d21489e819d25152fc54e65d8f012592401b8b2243436`.
+Earlier54-PASS and55-PASS/1-failure runs and their cleanup evidence remain
+preserved, not added to the final test count or reinterpreted as current PASS.
+
+This is not private Workflow submission, result-CHECK admission, actual numerical
+execution or Chat tool activation. The old Runner/compiler remains closed, and
+no operating service, corpus, original HTTP request, authentication or model
+default was changed. Full C1–C5 and CPU/CUDA/default gates remain open.

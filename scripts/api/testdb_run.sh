@@ -298,6 +298,7 @@ if [[ "${action}" == "embedding-tests" ]]; then
     tests/integration/test_embedding_registry_persistence.py \
     tests/integration/test_embedding_registry_application.py \
     tests/integration/test_local_embedding_completion_persistence.py \
+    tests/integration/test_private_chat_query_completion_persistence.py \
     tests/integration/test_local_embedding_native_executor.py
   printf 'Disposable model-free embedding artifact, registry and application tests passed.\n'
   exit 0

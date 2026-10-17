@@ -9,6 +9,7 @@ from eom_identifiers import canonical_json_bytes
 from eom_orchestrator.file_set_control_artifacts import CONTROL_FILE_SET_PROTOCOL
 from eom_orchestrator.local_embedding_completion_artifacts import (
     NATIVE_COMPLETION_ARTIFACT_TYPE,
+    PRIVATE_CHAT_QUERY_COMPLETION_ARTIFACT_TYPE,
     QUERY_COMPLETION_ARTIFACT_TYPE,
 )
 from eom_protocol.artifact_members import ArtifactMemberPointer
@@ -19,6 +20,12 @@ from eom_workflow.local_embedding_workflow_receipt import (
     parse_local_embedding_step_output,
     parse_local_embedding_workflow_receipt,
     validate_local_embedding_step_output,
+)
+from eom_workflow.private_chat_query_workflow import (
+    MAX_PRIVATE_CHAT_QUERY_RECEIPT_BYTES,
+    PrivateChatQueryStepOutput,
+    PrivateChatQueryWorkflowReceipt,
+    validate_private_chat_query_step_output,
 )
 from eom_workflow.reference_query_execution import (
     ReferenceQueryStepOutput,
@@ -97,6 +104,57 @@ def resolve_native_reference_query_completion(
     ):
         raise ValueError("REFERENCE_QUERY_RECEIPT_PRODUCER_MISMATCH")
     validate_reference_query_step_output(output, receipt)
+    return receipt
+
+
+def resolve_native_private_chat_query_completion(
+    session: Session,
+    settings: CatalogSettings,
+    output: PrivateChatQueryStepOutput,
+    *,
+    artifact_reader: PinnedArtifactReadContext | None = None,
+) -> PrivateChatQueryWorkflowReceipt:
+    """Receipt provenance only; current owned-source/public scope admission is upstream."""
+    root = session.get_transaction()
+    if (
+        root is None
+        or not root.is_active
+        or session.in_nested_transaction()
+        or session.new
+        or session.dirty
+        or session.deleted
+    ):
+        raise ValueError("PRIVATE_CHAT_QUERY_COMPLETION_READ_ROOT_INVALID")
+    output = PrivateChatQueryStepOutput.model_validate(output)
+    reader = (
+        PinnedArtifactReadContext(session, settings) if artifact_reader is None else artifact_reader
+    )
+    materialized = _read_receipt(
+        session,
+        settings,
+        output.receipt,
+        PRIVATE_CHAT_QUERY_COMPLETION_ARTIFACT_TYPE,
+        MAX_PRIVATE_CHAT_QUERY_RECEIPT_BYTES,
+        artifact_reader=reader,
+    )
+    body = json.loads(materialized.payload)
+    if canonical_json_bytes(body) != materialized.payload:
+        raise ValueError("PRIVATE_CHAT_QUERY_RECEIPT_NONCANONICAL")
+    receipt = PrivateChatQueryWorkflowReceipt.model_validate(body)
+    if materialized.producer_job_id != receipt.receipt_owner_job_id:
+        raise ValueError("PRIVATE_CHAT_QUERY_RECEIPT_PRODUCER_MISMATCH")
+    validate_private_chat_query_step_output(output, receipt)
+    # Initial capture/file hashes do not prove current approval after materialization.
+    reader.revalidate_provenance()
+    if (
+        session.get_transaction() is not root
+        or not root.is_active
+        or session.in_nested_transaction()
+        or session.new
+        or session.dirty
+        or session.deleted
+    ):
+        raise ValueError("PRIVATE_CHAT_QUERY_COMPLETION_READ_ROOT_INVALID")
     return receipt
 
 

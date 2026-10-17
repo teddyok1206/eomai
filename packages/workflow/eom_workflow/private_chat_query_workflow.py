@@ -42,6 +42,8 @@ PRIVATE_CHAT_QUERY_RESULT_SCHEMA: Final = "embedding-private-chat-query-result@1
 PRIVATE_CHAT_QUERY_RECEIPT_REF: Final = (
     "eom://schemas/workflow/private-chat-query-workflow-receipt/1.0"
 )
+MAX_PRIVATE_CHAT_QUERY_RECEIPT_BYTES: Final = 64 * 1024
+MAX_PRIVATE_CHAT_QUERY_OUTPUT_BYTES: Final = 8 * 1024
 _BINARY_REF = "eom://schemas/knowledge/embedding-f32le-l2-row-major/1.0"
 
 
@@ -144,7 +146,7 @@ class PrivateChatQueryStepOutput(_PrivateRunnerValue):
     def exact_output(self) -> PrivateChatQueryStepOutput:
         if len(
             canonical_json_bytes(self.model_dump(mode="json"))
-        ) > 8 * 1024 or self.output_sha256 != content_sha256(
+        ) > MAX_PRIVATE_CHAT_QUERY_OUTPUT_BYTES or self.output_sha256 != content_sha256(
             self.model_dump(mode="json", exclude={"output_sha256"})
         ):
             raise ValueError("PRIVATE_CHAT_QUERY_OUTPUT_INVALID")

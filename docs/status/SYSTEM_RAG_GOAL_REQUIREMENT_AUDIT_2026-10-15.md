@@ -19,7 +19,7 @@ summed into a single acceptance count. This ledger does not grant authority.
   not689 Items, full coverage or a fresh all-Artifact integrity audit. Full6-run
   model comparison/default selection and actual consumers remain open.
   [Exact installed pins, failures and resumption](../operations/EMBEDDING_BENCHMARK_PREFIX_2026-10-17.md#actual-cpu-publication-fresh-installation-admission-and-owner-resumption).
-- User unattended constraint: no new interactive login before2026-10-18 18:23 UTC;
+- User unattended constraint: no new interactive login before2026-10-18 20:01 UTC;
   continue independent authorized work, never simulate authentication, copy tokens
   or change freshness/TTL. Original HTTP read remains unverified, not a verified
   wait on a login prompt. The existing memory observer is preserved, not exported.
@@ -30,6 +30,19 @@ summed into a single acceptance count. This ledger does not grant authority.
   no result CHECK, migration, runtime or policy changed. This closes a necessary
   contract prerequisite, **not C4 activation or full goal completion**.
   [Contract and remaining implementation](../architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md).
+- C4 completion publication/read successor: existing Orchestrator file-set owner
+  and Catalog pinned reader now support the separate private receipt. The original
+  Workflow/step/attempt key fences changed inputs; late producer-state changes are
+  rechecked before return. Final source397 PASS/strict3/Ruff/format, guarded actual
+  PostgreSQL56 PASS/no skips/cleanup PASS. Native/source authority is synthetic;
+  operating DB/model/activation calls0. The earlier55-PASS/1-failure fixture was
+  rejected by the existing approved-Artifact immutability trigger; the corrected
+  test requires that unchanged rejection rather than weakening the schema.
+  Earlier54/contract402/subsets overlap and are not summed. This is source and
+  disposable-persistence acceptance only: compiler/result-CHECK admission, actual
+  private owner/checkpoint execution and Chat tool delivery remain OPEN. Existing
+  operating CPU/QUERY/INDEX selections are unchanged.
+  [Exact final/failed evidence](../architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#completion-owner-implementation--source-checkpoint).
 
 - Actual corrected retained negative2026-10-17: fixed root entryc2034177now selects
   installed ownere2326626; newf527cc61standalone lease installed and verified in both
