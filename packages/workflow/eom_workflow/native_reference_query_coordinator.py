@@ -70,7 +70,7 @@ class NativeQueryUnitCompletion(NativeEmbeddingContract):
         return self
 
 
-class _NativeQueryExecutedFields(NativeEmbeddingContract):
+class NativeQueryExecutedObservation(NativeEmbeddingContract):
     boot_id: str = Field(pattern=r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
     prepare: NativeQueryUnitCompletion
     query: NativeQueryUnitCompletion
@@ -89,7 +89,7 @@ class _NativeQueryExecutedFields(NativeEmbeddingContract):
         return self
 
 
-class NativeQueryExecuted(_NativeQueryExecutedFields):
+class NativeQueryExecuted(NativeQueryExecutedObservation):
     prepare_template_sha256: Literal[
         "sha256:4194d01ea9cffbc5468aac5f5f174303952e1008f8a8621ad1adea07ef76905f"
     ]
@@ -98,7 +98,7 @@ class NativeQueryExecuted(_NativeQueryExecutedFields):
     ]
 
 
-class NativeQueryExecutedV11(_NativeQueryExecutedFields):
+class NativeQueryExecutedV11(NativeQueryExecutedObservation):
     prepare_template_sha256: Literal[
         "sha256:bbd6ca87732f9a8f0c19e1a6892bdf8d41ed08b1f1473d50918dfde0e7890ec7"
     ]

@@ -19,6 +19,16 @@ summed into a single acceptance count. This ledger does not grant authority.
   not689 Items, full coverage or a fresh all-Artifact integrity audit. Full6-run
   model comparison/default selection and actual consumers remain open.
   [Exact installed pins, failures and resumption](../operations/EMBEDDING_BENCHMARK_PREFIX_2026-10-17.md#actual-cpu-publication-fresh-installation-admission-and-owner-resumption).
+- Scheduled read-only operational projection20:28:11 UTC (over30 minutes after
+  the preceding19:57:17 observation):705 encodings/705 bindings/183 index revisions/
+  6 logical indexes; the latest three per-index snapshots are237/545,251/545 and
+  217/545. These are partial per-view coverage/registry counts, not705 Items or a
+  fresh canonical Artifact/hash audit. Last five workflows: three COMPLETED,
+  one RUNNING, one REQUESTED, all failure_code null; not a global failure-free
+  claim. Same existing bounded read-only observer, no claim/replay/restart or
+  authentication prompt. Next routine observation no earlier than20:58:11 UTC.
+  Local sanitized evidence:
+  `/tmp/eom-private-checkpoint-db.IljUOOv7/index-observation.json`.
 - User unattended constraint: no new interactive login before2026-10-18 20:01 UTC;
   continue independent authorized work, never simulate authentication, copy tokens
   or change freshness/TTL. Original HTTP read remains unverified, not a verified
@@ -61,6 +71,18 @@ summed into a single acceptance count. This ledger does not grant authority.
   176-module staging/replay/cleanup/purpose-dispatch proof. That proof uses a
   synthetic local owner, no DB/model/unit observations or runtime activation.
   [Source scope and installation preconditions](../architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#fixed-private-cpu-source-checkpoint).
+- C4 original private checkpoint history: closed schema/typed four-phase prefix,
+  original text-free Chat origin, exact receipt reconstruction and private fixed
+  unit completion observations now compose with the existing shared Job-event
+  persistence. Reference public API/errors/schema bytes and keys remain unchanged.
+  Five-row original-Job indexed reads explicitly reject mixed-purpose/excess
+  history. Final source466 PASS/strict7/Ruff/format/shell PASS; actual guarded
+  PostgreSQL219/no skips/cleanup PASS, including six new concurrent/replay/rollback/
+  origin-conflict/terminal/root cases. Original source/native authority is synthetic;
+  no operating DB/model/service/activation call. The private owner still needs actual
+  origin/claim-bound Runner admission and execution; compiler/result CHECK is not
+  opened by this storage leaf. C4 and the full original goal remain OPEN.
+  [Design, final proof and failed fixture history](../architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#original-private-history-implementation-and-guarded-persistence).
 
 - Actual corrected retained negative2026-10-17: fixed root entryc2034177now selects
   installed ownere2326626; newf527cc61standalone lease installed and verified in both

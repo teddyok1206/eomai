@@ -1030,6 +1030,11 @@ NATIVE_REFERENCE_QUERY_COORDINATOR_V11_SCHEMA_RESOURCE = (
     "eom://schemas/workflow/native-reference-query-coordinator/1.1",
     "sha256:a3f08ea22ec5f71582f86598f6fa16737115e23742a332173da034f59860e6ed",
 )
+NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_SCHEMA_RESOURCE = (
+    "native-private-chat-query-coordinator-v1.schema.json",
+    "eom://schemas/workflow/native-private-chat-query-coordinator/1.0",
+    "sha256:52b9d892e9010a923ed287163d60030113f2f03dc19fc79c1f26902e7187ae3f",
+)
 
 
 @cache
@@ -1053,6 +1058,45 @@ def _native_reference_query_coordinator_schema(
 
 def load_native_reference_query_coordinator_schema() -> dict[str, Any]:
     return copy.deepcopy(_native_reference_query_coordinator_schema())
+
+
+def load_native_private_chat_query_coordinator_schema() -> dict[str, Any]:
+    return copy.deepcopy(
+        _native_reference_query_coordinator_schema(
+            NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_SCHEMA_RESOURCE
+        )
+    )
+
+
+def validate_native_private_chat_query_checkpoint(value: object) -> None:
+    """Separate private purpose; no remote resolution or mutation of old resources."""
+    try:
+        document = raw_similarity_contract_value(value)
+        if len(canonical_json_bytes(document)) > 64 * 1024:
+            raise ValueError()
+        registry = _local_embedding_admission_schema_registry().with_resources(
+            (
+                (
+                    NATIVE_EMBEDDING_COORDINATOR_SCHEMA_RESOURCE[1],
+                    Resource.from_contents(_native_embedding_coordinator_schema()),
+                ),
+                (
+                    NATIVE_REFERENCE_QUERY_COORDINATOR_SCHEMA_RESOURCE[1],
+                    Resource.from_contents(_native_reference_query_coordinator_schema()),
+                ),
+            )
+        )
+        Draft202012Validator(
+            _native_reference_query_coordinator_schema(
+                NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_SCHEMA_RESOURCE
+            ),
+            registry=registry,
+            format_checker=FormatChecker(),
+        ).validate(document)
+    except Exception:
+        raise LocalEmbeddingAdmissionContractError(
+            "PRIVATE_CHAT_QUERY_CHECKPOINT_INVALID"
+        ) from None
 
 
 def validate_native_reference_query_checkpoint(value: object) -> None:

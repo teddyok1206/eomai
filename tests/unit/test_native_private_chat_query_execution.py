@@ -524,3 +524,56 @@ def test_timeout_identity_drift_and_consumed_dispatch_never_authorize_another_st
         with pytest.raises(launcher.NativePrivateQueryLaunchError, match="UNCERTAIN"):
             owner.run(staged)
     assert len(starts) == (0 if failure == "consumed_dispatch" else 1)
+
+
+@pytest.mark.parametrize("fault", [None, "failed", "invocation", "order", "boot", "runtime"])
+def test_private_checkpoint_completion_requires_exact_successful_unit_observation(
+    prepared, monkeypatch, fault
+):
+    prepare = observation("success")
+    query = observation("failed" if fault == "failed" else "success", main=True)
+    query = replace(
+        query,
+        invocation_id="a" * 32 if fault == "invocation" else "b" * 32,
+        status=replace(query.status, exec_main_started_monotonic=1 if fault == "order" else 21),
+        exited_monotonic=30,
+    )
+    boots = iter(
+        [
+            "11111111-1111-1111-1111-111111111111",
+            "22222222-2222-2222-2222-222222222222"
+            if fault == "boot"
+            else "11111111-1111-1111-1111-111111111111",
+        ]
+    )
+    original_read = Path.read_text
+    monkeypatch.setattr(
+        launcher.Path,
+        "read_text",
+        lambda path, **kw: (
+            next(boots)
+            if path == Path("/proc/sys/kernel/random/boot_id")
+            else original_read(path, **kw)
+        ),
+    )
+
+    def installed(_self):
+        if fault == "runtime":
+            raise ValueError("synthetic changed installation")
+
+    monkeypatch.setattr(
+        launcher.FixedNativePrivateQueryLauncher, "assert_current_runtime", installed
+    )
+    monkeypatch.setattr(
+        launcher.FixedNativePrivateQueryLauncher, "_observe", lambda *_: (prepare, query)
+    )
+    result = encode_private_chat_query(prepared.request, backend(prepared.request)).result
+    owner = launcher.FixedNativePrivateQueryLauncher("a" * 64, "b" * 64, lambda: None)
+    if fault:
+        with pytest.raises(launcher.NativePrivateQueryLaunchError, match="COMPLETION_UNCERTAIN"):
+            owner.completion_observation(prepared, result)
+    else:
+        checked = owner.completion_observation(prepared, result)
+        assert checked.result_sha256 == result.result_sha256
+        assert checked.query.invocation_id == "b" * 32
+        assert checked.query_template_sha256 == "sha256:" + launcher.QUERY_TEMPLATE_SHA256

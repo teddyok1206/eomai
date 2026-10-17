@@ -329,3 +329,106 @@ The prior pinned synthetic values were reused without copying; their controls
 were adjusted only in memory to the existing fixed CPU resource contract.
 Final documentation/dependency9 PASS overlaps the494-case inventory. No new
 interactive authentication was requested; no operating pin was changed.
+
+## Original private Job checkpoint history — design before protocol
+
+1. Boundary: persist four original private phases in existing append-only Job
+   events, not another execution queue/table or authorization cache. Existing
+   Workflow→command→Job lock order remains the caller's responsibility.
+2. Canonical source: the original owned message and captured Chat origin; exact
+   private request/launch, allocated producers, observed fixed private units and
+   existing numeric/receipt Artifact pointers. No question text or vector bytes
+   enter the history. Capture the full text-free origin once at ALLOCATION;
+   every later phase and reconstructed receipt reuse that exact original pin.
+3. IDs: native launch Job, numeric Artifact producer and receipt producer stay
+   separate. Workflow/step/command and current root are not interchangeable with
+   an origin hash or an Artifact revision. No new identity on replay/recovery.
+4. Resolution: a closed2020-12 schema precedes models/storage. Validate phase and
+   hash, original purpose/launch/control/basis/actor, monotonic unit chronology,
+   exact private template hashes, four-member numeric file-set closure and exact
+   reconstructed receipt/output. Actual current Chat/public-source/native checks
+   remain mandatory upstream; a checkpoint is not an execution permission.
+5. Access: one indexed original launch lookup and bounded ordered event lookup
+   by Job ID/sequence. Four phases form a contiguous immutable prefix.
+6. Structures: existing unique launch key and Job event monotonic sequence;
+   fixed transition table, frozen typed phase payloads and tuple history.
+7. Complexity: O(four bounded metadata frames), no corpus scan or N+1. Existing
+   Job-key/event indexes suffice; no DB migration/index/large-value storage.
+8. Transactions: allocation and original step-start share the caller root. Each
+   append takes the existing Job lock, validates the entire original prefix and
+   commits its state/event together. No SQL root crosses file commit or inference.
+9. Ownership: pure workflow values own semantic closure; Orchestrator owns
+   Job/event storage. Extract only the shared existing reference/private event
+   persistence mechanics; retain typed public reference wrappers and exact legacy
+   keys/bytes/protocol IDs/errors. Domain imports no infrastructure.
+10. Replay: same record is idempotent; changed origin/producers/time/output at a
+    used phase conflicts. Reordered/skipped/mixed phases and foreign terminal
+    state fail closed. Known physical failure is preserved, not retried; a timeout
+    is uncertain, never FAILED or a fresh launch by assumption.
+11. Alternative: relabeling private results as reference violates its closed
+    schemas. Copying a second Job state machine duplicates lock/protocol/event
+    checks. Shared existing storage with typed purpose-specific validation is
+    smaller and preserves one transition owner. No mutable plugin registry.
+
+Tests must cover strict/mirrored packaged schemas, every contiguous prefix,
+forged model copies, origin/actor/basis/producer/template/file/hash/order changes,
+root/rollback, concurrent exact append, conflict and failure-preserving replay in
+guarded disposable PostgreSQL. Reference1.0/1.1 bytes and behavior stay unchanged.
+This still does not open compiler/result-CHECK admission or install a private
+unit; source/claim-bound Runner execution and current authorization are separate.
+
+### Original private history implementation and guarded persistence
+
+The separate packaged checkpoint schema now has raw SHA-256
+`52b9d892e9010a923ed287163d60030113f2f03dc19fc79c1f26902e7187ae3f`.
+Pure typed history reconstructs the exact receipt from original allocation/origin,
+fixed private unit observation and four-member intent/result/shard/binary pointers.
+The existing private launcher now emits the typed successful-unit observation,
+checking distinct ordered invocations, stable boot and exact private template pins.
+It does not derive successful execution from result bytes or start a new unit.
+
+`NativeQueryCheckpointStore` extracts the existing Job lock/protocol/event/state
+mechanics for reference and private queries. The original public reference wrapper
+retains its typed API/errors, keys and protocol identities; reference1.0/1.1 schema
+bytes and private runner/completion schemas are unchanged. The private wrapper uses
+the same store with distinct family validation/protocol/events. There is one fixed
+transition table, not a second state machine/queue. Reads use the original Job key
+and existing `(job_id, sequence)` unique B-tree, ordered and bounded to five rows:
+four valid phases or evidence of excess history. Foreign-purpose events are not
+silently filtered away. A source SQL-operation test verifies the exact indexed
+predicate/order and five-row cap; no new index/cache/migration is needed.
+
+Final related source regression **466 PASS/251.51s across16 suites**, including
+original reference execution/admission/submission/completion and private metadata,
+actual local SQLite root/rollback/conflict, private handoff and package/dependency
+tests. Earlier116/139/subsets overlap and are not summed. Strict mypy7 production
+files, Ruff/format11 files, shell/diff checks PASS.
+
+The first new tests exposed fixture errors, not relaxed invariants: hashing an
+illegal float before parsing, sealing a `+00:00` timestamp before typed `Z`
+conversion, and treating the existing publisher factory's tuple as its publisher.
+They were corrected before the final suite; canonical integer-only JSON and UTC
+hashing, root and immutable-prefix rules remain unchanged. One mistyped regression
+filename caused a no-tests-run invocation and was corrected, not counted as PASS.
+
+The supported guarded `embedding-stage-tests` purpose now includes six private
+checkpoint cases. The actual disposable PostgreSQL gate passed **219/219, no
+skips, cleanup PASS**, covering the existing213-case cohort plus concurrent exact
+private append, one original phase event, exact replay, caller rollback, changed
+origin conflict, nested-root refusal and failure-preserving terminal replay.
+Synthetic numerical fixtures were resealed and checked against the actual private
+receipt contract; they are not current Chat/IAM/native execution evidence.
+Production DB/model/service/activation calls0. Protected evidence:
+`/opt/eom/embedding-benchmark-os-evidence/private-query-checkpoints-IljUOOv7`;
+operator helper raw
+`d9a9978a4e946a6b25f947aead96852415b809d925b2895a9cb4367a165017cc`;
+test stdout raw
+`9ca60bd1596738209c3970a5db7befaa660f40609dad1868c63ad81a4abf0ea5`.
+Forty-six exact source/script/test files were pinned throughout that finite gate;
+no interactive authentication, retry, production row repair or new model run.
+
+This closes the private original-Job history storage prerequisite, not C4 or the
+full goal. Origin/source/claim-bound actual Runner submission/allocation/execution,
+private-purpose installation/isolation, current public corpus delivery and Chat
+tool activation remain OPEN. The compiler/result CHECK remains intentionally
+closed; operating CPU/QUERY/INDEX selections and original HTTP request are intact.
