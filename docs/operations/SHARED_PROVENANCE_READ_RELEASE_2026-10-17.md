@@ -79,6 +79,12 @@ Last routine INDEX observation16:36:16 reported653 encodings/653 bindings,
 not653 unique Items or full corpus coverage. Routine observations remain30min
 apart; foreground drain/HTTP handles are separate operations.
 
+The next due read-only observation actually ran17:15:31:661 encodings/661 bindings,
+172 immutable index revisions/six logical indexes. It used the unchanged supported
+observer and performed no admission/retry/encoding. The view-relation increase is
+not proof of unique-Item count or complete coverage. Next routine observation is
+no earlier17:45:31 UTC.
+
 ## Original request and honest authentication boundary
 
 After deployment, the old same-memory-session observer actually received401

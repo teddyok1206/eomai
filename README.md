@@ -317,6 +317,11 @@ wheel 조립2건 포함)·strict type·Ruff/format·shell 검사 PASS입니다. 
 우회하지 않습니다. [실패·실측](docs/status/REFERENCE_QUERY_HTTP_READ_TIMEOUT_2026-10-17.md) ·
 [실제 배포·남은 조회 검증](docs/operations/SHARED_PROVENANCE_READ_RELEASE_2026-10-17.md).
 
+추가 성능 수정에 앞서 실제 지연 구간을 구분하는 내용 없는 단계별 시간 기록을
+준비했습니다(**SOURCE_PASS / NOT_INSTALLED**). 관련260 tests·strict3·Ruff/format PASS,
+업무 코드의 구조도 시간 기록을 제외하면 동일합니다. 이것은503 해결이나 운영 실측
+PASS가 아닙니다. [진단 범위·검증](docs/architecture/SCOPED_TYPED_ARTIFACT_DECODING.md#stage-diagnostics-source-gate-2026-10-17-utc).
+
 GPU 비교의 최신 구현은 **SOURCE_PASS / NOT_ACTIVE**입니다. 고정 CUDA 실행기, CPU/CUDA
 공통 설정 준비, 관리자 측 실행·프로세스·장치·양쪽 잠금 대조를 연결했습니다. 준비 파일의
 부분 쓰기는 별도 파일 잠금으로 구분하고, 옛 실행기와의 혼합도 코드 해시로 거부합니다.

@@ -160,3 +160,46 @@ in the [operating release](../operations/SHARED_PROVENANCE_READ_RELEASE_2026-10-
 The actual original context read subsequently returned503 at17:10:01, so delivery
 acceptance remains unresolved. Source measurements and installed health are not
 relabeled as live latency PASS.
+
+## Bounded read-stage diagnostics after installed503
+
+The installed7fcd0865 original context still fails503. Do not assume another
+particular decoder is the remaining bottleneck or raise the30s deadline. Add
+small application-side elapsed-time observations around the existing full
+capture/read stages before another performance change. Responsibility stays in
+Catalog; the diagnostics neither resolve pointers nor own authorization/cache.
+
+The dominant operation is ordered measurement of a fixed stage inventory, O(1)
+state per measurement and a bounded number of metadata events per read. Record
+only a closed stage enum, integer elapsed milliseconds and COMPLETED/ABORTED;
+never caller input, actor, query, Item/report, pointer, exception text or secret.
+Use the existing structured logger; no dependency, metrics service, persistent
+table/schema, configurable callback or background task. Different operations may
+interleave: these events measure their own stage, not a new cross-request trace.
+
+Recompute all source/permission/hash/lifecycle checks exactly as before. Preserve
+exception identity and never let logger failure replace the business outcome.
+Monotonic timing surrounds caller-owned work, not an extra DB/NAS/model operation.
+Test fixed field inventory, deterministic timing, aborted work, bad logging and
+unchanged existing full-capture/read regressions. Installed timing and the actual
+original HTTP result remain later gates; source tests alone prove neither.
+
+### Stage diagnostics source gate —2026-10-17 UTC
+
+**SOURCE_PASS / NOT_INSTALLED.** The existing full source capture has five timing
+scopes (locks, provenance prefetch, candidate admission, solution profiles, staged
+entries); the completed-context reader has four outer scopes. They use the same
+small closed enum/context manager and existing logger, not a new trace framework.
+No authority/result schema or production exception handling changed.
+
+Ten disjoint focused suites pass260 tests (92/21.80s and168/10.92s), including24
+closed-field/logger/clock/exception/nesting cases, full-scope reader reuse,
+snapshot/registry adapters, current source retrieval and dependency boundaries.
+JUnit files `read-timing-focused.xml` and `read-timing-capture-regression.xml` are
+in `/tmp/eom-provenance-read-release-BnDPXZZA`. Strict mypy3, Ruff/format4 and diff
+checks pass. AST comparison of `read` and `_capture_population`, after removing
+only the timing wrappers, exactly matches the pre-change business methods.
+No new mutating PostgreSQL test is required by a logging-only diff; previous
+persistence evidence is not presented as new execution. Actual install/observed
+stage times and HTTP delivery remain pending. This instrumentation is not a fix
+claim for the actual503.

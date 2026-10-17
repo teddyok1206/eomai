@@ -50,6 +50,10 @@ from eom_catalog_service.inference_transfer_catalog_adapter import (
     InferenceTransferCorpusReadCommand,
 )
 from eom_catalog_service.inference_transfer_item_projection import project_staged_item_entry
+from eom_catalog_service.inference_transfer_read_timing import (
+    InferenceTransferReadStage,
+    observe_read_stage,
+)
 from eom_catalog_service.inference_transfer_scope import InferenceTransferPopulationScope
 from eom_catalog_service.inference_transfer_service import (
     AdmittedInferenceTransferCorpus,
@@ -387,50 +391,55 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
         read_pool: Callable[[], ReadOnlyKnowledgeCandidatePool],
     ) -> tuple[AdmittedInferenceTransferCorpus, tuple[StagedExperimentEntry, ...]]:
         """Common lock/prefetch/physical-byte/accepted-report path after owner admission."""
-        recipe = ExperimentViewRecipe.model_validate(recipe.model_dump(mode="json"))
-        memberships = tuple(session.scalars(population_membership_statement(scope)))
-        if len(memberships) > scope.maximum_candidates:
-            raise InferenceTransferServiceError("INFERENCE_TRANSFER_SNAPSHOT_POPULATION_TRUNCATED")
-        revisions = tuple(sorted({row.source_revision_id for row in memberships}))
-        source_rows = tuple(
-            session.execute(
-                select(ItemRecord, ItemRevisionRecord)
-                .join(ItemRevisionRecord, ItemRevisionRecord.item_id == ItemRecord.item_id)
-                .where(ItemRevisionRecord.item_revision_id.in_(revisions))
-                .order_by(ItemRecord.item_id, ItemRevisionRecord.item_revision_id)
-                .with_for_update(read=True, of=(ItemRecord, ItemRevisionRecord))
-                .execution_options(populate_existing=True)
+        with observe_read_stage(InferenceTransferReadStage.LOCK_POPULATION):
+            recipe = ExperimentViewRecipe.model_validate(recipe.model_dump(mode="json"))
+            memberships = tuple(session.scalars(population_membership_statement(scope)))
+            if len(memberships) > scope.maximum_candidates:
+                raise InferenceTransferServiceError(
+                    "INFERENCE_TRANSFER_SNAPSHOT_POPULATION_TRUNCATED"
+                )
+            revisions = tuple(sorted({row.source_revision_id for row in memberships}))
+            source_rows = tuple(
+                session.execute(
+                    select(ItemRecord, ItemRevisionRecord)
+                    .join(ItemRevisionRecord, ItemRevisionRecord.item_id == ItemRecord.item_id)
+                    .where(ItemRevisionRecord.item_revision_id.in_(revisions))
+                    .order_by(ItemRecord.item_id, ItemRevisionRecord.item_revision_id)
+                    .with_for_update(read=True, of=(ItemRecord, ItemRevisionRecord))
+                    .execution_options(populate_existing=True)
+                )
             )
-        )
-        base_ids = tuple(sorted({row.analysis_run_id for row in memberships}))
-        runs = tuple(
-            session.scalars(
-                select(KnowledgeAnalysisRunRecord)
-                .where(
-                    or_(
-                        KnowledgeAnalysisRunRecord.analysis_run_id.in_(base_ids),
-                        (KnowledgeAnalysisRunRecord.predecessor_analysis_run_id.in_(base_ids))
-                        & (KnowledgeAnalysisRunRecord.state == "ACCEPTED")
-                        & (
-                            KnowledgeAnalysisRunRecord.canonical_request["schema_version"].astext
-                            == "knowledge-analysis-request/10.0"
-                        ),
+            base_ids = tuple(sorted({row.analysis_run_id for row in memberships}))
+            runs = tuple(
+                session.scalars(
+                    select(KnowledgeAnalysisRunRecord)
+                    .where(
+                        or_(
+                            KnowledgeAnalysisRunRecord.analysis_run_id.in_(base_ids),
+                            (KnowledgeAnalysisRunRecord.predecessor_analysis_run_id.in_(base_ids))
+                            & (KnowledgeAnalysisRunRecord.state == "ACCEPTED")
+                            & (
+                                KnowledgeAnalysisRunRecord.canonical_request[
+                                    "schema_version"
+                                ].astext
+                                == "knowledge-analysis-request/10.0"
+                            ),
+                        )
+                    )
+                    .order_by(KnowledgeAnalysisRunRecord.analysis_run_id)
+                    .with_for_update(read=True)
+                    .execution_options(populate_existing=True)
+                )
+            )
+            components = tuple(
+                session.scalars(
+                    select(ItemComponentRecord).where(
+                        ItemComponentRecord.item_revision_id.in_(revisions),
+                        ItemComponentRecord.component_type == "ITEM_CONTENT",
+                        ItemComponentRecord.ordinal == 0,
                     )
                 )
-                .order_by(KnowledgeAnalysisRunRecord.analysis_run_id)
-                .with_for_update(read=True)
-                .execution_options(populate_existing=True)
             )
-        )
-        components = tuple(
-            session.scalars(
-                select(ItemComponentRecord).where(
-                    ItemComponentRecord.item_revision_id.in_(revisions),
-                    ItemComponentRecord.component_type == "ITEM_CONTENT",
-                    ItemComponentRecord.ordinal == 0,
-                )
-            )
-        )
         identities = (
             {(row.source_artifact_id, row.source_artifact_revision_id) for row in memberships}
             | {
@@ -453,27 +462,30 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
                     identities.add((artifact, revision))
         graph_member = scope.graph_snapshot.manifest_artifact
         identities.add((graph_member.artifact_id, graph_member.artifact_revision_id))
-        artifact_reader.prefetch(tuple(sorted(identities)))
-        # Publication metadata pins this member; prove its actual immutable bytes
-        # in this root transaction without granting any source permission.
-        artifact_reader.verify_member(
-            artifact_id=graph_member.artifact_id,
-            revision_id=graph_member.artifact_revision_id,
-            member_path=graph_member.member_path,
-            sha256=graph_member.sha256,
-            schema_ref=graph_member.schema_ref,
-            media_type=graph_member.media_type,
-            max_bytes=64 * 1024**2,
-        )
-        prefetch_past_exam_artifact_closure(
-            session, tuple(revision for _item, revision in source_rows), artifact_reader
-        )
-        pool = read_pool()
+        with observe_read_stage(InferenceTransferReadStage.PREFETCH_PROVENANCE):
+            artifact_reader.prefetch(tuple(sorted(identities)))
+            # Publication metadata pins this member; prove its actual immutable bytes
+            # in this root transaction without granting any source permission.
+            artifact_reader.verify_member(
+                artifact_id=graph_member.artifact_id,
+                revision_id=graph_member.artifact_revision_id,
+                member_path=graph_member.member_path,
+                sha256=graph_member.sha256,
+                schema_ref=graph_member.schema_ref,
+                media_type=graph_member.media_type,
+                max_bytes=64 * 1024**2,
+            )
+            prefetch_past_exam_artifact_closure(
+                session, tuple(revision for _item, revision in source_rows), artifact_reader
+            )
+        with observe_read_stage(InferenceTransferReadStage.ADMIT_CANDIDATES):
+            pool = read_pool()
         if pool.truncated:
             raise InferenceTransferServiceError("INFERENCE_TRANSFER_SNAPSHOT_POPULATION_TRUNCATED")
-        inputs, missing = self.sources._resolve_profile_inputs(
-            session, pool, artifact_reader=artifact_reader
-        )
+        with observe_read_stage(InferenceTransferReadStage.SOLUTION_PROFILES):
+            inputs, missing = self.sources._resolve_profile_inputs(
+                session, pool, artifact_reader=artifact_reader
+            )
         admitted_rows = []
         for row in pool.candidates:
             if not isinstance(row.source, ApprovedItemKnowledgeSourceV2):
@@ -487,7 +499,8 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
             missing_solution_reports=missing,
             sources=admitted,
         )
-        entries = self._materialize_entries(recipe, inputs, artifact_reader=artifact_reader)
+        with observe_read_stage(InferenceTransferReadStage.MATERIALIZE_ENTRIES):
+            entries = self._materialize_entries(recipe, inputs, artifact_reader=artifact_reader)
         return corpus, tuple(entries[key] for key in sorted(entries))
 
     def _baselines(
