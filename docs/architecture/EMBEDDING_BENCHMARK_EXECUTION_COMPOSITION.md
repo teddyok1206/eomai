@@ -437,3 +437,56 @@ Local receipt `/tmp/eom-benchmark-job-owner.dRRFygLW/operator-result.json` repor
 Same EOM2 sudo reused, no extra prompt or credential save. No active selector, numerical
 prefix, service, worker, live Job, model, GPU/CPU default or historical product was changed.
 The remaining launch/activation/measurement/consumer requirements above are unchanged.
+
+## CUDA model backend composition — design before implementation
+
+The existing native factory already supports CUDA but requires both independent installed
+admission and actual physical ownership. The missing CUDA composition must bind the
+concrete protected CUDA receipt reader and the already opened device/retained-lease
+adapter; a CPU receipt, parsed config, callback returning true, or probe PASS is insufficient.
+This is an installed numerical infrastructure adapter, not source/operator/Job admission.
+
+Inputs are the existing frozen root-local configuration pin (logical/revision IDs, semantic
+and raw hashes), exact CUDA receipt raw SHA and a borrowed concrete device-access scope.
+The fixed CUDA process identity is checked before metadata/optional imports. Ownership is
+checked before the protected installation reader, before/after backend construction/use
+and on exit. The shared native factory still owns model lifetime, actual bundle/proof/host
+resolution and its unchanged float32/QUERY/DOCUMENT semantics. No numerical rule, schema,
+device fallback, default, dependency, queue, DB/index or mutable cache is introduced.
+
+This adapter neither acquires nor closes the caller's borrowed GPU/device scope. Caller
+must already obtain the existing mandatory root lifetime ACK and retain ownership beyond
+backend close, until terminal/driver cleanup is proved. A failure never retries CPU, renews
+the lease or interprets probe metadata as model permission. Constructor/body/close errors
+propagate and cleanup uncertainty remains a failure. Access is constant-size pin lookup
+plus existing bounded installation resolution, with no copied model/payload or new scaling
+structure. Trusted native composition supplies these values, not worker JSON. A direct
+factory call with only a structural ownership callback would be shorter but would omit the
+required concrete reader/device binding. Actual CUDA entry/ACK/activation and six launches
+remain subsequent requirements; source tests cannot prove real GPU admission or timing.
+
+### Concrete CUDA backend source checkpoint — 2026-10-17
+
+Implemented `native_cuda_backend_scope` with the existing protected CUDA installation
+reader, exact root-local configuration/receipt pins and concrete opened-device ownership.
+It uses the unchanged native factory/encoder and checks ownership before installed capture,
+before/after model scope and at exit. It never closes the caller's borrowed physical
+ownership, switches to CPU, treats a probe as compute authority or skips installed checks.
+CPU composition, numerical implementation bytes and released schema bytes are unchanged.
+
+Eight related suites: **295 PASS26.38s**, including21 focused CUDA-composition cases;
+strict mypy1 and Ruff/format2 PASS. Fixtures cover constructor/body/backend/admission-close
+and ownership-fence failures, invalid/mutated pins, structural ownership callback refusal,
+no default ownership/receipt, and preservation of borrowed ownership after every outcome.
+A fresh actual API-interpreter process imports the stdlib-first module and rejects its
+wrong native identity before importing Pydantic/catalog contracts or optional ML modules.
+That is an actual wrong-identity negative, **not** successful CUDA installation/device/
+model admission. All positive lifecycle fixtures remain synthetic source evidence.
+
+This is source backend composition, not an activated CUDA executable. The actual CUDA
+entry still needs distinct benchmark pre-initialization retention/ready/root-ACK handling;
+the installation-probe message/zero-model outcome must not be repurposed as a benchmark
+launch or model success. Fixed unit/namespace/retirement integration and compatible prefix
+installation must be completed before model execution. Actual operator/source preparation,
+six launches, timing/default decision, original remaining image/trainer regressions and
+C1–C5 consumers remain open. No live unit, prefix, model, Artifact or default changed.
