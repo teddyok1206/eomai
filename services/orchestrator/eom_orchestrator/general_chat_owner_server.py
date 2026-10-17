@@ -5,10 +5,17 @@ from __future__ import annotations
 import socket
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
+from dataclasses import dataclass
 from threading import BoundedSemaphore, Event
 from time import monotonic
 from typing import Self
 
+from eom_catalog_contracts.private_chat_query_read import (
+    PRIVATE_CHAT_SOURCE_REPLY_BYTES,
+    PRIVATE_CHAT_SOURCE_REQUEST_BYTES,
+    parse_private_chat_query_read_reply,
+    parse_private_chat_query_read_request,
+)
 from eom_identifiers import canonical_json_bytes
 from eom_protocol.general_chat_grounding import ChatGroundingQuery, ChatGroundingViews
 from eom_protocol.general_chat_owner_messages import (
@@ -28,6 +35,10 @@ from eom_protocol.general_chat_owner_messages import (
 from eom_protocol.general_chat_rag_turn import ChatGroundingViewsV2
 from jsonschema import ValidationError as SchemaError
 
+from eom_orchestrator.general_chat_private_query_source import (
+    ChatPrivateQueryReadPort,
+    failed_private_chat_query_read,
+)
 from eom_orchestrator.general_chat_socket import (
     OWNER_REPLY_LIMIT,
     OWNER_REQUEST_LIMIT,
@@ -43,18 +54,34 @@ from eom_orchestrator.general_chat_socket import (
 from eom_orchestrator.general_chat_state import ChatError
 
 
+@dataclass(frozen=True, slots=True)
+class PrivateChatQueryRpcAccess:
+    """Separate source-only endpoint profile; never an extra peer on the API endpoint."""
+
+    reader: ChatPrivateQueryReadPort
+    peer_uid: int
+
+    def __post_init__(self) -> None:
+        if type(self.peer_uid) is not int or not 0 < self.peer_uid <= 2**31 - 1:
+            raise ValueError("private query source requires an explicit non-root controller peer")
+
+
 class GeneralChatOwnerRpcServer:
     def __init__(
         self,
-        owner: ChatOwnerPort,
+        owner: ChatOwnerPort | None,
         *,
         endpoint: ChatSocketEndpoint,
         allowed_uids: frozenset[int],
         maximum_requests: int = 8,
+        private_queries: PrivateChatQueryRpcAccess | None = None,
     ) -> None:
-        if not allowed_uids or not 1 <= maximum_requests <= 16:
+        api_profile = owner is not None and bool(allowed_uids) and private_queries is None
+        private_profile = owner is None and not allowed_uids and private_queries is not None
+        if not (api_profile or private_profile) or not 1 <= maximum_requests <= 16:
             raise ValueError("private owner admission requires bounded trusted peers")
         self.owner = owner
+        self.private_queries = private_queries
         self.endpoint = endpoint
         self.allowed_uids = allowed_uids
         self.stopped = Event()
@@ -100,6 +127,8 @@ class GeneralChatOwnerRpcServer:
         return reply
 
     def _execute(self, request: ChatOwnerRequest) -> ChatOwnerValue:
+        if self.owner is None:
+            raise ChatError("GENERAL_CHAT_PROTOCOL_INVALID")
         command = request.command
         if isinstance(command, ChatGroundingQuery):
             return self.owner.grounding(
@@ -134,12 +163,39 @@ class GeneralChatOwnerRpcServer:
     def _handle(self, connection: socket.socket) -> None:
         with connection:
             try:
-                if chat_peer_uid(connection) not in self.allowed_uids:
+                peer = chat_peer_uid(connection)
+                private = self.private_queries
+                if (private is None and peer not in self.allowed_uids) or (
+                    private is not None and peer != private.peer_uid
+                ):
                     return
                 deadline = monotonic() + OWNER_RPC_TIMEOUT
                 payload = receive_chat_frame(
-                    connection, limit=OWNER_REQUEST_LIMIT, deadline=deadline
+                    connection,
+                    limit=OWNER_REQUEST_LIMIT
+                    if private is None
+                    else PRIVATE_CHAT_SOURCE_REQUEST_BYTES,
+                    deadline=deadline,
                 )
+                if private is not None:
+                    source_request = parse_private_chat_query_read_request(
+                        decode_chat_frame(payload)
+                    )
+                    try:
+                        source_reply = parse_private_chat_query_read_reply(
+                            private.reader.read(source_request), request=source_request
+                        )
+                    except Exception:
+                        source_reply = failed_private_chat_query_read(
+                            source_request, "GENERAL_CHAT_APPLICATION_UNAVAILABLE"
+                        )
+                    send_chat_frame(
+                        connection,
+                        canonical_json_bytes(source_reply),
+                        limit=PRIVATE_CHAT_SOURCE_REPLY_BYTES,
+                        deadline=deadline,
+                    )
+                    return
                 request = read_chat_owner_request(decode_chat_frame(payload))
                 try:
                     reply = self.execute(request)

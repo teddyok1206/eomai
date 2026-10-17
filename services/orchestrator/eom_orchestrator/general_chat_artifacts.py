@@ -14,6 +14,7 @@ from eom_protocol.general_chat import (
     CHAT_RESULT_SCHEMA,
 )
 from eom_protocol.general_chat_dispatch import CHAT_DISPATCH_SCHEMA
+from eom_protocol.general_chat_evidence_families import chat_evidence_schema_family
 from eom_protocol.general_chat_grounding import (
     AGENT_INPUT_SCHEMA,
     AGENT_RESULT_SCHEMA,
@@ -146,28 +147,6 @@ class GeneralChatArtifactStore:
             return ()
         if len(pointers) > 150:
             raise ValueError("chat pointer budget exceeded")
-        families = {
-            CHAT_MESSAGE_SCHEMA: {CHAT_MESSAGE_SCHEMA, GROUNDED_MESSAGE_SCHEMA},
-            CHAT_INPUT_SCHEMA: {
-                CHAT_INPUT_SCHEMA,
-                GROUNDED_INPUT_SCHEMA,
-                AGENT_INPUT_SCHEMA,
-                RAG_INPUT_SCHEMA,
-            },
-            CHAT_RESULT_SCHEMA: {
-                CHAT_RESULT_SCHEMA,
-                GROUNDED_RESULT_SCHEMA,
-                AGENT_RESULT_SCHEMA,
-                RAG_RESULT_SCHEMA,
-            },
-            CHAT_DISPATCH_SCHEMA: {
-                CHAT_DISPATCH_SCHEMA,
-                "eom://schemas/general-chat/dispatch/2.0",
-                "eom://schemas/general-chat/dispatch/3.0",
-                "eom://schemas/general-chat/dispatch/4.0",
-                "eom://schemas/general-chat/dispatch/5.0",
-            },
-        }
         keys = {(p.artifact_id, p.artifact_revision_id) for p in pointers}
         with self.engine.connect() as connection:
             rows = connection.execute(
@@ -194,7 +173,8 @@ class GeneralChatArtifactStore:
             )
             if (
                 len(matching) != 1
-                or matching[0].get("schema_ref") not in families.get(pointer.schema_ref, set())
+                or matching[0].get("schema_ref")
+                not in chat_evidence_schema_family(pointer.schema_ref)
                 or matching[0].get("sha256") != pointer.sha256
                 or matching[0].get("media_type") != "application/json"
             ):

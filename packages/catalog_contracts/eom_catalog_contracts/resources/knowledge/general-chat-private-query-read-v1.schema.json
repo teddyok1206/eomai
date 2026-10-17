@@ -1,0 +1,323 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/general-chat-private-query-read/1.0",
+  "title": "Live owned Chat question source read for the numerical controller",
+  "description": "Read-only source resolution, not a human session, public retrieval grant, native execution permission or worker-to-worker channel.",
+  "oneOf": [
+    {
+      "$ref": "eom://schemas/knowledge/general-chat-private-query-read/1.0#/$defs/origin"
+    },
+    {
+      "$ref": "eom://schemas/knowledge/general-chat-private-query-read/1.0#/$defs/projection"
+    },
+    {
+      "$ref": "eom://schemas/knowledge/general-chat-private-query-read/1.0#/$defs/materialize"
+    },
+    {
+      "$ref": "eom://schemas/knowledge/general-chat-private-query-read/1.0#/$defs/authorize"
+    },
+    {
+      "$ref": "eom://schemas/knowledge/general-chat-private-query-read/1.0#/$defs/request"
+    },
+    {
+      "$ref": "eom://schemas/knowledge/general-chat-private-query-read/1.0#/$defs/reply"
+    }
+  ],
+  "$defs": {
+    "origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "actor_id",
+        "runtime_id",
+        "ticket",
+        "request_member",
+        "dispatch_member",
+        "basis",
+        "origin_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "general-chat-private-query-origin/1.0"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "runtime_id": {
+          "type": "string",
+          "pattern": "^chatrt_[0-9a-f]{32}$"
+        },
+        "ticket": {
+          "$ref": "eom://schemas/general-chat/worker-ticket/1.0"
+        },
+        "request_member": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            },
+            {
+              "properties": {
+                "member_path": {
+                  "const": "chat/evidence.json"
+                },
+                "schema_ref": {
+                  "enum": [
+                    "eom://schemas/general-chat/turn-input/4.0"
+                  ]
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "dispatch_member": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            },
+            {
+              "properties": {
+                "member_path": {
+                  "const": "chat/evidence.json"
+                },
+                "schema_ref": {
+                  "enum": [
+                    "eom://schemas/general-chat/dispatch/4.0",
+                    "eom://schemas/general-chat/dispatch/5.0"
+                  ]
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "basis": {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-query-basis/1.0"
+        },
+        "origin_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "origin",
+        "text"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "general-chat-private-query-projection/1.0"
+        },
+        "origin": {
+          "$ref": "eom://schemas/knowledge/general-chat-private-query-read/1.0#/$defs/origin"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16000,
+          "pattern": "^[^\\u0000]*\\S[^\\u0000]*$"
+        }
+      }
+    },
+    "materialize": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action",
+        "ticket"
+      ],
+      "properties": {
+        "action": {
+          "const": "MATERIALIZE_LIVE_CHAT_QUERY"
+        },
+        "ticket": {
+          "$ref": "eom://schemas/general-chat/worker-ticket/1.0"
+        }
+      }
+    },
+    "authorize": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action",
+        "origin"
+      ],
+      "properties": {
+        "action": {
+          "const": "AUTHORIZE_LIVE_CHAT_QUERY"
+        },
+        "origin": {
+          "$ref": "eom://schemas/knowledge/general-chat-private-query-read/1.0#/$defs/origin"
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "request_id",
+        "command"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "general-chat-private-query-read-request/1.0"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^chatqueryrpc_[0-9a-f]{32}$"
+        },
+        "command": {
+          "oneOf": [
+            {
+              "$ref": "eom://schemas/knowledge/general-chat-private-query-read/1.0#/$defs/materialize"
+            },
+            {
+              "$ref": "eom://schemas/knowledge/general-chat-private-query-read/1.0#/$defs/authorize"
+            }
+          ]
+        }
+      }
+    },
+    "reply": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "request_id",
+        "request_sha256",
+        "action",
+        "status",
+        "value",
+        "error_code"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "general-chat-private-query-read-reply/1.0"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^chatqueryrpc_[0-9a-f]{32}$"
+        },
+        "request_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "action": {
+          "enum": [
+            "MATERIALIZE_LIVE_CHAT_QUERY",
+            "AUTHORIZE_LIVE_CHAT_QUERY"
+          ]
+        },
+        "status": {
+          "enum": [
+            "SUCCEEDED",
+            "FAILED"
+          ]
+        },
+        "value": {
+          "oneOf": [
+            {
+              "$ref": "eom://schemas/knowledge/general-chat-private-query-read/1.0#/$defs/origin"
+            },
+            {
+              "$ref": "eom://schemas/knowledge/general-chat-private-query-read/1.0#/$defs/projection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "GENERAL_CHAT_FORBIDDEN",
+                "GENERAL_CHAT_NOT_FOUND",
+                "GENERAL_CHAT_POINTER_INVALID",
+                "GENERAL_CHAT_CLAIM_MISMATCH",
+                "GENERAL_CHAT_RECONCILIATION_REQUIRED",
+                "GENERAL_CHAT_PROTOCOL_INVALID",
+                "GENERAL_CHAT_APPLICATION_UNAVAILABLE"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "FAILED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "null"
+              },
+              "error_code": {
+                "enum": [
+                  "GENERAL_CHAT_FORBIDDEN",
+                  "GENERAL_CHAT_NOT_FOUND",
+                  "GENERAL_CHAT_POINTER_INVALID",
+                  "GENERAL_CHAT_CLAIM_MISMATCH",
+                  "GENERAL_CHAT_RECONCILIATION_REQUIRED",
+                  "GENERAL_CHAT_PROTOCOL_INVALID",
+                  "GENERAL_CHAT_APPLICATION_UNAVAILABLE"
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "error_code": {
+                "type": "null"
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "action": {
+                      "const": "MATERIALIZE_LIVE_CHAT_QUERY"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "value": {
+                      "$ref": "eom://schemas/knowledge/general-chat-private-query-read/1.0#/$defs/projection"
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "value": {
+                      "$ref": "eom://schemas/knowledge/general-chat-private-query-read/1.0#/$defs/origin"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

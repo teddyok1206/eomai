@@ -327,7 +327,8 @@ if [[ "${action}" == "chat-tests" ]]; then
   export EOM_GENERAL_CHAT_TEST_STATE="${state_directory}"
   "${PYTHON}" -m pytest -q \
     tests/integration/test_general_chat_persistence.py \
-    tests/integration/test_private_chat_query_basis.py
+    tests/integration/test_private_chat_query_basis.py \
+    tests/integration/test_private_chat_query_source.py
   printf 'Disposable general-chat persistence integration tests passed.\n'
   exit 0
 fi

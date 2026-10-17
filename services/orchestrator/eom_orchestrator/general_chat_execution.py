@@ -9,9 +9,16 @@ from datetime import datetime, timedelta
 from typing import TypedDict
 from uuid import uuid4
 
-from eom_identifiers import canonical_json_bytes, sha256_bytes
+from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
+from eom_catalog_contracts.private_chat_query_read import (
+    ChatPrivateQueryOrigin,
+    LiveChatQueryProjection,
+)
+from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
+from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_protocol.general_chat import (
     CHAT_INPUT_SCHEMA,
+    CHAT_MESSAGE_SCHEMA,
     CHAT_RESULT_SCHEMA,
     ChatContextMessage,
     ChatTurnInput,
@@ -22,6 +29,7 @@ from eom_protocol.general_chat_dispatch import (
     ChatExecutionIdentity,
     read_chat_dispatch,
 )
+from eom_protocol.general_chat_evidence_families import chat_evidence_schema_family
 from eom_protocol.general_chat_grounding import (
     AGENT_INPUT_SCHEMA,
     AGENT_RESULT_SCHEMA,
@@ -50,9 +58,12 @@ from eom_protocol.general_chat_turn_contracts import (
 from eom_protocol.general_chat_worker_messages import (
     ChatWorkerExecute,
     ChatWorkerRequest,
+    ChatWorkerTicket,
     chat_worker_protocol_version,
     chat_worker_ticket,
+    read_chat_worker_ticket,
 )
+from jsonschema.exceptions import ValidationError as SchemaError
 from sqlalchemy.orm import Session
 
 from eom_orchestrator.general_chat_artifacts import ChatEvidencePort
@@ -68,6 +79,7 @@ from eom_orchestrator.general_chat_owner import GeneralChatConversationOwner, ch
 from eom_orchestrator.general_chat_rag_access import authorize_rag_context, prepare_rag_scope
 from eom_orchestrator.general_chat_rag_broker import ChatRagToolBroker, rag_tool_knowledge
 from eom_orchestrator.general_chat_repository import GeneralChatRepository
+from eom_orchestrator.general_chat_similarity_basis import read_owned_private_chat_query
 from eom_orchestrator.general_chat_state import (
     CHAT_HEARTBEAT_TTL,
     ChatError,
@@ -83,6 +95,23 @@ class ChatClaim:
     conversation_id: str
     turn_id: str
     claim_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class _LiveChatToolRead:
+    claim: ChatClaim
+    actor_id: str
+    request: ArtifactMemberPointer
+    dispatch: ArtifactMemberPointer
+    message: ArtifactMemberPointer
+
+
+@dataclass(frozen=True, slots=True)
+class _ResolvedChatExecution:
+    request: ChatInputContract
+    receipt: ChatDispatchReceipt
+    input_member: ArtifactMemberPointer
+    dispatch_member: ArtifactMemberPointer
 
 
 class ChatPreparationRejected(ChatError):
@@ -128,26 +157,7 @@ class GeneralChatExecutionService:
         ticket = chat_worker_ticket(prepared, policy_sha256=command.policy_sha256)
 
         def require_scope() -> str:
-            with self.repository.sessions.begin() as session:
-                capacity = self.repository.capacity(session)
-                if capacity.runtime_id is None:
-                    raise ChatError("GENERAL_CHAT_CLAIM_MISMATCH")
-                _, turn = self._live_claim(
-                    session,
-                    ChatClaim(
-                        capacity.runtime_id,
-                        prepared.conversation_id,
-                        prepared.turn_id,
-                        prepared.claim_id,
-                    ),
-                )
-                if turn.state != "RUNNING" or turn.request_sha256 != ticket.request_sha256:
-                    raise ChatError("GENERAL_CHAT_CLAIM_MISMATCH")
-                conversation = self.repository.conversation_record(
-                    session, prepared.conversation_id
-                )
-                self.repository.require_actor(session, conversation.owner_id)
-                return conversation.owner_id
+            return self.require_live_tool_actor(ticket)
 
         require_scope()
         if isinstance(prepared, RagChatTurnInput):
@@ -169,6 +179,109 @@ class GeneralChatExecutionService:
             knowledge=self.knowledge,
             evidence=self.evidence,
         )
+
+    def _live_tool_read(self, ticket: ChatWorkerTicket) -> _LiveChatToolRead:
+        try:
+            ticket = read_chat_worker_ticket(raw_similarity_contract_value(ticket))
+        except (ValueError, TypeError, SchemaError):
+            raise ChatError("GENERAL_CHAT_PROTOCOL_INVALID") from None
+        with self.repository.sessions.begin() as session:
+            capacity = self.repository.capacity(session)
+            if capacity.runtime_id is None:
+                raise ChatError("GENERAL_CHAT_CLAIM_MISMATCH")
+            claim = ChatClaim(
+                capacity.runtime_id, ticket.conversation_id, ticket.turn_id, ticket.claim_id
+            )
+            _, turn = self._live_claim(session, claim)
+            if turn.state != "RUNNING" or turn.request_sha256 != ticket.request_sha256:
+                raise ChatError("GENERAL_CHAT_CLAIM_MISMATCH")
+            conversation = self.repository.conversation_record(session, ticket.conversation_id)
+            self.repository.require_actor(session, conversation.owner_id)
+            return _LiveChatToolRead(
+                claim,
+                conversation.owner_id,
+                chat_pointer(
+                    turn.request_artifact_id,
+                    turn.request_revision_id,
+                    turn.request_sha256,
+                    CHAT_INPUT_SCHEMA,
+                ),
+                chat_pointer(
+                    turn.dispatch_artifact_id,
+                    turn.dispatch_revision_id,
+                    turn.dispatch_sha256,
+                    CHAT_DISPATCH_SCHEMA,
+                ),
+                chat_pointer(
+                    turn.input_artifact_id,
+                    turn.input_revision_id,
+                    turn.input_sha256,
+                    CHAT_MESSAGE_SCHEMA,
+                ),
+            )
+
+    def require_live_tool_actor(self, ticket: ChatWorkerTicket) -> str:
+        """Shared live claim/actor guard; a ticket by itself is never authority."""
+        return self._live_tool_read(ticket).actor_id
+
+    def materialize_live_private_query(self, ticket: ChatWorkerTicket) -> LiveChatQueryProjection:
+        """Read the exact active question, without submitting/authorizing numerical work."""
+        before = self._live_tool_read(ticket)
+        try:
+            resolved = self._read_execution_pointers(before.claim, before.request, before.dispatch)
+            if (
+                not isinstance(resolved.request, RagChatTurnInput)
+                or resolved.receipt.ticket != ticket
+            ):
+                raise ChatError("GENERAL_CHAT_POINTER_INVALID")
+            question = read_owned_private_chat_query(
+                self.repository,
+                self.evidence,
+                actor_id=before.actor_id,
+                conversation_id=before.claim.conversation_id,
+                turn_id=before.claim.turn_id,
+            )
+            last = resolved.request.messages[-1]
+            if last.role != "user" or last.text != question.text:
+                raise ChatError("GENERAL_CHAT_POINTER_INVALID")
+            body = {
+                "schema_version": "general-chat-private-query-origin/1.0",
+                "actor_id": before.actor_id,
+                "runtime_id": before.claim.runtime_id,
+                "ticket": resolved.receipt.ticket.model_dump(mode="json"),
+                "request_member": resolved.input_member.model_dump(mode="json"),
+                "dispatch_member": resolved.dispatch_member.model_dump(mode="json"),
+                "basis": question.basis.model_dump(mode="json"),
+            }
+            origin = ChatPrivateQueryOrigin.model_validate(
+                body | {"origin_sha256": content_sha256(body)}
+            )
+            projection = LiveChatQueryProjection(
+                schema_version="general-chat-private-query-projection/1.0",
+                origin=origin,
+                text=question.text,
+            )
+        except ChatError:
+            raise
+        except Exception:
+            # A raw canonical request or schema error may contain the private question.
+            raise ChatError("GENERAL_CHAT_POINTER_INVALID") from None
+        if self._live_tool_read(ticket) != before:
+            raise ChatError("GENERAL_CHAT_POINTER_INVALID")
+        return projection
+
+    def authorize_live_private_query(
+        self, origin: ChatPrivateQueryOrigin
+    ) -> ChatPrivateQueryOrigin:
+        """Fresh owner/claim/pointer reauthorization; never a cached origin grant."""
+        try:
+            origin = ChatPrivateQueryOrigin.model_validate(raw_similarity_contract_value(origin))
+        except (ValueError, TypeError, SchemaError):
+            raise ChatError("GENERAL_CHAT_PROTOCOL_INVALID") from None
+        current = self.materialize_live_private_query(origin.ticket).origin
+        if current != origin:
+            raise ChatError("GENERAL_CHAT_POINTER_INVALID")
+        return current
 
     def heartbeat(self, *, runtime_id: str) -> None:
         """Only the resident owner, after its isolated-worker admission, calls this."""
@@ -314,9 +427,33 @@ class GeneralChatExecutionService:
             turn.dispatch_sha256,
             CHAT_DISPATCH_SCHEMA,
         )
-        request_pointer, dispatch_pointer = self.evidence.resolve_family(
-            (request_pointer, dispatch_pointer)
-        )
+        resolved = self._read_execution_pointers(claim, request_pointer, dispatch_pointer)
+        return resolved.request, resolved.receipt
+
+    def _read_execution_pointers(
+        self,
+        claim: ChatClaim,
+        request_pointer: ArtifactMemberPointer,
+        dispatch_pointer: ArtifactMemberPointer,
+    ) -> _ResolvedChatExecution:
+        hints = (request_pointer, dispatch_pointer)
+        resolved = self.evidence.resolve_family(hints)
+        try:
+            if type(resolved) is not tuple or len(resolved) != 2:
+                raise ValueError("execution pointer family differs")
+            checked = tuple(
+                ArtifactMemberPointer.model_validate(raw_similarity_contract_value(value))
+                for value in resolved
+            )
+            for hint, pointer in zip(hints, checked, strict=True):
+                if (
+                    pointer.schema_ref not in chat_evidence_schema_family(hint.schema_ref)
+                    or pointer.model_copy(update={"schema_ref": hint.schema_ref}) != hint
+                ):
+                    raise ValueError("execution member differs from exact original pointer")
+            request_pointer, dispatch_pointer = checked
+        except (ValueError, TypeError, SchemaError):
+            raise ChatError("GENERAL_CHAT_POINTER_INVALID") from None
         payloads = self.evidence.read((request_pointer, dispatch_pointer))
         if len(payloads) != 2:
             raise ChatError("GENERAL_CHAT_POINTER_INVALID")
@@ -331,7 +468,7 @@ class GeneralChatExecutionService:
         receipt = dispatch_evidence(payloads[1], request=request, input_pointer=request_pointer)
         if receipt.runtime_id != claim.runtime_id:
             raise ChatError("GENERAL_CHAT_CLAIM_MISMATCH")
-        return request, receipt
+        return _ResolvedChatExecution(request, receipt, request_pointer, dispatch_pointer)
 
     def execution_receipt(self, claim: ChatClaim) -> ChatDispatchReceipt:
         """Read exact canonical provenance even after expiry; never grants dispatch."""

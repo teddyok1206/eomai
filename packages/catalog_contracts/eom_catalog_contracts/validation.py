@@ -13,6 +13,10 @@ from importlib.resources.abc import Traversable
 from types import MappingProxyType
 from typing import Any
 
+from eom_protocol.general_chat_worker_messages import (
+    CHAT_WORKER_TICKET_SCHEMA,
+    load_chat_worker_ticket_schema,
+)
 from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import SchemaError
 from referencing import Registry, Resource
@@ -30,6 +34,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "general-chat-private-query-read": CatalogSchemaResource(
+            "schemas/knowledge/general-chat-private-query-read-v1.schema.json",
+            "resources/knowledge/general-chat-private-query-read-v1.schema.json",
+            "1.0",
+            "sha256:f0424e012ffcbe663678a83e817a44984a6eae61e8fc18e021421d9a81b116ef",
+        ),
         "embedding-benchmark-cuda-ready": CatalogSchemaResource(
             "schemas/knowledge/embedding-benchmark-cuda-ready-v1.schema.json",
             "resources/knowledge/embedding-benchmark-cuda-ready-v1.schema.json",
@@ -2179,6 +2189,12 @@ def catalog_schema_inventory() -> tuple[tuple[str, CatalogSchemaResource], ...]:
 @lru_cache(maxsize=1)
 def _catalog_schema_registry() -> Registry[Any]:
     resources: list[tuple[str, Resource[Any]]] = []
+    # Reuse the protocol owner's exact ticket. It identifies existing work and
+    # never supplies an actor, private-source grant or execution capability.
+    ticket = load_chat_worker_ticket_schema()
+    if ticket.get("$id") != CHAT_WORKER_TICKET_SCHEMA:
+        raise CatalogSchemaError("private query worker-ticket schema differs")
+    resources.append((ticket["$id"], Resource.from_contents(ticket)))
     for name in CATALOG_SCHEMA_RESOURCES:
         schema = load_schema(name)
         identifier = schema.get("$id")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from copy import deepcopy
 from enum import StrEnum
 from functools import lru_cache
 from importlib.resources import files
@@ -30,6 +31,7 @@ from eom_protocol.general_chat_turn_contracts import (
 
 WorkerBootId = Annotated[str, Field(pattern=r"^chatboot_[0-9a-f]{32}$")]
 WorkerAction = Literal["PROBE", "EXECUTE", "RESULT"]
+CHAT_WORKER_TICKET_SCHEMA = "eom://schemas/general-chat/worker-ticket/1.0"
 
 
 class ChatWorkerError(StrEnum):
@@ -261,6 +263,14 @@ def read_chat_worker_policy(document: object) -> ChatWorkerPolicy:
 def read_chat_worker_ticket(document: object) -> ChatWorkerTicket:
     _worker_validator("ticket").validate(document)
     return ChatWorkerTicket.model_validate(document)
+
+
+def load_chat_worker_ticket_schema() -> dict[str, Any]:
+    """Expose the canonical ticket dependency without duplicating or mutating its schema."""
+    schema = _worker_validator("ticket").schema
+    if not isinstance(schema, dict):
+        raise ValueError("worker ticket schema is unavailable")
+    return deepcopy(schema)
 
 
 def read_chat_worker_request(document: object) -> ChatWorkerRequest:
