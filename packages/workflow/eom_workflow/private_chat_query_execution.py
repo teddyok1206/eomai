@@ -94,6 +94,14 @@ class PrivateChatQueryExecutionPolicy(_PrivateExecutionValue):
         return self
 
 
+def parse_private_chat_query_workflow_request(value: object) -> PrivateChatQueryWorkflowRequest:
+    """Closed untrusted request parsing without serializing private authority extras."""
+    try:
+        return PrivateChatQueryWorkflowRequest.model_validate(raw_similarity_contract_value(value))
+    except (ValueError, TypeError, SchemaError):
+        raise ValueError("PRIVATE_CHAT_QUERY_WORKFLOW_REQUEST_INVALID") from None
+
+
 def validate_private_chat_query_request_references(
     request: PrivateChatQueryWorkflowRequest,
     policy: PrivateChatQueryExecutionPolicy,

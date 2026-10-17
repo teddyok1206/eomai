@@ -133,7 +133,7 @@ def _require_command(workflow: WorkflowInstanceRecord, command: WorkflowCommandR
         raise ValueError("PRIVATE_CHAT_QUERY_COMMAND_CONTEXT_INVALID")
 
 
-def _require_step(
+def validate_private_chat_query_execution_step(
     step: WorkflowStepRunRecord,
     workflow: WorkflowInstanceRecord,
     request: PrivateChatQueryWorkflowRequest,
@@ -231,7 +231,7 @@ class CatalogPrivateChatQueryOwnerAdmission:
             return sources
         if step is None:
             raise ValueError("PRIVATE_CHAT_QUERY_ORIGINAL_EXECUTION_MISSING")
-        _require_step(step, workflow, request)
+        validate_private_chat_query_execution_step(step, workflow, request)
         launch = read_native_query_launch(
             session, request=request, workflow_id=workflow.workflow_id, step_run_id=step.step_run_id
         )
@@ -293,5 +293,5 @@ class CatalogPrivateChatQueryOwnerAdmission:
             or command.workflow_id != workflow_id
         ):
             raise ValueError("PRIVATE_CHAT_QUERY_CURRENT_STEP_INVALID")
-        _require_step(step, workflow, request)
+        validate_private_chat_query_execution_step(step, workflow, request)
         return sources

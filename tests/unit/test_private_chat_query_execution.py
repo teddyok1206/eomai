@@ -18,6 +18,7 @@ from eom_workflow.private_chat_query_execution import (
     PRIVATE_CHAT_QUERY_POLICY_REF,
     PrivateChatQueryExecutionPolicy,
     PrivateChatQueryWorkflowRequest,
+    parse_private_chat_query_workflow_request,
     validate_private_chat_query_execution_input,
     validate_private_chat_query_request_references,
 )
@@ -106,6 +107,22 @@ def test_selected_private_controls_prepare_same_exact_owned_question():
     assert TEXT not in canonical_json_bytes(policy).decode()
     assert PrivateChatQueryWorkflowRequest.model_validate(request) == request
     assert PrivateChatQueryExecutionPolicy.model_validate(policy) == policy
+
+
+@pytest.mark.parametrize("invalid", [None, True, {"question": TEXT}, {"actor_role": "ADMIN"}])
+def test_supported_raw_request_parser_redacts_untrusted_question_or_authority(invalid):
+    with pytest.raises(ValueError, match="PRIVATE_CHAT_QUERY_WORKFLOW_REQUEST_INVALID") as error:
+        parse_private_chat_query_workflow_request(invalid)
+    assert TEXT not in str(error.value) and "ADMIN" not in str(error.value)
+
+
+def test_supported_raw_request_parser_revalidates_untrusted_model_copy():
+    request, _, _ = execution_case()
+    assert parse_private_chat_query_workflow_request(request) == request
+    assert parse_private_chat_query_workflow_request(request.model_dump(mode="json")) == request
+    invalid = request.model_copy(update={"request_sha256": "sha256:" + "f" * 64})
+    with pytest.raises(ValueError, match="PRIVATE_CHAT_QUERY_WORKFLOW_REQUEST_INVALID"):
+        parse_private_chat_query_workflow_request(invalid)
 
 
 @pytest.mark.parametrize("target", ["request", "policy"])

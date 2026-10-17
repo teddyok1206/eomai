@@ -25,6 +25,7 @@ from eom_orchestrator.local_embedding_control_artifacts import (
     LocalEmbeddingControlArtifactPublisher,
 )
 from eom_orchestrator.models import ArtifactRevisionRecord, JobRecord
+from eom_workflow.local_embedding_execution_policy import LocalEmbeddingResourceProfile
 from eom_workflow.private_chat_query_execution import (
     PrivateChatQueryExecutionPolicy,
     PrivateChatQueryWorkflowRequest,
@@ -53,7 +54,13 @@ def source(tmp_path, monkeypatch):
     return make_private_source_case(tmp_path, monkeypatch)
 
 
-def make_private_source_case(tmp_path, monkeypatch, *, definition_sha256: str | None = None):
+def make_private_source_case(
+    tmp_path,
+    monkeypatch,
+    *,
+    definition_sha256: str | None = None,
+    resource_profile: LocalEmbeddingResourceProfile | None = None,
+):
     publisher, _ = _publisher(tmp_path)
     publisher.settings = replace(publisher.settings, workspace_root=tmp_path)
     request, policy, bundle = execution_case(definition_sha256=definition_sha256)
@@ -63,7 +70,12 @@ def make_private_source_case(tmp_path, monkeypatch, *, definition_sha256: str | 
     policy = PrivateChatQueryExecutionPolicy.model_validate(
         seal(
             policy.model_dump(mode="json")
-            | {"runtime_bundle": saved_bundle.bundle.model_dump(mode="json")},
+            | {
+                "runtime_bundle": saved_bundle.bundle.model_dump(mode="json"),
+                "resource_profile": (resource_profile or policy.resource_profile).model_dump(
+                    mode="json"
+                ),
+            },
             "policy_sha256",
         )
     )
@@ -88,6 +100,7 @@ def make_private_source_case(tmp_path, monkeypatch, *, definition_sha256: str | 
                 "native_execution_policy": saved_policy.member.model_dump(mode="json"),
                 "native_execution_policy_sha256": policy.policy_sha256,
                 "runtime_bundle": saved_bundle.bundle.model_dump(mode="json"),
+                "resource_profile": policy.resource_profile.model_dump(mode="json"),
             },
             "request_sha256",
         )

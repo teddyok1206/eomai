@@ -456,3 +456,68 @@ Proof: `/tmp/eom-private-checkpoint-package.prmVCKZA/prove_archives.py`, raw
 The prior pinned synthetic metadata file was reused without copying. Final
 documentation/dependency9 PASS overlaps the466-case inventory, not an additional
 aggregate. No new authentication prompt or operating selection occurred.
+
+## Actual private executor composition
+
+1. Runner composes the existing current Chat/source/command owner, fixed private
+   CPU launcher, shared original-Job checkpoint store and existing publications.
+   No parallel queue, storage owner, worker protocol or generic plugin engine.
+2. Canonical sources are the immutable submitted origin, exact request/controls,
+   original launch and four-phase Job history; local workspace bytes are staging.
+3. Native Job, numerical publication producer and receipt producer stay distinct;
+   recovery reuses their original allocated identities and source commit.
+4. Current source/input is reconstructed under the original Job/query IDs. The
+   existing Catalog private numeric/receipt readers check member/revision/media/
+   hash/lifecycle/producer closure; the command owner supplies actual permission.
+5. Lookups use Workflow/step keys and a bounded five-event original history, not
+   scans or a second request tracker. Every replay reauthorizes current sources.
+6. Reuse frozen typed checkpoints and manifests; pending is a small internal
+   original-launch observation, never a Role/Codex result or retry grant.
+7. Metadata/vector checks are bounded O(bytes + dimension), plus the existing
+   authorized public scope. Actual model cost is measured separately; no new ML
+   dependency or question copy/public enrollment is introduced.
+8. Step/allocation commit precedes physical work; no SQL root survives inference
+   or unit observation. Commit PUBLISHED before the receipt owner's independent
+   commit, then validate and append COMPLETED in the current fenced root.
+9. Pure contracts stay below adapters. Runner orchestrates owners; only the
+   existing Orchestrator publisher commits validated bytes. Workers still have
+   no DB/NAS/network/peer channel.
+10. BUSY/UNCERTAIN retains the original prefix. A known failure stays failed;
+    lost observations/commits recover by exact checkpoint/publication replay,
+    never another Job/key/model run. Completed reads do not require old units.
+11. A receipt-only shortcut would omit physical/source provenance; treating the
+    question as a reference Item would lie about authority. Reuse the existing
+    storage, fixed lifecycle and file readers while preserving distinct private
+    source and receipt types. No released schema/migration is changed here.
+
+This implements the actual executor composition before opening compiler, result
+CHECK, async routing or Chat tools. Those remain required activation prerequisites.
+
+## Executor source verification 2026-10-17
+
+Concrete source composition now joins the original current-source owner, fixed
+private-purpose launcher, existing Job checkpoint adapter, numerical publisher,
+receipt publisher and canonical readers. It does not open production admission.
+
+`tests/unit/test_private_chat_query_native_executor.py`:23 PASS, including
+four commit-boundary crashes/replay, no SQL root during numerical work/observation,
+original launch and producer reuse, known-failure preservation, BUSY/UNCERTAIN,
+late permission withdrawal, changed canonical bytes, rollback, exact purpose,
+root/engine rejection and completed reads without surviving original units.
+Canonical temporary SQL Jobs/Artifacts and files are real; Chat/IAM/public scope,
+Workflow/step views, fixed-unit observations and numerical backend are explicitly
+synthetic. Tests do not relax the closed compiler or private application-step CHECK.
+
+Final focused inventories are167 PASS/six suites and122 PASS/four suites (the
+execution-contract suite overlaps; do not add the counts). The latter includes
+the six dependency/large-binary-DB checks and five new redacted raw-parser cases.
+Strict typing seven source modules; Ruff/format ten source/test files; diff check
+PASS. Initial draft-fixture failures used the older non-fixed resource profile
+and wrong checkpoint state/field names; corrected fixtures honor existing fixed
+resources and `SUCCEEDED`/`record_type`, with no production rule relaxation.
+
+No PostgreSQL composition claim for this new executor yet; earlier guarded
+storage/owner tests do not prove it. No operating DB mutation, model inference,
+protected install, private-unit activation or authentication prompt was made in
+this source gate. Original HTTP delivery, async ADVANCE lineage, immutable-context
+terminal, private CHECK/compiler/routing and genuine Chat delivery remain OPEN.

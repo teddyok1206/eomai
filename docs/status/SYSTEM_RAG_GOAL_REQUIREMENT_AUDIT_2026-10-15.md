@@ -29,7 +29,8 @@ summed into a single acceptance count. This ledger does not grant authority.
   authentication prompt. Next routine observation no earlier than20:58:11 UTC.
   Local sanitized evidence:
   `/tmp/eom-private-checkpoint-db.IljUOOv7/index-observation.json`.
-- User unattended constraint, renewed21:43 UTC: no new interactive login before2026-10-18 21:43 UTC;
+- User unattended constraint, renewed2026-10-17 22:36 UTC: no new interactive
+  login before2026-10-18 22:36 UTC;
   continue independent authorized work, never simulate authentication, copy tokens
   or change freshness/TTL. Original HTTP read remains unverified, not a verified
   wait on a login prompt. The existing memory observer is preserved, not exported.
@@ -115,6 +116,24 @@ summed into a single acceptance count. This ledger does not grant authority.
   preserving terminal and Chat delivery remain required. Full goal OPEN.
   [Owner evidence](../architecture/PRIVATE_CHAT_QUERY_SUBMISSION_CONTEXT.md#original-command-owner-verification),
   [numeric read evidence](../architecture/PRIVATE_CHAT_QUERY_PUBLICATION.md#canonical-read-implementation-and-verification).
+
+- C4 original four-phase executor source composition: concrete private launcher/
+  Job history/publication/receipt/current-source closure now passes23 new execution
+  cases. Final focused inventories167/six suites and122/four suites overlap and
+  are not summed; strict7/Ruff/format10 PASS. Temporary Jobs/Artifact SQL and bytes
+  are actual, while Chat/IAM/scope/Workflow views/unit observations/numerics are
+  synthetic. New executor PostgreSQL composition still pending; no existing
+  PostgreSQL proof is promoted to cover it. No private compiler/result CHECK,
+  installed runtime, async routing, Chat tool or operating policy is opened.
+  Full goal remains OPEN. [Exact source scope](../architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#executor-source-verification-2026-10-17).
+- Latest bounded read-only INDEX projection22:38:25 UTC:741 encodings/741 bindings/
+  192 immutable index revisions/6 logical indexes; latest per-index snapshots
+  263/545,229/545,249/545 remain PARTIAL, not741 Items or a full integrity audit.
+  Latest five workflows:3 COMPLETED/1 RUNNING/1 REQUESTED, their failure_code null;
+  no global failure-free assertion. Original observer only; no claim/replay,
+  restart or authentication prompt. Next routine observation no earlier than
+  23:08:25 UTC. Local sanitized evidence:
+  `/tmp/eom-private-executor-observation.PX6Z9nrH/index-observation.json`.
 
 - Actual corrected retained negative2026-10-17: fixed root entryc2034177now selects
   installed ownere2326626; newf527cc61standalone lease installed and verified in both

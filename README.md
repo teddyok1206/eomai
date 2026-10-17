@@ -430,6 +430,13 @@ Chat/IAM/문항 모집단과 선언된 작업은 합성 fixture이며 실제 채
 활성화는 아직 미완료입니다. [명령 경계](docs/architecture/PRIVATE_CHAT_QUERY_SUBMISSION_CONTEXT.md#original-command-owner-verification) ·
 [결과 읽기](docs/architecture/PRIVATE_CHAT_QUERY_PUBLICATION.md#canonical-read-implementation-and-verification)
 
+원본 채팅 계산의 배정·계산 확인·결과 저장·완료를 연결하는 실행기 소스도 구현했습니다.
+각 저장 전후 중단·재개, 같은 작업 재전송, 현재 권한 철회, 결과 파일 변조를 포함한 새23개
+시험이 통과했습니다. 관련 회귀는 겹치는 두 묶음167/122 PASS, strict7·lint·format PASS입니다.
+임시 Job/Artifact와 파일 저장은 실제지만 Chat/IAM/Workflow 조회·실행 단위·계산은 합성이며,
+이 변경의 PostgreSQL 조합 검증·설치·비공개 채팅 실행 활성화는 아직 남아 있습니다.
+[실행 경계와 검증 범위](docs/architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#executor-source-verification-2026-10-17)
+
 아래는 날짜·후보별 역사적 구현 기록입니다. 당시의 미완료 표기는 현재 종합 상태와
 구별하며, 최신 실제 실행·활성화 범위는 위 표와 연결된 상태 문서를 기준으로 합니다.
 

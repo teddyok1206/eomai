@@ -51,6 +51,10 @@ from eom_workflow.private_chat_query_execution import (
     PrivateChatQueryWorkflowRequest,
     validate_private_chat_query_request_references,
 )
+from eom_workflow.private_chat_query_publication import (
+    PrivateChatQueryLaunchAssociation,
+    validate_private_chat_query_launch,
+)
 from jsonschema.exceptions import ValidationError as SchemaError
 from pydantic import TypeAdapter
 from sqlalchemy import Engine
@@ -138,6 +142,28 @@ def build_private_chat_query_native_input(
             query_request_id=query_request_id,
         )
     except (SchemaError, ValueError, TypeError):
+        raise ValueError("PRIVATE_CHAT_QUERY_CURRENT_INPUT_INVALID") from None
+
+
+def validate_current_private_chat_query_input(
+    sources: ResolvedPrivateChatQuerySources,
+    launch: PrivateChatQueryLaunchAssociation,
+    native: EmbeddingPrivateChatQueryInput,
+) -> None:
+    """Reconstruct the same original input; this pure comparison grants no authority."""
+    try:
+        current = build_private_chat_query_native_input(
+            sources, job_id=launch.native_launch_job_id, query_request_id=launch.query_request_id
+        )
+        native = EmbeddingPrivateChatQueryInput.model_validate(
+            raw_similarity_contract_value(native)
+        )
+        validate_private_chat_query_launch(
+            launch, sources.request, sources.policy, sources.bundle, native
+        )
+        if current != native:
+            raise ValueError()
+    except (ValueError, TypeError, SchemaError):
         raise ValueError("PRIVATE_CHAT_QUERY_CURRENT_INPUT_INVALID") from None
 
 
