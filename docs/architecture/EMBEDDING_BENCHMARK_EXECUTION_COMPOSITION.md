@@ -1482,6 +1482,16 @@ No Job/key/process restart or new credential/TTL was introduced. Next routine in
 observation is>=11:20:29 UTC. Existing original HTTP authentication remains separately
 pending, last confirmed live10:38:15, with no new login process or duplicate prompt.
 
+Candidate `4bae7b35fe3589338e34788bb36f38b033881c65` passed the standard three-wheel/
+RECORD build. A separate isolated API-interpreter process loaded the new driver directly
+from that wheel, byte-matched its member and imported no ML libraries; this is packaging,
+not installed/active runtime or GPU acceptance. Build directory
+`/tmp/eom-api-build/4bae7b35fe3589338e34788bb36f38b033881c65.JOAsxM/dist`;
+platform raw SHA `e6752386bcfacaf183e5a006c27de605c6b6ce18ed4570e039cd28e40c5cf97a`;
+API-contract raw SHA `ef958e4ae73e5bb424c470fd3ce55139aa65144f91991d4ab8c5efeb1c706cef`.
+No owner release, numerical prefix, unit, selector, physical GPU lease, DB, model or
+default was installed/changed for this candidate. CPU remains the operational default.
+
 ### Resource relay source checkpoint — 2026-10-17
 
 Implemented the concrete root relay and fixed-owner client, reusing ResourceEvidence1.0,
