@@ -432,3 +432,27 @@ full goal. Origin/source/claim-bound actual Runner submission/allocation/executi
 private-purpose installation/isolation, current public corpus delivery and Chat
 tool activation remain OPEN. The compiler/result CHECK remains intentionally
 closed; operating CPU/QUERY/INDEX selections and original HTTP request are intact.
+
+### Original private history package verification
+
+Code candidate `9e96ab1d2e121bea9fcbf535a545df129bfd4e01` passed standard three-wheel
+build/RECORD verification without installation or service action. Dist:
+`/tmp/eom-api-build/9e96ab1d2e121bea9fcbf535a545df129bfd4e01.jJkT7O/dist`.
+
+- platform raw `6e92546314648e16fcfaa6eec72ea3ec5b7061e205525568ac8d1a21cc01206f`;
+- API-contract raw `3b87c8dd44e52c6697751fd9b402f16a0352cd19d139d34b502eb850c09ad6ee`;
+- API raw `57dc5dfa162efa10f0ad12f945ff6a2cba0404e50f3620e5b6b83d64b83bf15d`.
+
+The isolated Conda `-I -S -B` proof imported182 EOM modules only from the exact
+platform/contracts archives, reconstructed all four synthetic private checkpoints
+and their receipt/output, validated every contiguous prefix and imported both
+typed coordinator adapters/shared store and fixed private observation adapter.
+It made no DB/model/unit-observation/activation call and imported no checkout,
+installed EOM fallback, tests or optional ML module. Current source/Chat/native
+authorization remains unproven; this is package closure, not another live gate.
+
+Proof: `/tmp/eom-private-checkpoint-package.prmVCKZA/prove_archives.py`, raw
+`0daa4a8c3643fcb917f27d1a3ded9421ae6c0954c17bfacd6bb3afde6aec044f`.
+The prior pinned synthetic metadata file was reused without copying. Final
+documentation/dependency9 PASS overlaps the466-case inventory, not an additional
+aggregate. No new authentication prompt or operating selection occurred.

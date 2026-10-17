@@ -82,6 +82,9 @@ summed into a single acceptance count. This ledger does not grant authority.
   no operating DB/model/service/activation call. The private owner still needs actual
   origin/claim-bound Runner admission and execution; compiler/result CHECK is not
   opened by this storage leaf. C4 and the full original goal remain OPEN.
+  Candidate9e96ab1d also passed standard three-wheel/RECORD and isolated two-archive
+  182-module full synthetic checkpoint-prefix/receipt/adapter import proof. DB,
+  model, unit observations and runtime activation0 in that proof; no installation.
   [Design, final proof and failed fixture history](../architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#original-private-history-implementation-and-guarded-persistence).
 
 - Actual corrected retained negative2026-10-17: fixed root entryc2034177now selects
