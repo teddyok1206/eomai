@@ -95,6 +95,9 @@ def test_closed_schema_mirror_hash_and_318_predecessors_remain_frozen() -> None:
             "system-rag-private-chat-similarity",
             "embedding-private-chat-query",
             "system-rag-private-chat-query-basis",
+            # Additive contracts released after the pinned 318-schema baseline.
+            "embedding-benchmark-cuda-ready",
+            "general-chat-private-query-read",
         }
     }
     assert len(previous) == 318

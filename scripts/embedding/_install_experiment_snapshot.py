@@ -625,6 +625,10 @@ _INDEX_PREFIXES: Final = {
     "CPU_INDEX_FP32": Path("/opt/eom/conda/envs/eom-embedding-index-cpu"),
     "CUDA_INDEX_FP32": Path("/opt/eom/conda/envs/eom-embedding-cuda"),
 }
+_INDEX_PRIVATE_PACKAGES: Final = {
+    "CPU_INDEX_FP32": ("eom_platform",),
+    "CUDA_INDEX_FP32": ("eom_platform", "eom_gpu_lease"),
+}
 _INDEX_LOCK_SHA: Final = {
     "eom-embedding-protected-runtime.requirements.proposal.lock": (
         "974df998a3267b28fa4eadf54d69e7e14379e0b9e84683ab3bbca92d21cd5b04"
@@ -1215,11 +1219,22 @@ def _index_console_entries(dist: Path) -> set[str]:
 
 
 def _index_prepare_private_overlay(
-    candidate: Path, workspace: Path, wheels: tuple[Path, Path]
+    candidate: Path,
+    workspace: Path,
+    wheels: tuple[Path, ...],
+    *,
+    profile: str = "CUDA_INDEX_FP32",
 ) -> None:
     """Accepted OLD pip assembles inert wheels; candidate instructions are never run."""
     import subprocess
 
+    distributions = _INDEX_PRIVATE_PACKAGES.get(profile)
+    if (
+        distributions is None
+        or len(wheels) != len(distributions)
+        or len(set(wheels)) != len(wheels)
+    ):
+        raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_PROFILE_INVALID")
     stage = workspace / "private-successor"
     stage.mkdir(mode=0o700)  # No replay into a partial operation.
     site = stage / "lib/python3.12/site-packages"
@@ -1244,6 +1259,10 @@ def _index_prepare_private_overlay(
                     )
                     is None
                     or stat.S_IFMT(row.external_attr >> 16) not in {0, stat.S_IFREG, stat.S_IFDIR}
+                    or (
+                        profile == "CPU_INDEX_FP32"
+                        and relative.parts[0] in {"eom_gpu_lease", "eom_gpu_lease-0.1.0.dist-info"}
+                    )
                 ):
                     raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_WHEEL_INVALID")
     subprocess.run(
@@ -1275,8 +1294,12 @@ def _index_prepare_private_overlay(
         raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_ENTRYPOINT_INVALID")
     scripts.rename(stage / "bin")
     roots = _index_overlay_names(site)
+    if {name for name in roots if name.endswith(".dist-info")} != {
+        f"{name}-0.1.0.dist-info" for name in distributions
+    }:
+        raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_OVERLAY_INVALID")
     expected_scripts: set[str] = set()
-    for wheel, dist_name in zip(wheels, ("eom_platform", "eom_gpu_lease"), strict=True):
+    for wheel, dist_name in zip(wheels, distributions, strict=True):
         dist = site / f"{dist_name}-0.1.0.dist-info"
         entries = _index_console_entries(dist)
         if expected_scripts & entries:
@@ -1296,7 +1319,7 @@ def _index_prepare_private_overlay(
             if not separator or not first.startswith(b"#!/") or len(raw) > 16384:
                 raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_ENTRYPOINT_INVALID")
             target.write_bytes(
-                f"#!{_INDEX_PREFIXES['CUDA_INDEX_FP32']}/bin/python3.12\n".encode() + remainder
+                f"#!{_INDEX_PREFIXES[profile]}/bin/python3.12\n".encode() + remainder
             )
             records[f"../../../bin/{name}"] = target
         output = io.StringIO(newline="")
@@ -1328,7 +1351,7 @@ def _index_prepare_private_overlay(
     if not old_roots:
         raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_OVERLAY_INVALID")
     old_scripts: set[str] = set()
-    for dist_name in ("eom_platform", "eom_gpu_lease"):
+    for dist_name in distributions:
         old_scripts.update(_index_console_entries(old_site / f"{dist_name}-0.1.0.dist-info"))
     for name in expected_scripts - old_scripts:
         if os.path.lexists(candidate / "bin" / name):
@@ -1348,15 +1371,25 @@ def _index_prepare_private_overlay(
 
 
 def index_private_successor_main() -> int:
-    """CUDA-only root quarantine assembly using the already accepted OLD interpreter."""
+    """Fixed-profile root quarantine assembly using the already accepted OLD interpreter."""
     parser = argparse.ArgumentParser(description="Prepare a pinned private-code successor")
+    parser.add_argument("--profile", choices=tuple(_INDEX_PREFIXES), default="CUDA_INDEX_FP32")
     parser.add_argument("--candidate", type=Path, required=True)
     parser.add_argument("--workspace", type=Path, required=True)
     for name in ("platform", "lease"):
         for field in ("wheel", "wheel-sha256", "source", "source-sha256", "commit"):
-            parser.add_argument(f"--{name}-{field}", required=True)
+            parser.add_argument(f"--{name}-{field}", required=name == "platform")
     args = parser.parse_args(sys.argv[1:])
     try:
+        lease_pins = tuple(
+            getattr(args, "lease_" + field)
+            for field in ("wheel", "wheel_sha256", "source", "source_sha256", "commit")
+        )
+        if args.profile == "CPU_INDEX_FP32":
+            if any(value not in (None, "-") for value in lease_pins):
+                raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_PROFILE_INVALID")
+        elif any(value in (None, "-") for value in lease_pins):
+            parser.error("CUDA private successors require all lease archive pins")
         if (
             os.geteuid() != 0
             or not sys.flags.isolated
@@ -1366,7 +1399,7 @@ def index_private_successor_main() -> int:
             or sys.platform != "linux"
             or os.uname().machine != "x86_64"
             or Path(sys.executable) != PREFIX / "bin/python3.12"
-            or args.candidate.parent != _INDEX_PREFIXES["CUDA_INDEX_FP32"].parent
+            or args.candidate.parent != _INDEX_PREFIXES[args.profile].parent
             or re.fullmatch(r"\.embedding-index-runtime-[A-Za-z0-9]{8}", args.candidate.name)
             is None
             or args.workspace.parent != Path("/opt/eom")
@@ -1378,7 +1411,8 @@ def index_private_successor_main() -> int:
         require_root_path(args.workspace)
         validate_runtime_tree(args.candidate)
         retained: list[tuple[Path, Path, str, str]] = []
-        for kind, package in (("platform", "eom_platform"), ("lease", "eom_gpu_lease")):
+        for package in _INDEX_PRIVATE_PACKAGES[args.profile]:
+            kind = "platform" if package == "eom_platform" else "lease"
             commit = getattr(args, f"{kind}_commit")
             if re.fullmatch(r"[0-9a-f]{40}", commit) is None:
                 raise SnapshotInstallError("EMBEDDING_INDEX_PRIVATE_PINS_REQUIRED")
@@ -1396,7 +1430,10 @@ def index_private_successor_main() -> int:
             )
             retained.append((wheel, source, commit, package.replace("_", "-")))
         _index_prepare_private_overlay(
-            args.candidate, args.workspace, (retained[0][0], retained[1][0])
+            args.candidate,
+            args.workspace,
+            tuple(row[0] for row in retained),
+            profile=args.profile,
         )
         for wheel, source, commit, package in retained:
             _index_private_source(args.candidate, wheel, source, commit, package)

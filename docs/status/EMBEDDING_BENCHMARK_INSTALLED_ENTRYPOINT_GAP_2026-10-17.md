@@ -45,6 +45,12 @@ retained predecessor semantics; old documentation describing only `publish` and
 `audit-staged` is historical. Do not invent an alternate installer or weaken its
 profile guard to make CPU pass.
 
+Follow-up source checkpoint: the same installer now supports an explicitly
+validated CPU private-code successor, with one wheel/no lease and unchanged
+CPU audit families. [Design and352-test evidence](../architecture/EMBEDDING_CPU_PRIVATE_SUCCESSOR_DESIGN.md)
+does not supersede the missing installed-entry observations above or authorize
+execution. Exact new source/wheel/audit/config and drained publication are next.
+
 Determine the smallest supported CPU/CUDA composition successor, with its schema
 and eleven-point design where protocol/prefix meaning actually changes. Preserve
 the operating CPU prefix, model/numerical bytes, encoder spaces, source/report/

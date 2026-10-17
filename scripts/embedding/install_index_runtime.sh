@@ -61,9 +61,7 @@ case "$mode" in
     getent passwd eom >/dev/null || fail EMBEDDING_INDEX_DEVELOPER_MISSING
     install -d -o eom -g eom -m 0700 "$PREFIX"
     printf '%s\n' EMBEDDING_INDEX_PREFIX_PREPARED_NO_EXECUTION; exit 0 ;;
-  publish|audit-staged) ;;
-  publish-private-successor)
-    [[ "$profile" == CUDA_INDEX_FP32 ]] || fail EMBEDDING_INDEX_PRIVATE_SUCCESSOR_PROFILE_INVALID ;;
+  publish|audit-staged|publish-private-successor) ;;
   *) fail EMBEDDING_INDEX_MODE_INVALID ;;
 esac
 
@@ -184,14 +182,23 @@ IFS= read -r HOST_AUDIT_STATUS < "$HOST_AUDIT_RECEIPT" || fail EMBEDDING_INDEX_H
 [[ "$HOST_AUDIT_STATUS" =~ ^EMBEDDING_HOST_BYTES_AUDIT_PASS_NOT_ADMITTED\ sha256:[0-9a-f]{64}$ && "$(stat -c %s "$HOST_AUDIT_RECEIPT")" -eq $((${#HOST_AUDIT_STATUS} + 1)) ]] || fail EMBEDDING_INDEX_HOST_PREFLIGHT_INVALID
 record_phase HOST_BYTES_PREFLIGHT_PASS_NOT_ADMITTED
 if [[ "$mode" == publish-private-successor ]]; then
-  grep -Eq '"schema_version":"embedding-prefix-audit-input/1\.[23]"' "$PRIVATE/prefix-audit-input.json" || fail EMBEDDING_INDEX_PRIVATE_SUCCESSOR_INPUT_REQUIRED
+  # OLD's typed host preflight already binds CPU1.0/1.1 to the exact CPU profile.
+  # Keep CUDA's narrower historical successor guard; do not require canonical
+  # formatting from the older CPU wire families, whose raw hash is still exact.
+  if [[ "$profile" == CUDA_INDEX_FP32 ]]; then
+    grep -Eq '"schema_version":"embedding-prefix-audit-input/1\.[23]"' "$PRIVATE/prefix-audit-input.json" || fail EMBEDDING_INDEX_PRIVATE_SUCCESSOR_INPUT_REQUIRED
+  fi
   record_phase BEFORE_PRIVATE_SUCCESSOR_PREPARATION
-  timeout --signal=KILL 180 env -i PATH=/usr/bin:/bin TZ=UTC LANG=C.UTF-8 "$OLD_PREFIX/bin/python3.12" -I -S -B "$PRIVATE/install.py" index-private-successor \
-    --candidate "$QUARANTINE" --workspace "$PRIVATE" \
-    --platform-wheel "$PLATFORM_WHEEL" --platform-wheel-sha256 "$PLATFORM_SHA" \
-    --platform-source "$PLATFORM_SOURCE" --platform-source-sha256 "$PLATFORM_SOURCE_SHA" --platform-commit "$PLATFORM_COMMIT" \
-    --lease-wheel "$LEASE_WHEEL" --lease-wheel-sha256 "$LEASE_SHA" \
-    --lease-source "$LEASE_SOURCE" --lease-source-sha256 "$LEASE_SOURCE_SHA" --lease-commit "$LEASE_COMMIT"
+  private_arguments=(index-private-successor --profile "$profile"
+    --candidate "$QUARANTINE" --workspace "$PRIVATE"
+    --platform-wheel "$PLATFORM_WHEEL" --platform-wheel-sha256 "$PLATFORM_SHA"
+    --platform-source "$PLATFORM_SOURCE" --platform-source-sha256 "$PLATFORM_SOURCE_SHA" --platform-commit "$PLATFORM_COMMIT")
+  if [[ "$profile" == CUDA_INDEX_FP32 ]]; then
+    private_arguments+=(
+      --lease-wheel "$LEASE_WHEEL" --lease-wheel-sha256 "$LEASE_SHA"
+      --lease-source "$LEASE_SOURCE" --lease-source-sha256 "$LEASE_SOURCE_SHA" --lease-commit "$LEASE_COMMIT")
+  fi
+  timeout --signal=KILL 180 env -i PATH=/usr/bin:/bin TZ=UTC LANG=C.UTF-8 "$OLD_PREFIX/bin/python3.12" -I -S -B "$PRIVATE/install.py" "${private_arguments[@]}"
   record_phase PRIVATE_SUCCESSOR_PREPARED_NOT_AUDITED
 fi
 if [[ "$mode" == publish || "$mode" == publish-private-successor ]]; then

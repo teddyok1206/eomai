@@ -84,6 +84,8 @@ def overlay(
         site = Path(command[command.index("--target") + 1])
         site.mkdir(parents=True)
         for wheel, package in zip(wheels, ("eom_platform", "eom_gpu_lease"), strict=True):
+            if str(wheel) not in command:
+                continue
             with zipfile.ZipFile(wheel) as archive:
                 for row in archive.infolist():
                     target = site / row.filename
@@ -145,6 +147,66 @@ def test_overlay_replaces_only_private_roots_retains_originals_and_repins_record
     with pytest.raises(FileExistsError):
         module._index_prepare_private_overlay(candidate, workspace, wheels)
     assert len(calls) == 1
+
+
+def test_cpu_overlay_has_one_distribution_cpu_wrapper_and_no_lease_payload(overlay) -> None:
+    module, candidate, workspace, wheels, calls = overlay
+    site = candidate / "lib/python3.12/site-packages"
+    (site / "eom_gpu_lease-0.1.0.dist-info").rmdir()
+    public = site / "torch/__init__.py"
+    before = public.stat(), public.read_bytes()
+    module._index_prepare_private_overlay(
+        candidate, workspace, (wheels[0],), profile="CPU_INDEX_FP32"
+    )
+    assert len(calls) == 1 and str(wheels[1]) not in calls[0]
+    assert (public.stat(), public.read_bytes()) == before
+    assert not (site / "eom_gpu_lease").exists()
+    assert not (site / "eom_gpu_lease-0.1.0.dist-info").exists()
+    wrapper = candidate / "bin/eomctl"
+    assert wrapper.read_bytes().startswith(
+        b"#!/opt/eom/conda/envs/eom-embedding-index-cpu/bin/python3.12\n"
+    )
+    record = site / "eom_platform-0.1.0.dist-info/RECORD"
+    for name, digest, count in list(csv.reader(io.StringIO(record.read_text())))[:-1]:
+        target = site / name
+        assert int(count) == target.stat().st_size
+        assert digest == "sha256=" + base64.urlsafe_b64encode(
+            hashlib.sha256(target.read_bytes()).digest()
+        ).decode().rstrip("=")
+    assert (workspace / "prior-private-overlay/bin/eom-old").is_file()
+    assert not (workspace / "prior-private-overlay/site/eom_gpu_lease-0.1.0.dist-info").exists()
+
+
+@pytest.mark.parametrize(
+    "profile,selection",
+    [
+        ("CPU_INDEX_FP32", ()),
+        ("CPU_INDEX_FP32", (0, 1)),
+        ("CUDA_INDEX_FP32", (0,)),
+        ("CUDA_INDEX_FP32", (0, 0)),
+        ("foreign", (0, 1)),
+    ],
+)
+def test_profile_and_exact_package_arity_reject_before_stage_or_pip(overlay, profile, selection):
+    module, candidate, workspace, wheels, calls = overlay
+    with pytest.raises(module.SnapshotInstallError, match="PRIVATE_PROFILE_INVALID"):
+        module._index_prepare_private_overlay(
+            candidate, workspace, tuple(wheels[index] for index in selection), profile=profile
+        )
+    assert not (workspace / "private-successor").exists() and not calls
+
+
+@pytest.mark.parametrize(
+    "extra", ["eom_gpu_lease/hook.py", "eom_gpu_lease-0.1.0.dist-info/METADATA"]
+)
+def test_cpu_platform_cannot_smuggle_gpu_lease_payload(overlay, extra):
+    module, candidate, workspace, wheels, calls = overlay
+    _wheel(wheels[0], "eom_platform", extra=extra)
+    with pytest.raises(module.SnapshotInstallError, match="PRIVATE_WHEEL_INVALID"):
+        module._index_prepare_private_overlay(
+            candidate, workspace, (wheels[0],), profile="CPU_INDEX_FP32"
+        )
+    assert not calls and not (workspace / "prior-private-overlay").exists()
 
 
 @pytest.mark.parametrize(
@@ -231,17 +293,149 @@ def test_entry_context_rejects_before_any_archive_or_filesystem_mutation(
     assert helper.index_private_successor_main() == 1
 
 
-@pytest.mark.parametrize("version", ("1.2", "1.3"))
+@pytest.mark.parametrize("profile", ("CPU_INDEX_FP32", "CUDA_INDEX_FP32"))
+def test_cli_selects_exact_profile_archives_and_keeps_legacy_cuda_default(
+    helper: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, profile: str
+) -> None:
+    root = tmp_path / "opt/eom"
+    prefixes = {name: root / "conda/envs" / name.lower() for name in helper._INDEX_PREFIXES}
+    monkeypatch.setattr(helper, "_INDEX_PREFIXES", prefixes)
+    monkeypatch.setattr(helper, "Path", lambda value: root if value == "/opt/eom" else Path(value))
+    arguments = ["bootstrap"]
+    if profile == "CPU_INDEX_FP32":
+        arguments.extend(("--profile", profile))
+    candidate = root / "conda/envs/.embedding-index-runtime-abcdefgh"
+    workspace = root / ".embedding-index-install-abcdefgh"
+    arguments.extend(("--candidate", str(candidate), "--workspace", str(workspace)))
+    packages = helper._INDEX_PRIVATE_PACKAGES[profile]
+    for package in packages:
+        name = "platform" if package == "eom_platform" else "lease"
+        values = {
+            "wheel": str(tmp_path / f"{name}.whl"),
+            "wheel-sha256": "1" * 64,
+            "source": str(tmp_path / f"{name}.tar"),
+            "source-sha256": "2" * 64,
+            "commit": "a" * 40,
+        }
+        for field, value in values.items():
+            arguments.extend((f"--{name}-{field}", value))
+    monkeypatch.setattr(
+        helper,
+        "sys",
+        SimpleNamespace(
+            argv=arguments,
+            executable=str(helper.PREFIX / "bin/python3.12"),
+            flags=SimpleNamespace(isolated=True, no_site=True, dont_write_bytecode=True),
+            version_info=(3, 12, 13),
+            platform="linux",
+            stderr=io.StringIO(),
+        ),
+    )
+    monkeypatch.setattr(os, "geteuid", lambda: 0)
+    monkeypatch.setattr(helper, "require_root_path", lambda *args, **kwargs: None)
+    monkeypatch.setattr(helper, "validate_runtime_tree", lambda *args: None)
+    retained, assemblies, source_checks = [], [], []
+
+    def retain(source, digest, basename, **bounds):
+        retained.append((source, digest, basename, bounds["maximum"]))
+        return tmp_path / "retained" / basename
+
+    monkeypatch.setattr(helper, "retain_index_archive", retain)
+    monkeypatch.setattr(
+        helper,
+        "_index_prepare_private_overlay",
+        lambda *args, **kwargs: assemblies.append((args, kwargs)),
+    )
+    monkeypatch.setattr(helper, "_index_private_source", lambda *args: source_checks.append(args))
+    assert helper.index_private_successor_main() == 0
+    assert len(retained) == len(packages) * 2
+    assert assemblies == [
+        (
+            (
+                candidate,
+                workspace,
+                tuple(
+                    tmp_path / "retained" / f"{name}-0.1.0-py3-none-any.whl" for name in packages
+                ),
+            ),
+            {"profile": profile},
+        )
+    ]
+    assert [args[-1] for args in source_checks] == [name.replace("_", "-") for name in packages]
+
+
+@pytest.mark.parametrize(
+    "lease_field", ("wheel", "wheel-sha256", "source", "source-sha256", "commit")
+)
+def test_cpu_cli_rejects_each_foreign_lease_pin_before_context_or_archives(
+    helper: ModuleType, monkeypatch: pytest.MonkeyPatch, lease_field: str
+) -> None:
+    arguments = [
+        "bootstrap",
+        "--profile",
+        "CPU_INDEX_FP32",
+        "--candidate",
+        "/unused",
+        "--workspace",
+        "/unused",
+    ]
+    for field in ("wheel", "wheel-sha256", "source", "source-sha256", "commit"):
+        arguments.extend(("--platform-" + field, "unused"))
+    arguments.extend(("--lease-" + lease_field, "foreign"))
+    monkeypatch.setattr(helper, "sys", SimpleNamespace(argv=arguments, stderr=io.StringIO()))
+    monkeypatch.setattr(
+        helper, "require_root_path", lambda *args, **kwargs: pytest.fail("filesystem")
+    )
+    monkeypatch.setattr(
+        helper, "retain_index_archive", lambda *args, **kwargs: pytest.fail("archives")
+    )
+    assert helper.index_private_successor_main() == 1
+
+
+def test_legacy_cuda_cli_still_requires_complete_lease_pins(
+    helper: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    arguments = ["bootstrap", "--candidate", "/unused", "--workspace", "/unused"]
+    for field in ("wheel", "wheel-sha256", "source", "source-sha256", "commit"):
+        arguments.extend(("--platform-" + field, "unused"))
+    monkeypatch.setattr(helper, "sys", SimpleNamespace(argv=arguments))
+    monkeypatch.setattr(
+        helper, "require_root_path", lambda *args, **kwargs: pytest.fail("filesystem")
+    )
+    monkeypatch.setattr(
+        helper, "retain_index_archive", lambda *args, **kwargs: pytest.fail("archives")
+    )
+    with pytest.raises(SystemExit) as failure:
+        helper.index_private_successor_main()
+    assert failure.value.code == 2
+
+
+@pytest.mark.parametrize(
+    "profile,version",
+    [
+        ("CPU_INDEX_FP32", "1.0"),
+        ("CPU_INDEX_FP32", "1.1"),
+        ("CUDA_INDEX_FP32", "1.2"),
+        ("CUDA_INDEX_FP32", "1.3"),
+    ],
+)
 def test_successor_shell_stops_before_candidate_instruction_and_retains_predecessor(
     tmp_path: Path,
+    profile: str,
     version: str,
 ) -> None:
-    script, prefix, args, marker = _synthetic_shell(tmp_path, profile="CUDA_INDEX_FP32")
+    script, prefix, args, marker = _synthetic_shell(tmp_path, profile=profile)
     prefix.chmod(0o755)
     args[0] = "publish-private-successor"
     owner = Path(args[14])
+    # CPU1.0/1.1 permit whitespace; preserve raw bytes instead of imposing CUDA's
+    # canonical marker rule. The inert OLD stub is not real schema/host admission.
     owner.write_bytes(
-        ('{"schema_version":"embedding-prefix-audit-input/' + version + '"}').encode()
+        (
+            '{"schema_version" : "embedding-prefix-audit-input/' + version + '"}'
+            if profile == "CPU_INDEX_FP32"
+            else '{"schema_version":"embedding-prefix-audit-input/' + version + '"}'
+        ).encode()
     )
     args[15] = hashlib.sha256(owner.read_bytes()).hexdigest()
     old = tmp_path / "opt/eom/conda/envs/eom-embedding-experiment/bin/python3.12"
@@ -257,7 +451,7 @@ def test_successor_shell_stops_before_candidate_instruction_and_retains_predeces
     with tempfile.TemporaryDirectory(prefix="eom-index-source-") as temporary:
         args[-1] = temporary
         args[2] = subprocess.run(
-            ["/usr/bin/bash", str(script), "fingerprint", "CUDA_INDEX_FP32"],
+            ["/usr/bin/bash", str(script), "fingerprint", profile],
             check=True,
             capture_output=True,
             text=True,
@@ -280,11 +474,16 @@ def test_successor_shell_stops_before_candidate_instruction_and_retains_predeces
     assert prefix.is_dir() and backup.stat().st_ino != prefix.stat().st_ino
 
 
-def test_successor_mode_rejects_cpu_before_copy_or_interpreter(tmp_path: Path) -> None:
+@pytest.mark.parametrize("lease_field", range(5))
+def test_cpu_successor_rejects_lease_pins_before_copy_or_interpreter(
+    tmp_path: Path, lease_field: int
+) -> None:
     script, prefix, args, marker = _synthetic_shell(tmp_path)
     args[0] = "publish-private-successor"
+    args[2] = "f" * 64  # Reach the profile guard, not the earlier hash-shape guard.
+    args[9 + lease_field] = "foreign-lease-pin"
     result = subprocess.run(["/usr/bin/bash", str(script), *args], capture_output=True, text=True)
-    assert result.returncode != 0 and "SUCCESSOR_PROFILE_INVALID" in result.stderr
+    assert result.returncode != 0 and "PRIVATE_PINS_REQUIRED" in result.stderr
     assert prefix.is_dir() and not marker.exists()
     assert not tuple(prefix.parent.glob(".embedding-index-runtime-*"))
 
@@ -344,21 +543,20 @@ def test_successor_failure_preserves_original_or_backup_and_never_enters_candida
     os.environ.get("EOM_RUN_NATIVE_PRIVATE_WHEEL_ASSEMBLY") != "1",
     reason="opt-in real protected OLD pip with tiny synthetic wheels; no root/GPU/model",
 )
+@pytest.mark.parametrize("profile", ("CPU_INDEX_FP32", "CUDA_INDEX_FP32"))
 def test_real_old_pip_assembles_only_tiny_synthetic_private_wheels(
-    helper: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    helper: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, profile: str
 ) -> None:
     """Actual offline toolchain, test-only ownership substitute; not native admission."""
     candidate, workspace = tmp_path / "candidate", tmp_path / "workspace"
     site = candidate / "lib/python3.12/site-packages"
     site.mkdir(parents=True)
     (candidate / "bin").mkdir()
-    for name in ("eom_platform", "eom_gpu_lease"):
+    packages = helper._INDEX_PRIVATE_PACKAGES[profile]
+    for name in packages:
         (site / f"{name}-0.1.0.dist-info").mkdir()
     workspace.mkdir(mode=0o700)
-    wheels = (
-        _wheel(tmp_path / "eom_platform-0.1.0-py3-none-any.whl", "eom_platform"),
-        _wheel(tmp_path / "eom_gpu_lease-0.1.0-py3-none-any.whl", "eom_gpu_lease"),
-    )
+    wheels = tuple(_wheel(tmp_path / f"{name}-0.1.0-py3-none-any.whl", name) for name in packages)
     monkeypatch.setattr(
         helper,
         "sys",
@@ -371,13 +569,13 @@ def test_real_old_pip_assembles_only_tiny_synthetic_private_wheels(
     monkeypatch.setattr(helper, "validate_runtime_tree", synthetic_owner)
     previous = os.umask(0o077)
     try:
-        helper._index_prepare_private_overlay(candidate, workspace, wheels)
+        helper._index_prepare_private_overlay(candidate, workspace, wheels, profile=profile)
     finally:
         os.umask(previous)
     assert (
         (candidate / "bin/eomctl")
         .read_bytes()
-        .startswith(b"#!/opt/eom/conda/envs/eom-embedding-cuda/bin/python3.12\n")
+        .startswith(f"#!{helper._INDEX_PREFIXES[profile]}/bin/python3.12\n".encode())
     )
     assert (candidate / "bin/eomctl").stat().st_mode & 0o777 == 0o555
     assert (workspace / "prior-private-overlay/site/eom_platform-0.1.0.dist-info").is_dir()
