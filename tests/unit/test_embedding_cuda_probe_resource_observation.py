@@ -5,6 +5,8 @@ from __future__ import annotations
 import copy
 import json
 import os
+import subprocess
+import sys
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -12,6 +14,8 @@ from types import SimpleNamespace
 import pytest
 from eom_catalog_service import embedding_cuda_probe_resource_observation as owner
 
+from tests.unit.embedding_benchmark_cuda_ready_fixtures import benchmark_cuda_ready
+from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.test_embedding_cuda_probe_resource_files import FakeKernel, metadata
 from tests.unit.test_embedding_native_cuda_probe import case as case
 from tests.unit.test_embedding_native_cuda_probe_ready import ready_case as ready_case
@@ -130,6 +134,80 @@ def test_worker_and_pid1_real_lock_records_are_both_required_not_display_path(ke
     assert result.shared_gpu_lease.lock_epoch[1] == 99
     assert tuple(n.role for n in result.device_nodes) == tuple(owner.CUDA_DEVICE_NODE_SPECS)
     assert not hasattr(result, "assert_owned")
+
+
+def benchmark_report(kernel):
+    from eom_catalog_contracts.embedding_benchmark_cuda_ready import BenchmarkCudaReady
+
+    prototype, _files, state, _store = kernel
+    _, ready = benchmark_cuda_ready()
+    body = ready.model_dump(mode="json")
+    for name in (
+        "execution_id",
+        "pid",
+        "start_time_ticks",
+        "worker_uid",
+        "worker_gid",
+        "supplementary_gids",
+        "resource_fds",
+        "expected_device_capture",
+    ):
+        body[name] = prototype.model_dump(mode="json")[name]
+    report = BenchmarkCudaReady.model_validate(seal(body, "ready_sha256"))
+    state["expected_unit"] = f"eom-embedding-benchmark-cuda@{report.execution_id}.service"
+    return report
+
+
+def test_existing_probe_and_image_imports_do_not_eagerly_load_new_ready_contract():
+    paths = os.environ["PYTHONPATH"].split(os.pathsep)
+    code = """
+import sys
+sys.path[:0]=sys.argv[1:]
+import eom_catalog_service.embedding_cuda_probe_resource_observation
+assert 'eom_catalog_contracts.embedding_benchmark_cuda_ready' not in sys.modules
+# Existing public package exports already load the old benchmark1.0 contract.
+# This extension must not add an eager import of the new readiness branch.
+assert not {'torch','numpy','transformers','tokenizers'}.intersection(sys.modules)
+"""
+    result = subprocess.run(
+        (sys.executable, "-I", "-B", "-c", code, *paths), capture_output=True, timeout=10
+    )
+    assert result.returncode == 0, result.stderr.decode()
+
+
+def test_benchmark_uses_its_own_message_and_exact_unit_with_the_same_kernel_fd_rules(kernel):
+    report = benchmark_report(kernel)
+    result = owner.observe_benchmark_cuda_ready_resources(
+        report, unit=kernel[2]["expected_unit"], lease_gid=2468
+    )
+    assert result.pid1_descriptor == 80 and result.shared_gpu_lease.holder_pid == report.pid
+    assert result.shared_gpu_lease.lock_epoch[1] == 99
+    assert not hasattr(result, "assert_owned")
+
+
+@pytest.mark.parametrize(
+    "fault", ("probe_report", "probe_unit", "other_execution", "group", "pid1", "worker", "store")
+)
+def test_benchmark_cannot_borrow_another_purpose_or_skip_either_physical_lock(kernel, fault):
+    report = benchmark_report(kernel)
+    unit = kernel[2]["expected_unit"]
+    group = 2468
+    if fault == "probe_report":
+        report = kernel[0]
+    elif fault == "probe_unit":
+        unit = "eom-embedding-native-cuda-probe@" + report.execution_id + ".service"
+    elif fault == "other_execution":
+        unit = "eom-embedding-benchmark-cuda@" + "0" * 32 + ".service"
+    elif fault == "group":
+        group = 1
+    elif fault == "pid1":
+        kernel[2]["unheld_pid1"] = True
+    elif fault == "worker":
+        kernel[2]["unheld_worker"] = True
+    else:
+        kernel[2]["store"] = b"[]"
+    with pytest.raises(ValueError, match="BENCHMARK_CUDA_RESOURCE_OBSERVATION_INVALID"):
+        owner.observe_benchmark_cuda_ready_resources(report, unit=unit, lease_gid=group)
 
 
 @pytest.mark.parametrize(

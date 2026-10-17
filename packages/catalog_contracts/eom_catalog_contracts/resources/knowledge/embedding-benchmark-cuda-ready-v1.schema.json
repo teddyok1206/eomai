@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/embedding-benchmark-cuda-ready/1.0",
+  "title": "CUDA benchmark pre-initialization retention request; never a probe result, root acceptance or compute grant",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_state",
+    "execution_id",
+    "job_id",
+    "invocation_raw_sha256",
+    "configuration",
+    "receipt_raw_sha256",
+    "fdstore_name",
+    "pid",
+    "start_time_ticks",
+    "worker_uid",
+    "worker_gid",
+    "supplementary_gids",
+    "resource_fds",
+    "expected_device_capture",
+    "cuda_initialization_calls",
+    "cuda_synchronize_calls",
+    "model_constructor_calls",
+    "tokenizer_constructor_calls",
+    "forward_calls",
+    "ready_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "embedding-benchmark-cuda-ready/1.0"
+    },
+    "evidence_state": {
+      "const": "RETENTION_REQUESTED_NOT_COMPUTE_ADMITTED"
+    },
+    "execution_id": {
+      "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/executionId"
+    },
+    "job_id": {
+      "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/jobId"
+    },
+    "invocation_raw_sha256": {
+      "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/sha"
+    },
+    "configuration": {
+      "$ref": "eom://schemas/knowledge/embedding-native-cuda-probe-lease-ready/1.0#/properties/configuration"
+    },
+    "receipt_raw_sha256": {
+      "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/sha"
+    },
+    "fdstore_name": {
+      "const": "eom-gpu0-lease"
+    },
+    "pid": {
+      "$ref": "eom://schemas/knowledge/embedding-native-cuda-probe-lease-ready/1.0#/properties/pid"
+    },
+    "start_time_ticks": {
+      "$ref": "eom://schemas/knowledge/embedding-native-cuda-probe-lease-ready/1.0#/properties/start_time_ticks"
+    },
+    "worker_uid": {
+      "$ref": "eom://schemas/knowledge/embedding-native-cuda-probe-lease-ready/1.0#/properties/worker_uid"
+    },
+    "worker_gid": {
+      "$ref": "eom://schemas/knowledge/embedding-native-cuda-probe-lease-ready/1.0#/properties/worker_gid"
+    },
+    "supplementary_gids": {
+      "$ref": "eom://schemas/knowledge/embedding-native-cuda-probe-lease-ready/1.0#/properties/supplementary_gids"
+    },
+    "resource_fds": {
+      "$ref": "eom://schemas/knowledge/embedding-native-cuda-probe-lease-ready/1.0#/properties/resource_fds"
+    },
+    "expected_device_capture": {
+      "$ref": "eom://schemas/knowledge/embedding-native-cuda-probe-lease-ready/1.0#/properties/expected_device_capture"
+    },
+    "cuda_initialization_calls": {
+      "type": "integer",
+      "const": 0
+    },
+    "cuda_synchronize_calls": {
+      "type": "integer",
+      "const": 0
+    },
+    "model_constructor_calls": {
+      "type": "integer",
+      "const": 0
+    },
+    "tokenizer_constructor_calls": {
+      "type": "integer",
+      "const": 0
+    },
+    "forward_calls": {
+      "type": "integer",
+      "const": 0
+    },
+    "ready_sha256": {
+      "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/sha"
+    }
+  }
+}

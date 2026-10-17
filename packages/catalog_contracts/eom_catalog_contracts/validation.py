@@ -30,6 +30,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "embedding-benchmark-cuda-ready": CatalogSchemaResource(
+            "schemas/knowledge/embedding-benchmark-cuda-ready-v1.schema.json",
+            "resources/knowledge/embedding-benchmark-cuda-ready-v1.schema.json",
+            "1.0",
+            "sha256:c902ead02b103dcff6304cf9fbb9c9e47fcd5db1e23f6e158a7c2660d3913a10",
+        ),
         "system-rag-exam-observation-read": CatalogSchemaResource(
             "schemas/knowledge/system-rag-exam-observation-read-v1.schema.json",
             "resources/knowledge/system-rag-exam-observation-read-v1.schema.json",

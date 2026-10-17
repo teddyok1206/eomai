@@ -10,6 +10,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from eom_catalog_contracts.embedding_cuda_installation_evidence import (
     CUDA_DEVICE_NODE_SPECS,
@@ -24,9 +25,13 @@ from eom_catalog_contracts.embedding_native_cuda_probe import (
 from eom_catalog_contracts.embedding_native_installation_evidence import (
     parse_rootlocal_evidence_document,
 )
+from jsonschema.exceptions import ValidationError as JsonSchemaError
 
 from eom_catalog_service.embedding_runtime_files import read_live_runtime_os_file
 from eom_catalog_service.embedding_runtime_process_identity import require_exclusive_flock_fdinfo
+
+if TYPE_CHECKING:
+    from eom_catalog_contracts.embedding_benchmark_cuda_ready import BenchmarkCudaReady
 
 _LOCK = Path("/run/eom-gpu-lease/gpu0.lock")
 _PID1_FDS = Path("/proc/1/fd")
@@ -375,6 +380,33 @@ def observe_cuda_probe_resources(
         report = NativeCudaProbeResult.model_validate(report)
     else:
         raise ValueError("NATIVE_CUDA_PROBE_RESOURCE_OBSERVATION_INVALID")
+    return _observe_native_report_resources(report, unit=unit, lease_gid=lease_gid)
+
+
+def observe_benchmark_cuda_ready_resources(
+    report: BenchmarkCudaReady, *, unit: str, lease_gid: int
+) -> CudaProbeResourceObservation:
+    """Benchmark-only kernel readback, not a fabricated probe or source/compute grant.
+
+    Caller separately pins unit policy, process/cgroup/birth, executable/host and source/Job.
+    The returned small physical observation shares the existing value layout, not probe status.
+    """
+    try:
+        _require(os.getresuid() == (0, 0, 0))
+        from eom_catalog_contracts.embedding_benchmark_cuda_ready import BenchmarkCudaReady
+
+        _require(type(report) is BenchmarkCudaReady)
+        report = BenchmarkCudaReady.model_validate(report)
+        _require(unit == f"eom-embedding-benchmark-cuda@{report.execution_id}.service")
+        return _observe_native_report_resources(report, unit=unit, lease_gid=lease_gid)
+    except (ValueError, OSError, JsonSchemaError):
+        raise ValueError("BENCHMARK_CUDA_RESOURCE_OBSERVATION_INVALID") from None
+
+
+def _observe_native_report_resources(
+    report: ProbeReport | BenchmarkCudaReady, *, unit: str, lease_gid: int
+) -> CudaProbeResourceObservation:
+    """Shared physical FD checks after each public closed-purpose/root identity guard."""
     _require(type(lease_gid) is int and report.supplementary_gids == (lease_gid,))
     lease = _current_lease(report.pid, report.start_time_ticks, lease_gid)
     held_lock = Path("/proc") / str(report.pid) / "fd" / str(report.resource_fds.lease_fd)

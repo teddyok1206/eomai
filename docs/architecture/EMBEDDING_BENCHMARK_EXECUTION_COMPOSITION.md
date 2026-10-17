@@ -490,3 +490,106 @@ launch or model success. Fixed unit/namespace/retirement integration and compati
 installation must be completed before model execution. Actual operator/source preparation,
 six launches, timing/default decision, original remaining image/trainer regressions and
 C1–C5 consumers remain open. No live unit, prefix, model, Artifact or default changed.
+
+## CUDA executable and pre-initialization root ACK — implementation plan
+
+The next executable is the fixed CUDA benchmark leaf, not a repurposed installation probe.
+Its root/PID1 transport must be implemented before actual private-data inference:
+
+1. Define the small `embedding-benchmark-cuda-ready/1.0` JSON Schema2020-12 before worker
+   behavior. Reuse existing configuration-pin, device-capture and FD-descriptor value types,
+   but do not serialize a fake probe input/result. Bind real Job/execution identity, exact
+   invocation raw hash, configuration/receipt pins, process birth/UID/GID, retained-store
+   name, device capture and zero initialization/model/tokenizer/forward counters. The small
+   canonical self-hash is identity only, not root acceptance or compute permission.
+2. Keep the existing benchmark1.0 invocation/result/channel and numerical rules unchanged.
+   The operational readiness member is fixed `cuda-ready.json` in the root-owned execution
+   directory, **outside** the canonical4/16-member numerical output namespace. Root precreates
+   it once with native ownership and workflow-owner read group, no create/unlink permission.
+   Only this member and precreated outputs become writable in the private worker namespace.
+3. Fixed CLI values come from the protected per-execution environment and PID1-opened input
+   and listener, not worker JSON paths. Share only the actual common CPU/CUDA CLI/input
+   adaptation through a small public value/parser, preserving existing CPU behavior. Block
+   root-ACK signals before optional imports; check exact native CUDA identity before loading
+   metadata, and retain the existing diagnostics suppression and absolute owner deadline.
+4. Acquire the **existing** shared physical lease and request PID1 retention before CUDA
+   initialization. Existing O_PATH device/lease capture supplies untrusted descriptor hints;
+   no constructor or initialization is permitted before root ACK. Read only protected pinned
+   config/proof metadata needed for readiness, with current epochs and no implicit latest.
+5. Root independently verifies the exact new unit/template policy, MainPID/start ticks,
+   credentials/capabilities/cgroup and executable/host closure, real worker lock and PID1
+   retained descriptor, actual device mapping and competing clients. Reuse the existing
+   physical-FD observation adapter via a typed benchmark-specific entry, not fake probe
+   metadata or an enlarged arbitrary-template allowlist. Source/session/Job authority stays
+   with the supported Orchestrator owner; root observation itself grants no source access.
+6. Native wait accepts only the reserved signal from kernel-observed UID0, bounded by the
+   absolute deadline and existing30-second observation ceiling. Missing/wrong/late ACK fails
+   without model construction, CPU fallback, reconnect, new identity or lease renewal. Only
+   after ACK may the concrete opened-device scope and CUDA backend composition run. It uses
+   the existing owner channel/checkpoints/resource finalizer; actual owner resource readback
+   remains mandatory for the frozen1.0 result and timing gates.
+7. Close model/backend before borrowed device resources; close only the process's original
+   lease description. PID1 retention must survive failure/exit. The existing root terminal,
+   driver-client, retained-store retirement and exact-inode handoff checks govern physical
+   release; unknown cleanup blocks the next launch and never becomes success.
+
+This is bounded keyed execution lookup, fixed-size readiness IO and the existing ordered
+checkpoint stream; no DB migration, new queue, model service or general plugin framework.
+Root/native transport and actual current source authorization remain separate adapter
+owners. No large payload is copied into DB, no readiness path is caller-selected, and no
+worker can access DB/NAS/credentials or sibling executions. Readiness fixtures and API-user
+identity negatives are not physical CUDA or source-admitted benchmark acceptance.
+
+Finish the concrete CUDA entry/root-observer/unit and CPU privileged-preparation bridge
+before a coordinated compatible numerical-prefix successor. Do not repeatedly update an
+active prefix for source-only helper increments. Current INDEX/QUERY and prior accepted
+policies stay pinned until explicit release/rollback and native admission gates pass.
+
+### CUDA readiness protocol and shared root FD observation source checkpoint
+
+Defined additive `embedding-benchmark-cuda-ready/1.0` schema/frozen model before a CUDA
+worker can emit it. It reuses existing small configuration/device/FD **value definitions**,
+not a fake probe message. The new message binds Job/execution/invocation raw hash, pinned
+configuration/receipt, process identity/birth and pre-initialization zero counters with its
+own semantic hash. Canonical bytes, bounds, duplicate keys, coerced counters, extra authority
+fields, aliased descriptors and rehashed cross-Job/device pointers are rejected. Parsing
+still cannot acknowledge a GPU, establish a genuine Job or authorize model computation.
+
+The existing root physical-FD observer now has a distinct typed benchmark entry. It binds
+the exact benchmark execution unit and checks both real worker lock and PID1 retention
+using the same private physical checks as the unchanged probe entry. No arbitrary-template
+registration, fake probe, source grant, signal or lease acquisition/release is added. The
+benchmark model is imported only for that new branch. Existing image/probe entry imports
+remain unchanged; a fresh-process test checks no new readiness or optional ML import.
+
+Related9 suites: **425 PASS20.71s**, strict3 production modules PASS. Separate Catalog
+resource/new-readiness/frozen-benchmark contract suites: **268 PASS10.89s**; these overlap
+and must not be added together. Ruff/format and exact schema mirror/hash checks PASS.
+Schema raw SHA: `c902ead02b103dcff6304cf9fbb9c9e47fcd5db1e23f6e158a7c2660d3913a10`.
+An initial import named a nonexistent codec module; it was corrected to the existing public
+ROOTLOCAL codec, not another parser. One dependency test initially prohibited the old
+benchmark contract too, but the predecessor public package already exports it at
+`eom_catalog_contracts.__init__`; the test now protects the actual added lazy-readiness
+boundary without claiming removal of that pre-existing dependency.
+
+All readiness/FD positive fixtures are synthetic, not actual root/GPU/source admission.
+The kernel FD algorithm itself is reused, not weakened. CUDA executable/ready member writer,
+root unit/process/host/source admission and ACK, namespace/terminal retirement, compatible
+prefix and actual six launches remain required. No native unit or numerical prefix has
+been updated for these source changes; model executions remain0 at this checkpoint.
+
+The preceding CUDA backend candidate `7bc16caef857afab7c32a54ed57de8cd1b43eddb` passed its
+standard three-wheel/RECORD build. A fresh isolated API interpreter imported its **wheel**
+module with exact member SHA and refused wrong native identity before metadata/ML imports:
+`/tmp/eom-benchmark-cuda-composition.JvOuEwWM/result.json`. It is BUILD_ONLY, not installed
+native admission. Build `/tmp/eom-api-build/7bc16caef857afab7c32a54ed57de8cd1b43eddb.yplcHO/dist`;
+platform raw wheel SHA `2d3c2ca82618b0b66da926d59c943556ba47bd03b9c12311574a1ba4a0b9ebbf`,
+API-contract raw wheel SHA `809f3c96ae37655a5bda96f0aa340344cad1c4456935897ef9792e497f6bcc0c`.
+
+Routine07:12:24 observation reused the already installed protected read-only observer,
+without a new root script installation. Existing INDEX3633849 and QUERY3633843 are live;
+metadata shows485 encodings/bindings,128 index revisions and6 logical indexes. The latest
+per-view rows175/149/161 with eligible545 do not prove whole-corpus coverage or485/545.
+Two newer workflows completed, one is RUNNING and two REQUESTED with no failure code in
+that bounded projection. Original HTTP observer2895440 remains live/LOGIN; no authentication
+success, new prompt/key/request or restart is claimed. Next routine check≥07:42:24 UTC.
