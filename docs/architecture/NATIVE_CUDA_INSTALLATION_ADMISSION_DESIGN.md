@@ -43,6 +43,37 @@ not by itself seal CUDA admission, migrate image entries or activate a GPU defau
 
 ## Responsibility and required design procedure
 
+### NVML cache alias selection —bounded root maintenance
+
+The new config1.3 and byte-audited prefix do not themselves change the fixed
+probe's root-owned `selected-cache` alias. Select only the exact validated host1.1
+revision used by that config, never latest. This alias is a mutable storage
+reference, not a host identity or GPU-default decision. Root holds the existing
+CUDA publication flock and actual free physical GPU inode, verifies no active
+old CUDA/image unit and a bounded empty driver-client snapshot, validates both
+old/new config/host/cache pointers, and fsyncs a no-clobber intent with old/new
+targets before atomic symlink replacement. Retain both immutable cache revisions;
+record/recheck the new link target and opened-cache inode. No schema/DB/queue,
+worker message, model run, unit-policy change or numerical-space change is needed.
+Operations are fixed pointer lookup and bounded key/set comparisons; no global
+process-name scan or data copy. Root filesystem/systemd adapters own effects;
+unknown outcome is reread, not blind replay. Root's later fixed probe must still
+prove both phases and actual mappings; baseline image idleness is not completion
+of the separate19-entrypoint shared-lease migration gate.
+
+Actual2026-10-17 implementation uses only the existing typed receipt2.1,
+configuration1.3 and protected root probe/terminal observers. Root assembles the
+receipt from independently saved READY/FINAL and freshly rechecked terminal
+evidence, validates exact raw/semantic/policy/host/device/source references, writes
+the pinned installation inventory once and receipt last with exclusive/fsynced
+root-owned files. This is OS installation evidence, not a new NAS commit owner.
+The independent reader runs the actual CUDA-prefix interpreter as UID973 with no
+GPU R/W grant; it must reject factory binding without separate live ownership.
+Only successful sealing and native readback permit the already implemented
+exact-unit success retirement. No new worker protocol or general sealer framework
+was introduced. Actual probe/receipt/native-reader/retirement acceptance and all
+hashes are in the [operation record](../operations/EMBEDDING_CUDA_CONFIGURATION_2026-10-16.md#actual-nvml-probe-seal-native-reader-and-success-retirement).
+
 ### NVML successor selection —2026-10-17, design before protocol
 
 The actual host1.1 publication/capture does not fit the exact host1.0 references

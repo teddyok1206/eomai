@@ -612,3 +612,130 @@ comparisons and conditional GPU default run. C1–C5 actual consumer gates remai
 open. The full original goal stays ACTIVE; source/static byte PASS is not runtime,
 benchmark or product completion. Total historical candidate probe executions are
 still two FAILED histories; this prefix/config work adds **zero** probe/model runs.
+
+## Actual NVML probe, seal, native reader and success retirement
+
+Actual2026-10-17 01:48–02:01 UTC.
+
+This checkpoint supersedes the earlier NOT_SELECTED/NOT_ADMITTED snapshot for
+config1.3 only. Numerical prefix is still exactly c499e3bd; administrative owner
+is e5a49f60. No new wheel, source overlay, numerical bytes, model payload, queue,
+DB schema, source/report revision, API/CPU owner release or GPU default was changed.
+
+### Exact cache selection, including the preserved operator failure
+
+Root operator raw `b85e2832f795090e9d70336602ed4099ba6555fdd1649a58382c34c3d2d447ed`
+validated old/new config/host/cache, held the existing publication flock and actual
+free physical inode, and required no active CUDA/image unit or driver clients.
+The first selection unit `eom-cuda-cache-selection-83d62d8d.service`, invocation
+`2950f6d9729145598d4f423ea6044ae4`, failed **before** stage/intent/alias mutation:
+the operator's DeviceAllow colon spelling named the wrong device paths. Actual
+properties and denied fixed NVIDIA query established the cause. Its failed
+history remains; no device-policy relaxation, model run or failed-state reset.
+
+Only the systemd property spelling was corrected to fixed `DeviceAllow=/dev/... rw`.
+Distinct unit `eom-cuda-cache-selection-access-83d62d8d.service`, invocation
+`f98459051eb34328aa53247963be173f`, succeeded with the SAME reviewed helper.
+Root no-clobber/fsynced intent/result are in
+`/opt/eom/.embedding-cuda-nvml-selection-83d62d8d`.
+The mutable `selected-cache` alias now names exact host1.1 revision b1039162's
+immutable cache, raw7276f7a0f80cbcb2cf877a51021f96b0f2f9ea4ca553e061b4f38146c6fb6d20.
+Both old/new caches remain. This is loader selection, **not GPU-default activation**.
+
+### Actual fixed two-ACK probe
+
+New execution `83d62d8d6e8247f0a98823f3451c1494` ran once in the unchanged fixed
+template911e3ef9 as UID/GID973 with only shared lease group974. Actual PID4030275,
+worker invocation `ecb3ce875f3f4727b16fbd254810bbf9`; root controller invocation
+`1ae918d8d5374a93a35a323a9dbf0ab4` with protected helper raw357a8cd1.
+Its kernel/process/resource observer validated both phases, not worker assertions:
+
+| Actual event | UTC |
+| --- | --- |
+| Submitted |01:48:31.419448 |
+| Independent READY observation / first ACK |01:48:39.004927 |
+| Independent FINAL mappings/resources / second ACK |01:49:36.478264 |
+| Successful terminal/cgroup/GPU-client readback |01:49:37.267952 |
+
+READY rawb1824530a9f8bb695a8a24ca2241b43996766c69e4eb053f69cb6c520815a10d;
+FINAL rawfd251c9000ea53ba4cd2bdb37d6382102720265d605b51f27f4fc44fb41de18a.
+Loaded ELF member hash672ea4d470837a801d780dcc4b3b83286bf97cd59edf9629b2128aff3d0d6195,
+including the actual reviewed NVML mapping. CUDA initialization1/synchronization1;
+model constructors0, tokenizer constructors0, forwards0. MainPID0, empty cgroup,
+original probe GPU clients0; PID1 intentionally retained the same physical lease
+until seal/readback. Original dd46/db5 failures remain failures. Total distinct
+candidate installation probes are now **two historical FAILED + this one PASS**.
+
+### Root installation seal and actual non-owning native reader
+
+Root sealer `eom-cuda-nvml-seal-83d62d8d.service`, invocation
+`47b2af2bd86947f3bb158a9bdb4fa121`, used protected helper
+rawe326efc2a7f6ca4c0e94a090934421c461ca6a4fd788b79f1b913cbac0c8eae3.
+It used existing typed codecs/reference validators, rechecked root observations,
+actual effective policy, all current prefix epochs, account/template, host/cache,
+device/boot, retained inode and fresh successful terminal state. No new framework
+or worker protocol. It exclusively wrote root installation metadata at the existing
+fixed admission namespace; inventory is one explicit sealing materialization, not
+a second model or NAS product Artifact. The receipt was written last, fsynced,
+then exposed root444 under root755 directories without overwriting predecessors.
+
+Config1.3's existing logical/revision directory under
+`/opt/eom/embedding-runtime-admission/` now contains inventory.json,
+effective-policy.txt and receipt.json. Exact accepted values:
+
+| Meaning | Actual SHA-256 / time |
+| --- | --- |
+| Receipt2.1 raw | `2ba46dbf2e18d1e68198a4b3ba988269965b0122745a05e4aa65499cb8c2e8f0` |
+| Receipt semantic | `cd36cbb70b400d4938a7655cb793ffd245099b93083a39655ef957058b478179` |
+| Effective policy raw | `de6ab8c0db192f717fed9f2ef694e28df8d9f9b10815a7e16ce4d5427ff8bcb2` |
+| Sealed |2026-10-17T01:57:50.100113Z |
+
+Independent `eom-cuda-nvml-reader-83d62d8d.service` invocation
+`20f9514791c34920b9868f569e7ea586`, PID4037220, passed01:59:34.140847 UTC.
+It executed the **actual CUDA prefix Python3.12 -I -B as UID/GID973**, not root/OLD
+with an interpreter guard patched away. Protected reader helper
+rawd206c4d81aecbd53632a474e4f399561dc90e917ee84ea0036010e23f3c4e239
+read/revalidated the pinned receipt and whole installation twice. No capabilities,
+no GPU DeviceAllow grant, read-only installation/lease material, private network,
+NAS/auth/repository inaccessible. All4 actual GPU O_RDWR attempts were denied;
+the native factory rejected missing ownership before backend creation. Optional
+ML imports0/model runs0. The exact invocation's successful terminal journal and
+root-protected output were checked separately; its root log raw is
+369cbbb71494bd49f41857279419a80f83368b57cc66925b9a93f2c3a45f5d2d.
+
+### Supported success retirement, not failure reset
+
+Only after actual seal and native reader PASS, the existing installed e5 public
+`retire_successful_native_cuda_probe` executed once. Operator helper
+raw73a486873f4802c6a4fbbde1cd4b121dd2b496b23be0e909f0469c5faed26dab
+ran in `eom-cuda-nvml-retirement-83d62d8d.service`, invocation
+`7db916da42674233af44b30c543fc8d0`, completed02:01:03 UTC.
+Fresh terminal verification preceded the fsynced success intent and exact unit
+stop. MainPID0/store0, empty cgroup, original GPU client absent and actual new
+exclusive acquisition of the SAME physical lock inode were verified. The public
+read-only retired-success observer then independently rechecked; no second stop.
+
+Root-protected `/opt/eom/embedding-probe-retirements/83d62d8d6e8247f0a98823f3451c1494/`:
+intent raw88f9f77b0a64a5fb8a4e44ce6991445a83696474072dc44d8b23d66bfd6a47d5;
+result raw64ee48dd2288a8a65f046ae9f328022d4dd8a3c0a0a6a7bbf2b0ec376d69f45d.
+Its recorded outcome remains SUCCESS; old failed histories were not reset or
+reinterpreted. The fixed probe is inactive/dead/Main0/store0. No model/QUERY replay,
+GPU default or broad cleanup. Local operator/materialization files remain in
+`/tmp/eom-cuda-nvml-probe-9QBBCdeI`; protected root copies remain in the existing
+release-operator directory. Lint/format and launch-shell syntax passed before use.
+
+Next: migrate all19 actual legacy image GPU entry/lifetime paths to the existing
+shared inode; only then perform the six frozen real CPU/CUDA model comparisons
+and conditional default decision. Original authenticated HTTP, private Chat,
+ordinary author/review and exact25 consumer acceptance remain open. The original
+full goal remains ACTIVE, and **installation PASS is not product completion**.
+
+Routine read-only observation02:03:44 UTC (previous01:33:11, not progress polling):
+INDEX/QUERY remain active/running with the SAME3633849/3633843 PIDs and
+7c9ea0c5/ae90dbc1 invocations. Original HTTP observer2895440 remains alive/LOGIN;
+no acceptance file/auth-success/new prompt/key/QUERY is inferred from a user reply.
+All three preceding four-target commands ecdbfb60/239e621e/54435cee succeeded
+01:36:49/01:48:24/01:59:43. Subsequent bounded four-target commands are queued;
+separately timed view projections report missing bindings381/391/403, eligible545,
+missing accepted reports25, unavailable views0. Do not sum these windows into a
+coherent global completeness claim. Next routine observation is not before02:33:44.
