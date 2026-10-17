@@ -1348,3 +1348,14 @@ reviewed operator raw SHA
 Same EOM2 sudo TTY reused without a new prompt, saved credential or TTL changes. Only that
 marker-identified disposable DB and temporary roles/state were removed; another fixture can
 recreate them. No production DB/Job/Item/NAS Artifact, model, runtime selector or default changed.
+
+Source `0e3b8940feab7cc56a70d3065f32e56610926507` passed the standard three-wheel/RECORD
+build and was pushed to main with a clean tree. Build directory
+`/tmp/eom-api-build/0e3b8940feab7cc56a70d3065f32e56610926507.vYqLmD/dist`;
+platform raw SHA `69dd90ec35df90e28fe293e4fd0c00b1317d7579f73f7df7713e11434d6a0cd7`;
+API-contract raw SHA `281e944f5e1eef629189e34a30ca816ad0a9eb157c36939e93f18c74f9fc4f19`.
+A fresh isolated actual API-interpreter process imported all6 changed production modules
+directly from that wheel (not Git/editable source), byte-matched each member and observed
+no torch/transformers/sentence-transformers/numpy imports. This verifies packaging/import
+closure, not installation/admission or numerical execution. No active or passive owner
+release, numerical prefix, unit, selector or default was installed/changed for this candidate.
