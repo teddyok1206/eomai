@@ -1,10 +1,11 @@
 # Fixed benchmark prefix preparation — 2026-10-17 UTC
 
-**CUDA FRESH_ADMISSION_PASS / SUCCESSOR_POLICY_PUBLISHED / CPU_NOT_UPGRADED /
-SIX_RUNS_PENDING.** Earlier dated preparation/probe statuses below are historical.
-CPU operating prefix/config and model defaults are unchanged. This is not a
-six-run comparison or full-goal acceptance. The original HTTP context failure
-remains open and is prioritized before further consumer activation.
+**CPU/CUDA FRESH_ADMISSION_PASS / INDEX16_SELECTED_RESUMED /
+QUERY_READY / SIX_RUNS_PENDING**, as of19:26 UTC. Earlier dated preparation/probe
+statuses below are historical. The CPU private code/config changed; model,
+document encoder space and CPU default did not. This is not a six-run comparison
+or full-goal acceptance. The original HTTP context failure remains open; the
+user's no-interactive-login window is honored without simulated authentication.
 
 ## Exact source and preparation
 
@@ -473,3 +474,139 @@ proofs do not prove a fresh CPU install, model comparison, GPU superiority,
 consumer activation or the original HTTP context delivery. The next boundary
 remains coherent normal drain → supported old-command handling → CPU successor/
 fresh admission → stopped configuration/Identity selection → normal resumption.
+
+### CPU maintenance drain and rollback boundary
+
+Before any prefix mutation, pin the actual two owner invocations/config files,
+the already installed compatible owner and its published policy/Catalog receipt.
+SIGTERM only the original main processes, not native children or a timed systemd
+stop job. Wait for natural completion and separately inspect terminal owners,
+native processes/Jobs and exact remaining commands. Preserve all completed work.
+Only supported owner-maintenance cancellation may handle still-unstarted old
+requests; an earlier observation is not authority to cancel a newly claimed row.
+
+The complete predecessor prefix is retained, but a filesystem restore alone is
+not runtime rollback acceptance: rename/chmod changes captured prefix epochs.
+If restoration is needed, preserve the rejected successor, independently audit
+the restored bytes and make a fresh config/probe/admission and coherent owner
+selection before resuming. Never reuse an old sealed epoch receipt as if a
+changed root were unchanged. Existing source/model/vector history is untouched;
+fresh admission and a compatible control set, not an old path name, define recovery.
+
+### Actual CPU publication, fresh installation admission and owner resumption
+
+The original QUERY/INDEX main processes received normal main-only SIGTERM at
+18:48 UTC. INDEX completed its current work naturally by18:55 UTC. Independent
+post-drain reads found both exact original units inactive/dead/success, no live
+native CPU work and **zero unfinished INDEX commands**. The supported maintenance
+application therefore produced empty command/receipt lists: **no cancellation**,
+row repair, synthetic failure or replacement workflow was needed. The old expired
+QUERY history remains unchanged.
+
+The fixed CPU installer was submitted once as
+`eom-cpu-benchmark-prefix-42a1c5c6.service`, invocation
+`252a445702c74014a13ed1e9214e719f`. Its actual successful terminal journal and
+protected outputs were checked independently. Complete predecessor backup:
+`/opt/eom/conda/envs/.embedding-index-prepublication-CPU_INDEX_FP32-.embedding-index-install-IfhMkoYI`.
+The independent OLD reader verified30,917 entries/27,442 regular files/1,380 links/
+356 ELF and1,176,577,301 audited bytes. Numerical implementation files3 remain
+exact predecessors; benchmark CPU/worker files2 match source42a1c5c6.
+
+| Fresh CPU proof | Exact value |
+|---|---|
+| Inventory raw SHA | `0bfabf5b4db83ccd43dcdff5d073476cccfa6e8bb3089a5ec05ade5c37a52d7e` |
+| Inventory semantic SHA | `5b2f79ad747e0b442558d3c4639f0285fcb9af1a04a75e55c96f0812ac11d984` |
+| Native config revision | `embeddingnativeconfigrev_387a9b5d34b54298a4004dc0c1c20dce` |
+| Config raw SHA | `d7a81c8a118136efa49bc932c4ae67a9095045866a4f869c7f5a7ed9b202af86` |
+| Config semantic SHA | `2ca18183f3275c718730229db8485534aca31669fc7bbc3cc7989ae76123ec91` |
+| Runtime SHA, unchanged | `f02cfc2b977c262b2b20cf7a3cc07553ad41f718ca39334953fb11d7a6ab10fb` |
+| New receipt raw SHA | `2b938120a3180bd8ff70d8fbfb52eaca0ae77a2d65ee3d0c2ea1daaf47b7fea1` |
+| New receipt semantic SHA | `a663cf8f24dd8bce5d27a7eb3595de040ba6a4dec7bbf192eca503900377dd69` |
+
+Actual native installation probe `a8a4336f416342c0993d379c1991c3a9` ran as
+UID978/GID975, PID1142087, invocation7079216381f14ded843fc91f495f2003. The original
+controller checked actual process/unit/ELF/denials, both ACKs and successful
+terminal state with empty cgroup. The native probe code is the exact new
+`4f5c57106e235513359c57b64662b37d77799b222759b26c4e560a851344e49a`, not the old
+probe hash. Forward/tokenizer calls0. This is installation verification, not
+performance or model-quality evidence.
+
+The saved original probe was sealed without rerunning it. Seal unit
+`eom-benchmark-cpu-seal-a8a4336f.service`, invocation
+`3a003a52ccd94a61b4a7802c8e7fe6db`, independently matched its successful journal,
+root receipt and inventory. Sealed at19:15:00.050101 UTC; root readback status
+`CPU_INSTALLATION_SEALED_AND_READER_PASS`. Metadata controllers used the actual
+new CPU interpreter after the OLD byte audit; these were administrative metadata
+executions, **not zero candidate-Python execution** or model runs.
+
+Failures are preserved, not reclassified:
+
+- First config publication used a legacy1.0 parser for the existing1.1 input.
+  It failed before writing config/workspace. The installed supported closed1.1
+  parser accepted the same canonical input; no schema was relaxed.
+- Second attempt used an OLD interpreter for an observer requiring the actual
+  native prefix. It rejected `INSTALLED_RUNTIME_INTERPRETER_PREFIX_MISMATCH`
+  before materialization. The diagnosed repeat used the real audited native
+  interpreter, not a spoofed prefix or disabled check, and passed.
+- Initial stopped-owner preparation omitted the official reader's required
+  `prefetch` before `require_file_set`. It rejected before creating the selection
+  directory or DB mutation. Adding the existing prefetch/provenance calls passed;
+  both finite protected helper revisions and their result records are retained.
+- The first startup observer ran before readiness was proven. A later read of
+  the **same** owner invocations found both expected READY/STARTED receipts;
+  neither service was restarted to make that observation pass.
+
+### Actual coherent selection — Identity16 and normal service recovery
+
+The existing public Identity registration/activation and Catalog policy
+publication operations advanced resource version30→31→32 in one transaction.
+No direct table update, new queue, protocol, migration, worker privilege or human
+impersonation was introduced. Service identity16 remains the previously prepared
+`localindexservicerev_8c018aa27fce4a119a684deb9c8ca6a6` / semantic3a529110. The new
+grant is `accessrev_63b85bbe4b8e4ebaa4a92e4470ae2e03`, semantic
+`88ce1eed3eb5c464b6eb86976b22392cd314b19b7f54b35fcab35e3b83283324`.
+Its actual source access policy, source classes, Graph, model, namespaces and
+resource profile are the predecessor's unchanged constraints.
+
+Both owners stayed stopped while **eight small files** were selected: INDEX
+runtime/config/unit, CPU native environment, INDEX/QUERY prepare environments and
+QUERY config/unit. Manifest SHA
+`86cc75c6d7da2d00f613cf461e6c49b4c9ff74de14cf73d0602def8dd8259d83`.
+Before replacement, the new protected verifier9c05463d ran successfully against
+the exact fresh CPU receipt in its real interpreter/host-cache namespace. Each
+old byte set was retained; each replaced file was independently reread and
+daemon-reload confirmed. This is a staged stopped-service rollout, not a
+distributed atomic filesystem transaction. Failure does not authorize starting a
+mixed set or blindly restoring an epoch-invalid predecessor.
+
+| Normal resumed service | Actual operating proof |
+|---|---|
+| QUERY | Owner0fab624c retained; main1149347, invocation850a61e8a2d341fc9668496335957099; `REFERENCE_QUERY_OWNER_READY` |
+| INDEX | Ownerdf408fef/service16; main1149648, invocationecb76e6264ea4e5eb576896ce89f8e27; `LOCAL_INDEXING_SERVICE_STARTED` |
+| API | Existingdf408fef/main900537/invocation9bcac465bab94dcb97614e649999310a unchanged |
+| Catalog | Existingdf408fef/main900493/invocation85196a9ddf644a1781224a2b33b50cb5 unchanged |
+
+At19:26:18.207040 UTC, independent original-invocation journal reads confirmed
+QUERY READY and INDEX STARTED, both active/running/NeedDaemonReload=no, with no
+STOPPED event. Boot-enable state is unchanged. This proves compatible startup,
+not a new successful QUERY, seed/delta completion or six-run benchmark. Normal
+background INDEX work may resume after this boundary; installation/control
+model-call counters0 do not claim that background indexing never runs models.
+
+Configuration/native owner/source-policy contract regressions: **115 PASS/9.64s**.
+Finite installation/selection helpers pass Ruff/format. No production source,
+worker protocol, schema or DB migration changed in this maintenance. Evidence
+roots remain the two protected stages named above and temporary finite-helper
+records under `/tmp/eom-cpu-benchmark-maintenance-VfCRKQxQ`; no credential/log
+payload is committed to Git. No new login prompt or auth/TTL change occurred.
+Original HTTP read, common consumers, six fixed CPU/CUDA model measurements and
+conditional GPU default remain distinct unfinished goal boundaries.
+
+One due metadata-only observation at19:26:55.502032 UTC reported689 encodings/
+689 source bindings/179 immutable index revisions/6 logical indexes. These are
+**not689 different Items or complete corpus coverage**. Its latest per-view
+snapshots remain partial (233/545,243/545,213/545 bindings/eligible sources), with
+the original five observed INDEX workflows COMPLETED and failure_code=null.
+The previous observation was18:22:38; no routine poll occurred during the drain.
+Next routine INDEX observation is no earlier19:56:55 UTC. Source/current-role
+eligibility and full-completion proof remain separate from these metadata counts.
