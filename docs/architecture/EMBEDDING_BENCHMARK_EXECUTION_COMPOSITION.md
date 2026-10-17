@@ -888,3 +888,23 @@ distinct supported evidence/recovery; the current API must not fake readiness or
 it as an unleased exit. Actual original-Job orchestration, compatible numerical-prefix
 activation, that failure branch, six frozen model launches and C1–C5 actual consumer gates
 remain open. No protected template/prefix/default, canonical Job or Artifact was changed.
+
+Candidate `75d69a03ecaf89de9395fe489601bf02de1cefc2` passed standard three-wheel/RECORD
+build. An actual isolated API-interpreter child imported all6 changed/new production
+members from the built platform wheel and matched their exact source bytes, checked the
+two native entry/publication implementation pins, and refused its actual nonroot identity
+at all three root lifetime entries before metadata/effects, without optional ML imports.
+Build `/tmp/eom-api-build/75d69a03ecaf89de9395fe489601bf02de1cefc2.OK7e4d/dist`;
+raw platform SHA `98f47a4df95ac50571b02a0e67c80a9d0154c10fd5ac65e92d8e996224084a39`,
+API-contract SHA `dd0873d2bd0ac187cfb4061bd47fc5146357d3a541ae9f6f6a8ca5cc337898c9`.
+BUILD_ONLY, not installed root/GPU activation.
+
+The next30-minute read at08:38:39 UTC reused the exact installed protected observer in
+the existing EOM2 TTY with isolated Python; `index-observation-0838.json` return0 records
+509 encodings/bindings,134 revisions/6 logical indexes. Latest view-specific183/157/169
+each report545 eligible sources; these are not509 unique Items or a coherent full index.
+The bounded latest5 workflows show3 completed,1 running and1 requested with no failure
+code, not a global zero-failure assertion. No new request/Job or restart was submitted.
+The existing HTTP process was still at LOGIN at08:34; state/log timestamp unchanged.
+The user's acknowledgement alone was not recorded as an authenticated PASS; no new login
+process or duplicate password prompt was created and no credential/TTY input was read.

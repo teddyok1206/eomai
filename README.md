@@ -302,8 +302,8 @@ GPU 비교의 최신 구현은 **SOURCE_PASS / NOT_ACTIVE**입니다. 고정 CUD
 전환은 아직 미완료이며 CPU 기본값을 유지합니다.
 [검증 범위와 남은 연결](docs/architecture/EMBEDDING_BENCHMARK_EXECUTION_COMPOSITION.md#durable-ack-and-after-ready-retirement-source-checkpoint--2026-10-17)
 
-기존 자동 인덱싱은08:08:29 UTC 조회에서 연결501건/인덱스 개정132건으로 진행됐습니다.
-최신 view별169/179/153건은 서로 다른 개정의 집계이며,501개 고유 문항이나 전체545개
+기존 자동 인덱싱은08:38:39 UTC 조회에서 연결509건/인덱스 개정134건으로 진행됐습니다.
+최신 view별183/157/169건은 서로 다른 개정의 집계이며,509개 고유 문항이나 전체545개
 완료라는 뜻이 아닙니다. 실제 사용자 인증 조회와 공통 소비자 연결도 별도로 검증 중입니다.
 
 10/15 최초 QUERY는 전체 자료의 반복 검증 중 인증 창을 넘겼고 native allocation이 없어
