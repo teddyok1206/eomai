@@ -737,6 +737,36 @@ def test_genuinely_absent_lease_retains_legacy_installed_admission(tmp_path: Pat
     assert verifier.verify_installed_lease_ownership(prefix) == {}
 
 
+def test_conda_lexical_alias_does_not_create_a_second_physical_runtime(tmp_path: Path) -> None:
+    prefix = tmp_path / "runtime"
+    site = _site(prefix)
+    alias = prefix / "lib/python3.1"
+    alias.symlink_to("python3.11", target_is_directory=True)
+    assert verifier._site_packages(prefix) == site
+    assert verifier.verify_installed_lease_ownership(prefix) == {}
+    assert alias.is_symlink() and os.readlink(alias) == "python3.11"
+
+
+@pytest.mark.parametrize("case", ["second_runtime", "escaping_alias", "symlinked_canonical"])
+def test_runtime_site_alias_never_admits_a_distinct_or_unprotected_site(
+    tmp_path: Path, case: str
+) -> None:
+    prefix = tmp_path / "runtime"
+    site = _site(prefix)
+    other = tmp_path / "other-site"
+    other.mkdir(mode=0o700)
+    if case == "second_runtime":
+        (prefix / "lib/python3.12/site-packages").mkdir(parents=True, mode=0o700)
+    elif case == "escaping_alias":
+        (other / "site-packages").mkdir(mode=0o700)
+        (prefix / "lib/python3.1").symlink_to(other, target_is_directory=True)
+    else:
+        site.rmdir()
+        site.symlink_to(other, target_is_directory=True)
+    with pytest.raises(verifier.ImageReleaseError, match="RUNTIME_SITE_INVALID"):
+        verifier.verify_installed_lease_ownership(prefix)
+
+
 @pytest.mark.parametrize("name", ["eom_gpu_lease.pyc", "__pycache__/eom_gpu_lease.cpython-311.pyc"])
 def test_unowned_sourceless_sibling_is_not_genuinely_absent_lease(
     tmp_path: Path, name: str

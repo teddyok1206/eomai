@@ -112,6 +112,20 @@ the mutation receipt; recovery retains exact inputs rather than claiming an atom
 
 ## Source verification
 
+2026-10-17 deployment finding: the existing Conda Python3.11 prefixes contain the
+`lib/python3.1 -> python3.11` compatibility alias. Counting lexical glob matches as
+separate runtimes rejects this one physical site. The verifier now requires every
+candidate to resolve to the fixed `lib/python3.11/site-packages`, checks that
+canonical path's protected ancestors and returns only that non-alias path. Distinct
+runtime roots, escaping aliases and a symlinked canonical site remain denied.
+No alias is removed and no alternate Python/runtime is selected. This is an
+administrative verifier change, not a model, wheel-payload or numerical-space change.
+The successor helper SHA is
+`44f7e11f4e43f7fe78b485ced65f5e006b36d0c991b1822d40911104a52d00e8`;
+all four current scripts pin that successor. The historical 81-case/hash statement
+below describes the earlier source gate. The successor's focused suite has85cases,
+including positive alias preservation and distinct/escaping/canonical-symlink denials.
+
 The synthetic suite uses temporary code/wheels/prefixes only. It does not invoke Git archive,
 build/deploy scripts, Conda/pip installation or root operations. Actual argument-parser snippets
 are exercised without the rest of the deployment script. The installed-import simulation manually

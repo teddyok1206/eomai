@@ -5,7 +5,7 @@ REPOSITORY=/home/eom/EOM
 PYTHON=/srv/eom/conda/envs/eom-api/bin/python
 PIP=/srv/eom/conda/envs/eom-api/bin/pip
 OUTPUT_ROOT=/tmp/eom-image-trainer-build
-DEPENDENCY_VERIFIER_SHA256=231089d320a70a41272c006ccca38e1c68014fccfba2ff61feb1515ca5699300
+DEPENDENCY_VERIFIER_SHA256=44f7e11f4e43f7fe78b485ced65f5e006b36d0c991b1822d40911104a52d00e8
 
 fail() {
   printf '%s\n' "$1" >&2

@@ -527,9 +527,16 @@ def verify_build_wheels(
 def _site_packages(prefix: Path) -> Path:
     _protected(prefix)
     matches = tuple((prefix / "lib").glob("python3.*/site-packages"))
-    _require(len(matches) == 1, "RUNTIME_SITE_INVALID")
-    _protected(matches[0])
-    return matches[0]
+    # Conda can retain python3.1 -> python3.11 for its Python3.11 layout.
+    # A lexical alias is not a second runtime, but never select through that
+    # alias or admit a different/escaping physical site as an implicit fallback.
+    canonical = prefix / "lib/python3.11/site-packages"
+    _require(
+        bool(matches) and all(path.resolve(strict=True) == canonical for path in matches),
+        "RUNTIME_SITE_INVALID",
+    )
+    _protected(canonical)
+    return canonical
 
 
 def verify_installed_lease_ownership(prefix: Path) -> dict[str, str]:
