@@ -1385,6 +1385,50 @@ Each wait checks peer/current owner before sampling. Received local evidence is 
 finalized by the same actual observer and returned through the same socket, with no model,
 DB, NAS publication, new queue/schema/dependency or implicit device fallback.
 
+### Fixed CUDA launch driver — design before implementation
+
+The next missing piece is actual lifecycle composition, not another admission journal.
+Add one root-only synchronous driver for the already admitted original CUDA invocation.
+It consumes the existing root-prepared handoff/environment, exact backend/inventory/host
+and an already connected actual workflow-owner resource socket. It does not select a
+request, create a Job, authenticate a user, resolve NAS inputs or publish an Artifact.
+Those remain the existing Orchestrator's responsibility. The root launcher must be
+invoked by that trusted composition, not exposed as an arbitrary caller-controlled CLI.
+
+Canonical source remains the admitted input Artifact and original Job reservation.
+The driver checks invocation/environment association, actual root/current owner PID
+birth, installed fixed service/socket hashes and a genuinely fresh unit before effects.
+Only the original execution ID derives the two reviewed CUDA unit names. Start the
+socket once and the service once, wait on that same live handle, capture actual READY,
+construct the concrete root resource relay before compute ACK, ACK once through the
+existing durable intent boundary, serve resource sampling on this control thread,
+observe terminal state, then call existing outcome-preserving retirement. A failed unit
+cannot become a successful launch. Stop the socket only after confirmed GPU retirement
+and verify process/cgroup emptiness.
+
+The original compute deadline is never extended. After the resource exchange, allow a
+separate15s terminal-observation grace beyond it for PID1's frozen180s execution/5s stop
+bounds; this permits confirming and retiring an actual timeout failure. It never ACKs or
+restarts compute. Late socket-stop/readback must not depend on expired source/peer IO.
+The existing concrete retirement proof, not elapsed time, remains mandatory.
+
+One object is one attempt, including failure. A second call is forbidden. Timeout,
+owner loss or malformed output does not prove nonexecution and does not trigger another
+unit, replacement execution identity or speculative cleanup. Existing root ACK/retirement
+intent/results preserve uncertainty. Failure before READY remains for the supported
+unacknowledged reconciliation path: never invent READY or silently release its retained
+FD. All exits close only the transferred resource socket. Root never commits NAS output.
+
+Dominant operations are fixed unit/peer lookups, bounded sequential lifecycle steps
+and polling one original execution. Memory is O(1) outside the existing bounded sampler.
+No new DB, queue, schema bytes, wire protocol or dependency is needed for this in-process
+root infrastructure composition. ResourceEvidence1.0 stays resource-only. Root lifetime
+results remain typed local observations, not transferable cleanup grants. A parsed
+worker success/cleanup flag cannot prove actual retained ownership or cleanup; a generic
+privileged command broker is unnecessary. The later production owner connection and
+output publication remain required. This driver alone is not six-run performance
+acceptance or GPU-default activation.
+
 The owner client requires its actual fixed OS account, the exact root peer and a bound
 current original-Job authorizer. It reauthorizes before sending and after receiving, validates
 the exact allowed resource-field changes and never fills missing GPU fields locally. Root
@@ -1395,6 +1439,48 @@ Operations are one fixed peer/FD lookup and one bounded frame per direction, wit
 bytes) space/time and O(1) sampling state. No DB schema/index is involved. The simpler direct
 model-reported counters are insufficient: they cannot establish whole-process/device usage
 or independent overlap. A second encoder, queue or generic RPC framework is unnecessary.
+
+### Fixed CUDA lifecycle driver source checkpoint — 2026-10-17
+
+Implemented `FixedRootBenchmarkCudaDriver` as concrete root infrastructure composition,
+not a substitute execution port or generic command broker. It checks actual root UID/GID,
+original owner PID/birth and kernel socket peer, captures the existing installed launch
+basis, refuses any non-fresh service/existing socket path, starts only the two derived
+fixed units once, waits on that same original PID1 invocation, constructs the concrete
+resource relay before ACK, samples across ACK and serves the existing resource exchange.
+Only actual terminal verification and the existing outcome-preserving retirement permit
+socket stop and final empty-cgroup check. One object is one attempt on every failure.
+All errors close the transferred socket, never pretend nonexecution or guess cleanup.
+Early/pre-READY failure remains for the existing supported unacknowledged reconciliation;
+no forged READY/PID birth, speculative reset/stop or model retry was added.
+
+Terminal observation has15s cleanup-only grace beyond the unchanged compute deadline;
+late cleanup may confirm an actual timeout failure, never grant more compute time.
+The active socket may already be `running` rather than `listening` when its original
+owner connection activates the same Accept=no service. Both legitimate active substates
+are supported without accepting another unit or relaxing installed hashes. A local
+read-only `systemctl show dbus.socket` confirmed active/running on this host; that is
+socket-state evidence only, not EOM benchmark/GPU acceptance.
+
+Related49 source suites **1718 PASS150.84s**, including earlier1691 and new27, not summed
+again. Strict mypy1 production module, Ruff/format2 and diff pass. New tests exercise actual
+unprivileged socket credentials plus synthetic root/unit/GPU/clock ports: effect ordering,
+baseline before ACK, one start/no replay, preflight/peer/owner/expiry failure, unchanged
+original outcome after retirement, actual timeout-shaped failure after compute expiry,
+early terminal preservation, replaced invocation refusal and normal socket activation.
+Actual nonroot construction is denied before parsing/OS effects. No new DB/persistence
+boundary changed, so prior disposable21-case evidence is referenced, not rerun or counted
+as a fresh result. Previous installed private transport10 PASS remains tied to dacb7419,
+not claimed for this new driver. This source is not an installed/active numerical prefix,
+live CUDA unit, numerical run, Orchestrator child/publication bridge or six-run acceptance.
+
+Due10:50:28 UTC protected read-only observation returned549 encoding/binding rows and144
+index revisions over6 logical indexes, with latest view counts169/185/195 each eligible545.
+The bounded latest5 workflows were4 completed/1 running without failure codes; that is
+not global failure-free status. Actual INDEX3633849/QUERY3633843 remained alive10h42m39.
+No Job/key/process restart or new credential/TTL was introduced. Next routine index
+observation is>=11:20:29 UTC. Existing original HTTP authentication remains separately
+pending, last confirmed live10:38:15, with no new login process or duplicate prompt.
 
 ### Resource relay source checkpoint — 2026-10-17
 
