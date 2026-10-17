@@ -25,7 +25,7 @@ from eom_identifiers import sha256_bytes
 
 from eom_catalog_service.embedding_benchmark_layout import benchmark_read_acl
 from eom_catalog_service.embedding_device_benchmark_files import BenchmarkWorkerLocalFiles
-from eom_catalog_service.embedding_native_cpu_backend import NativeCpuBackendPins
+from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
 from eom_catalog_service.embedding_runtime_files import (
     NumericalRuntimeFileSnapshots,
     fixed_native_embedding_profile,
@@ -70,7 +70,7 @@ class PreparedBenchmarkHandoff:
 
 
 @dataclass(frozen=True, slots=True)
-class PreparedCpuBenchmarkEnvironment:
+class PreparedBenchmarkEnvironment:
     """OS-local staging only; neither a Job/source grant nor a launch/installation receipt."""
 
     execution_id: str
@@ -80,6 +80,9 @@ class PreparedCpuBenchmarkEnvironment:
     owner_start_ticks: int
     expires_ns: int
     state: Literal["STAGED_NOT_LAUNCHED"] = "STAGED_NOT_LAUNCHED"
+
+
+PreparedCpuBenchmarkEnvironment = PreparedBenchmarkEnvironment
 
 
 def _prepared_handoff(
@@ -267,10 +270,10 @@ def _owner_start_ticks(pid: int, *, uid: int, gid: int) -> int:
     return first
 
 
-def _validate_cpu_environment_installation(
+def _validate_environment_installation(
     files: NumericalRuntimeFileSnapshots,
     invocation: BenchmarkWorkerInvocation,
-    backend: NativeCpuBackendPins,
+    backend: NativeEmbeddingBackendPins,
 ) -> None:
     from eom_catalog_contracts.embedding_native_installation_evidence import (
         ADMISSION_EVIDENCE_DRAFT_RAW_SHA256,
@@ -280,6 +283,8 @@ def _validate_cpu_environment_installation(
     )
     from eom_catalog_contracts.embedding_native_runtime_config import (
         MAX_NATIVE_RUNTIME_CONFIG_BYTES,
+        EmbeddingNativeRuntimeConfigV12,
+        EmbeddingNativeRuntimeConfigV13,
         parse_installed_embedding_native_runtime_config_bytes,
         validate_installed_embedding_native_runtime_config_raw,
     )
@@ -299,20 +304,45 @@ def _validate_cpu_environment_installation(
         configuration_sha256=backend.configuration_sha256,
         configuration_raw_sha256=backend.configuration_raw_sha256,
     )
-    receipt = parse_rootlocal_native_admission_receipt_metadata(
-        files.read(
-            _EVIDENCE_ROOT / pin.configuration_id / pin.configuration_revision_id / "receipt.json",
-            sha256=backend.receipt_raw_sha256,
-            maximum=MAX_ROOTLOCAL_ADMISSION_EVIDENCE_BYTES,
-        ),
-        schema_raw=files.read(
-            _EVIDENCE_ROOT / "schemas/admission-receipt-v1.schema.json",
-            sha256=ADMISSION_EVIDENCE_DRAFT_RAW_SHA256,
-            maximum=32 * 1024,
-        ),
+    from eom_catalog_contracts.embedding_cuda_installation_evidence import (
+        CudaAdmissionReceiptMetadata,
     )
+    from eom_catalog_contracts.embedding_native_installation_evidence import (
+        RootLocalNativeAdmissionReceiptMetadata,
+    )
+
+    receipt: RootLocalNativeAdmissionReceiptMetadata | CudaAdmissionReceiptMetadata
+    if invocation.device == "CPU":
+        receipt = parse_rootlocal_native_admission_receipt_metadata(
+            files.read(
+                _EVIDENCE_ROOT
+                / pin.configuration_id
+                / pin.configuration_revision_id
+                / "receipt.json",
+                sha256=backend.receipt_raw_sha256,
+                maximum=MAX_ROOTLOCAL_ADMISSION_EVIDENCE_BYTES,
+            ),
+            schema_raw=files.read(
+                _EVIDENCE_ROOT / "schemas/admission-receipt-v1.schema.json",
+                sha256=ADMISSION_EVIDENCE_DRAFT_RAW_SHA256,
+                maximum=32 * 1024,
+            ),
+        )
+    else:
+        from eom_catalog_service.embedding_native_installation_admission import (
+            read_pinned_cuda_admission_receipt,
+        )
+
+        receipt, _ = read_pinned_cuda_admission_receipt(
+            files, pin, receipt_raw_sha256=backend.receipt_raw_sha256
+        )
+        _require(
+            isinstance(config, EmbeddingNativeRuntimeConfigV12 | EmbeddingNativeRuntimeConfigV13)
+        )
+        assert isinstance(config, EmbeddingNativeRuntimeConfigV12 | EmbeddingNativeRuntimeConfigV13)
+        _require(receipt.cuda_host_extension == config.cuda_host_extension)
     _require(
-        config.profile == "CPU_INDEX_FP32"
+        config.profile == invocation.runtime.profile
         and config.configuration_id == pin.configuration_id
         and config.configuration_revision_id == pin.configuration_revision_id
         and config.config_sha256 == pin.configuration_sha256
@@ -327,14 +357,14 @@ def _validate_cpu_environment_installation(
     files.assert_unchanged()
 
 
-def prepare_cpu_benchmark_environment(
+def prepare_benchmark_environment(
     prepared: PreparedBenchmarkHandoff,
     invocation: BenchmarkWorkerInvocation,
     *,
-    backend: NativeCpuBackendPins,
+    backend: NativeEmbeddingBackendPins,
     owner_pid: int,
     expires_ns: int,
-) -> PreparedCpuBenchmarkEnvironment:
+) -> PreparedBenchmarkEnvironment:
     """Exclusive root-only environment creation; caller still owns real Job/launch admission."""
     if os.geteuid() != _ROOT_UID:
         raise BenchmarkHandoffError("BENCHMARK_HANDOFF_ROOT_REQUIRED")
@@ -342,9 +372,9 @@ def prepare_cpu_benchmark_environment(
     _require(
         type(prepared) is PreparedBenchmarkHandoff
         and prepared == _prepared_handoff(invocation, sha256_bytes(raw))
-        and invocation.device == "CPU"
-        and invocation.runtime.profile == "CPU_INDEX_FP32"
-        and type(backend) is NativeCpuBackendPins
+        and invocation.runtime.profile
+        == {"CPU": "CPU_INDEX_FP32", "CUDA": "CUDA_INDEX_FP32"}[invocation.device]
+        and type(backend) is NativeEmbeddingBackendPins
         and type(owner_pid) is int
         and 0 < owner_pid <= 2**31 - 1
         and type(expires_ns) is int
@@ -360,7 +390,7 @@ def prepare_cpu_benchmark_environment(
     )
     start_ticks = _owner_start_ticks(owner_pid, uid=owner.pw_uid, gid=owner.pw_gid)
     installation = NumericalRuntimeFileSnapshots(_ROOT_UID)
-    _validate_cpu_environment_installation(installation, invocation, backend)
+    _validate_environment_installation(installation, invocation, backend)
     fields = (
         ("EOM_BENCHMARK_INVOCATION_RAW_SHA256", prepared.invocation_raw_sha256),
         ("EOM_BENCHMARK_OWNER_PID", str(owner_pid)),
@@ -383,7 +413,7 @@ def prepare_cpu_benchmark_environment(
             stack.callback(os.close, descriptor)
             with BenchmarkWorkerLocalFiles(
                 descriptor,
-                profile="CPU_INDEX_FP32",
+                profile=invocation.runtime.profile,
                 execution_id=prepared.execution_id,
                 invocation_raw_sha256=prepared.invocation_raw_sha256,
             ) as local:
@@ -414,11 +444,28 @@ def prepare_cpu_benchmark_environment(
         raise BenchmarkHandoffError("BENCHMARK_ENVIRONMENT_ALREADY_EXISTS") from None
     except OSError:
         raise BenchmarkHandoffError("BENCHMARK_ENVIRONMENT_PREPARE_FAILED") from None
-    return PreparedCpuBenchmarkEnvironment(
+    return PreparedBenchmarkEnvironment(
         execution_id=prepared.execution_id,
         job_id=prepared.job_id,
         environment_raw_sha256=sha256_bytes(payload),
         owner_pid=owner_pid,
         owner_start_ticks=start_ticks,
         expires_ns=expires_ns,
+    )
+
+
+def prepare_cpu_benchmark_environment(
+    prepared: PreparedBenchmarkHandoff,
+    invocation: BenchmarkWorkerInvocation,
+    *,
+    backend: NativeEmbeddingBackendPins,
+    owner_pid: int,
+    expires_ns: int,
+) -> PreparedCpuBenchmarkEnvironment:
+    """Compatibility entry retains the original CPU-only boundary, without another writer."""
+    if os.geteuid() != _ROOT_UID:
+        raise BenchmarkHandoffError("BENCHMARK_HANDOFF_ROOT_REQUIRED")
+    _require(invocation.device == "CPU" and invocation.runtime.profile == "CPU_INDEX_FP32")
+    return prepare_benchmark_environment(
+        prepared, invocation, backend=backend, owner_pid=owner_pid, expires_ns=expires_ns
     )

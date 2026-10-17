@@ -45,6 +45,7 @@ class EnvironmentMetadata:
     configuration_raw: bytes
     receipt_raw: bytes
     receipt_schema: bytes
+    receipt_schema_name: str = "admission-receipt-v1.schema.json"
 
 
 def environment_metadata() -> EnvironmentMetadata:
@@ -111,7 +112,7 @@ def stage_installation(root: Path, metadata: EnvironmentMetadata) -> tuple[Path,
             / "receipt.json",
             metadata.receipt_raw,
         ),
-        (evidence / "schemas/admission-receipt-v1.schema.json", metadata.receipt_schema),
+        (evidence / "schemas" / metadata.receipt_schema_name, metadata.receipt_schema),
     ):
         path.write_bytes(raw)
         path.chmod(0o600)

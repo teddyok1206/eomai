@@ -666,3 +666,52 @@ API-contract wheel SHA `7fbce06c599aba2494a134f6663726dcf96e820343b8997c93495b7d
 This is not installed prefix/source-authorized Job/GPU positive evidence. Milestone Slack
 sent `devreport_1433d08fc62e4f5a976d0871b9cb8b0c` at07:33:58 UTC explicitly retained that
 distinction and the outstanding six-launch/consumer/full-goal scope.
+
+### Protected CUDA launch environment — design before implementation
+
+Extend the existing fixed root preparer rather than add a second launch queue or writer.
+Both devices need identical eight nonsecret fields, O_EXCL/root0600 materialization, exact
+handoff/owner process-birth checks, absolute180-second bound and pre/post file epochs.
+Use one device-neutral immutable preparation result and pin value; preserve CPU public
+names as compatibility entry points that still refuse CUDA input. Runtime profile comes
+only from the validated frozen invocation, never a new caller-selectable flag or default.
+
+CUDA differs only at the protected installation metadata boundary: parse the exact pinned
+config and receipt2.0/2.1 plus the exact versioned receipt schema, and bind configuration,
+bundle, installed proof, numerical runtime and host-extension pointers. Share receipt
+version resolution with the existing native CUDA installation reader through a public
+metadata-reading function; do not copy its dispatcher or reinterpret CPU receipt1.0.
+This is bounded keyed lookup plus a single exclusive file write, with no DB/schema/queue
+change or stored vectors/content. Metadata reading and preparation remain non-admitting:
+actual host/prefix/unit/source/Job/lease checks and independent root ACK are still mandatory.
+No protected prefix or template changes during source tests. Partial/late failure leaves
+the execution and original file intact; no overwrite, renewal, implicit latest or retry.
+
+### Shared protected preparation source checkpoint — 2026-10-17
+
+Implemented `prepare_benchmark_environment` for the validated fixed CPU/CUDA profiles;
+the original CPU-only function/result names remain compatible and still reject CUDA.
+One exclusive writer retains the same eight fields, owner UID/GID/birth rechecks, protected
+root0600 file and failure preservation. A public `read_pinned_cuda_admission_receipt`
+metadata function now serves both this preparer and the existing native installation
+reader. It resolves only exact receipt2.0/2.1 and versioned schema pins; full host/prefix/
+device admission stays in the unchanged native reader stages, not this small helper.
+
+Ten related suites: **366 PASS31.02s**, including25 focused CUDA-preparation cases;
+strict2 and Ruff/format5 PASS. Synthetic local-IO cases cover both receipt versions, exact
+field/mode/member sets, rehashed cross-configuration/bundle/proof/runtime/host mismatches,
+wrong receipt/schema/raw bytes, the CPU-only facade, concurrent O_EXCL preparation and
+owner exit before/after materialization. Late failure preserves the original bytes and
+prevents renewal. This is not actual root/PID1/installation/model admission.
+
+The broader CUDA regression run first found a historical test that treated the entire
+extensible registry minus its own additions as exactly330 predecessors; the additive ready
+schema made that331. The test now selects its original330 names explicitly using the
+existing frozen323-name fixture plus the exact7 historical successors. Its original
+semantic digest `cee7697e19c0d4e2ae0c9f9bebe8495dbf0fb155f2cfa5f07af60479b83a12c7`,
+count330 and every old canonical schema SHA remain unchanged. Future additions do not
+redefine that historical family; no prior schema bytes or expected hash were updated.
+
+No protected prefix, template, active policy, existing Job/Artifact or service changed.
+Root source/unit/process/host ACK and terminal retirement composition, coordinated
+compatible prefix successor, six actual measurements and consumer gates remain open.

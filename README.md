@@ -298,6 +298,12 @@ CUDA 고정 실행기도 **SOURCE_PASS / NOT_ACTIVE**입니다. 준비 파일을
 아직 실제 root ACK·호환 수치 환경 갱신·6회 성능 비교·GPU 기본값 전환은 아닙니다.
 [구현 범위와 남은 연결](docs/architecture/EMBEDDING_BENCHMARK_EXECUTION_COMPOSITION.md#cuda-executable-and-fixed-unit-source-checkpoint--2026-10-17)
 
+실행별 보호 설정도 CPU/CUDA가 같은 작성 경로를 사용하도록 연결했습니다(**SOURCE_PASS**).
+기존 CPU 전용 함수는 유지하고 CUDA 영수증2.0/2.1의 읽기·버전 판별을 기존 설치 reader와
+공유합니다. 관련366 tests·strict2·Ruff/format5 PASS; 과거330개 계약의 이름·해시는
+그대로 보존했습니다. 실제 root/GPU 실행·운영 활성화 증거는 아닙니다.
+[공유 설정 준비 검증](docs/architecture/EMBEDDING_BENCHMARK_EXECUTION_COMPOSITION.md#shared-protected-preparation-source-checkpoint--2026-10-17)
+
 10/15 최초 QUERY는 전체 자료의 반복 검증 중 인증 창을 넘겼고 native allocation이 없어
 그대로 보존합니다. 이후 별도 독립 QUERY는 원 ALLOCATION을 먼저 저장했고, staging 폴더
 누락 중단을 같은 Workflow/START/Job으로 이어18:57 UTC 완료했습니다.18:59에는 같은 key

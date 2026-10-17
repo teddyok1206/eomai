@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
@@ -145,11 +146,21 @@ def test_both_packaged_schemas_and_root_receipt_draft_have_exact_identity_and_by
 
 
 def test_all330_predecessor_records_and_schema_bytes_remain_unchanged():
-    previous = {
-        name: asdict(value)
-        for name, value in CATALOG_SCHEMA_RESOURCES.items()
-        if name not in ADDITIONS
+    # Pin the historical family, not the size of a registry that admits successors.
+    names = set(
+        json.loads(
+            (ROOT / "tests/fixtures/embedding_predecessor_schema_names_323.json").read_bytes()
+        )
+    ) | {
+        "embedding-cuda-host-extension-v1.1",
+        "embedding-native-cuda-probe",
+        "embedding-native-cuda-probe-lease-ready",
+        "embedding-native-runtime-config-v1.2",
+        "embedding-prefix-audit-input-v1.2",
+        "system-rag-exam-observation",
+        "system-rag-exam-observation-read",
     }
+    previous = {name: asdict(CATALOG_SCHEMA_RESOURCES[name]) for name in names}
     assert len(previous) == 330
     assert content_sha256(previous) == (
         "sha256:cee7697e19c0d4e2ae0c9f9bebe8495dbf0fb155f2cfa5f07af60479b83a12c7"
