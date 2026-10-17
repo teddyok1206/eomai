@@ -7,6 +7,22 @@ Prior [whole-prefix audit and numerical-family fix](../architecture/EMBEDDING_NU
 remain separate evidence; no numeric prefix rebuild follows from later docs or
 the declarative sysusers/tmpfiles inputs.
 
+## Existing operator input contract —check before an expensive prefix copy
+
+The installed archive owner's input guard requires the first `/tmp/eom-*` directory
+to be0700 and subsequent input ancestors to be same-owner/non-writable by others.
+The shared `/tmp/eom-api-build` directory/dist layout is **not** a valid direct
+input even when its wheel/source bytes and release manifest are verified.
+Materialize the exact reviewed platform wheel/source once into a dedicated0700
+input directory with0600 files, preserving independent SHA/commit pins. Reuse the
+existing correctly staged lease inputs; do not repeatedly copy public wheels or
+model weights. Do not chmod a shared build directory to make admission pass.
+Use the accepted OLD archive owner's PUBLIC `retain_index_archive` under both
+publication flocks to retain/reuse these exact inputs before a costly successor
+copy. This is the existing canonical archive boundary, not a new registry. Never
+auto-repair an incomplete reservation: establish actual failed state/phase/inode/
+emptiness and preserve it through a narrowly reviewed recoverable operation first.
+
 ## Static expected runtime preparation
 
 Unit `eom-cuda-expected-metadata-69793b3e.service`, invocation
@@ -512,3 +528,87 @@ change; resources, official bundle Artifact/proof/runtime pins are exact old val
 This is **NOT_PUBLISHED / NOT_SELECTED / NOT_ADMITTED**, not a new numerical space
 or model payload. Its root publication helper still has an explicit UNSELECTED
 audit placeholder and is not installed/executed until actual audit evidence pins it.
+
+### Corrected NVML prefix audit and config installation —01:30–01:33 UTC
+
+The corrected preparation above completed successfully **01:30:18 UTC**, confirmed
+by its exact invocation's Deactivated successfully/Finished journal, not by later
+unit collection or a timeout. Standard stdout explicitly says
+`AUDITED_NOT_ADMITTED / NOT_PROBED`, input457960be and predecessor treee11f2e19.
+It prepared only private code, retained the previous69793b3e prefix and then ran
+the full source/byte/ELF audit under accepted OLD; no candidate instruction or
+GPU model was executed. Actual new operation
+`/opt/eom/.embedding-index-install-9Mk2LeO6` and backup
+`/opt/eom/conda/envs/.embedding-index-prepublication-CUDA_INDEX_FP32-.embedding-index-install-9Mk2LeO6`
+remain distinct from the first failed MLLaEOGd/FWjdcu35 operation. Nothing was deleted.
+
+Independent installed-owner unit `eom-cuda-nvml-inventory-check-c499e3bd.service`,
+invocation `3726b4aa438f400fb9b918ecd900a166`, passed in8.785s with reviewed helper
+raw `3376c5e312b6d9866dbe755ae278f70e404e5d43c1cbb7d08fc81508d520753f`.
+It validated actual inventory1.0/raw/semantic/input/host pins and independently read
+the three actual installed numerical files against the unchanged operating CPU
+hashes3487cae0/440d7406/f667e54d. No optional ML/candidate interpreter was loaded.
+
+| Actual new inventory | Value |
+| --- | --- |
+| Raw bytes / SHA |8929405 / `726ce9558dff7a5fdddc92573c17f321184879dc2d86c4640321f918ba6f32d3` |
+| Semantic SHA | `a209586101573c8c5f777bc58c391f39579215ed3bfdda7ff6a4a0699b045c44` |
+| Entries / regular / links / ELF |31601 /28028 /1380 /287 |
+| Payload bytes |7084933294 |
+| Source closure | `7aaabdcff1764980ce899b1e1e6958c9e003a62cd0e6366b2d4ce3478f8cddd3` |
+| Host seed | `92e83a3e0677842574ac5712855eef6eea7613a884f982d67f94a27f0ac752bd` |
+
+Only after this actual audit, the local config helper's UNSELECTED placeholder was
+replaced with the **exact9Mk2LeO6 operation**. Protected helper raw
+`620766e2dce6174ad64ee2ee97ad5eda8da5a86b1af1aa658fc3b049e77dd3af`
+ran in `eom-cuda-nvml-configuration-c499e3bd.service`, invocation
+`960feb200ff5477ca1eece8bc49a8709`, completed successfully **01:33:15 UTC**.
+It parsed/validated config1.3, compared every unchanged field with the independently
+pinned old config, resolved the same official bundle/proof and exact new host1.1
+under a unit-local readonly cache bind, and wrote only the new immutable config
+revision plus operational summary. No new bundle/Artifact, weights, vector space,
+resource budget, model run, candidate instruction or default activation.
+
+Actual new path:
+`/opt/eom/embedding-native-config/embeddingnativeconfig_3e98a13d3d164e2db5f861c2e5f73e08/embeddingnativeconfigrev_6107b4788260479c9ac0d69fbdfa7f7a/config.json`.
+Independent public root444-file SHA matches2fd09bfe exactly. Semantic6754cd09 and
+runtime d0887315 match the declared values; old config/proof/bundle remain.
+The global selected-cache alias was explicitly reread on OLD3a79d328. Config state
+is **INSTALLED_NOT_ADMITTED_NOT_SELECTED**, not a receipt, GPU grant or new default.
+Protected root log stayed private; only a bounded authorized operator readback was
+used, without changing its permissions or asking for another login.
+
+To finish later successful-probe cleanup without treating it as a failure, source
+`e5a49f605a9279a322a3eecd93f0814887298007` adds a separate typed success/stop path
+and shares the authoritative post-retirement checks. Old failure fields/events and
+their saved raw hashes are unchanged. Focused141 PASS16.42s; broad1682 PASS79.69s,
+one unchanged-helper OLD pip opt-in SKIP (its previous actual1 PASS is retained);
+strict1/Ruff/format/diff/build/RECORD PASS. Existing protected installer559ada51
+installed only the new immutable administrative owner pair:
+
+- Dist `/tmp/eom-api-build/e5a49f605a9279a322a3eecd93f0814887298007.YFUfDd/dist`.
+- Platform raw `cc68dacf6331646017ee5a4067cf6ee013bd7fe6f131364bd94c83305b28d1db`.
+- API-contracts raw `979432c83f74ec67d34ce9018a7719ddb534ab9700adea3ff0589782bdb6a92b`.
+
+Numerical prefix remains exactly c499e3bd, not silently upgraded to e5. This is an
+explicit compatible administrative/worker release combination with unchanged
+worker1.0/config1.3/receipt2.1 contracts. No service was switched to this owner and
+no actual successful probe/cleanup is claimed. API e132, CPU index c698 and query
+0fab installations/actual service invocations remain unchanged.
+
+Routine observation01:33:11 UTC: both index/query services still active/running,
+same invocations. Earlier CONCRETE97181d and METADATA511229 commands succeeded
+01:10/01:22. New bounded four-target commands are queued; view-specific missing
+bindings385/395/407 were observed in separate windows, eligible545/missing reports25.
+These are not a coherent global completion sum. Original HTTP observer2895440 is
+still alive/LOGIN with no accepted result; no new auth prompt, key or numerical
+QUERY was created. Next routine observation is not before02:03:11 UTC.
+
+Next: controlled exact cache/config selection with no active old CUDA consumer;
+distinct fixed two-ACK no-model probe and independent live-map/termination checks;
+root receipt2.1 sealing/readback, then supported successful retirement. Only after
+all19 image entrypoint/lifetime paths migrate may the six real frozen CPU/CUDA
+comparisons and conditional GPU default run. C1–C5 actual consumer gates remain
+open. The full original goal stays ACTIVE; source/static byte PASS is not runtime,
+benchmark or product completion. Total historical candidate probe executions are
+still two FAILED histories; this prefix/config work adds **zero** probe/model runs.
