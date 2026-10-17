@@ -309,3 +309,107 @@ No-replay operator raw SHA:
 `6813fa26f8d5794ac58f104db134b3a3d4e81bea501ec1bf33b942662a442d86`;
 local exit receipt `/tmp/eom-benchmark-environment-os.nMcR7mq1/operator-result.json`
 reports0 and `expected_nine_tests_passed=true`. Earlier evidence remains unchanged.
+
+## Actual operator/source admission — design before implementation
+
+The Catalog boundary must resolve an already committed benchmark-input member, not trust
+worker text or an audit actor string. Trusted composition supplies the existing opaque
+Identity session capture and authenticated-session fence. The benchmark audit identity
+must equal that real operator, with current WORKFLOW_START and the existing source-read
+permissions. A service-indexing identity is not silently promoted to benchmark operator.
+
+The existing snapshot source adapter reconstructs only the exact six selected Item
+revisions under the same root transaction and pinned Graph/policy. It retains current
+source/report locks and uses its existing batched Artifact resolver and deterministic
+accepted-report projection. The new thin adapter compares every profile/source/report/
+Graph pin and selected document/query text with that canonical projection, then resolves
+the committed input Artifact through the same typed reader. Missing reports, extra/missing
+profiles, unavailable views, stale sources or changed bytes are explicit errors, not an
+implicit latest or full-corpus search. Token witnesses remain numerical-worker checks;
+source admission does not claim a tokenizer/model/runtime admission.
+
+Primary access is one bounded six-revision selection and keyed profile/source lookups.
+The maps/sets require O(P + R + input bytes) time and O(P + R) metadata, with P=6 and R≤20;
+only the explicit input boundary materializes the staged texts, at most64MiB. No source
+content is copied into a Job row. No DB schema, new queue, mutable cache, dependency or
+worker authority is introduced. This Catalog adapter depends on public Identity and
+existing Catalog application boundaries; workers still have no DB/NAS access. It returns
+an owner-local value valid for the caller's current root only. Submission/launch/replay
+must reauthorize in their own current roots; parsing or persisting this result grants
+nothing. The simpler approach of comparing hashes in the worker cannot establish current
+operator permission or canonical accepted-report lineage, so it is insufficient.
+
+### Original benchmark Job registration
+
+The Orchestrator registers one original benchmark Job using existing Jobs/events/protocol
+storage, not a new table or worker queue. Its request is the released owner-request1.0
+pointer metadata; staged corpus text is never a DB payload. A trusted Catalog admission
+context retains current root source/session locks through the mutation and rechecks scope
+and expiry before returning, without rereading/hashing immutable input bytes.
+
+The unique idempotency key is the benchmark logical ID plus immutable revision, not a new
+random key per retry. A changed request for that identity is a conflict. Under a nonblocking
+namespaced PostgreSQL transaction lock, the existing repository registers the exact
+protocol SHA and creates the Job once. Existing unique constraints remain the durable
+backstop; a busy submit returns an explicit error, never another attempt. Key lookup is
+indexed O(log J); initial validation events are constant size. This short submission lock
+serializes a bounded administrative operation, not workers or CPU/GPU capacity. No DB
+migration, persistent lock/queue/framework or dependency is introduced.
+
+New Jobs stop at VALIDATED until an admitted real launcher takes responsibility. No
+CLAIMED/RUNNING/SUCCEEDED, worker slot, output Artifact or launch permission is synthesized.
+Replay reauthorizes the current operator and exact sources, validates the complete original
+Job closure and returns its actual historical state, including terminal failure. Any error
+requires caller root rollback; there is no nested independent commit or retry. Trusted
+composition supplies the actual Catalog adapter, not a model-selected callback or boolean
+grant. This admission port is the Catalog/Orchestrator adapter boundary, not a plugin API.
+
+### Source/Job implementation and disposable concurrency checkpoint — 2026-10-17
+
+Implemented the actual Catalog source adapter and Orchestrator Job-registration use case.
+The adapter uses the existing opaque authenticated-session fence, official GraphRAG
+snapshot resolution, accepted-report projection and pinned Artifact reader. Every selected
+profile/source/report/Graph and document/query text is compared; input token witnesses are
+still a later numerical-worker responsibility. Registration persists only released pointer
+metadata, reserves output identity without publishing an Artifact, and stops at VALIDATED.
+Replay checks original request/hash/protocol/task plus both initial append-only events,
+returns the same Job and preserves historical failure. No launcher/worker admission is
+inferred from registration. Late scope/expiry checks stay within the original root.
+
+Seven focused source suites: **346 PASS19.22s**; four PostgreSQL cases deliberately SKIP
+in that source invocation. Strict mypy2 and Ruff/format6 pass. The current source and Job
+tests themselves cover36 cases. Initial source tests caught a genuine parser-budget bug:
+staged inputs were parsed with the default64KiB envelope bound. The adapter now explicitly
+selects the released64MiB staged-input bound, without loosening the protocol. Invalid JSON/
+schema input is mapped to a stable code instead of exposing a full validation dump. The
+SQLite storage fixture initially returned int1 for a boolean SQL function; the SQL expression
+is now explicitly typed Boolean and still requires `is True`. It is not PostgreSQL proof.
+
+Actual marker-guarded temporary PostgreSQL: **15 PASS**, including four new Job cases for
+one original/replay, simultaneous submission BUSY then original replay, late authorization
+failure rollback/lock release, and preservation of FAILED plus payload-conflict refusal.
+The other11 existing encoding reservation/privilege tests also pass. Source authority in
+these storage cases is deliberately synthetic, not an authenticated live operator/source
+or model benchmark. The first invocation was14 PASS/1 FAIL because the one-off driver
+omitted the supported post-migration runtime-role reconciliation and `runtime.env` did not
+exist. The failure is preserved. Supported reconciliation of the **same temporary DB** and
+one corrected invocation produced15 PASS; no production workaround or row repair was used.
+
+The temporary DB and its temporary roles/credential files were then removed by the guarded
+cleanup; operational source data and history were untouched. Evidence remains protected at
+`/opt/eom/embedding-benchmark-os-evidence/job-storage-xGCk8OqE/` (original failure) and
+`/opt/eom/embedding-benchmark-os-evidence/job-storage-xGCk8OqE-reconciled/` (PASS/cleanup).
+Final test stdout raw SHA:
+`e88f906cc98cb0de178098ed9bb4a698cab184f301017cc0c572ac1565705e12`.
+Reconciliation operator raw SHA:
+`08b87c8a1f1db76bfa61f10464584c2d530d5c3269457534d7d22353ea6dfa08`.
+Local exit receipt `/tmp/eom-benchmark-job-db.xGCk8OqE/reconciliation-result.json` reports0.
+
+No live benchmark Job, model execution, numerical-prefix upgrade or active release/default
+change occurred. The source/runtime owner entry, current operator connection, real input
+Artifact preparation, admitted six launches and C1–C5 remain open. Existing HTTP observer
+remains live with safe state LOGIN: authentication success is not claimed and no new
+prompt/key/request is created. Routine06:41:17 metadata separately shows473 encodings and
+bindings,125 index revisions and6 logical indexes; recent per-view counts171/145/157 share
+eligible545 but do not establish coherent corpus completion or473/545. Existing INDEX/QUERY
+processes remain live. Next routine observation is not before07:11:17 UTC.
