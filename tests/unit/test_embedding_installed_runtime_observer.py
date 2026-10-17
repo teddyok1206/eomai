@@ -49,6 +49,29 @@ def _observer(staged: StagedSyntheticRuntime) -> ProtectedInstalledEmbeddingRunt
     )
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="requires real non-root directory permission checks")
+def test_safe_member_capture_needs_parent_read_not_only_path_traversal(tmp_path: Path) -> None:
+    parent = tmp_path / "model-store"
+    parent.mkdir(mode=0o700)
+    member = parent / "manifest.json"
+    member.write_bytes(b"{}")
+    member.chmod(0o444)
+    files = NumericalRuntimeFileSnapshots(os.geteuid())
+    parent.chmod(0o111)
+    try:
+        assert os.access(parent, os.X_OK) and not os.access(parent, os.R_OK)
+        assert os.access(member, os.R_OK)
+        with pytest.raises(InstalledRuntimeProofError) as error:
+            files.observe_protected_member_identity(member)
+        assert error.value.code == "INSTALLED_RUNTIME_FILE_UNAVAILABLE"
+        assert isinstance(error.value.__cause__, PermissionError)
+    finally:
+        parent.chmod(0o555)
+    # Keep the NOFOLLOW/readonly-directory FD checks, rather than bypassing them.
+    files.observe_protected_member_identity(member)
+    files.assert_unchanged()
+
+
 def test_verified_proof_metadata_accessor_rechecks_and_reuses_one_initial_byte_read(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -1,9 +1,66 @@
 # CUDA host extension: closed private libraries, not a CPU allowlist expansion
 
+Latest actual discovery2026-10-17: the fixed probe passed independent READY but
+FINAL rejected one uncaptured NVML dependency. It remains FAILED/NOT_ADMITTED;
+see the bounded successor design below and
+[actual operations](../operations/EMBEDDING_CUDA_CONFIGURATION_2026-10-16.md).
+
 2026-10-16 UTC. Design before protocol/behavior. Source and protected host-only
 publication/capture PASS; full CUDA candidate/runtime/device admission NOT_ACTIVE.
 This is required by the original incremental-RAG CPU/CUDA experiment, not a new
 platform or a substitute for real C1–C5/device acceptance.
+
+## Actual dlopen discovery and scoped successor design —2026-10-17
+
+This is required by one reproduced actual missing dependency, not speculative
+driver support. The unchanged public Torch device-count check dynamically loads
+`libnvidia-ml.so.1`; static DT_NEEDED scanning could not establish its absence.
+OLD-only actual captured-map diagnosis found exactly that system NVML member
+outside the six-library1.0 closure. Every other captured mapping matched. Do not
+weaken the correct rejection, change model arithmetic or conceal the failed unit.
+
+1. **Responsibility:** extend the existing private CUDA host capture/publication,
+   config and installation admission path only. No second dependency resolver,
+   worker-error framework, search system or queue.
+2. **Canonical source:** current installed NVIDIA driver NVML bytes matching the
+   observed driver release; independently hash/ELF/dependency-check them before
+   publishing a new immutable private extension. OS inspection is not admission.
+3. **Revision model:** preserve released host-extension1.0/schema/resource bytes
+   and its six roles. Define an explicit successor with one named NVML role;
+   select new config/audit/receipt successors only where existing exact reference
+   schemas cannot express that pointer. Do not rewrite historical config1.2.
+4. **Pointers/checks:** keep ID/revision/raw/semantic/cache/host seed separate.
+   Exact basename/role/bound/hash/SONAME, root/single-link/mode/FD/namespace,
+   readonly actual cache binding, version/dependency and mapped-inode checks
+   remain mandatory. No arbitrary paths, implicit latest or system NVML fallback.
+5. **Access pattern:** seven keyed libraries, ordered serialization, role membership
+   and sparse ELF dependency traversal. Existing base-host tools are reused.
+6. **Structures:** frozen tuple plus role map/set and existing DAG/checkers. Do
+   not duplicate old parser/capturer/ABI logic; no DB/index/schema migration.
+7. **Scale:** k=7; O(k) metadata/epoch checks, O(B) initial copy/hash/ELF inspection.
+   NVML is2,283,608bytes and fits a fixed8MiB per-member bound. Avoid retaining
+   multiple copies outside explicit untrusted-input/canonical publication stages.
+8. **Concurrency:** existing root CUDA publication lock and explicit quiet GPU
+   maintenance. The failed probe's retained PID1 lease first needs separately
+   recorded actual terminal/GPU cleanup and supported explicit retirement. No
+   new candidate execution while its physical-lease outcome is uncertain.
+9. **Dependencies:** pure versioned schema/value contracts; existing stdlib
+   protected OLD capture/publication adapters own files/cache/ELF. Workers gain
+   no root/NAS/DB/auth access. CPU numerical files/space/default stay unchanged.
+10. **Failure/retry:** exclusive new stage/revision; preserve both failed probe
+    histories, snapshots and model payload. One new probe only after the concrete
+    dependency correction and actual old-execution cleanup. No blind replay or
+    success rewrite; tests/static bytes do not count as real probe acceptance.
+11. **Simpler alternative rejected:** ignoring NVML in maps or replacing the
+    public device-count check would suppress a real executable dependency.
+    Broadening CPU or editing the released six-member schema would reinterpret
+    accepted history. One strict host successor reuses the existing boundary.
+
+Implement/test schema first, preserve predecessor raw bytes and behavior, then
+capture/publish through supported owners and independently audit/probe/observe.
+This design does not itself install a successor, release a lease, seal CUDA,
+run a model or change the default. Original C1–C5 and six frozen interleaved
+CPU/CUDA comparisons remain required; no human quality evaluation is added.
 
 ## Evidence and chosen boundary
 

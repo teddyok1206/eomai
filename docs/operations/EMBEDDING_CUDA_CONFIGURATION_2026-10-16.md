@@ -1,7 +1,8 @@
 # CUDA expected configuration, not native execution admission
 
-2026-10-16 UTC. Original goal remains ACTIVE. This is actual installed metadata
-and an actual Orchestrator Artifact, not a model run, probe/seal or default change.
+Started2026-10-16 UTC; subsequent actual checks are dated below. Original goal
+remains ACTIVE. Installed metadata, actual probe execution and runtime activation
+are separate states; this document does not imply a model run or default change.
 Prior [whole-prefix audit and numerical-family fix](../architecture/EMBEDDING_NUMERICAL_CODEC_INTERFACE_BOUNDARY.md)
 remain separate evidence; no numeric prefix rebuild follows from later docs or
 the declarative sysusers/tmpfiles inputs.
@@ -84,7 +85,8 @@ The existing resource recipe remains batch4/threads4/6GiB RAM/180s/one active
 launch; GPU allowance is its separately declared8GiB, not an allocation or grant.
 
 `CONFIGURATION_INSTALLED_NOT_NATIVE_ADMITTED_NOT_ACTIVE`.
-Candidate Python/model runs0; model payload copies0; CPU config/default unchanged.
+At configuration installation23:24:17: candidate Python/model runs0; model payload
+copies0; CPU config/default unchanged. Later execution is recorded separately below.
 Runtime proof/bundle/config canonical files are under their existing `/opt/eom/`
 stores; preparation files/receipts under the private expected stage above.
 Temporary exact operator/launch/log records:
@@ -144,8 +146,8 @@ checks returned `EMBEDDING_HOST_BYTES_AUDIT_PASS_NOT_ADMITTED` and exact host se
 This is actual validation of the selector, not just identical copied bytes or a
 schema-only test. No CUDA candidate interpreter, device R/W, model or forward.
 
-Model ACLs, CPU owners/config/default and all legacy image entrypoints remain
-UNCHANGED. Next: supported CPU drain, narrowly add readonly model access for973,
+At this OS-bootstrap checkpoint, model ACLs, CPU owners/config/default and all
+legacy image entrypoints were UNCHANGED. Next: supported CPU drain, narrowly add readonly model access for973,
 fresh CPU resume/readback, then the existing real two-ACK no-model CUDA probe.
 The fixed probe requires root-independent lease/FDstore/maps/process checks
 before initial CUDA access and separately verified termination before seal.
@@ -159,3 +161,135 @@ PID2895440 remains alive/LOGIN with no acceptance receipt; no new login request,
 key, token persistence, operation or numerical replay. Next routine observation
 is no earlier than2026-10-17 00:00:59 UTC; actual finite operation handles are
 observed independently. Original520 corpus work is not reopened.
+
+## Actual model access and parent-directory correction —2026-10-17 UTC
+
+These are OS access corrections using the existing resolver, not a new worker
+protocol, weakened pointer check, numerical-code update or model-payload copy.
+Before either ACL mutation, the existing INDEX/QUERY owners received only normal
+main-process SIGTERM, completed their current work and exited successfully. No
+native child was killed and no failed history, claim or DB row was repaired.
+
+The first scoped operation added UID973 readonly access to the one canonical
+BGE model's declared files/directories, preserving all prior ACL entries, owners,
+inodes, modes and bytes. Fresh canonical bundle/model hash resolution passed.
+Its later root-maintenance `runuser` access inspection failed; that operation
+remains FAILED, not retroactively successful. Separate PID1 direct-UID973/978
+readonly checks passed23:43:24. The original CPU services resumed23:44:10 with
+unchanged sources/configuration and reported READY23:44:27/32.
+
+The first fixed CUDA probe `dd46e444fa9b4dc895c3d905a3fe18e2` actually ran
+candidate Python once at23:51:18 and failed23:51:21 before any complete READY
+report or root ACK. Unit invocationd2df9eec92f24a19b1c3e9a3accc7326/PID3622967
+and its root owner failure are preserved. No reset, model/forward or numerical
+request replay. Its terminal main/cgroup/FD store are empty, and the actual driver
+query confirmed the old probe PID absent before the successor was considered.
+
+The concrete pre-READY permission defect was independently reproduced using
+accepted OLD Python, actual UID973 and the installed public
+`NumericalRuntimeFileSnapshots.observe_protected_member_identity` adapter.
+Two model-store ancestors had only `--x`, sufficient for ordinary path traversal
+and leaf reads but not the adapter's protected `O_RDONLY|O_DIRECTORY|NOFOLLOW`
+directory opens. Actual negative unit `eom-cuda-parent-fd-before-b2fce2a3.service`
+asserted two EACCES results and unresolved member identity. The candidate/ML
+interpreter was not executed in that diagnostic. Keep the safe directory-FD
+validation rather than replacing it with a weaker existence/access test.
+
+After a second normal drain, protected operator raw
+87274eaefd93ebf73a7c8a14d8e23e28c3ce26dbd83904f9639563e8356fae5b
+corrected ONLY UID973's two ancestor ACL entries from `--x` to `r-x`, using
+`setfacl --no-mask`. It checked failed-probe driver cleanup, exact physical
+lease inode2574220/device25 and uncontended readonly flock before mutation;
+that temporary flock observation was closed and is not compute admission.
+The two-ACL before/after raw hashes are respectively
+15fe4c2c9b1fe8dcc51fd68f7858bac41175c72876fe3a735bad298ed4e2ee03 /
+c418d047357b8f5d8a188906b233769b6f15f8b6aeb2df6c5437f17dd6a6305f.
+Fresh canonical payload verification passed; no model bytes, prior CPU ACL
+entries, unit policy, config, bundle or numerical fingerprint changed.
+
+Actual positive unit `eom-cuda-parent-fd-after-b2fce2a3.service` ran the SAME
+protected diagnostic script raw
+3958f5e0a24faf9e2f0e85dd8312a7c57c18442b20ac0c87290554012d94ed32,
+with identical direct UID/GID/groups and sandbox. It passed with zero denied
+directory opens and public member identity resolved/current; no candidate or ML.
+CPU services resumed again with unchanged settings: INDEX PID3633849 /
+invocation7c9ea0c56cb2425cbf7d0a194e2118e1; QUERY PID3633843 /
+invocationae90dbc175f741ddb7b8092024e6771c. Startup readiness is recorded
+separately from process activation; this does not claim new HTTP acceptance.
+
+Added a real non-root permission regression to the existing runtime-file observer
+suite. It proves traversal/leaf readability does not satisfy protected directory
+capture, then verifies recovery after readonly directory permission. Observer,
+bundle resolver and CUDA execution focused suite120 PASS5.19s; Ruff/format/diff
+PASS. No production code, public schema, dependency, runtime wheel or numeric
+prefix rebuild was needed for this permission correction/test.
+
+Correction operator/diagnostic evidence remains in the existing private stages
+`/opt/eom/.embedding-cuda-model-parent-read-b2fce2a3` and
+`/tmp/eom-cuda-probe-prepare-sYonRqhb`. Original failed operation/probe evidence
+and immutable canonical source/model histories remain intact.
+
+## Corrected actual probe: READY accepted, FINAL mapping rejected —00:08–00:12 UTC
+
+After the concrete ACL correction/actual positive diagnostic and prior-failure
+cleanup check, a distinct fixed execution
+`db5a25eec7b248f9b77eaf9969a67e05` was submitted once00:08:30.974603 UTC.
+Protected root composition raw
+cf0a1b187db75d2b45ce9b297eaf7fdce99e58b380aebe7f63c8a1370295e5a4
+differs from the previous composition only in its execution/stage identities.
+Worker/template/config/proof/bundle/numerical bytes and guards are unchanged.
+
+Actual probe PID3634333/invocationb838ba107792441399a749699ba1da7c passed the
+independent root READY process/maps/resource/PID1-retained-lease observations.
+Root sent the existing first ACK00:08:39.318022. The worker then produced its
+bounded final report, raw
+4f474c6295e248c9ec5ff9a1edcb12896fc9f9b17d9d62a02b5b28d06ee02f97.
+The independent FINAL mapping check rejected `NATIVE_CUDA_PROBE_MAPS_INVALID`.
+Root sent NO final ACK, created no success summary/seal and did not retry.
+The worker exited through its existing ACK timeout; actual unit remains FAILED,
+main0/cgroupempty with NFileDescriptorStore1. Preserve this retained physical
+lease until the supported explicit terminal-retirement boundary; do not reset,
+restart, release the store, modify evidence or start another GPU execution.
+
+The actual rejected process maps were captured while that exact unit still had
+PID3634333, then retained readonly under its existing root stage; raw
+ff929d8adb3b0590b97d68cb950f540fecaa2f27135c3a0bbdf47dd16024f49a.
+Accepted OLD Python subsequently parsed this bounded capture and independently
+recaptured the SAME actual audited prefix/current CUDA host. No candidate/model
+was rerun. It reproduced the public aggregate rejection, checked each captured
+executable identity against the prefix/host and found exactly ONE missing member:
+`/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.580.126.09`,
+`INSTALLED_RUNTIME_HOST_MAPPED_FILE_UNAVAILABLE`. Every other mapped member
+resolved. The same official device observer confirmed the failed PID absent from
+driver compute clients before and after diagnosis; the unit invocation remained
+unchanged and failed. Diagnostic unit
+`eom-cuda-rejected-maps-diagnosis-db5a25ee.service` passed in12.235s, using
+protected script raw
+60ff9d90518ade7b9f17a8ce8ff4bea45018264f9634b351b8d363a74007fb0b.
+This is a successful diagnosis of a FAILED probe, not CUDA admission.
+
+Read-only inspection of the installed audited Torch source explains the dynamic
+dependency: public `torch.cuda.device_count()` uses `_device_count_nvml()` and
+`CDLL("libnvidia-ml.so.1")`, independently of the optional NVML-based availability
+environment flag. The source backend calls this public device-count check.
+The current strict host-extension1.0 declares six OTHER libraries, so the
+rejection is correct. Do not bypass device-count checks, change numerical code,
+ignore a mapped file, add an unchecked system-path exception or replay the probe.
+
+Actual OS NVML inspection: root:root0644/nlink1,2,283,608bytes, device64512/
+inode3676829; raw SHA
+7cf5b9e876f8a082616b5b632f426fdf2ac6fb2e04bfa90c5a3f4eebafe90910.
+Readelf reports SONAME `libnvidia-ml.so.1`, existing base-host dependencies
+pthread/m/dl/c/rt and no RPATH/RUNPATH. This is acquisition evidence only, not a
+captured immutable extension or successful ABI/mapping/runtime check.
+
+Next is the existing CUDA host boundary's explicit NVML successor, described in
+[the scoped design](../architecture/EMBEDDING_CUDA_HOST_EXTENSION_DESIGN.md#actual-dlopen-discovery-and-scoped-successor-design-2026-10-17).
+Keep original1.0/pins/failed reports immutable. No extra model computation,
+benchmark, shared image migration, seal or GPU-default change is claimed.
+CPU config/default remain unchanged; QUERY reported READY00:08:05.456947.
+INDEX reported SERVICE_STARTED00:08:10.739730 and performed its existing
+four-target reconciliation in the three views00:09–00:11. These per-view windows
+are not a coherent global coverage/terminal snapshot or new HTTP acceptance.
+The original authenticated HTTP observer is still
+LOGIN without an acceptance receipt; no new login prompt/key/numerical QUERY.

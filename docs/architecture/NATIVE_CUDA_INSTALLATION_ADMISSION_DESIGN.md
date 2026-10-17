@@ -21,7 +21,7 @@ through the existing protected owner/private-successor boundaries and whole-audi
 successfully23:14:13 UTC; actual inventory1.0 and all three operating CPU numeric
 pins independently verified. See the facade document's
 [exact operation evidence](EMBEDDING_NUMERICAL_CODEC_INTERFACE_BOUNDARY.md#actual-protected-installation-and-whole-prefix-audit).
-Latest state remains BYTE_AUDITED / NOT_ADMITTED / NOT_PROBED; no GPU model run,
+At that23:14 audit checkpoint: BYTE_AUDITED / NOT_ADMITTED / NOT_PROBED; no GPU model run,
 CPU space replacement or default activation follows from this audit.
 
 Further actual installation23:20–23:30 UTC: static expected20-library proof and
@@ -29,8 +29,17 @@ same CPU/GPU family were verified, the existing UID990 Orchestrator committed a
 real bundle Artifact, and config1.2 plus dedicated account/shared inode/fixed
 template were installed. Existing OLD host checks passed with the root-selected
 canonical cache alias actually mounted readonly. No candidate instruction or
-native CUDA probe has run; CPU/model ACLs and legacy image execution are unchanged.
+native CUDA probe had run at that23:30 checkpoint; CPU/model ACLs and legacy
+image execution were unchanged.
 [Exact actual identities and remaining first-execution boundary](../operations/EMBEDDING_CUDA_CONFIGURATION_2026-10-16.md).
+
+Subsequent actual execution/OS permission correction on2026-10-17 is recorded in
+the same [operation document](../operations/EMBEDDING_CUDA_CONFIGURATION_2026-10-16.md#actual-model-access-and-parent-directory-correction-2026-10-17-utc).
+Do not carry the earlier candidate-executions0/unchanged-model-ACL claims forward.
+The first fixed probe failed before READY; that failed execution remains distinct
+from its corrected successor. Parent readonly ACL correction preserves the safe
+directory-FD checks, canonical weights and all CPU/config/numerical pins. It does
+not by itself seal CUDA admission, migrate image entries or activate a GPU default.
 
 ## Responsibility and required design procedure
 
