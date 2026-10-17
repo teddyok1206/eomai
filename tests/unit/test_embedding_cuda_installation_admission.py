@@ -1,4 +1,4 @@
-"""Synthetic protected CUDA2.0 reader composition; never an actual owner seal or GPU grant."""
+"""Synthetic protected CUDA2.0/2.1 reader ports; never an actual owner seal or GPU grant."""
 
 from __future__ import annotations
 
@@ -10,7 +10,9 @@ from types import SimpleNamespace
 
 import pytest
 from eom_catalog_contracts.embedding_cuda_installation_evidence import (
+    RootLocalCudaAdmissionReceiptMetadataV21,
     parse_rootlocal_cuda_admission_receipt_metadata,
+    parse_rootlocal_cuda_admission_receipt_metadata_v21,
     rootlocal_cuda_admission_receipt_metadata_bytes,
 )
 from eom_catalog_service import embedding_cuda_host_capture as hosts
@@ -33,20 +35,30 @@ PROBE_MEMBER = "lib/python3.12/site-packages/eom_catalog_service/embedding_nativ
 
 @pytest.fixture
 def state(monkeypatch):
-    facts = metadata()
+    return state_for_metadata(monkeypatch, metadata(), DRAFT)
+
+
+def state_for_metadata(monkeypatch, facts, schema):
     body = facts["receipt"].model_dump(mode="json")
     body["unit_probe"]["unit_template_sha256"] = sha256_bytes(b"synthetic CUDA unit")
     body["unit_probe"]["probe_code_sha256"] = sha256_bytes(b"synthetic CUDA probe")
-    receipt = parse_rootlocal_cuda_admission_receipt_metadata(
-        canonical_json_bytes(seal(body, "receipt_sha256")), schema_raw=DRAFT.read_bytes()
-    )
+    if isinstance(facts["receipt"], RootLocalCudaAdmissionReceiptMetadataV21):
+        receipt = parse_rootlocal_cuda_admission_receipt_metadata_v21(
+            canonical_json_bytes(seal(body, "receipt_sha256")), schema_raw=schema.read_bytes()
+        )
+        schema_name = "admission-receipt-v2.1.schema.json"
+    else:
+        receipt = parse_rootlocal_cuda_admission_receipt_metadata(
+            canonical_json_bytes(seal(body, "receipt_sha256")), schema_raw=schema.read_bytes()
+        )
+        schema_name = "admission-receipt-v2.schema.json"
     config, proof, bundle = facts["config"], facts["proof"], facts["bundle"]
     base = admission._EVIDENCE_ROOT / config.configuration_id / config.configuration_revision_id
     raw = rootlocal_cuda_admission_receipt_metadata_bytes(receipt)
     files = {
         base / "receipt.json": raw,
         base / "inventory.json": facts["inventory_raw"],
-        admission._EVIDENCE_ROOT / "schemas/admission-receipt-v2.schema.json": DRAFT.read_bytes(),
+        admission._EVIDENCE_ROOT / "schemas" / schema_name: schema.read_bytes(),
         admission._EVIDENCE_ROOT
         / "schemas/prefix-inventory-v1.schema.json": INVENTORY_DRAFT.read_bytes(),
         admission._CONFIG_ROOT

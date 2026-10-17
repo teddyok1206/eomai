@@ -309,6 +309,8 @@ def test_all_predecessor_resource_metadata_and_bytes_remain_unchanged():
             "embedding-cuda-host-extension-v1.1",
             "embedding-native-runtime-config-v1.2",
             "embedding-prefix-audit-input-v1.2",
+            "embedding-native-runtime-config-v1.3",
+            "embedding-prefix-audit-input-v1.3",
             "embedding-native-cuda-probe",
             "embedding-native-cuda-probe-lease-ready",
             "system-rag-exam-observation",

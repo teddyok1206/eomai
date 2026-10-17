@@ -333,10 +333,14 @@ def main(argv: list[str] | None = None) -> int:
             "embedding-prefix-audit-input/1.0",
             "embedding-prefix-audit-input/1.1",
             "embedding-prefix-audit-input/1.2",
+            "embedding-prefix-audit-input/1.3",
         }:
             raise ValueError("invalid explicit bootstrap input version")
         snapshot = value["schema_version"] == "embedding-prefix-audit-input/1.1"
-        cuda = value["schema_version"] == "embedding-prefix-audit-input/1.2"
+        cuda = value["schema_version"] in {
+            "embedding-prefix-audit-input/1.2",
+            "embedding-prefix-audit-input/1.3",
+        }
         if (
             cuda
             and raw

@@ -24,6 +24,7 @@ from eom_catalog_contracts.embedding_native_installation_evidence import (
     PREFIX_INVENTORY_DRAFT_RAW_SHA256,
     RootLocalNativeConfigurationPin,
     RootLocalPrefixInventoryCandidate,
+    parse_rootlocal_evidence_document,
     parse_rootlocal_native_admission_receipt_metadata,
     parse_rootlocal_prefix_inventory_candidate,
     validate_rootlocal_native_installation_metadata_references,
@@ -64,7 +65,7 @@ from eom_catalog_service.embedding_runtime_prefix_closure import (
 
 if TYPE_CHECKING:
     from eom_catalog_contracts.embedding_cuda_installation_evidence import (
-        RootLocalCudaAdmissionReceiptMetadata,
+        CudaAdmissionReceiptMetadata,
     )
     from eom_catalog_contracts.embedding_native_installation_evidence import (
         RootLocalNativeAdmissionReceiptMetadata,
@@ -105,7 +106,7 @@ class _InstallationMaterials:
 def _read_installation_materials(
     files: NumericalRuntimeFileSnapshots,
     configuration: RootLocalNativeConfigurationPin,
-    receipt: RootLocalNativeAdmissionReceiptMetadata | RootLocalCudaAdmissionReceiptMetadata,
+    receipt: RootLocalNativeAdmissionReceiptMetadata | CudaAdmissionReceiptMetadata,
 ) -> _InstallationMaterials:
     """Same bounded protected read boundary for both explicit families; not an admission."""
     base = _EVIDENCE_ROOT / configuration.configuration_id / configuration.configuration_revision_id
@@ -334,7 +335,7 @@ class ProtectedNativeEmbeddingInstallationAdmission:
 
 
 class ProtectedNativeCudaEmbeddingInstallationAdmission:
-    """Read only independently accepted CUDA2.0 evidence; current GPU ownership stays separate."""
+    """Read pinned explicit CUDA2.0/2.1 evidence; current GPU ownership stays separate."""
 
     def __init__(
         self, configuration: RootLocalNativeConfigurationPin, *, expected_receipt_raw_sha256: str
@@ -349,7 +350,9 @@ class ProtectedNativeCudaEmbeddingInstallationAdmission:
             )
             from eom_catalog_contracts.embedding_cuda_installation_evidence import (
                 CUDA_ADMISSION_DRAFT_RAW_SHA256,
+                CUDA_ADMISSION_V21_DRAFT_RAW_SHA256,
                 parse_rootlocal_cuda_admission_receipt_metadata,
+                parse_rootlocal_cuda_admission_receipt_metadata_v21,
                 validate_rootlocal_cuda_installation_metadata_references,
             )
             from eom_catalog_contracts.embedding_host_configuration import (
@@ -357,6 +360,7 @@ class ProtectedNativeCudaEmbeddingInstallationAdmission:
             )
             from eom_catalog_contracts.embedding_native_runtime_config import (
                 EmbeddingNativeRuntimeConfigV12,
+                EmbeddingNativeRuntimeConfigV13,
             )
 
             from eom_catalog_service.embedding_cuda_host_capture import (
@@ -393,24 +397,45 @@ class ProtectedNativeCudaEmbeddingInstallationAdmission:
                 sha256=receipt_pin,
                 maximum=MAX_ROOTLOCAL_ADMISSION_EVIDENCE_BYTES,
             )
-            receipt = parse_rootlocal_cuda_admission_receipt_metadata(
-                receipt_raw,
-                schema_raw=self._files.read(
-                    _EVIDENCE_ROOT / "schemas/admission-receipt-v2.schema.json",
-                    sha256=CUDA_ADMISSION_DRAFT_RAW_SHA256,
-                    maximum=32 * 1024,
-                ),
+            document = parse_rootlocal_evidence_document(
+                receipt_raw, MAX_ROOTLOCAL_ADMISSION_EVIDENCE_BYTES
             )
+            receipt: CudaAdmissionReceiptMetadata
+            if document.get("schema_version") == "embedding-native-admission-receipt/2.0":
+                receipt = parse_rootlocal_cuda_admission_receipt_metadata(
+                    receipt_raw,
+                    schema_raw=self._files.read(
+                        _EVIDENCE_ROOT / "schemas/admission-receipt-v2.schema.json",
+                        sha256=CUDA_ADMISSION_DRAFT_RAW_SHA256,
+                        maximum=32 * 1024,
+                    ),
+                )
+            elif document.get("schema_version") == "embedding-native-admission-receipt/2.1":
+                receipt = parse_rootlocal_cuda_admission_receipt_metadata_v21(
+                    receipt_raw,
+                    schema_raw=self._files.read(
+                        _EVIDENCE_ROOT / "schemas/admission-receipt-v2.1.schema.json",
+                        sha256=CUDA_ADMISSION_V21_DRAFT_RAW_SHA256,
+                        maximum=32 * 1024,
+                    ),
+                )
+            else:
+                raise ValueError("CUDA installation receipt version is unsupported")
             if receipt.configuration != self._configuration:
                 raise ValueError(
                     "installation configuration differs from independently accepted pin"
                 )
             materials = _read_installation_materials(self._files, self._configuration, receipt)
             config, candidate = materials.config, materials.candidate
-            if not isinstance(config, EmbeddingNativeRuntimeConfigV12):
-                raise ValueError("CUDA installation requires config1.2")
+            if not isinstance(
+                config, EmbeddingNativeRuntimeConfigV12 | EmbeddingNativeRuntimeConfigV13
+            ):
+                raise ValueError("CUDA installation requires config1.2 or1.3")
             resolved = resolve_cuda_host_extension(
-                parse_cuda_host_extension_pin(config.cuda_host_extension.model_dump(mode="json"))
+                parse_cuda_host_extension_pin(
+                    config.cuda_host_extension.model_dump(mode="json"),
+                    expected_schema_ref=config.cuda_host_extension.schema_ref,
+                )
             )
             snapshot = parse_cuda_host_extension_bytes(resolved.snapshot_raw)
             base_snapshot = parse_host_configuration_snapshot(

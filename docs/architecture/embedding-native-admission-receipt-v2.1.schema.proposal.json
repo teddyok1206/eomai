@@ -1,0 +1,626 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://local/embedding-native-admission-receipt/2.1",
+  "title": "CUDA-only root-local native admission receipt V2.1 with pinned NVML host",
+  "$comment": "UNREGISTERED CUDA-only successor. Root owner independently observes prefix/first-instruction maps, sandbox, four devices, held shared lease, no-model probe and terminal cleanup before sealing. <=32KiB/depth16, canonical integer-only metadata. A hash/parsed receipt cannot prove observations, authorize compute or attest all image/trainer lease migration.",
+  "$defs": {
+    "sha": {
+      "type": "string",
+      "minLength": 71,
+      "maxLength": 71,
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "hex32": {
+      "type": "string",
+      "minLength": 32,
+      "maxLength": 32,
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "uint64": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709552000
+    },
+    "positive64": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 18446744073709552000
+    },
+    "positiveGid": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4294967294
+    },
+    "pid": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647
+    },
+    "utc": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 27,
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?Z(?![\\s\\S])"
+    },
+    "configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "configuration_id",
+        "configuration_revision_id",
+        "configuration_raw_sha256",
+        "configuration_sha256"
+      ],
+      "properties": {
+        "configuration_id": {
+          "type": "string",
+          "minLength": 54,
+          "maxLength": 54,
+          "pattern": "^embeddingnativeconfig_[0-9a-f]{32}$"
+        },
+        "configuration_revision_id": {
+          "type": "string",
+          "minLength": 57,
+          "maxLength": 57,
+          "pattern": "^embeddingnativeconfigrev_[0-9a-f]{32}$"
+        },
+        "configuration_raw_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "configuration_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "inventoryPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_ref",
+        "inventory_raw_sha256",
+        "inventory_sha256"
+      ],
+      "properties": {
+        "schema_ref": {
+          "const": "eom://local/embedding-native-prefix-inventory/1.0"
+        },
+        "inventory_raw_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "inventory_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "deviceEpoch": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "items": false,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/uint64"
+        },
+        {
+          "$ref": "#/$defs/positive64"
+        },
+        {
+          "type": "integer",
+          "const": 0
+        },
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967294
+        },
+        {
+          "type": "integer",
+          "minimum": 8192,
+          "maximum": 8703
+        },
+        {
+          "type": "integer",
+          "const": 1
+        },
+        {
+          "type": "integer",
+          "const": 0
+        },
+        {
+          "$ref": "#/$defs/uint64"
+        },
+        {
+          "$ref": "#/$defs/uint64"
+        }
+      ]
+    },
+    "deviceNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "path",
+        "epoch",
+        "rdev_major",
+        "rdev_minor"
+      ],
+      "properties": {
+        "role": {
+          "enum": [
+            "NVIDIA0",
+            "NVIDIACTL",
+            "NVIDIA_UVM",
+            "NVIDIA_UVM_TOOLS"
+          ]
+        },
+        "path": {
+          "enum": [
+            "/dev/nvidia0",
+            "/dev/nvidiactl",
+            "/dev/nvidia-uvm",
+            "/dev/nvidia-uvm-tools"
+          ]
+        },
+        "epoch": {
+          "$ref": "#/$defs/deviceEpoch"
+        },
+        "rdev_major": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967294
+        },
+        "rdev_minor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967294
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "NVIDIA0"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "path": {
+                "const": "/dev/nvidia0"
+              },
+              "rdev_major": {
+                "const": 195
+              },
+              "rdev_minor": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "NVIDIACTL"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "path": {
+                "const": "/dev/nvidiactl"
+              },
+              "rdev_major": {
+                "const": 195
+              },
+              "rdev_minor": {
+                "const": 255
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "NVIDIA_UVM"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "path": {
+                "const": "/dev/nvidia-uvm"
+              },
+              "rdev_minor": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "NVIDIA_UVM_TOOLS"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "path": {
+                "const": "/dev/nvidia-uvm-tools"
+              },
+              "rdev_minor": {
+                "const": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "deviceNodes": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": false,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/deviceNode"
+            },
+            {
+              "properties": {
+                "role": {
+                  "const": "NVIDIA0"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/deviceNode"
+            },
+            {
+              "properties": {
+                "role": {
+                  "const": "NVIDIACTL"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/deviceNode"
+            },
+            {
+              "properties": {
+                "role": {
+                  "const": "NVIDIA_UVM"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/deviceNode"
+            },
+            {
+              "properties": {
+                "role": {
+                  "const": "NVIDIA_UVM_TOOLS"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "leaseDirectoryEpoch": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": false,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/uint64"
+        },
+        {
+          "$ref": "#/$defs/positive64"
+        },
+        {
+          "type": "integer",
+          "const": 0
+        },
+        {
+          "$ref": "#/$defs/positiveGid"
+        },
+        {
+          "type": "integer",
+          "const": 16872
+        }
+      ]
+    },
+    "leaseFileEpoch": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "items": false,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/uint64"
+        },
+        {
+          "$ref": "#/$defs/positive64"
+        },
+        {
+          "type": "integer",
+          "const": 0
+        },
+        {
+          "$ref": "#/$defs/positiveGid"
+        },
+        {
+          "type": "integer",
+          "const": 33184
+        },
+        {
+          "type": "integer",
+          "const": 1
+        },
+        {
+          "type": "integer",
+          "const": 0
+        },
+        {
+          "$ref": "#/$defs/uint64"
+        },
+        {
+          "$ref": "#/$defs/uint64"
+        }
+      ]
+    },
+    "sharedGpuLease": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "resource_id",
+        "lock_path",
+        "filesystem",
+        "lease_gid",
+        "parent_epoch",
+        "lock_epoch",
+        "holder_pid",
+        "holder_start_time_ticks"
+      ],
+      "properties": {
+        "source": {
+          "const": "ROOT_PROVISIONED_TMPFS_READONLY_EXCLUSIVE_FLOCK/1.0"
+        },
+        "resource_id": {
+          "const": "GPU0"
+        },
+        "lock_path": {
+          "const": "/run/eom-gpu-lease/gpu0.lock"
+        },
+        "filesystem": {
+          "const": "tmpfs"
+        },
+        "lease_gid": {
+          "$ref": "#/$defs/positiveGid"
+        },
+        "parent_epoch": {
+          "$ref": "#/$defs/leaseDirectoryEpoch"
+        },
+        "lock_epoch": {
+          "$ref": "#/$defs/leaseFileEpoch"
+        },
+        "holder_pid": {
+          "$ref": "#/$defs/pid"
+        },
+        "holder_start_time_ticks": {
+          "$ref": "#/$defs/positive64"
+        }
+      }
+    },
+    "unitProbe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recipe",
+        "execution_id",
+        "invocation_id",
+        "pid",
+        "start_time_ticks",
+        "worker_uid",
+        "worker_gid",
+        "supplementary_gids",
+        "unit_template_sha256",
+        "probe_code_sha256",
+        "effective_policy_sha256",
+        "probe_report_raw_sha256",
+        "loaded_elf_members_sha256",
+        "observed_runtime_sha256",
+        "model_constructor_calls",
+        "tokenizer_constructor_calls",
+        "forward_calls",
+        "cuda_initialization_calls",
+        "cuda_synchronize_calls",
+        "terminal_probe_gpu_client_count",
+        "terminal_exec_main_code",
+        "terminal_exec_main_status",
+        "terminal_main_pid",
+        "terminal_cgroup_member_count",
+        "terminated_at_utc"
+      ],
+      "properties": {
+        "recipe": {
+          "const": "NATIVE_CUDA_FIXED_UNIT_NO_MODEL_NO_FORWARD_NEGATIVES/1.0"
+        },
+        "execution_id": {
+          "$ref": "#/$defs/hex32"
+        },
+        "invocation_id": {
+          "$ref": "#/$defs/hex32"
+        },
+        "pid": {
+          "$ref": "#/$defs/pid"
+        },
+        "start_time_ticks": {
+          "$ref": "#/$defs/positive64"
+        },
+        "worker_uid": {
+          "$ref": "#/$defs/positiveGid"
+        },
+        "worker_gid": {
+          "$ref": "#/$defs/positiveGid"
+        },
+        "supplementary_gids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "$ref": "#/$defs/positiveGid"
+          }
+        },
+        "unit_template_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "probe_code_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "effective_policy_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "probe_report_raw_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "loaded_elf_members_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "observed_runtime_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "model_constructor_calls": {
+          "type": "integer",
+          "const": 0
+        },
+        "tokenizer_constructor_calls": {
+          "type": "integer",
+          "const": 0
+        },
+        "forward_calls": {
+          "type": "integer",
+          "const": 0
+        },
+        "cuda_initialization_calls": {
+          "type": "integer",
+          "const": 1
+        },
+        "cuda_synchronize_calls": {
+          "type": "integer",
+          "const": 1
+        },
+        "terminal_probe_gpu_client_count": {
+          "type": "integer",
+          "const": 0
+        },
+        "terminal_exec_main_code": {
+          "type": "integer",
+          "const": 1
+        },
+        "terminal_exec_main_status": {
+          "type": "integer",
+          "const": 0
+        },
+        "terminal_main_pid": {
+          "type": "integer",
+          "const": 0
+        },
+        "terminal_cgroup_member_count": {
+          "type": "integer",
+          "const": 0
+        },
+        "terminated_at_utc": {
+          "$ref": "#/$defs/utc"
+        }
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_state",
+    "profile",
+    "configuration",
+    "inventory",
+    "installed_proof",
+    "bundle",
+    "runtime_sha256",
+    "cuda_host_extension",
+    "device_capture",
+    "device_nodes",
+    "shared_gpu_lease",
+    "unit_probe",
+    "sealed_at_utc",
+    "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "embedding-native-admission-receipt/2.1"
+    },
+    "evidence_state": {
+      "const": "SEALED_INSTALLATION_EVIDENCE"
+    },
+    "profile": {
+      "const": "CUDA_INDEX_FP32"
+    },
+    "configuration": {
+      "$ref": "#/$defs/configuration"
+    },
+    "inventory": {
+      "$ref": "#/$defs/inventoryPointer"
+    },
+    "installed_proof": {
+      "$ref": "eom://schemas/knowledge/embedding-installed-runtime-proof/1.0#/$defs/pointer"
+    },
+    "bundle": {
+      "$ref": "eom://schemas/knowledge/embedding-runtime-bundle/1.0#/$defs/bundlePointer"
+    },
+    "runtime_sha256": {
+      "$ref": "#/$defs/sha"
+    },
+    "cuda_host_extension": {
+      "$ref": "eom://schemas/knowledge/embedding-cuda-host-extension/1.1#/$defs/pointer"
+    },
+    "device_capture": {
+      "$ref": "eom://schemas/knowledge/embedding-installed-runtime-proof/1.0#/$defs/cudaDeviceCapture"
+    },
+    "device_nodes": {
+      "$ref": "#/$defs/deviceNodes"
+    },
+    "shared_gpu_lease": {
+      "$ref": "#/$defs/sharedGpuLease"
+    },
+    "unit_probe": {
+      "$ref": "#/$defs/unitProbe"
+    },
+    "sealed_at_utc": {
+      "$ref": "#/$defs/utc"
+    },
+    "receipt_sha256": {
+      "$ref": "#/$defs/sha"
+    }
+  }
+}

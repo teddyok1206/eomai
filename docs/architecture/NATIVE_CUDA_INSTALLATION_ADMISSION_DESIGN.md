@@ -43,6 +43,47 @@ not by itself seal CUDA admission, migrate image entries or activate a GPU defau
 
 ## Responsibility and required design procedure
 
+### NVML successor selection —2026-10-17, design before protocol
+
+The actual host1.1 publication/capture does not fit the exact host1.0 references
+of native1.2/audit1.2/receipt2.0. Preserve those bytes and strict parsers. Add only
+the following explicit compatible family; keep probe input/ready/result1.0,
+prefix inventory1.0, numeric rules, device/lease facts and CPU families unchanged:
+
+| Host | Native config | Prefix audit input | Root-local CUDA receipt |
+| --- | --- | --- | --- |
+| strict six-member1.0 | 1.2 | 1.2 | 2.0 |
+| strict seven-member1.1 | 1.3 | 1.3 | 2.1 |
+
+1. Existing contract classes/installed-family readers own metadata selection;
+   existing protected OLD installer/capture and root admission adapter own effects.
+2. Canonical sources remain actual immutable prefix, reviewed source/wheels,
+   host snapshot and independently observed probe/terminal evidence, not a claim.
+3. New config/audit/receipt versions pin new revisions/raw hashes; old histories,
+   bundle/model identities and numeric fingerprints are not rewritten.
+4. Close schema/version, raw/semantic/revision/base/host/device/boot references.
+   Old strict public parsers still reject new shapes; installed-family readers
+   select only an explicitly named supported version and independently pinned raw.
+5. Access is bounded keyed version selection, ordered file/reference validation.
+6. Reuse frozen values and fixed mapping/known branches, not new registries or queues.
+7. Metadata remains bounded; O(metadata+inventory), no new binary payload/storage.
+8. Existing publication lock and separate physical GPU lease/lifetime remain
+   authoritative. No new candidate until actual old-probe cleanup/retirement and
+   fresh whole-prefix/config admission; timeout is not restart authority.
+9. Contracts remain pure; no SQL/NAS/subprocess in domain. Keep one shared
+   reference/hash rule rather than duplicate receipt/config implementations.
+10. Missing/mixed/unknown versions fail explicitly. No latest fallback, conversion,
+    hash-equivalence exception, automatic retry or reinterpretation of failure.
+11. Broadening old host references is simpler but would change accepted history;
+    three narrowly necessary successor formats preserve reproducible boundaries.
+
+The root reader may read2.0 or2.1 only against an independent accepted raw pin and
+the corresponding fixed schema. A parsed/sealed receipt is still not a live
+physical GPU lock, source permission, model grant, activation or benchmark.
+Source changes do not select the new config or retire the retained failed probe.
+
+### Existing admission boundary
+
 1. Extend the existing protected installation/admission boundary with an explicit
    CUDA-only receipt2.0. Preserve strict CPU1.0 bytes, parser, profile and empty
    supplementary-group meaning; never relabel a CPU receipt as CUDA.
@@ -78,7 +119,63 @@ not by itself seal CUDA admission, migrate image entries or activate a GPU defau
     grant would be simpler but wrong. A distinct explicit successor preserves
     history and makes the actual device/lease prerequisites unambiguous.
 
+## NVML family source checkpoint —2026-10-17
+
+Implemented the table above, **SOURCE_PASS / NOT_INSTALLED / NOT_ACTIVE** for
+native1.3/audit1.3/receipt2.1. The actual host1.1 byte publication is a separate
+completed operation; it does not activate these new consumers.
+
+- Native config1.3 and audit-input1.3 JSON Schema2020-12/package mirrors were
+  defined first, raw SHA respectively
+  f581d4fdef31dee77a9e9885cb9a009f7658ff3a647b12f867813158cd6dfaae /
+  3ed485e0324becea46cfdd88fc3ebd71f8a016b679d10c0a1ca7242b3f959dca.
+  Both pin host1.1 only. Root-local receipt2.1 draft/raw schema hash
+  30d10fe4f4333101059920704d82d246d3e5f1109e29b6fb9bf796a514975f3a
+  is independently supplied to its strict parser, not accepted from a worker.
+- Existing shared typed config/resource/hash and CUDA receipt/resource rules are
+  reused. Explicit installed-family readers handle the new versions; old strict
+  config/receipt readers and old audit shapes still reject them. Receipt2.1 can
+  close only config1.3/host1.1, while2.0 remains config1.2/host1.0. Unknown/mixed
+  versions do not silently select latest or fall back to a different profile.
+- Existing probe input/READY/result1.0 can pin the new config's exact raw/semantic
+  identity. Positive metadata-loader/frame/progression tests cover that path;
+  no signal order, model timing, input descriptor or GPU-ownership rule changed.
+  The private-successor shell explicitly copies the same two CUDA bootstrap
+  members for1.2/1.3 and still stops before any candidate instruction.
+- The CUDA installation reader binds either receipt format to an independently
+  accepted raw hash and its exact protected schema, then the existing inventory,
+  config/proof/bundle/host/boot/device/group/FD rules. New tests prove one-time
+  metadata reads/rechecks and failure before host/resource capture for unknown
+  format or missing/wrong schema. The reader does not mint physical ownership.
+- All330 preexisting schema resource records/bytes retain digest
+  cee7697e19c0d4e2ae0c9f9bebe8495dbf0fb155f2cfa5f07af60479b83a12c7.
+  The older318/322/329 families retain their original counts/hashes. A broad test
+  caught the318 membership test counting seven later additions; only explicit
+  additive exclusions were corrected. New positive fixtures initially used a
+  generic datetime serialization instead of the host's canonical serializer;
+  the strict raw-pointer gate caught it and the fixture now uses the official
+  serializer. No hash or family condition was weakened to fix either failure.
+
+Final focused CUDA/native/prefix/resources/dependency/private-successor suite:
+**1621 PASS in74.83s**, with the existing opt-in tiny synthetic private-wheel
+assembly actually run under protected OLD pip. That test substitutes ownership
+only for temporary fixtures; it is not protected native installation/admission.
+Strict type checking6 core modules plus1 administrative bootstrap PASS; source
+Ruff/format, Bash syntax and diff PASS. The suite also builds/inspects the wheel
+and reads its schemas without the source checkout. Earlier runs overlap and are
+not summed. Actual SHA checks reconfirm CPU numeric files3487cae0/440d7406/f667e54d
+unchanged; no model inference, re-encoding, API deployment or GPU default switch.
+
+Next: supported explicit failed-probe terminal retirement, compatible protected
+owner/private-prefix installation and fresh whole-prefix audit, then a distinct
+real two-ACK probe/terminal/seal/reader. The retained failed probe, old selected
+cache and running CPU services were not mutated by this source checkpoint.
+Image19-entry/lifetime migration, six actual comparisons/conditional default and
+C1–C5 actual consumers remain OPEN. The original goal remains ACTIVE.
+
 ## Receipt2.0 scope
+
+Preserved predecessor; its fields and root-local schema bytes are unchanged.
 
 - Existing config/inventory/proof/bundle/runtime/raw/semantic pins.
 - Exact CUDA host snapshot pointer and existing CUDA device capture (numeric

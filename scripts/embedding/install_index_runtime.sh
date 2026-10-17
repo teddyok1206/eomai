@@ -156,7 +156,7 @@ mkdir -m 0700 "$PRIVATE/source" "$PRIVATE/source/eom_catalog_service"
 bootstrap_names=(__init__.py embedding_runtime_files.py embedding_runtime_wheel_closure.py embedding_runtime_host_closure.py embedding_conda_runtime_closure.py embedding_runtime_prefix_closure.py embedding_host_configuration_capture.py)
 # This byte-pinned canonical marker only selects two fixed copy names. The protected
 # OLD owner independently validates the full version/shape/module hashes before import.
-if grep -Fq '"schema_version":"embedding-prefix-audit-input/1.2"' "$PRIVATE/prefix-audit-input.json"; then
+if grep -Eq '"schema_version":"embedding-prefix-audit-input/1\.[23]"' "$PRIVATE/prefix-audit-input.json"; then
   bootstrap_names+=(embedding_cuda_host_capture.py embedding_cuda_host_closure.py)
 fi
 for name in "${bootstrap_names[@]}"; do
@@ -184,7 +184,7 @@ IFS= read -r HOST_AUDIT_STATUS < "$HOST_AUDIT_RECEIPT" || fail EMBEDDING_INDEX_H
 [[ "$HOST_AUDIT_STATUS" =~ ^EMBEDDING_HOST_BYTES_AUDIT_PASS_NOT_ADMITTED\ sha256:[0-9a-f]{64}$ && "$(stat -c %s "$HOST_AUDIT_RECEIPT")" -eq $((${#HOST_AUDIT_STATUS} + 1)) ]] || fail EMBEDDING_INDEX_HOST_PREFLIGHT_INVALID
 record_phase HOST_BYTES_PREFLIGHT_PASS_NOT_ADMITTED
 if [[ "$mode" == publish-private-successor ]]; then
-  grep -Fq '"schema_version":"embedding-prefix-audit-input/1.2"' "$PRIVATE/prefix-audit-input.json" || fail EMBEDDING_INDEX_PRIVATE_SUCCESSOR_INPUT_REQUIRED
+  grep -Eq '"schema_version":"embedding-prefix-audit-input/1\.[23]"' "$PRIVATE/prefix-audit-input.json" || fail EMBEDDING_INDEX_PRIVATE_SUCCESSOR_INPUT_REQUIRED
   record_phase BEFORE_PRIVATE_SUCCESSOR_PREPARATION
   timeout --signal=KILL 180 env -i PATH=/usr/bin:/bin TZ=UTC LANG=C.UTF-8 "$OLD_PREFIX/bin/python3.12" -I -S -B "$PRIVATE/install.py" index-private-successor \
     --candidate "$QUARANTINE" --workspace "$PRIVATE" \

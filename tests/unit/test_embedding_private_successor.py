@@ -231,14 +231,18 @@ def test_entry_context_rejects_before_any_archive_or_filesystem_mutation(
     assert helper.index_private_successor_main() == 1
 
 
+@pytest.mark.parametrize("version", ("1.2", "1.3"))
 def test_successor_shell_stops_before_candidate_instruction_and_retains_predecessor(
     tmp_path: Path,
+    version: str,
 ) -> None:
     script, prefix, args, marker = _synthetic_shell(tmp_path, profile="CUDA_INDEX_FP32")
     prefix.chmod(0o755)
     args[0] = "publish-private-successor"
     owner = Path(args[14])
-    owner.write_bytes(b'{"schema_version":"embedding-prefix-audit-input/1.2"}')
+    owner.write_bytes(
+        ('{"schema_version":"embedding-prefix-audit-input/' + version + '"}').encode()
+    )
     args[15] = hashlib.sha256(owner.read_bytes()).hexdigest()
     old = tmp_path / "opt/eom/conda/envs/eom-embedding-experiment/bin/python3.12"
     text = old.read_text()

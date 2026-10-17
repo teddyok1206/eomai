@@ -42,6 +42,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:4eb128c0d2b38f785b00366dc8213f419adb06ae125fa147c29bc4c950db0c46",
         ),
+        "embedding-native-runtime-config-v1.3": CatalogSchemaResource(
+            "schemas/knowledge/embedding-native-runtime-config-v1.3.schema.json",
+            "resources/knowledge/embedding-native-runtime-config-v1.3.schema.json",
+            "1.3",
+            "sha256:f581d4fdef31dee77a9e9885cb9a009f7658ff3a647b12f867813158cd6dfaae",
+        ),
+        "embedding-prefix-audit-input-v1.3": CatalogSchemaResource(
+            "schemas/knowledge/embedding-prefix-audit-input-v1.3.schema.json",
+            "resources/knowledge/embedding-prefix-audit-input-v1.3.schema.json",
+            "1.3",
+            "sha256:3ed485e0324becea46cfdd88fc3ebd71f8a016b679d10c0a1ca7242b3f959dca",
+        ),
         "embedding-native-runtime-config-v1.2": CatalogSchemaResource(
             "schemas/knowledge/embedding-native-runtime-config-v1.2.schema.json",
             "resources/knowledge/embedding-native-runtime-config-v1.2.schema.json",

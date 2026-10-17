@@ -120,7 +120,12 @@ def test_every_preexisting_registry_entry_and_schema_byte_is_preserved():
     previous = {
         name: asdict(value)
         for name, value in CATALOG_SCHEMA_RESOURCES.items()
-        if name != CUDA_HOST_NVML_SCHEMA
+        if name
+        not in {
+            CUDA_HOST_NVML_SCHEMA,
+            "embedding-native-runtime-config-v1.3",
+            "embedding-prefix-audit-input-v1.3",
+        }
     }
     # Independently extracted from committed501ec6fa, not the edited registry.
     assert len(previous) == 329

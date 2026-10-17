@@ -101,6 +101,7 @@ _INSTALLATION_INPUTS = types.MappingProxyType(
         "embedding-prefix-audit-input/1.0": (_BOOTSTRAP, None),
         "embedding-prefix-audit-input/1.1": (_SNAPSHOT_BOOTSTRAP, "host_configuration"),
         "embedding-prefix-audit-input/1.2": (_CUDA_BOOTSTRAP, "cuda_host_extension"),
+        "embedding-prefix-audit-input/1.3": (_CUDA_BOOTSTRAP, "cuda_host_extension"),
     }
 )
 # These two inert owner templates are the only non-JSON packaged resources in
@@ -500,7 +501,7 @@ def _parse_prefix_installation_input(
             "INPUT_INVALID",
         )
         selected_bootstrap, host_field = _INSTALLATION_INPUTS[cast(str, version)]
-        if version == "embedding-prefix-audit-input/1.2":
+        if version in {"embedding-prefix-audit-input/1.2", "embedding-prefix-audit-input/1.3"}:
             _require(
                 raw
                 == json.dumps(
@@ -533,7 +534,8 @@ def _parse_prefix_installation_input(
             "INPUT_INVALID",
         )
         _require(
-            version != "embedding-prefix-audit-input/1.2" or item["profile"] == "CUDA_INDEX_FP32",
+            version not in {"embedding-prefix-audit-input/1.2", "embedding-prefix-audit-input/1.3"}
+            or item["profile"] == "CUDA_INDEX_FP32",
             "INPUT_INVALID",
         )
         for name, count in (
@@ -598,12 +600,21 @@ def _parse_prefix_installation_input(
             )
 
             snapshot = parse_host_configuration_snapshot_pin(item["host_configuration"])
-        elif version == "embedding-prefix-audit-input/1.2":
+        elif version in {"embedding-prefix-audit-input/1.2", "embedding-prefix-audit-input/1.3"}:
             from eom_catalog_service.embedding_cuda_host_capture import (
+                CUDA_HOST_NVML_SCHEMA_REF,
+                CUDA_HOST_SCHEMA_REF,
                 parse_cuda_host_extension_pin,
             )
 
-            cuda_extension = parse_cuda_host_extension_pin(item["cuda_host_extension"])
+            cuda_extension = parse_cuda_host_extension_pin(
+                item["cuda_host_extension"],
+                expected_schema_ref=(
+                    CUDA_HOST_NVML_SCHEMA_REF
+                    if version == "embedding-prefix-audit-input/1.3"
+                    else CUDA_HOST_SCHEMA_REF
+                ),
+            )
         plan = PrefixRuntimeAuditPlan(
             CondaRuntimeAuditPlan(
                 item["profile"], source.sha256, source.size_bytes, tuple(conda_pins), overlays

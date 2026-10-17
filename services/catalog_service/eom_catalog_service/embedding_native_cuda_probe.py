@@ -36,7 +36,7 @@ if TYPE_CHECKING:
         NativeCudaProbeResult,
     )
     from eom_catalog_contracts.embedding_native_runtime_config import (
-        EmbeddingNativeRuntimeConfigV12,
+        CudaEmbeddingNativeRuntimeConfig,
     )
 
     from eom_catalog_service.embedding_bundle_resolver import ResolvedEmbeddingBundle
@@ -57,7 +57,7 @@ _HANDOFF_ROOT = Path("/run/eom-embedding-native-cuda-probe")
 class _PreparedCudaProbe:
     request: NativeCudaProbeInput
     request_raw: bytes
-    configuration: EmbeddingNativeRuntimeConfigV12
+    configuration: CudaEmbeddingNativeRuntimeConfig
     configuration_raw: bytes
     proof: EmbeddingInstalledRuntimeProof
     proof_raw: bytes
@@ -82,7 +82,7 @@ def _load_probe_metadata(
     request: NativeCudaProbeInput,
 ) -> tuple[
     NumericalRuntimeFileSnapshots,
-    EmbeddingNativeRuntimeConfigV12,
+    CudaEmbeddingNativeRuntimeConfig,
     bytes,
     EmbeddingInstalledRuntimeProof,
     bytes,
@@ -100,6 +100,7 @@ def _load_probe_metadata(
     from eom_catalog_contracts.embedding_native_runtime_config import (
         MAX_NATIVE_RUNTIME_CONFIG_BYTES,
         EmbeddingNativeRuntimeConfigV12,
+        EmbeddingNativeRuntimeConfigV13,
         parse_installed_embedding_native_runtime_config_bytes,
     )
 
@@ -120,7 +121,9 @@ def _load_probe_metadata(
         maximum=MAX_NATIVE_RUNTIME_CONFIG_BYTES,
     )
     configuration = parse_installed_embedding_native_runtime_config_bytes(config_raw)
-    if not isinstance(configuration, EmbeddingNativeRuntimeConfigV12):
+    if not isinstance(
+        configuration, EmbeddingNativeRuntimeConfigV12 | EmbeddingNativeRuntimeConfigV13
+    ):
         raise ValueError("NATIVE_CUDA_PROBE_CONFIGURATION_INVALID")
     require_cuda_loader_working_directory(files)
     proof_pin = request.installed_proof

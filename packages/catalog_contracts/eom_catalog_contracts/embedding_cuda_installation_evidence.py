@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import stat
 from types import MappingProxyType
-from typing import Annotated, Final, Literal
+from typing import Annotated, Final, Literal, Self
 
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from jsonschema.exceptions import SchemaError
@@ -14,6 +14,8 @@ from referencing.exceptions import Unresolvable
 
 from eom_catalog_contracts.embedding_cuda_host_extension import (
     CudaHostExtensionPointer,
+    CudaHostExtensionPointerV11,
+    CudaHostExtensionPointerValue,
     CudaHostExtensionSnapshotValue,
     validate_cuda_host_extension_pointer,
 )
@@ -44,7 +46,9 @@ from eom_catalog_contracts.embedding_native_installation_evidence import (
     validate_rootlocal_evidence_utc,
 )
 from eom_catalog_contracts.embedding_native_runtime_config import (
+    CudaEmbeddingNativeRuntimeConfig,
     EmbeddingNativeRuntimeConfigV12,
+    EmbeddingNativeRuntimeConfigV13,
     installed_embedding_native_runtime_config_bytes,
     parse_installed_embedding_native_runtime_config_bytes,
     validate_installed_embedding_native_runtime_config_raw,
@@ -62,6 +66,10 @@ from eom_catalog_contracts.models import Sha256, UtcDatetime
 CUDA_ADMISSION_EVIDENCE_REF: Final = "eom://local/embedding-native-admission-receipt/2.0"
 CUDA_ADMISSION_DRAFT_RAW_SHA256: Final = (
     "sha256:1850d34ebe477f383f6b0ea0a8c88909aa8e2bb2c21356d110dfd340f27ac5dc"
+)
+CUDA_ADMISSION_V21_EVIDENCE_REF: Final = "eom://local/embedding-native-admission-receipt/2.1"
+CUDA_ADMISSION_V21_DRAFT_RAW_SHA256: Final = (
+    "sha256:30d10fe4f4333101059920704d82d246d3e5f1109e29b6fb9bf796a514975f3a"
 )
 type _Gid = Annotated[int, Field(ge=1, le=4294967294, strict=True)]
 type _Pid = Annotated[int, Field(ge=1, le=2147483647, strict=True)]
@@ -159,10 +167,10 @@ def validate_rootlocal_cuda_resource_file_metadata(
         raise ValueError("CUDA resource file metadata identity differs")
 
 
-class RootLocalCudaAdmissionReceiptMetadata(RootLocalEvidenceValue):
+class _CudaAdmissionReceiptMetadata(RootLocalEvidenceValue):
     """A parsed CUDA SEALED claim only; root observations/admission are separate prerequisites."""
 
-    schema_version: Literal["embedding-native-admission-receipt/2.0"]
+    schema_version: str
     evidence_state: Literal["SEALED_INSTALLATION_EVIDENCE"]
     profile: Literal["CUDA_INDEX_FP32"]
     configuration: RootLocalNativeConfigurationPin
@@ -170,7 +178,7 @@ class RootLocalCudaAdmissionReceiptMetadata(RootLocalEvidenceValue):
     installed_proof: EmbeddingInstalledRuntimeProofPointer
     bundle: EmbeddingRuntimeBundlePointer
     runtime_sha256: Sha256
-    cuda_host_extension: CudaHostExtensionPointer
+    cuda_host_extension: CudaHostExtensionPointerValue
     device_capture: CudaRuntimeDeviceCapture
     device_nodes: tuple[RootLocalCudaDeviceNode, ...] = Field(min_length=4, max_length=4)
     shared_gpu_lease: RootLocalCudaSharedGpuLease
@@ -184,7 +192,7 @@ class RootLocalCudaAdmissionReceiptMetadata(RootLocalEvidenceValue):
         return validate_rootlocal_evidence_utc(value)
 
     @model_validator(mode="after")
-    def exact_cuda_metadata(self) -> RootLocalCudaAdmissionReceiptMetadata:
+    def exact_cuda_metadata(self) -> Self:
         nodes, lease, probe = self.device_nodes, self.shared_gpu_lease, self.unit_probe
         validate_rootlocal_cuda_resource_file_metadata(nodes, lease)
         if (
@@ -204,24 +212,68 @@ class RootLocalCudaAdmissionReceiptMetadata(RootLocalEvidenceValue):
         return self
 
 
+class RootLocalCudaAdmissionReceiptMetadata(_CudaAdmissionReceiptMetadata):
+    schema_version: Literal["embedding-native-admission-receipt/2.0"]
+    cuda_host_extension: CudaHostExtensionPointer
+
+
+class RootLocalCudaAdmissionReceiptMetadataV21(_CudaAdmissionReceiptMetadata):
+    schema_version: Literal["embedding-native-admission-receipt/2.1"]
+    cuda_host_extension: CudaHostExtensionPointerV11
+
+
+type CudaAdmissionReceiptMetadata = (
+    RootLocalCudaAdmissionReceiptMetadata | RootLocalCudaAdmissionReceiptMetadataV21
+)
+
+
+def _receipt(value: object) -> CudaAdmissionReceiptMetadata:
+    raw = rootlocal_evidence_values(value)
+    if (
+        isinstance(raw, dict)
+        and raw.get("schema_version") == "embedding-native-admission-receipt/2.1"
+    ):
+        return RootLocalCudaAdmissionReceiptMetadataV21.model_validate(raw)
+    return RootLocalCudaAdmissionReceiptMetadata.model_validate(raw)
+
+
 def rootlocal_cuda_admission_receipt_metadata_bytes(
-    value: RootLocalCudaAdmissionReceiptMetadata,
+    value: CudaAdmissionReceiptMetadata,
 ) -> bytes:
     """Serialize a claim, never seal observations or admit execution."""
-    return canonical_json_bytes(
-        RootLocalCudaAdmissionReceiptMetadata.model_validate(value).model_dump(mode="json")
-    )
+    return canonical_json_bytes(_receipt(value).model_dump(mode="json"))
 
 
 def parse_rootlocal_cuda_admission_receipt_metadata(
     raw: bytes, *, schema_raw: bytes
 ) -> RootLocalCudaAdmissionReceiptMetadata:
+    receipt = _parse_receipt(raw, schema_raw=schema_raw, version="2.0")
+    if not isinstance(receipt, RootLocalCudaAdmissionReceiptMetadata):
+        raise RootLocalInstallationEvidenceError("ROOTLOCAL_CUDA_ADMISSION_EVIDENCE_INVALID")
+    return receipt
+
+
+def parse_rootlocal_cuda_admission_receipt_metadata_v21(
+    raw: bytes, *, schema_raw: bytes
+) -> RootLocalCudaAdmissionReceiptMetadataV21:
+    receipt = _parse_receipt(raw, schema_raw=schema_raw, version="2.1")
+    if not isinstance(receipt, RootLocalCudaAdmissionReceiptMetadataV21):
+        raise RootLocalInstallationEvidenceError("ROOTLOCAL_CUDA_ADMISSION_EVIDENCE_INVALID")
+    return receipt
+
+
+def _parse_receipt(
+    raw: bytes, *, schema_raw: bytes, version: Literal["2.0", "2.1"]
+) -> CudaAdmissionReceiptMetadata:
     try:
         document = parse_rootlocal_evidence_document(raw, MAX_ROOTLOCAL_ADMISSION_EVIDENCE_BYTES)
-        validate_rootlocal_evidence_schema(
-            schema_raw, document, CUDA_ADMISSION_DRAFT_RAW_SHA256, CUDA_ADMISSION_EVIDENCE_REF
+        schema_sha, schema_ref = (
+            (CUDA_ADMISSION_DRAFT_RAW_SHA256, CUDA_ADMISSION_EVIDENCE_REF)
+            if version == "2.0"
+            else (CUDA_ADMISSION_V21_DRAFT_RAW_SHA256, CUDA_ADMISSION_V21_EVIDENCE_REF)
         )
-        receipt = RootLocalCudaAdmissionReceiptMetadata.model_validate(document)
+        validate_rootlocal_evidence_schema(schema_raw, document, schema_sha, schema_ref)
+        receipt = _receipt(document)
         if raw != rootlocal_cuda_admission_receipt_metadata_bytes(receipt):
             raise ValueError("CUDA receipt raw bytes are not canonical")
         return receipt
@@ -239,13 +291,13 @@ def parse_rootlocal_cuda_admission_receipt_metadata(
 
 
 def validate_rootlocal_cuda_installation_metadata_references(
-    receipt: RootLocalCudaAdmissionReceiptMetadata,
+    receipt: CudaAdmissionReceiptMetadata,
     receipt_raw: bytes,
     *,
     expected_receipt_raw_sha256: str,
     inventory: RootLocalPrefixInventoryCandidate,
     inventory_raw: bytes,
-    config: EmbeddingNativeRuntimeConfigV12,
+    config: CudaEmbeddingNativeRuntimeConfig,
     config_raw: bytes,
     proof: EmbeddingInstalledRuntimeProof,
     proof_raw: bytes,
@@ -258,7 +310,7 @@ def validate_rootlocal_cuda_installation_metadata_references(
 ) -> None:
     """Pure reference closure; independent root composition must supply the expected raw pin."""
     try:
-        receipt = RootLocalCudaAdmissionReceiptMetadata.model_validate(receipt)
+        receipt = _receipt(receipt)
         expected = TypeAdapter(Sha256).validate_python(expected_receipt_raw_sha256, strict=True)
         inventory = RootLocalPrefixInventoryCandidate.model_validate(inventory)
         if (
@@ -272,7 +324,12 @@ def validate_rootlocal_cuda_installation_metadata_references(
             or inventory.profile != "CUDA_INDEX_FP32"
         ):
             raise ValueError("CUDA receipt/inventory raw/profile frame differs")
-        config = EmbeddingNativeRuntimeConfigV12.model_validate(rootlocal_evidence_values(config))
+        config_type = (
+            EmbeddingNativeRuntimeConfigV13
+            if isinstance(receipt, RootLocalCudaAdmissionReceiptMetadataV21)
+            else EmbeddingNativeRuntimeConfigV12
+        )
+        config = config_type.model_validate(rootlocal_evidence_values(config))
         proof = EmbeddingInstalledRuntimeProof.model_validate(rootlocal_evidence_values(proof))
         bundle = EmbeddingRuntimeBundle.model_validate(rootlocal_evidence_values(bundle))
         if (

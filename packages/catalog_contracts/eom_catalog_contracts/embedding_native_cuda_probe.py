@@ -22,6 +22,7 @@ from eom_catalog_contracts.embedding_native_installation_evidence import (
 )
 from eom_catalog_contracts.embedding_native_runtime_config import (
     EmbeddingNativeRuntimeConfigV12,
+    EmbeddingNativeRuntimeConfigV13,
     InstalledEmbeddingNativeRuntimeConfig,
     parse_installed_embedding_native_runtime_config,
     validate_installed_embedding_native_runtime_config_raw,
@@ -216,7 +217,7 @@ def validate_native_cuda_probe_configuration(
     """Common exact config/proof/bundle closure; never prefix/host/unit admission."""
     request = NativeCudaProbeInput.model_validate(request)
     config = parse_installed_embedding_native_runtime_config(configuration)
-    if not isinstance(config, EmbeddingNativeRuntimeConfigV12):
+    if not isinstance(config, EmbeddingNativeRuntimeConfigV12 | EmbeddingNativeRuntimeConfigV13):
         raise ValueError("NATIVE_CUDA_PROBE_CONFIGURATION_INVALID")
     validate_installed_embedding_native_runtime_config_raw(
         config, configuration_raw, request.configuration.configuration_raw_sha256
