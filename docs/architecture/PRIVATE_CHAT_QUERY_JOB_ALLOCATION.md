@@ -91,3 +91,26 @@ The [actual original HTTP result-read timeout](../status/REFERENCE_QUERY_HTTP_RE
 is now the next priority within the unchanged goal. Private origin-bound Workflow
 admission, complete checkpoints/physical execution/tool delivery, installed source
 activation, other consumers and CPU/CUDA/default verification remain incomplete.
+
+### Candidate packaging
+
+Code candidate`4e0fcb9194c150cd7fc55017714e3b8c594bb551` passed the standard
+three-wheel/RECORD build. An isolated`python -I -S -B` proof loaded165 EOM modules
+only from two pinned archives, checked both closed request/launch families and
+the unchanged reference/new private keys. No checkout/test/ML imports or actual
+DB/socket/model/install calls occurred in that archive proof. The actual Job/
+event transaction evidence remains the separate213-case PostgreSQL gate above.
+
+- platform wheel raw SHA-256:
+  `d5b27e1bd3fdad2dd28f4091fe93c06df5f98d0922f7eda3e0a58820a368240f`.
+- API-contract wheel raw SHA-256:
+  `507a6b6c95667072fc1463623a4934e70c4ca650ca99314b1ea59b78f72d516d`.
+- application-API wheel raw SHA-256:
+  `8534341de4d5e92c0404118d830a8e3f22cbb9c37adf954da65ae61c07cc4f2c`.
+- archive proof script raw SHA-256:
+  `3a78c57732703ef7f2bc44837affef8ada7483104652376ccb6edc6d91b3ca59`.
+- synthetic metadata-only fixture raw SHA-256:
+  `1516a589faff658b972d938aa2bf98a03a014c58c550aec86698ee5d15dc412c`.
+
+Packaging does not activate private Workflow/native execution or close the actual
+HTTP result delivery, C4 or the full goal. No production component was replaced.
