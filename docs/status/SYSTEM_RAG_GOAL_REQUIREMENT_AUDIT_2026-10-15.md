@@ -99,6 +99,9 @@ summed into a single acceptance count. This ledger does not grant authority.
   result-CHECK admission, real private execution or Chat tool activation follows
   from these synthetic metadata tests. Actual original-command submission and
   executor/consumer still required; full goal OPEN.
+  Candidated3939f72 passed standard three-wheel/RECORD and isolated two-archive
+  310-module synthetic source/submission/DB-model/schema closure; DB/model/socket
+  calls0 and no installation/activation. This is not original private execution.
   [Design and immutable final/failed evidence](../architecture/PRIVATE_CHAT_QUERY_SUBMISSION_CONTEXT.md).
 
 - Actual corrected retained negative2026-10-17: fixed root entryc2034177now selects

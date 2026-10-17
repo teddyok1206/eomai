@@ -128,6 +128,37 @@ retry occurred. **SOURCE_PASS / DISPOSABLE_DB_PASS / NOT_INSTALLED / NOT_ACTIVE*
 Original command-bound application submission/execution, tool delivery and the
 full goal's remaining consumer/CPU-CUDA gates are not completed by this leaf.
 
+## Source candidate archive closure
+
+Candidate `d3939f7291f882c372ca058d2be530e7619cea9a`, tree
+`f328a8df98dba53a6a5ff5f12cf63cf5dce8fb85`, passed the supported
+`scripts/api/deploy_release.sh --build-only` three-wheel inspection and RECORD
+verification. The initial unsupported positional `build` invocation returned
+usage/exit2 before building; the supported flag then passed without any install.
+
+Wheels under
+`/tmp/eom-api-build/d3939f7291f882c372ca058d2be530e7619cea9a.iWdfGI/dist`:
+
+| Wheel | Raw SHA256 |
+|---|---|
+| platform | `f45c127d15d2b36b2b340c45f2d27c033815c25b656766a75abfaa80c002a092` |
+| API contracts | `1b19c61e2e5349819dd533f1284b0a7bda51a7bdece5d0f31efa499c25635dc6` |
+| application API | `18479c68ed4256dfe70f589f840df8cf20f0acc08ccff2746abb598f66f58ace` |
+
+The exact two-archive isolated `-I -S -B` proof loaded310 EOM modules only from
+the two pinned wheels, with no checkout/Git/test/ML import. It validated the exact
+synthetic source/control/native input, built/reparsed the original submission,
+checked its private text exclusion, parent/fingerprint/key, current0056 constant
+and compiled partial unique index. Unknown authority extras and private compiler
+admission remained denied. DB/model/socket calls0, runtime activation false.
+
+Proof: `/tmp/eom-private-context-package.yhgYGUsK/prove_archives.py`, raw
+`3a11e0cd131570e9050441996e053b5abab356d53c19801b62e84753f0a748bf`.
+Synthetic input raw
+`7a7eb93230b43049a3a5cac9c167a1884667c37ccc328b95c0bc437ddfa7625f`.
+This is package closure, not an installed migration/private Workflow, real Chat
+ownership/claim, numerical acceptance, six-run comparison or full-goal completion.
+
 No application compiler/result CHECK is opened. No operating database migration,
 service restart, private model/QUERY, unit installation or Chat tool activation
 follows from source checks or synthetic metadata fixtures.
