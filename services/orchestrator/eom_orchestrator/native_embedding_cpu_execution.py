@@ -36,7 +36,7 @@ CGROUP_ROOT = Path("/sys/fs/cgroup/system.slice")
 _ENV = {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "TZ": "UTC"}
 _UNIT = re.compile(
     r"(?:eom-embedding-native-(?:cpu-(?:index|query)|(?:index|query)-prepare)"
-    r"|eom-embedding-benchmark-cpu)@[0-9a-f]{32}\.service\Z",
+    r"|eom-embedding-benchmark-(?:cpu|cuda))@[0-9a-f]{32}\.service\Z",
     re.ASCII,
 )
 _UNIT_GLOBS = (
@@ -45,6 +45,7 @@ _UNIT_GLOBS = (
     "eom-embedding-native-cpu-query@*.service",
     "eom-embedding-native-query-prepare@*.service",
     "eom-embedding-benchmark-cpu@*.service",
+    "eom-embedding-benchmark-cuda@*.service",
 )
 _FIXED_RESOURCE_VALUES = MappingProxyType(
     {

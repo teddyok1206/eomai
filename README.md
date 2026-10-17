@@ -300,9 +300,12 @@ GPU 비교의 최신 구현은 **SOURCE_PASS / NOT_ACTIVE**입니다. 고정 CUD
 전용 경계를 사용하며, 실제 unit 이름 검사까지 회귀합니다.
 준비 메시지 전 실패도 별도 경로로 관찰·정리하며, 없는 준비 메시지나 프로세스 시작 시각을
 만들어 넣지 않습니다. 계산 허가 기록이 있으면 이 경로를 거부하고, 잠금 획득 전 종료는
-다른 GPU 작업의 잠금을 건드리지 않습니다. 최신 관련1042 tests·strict8·Ruff/format12 PASS;
+다른 GPU 작업의 잠금을 건드리지 않습니다. GPU 메모리는 독립 관찰값과 모델 자체
+보고값을 구분하고, 표시 단위의 상한·관찰 공백·원래 실행 신원을 확인한 뒤 기존 결과
+계약에 합칩니다. CUDA 비교의 잔존 실행도 CPU 중복 실행 방지에 포함합니다.
+최신 관련1290 tests·strict3·Ruff/format6 PASS;
 실제 일반 계정의 거부·로컬 파일 잠금은 확인했지만 root/GPU 양성 사례는 합성 fixture입니다.
-실제 관리자 실행·호환 수치 환경 갱신·6회 성능 비교·GPU 기본값
+원본 Job 실행 관리자 연결·실제 관리자 실행·호환 수치 환경 갱신·6회 성능 비교·GPU 기본값
 전환은 아직 미완료이며 CPU 기본값을 유지합니다.
 [검증 범위와 남은 연결](docs/architecture/EMBEDDING_BENCHMARK_EXECUTION_COMPOSITION.md#pre-ack-terminal-recovery-source-checkpoint--2026-10-17)
 

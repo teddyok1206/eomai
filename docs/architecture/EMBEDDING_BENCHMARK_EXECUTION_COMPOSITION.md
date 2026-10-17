@@ -1016,3 +1016,72 @@ and proved7 actual nonroot entry denials without optional ML imports. Build:
 Raw platform SHA `20ab33cf649fc2b0e9f741735d78837447dd6ea2826d5c0257291faea756c961`;
 API-contract SHA `9be274e569807149eb3da4263b6ec5ddc3b53281ba88b8ca70a09ab7e483aa6e`.
 BUILD_ONLY / NOT_ACTIVE. No privileged helper install, activation or GPU positive occurred.
+
+### Independent GPU resource finalization — design before implementation
+
+The concrete owner channel cannot finalize CUDA resources with worker allocator numbers
+alone. Extend the existing fixed root NVIDIA XML reader, sharing bounded XML/device/tool
+validation with the old client query. Read framebuffer and per-process MiB counters without
+process names, root credentials or ML imports. Preserve old client parsing/commands/errors.
+Use a separate small frozen physical snapshot; no new worker message is needed because the
+finalizer returns the existing released BenchmarkResourceEvidence1.0 allowed owner fields.
+This adapter is not a launcher, Job/source grant, GPU ownership or cleanup receipt.
+
+Bind the actual original unit/PID/birth/current device and retained worker/PID1 locks on
+both sides of each sample. Capture initial pinned file epochs once; perform full prefix/host
+checks before capture and at finalization rather than rebuilding/hashing the installation
+for every sample. One root control owner calls the bounded accumulator; retain count/maxima/
+overlap only (O(1) retained space), never a growing raw trace. Parse ≤256KiB/1024 process rows
+with a keyed PID map and stable ordered tuple. Missing/N/A/ambiguous counters fail explicitly.
+Repeated equal PID counters deduplicate, unequal duplicates fail instead of undercounting.
+
+Vendor integer MiB display is not exact bytes. Before any numerical benchmark, fix the
+conservative interpretation: each displayed counter uses (MiB+1)*1048576-1 as an upper bound;
+absent own PID means no reported context and zero process bytes. Never round a cap violation
+down or describe the utility as exact NVML byte telemetry. The current actual read-only
+format check returned framebuffer total16303/reserved464/used2/free15839MiB, driver580.126.09,
+one GPU/no process rows; no model/lease/root effect or runtime admission was performed.
+
+An uncertain observation poisons the per-invocation accumulator; do not emit a successful
+finalized result or retry a failed sample as if continuous observation held. Finalization
+preserves every local field, adds only the permitted independent owner fields and seals the
+existing contract. No DB, cache, queue, dependency or new cross-process protocol is added.
+Any later transport must preserve root file/peer provenance; parsing these values alone is
+not proof of an activated owner. Also extend the existing stale CPU-capacity deny inventory
+to CUDA benchmark units: they use the same4 CPU threads and must block overlap after an owner
+crash. This adds no launch permission or generic unit family.
+
+The root accumulator establishes its first sample before the controller may ACK compute.
+The future concrete guardian must keep that control thread sampling while other control
+work runs; maximum accepted sample gap is2s, fixed before measurement. Missing a period
+poisons finalization rather than pretending an end-only sample covered the invocation.
+Observed maxima remain sampled upper bounds, not a guarantee of unseen sub-period spikes;
+local allocator high-water marks and all other resource gates remain independent.
+
+### Independent resource observer source checkpoint — 2026-10-17
+
+Implemented the shared bounded NVIDIA projection and a concrete root benchmark counter
+accumulator/finalizer. It checks actual unit/PID/birth, owner birth, credentials/cgroup,
+policy, unchanged launch files and worker/PID1 physical locks on both sides of a sample.
+Full prefix/host checks stay at capture/finalization, not per-counter inventory rebuilds.
+Constructor captures a pre-compute baseline; one control thread owns count/maxima/overlap.
+Sampling gaps are bounded conservatively by current query end minus previous query start,
+including query latency, not just convenient completion timestamps. Query/scope/gap errors
+poison an open observation; a frozen original result cannot be changed by a duplicate call.
+
+Finalization changes only existing1.0 independent-owner fields and seals/validates the
+result against the original local evidence. Exceeding8GiB or overlapping consumers remains
+visible, never clamped or reinterpreted as admission. Missing/N/A/counter conflicts fail;
+old client-query behavior stays unchanged. The existing CPU stale-execution deny inventory
+now also recognizes the fixed CUDA benchmark family, including flat/default-slice orphan
+cgroups. No additional unit launch permission or generic dispatcher was added.
+
+Final35 related source suites **1290 PASS107.48s**, strict3 production modules,
+Ruff/format6 and diff PASS. The total includes prior1042, not an additive count. Included
+actual shared parser/command regressions, resource-field immutability, peak/overlap maxima,
+upper-bound cap edge, missing/ambiguous counters, model-time scope changes, owner loss,
+sample gap/expiry, poison/no-retry, duplicate finalization and orphan CUDA CPU-capacity cases.
+A fresh isolated actual nonroot process is refused before command access with no optional
+ML imports. Root/kernel/unit positive cases remain synthetic. No numerical workload, Job,
+default, runtime selector or protected prefix was changed. Source readiness is not actual
+whole-invocation measurement or an activated six-launch owner; those gates remain open.

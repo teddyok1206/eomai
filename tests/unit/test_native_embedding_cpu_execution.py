@@ -38,6 +38,7 @@ def test_fixed_unit_names_are_purpose_bound_and_no_arbitrary_units(
         "eom-embedding-native-cpu-query@",
         "eom-embedding-native-query-prepare@",
         "eom-embedding-benchmark-cpu@",
+        "eom-embedding-benchmark-cuda@",
     ),
 )
 def test_active_prepare_or_worker_of_either_purpose_blocks_new_inference(
@@ -221,6 +222,7 @@ def test_resource_guard_revalidates_raw_values_without_silently_dropping_fields(
     (
         "eom-embedding-native-index-prepare",
         "eom-embedding-benchmark-cpu",
+        "eom-embedding-benchmark-cuda",
     ),
 )
 def test_actual_file_reads_detect_surviving_child_in_flat_or_default_template_slice(
