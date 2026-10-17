@@ -413,3 +413,27 @@ prompt/key/request is created. Routine06:41:17 metadata separately shows473 enco
 bindings,125 index revisions and6 logical indexes; recent per-view counts171/145/157 share
 eligible545 but do not establish coherent corpus completion or473/545. Existing INDEX/QUERY
 processes remain live. Next routine observation is not before07:11:17 UTC.
+
+### Passive installed source/Job adapter — 2026-10-17 06:52 UTC
+
+Source `9500e325fa89edba2362a295463acf1fda4986cb` passed the standard API three-wheel/
+RECORD build. The exact platform/API-contract wheels were installed in its passive owner
+prefix only. An isolated installed import verifies both new modules' exact source-file SHA,
+rejects an actor string in place of a genuine Identity capture, and imports no Torch, NumPy,
+Transformers or tokenizers. Static mypy also verifies concrete Catalog/Orchestrator port
+compatibility. These checks do **not** establish a live authorized source read or launch.
+
+Build: `/tmp/eom-api-build/9500e325fa89edba2362a295463acf1fda4986cb.JgNfdO/dist`.
+Platform raw wheel SHA:
+`4b606527db78d948987d289d47e00e2644a3924c2d7ab330af14fb7a68f1318f`;
+API-contract raw wheel SHA:
+`2a609088d46ddcf33879201342fdb1d0b15813cc37d4a1517298f527518a9667`.
+Evidence: `/opt/eom/embedding-benchmark-os-evidence/9500e325fa89edba2362a295463acf1fda4986cb/`.
+Import stdout raw SHA:
+`976b3235e17a0242ab033188392efb6164e6857089c60ea9459831adcf333b2a`;
+operator raw SHA:
+`e4295e8cbe72d6bc7d1bc49bddd3b1d9755eb33e18329f913dcf94032745ccc6`.
+Local receipt `/tmp/eom-benchmark-job-owner.dRRFygLW/operator-result.json` reports0.
+Same EOM2 sudo reused, no extra prompt or credential save. No active selector, numerical
+prefix, service, worker, live Job, model, GPU/CPU default or historical product was changed.
+The remaining launch/activation/measurement/consumer requirements above are unchanged.
