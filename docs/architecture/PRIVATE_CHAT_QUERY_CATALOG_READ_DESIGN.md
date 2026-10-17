@@ -119,6 +119,27 @@ was extended, not replaced with an unguarded invocation. Separate documentation/
 dependency/package-resource27 PASS overlaps earlier broad tests and is not added
 to the318-case focused source inventory.
 
+## Release archive verification
+
+Committed/pushed code candidate:
+`680849e9fd59c5479bc0dd927be22291b88219aa`.
+Standard three-wheel build and RECORD verification PASS, build-only; no installed
+package or service changed. Dist:
+`/tmp/eom-api-build/680849e9fd59c5479bc0dd927be22291b88219aa.9zB8mc/dist`.
+
+- platform raw `c123ec9da8f2f9923ded7c6ee14b0f4e3cfc008257b0531f632b7813fe11bf9b`;
+- API-contract raw `ac0c969da325dbe19c22c2370c527d7be8f620c8c1e7cab1df6cc93e74bc30bf`;
+- API raw `884c87d721fd97d6019197100fe83deb5f128a4ec181cf70677ab3793a08e567`.
+
+Explicit Conda `-I -S -B` archive proof imported240 EOM modules from the exact
+platform/contracts wheels only, including the two new public adapter methods,
+private read module and shared read-window identity. It checked the frozen
+public-only scope value. No checkout, installed EOM fallback, tests or optional
+ML module was imported. DB/model/current-user admission/activation calls0. This
+is import/package closure, not another numeric or Chat runtime acceptance.
+Proof `/tmp/eom-private-document-package.WrotY1u0/prove_archives.py`, raw
+`e5bbca3c7c3f53206c5ce618eb946c08def69022d8bb485b7d4a9fabcd0bef01`.
+
 Remaining next boundary: compose this public read owner with the actual Chat
 message/session/claim owner and original-command/root-bound private Runner
 submission/allocation/execution. Then verify protected installation and actual
