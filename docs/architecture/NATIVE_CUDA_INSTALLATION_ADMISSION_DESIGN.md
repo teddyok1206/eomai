@@ -173,6 +173,18 @@ cache and running CPU services were not mutated by this source checkpoint.
 Image19-entry/lifetime migration, six actual comparisons/conditional default and
 C1–C5 actual consumers remain OPEN. The original goal remains ACTIVE.
 
+Standard build/inspection from code commit
+de3b0c78ef0b4c454c394c04fc3a6616a3d056a1 passed wheel RECORD verification.
+Retained candidate directory:
+`/tmp/eom-api-build/de3b0c78ef0b4c454c394c04fc3a6616a3d056a1.AXBxwW/dist`.
+Platform wheel raw6f35ca334ee408856443f97aad26f1af13790690327ee0a4cdd7bda69d4a38a6;
+API-contracts rawff3dfd3b1e4cf12ea82c140dde19beb3f450b74a8cc5cbd2f0ce5570b1f5e16d.
+This build did not install/activate any service. Later documentation commits do
+not require rebuilding these exact reviewed code bytes. The updated index installer
+and administrative bootstrap source are respectively rawa0e5f960e6787de7292699ea8d8b168816b5c457476a1a31c71ad623c32ae089 /
+880a701fb22fa51047ab860d45ea22fd6ec902418710bd8dad869fd0544ea763;
+their protected installation/re-audit is still a separate future operation.
+
 ## Receipt2.0 scope
 
 Preserved predecessor; its fields and root-local schema bytes are unchanged.
