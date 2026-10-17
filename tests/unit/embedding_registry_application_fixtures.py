@@ -13,7 +13,7 @@ from eom_catalog_contracts.embedding_registry import (
     EmbeddingIndexNamespace,
     RegisterEmbeddingIndexCommand,
 )
-from eom_catalog_contracts.inference_transfer_experiment import population_sha256
+from eom_catalog_contracts.inference_transfer_experiment import ExperimentView, population_sha256
 from eom_catalog_service.embedding_incremental_plan import RegisteredEmbeddingRow
 from eom_catalog_service.embedding_registry_models import (
     EmbeddingEncodingRecord,
@@ -34,6 +34,7 @@ from eom_catalog_service.embedding_registry_ports import (
     ResolvedEmbeddingRegistration,
 )
 from eom_catalog_service.embedding_registry_repository import ASSOCIATION_COLUMNS, artifact_member
+from eom_identifiers import content_sha256
 from sqlalchemy.orm import Session
 
 from tests.unit.inference_transfer_embedding_fixtures import (
@@ -49,20 +50,24 @@ from tests.unit.test_embedding_registry_contracts import registration_command
 
 def capture_pair(
     previous: ResolvedEmbeddingRegistration | None = None,
+    *,
+    view: ExperimentView = "METADATA_ONLY",
 ) -> tuple[RegisterEmbeddingIndexCommand, ResolvedEmbeddingRegistration]:
     entry = embedding_entry()
-    binding = source_binding(entry)
+    binding = source_binding(entry, view=view)
     shard = vector_shard((binding.encoding,))
     previous_value = (
         None if previous is None else (index_pointer(previous.index, "b"), previous.index)
     )
     index = index_manifest(
         binding,
+        view=view,
         previous_manifest=None if previous_value is None else previous_value[0],
         revision_seed="2" if previous is None else "3",
     )
     command = registration_command().model_dump(mode="json")
     command.update(
+        namespace=command["namespace"] | {"view": view},
         index_revision_id=index.index_revision_id,
         index_manifest=index_pointer(index, "b" if previous is None else "c").model_dump(
             mode="json"
@@ -76,6 +81,7 @@ def capture_pair(
         if previous is None
         else "synthetic-register:second",
         source_set_sha256=population_sha256((binding.source,)),
+        binding_set_sha256=content_sha256([binding.binding_sha256]),
     )
     request = RegisterEmbeddingIndexCommand.model_validate(seal(command, "request_sha256"))
     resolved = ResolvedEmbeddingRegistration(

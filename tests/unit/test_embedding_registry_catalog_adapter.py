@@ -202,8 +202,10 @@ def _file_set(
 
 
 @pytest.fixture
-def owner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Any, ...]:
-    command, resolved = capture_pair()
+def owner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> tuple[Any, ...]:
+    command, resolved = capture_pair(view=getattr(request, "param", "METADATA_ONLY"))
     original = resolved.shards[0][1]
     vector = pack_unit_vectors(
         ((1.0,) + (0.0,) * (original.dimension - 1),), dimension=original.dimension
@@ -212,7 +214,9 @@ def owner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Any, ...]:
     shard_body["binary"]["sha256"] = sha256_bytes(vector)
     shard = EmbeddingVectorShardManifest.model_validate(seal(shard_body, "shard_sha256"))
     pointer = shard_pointer(shard)
-    binding = source_binding(resolved.entries[0], shard=shard, pointer=pointer)
+    binding = source_binding(
+        resolved.entries[0], view=resolved.index.view, shard=shard, pointer=pointer
+    )
     index_body = resolved.index.model_dump(mode="json")
     index_body.update(
         shards=[pointer.model_dump(mode="json")], bindings=[binding.model_dump(mode="json")]

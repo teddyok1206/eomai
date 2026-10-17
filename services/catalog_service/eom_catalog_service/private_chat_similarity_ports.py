@@ -9,15 +9,38 @@ from eom_catalog_contracts.embedding_private_chat_query import (
     EmbeddingPrivateChatQueryInput,
     EmbeddingPrivateChatQueryResult,
 )
+from eom_catalog_contracts.models import Sha256
 from eom_catalog_contracts.private_chat_query_basis import PrivateChatQueryBasis
 from eom_catalog_contracts.private_chat_similarity import PrivateChatSimilarityRequest
 from eom_protocol.artifact_members import ArtifactMemberPointer
+from pydantic import TypeAdapter
 
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
     ResolvedPinnedEmbeddingIndex,
 )
 from eom_catalog_service.similarity_context_ports import PreparedSimilaritySource
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedPrivateChatDocumentScope:
+    """Public source pointers only; never a private origin, user grant or cached authority."""
+
+    request_sha256: str
+    sources: tuple[PreparedSimilaritySource, ...]
+    truncated: bool = False
+
+    def __post_init__(self) -> None:
+        TypeAdapter(Sha256).validate_python(self.request_sha256, strict=True)
+        if (
+            type(self.sources) is not tuple
+            or len(self.sources) > 1024
+            or (
+                type(self.truncated) is not bool
+                or any(type(source) is not PreparedSimilaritySource for source in self.sources)
+            )
+        ):
+            raise ValueError("PRIVATE_CHAT_DOCUMENT_SCOPE_INVALID")
 
 
 @dataclass(frozen=True, slots=True)

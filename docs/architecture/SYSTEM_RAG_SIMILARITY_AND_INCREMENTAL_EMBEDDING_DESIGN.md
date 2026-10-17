@@ -446,6 +446,9 @@ NOT_IMPLEMENTED / NOT_EVALUATED`를 구분한다. 기존 corpus의 학습 완료
 - [공통 소비자 구현 경계](SYSTEM_RAG_SIMILARITY_CONTEXT_IMPLEMENTATION_BOUNDARY.md):
   승인 reference부터 시작하는 최소 연결과 pinned index read·production QUERY의 실제 미구현
   경계를 명시한다. 다섯 소비자의 적용·미적용을 구분하며 이 설계 자체는 활성화가 아니다.
+- [채팅 질문의 공식 자료·인덱스 읽기](PRIVATE_CHAT_QUERY_CATALOG_READ_DESIGN.md):
+  기존 Catalog 경계에서 공개 자료를 현재 권한으로 다시 확인한다. 원 채팅 소유권·claim과
+  실제 QUERY 접수/계산/도구 전달은 별도 연결 단계이며, 소스 구현을 활성화로 간주하지 않는다.
 - `services/catalog_service/eom_catalog_service/knowledge_analysis_service.py`: 승인 분석·이벤트 transaction.
 - `services/catalog_service/eom_catalog_service/registry_service.py`: Item 승인·소유된 상태 변경.
 - `services/catalog_service/eom_catalog_service/knowledge_graph_publication_service.py`: source membership·Graph 출판 transaction.

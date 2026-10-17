@@ -27,6 +27,7 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingVectorShardManifest,
 )
 from eom_catalog_contracts.inference_transfer_experiment import (
+    ExperimentView,
     StagedExperimentEntry,
     population_sha256,
 )
@@ -135,8 +136,10 @@ def _artifact(session: Session, pointer: ArtifactMemberPointer, document: dict[s
     session.flush()
 
 
-def _fixture(engine: Engine) -> tuple[RegisterEmbeddingIndexCommand, ResolvedEmbeddingRegistration]:
-    command, original = capture_pair()
+def _fixture(
+    engine: Engine, *, view: ExperimentView = "METADATA_ONLY"
+) -> tuple[RegisterEmbeddingIndexCommand, ResolvedEmbeddingRegistration]:
+    command, original = capture_pair(view=view)
     with Session(engine) as session, session.begin():
         seed = _seed(session)
         item_id, item_revision, base_run, solution_run = _binding_source_ids(session, seed)

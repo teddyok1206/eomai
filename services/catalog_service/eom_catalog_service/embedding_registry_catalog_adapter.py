@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass
 from typing import Any, Literal
 
 from eom_catalog_contracts.embedding_registry import (
@@ -38,6 +37,7 @@ from eom_catalog_contracts.inference_transfer_experiment import (
     experiment_view_text,
 )
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
+from eom_catalog_contracts.private_chat_similarity import PrivateChatSimilarityRequest
 from eom_catalog_contracts.similarity_context import (
     SimilarityContext,
     SimilarityContextRequest,
@@ -136,6 +136,11 @@ from eom_catalog_service.pinned_artifact_resolution import (
     PinnedArtifactReadContext,
     PinnedArtifactResolutionError,
 )
+from eom_catalog_service.private_chat_document_read import (
+    prepare_private_chat_document_scope_in_session,
+    read_private_chat_document_index_in_session,
+)
+from eom_catalog_service.private_chat_similarity_ports import PreparedPrivateChatDocumentScope
 from eom_catalog_service.reference_query_context_preparation import (
     validate_reference_query_context_preparation,
 )
@@ -147,18 +152,9 @@ from eom_catalog_service.similarity_context_ports import (
     similarity_context_error_from_registry,
 )
 from eom_catalog_service.similarity_context_service import validate_similarity_preparation
-
-
-@dataclass(frozen=True, slots=True)
-class _SimilarityReadWindow:
-    """Owner-private bounded decode reuse, not a current authority/membership cache."""
-
-    session: Session
-    transaction: object
-    caller: EmbeddingRegistryActor
-    reader: PinnedArtifactReadContext
-    capture: InferenceTransferSessionCapture
-    source_revision_ids: tuple[str, ...] = ()
+from eom_catalog_service.similarity_document_read_window import (
+    SimilarityDocumentReadWindow as _SimilarityReadWindow,
+)
 
 
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -950,6 +946,31 @@ class CatalogEmbeddingRegistryVerifier:
         current = self.prepare_similarity_context(caller, request)
         if current != prepared:
             raise SimilarityContextReadError("SOURCE_REVOKED")
+
+    def prepare_private_chat_document_scope_in_session(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        request: PrivateChatSimilarityRequest,
+        *,
+        artifact_reader: PinnedArtifactReadContext | None = None,
+    ) -> PreparedPrivateChatDocumentScope:
+        return prepare_private_chat_document_scope_in_session(
+            self, session, caller, request, artifact_reader=artifact_reader
+        )
+
+    def read_private_chat_document_index_in_session(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        request: PrivateChatSimilarityRequest,
+        prepared: PreparedPrivateChatDocumentScope,
+        *,
+        artifact_reader: PinnedArtifactReadContext | None = None,
+    ) -> tuple[ResolvedPinnedEmbeddingIndex, ...]:
+        return read_private_chat_document_index_in_session(
+            self, session, caller, request, prepared, artifact_reader=artifact_reader
+        )
 
     def authorize_scope(
         self,
