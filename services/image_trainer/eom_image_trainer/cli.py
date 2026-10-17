@@ -250,6 +250,14 @@ def _sigterm_gpu_lock(path: Path, handler: Callable[[int, object], None]) -> Ite
 
 
 def main() -> None:
+    """Keep typed pre-lease and cleanup errors within the existing CLI code boundary."""
+    try:
+        _execute()
+    except TrainingRunnerError as exc:
+        raise SystemExit(exc.code) from None
+
+
+def _execute() -> None:
     args = _parser().parse_args()
     if args.operation == "sdxl-native-lora":
         try:

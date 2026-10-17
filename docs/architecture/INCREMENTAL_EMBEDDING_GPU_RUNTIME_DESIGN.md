@@ -860,6 +860,50 @@ CONCRETEab37001d and METADATAaf00d06c succeeded03:40/03:51. Separate queued view
 counts369/379/391 are not a fresh coherent corpus audit. Original HTTP observer
 2895440 remains live/LOGIN; no new auth prompt/key/QUERY. Next routine≥04:35:53 UTC.
 
+### Actual image-model / cache / BUSY checkpoint — 2026-10-17
+
+The current protected SSD-1B model pointer was read without weights/auth disclosure:
+`imgmodel_7f1d9f4f4f041adde5dda11dba9491ff` /
+`imgmodelrev_17b6fb3832ac469316e3a447be8e7e1d`, manifest SHA
+`20dbed28f34c9275538198110ac4962fcf7a312c0846e6819f284ead791fe70c`.
+The V6 binding,19 templates, root guardian and numerical runtime were unchanged.
+One declared, one-step **non-Item** provider model invocation ran through the actual fixed
+provider unit, READY/root ACK, real local CUDA model, original SUCCEEDED preservation,
+automatic retirement, zero stored FDs, empty cgroup and same-inode lease reacquisition.
+
+While a different root controller held the physical lease, the installed provider CLI reused
+that exact private output: identical receipt, output hashes/inodes/mtimes, no new unit/model
+or GPU client. A fresh actual provider unit then correctly failed BUSY before ACK/model,
+retired without clearing the parent's lease, and left no output. The parent proved its
+lease remained valid and a second claimant remained BUSY; final same-inode return passed.
+
+Protected OS evidence (not product Artifacts):
+`/opt/eom/image-joint-runtime-releases/imagejoint-a610b0c7/provider-success-cache-busy/`.
+No-replay operator raw SHA `ef6b373d40e406ba707bc6b8610a649841373dd80df444ab88eb8c447155e70f`;
+local exit receipt `/tmp/eom-image-joint-release.FLrlFoWI/image-provider-regression-result.json`
+reports0. The generated PNGs remain explicit private test-workspace outputs, not registered
+Items, published images or NAS artifacts. Model runs1; training steps/production Jobs0.
+
+The separate actual trainer BUSY case preserved original FAILED/no ACK, MainPID0/store0,
+empty cgroup and no training result/output. Its harness deliberately remains **FAILED**:
+it required a bare stable error line, while the installed CLI emitted
+`eom_image_trainer.runner.TrainingRunnerError: IMAGE_TRAINING_GPU_BUSY`. A bounded
+read-only inspection of the same invocation `30aef179dae24d0aaa23af7b14ca24dc` confirmed
+this classification; no second trainer unit or model was submitted to hide it.
+Evidence: `.../trainer-busy/`; local original failure and read-only receipts:
+`trainer-busy-regression-result.json` / `trainer-busy-readonly-result.json` in the same
+temporary operator directory. Dataset/plan pointers were explicitly absent negative
+fixtures, not approved data or real Artifact authority; they were never dereferenced.
+
+Two source tests reproduced the typed pre-lease exception escaping the CLI. A single
+presentation boundary now maps `TrainingRunnerError` to its existing stable SystemExit
+code, preserving argparse/unknown failures and all locking, cleanup and no-retry behavior.
+Related source regression188 PASS21.32s, strict mypy1/Ruff/format PASS. An initial command
+named a nonexistent test file and ran no tests; the corrected inventory above is the
+reported result. This correction is **source-only until coordinated trainer installation**.
+Crash/timeout and successful trainer execution, six actual CPU/CUDA benchmark launches,
+conditional default activation and C1–C5 operational acceptance remain open.
+
 ## 5. 별도 protected CUDA 실행 leaf
 
 제안 prefix는 `/opt/eom/conda/envs/eom-embedding-cuda`, worker는 `eom-embedding-cuda`,
