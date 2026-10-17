@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import pwd
 import stat
+import time
 from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,13 +24,22 @@ from eom_catalog_contracts.embedding_device_benchmark import (
 from eom_identifiers import sha256_bytes
 
 from eom_catalog_service.embedding_benchmark_layout import benchmark_read_acl
-from eom_catalog_service.embedding_runtime_files import fixed_native_embedding_profile
+from eom_catalog_service.embedding_device_benchmark_files import BenchmarkWorkerLocalFiles
+from eom_catalog_service.embedding_native_cpu_backend import NativeCpuBackendPins
+from eom_catalog_service.embedding_runtime_files import (
+    NumericalRuntimeFileSnapshots,
+    fixed_native_embedding_profile,
+    read_live_runtime_os_file,
+)
+from eom_catalog_service.embedding_runtime_process_identity import native_process_start_ticks
 
 _HANDOFF_ROOT = Path("/run/eom-incremental-embeddings/benchmark")
 _ROOT_UID = 0
 _ROOT_GID = 0
 _OPEN_DIRECTORY = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 _ACL_NAMES = frozenset(("system.posix_acl_access", "system.posix_acl_default"))
+_CONFIG_ROOT = Path("/opt/eom/embedding-native-config")
+_EVIDENCE_ROOT = Path("/opt/eom/embedding-runtime-admission")
 
 
 class BenchmarkHandoffError(ValueError):
@@ -57,6 +67,35 @@ class PreparedBenchmarkHandoff:
     input_raw_sha256: str
     output_members: tuple[str, ...]
     state: Literal["STAGED_NOT_ADMITTED"] = "STAGED_NOT_ADMITTED"
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedCpuBenchmarkEnvironment:
+    """OS-local staging only; neither a Job/source grant nor a launch/installation receipt."""
+
+    execution_id: str
+    job_id: str
+    environment_raw_sha256: str
+    owner_pid: int
+    owner_start_ticks: int
+    expires_ns: int
+    state: Literal["STAGED_NOT_LAUNCHED"] = "STAGED_NOT_LAUNCHED"
+
+
+def _prepared_handoff(
+    invocation: BenchmarkWorkerInvocation, invocation_raw_sha256: str
+) -> PreparedBenchmarkHandoff:
+    return PreparedBenchmarkHandoff(
+        benchmark_id=invocation.benchmark_id,
+        benchmark_revision_id=invocation.benchmark_revision_id,
+        job_id=invocation.job_id,
+        execution_id=invocation.execution_id,
+        invocation_sha256=invocation.invocation_sha256,
+        invocation_raw_sha256=invocation_raw_sha256,
+        input_set_sha256=invocation.input_set_sha256,
+        input_raw_sha256=invocation.local_input.sha256,
+        output_members=benchmark_local_output_members(invocation.launch_ordinal),
+    )
 
 
 def _directory_identity(value: os.stat_result) -> tuple[int, ...]:
@@ -201,14 +240,182 @@ def prepare_benchmark_handoff(
         raise BenchmarkHandoffError("BENCHMARK_HANDOFF_ALREADY_EXISTS") from None
     except OSError:
         raise BenchmarkHandoffError("BENCHMARK_HANDOFF_PREPARE_FAILED") from None
-    return PreparedBenchmarkHandoff(
-        benchmark_id=invocation.benchmark_id,
-        benchmark_revision_id=invocation.benchmark_revision_id,
-        job_id=invocation.job_id,
-        execution_id=invocation.execution_id,
-        invocation_sha256=invocation.invocation_sha256,
-        invocation_raw_sha256=sha256_bytes(invocation_raw),
-        input_set_sha256=inputs.input_set_sha256,
-        input_raw_sha256=sha256_bytes(input_raw),
-        output_members=members,
+    return _prepared_handoff(invocation, sha256_bytes(invocation_raw))
+
+
+def _owner_start_ticks(pid: int, *, uid: int, gid: int) -> int:
+    """Fresh kernel reads only; no cmdline, environment, credentials or caller role claim."""
+    process = Path("/proc") / str(pid)
+    first = native_process_start_ticks(
+        read_live_runtime_os_file(process / "stat", maximum=64 * 1024, owner_uid=uid), pid
+    )
+    raw = read_live_runtime_os_file(process / "status", maximum=128 * 1024, owner_uid=uid)
+    fields: dict[bytes, tuple[bytes, ...]] = {}
+    for line in raw.splitlines():
+        name, separator, value = line.partition(b":")
+        if name in {b"Uid", b"Gid"}:
+            _require(bool(separator) and name not in fields)
+            fields[name] = tuple(value.split())
+    _require(fields == {b"Uid": (str(uid).encode(),) * 4, b"Gid": (str(gid).encode(),) * 4})
+    last = native_process_start_ticks(
+        read_live_runtime_os_file(process / "stat", maximum=64 * 1024, owner_uid=uid), pid
+    )
+    _require(first == last)
+    return first
+
+
+def _validate_cpu_environment_installation(
+    files: NumericalRuntimeFileSnapshots,
+    invocation: BenchmarkWorkerInvocation,
+    backend: NativeCpuBackendPins,
+) -> None:
+    from eom_catalog_contracts.embedding_native_installation_evidence import (
+        ADMISSION_EVIDENCE_DRAFT_RAW_SHA256,
+        MAX_ROOTLOCAL_ADMISSION_EVIDENCE_BYTES,
+        RootLocalNativeConfigurationPin,
+        parse_rootlocal_native_admission_receipt_metadata,
+    )
+    from eom_catalog_contracts.embedding_native_runtime_config import (
+        MAX_NATIVE_RUNTIME_CONFIG_BYTES,
+        parse_installed_embedding_native_runtime_config_bytes,
+        validate_installed_embedding_native_runtime_config_raw,
+    )
+
+    raw = files.read(
+        _CONFIG_ROOT / backend.configuration_id / backend.configuration_revision_id / "config.json",
+        sha256=backend.configuration_raw_sha256,
+        maximum=MAX_NATIVE_RUNTIME_CONFIG_BYTES,
+    )
+    config = parse_installed_embedding_native_runtime_config_bytes(raw)
+    validate_installed_embedding_native_runtime_config_raw(
+        config, raw, backend.configuration_raw_sha256
+    )
+    pin = RootLocalNativeConfigurationPin(
+        configuration_id=backend.configuration_id,
+        configuration_revision_id=backend.configuration_revision_id,
+        configuration_sha256=backend.configuration_sha256,
+        configuration_raw_sha256=backend.configuration_raw_sha256,
+    )
+    receipt = parse_rootlocal_native_admission_receipt_metadata(
+        files.read(
+            _EVIDENCE_ROOT / pin.configuration_id / pin.configuration_revision_id / "receipt.json",
+            sha256=backend.receipt_raw_sha256,
+            maximum=MAX_ROOTLOCAL_ADMISSION_EVIDENCE_BYTES,
+        ),
+        schema_raw=files.read(
+            _EVIDENCE_ROOT / "schemas/admission-receipt-v1.schema.json",
+            sha256=ADMISSION_EVIDENCE_DRAFT_RAW_SHA256,
+            maximum=32 * 1024,
+        ),
+    )
+    _require(
+        config.profile == "CPU_INDEX_FP32"
+        and config.configuration_id == pin.configuration_id
+        and config.configuration_revision_id == pin.configuration_revision_id
+        and config.config_sha256 == pin.configuration_sha256
+        and config.bundle == invocation.runtime.bundle
+        and config.installed_proof == invocation.runtime.installed_proof
+        and config.runtime_sha256 == invocation.runtime.numerical_runtime.runtime_sha256
+        and receipt.configuration == pin
+        and receipt.bundle == config.bundle
+        and receipt.installed_proof == config.installed_proof
+        and receipt.runtime_sha256 == config.runtime_sha256
+    )
+    files.assert_unchanged()
+
+
+def prepare_cpu_benchmark_environment(
+    prepared: PreparedBenchmarkHandoff,
+    invocation: BenchmarkWorkerInvocation,
+    *,
+    backend: NativeCpuBackendPins,
+    owner_pid: int,
+    expires_ns: int,
+) -> PreparedCpuBenchmarkEnvironment:
+    """Exclusive root-only environment creation; caller still owns real Job/launch admission."""
+    if os.geteuid() != _ROOT_UID:
+        raise BenchmarkHandoffError("BENCHMARK_HANDOFF_ROOT_REQUIRED")
+    raw = embedding_device_benchmark_bytes(invocation)
+    _require(
+        type(prepared) is PreparedBenchmarkHandoff
+        and prepared == _prepared_handoff(invocation, sha256_bytes(raw))
+        and invocation.device == "CPU"
+        and invocation.runtime.profile == "CPU_INDEX_FP32"
+        and type(backend) is NativeCpuBackendPins
+        and type(owner_pid) is int
+        and 0 < owner_pid <= 2**31 - 1
+        and type(expires_ns) is int
+        and time.monotonic_ns() < expires_ns <= time.monotonic_ns() + 180 * 10**9
+    )
+    backend.__post_init__()
+    owner = pwd.getpwnam("eom-workflow-runner")
+    _require(
+        type(owner.pw_uid) is int
+        and 0 < owner.pw_uid < 2**32 - 1
+        and type(owner.pw_gid) is int
+        and 0 < owner.pw_gid < 2**32 - 1
+    )
+    start_ticks = _owner_start_ticks(owner_pid, uid=owner.pw_uid, gid=owner.pw_gid)
+    installation = NumericalRuntimeFileSnapshots(_ROOT_UID)
+    _validate_cpu_environment_installation(installation, invocation, backend)
+    fields = (
+        ("EOM_BENCHMARK_INVOCATION_RAW_SHA256", prepared.invocation_raw_sha256),
+        ("EOM_BENCHMARK_OWNER_PID", str(owner_pid)),
+        ("EOM_BENCHMARK_EXPIRES_NS", str(expires_ns)),
+        ("EOM_EMBEDDING_CONFIGURATION_ID", backend.configuration_id),
+        ("EOM_EMBEDDING_CONFIGURATION_REVISION_ID", backend.configuration_revision_id),
+        ("EOM_EMBEDDING_CONFIGURATION_SHA256", backend.configuration_sha256),
+        ("EOM_EMBEDDING_CONFIGURATION_RAW_SHA256", backend.configuration_raw_sha256),
+        ("EOM_EMBEDDING_RECEIPT_RAW_SHA256", backend.receipt_raw_sha256),
+    )
+    payload = "".join(f"{key}={value}\n" for key, value in fields).encode("ascii")
+    try:
+        with ExitStack() as stack:
+            root = _fixed_root(stack)
+            execution = os.open(prepared.execution_id, _OPEN_DIRECTORY, dir_fd=root)
+            stack.callback(os.close, execution)
+            descriptor = os.open(
+                "invocation.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=execution
+            )
+            stack.callback(os.close, descriptor)
+            with BenchmarkWorkerLocalFiles(
+                descriptor,
+                profile="CPU_INDEX_FP32",
+                execution_id=prepared.execution_id,
+                invocation_raw_sha256=prepared.invocation_raw_sha256,
+            ) as local:
+                _require(local.read_invocation() == invocation)
+                location = _HANDOFF_ROOT / prepared.execution_id
+                _require(
+                    _directory_identity(os.fstat(execution))
+                    == _directory_identity(location.lstat())
+                )
+                installation.assert_unchanged()
+                _require(
+                    _owner_start_ticks(owner_pid, uid=owner.pw_uid, gid=owner.pw_gid) == start_ticks
+                )
+                _require(time.monotonic_ns() < expires_ns)
+                _new_member(execution, "launch.env", payload, _ROOT_UID, _ROOT_GID, 0o600)
+                os.fsync(execution)
+                local.assert_current()
+                _require(
+                    _directory_identity(os.fstat(execution))
+                    == _directory_identity(location.lstat())
+                )
+                installation.assert_unchanged()
+                _require(
+                    _owner_start_ticks(owner_pid, uid=owner.pw_uid, gid=owner.pw_gid) == start_ticks
+                )
+                _require(time.monotonic_ns() < expires_ns)
+    except FileExistsError:
+        raise BenchmarkHandoffError("BENCHMARK_ENVIRONMENT_ALREADY_EXISTS") from None
+    except OSError:
+        raise BenchmarkHandoffError("BENCHMARK_ENVIRONMENT_PREPARE_FAILED") from None
+    return PreparedCpuBenchmarkEnvironment(
+        execution_id=prepared.execution_id,
+        job_id=prepared.job_id,
+        environment_raw_sha256=sha256_bytes(payload),
+        owner_pid=owner_pid,
+        owner_start_ticks=start_ticks,
+        expires_ns=expires_ns,
     )

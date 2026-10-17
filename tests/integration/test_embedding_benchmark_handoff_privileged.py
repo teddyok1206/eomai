@@ -8,6 +8,8 @@ import signal
 import socket
 import tempfile
 import time
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -19,6 +21,10 @@ from eom_catalog_service.embedding_benchmark_channel import BenchmarkUnixPeer
 from eom_catalog_service.embedding_device_benchmark_files import BenchmarkWorkerLocalFiles
 from eom_catalog_service.embedding_runtime_files import fixed_native_embedding_profile
 
+from tests.unit.embedding_benchmark_environment_fixtures import (
+    environment_metadata,
+    stage_installation,
+)
 from tests.unit.embedding_device_benchmark_fixtures import (
     owner_request,
     staged_inputs,
@@ -26,6 +32,57 @@ from tests.unit.embedding_device_benchmark_fixtures import (
 )
 
 pytestmark = pytest.mark.privileged
+
+
+@contextmanager
+def actual_workflow_owner() -> Iterator[tuple[int, Callable[[], None]]]:
+    """Only this test's child; no credential, process-global UID change or production unit."""
+    account = pwd.getpwnam("eom-workflow-runner")
+    waiting, release = os.pipe2(os.O_CLOEXEC)
+    ready, started = os.pipe2(os.O_CLOEXEC)
+    child = os.fork()
+    if child == 0:
+        try:
+            os.close(release)
+            os.close(ready)
+            os.setgroups([])
+            os.setgid(account.pw_gid)
+            os.setuid(account.pw_uid)
+            # Match an actual exec'd owner: setuid without exec leaves proc files root-owned.
+            os.dup2(waiting, 0, inheritable=True)
+            os.dup2(started, 3, inheritable=True)
+            executable = "/srv/eom/conda/envs/eom-api/bin/python"
+            os.execve(
+                executable,
+                [
+                    executable,
+                    "-I",
+                    "-B",
+                    "-c",
+                    "import os;os.write(3,b'1');os.close(3);os.read(0,1)",
+                ],
+                {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"},
+            )
+        except BaseException:
+            os._exit(1)
+    os.close(waiting)
+    os.close(started)
+    alive = True
+
+    def stop() -> None:
+        nonlocal alive
+        if alive:
+            os.close(release)
+            _, status = os.waitpid(child, 0)
+            alive = False
+            assert os.waitstatus_to_exitcode(status) == 0
+
+    try:
+        assert os.read(ready, 1) == b"1"
+        yield child, stop
+    finally:
+        os.close(ready)
+        stop()
 
 
 @pytest.mark.parametrize("ordinal", range(1, 7))
@@ -187,3 +244,84 @@ def test_real_native_accepts_exact_workflow_owner_peer_without_binding_or_model(
             os.close(go_read)
             os.close(go_write)
             listener.close()
+
+
+@pytest.mark.parametrize("late_owner_exit", (False, True))
+def test_real_root_environment_private_access_and_process_exit_fence(
+    monkeypatch: pytest.MonkeyPatch,
+    late_owner_exit: bool,
+) -> None:
+    if os.environ.get("EOM_RUN_BENCHMARK_HANDOFF_PRIVILEGED") != "1":
+        pytest.skip("explicit private benchmark filesystem OS gate required")
+    assert os.geteuid() == 0
+    metadata = environment_metadata()
+    with tempfile.TemporaryDirectory(prefix="eom-bench-env-", dir="/run") as directory:
+        root = Path(directory)
+        root.chmod(0o711)
+        namespace = root / "b"
+        namespace.mkdir(mode=0o711)
+        namespace.chmod(0o711)
+        config, evidence = stage_installation(root, metadata)
+        monkeypatch.setattr(handoff, "_HANDOFF_ROOT", namespace)
+        monkeypatch.setattr(capture, "_HANDOFF_ROOT", namespace)
+        monkeypatch.setattr(handoff, "_CONFIG_ROOT", config)
+        monkeypatch.setattr(handoff, "_EVIDENCE_ROOT", evidence)
+        prepared = handoff.prepare_benchmark_handoff(
+            metadata.request,
+            metadata.invocation,
+            metadata.inputs,
+        )
+        path = namespace / prepared.execution_id / "launch.env"
+        with actual_workflow_owner() as (owner_pid, stop):
+            if late_owner_exit:
+                original = handoff._new_member
+
+                def write_then_exit(
+                    parent: int, name: str, raw: bytes, uid: int, gid: int, mode: int
+                ) -> None:
+                    original(parent, name, raw, uid, gid, mode)
+                    stop()
+
+                monkeypatch.setattr(handoff, "_new_member", write_then_exit)
+                with pytest.raises(ValueError):
+                    handoff.prepare_cpu_benchmark_environment(
+                        prepared,
+                        metadata.invocation,
+                        backend=metadata.backend,
+                        owner_pid=owner_pid,
+                        expires_ns=time.monotonic_ns() + 10 * 10**9,
+                    )
+                assert path.is_file() and path.stat().st_uid == 0
+            else:
+                result = handoff.prepare_cpu_benchmark_environment(
+                    prepared,
+                    metadata.invocation,
+                    backend=metadata.backend,
+                    owner_pid=owner_pid,
+                    expires_ns=time.monotonic_ns() + 10 * 10**9,
+                )
+                assert result.state == "STAGED_NOT_LAUNCHED" and result.owner_start_ticks > 0
+                assert (
+                    result.owner_pid == owner_pid and path.stat().st_uid == path.stat().st_gid == 0
+                )
+                assert path.stat().st_mode & 0o777 == 0o600
+                assert (
+                    b"EOM_BENCHMARK_OWNER_PID=" + str(owner_pid).encode() + b"\n"
+                    in path.read_bytes()
+                )
+                for name in ("eom-workflow-runner", "eom-embedding-index-cpu"):
+                    account = pwd.getpwnam(name)
+                    child = os.fork()
+                    if child == 0:
+                        try:
+                            os.setgroups([])
+                            os.setgid(account.pw_gid)
+                            os.setuid(account.pw_uid)
+                            with pytest.raises(PermissionError):
+                                path.read_bytes()
+                            os._exit(0)
+                        except BaseException:
+                            os._exit(1)
+                    _, status = os.waitpid(child, 0)
+                    assert os.waitstatus_to_exitcode(status) == 0
+        assert path.stat().st_mode & 0o777 == 0o600

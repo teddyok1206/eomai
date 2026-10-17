@@ -230,3 +230,53 @@ Encoding/binding rows465 and eligible-source545 are different denominators, not4
 completion. The latest per-view revision rows are not a coherent whole-corpus coverage
 audit. Original HTTP observer2895440 remains live/LOGIN; no new key, query, authentication
 prompt or worker restart was submitted. Next routine observation not before06:40:42 UTC.
+
+## Per-execution CPU environment preparation — design before implementation
+
+The existing root handoff adapter owns this additional local materialization, not a new
+registry or authentication mechanism. It accepts the exact prepared receipt/invocation,
+the existing typed CPU installation pins, actual workflow-owner PID and bounded monotonic
+deadline. It verifies the staged identity/raw hash and empty output namespace, the pinned
+protected configuration and receipt metadata closure, and the real owner's UID/GID/start
+ticks before creating anything. Reading SEALED metadata is not fresh installation admission;
+the numerical entry still requires its existing independent installation reader/factory.
+
+The canonical authorities remain the original Job/source/session and installed records.
+The small returned receipt contains execution/Job identity, raw environment hash, owner
+process birth/deadline, and `STAGED_NOT_LAUNCHED`, not a persisted grant or copied corpus.
+The environment's eight fixed non-secret fields contain only validated IDs, hashes and
+decimal integers. No shell, interpolation, worker-selected paths or mutable latest is used.
+
+Exact execution lookup and bounded file/process reads are O(path depth + envelope/config
+bytes), with constant field count. Existing descriptor-relative root/file validators and
+exclusive creation are reused; no DB/index/cache/dependency is added. Concurrent preparation
+has one file winner. Existing, partial or expired environments are explicit failures, never
+truncated, rewritten or silently renewed. Configuration/file epochs and owner birth are
+checked again after the exclusive write; late failure preserves the private candidate and
+cannot authorize a launch. Application admission/claim/replay/cleanup remain outside this
+adapter. Merely trusting the prepared dataclass or parsing receipt claims would be shorter
+but would accept stale/forged identities; this staged closure is required before PID1 input.
+
+### CPU environment source checkpoint — 2026-10-17
+
+Implemented this preparation in the existing handoff adapter, without a new wire schema,
+dependency, registry or dispatch route. Existing handoff receipt construction now has one
+authoritative function; schema-validated inputs still determine all pins. The current CPU
+configuration1.1 and predecessor1.0 are tested without conversion or implicit latest.
+
+Eleven source suites: **589 PASS14.46s**, strict mypy1, Ruff/format4 and diff checks PASS.
+Nine privileged cases are deliberately SKIP in this source invocation, not OS PASS. Tests
+cover concurrent exclusive creation, forged prepared metadata, rehashed-but-different
+runtime closure, changed config/receipt/schema/staged files, used output, invalid PID or
+deadline, CUDA refusal, late process birth change and partial-write preservation. Current
+process reads are real but unit installation/process fixtures are synthetic claims only.
+Two failed suite invocations named a nonexistent test file; neither ran tests or counts as
+PASS. Corrected inventory produced the result above.
+
+The two new opt-in root cases use a real exec'd workflow-owner child and test root-only
+environment access and owner exit after writing. They do not launch a benchmark, submit a
+Job, admit a source or execute a model. Actual protected OS results are recorded separately
+after the candidate wheel is built and installed passively. Source/real-Job admission,
+compatible numerical prefix, PID1 activation, CUDA entry, six measurements and C1–C5 remain
+open. Existing active services, model defaults, historical outputs and authentication are
+unchanged by this source checkpoint.
