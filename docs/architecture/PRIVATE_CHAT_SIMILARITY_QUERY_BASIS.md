@@ -422,3 +422,20 @@ Status: **SOURCE_PASS / NOT_INSTALLED / NOT_ACTIVE / C4_NOT_ACCEPTED**. Actual
 private Workflow admission/result CHECK, publication receipt, atomic allocation,
 native execution and Chat tool delivery remain open. No old reference policy,
 selected runtime, model default, original request/key or authentication changed.
+
+Candidate `aeab2d78ba6363f88c1422f2e756ddc76d4b46b8` is committed/pushed and
+passed the standard three-wheel build/RECORD gate. Retained dist:
+`/tmp/eom-api-build/aeab2d78ba6363f88c1422f2e756ddc76d4b46b8.UBkghP/dist`.
+Platform raw `20f33053cc6155bc50d39001d6f0cf4b6f49e59a8338b376652e8c1f33248089`;
+API-contract raw `5cbcc2a12aa47c193972b4695269a4292ddb72d95a4a41a6f53f5a565b8e5722`;
+API raw `2ea6b7b0841607149a4494af59c827b5f41673c5c4ed46066dd366274827f19c`.
+
+An independent Conda `-I -S -B` process imported195 EOM modules exclusively from
+the exact platform/API-contract archives. It validated the new schema/resource,
+private intent→native preparation equality, shared legacy-reference closure and
+unchanged original DOCUMENT inventory. Test/checkout/optional-ML imports0; actual
+DB/model/activation calls0. Synthetic input was staged separately, pinned raw
+`68fae22f427ec6144976142de16b467622e7c83be965c1594d18de47727b8810`.
+The read-only proof and staged input remain under
+`/tmp/eom-private-query-intent.gyMCBX4F`; they are not source/IAM/native acceptance.
+No protected prefix, service, policy, original request or selected device changed.
