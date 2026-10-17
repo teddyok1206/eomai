@@ -264,6 +264,7 @@ if [[ "${action}" == "embedding-stage-tests" ]]; then
     tests/integration/test_local_embedding_stage_migration.py \
     tests/integration/test_reference_query_step_migration.py \
     tests/integration/test_reference_query_native_persistence.py \
+    tests/integration/test_private_chat_query_job_allocation.py \
     tests/integration/test_reference_query_submission.py \
     tests/integration/test_reference_query_prepare_application.py \
     tests/integration/test_local_embedding_runner.py \

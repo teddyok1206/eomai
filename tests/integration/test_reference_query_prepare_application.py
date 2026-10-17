@@ -253,9 +253,11 @@ def prepared_application(prepared_query, monkeypatch):
     )
     value.source.prepared = replace(value.source.prepared, request_sha256=context.request_sha256)
 
-    def anchor(session, caller, current):
+    def anchor(session, caller, current, *, artifact_reader=None):
         assert session.get_transaction().is_active and not session.in_nested_transaction()
         assert caller == value.caller and current == value.context
+        if artifact_reader is not None:
+            artifact_reader.require_session(session)
         validate_similarity_preparation(current, value.source.prepared)
         return value.source.prepared
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from eom_identifiers import content_sha256, new_logical_artifact_id, new_revision_id
 from eom_workflow.native_reference_query_coordinator import (
     NativeQueryPhase,
     SupportedNativeReferenceQueryCheckpoint,
@@ -17,17 +16,21 @@ from eom_workflow.reference_query_execution import (
     parse_reference_query_launch_association,
     parse_supported_reference_query_workflow_request,
 )
-from eom_workflow.reference_query_workflow import REFERENCE_QUERY_EXECUTION_PROTOCOL
 from eom_workflow.schemas import (
     NATIVE_REFERENCE_QUERY_COORDINATOR_SCHEMA_RESOURCE,
-    REFERENCE_QUERY_EXECUTION_SCHEMA_RESOURCE,
 )
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from eom_orchestrator.models import JobEventRecord, JobRecord, ProtocolVersionRecord
-from eom_orchestrator.repository import ensure_protocol_version, submit_structured_job
+from eom_orchestrator.models import JobEventRecord, JobRecord
+from eom_orchestrator.native_query_job_allocation import (
+    NativeQueryLaunchError,
+    create_native_query_launch,
+    native_reference_query_key,
+    read_native_query_launch,
+    require_native_query_protocol,
+    require_native_query_root,
+)
 from eom_orchestrator.state_machine import JobState, transition_job
 
 NATIVE_QUERY_TASK = "native_reference_query_launch"
@@ -63,37 +66,23 @@ class NativeReferenceQueryHistoryError(ValueError):
 
 
 def _root(session: Session) -> None:
-    root = session.get_transaction()
-    if root is None or not root.is_active or session.in_nested_transaction():
-        raise NativeReferenceQueryHistoryError("REFERENCE_QUERY_OWNER_ROOT_REQUIRED")
+    try:
+        require_native_query_root(session)
+    except NativeQueryLaunchError as error:
+        raise NativeReferenceQueryHistoryError(str(error)) from None
 
 
 def _protocol(session: Session, version: str, digest: str, *, create: bool = False) -> None:
-    if create:
-        if session.get_bind().dialect.name == "postgresql":
-            session.execute(
-                insert(ProtocolVersionRecord)
-                .values(version=version, schema_sha256=digest)
-                .on_conflict_do_nothing(index_elements=[ProtocolVersionRecord.version])
-            )
-        ensure_protocol_version(session, version, digest)
-        session.flush()
-    protocol = session.get(ProtocolVersionRecord, version, populate_existing=True)
-    if protocol is None or protocol.schema_sha256 != digest:
-        raise NativeReferenceQueryHistoryError("REFERENCE_QUERY_HISTORY_PROTOCOL_INVALID")
+    try:
+        require_native_query_protocol(session, version, digest, create=create)
+    except NativeQueryLaunchError as error:
+        raise NativeReferenceQueryHistoryError(str(error)) from None
 
 
 def native_reference_query_launch_key(
     workflow_id: str, step_run_id: str, request_sha256: str
 ) -> str:
-    return "native-reference-query:" + content_sha256(
-        {
-            "workflow_id": workflow_id,
-            "step_run_id": step_run_id,
-            "attempt": 1,
-            "request_sha256": request_sha256,
-        }
-    ).removeprefix("sha256:")
+    return native_reference_query_key(workflow_id, step_run_id, request_sha256)
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,62 +99,16 @@ def read_native_reference_query_launch(
     workflow_id: str,
     step_run_id: str,
 ) -> ReferenceQueryLaunchAssociation | None:
-    """Caller fences the actual Workflow and current execution/read authority first."""
-    _root(session)
+    """Caller holds actual Workflow/command/source fences; not execution authority."""
     request = parse_supported_reference_query_workflow_request(request)
-    job = session.scalar(
-        select(JobRecord)
-        .where(
-            JobRecord.idempotency_key
-            == native_reference_query_launch_key(workflow_id, step_run_id, request.request_sha256)
-        )
-        .with_for_update(read=True)
-        .execution_options(populate_existing=True)
-    )
-    if job is None:
-        return None
-    _protocol(
-        session, REFERENCE_QUERY_EXECUTION_PROTOCOL, REFERENCE_QUERY_EXECUTION_SCHEMA_RESOURCE[2]
-    )
-    events = tuple(
-        session.scalars(
-            select(JobEventRecord).where(
-                JobEventRecord.job_id == job.job_id,
-                JobEventRecord.event == NATIVE_QUERY_LAUNCH_EVENT,
-            )
-        )
-    )
     try:
-        if len(events) != 1:
-            raise ValueError("QUERY original launch count differs")
-        launch = parse_reference_query_launch_association(events[0].data)
-        payload = request.model_dump(mode="json")
-        if (
-            job.job_id != launch.native_launch_job_id
-            or job.worker_slot_id is not None
-            or job.task_type != NATIVE_QUERY_TASK
-            or job.protocol_version != REFERENCE_QUERY_EXECUTION_PROTOCOL
-            or job.request != payload
-            or job.request_hash
-            != content_sha256(
-                {
-                    "protocol_version": REFERENCE_QUERY_EXECUTION_PROTOCOL,
-                    "task_type": NATIVE_QUERY_TASK,
-                    "request": payload,
-                }
-            )
-            or (events[0].from_state, events[0].to_state) != ("QUEUED", "CLAIMED")
-            or launch.workflow_id != workflow_id
-            or launch.step_run_id != step_run_id
-            or launch.workflow_request_sha256 != request.request_sha256
-            or launch.context_request_sha256 != request.context_request.request_sha256
-            or launch.runtime_bundle != request.runtime_bundle
-            or launch.resource_profile_sha256 != request.resource_profile.resource_profile_sha256
-        ):
-            raise ValueError("QUERY original Job closure differs")
-        return launch
-    except (ValueError, TypeError, KeyError):
-        raise NativeReferenceQueryHistoryError("REFERENCE_QUERY_LAUNCH_HISTORY_INVALID") from None
+        result = read_native_query_launch(
+            session, request=request, workflow_id=workflow_id, step_run_id=step_run_id
+        )
+    except NativeQueryLaunchError as error:
+        raise NativeReferenceQueryHistoryError(str(error)) from None
+    assert result is None or isinstance(result, ReferenceQueryLaunchAssociation)
+    return result
 
 
 def create_native_reference_query_launch(
@@ -174,59 +117,15 @@ def create_native_reference_query_launch(
     request: SupportedReferenceQueryWorkflowRequest,
     launch: ReferenceQueryLaunchAssociation,
 ) -> ReferenceQueryLaunchAssociation:
-    """Within held Workflow→command locks, create or return ONLY the original launch.
-
-    This does not verify native text, current authority, installed units or admission.
-    The owner must validate the complete prepared handoff before physical launch.
-    """
-    _root(session)
+    """Allocate or replay the original reference Job under existing owner fences."""
     request = parse_supported_reference_query_workflow_request(request)
     launch = parse_reference_query_launch_association(launch)
-    existing = read_native_reference_query_launch(
-        session, request=request, workflow_id=launch.workflow_id, step_run_id=launch.step_run_id
-    )
-    if existing is not None:
-        return existing
-    if (
-        launch.workflow_request_sha256 != request.request_sha256
-        or launch.context_request_sha256 != request.context_request.request_sha256
-        or launch.runtime_bundle != request.runtime_bundle
-        or launch.resource_profile_sha256 != request.resource_profile.resource_profile_sha256
-    ):
-        raise NativeReferenceQueryHistoryError("REFERENCE_QUERY_LAUNCH_REQUEST_INVALID")
-    _protocol(
-        session,
-        REFERENCE_QUERY_EXECUTION_PROTOCOL,
-        REFERENCE_QUERY_EXECUTION_SCHEMA_RESOURCE[2],
-        create=True,
-    )
-    job, created = submit_structured_job(
-        session,
-        job_id=launch.native_launch_job_id,
-        protocol_version=REFERENCE_QUERY_EXECUTION_PROTOCOL,
-        idempotency_key=native_reference_query_launch_key(
-            launch.workflow_id, launch.step_run_id, request.request_sha256
-        ),
-        task_type=NATIVE_QUERY_TASK,
-        request=request.model_dump(mode="json"),
-        logical_artifact_id=new_logical_artifact_id(),
-        revision_id=new_revision_id(),
-    )
-    if not created:
-        raise NativeReferenceQueryHistoryError("REFERENCE_QUERY_LAUNCH_RACE_UNRECONCILED")
-    for state, event in (
-        (JobState.VALIDATED, "REFERENCE_QUERY_REQUEST_VALIDATED"),
-        (JobState.QUEUED, "REFERENCE_QUERY_COORDINATOR_QUEUED"),
-        (JobState.CLAIMED, NATIVE_QUERY_LAUNCH_EVENT),
-    ):
-        transition_job(
-            session,
-            job.job_id,
-            state,
-            event,
-            data=launch.model_dump(mode="json") if state is JobState.CLAIMED else {},
-        )
-    return launch
+    try:
+        result = create_native_query_launch(session, request=request, launch=launch)
+    except NativeQueryLaunchError as error:
+        raise NativeReferenceQueryHistoryError(str(error)) from None
+    assert isinstance(result, ReferenceQueryLaunchAssociation)
+    return result
 
 
 class NativeReferenceQueryCoordinator:
