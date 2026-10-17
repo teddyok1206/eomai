@@ -715,3 +715,11 @@ redefine that historical family; no prior schema bytes or expected hash were upd
 No protected prefix, template, active policy, existing Job/Artifact or service changed.
 Root source/unit/process/host ACK and terminal retirement composition, coordinated
 compatible prefix successor, six actual measurements and consumer gates remain open.
+
+Candidate `94b901bed02e837af404da94ce6acdd16d37533c` passed standard three-wheel/RECORD
+build and isolated API-interpreter imports of the actual wheel's two changed production
+modules, with exact checkout byte comparison and no optional ML/GPU package import.
+Build `/tmp/eom-api-build/94b901bed02e837af404da94ce6acdd16d37533c.mdvUkN/dist`;
+platform raw SHA `d9ec41f3b1641c235ff9d2b53909e3e30e09b88694575b568c28343cb945ed86`,
+API-contract raw SHA `b245929dbcf33d80c650c5c3e43d6e3b636c29c1b69d6917e3162d57c8c490b5`.
+BUILD_ONLY: neither this import nor metadata preparation is protected runtime activation.
