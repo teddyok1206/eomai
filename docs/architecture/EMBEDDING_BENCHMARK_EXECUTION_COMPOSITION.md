@@ -908,3 +908,30 @@ code, not a global zero-failure assertion. No new request/Job or restart was sub
 The existing HTTP process was still at LOGIN at08:34; state/log timestamp unchanged.
 The user's acknowledgement alone was not recorded as an authenticated PASS; no new login
 process or duplicate password prompt was created and no credential/TTY input was read.
+
+### Actual retained-reader family boundary correction — before implementation
+
+Review against the full goal found that the new benchmark terminal/retirement code called
+the old installation-probe retained reader, whose closed regex correctly rejects benchmark
+units. The higher-level fixtures replaced that reader and therefore did not expose this
+wiring error. Keep the probe guard unchanged; add one benchmark-specific retained adapter
+with its own exact fixed unit family, sharing only the existing physical FD/inode checks.
+Use it at both benchmark callers. Regression must run the actual public family guards and
+synthetic kernel FD readbacks, not replace the entire retained reader. No worker wire bytes,
+schema, DB, source permission, numerical code, runtime default or installed activation changes.
+
+Implemented the dedicated benchmark retained reader and corrected both terminal/retirement
+callers. The probe-only reader is unchanged and still rejects benchmark units. The new
+reader checks its exact benchmark family and real resource value type, then uses the same
+bounded device/lease/store/PID1-lock observer; a metadata timeout is uncertain, not cleanup
+permission. Tests exercise the actual public guards with synthetic kernel ports, including
+unheld PID1 lock, missing store, changed descriptor/device, wrong purpose/type and nonroot.
+Two higher-level regressions now retain the real family guard while replacing only its
+physical kernel adapter, so wiring a probe-only reader back into either caller fails.
+
+Final20 suites **746 PASS65.27s**, strict3 changed production modules, Ruff/format6 and diff
+PASS. These include the earlier734 cases; do not add the totals. The initial6 new tests
+were red because the benchmark retained API did not exist, then all passed with the API
+and caller correction. Positive root/GPU/kernel cases remain synthetic; this corrects an
+actual source boundary mismatch, not an installed GPU acceptance. No real signal, unit
+cleanup, model, new Job/request, policy/default or protected prefix was changed.

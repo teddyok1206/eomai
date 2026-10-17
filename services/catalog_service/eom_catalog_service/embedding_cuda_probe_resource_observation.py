@@ -191,6 +191,23 @@ def observe_cuda_probe_retained_resources(
     return observed
 
 
+def observe_benchmark_cuda_retained_resources(
+    observed: CudaProbeResourceObservation, *, unit: str
+) -> CudaProbeResourceObservation:
+    """Benchmark-only retained fence, not installation-probe admission or cleanup authority."""
+    try:
+        _require(os.getresuid() == (0, 0, 0) and type(observed) is CudaProbeResourceObservation)
+        _require(
+            type(unit) is str
+            and re.fullmatch(r"eom-embedding-benchmark-cuda@[0-9a-f]{32}\.service", unit)
+            is not None
+        )
+        _assert_retained_resources(observed, unit)
+        return observed
+    except (ValueError, OSError, subprocess.TimeoutExpired, JsonSchemaError):
+        raise ValueError("BENCHMARK_CUDA_RESOURCE_OBSERVATION_INVALID") from None
+
+
 def _assert_retained_resources(observed: _RetainedGpuUnitResources, unit: str) -> None:
     lease = RootLocalCudaSharedGpuLease.model_validate(observed.shared_gpu_lease)
     validate_rootlocal_cuda_resource_file_metadata(observed.device_nodes, lease)

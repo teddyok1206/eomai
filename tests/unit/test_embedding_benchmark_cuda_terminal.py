@@ -40,7 +40,7 @@ def ended(benchmark, monkeypatch):
         return resources
 
     monkeypatch.setattr(Path, "lstat", lstat)
-    monkeypatch.setattr(owner, "observe_cuda_probe_retained_resources", retained)
+    monkeypatch.setattr(owner, "observe_benchmark_cuda_retained_resources", retained)
     return state
 
 
@@ -149,3 +149,22 @@ def test_pinned_file_capture_is_not_a_live_ready_or_model_grant(ended, monkeypat
     assert captured.ready == state.ready
     with pytest.raises(ValueError, match="NOT_RUNNING"):
         observe(state)
+
+
+def test_terminal_calls_real_benchmark_family_guard_not_probe_only_reader(ended, monkeypatch):
+    from eom_catalog_service import embedding_cuda_probe_resource_observation as resources
+
+    calls = []
+
+    def retained(observed, unit):
+        assert observed == ended.observed_ready.resources and unit == ended.unit_name
+        calls.append(unit)
+
+    monkeypatch.setattr(resources, "_assert_retained_resources", retained)
+    monkeypatch.setattr(
+        owner,
+        "observe_benchmark_cuda_retained_resources",
+        resources.observe_benchmark_cuda_retained_resources,
+    )
+    assert verify(ended).original_outcome == "SUCCEEDED"
+    assert calls == [ended.unit_name, ended.unit_name]

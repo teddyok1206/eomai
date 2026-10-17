@@ -47,7 +47,7 @@ from eom_catalog_service.embedding_cuda_probe_gpu_clients import observe_cuda_pr
 from eom_catalog_service.embedding_cuda_probe_resource_observation import (
     CudaProbeResourceObservation,
     observe_benchmark_cuda_ready_resources,
-    observe_cuda_probe_retained_resources,
+    observe_benchmark_cuda_retained_resources,
 )
 from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
 from eom_catalog_service.embedding_native_installation_admission import (
@@ -535,9 +535,9 @@ def verify_benchmark_cuda_terminal(
 
     ended()
     observe_runtime_device(ready.device)
-    observe_cuda_probe_retained_resources(ready.resources, unit=unit)
+    observe_benchmark_cuda_retained_resources(ready.resources, unit=unit)
     _require(observe_cuda_probe_gpu_clients(ready.device) == (), "GPU_CLEANUP_UNCERTAIN")
-    observe_cuda_probe_retained_resources(ready.resources, unit=unit)
+    observe_benchmark_cuda_retained_resources(ready.resources, unit=unit)
     _require(
         observe_gpu_unit_policy(unit, worker_account="eom-embedding-cuda")
         == ready.effective_policy_sha256,

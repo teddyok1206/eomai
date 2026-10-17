@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -183,6 +184,61 @@ def test_benchmark_uses_its_own_message_and_exact_unit_with_the_same_kernel_fd_r
     assert result.pid1_descriptor == 80 and result.shared_gpu_lease.holder_pid == report.pid
     assert result.shared_gpu_lease.lock_epoch[1] == 99
     assert not hasattr(result, "assert_owned")
+
+
+def test_benchmark_retained_phase_uses_its_own_closed_unit_family_without_dead_worker_fds(kernel):
+    report = benchmark_report(kernel)
+    unit = kernel[2]["expected_unit"]
+    observed = owner.observe_benchmark_cuda_ready_resources(report, unit=unit, lease_gid=2468)
+    kernel[2]["unheld_worker"] = True
+    assert owner.observe_benchmark_cuda_retained_resources(observed, unit=unit) is observed
+    with pytest.raises(ValueError):
+        owner.observe_cuda_probe_retained_resources(observed, unit=unit)
+
+
+@pytest.mark.parametrize(
+    "fault",
+    ("probe_unit", "pid1", "store", "device", "root", "unit_type", "resource_type", "descriptor"),
+)
+def test_benchmark_retained_phase_still_checks_actual_physical_fencing(kernel, monkeypatch, fault):
+    report = benchmark_report(kernel)
+    unit = kernel[2]["expected_unit"]
+    observed = owner.observe_benchmark_cuda_ready_resources(report, unit=unit, lease_gid=2468)
+    if fault == "probe_unit":
+        unit = f"eom-embedding-native-cuda-probe@{report.execution_id}.service"
+    elif fault == "pid1":
+        kernel[2]["unheld_pid1"] = True
+    elif fault == "store":
+        kernel[2]["store"] = b"[]"
+    elif fault == "device":
+        kernel[1].named[20] = metadata(
+            kernel[1].values[20].st_mode, 500, rdev=kernel[1].values[20].st_rdev
+        )
+    elif fault == "root":
+        monkeypatch.setattr(owner.os, "getresuid", lambda: (1000,) * 3)
+    elif fault == "unit_type":
+        unit = None
+    elif fault == "resource_type":
+        observed = None
+    else:
+        observed = replace(observed, pid1_descriptor=observed.pid1_descriptor + 1)
+    with pytest.raises(ValueError, match="BENCHMARK_CUDA_RESOURCE_OBSERVATION_INVALID"):
+        owner.observe_benchmark_cuda_retained_resources(observed, unit=unit)
+
+
+def test_benchmark_retained_metadata_timeout_is_uncertain_not_cleanup_permission(
+    kernel, monkeypatch
+):
+    report = benchmark_report(kernel)
+    unit = kernel[2]["expected_unit"]
+    observed = owner.observe_benchmark_cuda_ready_resources(report, unit=unit, lease_gid=2468)
+
+    def timeout(*_a, **_kw):
+        raise subprocess.TimeoutExpired("synthetic fdstore read", 10)
+
+    monkeypatch.setattr(owner.subprocess, "run", timeout)
+    with pytest.raises(ValueError, match="BENCHMARK_CUDA_RESOURCE_OBSERVATION_INVALID"):
+        owner.observe_benchmark_cuda_retained_resources(observed, unit=unit)
 
 
 @pytest.mark.parametrize(

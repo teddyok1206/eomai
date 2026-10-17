@@ -28,7 +28,7 @@ from eom_catalog_service.embedding_benchmark_handoff import PreparedBenchmarkEnv
 from eom_catalog_service.embedding_cuda_probe_gpu_clients import observe_cuda_probe_gpu_clients
 from eom_catalog_service.embedding_cuda_probe_resource_observation import (
     hold_released_cuda_probe_resources,
-    observe_cuda_probe_retained_resources,
+    observe_benchmark_cuda_retained_resources,
 )
 from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
 from eom_catalog_service.embedding_runtime_os_identity import observe_runtime_device
@@ -274,7 +274,7 @@ def retire_benchmark_cuda_unit(
         )
         if stopped.stored_descriptors == 1:
             observe_runtime_device(ready.device)
-            observe_cuda_probe_retained_resources(ready.resources, unit=unit)
+            observe_benchmark_cuda_retained_resources(ready.resources, unit=unit)
             _require(observe_cuda_probe_gpu_clients(ready.device) == (), "RETIREMENT_UNCERTAIN")
             _require(
                 observe_stopped_gpu_unit(

@@ -126,7 +126,7 @@ def retirement(ended, tmp_path, monkeypatch):
     monkeypatch.setattr(owner, "verify_benchmark_cuda_terminal", verify)
     monkeypatch.setattr(owner, "reserve_unit_effect_phase", reserve)
     monkeypatch.setattr(owner, "observe_stopped_gpu_unit", stopped)
-    monkeypatch.setattr(owner, "observe_cuda_probe_retained_resources", retained)
+    monkeypatch.setattr(owner, "observe_benchmark_cuda_retained_resources", retained)
     monkeypatch.setattr(owner, "observe_cuda_probe_gpu_clients", clients)
     monkeypatch.setattr(owner, "observe_runtime_device", device)
     monkeypatch.setattr(owner, "require_benchmark_cuda_processes_ended", ended_processes)
@@ -286,3 +286,26 @@ def test_nonroot_never_changes_or_recovers_unit(retirement, monkeypatch, readonl
     with pytest.raises(ValueError, match="ROOT_REQUIRED"):
         invoke(retirement, readonly=readonly)
     assert not retirement.calls and not tuple(retirement.root.iterdir())
+
+
+def test_retirement_calls_real_benchmark_family_guard_not_probe_only_reader(
+    retirement, monkeypatch
+):
+    from eom_catalog_service import embedding_cuda_probe_resource_observation as resources
+
+    calls = []
+
+    def retained(observed, unit):
+        assert (
+            observed == retirement.terminal.ready.resources and unit == retirement.source.unit_name
+        )
+        calls.append(unit)
+
+    monkeypatch.setattr(resources, "_assert_retained_resources", retained)
+    monkeypatch.setattr(
+        owner,
+        "observe_benchmark_cuda_retained_resources",
+        resources.observe_benchmark_cuda_retained_resources,
+    )
+    assert invoke(retirement).retired_unit.stored_descriptors == 0
+    assert calls == [retirement.source.unit_name]
