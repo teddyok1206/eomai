@@ -374,9 +374,9 @@ def test_three_actual_cli_prefix_bindings_have_explicit_roles():
 def test_all_source_gpu_execution_bindings_match_closed_root_unit_roles():
     root = Path(__file__).resolve().parents[2] / "infra/systemd"
     roles = {
-        "/srv/eom/conda/envs/eom-image/bin/eom-local-image": "PROVIDER",
-        "/srv/eom/conda/envs/eom-image-trainer/bin/eom-local-image": "PROVIDER_IN_TRAINER",
-        "/srv/eom/conda/envs/eom-image-trainer/bin/eom-local-image-trainer": "TRAINER",
+        "PROVIDER": "/srv/eom/conda/envs/eom-image/bin/python3.11",
+        "PROVIDER_IN_TRAINER": "/srv/eom/conda/envs/eom-image-trainer/bin/python3.11",
+        "TRAINER": "/srv/eom/conda/envs/eom-image-trainer/bin/python3.11",
     }
     checked = set()
     for path in root.glob("eom-image-*.service"):
@@ -387,9 +387,24 @@ def test_all_source_gpu_execution_bindings_match_closed_root_unit_roles():
             line.removeprefix("ExecStart=") for line in lines if line.startswith("ExecStart=")
         ]
         assert len(commands) == 1
-        program = shlex.split(commands[0])[0]
-        assert program in roles, path.name
-        assert image_gpu_unit_role(path.name.replace("@.service", "@x.service")) == roles[program]
+        arguments = shlex.split(commands[0])
+        if path.name == "eom-image-gpu-lifetime@.service":
+            assert "User=root" in lines
+            assert arguments == [
+                "/opt/eom/conda/envs/eom-embedding-experiment/bin/python3.12",
+                "-I",
+                "-B",
+                "/usr/local/libexec/eom-image-runtime/watch_gpu_guard.py",
+                "%I",
+            ]
+            continue
+        assert arguments[4] in roles and arguments[0] == roles[arguments[4]], path.name
+        assert arguments[1:4] == [
+            "-I",
+            "-B",
+            "/usr/local/libexec/eom-image-runtime/run_gpu_unit.py",
+        ]
+        assert image_gpu_unit_role(path.name.replace("@.service", "@x.service")) == arguments[4]
         checked.add(path.name)
     assert len(checked) == 19
 

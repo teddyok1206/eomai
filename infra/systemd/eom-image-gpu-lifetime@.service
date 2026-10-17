@@ -1,0 +1,61 @@
+[Unit]
+Description=EOM root lifetime observation for image unit %I
+After=local-fs.target
+StartLimitIntervalSec=infinity
+StartLimitBurst=1
+CollectMode=inactive
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+Group=root
+WorkingDirectory=/
+Environment=PATH=/usr/bin:/bin
+Environment=TZ=UTC
+Environment=LANG=C.UTF-8
+UnsetEnvironment=LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT PYTHONPATH PYTHONHOME PYTHONSTARTUP PYTHONUSERBASE
+ExecStart=/opt/eom/conda/envs/eom-embedding-experiment/bin/python3.12 -I -B /usr/local/libexec/eom-image-runtime/watch_gpu_guard.py %I
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+PrivateDevices=no
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+SystemCallArchitectures=native
+DevicePolicy=closed
+DeviceAllow=/dev/nvidia0 rw
+DeviceAllow=/dev/nvidiactl rw
+DeviceAllow=/dev/nvidia-uvm rw
+DeviceAllow=/dev/nvidia-uvm-tools rw
+ReadOnlyPaths=/run/eom-gpu-lease
+ReadOnlyPaths=/opt/eom/embedding-owner-releases
+ReadWritePaths=/opt/eom/image-gpu-lifetimes
+InaccessiblePaths=/mnt/nas /home/eom/EOM /home/eom/EOMIS
+InaccessiblePaths=/root/.codex /srv/eom/worker-homes /srv/eom/workspaces
+InaccessiblePaths=/srv/eom/models/image /srv/eom/models/image-style
+InaccessiblePaths=/opt/eom/embedding-models /etc/eom
+InaccessiblePaths=-/var/run/docker.sock -/run/postgresql
+UMask=0077
+MemoryMax=1G
+TasksMax=64
+CPUQuota=50%
+TimeoutStartSec=87000
+TimeoutStopSec=10
+KillMode=control-group
+Restart=no
+LimitCORE=0
+StandardOutput=journal
+StandardError=journal

@@ -9,6 +9,22 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Template/preparation checkpoint2026-10-17: all19 source image GPU units and
+  separate root guardian/fixed entry now have the reviewed shared lifecycle
+  settings. Header2020-12/installation/Pydantic validation rejects extra authority,
+  owner/latest drift; component deployers refuse partial deployment. Source378
+  PASS26.00s, separate image340 PASS14.23s,20 unit syntax/strict2/Ruff/format/shell
+  PASS. Root permission adapter separately passed8 actual root disposable FS tests
+  with real hardlinks/chown/chmod; no production mutation. Actual read-only plan
+  captures376 members/349 protections/12 private metadata copies163540bytes,
+  exact SHA recorded. This corrects a real pre-existing prefix permission gate
+  without weakening it or rewriting unrelated environments. Runtime templates,
+  groups, prefixes/defaults/DB/model unchanged; full drained compatible rollout/
+  rollback and actual lifecycle/model comparisons/C1–C5 remain open. Historical13
+  image failed units were observed, not reset or reinterpreted; no active image unit
+  appeared in that readback. INDEX/QUERY active04:05:53, original HTTP liveLOGIN;
+  next routine≥04:35:53, no new login/key/QUERY.
+  [Exact source/privileged-test/production-read-only separation](../architecture/INCREMENTAL_EMBEDDING_GPU_RUNTIME_DESIGN.md#templateroot-entrypreparation-checkpoint2026-10-17).
 - Actual guardian preparation03:26 UTC:1031a232 standard build/RECORD and separate
   OLD owner-pair import PASS; existing protected owner installer published a new
   immutable root-owned owner using EOM2 authorization. Actual root0444 source SHA

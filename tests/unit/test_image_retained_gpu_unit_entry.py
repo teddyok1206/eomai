@@ -391,6 +391,7 @@ _GPU_TEMPLATES = tuple(
     sorted(
         path
         for path in _UNIT_ROOT.glob("eom-image-*.service")
+        if "User=eom-image" in path.read_text().splitlines()
         if any(
             line.startswith("DeviceAllow=") and "nvidia" in line
             for line in path.read_text().splitlines()
@@ -428,13 +429,91 @@ def test_every_source_gpu_template_has_one_explicit_bootstrap_binding(template):
     lines = template.read_text().splitlines()
     starts = [line.removeprefix("ExecStart=") for line in lines if line.startswith("ExecStart=")]
     assert len(starts) == 1
-    executable = Path(shlex.split(starts[0])[0])
+    arguments = shlex.split(starts[0])
     matches = [
         (role, module)
         for role, (prefix, module, console) in bootstrap._ROLES.items()
-        if executable == prefix / "bin" / console
+        if arguments[:5]
+        == [
+            str(prefix / "bin/python3.11"),
+            "-I",
+            "-B",
+            "/usr/local/libexec/eom-image-runtime/run_gpu_unit.py",
+            role,
+        ]
     ]
     assert len(matches) == 1, f"unmapped or ambiguous unit executable: {template.name}"
+    assert "--gpu-lock /run/eom-gpu-lease/gpu0.lock" in starts[0]
+    assert "/var/lib/eom-image/gpu0.lock" not in starts[0]
+
+
+def test_root_driver_query_guardian_is_explicit_and_no_other_gpu_template_is_hidden():
+    all_device_units = {
+        path.name
+        for path in _UNIT_ROOT.glob("eom-image-*.service")
+        if any(
+            line.startswith("DeviceAllow=") and "nvidia" in line
+            for line in path.read_text().splitlines()
+        )
+    }
+    assert all_device_units == {path.name for path in _GPU_TEMPLATES} | {
+        "eom-image-gpu-lifetime@.service"
+    }
+
+
+@pytest.mark.parametrize("template", _GPU_TEMPLATES, ids=lambda path: path.name)
+def test_every_gpu_template_reserves_retention_and_root_lifecycle_without_broad_group(template):
+    lines = template.read_text().splitlines()
+    expected = {
+        "StartLimitIntervalSec=infinity",
+        "StartLimitBurst=1",
+        "CollectMode=inactive",
+        "RemainAfterExit=yes",
+        "NotifyAccess=main",
+        "FileDescriptorStoreMax=1",
+        "FileDescriptorStorePreserve=yes",
+        "SupplementaryGroups=eom-gpu-lease",
+        "KillMode=control-group",
+        "ReadOnlyPaths=/run/eom-gpu-lease",
+        "ExecStartPre=+/opt/eom/conda/envs/eom-embedding-experiment/bin/python3.12 -I -B "
+        "/usr/local/libexec/eom-image-runtime/start_gpu_guard.py %n",
+    }
+    assert all(lines.count(value) == 1 for value in expected)
+    assert "User=eom-image" in lines and "Group=eom-image" in lines
+    assert not any(value.startswith("SupplementaryGroups=") and "eom " in value for value in lines)
+
+
+def test_guardian_has_only_root_observation_access_not_models_auth_nas_or_db():
+    lines = (_UNIT_ROOT / "eom-image-gpu-lifetime@.service").read_text().splitlines()
+    for value in {
+        "User=root",
+        "Group=root",
+        "PrivateNetwork=yes",
+        "NoNewPrivileges=yes",
+        "CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE",
+        "AmbientCapabilities=",
+        "RestrictAddressFamilies=AF_UNIX AF_NETLINK",
+        "ReadWritePaths=/opt/eom/image-gpu-lifetimes",
+        "Restart=no",
+        "StartLimitIntervalSec=infinity",
+        "StartLimitBurst=1",
+    }:
+        assert value in lines
+    assert not any("eom-image-trainer/bin" in value or "eom-image/bin" in value for value in lines)
+    assert "InaccessiblePaths=/mnt/nas /home/eom/EOM /home/eom/EOMIS" in lines
+    assert "InaccessiblePaths=/opt/eom/embedding-models /etc/eom" in lines
+    assert "InaccessiblePaths=/srv/eom/models/image /srv/eom/models/image-style" in lines
+    assert "InaccessiblePaths=/root/.codex /srv/eom/worker-homes /srv/eom/workspaces" in lines
+
+
+@pytest.mark.parametrize("component", ["image_provider", "image_trainer"])
+def test_legacy_component_deployer_rejects_partial_shared_release_before_mutations(component):
+    root = Path(__file__).resolve().parents[2]
+    source = (root / "scripts" / component / "deploy_runtime.sh").read_text()
+    guard = source.index('fail "LOCAL_IMAGE_COORDINATED_GPU_RELEASE_REQUIRED"')
+    for effect in ("release_quarantine=$(mktemp", "mark-mutation", "pip install"):
+        if effect in source:
+            assert guard < source.index(effect)
 
 
 @pytest.mark.parametrize(

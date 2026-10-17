@@ -53,6 +53,12 @@ fail() {
 }
 
 [[ "${EUID}" -eq 0 ]] || fail "LOCAL_IMAGE_TRAINER_RUNTIME_ROOT_REQUIRED"
+# Keep the legacy provisioning/rollback path, but never mix it with only part of
+# the shared image GPU lifetime release. Use the coordinated release owner.
+if [[ -e /usr/local/libexec/eom-image-runtime/watch_gpu_guard.py ]] || \
+   /usr/bin/grep -Fq '/usr/local/libexec/eom-image-runtime/run_gpu_unit.py' "$TRAINER_UNIT_SOURCE"; then
+  fail "LOCAL_IMAGE_COORDINATED_GPU_RELEASE_REQUIRED"
+fi
 if [[ $# -eq 15 ]]; then
   [[ "${12}" == --gpu-lease-wheel && "${14}" == --gpu-lease-sha256 ]] || \
     fail "LOCAL_IMAGE_TRAINER_DEPENDENCY_ARGUMENTS_INVALID"

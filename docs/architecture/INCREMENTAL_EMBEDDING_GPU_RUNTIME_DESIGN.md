@@ -543,6 +543,133 @@ CPU defaults were not changed. No new numerical-prefix audit/rebuild is needed
 for this administrative-only installation. Important Slack milestone delivered
 `devreport_58eb654fe94f4238b5bf9584bdc4346f`03:26:50 UTC, Korean summary first.
 
+##### Coordinated template rollout boundary — design before implementation
+
+The19 existing image templates retain their original command arguments, resource
+budgets, workspaces and model bindings, but switch the executable to the reviewed
+stdlib-first bootstrap, fixed shared lock and per-unit supplementary lease group.
+An explicit root ExecStartPre launches the separate fixed guardian before the
+unprivileged main starts. Retain the main unit after exit, preserve PID1's single
+descriptor, disable automatic restart and admit one invocation per instance.
+ReadOnlyPaths exposes the existing shared inode without granting its creation or
+mutation; the old lock/path remains as history/rollback, not an active fallback.
+
+The separate root guardian is OS coordination, not a worker/model role. It uses
+the existing OLD interpreter and reviewed installed owner, no repository/NAS,
+model stores, database or auth inputs. Root proc/FD observation requires bounded
+DAC-read/ptrace capabilities; fixed systemctl commands use PID1, not an arbitrary
+privileged shell. Read-only driver queries have only the four fixed device nodes,
+AF_UNIX/AF_NETLINK and a private network; no ML import or model file access. Only
+its root-local lifecycle audit directory is writable. Root entry files are
+protected installation code, not paths/commands supplied by a worker or user.
+
+Existing component deployers must reject the new source templates (or installed
+guardian entry) before wheel/user/unit mutation. They configure unrelated bindings
+and identities and cannot safely perform this19-entry migration piecemeal. Reuse
+their existing wheel/source/RECORD verifier in the coordinated operator instead:
+pin source and existing wheel bytes, drain and fence entrypoints, preserve exact
+old prefix members/templates/configs, verify no active/uncertain legacy holder,
+install both reviewed package sets/root entries/all19 units while fenced, reload,
+verify the complete source/effective set, then reopen only the supported path.
+Migration failure leaves the fence and durable evidence; no blind reinstallation.
+Rollback uses preserved exact old inputs as one compatible set, not a latest
+package/model substitution. These are source/installation changes, no new worker
+protocol, DB/queue or replacement Artifact ownership boundary.
+
+Existing image-prefix preflight also found operator-owned0775 directories and
+Python executables. The unchanged release verifier correctly refuses them. The
+coordinated preparation must preserve exact prior metadata and normalize only
+the fixed two image-prefix ancestor chains, Python3.11 executables, site-packages
+directory and distribution METADATA/RECORD ancestors/files needed by that verifier.
+The shared `/srv/eom/conda/envs` parent changes ownership/protection only; other
+environment contents and current jobs are not rewritten. New environment creation
+there becomes an explicit privileged installation operation. This is not a full
+image numerical-prefix admission or an audit of every third-party library.
+
+For any regular metadata file with multiple links, never chown/chmod its shared
+inode (which can also belong to a Conda cache/another environment). Preserve the
+old directory entry/inode in the private rollback workspace and materialize an
+identical-byte private file at the exact original path before protection. Record
+hash and before/after identity/metadata; bounded no-clobber preparation must stop
+on symlinks, unknown owners, changed epochs or partial outcomes. No model/Artifact
+payload is copied, no global Conda cache or unrelated environment file is changed,
+and the verifier's protection checks are not relaxed. Preparation runs only after
+the image-entry drain/fence, with its rollback metadata preserved.
+
+##### Template/root-entry/preparation checkpoint2026-10-17
+
+All19 source templates now select their original operation through the fixed
+Python3.11/-I/-B/bootstrap role and shared inode. Original model/workspace/budget
+arguments remain. Retention/one-invocation policy, per-unit lease group and root
+pre-entry hook are explicit. The separate root guardian template has only proc/FD
+read capabilities, fixed device-query access and its root-local metadata write
+directory; model/auth/NAS/DB locations are inaccessible. Existing polkit remains
+closed and does not grant workers permission to start the root guardian.
+
+`gpu_guard_entry.py` is the source for the two fixed root start/watch entries.
+Its2020-12 header schema pins owner1031a232, forbids authority/extra/latest fields
+and validates the frozen installation schema/Pydantic invariants before calling
+the existing owner. Protected bounded/no-follow reads and config epochs prevent
+silent rebinding. Only safe stable diagnostics are emitted, never config inputs.
+This small root installation value is not a new worker/RPC/DB contract. Legacy
+component deployment now refuses the new source/installed guardian before any
+wheel/user/binding/unit mutation; it cannot accidentally deploy only half the set.
+
+`gpu_runtime_permissions` captures only the fixed two image-prefix paths and
+required metadata, preserves intent before one application, and refuses drift,
+unknown ownership, symlinks, special modes, wrong workspaces or replay. Shared
+metadata entries are retained in the private same-filesystem recovery workspace;
+identical-byte new entries receive protection without changing the old inode's
+owner/mode/content. A local inode→epoch map accounts only for the coordinator's
+own rename-ctime changes across known aliases. Parent-directory fsync and before/
+after identities are recorded; no model copy, recursive environment rewrite or
+unrelated environment-file permission change is performed. Final activation and
+full compatible rollback remain the coordinated operator's responsibility.
+
+Actual **root-only disposable filesystem** tests ran from protected hash-checked
+copies in `/opt/eom/.image-permission-tests-lyfi_bfr`: **8 PASS0.06s**, with real
+chown/chmod/hardlinks, two aliases plus a third cache alias, no fake root identity,
+and no production-prefix/model mutation. Default unprivileged invocation correctly
+skips these8 instead of claiming privilege acceptance. Protected test operator
+SHA777b4a88 and source2b9ee357/testc58975c2 are preserved under
+`/tmp/eom-image-permission-test-operator.vrInfUOo` and the root stage.
+
+Then the same tested adapter captured the **actual production plan, read-only**:
+376 members,349 needing protection,12 private metadata materializations totaling
+163540bytes. Its root-local JSON SHA is
+`dffa5024ce569fa9a0b6719d7641454006d40d5940ed27617bef8c3963c2bc78` at
+`/opt/eom/.image-permission-tests-lyfi_bfr/production-plan-readonly.json`.
+Both actual prefixes and recovery root use filesystem64512. This is a preparation
+inventory, not permission application, image deployment or numerical admission.
+
+Source image regression340 PASS14.23s and all20 candidate unit syntax checks
+passed. Final eleven-suite root-entry/core/resource/dependency regression is
+**378 PASS26.00s**; fresh strict2 script modules, Ruff/format/shell/diff PASS.
+The actual root filesystem8 PASS is separate and is not counted as a source-only
+privilege simulation. Initial fixture syntax/old console-binding assertions were corrected
+for the intentional new bootstrap; no production guard was relaxed. Core package,
+native schema/numerical code, installed owner1031, bootstrap7edb475d and image
+wheel candidates1a5c6b86 are unchanged, so do not rebuild those environments for
+these script/template-only changes.
+
+The actual coordinated operator is still next. It must fence/drain **all users
+of both image prefixes**, including the non-GPU extraction/reference units, before
+package updates. Do not rely on a /run mask overriding an existing /etc fragment;
+use verified existing-style deployment holds at the effective template boundary,
+preserve their exact original state and prove admission is refused. Acquire both
+existing legacy and shared physical leases; do not create/replace either inode.
+Capture old namespace/config/template inputs and retain original failed history,
+then prepare permissions, stage/verify both package sets and config/root entries,
+install the whole set while fenced, and verify before releasing the hold. Do not
+apply the production plan alone or activate partial RemainAfterExit templates.
+Actual cross-consumer/crash/timeout acceptance, six comparisons/default and C1–C5
+remain mandatory parts of the full ACTIVE goal.
+
+Routine04:05:53 UTC: same INDEX/QUERY processes/invocations remain active;
+CONCRETEab37001d and METADATAaf00d06c succeeded03:40/03:51. Separate queued view
+counts369/379/391 are not a fresh coherent corpus audit. Original HTTP observer
+2895440 remains live/LOGIN; no new auth prompt/key/QUERY. Next routine≥04:35:53 UTC.
+
 ## 5. 별도 protected CUDA 실행 leaf
 
 제안 prefix는 `/opt/eom/conda/envs/eom-embedding-cuda`, worker는 `eom-embedding-cuda`,

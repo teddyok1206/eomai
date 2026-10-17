@@ -1,11 +1,22 @@
 [Unit]
 Description=EOM isolated science visual subject multi-seed evaluation %i
 After=local-fs.target
+StartLimitIntervalSec=infinity
+StartLimitBurst=1
+CollectMode=inactive
 ConditionPathIsDirectory=/srv/eom/image-training-workspaces/%i
 ConditionPathIsReadWrite=/srv/eom/image-training-workspaces/%i
 
 [Service]
 Type=oneshot
+RemainAfterExit=yes
+NotifyAccess=main
+FileDescriptorStoreMax=1
+FileDescriptorStorePreserve=yes
+SupplementaryGroups=eom-gpu-lease
+KillMode=control-group
+ReadOnlyPaths=/run/eom-gpu-lease
+UnsetEnvironment=LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT PYTHONPATH PYTHONHOME PYTHONSTARTUP PYTHONUSERBASE
 User=eom-image
 Group=eom-image
 WorkingDirectory=/srv/eom/image-training-workspaces/%i
@@ -13,7 +24,8 @@ Environment=HOME=/var/lib/eom-image
 Environment=TZ=UTC
 Environment=PYTHONNOUSERSITE=1
 Environment=CUBLAS_WORKSPACE_CONFIG=:4096:8
-ExecStart=/srv/eom/conda/envs/eom-image-trainer/bin/eom-local-image-trainer science-subject-multiseed --command /srv/eom/image-training-workspaces/%i/command.json --model-store-root /srv/eom/models/image --workspace /srv/eom/image-training-workspaces/%i --gpu-lock /var/lib/eom-image/gpu0.lock
+ExecStartPre=+/opt/eom/conda/envs/eom-embedding-experiment/bin/python3.12 -I -B /usr/local/libexec/eom-image-runtime/start_gpu_guard.py %n
+ExecStart=/srv/eom/conda/envs/eom-image-trainer/bin/python3.11 -I -B /usr/local/libexec/eom-image-runtime/run_gpu_unit.py TRAINER science-subject-multiseed --command /srv/eom/image-training-workspaces/%i/command.json --model-store-root /srv/eom/models/image --workspace /srv/eom/image-training-workspaces/%i --gpu-lock /run/eom-gpu-lease/gpu0.lock
 
 StateDirectory=eom-image
 StateDirectoryMode=0700

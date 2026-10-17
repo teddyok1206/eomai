@@ -37,6 +37,12 @@ fail() {
 }
 
 [[ "${EUID}" -eq 0 ]] || fail "LOCAL_IMAGE_RUNTIME_ROOT_REQUIRED"
+# The shared unit/bootstrap/retention owner is one release boundary. This legacy
+# provisioner also changes bindings/users; it must not partially deploy that set.
+if [[ -e /usr/local/libexec/eom-image-runtime/watch_gpu_guard.py ]] || \
+   /usr/bin/grep -Fq '/usr/local/libexec/eom-image-runtime/run_gpu_unit.py' "$UNIT_SOURCE"; then
+  fail "LOCAL_IMAGE_COORDINATED_GPU_RELEASE_REQUIRED"
+fi
 if [[ $# -eq 11 ]]; then
   [[ "$8" == --gpu-lease-wheel && "${10}" == --gpu-lease-sha256 ]] || \
     fail "LOCAL_IMAGE_DEPENDENCY_ARGUMENTS_INVALID"

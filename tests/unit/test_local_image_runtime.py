@@ -72,9 +72,9 @@ def test_local_image_unit_is_fixed_hardened_and_nas_inaccessible() -> None:
 
     assert "User=eom-image" in source
     assert "Group=eom-image" in source
-    assert "eom-local-image generate-composite" in source
+    assert "run_gpu_unit.py PROVIDER generate-composite" in source
     assert "/srv/eom/image-workspaces/%i/request.json" in source
-    assert "--gpu-lock /var/lib/eom-image/gpu0.lock" in source
+    assert "--gpu-lock /run/eom-gpu-lease/gpu0.lock" in source
     assert "PrivateNetwork=true" in source
     assert "NoNewPrivileges=true" in source
     assert "RestrictSUIDSGID=true" in source
@@ -129,8 +129,8 @@ def test_reference_conditioned_provider_has_gpu_but_no_network_nas_or_acquirer_a
     )
 
     assert "User=eom-image" in source
-    assert "eom-local-image generate-reference-composite" in source
-    assert "--gpu-lock /var/lib/eom-image/gpu0.lock" in source
+    assert "run_gpu_unit.py PROVIDER generate-reference-composite" in source
+    assert "--gpu-lock /run/eom-gpu-lease/gpu0.lock" in source
     assert "PrivateNetwork=true" in source
     assert "DevicePolicy=closed" in source
     assert "ReadOnlyPaths=/srv/eom/models/image" in source
@@ -147,9 +147,9 @@ def test_style_reference_provider_reads_only_exact_model_and_adapter_stores() ->
     )
 
     assert "User=eom-image" in source
-    assert "eom-local-image generate-reference-style-composite" in source
+    assert "run_gpu_unit.py PROVIDER generate-reference-style-composite" in source
     assert "--style-adapter-store-root /srv/eom/models/image-style" in source
-    assert "--gpu-lock /var/lib/eom-image/gpu0.lock" in source
+    assert "--gpu-lock /run/eom-gpu-lease/gpu0.lock" in source
     assert "PrivateNetwork=true" in source
     assert "ReadOnlyPaths=/srv/eom/models/image" in source
     assert "ReadOnlyPaths=/srv/eom/models/image-style" in source
@@ -165,10 +165,10 @@ def test_base_reference_provider_has_no_style_store_or_network_access() -> None:
     )
 
     assert "User=eom-image" in source
-    assert "eom-local-image generate-reference-base-composite" in source
+    assert "run_gpu_unit.py PROVIDER generate-reference-base-composite" in source
     assert "--style-adapter-store-root" not in source
     assert "/srv/eom/models/image-style" not in source
-    assert "--gpu-lock /var/lib/eom-image/gpu0.lock" in source
+    assert "--gpu-lock /run/eom-gpu-lease/gpu0.lock" in source
     assert "PrivateNetwork=true" in source
     assert "ReadOnlyPaths=/srv/eom/models/image" in source
     assert "ReadWritePaths=/srv/eom/image-workspaces/%i" in source
@@ -182,9 +182,9 @@ def test_local_image_trainer_unit_is_isolated_and_shares_only_gpu_capacity_lock(
 
     assert "User=eom-image" in source
     assert "Group=eom-image" in source
-    assert "eom-local-image-trainer train" in source
+    assert "run_gpu_unit.py TRAINER train" in source
     assert "/srv/eom/image-training-workspaces/%i/command.json" in source
-    assert "--gpu-lock /var/lib/eom-image/gpu0.lock" in source
+    assert "--gpu-lock /run/eom-gpu-lease/gpu0.lock" in source
     assert "Environment=CUBLAS_WORKSPACE_CONFIG=:4096:8" in source
     assert "PrivateNetwork=true" in source
     assert "NoNewPrivileges=true" in source
@@ -239,9 +239,9 @@ def test_local_image_micro_probe_unit_is_evaluation_only_and_nas_inaccessible() 
 
     assert "User=eom-image" in source
     assert "Group=eom-image" in source
-    assert "eom-local-image-trainer micro-probe" in source
+    assert "run_gpu_unit.py TRAINER micro-probe" in source
     assert "/srv/eom/image-training-workspaces/%i/command.json" in source
-    assert "--gpu-lock /var/lib/eom-image/gpu0.lock" in source
+    assert "--gpu-lock /run/eom-gpu-lease/gpu0.lock" in source
     assert "Environment=CUBLAS_WORKSPACE_CONFIG=:4096:8" in source
     assert "PrivateNetwork=true" in source
     assert "NoNewPrivileges=true" in source
@@ -259,9 +259,9 @@ def test_science_micro_probe_unit_is_evaluation_only_and_nas_inaccessible() -> N
 
     assert "User=eom-image" in source
     assert "Group=eom-image" in source
-    assert "eom-local-image-trainer science-micro-probe" in source
+    assert "run_gpu_unit.py TRAINER science-micro-probe" in source
     assert "/srv/eom/image-training-workspaces/%i/command.json" in source
-    assert "--gpu-lock /var/lib/eom-image/gpu0.lock" in source
+    assert "--gpu-lock /run/eom-gpu-lease/gpu0.lock" in source
     assert "Environment=CUBLAS_WORKSPACE_CONFIG=:4096:8" in source
     assert "PrivateNetwork=true" in source
     assert "NoNewPrivileges=true" in source
@@ -279,9 +279,9 @@ def test_science_campaign_micro_probe_unit_is_evaluation_only_and_nas_inaccessib
 
     assert "User=eom-image" in source
     assert "Group=eom-image" in source
-    assert "eom-local-image-trainer science-campaign-micro-probe" in source
+    assert "run_gpu_unit.py TRAINER science-campaign-micro-probe" in source
     assert "/srv/eom/image-training-workspaces/%i/command.json" in source
-    assert "--gpu-lock /var/lib/eom-image/gpu0.lock" in source
+    assert "--gpu-lock /run/eom-gpu-lease/gpu0.lock" in source
     assert "Environment=CUBLAS_WORKSPACE_CONFIG=:4096:8" in source
     assert "PrivateNetwork=true" in source
     assert "NoNewPrivileges=true" in source
@@ -299,9 +299,9 @@ def test_local_image_micro_evaluation_unit_is_isolated_and_nas_inaccessible() ->
 
     assert "User=eom-image" in source
     assert "Group=eom-image" in source
-    assert "eom-local-image-trainer evaluate-micro-probe" in source
+    assert "run_gpu_unit.py TRAINER evaluate-micro-probe" in source
     assert "/srv/eom/image-training-workspaces/%i/command.json" in source
-    assert "--gpu-lock /var/lib/eom-image/gpu0.lock" in source
+    assert "--gpu-lock /run/eom-gpu-lease/gpu0.lock" in source
     assert "Environment=CUBLAS_WORKSPACE_CONFIG=:4096:8" in source
     assert "PrivateNetwork=true" in source
     assert "NoNewPrivileges=true" in source
@@ -319,9 +319,9 @@ def test_science_micro_evaluation_unit_is_isolated_and_nas_inaccessible() -> Non
 
     assert "User=eom-image" in source
     assert "Group=eom-image" in source
-    assert "eom-local-image-trainer evaluate-science-micro-probe" in source
+    assert "run_gpu_unit.py TRAINER evaluate-science-micro-probe" in source
     assert "/srv/eom/image-training-workspaces/%i/command.json" in source
-    assert "--gpu-lock /var/lib/eom-image/gpu0.lock" in source
+    assert "--gpu-lock /run/eom-gpu-lease/gpu0.lock" in source
     assert "Environment=CUBLAS_WORKSPACE_CONFIG=:4096:8" in source
     assert "PrivateNetwork=true" in source
     assert "NoNewPrivileges=true" in source
@@ -339,9 +339,9 @@ def test_science_campaign_micro_evaluation_unit_is_isolated_and_nas_inaccessible
 
     assert "User=eom-image" in source
     assert "Group=eom-image" in source
-    assert "eom-local-image-trainer evaluate-science-campaign-micro-probe" in source
+    assert "run_gpu_unit.py TRAINER evaluate-science-campaign-micro-probe" in source
     assert "/srv/eom/image-training-workspaces/%i/command.json" in source
-    assert "--gpu-lock /var/lib/eom-image/gpu0.lock" in source
+    assert "--gpu-lock /run/eom-gpu-lease/gpu0.lock" in source
     assert "Environment=CUBLAS_WORKSPACE_CONFIG=:4096:8" in source
     assert "PrivateNetwork=true" in source
     assert "NoNewPrivileges=true" in source
@@ -359,9 +359,9 @@ def test_science_subject_multiseed_unit_is_isolated_and_nas_inaccessible() -> No
 
     assert "User=eom-image" in source
     assert "Group=eom-image" in source
-    assert "eom-local-image-trainer science-subject-multiseed" in source
+    assert "run_gpu_unit.py TRAINER science-subject-multiseed" in source
     assert "/srv/eom/image-training-workspaces/%i/command.json" in source
-    assert "--gpu-lock /var/lib/eom-image/gpu0.lock" in source
+    assert "--gpu-lock /run/eom-gpu-lease/gpu0.lock" in source
     assert "Environment=CUBLAS_WORKSPACE_CONFIG=:4096:8" in source
     assert "PrivateNetwork=true" in source
     assert "NoNewPrivileges=true" in source
