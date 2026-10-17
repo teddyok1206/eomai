@@ -26,9 +26,14 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisWorkerProposalV8,
     validate_contract,
 )
+from eom_protocol.artifact_members import ArtifactMemberPointer
 from pydantic import ValidationError
 
-from eom_catalog_service.artifacts import CatalogArtifactReader, CatalogArtifactService
+from eom_catalog_service.artifacts import (
+    CatalogArtifactReader,
+    CatalogArtifactService,
+    CatalogModelArtifactReader,
+)
 
 type KnowledgeAnalysisReceipt = (
     KnowledgeAnalysisProposalReceipt
@@ -200,6 +205,14 @@ def resolve_knowledge_analysis_proposal(
     return proposal
 
 
+def _decode_solution_report(_schema_ref: str, raw: bytes) -> KnowledgeAnalysisSolutionReport:
+    value = json.loads(raw)
+    if not isinstance(value, dict):
+        raise ValueError("solution report is not an object")
+    validate_contract("knowledge-analysis-solution-report-v1", value)
+    return KnowledgeAnalysisSolutionReport.model_validate(value)
+
+
 def resolve_knowledge_solution_proposal(
     artifacts: CatalogArtifactReader,
     receipt: KnowledgeAnalysisProposalReceiptV9,
@@ -208,22 +221,32 @@ def resolve_knowledge_solution_proposal(
 
     pointer = receipt.solution_report
     try:
-        raw = artifacts.read_member(
-            artifact_id=pointer.artifact_id,
-            revision_id=pointer.artifact_revision_id,
-            member_path=pointer.member_path,
-            sha256=pointer.sha256,
-            media_type=pointer.media_type,
-            schema_ref=pointer.schema_ref,
-            max_bytes=pointer.bytes,
-        )
-        if len(raw) != pointer.bytes:
-            raise ValueError("solution report member byte count differs")
-        value = json.loads(raw)
-        if not isinstance(value, dict):
-            raise ValueError("solution report is not an object")
-        validate_contract("knowledge-analysis-solution-report-v1", value)
-        report = KnowledgeAnalysisSolutionReport.model_validate(value)
+        if isinstance(artifacts, CatalogModelArtifactReader):
+            report = artifacts.read_model_member(
+                ArtifactMemberPointer(
+                    artifact_id=pointer.artifact_id,
+                    artifact_revision_id=pointer.artifact_revision_id,
+                    member_path=pointer.member_path,
+                    sha256=pointer.sha256,
+                    media_type=pointer.media_type,
+                    schema_ref=pointer.schema_ref,
+                ),
+                expected_bytes=pointer.bytes,
+                decoder=_decode_solution_report,
+            )
+        else:
+            raw = artifacts.read_member(
+                artifact_id=pointer.artifact_id,
+                revision_id=pointer.artifact_revision_id,
+                member_path=pointer.member_path,
+                sha256=pointer.sha256,
+                media_type=pointer.media_type,
+                schema_ref=pointer.schema_ref,
+                max_bytes=pointer.bytes,
+            )
+            if len(raw) != pointer.bytes:
+                raise ValueError("solution report member byte count differs")
+            report = _decode_solution_report(pointer.schema_ref, raw)
         return KnowledgeAnalysisWorkerProposalV8(
             analysis_request_id=receipt.analysis_request_id,
             base_analysis_result_id=receipt.base_analysis.analysis_result_id,

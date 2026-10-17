@@ -5,8 +5,9 @@ from __future__ import annotations
 import os
 import stat
 from collections import OrderedDict
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
+from datetime import date, datetime, time, timedelta
 from pathlib import Path, PurePosixPath
 from threading import get_ident
 from typing import Literal, cast
@@ -14,6 +15,7 @@ from typing import Literal, cast
 from eom_identifiers import content_sha256, sha256_bytes, sha256_file
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
 from eom_protocol.artifact_members import ArtifactMemberPointer
+from pydantic import BaseModel
 from sqlalchemy import select, tuple_
 from sqlalchemy.orm import Session
 
@@ -403,6 +405,37 @@ def resolve_pinned_artifact_member(
     )
 
 
+@dataclass(frozen=True)
+class _DecodedArtifactMember:
+    decoder: object
+    value: BaseModel
+    byte_charge: int
+
+
+def _deeply_immutable(value: BaseModel) -> bool:
+    """Frozen roots with mutable nested fields cannot safely be shared by readers."""
+    pending: list[object] = [value]
+    visited: set[int] = set()
+    while pending:
+        node = pending.pop()
+        if node is None or isinstance(
+            node, (str, bytes, int, float, date, datetime, time, timedelta)
+        ):
+            continue
+        if id(node) in visited:
+            continue
+        visited.add(id(node))
+        if isinstance(node, BaseModel):
+            if not node.model_config.get("frozen") or node.__pydantic_private__ or node.model_extra:
+                return False
+            pending.extend(node.__dict__.values())
+        elif isinstance(node, (tuple, frozenset)):
+            pending.extend(node)
+        else:
+            return False
+    return True
+
+
 class PinnedArtifactReadContext:
     """Bounded root-Session immutable decoding reuse, never a permission cache.
 
@@ -414,6 +447,8 @@ class PinnedArtifactReadContext:
     MAX_REVISIONS = 4096
     MAX_MEMBERS = 8192
     MAX_RETAINED_BYTES = 128 * 1024**2
+    MAX_DECODED_BYTES = 32 * 1024**2
+    MAX_DECODED_MEMBERS = 2048
 
     def __init__(self, session: Session, settings: CatalogSettings) -> None:
         root = session.get_transaction()
@@ -429,6 +464,10 @@ class PinnedArtifactReadContext:
         )
         self._seen_members: set[tuple[str, str, str, str, str, str]] = set()
         self._retained_bytes = 0
+        self._decoded: OrderedDict[tuple[str, str, str, str, str, str], _DecodedArtifactMember] = (
+            OrderedDict()
+        )
+        self._decoded_bytes = 0
 
     def require_session(self, session: Session) -> None:
         if (
@@ -677,8 +716,11 @@ class PinnedArtifactReadContext:
             # Retention is a memory bound, not a corpus-size admission limit.
             # Evicted bytes must pass the same physical checks on their next use.
             while type(size) is int and self._retained_bytes + size > self.MAX_RETAINED_BYTES:
-                _evicted_key, evicted = self._members.popitem(last=False)
+                evicted_key, evicted = self._members.popitem(last=False)
                 self._retained_bytes -= len(evicted.payload)
+                decoded = self._decoded.pop(evicted_key, None)
+                if decoded is not None:
+                    self._decoded_bytes -= decoded.byte_charge
         member = _resolve_pinned_artifact_member(
             self._session,
             self.settings,
@@ -736,6 +778,59 @@ class PinnedArtifactReadContext:
             expected_primary_file=primary,
             max_bytes=max_bytes,
         ).payload
+
+    def read_model_member[Model: BaseModel](
+        self,
+        pointer: ArtifactMemberPointer,
+        *,
+        expected_bytes: int,
+        decoder: Callable[[str, bytes], Model],
+    ) -> Model:
+        """Reuse only immutable decoding, never member/provenance/current authority checks."""
+        if type(expected_bytes) is not int or expected_bytes < 1:
+            raise PinnedArtifactResolutionError("pinned Artifact member byte count is invalid")
+        payload = self.read_member(
+            artifact_id=pointer.artifact_id,
+            revision_id=pointer.artifact_revision_id,
+            member_path=pointer.member_path,
+            sha256=pointer.sha256,
+            media_type=pointer.media_type,
+            schema_ref=pointer.schema_ref,
+            max_bytes=expected_bytes,
+        )
+        if len(payload) != expected_bytes:
+            raise PinnedArtifactResolutionError("pinned Artifact member byte count differs")
+        key = (
+            pointer.artifact_id,
+            pointer.artifact_revision_id,
+            pointer.member_path,
+            pointer.sha256,
+            pointer.schema_ref,
+            pointer.media_type,
+        )
+        cached = self._decoded.get(key)
+        if cached is not None and cached.decoder is decoder:
+            self._decoded.move_to_end(key)
+            return cast(Model, cached.value)
+        # A different decoder must not inherit the previous interpretation, even
+        # if its own validation fails or returns a mutable model.
+        if cached is not None:
+            self._decoded_bytes -= self._decoded.pop(key).byte_charge
+        value = decoder(pointer.schema_ref, payload)
+        if (
+            len(payload) <= self.MAX_DECODED_BYTES
+            and self.MAX_DECODED_MEMBERS > 0
+            and _deeply_immutable(value)
+        ):
+            while self._decoded and (
+                len(self._decoded) >= self.MAX_DECODED_MEMBERS
+                or self._decoded_bytes + len(payload) > self.MAX_DECODED_BYTES
+            ):
+                _key, evicted = self._decoded.popitem(last=False)
+                self._decoded_bytes -= evicted.byte_charge
+            self._decoded[key] = _DecodedArtifactMember(decoder, value, len(payload))
+            self._decoded_bytes += len(payload)
+        return value
 
     def verify_member(
         self,

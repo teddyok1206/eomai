@@ -6,9 +6,10 @@ import json
 import os
 import shutil
 import stat
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 from uuid import uuid4
 
 from eom_identifiers import (
@@ -28,6 +29,8 @@ from eom_orchestrator.repository import (
     submit_structured_job,
 )
 from eom_orchestrator.state_machine import JobState, transition_job
+from eom_protocol.artifact_members import ArtifactMemberPointer
+from pydantic import BaseModel
 from sqlalchemy import Engine, select
 
 from eom_catalog_service.settings import CatalogSettings
@@ -180,6 +183,19 @@ class CatalogArtifactReader(Protocol):
         schema_ref: str,
         max_bytes: int,
     ) -> None: ...
+
+
+@runtime_checkable
+class CatalogModelArtifactReader(CatalogArtifactReader, Protocol):
+    """Optional operation-scoped decoding; each call still resolves the exact member."""
+
+    def read_model_member[Model: BaseModel](
+        self,
+        pointer: ArtifactMemberPointer,
+        *,
+        expected_bytes: int,
+        decoder: Callable[[str, bytes], Model],
+    ) -> Model: ...
 
 
 class CatalogArtifactService:

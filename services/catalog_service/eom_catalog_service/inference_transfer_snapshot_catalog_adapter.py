@@ -12,7 +12,11 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, cast
 
-from eom_catalog_contracts import ApprovedItemKnowledgeSourceV2, CreateEvidenceBundleCommand
+from eom_catalog_contracts import (
+    ApprovedItemKnowledgeSourceV2,
+    AssessmentItemContentContract,
+    CreateEvidenceBundleCommand,
+)
 from eom_catalog_contracts.inference_transfer_experiment import (
     MAX_GRAPH_BASELINE_CANDIDATES,
     ExperimentViewRecipe,
@@ -39,7 +43,7 @@ from eom_protocol.artifact_members import ArtifactMemberPointer
 from sqlalchemy import Engine, Select, or_, select, text
 from sqlalchemy.orm import Session
 
-from eom_catalog_service.artifacts import CatalogArtifactReader
+from eom_catalog_service.artifacts import CatalogArtifactReader, CatalogModelArtifactReader
 from eom_catalog_service.inference_transfer_catalog_adapter import (
     AcceptedInferenceTransferProfileInput,
     CatalogInferenceTransferSourceAdapter,
@@ -58,7 +62,10 @@ from eom_catalog_service.inference_transfer_snapshot_service import (
     prepare_snapshot_value,
     validate_snapshot_selection,
 )
-from eom_catalog_service.item_content_contract import ITEM_CONTENT_SCHEMAS, read_item_content
+from eom_catalog_service.item_content_contract import (
+    ITEM_CONTENT_SCHEMAS,
+    read_item_content,
+)
 from eom_catalog_service.knowledge_graph_models import (
     KnowledgeSnapshotAnalysisRecord,
 )
@@ -122,6 +129,17 @@ def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 def _reject_json_constant(value: str) -> Any:
     raise ValueError(f"non-standard JSON numeric constant: {value}")
+
+
+def _decode_item_content(schema_ref: str, payload: bytes) -> AssessmentItemContentContract:
+    document = json.loads(
+        payload.decode("utf-8"),
+        object_pairs_hook=_unique_json_object,
+        parse_constant=_reject_json_constant,
+    )
+    if not isinstance(document, dict):
+        raise ValueError("canonical Item must be a JSON object")
+    return read_item_content(schema_ref, document)
 
 
 class InferenceTransferSessionCapturePhase(StrEnum):
@@ -199,10 +217,38 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
         batch: list[BoundedControlArtifactRead] = []
         batch_bytes = 0
 
+        def project_member(
+            pointer: ArtifactMemberPointer, item: AssessmentItemContentContract
+        ) -> None:
+            # Share decoding, not exact profile/report identity or its projection.
+            for value in inputs_by_pointer[pointer]:
+                run_id = value.profile.source_basis.solution_evidence.base_analysis_run_id
+                result[run_id] = project_staged_item_entry(
+                    profile=value.profile,
+                    item=item,
+                    accepted_report=value.report,
+                    recipe=request.recipe
+                    if isinstance(request, InferenceTransferSnapshotPrepareRequest)
+                    else request,
+                )
+
         def read_batch() -> None:
             if not batch:
                 return
             try:
+                if isinstance(artifact_reader, CatalogModelArtifactReader):
+                    for read in batch:
+                        pointer = cast(ArtifactMemberPointer, read.pointer)
+                        project_member(
+                            pointer,
+                            artifact_reader.read_model_member(
+                                pointer,
+                                expected_bytes=pointers[pointer],
+                                decoder=_decode_item_content,
+                            ),
+                        )
+                    batch.clear()
+                    return
                 values = (
                     resolve_control_artifact_members(self.engine, tuple(batch))
                     if artifact_reader is None
@@ -219,7 +265,7 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
                         for read in batch
                     )
                 )
-            except ControlArtifactResolutionError as exc:
+            except (ControlArtifactResolutionError, OSError, ValueError) as exc:
                 raise InferenceTransferServiceError(
                     "INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH"
                 ) from exc
@@ -230,26 +276,7 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
                 if len(payload) != pointers[pointer]:
                     raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH")
                 try:
-                    document = json.loads(
-                        payload.decode("utf-8"),
-                        object_pairs_hook=_unique_json_object,
-                        parse_constant=_reject_json_constant,
-                    )
-                    if not isinstance(document, dict):
-                        raise ValueError("canonical Item must be a JSON object")
-                    item = read_item_content(pointer.schema_ref, document)
-                    # Parse one canonical member once, but preserve each exact
-                    # profile/report identity when the member is shared.
-                    for value in inputs_by_pointer[pointer]:
-                        run_id = value.profile.source_basis.solution_evidence.base_analysis_run_id
-                        result[run_id] = project_staged_item_entry(
-                            profile=value.profile,
-                            item=item,
-                            accepted_report=value.report,
-                            recipe=request.recipe
-                            if isinstance(request, InferenceTransferSnapshotPrepareRequest)
-                            else request,
-                        )
+                    project_member(pointer, _decode_item_content(pointer.schema_ref, payload))
                 except (UnicodeError, ValueError) as exc:
                     raise InferenceTransferServiceError(
                         "INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH"
