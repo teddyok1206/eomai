@@ -167,11 +167,11 @@ def _parser() -> argparse.ArgumentParser:
 def _lock_gpu(path: Path) -> int | SharedGpuLease:
     if path == Path("/run/eom-gpu-lease/gpu0.lock"):
         try:
-            from eom_gpu_lease import SharedGpuLeaseError, acquire_shared_gpu_lease
+            from eom_gpu_lease import SharedGpuLeaseError, acquire_retained_unit_gpu_lease
         except ImportError as exc:
             raise TrainingRunnerError("IMAGE_TRAINING_GPU_LOCK_INVALID") from exc
         try:
-            return acquire_shared_gpu_lease()
+            return acquire_retained_unit_gpu_lease()
         except SharedGpuLeaseError as exc:
             code = (
                 "IMAGE_TRAINING_GPU_BUSY"

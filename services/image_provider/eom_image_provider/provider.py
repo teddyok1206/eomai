@@ -126,11 +126,11 @@ def acquire_gpu_lease(lock_path: Path) -> Iterator[None]:
 
     if lock_path == Path("/run/eom-gpu-lease/gpu0.lock"):
         try:
-            from eom_gpu_lease import SharedGpuLeaseError, shared_gpu_lease
+            from eom_gpu_lease import SharedGpuLeaseError, retained_unit_gpu_lease
         except ImportError as exc:
             raise ProviderError("LOCAL_IMAGE_GPU_UNAVAILABLE") from exc
         try:
-            with shared_gpu_lease():
+            with retained_unit_gpu_lease():
                 yield
         except SharedGpuLeaseError as exc:
             raise ProviderError("LOCAL_IMAGE_GPU_UNAVAILABLE") from exc

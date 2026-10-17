@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tomllib
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from eom_gpu_lease import SHARED_GPU_LOCK_PATH, SharedGpuLease, SharedGpuLeaseError
@@ -25,6 +26,15 @@ def configured_policy(
     policy: adapter._LeasePolicy, monkeypatch: pytest.MonkeyPatch
 ) -> adapter._LeasePolicy:
     monkeypatch.setattr(adapter, "_production_policy", lambda: policy)
+    # Synthetic root observation only. Real PID1 acceptance/ACK remains a live gate.
+    monkeypatch.setattr(signal, "pthread_sigmask", lambda how, mask: {signal.SIGUSR1})
+    monkeypatch.setattr(signal, "sigpending", lambda: set())
+    monkeypatch.setattr(adapter, "request_unit_gpu_lease_retention", lambda lease: None)
+    monkeypatch.setattr(
+        signal,
+        "sigtimedwait",
+        lambda mask, timeout: SimpleNamespace(si_signo=signal.SIGUSR1, si_uid=0, si_pid=1234),
+    )
     return policy
 
 

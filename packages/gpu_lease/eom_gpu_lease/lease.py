@@ -7,6 +7,7 @@ import fcntl
 import grp
 import os
 import select
+import signal
 import socket
 import stat
 import sys
@@ -342,6 +343,54 @@ def request_unit_gpu_lease_retention(lease: SharedGpuLease) -> None:
             raise SharedGpuLeaseError("INVALID")
     except (OSError, ValueError, TypeError, OverflowError, SharedGpuLeaseError) as error:
         raise SharedGpuLeaseError("INVALID") from error
+
+
+def acquire_retained_unit_gpu_lease() -> SharedGpuLease:
+    """Wait for real root store observation before the caller may start image work.
+
+    The fixed unit bootstrap reserves SIGUSR1 before importing model-adjacent code;
+    this function neither changes handlers/masks nor grants unit/runtime authority.
+    Root must validate the actual unit, PID/start ticks, thread frame, retained
+    physical inode and policy before sending one ACK. Its separate terminal owner
+    retains/cleans the PID1 copy, including when this call times out or is cancelled.
+    """
+    try:
+        if (
+            signal.SIGUSR1 not in signal.pthread_sigmask(signal.SIG_BLOCK, set())
+            or signal.SIGUSR1 in signal.sigpending()
+        ):
+            raise SharedGpuLeaseError("INVALID")
+    except (OSError, ValueError, TypeError) as error:
+        raise SharedGpuLeaseError("INVALID") from error
+    lease = acquire_shared_gpu_lease()
+    try:
+        request_unit_gpu_lease_retention(lease)
+        received = signal.sigtimedwait({signal.SIGUSR1}, 30)
+        if (
+            received is None
+            or received.si_signo != signal.SIGUSR1
+            or received.si_uid != 0
+            or received.si_pid <= 0
+        ):
+            raise SharedGpuLeaseError("INVALID")
+        lease.assert_valid()
+        return lease
+    except BaseException as error:
+        # Never LOCK_UN, remove a store, or release PID1's possibly accepted copy.
+        lease.close()
+        if isinstance(error, (OSError, ValueError, TypeError)):
+            raise SharedGpuLeaseError("INVALID") from error
+        raise
+
+
+@contextmanager
+def retained_unit_gpu_lease() -> Iterator[SharedGpuLease]:
+    """Explicit one-shot unit scope; worker close cannot retire PID1 ownership."""
+    lease = acquire_retained_unit_gpu_lease()
+    try:
+        yield lease
+    finally:
+        lease.close()
 
 
 @contextmanager

@@ -170,6 +170,100 @@ branch와 old inode는 이력/rollback용으로 보존하되 active profile은 s
 trainer/provider/embedding의 상호 경합, 프로세스 crash/timeout/잔존 child, inode 교체·symlink·
 metadata mismatch 및 old entry 거부를 회귀한다. 이 gate가 닫히기 전 GPU 기본값은 금지다.
 
+### Image unit lifetime integration —2026-10-17 design before implementation
+
+The actual CUDA installation probe/seal/native reader/retirement passed; this is
+not evidence that the19 installed legacy image GPU templates have migrated.
+The migration reuses the existing physical inode and PID1 fdstore, not a new
+broker, queue, database, model runtime, or competing mutex.
+
+1. Responsibility: the optional stdlib GPU adapter acquires the fixed lease,
+   requests its retention, and waits for a root acknowledgement before yielding.
+   Image code never observes/changes another worker, clears a store, or retires a unit.
+2. Canonical source: installed root-owned unit/code pins and actual PID/invocation,
+   cgroup, process/driver state and stored lock FD. Notifications and paths alone
+   are not proof of store acceptance. Product input/output schemas remain unchanged.
+3. Identity: reuse exact systemd unit/instance/invocation and PID/start ticks;
+   do not invent a Job, Artifact or revision for this OS lifecycle.
+4. Pointers/checks: existing-only lock dev/inode/epochs, fixed unit/template and
+   actual user/groups/capabilities, root-protected notification endpoint, and
+   terminal cgroup/driver observations. No caller-supplied lock/authority fallback.
+5. Access: one indexed unit lookup, one bounded PID/FD observation, one physical
+   flock per invocation, and append-only local lifecycle evidence. No corpus scan.
+6. Structures: existing typed OS observations, fixed template-to-role lookup and
+   bounded descriptor sets. No DB schema/index or generic runtime registry.
+7. Scale/complexity:19 admitted image templates, one active physical GPU holder;
+   O(F+T) observation for a bounded number of FDs/threads and constant-size policy.
+8. Concurrency: root observes PID1's duplicate of the SAME exclusive description
+   before ACK. Worker close only closes its own FD; PID1 retains ownership through
+   success, cancellation or crash until supported root terminal verification.
+9. Direction: provider/trainer depend on the public optional GPU adapter. Existing
+   root installation/Orchestrator infrastructure owns launch/observe/retire; the
+   adapter never imports Catalog, ML, NAS, SQL, HTTP or Orchestrator packages.
+10. Failure: absent/early/foreign/late ACK or retention errors fail before model
+    work; no unlocked legacy fallback, store removal or auto-retry. Busy remains
+    busy. Root preserves failed identity/history and fences unknown cleanup.
+11. Simpler alternative: changing only --gpu-lock or holding a parent FD releases
+    ownership too early on context exit/parent crash. Sending FDSTORE plus a
+    barrier alone proves processing, not acceptance; therefore explicit root ACK
+    and terminal cleanup remain required.
+
+An explicit stdlib-only unit bootstrap blocks SIGUSR1 before importing either
+image CLI so new threads inherit the blocked signal. Do not mutate signal state
+when a library is merely imported. The new acquire-for-unit API requires this
+already-blocked process-lifetime reservation; it does not install a handler or
+restore/unblock SIGUSR1 during model work. Root's
+bounded observer must reject an unexpected thread/child frame before ACK.
+The legacy same-UID lock branch and independent plain shared-lease API remain
+unchanged. Only image's explicitly selected shared branch requests the new unit
+handshake. Source changes alone do not activate any installed image template.
+
+Installation must coordinate provider/trainer wheels, all19 templates, per-unit
+shared group and root observation/retirement before enabling CUDA models. Do not
+add RemainAfterExit to an operating --wait launcher without its exact cleanup
+owner: it would hang waiting for a unit that no one retires. Root guard activation,
+all-entrypoint draining/migration, real mutual exclusion/crash/terminal checks and
+six model comparisons are separate remaining acceptance, not source-test claims.
+
+#### Worker-entry source checkpoint —02:18 UTC
+
+Added the explicit optional-adapter acquire/context pair for unit-retained GPU
+ownership. It requires SIGUSR1 already blocked, rejects a pending early ACK,
+acquires the unchanged fixed inode, uses the existing FDSTORE/BARRIER request,
+then waits30s for the actual signal's root UID/nonzero sender PID. It validates
+the held lease again before yielding. Error/cancellation closes only its own FDs;
+no LOCK_UN/store removal/legacy fallback. Plain shared and legacy APIs remain.
+Provider/trainer shared-path branches use the new public entry; existing stable
+error labels, local image result schemas, model data and orchestration stay unchanged.
+No new worker JSON message was invented: this reuses the existing OS notification
+protocol and POSIX signal metadata, not a worker-claimed JSON `ack=true` field.
+
+`scripts/image_provider/run_gpu_unit.py` is a separate root-installation input,
+not a general module launcher or a wheel-installed console command. Its fixed
+role/prefix map admits only provider/trainer, actual image UID/GID with the narrow
+per-unit lease group, isolated/no-bytecode Linux interpreter and no preloaded ML.
+It accepts exactly one shared --gpu-lock (including unambiguous equals form),
+rejecting missing/legacy/duplicate/abbreviated choices. Only then does it reserve
+the signal and import the fixed existing CLI. Import alone changes no signal mask.
+The future root installer must pin this separate bootstrap's exact source bytes;
+the existing image wheel build does not imply it installed the bootstrap or guard.
+
+Explicit image-test Conda run: **287 PASS in14.34s**, including39 new entry/negative
+cases (the earlier179/275/280 runs overlap and are not added). Real temporary FD
+duplicates prove continued contention after worker success/failure/timeout/cancel,
+then release only when the synthetic retained owner closes. Root ACK and identities
+are explicitly synthetic; these are not actual PID1/image privilege acceptance.
+Python3.11 grammar for the shared adapter/bootstrap is checked. Ruff/format/diff
+and strict4 changed production files PASS, using the actual image-test interpreter
+as the type checker's dependency target. The initial pytest invocation lacked
+source image paths and initial API-only type lookup lacked Pillow; both invocation
+errors were corrected without installing Pillow/ML into the API or weakening types.
+
+This is **SOURCE_PASS / NOT_INSTALLED / NOT_ACTIVATED**. Actual19-unit guard,
+launch/drain/template migration and independent terminal cleanup remain required.
+No installed GPU account, unit, image prefix, numerical CUDA/CPU prefix, index,
+default, model output or authentication/session was changed at this checkpoint.
+
 ## 5. 별도 protected CUDA 실행 leaf
 
 제안 prefix는 `/opt/eom/conda/envs/eom-embedding-cuda`, worker는 `eom-embedding-cuda`,
