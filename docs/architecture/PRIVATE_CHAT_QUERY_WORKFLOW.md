@@ -302,3 +302,30 @@ must not race private work using an inventory that predates its unit names.
 Current origin/claim-bound private submission/allocation/checkpoints, protected
 purpose admission/installation/isolation, numerical execution and Chat tool
 delivery remain required; old compiler/Runner admission remains closed.
+
+### Fixed private CPU packaging
+
+Code candidate `db18397e21bf2cda93ce9472bf328e9fcf62d489` passed the standard three-wheel
+build/RECORD verification, with no installation or service action. Dist:
+`/tmp/eom-api-build/db18397e21bf2cda93ce9472bf328e9fcf62d489.gwSofU/dist`.
+
+- platform raw `361102afaf09c631ad26b081243281d48668d0f00a75ab4b4f88f6f278ae84a6`;
+- API-contract raw `42f5799a965144e1a1a18806fb087ddf866a1e24e39826f0f7f4b8b19dc05979`;
+- API raw `99a36bb58ca3afcf0725f4fa48307fca44a6661bd54e220403247b8ff6c2b1ab`.
+
+An isolated Conda `-I -S -B` proof loaded176 EOM modules exclusively from the
+two exact platform/contracts archives, revalidated synthetic private controls and
+the fixed CPU resource profile, staged five real temporary files, replayed them
+without inode/byte changes, marked the original launch and checked automatic
+temporary cleanup. It also verified the separate private unit names and explicit
+numerical purpose dispatch. No checkout/installed-EOM fallback, test/ML module,
+DB/native model call, OS-unit observation or runtime activation occurred.
+The temporary owner's current UID/GID is explicitly synthetic, not an installed
+private controller identity. An archive/import proof is not an isolation grant.
+
+Proof `/tmp/eom-private-cpu-package.793r6xri/prove_archives.py`, raw
+`a071be42c6516ddc4a5782a0c28b24580eacae20243d051beddd5deb5b24a06c`.
+The prior pinned synthetic values were reused without copying; their controls
+were adjusted only in memory to the existing fixed CPU resource contract.
+Final documentation/dependency9 PASS overlaps the494-case inventory. No new
+interactive authentication was requested; no operating pin was changed.

@@ -57,6 +57,9 @@ summed into a single acceptance count. This ledger does not grant authority.
   submission/checkpoints and purpose admission/installed isolation remain required
   before any actual private launch. Old compiler/Runner stays closed; C4/full goal
   remain OPEN, not a relabeled reference execution.
+  Candidatedb18397e passed standard three-wheel/RECORD and isolated two-archive
+  176-module staging/replay/cleanup/purpose-dispatch proof. That proof uses a
+  synthetic local owner, no DB/model/unit observations or runtime activation.
   [Source scope and installation preconditions](../architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#fixed-private-cpu-source-checkpoint).
 
 - Actual corrected retained negative2026-10-17: fixed root entryc2034177now selects
