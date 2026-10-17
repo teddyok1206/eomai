@@ -10,16 +10,35 @@ from eom_orchestrator.embedding_benchmark_jobs import (
     benchmark_job_key,
     submit_benchmark_job_in_session,
 )
+from eom_orchestrator.embedding_benchmark_launch_history import BenchmarkLaunchJournal
 from eom_orchestrator.models import ArtifactRecord, JobEventRecord, JobRecord
 from eom_orchestrator.state_machine import JobState, transition_job
 from sqlalchemy import Engine, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from tests.integration.test_preset_model_validation_persistence import (
     guarded_engine as guarded_engine,
 )
 from tests.unit.embedding_benchmark_job_fixtures import SyntheticBenchmarkAdmission, benchmark_case
 from tests.unit.inference_transfer_embedding_fixtures import seal
+from tests.unit.test_embedding_benchmark_launch_history import (
+    SyntheticResultReader,
+    invocation_for,
+    receipt_for,
+)
+
+
+def _launch_storage(engine):
+    request, inputs = benchmark_case()
+    admission, reader = SyntheticBenchmarkAdmission(request, inputs), SyntheticResultReader()
+    sessions = sessionmaker(engine, expire_on_commit=False)
+    with sessions() as session, session.begin():
+        job, _ = submit_benchmark_job_in_session(session, request, source_admission=admission)
+        job_id = job.job_id
+        for state in (JobState.QUEUED, JobState.CLAIMED, JobState.RUNNING):
+            transition_job(session, job_id, state, "SYNTHETIC_" + state)
+    return sessions, admission, reader, BenchmarkLaunchJournal(admission, reader), job_id
+
 
 pytestmark = pytest.mark.integration
 
@@ -160,4 +179,75 @@ def test_postgres_failed_original_remains_failed_and_changed_identity_payload_co
                 .where(JobEventRecord.job_id == identifier)
             )
             == 3
+        )
+
+
+def test_postgres_concurrent_launch_reservation_and_receipt_are_exact_replays(
+    guarded_engine: Engine,
+):
+    sessions, admission, reader, journal, job_id = storage = _launch_storage(guarded_engine)
+    invocation = invocation_for(storage, 1)
+    receipt = receipt_for(storage, invocation)
+
+    def submit(value, operation):
+        with sessions() as session, session.begin():
+            return getattr(journal, operation)(session, admission.request, value)[1]
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        for value, operation in ((invocation, "reserve"), (receipt, "record")):
+            futures = [executor.submit(submit, value, operation) for _ in range(2)]
+            assert sorted(future.result(timeout=15) for future in futures) == [False, True]
+    with sessions() as session, session.begin():
+        history = journal.read(session, admission.request, job_id=job_id)
+        assert len(history.launches) == 1 and history.launches[0].receipt == receipt
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(JobEventRecord)
+                .where(JobEventRecord.job_id == job_id)
+            )
+            == 7
+        )
+    assert len(reader.reads) == 1
+
+
+def test_postgres_six_launches_remain_one_job_and_late_failure_rolls_back(guarded_engine: Engine):
+    sessions, admission, _, journal, job_id = storage = _launch_storage(guarded_engine)
+    for ordinal in range(1, 7):
+        invocation = invocation_for(storage, ordinal)
+        with sessions() as session, session.begin():
+            _, created = journal.reserve(session, admission.request, invocation)
+            assert created
+        receipt = receipt_for(storage, invocation)
+        admission.late_error = ValueError("SYNTHETIC_LATE_REVOKED")
+        with (
+            pytest.raises(ValueError, match="LATE_REVOKED"),
+            sessions() as session,
+            session.begin(),
+        ):
+            journal.record(session, admission.request, receipt)
+        admission.late_error = None
+        with sessions() as session, session.begin():
+            history = journal.read(session, admission.request, job_id=job_id)
+            assert history.launches[-1].receipt is None
+            _, created = journal.record(session, admission.request, receipt)
+            assert created
+    with sessions() as session, session.begin():
+        history = journal.read(session, admission.request, job_id=job_id)
+        assert len(history.launches) == 6 and history.job_state == "RUNNING"
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(JobEventRecord)
+                .where(JobEventRecord.job_id == job_id)
+            )
+            == 17
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(ArtifactRecord)
+                .where(ArtifactRecord.job_id == job_id)
+            )
+            == 0
         )

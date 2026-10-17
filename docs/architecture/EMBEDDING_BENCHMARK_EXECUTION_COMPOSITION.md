@@ -2,6 +2,40 @@
 
 Status: source implementation in progress; not six-launch acceptance or a device-default change.
 
+## Original-Job launch history — design before implementation
+
+The Orchestrator records each reservation and published launch receipt in the existing
+parent Job's append-only event stream. Event data uses the already released invocation
+and launch-receipt JSON Schema2020-12 messages, validated again by Pydantic; no wrapper,
+schema mutation, table, queue, dependency or binary DB value is introduced. The original
+request, initial events, protocol hash and idempotency key must match before access.
+
+Canonical numerical output stays in registered Artifact revisions. A receipt is only a
+pointer: before advancing, the application resolves its exact worker-result member through
+an authorized Artifact reader (existence, revision, schema, media, lifecycle, permission and
+raw hash), validates canonical bytes and the original invocation linkage, and requires
+COMPLETED plus CONFIRMED cleanup. Missing/failed/uncertain evidence never unlocks a launch.
+Publication Jobs remain distinct from the genuine parent numerical Job.
+
+Primary operations are one indexed Job lookup, row locking and ordered iteration over at
+most12 launch events, represented as an immutable tuple and execution-ID set. Existing
+job/sequence uniqueness serializes concurrent appends under the parent row lock. Work is
+O(6 + bounded evidence bytes), with bounded metadata memory. Only short source/IAM-fenced
+transactions are held; no transaction spans inference. The existing source adapter owns
+current authorization and the Orchestrator owns event/publication effects, not workers.
+
+New reservations require an already RUNNING genuine Job and a contiguous released device
+order. Exact replay returns the original record with created=false, never permission to
+launch again. A reservation without a receipt is explicitly unresolved and blocks the next
+ordinal; a changed execution ID cannot disguise a timeout. Terminal Job history is readable
+but cannot gain new events. Source revocation/late fence failure rolls the entire append
+back. This storage primitive grants no compute/capacity/root/PID1 permission: the concrete
+execution owner must retain those existing admissions independently.
+
+A local in-memory list is simpler but loses the original execution identity on crash;
+allocating another Job/queue or editing status rows would lose idempotency and failure
+history. Existing typed messages and the Job event stream are sufficient instead.
+
 This closes the execution composition described in
 `INCREMENTAL_EMBEDDING_GPU_RUNTIME_DESIGN.md`, without changing the released
 `embedding-device-benchmark/1.0` schema or its numerical/performance thresholds.
@@ -1126,3 +1160,57 @@ eligible sources. These are not521 unique Items or a coherent complete index. Bo
 workflows2 completed/1 running/2 requested had no failure code, not a global zero-failure claim.
 Original HTTP PID2895440 was actually live at09:05:01 and still LOGIN, state timestamp unchanged;
 no new authentication or request was created. Full goal remains ACTIVE/NOT_COMPLETE.
+
+## Original-Job history source and disposable PostgreSQL checkpoint — 2026-10-17
+
+Implemented the journal described above using the existing invocation and receipt schemas;
+no new wire format, schema-byte change, DB migration or queue. Original Job validation is a
+single supported function shared by registration replay and journal access. The application
+locks that exact Job, checks the initial protocol/history/request pins and validates the
+whole bounded event sequence against the existing domain transition table. Events after a
+terminal state, unknown same-state events, gaps, duplicate execution IDs, wrong device order
+and conflicting replays fail. Exact replay returns created=false without starting anything.
+
+Receipt recording resolves and validates the canonical registered worker-result bytes via
+the injected authorized Artifact-reader boundary; no worker-result payload is copied into
+the DB. A valid FAILED/UNCERTAIN record is retained. A subsequent reservation independently
+re-resolves the prior result and requires COMPLETED plus CONFIRMED cleanup. Wrong revision,
+missing/revoked evidence, raw hash mismatch, noncanonical bytes and foreign invocation do
+not unlock a next launch. Every operation retains the actual source/session admission
+context through the short transaction's late fence. A journal is not current compute
+admission, an authenticated execution owner, resource capacity, an Artifact publisher or a
+PID1 launcher. Those remaining composition gates are not claimed by this checkpoint.
+
+Five related source suites: **275 PASS24.65s**, including the earlier53 subset (not additive).
+Strict mypy2 production modules, Ruff/format4 and diff checks pass. The first synthetic
+result fixture used a plural timings-hash field; correcting the fixture to the released
+singular field fixed its11 failures without relaxing any production contract. One initial
+broader-test invocation named a nonexistent test module and ran0 tests; the corrected
+explicit five-module invocation produced the275 result above.
+
+The supported marker-guarded disposable PostgreSQL gate passed **17 tests**, including
+concurrent reservation/receipt exact replay, all six ordered reservations in one original
+Job, late-revocation rollback and the prior registration/encoding regressions. Cleanup
+PASS removed only that disposable DB and its temporary roles/state through the existing
+guarded cleanup script; it is recoverable by preparing another disposable fixture. No
+production DB, model, GPU workload, Item or NAS Artifact was changed.
+
+Initial disposable setup incorrectly reconciled before migration and stopped with
+UndefinedTable. That failure is preserved at
+`/opt/eom/embedding-benchmark-os-evidence/launch-journal-hvJxzZnz/`.
+After classifying the pre-migration ordering error, the same identified disposable DB was
+migrated, reconciled, tested and cleaned with the supported scripts, not replaced by a new
+identity or repaired by direct SQL. Recovery evidence:
+`/opt/eom/embedding-benchmark-os-evidence/launch-journal-hvJxzZnz-ordered-recovery/`;
+test stdout raw SHA
+`5ca26eb7ff05a95fd9a497dfd57a0793cbfab6d8f4deec2b531645e63cec8de1`.
+The same EOM2 sudo TTY was reused, without new credentials/TTL changes. Local immutable
+receipts remain in `/tmp/eom-benchmark-journal-db.hvJxzZnz/`, including the original failure
+and `recovery-result.json` (return0). No automatic retry or production mutation occurred.
+
+Due30-minute read-only metadata observation09:40:57 UTC separately reported529 binding/
+encoding rows,139 index revisions and6 logical indexes. Latest view counts165/177/187 each
+have545 eligible sources; this is not529 unique Items, a coherent snapshot or full coverage.
+User-triggered authentication check09:35:29 found original PID2895440 actually alive and
+still LOGIN with unchanged state timestamp. No new login, key or duplicate question was
+created. Next routine index observation is no earlier than10:10:58 UTC; auth10:05:29 UTC.

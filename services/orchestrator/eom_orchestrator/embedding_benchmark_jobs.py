@@ -46,6 +46,65 @@ def benchmark_job_key(request: BenchmarkOwnerRequest) -> str:
     return "embedding-benchmark:" + request.benchmark_id + ":" + request.benchmark_revision_id
 
 
+def require_benchmark_job_in_session(
+    session: Session, request: BenchmarkOwnerRequest, *, job_id: str
+) -> JobRecord:
+    """Lock and validate the original Job, not current source or compute authority."""
+    embedding_device_benchmark_bytes(request)
+    root = session.get_transaction()
+    if root is None or not root.is_active or session.in_nested_transaction():
+        raise BenchmarkJobAdmissionError("BENCHMARK_JOB_ROOT_TRANSACTION_REQUIRED")
+    job = session.scalar(
+        select(JobRecord)
+        .where(JobRecord.job_id == job_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    protocol = session.get(ProtocolVersionRecord, BENCHMARK_JOB_PROTOCOL, populate_existing=True)
+    if (
+        protocol is None
+        or protocol.schema_sha256
+        != CATALOG_SCHEMA_RESOURCES[EMBEDDING_DEVICE_BENCHMARK_SCHEMA].sha256
+    ):
+        raise BenchmarkJobAdmissionError("BENCHMARK_JOB_PROTOCOL_UNAVAILABLE")
+    if job is None:
+        raise BenchmarkJobAdmissionError("BENCHMARK_JOB_HISTORY_CONFLICT")
+    initial = tuple(
+        session.scalars(
+            select(JobEventRecord)
+            .where(JobEventRecord.job_id == job_id, JobEventRecord.sequence.in_((1, 2)))
+            .order_by(JobEventRecord.sequence)
+        )
+    )
+    payload = request.model_dump(mode="json")
+    expected_hash = content_sha256(
+        {
+            "protocol_version": BENCHMARK_JOB_PROTOCOL,
+            "task_type": BENCHMARK_JOB_TASK,
+            "request": payload,
+        }
+    )
+    if (
+        job.protocol_version != BENCHMARK_JOB_PROTOCOL
+        or job.task_type != BENCHMARK_JOB_TASK
+        or job.idempotency_key != benchmark_job_key(request)
+        or job.request_hash != expected_hash
+        or job.request != payload
+        or job.worker_slot_id is not None
+        or job.status not in JobState
+        or tuple(
+            (event.sequence, event.from_state, event.to_state, event.event, event.data)
+            for event in initial
+        )
+        != (
+            (1, None, "CREATED", "JOB_CREATED", {}),
+            (2, "CREATED", "VALIDATED", "BENCHMARK_REQUEST_VALIDATED", {}),
+        )
+    ):
+        raise BenchmarkJobAdmissionError("BENCHMARK_JOB_HISTORY_CONFLICT")
+    return job
+
+
 def submit_benchmark_job_in_session(
     session: Session,
     request: BenchmarkOwnerRequest,
@@ -84,39 +143,8 @@ def submit_benchmark_job_in_session(
             .execution_options(populate_existing=True)
         )
         payload = request.model_dump(mode="json")
-        expected_hash = content_sha256(
-            {
-                "protocol_version": BENCHMARK_JOB_PROTOCOL,
-                "task_type": BENCHMARK_JOB_TASK,
-                "request": payload,
-            }
-        )
         if job is not None:
-            initial = tuple(
-                session.scalars(
-                    select(JobEventRecord)
-                    .where(JobEventRecord.job_id == job.job_id, JobEventRecord.sequence.in_((1, 2)))
-                    .order_by(JobEventRecord.sequence)
-                )
-            )
-            if (
-                job.protocol_version != BENCHMARK_JOB_PROTOCOL
-                or job.task_type != BENCHMARK_JOB_TASK
-                or job.request_hash != expected_hash
-                or job.request != payload
-                or job.worker_slot_id is not None
-                or job.status not in JobState
-                or tuple(
-                    (event.sequence, event.from_state, event.to_state, event.event, event.data)
-                    for event in initial
-                )
-                != (
-                    (1, None, "CREATED", "JOB_CREATED", {}),
-                    (2, "CREATED", "VALIDATED", "BENCHMARK_REQUEST_VALIDATED", {}),
-                )
-            ):
-                raise BenchmarkJobAdmissionError("BENCHMARK_JOB_HISTORY_CONFLICT")
-            return job, False
+            return require_benchmark_job_in_session(session, request, job_id=job.job_id), False
         job, created = submit_structured_job(
             session,
             job_id=new_job_id(),
