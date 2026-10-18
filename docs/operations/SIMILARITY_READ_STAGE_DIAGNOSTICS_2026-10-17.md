@@ -145,8 +145,8 @@ continues. It is not a successful login, a stored credential or permission to
 extend auth/sudo lifetimes. Preserve already successful and failed observations;
 leave genuinely credentialed checks pending instead of inventing acceptance.
 
-Superseding unattended window, confirmed2026-10-18: **no new interactive login
-before2026-10-19 02:53 UTC (11:53 Asia/Seoul)**. This replaces every earlier
+Superseding unattended window, reconfirmed2026-10-18 04:11 UTC: **no new interactive login
+before2026-10-19 04:15 UTC (13:15 Asia/Seoul)**, at least24h after reconfirmation. This replaces every earlier
 no-prompt deadline in this runbook and temporary diagnostic instructions. It is
 not authentication, an auth lifetime extension or a scheduled login at expiry.
 Use only already valid supported same-actor continuation/noninteractive sudo;
