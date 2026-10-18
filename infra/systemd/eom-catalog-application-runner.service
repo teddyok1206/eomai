@@ -44,6 +44,7 @@ ReadOnlyPaths=/etc/eom/secrets/catalog-manager.env
 ReadOnlyPaths=-/etc/eom/legacy-item-automation.env
 ReadOnlyPaths=-/etc/eom/catalog-similarity-read.env
 ReadOnlyPaths=-/etc/eom/catalog-similarity-read.json
+ReadOnlyPaths=-/etc/eom/catalog-exam-similarity-read.json
 ReadOnlyPaths=/srv/eom/conda/envs/eom-api
 ReadWritePaths=/mnt/nas/eom/artifacts
 ReadWritePaths=/run/eom-catalog-api

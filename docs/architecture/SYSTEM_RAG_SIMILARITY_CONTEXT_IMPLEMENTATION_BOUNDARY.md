@@ -3740,3 +3740,62 @@ credential persistence or deadline extension is used. First installer invocation
 failed before its body because its protected0444 script was invoked directly.
 The reviewed wrapper invokes the same hashed script through Bash, without chmod
 or protected edits; original failure and successful logs are both retained.
+
+### C5 exact-cohort DOCUMENT scope composition — 2026-10-18
+
+1. **Boundary.** C5 reads the exact already registered25-Item Assembly with its
+   current user fence. It is neither a QUERY execution nor a new exam production.
+2. **Canonical source.** Existing Assembly, Item/report, Graph/policy and immutable
+   DOCUMENT index pointers remain canonical. A fixed protected C5 reader selection
+   controls composition only; it does not grant any source/operator permission.
+3. **Identity/revisions.** Preserve all existing request/schema/revision bytes.
+   Reuse `system-rag-similarity-reader-configuration/1.0`; no new wire/schema family,
+   registry, database table, model space or Artifact identity is necessary.
+4. **Pointers/checks.** The distinct fixed
+   `/etc/eom/catalog-exam-similarity-read.json` and its explicit raw-SHA environment
+   pin are read with the same root-protected no-follow/hash/epoch rules. Existing
+   engine role and installed Identity-fence checks precede composition. Every actual
+   request still fences the real user, exact Assembly and current source/policy.
+5. **Access.** One fixed configuration lookup at startup; indexed exact25 cohort
+   and pinned member reads per request. No current/latest or corpus-wide discovery.
+6. **Structures.** Existing frozen configuration and DOCUMENT verifier; separate
+   concrete C5 instance, shared construction/IO functions. No cache or framework.
+7. **Scale.** Configuration is bounded64KiB; exact cohort is25 and at most300 pairs
+   per selected view. Existing batching, vector and coverage bounds stay unchanged.
+8. **Transactions.** Existing C5 real-user/Assembly/source reads and end fence stay
+   in their one root transaction. Startup selection does not authorize a request.
+9. **Dependency.** Catalog composition owns its fixed files and verifier. Existing
+   Identity infrastructure supplies the same current-user fence; no INDEX service
+   identity, forged actor or worker access to DB/NAS is reused.
+10. **Failure/replay.** DISABLED performs no IO. ENABLED requires its own exact config
+    hash; a missing/invalid file or failed fence is explicit unavailability, never
+    fallback to the reference reader or automatic class broadening. Missing accepted
+    reports/vectors remain EMPTY/PARTIAL, not reconstructed reports or fake success.
+11. **Simpler alternative.** The existing C5 builder borrowed the PAST_EXAM-only
+    reference owner, while the actual immutable exam contains APPROVED_ITEM members.
+    Its scope guard therefore rejects the prepared read before actual capture.
+    Broadening the shared reference reader would also break historical exact-class
+    checks; dropping APPROVED_ITEM mislabels the cohort. An independently configured
+    instance of the same existing DOCUMENT reader solves the composition defect.
+
+Observed source/receipt contradiction: installed selection3bf9ed04 retains only
+PAST_EXAM, whereas the prepared finite C5 request contains both source classes.
+This is a preflight discovery, not an observed new failed HTTP request or policy
+grant. The source correction does not install/select a C5 configuration, activate
+a release or prove actual25-Item delivery. Operating activation must preserve
+the existing reference/private scopes and inspect the actual unchanged source policy.
+
+Source verification:288 tests across16 affected/regression/dependency suites PASS;
+an independent focused selection68 PASS,23 deselected (overlapping, not additive).
+Strict type checking of both changed runtime modules, Ruff/format of six changed
+Python files, actual systemd syntax verification and independent review PASS.
+No contract bytes, dependency, migration, source grant or operational file changed.
+
+Deployment prerequisite: current C5 mode is already ENABLED. Before replacing shared
+wheels, validate and select the protected C5 JSON and its raw-SHA environment pin;
+otherwise the deliberately strict new factory will prevent Catalog socket startup.
+The ordinary shared installer does not install the Catalog unit: use its existing
+unit owner when needed; the added optional ReadOnlyPaths line grants no write access.
+The finite operator preparation must accept an independently reviewed exact C5
+selection, not copy historical C1's OCCURRENCE_BACKED_PAST_EXAM view pins. Existing
+request types already express both selections; no released schema needs mutation.

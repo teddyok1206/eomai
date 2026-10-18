@@ -31,7 +31,7 @@ logical Item
 - 승인 문항, HWPX build, RAG 학습 현황과 Codex slot 사용 상태 조회
 - 25문항 모의고사 생산 계획·실행·검토·퇴역을 불변 checkpoint와 영수증으로 관리
 
-## 증분 RAG 목표의 현재 상태 — 2026-10-18 19:12 UTC
+## 증분 RAG 목표의 현재 상태 — 2026-10-18 19:32 UTC
 
 운영 API·Catalog·출제/HWPX 실행기·일반 채팅에 `3bf9ed04`를 설치했고,
 실제 wheel·RECORD·provider를 확인했습니다. 별도 QUERY SDK는 `d81b9ba3`, INDEX와
@@ -72,6 +72,13 @@ GPU QUERY/기본값·CPU rollback은 원래 실측 결과와 조건에 따라 �
 남은 실행 시간이 부족해 정상 중단했고, 실패 기록을 보존했습니다. **18:18 UTC에 같은
 INDEX18 자동 인덱싱을 정상 재개했고 관련 10개 서비스·API LIVE/READY를 확인했습니다.**
 새 로그인창이나 중복 요청은 만들지 않았으며, 전체 목표는 여전히 미완료입니다.
+
+시험지 관측(C5)이 기출 전용 검색 설정을 재사용하던 조합 오류도 소스에서 수정했습니다.
+이미 등록된 25문항은 별도 DOCUMENT reader 설정으로 조회하고, 기존 기출 검색·채팅 범위는
+넓히지 않습니다. 관련 회귀288개·타입·스타일·독립 검토를 통과했지만 **아직 운영 미반영**입니다.
+운영 반영 전에는 전용 설정/해시를 먼저 검증하고, 과거 C1 검색 인덱스 대신 시험지 모집단에
+맞는 별도 고정 인덱스 참조를 준비해야 합니다. 이 수정은 새 시험지·문항·HWPX 생성이나
+실제 C5 조회 성공을 뜻하지 않습니다.
 [불변 검색 범위 호환 설계](docs/architecture/PINNED_EMBEDDING_NAMESPACE_READ_COMPATIBILITY.md),
 [이번 운영 반영과 남은 범위](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#lineage-map-release-installed-and-recovered--1636-utc),
 [저장된 인덱스 정본 점검](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#committed-index-storage-snapshot--1728-utc),

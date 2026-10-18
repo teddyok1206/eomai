@@ -12,8 +12,9 @@ from sqlalchemy import create_engine
 
 
 @pytest.mark.parametrize("mode", ("DISABLED", "ENABLED", "INVALID"))
+@pytest.mark.parametrize("exam_mode", ("DISABLED", "ENABLED", "INVALID"))
 def test_actual_runner_passes_explicit_read_service_or_fails_before_socket(
-    monkeypatch, capsys, mode
+    monkeypatch, capsys, mode, exam_mode
 ):
     engine = create_engine("sqlite+pysqlite:///:memory:")
     monkeypatch.setattr(entry, "build_engine", lambda: engine)
@@ -21,6 +22,14 @@ def test_actual_runner_passes_explicit_read_service_or_fails_before_socket(
     monkeypatch.setattr(entry.signal, "signal", lambda *_args: None)
     monkeypatch.setenv("EOM_LEGACY_ITEM_AUTOMATION_MODE", "DISABLED")
     monkeypatch.setenv("EOM_SIMILARITY_READ_MODE", mode)
+    monkeypatch.setenv("EOM_EXAM_SIMILARITY_READ_MODE", exam_mode)
+    monkeypatch.setenv("EOM_ITEM_SIMILARITY_PUBLICATION_MODE", "DISABLED")
+    monkeypatch.setenv("EOM_WORKFLOW_SIMILARITY_READ_MODE", "DISABLED")
+    exam_hash = "sha256:" + "b" * 64 if exam_mode == "ENABLED" else None
+    if exam_hash is None:
+        monkeypatch.delenv("EOM_EXAM_SIMILARITY_READ_CONFIG_SHA256", raising=False)
+    else:
+        monkeypatch.setenv("EOM_EXAM_SIMILARITY_READ_CONFIG_SHA256", exam_hash)
     if mode == "ENABLED":
         monkeypatch.setenv("EOM_SIMILARITY_READ_CONFIG_SHA256", "sha256:" + "a" * 64)
     else:
@@ -30,6 +39,11 @@ def test_actual_runner_passes_explicit_read_service_or_fails_before_socket(
     if mode == "INVALID":
         build.side_effect = SimilarityReaderRuntimeError()
     monkeypatch.setattr(entry, "build_catalog_similarity_context_reads", build)
+    exam_optional = object() if exam_mode == "ENABLED" else None
+    exam_build = Mock(return_value=exam_optional)
+    if exam_mode == "INVALID":
+        exam_build.side_effect = SimilarityReaderRuntimeError()
+    monkeypatch.setattr(entry, "build_catalog_exam_similarity_reads", exam_build)
     for name in (
         "KnowledgeAnalysisApplicationService",
         "KnowledgeAnalysisBatchService",
@@ -63,17 +77,25 @@ def test_actual_runner_passes_explicit_read_service_or_fails_before_socket(
             Thread=Mock(return_value=thread),
         ),
     )
-    assert entry.serve() == (1 if mode == "INVALID" else 0)
+    invalid = mode == "INVALID" or exam_mode == "INVALID"
+    assert entry.serve() == (1 if invalid else 0)
     build.assert_called_once_with(
         engine,
         mode=mode,
         configuration_raw_sha256="sha256:" + "a" * 64 if mode == "ENABLED" else None,
     )
     if mode == "INVALID":
+        exam_build.assert_not_called()
+    else:
+        exam_build.assert_called_once_with(
+            engine, mode=exam_mode, configuration_raw_sha256=exam_hash
+        )
+    if invalid:
         factory.assert_not_called()
         thread.start.assert_not_called()
         assert capsys.readouterr().out == "CATALOG_SIMILARITY_READ_UNAVAILABLE\n"
     else:
         assert factory.call_args.kwargs["similarity_context_reads"] is optional
+        assert factory.call_args.kwargs["exam_similarity_reads"] is exam_optional
         thread.start.assert_called_once()
         assert capsys.readouterr().out == ""

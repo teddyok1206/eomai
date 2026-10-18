@@ -1564,6 +1564,16 @@ def test_catalog_application_systemd_boundary_keeps_api_away_from_nas() -> None:
     assert "InaccessiblePaths=/etc/eom/secrets/catalog-manager.env" in api_unit
 
 
+def test_catalog_optional_exam_reader_selection_is_readonly_and_not_enabled_by_unit() -> None:
+    unit = Path("infra/systemd/eom-catalog-application-runner.service").read_text(encoding="utf-8")
+    path = "/etc/eom/catalog-exam-similarity-read.json"
+    assert unit.count(f"ReadOnlyPaths=-{path}\n") == 1
+    assert f"ReadWritePaths={path}" not in unit
+    assert "ReadOnlyPaths=-/etc/eom/catalog-similarity-read.json\n" in unit
+    assert "Environment=EOM_EXAM_SIMILARITY_READ_MODE=ENABLED" not in unit
+    assert "EOM_EXAM_SIMILARITY_READ_CONFIG_SHA256=" not in unit
+
+
 def test_workflow_runner_uses_its_own_catalog_staging_identity() -> None:
     unit = Path("infra/systemd/eom-workflow-runner.service").read_text(encoding="utf-8")
     composition = Path("services/workflow_runner/eom_workflow_runner/composition.py").read_text(

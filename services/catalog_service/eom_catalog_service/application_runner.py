@@ -279,8 +279,9 @@ def serve() -> int:
             inference_transfer_metadata=CatalogInferenceTransferMetadataService(engine),
             similarity_context_reads=similarity_reads,
             exam_similarity_reads=build_catalog_exam_similarity_reads(
+                engine,
                 mode=os.environ.get("EOM_EXAM_SIMILARITY_READ_MODE", "DISABLED"),
-                context_reads=similarity_reads,
+                configuration_raw_sha256=os.environ.get("EOM_EXAM_SIMILARITY_READ_CONFIG_SHA256"),
             ),
             item_similarity_publications=build_catalog_item_similarity_publications(
                 mode=os.environ.get("EOM_ITEM_SIMILARITY_PUBLICATION_MODE", "DISABLED"),

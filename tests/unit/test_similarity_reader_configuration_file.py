@@ -18,8 +18,8 @@ from eom_identifiers import canonical_json_bytes, sha256_bytes
 from tests.unit.test_similarity_reader_configuration import document
 
 
-@pytest.fixture
-def protected(tmp_path, monkeypatch):
+@pytest.fixture(params=("REFERENCE", "EXAM"))
+def protected(tmp_path, monkeypatch, request):
     path = tmp_path / "configuration.json"
     raw = canonical_json_bytes(document())
     path.write_bytes(raw)
@@ -75,7 +75,17 @@ def protected(tmp_path, monkeypatch):
     io.fstat = lambda fd: metadata(os.fstat(fd))
     io.stat = lambda *a, **kw: metadata(os.stat(*a, **kw))
     monkeypatch.setattr(module, "os", io)
-    monkeypatch.setattr(module, "SIMILARITY_READER_CONFIGURATION_PATH", path)
+    constant = (
+        "SIMILARITY_READER_CONFIGURATION_PATH"
+        if request.param == "REFERENCE"
+        else "EXAM_SIMILARITY_READER_CONFIGURATION_PATH"
+    )
+    read = (
+        module.read_similarity_reader_configuration
+        if request.param == "REFERENCE"
+        else module.read_exam_similarity_reader_configuration
+    )
+    monkeypatch.setattr(module, constant, path)
     return SimpleNamespace(
         path=path,
         raw=raw,
@@ -85,6 +95,8 @@ def protected(tmp_path, monkeypatch):
         closed=closed,
         hooks=hooks,
         metadata=metadata,
+        read=read,
+        constant=constant,
     )
 
 
@@ -98,7 +110,7 @@ def test_exact_nonsecret_file_is_read_once_and_all_descriptors_are_closed(protec
         return pread(fd, count, offset)
 
     value.io.pread = observe
-    assert module.read_similarity_reader_configuration(value.sha) == value.raw
+    assert value.read(value.sha) == value.raw
     assert calls == [(64 * 1024 + 1, 0)]
     assert sorted(value.opened) == sorted(value.closed)
 
@@ -152,11 +164,11 @@ def test_unprotected_or_changed_file_never_reaches_configuration_parse(protected
         (original / "configuration.json").write_bytes(value.raw)
         linked = value.path.parent / "linked"
         linked.symlink_to(original, target_is_directory=True)
-        module.SIMILARITY_READER_CONFIGURATION_PATH = linked / "configuration.json"
+        setattr(module, value.constant, linked / "configuration.json")
     else:
         value.sha = "sha256:" + "f" * 64
     with pytest.raises(SimilarityReaderRuntimeError):
-        module.read_similarity_reader_configuration(value.sha)
+        value.read(value.sha)
     assert sorted(value.opened) == sorted(value.closed)
 
 
@@ -181,11 +193,11 @@ def test_named_file_descriptor_and_ancestor_races_fail_closed(protected, fault):
 
     value.hooks.append(change)
     with pytest.raises(SimilarityReaderRuntimeError):
-        module.read_similarity_reader_configuration(value.sha)
+        value.read(value.sha)
     assert sorted(value.opened) == sorted(value.closed)
 
 
 def test_bad_raw_sha_is_rejected_before_any_file_is_opened(protected):
     with pytest.raises(ValueError):
-        module.read_similarity_reader_configuration("not-a-valid-sha")
+        protected.read("not-a-valid-sha")
     assert not protected.opened and not protected.closed

@@ -10,6 +10,7 @@ from pathlib import Path
 from eom_catalog_contracts.models import Sha256
 from eom_catalog_contracts.similarity_reader_configuration import (
     MAX_SIMILARITY_READER_CONFIGURATION_BYTES,
+    SimilarityReaderConfiguration,
     parse_similarity_reader_configuration,
 )
 from eom_identifiers import sha256_bytes
@@ -30,6 +31,7 @@ from eom_workflow_runner.reference_query_source_read import (
 from pydantic import TypeAdapter
 from sqlalchemy import Engine, text
 
+from eom_catalog_service.embedding_registry_catalog_adapter import CatalogEmbeddingRegistryVerifier
 from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryOwnerConfiguration
 from eom_catalog_service.exam_similarity_read_service import CatalogExamSimilarityReadService
 from eom_catalog_service.item_similarity_publication_service import (
@@ -42,6 +44,7 @@ from eom_catalog_service.workflow_similarity_read_service import (
 )
 
 SIMILARITY_READER_CONFIGURATION_PATH = Path("/etc/eom/catalog-similarity-read.json")
+EXAM_SIMILARITY_READER_CONFIGURATION_PATH = Path("/etc/eom/catalog-exam-similarity-read.json")
 
 
 class SimilarityReaderRuntimeError(ValueError):
@@ -50,16 +53,27 @@ class SimilarityReaderRuntimeError(ValueError):
 
 
 def build_catalog_exam_similarity_reads(
-    *, mode: str, context_reads: CatalogSimilarityContextReadService | None
+    engine: Engine,
+    *,
+    mode: str,
+    configuration_raw_sha256: str | None = None,
+    settings: CatalogSettings | None = None,
 ) -> CatalogExamSimilarityReadService | None:
-    """Separate read-only enable; reference reads alone never activate exam delivery."""
+    """Independent configured DOCUMENT scope; reference enable never grants exam access."""
     if mode == "DISABLED":
         return None
-    if mode != "ENABLED" or not isinstance(context_reads, CatalogSimilarityContextReadService):
+    if mode != "ENABLED" or configuration_raw_sha256 is None:
         raise SimilarityReaderRuntimeError()
-    return CatalogExamSimilarityReadService(
-        context_reads.owner.catalog, context_reads.owner.identity
-    )
+    try:
+        _selection, registry, identity = _admitted_reader_inputs(
+            engine, read_exam_similarity_reader_configuration(configuration_raw_sha256)
+        )
+        catalog = CatalogEmbeddingRegistryVerifier(
+            engine, registry, identity_fence=identity, settings=settings
+        )
+        return CatalogExamSimilarityReadService(catalog, identity)
+    except Exception:
+        raise SimilarityReaderRuntimeError() from None
 
 
 def build_catalog_item_similarity_publications(
@@ -145,8 +159,18 @@ def _file_identity(value: os.stat_result) -> tuple[int, ...]:
 
 def read_similarity_reader_configuration(expected_raw_sha256: str) -> bytes:
     """One fixed root-protected non-secret file; no user/model supplied path."""
+    return _read_reader_configuration(SIMILARITY_READER_CONFIGURATION_PATH, expected_raw_sha256)
+
+
+def read_exam_similarity_reader_configuration(expected_raw_sha256: str) -> bytes:
+    """C5's independent fixed selection; never fall back to reference configuration."""
+    return _read_reader_configuration(
+        EXAM_SIMILARITY_READER_CONFIGURATION_PATH, expected_raw_sha256
+    )
+
+
+def _read_reader_configuration(path: Path, expected_raw_sha256: str) -> bytes:
     TypeAdapter(Sha256).validate_python(expected_raw_sha256)
-    path = SIMILARITY_READER_CONFIGURATION_PATH
     directories: list[tuple[int, int | None, str, tuple[int, ...]]] = []
     descriptor = -1
     try:
@@ -201,6 +225,36 @@ def read_similarity_reader_configuration(expected_raw_sha256: str) -> bytes:
             os.close(fd)
 
 
+def _admitted_reader_inputs(
+    engine: Engine, raw: bytes
+) -> tuple[
+    SimilarityReaderConfiguration,
+    EmbeddingRegistryOwnerConfiguration,
+    PostgresOperatorAuthorizationFence,
+]:
+    selection = parse_similarity_reader_configuration(raw)
+    pin = OperatorAuthorizationFenceOwnerPin(
+        selection.database_owner.role_name, selection.database_owner.role_oid
+    )
+    # Installation/role inspection is independent for each configured reader;
+    # no source/operator admission is inferred or cached by this composition.
+    with engine.connect() as connection:
+        if connection.dialect.name != "postgresql" or (
+            connection.scalar(text("SELECT CURRENT_USER"))
+            != OPERATOR_AUTHORIZATION_FENCE_EXECUTE_ROLE
+        ):
+            raise SimilarityReaderRuntimeError()
+        require_operator_authorization_fence_installation(connection, pin)
+    registry = EmbeddingRegistryOwnerConfiguration(
+        selection.corpus_id,
+        selection.namespace,
+        selection.document_space,
+        selection.recipe,
+        selection.source_classes,
+    )
+    return selection, registry, PostgresOperatorAuthorizationFence(pin)
+
+
 def build_catalog_similarity_context_reads(
     engine: Engine,
     *,
@@ -213,36 +267,18 @@ def build_catalog_similarity_context_reads(
     if mode != "ENABLED" or configuration_raw_sha256 is None:
         raise SimilarityReaderRuntimeError()
     try:
-        selection = parse_similarity_reader_configuration(
-            read_similarity_reader_configuration(configuration_raw_sha256)
+        selection, registry, identity = _admitted_reader_inputs(
+            engine, read_similarity_reader_configuration(configuration_raw_sha256)
         )
-        pin = OperatorAuthorizationFenceOwnerPin(
-            selection.database_owner.role_name, selection.database_owner.role_oid
-        )
-        # This independently verifies installation; it does not install, grant,
-        # authorize an operator, open an old capture or inspect a current index.
-        with engine.connect() as connection:
-            if connection.dialect.name != "postgresql" or (
-                connection.scalar(text("SELECT CURRENT_USER"))
-                != OPERATOR_AUTHORIZATION_FENCE_EXECUTE_ROLE
-            ):
-                raise SimilarityReaderRuntimeError()
-            require_operator_authorization_fence_installation(connection, pin)
         owner = CatalogReferenceQueryReadOwner(
             engine,
             ReferenceQueryOwnerConfiguration(
-                EmbeddingRegistryOwnerConfiguration(
-                    selection.corpus_id,
-                    selection.namespace,
-                    selection.document_space,
-                    selection.recipe,
-                    selection.source_classes,
-                ),
+                registry,
                 selection.native_execution_policy,
                 selection.native_execution_policy_sha256,
                 selection.runtime_bundle,
             ),
-            identity_fence=PostgresOperatorAuthorizationFence(pin),
+            identity_fence=identity,
             settings=settings,
         )
         return CatalogSimilarityContextReadService(owner)
