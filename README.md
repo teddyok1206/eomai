@@ -31,7 +31,7 @@ logical Item
 - 승인 문항, HWPX build, RAG 학습 현황과 Codex slot 사용 상태 조회
 - 25문항 모의고사 생산 계획·실행·검토·퇴역을 불변 checkpoint와 영수증으로 관리
 
-## 증분 RAG 목표의 현재 상태 — 2026-10-18 18:48 UTC
+## 증분 RAG 목표의 현재 상태 — 2026-10-18 19:12 UTC
 
 운영 API·Catalog·출제/HWPX 실행기·일반 채팅에 `3bf9ed04`를 설치했고,
 실제 wheel·RECORD·provider를 확인했습니다. 별도 QUERY SDK는 `d81b9ba3`, INDEX와
@@ -55,13 +55,17 @@ logical Item
 원래 CPU/CUDA 여섯 회 실측·최종화와 조건부 기본 device 결정은 완료 전입니다.
 준비된 검증 절차의 129개 테스트 통과는 이 운영 결과를 대신하지 않습니다.
 
-저장소 후보 `140b14d9`에는 명시적인 CPU/CUDA backend 계약·INDEX owner V3,
-GPU용 입력 전달·고정 실행 unit·준비/종료 관찰·자원 회수 검증을 구현했습니다.
-기존 CPU 설정 V1/V2와 CPU-only 실행 경계는 유지합니다. 통합 소스 테스트 689개,
-의존성 검사 6개, strict typing·Ruff·format·독립 검토와 공식 build-only wheel/RECORD
-검사는 통과했지만 **운영에는 미설치·미활성입니다.** 실제 root 제어 실행기,
-준비 메시지 전 실패 복구, QUERY 연결과 실제 CPU/CUDA 여섯 회 측정·조건부 기본값
-전환은 남아 있습니다. 소스 검증을 실제 성능이나 GPU 기본값 전환의 증거로 쓰지 않습니다.
+저장소 후보 `06143969`에는 GPU 입력 전달·준비/종료 관찰에 이어, 실제 요청 주인의
+PID/시작 시각 계약·고정 root 제어 실행기·준비 전 실패 복구를 구현했습니다. GPU가 사용
+중이면 같은 요청의 제한시간 안에서만 기다립니다. 원 실패·자원 보관·회수 기록을 보존하고,
+중복 실행·불확실한 재시도·암묵적인 CPU 전환은 거부합니다. 기존 CPU 설정 V1/V2와
+CPU-only 실행 경계는 유지합니다. 통합 975개(의존성 포함)·패키지/계약 71개 테스트,
+strict typing·Ruff·format·독립 검토와 공식 build-only wheel/RECORD 검사를 통과했습니다.
+새 wheel만 임시 설치해 실제 보호된 두 Python 환경에서 모델/GPU import 없이 관리 코드가
+불러와지는 것도 확인했지만, **운영에는 미설치·미활성입니다.** 실제 자원 회수를 확인한 뒤
+결과 저장을 허용하는 owner 연결, 원래 C1–C5 전달·CPU/CUDA 여섯 회 실측은 남아 있습니다.
+GPU QUERY/기본값·CPU rollback은 원래 실측 결과와 조건에 따라 진행합니다. 테스트 개수를
+실제 성능이나 GPU 기본값 전환의 증거로 쓰지 않으며, 새 평가·사람 승인 gate도 추가하지 않습니다.
 [고정 CUDA INDEX 경계](docs/architecture/NATIVE_CUDA_INDEX_EXECUTION_DESIGN.md)를 참고하세요.
 
 실제 유한 검증은 로그인 성공이 관측되지 않은 상태에서

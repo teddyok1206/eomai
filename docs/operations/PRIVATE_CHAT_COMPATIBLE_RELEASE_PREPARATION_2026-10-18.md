@@ -842,3 +842,64 @@ These source functions neither install that controller nor prove live execution.
 Operating API3bf9ed04/QUERYd81b9ba3/INDEXee97239d and CPU default remain selected;
 the last actual runtime recovery observation is18:18:51 until a later scheduled
 check. No new getpass prompt or credential persistence was introduced.
+
+## Fixed CUDA INDEX controller source and package checkpoint — 19:12 UTC
+
+Candidate `061439696a7b45c8452e1224127ae93537abf55c` adds the schema-first original
+owner PID/birth binding, fixed root INDEX lifetime controller, start-only controller
+Polkit and separate root template, same-execution bounded BUSY-only WAIT, and actual
+terminal PID/store0-or1 recovery before READY. Original outcome/effect records stay
+immutable; uncertain ACK/dispatch/cleanup is not replayed. Store0 never inspects or
+cleans another GPU holder. The common failed-terminal metadata reader now serves
+both real benchmark and INDEX adapters without borrowing benchmark authority.
+
+Verification:27 explicit suites975 PASS97.44s (dependency boundaries included),
+separate schema resource/wheel tests71 PASS9.27s, strict12 source files and
+Ruff/format21 PASS. Independent controller/WAIT/owner/pre-READY review found no
+blocking issue. Real unprivileged proc/flock/diagnostic/record tests are distinct
+from synthetic privileged process/device/FDSTORE ports. No DB schema/state changed,
+so no operating DB test was run. Prior PostgreSQL evidence remains unchanged.
+
+Final source XML raw SHA
+`ad948679c1191807600892d65ea209294c6aa7d5d893b213c3405b86344ca8b4`;
+packaging XML raw SHA
+`cc210eb6b66cea9ab3a035dcecd77df7d0c3a023b396854388bf455c0c7e06ac`.
+Both are local diagnostic materializations under
+`/tmp/eom-native-cuda-successor.gKpxVAwN/`, not committed runtime Artifacts.
+
+Official build-only wheel/RECORD verification PASS:
+`/tmp/eom-api-build/061439696a7b45c8452e1224127ae93537abf55c.3zQplf/dist`.
+
+| Wheel | Raw SHA-256 |
+|---|---|
+| platform | `5b4c72536327d3cabe83182f5bea2cf2c473de1061a5b5d1f716a5ee62d10e8e` |
+| API contracts | `8ce8e9c48a638b6f145edce8d25fdf4ed6b021b8203b417c5c90a01279b2797f` |
+| application API | `a511c75858735b3a0d790e73e0d2f3f8fc330e70ab23e0c5e59781e8237680cf` |
+
+Only the two owner wheels were installed to an unprivileged temporary simulation
+directory, never a selected runtime. Actual protected INDEX-CPU and experiment
+interpreters both imported the new metadata modules with `-I -B`, zero ML/numerical
+or `eom_gpu_lease` imports, and no repository/source sys.path. Source/IAM/model/root
+functions were not called. The new root unit passed actual read-only systemd syntax
+verification. No installed wheel, numerical prefix, environment, unit, group, policy,
+service, operator session or default device changed. No new request/benchmark key,
+getpass prompt or credential persistence was introduced.
+
+The current CPU owner process Group=eom is not claimed compatible with the new
+strict fixed-primary-GID CUDA owner check; a reviewed future CUDA owner unit must
+align this rather than weakening kernel proof or rewriting identity18 history.
+Protected runtime/lifetime directories and static backend config/env are not yet
+installed. The controller's in-process outcome is not a protected owner completion
+receipt: retirement-aware output materialization/publication remains unconnected.
+
+The last scheduled read-only runtime observation remains18:49:36 UTC: same INDEX18
+active/running, invocation `fb0b1b5d8f6e4d96a7bc9ac9e0ea6fa9`, API LIVE/READY;
+API3bf9ed04/QUERYd81b9ba3/INDEXee97239d and CPU default stay selected. No valid
+operator session or waiting getpass is currently observed. Do not poll again before
+the original19:19:36 due time or manufacture an authentication success.
+
+Full goal remains ACTIVE/INCOMPLETE. Actual original C1–C5 delivery and six-run
+performance/finalization keep priority when genuine supported authentication is
+available. Conditional GPU QUERY/default/CPU rollback follows the original measured
+winner/gates, not synthetic test counts. No new acceptance cycle, human evaluation,
+textbook index, PDF matching, ANN or chat-deletion implementation is added here.

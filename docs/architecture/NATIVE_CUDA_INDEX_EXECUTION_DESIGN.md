@@ -471,3 +471,15 @@ available. GPU QUERY/default and real CPU rollback are conditional on the origin
 measured winner/gates, not on synthetic test counts. No additional acceptance or
 human evaluation gate is added. Do not expand implementation beyond these original
 dependencies or activate the partial CUDA composition merely to exercise it.
+
+Candidate `061439696a7b45c8452e1224127ae93537abf55c` passed official build-only
+wheel/RECORD verification in
+`/tmp/eom-api-build/061439696a7b45c8452e1224127ae93537abf55c.3zQplf/dist`.
+The two owner wheels were materialized only under
+`/tmp/eom-cuda-index-owner-import.oQdmrBz1/site-packages`. Both actual protected
+INDEX-CPU and experiment interpreters imported the new controller, unacknowledged
+recovery, handoff and owner contract with `-I -B`, no repository/source path and
+zero numerical/ML/`eom_gpu_lease` module imports. No function granting execution or
+reading source/IAM was called. This is installed-wheel simulation, not protected
+owner-release installation or numerical admission. The new root unit also passed
+actual `systemd-analyze verify --man=no`; no unit was installed or started.
