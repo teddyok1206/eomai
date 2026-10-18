@@ -138,11 +138,20 @@ def test_six_exact_ordered_original_job_records_and_replay(storage):
         rows = list(session.scalars(select(JobEventRecord).order_by(JobEventRecord.sequence)))
         assert [row.event for row in rows[5:]] == [RESERVED_EVENT, RECORDED_EVENT] * 6
         assert [row.sequence for row in rows] == list(range(1, 18))
+        assert len(reader.reads) == 11
+        reader.reads.clear()
+        completed = journal.require_completed_launches(session, admission.request, job_id=job_id)
+        assert len(completed) == len(reader.reads) == 6
+        assert tuple(launch.invocation.launch_ordinal for launch in completed) == tuple(range(1, 7))
+        assert all(launch.result.status == "COMPLETED" for launch in completed)
+        assert tuple(launch.receipt for launch in completed) == journal.require_completed(
+            session, admission.request, job_id=job_id
+        )
         assert all(
             key not in json.dumps([row.data for row in rows])
             for key in ('"text"', '"vectors"', '"token_ids"')
         )
-    assert len(reader.reads) == 11
+    assert len(reader.reads) == 12
 
 
 def test_reservation_is_unresolved_not_permission_to_restart(storage):

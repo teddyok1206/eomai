@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
@@ -12,14 +13,19 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     BENCHMARK_POLICY_SCHEMA_REF,
     EMBEDDING_DEVICE_BENCHMARK_SCHEMA_REF,
     MAX_BENCHMARK_ENVELOPE_BYTES,
+    BenchmarkColdTiming,
     BenchmarkExecutionPolicy,
     BenchmarkNearTieReference,
     BenchmarkOwnerRequest,
+    BenchmarkQueryTiming,
     BenchmarkStagedInputs,
     embedding_device_benchmark_bytes,
     parse_embedding_device_benchmark_bytes,
+    validate_benchmark_invocation,
 )
 from eom_catalog_contracts.models import Sha256
+from eom_catalog_contracts.validation import catalog_schema_registry
+from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_identity_service import (
     AuthenticatedOperatorSession,
     AuthenticatedSessionFence,
@@ -27,8 +33,11 @@ from eom_identity_service import (
 )
 from eom_identity_service.repository import active_role_assignments
 from eom_operator_identity import PermissionKey, RoleKey
+from eom_orchestrator.embedding_benchmark_launch_history import CompletedBenchmarkLaunch
 from eom_orchestrator.file_set_control_artifacts import CONTROL_FILE_SET_PROTOCOL
 from eom_protocol.artifact_members import ArtifactMemberPointer
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import ValidationError as SchemaError
 from pydantic import TypeAdapter
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
@@ -38,6 +47,7 @@ from eom_catalog_service.embedding_benchmark_cpu_reference import (
     validate_cpu_benchmark_reference,
 )
 from eom_catalog_service.embedding_benchmark_sources import CatalogBenchmarkSourceAdmission
+from eom_catalog_service.embedding_benchmark_timing_evidence import BenchmarkLaunchTimings
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.settings import CatalogSettings
 
@@ -182,3 +192,83 @@ class CatalogBenchmarkOwnerAdmission:
                 validate_cpu_benchmark_reference(request, pointer, raw, binary)
             reader.require_session(session)
             return raw
+
+    def read_launch_timings_in_session(
+        self, session: Session, request: BenchmarkOwnerRequest, launch: CompletedBenchmarkLaunch
+    ) -> BenchmarkLaunchTimings:
+        """Exact receipt Artifact timing members, under current original-source authority."""
+        invocation, receipt, result = launch.invocation, launch.receipt, launch.result
+        embedding_device_benchmark_bytes(invocation)
+        embedding_device_benchmark_bytes(receipt)
+        result_raw = embedding_device_benchmark_bytes(result)
+        identity = receipt.worker_result.artifact_id, receipt.worker_result.artifact_revision_id
+        if (
+            receipt.invocation_sha256 != invocation.invocation_sha256
+            or receipt.job_id != invocation.job_id
+            or receipt.execution_id != invocation.execution_id
+            or receipt.device != invocation.device
+            or receipt.launch_ordinal != invocation.launch_ordinal
+            or receipt.cleanup != "CONFIRMED"
+            or result.status != "COMPLETED"
+            or result.execution_id != invocation.execution_id
+            or result.invocation_sha256 != invocation.invocation_sha256
+            or result.device != invocation.device
+            or result.launch_ordinal != invocation.launch_ordinal
+            or result.timings is None
+            or sha256_bytes(result_raw) != receipt.worker_result.sha256
+            or (receipt.session.artifact_id, receipt.session.artifact_revision_id) != identity
+        ):
+            raise ValueError("BENCHMARK_OWNER_TIMING_CLOSURE_INVALID")
+        with self.admit_in_session(session, request) as inputs:
+            validate_benchmark_invocation(request, invocation, inputs)
+            reader = PinnedArtifactReadContext(session, self._settings)
+            reader.prefetch((identity,))
+            original = reader.member_pointer(
+                *identity,
+                "worker-result.json",
+                schema_ref=EMBEDDING_DEVICE_BENCHMARK_SCHEMA_REF + "#/$defs/workerResult",
+                media_type="application/json",
+            )
+            if original != receipt.worker_result:
+                raise ValueError("BENCHMARK_OWNER_TIMING_CLOSURE_INVALID")
+
+            def fragment[Timing: (BenchmarkColdTiming, BenchmarkQueryTiming)](
+                name: str, definition: str, model: type[Timing]
+            ) -> Timing:
+                pointer = reader.member_pointer(
+                    *identity,
+                    name,
+                    schema_ref=EMBEDDING_DEVICE_BENCHMARK_SCHEMA_REF + "#/$defs/" + definition,
+                    media_type="application/json",
+                )
+                raw = reader.read_pinned(
+                    **pointer.model_dump(mode="python"),
+                    expected_artifact_types=(BENCHMARK_LAUNCH_ARTIFACT_TYPE,),
+                    expected_primary_file="worker-result.json",
+                    max_bytes=65536,
+                ).payload
+                try:
+                    document = json.loads(raw)
+                    Draft202012Validator(
+                        {"$ref": pointer.schema_ref}, registry=catalog_schema_registry()
+                    ).validate(document)
+                    value = model.model_validate(document)
+                    if canonical_json_bytes(value) != raw:
+                        raise ValueError()
+                    return value
+                except (ValueError, RecursionError, SchemaError):
+                    raise ValueError("BENCHMARK_OWNER_TIMING_MEMBER_INVALID") from None
+
+            cold = fragment("cold-timing.json", "coldTiming", BenchmarkColdTiming)
+            queries = (
+                tuple(
+                    fragment(f"query-timing-{q}-{r}.json", "queryTiming", BenchmarkQueryTiming)
+                    for q in (1, 2)
+                    for r in range(1, 6)
+                )
+                if invocation.launch_ordinal in (1, 2)
+                else ()
+            )
+            reader.revalidate_provenance()
+            reader.require_session(session)
+            return BenchmarkLaunchTimings(invocation, result.timings, cold, queries)

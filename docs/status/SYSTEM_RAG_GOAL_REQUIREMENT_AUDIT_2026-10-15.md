@@ -9,6 +9,26 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Original-series timing assessment2026-10-18 01:19 UTC: journal result values
+  feed a current-administrator/source/policy-fenced same-Artifact timing reader.
+  Pure closure preserves six original executions/one Job, all cold spans and only
+  prescribed warm/query samples; the existing conservative fixed comparator is
+  reused. No OwnerResult publication, Job state change, model run or activation.
+  Related48 suites1295 PASS/246.19s/strict4/Ruff+format8/diff PASS. Exact171-pin
+  disposable PostgreSQL23/no skips/inspect+cleanup PASS; official temporary
+  Identity capture/logout and canonical Artifact/SQL reads real, Graph/native/
+  capacity synthetic. Initial fixture/cumulative-count failures are retained.
+  Actual protected execution, numerical/resource/regression/default/rollback and
+  all genuine C1–C5 consumer acceptance remain OPEN.
+  [Design and exact protected proof](../architecture/EMBEDDING_BENCHMARK_TIMING_ASSESSMENT.md).
+- Due INDEX observation01:18:47 UTC:785 encodings/bindings,203 revisions,6 logical
+  indexes; latest per-index265/545,275/545,245/545 remain PARTIAL. Latest five
+  rows3 COMPLETED/2 REQUESTED, all five failure_code null; no global failure-free
+  claim or fresh all-file audit. INDEX independently active/running PID1149648.
+  Original HTTP observer837676 remains live, no replay/login. Next routine
+  observation no earlier01:48:47 UTC. Evidence:
+  `/tmp/eom-benchmark-timing-observation.GxTtO3fX/index-observation.json`.
+
 - Explicit benchmark owner composition2026-10-18 01:02 UTC: one factory reuses
   existing current-administrator admission, fixed CPU/CUDA execution and original
   Orchestrator publisher/session owner. Actual fixed OS identity, opaque capture,

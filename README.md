@@ -306,6 +306,13 @@ CONTENT_ONLY7/520·CONCRETE_FACETS1/520·METADATA_ONLY1/520입니다.
 조건부 기본값 전환·롤백은 남아 있습니다.
 [구성 책임과 검증 범위](docs/architecture/EMBEDDING_BENCHMARK_OWNER_COMPOSITION.md).
 
+이어 원본6회의 등록된 시간 기록을 실제 권한으로 읽고 기존 고정 기준으로 판정하는
+경로를 연결했습니다(**SOURCE_AND_DISPOSABLE_PASS / NOT_ACTIVE**).
+관련1,295개 소스 테스트·strict type4·임시 PostgreSQL23개와 정리 PASS입니다.
+임시 DB의 권한·파일 조회는 실제 검증했지만 시간값은 합성이며, GPU가 더 빠르다는
+실측 결과나 기본값 전환은 아닙니다.
+[원본 실행·시간 판정·검증 경계](docs/architecture/EMBEDDING_BENCHMARK_TIMING_ASSESSMENT.md).
+
 CPU/GPU 비교용 코드 설치 도구도 기존 경계 안에서 CPU까지 확장했습니다
 (**SOURCE_PASS / NOT_INSTALLED**). CPU는 platform 패키지 하나만, CUDA는 기존 두 패키지를
 검사하며 옛 CPU 계약·수치 코드는 유지합니다. 관련352 tests(실제 OLD pip의 소형 합성

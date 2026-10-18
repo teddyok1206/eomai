@@ -1998,3 +1998,16 @@ suites1244 PASS/strict1/Ruff/format2; actual nonowner process denial PASS. This 
 SOURCE_PASS, not an operating install, fresh-operator admission or model run.
 The root-controller coordination and full six-run/default/rollback gates remain
 open. [Small design note and exact test scope](EMBEDDING_BENCHMARK_OWNER_COMPOSITION.md).
+
+### Original-series timing assessment — 2026-10-18
+
+The same original journal now exposes its validated result values to the Catalog
+timing reader without rereading/reparsing worker members. Fixed same-Artifact
+owner/native timing fragments pass current-source/policy/administrator and producer
+checks, then the existing frozen comparator assesses all six original clocks.
+No new recipe/schema/DB/queue, state mutation, model run or default activation.
+Related48 source suites1295 PASS/strict4/Ruff/format8; exact171-pin guarded
+PostgreSQL23 PASS/no skips/inspect+cleanup PASS. Identity/SQL/Artifacts/revocation
+are real disposable evidence; source, capacity and native clocks are synthetic.
+Actual protected six launches and complete numerical/resource/regression/default/
+rollback gates remain open. [Exact scope and preserved failures](EMBEDDING_BENCHMARK_TIMING_ASSESSMENT.md).

@@ -58,6 +58,13 @@ class BenchmarkLaunchHistory:
     launches: tuple[BenchmarkLaunchRecord, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class CompletedBenchmarkLaunch:
+    invocation: BenchmarkWorkerInvocation
+    receipt: BenchmarkLaunchReceipt
+    result: BenchmarkWorkerResult
+
+
 def _require_receipt(
     invocation: BenchmarkWorkerInvocation, receipt: BenchmarkLaunchReceipt
 ) -> None:
@@ -255,20 +262,27 @@ class BenchmarkLaunchJournal:
         self, session: Session, request: BenchmarkOwnerRequest, *, job_id: str
     ) -> tuple[BenchmarkLaunchReceipt, ...]:
         """Current exact evidence for all six launches, not parent success or device approval."""
+        return tuple(
+            launch.receipt
+            for launch in self.require_completed_launches(session, request, job_id=job_id)
+        )
+
+    def require_completed_launches(
+        self, session: Session, request: BenchmarkOwnerRequest, *, job_id: str
+    ) -> tuple[CompletedBenchmarkLaunch, ...]:
+        """Reuse each canonical result read for final assessment, never duplicate its parsing."""
         with self.source_admission.admit_in_session(session, request) as inputs:
             job = require_benchmark_job_in_session(session, request, job_id=job_id)
             history = _history(session, job, request, inputs)
             if len(history.launches) != 6:
                 raise BenchmarkJobAdmissionError("BENCHMARK_LAUNCH_SERIES_INCOMPLETE")
-            receipts: list[BenchmarkLaunchReceipt] = []
+            completed: list[CompletedBenchmarkLaunch] = []
             for launch in history.launches:
                 receipt = launch.receipt
-                if (
-                    receipt is None
-                    or receipt.cleanup != "CONFIRMED"
-                    or self._result(session, request, launch.invocation, receipt).status
-                    != "COMPLETED"
-                ):
+                if receipt is None or receipt.cleanup != "CONFIRMED":
                     raise BenchmarkJobAdmissionError("BENCHMARK_LAUNCH_SERIES_INCOMPLETE")
-                receipts.append(receipt)
-            return tuple(receipts)
+                result = self._result(session, request, launch.invocation, receipt)
+                if result.status != "COMPLETED":
+                    raise BenchmarkJobAdmissionError("BENCHMARK_LAUNCH_SERIES_INCOMPLETE")
+                completed.append(CompletedBenchmarkLaunch(launch.invocation, receipt, result))
+            return tuple(completed)

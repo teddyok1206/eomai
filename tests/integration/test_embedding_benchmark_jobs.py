@@ -527,3 +527,94 @@ def test_real_identity_capture_and_registered_policy_gate_the_manual_benchmark(
         ):
             pytest.fail("an AUTHOR capture cannot authorize benchmark compute")
         assert synthetic_source.entered == 0
+
+
+@pytest.mark.api_integration
+def test_postgres_original_timing_read_uses_real_identity_and_canonical_artifacts(
+    prepared, tmp_path, monkeypatch
+):
+    """Real PG/IAM/Artifact/revocation; source, native clocks and capacity are synthetic."""
+    from eom_catalog_service.embedding_benchmark_timing_read import (
+        read_completed_benchmark_series_timings,
+    )
+
+    from tests.unit.test_embedding_benchmark_timing_read import published_launch
+
+    with Session(prepared.engine) as session:
+        username = session.get(OperatorRecord, prepared.admin.operator_id).username
+    authenticated = prepared.auth.login(
+        username=username, password=prepared.password, client_name="Synthetic timing read gate"
+    ).pair
+    access = prepared.auth.authenticate_and_capture_access(authenticated.access_token)
+    capture = access.capture
+    request, inputs = benchmark_case()
+    request = BenchmarkOwnerRequest.model_validate(
+        seal(
+            request.model_dump(mode="json") | {"operator_audit_id": capture.operator_id},
+            "request_sha256",
+        )
+    )
+    workspace, artifacts = tmp_path / "workspace", tmp_path / "artifacts"
+    workspace.mkdir(mode=0o700)
+    artifacts.mkdir(mode=0o700)
+    publisher = ControlFileSetPublisher(
+        prepared.engine, Settings(workspace_root=workspace, nas_artifact_root=artifacts)
+    )
+    published = LocalEmbeddingControlArtifactPublisher(
+        publisher, source_commit="a" * 40
+    ).publish_benchmark_policy(
+        request.execution_policy,
+        idempotency_key="synthetic-timing-policy:" + request.benchmark_id,
+        created_at=datetime.now(UTC),
+    )
+    admission = CatalogBenchmarkOwnerAdmission(
+        prepared.engine,
+        BenchmarkOwnerConfiguration(
+            request.request_sha256, published.member, published.semantic_sha256
+        ),
+        capture=capture,
+        session_fence=AuthenticatedSessionFence(prepared.pin),
+        settings=CatalogSettings(nas_artifact_root=artifacts),
+    )
+    admission._source = SyntheticBenchmarkAdmission(request, inputs)
+    case = SimpleNamespace(publisher=publisher, request=request, inputs=inputs)
+    dispatches = []
+
+    @contextmanager
+    def synthetic_capacity():
+        yield
+
+    monkeypatch.setattr(owner_module, "native_cpu_capacity", synthetic_capacity)
+    monkeypatch.setattr(owner_module, "require_no_active_native_cpu_execution", lambda: None)
+
+    class SyntheticTimingExecution:
+        def assert_installed(self, value):
+            assert value == request
+
+        def run_and_publish(self, invocation, staged, authorization):
+            authorization.assert_invocation(invocation)
+            assert staged == inputs
+            dispatches.append(invocation.execution_id)
+            launch, *_ = published_launch(
+                case, tmp_path, invocation.launch_ordinal, selected_invocation=invocation
+            )
+            authorization.assert_invocation(invocation)
+            return launch.receipt
+
+    owner = BenchmarkExecutionOwner(
+        publisher.sessions, admission=admission, execution=SyntheticTimingExecution()
+    )
+    series = owner.run_launches(request)
+    owner.execution = None
+    with publisher.sessions() as session:
+        count = session.scalar(select(func.count()).select_from(JobRecord))
+    first = read_completed_benchmark_series_timings(owner, request, job_id=series.job_id)
+    assert first == read_completed_benchmark_series_timings(owner, request, job_id=series.job_id)
+    assert first.performance.verdict == "KEEP_CPU" and len(dispatches) == len(set(dispatches)) == 6
+    with publisher.sessions() as session:
+        assert session.scalar(select(func.count()).select_from(JobRecord)) == count
+        assert session.get(JobRecord, series.job_id).status == "VALIDATING_RESULT"
+    prepared.auth.logout(access.authentication.session_id, capture.operator_id)
+    with pytest.raises(ValueError):
+        read_completed_benchmark_series_timings(owner, request, job_id=series.job_id)
+    assert len(dispatches) == 6
