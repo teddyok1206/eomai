@@ -138,3 +138,16 @@ remain OPEN.
 Next: bounded private host routing to this operation-local factory, supported
 same-original BUSY liveness, canonical auxiliary provenance and actual Chat
 consumer delivery. The factory alone is not an installed service or activation.
+
+## Published package candidate — NOT_INSTALLED
+
+Code `f0ff587591b5662e51a7b4f0e927164535032132` is pushed. Standard build-only
+three-wheel/RECORD/installed-simulation checks PASS. The two new production
+modules and unchanged Identity provider export module match source bytes inside
+the platform wheel. Separate-process factory import loads no torch/transformers/
+sentence-transformers/numpy. Existing runtime services were not reinstalled.
+Build directory:
+`/tmp/eom-api-build/f0ff587591b5662e51a7b4f0e927164535032132.VAAubA/dist`.
+Platform rawdfcf6b845009a38e0932fed5f39fce289693045c8ba7822a05d8852656ce0e8e;
+API contracts rawebde89fbe4d6b4feb6cf5a5df9e6bcd0de2adac625ad610d8d1bd05d8de5ed7f;
+API raw500dc248eab5a5dc239e6642f6a35c616a82f241faaba560eb228e3c90120994.
