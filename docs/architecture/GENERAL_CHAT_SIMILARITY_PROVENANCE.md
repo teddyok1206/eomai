@@ -129,3 +129,24 @@ Next required C4 work remains official metadata filtering, optional broker
 composition, actual caller/current source reauthorization, protected release and
 end-to-end delivery. Full C1–C5 activation, seed/delta/current canonical coverage,
 genuine CPU/CUDA comparison and conditional coherent default/rollback remain open.
+
+### Clean-source package checkpoint
+
+Candidate `1558d9162b8578c895a4ba6a332a7a0e70ad5045` is pushed to `origin/main`.
+`scripts/api/deploy_release.sh --build-only` passed three-wheel/RECORD/installed
+simulation checks. The new contract/resource and changed registry/Chat store
+(four package members) match the clean source byte-for-byte. Worker protocol and
+migration paths have no diff against preceding candidate `e60e13cd`.
+Build directory:
+`/tmp/eom-api-build/1558d9162b8578c895a4ba6a332a7a0e70ad5045.szpk58/dist`.
+
+| Wheel | Raw SHA-256 |
+|---|---|
+| platform | `c7efa81c72ee12208f1976a5286f3c6d31ed839cc847c95970e7ce343f41b0af` |
+| API contracts | `436f57a5809c63897dec2558b5eede218530636ad8463cac4467bfb9536af2c9` |
+| API | `83155c747f2e003bb3bc006b931370075c095a2e3926ddc603e3fea5e9aaab65` |
+
+**Build only, not installed/active.** No operating service/config/migration/model
+execution/default changed. The only operating observation this turn was the one
+due readonly INDEX inventory at05:26 UTC, using the existing observer/valid
+noninteractive sudo in the same pane. No login prompt or credential handling.
