@@ -225,6 +225,116 @@ and Chat group GID977; it does not prove the socket exists, DAC or live origin
 authorization. No install, restart, group change, login or model run occurred.
 This checkpoint remains SOURCE_PASS/PACKAGE_PASS/NOT_INSTALLED/NOT_ACTIVE.
 
+## Optional protected service selection — design before schema and wiring
+
+1. Extend the existing root supervisor/dropped-UID QUERY child with an explicit
+   optional private configuration, not another daemon, DB engine or driver.
+2. Canonical inputs are root-protected fixed configuration bytes, selected
+   immutable policy/runtime Artifact members and current independent Chat source.
+3. A new closed `private-chat-query-owner-configuration/1.0` pins the raw hash of
+   the unchanged reference configuration, private CONTENT_ONLY registry selection,
+   exact private policy/bundle pointers and private prepare environment hash.
+   Inherit the actual database owner/source release, CPU env and fixed verifier
+   from that pinned reference baseline; do not duplicate credentials or authority.
+4. Hash/size/canonical JSON/schema and recipe/view/source-class checks precede
+   composition. Resolve policy/bundle through existing Catalog protected reads,
+   validate the numerical closure/resources/space and actual current runtime.
+5. Startup does bounded key/config reads, indexed Artifact resolution and fixed
+   OS layout checks. No source enumeration, model invocation or workflow claim.
+6. Keep frozen typed configuration and existing Artifact pointers. One existing
+   engine/publisher/driver is shared; no new DB/schema/index/cache/dependency.
+7. Configuration work is O(configuration bytes + bounded pointer closure), O(1)
+   retained metadata. Large corpus/model bytes remain in their existing owners.
+8. Read-only startup transactions close before listener construction. Per-request
+   live-origin/Identity/source checks and model/commit boundaries remain unchanged.
+9. Domain configuration imports only contracts/value models. Runner composes
+   adapters after verified UID/capability drop; root only validates protected
+   configuration and provisions exact selected socket parents.
+10. Missing opt-in leaves reference-only behavior. Invalid opt-in fails startup,
+    never falls back to reference purpose/session capture/latest. Recheck both
+    configuration file snapshots on every application dispatch. Drain one shared
+    driver before disposing its existing engine on shutdown/startup failure.
+11. A mutable flag plus arbitrary factory/path would not pin deployment identity;
+    copying all reference settings would create drift. A small pinned optional
+    selection is the simpler extension of the existing owner.
+
+The shared unit needs optional write access only to the distinct private socket
+parent and existing private staging workspace. Existing exact start-only polkit
+rules must include the specific private CPU unit, not arbitrary prepare/services,
+verbs or worker subjects. These are source candidates until an explicit coherent
+runtime/unit/policy/configuration deployment and actual OS/source verification.
+
+### Implemented optional composition
+
+The new schema/Pydantic value and canonical parser are implemented. The protected
+optional path is `/etc/eom/private-chat-query-owner.json`, selected only by
+`EOM_PRIVATE_CHAT_QUERY_CONFIGURATION_SHA256`. Absent means reference-only;
+empty/invalid pins, changed bytes or a different reference baseline are errors.
+Root validates selection before provisioning/fork. The existing child rechecks
+the exact file after dropping all root IDs/groups/capabilities, then composes the
+private listener. No private launcher/factory application is imported by root.
+
+`build_private_chat_query_owner_factory` uses the existing engine/publisher and
+single finite driver. It checks the current reference provider and actual child
+UID/GID/no supplemental groups; validates the fixed Chat source socket profile;
+opens one read-only owner-role root for existing pinned policy/bundle resolution;
+validates fixed CPU resources, both paired spaces and producer provenance; then
+checks the private launcher only after that root closes. Each operation checks
+the configuration snapshots before/after actual live Chat authorization, in
+addition to existing native/runtime/Identity/source fences. No question, actor,
+session capture or numerical execution is involved in startup.
+
+Host and client now share the same fixed private endpoint selection. The existing
+unit adds only two optional writable paths (private socket/staging), no capability
+or credential change. The existing ordered polkit query rule adds exactly
+`eom-embedding-native-cpu-private-chat-query@<32 lowercase hex>.service` for the
+existing owner/start verb; prepare units, other verbs/subjects and malformed
+instances stay denied. Node evaluates the complete existing ordered rule set in
+source tests; this is not an installed daemon permission grant.
+
+Initial combined startup tests preserved75 PASS/2 FAIL: the reused generic CPU
+fixture had a non-native timeout, and namespace-space mismatch was not rejected
+before control reads. The positive fixture now selects the existing native
+handoff resource profile, without weakening production resource validation. The
+builder now explicitly rejects a foreign namespace space before opening that
+startup root. A subsequent123 PASS/1 FAIL was test-only: Mock deliberately rejects
+unknown `assert_*` attributes, so the declared file port now explicitly supplies
+`assert_unchanged`. No protected-file check was removed. Focused146 PASS/20.10s
+after those corrections, including real Thread/socket-compatible objects but
+declared startup SQL/provider/files/account/runtime ports, not actual protected
+startup or source authorization. Broader source/package verification follows.
+
+Final related43 suites **1143 PASS /325.96s, no skips**, including the focused146
+as overlap, not added counts. Strict mypy6 production modules, Ruff/format12
+Python files, diff checks and separate-process six-module import without torch/
+transformers/sentence-transformers/numpy PASS. These source tests do not establish
+actual protected startup, private policy activation, source authentication,
+numerical execution, operating migration0057 or consumer delivery.
+
+No DB schema/state/claim/native persistence or released worker/input/schema bytes
+were modified. The previous actual121-case disposable SQL evidence remains its
+historical data-layer proof, not this mocked startup's acceptance. Operating
+private policy/admission, configuration installation, numerical successor and
+actual consumer/source/OS verification remain required. This composition does
+not close acknowledged-BUSY liveness, Chat provenance/delivery or C1–C5.
+
+### Thirty-minute operating metadata observation — 2026-10-18 04:25 UTC
+
+One supported read-only observation at04:25:17.191411 UTC found833 encoding
+records/833 source bindings/215 index revisions across6 logical indexes. Latest
+per-index metadata for the three observed seed indexes was291/545,261/545 and
+281/545, compared with291,257,277 at03:55. These are per-view bindings, not833
+distinct Items and not a full current source/Artifact/vector/hash audit. Coverage
+remains PARTIAL. Latest-five Workflow metadata includes one RUNNING and two
+REQUESTED; this is not a global active/failed/lease census.
+
+Evidence `/tmp/eom-index-observation.0MaILuHK/index-observation.json`, unchanged
+installed observer raw474c76189fd61e20773cc05f9b4dfb411e6bed38e9ccd1015c7371151d775ee0.
+Existing same-pane noninteractive sudo was used; no login or state replay.
+Next routine observation is not before04:55:17.191411 UTC. At04:29 both INDEX
+PID1149648 and reference QUERY PID1149347 were still active/running; neither was
+replaced or restarted for this source work.
+
 ### Host source checkpoint — 2026-10-18 04:00 UTC
 
 The optional private listener and operation-local factory dispatch are implemented

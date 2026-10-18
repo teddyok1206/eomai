@@ -13,6 +13,7 @@ RULES = Path(__file__).resolve().parents[2] / "infra/polkit"
 INSTANCE = "a" * 32
 INDEX = f"eom-embedding-native-cpu-index@{INSTANCE}.service"
 QUERY = INDEX.replace("cpu-index", "cpu-query")
+PRIVATE_QUERY = INDEX.replace("cpu-index", "cpu-private-chat-query")
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node is unavailable")
@@ -21,6 +22,30 @@ QUERY = INDEX.replace("cpu-index", "cpu-query")
     (
         ("eom-workflow-runner", "manage-units", INDEX, "start", "yes"),
         ("eom-workflow-runner", "manage-units", QUERY, "start", "yes"),
+        ("eom-workflow-runner", "manage-units", PRIVATE_QUERY, "start", "yes"),
+        ("eom-workflow-runner", "manage-units", PRIVATE_QUERY, "restart", "no"),
+        ("eom-workflow-runner", "manage-units", PRIVATE_QUERY, "stop", "no"),
+        ("eom-workflow-runner", "manage-units", PRIVATE_QUERY, "enable", "no"),
+        ("eom-workflow-runner", "manage-units", PRIVATE_QUERY + "\n", "start", "no"),
+        (
+            "eom-workflow-runner",
+            "manage-units",
+            PRIVATE_QUERY.replace(INSTANCE, INSTANCE.upper()),
+            "start",
+            "no",
+        ),
+        (
+            "eom-workflow-runner",
+            "manage-units",
+            PRIVATE_QUERY.replace("cpu-private-chat-query", "private-chat-query-prepare"),
+            "start",
+            "no",
+        ),
+        ("eom-api", "manage-units", PRIVATE_QUERY, "start", "no"),
+        ("eom-general-chat", "manage-units", PRIVATE_QUERY, "start", "no"),
+        ("eom-cdx-chat", "manage-units", PRIVATE_QUERY, "start", "no"),
+        ("eom-embedding-index-cpu", "manage-units", PRIVATE_QUERY, "start", "no"),
+        ("eom", "manage-units", PRIVATE_QUERY, "start", "no"),
         ("eom-workflow-runner", "manage-units", QUERY, "restart", "no"),
         ("eom-workflow-runner", "manage-units", QUERY, "stop", "no"),
         ("eom-workflow-runner", "manage-units", QUERY, "enable", "no"),

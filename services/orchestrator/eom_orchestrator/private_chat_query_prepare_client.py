@@ -22,6 +22,18 @@ from eom_orchestrator.general_chat_socket import (
 )
 
 
+def fixed_private_chat_query_prepare_endpoint() -> ChatSocketEndpoint:
+    """One trusted layout for host and client; never selected by worker/request fields."""
+    try:
+        owner = pwd.getpwnam("eom-workflow-runner").pw_uid
+        group = grp.getgrnam("eom-general-chat").gr_gid
+    except (KeyError, OSError):
+        raise ChatTransportError("UNAVAILABLE") from None
+    if type(owner) is not int or type(group) is not int or owner <= 0 or group <= 0:
+        raise ChatTransportError("INVALID")
+    return ChatSocketEndpoint(Path(PRIVATE_CHAT_PREPARE_SOCKET), owner, group, parent_mode=0o2750)
+
+
 class PrivateChatQueryPrepareClient:
     """Composition must select an installed trusted owner endpoint, never a worker path."""
 
@@ -31,16 +43,7 @@ class PrivateChatQueryPrepareClient:
     @classmethod
     def for_installed_owner(cls) -> Self:
         """Select only fixed OS identities/layout; each exchange still validates DAC/peer."""
-        try:
-            owner = pwd.getpwnam("eom-workflow-runner").pw_uid
-            group = grp.getgrnam("eom-general-chat").gr_gid
-        except (KeyError, OSError):
-            raise ChatTransportError("UNAVAILABLE") from None
-        if type(owner) is not int or type(group) is not int or owner <= 0 or group <= 0:
-            raise ChatTransportError("INVALID")
-        return cls(
-            ChatSocketEndpoint(Path(PRIVATE_CHAT_PREPARE_SOCKET), owner, group, parent_mode=0o2750)
-        )
+        return cls(fixed_private_chat_query_prepare_endpoint())
 
     def execute(self, request: PrivateChatQueryPrepareRequest) -> PrivateChatQueryPrepareReply:
         request = parse_private_chat_query_prepare_request(request)

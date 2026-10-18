@@ -33,6 +33,8 @@ if TYPE_CHECKING:
 _RELEASES = Path("/opt/eom/embedding-owner-releases")
 _CONFIGURATION = Path("/etc/eom/reference-query-owner.json")
 _SOCKET_PARENT = Path("/run/eom-reference-query-owner")
+_PRIVATE_CONFIGURATION = Path("/etc/eom/private-chat-query-owner.json")
+_PRIVATE_SOCKET_PARENT = Path("/run/eom-private-chat-query-owner")
 
 
 def _installed_site() -> Path:
@@ -105,33 +107,56 @@ def _configuration_bytes() -> bytes:
     return snapshots.read(_CONFIGURATION, sha256=expected, maximum=64 * 1024)
 
 
-def _provision_socket_parent() -> None:
-    owner, api = pwd.getpwnam("eom-workflow-runner"), grp.getgrnam("eom-api")
+def _private_configuration_bytes() -> bytes | None:
+    expected = os.environ.get("EOM_PRIVATE_CHAT_QUERY_CONFIGURATION_SHA256")
+    if expected is None:
+        return None  # Opt-in absence preserves reference-only startup.
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", expected) is None:
+        raise ValueError("PRIVATE_CHAT_QUERY_OWNER_CONFIGURATION_UNAVAILABLE")
+    from eom_catalog_service.embedding_runtime_files import NumericalRuntimeFileSnapshots
+
+    return NumericalRuntimeFileSnapshots().read(
+        _PRIVATE_CONFIGURATION, sha256=expected, maximum=16 * 1024
+    )
+
+
+def _provision_query_socket_parent(parent: Path, group_name: str) -> None:
+    owner, group = pwd.getpwnam("eom-workflow-runner"), grp.getgrnam(group_name)
+    if owner.pw_uid <= 0 or group.gr_gid <= 0:
+        raise ValueError("REFERENCE_QUERY_OWNER_SOCKET_LAYOUT_INVALID")
     # /run is a root-owned fixed parent; never chmod/chown an existing directory
     # into compliance. A missing transient directory is a bounded boot action.
-    metadata = _SOCKET_PARENT.parent.lstat()
+    metadata = parent.parent.lstat()
     if (
-        _SOCKET_PARENT.parent.is_symlink()
+        parent.parent.is_symlink()
         or not stat.S_ISDIR(metadata.st_mode)
         or metadata.st_uid != 0
         or metadata.st_mode & 0o022
     ):
         raise ValueError("REFERENCE_QUERY_OWNER_SOCKET_LAYOUT_INVALID")
     try:
-        _SOCKET_PARENT.mkdir(mode=0o700)
+        parent.mkdir(mode=0o700)
     except FileExistsError:
         pass
     else:
-        os.chown(_SOCKET_PARENT, owner.pw_uid, api.gr_gid, follow_symlinks=False)
-        _SOCKET_PARENT.chmod(0o2750)
-    metadata = _SOCKET_PARENT.lstat()
+        os.chown(parent, owner.pw_uid, group.gr_gid, follow_symlinks=False)
+        parent.chmod(0o2750)
+    metadata = parent.lstat()
     if (
-        _SOCKET_PARENT.is_symlink()
+        parent.is_symlink()
         or not stat.S_ISDIR(metadata.st_mode)
-        or (metadata.st_uid, metadata.st_gid) != (owner.pw_uid, api.gr_gid)
+        or (metadata.st_uid, metadata.st_gid) != (owner.pw_uid, group.gr_gid)
         or stat.S_IMODE(metadata.st_mode) != 0o2750
     ):
         raise ValueError("REFERENCE_QUERY_OWNER_SOCKET_LAYOUT_INVALID")
+
+
+def _provision_socket_parent() -> None:
+    _provision_query_socket_parent(_SOCKET_PARENT, "eom-api")
+
+
+def _provision_private_socket_parent() -> None:
+    _provision_query_socket_parent(_PRIVATE_SOCKET_PARENT, "eom-general-chat")
 
 
 def _emit(event: str, *, error: BaseException | None = None) -> None:
@@ -163,6 +188,8 @@ def _serve_child(
     observation: InstalledIdentityProviderObservation,
     raw_sha256: str,
     restore_mask: set[int | signal.Signals],
+    *,
+    private_raw: bytes | None = None,
 ) -> int:
     owner = pwd.getpwnam("eom-workflow-runner")
     api = pwd.getpwnam("eom-api")
@@ -179,7 +206,10 @@ def _serve_child(
         ProtectedInstalledIdentityProviderAdmission,
     )
     from eom_orchestrator.general_chat_socket import ChatSocketEndpoint
-    from eom_orchestrator.reference_query_owner_server import ReferenceQueryOwnerServer
+    from eom_orchestrator.reference_query_owner_server import (
+        PrivateChatQueryListener,
+        ReferenceQueryOwnerServer,
+    )
 
     from eom_workflow_runner.reference_query_owner_runtime import (
         build_reference_query_owner_runtime,
@@ -203,6 +233,34 @@ def _serve_child(
         snapshots.read(_CONFIGURATION, sha256=raw_sha256, maximum=64 * 1024)
         admission = ProtectedInstalledIdentityProviderAdmission(observation)
         runtime = build_reference_query_owner_runtime(configuration, admission)
+        private_listener = None
+        if private_raw is not None:
+            from eom_orchestrator.private_chat_query_prepare_client import (
+                fixed_private_chat_query_prepare_endpoint,
+            )
+            from eom_workflow.private_chat_query_owner_configuration import (
+                parse_private_chat_query_service_configuration,
+            )
+
+            from eom_workflow_runner.private_chat_query_owner_runtime import (
+                build_private_chat_query_owner_factory,
+            )
+
+            current_private = snapshots.read(
+                _PRIVATE_CONFIGURATION,
+                sha256="sha256:" + hashlib.sha256(private_raw).hexdigest(),
+                maximum=16 * 1024,
+            )
+            private_factory = build_private_chat_query_owner_factory(
+                runtime,
+                parse_private_chat_query_service_configuration(current_private),
+                configuration_guard=snapshots.assert_unchanged,
+            )
+            private_listener = PrivateChatQueryListener(
+                fixed_private_chat_query_prepare_endpoint(),
+                pwd.getpwnam("eom-general-chat").pw_uid,
+                private_factory,
+            )
         if stop.is_set():
             return 0
 
@@ -218,6 +276,7 @@ def _serve_child(
             api_uid=api.pw_uid,
             admission=admission,
             application=application,
+            private_queries=private_listener,
         )
         _emit("REFERENCE_QUERY_OWNER_READY")
         server.serve()
@@ -294,6 +353,17 @@ def main() -> int:
         configuration = parse_reference_query_service_configuration(raw)
         if configuration.owner_source_commit != site.parent.name:
             raise ValueError("REFERENCE_QUERY_OWNER_SOURCE_MISMATCH")
+        private_raw = _private_configuration_bytes()
+        if private_raw is not None:
+            from eom_workflow.private_chat_query_owner_configuration import (
+                parse_private_chat_query_service_configuration,
+                require_private_chat_query_reference_configuration,
+            )
+
+            require_private_chat_query_reference_configuration(
+                parse_private_chat_query_service_configuration(private_raw), configuration
+            )
+            _provision_private_socket_parent()
         selected = configuration.api_provider
         _provision_socket_parent()
         with open_installed_identity_provider_observation(
@@ -312,6 +382,7 @@ def main() -> int:
                     observation,
                     "sha256:" + hashlib.sha256(raw).hexdigest(),
                     restore_mask,
+                    private_raw=private_raw,
                 )
                 sys.stdout.flush()
                 os._exit(status)

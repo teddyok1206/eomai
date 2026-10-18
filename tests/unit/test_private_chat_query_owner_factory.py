@@ -43,6 +43,7 @@ def factory(source, monkeypatch):
         launcher,
         driver,
         "a" * 40,
+        lambda: None,
     )
     try:
         yield SimpleNamespace(factory=value, source=source, observed=observed, authorize=authorize)
@@ -76,7 +77,16 @@ def test_each_original_gets_distinct_actual_private_owners_and_one_shared_finite
     assert not value.factory.driver.observe().active
 
 
-@pytest.mark.parametrize("fault", ("source_denied", "origin_changed", "runtime_changed"))
+@pytest.mark.parametrize(
+    "fault",
+    (
+        "source_denied",
+        "origin_changed",
+        "runtime_changed",
+        "configuration_changed",
+        "late_configuration_changed",
+    ),
+)
 def test_current_origin_or_runtime_failure_never_constructs_executor_or_runner(
     factory, monkeypatch, fault
 ):
@@ -96,6 +106,20 @@ def test_current_origin_or_runtime_failure_never_constructs_executor_or_runner(
             )
         )
         expected = ValueError
+    elif fault == "configuration_changed":
+        value.factory = replace(
+            value.factory,
+            configuration_guard=Mock(side_effect=ValueError("synthetic configuration replaced")),
+        )
+        expected = ValueError
+    elif fault == "late_configuration_changed":
+        value.factory = replace(
+            value.factory,
+            configuration_guard=Mock(
+                side_effect=[None, ValueError("synthetic configuration replaced")]
+            ),
+        )
+        expected = ValueError
     else:
 
         def reject(_actual):
@@ -109,7 +133,9 @@ def test_current_origin_or_runtime_failure_never_constructs_executor_or_runner(
     assert not value.factory.driver.observe().active
 
 
-@pytest.mark.parametrize("fault", ("engine", "driver", "launcher", "chat", "source", "space"))
+@pytest.mark.parametrize(
+    "fault", ("engine", "driver", "launcher", "chat", "source", "space", "configuration_guard")
+)
 def test_mixed_composition_is_rejected_before_source_rpc(factory, fault):
     value = factory
     if fault == "engine":

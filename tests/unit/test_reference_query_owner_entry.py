@@ -38,6 +38,47 @@ def test_missing_config_pin_fails_before_opening_any_external_file(monkeypatch):
         module._configuration_bytes()
 
 
+def test_private_configuration_is_opt_in_and_does_not_read_files_when_absent(monkeypatch):
+    monkeypatch.delenv("EOM_PRIVATE_CHAT_QUERY_CONFIGURATION_SHA256", raising=False)
+    assert module._private_configuration_bytes() is None
+
+
+@pytest.mark.parametrize("pin", ("", "sha256:bad", "sha256:" + "g" * 64, "/tmp/config.json"))
+def test_malformed_private_configuration_pin_is_not_silently_disabled(monkeypatch, pin):
+    monkeypatch.setenv("EOM_PRIVATE_CHAT_QUERY_CONFIGURATION_SHA256", pin)
+    with pytest.raises(ValueError, match="PRIVATE_CHAT_QUERY_OWNER_CONFIGURATION_UNAVAILABLE"):
+        module._private_configuration_bytes()
+
+
+def test_private_parent_profile_is_fixed_and_separate_from_api(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        module, "_provision_query_socket_parent", lambda path, group: calls.append((path, group))
+    )
+    module._provision_socket_parent()
+    module._provision_private_socket_parent()
+    assert calls == [
+        (Path("/run/eom-reference-query-owner"), "eom-api"),
+        (Path("/run/eom-private-chat-query-owner"), "eom-general-chat"),
+    ]
+
+
+def test_private_configuration_reader_uses_only_fixed_path_exact_pin_and_bound(monkeypatch):
+    from unittest.mock import Mock
+
+    from eom_catalog_service import embedding_runtime_files
+
+    pin = "sha256:" + "7" * 64
+    files = Mock()
+    files.read.return_value = b"synthetic configuration bytes"
+    monkeypatch.setenv("EOM_PRIVATE_CHAT_QUERY_CONFIGURATION_SHA256", pin)
+    monkeypatch.setattr(embedding_runtime_files, "NumericalRuntimeFileSnapshots", lambda: files)
+    assert module._private_configuration_bytes() == b"synthetic configuration bytes"
+    files.read.assert_called_once_with(
+        Path("/etc/eom/private-chat-query-owner.json"), sha256=pin, maximum=16 * 1024
+    )
+
+
 def test_logs_never_include_exception_text_or_traceback(capsys):
     module._emit("REFERENCE_QUERY_OWNER_STOPPED", error=RuntimeError("synthetic private data"))
     output = capsys.readouterr().out
@@ -110,6 +151,14 @@ def test_service_template_isolated_supervisor_without_provider_file_shadowing():
     assert "CAP_DAC_OVERRIDE" not in template and "CAP_SYS_ADMIN" not in template
     assert "-I -B /opt/eom/embedding-owner-releases/@SOURCE_COMMIT@/" in template
     assert "EOM_REFERENCE_QUERY_CONFIGURATION_SHA256=@CONFIGURATION_SHA256@" in template
+    assert "ReadWritePaths=-/run/eom-private-chat-query-owner\n" in template
+    assert (
+        "ReadWritePaths=-/var/lib/eom-workflow-runner/incremental-embeddings/private-chat-query\n"
+        in template
+    )
+    assert (
+        "EOM_PRIVATE_CHAT_QUERY_CONFIGURATION_SHA256=" not in template
+    )  # Separate explicit opt-in.
     assert "InaccessiblePaths=/home/eom/EOM /home/eom/EOMIS /root/.codex" in template
     assert "/etc/eom/secrets/api.env" not in template
     assert "ReadOnlyPaths=/etc/eom-api" not in template

@@ -46,8 +46,10 @@ IPAddressAllow=localhost
 # Keep provider paths in the real filesystem view: per-file bind masking would
 # hide replacement epochs. ProtectSystem already makes them read-only here.
 ReadWritePaths=/run/eom-reference-query-owner
+ReadWritePaths=-/run/eom-private-chat-query-owner
 ReadWritePaths=/var/lib/eom-workflow-runner/reference-query-owner
 ReadWritePaths=/var/lib/eom-workflow-runner/incremental-embeddings/query
+ReadWritePaths=-/var/lib/eom-workflow-runner/incremental-embeddings/private-chat-query
 ReadWritePaths=/mnt/nas/eom/artifacts
 InaccessiblePaths=/home/eom/EOM /home/eom/EOMIS /root/.codex
 InaccessiblePaths=/srv/eom/worker-homes /srv/eom/models/image

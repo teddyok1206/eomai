@@ -29,6 +29,15 @@ from eom_orchestrator.general_chat_state import ChatError
 PRIVATE_CHAT_QUERY_SOURCE_SOCKET = Path("/run/eom-general-chat-query-read/source.sock")
 
 
+def fixed_private_chat_query_source_endpoint() -> ChatSocketEndpoint:
+    """One owner-selected layout for startup checks and actual current-source exchanges."""
+    return ChatSocketEndpoint(
+        PRIVATE_CHAT_QUERY_SOURCE_SOCKET,
+        pwd.getpwnam("eom-general-chat").pw_uid,
+        grp.getgrnam("eom").gr_gid,
+    )
+
+
 class GeneralChatPrivateQueryClient:
     def __init__(self, endpoint: ChatSocketEndpoint | None = None) -> None:
         self.endpoint = endpoint
@@ -42,11 +51,7 @@ class GeneralChatPrivateQueryClient:
                     "command": command,
                 }
             )
-            endpoint = self.endpoint or ChatSocketEndpoint(
-                PRIVATE_CHAT_QUERY_SOURCE_SOCKET,
-                pwd.getpwnam("eom-general-chat").pw_uid,
-                grp.getgrnam("eom").gr_gid,
-            )
+            endpoint = self.endpoint or fixed_private_chat_query_source_endpoint()
             value = exchange_chat_frame(
                 endpoint,
                 request.model_dump(mode="json"),

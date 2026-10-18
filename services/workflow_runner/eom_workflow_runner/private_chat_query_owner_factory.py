@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from eom_catalog_contracts.embedding_reference_query import (
@@ -76,6 +77,7 @@ class PrivateChatQueryOwnerFactory:
     launcher: FixedNativePrivateQueryLauncher
     driver: NativeQueryPrepareDriver
     source_commit: str
+    configuration_guard: Callable[[], None]
 
     def __post_init__(self) -> None:
         if (
@@ -97,6 +99,7 @@ class PrivateChatQueryOwnerFactory:
             or type(self.operator_owner) is not OperatorAuthorizationFenceOwnerPin
             or type(self.source_commit) is not str
             or re.fullmatch(r"[0-9a-f]{40}", self.source_commit) is None
+            or not callable(self.configuration_guard)
         ):
             raise ValueError("PRIVATE_CHAT_QUERY_OWNER_COMPOSITION_INVALID")
         object.__setattr__(self, "spaces", spaces)
@@ -105,12 +108,14 @@ class PrivateChatQueryOwnerFactory:
         """Bind one live original; no local queue/claim/model work during construction."""
         self.__post_init__()
         origin = ChatPrivateQueryOrigin.model_validate(raw_similarity_contract_value(origin))
+        self.configuration_guard()
         self.launcher.assert_current_runtime()
         current = ChatPrivateQueryOrigin.model_validate(
             raw_similarity_contract_value(self.chat.authorize(origin))
         )
         if current != origin:
             raise ValueError("PRIVATE_CHAT_QUERY_OWNER_ORIGIN_INVALID")
+        self.configuration_guard()
         self.launcher.assert_current_runtime()
         sources = CatalogPrivateChatQuerySourceOwner(
             self.engine,
