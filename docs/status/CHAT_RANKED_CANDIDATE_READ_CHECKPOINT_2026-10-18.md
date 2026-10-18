@@ -97,3 +97,28 @@ remain explicit, never fabricated EMPTY/READY; hash/permission errors fail close
 Current source/report/claim reauthorization and coherent protected deployment/live
 delivery remain required. Full C1–C5 activation, complete seed/delta/current audit,
 genuine CPU/CUDA comparisons and conditional coherent default/rollback remain open.
+
+## Clean-source package evidence
+
+Candidate `739f08f91f9eebf1eaed3324f647396bcc586e04` is pushed to `origin/main`.
+The build-only release gate passed three-wheel/RECORD/installed simulation.
+Eight contract/resource/registry/server/shared-discovery/client members match
+the clean source byte-for-byte. Worker protocol and migration paths have no diff
+against the source baseline. Build directory:
+`/tmp/eom-api-build/739f08f91f9eebf1eaed3324f647396bcc586e04.3qeB1J/dist`.
+
+| Wheel | Raw SHA-256 |
+|---|---|
+| platform | `19698558f2b846571761efdccb189ac0e764c95a57ac5455fbb2e1b002e12152` |
+| API contracts | `5eba80360e9bbd4eb22c3c45a5300f1e565d7b478e6a5bd4699515985d1f2317` |
+| API | `a51e86583a9b9f6b7c68fdf436cdb9ee899a47f5d246613075c5cd71aa9303ea` |
+
+These are **build-only artifacts, not an installed/active product feature**.
+The due thirty-minute readonly INDEX observation at2026-10-18 05:58:30.731045 UTC
+recorded857 view encodings/bindings,221 revisions/6 logical indexes and latest
+coverage269/545,289/545,299/545. Still PARTIAL; not857 distinct Items or a full
+canonical/source/lease audit. Latest-five-only work states:2 REQUESTED,1 RUNNING,
+2 COMPLETED, not a global failure count. Evidence:
+`/tmp/eom-index-observation.OhZYYmMz/index-observation.json`.
+Next routine read is not before06:28:30.732 UTC. No interactive authentication
+before2026-10-19 05:10 UTC; the original human fresh-auth denial is unchanged.
