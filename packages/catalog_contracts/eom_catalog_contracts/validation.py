@@ -70,6 +70,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:f0424e012ffcbe663678a83e817a44984a6eae61e8fc18e021421d9a81b116ef",
         ),
+        "embedding-native-cuda-index-ready": CatalogSchemaResource(
+            "schemas/knowledge/embedding-native-cuda-index-ready-v1.schema.json",
+            "resources/knowledge/embedding-native-cuda-index-ready-v1.schema.json",
+            "1.0",
+            "sha256:f2f33a3e515f5ef4c9e81aebcb940212453cc418c929434b2af3cf77726fae4e",
+        ),
         "embedding-benchmark-cuda-ready": CatalogSchemaResource(
             "schemas/knowledge/embedding-benchmark-cuda-ready-v1.schema.json",
             "resources/knowledge/embedding-benchmark-cuda-ready-v1.schema.json",
