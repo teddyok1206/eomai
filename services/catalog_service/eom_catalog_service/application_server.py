@@ -80,6 +80,13 @@ from eom_catalog_contracts import (
     catalog_application_schema_route,
     validate_contract,
 )
+from eom_catalog_contracts.chat_private_query_scope import (
+    CHAT_PRIVATE_SCOPE_REQUEST_BYTES,
+    failed_chat_private_query_scope_reply,
+    parse_chat_private_query_scope_request,
+    validate_chat_private_query_scope_reply,
+)
+from eom_identifiers import canonical_json_bytes
 from eom_item_registry import RegistryError
 from eom_protocol.general_chat_grounding import (
     ChatKnowledgeCatalogReply,
@@ -275,6 +282,29 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                         self.server.inference_transfer_workflow_reads, raw
                     )
                 )
+                self.wfile.flush()
+                return
+            if raw_operation == "RESOLVE_CHAT_PRIVATE_QUERY_SCOPE":
+                scope_request = None
+                try:
+                    if len(raw) > CHAT_PRIVATE_SCOPE_REQUEST_BYTES:
+                        return
+                    scope_request = parse_chat_private_query_scope_request(value)
+                    if canonical_json_bytes(scope_request.model_dump(mode="json")) + b"\n" != raw:
+                        return
+                    if self.server.chat_rag is None:
+                        raise ValueError("private scope read not configured")
+                    scope_reply = validate_chat_private_query_scope_reply(
+                        scope_request,
+                        self.server.chat_rag.resolve_private_query_scope(scope_request),
+                    )
+                except Exception:
+                    if scope_request is None:
+                        return
+                    scope_reply = failed_chat_private_query_scope_reply(
+                        scope_request, "CHAT_KNOWLEDGE_UNAVAILABLE"
+                    )
+                self.wfile.write(canonical_json_bytes(scope_reply.model_dump(mode="json")) + b"\n")
                 self.wfile.flush()
                 return
             if raw_operation == "CHAT_RAG":
@@ -1452,7 +1482,13 @@ class CatalogApplicationServer(_ThreadingUnixServer):
             return self.workflow_similarity_reads is not None and uid == self.workflow_runner_uid
         return uid == self.allowed_uid or (
             uid == self.chat_owner_uid
-            and operation in {"RESOLVE_CHAT_KNOWLEDGE", "SEARCH_CHAT_KNOWLEDGE", "CHAT_RAG"}
+            and operation
+            in {
+                "RESOLVE_CHAT_KNOWLEDGE",
+                "SEARCH_CHAT_KNOWLEDGE",
+                "CHAT_RAG",
+                "RESOLVE_CHAT_PRIVATE_QUERY_SCOPE",
+            }
         )
 
     def handle_error(self, _request: object, _client_address: object) -> None:

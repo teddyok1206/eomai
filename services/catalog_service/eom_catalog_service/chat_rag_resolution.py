@@ -17,6 +17,14 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisSourceV3,
     validate_contract,
 )
+from eom_catalog_contracts.chat_private_query_scope import (
+    ChatPrivateQueryScopeReply,
+    ChatPrivateQueryScopeRequest,
+    failed_chat_private_query_scope_reply,
+    parse_chat_private_query_scope_request,
+    validate_chat_private_query_scope_reply,
+)
+from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
 from eom_identifiers import content_sha256
 from eom_identity_service.models import OperatorRecord
 from eom_identity_service.repository import active_role_assignments, effective_permissions
@@ -47,6 +55,7 @@ from eom_protocol.general_chat_rag_knowledge import (
 )
 from jsonschema import ValidationError as JsonSchemaValidationError
 from sqlalchemy import Engine, and_, or_, select, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.knowledge_graph_models import (
@@ -141,6 +150,48 @@ class ChatRagResolutionService:
         self.sessions = build_session_factory(engine)
         self.retrieval = KnowledgeRetrievalApplicationService(engine, settings)
         self.analyses = KnowledgeGraphPublicationService(engine, settings)
+
+    def resolve_private_query_scope(
+        self, request: ChatPrivateQueryScopeRequest
+    ) -> ChatPrivateQueryScopeReply:
+        """Read an exact selected scope through the same actor/policy/Graph boundary."""
+        request = parse_chat_private_query_scope_request(request)
+        try:
+            with self.sessions() as session, session.begin():
+                session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+                session.execute(text("SET TRANSACTION READ ONLY"))
+                self._authority(session, request.actor_id, request.scope.policy)
+                pointer = self._scope(session, request.scope)
+                reply = ChatPrivateQueryScopeReply(
+                    schema_version="chat-private-query-scope-reply/1.0",
+                    request_sha256=request.request_sha256,
+                    status="SUCCEEDED",
+                    scope=request.scope,
+                    graph_snapshot=pointer,
+                    error_code=None,
+                )
+        except ChatRagResolutionError as error:
+            reply = failed_chat_private_query_scope_reply(
+                request,
+                "CHAT_KNOWLEDGE_FORBIDDEN"
+                if error.code == "CHAT_KNOWLEDGE_FORBIDDEN"
+                else "CHAT_KNOWLEDGE_UNAVAILABLE"
+                if error.code == "CHAT_KNOWLEDGE_UNAVAILABLE"
+                else "CHAT_KNOWLEDGE_POINTER_INVALID",
+            )
+        except KnowledgeRetrievalServiceError as error:
+            reply = failed_chat_private_query_scope_reply(
+                request,
+                "CHAT_KNOWLEDGE_FORBIDDEN"
+                if error.code
+                in {"KNOWLEDGE_RETRIEVAL_UNAUTHORIZED", "KNOWLEDGE_RETRIEVAL_REQUESTER_INVALID"}
+                else "CHAT_KNOWLEDGE_POINTER_INVALID",
+            )
+        except SQLAlchemyError:
+            reply = failed_chat_private_query_scope_reply(request, "CHAT_KNOWLEDGE_UNAVAILABLE")
+        except (KnowledgeGraphPublicationError, JsonSchemaValidationError, ValueError, OSError):
+            reply = failed_chat_private_query_scope_reply(request, "CHAT_KNOWLEDGE_POINTER_INVALID")
+        return validate_chat_private_query_scope_reply(request, reply)
 
     def resolve(self, request: ChatRagCatalogRequest) -> ChatRagCatalogReply:
         request = read_rag("CatalogRequest", request.model_dump(mode="json"), ChatRagCatalogRequest)
@@ -358,7 +409,7 @@ class ChatRagResolutionService:
         ):
             raise ChatRagResolutionError("CHAT_KNOWLEDGE_FORBIDDEN")
 
-    def _scope(self, session: Session, scope: ChatRagScope) -> None:
+    def _scope(self, session: Session, scope: ChatRagScope) -> KnowledgeGraphSnapshotPointer:
         pointer = self.retrieval.resolve_snapshot_pointer(
             session, scope.snapshot.graph_snapshot_revision_id
         )
@@ -384,6 +435,8 @@ class ChatRagResolutionService:
             or document.get("snapshot_sha256") != scope.snapshot.sha256
         ):
             raise ChatRagResolutionError("CHAT_KNOWLEDGE_POINTER_INVALID")
+
+        return pointer
 
     @staticmethod
     def _bounded_candidates(

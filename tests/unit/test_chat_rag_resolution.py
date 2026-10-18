@@ -477,7 +477,7 @@ def test_snapshot_identity_hash_is_not_the_manifest_file_hash(
         with pytest.raises(ChatRagResolutionError):
             value._scope(session, scope())
     else:
-        value._scope(session, scope())
+        assert value._scope(session, scope()) is graph
         validate.assert_called_once_with("knowledge-graph-snapshot-manifest-v9", document)
         assert value.retrieval.artifacts.read_member.call_args.kwargs["sha256"] == manifest_hash
 

@@ -824,6 +824,7 @@ def test_chat_owner_peer_is_read_only_not_a_catalog_mutation_peer(tmp_path: Path
         assert server.peer_can_operate(left, "RESOLVE_CHAT_KNOWLEDGE")
         assert server.peer_can_operate(left, "SEARCH_CHAT_KNOWLEDGE")
         assert server.peer_can_operate(left, "CHAT_RAG")
+        assert server.peer_can_operate(left, "RESOLVE_CHAT_PRIVATE_QUERY_SCOPE")
         for operation in (
             "REGISTER_ITEM",
             "IMPORT_CONTENT",

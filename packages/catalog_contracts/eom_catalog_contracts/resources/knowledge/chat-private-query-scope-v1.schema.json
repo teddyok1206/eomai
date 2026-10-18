@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/chat-private-query-scope/1.0",
+  "title": "Pinned conversational Graph scope to exact manifest pointer; never authority",
+  "oneOf": [{"$ref": "#/$defs/request"}, {"$ref": "#/$defs/reply"}],
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "scope": {
+      "type": "object", "additionalProperties": false,
+      "required": ["snapshot", "policy"],
+      "properties": {
+        "snapshot": {
+          "type": "object", "additionalProperties": false,
+          "required": ["graph_snapshot_revision_id", "sha256"],
+          "properties": {
+            "graph_snapshot_revision_id": {"type": "string", "pattern": "^graphrev_[0-9a-f]{32}$"},
+            "sha256": {"$ref": "#/$defs/hash"}
+          }
+        },
+        "policy": {
+          "type": "object", "additionalProperties": false,
+          "required": ["access_policy_revision_id", "sha256"],
+          "properties": {
+            "access_policy_revision_id": {"type": "string", "pattern": "^accessrev_[0-9a-f]{32}$"},
+            "sha256": {"$ref": "#/$defs/hash"}
+          }
+        }
+      }
+    },
+    "request": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "operation", "actor_id", "scope", "request_sha256"],
+      "properties": {
+        "schema_version": {"const": "chat-private-query-scope-request/1.0"},
+        "operation": {"const": "RESOLVE_CHAT_PRIVATE_QUERY_SCOPE"},
+        "actor_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "request_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "reply": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "request_sha256", "status", "scope", "graph_snapshot", "error_code"],
+      "properties": {
+        "schema_version": {"const": "chat-private-query-scope-reply/1.0"},
+        "request_sha256": {"$ref": "#/$defs/hash"},
+        "status": {"enum": ["SUCCEEDED", "FAILED"]},
+        "scope": {"anyOf": [{"$ref": "#/$defs/scope"}, {"type": "null"}]},
+        "graph_snapshot": {"anyOf": [{"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"}, {"type": "null"}]},
+        "error_code": {"anyOf": [{"enum": ["CHAT_KNOWLEDGE_FORBIDDEN", "CHAT_KNOWLEDGE_POINTER_INVALID", "CHAT_KNOWLEDGE_UNAVAILABLE"]}, {"type": "null"}]}
+      },
+      "allOf": [
+        {"if": {"properties": {"status": {"const": "SUCCEEDED"}}}, "then": {"properties": {"scope": {"$ref": "#/$defs/scope"}, "graph_snapshot": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"}, "error_code": {"type": "null"}}}},
+        {"if": {"properties": {"status": {"const": "FAILED"}}}, "then": {"properties": {"scope": {"type": "null"}, "graph_snapshot": {"type": "null"}, "error_code": {"enum": ["CHAT_KNOWLEDGE_FORBIDDEN", "CHAT_KNOWLEDGE_POINTER_INVALID", "CHAT_KNOWLEDGE_UNAVAILABLE"]}}}}
+      ]
+    }
+  }
+}

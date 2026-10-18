@@ -98,6 +98,8 @@ def test_closed_schema_mirror_hash_and_318_predecessors_remain_frozen() -> None:
             # Additive contracts released after the pinned 318-schema baseline.
             "embedding-benchmark-cuda-ready",
             "general-chat-private-query-read",
+            "system-rag-private-chat-query-prepare",
+            "chat-private-query-scope",
         }
     }
     assert len(previous) == 318

@@ -34,6 +34,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "chat-private-query-scope": CatalogSchemaResource(
+            "schemas/knowledge/chat-private-query-scope-v1.schema.json",
+            "resources/knowledge/chat-private-query-scope-v1.schema.json",
+            "1.0",
+            "sha256:096505224a270455ecb603e0aed693d00e0d67ebbef8c458a922490edee4862c",
+        ),
         "system-rag-private-chat-query-prepare": CatalogSchemaResource(
             "schemas/knowledge/system-rag-private-chat-query-prepare-v1.schema.json",
             "resources/knowledge/system-rag-private-chat-query-prepare-v1.schema.json",

@@ -8,6 +8,13 @@ from pathlib import Path
 from typing import Protocol
 
 from eom_catalog_contracts import CATALOG_APPLICATION_SOCKET_PATH
+from eom_catalog_contracts.chat_private_query_scope import (
+    CHAT_PRIVATE_SCOPE_REPLY_BYTES,
+    CHAT_PRIVATE_SCOPE_REQUEST_BYTES,
+    ChatPrivateQueryScopeReply,
+    build_chat_private_query_scope_request,
+    validate_chat_private_query_scope_reply,
+)
 from eom_protocol.general_chat_grounding import (
     ChatKnowledgeCatalogReply,
     ChatKnowledgeCatalogRequest,
@@ -19,6 +26,7 @@ from eom_protocol.general_chat_grounding import (
 from eom_protocol.general_chat_rag_knowledge import (
     ChatRagCatalogReply,
     ChatRagCatalogRequest,
+    ChatRagScope,
     read_rag,
     read_rag_catalog_reply,
 )
@@ -56,6 +64,35 @@ class ChatRagKnowledgePort(Protocol):
 
 
 class CatalogChatKnowledgeClient:
+    def resolve_private_query_scope(
+        self, *, actor_id: str, scope: ChatRagScope
+    ) -> ChatPrivateQueryScopeReply:
+        """One exact semantic→manifest read; never invent a hash/pin or retry transport."""
+        request = build_chat_private_query_scope_request(actor_id, scope)
+        try:
+            value = exchange_chat_frame(
+                ChatSocketEndpoint(
+                    Path(CATALOG_APPLICATION_SOCKET_PATH),
+                    pwd.getpwnam("eom-catalog-manager").pw_uid,
+                    grp.getgrnam("eom-api").gr_gid,
+                ),
+                request.model_dump(mode="json"),
+                request_limit=CHAT_PRIVATE_SCOPE_REQUEST_BYTES,
+                reply_limit=CHAT_PRIVATE_SCOPE_REPLY_BYTES,
+                timeout=20,
+            )
+            return validate_chat_private_query_scope_reply(request, value)
+        except ChatTransportError as error:
+            raise ChatError(
+                "GENERAL_CHAT_POINTER_INVALID"
+                if error.kind == "INVALID"
+                else "GENERAL_CHAT_APPLICATION_UNAVAILABLE"
+            ) from None
+        except (ValueError, SchemaError):
+            raise ChatError("GENERAL_CHAT_POINTER_INVALID") from None
+        except (KeyError, OSError):
+            raise ChatError("GENERAL_CHAT_APPLICATION_UNAVAILABLE") from None
+
     def rag(self, request: ChatRagCatalogRequest) -> ChatRagCatalogReply:
         document = request.model_dump(mode="json")
         read_rag("CatalogRequest", document, ChatRagCatalogRequest)
