@@ -1,5 +1,90 @@
 # Private Chat QUERY preparation and finite drive
 
+## Acknowledged original continuation — 2026-10-18 design before behavior
+
+1. Extend the existing private preparation application/client, not a queue or a
+   new wire version. PREPARE remains explicit admission/drive; READ stays strictly
+   read-only. An acknowledged PENDING Workflow may have received BUSY, so it does
+   not prove a physical execution is alive.
+2. Canonical state is the original unique-origin Workflow, its validated START,
+   current live Chat origin/Identity and immutable selected request/controls.
+3. Reuse that exact request/origin/Workflow ID. No tool-sequence key, new Workflow,
+   command, query execution or latest index is allocated by continuation.
+4. Existing closed V1 schema/Pydantic request/reply checks and correlation hashes
+   remain unchanged. The client may explicitly continue only a validated PENDING
+   acknowledgement; returned non-null Workflow IDs must match that original.
+5. Reuse the Runner's current atomic native claim and exact checkpoint admission.
+   A drive offer is not permission to compute. Existing linked recovery may
+   observe/advance RUNNING work without a new Job or physical launch; do not
+   duplicate that state machine in this application or infer authority from idle.
+6. Use the existing indexed original/command lookups and single finite handle,
+   O(1) additional metadata. No schema/migration/query/index/cache or retained
+   authority is introduced by this client seam.
+7. Close the admission transaction before offering the existing single driver.
+   A competing offer coalesces; actual atomic claim/current fences remain required
+   even after a stale observation. Never invoke a model under a source-read root.
+8. Client read uses READ only. Explicit continuation sends the exact same PREPARE
+   once after known PENDING, not a hidden retry inside read. Timeout/disconnect,
+   FAILED/UNAVAILABLE or wrong original never triggers another request.
+9. Runner infrastructure owns durable eligibility; Orchestrator client owns wire
+   acknowledgement/identity validation. Workers gain no new tool or authority.
+10. BUSY preserves the original and permits a later explicit bounded continuation.
+    Unknown transport outcome triggers no automatic request. Any later explicit
+    drive still uses the original lease/checkpoint recovery boundary; no lease
+    reset, new identity or reinterpretation of failed history is permitted.
+11. A new drive message/queue is unnecessary because PREPARE already owns original
+    admission. Hiding PREPARE in a read is unsafe; an unstarted-only parallel rule
+    would incorrectly prevent supported original RUNNING/checkpoint continuation.
+    Returning BUSY as permanent failure would abandon an otherwise valid original.
+
+The consumer must still bound its own wait/progress loop and report unresolved
+PENDING honestly. This seam does not activate Chat delivery or admit native work.
+
+The concrete owner wait use case uses the existing stop Event/current worker
+deadline, capped at180s and12 progress rounds (maximum25 RPCs,5s interruptible
+spacing). It reserves the full20s one-shot RPC bound before every call, including
+after a delayed wake-up. It returns the actual last PENDING at its bound; it never
+converts that into EMPTY/READY, starts another Thread/queue, stores authority or
+holds SQL roots. Initial admission and explicit continuation are PREPARE; every
+observation is READ. Any transport/validation error propagates immediately with
+no subsequent call. Later broker/provenance/current-source delivery remains a
+separate integration, not implied by this local use case.
+
+### Implemented continuation and final source verification
+
+`PrivateChatQueryPrepareClient.read_original` makes exactly one READ; explicit
+`continue_pending_original` validates a PREPARE/PENDING acknowledgement and sends
+the exact same PREPARE bytes once. Both reject a returned different non-null
+Workflow ID. Missing/revoked/failed replies and unknown transport errors never
+cause fallback requests. `wait_for_original_private_chat_query` supplies the
+bounded/interruptible owner wait described above, returning actual canonical
+READY or unresolved PENDING without inventing empty results.
+
+Related nine suites **207 PASS /99.50s, no skips**; the initial105 overlap and
+are not added counts. Cases include real temporary kernel-peer/Unix exchanges,
+an actual shared Thread occupied by reference work then driving one original
+private Workflow after release, same-original coalescence and read-only behavior.
+Runner/model/source bodies remain declared fixtures. Fake-clock tests prove
+25-call/180s bounds, delayed-wakeup checks, stop, exact request bytes and immediate
+termination on unknown outcomes. Existing native executor/step/Runner tests cover
+their own original checkpoint fences; this is not a new actual model or DB gate.
+
+An exploratory unstarted-only application predicate was rejected before merge:
+it would incorrectly block existing RUNNING/checkpoint continuation and duplicate
+the Runner's authoritative admission. Its trial73 PASS/5 FAIL also exposed that
+the declared application fixture has no step table. The trial predicate/query
+and fixture edits were removed, restoring byte-identical application, domain,
+SQL, state, lease and persistence code. Final207 prove existing RUNNING behavior
+is preserved. No production safeguard was relaxed to hide that trial.
+
+Frozen private prepare1.0 source/mirror raw9af37ac1dab5062183336016d1522a0e167fe165b592abfc244ee8b689487656
+and worker V4/tool2/origin1 bytes are unchanged. No schema version, dependency,
+queue, database, native admission or operating default was added/changed. The
+previous121-case real PostgreSQL proof remains its historical data-layer scope.
+The new client/wait use case is not wired into the operating Chat broker yet;
+canonical provenance, truthful bounded candidate filtering and live delivery
+remain required. Existing passive owner3b0626ac and running services are intact.
+
 Design before behavior, 2026-10-18 UTC. Continues
 [initial private context selection](PRIVATE_CHAT_CONTEXT_PREPARATION.md).
 

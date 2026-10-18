@@ -8,6 +8,9 @@ import pytest
 from eom_workflow_runner.native_query_prepare_driver import NativeQueryPrepareDriver
 
 from tests.unit.test_private_chat_query_prepare_application import application as application
+from tests.unit.test_private_chat_query_prepare_application import (
+    observed_application as observed_application,
+)
 from tests.unit.test_private_chat_query_source_owner import source as source
 from tests.unit.test_reference_query_owner_admission import make_source_case
 from tests.unit.test_reference_query_prepare_application import query_runner
@@ -72,6 +75,48 @@ def test_each_public_entry_keeps_its_own_concrete_family_guard(application, refe
     assert driver.observe().workflow_id is None and not driver.observe().active
     private_run.assert_not_called()
     reference_run.assert_not_called()
+
+
+def test_busy_original_is_later_driven_once_and_read_never_drives_it(
+    observed_application, reference, monkeypatch
+):
+    value = observed_application
+    entered_reference, release_reference = Event(), Event()
+    entered_private, release_private = Event(), Event()
+    calls = []
+
+    def hold_reference(_workflow):
+        entered_reference.set()
+        assert release_reference.wait(timeout=5)
+
+    def hold_private(workflow):
+        calls.append(workflow)
+        entered_private.set()
+        assert release_private.wait(timeout=5)
+
+    monkeypatch.setattr(reference, "run_once", hold_reference)
+    monkeypatch.setattr(value.runner, "run_once", hold_private)
+    driver = NativeQueryPrepareDriver()
+    value.app.driver = driver
+    try:
+        assert driver.offer("workflow_" + "a" * 32, reference) == "STARTED"
+        assert entered_reference.wait(timeout=3)
+        first = value.app.prepare(value.source.projection.origin, value.preparation)
+        assert first.status == "PENDING" and not calls
+        read = value.app.read(value.source.projection.origin, value.preparation)
+        assert read.status == "PENDING" and not calls
+        release_reference.set()
+        driver._thread.join(timeout=3)
+        assert not driver.observe().active
+        resumed = value.app.prepare(value.source.projection.origin, value.preparation)
+        assert entered_private.wait(timeout=3)
+        repeated = value.app.prepare(value.source.projection.origin, value.preparation)
+        assert first.workflow_id == resumed.workflow_id == repeated.workflow_id
+        assert calls == [first.workflow_id] and driver.observe().active
+    finally:
+        release_reference.set()
+        release_private.set()
+        driver.close()
 
 
 def test_private_exception_has_no_automatic_retry_or_retained_authority(application, monkeypatch):
