@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/native-embedding-backend-selection/1.0",
+  "title": "Closed native deployment backend value; never installation, lease or execution admission",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "purpose",
+    "backend"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "native-embedding-backend-selection/1.0"
+    },
+    "purpose": {
+      "enum": [
+        "INDEX",
+        "REFERENCE_QUERY",
+        "PRIVATE_CHAT_QUERY"
+      ]
+    },
+    "backend": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/cpu"
+        },
+        {
+          "$ref": "#/$defs/cuda"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "runtimeVerifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_commit",
+        "script_raw_sha256"
+      ],
+      "properties": {
+        "source_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$",
+          "minLength": 40,
+          "maxLength": 40
+        },
+        "script_raw_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "cpu": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "device",
+        "runtime_verifier",
+        "cpu_environment_raw_sha256"
+      ],
+      "properties": {
+        "device": {
+          "const": "CPU"
+        },
+        "runtime_verifier": {
+          "$ref": "#/$defs/runtimeVerifier"
+        },
+        "cpu_environment_raw_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "cuda": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "device",
+        "configuration",
+        "receipt_raw_sha256",
+        "cuda_environment_raw_sha256"
+      ],
+      "properties": {
+        "device": {
+          "const": "CUDA"
+        },
+        "configuration": {
+          "$ref": "eom://schemas/knowledge/embedding-native-cuda-probe/1.0#/$defs/configurationPin"
+        },
+        "receipt_raw_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "cuda_environment_raw_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    }
+  }
+}

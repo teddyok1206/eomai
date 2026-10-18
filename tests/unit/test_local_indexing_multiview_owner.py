@@ -21,6 +21,7 @@ from eom_workflow.local_indexing_owner_configuration import (
 )
 from eom_workflow_runner import local_indexing_service_entry as entry
 from eom_workflow_runner import local_indexing_service_runtime as composition
+from eom_workflow_runner import native_cpu_scheduling_read as scheduling
 from eom_workflow_runner.local_embedding_service_reconciliation import (
     LocalEmbeddingReconciliationResult,
     ReconciliationState,
@@ -204,6 +205,8 @@ def test_exact_namespace_queue_predicate_is_selection_not_permission():
 
 def schedule(monkeypatch, stop, *, busy=False):
     clock = [0.0]
+    # These scheduler tests isolate round-robin behavior, not the separate SQL quiet gate.
+    monkeypatch.setattr(scheduling, "should_defer_background_cpu_claim", Mock(return_value=False))
     monkeypatch.setattr(entry.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(stop, "wait", lambda seconds: clock.__setitem__(0, clock[0] + seconds))
     leaves = []
@@ -224,7 +227,9 @@ def schedule(monkeypatch, stop, *, busy=False):
             )
         )
     return SimpleNamespace(
-        namespaces=tuple(leaves), configuration=SimpleNamespace(poll_interval_seconds=30)
+        engine=Mock(),
+        namespaces=tuple(leaves),
+        configuration=SimpleNamespace(poll_interval_seconds=30),
     ), clock
 
 

@@ -1155,3 +1155,47 @@ PASS를 추정하지 않는다. 입력 tag/count/type mismatch는 실패다. 실
 미래 benchmark worker 메시지는 §6의 JSON Schema를 먼저 정의하고 이 내부 값을 owner가
 materialize해야 한다. 현재 primitive는 wire JSON을 수신하거나 benchmark를 실행하지 않는다.
 단순히 warm 처리시간 하나만 비교하는 대안은 cold/query 비용과 tail 회귀를 놓치므로 부족하다.
+
+## 12. Native backend·INDEX owner protocol successor — source only
+
+2026-10-18 UTC. 이 단계는 원 설계의 **실측 우수 시 GPU 기본 전환**을 위한 작은 계약
+경계다. GPU 승리·설치·실행·기본 활성화 또는 physical lease PASS의 증거가 아니다.
+
+1. **책임:** 기존 INDEX owner의 CPU 전용 선택을 명시적인 CPU/CUDA 값으로 확장한다.
+   launcher, Workflow/Job family, source authority와 실행 state machine은 바꾸지 않는다.
+2. **canonical source:** protected owner configuration과 별도로 발행된 기존 native policy,
+   runtime bundle·설치 receipt가 원본이다. 계약에는 모델·vector bytes를 복사하지 않는다.
+3. **identity/revision:** backend selection1.0과 INDEX owner3.0을 additive하게 추가한다.
+   owner1.0/2.0 schema bytes와 해석, 현재 CPU 선택 및 immutable 이력을 보존한다.
+4. **pointer 검사:** CPU는 기존 verifier source/raw SHA와 CPU environment raw SHA를,
+   CUDA는 기존 `RootLocalNativeConfigurationPin`의 logical/revision/raw/semantic SHA,
+   receipt raw SHA와 CUDA environment raw SHA를 보유한다. 실제 존재·설치·권한·device/
+   lease/ACK/종료 증명은 다음 trusted adapter의 책임이며 DTO가 이를 승인하지 않는다.
+5. **access pattern:** 닫힌 purpose/device 선택과 단일 runtime profile key lookup이다.
+   INDEX는 INDEX purpose만 허용하며 선택 device와 profile device가 일치해야 한다.
+6. **구조:** frozen discriminated union과 최대3개의 ordered namespace tuple을 사용한다.
+   기존 verifier 값은 새 backend 계약으로 옮기되 원래 import alias와 의미를 유지하여
+   owner↔backend 순환 의존을 만들지 않는다. 새 registry/framework/dependency는 없다.
+7. **규모/복잡도:** backend 선택·최대2 policy profile 비교는 O(1), namespace 검사는
+   최대3개다. 기존64KiB owner 상한과 작은 backend canonical-byte 상한을 적용한다.
+8. **transaction/concurrency:** pure parser는 DB·파일 선택·claim을 실행하지 않는다.
+   향후 owner는 현재 policy를 resolve한 후 default/profile/backend 일치를 확인하고,
+   기존 drain·Identity/grant·encoding reservation·Registry CAS 경계를 그대로 사용한다.
+9. **dependency:** workflow/domain은 기존 Catalog contract와 identifiers만 참조한다.
+   infrastructure CUDA backend pin, SQLAlchemy, Torch, subprocess를 import하지 않는다.
+10. **실패/idempotency:** schema/hash/purpose/profile/forged-copy 불일치는 닫힌 오류다.
+    CPU fallback, latest 치환, 재키잉, launch 또는 activation을 parser에 넣지 않는다.
+11. **단순 대안:** policy `default_device`만 바꾸거나 CPU guard를 제거하면 실제 고정
+    launcher/device lifetime을 선택하지 못한다. 이번 단계는 그 계약만 정의하며 실제
+    CUDA INDEX→public/private QUERY→정확한 CPU historical read/rollback은 별도 구현과
+    genuine6회 성능·정확성·공유 lease gate 이후에만 활성화한다.
+
+Source checkpoint: backend1.0/INDEX owner3.0 schema와 packaged mirror, frozen model,
+canonical parser/public export 및 resolved policy의 semantic SHA/default/profile 일치 검사가
+추가되었다. 기존 `parse_local_indexing_owner_configuration`은1.0/2.0 전용이다.
+별도 `parse_supported_local_indexing_owner_configuration`만3.0 pure value를 읽으며,
+현재 CPU runtime은3.0을 DB engine/queue claim 전에 거부한다. old verifier import alias와
+1.0/2.0 raw schema SHA·canonical bytes는 그대로다. Source focused7suite187PASS,
+strict4/Ruff5/format5이며 실제 GPU 실행·default/retained CPU read/rollback 증거가 아니다.
+기존 multiview scheduler fixture에는 별도 CPU scheduling-read seam과 mock engine만 보완했고
+business rule을 변경하거나 실패 case를 deselect하지 않았다.

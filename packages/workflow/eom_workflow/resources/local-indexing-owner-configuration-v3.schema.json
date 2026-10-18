@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/local-indexing-owner-configuration/3.0",
+  "title": "Closed CPU/CUDA INDEX owner selection; pure value, not runtime admission",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "corpus_id",
+    "namespace",
+    "additional_namespaces",
+    "recipe",
+    "source_classes",
+    "service_policy_revision_id",
+    "service_policy_sha256",
+    "native_execution_policy",
+    "native_execution_policy_sha256",
+    "runtime_profile",
+    "database_owner",
+    "native_backend",
+    "owner_environment_raw_sha256",
+    "poll_interval_seconds",
+    "maximum_targets",
+    "maximum_sources"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-indexing-owner-configuration/3.0"
+    },
+    "corpus_id": {
+      "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0#/properties/corpus_id"
+    },
+    "namespace": {
+      "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0#/properties/namespace"
+    },
+    "additional_namespaces": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0#/properties/namespace"
+      }
+    },
+    "recipe": {
+      "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0#/properties/recipe"
+    },
+    "source_classes": {
+      "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0#/properties/source_classes"
+    },
+    "service_policy_revision_id": {
+      "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0#/properties/service_policy_revision_id"
+    },
+    "service_policy_sha256": {
+      "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0#/properties/service_policy_sha256"
+    },
+    "native_execution_policy": {
+      "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0#/properties/native_execution_policy"
+    },
+    "native_execution_policy_sha256": {
+      "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0#/properties/native_execution_policy_sha256"
+    },
+    "runtime_profile": {
+      "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0#/properties/runtime_profile"
+    },
+    "database_owner": {
+      "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0#/properties/database_owner"
+    },
+    "native_backend": {
+      "$ref": "eom://schemas/workflow/native-embedding-backend-selection/1.0",
+      "properties": {
+        "purpose": {
+          "const": "INDEX"
+        }
+      }
+    },
+    "owner_environment_raw_sha256": {
+      "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0#/properties/owner_environment_raw_sha256"
+    },
+    "poll_interval_seconds": {
+      "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0#/properties/poll_interval_seconds"
+    },
+    "maximum_targets": {
+      "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0#/properties/maximum_targets"
+    },
+    "maximum_sources": {
+      "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0#/properties/maximum_sources"
+    }
+  }
+}
