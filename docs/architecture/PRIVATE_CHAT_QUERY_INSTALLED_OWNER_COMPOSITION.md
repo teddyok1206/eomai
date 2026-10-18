@@ -211,6 +211,20 @@ introduced. CPU-prefix publication still requires the existing supported drain,
 retained predecessor, byte audit and fresh admission; it has not been invoked
 against the running INDEX prefix by this source correction.
 
+The source correction is pushed as
+`345372a3ef500e4bdfc76d4c7233ac67b8cb7053`. Its standard build-only
+three-wheel/RECORD/installed simulation PASS, with exact contract/client members
+verified in the platform ZIP. Build directory:
+`/tmp/eom-api-build/345372a3ef500e4bdfc76d4c7233ac67b8cb7053.7WeOKu/dist`.
+Platform rawb67aa1b02b42973b07b96ba7c511217a34bc00aa863f7a30217b5cea1d8ca9b1;
+API contracts rawca8cf29b46bc88750d592aca31a290755bf436f591b21806265882c963e216bd;
+API raw60c57f29403b01eba5264874a1c0c2e94f67ff32a41fe81181632bdd53ee22d1.
+The optional tmpfiles source is deployment input, not an automatically installed
+wheel member. Actual read-only OS identity lookup at04:17 UTC found owner UID990
+and Chat group GID977; it does not prove the socket exists, DAC or live origin
+authorization. No install, restart, group change, login or model run occurred.
+This checkpoint remains SOURCE_PASS/PACKAGE_PASS/NOT_INSTALLED/NOT_ACTIVE.
+
 ### Host source checkpoint — 2026-10-18 04:00 UTC
 
 The optional private listener and operation-local factory dispatch are implemented
