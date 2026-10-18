@@ -148,3 +148,15 @@ tool2 record; verify full producer/permission/replay closure before choosing tha
 design. Do not invent an implicit audit registry, silently repurpose TOPIC or
 change frozen worker/Origin bytes just to get a passing fixture. C1–C5, full
 coverage and six real CPU/CUDA/default/rollback gates remain OPEN.
+
+## Published candidate and package evidence
+
+Code candidate `16b021b25cc2408521f682e7b12fb1b77ccc3852` is pushed. Standard
+build-only three-wheel/RECORD/installed-simulation verification PASS; all five
+changed production modules in the platform wheel match the selected source bytes.
+Build directory:
+`/tmp/eom-api-build/16b021b25cc2408521f682e7b12fb1b77ccc3852.T2wQTy/dist`.
+Platform raw25d9fc5b38aed74a9d07ee8aa2c3a2c53d910bc162c7d60d7b490b6a5a87e0c5;
+API contracts rawc05103df64a904f6b1b834c8d533e52c757307f66e485efab3e7fde3fa217c7b.
+This is a developer package candidate, NOT protected installation/activation.
+The earlier actual c6c01fe7 root CUDA capture remains separate historical evidence.
