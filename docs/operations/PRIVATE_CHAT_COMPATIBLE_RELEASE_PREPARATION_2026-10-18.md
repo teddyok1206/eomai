@@ -548,3 +548,53 @@ Cleanup completed at16:07:11.389 UTC with returncode0/empty stderr; an independe
 path observation confirmed the exact disposable state directory absent. Only the
 generated disposable DB/roles/state were removed by the supported cleanup; source,
 production rows, Artifact history and the preserved test evidence were untouched.
+
+## Lineage-map release installed and recovered — 16:36 UTC
+
+The official compatible installation of source
+`3bf9ed04bacc44f8f745e31ad259697df79fdaf0`, tree
+`4853998451e18c7a7a959a69dc9ea2d3860fb9e2`, completed successfully. DB remains
+`20261017_0057`; CPU configuration/seal, INDEX18 identity/runtime/grant and the
+separate QUERY d81 and Benchmark ee SDKs are unchanged. Installed wheel hashes,
+verified against the deployment record and installed pip receipts, are:
+
+| Installed package | Actual wheel SHA-256 |
+|---|---|
+| `eom_platform` | `8809c23c8d39dbbdbdf19d740576b0ec1b544ef6e8d417447a5decc038f9e8f2` |
+| `eom_api_contracts` | `bc5574c9fac8d6e28c68346536950e78059b483bbe4571b2ff7ca4cae5815aa0` |
+| `eom_application_api` | `29c1e80acab70d6a547c2a3e79d996ce92aa5ea3a286bd4d452108463769d814` |
+
+These are actual installation wheels, not build-only wheel hashes. The source-only
+Catalog drop-in CAS preceded installation. After the normal five-service restop,
+the exact three-file QUERY provider CAS advanced only the API provider derivation,
+private reference-configuration digest and QUERY unit digests. ALL/PAST_EXAM,
+private policy, CPU and INDEX controls were retained. Official Chat restoration
+then selected shared source3bf while preserving its model, verified CLI0.162.1,
+RAG policy and READ_ONLY/NATIVE_TOPIC flags; no auth or CLI identity was recaptured.
+
+At16:36 UTC the operator observed all ten services active, API live/ready and QUERY
+READY. INDEX18 resumed normally with the same identity (invocation prefix
+`9e858`); this startup observation is not a corpus coverage or throughput claim.
+Evidence in `/tmp/eom-lineage-map-release.ZD9x5SZY`, raw SHA-256:
+
+- `installation-result.json`:
+  `9709299c05f89cc1d2274111c911be158bb81bd55b8ea7172a32ad715f606a29`;
+- `installed-3bf9ed04-provider-metadata.json`:
+  `a7dd1c0c0c1253f81ea28a56cd433a8d11d78bbe75d2fa5e017115dd857789d1`;
+- `installed-3bf9ed04-provider-observation-result.json`:
+  `d15bf45477a4fc57a633f9977fb980a1a75c09cd2cc907ac86fc15646ec12a59`;
+- `restore-chat-result.json`:
+  `64c2ecc11365bc9c0a091eaf190fd0ab2af662c33a07579ee38d97c72ca41764`.
+
+The exact three-file SELECT receipt is
+`/tmp/eom-query-provider-rebind.NyluUYK6/query-provider-config-SELECT-result.json`,
+raw `dd68575f840142a1b48a765874c7c1ca9defc11fe092370497e5af73226411ae`.
+
+At16:39 UTC a separate eight-file finite successor stage passed. One normal
+main-only INDEX drain was requested for that prepared finite workflow; the other
+nine services remained active. This later request does not claim that INDEX is
+still running or already quiescent. No new login had yet been requested. The
+successful15:40 login and failed C1 deadline evidence above remain historical
+evidence, not erased or converted to a pass. Deployed read latency, authenticated
+C1 delivery, C2–C5, the original six measurements/finalization and the conditional
+device/default decision remain unverified by this recovery checkpoint. **Full goal OPEN.**
