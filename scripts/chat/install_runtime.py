@@ -172,6 +172,20 @@ def require_pinned_model_selection(
     source_commit: str,
 ) -> ChatOwnerConfiguration:
     """Pin-only selection preserves the existing released model and RAG authority."""
+    current = read_selected_model_configuration(secret=secret, source_commit=source_commit)
+    if (
+        current.model != model
+        or current.rag_policy is None
+        or (rag_policy is not None and rag_policy != current.rag_policy)
+    ):
+        raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
+    return current
+
+
+def read_selected_model_configuration(
+    *, secret: dict[str, str], source_commit: str
+) -> ChatOwnerConfiguration:
+    """Read the current protected selection; never recapture CLI identity implicitly."""
     values = read_chat_environment(CONFIG_ROOT / "general-chat-model.env", uid=0, gid=0, mode=0o600)
     allowed = {
         "EOM_GENERAL_CHAT_MODEL",
@@ -184,16 +198,9 @@ def require_pinned_model_selection(
     }
     if set(values) - allowed:
         raise ChatError("GENERAL_CHAT_OWNER_CONFIGURATION_INVALID")
-    current = ChatOwnerConfiguration.from_environment(
+    return ChatOwnerConfiguration.from_environment(
         secret | {"EOM_RUNTIME_SOURCE_COMMIT": source_commit} | values
     )
-    if (
-        current.model != model
-        or current.rag_policy is None
-        or (rag_policy is not None and rag_policy != current.rag_policy)
-    ):
-        raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
-    return current
 
 
 def source_endpoint_preflight(commit: str) -> tuple[bytes, bool]:
@@ -322,6 +329,7 @@ def stage(
     *,
     runtime_commit: str | None = None,
     previous_runtime_commit: str | None = None,
+    previous_unit_commit: str | None = None,
     rag_policy: ChatRagPolicy | None = None,
     previous_model_config_sha256: str | None = None,
     pin_codex_runtime: bool = False,
@@ -329,6 +337,16 @@ def stage(
     similarity_search: bool | None = None,
 ) -> None:
     require_source(commit, model)
+    if (
+        previous_unit_commit is not None
+        and re.fullmatch(r"[0-9a-f]{40}", previous_unit_commit) is None
+    ):
+        raise ChatError("GENERAL_CHAT_INSTALL_TARGET_INVALID")
+    # Unit and installed Python releases have independent immutable histories.
+    # An exact unit predecessor never substitutes for the release-env CAS pin.
+    unit_predecessor = (
+        previous_runtime_commit if previous_unit_commit is None else previous_unit_commit
+    )
     selected = runtime_commit or commit
     require_compatible_runtime(commit, selected)
     for parent in (UNIT_ROOT, CONFIG_ROOT):
@@ -348,6 +366,14 @@ def stage(
     if set(secret) != {"EOM_GENERAL_CHAT_DATABASE_URL"}:
         raise ChatError("GENERAL_CHAT_OWNER_CONFIGURATION_INVALID")
     native_guard: CodexCliIdentityGuard | None = None
+    selected_native_runtime: CodexCliIdentity | None = None
+    if not pin_codex_runtime and previous_model_config_sha256 is not None:
+        current = read_selected_model_configuration(secret=secret, source_commit=selected)
+        selected_native_runtime = current.native_runtime
+        if private_query_source is None:
+            private_query_source = current.private_query_source
+        if similarity_search is None:
+            similarity_search = current.similarity_search
     if pin_codex_runtime:
         pinned = require_pinned_model_selection(
             model, rag_policy=rag_policy, secret=secret, source_commit=selected
@@ -360,11 +386,12 @@ def stage(
         private_query_source = pinned.private_query_source
         similarity_search = pinned.similarity_search
         native_guard = capture_codex_cli_identity(CODEX_BINARY)
+        selected_native_runtime = native_guard.identity
     configs = configuration_payloads(
         selected,
         model,
         rag_policy=rag_policy,
-        native_runtime=native_guard.identity if native_guard is not None else None,
+        native_runtime=selected_native_runtime,
         private_query_source=private_query_source is True,
         similarity_search=similarity_search is True,
     )
@@ -429,19 +456,19 @@ def stage(
     existing_units = {}
     for target, payload in unit_payloads.items():
         if (
-            pin_codex_runtime
+            target.exists()
             and read_chat_preparation_file(target, uid=0, gid=0, mode=0o644) == payload
         ):
             existing_units[target] = True
             continue
-        if previous_runtime_commit is not None:
+        if unit_predecessor is not None:
             prior = subprocess.check_output(
                 [
                     "git",
                     "-C",
                     str(REPOSITORY),
                     "show",
-                    f"{previous_runtime_commit}:infra/systemd/{target.name}",
+                    f"{unit_predecessor}:infra/systemd/{target.name}",
                 ],
                 timeout=20,
             )
@@ -550,6 +577,10 @@ def main() -> int:
         "--previous-runtime-commit",
         help="Exact stopped-runtime predecessor for nonsecret pin update",
     )
+    parser.add_argument(
+        "--previous-unit-commit",
+        help="Exact unit-source predecessor; does not override the installed runtime pin",
+    )
     parser.add_argument("--rag-policy-revision-id")
     parser.add_argument("--rag-policy-sha256")
     parser.add_argument("--previous-model-config-sha256")
@@ -583,6 +614,7 @@ def main() -> int:
             args.model,
             runtime_commit=args.runtime_commit,
             previous_runtime_commit=args.previous_runtime_commit,
+            previous_unit_commit=args.previous_unit_commit,
             rag_policy=rag_policy,
             previous_model_config_sha256=args.previous_model_config_sha256,
             pin_codex_runtime=args.pin_codex_runtime,

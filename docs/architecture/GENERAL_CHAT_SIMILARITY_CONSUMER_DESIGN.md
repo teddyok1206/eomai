@@ -1,6 +1,7 @@
 # Claim-scoped Chat similarity consumer
 
-Status: implementation candidate; not operating activation or full goal acceptance.
+Status: source/package passed and protected passive owner installed; not selected,
+operating activation or full goal acceptance.
 
 Source candidate `b01095b8`: final423 source tests, strict10 modules, formatting/
 lint17 files, no-ML owner import and three-wheel RECORD/ten-member source match
@@ -82,3 +83,43 @@ latching, original READ correlation, current actor/source rechecks, filtered nat
 ordering and duplicate conflict, unchanged READ/RAG/RECENT/EXAM, atomic publication,
 legacy replay and missing/tampered companion tests. Source/package tests are not
 production activation, GPU performance or current full-corpus coverage evidence.
+
+## Coherent operating rollout boundary — 2026-10-18
+
+The fixed protected observer at06:36:58 UTC confirms both private CPU/prepare
+templates, their owner environment and private run/staging directories are still
+absent. The currently selected QUERY owner0fab624c also lacks its private launcher
+module. These missing components cannot be repaired by enabling a Chat flag.
+
+Prestage the already-verified b01095b8 two-wheel owner release through the existing
+root-owned installer, with exact wheel hashes and dropped-UID/no-capability import
+checks. This only creates its new immutable release directory; no selector, unit,
+model, DB, privilege or numerical prefix is changed. The existing INDEX/QUERY
+controllers, sealed CPU environment and old owner releases remain untouched.
+
+Before any later numerical prefix/selector mutation, separately fix the exact
+operating API/Catalog/Chat/QUERY/INDEX releases, migration and configuration pins,
+then use supported natural drain. Retain full predecessor bytes and all work.
+Stage the private numerical successor, verify unchanged numerical/model recipes,
+freshly audit/probe/seal its actual file epoch, and coherently select compatible
+controls only while affected owners are stopped. Path restoration alone is not
+accepted rollback; it too requires fresh admission and the compatible controls.
+Private source endpoint, private policy/owner configuration, exact start-only
+polkit rule and approved migration must be verified before selecting the optional
+Chat consumer. Real current-actor source/query delivery is a separate final gate.
+
+No historical failed execution is reset or repaired, no fresh-auth denial is
+converted into a session grant, and no runtime is labelled active merely because
+its passive release directory is present. The unattended no-prompt window remains
+in force during these steps.
+
+Actual OS review also found the current Chat process UID980/GID985 has groups
+978/985/1000, but the fixed private prepare endpoint requires its own account's
+primary group `eom-general-chat` (GID977). `Group=eom-api` in the service overrides
+the account group; it is not implicitly retained. Explicitly retain that one own
+group in the Chat **owner service's** SupplementaryGroups. No worker/account group
+membership, API/DB role, socket mode, kernel peer allowlist or policy is changed.
+The source unit and regression test protect this composition invariant; actual
+group/DAC/peer verification remains required after a coordinated service rollout.
+This unit fix is a separate release component; the already frozen b01095b8 code/
+wheels/adjacent migration stages are not rewritten to pretend it was present.

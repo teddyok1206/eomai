@@ -426,6 +426,34 @@ Exit: 최소 기출변형의 실제 공통 경로가 닫히고 다른 소비자�
 
 Exit: 준비됨·대기·실패·차단 coverage가 정확하고, 기존 기능은 회귀 없이 유지된다.
 
+### 진행 재점검 — 2026-10-18 UTC
+
+사용자의 계획 재점검 요청에 따라 §1–10의 원래 목표를 다시 기준으로 삼는다.
+초기 1~2일 가정보다 오래 걸렸고 운영 준비와 작은 계약 검증이 늘어났다. 테스트 개수나
+문서 수를 진척의 대체 지표로 삼지 않는다. 이미 통과한 고정 입력·패키지·설치 검증은
+변경 영향이 없는 한 재사용하고, 앞으로는 아래 수직 경로의 실제 종료 증거를 우선한다.
+
+1. **진행 중인 배포 조합 수정만 닫기:** Chat owner의 자기 그룹 누락, 실제로 다른
+   Python/unit predecessor, 기능 선택 갱신 중 검증된 Codex identity 유실을 수정·회귀한다.
+   새 queue/framework/schema/권한 예외는 추가하지 않는다. 기존 b01095b8 보호 설치와
+   55→56→57 단계는 보존하며, 후속 수정이 포함된 것으로 과거 패키지를 재표기하지 않는다.
+2. **기존 기능의 끝단 확인:** 공통 후보 조회 → 기출변형 → 출제·최대3교 검토 → Chat·
+   시험지 관측 순서의 설치/활성/전달 증거를 대조한다. 현재 실제 QUERY 성공 이력은
+   후속 context HTTP 조회 성공이 아니며, 기존503/재인증 거부 기록을 그대로 보존한다.
+   Chat 준비가 다른 소비자의 실제 연결 완료를 대신하지 않는다.
+3. **학습→검색 준비의 실제 종료:** 현재 eligible source/report 기준 coverage를 확인하고,
+   기존 자동 인덱싱을 유지하면서 승인된 seed/delta/reuse의 encode count와 pointer를 검증한다.
+   현재 부분 coverage와 view별 binding 합계를 전체 문항 수로 해석하지 않는다.
+4. **고정 CPU/GPU 비교와 결정:** 원래 여섯 실행·정확성·순위·자원·lease gate 그대로
+   측정한다. 우수하면 일관된 query/document GPU space와 실제 CPU rollback까지 확인한다.
+   아직 실행하지 않은 성능 측정을 준비/파일 검증으로 대체하지 않는다.
+5. **최종 원안 대조:** 소비자별 실제 상태, 자동 증분·재사용·철회·복구와 device 선택을
+   §10에 대응시켜 보고한다. 사람 교육 품질 평가를 새 필수 조건으로 추가하지 않는다.
+
+무인 창의 인증 제한은 §8 그대로다. 유효한 권한이 필요한 단계는 실제 continuation이
+있을 때만 수행하며, 없다면 그 단계만 대기로 두고 독립적인 위 작업을 진행한다.
+새 기능을 발견했다는 이유만으로 범위를 넓히거나, 기존 전체 목표를 축소하지 않는다.
+
 ## 10. 필수 테스트와 전체 완료 기준
 
 - missing/stale target·schema/media/hash mismatch·immutable revision·duplicate refs.
@@ -513,6 +541,10 @@ provenance/1.0을 바꾸지 않고 PENDING/UNAVAILABLE/UNKNOWN도 정직하게 �
 [연결 설계와 정확한 경계](GENERAL_CHAT_SIMILARITY_CONSUMER_DESIGN.md).
 최종423개 소스 테스트·타입10모듈·패키지/RECORD·정확한 구성원10개 대조를 통과했다.
 [이번 실제 검증과 미설치·미활성 범위](../status/CHAT_SIMILARITY_CONSUMER_CHECKPOINT_2026-10-18.md).
+후속 실제 보호 폴더의 비활성 설치와 전용 UID/zero-capability import, 두 인접 migration
+단계의 설치 검증까지 마쳤다. 지원된 읽기 전용 콜백에서 운영 DB55를 재확인했으며,
+DDL·서비스 전환·수치 환경 변경·로그인 우회는 수행하지 않았다.
+[현재 설치 준비와 아직 남은 운영 전환](../operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md).
 
 ## 부록 — ChatGPT 기능에서 대화 삭제 추가하기
 

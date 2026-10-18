@@ -437,6 +437,182 @@ def test_application_release_advance_remains_separate_from_native_selection_cas(
     assert value.events.count("write-config") == 2
 
 
+def test_unit_predecessor_is_independent_of_runtime_and_exact_unit_replay_is_accepted(
+    installed_runtime: InstallationHarness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    value = installed_runtime
+    previous_runtime, previous_unit = "d" * 40, "e" * 40
+    value.release.write_bytes(f"EOM_RUNTIME_SOURCE_COMMIT={previous_runtime}\n".encode())
+    previous_payloads = {
+        unit: (installation.UNIT_ROOT / unit).read_bytes() for unit in installation.UNITS
+    }
+    desired_payloads = {
+        unit: payload + b"new-unit\n" for unit, payload in previous_payloads.items()
+    }
+    reads = []
+
+    def read_unit(command: list[str], **_kw: Any) -> bytes:
+        revision, path = command[-1].split(":", 1)
+        reads.append(revision)
+        assert revision in {COMMIT, previous_unit}
+        return (desired_payloads if revision == COMMIT else previous_payloads)[Path(path).name]
+
+    monkeypatch.setattr(subprocess, "check_output", read_unit)
+    installation.stage(
+        COMMIT,
+        MODEL,
+        previous_runtime_commit=previous_runtime,
+        previous_unit_commit=previous_unit,
+        rag_policy=POLICY,
+    )
+    assert previous_unit in reads and previous_runtime not in reads
+    assert value.release.read_bytes() == f"EOM_RUNTIME_SOURCE_COMMIT={COMMIT}\n".encode()
+    first_epochs = {}
+    for unit, payload in desired_payloads.items():
+        path = installation.UNIT_ROOT / unit
+        assert path.read_bytes() == payload and path.stat().st_mode & 0o777 == 0o644
+        first_epochs[unit] = (path.stat().st_ino, path.stat().st_mtime_ns)
+    # An already-installed desired unit is not rechecked against its old predecessor.
+    installation.stage(COMMIT, MODEL, previous_unit_commit=previous_unit, rag_policy=POLICY)
+    for unit, epoch in first_epochs.items():
+        actual = (installation.UNIT_ROOT / unit).stat()
+        assert (actual.st_ino, actual.st_mtime_ns) == epoch
+
+
+@pytest.mark.parametrize("invalid", ["", "latest", "a" * 39, "A" * 40, "b" * 41])
+def test_unit_predecessor_requires_an_exact_immutable_commit_before_any_writes(
+    installed_runtime: InstallationHarness, invalid: str
+) -> None:
+    value = installed_runtime
+    before = value.release.read_bytes()
+    with pytest.raises(ChatError, match="TARGET_INVALID"):
+        installation.stage(COMMIT, MODEL, previous_unit_commit=invalid)
+    assert value.target.read_bytes() == value.before and value.release.read_bytes() == before
+    assert "write-config" not in value.events and "daemon-reload" not in value.events
+
+
+@pytest.mark.parametrize("conflict", ["unit", "runtime"])
+def test_separate_unit_pin_does_not_bypass_unit_or_runtime_predecessor_conflicts(
+    installed_runtime: InstallationHarness, monkeypatch: pytest.MonkeyPatch, conflict: str
+) -> None:
+    value = installed_runtime
+    previous_runtime, previous_unit = "d" * 40, "e" * 40
+    value.release.write_bytes(f"EOM_RUNTIME_SOURCE_COMMIT={previous_runtime}\n".encode())
+    before_release = value.release.read_bytes()
+    unit_before = {
+        unit: (installation.UNIT_ROOT / unit).read_bytes() for unit in installation.UNITS
+    }
+
+    def read_unit(command: list[str], **_kw: Any) -> bytes:
+        revision = command[-1].split(":", 1)[0]
+        return b"desired-unit\n" if revision == COMMIT else b"not-installed-predecessor\n"
+
+    monkeypatch.setattr(subprocess, "check_output", read_unit)
+    with pytest.raises(ChatError, match="TARGET_CONFLICT"):
+        installation.stage(
+            COMMIT,
+            MODEL,
+            previous_runtime_commit=previous_runtime if conflict == "unit" else "f" * 40,
+            previous_unit_commit=previous_unit,
+            rag_policy=POLICY,
+        )
+    assert (
+        value.release.read_bytes() == before_release and value.target.read_bytes() == value.before
+    )
+    assert all(
+        (installation.UNIT_ROOT / unit).read_bytes() == payload
+        for unit, payload in unit_before.items()
+    )
+    assert "write-config" not in value.events and "daemon-reload" not in value.events
+
+
+@pytest.mark.parametrize("enable_source", [False, True])
+def test_normal_release_update_preserves_native_identity_without_implicit_cli_capture(
+    installed_runtime: InstallationHarness, monkeypatch, tmp_path, enable_source
+) -> None:
+    value = installed_runtime
+    previous_runtime = "d" * 40
+    value.target.write_bytes(value.desired)
+    value.release.write_bytes(f"EOM_RUNTIME_SOURCE_COMMIT={previous_runtime}\n".encode())
+    existing = value.target.read_bytes()
+    monkeypatch.setattr(
+        installation, "source_endpoint_preflight", lambda _: (b"fixed-source-policy", True)
+    )
+    monkeypatch.setattr(
+        installation, "source_endpoint", lambda: SimpleNamespace(path=tmp_path / "source.sock")
+    )
+    installation.stage(
+        COMMIT,
+        MODEL,
+        previous_runtime_commit=previous_runtime,
+        previous_model_config_sha256=sha256_bytes(existing),
+        rag_policy=POLICY,
+        private_query_source=enable_source,
+        similarity_search=enable_source,
+    )
+    expected = installation.configuration_payloads(
+        COMMIT,
+        MODEL,
+        rag_policy=POLICY,
+        native_runtime=IDENTITY,
+        private_query_source=enable_source,
+        similarity_search=enable_source,
+    )[value.target]
+    assert value.target.read_bytes() == expected
+    assert value.release.read_bytes() == f"EOM_RUNTIME_SOURCE_COMMIT={COMMIT}\n".encode()
+    assert "capture-cli" not in value.events
+
+
+def test_normal_update_preserves_existing_source_and_similarity_selection_when_unspecified(
+    installed_runtime: InstallationHarness, monkeypatch, tmp_path
+) -> None:
+    value = installed_runtime
+    previous_runtime = "d" * 40
+    current = installation.configuration_payloads(
+        previous_runtime,
+        MODEL,
+        rag_policy=POLICY,
+        native_runtime=IDENTITY,
+        private_query_source=True,
+        similarity_search=True,
+    )[value.target]
+    value.target.write_bytes(current)
+    value.release.write_bytes(f"EOM_RUNTIME_SOURCE_COMMIT={previous_runtime}\n".encode())
+    monkeypatch.setattr(
+        installation, "source_endpoint_preflight", lambda _: (b"fixed-source-policy", True)
+    )
+    monkeypatch.setattr(
+        installation, "source_endpoint", lambda: SimpleNamespace(path=tmp_path / "source.sock")
+    )
+    installation.stage(
+        COMMIT,
+        MODEL,
+        previous_runtime_commit=previous_runtime,
+        previous_model_config_sha256=sha256_bytes(current),
+        rag_policy=POLICY,
+    )
+    assert value.target.read_bytes() == current and "capture-cli" not in value.events
+
+
+def test_normal_native_preservation_does_not_bypass_model_configuration_cas(
+    installed_runtime: InstallationHarness,
+) -> None:
+    value = installed_runtime
+    value.target.write_bytes(value.desired)
+    original_release = value.release.read_bytes()
+    with pytest.raises(ChatError, match="TARGET_CONFLICT"):
+        installation.stage(
+            COMMIT,
+            MODEL,
+            previous_runtime_commit=COMMIT,
+            previous_model_config_sha256="sha256:" + "f" * 64,
+            rag_policy=POLICY,
+        )
+    assert value.target.read_bytes() == value.desired
+    assert value.release.read_bytes() == original_release
+    assert "capture-cli" not in value.events and "write-config" not in value.events
+
+
 @pytest.mark.parametrize("change", ["model", "rag", "legacy", "extra", "partial-native"])
 def test_native_pin_capture_cannot_change_or_discard_existing_model_or_rag(
     installed_runtime: InstallationHarness, change: str
@@ -500,3 +676,29 @@ def test_native_pin_flag_is_explicit_and_routed_to_the_installer_without_model_o
     assert calls[0][0] == (COMMIT, MODEL)
     assert calls[0][1]["pin_codex_runtime"] is True
     assert calls[0][1]["rag_policy"] is None
+
+
+def test_cli_routes_independent_unit_predecessor_without_replacing_runtime_predecessor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    previous_runtime, previous_unit = "d" * 40, "e" * 40
+    calls = []
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "installer",
+            "stage",
+            COMMIT,
+            MODEL,
+            "--previous-runtime-commit",
+            previous_runtime,
+            "--previous-unit-commit",
+            previous_unit,
+        ],
+    )
+    monkeypatch.setattr(installation, "stage", lambda *args, **kw: calls.append((args, kw)))
+    assert installation.main() == 0
+    assert calls[0][0] == (COMMIT, MODEL)
+    assert calls[0][1]["previous_runtime_commit"] == previous_runtime
+    assert calls[0][1]["previous_unit_commit"] == previous_unit

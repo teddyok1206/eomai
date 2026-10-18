@@ -11,7 +11,8 @@ User=eom-general-chat
 Group=eom-api
 # Only the Orchestrator owner commits NAS and calls the private worker socket.
 # The isolated worker is not granted these supplementary groups.
-SupplementaryGroups=eom eom-cdx-chat
+# Group=eom-api replaces the account's primary group; retain its own private RPC group.
+SupplementaryGroups=eom eom-cdx-chat eom-general-chat
 WorkingDirectory=/var/lib/eom-general-chat
 Environment=LANG=C.UTF-8
 EnvironmentFile=/etc/eom/secrets/general-chat.env

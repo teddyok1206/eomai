@@ -190,3 +190,23 @@ def test_systemd_units_keep_separate_capacity_durable_handoff_and_graceful_drain
         assert "Restart=on-failure" in value and "StartLimitBurst=5" in value
         assert "python -I -m eom_orchestrator.general_chat_" in value
         assert "PYTHONPATH=" not in value and "codex auth" not in value
+
+
+def test_chat_owner_retains_its_own_group_for_fixed_private_query_socket():
+    # A service Group override omits the account's primary GID from initgroups.
+    # The private QUERY parent/socket use that named group, not eom-api.
+    owner = (ROOT / "infra/systemd/eom-general-chat.service").read_text()
+    fields = dict(
+        line.split("=", 1)
+        for line in owner.splitlines()
+        if line.startswith(("User=", "Group=", "SupplementaryGroups="))
+    )
+    assert fields["User"] == "eom-general-chat" and fields["Group"] == "eom-api"
+    assert set(fields["SupplementaryGroups"].split()) == {
+        "eom",
+        "eom-cdx-chat",
+        "eom-general-chat",
+    }
+    worker = (ROOT / "infra/systemd/eom-general-chat-worker.service").read_text()
+    assert "SupplementaryGroups=" not in worker
+    assert "User=eom-cdx-chat\nGroup=eom-cdx-chat\n" in worker
