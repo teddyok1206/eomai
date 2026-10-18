@@ -435,6 +435,9 @@ NOT_IMPLEMENTED / NOT_EVALUATED`를 구분한다. 기존 corpus의 학습 완료
 
 ## 11. 코드 근거와 관련 문서
 
+- [채팅 QUERY 접수·공유 실행·완료 읽기](PRIVATE_CHAT_QUERY_PREPARE_APPLICATION.md):
+  원래 대화 요청의 Workflow/START를 먼저 확정하고, 기존 실행 핸들과 정본 읽기를 연결한다.
+  새 검색 도구·워커 프로토콜·운영 활성화와 실제 소스/권한 검증은 별도 경계다.
 - [CPU/GPU 비교의 공통 CUDA 설치 읽기](EMBEDDING_BENCHMARK_CUDA_CAPTURE.md):
   native 실행기의 인터프리터 검사를 유지하면서 root 비교 관리자가 같은 보호 파일·자원
   관찰을 재사용한다. 실제 namespace·모델 실행·사용자 인증·기본값 승인을 대신하지 않는다.

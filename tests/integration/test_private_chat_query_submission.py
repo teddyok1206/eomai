@@ -40,7 +40,7 @@ from eom_workflow_runner.private_chat_query_owner_admission import (
     CatalogPrivateChatQueryOwnerAdmission,
 )
 from eom_workflow_runner.private_chat_query_submission import start_private_chat_query_in_session
-from eom_workflow_runner.repository import create_workflow_instance
+from eom_workflow_runner.repository import CommandType, create_workflow_instance
 from eom_workflow_runner.state_machine import WorkflowState, transition_workflow
 from sqlalchemy import func, select
 
@@ -404,3 +404,90 @@ def test_postgres_submission_rejects_unrelated_pending_writes_before_autoflush(s
         )
     assert retained_rows(value) == ((), ())
     assert value.executor.mock_calls == []
+
+
+def preparation_application(value):
+    from eom_workflow_runner.private_chat_query_prepare_application import (
+        NativePrivateChatQueryPreparation,
+    )
+
+    from tests.unit.test_private_chat_query_preparation import initial_selection
+    from tests.unit.test_private_chat_query_prepare_application import private_runner
+
+    offers = []
+
+    def offer(workflow_id, _runner):
+        # Independent connection proves original Workflow/START commit precedes
+        # dispatch; seeing ORM objects in the same root would not prove this.
+        workflows, commands = retained_rows(value)
+        assert tuple(row.workflow_id for row in workflows) == (workflow_id,)
+        assert len(commands) == 1 and commands[0].command_type == CommandType.START_WORKFLOW.value
+        offers.append(workflow_id)
+        return "BUSY"
+
+    runner = private_runner(value.source, value.owner, value.executor)
+    app = NativePrivateChatQueryPreparation(
+        owner=value.owner,
+        executor=value.executor,
+        runner=runner,
+        driver=SimpleNamespace(offer_private_chat_query=offer),
+    )
+    return app, initial_selection(value), offers
+
+
+def test_postgres_private_application_commits_before_offer_and_replays_without_recapture(
+    submission, monkeypatch
+):
+    value = submission
+    app, selection, offers = preparation_application(value)
+    first = app.prepare(value.context.origin, selection)
+    assert first.status == "PENDING"
+    monkeypatch.setattr(
+        value.owner.catalog,
+        "prepare_private_chat_context_in_session",
+        Mock(side_effect=AssertionError("recapturing original private context")),
+    )
+    replay = app.prepare(value.context.origin, selection)
+    assert first == replay and offers == [first.workflow_id, first.workflow_id]
+    workflows, commands = retained_rows(value)
+    assert len(workflows) == len(commands) == 1
+    assert TEXT not in canonical_json_bytes(workflows[0].runtime_context).decode()
+    assert value.executor.mock_calls == []
+
+
+def test_postgres_private_application_late_source_denial_preserves_original_without_new_offer(
+    submission,
+):
+    value = submission
+    app, selection, offers = preparation_application(value)
+    first = app.prepare(value.context.origin, selection)
+    value.source.fault.value = "public_during_private_auth"
+    with pytest.raises(SimilarityContextReadError):
+        app.prepare(value.context.origin, selection)
+    workflows, commands = retained_rows(value)
+    assert tuple(row.workflow_id for row in workflows) == (first.workflow_id,)
+    assert workflows[0].state == "REQUESTED" and len(commands) == 1
+    assert offers == [first.workflow_id] and value.executor.mock_calls == []
+
+
+def test_postgres_private_application_failed_history_is_not_replaced_or_driven(submission):
+    value = submission
+    app, selection, offers = preparation_application(value)
+    first = app.prepare(value.context.origin, selection)
+    _, commands = retained_rows(value)
+    with value.publisher.sessions.begin() as session:
+        transition_workflow(
+            session,
+            first.workflow_id,
+            WorkflowState.FAILED,
+            "SYNTHETIC_PRIVATE_FAILURE",
+            actor_type="human",
+            actor_id=value.context.origin.actor_id,
+            command_id=commands[0].command_id,
+        )
+    replay = app.prepare(value.context.origin, selection)
+    assert replay.status == "FAILED" and replay.workflow_id == first.workflow_id
+    assert replay.failure_code == "PRIVATE_CHAT_QUERY_EXECUTION_FAILED"
+    workflows, commands = retained_rows(value)
+    assert len(workflows) == len(commands) == 1 and workflows[0].state == "FAILED"
+    assert offers == [first.workflow_id] and value.executor.mock_calls == []

@@ -5,7 +5,7 @@ from threading import Barrier, Event, Timer
 from unittest.mock import Mock
 
 import pytest
-from eom_workflow_runner import reference_query_prepare_driver as driver_module
+from eom_workflow_runner import native_query_prepare_driver as driver_module
 from eom_workflow_runner.reference_query_execution_port import ReferenceQueryNativeExecutor
 from eom_workflow_runner.reference_query_prepare_driver import ReferenceQueryPrepareDriver
 from eom_workflow_runner.repository import CommandExecutionFamily, NativeCommandActorSelection

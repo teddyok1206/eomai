@@ -92,3 +92,8 @@ canonical private context/receipt provenance even when workers receive ordinary
 discovery cards. New internal owner messages require schema-first contracts;
 changing worker prompt/tool/result meaning requires an explicit successor, not
 unversioned fields or pretending legacy bytes already permit them.
+
+The next owner application joins this existing first-capture/atomic-start boundary
+to one shared finite native drive and the existing canonical completed read:
+[private QUERY prepare application](PRIVATE_CHAT_QUERY_PREPARE_APPLICATION.md).
+That source seam is not private-policy admission, a new Chat tool or activation.

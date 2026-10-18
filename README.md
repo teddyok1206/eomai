@@ -524,6 +524,13 @@ DB 단계 연결은 당시 미완료였습니다. [원본 접수·동시성·롤
 검증은 대역 권한·대화·수치 모델을 사용했으며 운영 채팅 도구 연결은 아직 남아 있습니다.
 [최초 참조 선택과 실제 검증 범위](docs/architecture/PRIVATE_CHAT_CONTEXT_PREPARATION.md)
 
+그 준비를 원래 Workflow 접수·공유 QUERY 실행·정본 완료 읽기와 묶는 진입점도 추가했습니다
+(**SOURCE_AND_DISPOSABLE_PASS / NOT_ACTIVE**). 실행 전 접수를 먼저 확정하고, 재전송·
+권한 철회·실패 이력은 원래 작업에서 처리합니다. 기존 기출 QUERY와 실행 핸들을 공유하되
+서로 다른 목적의 요청을 섞지 않습니다. 소스597/23묶음·strict5·임시 PostgreSQL103·정리 PASS입니다.
+채팅 도구의 실제 벡터 후보 전달·운영 활성화는 아직 남아 있으며 기본값은 CPU입니다.
+[준비·실행·읽기 연결과 검증 범위](docs/architecture/PRIVATE_CHAT_QUERY_PREPARE_APPLICATION.md)
+
 아래는 날짜·후보별 역사적 구현 기록입니다. 당시의 미완료 표기는 현재 종합 상태와
 구별하며, 최신 실제 실행·활성화 범위는 위 표와 연결된 상태 문서를 기준으로 합니다.
 

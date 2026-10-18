@@ -35,6 +35,10 @@ from sqlalchemy import select
 
 from eom_workflow_runner.engine import WorkflowRunner
 from eom_workflow_runner.models import WorkflowCommandRecord
+from eom_workflow_runner.native_query_prepare_runner import (
+    NativeQueryDriveOffer as ReferenceQueryDriveOffer,
+)
+from eom_workflow_runner.native_query_prepare_runner import require_reference_query_prepare_runner
 from eom_workflow_runner.reference_query_consumer_read import CatalogCompletedReferenceQueryRead
 from eom_workflow_runner.reference_query_execution_port import ReferenceQueryNativeExecutor
 from eom_workflow_runner.reference_query_owner_admission import CatalogReferenceQueryOwnerAdmission
@@ -42,9 +46,7 @@ from eom_workflow_runner.reference_query_preparation import (
     ReferenceQueryPreparationUnavailable,
     prepare_and_start_reference_query_selection_in_session,
 )
-from eom_workflow_runner.repository import CommandExecutionFamily, NativeCommandActorSelection
 
-type ReferenceQueryDriveOffer = Literal["STARTED", "ALREADY_ACTIVE", "BUSY", "UNAVAILABLE"]
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -52,24 +54,6 @@ class ReferenceQueryPrepareDrivePort(Protocol):
     """Application-owned finite offer boundary; not a queue or execution authority."""
 
     def offer(self, workflow_id: str, runner: WorkflowRunner) -> ReferenceQueryDriveOffer: ...
-
-
-def require_reference_query_prepare_runner(runner: WorkflowRunner) -> None:
-    """Composition checks only; every actual claim still needs current owner authority."""
-    if type(runner) is not WorkflowRunner:
-        raise ValueError("REFERENCE_QUERY_PREPARE_RUNNER_INVALID")
-    owner = runner.reference_query_owner
-    if (
-        type(owner) is not CatalogReferenceQueryOwnerAdmission
-        or runner.reference_query_executor is None
-        or runner.engine is not owner.catalog.engine
-        or runner.command_families != frozenset({CommandExecutionFamily.REFERENCE_QUERY})
-        or runner.command_actor_selection
-        != NativeCommandActorSelection("human", owner.identity.capture.operator_id)
-        or runner.available_roles
-        or runner.executor is not None
-    ):
-        raise ValueError("REFERENCE_QUERY_PREPARE_RUNNER_INVALID")
 
 
 def reference_query_prepare_identity(operator_id: str, original_key: str) -> tuple[str, str]:
