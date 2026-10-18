@@ -31,9 +31,9 @@ logical Item
 - 승인 문항, HWPX build, RAG 학습 현황과 Codex slot 사용 상태 조회
 - 25문항 모의고사 생산 계획·실행·검토·퇴역을 불변 checkpoint와 영수증으로 관리
 
-## 증분 RAG 목표의 현재 상태 — 2026-10-18 19:32 UTC
+## 증분 RAG 목표의 현재 상태 — 2026-10-18 20:09 UTC
 
-운영 API·Catalog·출제/HWPX 실행기·일반 채팅에 `3bf9ed04`를 설치했고,
+운영 API·Catalog·출제/HWPX 실행기·일반 채팅에 `a43fd918`을 설치했고,
 실제 wheel·RECORD·provider를 확인했습니다. 별도 QUERY SDK는 `d81b9ba3`, INDEX와
 비교 검증 SDK는 `ee97239d`를 유지합니다. 새 검색 범위는 자동 인덱싱과 같은
 `ALL_ADMITTED_GRAPH_ITEMS`이며, 과거 요청은 원래 고정된 인덱스 Revision을 조회합니다.
@@ -62,7 +62,8 @@ PID/시작 시각 계약·고정 root 제어 실행기·준비 전 실패 복구
 CPU-only 실행 경계는 유지합니다. 통합 975개(의존성 포함)·패키지/계약 71개 테스트,
 strict typing·Ruff·format·독립 검토와 공식 build-only wheel/RECORD 검사를 통과했습니다.
 새 wheel만 임시 설치해 실제 보호된 두 Python 환경에서 모델/GPU import 없이 관리 코드가
-불러와지는 것도 확인했지만, **운영에는 미설치·미활성입니다.** 실제 자원 회수를 확인한 뒤
+불러와지는 것도 확인했습니다. 관련 소스는 후속 공유 wheel에 포함됐지만, 별도 CUDA INDEX
+실행 단위·설정과 실제 INDEX owner 연결은 **미설치·미활성입니다.** 실제 자원 회수를 확인한 뒤
 결과 저장을 허용하는 owner 연결, 원래 C1–C5 전달·CPU/CUDA 여섯 회 실측은 남아 있습니다.
 GPU QUERY/기본값·CPU rollback은 원래 실측 결과와 조건에 따라 진행합니다. 테스트 개수를
 실제 성능이나 GPU 기본값 전환의 증거로 쓰지 않으며, 새 평가·사람 승인 gate도 추가하지 않습니다.
@@ -73,14 +74,18 @@ GPU QUERY/기본값·CPU rollback은 원래 실측 결과와 조건에 따라 �
 INDEX18 자동 인덱싱을 정상 재개했고 관련 10개 서비스·API LIVE/READY를 확인했습니다.**
 새 로그인창이나 중복 요청은 만들지 않았으며, 전체 목표는 여전히 미완료입니다.
 
-시험지 관측(C5)이 기출 전용 검색 설정을 재사용하던 조합 오류도 소스에서 수정했습니다.
-이미 등록된 25문항은 별도 DOCUMENT reader 설정으로 조회하고, 기존 기출 검색·채팅 범위는
-넓히지 않습니다. 관련 회귀288개·타입·스타일·독립 검토를 통과했지만 **아직 운영 미반영**입니다.
-운영 반영 전에는 전용 설정/해시를 먼저 검증하고, 과거 C1 검색 인덱스 대신 시험지 모집단에
-맞는 별도 고정 인덱스 참조를 준비해야 합니다. 이 수정은 새 시험지·문항·HWPX 생성이나
-실제 C5 조회 성공을 뜻하지 않습니다.
+시험지 관측(C5)이 기출 전용 검색 설정을 재사용하던 조합 오류도 수정·배포했습니다.
+이미 등록된 25문항은 별도 DOCUMENT reader로 조회하도록 구성했고, 기존 기출 검색·채팅 범위는
+넓히지 않습니다. 관련 회귀288개·타입·스타일·독립 검토 후 전용 설정/해시를 먼저 선택하고
+공식 호환 릴리스를 설치했습니다. 실제 설치된 3개 wheel·RECORD·provider를 확인했고,
+**20:02 UTC에 관련 10개 서비스·API LIVE/READY·QUERY READY와 기존 INDEX18 재개를 확인했습니다.**
+시험지용 세 ALL 인덱스 참조는 등록된 정확한 revision에서 별도로 준비했습니다.
+이 수정은 새 시험지·문항·HWPX 생성이나 인증된 실제 C5 조회 성공을 뜻하지 않습니다.
+다음 실제 로그인에 쓸 고정 입력 8개도 보호된 위치에 준비했습니다. 실행은 아직 시작하지
+않았고 유효한 사용자 세션이 없어 대기 중입니다. 인증 유효시간을 늘리거나 로그인한 것으로
+가장하지 않습니다.
 [불변 검색 범위 호환 설계](docs/architecture/PINNED_EMBEDDING_NAMESPACE_READ_COMPATIBILITY.md),
-[이번 운영 반영과 남은 범위](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#lineage-map-release-installed-and-recovered--1636-utc),
+[이번 운영 반영과 남은 범위](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#independent-c5-reader-installed-and-services-recovered--2003-utc),
 [저장된 인덱스 정본 점검](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#committed-index-storage-snapshot--1728-utc),
 [인증 후 조회 시간 초과와 정상 인덱싱 재개](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#authenticated-c1-read-deadline-and-index-resumption--1548-utc)를 참고하세요.
 아래 누적 릴리스 기록은 각 기록 시점의 검증 범위입니다.

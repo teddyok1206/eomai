@@ -903,3 +903,136 @@ performance/finalization keep priority when genuine supported authentication is
 available. Conditional GPU QUERY/default/CPU rollback follows the original measured
 winner/gates, not synthetic test counts. No new acceptance cycle, human evaluation,
 textbook index, PDF matching, ANN or chat-deletion implementation is added here.
+
+## Independent C5 reader installed and services recovered — 20:03 UTC
+
+Actual operating source is now `a43fd9181b9e91d5824ea92ad363f6771e0ad8ed`,
+tree `4a3b860ad94b155f0f582953b7f7678f29d23f09`. This supersedes the preceding
+3bf9ed04 operating snapshot, not its historical evidence. C5 previously borrowed
+the PAST_EXAM-only reference reader although its exact existing25-item Assembly
+requires APPROVED_ITEM plus PAST_EXAM. It now owns an independent DOCUMENT reader
+using the existing reader-configuration/1.0 contract and actual operator fence.
+Reference/private-chat source classes, their original pinned inputs and all
+source permissions remain unchanged. There is no fallback to a wider reader.
+
+Related source/regression/dependency tests288 PASS153.23s, independent focused68
+PASS, strict typing, Ruff/format and independent review passed. These are source
+gates, not proof of authenticated C5 delivery. Final source XML raw SHA-256:
+`2bf56cfa23cefca9808e91da74193416fa1019357ab6710a21d0be093b2c6eb0`.
+
+### Actual transition and installed identity
+
+All privileged actions used the original tmux pane%89. After admission and
+file-only preparation, QUERY and the unchanged INDEX18 received one normal
+main-process stop each and reached terminal/PID0/empty-ControlGroup. No numerical
+child was directly signaled. Existing maintenance CHECK/STOP then established
+quiescence before source/config selection and one official shared installation.
+Migration head remains `20261017_0057`; no migration was performed.
+
+Actual installed wheel directory, distinct from the earlier build-only output:
+`/tmp/eom-api-build/a43fd9181b9e91d5824ea92ad363f6771e0ad8ed.GoUaci/dist`.
+
+| Installed wheel | Raw SHA-256 |
+|---|---|
+| platform | `44f3eb2e4670a7b31214cb300e26490c05594fe6e7da48f5301ee3ce822a3db2` |
+| API contracts | `5a45a3e025b923804baf693782d2a0b886bd6255d5d4a6f2b821cc79ce18074d` |
+| application API | `12ce81c848cf33b4f669e5b23bd1f191017f95a007524eeaad9b0ad2631eeaaf` |
+
+Actual wheel RECORD/provider metadata and all12 API/Identity code members were
+verified. API configuration raw SHA remains
+`a6335f21f928fd4cdc2c8a76ee2b3ee1471b688686063a8f2afddac7a303f78d`.
+Installed provider metadata raw SHA is
+`85955672a427988211b7079c6e93bd9d65d7c677203b78f205efe583041f2cfe`.
+Catalog's existing40source selector now pins a43fd918. The independent
+`/etc/eom/catalog-exam-similarity-read.json` raw SHA is
+`0653d1b9a9117c6a6fb5f75234c4b4ef12d3ad89172d5e60e661033992eb1e99`;
+its41drop-in pins that hash. The standard installer did not copy a new Catalog
+unit: the existing protected filesystem policy already permits these reads.
+
+Exact QUERY provider files were rebound to the actual installed API provider;
+QUERY SDKd81b9ba3 and INDEX/benchmark SDKee97239d were retained. Official Chat
+restoration preserved the verified CLI/model and READ_ONLY/NATIVE_TOPIC policy.
+At20:02:11–20:03:01 UTC all10 original services were active/running/success,
+NeedDaemonReload=no, API LIVE/READY and QUERY READY. The same logical INDEX18
+resumed automatic indexing; its new OS invocation is not a new service identity.
+QUERY invocation `e82ae8c27f274d79b100f906edce3d22` and INDEX invocation
+`9280db83c6474f859f4cd3e454f4a20e` identify this observation. CPU remains default.
+The next routine monitor is not due before20:32:11 UTC.
+
+Local sanitized receipts under `/tmp/eom-c5-compatible-release.0cxKdzeq`:
+the C5 selection receipt is instead
+`/tmp/eom-c5-reader-preparation.EJheKKt6/c5-reader-config-v2-SELECT-result.json`.
+
+| Boundary | Raw receipt SHA-256 |
+|---|---|
+| Shared installation | `61c69b2ed26d93da50ea54a3cc925a39e40110cef2c090fe77c5888f328bd323` |
+| C5 selection | `b7cf046db443600dd9aced9c52585d6cc0fc1ada35ed8ce73dee1a97ae771715` |
+| QUERY provider selection | `cef5fda888c18766195cef0bf339fc0cad04f1d0b779bff32d45b9eb6872bfc3` |
+| Official Chat restoration | `5660f268212b08ad00de0b3c1ebd6856344fd70d6fb36c29011b202ba449d7d2` |
+
+`final-runtime-observation.json` records the terminal recovery. These local
+operator receipts are not registered product Artifacts or new source grants.
+
+### Preserved preparation failures and remaining original gates
+
+Original C5 PREPARE failed before operational target writes: JavaScript transport
+rounded nanosecond metadata. The failed helper/outcome remain immutable; an
+explicit V2 uses exact decimal epoch strings and passed49 synthetic tests before
+its successful PREPARE/SELECT. Local restoration tests also retained initial
+DRAFT-only fixture failures; their corrected assertions bind actual prerequisite
+receipts rather than treating completed preparation as still PENDING. Final25
+tests passed without weakening any production guard or repeating installation.
+
+Independent C5 input now pins the three registered ALL index revisions rather
+than borrowing historical C1 occurrence views. The minimal metadata audit used
+three supported pinned-revision reads in a read-only transaction; it did not read
+current heads, source bytes or models, or fabricate missing V10 reports. Exact
+index metadata audit raw SHA is
+`f0cc0911c9c05d95e5d1a2d0607eb014f166a29b67aac459eb15f86dd82c58e0`.
+The prepared canonical C5 selection raw SHA is
+`c6719bfd7710682f252261fb79300501eaca7925a4608c2da75ab2e48ca2dd83`.
+
+No genuine operator session, original six benchmark execution, new LLM/GPU/item/
+exam/HWPX run or authenticated C5 read was produced by this rollout. C1–C5 actual
+delivery and the original six CPU/CUDA runs/finalization remain incomplete. The
+finite client keeps the original keys/cohort/allocation and performs read-only
+discovery and the six comparisons before slower writes; it does not extend the
+authentication lifetime. CUDA INDEX controller source is present in the shared
+wheel, but its separate unit/configuration, owner completion connection and
+actual GPU QUERY/default/CPU rollback remain unselected and conditional on the
+original measured winner/gates. No new human evaluation gate is introduced.
+
+## Fixed finite inputs staged, actual execution still pending — 20:09 UTC
+
+One reviewed same-pane staging operation completed at20:09:35 UTC. It captured
+exactly8 fixed hash-pinned inputs under
+`/var/lib/eom-finite-goal-operator.ee97239d-a43fd918`, with root-owned read-only
+members and the existing owner UID990/GID1000. The original request, reply,
+six-run allocation, consumer keys and exact25 Assembly remain unchanged. The
+client embeds the independently validated C5 selection; no ninth mutable input
+or implicit latest selection is introduced. This staging also validates/prepares
+the existing fixed empty local runtime directories; it launches no supervisor,
+authentication, model, database operation or service.
+
+Local receipt `/tmp/eom-finite-a43-successor.OKPzSsrf/finite-goal-root-stage-result.json`
+has raw SHA `6b0f0546dbad3d4f6d17b652f88f1dcde5dcd36b970e37655c852d33301dfc92`.
+Its metadata raw SHA is
+`14d12587ac63615c1dcd5ac1ec8809e27ad1ca340869c3d3a2c37a20745f72f0`.
+Result is `NONSECRET_ROOT_STAGE_PREPARED_NOT_EXECUTED`, not a goal execution
+or benchmark PASS. The root authentication/model launcher remains DRAFT. The
+earlier invocation2 pre-auth failure and all original outcome records remain
+preserved. An initial invalid tmux option did not execute the helper; the single
+actual execution followed the supported pane enable operation and succeeded.
+Pane%89 is back at idle bash with input disabled; no late password can reach it.
+
+No current supported in-memory user session or waiting getpass exists. The
+recurrent authentication blocker prevents the original actual consumer chain
+and comparisons; neither sudo authority nor a past acknowledgement substitutes
+for that session. Do not create more speculative features/tests to keep the goal
+running, drain INDEX for an unanswered prompt, or request fresh interactive
+authentication before the agreed2026-10-19 05:10 UTC boundary absent a fresh offer.
+After genuine authentication, continue the original finite allocation and inspect
+actual outcomes before any retry or conditional device selection. A genuinely
+new source/report arrival after the persistent seed also remains NOT_LIVE_VERIFIED;
+expanding existing coverage is not that witness. No educational human-evaluation
+requirement, extra25-item production or unrelated acceptance cycle is added.
