@@ -70,3 +70,39 @@ numerical prefix, model, selector or default was changed. CPU remains selected.
 Construction success is neither authentication nor runtime readiness. The user
 requested no interactive login for24 hours from2026-10-18 00:13 UTC; stale capture
 is not substituted for that missing live gate, and no additional login was requested.
+
+## Canonical per-launch receipt closure — 2026-10-18 UTC
+
+1. Responsibility: the existing launch publisher includes its typed
+   `launch-receipt.json` in the same launch Artifact; final nine-gate assessment
+   and original benchmark Job finalization remain separate.
+2. Canonical source is the original validated native/root output and invocation,
+   under the existing current `BenchmarkLaunchAuthorization` checks. A receipt
+   or preselected publication identity grants no source or compute authority.
+3. Preserve original benchmark Job, distinct publication Job, Artifact/revision
+   and raw/content hashes. Preselect publication identities before serialization;
+   keep CPU1's existing deterministic identity unchanged for its sealed reference.
+4. Receipt pointers target that same Artifact's exact worker result, session and
+   CPU1 reference/root completion. Its canonical serialized bytes are the same
+   value returned for the original Job journal; there is no self-hash cycle.
+5. Access is bounded ordered member assembly plus keyed name lookup. Add one
+   small immutable JSON member, not another Job, registry or receipt table.
+6. Work remains O(total launch output bytes); identity/receipt assembly is O(1).
+   Native f32/token bytes are not rewritten, copied to another canonical Artifact
+   or reinterpreted as new numerical/authorization evidence.
+7. The existing file-set publisher retains its publication-key lock, immutable
+   commit and exact replay semantics. Reauthorization still occurs before and
+   after publication; late revocation retains original bytes and unresolved work.
+8. Catalog's installed infrastructure adapter builds the receipt; only the
+   existing Orchestrator file-set owner commits it to NAS. Worker output member
+   names and all released schemas stay unchanged; no dependency is added.
+9. New publications require exact preselected publication identities and one
+   receipt member. A changed identity/hash or injected worker receipt fails.
+   Unknown outcomes never allocate a replacement execution or retry a model.
+10. Historical Artifacts are not upgraded or overwritten. Existing completed
+    journal/read replay still accepts original Artifacts without the new member;
+    trying to republish a different file set under an old key remains a conflict.
+    A future finalizer must not fabricate a receipt pointer into such an Artifact.
+11. Publishing six separate receipt Artifacts is the simpler disconnected option
+    but adds six Jobs and storage boundaries. Extending the current launch owner
+    reuses CPU1's established identity-before-serialization pattern instead.

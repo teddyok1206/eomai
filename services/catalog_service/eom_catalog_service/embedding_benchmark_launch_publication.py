@@ -67,6 +67,7 @@ _JSON_DEFINITIONS = {
     "session.json": "session",
     "cold-timing.json": "coldTiming",
     "near-tie-reference.json": "nearTieReference",
+    "launch-receipt.json": "launchReceipt",
 }
 
 
@@ -88,13 +89,21 @@ class ValidatedBenchmarkOutput:
     queries: tuple[BenchmarkRowVector, ...]
 
 
-def _cpu_publication_identity(invocation: BenchmarkWorkerInvocation) -> ControlFileSetIdentity:
+def _publication_identity(invocation: BenchmarkWorkerInvocation) -> ControlFileSetIdentity:
     """Separate typed identities, stable for this original invocation, not content hashes."""
+
+    # Preserve CPU1's already released reference identity; later launches use
+    # their own original invocation, never a new identity on publication replay.
+    purpose = (
+        "CPU_FIRST_BENCHMARK_PUBLICATION_IDENTITY"
+        if invocation.launch_ordinal == 1
+        else "BENCHMARK_LAUNCH_PUBLICATION_IDENTITY"
+    )
 
     def suffix(role: str) -> str:
         return content_sha256(
             {
-                "purpose": "CPU_FIRST_BENCHMARK_PUBLICATION_IDENTITY",
+                "purpose": purpose,
                 "invocation_sha256": invocation.invocation_sha256,
                 "role": role,
             }
@@ -348,9 +357,8 @@ class BenchmarkLaunchArtifactPublisher:
                 "cold-timing.json": canonical_json_bytes(cold.model_dump(mode="json")),
             }
         )
-        identity = None
+        identity = _publication_identity(invocation)
         if invocation.launch_ordinal == 1:
-            identity = _cpu_publication_identity(invocation)
             reference, scores = build_cpu_benchmark_reference(
                 invocation,
                 validated.documents,
@@ -384,6 +392,38 @@ class BenchmarkLaunchArtifactPublisher:
                 "queryTiming" if name.startswith("query-timing-") else _JSON_DEFINITIONS[name]
             )
             return EMBEDDING_DEVICE_BENCHMARK_SCHEMA_REF + "#/$defs/" + definition
+
+        def pointer(name: str) -> dict[str, str]:
+            return ArtifactMemberPointer(
+                artifact_id=identity.artifact_id,
+                artifact_revision_id=identity.artifact_revision_id,
+                member_path=name,
+                schema_ref=schema(name),
+                media_type="application/json",
+                sha256=sha256_bytes(members[name]),
+            ).model_dump(mode="json")
+
+        body = dict(
+            schema_version="embedding-device-benchmark-launch-receipt/1.0",
+            job_id=invocation.job_id,
+            execution_id=invocation.execution_id,
+            launch_ordinal=invocation.launch_ordinal,
+            device=invocation.device,
+            invocation_sha256=invocation.invocation_sha256,
+            observed_runtime_sha256=invocation.runtime.numerical_runtime.runtime_sha256,
+            worker_result=pointer("worker-result.json"),
+            session=pointer("session.json"),
+            evidence=pointer(
+                "near-tie-reference.json"
+                if invocation.launch_ordinal == 1
+                else "root-completion.json"
+            ),
+            cleanup="CONFIRMED",
+        )
+        receipt = BenchmarkLaunchReceipt.model_validate(
+            body | {"receipt_sha256": content_sha256(body)}
+        )
+        members["launch-receipt.json"] = embedding_device_benchmark_bytes(receipt)
 
         # Explicit publication materialization. Native/root bytes are never modified.
         with tempfile.TemporaryDirectory(
@@ -419,50 +459,19 @@ class BenchmarkLaunchArtifactPublisher:
                 + invocation.invocation_sha256.removeprefix("sha256:"),
                 source_commit=self.source_commit,
             )
-            if identity is None:
-                published = self.publisher.publish_first_observation(**arguments)
-            else:
-                published = self.publisher.publish_identified_first_observation(
-                    identity=identity, **arguments
-                )
+            published = self.publisher.publish_identified_first_observation(
+                identity=identity, **arguments
+            )
             # Commit is not a distributed transaction with the source grant. A late
             # revocation preserves committed bytes/key and the unresolved original;
             # it never triggers another model run or an invented rollback deletion.
             authorization.assert_invocation(invocation)
         if published.job_id == invocation.job_id:
             raise ValueError("BENCHMARK_PUBLICATION_JOB_MUST_BE_SEPARATE")
-        if identity is not None and (
+        if (
             published.job_id,
             published.artifact_id,
             published.artifact_revision_id,
         ) != (identity.job_id, identity.artifact_id, identity.artifact_revision_id):
-            raise ValueError("BENCHMARK_CPU_REFERENCE_PUBLICATION_IDENTITY_CHANGED")
-
-        def pointer(name: str) -> dict[str, str]:
-            return ArtifactMemberPointer(
-                artifact_id=published.artifact_id,
-                artifact_revision_id=published.artifact_revision_id,
-                member_path=name,
-                schema_ref=schema(name),
-                media_type="application/json",
-                sha256=sha256_bytes(members[name]),
-            ).model_dump(mode="json")
-
-        body = dict(
-            schema_version="embedding-device-benchmark-launch-receipt/1.0",
-            job_id=invocation.job_id,
-            execution_id=invocation.execution_id,
-            launch_ordinal=invocation.launch_ordinal,
-            device=invocation.device,
-            invocation_sha256=invocation.invocation_sha256,
-            observed_runtime_sha256=invocation.runtime.numerical_runtime.runtime_sha256,
-            worker_result=pointer("worker-result.json"),
-            session=pointer("session.json"),
-            evidence=pointer(
-                "near-tie-reference.json" if identity is not None else "root-completion.json"
-            ),
-            cleanup="CONFIRMED",
-        )
-        return BenchmarkLaunchReceipt.model_validate(
-            body | {"receipt_sha256": content_sha256(body)}
-        )
+            raise ValueError("BENCHMARK_PUBLICATION_IDENTITY_CHANGED")
+        return receipt

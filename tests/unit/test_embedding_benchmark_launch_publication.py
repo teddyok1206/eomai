@@ -2,13 +2,17 @@
 
 import os
 from dataclasses import replace
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from eom_catalog_contracts.embedding_device_benchmark import (
+    BenchmarkLaunchReceipt,
     BenchmarkQueryTiming,
     BenchmarkSession,
     benchmark_ack_for_checkpoint,
+    embedding_device_benchmark_bytes,
+    parse_embedding_device_benchmark_bytes,
 )
 from eom_catalog_service import embedding_benchmark_launch_publication as publication
 from eom_catalog_service.embedding_benchmark_native_observation import (
@@ -107,6 +111,7 @@ def test_all_six_programs_validate_real_f32_token_resource_and_checkpoint_bytes(
     (
         "missing",
         "extra",
+        "worker_receipt",
         "binary",
         "witness",
         "resources",
@@ -121,6 +126,8 @@ def test_no_changed_byte_or_clock_can_be_published_as_complete(tmp_path, monkeyp
         bundle.members.pop("token-witness.json")
     elif fault == "extra":
         bundle.members["unexpected.json"] = b"{}"
+    elif fault == "worker_receipt":
+        bundle.members["launch-receipt.json"] = b"{}"
     elif fault == "binary":
         bundle.members["cold-documents.f32"] = b"\x00" * len(bundle.members["cold-documents.f32"])
     elif fault == "witness":
@@ -167,7 +174,7 @@ def test_correctly_rehashed_but_overlapping_supplementary_ranges_are_rejected(
 
 
 @pytest.mark.parametrize("revoke_after_commit", (False, True))
-@pytest.mark.parametrize("ordinal", (1, 4))
+@pytest.mark.parametrize("ordinal", range(1, 7))
 @pytest.mark.parametrize("local_owner", (False, True))
 def test_publication_uses_one_separate_job_preserves_bytes_and_late_revocation(
     tmp_path, monkeypatch, revoke_after_commit, ordinal, local_owner, request
@@ -200,7 +207,7 @@ def test_publication_uses_one_separate_job_preserves_bytes_and_late_revocation(
         path = bundle.root / name
         path.write_bytes(benchmark_launch_control_bytes(record))
         path.chmod(0o640)
-    calls, published_members = [], []
+    calls, published_members, publications = [], [], []
     actual_owner = None
     if local_owner:
         from tests.unit.test_control_file_set_publication import _publisher
@@ -223,7 +230,7 @@ def test_publication_uses_one_separate_job_preserves_bytes_and_late_revocation(
         calls.append("publish")
         assert kwargs["primary_file"] == "worker-result.json"
         assert kwargs["artifact_type"] == "control_embedding_benchmark_launch"
-        assert len(kwargs["members"]) == (32 if ordinal == 1 else 8)
+        assert len(kwargs["members"]) == (33 if ordinal == 1 else 31 if ordinal == 2 else 9)
         assert tuple(member.file_name for member in kwargs["members"]) == tuple(
             sorted(member.file_name for member in kwargs["members"])
         )
@@ -235,21 +242,27 @@ def test_publication_uses_one_separate_job_preserves_bytes_and_late_revocation(
                 assert (
                     member.schema_ref == "eom://schemas/knowledge/embedding-f32le-l2-row-major/1.0"
                 )
+            if member.file_name == "launch-receipt.json":
+                assert member.schema_ref.endswith("#/$defs/launchReceipt")
+                assert member.media_type == "application/json"
             published_members.append((member.file_name, raw))
-        identity = kwargs.get("identity")
+        identity = kwargs["identity"]
+        assert identity.job_id != bundle.invocation.job_id
         if actual_owner is not None:
-            if identity is not None:
-                return actual_owner.publish_identified_first_observation(**kwargs)
-            return actual_owner.publish_first_observation(**kwargs)
-        return PublishedControlFileSet(
-            identity.job_id if identity else "job_" + "f" * 32,
-            identity.artifact_id if identity else "artifact_" + "f" * 32,
-            identity.artifact_revision_id if identity else "rev_" + "f" * 32,
+            value = actual_owner.publish_identified_first_observation(**kwargs)
+            publications.append(value)
+            return value
+        value = PublishedControlFileSet(
+            identity.job_id,
+            identity.artifact_id,
+            identity.artifact_revision_id,
             "worker-result.json",
             publication.sha256_bytes(bundle.members["worker-result.json"]),
             "sha256:" + "a" * 64,
             "synthetic-not-NAS",
         )
+        publications.append(value)
+        return value
 
     publisher = publication.BenchmarkLaunchArtifactPublisher(
         SimpleNamespace(
@@ -281,6 +294,28 @@ def test_publication_uses_one_separate_job_preserves_bytes_and_late_revocation(
         assert receipt.job_id == bundle.invocation.job_id
         assert receipt.worker_result.artifact_id == receipt.evidence.artifact_id
         assert receipt.session.artifact_revision_id == receipt.evidence.artifact_revision_id
+        saved_receipt = dict(published_members)["launch-receipt.json"]
+        assert parse_embedding_device_benchmark_bytes(saved_receipt) == receipt
+        assert isinstance(
+            parse_embedding_device_benchmark_bytes(saved_receipt), BenchmarkLaunchReceipt
+        )
+        assert saved_receipt == embedding_device_benchmark_bytes(receipt)
+        assert receipt.evidence.member_path == (
+            "near-tie-reference.json" if ordinal == 1 else "root-completion.json"
+        )
+        if actual_owner is not None:
+            original = publications[-1]
+            assert (Path(original.nas_path) / "launch-receipt.json").read_bytes() == saved_receipt
+            replay = publisher.publish(
+                bundle.invocation,
+                bundle.inputs,
+                bundle.observed,
+                bundle.prepared,
+                bundle.completion,
+                authorization=authorization,
+            )
+            assert replay == receipt and publications[-1] == original
+            assert (Path(original.nas_path) / "launch-receipt.json").read_bytes() == saved_receipt
         if ordinal == 1:
             from eom_catalog_service.embedding_benchmark_cpu_reference import (
                 validate_cpu_benchmark_reference,
@@ -296,7 +331,9 @@ def test_publication_uses_one_separate_job_preserves_bytes_and_late_revocation(
                 saved["rank-evidence.f64"],
             )
             assert reference.score_binary.artifact_id == receipt.worker_result.artifact_id
-    assert calls == ["authorize", "authorize", "publish", "authorize"]
+    assert calls == ["authorize", "authorize", "publish", "authorize"] * (
+        2 if local_owner and not revoke_after_commit else 1
+    )
     import json
 
     cold = json.loads(dict(published_members)["cold-timing.json"])
@@ -308,3 +345,24 @@ def test_publication_uses_one_separate_job_preserves_bytes_and_late_revocation(
     assert all(
         (bundle.root / "outputs" / name).read_bytes() == raw for name, raw in bundle.members.items()
     )
+    assert "launch-receipt.json" not in bundle.members
+
+
+def test_cpu1_publication_identity_preserves_its_existing_reference_namespace():
+    from eom_identifiers import content_sha256
+
+    invocation = worker_invocation(1)
+    selected = publication._publication_identity(invocation)
+    for field, prefix, role in (
+        ("job_id", "job_", "JOB"),
+        ("artifact_id", "artifact_", "ARTIFACT"),
+        ("artifact_revision_id", "rev_", "REVISION"),
+    ):
+        expected = content_sha256(
+            {
+                "purpose": "CPU_FIRST_BENCHMARK_PUBLICATION_IDENTITY",
+                "invocation_sha256": invocation.invocation_sha256,
+                "role": role,
+            }
+        ).removeprefix("sha256:")[:32]
+        assert getattr(selected, field) == prefix + expected
