@@ -31,7 +31,10 @@ from eom_catalog_service.embedding_registry_catalog_adapter import (
     CatalogEmbeddingRegistryVerifier,
     EmbeddingRegistryOwnerConfiguration,
 )
-from eom_catalog_service.embedding_registry_models import EmbeddingEncodingRecord
+from eom_catalog_service.embedding_registry_models import (
+    EmbeddingEncodingRecord,
+    EmbeddingSourceBindingRecord,
+)
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingBindingOrigin,
     EmbeddingRegistryCaller,
@@ -42,6 +45,7 @@ from eom_catalog_service.embedding_registry_ports import (
     RegisteredEmbeddingIndexRead,
     SelectedEmbeddingSources,
 )
+from eom_catalog_service.embedding_registry_repository import binding_columns
 from eom_catalog_service.inference_transfer_catalog_adapter import (
     AcceptedInferenceTransferProfileInput,
     CatalogInferenceTransferSourceAdapter,
@@ -99,6 +103,7 @@ class OwnerSession(MetadataSession):
         self.dirty: list[object] = []
         self.deleted: list[object] = []
         self.no_autoflush = nullcontext()
+        self.binding_records: dict[str, EmbeddingSourceBindingRecord] = {}
 
     def execute(self, statement: Any) -> list[Any]:
         rows = MetadataSession.scalars(self, statement)
@@ -122,6 +127,10 @@ class OwnerSession(MetadataSession):
         return super().get(model, identity)
 
     def scalars(self, statement: Any) -> list[Any]:
+        if statement.column_descriptions[0]["entity"] is EmbeddingSourceBindingRecord:
+            self.statements.append(statement)
+            keys = next(iter(statement.compile().params.values()))
+            return [value for key, value in self.binding_records.items() if key in keys]
         rows = super().scalars(statement)
         selected = next(iter(statement.compile().params.values()))
         if rows and isinstance(rows[0], ArtifactRevisionRecord):
@@ -266,6 +275,13 @@ def owner(
         "d",
     )
     session = OwnerSession(command, *numerical, *publication)
+    session.binding_records[binding.binding_sha256] = EmbeddingSourceBindingRecord(
+        **binding_columns(binding),
+        **{
+            "binding_manifest_" + name: value
+            for name, value in index_member.model_dump(mode="python").items()
+        },
+    )
     verifier = CatalogEmbeddingRegistryVerifier(
         cast(Any, object()),
         EmbeddingRegistryOwnerConfiguration(

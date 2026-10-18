@@ -364,3 +364,51 @@ index manifests in `verify_registered_references`; the C1 operator-only read-set
 does not change that service path. Examine the existing canonical registration
 and origin-membership proof before a separate bounded optimization; do not skip
 its integrity checks or claim a shared API rollout speeds the private INDEX.
+
+## Actual4fac922b read-set rollout —2026-10-18
+
+The exact `4fac922b03057e8c33a6fea99507f47c88bd7c56` candidate passed28 source
+suites/660 tests and112 actual disposable-PostgreSQL tests before deployment.
+The temporary database and roles were removed; failed fixture invocations and
+their corrected final gate remain recorded, not rewritten as original successes.
+
+At10:52–10:58 UTC the existing protected release owner admitted the candidate,
+verified file-only composition, normally drained the original QUERY/INDEX main
+processes, checked actual quiescence, and installed it once. No native child was
+interrupted, unknown attempt replayed, schema migrated or source row repaired.
+The exact installed delivery is
+`/tmp/eom-api-build/4fac922b03057e8c33a6fea99507f47c88bd7c56.ptMQBX`:
+
+- source tree `9ebffaae710495e57da1b27febfb63a0f0c3ee70`;
+- archive `9966b478ee0393a2818a595c9e32e99bead5f81cbc75303d7bb5c047c194a708`;
+- platform wheel `2434edee0178d88828e2b48afbe39251330294c4d32547447c422e53b654ca70`;
+- API-contract wheel `1ec646779b392d523d61dd6dc917e4eb7d69cb9e50658af350029994993a2264`;
+- API wheel `56eb3bdeef19d21a02adf6cc3ae396c136f171e743de5f570b0ea96b68f67c12`.
+
+Independent public-file comparison verified1,992 packaged members and unchanged
+file epochs. The build-onlyDrjmW0 delivery has distinct build metadata and is not
+the installed API wheel. Protected context1.6 is
+`/var/lib/eom-release-operator-stage.4fac922b-y1vw7ldg`, raw
+`5f94a2e15ea7cf1afc7c89df1e8441341ae09d7ba2068af892fba4ae73634eb4`.
+Evidence/handles: `/tmp/eom-c1-readset-release.T8PBlK6K`; rollback:
+`/var/lib/eom-api/deployments/4fac922b03057e8c33a6fea99507f47c88bd7c56.json`.
+
+The official Chat installer restored its prior model/RAG/verified Codex identity
+and disabled private-similarity selections. QUERY owner0fab keeps its source and
+is rebound only to the actual API56eb wheel/configuration. Private INDEX ownerdf40
+and all six numerical/owner/unit pins remain unchanged. All ten services are
+active; postflight11:00:45.023127 UTC confirms API LIVE/READY, QUERY READY and
+INDEX STARTED. DB57 and CPU defaults remain selected.
+
+That postflight's due count observation is925 bindings/encodings,238 revisions,
+six logical indexes. Latest distinct heads in its bounded revision list:
+313/545,323/545,289/545; this remains PARTIAL, not all-six-head or full-corpus
+acceptance. Next routine count is no earlier11:30:45.024 UTC. Quiescence and
+startup checks are independent of routine count polling.
+
+**C1 authenticated completed-context delivery remains unverified.** The original
+memory-only client retains its actual login and old503 history, but has consumed
+its two finite official refreshes; it is not patched or harvested to obtain
+credentials. No new login, QUERY key, model submission or consumer start was
+performed by this rollout. Prepare the supported combined consumer client before
+the next genuine authentication; do not turn health or source tests into C1–C5 PASS.

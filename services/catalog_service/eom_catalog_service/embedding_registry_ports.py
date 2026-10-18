@@ -435,8 +435,10 @@ class EmbeddingRegistryVerificationPort(Protocol):
     ) -> ResolvedEmbeddingReferences:
         """Reauthorize and resolve retained canonical references, including historical origins.
 
-        Return exactly one full binding for each requested origin and its exact
-        unique sorted shard closure. Never repeat full manifests per binding.
+        Return exactly one full binding for each requested immutable ledger origin
+        and its exact unique sorted shard closure. Reconstruct current bindings,
+        compare all canonical ledger scalars/origin pointers, and resolve unchanged
+        physical origin bytes; no full historical index DTO reinterpretation.
         Row resolution also verifies each requested row's same-file-set shard/
         binary and exact encoding, including rows with no registered binding yet;
         such row-only shards are verified internally, not extra returned pointers.

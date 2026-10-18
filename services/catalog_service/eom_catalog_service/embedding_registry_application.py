@@ -81,6 +81,9 @@ from eom_catalog_service.embedding_registry_repository import (
     binding_origin,
     registered_row,
 )
+from eom_catalog_service.embedding_registry_repository import (
+    binding_columns as _binding_columns,
+)
 
 
 def _fail(code: str) -> NoReturn:
@@ -104,29 +107,6 @@ def _key(binding: EmbeddingSourceBinding) -> EmbeddingBindingLookupKey:
         binding.solution_evidence.solution_analysis_run_id,
         binding.encoding.encoding_sha256,
     )
-
-
-def _binding_columns(binding: EmbeddingSourceBinding) -> dict[str, Any]:
-    return {
-        "binding_sha256": binding.binding_sha256,
-        "encoding_sha256": binding.encoding.encoding_sha256,
-        "item_id": binding.source.item_id,
-        "item_revision_id": binding.source.item_revision_id,
-        "source_class": binding.source.source_class,
-        "source_sha256": binding.source.artifact_member.sha256,
-        "base_analysis_run_id": binding.solution_evidence.base_analysis_run_id,
-        "solution_analysis_run_id": binding.solution_evidence.solution_analysis_run_id,
-        "solution_pointer_sha256": binding.solution_evidence.pointer_sha256,
-        "profile_id": binding.profile.profile_id,
-        "profile_revision_id": binding.profile.profile_revision_id,
-        "profile_sha256": binding.profile.profile_sha256,
-        "graph_snapshot_revision_id": binding.graph_snapshot.graph_snapshot_revision_id,
-        "policy_revision_id": binding.policy_revision_id,
-        "policy_sha256": binding.policy_sha256,
-        "view": binding.view,
-        "recipe_sha256": binding.recipe.recipe_sha256,
-        "projection_version": binding.projection_version,
-    }
 
 
 def validate_resolved_embedding_registration(

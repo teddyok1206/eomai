@@ -77,7 +77,10 @@ from eom_catalog_service.embedding_incremental_plan import (
     RegisteredEmbeddingRow,
     plan_embedding_delta,
 )
-from eom_catalog_service.embedding_index_assembly import PreparedEmbeddingIndexBasis
+from eom_catalog_service.embedding_index_assembly import (
+    PreparedEmbeddingIndexBasis,
+    assemble_embedding_source_binding,
+)
 from eom_catalog_service.embedding_registry_application import (
     read_pinned_embedding_index,
     validate_registered_embedding_index_manifest,
@@ -113,6 +116,8 @@ from eom_catalog_service.embedding_registry_ports import (
 )
 from eom_catalog_service.embedding_registry_repository import (
     EmbeddingRegistryRepository,
+    binding_columns,
+    binding_origin,
     registered_row,
 )
 from eom_catalog_service.exam_similarity_observation import compose_exam_similarity_observation
@@ -415,9 +420,10 @@ class CatalogEmbeddingRegistryVerifier:
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
         return reader, capture
 
-    def _read_index(
+    def _read_index_member(
         self, reader: PinnedArtifactReadContext, pointer: ArtifactMemberPointer
-    ) -> EmbeddingIndexManifest:
+    ) -> bytes:
+        """Same physical/provenance closure for selected indices and immutable origins."""
         pointer = ArtifactMemberPointer.model_validate(pointer.model_dump(mode="json"))
         if (
             pointer.schema_ref != INDEX_SCHEMA_REF
@@ -438,7 +444,12 @@ class CatalogEmbeddingRegistryVerifier:
             EMBEDDING_INDEX_MEMBER_NAMES,
             manifest_version=EMBEDDING_INDEX_MANIFEST_VERSION,
         )
-        return parse_embedding_index(_document(raw.payload))
+        return raw.payload
+
+    def _read_index(
+        self, reader: PinnedArtifactReadContext, pointer: ArtifactMemberPointer
+    ) -> EmbeddingIndexManifest:
+        return parse_embedding_index(_document(self._read_index_member(reader, pointer)))
 
     def _read_shards(
         self,
@@ -1779,10 +1790,63 @@ class CatalogEmbeddingRegistryVerifier:
                 )
                 for row in rows
             )
-            if len({row.encoding.encoding_sha256 for row in checked_rows}) != len(rows) or len(
-                set(origins)
-            ) != len(origins):
+            if (
+                len({row.encoding.encoding_sha256 for row in checked_rows}) != len(rows)
+                or len(set(origins)) != len(origins)
+                or len({origin.binding_sha256 for origin in origins}) != len(origins)
+            ):
                 raise ValueError("duplicate registered references")
+            assert capture.corpus is not None
+            admitted_sources = {
+                value.source.item_revision_id: value.source for value in capture.corpus.sources
+            }
+            entries = {
+                value.profile.source_basis.source.item_revision_id: value
+                for value in capture.entries
+            }
+            by_encoding = {row.encoding.encoding_sha256: row for row in checked_rows}
+            rebuilt: dict[str, EmbeddingSourceBinding] = {}
+            for demand in plan.demands:
+                row = by_encoding.get(demand.encoding.encoding_sha256)
+                if row is None:
+                    continue
+                binding = assemble_embedding_source_binding(
+                    source=admitted_sources[demand.source_revision_id],
+                    profile=demand.profile,
+                    solution_evidence=entries[
+                        demand.source_revision_id
+                    ].profile.source_basis.solution_evidence,
+                    graph_snapshot=intent.graph_snapshot,
+                    policy_revision_id=intent.policy_revision_id,
+                    policy_sha256=intent.policy_sha256,
+                    recipe=self.configuration.recipe,
+                    view=intent.namespace.view,
+                    projection_version=intent.namespace.projection_version,
+                    row=row,
+                )
+                if binding.binding_sha256 in rebuilt:
+                    raise ValueError("duplicate reconstructed source binding")
+                rebuilt[binding.binding_sha256] = binding
+            ledger = EmbeddingRegistryRepository(session).bindings_by_sha256(
+                tuple(origin.binding_sha256 for origin in origins)
+            )
+            if set(ledger) != {origin.binding_sha256 for origin in origins}:
+                raise ValueError("registered binding ledger identity is missing")
+            resolved_values = []
+            for origin in origins:
+                current_binding = rebuilt.get(origin.binding_sha256)
+                record = ledger[origin.binding_sha256]
+                if (
+                    current_binding is None
+                    or binding_origin(record) != origin
+                    or any(
+                        getattr(record, name) != value
+                        for name, value in binding_columns(current_binding).items()
+                    )
+                ):
+                    raise ValueError("registered binding ledger differs from exact current binding")
+                resolved_values.append(ResolvedEmbeddingBindingOrigin(origin, current_binding))
+            resolved = tuple(resolved_values)
             pointers = {row.row_ref.shard_manifest for row in checked_rows}
             index_pointers = tuple(
                 sorted(
@@ -1791,17 +1855,11 @@ class CatalogEmbeddingRegistryVerifier:
                 )
             )
             reader.prefetch(tuple((p.artifact_id, p.artifact_revision_id) for p in index_pointers))
-            indices = {pointer: self._read_index(reader, pointer) for pointer in index_pointers}
-            bindings = {
-                pointer: {value.binding_sha256: value for value in index.bindings}
-                for pointer, index in indices.items()
-            }
-            resolved = tuple(
-                ResolvedEmbeddingBindingOrigin(
-                    origin, bindings[origin.manifest][origin.binding_sha256]
-                )
-                for origin in origins
-            )
+            # Registration fully validates this value before the immutable ledger
+            # insertion. Exact reconstruction/ledger equality plus the SAME origin
+            # bytes preserve membership without reparsing every cumulative prefix.
+            for pointer in index_pointers:
+                self._read_index_member(reader, pointer)
             pointers.update(value.binding.row_ref.shard_manifest for value in resolved)
             shards = self._read_shards(
                 reader,
@@ -1828,10 +1886,6 @@ class CatalogEmbeddingRegistryVerifier:
                 ):
                     raise ValueError("registered encoding differs from current source or exact row")
             selected = {value.binding.row_ref.shard_manifest for value in resolved}
-            assert capture.corpus is not None
-            admitted_sources = {
-                value.source.item_revision_id: value.source for value in capture.corpus.sources
-            }
             if any(
                 value.binding.source != admitted_sources.get(value.binding.source.item_revision_id)
                 or value.binding.graph_snapshot != intent.graph_snapshot

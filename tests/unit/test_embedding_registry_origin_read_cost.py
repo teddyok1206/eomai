@@ -12,6 +12,7 @@ import json
 from collections import Counter
 from pathlib import Path
 from time import perf_counter_ns
+from tracemalloc import get_traced_memory, start, stop
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import Mock
@@ -155,7 +156,7 @@ def _records(
     return records
 
 
-@pytest.mark.parametrize("count", (16, 64))
+@pytest.mark.parametrize("count", (16, 64, 256))
 def test_cumulative_first_origin_manifest_read_and_decode_cost(
     count: int,
     tmp_path: Path,
@@ -204,6 +205,7 @@ def test_cumulative_first_origin_manifest_read_and_decode_cost(
         for record in _records(tmp_path, command.index_manifest, resolved.index, ordinal)
     )
     concrete_session = OwnerSession(last, *records)
+    concrete_session.binding_records = session.state["bindings"]
     resolved = history[-1][1]
     verifier = catalog.CatalogEmbeddingRegistryVerifier(
         cast(Any, object()),
@@ -233,6 +235,7 @@ def test_cumulative_first_origin_manifest_read_and_decode_cost(
     timings: Counter[str] = Counter()
     parsed_bindings = []
     original_parse = catalog.parse_embedding_index
+    original_binding = catalog.assemble_embedding_source_binding
     original_hash = artifact_reads.sha256_file
     original_read = PinnedArtifactReadContext.read_pinned
 
@@ -251,6 +254,10 @@ def test_cumulative_first_origin_manifest_read_and_decode_cost(
             return original_parse(document)
         finally:
             timings["index_dto_decode_ns"] += perf_counter_ns() - started
+
+    def construct_binding(**options):
+        calls["current_binding_construction"] += 1
+        return original_binding(**options)
 
     def read_member(reader, **options):
         if options["member_path"] == "index.json":
@@ -275,6 +282,7 @@ def test_cumulative_first_origin_manifest_read_and_decode_cost(
     monkeypatch.setattr(verifier, "_capture", capture)
     monkeypatch.setattr(verifier, "_read_shards", shards)
     monkeypatch.setattr(catalog, "parse_embedding_index", parse_index)
+    monkeypatch.setattr(catalog, "assemble_embedding_source_binding", construct_binding)
     monkeypatch.setattr(PinnedArtifactReadContext, "read_pinned", read_member)
     monkeypatch.setattr(artifact_reads, "sha256_file", physical_hash)
     query = EmbeddingRegistryLookup(
@@ -284,24 +292,69 @@ def test_cumulative_first_origin_manifest_read_and_decode_cost(
         last.policy_revision_id,
         last.policy_sha256,
     )
-    started = perf_counter_ns()
-    for _ in range(2):
-        actual = verifier.verify_registered_references(
-            cast(Session, concrete_session),
-            CALLER,
-            query,
-            rows,
-            actual_origins,
-        )
-        assert {value.binding.binding_sha256 for value in actual.origins} == set(expected_origins)
-    elapsed_ns = perf_counter_ns() - started
+    # Keep an executed control of the former cumulative-origin operation, not
+    # merely a relaxed expected counter. It reuses the unchanged selected-index
+    # reader and proves every first origin contains the exact expected binding.
+    expected_bindings = {binding.binding_sha256: binding for binding in resolved.index.bindings}
+    origin_pointers = tuple(dict.fromkeys(origin.manifest for origin in actual_origins))
+    start()
+    try:
+        baseline_started = perf_counter_ns()
+        for _ in range(2):
+            reader = PinnedArtifactReadContext(cast(Session, concrete_session), verifier.settings)
+            historical = {
+                pointer: {
+                    binding.binding_sha256: binding
+                    for binding in verifier._read_index(reader, pointer).bindings
+                }
+                for pointer in origin_pointers
+            }
+            for origin in actual_origins:
+                assert (
+                    historical[origin.manifest][origin.binding_sha256]
+                    == expected_bindings[origin.binding_sha256]
+                )
+            del historical
+        baseline_elapsed_ns = perf_counter_ns() - baseline_started
+        _baseline_retained_bytes, baseline_peak_bytes = get_traced_memory()
+    finally:
+        stop()
     revisions = count // BATCH_SIZE
     expected_visits = BATCH_SIZE * revisions * (revisions + 1) // 2
     assert sorted(parsed_bindings) == sorted(list(range(BATCH_SIZE, count + 1, BATCH_SIZE)) * 2)
     assert sum(parsed_bindings) == 2 * expected_visits
     assert calls == {
-        "capture": 2,
         "index_dto_decode": 2 * revisions,
+        "index_member_read": 2 * revisions,
+        "physical_index_read_hash": 2 * revisions,
+    }
+    baseline_calls, baseline_timings = dict(calls), dict(timings)
+    calls.clear()
+    timings.clear()
+    parsed_bindings.clear()
+    start()
+    try:
+        started = perf_counter_ns()
+        for _ in range(2):
+            actual = verifier.verify_registered_references(
+                cast(Session, concrete_session),
+                CALLER,
+                query,
+                rows,
+                actual_origins,
+            )
+            assert len(actual.origins) == count
+            for value in actual.origins:
+                assert value.binding == expected_bindings[value.origin.binding_sha256]
+                assert value.origin.manifest == expected_origins[value.origin.binding_sha256]
+        elapsed_ns = perf_counter_ns() - started
+        _retained_bytes, peak_bytes = get_traced_memory()
+    finally:
+        stop()
+    assert parsed_bindings == []
+    assert calls == {
+        "capture": 2,
+        "current_binding_construction": 2 * count,
         "index_member_read": 2 * revisions,
         "physical_index_read_hash": 2 * revisions,
         "shard_boundary": 2,
@@ -313,10 +366,16 @@ def test_cumulative_first_origin_manifest_read_and_decode_cost(
                 "bindings": count,
                 "batch_size": BATCH_SIZE,
                 "first_origin_revisions": revisions,
-                "bindings_visited_per_capture": expected_visits,
+                "prior_full_dto_binding_visits_per_capture": expected_visits,
+                "historical_full_dto_binding_visits_per_capture": 0,
                 "calls": dict(calls),
                 "timings": dict(timings),
+                "baseline_origin_only_calls": baseline_calls,
+                "baseline_origin_only_timings": baseline_timings,
+                "baseline_origin_only_elapsed_ns": baseline_elapsed_ns,
+                "baseline_origin_only_traced_peak_bytes": baseline_peak_bytes,
                 "two_capture_elapsed_ns": elapsed_ns,
+                "two_capture_traced_peak_bytes": peak_bytes,
                 "source_iam_sql": "SYNTHETIC",
                 "numerical_validation": "SYNTHETIC_SEAM",
                 "live_throughput": "NOT_MEASURED",

@@ -15,11 +15,17 @@ from uuid import uuid4
 import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
+from eom_catalog_contracts.inference_transfer_embedding import EmbeddingSourceBinding
 from eom_catalog_service.embedding_registry_models import (
     EmbeddingEncodingRecord,
     EmbeddingIndexRecord,
     EmbeddingIndexRevisionRecord,
     EmbeddingSourceBindingRecord,
+)
+from eom_catalog_service.embedding_registry_repository import (
+    EmbeddingRegistryRepository,
+    binding_columns,
+    binding_origin,
 )
 from eom_catalog_service.knowledge_graph_models import (
     EducationRetrievalAccessPolicyRevisionRecord,
@@ -41,16 +47,19 @@ from eom_orchestrator.knowledge_analysis_models import (
 )
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
 from eom_orchestrator.repository import ensure_protocol_version
+from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow_runner.models import WorkflowStepRunRecord
-from sqlalchemy import Engine, delete, select, text, update
+from sqlalchemy import Engine, delete, event, select, text, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import set_committed_value
 
 from tests.integration.test_control_plane_persistence import _complete_control_plane, _workflow
 from tests.integration.test_preset_model_validation_persistence import (
     guarded_engine as guarded_engine,
 )
+from tests.unit.inference_transfer_embedding_fixtures import seal, source_binding
 from tests.unit.inference_transfer_fixtures import NOW, sha
 from tests.unit.test_embedding_registry_models import migration_module
 
@@ -378,8 +387,17 @@ def test_encoding_key_row_unique_artifact_pairing_and_immutable(registry_session
             EmbeddingEncodingRecord.encoding_sha256 == body["encoding_sha256"]
         ),
     ):
-        with pytest.raises(DBAPIError, match="immutable"), session.begin_nested():
+        with pytest.raises(DBAPIError, match="immutable") as rejected, session.begin_nested():
             session.execute(statement)
+        assert getattr(rejected.value.orig, "sqlstate", None) == "23514"
+    assert (
+        session.scalar(
+            select(EmbeddingEncodingRecord.row_index).where(
+                EmbeddingEncodingRecord.encoding_sha256 == body["encoding_sha256"]
+            )
+        )
+        == body["row_index"]
+    )
 
 
 def _binding_source_ids(session: Session, seed: dict[str, Any]) -> tuple[str, str, str, str]:
@@ -583,8 +601,9 @@ def test_binding_relational_happy_unique_pairing_and_immutable_not_admission(
             EmbeddingSourceBindingRecord.binding_sha256 == body["binding_sha256"]
         ),
     ):
-        with pytest.raises(DBAPIError, match="immutable"), session.begin_nested():
+        with pytest.raises(DBAPIError, match="immutable") as rejected, session.begin_nested():
             session.execute(statement)
+        assert getattr(rejected.value.orig, "sqlstate", None) == "23514"
     # FK existence is intentionally not source eligibility: a future owner must reject
     # these DRAFT Items/REQUESTED analyses before real registry admission.
     assert (
@@ -595,6 +614,103 @@ def test_binding_relational_happy_unique_pairing_and_immutable_not_admission(
         )
         == body["binding_sha256"]
     )
+
+
+def test_binding_sha_batch_read_refreshes_every_scalar_and_exact_first_origin(
+    registry_session: Session,
+) -> None:
+    """Actual immutable SQL rows replace forged local values, never grant source admission."""
+    session = registry_session
+    seed = _seed(session)
+    item_id, item_revision, base_run, solution_run = _binding_source_ids(session, seed)
+    body = source_binding().model_dump(mode="json")
+    body["source"].update(item_id=item_id, item_revision_id=item_revision)
+    body["solution_evidence"].update(
+        base_analysis_run_id=base_run, solution_analysis_run_id=solution_run
+    )
+    body["solution_evidence"] = seal(body["solution_evidence"], "pointer_sha256")
+    body["graph_snapshot"]["graph_snapshot_revision_id"] = seed["snapshot"]
+    body["policy_revision_id"] = seed["policy"]
+    body["row_ref"]["shard_manifest"].update(
+        artifact_id=seed["artifact"], artifact_revision_id=seed["artifact_revision"]
+    )
+    expected: dict[str, tuple[dict[str, Any], ArtifactMemberPointer]] = {}
+    originals: dict[str, EmbeddingSourceBindingRecord] = {}
+    for ordinal in range(2):
+        body["profile"].update(
+            profile_id="inferenceprofile_" + uuid4().hex,
+            profile_revision_id="inferenceprofilerev_" + uuid4().hex,
+        )
+        binding = EmbeddingSourceBinding.model_validate(seal(body, "binding_sha256"))
+        if ordinal == 0:
+            session.add(
+                EmbeddingEncodingRecord(
+                    **binding.encoding.model_dump(mode="python"),
+                    **{
+                        "shard_" + name: value
+                        for name, value in binding.row_ref.shard_manifest.model_dump(
+                            mode="python"
+                        ).items()
+                    },
+                    row_index=binding.row_ref.row_index,
+                    registered_at=NOW,
+                )
+            )
+            session.flush()
+        origin = ArtifactMemberPointer(
+            artifact_id=seed["artifact"],
+            artifact_revision_id=seed["artifact_revision"],
+            member_path="index.json",
+            schema_ref="eom://schemas/knowledge/embedding-index-manifest/1.0",
+            media_type="application/json",
+            sha256=sha("b" if ordinal == 0 else "c"),
+        )
+        scalars = binding_columns(binding)
+        origin_columns = {
+            "binding_manifest_" + name: value
+            for name, value in origin.model_dump(mode="python").items()
+        }
+        assert set(scalars) | set(origin_columns) | {"registered_at"} == {
+            column.name for column in EmbeddingSourceBindingRecord.__table__.columns
+        }
+        row = EmbeddingSourceBindingRecord(**scalars, **origin_columns, registered_at=NOW)
+        session.add(row)
+        expected[binding.binding_sha256] = scalars, origin
+        originals[binding.binding_sha256] = row
+    session.flush()
+    # Poison only identity-map values: real history stays untouched and triggers stay enabled.
+    # With autoflush disabled this read cannot repair itself through UPDATE or expiry.
+    for key, row in originals.items():
+        scalars, origin = expected[key]
+        for name, value in scalars.items():
+            set_committed_value(row, name, value + ":forged-local")
+        for name, value in origin.model_dump(mode="python").items():
+            set_committed_value(row, "binding_manifest_" + name, value + ":forged-local")
+        assert row.binding_manifest_sha256 != origin.sha256
+    assert not session.dirty
+    statements: list[str] = []
+
+    def observe(_connection, _cursor, statement, _parameters, _context, _many):
+        statements.append(statement.upper())
+
+    connection = session.connection()
+    event.listen(connection, "before_cursor_execute", observe)
+    try:
+        repository = EmbeddingRegistryRepository(session)
+        assert repository.bindings_by_sha256(()) == {}
+        assert statements == []
+        keys = tuple(expected)
+        with session.no_autoflush:
+            found = repository.bindings_by_sha256((*keys, keys[0], sha("f")))
+    finally:
+        event.remove(connection, "before_cursor_execute", observe)
+    assert len(statements) == 1 and statements[0].lstrip().startswith("SELECT ")
+    assert "WHERE EMBEDDING_SOURCE_BINDINGS.BINDING_SHA256 IN " in statements[0]
+    assert set(found) == set(expected)
+    for key, (scalars, origin) in expected.items():
+        assert found[key] is originals[key]
+        assert {name: getattr(found[key], name) for name in scalars} == scalars
+        assert binding_origin(found[key]).manifest == origin
 
 
 def test_revision_append_only_and_nonempty_downgrade_refusal(registry_session: Session) -> None:
@@ -610,8 +726,17 @@ def test_revision_append_only_and_nonempty_downgrade_refusal(registry_session: S
             EmbeddingIndexRevisionRecord.index_revision_id == revision.index_revision_id
         ),
     ):
-        with pytest.raises(DBAPIError, match="immutable"), session.begin_nested():
+        with pytest.raises(DBAPIError, match="immutable") as rejected, session.begin_nested():
             session.execute(statement)
+        assert getattr(rejected.value.orig, "sqlstate", None) == "23514"
+    assert (
+        session.scalar(
+            select(EmbeddingIndexRevisionRecord.binding_count).where(
+                EmbeddingIndexRevisionRecord.index_revision_id == revision.index_revision_id
+            )
+        )
+        == revision.binding_count
+    )
     with (
         pytest.raises(DBAPIError, match="requires empty registry"),
         session.begin_nested(),
