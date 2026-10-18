@@ -31,6 +31,20 @@ logical Item
 - 승인 문항, HWPX build, RAG 학습 현황과 Codex slot 사용 상태 조회
 - 25문항 모의고사 생산 계획·실행·검토·퇴역을 불변 checkpoint와 영수증으로 관리
 
+## 증분 RAG 목표의 현재 상태 — 2026-10-18 14:45 UTC
+
+운영 API·Catalog·출제/HWPX 실행기와 일반 채팅은 `18525fe9` 호환 릴리스로 복구했으며,
+API readiness를 확인했습니다. QUERY의 전용 SDK는 `eecf0061`, 자동 인덱싱은 기존
+INDEX18 신원과 `ee97239d` 실행기를 유지해 재개했습니다. CPU 설치·격리 검증과 새 봉인
+영수증을 확인했으며, 이 과정에서 기존 작업·기출·실패 이력은 수정하지 않았습니다.
+
+**전체 목표는 아직 진행 중입니다.** 자동 인덱싱의 `ALL_ADMITTED_GRAPH_ITEMS`와 조회의
+이전 `OCCURRENCE_BACKED_PAST_EXAM`이 별도 인덱스라는 실제 연결 간극을 확인했습니다.
+새 조회는 성장하는 인덱스를 사용하고 과거 조회는 저장된 정확한 버전을 유지하도록
+[불변 검색 범위 호환 설계](docs/architecture/PINNED_EMBEDDING_NAMESPACE_READ_COMPATIBILITY.md)에
+따라 보완 중입니다. 실제 C1–C5 전달 검증·CPU/CUDA 여섯 회 실측과 기본값 결정은 아직
+완료하지 않았습니다. 아래 누적 릴리스 기록은 각 기록 시점의 검증 범위입니다.
+
 ## 현재 저장소 릴리스 선
 
 관리자 설정의 실행 설정에서 **출제·일반 검토·강화 검토 모델과 추론 강도**를 각각 선택하는
