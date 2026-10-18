@@ -454,6 +454,14 @@ Exit: 준비됨·대기·실패·차단 coverage가 정확하고, 기존 기능�
 있을 때만 수행하며, 없다면 그 단계만 대기로 두고 독립적인 위 작업을 진행한다.
 새 기능을 발견했다는 이유만으로 범위를 넓히거나, 기존 전체 목표를 축소하지 않는다.
 
+재점검 이후 실제 운영 경계(2026-10-18 08:13 UTC): `685b54a2`의 호환 공유 설치와
+55→56→57 migration, Chat/QUERY 복구 및 변경 없는 CPU INDEX 재개를 마쳤다.
+관련10개 서비스·API LIVE/READY·QUERY READY·INDEX STARTED·1,989개 설치 멤버 검증은
+PASS다. 이는 위1번의 배포 조합 수정 완료이며, 소비자별 실제 전달이나 C4 활성화 증거는 아니다.
+최신 metadata 관측889 bindings, 최신 세 인덱스277/545·301/545·311/545는 여전히 PARTIAL이다.
+다음은 위2–4번의 실제 종료 증거를 우선하고, 유효한 사용자 권한이 없는 단계에는 인증을
+가장하거나 새 권한을 만들지 않는다. [고정 설치본·복구와 정확한 잔여 범위](../operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#actual-shared-installation-and-recovery--0813-utc).
+
 ## 10. 필수 테스트와 전체 완료 기준
 
 - missing/stale target·schema/media/hash mismatch·immutable revision·duplicate refs.

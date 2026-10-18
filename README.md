@@ -592,9 +592,14 @@ Chat의 Graph 내용 해시와 임베딩 입력의 manifest 파일 해시를 구
 423개 통합 테스트·엄격한 타입 검사10개 모듈·배포용 패키지 검증을 통과했습니다.
 [소비 경로 설계](docs/architecture/GENERAL_CHAT_SIMILARITY_CONSUMER_DESIGN.md) ·
 [실제 검증과 남은 운영 범위](docs/status/CHAT_SIMILARITY_CONSUMER_CHECKPOINT_2026-10-18.md)
-후속으로 실제 전용 UID의 비활성 설치 검증, CPU 입력 준비, 정확한55→56→57 배포 자료와
-설치 검증을 마쳤고, 읽기 전용 검증으로 운영 DB55를 재확인했습니다. 기존 인덱싱·CPU
-환경·로그인 정책은 변경하지 않았습니다.
+10월18일08:13 UTC에는 `685b54a2`의 호환 API/Catalog/Chat을 실제 설치하고,
+정상 작업 종료·새 백업 후 운영 DB를 정확한55→56→57 순서로 전환했습니다.
+기존 QUERY owner의 API 연결만 새 설치본에 맞췄고, 변경하지 않은 CPU INDEX도 재개했습니다.
+관련10개 서비스 active, API LIVE/READY, QUERY READY·INDEX STARTED와 설치 멤버1,989개
+일치를 확인했습니다. Chat 자기 그룹과 검증된 Codex identity를 유지하는 설치 수정도 반영됐습니다.
+**새 Chat 유사도 기능은 여전히 비활성**이며, 기존 조회의 실제 사용자 전달·출제/검토 canary·
+CPU/GPU 여섯 비교 실행은 별도 미완료입니다. 최신 관측889 bindings는 전체 문항 수가 아니고,
+세 최신 인덱스는 각각277/545·301/545·311/545로 PARTIAL입니다. 로그인 정책은 그대로입니다.
 [실제 준비·검증 및 남은 전환 경계](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md)
 10월18일 원안을 재점검해, 추가 계약 확장보다 기존 기능의 실제 전달·증분 재사용·CPU/GPU
 실측을 우선하도록 [남은 수행 순서](docs/architecture/SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md#진행-재점검--2026-10-18-utc)를 고정했습니다.

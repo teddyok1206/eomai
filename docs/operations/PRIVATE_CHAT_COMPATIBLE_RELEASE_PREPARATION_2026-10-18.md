@@ -4,6 +4,12 @@ This record preserves the boundary between a protected passive installation,
 installation admission, operating release selection and actual user execution.
 It does not close the system RAG/embedding goal.
 
+Latest actual update: the shared685b54a2 release and exact0055→0056→0057
+migrations are installed; all ten affected services were restored at08:12 UTC
+and independent startup/health observation passed at08:13 UTC. Private Chat
+features remain DISABLED. Earlier sections below retain their timestamped
+preparation states, not the current migration head. See the final actual section.
+
 ## Actual passive owner installation
 
 Candidate `b01095b8ab5b688f34fd38046e83b70b93d54273` was installed through the
@@ -222,3 +228,119 @@ Items or a full source/lease audit. Exact evidence
 `/tmp/eom-index-observation.w7bCHalB/index-observation.json`, raw
 fa47c551474604d4be17ef6153142489b68cd0eea81d3c749b0d7769fa2ceb5f.
 Next routine check is not before07:30:41.806 UTC. No new Auth request was made.
+
+## Actual shared installation and recovery — 08:13 UTC
+
+This closes the bounded installer-composition corrections, not C1–C5 user
+acceptance, full vector coverage, private numerical activation or the full goal.
+The exact installed source is `685b54a2c22cfe4be0791432b304bf69e9a20573`, tree
+`5646ad8503b28f4603c96cd81ce3328136935c00`, containing the tested23ea5860
+corrections. The frozen protected context1.6 raw SHA is
+494166ef53a35350695c19d4c51725ef3d9a20ca946418693fc0898862d39341.
+No later documentation commit is substituted for this installed source.
+
+### Actual transition, not build-only evidence
+
+1. QUERY and INDEX received one natural main-process termination request. QUERY
+   exited first; INDEX completed its in-flight command without child signals,
+   force, timeout kill or resubmission. Both were inactive/dead, empty-cgroup,
+   exit0 at07:58:29 UTC. No target, lease, failure or workflow row was repaired.
+2. Supported maintenance verified queue/claim/native quiescence and stopped the
+   eight originally active shared/Chat/broker services. The actual maintenance
+   fence was held again across each adjacent migration callback; a saved receipt
+   alone was not used as continuing authority.
+3. The official backup script completed and verified its dump/manifest at
+   `/mnt/nas/eom/backups/postgresql/eom_20261018T075944Z_b246edce8867.dump`
+   (800,564,273 bytes). Backup result raw
+   bf612922ac277463aaf57335875540b430d5bea5d80fee866122f57fbb1b6ded.
+4. The unchanged protected callbacks applied/verified0056 usingd3939f72, then
+   applied0057 usingb01095b8 and independently verified0057 using685b54a2.
+   All four returned0; processes terminated. Actual production head is now
+   **20261017_0057**, not55. No arbitrary `upgrade head`, direct row edits,
+   production pytest, widened grant or historical-success rewrite occurred.
+5. The standard `deploy_release.sh --install` returned0 once. RECORD, migration
+   verification, dependency checks, Catalog/HWPX identities, pidfd isolation,
+   office conversion admission and the actual API isolation verifier passed.
+   Installer/wrapper processes1806547/1806531 were independently absent.
+   Authenticated smoke was correctly deferred without credentials, not claimed
+   PASS. Rollback/deployment record:
+   `/var/lib/eom-api/deployments/685b54a2c22cfe4be0791432b304bf69e9a20573.json`.
+
+The standard install creates its own delivery, separate from build-only3fz0x9:
+`/tmp/eom-api-build/685b54a2c22cfe4be0791432b304bf69e9a20573.wVv96A/dist`.
+Official installed build metadata and **1,989 actual installed members** match
+all three wheels; only pip-rewritten RECORD bookkeeping is excluded. The previous
+1,934-member count belongs todf408fef and is not reused for this release.
+
+| Actual installed wheel | Raw SHA-256 |
+| --- | --- |
+| Platform | `3920d862c8b8dac67d65efb69b976a0631cd5737a7e56596be84b4dd9cb47d77` |
+| API contracts | `feed45fd0ee5a093633e263ddc4180cacc35a14c85f7da5f834236521c884e97` |
+| API | `e9ce428f8bc276677df010f29fc5a80073f5101862efa3daa092bcd97bf3f30a` |
+| Source archive | `bc1b366fff15622777cd4f0acc3ec3032ba636442939ad70015cac25132e7f23` |
+
+### Actual service composition and unchanged boundaries
+
+The official Chat installer activated once, using the exactdf408fef runtime
+predecessor and independent4c0005d5 unit predecessor. The originally active auth
+broker was restored first. Actual owner UID980 retains GID977 alongside its
+existing groups; actual worker UID981 has only GID978, no eom/sudo/Docker/root
+group. Protected Codex0.162.1 identity/model/RAG policy selection was preserved,
+not recaptured. Existing six worker slots and authentication bytes were untouched.
+Private source/similarity flags remain DISABLED; no private owner configuration
+was created and no model submission was made by the installer.
+
+QUERY retains immutable owner0fab624c and its CPU numerical selection. Its
+existing typed configuration advances only `api_provider` to the exact685b54a2
+source, actual installed API wheel, unchanged public API configuration and the
+twelve checked provider members. The existing systemd template changes only the
+derived configuration hash. PREPARE/SELECT/START each ran once through exact
+predecessor CAS; this helper does not own Chat release selection. Before/after
+files remain at `/var/lib/eom-query-provider-685b54a2`.
+
+INDEX retains itsdf408fef owner, CPU prefix, unit, runtime configuration,
+resources, recipes, numerical spaces and vector history. Nine exact unchanged
+public/model/unit hashes passed before its one supported service start. All ten
+services were actually active at08:12:36 UTC: API, Catalog application runner,
+workflow maintenance/runner, HWPX application runner, Chat owner/worker, auth
+broker, QUERY and INDEX. Independent08:13:36 observation confirmed API
+LIVE/READY and current-invocation `REFERENCE_QUERY_OWNER_READY` /
+`LOCAL_INDEXING_SERVICE_STARTED`; these are not authenticated user-query results.
+No service restart loop, automatic retry, new login, TTL extension, root-auth
+copy, new worker group, external model API or GPU selection was used.
+
+Operational evidence stays outside Git at `/tmp/eom-c1-release.ekglSWGU`:
+
+| Evidence file | Raw SHA-256 |
+| --- | --- |
+| `installation-result.json` | `27b02e471eaff9fa50734d3c7272a3cf9bc5702252283caed5d901f0b28e1c80` |
+| `installed-api-payload-685b54a2.json` | `b118d23a177834dc9dd3a0b9326ea221b5bf963f062cbf764cae65b8778dc77c` |
+| `restore-chat-result.json` | `970132e2df72b2976d67f727cc9e22fed7a776066e8bbf91e8810c3901c90814` |
+| `query-START-result.json` | `fbeefb55a6ba89b5caada7011d605783993a2baed077e6bf8340c180e29a3fae` |
+| `restore-index-result.json` | `3fc9057954d51a285dbcec3695f7eb2d54f216d32907d03b1a619faf995f8124` |
+| `postflight-read.json` | `bacf3b8036e0a2cdb2196a20acbb8d45755d1d88621cea99bd9960a84cab990c` |
+
+### Current progress, recovery and next scope
+
+The due post-recovery metadata read (previous routine read07:31:35) reports
+889 encodings/bindings,229 index revisions,6 logical indexes. Latest revisions
+for the three observed indexes contain277/545,301/545 and311/545 bindings.
+**PARTIAL**, not889 Items, not current full source/permission/lease/Artifact/hash
+coverage. The difference from881 includes work completed during the earlier
+natural drain; this is not proof of new delta encoding after restart. The next
+routine count read is not before08:43:36 UTC.
+
+Keep the coherent685b54a2 CPU-only forward recovery set and retained predecessor
+bytes. Olddf408fef API/Chat expect a different exact migration head: restarting
+those old wheels at0057 is not an admitted rollback. Do not blindly reinstall,
+downgrade migrations or alter history. Private C4 CPU successor audit/probe/seal
+and activation remain separate. Original authenticated HTTP503/403 evidence and
+the sleeping user's observer are preserved; no new interactive authentication is
+requested before2026-10-19T05:10Z.
+
+Next remains the original plan: completed context read through real current
+authority, bounded variation and ordinary authoring/max3 review delivery,
+Chat/Assembly observation, current seed/delta/reuse evidence, then six actual
+CPU/CUDA measurements and conditional default/real CPU rollback. Source wiring
+already exists; this release does not manufacture those missing live results.
+Human educational evaluation is not a newly added gate. **Full goal OPEN.**
