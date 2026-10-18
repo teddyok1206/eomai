@@ -716,11 +716,10 @@ class PinnedArtifactReadContext:
             # Retention is a memory bound, not a corpus-size admission limit.
             # Evicted bytes must pass the same physical checks on their next use.
             while type(size) is int and self._retained_bytes + size > self.MAX_RETAINED_BYTES:
-                evicted_key, evicted = self._members.popitem(last=False)
+                _evicted_key, evicted = self._members.popitem(last=False)
                 self._retained_bytes -= len(evicted.payload)
-                decoded = self._decoded.pop(evicted_key, None)
-                if decoded is not None:
-                    self._decoded_bytes -= decoded.byte_charge
+                # Typed values have their own bounded LRU. Model reads still
+                # resolve exact bytes before a hit, even after raw eviction.
         member = _resolve_pinned_artifact_member(
             self._session,
             self.settings,

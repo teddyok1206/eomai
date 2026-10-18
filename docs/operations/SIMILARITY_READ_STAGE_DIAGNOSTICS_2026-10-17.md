@@ -192,5 +192,58 @@ Initial local test failures were fixture expectations (JSON Schema exception typ
 and `sys.dont_write_bytecode` location); production validation was not loosened.
 
 The old observer and failed503 history are preserved. No new observer was started
-at getpass and no user input was requested. Source22ea9d14's logger startup fix is
-still not deployed, and actual context delivery/measurement remains unverified.
+at getpass and no user input was requested. Source22ea9d14's logger startup fix was
+not yet deployed at that historical checkpoint. Later measurements follow below.
+
+## Actual3195fa32 corrective release and same-session read —2026-10-18
+
+The user's later explicit login offer superseded the unattended-login constraint
+for one supervised invocation. Actual guiadmin login succeeded08:35:15 UTC on
+685b54a2. Its original read returned503 after32s; complete server-stage evidence
+showed78.5s in COMPOSE_CONTEXT. No replacement request/key/model was submitted.
+
+Source3195fa327eb14722c7266fa64bc6ba5490d4352b batches fresh Item source relations,
+reuses exact frozen current-metadata interpretations and removes duplicated
+solution-resolution work. Source21-suite394 PASS/26.84s, strict mypy6 and Ruff14
+PASS; the official disposable PostgreSQL gate89 PASS/19.36s, guarded cleanupPASS.
+The temporary test database and test roles were removed; production DB tests0.
+
+QUERY/INDEX received only their exact original-main normal drain signal and
+finished successfully before CHECK/STOP. Standard --install ran once and
+completed0 at unchanged production head20261017_0057. Actual delivery:
+`/tmp/eom-api-build/3195fa327eb14722c7266fa64bc6ba5490d4352b.Lxt2Kc/dist`.
+Its three wheels and1,990 installed members matched independently, including
+unchanged file epochs. Build-only vPYB65 was explicitly not used as delivery.
+
+| Actual installed wheel | Raw SHA-256 |
+| --- | --- |
+| platform | `a97357ca164289f53f23c96b64050edf6f5f14bf84eb74e6ff39189398136534` |
+| API contracts | `f043881e6ff417d5020550c6893b569b9882f3b2ed2694d75053cf959aa35136` |
+| API | `c7b527d2071993ce4afec583b22b2e5494cc4a7023dbde5f89a9a94c2974567e` |
+
+Catalog's source tag advanced by its single exact source line only. Official
+Chat restoration and QUERY provider PREPARE/SELECT/START all completed0. The
+unchanged df408fef INDEX was restored; all10 services were active09:25:29.
+Current-invocation QUERY_READY/INDEX_STARTED and API LIVE/READY were confirmed
+separately. CPU/model/recipes, API flags, private Chat feature flags, worker
+identities and900s fresh-auth policy were unchanged. INDEX uses its own retained
+private code; shared API deployment is not an INDEX performance upgrade.
+
+The resident client was preserved. Its explicit READ09:25:42 used official
+same-session refresh with unchanged authenticated_at and no credential storage.
+Original read again returned503 at09:26:14. Completed server observations showed
+COMPOSE_CONTEXT66,401ms, before971ms, after1,093ms and final provenance72ms.
+Four full population passes still dominate. Neither source PASS nor successful
+installation closes C1. No preparation replay or new native/model work occurred.
+
+Temporary evidence: `/tmp/eom-c1-next-release.PVv202vx` and the resident
+`/tmp/eom-c1-consumer-u2HajatK`. The first combined postflight collector failed
+without a complete projection; do not infer fresh counts from it. Subsequent
+startup/health inspection was metadata-only. Last valid counts remain08:47:57;
+no new full coverage is claimed. Follow the30-minute count-observation cadence.
+
+Next: measure remaining repeated decoding/cache eviction before another narrow
+fix; do not increase the API timeout, weaken source reauthorization, regenerate
+the query or request another login merely to repeat the same failing read.
+Full C1–C5, full eligible seed/delta evidence and actual six-run CPU/CUDA/default
+gates remain open. Failure evidence and the compatible685 predecessor are retained.

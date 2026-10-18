@@ -23,8 +23,10 @@
    reference validation still run on every original phase.
 6. Structure: operation-local OrderedDict beside existing raw-member retention.
    One decoder/value per member; switching decoders cannot reuse another meaning.
-   Evict decoded values when their raw member is evicted. Only deeply immutable
-   frozen models are memoized; mutable results remain uncached, not silently copied.
+   The initial implementation also coevicted decoded values with raw members;
+   the independent-retention correction below supersedes that coupling. Only
+   deeply immutable frozen models are memoized; mutable results remain uncached,
+   not silently copied.
 7. Bound: at most32MiB of raw-byte charge and2048 decoded members, also bounded by
    the existing128MiB raw cache. Raw charge is not an exact Python RSS bound; measure
    synthetic allocation/peak memory and disclose the distinction. Oversized values
@@ -367,6 +369,66 @@ denial. Evidence: `/tmp/eom-c1-pool-db.OYfxwCPJ`. This verifies the real SQL on 
 fresh temporary DB at head57, not production authorization or actual HTTP latency.
 Strict mypy for six changed production modules and focused Ruff/diff checks pass.
 No timeout, decoded/raw retention bound, schema, model or freshness setting changed.
+
+## Independent bounded raw/typed retention — design before implementation
+
+2026-10-18 UTC. Installed3195 still returns the original completed-context503.
+The first full solution stage falls from7.785s to about4.05s on later captures,
+but candidate admission remains6–7.1s and entry materialization2.7–2.9s. This
+does not establish the actual cache occupancy or a pure CPU/DB decomposition.
+
+1. Change only the existing root Artifact reader's retention coupling, not source
+   capture, admission, permissions, the read window or a public protocol.
+2. Exact immutable Artifact members remain canonical. Frozen typed values remain
+   temporary, derived interpretations, never authorization or stored records.
+3. Preserve the exact Artifact/revision/path/raw-hash/schema/media key, decoder
+   identity and active owning root/session/thread. No latest or cross-root reuse.
+4. Every `read_model_member` still calls `read_member` and checks exact size BEFORE
+   looking up its model. After raw eviction this physically re-resolves/hashes
+   the member, so a missing/corrupt file or current provenance failure still fails.
+5. Access is repeated small JSON interpretation interleaved with large source/PNG
+   verification. A binary scan should not discard a separately bounded model.
+6. Keep the existing two OrderedDict LRUs but let each evict only its own values.
+   Remove raw eviction's decoded-key deletion; introduce no third cache or index.
+7. Retain raw128MiB and decoded32MiB/2048 limits unchanged. Their existing byte
+   charges are not exact RSS. Total retention was already bounded independently;
+   no bytes or models are newly admitted past either existing maximum.
+8. Both LRUs still die with their root and enforce its existing thread checks.
+   Current metadata and late authority/provenance fences remain unchanged.
+9. The existing infrastructure adapter owns this policy; domain, wire and worker
+   code are unchanged, with no dependency or optional capability addition.
+10. Decoder switching/failure, mutable outputs, own-budget eviction and all source
+    failures retain their behavior. No retry, timeout, auth or operational change.
+11. Raising either budget does not correct needless coupling. Removing repeated
+    fresh checks would weaken correctness. Independent existing limits are the
+    smaller correction because strict re-read already precedes every model hit.
+
+Before-change synthetic proof uses the real root reader and actual frozen
+solution-report decoder with545 temporary256KiB binary members:142,868,480 bytes
+exceed raw128MiB. Across four scans, physical member checks are546/1092/1638/2184
+cumulative; the1,478-byte report is decoded1/2/3/4 times despite only one decoded
+entry and1,478-byte charge, far below both decoded limits. This proves raw
+pollution can discard an eligible interpretation; it is not a measurement of the
+actual corpus's binary bytes or a claim that this alone fixes live C1 latency.
+
+### Independent-retention source gate
+
+The production diff removes only raw eviction's decoded-key deletion/accounting;
+the decoded LRU still owns its original32MiB/2048 bounds. Six focused suites pass
+102 tests in12.10s, including same decoder/size/schema checks, zero quota,
+mutable-result nonretention, own-budget eviction, root/thread guards and four
+fresh population captures. Seven additional raw-eviction cases retain a decoded
+value but reject missing/changed physical bytes, current approval/producer/hash
+changes and wrong root/thread before it can be returned. Strict mypy1, Ruff2 and
+diff checks pass.
+
+Re-running the same545-binary temporary-file probe retains exactly the original
+546/1092/1638/2184 physical checks, raw133,957,062 bytes and decoded1,478 bytes.
+Only report interpretation changes from1/2/3/4 to1/1/1/1 cumulative calls.
+Elapsed time changes3.053s→2.956s for this small-report fixture; that small timing
+delta is not a live performance claim or a prediction for larger reports/batches.
+No operating read, authorization, model execution, retention increase or timeout
+change is performed by this source gate. Actual installed C1 remains required.
 
 ## Truthful optional reader capability — design before correction
 

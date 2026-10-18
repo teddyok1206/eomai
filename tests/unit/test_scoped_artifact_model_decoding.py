@@ -187,7 +187,7 @@ def test_oversized_or_disabled_decoded_retention_does_not_change_valid_reads(tmp
 
 
 @pytest.mark.parametrize("bound", ["raw", "decoded_bytes", "decoded_members"])
-def test_lru_bounds_and_raw_eviction_remove_corresponding_decoded_models(tmp_path, bound):
+def test_each_existing_lru_enforces_its_own_retention_bound(tmp_path, bound):
     original, settings, arguments = _fixture(tmp_path)
     revision = original.get(ArtifactRevisionRecord, arguments["artifact_revision_id"])
     descriptors = [revision.manifest["files"][0]]
@@ -220,11 +220,79 @@ def test_lru_bounds_and_raw_eviction_remove_corresponding_decoded_models(tmp_pat
     decoder = Mock(side_effect=decode)
     for pointer in pointers:
         reader.read_model_member(pointer, expected_bytes=11, decoder=decoder)
-    assert len(reader._decoded) == 2 and reader._decoded_bytes == 22
+    retained_models = 3 if bound == "raw" else 2
+    assert len(reader._decoded) == retained_models and reader._decoded_bytes == 11 * retained_models
     assert reader.read_model_member(pointers[1], expected_bytes=11, decoder=decoder).value == 2
     assert decoder.call_count == 3
     reader.read_model_member(pointers[0], expected_bytes=11, decoder=decoder)
-    assert decoder.call_count == 4 and reader._decoded_bytes <= 22
+    assert decoder.call_count == (3 if bound == "raw" else 4)
+    assert reader._decoded_bytes <= reader.MAX_DECODED_BYTES
+
+
+@pytest.mark.parametrize(
+    "fault", ["missing", "bytes", "approval", "producer", "revision", "root", "thread"]
+)
+def test_model_retained_after_raw_eviction_still_requires_actual_member_resolution(
+    tmp_path, monkeypatch, fault
+):
+    original, settings, arguments = _fixture(tmp_path)
+    revision = original.get(ArtifactRevisionRecord, arguments["artifact_revision_id"])
+    binary = b"unparsedPNG"
+    binary_name = "evidence/other.png"
+    (Path(revision.nas_path) / binary_name).write_bytes(binary)
+    revision.manifest["files"].append(
+        {
+            "file_name": binary_name,
+            "sha256": sha256_bytes(binary),
+            "bytes": len(binary),
+            "schema_ref": "synthetic-image/1",
+            "media_type": "image/png",
+        }
+    )
+    revision.manifest_hash = content_sha256(revision.manifest)
+    session = MetadataSession(*original.records.values())
+    reader = PinnedArtifactReadContext(cast(Session, session), settings)
+    reader.prefetch(((arguments["artifact_id"], arguments["artifact_revision_id"]),))
+    pointer = reader.member_pointer(
+        arguments["artifact_id"],
+        arguments["artifact_revision_id"],
+        arguments["member_path"],
+        schema_ref=arguments["schema_ref"],
+        media_type=arguments["media_type"],
+    )
+    reader.MAX_RETAINED_BYTES = 11
+    decoder = Mock(side_effect=decode)
+    reader.read_model_member(pointer, expected_bytes=11, decoder=decoder)
+    reader.verify_member(
+        artifact_id=pointer.artifact_id,
+        revision_id=pointer.artifact_revision_id,
+        member_path=binary_name,
+        sha256=sha256_bytes(binary),
+        schema_ref="synthetic-image/1",
+        media_type="image/png",
+        max_bytes=len(binary),
+    )
+    assert len(reader._members) == len(reader._decoded) == 1
+    assert next(iter(reader._members))[2] == binary_name
+    assert next(iter(reader._decoded))[2] == pointer.member_path
+    path = Path(revision.nas_path) / pointer.member_path
+    if fault == "missing":
+        path.unlink()
+    elif fault == "bytes":
+        path.write_bytes(b'{"value":2}')
+    elif fault == "approval":
+        session.get(ArtifactRecord, pointer.artifact_id).approved = False
+    elif fault == "producer":
+        session.get(JobRecord, revision.job_id).status = "RUNNING"
+    elif fault == "revision":
+        revision.content_hash = "sha256:" + "f" * 64
+    elif fault == "root":
+        session.root.is_active = False
+    else:
+        monkeypatch.setattr(module, "get_ident", lambda: -1)
+    with pytest.raises((OSError, PinnedArtifactResolutionError)):
+        reader.read_model_member(pointer, expected_bytes=11, decoder=decoder)
+    assert decoder.call_count == 1
 
 
 def test_decoded_values_do_not_cross_root_request_lifetimes(tmp_path):
