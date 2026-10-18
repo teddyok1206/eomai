@@ -31,7 +31,7 @@ logical Item
 - 승인 문항, HWPX build, RAG 학습 현황과 Codex slot 사용 상태 조회
 - 25문항 모의고사 생산 계획·실행·검토·퇴역을 불변 checkpoint와 영수증으로 관리
 
-## 증분 RAG 목표의 현재 상태 — 2026-10-18 18:12 UTC
+## 증분 RAG 목표의 현재 상태 — 2026-10-18 18:20 UTC
 
 운영 API·Catalog·출제/HWPX 실행기·일반 채팅에 `3bf9ed04`를 설치했고,
 실제 wheel·RECORD·provider를 확인했습니다. 별도 QUERY SDK는 `d81b9ba3`, INDEX와
@@ -64,6 +64,13 @@ INDEX owner 설정 V3와 CUDA INDEX의 pre-compute READY·외부 실행 진입�
 전환은 아직 완료되지 않았습니다. 이 준비를 CPU/CUDA 여섯 회 실측의 대체 증거로 쓰지
 않습니다. [고정 CUDA INDEX 경계](docs/architecture/NATIVE_CUDA_INDEX_EXECUTION_DESIGN.md)를
 참고하세요.
+
+후속 후보 `32ec2822`는 새 프레임워크 없이 기존 물리 GPU 검사에 INDEX 전용 입구를
+추가했습니다. 관련 355개 소스 테스트·독립 검토와 별도 build-only 검사를 통과했지만
+운영에는 설치하지 않았습니다. 실제 유한 검증은 로그인 성공이 관측되지 않은 상태에서
+남은 실행 시간이 부족해 정상 중단했고, 실패 기록을 보존했습니다. **18:18 UTC에 같은
+INDEX18 자동 인덱싱을 정상 재개했고 관련 10개 서비스·API LIVE/READY를 확인했습니다.**
+새 로그인창이나 중복 요청은 만들지 않았으며, 전체 목표는 여전히 미완료입니다.
 [불변 검색 범위 호환 설계](docs/architecture/PINNED_EMBEDDING_NAMESPACE_READ_COMPATIBILITY.md),
 [이번 운영 반영과 남은 범위](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#lineage-map-release-installed-and-recovered--1636-utc),
 [저장된 인덱스 정본 점검](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#committed-index-storage-snapshot--1728-utc),

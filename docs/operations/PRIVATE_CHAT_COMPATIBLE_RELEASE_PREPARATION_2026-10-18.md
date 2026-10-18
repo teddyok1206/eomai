@@ -751,3 +751,55 @@ Raw SHA-256 values:
 `BUILD_ONLY_NOT_INSTALLED`; no model, DB migration, permission or service change
 was performed by this packaging step. The exact original six CPU/CUDA runs and
 C1–C5 actual delivery/finalization remain separate pending operating evidence.
+
+## Pre-auth finite stop and unchanged INDEX resumption — 18:20 UTC
+
+The second finite invocation remained at genuine getpass with no login event.
+Before its enclosing one-hour runtime could permit late preparation/model work
+into an insufficient remaining execution window, the operator recorded intent
+and sent one normal TTY interrupt. The first stop preflight correctly did not
+proceed because a broad `active` query also returned historical `active/exited`
+oneshots; those are not executing native processes. The subsequent bounded
+preflight excluded only terminal exited rows and observed no executing native or
+benchmark unit and still no login-success event before sending the interrupt.
+
+Exact original invocation `b05be86d45aa44139475c852bf9361ea` became FAILED/
+exit-code, MainPID0 and empty ControlGroup. Its failure is preserved, not reset,
+restarted or relabeled as authenticated acceptance. No original six-run launch or
+C1–C5 submission was observed from this procedure; user acknowledgement alone is
+not auth proof. Its unit/preparation/input pointers remain available for audit.
+No automatic retry, new FIRST key, different actor or new login prompt was used.
+
+Only after that terminal observation, one normal start resumed the exact unchanged
+INDEX18 service: PID2893537, invocation `fb0b1b5d8f6e4d96a7bc9ac9e0ea6fa9`,
+active/running. At18:18:51 UTC the actual ten related services were active/running
+and the correct API `/api/v1/health/live` and `/api/v1/health/ready` returned
+LIVE/READY. Two initial guessed health paths returned404 and the guessed absent
+`eom-web.service` is not the real `eom-web-gui.service`; those read-probe mistakes
+are retained, not classified as service outages. The original pane%89 is idle with
+input disabled, so a late password cannot be entered into an ordinary shell.
+
+Sanitized local recovery evidence in `/tmp/eom-finite-invocation2.mhHggZia`:
+
+- `preauth-stop-intent.json`, `preauth-terminal-observation.json`;
+- `index18-resume-intent.json`, `index18-resume-terminal.json`;
+- `final-runtime-observation.json`, raw SHA-256
+  `6f68cc03839da07528d2f910fda8f49197e5e7e5962d1377b255e085098de63e`.
+
+The final observation corrects a rounded-ahead timestamp in the earlier resume
+note; use18:18:51 for the precise final health observation, not18:19. These local
+operator records are not product Artifact identities or fresh source grants.
+
+Source-only successor `32ec2822e76b5d8d5b9de5ae1f734b507ecf9b1b` also passed:
+closed INDEX physical READY/retained/released-lock wrappers reusing the existing
+observer,355 focused source tests, strict observer typing, Ruff/format and
+independent review. One new build-only inspection of this changed source passed
+wheel/RECORD checks at
+`/tmp/eom-api-build/32ec2822e76b5d8d5b9de5ae1f734b507ecf9b1b.WnLjtH/dist`.
+Both source candidates remain **NOT_INSTALLED/NOT_ACTIVE**. No schema migration,
+permission, numerical prefix/model, CPU default or operating release was changed.
+
+Full goal remains ACTIVE/NOT_COMPLETE. Remaining operating proof is the original
+C1–C5 consumer chain and six frozen CPU/CUDA runs/finalization; actual GPU INDEX/
+QUERY/default/rollback is conditional on those real measurements and admission.
+No additional human educational-evaluation gate is introduced.
