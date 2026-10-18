@@ -11,10 +11,16 @@ from tests.unit.test_image_gpu_unit_observation import UNIT as IMAGE_UNIT
 from tests.unit.test_image_gpu_unit_observation import policy as image_policy
 
 CUDA_UNIT = "eom-embedding-benchmark-cuda@" + "1" * 32 + ".service"
+INDEX_UNIT = "eom-embedding-native-cuda-index@" + "2" * 32 + ".service"
 
 
 @pytest.mark.parametrize(
-    "account,unit", (("eom-image", IMAGE_UNIT), ("eom-embedding-cuda", CUDA_UNIT))
+    "account,unit",
+    (
+        ("eom-image", IMAGE_UNIT),
+        ("eom-embedding-cuda", CUDA_UNIT),
+        ("eom-embedding-cuda", INDEX_UNIT),
+    ),
 )
 @pytest.mark.parametrize(
     "fault",
@@ -66,11 +72,17 @@ def test_exact_family_device_allowlist_and_bounded_read_fail_closed(
     monkeypatch.setattr(
         policy, "subprocess", SimpleNamespace(run=read, TimeoutExpired=subprocess.TimeoutExpired)
     )
+
+    def reader():
+        if unit == INDEX_UNIT:
+            return policy.observe_native_cuda_index_unit_policy(unit)
+        return policy.observe_gpu_unit_policy(unit, worker_account=account)
+
     if fault is None:
-        assert policy.observe_gpu_unit_policy(unit, worker_account=account) == sha256_bytes(raw)
+        assert reader() == sha256_bytes(raw)
     else:
         with pytest.raises(ValueError, match="GPU_UNIT_POLICY_"):
-            policy.observe_gpu_unit_policy(unit, worker_account=account)
+            reader()
     assert len(calls) == 1
 
 
@@ -82,6 +94,7 @@ def test_exact_family_device_allowlist_and_bounded_read_fail_closed(
         ("--all", "eom-image"),
         ("other.service", "eom-embedding-cuda"),
         (CUDA_UNIT, "root"),
+        (INDEX_UNIT, "eom-embedding-cuda"),
         (None, "eom-embedding-cuda"),
     ),
 )
@@ -95,3 +108,14 @@ def test_arbitrary_or_cross_family_unit_is_refused_before_process_execution(
     )
     with pytest.raises(ValueError):
         policy.observe_gpu_unit_policy(unit, worker_account=account)
+
+
+@pytest.mark.parametrize("unit", (IMAGE_UNIT, CUDA_UNIT, "--all", None, INDEX_UNIT + "\n"))
+def test_index_policy_cannot_borrow_other_gpu_families(monkeypatch, unit):
+    monkeypatch.setattr(
+        policy,
+        "subprocess",
+        SimpleNamespace(run=lambda *_a, **_kw: pytest.fail("untrusted INDEX unit executed")),
+    )
+    with pytest.raises(ValueError, match="GPU_UNIT_POLICY_INVALID"):
+        policy.observe_native_cuda_index_unit_policy(unit)

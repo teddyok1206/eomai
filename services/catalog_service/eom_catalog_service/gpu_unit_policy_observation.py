@@ -1,4 +1,4 @@
-"""One bounded effective-policy reader for two existing fixed GPU unit families."""
+"""Bounded effective-policy readback through closed-purpose GPU entrypoints."""
 
 from __future__ import annotations
 
@@ -26,6 +26,22 @@ def observe_gpu_unit_policy(
             raise ValueError("GPU_UNIT_POLICY_INVALID")
     else:
         raise ValueError("GPU_UNIT_POLICY_INVALID")
+    return _observe_gpu_unit_policy(unit, worker_account=worker_account)
+
+
+def observe_native_cuda_index_unit_policy(unit: str) -> str:
+    """INDEX physical-policy readback only; original owner/source and root ACK are separate."""
+    if (
+        type(unit) is not str
+        or re.fullmatch(r"eom-embedding-native-cuda-index@[0-9a-f]{32}\.service", unit) is None
+    ):
+        raise ValueError("GPU_UNIT_POLICY_INVALID")
+    return _observe_gpu_unit_policy(unit, worker_account="eom-embedding-cuda")
+
+
+def _observe_gpu_unit_policy(
+    unit: str, *, worker_account: Literal["eom-image", "eom-embedding-cuda"]
+) -> str:
     expected = {
         "User": worker_account,
         "Group": worker_account,

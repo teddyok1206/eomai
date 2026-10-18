@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.embedding_vector_binary import read_unit_vectors
 from eom_catalog_contracts.inference_transfer_embedding import (
     MAX_EMBEDDING_INPUT_BYTES,
@@ -61,17 +62,19 @@ def _canonical_value(raw: bytes) -> dict[str, Any]:
     return value
 
 
-def _checked_batch(
+def validate_native_index_original_input(
     association: LocalEmbeddingLaunchAssociation, request: IncrementalEmbeddingInput
 ) -> tuple[LocalEmbeddingLaunchAssociation, IncrementalEmbeddingInput]:
-    association_value = parse_embedding_encoding_job_message(association.model_dump(mode="json"))
-    request = parse_incremental_embedding_input(request.model_dump(mode="json"))
+    """Revalidate the exact original association/input, without choosing a device."""
+    association_value = parse_embedding_encoding_job_message(
+        raw_similarity_contract_value(association)
+    )
+    request = parse_incremental_embedding_input(raw_similarity_contract_value(request))
     if not isinstance(association_value, LocalEmbeddingLaunchAssociation):
         raise NativeIndexHandoffError("NATIVE_INDEX_ASSOCIATION_INVALID")
     association = association_value
     if (
-        request.space.runtime.device != "CPU"
-        or request.batch_size != 4
+        request.batch_size != 4
         or request.threads != 4
         or request.job_id != association.intent.native_launch_job_id
         or request.space != association.owned_jobs[0].request.space
@@ -82,6 +85,15 @@ def _checked_batch(
         or sha256_bytes(canonical_json_bytes(request.model_dump(mode="json")))
         != association.owned_input.sha256
     ):
+        raise NativeIndexHandoffError("NATIVE_INDEX_ASSOCIATION_INPUT_MISMATCH")
+    return association, request
+
+
+def _checked_batch(
+    association: LocalEmbeddingLaunchAssociation, request: IncrementalEmbeddingInput
+) -> tuple[LocalEmbeddingLaunchAssociation, IncrementalEmbeddingInput]:
+    association, request = validate_native_index_original_input(association, request)
+    if request.space.runtime.device != "CPU":
         raise NativeIndexHandoffError("NATIVE_INDEX_ASSOCIATION_INPUT_MISMATCH")
     return association, request
 

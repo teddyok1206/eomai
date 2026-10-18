@@ -193,20 +193,26 @@ def _ready_descriptor() -> os.stat_result:
 
 def _write_ready(raw: bytes, initial: os.stat_result) -> tuple[int, ...]:
     _require(0 < len(raw) <= _MAX_READY_BYTES)
-    _require(
-        _epoch(_descriptor(_READY_FD, access=os.O_RDWR, mode=0o640, maximum=0)) == _epoch(initial)
-    )
-    remaining = memoryview(raw)
-    while remaining:
-        count = os.write(_READY_FD, remaining)
-        _require(0 < count <= len(remaining))
-        remaining = remaining[count:]
-    os.fsync(_READY_FD)
-    after = os.fstat(_READY_FD)
-    _require(_epoch(after)[:6] == _epoch(initial)[:6] and after.st_size == len(raw))
-    epoch = _epoch(after)
-    _assert_ready_current(epoch)
-    return epoch
+    # The root reader takes a shared READY-file lock, never the physical GPU lease.
+    fcntl.flock(_READY_FD, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    try:
+        _require(
+            _epoch(_descriptor(_READY_FD, access=os.O_RDWR, mode=0o640, maximum=0))
+            == _epoch(initial)
+        )
+        remaining = memoryview(raw)
+        while remaining:
+            count = os.write(_READY_FD, remaining)
+            _require(0 < count <= len(remaining))
+            remaining = remaining[count:]
+        os.fsync(_READY_FD)
+        after = os.fstat(_READY_FD)
+        _require(_epoch(after)[:6] == _epoch(initial)[:6] and after.st_size == len(raw))
+        epoch = _epoch(after)
+        _assert_ready_current(epoch)
+        return epoch
+    finally:
+        fcntl.flock(_READY_FD, fcntl.LOCK_UN)
 
 
 def _assert_ready_current(epoch: tuple[int, ...]) -> None:

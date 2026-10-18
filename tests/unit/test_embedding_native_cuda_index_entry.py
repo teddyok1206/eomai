@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import fcntl
 import json
 import os
 import signal
@@ -290,23 +291,54 @@ def test_ready_is_only_exact_named_root_regular_openfile_fd3_rdwr(monkeypatch, f
         assert not inherited
 
 
-@pytest.mark.parametrize("fault", [None, "write_zero", "oversized", "changed"])
+@pytest.mark.parametrize(
+    "fault",
+    [None, "write_zero", "oversized", "changed", "partial", "fsync", "contended", "unlock"],
+)
 def test_ready_partial_writes_are_bounded_fsynced_and_epoch_checked_on_fd3(monkeypatch, fault):
     payload = b'{"ready":true}' if fault != "oversized" else b"x" * (8 * 1024 + 1)
     data = bytearray()
     synced = []
+    events = []
+    locked = [False]
+
+    def ready_flock(fd, operation):
+        assert fd == 3
+        if operation == fcntl.LOCK_EX | fcntl.LOCK_NB:
+            assert not locked[0]
+            events.append("lock")
+            if fault == "contended":
+                raise BlockingIOError("synthetic READY reader contention")
+            locked[0] = True
+        else:
+            assert operation == fcntl.LOCK_UN and locked[0]
+            events.append("unlock")
+            locked[0] = False
+            if fault == "unlock":
+                raise OSError("synthetic READY unlock failure")
 
     def observed(fd):
         assert fd == 3
+        events.append("stat")
         return metadata(3, len(data), links=2 if fault == "changed" and data else 1)
 
     def write(fd, remaining):
-        assert fd == 3
+        assert fd == 3 and locked[0]
+        events.append("write")
+        if fault == "partial" and data:
+            raise OSError("synthetic partial READY failure")
         if fault == "write_zero":
             return 0
         count = min(7, len(remaining))
         data.extend(remaining[:count])
         return count
+
+    def sync(fd):
+        assert fd == 3 and locked[0]
+        events.append("fsync")
+        if fault == "fsync":
+            raise OSError("synthetic READY fsync failure")
+        synced.append(fd)
 
     monkeypatch.setattr(
         entry,
@@ -314,7 +346,7 @@ def test_ready_partial_writes_are_bounded_fsynced_and_epoch_checked_on_fd3(monke
         SimpleNamespace(
             fstat=observed,
             write=write,
-            fsync=lambda fd: synced.append(fd),
+            fsync=sync,
             lseek=lambda *_a: len(data),
             get_inheritable=lambda _fd: False,
             O_RDWR=os.O_RDWR,
@@ -323,17 +355,44 @@ def test_ready_partial_writes_are_bounded_fsynced_and_epoch_checked_on_fd3(monke
             SEEK_CUR=os.SEEK_CUR,
         ),
     )
-    monkeypatch.setattr(entry, "fcntl", SimpleNamespace(F_GETFL=1, fcntl=lambda *_a: os.O_RDWR))
+    monkeypatch.setattr(
+        entry,
+        "fcntl",
+        SimpleNamespace(
+            F_GETFL=1,
+            fcntl=lambda *_a: os.O_RDWR,
+            flock=ready_flock,
+            LOCK_EX=fcntl.LOCK_EX,
+            LOCK_NB=fcntl.LOCK_NB,
+            LOCK_UN=fcntl.LOCK_UN,
+        ),
+    )
     initial = observed(3)
+    events.clear()
     if fault is None:
         epoch = entry._write_ready(payload, initial)
         assert bytes(data) == payload and synced == [3]
+        assert events[0] == "lock" and events[-1] == "unlock"
+        assert events.index("lock") < events.index("stat") < events.index("write")
+        assert events.index("write") < events.index("fsync") < len(events) - 1
+        assert events[-2] == "stat"  # Post-write/epoch validation is still locked.
         entry._assert_ready_current(epoch)
     else:
-        with pytest.raises(ValueError):
+        with pytest.raises((ValueError, OSError)):
             entry._write_ready(payload, initial)
         if fault in {"write_zero", "oversized"}:
             assert not data and not synced
+        if fault == "oversized":
+            assert not events
+        elif fault == "contended":
+            assert events == ["lock"] and not data and not synced
+        else:
+            assert events[0] == "lock" and events[-1] == "unlock"
+        if fault == "partial":
+            assert 0 < len(data) < len(payload) and not synced
+        elif fault == "fsync":
+            assert bytes(data) == payload and not synced
+    assert not locked[0]
 
 
 @pytest.mark.parametrize("fault", [None, "identity", "pending", "argv", "execute", "silencer"])
@@ -653,7 +712,28 @@ def test_external_script_imports_only_existing_absolute_sealed_prefix_boundaries
         for name in modules
     )
     text = source.read_text()
-    assert "FDSTOREREMOVE" not in text and "LOCK_UN" not in text
+    assert "FDSTOREREMOVE" not in text
+    ready_writer = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_write_ready"
+    )
+    flock_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "fcntl"
+        and node.func.attr == "flock"
+    ]
+    assert len(flock_calls) == 2
+    assert all(node in tuple(ast.walk(ready_writer)) for node in flock_calls)
+    assert all(ast.unparse(node.args[0]) == "_READY_FD" for node in flock_calls)
+    assert {ast.unparse(node.args[1]) for node in flock_calls} == {
+        "fcntl.LOCK_EX | fcntl.LOCK_NB",
+        "fcntl.LOCK_UN",
+    }
     assert not any(
         (node.module or "").startswith("eom_")
         for node in tree.body
