@@ -2024,3 +2024,11 @@ evidence is synthetic, not operating model acceptance. Packaged privileged11-cas
 cohort is only collected here. Actual CUDA capture/operator composition and live
 six-run/default/rollback gates remain open.
 [Design, source proof and explicit activation limit](EMBEDDING_BENCHMARK_SERIES_CONTROL.md).
+
+Candidate93e9204f subsequently passed standard3-wheel/RECORD proof and separate
+passive owner installation. Read-only installed verification and actual root/
+workflow-owner framed transport/DAC/birth tests now pass11 cases. Obsolete import
+audit failure and private ancestor-permission10/1 failure are retained; only the
+test fixture changed, with no installer replay or production permission relaxation.
+Actual model/unit/source/default activation remains unperformed.
+[Exact installed bytes and successful/private failed evidence](EMBEDDING_BENCHMARK_SERIES_CONTROL.md#passive-installation-and-actual-private-os-proof--2026-10-18).

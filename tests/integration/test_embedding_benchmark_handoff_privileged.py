@@ -426,7 +426,10 @@ os.read(3,1)
 """
     with tempfile.TemporaryDirectory(prefix="eom-series-peer-", dir="/run") as temporary:
         parent = Path(temporary)
-        parent.chmod(0o711)
+        # The production resolver opens retained ancestor FDs with O_RDONLY,
+        # so this private fixture must give the actual owner group r-x, not --x.
+        os.chown(parent, 0, account.pw_gid)
+        parent.chmod(0o750)
         namespace = parent / "control"
         namespace.mkdir(mode=0o750)
         os.chown(namespace, 0, account.pw_gid)

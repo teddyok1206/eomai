@@ -92,3 +92,69 @@ and start the finite root entry for the actual admitted owner process. This sour
 does not select policies, create an administrator session or expose a privileged
 network API. Fresh-user/source gates, six real models and numerical/resource/
 regression/default/rollback acceptance remain OPEN; original C1–C5 scope is intact.
+
+## Passive installation and actual private OS proof — 2026-10-18
+
+Code candidate `93e9204f9985551b8df636ea4886ad9dbad3190f` passed the standard
+three-wheel/RECORD/installed-simulation build and was pushed. Directory:
+`/tmp/eom-api-build/93e9204f9985551b8df636ea4886ad9dbad3190f.CH46oP/dist`.
+Platform wheel raw SHA256:
+`fb74f37f94c1374632b0d2b0aca41e590541dfa0e0588b2c356ddca8b2b14799`;
+API-contract wheel raw SHA256:
+`123a2a4ca1ba7a30042212e7c076ff3b41d58669aea02e5fdc02718e3205a88f`.
+
+The existing protected installer559ada516fe9d46f57926aad70699e81deba5f1a18b4e25e3f6e6bcdf1384b71
+installed those exact two wheels to the separate passive owner prefix
+`/opt/eom/embedding-owner-releases/93e9204f9985551b8df636ea4886ad9dbad3190f`.
+No current selector, live service, numerical prefix, unit or default was changed.
+The first operator helper then failed before tests because its copied import audit
+still named the removed Orchestrator resource-client module. Original installer
+stdout and failed wrapper remain preserved; the original exception content was not
+retained by that wrapper (only stderr SHA0df06141e8ffc613b56eae84354038da7b08f595efe28dbeefdc57e5c612e58a).
+Independent package inspection established the obsolete target's absence and the
+completed passive install. No compatibility alias or production workaround added.
+
+The read-only resume verified installed wheel hashes and all16 original fixture
+bytes, used the current Catalog public module, and did not replay installation.
+Its first actual OS cohort was10 PASS/1 FAIL: the new test's root-owned711 parent
+allowed traversal but not the retained O_RDONLY ancestor directory descriptors
+required by the production resolver. The child correctly refused the preflight;
+the parent then timed out. Production directory/peer/authority checks were kept.
+
+Only that private test parent now uses root ownership/the actual owner group and
+0750, matching the retained-FD boundary. A new exclusive fixture copy reused the
+same immutable installed production bytes: **11 privileged tests PASS/no skips**,
+including actual root/workflow-owner UID/GID/PID/birth, root socket DAC, original
+association/prepared/completion framing and owned-socket cleanup. The child execs
+the explicit API Python with no supplementary groups, imports only the protected
+installed package, and confirms no optional ML import. The10 earlier DAC/ACL/
+environment/resource cases are rerun, not summed with historical results.
+Synthetic administrator/source callbacks, selection/completion and GPU counters
+remain synthetic: this does NOT prove real unit/model/source/IAM/lease cleanup,
+performance, six genuine launches, device default or consumer acceptance.
+The isolated fixture cohort also retains its nonblocking unknown-marker warning;
+no runtime validation was relaxed to remove it.
+
+Evidence root:
+`/opt/eom/embedding-benchmark-os-evidence/93e9204f9985551b8df636ea4886ad9dbad3190f`.
+Original failed helper raw:
+`f4e3ec5432ef7e38fd783f59670cb974406cd939f23296682c98f34903e0507e`;
+first resume raw:
+`bea730629afcd0961f98ad515bb428ec7543487dd848180ad8718521246d5ad9`;
+successful fixture-v2 helper raw:
+`243751ca627b263cc06beee967064b10e117f3491725e93944bc2e94230fc654`.
+Success lives under `series-control-fixture-v2`, while initial10/1 failure stays
+under `series-control-resume-1`. Successful test stdout raw SHA256:
+`fd36cbeec056060145090c0b48599627677c9d7e76259123407be319c3bec774`;
+fixture-v2 archive raw SHA256:
+`5830ce507e464e597f2425d11e05629dfd2dfbd060e2d59991b1bbf1194e8017`.
+Protected readback01:49 UTC confirms the exact successful result/stdout and11/no
+skips. All finite helpers are terminal. Source1326 evidence applies to unchanged
+production code; the later test-only parent correction is separately pinned here.
+
+No login prompt, credential persistence/TTL bypass, model, GPU lease, production
+Job/DB, NAS publication or activation occurred. Root helpers use the same EOM2
+noninteractive sudo TTY. Only private test namespaces were created/removed. The
+actual root CUDA capture/operator composition and full original goal remain OPEN.
+All zero execution counts above refer to these helpers, not the independently
+running INDEX service and its ongoing authorized work.

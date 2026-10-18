@@ -9,6 +9,25 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Series control package/OS checkpoint2026-10-18 01:49 UTC: exact93e9204f wheels/
+  RECORD proof and separate passive owner installation PASS. Actual root/owner
+  UID/GID/PID/birth, socket DAC and existing frames pass11 privileged cases/no
+  skips on installed bytes, no repository import or ML. Original obsolete audit
+  failure and10/1 private fixture failure preserved; only the test parent changed
+  to match retained O_RDONLY ancestor access. No production guard relaxation,
+  installer replay, model, DB/Job/NAS change, runtime selector or activation.
+  Real source/unit/GPU/model/default acceptance is not implied. Root CUDA/operator
+  capture and all C1–C5/six-model/full seed–delta/default/rollback gates remain OPEN.
+  [Exact package, original failures and successful scope](../architecture/EMBEDDING_BENCHMARK_SERIES_CONTROL.md#passive-installation-and-actual-private-os-proof--2026-10-18).
+- Due read-only INDEX snapshot01:49:32 UTC:793 encodings/bindings,205 revisions,
+  six logical indexes; latest per-index269/545,279/545,245/545 remain PARTIAL, not
+  793 Items or a fresh all-file hash audit. Latest five4 COMPLETED/1 RUNNING, all
+  five failure_code null; not a global failure/lease inventory. Actual named INDEX
+  service active/running PID1149648, actual reference QUERY owner active/running;
+  API/Catalog/Chat active. Original observer837676 still live with no replay/login.
+  Next routine observation no earlier02:19:32 UTC. Evidence:
+  `/tmp/eom-benchmark-series-observation.U6OgBU0I/index-observation.json`.
+
 - Finite series-controller source checkpoint2026-10-18 01:38 UTC: one preselected
   root listener receives the six original associations; exact stage/owner/birth/
   request/Job/order checks reuse existing control frames, root driver and listener
