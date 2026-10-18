@@ -143,6 +143,8 @@ def test_signal_capability_is_not_added_to_native_units_or_index_owner():
         "eom-embedding-native-cpu-probe@.service",
         "eom-embedding-native-query-prepare@.service",
         "eom-embedding-native-cpu-query@.service",
+        "eom-embedding-native-private-chat-query-prepare@.service",
+        "eom-embedding-native-cpu-private-chat-query@.service",
     }
     index = (
         root

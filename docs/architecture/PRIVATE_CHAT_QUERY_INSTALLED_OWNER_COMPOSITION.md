@@ -170,6 +170,47 @@ schema, migration, model/native launch or actual service activation occurs here.
 Installed configuration selection and acknowledged BUSY-original liveness remain
 separate required steps, not implied by having a listener implementation.
 
+### Fixed endpoint layout correction — 2026-10-18
+
+Installation review found the private prepare socket constant still under the
+API-only parent, incompatible with the host's mandatory distinct-parent rule.
+Select `/run/eom-private-chat-query-owner/prepare.sock` with owner
+`eom-workflow-runner`, group `eom-general-chat`, SGID parent2750 and socket0660.
+Keep `/run/eom-reference-query-owner/owner.sock` and its API group unchanged.
+The existing fixed-peer source socket is a different direction and is unchanged.
+
+Provide one explicit installed-owner client constructor and one separate tmpfiles
+selection for that private parent, not a fallback/path chosen by worker input.
+OS account lookup is O(1) configuration work, not source authorization; socket
+metadata/kernel peer and exact live-origin checks still apply per operation.
+No DB, schema/message bytes, queue, group membership or installed path changes
+are required by this source correction. Existing explicit endpoint injection is
+retained for declared fixtures. Default layout/account/group tests must cover
+the production constants as well as temporary socket fixtures. No private
+directory/unit/configuration is installed or activated by adding these sources.
+
+The fixed path correction and explicit installed client are implemented. Related
+seven suites **125 PASS /16.96s**, strict typing2, Ruff/format4 and diff checks
+PASS. Seven new layout/account cases cover real production path constants, fixed
+owner/Chat group selection, missing/root identity rejection and the separate
+opt-in tmpfiles selection; these account lookups remain declared fixtures, not
+actual protected-directory/DAC admission. The preceding host's real temporary
+socket cases remain included, not counted as a second OS deployment proof.
+
+Initial new layout tests failed3/3 before the fix as expected. The first expanded
+run then preserved84 PASS/1 FAIL: an older capability inventory expected six
+native templates although the two private templates already existed. Add exactly
+those two known templates to its inventory, keeping the assertion that every
+native template lacks CAP_KILL. No capability, runtime guard or schema byte was
+changed to pass that fixture. The final125 include the corrected inventory.
+
+Review of actual native START handling also found no generic WORKFLOW_START
+permission requirement to remove: private owner/source/Identity fences remain
+the authorization boundary. No permission widening or ADMIN impersonation was
+introduced. CPU-prefix publication still requires the existing supported drain,
+retained predecessor, byte audit and fresh admission; it has not been invoked
+against the running INDEX prefix by this source correction.
+
 ### Host source checkpoint — 2026-10-18 04:00 UTC
 
 The optional private listener and operation-local factory dispatch are implemented

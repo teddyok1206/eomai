@@ -20,7 +20,7 @@ from eom_catalog_contracts.similarity_context import SimilarityFailureCode
 
 PRIVATE_CHAT_PREPARE_REQUEST_BYTES = 32 * 1024
 PRIVATE_CHAT_PREPARE_REPLY_BYTES = 640 * 1024
-PRIVATE_CHAT_PREPARE_SOCKET = "/run/eom-reference-query-owner/private-chat.sock"
+PRIVATE_CHAT_PREPARE_SOCKET = "/run/eom-private-chat-query-owner/prepare.sock"
 type PrivateChatQueryPrepareAction = Literal[
     "PREPARE_PRIVATE_CHAT_QUERY", "READ_PRIVATE_CHAT_QUERY"
 ]
