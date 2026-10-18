@@ -195,6 +195,26 @@ files and diff checks PASS. No disposable PostgreSQL or operating migration was
 needed or executed for these filesystem/configuration-only corrections; earlier
 SQL evidence stays separately scoped. No new dependency was added.
 
+Final source candidate `23ea58605cdf3a74a308e3f11076ecb921f2ba12`, tree
+`620022fcd7d0a9f190ceb9101e052291de6bf11d`, is committed/pushed. The existing
+`deploy_release.sh --build-only` completed once with RECORD/installed-simulation
+verification PASS. It did not install packages or stop/restart operating services.
+Delivery directory:
+`/tmp/eom-api-build/23ea58605cdf3a74a308e3f11076ecb921f2ba12.xIaO3i`.
+
+| Prepared member | Raw SHA-256 |
+| --- | --- |
+| Platform wheel | `63721025f029ba3ee510c143141bd48ee4dbd3135bc4109117bb45b5ba6d2069` |
+| API-contract wheel | `1ef2010f3c3702f7ed0b9e1f595c23dffb6fc0ce90fdf1f442cc79d868f8392c` |
+| API wheel | `8864fe9c6f94f3435e143fdc3f453cc3126fcbff2d92330f79f1c74307839e0e` |
+| Source archive | `c124f39f984e15e9287a1b6c417c853c05f02a2483c816e646342fa0b61458f6` |
+| Installer in source/archive | `a991df784085db37d353e9b2af0d71ca55f8e01483242a3ade6b2d31d931627a` |
+| Owner unit in source/archive | `30ba79ed7019cf751efc2c9684a10bab928c49740c3fd4394b4a29e8a9ec4a20` |
+
+The two corrected release files were independently hashed out of this exact
+archive and matched source. This candidate is BUILD_ONLY/NOT_SELECTED; the earlier
+passive owner installation and protected migration stages remain separate pins.
+
 Routine metadata observation at07:00:41.806485 UTC continued the expected30-minute
 cadence:873 encoding/bindings,225 index revisions,6 logical indexes; latest-per-
 observed-index coverage273/545,293/545,307/545. Still PARTIAL, not873 distinct
