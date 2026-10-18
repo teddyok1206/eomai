@@ -349,6 +349,11 @@ def stage(
     )
     selected = runtime_commit or commit
     require_compatible_runtime(commit, selected)
+    configuration_only = (
+        not pin_codex_runtime
+        and previous_model_config_sha256 is not None
+        and previous_runtime_commit == selected
+    )
     for parent in (UNIT_ROOT, CONFIG_ROOT):
         require_root_directory(parent)
     # Enrolled worker auth is inspected only for metadata; never read/copy tokens.
@@ -369,6 +374,12 @@ def stage(
     selected_native_runtime: CodexCliIdentity | None = None
     if not pin_codex_runtime and previous_model_config_sha256 is not None:
         current = read_selected_model_configuration(secret=secret, source_commit=selected)
+        if configuration_only:
+            if current.model != model or (
+                rag_policy is not None and rag_policy != current.rag_policy
+            ):
+                raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
+            rag_policy = current.rag_policy
         selected_native_runtime = current.native_runtime
         if private_query_source is None:
             private_query_source = current.private_query_source
@@ -435,11 +446,15 @@ def stage(
             )
             updates[model_target] = (previous_model_config_sha256, 0o600)
     advance_release = previous_runtime_commit is not None and not (
-        pin_codex_runtime and previous_runtime_commit == selected
+        configuration_only or (pin_codex_runtime and previous_runtime_commit == selected)
     )
     existing_configs = {}
     for target, payload in configs.items():
-        if target == release_target and advance_release:
+        if target == release_target and configuration_only:
+            if not require_replay(target, payload, mode=0o600):
+                raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
+            existing_configs[target] = True
+        elif target == release_target and advance_release:
             assert previous_runtime_commit is not None
             if (
                 pin_codex_runtime
@@ -461,6 +476,8 @@ def stage(
         ):
             existing_units[target] = True
             continue
+        if configuration_only:
+            raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
         if unit_predecessor is not None:
             prior = subprocess.check_output(
                 [
@@ -482,6 +499,10 @@ def stage(
     source_needs_staging = source_prepared is not None and (
         not source_prepared[1] or not source_endpoint().path.parent.exists()
     )
+    if configuration_only:
+        require_chat_services_stopped()
+        if not require_replay(release_target, configs[release_target], mode=0o600):
+            raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
     if native_guard is not None:
         # Capture is not permission to race service startup or a CLI replacement.
         # Recheck the same file epoch and stopped services before any mutation.
@@ -510,6 +531,10 @@ def stage(
                 check=True,
             )
     for target, (digest, mode) in updates.items():
+        if configuration_only:
+            require_chat_services_stopped()
+            if not require_replay(release_target, configs[release_target], mode=0o600):
+                raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
         if native_guard is not None:
             native_guard.assert_unchanged()
             require_chat_services_stopped()

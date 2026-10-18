@@ -160,6 +160,18 @@ Staging keeps both chat services stopped. Activation uses an exact policy and
 worker protocol pin; nonsecret model configuration advances only from its supplied
 predecessor hash, and changed units only from the named predecessor source bytes.
 Protected credentials, worker authentication and conversation history are untouched.
+An explicit model-configuration SHA CAS may select source/similarity flags while
+the exact installed runtime commit remains unchanged. This config-only path must
+verify the existing release pin and both source-pinned unit bytes, preserve the
+parsed model/RAG policy/native CLI identity, and reject missing or foreign targets.
+It neither advances/recreates release.env nor repins a CLI or changes a unit.
+The existing compatibility/installed-release, stopped-service, configuration CAS
+and source-endpoint preflight checks remain required; stopped state and the same
+release pin are rechecked before mutation. File selection is bounded O(1) work,
+not a new authority or activation protocol. Treating this as a release advance
+rejects a valid equal predecessor; using CLI pin-only mode would incorrectly try
+to substitute a different selection operation. No model call or authentication
+transfer is involved, and ordinary startup/current authorization gates still apply.
 Source/disposable evidence and the then-pending live gates are recorded in
 `docs/status/GENERAL_CHAT_RAG_NATIVE_CHECKPOINT_2026-10-09.md`.
 

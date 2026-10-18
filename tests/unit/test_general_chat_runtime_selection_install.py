@@ -563,6 +563,186 @@ def test_normal_release_update_preserves_native_identity_without_implicit_cli_ca
     assert "capture-cli" not in value.events
 
 
+@pytest.mark.parametrize("enable_source", [False, True])
+@pytest.mark.parametrize("supply_policy", [False, True])
+@pytest.mark.parametrize("runtime_commit", [COMMIT, "d" * 40])
+def test_same_release_configuration_cas_changes_only_explicit_source_selections(
+    installed_runtime: InstallationHarness,
+    monkeypatch,
+    tmp_path,
+    enable_source,
+    supply_policy,
+    runtime_commit,
+) -> None:
+    value = installed_runtime
+    current = installation.configuration_payloads(
+        COMMIT,
+        MODEL,
+        rag_policy=POLICY,
+        native_runtime=IDENTITY,
+        private_query_source=not enable_source,
+        similarity_search=not enable_source,
+    )[value.target]
+    value.target.write_bytes(current)
+    value.release.write_bytes(f"EOM_RUNTIME_SOURCE_COMMIT={runtime_commit}\n".encode())
+    original_release = value.release.read_bytes()
+    release_epoch = value.release.stat()
+    original_units = {
+        unit: (installation.UNIT_ROOT / unit).read_bytes() for unit in installation.UNITS
+    }
+    monkeypatch.setattr(
+        installation, "source_endpoint_preflight", lambda _: (b"fixed-source-policy", True)
+    )
+    monkeypatch.setattr(
+        installation, "source_endpoint", lambda: SimpleNamespace(path=tmp_path / "source.sock")
+    )
+    installation.stage(
+        COMMIT,
+        MODEL,
+        runtime_commit=runtime_commit,
+        previous_runtime_commit=runtime_commit,
+        previous_model_config_sha256=sha256_bytes(current),
+        rag_policy=POLICY if supply_policy else None,
+        private_query_source=enable_source,
+        similarity_search=enable_source,
+    )
+    assert (
+        value.target.read_bytes()
+        == installation.configuration_payloads(
+            COMMIT,
+            MODEL,
+            rag_policy=POLICY,
+            native_runtime=IDENTITY,
+            private_query_source=enable_source,
+            similarity_search=enable_source,
+        )[value.target]
+    )
+    assert value.release.read_bytes() == original_release
+    after = value.release.stat()
+    assert (after.st_ino, after.st_mtime_ns, after.st_ctime_ns) == (
+        release_epoch.st_ino,
+        release_epoch.st_mtime_ns,
+        release_epoch.st_ctime_ns,
+    )
+    assert all(
+        (installation.UNIT_ROOT / unit).read_bytes() == payload
+        for unit, payload in original_units.items()
+    )
+    assert value.events.count("write-config") == 1
+    assert "installed" in value.events and "source-stopped" in value.events
+    assert "capture-cli" not in value.events
+    assert value.events[value.events.index("write-config") - 1] == "recheck-stopped"
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "missing-cas",
+        "wrong-cas",
+        "model",
+        "policy",
+        "release-missing",
+        "release-conflict",
+        "release-mode",
+        "unit-missing",
+        "unit-conflict",
+        "incompatible",
+        "busy",
+        "source-preflight",
+    ],
+)
+def test_same_release_configuration_cas_never_bypasses_existing_boundaries(
+    installed_runtime: InstallationHarness, monkeypatch, tmp_path, fault
+) -> None:
+    value = installed_runtime
+    value.target.write_bytes(value.desired)
+    model, policy, digest = MODEL, POLICY, sha256_bytes(value.desired)
+    if fault == "missing-cas":
+        digest = None
+    elif fault == "wrong-cas":
+        digest = "sha256:" + "f" * 64
+    elif fault == "model":
+        model = "different-model"
+    elif fault == "policy":
+        policy = POLICY.model_copy(update={"sha256": "sha256:" + "f" * 64})
+    elif fault == "release-missing":
+        value.release.unlink()
+    elif fault == "release-conflict":
+        value.release.write_bytes(f"EOM_RUNTIME_SOURCE_COMMIT={'d' * 40}\n".encode())
+    elif fault == "release-mode":
+        value.release.chmod(0o644)
+    elif fault == "unit-missing":
+        (installation.UNIT_ROOT / installation.UNITS[0]).unlink()
+    elif fault == "unit-conflict":
+        (installation.UNIT_ROOT / installation.UNITS[0]).write_bytes(b"foreign-unit\n")
+    elif fault == "busy":
+        value.busy = True
+
+    def reject(*_a, **_k):
+        raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
+
+    if fault == "incompatible":
+        monkeypatch.setattr(installation, "require_compatible_runtime", reject)
+    monkeypatch.setattr(
+        installation,
+        "source_endpoint_preflight",
+        reject if fault == "source-preflight" else lambda _: (b"fixed-source-policy", True),
+    )
+    monkeypatch.setattr(
+        installation, "source_endpoint", lambda: SimpleNamespace(path=tmp_path / "source.sock")
+    )
+    before = {
+        path: path.read_bytes()
+        for path in (
+            value.target,
+            value.release,
+            *(installation.UNIT_ROOT / u for u in installation.UNITS),
+        )
+        if path.exists()
+    }
+    with pytest.raises(ChatError):
+        installation.stage(
+            COMMIT,
+            model,
+            previous_runtime_commit=COMMIT,
+            previous_model_config_sha256=digest,
+            rag_policy=policy,
+            private_query_source=True,
+            similarity_search=True,
+        )
+    assert all(path.read_bytes() == raw for path, raw in before.items())
+    assert "capture-cli" not in value.events and "write-config" not in value.events
+    assert "daemon-reload" not in value.events
+
+
+def test_same_release_pin_is_rechecked_after_source_preflight_before_config_cas(
+    installed_runtime: InstallationHarness, monkeypatch, tmp_path
+) -> None:
+    value = installed_runtime
+    value.target.write_bytes(value.desired)
+
+    def substitute(_):
+        value.release.write_bytes(f"EOM_RUNTIME_SOURCE_COMMIT={'d' * 40}\n".encode())
+        return b"fixed-source-policy", True
+
+    monkeypatch.setattr(installation, "source_endpoint_preflight", substitute)
+    monkeypatch.setattr(
+        installation, "source_endpoint", lambda: SimpleNamespace(path=tmp_path / "source.sock")
+    )
+    with pytest.raises(ChatError, match="TARGET_CONFLICT"):
+        installation.stage(
+            COMMIT,
+            MODEL,
+            previous_runtime_commit=COMMIT,
+            previous_model_config_sha256=sha256_bytes(value.desired),
+            private_query_source=True,
+            similarity_search=True,
+        )
+    assert value.target.read_bytes() == value.desired
+    assert value.release.read_bytes() == f"EOM_RUNTIME_SOURCE_COMMIT={'d' * 40}\n".encode()
+    assert "write-config" not in value.events and "daemon-reload" not in value.events
+
+
 def test_normal_update_preserves_existing_source_and_similarity_selection_when_unspecified(
     installed_runtime: InstallationHarness, monkeypatch, tmp_path
 ) -> None:
