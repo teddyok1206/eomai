@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
 from eom_catalog_contracts.embedding_private_chat_query import (
@@ -49,7 +49,7 @@ class PreparedPrivateChatSimilarity:
 
     request_sha256: str
     query_basis: PrivateChatQueryBasis
-    query_text: str
+    query_text: str = field(repr=False)
     sources: tuple[PreparedSimilaritySource, ...]
     truncated: bool = False
 
@@ -58,11 +58,11 @@ class PreparedPrivateChatSimilarity:
 class VerifiedPrivateChatQueryRead:
     """Owner-verified committed file set after actual session/purpose/native admission."""
 
-    request: EmbeddingPrivateChatQueryInput
+    request: EmbeddingPrivateChatQueryInput = field(repr=False)
     result: EmbeddingPrivateChatQueryResult
     result_member: ArtifactMemberPointer
     shard_member: ArtifactMemberPointer
-    binary: bytes
+    binary: bytes = field(repr=False)
 
 
 @dataclass(frozen=True, slots=True)

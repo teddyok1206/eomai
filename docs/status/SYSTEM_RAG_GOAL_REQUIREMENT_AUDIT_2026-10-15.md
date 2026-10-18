@@ -9,6 +9,29 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Concrete private consumer source checkpoint2026-10-18 00:31 UTC: the existing
+  Catalog private read port now has a Runner-side actual source/Workflow/terminal/
+  publication composition. No launch/claim/session cache or approved-Item fallback.
+  Temporary question/vector values are excluded from repr. Combined783/37 suites
+  PASS (232.63s), strict8/Ruff/format6/shell/diff PASS. New29 source tests use actual
+  local ORM/history/control/Artifact files with declared Chat/IAM/numerical seams;
+  retained draft failures and their corrections are recorded, not hidden.
+  Exact135-pin finite PostgreSQL98/257 gate PASS/no skips/both cleanup PASS,
+  original process1356709 and wrapper terminated normally, read back00:37 UTC:
+  `/opt/eom/embedding-benchmark-os-evidence/private-consumer-CVqopCqm`.
+  All135 pins stayed unchanged through cleanup. Five new PG cases cover actual
+  preparation/start/replay and canonical private read/registered-index candidate
+  composition/revocation. Chat/IAM/declared Workflow and numerical seams remain
+  synthetic. No operating DB/genuine model/install or Chat activation. Separate
+  detached initial-context code is not covered by this exact DB snapshot.
+- Existing actual-user HTTP gate retried once through original observer837676,
+  same original key,2026-10-18 00:30 UTC. Official in-memory refresh PASS retained
+  session/operator/authenticated_at; preparation403 AUTH_REAUTHENTICATION_REQUIRED.
+  No new login, token persistence/transfer, new key or freshness change. No further
+  replay; preserve observer and defer only this gate during the no-login interval.
+  C1 read/actual consumers/full seed–delta/six device comparisons/default/rollback
+  and complete C4 tool delivery remain OPEN, not inferred from source PASS.
+
 - Owner-local private preparation checkpoint2026-10-18 UTC: actual caller,
   original typed Chat origin and pinned context now construct the existing
   private request/context before atomic start. Shared domain key bytes unchanged;

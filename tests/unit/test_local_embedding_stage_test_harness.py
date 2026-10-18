@@ -79,8 +79,10 @@ def test_private_declared_workflows_do_not_share_the_empty_history_migration_dat
     assert "test_private_chat_query_context_persistence.py" in stage
     assert "test_private_chat_query_command_lineage.py" not in stage
     assert "test_private_chat_query_submission.py" not in stage
+    assert "test_private_chat_similarity_read.py" not in stage
     assert "test_private_chat_query_command_lineage.py" in owner
     assert "test_private_chat_query_submission.py" in owner
+    assert "test_private_chat_similarity_read.py" in owner
     assert "test_private_chat_query_owner_admission.py" in owner
     assert "test_private_chat_query_context_persistence.py" not in owner
 

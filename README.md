@@ -479,6 +479,13 @@ DB 단계 연결은 당시 미완료였습니다. [원본 접수·동시성·롤
 시작 접수는 대역입니다. 아직 운영 설치·채팅 도구 활성화나 전체 목표 완료는 아닙니다.
 [준비 경로와 검증 범위](docs/architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#owner-local-preparation-before-submission)
 
+완료된 채팅 질문 벡터를 공식 등록 인덱스와 비교하는 실제 읽기 어댑터도 연결했습니다.
+원 작업·종료 기록·게시 파일을 확인하고 전달 직전 권한과 파일 생산 작업을 다시 확인합니다.
+관련 소스783/37묶음·strict8·임시 PostgreSQL98/257·각 정리 PASS입니다. 새 DB 시험에는
+최초 접수·재사용과 실제 등록 인덱스의 후보 구성도 포함되지만, 채팅·권한·수치 모델은
+대역입니다. 운영 채팅 도구 활성화와 전체 목표는 아직 미완료입니다.
+[읽기 연결·검증·미완료 범위](docs/architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#concrete-current-private-similarity-read-composition)
+
 아래는 날짜·후보별 역사적 구현 기록입니다. 당시의 미완료 표기는 현재 종합 상태와
 구별하며, 최신 실제 실행·활성화 범위는 위 표와 연결된 상태 문서를 기준으로 합니다.
 

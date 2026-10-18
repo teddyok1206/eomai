@@ -852,6 +852,79 @@ non-live tests and documentation can continue.
 
 ## Original atomic submission — design before persistence behavior
 
+### Concrete current private similarity read composition
+
+The Runner-side adapter implements Catalog's existing private similarity read
+port; it does not introduce another search engine or worker access to SQL/NAS.
+Trusted composition supplies the original private Workflow request and Chat
+origin, not a model-supplied completed Workflow ID or numerical result. Canonical
+data stays in the original Workflow/step/terminal and Orchestrator-published
+Artifact revisions. Same actor/turn key, request/context/origin and all index/
+policy/control hashes remain pinned. No wire schema, DB, index or queue change.
+
+Each method opens one clean short read root, reuses the existing source owner and
+checks current Chat/Identity/public-source authority. Completed-query resolution
+uses the original indexed key, shared Workflow/step/terminal validators and the
+existing canonical publication reader; it never depends on an old command lease
+or surviving physical unit. Original completion/history/receipt/member/byte/hash
+closure is required, then current sources, row/terminal state and producer
+provenance are checked again before delivery. Missing/pending work is explicitly
+unavailable; failed or inconsistent completed work is an error, never a retry.
+
+Preparation/text and document-index reads also remain behind that source owner.
+Temporary question/vector bytes exist only in bounded read values, not persistent
+metadata, logs or repr. Current prepared values are compared, not trusted as an
+authorization cache. Access is fixed indexed original-key/step/terminal lookup,
+bounded history and O(authorized index rows × dimensions) materialization via one
+root-local immutable Artifact context; current permissions are never cached.
+
+The adapter has no submission, claim, launch or commit method. It adds no runtime
+activation. A synthetic result provider would be shorter but could bypass the
+original receipt/terminal/current-authority checks; reusing the reference QUERY
+would misrepresent private text as an approved Item. Both are rejected.
+
+Staged verification2026-10-18 UTC: concrete read implementation and29 new source
+cases exercise actual local Workflow/terminal/Job history and committed file
+resolution, with declared Chat/IAM/numerical seams. The initial fixed-resource
+fixture mismatch was corrected by using the same explicit resource profile as
+the existing native fixture; production admission was not relaxed. A4-PASS/
+1-FAIL adversarial run found that `None` preparation skipped the new optional
+comparison. First capture and mandatory checked reads are now separate methods;
+missing preparation and integer-as-boolean values are rejected. An expanded
+15-PASS/9-FAIL draft injected fake row values before `populate_existing`, so the
+correct fresh SQL read replaced them. Tests now inject immediately after the SQL
+read and record a witness, rather than weakening fresh-read behavior. Final29
+PASS precedes a fixture-only factoring for the combined/new PostgreSQL gate.
+
+The final combined source783/37-suite gate PASSED in232.63s, strict8/Ruff/format6/
+shell/diff PASS. New4 concrete-provider PostgreSQL cases were collected; a fifth
+new actual preparation→atomic submission/replay case extends the existing suite.
+Exact135-pin finite98/257 PostgreSQL gate PASSED, no skips and both cleanup PASS,
+read back2026-10-18 00:37 UTC, at
+`/opt/eom/embedding-benchmark-os-evidence/private-consumer-CVqopCqm`;
+helper raw `c9cb7a8648cd55753f6b567f27eeb67597d12cd946044993c8d0043f6497fe62`.
+Embedding stdout raw `178865dd1341a417e0c18508e6b651f2c676bbf7b85809642d17a6ccb7dfc2c8`;
+stage stdout raw `8a1dfd0ce82cddf2a5dfa404a5639222e829abb2333a319f9b950c9814a0a2bf`.
+Original root1356709 and wrapper1356702 terminated normally; all135 source/test/
+migration pins remained unchanged through cleanup. The five new PostgreSQL cases
+cover preparation→atomic create/replay, original completion/terminal/canonical
+bytes, actual registered-index candidate composition and live-claim/mid-read
+public revocation. Ranking/composition and committed SQL/files are real; Chat/IAM/
+declared Workflow metadata and numerical backend remain synthetic. No operating
+DB/genuine model/installation/tool activation or new login has occurred. No
+actual Chat delivery or full goal completion is claimed. Separate detached
+initial-context selection code is not covered by this snapshot.
+
+Independent C1 HTTP gate2026-10-18 00:30 UTC: the original live observer837676
+received one supported explicit same-key REPLAY, not a new key/login. Its official
+in-memory refresh succeeded once with the same session/operator and unchanged
+`authenticated_at`; preparation then returned403 `AUTH_REAUTHENTICATION_REQUIRED`.
+This does not prove C1 context read or grant a fresh native execution. No token/
+password was extracted, persisted or transferred, no freshness setting changed,
+and no additional replay was submitted. Preserve the original observer in
+AWAIT_EXPLICIT_REPLAY; defer this freshness-gated HTTP acceptance while respecting
+the user's no-login interval. Independent source/disposable DB work continues.
+
 ### Owner-local preparation before submission
 
 The next application entrypoint constructs the already-released private request

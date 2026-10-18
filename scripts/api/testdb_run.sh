@@ -306,6 +306,7 @@ if [[ "${action}" == "embedding-tests" ]]; then
     tests/integration/test_private_chat_query_owner_admission.py \
     tests/integration/test_private_chat_query_command_lineage.py \
     tests/integration/test_private_chat_query_submission.py \
+    tests/integration/test_private_chat_similarity_read.py \
     tests/integration/test_local_embedding_completion_persistence.py \
     tests/integration/test_private_chat_query_completion_persistence.py \
     tests/integration/test_local_embedding_native_executor.py

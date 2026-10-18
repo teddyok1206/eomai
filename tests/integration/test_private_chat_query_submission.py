@@ -12,6 +12,7 @@ from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
+from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryCaller
 from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
 from eom_identifiers import canonical_json_bytes
 from eom_orchestrator.models import JobRecord
@@ -23,6 +24,7 @@ from eom_workflow.private_chat_query_submission_context import (
 )
 from eom_workflow_runner import native_start_command
 from eom_workflow_runner import private_chat_query_admission as admission
+from eom_workflow_runner import private_chat_query_preparation as preparation_module
 from eom_workflow_runner.models import (
     WorkflowCommandRecord,
     WorkflowDefinitionRecord,
@@ -163,6 +165,45 @@ def test_postgres_original_private_start_is_atomic_replayable_and_text_free(subm
         )
     workflows, commands = retained_rows(value)
     assert len(workflows) == len(commands) == 1
+    assert value.executor.mock_calls == []
+
+
+def test_postgres_private_preparation_constructs_first_request_and_reuses_original_pins(
+    submission, monkeypatch
+):
+    value = submission
+    arguments = dict(
+        caller=EmbeddingRegistryCaller(value.context.origin.actor_id),
+        origin=value.context.origin,
+        context=value.request.context_request,
+        owner=value.owner,
+        executor=value.executor,
+    )
+    with value.publisher.sessions.begin() as session:
+        first = preparation_module.prepare_and_start_private_chat_query_in_session(
+            session, **arguments
+        )
+        ids = first.workflow.workflow_id, first.command.command_id
+        initial = first.workflow.initial_request
+        assert first.workflow_created and first.command_created
+        assert TEXT.encode() not in canonical_json_bytes(initial)
+    monkeypatch.setattr(
+        preparation_module,
+        "read_pinned_private_chat_query_controls",
+        Mock(side_effect=AssertionError("rebuilding original preparation controls")),
+    )
+    monkeypatch.setattr(
+        preparation_module,
+        "effective_permissions",
+        Mock(side_effect=AssertionError("rebuilding original audit")),
+    )
+    with value.publisher.sessions.begin() as session:
+        replay = preparation_module.prepare_and_start_private_chat_query_in_session(
+            session, **arguments
+        )
+        assert (replay.workflow.workflow_id, replay.command.command_id) == ids
+        assert replay.workflow.initial_request == initial
+        assert not replay.workflow_created and not replay.command_created
     assert value.executor.mock_calls == []
 
 
