@@ -85,6 +85,26 @@ The new client/wait use case is not wired into the operating Chat broker yet;
 canonical provenance, truthful bounded candidate filtering and live delivery
 remain required. Existing passive owner3b0626ac and running services are intact.
 
+### Committed package candidate — 2026-10-18 04:54 UTC
+
+Code `48d28c2a2c879d118f294794c124804f3e8572c4` is pushed. Strict typing2,
+Ruff/format4, diff and separate-process client/completion imports without
+torch/transformers/sentence-transformers/numpy PASS. Standard three-wheel/RECORD/
+installed simulation PASS; exact client/completion modules and unchanged packaged
+private prepare1.0 schema match source inside the platform ZIP.
+Build directory:
+`/tmp/eom-api-build/48d28c2a2c879d118f294794c124804f3e8572c4.nkvNmb/dist`.
+Platform raw1dcc9841da9ef90702ddac364fbd0751b330fcf9afd6aaf2218d35157a86f9cd;
+API contracts raw47de20c7f244ab3c5250c5729e193f457983cc403bb9f2bc3135f8a9f643e454;
+API raw814cd45b1b958ac85bdc933727f528f53af486fbd22e53f7267ab2dc261c027e.
+
+This client-only candidate is NOT_INSTALLED/NOT_ACTIVE; the prior passive QUERY
+composition3b0626ac is not replaced merely to add an unused Chat-side helper.
+No production DB/schema/state/claim/runtime/unit/policy/default change or manual
+model/GPU/HTTP replay occurred. Background INDEX remains separately observed on
+the thirty-minute schedule. Full consumer/coverage/six-actual-run/default/rollback
+gates remain OPEN; the next boundary is canonical provenance and real Chat use.
+
 Design before behavior, 2026-10-18 UTC. Continues
 [initial private context selection](PRIVATE_CHAT_CONTEXT_PREPARATION.md).
 
