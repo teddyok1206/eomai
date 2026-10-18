@@ -99,3 +99,70 @@ This is a developer build, not protected installation or root namespace acceptan
 The important-milestone development report was delivered and archived as
 `devreport_1809959814904a03baebec0c72fa0c7d` at02:02:47 UTC. No credential,
 full log, prompt/result or item content was included. Full goal remains active.
+
+## Next actual gate: one read-only root capture
+
+Reuse the existing protected passive-owner installer for the exact c6c01fe7
+two-wheel candidate, without selecting it for any live service. Run one bounded
+oneshot under the existing admitted OLD interpreter, not CUDA Python, with the
+already installed immutable CUDA host-cache file bound privately and read-only.
+The working directory stays the existing protected empty loader directory.
+
+The gate has no source/user/Job request and never calls the series driver. Device
+access is closed, capabilities empty, network/private home/NAS/auth/repository
+access unavailable and runtime files read-only. Check exact installed module/wheel
+bytes, actual root IDs, actual kernel mount/current device/boot/account/FD closure,
+native-interpreter rejection in this nonnative process, device R/W denial and
+before/after descriptor identity. Preserve original gate logs and failures; no
+automatic retry, model/lease, production DB, selector or default mutation.
+This advances the actual installation/namespace proof only, not six numerical
+runs or consumer/source acceptance. A sudo -n failure must return without a prompt.
+
+## Actual passive installation and root capture PASS — 2026-10-18 02:07 UTC
+
+The above gate ran once through the existing EOM2 sudo TTY, without a prompt.
+The exact c6c01fe7 owner wheels were installed to the separate immutable prefix
+`/opt/eom/embedding-owner-releases/c6c01fe74308b58b03e65248323b92d823019ada`.
+No service selector or numerical prefix was replaced. Existing owner releases,
+installation/admission receipts and failure history were preserved.
+
+The fixed root oneshot
+`eom-benchmark-cuda-capture-c6c01fe7.service` used the admitted OLD interpreter,
+closed device policy, empty capabilities and the existing immutable CUDA host1.1
+cache privately/read-only bound to `/etc/ld.so.cache`. Actual root PID1425119,
+invocation `1b59d279452646a880114f932fc6d761`, reported PASS at02:07:26.636071 UTC:
+
+- Actual installed module bytes match the retained wheel, with no optional ML import.
+- Existing native interpreter guard rejects this nonnative root process.
+- The same real receipt/config/inventory/proof/bundle/boot/accounts/device and
+  kernel-mounted host/resource-file checks pass; no synthetic witness was supplied.
+- All four device R/W attempts are denied. No physical GPU flock is acquired.
+- Held descriptors return to their exact original fd/device/inode/mode baseline;
+  the closed host subsequently rejects reuse.
+- Model/tokenizer/forward, Job/production DB/NAS and runtime activation counts0.
+  CPU default and existing services remain unchanged.
+
+`systemd-run --wait` returned0, and independent protected readback verified the
+original result/stdout/stderr hashes, both installed wheel hashes and changed
+module bytes. The journal has matching start/successful-deactivation/Finished
+events for the exact invocation; original gate/helper processes are terminal.
+An unloaded unit's empty InvocationID was NOT used alone as success evidence.
+Journal resource accounting is16.366s CPU /439.3MiB peak, not model performance.
+
+Protected evidence:
+`/opt/eom/embedding-benchmark-os-evidence/c6c01fe74308b58b03e65248323b92d823019ada`.
+Capture stdout raw SHA256:
+`ab8c8434cd519b91812afe3404c0cb212e0d1449a014ed644bf60780bc11b2cb`;
+capture stderr raw SHA256:
+`95ab6904d0e438f91154edf598c4325d5bf5db8668922f7ecdcf89d11384f2ed`.
+Operator gate raw7a87f78dfc7c1e5ee71140b8880f9d9c3487cc4b6b214a677ab9d9e65115d875;
+actual capture helper raw40fc2d943bfd224864dbd9fc422972364f8407fddbd59d35a6514478cdce8ff8;
+independent observer rawbba6069563098844802e3daad86a6984b03074a511bebc6b7d8e2814361a8f0f.
+Bounded local preparation/readback records are under
+`/tmp/eom-benchmark-cuda-capture.oes4Wx8d`; they are not canonical source Artifacts.
+
+This closes actual installed root *file capture*, not the finite series' source/
+Job admission, actual six CPU/CUDA model launches, performance/default decision,
+QUERY/DOCUMENT coherence/rollback or C1–C5 consumer activation. The original
+authenticated HTTP observer is still retained without another REPLAY/login.
+Full goal remains IN_PROGRESS, with no authentication freshness or permission change.
