@@ -318,6 +318,45 @@ private policy/admission, configuration installation, numerical successor and
 actual consumer/source/OS verification remain required. This composition does
 not close acknowledged-BUSY liveness, Chat provenance/delivery or C1–C5.
 
+### Exact package and passive protected installation — 2026-10-18 04:37 UTC
+
+Source `3b0626ac60b93f4248a21ae9fb899a30b4416dd1` is pushed. Standard build-only
+three-wheel/RECORD/installed simulation and exact eight production/schema/unit
+members in the platform ZIP PASS. Build:
+`/tmp/eom-api-build/3b0626ac60b93f4248a21ae9fb899a30b4416dd1.6XgF0h/dist`.
+Platform raw994acf4bbb3223d51e53339fed29127c79c09b981db1de601706321a48de2826;
+API contracts raw66473443b41d7bdac823f5cbe0f28ef3bcb225ea561bd0b47fa63698055d38e8;
+API rawf4164cb075fa9934a2465602566f80351188a2091d99f2e3f00b23b4d29558a0.
+
+The unchanged protected owner installer raw559ada516fe9d46f57926aad70699e81deba5f1a18b4e25e3f6e6bcdf1384b71
+installed the exact platform/API-contracts pair to the new no-clobber prefix
+`/opt/eom/embedding-owner-releases/3b0626ac60b93f4248a21ae9fb899a30b4416dd1`.
+Independent readback matched both protected wheel hashes/root ownership and all
+eight selected immutable member hashes. An actual subprocess under UID990,
+GID1000, no supplemental groups, zero permitted/effective/ambient capabilities
+and NoNewPrivs1 imported all six production modules from that protected prefix,
+verified the packaged configuration schema and loaded no numerical packages.
+This is actual passive installation/low-UID import, NOT application startup,
+provider/source authorization, socket/DAC delivery or native numerical admission.
+
+Evidence `/tmp/eom-private-owner-passive-bash.FHeJvGvR`;
+wrapper raw55bb509816a40b1dec59cc557f88debb8eea4cfa0425350a7041ac008f2afdcd;
+result raw8ee2e4f49c1178b42243e6ac19d3a5bfc24c432629d3f4b9c9d82ac52f7deb90;
+installed import stdout rawab2cd08d5fbb67494e2a68a1503c58a04862770920b0a0ae3505eaf049bb70f1.
+Wrapper1523581/installer1523582 are terminal. The first invocation remains at
+`/tmp/eom-private-owner-passive-install.pk8m9VeA`: direct invocation of the
+existing root0444 script returned sudo command-not-found before installer entry;
+stdout was empty and exact target absence was confirmed. The corrected distinct
+invocation used the existing protected `/usr/bin/bash` without chmod or permission
+changes; it was an invocation fix, not replay of an uncertain installation.
+
+No unit/env/polkit/migration/service selection or numerical prefix was changed.
+Existing INDEX1149648 and reference QUERY1149347 remain active/running at04:36.
+API/Catalog and operating QUERY release remain unchanged; CPU is still default.
+Manual model/GPU/HTTP replay0, no login prompt and no auth lifetime/authority
+change. All full-goal consumer/coverage/six-real-run/default/rollback gates remain
+OPEN; protected prefix installation is not operating activation.
+
 ### Thirty-minute operating metadata observation — 2026-10-18 04:25 UTC
 
 One supported read-only observation at04:25:17.191411 UTC found833 encoding
