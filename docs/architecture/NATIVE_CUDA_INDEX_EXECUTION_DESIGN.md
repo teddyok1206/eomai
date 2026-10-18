@@ -118,3 +118,39 @@ There is no actual OpenFile, root ACK, GPU model or installed execution proof.
 Fixed unit/entry admission, independent root READY/ACK/retirement and actual WAIT
 capacity handling remain required before a production owner may use this leaf;
 no new busy/retry/fallback protocol is implemented here.
+
+### INDEX physical-resource observation wrappers
+
+The existing physical observer now has three closed INDEX-only public entrypoints:
+`observe_native_cuda_index_ready_resources`,
+`observe_native_cuda_index_retained_resources`, and
+`hold_released_native_cuda_index_resources`. READY requires the exact frozen
+`NativeCudaIndexReady` type, current semantic hash and root identity, and binds only
+`eom-embedding-native-cuda-index@<execution_id>.service`. Its model import is lazy;
+old probe/image/benchmark paths do not require the new contract to be installed.
+
+These wrappers reuse the existing worker/PID1 FD, FDSTORE, device-node, tmpfs and
+exclusive-flock checks. They return the existing small `CudaProbeResourceObservation`
+physical value, not a probe status, installation receipt, source grant or root ACK.
+Retained observation uses the exact INDEX unit family and does not read dead worker
+FDs. The released-lock scope only opens a new description of the same now-free
+inode and holds it across caller post-checks; it never unlocks the old lease,
+signals/stops/resets a unit or removes PID1's store. The caller must independently
+prove the original unit/invocation and terminal/retirement boundary. These source
+wrappers do not install or complete that root lifetime/controller.
+
+Remaining production wiring is deliberately separate: keep
+`native_embedding_index_handoff._checked_batch` CPU-only and add a distinct
+`PreparedNativeCudaIndex` with the original exact input/association/ordered hashes.
+Reuse the descriptor-file primitive in `inference_transfer_cpu_handoff.py`, with a
+separate CUDA runtime root and READY FD3, then select the CUDA composition explicitly
+in `local_embedding_native_executor.py`. `NativeEmbeddingIndexCompletion` is already
+device-neutral; no new Job/vector/receipt/Registry schema is needed. The current
+pending-read path in `local_embedding_encoding_admission.py` treats all successful
+unit observations as certain: a future CUDA launcher's successful observation must
+also require independently proven retirement, never merely process exit success.
+These physical wrappers alone cannot supply that completion certainty.
+
+Source verification:355 focused resource/probe/image/benchmark/INDEX leaf/READY
+tests PASS25.11s, strict observer typing and Ruff/format PASS. Root GPU/FDSTORE
+observations in these tests are synthetic, not an installed CUDA INDEX execution.

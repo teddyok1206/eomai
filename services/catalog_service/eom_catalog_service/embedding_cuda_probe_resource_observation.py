@@ -1,4 +1,4 @@
-"""Root physical-GPU FD readback shared by explicit CUDA probe and image unit owners."""
+"""Root physical-GPU FD readback through explicit closed-purpose owner entrypoints."""
 
 from __future__ import annotations
 
@@ -36,6 +36,7 @@ from eom_catalog_service.embedding_runtime_process_identity import require_exclu
 
 if TYPE_CHECKING:
     from eom_catalog_contracts.embedding_benchmark_cuda_ready import BenchmarkCudaReady
+    from eom_catalog_contracts.embedding_native_cuda_index_ready import NativeCudaIndexReady
 
 _LOCK = Path("/run/eom-gpu-lease/gpu0.lock")
 _PID1_FDS = Path("/proc/1/fd")
@@ -242,6 +243,28 @@ def observe_benchmark_cuda_retained_resources(
         raise ValueError("BENCHMARK_CUDA_RESOURCE_OBSERVATION_INVALID") from None
 
 
+def _require_native_cuda_index_unit(unit: str) -> None:
+    if not (
+        os.getresuid() == (0, 0, 0)
+        and type(unit) is str
+        and re.fullmatch(r"eom-embedding-native-cuda-index@[0-9a-f]{32}\.service", unit) is not None
+    ):
+        raise ValueError("NATIVE_CUDA_INDEX_RESOURCE_OBSERVATION_INVALID")
+
+
+def observe_native_cuda_index_retained_resources(
+    observed: CudaProbeResourceObservation, *, unit: str
+) -> CudaProbeResourceObservation:
+    """Recheck only INDEX physical fencing; caller owns original terminal/unit authority."""
+    try:
+        _require_native_cuda_index_unit(unit)
+        _require(type(observed) is CudaProbeResourceObservation)
+        _assert_retained_resources(observed, unit)
+        return observed
+    except (ValueError, OSError, subprocess.TimeoutExpired, JsonSchemaError):
+        raise ValueError("NATIVE_CUDA_INDEX_RESOURCE_OBSERVATION_INVALID") from None
+
+
 def _assert_retained_resources(observed: _RetainedGpuUnitResources, unit: str) -> None:
     lease = _validated_retained_lease(observed)
     _require(_epoch(_LOCK.lstat()) == lease.lock_epoch)
@@ -311,6 +334,18 @@ def hold_released_cuda_probe_resources(
 ) -> Iterator[None]:
     """Root cleanup proof only: hold the same now-free inode across post-retirement checks."""
     _require(os.getresuid() == (0, 0, 0) and type(observed) is CudaProbeResourceObservation)
+    with _hold_released_resources(observed):
+        yield
+
+
+@contextmanager
+def hold_released_native_cuda_index_resources(
+    observed: CudaProbeResourceObservation, *, unit: str
+) -> Iterator[None]:
+    """Same-inode reacquisition only; caller independently proves INDEX terminal/retirement."""
+    _require_native_cuda_index_unit(unit)
+    if type(observed) is not CudaProbeResourceObservation:
+        raise ValueError("NATIVE_CUDA_INDEX_RESOURCE_OBSERVATION_INVALID")
     with _hold_released_resources(observed):
         yield
 
@@ -503,8 +538,28 @@ def observe_benchmark_cuda_ready_resources(
         raise ValueError("BENCHMARK_CUDA_RESOURCE_OBSERVATION_INVALID") from None
 
 
+def observe_native_cuda_index_ready_resources(
+    report: NativeCudaIndexReady, *, unit: str, lease_gid: int
+) -> CudaProbeResourceObservation:
+    """INDEX-only kernel readback, not source/installation admission or a root ACK.
+
+    Caller separately pins the original owner selection, unit/process/birth, policy,
+    executable/host and actual device. This returns only shared physical facts.
+    """
+    try:
+        _require_native_cuda_index_unit(unit)
+        from eom_catalog_contracts.embedding_native_cuda_index_ready import NativeCudaIndexReady
+
+        _require(type(report) is NativeCudaIndexReady)
+        report = NativeCudaIndexReady.model_validate(report)
+        _require(unit == f"eom-embedding-native-cuda-index@{report.execution_id}.service")
+        return _observe_native_report_resources(report, unit=unit, lease_gid=lease_gid)
+    except (ValueError, OSError, subprocess.TimeoutExpired, JsonSchemaError):
+        raise ValueError("NATIVE_CUDA_INDEX_RESOURCE_OBSERVATION_INVALID") from None
+
+
 def _observe_native_report_resources(
-    report: ProbeReport | BenchmarkCudaReady, *, unit: str, lease_gid: int
+    report: ProbeReport | BenchmarkCudaReady | NativeCudaIndexReady, *, unit: str, lease_gid: int
 ) -> CudaProbeResourceObservation:
     """Shared physical FD checks after each public closed-purpose/root identity guard."""
     _require(type(lease_gid) is int and report.supplementary_gids == (lease_gid,))

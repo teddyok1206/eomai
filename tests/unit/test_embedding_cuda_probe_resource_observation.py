@@ -159,6 +159,48 @@ def benchmark_report(kernel):
     return report
 
 
+def index_report(kernel):
+    from eom_catalog_contracts.embedding_native_cuda_index_ready import NativeCudaIndexReady
+
+    prototype, _files, state, _store = kernel
+    body = {
+        "schema_version": "embedding-native-cuda-index-ready/1.0",
+        "purpose": "INDEX",
+        "evidence_state": "RETENTION_REQUESTED_NOT_COMPUTE_ADMITTED",
+        "job_id": "job_" + "b" * 32,
+        "launch_association_sha256": "sha256:" + "c" * 64,
+        "input_raw_sha256": "sha256:" + "d" * 64,
+        "request_sha256": "sha256:" + "e" * 64,
+        "input_set_sha256": "sha256:" + "f" * 64,
+        "receipt_raw_sha256": "sha256:" + "a" * 64,
+        **{
+            name: value
+            for name, value in prototype.model_dump(mode="json").items()
+            if name
+            in {
+                "execution_id",
+                "configuration",
+                "fdstore_name",
+                "pid",
+                "start_time_ticks",
+                "worker_uid",
+                "worker_gid",
+                "supplementary_gids",
+                "resource_fds",
+                "expected_device_capture",
+                "cuda_initialization_calls",
+                "cuda_synchronize_calls",
+                "model_constructor_calls",
+                "tokenizer_constructor_calls",
+                "forward_calls",
+            }
+        },
+    }
+    report = NativeCudaIndexReady.model_validate(seal(body, "ready_sha256"))
+    state["expected_unit"] = f"eom-embedding-native-cuda-index@{report.execution_id}.service"
+    return report
+
+
 def test_existing_probe_and_image_imports_do_not_eagerly_load_new_ready_contract():
     paths = os.environ["PYTHONPATH"].split(os.pathsep)
     code = """
@@ -166,6 +208,7 @@ import sys
 sys.path[:0]=sys.argv[1:]
 import eom_catalog_service.embedding_cuda_probe_resource_observation
 assert 'eom_catalog_contracts.embedding_benchmark_cuda_ready' not in sys.modules
+assert 'eom_catalog_contracts.embedding_native_cuda_index_ready' not in sys.modules
 # Existing public package exports already load the old benchmark1.0 contract.
 # This extension must not add an eager import of the new readiness branch.
 assert not {'torch','numpy','transformers','tokenizers'}.intersection(sys.modules)
@@ -466,3 +509,228 @@ def test_released_lock_drift_and_body_failure_still_close_only_new_description(r
     ):
         k.named[99] = metadata(k.values[99].st_mode, 100, device=2, gid=2468)
     assert events[-1] == "close"
+
+
+def test_index_uses_its_exact_ready_and_unit_with_the_existing_kernel_checks(kernel):
+    report = index_report(kernel)
+    result = owner.observe_native_cuda_index_ready_resources(
+        report, unit=kernel[2]["expected_unit"], lease_gid=2468
+    )
+    assert type(result) is owner.CudaProbeResourceObservation
+    assert result.pid1_descriptor == 80 and result.shared_gpu_lease.holder_pid == report.pid
+    assert result.shared_gpu_lease.holder_start_time_ticks == report.start_time_ticks
+    assert result.shared_gpu_lease.lock_epoch[1] == 99
+    assert not hasattr(result, "assert_owned") and not hasattr(result, "root_ack")
+    with pytest.raises(ValueError):
+        owner.observe_cuda_probe_resources(report, unit=kernel[2]["expected_unit"], lease_gid=2468)
+    with pytest.raises(ValueError):
+        owner.observe_benchmark_cuda_ready_resources(
+            report, unit=kernel[2]["expected_unit"], lease_gid=2468
+        )
+
+
+@pytest.mark.parametrize(
+    "fault",
+    (
+        "probe_report",
+        "benchmark_report",
+        "dict",
+        "probe_unit",
+        "benchmark_unit",
+        "other_execution",
+        "unit_type",
+        "root",
+        "partial_root",
+        "purpose",
+        "hash",
+        "alias",
+        "group",
+        "worker",
+        "pid1",
+        "store",
+        "store_inode",
+        "device",
+    ),
+)
+def test_index_ready_cannot_borrow_authority_or_skip_either_physical_lock(
+    kernel, monkeypatch, fault
+):
+    report = index_report(kernel)
+    unit, group = kernel[2]["expected_unit"], 2468
+    if fault == "probe_report":
+        report = kernel[0]
+    elif fault == "benchmark_report":
+        report = benchmark_report(kernel)
+    elif fault == "dict":
+        report = report.model_dump(mode="json")
+    elif fault == "probe_unit":
+        unit = f"eom-embedding-native-cuda-probe@{report.execution_id}.service"
+    elif fault == "benchmark_unit":
+        unit = f"eom-embedding-benchmark-cuda@{report.execution_id}.service"
+    elif fault == "other_execution":
+        unit = "eom-embedding-native-cuda-index@" + "0" * 32 + ".service"
+    elif fault == "unit_type":
+        unit = None
+    elif fault in {"root", "partial_root"}:
+        identity = (1000,) * 3 if fault == "root" else (0, 1000, 0)
+        monkeypatch.setattr(owner.os, "getresuid", lambda: identity)
+    elif fault == "purpose":
+        report = report.model_copy(update={"purpose": "BENCHMARK"})
+    elif fault == "hash":
+        report = report.model_copy(update={"ready_sha256": "sha256:" + "0" * 64})
+    elif fault == "alias":
+        report = report.model_copy(
+            update={
+                "resource_fds": report.resource_fds.model_copy(
+                    update={"lease_fd": report.resource_fds.nvidia0_fd}
+                )
+            }
+        )
+    elif fault == "group":
+        group = 1
+    elif fault in {"worker", "pid1"}:
+        kernel[2]["unheld_" + fault] = True
+    elif fault == "store":
+        kernel[2]["store"] = b"[]"
+    elif fault == "store_inode":
+        rows = copy.deepcopy(kernel[3])
+        rows[0]["inode"] += 1
+        kernel[2]["store"] = json.dumps(rows).encode()
+    else:
+        kernel[1].named[20] = metadata(
+            kernel[1].values[20].st_mode, 500, rdev=kernel[1].values[20].st_rdev
+        )
+    with pytest.raises(ValueError, match="NATIVE_CUDA_INDEX_RESOURCE_OBSERVATION_INVALID"):
+        owner.observe_native_cuda_index_ready_resources(report, unit=unit, lease_gid=group)
+
+
+def test_index_retained_checks_only_same_original_physical_fence_not_dead_worker_fds(kernel):
+    report = index_report(kernel)
+    unit = kernel[2]["expected_unit"]
+    observed = owner.observe_native_cuda_index_ready_resources(report, unit=unit, lease_gid=2468)
+    kernel[2]["unheld_worker"] = True
+    assert owner.observe_native_cuda_index_retained_resources(observed, unit=unit) is observed
+    with pytest.raises(ValueError):
+        owner.observe_cuda_probe_retained_resources(observed, unit=unit)
+    with pytest.raises(ValueError):
+        owner.observe_benchmark_cuda_retained_resources(observed, unit=unit)
+
+
+@pytest.mark.parametrize(
+    "fault",
+    ("probe", "benchmark", "unit_type", "root", "type", "descriptor", "pid1", "store"),
+)
+def test_index_retained_never_uses_another_family_or_lost_store(kernel, monkeypatch, fault):
+    report = index_report(kernel)
+    unit = kernel[2]["expected_unit"]
+    observed = owner.observe_native_cuda_index_ready_resources(report, unit=unit, lease_gid=2468)
+    if fault in {"probe", "benchmark"}:
+        prefix = (
+            "eom-embedding-native-cuda-probe"
+            if fault == "probe"
+            else "eom-embedding-benchmark-cuda"
+        )
+        unit = f"{prefix}@{report.execution_id}.service"
+    elif fault == "unit_type":
+        unit = None
+    elif fault == "root":
+        monkeypatch.setattr(owner.os, "getresuid", lambda: (1000,) * 3)
+    elif fault == "type":
+        observed = None
+    elif fault == "descriptor":
+        observed = replace(observed, pid1_descriptor=81)
+    elif fault == "pid1":
+        kernel[2]["unheld_pid1"] = True
+    else:
+        kernel[2]["store"] = b"[]"
+    with pytest.raises(ValueError, match="NATIVE_CUDA_INDEX_RESOURCE_OBSERVATION_INVALID"):
+        owner.observe_native_cuda_index_retained_resources(observed, unit=unit)
+
+
+@pytest.mark.parametrize("phase", ("ready", "retained"))
+def test_index_fdstore_timeout_is_uncertain_not_ack_or_cleanup(kernel, monkeypatch, phase):
+    report = index_report(kernel)
+    unit = kernel[2]["expected_unit"]
+    observed = owner.observe_native_cuda_index_ready_resources(report, unit=unit, lease_gid=2468)
+
+    def timeout(*_a, **_kw):
+        raise subprocess.TimeoutExpired("synthetic fdstore read", 10)
+
+    monkeypatch.setattr(owner.subprocess, "run", timeout)
+    with pytest.raises(ValueError, match="NATIVE_CUDA_INDEX_RESOURCE_OBSERVATION_INVALID"):
+        if phase == "ready":
+            owner.observe_native_cuda_index_ready_resources(report, unit=unit, lease_gid=2468)
+        else:
+            owner.observe_native_cuda_index_retained_resources(observed, unit=unit)
+
+
+@pytest.fixture
+def index_released(kernel, released):
+    report = index_report(kernel)
+    unit = kernel[2]["expected_unit"]
+    observed = owner.observe_native_cuda_index_ready_resources(report, unit=unit, lease_gid=2468)
+    return observed, *released[1:], unit
+
+
+def test_index_released_scope_holds_only_its_new_description(index_released):
+    observed, _, _, events, unit = index_released
+    with owner.hold_released_native_cuda_index_resources(observed, unit=unit):
+        assert events == ["open", "flock"]
+        events.append("post-checks")
+    assert events == ["open", "flock", "post-checks", "close"]
+
+
+@pytest.mark.parametrize("fault", ("root", "probe", "benchmark", "unit_type", "type"))
+def test_index_released_scope_rejects_bad_owner_or_family_before_opening(
+    index_released, monkeypatch, fault
+):
+    observed, _, _, events, unit = index_released
+    if fault == "root":
+        monkeypatch.setattr(owner.os, "getresuid", lambda: (1000,) * 3)
+    elif fault == "probe":
+        unit = unit.replace("cuda-index", "cuda-probe")
+    elif fault == "benchmark":
+        unit = unit.replace("native-cuda-index", "benchmark-cuda")
+    elif fault == "unit_type":
+        unit = None
+    else:
+        observed = None
+    with (
+        pytest.raises(ValueError, match="NATIVE_CUDA_INDEX_RESOURCE_OBSERVATION_INVALID"),
+        owner.hold_released_native_cuda_index_resources(observed, unit=unit),
+    ):
+        pytest.fail("invalid INDEX owner cannot obtain a released-lock scope")
+    assert events == []
+
+
+def test_index_release_rejects_still_retained_lock_without_unlock_or_store_removal(index_released):
+    observed, _, state, events, unit = index_released
+    state["still_retained"] = True
+    with (
+        pytest.raises(ValueError, match="RELEASE_UNCERTAIN"),
+        owner.hold_released_native_cuda_index_resources(observed, unit=unit),
+    ):
+        pytest.fail("retained old flock is not released INDEX evidence")
+    assert events == ["open", "flock", "close"]
+
+
+def test_index_release_detects_post_check_inode_drift_and_closes_only_new_fd(index_released):
+    observed, k, _, events, unit = index_released
+    with (
+        pytest.raises(ValueError, match="RESOURCE_OBSERVATION_INVALID"),
+        owner.hold_released_native_cuda_index_resources(observed, unit=unit),
+    ):
+        k.named[99] = metadata(k.values[99].st_mode, 100, device=2, gid=2468)
+    assert events == ["open", "flock", "close"]
+
+
+def test_index_release_does_not_relabel_caller_failure_as_retirement(index_released):
+    observed, _, _, events, unit = index_released
+    failure = RuntimeError("synthetic original caller failure")
+    with (
+        pytest.raises(RuntimeError) as error,
+        owner.hold_released_native_cuda_index_resources(observed, unit=unit),
+    ):
+        raise failure
+    assert error.value is failure
+    assert events == ["open", "flock", "close"]
