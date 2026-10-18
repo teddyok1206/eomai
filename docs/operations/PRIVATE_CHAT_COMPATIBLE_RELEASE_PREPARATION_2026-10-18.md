@@ -408,3 +408,47 @@ and2 revisions since08:13 is post-restoration progress, not proof of full delta
 or current hash/authorization coverage. Evidence:
 `/tmp/eom-index-observation-20261018T0852.json`; next routine count read not before
 09:17:57 UTC. This observer performs no authentication, query submission or repair.
+
+## Incremental namespace compatible release — 15:34 UTC
+
+The original goal remains OPEN. New consumers previously selected the OCC namespace,
+while INDEX18 populated ALL: identical model/recipe is not identical index identity.
+The [pinned-namespace design](../architecture/PINNED_EMBEDDING_NAMESPACE_READ_COMPATIBILITY.md)
+now selects registered exact historical revisions operation-locally, without a current-head
+substitution or alteration of the original C1 request/key/result. New operations select ALL;
+the actual released source-class restriction remains PAST_EXAM.
+
+Source `d81b9ba34c6d06255460db93bf72ec97328827ed`, tree
+`eeae186e7fce7f95cb4e4bd4a3f460fd7c1827d6`: 269 focused tests, strict typing,
+Ruff/format and disposable PostgreSQL 126 tests PASS; disposable cleanup PASS.
+DB remains `20261017_0057`. Official compatible installation PASS; installed API wheel
+`sha256:e67f24238416aaf3ae0c2d684a5fac53119963254fb63e719496f61c5b49f989`
+is distinct from the build-only wheel. The actual deployment record and installed pip
+RECORD/direct-URL receipts were cross-checked; twelve identity-provider members are unchanged.
+
+QUERY/INDEX received one normal main-only termination request. INDEX finished its current
+command, including post-native source validation and Artifact/index publication, before
+inactive/success/no-control-group at about15:22. Native process exit alone was not taken as
+controller completion. The existing maintenance boundary stopped the original eight
+remaining services. A source-only Catalog drop-in CAS preceded the standard installer;
+its normal five restarts were followed by supported quiescent five-service restop.
+The seven-file typed CAS then selected ALL for Catalog/public/private QUERY together,
+including their derived hashes. It changed no DB rows, original requests, source permissions,
+CPU configuration or INDEX18 selection. Private policy Artifact was reused, not republished.
+
+API/Catalog/Workflow/HWPX and Chat are installed at d81; QUERY SDK is d81. Nine related
+services are active and API READY. Chat keeps READ_ONLY/NATIVE_TOPIC, its prior model,
+verified CLI and RAG policy; no CLI identity/auth was copied or recaptured. INDEX18 retains
+the ee97239d runtime and CPU e0af/f02 pins but is deliberately normally drained for the finite
+comparison, then must resume with the same identity. No new corpus count is asserted here.
+
+Evidence directory: `/tmp/eom-pinned-namespace-release.PjuXcLnk`; installation result raw
+`9e4b970fa8656deb6d5d5b10e1d9fe0172343c2ce23c3a5bdf89dda8559f9ee8`,
+actual provider metadata `ff68835d1b2f1e350d8139b5c647882952f9c49043eeda7e73b85e9191521c20`,
+seven-file SELECT result `2748f2a5d9753002072fc2c6714567c905a4c80b4ef1911abfe87a5cda5c72a9`.
+The existing finite eight-file supervisor has a separate protected successor stage,
+`/var/lib/eom-finite-goal-operator.ee97239d-d81b9ba3`, preserving original ee benchmark owner,
+six IDs/inputs/order, original C1 pointers and credential-free staging. Its genuine login
+was offered in `EOM:2 rag-incremental`; this is not yet authenticated-delivery evidence.
+C1-C5 live delivery, original six measurements/finalization, conditional default decision
+and actual INDEX18 resumption remain required. No human educational review was added.
