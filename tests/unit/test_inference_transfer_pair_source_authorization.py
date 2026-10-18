@@ -241,6 +241,7 @@ def accepted_input(seed: str):
         report=resolved_report,
         source=basis.source,
         base_accepted_result=accepted.base_analysis.accepted_result_artifact,
+        accepted_at=accepted.accepted_at,
     )
     candidate = KnowledgeRetrievalCandidate(
         analysis_run_id=base["analysis_run_id"],
@@ -307,7 +308,7 @@ def test_authorization_replays_exact_two_profiles_without_full_corpus_or_lexical
     value.adapter.retrieval.admit_read_only_candidate_pool.assert_called_once()
     assert value.resolution.call_args.kwargs["base_analysis_run_ids"] == expected_ids
     value.adapter.retrieval.retrieve_read_only.assert_not_called()
-    assert value.session.scalars.call_count == 1
+    value.session.scalars.assert_not_called()
 
 
 def test_corpus_load_and_pair_use_the_same_accepted_timestamp_projection(pair_source):
@@ -403,6 +404,7 @@ def test_exact_source_pool_must_contain_both_requested_ids_once(pair_source, def
         "accepted_hash",
         "accepted_missing",
         "accepted_timestamp",
+        "accepted_timestamp_naive",
         "invalid_accepted_metadata",
         "resolver_failure",
     ),
@@ -423,18 +425,18 @@ def test_current_report_source_and_accepted_metadata_must_match_exact_profile(pa
         value.resolution.return_value[value.right[1].analysis_run_id] = replace(
             right, report=KnowledgeAnalysisSolutionReport.model_validate(body)
         )
-    elif defect == "accepted_hash":
-        value.right[3].content_hash = sha("0")
-    elif defect == "accepted_missing":
-        value.session.scalars.return_value = (value.left[3],)
+    elif defect in {"accepted_hash", "accepted_missing", "invalid_accepted_metadata"}:
+        # Current accepted-row checks belong to the official resolver, exercised
+        # with real metadata in its own suite, not a second adapter-side SQL read.
+        value.resolution.side_effect = SolutionEvidenceResolutionError(defect)
     elif defect == "accepted_timestamp":
-        body = value.right[3].result
-        body["accepted_at"] = (NOW + timedelta(days=1)).isoformat().replace("+00:00", "Z")
-        body["result_sha256"] = content_sha256(
-            {key: child for key, child in body.items() if key != "result_sha256"}
+        value.resolution.return_value[value.right[1].analysis_run_id] = replace(
+            right, accepted_at=NOW + timedelta(days=1)
         )
-    elif defect == "invalid_accepted_metadata":
-        value.right[3].result["accepted_at"] = "no timestamp"
+    elif defect == "accepted_timestamp_naive":
+        value.resolution.return_value[value.right[1].analysis_run_id] = replace(
+            right, accepted_at=NOW.replace(tzinfo=None)
+        )
     else:
         value.resolution.side_effect = SolutionEvidenceResolutionError(
             "synthetic stale report chain"

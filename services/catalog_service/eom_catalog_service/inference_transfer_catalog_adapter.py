@@ -8,7 +8,6 @@ from typing import Literal
 from eom_catalog_contracts import (
     ApprovedItemKnowledgeSourceV2,
     CreateEvidenceBundleCommand,
-    KnowledgeAnalysisResultV10,
     KnowledgeAnalysisSolutionReport,
     KnowledgeGraphSnapshotPointer,
 )
@@ -21,8 +20,7 @@ from eom_identity_service.models import OperatorRecord
 from eom_identity_service.repository import active_role_assignments, effective_permissions
 from eom_operator_identity import PermissionKey
 from eom_orchestrator.database import build_session_factory
-from eom_orchestrator.models import ArtifactRevisionRecord
-from sqlalchemy import Engine, select, text
+from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.artifacts import CatalogArtifactReader
@@ -182,19 +180,6 @@ class CatalogInferenceTransferSourceAdapter:
             )
         except SolutionEvidenceResolutionError as exc:
             raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH") from exc
-        revisions = {
-            row.revision_id: row
-            for row in session.scalars(
-                select(ArtifactRevisionRecord).where(
-                    ArtifactRevisionRecord.revision_id.in_(
-                        tuple(
-                            value.pointer.accepted_result_artifact.artifact_revision_id
-                            for value in solutions.values()
-                        )
-                    )
-                )
-            )
-        }
         profiles: list[AcceptedInferenceTransferProfileInput] = []
         missing = 0
         for candidate in pool.candidates:
@@ -202,18 +187,15 @@ class CatalogInferenceTransferSourceAdapter:
             if solution is None:
                 missing += 1
                 continue
-            accepted_pointer = solution.pointer.accepted_result_artifact
-            revision = revisions.get(accepted_pointer.artifact_revision_id)
-            if revision is None or revision.content_hash != accepted_pointer.sha256:
-                raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH")
             try:
-                accepted = KnowledgeAnalysisResultV10.model_validate(revision.result)
                 profiles.append(
                     AcceptedInferenceTransferProfileInput(
                         project_accepted_solution_report(
                             source_basis=self._basis(candidate, solution, pool.graph_snapshot),
                             report=solution.report,
-                            created_at=accepted.accepted_at,
+                            # The current resolver has just checked the accepted
+                            # row's exact bytes/hash/lifecycle under this root.
+                            created_at=solution.accepted_at,
                         ),
                         solution.report,
                     )

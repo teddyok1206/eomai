@@ -198,6 +198,23 @@ class CatalogModelArtifactReader(CatalogArtifactReader, Protocol):
     ) -> Model: ...
 
 
+@runtime_checkable
+class CatalogModelValueDecoder(Protocol):
+    """Optional root-scoped interpretation of current canonical JSON metadata.
+
+    This returns immutable values, not source admission or authorization. Callers
+    still read current rows and apply their current-state checks on every use.
+    """
+
+    def decode_model_value[Model: BaseModel](
+        self,
+        schema_ref: str,
+        value: object,
+        *,
+        decoder: Callable[[str, bytes], Model],
+    ) -> Model: ...
+
+
 class CatalogArtifactService:
     def __init__(self, engine: Engine, settings: CatalogSettings | None = None) -> None:
         self.settings = settings or CatalogSettings.from_environment()

@@ -34,6 +34,10 @@ from eom_catalog_service.inference_transfer_snapshot_catalog_adapter import (
 from eom_catalog_service.inference_transfer_snapshot_service import (
     InferenceTransferSnapshotApplicationService,
 )
+from eom_catalog_service.knowledge_analysis_sources import (
+    KnowledgeAnalysisSourceError,
+    read_item_source_relations,
+)
 from eom_catalog_service.knowledge_retrieval_service import KnowledgeRetrievalApplicationService
 from eom_orchestrator.database import build_engine
 from sqlalchemy import text
@@ -617,3 +621,260 @@ def test_real_postgres_snapshot_rejects_nonselected_occurrence_drift_before_read
                 selected_index_entries=prepared.index[:1],
             ),
         )
+
+
+@pytest.fixture
+def item_source_relation_database(pool_database):
+    """Same guarded temporary database; only additional pg_temp shadows are written."""
+    tables = (
+        "item_components",
+        "legacy_item_extraction_decisions",
+        "legacy_item_extraction_batch_work_units",
+    )
+    for table in tables:
+        pool_database.execute(
+            text(f"CREATE TEMP TABLE {table} AS SELECT * FROM app.{table} WITH NO DATA")
+        )
+    # Preserve actual indexed lookup shapes without copying production uniqueness:
+    # deliberately ambiguous temporary rows must survive the map's grouping.
+    pool_database.execute(
+        text(
+            "CREATE INDEX item_relation_component_revision ON "
+            "pg_temp.item_components(item_revision_id)"
+        )
+    )
+    pool_database.execute(
+        text(
+            "CREATE INDEX item_relation_decision_acceptance_proposal ON "
+            "pg_temp.legacy_item_extraction_decisions(acceptance_id,item_proposal_id)"
+        )
+    )
+    pool_database.execute(text("TRUNCATE pg_temp.item_revisions"))
+    pool_database.execute(
+        text("""
+        INSERT INTO pg_temp.item_revisions(item_revision_id,item_id,revision_state,metadata_json)
+        SELECT 'itemrev_'||lpad(i::text,32,'0'),'item_'||lpad(i::text,32,'0'),'APPROVED',
+            jsonb_build_object('source_kind','PAST_EXAM',
+                'extraction_acceptance_id','itemacceptance_'||lpad(i::text,32,'0'),
+                'extraction_result_id','itemextractresult_'||lpad(i::text,32,'0'),
+                'item_proposal_id','itemproposal_'||lpad(i::text,32,'0'),'item_number',i)
+        FROM generate_series(1,545) i
+    """)
+    )
+    pool_database.execute(
+        text("""
+        INSERT INTO pg_temp.item_components(item_component_id,item_revision_id,component_type,
+            ordinal,schema_ref,media_type,artifact_id,artifact_revision_id,sha256,logical_name,
+            required,metadata_json)
+        SELECT 'component_'||lpad(i::text,32,'0'),'itemrev_'||lpad(i::text,32,'0'),
+            'ITEM_CONTENT',0,'eom.assessment.item-content/1.0','application/json',
+            'artifact_'||lpad(i::text,32,'0'),'rev_'||lpad(i::text,32,'0'),
+            'sha256:'||repeat('a',64),'item-content.json',true,'{}'::jsonb
+        FROM generate_series(1,545) i
+    """)
+    )
+    pool_database.execute(
+        text("""
+        INSERT INTO pg_temp.legacy_item_extraction_decisions(decision_id,acceptance_id,
+            item_proposal_id,item_number,decision)
+        SELECT i,'itemacceptance_'||lpad(i::text,32,'0'),
+            'itemproposal_'||lpad(i::text,32,'0'),i,'ACCEPT'
+        FROM generate_series(1,545) i
+    """)
+    )
+    pool_database.execute(
+        text("""
+        INSERT INTO pg_temp.legacy_item_extraction_batch_work_units(work_unit_id,
+            extraction_batch_id,state,acceptance_id,extraction_result_id,created_at)
+        SELECT 'legacyworkunit_'||lpad(i::text,32,'0'),
+            'legacybatch_'||lpad(i::text,32,'0'),'ACCEPTED',
+            'itemacceptance_'||lpad(i::text,32,'0'),
+            'itemextractresult_'||lpad(i::text,32,'0'),'2026-10-01T00:00:00Z'::timestamptz
+        FROM generate_series(1,545) i
+    """)
+    )
+    for table in (*tables, "item_revisions"):
+        pool_database.execute(text(f"ANALYZE pg_temp.{table}"))
+    return pool_database
+
+
+def item_source_relation_keys(number):
+    suffix = str(number).zfill(32)
+    return (
+        "itemrev_" + suffix,
+        ("itemacceptance_" + suffix, "itemproposal_" + suffix, number),
+        ("itemacceptance_" + suffix, "itemextractresult_" + suffix),
+    )
+
+
+def capture_item_source_relations(session, selected):
+    """Capture actual ORM statements, not synthetic query-count expectations."""
+    statements = []
+    original = session.scalars
+    selected_ids = frozenset(selected)
+
+    def observed(statement, *args, **kwargs):
+        statements.append(statement)
+        return original(statement, *args, **kwargs)
+
+    session.scalars = observed
+    try:
+        relations = read_item_source_relations(session, selected)
+        # Per-Item map lookup must perform no additional SQL.
+        for number in range(1, 546):
+            revision, decision, unit = item_source_relation_keys(number)
+            if revision in selected_ids:
+                relations.components(session, revision)
+                relations.decisions(session, decision)
+                relations.work_units(session, unit)
+    finally:
+        session.scalars = original
+    return relations, tuple(statements)
+
+
+def test_real_postgres_item_relations_are_four_fresh_queries_not_per_item_or_authority_cache(
+    item_source_relation_database,
+):
+    session = item_source_relation_database
+    selected = tuple(item_source_relation_keys(number)[0] for number in range(1, 546))
+    first_revision, first_decision, first_unit = item_source_relation_keys(1)
+    captures = []
+    for phase in range(4):
+        if phase == 1:
+            session.execute(
+                text(
+                    "UPDATE pg_temp.legacy_item_extraction_decisions "
+                    "SET decision='REJECT' WHERE decision_id=1"
+                )
+            )
+        elif phase == 2:
+            session.execute(
+                text("DELETE FROM pg_temp.item_components WHERE item_revision_id=:revision"),
+                {"revision": first_revision},
+            )
+            session.execute(
+                text(
+                    "UPDATE pg_temp.legacy_item_extraction_batch_work_units "
+                    "SET state='FAILED' WHERE acceptance_id=:acceptance"
+                ),
+                {"acceptance": first_unit[0]},
+            )
+        elif phase == 3:
+            session.execute(
+                text("DELETE FROM pg_temp.legacy_item_extraction_decisions WHERE decision_id=1")
+            )
+        relations, statements = capture_item_source_relations(session, selected)
+        assert len(statements) == 4
+        assert tuple(
+            statement.column_descriptions[0]["entity"].__tablename__ for statement in statements
+        ) == (
+            "item_revisions",
+            "item_components",
+            "legacy_item_extraction_decisions",
+            "legacy_item_extraction_batch_work_units",
+        )
+        assert len(relations.components(session, first_revision)) == (1 if phase < 2 else 0)
+        decisions = relations.decisions(session, first_decision)
+        assert len(decisions) == (1 if phase < 3 else 0)
+        if decisions:
+            assert decisions[0].decision == ("ACCEPT" if phase == 0 else "REJECT")
+        assert len(relations.work_units(session, first_unit)) == (1 if phase < 2 else 0)
+        # Unchanged sources remain present; none is silently substituted for a missing row.
+        for number in (2, 545):
+            revision, decision, unit = item_source_relation_keys(number)
+            assert len(relations.components(session, revision)) == 1
+            assert relations.decisions(session, decision)[0].decision == "ACCEPT"
+            assert len(relations.work_units(session, unit)) == 1
+        assert all(relations is not previous for previous in captures)
+        captures.append(relations)
+    # This proves fresh current relation reads, not a canonical source/Artifact grant.
+
+
+def test_real_postgres_item_relations_preserve_ambiguity_and_original_work_unit_order(
+    item_source_relation_database,
+):
+    session = item_source_relation_database
+    revision, decision, unit = item_source_relation_keys(1)
+    session.execute(
+        text("""
+        INSERT INTO pg_temp.legacy_item_extraction_decisions
+            (decision_id,acceptance_id,item_proposal_id,item_number,decision)
+        SELECT 999,acceptance_id,item_proposal_id,item_number,'REJECT'
+        FROM pg_temp.legacy_item_extraction_decisions WHERE decision_id=1
+    """)
+    )
+    for suffix, batch, created, state in (
+        ("a", "a", "2026-09-30T00:00:00Z", "ACCEPTED"),
+        ("b", "0", "2026-10-01T00:00:00Z", "ACCEPTED"),
+        ("c", "0", "2026-10-01T00:00:00Z", "ACCEPTED"),
+        ("d", "0", "2026-09-29T00:00:00Z", "FAILED"),
+    ):
+        session.execute(
+            text("""
+            INSERT INTO pg_temp.legacy_item_extraction_batch_work_units
+                (work_unit_id,extraction_batch_id,state,acceptance_id,extraction_result_id,created_at)
+            VALUES (:work,:batch,:state,:acceptance,:result,:created)
+        """),
+            {
+                "work": "legacyworkunit_" + suffix * 32,
+                "batch": "legacybatch_" + batch * 32,
+                "state": state,
+                "acceptance": unit[0],
+                "result": unit[1],
+                "created": created,
+            },
+        )
+    relations, statements = capture_item_source_relations(session, (revision,))
+    assert len(statements) == 4
+    assert len(relations.decisions(session, decision)) == 2  # no set/dict last-row-wins
+    assert {row.decision for row in relations.decisions(session, decision)} == {"ACCEPT", "REJECT"}
+    assert tuple(row.work_unit_id for row in relations.work_units(session, unit)) == (
+        "legacyworkunit_" + "a" * 32,
+        "legacyworkunit_" + "b" * 32,
+        "legacyworkunit_" + "c" * 32,
+        "legacyworkunit_" + "1".zfill(32),
+    )
+
+
+def test_real_postgres_item_relations_keep_existing_component_and_decision_index_shapes(
+    item_source_relation_database,
+):
+    session = item_source_relation_database
+    session.execute(text("SET LOCAL enable_seqscan=off"))
+    revision = item_source_relation_keys(1)[0]
+    _relations, statements = capture_item_source_relations(session, (revision,))
+    for statement, expected_index in (
+        (statements[1], "item_relation_component_revision"),
+        (statements[2], "item_relation_decision_acceptance_proposal"),
+    ):
+        compiled = statement.compile(
+            dialect=session.get_bind().dialect, compile_kwargs={"literal_binds": True}
+        )
+        plan = "\n".join(session.scalars(text("EXPLAIN (COSTS OFF) " + str(compiled))))
+        assert expected_index in plan
+    # Work-unit pair has no corresponding production index today. Do not invent
+    # one in this fixture or claim this gate proves an indexed work-unit lookup.
+
+
+def test_real_postgres_item_relations_reject_different_session_and_finished_root(
+    item_source_relation_database,
+):
+    session = item_source_relation_database
+    revision, decision, unit = item_source_relation_keys(1)
+    relations = read_item_source_relations(session, (revision,))
+    with Session(bind=session.get_bind()) as other:
+        for method, key in (
+            (relations.components, revision),
+            (relations.decisions, decision),
+            (relations.work_units, unit),
+        ):
+            with pytest.raises(KnowledgeAnalysisSourceError, match="out of scope"):
+                method(other, key)
+    session.commit()
+    for method, key in (
+        (relations.components, revision),
+        (relations.decisions, decision),
+        (relations.work_units, unit),
+    ):
+        with pytest.raises(KnowledgeAnalysisSourceError, match="out of scope"):
+            method(session, key)

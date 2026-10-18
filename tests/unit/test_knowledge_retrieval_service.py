@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+from datetime import datetime
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -393,6 +394,7 @@ def _solution_evidence() -> ResolvedSolutionEvidence:
             logical_name="accepted-result.json",
             bytes=1,
         ),
+        accepted_at=datetime.fromisoformat(NOW),
     )
 
 
@@ -943,12 +945,14 @@ def test_past_exam_resolution_cache_preserves_artifact_settings_port(
         item_revision_id: str,
         source_class: str,
         past_exam_cache: Any,
+        read_relations: Any,
     ) -> ApprovedPastExamItemKnowledgeSourceV3:
         # Corrected legacy media resolution dereferences this exact storage boundary.
         assert artifacts.settings is delegate.settings
         assert item_revision_id == source.item_revision_id
         assert source_class == "PAST_EXAM"
         assert past_exam_cache is cache.past_exam_provenance
+        assert read_relations is cache.item_relations
         return source
 
     monkeypatch.setattr(

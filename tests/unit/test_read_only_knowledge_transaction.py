@@ -282,6 +282,9 @@ def _five_calls(
     measures immutable decoder reuse and exact fixture output/order equivalence.
     """
     documents = _documents()
+    # Current relation SQL/source checks are this fixture's explicit fake seam;
+    # fresh real relation batching has its own source-resolver regression suite.
+    monkeypatch.setattr(retrieval, "read_item_source_relations", lambda *_args: None)
     scope = _scope()
     validations: Counter[str] = Counter()
     real_validate = validate_contract
@@ -306,7 +309,11 @@ def _five_calls(
         }
         pointers = tuple(
             SimpleNamespace(
-                analysis_run_id=run_id, node_id=f"node_{ordinal:032x}", anchor_id="anchor_1"
+                analysis_run_id=run_id,
+                node_id=f"node_{ordinal:032x}",
+                anchor_id="anchor_1",
+                source_class="PAST_EXAM",
+                source_revision_id=sources[run_id].item_revision_id,
             )
             for ordinal, run_id in enumerate(run_ids)
         )

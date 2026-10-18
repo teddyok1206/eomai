@@ -601,6 +601,14 @@ Chat의 Graph 내용 해시와 임베딩 입력의 manifest 파일 해시를 구
 CPU/GPU 여섯 비교 실행은 별도 미완료입니다. 최신 관측889 bindings는 전체 문항 수가 아니고,
 세 최신 인덱스는 각각277/545·301/545·311/545로 PARTIAL입니다. 로그인 정책은 그대로입니다.
 [실제 준비·검증 및 남은 전환 경계](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md)
+이후 실제 사용자 로그인에는 성공했지만 기존 완료 조회는503이었습니다. 서버가 네 차례
+전체 자료를 확인하는 데 약81초가 걸려30초 API 대기 한도를 넘겼습니다. 권한·원본 검증은
+유지하고 반복 해석과 문항별 DB 조회를 줄이는 소스 수정·회귀394개와 임시 PostgreSQL89개
+검증을 마쳤지만, 아직 운영 조회 PASS는 아닙니다. 08:47 UTC 인덱스 관측은
+281/545·301/545·315/545로 여전히 PARTIAL입니다.
+원래 여섯 CPU/GPU 실행의 수치 결과를 합성·비교하는 소스 검증145개는 통과했으나,
+이를 실제 장치 성능 측정이나 GPU 기본값 활성화로 해석하지 않습니다.
+[수치 검증 범위](docs/architecture/EMBEDDING_BENCHMARK_NUMERICAL_ASSESSMENT.md)
 10월18일 원안을 재점검해, 추가 계약 확장보다 기존 기능의 실제 전달·증분 재사용·CPU/GPU
 실측을 우선하도록 [남은 수행 순서](docs/architecture/SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md#진행-재점검--2026-10-18-utc)를 고정했습니다.
 

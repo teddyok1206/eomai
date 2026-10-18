@@ -68,7 +68,12 @@ class AdmissionSession:
 def source_rows(run_id: str, *, number: int = 2) -> tuple[tuple[Any, Any], ...]:
     return tuple(
         (
-            SimpleNamespace(analysis_run_id=run_id, anchor_id=f"anchor_{index}"),
+            SimpleNamespace(
+                analysis_run_id=run_id,
+                anchor_id=f"anchor_{index}",
+                source_revision_id=profile().source_basis.source.item_revision_id,
+                source_class="PAST_EXAM",
+            ),
             SimpleNamespace(
                 node_id=f"knode_{index}",
                 label="조건의 구체적 내용",

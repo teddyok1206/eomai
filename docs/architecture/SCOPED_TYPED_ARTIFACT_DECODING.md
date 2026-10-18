@@ -209,3 +209,216 @@ in the [operating evidence](../operations/SIMILARITY_READ_STAGE_DIAGNOSTICS_2026
 The existing observer's preparation replay was denied403 at its fresh-auth gate,
 before context read. Actual per-stage measurement therefore remains pending;
 do not report the new release as either measured503 or latency PASS.
+
+## Canonical analysis metadata interpretation — design before implementation
+
+2026-10-18 UTC. The original completed-context read on installed685 reached
+Catalog but exceeded the unchanged30s API deadline. Sanitized stage observations
+recorded approximately81s of server work, including four full captures with
+candidate admission about7s, solution profiles about7.3s and entry projection
+about3s each. Server completion after the client deadline is not delivery PASS.
+
+1. Extend the existing root-scoped immutable interpretation boundary, not source
+   admission or whole-population caching. Repeated schema/Pydantic interpretation
+   of canonical analysis request/result/receipt metadata is the target.
+2. Canonical sources remain the freshly selected DB rows and exact Artifact
+   revisions. A temporary frozen typed interpretation is derived, never authority.
+3. Keep logical IDs, revision IDs, raw Artifact hashes and semantic model hashes
+   distinct. Derive interpretation identity from the complete current canonical
+   JSON value, schema and trusted decoder identity; never from a row ID alone.
+4. Read current rows and compare lifecycle, source, permission, membership,
+   predecessor, manifest, byte count and exact historical accepted/receipt hash
+   representations on every original phase. A changed value must miss or fail.
+5. Access is repeated exact-value interpretation within one active root/thread.
+   Canonical serialization/hashing remains O(value bytes); repeated schema/model
+   decoding becomes a bounded keyed lookup. No DB query/index changes are needed.
+6. Use the existing decoded OrderedDict and its32MiB/2048 limits, not another
+   cache. Retain only deeply immutable typed outputs, not caller dictionaries.
+   Three related solution-row models may be one small typed interpretation rather
+   than three entries. At545 sources, naive separate Item/report/request/result/
+   receipt entries exceed2048 and can cause sequential LRU thrashing; tests must
+   report capacity/count behavior, not silently increase either bound.
+7. Existing raw128MiB retention, current provenance checks and root/thread/session
+   guards remain. Canonical-byte charge is not an exact Python RSS measurement.
+8. Artifact/application ports may expose optional typed-value interpretation;
+   Catalog's existing infrastructure owner implements it. Two actual users are
+   accepted solution metadata and original candidate-analysis request decoding.
+   Legacy readers retain strict direct decoding; no generic registry/dependency.
+9. Public projection validators continue rejecting forged models. Any subsequent
+   immutable projection reuse must use complete exact validated inputs, keep fresh
+   authority checks, and demonstrate useful savings under the same shared bounds.
+10. Invalid decoding is never cached. Changed input, schema or decoder cannot
+    inherit success. Root exit invalidates reuse; no TTL, retry, refresh, workflow,
+    model, wire contract, migration or external side effect changes.
+11. Merely reducing four captures to two still costs roughly36s for these measured
+    stages. Raising the deadline or reusing a captured authority population is not
+    the correction. Test strict output equivalence, current-state/late-revocation
+    failures, bounded retention and interpretation counts before installed replay.
+
+An offline installed685 call-count probe used one valid synthetic solution row
+four times across16 repetitions:64 request,64 accepted-result and64 receipt model
+validations plus128 JSON Schema validations,2.447s total. The actual V10 request,
+V10 accepted result, V9 receipt and solution-report models all pass the existing
+deep-immutability predicate. This isolates uncovered repeated interpretation; it
+does not profile the real545-source population or establish live deadline PASS.
+
+### Canonical metadata source gate
+
+`CatalogModelValueDecoder` now provides optional exact-current-value decoding on
+the existing root owner. Member and canonical-value interpretations share the
+same decoded LRU and unchanged bounds; canonical values are neither retained as
+mutable dictionaries nor tied to a row ID. Solution metadata uses one frozen
+request/result/receipt interpretation per complete input value. The accepted
+JSON-mode Artifact hash and typed receipt Artifact hash retain their distinct
+historical encodings. Fresh row, descriptor, lifecycle and chain comparisons
+still execute after every hit. Legacy readers retain strict direct interpretation.
+
+The authoritative solution resolver also returns its required validated
+`accepted_at` timestamp. The profile adapter uses that exact value rather than
+issuing a second accepted-Artifact query and interpreting the same V10 result
+again. No current-time/default fallback or additional LRU entry is introduced;
+every original phase still runs the complete current solution resolver first.
+
+The focused source gate passes98 tests in11.38s, including original four-capture
+root reuse, existing Artifact-model bounds/provenance and solution contracts.
+Strict mypy for3 changed production modules, Ruff and diff checks pass. A545-value
+four-phase count test retains545 solution envelopes alongside1090 tiny synthetic
+occupancy entries:2180 interpretations become545, entries1635 and raw-byte charge
+17,800,770 bytes. These occupancy values are not real Item/report memory models.
+
+A separate finite metadata-only benchmark measured14.901s direct versus3.930s
+reused (reused phases3.436/0.167/0.164/0.163s), with identical output signatures.
+It excludes DB/source/IAM checks, real Item/report/provenance memory, candidate
+admission and subsequent strict profile/entry projection. In particular, adding
+every request/profile/entry as separate cache entries can exceed the existing
+count/byte bounds. This is not evidence that the actual C1 now fits30s. Installed
+verification and actual successful original completed reads remain required.
+
+## Fresh per-capture Item relation batching — design before implementation
+
+2026-10-18 UTC. Candidate admission still issues per-Item component, decision,
+accepted work-unit and compatibility-component queries. An offline official
+source-resolver seam (current SQL calls replaced by synthetic metadata only)
+constructs8720 such queries for545 repetitions across four phases:4360 component,
+2180 decision and2180 work-unit queries. This is not a real DB timing profile.
+
+1. Responsibility stays in Catalog's existing source-read use case and resolver.
+   Batch current relational inputs, not accepted admission or whole populations.
+2. Canonical sources remain current Item revisions/components, extraction decisions
+   and accepted work units. No new persistent or derived canonical record exists.
+3. Key components by pinned Item revision; decisions by exact acceptance/proposal/
+   item number; work units by exact acceptance/result. No current/latest fallback.
+4. Preserve source/lifecycle/approval/lineage/Artifact/PNG checks and exact missing/
+   duplicate behavior. All current maps are rebuilt for every original capture.
+5. Pattern: one bounded set selection followed by O(1) per-source keyed lookups,
+   replacing O(sources) SQL round trips and repeated row materialization.
+6. Use small owner-local typed relation maps, preserving duplicate tuples and the
+   existing work-unit ordering. Reuse the already-supported compatibility
+   `components=` argument; do not cache a compatibility decision.
+7. Bound selected revision/key counts and returned rows. Exceeding a bound fails
+   the complete read explicitly rather than truncating or substituting a source.
+   Space is O(selected current rows); no decoded/raw cache budget increases.
+8. Bind relation values to the same session/root/thread and one snapshot-cache
+   construction. Never attach them to Session.info, the shared root reader or a
+   cross-phase reuse context. A later phase performs fresh batched current reads.
+9. Infrastructure owns SQL and maps; the existing application/source adapter
+   consumes the typed values. Domain/wire contracts gain no SQL or new dependency.
+10. Legacy public source helpers retain their original SQL fallback. Missing,
+    malformed, duplicate, withdrawn or changed current inputs retain explicit
+    failure; there is no retry, model, auth, TTL, schema or migration change.
+11. Descriptor indexing alone measured0.357s for2180 synthetic545-member-manifest
+    lookups and is not established as the7s admission cause. Eliminating the
+    demonstrated N+1 round trips at their current owner is a smaller, better
+    supported correction than another root cache or removal of fresh captures.
+
+### Fresh relation batching implementation and gates
+
+`knowledge_analysis_sources.read_item_source_relations` reads current selected
+Item revisions, canonical/compatibility components, exact decision triples and
+accepted work-unit pairs in four bounded queries. The original work-unit
+`created_at / extraction_batch_id / work_unit_id` order and duplicate tuples are
+preserved. `ItemSourceReadRelations` checks the owning session/root/thread.
+The candidate-pool owner constructs it afresh for each capture; neither the
+cross-call immutable reuse context nor root Artifact reader retains these maps.
+The public source helpers retain their original SQL fallback. Current Artifact,
+Item/decision/acceptance/lineage and image checks are unchanged.
+
+`tests/unit/test_item_source_read_relations.py` covers four fresh16/545-source
+captures, constant query count, equal fallback output, missing/duplicate rows,
+lineage ambiguity, later withdrawals and session/root/thread/selection denial.
+The metadata/Artifact decoding, source, candidate admission, read-only transaction,
+accepted solution, profile/item projection, snapshot and same-root regression
+inventory comprises340 tests:337 PASS /3 pre-existing failures in16.09s, with
+zero skips/deselections. Evidence:
+`/tmp/eom-c1-consumer-u2HajatK/c1-source-combined.xml`.
+The three failures are the unchanged
+`test_read_only_knowledge_transaction.py::test_shared_cache_retention_bounds_fall_back_without_truncation`
+parameters: scalar zero-retention fallback reads16 times instead of8. The same
+three failures were separately reproduced against installed685 without the new
+source path. Their assertions were not relaxed; they remain a separate source
+gate correction before claiming a fully clean combined run.
+
+The main operator ran the official guarded disposable PostgreSQL
+`chat-knowledge-tests` suite:89 PASS /19.36s, including all four new
+`tests/integration/test_inference_transfer_candidate_admission.py` cases:
+fresh four-query545-source captures/current withdrawal, ambiguity/original
+work-unit order, existing index shapes and different-session/finished-root
+denial. Evidence: `/tmp/eom-c1-pool-db.OYfxwCPJ`. This verifies the real SQL on a
+fresh temporary DB at head57, not production authorization or actual HTTP latency.
+Strict mypy for six changed production modules and focused Ruff/diff checks pass.
+No timeout, decoded/raw retention bound, schema, model or freshness setting changed.
+
+## Truthful optional reader capability — design before correction
+
+The three unchanged zero-retention failures expose a wrapper ownership defect:
+the scalar request wrapper advertises `CatalogModelArtifactReader` even when its
+delegate does not implement that optional port. Provenance therefore reads the
+same member twice when retention is disabled (16 rather than8 reads for two
+passes over four members). Retention must not be required for correct behavior.
+
+1. Boundary: the existing request-local Artifact wrapper preserves only actual
+   delegate capabilities; no new service, wire contract or database change.
+2. Canonical source remains the exact member owned by the existing reader.
+3. Logical identity, pinned revision, original member/hash/schema/media and
+   request/root ownership are unchanged.
+4. Raw member verification stays with the scalar base. A small model-capable
+   subclass forwards the existing typed port only to a typed delegate; it does
+   not implement a second scalar decoder or bypass pointer/current-state checks.
+5. Access is the same bounded exact-key lookup and original ordered source reads.
+6. A private factory selects the base or typed subclass by the existing optional
+   protocol at the three production construction sites. No registry, flags,
+   constructor metaprogramming, extra cache or dependency is introduced.
+7. Bounds and complexity do not increase. Scalar zero-retention readers perform
+   one read/strict decode per member; typed readers retain their root decoder
+   reuse. Existing raw-byte alias/charge semantics remain unchanged.
+8. Request/root/thread lifetime and four fresh authority captures are unchanged;
+   neither subclass stores source admission or mutable database decisions.
+9. Application consumers depend on the existing Artifact ports; infrastructure
+   implements typed decoding. The wrapper forwards behavior, not authority.
+10. Original failures remain explicit; no retry or fallback masks a typed reader
+    failure. Tests retain the original8-read zero-retention assertions and cover
+    factory capability, exact forwarding, byte bounds and late withdrawal.
+11. Keeping a scalar fallback on a universally advertised model port is simpler
+    syntactically but creates a second read/parse path and false capability.
+    Raising retention budgets or weakening read-count expectations hides it.
+
+Implemented by a scalar-only base, one model-capable forwarding subclass and
+the private factory at all three production construction sites. The original
+three zero-retention tests now pass with their8-read assertions unchanged.
+The same18-suite source inventory plus four factory/forwarding cases passes:
+344 PASS /15.90s, zero failures/skips/deselections. Evidence:
+`/tmp/eom-c1-wrapper-final.fMWJbojA/c1-source-combined.xml`.
+The four-suite wrapper/source/transaction regression is116 PASS /6.07s;
+strict mypy for the changed production module and Ruff/format/diff checks pass.
+No SQL or integration test changed after the official89-case temporary-DB run.
+These are source/temporary-DB results, not live latency or operating acceptance.
+
+Root final gate adds the three dependency/consumer-boundary suites to that exact
+inventory: **394 PASS/26.84s**, zero failures/skips/deselections. Evidence:
+`/tmp/eom-c1-consumer-u2HajatK/c1-root-final-source.xml`. Strict mypy6 production
+modules and final Ruff/format/diff checks PASS. The unchanged integration file's
+rawSHA256 is `88c27a8a978924a5655dedd746fff07885184c5a15f9a6d733d52ab89098fe50`;
+its last write09:00:59 precedes the actual89-test PostgreSQL run09:02:27–50.
+Supported cleanup completed09:03:05 for that exact disposable database only.
+Original installed685, the first authenticated503 and current partial indexing
+remain the operating baseline until the correction is actually installed/read.

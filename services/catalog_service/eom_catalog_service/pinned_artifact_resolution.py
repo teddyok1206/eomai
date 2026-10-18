@@ -12,7 +12,7 @@ from pathlib import Path, PurePosixPath
 from threading import get_ident
 from typing import Literal, cast
 
-from eom_identifiers import content_sha256, sha256_bytes, sha256_file
+from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes, sha256_file
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from pydantic import BaseModel
@@ -808,6 +808,33 @@ class PinnedArtifactReadContext:
             pointer.schema_ref,
             pointer.media_type,
         )
+        return self._decode_immutable(key, pointer.schema_ref, payload, decoder)
+
+    def decode_model_value[Model: BaseModel](
+        self,
+        schema_ref: str,
+        value: object,
+        *,
+        decoder: Callable[[str, bytes], Model],
+    ) -> Model:
+        """Interpret exact current JSON; never retain its dictionary or authority.
+
+        Hash the complete current value on each call, so changed DB metadata
+        cannot inherit an earlier interpretation merely by keeping its row ID.
+        Artifact raw hashes remain separate from this temporary semantic key.
+        """
+        self.require_session(self._session)
+        payload = canonical_json_bytes(value)
+        key = ("canonical-json", schema_ref, sha256_bytes(payload), "", "", "")
+        return self._decode_immutable(key, schema_ref, payload, decoder)
+
+    def _decode_immutable[Model: BaseModel](
+        self,
+        key: tuple[str, str, str, str, str, str],
+        schema_ref: str,
+        payload: bytes,
+        decoder: Callable[[str, bytes], Model],
+    ) -> Model:
         cached = self._decoded.get(key)
         if cached is not None and cached.decoder is decoder:
             self._decoded.move_to_end(key)
@@ -816,7 +843,7 @@ class PinnedArtifactReadContext:
         # if its own validation fails or returns a mutable model.
         if cached is not None:
             self._decoded_bytes -= self._decoded.pop(key).byte_charge
-        value = decoder(pointer.schema_ref, payload)
+        value = decoder(schema_ref, payload)
         if (
             len(payload) <= self.MAX_DECODED_BYTES
             and self.MAX_DECODED_MEMBERS > 0

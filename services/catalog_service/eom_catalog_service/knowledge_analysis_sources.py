@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import json
+from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
+from threading import get_ident
+from types import MappingProxyType
 from typing import Literal, cast
 
 from eom_catalog_contracts import (
@@ -12,6 +16,7 @@ from eom_catalog_contracts import (
     ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
     ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF,
     ASSESSMENT_ITEM_CONTENT_V3_SCHEMA_REF,
+    LEGACY_ITEM_MEDIA_COMPATIBILITY_SCHEMA_REF,
     ApprovedItemKnowledgeSourceV2,
     ApprovedPastExamItemKnowledgeSourceV3,
     AssessmentArtifactMemberPointer,
@@ -31,8 +36,8 @@ from eom_catalog_contracts import (
 )
 from eom_identifiers import content_sha256
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_, select, tuple_
+from sqlalchemy.orm import Session, SessionTransaction
 
 from eom_catalog_service.artifacts import CatalogArtifactReader
 from eom_catalog_service.legacy_assessment_models import (
@@ -63,6 +68,8 @@ from eom_catalog_service.past_exam_source_provenance import (
 )
 
 MAX_SOURCE_BYTES = 100 * 1024 * 1024
+MAX_ITEM_SOURCE_RELATION_REVISIONS = 1024
+MAX_ITEM_SOURCE_RELATION_WORK_UNITS = 4096
 CONTENT_INTAKE_ELIGIBLE_STATES = frozenset(
     {
         "HASHED",
@@ -111,6 +118,187 @@ class KnowledgeAnalysisSourceError(RuntimeError):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
+
+
+@dataclass(frozen=True, slots=True)
+class ItemSourceReadRelations:
+    """Current relations for ONE capture, never a shared admission/authority cache."""
+
+    _session: Session = field(repr=False)
+    _root: SessionTransaction = field(repr=False)
+    _thread_id: int = field(repr=False)
+    _components: Mapping[str, tuple[ItemComponentRecord, ...]] = field(repr=False)
+    _decisions: Mapping[tuple[str, str, int], tuple[LegacyItemExtractionDecisionRecord, ...]] = (
+        field(repr=False)
+    )
+    _work_units: Mapping[tuple[str, str], tuple[LegacyItemExtractionBatchWorkUnitRecord, ...]] = (
+        field(repr=False)
+    )
+
+    def _require(self, session: Session) -> None:
+        if (
+            session is not self._session
+            or session.get_transaction() is not self._root
+            or not self._root.is_active
+            or get_ident() != self._thread_id
+        ):
+            raise KnowledgeAnalysisSourceError(
+                "KNOWLEDGE_ANALYSIS_SOURCE_STALE", "Item source read relations are out of scope"
+            )
+
+    def components(self, session: Session, revision_id: str) -> tuple[ItemComponentRecord, ...]:
+        self._require(session)
+        if revision_id not in self._components:
+            raise KnowledgeAnalysisSourceError(
+                "KNOWLEDGE_ANALYSIS_SOURCE_MISSING", "Item source revision was not selected"
+            )
+        return self._components[revision_id]
+
+    def decisions(
+        self, session: Session, key: tuple[str, str, int]
+    ) -> tuple[LegacyItemExtractionDecisionRecord, ...]:
+        self._require(session)
+        return self._decisions.get(key, ())
+
+    def work_units(
+        self, session: Session, key: tuple[str, str]
+    ) -> tuple[LegacyItemExtractionBatchWorkUnitRecord, ...]:
+        self._require(session)
+        return self._work_units.get(key, ())
+
+
+def read_item_source_relations(
+    session: Session, item_revision_ids: tuple[str, ...]
+) -> ItemSourceReadRelations:
+    """Batch exact current inputs afresh; preserve duplicates and lineage ordering."""
+    selected = tuple(sorted(set(item_revision_ids)))
+    root = session.get_transaction()
+    if root is None or not root.is_active or len(selected) > MAX_ITEM_SOURCE_RELATION_REVISIONS:
+        raise KnowledgeAnalysisSourceError(
+            "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE", "Item source relation scope is invalid"
+        )
+    revisions = tuple(
+        session.scalars(
+            select(ItemRevisionRecord)
+            .where(ItemRevisionRecord.item_revision_id.in_(selected))
+            .execution_options(populate_existing=True)
+        )
+    )
+    components = tuple(
+        session.scalars(
+            select(ItemComponentRecord)
+            .where(
+                ItemComponentRecord.item_revision_id.in_(selected),
+                or_(
+                    and_(
+                        ItemComponentRecord.component_type == "ITEM_CONTENT",
+                        ItemComponentRecord.ordinal == 0,
+                    ),
+                    and_(
+                        ItemComponentRecord.component_type == "OTHER",
+                        ItemComponentRecord.schema_ref
+                        == LEGACY_ITEM_MEDIA_COMPATIBILITY_SCHEMA_REF,
+                    ),
+                ),
+            )
+            .limit(4 * len(selected) + 1)
+            .execution_options(populate_existing=True)
+        )
+    )
+    if len(components) > 4 * len(selected):
+        raise KnowledgeAnalysisSourceError(
+            "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE", "Item source component budget is exceeded"
+        )
+    decision_keys: set[tuple[str, str, int]] = set()
+    work_unit_keys: set[tuple[str, str]] = set()
+    for revision in revisions:
+        metadata = revision.metadata_json
+        acceptance, result = (
+            metadata.get("extraction_acceptance_id"),
+            metadata.get("extraction_result_id"),
+        )
+        proposal, number = metadata.get("item_proposal_id"), metadata.get("item_number")
+        if (
+            metadata.get("source_kind") == "PAST_EXAM"
+            and isinstance(acceptance, str)
+            and isinstance(result, str)
+            and isinstance(proposal, str)
+            and isinstance(number, int)
+        ):
+            decision_keys.add((acceptance, proposal, number))
+            work_unit_keys.add((acceptance, result))
+    decisions = (
+        tuple(
+            session.scalars(
+                select(LegacyItemExtractionDecisionRecord)
+                .where(
+                    tuple_(
+                        LegacyItemExtractionDecisionRecord.acceptance_id,
+                        LegacyItemExtractionDecisionRecord.item_proposal_id,
+                        LegacyItemExtractionDecisionRecord.item_number,
+                    ).in_(tuple(sorted(decision_keys)))
+                )
+                .limit(2 * len(decision_keys) + 1)
+                .execution_options(populate_existing=True)
+            )
+        )
+        if decision_keys
+        else ()
+    )
+    units = (
+        tuple(
+            session.scalars(
+                select(LegacyItemExtractionBatchWorkUnitRecord)
+                .where(
+                    tuple_(
+                        LegacyItemExtractionBatchWorkUnitRecord.acceptance_id,
+                        LegacyItemExtractionBatchWorkUnitRecord.extraction_result_id,
+                    ).in_(tuple(sorted(work_unit_keys))),
+                    LegacyItemExtractionBatchWorkUnitRecord.state == "ACCEPTED",
+                )
+                .order_by(
+                    LegacyItemExtractionBatchWorkUnitRecord.created_at,
+                    LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id,
+                    LegacyItemExtractionBatchWorkUnitRecord.work_unit_id,
+                )
+                .limit(MAX_ITEM_SOURCE_RELATION_WORK_UNITS + 1)
+                .execution_options(populate_existing=True)
+            )
+        )
+        if work_unit_keys
+        else ()
+    )
+    if len(decisions) > 2 * len(decision_keys) or len(units) > MAX_ITEM_SOURCE_RELATION_WORK_UNITS:
+        raise KnowledgeAnalysisSourceError(
+            "KNOWLEDGE_ANALYSIS_SOURCE_STALE", "Item extraction relation budget is exceeded"
+        )
+    components_by_revision: dict[str, list[ItemComponentRecord]] = {key: [] for key in selected}
+    decisions_by_key: dict[tuple[str, str, int], list[LegacyItemExtractionDecisionRecord]] = (
+        defaultdict(list)
+    )
+    units_by_key: dict[tuple[str, str], list[LegacyItemExtractionBatchWorkUnitRecord]] = (
+        defaultdict(list)
+    )
+    for component in components:
+        components_by_revision[component.item_revision_id].append(component)
+    for decision in decisions:
+        decisions_by_key[
+            (decision.acceptance_id, decision.item_proposal_id, decision.item_number)
+        ].append(decision)
+    for unit in units:
+        if unit.acceptance_id is None or unit.extraction_result_id is None:
+            raise KnowledgeAnalysisSourceError(
+                "KNOWLEDGE_ANALYSIS_SOURCE_STALE", "accepted Item work unit has incomplete lineage"
+            )
+        units_by_key[(unit.acceptance_id, unit.extraction_result_id)].append(unit)
+    return ItemSourceReadRelations(
+        session,
+        root,
+        get_ident(),
+        MappingProxyType({key: tuple(rows) for key, rows in components_by_revision.items()}),
+        MappingProxyType({key: tuple(rows) for key, rows in decisions_by_key.items()}),
+        MappingProxyType({key: tuple(rows) for key, rows in units_by_key.items()}),
+    )
 
 
 @dataclass(frozen=True)
@@ -199,6 +387,7 @@ def _resolve_item_source(
     source_class: Literal["APPROVED_ITEM", "PAST_EXAM"],
     eligible_revision_states: frozenset[str],
     past_exam_cache: PastExamSourceResolutionCache | None = None,
+    read_relations: ItemSourceReadRelations | None = None,
 ) -> ApprovedItemKnowledgeSourceV2 | ApprovedPastExamItemKnowledgeSourceV3:
     revision = session.get(ItemRevisionRecord, item_revision_id)
     if revision is None:
@@ -227,13 +416,24 @@ def _resolve_item_source(
             "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE",
             "retired Item Revision has incomplete approval history",
         )
-    components = tuple(
-        session.scalars(
-            select(ItemComponentRecord).where(
-                ItemComponentRecord.item_revision_id == item_revision_id,
-                ItemComponentRecord.component_type == "ITEM_CONTENT",
-                ItemComponentRecord.ordinal == 0,
+    scoped_components = (
+        None if read_relations is None else read_relations.components(session, item_revision_id)
+    )
+    components = (
+        tuple(
+            session.scalars(
+                select(ItemComponentRecord).where(
+                    ItemComponentRecord.item_revision_id == item_revision_id,
+                    ItemComponentRecord.component_type == "ITEM_CONTENT",
+                    ItemComponentRecord.ordinal == 0,
+                )
             )
+        )
+        if scoped_components is None
+        else tuple(
+            component
+            for component in scoped_components
+            if component.component_type == "ITEM_CONTENT" and component.ordinal == 0
         )
     )
     if len(components) != 1:
@@ -297,6 +497,8 @@ def _resolve_item_source(
             revision=revision,
             artifact_member=artifact_member,
             cache=past_exam_cache,
+            read_relations=read_relations,
+            components=scoped_components,
         )
     try:
         return ApprovedItemKnowledgeSourceV2(
@@ -318,6 +520,8 @@ def _resolve_past_exam_item_source(
     revision: ItemRevisionRecord,
     artifact_member: KnowledgeAnalysisSourceArtifactMemberV2,
     cache: PastExamSourceResolutionCache | None = None,
+    read_relations: ItemSourceReadRelations | None = None,
+    components: tuple[ItemComponentRecord, ...] | None = None,
 ) -> ApprovedPastExamItemKnowledgeSourceV3:
     """Resolve one promoted Item back to its exact extraction request and PNG evidence."""
 
@@ -338,14 +542,18 @@ def _resolve_past_exam_item_source(
             "past-exam Item promotion provenance is incomplete",
         )
     acceptance_record = session.get(LegacyItemExtractionAcceptanceRecord, acceptance_id)
-    decisions = tuple(
-        session.scalars(
-            select(LegacyItemExtractionDecisionRecord).where(
-                LegacyItemExtractionDecisionRecord.acceptance_id == acceptance_id,
-                LegacyItemExtractionDecisionRecord.item_proposal_id == item_proposal_id,
-                LegacyItemExtractionDecisionRecord.item_number == item_number,
+    decisions = (
+        tuple(
+            session.scalars(
+                select(LegacyItemExtractionDecisionRecord).where(
+                    LegacyItemExtractionDecisionRecord.acceptance_id == acceptance_id,
+                    LegacyItemExtractionDecisionRecord.item_proposal_id == item_proposal_id,
+                    LegacyItemExtractionDecisionRecord.item_number == item_number,
+                )
             )
         )
+        if read_relations is None
+        else read_relations.decisions(session, (acceptance_id, item_proposal_id, item_number))
     )
     if (
         acceptance_record is None
@@ -359,21 +567,25 @@ def _resolve_past_exam_item_source(
             "KNOWLEDGE_ANALYSIS_SOURCE_STALE",
             "past-exam Item acceptance or decision does not resolve",
         )
-    work_units = tuple(
-        session.scalars(
-            select(LegacyItemExtractionBatchWorkUnitRecord)
-            .where(
-                LegacyItemExtractionBatchWorkUnitRecord.acceptance_id == acceptance_id,
-                LegacyItemExtractionBatchWorkUnitRecord.extraction_result_id
-                == extraction_result_id,
-                LegacyItemExtractionBatchWorkUnitRecord.state == "ACCEPTED",
-            )
-            .order_by(
-                LegacyItemExtractionBatchWorkUnitRecord.created_at,
-                LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id,
-                LegacyItemExtractionBatchWorkUnitRecord.work_unit_id,
+    work_units = (
+        tuple(
+            session.scalars(
+                select(LegacyItemExtractionBatchWorkUnitRecord)
+                .where(
+                    LegacyItemExtractionBatchWorkUnitRecord.acceptance_id == acceptance_id,
+                    LegacyItemExtractionBatchWorkUnitRecord.extraction_result_id
+                    == extraction_result_id,
+                    LegacyItemExtractionBatchWorkUnitRecord.state == "ACCEPTED",
+                )
+                .order_by(
+                    LegacyItemExtractionBatchWorkUnitRecord.created_at,
+                    LegacyItemExtractionBatchWorkUnitRecord.extraction_batch_id,
+                    LegacyItemExtractionBatchWorkUnitRecord.work_unit_id,
+                )
             )
         )
+        if read_relations is None
+        else read_relations.work_units(session, (acceptance_id, extraction_result_id))
     )
     lineage = {
         (
@@ -553,6 +765,7 @@ def _resolve_past_exam_item_source(
             result=result,
             request=request,
             proposal=proposal,
+            components=components,
         )
     except LegacyItemMediaCompatibilityError as exc:
         raise KnowledgeAnalysisSourceError(
@@ -674,6 +887,7 @@ def resolve_approved_item_source(
     item_revision_id: str,
     source_class: Literal["APPROVED_ITEM", "PAST_EXAM"],
     past_exam_cache: PastExamSourceResolutionCache | None = None,
+    read_relations: ItemSourceReadRelations | None = None,
 ) -> ApprovedItemKnowledgeSourceV2 | ApprovedPastExamItemKnowledgeSourceV3:
     """Resolve a currently approved Item Revision for a new analysis request."""
 
@@ -684,6 +898,7 @@ def resolve_approved_item_source(
         source_class=source_class,
         eligible_revision_states=frozenset({"APPROVED"}),
         past_exam_cache=past_exam_cache,
+        read_relations=read_relations,
     )
 
 
@@ -694,6 +909,7 @@ def resolve_historically_approved_item_source(
     item_revision_id: str,
     source_class: Literal["APPROVED_ITEM", "PAST_EXAM"],
     past_exam_cache: PastExamSourceResolutionCache | None = None,
+    read_relations: ItemSourceReadRelations | None = None,
 ) -> ApprovedItemKnowledgeSourceV2 | ApprovedPastExamItemKnowledgeSourceV3:
     """Re-resolve an immutable published source without substituting its current revision."""
 
@@ -704,6 +920,7 @@ def resolve_historically_approved_item_source(
         source_class=source_class,
         eligible_revision_states=frozenset({"APPROVED", "SUPERSEDED", "RETIRED"}),
         past_exam_cache=past_exam_cache,
+        read_relations=read_relations,
     )
 
 

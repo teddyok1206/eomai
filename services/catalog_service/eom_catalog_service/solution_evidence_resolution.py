@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from eom_catalog_contracts import (
@@ -21,11 +23,11 @@ from eom_catalog_contracts import (
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased
 
-from eom_catalog_service.artifacts import CatalogArtifactReader
+from eom_catalog_service.artifacts import CatalogArtifactReader, CatalogModelValueDecoder
 from eom_catalog_service.knowledge_proposal_resolution import (
     KnowledgeProposalResolutionError,
     resolve_knowledge_solution_proposal,
@@ -42,6 +44,42 @@ class ResolvedSolutionEvidence:
     report: KnowledgeAnalysisSolutionReport
     source: ApprovedItemKnowledgeSourceV2
     base_accepted_result: KnowledgeAnalysisAcceptedResultArtifactMember
+    accepted_at: datetime
+
+
+class _SolutionMetadataInterpretation(BaseModel):
+    """One bounded entry per immutable interpretation, not three competing LRUs."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    request: KnowledgeAnalysisRequestV10
+    accepted: KnowledgeAnalysisResultV10
+    receipt: KnowledgeAnalysisProposalReceiptV9
+    accepted_artifact_sha256: str
+    receipt_artifact_sha256: str
+
+
+_SOLUTION_METADATA_SCHEMA = "catalog-accepted-solution-metadata/1.0"
+
+
+def _decode_solution_metadata(_schema: str, raw: bytes) -> _SolutionMetadataInterpretation:
+    value = json.loads(raw)
+    request = KnowledgeAnalysisRequestV10.model_validate(value["request"])
+    validate_contract("knowledge-analysis-result-v10", value["accepted"])
+    accepted = KnowledgeAnalysisResultV10.model_validate(value["accepted"])
+    validate_contract("knowledge-analysis-proposal-receipt-v9", value["receipt"])
+    receipt = KnowledgeAnalysisProposalReceiptV9.model_validate(value["receipt"])
+    return _SolutionMetadataInterpretation(
+        request=request,
+        accepted=accepted,
+        receipt=receipt,
+        # These historical commit encodings deliberately differ. The canonical
+        # input-value cache key is not either Artifact's raw content hash.
+        accepted_artifact_sha256=sha256_bytes(
+            canonical_json_bytes(accepted.model_dump(mode="json"))
+        ),
+        receipt_artifact_sha256=sha256_bytes(canonical_json_bytes(receipt)),
+    )
 
 
 def _manifest_member(
@@ -111,11 +149,22 @@ def _resolve_row(
 ) -> ResolvedSolutionEvidence:
     run, accepted_revision, accepted_artifact, proposal_revision, proposal_artifact = row
     try:
-        request = KnowledgeAnalysisRequestV10.model_validate(run.canonical_request)
-        validate_contract("knowledge-analysis-result-v10", accepted_revision.result)
-        accepted = KnowledgeAnalysisResultV10.model_validate(accepted_revision.result)
-        validate_contract("knowledge-analysis-proposal-receipt-v9", proposal_revision.result)
-        receipt = KnowledgeAnalysisProposalReceiptV9.model_validate(proposal_revision.result)
+        current_metadata = {
+            "request": run.canonical_request,
+            "accepted": accepted_revision.result,
+            "receipt": proposal_revision.result,
+        }
+        if isinstance(artifacts, CatalogModelValueDecoder):
+            metadata = artifacts.decode_model_value(
+                _SOLUTION_METADATA_SCHEMA,
+                current_metadata,
+                decoder=_decode_solution_metadata,
+            )
+        else:
+            metadata = _decode_solution_metadata(
+                _SOLUTION_METADATA_SCHEMA, canonical_json_bytes(current_metadata)
+            )
+        request, accepted, receipt = metadata.request, metadata.accepted, metadata.receipt
 
         accepted_pointer, accepted_bytes = _manifest_member(
             accepted_revision,
@@ -165,12 +214,11 @@ def _resolve_row(
             # The accepted-result commit boundary hashes the JSON-mode dictionary written to
             # the Artifact. Hashing that model directly would re-encode UTC strings through
             # Python datetimes and can add fractional seconds absent from the immutable bytes.
-            or sha256_bytes(canonical_json_bytes(accepted.model_dump(mode="json")))
-            != accepted_revision.content_hash
+            or metadata.accepted_artifact_sha256 != accepted_revision.content_hash
             # Proposal receipts have a distinct historical commit boundary: the Orchestrator
             # hashes the typed model directly. Preserve that representation when resolving an
             # immutable receipt rather than silently reinterpreting predecessor artifacts.
-            or sha256_bytes(canonical_json_bytes(receipt)) != proposal_revision.content_hash
+            or metadata.receipt_artifact_sha256 != proposal_revision.content_hash
             or accepted.analysis_request_id != run.analysis_request_id
             or accepted.analysis_request_sha256 != run.request_sha256
             or accepted.source != request.source
@@ -220,6 +268,7 @@ def _resolve_row(
                 artifact_member=request.source.artifact_member,
             ),
             base_accepted_result=request.base_analysis.accepted_result_artifact,
+            accepted_at=accepted.accepted_at,
         )
     except (KnowledgeProposalResolutionError, ValidationError, ValueError) as exc:
         if isinstance(exc, SolutionEvidenceResolutionError):

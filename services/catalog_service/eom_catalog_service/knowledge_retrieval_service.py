@@ -78,7 +78,9 @@ from eom_catalog_service.inference_transfer_scope import (
 )
 from eom_catalog_service.knowledge_analysis_sources import (
     EducationalDocumentSourceResolutionCache,
+    ItemSourceReadRelations,
     KnowledgeAnalysisSourceError,
+    read_item_source_relations,
     resolve_content_intake_source,
     resolve_educational_document_source,
     resolve_historically_approved_item_source,
@@ -468,33 +470,6 @@ class _RequestScopedArtifactValidationCache:
                 self._member_bytes[exact] = value
         return value
 
-    def read_model_member[Model: BaseModel](
-        self,
-        pointer: ArtifactMemberPointer,
-        *,
-        expected_bytes: int,
-        decoder: Callable[[str, bytes], Model],
-    ) -> Model:
-        """Keep the root reader's optional decoding capability through this wrapper."""
-        if type(expected_bytes) is not int or expected_bytes <= 0:
-            raise ValueError("immutable Artifact member byte count differs")
-        if isinstance(self._delegate, CatalogModelArtifactReader):
-            return self._delegate.read_model_member(
-                pointer, expected_bytes=expected_bytes, decoder=decoder
-            )
-        payload = self.read_member(
-            artifact_id=pointer.artifact_id,
-            revision_id=pointer.artifact_revision_id,
-            member_path=pointer.member_path,
-            sha256=pointer.sha256,
-            media_type=pointer.media_type,
-            schema_ref=pointer.schema_ref,
-            max_bytes=expected_bytes,
-        )
-        if len(payload) != expected_bytes:
-            raise ValueError("immutable Artifact member byte count differs")
-        return decoder(pointer.schema_ref, payload)
-
     def verify_member(
         self,
         *,
@@ -528,6 +503,33 @@ class _RequestScopedArtifactValidationCache:
         )
         if len(self._verified_members) < MAX_REQUEST_ARTIFACT_CACHE_MEMBERS:
             self._verified_members.add(key)
+
+
+class _RequestScopedModelArtifactValidationCache(_RequestScopedArtifactValidationCache):
+    """Preserve an actual delegate capability, without inventing a scalar decode path."""
+
+    def __init__(self, delegate: CatalogModelArtifactReader) -> None:
+        super().__init__(delegate)
+        self._model_delegate = delegate
+
+    def read_model_member[Model: BaseModel](
+        self,
+        pointer: ArtifactMemberPointer,
+        *,
+        expected_bytes: int,
+        decoder: Callable[[str, bytes], Model],
+    ) -> Model:
+        return self._model_delegate.read_model_member(
+            pointer, expected_bytes=expected_bytes, decoder=decoder
+        )
+
+
+def _request_scoped_artifact_validation_cache(
+    delegate: CatalogArtifactReader,
+) -> _RequestScopedArtifactValidationCache:
+    if isinstance(delegate, CatalogModelArtifactReader):
+        return _RequestScopedModelArtifactValidationCache(delegate)
+    return _RequestScopedArtifactValidationCache(delegate)
 
 
 @dataclass(frozen=True, slots=True)
@@ -646,6 +648,7 @@ class _SnapshotSourceResolutionCache:
     past_exam_provenance: PastExamSourceResolutionCache = field(
         default_factory=PastExamSourceResolutionCache
     )
+    item_relations: ItemSourceReadRelations | None = None
     declared_sources_by_run_id: dict[str, _ResolvedKnowledgeSource] = field(default_factory=dict)
     resolved_sources_by_run_id: dict[str, _ResolvedKnowledgeSource] = field(default_factory=dict)
     validated_sources_by_pointer: dict[_ImmutableSourcePointerKey, _ResolvedKnowledgeSource] = (
@@ -716,7 +719,7 @@ class KnowledgeRetrievalApplicationService:
                 graph_snapshot=scope.graph_snapshot,
                 policy_sha256=scope.access_policy_sha256,
             ),
-            _artifacts=_RequestScopedArtifactValidationCache(self.artifacts),
+            _artifacts=_request_scoped_artifact_validation_cache(self.artifacts),
             _past_exam=PastExamSourceResolutionCache(),
         )
 
@@ -1660,6 +1663,15 @@ class KnowledgeRetrievalApplicationService:
             tuple(values[0][0] for values in by_run.values()),
             reuse_context=reuse_context,
             artifact_reader=artifact_reader,
+            item_source_revision_ids=tuple(
+                sorted(
+                    {
+                        values[0][0].source_revision_id
+                        for values in by_run.values()
+                        if values[0][0].source_class in {"APPROVED_ITEM", "PAST_EXAM"}
+                    }
+                )
+            ),
         )
         admitted: list[KnowledgeRetrievalCandidate] = []
         for run_id in run_ids:
@@ -2185,6 +2197,7 @@ class KnowledgeRetrievalApplicationService:
         *,
         reuse_context: ReadOnlyKnowledgeReuseContext | None = None,
         artifact_reader: CatalogArtifactReader | None = None,
+        item_source_revision_ids: tuple[str, ...] = (),
     ) -> _SnapshotSourceResolutionCache:
         if reuse_context is not None and artifact_reader is not None:
             raise KnowledgeRetrievalServiceError(
@@ -2206,7 +2219,7 @@ class KnowledgeRetrievalApplicationService:
                 runs_by_id={},
                 artifacts=reuse_context._artifacts
                 if reuse_context is not None
-                else _RequestScopedArtifactValidationCache(reader),
+                else _request_scoped_artifact_validation_cache(reader),
                 past_exam_provenance=reuse_context._past_exam
                 if reuse_context is not None
                 else PastExamSourceResolutionCache(),
@@ -2242,15 +2255,29 @@ class KnowledgeRetrievalApplicationService:
                     "graph snapshot resolves an Analysis Run more than once",
                 )
             runs_by_id[run.analysis_run_id] = run
+        try:
+            # This belongs to this capture only. In particular it is never kept
+            # in the cross-call immutable reuse context or the root byte reader.
+            item_relations = (
+                read_item_source_relations(session, item_source_revision_ids)
+                if item_source_revision_ids
+                else None
+            )
+        except KnowledgeAnalysisSourceError as exc:
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_SOURCE_STALE",
+                "current Item source relations cannot be resolved exactly",
+            ) from exc
         return _SnapshotSourceResolutionCache(
             associations_by_run_id=associations_by_run_id,
             runs_by_id=runs_by_id,
             artifacts=reuse_context._artifacts
             if reuse_context is not None
-            else _RequestScopedArtifactValidationCache(reader),
+            else _request_scoped_artifact_validation_cache(reader),
             past_exam_provenance=reuse_context._past_exam
             if reuse_context is not None
             else PastExamSourceResolutionCache(),
+            item_relations=item_relations,
         )
 
     def _resolve_snapshot_source(
@@ -2365,6 +2392,7 @@ class KnowledgeRetrievalApplicationService:
                 item_revision_id=source.item_revision_id,
                 source_class=source.source_class,
                 past_exam_cache=cache.past_exam_provenance,
+                read_relations=cache.item_relations,
             )
         if isinstance(
             source,
@@ -2393,6 +2421,7 @@ class KnowledgeRetrievalApplicationService:
             item_revision_id=source.item_revision_id,
             source_class=source.source_class,
             past_exam_cache=cache.past_exam_provenance,
+            read_relations=cache.item_relations,
         )
 
     @staticmethod
