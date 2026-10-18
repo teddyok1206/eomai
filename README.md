@@ -31,20 +31,28 @@ logical Item
 - 승인 문항, HWPX build, RAG 학습 현황과 Codex slot 사용 상태 조회
 - 25문항 모의고사 생산 계획·실행·검토·퇴역을 불변 checkpoint와 영수증으로 관리
 
-## 증분 RAG 목표의 현재 상태 — 2026-10-18 15:34 UTC
+## 증분 RAG 목표의 현재 상태 — 2026-10-18 16:07 UTC
 
 운영 API·Catalog·출제/HWPX 실행기·일반 채팅과 QUERY 전용 SDK에 `d81b9ba3`를 반영했고,
 API readiness와 관련 9개 서비스의 실행을 확인했습니다. 새 검색의 기본 범위는 자동 인덱싱과
 같은 `ALL_ADMITTED_GRAPH_ITEMS`로 연결했습니다. 과거 요청은 원래 고정된 인덱스 Revision을
 조회하며, 기존 요청·출처 권한·Graph/정책·CPU 환경·INDEX18 신원은 바꾸지 않았습니다.
-인덱싱은 진행 중이던 작업을 정상 완료한 뒤 고정 CPU/CUDA 비교를 위해 잠시 종료 상태로
-유지합니다. 비교 후 같은 `ee97239d` 실행기와 INDEX18 신원으로 재개합니다.
+실제 관리자 로그인과 서비스 정보 조회는 통과했으나, 첫 기존 유사도 결과 조회에서
+Catalog의 처리가 API의 30초 통신 한도를 넘었습니다. Catalog 내부의 원본·후속 재검증은
+약 33초 뒤 완료됐으며, 이를 HTTP 전달 성공이나 로그인 실패로 기록하지 않습니다.
+검증 프로세스의 종료를 확인한 뒤 같은 `ee97239d` 실행기와 INDEX18 신원으로 자동
+인덱싱을 정상 재개했습니다. 새로운 문항·대화·비교 실행은 시작하지 않았습니다.
 
 소스 회귀 269개와 임시 PostgreSQL 테스트 126개, 테스트 DB 정리 및 공식 배포가 통과했습니다.
 이는 실제 사용자 요청의 전달 성공을 대신하지 않습니다. **전체 목표는 아직 진행 중이며**,
 현재 배포본의 C1–C5 전달 검증·CPU/CUDA 여섯 회 실측과 기본값 결정은 완료 전입니다.
+추가로 확인된 문항별 출처 메타데이터 반복 조회는 기존 검증 범위의 일괄 조회로 개선했습니다.
+이 후속 저장소 후보는 단위 테스트 231개와 별도 검색 회귀 61개, 임시 PostgreSQL의 자료 조회
+120개·임베딩 저장/조회 126개를 통과했습니다. 권한·출처 해시 검증과 원래 요청은 유지했고,
+통신 제한을 늘리지는 않았습니다. 아직 이 후보의 운영 성능·사용자 전달 성공은 주장하지 않습니다.
 [불변 검색 범위 호환 설계](docs/architecture/PINNED_EMBEDDING_NAMESPACE_READ_COMPATIBILITY.md),
-[이번 운영 반영과 남은 범위](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#incremental-namespace-compatible-release--1534-utc)를 참고하세요.
+[이번 운영 반영과 남은 범위](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#incremental-namespace-compatible-release--1534-utc),
+[인증 후 조회 시간 초과와 정상 인덱싱 재개](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#authenticated-c1-read-deadline-and-index-resumption--1548-utc)를 참고하세요.
 아래 누적 릴리스 기록은 각 기록 시점의 검증 범위입니다.
 
 ## 현재 저장소 릴리스 선

@@ -2259,11 +2259,26 @@ class KnowledgeRetrievalApplicationService:
                     "graph snapshot resolves an Analysis Run more than once",
                 )
             runs_by_id[run.analysis_run_id] = run
+        past_exam_provenance = (
+            reuse_context._past_exam
+            if reuse_context is not None
+            else PastExamSourceResolutionCache()
+        )
+        scoped_artifacts = (
+            reuse_context._artifacts
+            if reuse_context is not None
+            else _request_scoped_artifact_validation_cache(reader)
+        )
         try:
             # This belongs to this capture only. In particular it is never kept
             # in the cross-call immutable reuse context or the root byte reader.
             item_relations = (
-                read_item_source_relations(session, item_source_revision_ids)
+                read_item_source_relations(
+                    session,
+                    item_source_revision_ids,
+                    artifacts=scoped_artifacts,
+                    past_exam_cache=past_exam_provenance,
+                )
                 if item_source_revision_ids
                 else None
             )
@@ -2275,12 +2290,8 @@ class KnowledgeRetrievalApplicationService:
         return _SnapshotSourceResolutionCache(
             associations_by_run_id=associations_by_run_id,
             runs_by_id=runs_by_id,
-            artifacts=reuse_context._artifacts
-            if reuse_context is not None
-            else _request_scoped_artifact_validation_cache(reader),
-            past_exam_provenance=reuse_context._past_exam
-            if reuse_context is not None
-            else PastExamSourceResolutionCache(),
+            artifacts=scoped_artifacts,
+            past_exam_provenance=past_exam_provenance,
             item_relations=item_relations,
         )
 

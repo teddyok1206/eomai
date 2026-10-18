@@ -327,6 +327,7 @@ if [[ "${action}" == "chat-knowledge-tests" ]]; then
     tests/integration/test_chat_knowledge_search.py \
     tests/integration/test_chat_knowledge_runtime_privileges.py \
     tests/integration/test_inference_transfer_candidate_admission.py \
+    tests/integration/test_item_source_extraction_relations.py \
     tests/integration/test_inference_transfer_stage_migration.py \
     tests/integration/test_inference_transfer_workflow_admission.py \
     tests/integration/test_inference_transfer_plan_persistence.py \

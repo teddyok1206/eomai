@@ -631,6 +631,9 @@ def item_source_relation_database(pool_database):
         "item_components",
         "legacy_item_extraction_decisions",
         "legacy_item_extraction_batch_work_units",
+        "legacy_item_extraction_acceptances",
+        "legacy_item_extraction_batches",
+        "assessment_source_bundle_revisions",
     )
     for table in tables:
         pool_database.execute(
@@ -733,7 +736,7 @@ def capture_item_source_relations(session, selected):
     return relations, tuple(statements)
 
 
-def test_real_postgres_item_relations_are_four_fresh_queries_not_per_item_or_authority_cache(
+def test_real_postgres_item_relations_are_seven_fresh_metadata_queries_not_per_item(
     item_source_relation_database,
 ):
     session = item_source_relation_database
@@ -765,7 +768,7 @@ def test_real_postgres_item_relations_are_four_fresh_queries_not_per_item_or_aut
                 text("DELETE FROM pg_temp.legacy_item_extraction_decisions WHERE decision_id=1")
             )
         relations, statements = capture_item_source_relations(session, selected)
-        assert len(statements) == 4
+        assert len(statements) == 7
         assert tuple(
             statement.column_descriptions[0]["entity"].__tablename__ for statement in statements
         ) == (
@@ -773,6 +776,9 @@ def test_real_postgres_item_relations_are_four_fresh_queries_not_per_item_or_aut
             "item_components",
             "legacy_item_extraction_decisions",
             "legacy_item_extraction_batch_work_units",
+            "legacy_item_extraction_acceptances",
+            "legacy_item_extraction_batches",
+            "assessment_source_bundle_revisions",
         )
         assert len(relations.components(session, first_revision)) == (1 if phase < 2 else 0)
         decisions = relations.decisions(session, first_decision)
@@ -826,7 +832,7 @@ def test_real_postgres_item_relations_preserve_ambiguity_and_original_work_unit_
             },
         )
     relations, statements = capture_item_source_relations(session, (revision,))
-    assert len(statements) == 4
+    assert len(statements) == 7
     assert len(relations.decisions(session, decision)) == 2  # no set/dict last-row-wins
     assert {row.decision for row in relations.decisions(session, decision)} == {"ACCEPT", "REJECT"}
     assert tuple(row.work_unit_id for row in relations.work_units(session, unit)) == (
@@ -896,6 +902,13 @@ def population_observation_database(item_source_relation_database):
         "jobs",
     )
     for table in tables:
+        # The relation fixture now owns these exact empty metadata shadows too.
+        if table in {
+            "legacy_item_extraction_acceptances",
+            "legacy_item_extraction_batches",
+            "assessment_source_bundle_revisions",
+        }:
+            continue
         session.execute(
             text(f"CREATE TEMP TABLE {table} AS SELECT * FROM app.{table} WITH NO DATA")
         )

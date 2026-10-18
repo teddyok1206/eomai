@@ -452,3 +452,99 @@ six IDs/inputs/order, original C1 pointers and credential-free staging. Its genu
 was offered in `EOM:2 rag-incremental`; this is not yet authenticated-delivery evidence.
 C1-C5 live delivery, original six measurements/finalization, conditional default decision
 and actual INDEX18 resumption remain required. No human educational review was added.
+
+## Authenticated C1 read deadline and INDEX resumption — 15:48 UTC
+
+The original finite unit `eom-system-rag-goal-ee97239d-d81b9ba3.service`
+(`3c795e7ddd3f457e9b2d0323c2a32082`) terminated with status1 at15:40:34 UTC;
+subsequent observation proved MainPID0 and an empty control group. It was not
+relaunched and no replacement session, query key, Benchmark identity or Item was
+created. The user supplied a genuine password at its attached, no-echo TTY.
+
+Sanitized API metadata establishes the actual sequence:
+
+| UTC | Official route | Duration |
+|---|---|---:|
+| 15:40:00.836 | `/auth/login` | 268.064ms |
+| 15:40:00.842 | `/auth/me` | 4.949ms |
+| 15:40:01.676 | `/system/info` | 833.272ms |
+| 15:40:33.653 | `/knowledge/inference-transfer/similarity-context` | 31,976.625ms |
+
+The client reached C1 only after typed login, actual-operator/session binding and
+installed API/migration checks. Therefore another password prompt is not the
+diagnosis. The last API request ID is `req_f8e17feeaf8fff35e092f6219c120c79`.
+Its response body/status was not retained; do not invent one from log timing.
+
+Catalog's closed, content-free `SIMILARITY_READ_STAGE` records show the same
+read completed after the API's fixed30-second Unix-RPC deadline:
+
+- before-source resolution1,192ms;
+- context composition28,562ms, completed15:40:33.704;
+- within the full population, admission6,049ms, report/profile resolution7,582ms,
+  and content materialization3,037ms;
+- after-source resolution1,325ms and final provenance69ms, completed15:40:35.138.
+
+Every recorded stage completed. This is late internal read completion, not proof
+of authenticated HTTP delivery, a new QUERY/model execution, or a reason to
+rewrite historical state. The API adapter maps timeout to unavailable; retain
+the30-second boundary as the diagnosed mismatch, not as measured HTTP status.
+Do not increase it speculatively or remove fresh permission/source/hash checks.
+Investigate avoidable repeated decoding/materialization using the existing
+operation-local immutable read window and evidence-backed focused tests.
+
+The temporary operator also has a diagnostic defect: importing `client.main`
+skips its standalone safe exception handler, and the supervisor replaces all
+exceptions with one fixed line. A local successor must use the same safe handler
+for both entry paths; only fixed phases, allowlisted `Stopped` codes and bounded
+exception types may appear, never exception prose, response bodies or credentials.
+Its post-discovery120-second HOLD must have a reviewed nonsecret plan prepared
+before another real login; no runtime-stage chmod or credential persistence.
+
+After proving the original finite unit terminal, INDEX18 was restarted once
+through the existing tmux `%89` sudo session. Independent service observation
+confirmed `eom-embedding-index-owner.service` active/running, PID2733721,
+invocation `7f7688a06a5e4571b87115db2f1428db`. This restores the exact existing
+owner/runtime/configuration, not a new identity, schema, queue, claim repair or
+Benchmark retry. No current corpus count was inferred from its running state.
+The original C1–C5/six-run/default-device goal remains open.
+
+### Capture-local lineage source correction — 16:01 UTC
+
+The remaining per-Item acceptance/batch/bundle/layout access was reproduced at
+the full canonical source resolver, rather than inferred from a map-builder
+fixture. The existing relation owner now batches these exact dependencies and
+retains them within the same session/root/thread. The production caller shares
+its existing Artifact reader/provenance decoder; fresh population and final
+source/authority/hash checks remain. No new cache owner, DB schema/index, worker
+protocol, retry, copied Artifact or longer transport deadline was introduced.
+
+- Root source gate:231 PASS/18.49s; explicit source import verified.
+- Strict mypy2, Ruff/format5, shell syntax and independent review PASS.
+- Actual guarded PostgreSQL chat-knowledge gate:120 PASS/40.36s.
+- New eight PostgreSQL cases include16/545 full-resolver populations across four
+  fresh captures, actual constant per-table SELECT counts, missing/stale rows,
+  standalone canonical equality and four indexed lookup plans.
+- Initial test run97PASS/23ERROR is preserved: inherited `pg_temp` tables were
+  created twice by the fixture. The correction changes fixture setup, not the
+  invariants/assertions or production rows.
+- Evidence directory `/tmp/eom-lineage-relations-db.6u7iAAOD`; disposable state
+  `/tmp/eom-api-testdb-20261018155457_bb49d831`. The separate embedding regression
+  gate and supported cleanup are still in progress at this checkpoint.
+
+The deployed shared source is stilld81. Current authenticated HTTP delivery and
+latency remain unverified with this candidate; do not replace that distinction
+with the query-count improvement or a new password prompt.
+
+16:07 UTC follow-up: the separate embedding persistence/registry/application gate
+passed126 tests in281.45s, with returncode0 and empty stderr. Additional source
+retrieval/origin/root-model regressions passed61 tests in6.14s, separate from the
+231-test gate. The supported disposable cleanup was submitted only after the
+original test process returned terminal; cleanup completion is a separate result.
+No production DB was used. The original C1 request, failure evidence and all six
+Benchmark identities remain unchanged; model/GPU/Item/Chat submissions remain0
+for this corrective test work.
+
+Cleanup completed at16:07:11.389 UTC with returncode0/empty stderr; an independent
+path observation confirmed the exact disposable state directory absent. Only the
+generated disposable DB/roles/state were removed by the supported cleanup; source,
+production rows, Artifact history and the preserved test evidence were untouched.

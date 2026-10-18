@@ -36,6 +36,7 @@ from eom_catalog_contracts import (
 )
 from eom_identifiers import content_sha256
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
+from jsonschema.exceptions import ValidationError as JsonSchemaError
 from sqlalchemy import and_, or_, select, tuple_
 from sqlalchemy.orm import Session, SessionTransaction
 
@@ -134,6 +135,10 @@ class ItemSourceReadRelations:
     _work_units: Mapping[tuple[str, str], tuple[LegacyItemExtractionBatchWorkUnitRecord, ...]] = (
         field(repr=False)
     )
+    _acceptances: Mapping[str, LegacyItemExtractionAcceptanceRecord] = field(repr=False)
+    _batches: Mapping[str, LegacyItemExtractionBatchRecord] = field(repr=False)
+    _bundles: Mapping[str, AssessmentSourceBundleRevisionRecord] = field(repr=False)
+    _layouts: Mapping[str, AssessmentLayoutObservationRecord] | None = field(repr=False)
 
     def _require(self, session: Session) -> None:
         if (
@@ -166,9 +171,37 @@ class ItemSourceReadRelations:
         self._require(session)
         return self._work_units.get(key, ())
 
+    def acceptance(
+        self, session: Session, acceptance_id: str
+    ) -> LegacyItemExtractionAcceptanceRecord | None:
+        self._require(session)
+        return self._acceptances.get(acceptance_id)
+
+    def batch(self, session: Session, batch_id: str) -> LegacyItemExtractionBatchRecord | None:
+        self._require(session)
+        return self._batches.get(batch_id)
+
+    def bundle(
+        self, session: Session, revision_id: str
+    ) -> AssessmentSourceBundleRevisionRecord | None:
+        self._require(session)
+        return self._bundles.get(revision_id)
+
+    def layout(self, session: Session, layout_id: str) -> AssessmentLayoutObservationRecord | None:
+        self._require(session)
+        # Legacy metadata-only callers cannot select layout IDs without the
+        # exact batch member. Production supplies the existing reader/cache.
+        if self._layouts is None:
+            return session.get(AssessmentLayoutObservationRecord, layout_id)
+        return self._layouts.get(layout_id)
+
 
 def read_item_source_relations(
-    session: Session, item_revision_ids: tuple[str, ...]
+    session: Session,
+    item_revision_ids: tuple[str, ...],
+    *,
+    artifacts: CatalogArtifactReader | None = None,
+    past_exam_cache: PastExamSourceResolutionCache | None = None,
 ) -> ItemSourceReadRelations:
     """Batch exact current inputs afresh; preserve duplicates and lineage ordering."""
     selected = tuple(sorted(set(item_revision_ids)))
@@ -272,6 +305,94 @@ def read_item_source_relations(
         raise KnowledgeAnalysisSourceError(
             "KNOWLEDGE_ANALYSIS_SOURCE_STALE", "Item extraction relation budget is exceeded"
         )
+    acceptance_ids = tuple(sorted({key[0] for key in work_unit_keys}))
+    acceptances = (
+        tuple(
+            session.scalars(
+                select(LegacyItemExtractionAcceptanceRecord)
+                .where(LegacyItemExtractionAcceptanceRecord.acceptance_id.in_(acceptance_ids))
+                .execution_options(populate_existing=True)
+            )
+        )
+        if acceptance_ids
+        else ()
+    )
+    batch_ids = tuple(sorted({unit.extraction_batch_id for unit in units}))
+    batches = (
+        tuple(
+            session.scalars(
+                select(LegacyItemExtractionBatchRecord)
+                .where(LegacyItemExtractionBatchRecord.extraction_batch_id.in_(batch_ids))
+                .execution_options(populate_existing=True)
+            )
+        )
+        if batch_ids
+        else ()
+    )
+    bundle_ids = tuple(sorted({unit.assessment_source_bundle_revision_id for unit in units}))
+    bundles = (
+        tuple(
+            session.scalars(
+                select(AssessmentSourceBundleRevisionRecord)
+                .where(
+                    AssessmentSourceBundleRevisionRecord.assessment_source_bundle_revision_id.in_(
+                        bundle_ids
+                    )
+                )
+                .execution_options(populate_existing=True)
+            )
+        )
+        if bundle_ids
+        else ()
+    )
+    batches_by_id = {row.extraction_batch_id: row for row in batches}
+    layouts: tuple[AssessmentLayoutObservationRecord, ...] | None = None
+    if artifacts is not None:
+        provenance = (
+            past_exam_cache if past_exam_cache is not None else PastExamSourceResolutionCache()
+        )
+        layout_ids: set[str] = set()
+        for unit in units:
+            batch = batches_by_id.get(unit.extraction_batch_id)
+            if batch is None:
+                continue
+            try:
+                decoded = provenance.batch(
+                    artifacts,
+                    PastExamProvenanceMember(
+                        artifact_id=batch.manifest_artifact_id,
+                        artifact_revision_id=batch.manifest_artifact_revision_id,
+                        member_path=batch.manifest_artifact_member_path,
+                        sha256=batch.manifest_artifact_sha256,
+                        schema_ref=batch.manifest_artifact_schema_ref,
+                        media_type=batch.manifest_artifact_media_type,
+                        max_bytes=MAX_DOCUMENT_JSON_BYTES,
+                    ),
+                )
+            except (OSError, TypeError, ValueError, JsonSchemaError):
+                # Preserve the canonical resolver's eligibility/error ordering.
+                # Invalid members never grant a layout hint or become cached.
+                continue
+            matches = decoded.work_units_by_id.get(unit.work_unit_id, ())
+            if len(matches) == 1:
+                layout_ids.add(
+                    matches[0].request.layout_observation.assessment_layout_observation_id
+                )
+        layouts = (
+            tuple(
+                session.scalars(
+                    select(AssessmentLayoutObservationRecord)
+                    .where(
+                        AssessmentLayoutObservationRecord.assessment_layout_observation_id.in_(
+                            tuple(sorted(layout_ids))
+                        )
+                    )
+                    .execution_options(populate_existing=True)
+                )
+            )
+            if layout_ids
+            else ()
+        )
     components_by_revision: dict[str, list[ItemComponentRecord]] = {key: [] for key in selected}
     decisions_by_key: dict[tuple[str, str, int], list[LegacyItemExtractionDecisionRecord]] = (
         defaultdict(list)
@@ -298,6 +419,12 @@ def read_item_source_relations(
         MappingProxyType({key: tuple(rows) for key, rows in components_by_revision.items()}),
         MappingProxyType({key: tuple(rows) for key, rows in decisions_by_key.items()}),
         MappingProxyType({key: tuple(rows) for key, rows in units_by_key.items()}),
+        MappingProxyType({row.acceptance_id: row for row in acceptances}),
+        MappingProxyType(batches_by_id),
+        MappingProxyType({row.assessment_source_bundle_revision_id: row for row in bundles}),
+        None
+        if layouts is None
+        else MappingProxyType({row.assessment_layout_observation_id: row for row in layouts}),
     )
 
 
@@ -541,7 +668,11 @@ def _resolve_past_exam_item_source(
             "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE",
             "past-exam Item promotion provenance is incomplete",
         )
-    acceptance_record = session.get(LegacyItemExtractionAcceptanceRecord, acceptance_id)
+    acceptance_record = (
+        session.get(LegacyItemExtractionAcceptanceRecord, acceptance_id)
+        if read_relations is None
+        else read_relations.acceptance(session, acceptance_id)
+    )
     decisions = (
         tuple(
             session.scalars(
@@ -610,10 +741,17 @@ def _resolve_past_exam_item_source(
             "past-exam Item extraction lineage is ambiguous",
         )
     work_unit = work_units[0]
-    batch = session.get(LegacyItemExtractionBatchRecord, work_unit.extraction_batch_id)
-    bundle = session.get(
-        AssessmentSourceBundleRevisionRecord,
-        work_unit.assessment_source_bundle_revision_id,
+    batch = (
+        session.get(LegacyItemExtractionBatchRecord, work_unit.extraction_batch_id)
+        if read_relations is None
+        else read_relations.batch(session, work_unit.extraction_batch_id)
+    )
+    bundle = (
+        session.get(
+            AssessmentSourceBundleRevisionRecord, work_unit.assessment_source_bundle_revision_id
+        )
+        if read_relations is None
+        else read_relations.bundle(session, work_unit.assessment_source_bundle_revision_id)
     )
     if (
         batch is None
@@ -678,9 +816,15 @@ def _resolve_past_exam_item_source(
         )
         result = decoded_result.value
 
-        layout_record = session.get(
-            AssessmentLayoutObservationRecord,
-            request.layout_observation.assessment_layout_observation_id,
+        layout_record = (
+            session.get(
+                AssessmentLayoutObservationRecord,
+                request.layout_observation.assessment_layout_observation_id,
+            )
+            if read_relations is None
+            else read_relations.layout(
+                session, request.layout_observation.assessment_layout_observation_id
+            )
         )
         if layout_record is None:
             raise ValueError("layout observation record is absent")
