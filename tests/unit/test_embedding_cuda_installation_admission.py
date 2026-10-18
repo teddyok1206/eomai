@@ -423,3 +423,59 @@ def test_real_cuda_reader_is_not_a_substitute_for_the_factorys_physical_ownershi
             configuration_raw_sha256=state.configuration.configuration_raw_sha256,
             admission=reader,
         )
+
+
+def test_native_interpreter_guard_precedes_all_shared_file_capture(state):
+    state.broken = "interpreter"
+    with pytest.raises(admission.NativeInstallationAdmissionError, match="CAPTURE_INVALID"):
+        capture(state)
+    assert not state.reads and state.host_closes == state.resource_closes == 0
+
+
+def test_native_interpreter_is_rechecked_after_capture_and_owned_files_close(state, monkeypatch):
+    checks = []
+
+    def interpreter(_prefix):
+        checks.append(True)
+        if len(checks) == 2:
+            raise ValueError("interpreter changed during file capture")
+
+    monkeypatch.setattr(admission, "require_native_runtime_interpreter", interpreter)
+    with pytest.raises(admission.NativeInstallationAdmissionError, match="CAPTURE_INVALID"):
+        capture(state)
+    assert len(checks) == 2 and state.host_closes == state.resource_closes == 1
+
+
+def test_shared_file_observations_do_not_implement_native_admission_protocol(state):
+    with admission.ProtectedCudaInstallationFiles(
+        state.configuration, expected_receipt_raw_sha256=state.receipt_pin
+    ) as files:
+        with pytest.raises(TypeError):
+            current(state, files)
+        files.assert_current()
+
+
+def test_native_wrapper_preserves_shared_constructor_cleanup_uncertainty(state, monkeypatch):
+    def uncertain(*_args, **_kwargs):
+        raise admission.NativeInstallationAdmissionError(
+            "NATIVE_INSTALLATION_CAPTURE_CLEANUP_UNCERTAIN"
+        )
+
+    monkeypatch.setattr(admission, "ProtectedCudaInstallationFiles", uncertain)
+    with pytest.raises(admission.NativeInstallationAdmissionError, match="CLEANUP_UNCERTAIN"):
+        capture(state)
+
+
+@pytest.mark.parametrize("phase", ("constructor", "enter"))
+def test_interrupted_native_identity_check_retires_shared_capture(state, monkeypatch, phase):
+    checks = []
+
+    def interrupted(_prefix):
+        checks.append(True)
+        if len(checks) == (2 if phase == "constructor" else 3):
+            raise KeyboardInterrupt("cancelled native admission")
+
+    monkeypatch.setattr(admission, "require_native_runtime_interpreter", interrupted)
+    with pytest.raises(KeyboardInterrupt, match="cancelled native admission"), capture(state):
+        pytest.fail("interrupted identity check entered backend body")
+    assert state.host_closes == state.resource_closes == 1

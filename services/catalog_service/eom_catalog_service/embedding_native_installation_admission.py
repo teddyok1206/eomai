@@ -385,8 +385,12 @@ def read_pinned_cuda_admission_receipt(
     return receipt, raw
 
 
-class ProtectedNativeCudaEmbeddingInstallationAdmission:
-    """Read pinned explicit CUDA2.0/2.1 evidence; current GPU ownership stays separate."""
+class ProtectedCudaInstallationFiles:
+    """Shared protected file observations, not native admission or GPU ownership.
+
+    Native and root compositions enforce their different actual process identities
+    outside this owner-neutral capture. Neither can omit the shared closure checks.
+    """
 
     def __init__(
         self, configuration: RootLocalNativeConfigurationPin, *, expected_receipt_raw_sha256: str
@@ -431,7 +435,6 @@ class ProtectedNativeCudaEmbeddingInstallationAdmission:
             )
             fixed = fixed_native_embedding_profile("CUDA_INDEX_FP32")
             self._prefix, self._worker = fixed.prefix, fixed.worker_user
-            require_native_runtime_interpreter(self._prefix)
             self._files = NumericalRuntimeFileSnapshots(0)
             require_cuda_loader_working_directory(self._files)
             receipt, receipt_raw = read_pinned_cuda_admission_receipt(
@@ -474,6 +477,7 @@ class ProtectedNativeCudaEmbeddingInstallationAdmission:
             self._worker_identity = (receipt.unit_probe.worker_uid, receipt.unit_probe.worker_gid)
             self._lease_gid = receipt.shared_gpu_lease.lease_gid
             self._inventory = _installation_inventory(self._prefix, candidate)
+            self._configuration_sha256 = config.config_sha256
             self._files.read(
                 Path("/etc/systemd/system/eom-embedding-native-cuda-probe@.service"),
                 sha256=receipt.unit_probe.unit_template_sha256,
@@ -497,7 +501,7 @@ class ProtectedNativeCudaEmbeddingInstallationAdmission:
             self._stack.callback(self._host.close)
             self._closed = False
             self._assert_current()
-        except Exception:
+        except BaseException as error:
             self._closed = True
             try:
                 self._stack.close()
@@ -505,12 +509,16 @@ class ProtectedNativeCudaEmbeddingInstallationAdmission:
                 raise NativeInstallationAdmissionError(
                     "NATIVE_INSTALLATION_CAPTURE_CLEANUP_UNCERTAIN"
                 ) from None
-            raise NativeInstallationAdmissionError("NATIVE_INSTALLATION_CAPTURE_INVALID") from None
+            if isinstance(error, Exception):
+                raise NativeInstallationAdmissionError(
+                    "NATIVE_INSTALLATION_CAPTURE_INVALID"
+                ) from None
+            raise
 
-    def __enter__(self) -> ProtectedNativeCudaEmbeddingInstallationAdmission:
+    def __enter__(self) -> ProtectedCudaInstallationFiles:
         try:
             self._assert_current()
-        except Exception:
+        except BaseException:
             self.close()
             raise
         return self
@@ -527,7 +535,6 @@ class ProtectedNativeCudaEmbeddingInstallationAdmission:
         try:
             if self._closed or self._host is None or self._resources is None:
                 raise ValueError("installation capture is closed")
-            require_native_runtime_interpreter(self._prefix)
             worker, group = pwd.getpwnam(self._worker), grp.getgrnam(self._worker)
             lease_gid = grp.getgrnam("eom-gpu-lease").gr_gid
             if (
@@ -547,6 +554,88 @@ class ProtectedNativeCudaEmbeddingInstallationAdmission:
             self._inventory.assert_unchanged()
             self._resources.assert_current()
             self._host.assert_current()
+        except Exception:
+            raise NativeInstallationAdmissionError("NATIVE_INSTALLATION_CHANGED") from None
+
+    def assert_current(self) -> None:
+        self._assert_current()
+
+    @property
+    def configuration_sha256(self) -> str:
+        self._assert_current()
+        return self._configuration_sha256
+
+    @property
+    def inventory(self) -> PrefixRuntimeInventory:
+        self._assert_current()
+        return self._inventory
+
+    @property
+    def host(self) -> ProtectedCudaEmbeddingHostClosure:
+        self._assert_current()
+        assert self._host is not None
+        return self._host
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        try:
+            self._assert_current()
+        finally:
+            self._closed = True
+            try:
+                self._stack.close()
+            except Exception:
+                raise NativeInstallationAdmissionError(
+                    "NATIVE_INSTALLATION_CAPTURE_CLEANUP_UNCERTAIN"
+                ) from None
+
+
+class ProtectedNativeCudaEmbeddingInstallationAdmission:
+    """Native-only admission; sharing file capture never relaxes interpreter identity."""
+
+    def __init__(
+        self, configuration: RootLocalNativeConfigurationPin, *, expected_receipt_raw_sha256: str
+    ) -> None:
+        self._closed = True
+        self._prefix = fixed_native_embedding_profile("CUDA_INDEX_FP32").prefix
+        try:
+            require_native_runtime_interpreter(self._prefix)
+            self._configuration = RootLocalNativeConfigurationPin.model_validate(configuration)
+        except Exception:
+            raise NativeInstallationAdmissionError("NATIVE_INSTALLATION_CAPTURE_INVALID") from None
+        self._capture = ProtectedCudaInstallationFiles(
+            self._configuration, expected_receipt_raw_sha256=expected_receipt_raw_sha256
+        )
+        self._closed = False
+        try:
+            self._assert_current()
+        except BaseException as error:
+            self._closed = True
+            self._capture.close()
+            if isinstance(error, Exception):
+                raise NativeInstallationAdmissionError(
+                    "NATIVE_INSTALLATION_CAPTURE_INVALID"
+                ) from None
+            raise
+
+    def __enter__(self) -> ProtectedNativeCudaEmbeddingInstallationAdmission:
+        try:
+            self._assert_current()
+        except BaseException:
+            self.close()
+            raise
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        self.close()
+
+    def _assert_current(self) -> None:
+        try:
+            if self._closed:
+                raise ValueError("installation capture is closed")
+            require_native_runtime_interpreter(self._prefix)
+            self._capture.assert_current()
         except Exception:
             raise NativeInstallationAdmissionError("NATIVE_INSTALLATION_CHANGED") from None
 
@@ -575,9 +664,4 @@ class ProtectedNativeCudaEmbeddingInstallationAdmission:
             self._assert_current()
         finally:
             self._closed = True
-            try:
-                self._stack.close()
-            except Exception:
-                raise NativeInstallationAdmissionError(
-                    "NATIVE_INSTALLATION_CAPTURE_CLEANUP_UNCERTAIN"
-                ) from None
+            self._capture.close()

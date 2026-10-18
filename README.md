@@ -321,6 +321,13 @@ CONTENT_ONLY7/520·CONCRETE_FACETS1/520·METADATA_ONLY1/520입니다.
 이는 실제 모델6회 비교나 운영 활성화가 아니며 CPU 기본값과 기존 서비스는 유지합니다.
 [연결 구조와 남은 실제 실행 조건](docs/architecture/EMBEDDING_BENCHMARK_SERIES_CONTROL.md).
 
+비교 관리자의 CUDA 설치 읽기는 native 실행기와 같은 보호 파일 검증을 재사용하도록
+구성했습니다(**SOURCE_PASS / NOT_ACTIVE**). native 인터프리터 확인은 그대로 유지하고,
+중간에 작업을 중단해도 보유 파일 자원을 정리합니다. 실제 보호 실행 환경·사용자 권한과
+6회 성능 비교를 대신하지 않으며, 운영 CPU 기본값과 수치 실행 환경은 바꾸지 않았습니다.
+관련22개 묶음의701개 테스트·strict type2·Ruff/format PASS이며 실제 운영 활성화는 별도입니다.
+[공통 설치 검증과 root 실행 경계](docs/architecture/EMBEDDING_BENCHMARK_CUDA_CAPTURE.md).
+
 CPU/GPU 비교용 코드 설치 도구도 기존 경계 안에서 CPU까지 확장했습니다
 (**SOURCE_PASS / NOT_INSTALLED**). CPU는 platform 패키지 하나만, CUDA는 기존 두 패키지를
 검사하며 옛 CPU 계약·수치 코드는 유지합니다. 관련352 tests(실제 OLD pip의 소형 합성

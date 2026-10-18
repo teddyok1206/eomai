@@ -435,6 +435,9 @@ NOT_IMPLEMENTED / NOT_EVALUATED`를 구분한다. 기존 corpus의 학습 완료
 
 ## 11. 코드 근거와 관련 문서
 
+- [CPU/GPU 비교의 공통 CUDA 설치 읽기](EMBEDDING_BENCHMARK_CUDA_CAPTURE.md):
+  native 실행기의 인터프리터 검사를 유지하면서 root 비교 관리자가 같은 보호 파일·자원
+  관찰을 재사용한다. 실제 namespace·모델 실행·사용자 인증·기본값 승인을 대신하지 않는다.
 - [증분 임베딩의 non-Codex 실행 경계](INCREMENTAL_EMBEDDING_EXECUTION_BOUNDARY.md):
   기존 queue를 재사용하는 전용 실행 목적·DB/owner 변경과 CPU/GPU admission 설계.
 - [검증된 첫 소스·임시 DB checkpoint](../status/SYSTEM_RAG_INCREMENTAL_EMBEDDING_CHECKPOINT_2026-10-12.md):

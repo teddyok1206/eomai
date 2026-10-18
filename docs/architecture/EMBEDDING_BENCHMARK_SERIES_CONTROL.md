@@ -158,3 +158,8 @@ noninteractive sudo TTY. Only private test namespaces were created/removed. The
 actual root CUDA capture/operator composition and full original goal remain OPEN.
 All zero execution counts above refer to these helpers, not the independently
 running INDEX service and its ongoing authorized work.
+
+The next source composition reuses the native reader's owner-neutral protected
+file observations without dropping its native-interpreter guard. See
+[CUDA capture ownership and remaining actual namespace boundary](EMBEDDING_BENCHMARK_CUDA_CAPTURE.md).
+It does not change the historical installation/OS evidence or open a source grant.
