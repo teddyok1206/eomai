@@ -247,3 +247,90 @@ fix; do not increase the API timeout, weaken source reauthorization, regenerate
 the query or request another login merely to repeat the same failing read.
 Full C1–C5, full eligible seed/delta evidence and actual six-run CPU/CUDA/default
 gates remain open. Failure evidence and the compatible685 predecessor are retained.
+## Actual7c19e6c6 rollout and preserved C1 failure —2026-10-18
+
+The exact7c19e6c6905d22302ec0db3f89bd2b7e58954fe7 source passed27 focused
+suites519 tests/266.45s, strict mypy4 and Ruff/format7. The source-only benchmark
+numerical bridge and canonical per-launch receipt closure are included; actual
+six-model measurement and final nine-gate acceptance have not occurred.
+
+Normal exact-main QUERY/INDEX drain completed success/exit0 with empty cgroups.
+The original INDEX work completed, without child signals or row repairs. The
+single standard install completed0, DB head20261017_0057 unchanged. Delivery is
+`/tmp/eom-api-build/7c19e6c6905d22302ec0db3f89bd2b7e58954fe7.qrOkyP`;
+build-only `.XsZbWn` is not delivery. Independent verification matched1,991
+installed members and unchanged file epochs.
+
+| Actual installed wheel | Raw SHA-256 |
+| --- | --- |
+| platform | `97d79aeae04e2a38513bc2cbfdeb7c966c6f0f0291a35436886e0139b7b88eb8` |
+| API contracts | `c65c8f777ee5014d211ca9f251593fc3c06263e439399ec26fe5c4f507209d29` |
+| API | `4748ac6f7c1fe9b0e7fe4ae1bd721649b560e20570fc1729394f4109768c0d87` |
+
+Postflight confirmed10 active services, current QUERY_READY/INDEX_STARTED and
+API LIVE/READY. Private INDEX owner df408fef and QUERY owner0fab624c retained
+their code/model/policy/recipe identities; QUERY provider points to actual new
+API. Private Chat and authoring/exam similarity activation remain disabled.
+
+Same resident-session READ10:00:45→10:01:17 returned503 after32s. Server
+COMPOSE_CONTEXT56,028ms, before1,007ms, after1,317ms, final provenance78ms.
+Physical/raw/model retention remains bounded and current checks unchanged; the
+observed improvement is not delivery PASS. Catalog reached its existing1GiB
+memory ceiling and used swap; this is evidence of pressure, not a complete
+causal profile. No limit/default/timeout/auth policy was changed.
+
+Valid postflight10:00:12.723382 recorded913 encodings/bindings,235 index revisions
+and6 logical indexes. Its latest-three observation is309/545,319/545,285/545,
+not all six heads or913 distinct Items. Next routine count observation is no
+earlier10:30:12.724 UTC. Evidence `/tmp/eom-c1-cache-release.tG5O5Zqn`;
+root source JUnit `/tmp/eom-c1-consumer-u2HajatK/c1-cache-root-final.xml`, raw
+`02e716db90ff6aeb0ca76d8bd08360ebcb149a3f0c8c6f3e37d1aad2569c75b3`.
+
+## 2026-10-18 bounded live stack sampling
+
+The installed `7c19e6c6` original completed-query read still returned503. Its
+existing metadata-only stages measured56,028ms for context composition; this is
+not a delivery PASS. Do not increase the API deadline or weaken authorization.
+
+Use `py-spy==0.4.2` only as a temporary development diagnostic, not an application
+dependency: an external sampler can measure the actual Catalog process without
+another service restart or in-process instrumentation release. The official
+Linux x86-64 wheel is2,936,518bytes with SHA-256
+`aeb0323409199c785f730645e9f4bb7a7b9ca2c481f2c331a55642b5d13fa52f`.
+Download/extract outside every protected Conda environment; verify the wheel and
+standalone executable before installing an owner-only diagnostic copy. Restrict
+one sampling run to the current Catalog PID and invocation, at20Hz for at most
+70seconds with nonblocking stack-only capture. Do not sample the resident login
+client, use locals/arguments/native dumps/subprocess capture, export credentials,
+change ptrace/sysctl/capabilities, or change production dependencies/configuration.
+Retain output privately as diagnostic evidence, not Git or Slack content. A
+permission denial stops sampling; it is not authority to relax runtime isolation.
+
+The same original context READ may be observed once during this bounded sample;
+it submits no preparation, model execution or new idempotency key. Sampling can
+alter observed timing and is evidence of cost location, not a performance PASS.
+The normal read still enforces all original source and operator checks. The
+diagnostic tool remains removable without any production import dependency.
+Primary tool documentation: https://github.com/benfred/py-spy .
+
+Actual one-run observation: wheel/executable matched the pins above and
+`9b4d1f39b2a47ae44f4c6a46f615dcc0287d7755beba5065f32391951e07d594`.
+Only Catalog PID2015169/invocation97f70d3b0a57430bb1bfbf37b3596c8d was sampled.
+The tool exited normally after70s with555 weighted samples and238 nonblocking
+sampling errors; the errors limit representativeness and are not API errors.
+The original READ returned503 at10:08:56, without another refresh/login/key.
+
+Private raw profile `/tmp/eom-catalog-stack-profile.VkRwq67D/catalog-7c19-20261018T1010.raw`,
+SHA-256 `ec4b851a82a804c8e415e440c5dc0da3c2081ea0ddb4ad31cbf111dd25f44692`.
+463 samples contained the C1 dispatch frame;400 contained full source capture.
+Inclusive counts (overlapping, not additive): candidate admission157, solution
+profiles118, materialization65. Of62 decoder-call samples,61 were in the first
+composition preparation, one in the preceding completed-source resolution,
+and none in later view/final-reauthorization passes. Thus this sample does not
+support ongoing decoded-cache churn. No budget increase is justified.
+
+The measured repeated workload is broader: fresh source-resolution/ORM work and
+strict deterministic projections are rebuilt four times. A correction must
+separate first full materialization from fresh full current-input validation,
+without skipping late membership/report/source/permission changes or relaxing
+the original public validators. No such correction is yet installed here.
