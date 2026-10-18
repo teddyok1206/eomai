@@ -31,7 +31,7 @@ logical Item
 - 승인 문항, HWPX build, RAG 학습 현황과 Codex slot 사용 상태 조회
 - 25문항 모의고사 생산 계획·실행·검토·퇴역을 불변 checkpoint와 영수증으로 관리
 
-## 증분 RAG 목표의 현재 상태 — 2026-10-18 18:20 UTC
+## 증분 RAG 목표의 현재 상태 — 2026-10-18 18:48 UTC
 
 운영 API·Catalog·출제/HWPX 실행기·일반 채팅에 `3bf9ed04`를 설치했고,
 실제 wheel·RECORD·provider를 확인했습니다. 별도 QUERY SDK는 `d81b9ba3`, INDEX와
@@ -55,19 +55,16 @@ logical Item
 원래 CPU/CUDA 여섯 회 실측·최종화와 조건부 기본 device 결정은 완료 전입니다.
 준비된 검증 절차의 129개 테스트 통과는 이 운영 결과를 대신하지 않습니다.
 
-18:12 UTC의 저장소 후보 `5f0be84f`에는 명시적인 CPU/CUDA backend 선택 계약,
-INDEX owner 설정 V3와 CUDA INDEX의 pre-compute READY·외부 실행 진입점이 추가됐습니다.
-기존 CPU 설정 V1/V2의 bytes와 운영 해석은 유지하며, V3는 기존 실행기에 자동 허용하지
-않습니다. 관련 소스 테스트 278개와 strict typing·Ruff·format, 독립 검토 및 공식
-`--build-only` wheel/RECORD 검사는 통과했습니다. **소스 후보이며 미설치·미활성입니다.**
-실제 CUDA INDEX의 root ACK·종료/lease 회수, QUERY 연결, 성능 우수 판정과 GPU 기본값
-전환은 아직 완료되지 않았습니다. 이 준비를 CPU/CUDA 여섯 회 실측의 대체 증거로 쓰지
-않습니다. [고정 CUDA INDEX 경계](docs/architecture/NATIVE_CUDA_INDEX_EXECUTION_DESIGN.md)를
-참고하세요.
+저장소 후보 `140b14d9`에는 명시적인 CPU/CUDA backend 계약·INDEX owner V3,
+GPU용 입력 전달·고정 실행 unit·준비/종료 관찰·자원 회수 검증을 구현했습니다.
+기존 CPU 설정 V1/V2와 CPU-only 실행 경계는 유지합니다. 통합 소스 테스트 689개,
+의존성 검사 6개, strict typing·Ruff·format·독립 검토와 공식 build-only wheel/RECORD
+검사는 통과했지만 **운영에는 미설치·미활성입니다.** 실제 root 제어 실행기,
+준비 메시지 전 실패 복구, QUERY 연결과 실제 CPU/CUDA 여섯 회 측정·조건부 기본값
+전환은 남아 있습니다. 소스 검증을 실제 성능이나 GPU 기본값 전환의 증거로 쓰지 않습니다.
+[고정 CUDA INDEX 경계](docs/architecture/NATIVE_CUDA_INDEX_EXECUTION_DESIGN.md)를 참고하세요.
 
-후속 후보 `32ec2822`는 새 프레임워크 없이 기존 물리 GPU 검사에 INDEX 전용 입구를
-추가했습니다. 관련 355개 소스 테스트·독립 검토와 별도 build-only 검사를 통과했지만
-운영에는 설치하지 않았습니다. 실제 유한 검증은 로그인 성공이 관측되지 않은 상태에서
+실제 유한 검증은 로그인 성공이 관측되지 않은 상태에서
 남은 실행 시간이 부족해 정상 중단했고, 실패 기록을 보존했습니다. **18:18 UTC에 같은
 INDEX18 자동 인덱싱을 정상 재개했고 관련 10개 서비스·API LIVE/READY를 확인했습니다.**
 새 로그인창이나 중복 요청은 만들지 않았으며, 전체 목표는 여전히 미완료입니다.

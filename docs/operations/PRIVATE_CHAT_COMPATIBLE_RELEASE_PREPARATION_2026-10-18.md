@@ -803,3 +803,42 @@ Full goal remains ACTIVE/NOT_COMPLETE. Remaining operating proof is the original
 C1–C5 consumer chain and six frozen CPU/CUDA runs/finalization; actual GPU INDEX/
 QUERY/default/rollback is conditional on those real measurements and admission.
 No additional human educational-evaluation gate is introduced.
+
+## CUDA INDEX source vertical slice — 18:48 UTC
+
+Source candidate `140b14d9d68396c17b54ab5ffc9661005487e617` implements distinct
+CUDA staging/root descriptor preparation, a fixed main template, canonical closed
+launch values and root READY/terminal/after-READY retirement functions. Existing
+CPU guards, small original association/input values, protected filesystem,
+installation capture, kernel FD/lease checks and no-replay effect-record primitives
+are reused. No new queue, database/state schema, dependency or numerical-prefix
+change was introduced. No operating installation, authentication, model execution,
+new source grant, default-device or service mutation occurred in this source slice.
+
+One concrete handshake race was corrected: exclusive READY writing prevents partial
+JSON reads, while root must return NOT_READY before taking a shared lock on an empty
+file, so its poll cannot defeat the legitimate first nonblocking writer. Root retains
+the exact READY hash/full epoch and verifies saved numerical descriptor identities
+without mistaking already-silenced FD1/2 for the original output files.
+
+Final explicit17-suite source gate:689 PASS53.74s; separate dependency boundary6
+PASS5.10s; strict7source/Ruff13/format13/diff and independent reviews PASS. Counts
+from individual225/344/103/216 suites overlap and are not added. Real unprivileged
+flock/diagnostic checks are distinguished from synthetic root/process/device/store
+ports. No operating PostgreSQL tests were used; database/state behavior was not
+changed by this descriptor/lifetime slice.
+
+Evidence: `/tmp/eom-native-cuda-successor.gKpxVAwN/CUDA_INDEX_AFTER_READY_COMMANDS.md`
+and final XML raw SHA-256
+`34d80546ad55d5843b9ed7d31bd6dd8d55efd6cd31557d3af515e909e605b5d2`.
+One official build-only inspection for140b14d9 passed wheel/RECORD checks:
+`/tmp/eom-api-build/140b14d9d68396c17b54ab5ffc9661005487e617.gHiRsY/dist`.
+
+Remaining original-goal work: actual fixed root controller/owner binding and
+start-only controller admission, failure-before-READY store0/1 reconciliation,
+retirement-aware completion/pending read, actual CUDA QUERY and retained CPU-read
+compatibility, original C1–C5/six-run proof and conditional real default/rollback.
+These source functions neither install that controller nor prove live execution.
+Operating API3bf9ed04/QUERYd81b9ba3/INDEXee97239d and CPU default remain selected;
+the last actual runtime recovery observation is18:18:51 until a later scheduled
+check. No new getpass prompt or credential persistence was introduced.
