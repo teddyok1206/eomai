@@ -106,3 +106,65 @@ is not substituted for that missing live gate, and no additional login was reque
 11. Publishing six separate receipt Artifacts is the simpler disconnected option
     but adds six Jobs and storage boundaries. Extending the current launch owner
     reuses CPU1's established identity-before-serialization pattern instead.
+
+## Read-only execution readiness — 2026-10-18 UTC
+
+Status: preparation inventory only; no corpus materialization, tokenizer/model
+execution, benchmark publication or six-launch acceptance was performed by this
+inspection. A valid registered benchmark request, policy and input pointer were
+not established from the inspected local preparation directories; this is not a
+claim that the canonical database contains none.
+
+- Normal INDEX and QUERY call `embedding_encoder_adapter.encode_incremental_batch`
+  and `encode_reference_query_batch`, both through `backend.encode`. Their
+  released result/shard contracts preserve input/space/vector hashes, **not**
+  token IDs or `token_ids_sha256`. Do not reinterpret those vectors as a token
+  witness. The benchmark's `encode_observed` produces the separate actual witness.
+- The previous BGE experiment's `ExperimentTokenCoverage` preserves exact
+  profile/view/text hash and measured token count, but not token-ID hashes.
+  Reuse its validated original request/result for length-stratum selection only
+  after matching model payload, tokenizer/prefix, recipe and rendered-text pins.
+  Its retained receipt locator is
+  `/var/lib/eom-workflow-runner/inference-transfer-experiments/owner-input-s9vek0xd/bge-successor-v1/{input,output}.json`;
+  the existing reviewed `pair-completion-v11-bge-resume.py:retained_cpu` resolves
+  the actual execution and registered result. This inspection did not dereference
+  that private original corpus or establish current permission from its receipts.
+- Select six currently eligible profiles, two per frozen length stratum, through
+  `CatalogBenchmarkSourceAdmission` and the supported current Catalog snapshot.
+  Keep the exact six source/report/Graph/policy revisions and canonical
+  `experiment_view_text` values. Use the old coverage to avoid retokenizing520
+  profiles, not to bypass fresh source authorization.
+- For those6–18 DOCUMENT rows,2 QUERY rows, the8 public synthetic cases and the
+  exact2048-token capacity text, a bounded future preparation operation can use
+  the existing isolated CPU prefix `/opt/eom/conda/envs/eom-embedding-index-cpu`
+  and `embedding_bundle_resolver.resolve_configured_embedding_bundle` to resolve
+  the exact protected local tokenizer. `AutoTokenizer.from_pretrained` must use
+  `local_files_only=True`, `trust_remote_code=False`, `use_fast=True`, the pinned
+  purpose prefix and no truncation. Measure count and canonical unpadded
+  `input_ids`/`token_type_ids` hash; load no `AutoModel` and run no forwards.
+  The existing public `token_lengths` gives counts only; its backend constructor
+  also loads the model. No existing tokenizer-only CLI was found in the inspected
+  embedding scripts/adapters. This is one bounded preparation, not a new service.
+- Publish the already released `BenchmarkStagedInputs` (`benchmark-inputs.json`)
+  and `BenchmarkExecutionPolicy` (`policy.json`) through the existing
+  `ControlFileSetPublisher`/`publish_benchmark_policy`. Then close the actual
+  `BenchmarkOwnerRequest` and selected `BenchmarkOwnerConfiguration`; do not use
+  the separately published INDEX policy as a benchmark policy.
+- Prepare the exact protected controller before fresh login. The existing route
+  is `embedding_benchmark_cuda_capture.serve_installed_root_benchmark_series`
+  plus `embedding_benchmark_owner_composition.build_benchmark_execution_owner`
+  and `BenchmarkExecutionOwner.run_launches`: CPU,CUDA,CUDA,CPU,CPU,CUDA.
+  The four fixed `/etc/systemd/system/eom-embedding-benchmark-{cpu,cuda}@.{service,socket}`
+  files exist and their hashes match the recorded installation. The prior actual
+  root CUDA file-capture PASS remains valid evidence for its unchanged boundary;
+  do not rerun that standalone capture merely to prepare this series.
+
+Login must occur after these preparations. The real capture cap is900seconds;
+six180-second per-launch bounds do not guarantee completion within that cap.
+Expiry or an unresolved reservation requires the existing explicit reconciliation
+boundary, not altered timestamps, a new execution identity or automatic rerun.
+The completed-series numerical/timing readers and canonical new per-launch
+receipts are implemented. Actual six runs, all nine genuinely evidenced owner
+gates, original-Job finalization/publication, coherent device selection and actual
+CPU rollback remain OPEN. Existing gate schema1.0 is sufficient; installation,
+source tests and partial image/trainer proofs must not be promoted to those gates.
