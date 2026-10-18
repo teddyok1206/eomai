@@ -374,3 +374,37 @@ authorization or runtime selection was changed by this diagnostic test. Reuse
 of immutable decoding must retain current source/Artifact approval rechecks;
 removing same-manifest redecodes alone does not eliminate distinct cumulative
 manifest bytes. Actual consumer verification remains the next critical path.
+
+## Actual authenticated C1 timing — 08:38 UTC
+
+The offered real login succeeded at08:35:15 UTC. The resident reader verified
+the actual API685b54a2 and DB0057 through public authenticated operations; its
+original completed-selection READ returned503 `SIMILARITY_CONTEXT_UNAVAILABLE`
+at08:35:47 after about32s. The same nonroot in-memory session remains available
+for explicit READ. No replacement QUERY, preparation replay or model start was
+submitted; replay remains forbidden until a successful read. No credentials are
+stored or extracted and no live client code is patched.
+
+Sanitized current-invocation Catalog stage evidence shows completion after the
+client deadline, not a new persistent failure or proof of a DB deadlock:
+completed-before1,035ms, compose78,515ms, completed-after1,397ms and final
+provenance77ms. Composition performs four full current-population captures.
+Each spends about6.9–7.4s in candidate admission,7.0–7.5s in solution profiles
+and2.8–3.2s in entry projection. Current-source checks remain mandatory; reuse
+targets exact immutable interpretation, not captured authorization/populations.
+The API30s deadline, cache budgets, policy and auth900s limit stay unchanged.
+
+Actual evidence: `/tmp/eom-c1-release.ekglSWGU/c1-live-diagnosis.json`, rawSHA256
+`4d6b0d66a1901dbe7eff30ce8e29c1428f0d0c16a69d3fca6dc39038edc3acd0`.
+The next C1 correction is governed by
+[the scoped decoding design](../architecture/SCOPED_TYPED_ARTIFACT_DECODING.md#canonical-analysis-metadata-interpretation--design-before-implementation).
+Source correction/tests and installed HTTP delivery must be reported separately.
+C2/C3 operating activation remains deferred until the read boundary is repaired.
+
+The one due INDEX metadata observation at08:47:57 UTC reports897 encodings and
+bindings,231 index revisions and6 logical indexes. Latest observed indexes have
+281/545,301/545 and315/545 bindings, still PARTIAL. The increase by8 bindings
+and2 revisions since08:13 is post-restoration progress, not proof of full delta
+or current hash/authorization coverage. Evidence:
+`/tmp/eom-index-observation-20261018T0852.json`; next routine count read not before
+09:17:57 UTC. This observer performs no authentication, query submission or repair.
