@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/chat-ranked-candidate-read/1.0",
+  "title": "Owner-only ranked Chat metadata read; not source or execution authority",
+  "oneOf": [{"$ref": "#/$defs/request"}, {"$ref": "#/$defs/reply"}],
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "item": {
+      "type": "object", "additionalProperties": false,
+      "required": ["item_id", "item_revision_id", "manifest_sha256"],
+      "properties": {
+        "item_id": {"type": "string", "pattern": "^item_[0-9a-f]{32}$"},
+        "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+        "manifest_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "key": {
+      "type": "object", "additionalProperties": false,
+      "required": ["item_id", "item_revision_id", "source_class", "component_artifact_id", "component_artifact_revision_id", "component_sha256"],
+      "properties": {
+        "item_id": {"type": "string", "pattern": "^item_[0-9a-f]{32}$"},
+        "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+        "source_class": {"enum": ["APPROVED_ITEM", "PAST_EXAM"]},
+        "component_artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "component_artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "component_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "arguments": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "source", "terms", "administration_year", "administration_month", "target_school_level", "target_grade", "subject_key", "item_number"],
+      "properties": {
+        "kind": {"const": "TOPIC"},
+        "source": {"enum": ["ALL", "PAST_EXAM", "GENERATED"]},
+        "terms": {"type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": {"type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-z0-9가-힣_]+$"}},
+        "administration_year": {"type": "null"}, "administration_month": {"type": "null"},
+        "target_school_level": {"type": "null"}, "target_grade": {"type": "null"},
+        "subject_key": {"type": "null"}, "item_number": {"type": "null"}
+      }
+    },
+    "card": {
+      "type": "object", "additionalProperties": false,
+      "required": ["item", "display_name", "approval", "source_kind", "graph_membership"],
+      "properties": {
+        "item": {"$ref": "#/$defs/item"},
+        "display_name": {"type": "string", "minLength": 1, "maxLength": 512},
+        "approval": {"const": "APPROVED"},
+        "source_kind": {"enum": ["PAST_EXAM", "GENERATED", "UNCLASSIFIED"]},
+        "graph_membership": {"const": "INDEXED"}
+      }
+    },
+    "request": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "operation", "actor_id", "scope", "arguments", "candidates", "request_sha256"],
+      "properties": {
+        "schema_version": {"const": "chat-ranked-candidate-read-request/1.0"},
+        "operation": {"const": "READ_CHAT_RANKED_CANDIDATES"},
+        "actor_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+        "scope": {"$ref": "eom://schemas/knowledge/chat-private-query-scope/1.0#/$defs/scope"},
+        "arguments": {"$ref": "#/$defs/arguments"},
+        "candidates": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/key"}},
+        "request_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "reply": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "request_sha256", "status", "scope", "cards", "truncated", "error_code"],
+      "properties": {
+        "schema_version": {"const": "chat-ranked-candidate-read-reply/1.0"},
+        "request_sha256": {"$ref": "#/$defs/hash"},
+        "status": {"enum": ["SUCCEEDED", "EMPTY", "FAILED"]},
+        "scope": {"anyOf": [{"$ref": "eom://schemas/knowledge/chat-private-query-scope/1.0#/$defs/scope"}, {"type": "null"}]},
+        "cards": {"type": "array", "maxItems": 6, "uniqueItems": true, "items": {"$ref": "#/$defs/card"}},
+        "truncated": {"type": "boolean"},
+        "error_code": {"anyOf": [{"enum": ["CHAT_KNOWLEDGE_FORBIDDEN", "CHAT_KNOWLEDGE_POINTER_INVALID", "CHAT_KNOWLEDGE_UNAVAILABLE"]}, {"type": "null"}]}
+      },
+      "allOf": [
+        {"if": {"properties": {"status": {"const": "SUCCEEDED"}}}, "then": {"properties": {"scope": {"$ref": "eom://schemas/knowledge/chat-private-query-scope/1.0#/$defs/scope"}, "cards": {"minItems": 1}, "error_code": {"type": "null"}}}},
+        {"if": {"properties": {"status": {"const": "EMPTY"}}}, "then": {"properties": {"scope": {"$ref": "eom://schemas/knowledge/chat-private-query-scope/1.0#/$defs/scope"}, "cards": {"maxItems": 0}, "truncated": {"const": false}, "error_code": {"type": "null"}}}},
+        {"if": {"properties": {"status": {"const": "FAILED"}}}, "then": {"properties": {"scope": {"type": "null"}, "cards": {"maxItems": 0}, "truncated": {"const": false}, "error_code": {"enum": ["CHAT_KNOWLEDGE_FORBIDDEN", "CHAT_KNOWLEDGE_POINTER_INVALID", "CHAT_KNOWLEDGE_UNAVAILABLE"]}}}}
+      ]
+    }
+  }
+}

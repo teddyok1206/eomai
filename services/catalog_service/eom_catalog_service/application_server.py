@@ -86,6 +86,12 @@ from eom_catalog_contracts.chat_private_query_scope import (
     parse_chat_private_query_scope_request,
     validate_chat_private_query_scope_reply,
 )
+from eom_catalog_contracts.chat_ranked_candidate_read import (
+    CHAT_RANKED_READ_REQUEST_BYTES,
+    failed_chat_ranked_candidate_read_reply,
+    parse_chat_ranked_candidate_read_request,
+    validate_chat_ranked_candidate_read_reply,
+)
 from eom_identifiers import canonical_json_bytes
 from eom_item_registry import RegistryError
 from eom_protocol.general_chat_grounding import (
@@ -282,6 +288,28 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                         self.server.inference_transfer_workflow_reads, raw
                     )
                 )
+                self.wfile.flush()
+                return
+            if raw_operation == "READ_CHAT_RANKED_CANDIDATES":
+                ranked_request = None
+                try:
+                    if len(raw) > CHAT_RANKED_READ_REQUEST_BYTES:
+                        return
+                    ranked_request = parse_chat_ranked_candidate_read_request(value)
+                    if canonical_json_bytes(ranked_request.model_dump(mode="json")) + b"\n" != raw:
+                        return
+                    if self.server.chat_rag is None:
+                        raise ValueError("ranked read not configured")
+                    ranked_reply = validate_chat_ranked_candidate_read_reply(
+                        ranked_request, self.server.chat_rag.read_ranked_candidates(ranked_request)
+                    )
+                except Exception:
+                    if ranked_request is None:
+                        return
+                    ranked_reply = failed_chat_ranked_candidate_read_reply(
+                        ranked_request, "CHAT_KNOWLEDGE_UNAVAILABLE"
+                    )
+                self.wfile.write(canonical_json_bytes(ranked_reply.model_dump(mode="json")) + b"\n")
                 self.wfile.flush()
                 return
             if raw_operation == "RESOLVE_CHAT_PRIVATE_QUERY_SCOPE":
@@ -1488,6 +1516,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
                 "SEARCH_CHAT_KNOWLEDGE",
                 "CHAT_RAG",
                 "RESOLVE_CHAT_PRIVATE_QUERY_SCOPE",
+                "READ_CHAT_RANKED_CANDIDATES",
             }
         )
 

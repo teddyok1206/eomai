@@ -450,6 +450,9 @@ NOT_IMPLEMENTED / NOT_EVALUATED`를 구분한다. 기존 corpus의 학습 완료
 
 ## 11. 코드 근거와 관련 문서
 
+- [Chat 유사도 후보의 공식 메타데이터 조회](GENERAL_CHAT_RANKED_CANDIDATE_READ.md):
+  기존 Catalog 발견 경로·권한·현재 버전·주제 필터와 native 순서를 재사용한다.
+  [소스·실제 임시 PostgreSQL 검증 및 운영 미활성 범위](../status/CHAT_RANKED_CANDIDATE_READ_CHECKPOINT_2026-10-18.md).
 - [Chat 검색과 계산 출처의 동시 보존](GENERAL_CHAT_SIMILARITY_PROVENANCE.md):
   기존 V4/tool2를 유지하는 같은 Artifact의 보조 기록과 실제 검증·남은 소비자 연결 경계.
 - [Chat의 Graph 내용 해시와 manifest 파일 참조 연결](GENERAL_CHAT_SIMILARITY_SCOPE_BRIDGE.md):

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 from eom_catalog_service.chat_knowledge_discovery import ChatKnowledgeQueryAdapter
-from eom_catalog_service.chat_knowledge_search import ChatKnowledgeSearchService
+from eom_catalog_service.chat_knowledge_search import ChatKnowledgeSearchService, chat_search_query
 from eom_operator_identity import PermissionKey
 from eom_protocol.general_chat_tools import ChatSearchCatalogRequest
 
@@ -79,7 +79,7 @@ def test_agent_projection_uses_existing_typed_query_and_exact_snapshot(kind):
     snapshot = ChatKnowledgeSnapshot(
         graph_snapshot_revision_id="graphrev_" + "1" * 32, sha256="sha256:" + "1" * 64
     )
-    query = ChatKnowledgeSearchService._query(
+    query = chat_search_query(
         ChatSearchCatalogRequest(
             actor_id="operator_" + "1" * 32,
             arguments=arguments(kind, **options),

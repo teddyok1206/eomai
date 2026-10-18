@@ -5,7 +5,7 @@ from __future__ import annotations
 import grp
 import pwd
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from eom_catalog_contracts import CATALOG_APPLICATION_SOCKET_PATH
 from eom_catalog_contracts.chat_private_query_scope import (
@@ -14,6 +14,14 @@ from eom_catalog_contracts.chat_private_query_scope import (
     ChatPrivateQueryScopeReply,
     build_chat_private_query_scope_request,
     validate_chat_private_query_scope_reply,
+)
+from eom_catalog_contracts.chat_ranked_candidate_read import (
+    CHAT_RANKED_READ_REPLY_BYTES,
+    CHAT_RANKED_READ_REQUEST_BYTES,
+    ChatRankedCandidateKey,
+    ChatRankedCandidateReadReply,
+    build_chat_ranked_candidate_read_request,
+    validate_chat_ranked_candidate_read_reply,
 )
 from eom_protocol.general_chat_grounding import (
     ChatKnowledgeCatalogReply,
@@ -46,6 +54,23 @@ from eom_orchestrator.general_chat_socket import (
 from eom_orchestrator.general_chat_state import ChatError
 
 
+def _read_catalog_frame(
+    document: dict[str, Any], *, request_limit: int, reply_limit: int
+) -> object:
+    """One bounded exchange with the installed trusted Catalog peer; never retry."""
+    return exchange_chat_frame(
+        ChatSocketEndpoint(
+            Path(CATALOG_APPLICATION_SOCKET_PATH),
+            pwd.getpwnam("eom-catalog-manager").pw_uid,
+            grp.getgrnam("eom-api").gr_gid,
+        ),
+        document,
+        request_limit=request_limit,
+        reply_limit=reply_limit,
+        timeout=20,
+    )
+
+
 class ChatKnowledgePort(Protocol):
     def search(
         self,
@@ -64,22 +89,50 @@ class ChatRagKnowledgePort(Protocol):
 
 
 class CatalogChatKnowledgeClient:
+    def read_ranked_candidates(
+        self,
+        *,
+        actor_id: str,
+        scope: ChatRagScope,
+        arguments: ChatSearchArguments,
+        candidates: tuple[ChatRankedCandidateKey, ...],
+    ) -> ChatRankedCandidateReadReply:
+        request = build_chat_ranked_candidate_read_request(
+            actor_id=actor_id,
+            scope=scope,
+            arguments=arguments,
+            candidates=candidates,
+        )
+        try:
+            return validate_chat_ranked_candidate_read_reply(
+                request,
+                _read_catalog_frame(
+                    request.model_dump(mode="json"),
+                    request_limit=CHAT_RANKED_READ_REQUEST_BYTES,
+                    reply_limit=CHAT_RANKED_READ_REPLY_BYTES,
+                ),
+            )
+        except ChatTransportError as error:
+            raise ChatError(
+                "GENERAL_CHAT_POINTER_INVALID"
+                if error.kind == "INVALID"
+                else "GENERAL_CHAT_APPLICATION_UNAVAILABLE"
+            ) from None
+        except (ValueError, SchemaError):
+            raise ChatError("GENERAL_CHAT_POINTER_INVALID") from None
+        except (KeyError, OSError):
+            raise ChatError("GENERAL_CHAT_APPLICATION_UNAVAILABLE") from None
+
     def resolve_private_query_scope(
         self, *, actor_id: str, scope: ChatRagScope
     ) -> ChatPrivateQueryScopeReply:
         """One exact semantic→manifest read; never invent a hash/pin or retry transport."""
         request = build_chat_private_query_scope_request(actor_id, scope)
         try:
-            value = exchange_chat_frame(
-                ChatSocketEndpoint(
-                    Path(CATALOG_APPLICATION_SOCKET_PATH),
-                    pwd.getpwnam("eom-catalog-manager").pw_uid,
-                    grp.getgrnam("eom-api").gr_gid,
-                ),
+            value = _read_catalog_frame(
                 request.model_dump(mode="json"),
                 request_limit=CHAT_PRIVATE_SCOPE_REQUEST_BYTES,
                 reply_limit=CHAT_PRIVATE_SCOPE_REPLY_BYTES,
-                timeout=20,
             )
             return validate_chat_private_query_scope_reply(request, value)
         except ChatTransportError as error:
@@ -97,16 +150,10 @@ class CatalogChatKnowledgeClient:
         document = request.model_dump(mode="json")
         read_rag("CatalogRequest", document, ChatRagCatalogRequest)
         try:
-            value = exchange_chat_frame(
-                ChatSocketEndpoint(
-                    Path(CATALOG_APPLICATION_SOCKET_PATH),
-                    pwd.getpwnam("eom-catalog-manager").pw_uid,
-                    grp.getgrnam("eom-api").gr_gid,
-                ),
+            value = _read_catalog_frame(
                 document,
                 request_limit=64000,
                 reply_limit=64000,
-                timeout=20,
             )
         except ChatTransportError as exc:
             raise ChatError(
@@ -134,16 +181,10 @@ class CatalogChatKnowledgeClient:
         document = request.model_dump(mode="json")
         read_agent("CatalogRequest", document, ChatSearchCatalogRequest)
         try:
-            value = exchange_chat_frame(
-                ChatSocketEndpoint(
-                    Path(CATALOG_APPLICATION_SOCKET_PATH),
-                    pwd.getpwnam("eom-catalog-manager").pw_uid,
-                    grp.getgrnam("eom-api").gr_gid,
-                ),
+            value = _read_catalog_frame(
                 document,
                 request_limit=32000,
                 reply_limit=64000,
-                timeout=20,
             )
             return read_agent("CatalogReply", value, ChatSearchCatalogReply).outcome
         except Exception:
@@ -158,16 +199,10 @@ class CatalogChatKnowledgeClient:
         document = request.model_dump(mode="json")
         read_grounding("CatalogRequest", document, ChatKnowledgeCatalogRequest)
         try:
-            value = exchange_chat_frame(
-                ChatSocketEndpoint(
-                    Path(CATALOG_APPLICATION_SOCKET_PATH),
-                    pwd.getpwnam("eom-catalog-manager").pw_uid,
-                    grp.getgrnam("eom-api").gr_gid,
-                ),
+            value = _read_catalog_frame(
                 document,
                 request_limit=32000,
                 reply_limit=512000,
-                timeout=20,
             )
             reply = read_grounding("CatalogReply", value, ChatKnowledgeCatalogReply)
         except Exception:

@@ -18,11 +18,19 @@ from eom_catalog_contracts import (
     validate_contract,
 )
 from eom_catalog_contracts.chat_private_query_scope import (
+    ChatPrivateQueryScopeErrorCode,
     ChatPrivateQueryScopeReply,
     ChatPrivateQueryScopeRequest,
     failed_chat_private_query_scope_reply,
     parse_chat_private_query_scope_request,
     validate_chat_private_query_scope_reply,
+)
+from eom_catalog_contracts.chat_ranked_candidate_read import (
+    ChatRankedCandidateReadReply,
+    ChatRankedCandidateReadRequest,
+    failed_chat_ranked_candidate_read_reply,
+    parse_chat_ranked_candidate_read_request,
+    validate_chat_ranked_candidate_read_reply,
 )
 from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
 from eom_identifiers import content_sha256
@@ -53,11 +61,21 @@ from eom_protocol.general_chat_rag_knowledge import (
     read_rag,
     read_rag_catalog_reply,
 )
+from eom_protocol.general_chat_tools import ChatSearchCatalogRequest
 from jsonschema import ValidationError as JsonSchemaValidationError
 from sqlalchemy import Engine, and_, or_, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from eom_catalog_service.chat_knowledge_discovery import (
+    ChatDiscoveryError,
+    ChatKnowledgeQueryAdapter,
+)
+from eom_catalog_service.chat_knowledge_search import (
+    chat_search_outcome,
+    chat_search_query,
+    discovery_approvals,
+)
 from eom_catalog_service.knowledge_graph_models import (
     KnowledgeCorpusRecord,
     KnowledgeGraphSnapshotRecord,
@@ -95,6 +113,25 @@ class ChatRagResolutionError(ValueError):
     def __init__(self, code: RagError) -> None:
         self.code = code
         super().__init__(code)
+
+
+def _scope_read_error_code(error: Exception) -> ChatPrivateQueryScopeErrorCode:
+    """Shared pointer-only reads preserve denial/unavailability without partial metadata."""
+    if isinstance(error, ChatRagResolutionError):
+        if error.code == "CHAT_KNOWLEDGE_FORBIDDEN":
+            return "CHAT_KNOWLEDGE_FORBIDDEN"
+        if error.code == "CHAT_KNOWLEDGE_UNAVAILABLE":
+            return "CHAT_KNOWLEDGE_UNAVAILABLE"
+    if isinstance(error, ChatDiscoveryError) and error.code == "CHAT_KNOWLEDGE_FORBIDDEN":
+        return "CHAT_KNOWLEDGE_FORBIDDEN"
+    if isinstance(error, KnowledgeRetrievalServiceError) and error.code in {
+        "KNOWLEDGE_RETRIEVAL_UNAUTHORIZED",
+        "KNOWLEDGE_RETRIEVAL_REQUESTER_INVALID",
+    }:
+        return "CHAT_KNOWLEDGE_FORBIDDEN"
+    if isinstance(error, SQLAlchemyError):
+        return "CHAT_KNOWLEDGE_UNAVAILABLE"
+    return "CHAT_KNOWLEDGE_POINTER_INVALID"
 
 
 def source_reference(
@@ -150,6 +187,64 @@ class ChatRagResolutionService:
         self.sessions = build_session_factory(engine)
         self.retrieval = KnowledgeRetrievalApplicationService(engine, settings)
         self.analyses = KnowledgeGraphPublicationService(engine, settings)
+        self.discovery = ChatKnowledgeQueryAdapter(engine, discovery_approvals)
+
+    def read_ranked_candidates(
+        self,
+        request: ChatRankedCandidateReadRequest,
+    ) -> ChatRankedCandidateReadReply:
+        request = parse_chat_ranked_candidate_read_request(request)
+        try:
+            with self.sessions() as session, session.begin():
+                session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+                session.execute(text("SET TRANSACTION READ ONLY"))
+                policy, _role, permissions = self._authority(
+                    session, request.actor_id, request.scope.policy
+                )
+                self._source_authority(
+                    tuple(sorted({key.source_class for key in request.candidates})),
+                    permissions,
+                    policy,
+                )
+                self._scope(session, request.scope)
+                query = chat_search_query(
+                    ChatSearchCatalogRequest(
+                        actor_id=request.actor_id,
+                        arguments=request.arguments,
+                        snapshot=request.scope.snapshot,
+                    )
+                )
+                selected = self.discovery.search_in_session(
+                    session,
+                    query,
+                    actor_id=request.actor_id,
+                    ranked_candidates=request.candidates,
+                )
+                outcome = chat_search_outcome(selected)
+                if outcome.snapshot != request.scope.snapshot:
+                    raise ChatRagResolutionError("CHAT_KNOWLEDGE_POINTER_INVALID")
+                reply = ChatRankedCandidateReadReply(
+                    schema_version="chat-ranked-candidate-read-reply/1.0",
+                    request_sha256=request.request_sha256,
+                    status=outcome.status,
+                    scope=request.scope,
+                    cards=outcome.cards,
+                    truncated=outcome.truncated,
+                    error_code=None,
+                )
+                reply = validate_chat_ranked_candidate_read_reply(request, reply)
+        except (
+            ChatRagResolutionError,
+            ChatDiscoveryError,
+            KnowledgeRetrievalServiceError,
+            KnowledgeGraphPublicationError,
+            JsonSchemaValidationError,
+            ValueError,
+            OSError,
+            SQLAlchemyError,
+        ) as error:
+            reply = failed_chat_ranked_candidate_read_reply(request, _scope_read_error_code(error))
+        return reply
 
     def resolve_private_query_scope(
         self, request: ChatPrivateQueryScopeRequest
@@ -170,27 +265,16 @@ class ChatRagResolutionService:
                     graph_snapshot=pointer,
                     error_code=None,
                 )
-        except ChatRagResolutionError as error:
-            reply = failed_chat_private_query_scope_reply(
-                request,
-                "CHAT_KNOWLEDGE_FORBIDDEN"
-                if error.code == "CHAT_KNOWLEDGE_FORBIDDEN"
-                else "CHAT_KNOWLEDGE_UNAVAILABLE"
-                if error.code == "CHAT_KNOWLEDGE_UNAVAILABLE"
-                else "CHAT_KNOWLEDGE_POINTER_INVALID",
-            )
-        except KnowledgeRetrievalServiceError as error:
-            reply = failed_chat_private_query_scope_reply(
-                request,
-                "CHAT_KNOWLEDGE_FORBIDDEN"
-                if error.code
-                in {"KNOWLEDGE_RETRIEVAL_UNAUTHORIZED", "KNOWLEDGE_RETRIEVAL_REQUESTER_INVALID"}
-                else "CHAT_KNOWLEDGE_POINTER_INVALID",
-            )
-        except SQLAlchemyError:
-            reply = failed_chat_private_query_scope_reply(request, "CHAT_KNOWLEDGE_UNAVAILABLE")
-        except (KnowledgeGraphPublicationError, JsonSchemaValidationError, ValueError, OSError):
-            reply = failed_chat_private_query_scope_reply(request, "CHAT_KNOWLEDGE_POINTER_INVALID")
+        except (
+            ChatRagResolutionError,
+            KnowledgeRetrievalServiceError,
+            SQLAlchemyError,
+            KnowledgeGraphPublicationError,
+            JsonSchemaValidationError,
+            ValueError,
+            OSError,
+        ) as error:
+            reply = failed_chat_private_query_scope_reply(request, _scope_read_error_code(error))
         return validate_chat_private_query_scope_reply(request, reply)
 
     def resolve(self, request: ChatRagCatalogRequest) -> ChatRagCatalogReply:

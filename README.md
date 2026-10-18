@@ -578,6 +578,11 @@ Chat의 Graph 내용 해시와 임베딩 입력의 manifest 파일 해시를 구
 **소스·임시 SQLite 검증이며 실제 검색 후보 전달과 운영 활성화는 아직 남아 있습니다.**
 [출처 기록 설계·실제 검증 범위](docs/architecture/GENERAL_CHAT_SIMILARITY_PROVENANCE.md)
 
+유사도 후보를 같은 Catalog 문항 조회로 거르는 경로도 연결했습니다. 현재 승인·주제·자료
+종류를 먼저 확인하고 순서를 유지하며, 다른 종류의 해시를 혼동하거나 과거 버전을 최신으로
+바꾸지 않습니다. 소스526개·임시 PostgreSQL85개 검증 PASS이며 **운영 Chat 연결은 남아
+있습니다.** [실제 검증 범위와 남은 작업](docs/status/CHAT_RANKED_CANDIDATE_READ_CHECKPOINT_2026-10-18.md)
+
 아래는 날짜·후보별 역사적 구현 기록입니다. 당시의 미완료 표기는 현재 종합 상태와
 구별하며, 최신 실제 실행·활성화 범위는 위 표와 연결된 상태 문서를 기준으로 합니다.
 

@@ -20,10 +20,13 @@ from eom_api.services.chat_knowledge_query_adapter import (
 from eom_api.services.query_adapter import QueryAdapter
 from eom_api_contracts.chat_knowledge import ChatKnowledgeRequest
 from eom_catalog_contracts import INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY
+from eom_catalog_contracts.chat_ranked_candidate_read import ChatRankedCandidateKey
+from eom_catalog_service.chat_knowledge_discovery import ChatDiscoveryError
+from eom_operator_identity import PermissionKey
 from eom_orchestrator.database import build_engine
 from sqlalchemy import event, text
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from scripts.api.testdb_guard import TestDatabaseManifest as DisposableManifest
 from scripts.api.testdb_guard import validate_state_directory
@@ -430,3 +433,239 @@ def test_ten_thousand_item_real_query_plan_uses_indexes(search_db, query, index)
     plan = con.exec_driver_sql("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " + sql).scalar_one()
     assert index in json.dumps(plan)
     assert plan[0]["Plan"]["Actual Rows"] <= 21
+
+
+RANKED_ACTOR = "operator_" + "a" * 32
+
+
+@pytest.fixture
+def ranked_db(search_db):
+    reader, con = search_db
+    # Real current identity/permission SQL, but synthetic rows in this guarded
+    # database's pg_temp namespace: no login, production actor or source grant.
+    for table in (
+        "operators",
+        "roles",
+        "permissions",
+        "role_permissions",
+        "operator_role_assignments",
+    ):
+        con.exec_driver_sql(f"CREATE TEMP TABLE {table} AS SELECT * FROM app.{table} WITH NO DATA")
+    con.execute(
+        text("""
+        INSERT INTO pg_temp.operators(operator_id,username,normalized_username,display_name,
+          status,must_change_password,created_by)
+        VALUES (:actor,'ranked-fixture','ranked-fixture','fixture','ACTIVE',false,'fixture')
+    """),
+        {"actor": RANKED_ACTOR},
+    )
+    con.exec_driver_sql(
+        "INSERT INTO pg_temp.roles(role_id,role_key) VALUES ('role_fixture','EDITOR')"
+    )
+    con.exec_driver_sql("""
+        INSERT INTO pg_temp.operator_role_assignments(operator_role_assignment_id,
+          operator_id,role_id,assigned_by,assigned_at)
+        VALUES ('assignment_fixture','operator_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          'role_fixture','fixture',now())
+    """)
+    for permission in (PermissionKey.GENERAL_CHAT_READ, PermissionKey.ITEM_READ):
+        con.execute(
+            text("""
+            INSERT INTO pg_temp.permissions(permission_id,permission_key)
+            VALUES ('permission_'||md5(:key),:key)
+        """),
+            {"key": permission.value},
+        )
+        con.execute(
+            text("""
+            INSERT INTO pg_temp.role_permissions(role_id,permission_id)
+            VALUES ('role_fixture','permission_'||md5(:key))
+        """),
+            {"key": permission.value},
+        )
+    con.exec_driver_sql("""
+        UPDATE pg_temp.knowledge_node_source_pointers p
+        SET source_artifact_id=a.source_artifact_id,
+            artifact_revision_id=a.source_artifact_revision_id,source_sha256=a.source_sha256
+        FROM pg_temp.knowledge_snapshot_analyses a
+        WHERE a.graph_snapshot_revision_id=p.graph_snapshot_revision_id
+          AND a.source_revision_id=p.source_revision_id
+    """)
+    rows = con.execute(
+        text("""
+        SELECT r.item_id,a.source_revision_id,a.source_artifact_id,
+          a.source_artifact_revision_id,a.source_sha256
+        FROM pg_temp.knowledge_snapshot_analyses a
+        JOIN pg_temp.item_revisions r ON r.item_revision_id=a.source_revision_id
+        ORDER BY a.source_revision_id DESC LIMIT 64
+    """)
+    ).all()
+    keys = tuple(
+        ChatRankedCandidateKey(
+            item_id=item,
+            item_revision_id=revision,
+            source_class="APPROVED_ITEM",
+            component_artifact_id=artifact,
+            component_artifact_revision_id=artifact_revision,
+            component_sha256=digest,
+        )
+        for item, revision, artifact, artifact_revision, digest in rows
+    )
+    assert len(keys) == 64
+    con.commit()
+    return reader.reader, con, keys
+
+
+def ranked_read(catalog, con, keys):
+    with Session(bind=con, expire_on_commit=False) as session, session.begin():
+        session.execute(text("SET TRANSACTION READ ONLY"))
+        return catalog.search_in_session(
+            session,
+            request({"kind": "TOPIC", "terms": ["전자기"]}, snapshot=SNAPSHOT, limit=6),
+            actor_id=RANKED_ACTOR,
+            ranked_candidates=keys,
+        )
+
+
+def test_ranked_native_pool_is_not_legacy_six_reranking_and_has_constant_queries(ranked_db):
+    catalog, con, keys = ranked_db
+    calls = []
+    event.listen(con, "before_cursor_execute", lambda *args: calls.append(args[2]))
+    first = ranked_read(catalog, con, keys[:1])
+    count = len(calls)
+    calls.clear()
+    many = ranked_read(catalog, con, keys)
+    assert len(calls) == count
+    assert [card.item_revision_id for card in many.values] == [
+        key.item_revision_id for key in keys[:6]
+    ]
+    assert first.values[0] == many.values[0] and many.truncated
+    assert all(card.manifest_sha256 == HASH != CONTENT_HASH for card in many.values)
+    assert all(
+        card.approval.status == "APPROVED" and card.graph_membership == "INDEXED"
+        for card in many.values
+    )
+
+
+def test_ranked_topic_filter_is_applied_before_limit_not_to_six_candidates(ranked_db):
+    catalog, con, keys = ranked_db
+    for key in keys[:10]:
+        con.execute(
+            text(
+                "UPDATE pg_temp.knowledge_node_source_pointers SET node_id='other_node' "
+                "WHERE source_revision_id=:id"
+            ),
+            {"id": key.item_revision_id},
+        )
+    con.commit()
+    result = ranked_read(catalog, con, keys)
+    assert [card.item_revision_id for card in result.values] == [
+        key.item_revision_id for key in keys[10:16]
+    ]
+    assert result.truncated
+
+
+@pytest.mark.parametrize("fault", ["component_hash", "foreign_current", "revoked"])
+def test_ranked_invalid_relations_do_not_reach_title_projection(ranked_db, fault):
+    catalog, con, keys = ranked_db
+    projected = []
+    original = catalog.project_revisions
+
+    def project(*args):
+        projected.append(True)
+        return original(*args)
+
+    catalog.project_revisions = project
+    if fault == "component_hash":
+        keys = (keys[0].model_copy(update={"component_sha256": HASH}), *keys[1:])
+    elif fault == "foreign_current":
+        con.execute(
+            text("UPDATE pg_temp.items SET current_revision_id=:revision WHERE item_id=:item"),
+            {"revision": keys[1].item_revision_id, "item": keys[0].item_id},
+        )
+    else:
+        con.execute(
+            text(
+                "UPDATE pg_temp.item_revisions SET revision_state='RETIRED' "
+                "WHERE item_revision_id=:id"
+            ),
+            {"id": keys[0].item_revision_id},
+        )
+    con.commit()
+    with pytest.raises(ChatDiscoveryError, match="CHAT_KNOWLEDGE_POINTER_INVALID"):
+        ranked_read(catalog, con, keys)
+    assert projected == []
+
+
+def test_ranked_valid_history_is_filtered_without_latest_substitution(ranked_db):
+    catalog, con, keys = ranked_db
+    con.execute(
+        text("""
+        INSERT INTO pg_temp.item_revisions(item_revision_id,item_id,revision_number,revision_state,
+          content_pack_release_id,workflow_id,workflow_definition_version,manifest_artifact_id,
+          manifest_artifact_revision_id,manifest_sha256,item_type_key,lock_version,created_at)
+        SELECT :new,item_id,2,'APPROVED',content_pack_release_id,workflow_id,
+          workflow_definition_version,
+          manifest_artifact_id,manifest_artifact_revision_id,manifest_sha256,item_type_key,1,created_at
+        FROM pg_temp.item_revisions WHERE item_revision_id=:old
+    """),
+        {"new": "itemrev_" + "f" * 32, "old": keys[0].item_revision_id},
+    )
+    con.execute(
+        text("UPDATE pg_temp.items SET current_revision_id=:new WHERE item_id=:item"),
+        {"new": "itemrev_" + "f" * 32, "item": keys[0].item_id},
+    )
+    con.execute(
+        text(
+            "UPDATE pg_temp.item_revisions SET revision_state='SUPERSEDED' "
+            "WHERE item_revision_id=:old"
+        ),
+        {"old": keys[0].item_revision_id},
+    )
+    con.commit()
+    result = ranked_read(catalog, con, keys)
+    assert [card.item_revision_id for card in result.values] == [
+        key.item_revision_id for key in keys[1:7]
+    ]
+
+
+def test_ranked_current_role_revocation_is_denied_by_actual_sql(ranked_db):
+    catalog, con, keys = ranked_db
+    assert ranked_read(catalog, con, keys).values
+    con.execute(text("UPDATE pg_temp.operator_role_assignments SET revoked_at=now()"))
+    con.commit()
+    with pytest.raises(ChatDiscoveryError, match="CHAT_KNOWLEDGE_FORBIDDEN"):
+        ranked_read(catalog, con, keys)
+
+
+def test_ranked_actual_readonly_transaction_and_ten_thousand_item_index_plan(ranked_db):
+    catalog, con, keys = ranked_db
+    settings = []
+    original = catalog.project_revisions
+
+    def project(session, revisions):
+        settings.append(
+            session.execute(
+                text(
+                    "SELECT current_setting('transaction_read_only'), "
+                    "current_setting('transaction_isolation')"
+                )
+            ).one()
+        )
+        return original(session, revisions)
+
+    catalog.project_revisions = project
+    ranked_read(catalog, con, keys)
+    assert settings == [("on", "repeatable read")]
+    statement = candidate_statement(
+        request({"kind": "TOPIC", "terms": ["전자기"]}, snapshot=SNAPSHOT, limit=6),
+        SNAPSHOT["graph_snapshot_revision_id"],
+        ranked_candidates=keys,
+    )
+    sql = str(
+        statement.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
+    )
+    plan = con.exec_driver_sql("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " + sql).scalar_one()
+    rendered = json.dumps(plan)
+    assert "ix_chat_revision_pk" in rendered and "ix_chat_item_pk" in rendered
+    assert plan[0]["Plan"]["Actual Rows"] <= 7

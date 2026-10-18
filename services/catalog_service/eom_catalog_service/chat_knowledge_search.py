@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, cast
 
-from eom_api_contracts.chat_knowledge import ChatKnowledgeRequest
+from eom_api_contracts.chat_knowledge import ChatKnowledgeRequest, ChatKnowledgeSelection
 from eom_api_contracts.items import ItemApprovalView
 from eom_protocol.general_chat_grounding import ChatKnowledgeItem, ChatKnowledgeSnapshot, read_agent
 from eom_protocol.general_chat_tools import (
@@ -62,34 +62,8 @@ class ChatKnowledgeSearchService:
         try:
             # The permission check shares the discovery transaction; no TOCTOU
             # authorization window or unrestricted metadata/title side channel.
-            result = self.reader.search(self._query(request), actor_id=request.actor_id)
-            cards = tuple(
-                ChatDiscoveryCard(
-                    item=ChatKnowledgeItem.model_validate(
-                        card.model_dump(
-                            mode="json", include={"item_id", "item_revision_id", "manifest_sha256"}
-                        )
-                    ),
-                    display_name=card.display_name,
-                    approval=cast(Literal["APPROVED", "PENDING"], card.approval.status),
-                    source_kind=card.source_kind,
-                    graph_membership=card.graph_membership,
-                )
-                for card in result.values
-            )
-            outcome = ChatToolOutcome(
-                status="SUCCEEDED" if cards else "EMPTY",
-                cards=cards,
-                snapshot=None
-                if result.snapshot is None
-                else ChatKnowledgeSnapshot(
-                    graph_snapshot_revision_id=result.snapshot.graph_snapshot_revision_id,
-                    sha256=result.snapshot.snapshot_sha256,
-                ),
-                truncated=result.truncated,
-                context=None,
-                error_code=None,
-            )
+            result = self.reader.search(chat_search_query(request), actor_id=request.actor_id)
+            outcome = chat_search_outcome(result)
         except ChatDiscoveryError as error:
             outcome = failed_tool(
                 "CHAT_KNOWLEDGE_FORBIDDEN"
@@ -104,24 +78,56 @@ class ChatKnowledgeSearchService:
             ChatSearchCatalogReply,
         )
 
-    @staticmethod
-    def _query(request: ChatSearchCatalogRequest) -> ChatKnowledgeRequest:
-        args = request.arguments
-        if args.kind == "TOPIC":
-            query = {"kind": args.kind, "terms": args.terms, "source": args.source}
-        elif args.kind == "RECENT":
-            query = {"kind": args.kind, "source": args.source}
-        else:
-            query = args.model_dump(exclude={"terms", "source"})
-        return ChatKnowledgeRequest.model_validate(
-            {
-                "query": query,
-                "limit": 6,
-                "snapshot": None
-                if request.snapshot is None
-                else {
-                    "graph_snapshot_revision_id": request.snapshot.graph_snapshot_revision_id,
-                    "snapshot_sha256": request.snapshot.sha256,
-                },
-            }
+
+def chat_search_outcome(result: ChatKnowledgeSelection) -> ChatToolOutcome:
+    """One shared card projection; never elevate approval or manufacture source content."""
+    cards = tuple(
+        ChatDiscoveryCard(
+            item=ChatKnowledgeItem.model_validate(
+                card.model_dump(
+                    mode="json", include={"item_id", "item_revision_id", "manifest_sha256"}
+                )
+            ),
+            display_name=card.display_name,
+            approval=cast(Literal["APPROVED", "PENDING"], card.approval.status),
+            source_kind=card.source_kind,
+            graph_membership=card.graph_membership,
         )
+        for card in result.values
+    )
+    outcome = ChatToolOutcome(
+        status="SUCCEEDED" if cards else "EMPTY",
+        cards=cards,
+        snapshot=None
+        if result.snapshot is None
+        else ChatKnowledgeSnapshot(
+            graph_snapshot_revision_id=result.snapshot.graph_snapshot_revision_id,
+            sha256=result.snapshot.snapshot_sha256,
+        ),
+        truncated=result.truncated,
+        context=None,
+        error_code=None,
+    )
+    return outcome
+
+
+def chat_search_query(request: ChatSearchCatalogRequest) -> ChatKnowledgeRequest:
+    args = request.arguments
+    if args.kind == "TOPIC":
+        query = {"kind": args.kind, "terms": args.terms, "source": args.source}
+    elif args.kind == "RECENT":
+        query = {"kind": args.kind, "source": args.source}
+    else:
+        query = args.model_dump(exclude={"terms", "source"})
+    return ChatKnowledgeRequest.model_validate(
+        {
+            "query": query,
+            "limit": 6,
+            "snapshot": None
+            if request.snapshot is None
+            else {
+                "graph_snapshot_revision_id": request.snapshot.graph_snapshot_revision_id,
+                "snapshot_sha256": request.snapshot.sha256,
+            },
+        }
+    )
