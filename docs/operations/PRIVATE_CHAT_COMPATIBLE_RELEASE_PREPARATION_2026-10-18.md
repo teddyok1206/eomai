@@ -344,3 +344,33 @@ Chat/Assembly observation, current seed/delta/reuse evidence, then six actual
 CPU/CUDA measurements and conditional default/real CPU rollback. Source wiring
 already exists; this release does not manufacture those missing live results.
 Human educational evaluation is not a newly added gate. **Full goal OPEN.**
+
+## Offered real login and bounded INDEX cost baseline — 08:24 UTC
+
+The user subsequently explicitly offered a real login to accelerate the goal.
+This supersedes the no-prompt restriction for that supervised login, not the
+permission/fresh-auth/TTL contracts. The old observer exited through its supported
+QUIT (PIDs837676/837677 absent); original503/403 and QUERY identities remain.
+`EOM:1` is now `rag-validation`: the new finite nonroot reader1832478 is actually
+waiting in getpass, not claimed authenticated. Its input/installed685 pins passed;
+11 synthetic HTTP/session tests passed4.12s. It reads the original completed
+selection twice first and retains the same in-memory session for explicit
+READ/original-key REPLAY/QUIT. No new query key, model dispatch, session export,
+automatic login or live-process patch is permitted. Actual API settings were
+independently read: preparation=true, reference-item-start=false, exam-observation
+=false, fresh-auth900s. C2/C3 activation remains separate, not implied by C1.
+
+The new source-only `test_embedding_registry_origin_read_cost.py` registers
+cumulative batches through the existing registration application/memory repository
+and verifies actual local pinned index files with the concrete Catalog verifier.
+Source/IAM/SQL/numerical validation remain explicitly synthetic. Both first-origin
+immutability and historical replay preservation PASS. Independent final2 tests
+passed19.59s; Ruff/check/format and diff PASS. Two captures at16/64 bindings decode
+8/32 historical manifests, visiting40/544 binding DTOs per capture; measured total
+180/1,569ms, DTO decoding105/1,239ms, file hashing0.39/3.57ms. These are bounded
+fixture measurements, **not** production throughput or proof of the15-minute
+command cadence's cause. No cache, numerical recipe, registry format, service,
+authorization or runtime selection was changed by this diagnostic test. Reuse
+of immutable decoding must retain current source/Artifact approval rechecks;
+removing same-manifest redecodes alone does not eliminate distinct cumulative
+manifest bytes. Actual consumer verification remains the next critical path.
