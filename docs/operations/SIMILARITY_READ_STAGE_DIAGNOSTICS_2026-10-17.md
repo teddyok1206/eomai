@@ -145,6 +145,15 @@ continues. It is not a successful login, a stored credential or permission to
 extend auth/sudo lifetimes. Preserve already successful and failed observations;
 leave genuinely credentialed checks pending instead of inventing acceptance.
 
+Superseding unattended window, confirmed2026-10-18: **no new interactive login
+before2026-10-19 02:53 UTC (11:53 Asia/Seoul)**. This replaces every earlier
+no-prompt deadline in this runbook and temporary diagnostic instructions. It is
+not authentication, an auth lifetime extension or a scheduled login at expiry.
+Use only already valid supported same-actor continuation/noninteractive sudo;
+preserve denied original requests and continue independent authorized work.
+See the current unattended-work section of
+[the full goal](../architecture/SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md).
+
 ## Completed-read continuation is prepared without new login
 
 The temporary diagnostic now has a separate **completed-result-read-only** entry:
