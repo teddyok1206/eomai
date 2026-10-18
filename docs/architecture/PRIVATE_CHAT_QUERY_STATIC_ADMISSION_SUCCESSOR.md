@@ -65,3 +65,19 @@ unchanged stage cohort passed all 257 tests (261.38 s) in the separately prepare
 migrated and reconciled fresh guarded DB state
 `/tmp/eom-api-testdb-20261018134420_af3c84bc`. These separate-purpose results prove
 source/persistence behavior, not operating private QUERY admission or delivery.
+
+The existing official builder owns the complete installed-definition inspection
+inventory. Its isolated wheel check must copy, pass and compile this same fixed
+private YAML before comparing all compiled protocols with the real admission map.
+This is build-time evidence only: it does not import a DB definition or activate
+the private owner. A regression executes that actual pure inspection expression
+and verifies that omitting the private graph fails its unchanged exact comparison.
+The full inventory regression also reproduced an existing clean185 omission of
+the already packaged Catalog population-read-set and read-timing modules. Add
+those two names to that same literal inspection inventory; do not change their
+runtime code or weaken the source-derived completeness assertion.
+The five focused builder/private suites passed 73 tests (5.84 s), with strict
+mypy, Ruff/format and shell syntax checks passing. A broader deployment-boundary
+diagnostic retained three stale0056 expectations (117 passes/3 failures), each
+independently reproduced on unchanged clean185; those unrelated assertions and
+all runtime migration behavior remain unchanged by this inspection follow-up.

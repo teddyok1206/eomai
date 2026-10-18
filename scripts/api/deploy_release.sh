@@ -1413,7 +1413,9 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_catalog_service/inference_transfer_experiment.py",
         "eom_catalog_service/inference_transfer_item_projection.py",
         "eom_catalog_service/inference_transfer_ports.py",
+        "eom_catalog_service/inference_transfer_population_read_set.py",
         "eom_catalog_service/inference_transfer_projection.py",
+        "eom_catalog_service/inference_transfer_read_timing.py",
         "eom_catalog_service/inference_transfer_scope.py",
         "eom_catalog_service/inference_transfer_service.py",
         "eom_catalog_service/inference_transfer_snapshot_catalog_adapter.py",
@@ -1854,6 +1856,13 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
             / "config/workflows/local-embedding-reference-query.v1.yaml"
         ).read_bytes()
     )
+    private_chat_query_definition = root / "local-embedding-private-chat-query.v1.yaml"
+    private_chat_query_definition.write_bytes(
+        (
+            Path(os.environ["REPOSITORY_ROOT"])
+            / "config/workflows/local-embedding-private-chat-query.v1.yaml"
+        ).read_bytes()
+    )
     worker_config = root / "worker-slots.yaml"
     worker_config.write_bytes(
         (Path(os.environ["REPOSITORY_ROOT"]) / "config/worker-slots.example.yaml").read_bytes()
@@ -1904,7 +1913,7 @@ from pathlib import Path
 from pydantic import TypeAdapter
 
 installed_root = Path(sys.argv[1]).resolve()
-repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, definition_v1_11, definition_v1_12, definition_v1_13, definition_v1_14, definition_v1_15, definition_v1_16, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, legacy_definition, editorial_definition, customer_support_definition, pdf_document_review_definition_v1, pdf_document_review_definition_v1_1, pdf_document_review_definition_v1_2, pdf_document_review_definition_v1_3, inference_transfer_definition, inference_transfer_definition_v1_1, local_embedding_definition, reference_query_definition, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256, expected_catalog_resources_json = sys.argv[2:]
+repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, definition_v1_11, definition_v1_12, definition_v1_13, definition_v1_14, definition_v1_15, definition_v1_16, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, legacy_definition, editorial_definition, customer_support_definition, pdf_document_review_definition_v1, pdf_document_review_definition_v1_1, pdf_document_review_definition_v1_2, pdf_document_review_definition_v1_3, inference_transfer_definition, inference_transfer_definition_v1_1, local_embedding_definition, reference_query_definition, private_chat_query_definition, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256, expected_catalog_resources_json = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
 os.environ["EOM_STAGING_ROOT"] = staging
@@ -2309,6 +2318,7 @@ admitted_definitions = (
     compile_definition(Path(inference_transfer_definition_v1_1), {"support"}),
     compile_definition(Path(local_embedding_definition), set()),
     compile_definition(Path(reference_query_definition), set()),
+    compile_definition(Path(private_chat_query_definition), set()),
 )
 if {
     (compiled.definition.definition_key, compiled.definition.definition_version):
@@ -2377,6 +2387,7 @@ validate_contract(
             str(inference_transfer_definition_v1_1),
             str(local_embedding_definition),
             str(reference_query_definition),
+            str(private_chat_query_definition),
             str(worker_config),
             str(staging),
             str(workspace_root),

@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tomllib
 from collections.abc import Callable
+from copy import deepcopy
 from pathlib import Path
 from typing import cast
 
@@ -214,6 +215,7 @@ def test_installed_support_admission_covers_materialized_workflow_contracts() ->
         "item-inference-transfer-comparison",
         "local-embedding-index",
         "local-embedding-reference-query",
+        "local-embedding-private-chat-query",
     }
     fixed_prefixes = tuple(f"{name}." for name in sorted(fixed_families))
     staged = {
@@ -271,6 +273,76 @@ def test_installed_support_admission_covers_materialized_workflow_contracts() ->
     assert actual == expected
 
 
+def test_actual_installed_admission_comparison_rejects_an_omitted_private_graph() -> None:
+    """Run only the real pure compiler/comparison, never wheel installation or deployment."""
+    outer = ast.parse(release_inspector_source())
+    bindings = {
+        node.targets[0].id: str(ROOT / "config/workflows" / node.value.right.value)
+        for node in ast.walk(outer)
+        if isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and isinstance(node.value, ast.BinOp)
+        and isinstance(node.value.left, ast.Name)
+        and node.value.left.id == "root"
+        and isinstance(node.value.right, ast.Constant)
+        and isinstance(node.value.right.value, str)
+        and node.value.right.value.endswith(".yaml")
+    }
+    for version in range(1, 17):
+        bindings[f"definition_v1_{version}"] = str(
+            ROOT / f"config/workflows/generic-item-development.v1.{version}.yaml"
+        )
+    for version in range(1, 11):
+        bindings[f"analysis_v{version}"] = str(
+            ROOT / f"config/workflows/knowledge-analysis.v{version}.yaml"
+        )
+    inner = ast.parse(installed_workflow_inspector_source())
+    assignment = next(
+        node
+        for node in inner.body
+        if isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "admitted_definitions"
+    )
+    comparison = next(
+        node
+        for node in inner.body
+        if isinstance(node, ast.If) and "WORKFLOW_ADMISSION_BY_IDENTITY" in ast.unparse(node.test)
+    )
+    namespace = {
+        "Path": Path,
+        "compile_definition": compile_definition,
+        "definition_execution_protocol": definition_execution_protocol,
+        "WORKFLOW_ADMISSION_BY_IDENTITY": WORKFLOW_ADMISSION_BY_IDENTITY,
+        **bindings,
+    }
+    exec(
+        compile(ast.Module(body=[assignment, comparison], type_ignores=[]), "admission", "exec"),
+        namespace,
+    )
+    omitted = deepcopy(assignment)
+    assert isinstance(omitted.value, ast.Tuple)
+    count = len(omitted.value.elts)
+    omitted.value.elts = [
+        value
+        for value in omitted.value.elts
+        if not any(
+            isinstance(node, ast.Name) and node.id == "private_chat_query_definition"
+            for node in ast.walk(value)
+        )
+    ]
+    assert len(omitted.value.elts) == count - 1
+    with pytest.raises(SystemExit, match="admission policy does not match"):
+        exec(
+            compile(
+                ast.Module(body=[omitted, comparison], type_ignores=[]),
+                "omitted private admission",
+                "exec",
+            ),
+            namespace,
+        )
+
+
 @pytest.mark.parametrize(
     ("filename", "variable", "protocol"),
     (
@@ -279,6 +351,11 @@ def test_installed_support_admission_covers_materialized_workflow_contracts() ->
             "local-embedding-reference-query.v1.yaml",
             "reference_query_definition",
             "reference-query/1.0",
+        ),
+        (
+            "local-embedding-private-chat-query.v1.yaml",
+            "private_chat_query_definition",
+            "private-chat-query/1.0",
         ),
     ),
 )
