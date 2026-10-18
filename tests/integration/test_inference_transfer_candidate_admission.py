@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 from dataclasses import replace
 from pathlib import Path
+from time import perf_counter
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import Mock
@@ -878,3 +879,370 @@ def test_real_postgres_item_relations_reject_different_session_and_finished_root
     ):
         with pytest.raises(KnowledgeAnalysisSourceError, match="out of scope"):
             method(session, key)
+
+
+@pytest.fixture
+def population_observation_database(item_source_relation_database):
+    """545 synthetic source lineages, pg_temp only; no Artifact bytes or authority."""
+    session = item_source_relation_database
+    tables = (
+        "knowledge_graph_snapshots",
+        "legacy_item_extraction_acceptances",
+        "legacy_item_extraction_batches",
+        "assessment_source_bundle_revisions",
+        "assessment_layout_observations",
+        "artifacts",
+        "artifact_revisions",
+        "jobs",
+    )
+    for table in tables:
+        session.execute(
+            text(f"CREATE TEMP TABLE {table} AS SELECT * FROM app.{table} WITH NO DATA")
+        )
+    for table in TABLES:
+        if table != "item_revisions":
+            session.execute(text(f"TRUNCATE pg_temp.{table}"))
+    snapshot = occurrence_scope().graph_snapshot.graph_snapshot_revision_id
+    statements = (
+        "INSERT INTO pg_temp.knowledge_graph_snapshots(graph_snapshot_revision_id,graph_id,state,"
+        "manifest_artifact_id,manifest_artifact_revision_id,manifest_sha256) "
+        "VALUES (:snapshot,:graph,'PUBLISHED','artifact_'||lpad('4007',32,'0'),"
+        "'rev_'||lpad('4007',32,'0'),'sha256:'||repeat('a',64))",
+        "INSERT INTO pg_temp.items(item_id,lifecycle_state) "
+        "SELECT 'item_'||lpad(i::text,32,'0'),'ACTIVE' FROM generate_series(1,545) i",
+        "INSERT INTO pg_temp.knowledge_analysis_runs(analysis_run_id,state,canonical_request,"
+        "accepted_result_artifact_id,accepted_result_artifact_revision_id,accepted_result_sha256) "
+        "SELECT 'analysisrun_'||lpad(i::text,32,'0'),'ACCEPTED',"
+        "jsonb_build_object('schema_version','knowledge-analysis-request/9.0','source',"
+        "jsonb_build_object('source_class','PAST_EXAM',"
+        "'layout_observation',jsonb_build_object('assessment_layout_observation_id','layout_1'),"
+        "'artifact_member',jsonb_build_object('artifact_id','artifact_'||lpad(i::text,32,'0'),"
+        "'artifact_revision_id','rev_'||lpad(i::text,32,'0')))),"
+        "'artifact_'||lpad((1000+i)::text,32,'0'),'rev_'||lpad((1000+i)::text,32,'0'),"
+        "'sha256:'||repeat('a',64) FROM generate_series(1,545) i",
+        "INSERT INTO pg_temp.knowledge_snapshot_analyses(snapshot_analysis_id,"
+        "graph_snapshot_revision_id,analysis_run_id,source_kind,source_revision_id,"
+        "source_artifact_id,source_artifact_revision_id,source_sha256,"
+        "accepted_result_artifact_id,accepted_result_artifact_revision_id,accepted_result_sha256) "
+        "SELECT i,:snapshot,'analysisrun_'||lpad(i::text,32,'0'),'APPROVED_ITEM_REVISION',"
+        "'itemrev_'||lpad(i::text,32,'0'),'artifact_'||lpad(i::text,32,'0'),"
+        "'rev_'||lpad(i::text,32,'0'),'sha256:'||repeat('a',64),"
+        "'artifact_'||lpad((1000+i)::text,32,'0'),'rev_'||lpad((1000+i)::text,32,'0'),"
+        "'sha256:'||repeat('a',64) FROM generate_series(1,545) i",
+        "INSERT INTO pg_temp.knowledge_nodes(graph_snapshot_revision_id,node_id,"
+        "node_type,label,answer_bearing) SELECT :snapshot,'knode_'||i,"
+        "'CONCEPT','synthetic bounded population',false FROM generate_series(1,545) i",
+        "INSERT INTO pg_temp.knowledge_node_source_pointers(pointer_id,"
+        "graph_snapshot_revision_id,analysis_run_id,node_id,anchor_id,source_class,"
+        "source_revision_id,source_artifact_id,artifact_revision_id,source_sha256,member_path) "
+        "SELECT i,:snapshot,'analysisrun_'||lpad(i::text,32,'0'),'knode_'||i,'anchor_'||i,"
+        "'PAST_EXAM','itemrev_'||lpad(i::text,32,'0'),'artifact_'||lpad(i::text,32,'0'),"
+        "'rev_'||lpad(i::text,32,'0'),'sha256:'||repeat('a',64),'item-content.json' "
+        "FROM generate_series(1,545) i",
+        "INSERT INTO pg_temp.assessment_item_occurrence_references(graph_snapshot_revision_id,"
+        "placement_node_id,analysis_run_id,item_id,item_revision_id) "
+        "SELECT :snapshot,'placement_'||i,'analysisrun_'||lpad(i::text,32,'0'),"
+        "'item_'||lpad(i::text,32,'0'),'itemrev_'||lpad(i::text,32,'0') "
+        "FROM generate_series(1,545) i",
+        "INSERT INTO pg_temp.legacy_item_extraction_acceptances(acceptance_id,"
+        "extraction_result_id,state,coverage_state,result_sha256,acceptance_sha256,"
+        "acceptance_artifact_id,acceptance_artifact_revision_id,acceptance_artifact_member_path,"
+        "acceptance_artifact_schema_ref,acceptance_artifact_media_type,acceptance_artifact_sha256,"
+        "result_artifact_id,result_artifact_revision_id,result_artifact_member_path,"
+        "result_artifact_schema_ref,result_artifact_media_type,result_artifact_sha256) "
+        "SELECT 'itemacceptance_'||lpad(i::text,32,'0'),"
+        "'itemextractresult_'||lpad(i::text,32,'0'),'ACCEPTED','COMPLETE',"
+        "'sha256:'||repeat('a',64),'sha256:'||repeat('a',64),"
+        "'artifact_'||lpad((2000+i)::text,32,'0'),'rev_'||lpad((2000+i)::text,32,'0'),"
+        "'acceptance.json','synthetic-acceptance/1','application/json','sha256:'||repeat('a',64),"
+        "'artifact_'||lpad((3000+i)::text,32,'0'),'rev_'||lpad((3000+i)::text,32,'0'),"
+        "'result.json','synthetic-result/1','application/json','sha256:'||repeat('a',64) "
+        "FROM generate_series(1,545) i",
+        "UPDATE pg_temp.legacy_item_extraction_batch_work_units SET "
+        "extraction_batch_id='legacybatch_1',assessment_source_bundle_id='sourcebundle_1',"
+        "assessment_source_bundle_revision_id='sourcebundlerev_1',"
+        "bundle_manifest_sha256='sha256:'||repeat('a',64),"
+        "request_sha256='sha256:'||repeat('a',64),"
+        "result_sha256='sha256:'||repeat('a',64),acceptance_sha256='sha256:'||repeat('a',64)",
+        "INSERT INTO pg_temp.legacy_item_extraction_batches(extraction_batch_id,manifest_sha256,"
+        "manifest_artifact_id,manifest_artifact_revision_id,manifest_artifact_member_path,"
+        "manifest_artifact_schema_ref,manifest_artifact_media_type,manifest_artifact_sha256) "
+        "VALUES ('legacybatch_1','sha256:'||repeat('a',64),"
+        "'artifact_'||lpad('4001',32,'0'),'rev_'||lpad('4001',32,'0'),"
+        "'batch.json','synthetic-batch/1','application/json','sha256:'||repeat('a',64))",
+        "INSERT INTO pg_temp.assessment_source_bundle_revisions("
+        "assessment_source_bundle_revision_id,assessment_source_bundle_id,state,"
+        "bundle_manifest_sha256) VALUES ('sourcebundlerev_1','sourcebundle_1','REVIEWED',"
+        "'sha256:'||repeat('a',64))",
+        "INSERT INTO pg_temp.assessment_layout_observations(assessment_layout_observation_id,"
+        "assessment_source_bundle_revision_id,artifact_id,artifact_revision_id,"
+        "artifact_member_path,artifact_schema_ref,artifact_media_type,artifact_sha256) "
+        "VALUES ('layout_1','sourcebundlerev_1',"
+        "'artifact_'||lpad('4002',32,'0'),'rev_'||lpad('4002',32,'0'),"
+        "'layout.json','synthetic-layout/1','application/json','sha256:'||repeat('a',64))",
+        "INSERT INTO pg_temp.artifacts(logical_artifact_id,job_id,artifact_type,approved) "
+        "SELECT 'artifact_'||lpad(i::text,32,'0'),'job_'||lpad(i::text,32,'0'),"
+        "'synthetic-population',true FROM (SELECT generate_series(1,545) i UNION ALL "
+        "SELECT generate_series(1001,1545) UNION ALL SELECT generate_series(2001,2545) "
+        "UNION ALL SELECT generate_series(3001,3545) "
+        "UNION ALL SELECT generate_series(4001,4007)) n",
+        "INSERT INTO pg_temp.artifact_revisions(revision_id,logical_artifact_id,job_id,approved,"
+        "content_hash,manifest_hash,content_bytes,nas_path,manifest,result) "
+        "SELECT 'rev_'||right(logical_artifact_id,32),logical_artifact_id,job_id,true,"
+        "'sha256:'||repeat('a',64),'sha256:'||repeat('a',64),1,"
+        "'/synthetic/not-materialized',jsonb_build_object('files','[]'::jsonb),"
+        "jsonb_build_object('synthetic',true) FROM pg_temp.artifacts",
+        "INSERT INTO pg_temp.jobs(job_id,status,task_type,logical_artifact_id,revision_id) "
+        "SELECT job_id,'SUCCEEDED',artifact_type,logical_artifact_id,"
+        "'rev_'||right(logical_artifact_id,32) FROM pg_temp.artifacts",
+    )
+    for statement in statements:
+        session.execute(
+            text(statement),
+            {"snapshot": snapshot, "graph": occurrence_scope().graph_snapshot.graph_id},
+        )
+    for table in (*TABLES, *tables):
+        session.execute(text(f"ANALYZE pg_temp.{table}"))
+    return session
+
+
+def observe_population(session, *, maximum=1024, artifact_identities=()):
+    from eom_catalog_service.inference_transfer_population_read_set import (
+        observe_inference_transfer_population,
+    )
+
+    return observe_inference_transfer_population(
+        session,
+        occurrence_scope(maximum=maximum),
+        artifact_identities=artifact_identities,
+        layout_observation_ids=("layout_1",),
+    )
+
+
+@pytest.mark.parametrize(
+    "statement",
+    (
+        "UPDATE pg_temp.items SET lifecycle_state='RETIRED' "
+        "WHERE item_id='item_'||lpad('545',32,'0')",
+        "UPDATE pg_temp.item_revisions SET "
+        "metadata_json=metadata_json||jsonb_build_object('item_number',999) "
+        "WHERE item_revision_id='itemrev_'||lpad('545',32,'0')",
+        "UPDATE pg_temp.item_components SET required=false "
+        "WHERE item_revision_id='itemrev_'||lpad('545',32,'0')",
+        "UPDATE pg_temp.knowledge_snapshot_analyses SET source_sha256='sha256:'||repeat('b',64) "
+        "WHERE analysis_run_id='analysisrun_'||lpad('545',32,'0')",
+        "UPDATE pg_temp.knowledge_node_source_pointers SET member_path='changed-unranked.png' "
+        "WHERE pointer_id=545",
+        "UPDATE pg_temp.knowledge_nodes SET label='changed unranked node' "
+        "WHERE node_id='knode_545'",
+        "UPDATE pg_temp.knowledge_analysis_runs SET canonical_request=canonical_request||"
+        "jsonb_build_object('fresh_source_input',true) "
+        "WHERE analysis_run_id='analysisrun_'||lpad('545',32,'0')",
+        "UPDATE pg_temp.legacy_item_extraction_acceptances SET coverage_state='INCOMPLETE' "
+        "WHERE acceptance_id='itemacceptance_'||lpad('545',32,'0')",
+        "UPDATE pg_temp.legacy_item_extraction_decisions SET decision='REJECT' "
+        "WHERE decision_id=545",
+        "UPDATE pg_temp.legacy_item_extraction_batch_work_units SET receipt_artifact_sha256="
+        "'sha256:'||repeat('b',64) WHERE work_unit_id='legacyworkunit_'||lpad('545',32,'0')",
+        "UPDATE pg_temp.legacy_item_extraction_batches SET manifest_artifact_sha256="
+        "'sha256:'||repeat('b',64) WHERE extraction_batch_id='legacybatch_1'",
+        "UPDATE pg_temp.assessment_source_bundle_revisions SET state='RETIRED' "
+        "WHERE assessment_source_bundle_revision_id='sourcebundlerev_1'",
+        "UPDATE pg_temp.assessment_layout_observations SET artifact_sha256="
+        "'sha256:'||repeat('b',64) WHERE assessment_layout_observation_id='layout_1'",
+        "UPDATE pg_temp.artifacts SET approved=false "
+        "WHERE logical_artifact_id='artifact_'||lpad('545',32,'0')",
+        "UPDATE pg_temp.artifact_revisions SET result=jsonb_build_object('changed',true) "
+        "WHERE revision_id='rev_'||lpad('545',32,'0')",
+        "UPDATE pg_temp.jobs SET status='FAILED' WHERE job_id='job_'||lpad('545',32,'0')",
+        "DELETE FROM pg_temp.assessment_item_occurrence_references "
+        "WHERE analysis_run_id='analysisrun_'||lpad('545',32,'0')",
+    ),
+)
+def test_real_postgres_population_observation_covers_every_current_dependency_group(
+    population_observation_database, statement
+):
+    session = population_observation_database
+    initial = observe_population(session)
+    session.execute(text(statement))
+    assert observe_population(session) != initial
+
+
+def test_real_postgres_population_observation_reads_scalars_past_a_stale_orm_identity(
+    population_observation_database,
+):
+    from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
+
+    session = population_observation_database
+    identity = "analysisrun_" + "545".zfill(32)
+    retained = session.get(KnowledgeAnalysisRunRecord, identity)
+    assert retained.canonical_request.get("fresh_source_input") is None
+    initial = observe_population(session)
+    session.execute(
+        text(
+            "UPDATE pg_temp.knowledge_analysis_runs SET canonical_request=canonical_request||"
+            "jsonb_build_object('fresh_source_input',true) WHERE analysis_run_id=:identity"
+        ),
+        {"identity": identity},
+    )
+    assert retained.canonical_request.get("fresh_source_input") is None
+    assert observe_population(session) != initial
+    assert session.get(KnowledgeAnalysisRunRecord, identity) is retained
+
+
+def test_real_postgres_population_observation_reads_snapshot_past_a_stale_orm_identity(
+    population_observation_database,
+):
+    from eom_catalog_service.knowledge_graph_models import KnowledgeGraphSnapshotRecord
+
+    session = population_observation_database
+    identity = occurrence_scope().graph_snapshot.graph_snapshot_revision_id
+    retained = session.get(KnowledgeGraphSnapshotRecord, identity)
+    initial_graph_id = retained.graph_id
+    initial = observe_population(session)
+    session.execute(
+        text(
+            "UPDATE pg_temp.knowledge_graph_snapshots SET graph_id=:different "
+            "WHERE graph_snapshot_revision_id=:identity"
+        ),
+        {"different": "graph_" + "f" * 32, "identity": identity},
+    )
+    assert retained.graph_id == initial_graph_id
+    assert observe_population(session) != initial
+    assert session.get(KnowledgeGraphSnapshotRecord, identity) is retained
+
+
+def test_real_postgres_population_observation_detects_missing_to_accepted_report_and_withdrawal(
+    population_observation_database,
+):
+    session = population_observation_database
+    missing = observe_population(session)
+    session.execute(
+        text(
+            "INSERT INTO pg_temp.knowledge_analysis_runs(analysis_run_id,state,"
+            "predecessor_analysis_run_id,canonical_request,accepted_result_artifact_id,"
+            "accepted_result_artifact_revision_id,proposal_artifact_id,"
+            "proposal_artifact_revision_id) "
+            "VALUES ('analysisrun_'||lpad('9999',32,'0'),'ACCEPTED',"
+            "'analysisrun_'||lpad('545',32,'0'),"
+            '\'{"schema_version":"knowledge-analysis-request/10.0"}\'::jsonb,'
+            "'artifact_'||lpad('4004',32,'0'),'rev_'||lpad('4004',32,'0'),"
+            "'artifact_'||lpad('4005',32,'0'),'rev_'||lpad('4005',32,'0'))"
+        )
+    )
+    accepted = observe_population(session)
+    assert accepted != missing
+    session.execute(
+        text(
+            "UPDATE pg_temp.knowledge_analysis_runs SET state='REJECTED' "
+            "WHERE analysis_run_id='analysisrun_'||lpad('9999',32,'0')"
+        )
+    )
+    assert observe_population(session) != accepted
+
+
+def test_real_postgres_population_observation_closes_noncanonical_graph_and_prefetched_artifacts(
+    population_observation_database,
+):
+    session = population_observation_database
+    session.execute(
+        text(
+            "UPDATE pg_temp.knowledge_node_source_pointers SET "
+            "source_artifact_id='artifact_'||lpad('4006',32,'0'),"
+            "artifact_revision_id='rev_'||lpad('4006',32,'0'),member_path='pages/pinned.png' "
+            "WHERE pointer_id=545"
+        )
+    )
+    # A page PNG can be an admitted Graph pointer distinct from the Item JSON.
+    # Page source/PDF provenance can instead arrive in the root's exact prefetch set.
+    identities = (("artifact_" + "4007".zfill(32), "rev_" + "4007".zfill(32)),)
+    initial = observe_population(session, artifact_identities=identities)
+    session.execute(
+        text(
+            "UPDATE pg_temp.artifacts SET approved=false "
+            "WHERE logical_artifact_id='artifact_'||lpad('4006',32,'0')"
+        )
+    )
+    graph_withdrawn = observe_population(session, artifact_identities=identities)
+    assert graph_withdrawn != initial
+    session.execute(
+        text("UPDATE pg_temp.jobs SET status='FAILED' WHERE job_id='job_'||lpad('4007',32,'0')")
+    )
+    assert observe_population(session, artifact_identities=identities) != graph_withdrawn
+
+
+def test_real_postgres_population_observation_closes_other_media_compatibility_component(
+    population_observation_database,
+):
+    from eom_catalog_contracts import LEGACY_ITEM_MEDIA_COMPATIBILITY_SCHEMA_REF
+
+    session = population_observation_database
+    session.execute(
+        text(
+            "INSERT INTO pg_temp.item_components(item_component_id,item_revision_id,component_type,"
+            "ordinal,schema_ref,media_type,artifact_id,artifact_revision_id,sha256,logical_name,"
+            "required,metadata_json) VALUES ('compatibility-fixture',"
+            "'itemrev_'||lpad('545',32,'0'),'OTHER',0,:schema,'application/json',"
+            "'artifact_'||lpad('4003',32,'0'),'rev_'||lpad('4003',32,'0'),"
+            "'sha256:'||repeat('a',64),'compatibility.json',true,'{}'::jsonb)"
+        ),
+        {"schema": LEGACY_ITEM_MEDIA_COMPATIBILITY_SCHEMA_REF},
+    )
+    initial = observe_population(session)
+    session.execute(
+        text(
+            "UPDATE pg_temp.artifact_revisions SET manifest="
+            "jsonb_build_object('changed_member',true) "
+            "WHERE revision_id='rev_'||lpad('4003',32,'0')"
+        )
+    )
+    assert observe_population(session) != initial
+
+
+def test_real_postgres_population_observation_order_and_72800_pointer_scale(
+    population_observation_database, record_property
+):
+    session = population_observation_database
+    initial = observe_population(session)
+    session.execute(
+        text(
+            "INSERT INTO pg_temp.knowledge_node_source_pointers("
+            "pointer_id,graph_snapshot_revision_id,node_id,analysis_run_id,source_revision_id,"
+            "source_class,source_artifact_id,artifact_revision_id,source_sha256,member_path,"
+            "anchor_id,excerpt_sha256) SELECT "
+            "545+g.i,p.graph_snapshot_revision_id,p.node_id,p.analysis_run_id,p.source_revision_id,"
+            "p.source_class,p.source_artifact_id,p.artifact_revision_id,p.source_sha256,"
+            "p.member_path,'duplicate_'||g.i,p.excerpt_sha256 "
+            "FROM generate_series(1,72800) g(i) JOIN pg_temp.knowledge_node_source_pointers p "
+            "ON p.pointer_id=(g.i-1)%545+1"
+        )
+    )
+    session.execute(text("ANALYZE pg_temp.knowledge_node_source_pointers"))
+    statements = []
+    execute = session.execute
+
+    def observed(statement, *args, **kwargs):
+        statements.append(statement)
+        return execute(statement, *args, **kwargs)
+
+    session.execute = observed
+    started = perf_counter()
+    try:
+        first = observe_population(session)
+        first_query_count = len(statements)
+        second = observe_population(session)
+    finally:
+        session.execute = execute
+    elapsed = perf_counter() - started
+    assert first == second and first != initial
+    assert len(statements) == 2 * first_query_count
+    assert first_query_count <= 20  # fixed dependency batches, not545 per-source reads
+    groups = {group.group: group for group in first.groups}
+    assert groups["membership"].row_count == 545
+    assert groups["graph_pointers"].row_count == 73345
+    # A fresh executor order cannot change an ordered primitive observation.
+    session.execute(text("SET LOCAL enable_seqscan=off"))
+    assert observe_population(session) == first
+    record_property("population_observation_545_sources_73345_pointers_seconds", elapsed)
+    record_property("population_observation_queries_per_capture", first_query_count)
+    assert elapsed < 20  # bounded fixture only, not a production latency promise

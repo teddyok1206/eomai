@@ -326,6 +326,7 @@ def resolve_solution_evidence_by_base_run(
             == "knowledge-analysis-request/10.0",
         )
         .order_by(KnowledgeAnalysisRunRecord.predecessor_analysis_run_id)
+        .execution_options(populate_existing=True)
     ).all()
     resolved: dict[str, ResolvedSolutionEvidence] = {}
     for row in rows:

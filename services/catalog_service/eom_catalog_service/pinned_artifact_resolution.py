@@ -478,6 +478,11 @@ class PinnedArtifactReadContext:
         ):
             raise PinnedArtifactResolutionError("pinned Artifact read transaction is invalid")
 
+    def provenance_identities(self) -> tuple[tuple[str, str], ...]:
+        """Expose bounded exact identities, never decoded metadata or read authority."""
+        self.require_session(self._session)
+        return tuple(sorted(self._metadata))
+
     def prefetch(self, identities: tuple[tuple[str, str], ...]) -> None:
         self.require_session(self._session)
         selected = tuple(sorted(set(identities).difference(self._metadata)))

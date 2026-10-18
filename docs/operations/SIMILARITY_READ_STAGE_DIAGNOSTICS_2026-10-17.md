@@ -334,3 +334,33 @@ strict deterministic projections are rebuilt four times. A correction must
 separate first full materialization from fresh full current-input validation,
 without skipping late membership/report/source/permission changes or relaxing
 the original public validators. No such correction is yet installed here.
+
+At the next due30-minute count observation10:30:28, bindings advanced913→921,
+index revisions235→237, still6 logical indexes. Observed latest unique heads
+were313/545,323/545,285/545; the bounded last-five-revision list is not an audit
+of all six heads. Original INDEX had one RUNNING and one REQUESTED work among
+the recent rows, with completed history preserved; no failure census is claimed.
+Normal INDEX and QUERY remained active and API LIVE/READY. Next routine count
+observation is no earlier11:00:28.376 UTC.
+
+Because only8 view bindings advanced during this30-minute interval, a separate
+single60-second20Hz nonblocking stack-only sample of the exact current private
+INDEX owner is also authorized as the same bounded diagnostic. Use the existing
+verified tool; keep no locals/arguments/model/child capture, configuration change
+or additional count query. Its output measures an active computation, not a
+reason to skip authority checks or raise memory limits. Shared API7c19 and the
+private df408fef INDEX remain different installed code identities.
+
+The INDEX sample completed normally:639 weighted samples,389 nonblocking misses;
+raw `/tmp/eom-catalog-stack-profile.VkRwq67D/index-df40-20261018T1032.raw`, SHA-256
+`08bcd635322eb4cdf940e1aeb5896c6cbab8162599fa07004811f104a8af24a0`.
+Of382 identifiable main-thread samples,351 were inside post-native completion
+validation,274 in registration observation and191 in registered-reference
+verification. These inclusive counts overlap. No sampled main stack showed
+native launch waiting or Item/profile projection.230 partial/other weights and
+the sampling misses limit inference; this is not a wall-time decomposition or
+proof of a model/memory fault. The source owner still parses cumulative original
+index manifests in `verify_registered_references`; the C1 operator-only read-set
+does not change that service path. Examine the existing canonical registration
+and origin-membership proof before a separate bounded optimization; do not skip
+its integrity checks or claim a shared API rollout speeds the private INDEX.

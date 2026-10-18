@@ -25,13 +25,19 @@ def session_case():
     roots = []
     readers = []
     hooks = []
+    read_sets = []
+    population_read_set = object()
     root = SimpleNamespace(is_active=True)
     session = SimpleNamespace(get_transaction=lambda: root, in_nested_transaction=lambda: False)
 
-    def prepare(actual_session, caller, actual_request, *, artifact_reader=None):
+    def prepare(
+        actual_session, caller, actual_request, *, artifact_reader=None, population_read_set=None
+    ):
         if artifact_reader is not None:
             artifact_reader.require_session(actual_session)
             readers.append(artifact_reader)
+        if population_read_set is not None:
+            read_sets.append(population_read_set)
         assert caller == CALLER and actual_request == request
         roots.append(actual_session)
         calls.append("prepare")
@@ -39,16 +45,27 @@ def session_case():
             hooks.pop(0)()
         return sources.prepared
 
-    def read(actual_session, caller, actual_request, prepared, *, artifact_reader=None):
+    def read(
+        actual_session,
+        caller,
+        actual_request,
+        prepared,
+        *,
+        artifact_reader=None,
+        population_read_set=None,
+    ):
         if artifact_reader is not None:
             artifact_reader.require_session(actual_session)
             readers.append(artifact_reader)
+        if population_read_set is not None:
+            read_sets.append(population_read_set)
         assert caller == CALLER and actual_request == request and prepared == sources.prepared
         roots.append(actual_session)
         calls.append("read")
         return sources.reads
 
     catalog = SimpleNamespace(
+        create_similarity_population_read_set_in_session=Mock(return_value=population_read_set),
         prepare_similarity_context_in_session=prepare,
         read_similarity_views_in_session=read,
         prepare_similarity_context=Mock(side_effect=AssertionError("new root")),
@@ -74,6 +91,8 @@ def session_case():
         calls=calls,
         roots=roots,
         readers=readers,
+        read_sets=read_sets,
+        population_read_set=population_read_set,
         hooks=hooks,
         session=session,
         query=query,
@@ -100,6 +119,10 @@ def test_common_source_ports_forward_the_same_root_local_reader_to_every_fresh_p
     result = value.reader.compose_in_session(value.session, CALLER, value.request)
     assert result == value.expected
     assert value.readers == [reader, reader, reader]
+    assert value.read_sets == [value.population_read_set] * 3
+    value.catalog.create_similarity_population_read_set_in_session.assert_called_once_with(
+        value.session, CALLER, value.request, artifact_reader=reader
+    )
     assert value.calls == ["prepare", "query", "read", "prepare"]
 
 

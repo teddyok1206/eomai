@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any, cast
 
 import pytest
@@ -9,6 +10,7 @@ from eom_catalog_contracts import AssessmentLayoutObservation
 from eom_catalog_service import knowledge_analysis_sources as sources
 from eom_catalog_service.legacy_assessment_models import (
     AssessmentLayoutObservationRecord,
+    AssessmentSourceBundleRevisionRecord,
     LegacyItemExtractionAcceptanceRecord,
 )
 from eom_catalog_service.legacy_item_extraction_batch_models import (
@@ -82,6 +84,7 @@ def closure(monkeypatch):
             LegacyItemExtractionAcceptanceRecord,
             LegacyItemExtractionBatchRecord,
             AssessmentLayoutObservationRecord,
+            AssessmentSourceBundleRevisionRecord,
         }:
             queries.append(statement)
             return (fake.records[entity],)
@@ -130,13 +133,17 @@ def resolve(case):
 
 
 @pytest.mark.parametrize("count", [1, 520])
-def test_exact_extraction_closure_fixes_missing_metadata_with_four_set_queries(closure, count):
+def test_exact_extraction_closure_fixes_missing_metadata_with_five_fresh_set_queries(
+    closure, count
+):
     _session, reader, _state, queries = closure
     with pytest.raises(sources.KnowledgeAnalysisSourceError):
         resolve(closure)
     queries.clear()
     prepare(closure, count)
-    assert len(queries) == 4
+    assert len(queries) == 5
+    assert queries[2].column_descriptions[0]["entity"] is AssessmentSourceBundleRevisionRecord
+    assert queries[2].get_execution_options()["populate_existing"]
     assert len(reader.batches) == 3
     assert "ACCEPTED" in queries[1].compile().params.values()
     assert all(batch == tuple(sorted(set(batch))) for batch in reader.batches)
@@ -148,6 +155,26 @@ def test_preparation_is_not_source_approval_or_a_current_decision_cache(closure)
     closure[2]["decision"].decision = "REJECT"
     with pytest.raises(sources.KnowledgeAnalysisSourceError):
         resolve(closure)
+
+
+def test_exact_bundle_batch_refresh_prevents_first_materialization_from_held_stale_bundle(closure):
+    session, _reader, _state, queries = closure
+    current = session.records[AssessmentSourceBundleRevisionRecord]
+    held = deepcopy(current)
+    held.state = "WITHDRAWN"
+    session.records[AssessmentSourceBundleRevisionRecord] = held
+    previous = session.scalars
+
+    def fresh(statement):
+        if statement.column_descriptions[0]["entity"] is AssessmentSourceBundleRevisionRecord:
+            assert statement.get_execution_options()["populate_existing"]
+            session.records[AssessmentSourceBundleRevisionRecord] = current
+        return previous(statement)
+
+    session.scalars = fresh
+    prepare(closure)
+    assert len(queries) == 5
+    assert resolve(closure).page_image_count >= 1
 
 
 def test_wrong_root_fails_before_any_metadata_or_bytes(closure):

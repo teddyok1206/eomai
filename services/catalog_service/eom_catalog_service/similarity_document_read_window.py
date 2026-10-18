@@ -9,6 +9,9 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
     from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryActor
+    from eom_catalog_service.inference_transfer_population_read_set import (
+        InferenceTransferPopulationReadSet,
+    )
     from eom_catalog_service.inference_transfer_snapshot_catalog_adapter import (
         InferenceTransferSessionCapture,
     )
@@ -25,3 +28,4 @@ class SimilarityDocumentReadWindow:
     reader: PinnedArtifactReadContext
     capture: InferenceTransferSessionCapture
     source_revision_ids: tuple[str, ...] = ()
+    population_read_set: InferenceTransferPopulationReadSet | None = None

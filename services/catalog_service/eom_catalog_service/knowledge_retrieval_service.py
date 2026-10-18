@@ -1646,7 +1646,7 @@ class KnowledgeRetrievalApplicationService:
             detail = detail.where(node.answer_bearing.is_(False))
         if occurrence_scoped:
             detail = detail.where(pointer.source_class == "PAST_EXAM")
-        rows = tuple(session.execute(detail))
+        rows = tuple(session.execute(detail.execution_options(populate_existing=True)))
         if len(rows) > maximum_pointer_rows:
             raise KnowledgeRetrievalServiceError(
                 "KNOWLEDGE_RETRIEVAL_CANDIDATE_POOL_BUDGET_EXCEEDED",
@@ -1714,7 +1714,9 @@ class KnowledgeRetrievalApplicationService:
     def _snapshot_pointer(
         self, session: Session, graph_snapshot_revision_id: str
     ) -> KnowledgeGraphSnapshotPointer:
-        snapshot = session.get(KnowledgeGraphSnapshotRecord, graph_snapshot_revision_id)
+        snapshot = session.get(
+            KnowledgeGraphSnapshotRecord, graph_snapshot_revision_id, populate_existing=True
+        )
         if snapshot is None or snapshot.state != "PUBLISHED":
             raise KnowledgeRetrievalServiceError(
                 "KNOWLEDGE_RETRIEVAL_SNAPSHOT_INVALID",
@@ -2226,17 +2228,19 @@ class KnowledgeRetrievalApplicationService:
             )
         associations = tuple(
             session.scalars(
-                select(KnowledgeSnapshotAnalysisRecord).where(
+                select(KnowledgeSnapshotAnalysisRecord)
+                .where(
                     KnowledgeSnapshotAnalysisRecord.graph_snapshot_revision_id == snapshot_id,
                     KnowledgeSnapshotAnalysisRecord.analysis_run_id.in_(analysis_run_ids),
                 )
+                .execution_options(populate_existing=True)
             )
         )
         runs = tuple(
             session.scalars(
-                select(KnowledgeAnalysisRunRecord).where(
-                    KnowledgeAnalysisRunRecord.analysis_run_id.in_(analysis_run_ids)
-                )
+                select(KnowledgeAnalysisRunRecord)
+                .where(KnowledgeAnalysisRunRecord.analysis_run_id.in_(analysis_run_ids))
+                .execution_options(populate_existing=True)
             )
         )
         associations_by_run_id: dict[str, KnowledgeSnapshotAnalysisRecord] = {}

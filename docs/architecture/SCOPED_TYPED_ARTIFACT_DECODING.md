@@ -484,3 +484,110 @@ its last write09:00:59 precedes the actual89-test PostgreSQL run09:02:27–50.
 Supported cleanup completed09:03:05 for that exact disposable database only.
 Original installed685, the first authenticated503 and current partial indexing
 remain the operating baseline until the correction is actually installed/read.
+
+## One materialization, four fresh source closures — design before implementation
+
+Installed7c19 still takes56.028s in completed-read composition. Its four full545-
+source captures spend47.689s in admission/profile/materialization stages. Actual
+stack sampling puts61 of62 decoder misses in the first preparation and none in
+the later full captures: repeated ORM population/projection, not demonstrated
+decoded-LRU churn, is the remaining structural problem.
+
+1. Responsibility: the existing Catalog snapshot source owner validates one
+   root-local population read set. The completed-query session adapter owns its
+   lifetime through preparation, numerical reads and final reauthorization.
+   This is current admission validation, not a persisted/cached authority grant.
+2. Canonical sources remain current relational source/lineage/publication rows
+   and exact immutable Artifacts. A retained capture is only derived output.
+3. Preserve logical IDs, pinned revisions, original raw member hashes and schema/
+   media identities. No latest selection, wire/schema/migration or model change.
+4. Every original source fence still performs current Identity, role/permission,
+   released policy and Graph checks. Fresh bounded primitive-column batches
+   observe full membership (including missing-report/unranked Items), Graph
+   associations/pointers/nodes, Item/revision/components, base and solution runs,
+   extraction acceptance/decision/unit/batch/bundle/layout and referenced Artifact
+   metadata. Missing rows, additions, duplicate/order changes, content/manifest/
+   result/JSON hash or lifecycle changes reject; current provenance is rechecked.
+5. Access is repeated equality over one exact immutable input closure. Perform
+   full source admission/projection/materialization once; later original capture
+   calls rebuild current observations and compare before returning derived output.
+6. Use a frozen typed observation containing bounded row counts/digests and exact
+   dependent IDs, plus the existing root-local window/capture. Keep no duplicate
+   canonical payload, ORM entity collection, global/session-info cache, arbitrary
+   table-hook registry, additional decoded LRU or numerical retention budget.
+7. Bounds follow the existing1024-source/4096-revision/pointer/lineage limits;
+   observation queries use exact keys and bounded cardinalities. Work remains
+   O(current source closure) per fence, but expensive immutable interpretation and
+   profile/Item materialization become O(N) once rather than four times. Retained
+   observations are O(identity/count/digest metadata), not canonical JSON copies.
+8. Bind to the actual Session, active root transaction, owning thread, caller-
+   resolved scope, recipe and exact full/anchor selection. Reject nested/stale/
+   different ownership and pending mutations. Capture the initial closure before
+   materialization and require an identical fresh closure afterward, so changed
+   metadata cannot be attached to output derived from an earlier value.
+9. Infrastructure source owners implement the observation boundary. Existing pure
+   public projections stay strict. The session adapter uses a supported Catalog
+   method; standalone prepare/read calls retain their original strict behavior.
+10. Fail closed on any change with the existing source/pointer error families;
+    never retry, refresh to latest, silently recapture, extend auth age or increase
+    timeouts/budgets. Four fresh source fences and nine scope authorizations remain.
+    Test all dependency groups, new accepted/missing-report rows, unranked changes,
+    root/thread/scope drift, before/after mutation and identical successful output.
+11. Merely reducing four captures to two predicts about35s with current measured
+    overhead. More decoder/projection memoization treats symptoms and can consume
+    scarce retention. One existing-owner read-set validation path removes the
+    redundant full reconstruction while preserving all current source fences.
+
+Required source evidence:545-source operation counts (one materialization, four
+fresh source fences), negative mutations for every dependency group and strict
+existing standalone/provenance/consumer regressions. No source benchmark proves
+the actual30s deadline; a coherent installed release and original completed READ
+remain the operating acceptance boundary.
+
+The source implementation uses fixed explicit PostgreSQL Core row projections.
+PostgreSQL's built-in SHA256 hashes each selected row (including raw JSON values)
+on the server; ordered32-byte digests are streamed in128-row batches. The derived
+closure fingerprints are not Artifact/content hashes. Only bounded unique
+dependency IDs are retained; no full request/result JSON or72k-pointer ORM pool
+is returned to Python. The original membership statement is shared by snapshot
+and observation owners, avoiding a hidden import cycle or duplicated eligibility.
+
+The first closure is recorded after the original lock/PREFETCH closure but before
+admission. The same existing five extraction-metadata batches are then refreshed
+once after BEGIN, through the same model reader, and must return the exact same
+layout IDs. This closes the held-ORM interval between prefetch and observation;
+it is not another full population pass. Later fences observe current scalar rows
+and revalidate provenance without rematerializing the capture. Four source fences
+therefore produce five closure observations plus five additional initial metadata
+queries, not nine observations. Pointer/node, association/run, Graph and solution
+join reads explicitly refresh their existing ORM values for first materialization.
+
+### Read-set candidate verification —2026-10-18 UTC
+
+Root final source gate: **28 suites /660 PASS /145.99s**, no skips/failures.
+Production and test file hashes were unchanged from collection through completion.
+Strict mypy9 production modules, Ruff/check/format14 files and diff checks PASS.
+JUnit `/tmp/eom-c1-consumer-u2HajatK/c1-source-readset-root-20261018T1032.xml`, raw
+`05af3e9d9e4b5dfab0d16230e8bbddf48a7a3e998c255d0bf8eb78f782ea3a9b`.
+The agent's12-suite282 PASS overlaps and is not added to that count.
+
+The official disposable PostgreSQL gate separately passed112 tests/38.78s with
+no failures/skips. Two545-source/73,345-pointer primitive observations took
+3.4643751755s in total,16 queries each; this fixture is not a live API latency
+measurement. Its JUnit contains the measurements despite one harmless xunit2
+`record_property` warning. JUnit `/tmp/eom-c1-readset-db.HY1oe2Y4/TESTFINAL.xml`, raw
+`493b08b699307c8d7b5df32f36950b5d3e14af06ed2f9a93e65a46e627b3ab61`.
+The SQL observer was unchanged through this gate and final source verification;
+the later initial-metadata refresh uses the same existing tested query path.
+The temporary database/test roles were removed by guarded cleanup; production
+database pytest/migrations0. Initial106 PASS/6 fixture failures are preserved:
+five SQLAlchemy literal-colon binds and one missing explicit INSERT column list,
+not weakening or skipping the negative tests.
+
+The source tests exercise actual owner orchestration with545 distinct typed
+entries (synthetic source SQL/IAM), one pool admission/profile/materialization,
+four current source fences and nine scope authorizations, five closure observations,
+and rejection of partial/torn capture, stale ORM values, every dependency group,
+new accepted reports, unranked changes and different ownership/root/thread/recipe.
+No wire schema, DB migration, model/default, timeout or cache quota changed.
+**SOURCE_CANDIDATE / DISPOSABLE_DB_PASS; not installed/live C1 PASS.**

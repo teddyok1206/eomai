@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from eom_catalog_service.knowledge_analysis_sources import MAX_DOCUMENT_JSON_BYTES
 from eom_catalog_service.legacy_assessment_models import (
     AssessmentLayoutObservationRecord,
+    AssessmentSourceBundleRevisionRecord,
     LegacyItemExtractionAcceptanceRecord,
 )
 from eom_catalog_service.legacy_item_extraction_batch_models import (
@@ -29,7 +30,7 @@ def prefetch_past_exam_artifact_closure(
     session: Session,
     revisions: tuple[ItemRevisionRecord, ...],
     reader: PinnedArtifactReadContext,
-) -> None:
+) -> tuple[str, ...]:
     """Prepare exact hints before the existing resolver checks each source again.
 
     Current source/IAM authorization belongs to the caller, not this adapter.
@@ -48,7 +49,7 @@ def prefetch_past_exam_artifact_closure(
         )
     )
     if not acceptance_ids:
-        return
+        return ()
     maximum = reader.MAX_REVISIONS
     if len(revisions) > 1024 or len(acceptance_ids) > 1024:
         raise PinnedArtifactResolutionError("past-exam metadata preparation budget exceeded")
@@ -68,11 +69,25 @@ def prefetch_past_exam_artifact_closure(
             )
             .order_by(LegacyItemExtractionBatchWorkUnitRecord.work_unit_id)
             .limit(maximum + 1)
+            .execution_options(populate_existing=True)
         )
     )
     if len(units) > maximum:
         raise PinnedArtifactResolutionError("past-exam metadata preparation budget exceeded")
     batch_ids = tuple(sorted({unit.extraction_batch_id for unit in units}))
+    # Populate the exact bundle set before the resolver's identity-map lookups;
+    # a held old row must not be materialized against a fresh read-set digest.
+    tuple(
+        session.scalars(
+            select(AssessmentSourceBundleRevisionRecord)
+            .where(
+                AssessmentSourceBundleRevisionRecord.assessment_source_bundle_revision_id.in_(
+                    tuple(sorted({unit.assessment_source_bundle_revision_id for unit in units}))
+                )
+            )
+            .execution_options(populate_existing=True)
+        )
+    )
     batches = tuple(
         session.scalars(
             select(LegacyItemExtractionBatchRecord)
@@ -164,3 +179,4 @@ def prefetch_past_exam_artifact_closure(
             for pointer in (page.page.source, page.page.image):
                 page_hints.add((pointer.artifact_id, pointer.artifact_revision_id))
     reader.prefetch(tuple(sorted(page_hints)))
+    return tuple(sorted(layout_ids))

@@ -40,7 +40,7 @@ from eom_orchestrator.control_artifact_resolution import (
 )
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_protocol.artifact_members import ArtifactMemberPointer
-from sqlalchemy import Engine, Select, or_, select, text
+from sqlalchemy import Engine, or_, select, text
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.artifacts import CatalogArtifactReader, CatalogModelArtifactReader
@@ -50,6 +50,12 @@ from eom_catalog_service.inference_transfer_catalog_adapter import (
     InferenceTransferCorpusReadCommand,
 )
 from eom_catalog_service.inference_transfer_item_projection import project_staged_item_entry
+from eom_catalog_service.inference_transfer_population_read_set import (
+    InferenceTransferPopulationReadSet,
+)
+from eom_catalog_service.inference_transfer_population_read_set import (
+    population_membership_statement as population_membership_statement,
+)
 from eom_catalog_service.inference_transfer_read_timing import (
     InferenceTransferReadStage,
     observe_read_stage,
@@ -70,12 +76,8 @@ from eom_catalog_service.item_content_contract import (
     ITEM_CONTENT_SCHEMAS,
     read_item_content,
 )
-from eom_catalog_service.knowledge_graph_models import (
-    KnowledgeSnapshotAnalysisRecord,
-)
 from eom_catalog_service.knowledge_graph_projection import knowledge_node_terms
 from eom_catalog_service.knowledge_retrieval_service import (
-    KnowledgeRetrievalApplicationService,
     KnowledgeRetrievalServiceError,
     ReadOnlyCandidatePoolScope,
     ReadOnlyKnowledgeCandidatePool,
@@ -96,30 +98,6 @@ from eom_catalog_service.settings import CatalogSettings
 
 _MAXIMUM_ITEM_MEMBER_BYTES = 16 * 1024**2
 _MAXIMUM_ARTIFACT_BATCH_BYTES = 128 * 1024**2
-
-
-def population_membership_statement(
-    scope: ReadOnlyCandidatePoolScope | LocalIndexingSourceReadIntent,
-) -> Select[tuple[KnowledgeSnapshotAnalysisRecord]]:
-    """Bound metadata hints by official eligibility; this query grants no access."""
-    association = KnowledgeSnapshotAnalysisRecord
-    selection = (
-        KnowledgeRetrievalApplicationService.candidate_pool_analysis_statement(
-            scope, allow_answer_bearing=True
-        )
-        .cte("eligible_snapshot_analyses")
-        .prefix_with("MATERIALIZED", dialect="postgresql")
-    )
-    return (
-        select(association)
-        .join(selection, selection.c.analysis_run_id == association.analysis_run_id)
-        .where(
-            association.graph_snapshot_revision_id
-            == scope.graph_snapshot.graph_snapshot_revision_id,
-        )
-        .order_by(association.analysis_run_id)
-        .limit(scope.maximum_candidates + 1)
-    )
 
 
 def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -307,6 +285,7 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
         phase: InferenceTransferSessionCapturePhase = (
             InferenceTransferSessionCapturePhase.CAPTURE_POPULATION
         ),
+        population_read_set: InferenceTransferPopulationReadSet | None = None,
     ) -> InferenceTransferSessionCapture:
         """One current-operator owner operation in the caller's Catalog transaction.
 
@@ -334,6 +313,10 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
             raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH")
         if phase is InferenceTransferSessionCapturePhase.AUTHORIZE_SCOPE:
             return InferenceTransferSessionCapture(scope)
+        if population_read_set is not None:
+            reused = population_read_set.reuse(session, scope, recipe, artifact_reader)
+            if reused is not None:
+                return reused
         corpus, entries = self._capture_population(
             session,
             scope,
@@ -344,8 +327,12 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
                 scope,
                 artifact_reader=artifact_reader,
             ),
+            population_read_set=population_read_set,
         )
-        return InferenceTransferSessionCapture(scope, corpus, entries)
+        capture = InferenceTransferSessionCapture(scope, corpus, entries)
+        if population_read_set is not None:
+            population_read_set.complete(session, scope, recipe, artifact_reader, capture)
+        return capture
 
     def capture_indexing_in_session(
         self,
@@ -389,6 +376,7 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
         *,
         artifact_reader: PinnedArtifactReadContext,
         read_pool: Callable[[], ReadOnlyKnowledgeCandidatePool],
+        population_read_set: InferenceTransferPopulationReadSet | None = None,
     ) -> tuple[AdmittedInferenceTransferCorpus, tuple[StagedExperimentEntry, ...]]:
         """Common lock/prefetch/physical-byte/accepted-report path after owner admission."""
         with observe_read_stage(InferenceTransferReadStage.LOCK_POPULATION):
@@ -475,9 +463,29 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
                 media_type=graph_member.media_type,
                 max_bytes=64 * 1024**2,
             )
-            prefetch_past_exam_artifact_closure(
+            layout_observation_ids = prefetch_past_exam_artifact_closure(
                 session, tuple(revision for _item, revision in source_rows), artifact_reader
             )
+        if population_read_set is not None:
+            if not isinstance(scope, ReadOnlyCandidatePoolScope):
+                raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH")
+            population_read_set.begin(
+                session,
+                scope,
+                recipe,
+                artifact_reader,
+                layout_observation_ids=layout_observation_ids,
+            )
+            # Initial prefetch precedes the baseline. Refresh the same bounded
+            # mutable lineage rows after it, so held ORM values cannot bless an
+            # already changed acceptance/batch/bundle/layout under a new digest.
+            if (
+                prefetch_past_exam_artifact_closure(
+                    session, tuple(revision for _item, revision in source_rows), artifact_reader
+                )
+                != layout_observation_ids
+            ):
+                raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH")
         with observe_read_stage(InferenceTransferReadStage.ADMIT_CANDIDATES):
             pool = read_pool()
         if pool.truncated:
