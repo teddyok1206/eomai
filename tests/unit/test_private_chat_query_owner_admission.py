@@ -181,7 +181,7 @@ def test_fresh_original_claim_rechecks_real_controls_and_actual_source_port(decl
         assert resolved.projection.origin == value.context.origin and TEXT not in repr(resolved)
         assert session.get_transaction() is root and not session.new and not session.dirty
         assert command.state == "PENDING" and command.attempts == 0
-    assert not workflow_definition_is_admitted("local-embedding-private-chat-query", "1.0.0")
+    assert workflow_definition_is_admitted("local-embedding-private-chat-query", "1.0.0")
 
 
 @pytest.mark.parametrize("fault", ("claim", "public_during_private_auth", "producer"))

@@ -68,7 +68,7 @@ def fingerprint(value, context=None, **overrides):
     )
 
 
-def test_schema_first_pinned_resource_and_no_private_definition_admission():
+def test_schema_first_pinned_resource_and_exact_private_static_admission():
     _name, filename, identity, digest = PRIVATE_CHAT_QUERY_SUBMISSION_SCHEMA_RESOURCE
     root = Path(__file__).resolve().parents[2]
     raw = (root / "schemas/workflow" / filename).read_bytes()
@@ -77,7 +77,7 @@ def test_schema_first_pinned_resource_and_no_private_definition_admission():
     schema = load_local_embedding_admission_schema("private-chat-submission")
     assert schema["$id"] == identity
     Draft202012Validator.check_schema(schema)
-    assert not workflow_definition_is_admitted("local-embedding-private-chat-query", "1.0.0")
+    assert workflow_definition_is_admitted("local-embedding-private-chat-query", "1.0.0")
 
 
 def test_exact_origin_and_existing_empty_pointer_value_are_small_immutable_metadata():

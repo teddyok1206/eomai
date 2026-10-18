@@ -90,4 +90,4 @@ def test_unique_turn_index_and_separate_step_check_do_not_admit_execution():
         if c.name == "ck_workflow_step_runs_local_embedding"
     )
     assert "embedding-private-chat-query-result@1.0" in steps
-    assert not workflow_definition_is_admitted("local-embedding-private-chat-query", "1.0.0")
+    assert workflow_definition_is_admitted("local-embedding-private-chat-query", "1.0.0")

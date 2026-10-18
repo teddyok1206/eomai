@@ -43,6 +43,7 @@ _ADMISSIONS = (
     # Historical column name is not a Codex role or native execution grant.
     WorkflowAdmission("local-embedding-index", "1.0.0", "local-embedding/1.0"),
     WorkflowAdmission("local-embedding-reference-query", "1.0.0", "reference-query/1.0"),
+    WorkflowAdmission("local-embedding-private-chat-query", "1.0.0", "private-chat-query/1.0"),
     WorkflowAdmission("legacy-item-extraction", "1.0.0", "workflow-role/1.14.0"),
     WorkflowAdmission(
         "legacy-item-editorial-compatibility",

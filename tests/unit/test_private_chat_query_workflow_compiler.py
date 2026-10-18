@@ -1,11 +1,16 @@
 """Private fixed-graph compiler support is not a source/claim/native runtime grant."""
 
 from copy import deepcopy
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
 from eom_identifiers import canonical_json_bytes, sha256_bytes
-from eom_workflow.compiler import WorkflowDefinitionError, compile_definition_data
+from eom_workflow.compiler import (
+    WorkflowDefinitionError,
+    compile_definition,
+    compile_definition_data,
+)
 from eom_workflow.definition_execution_protocol import (
     DefinitionExecutionProtocolError,
     definition_execution_protocol,
@@ -22,6 +27,19 @@ from eom_workflow_runner.repository import (
 from sqlalchemy.orm import Session
 
 from tests.unit.test_private_chat_query_workflow import definition_body
+
+
+def test_released_private_definition_asset_matches_the_closed_native_graph():
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "config/workflows/local-embedding-private-chat-query.v1.yaml"
+    )
+    compiled = compile_definition(path, set())
+    expected = compile_definition_data(definition_body(), "declared-closed-private-graph", set())
+    assert type(compiled.definition) is PrivateChatQueryWorkflowDefinition
+    assert compiled.canonical_bytes == expected.canonical_bytes
+    assert compiled.sha256 == expected.sha256
+    assert compiled.source_path == str(path)
 
 
 def test_private_definition_compiles_without_codex_roles_and_preserves_its_fixed_hash():
@@ -75,13 +93,13 @@ def test_private_protocol_calculation_revalidates_untrusted_model_copies():
         definition_execution_protocol(copied)
 
 
-def test_private_definition_import_remains_inactive_and_reports_its_own_protocol():
-    compiled = compile_definition_data(definition_body(), "synthetic-inactive-private", set())
+def test_exact_private_definition_import_is_active_but_not_runtime_authority():
+    compiled = compile_definition_data(definition_body(), "synthetic-exact-private", set())
     session = Mock(spec=Session)
     session.scalar.return_value = None
     record, created = import_workflow_definition(session, compiled)
-    assert created and record.active is False
+    assert created and record.active is True
     session.scalars.return_value = (record,)
     (status,) = workflow_definition_admission_statuses(session)
     assert status.role_protocol_version == PRIVATE_CHAT_QUERY_EXECUTION_PROTOCOL
-    assert not status.active and not status.admitted and not status.accepts_new_work
+    assert status.active and status.admitted and status.accepts_new_work

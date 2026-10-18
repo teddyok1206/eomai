@@ -284,6 +284,21 @@ def test_legacy_exact_claim_keeps_generation_without_calling_native_owner() -> N
     assert command.lease_generation == 1
 
 
+def test_role_header_cannot_carry_local_embedding_request_even_with_native_ports() -> None:
+    fixture, _workflow, command = candidate_fixture()
+    candidate = replace(peek(fixture), family=CommandExecutionFamily.ROLE)
+    assert candidate.native_request is not None
+    fixture.session.reset_mock()
+    with pytest.raises(WorkflowError) as failure:
+        claim(fixture, candidate)
+    assert failure.value.code is WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE
+    fixture.session.scalar.assert_not_called()
+    fixture.session.execute.assert_not_called()
+    fixture.owner.resolve_claim.assert_not_called()
+    fixture.owner.fence_mutation.assert_not_called()
+    assert command.lease_generation == 0 and command.lease_token is None
+
+
 @pytest.mark.parametrize("native", [False, True])
 def test_direct_routing_lookup_reuses_total_predicate_at_exact_pk(native: bool) -> None:
     session = Mock(spec=Session)

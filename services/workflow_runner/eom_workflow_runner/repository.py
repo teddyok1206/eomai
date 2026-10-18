@@ -1681,8 +1681,10 @@ def claim_command_candidate(
         if isinstance(candidate.native_request, SupportedReferenceQueryWorkflowRequest)
         else None
     )
-    if native and (
-        (candidate.family is CommandExecutionFamily.REFERENCE_QUERY) != (query_request is not None)
+    if (
+        (candidate.family is CommandExecutionFamily.ROLE) != (candidate.native_request is None)
+        or (candidate.family is CommandExecutionFamily.REFERENCE_QUERY)
+        != (query_request is not None)
         or (candidate.family is CommandExecutionFamily.PRIVATE_CHAT_QUERY)
         != (private_request is not None)
     ):

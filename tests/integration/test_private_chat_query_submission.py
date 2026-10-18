@@ -1,11 +1,12 @@
 """Guarded PostgreSQL atomic submission; current source/Chat/IAM are synthetic.
 
-The private admission predicate is explicitly synthetic for these staged tests;
-real static admission stays closed. No private step/native model/unit/activation.
+The exact static admission predicate is real; Chat/IAM/source and executor ports
+remain declared fixtures. No private step/native model/unit/activation.
 Original retained rows are not deleted, repaired or reinterpreted on retry.
 """
 
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from threading import Barrier, local
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -21,13 +22,12 @@ from eom_catalog_service.similarity_context_ports import SimilarityContextReadEr
 from eom_identifiers import canonical_json_bytes
 from eom_orchestrator.models import JobRecord
 from eom_workflow.admission import workflow_definition_is_admitted
-from eom_workflow.compiler import compile_definition_data
+from eom_workflow.compiler import compile_definition, compile_definition_data
 from eom_workflow.private_chat_query_submission_context import (
     build_private_chat_query_submission_context,
     private_chat_query_submission_key,
 )
 from eom_workflow_runner import native_start_command
-from eom_workflow_runner import private_chat_query_admission as admission
 from eom_workflow_runner import private_chat_query_preparation as preparation_module
 from eom_workflow_runner.models import (
     WorkflowCommandRecord,
@@ -40,10 +40,16 @@ from eom_workflow_runner.private_chat_query_owner_admission import (
     CatalogPrivateChatQueryOwnerAdmission,
 )
 from eom_workflow_runner.private_chat_query_submission import start_private_chat_query_in_session
-from eom_workflow_runner.repository import CommandType, create_workflow_instance
+from eom_workflow_runner.repository import (
+    CommandType,
+    admitted_workflow_definition,
+    create_workflow_instance,
+    import_workflow_definition,
+)
 from eom_workflow_runner.state_machine import WorkflowState, transition_workflow
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError, ProgrammingError
+from sqlalchemy.orm import Session
 
 from tests.integration.test_preset_model_validation_persistence import (
     guarded_engine as guarded_engine,
@@ -61,7 +67,7 @@ pytestmark = [
 
 
 @pytest.fixture
-def submission(owned, monkeypatch):
+def submission(owned):
     compiled = compile_definition_data(definition_body(), "synthetic-private-atomic-start", set())
     assert owned.request.workflow_definition_sha256 == compiled.sha256
     with owned.publisher.sessions.begin() as session:
@@ -81,19 +87,13 @@ def submission(owned, monkeypatch):
                 canonical_definition=compiled.as_dict(),
                 definition_hash=compiled.sha256,
                 active=True,
-                source_path="synthetic/declared-private-atomic-start-not-admitted",
+                source_path="synthetic/declared-private-atomic-start",
             )
             session.add(definition)
             session.flush()
         assert definition.active is True and definition.definition_hash == compiled.sha256
         definition_id = definition.definition_id
-    # Synthetic staged-admission seam only, never the real static admission map.
-    assert not workflow_definition_is_admitted(compiled.definition.definition_key, "1.0.0")
-    monkeypatch.setattr(
-        admission,
-        "workflow_definition_is_admitted",
-        lambda key, version: (key, version) == (compiled.definition.definition_key, "1.0.0"),
-    )
+    assert workflow_definition_is_admitted(compiled.definition.definition_key, "1.0.0")
     return SimpleNamespace(
         source=owned,
         publisher=owned.publisher,
@@ -469,6 +469,69 @@ def test_postgres_private_application_late_source_denial_preserves_original_with
     assert tuple(row.workflow_id for row in workflows) == (first.workflow_id,)
     assert workflows[0].state == "REQUESTED" and len(commands) == 1
     assert offers == [first.workflow_id] and value.executor.mock_calls == []
+
+
+@pytest.mark.parametrize("existing", ["absent", "inactive", "conflicting_hash"])
+def test_postgres_real_static_private_import_is_exact_and_does_not_repair_history(
+    guarded_engine, registered, existing
+):
+    """Real PostgreSQL in pg_temp only; no operator/source/native authority fixture."""
+    compiled = compile_definition(
+        Path(__file__).resolve().parents[2]
+        / "config/workflows/local-embedding-private-chat-query.v1.yaml",
+        set(),
+    )
+    assert workflow_definition_is_admitted(compiled.definition.definition_key, "1.0.0")
+    with guarded_engine.connect() as connection, connection.begin():
+        connection.execute(
+            text(
+                "CREATE TEMP TABLE workflow_definitions "
+                "(LIKE app.workflow_definitions INCLUDING ALL) ON COMMIT DROP"
+            )
+        )
+        translated = connection.execution_options(schema_translate_map={None: "pg_temp"})
+        with Session(translated, autoflush=False) as session:
+            if existing != "absent":
+                row = WorkflowDefinitionRecord(
+                    definition_id="wfdef_" + uuid4().hex,
+                    definition_key=compiled.definition.definition_key,
+                    definition_version=compiled.definition.definition_version,
+                    schema_version=compiled.definition.schema_version,
+                    canonical_definition=compiled.as_dict(),
+                    definition_hash=compiled.sha256
+                    if existing == "inactive"
+                    else "sha256:" + "f" * 64,
+                    active=existing != "inactive",
+                    source_path="declared-retained-private-snapshot",
+                )
+                session.add(row)
+                session.flush()
+            if existing == "conflicting_hash":
+                from eom_workflow_runner.errors import WorkflowError
+
+                with pytest.raises(WorkflowError, match="different hash"):
+                    import_workflow_definition(session, compiled)
+                assert (
+                    connection.scalar(
+                        text("SELECT definition_hash FROM pg_temp.workflow_definitions")
+                    )
+                    == "sha256:" + "f" * 64
+                )
+                return
+            record, created = import_workflow_definition(session, compiled)
+            assert created is (existing == "absent")
+            assert record.active is (existing == "absent")
+            assert connection.scalar(text("SELECT active FROM pg_temp.workflow_definitions")) is (
+                existing == "absent"
+            )
+            replay, replay_created = import_workflow_definition(session, compiled)
+            assert replay.definition_id == record.definition_id and replay_created is False
+            selected = admitted_workflow_definition(
+                session,
+                definition_key=compiled.definition.definition_key,
+                definition_version=compiled.definition.definition_version,
+            )
+            assert (selected is not None) is (existing == "absent")
 
 
 def test_postgres_private_application_failed_history_is_not_replaced_or_driven(submission):

@@ -76,7 +76,7 @@ def native_input(request, policy, bundle):
     )
 
 
-def test_closed_packaged_resource_and_not_yet_admitted_execution():
+def test_closed_packaged_resource_and_exact_static_admission():
     entry = PRIVATE_CHAT_QUERY_EXECUTION_SCHEMA_RESOURCE
     _, filename, schema_id, digest = entry
     root = Path(__file__).resolve().parents[2]
@@ -87,7 +87,7 @@ def test_closed_packaged_resource_and_not_yet_admitted_execution():
     assert schema["$id"] == schema_id
     assert set(schema["$defs"]) == {"request", "policy"}
     Draft202012Validator.check_schema(schema)
-    assert not workflow_definition_is_admitted("local-embedding-private-chat-query", "1.0.0")
+    assert workflow_definition_is_admitted("local-embedding-private-chat-query", "1.0.0")
 
 
 def test_selected_private_controls_prepare_same_exact_owned_question():

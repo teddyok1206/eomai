@@ -1,0 +1,16 @@
+schema_version: '1.3'
+definition_key: local-embedding-private-chat-query
+definition_version: 1.0.0
+start_step: encode_private_chat_query
+limits:
+  max_rework_cycles: 0
+  max_step_attempts: 1
+steps:
+  - key: encode_private_chat_query
+    type: application
+    operation: BUILD_PRIVATE_CHAT_QUERY_EMBEDDINGS
+    result_schema: embedding-private-chat-query-result@1.0
+    on_success: complete
+  - key: complete
+    type: terminal
+    terminal_status: COMPLETED

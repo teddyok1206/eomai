@@ -207,7 +207,7 @@ def test_resource_is_closed_hash_pinned_and_mirrored():
         assert set(value["properties"]) == set(value["required"])
 
 
-def test_fixed_definition_hash_and_no_implicit_compiler_or_execution_admission(completed):
+def test_fixed_definition_hash_and_exact_static_admission_not_runtime_authority(completed):
     definition = PrivateChatQueryWorkflowDefinition.model_validate(definition_body())
     assert PrivateChatQueryWorkflowDefinition.model_validate(definition) == definition
     request = type(completed.request).model_validate(
@@ -222,9 +222,7 @@ def test_fixed_definition_hash_and_no_implicit_compiler_or_execution_admission(c
     validate_private_chat_query_definition(definition, request)
     with pytest.raises(ValueError, match="DEFINITION_MISMATCH"):
         validate_private_chat_query_definition(definition, completed.request)
-    assert not workflow_definition_is_admitted(
-        definition.definition_key, definition.definition_version
-    )
+    assert workflow_definition_is_admitted(definition.definition_key, definition.definition_version)
     compiled = compile_definition_data(definition_body(), "synthetic-private-definition", set())
     assert compiled.definition == definition
     assert compiled.sha256 == request.workflow_definition_sha256

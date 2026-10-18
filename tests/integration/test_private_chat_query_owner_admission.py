@@ -78,7 +78,7 @@ def test_postgres_original_claim_is_read_only_and_resolves_registered_controls(d
         assert len(result.documents.sources) == 1 and TEXT not in repr(result)
         assert command.state == "PENDING" and command.lease_generation == 0
         assert session.get_transaction() is root and not session.new and not session.dirty
-    assert not workflow_definition_is_admitted("local-embedding-private-chat-query", "1.0.0")
+    assert workflow_definition_is_admitted("local-embedding-private-chat-query", "1.0.0")
 
 
 def test_postgres_private_shared_root_terminal_witness_does_not_survive_commit(declared):

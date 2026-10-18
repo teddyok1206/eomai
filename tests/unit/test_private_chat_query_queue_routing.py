@@ -83,9 +83,18 @@ def private_candidate():
     return fixture, result
 
 
-@pytest.mark.parametrize("family", list(CommandExecutionFamily))
-def test_private_candidate_cannot_borrow_role_index_or_reference_ports_before_admission(family):
+@pytest.mark.parametrize(
+    "family",
+    [
+        family
+        for family in CommandExecutionFamily
+        if family is not CommandExecutionFamily.PRIVATE_CHAT_QUERY
+    ],
+)
+def test_admitted_private_candidate_cannot_borrow_role_index_or_reference_ports(family):
     fixture, candidate = private_candidate()
+    fixture.session.execute.reset_mock()
+    private_owner = Mock()
     with pytest.raises(WorkflowError):
         claim_command_candidate(
             fixture.session,
@@ -96,10 +105,33 @@ def test_private_candidate_cannot_borrow_role_index_or_reference_ports_before_ad
             local_embedding_executor=Mock(),
             reference_query_owner=Mock(),
             reference_query_executor=Mock(),
-            private_chat_query_owner=Mock(),
+            private_chat_query_owner=private_owner,
             private_chat_query_executor=Mock(),
         )
     fixture.owner.resolve_claim.assert_not_called()
+    private_owner.resolve_claim.assert_not_called()
+    fixture.session.execute.assert_not_called()
+    fixture.session.add.assert_not_called()
+
+
+@pytest.mark.parametrize("owner,executor", [(None, None), (Mock(), None), (None, Mock())])
+def test_admitted_private_candidate_still_requires_both_private_ports(owner, executor):
+    fixture, candidate = private_candidate()
+    fixture.session.execute.reset_mock()
+    with pytest.raises(WorkflowError, match="actual private owner/executor"):
+        claim_command_candidate(
+            fixture.session,
+            candidate,
+            runner_id="synthetic",
+            lease_seconds=60,
+            local_embedding_owner=Mock(),
+            local_embedding_executor=Mock(),
+            reference_query_owner=Mock(),
+            reference_query_executor=Mock(),
+            private_chat_query_owner=owner,
+            private_chat_query_executor=executor,
+        )
+    fixture.session.execute.assert_not_called()
     fixture.session.add.assert_not_called()
 
 
