@@ -67,3 +67,54 @@ Catalog schema-loader entry passed125 focused readiness/benchmark/resource tests
 strict typing on the two new Python files, Ruff/format and an independent review.
 This evidence covers canonical input/result linkage and hostile metadata, not an
 actual retained lease, root ACK, CUDA INDEX launch or default-device activation.
+
+### Fixed worker entry and READY descriptor
+
+The external immutable INDEX entry uses only libraries already in the sealed CUDA
+prefix; it must not import the new READY model. Root validates its small canonical
+READY body against the new schema. Its closed positional argv is INDEX, original
+execution/Job/association SHA/input raw SHA, absolute monotonic expiry, configuration
+ID/revision/semantic SHA/raw SHA, and receipt raw SHA. No path/backend/authority flag
+or benchmark invocation is accepted.
+
+READY uses inherited FD3, not result FD1 or vector FD2. The future fixed unit selects
+`OpenFile=/run/eom-native-embedding-cuda-index/%i/ready.json:cuda-index-ready`;
+installed systemd255 documentation supports OpenFile since253 and its default is
+O_RDWR, not O_WRONLY. The leaf requires exactly that activation name/PID/count,
+root-owned single-link empty regular0640/nonappend FD3, and makes it close-on-exec.
+It writes/fsyncs canonical READY once and rechecks its epoch before device access.
+Root separately pins the fixed staged file/inode/unit/entry. This source choice has
+not been exercised as an actual privileged OpenFile launch.
+
+Top-level imports are stdlib only. SIGUSR1 is blocked before identity/lease/optional
+ML imports, and a fixed guarded `/dev/null` sink precedes even the existing public
+identity-library import. Import failure cannot write traceback into result/vector
+FDs. Any pending old ACK is denied.
+The wait uses zero-time sigtimedwait plus bounded short sleeps, at most30seconds and
+never beyond the original monotonic expiry. This fixed INDEX target permits at most
+180seconds, not the general resource-policy upper bound. Only UID0 with a positive kernel sender
+PID is accepted: the existing root effect uses systemctl kill, whose sender may be
+PID1, so an invented guardian-PID pin would be incorrect. Independent root observation,
+reserved ACK record and exact original unit/invocation remain mandatory. Device R/W
+open and model scope occur only after ACK. Worker cleanup closes its borrowed lease
+handle without unlock/store removal; root retirement remains a required next piece.
+
+The source checkpoint now also includes `embedding_native_cuda_index_entry.py` as an
+external-copyable leaf. It first preserves the root result/vector descriptors, then
+permanently silences diagnostics before any EOM import; sink failure closes1/2 and
+fails, including KeyboardInterrupt/SystemExit or import/preflight failure. Exact
+canonical bounded FD0 is hash-checked and rewound for the existing numerical API.
+Pinned receipt metadata supplies the expected device/runtime; retained lease and
+PATH-only resources precede READY. Only an accepted root ACK and fresh descriptor/
+receipt/resource epochs permit device R/W and the existing CUDA backend/numerical
+entry. Only that standard adapter may write JSON/vectors. Local return0 is not root
+retirement, Artifact publication or GPU-default activation.
+
+Source verification:278tests across the new77leaf cases and existing READY/native
+entry/backend/resource/benchmark regressions PASS9.40s; strict leaf typing, Ruff2,
+formatter2 and diff checks PASS. Tests include real unprivileged child-process
+zero-diagnostic failures, while FD3/root/device/model observations are synthetic.
+There is no actual OpenFile, root ACK, GPU model or installed execution proof.
+Fixed unit/entry admission, independent root READY/ACK/retirement and actual WAIT
+capacity handling remain required before a production owner may use this leaf;
+no new busy/retry/fallback protocol is implemented here.
