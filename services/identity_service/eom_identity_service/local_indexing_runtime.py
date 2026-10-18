@@ -15,6 +15,7 @@ import stat
 import subprocess
 import sys
 import zipfile
+from calendar import timegm
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -182,6 +183,7 @@ def _unit() -> dict[str, str]:
         (
             "/usr/bin/systemctl",
             "--no-pager",
+            "--timestamp=us",
             "show",
             _UNIT_NAME,
             *("--property=" + name for name in sorted(_PROPERTIES)),
@@ -238,10 +240,20 @@ def _self_unit() -> tuple[dict[str, str], int]:
         or _live(Path("/proc/self/cgroup"), 8192) != "0::" + current["ControlGroup"]
     ):
         raise _unavailable()
-    started = datetime.strptime(
-        current["ExecMainStartTimestamp"], "%a %Y-%m-%d %H:%M:%S UTC"
-    ).replace(tzinfo=UTC)
-    return current, int(started.timestamp()) * 1_000_000_000
+    raw_started = current["ExecMainStartTimestamp"]
+    # Whole-second display truncation rejects files legitimately selected earlier
+    # in the same second. Preserve the actual OS microseconds, not a future grace.
+    if (
+        re.fullmatch(
+            r"(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) [0-9]{4}-[0-9]{2}-[0-9]{2} "
+            r"[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6} UTC",
+            raw_started,
+        )
+        is None
+    ):
+        raise _unavailable()
+    started = datetime.strptime(raw_started, "%a %Y-%m-%d %H:%M:%S.%f UTC").replace(tzinfo=UTC)
+    return current, timegm(started.utctimetuple()) * 1_000_000_000 + started.microsecond * 1000
 
 
 def _wheel_members(

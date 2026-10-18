@@ -99,6 +99,22 @@ passed replay, savepoint rollback and both independent-process races but failed
 the test's guessed composite-index-name assertion; that was a test expectation
 defect, not evidence of lost association predicates or a registry mutation defect.
 
+## Scoped Artifact metadata refresh
+
+Two read contexts may prefetch the same Artifact in one caller Session. SQLAlchemy
+`populate_existing` then replaces the JSON manifest object even when its canonical
+value is unchanged. Object identity is not a revision or content identity. Before
+using its existing bounded metadata map, a context may recapture that replacement
+only when its complete original provenance and canonical manifest SHA still match
+the current advertised manifest SHA and current approved/SUCCEEDED lineage. Any
+changed header, member, content hash, size, path or lifecycle remains an error.
+The refreshed capture replaces only that context's entry: one manifest hash/map
+build per replacement, not per member. File/schema/media/raw-SHA checks and the
+late fresh scalar provenance fence remain unchanged. No cross-context/global cache,
+new authority, database schema or runtime protocol is introduced. Merely removing
+the identity guard or accepting dictionary equality would omit the immutable-hash
+and lineage proof; the existing strict resolver receives the verified new capture.
+
 ## Immutable first-origin ledger resolution
 
 2026-10-18 UTC; separate source-only INDEX throughput cohort. Existing released

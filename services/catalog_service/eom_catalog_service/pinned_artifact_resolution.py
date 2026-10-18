@@ -115,6 +115,8 @@ def _capture_metadata(
     logical: ArtifactRecord, revision: ArtifactRevisionRecord, job: JobRecord | None
 ) -> _CapturedArtifactMetadata:
     manifest = revision.manifest
+    if not isinstance(manifest, dict):
+        raise PinnedArtifactResolutionError("pinned Artifact manifest does not resolve")
     files = manifest.get("files")
     if not isinstance(files, list):
         raise PinnedArtifactResolutionError("pinned Artifact manifest does not resolve")
@@ -540,6 +542,60 @@ class PinnedArtifactReadContext:
             )
         self._metadata.update(captured)
 
+    def _current_metadata(self, identity: tuple[str, str]) -> _CapturedArtifactMetadata | None:
+        """Adopt an equal immutable JSON refresh, never a different revision or grant."""
+        captured = self._metadata.get(identity)
+        if captured is None:
+            return None
+        logical, revision, job = captured.logical, captured.revision, captured.job
+        original = captured.provenance
+        if (
+            not logical.approved
+            or not revision.approved
+            or job is None
+            or (
+                logical.logical_artifact_id,
+                logical.job_id,
+                logical.artifact_type,
+                revision.logical_artifact_id,
+                revision.revision_id,
+                revision.job_id,
+                revision.content_hash,
+                revision.manifest_hash,
+                revision.content_bytes,
+                revision.nas_path,
+                job.job_id,
+                job.logical_artifact_id,
+                job.revision_id,
+                job.task_type,
+                job.status,
+            )
+            != (
+                original.logical_artifact_id,
+                original.producer_job_id,
+                original.artifact_type,
+                original.logical_artifact_id,
+                original.revision_id,
+                original.producer_job_id,
+                original.content_hash,
+                original.manifest_hash,
+                original.content_bytes,
+                original.nas_path,
+                original.producer_job_id,
+                original.logical_artifact_id,
+                original.revision_id,
+                original.artifact_type,
+                "SUCCEEDED",
+            )
+        ):
+            raise PinnedArtifactResolutionError("pinned Artifact current provenance differs")
+        if revision.manifest is not captured.manifest:
+            refreshed = _capture_metadata(logical, revision, job)
+            if refreshed.provenance != original:
+                raise PinnedArtifactResolutionError("pinned Artifact manifest does not resolve")
+            self._metadata[identity] = captured = refreshed
+        return captured
+
     def revalidate_provenance(self) -> None:
         """Refresh only small current lineage/lifecycle values, not immutable bytes/JSON.
 
@@ -647,7 +703,7 @@ class PinnedArtifactReadContext:
     ) -> None:
         """Check one fixed owner member closure; this is not source authorization."""
         self.require_session(self._session)
-        captured = self._metadata.get((artifact_id, revision_id))
+        captured = self._current_metadata((artifact_id, revision_id))
         if (
             captured is None
             or (
@@ -672,7 +728,7 @@ class PinnedArtifactReadContext:
     ) -> ArtifactMemberPointer:
         """Resolve a descriptor pointer; callers must still read/verify its bytes."""
         self.require_session(self._session)
-        captured = self._metadata.get((artifact_id, revision_id))
+        captured = self._current_metadata((artifact_id, revision_id))
         descriptors = () if captured is None else captured.members.get(member_path, ())
         if (
             len(descriptors) != 1
@@ -706,7 +762,7 @@ class PinnedArtifactReadContext:
         expected_manifest_artifact_types: Collection[str] | None = None,
     ) -> PinnedArtifactMember:
         self.require_session(self._session)
-        captured = self._metadata.get((artifact_id, artifact_revision_id))
+        captured = self._current_metadata((artifact_id, artifact_revision_id))
         if captured is None:
             raise PinnedArtifactResolutionError("pinned Artifact metadata was not captured")
         key = artifact_id, artifact_revision_id, member_path, sha256, schema_ref, media_type
@@ -763,7 +819,7 @@ class PinnedArtifactReadContext:
         max_bytes: int,
     ) -> bytes:
         self.require_session(self._session)
-        captured = self._metadata.get((artifact_id, revision_id))
+        captured = self._current_metadata((artifact_id, revision_id))
         if captured is None:
             raise PinnedArtifactResolutionError("pinned Artifact metadata was not captured")
         primary = captured.manifest.get("primary_file")

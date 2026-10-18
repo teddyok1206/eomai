@@ -85,7 +85,7 @@ def installed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]
         "DropInPaths": "",
         "ControlGroup": "/system.slice/" + runtime._UNIT_NAME,
         "InvocationID": "a" * 32,
-        "ExecMainStartTimestamp": "Wed 2026-10-14 00:00:00 UTC",
+        "ExecMainStartTimestamp": "Wed 2026-10-14 00:00:00.000000 UTC",
     }
     boot = ["11111111-2222-3333-4444-555555555555"]
     fake_sys = SimpleNamespace(
@@ -316,7 +316,13 @@ def test_unit_observation_is_fixed_bounded_and_not_caller_supplied(
     monkeypatch.setattr(runtime.subprocess, "run", run)
     assert set(runtime._unit()) == runtime._PROPERTIES
     argv, kwargs = calls[0]
-    assert argv[0:4] == ("/usr/bin/systemctl", "--no-pager", "show", runtime._UNIT_NAME)
+    assert argv[0:5] == (
+        "/usr/bin/systemctl",
+        "--no-pager",
+        "--timestamp=us",
+        "show",
+        runtime._UNIT_NAME,
+    )
     assert kwargs["timeout"] == 2 and "PGPASSWORD" not in kwargs["env"]
     for raw in (
         output + b"\nUser=duplicate",
@@ -374,7 +380,7 @@ def test_actual_self_unit_decision_checks_process_and_unit_independently(
         "DropInPaths": "",
         "ControlGroup": "/system.slice/" + runtime._UNIT_NAME,
         "InvocationID": "a" * 32,
-        "ExecMainStartTimestamp": "Wed 2026-10-14 00:00:00 UTC",
+        "ExecMainStartTimestamp": "Wed 2026-10-14 00:00:00.000000 UTC",
     }
     changes = {
         "user": ("User", "root"),
@@ -404,3 +410,74 @@ def test_actual_self_unit_decision_checks_process_and_unit_independently(
     else:
         with pytest.raises(ValueError):
             runtime._self_unit()
+
+
+@pytest.fixture
+def precise_unit(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
+    """Actual parser/epoch comparison, explicit synthetic OS process metadata."""
+    monkeypatch.setattr(runtime.pwd, "getpwnam", lambda _name: SimpleNamespace(pw_uid=os.getuid()))
+    monkeypatch.setattr(
+        runtime,
+        "sys",
+        SimpleNamespace(flags=SimpleNamespace(isolated=True), dont_write_bytecode=True),
+    )
+    unit = {
+        "User": "eom-workflow-runner",
+        "ActiveState": "active",
+        "MainPID": str(os.getpid()),
+        "ExecMainPID": str(os.getpid()),
+        "FragmentPath": str(runtime._UNIT_PATH),
+        "DropInPaths": "",
+        "ControlGroup": "/system.slice/" + runtime._UNIT_NAME,
+        "InvocationID": "a" * 32,
+        "ExecMainStartTimestamp": "Wed 2026-10-14 00:00:00.996677 UTC",
+    }
+    monkeypatch.setattr(runtime, "_unit", lambda: dict(unit))
+    monkeypatch.setattr(runtime, "_live", lambda _path, _max: "0::" + unit["ControlGroup"])
+    return unit
+
+
+@pytest.mark.parametrize("after", (None, "mtime", "ctime"))
+def test_same_second_before_start_is_valid_and_post_start_write_still_rejected(
+    precise_unit, monkeypatch: pytest.MonkeyPatch, after: str | None
+) -> None:
+    observed, started = runtime._self_unit()
+    base = 1791936000 * 1_000_000_000
+    assert observed == precise_unit and started == base + 996_677_000
+    metadata = SimpleNamespace(
+        st_dev=1,
+        st_ino=2,
+        st_mode=stat.S_IFREG | 0o444,
+        st_uid=runtime._ROOT_UID,
+        st_gid=0,
+        st_nlink=1,
+        st_size=2,
+        st_mtime_ns=base + 134_310_796,
+        st_ctime_ns=base + 143_310_832,
+    )
+    if after is not None:
+        setattr(metadata, "st_" + after + "_ns", started + 1)
+    monkeypatch.setattr(Path, "lstat", lambda _self: metadata)
+    files = runtime._ProtectedFiles(started)
+    if after is None:
+        assert files.observe(Path("/opt/selected-before-start.json")) is metadata
+    else:
+        with pytest.raises(runtime.IndexingRuntimeAdmissionError):
+            files.observe(Path("/opt/selected-after-start.json"))
+
+
+@pytest.mark.parametrize(
+    "timestamp",
+    (
+        "Wed 2026-10-14 00:00:00 UTC",
+        "Wed 2026-10-14 00:00:00.9 UTC",
+        "Wed 2026-10-14 00:00:00.996677000 UTC",
+        "Wed 2026-10-14 00:00:00.996677 KST",
+    ),
+)
+def test_missing_or_noncanonical_start_precision_never_falls_back_to_seconds(
+    precise_unit, timestamp: str
+) -> None:
+    precise_unit["ExecMainStartTimestamp"] = timestamp
+    with pytest.raises(ValueError):
+        runtime._self_unit()

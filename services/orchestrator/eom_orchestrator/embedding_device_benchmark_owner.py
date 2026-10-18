@@ -239,10 +239,14 @@ class BenchmarkExecutionOwner:
             if job is None:
                 return None
             history = self.journal.read(session, request, job_id=job.job_id)
-            if history.job_state == JobState.VALIDATING_RESULT:
+            if history.job_state in {
+                JobState.VALIDATING_RESULT,
+                JobState.COMMITTING,
+                JobState.SUCCEEDED,
+            }:
                 receipts = self.journal.require_completed(session, request, job_id=job.job_id)
                 return BenchmarkLaunchSeries(
-                    job.job_id, request.request_sha256, receipts, 0, JobState.VALIDATING_RESULT
+                    job.job_id, request.request_sha256, receipts, 0, history.job_state
                 )
             if history.launches and history.launches[-1].receipt is None:
                 raise BenchmarkOwnerError("BENCHMARK_OWNER_ORIGINAL_EXECUTION_UNRESOLVED")

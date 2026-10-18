@@ -862,3 +862,28 @@ locks/writes lack privileges and even owner UPDATE/DELETE is rejected. Concurren
 owner mutation must fail, not be made possible to exercise a fictitious mutable
 state. All native callers and normal role workflows retain their compatibility
 tests. The owner successor still needs a genuine source/seed verification.
+
+## INDEX process-start precision — 2026-10-18
+
+The unchanged df→8f runtime capture exposed a pre-existing display-precision bug:
+normal control-file CAS and process start happened in the same second, but
+`ExecMainStartTimestamp` was rendered/parsing only whole seconds. A valid earlier
+file ctime was therefore greater than that truncated lower bound. Preserve that
+failed original startup; it allocated no work before runtime capture failed.
+
+The narrow source fix requests the supported `systemctl --timestamp=us` format,
+requires exact UTC/six-digit microseconds, and converts to integer nanoseconds
+without floating-point arithmetic. Local read-only observation confirmed that
+format is actually available. Missing precision fails closed; no sleep, future
+grace, backdating, implicit seconds fallback or file-epoch relaxation is added.
+Post-start mtime/ctime, changed PID/InvocationID, root/file permissions, hashes,
+closed namespaces, current Identity/source grants and replay fences are unchanged.
+No public schema, migration, worker, numeric policy or other runtime adapter changes.
+
+Source verification: 172 focused runtime/metadata/Identity/indexing-authority tests
+PASS in7.55s with no skipped/deselected cases, including same-second pre-start
+acceptance and mtime/ctime+1ns post-start rejection. Ruff/format2 files and strict
+mypy1 production module PASS. JUnit:
+`/tmp/eom-index-successor.oN0tO38d/index-start-precision-source.xml`.
+These synthetic OS seams and local files are not an installed startup acceptance;
+the actual operator retains the separate exact-config recovery/start evidence.
