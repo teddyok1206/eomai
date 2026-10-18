@@ -12,7 +12,11 @@ from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
-from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryCaller
+from eom_catalog_service.embedding_registry_ports import (
+    EmbeddingRegistryCaller,
+    EmbeddingRegistryLookup,
+    PrivateChatContextPreparation,
+)
 from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
 from eom_identifiers import canonical_json_bytes
 from eom_orchestrator.models import JobRecord
@@ -199,6 +203,57 @@ def test_postgres_private_preparation_constructs_first_request_and_reuses_origin
     )
     with value.publisher.sessions.begin() as session:
         replay = preparation_module.prepare_and_start_private_chat_query_in_session(
+            session, **arguments
+        )
+        assert (replay.workflow.workflow_id, replay.command.command_id) == ids
+        assert replay.workflow.initial_request == initial
+        assert not replay.workflow_created and not replay.command_created
+    assert value.executor.mock_calls == []
+
+
+def test_postgres_private_selection_captures_official_initial_index_then_replays_without_recapture(
+    submission, monkeypatch
+):
+    value = submission
+    config = value.owner.configuration.registry
+    context = value.request.context_request
+    selection = PrivateChatContextPreparation(
+        context.request_id,
+        context.query_basis,
+        EmbeddingRegistryLookup(
+            config.corpus_id,
+            config.namespace,
+            context.graph_snapshot,
+            context.policy_revision_id,
+            context.policy_sha256,
+            context.maximum_sources,
+        ),
+        value.source.policy.spaces,
+        context.top_k,
+    )
+    arguments = dict(
+        caller=EmbeddingRegistryCaller(value.context.origin.actor_id),
+        origin=value.context.origin,
+        preparation=selection,
+        owner=value.owner,
+        executor=value.executor,
+    )
+    with value.publisher.sessions.begin() as session:
+        first = preparation_module.prepare_and_start_private_chat_query_selection_in_session(
+            session, **arguments
+        )
+        ids = first.workflow.workflow_id, first.command.command_id
+        initial = first.workflow.initial_request
+        assert first.workflow_created and first.command_created
+        assert initial["context_request"] == context.model_dump(mode="json")
+        assert "anchor" not in initial["context_request"]
+    monkeypatch.setattr(
+        value.owner.catalog,
+        "prepare_private_chat_context_in_session",
+        Mock(side_effect=AssertionError("recapturing an original private context")),
+    )
+    with value.publisher.sessions.begin() as session:
+        replay = preparation_module.prepare_and_start_private_chat_query_selection_in_session(
             session, **arguments
         )
         assert (replay.workflow.workflow_id, replay.command.command_id) == ids

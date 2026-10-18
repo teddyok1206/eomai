@@ -6,6 +6,7 @@ import json
 from collections.abc import Callable, Iterator
 from typing import Any, Literal
 
+from eom_catalog_contracts.embedding_reference_query import ReferenceQuerySpaces
 from eom_catalog_contracts.embedding_registry import (
     EmbeddingIndexNamespace,
     RegisterEmbeddingIndexCommand,
@@ -33,6 +34,7 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     validate_embedding_source_bindings,
 )
 from eom_catalog_contracts.inference_transfer_experiment import (
+    ExperimentView,
     ExperimentViewRecipe,
     experiment_view_text,
 )
@@ -95,6 +97,7 @@ from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryRead,
     EmbeddingRegistryServiceCaller,
     MaterializedEmbeddingReadRow,
+    PrivateChatContextPreparation,
     ReferenceQueryContextPreparation,
     RegisteredEmbeddingIndexRead,
     ResolvedEmbeddingBindingOrigin,
@@ -135,6 +138,9 @@ from eom_catalog_service.local_indexing_source_ports import LocalIndexingSourceE
 from eom_catalog_service.pinned_artifact_resolution import (
     PinnedArtifactReadContext,
     PinnedArtifactResolutionError,
+)
+from eom_catalog_service.private_chat_context_preparation import (
+    validate_private_chat_context_preparation,
 )
 from eom_catalog_service.private_chat_document_read import (
     prepare_private_chat_document_scope_in_session,
@@ -1268,44 +1274,9 @@ class CatalogEmbeddingRegistryVerifier:
                     projection_version=scope.namespace.projection_version,
                 )
             reader = PinnedArtifactReadContext(session, self.settings)
-            repository = EmbeddingRegistryRepository(session)
-            views = []
-            for view in preparation.views:
-                namespace = EmbeddingIndexNamespace.model_validate(
-                    scope.namespace.model_dump(mode="json") | {"view": view}
-                )
-                current = repository.current_namespace_revision(scope.corpus_id, namespace)
-                selected = SimilarityViewSelection(view=view, recipe=config.recipe, index=None)
-                if current is not None:
-                    registered, _version = current
-                    selected = SimilarityViewSelection(
-                        view=view,
-                        recipe=config.recipe,
-                        index=SimilarityIndexPin(
-                            index_id=registered.index_id,
-                            index_revision_id=registered.index_revision_id,
-                            index_manifest=registered.index_manifest,
-                            index_sha256=registered.index_sha256,
-                            storage_partition=namespace.storage_partition,
-                            spaces=spaces,
-                        ),
-                    )
-                    intent = EmbeddingRegistryRead(
-                        EmbeddingRegistryLookup(
-                            scope.corpus_id,
-                            namespace,
-                            scope.graph_snapshot,
-                            scope.policy_revision_id,
-                            scope.policy_sha256,
-                            scope.maximum_sources,
-                        ),
-                        selected,
-                    )
-                    validate_registered_embedding_index_read(intent, registered)
-                    manifest = self._read_index(reader, registered.index_manifest)
-                    validate_similarity_index_pin(selected, registered.index_manifest, manifest)
-                    validate_registered_embedding_index_manifest(registered, manifest)
-                views.append(selected.model_dump(mode="json"))
+            views = self._initial_similarity_views(
+                session, scope, spaces, preparation.views, reader
+            )
             body = {
                 "schema_version": "system-rag-similarity-request/1.0",
                 "request_id": preparation.request_id,
@@ -1328,7 +1299,7 @@ class CatalogEmbeddingRegistryVerifier:
                 "source_classes": list(config.source_classes),
                 "topics": [],
                 "unit_ids": [],
-                "views": views,
+                "views": [view.model_dump(mode="json") for view in views],
                 "vector_mode": preparation.vector_mode,
                 "maximum_sources": scope.maximum_sources,
                 "top_k": preparation.top_k,
@@ -1340,6 +1311,106 @@ class CatalogEmbeddingRegistryVerifier:
             # Reauthorize the exact anchor after bytes, not a second mutable-head selection.
             if self.resolve_selected_sources(session, caller, selection) != captured:
                 raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+            return request
+
+        return self._guard(resolve)
+
+    def _initial_similarity_views(
+        self,
+        session: Session,
+        scope: EmbeddingRegistryLookup,
+        spaces: ReferenceQuerySpaces,
+        views: tuple[ExperimentView, ...],
+        reader: PinnedArtifactReadContext,
+    ) -> tuple[SimilarityViewSelection, ...]:
+        """One current-head capture for initial reference/private intents, not replay."""
+        repository = EmbeddingRegistryRepository(session)
+        selected_views = []
+        for view in views:
+            namespace = EmbeddingIndexNamespace.model_validate(
+                scope.namespace.model_dump(mode="json") | {"view": view}
+            )
+            current = repository.current_namespace_revision(scope.corpus_id, namespace)
+            selected = SimilarityViewSelection(
+                view=view, recipe=self.configuration.recipe, index=None
+            )
+            if current is not None:
+                registered, _version = current
+                selected = SimilarityViewSelection(
+                    view=view,
+                    recipe=self.configuration.recipe,
+                    index=SimilarityIndexPin(
+                        index_id=registered.index_id,
+                        index_revision_id=registered.index_revision_id,
+                        index_manifest=registered.index_manifest,
+                        index_sha256=registered.index_sha256,
+                        storage_partition=namespace.storage_partition,
+                        spaces=spaces,
+                    ),
+                )
+                intent = EmbeddingRegistryRead(
+                    EmbeddingRegistryLookup(
+                        scope.corpus_id,
+                        namespace,
+                        scope.graph_snapshot,
+                        scope.policy_revision_id,
+                        scope.policy_sha256,
+                        scope.maximum_sources,
+                    ),
+                    selected,
+                )
+                validate_registered_embedding_index_read(intent, registered)
+                manifest = self._read_index(reader, registered.index_manifest)
+                validate_similarity_index_pin(selected, registered.index_manifest, manifest)
+                validate_registered_embedding_index_manifest(registered, manifest)
+            selected_views.append(selected)
+        return tuple(selected_views)
+
+    def prepare_private_chat_context_in_session(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        preparation: PrivateChatContextPreparation,
+    ) -> PrivateChatSimilarityRequest:
+        """Initial official index pins for an owned question; no invented Item or native run."""
+        self._require_similarity_root(session)
+
+        def resolve() -> PrivateChatSimilarityRequest:
+            if (
+                type(caller) is not EmbeddingRegistryCaller
+                or type(preparation) is not PrivateChatContextPreparation
+                or session.get_bind() is not self.engine
+                or self._indexing_source_authority is not None
+            ):
+                raise EmbeddingRegistryError("EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE")
+            validate_private_chat_context_preparation(preparation, self.configuration)
+            scope = preparation.scope
+            self.authorize_scope(session, caller, scope)
+            reader = PinnedArtifactReadContext(session, self.settings)
+            views = self._initial_similarity_views(
+                session, scope, preparation.spaces, ("CONTENT_ONLY",), reader
+            )
+            body = {
+                "schema_version": "system-rag-private-chat-similarity-request/1.0",
+                "request_id": preparation.request_id,
+                "consumer_purpose": "GENERAL_CHAT_READ",
+                "query_basis": preparation.query_basis.model_dump(mode="json"),
+                "graph_snapshot": scope.graph_snapshot.model_dump(mode="json"),
+                "policy_revision_id": scope.policy_revision_id,
+                "policy_sha256": scope.policy_sha256,
+                "source_classes": list(self.configuration.source_classes),
+                "views": [view.model_dump(mode="json") for view in views],
+                "vector_mode": "REQUIRED",
+                "maximum_sources": scope.maximum_sources,
+                "top_k": preparation.top_k,
+            }
+            request = PrivateChatSimilarityRequest.model_validate(
+                body | {"request_sha256": content_sha256(body)}
+            )
+            validate_private_chat_context_preparation(preparation, self.configuration, request)
+            self.authorize_scope(session, caller, scope)
+            reader.revalidate_provenance()
+            self._require_similarity_root(session)
             return request
 
         return self._guard(resolve)

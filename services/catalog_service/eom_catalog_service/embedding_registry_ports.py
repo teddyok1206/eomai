@@ -29,10 +29,12 @@ from eom_catalog_contracts.inference_transfer_experiment import (
 )
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
 from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
+from eom_catalog_contracts.private_chat_query_basis import PrivateChatQueryBasis
 from eom_catalog_contracts.similarity_context import SimilarityContext, SimilarityViewSelection
 from eom_catalog_contracts.similarity_materials import SimilarityReferenceMaterials
 from eom_operator_identity import LocalIndexingServiceReference, local_indexing_service_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
+from jsonschema.exceptions import ValidationError as SchemaError
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.embedding_incremental_plan import RegisteredEmbeddingRow
@@ -186,6 +188,46 @@ class ReferenceQueryContextPreparation:
         self.selection.__post_init__()
         spaces = ReferenceQuerySpaces.model_validate(raw_similarity_contract_value(self.spaces))
         object.__setattr__(self, "spaces", spaces)
+
+
+@dataclass(frozen=True, slots=True)
+class PrivateChatContextPreparation:
+    """Initial owner-local pins, never Chat ownership, wire input or a replay grant."""
+
+    request_id: str
+    query_basis: PrivateChatQueryBasis
+    scope: EmbeddingRegistryLookup
+    spaces: ReferenceQuerySpaces
+    top_k: int
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.request_id) is not str
+            or re.fullmatch(r"similarityrequest_[0-9a-f]{32}", self.request_id) is None
+            or type(self.scope) is not EmbeddingRegistryLookup
+            or type(self.scope.namespace) is not EmbeddingIndexNamespace
+            or self.scope.namespace.view != "CONTENT_ONLY"
+            or type(self.scope.maximum_sources) is not int
+            or not 1 <= self.scope.maximum_sources <= 1024
+            or type(self.top_k) is not int
+            or not 1 <= self.top_k <= 64
+        ):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_REQUEST_INVALID")
+        try:
+            object.__setattr__(
+                self,
+                "query_basis",
+                PrivateChatQueryBasis.model_validate(
+                    raw_similarity_contract_value(self.query_basis)
+                ),
+            )
+            object.__setattr__(
+                self,
+                "spaces",
+                ReferenceQuerySpaces.model_validate(raw_similarity_contract_value(self.spaces)),
+            )
+        except (ValueError, TypeError, SchemaError):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_REQUEST_INVALID") from None
 
 
 class SimilarityMaterialsReadPort(Protocol):

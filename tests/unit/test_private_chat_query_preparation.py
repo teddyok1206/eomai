@@ -1,12 +1,18 @@
 """Actual immutable control bytes/ORM roots; declared Chat/IAM/persistence seams only."""
 
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
 from eom_catalog_contracts.private_chat_query_read import ChatPrivateQueryOrigin
 from eom_catalog_contracts.private_chat_similarity import PrivateChatSimilarityRequest
-from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryCaller
+from eom_catalog_service.embedding_registry_ports import (
+    EmbeddingRegistryCaller,
+    EmbeddingRegistryError,
+    EmbeddingRegistryLookup,
+    PrivateChatContextPreparation,
+)
 from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_identity_service import OperatorAuthorizationFenceError
@@ -94,6 +100,111 @@ def original_row(value):
         created_actor_type="human",
         created_actor_id=args["actor_id"],
     )
+
+
+def initial_selection(value):
+    context = value.source.request.context_request
+    config = value.owner.configuration.registry
+    return PrivateChatContextPreparation(
+        context.request_id,
+        context.query_basis,
+        EmbeddingRegistryLookup(
+            config.corpus_id,
+            config.namespace,
+            context.graph_snapshot,
+            context.policy_revision_id,
+            context.policy_sha256,
+            context.maximum_sources,
+        ),
+        value.source.policy.spaces,
+        context.top_k,
+    )
+
+
+def prepare_selection(value, session, selection):
+    return module.prepare_and_start_private_chat_query_selection_in_session(
+        session,
+        caller=EmbeddingRegistryCaller(value.source.projection.origin.actor_id),
+        origin=value.source.projection.origin,
+        preparation=selection,
+        owner=value.owner,
+        executor=value.executor,
+    )
+
+
+def test_selection_captures_once_then_replays_same_original_without_recapturing(
+    preparation, monkeypatch
+):
+    value = preparation
+    selected = initial_selection(value)
+    capture = Mock(return_value=value.source.request.context_request)
+    monkeypatch.setattr(value.owner.catalog, "prepare_private_chat_context_in_session", capture)
+    with value.source.publisher.sessions.begin() as session:
+        assert prepare_selection(value, session, selected).workflow_created
+    value.existing = original_row(value)
+    for name in ("read_pinned_private_chat_query_controls", "effective_permissions"):
+        monkeypatch.setattr(module, name, Mock(side_effect=AssertionError("rebuilding replay")))
+    capture.side_effect = AssertionError("reselecting a newer head")
+    with value.source.publisher.sessions.begin() as session:
+        assert not prepare_selection(value, session, selected).workflow_created
+    assert value.received[0] == value.received[1] and capture.call_count == 1
+    value.executor.execute.assert_not_called()
+
+
+@pytest.mark.parametrize("field", ["top_k", "request_id", "policy"])
+def test_changed_selection_replay_is_rejected_without_recapture(preparation, monkeypatch, field):
+    value = preparation
+    with value.source.publisher.sessions.begin() as session:
+        prepare(value, session)
+    value.existing = original_row(value)
+    selected = initial_selection(value)
+    if field == "top_k":
+        selected = replace(selected, top_k=selected.top_k + 1)
+    elif field == "request_id":
+        selected = replace(selected, request_id="similarityrequest_" + "f" * 32)
+    else:
+        selected = replace(
+            selected, scope=replace(selected.scope, policy_sha256="sha256:" + "f" * 64)
+        )
+    capture = Mock(side_effect=AssertionError("recapturing replay"))
+    monkeypatch.setattr(value.owner.catalog, "prepare_private_chat_context_in_session", capture)
+    with value.source.publisher.sessions.begin() as session, pytest.raises(EmbeddingRegistryError):
+        prepare_selection(value, session, selected)
+    capture.assert_not_called()
+    assert len(value.received) == 1
+
+
+def test_initial_missing_index_does_not_build_controls_start_or_fallback(preparation, monkeypatch):
+    value = preparation
+    data = value.source.request.context_request.model_dump(mode="json")
+    data["views"][0]["index"] = None
+    context = PrivateChatSimilarityRequest.model_validate(seal(data, "request_sha256"))
+    monkeypatch.setattr(
+        value.owner.catalog, "prepare_private_chat_context_in_session", Mock(return_value=context)
+    )
+    for name in ("read_pinned_private_chat_query_controls", "effective_permissions"):
+        monkeypatch.setattr(
+            module, name, Mock(side_effect=AssertionError("unexpected new request"))
+        )
+    with (
+        value.source.publisher.sessions.begin() as session,
+        pytest.raises(module.PrivateChatQueryPreparationUnavailable) as error,
+    ):
+        prepare_selection(value, session, initial_selection(value))
+    assert error.value.code == "INDEX_NOT_PREPARED" and value.received == []
+    assert value.lookups == [WorkflowInstanceRecord]
+
+
+def test_initial_current_authority_denial_is_not_missing_index(preparation, monkeypatch):
+    value = preparation
+    capture = Mock(side_effect=EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN"))
+    monkeypatch.setattr(value.owner.catalog, "prepare_private_chat_context_in_session", capture)
+    with (
+        value.source.publisher.sessions.begin() as session,
+        pytest.raises(EmbeddingRegistryError, match="FORBIDDEN"),
+    ):
+        prepare_selection(value, session, initial_selection(value))
+    assert value.received == [] and capture.call_count == 1
 
 
 def test_builds_first_request_from_real_control_bytes_and_actual_caller(preparation):

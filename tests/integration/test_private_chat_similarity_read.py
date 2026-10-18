@@ -1,6 +1,10 @@
 """Guarded PostgreSQL/public index/private canonical read; Chat/IAM/numerics synthetic."""
 
 import pytest
+from eom_catalog_service.embedding_registry_ports import (
+    EmbeddingRegistryLookup,
+    PrivateChatContextPreparation,
+)
 from eom_catalog_service.private_chat_similarity_ports import VerifiedPrivateChatQueryRead
 from eom_catalog_service.private_chat_similarity_service import (
     PrivateChatSimilarityApplicationService,
@@ -82,4 +86,33 @@ def test_postgres_private_consumer_refuses_current_chat_or_mid_read_public_revoc
     with pytest.raises(SimilarityContextReadError):
         value.read.resolve_private_chat_query(value.caller, value.request, prepared)
     assert value.source.fault.final_authorization_reached
+    assert value.native.encodes == 1
+
+
+def test_postgres_initial_private_context_pins_the_registered_index_without_item_anchor(
+    completed_read,
+):
+    value = completed_read
+    config = value.source.owner.configuration.registry
+    current = value.request
+    selection = PrivateChatContextPreparation(
+        current.request_id,
+        current.query_basis,
+        EmbeddingRegistryLookup(
+            config.corpus_id,
+            config.namespace,
+            current.graph_snapshot,
+            current.policy_revision_id,
+            current.policy_sha256,
+            current.maximum_sources,
+        ),
+        value.source.policy.spaces,
+        current.top_k,
+    )
+    with value.native.publisher.sessions.begin() as session:
+        captured = value.source.owner.catalog.prepare_private_chat_context_in_session(
+            session, value.caller, selection
+        )
+        assert captured == current and "anchor" not in captured.model_dump(mode="json")
+        assert not session.new and not session.dirty
     assert value.native.encodes == 1

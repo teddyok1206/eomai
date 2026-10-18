@@ -9,6 +9,28 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Initial private-context checkpoint2026-10-18 00:47 UTC: Catalog now shares one
+  initial namespace/index selector between reference and private questions. Runner
+  checks the original actor/turn key before capture; both preparation entrypoints
+  share request construction and atomic start. Missing index is explicit and
+  replay never selects latest. Combined1014/43 suites/252.64s, strict11/Ruff/
+  format8/diff PASS; detached45/246 and focused68 overlap and are not summed.
+  Exact138-pin guarded PostgreSQL100/no skips/cleanup PASS includes actual first
+  private Catalog index capture and selection→Workflow/START→exact replay. No
+  schema/migration/storage change in this slice; previous257 stage proof remains
+  historical, not rerun. Chat/IAM/declared Workflow/numerical seams are synthetic.
+  No genuine model, operating DB, login, install or Chat tool activation. C1–C5/
+  complete seed–delta/six real comparisons/default/rollback remain OPEN.
+  [Source design and exact proof](../architecture/PRIVATE_CHAT_CONTEXT_PREPARATION.md).
+- Due read-only INDEX observation00:48:23 UTC (over30 minutes after00:15:52):
+  777 encodings/777 bindings/201 index revisions/6 logical indexes. Latest per-index
+  261/545,275/545,241/545 remain PARTIAL, not777 Items or a fresh all-file audit.
+  Latest five rows3 COMPLETED/2 REQUESTED, each failure_code null; this is not a
+  global execution/lease/failure inventory or proof that INDEX stopped. Same
+  existing noninteractive pane/observer, no login, claim/restart/model request.
+  Next routine read no earlier01:18:23 UTC. Sanitized evidence:
+  `/tmp/eom-private-context-observation.slhepehQ/index-observation.json`.
+
 - Concrete private consumer source checkpoint2026-10-18 00:31 UTC: the existing
   Catalog private read port now has a Runner-side actual source/Workflow/terminal/
   publication composition. No launch/claim/session cache or approved-Item fallback.

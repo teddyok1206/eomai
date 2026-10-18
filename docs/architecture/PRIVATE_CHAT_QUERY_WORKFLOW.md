@@ -966,6 +966,13 @@ request, operating migration or private tool activation occurred. The earlier
 93/257 PostgreSQL gate covers the0057 snapshot, not this later preparation change.
 Actual installed preparation/provider/tool delivery and the full goal remain OPEN.
 
+The later [initial-context selection](PRIVATE_CHAT_CONTEXT_PREPARATION.md) adds
+Catalog-owned first index capture before that request builder. Both entrypoints
+now share the original-key read and builder/start; replay keeps the original
+context/audit. Main1014 source and exact138-pin PostgreSQL100/cleanup PASS cover
+this later snapshot. The earlier783/98/257 proof remains its own historical
+snapshot and is not silently relabeled. No runtime/tool activation follows.
+
 The existing Workflow repository and native START resolver own persistence, not
 Chat workers or a new queue. Canonical inputs are the closed private request and
 text-free immutable submission context; the original Chat request remains the

@@ -486,6 +486,12 @@ DB 단계 연결은 당시 미완료였습니다. [원본 접수·동시성·롤
 대역입니다. 운영 채팅 도구 활성화와 전체 목표는 아직 미완료입니다.
 [읽기 연결·검증·미완료 범위](docs/architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#concrete-current-private-similarity-read-composition)
 
+채팅 원 질문에서 공식 자료·인덱스 참조를 처음 선택하는 경로도 기존 접수에 연결했습니다.
+기출 참조와 인덱스 선택 코드를 공유하며, 재요청은 최초 참조를 유지하고 없는 인덱스를
+대체하지 않습니다. 관련 소스1,014/43묶음·strict11·임시 PostgreSQL100·정리 PASS입니다.
+검증은 대역 권한·대화·수치 모델을 사용했으며 운영 채팅 도구 연결은 아직 남아 있습니다.
+[최초 참조 선택과 실제 검증 범위](docs/architecture/PRIVATE_CHAT_CONTEXT_PREPARATION.md)
+
 아래는 날짜·후보별 역사적 구현 기록입니다. 당시의 미완료 표기는 현재 종합 상태와
 구별하며, 최신 실제 실행·활성화 범위는 위 표와 연결된 상태 문서를 기준으로 합니다.
 
