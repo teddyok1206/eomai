@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/general-chat-similarity-provenance/1.0",
+  "title": "Owner-only auxiliary Chat similarity provenance; never source Evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "scope", "native_request", "native_reply", "tool_record_member", "delivered_native_items", "selection_policy", "limitations", "provenance_sha256"],
+  "properties": {
+    "schema_version": {"const": "general-chat-similarity-provenance/1.0"},
+    "scope": {"$ref": "eom://schemas/knowledge/chat-private-query-scope/1.0#/$defs/scope"},
+    "native_request": {"$ref": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/1.0#/$defs/request"},
+    "native_reply": {"$ref": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/1.0#/$defs/reply"},
+    "tool_record_member": {
+      "type": "object", "additionalProperties": false,
+      "required": ["member_path", "schema_ref", "media_type", "sha256"],
+      "properties": {
+        "member_path": {"const": "chat/evidence.json"},
+        "schema_ref": {"const": "eom://schemas/general-chat/tool-record/2.0"},
+        "media_type": {"const": "application/json"},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "delivered_native_items": {
+      "type": "array", "maxItems": 6, "uniqueItems": true,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["item_id", "item_revision_id", "manifest_sha256"],
+        "properties": {
+          "item_id": {"type": "string", "pattern": "^item_[0-9a-f]{32}$"},
+          "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+          "manifest_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "selection_policy": {"const": "TOPIC_FILTERED_GLOBAL_TOP64_NATIVE_THEN_GRAPH"},
+    "limitations": {
+      "const": ["AUXILIARY_NOT_SOURCE_EVIDENCE", "SINGLE_USER_MESSAGE_ONLY", "SCORES_ARE_NOT_SOLUTION_EQUALITY_OR_APPROVAL", "FILTERED_GLOBAL_TOP64_IS_NOT_FILTERED_TOP_K"]
+    },
+    "provenance_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

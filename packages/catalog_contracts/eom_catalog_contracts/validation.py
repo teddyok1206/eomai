@@ -34,6 +34,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "general-chat-similarity-provenance": CatalogSchemaResource(
+            "schemas/knowledge/general-chat-similarity-provenance-v1.schema.json",
+            "resources/knowledge/general-chat-similarity-provenance-v1.schema.json",
+            "1.0",
+            "sha256:5832a534f919bdb55e75978c46b888295486da31ed026d1c725008e7e76bcd62",
+        ),
         "chat-private-query-scope": CatalogSchemaResource(
             "schemas/knowledge/chat-private-query-scope-v1.schema.json",
             "resources/knowledge/chat-private-query-scope-v1.schema.json",

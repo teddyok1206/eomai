@@ -450,6 +450,10 @@ NOT_IMPLEMENTED / NOT_EVALUATED`를 구분한다. 기존 corpus의 학습 완료
 
 ## 11. 코드 근거와 관련 문서
 
+- [Chat 검색과 계산 출처의 동시 보존](GENERAL_CHAT_SIMILARITY_PROVENANCE.md):
+  기존 V4/tool2를 유지하는 같은 Artifact의 보조 기록과 실제 검증·남은 소비자 연결 경계.
+- [Chat의 Graph 내용 해시와 manifest 파일 참조 연결](GENERAL_CHAT_SIMILARITY_SCOPE_BRIDGE.md):
+  기존 Catalog 출처·권한 경계를 재사용하며 서로 다른 해시를 대입하지 않는다.
 - [채팅 QUERY의 실제 owner 구성 경계](PRIVATE_CHAT_QUERY_INSTALLED_OWNER_COMPOSITION.md):
   Catalog 전용 역할 제한을 유지하고, 실제 대화 소유권과 Identity의 owner 행 잠금을 결합한다.
   소스·임시 DB 증거와 아직 없는 운영 호스트/소비자 활성화를 구분한다.

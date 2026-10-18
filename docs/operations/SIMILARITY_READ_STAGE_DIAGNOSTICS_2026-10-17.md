@@ -151,6 +151,15 @@ no-prompt deadline in this runbook and temporary diagnostic instructions. It is
 not authentication, an auth lifetime extension or a scheduled login at expiry.
 Use only already valid supported same-actor continuation/noninteractive sudo;
 preserve denied original requests and continue independent authorized work.
+
+One due30-minute observation used the unchanged pinned installed observer from
+the same `%89` pane with `sudo -n`, no prompt or auth-lifetime change. As of
+2026-10-18 05:26:12.760558 UTC:849 encodings/bindings,219 index revisions,6 logical
+indexes; latest per-index coverage299/545,265/545,285/545. These are view bindings,
+not849 distinct Items or full completion. Latest-five-only projection has1
+REQUESTED/1 RUNNING/3 COMPLETED; it is not a global failed/lease census. Evidence:
+`/tmp/eom-index-observation.Hg7nFQTe/index-observation.json`. Next routine read is
+not before2026-10-18 05:56:12.761 UTC. No replay/model/migration or service restart.
 See the current unattended-work section of
 [the full goal](../architecture/SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md).
 

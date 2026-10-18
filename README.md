@@ -573,6 +573,11 @@ Chat의 Graph 내용 해시와 임베딩 입력의 manifest 파일 해시를 구
 정확한 Artifact 참조를 재사용하며 새 로그인이나 정책 변경을 하지 않습니다.
 [연결 설계·검증 범위](docs/architecture/GENERAL_CHAT_SIMILARITY_SCOPE_BRIDGE.md)
 
+그 검색의 계산 출처를 기존 도구 기록과 같은 Artifact에 보관하는 경로도 추가했습니다.
+관련14묶음399 PASS이며 기존 Chat 형식·인용 규칙·과거 기록은 유지합니다.
+**소스·임시 SQLite 검증이며 실제 검색 후보 전달과 운영 활성화는 아직 남아 있습니다.**
+[출처 기록 설계·실제 검증 범위](docs/architecture/GENERAL_CHAT_SIMILARITY_PROVENANCE.md)
+
 아래는 날짜·후보별 역사적 구현 기록입니다. 당시의 미완료 표기는 현재 종합 상태와
 구별하며, 최신 실제 실행·활성화 범위는 위 표와 연결된 상태 문서를 기준으로 합니다.
 
