@@ -93,3 +93,22 @@ private prepare1.0, DB schema, policies, credentials and CPU default are unchang
 Actual Chat candidate delivery/provenance, C1–C5 consumer activation, complete
 seed/delta/current coverage and genuine CPU/CUDA comparison/default/rollback
 remain requirements of the original goal. This prerequisite does not close them.
+
+### Clean-source package evidence
+
+Candidate `2df1746213041a0b0dcfc05f51b9e45bb5433a46` was pushed to `origin/main`.
+`scripts/api/deploy_release.sh --build-only` passed three-wheel build/RECORD and
+its installed simulation. The five new/changed contract, schema, service and
+client package members match the clean source byte-for-byte. Build directory:
+`/tmp/eom-api-build/2df1746213041a0b0dcfc05f51b9e45bb5433a46.OSJLhb/dist`.
+
+| Wheel | Raw SHA-256 |
+|---|---|
+| platform | `afd8bc62009b6b8c77e3fef431e70fe9f5f4033664f325de3082a951ac431b1b` |
+| API contracts | `298f19aff6ead507df3f04d3d7cfdbacf4468e33b3a21a50cdb968c15f6e633c` |
+| API | `137169c8d6a9c8d704055caa55b8428caf16b8d77d21ab3914140b9ba6345172` |
+
+These are **build-only artifacts, not an operating installation/activation**.
+No operating service, numerical prefix, migration, claim or user session changed.
+The renewed no-interactive-auth window is until2026-10-19 05:10 UTC; existing
+human fresh-auth denial remains a denial, not a successful login.
