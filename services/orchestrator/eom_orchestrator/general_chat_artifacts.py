@@ -9,6 +9,13 @@ from pathlib import Path
 from threading import Lock
 from typing import Protocol
 
+from eom_catalog_contracts.chat_similarity_observation import (
+    CHAT_SIMILARITY_OBSERVATION_MEMBER,
+    CHAT_SIMILARITY_OBSERVATION_REF,
+    MAX_CHAT_SIMILARITY_OBSERVATION_BYTES,
+    ChatSimilarityObservation,
+    validate_chat_similarity_observation,
+)
 from eom_catalog_contracts.chat_similarity_provenance import (
     CHAT_SIMILARITY_PROVENANCE_MEMBER,
     CHAT_SIMILARITY_PROVENANCE_REF,
@@ -147,8 +154,35 @@ class GeneralChatArtifactStore:
     ) -> ArtifactMemberPointer:
         """One idempotent commit; the frozen V2 worker still receives its usual member."""
         provenance = validate_chat_similarity_provenance(record, provenance)
+        return self._publish_similarity_member(
+            record,
+            canonical_json_bytes(provenance),
+            CHAT_SIMILARITY_PROVENANCE_MEMBER,
+            CHAT_SIMILARITY_PROVENANCE_REF,
+            "general-chat-tool-files/1.0",
+        )
+
+    def publish_similarity_observation(
+        self, record: ChatToolRecordV2, observation: ChatSimilarityObservation
+    ) -> ArtifactMemberPointer:
+        observation = validate_chat_similarity_observation(record, observation)
+        return self._publish_similarity_member(
+            record,
+            canonical_json_bytes(observation),
+            CHAT_SIMILARITY_OBSERVATION_MEMBER,
+            CHAT_SIMILARITY_OBSERVATION_REF,
+            "general-chat-similarity-files/1.0",
+        )
+
+    def _publish_similarity_member(
+        self,
+        record: ChatToolRecordV2,
+        companion: bytes,
+        companion_member: str,
+        companion_schema: str,
+        manifest_version: str,
+    ) -> ArtifactMemberPointer:
         payload = canonical_json_bytes(record.model_dump(mode="json"))
-        companion = canonical_json_bytes(provenance.model_dump(mode="json"))
         if not 0 < len(payload) <= 256000:
             raise ChatSimilarityProvenanceError()
         staging = self.publisher.settings.staging_root
@@ -162,7 +196,7 @@ class GeneralChatArtifactStore:
             members = []
             for name, raw, schema in (
                 (CHAT_MEMBER, payload, RAG_TOOL_RECORD_SCHEMA),
-                (CHAT_SIMILARITY_PROVENANCE_MEMBER, companion, CHAT_SIMILARITY_PROVENANCE_REF),
+                (companion_member, companion, companion_schema),
             ):
                 local = Path(workspace) / name
                 local.parent.mkdir(parents=True, exist_ok=True)
@@ -182,7 +216,7 @@ class GeneralChatArtifactStore:
                 members=tuple(members),
                 primary_file=CHAT_MEMBER,
                 artifact_type="control_general_chat_evidence",
-                manifest_version="general-chat-tool-files/1.0",
+                manifest_version=manifest_version,
                 idempotency_key=f"chat-tool:{record.request.ticket.claim_id}:{record.request.sequence}",
                 source_commit=self.source_commit,
             )
@@ -201,6 +235,28 @@ class GeneralChatArtifactStore:
         self, record_pointer: ArtifactMemberPointer
     ) -> ChatSimilarityProvenance | None:
         """Owner audit read, never private-claim reauthorization or a public citation."""
+        value = self._read_similarity_member(record_pointer)
+        if value is None:
+            return None
+        record, schema, payload = value
+        if schema != CHAT_SIMILARITY_PROVENANCE_REF:
+            raise ChatSimilarityProvenanceError()
+        return validate_chat_similarity_provenance(record, json.loads(payload))
+
+    def read_similarity_observation(
+        self, record_pointer: ArtifactMemberPointer
+    ) -> ChatSimilarityObservation | None:
+        value = self._read_similarity_member(record_pointer)
+        if value is None:
+            return None
+        record, schema, payload = value
+        if schema != CHAT_SIMILARITY_OBSERVATION_REF:
+            raise ChatSimilarityProvenanceError()
+        return validate_chat_similarity_observation(record, json.loads(payload))
+
+    def _read_similarity_member(
+        self, record_pointer: ArtifactMemberPointer
+    ) -> tuple[ChatToolRecordV2, str, bytes] | None:
         if (
             record_pointer.member_path != CHAT_MEMBER
             or record_pointer.schema_ref != RAG_TOOL_RECORD_SCHEMA
@@ -220,48 +276,53 @@ class GeneralChatArtifactStore:
         files = manifest.get("files")
         if not isinstance(files, list):
             raise ChatSimilarityProvenanceError()
+        descriptors = {
+            CHAT_SIMILARITY_PROVENANCE_MEMBER: (
+                CHAT_SIMILARITY_PROVENANCE_REF,
+                "general-chat-tool-files/1.0",
+                MAX_CHAT_SIMILARITY_PROVENANCE_BYTES,
+            ),
+            CHAT_SIMILARITY_OBSERVATION_MEMBER: (
+                CHAT_SIMILARITY_OBSERVATION_REF,
+                "general-chat-similarity-files/1.0",
+                MAX_CHAT_SIMILARITY_OBSERVATION_BYTES,
+            ),
+        }
         matching = [
             member
             for member in files
-            if isinstance(member, dict)
-            and member.get("file_name") == CHAT_SIMILARITY_PROVENANCE_MEMBER
+            if isinstance(member, dict) and member.get("file_name") in descriptors
         ]
         if not matching:
-            if manifest.get("manifest_version") == "general-chat-tool-files/1.0" or len(files) != 1:
+            if (
+                manifest.get("manifest_version") in {v[1] for v in descriptors.values()}
+                or len(files) != 1
+            ):
                 raise ChatSimilarityProvenanceError()
             return None  # A genuine legacy single-member tool record remains valid.
-        if (
-            len(matching) != 1
-            or len(files) != 2
-            or manifest.get("manifest_version") != "general-chat-tool-files/1.0"
-            or manifest.get("primary_file") != CHAT_MEMBER
-        ):
+        if len(matching) != 1 or len(files) != 2 or manifest.get("primary_file") != CHAT_MEMBER:
             raise ChatSimilarityProvenanceError()
         member = matching[0]
+        schema, manifest_version, maximum_bytes = descriptors[member["file_name"]]
         if (
-            member.get("schema_ref") != CHAT_SIMILARITY_PROVENANCE_REF
+            manifest.get("manifest_version") != manifest_version
+            or member.get("schema_ref") != schema
             or member.get("media_type") != "application/json"
         ):
             raise ChatSimilarityProvenanceError()
         pointer = ArtifactMemberPointer(
             artifact_id=record_pointer.artifact_id,
             artifact_revision_id=record_pointer.artifact_revision_id,
-            member_path=CHAT_SIMILARITY_PROVENANCE_MEMBER,
-            schema_ref=CHAT_SIMILARITY_PROVENANCE_REF,
+            member_path=member["file_name"],
+            schema_ref=schema,
             media_type="application/json",
             sha256=member["sha256"],
         )
         companion = resolve_control_artifact_members(
             self.engine,
-            (
-                BoundedControlArtifactRead(
-                    pointer=pointer, maximum_bytes=MAX_CHAT_SIMILARITY_PROVENANCE_BYTES
-                ),
-            ),
+            (BoundedControlArtifactRead(pointer=pointer, maximum_bytes=maximum_bytes),),
         )[0]
-        return validate_chat_similarity_provenance(
-            read_rag("Record", json.loads(raw), ChatToolRecordV2), json.loads(companion)
-        )
+        return read_rag("Record", json.loads(raw), ChatToolRecordV2), schema, companion
 
     def read(self, pointers: tuple[ArtifactMemberPointer, ...]) -> tuple[bytes, ...]:
         if not pointers:

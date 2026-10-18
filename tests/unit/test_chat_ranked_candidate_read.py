@@ -175,6 +175,7 @@ def test_request_cannot_supply_authority_paths_latest_or_ambiguous_order(change)
         "pending",
         "not_indexed",
         "source",
+        "source_class",
         "failed_partial",
     ],
 )
@@ -198,6 +199,8 @@ def test_reply_cannot_substitute_or_promote_candidates(change):
     elif change == "source":
         query = request(arguments=arguments("TOPIC", terms=["전자기"], source="GENERATED"))
         value = reply(query)
+    elif change == "source_class":
+        value["cards"][0]["source_kind"] = "GENERATED"
     else:
         value.update(status="FAILED", error_code="CHAT_KNOWLEDGE_FORBIDDEN")
     with pytest.raises(ChatRankedCandidateReadError):

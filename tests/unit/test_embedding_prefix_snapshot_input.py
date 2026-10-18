@@ -102,6 +102,7 @@ def test_closed_schema_mirror_hash_and_318_predecessors_remain_frozen() -> None:
             "chat-private-query-scope",
             "general-chat-similarity-provenance",
             "chat-ranked-candidate-read",
+            "general-chat-similarity-observation",
         }
     }
     assert len(previous) == 318

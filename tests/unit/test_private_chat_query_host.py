@@ -49,6 +49,7 @@ class HostCase:
     enabled: bool = True
     failure: str | None = None
     events: list[str] = field(default_factory=list)
+    execution_options: dict = field(default_factory=dict)
     servers: list[object] = field(default_factory=list)
     source_started: Event = field(default_factory=Event)
     coordinator_stopped: Event = field(default_factory=Event)
@@ -85,7 +86,12 @@ def composed(monkeypatch):
     monkeypatch.setattr(host, "GeneralChatRepository", lambda _: object())
     monkeypatch.setattr(host, "CatalogChatKnowledgeClient", object)
     execution = object()
-    monkeypatch.setattr(host, "GeneralChatExecutionService", lambda *_a, **_k: execution)
+
+    def make_execution(*_a, **kwargs):
+        case.execution_options.update(kwargs)
+        return execution
+
+    monkeypatch.setattr(host, "GeneralChatExecutionService", make_execution)
     monkeypatch.setattr(host, "GeneralChatConversationOwner", lambda *_a, **_k: object())
     monkeypatch.setattr(host, "source_chat_worker_policy", lambda **_: object())
 
@@ -153,6 +159,48 @@ def test_enabled_host_composes_exact_peer_separate_profile_and_stops_every_owner
     assert composed.events.index("source-closed") < composed.events.index("dispose")
     assert composed.events.index("api-closed") < composed.events.index("dispose")
     assert capsys.readouterr().err == ""
+
+
+def test_similarity_selection_is_explicit_and_composes_existing_clients_and_shared_stop(
+    composed,
+    monkeypatch,
+):
+    native = object()
+    monkeypatch.setattr(
+        host.os,
+        "environ",
+        VALUES
+        | RAG
+        | {
+            MODE: "READ_ONLY",
+            "EOM_GENERAL_CHAT_SIMILARITY_SEARCH": "NATIVE_TOPIC",
+        },
+    )
+    monkeypatch.setattr(host.PrivateChatQueryPrepareClient, "for_installed_owner", lambda: native)
+    assert host.main() == 0
+    ports = composed.execution_options["similarity"]
+    assert ports.native is native and ports.stop.is_set()
+    assert ports.catalog is composed.execution_options["knowledge"]
+
+
+@pytest.mark.parametrize("flag", ["", "true", "native_topic", "ADMIN", "NATIVE_TOPIC "])
+def test_similarity_mode_cannot_be_guessed_or_coerced(flag):
+    with pytest.raises(ChatError, match="CONFIGURATION_INVALID"):
+        ChatOwnerConfiguration.from_environment(
+            VALUES
+            | RAG
+            | {
+                MODE: "READ_ONLY",
+                "EOM_GENERAL_CHAT_SIMILARITY_SEARCH": flag,
+            }
+        )
+
+
+def test_similarity_selection_cannot_implicitly_enable_v4_or_private_source():
+    flag = {"EOM_GENERAL_CHAT_SIMILARITY_SEARCH": "NATIVE_TOPIC"}
+    for values in (VALUES, VALUES | RAG):
+        with pytest.raises(ChatError, match="CONFIGURATION_INVALID"):
+            ChatOwnerConfiguration.from_environment(values | flag)
 
 
 def test_default_disabled_host_keeps_the_original_single_listener(composed, monkeypatch):

@@ -340,11 +340,14 @@ def test_future_runtime_repin_uses_current_model_digest_without_a_new_source_rel
     assert value.events.count("write-config") == 1
 
 
+@pytest.mark.parametrize("similarity_search", [False, True])
 def test_codex_repin_preserves_enabled_source_and_exact_replay_does_not_reprovision(
-    installed_runtime: InstallationHarness, monkeypatch, tmp_path
+    installed_runtime: InstallationHarness, monkeypatch, tmp_path, similarity_search
 ) -> None:
     value = installed_runtime
     flag = b"EOM_GENERAL_CHAT_PRIVATE_QUERY_SOURCE=READ_ONLY\n"
+    if similarity_search:
+        flag += b"EOM_GENERAL_CHAT_SIMILARITY_SEARCH=NATIVE_TOPIC\n"
     value.target.write_bytes(value.desired + flag)
     existing = value.target.read_bytes()
     calls = []

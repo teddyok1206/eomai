@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/general-chat-similarity-observation/1.0",
+  "title": "Claim-scoped auxiliary similarity observation, not source Evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "origin", "scope", "status", "phase", "native_request", "native_reply", "tool_record_member", "delivered_native_items", "error_code", "limitations", "observation_sha256"],
+  "properties": {
+    "schema_version": {"const": "general-chat-similarity-observation/1.0"},
+    "origin": {"$ref": "eom://schemas/knowledge/general-chat-private-query-read/1.0#/$defs/origin"},
+    "scope": {"$ref": "eom://schemas/knowledge/chat-private-query-scope/1.0#/$defs/scope"},
+    "status": {"enum": ["READY", "PENDING", "UNAVAILABLE", "FAILED", "UNKNOWN"]},
+    "phase": {"enum": ["SCOPE", "QUERY", "METADATA", "COMPLETE"]},
+    "native_request": {"anyOf": [{"type": "null"}, {"$ref": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/1.0#/$defs/request"}]},
+    "native_reply": {"anyOf": [{"type": "null"}, {"$ref": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/1.0#/$defs/reply"}]},
+    "tool_record_member": {"$ref": "eom://schemas/knowledge/general-chat-similarity-provenance/1.0#/properties/tool_record_member"},
+    "delivered_native_items": {"$ref": "eom://schemas/knowledge/general-chat-similarity-provenance/1.0#/properties/delivered_native_items"},
+    "error_code": {"enum": [null, "SCOPE_UNAVAILABLE", "QUERY_PENDING", "QUERY_UNAVAILABLE", "QUERY_FAILED", "QUERY_OUTCOME_UNKNOWN", "METADATA_UNAVAILABLE", "INTEGRITY_REJECTED"]},
+    "limitations": {"const": ["AUXILIARY_NOT_SOURCE_EVIDENCE", "SINGLE_USER_MESSAGE_ONLY", "SCORES_ARE_NOT_SOLUTION_EQUALITY_OR_APPROVAL", "FILTERED_GLOBAL_TOP64_IS_NOT_FILTERED_TOP_K"]},
+    "observation_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "READY"}}}, "then": {"properties": {"phase": {"const": "COMPLETE"}, "native_request": {"type": "object"}, "native_reply": {"type": "object", "properties": {"status": {"const": "READY"}}}, "error_code": {"type": "null"}}}, "else": {"properties": {"phase": {"enum": ["SCOPE", "QUERY", "METADATA"]}, "delivered_native_items": {"maxItems": 0}, "error_code": {"type": "string"}}}},
+    {"if": {"properties": {"phase": {"const": "SCOPE"}}}, "then": {"properties": {"native_request": {"type": "null"}, "native_reply": {"type": "null"}}}, "else": {"properties": {"native_request": {"type": "object"}}}},
+    {"if": {"properties": {"status": {"const": "PENDING"}}}, "then": {"properties": {"phase": {"const": "QUERY"}, "error_code": {"const": "QUERY_PENDING"}, "native_reply": {"type": "object", "properties": {"status": {"const": "PENDING"}}}}}},
+    {"if": {"properties": {"status": {"const": "UNKNOWN"}}}, "then": {"properties": {"phase": {"const": "QUERY"}, "error_code": {"const": "QUERY_OUTCOME_UNKNOWN"}}}}
+  ]
+}

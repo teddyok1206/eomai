@@ -144,6 +144,23 @@ def test_read_ready_returns_canonical_reply_without_another_prepare(local):
     assert local.case.application.prepare.call_count == local.case.application.read.call_count == 1
 
 
+def test_waiter_exposes_actual_prepare_ack_without_relabelling_read_ready(local):
+    local.case.application.read.return_value = ready(local.case)
+    acknowledgements = []
+    result = wait_module.wait_for_original_private_chat_query(
+        local.client,
+        local.case.request,
+        stop=local.stop,
+        deadline=local.clock.now + 300,
+        on_acknowledged=acknowledgements.append,
+    )
+    assert len(acknowledgements) == 1
+    assert acknowledgements[0].action == "PREPARE_PRIVATE_CHAT_QUERY"
+    assert acknowledgements[0].status == "PENDING"
+    assert result.action == "READ_PRIVATE_CHAT_QUERY" and result.status == "READY"
+    assert acknowledgements[0].workflow_id == result.workflow_id
+
+
 def test_initial_ready_returns_without_sleep_read_or_continuation(local):
     local.case.application.prepare.return_value = ready(local.case)
     assert await_original(local).status == "READY"

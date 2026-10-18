@@ -80,6 +80,10 @@ from eom_orchestrator.general_chat_rag_access import authorize_rag_context, prep
 from eom_orchestrator.general_chat_rag_broker import ChatRagToolBroker, rag_tool_knowledge
 from eom_orchestrator.general_chat_repository import GeneralChatRepository
 from eom_orchestrator.general_chat_similarity_basis import read_owned_private_chat_query
+from eom_orchestrator.general_chat_similarity_consumer import (
+    ChatSimilarityPorts,
+    ChatSimilarityTurn,
+)
 from eom_orchestrator.general_chat_state import (
     CHAT_HEARTBEAT_TTL,
     ChatError,
@@ -138,6 +142,7 @@ class GeneralChatExecutionService:
         knowledge: ChatKnowledgePort | None = None,
         rag_knowledge: ChatRagKnowledgePort | None = None,
         rag_policy: ChatRagPolicy | None = None,
+        similarity: ChatSimilarityPorts | None = None,
     ) -> None:
         self.repository = repository
         self.evidence = evidence
@@ -145,6 +150,7 @@ class GeneralChatExecutionService:
         self.knowledge = knowledge
         self.rag_knowledge = rag_knowledge
         self.rag_policy = rag_policy
+        self.similarity = similarity
 
     def tool_broker(self, command: ChatWorkerRequest) -> ChatToolBroker | ChatRagToolBroker:
         if (
@@ -171,6 +177,13 @@ class GeneralChatExecutionService:
                 knowledge=self.knowledge,
                 rag_knowledge=self.rag_knowledge,
                 evidence=self.evidence,
+                similarity=(
+                    ChatSimilarityTurn(
+                        source=self, ticket=ticket, scope=prepared.rag_scope, ports=self.similarity
+                    )
+                    if self.similarity is not None and prepared.rag_scope is not None
+                    else None
+                ),
             )
         return ChatToolBroker(
             rpc_request_id=command.request_id,

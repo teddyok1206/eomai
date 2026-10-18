@@ -36,11 +36,16 @@ from eom_protocol.general_chat_rag_turn import (
     RagChatTurnResult,
     validate_rag_citations,
 )
+from eom_protocol.general_chat_tools import ChatSearchCommand
 from eom_protocol.general_chat_worker_messages import ChatWorkerTicket
 from jsonschema import ValidationError as SchemaError
 
 from eom_orchestrator.general_chat_artifacts import ChatEvidencePort
 from eom_orchestrator.general_chat_knowledge import ChatKnowledgePort, ChatRagKnowledgePort
+from eom_orchestrator.general_chat_similarity_consumer import (
+    ChatSimilaritySelection,
+    ChatSimilarityTurn,
+)
 from eom_orchestrator.general_chat_state import ChatError
 from eom_orchestrator.general_chat_tool_broker import resolve_item_tool
 
@@ -56,6 +61,7 @@ class ChatRagToolBroker:
         knowledge: ChatKnowledgePort,
         rag_knowledge: ChatRagKnowledgePort,
         evidence: ChatEvidencePort,
+        similarity: ChatSimilarityTurn | None = None,
     ) -> None:
         if (ticket.conversation_id, ticket.turn_id, ticket.claim_id, ticket.request_sha256) != (
             prepared.conversation_id,
@@ -64,9 +70,14 @@ class ChatRagToolBroker:
             sha256_bytes(canonical_json_bytes(prepared.model_dump(mode="json"))),
         ):
             raise ChatError("GENERAL_CHAT_PROTOCOL_INVALID")
+        if similarity is not None and (
+            similarity.ticket != ticket or similarity.scope != prepared.rag_scope
+        ):
+            raise ChatError("GENERAL_CHAT_PROTOCOL_INVALID")
         self.rpc_request_id, self.ticket = rpc_request_id, ticket
         self.actor_guard, self.knowledge = actor_guard, knowledge
         self.rag_knowledge, self.evidence = rag_knowledge, evidence
+        self.similarity = similarity
         self.transcript = ChatRagToolTranscript(
             scope=prepared.rag_scope,
             item_context=prepared.knowledge,
@@ -82,6 +93,7 @@ class ChatRagToolBroker:
         ):
             raise ChatError("GENERAL_CHAT_PROTOCOL_INVALID")
         actor_id = self.actor_guard()
+        similarity_selection: ChatSimilaritySelection | None = None
         error = self.transcript.command_error(request.command)
         if error is not None:
             outcome = failed_rag_tool(error)
@@ -128,6 +140,18 @@ class ChatRagToolBroker:
             outcome = ChatToolOutcomeV2.model_validate(
                 {**old.model_dump(mode="json"), "rag_context": None}
             )
+            if (
+                self.similarity is not None
+                and isinstance(request.command, ChatSearchCommand)
+                and request.command.arguments.kind == "TOPIC"
+                and outcome.status != "FAILED"
+            ):
+                similarity_selection = self.similarity.select(
+                    actor_id=actor_id,
+                    arguments=request.command.arguments,
+                    graph=outcome,
+                )
+                outcome = similarity_selection.outcome
         if self.actor_guard() != actor_id:
             raise ChatError("GENERAL_CHAT_FORBIDDEN")
         record = read_rag(
@@ -136,12 +160,19 @@ class ChatRagToolBroker:
             ChatToolRecordV2,
         )
         self.transcript.observe(record)
-        pointer = self.evidence.publish(
-            payload=canonical_json_bytes(record.model_dump(mode="json")),
-            schema_ref=RAG_TOOL_RECORD_SCHEMA,
-            intent=f"chat-tool:{request.ticket.claim_id}:{request.sequence}",
-            created_at=datetime.now(UTC),
-        )
+        if similarity_selection is not None:
+            assert self.similarity is not None
+            pointer = self.similarity.ports.evidence.publish_similarity_observation(
+                record,
+                similarity_selection.observation(record),
+            )
+        else:
+            pointer = self.evidence.publish(
+                payload=canonical_json_bytes(record.model_dump(mode="json")),
+                schema_ref=RAG_TOOL_RECORD_SCHEMA,
+                intent=f"chat-tool:{request.ticket.claim_id}:{request.sequence}",
+                created_at=datetime.now(UTC),
+            )
         return read_rag(
             "Reply",
             ChatToolReplyV2(record=record, pointer=pointer).model_dump(mode="json"),

@@ -147,6 +147,9 @@ def validate_chat_ranked_candidate_read_reply(
             pair = offered.get(card.item.item_revision_id)
             if pair is None or pair[1].item_id != card.item.item_id:
                 raise ChatRankedCandidateReadError()
+            expected_kind = "PAST_EXAM" if pair[1].source_class == "PAST_EXAM" else "GENERATED"
+            if card.source_kind != expected_kind:
+                raise ChatRankedCandidateReadError()
             if request.arguments.source != "ALL" and card.source_kind != request.arguments.source:
                 raise ChatRankedCandidateReadError()
             ranks.append(pair[0])

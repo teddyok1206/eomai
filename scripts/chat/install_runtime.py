@@ -131,6 +131,7 @@ def configuration_payloads(
     rag_policy: ChatRagPolicy | None = None,
     native_runtime: CodexCliIdentity | None = None,
     private_query_source: bool = False,
+    similarity_search: bool = False,
 ) -> dict[Path, bytes]:
     model_value = f"EOM_GENERAL_CHAT_MODEL={model}\n"
     if rag_policy is not None:
@@ -153,6 +154,10 @@ def configuration_payloads(
         if rag_policy is None:
             raise ChatError("GENERAL_CHAT_OWNER_CONFIGURATION_INVALID")
         model_value += "EOM_GENERAL_CHAT_PRIVATE_QUERY_SOURCE=READ_ONLY\n"
+    if similarity_search:
+        if not private_query_source:
+            raise ChatError("GENERAL_CHAT_OWNER_CONFIGURATION_INVALID")
+        model_value += "EOM_GENERAL_CHAT_SIMILARITY_SEARCH=NATIVE_TOPIC\n"
     return {
         CONFIG_ROOT / "general-chat-model.env": model_value.encode(),
         CONFIG_ROOT / "general-chat-release.env": f"EOM_RUNTIME_SOURCE_COMMIT={commit}\n".encode(),
@@ -175,6 +180,7 @@ def require_pinned_model_selection(
         "EOM_GENERAL_CHAT_RAG_POLICY_SHA256",
         *NATIVE_RUNTIME_KEYS,
         "EOM_GENERAL_CHAT_PRIVATE_QUERY_SOURCE",
+        "EOM_GENERAL_CHAT_SIMILARITY_SEARCH",
     }
     if set(values) - allowed:
         raise ChatError("GENERAL_CHAT_OWNER_CONFIGURATION_INVALID")
@@ -320,6 +326,7 @@ def stage(
     previous_model_config_sha256: str | None = None,
     pin_codex_runtime: bool = False,
     private_query_source: bool | None = None,
+    similarity_search: bool | None = None,
 ) -> None:
     require_source(commit, model)
     selected = runtime_commit or commit
@@ -347,8 +354,11 @@ def stage(
         )
         if private_query_source is not None and private_query_source != pinned.private_query_source:
             raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
+        if similarity_search is not None and similarity_search != pinned.similarity_search:
+            raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
         rag_policy = pinned.rag_policy
         private_query_source = pinned.private_query_source
+        similarity_search = pinned.similarity_search
         native_guard = capture_codex_cli_identity(CODEX_BINARY)
     configs = configuration_payloads(
         selected,
@@ -356,6 +366,7 @@ def stage(
         rag_policy=rag_policy,
         native_runtime=native_guard.identity if native_guard is not None else None,
         private_query_source=private_query_source is True,
+        similarity_search=similarity_search is True,
     )
     model_settings = dict(
         line.split("=", 1)
@@ -548,6 +559,11 @@ def main() -> int:
         help="Explicit source-only socket selection; Codex-only repins preserve the current value",
     )
     parser.add_argument(
+        "--similarity-search",
+        choices=("DISABLED", "NATIVE_TOPIC"),
+        help="Optional native TOPIC enrichment; requires the private source endpoint",
+    )
+    parser.add_argument(
         "--pin-codex-runtime",
         action="store_true",
         help="Pin the protected installed CLI while preserving the existing protocol-4 model/RAG",
@@ -574,6 +590,9 @@ def main() -> int:
                 None
                 if args.private_query_source is None
                 else args.private_query_source == "READ_ONLY"
+            ),
+            similarity_search=(
+                None if args.similarity_search is None else args.similarity_search == "NATIVE_TOPIC"
             ),
         )
         if args.action == "activate":

@@ -31,9 +31,11 @@ from eom_orchestrator.general_chat_owner_server import (
 from eom_orchestrator.general_chat_private_query_client import PRIVATE_CHAT_QUERY_SOURCE_SOCKET
 from eom_orchestrator.general_chat_private_query_source import GeneralChatPrivateQuerySource
 from eom_orchestrator.general_chat_repository import GeneralChatRepository
+from eom_orchestrator.general_chat_similarity_consumer import ChatSimilarityPorts
 from eom_orchestrator.general_chat_socket import OWNER_SOCKET, ChatSocketEndpoint
 from eom_orchestrator.general_chat_state import ChatError, safe_chat_error_code
 from eom_orchestrator.general_chat_worker_client import ChatWorkerClient
+from eom_orchestrator.private_chat_query_prepare_client import PrivateChatQueryPrepareClient
 from eom_orchestrator.settings import Settings
 
 
@@ -74,6 +76,13 @@ def main() -> int:
             knowledge=knowledge,
             rag_knowledge=knowledge,
             rag_policy=config.rag_policy,
+            similarity=(
+                ChatSimilarityPorts(
+                    knowledge, PrivateChatQueryPrepareClient.for_installed_owner(), evidence, stop
+                )
+                if config.similarity_search
+                else None
+            ),
         )
         policy = source_chat_worker_policy(
             model=config.model,

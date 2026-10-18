@@ -497,6 +497,21 @@ NOT_IMPLEMENTED / NOT_EVALUATED`를 구분한다. 기존 corpus의 학습 완료
 - [권한이 적용된 snapshot](ITEM_INFERENCE_TRANSFER_AUTHORIZED_SNAPSHOT.md).
 - [교과서 GraphRAG 연결 경계](GENERAL_CHAT_TEXTBOOK_RAG_DESIGN.md).
 
+### C4 Chat 소비 경로의 소스 연결 — 2026-10-18
+
+기존 V4 도구 브로커에 실제 claim 기반의 원 질문 QUERY·Catalog 후보 읽기·원자적 보조
+관측 기록을 선택적으로 연결했다. 단순 독립 계약/클라이언트 추가와 달리 실행 service와
+설치 owner의 명시적 구성까지 같은 소비 경로로 묶는다. 새 관측 계약은 기존 READY-only
+provenance/1.0을 바꾸지 않고 PENDING/UNAVAILABLE/UNKNOWN도 정직하게 보존한다.
+실제 READ 응답을 PREPARE로 재해석하지 않으며, 원 작업을 확인할 수 없는 통신 오류 뒤에는
+같은 turn에서 물리적 재제출을 하지 않는다. 기존 인용은 여전히 승인 자료 읽기가 필요하다.
+
+**소스/격리 검증과 운영 설치·활성화는 별개**다. 이 변경은 새 DB/migration/권한/TTL/로그인,
+운영 selector·CPU/GPU 기본값 또는 기존 인덱싱을 변경하지 않는다. 전체 C1–C5 활성화,
+현재 전체 corpus·seed/delta 증거, 여섯 번의 실제 고정 CPU/CUDA 비교와 실제 CPU 복구는
+여전히 전체 목표의 종료 조건이다. 무인 작업 창과 원래 fresh-auth 거부 기록도 유지한다.
+[연결 설계와 정확한 경계](GENERAL_CHAT_SIMILARITY_CONSUMER_DESIGN.md).
+
 ## 부록 — ChatGPT 기능에서 대화 삭제 추가하기
 
 사용자가 요청한 별도 후속 기능이며 문서의 마지막 항목으로 관리한다. 위 핵심 증분

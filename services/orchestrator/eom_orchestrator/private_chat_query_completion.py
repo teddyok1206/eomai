@@ -1,5 +1,6 @@
 """Bounded original-query progress, never a new queue, SQL root or transport retry."""
 
+from collections.abc import Callable
 from threading import Event
 from time import monotonic
 
@@ -26,6 +27,7 @@ def wait_for_original_private_chat_query(
     *,
     stop: Event,
     deadline: float,
+    on_acknowledged: Callable[[PrivateChatQueryPrepareReply], None] | None = None,
 ) -> PrivateChatQueryPrepareReply:
     """One initial admission, then acknowledged reads/explicit original progress only.
 
@@ -44,6 +46,8 @@ def wait_for_original_private_chat_query(
     if stop.is_set() or deadline - now < PRIVATE_CHAT_QUERY_RPC_TIMEOUT:
         raise PrivateChatQueryPrepareProtocolError("PRIVATE_CHAT_QUERY_UNAVAILABLE")
     acknowledged = client.execute(request)
+    if on_acknowledged is not None:
+        on_acknowledged(acknowledged)
     for _ in range(MAX_PRIVATE_CHAT_QUERY_PROGRESS_ROUNDS):
         if acknowledged.status != "PENDING":
             return acknowledged
@@ -62,4 +66,6 @@ def wait_for_original_private_chat_query(
         # This explicit admission is not hidden inside READ. The existing Runner
         # decides current original claim/checkpoint eligibility; this loop cannot.
         acknowledged = client.continue_pending_original(request, acknowledged)
+        if on_acknowledged is not None:
+            on_acknowledged(acknowledged)
     return acknowledged
