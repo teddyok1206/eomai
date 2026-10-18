@@ -2,6 +2,12 @@
 
 Status: implementation candidate; not operating activation or full goal acceptance.
 
+Source candidate `b01095b8`: final423 source tests, strict10 modules, formatting/
+lint17 files, no-ML owner import and three-wheel RECORD/ten-member source match
+PASS. Native/Catalog/actor authority in tests is synthetic; publication uses real
+temporary files/SQLite. No operating install, model run or fresh login occurred.
+[Exact checkpoint and remaining release gates](../status/CHAT_SIMILARITY_CONSUMER_CHECKPOINT_2026-10-18.md).
+
 ## Boundary and canonical identity
 
 The existing Orchestrator V4 broker owns the optional TOPIC enrichment. RECENT,

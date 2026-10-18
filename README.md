@@ -588,7 +588,9 @@ Chat의 Graph 내용 해시와 임베딩 입력의 manifest 파일 해시를 구
 같은 도구 Artifact에 준비 중·완료·사용 불가·결과 불명을 구분해 남깁니다. 통신 결과를
 모르면 재제출하지 않고, 권한·해시 오류는 기존 검색 결과로 숨기지 않습니다. 기존 인용·
 워커 형식과 일반 검색/교과서 조회는 유지합니다. **소스 후보이며 운영 미설치·미활성**입니다.
-[소비 경로 설계와 검증 범위](docs/architecture/GENERAL_CHAT_SIMILARITY_CONSUMER_DESIGN.md)
+423개 통합 테스트·엄격한 타입 검사10개 모듈·배포용 패키지 검증을 통과했습니다.
+[소비 경로 설계](docs/architecture/GENERAL_CHAT_SIMILARITY_CONSUMER_DESIGN.md) ·
+[실제 검증과 남은 운영 범위](docs/status/CHAT_SIMILARITY_CONSUMER_CHECKPOINT_2026-10-18.md)
 
 아래는 날짜·후보별 역사적 구현 기록입니다. 당시의 미완료 표기는 현재 종합 상태와
 구별하며, 최신 실제 실행·활성화 범위는 위 표와 연결된 상태 문서를 기준으로 합니다.

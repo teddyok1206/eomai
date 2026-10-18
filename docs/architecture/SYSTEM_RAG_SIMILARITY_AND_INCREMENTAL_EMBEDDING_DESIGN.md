@@ -511,6 +511,8 @@ provenance/1.0을 바꾸지 않고 PENDING/UNAVAILABLE/UNKNOWN도 정직하게 �
 현재 전체 corpus·seed/delta 증거, 여섯 번의 실제 고정 CPU/CUDA 비교와 실제 CPU 복구는
 여전히 전체 목표의 종료 조건이다. 무인 작업 창과 원래 fresh-auth 거부 기록도 유지한다.
 [연결 설계와 정확한 경계](GENERAL_CHAT_SIMILARITY_CONSUMER_DESIGN.md).
+최종423개 소스 테스트·타입10모듈·패키지/RECORD·정확한 구성원10개 대조를 통과했다.
+[이번 실제 검증과 미설치·미활성 범위](../status/CHAT_SIMILARITY_CONSUMER_CHECKPOINT_2026-10-18.md).
 
 ## 부록 — ChatGPT 기능에서 대화 삭제 추가하기
 
