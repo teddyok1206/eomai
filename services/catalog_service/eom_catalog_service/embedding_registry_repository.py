@@ -16,7 +16,7 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingVectorRowRef,
 )
 from eom_protocol.artifact_members import ArtifactMemberPointer
-from sqlalchemy import String, column, exists, select, tuple_, update, values
+from sqlalchemy import Select, String, column, exists, select, tuple_, update, values
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
@@ -111,6 +111,51 @@ def binding_columns(binding: EmbeddingSourceBinding) -> dict[str, Any]:
     }
 
 
+def _pinned_revision_select() -> Select[Any]:
+    revision, index = EmbeddingIndexRevisionRecord, EmbeddingIndexRecord
+    return select(
+        revision.index_id,
+        revision.index_revision_id,
+        revision.manifest_artifact_id,
+        revision.manifest_artifact_revision_id,
+        revision.manifest_member_path,
+        revision.manifest_schema_ref,
+        revision.manifest_media_type,
+        revision.manifest_sha256,
+        revision.index_sha256,
+        revision.graph_snapshot_revision_id,
+        revision.policy_revision_id,
+        revision.policy_sha256,
+        revision.binding_count,
+        revision.binding_set_sha256,
+        index.corpus_id,
+        index.storage_partition,
+        index.space_sha256,
+        index.view,
+        index.recipe_sha256,
+        index.projection_version,
+        index.population_scope,
+    ).join(index, index.index_id == revision.index_id)
+
+
+def _registered_index_read(row: Any) -> RegisteredEmbeddingIndexRead:
+    return RegisteredEmbeddingIndexRead(
+        row.corpus_id,
+        EmbeddingIndexNamespace.model_validate(
+            {name: getattr(row, name) for name in EmbeddingIndexNamespace.model_fields}
+        ),
+        row.index_id,
+        row.index_revision_id,
+        artifact_member(row, "manifest_"),
+        row.index_sha256,
+        row.graph_snapshot_revision_id,
+        row.policy_revision_id,
+        row.policy_sha256,
+        row.binding_count,
+        row.binding_set_sha256,
+    )
+
+
 class EmbeddingRegistryRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
@@ -169,51 +214,32 @@ class EmbeddingRegistryRepository:
         self, index_id: str, revision_id: str
     ) -> RegisteredEmbeddingIndexRead | None:
         """One exact PK/FK join; never select the mutable current pointer or acquire its lock."""
-        revision, index = EmbeddingIndexRevisionRecord, EmbeddingIndexRecord
+        revision = EmbeddingIndexRevisionRecord
         row = self.session.execute(
-            select(
-                revision.index_id,
-                revision.index_revision_id,
-                revision.manifest_artifact_id,
-                revision.manifest_artifact_revision_id,
-                revision.manifest_member_path,
-                revision.manifest_schema_ref,
-                revision.manifest_media_type,
-                revision.manifest_sha256,
-                revision.index_sha256,
-                revision.graph_snapshot_revision_id,
-                revision.policy_revision_id,
-                revision.policy_sha256,
-                revision.binding_count,
-                revision.binding_set_sha256,
-                index.corpus_id,
-                index.storage_partition,
-                index.space_sha256,
-                index.view,
-                index.recipe_sha256,
-                index.projection_version,
-                index.population_scope,
+            _pinned_revision_select().where(
+                revision.index_id == index_id, revision.index_revision_id == revision_id
             )
-            .join(index, index.index_id == revision.index_id)
-            .where(revision.index_id == index_id, revision.index_revision_id == revision_id)
         ).one_or_none()
-        if row is None:
-            return None
-        return RegisteredEmbeddingIndexRead(
-            row.corpus_id,
-            EmbeddingIndexNamespace.model_validate(
-                {name: getattr(row, name) for name in EmbeddingIndexNamespace.model_fields}
-            ),
-            row.index_id,
-            row.index_revision_id,
-            artifact_member(row, "manifest_"),
-            row.index_sha256,
-            row.graph_snapshot_revision_id,
-            row.policy_revision_id,
-            row.policy_sha256,
-            row.binding_count,
-            row.binding_set_sha256,
-        )
+        return None if row is None else _registered_index_read(row)
+
+    def read_pinned_revisions(
+        self, identities: tuple[tuple[str, str], ...]
+    ) -> dict[tuple[str, str], RegisteredEmbeddingIndexRead]:
+        """At most three immutable view pins in one exact indexed join, never latest."""
+        if not 1 <= len(identities) <= 3 or len(set(identities)) != len(identities):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_POINTER_INVALID")
+        revision = EmbeddingIndexRevisionRecord
+        rows = self.session.execute(
+            _pinned_revision_select().where(
+                tuple_(revision.index_id, revision.index_revision_id).in_(identities)
+            )
+        ).all()
+        result = {
+            (row.index_id, row.index_revision_id): _registered_index_read(row) for row in rows
+        }
+        if len(result) != len(rows):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_POINTER_INVALID")
+        return result
 
     def create_head(
         self, command: RegisterEmbeddingIndexCommand, now: datetime

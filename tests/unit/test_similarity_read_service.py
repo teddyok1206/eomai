@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from threading import Barrier
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -131,11 +132,16 @@ def selected(source, monkeypatch):
         return SimpleNamespace(sources="same-pinned-sources", output="same-output")
 
     owner = SimpleNamespace(
-        catalog=SimpleNamespace(engine=source.publisher.engine),
+        catalog=SimpleNamespace(
+            engine=source.publisher.engine,
+            configuration=source.owner.catalog.configuration,
+        ),
         settings=source.owner.settings,
+        configuration=source.owner.configuration,
         identity=SimpleNamespace(fence_current_operator=Mock()),
         resolve_completed_sources=current,
     )
+    owner.catalog.for_pinned_similarity_request_in_session = Mock(return_value=owner.catalog)
     common = Mock(return_value=result)
 
     def compose(_reader, session, caller, context):
@@ -155,6 +161,49 @@ def selected(source, monkeypatch):
         common=common,
         source=source,
     )
+
+
+def test_historical_request_uses_only_an_operation_local_read_owner(selected, monkeypatch):
+    from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
+
+    original_owner = selected.owner
+    historical = original_owner.configuration.registry
+    namespace = EmbeddingIndexNamespace.model_validate(
+        historical.namespace.model_dump(mode="json")
+        | {"population_scope": "ALL_ADMITTED_GRAPH_ITEMS"}
+    )
+    original_config = replace(
+        original_owner.configuration, registry=replace(historical, namespace=namespace)
+    )
+    original_owner.configuration = original_config
+    original_owner.catalog.configuration = original_config.registry
+    original_owner.catalog.for_pinned_similarity_request_in_session.return_value = SimpleNamespace(
+        configuration=historical
+    )
+    factory = module.CatalogReferenceQueryReadOwner
+    owners = []
+
+    def create(*args, **kwargs):
+        owner = factory(*args, **kwargs)
+        owner.resolve_completed_sources = original_owner.resolve_completed_sources
+        owners.append(owner)
+        return owner
+
+    monkeypatch.setattr(module, "CatalogReferenceQueryReadOwner", create)
+    original = module.CatalogSimilaritySessionContextReader.compose_in_session
+
+    def compose(reader, session, caller, request):
+        assert reader.query.owner is owners[0]
+        return original(reader, session, caller, request)
+
+    monkeypatch.setattr(module.CatalogSimilaritySessionContextReader, "compose_in_session", compose)
+    result = selected.service.read(selected.request)
+    assert result == selected.result and result.request == selected.source.request.context_request
+    assert len(owners) == 1 and len(selected.calls) == 2
+    assert owners[0].configuration.registry == historical
+    assert owners[0].identity is original_owner.identity
+    assert original_owner.configuration is original_config
+    assert original_owner.catalog.configuration is original_config.registry
 
 
 def change(value, **fields):

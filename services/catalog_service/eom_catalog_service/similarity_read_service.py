@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from eom_catalog_contracts.similarity_context import SimilarityContext
 from eom_catalog_contracts.similarity_read import (
     SimilarityContextReadRequest,
@@ -13,7 +15,10 @@ from eom_workflow_runner.reference_query_consumer_read import (
     CatalogCompletedReferenceQueryRead,
     select_completed_reference_query_request,
 )
-from eom_workflow_runner.reference_query_source_read import ReferenceQuerySourceOwner
+from eom_workflow_runner.reference_query_source_read import (
+    CatalogReferenceQueryReadOwner,
+    ReferenceQuerySourceOwner,
+)
 from eom_workflow_runner.similarity_context_session_reader import (
     CatalogSimilaritySessionContextReader,
 )
@@ -50,8 +55,19 @@ class CatalogSimilarityContextReadService:
                     session, self.owner, caller, request.selection
                 )
                 provenance = PinnedArtifactReadContext(session, self.owner.settings)
+                selected = self.owner.catalog.for_pinned_similarity_request_in_session(
+                    session, caller, original.context_request, artifact_reader=provenance
+                )
+                owner = self.owner
+                if selected.configuration != self.owner.catalog.configuration:
+                    owner = CatalogReferenceQueryReadOwner(
+                        self.owner.catalog.engine,
+                        replace(self.owner.configuration, registry=selected.configuration),
+                        identity_fence=self.owner.identity,
+                        settings=self.owner.settings,
+                    )
                 with observe_read_stage(InferenceTransferReadStage.RESOLVE_COMPLETED_BEFORE):
-                    current = self.owner.resolve_completed_sources(
+                    current = owner.resolve_completed_sources(
                         session,
                         caller,
                         original,
@@ -59,7 +75,7 @@ class CatalogSimilarityContextReadService:
                         artifact_reader=provenance,
                     )
                 query = CatalogCompletedReferenceQueryRead(
-                    self.owner,
+                    owner,
                     workflow_id=request.selection.workflow_id,
                     request=original,
                     artifact_reader=provenance,
@@ -72,10 +88,10 @@ class CatalogSimilarityContextReadService:
                     assert result.error_code is not None
                     raise SimilarityContextReadError(result.error_code)
                 late_request = select_completed_reference_query_request(
-                    session, self.owner, caller, request.selection
+                    session, owner, caller, request.selection
                 )
                 with observe_read_stage(InferenceTransferReadStage.RESOLVE_COMPLETED_AFTER):
-                    late = self.owner.resolve_completed_sources(
+                    late = owner.resolve_completed_sources(
                         session,
                         caller,
                         late_request,

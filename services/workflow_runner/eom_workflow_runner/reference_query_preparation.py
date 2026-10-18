@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Literal
 
 from eom_catalog_contracts.similarity_context import (
@@ -12,6 +13,7 @@ from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
     EmbeddingRegistryLookup,
     ReferenceQueryContextPreparation,
+    SelectedEmbeddingSources,
     validate_embedding_registry_actor,
 )
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
@@ -105,12 +107,28 @@ def prepare_and_start_reference_query_selection_in_session(
     _require_preparation_root(session, owner, caller)
     validate_reference_query_context_preparation(preparation, owner.configuration.registry)
     original = _current_query_request(session, owner, caller, idempotency_key)
+    replay_preparation = preparation
+    registry = owner.configuration.registry
+    if original is not None:
+        catalog = owner.catalog.for_pinned_similarity_request_in_session(
+            session, caller, original.context_request
+        )
+        registry = catalog.configuration
+        # Namespace is internal deployment selection, not an HTTP replay field.
+        # Normalize only that proven selection; all original intent still matches.
+        replay_preparation = replace(
+            preparation,
+            selection=SelectedEmbeddingSources(
+                replace(preparation.selection.scope, namespace=registry.namespace),
+                preparation.selection.source_revision_ids,
+            ),
+        )
     context = (
         owner.catalog.prepare_reference_query_context_in_session(session, caller, preparation)
         if original is None
         else original.context_request
     )
-    validate_reference_query_context_preparation(preparation, owner.configuration.registry, context)
+    validate_reference_query_context_preparation(replay_preparation, registry, context)
     if original is None:
         # Only an initial context captured by the actual Catalog source owner can
         # establish absence. A supplied/replayed context is not an absence grant.
@@ -185,9 +203,13 @@ def _start_with_pinned_context(
                 context.maximum_sources,
             ),
         )
-        policy, bundle = read_pinned_reference_query_controls(
-            PinnedArtifactReadContext(session, owner.settings), config
+        reader = PinnedArtifactReadContext(session, owner.settings)
+        selected = owner.catalog.for_pinned_similarity_request_in_session(
+            session, caller, context, artifact_reader=reader
         )
+        if selected.configuration.namespace != config.registry.namespace:
+            raise ValueError("REFERENCE_QUERY_INITIAL_NAMESPACE_MISMATCH")
+        policy, bundle = read_pinned_reference_query_controls(reader, config)
         body = {
             "schema_version": "reference-query-workflow-request/1.0"
             if context.consumer_purpose == "PAST_EXAM_VARIATION"

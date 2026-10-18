@@ -16,6 +16,7 @@ import pytest
 from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
 from eom_catalog_contracts.similarity_context import SimilarityConsumerPurpose
 from eom_catalog_service.embedding_registry_catalog_adapter import (
+    CatalogEmbeddingRegistryVerifier,
     EmbeddingRegistryOwnerConfiguration,
 )
 from eom_catalog_service.embedding_registry_ports import (
@@ -230,6 +231,13 @@ def make_source_case(
 
     monkeypatch.setattr(AuthenticatedSessionFence, "assert_current", identity)
     monkeypatch.setattr(owner.catalog, "authorize_scope", authorize)
+    # Existing fixture deliberately stubs registered-index authority; real exact
+    # revision/population/Artifact validation is covered by the Catalog adapter tests.
+    monkeypatch.setattr(
+        owner.catalog,
+        "for_pinned_similarity_request_in_session",
+        lambda *_args, **_kwargs: owner.catalog,
+    )
     monkeypatch.setattr(owner.catalog, "prepare_similarity_context_in_session", prepare)
     monkeypatch.setattr(owner.catalog, "read_similarity_views_in_session", read)
     monkeypatch.setattr(owner.catalog, "prepare_reference_query_anchor_in_session", prepare_anchor)
@@ -958,3 +966,71 @@ def test_exact_native_rows_use_query_purpose_and_configured_batch_not_row_count(
         bounded, job_id=first.job_id, query_request_id=first.query_request_id
     )
     assert "operator_id" not in first.model_dump(mode="json")
+
+
+def current_all_with_pinned_occurrence(source, monkeypatch):
+    """Explicit current-release/index-adapter seam; no registered-index assertion."""
+    owner = source.owner
+    historical = owner.configuration.registry
+    selected = CatalogEmbeddingRegistryVerifier(
+        source.publisher.engine,
+        historical,
+        identity_fence=owner.identity,
+        settings=owner.settings,
+    )
+    for name in ("authorize_scope", "prepare_reference_query_anchor_in_session"):
+        monkeypatch.setattr(selected, name, getattr(owner.catalog, name))
+    current = replace(
+        historical,
+        namespace=EmbeddingIndexNamespace.model_validate(
+            historical.namespace.model_dump(mode="json")
+            | {"population_scope": "ALL_ADMITTED_GRAPH_ITEMS"}
+        ),
+    )
+    owner.configuration = replace(owner.configuration, registry=current)
+    owner.catalog.configuration = current
+    selector = Mock(return_value=selected)
+    monkeypatch.setattr(owner.catalog, "for_pinned_similarity_request_in_session", selector)
+    return selected, selector
+
+
+def test_historical_source_resolution_uses_local_pinned_owner_not_current_all(source, monkeypatch):
+    selected, selector = current_all_with_pinned_occurrence(source, monkeypatch)
+    current = source.owner.catalog.configuration
+    monkeypatch.setattr(
+        source.owner.catalog,
+        "prepare_reference_query_anchor_in_session",
+        Mock(side_effect=AssertionError("current owner cannot materialize historical pins")),
+    )
+    with source.publisher.sessions.begin() as session:
+        reader = read_module.PinnedArtifactReadContext(session, source.owner.settings)
+        resolved = source.owner.resolve_sources(session, source.request, artifact_reader=reader)
+        selector.assert_called_once_with(
+            session,
+            EmbeddingRegistryCaller(source.request.operator_audit.operator_id),
+            source.request.context_request,
+            artifact_reader=reader,
+        )
+        assert resolved.request == source.request
+        assert resolved.prepared == source.prepared
+    assert source.owner.catalog.configuration is current
+    assert current.namespace.population_scope == "ALL_ADMITTED_GRAPH_ITEMS"
+    assert selected.configuration.namespace.population_scope == "OCCURRENCE_BACKED_PAST_EXAM"
+
+
+def test_pinned_namespace_resolution_failure_never_uses_current_or_native_fallback(
+    source, monkeypatch
+):
+    selected, selector = current_all_with_pinned_occurrence(source, monkeypatch)
+    selector.side_effect = ValueError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+    prepare = Mock(side_effect=AssertionError("invalid pinned revision cannot prepare"))
+    monkeypatch.setattr(selected, "prepare_reference_query_anchor_in_session", prepare)
+    with (
+        source.publisher.sessions.begin() as session,
+        pytest.raises(ValueError, match="EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH"),
+    ):
+        source.owner.resolve_sources(session, source.request)
+    prepare.assert_not_called()
+    assert (
+        source.owner.catalog.configuration.namespace.population_scope == "ALL_ADMITTED_GRAPH_ITEMS"
+    )

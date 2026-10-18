@@ -62,6 +62,11 @@ def read_owner(source, monkeypatch):
     # Scope/index behavior remains explicitly synthetic; control file bytes are real.
     for name in ("authorize_scope", "prepare_reference_query_anchor_in_session"):
         monkeypatch.setattr(owner.catalog, name, getattr(source.owner.catalog, name))
+    monkeypatch.setattr(
+        owner.catalog,
+        "for_pinned_similarity_request_in_session",
+        lambda *_args, **_kwargs: owner.catalog,
+    )
     return owner, state, observations
 
 

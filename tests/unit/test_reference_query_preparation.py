@@ -24,6 +24,7 @@ from eom_workflow_runner.reference_query_execution_port import ReferenceQueryNat
 from jsonschema.exceptions import ValidationError as JsonSchemaError
 
 from tests.unit.inference_transfer_embedding_fixtures import seal
+from tests.unit.test_reference_query_owner_admission import current_all_with_pinned_occurrence
 from tests.unit.test_reference_query_owner_admission import source as source
 from tests.unit.test_reference_query_workflow_contracts import definition_body
 
@@ -357,3 +358,75 @@ def test_missing_nested_inactive_or_foreign_owner_root_denies_before_authority(
         with pytest.raises(ValueError, match="REFERENCE_QUERY_PREPARATION_ROOT_INVALID"):
             prepare(value, session)
     assert value.source.calls == [] and value.received == []
+
+
+def test_original_occurrence_replay_normalizes_only_internal_current_namespace(
+    preparation, monkeypatch
+):
+    value = preparation
+    original = value.source.request
+    selected, selector = current_all_with_pinned_occurrence(value.source, monkeypatch)
+    selection = context_selection(value.source)
+    assert selection.selection.scope.namespace.population_scope == "ALL_ADMITTED_GRAPH_ITEMS"
+    value.existing = SimpleNamespace(
+        initial_request=original.model_dump(mode="json"),
+        created_actor_type="human",
+        created_actor_id=original.operator_audit.operator_id,
+    )
+    capture = Mock(side_effect=AssertionError("historical replay must not select a current head"))
+    monkeypatch.setattr(
+        value.source.owner.catalog, "prepare_reference_query_context_in_session", capture
+    )
+    for name in ("read_pinned_reference_query_controls", "effective_permissions"):
+        monkeypatch.setattr(
+            module, name, Mock(side_effect=AssertionError("original pins/audit only"))
+        )
+    with value.source.publisher.sessions.begin() as session:
+        assert not prepare_selection(value, session, selection).workflow_created
+        selector.assert_called_once_with(
+            session,
+            EmbeddingRegistryCaller(original.operator_audit.operator_id),
+            original.context_request,
+        )
+    assert value.received[0]["request"] == original
+    assert selection.selection.scope.namespace.population_scope == "ALL_ADMITTED_GRAPH_ITEMS"
+    assert selected.configuration.namespace.population_scope == "OCCURRENCE_BACKED_PAST_EXAM"
+    assert (
+        value.source.owner.configuration.registry.namespace.population_scope
+        == "ALL_ADMITTED_GRAPH_ITEMS"
+    )
+    capture.assert_not_called()
+    value.executor.execute.assert_not_called()
+    value.executor.allocate_execution.assert_not_called()
+
+
+def test_new_initial_request_cannot_borrow_historical_namespace(preparation, monkeypatch):
+    value = preparation
+    _selected, selector = current_all_with_pinned_occurrence(value.source, monkeypatch)
+    with (
+        value.source.publisher.sessions.begin() as session,
+        pytest.raises(ValueError, match="REFERENCE_QUERY_INITIAL_NAMESPACE_MISMATCH"),
+    ):
+        prepare(value, session)
+    selector.assert_called_once()
+    assert value.received == []
+    value.executor.execute.assert_not_called()
+
+
+def test_initial_current_source_denial_precedes_artifact_context(preparation, monkeypatch):
+    value = preparation
+    monkeypatch.setattr(
+        value.source.owner.catalog,
+        "authorize_scope",
+        Mock(side_effect=EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN")),
+    )
+    reader = Mock(side_effect=AssertionError("initial denial must precede Artifact context"))
+    monkeypatch.setattr(module, "PinnedArtifactReadContext", reader)
+    with (
+        value.source.publisher.sessions.begin() as session,
+        pytest.raises(EmbeddingRegistryError, match="EMBEDDING_REGISTRY_FORBIDDEN"),
+    ):
+        prepare(value, session)
+    reader.assert_not_called()
+    assert value.received == []
+    value.executor.execute.assert_not_called()

@@ -1394,6 +1394,150 @@ class CatalogEmbeddingRegistryVerifier:
 
         return self._guard(resolve)
 
+    def for_pinned_similarity_request_in_session(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        request: SimilarityContextRequest,
+        *,
+        artifact_reader: PinnedArtifactReadContext | None = None,
+    ) -> CatalogEmbeddingRegistryVerifier:
+        """Resolve stored exact view pins without changing the initial namespace.
+
+        This is read-local selection, never permission, current-head discovery or
+        a mutation of the installed owner. The original Workflow/request owner
+        supplies the pinned request; subsequent reads retain every source fence.
+        """
+        self._require_similarity_root(session)
+
+        def resolve() -> CatalogEmbeddingRegistryVerifier:
+            if (
+                type(caller) is not EmbeddingRegistryCaller
+                or self.identity_fence is None
+                or self._indexing_source_authority is not None
+                or self._similarity_read_window is not None
+                or session.get_bind() is not self.engine
+            ):
+                raise EmbeddingRegistryError("EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE")
+            checked = parse_similarity_context_request(request)
+            config = self.configuration
+            if checked.source_classes != config.source_classes:
+                raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+            lookup = EmbeddingRegistryLookup(
+                config.corpus_id,
+                config.namespace,
+                checked.graph_snapshot,
+                checked.policy_revision_id,
+                checked.policy_sha256,
+                checked.maximum_sources,
+            )
+            self.authorize_scope(session, caller, lookup)
+            selections = tuple(value for value in checked.views if value.index is not None)
+            if not selections:
+                return self
+            identities = tuple(
+                (value.index.index_id, value.index.index_revision_id)
+                for value in selections
+                if value.index is not None
+            )
+            registered = EmbeddingRegistryRepository(session).read_pinned_revisions(identities)
+            if set(registered) != set(identities):
+                raise EmbeddingRegistryError("EMBEDDING_REGISTRY_POINTER_INVALID")
+            reader = (
+                PinnedArtifactReadContext(session, self.settings)
+                if artifact_reader is None
+                else artifact_reader
+            )
+            reader.require_session(session)
+            if reader.settings != self.settings:
+                raise EmbeddingRegistryError("EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE")
+            selected_namespace: EmbeddingIndexNamespace | None = None
+            for selection in selections:
+                pin = selection.index
+                assert pin is not None
+                value = registered[(pin.index_id, pin.index_revision_id)]
+                namespace = EmbeddingIndexNamespace.model_validate(
+                    value.namespace.model_dump(mode="json")
+                )
+                expected = config.namespace.model_dump(mode="json") | {
+                    "view": selection.view,
+                    "population_scope": namespace.population_scope,
+                }
+                if namespace.model_dump(mode="json") != expected or (
+                    namespace.population_scope != config.namespace.population_scope
+                    and (
+                        config.namespace.population_scope != "ALL_ADMITTED_GRAPH_ITEMS"
+                        or namespace.population_scope != "OCCURRENCE_BACKED_PAST_EXAM"
+                        or checked.source_classes != ("PAST_EXAM",)
+                    )
+                ):
+                    raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+                normalized = EmbeddingIndexNamespace.model_validate(
+                    namespace.model_dump(mode="json") | {"view": config.namespace.view}
+                )
+                if selected_namespace is not None and selected_namespace != normalized:
+                    raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+                selected_namespace = normalized
+                intent = EmbeddingRegistryRead(
+                    EmbeddingRegistryLookup(
+                        config.corpus_id,
+                        namespace,
+                        checked.graph_snapshot,
+                        checked.policy_revision_id,
+                        checked.policy_sha256,
+                        checked.maximum_sources,
+                    ),
+                    selection,
+                )
+                validate_registered_embedding_index_read(intent, value)
+            reader.prefetch(
+                tuple(
+                    (value.index_manifest.artifact_id, value.index_manifest.artifact_revision_id)
+                    for value in registered.values()
+                )
+            )
+            for selection in selections:
+                pin = selection.index
+                assert pin is not None
+                value = registered[(pin.index_id, pin.index_revision_id)]
+                index = self._read_index(reader, value.index_manifest)
+                validate_similarity_index_pin(selection, value.index_manifest, index)
+                validate_registered_embedding_index_manifest(value, index)
+                if index.space != config.space or index.recipe != config.recipe:
+                    raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+            assert selected_namespace is not None
+            owner = self
+            if selected_namespace != config.namespace:
+                owner = CatalogEmbeddingRegistryVerifier(
+                    self.engine,
+                    EmbeddingRegistryOwnerConfiguration(
+                        config.corpus_id,
+                        selected_namespace,
+                        config.space,
+                        config.recipe,
+                        config.source_classes,
+                    ),
+                    identity_fence=self.identity_fence,
+                    settings=self.settings,
+                )
+                owner.sources = self.sources
+            owner.authorize_scope(
+                session,
+                caller,
+                EmbeddingRegistryLookup(
+                    config.corpus_id,
+                    selected_namespace,
+                    checked.graph_snapshot,
+                    checked.policy_revision_id,
+                    checked.policy_sha256,
+                    checked.maximum_sources,
+                ),
+            )
+            reader.revalidate_provenance()
+            return owner
+
+        return self._guard(resolve)
+
     def _initial_similarity_views(
         self,
         session: Session,

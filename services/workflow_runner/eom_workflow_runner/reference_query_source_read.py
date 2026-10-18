@@ -368,6 +368,8 @@ def resolve_reference_query_sources(
         or request.runtime_bundle != config.runtime_bundle
     ):
         raise ValueError("REFERENCE_QUERY_OWNER_CONFIGURATION_MISMATCH")
+    # Keep the original current deployment fence before opening Artifact state;
+    # a historical namespace is not a replacement for current source authority.
     owner.catalog.authorize_scope(
         session,
         caller,
@@ -388,9 +390,28 @@ def resolve_reference_query_sources(
     reader.require_session(session)
     if reader.settings != owner.settings:
         raise ValueError("REFERENCE_QUERY_READ_ARTIFACT_CONTEXT_INVALID")
+    # A stored request owns its exact registered index identity. The current
+    # deployment remains unchanged; only this operation uses its verified scope.
+    catalog = owner.catalog.for_pinned_similarity_request_in_session(
+        session, caller, context, artifact_reader=reader
+    )
+    registry = catalog.configuration
+    if registry.namespace != config.registry.namespace:
+        catalog.authorize_scope(
+            session,
+            caller,
+            EmbeddingRegistryLookup(
+                registry.corpus_id,
+                registry.namespace,
+                context.graph_snapshot,
+                context.policy_revision_id,
+                context.policy_sha256,
+                context.maximum_sources,
+            ),
+        )
     policy, bundle = read_pinned_reference_query_controls(reader, config)
     validate_reference_query_request_references(request, policy, bundle)
-    prepared = owner.catalog.prepare_reference_query_anchor_in_session(
+    prepared = catalog.prepare_reference_query_anchor_in_session(
         session, caller, context, artifact_reader=reader
     )
     reader.revalidate_provenance()

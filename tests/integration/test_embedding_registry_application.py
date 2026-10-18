@@ -472,6 +472,151 @@ def test_initial_query_capture_reads_actual_index_artifact_and_does_not_lock_cur
     assert sum("FOR UPDATE NOWAIT" in s for s in statements) == 1
 
 
+def test_historical_namespace_uses_one_registered_pk_batch_and_real_artifact(
+    guarded_engine: Engine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Real SQL/file-set, with explicitly synthetic current source/IAM admission."""
+    from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
+    from eom_catalog_contracts.similarity_context import parse_similarity_context_request
+    from eom_catalog_service.embedding_registry_catalog_adapter import (
+        CatalogEmbeddingRegistryVerifier,
+        EmbeddingRegistryOwnerConfiguration,
+    )
+    from eom_catalog_service.settings import CatalogSettings
+    from eom_orchestrator.embedding_artifact_store import (
+        EmbeddingArtifactStore,
+        EmbeddingIndexPublicationScope,
+    )
+    from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
+    from eom_orchestrator.settings import Settings
+
+    from tests.unit.test_embedding_registry_catalog_adapter import _read_selection
+    from tests.unit.test_similarity_read_contract import pair
+
+    command, capture = _fixture(guarded_engine)
+    current_namespace = command.namespace
+    original_namespace = EmbeddingIndexNamespace.model_validate(
+        current_namespace.model_dump(mode="json")
+        | {"population_scope": "OCCURRENCE_BACKED_PAST_EXAM"}
+    )
+    settings = Settings(
+        nas_artifact_root=tmp_path / "artifacts",
+        workspace_root=tmp_path / "workspaces",
+        staging_root=tmp_path / "staging",
+    )
+    settings.nas_artifact_root.mkdir(mode=0o700)
+    settings.workspace_root.mkdir(mode=0o700)
+    workspace = settings.workspace_root / "index"
+    workspace.mkdir(mode=0o700)
+    publication = EmbeddingArtifactStore(
+        ControlFileSetPublisher(guarded_engine, settings), source_commit="a" * 40
+    ).publish_index(
+        index=capture.index,
+        shards=capture.shards,
+        previous=None,
+        scope=EmbeddingIndexPublicationScope(
+            command.graph_snapshot, command.policy_revision_id, command.policy_sha256
+        ),
+        workspace=workspace,
+    )
+    command = RegisterEmbeddingIndexCommand.model_validate(
+        seal(
+            command.model_dump(mode="json")
+            | {
+                "namespace": original_namespace.model_dump(mode="json"),
+                "index_manifest": publication.index_manifest.model_dump(mode="json"),
+            },
+            "request_sha256",
+        )
+    )
+    with Session(guarded_engine) as session, session.begin():
+        register_embedding_index(session, CALLER, command, SyntheticVerifier(capture), now=NOW)
+    intent, _registered = _read_selection(command, capture.index)
+    _, example = pair()
+    body = example.result.request.model_dump(mode="json")
+    binding = capture.index.bindings[0]
+    body.update(
+        graph_snapshot=command.graph_snapshot.model_dump(mode="json"),
+        policy_revision_id=command.policy_revision_id,
+        policy_sha256=command.policy_sha256,
+        source_classes=["PAST_EXAM"],
+        views=[intent.selection.model_dump(mode="json")],
+        anchor={
+            "basis": "APPROVED_REFERENCE_ITEM",
+            "source": binding.source.model_dump(mode="json"),
+            "profile": binding.profile.model_dump(mode="json"),
+            "solution_evidence": binding.solution_evidence.model_dump(mode="json"),
+        },
+    )
+    request = parse_similarity_context_request(seal(body, "request_sha256"))
+    verifier = CatalogEmbeddingRegistryVerifier(
+        guarded_engine,
+        EmbeddingRegistryOwnerConfiguration(
+            command.corpus_id,
+            current_namespace,
+            capture.index.space,
+            capture.index.recipe,
+            ("PAST_EXAM",),
+        ),
+        identity_fence=Mock(),
+        settings=CatalogSettings(nas_artifact_root=settings.nas_artifact_root),
+    )
+    scopes = []
+
+    def authorize(owner, session, caller, scope):
+        assert session.get_bind() is guarded_engine and session.get_transaction().is_active
+        assert caller == CALLER and owner.configuration.source_classes == ("PAST_EXAM",)
+        assert scope.graph_snapshot == command.graph_snapshot
+        assert (scope.policy_revision_id, scope.policy_sha256) == (
+            command.policy_revision_id,
+            command.policy_sha256,
+        )
+        scopes.append(scope.namespace)
+
+    monkeypatch.setattr(CatalogEmbeddingRegistryVerifier, "authorize_scope", authorize)
+    statements = []
+
+    def observe(_connection, _cursor, statement, _parameters, _context, _many):
+        statements.append(statement.upper())
+
+    event.listen(guarded_engine, "before_cursor_execute", observe)
+    try:
+        with Session(guarded_engine) as session, session.begin():
+            selected = verifier.for_pinned_similarity_request_in_session(session, CALLER, request)
+            assert selected.configuration.namespace == original_namespace
+            assert verifier.configuration.namespace == current_namespace
+            assert selected.identity_fence is verifier.identity_fence
+    finally:
+        event.remove(guarded_engine, "before_cursor_execute", observe)
+    reads = [s for s in statements if "FROM EMBEDDING_INDEX_REVISIONS" in s]
+    assert len(reads) == 1 and " IN ((" in reads[0]
+    assert "CURRENT_INDEX_REVISION_ID" not in reads[0] and "FOR UPDATE" not in reads[0]
+    assert scopes == [current_namespace, original_namespace]
+    probe = Mock(spec=Session)
+    probe.execute.return_value.all.return_value = []
+    EmbeddingRegistryRepository(probe).read_pinned_revisions(
+        ((command.index_id, command.index_revision_id),)
+    )
+    sql = str(
+        probe.execute.call_args.args[0].compile(
+            dialect=guarded_engine.dialect, compile_kwargs={"literal_binds": True}
+        )
+    )
+    with guarded_engine.connect() as connection, connection.begin():
+        connection.execute(text("SET LOCAL enable_seqscan=off"))
+        explained = connection.scalar(text("EXPLAIN (FORMAT JSON) " + sql))
+    pending, indexes = [explained[0]["Plan"]], []
+    while pending:
+        node = pending.pop()
+        if node.get("Relation Name") == "embedding_index_revisions":
+            indexes.append(node.get("Index Name", ""))
+        pending.extend(node.get("Plans", ()))
+    assert any(
+        name in {"embedding_index_revisions_pkey", "uq_embedding_index_revision_identity"}
+        for name in indexes
+    )
+
+
 def test_atomic_registration_historical_replay_and_stale_identity_map(
     guarded_engine: Engine,
 ) -> None:
