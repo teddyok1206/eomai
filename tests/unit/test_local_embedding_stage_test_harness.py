@@ -36,6 +36,7 @@ def test_native_stage_branch_stays_after_exact_disposable_owner_preflight() -> N
     leaf = source[branch : source.index('if [[ "${action}" == "embedding-encoding-tests" ]]')]
     assert "tests/integration/test_local_embedding_stage_migration.py" in leaf
     assert "tests/integration/test_reference_query_step_migration.py" in leaf
+    assert "tests/integration/test_private_chat_query_step_migration.py" in leaf
     assert "tests/integration/test_reference_query_native_persistence.py" in leaf
     assert "tests/integration/test_private_chat_query_native_persistence.py" in leaf
     assert "tests/integration/test_reference_query_submission.py" in leaf

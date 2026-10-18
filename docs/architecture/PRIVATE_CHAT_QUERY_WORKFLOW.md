@@ -788,6 +788,68 @@ authority. Proof script:
 `/tmp/eom-private-runner-package.PyGehQxA/prove_runner_archives.py`, raw
 `14ef637595e5b1dd02814a91e52bdbf4a0cf1dcd3ba0a69c5170ecc5446046f1`.
 
+## Private step CHECK and exact release successor — staging design
+
+This staged DB change belongs to the existing Workflow step table/Alembic owner.
+0056 original context and accepted histories stay canonical and immutable; no
+source, vector, binary, pointer format, queue, index or worker protocol is added.
+The current model CHECK and a new frozen0057 migration permit only the exact
+private application key/result schema/NULL role/attempt1 tuple. Existing0054
+INDEX/reference and legacy/null semantics remain byte-preserved in the frozen
+predecessor predicate. Primary access stays PK/step key; DDL is transactionally
+replaced, with no row scan beyond PostgreSQL's necessary CHECK validation and no
+data rewrite. No application permission follows from accepting a storage tuple.
+
+Downgrade checks private step/key/result/carrier history before DDL, then restores
+the exact0054 predicate. It does not block pre-execution private metadata already
+supported by0056; it must not erase/mutate step history to enable a rollback.
+The simpler application-only check would not protect independent persistence
+callers; editing0054 in place would reinterpret released history.
+
+An additive2020-12 release context/admission1.6 pins only target0057. Its new verify/
+upgrade callbacks require exact0057 or immediate0056 predecessor respectively,
+same current owner and checked release identity. Old contexts/callbacks keep their
+old targets; no `head`, skipped predecessor, retry, authority or deployment grant.
+Source current head, runtime/schema hash and presentation allowlists must move
+together only after the new schema exists. Installed migration remains independent
+and no operating DB or runtime is changed by these detached-worktree tests.
+
+### Detached staging and current combined verification
+
+The SQL successor/release1.6 change was prepared in a detached88d4bfb0 worktree
+while the113-pin submission gate held main's inputs unchanged. Detached source
+224 tests, separate46 (overlapping subsets), strict4/Ruff/format17/shell PASS;
+11 new PostgreSQL CHECK/downgrade cases were collected, not executed there.
+
+After submission93/246 and both cleanups passed and candidate61940b68 was pushed,
+the staged changes were transferred without replacing the original atomic
+submission or owner-purpose harness entries. Combined main source737/35 suites,
+strict10/diff/shell PASS; existing private static admission/default family/operating
+runtime are still unchanged. No source-only result proves an applied migration.
+
+The separate exact130-pin finite PostgreSQL gate completed with93/257 PASS,
+no skips and both cleanup PASS, read back2026-10-18 00:14 UTC. Evidence:
+`/opt/eom/embedding-benchmark-os-evidence/private-step-Xn1sjxmD`. Helper raw
+`5e8a240dc453dc5f4ca6c2fbabe94a3d727abd4e2bb34ee5d2b2327362b3ea61`.
+Embedding stdout raw `f07c3eb0096a5a24c336bd908fe92d7dcd0c01a1dadf1a22a624d906e478f2c4`;
+stage stdout raw `25fa945b2a0c2ccec7c967ade5865b2e0106779e2646377cf67ef387d3af0c2f`.
+The original finite invocation terminated normally; no poll timeout triggered a
+resubmission. Main source/migration/test inputs stayed frozen through cleanup.
+The11 new actual PostgreSQL cases verify rejected cross-purpose tuples, attempt1,
+three downgrade-history refusals before DDL and an absent-history roundtrip with
+older INDEX/reference tuples retained. Private admission/Chat/IAM/execution remain
+synthetic seams in these suites. No actual operating migration, private native
+model, login, install or Chat tool activation has occurred. Source head0057 and
+last verified operating head0055 are distinct. C4 and the full original goal
+remain OPEN.
+
+User availability: from2026-10-18 00:13 UTC, do not request interactive login for
+at least24 hours (until2026-10-19 00:13 UTC). Reuse only genuinely valid sessions
+and noninteractive privileges. This is permission to continue approved work, not
+proof of authentication, an authority/TTL extension or a credential-storage grant.
+Defer only operations that genuinely require fresh authentication; source work,
+non-live tests and documentation can continue.
+
 ## Original atomic submission — design before persistence behavior
 
 The existing Workflow repository and native START resolver own persistence, not

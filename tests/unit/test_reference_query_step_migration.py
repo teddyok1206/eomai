@@ -42,7 +42,16 @@ def test_additive_constraint_and_frozen_predecessor_match_current_model(
         for c in cast(Table, WorkflowStepRunRecord.__table__).constraints
         if isinstance(c, CheckConstraint) and c.name == module._CHECK
     )
-    assert guard == model_guard == module._PREDICATE
+    assert guard == module._PREDICATE
+    spec = importlib.util.spec_from_file_location(
+        "private_step_successor",
+        Path("migrations/versions/20261017_0057_private_chat_query_step.py"),
+    )
+    assert spec is not None and spec.loader is not None
+    successor = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(successor)
+    assert guard == successor._PREVIOUS_PREDICATE
+    assert model_guard == successor._PREDICATE
     assert "IS NOT DISTINCT FROM" in guard and "attempt = 1" in guard
     assert not any(
         word in PATH.read_text()

@@ -464,7 +464,14 @@ format17 PASS를 확인했습니다. 앞선81 PASS/233 PASS·16 FAIL 기록도 �
 같은 작업을 재사용하고, 저장 도중 권한이 철회되거나 시작 명령 저장이 실패하면 접수 전체를
 취소합니다. 소스488·별도 기출 QUERY 접수 회귀17·strict6·임시 PostgreSQL93/246·각 정리
 PASS입니다. 검증의 채팅·권한·모집단·전용 입장/실제 계산은 대역이며, 운영 활성화와 전용
-DB 단계 연결은 아직 미완료입니다. [원본 접수·동시성·롤백 검증](docs/architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#atomic-submission-source-and-guarded-postgresql-verification)
+DB 단계 연결은 당시 미완료였습니다. [원본 접수·동시성·롤백 검증](docs/architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#atomic-submission-source-and-guarded-postgresql-verification)
+
+후속으로 전용 채팅 계산 단계의 정확한 DB 제약과 배포 문맥1.6/0057을 추가했습니다.
+기존 단계·이력 의미는 유지하며, 전용 이력이 남으면 되돌리기를 거부합니다. 통합 소스737/
+35묶음·strict10·별도 임시 PostgreSQL93/257·각 정리 PASS입니다(앞선 결과와 중복 합산 안 함).
+이는 소스와 임시 DB 검증이며 운영 DB 적용이나 채팅 도구 활성화가 아닙니다. 실제 질문의
+요청 구성·도구 전달·설치/활성화와 전체 목표는 아직 미완료입니다.
+[DB 제약·배포 계약과 검증 범위](docs/architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#detached-staging-and-current-combined-verification)
 
 아래는 날짜·후보별 역사적 구현 기록입니다. 당시의 미완료 표기는 현재 종합 상태와
 구별하며, 최신 실제 실행·활성화 범위는 위 표와 연결된 상태 문서를 기준으로 합니다.

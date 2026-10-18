@@ -62,7 +62,7 @@ def test_revision_predecessor_upgrade_and_models_project_exact_total_boolean_gua
         if isinstance(constraint, CheckConstraint)
     }
     # 0053 stays frozen. Its exact predecessor meaning is retained by0054,
-    # while current models project the successor's two exact native purposes.
+    # while current models project the exact private-step successor as well.
     spec = importlib.util.spec_from_file_location(
         "synthetic_query_step_successor",
         Path("migrations/versions/20261013_0054_reference_query_step.py"),
@@ -72,7 +72,15 @@ def test_revision_predecessor_upgrade_and_models_project_exact_total_boolean_gua
     spec.loader.exec_module(successor)
     assert guard == successor._PREVIOUS_PREDICATE
     current_guard = expected["ck_workflow_step_runs_local_embedding"]
-    assert current_guard == successor._PREDICATE
+    private_spec = importlib.util.spec_from_file_location(
+        "synthetic_private_step_successor",
+        Path("migrations/versions/20261017_0057_private_chat_query_step.py"),
+    )
+    assert private_spec is not None and private_spec.loader is not None
+    private = importlib.util.module_from_spec(private_spec)
+    private_spec.loader.exec_module(private)
+    assert successor._PREDICATE == private._PREVIOUS_PREDICATE
+    assert current_guard == private._PREDICATE
     ddl = str(
         CreateTable(cast(Table, WorkflowStepRunRecord.__table__)).compile(dialect=POSTGRES_DIALECT)
     )

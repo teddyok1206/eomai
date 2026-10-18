@@ -37,7 +37,8 @@ def migration_module():
 
 def test_model_guard_matches_frozen_additive_migration_and_latest_head():
     migration = migration_module()
-    assert migration.revision == CURRENT_MIGRATION_REVISION == "20261017_0056"
+    assert migration.revision == "20261017_0056"
+    assert CURRENT_MIGRATION_REVISION == "20261017_0057"
     assert migration.down_revision == "20261014_0055"
     scripts = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
     assert scripts.get_heads() == [CURRENT_MIGRATION_REVISION]
@@ -68,7 +69,7 @@ def test_persistence_id_patterns_match_the_existing_closed_origin_contract():
     assert "'^chatturn_[0-9a-f]{32}$'" in PRIVATE_CHAT_QUERY_CONTEXT_PREDICATE
 
 
-def test_unique_turn_index_is_partial_keyed_and_does_not_open_private_steps():
+def test_unique_turn_index_and_separate_step_check_do_not_admit_execution():
     index = next(
         i
         for i in WorkflowInstanceRecord.__table__.indexes
@@ -88,5 +89,5 @@ def test_unique_turn_index_is_partial_keyed_and_does_not_open_private_steps():
         for c in WorkflowStepRunRecord.__table__.constraints
         if c.name == "ck_workflow_step_runs_local_embedding"
     )
-    assert "embedding-private-chat-query" not in steps
+    assert "embedding-private-chat-query-result@1.0" in steps
     assert not workflow_definition_is_admitted("local-embedding-private-chat-query", "1.0.0")

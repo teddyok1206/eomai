@@ -9,6 +9,22 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Private step/release successor checkpoint2026-10-18 00:14 UTC: exact0057
+  CHECK and additive release1.6 now pass combined737 source tests/35 suites,
+  strict10/Ruff/format17/bash/diff and the exact130-pin guarded PostgreSQL93/257,
+  no skips, both cleanup PASS. New11 PostgreSQL cases exercise tuple/attempt
+  rejection and guarded downgrade/roundtrip. No historical migration is edited.
+  Private admission and Chat/IAM/physical executor remain synthetic seams;
+  operating head is last verified0055, not source0057. No model, installation,
+  login prompt or Chat tool activation. Actual private preparation/tool delivery
+  and full C1–C5/seed–delta/six comparisons/default/rollback remain OPEN.
+  [Exact terminal proof](../architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#detached-staging-and-current-combined-verification).
+- User unattended constraint renewed2026-10-18 00:13 UTC: no interactive login
+  prompts for at least24 hours, until2026-10-19 00:13 UTC. Only genuinely valid
+  sessions/noninteractive privileges may be reused; no fake authentication,
+  stored credentials, authority broadening or freshness/TTL extension. Preserve
+  existing observer and defer only operations requiring fresh authentication.
+
 - Atomic private submission checkpoint2026-10-18 00:00 UTC: one original typed
   actor/turn key now creates/replays Workflow+START atomically through existing
   repository/owner boundaries; clean-root current reads surround released flushed

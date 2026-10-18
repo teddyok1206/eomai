@@ -263,6 +263,7 @@ if [[ "${action}" == "embedding-stage-tests" ]]; then
   "${PYTHON}" -m pytest -q tests/integration/test_native_cpu_scheduling_read.py \
     tests/integration/test_local_embedding_stage_migration.py \
     tests/integration/test_reference_query_step_migration.py \
+    tests/integration/test_private_chat_query_step_migration.py \
     tests/integration/test_reference_query_native_persistence.py \
     tests/integration/test_private_chat_query_job_allocation.py \
     tests/integration/test_private_query_checkpoint_persistence.py \
