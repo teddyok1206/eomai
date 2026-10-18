@@ -1989,3 +1989,12 @@ contexts; production handoff, original Jobs/Artifacts/INDEX/QUERY, numerical pre
 active selectors, image runtime and CPU default were untouched. Models/GPU leases/new
 production Jobs/NAS publications:0. Actual root lifecycle driver and all remaining full
 benchmark/consumer/default gates stay open; whole goal remains ACTIVE, not complete.
+
+### Explicit existing-owner factory — 2026-10-18
+
+The missing operation-local composition now reuses the actual Catalog admission,
+fixed CPU/CUDA execution and Orchestrator publisher/session factory. Related45
+suites1244 PASS/strict1/Ruff/format2; actual nonowner process denial PASS. This is
+SOURCE_PASS, not an operating install, fresh-operator admission or model run.
+The root-controller coordination and full six-run/default/rollback gates remain
+open. [Small design note and exact test scope](EMBEDDING_BENCHMARK_OWNER_COMPOSITION.md).

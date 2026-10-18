@@ -299,6 +299,13 @@ CONTENT_ONLY7/520·CONCRETE_FACETS1/520·METADATA_ONLY1/520입니다.
 | CUDA benchmark 준비 통신 | SOURCE_PASS/NOT_ACTIVE; 설치검사와 구분한 새 준비 메시지를 먼저 정의하고 원본 Job/실행/config·receipt/process/장치 pin과 초기화0을 묶음. 별도 root 관찰 입구는 자기 실행 unit·worker/PID1 양쪽 실제 잠금 확인을 같은 기존 코드로 수행. 관련425 PASS/strict3, 별도 계약·패키지 자원268 PASS(중복 합산 금지). 실제 unit/GPU 양성 검증이 아닌 합성 source 검증이며 CUDA 실행기·root ACK·prefix/6회 비교는 미완료. [계약·공유 경계·검증](docs/architecture/EMBEDDING_BENCHMARK_EXECUTION_COMPOSITION.md#cuda-readiness-protocol-and-shared-root-fd-observation-source-checkpoint) |
 | 실제 seed/delta·공통 소비자·CPU/GPU 비교·GPU 기본값 | 실제 seed/delta·과거 QUERY 완료/replay/current context PASS 보존. CPU 설치 seal/reader·QUERY READY와 INDEX 신원14 복구 후3-view 각4행 완료/독립 정본 감사도 PASS. [미실행 취소 계약](docs/architecture/LOCAL_INDEXING_UNSTARTED_CANCELLATION_DESIGN.md)의 원 START CANCELLED 영수증과 이력 보존(관련106·임시 DB113+19·strict2 PASS, 중복 합산 안 함). 전체 coverage·인증 HTTP C1/일반 소비자·실제6회 CPU/GPU 비교·조건부 GPU 기본값은 여전히 미완료. 같은 수치 bundle/proof/벡터 공간 유지; hash 우회나 OS 업데이트 중지는 하지 않음. [단계별 실제 증거·관찰 시각](docs/operations/LOCAL_INDEXING_HOST_CACHE_DRIFT_2026-10-16.md) |
 
+6회 비교를 실행할 기존 관리자·실행기·결과 저장자의 구성도 한 입구로 연결했습니다
+(**SOURCE_PASS / NOT_ACTIVE**). 관련1,244개 소스 테스트·strict type·Ruff/format와
+실제 비소유 프로세스 거부를 확인했습니다. 이는 실제 사용자 인증이나 성능 측정이 아니며,
+새 로그인 없이 가능한 개발·검증만 진행합니다. 실제6회 비교·device별 인덱스/조회 경로 정렬과
+조건부 기본값 전환·롤백은 남아 있습니다.
+[구성 책임과 검증 범위](docs/architecture/EMBEDDING_BENCHMARK_OWNER_COMPOSITION.md).
+
 CPU/GPU 비교용 코드 설치 도구도 기존 경계 안에서 CPU까지 확장했습니다
 (**SOURCE_PASS / NOT_INSTALLED**). CPU는 platform 패키지 하나만, CUDA는 기존 두 패키지를
 검사하며 옛 CPU 계약·수치 코드는 유지합니다. 관련352 tests(실제 OLD pip의 소형 합성

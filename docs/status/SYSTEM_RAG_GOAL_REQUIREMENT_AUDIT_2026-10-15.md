@@ -9,6 +9,18 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Explicit benchmark owner composition2026-10-18 01:02 UTC: one factory reuses
+  existing current-administrator admission, fixed CPU/CUDA execution and original
+  Orchestrator publisher/session owner. Actual fixed OS identity, opaque capture,
+  actor, selected source release and policy raw/semantic hashes are closed before
+  composition. Related45 suites1244 PASS/232.84s, strict1/Ruff/format2/diff PASS;
+  actual nonowner process denial PASS. Positive OS/Identity fixtures are synthetic,
+  not live authorization. No operating install/DB/model or default change.
+  Actual original root-controller coordination and six measured runs/paired query
+  routing/default/rollback remain OPEN. No login prompt during the user's24-hour
+  unattended interval; freshness is not waived.
+  [Design and exact scope](../architecture/EMBEDDING_BENCHMARK_OWNER_COMPOSITION.md).
+
 - Initial private-context checkpoint2026-10-18 00:47 UTC: Catalog now shares one
   initial namespace/index selector between reference and private questions. Runner
   checks the original actor/turn key before capture; both preparation entrypoints
