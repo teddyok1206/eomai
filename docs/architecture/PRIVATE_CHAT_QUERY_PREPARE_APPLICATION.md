@@ -345,6 +345,20 @@ disposable test; Chat, Identity/source populations and numerical work are declar
 fixtures. Operating migration remains last verified0055. Model/GPU/HTTP replay0,
 production DB/role/runtime/default/admission changes0; no interactive login.
 
+### Published package candidate — NOT_INSTALLED
+
+Code candidate `c9927f57f8ae76916c23a973323a75f360100d4f` is pushed. Standard
+build-only three-wheel/RECORD/installed-simulation verification PASS; all seven
+changed production Python modules and the packaged schema (eight members) match
+the exact selected source bytes inside the platform wheel.
+Build directory:
+`/tmp/eom-api-build/c9927f57f8ae76916c23a973323a75f360100d4f.VfeX2d/dist`.
+Platform rawf1c2b8ce6ef9fdfab4fb7a94897f35ba881591a3d0274cf4f2219b8adc5e480d;
+API contracts rawde196c637df34b99db454174155c9a43822aceaec37e5242715663a9b1a721fc;
+API raw993673bc69fdc0ef07bb00c249c60a9a2d917490456276ea5089ddc175cebd30.
+This does not install the private host, policy/admission, migration0057 or a Chat
+tool consumer. Existing operating services/default/policies remain unchanged.
+
 ## Published candidate and package evidence
 
 Code candidate `16b021b25cc2408521f682e7b12fb1b77ccc3852` is pushed. Standard
