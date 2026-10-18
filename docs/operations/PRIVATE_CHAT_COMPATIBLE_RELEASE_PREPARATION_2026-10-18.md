@@ -696,3 +696,58 @@ preparation wait differ. Stage preparation is **not authentication or execution*
 At17:29:30 the operator requested normal main-only INDEX18 drain for this finite
 run. Do not treat that request as observed quiescence; preserve the old failed
 unit and never enter a password until the new genuine prompt is observed.
+
+## CUDA INDEX source successor and finite invocation — 18:12 UTC
+
+The normal INDEX18 drain was actually observed terminal at17:32:59 UTC:
+inactive/dead, MainPID0, empty cgroup, Resultsuccess. No native/embedding unit was
+active. The original18 identity/configuration was not changed. The distinct finite
+unit `eom-system-rag-goal-ee97239d-3bf9ed04-invocation2.service` then started with
+invocation `b05be86d45aa44139475c852bf9361ea` and mainPID2867458. Its genuine TTY
+password prompt was observed at17:33 and again in the scheduled18:09 observation;
+no login-success event was observed at either point. A user acknowledgement is
+not a substitute for the real login response. Do not spawn another prompt, store
+credentials or count any benchmark/model invocation from preparation alone.
+INDEX18 remains normally drained during this finite procedure; other services
+were not redeployed by the source work below. Resume the same INDEX normally only
+after observing this exact finite invocation terminal and no active native child.
+
+Three source-only successors were committed and pushed:
+
+- `756a78ed`: explicit native backend selection and INDEX owner3.0, preserving
+  released1.0/2.0 schema bytes and their current CPU-only parser;
+- `2fb0e36a`: INDEX-only bounded pre-compute READY/linkage contract;
+- `5f0be84f1fd9d3c8b223aaea54dcf9004c8a7c43`: fixed external CUDA INDEX entry,
+  no sealed numerical-prefix/model mutation and no runtime activation.
+
+The leaf performs only the already admitted original DOCUMENT request. Its
+stdlib-only diagnostic bootstrap precedes EOM imports; root-owned FD0/1/2 and
+separate inherited FD3 are checked and kept distinct. Shared retained lease and
+canonical READY precede a bounded root ACK; actual device R/W and the existing
+numerical adapter follow ACK. Result/diagnostic-sink failures, including
+KeyboardInterrupt/SystemExit, cannot emit traceback into binary outputs. Return0
+is not physical retirement, source authority, Artifact publication or GPU-default
+approval. Actual fixed root observation/ACK/retirement, owner/QUERY handoff and
+conditional default activation remain unimplemented.
+
+Source evidence:187 backend/owner/regression tests and the final278-test leaf/
+readiness/native/backend/resource/benchmark suite PASS. These counts overlap and
+must not be summed. Strict typing, Ruff/format, diff checks and independent final
+leaf review passed. Test commands and retained intermediate failure evidence are
+in `/tmp/eom-native-cuda-successor.gKpxVAwN`; final suite XML raw SHA is
+`6e15040cc09e72244134cbe83d16ba76317d52edbc817ae0191f21c5d446cb06`.
+
+One official `scripts/api/deploy_release.sh --build-only` completed for5f0be84f;
+installed source remains3bf9ed04. Wheel/RECORD inspection PASS. Output directory:
+`/tmp/eom-api-build/5f0be84f1fd9d3c8b223aaea54dcf9004c8a7c43.3oQzSb/dist`.
+Raw SHA-256 values:
+
+| Wheel | SHA-256 |
+|---|---|
+| eom_platform0.1.0 | `dd2bf9c3cf6686daebd171ccb2cc07c3b380e3009f1ed4bfe64292290b3afad2` |
+| eom_api_contracts0.1.0 | `d4e4b7507d2f7991639f83dc856612e58ac5f6ce0a73274c8df513107c7417a6` |
+| eom_application_api0.1.0 | `f1e9a1a534a3cad167fb8d73428dd56889838a90e1002872b0b505eee5fbb1bd` |
+
+`BUILD_ONLY_NOT_INSTALLED`; no model, DB migration, permission or service change
+was performed by this packaging step. The exact original six CPU/CUDA runs and
+C1–C5 actual delivery/finalization remain separate pending operating evidence.
