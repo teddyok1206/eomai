@@ -17,11 +17,15 @@ from eom_workflow_runner.repository import (
 
 LOCAL_EMBEDDING_SUBMISSION_SOURCE: Final = "local_embedding_submission"
 REFERENCE_QUERY_SUBMISSION_SOURCE: Final = "reference_query_submission"
-type NativeStartSource = Literal["local_embedding_submission", "reference_query_submission"]
+PRIVATE_CHAT_QUERY_SUBMISSION_SOURCE: Final = "private_chat_query_submission"
+type NativeStartSource = Literal[
+    "local_embedding_submission", "reference_query_submission", "private_chat_query_submission"
+]
 _REPLAY_ERRORS = MappingProxyType(
     {
         LOCAL_EMBEDDING_SUBMISSION_SOURCE: "LOCAL_EMBEDDING_SUBMISSION_REPLAY_INVALID",
         REFERENCE_QUERY_SUBMISSION_SOURCE: "REFERENCE_QUERY_SUBMISSION_REPLAY_INVALID",
+        PRIVATE_CHAT_QUERY_SUBMISSION_SOURCE: "PRIVATE_CHAT_QUERY_SUBMISSION_REPLAY_INVALID",
     }
 )
 

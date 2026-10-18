@@ -10,10 +10,12 @@ from eom_workflow.private_chat_query_publication import PrivateChatQueryLaunchAs
 from sqlalchemy.orm import Session, object_session
 
 from eom_workflow_runner.models import WorkflowCommandRecord, WorkflowInstanceRecord
+from eom_workflow_runner.native_start_command import (
+    PRIVATE_CHAT_QUERY_SUBMISSION_SOURCE as PRIVATE_CHAT_QUERY_SUBMISSION_SOURCE,
+)
 from eom_workflow_runner.native_step_completion import native_application_step
 from eom_workflow_runner.repository import CommandType, command_business_fingerprint
 
-PRIVATE_CHAT_QUERY_SUBMISSION_SOURCE = "private_chat_query_submission"
 PRIVATE_CHAT_QUERY_CONTINUATION_SOURCE = "private-chat-query-owner"
 
 

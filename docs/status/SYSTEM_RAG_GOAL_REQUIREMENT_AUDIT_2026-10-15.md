@@ -9,6 +9,21 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Atomic private submission checkpoint2026-10-18 00:00 UTC: one original typed
+  actor/turn key now creates/replays Workflow+START atomically through existing
+  repository/owner boundaries; clean-root current reads surround released flushed
+  savepoints. Same private row validator is shared with its previous public export.
+  Source488/22 suites plus separate reference submission17, strict6/Ruff/format9/
+  bash/diff PASS (subsets overlap, not summed). Exact113-pin guarded PostgreSQL93
+  and246/no skips/both cleanup PASS includes nine new concurrent/replay/rollback/
+  late-denial/failed-history/missing-START/dirty-root cases. Declared private
+  admission, Chat/IAM/source population and physical executor are synthetic; no
+  actual private step, operating DB/model/install/activation or new login. Source
+  head0056 and last verified operating0055 unchanged. Separate detached0057 source
+  is not claimed as covered. Private SQL successor, actual installed/tool delivery,
+  full C1–C5/seed–delta/six real comparisons/default/rollback remain OPEN.
+  [Exact original submission proof](../architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#atomic-submission-source-and-guarded-postgresql-verification).
+
 - Latest Runner source checkpoint2026-10-17 23:41 UTC: dedicated paired private
   ports now connect composition→readiness→claim→short mutation root→private step/
   terminal. Original actor/request/lease identity, failed history, context replay,

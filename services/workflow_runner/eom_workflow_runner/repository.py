@@ -47,6 +47,12 @@ from eom_workflow.private_chat_query_execution import (
     PrivateChatQueryWorkflowRequest,
     parse_private_chat_query_workflow_request,
 )
+from eom_workflow.private_chat_query_submission_context import (
+    PrivateChatQuerySubmissionContext,
+    private_chat_query_submission_fingerprint,
+    private_chat_query_submission_key,
+    validate_private_chat_query_submission_context,
+)
 from eom_workflow.private_chat_query_workflow import (
     PRIVATE_CHAT_QUERY_EXECUTION_PROTOCOL,
     PRIVATE_CHAT_QUERY_RESULT_SCHEMA,
@@ -94,7 +100,11 @@ from eom_workflow_runner.models import (
     WorkflowInstanceRecord,
     WorkflowStepRunRecord,
 )
-from eom_workflow_runner.private_chat_query_admission import PrivateChatQueryOwnerAdmission
+from eom_workflow_runner.private_chat_query_admission import (
+    PrivateChatQueryOwnerAdmission,
+    resolve_private_chat_query_submission_controls,
+    validate_private_chat_query_workflow_submission,
+)
 from eom_workflow_runner.private_chat_query_execution_port import PrivateChatQueryNativeExecutor
 from eom_workflow_runner.reference_query_admission import (
     ReferenceQueryOwnerAdmission,
@@ -670,9 +680,12 @@ def workflow_request_storage_document(
         | InferenceTransferWorkflowRequest
         | LocalEmbeddingExecutableRequest
         | SupportedReferenceQueryWorkflowRequest
+        | PrivateChatQueryWorkflowRequest
     ),
 ) -> dict[str, Any]:
     """Serialize a request without dropping schema-required nullable values."""
+    if isinstance(request, PrivateChatQueryWorkflowRequest):
+        return parse_private_chat_query_workflow_request(request).model_dump(mode="json")
     if isinstance(request, SupportedReferenceQueryWorkflowRequest):
         return parse_supported_reference_query_workflow_request(request).model_dump(mode="json")
     if isinstance(
@@ -1026,6 +1039,7 @@ def create_workflow_instance(
         | InferenceTransferWorkflowRequest
         | LocalEmbeddingExecutableRequest
         | SupportedReferenceQueryWorkflowRequest
+        | PrivateChatQueryWorkflowRequest
     ),
     idempotency_key: str,
     actor_type: str,
@@ -1037,7 +1051,89 @@ def create_workflow_instance(
     local_embedding_executor: LocalEmbeddingNativeExecutor | None = None,
     reference_query_owner: ReferenceQueryOwnerAdmission | None = None,
     reference_query_executor: ReferenceQueryNativeExecutor | None = None,
+    private_chat_query_context: PrivateChatQuerySubmissionContext | None = None,
+    private_chat_query_owner: PrivateChatQueryOwnerAdmission | None = None,
+    private_chat_query_executor: PrivateChatQueryNativeExecutor | None = None,
 ) -> tuple[WorkflowInstanceRecord, bool]:
+    if (
+        isinstance(request, PrivateChatQueryWorkflowRequest)
+        or definition.definition_key == PRIVATE_CHAT_QUERY_WORKFLOW_KEY
+    ):
+        if (
+            not isinstance(request, PrivateChatQueryWorkflowRequest)
+            or definition.definition_key != PRIVATE_CHAT_QUERY_WORKFLOW_KEY
+            or private_chat_query_context is None
+            or runtime_context is not None
+            or completed_preset_revision_id is not None
+            or inference_transfer_context is not None
+            or local_embedding_owner is not None
+            or local_embedding_executor is not None
+            or reference_query_owner is not None
+            or reference_query_executor is not None
+        ):
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+                "private QUERY requires only its exact request, original context and ports",
+            )
+        context = validate_private_chat_query_submission_context(
+            request, private_chat_query_context
+        )
+        if idempotency_key != private_chat_query_submission_key(context):
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+                "private QUERY key must identify its original turn",
+            )
+        private_scope = resolve_private_chat_query_submission_controls(
+            session,
+            definition=definition,
+            request=request,
+            context=context,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            owner=private_chat_query_owner,
+            executor=private_chat_query_executor,
+        )
+        try:
+            with session.begin_nested():
+                result = _persist_workflow_instance(
+                    session,
+                    definition=definition,
+                    request=private_scope.request,
+                    idempotency_key=idempotency_key,
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                    private_chat_query_context=context,
+                )
+            # Releasing the outer savepoint flushes the initial audit record.
+            # Source and attached-row checks require the same clean caller root.
+            stored_context = validate_private_chat_query_workflow_submission(
+                session, result[0], private_scope.request
+            )
+            late_private = resolve_private_chat_query_submission_controls(
+                session,
+                definition=definition,
+                request=private_scope.request,
+                context=context,
+                actor_type=actor_type,
+                actor_id=actor_id,
+                owner=private_chat_query_owner,
+                executor=private_chat_query_executor,
+            )
+            if stored_context != context or late_private != private_scope:
+                raise ValueError("PRIVATE_CHAT_QUERY_SUBMISSION_CONTEXT_INVALID")
+            return result
+        except BaseException:
+            session.rollback()
+            raise
+    if (
+        private_chat_query_context is not None
+        or private_chat_query_owner is not None
+        or private_chat_query_executor is not None
+    ):
+        raise WorkflowError(
+            WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+            "private QUERY context or owner cannot admit another workflow purpose",
+        )
     if (
         isinstance(request, SupportedReferenceQueryWorkflowRequest)
         or definition.definition_key == REFERENCE_QUERY_WORKFLOW_KEY
@@ -1225,31 +1321,47 @@ def _persist_workflow_instance(
         | InferenceTransferWorkflowRequest
         | LocalEmbeddingExecutableRequest
         | SupportedReferenceQueryWorkflowRequest
+        | PrivateChatQueryWorkflowRequest
     ),
     idempotency_key: str,
     actor_type: str,
     actor_id: str,
     runtime_context: dict[str, Any] | None = None,
     completed_preset_revision_id: str | None = None,
+    private_chat_query_context: PrivateChatQuerySubmissionContext | None = None,
 ) -> tuple[WorkflowInstanceRecord, bool]:
     request_data = workflow_request_storage_document(request)
-    request_hash = (
-        reference_query_business_fingerprint(
-            definition, request, actor_type=actor_type, actor_id=actor_id
+    if isinstance(request, PrivateChatQueryWorkflowRequest):
+        if private_chat_query_context is None:
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+                "private QUERY original context is required for persistence",
+            )
+        request_hash = private_chat_query_submission_fingerprint(
+            request,
+            private_chat_query_context,
+            definition_sha256=definition.definition_hash,
+            actor_type=actor_type,
+            actor_id=actor_id,
         )
-        if isinstance(request, SupportedReferenceQueryWorkflowRequest)
-        else local_embedding_business_fingerprint(
-            definition, request, actor_type=actor_type, actor_id=actor_id
+    else:
+        request_hash = (
+            reference_query_business_fingerprint(
+                definition, request, actor_type=actor_type, actor_id=actor_id
+            )
+            if isinstance(request, SupportedReferenceQueryWorkflowRequest)
+            else local_embedding_business_fingerprint(
+                definition, request, actor_type=actor_type, actor_id=actor_id
+            )
+            if isinstance(
+                request, (LocalEmbeddingWorkflowRequestV11, LocalEmbeddingServiceWorkflowRequest)
+            )
+            else inference_transfer_business_fingerprint(
+                definition, request, actor_type=actor_type, actor_id=actor_id
+            )
+            if isinstance(request, InferenceTransferWorkflowRequest)
+            else workflow_business_fingerprint(definition, request)
         )
-        if isinstance(
-            request, (LocalEmbeddingWorkflowRequestV11, LocalEmbeddingServiceWorkflowRequest)
-        )
-        else inference_transfer_business_fingerprint(
-            definition, request, actor_type=actor_type, actor_id=actor_id
-        )
-        if isinstance(request, InferenceTransferWorkflowRequest)
-        else workflow_business_fingerprint(definition, request)
-    )
     existing = _matching_submission(
         session, idempotency_key=idempotency_key, request_hash=request_hash
     )
@@ -1280,6 +1392,7 @@ def _persist_workflow_instance(
             LocalEmbeddingWorkflowRequestV11,
             LocalEmbeddingServiceWorkflowRequest,
             SupportedReferenceQueryWorkflowRequest,
+            PrivateChatQueryWorkflowRequest,
         ),
     ):
         role_schema_version = _stored_role_protocol(definition)
@@ -1295,7 +1408,11 @@ def _persist_workflow_instance(
                 "stored definition has inconsistent role protocol versions",
             )
         role_schema_version = next(iter(role_protocols))
-    initial_context = dict(runtime_context or {})
+    initial_context = (
+        private_chat_query_context.model_dump(mode="json")
+        if private_chat_query_context is not None
+        else dict(runtime_context or {})
+    )
     initial_context["artifact_pointers"] = []
     workflow = WorkflowInstanceRecord(
         workflow_id=new_workflow_id(),
@@ -1314,6 +1431,7 @@ def _persist_workflow_instance(
                     LocalEmbeddingWorkflowRequestV11,
                     LocalEmbeddingServiceWorkflowRequest,
                     SupportedReferenceQueryWorkflowRequest,
+                    PrivateChatQueryWorkflowRequest,
                 ),
             )
             else WorkflowStage.INFERENCE_TRANSFER.value

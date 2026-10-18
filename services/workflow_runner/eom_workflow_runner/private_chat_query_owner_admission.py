@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
-from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_orchestrator.native_private_chat_query_coordinator import NativePrivateChatQueryCoordinator
 from eom_orchestrator.native_query_job_allocation import read_native_query_launch
 from eom_workflow.native_private_chat_query_coordinator import NativePrivateQueryAllocation
@@ -13,23 +11,15 @@ from eom_workflow.private_chat_query_execution import PrivateChatQueryWorkflowRe
 from eom_workflow.private_chat_query_publication import PrivateChatQueryLaunchAssociation
 from eom_workflow.private_chat_query_submission_context import (
     PrivateChatQuerySubmissionContext,
-    parse_private_chat_query_submission_context,
-    private_chat_query_submission_fingerprint,
-    private_chat_query_submission_key,
     validate_private_chat_query_submission_context,
 )
 from eom_workflow.private_chat_query_workflow import (
-    PRIVATE_CHAT_QUERY_EXECUTION_PROTOCOL,
     PRIVATE_CHAT_QUERY_RESULT_SCHEMA,
-    PrivateChatQueryWorkflowDefinition,
-    validate_private_chat_query_definition,
 )
-from jsonschema.exceptions import ValidationError as SchemaError
 from sqlalchemy.orm import Session, object_session
 
 from eom_workflow_runner.models import (
     WorkflowCommandRecord,
-    WorkflowDefinitionRecord,
     WorkflowInstanceRecord,
     WorkflowStepRunRecord,
 )
@@ -38,6 +28,9 @@ from eom_workflow_runner.native_command_fence import (
     require_unexpired_native_command,
 )
 from eom_workflow_runner.native_step_completion import native_application_step
+from eom_workflow_runner.private_chat_query_admission import (
+    validate_private_chat_query_workflow_submission as _validate_private_submission,
+)
 from eom_workflow_runner.private_chat_query_command_lineage import (
     PRIVATE_CHAT_QUERY_SUBMISSION_SOURCE as PRIVATE_CHAT_QUERY_SUBMISSION_SOURCE,
 )
@@ -54,62 +47,7 @@ from eom_workflow_runner.repository import (
     require_command_lease,
 )
 
-
-def validate_private_chat_query_workflow_submission(
-    session: Session,
-    workflow: WorkflowInstanceRecord,
-    request: PrivateChatQueryWorkflowRequest,
-) -> PrivateChatQuerySubmissionContext:
-    """Attached immutable row closure only; live source/claim permission is separate."""
-    require_private_chat_query_source_root(session)
-    try:
-        request = PrivateChatQueryWorkflowRequest.model_validate(
-            raw_similarity_contract_value(request)
-        )
-        if object_session(workflow) is not session:
-            raise ValueError()
-        definition = session.get(
-            WorkflowDefinitionRecord, workflow.definition_id, populate_existing=True
-        )
-        if definition is None or definition.active is not True:
-            raise ValueError()
-        fixed = PrivateChatQueryWorkflowDefinition.model_validate(definition.canonical_definition)
-        validate_private_chat_query_definition(fixed, request)
-        context = validate_private_chat_query_submission_context(
-            request, parse_private_chat_query_submission_context(workflow.runtime_context)
-        )
-        expected_definition = (
-            fixed.definition_key,
-            fixed.definition_version,
-            request.workflow_definition_sha256,
-        )
-        if (
-            (definition.definition_key, definition.definition_version, definition.definition_hash)
-            != expected_definition
-            or (workflow.definition_key, workflow.definition_version, workflow.definition_hash)
-            != expected_definition
-            or definition.schema_version != fixed.schema_version
-            or sha256_bytes(canonical_json_bytes(fixed)) != definition.definition_hash
-            or workflow.role_schema_version != PRIVATE_CHAT_QUERY_EXECUTION_PROTOCOL
-            or workflow.protocol_version != "1.0.1"
-            or workflow.created_actor_type != "human"
-            or workflow.created_actor_id != context.origin.actor_id
-            or workflow.initial_request != request.model_dump(mode="json")
-            or workflow.request_payload != workflow.initial_request
-            or workflow.idempotency_key != private_chat_query_submission_key(context)
-            or workflow.request_hash
-            != private_chat_query_submission_fingerprint(
-                request,
-                context,
-                definition_sha256=definition.definition_hash,
-                actor_type=workflow.created_actor_type,
-                actor_id=workflow.created_actor_id,
-            )
-        ):
-            raise ValueError()
-        return context
-    except (ValueError, TypeError, SchemaError):
-        raise ValueError("PRIVATE_CHAT_QUERY_WORKFLOW_CONTEXT_INVALID") from None
+validate_private_chat_query_workflow_submission = _validate_private_submission
 
 
 def validate_private_chat_query_execution_step(

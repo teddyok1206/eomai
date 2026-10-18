@@ -460,6 +460,12 @@ format17 PASS를 확인했습니다. 앞선81 PASS/233 PASS·16 FAIL 기록도 �
 이 시험의 DB·권한·채팅·실제 계산은 대역입니다. 실제 접수·전용 DB 단계 허용·설치/활성화는
 남아 있고 운영 설정은 변경하지 않았습니다. [Runner 검증 범위](docs/architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#runner-source-verification-2026-10-17)
 
+원 채팅 질문용 요청과 시작 명령을 함께 저장하는 접수 경로도 연결했습니다. 같은 요청은
+같은 작업을 재사용하고, 저장 도중 권한이 철회되거나 시작 명령 저장이 실패하면 접수 전체를
+취소합니다. 소스488·별도 기출 QUERY 접수 회귀17·strict6·임시 PostgreSQL93/246·각 정리
+PASS입니다. 검증의 채팅·권한·모집단·전용 입장/실제 계산은 대역이며, 운영 활성화와 전용
+DB 단계 연결은 아직 미완료입니다. [원본 접수·동시성·롤백 검증](docs/architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#atomic-submission-source-and-guarded-postgresql-verification)
+
 아래는 날짜·후보별 역사적 구현 기록입니다. 당시의 미완료 표기는 현재 종합 상태와
 구별하며, 최신 실제 실행·활성화 범위는 위 표와 연결된 상태 문서를 기준으로 합니다.
 

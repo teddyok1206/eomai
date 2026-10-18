@@ -787,3 +787,80 @@ This verifies package dependency closure, not actual private submission or runti
 authority. Proof script:
 `/tmp/eom-private-runner-package.PyGehQxA/prove_runner_archives.py`, raw
 `14ef637595e5b1dd02814a91e52bdbf4a0cf1dcd3ba0a69c5170ecc5446046f1`.
+
+## Original atomic submission — design before persistence behavior
+
+The existing Workflow repository and native START resolver own persistence, not
+Chat workers or a new queue. Canonical inputs are the closed private request and
+text-free immutable submission context; the original Chat request remains the
+only question source. Definition ID/version/canonical hash, original actor/turn,
+source/report/index/policy/runtime pins are checked through the existing owners.
+Request/context/fingerprint hashes keep their different meanings.
+
+The new application use case creates or reuses one original Workflow and START in
+the caller-owned root. Its key is derived from the validated original actor/turn,
+never supplied by the model. Existing key uniqueness, active equivalence and the
+0056 partial turn index provide concurrent deduplication. Access is a fixed number
+of PK/key/B-tree lookups, O(log W) per indexed lookup at W retained workflows; no
+recursive history scan, second cache, binary column, registry or new index.
+
+Private inputs require their typed original context and paired private ports;
+generic runtime/preset/inference/INDEX/reference context is rejected. Other
+purposes reject private ports/context. Current definition/Chat/source reads happen
+before writes and again after each released savepoint has flushed. The existing
+source reader's clean-root requirement is preserved: no source call inside nested
+transactions or with pending changes. Exact attached row/context checks also run
+in the clean root. A late denial rolls back the entire submission root, including
+released savepoints; unrelated caller writes are not permitted in this use case.
+
+START replay uses the existing original key/source/actor/fingerprint invariant;
+missing original commands are errors, not permission to synthesize replacements.
+Existing failed terminal histories remain failed and changing claim/pins/key cannot
+produce a second original request. Submission does not launch a model or grant a
+later claim. Repository depends on the abstract owner port and shared row validator
+at the existing admission boundary. The concrete owner reexports the old public
+validator path; there is no top-level repository→concrete-owner cycle. No released
+schema/migration or static private
+admission is changed by this staged source work. Tests explicitly distinguish
+synthetic admission seams from genuine installed/private execution acceptance.
+
+Allowing arbitrary metadata through generic ROLE/INDEX persistence is simpler but
+loses original-turn identity/current source checks. Manually inserting a Workflow
+and repairing START later loses atomicity; a new task tracker duplicates existing
+queue/lease ownership. Neither is an acceptable shortcut.
+
+### Atomic submission source and guarded PostgreSQL verification
+
+The original private Workflow+START application use case now reuses existing
+repository persistence, native START replay, source owner and0056 immutable
+context/turn constraints. The same row-closure rule moved to the existing admission
+module; the concrete owner preserves its former public export as the same function,
+not a copied rule. Old INDEX/reference/role fingerprints and default routing are
+unchanged. Private context/ports cannot enter those other purposes, and private
+callers cannot choose another key or supply generic runtime metadata.
+
+Final combined source488 PASS/22 suites, separate reference submission17 PASS,
+strict6/Ruff/format9/bash/diff PASS. The prior68 and new negative17 are overlapping
+subsets, not extra coverage. Static private definition/execution admission stays
+closed; compiler staging is not a grant. Synthetic private admission is explicitly
+confined to the guarded test fixture.
+
+The exact113-pin finite PostgreSQL gate completed with embedding93 PASS and stage
+246 PASS, no skips and both cleanup PASS, read back2026-10-18 00:00 UTC. Nine new
+actual PostgreSQL cases cover atomic text-free creation/replay/audit, two concurrent
+submissions, late authority denial at three distinct boundaries, START storage
+failure, retained failed Workflow, missing-START replay refusal and dirty-root
+autoflush denial. Registered controls/index/files/Workflow/command/constraint SQL
+are actual; Chat/IAM/source population and private admission/physical executor
+remain synthetic. No model, actual private step, operating DB/install/activation,
+auth prompt/TTL change or credential transfer occurs.
+
+Evidence:
+`/opt/eom/embedding-benchmark-os-evidence/private-submission-RaCaa6Cr`.
+Helper raw `7224790cd6254c7e83dab1cc1ddf0b3e17f63d03cda223e017f5718132640bd0`.
+Embedding stdout raw `6b92966b24f0d6400177c57cf094ffd758aa5f6bbd43cf748054ec326cf28eb2`;
+stage stdout raw `7768ccf6ccae80611a8d52b8c09255488053375a59c79f61aa3bd8af7be722b5`.
+Source/model/migration inputs were held unchanged through cleanup; this proof uses
+source head0056, operating head last verified0055. The later detached0057 work is
+not covered by this gate. Actual private-step SQL successor/admission, compatible
+installed owner/executor and Chat tool delivery remain OPEN with the full goal.
