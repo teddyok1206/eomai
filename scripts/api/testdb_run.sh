@@ -303,6 +303,7 @@ if [[ "${action}" == "embedding-tests" ]]; then
     tests/integration/test_embedding_registry_application.py \
     tests/integration/test_private_chat_document_read.py \
     tests/integration/test_private_chat_query_source_owner.py \
+    tests/integration/test_owned_operator_authorization_fence.py \
     tests/integration/test_private_chat_query_owner_admission.py \
     tests/integration/test_private_chat_query_command_lineage.py \
     tests/integration/test_private_chat_query_submission.py \

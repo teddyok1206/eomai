@@ -268,6 +268,14 @@ from the reference/API path. Actual role pin, installed routine/privilege/curren
 configuration and source-policy checks are still mandatory. This discovery does
 not install that composition or change either authentication contract.
 
+Concrete composition subsequently confirmed that adapter's caller-role check is
+Catalog-only, whereas the native QUERY controller is pinned to `eom_app`. Do not
+configure/patch that restricted adapter to accept QUERY. The Identity-owned
+table-owner alternative and live-original factory are documented in
+[installed-owner composition](PRIVATE_CHAT_QUERY_INSTALLED_OWNER_COMPOSITION.md).
+Neither alternative grants a human capture, changes HTTP freshness or turns an
+old login into current authentication.
+
 The original origin-key lookup now also reuses the existing full
 `validate_private_chat_query_workflow_submission` definition/row/fingerprint
 validator for both read and prepare replay, rather than trusting stored state.

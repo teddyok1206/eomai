@@ -449,6 +449,9 @@ NOT_IMPLEMENTED / NOT_EVALUATED`를 구분한다. 기존 corpus의 학습 완료
 
 ## 11. 코드 근거와 관련 문서
 
+- [채팅 QUERY의 실제 owner 구성 경계](PRIVATE_CHAT_QUERY_INSTALLED_OWNER_COMPOSITION.md):
+  Catalog 전용 역할 제한을 유지하고, 실제 대화 소유권과 Identity의 owner 행 잠금을 결합한다.
+  소스·임시 DB 증거와 아직 없는 운영 호스트/소비자 활성화를 구분한다.
 - [채팅 QUERY 접수·공유 실행·완료 읽기](PRIVATE_CHAT_QUERY_PREPARE_APPLICATION.md):
   원래 대화 요청의 Workflow/START를 먼저 확정하고, 기존 실행 핸들과 정본 읽기를 연결한다.
   새 검색 도구·워커 프로토콜·운영 활성화와 실제 소스/권한 검증은 별도 경계다.
