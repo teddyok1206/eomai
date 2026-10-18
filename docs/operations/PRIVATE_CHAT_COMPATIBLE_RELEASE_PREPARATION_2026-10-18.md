@@ -598,3 +598,54 @@ successful15:40 login and failed C1 deadline evidence above remain historical
 evidence, not erased or converted to a pass. Deployed read latency, authenticated
 C1 delivery, C2–C5, the original six measurements/finalization and the conditional
 device/default decision remain unverified by this recovery checkpoint. **Full goal OPEN.**
+
+## Finite preparation wait and normal INDEX resumption — 17:07 UTC
+
+The distinct finite unit `eom-system-rag-goal-ee97239d-3bf9ed04.service`, invocation
+`940d4ae222384728b1a2888482c127ad`, reached its genuine `guiadmin` getpass prompt
+after the eight-file stage check. No successful-login event was observed in this
+invocation; this is different from the successful15:40 login above. Do not report
+an incorrect password or completed C1/model/benchmark work for this invocation.
+
+The operator found a preparation-lifetime defect in the temporary supervisor:
+the parent's initial900s socket wait included getpass, C1/discovery and initial
+consumer preparation. On timeout, it could close the channel and then wait for
+the still-prompting child. After confirming that exact pre-auth state, one normal
+TTY interrupt ended this original invocation. Actual terminal evidence was
+FAILED/exit1, MainPID0 and empty ControlGroup, with no active native/benchmark
+unit observed. This failed history, all original six identities and FIRST HTTP
+keys are preserved; no automatic retry, force kill, new key or DB repair occurred.
+
+At17:07 UTC the same INDEX18 resumed normally: PID2847230, invocation
+`c3b1bfe1bacf4ad6875a49a1442336c4`. All ten services were observed active and API
+readiness passed. The old input prompt is closed. Pane`%89`/EOM2 is temporarily
+named`rag-incremental-idle` with keyboard input disabled, preventing a late
+password from being entered as a shell command. Re-enable it only for the next
+deliberately prepared operator action; do not ask for another password merely
+because time passed.
+
+Local-only corrected supervisor:
+`/tmp/eom-finite-preparation-wait.fF8GjvmW/benchmark_goal_supervisor.py`, raw SHA
+`1ea96c6aea815b74d631fe38239d2936609c1afbcd0f06205903e3568ec8bdc0`.
+Only the initial preparation wait uses the enclosing3600s unit bound; immediately
+after the first frame it restores the existing900s wait. Native series900s,
+child180s, whole-unit3600s, session freshness/TTL, permission and original Job/key
+contracts are unchanged. Five phase-bound tests and the original129 client tests,
+strict typing/Ruff/format passed. This is **LOCAL_PREPARATION_ONLY**, not an
+installed successor or actual authenticated verification. Preserve the old stage;
+any future deliberate invocation needs its own reviewed fixed stage/unit pins.
+
+One bounded read of the original INDEX invocation's existing owner journal showed
+16:37/16:38/16:39 per-view reconciliation with eligible_sources545 and
+missing_reports25. Missing-binding counts were177/191/219 respectively, and the
+original CONTENT_ONLY command was SUCCEEDED at16:50:53. These are historical
+owner projection observations, not full/current coverage or raw-vector validation.
+Do not subtract missing bindings from545 to manufacture binding counts, or sum
+views as distinct Items. No further corpus projection read is needed within30min.
+
+The A/B evidence audit also distinguishes actual bounded seed/append and
+zero-forward membership reuse from a positive new-source/report-arrival test.
+The latter, same-original INDEX-request replay and a current canonical committed
+output audit remain to be closed. Existing guarded PostgreSQL concurrency,
+recovery/revocation and space-isolation tests are not erased, and destructive
+production fault tests are not required to reproduce them. Full goal remains OPEN.
