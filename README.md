@@ -31,7 +31,7 @@ logical Item
 - 승인 문항, HWPX build, RAG 학습 현황과 Codex slot 사용 상태 조회
 - 25문항 모의고사 생산 계획·실행·검토·퇴역을 불변 checkpoint와 영수증으로 관리
 
-## 증분 RAG 목표의 현재 상태 — 2026-10-18 16:41 UTC
+## 증분 RAG 목표의 현재 상태 — 2026-10-18 17:29 UTC
 
 운영 API·Catalog·출제/HWPX 실행기·일반 채팅에 `3bf9ed04`를 설치했고,
 실제 wheel·RECORD·provider를 확인했습니다. 별도 QUERY SDK는 `d81b9ba3`, INDEX와
@@ -46,14 +46,17 @@ logical Item
 120개·임베딩 저장/조회 126개와 테스트 DB 정리를 통과한 수정본을 운영에 반영했습니다.
 이것만으로 실제 요청 지연 개선이나 사용자 전달 성공을 주장하지 않습니다.
 
-16:36 UTC에 관련 10개 서비스 active, API LIVE/READY, QUERY READY와 Chat 준비 상태를
-확인하고 같은 INDEX18 자동 인덱싱을 재개했습니다. 16:39 UTC에는 준비된 유한 검증을 위해
-INDEX에만 정상 종료를 요청했습니다. 나머지 서비스는 유지하며, 강제 종료·작업 취소나
+17:07 UTC에 관련 10개 서비스를 정상 복구하고 같은 INDEX18 자동 인덱싱을 재개했습니다.
+17:28 UTC에는 읽기 전용 정본 점검으로 세 표현의 binding 347/333/305개, 합계985개와
+벡터 shard250개의 등록·해시·수치 구조를 검증했습니다. 이는985문항이나 전체 coverage,
+현재 사용자 출처 권한을 새로 승인했다는 뜻이 아닙니다. 17:29 UTC에는 준비된 유한 검증을
+위해 INDEX에만 정상 종료를 요청했습니다. 나머지 서비스는 유지하며, 강제 종료·작업 취소나
 새 INDEX 신원은 사용하지 않습니다. **전체 목표는 아직 진행 중이며**, C1–C5 실제 전달,
 원래 CPU/CUDA 여섯 회 실측·최종화와 조건부 기본 device 결정은 완료 전입니다.
 준비된 검증 절차의 129개 테스트 통과는 이 운영 결과를 대신하지 않습니다.
 [불변 검색 범위 호환 설계](docs/architecture/PINNED_EMBEDDING_NAMESPACE_READ_COMPATIBILITY.md),
 [이번 운영 반영과 남은 범위](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#lineage-map-release-installed-and-recovered--1636-utc),
+[저장된 인덱스 정본 점검](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#committed-index-storage-snapshot--1728-utc),
 [인증 후 조회 시간 초과와 정상 인덱싱 재개](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#authenticated-c1-read-deadline-and-index-resumption--1548-utc)를 참고하세요.
 아래 누적 릴리스 기록은 각 기록 시점의 검증 범위입니다.
 

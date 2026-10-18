@@ -646,6 +646,53 @@ views as distinct Items. No further corpus projection read is needed within30min
 The A/B evidence audit also distinguishes actual bounded seed/append and
 zero-forward membership reuse from a positive new-source/report-arrival test.
 The latter, same-original INDEX-request replay and a current canonical committed
-output audit remain to be closed. Existing guarded PostgreSQL concurrency,
+output audit remained open at17:07; the storage audit is recorded below. Existing guarded PostgreSQL concurrency,
 recovery/revocation and space-isolation tests are not erased, and destructive
 production fault tests are not required to reproduce them. Full goal remains OPEN.
+
+## Committed index storage snapshot — 17:28 UTC
+
+One fixed read-only operator audit of the installed `ee97239d` SDK and unchanged
+INDEX18 selection completed at17:28:15 UTC. It pinned the three namespace heads
+once in a REPEATABLE READ, PostgreSQL READ ONLY transaction, checked the actual
+configured owner role/OID, and used the existing registered Artifact, file-set,
+schema/media/hash/provenance, result/shard and float32 finite/L2 validators.
+Both encoding and binding ledgers were compared in bounded batched lookups.
+INDEX18 continued running during the audit; later head advancement is legitimate.
+
+| View | Pinned index revision | Validated bindings |
+|---|---|---:|
+| CONTENT_ONLY | `embeddingindexrev_b18e8d563e382684d0058a623cea8467` | 347 |
+| CONCRETE_FACETS | `embeddingindexrev_25bffe2acec3f9f126e3ff0fc7be9e2a` | 333 |
+| METADATA_ONLY | `embeddingindexrev_df4ed4df159a6962b20bd0a00bbeb457` | 305 |
+
+Total validated:985 bindings/encodings,250 shards and250 first-origin manifests.
+The total is view-bindings, **not985 distinct Items**. This observation is not a
+fresh source/IAM admission, current corpus denominator, full coverage, live
+INDEX-request replay or consumer-delivery proof. No database mutation, model,
+service operation or new source grant occurred during this audit.
+
+Local evidence directory `/tmp/eom-index-storage-audit.HaetYOtP`:
+
+- `current-index18-storage-audit.json`, raw SHA-256
+  `6331b67b0162f60df2cee2bbc7cbeef9c9d0ae207bde7d0383280b08fef09064`;
+- exact reviewed helper raw
+  `d1dd527c31a5bacb53ad86686d4c92d18722d57172e86055b7ce47a8266b621c`;
+- exclusive once-wrapper raw
+  `9a95dcf0cad7aa4feb2c5d19f6ba104b7f85db13baedcaf4dc70a5f1cdfde4a6`.
+
+The first local preflight correctly rejected a group-writable local source before
+creating a handle/protected copy or running the audit. Its evidence is retained;
+only those local file modes were changed to0600, with source bytes/hashes intact.
+The subsequent single actual audit exited0 with empty stderr. Twenty-five offline
+tests, strict typing, Ruff/format and peer review passed before the operating run.
+
+A distinct eight-file finite preparation stage passed at17:29:18 UTC:
+`/var/lib/eom-finite-goal-operator.ee97239d-3bf9ed04-invocation2`, metadata raw
+`b061cee5a52f4c802e5ea7f7fe29fa3c6a1ddeeba56d86c4a69b176c87f144a1`.
+It preserves the exact original six selection, FIRST HTTP keys, client/provider
+pins and original request files; only invocation identity and the tested initial
+preparation wait differ. Stage preparation is **not authentication or execution**.
+At17:29:30 the operator requested normal main-only INDEX18 drain for this finite
+run. Do not treat that request as observed quiescence; preserve the old failed
+unit and never enter a password until the new genuine prompt is observed.
