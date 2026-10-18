@@ -88,3 +88,57 @@ CPU prefix. The root's final combined run passed **145 tests/165.36s**, comprisi
 test fileSHA256 is `a952ab53d8a75e9e6e5cf05ac362c278c875b66825918d54d054f401e672d0e5`.
 Strict mypy1 and Ruff/check/format2 PASS. These remain synthetic-encoder source
 results, not six actual model executions or authority/device-default acceptance.
+
+## Current-source numerical read bridge — design before implementation
+
+1. Responsibility: extend the existing Catalog benchmark admission/read owner to
+   materialize its original completed launch members for the pure assessor. No
+   model dispatch, final publication, ninth-gate verdict or device selection.
+2. Canonical source is the original Job journal and committed six launch Artifact
+   Revisions, not local worker workspaces, current/latest results or supplied bytes.
+3. Preserve the original request/Job/execution and Artifact/revision/member/hash
+   identities; require the original series in `VALIDATING_RESULT`.
+4. Reuse the current administrator/policy/Graph/source fences and pinned Artifact
+   resolver. Match the exact receipt/result, token witness descriptor, f32 names,
+   schema/media/hash/byte counts and CPU1 sealed-reference/f64 pointers.
+5. Access is one ordered six-launch journal traversal, keyed distinct f32 members
+   per launch and one CPU1 reference read. Every prescribed result is retained.
+6. Frozen launch/reference values and ordered tuples suffice; no global cache,
+   database table/index, schema, registry or new dependency is introduced.
+7. Time/space are O(total bounded output bytes), followed by the existing pure
+   assessment. Each unique f32 member is materialized once in this read operation;
+   the existing16MiB output bound is explicit for token witnesses and binaries.
+8. One caller-owned short Catalog SQL root holds current authorization and journal
+   reads. Recheck original history and mutable producer provenance before return;
+   no transaction, state, credential, claim or execution is created or committed.
+9. Catalog owns Artifact interpretation and calls the existing pure leaf. The
+   Orchestrator journal owns original history; final Artifact commit stays with
+   its separate existing Orchestrator publication boundary.
+10. Missing, corrupt, stale, revoked, foreign, incomplete or changed evidence
+    fails explicitly. No identity substitution, latest fallback, retry or model
+    run occurs; failures do not become numerical samples or gate success.
+11. Directly feeding temporary bytes into the pure leaf is simpler but cannot
+    establish actual original-source/Artifact closure. Extend existing admission
+    and journal readers rather than introduce a parallel benchmark framework.
+
+The bridge is implemented by the two explicit admission reads and
+`read_completed_benchmark_series_numerics`. It preserves the original Job in
+`VALIDATING_RESULT` and returns the existing pure assessment, not an Artifact,
+owner-gate result or device decision. The original CPU reference reader reuses
+the same strict reference validator and keeps its bytes-only public result.
+
+Focused verification is **49 PASS /120.83s**, with no skips/deselections, across
+the new17 numerical-read cases and the existing admission/timing readers. Actual
+temporary registered Artifacts and original journal transitions are exercised;
+Identity/Graph/encoding/capacity are explicitly synthetic, not operating grants.
+Tests cover token JSON above64KiB, one read of each distinct f32 member, exact CPU
+reference/f64 closure, missing/corrupt/wrong-schema/withdrawn/foreign members,
+late role withdrawal, content-free schema failure, same original six-launch
+assessment/replay without new Jobs/dispatch, wrong state and changed history.
+Strict mypy2 production modules, Ruff/format3 files and diff checks PASS.
+Evidence: `/tmp/eom-benchmark-numerical-read.3njiIgwe/numerical-read-focused.xml`.
+An earlier16-case run passed88.14s; it precedes the extra stable-error and final
+state/history assertions and is not substituted for the final49-case proof.
+No root, model, GPU, operating DB, credential or runtime selection was executed.
+The actual six measurements, nine-gate publication and conditional default/
+coherent rollback remain open under their original contracts.
