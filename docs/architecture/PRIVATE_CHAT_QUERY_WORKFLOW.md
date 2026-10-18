@@ -852,6 +852,47 @@ non-live tests and documentation can continue.
 
 ## Original atomic submission — design before persistence behavior
 
+### Owner-local preparation before submission
+
+The next application entrypoint constructs the already-released private request
+and submission context from the actual caller, typed original Chat origin and
+pinned Catalog context. It owns no new wire schema, queue, DB table, worker
+behavior or model call. Canonical policy/bundle bytes remain behind the existing
+Catalog artifact reader; the question text is never an input or output of this
+preparation entrypoint. Existing identities, revisions and raw/semantic hashes
+remain separate.
+
+Access is a fixed number of indexed Workflow-key/definition lookups, O(log W)
+per lookup, plus existing bounded control reads. The original actor/turn key is
+derived by the shared context-domain function, not supplied by the caller. Lookup
+precedes selecting controls: an exact replay retains its original audit/context/
+policy pins and uses the same atomic submission for fresh authorization. Changed
+origin/context is rejected, not assigned a new identity. A clean caller-owned root
+must use the same Catalog engine; no implicit commit or physical execution occurs.
+
+The first request uses installed owner configuration, current effective permission
+hash and exact policy/bundle closure, then the existing atomic Workflow+START
+use case. That use case retains late source checks and rollback. Private static
+admission stays closed until the complete installed path is ready. Accepting a
+model-built Workflow request is simpler but exposes audit/runtime authority;
+rebuilding on replay would silently change the original request. Neither is used.
+
+Preparation source checkpoint2026-10-18 UTC: the owner-local application entrypoint
+now constructs the existing request/context and calls the existing atomic start.
+The domain key derivation is shared before/after request construction without
+changing original keys or schema bytes. First-use control reads and replay's
+original audit/pins are distinguished; mismatched origin/context/actor, wrong or
+dirty roots, identity denial and absent/stale definitions fail explicitly.
+
+Combined754 tests/36 suites PASS; focused34 and separate16 dependency/consumer
+boundary tests overlap that inventory and are not summed. Strict6/Ruff/format3/
+diff PASS. The17 new preparation cases use real immutable control files and ORM
+roots, with declared Chat/IAM/Workflow lookup/start seams. One case retains the
+real static admission rejection. No physical executor, model, actual live user
+request, operating migration or private tool activation occurred. The earlier
+93/257 PostgreSQL gate covers the0057 snapshot, not this later preparation change.
+Actual installed preparation/provider/tool delivery and the full goal remain OPEN.
+
 The existing Workflow repository and native START resolver own persistence, not
 Chat workers or a new queue. Canonical inputs are the closed private request and
 text-free immutable submission context; the original Chat request remains the

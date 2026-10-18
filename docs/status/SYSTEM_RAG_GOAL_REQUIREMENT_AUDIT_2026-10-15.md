@@ -9,6 +9,25 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Owner-local private preparation checkpoint2026-10-18 UTC: actual caller,
+  original typed Chat origin and pinned context now construct the existing
+  private request/context before atomic start. Shared domain key bytes unchanged;
+  replay retains original audit/pins and never reselects controls. Combined754/
+  36 suites, strict6/Ruff/format3/diff PASS; separate34/16 overlap and are not
+  summed. New17 source cases use real control files/ORM roots with declared
+  lookup/Chat/IAM/start seams; closed static admission remains tested. The earlier
+  93/257 DB proof is not promoted to cover this later change. No model, live user
+  execution, operating DB/install or tool activation. Actual provider/Chat delivery
+  and the original complete C1–C5/seed–delta/device goal remain OPEN.
+- Read-only INDEX observation2026-10-18 00:15:52 UTC:769 encodings/769 bindings/
+  199 index revisions/6 logical indexes. Latest per-index261/545,271/545,237/545
+  remain PARTIAL, not769 Items or complete coverage. Latest five workflows:
+  3 COMPLETED/1 RUNNING/1 REQUESTED, all five failure codes null; no global
+  failure-free assertion. Same valid noninteractive pane/observer; no login,
+  claim, replay, restart, model or row mutation. Next routine read no earlier
+  00:45:52 UTC. Sanitized local evidence:
+  `/tmp/eom-private-step-observation.LZnLquDh/index-observation.json`.
+
 - Private step/release successor checkpoint2026-10-18 00:14 UTC: exact0057
   CHECK and additive release1.6 now pass combined737 source tests/35 suites,
   strict10/Ruff/format17/bash/diff and the exact130-pin guarded PostgreSQL93/257,

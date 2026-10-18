@@ -115,8 +115,19 @@ def private_chat_query_turn_identity(
 
 def private_chat_query_submission_key(context: PrivateChatQuerySubmissionContext) -> str:
     """One trusted original key per turn; changing claim/pins cannot invent another key."""
-    actor, _conversation, turn = private_chat_query_turn_identity(context)
-    return f"private-chat-query:{actor}:{turn}"
+    context = parse_private_chat_query_submission_context(context)
+    return private_chat_query_origin_key(context.origin)
+
+
+def private_chat_query_origin_key(origin: ChatPrivateQueryOrigin) -> str:
+    """The same key before request construction; parsing does not grant ownership."""
+    try:
+        origin = ChatPrivateQueryOrigin.model_validate(raw_similarity_contract_value(origin))
+    except (ValueError, TypeError, SchemaError):
+        raise PrivateChatQuerySubmissionContextError(
+            "PRIVATE_CHAT_QUERY_SUBMISSION_CONTEXT_INVALID"
+        ) from None
+    return f"private-chat-query:{origin.actor_id}:{origin.basis.turn_id}"
 
 
 def private_chat_query_submission_fingerprint(

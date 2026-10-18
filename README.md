@@ -473,6 +473,12 @@ DB 단계 연결은 당시 미완료였습니다. [원본 접수·동시성·롤
 요청 구성·도구 전달·설치/활성화와 전체 목표는 아직 미완료입니다.
 [DB 제약·배포 계약과 검증 범위](docs/architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#detached-staging-and-current-combined-verification)
 
+실제 사용자와 원 채팅의 참조에서 검색 요청을 구성하는 접수 준비 경로도 추가했습니다.
+재요청은 최초의 설정·권한 기록·자료 참조를 유지하고, 다른 사용자나 바뀐 대화 참조는
+거부합니다. 통합 소스754/36묶음·strict6·lint/format3 PASS이며, 새 준비 경로의 DB 조회·
+시작 접수는 대역입니다. 아직 운영 설치·채팅 도구 활성화나 전체 목표 완료는 아닙니다.
+[준비 경로와 검증 범위](docs/architecture/PRIVATE_CHAT_QUERY_WORKFLOW.md#owner-local-preparation-before-submission)
+
 아래는 날짜·후보별 역사적 구현 기록입니다. 당시의 미완료 표기는 현재 종합 상태와
 구별하며, 최신 실제 실행·활성화 범위는 위 표와 연결된 상태 문서를 기준으로 합니다.
 
