@@ -282,3 +282,192 @@ Remaining required production work is explicit:
 These are original-goal requirements, not new acceptance or human-review gates.
 Source functions and synthetic tests do not attest a live root launch, numerical
 execution, consumer delivery, performance winner or GPU-default activation.
+
+### Fixed root INDEX controller boundary
+
+1. **Responsibility.** One root controller composes the existing original-input
+   handoff, fixed main unit, READY observation, ACK and terminal retirement. It
+   grants neither source access nor Artifact publication; the original owner still
+   owns admission, reservation and late-source fences.
+2. **Canonical source.** The staged association/request remain the original input.
+   Fixed root-owned `/etc/eom/embedding-native-index-backend.json` uses the existing
+   backend-selection contract; the owner request cannot choose a configuration.
+   `/etc/eom/embedding-native-cuda.env` contains only its five non-secret immutable
+   configuration/receipt pins. Its static raw hash is not dynamic `launch.env`.
+3. **Identity/revisions.** Original execution/Job/association/input identities are
+   retained. A separate owner-binding contract pins the actual owner PID/birth;
+   no new Job, queue, vector identity or model-selected authority is introduced.
+4. **Resolution.** Root retains protected deployment-file epochs, validates the
+   actual owner and original staged input, exclusively prepares descriptors, and
+   captures the existing complete installed configuration/receipt closure before
+   starting the main unit. Missing deployment files fail closed.
+5. **Access patterns.** Exact execution/configuration lookup and bounded ordered
+   readiness/terminal observation; never directory-wide discovery or latest lookup.
+6. **Structures.** Frozen outcome values and existing unit/effect records are used.
+   Exclusive runtime-directory creation reserves the one dispatch. No registry,
+   DB schema, cache, retry identity or parallel scheduling framework is added.
+7. **Complexity.** O(bounded original bytes + existing installation capture) plus
+   bounded status observations within the fixed180-second computation lifetime.
+   File epochs are reused inside that scope, not cached across launches.
+8. **Concurrency.** Require a fresh exact main unit before one nonblocking start.
+   Once started, pin its first actual invocation/start. Before ACK the worker may
+   wait on the existing shared GPU lease until the original deadline, retrying only
+   BUSY on the same input/identity; INVALID is never retried. No model/GPU device
+   access occurs while waiting. No CPU fallback or new encoding key is allowed.
+9. **Dependency/ownership.** The protected owner SDK composes infrastructure only;
+   the numerical CUDA prefix is not modified. A new root service is distinct from
+   the CPU prepare service. Start-only authorization names the controller, never
+   the CUDA main unit. Root needs actual process inspection and PID1 access.
+10. **Failure/idempotency.** A dispatch timeout is uncertain, not permission to
+    start again. Exact failed terminal observations use the separate pre-READY
+    cleanup path; a reserved/uncertain ACK never does. After READY, preserve the
+    original outcome and require retirement. Unexpected observation failure or
+    deadline does not authorize blind stop/reset/cleanup or publication.
+11. **Simpler alternative.** A direct main-unit start loses trusted ACK/retirement;
+    borrowing benchmark authority or weakening the CPU root service loses its
+    boundary. Composing the already implemented concrete adapters is sufficient.
+    The installed CPU owner currently uses a different service process group from
+    the primary-group proof required here; it is not silently declared compatible.
+    A reviewed CUDA-owner composition/group alignment remains a deployment gate.
+
+This section is an implementation plan, not evidence of installed deployment,
+valid operator authentication, GPU performance or complete owner publication.
+
+### Original owner-process binding
+
+1. **Boundary.** Bind the real Orchestrator process that marked one CUDA INDEX
+   launch. This small value is neither source authority, backend choice nor ACK.
+2. **Canonical source.** Actual current kernel PID/birth and fixed owner credentials
+   produce `owner-binding.json` in the existing canonical owner-local workspace.
+   Existing association/input Artifacts remain canonical for Job/request/source.
+3. **Identity.** The closed1.0 value carries execution ID, association semantic SHA,
+   owner PID/start ticks and its own semantic hash, not a duplicate Job or input.
+4. **Checks.** JSON Schema2020-12 precedes the frozen model; bounded canonical parsing
+   rejects extra/coerced/copied fields and bad hashes. Protected readback links the
+   exact staged association and existing launch marker, not an implicit latest.
+5. **Access.** One fixed execution-key lookup and constant-size proc/file reads;
+   no process scan, database, source-content lookup or worker-selected path.
+6. **Structures.** One frozen value and exclusive exact-replay owner file reuse
+   existing retained-directory/member primitives. No registry/cache is introduced.
+7. **Scale.** At most1KiB canonical metadata, O(1) space/time beyond existing bounded
+   association/input validation. Process metadata contains no text or credentials.
+8. **Concurrency.** After the current source/command fence, the actual owner writes
+   the binding before the association-only launch marker. Same-process exact replay
+   is allowed; a replacement owner conflicts rather than replacing old provenance.
+9. **Direction.** The pure Catalog contract imports only contracts/identifiers.
+   Orchestrator IO uses its public protected-directory/member interfaces and a tiny
+   local stdlib-only fixed proc adapter, not a forbidden dependency on Catalog
+   infrastructure, benchmark authority or sibling private helpers.
+10. **Failure.** Missing/tampered binding, PID reuse or credential/birth drift fails
+    root preparation before runtime creation. Protected readback itself stays usable
+    after owner death for cleanup; a later live observer separately fences compute.
+11. **Alternative.** The association-only marker cannot identify the actual owner.
+    Accepting PID claims as flags would not bind them to original protected staging.
+    CPU marker/contracts and all current CPU runtime selections remain unchanged.
+
+The current released CPU controller unit uses Group=eom; that is not proof of a
+CUDA-compatible primary owner GID. These new kernel checks keep the fixed owner's
+primary UID/GID rule. A future CUDA controller must align its trusted unit Group or
+separately review an exact runtime-GID contract; this slice does not broaden the
+check, modify the CPU unit or claim the current composition passes CUDA admission.
+
+Verification: the schema/mirrored resource/loader/model gate passed32 tests before
+producer behavior changed. Final229 tests across owner-binding, CUDA/CPU/QUERY
+handoffs, dispatch/launch identity, READY and dependency boundaries PASS22.60s;
+strict typing5, Ruff5 and formatter5 PASS. Initial diagnostic failures are retained:
+two schema-test assumptions about mathematically integral float lexemes, one real
+forbidden infrastructure dependency (removed, not allowlisted), then two outdated
+synthetic IO seams after that adapter relocation. No business guard was relaxed.
+The final gate includes real unprivileged reads of the test process's own proc
+metadata; root runtime creation remains synthetic, not installed CUDA acceptance.
+
+### Failed original INDEX before ACK: terminal recovery
+
+1. **Boundary.** Observe and retire only an originally failed CUDA INDEX invocation
+   without an ACK record. Never fabricate READY, worker birth or benchmark authority.
+2. **Canonical source.** Actual systemd terminal invocation/start/ExecMainPID/store,
+   the original protected launch files and actual PID1/lease facts are authoritative.
+3. **Identity.** Keep execution, Job, association/input hashes, terminal invocation,
+   actual terminal PID and raw READY hash/epoch separate; partial/empty READY is metadata.
+4. **Checks.** Require root, fixed unit family, full original installed/file closure,
+   unchanged original failed outcome/start, empty cgroup and absent ACK reservation.
+5. **Access.** Exact original-unit/file lookup and bounded kernel/descriptor reads;
+   no database, source-content scan, live-owner requirement or implicit latest.
+6. **Structures.** Frozen terminal/retirement values and the existing protected
+   unit/invocation/phase effect records; reuse the shared physical/terminal primitives.
+7. **Scale.** O(8KiB READY + existing bounded installed closure/descriptor scan),
+   constant terminal metadata, no full request, vector or credential history.
+8. **Concurrency.** Recheck before intent and effect. Store1 requires the exact
+   retained lock/device and idle GPU before one reset/clean, then same-inode released
+   reacquisition plus postchecks. Store0 never inspects or cleans another GPU holder.
+9. **Direction.** INDEX infrastructure owns concrete root effects; shared physical
+   readers grant no execution authority. The sealed numerical prefix and released
+   READY schemas stay unchanged.
+10. **Failure/replay.** Preserve FAILED. Partial records/uncertain effects are not
+    retried; read-only retirement reconciliation remains available after owner death
+    or compute expiry. Missing/changed proof remains explicit uncertainty.
+11. **Alternative.** The after-READY path cannot represent absent readiness, and
+    importing benchmark recovery would borrow unrelated authority. One narrow INDEX
+    path reusing existing primitives closes that real lifecycle gap without a framework.
+
+This source slice is not installed execution, GPU/default activation or numerical success.
+
+Verification:230 tests across the new INDEX unacknowledged/actual terminal-metadata
+readers and existing benchmark unacknowledged/INDEX lifetime/physical-resource suites
+PASS22.14s; the separate82 existing benchmark pre-ACK retirement, benchmark lifetime
+and image lifetime regressions PASS16.81s. Strict typing5, Ruff9, formatter9 and diff
+checks PASS. Initial fixture collection and exact-union typing errors were corrected
+without weakening guards. Root/kernel/GPU ports remain synthetic; protected local
+record writes are real. The source preserves store0 isolation, raw partial/empty
+READY, absent-ACK proof, original FAILED, no-replay partial effects and same-inode
+release closure. No actual root start, ACK, cleanup, model or device selection ran.
+
+### Controller source integration checkpoint — 19:09 UTC
+
+The fixed root controller now composes original owner binding, exclusive runtime
+preparation, fixed static backend pins, installed-file capture, one nonblocking
+main start, actual invocation/start pinning, independently observed READY/ACK and
+the appropriate after-READY or unacknowledged FAILED retirement. Its small frozen
+return contains execution/Job/association/input identities and retirement metadata,
+not another copy of the request. It is explicitly not a wire completion receipt or
+permission to publish an Artifact.
+
+The new `eom-embedding-native-cuda-index-owner@.service` uses the existing protected
+owner SDK/isolated interpreter with the CUDA empty cwd and selected cache. Root
+gets only CHOWN/DAC_READ_SEARCH/SYS_PTRACE capabilities, fixed device access and
+PID1/process observation. Start-only Polkit grants the trusted owner this controller,
+and explicitly denies direct CUDA main starts. The old CPU prepare service, old
+CPU Polkit rule and numerical CUDA prefix were not changed. Nonoptional runtime
+and lifetime directories must be protected/precreated during a later installation.
+
+The leaf's admitted WAIT is now explicit: only shared-lease BUSY retries on the same
+original execution until its unchanged finite deadline; invalid lease protection
+fails immediately. No model/device opening, new request, same-unit restart or CPU
+fallback is introduced. The external leaf's new raw SHA is
+`0fb389628c322ea9b0cc01ad05c422f44ee637dc3d7883c95344eed425548a8a`;
+the main template bytes are unchanged. Controller source raw SHA is
+`600c0c17dd82b5e527a352286a3c99bcdf32bc020d65fe5ff6437a2a1a136fa5`.
+
+Final combined27-suite gate:975 tests PASS97.44s, including dependency boundaries,
+legacy CPU/QUERY and GPU probe/benchmark/image retirement. Separate resource/wheel
+packaging tests71 PASS9.27s; strict typing12 source files, Ruff/format21 and independent
+controller/owner/pre-READY reviews PASS. Earlier229/230/82/149/77 reports overlap
+this cohort and are not added. Actual unprivileged own-process proc reads, flock,
+zero-diagnostic children and protected local record IO are exercised; privileged
+systemd/device/FDSTORE/model ports remain synthetic.
+
+Final XML `/tmp/eom-native-cuda-successor.gKpxVAwN/cuda-index-controller-final.xml`,
+raw SHA `ad948679c1191807600892d65ea209294c6aa7d5d893b213c3405b86344ca8b4`.
+Packaging XML raw SHA
+`cc210eb6b66cea9ab3a035dcecd77df7d0c3a023b396854388bf455c0c7e06ac`.
+No database/state change, dependency addition, auth prompt, service mutation,
+numerical run, original benchmark allocation or default-device change occurred.
+
+**Still required:** owner completion/pending reads must consume a protected actual
+retirement/output proof before materialization/publication. This source controller
+alone is not that proof. Actual fixed six-run performance/finalization and C1–C5
+delivery remain the original priority once genuine supported authentication is
+available. GPU QUERY/default and real CPU rollback are conditional on the original
+measured winner/gates, not on synthetic test counts. No additional acceptance or
+human evaluation gate is added. Do not expand implementation beyond these original
+dependencies or activate the partial CUDA composition merely to exercise it.

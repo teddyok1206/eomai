@@ -31,6 +31,43 @@ from tests.unit.local_embedding_admission_fixtures import native_fixture
 ROOT = Path(__file__).resolve().parents[2]
 
 
+@pytest.mark.parametrize("fault", [None, "invalid", "deadline"])
+def test_wait_retries_only_busy_on_same_original_budget_without_gpu_or_model(monkeypatch, fault):
+    import eom_gpu_lease
+
+    pins = replace(entry.parse_native_cuda_index_launch_pins(arguments()), expires_ns=10**9)
+    clock = [0]
+    calls = []
+    result = object()
+
+    def acquire():
+        calls.append(clock[0])
+        if fault == "invalid":
+            raise eom_gpu_lease.SharedGpuLeaseError("INVALID")
+        if len(calls) < 3 or fault == "deadline":
+            raise eom_gpu_lease.SharedGpuLeaseError("BUSY")
+        return result
+
+    def sleep(seconds):
+        assert 0 < seconds <= 0.25
+        clock[0] += int(seconds * 10**9)
+
+    monkeypatch.setattr(eom_gpu_lease, "acquire_shared_gpu_lease", acquire)
+    monkeypatch.setattr(entry.time, "monotonic_ns", lambda: clock[0])
+    monkeypatch.setattr(entry.time, "sleep", sleep)
+    if fault is None:
+        assert entry._wait_gpu_lease(pins) is result
+        assert len(calls) == 3
+    elif fault == "invalid":
+        with pytest.raises(eom_gpu_lease.SharedGpuLeaseError, match="INVALID"):
+            entry._wait_gpu_lease(pins)
+        assert calls == [0] and clock == [0]
+    else:
+        with pytest.raises(ValueError, match="NATIVE_CUDA_INDEX_ENTRY_INVALID"):
+            entry._wait_gpu_lease(pins)
+        assert len(calls) == 4 and clock == [10**9]
+
+
 def arguments(request=None):
     request = native_fixture(device="CUDA").native_input if request is None else request
     return (

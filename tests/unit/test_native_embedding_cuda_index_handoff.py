@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import json
 import os
 import stat
 from pathlib import Path
@@ -11,8 +12,11 @@ from typing import Any
 from unittest.mock import Mock
 
 import pytest
+from eom_catalog_contracts.embedding_native_cuda_index_owner_binding import (
+    native_cuda_index_owner_binding_bytes,
+)
 from eom_catalog_contracts.inference_transfer_embedding import IncrementalEmbeddingInput
-from eom_identifiers import canonical_json_bytes, sha256_bytes
+from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_orchestrator import native_embedding_cuda_index_handoff as handoff
 from eom_orchestrator import native_embedding_index_handoff as cpu
 from eom_orchestrator.inference_transfer_cpu_handoff import (
@@ -27,6 +31,15 @@ from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.local_embedding_admission_fixtures import native_fixture
 
 INVALID = (ValueError, TypeError, CpuHandoffError, SchemaError)
+
+
+def test_real_unprivileged_process_birth_reader_is_not_a_production_owner_grant() -> None:
+    # Exercise real proc descriptors without root, service mutation or impersonation.
+    # The production public API still resolves the fixed workflow owner separately.
+    identity = CpuHandoffIdentity(os.geteuid(), os.getegid())
+    born = handoff._owner_start_ticks(os.getpid(), identity)
+    assert born > 0
+    assert handoff._owner_start_ticks(os.getpid(), identity) == born
 
 
 def prepared() -> handoff.PreparedNativeCudaIndex:
@@ -53,7 +66,28 @@ def synthetic_root(
 ) -> tuple[Mock, Mock]:
     """Translate only the root-file boundary; never claim privileged acceptance."""
     uid = os.geteuid()
-    monkeypatch.setattr(handoff, "os", SimpleNamespace(geteuid=lambda: 0, fsync=os.fsync))
+    monkeypatch.setattr(
+        handoff,
+        "os",
+        SimpleNamespace(
+            geteuid=lambda: 0,
+            **{
+                name: getattr(os, name)
+                for name in (
+                    "fsync",
+                    "open",
+                    "fstat",
+                    "read",
+                    "stat",
+                    "close",
+                    "O_RDONLY",
+                    "O_NOFOLLOW",
+                    "O_CLOEXEC",
+                    "O_NONBLOCK",
+                )
+            },
+        ),
+    )
 
     def directory(path: Path, **values: Any) -> Any:
         if values["uid"] == 0:
@@ -363,3 +397,158 @@ def test_module_has_no_completion_launch_or_sibling_private_dependency() -> None
                 name in node.module
                 for name in ("benchmark", "executor", "systemd", "backend", "sqlalchemy")
             )
+
+
+def test_binding_uses_actual_owner_and_existing_association_marker(
+    staged: handoff.PreparedNativeCudaIndex,
+) -> None:
+    handoff.mark_native_cuda_index_launch_started(staged)
+    binding = handoff.read_native_cuda_index_owner_binding(staged.execution_id)
+    assert binding.owner_pid == os.getpid()
+    assert binding.owner_start_ticks > 0
+    assert binding.execution_id == staged.execution_id
+    assert binding.launch_association_sha256 == staged.association.association_sha256
+    assert (
+        staged.workspace / "owner-binding.json"
+    ).read_bytes() == native_cuda_index_owner_binding_bytes(binding)
+    assert (
+        staged.workspace / ".launch-started"
+    ).read_bytes() == staged.association.association_sha256.encode("ascii")
+    handoff.require_native_cuda_index_owner_current(binding)
+
+
+@pytest.mark.parametrize("field", ("execution_id", "launch_association_sha256"))
+def test_rehashed_other_binding_is_not_original_staged_linkage(
+    staged: handoff.PreparedNativeCudaIndex, field: str
+) -> None:
+    handoff.mark_native_cuda_index_launch_started(staged)
+    path = staged.workspace / "owner-binding.json"
+    body = json.loads(path.read_bytes())
+    body[field] = "c" * 32 if field == "execution_id" else "sha256:" + "c" * 64
+    body["binding_sha256"] = content_sha256(
+        {k: v for k, v in body.items() if k != "binding_sha256"}
+    )
+    path.write_bytes(canonical_json_bytes(body))
+    with pytest.raises(ValueError, match="OWNER_BINDING_MISMATCH"):
+        handoff.read_native_cuda_index_owner_binding(staged.execution_id)
+
+
+@pytest.mark.parametrize("fault", ("mode", "symlink", "hardlink", "tamper", "missing"))
+def test_untrusted_binding_never_reaches_root_creation(
+    staged: handoff.PreparedNativeCudaIndex, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    handoff.mark_native_cuda_index_launch_started(staged)
+    path = staged.workspace / "owner-binding.json"
+    if fault == "mode":
+        path.chmod(0o640)
+    elif fault == "symlink":
+        path.rename(path.with_suffix(".original"))
+        path.symlink_to(path.with_suffix(".original"))
+    elif fault == "hardlink":
+        os.link(path, path.with_suffix(".linked"))
+    elif fault == "tamper":
+        body = json.loads(path.read_bytes())
+        body["owner_start_ticks"] += 1
+        path.write_bytes(canonical_json_bytes(body))
+    else:
+        path.unlink()
+    three, ready = synthetic_root(monkeypatch)
+    with pytest.raises(INVALID):
+        handoff.prepare_native_cuda_index_handoff(staged.execution_id)
+    three.assert_not_called()
+    ready.assert_not_called()
+
+
+def test_replacement_owner_cannot_overwrite_original_binding(
+    staged: handoff.PreparedNativeCudaIndex, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    handoff.mark_native_cuda_index_launch_started(staged)
+    path = staged.workspace / "owner-binding.json"
+    first, marker = path.read_bytes(), (staged.workspace / ".launch-started").read_bytes()
+    binding = handoff.read_native_cuda_index_owner_binding(staged.execution_id)
+    monkeypatch.setattr(
+        handoff, "os", SimpleNamespace(geteuid=os.geteuid, getpid=lambda: os.getpid() + 1)
+    )
+    monkeypatch.setattr(handoff, "_owner_start_ticks", lambda *_: binding.owner_start_ticks)
+    with pytest.raises(ValueError, match="MEMBER_CONFLICT"):
+        handoff.mark_native_cuda_index_launch_started(staged)
+    assert path.read_bytes() == first
+    assert (staged.workspace / ".launch-started").read_bytes() == marker
+
+
+def test_cleanup_read_survives_owner_death_but_prepare_checks_live_birth(
+    staged: handoff.PreparedNativeCudaIndex, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    handoff.mark_native_cuda_index_launch_started(staged)
+    binding = handoff.read_native_cuda_index_owner_binding(staged.execution_id)
+    three, ready = synthetic_root(monkeypatch)
+    monkeypatch.setattr(
+        handoff, "_owner_start_ticks", Mock(side_effect=FileNotFoundError("synthetic owner died"))
+    )
+    assert handoff.read_native_cuda_index_owner_binding(staged.execution_id) == binding
+    with pytest.raises(FileNotFoundError):
+        handoff.prepare_native_cuda_index_handoff(staged.execution_id)
+    three.assert_not_called()
+    ready.assert_not_called()
+    monkeypatch.setattr(handoff, "_owner_start_ticks", lambda *_: binding.owner_start_ticks + 1)
+    with pytest.raises(ValueError, match="OWNER_CHANGED"):
+        handoff.prepare_native_cuda_index_handoff(staged.execution_id)
+    three.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "fault", (None, "uid", "gid", "duplicate_uid", "birth", "pid", "stale_binding")
+)
+def test_public_current_owner_check_has_one_strict_kernel_rule(
+    staged: handoff.PreparedNativeCudaIndex, monkeypatch: pytest.MonkeyPatch, fault: str | None
+) -> None:
+    handoff.mark_native_cuda_index_launch_started(staged)
+    binding = handoff.read_native_cuda_index_owner_binding(staged.execution_id)
+    calls = []
+
+    def read(pid: int, name: str, owner: CpuHandoffIdentity) -> bytes:
+        assert pid == binding.owner_pid and owner.owner_uid == os.geteuid()
+        calls.append(name)
+        if name == "status":
+            uid = os.geteuid() + (fault == "uid")
+            gid = os.getegid() + (fault == "gid")
+            value = f"Uid:\t{uid} {uid} {uid} {uid}\nGid:\t{gid} {gid} {gid} {gid}\n".encode()
+            return value + (
+                f"Uid:\t{uid} {uid} {uid} {uid}\n".encode() if fault == "duplicate_uid" else b""
+            )
+        ticks = binding.owner_start_ticks + (
+            fault == "stale_binding" or (fault == "birth" and len(calls) > 1)
+        )
+        pid = binding.owner_pid + (fault == "pid")
+        return f"{pid} (synthetic owner)) S {'0 ' * 18}{ticks}\n".encode()
+
+    monkeypatch.setattr(handoff, "_read_owner_process_member", read)
+    if fault is None:
+        handoff.require_native_cuda_index_owner_current(binding)
+        assert calls == ["stat", "status", "stat"]
+    else:
+        with pytest.raises(ValueError):
+            handoff.require_native_cuda_index_owner_current(binding)
+
+
+def test_cpu_marker_bytes_and_files_remain_unchanged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "cpu-owner"
+    root.mkdir(mode=0o700)
+    monkeypatch.setattr(cpu, "OWNER_ROOT", root)
+    monkeypatch.setattr(
+        cpu, "fixed_owner_identity", lambda: CpuHandoffIdentity(os.geteuid(), os.getegid())
+    )
+    fixture = native_fixture()
+    value = cpu.PreparedNativeIndex("b" * 32, fixture.association, fixture.native_input)
+    cpu.stage_native_index(value)
+    cpu.mark_native_index_launch_started(value)
+    assert (
+        value.workspace / ".launch-started"
+    ).read_bytes() == value.association.association_sha256.encode("ascii")
+    assert {path.name for path in value.workspace.iterdir()} == {
+        "input.json",
+        "association.json",
+        ".launch-started",
+    }

@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import re
 import stat
-import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Literal
@@ -38,20 +37,15 @@ from eom_catalog_service.embedding_runtime_files import (
 )
 from eom_catalog_service.embedding_runtime_os_identity import observe_runtime_device
 from eom_catalog_service.gpu_unit_policy_observation import observe_gpu_unit_policy
-from eom_catalog_service.gpu_unit_terminal_observation import gpu_unit_terminal_outcome
+from eom_catalog_service.gpu_unit_terminal_observation import (
+    gpu_unit_terminal_outcome,
+    observe_failed_gpu_unit_metadata,
+)
 from eom_catalog_service.unit_effect_records import require_unit_effect_phase_absent
 
 if TYPE_CHECKING:
     from eom_catalog_service.embedding_cuda_host_closure import ProtectedCudaEmbeddingHostClosure
     from eom_catalog_service.embedding_runtime_prefix_closure import PrefixRuntimeInventory
-
-_ENV = {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"}
-_PROPERTIES = (
-    "ExecMainPID",
-    "NFileDescriptorStore",
-    "InvocationID",
-    "ExecMainStartTimestampMonotonic",
-)
 
 
 def _require(condition: bool, suffix: str) -> None:
@@ -196,37 +190,11 @@ def require_empty_benchmark_cuda_cgroup(unit: str) -> None:
 
 def _terminal_metadata(unit: str, expected: CpuUnitObservation) -> tuple[int, Literal[0, 1]]:
     try:
-        result = subprocess.run(
-            ("/usr/bin/systemctl", "show", unit, *("--property=" + key for key in _PROPERTIES)),
-            capture_output=True,
-            check=False,
-            timeout=10,
-            env=_ENV,
+        return observe_failed_gpu_unit_metadata(
+            unit, template=CUDA_BENCHMARK_TEMPLATE, expected=expected
         )
-    except (OSError, subprocess.TimeoutExpired):
+    except ValueError:
         raise ValueError("BENCHMARK_CUDA_UNACKNOWLEDGED_TERMINATION_UNCERTAIN") from None
-    _require(
-        result.returncode == 0 and len(result.stdout) <= 16384 and len(result.stderr) <= 16384,
-        "TERMINATION_UNCERTAIN",
-    )
-    fields: dict[str, str] = {}
-    for line in result.stdout.decode("ascii").splitlines():
-        key, separator, value = line.partition("=")
-        _require(
-            bool(separator) and key in _PROPERTIES and key not in fields, "TERMINATION_UNCERTAIN"
-        )
-        fields[key] = value
-    _require(
-        set(fields) == set(_PROPERTIES)
-        and fields["InvocationID"] == expected.invocation_id
-        and fields["ExecMainStartTimestampMonotonic"]
-        == str(expected.status.exec_main_started_monotonic)
-        and fields["NFileDescriptorStore"] in {"0", "1"}
-        and re.fullmatch(r"[1-9][0-9]{0,9}", fields["ExecMainPID"]) is not None
-        and 0 < int(fields["ExecMainPID"]) <= 2147483647,
-        "TERMINATION_UNCERTAIN",
-    )
-    return int(fields["ExecMainPID"]), 1 if fields["NFileDescriptorStore"] == "1" else 0
 
 
 def observe_unacknowledged_benchmark_cuda_terminal(

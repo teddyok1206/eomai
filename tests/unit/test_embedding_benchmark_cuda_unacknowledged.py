@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 from eom_catalog_service import embedding_benchmark_cuda_observation as ready_owner
 from eom_catalog_service import embedding_benchmark_cuda_unacknowledged as owner
+from eom_catalog_service import gpu_unit_terminal_observation as terminal_reader
 from eom_catalog_service.embedding_cuda_probe_resource_observation import (
     TerminalCudaLeaseIdentity,
     UnacknowledgedBenchmarkGpuResources,
@@ -69,8 +70,18 @@ def unacknowledged(benchmark, monkeypatch):
 
     def metadata(args, **kwargs):
         assert args[:3] == ("/usr/bin/systemctl", "show", state.unit_name)
-        assert set(args[3:]) == {"--property=" + key for key in owner._PROPERTIES}
-        assert kwargs == dict(capture_output=True, check=False, timeout=10, env=owner._ENV)
+        assert set(args[3:]) == {
+            "--property=" + key
+            for key in (
+                "ExecMainPID",
+                "NFileDescriptorStore",
+                "InvocationID",
+                "ExecMainStartTimestampMonotonic",
+            )
+        }
+        assert kwargs == dict(
+            capture_output=True, check=False, timeout=10, env=terminal_reader._ENV
+        )
         state.metadata_calls += 1
         fields = dict(
             ExecMainPID="123",
@@ -105,7 +116,9 @@ def unacknowledged(benchmark, monkeypatch):
     monkeypatch.setattr(owner, "observe_cuda_probe_gpu_clients", lambda *_a: state.clients)
     monkeypatch.setattr(owner, "observe_unacknowledged_benchmark_gpu_resources", physical)
     monkeypatch.setattr(
-        owner, "subprocess", SimpleNamespace(run=metadata, TimeoutExpired=subprocess.TimeoutExpired)
+        terminal_reader,
+        "subprocess",
+        SimpleNamespace(run=metadata, TimeoutExpired=subprocess.TimeoutExpired),
     )
     return state
 
@@ -173,7 +186,17 @@ def test_unknown_pre_ack_state_never_grants_recovery(unacknowledged, monkeypatch
         observe(state)
 
 
-@pytest.mark.parametrize("fault", (*owner._PROPERTIES, "timeout", "late_store"))
+@pytest.mark.parametrize(
+    "fault",
+    (
+        "ExecMainPID",
+        "NFileDescriptorStore",
+        "InvocationID",
+        "ExecMainStartTimestampMonotonic",
+        "timeout",
+        "late_store",
+    ),
+)
 def test_terminal_pid_store_and_invocation_are_bound_to_actual_failed_unit(unacknowledged, fault):
     unacknowledged.metadata_fault = fault
     with pytest.raises(ValueError, match="TERMINATION_UNCERTAIN"):

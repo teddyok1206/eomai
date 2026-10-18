@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/embedding-native-cuda-index-owner-binding/1.0",
+  "title": "Original CUDA INDEX owner-process binding, not authority or backend selection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "execution_id",
+    "launch_association_sha256",
+    "owner_pid",
+    "owner_start_ticks",
+    "binding_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "embedding-native-cuda-index-owner-binding/1.0"},
+    "execution_id": {"type": "string", "pattern": "^[0-9a-f]{32}$", "maxLength": 32},
+    "launch_association_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$", "maxLength": 71},
+    "owner_pid": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+    "owner_start_ticks": {"type": "integer", "minimum": 1, "maximum": 18446744073709551615},
+    "binding_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$", "maxLength": 71}
+  }
+}

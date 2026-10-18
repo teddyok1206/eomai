@@ -295,6 +295,42 @@ def test_pre_ready_terminal_resources_have_no_invented_birth_or_worker_fd_read(k
     assert not hasattr(observed, "assert_owned")
 
 
+def test_index_unacknowledged_resources_use_actual_terminal_pid_without_worker_or_ready(kernel):
+    report = index_report(kernel)
+    kernel[2]["unheld_worker"] = True
+    observed = owner.observe_unacknowledged_native_cuda_index_gpu_resources(
+        unit=kernel[2]["expected_unit"], terminal_pid=report.pid, lease_gid=2468
+    )
+    assert type(observed) is owner.UnacknowledgedNativeCudaIndexGpuResources
+    assert observed.pid1_descriptor == 80 and observed.shared_gpu_lease.holder_pid == report.pid
+    assert not hasattr(observed.shared_gpu_lease, "holder_start_time_ticks")
+    assert not hasattr(observed, "ready") and not hasattr(observed, "assert_owned")
+
+
+@pytest.mark.parametrize("fault", ("pid", "group", "benchmark", "pid1", "store", "root"))
+def test_index_unacknowledged_resources_never_borrow_other_unit_or_authority(
+    kernel, monkeypatch, fault
+):
+    report = index_report(kernel)
+    unit, pid, gid = kernel[2]["expected_unit"], report.pid, 2468
+    if fault == "pid":
+        pid += 1
+    elif fault == "group":
+        gid += 1
+    elif fault == "benchmark":
+        unit = "eom-embedding-benchmark-cuda@" + report.execution_id + ".service"
+    elif fault == "pid1":
+        kernel[2]["unheld_pid1"] = True
+    elif fault == "store":
+        kernel[2]["store"] = b"[]"
+    else:
+        monkeypatch.setattr(owner.os, "getresuid", lambda: (1000,) * 3)
+    with pytest.raises(ValueError, match="NATIVE_CUDA_INDEX_RESOURCE_OBSERVATION_INVALID"):
+        owner.observe_unacknowledged_native_cuda_index_gpu_resources(
+            unit=unit, terminal_pid=pid, lease_gid=gid
+        )
+
+
 @pytest.mark.parametrize("fault", ("pid", "group", "probe", "pid1", "store", "root"))
 def test_pre_ready_terminal_resources_require_exact_unit_physical_identity(
     kernel, monkeypatch, fault
@@ -678,6 +714,61 @@ def test_index_released_scope_holds_only_its_new_description(index_released):
         assert events == ["open", "flock"]
         events.append("post-checks")
     assert events == ["open", "flock", "post-checks", "close"]
+
+
+def unacknowledged_index_resources(original):
+    lease = original.shared_gpu_lease
+    return owner.UnacknowledgedNativeCudaIndexGpuResources(
+        original.device_nodes,
+        owner.TerminalCudaLeaseIdentity(
+            lease.lease_gid, lease.parent_epoch, lease.lock_epoch, lease.holder_pid
+        ),
+        original.pid1_descriptor,
+    )
+
+
+def test_unacknowledged_index_release_holds_same_inode_without_fabricated_birth(index_released):
+    original, _, _, events, unit = index_released
+    resources = unacknowledged_index_resources(original)
+    with owner.hold_released_unacknowledged_native_cuda_index_resources(resources, unit=unit):
+        assert events == ["open", "flock"]
+        events.append("post-checks")
+    assert events == ["open", "flock", "post-checks", "close"]
+
+
+def test_unacknowledged_index_release_cannot_unlock_still_retained_description(index_released):
+    original, _, state, events, unit = index_released
+    state["still_retained"] = True
+    with (
+        pytest.raises(ValueError, match="RELEASE_UNCERTAIN"),
+        owner.hold_released_unacknowledged_native_cuda_index_resources(
+            unacknowledged_index_resources(original), unit=unit
+        ),
+    ):
+        pytest.fail("old retained description is not released")
+    assert events == ["open", "flock", "close"]
+
+
+@pytest.mark.parametrize("fault", ("root", "benchmark", "type"))
+def test_unacknowledged_index_release_rejects_other_family_before_open(
+    index_released, monkeypatch, fault
+):
+    original, _, _, events, unit = index_released
+    resources = unacknowledged_index_resources(original)
+    if fault == "root":
+        monkeypatch.setattr(owner.os, "getresuid", lambda: (1000,) * 3)
+    elif fault == "benchmark":
+        unit = unit.replace("native-cuda-index", "benchmark-cuda")
+    else:
+        resources = owner.UnacknowledgedBenchmarkGpuResources(
+            resources.device_nodes, resources.shared_gpu_lease, resources.pid1_descriptor
+        )
+    with (
+        pytest.raises(ValueError),
+        owner.hold_released_unacknowledged_native_cuda_index_resources(resources, unit=unit),
+    ):
+        pytest.fail("wrong family cannot obtain an INDEX scope")
+    assert events == []
 
 
 @pytest.mark.parametrize("fault", ("root", "probe", "benchmark", "unit_type", "type"))

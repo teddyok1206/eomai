@@ -19,6 +19,7 @@ if TYPE_CHECKING:
         RootLocalNativeConfigurationPin,
     )
     from eom_catalog_contracts.inference_transfer_embedding import IncrementalEmbeddingInput
+    from eom_gpu_lease import SharedGpuLease
 
     from eom_catalog_service.embedding_cuda_probe_resource_files import OpenedCudaProbeDeviceAccess
 
@@ -93,6 +94,22 @@ def parse_native_cuda_index_launch_pins(arguments: tuple[str, ...]) -> NativeCud
 def _before_deadline(pins: NativeCudaIndexLaunchPins) -> None:
     now = time.monotonic_ns()
     _require(now < pins.expires_ns <= now + _MAX_LIFETIME_NS)
+
+
+def _wait_gpu_lease(pins: NativeCudaIndexLaunchPins) -> SharedGpuLease:
+    """The admitted WAIT policy consumes only this original launch's finite budget."""
+    from eom_gpu_lease import SharedGpuLeaseError, acquire_shared_gpu_lease
+
+    while True:
+        _before_deadline(pins)
+        try:
+            return acquire_shared_gpu_lease()
+        except SharedGpuLeaseError as error:
+            if error.code != "BUSY":
+                raise
+        remaining = pins.expires_ns - time.monotonic_ns()
+        _require(remaining > 0)
+        time.sleep(min(0.25, remaining / 10**9))
 
 
 def _epoch(value: os.stat_result) -> tuple[int, ...]:
@@ -302,7 +319,7 @@ def _run(pins: NativeCudaIndexLaunchPins, outputs: tuple[int, int]) -> int:
     from eom_catalog_contracts.embedding_native_installation_evidence import (
         RootLocalNativeConfigurationPin,
     )
-    from eom_gpu_lease import acquire_shared_gpu_lease, request_unit_gpu_lease_retention
+    from eom_gpu_lease import request_unit_gpu_lease_retention
     from eom_identifiers import canonical_json_bytes, content_sha256
 
     from eom_catalog_service.embedding_cuda_probe_resource_files import (
@@ -343,7 +360,7 @@ def _run(pins: NativeCudaIndexLaunchPins, outputs: tuple[int, int]) -> int:
     )
     files.assert_unchanged()
     _before_deadline(pins)
-    lease = acquire_shared_gpu_lease()
+    lease = _wait_gpu_lease(pins)
     try:
         with capture_cuda_probe_resource_files(device, lease) as resources:
             request_unit_gpu_lease_retention(lease)

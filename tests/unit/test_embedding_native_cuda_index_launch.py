@@ -6,6 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
 from eom_catalog_service.embedding_native_cuda_index_entry import (
     NativeCudaIndexLaunchPins,
     parse_native_cuda_index_launch_pins,
@@ -16,6 +17,7 @@ from eom_catalog_service.embedding_native_cuda_index_launch import (
     CUDA_INDEX_RUNTIME_ROOT,
     CUDA_INDEX_TEMPLATE,
     CUDA_INDEX_TEMPLATE_SHA256,
+    native_cuda_index_backend_environment_bytes,
     native_cuda_index_launch_arguments,
     native_cuda_index_launch_environment_bytes,
     native_cuda_index_unit,
@@ -24,6 +26,22 @@ from eom_catalog_service.embedding_native_cuda_index_launch import (
 from eom_identifiers import sha256_bytes
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_static_backend_environment_contains_no_execution_fields(pins):
+    backend = NativeEmbeddingBackendPins(
+        pins.configuration_id,
+        pins.configuration_revision_id,
+        pins.configuration_sha256,
+        pins.configuration_raw_sha256,
+        pins.receipt_raw_sha256,
+    )
+    raw = native_cuda_index_backend_environment_bytes(backend)
+    assert len(raw.splitlines()) == 5
+    assert b"EOM_CUDA_INDEX_" not in raw
+    assert native_cuda_index_launch_environment_bytes(pins).endswith(raw)
+    with pytest.raises(ValueError, match="BACKEND_ENVIRONMENT_INVALID"):
+        native_cuda_index_backend_environment_bytes(pins)
 
 
 @pytest.fixture

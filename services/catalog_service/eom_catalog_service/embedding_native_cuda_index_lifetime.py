@@ -40,7 +40,8 @@ from eom_catalog_service.unit_effect_records import (
     write_unit_effect_record,
 )
 
-_ROOT = Path("/opt/eom/embedding-native-cuda-index-lifetimes")
+NATIVE_CUDA_INDEX_LIFETIME_ROOT = Path("/opt/eom/embedding-native-cuda-index-lifetimes")
+_ROOT = NATIVE_CUDA_INDEX_LIFETIME_ROOT
 _ENV = {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"}
 
 
@@ -150,7 +151,10 @@ def _close_record(directory: int) -> None:
         raise ValueError("NATIVE_CUDA_INDEX_LIFETIME_RECORD_UNCERTAIN") from None
 
 
-def _effect(action: Literal["ACK", "STOP", "RESET_FAILED", "CLEAN_FDSTORE"], unit: str) -> None:
+def apply_native_cuda_index_effect(
+    action: Literal["ACK", "STOP", "RESET_FAILED", "CLEAN_FDSTORE"], unit: str
+) -> None:
+    """One closed root-only INDEX effect; caller must own intent and original-unit proof."""
     _require(os.getresuid() == (0, 0, 0), "ROOT_REQUIRED")
     _require(
         type(unit) is str
@@ -194,7 +198,7 @@ def acknowledge_native_cuda_index_ready(
     try:
         _save(directory, "intent.json", "NATIVE_CUDA_INDEX_ACK_INTENT", ready)
         recheck()
-        _effect("ACK", unit)
+        apply_native_cuda_index_effect("ACK", unit)
         result = NativeCudaIndexAcknowledgement(ready, _timestamp())
         _save(directory, "result.json", "NATIVE_CUDA_INDEX_ACK_SENT", result)
         return result
@@ -250,7 +254,9 @@ def retire_native_cuda_index_unit(
     try:
         _save(directory, "intent.json", "NATIVE_CUDA_INDEX_RETIREMENT_INTENT", terminal)
         recheck()
-        _effect("STOP" if terminal.original_outcome == "SUCCEEDED" else "RESET_FAILED", unit)
+        apply_native_cuda_index_effect(
+            "STOP" if terminal.original_outcome == "SUCCEEDED" else "RESET_FAILED", unit
+        )
         stopped = observe_stopped_gpu_unit(
             unit, template=CUDA_INDEX_TEMPLATE, invocation=ready.unit.invocation_id
         )
@@ -268,7 +274,7 @@ def retire_native_cuda_index_unit(
             )
             require_native_cuda_index_processes_ended(ready)
             captured.assert_current()
-            _effect("CLEAN_FDSTORE", unit)
+            apply_native_cuda_index_effect("CLEAN_FDSTORE", unit)
         result = observe_retired_native_cuda_index_unit(terminal, captured)
         _save(directory, "result.json", "NATIVE_CUDA_INDEX_RETIRED_NOT_ADMITTED", result)
         return result

@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
 from eom_catalog_service.embedding_native_cuda_index_entry import (
     NativeCudaIndexLaunchPins,
     parse_native_cuda_index_launch_pins,
@@ -15,7 +16,7 @@ CUDA_INDEX_TEMPLATE_SHA256 = (
     "sha256:6a7d5ad3e921d89cd30482ae4e00a5797a0d6a2d16e3b0f61adbf25c316a0bf1"
 )
 CUDA_INDEX_ENTRY = Path("/usr/local/libexec/eom-embedding-native-cuda-index/entry.py")
-CUDA_INDEX_ENTRY_SHA256 = "sha256:d7d60aa6035f69be899cb2d00254012681b54813c74988f1a907d0483404e606"
+CUDA_INDEX_ENTRY_SHA256 = "sha256:0fb389628c322ea9b0cc01ad05c422f44ee637dc3d7883c95344eed425548a8a"
 CUDA_INDEX_RUNTIME_ROOT = Path("/run/eom-native-embedding-cuda-index")
 _FIELDS = (
     "EOM_CUDA_INDEX_JOB_ID",
@@ -28,6 +29,30 @@ _FIELDS = (
     "EOM_EMBEDDING_CONFIGURATION_RAW_SHA256",
     "EOM_EMBEDDING_RECEIPT_RAW_SHA256",
 )
+_BACKEND_FIELDS = _FIELDS[-5:]
+
+
+def native_cuda_index_backend_environment_bytes(pins: NativeEmbeddingBackendPins) -> bytes:
+    """Fixed deployment pins only; this is not a per-execution launch environment."""
+    if type(pins) is not NativeEmbeddingBackendPins:
+        raise ValueError("NATIVE_CUDA_INDEX_BACKEND_ENVIRONMENT_INVALID")
+    checked = NativeEmbeddingBackendPins(
+        pins.configuration_id,
+        pins.configuration_revision_id,
+        pins.configuration_sha256,
+        pins.configuration_raw_sha256,
+        pins.receipt_raw_sha256,
+    )
+    values = (
+        checked.configuration_id,
+        checked.configuration_revision_id,
+        checked.configuration_sha256,
+        checked.configuration_raw_sha256,
+        checked.receipt_raw_sha256,
+    )
+    return "".join(
+        f"{key}={value}\n" for key, value in zip(_BACKEND_FIELDS, values, strict=True)
+    ).encode("ascii")
 
 
 def native_cuda_index_unit(execution_id: str) -> str:

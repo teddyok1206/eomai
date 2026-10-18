@@ -133,8 +133,20 @@ class UnacknowledgedBenchmarkGpuResources:
     pid1_descriptor: int
 
 
+@dataclass(frozen=True, slots=True)
+class UnacknowledgedNativeCudaIndexGpuResources:
+    """INDEX-only actual dead-PID fencing, not READY or benchmark authority."""
+
+    device_nodes: tuple[RootLocalCudaDeviceNode, ...]
+    shared_gpu_lease: TerminalCudaLeaseIdentity
+    pid1_descriptor: int
+
+
 type _RetainedGpuUnitResources = (
-    CudaProbeResourceObservation | ImageUnitGpuResources | UnacknowledgedBenchmarkGpuResources
+    CudaProbeResourceObservation
+    | ImageUnitGpuResources
+    | UnacknowledgedBenchmarkGpuResources
+    | UnacknowledgedNativeCudaIndexGpuResources
 )
 type _RetainedLease = RootLocalCudaSharedGpuLease | TerminalCudaLeaseIdentity
 
@@ -278,7 +290,10 @@ def _assert_retained_resources(observed: _RetainedGpuUnitResources, unit: str) -
 
 
 def _validated_retained_lease(observed: _RetainedGpuUnitResources) -> _RetainedLease:
-    if type(observed) is UnacknowledgedBenchmarkGpuResources:
+    if (
+        type(observed) is UnacknowledgedBenchmarkGpuResources
+        or type(observed) is UnacknowledgedNativeCudaIndexGpuResources
+    ):
         lease = observed.shared_gpu_lease
         _require(type(lease) is TerminalCudaLeaseIdentity)
         lease.__post_init__()
@@ -324,6 +339,40 @@ def hold_released_unacknowledged_benchmark_resources(
     observed: UnacknowledgedBenchmarkGpuResources,
 ) -> Iterator[None]:
     _require(os.getresuid() == (0, 0, 0) and type(observed) is UnacknowledgedBenchmarkGpuResources)
+    with _hold_released_resources(observed):
+        yield
+
+
+def observe_unacknowledged_native_cuda_index_gpu_resources(
+    *, unit: str, terminal_pid: int, lease_gid: int
+) -> UnacknowledgedNativeCudaIndexGpuResources:
+    """Read exact INDEX/PID1 retention; caller separately proves failure and absent ACK."""
+    try:
+        _require_native_cuda_index_unit(unit)
+        lease = TerminalCudaLeaseIdentity(
+            lease_gid, _epoch(_LOCK.parent.lstat())[:5], _epoch(_LOCK.lstat()), terminal_pid
+        )
+        nodes = _named_device_nodes()
+        validate_rootlocal_cuda_resource_file_identity(
+            nodes, lease.parent_epoch, lease.lock_epoch, lease.lease_gid
+        )
+        _require_tmpfs_device(lease.lock_epoch[0])
+        observed = UnacknowledgedNativeCudaIndexGpuResources(
+            nodes, lease, _observe_retained_store_descriptor(lease, unit)
+        )
+        _assert_retained_resources(observed, unit)
+        return observed
+    except (ValueError, OSError, subprocess.TimeoutExpired, JsonSchemaError):
+        raise ValueError("NATIVE_CUDA_INDEX_RESOURCE_OBSERVATION_INVALID") from None
+
+
+@contextmanager
+def hold_released_unacknowledged_native_cuda_index_resources(
+    observed: UnacknowledgedNativeCudaIndexGpuResources, *, unit: str
+) -> Iterator[None]:
+    """Reacquire only the same released INDEX lease, never a different current holder."""
+    _require_native_cuda_index_unit(unit)
+    _require(type(observed) is UnacknowledgedNativeCudaIndexGpuResources)
     with _hold_released_resources(observed):
         yield
 
