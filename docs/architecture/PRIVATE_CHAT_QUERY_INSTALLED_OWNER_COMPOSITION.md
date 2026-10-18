@@ -139,6 +139,88 @@ Next: bounded private host routing to this operation-local factory, supported
 same-original BUSY liveness, canonical auxiliary provenance and actual Chat
 consumer delivery. The factory alone is not an installed service or activation.
 
+## Bounded host connection — design before behavior
+
+Extend the existing reference QUERY host with one optional private listener, not
+a parallel service/pool/queue. Each endpoint has its own root-provisioned SGID
+parent: API and Chat can use their own group without adding a worker/controller
+to another group. Both sockets retain the same non-root owner UID. API and Chat
+peer UIDs must be distinct and the endpoints/parents cannot alias.
+
+The existing four-handler semaphore/pool is shared across both listeners.
+Two known descriptors use bounded select/accept (O(1), no pending task backlog).
+The API listener retains its unchanged current human-capture exchange. The
+private listener checks only its fixed kernel Chat peer before parsing the closed
+existing EOF-framed request; then its trusted operation-local factory authorizes
+that exact origin and returns the existing dispatch. No request/worker chooses
+an endpoint profile, declared role, capture or arbitrary callable.
+
+Current installed provider observation is rechecked before private dispatch as
+part of compatible owner service composition; it never mints a human capture.
+The factory independently rechecks native runtime/live origin/current sources.
+An exception after application entry is still unknown original work, not a retry
+grant. Invalid peer/frame must not call the factory. One request invokes factory
+and application at most once and gets at most one final reply.
+
+Startup failure must close/remove only already-owned socket identities; a foreign
+or replaced socket is preserved. Stop closes both listeners, drains the shared
+finite pool and leaves the actual native driver/runtime lifecycle to its existing
+owner. Saturation closes excess connections before any application call. No
+schema, migration, model/native launch or actual service activation occurs here.
+Installed configuration selection and acknowledged BUSY-original liveness remain
+separate required steps, not implied by having a listener implementation.
+
+### Host source checkpoint — 2026-10-18 04:00 UTC
+
+The optional private listener and operation-local factory dispatch are implemented
+in the existing host; both listeners share four handlers and bounded select/accept.
+Kernel peer rejection precedes provider reads/private factory construction. The
+existing human-capture handler is unchanged. Private request/reply1.0 schema
+bytes are unchanged; only the owner-local Python factory port is added.
+
+Related36 suites **1001 PASS /312.58s, no skips**; focused59 overlap that total.
+Strict typing3 production modules, Ruff/format4 Python files and diff checks PASS.
+Cases use real local Unix sockets/current test UID, explicit synthetic installed
+provider/source/handler behavior, and no model. They cover separate endpoint
+profiles, wrong peers/frames/provider, one factory call/final failure, global four
+handler saturation, invalid profiles, partial bind cleanup and replacement-socket
+preservation. They are NOT an actual protected API/Chat dual-UID/DAC deployment
+or live source authorization. No actual host/configuration was activated.
+
+This change touches only the host/socket factory adapter; no SQL, state machine,
+claim, native executor or persistence rule changed. The preceding f0ff5875
+121-case disposable SQL evidence remains its historical data-layer proof rather
+than being relabeled as this host's OS acceptance. No unnecessary DB/model run
+was added to test a socket-only boundary.
+
+### Actual read-only installation inventory — 2026-10-18 03:55 UTC
+
+A fixed root read-only probe, through the same existing noninteractive operator
+pane, found both private prepare/CPU unit templates, its owner env file, runtime
+and owner workspace directories, and the private launcher module in the running
+0fab624c owner release **MISSING**. No env content/credential was emitted, and no
+file/service/workflow/model was changed. Original QUERY service ExecStart still
+points to owner0fab624c0cf0feee08431793861a9c2b9c8462f3.
+Probe `/tmp/eom-private-runtime-inventory.QwK9S4EN/observe_root.py`, raw
+f8922e6b080b2acbd361031c83d6f2a161424a15ab94620df333f9519eabdc1a;
+root readback raw6dbc21f4e72f45a3650d1d196fe66d09e6457ba3c8631fc2e2679be01ff4974a.
+
+Read-only source inspection of the fixed CPU target referenced by the proposed
+private unit also found only INDEX/QUERY argument dispatch. Checked member:
+`/opt/eom/conda/envs/eom-embedding-index-cpu/lib/python3.12/site-packages/eom_catalog_service/embedding_native_cpu.py`,
+rawdf379cd5a5de58865571f061a50c710f422f6a52e5cffd1b602d2bbc13594720.
+This is file/CLI-branch evidence, not a model invocation or proof of which modules
+an already-running INDEX process has loaded. It establishes that copying the new
+private unit/turning on a flag is insufficient for that fixed interpreter target.
+
+Next deployment must verify/stage a compatible private-capable numerical release,
+private units/env/directories/policy/owner configuration and Chat source endpoint.
+Keep current INDEX and frozen comparison CPU intact; do not invoke the existing
+in-place prefix-replacement path while INDEX work is live. First inspect/reuse the
+supported runtime producer and plan exact successor/rollback/claim-drain boundaries.
+This is an expected uninstalled feature gap, not an incident in existing services.
+Actual source/consumer/CPU-CUDA/default/rollback gates remain OPEN.
+
 ## Published package candidate — NOT_INSTALLED
 
 Code `f0ff587591b5662e51a7b4f0e927164535032132` is pushed. Standard build-only

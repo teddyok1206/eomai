@@ -15,6 +15,7 @@ from eom_catalog_contracts.private_chat_query_prepare import (
     parse_private_chat_query_prepare_request,
     validate_private_chat_query_prepare_reply,
 )
+from eom_catalog_contracts.private_chat_query_read import ChatPrivateQueryOrigin
 from eom_identifiers import canonical_json_bytes
 
 from eom_orchestrator.general_chat_socket import (
@@ -29,11 +30,15 @@ class PrivateChatQueryPreparationPort(Protocol):
     def execute(self, request: PrivateChatQueryPrepareRequest) -> PrivateChatQueryPrepareReply: ...
 
 
+class PrivateChatQueryPreparationFactory(Protocol):
+    def application(self, origin: ChatPrivateQueryOrigin) -> PrivateChatQueryPreparationPort: ...
+
+
 def handle_private_chat_query_prepare_connection(
     connection: socket.socket,
     *,
     chat_uid: int,
-    application: PrivateChatQueryPreparationPort,
+    factory: PrivateChatQueryPreparationFactory,
 ) -> None:
     """The host owns finite accept capacity; this function never retries a request."""
     request = None
@@ -48,6 +53,7 @@ def handle_private_chat_query_prepare_connection(
         if canonical_json_bytes(parsed.model_dump(mode="json")) != raw:
             return
         request = parsed
+        application = factory.application(request.origin)
         reply = validate_private_chat_query_prepare_reply(request, application.execute(request))
     except Exception:
         # The application may already have committed. Never turn unknown outcome

@@ -301,11 +301,12 @@ def socket_case(case, tmp_path):
     observed = []
     peer = SimpleNamespace(uid=os.getuid())
     application = SimpleNamespace(execute=Mock(side_effect=case.dispatch.execute))
+    factory = SimpleNamespace(application=Mock(return_value=application))
 
     def serve():
         with listener.accept()[0] as connection:
             handle_private_chat_query_prepare_connection(
-                connection, chat_uid=peer.uid, application=application
+                connection, chat_uid=peer.uid, factory=factory
             )
             observed.append("closed")
 
@@ -316,6 +317,7 @@ def socket_case(case, tmp_path):
             client=PrivateChatQueryPrepareClient(endpoint),
             peer=peer,
             application=application,
+            factory=factory,
             observed=observed,
             endpoint=endpoint,
         )
@@ -330,6 +332,7 @@ def test_real_kernel_peer_and_canonical_frames_call_application_exactly_once(cas
     reply = socket_case.client.execute(case.request)
     assert reply.status == "PENDING"
     socket_case.application.execute.assert_called_once_with(case.request)
+    socket_case.factory.application.assert_called_once_with(case.request.origin)
 
 
 def test_wrong_kernel_peer_never_calls_application(case, socket_case):
@@ -337,6 +340,16 @@ def test_wrong_kernel_peer_never_calls_application(case, socket_case):
     with pytest.raises(ChatTransportError):
         socket_case.client.execute(case.request)
     socket_case.application.execute.assert_not_called()
+    socket_case.factory.application.assert_not_called()
+
+
+def test_origin_factory_failure_never_executes_or_retries_application(case, socket_case):
+    socket_case.factory.application.side_effect = RuntimeError("DO_NOT_DISCLOSE_ORIGIN")
+    reply = socket_case.client.execute(case.request)
+    assert reply.status == "FAILED" and reply.error_code == "PRIVATE_CHAT_QUERY_UNAVAILABLE"
+    socket_case.factory.application.assert_called_once_with(case.request.origin)
+    socket_case.application.execute.assert_not_called()
+    assert b"DO_NOT_DISCLOSE" not in canonical_json_bytes(reply.model_dump(mode="json"))
 
 
 def test_unknown_committed_outcome_is_not_retried_or_claimed_missing(case, socket_case):
