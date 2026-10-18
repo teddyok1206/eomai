@@ -43,6 +43,7 @@ from eom_workflow_runner.private_chat_query_submission import start_private_chat
 from eom_workflow_runner.repository import CommandType, create_workflow_instance
 from eom_workflow_runner.state_machine import WorkflowState, transition_workflow
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError, ProgrammingError
 
 from tests.integration.test_preset_model_validation_persistence import (
     guarded_engine as guarded_engine,
@@ -490,4 +491,119 @@ def test_postgres_private_application_failed_history_is_not_replaced_or_driven(s
     assert replay.failure_code == "PRIVATE_CHAT_QUERY_EXECUTION_FAILED"
     workflows, commands = retained_rows(value)
     assert len(workflows) == len(commands) == 1 and workflows[0].state == "FAILED"
+    assert offers == [first.workflow_id] and value.executor.mock_calls == []
+
+
+def test_postgres_private_read_missing_never_creates_work_or_offers_driver(submission):
+    from eom_workflow_runner.private_chat_query_prepare_application import (
+        PrivateChatQueryNotPrepared,
+    )
+
+    value = submission
+    app, selection, offers = preparation_application(value)
+    with pytest.raises(PrivateChatQueryNotPrepared):
+        app.read(value.context.origin, selection)
+    assert retained_rows(value) == ((), ())
+    assert not offers and value.executor.mock_calls == []
+
+
+def test_postgres_private_read_preserves_original_pending_without_start_or_head_selection(
+    submission, monkeypatch
+):
+    value = submission
+    app, selection, offers = preparation_application(value)
+    first = app.prepare(value.context.origin, selection)
+    with value.publisher.sessions.begin() as session:
+        jobs_before = session.scalar(select(func.count()).select_from(JobRecord))
+        events_before = session.scalar(
+            select(func.count())
+            .select_from(WorkflowEventRecord)
+            .where(WorkflowEventRecord.workflow_id == first.workflow_id)
+        )
+    monkeypatch.setattr(
+        value.owner.catalog,
+        "prepare_private_chat_context_in_session",
+        Mock(side_effect=AssertionError("a read cannot select the current head")),
+    )
+    observed = app.read(value.context.origin, selection)
+    assert observed == first and offers == [first.workflow_id]
+    workflows, commands = retained_rows(value)
+    assert len(workflows) == len(commands) == 1
+    assert commands[0].state == "PENDING" and commands[0].attempts == 0
+    assert commands[0].lease_generation == 0 and commands[0].lease_owner is None
+    with value.publisher.sessions.begin() as session:
+        assert session.scalar(select(func.count()).select_from(JobRecord)) == jobs_before
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(WorkflowEventRecord)
+                .where(WorkflowEventRecord.workflow_id == first.workflow_id)
+            )
+            == events_before
+        )
+    assert value.executor.mock_calls == []
+
+
+def test_postgres_private_read_revoked_origin_never_reprepares_or_drives(submission):
+    value = submission
+    app, selection, offers = preparation_application(value)
+    first = app.prepare(value.context.origin, selection)
+    value.source.fault.value = "claim"
+    with pytest.raises(SimilarityContextReadError) as error:
+        app.read(value.context.origin, selection)
+    assert error.value.code == "AUTHORITY_UNAVAILABLE"
+    workflows, commands = retained_rows(value)
+    assert tuple(row.workflow_id for row in workflows) == (first.workflow_id,)
+    assert len(commands) == 1 and commands[0].attempts == 0
+    assert offers == [first.workflow_id] and value.executor.mock_calls == []
+
+
+def test_postgres_private_read_failed_history_never_drives_or_reinterprets_success(submission):
+    value = submission
+    app, selection, offers = preparation_application(value)
+    first = app.prepare(value.context.origin, selection)
+    _, commands = retained_rows(value)
+    with value.publisher.sessions.begin() as session:
+        transition_workflow(
+            session,
+            first.workflow_id,
+            WorkflowState.FAILED,
+            "SYNTHETIC_PRIVATE_FAILURE",
+            actor_type="human",
+            actor_id=value.context.origin.actor_id,
+            command_id=commands[0].command_id,
+        )
+    observed = app.read(value.context.origin, selection)
+    assert observed.status == "FAILED" and observed.workflow_id == first.workflow_id
+    workflows, commands = retained_rows(value)
+    assert len(workflows) == len(commands) == 1 and workflows[0].state == "FAILED"
+    assert offers == [first.workflow_id] and value.executor.mock_calls == []
+
+
+@pytest.mark.parametrize("field", ("request_hash", "definition_hash", "request_payload"))
+def test_postgres_private_read_retains_original_after_database_rejects_mutation(submission, field):
+    value = submission
+    app, selection, offers = preparation_application(value)
+    first = app.prepare(value.context.origin, selection)
+    workflows, _ = retained_rows(value)
+    original = getattr(workflows[0], field)
+    corrupted = {"invalid": True} if field == "request_payload" else "sha256:" + "f" * 64
+    # The existing PostgreSQL immutability triggers must remain enabled. A failed
+    # attempted mutation rolls back; the application then reads the same original.
+    with (
+        pytest.raises((IntegrityError, ProgrammingError)) as error,
+        value.publisher.sessions.begin() as session,
+    ):
+        row = session.get(WorkflowInstanceRecord, first.workflow_id)
+        setattr(row, field, corrupted)
+    expected = (
+        "PRIVATE_CHAT_QUERY_ORIGIN_IMMUTABLE"
+        if field == "request_payload"
+        else "workflow instance snapshot fields are immutable"
+    )
+    assert expected in str(error.value.orig)
+    assert app.read(value.context.origin, selection) == first
+    workflows, commands = retained_rows(value)
+    assert len(workflows) == len(commands) == 1
+    assert getattr(workflows[0], field) == original
     assert offers == [first.workflow_id] and value.executor.mock_calls == []

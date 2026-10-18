@@ -179,6 +179,107 @@ def prepare(value):
     return value.app.prepare(value.source.projection.origin, value.preparation)
 
 
+@pytest.fixture
+def observed_application(application, monkeypatch):
+    from eom_workflow.private_chat_query_submission_context import (
+        build_private_chat_query_submission_context,
+    )
+    from eom_workflow_runner.private_chat_query_preparation import SelectedPrivateChatQueryWorkflow
+
+    value = application
+    value.selected = SelectedPrivateChatQueryWorkflow(
+        "workflow_" + "c" * 32,
+        "REQUESTED",
+        value.source.request,
+        build_private_chat_query_submission_context(
+            value.source.request, value.source.projection.origin
+        ),
+    )
+    value.reads = []
+
+    def read(session, **kwargs):
+        assert session.get_transaction().is_active and not session.in_nested_transaction()
+        assert kwargs["owner"] is value.owner
+        assert kwargs["origin"] == value.source.projection.origin
+        assert kwargs["preparation"] == value.preparation
+        value.roots.append(session)
+        value.reads.append(kwargs)
+        return value.selected
+
+    monkeypatch.setattr(module, "read_private_chat_query_selection_in_session", read)
+    return value
+
+
+def read(value):
+    return value.app.read(value.source.projection.origin, value.preparation)
+
+
+@pytest.mark.parametrize("state", ("REQUESTED", "RUNNING"))
+def test_read_pending_never_offers_original_or_prepares_new_work(observed_application, state):
+    value = observed_application
+    value.selected = replace(value.selected, state=state)
+    first, replay = read(value), read(value)
+    assert first == replay and first.status == "PENDING"
+    assert len(value.reads) == 2
+    assert not value.admitted and not value.offers and not value.compose_calls
+    assert value.executor.mock_calls == []
+
+
+def test_read_missing_is_explicit_without_preparation_or_drive(observed_application):
+    value = observed_application
+    value.selected = None
+    with pytest.raises(module.PrivateChatQueryNotPrepared) as error:
+        read(value)
+    assert str(error.value) == "PRIVATE_CHAT_QUERY_NOT_PREPARED"
+    assert not value.admitted and not value.offers and not value.compose_calls
+    assert value.executor.mock_calls == []
+
+
+@pytest.mark.parametrize("state", ("FAILED", "CANCELLED", "unexpected"))
+def test_read_terminal_failure_preserves_original_without_drive(observed_application, state):
+    value = observed_application
+    value.selected = replace(value.selected, state=state)
+    result = read(value)
+    assert result.status == "FAILED" and result.workflow_id == value.selected.workflow_id
+    assert not value.admitted and not value.offers and not value.compose_calls
+    assert value.executor.mock_calls == []
+
+
+def test_read_failed_command_preserves_pending_workflow_without_drive(observed_application):
+    value = observed_application
+    value.command_failure = "failed"
+    result = read(value)
+    assert (
+        result.status == "FAILED" and result.failure_code == "PRIVATE_CHAT_QUERY_EXECUTION_FAILED"
+    )
+    assert not value.admitted and not value.offers and not value.compose_calls
+
+
+def test_read_completed_requires_canonical_context_outside_original_root(observed_application):
+    value = observed_application
+    value.selected = replace(value.selected, state="COMPLETED")
+    value.context = empty_completed_context(value.source)
+    result = read(value)
+    assert result.status == "READY" and result.context == value.context
+    assert len(value.compose_calls) == 1
+    assert not value.admitted and not value.offers and value.executor.mock_calls == []
+
+
+@pytest.mark.parametrize("code", ("SOURCE_REVOKED", "SOURCE_HASH_MISMATCH", "QUERY_RESULT_INVALID"))
+def test_read_completed_canonical_failure_never_reprepares(observed_application, monkeypatch, code):
+    value = observed_application
+    value.selected = replace(value.selected, state="COMPLETED")
+    monkeypatch.setattr(
+        module.PrivateChatSimilarityApplicationService,
+        "compose",
+        Mock(side_effect=SimilarityContextReadError(code)),
+    )
+    with pytest.raises(SimilarityContextReadError) as error:
+        read(value)
+    assert error.value.code == code
+    assert not value.admitted and not value.offers and value.executor.mock_calls == []
+
+
 @pytest.mark.parametrize("state", ("REQUESTED", "RUNNING"))
 def test_pending_commits_original_before_offering_the_same_finite_driver(application, state):
     value = application

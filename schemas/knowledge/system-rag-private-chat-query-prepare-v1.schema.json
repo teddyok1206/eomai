@@ -1,0 +1,296 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/1.0",
+  "title": "Trusted Chat owner private numerical QUERY prepare or read-only observation",
+  "description": "Pointer-only original live origin and exact scope; metadata is not authentication, source authority, permission to retry or a worker tool.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/reply"
+    }
+  ],
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "action",
+        "request_id",
+        "origin",
+        "graph_snapshot",
+        "policy_revision_id",
+        "policy_sha256",
+        "request_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "system-rag-private-chat-query-prepare-request/1.0"
+        },
+        "action": {
+          "enum": [
+            "PREPARE_PRIVATE_CHAT_QUERY",
+            "READ_PRIVATE_CHAT_QUERY"
+          ]
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^chatqueryprepare_[0-9a-f]{32}$"
+        },
+        "origin": {
+          "$ref": "eom://schemas/knowledge/general-chat-private-query-read/1.0#/$defs/origin"
+        },
+        "graph_snapshot": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"
+        },
+        "policy_revision_id": {
+          "type": "string",
+          "pattern": "^accessrev_[0-9a-f]{32}$"
+        },
+        "policy_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "request_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "reply": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "action",
+        "request_id",
+        "request_sha256",
+        "status",
+        "workflow_id",
+        "context",
+        "error_code"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "system-rag-private-chat-query-prepare-reply/1.0"
+        },
+        "action": {
+          "enum": [
+            "PREPARE_PRIVATE_CHAT_QUERY",
+            "READ_PRIVATE_CHAT_QUERY"
+          ]
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^chatqueryprepare_[0-9a-f]{32}$"
+        },
+        "request_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "status": {
+          "enum": [
+            "PENDING",
+            "READY",
+            "UNAVAILABLE",
+            "FAILED"
+          ]
+        },
+        "workflow_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^workflow_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "context": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/knowledge/system-rag-private-chat-similarity/1.0#/$defs/result"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "SOURCE_ACCESS_DENIED",
+                "SOURCE_REVOKED",
+                "SOURCE_POINTER_INVALID",
+                "SOURCE_HASH_MISMATCH",
+                "INDEX_POINTER_INVALID",
+                "INDEX_HASH_MISMATCH",
+                "QUERY_RESULT_INVALID",
+                "AUTHORITY_UNAVAILABLE",
+                "PRIVATE_CHAT_QUERY_REQUEST_INVALID",
+                "PRIVATE_CHAT_QUERY_UNAVAILABLE",
+                "PRIVATE_CHAT_QUERY_NOT_PREPARED",
+                "PRIVATE_CHAT_QUERY_EXECUTION_FAILED",
+                "INDEX_NOT_PREPARED"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "READY"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "workflow_id": {
+                "type": "string",
+                "pattern": "^workflow_[0-9a-f]{32}$"
+              },
+              "context": {
+                "allOf": [
+                  {
+                    "$ref": "eom://schemas/knowledge/system-rag-private-chat-similarity/1.0#/$defs/result"
+                  },
+                  {
+                    "properties": {
+                      "status": {
+                        "enum": [
+                          "READY",
+                          "PARTIAL",
+                          "EMPTY"
+                        ]
+                      },
+                      "query_execution": {
+                        "not": {
+                          "type": "null"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "error_code": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "PENDING"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "workflow_id": {
+                "type": "string",
+                "pattern": "^workflow_[0-9a-f]{32}$"
+              },
+              "context": {
+                "type": "null"
+              },
+              "error_code": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "UNAVAILABLE",
+                  "FAILED"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "context": {
+                "type": "null"
+              },
+              "error_code": {
+                "enum": [
+                  "SOURCE_ACCESS_DENIED",
+                  "SOURCE_REVOKED",
+                  "SOURCE_POINTER_INVALID",
+                  "SOURCE_HASH_MISMATCH",
+                  "INDEX_POINTER_INVALID",
+                  "INDEX_HASH_MISMATCH",
+                  "QUERY_RESULT_INVALID",
+                  "AUTHORITY_UNAVAILABLE",
+                  "PRIVATE_CHAT_QUERY_REQUEST_INVALID",
+                  "PRIVATE_CHAT_QUERY_UNAVAILABLE",
+                  "PRIVATE_CHAT_QUERY_NOT_PREPARED",
+                  "PRIVATE_CHAT_QUERY_EXECUTION_FAILED",
+                  "INDEX_NOT_PREPARED"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "UNAVAILABLE"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "workflow_id": {
+                "type": "null"
+              },
+              "error_code": {
+                "enum": [
+                  "INDEX_NOT_PREPARED",
+                  "PRIVATE_CHAT_QUERY_NOT_PREPARED"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "FAILED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error_code": {
+                "not": {
+                  "enum": [
+                    "INDEX_NOT_PREPARED",
+                    "PRIVATE_CHAT_QUERY_NOT_PREPARED"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -20,8 +20,10 @@ from eom_operator_identity import PermissionKey
 from eom_orchestrator.models import JobRecord
 from eom_workflow.private_chat_query_submission_context import (
     build_private_chat_query_submission_context,
+    parse_private_chat_query_submission_context,
     private_chat_query_origin_key,
     private_chat_query_submission_key,
+    validate_private_chat_query_submission_context,
 )
 from eom_workflow_runner import private_chat_query_preparation as module
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
@@ -73,6 +75,16 @@ def preparation(source, monkeypatch):
     monkeypatch.setattr(module, "effective_permissions", lambda *_: value.permissions)
     value.start = Mock(side_effect=start)
     monkeypatch.setattr(module, "start_private_chat_query_in_session", value.start)
+    # The replay row/definition in these source cases is a declared ORM fixture.
+    # Full attached-row/fingerprint validation is exercised in guarded PostgreSQL.
+    value.validate_original = Mock(
+        side_effect=lambda session, row, request: validate_private_chat_query_submission_context(
+            request, parse_private_chat_query_submission_context(row.runtime_context)
+        )
+    )
+    monkeypatch.setattr(
+        module, "validate_private_chat_query_workflow_submission", value.validate_original
+    )
     return value
 
 
@@ -95,6 +107,8 @@ def prepare(value, session, **overrides):
 def original_row(value):
     args = value.received[0]
     return SimpleNamespace(
+        workflow_id="workflow_" + "c" * 32,
+        state="REQUESTED",
         initial_request=args["request"].model_dump(mode="json"),
         runtime_context=args["context"].model_dump(mode="json"),
         created_actor_type="human",
@@ -130,6 +144,112 @@ def prepare_selection(value, session, selection):
         owner=value.owner,
         executor=value.executor,
     )
+
+
+def read_selection(value, session, selection=None):
+    return module.read_private_chat_query_selection_in_session(
+        session,
+        caller=EmbeddingRegistryCaller(value.source.projection.origin.actor_id),
+        origin=value.source.projection.origin,
+        preparation=selection or initial_selection(value),
+        owner=value.owner,
+    )
+
+
+def test_read_absence_requires_current_identity_and_live_chat_without_creating_work(preparation):
+    value = preparation
+    before = len(value.source.events)
+    with value.source.publisher.sessions.begin() as session:
+        assert read_selection(value, session) is None
+        assert not session.new and not session.dirty and not session.deleted
+    assert value.source.events[before:] == ["identity", "authorize", "identity"]
+    assert value.lookups == [WorkflowInstanceRecord]
+    value.start.assert_not_called()
+    assert value.executor.mock_calls == []
+
+
+def test_read_original_pins_never_reselects_head_rebuilds_or_starts(preparation, monkeypatch):
+    value = preparation
+    with value.source.publisher.sessions.begin() as session:
+        prepare(value, session)
+    value.existing = original_row(value)
+    value.start.reset_mock()
+    value.lookups.clear()
+    for name in ("read_pinned_private_chat_query_controls", "effective_permissions"):
+        monkeypatch.setattr(module, name, Mock(side_effect=AssertionError("rebuilding read")))
+    capture = Mock(side_effect=AssertionError("reselecting read"))
+    monkeypatch.setattr(value.owner.catalog, "prepare_private_chat_context_in_session", capture)
+    with value.source.publisher.sessions.begin() as session:
+        result = read_selection(value, session)
+        assert result.request == value.received[0]["request"]
+        assert result.context == value.received[0]["context"]
+        assert (result.workflow_id, result.state) == (value.existing.workflow_id, "REQUESTED")
+        assert not session.new and not session.dirty and not session.deleted
+    assert value.lookups == [WorkflowInstanceRecord]
+    value.validate_original.assert_called_once()
+    value.start.assert_not_called()
+    capture.assert_not_called()
+    assert value.executor.mock_calls == []
+
+
+def test_read_rejects_failed_full_original_row_validation_before_returning_status(preparation):
+    value = preparation
+    with value.source.publisher.sessions.begin() as session:
+        prepare(value, session)
+    value.existing = original_row(value)
+    value.start.reset_mock()
+    value.validate_original.side_effect = ValueError("PRIVATE_CHAT_QUERY_WORKFLOW_CONTEXT_INVALID")
+    with (
+        value.source.publisher.sessions.begin() as session,
+        pytest.raises(ValueError, match="WORKFLOW_CONTEXT_INVALID"),
+    ):
+        read_selection(value, session)
+    value.start.assert_not_called()
+    assert value.executor.mock_calls == []
+
+
+@pytest.mark.parametrize("field", ("top_k", "request_id", "policy"))
+def test_read_changed_selection_is_not_silently_replaced_by_original(preparation, field):
+    value = preparation
+    with value.source.publisher.sessions.begin() as session:
+        prepare(value, session)
+    value.existing = original_row(value)
+    selection = initial_selection(value)
+    if field == "top_k":
+        selection = replace(selection, top_k=selection.top_k + 1)
+    elif field == "request_id":
+        selection = replace(selection, request_id="similarityrequest_" + "f" * 32)
+    else:
+        selection = replace(
+            selection, scope=replace(selection.scope, policy_sha256="sha256:" + "f" * 64)
+        )
+    with value.source.publisher.sessions.begin() as session, pytest.raises(EmbeddingRegistryError):
+        read_selection(value, session, selection)
+    assert len(value.received) == 1 and value.executor.mock_calls == []
+
+
+@pytest.mark.parametrize("existing", (False, True))
+def test_read_revoked_chat_never_discloses_even_original_absence(
+    preparation, monkeypatch, existing
+):
+    from eom_orchestrator.general_chat_state import ChatError
+
+    value = preparation
+    if existing:
+        with value.source.publisher.sessions.begin() as session:
+            prepare(value, session)
+        value.existing = original_row(value)
+    denied = Mock(side_effect=ChatError("GENERAL_CHAT_FORBIDDEN"))
+    monkeypatch.setattr(value.owner.sources.chat, "authorize", denied)
+    value.start.reset_mock()
+    with (
+        value.source.publisher.sessions.begin() as session,
+        pytest.raises(SimilarityContextReadError) as error,
+    ):
+        read_selection(value, session)
+    assert error.value.code == "SOURCE_ACCESS_DENIED"
+    value.start.assert_not_called()
+    assert value.executor.mock_calls == []
 
 
 def test_selection_captures_once_then_replays_same_original_without_recapturing(

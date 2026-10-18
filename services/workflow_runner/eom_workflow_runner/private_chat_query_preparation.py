@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Literal
+
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.private_chat_query_basis import PrivateChatQueryBasis
 from eom_catalog_contracts.private_chat_query_read import ChatPrivateQueryOrigin
@@ -15,8 +18,10 @@ from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadCon
 from eom_catalog_service.private_chat_context_preparation import (
     validate_private_chat_context_preparation,
 )
+from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
 from eom_identifiers import content_sha256
 from eom_identity_service.repository import effective_permissions
+from eom_orchestrator.general_chat_state import ChatError
 from eom_workflow.private_chat_query_execution import (
     PrivateChatQueryWorkflowRequest,
     parse_private_chat_query_workflow_request,
@@ -25,15 +30,16 @@ from eom_workflow.private_chat_query_execution import (
 from eom_workflow.private_chat_query_submission_context import (
     PrivateChatQuerySubmissionContext,
     build_private_chat_query_submission_context,
-    parse_private_chat_query_submission_context,
     private_chat_query_origin_key,
-    validate_private_chat_query_submission_context,
 )
 from jsonschema.exceptions import ValidationError as SchemaError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from eom_workflow_runner.models import WorkflowDefinitionRecord, WorkflowInstanceRecord
+from eom_workflow_runner.private_chat_query_admission import (
+    validate_private_chat_query_workflow_submission,
+)
 from eom_workflow_runner.private_chat_query_execution_port import PrivateChatQueryNativeExecutor
 from eom_workflow_runner.private_chat_query_owner_admission import (
     CatalogPrivateChatQueryOwnerAdmission,
@@ -47,15 +53,21 @@ from eom_workflow_runner.private_chat_query_submission import (
     start_private_chat_query_in_session,
 )
 
-type _OriginalPrivateRequest = tuple[
-    PrivateChatQueryWorkflowRequest, PrivateChatQuerySubmissionContext
-]
+
+@dataclass(frozen=True, slots=True)
+class SelectedPrivateChatQueryWorkflow:
+    """Original immutable selection and observed state, never retained authority."""
+
+    workflow_id: str
+    state: str
+    request: PrivateChatQueryWorkflowRequest
+    context: PrivateChatQuerySubmissionContext
 
 
 class PrivateChatQueryPreparationUnavailable(ValueError):
     """Known initial absence, never permission to relabel another numerical space."""
 
-    code = "INDEX_NOT_PREPARED"
+    code: Literal["INDEX_NOT_PREPARED"] = "INDEX_NOT_PREPARED"
 
     def __init__(self) -> None:
         super().__init__(self.code)
@@ -92,7 +104,7 @@ def _original_request(
     owner: CatalogPrivateChatQueryOwnerAdmission,
     origin: ChatPrivateQueryOrigin,
     root: object,
-) -> _OriginalPrivateRequest | None:
+) -> SelectedPrivateChatQueryWorkflow | None:
     owner.sources.identity.fence_current_operator(session, caller.operator_id)
     if require_private_chat_query_source_root(session) is not root:
         raise ValueError("PRIVATE_CHAT_QUERY_PREPARATION_ROOT_INVALID")
@@ -104,16 +116,51 @@ def _original_request(
     if existing is None:
         return None
     request = parse_private_chat_query_workflow_request(existing.initial_request)
-    context = validate_private_chat_query_submission_context(
-        request, parse_private_chat_query_submission_context(existing.runtime_context)
-    )
+    context = validate_private_chat_query_workflow_submission(session, existing, request)
     if (
         existing.created_actor_type != "human"
         or existing.created_actor_id != caller.operator_id
         or context.origin != origin
     ):
         raise ValueError("PRIVATE_CHAT_QUERY_PREPARATION_REPLAY_MISMATCH")
-    return request, context
+    return SelectedPrivateChatQueryWorkflow(existing.workflow_id, existing.state, request, context)
+
+
+def read_private_chat_query_selection_in_session(
+    session: Session,
+    *,
+    caller: EmbeddingRegistryCaller,
+    origin: ChatPrivateQueryOrigin,
+    preparation: PrivateChatContextPreparation,
+    owner: CatalogPrivateChatQueryOwnerAdmission,
+) -> SelectedPrivateChatQueryWorkflow | None:
+    """Observe the original only; no head selection, submission, renewal or drive."""
+    root = _preparation_root(session, caller, owner)
+    validate_private_chat_context_preparation(preparation, owner.configuration.registry)
+    origin = _original_origin(origin, caller, preparation.query_basis)
+    original = _original_request(session, caller, owner, origin, root)
+    try:
+        current = ChatPrivateQueryOrigin.model_validate(
+            raw_similarity_contract_value(owner.sources.chat.authorize(origin))
+        )
+    except ChatError as error:
+        raise SimilarityContextReadError(
+            "SOURCE_ACCESS_DENIED"
+            if error.code == "GENERAL_CHAT_FORBIDDEN"
+            else "AUTHORITY_UNAVAILABLE"
+        ) from None
+    if current != origin:
+        raise ValueError("PRIVATE_CHAT_QUERY_PREPARATION_REPLAY_MISMATCH")
+    if require_private_chat_query_source_root(session) is not root:
+        raise ValueError("PRIVATE_CHAT_QUERY_PREPARATION_ROOT_INVALID")
+    owner.sources.identity.fence_current_operator(session, caller.operator_id)
+    if require_private_chat_query_source_root(session) is not root:
+        raise ValueError("PRIVATE_CHAT_QUERY_PREPARATION_ROOT_INVALID")
+    if original is not None:
+        validate_private_chat_context_preparation(
+            preparation, owner.configuration.registry, original.request.context_request
+        )
+    return original
 
 
 def prepare_and_start_private_chat_query_in_session(
@@ -169,7 +216,7 @@ def prepare_and_start_private_chat_query_selection_in_session(
     context = (
         owner.catalog.prepare_private_chat_context_in_session(session, caller, preparation)
         if original is None
-        else original[0].context_request
+        else original.request.context_request
     )
     validate_private_chat_context_preparation(preparation, owner.configuration.registry, context)
     if require_private_chat_query_source_root(session) is not root:
@@ -194,13 +241,13 @@ def _start_with_pinned_context(
     caller: EmbeddingRegistryCaller,
     origin: ChatPrivateQueryOrigin,
     context: PrivateChatSimilarityRequest,
-    original: _OriginalPrivateRequest | None,
+    original: SelectedPrivateChatQueryWorkflow | None,
     root: object,
     owner: CatalogPrivateChatQueryOwnerAdmission,
     executor: PrivateChatQueryNativeExecutor,
 ) -> PrivateChatQueryWorkflowSubmitted:
     if original is not None:
-        request, original_context = original
+        request, original_context = original.request, original.context
         if request.context_request != context:
             raise ValueError("PRIVATE_CHAT_QUERY_PREPARATION_REPLAY_MISMATCH")
     else:
