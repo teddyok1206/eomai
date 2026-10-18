@@ -39,6 +39,12 @@ def test_nonowner_cannot_connect_to_privileged_control_or_native_listener():
     with pytest.raises(ValueError, match="OWNER_REQUIRED"):
         owner.connect_benchmark_root(None, authorization=None, controller_release="a" * 40)
     with pytest.raises(ValueError, match="OWNER_REQUIRED"):
+        owner.connect_benchmark_series_root(
+            None, None, authorization=None, controller_release="a" * 40
+        )
+    with pytest.raises(ValueError, match="OWNER_REQUIRED"):
+        owner.require_benchmark_series_listener(None)
+    with pytest.raises(ValueError, match="OWNER_REQUIRED"):
         native.CapturedBenchmarkNativeConnection.connect(None, authorization=None, expires_ns=1)
 
 
@@ -82,3 +88,34 @@ def test_real_same_uid_listener_cannot_impersonate_pid1(short_socket_root, monke
             accepted.close()
     finally:
         listener.close()
+
+
+@pytest.mark.parametrize("missing", ["directory", "socket"])
+def test_absent_series_controller_is_explicit_before_a_connect_or_job(missing, monkeypatch):
+    from contextlib import contextmanager
+    from unittest.mock import Mock
+
+    from eom_orchestrator.inference_transfer_cpu_handoff import CpuHandoffError
+
+    from tests.unit.embedding_device_benchmark_fixtures import owner_request
+
+    monkeypatch.setattr(
+        owner, "fixed_owner_identity", lambda: CpuHandoffIdentity(os.getuid(), os.getgid())
+    )
+
+    @contextmanager
+    def synthetic_directory(*args, **kwargs):
+        if missing == "directory":
+            raise CpuHandoffError("INFERENCE_CPU_DIRECTORY_INVALID")
+        yield 123
+
+    def absent(*args):
+        raise FileNotFoundError("synthetic missing socket")
+
+    monkeypatch.setattr(owner, "protected_cpu_handoff_directory", synthetic_directory)
+    monkeypatch.setattr(owner, "_socket_metadata", absent)
+    connect = Mock(side_effect=AssertionError("preflight must not create a connection"))
+    monkeypatch.setattr(owner.socket, "socket", connect)
+    with pytest.raises(ValueError, match="BENCHMARK_SERIES_CONTROLLER_UNAVAILABLE"):
+        owner.require_benchmark_series_listener(owner_request())
+    connect.assert_not_called()

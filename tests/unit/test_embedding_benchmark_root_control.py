@@ -149,3 +149,33 @@ def test_actual_nonroot_is_rejected_before_staging(monkeypatch):
     finally:
         left.close()
         right.close()
+
+
+@pytest.mark.parametrize("fault", ["backend", "request", "cuda"])
+def test_known_stage_bad_selection_is_denied_before_waiting_for_a_peer_frame(monkeypatch, fault):
+    ordinal = 2 if fault == "cuda" else 1
+    value = association(ordinal)
+    staged = StagedOwnerBenchmarkLaunch(
+        value, owner_request(), worker_invocation(ordinal), staged_inputs()
+    )
+    backend = NativeEmbeddingBackendPins(**prepared(value).backend.model_dump(mode="json"))
+    monkeypatch.setattr(root, "require_root_benchmark_control", lambda: None)
+    left, right = socket.socketpair()
+    try:
+        # No frame is sent. Regression would wait until the old control deadline.
+        with pytest.raises(
+            ValueError, match=r"BACKEND_INVALID|SELECTION_MISMATCH|CUDA_CAPTURE_REQUIRED"
+        ):
+            root.serve_root_benchmark_launch(
+                right,
+                staged,
+                selected_request_sha256="sha256:" + "f" * 64
+                if fault == "request"
+                else staged.request.request_sha256,
+                backend=None if fault == "backend" else backend,
+                controller_release="a" * 40,
+            )
+        assert right.fileno() == -1 and left.recv(1) == b""
+    finally:
+        left.close()
+        right.close()

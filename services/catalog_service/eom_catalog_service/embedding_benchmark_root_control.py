@@ -68,33 +68,13 @@ def serve_root_benchmark_launch(
     controller_release: str,
     cuda: RootBenchmarkCudaRuntime | None = None,
 ) -> BenchmarkLaunchCompleted:
-    """One root-admitted connection and original staged launch, with no retry.
-
-    The trusted installed caller owns socket capture/selection and original owner
-    staging resolution. Actual Orchestrator identity, Source/Job admission and NAS
-    publication stay on the other side; a role claimed in metadata is never trusted.
-    """
+    """Existing known-stage entry; receive its association then share one lifecycle."""
     channel = None
-    before = None
-    handoff_created = False
     try:
-        require_root_benchmark_control()
-        association, invocation = staged.association, staged.invocation
-        validate_benchmark_launch_association(
-            association, staged.request, invocation, staged.inputs
+        peer = _validated_launch_peer(
+            staged, selected_request_sha256=selected_request_sha256, backend=backend, cuda=cuda
         )
-        if type(backend) is not NativeEmbeddingBackendPins:
-            raise ValueError("BENCHMARK_ROOT_BACKEND_INVALID")
-        backend.__post_init__()
-        account = pwd.getpwnam("eom-workflow-runner")
-        peer = BenchmarkUnixPeer(association.owner_pid, account.pw_uid, account.pw_gid)
-        if (
-            selected_request_sha256 != staged.request.request_sha256
-            or association.owner_request_sha256 != selected_request_sha256
-        ):
-            raise ValueError("BENCHMARK_ROOT_SELECTION_MISMATCH")
-        if invocation.device == "CUDA" and type(cuda) is not RootBenchmarkCudaRuntime:
-            raise ValueError("BENCHMARK_ROOT_CUDA_CAPTURE_REQUIRED")
+        association = staged.association
 
         def fence(actual: BenchmarkUnixPeer) -> None:
             require_root_benchmark_control()
@@ -114,6 +94,75 @@ def serve_root_benchmark_launch(
             controller_release=controller_release,
         )
         channel.receive_association()
+        return serve_associated_root_benchmark_launch(
+            channel,
+            staged,
+            selected_request_sha256=selected_request_sha256,
+            backend=backend,
+            controller_release=controller_release,
+            cuda=cuda,
+        )
+    except BaseException:
+        if channel is not None:
+            channel.close()
+        connection.close()
+        raise
+
+
+def _validated_launch_peer(
+    staged: StagedOwnerBenchmarkLaunch,
+    *,
+    selected_request_sha256: str,
+    backend: NativeEmbeddingBackendPins,
+    cuda: RootBenchmarkCudaRuntime | None,
+) -> BenchmarkUnixPeer:
+    require_root_benchmark_control()
+    association, invocation = staged.association, staged.invocation
+    validate_benchmark_launch_association(association, staged.request, invocation, staged.inputs)
+    if type(backend) is not NativeEmbeddingBackendPins:
+        raise ValueError("BENCHMARK_ROOT_BACKEND_INVALID")
+    backend.__post_init__()
+    if (
+        selected_request_sha256 != staged.request.request_sha256
+        or association.owner_request_sha256 != selected_request_sha256
+    ):
+        raise ValueError("BENCHMARK_ROOT_SELECTION_MISMATCH")
+    if invocation.device == "CUDA" and type(cuda) is not RootBenchmarkCudaRuntime:
+        raise ValueError("BENCHMARK_ROOT_CUDA_CAPTURE_REQUIRED")
+    account = pwd.getpwnam("eom-workflow-runner")
+    return BenchmarkUnixPeer(association.owner_pid, account.pw_uid, account.pw_gid)
+
+
+def serve_associated_root_benchmark_launch(
+    channel: BenchmarkLaunchControlChannel,
+    staged: StagedOwnerBenchmarkLaunch,
+    *,
+    selected_request_sha256: str,
+    backend: NativeEmbeddingBackendPins,
+    controller_release: str,
+    cuda: RootBenchmarkCudaRuntime | None = None,
+) -> BenchmarkLaunchCompleted:
+    """One validated original association; the sole root prepare/driver/cleanup path.
+
+    Receiving a frame grants no source or compute permission. Actual Orchestrator
+    identity/Source/Job admission and publication stay on the owner side.
+    """
+    if type(channel) is not BenchmarkLaunchControlChannel:
+        raise ValueError("BENCHMARK_ROOT_CHANNEL_INVALID")
+    before = None
+    handoff_created = False
+    association = None
+    try:
+        peer = _validated_launch_peer(
+            staged, selected_request_sha256=selected_request_sha256, backend=backend, cuda=cuda
+        )
+        invocation = staged.invocation
+        channel.require_root_association(
+            staged.association,
+            expected_peer=peer,
+            controller_release=controller_release,
+        )
+        association = staged.association
         local = prepare_benchmark_handoff(staged.request, invocation, staged.inputs)
         handoff_created = True
         environment = prepare_benchmark_environment(
@@ -215,8 +264,7 @@ def serve_root_benchmark_launch(
         channel.wait_for_owner_close()
         return completed
     except Exception:
-        if channel is not None:
-            association = staged.association
+        if association is not None:
             body = dict(
                 schema_version="embedding-benchmark-launch-control/1.0",
                 record_type="UNCERTAIN",
@@ -239,7 +287,4 @@ def serve_root_benchmark_launch(
                 channel.send_uncertain(uncertain)
         raise
     finally:
-        if channel is not None:
-            channel.close()
-        else:
-            connection.close()
+        channel.close()

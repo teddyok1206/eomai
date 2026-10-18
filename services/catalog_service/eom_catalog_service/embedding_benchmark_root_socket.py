@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import os
+import re
 import selectors
 import socket
 import stat
 import struct
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 from eom_orchestrator.inference_transfer_cpu_handoff import (
     fixed_owner_identity,
@@ -25,6 +28,54 @@ from eom_catalog_service.embedding_benchmark_root_control import (
 )
 from eom_catalog_service.embedding_benchmark_unit_control import require_root_benchmark_control
 from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
+
+
+@contextmanager
+def root_benchmark_listener(name: str) -> Iterator[socket.socket]:
+    """One fixed root socket; remove only the original owned inode on close."""
+    require_root_benchmark_control()
+    if type(name) is not str or re.fullmatch(r"(?:series-)?[0-9a-f]{32}\.sock", name) is None:
+        raise ValueError("BENCHMARK_ROOT_CONTROL_NAME_INVALID")
+    owner = fixed_owner_identity()
+    with protected_cpu_handoff_directory(
+        BENCHMARK_CONTROL_ROOT, owner=owner, uid=0, gid=owner.owner_gid, mode=0o750
+    ) as parent:
+        listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        created = None
+        try:
+            listener.set_inheritable(False)
+            listener.bind(str(BENCHMARK_CONTROL_ROOT / name))
+            created = os.stat(name, dir_fd=parent, follow_symlinks=False)
+            os.chown(name, 0, owner.owner_gid, dir_fd=parent, follow_symlinks=False)
+            created = os.stat(name, dir_fd=parent, follow_symlinks=False)
+            os.chmod(name, 0o660, dir_fd=parent, follow_symlinks=False)
+            created = os.stat(name, dir_fd=parent, follow_symlinks=False)
+            if not stat.S_ISSOCK(created.st_mode) or created.st_nlink != 1:
+                raise ValueError("BENCHMARK_ROOT_CONTROL_SOCKET_INVALID")
+            listener.listen(1)
+            listener.setblocking(False)
+            yield listener
+        finally:
+            listener.close()
+            if created is not None:
+                current = os.stat(name, dir_fd=parent, follow_symlinks=False)
+                if (
+                    current.st_dev,
+                    current.st_ino,
+                    current.st_uid,
+                    current.st_gid,
+                    current.st_mode,
+                    current.st_nlink,
+                ) != (
+                    created.st_dev,
+                    created.st_ino,
+                    created.st_uid,
+                    created.st_gid,
+                    created.st_mode,
+                    created.st_nlink,
+                ):
+                    raise ValueError("BENCHMARK_ROOT_CONTROL_SOCKET_CHANGED")
+                os.unlink(name, dir_fd=parent)
 
 
 def serve_root_benchmark_workspace(
@@ -57,21 +108,9 @@ def serve_root_benchmark_workspace(
     ):
         raise ValueError("BENCHMARK_ROOT_OWNER_CHANGED")
     name = execution_id + ".sock"
-    with protected_cpu_handoff_directory(
-        BENCHMARK_CONTROL_ROOT, owner=owner, uid=0, gid=owner.owner_gid, mode=0o750
-    ) as parent:
-        listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    with root_benchmark_listener(name) as listener:
         connection = None
-        created = None
         try:
-            listener.bind(str(BENCHMARK_CONTROL_ROOT / name))
-            os.chown(name, 0, owner.owner_gid, dir_fd=parent, follow_symlinks=False)
-            os.chmod(name, 0o660, dir_fd=parent, follow_symlinks=False)
-            created = os.stat(name, dir_fd=parent, follow_symlinks=False)
-            if not stat.S_ISSOCK(created.st_mode) or created.st_nlink != 1:
-                raise ValueError("BENCHMARK_ROOT_CONTROL_SOCKET_INVALID")
-            listener.listen(1)
-            listener.setblocking(False)
             with selectors.DefaultSelector() as selector:
                 selector.register(listener, selectors.EVENT_READ)
                 remaining_peers = 8
@@ -108,21 +147,3 @@ def serve_root_benchmark_workspace(
         finally:
             if connection is not None:
                 connection.close()
-            listener.close()
-            if created is not None:
-                current = os.stat(name, dir_fd=parent, follow_symlinks=False)
-                if (
-                    current.st_dev,
-                    current.st_ino,
-                    current.st_uid,
-                    current.st_gid,
-                    current.st_mode,
-                ) != (
-                    created.st_dev,
-                    created.st_ino,
-                    created.st_uid,
-                    created.st_gid,
-                    created.st_mode,
-                ):
-                    raise ValueError("BENCHMARK_ROOT_CONTROL_SOCKET_CHANGED")
-                os.unlink(name, dir_fd=parent)

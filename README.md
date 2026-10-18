@@ -313,6 +313,12 @@ CONTENT_ONLY7/520·CONCRETE_FACETS1/520·METADATA_ONLY1/520입니다.
 실측 결과나 기본값 전환은 아닙니다.
 [원본 실행·시간 판정·검증 경계](docs/architecture/EMBEDDING_BENCHMARK_TIMING_ASSESSMENT.md).
 
+6회 실행의 보호 프로세스 연결도 원래 실행 ID와 순서를 유지하는 고정 통신 창으로
+연결했습니다(**SOURCE_PASS / NOT_ACTIVE**). 기존 실행·정리 코드를 공유하고 통신 창이
+없으면 접수 전에 명시적으로 거부합니다. 관련1,326개 소스 테스트·strict type7 PASS이며,
+실제 root/전용 계정 검증과 운영 실행은 별도입니다.
+[연결 구조와 남은 실제 실행 조건](docs/architecture/EMBEDDING_BENCHMARK_SERIES_CONTROL.md).
+
 CPU/GPU 비교용 코드 설치 도구도 기존 경계 안에서 CPU까지 확장했습니다
 (**SOURCE_PASS / NOT_INSTALLED**). CPU는 platform 패키지 하나만, CUDA는 기존 두 패키지를
 검사하며 옛 CPU 계약·수치 코드는 유지합니다. 관련352 tests(실제 OLD pip의 소형 합성

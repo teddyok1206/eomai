@@ -9,6 +9,18 @@ summed into a single acceptance count. This ledger does not grant authority.
 
 ## Current authoritative boundaries
 
+- Finite series-controller source checkpoint2026-10-18 01:38 UTC: one preselected
+  root listener receives the six original associations; exact stage/owner/birth/
+  request/Job/order checks reuse existing control frames, root driver and listener
+  inode lifecycle. Absent-listener preflight precedes original reservation; no
+  scan/new queue/new identity or retry. Related50 suites1326 PASS/252.26s, strict7/
+  Ruff+format14/diff PASS. Actual same-UID framing/inodes and negative nonroot
+  denial are separate from synthetic root/unit/source/metadata positives. Packaged
+  privileged11-case cohort is collected, NOT_RUN at this checkpoint. No schema,
+  DB/migration, model or operating activation. Actual root CUDA capture/operator
+  composition and all consumer/six-device/default/rollback gates remain OPEN.
+  [Design and exact source scope](../architecture/EMBEDDING_BENCHMARK_SERIES_CONTROL.md).
+
 - Original-series timing assessment2026-10-18 01:19 UTC: journal result values
   feed a current-administrator/source/policy-fenced same-Artifact timing reader.
   Pure closure preserves six original executions/one Job, all cold spans and only

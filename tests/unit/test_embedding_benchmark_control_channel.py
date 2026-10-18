@@ -2,6 +2,8 @@
 
 import os
 import socket
+import struct
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
@@ -19,6 +21,61 @@ from tests.unit.embedding_benchmark_control_fixtures import (
 )
 from tests.unit.embedding_device_benchmark_fixtures import resources, worker_invocation
 from tests.unit.test_embedding_benchmark_channel import local_resources
+
+
+def test_root_accepts_original_association_once_and_preserves_its_absolute_control_deadline():
+    value = association(1)
+    left, right = socket.socketpair()
+    peer = BenchmarkUnixPeer(os.getpid(), os.getuid(), os.getgid())
+    kwargs = dict(expected_peer=peer, peer_fence=lambda _: None, controller_release="a" * 40)
+    owner = BenchmarkLaunchControlChannel(left, value, side="OWNER", **kwargs)
+    root = None
+    try:
+        owner.send_association()
+        root = BenchmarkLaunchControlChannel.accept_root_association(
+            right, accept_until_ns=time.monotonic_ns() + 30 * 10**9, **kwargs
+        )
+        root.require_root_association(value, expected_peer=peer, controller_release="a" * 40)
+        assert root._frames.expires_ns == value.expires_ns + 30 * 10**9
+        with pytest.raises(ValueError, match="ORDER_INVALID"):
+            root.receive_association()
+    finally:
+        owner.close()
+        if root is not None:
+            root.close()
+        right.close()
+
+
+@pytest.mark.parametrize("fault", ["foreign-message", "oversize", "eof", "peer", "timeout"])
+def test_initial_receive_refuses_foreign_frames_or_peer_without_reusing_a_stream(fault):
+    from eom_workflow.embedding_benchmark_launch_control import benchmark_launch_control_bytes
+
+    value = association(1)
+    left, right = socket.socketpair()
+    peer = BenchmarkUnixPeer(os.getpid(), os.getuid(), os.getgid())
+    deadline = time.monotonic_ns() + (20_000_000 if fault == "timeout" else 10**9)
+    try:
+        if fault == "foreign-message":
+            raw = benchmark_launch_control_bytes(prepared(value))
+            left.sendall(struct.pack("!I", len(raw)) + raw)
+        elif fault == "oversize":
+            left.sendall(struct.pack("!I", 65537))
+        elif fault == "eof":
+            left.close()
+        elif fault == "peer":
+            peer = BenchmarkUnixPeer(os.getpid() + 1, os.getuid(), os.getgid())
+        with pytest.raises(ValueError):
+            BenchmarkLaunchControlChannel.accept_root_association(
+                right,
+                expected_peer=peer,
+                peer_fence=lambda _: None,
+                controller_release="a" * 40,
+                accept_until_ns=deadline,
+            )
+        assert right.fileno() == -1
+    finally:
+        left.close()
+        right.close()
 
 
 def endpoints(ordinal):

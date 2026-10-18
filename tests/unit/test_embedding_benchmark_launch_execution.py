@@ -123,7 +123,7 @@ def composition(monkeypatch):
         return object()
 
     monkeypatch.setattr(execution, "stage_owner_benchmark_launch", stage)
-    monkeypatch.setattr(execution, "connect_benchmark_root", connect)
+    monkeypatch.setattr(execution, "connect_benchmark_series_root", connect)
     monkeypatch.setattr(execution, "CapturedBenchmarkNativeConnection", Transport)
     monkeypatch.setattr(execution, "observe_benchmark_native_session", observe)
     monkeypatch.setattr(

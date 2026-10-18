@@ -2011,3 +2011,16 @@ PostgreSQL23 PASS/no skips/inspect+cleanup PASS. Identity/SQL/Artifacts/revocati
 are real disposable evidence; source, capacity and native clocks are synthetic.
 Actual protected six launches and complete numerical/resource/regression/default/
 rollback gates remain open. [Exact scope and preserved failures](EMBEDDING_BENCHMARK_TIMING_ASSESSMENT.md).
+
+### Finite original-series root rendezvous — 2026-10-18
+
+One fixed revision-keyed root listener now receives six original associations,
+checks the selected owner/request/Job/order/birth and resolves each exact stage
+without filesystem scans. Existing control frames, root drivers and inode cleanup
+are shared with the known-stage entry. Owner preflight rejects a missing controller
+before reservation; failed/uncertain executions do not receive another identity.
+Related50 source suites1326 PASS/strict7/Ruff+format14; positive unit/root/source
+evidence is synthetic, not operating model acceptance. Packaged privileged11-case
+cohort is only collected here. Actual CUDA capture/operator composition and live
+six-run/default/rollback gates remain open.
+[Design, source proof and explicit activation limit](EMBEDDING_BENCHMARK_SERIES_CONTROL.md).

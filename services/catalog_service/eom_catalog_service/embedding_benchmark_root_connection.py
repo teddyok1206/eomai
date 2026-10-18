@@ -13,17 +13,57 @@ import stat
 import struct
 import time
 
+from eom_catalog_contracts.embedding_device_benchmark import (
+    BenchmarkOwnerRequest,
+    embedding_device_benchmark_bytes,
+)
 from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkLaunchAuthorization
 from eom_orchestrator.inference_transfer_cpu_handoff import (
+    CpuHandoffError,
     fixed_owner_identity,
     protected_cpu_handoff_directory,
 )
-from eom_workflow.embedding_benchmark_launch_control import BenchmarkLaunchAssociation
+from eom_workflow.embedding_benchmark_launch_control import (
+    BenchmarkLaunchAssociation,
+    parse_benchmark_launch_control,
+)
 
 from eom_catalog_service.embedding_benchmark_channel import BenchmarkUnixPeer
 from eom_catalog_service.embedding_benchmark_control_channel import BenchmarkLaunchControlChannel
 from eom_catalog_service.embedding_benchmark_handoff import benchmark_owner_start_ticks
-from eom_catalog_service.embedding_benchmark_layout import BENCHMARK_CONTROL_ROOT
+from eom_catalog_service.embedding_benchmark_layout import (
+    BENCHMARK_CONTROL_ROOT,
+    benchmark_series_socket_name,
+)
+
+
+def require_benchmark_series_listener(request: BenchmarkOwnerRequest) -> None:
+    """Read-only absence/metadata preflight, not root liveness or execution admission."""
+    owner = fixed_owner_identity()
+    if os.getresuid() != (owner.owner_uid,) * 3 or os.getresgid() != (owner.owner_gid,) * 3:
+        raise ValueError("BENCHMARK_ROOT_CONNECTION_OWNER_REQUIRED")
+    embedding_device_benchmark_bytes(request)
+    name = benchmark_series_socket_name(request.benchmark_revision_id)
+    try:
+        with protected_cpu_handoff_directory(
+            BENCHMARK_CONTROL_ROOT, owner=owner, uid=0, gid=owner.owner_gid, mode=0o750
+        ) as parent:
+            _socket_metadata(parent, name, owner.owner_gid)
+    except (OSError, CpuHandoffError):
+        raise ValueError("BENCHMARK_SERIES_CONTROLLER_UNAVAILABLE") from None
+
+
+def _socket_metadata(parent: int, name: str, owner_gid: int) -> os.stat_result:
+    metadata = os.stat(name, dir_fd=parent, follow_symlinks=False)
+    if (
+        not stat.S_ISSOCK(metadata.st_mode)
+        or metadata.st_uid != 0
+        or metadata.st_gid != owner_gid
+        or stat.S_IMODE(metadata.st_mode) != 0o660
+        or metadata.st_nlink != 1
+    ):
+        raise ValueError("BENCHMARK_ROOT_CONNECTION_PATH_INVALID")
+    return metadata
 
 
 def connect_benchmark_root(
@@ -33,6 +73,37 @@ def connect_benchmark_root(
     controller_release: str,
 ) -> tuple[BenchmarkLaunchControlChannel, BenchmarkUnixPeer]:
     """One connect after the exact protected socket appears; never a new Job or model retry."""
+    return _connect_benchmark_control(
+        association,
+        request=None,
+        authorization=authorization,
+        controller_release=controller_release,
+    )
+
+
+def connect_benchmark_series_root(
+    request: BenchmarkOwnerRequest,
+    association: BenchmarkLaunchAssociation,
+    *,
+    authorization: BenchmarkLaunchAuthorization,
+    controller_release: str,
+) -> tuple[BenchmarkLaunchControlChannel, BenchmarkUnixPeer]:
+    """The original request's preselected finite listener; existing control frames only."""
+    return _connect_benchmark_control(
+        association,
+        request=request,
+        authorization=authorization,
+        controller_release=controller_release,
+    )
+
+
+def _connect_benchmark_control(
+    association: BenchmarkLaunchAssociation,
+    *,
+    request: BenchmarkOwnerRequest | None,
+    authorization: BenchmarkLaunchAuthorization,
+    controller_release: str,
+) -> tuple[BenchmarkLaunchControlChannel, BenchmarkUnixPeer]:
     owner = fixed_owner_identity()
     if (
         os.getresuid() != (owner.owner_uid,) * 3
@@ -40,6 +111,16 @@ def connect_benchmark_root(
         or type(authorization) is not BenchmarkLaunchAuthorization
     ):
         raise ValueError("BENCHMARK_ROOT_CONNECTION_OWNER_REQUIRED")
+    checked = parse_benchmark_launch_control(association)
+    if not isinstance(checked, BenchmarkLaunchAssociation):
+        raise ValueError("BENCHMARK_ROOT_CONNECTION_ASSOCIATION_INVALID")
+    association = checked
+    name = association.execution_id + ".sock"
+    if request is not None:
+        embedding_device_benchmark_bytes(request)
+        if association.owner_request_sha256 != request.request_sha256:
+            raise ValueError("BENCHMARK_ROOT_CONNECTION_SELECTION_INVALID")
+        name = benchmark_series_socket_name(request.benchmark_revision_id)
     # Full invocation authorization belongs to its caller; this exact association
     # is read from that invocation's already authorized protected stage.
     authorization.assert_current()
@@ -52,7 +133,6 @@ def connect_benchmark_root(
     connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     connection.setblocking(False)
     connection.set_inheritable(False)
-    name = association.execution_id + ".sock"
     try:
         with protected_cpu_handoff_directory(
             BENCHMARK_CONTROL_ROOT, owner=owner, uid=0, gid=owner.owner_gid, mode=0o750
@@ -61,18 +141,10 @@ def connect_benchmark_root(
                 if time.monotonic_ns() >= association.expires_ns:
                     raise ValueError("BENCHMARK_ROOT_CONNECTION_EXPIRED")
                 try:
-                    before = os.stat(name, dir_fd=parent, follow_symlinks=False)
+                    before = _socket_metadata(parent, name, owner.owner_gid)
                     break
                 except FileNotFoundError:
                     time.sleep(0.1)
-            if (
-                not stat.S_ISSOCK(before.st_mode)
-                or before.st_uid != 0
-                or before.st_gid != owner.owner_gid
-                or stat.S_IMODE(before.st_mode) != 0o660
-                or before.st_nlink != 1
-            ):
-                raise ValueError("BENCHMARK_ROOT_CONNECTION_PATH_INVALID")
             status = connection.connect_ex(str(BENCHMARK_CONTROL_ROOT / name))
             if status in {errno.EINPROGRESS, errno.EALREADY}:
                 with selectors.DefaultSelector() as selector:

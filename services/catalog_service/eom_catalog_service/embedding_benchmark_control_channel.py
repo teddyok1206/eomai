@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import selectors
 import socket
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from enum import StrEnum
@@ -91,6 +92,81 @@ class BenchmarkLaunchControlChannel:
             raise ValueError("BENCHMARK_CONTROL_CLOSED")
         self._frames.check()
         return self._frames
+
+    @classmethod
+    def accept_root_association(
+        cls,
+        connection: socket.socket,
+        *,
+        expected_peer: BenchmarkUnixPeer,
+        peer_fence: PeerFence,
+        controller_release: str,
+        accept_until_ns: int,
+    ) -> BenchmarkLaunchControlChannel:
+        """Consume one existing association from the exact selected owner, once.
+
+        The short receive bound is not a compute deadline or authentication
+        grant. After it, retain only the original association's absolute control
+        deadline. No bytes are peeked/replayed and no second socket is created.
+        """
+        bootstrap = None
+        try:
+            now = time.monotonic_ns()
+            if type(accept_until_ns) is not int or not now < accept_until_ns <= now + 900 * 10**9:
+                raise ValueError("BENCHMARK_CONTROL_ACCEPT_DEADLINE_INVALID")
+            bootstrap = _Frames(
+                connection,
+                expected_peer,
+                peer_fence,
+                min(accept_until_ns, now + 10 * 10**9),
+            )
+            value = parse_benchmark_launch_control_bytes(bootstrap.receive_raw())
+            now = time.monotonic_ns()
+            if not isinstance(value, BenchmarkLaunchAssociation) or not (
+                now < value.expires_ns <= now + 180 * 10**9
+            ):
+                raise ValueError("BENCHMARK_CONTROL_ASSOCIATION_INVALID")
+            bootstrap.check()
+            channel = cls(
+                connection,
+                value,
+                side="ROOT",
+                expected_peer=expected_peer,
+                peer_fence=peer_fence,
+                controller_release=controller_release,
+            )
+            channel._phase = _Phase.ASSOCIATED
+            # Transfer the same owned socket; an inactive bootstrap must no
+            # longer be able to close the new original-deadline transport.
+            bootstrap.closed = True
+            return channel
+        except BaseException:
+            if bootstrap is not None:
+                bootstrap.invalidate()
+            connection.close()
+            raise
+
+    def require_root_association(
+        self,
+        association: BenchmarkLaunchAssociation,
+        *,
+        expected_peer: BenchmarkUnixPeer,
+        controller_release: str,
+    ) -> None:
+        """The exact already-received root phase, not a caller-supplied grant."""
+        try:
+            if (
+                self._side != "ROOT"
+                or self._phase != _Phase.ASSOCIATED
+                or self.association != association
+                or self._release != controller_release
+            ):
+                raise ValueError("BENCHMARK_CONTROL_ASSOCIATION_INVALID")
+            if self._transport().peer != expected_peer:
+                raise ValueError("BENCHMARK_CONTROL_ASSOCIATION_INVALID")
+        except BaseException:
+            self.close()
+            raise
 
     def _transition(self, event: str) -> None:
         after = _TRANSITIONS.get((self._side, self._phase, event))

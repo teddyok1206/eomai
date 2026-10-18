@@ -41,7 +41,10 @@ from eom_catalog_service.embedding_benchmark_native_connection import (
 from eom_catalog_service.embedding_benchmark_native_observation import (
     observe_benchmark_native_session,
 )
-from eom_catalog_service.embedding_benchmark_root_connection import connect_benchmark_root
+from eom_catalog_service.embedding_benchmark_root_connection import (
+    connect_benchmark_series_root,
+    require_benchmark_series_listener,
+)
 from eom_catalog_service.embedding_benchmark_unit_control import (
     CPU_BENCHMARK_SOCKET,
     CPU_BENCHMARK_SOCKET_SHA256,
@@ -98,6 +101,7 @@ class FixedBenchmarkLaunchExecution:
             or request != self._request
         ):
             raise ValueError("BENCHMARK_EXECUTION_OWNER_OR_SELECTION_INVALID")
+        require_benchmark_series_listener(request)
         if self._installation is None:
             files = NumericalRuntimeFileSnapshots(0)
             for name, digest in (
@@ -138,8 +142,11 @@ class FixedBenchmarkLaunchExecution:
         staged = stage_owner_benchmark_launch(
             self._request, invocation, inputs, authorization=authorization, expires_ns=expires
         )
-        control, root_peer = connect_benchmark_root(
-            staged.association, authorization=authorization, controller_release=self._release
+        control, root_peer = connect_benchmark_series_root(
+            self._request,
+            staged.association,
+            authorization=authorization,
+            controller_release=self._release,
         )
         transport = None
         try:

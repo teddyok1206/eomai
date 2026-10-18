@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import pwd
 import signal
@@ -362,6 +363,161 @@ def test_real_workflow_owner_resource_client_authenticates_root_peer_without_mod
             if endpoint is not None:
                 endpoint.close()
             listener.close()
+
+
+def test_real_root_series_listener_and_owner_client_use_kernel_peers_without_model(monkeypatch):
+    """Actual root/owner/DAC/birth/control frames; selection and completion are synthetic."""
+    if os.environ.get("EOM_RUN_BENCHMARK_HANDOFF_PRIVILEGED") != "1":
+        pytest.skip("explicit private benchmark filesystem OS gate required")
+    assert os.getresuid() == (0, 0, 0) and os.getresgid() == (0, 0, 0)
+    from eom_catalog_service import embedding_benchmark_root_connection as client_module
+    from eom_catalog_service import embedding_benchmark_root_socket as listener_module
+    from eom_catalog_service.embedding_benchmark_control_channel import (
+        BenchmarkLaunchControlChannel,
+    )
+    from eom_catalog_service.embedding_benchmark_handoff import benchmark_owner_start_ticks
+    from eom_catalog_service.embedding_benchmark_layout import benchmark_series_socket_name
+
+    from tests.unit.embedding_benchmark_control_fixtures import association, completed, prepared
+
+    site = Path(client_module.__file__).resolve().parent.parent
+    assert site.is_relative_to(Path("/opt/eom/embedding-owner-releases"))
+    account = pwd.getpwnam("eom-workflow-runner")
+    root_pid = os.getpid()
+    request = owner_request()
+    payload = json.dumps(
+        {
+            "request": request.model_dump(mode="json"),
+            "association": association(1).model_dump(mode="json"),
+        }
+    ).encode()
+    child_code = r"""
+import json,os,sys,time
+sys.path.insert(0,sys.argv[1])
+from pathlib import Path
+from eom_catalog_contracts.embedding_device_benchmark import BenchmarkOwnerRequest
+from eom_catalog_service import embedding_benchmark_root_connection as connection
+from eom_catalog_service.embedding_benchmark_handoff import benchmark_owner_start_ticks
+from eom_identifiers import content_sha256
+from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkLaunchAuthorization
+from eom_workflow.embedding_benchmark_launch_control import BenchmarkLaunchAssociation
+assert os.getuid()==os.geteuid()!=0 and not os.getgroups()
+assert connection.__file__.startswith(sys.argv[1])
+data=json.loads(sys.stdin.buffer.read(65537))
+request=BenchmarkOwnerRequest.model_validate(data['request'])
+body=data['association']
+body.update(owner_pid=os.getpid(),owner_start_ticks=benchmark_owner_start_ticks(os.getpid(),uid=os.getuid(),gid=os.getgid()),expires_ns=time.monotonic_ns()+10*10**9)
+body.pop('association_sha256')
+value=BenchmarkLaunchAssociation.model_validate(body|{'association_sha256':content_sha256(body)})
+connection.BENCHMARK_CONTROL_ROOT=Path(sys.argv[2])
+calls=[]
+BenchmarkLaunchAuthorization.assert_current=lambda self:calls.append(1)
+connection.require_benchmark_series_listener(request)
+channel,peer=connection.connect_benchmark_series_root(request,value,authorization=object.__new__(BenchmarkLaunchAuthorization),controller_release='a'*40)
+try:
+ assert (peer.pid,peer.uid,peer.gid)==(int(sys.argv[3]),0,0) and len(calls)==2
+ channel.receive_prepared()
+ result=channel.receive_completed()
+ assert result.execution_id==value.execution_id and result.original_outcome=='SUCCEEDED'
+finally:
+ channel.close()
+assert not {'torch','numpy','transformers','tokenizers'}.intersection(sys.modules)
+os.read(3,1)
+"""
+    with tempfile.TemporaryDirectory(prefix="eom-series-peer-", dir="/run") as temporary:
+        parent = Path(temporary)
+        parent.chmod(0o711)
+        namespace = parent / "control"
+        namespace.mkdir(mode=0o750)
+        os.chown(namespace, 0, account.pw_gid)
+        namespace.chmod(0o750)
+        monkeypatch.setattr(listener_module, "BENCHMARK_CONTROL_ROOT", namespace)
+        name = benchmark_series_socket_name(request.benchmark_revision_id)
+        with listener_module.root_benchmark_listener(name) as listener:
+            data_read, data_write = os.pipe2(os.O_CLOEXEC)
+            release_read, release_write = os.pipe2(os.O_CLOEXEC)
+            child = os.fork()
+            if child == 0:
+                try:
+                    listener.close()
+                    os.close(data_write)
+                    os.close(release_write)
+                    os.setgroups([])
+                    os.setgid(account.pw_gid)
+                    os.setuid(account.pw_uid)
+                    os.dup2(data_read, 0, inheritable=True)
+                    os.dup2(release_read, 3, inheritable=True)
+                    executable = "/srv/eom/conda/envs/eom-api/bin/python"
+                    os.execve(
+                        executable,
+                        [
+                            executable,
+                            "-I",
+                            "-B",
+                            "-c",
+                            child_code,
+                            str(site),
+                            str(namespace),
+                            str(root_pid),
+                        ],
+                        {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"},
+                    )
+                except BaseException:
+                    os._exit(1)
+            os.close(data_read)
+            os.close(release_read)
+            channel = None
+            reaped = False
+            try:
+                with os.fdopen(data_write, "wb") as data:
+                    data.write(payload)
+                listener.settimeout(5)
+                accepted, _ = listener.accept()
+                accepted.settimeout(None)
+                expected = BenchmarkUnixPeer(child, account.pw_uid, account.pw_gid)
+                birth = benchmark_owner_start_ticks(child, uid=expected.uid, gid=expected.gid)
+
+                def fence(actual):
+                    assert (
+                        actual == expected
+                        and benchmark_owner_start_ticks(child, uid=expected.uid, gid=expected.gid)
+                        == birth
+                    )
+
+                channel = BenchmarkLaunchControlChannel.accept_root_association(
+                    accepted,
+                    expected_peer=expected,
+                    peer_fence=fence,
+                    controller_release="a" * 40,
+                    accept_until_ns=time.monotonic_ns() + 5 * 10**9,
+                )
+                value = channel.association
+                assert value.owner_pid == child and value.owner_start_ticks == birth
+                assert value.owner_request_sha256 == request.request_sha256
+                before = prepared(value)
+                channel.send_prepared(before)
+                channel.send_completed(completed(value, before))
+                channel.wait_for_owner_close()
+                os.close(release_write)
+                release_write = -1
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    finished, status = os.waitpid(child, os.WNOHANG)
+                    if finished:
+                        reaped = True
+                        assert os.waitstatus_to_exitcode(status) == 0
+                        break
+                    time.sleep(0.01)
+                assert reaped
+            finally:
+                if release_write != -1:
+                    os.close(release_write)
+                if not reaped:
+                    os.kill(child, signal.SIGKILL)
+                    os.waitpid(child, 0)
+                if channel is not None:
+                    channel.close()
+        assert not (namespace / name).exists()
 
 
 @pytest.mark.parametrize("late_owner_exit", (False, True))
