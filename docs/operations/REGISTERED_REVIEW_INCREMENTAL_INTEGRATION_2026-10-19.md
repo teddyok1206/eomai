@@ -503,3 +503,84 @@ INDEX sourcee013, DB0058, CPU 기본값과 별도 GPU6 NOT_STARTED는 그대로�
   `index21-targets64-start-events.log`.
 - `index21-targets64-registry-initial.json`, rawSHA
   `d07610694ff202acdda15d48a8240056f959a7ad33c72e706ea61a7521c895d3`.
+
+## mixed 3개 초기 색인 완료와 최종 검증 범위 — 20:40 UTC 체크포인트
+
+20:32:12.881518의 고정 completion 관측에서 새 Graph
+`graphrev_8f3ff9b22d592ecf661fec7116a5cab9`의 mixed3개 초기 Workflow가 모두
+COMPLETED였다. 각 encode step/native coordinator Job은 SUCCEEDED였고,
+ALLOCATION→INDEX_PREPARED→REGISTERED→COMPLETED checkpoint와 저장된 step output의
+일치를 확인했다. 앞선20:09의 미완료 view 관측은 그대로 보존한다.
+
+| view | 완료 Workflow | baseline과 동일한 encoding·row 참조 수 | encoding 변경 / row 참조 변경 / 누락 | owned 신규 encoding Job |
+|---|---|---:|---|---:|
+| CONTENT_ONLY | `workflow_f4e139c14f924ff7b10fcd1fef0aa7f2` | 479 | 0 / 0 / 0 | 0 |
+| CONCRETE_FACETS | `workflow_8918d97c51a142d3a6678edb06f427dd` | 457 | 0 / 0 / 0 | 0 |
+| METADATA_ONLY | `workflow_6c7118fc7624465d88b49ad40277b2ac` | 425 | 0 / 0 / 0 | 0 |
+
+이는 각 view의 원 baseline row 재사용 증거다. 세 수는 서로 다른 projection population이며
+합산하거나 원520개 분석 전체의 vectorization 완료로 해석하지 않는다. 이 초기 실행들의
+source-plan demand는 각각4개였고 target demand는0이었다. 전체 index row 수와 selected
+source 수, 실제 owned native encoding 수를 구분한다. 대상 생성 문항
+`itemrev_b6e626a764644e37b428cd914f920bb6`의 등록 binding도 세 view 모두0이어서,
+**대상 자체의 새 증분 완료 또는 검색 준비 완료는 아직 아니다**.
+
+별도20:29:43.004922 registry metadata는 current mixed3개 head가 모두 새 Graph8f3를
+가리키며 binding 수479/457/425임을 확인한다. primary1의 current3개 head는 같은 수의
+원 Graph `graphrev_c0e78b4e4ce6588de3d3b6c6f25fb3d9`에 남아 있다. 이 current-head
+관측과 위 완료 receipt 대조는 별도 증거이며, 저장된 과거 registration의 `is_current`만으로
+현재 head를 추정하지 않는다. metadata observer는 source 권한을 부여하거나 full completion
+owner 검증을 대신하지 않았고 DB write·vector read·모델 실행은0이었다.
+
+### 실제 delta 선택과 정상 drain·재기동
+
+보존된 control event는20:10:21.747745에 CONTENT 후속
+`workflow_235e8836515f438e9fd2b39a074f25d6` /
+`wfcmd_a408c0a358114d938357912b4f1b1af6`가 `selected_targets=42`, `state=QUEUED`였음을
+보여 준다. 이는 추정값이 아닌 실제 reconciliation 선택 수다. 다만20:32:12 completion
+관측의 이 Workflow는 REQUESTED / ENCODE_STEP_NOT_YET_CREATED이며, 아직 실제 source-plan의
+42개 목록·대상 포함 여부·native 입력/실행/완료 수를 확인한 것은 아니다.
+
+20:31:09에 PID69164의 MAIN에 한 번 보낸 두 번째 정상 SIGTERM은20:37에도 run-once
+drain 중이었다. 이후20:40:10의 보존된 terminal 관측은 inactive/dead, MainPID0,
+빈 cgroup, Result success/ExecMainStatus0/NRestarts0이었다. 같은 INDEX21 head46,
+owner rawSHA `575071809a4ee51956b639248c133b2236b93a560584bd653c91fb92e9830618`,
+runtime rawSHA `d001d57b33f3e10ee298ec731071f2ae465c8b677489cb0c735cd0eefe1e2710`와
+native0 guard 확인 뒤20:40:43–49에 한 번 정상 기동했다. 새 PID89255 /
+invocation `1ad76d6abfd6491f91b68b832025d5b5`다. 강제 종료·강제 dispatch·새 key 재시도나
+신원/권한 변경은 하지 않았다. cursor0에서 원 CONTENT 후속 요청의 정상 FIFO 처리를
+기다리며 기존 legacy 요청은 취소하지 않았다. 20:40:43.815708의 registry 관측에서는
+legacy CONTENT head도 새 Graph8f3/indexrev3843642b로 갱신됐고, 나머지 두 legacy view는
+원 Graphc0e에 남아 있다. 이 head 관측으로 모든 legacy Workflow의 terminal state를
+추정하지 않는다. 기동 성공은 새 target delta의 완료 증거가 아니다.
+
+### 종료 범위의 명확화 — 새 요구나 호환성 성공 주장 아님
+
+이번 생성 문항 증분 목표의 남은 실제 검증은 **새 Graph8f3의 mixed 경로에서 대상 자체의
+VECTOR binding·검색·읽기·같은-key replay**, 그리고 **기존 V1 역사 요청의 원 pin을 유지한
+prepare-replay·읽기**다. 실제 registered index/namespace를 확인하고 현재 source 권한을
+재검증하는 기존 `CatalogEmbeddingRegistryVerifier.for_pinned_similarity_request_in_session`
+경계를 그대로 사용한다. 원 Graph/정책을 latest로 바꾸거나 source 허용 범위를 넓히지 않는다.
+
+사용하지 않는 새 Graph8f3의 fresh primary V1 요청은 이 목표의 종료 조건이 아니며
+**NOT_RUN**이다. 기존 두 prepare 운영 초안은 실행 증거로 바꾸지 않고 보존한다.
+같은 프로세스의 legacy background 경로와 원 요청도 유지하지만, 이것만으로 새
+Graph의 모든 V1 경로나 fresh private Chat 호환성을 실제 검증했다고 주장하지 않는다.
+기존 운영 흐름을 보존하면서 목표에 필요한 mixed 실제 경로와 고정 역사 호환성을 구분하는
+범위 명확화이며, 원 검증 guard를 완화하거나 새 gate를 추가하는 변경이 아니다.
+
+공용 API/Catalog·Chat·QUERY source66, INDEX sourcee013/head46, DB0058과 CPU 기본값은
+그대로다. 원 여섯 CPU/CUDA 비교는 NOT_STARTED이며 이번 목표의 선행조건도 아니다.
+
+추가 증거는 같은 `/tmp/eom-registered-review-patch.zbfFVg5a/`의 다음 고정 파일이다.
+
+- `index21-completion-before-canary-restart.json`, rawSHA
+  `9ac395266af3eaffa8d2315c7afd75defae50cfbacafdc1c1dc7c468b3aad95f`.
+- `index21-bounded-watch-20261019202925-registry.json`, rawSHA
+  `adf538f2c117f2b0e2bf30f0f76bf246a5e50ee07bfc0f9ced613d1a4a99b775`.
+- `index21-drain-control-events-2040.jsonl`, rawSHA
+  `daa19a37f5e2f7f7b88375bd17966ec14b13b4912903ea74307f68dc91fc9622`.
+- `index21-same-scope-canary-terminal-state.txt`, rawSHA
+  `f6e56431374eb07dfcd94b81abe6e2fef8dee75697d99cccc5cc6dfc2c8081fb`.
+- `index21-same-scope-canary-start-state.txt`, rawSHA
+  `3f994ef368b77e7a17aeffa6aa8636796493edb5b2e9dc948a21adab84c19843`.

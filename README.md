@@ -49,18 +49,24 @@ logical Item
   INDEX21에만 설치·활성화했습니다. Runner 회귀68개와 최종 바이트5개가 통과했고,
   실제21의 권한 철회 상태 기동 거부·동일 개정 복구(head46)·정상 STARTED를 확인했습니다.
   기존 실패·성공 receipt와 원 벡터는 보존하며 IAM 허용 범위를 확대하지 않았습니다.
-- **실제 재사용 확인(20:07 UTC):** 새 Graph의 첫 mixed CONTENT Workflow가 완료됐고,
-  기존479개 encoding과 shard row 참조를 모두 그대로 재사용했습니다. 변경·누락과 이
-  Workflow가 소유한 신규 encoding Job은0입니다. 이는 원520개 전체 coverage나 새 생성
-  문항 처리 완료가 아니며, 해당 target binding은 아직0입니다.
+- **실제 재사용 확인(20:32 UTC):** 새 Graph의 mixed3개 초기 Workflow가 모두 완료됐고,
+  CONTENT479 / CONCRETE457 / METADATA425개의 기존 encoding과 shard row 참조를
+  그대로 재사용했습니다. 각 view의 변경·누락과 owned 신규 encoding Job은0입니다.
+  mixed3개 current head도 새 Graph를 가리키지만, 원520개 전체 coverage나 대상 생성
+  문항의 증분 완료는 아니며 target binding은 아직0입니다.
 - **후속 처리(20:09 UTC):** 정상 drain 후 mixed/legacy의 `maximum_targets`만4→64로
   선택하고 INDEX21을 정상 기동했습니다. 신원·grant·수치 자원·SDK는 바꾸지 않았고,
   대기 중 원 요청5건도 보존했습니다. 순수 테스트14 PASS와 실제 설정 선택은 구분해 기록합니다.
-- **남은 실제 검증:** 20:08:37 관측에서 새 Graph mixed CONTENT만479개이고 나머지
-  mixed2개 head는 없었습니다. primary479/457/425는 원 Graph에 남아 있습니다. target의
-  실제 binding·VECTOR 검색과 새 Graph primary 호환성·읽기·같은-key replay는 아직
-  대기 중이며, 기동·부분 재사용 성공을 전체 목표 완료로 확대하지 않습니다.
-  상세 수정·운영 이력은 아래 운영 기록에 보존합니다.
+- **현재 후속 처리(20:40 UTC):** 새 CONTENT delta는 실제42개 target을 선택해 QUEUED됐고,
+  20:32 관측의 Workflow는 REQUESTED였습니다. 선택 수를 native 실행·완료 수로 해석하지
+  않습니다. 두 번째 정상 drain 완료 후 같은 구성으로 한 번 재기동했으며 정상 FIFO 처리를
+  기다립니다. legacy 요청도 취소하지 않았으며, 20:40의 legacy CONTENT head는 새 Graph로
+  갱신됐고 다른 두 view는 원 Graph에 남아 있습니다.
+- **남은 실제 검증:** 새 Graph mixed 경로에서 대상 자체의 VECTOR binding·실제 검색·읽기·
+  같은-key replay, 그리고 원 V1 역사 요청의 prepare-replay·읽기가 남았습니다. 사용하지 않는
+  새 Graph의 fresh primary V1 요청은 이번 종료 범위가 아니며 NOT_RUN입니다. 전체 V1·Chat
+  호환성이나 전체 목표 완료로 확대하지 않습니다. 상세 이력과 범위 근거는 아래 운영 기록에
+  보존합니다.
 
 [현재 통합 설계](docs/architecture/REGISTERED_REVIEW_INCREMENTAL_INTEGRATION_DESIGN.md)와
 [이번 검증·남은 조건](docs/operations/REGISTERED_REVIEW_INCREMENTAL_INTEGRATION_2026-10-19.md)을
