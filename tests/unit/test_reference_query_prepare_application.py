@@ -2,17 +2,30 @@
 
 import ast
 import inspect
+from contextlib import nullcontext
+from dataclasses import replace
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
 from eom_catalog_contracts.reference_query_prepare import (
+    ReferenceQueryPrepareReply,
     parse_supported_reference_query_prepare_request,
+    validate_reference_query_prepare_reply,
 )
-from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryError
+from eom_catalog_service.embedding_registry_models import EmbeddingEncodingRecord
+from eom_catalog_service.embedding_registry_ports import (
+    EmbeddingRegistryCaller,
+    EmbeddingRegistryError,
+)
+from eom_catalog_service.embedding_registry_repository import EmbeddingRegistryRepository
 from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
+from eom_identifiers import canonical_json_bytes
 from eom_identity_service import OperatorAuthorizationFenceError
+from eom_workflow.reference_query_execution import parse_supported_reference_query_workflow_request
 from eom_workflow_runner import reference_query_prepare_application as module
 from eom_workflow_runner.actor_authorization_adapters import (
     OperatorIdentityWorkflowActorAuthorizer,
@@ -37,6 +50,8 @@ from eom_workflow_runner.settings import RunnerConfig, WorkflowSettings
 from jsonschema.exceptions import ValidationError as SchemaError
 
 from tests.unit.inference_transfer_embedding_fixtures import seal
+from tests.unit.test_embedding_registry_catalog_adapter import owner as owner
+from tests.unit.test_pinned_similarity_namespace import pinned as pinned
 from tests.unit.test_reference_query_owner_admission import source as source
 
 
@@ -316,6 +331,221 @@ def test_completed_state_requires_canonical_reader_before_ready(application, mon
     failed = value.app.prepare(wire_request(value.source))
     assert failed.status == "FAILED" and failed.selection is None
     assert value.offers == []
+
+
+@pytest.fixture
+def completed_occurrence_replay(application, pinned, monkeypatch):
+    """Real namespace/index/Artifact interpretation; only history/SQL/IAM are synthetic.
+
+    The existing app admission seam returns the same completed Workflow, and the
+    publication seam checks the actual prepared anchor. Neither seam pretends to
+    prove live admission, a native launch, or production source permissions.
+    """
+    value = application
+    catalog, session = pinned.verifier, pinned.session
+    session.in_transaction = lambda: session.get_transaction().is_active
+    historical = EmbeddingIndexNamespace.model_validate(
+        pinned.registered.namespace.model_dump(mode="json")
+        | {"population_scope": "OCCURRENCE_BACKED_PAST_EXAM"}
+    )
+    pinned.registered = replace(pinned.registered, namespace=historical)
+    pinned.rows = {
+        (pinned.registered.index_id, pinned.registered.index_revision_id): pinned.registered
+    }
+    value.source.owner.catalog = catalog
+    value.source.owner.settings = catalog.settings
+    value.source.owner.configuration = replace(
+        value.source.owner.configuration, registry=catalog.configuration
+    )
+    original = value.source.request
+    value.source.request = parse_supported_reference_query_workflow_request(
+        seal(
+            original.model_dump(mode="json")
+            | {"context_request": pinned.request.model_dump(mode="json")},
+            "request_sha256",
+        )
+    )
+    assert value.source.owner.identity.capture.operator_id == original.operator_audit.operator_id
+    value.app.spaces = pinned.request.views[0].index.spaces
+    value.app.sessions = SimpleNamespace(begin=lambda: nullcontext(session))
+    value.state = "COMPLETED"
+    value.pinned, value.catalog = pinned, catalog
+    value.original_configuration = catalog.configuration
+    value.original_context = pinned.request
+    value.publication_reads = []
+    value.initial_context = Mock(
+        side_effect=AssertionError("completed replay cannot select a head")
+    )
+    monkeypatch.setattr(
+        catalog, "prepare_reference_query_context_in_session", value.initial_context
+    )
+
+    def read_revision(repository, index_id, revision_id):
+        assert repository.session is session
+        return pinned.rows.get((index_id, revision_id))
+
+    def bindings(repository, keys):
+        assert repository.session is session and len(keys) == 1
+        return session.binding_records
+
+    row = pinned.binding.row_ref
+    encoding = EmbeddingEncodingRecord(
+        **pinned.binding.encoding.model_dump(mode="python"),
+        row_index=row.row_index,
+        **{"shard_" + key: child for key, child in row.shard_manifest.model_dump().items()},
+    )
+
+    def encodings(repository, keys):
+        assert repository.session is session and keys == (encoding.encoding_sha256,)
+        return {encoding.encoding_sha256: encoding}
+
+    monkeypatch.setattr(EmbeddingRegistryRepository, "read_pinned_revision", read_revision)
+    monkeypatch.setattr(EmbeddingRegistryRepository, "bindings", bindings)
+    monkeypatch.setattr(EmbeddingRegistryRepository, "encodings", encodings)
+
+    class CompletedPublication:
+        def __init__(self, actual_owner, *, workflow_id, request):
+            assert actual_owner is value.source.owner
+            assert workflow_id == "workflow_" + "c" * 32
+            assert request == value.source.request
+
+        def resolve_reference_query_in_session(self, actual_session, caller, request, prepared):
+            assert actual_session is session
+            assert caller == EmbeddingRegistryCaller(original.operator_audit.operator_id)
+            assert request == value.original_context
+            assert prepared.request_sha256 == request.request_sha256
+            assert tuple(entry.source for entry in prepared.sources) == (pinned.binding.source,)
+            assert prepared.query_texts and not prepared.truncated
+            value.publication_reads.append(prepared)
+
+    monkeypatch.setattr(module, "CatalogCompletedReferenceQueryRead", CompletedPublication)
+    return value
+
+
+def test_completed_occurrence_replay_preserves_exact_reply_under_current_all(
+    completed_occurrence_replay,
+):
+    value = completed_occurrence_replay
+    request = wire_request(value.source)
+    original_bytes = canonical_json_bytes(value.source.request)
+    expected = ReferenceQueryPrepareReply(
+        schema_version="system-rag-reference-query-prepare-reply/1.0",
+        operation="PREPARE_REFERENCE_QUERY",
+        operation_id=request.operation_id,
+        request_sha256=request.request_sha256,
+        status="READY",
+        workflow_id="workflow_" + "c" * 32,
+        selection={
+            "workflow_id": "workflow_" + "c" * 32,
+            "workflow_request_sha256": value.source.request.request_sha256,
+            "context_request_sha256": value.original_context.request_sha256,
+        },
+        error_code=None,
+    )
+
+    reply = value.app.prepare(request)
+
+    validate_reference_query_prepare_reply(request, reply)
+    assert reply == expected
+    assert canonical_json_bytes(value.source.request) == original_bytes
+    assert len(value.admitted) == 1 and len(value.publication_reads) == 1
+    assert (
+        value.admitted[0]["idempotency_key"]
+        == reference_query_prepare_identity(
+            value.source.owner.identity.capture.operator_id, request.idempotency_key
+        )[0]
+    )
+    assert value.catalog.configuration is value.original_configuration
+    assert value.catalog.configuration.namespace.population_scope == "ALL_ADMITTED_GRAPH_ITEMS"
+    assert value.pinned.registered.namespace.population_scope == "OCCURRENCE_BACKED_PAST_EXAM"
+    assert value.pinned.reads == [
+        ((value.pinned.registered.index_id, value.pinned.registered.index_revision_id),)
+    ]
+    captures = value.catalog.sources.capture_in_session.call_args_list
+    assert captures[0].args[1].population_scope.value == "ALL_ADMITTED_GRAPH_ITEMS"
+    assert captures[1].args[1].population_scope.value == "OCCURRENCE_BACKED_PAST_EXAM"
+    assert all(call.args[1].source_classes == ("PAST_EXAM",) for call in captures)
+    assert all(
+        call.args[1].actor_id == value.source.request.operator_audit.operator_id
+        for call in captures
+    )
+    assert len(value.catalog.identity_fence.fence_current_operator.call_args_list) >= 2
+    value.initial_context.assert_not_called()
+    EmbeddingRegistryRepository.current_namespace_revision.assert_not_called()
+    assert value.offers == []
+    value.executor.execute.assert_not_called()
+    value.executor.allocate_execution.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "fault,code",
+    (
+        ("current_permission", "SOURCE_ACCESS_DENIED"),
+        ("historical_permission", "SOURCE_ACCESS_DENIED"),
+        ("namespace", "SOURCE_POINTER_INVALID"),
+        ("registered_hash", "SOURCE_POINTER_INVALID"),
+        ("member_bytes", "SOURCE_POINTER_INVALID"),
+    ),
+)
+def test_completed_occurrence_replay_rejects_current_denial_and_corrupt_exact_pins(
+    completed_occurrence_replay, fault, code
+):
+    value = completed_occurrence_replay
+    request = wire_request(value.source)
+    original = canonical_json_bytes(value.source.request)
+    if fault in {"current_permission", "historical_permission"}:
+        calls = 0
+
+        def deny(*_args):
+            nonlocal calls
+            calls += 1
+            if calls == (1 if fault == "current_permission" else 2):
+                raise OperatorAuthorizationFenceError("OPERATOR_AUTHORIZATION_FENCE_FORBIDDEN")
+
+        value.catalog.identity_fence.fence_current_operator.side_effect = deny
+    elif fault == "namespace":
+        value.pinned.registered = replace(
+            value.pinned.registered,
+            namespace=EmbeddingIndexNamespace.model_validate(
+                value.pinned.registered.namespace.model_dump(mode="json")
+                | {"recipe_sha256": "sha256:" + "f" * 64}
+            ),
+        )
+    elif fault == "registered_hash":
+        value.pinned.registered = replace(
+            value.pinned.registered, index_sha256="sha256:" + "f" * 64
+        )
+    else:
+        pointer = value.pinned.registered.index_manifest
+        target = (
+            Path(value.catalog.settings.nas_artifact_root)
+            / pointer.artifact_id
+            / pointer.artifact_revision_id
+            / pointer.member_path
+        )
+        assert target.is_relative_to(value.pinned.root)
+        payload = target.read_bytes()
+        target.write_bytes(b"[" + payload[1:])  # Same size; only the local member bytes differ.
+    value.pinned.rows = {
+        (
+            value.pinned.registered.index_id,
+            value.pinned.registered.index_revision_id,
+        ): value.pinned.registered
+    }
+
+    reply = value.app.prepare(request)
+
+    validate_reference_query_prepare_reply(request, reply)
+    assert reply.status == "FAILED" and reply.error_code == code
+    assert reply.workflow_id is None and reply.selection is None
+    assert canonical_json_bytes(value.source.request) == original
+    assert value.catalog.configuration is value.original_configuration
+    assert value.catalog.configuration.namespace.population_scope == "ALL_ADMITTED_GRAPH_ITEMS"
+    assert len(value.admitted) == 1 and value.publication_reads == [] and value.offers == []
+    value.initial_context.assert_not_called()
+    EmbeddingRegistryRepository.current_namespace_revision.assert_not_called()
+    value.executor.execute.assert_not_called()
+    value.executor.allocate_execution.assert_not_called()
 
 
 def test_untrusted_extras_fail_before_admission(application):

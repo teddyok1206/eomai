@@ -1239,3 +1239,37 @@ The prior genuine login succeeded but its failed procedure closed the memory-onl
 session; that closed session is not reused or impersonated. Full C1–C5 delivery,
 six-run finalization, conditional device decisions and genuine post-seed arrival
 remain unverified. Installation success is not actual latency or overall goal PASS.
+
+## Actual C1 reads pass; original preparation replay stops — 2026-10-19 09:15 UTC
+
+The distinct finite unit `eom-system-rag-goal-ee97239d-881584aa.service`, invocation
+`a5b834aeec9747d388b7ae3346e08516`, used genuine current-operator authentication.
+Login validated at09:10:19.979915 UTC and current operator at09:10:19.985618.
+No token was persisted. Both original completed C1 context reads passed; the second
+finished at09:11:22.897360 with identical context SHA
+`sha256:8594b59e8845b352001e18e8f73e982245e8c8122ee181d8e7472e36e181fb1d`
+and eight candidates. Original Workflow
+`workflow_a0833f96b5154c3da4c5e5961eb9a209` and all original keys/pins were retained.
+No new C1 preparation or key was created for those two reads. Their outer HTTP
+durations do not establish API-to-Catalog performance headroom or an SLO.
+
+At09:11:28.359846, the following original same-key preparation replay failed its
+unchanged reply-equality assertion: `ORIGINAL_REPLAY_CHANGED`. The QUERY journal
+for that interval records the closed diagnostic boundary `SIMILARITY`; the actual
+reply body was not retained and is not reconstructed as wire evidence. The finite
+invocation exited1 with MainPID0 and empty cgroup. Its memory-only session closed;
+it is not reusable and no fresh authentication/retry followed this discovery.
+Original six benchmark runs, C5 and new C2/C3/C4 submissions remain unstarted.
+
+After that exact invocation was terminal and no native/benchmark unit remained,
+the unchanged logical INDEX18 resumed normally: PID3627513, invocation
+`5462565409604222b11594999f84712f`, observed active/running at09:12:41. API READY
+passed at09:14:43. Local invocation evidence:
+`/tmp/eom-finite-881-invocation.7oDiHzvD`.
+
+The source diagnosis and pre-change regression concern only the completed
+preparation branch's operation-local historical index selection, documented in
+[the owner composition note](../architecture/REFERENCE_QUERY_OWNER_COMPOSITION.md#completed-preparation-replay-uses-its-original-index-scope--2026-10-19).
+The current shared reader's two actual successful reads remain PASS; the original
+PREP replay, C1–C5 goal and six-run finalization do not. No failed history, request
+namespace, authority, comparison or deadline is rewritten to obtain a PASS.

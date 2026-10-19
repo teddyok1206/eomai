@@ -31,13 +31,20 @@ logical Item
 - 승인 문항, HWPX build, RAG 학습 현황과 Codex slot 사용 상태 조회
 - 25문항 모의고사 생산 계획·실행·검토·퇴역을 불변 checkpoint와 영수증으로 관리
 
-## 증분 RAG 목표의 현재 상태 — 2026-10-19 04:54 UTC
+## 증분 RAG 목표의 현재 상태 — 2026-10-19 09:24 UTC
 
 운영 API·Catalog·출제/HWPX 실행기·일반 채팅에 최신 수정본 `881584aa`를 설치했고,
 실제 wheel·RECORD·provider를 확인했습니다. 별도 QUERY SDK는 `d81b9ba3`, INDEX와
 비교 검증 SDK는 `ee97239d`를 유지합니다. 새 검색 범위는 자동 인덱싱과 같은
 `ALL_ADMITTED_GRAPH_ITEMS`이며, 과거 요청은 원래 고정된 인덱스 Revision을 조회합니다.
 기존 요청·출처 권한·Graph/정책·CPU 환경·INDEX18 신원은 바꾸지 않았습니다.
+
+**09:11 UTC 실제 인증된 유사도 조회 두 번이 같은 결과·관련 문항8개로 통과했습니다.**
+이어진 기존 요청의 같은-key 재전송은 과거 검색 범위 선택 누락으로 중단됐고, 실패 기록과
+종료된 인증 세션을 보존했습니다. 원인을 기존 코드에서 재현한 뒤, 완료 응답을 만들 때도
+기존 pinned Catalog 선택 함수를 사용하도록 수정했습니다. 원래 요청·응답 동등성·권한·해시
+검사는 완화하지 않습니다. 이 수정의 소스 검증과 실제 QUERY SDK 반영·재전송 성공은 별도입니다.
+같은 INDEX18은 정상 재개했고, 여섯 CPU/GPU 비교와 후속 소비자 전달은 아직 실행 전입니다.
 
 앞선 실제 관리자 로그인은 성공했지만, 기존 유사도 결과의 내부 조회가 API의 30초
 통신 한도를 넘었습니다. 이 실패 이력은 보존합니다. 문항별 출처 메타데이터의 반복 DB
@@ -101,8 +108,8 @@ API→Catalog 제한30초와 오류 응답 형식을 잘못 표시한 검증 클
 확인했습니다. **04:51 UTC에 10개 서비스·API LIVE/READY를 복구하고 같은 INDEX18을 재개했고,
 04:52 UTC에는 QUERY READY도 확인했습니다.** 비교 검증용 비밀 없는 고정 입력은 별도 보호
 영역에 준비했지만 실행하지 않았습니다. 추가 인증창이나 자동 재시도는 만들지 않았습니다.
-이 배포·테스트와 실제 운영 조회 성공은 구분합니다. 전체 목표와 실제
-사용자 전달 검증은 미완료이며, 현재 로그인창은 없습니다.
+당시 배포·테스트와 이후09:11 UTC의 실제 조회 두 번 성공은 구분합니다. 전체 목표와
+같은-key 재전송·후속 사용자 전달 검증은 미완료이며, 현재 로그인창은 없습니다.
 [불변 검색 범위 호환 설계](docs/architecture/PINNED_EMBEDDING_NAMESPACE_READ_COMPATIBILITY.md),
 [이번 운영 반영과 남은 범위](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#independent-c5-reader-installed-and-services-recovered--2003-utc),
 [저장된 인덱스 정본 점검](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#committed-index-storage-snapshot--1728-utc),

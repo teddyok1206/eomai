@@ -161,7 +161,10 @@ class NativeReferenceQueryPreparation:
                 error_code: ReferenceQueryPrepareErrorCode | None = None
                 status: Literal["READY", "FAILED", "PENDING"]
                 if workflow.state == "COMPLETED":
-                    prepared = self.owner.catalog.prepare_reference_query_anchor_in_session(
+                    catalog = self.owner.catalog.for_pinned_similarity_request_in_session(
+                        session, caller, original.context_request
+                    )
+                    prepared = catalog.prepare_reference_query_anchor_in_session(
                         session, caller, original.context_request
                     )
                     CatalogCompletedReferenceQueryRead(

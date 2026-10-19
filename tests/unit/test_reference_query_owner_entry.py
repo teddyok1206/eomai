@@ -188,6 +188,8 @@ def test_signal_capability_is_not_added_to_native_units_or_index_owner():
     assert {path.name for path in native} == {
         "eom-embedding-native-cpu-index@.service",
         "eom-embedding-native-index-prepare@.service",
+        "eom-embedding-native-cuda-index@.service",
+        "eom-embedding-native-cuda-index-owner@.service",
         "eom-embedding-native-cuda-probe@.service",
         "eom-embedding-native-cpu-probe@.service",
         "eom-embedding-native-query-prepare@.service",

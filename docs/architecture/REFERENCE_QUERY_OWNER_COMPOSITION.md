@@ -881,3 +881,72 @@ database/auth/model mutation was used. At02:45 UTC the production API returned
 READY and all9 related services were active. This health/package proof is not a
 genuine QUERY/seed or automatic-consumer acceptance. Documentation child and
 inspected code candidate remain distinct.
+
+## Completed preparation replay uses its original index scope — 2026-10-19
+
+The authenticated C1 completed-context read succeeded twice with the same context
+hash and eight candidates on shared API/Catalog source `881584aa`. The subsequent
+same-key preparation replay stopped at `ORIGINAL_REPLAY_CHANGED`; the unchanged
+QUERY SDK journal recorded `REFERENCE_QUERY_PREPARATION_REJECTED boundary=SIMILARITY`.
+The failed finite invocation and its closed memory-only session remain historical
+evidence, not a successful replay or six-run benchmark.
+
+The preparation use case already selects the pinned historical Catalog when it
+resolves an existing Workflow. Its later `COMPLETED` reply branch nevertheless
+prepares the anchor through the current deployment Catalog directly. After an
+OCCURRENCE_BACKED_PAST_EXAM → ALL_ADMITTED_GRAPH_ITEMS deployment transition,
+that second step can reject a valid original index namespace. Completed source
+resolution already has the supported operation-local selection boundary.
+
+The bounded correction is to reuse that boundary before preparing the completed
+anchor, not to alter the old request or broaden the current deployment:
+
+1. The preparation application owns reply assembly; Catalog owns pinned index
+   selection and validation. No worker, transport or protocol responsibility moves.
+2. Canonical inputs remain the stored original Workflow request and its exact
+   registered index/Artifact revisions, schema, source/policy and content hashes.
+3. Logical Workflow/operation identity, original idempotency key and request
+   hashes remain separate and unchanged. No new Workflow or numerical work is
+   created for completed replay.
+4. Use `for_pinned_similarity_request_in_session` and then the returned Catalog's
+   existing anchor preparation. Existence, exact namespace compatibility,
+   permission, lifecycle, physical bytes and hashes still fail closed; current
+   owner authority and completed-reader fences remain required.
+5. Access is indexed exact-revision lookup plus bounded ordered view validation.
+   Existing typed tuples/maps and indexes suffice; no scan of mutable heads,
+   cache, new DB state, migration, dependency or schema is needed. Work is
+   O(selected views + their existing validated input bytes), with no corpus copy.
+6. Both calls remain in the existing application-owned read transaction. The
+   selected Catalog is operation-local; the installed current owner is not mutated.
+   Domain/contracts still do not depend on infrastructure.
+7. Original same-key replay must retain the exact READY reply or return the
+   existing stable denial/corruption result. No automatic new key, success repair,
+   history rewrite, timeout extension or relaxed comparison is allowed.
+8. The simpler direct-current-Catalog call is insufficient because deployment
+   namespace is not an immutable HTTP replay field. Copying its compatibility
+   logic into the application would duplicate an existing authoritative rule.
+
+Reproduce the namespace mismatch before changing behavior. Regression coverage
+must exercise physical pinned manifests and typed registered namespaces, preserve
+all original reply pointers, reject foreign/mixed namespaces, permission denial
+and hash corruption, and prove no mutable-head discovery or native dispatch.
+Source/test PASS, a supported QUERY SDK successor installation, and an actual
+same-key authenticated replay are separate gates. Shared API/Catalog, INDEX and
+benchmark SDKs need not be redeployed for a QUERY-only application change if the
+existing release compatibility checks support that combination.
+
+The regression failed before the fix with `INDEX_POINTER_INVALID` and the same
+closed `SIMILARITY` log boundary as the actual replay. It now passes against real
+temporary index/shard/vector bytes and typed registered OCC metadata; original
+Workflow admission, QUERY publication, IAM and SQL remain explicit synthetic
+seams. The full application suite is26 PASS, including five current/historical
+permission, namespace and hash-corruption negatives. Related replay/contract/
+transport suites passed139 cases. The broader owner/source group initially had
+253 PASS and one outdated unit-inventory assertion: the two already-released CUDA
+INDEX templates were missing from its expected set. Adding those templates keeps
+the CAP_KILL prohibition applied to all native units; the final affected owner/
+application run passed56 cases. Repeated cases are not added to a total. Core
+strict typing, Ruff/format for the three changed Python files and independent
+review pass. No protocol, storage or concurrency behavior changed, so no DB test
+or new migration is introduced for this correction. Actual SDK activation and
+authenticated replay remain separate, pending gates.
