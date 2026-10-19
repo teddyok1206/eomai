@@ -31,9 +31,9 @@ logical Item
 - 승인 문항, HWPX build, RAG 학습 현황과 Codex slot 사용 상태 조회
 - 25문항 모의고사 생산 계획·실행·검토·퇴역을 불변 checkpoint와 영수증으로 관리
 
-## 증분 RAG 목표의 현재 상태 — 2026-10-19 00:19 UTC
+## 증분 RAG 목표의 현재 상태 — 2026-10-19 00:45 UTC
 
-운영 API·Catalog·출제/HWPX 실행기·일반 채팅에 `a43fd918`을 설치했고,
+운영 API·Catalog·출제/HWPX 실행기·일반 채팅에 `869de157`을 설치했고,
 실제 wheel·RECORD·provider를 확인했습니다. 별도 QUERY SDK는 `d81b9ba3`, INDEX와
 비교 검증 SDK는 `ee97239d`를 유지합니다. 새 검색 범위는 자동 인덱싱과 같은
 `ALL_ADMITTED_GRAPH_ITEMS`이며, 과거 요청은 원래 고정된 인덱스 Revision을 조회합니다.
@@ -85,15 +85,19 @@ INDEX18 자동 인덱싱을 정상 재개했고 관련 10개 서비스·API LIVE
 성공했습니다.** 다만 첫 C1 조회가32초 뒤 실패했고, Catalog는 같은 조회를 약34초에 마쳤습니다.
 API→Catalog 제한30초와 오류 응답 형식을 잘못 표시한 검증 클라이언트를 구분해 확인했습니다.
 같은 인덱스를 최대30번 해석하는 구간은 기존 요청 단위 디코딩 캐시를 재사용하도록 수정했고,
-회귀260개·추가 관련173개와 타입·스타일·독립 검토를 통과했습니다. **아직 운영 미반영**이며,
+회귀260개·추가 관련173개와 타입·스타일·독립 검토를 통과했습니다. **00:45 UTC 운영 반영·
+관련 10개 서비스 정상 복구·API LIVE/READY 확인을 마쳤습니다.** 실제 설치된 adapter의 SHA도
+저장소 수정본과 일치합니다. 인덱스·출처 정책·CPU 기본값·별도 SDK는 유지했고,
 권한·해시·최종 출처 검사는 유지하고 제한 시간을 늘려 덮지 않습니다.
 실제 여섯 비교·후속 문항/채팅 제출은 시작되지 않았습니다. 실패 기록을 보존하고 같은 INDEX18을
-재개했으며00:19 UTC API LIVE/READY를 확인했습니다. 전체 목표는 미완료이고, 현재 로그인창은 없습니다.
+재개했습니다. 전체 목표와 수정 후 실제 사용자 조회 검증은 미완료이며, 현재 로그인창은 없습니다.
 [불변 검색 범위 호환 설계](docs/architecture/PINNED_EMBEDDING_NAMESPACE_READ_COMPATIBILITY.md),
 [이번 운영 반영과 남은 범위](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#independent-c5-reader-installed-and-services-recovered--2003-utc),
 [저장된 인덱스 정본 점검](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#committed-index-storage-snapshot--1728-utc),
 [인증 후 조회 시간 초과와 정상 인덱싱 재개](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#authenticated-c1-read-deadline-and-index-resumption--1548-utc)를 참고하세요.
 [최근 실제 인증·첫 조회 실패 기록](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#genuine-authentication-followed-by-first-read-failure--2026-10-19)도 별도로 보존합니다.
+[최소 수정의 실제 호환 배포](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#immutable-index-decoder-reuse-installed--2026-10-19-0045-utc)는
+인증 후 조회 성공이나 여섯 회 실측을 대신하지 않습니다.
 아래 누적 릴리스 기록은 각 기록 시점의 검증 범위입니다.
 
 ## 현재 저장소 릴리스 선

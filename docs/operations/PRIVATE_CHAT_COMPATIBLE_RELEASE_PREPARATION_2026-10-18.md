@@ -1098,3 +1098,45 @@ logical index validations from one physical hash and retain four unique physical
 member reads. Synthetic ten-read parsing improved10→1 in a tiny fixture only;
 operating HTTP latency is still unverified. No timeout, schema, dependency, source
 permission or database state changed. Installation remains a separate next step.
+
+## Immutable index decoder reuse installed — 2026-10-19 00:45 UTC
+
+The normal same-pane release installed source `869de1574041992fbc811be1c879bebf0ee9747f`.
+Actual stage/admission/composition, normal QUERY/INDEX drain, supported DB57
+CHECK/STOP and source-only Catalog CAS passed. No forced child signal, migration,
+row repair, new scope or timeout change occurred. The official install completed
+with exit0 and known outcome; isolation verification passed. Its actual delivery
+is `869de1574041992fbc811be1c879bebf0ee9747f.VrD4wr`, not the earlier build-only delivery.
+
+Actual installed wheel hashes: API `15b5ac3f0b873a064447a719b6912426481e654f808af639d63a26da557e8099`,
+Platform `54bddac73ba956dcfe94e5199b1082a4f4af748db657a77017e7fc7875a9c5a0`,
+Contracts `fbed41119f1bdb661fa0942733572fc92f68dfd17996d10edc735e1886b4752c`.
+The installed adapter raw SHA `c17bf22dfa91f65ebed79f982aa4771f7a69fcf6d4a7897cc0c2795f629ae557`
+equals the repository source. File-only provider observation independently verified
+the deployment, wheel receipts, RECORD and12 code members; it grants no user authority.
+
+The existing stopped-file CAS re-bound only three QUERY provider configuration
+files to that actual API delivery. QUERY SDK `d81b9ba3`, INDEX/benchmark SDK
+`ee97239d`, existing scopes/policies/readers, CPU default and logical INDEX18 remain
+unchanged. Official Chat activation retained READ_ONLY/NATIVE_TOPIC and its actual
+model/CLI selection; no model submission or auth copying occurred. At00:45 UTC all
+ten services were active/running/success with no daemon reload pending, and versioned
+API LIVE/READY passed. One initial unversioned health probe returned404 and was
+corrected to the existing `/api/v1/health/*` routes; no runtime change followed it.
+Actual QUERY PID3251589/invocation `ef05cb03ac17467aa9b810f78860d7b6`,
+INDEX PID3251592/invocation `ad0d43d597a34f478085da852c484eff`.
+
+Local release evidence is under `/tmp/eom-index-interpretation-release.7A5H4NhU`;
+`installation-result.json` raw SHA `78058852bb70e788c92c6f2cd555dfc245981c259075d02fcd0e4cd4059338b1`.
+Actual public provider metadata is under `/tmp/eom-provider869-observer.he2O32bc`,
+raw SHA `5f0cc040e443583b271fedc0e7d269c4d13e786965b661d6d9f1de74bd4c88ee`.
+`final-runtime-observation.json` records restoration separately from acceptance.
+
+Authentication-dependent C1–C5 delivery and original six CPU/CUDA runs are still
+unverified; this release executed no model/GPU/item/exam work. A local diagnostic
+successor accepts supported `application/problem+json` only for4xx/5xx errors so
+the next attempt can report the real safe status/code; success typing, auth freshness,
+timeouts, keys, selection and retry policy remain unchanged. Its14 mock tests and
+strict/style gates passed. The prior failed invocation and closed session stay
+preserved. No fresh getpass has been opened at this checkpoint; services must not
+be left drained awaiting an unanswered login.
