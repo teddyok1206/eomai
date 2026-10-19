@@ -1273,3 +1273,63 @@ preparation branch's operation-local historical index selection, documented in
 The current shared reader's two actual successful reads remain PASS; the original
 PREP replay, C1–C5 goal and six-run finalization do not. No failed history, request
 namespace, authority, comparison or deadline is rewritten to obtain a PASS.
+
+## QUERY-only historical replay correction activated — 2026-10-19 09:35 UTC
+
+Source `052223d32affe05e13a66c2652b15d8ee52a2178`, tree
+`f2dba200b75edcd0811393eefa190d58425befb3`, selects the already-supported pinned
+Catalog before completed preparation anchor resolution. The original code failed
+the regression with `INDEX_POINTER_INVALID`/`SIMILARITY`; the corrected app26,
+related139 and final affected owner/app56 tests pass without adding repeated cases
+to a total. The broader owner group initially reported253 PASS and one obsolete
+template inventory expectation; the two already-released CUDA INDEX templates
+were added while retaining the CAP_KILL prohibition for all native templates.
+Core strict typing, three-file Ruff/format and independent review pass.
+
+Official build-only produced and inspected
+`/tmp/eom-api-build/052223d32affe05e13a66c2652b15d8ee52a2178.HbzMzV/dist`.
+The existing owner installer staged only the immutable QUERY SDK, with platform
+wheel SHA `5c19892569a236aa1feda003aeec26fd668ba9a55c2c1415ff9bae8dd381b801`
+and contracts SHA `d232be251def7ede454fe0b88646bfdf8746ab0f65a80d76b36e06e787077823`.
+Actual changed module SHA
+`3815ba59566d68b4d690ca6e7c98c18eb1605f91a1e14c8d9987fb0febbe2203`
+matches source; isolated installed imports pass. Shared API/Catalog881 and
+INDEX/benchmarkee were not reinstalled.
+
+The previous QUERY invocation `bee3abcaf46a467d8ce4d26f09bd25fa` received one
+main-only SIGTERM and exited0 with PID0/empty cgroup. A reviewed26-test, independent
+three-file selector changed only reference `owner_source_commit`, the private
+reference-configuration derived hash, and QUERY unit entry/configuration hashes.
+All other nine services retained active state, PID, invocation and cgroup. Native
+historical active/exited units with PID0/empty cgroup were preserved, not reset.
+No namespace, policy, source, CPU/native environment, old request or DB row changed.
+No model or authenticated HTTP operation ran during this selection.
+
+Protected selector raw SHA
+`d254e5db15c5bc6144f9fcfff8a39db49c2545fe2f172e0eaa1d9971a5741a39`,
+PREPARE/SELECT manifest SHA
+`a9dc63977fa0b87c12dae41556ed8b76bf35eb505e2594076f77bcfe0ebfdce3`.
+Root-only stage `/var/lib/eom-query-sdk-selection.052223d3` retains original bytes,
+successors, epochs, exclusive selection intent and result. A reviewed inverse CAS
+can select the retained d81 predecessor; rollback was not executed automatically.
+Selected public/private/unit raw SHAs respectively:
+
+- `17decbcbf04cb122c88ce2de4098343e7840a7a8f0369230b44f5a10a7b56354`;
+- `3c3fc319a4a71590b750522ffbf728c8a2463948e748887410cafffd873cf68b`;
+- `eaa696953dbffa6e6545dd1b397bfac8bd721d1280d4a1e8fdfeb187228dbeb5`.
+
+Parent daemon-reload and one QUERY start followed known successful selection.
+At09:34:23.153886 UTC the actual unit emitted READY; reference/private UNIX sockets
+were listening. QUERY PID3646398/invocation `6b6bfbecb88744cc8186fc71ee754b58`.
+API PID3463690/invocation `23aa547ff5d14a51b746c96e28758bb2` and INDEX PID3627513/
+invocation `5462565409604222b11594999f84712f` were retained through QUERY selection.
+Local selector/evidence: `/tmp/eom-query-sdk-successor.8773dsOs`.
+
+A distinct finite namespace, not a retry of the consumed unit, was materialized
+under `/var/lib/eom-finite-goal-operator.ee97239d-881584aa-query052223d3` at09:34:39.
+Nine offline closure tests pass. The client, provider/benchmark pins, phase,
+tokenizer, C1 request/reply, C5 and original six allocation are unchanged; only the
+supervisor's protected stage path and dependent adapter hashes differ. At09:35:48
+the same INDEX18 received one main-only normal drain request for that procedure.
+No new login prompt or numerical/consumer submission has occurred. QUERY READY is
+not authenticated original replay, six-run finalization or full goal completion.

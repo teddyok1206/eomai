@@ -948,5 +948,8 @@ the CAP_KILL prohibition applied to all native units; the final affected owner/
 application run passed56 cases. Repeated cases are not added to a total. Core
 strict typing, Ruff/format for the three changed Python files and independent
 review pass. No protocol, storage or concurrency behavior changed, so no DB test
-or new migration is introduced for this correction. Actual SDK activation and
-authenticated replay remain separate, pending gates.
+or new migration is introduced for this correction. QUERY-only SDK source
+`052223d3` was subsequently installed and selected through the existing immutable
+owner installer and exact three-file CAS. QUERY READY was observed at09:34:23 UTC;
+the other nine service identities were retained. Authenticated original replay
+remains a separate pending gate, not implied by startup readiness.
