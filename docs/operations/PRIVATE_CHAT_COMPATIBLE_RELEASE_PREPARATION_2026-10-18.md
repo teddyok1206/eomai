@@ -1333,3 +1333,52 @@ supervisor's protected stage path and dependent adapter hashes differ. At09:35:4
 the same INDEX18 received one main-only normal drain request for that procedure.
 No new login prompt or numerical/consumer submission has occurred. QUERY READY is
 not authenticated original replay, six-run finalization or full goal completion.
+
+## Actual original replay passes; local hash-kind comparison stops — 2026-10-19 09:55 UTC
+
+Finite unit `eom-system-rag-goal-ee97239d-881584aa-query052223d3.service`, invocation
+`859e70bb889e408d855b3da37a07341f`, authenticated the genuine operator at09:47:14.
+The two original completed C1 reads passed at09:48:14.416473 with eight candidates
+and the same context SHA `8594b59e8845b352001e18e8f73e982245e8c8122ee181d8e7472e36e181fb1d`.
+At09:48:22.199816 `C1_ORIGINAL_REPLAY_PASS` confirmed exact original reply equality,
+original Workflow `workflow_a0833f96b5154c3da4c5e5961eb9a209` and zero new keys.
+This is actual acceptance of the QUERY052 completed replay correction, not just
+source tests, install verification or service readiness.
+
+Authenticated exact-source discovery then returned the same Graph revision
+`graphrev_c0e78b4e4ce6588de3d3b6c6f25fb3d9` with semantic snapshot SHA
+`sha256:da76258a650dcb66c3303f579ec1502215bda6cb75f05808414809d7076bf645`.
+The fixed plan builder incorrectly compared that value to the different projection
+manifest SHA `sha256:5bbf1dd9590c6a1afaad9a524f20f154149515dc0652c06338763a722ee0a710`.
+It stopped at09:48:22.509557 with `PLAN_DISCOVERED_GRAPH_OR_POLICY_CHANGED`.
+This is a local verification-adapter hash-kind defect, not actual Graph drift or
+a server/policy failure. Existing Catalog publication stores these two hashes
+separately; ItemBank and Chat discovery publish the semantic snapshot hash. Earlier
+accepted inventory documents already record the same revision/semantic hash.
+
+The finite unit exited1, MainPID0/empty cgroup. Its memory-only session closed.
+C5, all original six numerical runs and new C2/C3/C4 submissions remain zero.
+After exact terminal/native quiescence, the same INDEX18 resumed normally with
+PID3656681/invocation `b45bbd04f0d64e7285d3e554a3f34a8d`, observed active at09:51:13.
+The original failure, consumed files and closed session remain immutable; no new
+login or automatic retry was requested during diagnosis.
+
+Local evidence: `/tmp/eom-finite-881-query052-successor.lEU3j6GL/terminal-and-restoration.json`.
+The bounded correction uses the existing typed Chat Graph snapshot reference for
+the exact semantic hash separately from the unchanged full Graph manifest pin.
+It requires a pre-change RED and distinct-hash positive/tamper-negative plan tests.
+It changes no wire schema, server, Graph, policy, original key, source, C5 selector
+or original six allocation, and must not remove any current-authority fence.
+
+Local correction `/tmp/eom-finite-discovery-hash-fix.nPIPaBrb` reproduced that exact
+failure before the patch, then passed14 pure DTO tests. The successor client raw
+SHA is `c739c976fac5be086b47a037b0936e9a4a1de4552c4e2d086d8dd3bd7fe8fc5d`.
+It adds only the existing `ChatGraphSnapshot` typed semantic pin and compares
+bank revision/semantic SHA to that pin. The full C1/C5 manifest pointer, policy,
+source, outline, limits, keys and six allocation remain unchanged. Distinct valid
+hashes pass; semantic, swapped-kind, revision, manifest, policy and bank/card/source
+mismatches fail closed. Fixture errors and behavioral RED are separate XML records.
+Ruff/format/compile pass. Independent review of the remaining client DTO/envelope/
+hash use found no other concrete mismatch; actual future service state is not
+claimed from that source-only review. A distinct successor's preparation is not
+a retry of the failed consumed process and does not recover its closed session.
