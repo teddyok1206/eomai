@@ -1181,3 +1181,61 @@ It adds no cache, source authority, schema, dependency or timeout. CIFS is the
 mounted storage; two userspace streams are not proof of two network transfers.
 The design is in the implementation-boundary document. Source verification and
 any later installation/actual user delivery must be recorded independently.
+
+## Single-stream reader installed — 2026-10-19 04:54 UTC
+
+Source `881584aa8533507e00e0ec4a231284658858e549`, tree
+`19f95612c117209cf96971e465e396ba59aea8b1`, passed349 disjoint tests across14
+suites, core strict typing, seven changed Python files' Ruff/format and independent
+review. The existing physical member reader now validates one bounded stream's
+payload SHA/size and full before/after/final-path stat identity, excluding atime.
+No schema, dependency, migration, timeout, source authority or cache was added.
+
+The original supported release sequence staged/admitted the candidate, checked
+composition and preserved the actual869 predecessor wheels. QUERY and INDEX each
+received one main-only SIGTERM at04:35:53. QUERY exited first. INDEX's synchronous
+current command continued full-index verification and was observed terminal with
+exit0, empty cgroup and unchanged invocation at04:47:32. No second/forced signal,
+claim repair or cancellation was used. A900s heartbeated lease is not a wall drain
+deadline; the main-only signal does not initiate systemd's stop timeout.
+
+Supported DB57 CHECK/STOP, source-only Catalog file CAS, official install and
+isolation passed. The original installer exited0 with known outcome. Actual
+installed delivery is `881584aa8533507e00e0ec4a231284658858e549.ZxQTar`, not the
+build-only `.TatfQx` directory. Actual wheel hashes:
+
+- API `e8fb6aa8114cad1505f0ec5843f954f66f59d3ed32f3866a1ad429c6bae3b52e`;
+- Platform `3ee953a1aeaf57727dec1ec47689e47031cde2075f74ef3c33aabc44cfb6ecac`;
+- Contracts `af3668c82be0a37530e1fdac05ae0802c9633b3c8fb62057c28fb74d8368b299`.
+
+Installed reader raw SHA
+`d1ea9f28f7f22cc0ee91ef39a2e1a306b92074a2b687f7d9278110089a0551fe`
+matches source. The actual provider observer verified installed wheel/RECORD,
+deployment and12 API code members without reading auth or conferring authority.
+Postinstall five-service restop preceded that file-only observation, then the
+existing three-file QUERY CAS selected the actual provider. Official Chat activation
+returned READY with READ_ONLY/NATIVE_TOPIC and the same native model/CLI selection.
+One startup `GENERAL_CHAT_WORKER_NOT_READY` event is retained; activation/service
+state does not substitute for an authenticated conversational turn acceptance.
+
+At04:51:57 all ten services were active/running/success with no pending daemon
+reload; versioned API LIVE/READY passed. At04:52:09 the original QUERY SDK emitted
+READY. The same logical INDEX18 resumed: PID3463677/invocation
+`8135cc101ecb4c08bc160f9ba00ad4ee`. QUERY PID3463691/invocation
+`bee3abcaf46a467d8ce4d26f09bd25fa`. CPU, DB57, existing independent C5 reader,
+source policies, original request keys and separate SDKs remain unchanged.
+
+Local evidence: `/tmp/eom-onepass-release.LX3CNCB7`, installation result raw SHA
+`eb7e3fdb3c3b4b89a8495c6f587dc779557ad343451b8f41d8561727b6950891`;
+provider `/tmp/eom-provider881-observer.y3QiXloC`, metadata raw SHA
+`7ce45adc9f0658e9fb3c99041719cf183602f1b2d6d58449607562165594d2ff`.
+`final-runtime-observation.json` separates release/restoration from user acceptance.
+
+The successor finite inputs were pinned/materialized, not executed, under
+`/var/lib/eom-finite-goal-operator.ee97239d-881584aa`; the outer launcher remains
+DRAFT. Original six selection/C1 request/reply/C5 ordered25 are unchanged. No
+fresh login prompt, HTTP retry, benchmark, item or exam submission was made.
+The prior genuine login succeeded but its failed procedure closed the memory-only
+session; that closed session is not reused or impersonated. Full C1–C5 delivery,
+six-run finalization, conditional device decisions and genuine post-seed arrival
+remain unverified. Installation success is not actual latency or overall goal PASS.
