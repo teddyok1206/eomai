@@ -24,7 +24,6 @@ from eom_catalog_contracts.inference_transfer_embedding import (
 from eom_catalog_contracts.similarity_context import SimilarityIndexPin, SimilarityViewSelection
 from eom_catalog_service import embedding_registry_catalog_adapter as owner_module
 from eom_catalog_service import inference_transfer_catalog_adapter as source_module
-from eom_catalog_service import pinned_artifact_resolution as artifact_module
 from eom_catalog_service.embedding_incremental_plan import RegisteredEmbeddingRow
 from eom_catalog_service.embedding_registry_application import (
     validate_resolved_embedding_registration,
@@ -94,7 +93,7 @@ from tests.unit.inference_transfer_embedding_fixtures import (
     source_binding,
 )
 from tests.unit.test_inference_transfer_snapshot_catalog_adapter import owner_input
-from tests.unit.test_pinned_artifact_read_context import MetadataSession
+from tests.unit.test_pinned_artifact_read_context import MetadataSession, member_stream_counts
 
 
 class OwnerSession(MetadataSession):
@@ -1194,8 +1193,13 @@ def test_pinned_read_uses_read_scope_without_publish_and_one_read_per_unique_mem
         return read(reader, **arguments)
 
     monkeypatch.setattr(PinnedArtifactReadContext, "read_pinned", counted)
-    physical_hash = Mock(wraps=artifact_module.sha256_file)
-    monkeypatch.setattr(artifact_module, "sha256_file", physical_hash)
+    member_sizes = {
+        Path(record.nas_path) / member["file_name"]: member["bytes"]
+        for record in session.records.values()
+        if isinstance(record, ArtifactRevisionRecord)
+        for member in record.manifest["files"]
+    }
+    streams = member_stream_counts(monkeypatch, set(member_sizes))
     result = verifier.resolve_pinned_read(
         cast(Session, session), EmbeddingRegistryCaller("operator_" + "1" * 32), intent, registered
     )
@@ -1218,8 +1222,12 @@ def test_pinned_read_uses_read_scope_without_publish_and_one_read_per_unique_mem
     # those two logical reads still share one immutable physical materialization.
     assert len(counts) == 4 and counts[index_key] == 2
     assert {count for key, count in counts.items() if key != index_key} == {1}
-    assert physical_hash.call_count == 4
-    assert len({str(call.args[0]) for call in physical_hash.call_args_list}) == 4
+    assert len(streams.opened) == 4 and set(streams.opened.values()) == {1}
+    assert streams.closed == streams.opened and not streams.active
+    assert streams.payload_bytes == {path: member_sizes[path] for path in streams.opened}
+    assert all(
+        streams.read_calls[path] == streams.payload_chunks[path] + 1 for path in streams.opened
+    )
     assert not hasattr(result, "index") and not hasattr(result, "entries")
     assert not hasattr(result, "binding_count") and not hasattr(result, "binding_set_sha256")
 
@@ -1416,8 +1424,13 @@ def test_shared_shard_is_materialized_once_and_unadmitted_binding_is_not_disclos
         return read(reader, **arguments)
 
     monkeypatch.setattr(PinnedArtifactReadContext, "read_pinned", counted)
-    physical_hash = Mock(wraps=artifact_module.sha256_file)
-    monkeypatch.setattr(artifact_module, "sha256_file", physical_hash)
+    member_sizes = {
+        Path(record.nas_path) / member["file_name"]: member["bytes"]
+        for record in session.records.values()
+        if isinstance(record, ArtifactRevisionRecord)
+        for member in record.manifest["files"]
+    }
+    streams = member_stream_counts(monkeypatch, set(member_sizes))
     intent, registered = _read_selection(command, updated)
     result = verifier.resolve_pinned_read(
         cast(Session, session), EmbeddingRegistryCaller("operator_" + "1" * 32), intent, registered
@@ -1429,8 +1442,12 @@ def test_shared_shard_is_materialized_once_and_unadmitted_binding_is_not_disclos
     )
     assert len(result.numerical_rows) == 1
     assert counts == {"index.json": 2, "shard.json": 1, "result.json": 1, "vectors.f32": 1}
-    assert physical_hash.call_count == 4
-    assert len({str(call.args[0]) for call in physical_hash.call_args_list}) == 4
+    assert len(streams.opened) == 4 and set(streams.opened.values()) == {1}
+    assert streams.closed == streams.opened and not streams.active
+    assert streams.payload_bytes == {path: member_sizes[path] for path in streams.opened}
+    assert all(
+        streams.read_calls[path] == streams.payload_chunks[path] + 1 for path in streams.opened
+    )
     if not admit_second:
         assert result.bindings == (first_binding,)
         assert all(

@@ -25,7 +25,7 @@ from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 
 from tests.unit.test_embedding_registry_catalog_adapter import owner as owner
 from tests.unit.test_inference_transfer_candidate_admission import admission_scope
-from tests.unit.test_pinned_artifact_read_context import MetadataSession
+from tests.unit.test_pinned_artifact_read_context import MetadataSession, member_stream_counts
 from tests.unit.test_pinned_artifact_resolution import _fixture
 from tests.unit.test_similarity_context_service import CALLER, case
 
@@ -374,13 +374,14 @@ def test_real_catalog_reuses_one_reader_but_retains_four_fresh_population_captur
     reader = PinnedArtifactReadContext(session, verifier.settings)
     original = verifier.sources.capture_in_session.side_effect
     phase_count = Counter()
-    readers, hashes = [], []
-    original_hash = pinned.sha256_file
+    readers = []
     pointer = command.index_manifest
-
-    def count_hash(path):
-        hashes.append(path)
-        return original_hash(path)
+    member = (
+        Path(session.records[(ArtifactRevisionRecord, pointer.artifact_revision_id)].nas_path)
+        / pointer.member_path
+    )
+    expected_bytes = member.stat().st_size
+    streams = member_stream_counts(monkeypatch, {member})
 
     def capture(actual_session, actual_command, recipe, **options):
         # Actual authority is intentionally synthetic here, but is called each time.
@@ -421,7 +422,6 @@ def test_real_catalog_reuses_one_reader_but_retains_four_fresh_population_captur
         owner.authorize_scope(actual_session, caller, intent.scope)
         return ResolvedPinnedEmbeddingIndex(intent, (), (), (), ())
 
-    monkeypatch.setattr(pinned, "sha256_file", count_hash)
     monkeypatch.setattr(verifier.sources, "capture_in_session", capture)
     monkeypatch.setattr(module, "read_pinned_embedding_index", index_read)
     prepared = verifier.prepare_similarity_context_in_session(
@@ -444,10 +444,9 @@ def test_real_catalog_reuses_one_reader_but_retains_four_fresh_population_captur
         )
     assert phase_count == {"CAPTURE_POPULATION": 4, "AUTHORIZE_SCOPE": 9}
     assert all(value is reader for value in readers)
-    assert hashes == [
-        Path(session.records[(ArtifactRevisionRecord, pointer.artifact_revision_id)].nas_path)
-        / pointer.member_path
-    ]
+    assert streams.opened == streams.closed == streams.payload_chunks == {member: 1}
+    assert streams.payload_bytes == {member: expected_bytes}
+    assert streams.read_calls == {member: 2} and not streams.active
 
 
 def test_completed_catalog_window_preserves_four_fences_nine_authorizations_and_one_capture(
@@ -559,16 +558,17 @@ def test_520_member_four_phase_benchmark_reuses_bytes_not_current_authority(tmp_
         }
     )
     revision.manifest_hash = content_sha256(revision.manifest)
-    hash_calls = []
-    actual_hash = pinned.sha256_file
-    monkeypatch.setattr(
-        pinned, "sha256_file", lambda path: (hash_calls.append(path), actual_hash(path))[1]
+    streams = member_stream_counts(
+        monkeypatch, {root / descriptor["file_name"] for descriptor in descriptors}
     )
+    expected_bytes = sum(descriptor["bytes"] for descriptor in descriptors)
     results = {}
     for reuse in (False, True):
         session = MetadataSession(*original.records.values())
         shared = PinnedArtifactReadContext(session, settings) if reuse else None
-        start, before = perf_counter(), len(hash_calls)
+        start, before = perf_counter(), sum(streams.opened.values())
+        before_bytes = sum(streams.payload_bytes.values())
+        before_reads = sum(streams.read_calls.values())
         totals = []
         for _phase in range(4):
             context = shared or PinnedArtifactReadContext(session, settings)
@@ -588,13 +588,20 @@ def test_520_member_four_phase_benchmark_reuses_bytes_not_current_authority(tmp_
                 )
             totals.append(total)
         results["shared" if reuse else "independent"] = {
-            "physical_reads": len(hash_calls) - before,
+            "physical_reads": sum(streams.opened.values()) - before,
+            "payload_bytes": sum(streams.payload_bytes.values()) - before_bytes,
+            "fd_read_calls": sum(streams.read_calls.values()) - before_reads,
             "metadata_queries": len(session.statements),
             "elapsed_ms": round((perf_counter() - start) * 1000),
         }
         assert len(set(totals)) == 1 and totals[0] > 2 * 1024 * 1024
     assert results["independent"]["physical_reads"] == 2080
     assert results["shared"]["physical_reads"] == 520
+    assert results["independent"]["payload_bytes"] == 4 * expected_bytes
+    assert results["shared"]["payload_bytes"] == expected_bytes
+    assert results["independent"]["fd_read_calls"] == 2 * 2080
+    assert results["shared"]["fd_read_calls"] == 2 * 520
+    assert streams.closed == streams.opened and not streams.active
     assert results["independent"]["metadata_queries"] == 12
     assert results["shared"]["metadata_queries"] == 3
     # No wall-time assertion: filesystem warmth/scheduling must not make correctness flaky.

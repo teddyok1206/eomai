@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import errno
+import os
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TypeVar
 
 import pytest
+from eom_catalog_service import pinned_artifact_resolution as artifact_module
 from eom_catalog_service.pinned_artifact_resolution import (
     PinnedArtifactResolutionError,
     resolve_pinned_artifact_member,
@@ -331,3 +335,236 @@ def test_historical_item_manifest_compatibility_is_narrow(tmp_path: Path) -> Non
         historical_metadata_compatibility=True,
     )
     assert resolved.artifact_type == "item-revision-manifest"
+
+
+def _member_target(session: _Session, arguments: dict[str, object]) -> Path:
+    revision = session.get(ArtifactRevisionRecord, str(arguments["artifact_revision_id"]))
+    assert revision is not None
+    return Path(revision.nas_path) / str(arguments["member_path"])
+
+
+def _observe_member_io(monkeypatch: pytest.MonkeyPatch, target: Path):
+    opened: list[int] = []
+    chunks: list[bytes] = []
+    closed: list[int] = []
+    original_open, original_read = os.open, os.read
+    original_close, original_fstat = os.close, os.fstat
+
+    def open_member(path, flags, *args, **kwargs):
+        if Path(path) == target:
+            assert flags & os.O_NOFOLLOW and flags & os.O_NONBLOCK
+        descriptor = original_open(path, flags, *args, **kwargs)
+        if Path(path) == target:
+            opened.append(descriptor)
+        return descriptor
+
+    def read_member(descriptor, size):
+        value = original_read(descriptor, size)
+        if descriptor in opened:
+            chunks.append(value)
+        return value
+
+    def close_member(descriptor):
+        original_close(descriptor)
+        if descriptor in opened:
+            closed.append(descriptor)
+
+    monkeypatch.setattr(artifact_module.os, "open", open_member)
+    monkeypatch.setattr(artifact_module.os, "read", read_member)
+    monkeypatch.setattr(artifact_module.os, "close", close_member)
+    return opened, chunks, closed, original_fstat
+
+
+def _assert_member_descriptors_closed(opened, closed, original_fstat) -> None:
+    assert closed == opened
+    for descriptor in opened:
+        with pytest.raises(OSError) as caught:
+            original_fstat(descriptor)
+        assert caught.value.errno == errno.EBADF
+
+
+def _changed_stat(value: os.stat_result, field: str) -> SimpleNamespace:
+    fields = {name: getattr(value, name) for name in dir(value) if name.startswith("st_")}
+    fields[field] += 1
+    return SimpleNamespace(**fields)
+
+
+def test_cold_member_consumes_one_bounded_descriptor_stream(tmp_path, monkeypatch):
+    payload = b"x" * (2 * 64 * 1024 + 19)
+    session, settings, arguments = _fixture(tmp_path, payload=payload)
+    arguments["max_bytes"] = len(payload)
+    target = _member_target(session, arguments)
+    opened, chunks, closed, original_fstat = _observe_member_io(monkeypatch, target)
+    original_path_open = Path.open
+
+    def no_second_path_stream(path, *args, **kwargs):
+        assert path != target, "the member must not have a separate preliminary hash stream"
+        return original_path_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", no_second_path_stream)
+    resolved = resolve_pinned_artifact_member(session, settings, **arguments)
+
+    assert resolved.payload == payload
+    assert len(opened) == 1
+    assert b"".join(chunks) == payload
+    assert sum(map(len, chunks)) == len(payload)
+    assert all(len(chunk) <= 64 * 1024 for chunk in chunks)
+    _assert_member_descriptors_closed(opened, closed, original_fstat)
+
+
+def test_same_size_physical_tamper_is_rejected_by_payload_hash(tmp_path, monkeypatch):
+    session, settings, arguments = _fixture(tmp_path)
+    target = _member_target(session, arguments)
+    original = target.read_bytes()
+    tampered = original.replace(b"1", b"2")
+    assert len(tampered) == len(original) and tampered != original
+    target.write_bytes(tampered)
+    opened, chunks, closed, original_fstat = _observe_member_io(monkeypatch, target)
+
+    with pytest.raises(PinnedArtifactResolutionError, match="changed while reading"):
+        resolve_pinned_artifact_member(session, settings, **arguments)
+
+    assert len(opened) == 1 and b"".join(chunks) == tampered
+    _assert_member_descriptors_closed(opened, closed, original_fstat)
+
+
+@pytest.mark.parametrize("replacement", ("inode", "symlink", "fifo"))
+def test_member_replacement_at_open_is_rejected_before_read(tmp_path, monkeypatch, replacement):
+    session, settings, arguments = _fixture(tmp_path)
+    target = _member_target(session, arguments)
+    substitute = target.with_name("replacement.json")
+    substitute.write_bytes(target.read_bytes())
+    opened, chunks, closed, original_fstat = _observe_member_io(monkeypatch, target)
+    observed_open = artifact_module.os.open
+    raced = False
+
+    def replace_before_open(path, flags, *args, **kwargs):
+        nonlocal raced
+        if Path(path) == target:
+            assert flags & os.O_NOFOLLOW and flags & os.O_NONBLOCK
+            assert not raced
+            raced = True
+            if replacement == "inode":
+                os.replace(substitute, target)
+            else:
+                target.unlink()
+                if replacement == "symlink":
+                    target.symlink_to(substitute)
+                else:
+                    os.mkfifo(target)
+        return observed_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(artifact_module.os, "open", replace_before_open)
+    with pytest.raises(PinnedArtifactResolutionError, match=r"materialization|changed"):
+        resolve_pinned_artifact_member(session, settings, **arguments)
+
+    assert raced and not chunks
+    assert len(opened) == (0 if replacement == "symlink" else 1)
+    _assert_member_descriptors_closed(opened, closed, original_fstat)
+
+
+@pytest.mark.parametrize(
+    "field",
+    (
+        "st_dev",
+        "st_ino",
+        "st_mode",
+        "st_nlink",
+        "st_uid",
+        "st_gid",
+        "st_size",
+        "st_mtime_ns",
+        "st_ctime_ns",
+    ),
+)
+def test_member_full_epoch_drift_during_read_is_rejected(tmp_path, monkeypatch, field):
+    session, settings, arguments = _fixture(tmp_path)
+    target = _member_target(session, arguments)
+    opened, chunks, closed, original_fstat = _observe_member_io(monkeypatch, target)
+    member_stats = 0
+
+    def drift_after_read(descriptor):
+        nonlocal member_stats
+        value = original_fstat(descriptor)
+        if descriptor in opened:
+            member_stats += 1
+            if member_stats == 2:
+                return _changed_stat(value, field)
+        return value
+
+    monkeypatch.setattr(artifact_module.os, "fstat", drift_after_read)
+    with pytest.raises(PinnedArtifactResolutionError, match="changed while reading"):
+        resolve_pinned_artifact_member(session, settings, **arguments)
+
+    assert member_stats == 2 and b"".join(chunks) == b'{"value":1}'
+    _assert_member_descriptors_closed(opened, closed, original_fstat)
+
+
+@pytest.mark.parametrize("change", ("removed", "replaced", "hardlink"))
+def test_member_final_path_change_is_rejected_and_descriptor_closed(tmp_path, monkeypatch, change):
+    session, settings, arguments = _fixture(tmp_path)
+    target = _member_target(session, arguments)
+    substitute = target.with_name("replacement.json")
+    substitute.write_bytes(target.read_bytes())
+    opened, chunks, closed, original_fstat = _observe_member_io(monkeypatch, target)
+    original_lstat = Path.lstat
+    changed = False
+
+    def change_final_path(path, *args, **kwargs):
+        nonlocal changed
+        if path == target and chunks and not changed:
+            changed = True
+            if change == "removed":
+                target.unlink()
+            elif change == "replaced":
+                os.replace(substitute, target)
+            else:
+                os.link(target, target.with_name("new-link.json"))
+        return original_lstat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "lstat", change_final_path)
+    with pytest.raises(PinnedArtifactResolutionError, match=r"materialization|changed"):
+        resolve_pinned_artifact_member(session, settings, **arguments)
+
+    assert changed and len(opened) == 1 and b"".join(chunks) == b'{"value":1}'
+    _assert_member_descriptors_closed(opened, closed, original_fstat)
+
+
+def test_member_atime_only_change_is_not_identity_drift(tmp_path, monkeypatch):
+    session, settings, arguments = _fixture(tmp_path)
+    target = _member_target(session, arguments)
+    opened, chunks, closed, original_fstat = _observe_member_io(monkeypatch, target)
+    changed = False
+
+    def access_time_only(descriptor):
+        nonlocal changed
+        value = original_fstat(descriptor)
+        if descriptor in opened and chunks:
+            changed = True
+            return _changed_stat(value, "st_atime_ns")
+        return value
+
+    monkeypatch.setattr(artifact_module.os, "fstat", access_time_only)
+    resolved = resolve_pinned_artifact_member(session, settings, **arguments)
+
+    assert changed and resolved.payload == b'{"value":1}' and len(opened) == 1
+    _assert_member_descriptors_closed(opened, closed, original_fstat)
+
+
+def test_member_read_error_closes_open_descriptor(tmp_path, monkeypatch):
+    session, settings, arguments = _fixture(tmp_path)
+    target = _member_target(session, arguments)
+    opened, chunks, closed, original_fstat = _observe_member_io(monkeypatch, target)
+    observed_read = artifact_module.os.read
+
+    def fail_member_read(descriptor, size):
+        if descriptor in opened:
+            raise OSError(errno.EIO, "synthetic local member read failure")
+        return observed_read(descriptor, size)
+
+    monkeypatch.setattr(artifact_module.os, "read", fail_member_read)
+    with pytest.raises(PinnedArtifactResolutionError, match="materialization does not resolve"):
+        resolve_pinned_artifact_member(session, settings, **arguments)
+
+    assert len(opened) == 1 and not chunks
+    _assert_member_descriptors_closed(opened, closed, original_fstat)

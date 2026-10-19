@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import Mock
 
 import pytest
 from eom_catalog_service import pinned_artifact_resolution as module
@@ -18,6 +18,60 @@ from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobR
 from sqlalchemy.orm import Session
 
 from tests.unit.test_pinned_artifact_resolution import _fixture, _primary_key
+
+
+def member_stream_counts(monkeypatch: pytest.MonkeyPatch, paths: set[Path]) -> SimpleNamespace:
+    """Count actual member FDs/returned bytes, ignoring unrelated Python/fixture IO."""
+    opened: Counter[Path] = Counter()
+    read_calls: Counter[Path] = Counter()
+    payload_chunks: Counter[Path] = Counter()
+    payload_bytes: Counter[Path] = Counter()
+    closed: Counter[Path] = Counter()
+    active: dict[int, Path] = {}
+    actual_open, actual_read, actual_close = module.os.open, module.os.read, module.os.close
+    actual_path_open = Path.open
+
+    def open_stream(path: Path, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
+        # A preliminary Path.open hash would bypass the counted bounded FD stream.
+        # Fixture writes remain allowed; production member bytes have one reader.
+        if path in paths and "r" in mode:
+            raise AssertionError("member read bypassed the bounded descriptor")
+        return actual_path_open(path, mode, *args, **kwargs)
+
+    def open_member(path: Any, *args: Any, **kwargs: Any) -> int:
+        descriptor = actual_open(path, *args, **kwargs)
+        if isinstance(path, (str, Path)) and Path(path) in paths:
+            member = Path(path)
+            opened[member] += 1
+            active[descriptor] = member
+        return descriptor
+
+    def read_member(descriptor: int, maximum: int) -> bytes:
+        payload = actual_read(descriptor, maximum)
+        if (member := active.get(descriptor)) is not None:
+            read_calls[member] += 1
+            payload_bytes[member] += len(payload)
+            if payload:
+                payload_chunks[member] += 1
+        return payload
+
+    def close_member(descriptor: int) -> None:
+        actual_close(descriptor)
+        if (member := active.pop(descriptor, None)) is not None:
+            closed[member] += 1
+
+    monkeypatch.setattr(module.os, "open", open_member)
+    monkeypatch.setattr(module.os, "read", read_member)
+    monkeypatch.setattr(module.os, "close", close_member)
+    monkeypatch.setattr(Path, "open", open_stream)
+    return SimpleNamespace(
+        opened=opened,
+        read_calls=read_calls,
+        payload_chunks=payload_chunks,
+        payload_bytes=payload_bytes,
+        closed=closed,
+        active=active,
+    )
 
 
 class MetadataSession:
@@ -40,16 +94,24 @@ class MetadataSession:
         return [value for (kind, _key), value in self.records.items() if kind is model]
 
 
-def test_prefetch_exact_three_queries_and_no_lazy_sql_on_read(tmp_path: Path) -> None:
+def test_prefetch_exact_three_queries_and_no_lazy_sql_on_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     original, settings, arguments = _fixture(tmp_path)
     session = MetadataSession(*original.records.values())
     context = PinnedArtifactReadContext(cast(Session, session), settings)
     with pytest.raises(PinnedArtifactResolutionError, match="not captured"):
         context.read_pinned(**arguments)  # type: ignore[arg-type]
     context.prefetch(((str(arguments["artifact_id"]), str(arguments["artifact_revision_id"])),))
+    revision = original.get(ArtifactRevisionRecord, str(arguments["artifact_revision_id"]))
+    member = Path(revision.nas_path) / str(arguments["member_path"])
+    streams = member_stream_counts(monkeypatch, {member})
     first = context.read_pinned(**arguments)  # type: ignore[arg-type]
     second = context.read_pinned(**arguments)  # type: ignore[arg-type]
     assert first == second and first.payload == b'{"value":1}'
+    assert streams.opened == streams.closed == streams.payload_chunks == {member: 1}
+    assert streams.read_calls == {member: 2}
+    assert streams.payload_bytes == {member: len(first.payload)} and not streams.active
     assert len(session.statements) == 3 and session.get_calls == 0
     assert all(
         statement.get_execution_options()["populate_existing"] for statement in session.statements
@@ -142,11 +204,12 @@ def test_exact_descriptor_pointer_member_closure_and_byte_budgets(
             media_type="application/json",
         )
     context.MAX_RETAINED_BYTES = 1
-    hash_file = Mock()
-    monkeypatch.setattr(module, "sha256_file", hash_file)
+    revision_record = original.get(ArtifactRevisionRecord, revision)
+    member = Path(revision_record.nas_path) / "evidence/value.json"
+    streams = member_stream_counts(monkeypatch, {member})
     with pytest.raises(PinnedArtifactResolutionError, match="byte budget"):
         context.read_pinned(**arguments)  # type: ignore[arg-type]
-    hash_file.assert_not_called()
+    assert not streams.opened and not streams.read_calls and not streams.payload_bytes
     context.MAX_REVISIONS = 1
     with pytest.raises(PinnedArtifactResolutionError, match="metadata budget"):
         context.prefetch((("artifact_" + "f" * 32, "rev_" + "f" * 32),))
@@ -230,14 +293,27 @@ def _eviction_fixture(tmp_path: Path):
 
 def test_lru_eviction_rereads_bytes_and_rejects_tampering(tmp_path: Path, monkeypatch):
     context, requests, revision = _eviction_fixture(tmp_path)
-    physical_hash = Mock(wraps=module.sha256_file)
-    monkeypatch.setattr(module, "sha256_file", physical_hash)
+    paths = [Path(revision.nas_path) / str(request["member_path"]) for request in requests]
+    streams = member_stream_counts(monkeypatch, set(paths))
     for number in (0, 1, 0, 2):
         context.read_pinned(**requests[number])
-    assert physical_hash.call_count == 3
+    assert streams.opened == streams.closed == streams.payload_chunks == dict.fromkeys(paths[:3], 1)
+    assert sum(streams.payload_bytes.values()) == 3 * len(b'{"value":1}')
     assert [key[2] for key in context._members] == [requests[n]["member_path"] for n in (0, 2)]
     context.read_pinned(**requests[1])
-    assert physical_hash.call_count == 4
+    assert (
+        streams.opened
+        == streams.closed
+        == streams.payload_chunks
+        == {
+            paths[0]: 1,
+            paths[1]: 2,
+            paths[2]: 1,
+        }
+    )
+    assert sum(streams.read_calls.values()) == 8
+    assert sum(streams.payload_bytes.values()) == 4 * len(b'{"value":1}')
+    assert not streams.active
     assert context._retained_bytes <= context.MAX_RETAINED_BYTES
     # Reading 1 evicted 0. Reopening 0 must not use an old validation flag.
     (Path(revision.nas_path) / str(requests[0]["member_path"])).write_bytes(b"tampered")

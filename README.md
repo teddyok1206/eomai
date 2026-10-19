@@ -31,7 +31,7 @@ logical Item
 - 승인 문항, HWPX build, RAG 학습 현황과 Codex slot 사용 상태 조회
 - 25문항 모의고사 생산 계획·실행·검토·퇴역을 불변 checkpoint와 영수증으로 관리
 
-## 증분 RAG 목표의 현재 상태 — 2026-10-19 00:45 UTC
+## 증분 RAG 목표의 현재 상태 — 2026-10-19 04:08 UTC
 
 운영 API·Catalog·출제/HWPX 실행기·일반 채팅에 `869de157`을 설치했고,
 실제 wheel·RECORD·provider를 확인했습니다. 별도 QUERY SDK는 `d81b9ba3`, INDEX와
@@ -90,7 +90,14 @@ API→Catalog 제한30초와 오류 응답 형식을 잘못 표시한 검증 클
 저장소 수정본과 일치합니다. 인덱스·출처 정책·CPU 기본값·별도 SDK는 유지했고,
 권한·해시·최종 출처 검사는 유지하고 제한 시간을 늘려 덮지 않습니다.
 실제 여섯 비교·후속 문항/채팅 제출은 시작되지 않았습니다. 실패 기록을 보존하고 같은 INDEX18을
-재개했습니다. 전체 목표와 수정 후 실제 사용자 조회 검증은 미완료이며, 현재 로그인창은 없습니다.
+재개했습니다. **04:05 UTC에 새 실제 로그인·사용자 확인은 성공했으나, 첫 C1 조회가
+30.039초 뒤 HTTP503 `SIMILARITY_CONTEXT_UNAVAILABLE`로 종료됐습니다.** Catalog는 같은
+조회 처리를30.297초에 끝냈습니다. 여섯 비교·후속 제출 없이 실패를 보존했고, **04:08 UTC에
+같은 INDEX18을 정상 재개하고 API LIVE/READY를 확인했습니다.** 추가 인증을 요청하거나
+실패 요청을 자동 재시도하지 않습니다. 파일을 별도 해시 스트림과 반환 스트림으로 중복 읽는
+기존 resolver를, 같은 FD의 크기·SHA·읽기 전후 신원을 검증하는 단일 스트림으로 정리하고
+있습니다. 이 소스 수정의 테스트와 실제 운영 조회 성공은 구분합니다. 전체 목표와 실제
+사용자 전달 검증은 미완료이며, 현재 로그인창은 없습니다.
 [불변 검색 범위 호환 설계](docs/architecture/PINNED_EMBEDDING_NAMESPACE_READ_COMPATIBILITY.md),
 [이번 운영 반영과 남은 범위](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#independent-c5-reader-installed-and-services-recovered--2003-utc),
 [저장된 인덱스 정본 점검](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#committed-index-storage-snapshot--1728-utc),

@@ -224,7 +224,8 @@ def test_late_provenance_is_three_indexed_scalar_batches_without_hash_or_file_io
         reader.prefetch((*identities, *identities))
         event.listen(publisher.engine, "before_cursor_execute", observed)
         forbidden_hash = Mock(side_effect=AssertionError("late metadata check must not rehash"))
-        monkeypatch.setattr(module, "sha256_file", forbidden_hash)
+        monkeypatch.setattr(module.os, "open", forbidden_hash)
+        monkeypatch.setattr(module.os, "read", forbidden_hash)
         monkeypatch.setattr(module, "content_sha256", forbidden_hash)
         try:
             reader.revalidate_provenance()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -9,17 +10,26 @@ from eom_identity_service import OperatorAuthorizationFenceError
 from eom_workflow_runner import reference_query_source_read as module
 from eom_workflow_runner.reference_query_source_read import CatalogReferenceQueryReadOwner
 
+from tests.unit.test_pinned_artifact_read_context import member_stream_counts
 from tests.unit.test_reference_query_owner_admission import source as source
 
 
 def test_repeated_root_control_reads_share_bytes_but_recheck_current_approval(source, monkeypatch):
-    from eom_catalog_service import pinned_artifact_resolution as pinned
     from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
-    from eom_orchestrator.models import ArtifactRecord
+    from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 
-    original = pinned.sha256_file
-    paths, contexts = [], []
-    monkeypatch.setattr(pinned, "sha256_file", lambda path: (paths.append(path), original(path))[1])
+    configuration = source.owner.configuration
+    with source.publisher.sessions.begin() as session:
+        paths = {
+            Path(session.get(ArtifactRevisionRecord, pin.artifact_revision_id).nas_path)
+            / pin.member_path
+            for pin in (
+                configuration.native_execution_policy,
+                configuration.runtime_bundle.manifest_member,
+            )
+        }
+    streams = member_stream_counts(monkeypatch, paths)
+    contexts = []
     prepare = source.owner.catalog.prepare_reference_query_anchor_in_session
 
     def checked(session, caller, request, *, artifact_reader):
@@ -33,7 +43,9 @@ def test_repeated_root_control_reads_share_bytes_but_recheck_current_approval(so
         first = source.owner.resolve_sources(session, source.request, artifact_reader=reader)
         second = source.owner.resolve_sources(session, source.request, artifact_reader=reader)
         assert first == second and contexts == [reader, reader]
-        assert len(paths) == len(set(paths)) == 2  # fixed policy and bundle bytes only
+        assert len(paths) == len(streams.opened) == 2  # fixed policy and bundle bytes only
+        assert set(streams.opened.values()) == {1}
+        assert streams.closed == streams.payload_chunks == streams.opened and not streams.active
         with source.publisher.sessions.begin() as other:
             other.get(
                 ArtifactRecord, source.request.native_execution_policy.artifact_id

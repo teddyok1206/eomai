@@ -3868,5 +3868,64 @@ Small temporary-fixture synthetic measurement: ten parses without decoded retent
 versus one with retention,0.038299s versus0.004986s. This demonstrates avoided
 interpretation, not actual545-item/API latency or performance acceptance. Local XML
 raw SHA `38b2b9bcef1084e1d223cfedc81c51061fa0d024b664a7e919d60c56148e1efe`.
-The changed Catalog source is not yet installed; no authentication/model/benchmark
-or database change was performed by these source gates.
+That source gate itself changed no operating installation, authentication, model,
+benchmark or database. The later869de157 installation and04:05 authenticated failure
+are separate operating evidence recorded in the release runbook.
+
+### One-pass bounded Artifact member read — 2026-10-19
+
+The actual869 C1 read returned503 at30.039s; Catalog finished its original read
+at30.297s. Its full-population admission/report/entry stages took5.437/7.509/3.006s.
+The small offline projection/schema improvements did not establish sufficient live
+headroom and are not deployed. NAS is CIFS. The existing cold member resolver
+opens and consumes the whole file for `sha256_file`, then reopens, consumes and
+hashes the same member again. That first stream is not the descriptor from which
+returned bytes originate. No claim is made that SMB wire reads equal userspace
+stream reads, or that changing this boundary alone proves30-second acceptance.
+
+1. **Responsibility/boundary:** correct the existing Catalog physical member
+   reader; keep all caller, producer, manifest, descriptor and lifecycle gates.
+2. **Canonical source:** the registered immutable Artifact member and expected
+   SHA remain authoritative. No new cache, copied artifact or derived store.
+3. **Identity/revisions:** preserve all logical/revision/member/hash/schema/media
+   fields and historical compatibility rules; no schema bytes or migration change.
+4. **Resolution:** resolve the same storage/root/member paths, open one bounded
+   NOFOLLOW/NONBLOCK descriptor, verify regular-file/single-link/size identity
+   before reading, check exact payload length/SHA, and compare full stat epochs
+   before/after and against the final path. Ignore access time only.
+5. **Access pattern:** one ordered bounded byte stream per cold unique member;
+   retained request-local byte hits continue to perform existing metadata gates.
+6. **Structure:** reuse the existing byte result and bounded chunk list. A small
+   private stat-epoch value function has no lifecycle, authority or persistence.
+7. **Complexity/scale:** cold userspace full-stream work2N→N; byte workO(total
+   payload), bounded existing memory unchanged. No claimed network/HTTP speedup
+   without corresponding evidence. Test stream and byte counts, not wall thresholds.
+8. **Concurrency:** bind lstat→opened FD→completed FD→current path using device,
+   inode, mode, UID/GID, links, size, mtime and ctime. Compare reported values only,
+   without assuming CIFS precision or monotonicity. Close the FD on every exit.
+9. **Dependency direction:** only the existing filesystem infrastructure leaf
+   changes; domain/contracts remain independent and no dependency is added.
+10. **Failure/retry:** same stable resolution errors; reject same-size tamper,
+    type/path/inode/metadata replacement, truncation and growth. No new retry,
+    timeout, privilege, source scope or interpretation of failed history.
+11. **Simpler alternative:** retaining a disconnected preliminary hash duplicates
+    the full stream without binding the returned payload's FD. Removing that pass
+    while retaining payload SHA and strengthening FD identity is the smaller
+    correction; do not introduce a parallel reader/cache or skip validation.
+
+Required source gates cover cold/hit/eviction read counts, physical same-size
+tamper, FIFO/symlink/inode replacement, changed file epochs, final path replacement
+or removal, atime-only reads and closure on failure. Source/operation tests do not
+substitute for the still-unverified original authenticated C1–C5/six-run sequence.
+
+Source gate:40 member-reader tests (19 new corruption/race/closure cases),147
+request-cache/index/root-reuse tests,79 provenance/reference-owner tests, and83
+disjoint caller/dependency tests passed:349 total across14 suites. A separate
+caller execution included29 already-counted reuse cases; those are not added.
+Core strict typing and changed Python files' Ruff/format passed; independent
+review found no blocker. Old-code RED (21 PASS/19 FAIL) remains separate from
+the corrected40 PASS. Two test-counter fixture errors while selecting the typed
+bundle member were corrected without changing production behavior or guards.
+Assertions count actual bounded descriptor reads and bytes and reject a separate
+preliminary `Path.open` stream. The metadata-only late fence performs neither
+file IO nor hashing. No installed release or actual HTTP success is implied.

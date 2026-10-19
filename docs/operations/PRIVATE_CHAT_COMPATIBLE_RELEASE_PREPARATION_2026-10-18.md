@@ -1140,3 +1140,44 @@ timeouts, keys, selection and retry policy remain unchanged. Its14 mock tests an
 strict/style gates passed. The prior failed invocation and closed session stay
 preserved. No fresh getpass has been opened at this checkpoint; services must not
 be left drained awaiting an unanswered login.
+
+## Second genuine login and measured C1 timeout — 2026-10-19 04:08 UTC
+
+The bounded successor used the same eight fixed inputs and original request keys.
+Unit `eom-system-rag-goal-ee97239d-869de157.service`, invocation
+`ca2a8bc3a8ef4a4d9aeee99b93a38055`, validated genuine login at04:05:12.213718 UTC
+and the current operator at04:05:12.219285. Its first C1 read started04:05:12.611852
+and stopped04:05:42.651559 with HTTP503 `SIMILARITY_CONTEXT_UNAVAILABLE`.
+The corrected problem-JSON diagnostic preserved the actual failure; authentication
+did not fail. No automatic retry, six-run benchmark, model/GPU forward or C2–C5
+submission followed. The finite unit exited1, its process/cgroup terminated, and
+its memory-only session closed. No token or password was persisted.
+
+Closed Catalog stage observations for that same request, not a new query:
+
+- RESOLVE_BEFORE1094ms; COMPOSE_CONTEXT27863ms; RESOLVE_AFTER917ms;
+  FINAL_PROVENANCE71ms; total server work approximately30.297s.
+- Initial full-population PREFETCH1126ms, ADMIT5437ms, SOLUTION_PROFILES7509ms,
+  MATERIALIZE_ENTRIES3006ms. Later captures retained their current gates and were
+  substantially smaller. Nested stage values must not be added twice.
+- The prior compose stage was29126ms; the installed decoder reuse reduced it by
+  approximately1.3s in these two observations, not enough for the30s RPC deadline.
+  This is not a controlled benchmark or acceptance of the complete delivery path.
+
+Only after finite termination and no active native/benchmark unit, one normal
+start resumed the original logical INDEX18. At04:08:35 UTC INDEX was active,
+PID3375853/invocation `65236350dd6b454a8ea0345d15bb3dcc`; the original API and
+QUERY invocations remained unchanged and API LIVE/READY passed. No forced child
+termination, database repair, permission/TTL change or new index identity occurred.
+Local sanitized outcome and49 stage observations are under
+`/tmp/eom-finite-869-invocation.3dIoFs0I`; terminal restoration and latency evidence
+remain separate from the original, still-unexecuted C1–C5/six-run acceptance.
+
+Source diagnosis found a disconnected preliminary `sha256_file` stream followed
+by another bounded stream and payload SHA for each cold Artifact member. The
+next minimal correction stays inside that existing reader: one bounded descriptor,
+payload length/SHA, full file-epoch identity before/after and final-path validation.
+It adds no cache, source authority, schema, dependency or timeout. CIFS is the
+mounted storage; two userspace streams are not proof of two network transfers.
+The design is in the implementation-boundary document. Source verification and
+any later installation/actual user delivery must be recorded independently.

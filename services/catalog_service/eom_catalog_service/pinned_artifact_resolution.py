@@ -12,7 +12,7 @@ from pathlib import Path, PurePosixPath
 from threading import get_ident
 from typing import Literal, cast
 
-from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes, sha256_file
+from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from pydantic import BaseModel
@@ -69,6 +69,21 @@ class PinnedArtifactResolutionError(ValueError):
         )
         self.artifact_id = artifact_id
         self.artifact_revision_id = artifact_revision_id
+
+
+def _member_file_epoch(metadata: os.stat_result) -> tuple[int, ...]:
+    # Reads can change atime; identity, content and access metadata must stay pinned.
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_uid,
+        metadata.st_gid,
+        metadata.st_nlink,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
 
 
 def artifact_identity_hints(value: object) -> set[tuple[str, str]]:
@@ -302,7 +317,7 @@ def _resolve_pinned_artifact_member(
         storage_root = settings.nas_artifact_root.resolve(strict=True)
         raw_root = Path(revision.nas_path)
         raw_metadata = raw_root.lstat()
-        if raw_root.is_symlink() or not stat.S_ISDIR(raw_metadata.st_mode):
+        if not stat.S_ISDIR(raw_metadata.st_mode):
             raise PinnedArtifactResolutionError("pinned Artifact root is invalid")
         artifact_root = raw_root.resolve(strict=True)
         if not artifact_root.is_relative_to(storage_root):
@@ -313,20 +328,28 @@ def _resolve_pinned_artifact_member(
         if (
             target != candidate
             or not target.is_relative_to(artifact_root)
-            or target.is_symlink()
             or not stat.S_ISREG(metadata.st_mode)
             or metadata.st_nlink != 1
             or metadata.st_size != size
-            or sha256_file(target) != sha256
         ):
             raise PinnedArtifactResolutionError("pinned Artifact materialization differs")
 
         descriptor = os.open(
             target,
-            os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
+            os.O_RDONLY
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_NONBLOCK", 0),
         )
         try:
             opened = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(opened.st_mode)
+                or opened.st_nlink != 1
+                or opened.st_size != size
+                or _member_file_epoch(opened) != _member_file_epoch(metadata)
+            ):
+                raise PinnedArtifactResolutionError("pinned Artifact changed before reading")
             chunks: list[bytes] = []
             remaining = size + 1
             while remaining:
@@ -337,13 +360,12 @@ def _resolve_pinned_artifact_member(
                 remaining -= len(chunk)
             payload = b"".join(chunks)
             closed = os.fstat(descriptor)
+            final_metadata = target.lstat()
             if (
                 len(payload) != size
                 or sha256_bytes(payload) != sha256
-                or (opened.st_dev, opened.st_ino, opened.st_size)
-                != (metadata.st_dev, metadata.st_ino, metadata.st_size)
-                or (opened.st_dev, opened.st_ino, opened.st_size)
-                != (closed.st_dev, closed.st_ino, closed.st_size)
+                or _member_file_epoch(opened) != _member_file_epoch(closed)
+                or _member_file_epoch(opened) != _member_file_epoch(final_metadata)
             ):
                 raise PinnedArtifactResolutionError("pinned Artifact changed while reading")
         finally:
