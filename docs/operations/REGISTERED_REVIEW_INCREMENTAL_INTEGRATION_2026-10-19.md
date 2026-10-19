@@ -437,3 +437,69 @@ VALIDATING_RESULT 진입을 보여주지만 Workflow는 여전히 RUNNING이고 
 이 정비는 source 권한·receipt·수치 검증이나 원520개 전체 vector coverage를 증명하지 않는다.
 앞으로 새 Graph에서도 필요하면 기존의 bounded owner 통계 정비를 사용하되, 자동 ANALYZE
 권한·새 유지보수 framework·자동 post-publication hook을 이번 작업에 추가하지 않는다.
+
+## 첫 mixed CONTENT 완료와 max64 선택 — 20:09 UTC 체크포인트
+
+20:07:26의 고정 관측에서 첫 mixed CONTENT Workflow
+`workflow_f4e139c14f924ff7b10fcd1fef0aa7f2`는 COMPLETED, encode step과 native
+coordinator Job은 SUCCEEDED였다. ALLOCATION→INDEX_PREPARED→REGISTERED→COMPLETED
+4개 checkpoint가 있고 저장된 step output과 최종 checkpoint의 일치도 확인했다.
+앞선19:59의 RUNNING 관측을 덮어쓰지 않고 후속 완료 증거로 보존한다.
+
+이 exact Workflow/index에서 원 CONTENT baseline과 대조한479개의
+encoding SHA와 shard row 참조가 모두 동일했다. changed encoding/changed row ref/
+missing baseline은 각각0, 이 Workflow의 owned encoding Job도0이었다. 이는 기존
+수치 row의 실제 재사용 증거지만 **520개 전체 vector coverage 또는 target의 새 증분
+완료 증거가 아니다**. 해당 실행의 target demand와 등록 target binding은 모두0이었다.
+
+보존된 index/receipt pin은 서로 다른 identity와 raw/semantic hash를 구분한다.
+
+- mixed index: `embeddingindex_f0c2752b70338070529a12e067817e0f`,
+  revision `embeddingindexrev_b175c611bf8f7b93e36a72dd8d1344da`, current head version3.
+  index semantic SHA는 `sha256:cb98f7302dfc6d4598a19bc334b6e1280f87bdd0bd88eb5749c7e9f7a2f50f89`다.
+- `index.json`/manifest2: `artifact_3ff9c96f3ad4464c9359bc6c18f412bd` /
+  `rev_0716fca2e62f49f7935b63ef8f53ff79`, raw SHA
+  `sha256:c51a6794e7fb31401d57416746557bbfb219cce0715d021453ec6545ebb1635a`.
+- `receipt.json`/receipt2: `artifact_e87869c5c92145d7863865c9c92fe345` /
+  `rev_e581aac2c3774bf3adb1e8a7ff28fd2f`, raw SHA
+  `sha256:22e06d9993998502d053f14e7a524867bd084f84eacac0aea8d75dc46f48c39e`,
+  receipt semantic SHA
+  `sha256:43f7bcb2da717fabf9d3414f84e04ffe8970af49e98f0bce67b52b4d1ac32ce7`.
+
+원 MAIN-only SIGTERM 뒤 실제 unit은 inactive/dead, MainPID0, 빈 cgroup,
+Result success/ExecMainStatus0/NRestarts0로 정상 drain을 마쳤다. source나 원 완료/실패
+이력을 고쳐 drain을 만든 것이 아니다.
+
+기존 guard와 순수 테스트14개를 통과한 한 파일 CAS를20:08:07 PREPARE,
+20:08:20 SELECT했다. mixed와 포함된 legacy 설정의 `maximum_targets`만4→64이며,
+선택 후 owner JSON rawSHA는
+`575071809a4ee51956b639248c133b2236b93a560584bd653c91fb92e9830618`이다.
+Identity/grant/native policy/resource/SDK/DB 데이터는 그대로이고 원 대기 요청5건도
+다시 쓰거나 취소하지 않았다. SELECT 자체는 service를 시작하지 않았다. 별도 정상 기동에서
+20:09:00 STARTED, PID69164 / invocation `65237334030743bf853b584f4678111c`를 관측했다.
+이제 max64는 실제 선택된 설정이지만 기존 pending 요청이64개 source로 변경됐다는 뜻은 아니다.
+
+설정 선택 후·애플리케이션 STARTED 이벤트(20:09:00) 전20:08:37의 registry metadata는
+다음 범위만 확인한다.
+
+| namespace | Graph | CONTENT / CONCRETE / METADATA binding 수 |
+|---|---|---|
+| mixed2 | 새 `graphrev_8f3ff9…` | 479 / head 없음 / head 없음 |
+| primary1 | 원 `graphrev_c0e78b…` | 479 / 457 / 425 |
+
+생성 target `itemrev_b6e626a764644e37b428cd914f920bb6`의 등록 view는0이었다.
+따라서 모든 head가 새 Graph로 갱신됐거나 target 검색이 준비됐다고 주장하지 않는다.
+원520개 정본 보존과 부분 indexing 수는 다르며, target binding·실제 사용자 VECTOR
+조회·primary/history replay는 계속 대기 상태다. 공용 API/Chat/QUERY source66,
+INDEX sourcee013, DB0058, CPU 기본값과 별도 GPU6 NOT_STARTED는 그대로다.
+
+증거는 `/tmp/eom-registered-review-patch.zbfFVg5a/`의 다음 고정 파일이다.
+
+- `index21-completion-2007.json`, rawSHA
+  `59f4e652a192a3360f2d3415aaa1b1c616c0854c9f7584543e0ffb74a774a70a`.
+  실제 완료 metadata·원 row 참조 대조이며 새 source 권한 부여나 별도 수치 재검증은 아니다.
+- `index21-drain-2007-state.txt`, `index21-targets64-prepare.json`,
+  `index21-targets64-select.json`, `index21-targets64-start-state.txt`,
+  `index21-targets64-start-events.log`.
+- `index21-targets64-registry-initial.json`, rawSHA
+  `d07610694ff202acdda15d48a8240056f959a7ad33c72e706ea61a7521c895d3`.

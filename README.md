@@ -49,9 +49,18 @@ logical Item
   INDEX21에만 설치·활성화했습니다. Runner 회귀68개와 최종 바이트5개가 통과했고,
   실제21의 권한 철회 상태 기동 거부·동일 개정 복구(head46)·정상 STARTED를 확인했습니다.
   기존 실패·성공 receipt와 원 벡터는 보존하며 IAM 허용 범위를 확대하지 않았습니다.
-- **남은 실제 검증:** 새 Graph의 자동 증분 완료·원 벡터 재사용량과 실제 사용자 권한의
-  mixed/primary 검색·읽기·같은-key replay입니다. 기동 성공이나 source/임시DB PASS를
-  이 최종 완료로 확대하지 않습니다. 상세 수정·운영 이력은 아래 운영 기록에 보존합니다.
+- **실제 재사용 확인(20:07 UTC):** 새 Graph의 첫 mixed CONTENT Workflow가 완료됐고,
+  기존479개 encoding과 shard row 참조를 모두 그대로 재사용했습니다. 변경·누락과 이
+  Workflow가 소유한 신규 encoding Job은0입니다. 이는 원520개 전체 coverage나 새 생성
+  문항 처리 완료가 아니며, 해당 target binding은 아직0입니다.
+- **후속 처리(20:09 UTC):** 정상 drain 후 mixed/legacy의 `maximum_targets`만4→64로
+  선택하고 INDEX21을 정상 기동했습니다. 신원·grant·수치 자원·SDK는 바꾸지 않았고,
+  대기 중 원 요청5건도 보존했습니다. 순수 테스트14 PASS와 실제 설정 선택은 구분해 기록합니다.
+- **남은 실제 검증:** 20:08:37 관측에서 새 Graph mixed CONTENT만479개이고 나머지
+  mixed2개 head는 없었습니다. primary479/457/425는 원 Graph에 남아 있습니다. target의
+  실제 binding·VECTOR 검색과 새 Graph primary 호환성·읽기·같은-key replay는 아직
+  대기 중이며, 기동·부분 재사용 성공을 전체 목표 완료로 확대하지 않습니다.
+  상세 수정·운영 이력은 아래 운영 기록에 보존합니다.
 
 [현재 통합 설계](docs/architecture/REGISTERED_REVIEW_INCREMENTAL_INTEGRATION_DESIGN.md)와
 [이번 검증·남은 조건](docs/operations/REGISTERED_REVIEW_INCREMENTAL_INTEGRATION_2026-10-19.md)을
