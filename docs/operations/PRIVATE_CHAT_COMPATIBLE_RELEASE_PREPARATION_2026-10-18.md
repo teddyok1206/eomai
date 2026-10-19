@@ -1382,3 +1382,43 @@ Ruff/format/compile pass. Independent review of the remaining client DTO/envelop
 hash use found no other concrete mismatch; actual future service state is not
 claimed from that source-only review. A distinct successor's preparation is not
 a retry of the failed consumed process and does not recover its closed session.
+
+## Genuine authentication and C1 pass; local unit-key mismatch — 2026-10-19 10:23 UTC
+
+Finite unit `eom-system-rag-goal-ee97239d-881584aa-query052-graphhash1.service`,
+invocation `e4e27e3a960342788a4596d65f4b6259`, validated genuine login at10:06:10.209784
+and current operator at10:06:10.214993 UTC. Two original completed C1 reads passed
+at10:07:09.898667 with the unchanged context SHA and eight candidates. Exact original
+same-key PREP replay passed at10:07:17.399238 with zero new keys. Thus the missing
+prompt reported by the user is not failed authentication: that finite process has
+already finished and its memory-only session closed.
+
+At10:07:17.532994 the local plan builder stopped with `PLAN_EXACT_OFFICIAL_UNIT_PENDING`.
+The authorized discovery returned product keys `eom.is.middle.3-1` and
+`eom.is.middle.5-6`. Catalog emits `unit_key=unit.key`; its Graph node stable key is a
+different identifier. The verifier incorrectly compared the product key with
+`outline.unit.graph_stable_key`. The existing public curriculum resolver already maps
+the exact product key to the corresponding Graph scope; no server, Graph, policy,
+schema or authority change is necessary. Earlier synthetic fixtures had incorrectly
+made these namespaces equal, masking this verification-adapter defect.
+
+The bounded local correction compares `outline.unit.key` by exact set membership and
+retains official outline preorder. The original client reproduces the exact failure;
+the corrected client passes18 pure tests, Ruff/format/compile and independent producer/
+C2/C3 mapping review. Actual producer-shaped two-key fixtures pass; Graph-key, unknown-key,
+label, semantic/manifest hash, revision, policy and source mismatches remain denied.
+Corrected local client SHA:
+`506ddf6c2a0fd0f01bb57322b221d1a8d0eb7dda8b9d1357ba7cda85b6d7be77`.
+This is offline validation, not downstream live delivery or a recovered old session.
+
+The consumed finite invocation remains failed/exit1 with MainPID0 and empty cgroup.
+C5, all six original numerical dispatches and new C2/C3/C4 submissions remain zero.
+After exact terminal/native quiescence the unchanged INDEX18 resumed normally,
+PID3674336/invocation `ee7e12cd760e48cfb235ba67b36791db`, and remains active/running.
+Local immutable terminal/restoration receipt:
+`/tmp/eom-finite-881-query052-graphhash1.zACTOGBw/terminal-and-restoration.json`.
+No credentials or tokens were stored. The idle `EOM:2 rag-incremental` pane input was
+disabled so an anticipated password cannot accidentally become a shell command.
+Any next finite preparation is distinct and must preserve the original eight inputs,
+six allocation, C1/C5 pins, consumer keys and provider release set. There is no new
+authentication prompt at this checkpoint and the overall goal remains incomplete.
