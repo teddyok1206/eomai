@@ -61,6 +61,11 @@ logical Item
   IAM 행 잠금/제한 역할 불일치로 중단됐으며 원 요청과 실패 이력을 보존합니다.
   기존 Identity fence를 재사용하는 수정과 실제 제한 역할 회귀를 진행 중입니다.
   이 관측은 새 Graph·자동 증분·벡터 검색의 완료 증거가 아닙니다.
+- **현재 후속:** Identity fence 수정은 소스131개와 실제 제한 역할 PostgreSQL12개를
+  통과했고, 별도 cold SDK `a67fa784`로 원 요청의 실제 새 Graph 출판이 성공했습니다.
+  API·Chat·QUERY는66을 유지합니다. 자동 색인 Runner의 새 완료 형식 검사 누락을
+  추가로 발견해 고정하고 있으며, INDEX만 후속 immutable 개정으로 교체할 예정입니다.
+  자동 증분과 인증된 실제 벡터 검색·replay가 끝나기 전 전체 완료로 표시하지 않습니다.
 
 [현재 통합 설계](docs/architecture/REGISTERED_REVIEW_INCREMENTAL_INTEGRATION_DESIGN.md)와
 [이번 검증·남은 조건](docs/operations/REGISTERED_REVIEW_INCREMENTAL_INTEGRATION_2026-10-19.md)을

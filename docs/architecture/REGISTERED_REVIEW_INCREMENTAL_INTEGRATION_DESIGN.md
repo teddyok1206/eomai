@@ -102,3 +102,20 @@ single resolver를 1,024번 호출하는 방식은 N+1과 반복 파일 조회 �
 
 각 단계의 SOURCE/DISPOSABLE_DB/INSTALLED/ACTIVE/LIVE 상태를 별도로 기록한다.
 단순 테스트 개수·새 schema 수를 완료의 대체 지표로 쓰지 않는다.
+
+## Runner 완료 carrier의 요청 계열 검증
+
+2026-10-19 실제 연결 점검에서 native owner는 완료2를 게시하지만 Runner의 execute 반환
+검사가 완료1 class만 허용하는 누락을 확인했다. 새 JSON Schema나 전환 상태를 추가하는
+문제가 아니라 이미 출시된 request2/output2 대응을 기존 완료 검증에 연결하는 수정이다.
+`_checked_completion` 한 곳에서 supported parser와 request/output 계열 대응을 확인하고,
+그 뒤 원 Workflow/step/attempt/owner Job 및 receipt를 기존 owner가 검증한다. execute,
+성공 step 재조회, terminal 완료와 exact replay가 같은 규칙을 사용한다. 반대 계열의
+결과를 변환하거나 기존 실패/완료 기록을 제자리 수정하지 않는다.
+
+이 변경은 수치 protocol/space/shard, DB schema/권한과 source/Graph 의미를 바꾸지 않는다.
+실제 입력·영수증은 기존 immutable pointers가 정본이며 새 cache/queue/registry는 없다.
+고정 class 분기와 bounded parsing 비용은 기존 완료 carrier 크기에 선형이다. 수정 SDK는
+별도 immutable release와 INDEX service successor로 선택하고 기존 API/QUERY/Chat이
+같은 commit이어야 한다고 강제하지 않는다. 기존 source의 진행 작업은 정상 종료와
+공식 미착수 취소 경계로 처리하며 강제 재실행이나 SDK 파일 덮어쓰기를 하지 않는다.

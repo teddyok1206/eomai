@@ -109,6 +109,40 @@ Graph-only 후보 반환을 새 문항의 벡터 소비로 확대하지 않는�
   **12 PASS /29.76초**다. Graph member 해석 한 포트는 합성이라 전체 Graph/NAS 출판
   성공으로 확대하지 않는다. 운영 계정·권한·DB는 테스트 대상이 아니다.
 
+## 운영 후속 — 18:13 UTC: 실제 Graph 출판과 Runner 계열 검사
+
+- Identity fence 수정은 `a67fa7847d72be603433de45cb5d624d8ad2f008`로 commit/push했다.
+  공식 build-only/RECORD 검증 뒤 cold SDK에만 설치했다. 공용 API/Chat/QUERY/provider와
+  normal INDEX20은66으로 유지하며 DB0058/migration과 수치 prefix도 바꾸지 않았다.
+- standard API prefix는 기존 설치 계약상 eom:eom writable code 위치다. root-owned SDK
+  code 검사와 혼동한 첫 one-shot wrapper는 import/DB 전39ms에 종료했다. 그 attempt
+  디렉터리가 없음을 실제 확인하고 기록을 보존했다. 후속 wrapper는 API build-info를
+  고정 hash·실제 metadata의 DATA로만 읽고 모든 EOM 코드는 root cold SDK/RECORD로
+  제한한다. API prefix 소유권이나 파일 mode를 바꾼 것이 아니다.
+- 원 command rawSHA `e0026b50e807b85c799b374f5f00caa7802f32cecbd0849aa66378bb274d27e8`
+  그대로 실제 Catalog credential+공개 Identity fence로 출판1회가 **CREATED**를 반환했다.
+  새 Graph는 `graphrev_8f3ff9b22d592ecf661fec7116a5cab9`, manifest SHA334a9468…,
+  semantic SHA44ed4dc6…, result SHA2c99ecc9…다. 실제 반환은18:07 무렵이며 약5분22초다.
+  result에 기록된 published_at18:02:07은 별도 관측한 DB commit 시각으로 확대하지 않는다.
+  원 command/key/actor/authorized_at17:46:11·accepted source/REVIEW는 유지했다.
+- 최초 승인된 V2 Graph 분석1회 외 추가 Codex/출제/REVIEW/풀이 호출은 없다.
+  같은 단원의 REVIEW-referenced genuine V10 anchor로 최종 HTTP plan도 오프라인 검증했다.
+  이 plan은 아직 HTTP 제출·사용자 로그인·실제 검색 성공이 아니다.
+- 18:08 registry 관측은 신규 target binding0/mixed head3개 NONE이었다. 18:09 FIFO에는
+  원 Graphc0e의 mixed CONTENT1건 PROCESSING/attempt1과 미착수5건이 있었다.
+  platform_job_id NULL은 native receipt 완료 전 정상이며, 반복 capture 로그만으로
+  busyloop나 완료를 판정하지 않았다.
+- 별도 source 대조에서 `local_embedding_step_execution`의 execute 후 old-only class
+  검사가 독립 output2를 거부함을 확인했다. request2/output2를 authoritative 완료 검증에
+  연결하는 집중 회귀·수정과 INDEX-only SDK successor를 준비한다.18:12에 원 INDEX20의
+  main에만 SIGTERM을 요청해 current run_once 뒤 정상 종료하게 했다. child kill, SDK hotpatch,
+  실패 이력 변경, 원 running workflow 취소나 API/Chat/QUERY 중단은 하지 않았다.
+- 요청/완료 계열 수정은 기존 Runner와 checkpoint2 경로를 포함해 **68 PASS /53.91초**,
+  최종 소스 바이트 집중 재실행은 **5 PASS /17.10초**다. synthetic owner 회귀이지 실제
+  운영 index 완료 증거는 아니다. strict type·Ruff·format·diff 검사도 통과했다.
+  18:20 실제 INDEX20은 MainPID0/inactive/dead/Result=success/NRestarts0이었다.
+  정상 process 종료와 Workflow/native terminal 완료를 동일시하지 않고 후속 관측한다.
+
 ## 구현·검증된 기반
 
 - 현재 승인 Item과 최종 authoring/review, 등록 정본, trusted receipt를 bounded batch로

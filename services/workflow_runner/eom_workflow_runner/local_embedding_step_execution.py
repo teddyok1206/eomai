@@ -5,12 +5,13 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from eom_workflow.compiler import CompiledWorkflowDefinition
-from eom_workflow.local_embedding_request_v2 import SupportedLocalEmbeddingRequest
-from eom_workflow.local_embedding_workflow import LocalEmbeddingWorkflowDefinition
-from eom_workflow.local_embedding_workflow_receipt import (
-    LocalEmbeddingStepOutput,
+from eom_workflow.local_embedding_request_v2 import (
+    LocalEmbeddingWorkflowRequestV2,
+    SupportedLocalEmbeddingRequest,
 )
+from eom_workflow.local_embedding_workflow import LocalEmbeddingWorkflowDefinition
 from eom_workflow.local_embedding_workflow_receipt_v2 import (
+    LocalEmbeddingStepOutputV2,
     SupportedLocalEmbeddingStepOutput,
     parse_supported_local_embedding_step_output,
 )
@@ -87,6 +88,10 @@ def _checked_completion(
     output: SupportedLocalEmbeddingStepOutput,
 ) -> SupportedLocalEmbeddingStepOutput:
     output = parse_supported_local_embedding_step_output(output)
+    if isinstance(request, LocalEmbeddingWorkflowRequestV2) != isinstance(
+        output, LocalEmbeddingStepOutputV2
+    ):
+        raise ValueError("LOCAL_EMBEDDING_COMPLETION_FAMILY_MISMATCH")
     if (
         output.workflow_id != workflow.workflow_id
         or output.step_run_id != step.step_run_id
@@ -287,11 +292,6 @@ def advance_local_embedding_step(
                 + timedelta(seconds=min(60, max(1, poll_interval_seconds))),
             )
             return False
-        if not isinstance(outcome, LocalEmbeddingStepOutput):
-            raise WorkflowError(
-                WorkflowErrorCode.LOCAL_EMBEDDING_OUTCOME_INVALID,
-                "native executor returned an unsupported outcome",
-            )
         try:
             output = _checked_completion(
                 session,
