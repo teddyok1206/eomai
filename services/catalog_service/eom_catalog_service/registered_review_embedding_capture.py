@@ -3,7 +3,8 @@
 No pool/source grant, analysis creation, model execution or persistent cache.
 Indexed bounded sets classify provenance; supported grounded sources must pass
 the public all-or-error registered/receipt owner. Historical unsupported sources
-remain missing. Proof locks last only through the caller's original SQL root.
+remain missing. Mutable parent locks and retained immutable leaves belong only
+to the caller's original SQL root.
 """
 
 from __future__ import annotations
@@ -151,7 +152,6 @@ def _grounded_candidates(
                 ItemComponentRecord.ordinal == 0,
             )
             .limit(2 * len(sources) + 1)
-            .with_for_update(read=True)
             .execution_options(populate_existing=True)
         )
     )
@@ -164,7 +164,6 @@ def _grounded_candidates(
         session.scalars(
             select(ResolvedExecutionPlanRecord)
             .where(ResolvedExecutionPlanRecord.workflow_id.in_(tuple(by_workflow)))
-            .with_for_update(read=True)
             .execution_options(populate_existing=True)
         )
     )
@@ -177,7 +176,6 @@ def _grounded_candidates(
                     tuple(row.definition_id for row in workflows)
                 )
             )
-            .with_for_update(read=True)
             .execution_options(populate_existing=True)
         )
     )

@@ -6,6 +6,66 @@
 설계: [통합 설계](../architecture/REGISTERED_REVIEW_INCREMENTAL_INTEGRATION_DESIGN.md),
 [원 검토 기록의 의미](../architecture/REGISTERED_ITEM_REVIEW_SOLUTION_EVIDENCE_DESIGN.md).
 
+## 운영 후속 — 16:50 UTC
+
+- 실제 source `37f10967bde4dfd88913cd2004c432c540b2d23e`를 공식 설치했고,
+  migration0058 upgrade/verify와 API 격리 검증이 통과했다. 실제 설치 delivery는
+  `/tmp/eom-api-build/37f10967bde4dfd88913cd2004c432c540b2d23e.X0Yx5Q/dist`이며
+  앞선 build-only `.flKtl9`와 구분한다. 실제 API wheel rawSHA는
+  `849bfb7cfe2b08bf00ad61eed0eb66ee21b540a116047387727039c130bfdd3a`다.
+- 변경 전 공식 PostgreSQL 백업과 manifest를 보존했다:
+  `/mnt/nas/eom/backups/postgresql/eom_20261019T162141Z_62e091033e53.manifest.json`.
+  dump SHA는 `62e091033e53f483e892ff14311505a2c456d0ee2e28a801f3478c5a9a5207ff`다.
+- 기존 INDEX18 실행1건은 정상 완료됐고 미착수2건은 public cancellation으로
+  CANCELLED를 기록했다. 새 identity가 옛 command를 재분류해 실행하지 않았다.
+- 사용자 승인 범위의 첫 Graph 분석1회는 실제 ACCEPTED다:
+  `analysisrun_c27ed152738e45e38ada736ca1fa06fc`. 그 전에 timeout/preset 불일치로
+  worker 시작 전 실패한 원 실행은 FAILED로 보존했다. 추가 출제/검토/풀이 모델
+  재실행이나 가짜 V10 생성은 없었다. ordinary Graph publication 자체는 아직 실행 전이다.
+- INDEX19 등록·활성화와 실제 policy Artifact2건, 권한1.1/1.2를 공식 owner로 게시했다.
+  같은37f/DB58/identity19의 legacy warm baseline은16:32:30 UTC에 실제10개 service,
+  QUERY READY·INDEX STARTED·Chat slot READY·API LIVE/READY로 확인했다.
+  증거 `/tmp/eom-registered-review-release.u0p6TvJa/legacy-warm-baseline-after-chat-result.json`,
+  rawSHA `4250a038c19741977a651d7c61d00b096627cb6adc1cc9228bb66e3ba5e1078f`.
+- 첫 QUERY 기동은 Chat의 private source socket보다 빨라 종료됐다. 실패 기록은
+  보존했고 Chat READY 후 정상 기동했다. 후속 배포 순서는 **Chat source 준비→QUERY**다.
+- mixed 설정 선택 후 INDEX는 STARTED했으나 실제 source capture에서42501로 종료됐다.
+  PostgreSQL이16:37:04 UTC에 `permission denied for table item_components`를 기록했다.
+  설정의 `database_owner=eom_app`는 fence 함수 소유자이며 실행 credential인
+  `eom_catalog_manager_runtime`과 다르다. 관리자 credential로 재실행하지 않았다.
+- DB trigger로 불변인 leaf에까지 FOR SHARE를 요구한 것이 원인이다. mutable
+  ItemRevision/Workflow/step/Job 잠금과 기존 source/hash/receipt 검증을 유지하면서
+  불필요한 leaf 잠금만 제거하는 수정이다. DB 권한·schema를 확대하지 않는다.
+  실제 제한 로그인 PG 회귀를 별도로 추가했다. 기존 소유자 계정 테스트만으로는
+  이 권한 차이를 증명할 수 없다는 검증 공백을 닫는다.
+- owner4→실제 finalized owner2 한 파일의 inverse CAS로 INDEX19 legacy 설정을
+  복구·기동했다. DB58/source37f/identity19/CPU/원520개·벡터·이력은 보존한다.
+  mixed QUERY/read2 설정 선택과 실제 증분·검색 acceptance는 서로 다르다.
+  실패한 mixed 기동을 성공으로 바꾸거나 새 Graph/delta/search 완료로 보고하지 않는다.
+
+다음은 제한 역할 회귀와 수정 compatible release, 실제 ordinary Graph1건 반영,
+자동 delta/재사용·mixed 검색/replay·철회/복구다. 원 여섯 CPU/CUDA 비교는 NOT_STARTED다.
+
+### 제한 역할 회귀와 Catalog 시작 검사 후속
+
+- 불필요한 leaf 잠금 제거 후 핵심73개, 관련 회귀251개, Graph/조회 관련81개가
+  통과했다. 이 묶음은 겹치므로 고유 테스트 수로 합산하지 않는다.
+- fresh disposable DB `20261019164834_33e639a4`에서 공식 embedding purpose는
+  134 PASS /1 FAIL이었다. 실패는 새 테스트가 공개 Entry에 없는 `evidence_kind`를
+  직접 참조한 assertion 오류였다. 실제 제한 로그인 capture는 그 전에 성공했다.
+  실제 계약의 `profile.source_basis.review_evidence`를 검사하도록 수정한 뒤 새4개를
+  동일 guarded DB에서 재실행해 **4 PASS /4.01초**를 확인했다. 앞선 전체 실행을
+  135 PASS로 재해석하지 않는다. XML `/tmp/eom-registered-review-lock-restricted-pg-green.xml`.
+  synthetic 제한 로그인 ACL 테스트와 실제 migrated app의 불변 trigger 테스트는
+  증명 범위가 다르며 IAM/NAS/실제 모델 성공을 주장하지 않는다.
+  검증 후 공식 cleanup으로 해당 disposable DB·전용 역할·임시 credential을 제거했고
+  XML과 실행 결과는 보존했다. 운영 DB나 Artifact를 삭제하지 않았다.
+- 별도로 Catalog startup 반복 실패를 발견해 해당 service의 재시작을 중지했다.
+  mixed reader JSON 설치가0444였으나 기존 reader의 계약은0640/0644다. 이는
+  DB 권한이나 Graph source 문제가 아닌 배포 파일 metadata 불일치다. 고정 hash와
+  root 소유권을 유지한 한 파일의0644 metadata 보정을 진행하며, 실제 재기동 확인 전
+  Catalog 정상·전체 서비스 정상으로 보고하지 않는다. 과거 실패 journal은 보존한다.
+
 ## 구현·검증된 기반
 
 - 현재 승인 Item과 최종 authoring/review, 등록 정본, trusted receipt를 bounded batch로

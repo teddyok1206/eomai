@@ -13,11 +13,12 @@ from eom_catalog_service.evidence_usage_receipts import (
     EvidenceUsageReceiptResolutionError,
     OrchestratorEvidenceUsageReceiptResolver,
 )
+from eom_catalog_service.models import ItemRevisionRecord
 from eom_catalog_service.registered_item_review_solution_resolver import (
     RegisteredItemReviewSolutionResolutionError,
     lock_registered_item_review_sources,
 )
-from eom_orchestrator.models import ArtifactRevisionRecord
+from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 from sqlalchemy.dialects import postgresql
 
 from tests.unit.similarity_plan_fixtures import ordinary_similarity_case, similarity_case
@@ -39,8 +40,11 @@ def test_fixed_bounded_proof_locks_then_existing_public_resolver(
     assert len(held.workflows) == count and len(held.steps) == 3 * count
     assert len(held.receipt_events) == 2 * count
     assert len(session.statements) == 8
+    locked_tables = {"item_revisions", "workflow_instances", "workflow_step_runs", "jobs"}
     for statement in session.statements:
-        assert "FOR SHARE" in str(statement.compile(dialect=postgresql.dialect()))
+        table = statement.column_descriptions[0]["entity"].__tablename__
+        sql = str(statement.compile(dialect=postgresql.dialect()))
+        assert ("FOR SHARE" in sql) is (table in locked_tables)
         assert statement.get_execution_options()["populate_existing"] is True
     before = len(session.statements)
     resolved = _resolve(batch)
@@ -49,6 +53,22 @@ def test_fixed_bounded_proof_locks_then_existing_public_resolver(
     for statement in session.statements[before:]:
         assert "FOR SHARE" not in str(statement.compile(dialect=postgresql.dialect()))
     held.assert_current(cast(Any, session))
+
+
+@pytest.mark.parametrize("model", [ItemRevisionRecord, ArtifactRecord, ArtifactRevisionRecord])
+def test_only_approved_immutable_leaf_proof_is_retained(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, model: type[Any]
+) -> None:
+    batch = _batch(tmp_path, monkeypatch, 1)
+    session = batch["session"]
+    session.get_nested_transaction = lambda: None
+    row = next(row for (kind, _), row in session.records.items() if kind is model)
+    if model is ItemRevisionRecord:
+        row.revision_state = "DRAFT"
+    else:
+        row.approved = False
+    with pytest.raises(RegisteredItemReviewSolutionResolutionError, match=r"LOCK_.*MISSING"):
+        lock_registered_item_review_sources(cast(Any, session), sources=batch["sources"])
 
 
 @pytest.mark.parametrize("change", ["root", "closed", "thread", "nested", "session"])

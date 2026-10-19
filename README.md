@@ -44,9 +44,16 @@ logical Item
   동시 요청·재전송·protocol25개가 통과했습니다. 테스트 묶음은 겹치므로 합산하지 않습니다.
 - **현재 마무리:** 기존 검색·ChatGPT 경로와 새 경로를 같은 owner 안에서 함께 유지하는
   호환 구성, 불변 wheel·설치 검증, 실제 자료의 증분·검색·재전송·철회/복구 확인입니다.
-- **운영 상태:** 기존 CPU 서비스와 INDEX18을 유지합니다. 새 기능은 아직 운영 완료가
-  아닙니다. API 등 공용 release는 `881584aa`, QUERY SDK는 `052223d3`,
-  INDEX SDK는 `ee97239d`입니다. 소스/임시DB PASS를 운영 PASS로 해석하지 않습니다.
+- **운영 관측(16:50 UTC):** 공용 release와 owner SDK를 `37f10967`, DB를0058로
+  설치했습니다. 같은 버전의 INDEX19 legacy 경로와 API·검색·채팅 기동 확인은 통과했습니다.
+  새 mixed 경로에서는 불변 자료에 대한 불필요한 행 잠금이 제한 DB 역할에서 거부돼,
+  INDEX19를 검증된 legacy 설정으로 복구하고 수정·실제 제한 역할 회귀를 진행 중입니다.
+  권한을 넓히거나 기존520개·이력을 변경하지 않았습니다. 새 Graph 반영·자동 증분·혼합
+  검색 완료는 아직 주장하지 않습니다. 소스/임시DB PASS와 운영 PASS는 구분합니다.
+- **수정 검증:** 잠금 경계 핵심73개와 관련 회귀가 통과했고, 실제 제한 로그인과 불변
+  trigger의 새 임시 PostgreSQL 테스트4개가 통과했습니다. 별도 mixed 조회 설정의
+  파일 권한 형식 불일치로 Catalog 시작 실패도 확인했으며, 데이터/DB 권한 변경 없이
+  설치 metadata를 보정하고 재기동을 검증합니다. 모든 후속 운영 검증은 아직 진행 중입니다.
 
 [현재 통합 설계](docs/architecture/REGISTERED_REVIEW_INCREMENTAL_INTEGRATION_DESIGN.md)와
 [이번 검증·남은 조건](docs/operations/REGISTERED_REVIEW_INCREMENTAL_INTEGRATION_2026-10-19.md)을

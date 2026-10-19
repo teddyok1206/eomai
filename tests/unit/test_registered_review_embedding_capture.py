@@ -18,12 +18,14 @@ from eom_catalog_service.inference_transfer_service import AdmittedInferenceTran
 from eom_catalog_service.registered_review_embedding_capture import (
     capture_registered_review_embedding_entries,
 )
+from eom_catalog_service.runtime_privileges import READ_TABLES, UPDATE_TABLES
 from eom_identifiers import content_sha256
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.models import ArtifactRecord
 from eom_workflow import WorkflowRequest, compile_definition
 from eom_workflow_runner.models import WorkflowDefinitionRecord, WorkflowInstanceRecord
 from eom_workflow_runner.repository import workflow_business_fingerprint
+from sqlalchemy.dialects import postgresql
 
 from tests.unit.inference_transfer_embedding_fixtures import view_recipe
 from tests.unit.inference_transfer_snapshot_fixtures import snapshot_v3_record
@@ -131,6 +133,42 @@ def _capture(value: dict[str, Any], **changes: Any) -> Any:
         receipts=value["receipts"],
         authorize_source=changes.get("authorize_source", value["auth"].append),
     )
+
+
+def test_select_only_immutable_leaves_need_no_additional_runtime_update_grant(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    value = _capture_fixture(tmp_path, monkeypatch)
+    session = value["session"]
+    original = session.scalars
+    immutable_tables = {
+        "item_components",
+        "resolved_execution_plans",
+        "workflow_definitions",
+        "artifacts",
+        "artifact_revisions",
+        "job_events",
+    }
+    assert immutable_tables <= set(READ_TABLES)
+    assert immutable_tables.isdisjoint(UPDATE_TABLES)
+
+    def catalog_scalars(statement: Any) -> Any:
+        table = statement.column_descriptions[0]["entity"].__tablename__
+        sql = str(statement.compile(dialect=postgresql.dialect()))
+        if "FOR SHARE" in sql and table not in UPDATE_TABLES:
+            raise PermissionError(f"CATALOG_SELECT_ONLY_ROW_LOCK:{table}")
+        return original(statement)
+
+    monkeypatch.setattr(session, "scalars", catalog_scalars)
+    captured = _capture(value)
+    assert len(captured.entries) == 1 and captured.missing_source_revision_ids == ()
+    locked = {
+        statement.column_descriptions[0]["entity"].__tablename__
+        for statement in session.statements
+        if "FOR SHARE" in str(statement.compile(dialect=postgresql.dialect()))
+    }
+    assert locked == {"item_revisions", "workflow_instances", "workflow_step_runs", "jobs"}
+    assert session.new == session.dirty == session.deleted == set()
 
 
 @pytest.mark.parametrize("family", [11, 12])

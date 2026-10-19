@@ -115,7 +115,7 @@ class ResolvedRegisteredItemReviewSolution:
 
 @dataclass(frozen=True, slots=True)
 class LockedRegisteredItemReviewSources:
-    """Retained same-root rows, NOT a source permission or immutable read cache."""
+    """Locked mutable parents and retained immutable leaves, NOT source permission."""
 
     session: Session
     root: SessionTransaction
@@ -151,8 +151,11 @@ def lock_registered_item_review_sources(
 
     Kept separate from the read-only resolver: ordinary retrieval must never
     acquire row locks or turn into a publication permission. No NAS reads here.
-    Canonical writers serialize role/receipt changes on the held Workflow/Job;
-    the existing resolver still proves every member and trusted receipt after it.
+    ItemRevision/Workflow/step/Job retain their shared locks. Approved components,
+    Artifacts and revisions are immutable under migrations0005/0001; their fresh
+    rows need retention, not row locks requiring extra UPDATE grants. Supported
+    receipt appenders serialize on Job, not the event leaf. The existing resolver
+    still proves every member, trusted receipt and current source after this read.
     """
     if (
         not isinstance(sources, tuple)
@@ -179,7 +182,8 @@ def lock_registered_item_review_sources(
             .where(
                 ItemRevisionRecord.item_revision_id.in_(
                     tuple(row.item_revision_id for row in checked)
-                )
+                ),
+                ItemRevisionRecord.revision_state == "APPROVED",
             )
             .order_by(ItemRevisionRecord.item_revision_id)
             .with_for_update(read=True)
@@ -204,7 +208,6 @@ def lock_registered_item_review_sources(
                 ItemComponentRecord.ordinal,
             )
             .limit(100 * count + 1)
-            .with_for_update(read=True)
             .execution_options(populate_existing=True)
         )
     )
@@ -247,18 +250,22 @@ def lock_registered_item_review_sources(
     logicals = tuple(
         session.scalars(
             select(ArtifactRecord)
-            .where(ArtifactRecord.logical_artifact_id.in_(logical_ids))
+            .where(
+                ArtifactRecord.logical_artifact_id.in_(logical_ids),
+                ArtifactRecord.approved.is_(True),
+            )
             .order_by(ArtifactRecord.logical_artifact_id)
-            .with_for_update(read=True)
             .execution_options(populate_existing=True)
         )
     )
     artifacts = tuple(
         session.scalars(
             select(ArtifactRevisionRecord)
-            .where(ArtifactRevisionRecord.revision_id.in_(revision_ids))
+            .where(
+                ArtifactRevisionRecord.revision_id.in_(revision_ids),
+                ArtifactRevisionRecord.approved.is_(True),
+            )
             .order_by(ArtifactRevisionRecord.revision_id)
-            .with_for_update(read=True)
             .execution_options(populate_existing=True)
         )
     )
@@ -287,7 +294,6 @@ def lock_registered_item_review_sources(
             )
             .order_by(JobEventRecord.job_id, JobEventRecord.sequence)
             .limit(2 * count + 1)
-            .with_for_update(read=True)
             .execution_options(populate_existing=True)
         )
     )
@@ -297,6 +303,8 @@ def lock_registered_item_review_sources(
         or {row.revision_id for row in artifacts} != revision_ids
         or {row.job_id for row in jobs}
         != {row.job_id for row in artifacts} | {row.job_id for row in pointers}
+        or any(row.approved is not True for row in logicals)
+        or any(row.approved is not True for row in artifacts)
     ):
         _fail("LOCK_PROOF_MISSING")
     root = session.get_transaction()

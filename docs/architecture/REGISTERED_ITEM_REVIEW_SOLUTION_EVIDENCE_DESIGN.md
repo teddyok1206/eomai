@@ -140,3 +140,32 @@ source→installed→active→live evidence를 별도로 기록한다.
 진단은 좁은 준비 단계에서 분리한다. 원래 CPU/CUDA 여섯 수치 측정과 gate는
 삭제·성공 처리하지 않고 **NOT_STARTED**로 유지한다. 비교로 우수함이 입증되지 않은
 GPU를 기본값으로 바꾸지 않는다. 이 source 작업에는 새 사용자 로그인이나 모델 실행이 없다.
+
+## 실제 제한 역할의 잠금 경계 보정 — 2026-10-19
+
+운영 mixed 경로에서 `item_components`의 `SELECT … FOR SHARE`가42501로 거부됐다.
+PostgreSQL의 행 잠금에는 SELECT 외에 UPDATE 권한도 필요하다. INDEX 설정의
+`database_owner=eom_app`는 기존 Identity fence **함수 소유자**이며, 실제 실행
+credential은 `eom_catalog_manager_runtime`이다. 두 신원을 혼동하지 않는다.
+
+1. 책임은 기존 Catalog capture/resolver의 읽기·동시성 경계다. 검색·queue·DB schema나
+   source 허용 정책을 새로 만들거나 변경하지 않는다.
+2. 정본은 동일한 승인 Item/등록 manifest/최종 REVIEW/검증 receipt다. 새 풀이·분석을 만들지 않는다.
+3. 논리 ID·revision·hash 및 기존 profile1/2와 binding/index 계약은 그대로 유지한다.
+4. 검증된 immutable leaf는 같은 root에서 읽고 pointer/schema/hash/승인 검증을 유지한다.
+   approved component/Artifact와 불변 plan/definition의 DB trigger 보호를 활용한다.
+5. 현재 승인·실행 상태의 변경은 Item Revision/Workflow/step/Job의 기존 shared lock으로
+   직렬화한다. 원 receipt event는 append-only이며 canonical writer의 Job parent lock을 따른다.
+6. 기존 bounded IN query와 PK/unique index, map/set을 유지한다. 별도 캐시·잠금 registry는 없다.
+7. n개 source와 c개 component에 대한 기존 O(n+c) metadata 경계와1,024개 상한을 유지한다.
+8. root/savepoint/thread 귀속과 publication 직전 현재 권한·source 재검증을 유지한다.
+   immutable leaf의 불필요한 행 잠금만 제거하며 mutable parent 잠금은 제거하지 않는다.
+9. Catalog application이 이 경계를 소유한다. worker·CLI로 권한/검증 책임을 옮기지 않는다.
+10. 권한 오류를 관리자 credential로 우회하거나 UPDATE/DELETE grant를 넓히지 않는다.
+    실패한 실행은 보존하고 수정 release를 실제 제한 역할로 검증한다.
+11. 테이블 UPDATE grant 추가나 새 SECURITY DEFINER 함수는 필요 없는 쓰기 권한·배포 계약을
+    늘린다. 불변 leaf와 mutable aggregate의 책임을 구분하는 기존 구조가 더 단순하다.
+
+종료 검증에는 실제 disposable PostgreSQL의 제한 login으로 capture/resolver를 실행하는
+회귀, immutable leaf의 불필요한 RowShareLock 부재, parent 잠금 유지, leaf UPDATE/DELETE
+거부, 원 pointer/hash/receipt·동시성 회귀를 포함한다. source PASS와 운영 재활성화는 별도다.

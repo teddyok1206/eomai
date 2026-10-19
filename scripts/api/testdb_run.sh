@@ -315,6 +315,7 @@ if [[ "${action}" == "embedding-tests" ]]; then
     tests/integration/test_embedding_runtime_bundle_persistence.py \
     tests/integration/test_embedding_registry_persistence.py \
     tests/integration/test_embedding_registry_application.py \
+    tests/integration/test_registered_review_restricted_role.py \
     tests/integration/test_private_chat_document_read.py \
     tests/integration/test_private_chat_query_source_owner.py \
     tests/integration/test_owned_operator_authorization_fence.py \
