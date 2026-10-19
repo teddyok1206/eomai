@@ -404,3 +404,36 @@ Nas/모델/문항 내용은 읽지 않았고 사용자 인증·자료 권한·V2
 restore 전이가 없고 immutable policy 새 발행은 기존 pinned query 철회가 아니다.
 guiadmin의 ADMIN 전체 권한을 검증 편의로 떼지 않는다. 실제 좁은 철회/복구 검증은
 미수행으로 남기며 단위 검증을 그 증거로 대체하지 않는다.
+
+## INDEX21 Graph 통계 정비 관측 — 19:59 UTC 체크포인트
+
+새 Graph `graphrev_8f3ff9b22d592ecf661fec7116a5cab9`의 조회 계획을 기존 owner
+통계 정비 경계로 확인했다. 19:58:08 관측에서 node/pointer 두 테이블의 Graph revision이
+most-common-values에 없었고, association 테이블에는 이미 있었다. 실제 직접 table/schema
+owner `eom_app`/OID16385가19:58:34–36에 기존3개 고정 column-only ANALYZE를
+각각254/101/1343ms에 완료했다. 고정 Graph의 node17,405/association1,041/pointer72,937개는
+전후 동일했고 node/pointer의 해당 MCV 포함 여부는 false→true였다.
+
+같은 selected4·원 request/source-plan·statement template의 EXPLAIN-only 비교에서 기존
+source-revision index와 node PK 경로를 선택했다. 새 index/DDL·source code·DB 권한·
+runtime pin·모델 설정을 변경하지 않았다. candidate 예상 cost는42.71→8389.41로
+오히려 증가했으므로 cost를 실제 속도로 해석하지 않는다. EXPLAIN ANALYZE나 해당
+진단 query의 실제 rows/loops·실행시간은 수집하지 않았다.
+
+정비 후19:58:48–56의 실제 stage는 LOCK_POPULATION142ms, ADMIT_CANDIDATES6522ms였다.
+앞선 저장 log에는 lock 약32초와 admission 약33초 또는69초가 있다. 다만 stage log에는
+실제 selected-source 범위·k가 없어 **동일 범위 벤치마크·인과적 배속·전체 완료·최종 HTTP
+지연 PASS로 주장하지 않는다**. 상세 명령·원 증거 파일과 해시는
+[Graph 통계 정비 기록](GRAPH_QUERY_STATISTICS_MAINTENANCE.md#actual-2026-10-19-index21-maintenance)에 있다.
+
+19:59:01의 고정 completion 관측은 coordinator의 ALLOCATION/INDEX_PREPARED와
+VALIDATING_RESULT 진입을 보여주지만 Workflow는 여전히 RUNNING이고 완료 index는
+관측되지 않았다. 할당 이후 observer는 flat `native_launch_job_id`/`native_state`/
+`coordinator_events`를 사용하므로 부재한 `native_launch` 필드를 할당 없음으로 읽지 않는다.
+19:54:53에 한 번 보낸 정상 MAIN-only SIGTERM은 당시 current run-once 종료를 기다리는
+중이었다. max64 후속 설정은 DRAFT와 순수 테스트14 PASS까지이며 **아직 선택하지 않았다**.
+새 Graph baseline proof·대상 생성 문항의 binding·최종 QUERY/HTTP 증거는 대기 상태다.
+
+이 정비는 source 권한·receipt·수치 검증이나 원520개 전체 vector coverage를 증명하지 않는다.
+앞으로 새 Graph에서도 필요하면 기존의 bounded owner 통계 정비를 사용하되, 자동 ANALYZE
+권한·새 유지보수 framework·자동 post-publication hook을 이번 작업에 추가하지 않는다.
