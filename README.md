@@ -42,30 +42,16 @@ logical Item
   기존 실행기의 claim·lease·checkpoint·완료 연결을 구현했습니다.
 - **임시 DB 검증:** 새0058 migration 설치·되돌리기·재설치, 기반131개, 실행 회귀241개,
   동시 요청·재전송·protocol25개가 통과했습니다. 테스트 묶음은 겹치므로 합산하지 않습니다.
-- **현재 마무리:** 기존 검색·ChatGPT 경로와 새 경로를 같은 owner 안에서 함께 유지하는
-  호환 구성, 불변 wheel·설치 검증, 실제 자료의 증분·검색·재전송·철회/복구 확인입니다.
-- **운영 관측(16:50 UTC):** 공용 release와 owner SDK를 `37f10967`, DB를0058로
-  설치했습니다. 같은 버전의 INDEX19 legacy 경로와 API·검색·채팅 기동 확인은 통과했습니다.
-  새 mixed 경로에서는 불변 자료에 대한 불필요한 행 잠금이 제한 DB 역할에서 거부돼,
-  INDEX19를 검증된 legacy 설정으로 복구하고 수정·실제 제한 역할 회귀를 진행 중입니다.
-  권한을 넓히거나 기존520개·이력을 변경하지 않았습니다. 새 Graph 반영·자동 증분·혼합
-  검색 완료는 아직 주장하지 않습니다. 소스/임시DB PASS와 운영 PASS는 구분합니다.
-- **수정 검증:** 잠금 경계 핵심73개와 관련 회귀가 통과했고, 실제 제한 로그인과 불변
-  trigger의 새 임시 PostgreSQL 테스트4개가 통과했습니다. 별도 mixed 조회 설정의
-  파일 권한 형식 불일치로 Catalog 시작 실패도 확인했으며, 데이터/DB 권한 변경 없이
-  설치 metadata를 보정하고 재기동을 검증합니다. 모든 후속 운영 검증은 아직 진행 중입니다.
-- **후속 운영(17:52 UTC):** 공용 API/Catalog·Chat과 INDEX/QUERY SDK의 실제 설치는
-  `66f387bf`, DB는0058입니다. 기존10개 서비스 기동, QUERY READY·INDEX20 STARTED,
-  API LIVE/READY를 확인했습니다. INDEX20 권한 철회 상태에서 실제 기동 거부와
-  같은 revision의 권한 복구(head42)도 확인했습니다. 새 문항의 Graph 출판은 별도
-  IAM 행 잠금/제한 역할 불일치로 중단됐으며 원 요청과 실패 이력을 보존합니다.
-  기존 Identity fence를 재사용하는 수정과 실제 제한 역할 회귀를 진행 중입니다.
-  이 관측은 새 Graph·자동 증분·벡터 검색의 완료 증거가 아닙니다.
-- **현재 후속:** Identity fence 수정은 소스131개와 실제 제한 역할 PostgreSQL12개를
-  통과했고, 별도 cold SDK `a67fa784`로 원 요청의 실제 새 Graph 출판이 성공했습니다.
-  API·Chat·QUERY는66을 유지합니다. 자동 색인 Runner의 새 완료 형식 검사 누락을
-  추가로 발견해 고정하고 있으며, INDEX만 후속 immutable 개정으로 교체할 예정입니다.
-  자동 증분과 인증된 실제 벡터 검색·replay가 끝나기 전 전체 완료로 표시하지 않습니다.
+- **실제 운영 구성:** API/Catalog·Chat·QUERY는 `66f387bf`/DB0058을 유지합니다.
+  Graph 출판은 별도 SDK `a67fa784`의 공개 Identity fence로 성공했습니다. 원 요청과
+  승인된 분석/검토 근거를 유지하며 새 Graph `graphrev_8f3ff9…`를 등록했습니다.
+- **최신 색인 실행기:** 혼합 완료 결과의 계열 검사 결함을 수정한 `e013d350`을
+  INDEX21에만 설치·활성화했습니다. Runner 회귀68개와 최종 바이트5개가 통과했고,
+  실제21의 권한 철회 상태 기동 거부·동일 개정 복구(head46)·정상 STARTED를 확인했습니다.
+  기존 실패·성공 receipt와 원 벡터는 보존하며 IAM 허용 범위를 확대하지 않았습니다.
+- **남은 실제 검증:** 새 Graph의 자동 증분 완료·원 벡터 재사용량과 실제 사용자 권한의
+  mixed/primary 검색·읽기·같은-key replay입니다. 기동 성공이나 source/임시DB PASS를
+  이 최종 완료로 확대하지 않습니다. 상세 수정·운영 이력은 아래 운영 기록에 보존합니다.
 
 [현재 통합 설계](docs/architecture/REGISTERED_REVIEW_INCREMENTAL_INTEGRATION_DESIGN.md)와
 [이번 검증·남은 조건](docs/operations/REGISTERED_REVIEW_INCREMENTAL_INTEGRATION_2026-10-19.md)을

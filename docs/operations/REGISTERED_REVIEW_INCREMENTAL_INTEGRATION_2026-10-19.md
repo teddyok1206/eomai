@@ -143,6 +143,35 @@ Graph-only 후보 반환을 새 문항의 벡터 소비로 확대하지 않는�
   18:20 실제 INDEX20은 MainPID0/inactive/dead/Result=success/NRestarts0이었다.
   정상 process 종료와 Workflow/native terminal 완료를 동일시하지 않고 후속 관측한다.
 
+## 운영 후속 — 18:36 UTC: INDEX21 실제 교체·권한 차단/복구
+
+- Runner 수정은 `e013d35013851a8a5a7b50b8bee9c40edd90568c`로 commit/push했고,
+  공식 build-only/RECORD 검사와 cold SDK 설치를 통과했다. 실제 설치 code SHA는
+  최종 소스86ab1dfc…와 같다. API66/QUERY/Chat과 CPU prefix는 그대로다.
+- 원 INDEX20의 command는18:18에 `LOCAL_EMBEDDING_OUTCOME_INVALID`로 FAILED였다.
+  native launch Job은 SUCCEEDED이며 ALLOCATION→INDEX_PREPARED→REGISTERED→COMPLETED
+  checkpoint4개와 committed index/receipt가 존재했다. WF/step RUNNING은 실행 중인
+  작업이 아니라 quiescent nonterminal history로 남긴다. 성공으로 바꾸거나 재시도하지 않았다.
+  root READ ONLY 관측 결과는 `original-index20-execution.json`이다.
+- 원Graphc0e를 대상으로 미착수였던5건만 같은 공개 cancellation owner로 CANCELLED했다.
+  attempt0/lease generation0/step0를 fresh 재검증하고5건을 한 transaction으로 처리했다.
+  원870 실행과 Artifact, encoding, 과거 receipt는 수정하지 않았다.
+- 기존 공개 Identity·grant·Orchestrator Artifact owner를 사용해 INDEX21을 등록/활성화했다.
+  revision은 `localindexservicerev_7819ddd0edc6412dac90393f30ae82ad`, identity SHA는
+  `sha256:3e50db350624f99b464de3ae99a387a1e78b1e5e1f1a1e9821fb96f98528dd67`다.
+  기존 namespace와 허용 범위를 유지한 legacy/mixed grant2개와 native policy Artifact2개를
+  새 immutable service/runtime에 결합했다. IAM/schema/수치 모델 변경은 없다.
+- INDEX가 terminal/native0인 상태에서 runtime·owner·unit·prepare entry의4파일을
+  exclusive backup/순차 CAS로 선택했고 최종 owner4를 선택했다. API/QUERY/Catalog/Chat의
+  기존 control hash·epoch를 보존했다. 전체 service 중단/공용 prefix 재설치는 없었다.
+- 같은21을 ACTIVE44→DISABLED45로 바꾸고 실제 시작을 시도했다. invocation
+  `9af38de3150d498792b70d24e0c9d5cf`는 `LOCAL_INDEXING_FENCE_FORBIDDEN`으로
+  종료했고 native 실행0/NRestarts0였다. 실패 journal을 보존한 뒤 public activate로
+  ACTIVE46에 복구했다.21 자체의 실제 차단 증거이지 사용자별 source ACL 철회 증거는 아니다.
+- 복구 뒤 positive invocation `8a7c747a65af4169988f3e6cf27abb74`/MainPID19308의
+  active/running/Result=success/NRestarts0를 확인했다. 시작 성공을 자동 delta·query 완료로
+  확대하지 않는다. 최종 mixed/primary/historical HTTP는 아직 제출하지 않았다.
+
 ## 구현·검증된 기반
 
 - 현재 승인 Item과 최종 authoring/review, 등록 정본, trusted receipt를 bounded batch로
