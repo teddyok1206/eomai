@@ -99,3 +99,39 @@ Graph publisher와 mixed INDEX capture만 이를 명시적으로 호출하며, �
 유지하며, 현재 ordinary grounded family만 batch REVIEW resolver와 pure projector로 보충한다.
 지원하지 않는 과거 family는 명시적인 missing이고 현재 지원 family의 손상은 실패다. 새 role/Job/
 receipt 의존성은 기존 population cache로 재사용하지 않고 caller의 같은 root에서 새로 확인한다.
+
+## 제한 Catalog role의 Identity fence와 immutable leaf 읽기
+
+2026-10-19 UTC. 실제 제한 role 출판에서 `operators FOR SHARE`가 거부된 경계의 수정이다.
+런타임 권한을 넓히거나 실제 출판 성공을 이 문서로 대신하지 않는다.
+
+1. 책임: ordinary publisher는 실제 actor/정책/source를 검증하고, Identity row 잠금은
+   주입된 기존 `OperatorAuthorizationFence`가 소유한다. 누락된 fence의 fallback은 없다.
+2. 정본: command의 actor는 이미 인증된 owner 선택이며, 현재 ACTIVE/password 상태와
+   실제 ADMIN/permission/RELEASED policy를 각 초기·최종 root에서 다시 읽는다.
+3. ID/revision: 원 source/run/Workflow/plan/Graph/policy/idempotency pin은 그대로다.
+   mutable corpus head를 immutable snapshot identity로 대체하거나 latest로 재선택하지 않는다.
+4. 포인터: approved Artifact와 revision은 migration0001 trigger, definition은0002,
+   resolved plan은0009, policy revision은0014 trigger가 UPDATE/DELETE를 거부한다.
+   fresh exact rows·approved 조건·실제 member/hash/producer/receipt 검증은 계속 필요하다.
+5. 접근: 최대16개 selected source의 bounded PK/IN 읽기를 유지한다. IAM 전체 잠금이나
+   새 permission 조회 경로를 만들지 않는다.
+6. 자료구조: 기존 map/set/PK와 Graph publication unique key를 재사용하며 새 table/cache는 없다.
+7. 비용: metadata O(n+c), 정렬 O(n log n), member 검증 O(bytes)라는 기존 한도를 유지한다.
+8. 동시성: 제한 role은 기존 SECURITY DEFINER fence가 target Operator SHARE를 root까지
+   유지하고 IAM에는 plain SELECT만 한다. 공식 role revoke/disable/delete/password writer의
+   target Operator UPDATE와 직렬화한다. Items/ItemRevision/analysis run/Workflow/step/Job의
+   mutable parent 잠금은 유지한다. 초기 owner와 공통 publisher의 fresh-Session preliminary
+   callback은 fence 전에 root를 명시적으로 시작하며 이미 있는 최종 corpus CAS root를
+   교체하거나 commit하지 않는다. Graph snapshot은0013에 불변 trigger가 있는 것이 아니라
+   공식 publisher가 append-only INSERT하고 제한 role에 UPDATE/DELETE가 없다는 경계다.
+   원 snapshot의 fresh state/hash/pointer 검증과 최종 corpus advisory lock/FOR UPDATE/CAS를
+   유지하며, 이 변경이 임의 DB-owner SQL까지 immutable로 만든다고 주장하지 않는다.
+9. 의존: application은 기존 Identity fence protocol에 의존한다. 실제 Catalog composition은
+   `PostgresOperatorAuthorizationFence`와 보호된 function-owner pin을 주입한다.
+   `OwnedOperatorAuthorizationFence`는 실제 table/schema-owner 세션 전용이며 Catalog 대안이 아니다.
+10. 실패: 미설치/변조 fence, 권한 철회, stale pin/member, 승인 철회는 출판 전 fail closed다.
+    기존 command/key/authorized_at 재사용 및 corpus CAS/rollback 동작은 바꾸지 않는다.
+11. 대안: Catalog에 IAM/immutable leaf UPDATE를 부여하면 read-only 경계를 넓힌다.
+    잠금만 삭제하면 mutable 권한 철회와 경합한다. 따라서 지원된 target-row fence와 기존
+    immutable/append-only owner 경계만 재사용하고 schema/grant/worker protocol은 바꾸지 않는다.

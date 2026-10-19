@@ -66,6 +66,49 @@
   root 소유권을 유지한 한 파일의0644 metadata 보정을 진행하며, 실제 재기동 확인 전
   Catalog 정상·전체 서비스 정상으로 보고하지 않는다. 과거 실패 journal은 보존한다.
 
+## 운영 후속 — 17:52 UTC: 호환 런타임 복구와 출판 역할 경계
+
+- 실제 설치 source는 `66f387bfa5ef3b5d16858d515ad0982dee8789c4`다. 공용 delivery의
+  API wheel SHA는 `27270fda4fb64c5267f04326b16837d29ca8959459fe4067533d734a4939a803`이며
+  build-only wheel과 구분한다. DB0058은 VERIFY만 했고 새 migration/grant는 없다.
+- Catalog 파일 metadata 보정은 실제 재기동에 성공했다. 공용5개, broker/Chat2개와
+  INDEX/QUERY를 포함한 기존10개 서비스를 복구했다. QUERY READY17:46:00,
+  INDEX20 STARTED17:45:59 및 versioned API LIVE/READY를 실제 확인했다.
+- INDEX20의 같은 revision `localindexservicerev_e8794dc635fe426e82527c869c76fbe9`를
+  public lifecycle로 ACTIVE40→DISABLED41로 바꿨다. 실제 시작은
+  `LOCAL_INDEXING_FENCE_FORBIDDEN`으로 종료했고 native 실행0/NRestarts0였다.
+  같은 revision을 public activate로 ACTIVE42에 복구한 뒤 정상 기동했다.
+  실패 journal과 원 lifecycle 결과를 보존했으며 다른 service/권한으로 대체하지 않았다.
+- ordinary Graph 출판1건은 제한 Catalog credential에서 `operators FOR SHARE`가 거부됐다.
+  원 command 파일을 보존했고 읽기 전용 확인에서 publication row 없음·current Graph가
+  원 `graphrev_c0e78b4e4ce6588de3d3b6c6f25fb3d9` 그대로임을 확인했다. 다른 key나
+  elevated credential로 재제출하지 않았다. 설치된 Identity fence를 주입하고 불변 leaf의
+  불필요한 잠금만 제거하는 수정이 필요하다. mutable source/producer와 최종 CAS는 보존한다.
+- 같은 단원의 실제 기출13개 중 새 문항의 독립 REVIEW가 참고했던 genuine V10 기출
+  `itemrev_72ab539bd96c4ba6993bc1f5dc678989`를 공식 읽기 계약으로 확인했다.
+  이것은 owner metadata 준비이며 새 사용자 인증/새 Graph/검색 성공 증거가 아니다.
+- 수정은 별도 cold SDK에만 설치할 수 있다. DB·daemon/provider/control20을 다시 선택할
+  필요가 없는 administrative one-shot 경계다. API66과 후속 SDK의 source/RECORD를
+  따로 검증하며, 새 SDK 설치를 운영 전체 release 변경이나 활성화로 보고하지 않는다.
+
+운영 증거는 `/tmp/eom-registered-review-patch.zbfFVg5a/`의 installation/selection,
+authority disable/restore, Chat 복구, startup, original publication/outcome 결과다.
+최종 HTTP는 exact generated target에 실제 VECTOR observation이 있는지도 확인한다.
+Graph-only 후보 반환을 새 문항의 벡터 소비로 확대하지 않는다.
+
+### 제한 출판 역할 수정의 종료 검증
+
+- publisher는 필수 Identity fence를 주입받는다. 최초 owner root와 automatic preliminary
+  callback의 새 Session만 명시적으로 시작하고 기존 최종 corpus CAS root는 교체하지 않는다.
+- ordinary publisher/기존 fence 관련3개 소스 suite **131 PASS /5.47초**와 strict type,
+  Ruff/format을 통과했다. 최종 XML은 `/tmp/eom-ordinary-publisher-identity-fence-final2.xml`이다.
+  기존 실패 재현과 중간 성공 실행도 보존하며 합산하지 않는다.
+- 별도 disposable DB `20261019174958_c012f45d`의0058 migration cycle·runtime reconcile,
+  공식 limited operator-fence profile을 사용했다. 공식 `operator-fence-tests`는 실제 제한
+  로그인/설치 SECURITY DEFINER/actor 잠금과 철회, stale Graph·policy 거부를 포함해
+  **12 PASS /29.76초**다. Graph member 해석 한 포트는 합성이라 전체 Graph/NAS 출판
+  성공으로 확대하지 않는다. 운영 계정·권한·DB는 테스트 대상이 아니다.
+
 ## 구현·검증된 기반
 
 - 현재 승인 Item과 최종 authoring/review, 등록 정본, trusted receipt를 bounded batch로

@@ -32,6 +32,7 @@ from eom_catalog_service.ordinary_item_graph_publication_service import (
     OrdinaryItemGraphPublicationService,
 )
 from eom_identifiers import content_sha256
+from eom_identity_service.operator_authorization_fence import OperatorAuthorizationFence
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
@@ -42,6 +43,7 @@ from eom_workflow_runner.models import (
 from eom_workflow_runner.repository import workflow_business_fingerprint
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
+from sqlalchemy import create_engine
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 
@@ -104,6 +106,100 @@ def _rehash(value: dict[str, Any]) -> dict[str, Any]:
 
 def _command() -> PublishOrdinaryApprovedItemAnalysesCommand:
     return PublishOrdinaryApprovedItemAnalysesCommand.model_validate(_command_value())
+
+
+def test_publisher_requires_explicit_identity_fence_no_owner_inference() -> None:
+    with pytest.raises(TypeError, match="identity_fence"):
+        OrdinaryItemGraphPublicationService(cast(Any, Mock()), publication=Mock(), retrieval=Mock())
+
+
+def test_identity_fence_denial_precedes_iam_reads_and_materialization() -> None:
+    service = object.__new__(OrdinaryItemGraphPublicationService)
+    service.identity_fence = Mock(spec=OperatorAuthorizationFence)
+    service.identity_fence.fence_current_operator.side_effect = ValueError(
+        "OPERATOR_AUTHORIZATION_FENCE_FORBIDDEN"
+    )
+    service.retrieval = Mock()
+    session = Mock(spec=Session)
+    session.scalar.side_effect = AssertionError("IAM_READ_BEFORE_IDENTITY_FENCE")
+    with pytest.raises(ValueError, match="OPERATOR_AUTHORIZATION_FENCE_FORBIDDEN"):
+        service._authorize(session, _command())
+    service.identity_fence.fence_current_operator.assert_called_once_with(
+        session, _command().requested_by_operator_id
+    )
+    session.scalar.assert_not_called()
+    session.scalars.assert_not_called()
+    service.retrieval.resolve_access_policy.assert_not_called()
+
+
+@pytest.mark.parametrize("fence", (None, object()))
+def test_missing_or_nonfence_value_is_not_a_noop_authority(fence: object) -> None:
+    with pytest.raises(OrdinaryItemGraphPublicationError, match="IDENTITY_FENCE_UNAVAILABLE"):
+        OrdinaryItemGraphPublicationService(
+            cast(Any, Mock()),
+            identity_fence=cast(Any, fence),
+            publication=Mock(),
+            retrieval=Mock(),
+        )
+
+
+@pytest.mark.parametrize("entry", ("initial", "preliminary_callback"))
+def test_publication_entries_open_actual_session_root_before_fence(entry: str) -> None:
+    seen = []
+
+    class DenyingFence:
+        def fence_current_operator(self, session: Session, operator_id: str) -> None:
+            root = session.get_transaction()
+            assert root is not None and root.is_active
+            assert operator_id == _command().requested_by_operator_id
+            seen.append(session)
+            raise ValueError("OPERATOR_AUTHORIZATION_FENCE_FORBIDDEN")
+
+    engine = create_engine("sqlite://")
+    publication = Mock()
+    try:
+        service = OrdinaryItemGraphPublicationService(
+            engine, identity_fence=DenyingFence(), publication=publication, retrieval=Mock()
+        )
+        with pytest.raises(ValueError, match="OPERATOR_AUTHORIZATION_FENCE_FORBIDDEN"):
+            if entry == "initial":
+                service.publish(_command())
+            else:
+                with service.sessions() as session:
+                    service._validate_current(session, _command(), ())
+        assert len(seen) == 1 and seen[0].get_transaction() is None
+        publication.resolve_accepted_analyses.assert_not_called()
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize("denial", (None, "state", "hash", "pointer"))
+def test_append_only_graph_snapshot_retains_exact_state_hash_and_pointer_checks(
+    denial: str | None,
+) -> None:
+    command = _command()
+    snapshot = SimpleNamespace(
+        state="PUBLISHED", snapshot_sha256=command.expected_graph_snapshot_sha256
+    )
+    if denial == "state":
+        snapshot.state = "DRAFT"
+    if denial == "hash":
+        snapshot.snapshot_sha256 = "sha256:" + "0" * 64
+    service = object.__new__(OrdinaryItemGraphPublicationService)
+    service.retrieval = Mock()
+    service.retrieval.resolve_snapshot_pointer.return_value = (
+        None if denial == "pointer" else command.expected_graph_snapshot
+    )
+    session = Mock(spec=Session)
+    session.scalar.return_value = snapshot
+    if denial is None:
+        assert service._validate_pinned_base(session, command) is snapshot
+    else:
+        with pytest.raises(OrdinaryItemGraphPublicationError, match="BASE_POINTER_INVALID"):
+            service._validate_pinned_base(session, command)
+    statement = session.scalar.call_args.args[0]
+    assert "FOR SHARE" not in str(statement.compile(dialect=postgresql.dialect()))
+    assert statement.get_execution_options()["populate_existing"] is True
 
 
 @pytest.mark.parametrize("kind", ["command", "result"])
@@ -503,6 +599,7 @@ def test_actual_actor_and_policy_required_not_hardcoded_admin_claim(denial: str 
         [SimpleNamespace(permission_id="actual-permission")],
     ]
     service = object.__new__(OrdinaryItemGraphPublicationService)
+    service.identity_fence = Mock(spec=OperatorAuthorizationFence)
     service.retrieval = Mock()
     service.retrieval.resolve_access_policy.return_value = SimpleNamespace(
         allowed_requester_roles=("ADMIN",),
@@ -536,8 +633,11 @@ def test_actual_actor_and_policy_required_not_hardcoded_admin_claim(denial: str 
             with pytest.raises(OrdinaryItemGraphPublicationError, match="FORBIDDEN"):
                 service._authorize(session, command)
     for call in session.scalars.call_args_list + session.scalar.call_args_list:
-        assert "FOR SHARE" in str(call.args[0].compile(dialect=postgresql.dialect()))
+        assert "FOR SHARE" not in str(call.args[0].compile(dialect=postgresql.dialect()))
         assert call.args[0].get_execution_options()["populate_existing"] is True
+    service.identity_fence.fence_current_operator.assert_called_once_with(
+        session, command.requested_by_operator_id
+    )
 
 
 def test_initial_forbidden_actor_fails_before_any_accepted_member_or_retrieval() -> None:
@@ -558,6 +658,7 @@ def test_initial_forbidden_actor_fails_before_any_accepted_member_or_retrieval()
     common.assert_not_called()
     service.publication.resolve_accepted_analyses.assert_not_called()
     session.scalar.assert_not_called()
+    session.begin.assert_called_once_with()
 
 
 @pytest.mark.parametrize(
@@ -664,6 +765,16 @@ def test_current_candidate_proof_revalidated_and_locked_before_final_commit(
     assert session.scalars.call_count == len(by_model)
     for call in session.scalars.call_args_list:
         statement = call.args[0]
-        assert "FOR SHARE" in str(statement.compile(dialect=postgresql.dialect()))
+        immutable = {
+            WorkflowDefinitionRecord,
+            ResolvedExecutionPlanRecord,
+            ArtifactRecord,
+            ArtifactRevisionRecord,
+        }
+        entity = statement.column_descriptions[0]["entity"]
+        compiled = str(statement.compile(dialect=postgresql.dialect()))
+        assert ("FOR SHARE" in compiled) is (entity not in immutable)
+        if entity in {ArtifactRecord, ArtifactRevisionRecord}:
+            assert ".approved IS true" in compiled
         assert statement.get_execution_options()["populate_existing"] is True
     session.add_all.assert_not_called()

@@ -54,6 +54,13 @@ logical Item
   trigger의 새 임시 PostgreSQL 테스트4개가 통과했습니다. 별도 mixed 조회 설정의
   파일 권한 형식 불일치로 Catalog 시작 실패도 확인했으며, 데이터/DB 권한 변경 없이
   설치 metadata를 보정하고 재기동을 검증합니다. 모든 후속 운영 검증은 아직 진행 중입니다.
+- **후속 운영(17:52 UTC):** 공용 API/Catalog·Chat과 INDEX/QUERY SDK의 실제 설치는
+  `66f387bf`, DB는0058입니다. 기존10개 서비스 기동, QUERY READY·INDEX20 STARTED,
+  API LIVE/READY를 확인했습니다. INDEX20 권한 철회 상태에서 실제 기동 거부와
+  같은 revision의 권한 복구(head42)도 확인했습니다. 새 문항의 Graph 출판은 별도
+  IAM 행 잠금/제한 역할 불일치로 중단됐으며 원 요청과 실패 이력을 보존합니다.
+  기존 Identity fence를 재사용하는 수정과 실제 제한 역할 회귀를 진행 중입니다.
+  이 관측은 새 Graph·자동 증분·벡터 검색의 완료 증거가 아닙니다.
 
 [현재 통합 설계](docs/architecture/REGISTERED_REVIEW_INCREMENTAL_INTEGRATION_DESIGN.md)와
 [이번 검증·남은 조건](docs/operations/REGISTERED_REVIEW_INCREMENTAL_INTEGRATION_2026-10-19.md)을

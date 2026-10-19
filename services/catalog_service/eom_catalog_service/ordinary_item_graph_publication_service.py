@@ -26,6 +26,7 @@ from eom_identity_service.models import (
     RolePermissionRecord,
     RoleRecord,
 )
+from eom_identity_service.operator_authorization_fence import OperatorAuthorizationFence
 from eom_identity_service.repository import active_role_assignments, effective_permissions
 from eom_operator_identity import PermissionKey
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
@@ -121,10 +122,14 @@ class OrdinaryItemGraphPublicationService:
         self,
         engine: Engine,
         *,
+        identity_fence: OperatorAuthorizationFence,
         publication: KnowledgeGraphPublicationService | None = None,
         retrieval: KnowledgeRetrievalApplicationService | None = None,
     ) -> None:
+        if not callable(getattr(identity_fence, "fence_current_operator", None)):
+            _fail("IDENTITY_FENCE_UNAVAILABLE")
         self.engine = engine
+        self.identity_fence = identity_fence
         self.sessions = build_session_factory(engine)
         self.publication = publication or KnowledgeGraphPublicationService(engine)
         self.retrieval = retrieval or KnowledgeRetrievalApplicationService(engine)
@@ -144,6 +149,7 @@ class OrdinaryItemGraphPublicationService:
             + content_sha256({"idempotency_key": command.idempotency_key}).removeprefix("sha256:")
         )
         with self.sessions() as session:
+            session.begin()
             self._authorize(session, command)
             replay = session.scalar(
                 select(KnowledgeGraphPublicationRecord).where(
@@ -237,7 +243,6 @@ class OrdinaryItemGraphPublicationService:
                 KnowledgeGraphSnapshotRecord.graph_snapshot_revision_id
                 == prior.graph_snapshot_revision_id
             )
-            .with_for_update(read=True)
             .execution_options(populate_existing=True)
         )
         if (
@@ -255,12 +260,12 @@ class OrdinaryItemGraphPublicationService:
         session: Session,
         command: PublishOrdinaryApprovedItemAnalysesCommand,
     ) -> None:
-        # Row locks cover only the actual actor's existing grants. Revocation cannot
-        # race the final publication, but no identity-wide/NAS outer lock is held.
+        # The Identity-owned fence retains the target Operator lock through this
+        # root. Catalog reads actual IAM without acquiring UPDATE capability.
+        self.identity_fence.fence_current_operator(session, command.requested_by_operator_id)
         actor = session.scalar(
             select(OperatorRecord)
             .where(OperatorRecord.operator_id == command.requested_by_operator_id)
-            .with_for_update(read=True)
             .execution_options(populate_existing=True)
         )
         assignments = tuple(
@@ -270,7 +275,6 @@ class OrdinaryItemGraphPublicationService:
                     OperatorRoleAssignmentRecord.operator_id == command.requested_by_operator_id,
                     OperatorRoleAssignmentRecord.revoked_at.is_(None),
                 )
-                .with_for_update(read=True)
                 .execution_options(populate_existing=True)
             )
         )
@@ -279,7 +283,6 @@ class OrdinaryItemGraphPublicationService:
             session.scalars(
                 select(RoleRecord)
                 .where(RoleRecord.role_id.in_(role_ids))
-                .with_for_update(read=True)
                 .execution_options(populate_existing=True)
             )
         )
@@ -287,7 +290,6 @@ class OrdinaryItemGraphPublicationService:
             session.scalars(
                 select(RolePermissionRecord)
                 .where(RolePermissionRecord.role_id.in_(role_ids))
-                .with_for_update(read=True)
                 .execution_options(populate_existing=True)
             )
         )
@@ -299,7 +301,6 @@ class OrdinaryItemGraphPublicationService:
                         tuple(row.permission_id for row in permissions)
                     )
                 )
-                .with_for_update(read=True)
                 .execution_options(populate_existing=True)
             )
         )
@@ -309,7 +310,6 @@ class OrdinaryItemGraphPublicationService:
                 EducationRetrievalAccessPolicyRevisionRecord.access_policy_revision_id
                 == command.access_policy_revision_id
             )
-            .with_for_update(read=True)
             .execution_options(populate_existing=True)
         )
         if (
@@ -358,6 +358,10 @@ class OrdinaryItemGraphPublicationService:
     ) -> None:
         if session.new or session.dirty or session.deleted:
             _fail("PENDING_MUTATION")
+        # Automatic publication's preliminary callback supplies a fresh Session;
+        # the final callback already owns the corpus CAS root. Never replace it.
+        if session.get_transaction() is None:
+            session.begin()
         self._authorize(session, command)
         self._validate_pinned_base(session, command)
         if tuple(row.analysis_run_id for row in analyses) != tuple(
@@ -412,7 +416,6 @@ class OrdinaryItemGraphPublicationService:
                         tuple(row.definition_id for row in workflows)
                     )
                 )
-                .with_for_update(read=True)
                 .execution_options(populate_existing=True)
             )
         )
@@ -420,7 +423,6 @@ class OrdinaryItemGraphPublicationService:
             session.scalars(
                 select(ResolvedExecutionPlanRecord)
                 .where(ResolvedExecutionPlanRecord.workflow_id.in_(workflow_ids))
-                .with_for_update(read=True)
                 .execution_options(populate_existing=True)
             )
         )
@@ -437,16 +439,20 @@ class OrdinaryItemGraphPublicationService:
         logicals = tuple(
             session.scalars(
                 select(ArtifactRecord)
-                .where(ArtifactRecord.logical_artifact_id.in_(artifact_ids))
-                .with_for_update(read=True)
+                .where(
+                    ArtifactRecord.logical_artifact_id.in_(artifact_ids),
+                    ArtifactRecord.approved.is_(True),
+                )
                 .execution_options(populate_existing=True)
             )
         )
         artifacts = tuple(
             session.scalars(
                 select(ArtifactRevisionRecord)
-                .where(ArtifactRevisionRecord.revision_id.in_(revision_ids))
-                .with_for_update(read=True)
+                .where(
+                    ArtifactRevisionRecord.revision_id.in_(revision_ids),
+                    ArtifactRevisionRecord.approved.is_(True),
+                )
                 .execution_options(populate_existing=True)
             )
         )

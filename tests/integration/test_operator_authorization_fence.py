@@ -19,6 +19,23 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 import pytest
+from eom_catalog_contracts.knowledge import (
+    EducationRetrievalAccessPolicy,
+    KnowledgeGraphSnapshotPointer,
+)
+from eom_catalog_contracts.ordinary_item_graph_publication import (
+    PublishOrdinaryApprovedItemAnalysesCommand,
+)
+from eom_catalog_service.knowledge_graph_models import (
+    EducationRetrievalAccessPolicyRevisionRecord,
+    KnowledgeGraphSnapshotRecord,
+)
+from eom_catalog_service.knowledge_retrieval_service import KnowledgeRetrievalApplicationService
+from eom_catalog_service.ordinary_item_graph_publication_service import (
+    OrdinaryItemGraphPublicationError,
+    OrdinaryItemGraphPublicationService,
+)
+from eom_identifiers import content_sha256
 from eom_identity_service import (
     OPERATOR_AUTHORIZATION_FENCE_SIGNATURE,
     OperatorAuthorizationFenceError,
@@ -48,16 +65,18 @@ from eom_operator_identity.errors import IdentityError
 from eom_operator_identity.identifiers import new_credential_id, new_role_assignment_id
 from eom_operator_identity.passwords import PasswordService
 from eom_orchestrator.database import build_engine
-from sqlalchemy import Engine, event, text
+from sqlalchemy import Engine, event, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import ORMExecuteState, Session, sessionmaker
 from sqlalchemy.sql import ClauseElement
 
 from scripts.api.testdb_guard import TestDatabaseManifest as DisposableManifest
 from scripts.api.testdb_guard import validate_state_directory
+from tests.integration.test_embedding_registry_persistence import _seed
 from tests.integration.test_preset_model_validation_persistence import (
     guarded_engine as guarded_engine,
 )
+from tests.unit.test_ordinary_item_graph_publication import _command_value, _rehash
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 _SYNTHETIC_KEY = b"synthetic-disposable-fence-key-not-production" * 2
@@ -466,3 +485,237 @@ def test_actual_temp_shadow_is_denied_without_reading_or_deleting_its_contents(
         # No broad temp cleanup: dispose this guarded synthetic connection pool.
     finally:
         runtime.dispose()
+
+
+@pytest.fixture
+def ordinary_publication(prepared: PreparedFence, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Real IAM/fence/policy/Graph rows; NOT a full Graph or NAS publication fixture.
+
+    The existing relational seed deliberately has unmaterialized Artifact bytes.
+    Only that immutable member-resolution port is synthetic here. The public
+    policy parser, actual restricted login, installed SECURITY DEFINER routine,
+    current actor/grants, and pinned Graph-row checks are real PostgreSQL paths.
+    No ACL, function or cluster role is installed or widened by this fixture.
+    """
+    owner, runtime = _guard_process(prepared, runtime=False), _guard_process(prepared, runtime=True)
+    now = datetime.now(UTC)
+    value: dict[str, Any] = {
+        "schema_version": "education-retrieval-access-policy/1.0",
+        "access_policy_revision_id": "accessrev_" + uuid4().hex,
+        "state": "RELEASED",
+        "allowed_query_kinds": ["ITEM_PREPARATION"],
+        "allowed_requester_roles": ["ADMIN"],
+        "allowed_source_classes": ["APPROVED_ITEM", "CURRICULUM", "TEXTBOOK"],
+        "answer_bearing_roles": ["ADMIN"],
+        "maximum_budget": {
+            "max_documents": 8,
+            "max_item_revisions": 0,
+            "max_graph_nodes": 64,
+            "max_claims": 16,
+            "max_context_tokens": 8000,
+        },
+        "created_at": now.isoformat().replace("+00:00", "Z"),
+    }
+    value["content_sha256"] = content_sha256(value)
+    policy = EducationRetrievalAccessPolicy.model_validate(value)
+    try:
+        with Session(owner) as session, session.begin():
+            seed = _seed(session)
+            snapshot = session.get(KnowledgeGraphSnapshotRecord, seed["snapshot"])
+            assert snapshot is not None
+            command_value = _command_value()
+            graph_value = command_value["expected_graph_snapshot"]
+            graph_value.update(
+                graph_id=snapshot.graph_id,
+                graph_snapshot_revision_id=snapshot.graph_snapshot_revision_id,
+                manifest_sha256=snapshot.manifest_sha256,
+            )
+            graph_value["manifest_artifact"].update(
+                artifact_id=snapshot.manifest_artifact_id,
+                artifact_revision_id=snapshot.manifest_artifact_revision_id,
+                sha256=snapshot.manifest_sha256,
+            )
+            graph = KnowledgeGraphSnapshotPointer.model_validate(graph_value)
+            command_value.update(
+                requested_by_operator_id=prepared.admin_id,
+                access_policy_revision_id=policy.access_policy_revision_id,
+                access_policy_sha256=policy.content_sha256,
+                expected_graph_snapshot_sha256=snapshot.snapshot_sha256,
+            )
+            command = PublishOrdinaryApprovedItemAnalysesCommand.model_validate(
+                _rehash(command_value)
+            )
+            session.add(
+                EducationRetrievalAccessPolicyRevisionRecord(
+                    access_policy_revision_id=policy.access_policy_revision_id,
+                    schema_version=policy.schema_version,
+                    state=policy.state,
+                    content_sha256=policy.content_sha256,
+                    canonical_document=policy.model_dump(mode="json"),
+                    created_by="synthetic-disposable-publication-fence",
+                    created_at=now,
+                )
+            )
+        retrieval = KnowledgeRetrievalApplicationService(runtime)
+
+        def resolved_member(_session: Session, revision_id: str) -> KnowledgeGraphSnapshotPointer:
+            assert revision_id == graph.graph_snapshot_revision_id
+            return graph
+
+        monkeypatch.setattr(retrieval, "resolve_snapshot_pointer", resolved_member)
+        service = OrdinaryItemGraphPublicationService(
+            runtime,
+            identity_fence=PostgresOperatorAuthorizationFence(prepared.owner_pin),
+            retrieval=retrieval,
+        )
+        yield owner, runtime, service, command
+    finally:
+        owner.dispose()
+        runtime.dispose()
+
+
+def test_ordinary_publisher_real_limited_login_fences_actor_not_immutable_leaves(
+    ordinary_publication: Any, prepared: PreparedFence
+) -> None:
+    owner, runtime, service, command = ordinary_publication
+    with Session(runtime) as session, session.begin():
+        assert session.scalar(text("SELECT SESSION_USER=CURRENT_USER")) is True
+        assert session.scalar(text("SELECT CURRENT_USER")) == prepared.runtime_role
+        service._authorize(session, command)
+        assert (
+            service._validate_pinned_base(session, command).graph_snapshot_revision_id
+            == command.expected_graph_snapshot.graph_snapshot_revision_id
+        )
+        for table in (
+            "operators",
+            "roles",
+            "permissions",
+            "role_permissions",
+            "operator_role_assignments",
+            "education_retrieval_access_policy_revisions",
+            "knowledge_graph_snapshots",
+            "workflow_definitions",
+            "resolved_execution_plans",
+            "artifacts",
+            "artifact_revisions",
+        ):
+            assert (
+                session.scalar(
+                    text("SELECT has_table_privilege(CURRENT_USER,:table,'SELECT')"),
+                    {"table": "app." + table},
+                )
+                is True
+            )
+            assert (
+                session.scalar(
+                    text("SELECT has_any_column_privilege(CURRENT_USER,:table,'UPDATE')"),
+                    {"table": "app." + table},
+                )
+                is False
+            )
+        held = {
+            name: set(modes)
+            for name, modes in session.execute(
+                text(
+                    "SELECT relation.relname,array_agg(locks.mode) FROM pg_locks locks "
+                    "JOIN pg_class relation ON relation.oid=locks.relation "
+                    "JOIN pg_namespace namespace ON namespace.oid=relation.relnamespace "
+                    "WHERE locks.pid=pg_backend_pid() AND locks.granted "
+                    "AND namespace.nspname='app' GROUP BY relation.relname"
+                )
+            )
+        }
+        assert "RowShareLock" in held["operators"]  # Actual SECURITY DEFINER target lock.
+        for table in (
+            "roles",
+            "permissions",
+            "role_permissions",
+            "operator_role_assignments",
+            "education_retrieval_access_policy_revisions",
+            "knowledge_graph_snapshots",
+        ):
+            assert "AccessShareLock" in held[table]
+            assert "RowShareLock" not in held[table]
+        with pytest.raises(DBAPIError) as error, owner.begin() as writer:
+            writer.execute(
+                text(
+                    "SELECT operator_id FROM app.operators WHERE operator_id=:id FOR UPDATE NOWAIT"
+                ),
+                {"id": command.requested_by_operator_id},
+            )
+        assert getattr(error.value.orig, "sqlstate", None) == "55P03"
+        # These old immutable row-lock calls would reproduce the real 42501.
+        for table, column in (
+            ("education_retrieval_access_policy_revisions", "access_policy_revision_id"),
+            ("knowledge_graph_snapshots", "graph_snapshot_revision_id"),
+        ):
+            with pytest.raises(DBAPIError) as denied, session.begin_nested():
+                session.execute(text(f"SELECT {column} FROM app.{table} FOR SHARE"))
+            assert getattr(denied.value.orig, "sqlstate", None) == "42501"
+        service._authorize(session, command)  # Late check still uses this exact root fence.
+        assert not session.new and not session.dirty and not session.deleted
+
+
+@pytest.mark.parametrize("withdrawal", ["disable", "revoke_admin"])
+def test_ordinary_publisher_rechecks_actual_actor_grants_after_prior_root(
+    ordinary_publication: Any, prepared: PreparedFence, withdrawal: str
+) -> None:
+    owner, runtime, service, command = ordinary_publication
+    with Session(runtime, expire_on_commit=False) as session:
+        with session.begin():
+            cached = session.get(OperatorRecord, prepared.admin_id)
+            assert cached is not None and cached.status == "ACTIVE"
+            service._authorize(session, command)
+        # Synthetic test metadata only, after the prior root has ended; no live
+        # actor mutation, impersonation or additional permissions are involved.
+        with Session(owner) as writer, writer.begin():
+            if withdrawal == "disable":
+                actor = writer.get(OperatorRecord, prepared.admin_id)
+                assert actor is not None
+                actor.status = "DISABLED"
+            else:
+                admin = require_role(writer, RoleKey.ADMIN)
+                assignment = writer.scalar(
+                    select(OperatorRoleAssignmentRecord).where(
+                        OperatorRoleAssignmentRecord.operator_id == prepared.admin_id,
+                        OperatorRoleAssignmentRecord.role_id == admin.role_id,
+                        OperatorRoleAssignmentRecord.revoked_at.is_(None),
+                    )
+                )
+                assert assignment is not None
+                assignment.revoked_at = datetime.now(UTC)
+                assignment.revoked_by = "synthetic-disposable-owner"
+        with (
+            pytest.raises(
+                (OrdinaryItemGraphPublicationError, OperatorAuthorizationFenceError),
+                match="FORBIDDEN",
+            ),
+            session.begin(),
+        ):
+            service._authorize(session, command)
+
+
+@pytest.mark.parametrize("pin", ["policy", "graph_semantic", "graph_member"])
+def test_ordinary_publisher_limited_role_rejects_changed_pins_without_publication(
+    ordinary_publication: Any, pin: str
+) -> None:
+    _owner, runtime, service, command = ordinary_publication
+    value = command.model_dump(mode="json")
+    if pin == "policy":
+        value["access_policy_sha256"] = "sha256:" + "0" * 64
+    elif pin == "graph_semantic":
+        value["expected_graph_snapshot_sha256"] = "sha256:" + "0" * 64
+    else:
+        value["expected_graph_snapshot"]["manifest_sha256"] = "sha256:" + "0" * 64
+        value["expected_graph_snapshot"]["manifest_artifact"]["sha256"] = "sha256:" + "0" * 64
+    changed = PublishOrdinaryApprovedItemAnalysesCommand.model_validate(_rehash(value))
+    with (
+        Session(runtime) as session,
+        pytest.raises(
+            OrdinaryItemGraphPublicationError,
+            match="FORBIDDEN" if pin == "policy" else "BASE_POINTER_INVALID",
+        ),
+        session.begin(),
+    ):
+        service._authorize(session, changed)
+        service._validate_pinned_base(session, changed)
