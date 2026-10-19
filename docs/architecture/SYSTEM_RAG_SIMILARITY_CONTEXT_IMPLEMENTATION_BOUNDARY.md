@@ -3799,3 +3799,74 @@ unit owner when needed; the added optional ReadOnlyPaths line grants no write ac
 The finite operator preparation must accept an independently reviewed exact C5
 selection, not copy historical C1's OCCURRENCE_BACKED_PAST_EXAM view pins. Existing
 request types already express both selections; no released schema needs mutation.
+
+### Request-local index interpretation reuse — 2026-10-19
+
+An actual authenticated C1 read on a43fd918 started at00:13:50 UTC. The API
+returned after32.063 seconds, while Catalog finished its compose/late-provenance
+stages at00:14:24. The API-to-Catalog read budget is30 seconds. The finite
+diagnostic also incorrectly rejects the API's standard `application/problem+json`
+media type; its `HTTP_RESPONSE_NOT_JSON` label is not proof of invalid JSON or
+an authentication failure. No numerical benchmark or consumer submission followed.
+
+1. **Responsibility/boundary.** Reuse immutable index interpretation at the
+   existing Catalog verifier, not permission, source admission or API response.
+2. **Canonical source.** Registered immutable index Artifact/member bytes and
+   current Catalog/Identity rows remain authoritative; no persistent derived store.
+3. **Identity/revisions.** Keep logical/revision/Artifact/hash concepts separate.
+   Existing index schema bytes, spaces, recipe and historical pins do not change.
+4. **Resolution.** Every use still runs the existing exact pointer, schema/media,
+   Artifact/producer, file-set, hash and current-provenance checks. Only the deeply
+   immutable parsed model can be reused after those checks; no latest fallback.
+5. **Access.** The same three pinned indices are decoded repeatedly during namespace
+   selection, completed-source reauthorization and context assembly. The ordinary
+   three-view QUERY-present path can call `_read_index`30 times, despite using just
+   three distinct immutable members. This is a source call-count bound, not a timed
+   profile or evidence that every individual stage is caused by index parsing.
+6. **Structure.** Reuse `PinnedArtifactReadContext.read_model_member` and its existing
+   hash/pointer/decoder-keyed bounded LRU. Use one stable schema-specific decoder;
+   do not add another dictionary, global cache, service or new abstraction.
+7. **Cost/scale.** For U unique retained members and K repeated uses, expensive
+   canonical/schema interpretation becomes O(U payload bytes), not O(K payload
+   bytes). Lookup remains keyed. Existing32MiB/2048 decoded-member bounds and
+   eviction semantics remain unchanged; evicted/oversized members may decode again.
+8. **Transaction/concurrency.** The existing cache is confined to one active root
+   Session/transaction/thread. It never survives a request or crosses users. Late
+   source/permission/provenance checks continue to query current state.
+9. **Dependencies.** Catalog's infrastructure verifier calls the existing Catalog
+   member-reader interface. Domain/contracts do not import storage; no dependency,
+   database migration, queue or worker behavior is introduced.
+10. **Failure/retry.** Invalid/missing/stale/hash/provenance/schema inputs still fail
+    explicitly, including after a cache hit. No timeout retry or new request identity
+    is added. The earlier failed authenticated execution remains failed.
+11. **Simpler alternative.** Unconditional full parsing currently ignores the
+    already available operation-scoped decoder reuse. Merely extending every
+    timeout would retain that repeated work and obscure the API/client error.
+    First remove this measured-boundary duplication and verify parse-count and
+    safety regressions; do not assume it alone proves live latency or full goal PASS.
+
+Required focused evidence: repeated exact indices decode once per retained member;
+different hashes/revisions/schema/decoder and separate contexts cannot inherit a
+value; cached reads still reject invalid pointer/file-set/current provenance.
+Existing immutable-cache lifecycle/eviction tests remain applicable. Run a bounded
+synthetic repeated-read benchmark separately from actual HTTP/consumer evidence.
+The finite diagnostic should accept only the two supported JSON media types and
+report the real status/stable error code, not loosen success validation or retry.
+
+Source verification: seven focused/regression suites260 PASS27.90s and nine
+additional Registry/reference/exam/scoped-decoder/dependency suites173 PASS119.44s.
+The independent overlapping three-suite gate157 PASS is not added to those counts.
+Strict typing1 source, Ruff/format2 files and independent narrow core review PASS.
+New tests distinguish two logical index resolutions from one physical hash, retain
+exact unique-member physical-read counts, and cover all three views, another reader,
+warm pointer/provenance/root denial and physical tamper/missing after raw eviction.
+The existing warm immutable-byte semantics and eviction bounds are unchanged.
+Initial145 PASS/3 failures came from old logical-call instrumentation and were
+preserved before replacing it with stronger logical-plus-physical assertions.
+
+Small temporary-fixture synthetic measurement: ten parses without decoded retention
+versus one with retention,0.038299s versus0.004986s. This demonstrates avoided
+interpretation, not actual545-item/API latency or performance acceptance. Local XML
+raw SHA `38b2b9bcef1084e1d223cfedc81c51061fa0d024b664a7e919d60c56148e1efe`.
+The changed Catalog source is not yet installed; no authentication/model/benchmark
+or database change was performed by these source gates.

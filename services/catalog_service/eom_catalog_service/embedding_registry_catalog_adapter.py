@@ -191,6 +191,12 @@ def _document(payload: bytes) -> dict[str, Any]:
     return value
 
 
+def _decode_index_manifest(schema_ref: str, payload: bytes) -> EmbeddingIndexManifest:
+    if schema_ref != INDEX_SCHEMA_REF:
+        raise ValueError("foreign index schema")
+    return parse_embedding_index(_document(payload))
+
+
 class CatalogEmbeddingRegistryVerifier:
     """Concrete official source/member composition; IAM fence is mandatory and not supplied.
 
@@ -449,7 +455,12 @@ class CatalogEmbeddingRegistryVerifier:
     def _read_index(
         self, reader: PinnedArtifactReadContext, pointer: ArtifactMemberPointer
     ) -> EmbeddingIndexManifest:
-        return parse_embedding_index(_document(self._read_index_member(reader, pointer)))
+        # Resolution and file-set checks remain current; only the immutable
+        # interpretation is reused inside this reader's root transaction.
+        raw = self._read_index_member(reader, pointer)
+        return reader.read_model_member(
+            pointer, expected_bytes=len(raw), decoder=_decode_index_manifest
+        )
 
     def _read_shards(
         self,

@@ -6,6 +6,7 @@ from collections.abc import Callable
 from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
+from time import perf_counter
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import Mock
@@ -23,6 +24,7 @@ from eom_catalog_contracts.inference_transfer_embedding import (
 from eom_catalog_contracts.similarity_context import SimilarityIndexPin, SimilarityViewSelection
 from eom_catalog_service import embedding_registry_catalog_adapter as owner_module
 from eom_catalog_service import inference_transfer_catalog_adapter as source_module
+from eom_catalog_service import pinned_artifact_resolution as artifact_module
 from eom_catalog_service.embedding_incremental_plan import RegisteredEmbeddingRow
 from eom_catalog_service.embedding_registry_application import (
     validate_resolved_embedding_registration,
@@ -68,7 +70,10 @@ from eom_catalog_service.knowledge_retrieval_service import (
     KnowledgeRetrievalServiceError,
     ReadOnlyCandidatePoolScope,
 )
-from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
+from eom_catalog_service.pinned_artifact_resolution import (
+    PinnedArtifactReadContext,
+    PinnedArtifactResolutionError,
+)
 from eom_catalog_service.settings import CatalogSettings
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_identity_service import OperatorAuthorizationFenceError
@@ -317,6 +322,129 @@ def owner(
 
     monkeypatch.setattr(verifier.sources, "capture_in_session", Mock(side_effect=capture))
     return verifier, session, command, index, binding, scope, tmp_path
+
+
+@pytest.mark.parametrize(
+    "owner", ("CONTENT_ONLY", "CONCRETE_FACETS", "METADATA_ONLY"), indirect=True
+)
+def test_actual_index_decoder_reuses_each_view_model_in_one_reader_not_another(
+    owner: tuple[Any, ...], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    verifier, session, command, index, *_rest = owner
+    parse = Mock(wraps=owner_module.parse_embedding_index)
+    monkeypatch.setattr(owner_module, "parse_embedding_index", parse)
+    reader = PinnedArtifactReadContext(cast(Session, session), verifier.settings)
+    models = tuple(verifier._read_index(reader, command.index_manifest) for _ in range(10))
+    assert models[0] == index and all(value is models[0] for value in models)
+    assert parse.call_count == 1
+    fresh = PinnedArtifactReadContext(cast(Session, session), verifier.settings)
+    other = verifier._read_index(fresh, command.index_manifest)
+    assert other == models[0] and other is not models[0]
+    assert verifier._read_index(fresh, command.index_manifest) is other
+    assert parse.call_count == 2
+
+
+@pytest.mark.parametrize(
+    "fault", ("hash", "schema", "media", "revision", "approval", "producer", "manifest", "root")
+)
+def test_warm_index_model_never_bypasses_pointer_or_current_provenance(
+    owner: tuple[Any, ...], monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    verifier, session, command, index, *_rest = owner
+    parse = Mock(wraps=owner_module.parse_embedding_index)
+    monkeypatch.setattr(owner_module, "parse_embedding_index", parse)
+    reader = PinnedArtifactReadContext(cast(Session, session), verifier.settings)
+    pointer = command.index_manifest
+    assert verifier._read_index(reader, pointer) == index
+    revision = session.get(ArtifactRevisionRecord, pointer.artifact_revision_id)
+    if fault == "hash":
+        pointer = pointer.model_copy(update={"sha256": "sha256:" + "f" * 64})
+    elif fault == "schema":
+        pointer = pointer.model_copy(update={"schema_ref": "eom://schemas/knowledge/foreign/1.0"})
+    elif fault == "media":
+        pointer = pointer.model_copy(update={"media_type": "text/plain"})
+    elif fault == "revision":
+        pointer = pointer.model_copy(update={"artifact_revision_id": "rev_" + "f" * 32})
+    elif fault == "approval":
+        session.get(ArtifactRecord, pointer.artifact_id).approved = False
+    elif fault == "producer":
+        session.get(JobRecord, revision.job_id).status = "RUNNING"
+    elif fault == "manifest":
+        revision.manifest["manifest_version"] = "catalog-file-set/1.0"
+        revision.manifest_hash = content_sha256(revision.manifest)
+    else:
+        session.root.is_active = False
+    with pytest.raises((ValueError, PinnedArtifactResolutionError)):
+        verifier._read_index(reader, pointer)
+    assert parse.call_count == 1
+
+
+@pytest.mark.parametrize("fault", (None, "missing", "tamper"))
+def test_retained_index_model_after_raw_eviction_still_requires_exact_physical_member(
+    owner: tuple[Any, ...], monkeypatch: pytest.MonkeyPatch, fault: str | None
+) -> None:
+    verifier, session, command, index, _binding, _scope, root = owner
+    pointer = command.index_manifest
+    index_path = root / pointer.artifact_id / pointer.artifact_revision_id / pointer.member_path
+    shard = index.shards[0]
+    shard_raw = (
+        root / shard.artifact_id / shard.artifact_revision_id / shard.member_path
+    ).read_bytes()
+    reader = PinnedArtifactReadContext(cast(Session, session), verifier.settings)
+    reader.MAX_RETAINED_BYTES = max(len(index_path.read_bytes()), len(shard_raw))
+    parse = Mock(wraps=owner_module.parse_embedding_index)
+    monkeypatch.setattr(owner_module, "parse_embedding_index", parse)
+    first = verifier._read_index(reader, pointer)
+    reader.prefetch(((shard.artifact_id, shard.artifact_revision_id),))
+    reader.read_member(
+        artifact_id=shard.artifact_id,
+        revision_id=shard.artifact_revision_id,
+        member_path=shard.member_path,
+        sha256=shard.sha256,
+        media_type=shard.media_type,
+        schema_ref=shard.schema_ref,
+        max_bytes=len(shard_raw),
+    )
+    assert all(key[2] != pointer.member_path for key in reader._members)
+    assert len(reader._decoded) == 1
+    if fault == "missing":
+        index_path.unlink()
+    elif fault == "tamper":
+        index_path.write_bytes(b"corrupt cached index")
+    if fault is None:
+        assert verifier._read_index(reader, pointer) is first
+    else:
+        with pytest.raises(PinnedArtifactResolutionError):
+            verifier._read_index(reader, pointer)
+    assert parse.call_count == 1
+
+
+def test_synthetic_index_interpretation_counts_repeated_parse_not_authority_or_live_latency(
+    owner: tuple[Any, ...], monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> None:
+    verifier, session, command, index, *_rest = owner
+    parse = Mock(wraps=owner_module.parse_embedding_index)
+    monkeypatch.setattr(owner_module, "parse_embedding_index", parse)
+    measured = []
+    for retained in (False, True):
+        reader = PinnedArtifactReadContext(cast(Session, session), verifier.settings)
+        if not retained:
+            reader.MAX_DECODED_MEMBERS = 0
+        parse.reset_mock()
+        start = perf_counter()
+        values = tuple(verifier._read_index(reader, command.index_manifest) for _ in range(10))
+        elapsed = perf_counter() - start
+        assert all(value == index for value in values)
+        assert parse.call_count == (1 if retained else 10)
+        measured.append((parse.call_count, elapsed))
+    request.node.user_properties.extend(
+        (
+            ("synthetic_uncached_parse_calls", measured[0][0]),
+            ("synthetic_retained_parse_calls", measured[1][0]),
+            ("synthetic_uncached_seconds", measured[0][1]),
+            ("synthetic_retained_seconds", measured[1][1]),
+        )
+    )
 
 
 def test_canonical_committed_index_shard_result_binary_and_source_composition(
@@ -1066,6 +1194,8 @@ def test_pinned_read_uses_read_scope_without_publish_and_one_read_per_unique_mem
         return read(reader, **arguments)
 
     monkeypatch.setattr(PinnedArtifactReadContext, "read_pinned", counted)
+    physical_hash = Mock(wraps=artifact_module.sha256_file)
+    monkeypatch.setattr(artifact_module, "sha256_file", physical_hash)
     result = verifier.resolve_pinned_read(
         cast(Session, session), EmbeddingRegistryCaller("operator_" + "1" * 32), intent, registered
     )
@@ -1079,7 +1209,17 @@ def test_pinned_read_uses_read_scope_without_publish_and_one_read_per_unique_mem
     assert result.numerical_rows[0].values == (1.0,) + (0.0,) * (
         index.space.model_spec.dimension - 1
     )
-    assert len(counts) == 4 and set(counts.values()) == {1}
+    index_key = (
+        command.index_manifest.artifact_id,
+        command.index_manifest.artifact_revision_id,
+        command.index_manifest.member_path,
+    )
+    # Structural closure and typed interpretation each revalidate the index;
+    # those two logical reads still share one immutable physical materialization.
+    assert len(counts) == 4 and counts[index_key] == 2
+    assert {count for key, count in counts.items() if key != index_key} == {1}
+    assert physical_hash.call_count == 4
+    assert len({str(call.args[0]) for call in physical_hash.call_args_list}) == 4
     assert not hasattr(result, "index") and not hasattr(result, "entries")
     assert not hasattr(result, "binding_count") and not hasattr(result, "binding_set_sha256")
 
@@ -1276,6 +1416,8 @@ def test_shared_shard_is_materialized_once_and_unadmitted_binding_is_not_disclos
         return read(reader, **arguments)
 
     monkeypatch.setattr(PinnedArtifactReadContext, "read_pinned", counted)
+    physical_hash = Mock(wraps=artifact_module.sha256_file)
+    monkeypatch.setattr(artifact_module, "sha256_file", physical_hash)
     intent, registered = _read_selection(command, updated)
     result = verifier.resolve_pinned_read(
         cast(Session, session), EmbeddingRegistryCaller("operator_" + "1" * 32), intent, registered
@@ -1286,7 +1428,9 @@ def test_shared_shard_is_materialized_once_and_unadmitted_binding_is_not_disclos
         == (2 if admit_second else 1)
     )
     assert len(result.numerical_rows) == 1
-    assert counts == {"index.json": 1, "shard.json": 1, "result.json": 1, "vectors.f32": 1}
+    assert counts == {"index.json": 2, "shard.json": 1, "result.json": 1, "vectors.f32": 1}
+    assert physical_hash.call_count == 4
+    assert len({str(call.args[0]) for call in physical_hash.call_args_list}) == 4
     if not admit_second:
         assert result.bindings == (first_binding,)
         assert all(

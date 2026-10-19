@@ -31,7 +31,7 @@ logical Item
 - 승인 문항, HWPX build, RAG 학습 현황과 Codex slot 사용 상태 조회
 - 25문항 모의고사 생산 계획·실행·검토·퇴역을 불변 checkpoint와 영수증으로 관리
 
-## 증분 RAG 목표의 현재 상태 — 2026-10-18 20:09 UTC
+## 증분 RAG 목표의 현재 상태 — 2026-10-19 00:19 UTC
 
 운영 API·Catalog·출제/HWPX 실행기·일반 채팅에 `a43fd918`을 설치했고,
 실제 wheel·RECORD·provider를 확인했습니다. 별도 QUERY SDK는 `d81b9ba3`, INDEX와
@@ -81,13 +81,19 @@ INDEX18 자동 인덱싱을 정상 재개했고 관련 10개 서비스·API LIVE
 **20:02 UTC에 관련 10개 서비스·API LIVE/READY·QUERY READY와 기존 INDEX18 재개를 확인했습니다.**
 시험지용 세 ALL 인덱스 참조는 등록된 정확한 revision에서 별도로 준비했습니다.
 이 수정은 새 시험지·문항·HWPX 생성이나 인증된 실제 C5 조회 성공을 뜻하지 않습니다.
-다음 실제 로그인에 쓸 고정 입력 8개도 보호된 위치에 준비했습니다. 실행은 아직 시작하지
-않았고 유효한 사용자 세션이 없어 대기 중입니다. 인증 유효시간을 늘리거나 로그인한 것으로
-가장하지 않습니다.
+고정 입력 8개로 실제 검증을 시작했고 **10월19일00:13 UTC 로그인·사용자 권한 확인은
+성공했습니다.** 다만 첫 C1 조회가32초 뒤 실패했고, Catalog는 같은 조회를 약34초에 마쳤습니다.
+API→Catalog 제한30초와 오류 응답 형식을 잘못 표시한 검증 클라이언트를 구분해 확인했습니다.
+같은 인덱스를 최대30번 해석하는 구간은 기존 요청 단위 디코딩 캐시를 재사용하도록 수정했고,
+회귀260개·추가 관련173개와 타입·스타일·독립 검토를 통과했습니다. **아직 운영 미반영**이며,
+권한·해시·최종 출처 검사는 유지하고 제한 시간을 늘려 덮지 않습니다.
+실제 여섯 비교·후속 문항/채팅 제출은 시작되지 않았습니다. 실패 기록을 보존하고 같은 INDEX18을
+재개했으며00:19 UTC API LIVE/READY를 확인했습니다. 전체 목표는 미완료이고, 현재 로그인창은 없습니다.
 [불변 검색 범위 호환 설계](docs/architecture/PINNED_EMBEDDING_NAMESPACE_READ_COMPATIBILITY.md),
 [이번 운영 반영과 남은 범위](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#independent-c5-reader-installed-and-services-recovered--2003-utc),
 [저장된 인덱스 정본 점검](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#committed-index-storage-snapshot--1728-utc),
 [인증 후 조회 시간 초과와 정상 인덱싱 재개](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#authenticated-c1-read-deadline-and-index-resumption--1548-utc)를 참고하세요.
+[최근 실제 인증·첫 조회 실패 기록](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md#genuine-authentication-followed-by-first-read-failure--2026-10-19)도 별도로 보존합니다.
 아래 누적 릴리스 기록은 각 기록 시점의 검증 범위입니다.
 
 ## 현재 저장소 릴리스 선

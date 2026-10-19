@@ -1036,3 +1036,65 @@ actual outcomes before any retry or conditional device selection. A genuinely
 new source/report arrival after the persistent seed also remains NOT_LIVE_VERIFIED;
 expanding existing coverage is not that witness. No educational human-evaluation
 requirement, extra25-item production or unrelated acceptance cycle is added.
+
+## Genuine authentication followed by first-read failure — 2026-10-19
+
+A fresh user offer authorized the original finite authentication. The same
+INDEX18 received one normal main-only SIGTERM at23:32:50 UTC. Its final metadata
+capture took longer than expected; no second signal or forced termination occurred.
+Source review confirmed that the existing native-unit/cgroup checks and shared
+CPU-capacity lock, not INDEX main PID alone, fence actual numerical execution.
+The original launcher was enabled by a DRAFT-only change; all eight protected
+inputs, original keys/cohort/six allocation and source/actor fences were retained.
+
+Exact unit `eom-system-rag-goal-ee97239d-a43fd918.service`, invocation
+`e9f09116f5774416bef82e7df63c4aab`, reached genuine getpass at23:40:33 UTC.
+The user authenticated successfully at00:13:49 UTC: LOGIN_RESPONSE_VALIDATED,
+CURRENT_OPERATOR_VALIDATED and MEMORY_SESSION_BOUND were all observed. This is
+actual authentication evidence, not an inference from the user's acknowledgement.
+The enclosing unit's waiting time did not extend the actor's900-second freshness.
+
+First C1 read started at00:13:50.232433 and stopped at00:14:22.296304 with the
+frozen client's `HTTP_RESPONSE_NOT_JSON` diagnostic. API request
+`req_74a506d1a2e9544a49e4b2b6d0c71080` took32063.332ms. Catalog continued the
+same original read: COMPOSE_CONTEXT took29126ms and FINAL_PROVENANCE completed
+at00:14:24.230638 UTC. This is late completion of the original read, not a retry.
+
+Two boundaries are now distinguished. The API-to-Catalog read deadline is30s,
+whereas the finite HTTP deadline is45s; the observed timing is consistent with
+the shorter owner-RPC deadline expiring first. Separately, the frozen diagnostic
+accepts only `application/json` and incorrectly rejects the API's supported
+`application/problem+json`. Thus that diagnostic does not establish malformed
+JSON or expose the original HTTP status/error code. Source and timing evidence
+must not be presented as a captured error body that was never retained.
+
+The finite unit became FAILED/exit-code, MainPID0 and empty ControlGroup. Its
+in-memory session closed without credential persistence. Original six executions,
+model forwards and C2/C3/C4 submissions remained0. Failed history is preserved;
+the unit and original keys were not retried. A new human approval or evaluation
+gate is not added as a remedy.
+
+Only after finite termination and no active native/benchmark unit, one normal
+start resumed the same logical INDEX18. At00:19:07 UTC INDEX was active/running,
+PID3176466, invocation `7ea3b6a76d7e4aa88fc2c55fc9a34e2b`; original QUERY/API
+invocations were unchanged and API LIVE/READY passed. Pane%89 is idle bash with
+input disabled. Next routine monitor is not due before00:49:07 UTC.
+Local sanitized outcome:
+`/tmp/eom-finite-a43-invocation.JzAp1H30/terminal-and-restoration.json`.
+
+The smallest confirmed hot-path duplication is repeated interpretation of the
+same three pinned index manifests (up to30 parses in the normal three-view path).
+The source correction reuses the already existing request-local immutable decoder;
+it does not cache source authorization, reduce fresh fences, introduce a new cache
+framework or extend timeouts. Its design is recorded in the implementation boundary
+document. Source verification and later operating latency remain separate gates.
+Full C1–C5 delivery/six-run/default selection remains incomplete.
+
+The minimal decoder-reuse source gate subsequently passed260 tests across seven
+suites and173 across nine other suites, strict typing1, Ruff/format2 and independent
+review. The overlapping157-test independent gate is not additive. Initial three
+logical-call-count failures are preserved; updated assertions now distinguish two
+logical index validations from one physical hash and retain four unique physical
+member reads. Synthetic ten-read parsing improved10→1 in a tiny fixture only;
+operating HTTP latency is still unverified. No timeout, schema, dependency, source
+permission or database state changed. Installation remains a separate next step.
