@@ -584,3 +584,86 @@ Graph의 모든 V1 경로나 fresh private Chat 호환성을 실제 검증했다
   `f6e56431374eb07dfcd94b81abe6e2fef8dee75697d99cccc5cc6dfc2c8081fb`.
 - `index21-same-scope-canary-start-state.txt`, rawSHA
   `3f994ef368b77e7a17aeffa6aa8636796493edb5b2e9dc948a21adab84c19843`.
+
+## target 등록과 최종 완료 검증의 구분 — 20:55 UTC 체크포인트
+
+20:53:12의 실제 current mixed CONTENT head는 binding521개와 대상 생성 문항의 binding1개를
+포함했다. 그러나20:55:40에는 coordinator가 COMMITTING / REGISTERED였고 receipt는
+없었으며 step과 Workflow는 RUNNING이었다. owned encoding42개가 모두 SUCCEEDED여도
+등록·수치 완료와 receipt·step·Workflow 최종 완료는 같은 상태가 아니다. 이 시점의 target
+등록을 최종 workflow 완료나 사용자 VECTOR 검색·read/replay 성공으로 주장하지 않는다.
+
+INDEX sourcee013의 정적 경로 검토에서 `local_embedding_index_completion.py`의 receipt-root
+registration 검증, receipt publication 뒤 `validate_completion`, step-success 검증,
+Workflow-terminal 검증은 registration observation을 총4회 확인하는 정상 유한 경로다.
+각 확인은 `embedding_registry_catalog_adapter.py:resolve_registration`과
+`_components`의 `verify_registered_references`를 통해 최대2회 population을 해석할 수 있어,
+전체로는 최대8회 해석 가능성이 있다. 이는 당시 eligibility546 / current binding521과
+별도로 exact42개 source·lease·owned closure도 검증하는 경로이며, **42회 전체 corpus를
+반복하는 N² 경로·새 native 호출·무한 retry를 확인한 것은 아니다**. 최대8회는 정적 호출
+경로의 가능 횟수이지 실제 계측 횟수나 wall-clock 상한이 아니다. MemoryMax1GiB 또는
+swap 관측만으로 병목을 입증하지도 않는다. 이 기록 때문에 source 성능 patch, fence 완화,
+새 종료 gate를 추가하지 않으며 최종 receipt·Workflow와 HTTP 증거는 계속 구분해 확인한다.
+
+## CONTENT delta의 receipt·step 성공과 최종 사용자 검증 대기 — 21:00 UTC 체크포인트
+
+20:58:51.038771 고정 관측에서 원 후속
+`workflow_235e8836515f438e9fd2b39a074f25d6`의 native Job과
+`steprun_d8cdc7c97e8e43cfa0d69b0fe02c4540`은 모두 SUCCEEDED였다.
+ALLOCATION→INDEX_PREPARED→REGISTERED→COMPLETED checkpoint4개, canonical completion
+receipt와 저장 step output의 최종 checkpoint 일치를 확인했다. 다만 **Workflow는 RUNNING**,
+`workflow_completion_observed=false`이며 원 owner의 terminal fence가 남아 있다.
+앞선20:55의 receipt 부재 관측은 보존하고, 이 후속 증거를 Workflow 최종 완료로 확대하지 않는다.
+
+이번 source-plan의 source/demand는 실제42개, 그중 대상 demand는1개다. 완료 CONTENT index는
+PAST_EXAM520개와 대상 생성 문항1개, 총521개다. 원 CONTENT baseline479개의 encoding과
+shard row 참조는 모두 동일하며 encoding 변경·row 참조 변경·누락은 각각0이다.
+owned 신규 encoding Job42개는 모두 SUCCEEDED이고 그 키42개 모두 baseline에 없으며,
+대상의 신규 encoding1개를 포함한다. baseline 키가 owned native input에 들어간 수는0이므로
+**원 baseline479개를 재인코딩하지 않고 재사용했다**. 신규42개 전체를 새 생성 문항으로
+해석하지 않으며, 모든 projection의 원520개 coverage 완료로도 해석하지 않는다.
+
+별도20:53:12.762054 registry 관측은 새 Graph
+`graphrev_8f3ff9b22d592ecf661fec7116a5cab9`의 current mixed CONTENT521개와
+대상 `itemrev_b6e626a764644e37b428cd914f920bb6`의 binding1개를 확인했다. 해당 binding의
+first-origin manifest는 아래 current CONTENT manifest와 정확히 같다. 과거 origin만으로
+current membership을 추정한 것이 아니다. mixed CONCRETE457 / METADATA425는 같은 새 Graph에
+있고 이후 처리는 정상 background 경로에 맡긴다. legacy CONTENT479는 새 Graph에,
+CONCRETE457 / METADATA425는 원 Graphc0e에 남아 있으며 원 요청·실패·완료 이력은 보존한다.
+
+정본 NAS Artifact의 identity와 raw/semantic hash는 다음처럼 구분한다. 이 문서에는 문항·
+worker 결과 본문이나 vector bytes를 복사하지 않는다.
+
+- current CONTENT index: `embeddingindex_f0c2752b70338070529a12e067817e0f` /
+  `embeddingindexrev_aee596522b9a2e376872ef52cf78b6cd`, head4, semantic SHA
+  `sha256:ddf9783d99647b2b9c3a701aef2abd9ca7dad863bfe4bc8381ce507ecb0a45cb`.
+  `artifact_6e5e51aa811d4ec29781968c7ad857e5` /
+  `rev_59a410b278344650a77e221293a6c5cf`, `index.json`,
+  schema `eom://schemas/knowledge/embedding-index-manifest/2.0`, raw SHA
+  `sha256:518649a13a16b0f8f22996eea57ee690e5e49367b002b665b2b1e52e247a111c`.
+- completion receipt: `artifact_c165cf9315b74efd83616d7a2da7cb26` /
+  `rev_c3a9c1ffeb5145b582a39e09222ddd0f`, `receipt.json`,
+  schema `eom://schemas/workflow/local-embedding-workflow-receipt/2.0`, raw SHA
+  `sha256:d3e4194ada3fa688b3cf2ce69cd5d5023f4e3d8b71527e0661c1c0ec68285388`,
+  semantic SHA `sha256:02704553d3a7e8ad67c28a94480cd26e531a7671c986bcf13be83d4818e278df`.
+
+두 metadata observer는 DB write·vector read·모델 실행 없이 기존 owner read를 사용했다.
+이 관측 자체는 source 권한 부여나 full completion owner 검증을 대체하지 않는다. 전체 목표에서
+별도 승인된 V2 분석1건은 이미 수행했으므로 전체 Codex 실행0을 주장하지 않는다.
+이번 INDEX·QUERY 연결은 기존 검토 풀이를 재사용하며 Codex 풀이 호출0이다.
+
+최종 단일 mixed QUERY 클라이언트는 offline48 PASS와 별도 재실행48 PASS(4.17초)를
+확인했다. 이 테스트는 source 계약·mock transport 검증이며, 별도로 실제 설치 API66의
+Python에서 고정 plan 검증도 통과했다(HTTP 호출0·로그인 입력0). active client SHA prefix는 `22ca49…`, plan은
+`fb3f…`이며 원 request key는 그대로다. 21:00에 `EOM2rag-incremental`에서 실제 guiadmin
+로그인 입력을 한 번 요청한 상태일 뿐, 이 체크포인트의 HTTP 인증·prepare·VECTOR 검색·읽기·
+같은-key replay 성공 증거는 아직 없다. 인증 파일을 만들거나 이전 세션을 복사하지 않았다.
+원 V1 역사 요청의 prepare-replay·읽기도 PENDING이다. unused fresh primary V1-on-new-Graph는
+여전히 NOT_RUN/종료 범위 밖이며 전체 V1·Chat 호환성을 주장하지 않는다.
+
+추가 고정 증거는 `/tmp/eom-registered-review-patch.zbfFVg5a/`의 다음 두 파일이다.
+
+- `index21-content-delta-completion-2058.json`, rawSHA
+  `90f780ff01bcb3ab51c64a42ed52e45d2ddcc71643c4c99f5648653dcc9c0fe2`.
+- `index21-content-delta-registry-2053.json`, rawSHA
+  `1aaaa58d39eb7988b525180e2c9fe79f590d374848a368b7076684cacfbdbd3c`.

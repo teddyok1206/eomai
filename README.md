@@ -35,8 +35,9 @@ logical Item
 
 생성 문항의 **기존 독립 검토 풀이 기록**을 GraphRAG와 로컬 임베딩 자동 증분,
 실제 유사도 검색에 연결하는 목표를 진행 중입니다. 검토 기록을 기출 V10 분석으로
-위장하지 않으며, 기존 기출520개·벡터·불변 이력을 보존합니다. 새 풀이 모델 실행이나
-외부 LLM API는 추가하지 않습니다.
+위장하지 않으며, 기존 기출520개·벡터·불변 이력을 보존합니다. 별도 승인된 Graph용 V2
+분석1건은 수행했지만, 생성 문항의 기존 검토 풀이를 다시 모델로 풀지 않습니다.
+INDEX·QUERY 연결의 Codex 풀이 호출은0이며 외부 LLM API는 사용하지 않습니다.
 
 - **소스 구현:** 혼합 source-plan/index/registry, 원 검토 근거를 구분하는 검색·읽기 계약,
   기존 실행기의 claim·lease·checkpoint·완료 연결을 구현했습니다.
@@ -49,24 +50,24 @@ logical Item
   INDEX21에만 설치·활성화했습니다. Runner 회귀68개와 최종 바이트5개가 통과했고,
   실제21의 권한 철회 상태 기동 거부·동일 개정 복구(head46)·정상 STARTED를 확인했습니다.
   기존 실패·성공 receipt와 원 벡터는 보존하며 IAM 허용 범위를 확대하지 않았습니다.
-- **실제 재사용 확인(20:32 UTC):** 새 Graph의 mixed3개 초기 Workflow가 모두 완료됐고,
-  CONTENT479 / CONCRETE457 / METADATA425개의 기존 encoding과 shard row 참조를
-  그대로 재사용했습니다. 각 view의 변경·누락과 owned 신규 encoding Job은0입니다.
-  mixed3개 current head도 새 Graph를 가리키지만, 원520개 전체 coverage나 대상 생성
-  문항의 증분 완료는 아니며 target binding은 아직0입니다.
+- **실제 재사용 확인:** 새 Graph의 mixed3개 초기 Workflow는 기존 CONTENT479 /
+  CONCRETE457 / METADATA425개의 encoding·shard row 참조를 그대로 재사용했습니다.
+  후속 CONTENT delta도 baseline479개의 변경·누락 없이 재사용했고, owned 신규42개는
+  모두 baseline에 없던 키이며 대상1개를 포함합니다. 원 baseline의 재인코딩은 없습니다.
 - **후속 처리(20:09 UTC):** 정상 drain 후 mixed/legacy의 `maximum_targets`만4→64로
   선택하고 INDEX21을 정상 기동했습니다. 신원·grant·수치 자원·SDK는 바꾸지 않았고,
   대기 중 원 요청5건도 보존했습니다. 순수 테스트14 PASS와 실제 설정 선택은 구분해 기록합니다.
-- **현재 후속 처리(20:40 UTC):** 새 CONTENT delta는 실제42개 target을 선택해 QUEUED됐고,
-  20:32 관측의 Workflow는 REQUESTED였습니다. 선택 수를 native 실행·완료 수로 해석하지
-  않습니다. 두 번째 정상 drain 완료 후 같은 구성으로 한 번 재기동했으며 정상 FIFO 처리를
-  기다립니다. legacy 요청도 취소하지 않았으며, 20:40의 legacy CONTENT head는 새 Graph로
-  갱신됐고 다른 두 view는 원 Graph에 남아 있습니다.
-- **남은 실제 검증:** 새 Graph mixed 경로에서 대상 자체의 VECTOR binding·실제 검색·읽기·
-  같은-key replay, 그리고 원 V1 역사 요청의 prepare-replay·읽기가 남았습니다. 사용하지 않는
-  새 Graph의 fresh primary V1 요청은 이번 종료 범위가 아니며 NOT_RUN입니다. 전체 V1·Chat
-  호환성이나 전체 목표 완료로 확대하지 않습니다. 상세 이력과 범위 근거는 아래 운영 기록에
-  보존합니다.
+- **실제 CONTENT 등록(20:53–20:58 UTC):** current mixed CONTENT는 PAST_EXAM520개와
+  대상1개, 총521개이며 대상 binding1의 origin은 같은 current manifest입니다. native와
+  step은 SUCCEEDED이고 완료 receipt도 등록됐지만 Workflow는 아직 RUNNING입니다.
+  CONCRETE457 / METADATA425를 포함한 세 view 모두의520개 coverage나 전체 목표 완료를
+  주장하지 않습니다. legacy CONTENT479는 새 Graph, 나머지 두 legacy view는 원 Graph입니다.
+- **남은 실제 검증(21:00 UTC):** Workflow terminal 확인과 새 Graph mixed 경로의 대상
+  VECTOR 검색·읽기·같은-key replay, 원 V1 역사 요청의 prepare-replay·읽기가 남았습니다.
+  최종 클라이언트의 실제 사용자 로그인 입력을 요청한 상태이며 아직 HTTP 인증·prepare
+  성공 증거는 없습니다. 사용하지 않는 fresh primary V1-on-new-Graph는 NOT_RUN이며 이번
+  종료 범위가 아닙니다. 전체 V1·Chat 호환성으로 확대하지 않습니다. 상세 이력과 정본
+  Artifact pointer는 아래 운영 기록에 보존합니다.
 
 [현재 통합 설계](docs/architecture/REGISTERED_REVIEW_INCREMENTAL_INTEGRATION_DESIGN.md)와
 [이번 검증·남은 조건](docs/operations/REGISTERED_REVIEW_INCREMENTAL_INTEGRATION_2026-10-19.md)을
