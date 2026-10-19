@@ -34,28 +34,33 @@ from eom_orchestrator.native_embedding_launch_identity import (
     create_native_embedding_launch,
     read_native_embedding_launch_association,
 )
-from eom_workflow.local_embedding_encoding_job import (
-    EmbeddingEncodingCompletedEvent,
-    EmbeddingEncodingJobRequest,
-    LocalEmbeddingLaunchAssociation,
-    LocalEmbeddingLaunchIntent,
-    build_owned_incremental_embedding_input,
+from eom_workflow.local_embedding_encoding_dispatch import (
+    SupportedEmbeddingAssociation,
+    SupportedEmbeddingCompletedEvent,
+    SupportedEmbeddingIntent,
+    build_supported_owned_incremental_embedding_input,
+    parse_supported_embedding_association,
+    parse_supported_embedding_completed,
 )
+from eom_workflow.local_embedding_encoding_job import (
+    EmbeddingEncodingJobRequest,
+)
+from eom_workflow.local_embedding_encoding_ownership_v2 import LocalEmbeddingLaunchAssociationV2
 from eom_workflow.local_embedding_execution_policy import LocalEmbeddingRuntimeProfile
 from eom_workflow.local_embedding_index_refresh import LocalEmbeddingIndexRefreshRequest
-from eom_workflow.local_embedding_request import (
-    LocalEmbeddingExecutableRequest,
-    parse_local_embedding_executable_request,
+from eom_workflow.local_embedding_request_v2 import (
+    LocalEmbeddingWorkflowRequestV2,
+    SupportedLocalEmbeddingRequest,
+    parse_supported_local_embedding_request,
 )
 from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
-from eom_workflow.local_embedding_workflow_receipt import (
-    LocalEmbeddingStepOutput,
-)
+from eom_workflow.local_embedding_source_plan_v2 import LocalEmbeddingSourcePlanV2
+from eom_workflow.local_embedding_workflow_receipt_v2 import SupportedLocalEmbeddingStepOutput
 from eom_workflow.native_embedding_coordinator import (
     NativeCoordinatorAllocation,
     NativeCoordinatorCompleted,
-    native_coordinator_checkpoint,
 )
+from eom_workflow.native_embedding_coordinator_v2 import NativeCoordinatorCompletedV2
 from sqlalchemy.orm import Session
 
 from eom_workflow_runner.local_embedding_encoding_admission import (
@@ -88,10 +93,14 @@ from eom_workflow_runner.readiness import (
 from eom_workflow_runner.repository import CommandLeaseIdentity
 
 
-def _encoding_requests(plan: LocalEmbeddingSourcePlan) -> tuple[EmbeddingEncodingJobRequest, ...]:
+def _encoding_requests(
+    plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2,
+    *,
+    reusable_encodings: frozenset[str] = frozenset(),
+) -> tuple[EmbeddingEncodingJobRequest, ...]:
     encodings = {d.encoding.encoding_sha256: d.encoding for d in plan.demands}
     values = []
-    for key in sorted(encodings):
+    for key in sorted(set(encodings) - reusable_encodings):
         body = {
             "schema_version": "embedding-encoding-job/1.0",
             "record_type": "REQUEST",
@@ -108,10 +117,10 @@ def _encoding_requests(plan: LocalEmbeddingSourcePlan) -> tuple[EmbeddingEncodin
 
 
 def _completion_events(
-    association: LocalEmbeddingLaunchAssociation,
+    association: SupportedEmbeddingAssociation,
     result: IncrementalEmbeddingResult,
     published: PublishedEmbeddingArtifacts,
-) -> tuple[EmbeddingEncodingCompletedEvent, ...]:
+) -> tuple[SupportedEmbeddingCompletedEvent, ...]:
     events = []
     for ordinal, owned in enumerate(association.owned_jobs):
         body = {
@@ -129,7 +138,9 @@ def _completion_events(
         }
         receipt = body | {"receipt_sha256": content_sha256(body)}
         body = {
-            "schema_version": "embedding-encoding-job/1.0",
+            "schema_version": "embedding-encoding-ownership/2.0"
+            if isinstance(association, LocalEmbeddingLaunchAssociationV2)
+            else "embedding-encoding-job/1.0",
             "record_type": "COMPLETED",
             "owned_job": owned.model_dump(mode="json"),
             "intent": association.intent.model_dump(mode="json"),
@@ -137,9 +148,7 @@ def _completion_events(
             "receipt": receipt,
         }
         events.append(
-            EmbeddingEncodingCompletedEvent.model_validate(
-                body | {"event_sha256": content_sha256(body)}
-            )
+            parse_supported_embedding_completed(body | {"event_sha256": content_sha256(body)})
         )
     return tuple(events)
 
@@ -169,9 +178,9 @@ class CatalogNativeEmbeddingExecutor:
         self.source_commit = source_commit
         self._index_completion = NativeEmbeddingIndexCompletion(owner, publisher, launcher)
 
-    def evaluate(self, request: LocalEmbeddingExecutableRequest) -> RuntimeReadinessReport:
+    def evaluate(self, request: SupportedLocalEmbeddingRequest) -> RuntimeReadinessReport:
         try:
-            request = parse_local_embedding_executable_request(request)
+            request = parse_supported_local_embedding_request(request)
             profile = self.runtime_profile
             if (
                 request.space != profile.space
@@ -207,7 +216,7 @@ class CatalogNativeEmbeddingExecutor:
         *,
         workflow_id: str,
         step_run_id: str,
-        request: LocalEmbeddingExecutableRequest,
+        request: SupportedLocalEmbeddingRequest,
         lease: CommandLeaseIdentity,
     ) -> ResolvedLocalEmbeddingSources:
         return resolve_native_execution_sources(
@@ -221,8 +230,8 @@ class CatalogNativeEmbeddingExecutor:
 
     def _reservations(
         self,
-        request: LocalEmbeddingExecutableRequest,
-        intent: LocalEmbeddingLaunchIntent,
+        request: SupportedLocalEmbeddingRequest,
+        intent: SupportedEmbeddingIntent,
         lease: CommandLeaseIdentity,
     ) -> EmbeddingEncodingReservations:
         return EmbeddingEncodingReservations(
@@ -237,11 +246,11 @@ class CatalogNativeEmbeddingExecutor:
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: LocalEmbeddingExecutableRequest,
+        request: SupportedLocalEmbeddingRequest,
         command_lease: CommandLeaseIdentity,
         idempotency_key: str,
         fenced_transaction: NativeFencedRunnerTransaction,
-    ) -> LocalEmbeddingStepOutput | LocalEmbeddingStepPending:
+    ) -> SupportedLocalEmbeddingStepOutput | LocalEmbeddingStepPending:
         expected_key = (
             f"local-embedding-step:{workflow.workflow_id}:encode_batch:1:"
             f"{request.workflow_definition_sha256}"
@@ -281,14 +290,16 @@ class CatalogNativeEmbeddingExecutor:
                     source_commit=self.source_commit,
                 )
                 history = coordinator.append(
-                    session, native_coordinator_checkpoint(launch.intent, "ALLOCATION", allocation)
+                    session, coordinator.checkpoint("ALLOCATION", allocation)
                 )
             allocated = history.records[0].payload
             assert isinstance(allocated, NativeCoordinatorAllocation)
             allocation = allocated
             if len(history.records) == 4:
                 completed = history.records[3].payload
-                assert isinstance(completed, NativeCoordinatorCompleted)
+                assert isinstance(
+                    completed, NativeCoordinatorCompleted | NativeCoordinatorCompletedV2
+                )
                 return self.validate_completion(
                     session=session,
                     workflow=workflow,
@@ -297,7 +308,20 @@ class CatalogNativeEmbeddingExecutor:
                     command_lease=command_lease,
                     output=completed.output,
                 )
-        if isinstance(request, LocalEmbeddingIndexRefreshRequest):
+            reusable_encodings = frozenset[str]()
+            if isinstance(request, LocalEmbeddingWorkflowRequestV2):
+                basis = self.owner.catalog.prepare_mixed_index_basis(
+                    session, caller, native_embedding_registry_scope(request)
+                )
+                reusable_encodings = frozenset(
+                    row.encoding.encoding_sha256 for row in basis.reusable_rows
+                )
+        if isinstance(request, LocalEmbeddingIndexRefreshRequest) or (
+            isinstance(request, LocalEmbeddingWorkflowRequestV2)
+            and not _encoding_requests(
+                sources.admission.plan, reusable_encodings=reusable_encodings
+            )
+        ):
             # Reuse canonical registry rows directly. A membership-only request
             # must never allocate encoding reservations or launch numerical work.
             return self._index_completion.publish(
@@ -316,7 +340,8 @@ class CatalogNativeEmbeddingExecutor:
         reservations = self._reservations(request, launch.intent, command_lease)
         publications = native_embedding_publications(self.publisher, allocation.source_commit)
         readings = reservations.reserve_and_attach(
-            _encoding_requests(sources.admission.plan), launch.intent
+            _encoding_requests(sources.admission.plan, reusable_encodings=reusable_encodings),
+            launch.intent,
         )
         if any(r.status in {"FAILED", "CANCELLED"} for r in readings):
             raise ValueError("LOCAL_EMBEDDING_EXECUTOR_ENCODING_FAILED")
@@ -336,7 +361,7 @@ class CatalogNativeEmbeddingExecutor:
                     session, launch.intent, request
                 )
                 if association is None:
-                    native_input = build_owned_incremental_embedding_input(
+                    native_input = build_supported_owned_incremental_embedding_input(
                         sources.admission.plan,
                         sources.entries,
                         owned_jobs=own,
@@ -349,7 +374,9 @@ class CatalogNativeEmbeddingExecutor:
                         created_at=allocation.created_at,
                     )
                     body = {
-                        "schema_version": "embedding-encoding-job/1.0",
+                        "schema_version": "embedding-encoding-ownership/2.0"
+                        if isinstance(request, LocalEmbeddingWorkflowRequestV2)
+                        else "embedding-encoding-job/1.0",
                         "record_type": "LAUNCH_ASSOCIATION",
                         "intent": launch.intent.model_dump(mode="json"),
                         "owned_jobs": [j.model_dump(mode="json") for j in own],
@@ -357,7 +384,7 @@ class CatalogNativeEmbeddingExecutor:
                         "owned_input_request_sha256": native_input.request_sha256,
                         "owned_input_set_sha256": native_input.input_set_sha256,
                     }
-                    association = LocalEmbeddingLaunchAssociation.model_validate(
+                    association = parse_supported_embedding_association(
                         body | {"association_sha256": content_sha256(body)}
                     )
                 else:
@@ -450,10 +477,10 @@ class CatalogNativeEmbeddingExecutor:
         session: Session,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: LocalEmbeddingExecutableRequest,
+        request: SupportedLocalEmbeddingRequest,
         command_lease: CommandLeaseIdentity,
-        output: LocalEmbeddingStepOutput,
-    ) -> LocalEmbeddingStepOutput:
+        output: SupportedLocalEmbeddingStepOutput,
+    ) -> SupportedLocalEmbeddingStepOutput:
         return self._index_completion.validate_completion(
             session=session,
             workflow=workflow,

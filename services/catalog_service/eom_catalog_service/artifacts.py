@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import stat
 from collections.abc import Callable
@@ -30,6 +31,7 @@ from eom_orchestrator.repository import (
 )
 from eom_orchestrator.state_machine import JobState, transition_job
 from eom_protocol.artifact_members import ArtifactMemberPointer
+from eom_protocol.models import ArtifactManifest
 from pydantic import BaseModel
 from sqlalchemy import Engine, select
 
@@ -76,6 +78,202 @@ CATALOG_ITEM_CONTENT_V3_SCHEMA_HASH = content_sha256(
     }
 )
 MAX_JOB_IDEMPOTENCY_KEY_LENGTH = 128
+MAX_JSON_REVISION_BATCH = 3072
+MAX_JSON_REVISION_BATCH_BYTES = 256 * 1024 * 1024
+
+
+@dataclass(frozen=True, slots=True)
+class CatalogJsonRevisionRequest:
+    """Exact immutable primary JSON identity, not source or role authorization."""
+
+    artifact_id: str
+    revision_id: str
+    content_hash: str
+    max_bytes: int = 1_048_576
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.artifact_id, str)
+            or re.fullmatch(r"artifact_[0-9a-f]{32}", self.artifact_id) is None
+            or not isinstance(self.revision_id, str)
+            or re.fullmatch(r"rev_[0-9a-f]{32}", self.revision_id) is None
+            or not isinstance(self.content_hash, str)
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", self.content_hash) is None
+            or type(self.max_bytes) is not int
+            or self.max_bytes < 1
+        ):
+            raise ValueError("JSON artifact pointer is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class _JsonRevisionMaterialization:
+    request: CatalogJsonRevisionRequest
+    nas_path: str
+    content_bytes: int
+
+
+def _json_file_epoch(value: os.stat_result) -> tuple[int, ...]:
+    # atime can change during this read; ctime, inode and payload metadata cannot.
+    return (
+        value.st_dev,
+        value.st_ino,
+        value.st_mode,
+        value.st_uid,
+        value.st_gid,
+        value.st_nlink,
+        value.st_size,
+        value.st_mtime_ns,
+        value.st_ctime_ns,
+    )
+
+
+def _json_directory_identity(value: os.stat_result) -> tuple[int, ...]:
+    # New sibling publications may change directory timestamps, not its identity.
+    return value.st_dev, value.st_ino, value.st_mode, value.st_uid, value.st_gid
+
+
+def _read_json_revision_payload(
+    settings: CatalogSettings, materialization: _JsonRevisionMaterialization
+) -> bytes:
+    configured_root = settings.nas_artifact_root.absolute()
+    storage_root = configured_root.resolve(strict=True)
+    raw_root = Path(materialization.nas_path)
+    if not raw_root.is_absolute() or raw_root.as_posix() != materialization.nas_path:
+        raise ValueError("JSON artifact root is invalid")
+    # A configured storage alias is trusted configuration; all descendant paths
+    # are opened relative to its resolved root without following any symlinks.
+    if raw_root.is_relative_to(configured_root):
+        relative = raw_root.relative_to(configured_root)
+    elif raw_root.is_relative_to(storage_root):
+        relative = raw_root.relative_to(storage_root)
+    else:
+        raise ValueError("JSON artifact escaped storage root")
+    if not relative.parts or any(part in {"", ".", ".."} for part in relative.parts):
+        raise ValueError("JSON artifact root is invalid")
+    directory_flags = os.O_RDONLY | os.O_CLOEXEC | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK
+    descriptors: list[int] = []
+    path_entries: list[tuple[int, str, tuple[int, ...]]] = []
+    try:
+        root_fd = os.open(storage_root, directory_flags)
+        descriptors.append(root_fd)
+        root_identity = _json_directory_identity(os.fstat(root_fd))
+        if root_identity != _json_directory_identity(storage_root.lstat()):
+            raise ValueError("JSON artifact storage root changed")
+        parent_fd = root_fd
+        for name in relative.parts:
+            before = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+            if not stat.S_ISDIR(before.st_mode):
+                raise ValueError("JSON artifact root traverses a symbolic link")
+            child_fd = os.open(name, directory_flags, dir_fd=parent_fd)
+            descriptors.append(child_fd)
+            identity = _json_directory_identity(os.fstat(child_fd))
+            if identity != _json_directory_identity(before):
+                raise ValueError("JSON artifact root changed")
+            path_entries.append((parent_fd, name, identity))
+            parent_fd = child_fd
+        before = os.stat("result.json", dir_fd=parent_fd, follow_symlinks=False)
+        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+            raise ValueError("JSON artifact materialization is invalid")
+        descriptor = os.open(
+            "result.json",
+            os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK,
+            dir_fd=parent_fd,
+        )
+        descriptors.append(descriptor)
+        opened = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or opened.st_nlink != 1
+            or _json_file_epoch(opened) != _json_file_epoch(before)
+            or opened.st_size != materialization.content_bytes
+        ):
+            raise ValueError("JSON artifact materialization is invalid")
+        chunks: list[bytes] = []
+        remaining = materialization.content_bytes + 1
+        while remaining:
+            chunk = os.read(descriptor, min(remaining, 64 * 1024))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        payload = b"".join(chunks)
+        if (
+            len(payload) != materialization.content_bytes
+            or sha256_bytes(payload) != materialization.request.content_hash
+            or _json_file_epoch(opened) != _json_file_epoch(os.fstat(descriptor))
+            or _json_file_epoch(opened)
+            != _json_file_epoch(os.stat("result.json", dir_fd=parent_fd, follow_symlinks=False))
+            or root_identity != _json_directory_identity(storage_root.lstat())
+            or any(
+                identity
+                != _json_directory_identity(os.stat(name, dir_fd=parent, follow_symlinks=False))
+                for parent, name, identity in path_entries
+            )
+        ):
+            raise ValueError("JSON artifact materialization changed or has an invalid hash")
+        return payload
+    finally:
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
+
+
+def _json_revision_materialization(
+    request: CatalogJsonRevisionRequest,
+    logical: ArtifactRecord,
+    revision: ArtifactRevisionRecord,
+) -> _JsonRevisionMaterialization:
+    if (
+        logical.approved is not True
+        or revision.approved is not True
+        or logical.logical_artifact_id != request.artifact_id
+        or revision.logical_artifact_id != request.artifact_id
+        or revision.revision_id != request.revision_id
+        or revision.content_hash != request.content_hash
+        or type(revision.content_bytes) is not int
+        or not 1 <= revision.content_bytes <= request.max_bytes
+    ):
+        raise ValueError("JSON artifact pointer does not resolve")
+    manifest = revision.manifest
+    if not isinstance(manifest, dict):
+        raise ValueError("JSON artifact manifest is invalid")
+    primary: object
+    if "files" not in manifest:
+        legacy = ArtifactManifest.model_validate(manifest)
+        digest = content_sha256(legacy)
+        primary = legacy.file_name
+    else:
+        digest = content_sha256(manifest)
+        primary = manifest.get("primary_file")
+        files = manifest["files"]
+        matching = (
+            [
+                entry
+                for entry in files
+                if isinstance(entry, dict) and entry.get("file_name") == primary
+            ]
+            if isinstance(files, list)
+            else []
+        )
+        if (
+            len(matching) != 1
+            or matching[0].get("sha256") != request.content_hash
+            or type(matching[0].get("bytes")) is not int
+            or matching[0]["bytes"] != revision.content_bytes
+            or matching[0].get("media_type", "application/json") != "application/json"
+        ):
+            raise ValueError("JSON artifact primary member is invalid")
+    if (
+        primary != "result.json"
+        or digest != revision.manifest_hash
+        or manifest.get("logical_artifact_id") != request.artifact_id
+        or manifest.get("revision_id") != request.revision_id
+        or manifest.get("job_id") != revision.job_id
+        or manifest.get("content_hash") != request.content_hash
+        or type(manifest.get("content_bytes")) is not int
+        or manifest["content_bytes"] != revision.content_bytes
+    ):
+        raise ValueError("JSON artifact manifest does not match its revision")
+    return _JsonRevisionMaterialization(request, revision.nas_path, revision.content_bytes)
 
 
 def _stat_identity(value: os.stat_result) -> tuple[int, int, int, int, int, int, int, int]:
@@ -586,36 +784,65 @@ class CatalogArtifactService:
         max_bytes: int = 1_048_576,
     ) -> dict[str, Any]:
         """Resolve one immutable small JSON result through its pinned artifact identity."""
+        request = CatalogJsonRevisionRequest(artifact_id, revision_id, content_hash, max_bytes)
+        return self.load_json_revisions((request,))[revision_id]
 
+    def load_json_revisions(
+        self, requests: tuple[CatalogJsonRevisionRequest, ...]
+    ) -> dict[str, dict[str, Any]]:
+        """Read bounded exact primaries with one fresh metadata query and no partial result.
+
+        The returned values are not source authorization or Workflow provenance.
+        Callers continue to validate those through their existing owner boundaries.
+        """
+        if not isinstance(requests, tuple) or len(requests) > MAX_JSON_REVISION_BATCH:
+            raise ValueError("CATALOG_JSON_BATCH_SELECTION_INVALID")
+        checked: dict[str, CatalogJsonRevisionRequest] = {}
+        for request in requests:
+            if type(request) is not CatalogJsonRevisionRequest:
+                raise ValueError("CATALOG_JSON_BATCH_SELECTION_INVALID")
+            # Frozen dataclasses are not a privilege boundary; revalidate forged instances.
+            validated = CatalogJsonRevisionRequest(
+                request.artifact_id, request.revision_id, request.content_hash, request.max_bytes
+            )
+            if validated.revision_id in checked:
+                raise ValueError("CATALOG_JSON_BATCH_SELECTION_INVALID")
+            checked[validated.revision_id] = validated
+        if not checked:
+            return {}
         with self.sessions() as session:
-            revision = session.get(ArtifactRevisionRecord, revision_id)
-            if (
-                revision is None
-                or not revision.approved
-                or revision.logical_artifact_id != artifact_id
-                or revision.content_hash != content_hash
-            ):
+            rows = session.execute(
+                select(ArtifactRevisionRecord, ArtifactRecord)
+                .join(
+                    ArtifactRecord,
+                    ArtifactRecord.logical_artifact_id
+                    == ArtifactRevisionRecord.logical_artifact_id,
+                )
+                .where(ArtifactRevisionRecord.revision_id.in_(tuple(checked)))
+                .execution_options(populate_existing=True)
+            ).all()
+            by_revision = {revision.revision_id: (revision, logical) for revision, logical in rows}
+            if len(by_revision) != len(checked):
                 raise ValueError("JSON artifact pointer does not resolve")
-            primary_name = revision.manifest.get("primary_file", "result.json")
-            if primary_name != "result.json":
-                raise ValueError("JSON artifact primary member is invalid")
-            storage_root = self.settings.nas_artifact_root.resolve(strict=True)
-            artifact_root = Path(revision.nas_path).resolve(strict=True)
-            if not artifact_root.is_relative_to(storage_root):
-                raise ValueError("JSON artifact escaped storage root")
-            primary = artifact_root / primary_name
-            metadata = primary.lstat()
+            materializations = tuple(
+                _json_revision_materialization(
+                    request, by_revision[revision_id][1], by_revision[revision_id][0]
+                )
+                for revision_id, request in checked.items()
+            )
             if (
-                primary.is_symlink()
-                or not stat.S_ISREG(metadata.st_mode)
-                or metadata.st_size > max_bytes
-                or sha256_file(primary) != content_hash
+                sum(value.content_bytes for value in materializations)
+                > MAX_JSON_REVISION_BATCH_BYTES
             ):
-                raise ValueError("JSON artifact materialization is invalid")
-            value: object = json.loads(primary.read_text(encoding="utf-8"))
-            if not isinstance(value, dict):
-                raise ValueError("JSON artifact is not an object")
-            return value
+                raise ValueError("CATALOG_JSON_BATCH_BUDGET_EXCEEDED")
+            result: dict[str, dict[str, Any]] = {}
+            for materialization in materializations:
+                payload = _read_json_revision_payload(self.settings, materialization)
+                value: object = json.loads(payload.decode("utf-8"))
+                if not isinstance(value, dict):
+                    raise ValueError("JSON artifact is not an object")
+                result[materialization.request.revision_id] = value
+            return result
 
     def verify_file_pointer(
         self,

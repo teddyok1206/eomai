@@ -34,6 +34,30 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "embedding-registry-v2": CatalogSchemaResource(
+            "schemas/knowledge/embedding-registry-v2.schema.json",
+            "resources/knowledge/embedding-registry-v2.schema.json",
+            "2.0",
+            "sha256:088f2981115a8d866e3d720c00c233cba134d3f141c58279b4abcb4f4b348e66",
+        ),
+        "mixed-embedding-index-v2": CatalogSchemaResource(
+            "schemas/knowledge/mixed-embedding-index-v2.schema.json",
+            "resources/knowledge/mixed-embedding-index-v2.schema.json",
+            "2.0",
+            "sha256:3fbd7d4222bab9a4c91080d0015693879615ff09a299076b9233df8733ddc859",
+        ),
+        "ordinary-item-graph-publication-command": CatalogSchemaResource(
+            "schemas/knowledge/ordinary-item-graph-publication-command-v1.schema.json",
+            "resources/knowledge/ordinary-item-graph-publication-command-v1.schema.json",
+            "1.0",
+            "sha256:2b0f8291ebd0fc4939f6b541cef7e048d0e7b2d23a3005fd64ee4ba5bc974555",
+        ),
+        "ordinary-item-graph-publication-result": CatalogSchemaResource(
+            "schemas/knowledge/ordinary-item-graph-publication-result-v1.schema.json",
+            "resources/knowledge/ordinary-item-graph-publication-result-v1.schema.json",
+            "1.0",
+            "sha256:ff1ec3b956f5e797e5d4caf6e764e4b66e641b297cee9a19087fdbf4dfd39e7b",
+        ),
         "item-inference-transfer-v2": CatalogSchemaResource(
             "schemas/knowledge/item-inference-transfer-v2.schema.json",
             "resources/knowledge/item-inference-transfer-v2.schema.json",
@@ -207,6 +231,36 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/knowledge/system-rag-similarity-reader-configuration-v1.schema.json",
             "1.0",
             "sha256:56e414955beda6fd1c9abf05e7acc77175c60c0374caf0e615496a5c73cec2a9",
+        ),
+        "system-rag-similarity-reader-configuration-v2": CatalogSchemaResource(
+            "schemas/knowledge/system-rag-similarity-reader-configuration-v2.schema.json",
+            "resources/knowledge/system-rag-similarity-reader-configuration-v2.schema.json",
+            "2.0",
+            "sha256:17df91dd0e3c3437f61479c03a13428c1cf63f09eb2768e04988fe672f18b9b2",
+        ),
+        "system-rag-reference-query-prepare-v2": CatalogSchemaResource(
+            "schemas/knowledge/system-rag-reference-query-prepare-v2.schema.json",
+            "resources/knowledge/system-rag-reference-query-prepare-v2.schema.json",
+            "2.0",
+            "sha256:b1bb18afe2fd0d3b302f38f565ef612d8f27505587e83e2678d6300813e3cf32",
+        ),
+        "system-rag-similarity-context-v2": CatalogSchemaResource(
+            "schemas/knowledge/system-rag-similarity-context-v2.schema.json",
+            "resources/knowledge/system-rag-similarity-context-v2.schema.json",
+            "2.0",
+            "sha256:1d40e17c596afe6a421dd7789728bd6741334874595241cb79dab7f292da79e4",
+        ),
+        "system-rag-similarity-materials-v2": CatalogSchemaResource(
+            "schemas/knowledge/system-rag-similarity-materials-v2.schema.json",
+            "resources/knowledge/system-rag-similarity-materials-v2.schema.json",
+            "2.0",
+            "sha256:c22b5907a5b4d9be22b710da89973e445485a89c858a6758d9c568301daaaf40",
+        ),
+        "system-rag-similarity-read-v2": CatalogSchemaResource(
+            "schemas/knowledge/system-rag-similarity-read-v2.schema.json",
+            "resources/knowledge/system-rag-similarity-read-v2.schema.json",
+            "2.0",
+            "sha256:d7beac0fa677e54e3dd2377c9124547378d141b1be95465d51a6af2995c38665",
         ),
         "system-rag-similarity-read": CatalogSchemaResource(
             "schemas/knowledge/system-rag-similarity-read-v1.schema.json",
@@ -2085,6 +2139,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/knowledge/education-retrieval-access-policy-v1_1.schema.json",
             "1.1",
             "sha256:2ba2fc1fd906fef5a17acb3a7ba7d7e3351aa9a2e863a4386f0913b4bf7f7152",
+        ),
+        "education-retrieval-access-policy-v1.2": CatalogSchemaResource(
+            "schemas/knowledge/education-retrieval-access-policy-v1_2.schema.json",
+            "resources/knowledge/education-retrieval-access-policy-v1_2.schema.json",
+            "1.2",
+            "sha256:9f723f43e17df7ddead0d1fcfae0008d61230b841a25fb682d62ec850bae5811",
         ),
         "educational-retrieval-requirement": CatalogSchemaResource(
             "schemas/knowledge/educational-retrieval-requirement-v1.schema.json",

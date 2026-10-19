@@ -5,26 +5,39 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
+from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_workflow.admission import workflow_definition_is_admitted
 from eom_workflow.compiler import CompiledWorkflowDefinition, compile_definition_data
 from eom_workflow.definition_execution_protocol import definition_execution_protocol
 from eom_workflow.local_embedding_execution_policy import (
     LocalEmbeddingExecutablePolicy,
+    LocalEmbeddingServiceExecutionPolicy,
     parse_local_embedding_executable_policy,
 )
 from eom_workflow.local_embedding_request import (
-    LocalEmbeddingExecutableRequest,
-    local_embedding_request_actor,
-    parse_local_embedding_executable_request,
     validate_local_embedding_request_references,
 )
-from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
+from eom_workflow.local_embedding_request_v2 import (
+    LocalEmbeddingWorkflowRequestV2,
+    SupportedLocalEmbeddingRequest,
+    parse_supported_local_embedding_request,
+    supported_local_embedding_request_actor,
+    validate_local_embedding_request_references_v2,
+)
+from eom_workflow.local_embedding_source_plan import (
+    LocalEmbeddingSourcePlan,
+    parse_local_embedding_source_plan,
+)
+from eom_workflow.local_embedding_source_plan_v2 import (
+    LocalEmbeddingSourcePlanV2,
+    parse_local_embedding_source_plan_v2,
+)
 from eom_workflow.local_embedding_workflow import (
     LOCAL_EMBEDDING_EXECUTION_PROTOCOL,
     LOCAL_EMBEDDING_WORKFLOW_KEY,
-    LOCAL_EMBEDDING_WORKFLOW_VERSION,
     LocalEmbeddingWorkflowDefinition,
 )
+from eom_workflow.local_embedding_workflow_v2 import LocalEmbeddingWorkflowDefinitionV2
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -39,20 +52,33 @@ if TYPE_CHECKING:
     from eom_workflow_runner.local_embedding_execution_port import LocalEmbeddingNativeExecutor
     from eom_workflow_runner.repository import CommandLeaseIdentity
 
+type SupportedLocalEmbeddingOwnerRequest = SupportedLocalEmbeddingRequest
+
+# Public compatibility names delegate to the authoritative lower-layer contract.
+parse_supported_local_embedding_owner_request = parse_supported_local_embedding_request
+local_embedding_owner_request_actor = supported_local_embedding_request_actor
+
 
 @dataclass(frozen=True, slots=True)
 class ResolvedLocalEmbeddingAdmission:
     """Validated immutable controls only; no caller/session/source authority is carried."""
 
-    request: LocalEmbeddingExecutableRequest
-    plan: LocalEmbeddingSourcePlan
+    request: SupportedLocalEmbeddingOwnerRequest
+    plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2
     policy: LocalEmbeddingExecutablePolicy
 
     def __post_init__(self) -> None:
-        request = parse_local_embedding_executable_request(self.request)
-        plan = LocalEmbeddingSourcePlan.model_validate(self.plan)
-        policy = parse_local_embedding_executable_policy(self.policy)
-        validate_local_embedding_request_references(request, plan, policy)
+        request = parse_supported_local_embedding_owner_request(self.request)
+        policy = parse_local_embedding_executable_policy(raw_similarity_contract_value(self.policy))
+        plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2
+        if isinstance(request, LocalEmbeddingWorkflowRequestV2):
+            plan = parse_local_embedding_source_plan_v2(self.plan)
+            if not isinstance(policy, LocalEmbeddingServiceExecutionPolicy):
+                raise ValueError("LOCAL_EMBEDDING_PURPOSE_INVALID")
+            validate_local_embedding_request_references_v2(request, plan, policy)
+        else:
+            plan = parse_local_embedding_source_plan(raw_similarity_contract_value(self.plan))
+            validate_local_embedding_request_references(request, plan, policy)
         object.__setattr__(self, "request", request)
         object.__setattr__(self, "plan", plan)
         object.__setattr__(self, "policy", policy)
@@ -73,7 +99,7 @@ class LocalEmbeddingOwnerAdmission(Protocol):
     """
 
     def resolve_submission(
-        self, session: Session, request: LocalEmbeddingExecutableRequest
+        self, session: Session, request: SupportedLocalEmbeddingOwnerRequest
     ) -> ResolvedLocalEmbeddingAdmission: ...
 
     def resolve_claim(
@@ -82,7 +108,7 @@ class LocalEmbeddingOwnerAdmission(Protocol):
         *,
         command: WorkflowCommandRecord,
         workflow: WorkflowInstanceRecord,
-        request: LocalEmbeddingExecutableRequest,
+        request: SupportedLocalEmbeddingOwnerRequest,
     ) -> ResolvedLocalEmbeddingAdmission:
         """Fence exact freshly locked candidate rows BEFORE assigning a new lease.
 
@@ -95,7 +121,7 @@ class LocalEmbeddingOwnerAdmission(Protocol):
     def fence_mutation(
         self,
         session: Session,
-        request: LocalEmbeddingExecutableRequest,
+        request: SupportedLocalEmbeddingOwnerRequest,
         lease: CommandLeaseIdentity,
     ) -> None:
         """Retain fresh authority and actual live command fence; return no boolean grant."""
@@ -115,16 +141,21 @@ def validate_local_embedding_submission_controls(
     No call here reads a permission, session, source, runtime or database state.
     """
     scope = ResolvedLocalEmbeddingAdmission(scope.request, scope.plan, scope.policy)
-    if not isinstance(definition.definition, LocalEmbeddingWorkflowDefinition):
+    expected_definition = (
+        LocalEmbeddingWorkflowDefinitionV2
+        if isinstance(scope.request, LocalEmbeddingWorkflowRequestV2)
+        else LocalEmbeddingWorkflowDefinition
+    )
+    if type(definition.definition) is not expected_definition:
         raise ValueError("LOCAL_EMBEDDING_PURPOSE_INVALID")
     checked = compile_definition_data(definition.as_dict(), definition.source_path, set())
-    expected_actor_type, expected_actor_id = local_embedding_request_actor(scope.request)
+    expected_actor_type, expected_actor_id = local_embedding_owner_request_actor(scope.request)
     if (
         checked.sha256 != definition.sha256
         or checked.canonical_bytes != definition.canonical_bytes
         or checked.definition != definition.definition
         or checked.definition.definition_key != LOCAL_EMBEDDING_WORKFLOW_KEY
-        or checked.definition.definition_version != LOCAL_EMBEDDING_WORKFLOW_VERSION
+        or checked.definition.definition_version != scope.request.workflow_definition_version
         or definition_execution_protocol(checked.definition) != LOCAL_EMBEDDING_EXECUTION_PROTOCOL
         or scope.request.workflow_definition_sha256 != checked.sha256
     ):
@@ -154,7 +185,7 @@ def resolve_local_embedding_submission_controls(
     session: Session,
     *,
     definition: WorkflowDefinitionRecord,
-    request: LocalEmbeddingExecutableRequest,
+    request: SupportedLocalEmbeddingOwnerRequest,
     actor_type: str,
     actor_id: str,
     owner: LocalEmbeddingOwnerAdmission | None,
@@ -178,7 +209,7 @@ def resolve_local_embedding_submission_controls(
             WorkflowErrorCode.ACTOR_AUTHORIZATION_UNAVAILABLE,
             "local embedding requires an active caller-owned root transaction",
         )
-    checked = parse_local_embedding_executable_request(request)
+    checked = parse_supported_local_embedding_owner_request(request)
     scope = owner.resolve_submission(session, checked)
     scope = ResolvedLocalEmbeddingAdmission(scope.request, scope.plan, scope.policy)
     if scope.request != checked:
@@ -192,7 +223,7 @@ def resolve_local_embedding_submission_controls(
     )
     if current is None or (
         current.definition_key != LOCAL_EMBEDDING_WORKFLOW_KEY
-        or current.definition_version != LOCAL_EMBEDDING_WORKFLOW_VERSION
+        or current.definition_version != checked.workflow_definition_version
         or current.active is not True
         or not workflow_definition_is_admitted(current.definition_key, current.definition_version)
     ):

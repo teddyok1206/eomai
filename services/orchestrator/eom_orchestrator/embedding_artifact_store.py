@@ -44,28 +44,34 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingIndexManifest,
     EmbeddingVectorShardManifest,
     IncrementalEmbeddingInput,
-    parse_embedding_index,
     parse_incremental_embedding_input,
     parse_incremental_embedding_result,
     validate_embedding_index_references,
     validate_incremental_embedding_result,
 )
 from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
+from eom_catalog_contracts.mixed_embedding_index import (
+    MIXED_EMBEDDING_INDEX_SCHEMA_REF,
+    MixedEmbeddingIndexManifest,
+    parse_supported_embedding_index,
+    validate_mixed_embedding_index_references,
+)
 from eom_catalog_contracts.models import Sha256, UtcDatetime
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_protocol.models import ArtifactId, JobId, RevisionId
-from eom_workflow.local_embedding_encoding_job import (
-    LocalEmbeddingLaunchAssociation,
-    validate_local_embedding_launch_association,
+from eom_workflow.local_embedding_encoding_dispatch import (
+    SupportedEmbeddingAssociation,
+    validate_supported_embedding_association,
 )
 from eom_workflow.local_embedding_execution_policy import LocalEmbeddingExecutablePolicy
-from eom_workflow.local_embedding_request import (
-    LocalEmbeddingExecutableRequest,
-    parse_local_embedding_executable_request,
-    validate_local_embedding_request_references,
+from eom_workflow.local_embedding_request_v2 import (
+    SupportedLocalEmbeddingRequest,
+    parse_supported_local_embedding_request,
+    validate_supported_local_embedding_request_references,
 )
 from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
+from eom_workflow.local_embedding_source_plan_v2 import LocalEmbeddingSourcePlanV2
 from eom_workflow.local_embedding_workflow import (
     LocalEmbeddingWorkflowRequest,
     parse_local_embedding_workflow_request,
@@ -694,18 +700,19 @@ class EmbeddingArtifactStore:
     def publish_index(
         self,
         *,
-        index: EmbeddingIndexManifest,
+        index: EmbeddingIndexManifest | MixedEmbeddingIndexManifest,
         shards: tuple[tuple[ArtifactMemberPointer, EmbeddingVectorShardManifest], ...],
-        previous: tuple[ArtifactMemberPointer, EmbeddingIndexManifest] | None,
+        previous: tuple[ArtifactMemberPointer, EmbeddingIndexManifest | MixedEmbeddingIndexManifest]
+        | None,
         scope: EmbeddingIndexPublicationScope,
         workspace: Path,
         identity: ControlFileSetIdentity | None = None,
     ) -> PublishedEmbeddingIndexArtifacts:
         """Commit one pinned metadata index; no source access, vectors or head mutation."""
         try:
-            index = parse_embedding_index(index.model_dump(mode="json"))
+            index = parse_supported_embedding_index(index)
             graph = TypeAdapter(KnowledgeGraphSnapshotPointer).validate_python(
-                scope.graph_snapshot.model_dump(mode="json")
+                raw_similarity_contract_value(scope.graph_snapshot)
             )
             policy_revision_id: str = TypeAdapter(
                 Annotated[str, Field(pattern=r"^accessrev_[0-9a-f]{32}$")]
@@ -727,7 +734,17 @@ class EmbeddingArtifactStore:
                 )
             ):
                 raise ValueError("index publication frame or pinned scope differs")
-            validate_embedding_index_references(index, shards, previous)
+            schema_ref = INDEX_SCHEMA_REF
+            if isinstance(index, MixedEmbeddingIndexManifest):
+                validate_mixed_embedding_index_references(index, shards, previous)
+                schema_ref = MIXED_EMBEDDING_INDEX_SCHEMA_REF
+            else:
+                parent = None
+                if previous is not None:
+                    if not isinstance(previous[1], EmbeddingIndexManifest):
+                        raise ValueError("index1 cannot reinterpret an index2 predecessor")
+                    parent = (previous[0], previous[1])
+                validate_embedding_index_references(index, shards, parent)
             timestamp = TypeAdapter(UtcDatetime).validate_python(index.created_at)
             payload = canonical_json_bytes(index.model_dump(mode="json"))
         except Exception:
@@ -749,7 +766,7 @@ class EmbeddingArtifactStore:
                     workspace / EMBEDDING_INDEX_PRIMARY_MEMBER,
                     sha256_bytes(saved),
                     len(saved),
-                    INDEX_SCHEMA_REF,
+                    schema_ref,
                     "application/json",
                 )
                 publish = (
@@ -787,7 +804,7 @@ class EmbeddingArtifactStore:
                         artifact_id=receipt.artifact_id,
                         artifact_revision_id=receipt.artifact_revision_id,
                         member_path=EMBEDDING_INDEX_PRIMARY_MEMBER,
-                        schema_ref=INDEX_SCHEMA_REF,
+                        schema_ref=schema_ref,
                         media_type="application/json",
                         sha256=member.sha256,
                     )
@@ -802,9 +819,11 @@ class EmbeddingArtifactStore:
                 except Exception:
                     raise EmbeddingArtifactStoreError("EMBEDDING_INDEX_RECEIPT_INVALID") from None
 
-    def stage_index_manifest(self, *, index: EmbeddingIndexManifest, workspace: Path) -> None:
+    def stage_index_manifest(
+        self, *, index: EmbeddingIndexManifest | MixedEmbeddingIndexManifest, workspace: Path
+    ) -> None:
         """Fixed durable local materialization before its small checkpoint; no NAS write."""
-        index = parse_embedding_index(index.model_dump(mode="json"))
+        index = parse_supported_embedding_index(index)
         with _directory(workspace) as directory:
             _materialize_manifest(
                 directory,
@@ -813,6 +832,22 @@ class EmbeddingArtifactStore:
             )
 
     def read_staged_index(self, *, workspace: Path, expected_sha256: str) -> EmbeddingIndexManifest:
+        index = self._read_staged_index(workspace=workspace, expected_sha256=expected_sha256)
+        if not isinstance(index, EmbeddingIndexManifest):
+            raise EmbeddingArtifactStoreError("EMBEDDING_INDEX_CONTEXT_INVALID")
+        return index
+
+    def read_staged_mixed_index(
+        self, *, workspace: Path, expected_sha256: str
+    ) -> MixedEmbeddingIndexManifest:
+        index = self._read_staged_index(workspace=workspace, expected_sha256=expected_sha256)
+        if not isinstance(index, MixedEmbeddingIndexManifest):
+            raise EmbeddingArtifactStoreError("EMBEDDING_INDEX_CONTEXT_INVALID")
+        return index
+
+    def _read_staged_index(
+        self, *, workspace: Path, expected_sha256: str
+    ) -> EmbeddingIndexManifest | MixedEmbeddingIndexManifest:
         """Read the exact checkpointed local bytes; never regenerate from current/latest."""
         with (
             _directory(workspace) as directory,
@@ -823,7 +858,7 @@ class EmbeddingArtifactStore:
             body = json.loads(raw)
             if canonical_json_bytes(body) != raw:
                 raise EmbeddingArtifactStoreError("EMBEDDING_INDEX_MEMBER_CONFLICT")
-            return parse_embedding_index(body)
+            return parse_supported_embedding_index(body)
 
     def publish(
         self,
@@ -862,10 +897,10 @@ class EmbeddingArtifactStore:
     def publish_owned_batch(
         self,
         *,
-        workflow_request: LocalEmbeddingExecutableRequest,
-        plan: LocalEmbeddingSourcePlan,
+        workflow_request: SupportedLocalEmbeddingRequest,
+        plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2,
         policy: LocalEmbeddingExecutablePolicy,
-        association: LocalEmbeddingLaunchAssociation,
+        association: SupportedEmbeddingAssociation,
         request: IncrementalEmbeddingInput,
         workspace: Path,
         created_at: datetime,
@@ -876,12 +911,10 @@ class EmbeddingArtifactStore:
         checks here cannot replace that authority or establish launch provenance.
         """
         try:
-            workflow_request = parse_local_embedding_executable_request(
-                workflow_request.model_dump(mode="json")
-            )
-            validate_local_embedding_request_references(workflow_request, plan, policy)
+            workflow_request = parse_supported_local_embedding_request(workflow_request)
+            validate_supported_local_embedding_request_references(workflow_request, plan, policy)
             request = parse_incremental_embedding_input(request.model_dump(mode="json"))
-            validate_local_embedding_launch_association(
+            validate_supported_embedding_association(
                 association,
                 plan,
                 request,

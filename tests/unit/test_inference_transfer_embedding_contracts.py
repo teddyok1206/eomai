@@ -89,38 +89,15 @@ def test_schema_first_package_mirror_raw_hash_and_draft_are_exact() -> None:
 
 
 def test_all_preexisting_schema_registry_metadata_and_resource_bytes_are_frozen() -> None:
-    resources = {
-        name: resource
-        for name, resource in CATALOG_SCHEMA_RESOURCES.items()
-        if name
-        not in {
-            SCHEMA_NAME,
-            "embedding-registry",
-            "embedding-runtime-bundle",
-            "embedding-installed-runtime-proof",
-            "embedding-device-benchmark",
-            "embedding-native-runtime-config",
-            "embedding-native-runtime-config-v1.1",
-            "embedding-prefix-audit-input-v1.1",
-            "embedding-host-configuration-snapshot",
-            "system-rag-authoring-reference",
-            "system-rag-reference-query-prepare-v1.1",
-            "system-rag-reference-query-prepare",
-            "system-rag-item-similarity-publication",
-            "system-rag-workflow-similarity-read",
-            "system-rag-similarity-reader-configuration",
-            "system-rag-similarity-read",
-            "system-rag-similarity-context",
-            "system-rag-similarity-delivery",
-            "system-rag-similarity-materials",
-            "embedding-reference-query",
-            "embedding-reference-query-input-v1.1",
-            "embedding-native-cpu-probe",
-            "education-retrieval-access-policy-v1.1",
-        }
-    }
+    # Fixed predecessor membership, not "all except the latest additions". New
+    # released contracts must not make an unchanged historical baseline fail.
+    names = json.loads(
+        (ROOT / "tests/fixtures/catalog-pre-embedding-resource-names.json").read_text()
+    )
+    assert names == sorted(set(names))
+    resources = {name: CATALOG_SCHEMA_RESOURCES[name] for name in names}
     assert len(resources) == 296
-    # Recorded from the pre-embedding registry, independently compared with HEAD's AST literals.
+    # Recorded from the pre-embedding registry, independently compared with its AST literals.
     # This regression uses package metadata and files only, never runtime Git or source discovery.
     assert content_sha256({name: asdict(resource) for name, resource in resources.items()}) == (
         "sha256:9f761ee9483774a515d122de175018dfb20ec430bcdec2952dde94118619a625"

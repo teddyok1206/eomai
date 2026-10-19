@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
+from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNamespace
 from eom_catalog_service.embedding_registry_indexing_authority import (
     CatalogIndexingRegistrySourceAuthority,
 )
@@ -29,8 +30,9 @@ from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.native_embedding_index_systemd import FixedNativeIndexLauncher
 from eom_orchestrator.settings import Settings
 from eom_workflow.local_indexing_owner_configuration import (
-    LocalIndexingOwnerSelection,
-    parse_local_indexing_owner_configuration,
+    CpuLocalIndexingOwnerSelection,
+    LocalIndexingMixedOwnerConfiguration,
+    parse_cpu_local_indexing_owner_configuration,
 )
 from sqlalchemy import Engine
 
@@ -77,7 +79,7 @@ class IndexingRoleExecutionDisabled:
 
 @dataclass(frozen=True, slots=True)
 class LocalIndexingNamespaceRuntime:
-    namespace: EmbeddingIndexNamespace
+    namespace: EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace
     runner: WorkflowRunner
     reconciliation: LocalEmbeddingServiceReconciliation
 
@@ -86,7 +88,7 @@ class LocalIndexingNamespaceRuntime:
 class LocalIndexingServiceRuntime:
     engine: Engine
     namespaces: tuple[LocalIndexingNamespaceRuntime, ...]
-    configuration: LocalIndexingOwnerSelection
+    configuration: CpuLocalIndexingOwnerSelection
 
 
 def build_local_indexing_service_runtime(
@@ -98,7 +100,7 @@ def build_local_indexing_service_runtime(
         or type(pin) is not LocalIndexingRuntimePin
     ):
         raise ValueError("LOCAL_INDEXING_SERVICE_RUNTIME_UNAVAILABLE")
-    selection = parse_local_indexing_owner_configuration(capture.read_owner_configuration())
+    selection = parse_cpu_local_indexing_owner_configuration(capture.read_owner_configuration())
     if selection.runtime_profile.resource_profile.device != "CPU":
         raise ValueError("LOCAL_INDEXING_SERVICE_DEVICE_UNAVAILABLE")
     capture.assert_current(
@@ -132,15 +134,27 @@ def build_local_indexing_service_runtime(
             # A missing deployment prerequisite must fail before any queue claim,
             # not strand a RUNNING application step at its first allocation.
             EmbeddingEncodingReservationStorage.require_protocol(session)
-        authority = CatalogIndexingRegistrySourceAuthority(
-            CatalogLocalIndexingSourceAuthority(
-                KnowledgeRetrievalApplicationService(engine, catalog_settings), fence
-            ),
-            selection.service_policy_revision_id,
-            selection.service_policy_sha256,
-            selection.native_execution_policy_sha256,
-            selection.runtime_profile.resource_profile.resource_profile_sha256,
-            selection.maximum_sources,
+            if isinstance(selection, LocalIndexingMixedOwnerConfiguration):
+                EmbeddingEncodingReservationStorage.require_mixed_ownership_protocol(session)
+        selections: tuple[CpuLocalIndexingOwnerSelection, ...] = (selection,)
+        if (
+            isinstance(selection, LocalIndexingMixedOwnerConfiguration)
+            and selection.legacy_configuration is not None
+        ):
+            selections = (selection, selection.legacy_configuration)
+        source_authority = CatalogLocalIndexingSourceAuthority(
+            KnowledgeRetrievalApplicationService(engine, catalog_settings), fence
+        )
+        authorities = tuple(
+            CatalogIndexingRegistrySourceAuthority(
+                source_authority,
+                configured.service_policy_revision_id,
+                configured.service_policy_sha256,
+                configured.native_execution_policy_sha256,
+                configured.runtime_profile.resource_profile.resource_profile_sha256,
+                configured.maximum_sources,
+            )
+            for configured in selections
         )
         verifier = FixedIndexingRuntimeVerification(selection.runtime_verifier)
         launcher = FixedNativeIndexLauncher(
@@ -151,9 +165,10 @@ def build_local_indexing_service_runtime(
         launcher.assert_current_runtime()
         namespaces = tuple(
             _build_namespace_runtime(
-                engine, publisher, authority, selection, namespace, pin, catalog_settings, launcher
+                engine, publisher, authority, configured, namespace, pin, catalog_settings, launcher
             )
-            for namespace in selection.namespaces
+            for configured, authority in zip(selections, authorities, strict=True)
+            for namespace in configured.namespaces
         )
         return LocalIndexingServiceRuntime(engine, namespaces, selection)
     except Exception:
@@ -165,8 +180,8 @@ def _build_namespace_runtime(
     engine: Engine,
     publisher: ControlFileSetPublisher,
     authority: CatalogIndexingRegistrySourceAuthority,
-    selection: LocalIndexingOwnerSelection,
-    namespace: EmbeddingIndexNamespace,
+    selection: CpuLocalIndexingOwnerSelection,
+    namespace: EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace,
     pin: LocalIndexingRuntimePin,
     catalog_settings: CatalogSettings,
     launcher: FixedNativeIndexLauncher,

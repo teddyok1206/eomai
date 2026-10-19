@@ -120,6 +120,31 @@ def test_prefetch_exact_three_queries_and_no_lazy_sql_on_read(
     assert len(session.statements) == 3
 
 
+def test_historical_item_manifest_opt_in_does_not_leak_through_cached_bytes(
+    tmp_path: Path,
+) -> None:
+    original, settings, arguments = _fixture(
+        tmp_path,
+        artifact_type="item-revision-manifest",
+        member_path="item-revision-manifest.json",
+        schema_ref="eom://schemas/item-registry/item-revision-manifest-v1",
+        metadata=False,
+    )
+    session = MetadataSession(*original.records.values())
+    context = PinnedArtifactReadContext(cast(Session, session), settings)
+    context.prefetch(((str(arguments["artifact_id"]), str(arguments["artifact_revision_id"])),))
+    with pytest.raises(PinnedArtifactResolutionError, match="descriptor differs"):
+        context.read_pinned(**arguments)  # type: ignore[arg-type]
+    member = context.read_pinned(
+        **arguments,
+        historical_metadata_compatibility=True,  # type: ignore[arg-type]
+    )
+    assert member.payload == b'{"value":1}'
+    with pytest.raises(PinnedArtifactResolutionError, match="descriptor differs"):
+        context.read_pinned(**arguments)  # type: ignore[arg-type]
+    assert len(session.statements) == 3 and session.get_calls == 0
+
+
 def test_cached_bytes_never_cache_approval_or_terminal_producer_state(tmp_path: Path) -> None:
     original, settings, arguments = _fixture(tmp_path)
     session = MetadataSession(*original.records.values())

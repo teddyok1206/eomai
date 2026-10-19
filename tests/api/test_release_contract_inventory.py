@@ -13,6 +13,7 @@ from typing import cast
 
 import pytest
 from eom_catalog_contracts import catalog_schema_inventory
+from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from eom_workflow import WORKFLOW_ADMISSION_BY_IDENTITY, AgentStep
 from eom_workflow.compiler import compile_definition
 from eom_workflow.definition_execution_protocol import definition_execution_protocol
@@ -78,6 +79,25 @@ def test_installed_release_compares_generated_routes_not_only_snapshot_hashes() 
     assert "generated_openapi = create_app(contract_services).openapi()" in source
     assert '"postgresql+psycopg://invalid:invalid@127.0.0.1:1/invalid"' in source
     assert "contract_services.engine.dispose()" in source
+
+
+def test_installed_migration_admission_matches_the_authoritative_runtime_head() -> None:
+    guard = next(
+        node
+        for node in ast.parse(installed_workflow_inspector_source()).body
+        if isinstance(node, ast.If)
+        and isinstance(node.test, ast.Compare)
+        and isinstance(node.test.left, ast.Name)
+        and node.test.left.id == "CURRENT_MIGRATION_REVISION"
+    )
+    assert isinstance(guard.test, ast.Compare)
+    assert len(guard.test.ops) == 1 and isinstance(guard.test.ops[0], ast.NotEq)
+    assert len(guard.test.comparators) == 1
+    assert ast.literal_eval(guard.test.comparators[0]) == CURRENT_MIGRATION_REVISION
+    checked = compile(ast.Module(body=[guard], type_ignores=[]), "migration admission", "exec")
+    exec(checked, {"CURRENT_MIGRATION_REVISION": CURRENT_MIGRATION_REVISION})
+    with pytest.raises(SystemExit, match="installed runtime migration admission head mismatch"):
+        exec(checked, {"CURRENT_MIGRATION_REVISION": "unexpected-head"})
 
 
 def test_model_selection_runtime_is_required_in_release_wheel_inventory() -> None:
@@ -273,7 +293,13 @@ def test_installed_support_admission_covers_materialized_workflow_contracts() ->
     assert actual == expected
 
 
-def test_actual_installed_admission_comparison_rejects_an_omitted_private_graph() -> None:
+@pytest.mark.parametrize(
+    "omitted_definition",
+    ("private_chat_query_definition", "local_embedding_definition_v2"),
+)
+def test_actual_installed_admission_comparison_rejects_an_omitted_native_definition(
+    omitted_definition: str,
+) -> None:
     """Run only the real pure compiler/comparison, never wheel installation or deployment."""
     outer = ast.parse(release_inspector_source())
     bindings = {
@@ -327,8 +353,7 @@ def test_actual_installed_admission_comparison_rejects_an_omitted_private_graph(
         value
         for value in omitted.value.elts
         if not any(
-            isinstance(node, ast.Name) and node.id == "private_chat_query_definition"
-            for node in ast.walk(value)
+            isinstance(node, ast.Name) and node.id == omitted_definition for node in ast.walk(value)
         )
     ]
     assert len(omitted.value.elts) == count - 1
@@ -336,7 +361,7 @@ def test_actual_installed_admission_comparison_rejects_an_omitted_private_graph(
         exec(
             compile(
                 ast.Module(body=[omitted, comparison], type_ignores=[]),
-                "omitted private admission",
+                "omitted native admission",
                 "exec",
             ),
             namespace,
@@ -347,6 +372,11 @@ def test_actual_installed_admission_comparison_rejects_an_omitted_private_graph(
     ("filename", "variable", "protocol"),
     (
         ("local-embedding-index.v1.yaml", "local_embedding_definition", "local-embedding/1.0"),
+        (
+            "local-embedding-index.v2.yaml",
+            "local_embedding_definition_v2",
+            "local-embedding/1.0",
+        ),
         (
             "local-embedding-reference-query.v1.yaml",
             "reference_query_definition",

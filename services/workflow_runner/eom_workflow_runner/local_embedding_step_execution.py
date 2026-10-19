@@ -5,12 +5,16 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from eom_workflow.compiler import CompiledWorkflowDefinition
-from eom_workflow.local_embedding_request import LocalEmbeddingExecutableRequest
+from eom_workflow.local_embedding_request_v2 import SupportedLocalEmbeddingRequest
 from eom_workflow.local_embedding_workflow import LocalEmbeddingWorkflowDefinition
 from eom_workflow.local_embedding_workflow_receipt import (
     LocalEmbeddingStepOutput,
-    parse_local_embedding_step_output,
 )
+from eom_workflow.local_embedding_workflow_receipt_v2 import (
+    SupportedLocalEmbeddingStepOutput,
+    parse_supported_local_embedding_step_output,
+)
+from eom_workflow.local_embedding_workflow_v2 import LocalEmbeddingWorkflowDefinitionV2
 from sqlalchemy.orm import Session
 
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
@@ -53,7 +57,7 @@ def _native_step(session: Session, workflow_id: str) -> WorkflowStepRunRecord | 
     return native_application_step(session, workflow_id, "encode_batch")
 
 
-def _checked_step(step: WorkflowStepRunRecord, request: LocalEmbeddingExecutableRequest) -> None:
+def _checked_step(step: WorkflowStepRunRecord, request: SupportedLocalEmbeddingRequest) -> None:
     if (
         step.step_key != "encode_batch"
         or step.attempt != 1
@@ -78,11 +82,11 @@ def _checked_completion(
     executor: LocalEmbeddingNativeExecutor,
     workflow: WorkflowInstanceRecord,
     step: WorkflowStepRunRecord,
-    request: LocalEmbeddingExecutableRequest,
+    request: SupportedLocalEmbeddingRequest,
     lease: CommandLeaseIdentity,
-    output: LocalEmbeddingStepOutput,
-) -> LocalEmbeddingStepOutput:
-    output = parse_local_embedding_step_output(output)
+    output: SupportedLocalEmbeddingStepOutput,
+) -> SupportedLocalEmbeddingStepOutput:
+    output = parse_supported_local_embedding_step_output(output)
     if (
         output.workflow_id != workflow.workflow_id
         or output.step_run_id != step.step_run_id
@@ -92,7 +96,7 @@ def _checked_completion(
         )
     ):
         raise ValueError("LOCAL_EMBEDDING_COMPLETION_IDENTITY_INVALID")
-    checked = parse_local_embedding_step_output(
+    checked = parse_supported_local_embedding_step_output(
         executor.validate_completion(
             session=session,
             workflow=workflow,
@@ -111,7 +115,7 @@ def advance_local_embedding_step(
     *,
     workflow: WorkflowInstanceRecord,
     compiled: CompiledWorkflowDefinition,
-    request: LocalEmbeddingExecutableRequest,
+    request: SupportedLocalEmbeddingRequest,
     lease: CommandLeaseIdentity,
     owner: LocalEmbeddingOwnerAdmission,
     executor: LocalEmbeddingNativeExecutor,
@@ -121,7 +125,9 @@ def advance_local_embedding_step(
     actor_id: str,
 ) -> bool:
     """Execute only between closed SQL roots; return False for exact pending owner reads."""
-    if not isinstance(compiled.definition, LocalEmbeddingWorkflowDefinition):
+    if not isinstance(
+        compiled.definition, LocalEmbeddingWorkflowDefinition | LocalEmbeddingWorkflowDefinitionV2
+    ):
         raise WorkflowError(
             WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID, "native fixed definition differs"
         )
@@ -180,7 +186,9 @@ def advance_local_embedding_step(
                     step=step,
                     request=request,
                     lease=lease,
-                    output=parse_local_embedding_step_output(step.output_pointer_manifest),
+                    output=parse_supported_local_embedding_step_output(
+                        step.output_pointer_manifest
+                    ),
                 )
             except ValueError as exc:
                 raise WorkflowError(
@@ -319,7 +327,7 @@ def advance_local_embedding_step(
 def complete_local_embedding_terminal(
     *,
     workflow_id: str,
-    request: LocalEmbeddingExecutableRequest,
+    request: SupportedLocalEmbeddingRequest,
     lease: CommandLeaseIdentity,
     executor: LocalEmbeddingNativeExecutor,
     fenced_transaction: NativeFencedRunnerTransaction,
@@ -328,7 +336,7 @@ def complete_local_embedding_terminal(
 ) -> None:
     def validate(
         session: Session, workflow: WorkflowInstanceRecord, step: WorkflowStepRunRecord
-    ) -> LocalEmbeddingStepOutput:
+    ) -> SupportedLocalEmbeddingStepOutput:
         _checked_step(step, request)
         return _checked_completion(
             session,
@@ -337,7 +345,7 @@ def complete_local_embedding_terminal(
             step=step,
             request=request,
             lease=lease,
-            output=parse_local_embedding_step_output(step.output_pointer_manifest),
+            output=parse_supported_local_embedding_step_output(step.output_pointer_manifest),
         )
 
     complete_native_terminal(

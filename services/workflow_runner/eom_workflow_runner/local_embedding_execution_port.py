@@ -7,9 +7,14 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
-from eom_workflow.local_embedding_encoding_job import EmbeddingEncodingReadResult
-from eom_workflow.local_embedding_request import LocalEmbeddingExecutableRequest
-from eom_workflow.local_embedding_workflow_receipt import LocalEmbeddingStepOutput
+from eom_workflow.local_embedding_encoding_dispatch import (
+    SupportedEmbeddingReadResult,
+    parse_supported_embedding_read,
+)
+from eom_workflow.local_embedding_request_v2 import SupportedLocalEmbeddingRequest
+from eom_workflow.local_embedding_workflow_receipt_v2 import (
+    SupportedLocalEmbeddingStepOutput,
+)
 from sqlalchemy.orm import Session
 
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
@@ -25,12 +30,12 @@ type NativeFencedRunnerTransaction = Callable[[], AbstractContextManager[Session
 class LocalEmbeddingStepPending:
     """Internal ordered existing owner reads, not a new wire receipt or retry grant."""
 
-    readings: tuple[EmbeddingEncodingReadResult, ...]
+    readings: tuple[SupportedEmbeddingReadResult, ...]
 
     def __post_init__(self) -> None:
         if type(self.readings) is not tuple or not 1 <= len(self.readings) <= 1024:
             raise ValueError("LOCAL_EMBEDDING_PENDING_READS_INVALID")
-        readings = tuple(EmbeddingEncodingReadResult.model_validate(row) for row in self.readings)
+        readings = tuple(parse_supported_embedding_read(row) for row in self.readings)
         keys = tuple(row.owned_job.request.encoding.encoding_sha256 for row in readings)
         if keys != tuple(sorted(set(keys))) or any(
             row.status in {"FAILED", "CANCELLED"} for row in readings
@@ -52,18 +57,18 @@ class LocalEmbeddingNativeExecutor(Protocol):
     does not return a completion carrier or authorize another inference.
     """
 
-    def evaluate(self, request: LocalEmbeddingExecutableRequest) -> RuntimeReadinessReport: ...
+    def evaluate(self, request: SupportedLocalEmbeddingRequest) -> RuntimeReadinessReport: ...
 
     def execute(
         self,
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: LocalEmbeddingExecutableRequest,
+        request: SupportedLocalEmbeddingRequest,
         command_lease: CommandLeaseIdentity,
         idempotency_key: str,
         fenced_transaction: NativeFencedRunnerTransaction,
-    ) -> LocalEmbeddingStepOutput | LocalEmbeddingStepPending:
+    ) -> SupportedLocalEmbeddingStepOutput | LocalEmbeddingStepPending:
         """Return only actual published receipt carrier or exact pending owner reads.
 
         Completion reauthorizes all bindings and validates canonical producer/
@@ -79,10 +84,10 @@ class LocalEmbeddingNativeExecutor(Protocol):
         session: Session,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: LocalEmbeddingExecutableRequest,
+        request: SupportedLocalEmbeddingRequest,
         command_lease: CommandLeaseIdentity,
-        output: LocalEmbeddingStepOutput,
-    ) -> LocalEmbeddingStepOutput:
+        output: SupportedLocalEmbeddingStepOutput,
+    ) -> SupportedLocalEmbeddingStepOutput:
         """Resolve and reauthorize the exact canonical receipt with existing owners.
 
         This short root transaction does not run inference. Resolve the carrier's

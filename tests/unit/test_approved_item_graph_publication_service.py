@@ -650,7 +650,10 @@ def test_shared_analysis_validator_fails_before_retrieval_create() -> None:
     publication.publish.assert_not_called()
 
 
-def test_shared_publisher_emits_origin_scoped_v2_binding_and_v6_graph_command() -> None:
+@pytest.mark.parametrize("authorized_at", [None, PUBLISHED_AT + timedelta(seconds=1)])
+def test_shared_publisher_emits_origin_scoped_v2_binding_and_v6_graph_command(
+    authorized_at: datetime | None,
+) -> None:
     base_analysis = _accepted_analysis()
     analysis = AcceptedAnalysisProposal(
         analysis_run_id=base_analysis.analysis_run_id,
@@ -733,6 +736,7 @@ def test_shared_publisher_emits_origin_scoped_v2_binding_and_v6_graph_command() 
     service.publication = publication
     service.retrieval = retrieval
     service.sessions = Mock(return_value=working_context)
+    validate_analysis = Mock()
 
     with (
         patch(
@@ -757,7 +761,9 @@ def test_shared_publisher_emits_origin_scoped_v2_binding_and_v6_graph_command() 
             retrieval_idempotency_namespace="approved-item-origin-align",
             publication_idempotency_namespace="approved-item-auto-graph",
             publisher_version="1.8.0",
+            analysis_validator=validate_analysis,
             alignment_scope_resolver=lambda *_args: (scope,),
+            publication_authorized_at=authorized_at,
         )
 
     retrieval_command = retrieval.create.call_args.args[0]
@@ -774,6 +780,16 @@ def test_shared_publisher_emits_origin_scoped_v2_binding_and_v6_graph_command() 
     assert receipt.alignments[0].alignment_policy_version.endswith("/1.3")
     assert isinstance(graph_command, PublishKnowledgeGraphSnapshotCommandV6)
     assert graph_command.structure_manifest == structure_pointer
+    assert graph_command.requested_at == (authorized_at or PUBLISHED_AT)
+    assert publication.publish.call_args.kwargs["authorized_at"] == authorized_at
+    assert receipt.alignments[0].aligned_at == PUBLISHED_AT
+    validate_analysis.assert_called_once_with(working_session, (analysis,))
+    final_validator = publication.publish.call_args.kwargs["analysis_validator"]
+    unrelated = cast(Any, SimpleNamespace(analysis_run_id="analysisrun_" + "f" * 32))
+    final_validator(load_session, (unrelated, analysis))
+    assert validate_analysis.call_args.args == (load_session, (analysis,))
+    with pytest.raises(ValueError, match="incomplete"):
+        final_validator(load_session, (unrelated,))
 
 
 @pytest.mark.parametrize("field", ("source_revision_id", "item_id", "item_revision_id"))

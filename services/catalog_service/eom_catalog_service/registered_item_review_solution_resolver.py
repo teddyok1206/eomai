@@ -1,14 +1,14 @@
-"""Resolve one registered Item's bounded independent review, never analysis V10.
+"""Bounded current-source registered REVIEW resolution, never analysis V10.
 
-This is deliberately a single-source vertical slice. It is not a bulk INDEX
-adapter: callers must not loop over a population until a bounded metadata and
-receipt batch port exists. Authorization remains with the existing Catalog owner
-and is required explicitly before dereferencing and before returning evidence.
+Metadata/receipts are read in indexed sets; each immutable member is materialized
+once. Source authorization remains an explicit actual-operator owner boundary.
 """
 
 from __future__ import annotations
 
 import json
+import threading
+from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -27,7 +27,12 @@ from eom_orchestrator.evidence_usage_validation import (
     canonical_review_evidence_set_sha256,
     validate_independent_review_draft,
 )
-from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
+from eom_orchestrator.models import (
+    ArtifactRecord,
+    ArtifactRevisionRecord,
+    JobEventRecord,
+    JobRecord,
+)
 from eom_protocol import ArtifactManifest
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow import ArtifactPointer, RoleWorkerInput
@@ -50,10 +55,13 @@ from eom_workflow.schemas import validate_role_result
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, SessionTransaction
 
-from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.artifacts import CatalogArtifactService, CatalogJsonRevisionRequest
 from eom_catalog_service.evidence_usage_receipts import (
+    BatchEvidenceUsageReceiptResolver,
+    EvidenceUsagePairRequest,
+    EvidenceUsageReceiptPair,
     EvidenceUsageReceiptResolutionError,
     MockExamEvidenceUsageReceiptResolver,
 )
@@ -62,9 +70,10 @@ from eom_catalog_service.item_content_contract import (
     read_item_content,
 )
 from eom_catalog_service.models import ItemComponentRecord, ItemRecord, ItemRevisionRecord
-from eom_catalog_service.pinned_artifact_resolution import resolve_pinned_artifact_member
+from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 
 MAX_REGISTERED_REVIEW_MEMBER_BYTES = 4 * 1024**2
+MAX_REGISTERED_REVIEW_SOURCES = 1024
 _COMPONENT_BY_STEP = {
     "authoring": "UPPER_STEM",
     "review": "REVIEW_REPORT",
@@ -104,6 +113,235 @@ class ResolvedRegisteredItemReviewSolution:
         return self.review.completed_at
 
 
+@dataclass(frozen=True, slots=True)
+class LockedRegisteredItemReviewSources:
+    """Retained same-root rows, NOT a source permission or immutable read cache."""
+
+    session: Session
+    root: SessionTransaction
+    nested: SessionTransaction | None
+    thread_id: int
+    item_revisions: tuple[ItemRevisionRecord, ...]
+    components: tuple[ItemComponentRecord, ...]
+    workflows: tuple[WorkflowInstanceRecord, ...]
+    steps: tuple[WorkflowStepRunRecord, ...]
+    logicals: tuple[ArtifactRecord, ...]
+    artifacts: tuple[ArtifactRevisionRecord, ...]
+    jobs: tuple[JobRecord, ...]
+    receipt_events: tuple[JobEventRecord, ...]
+
+    def assert_current(self, session: Session) -> None:
+        if (
+            session is not self.session
+            or threading.get_ident() != self.thread_id
+            or session.get_transaction() is not self.root
+            or not self.root.is_active
+            or session.get_nested_transaction() is not self.nested
+            or (self.nested is not None and not self.nested.is_active)
+        ):
+            _fail("LOCK_ROOT_CHANGED")
+
+
+def lock_registered_item_review_sources(
+    session: Session,
+    *,
+    sources: tuple[ApprovedItemKnowledgeSourceV2, ...],
+) -> LockedRegisteredItemReviewSources:
+    """Hold exact publication proof metadata through the caller's write root.
+
+    Kept separate from the read-only resolver: ordinary retrieval must never
+    acquire row locks or turn into a publication permission. No NAS reads here.
+    Canonical writers serialize role/receipt changes on the held Workflow/Job;
+    the existing resolver still proves every member and trusted receipt after it.
+    """
+    if (
+        not isinstance(sources, tuple)
+        or not sources
+        or len(sources) > MAX_REGISTERED_REVIEW_SOURCES
+        or session.new
+        or session.dirty
+        or session.deleted
+    ):
+        _fail("LOCK_SELECTION_INVALID")
+    nested = session.get_nested_transaction()
+    checked = tuple(
+        ApprovedItemKnowledgeSourceV2.model_validate(raw_similarity_contract_value(source))
+        for source in sources
+    )
+    if any(row.source_class != "APPROVED_ITEM" for row in checked) or len(
+        {row.item_revision_id for row in checked}
+    ) != len(checked):
+        _fail("LOCK_SELECTION_INVALID")
+    count = len(checked)
+    item_revisions = tuple(
+        session.scalars(
+            select(ItemRevisionRecord)
+            .where(
+                ItemRevisionRecord.item_revision_id.in_(
+                    tuple(row.item_revision_id for row in checked)
+                )
+            )
+            .order_by(ItemRevisionRecord.item_revision_id)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+    )
+    if {row.item_revision_id for row in item_revisions} != {
+        row.item_revision_id for row in checked
+    }:
+        _fail("LOCK_SOURCE_MISSING")
+    components = tuple(
+        session.scalars(
+            select(ItemComponentRecord)
+            .where(
+                ItemComponentRecord.item_revision_id.in_(
+                    tuple(row.item_revision_id for row in checked)
+                )
+            )
+            .order_by(
+                ItemComponentRecord.item_revision_id,
+                ItemComponentRecord.component_type,
+                ItemComponentRecord.ordinal,
+            )
+            .limit(100 * count + 1)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+    )
+    workflows = tuple(
+        session.scalars(
+            select(WorkflowInstanceRecord)
+            .where(
+                WorkflowInstanceRecord.workflow_id.in_(
+                    tuple(row.workflow_id for row in item_revisions)
+                )
+            )
+            .order_by(WorkflowInstanceRecord.workflow_id)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+    )
+    steps = tuple(
+        session.scalars(
+            select(WorkflowStepRunRecord)
+            .where(
+                WorkflowStepRunRecord.workflow_id.in_(tuple(row.workflow_id for row in workflows)),
+                WorkflowStepRunRecord.step_key.in_(tuple(_COMPONENT_BY_STEP)),
+                WorkflowStepRunRecord.superseded_by_step_run_id.is_(None),
+            )
+            .order_by(WorkflowStepRunRecord.step_run_id)
+            .limit(3 * count + 1)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+    )
+    if len(components) > 100 * count or len(steps) > 3 * count:
+        _fail("LOCK_BUDGET_EXCEEDED")
+    pointers = tuple(ArtifactPointer.model_validate(row.output_pointer_manifest) for row in steps)
+    logical_ids = {row.artifact_id for row in components}
+    revision_ids = {row.artifact_revision_id for row in components}
+    logical_ids.update(row.manifest_artifact_id for row in item_revisions)
+    revision_ids.update(row.manifest_artifact_revision_id for row in item_revisions)
+    logical_ids.update(row.logical_artifact_id for row in pointers)
+    revision_ids.update(row.revision_id for row in pointers)
+    logicals = tuple(
+        session.scalars(
+            select(ArtifactRecord)
+            .where(ArtifactRecord.logical_artifact_id.in_(logical_ids))
+            .order_by(ArtifactRecord.logical_artifact_id)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+    )
+    artifacts = tuple(
+        session.scalars(
+            select(ArtifactRevisionRecord)
+            .where(ArtifactRevisionRecord.revision_id.in_(revision_ids))
+            .order_by(ArtifactRevisionRecord.revision_id)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+    )
+    jobs = tuple(
+        session.scalars(
+            select(JobRecord)
+            .where(
+                JobRecord.job_id.in_(
+                    {row.job_id for row in artifacts} | {row.job_id for row in pointers}
+                )
+            )
+            .order_by(JobRecord.job_id)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+    )
+    receipt_job_ids = tuple(
+        row.job_id for row in pointers if row.step_key in {"authoring", "review"}
+    )
+    events = tuple(
+        session.scalars(
+            select(JobEventRecord)
+            .where(
+                JobEventRecord.job_id.in_(receipt_job_ids),
+                JobEventRecord.event == "ARTIFACT_COMMITTED",
+            )
+            .order_by(JobEventRecord.job_id, JobEventRecord.sequence)
+            .limit(2 * count + 1)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+    )
+    if (
+        len(events) > 2 * count
+        or {row.logical_artifact_id for row in logicals} != logical_ids
+        or {row.revision_id for row in artifacts} != revision_ids
+        or {row.job_id for row in jobs}
+        != {row.job_id for row in artifacts} | {row.job_id for row in pointers}
+    ):
+        _fail("LOCK_PROOF_MISSING")
+    root = session.get_transaction()
+    if root is None or not root.is_active:
+        _fail("LOCK_ROOT_CHANGED")
+    value = LockedRegisteredItemReviewSources(
+        session,
+        root,
+        nested,
+        threading.get_ident(),
+        item_revisions,
+        components,
+        workflows,
+        steps,
+        logicals,
+        artifacts,
+        jobs,
+        events,
+    )
+    value.assert_current(session)
+    return value
+
+
+@dataclass(frozen=True)
+class _PreparedSource:
+    """Current-call records only; neither a cache nor an authorization grant."""
+
+    source: ApprovedItemKnowledgeSourceV2
+    item: ItemRecord
+    revision: ItemRevisionRecord
+    components: tuple[ItemComponentRecord, ...]
+    workflow: WorkflowInstanceRecord
+    steps: dict[str, WorkflowStepRunRecord]
+    family: str
+    content: ArtifactMemberPointer
+    manifest: ArtifactMemberPointer
+
+
+@dataclass(frozen=True)
+class _RoleRecords:
+    logicals: dict[str, ArtifactRecord]
+    revisions: dict[str, ArtifactRevisionRecord]
+    jobs: dict[str, JobRecord]
+
+
 def _fail(reason: str) -> NoReturn:
     raise RegisteredItemReviewSolutionResolutionError("REGISTERED_ITEM_REVIEW_" + reason)
 
@@ -141,14 +379,11 @@ def _member(component: ItemComponentRecord) -> ArtifactMemberPointer:
 
 
 def _read_file_set_member(
-    session: Session,
-    artifacts: CatalogArtifactService,
+    reader: PinnedArtifactReadContext,
     pointer: ArtifactMemberPointer,
     artifact_type: str,
 ) -> tuple[dict[str, Any], int]:
-    member = resolve_pinned_artifact_member(
-        session,
-        artifacts.settings,
+    member = reader.read_pinned(
         artifact_id=pointer.artifact_id,
         artifact_revision_id=pointer.artifact_revision_id,
         member_path=pointer.member_path,
@@ -173,20 +408,19 @@ def _input_pointers(step: WorkflowStepRunRecord) -> tuple[ArtifactPointer, ...]:
     return tuple(ArtifactPointer.model_validate(value) for value in raw)
 
 
-def _role_result(
-    session: Session,
-    artifacts: CatalogArtifactService,
+def _role_provenance(
+    records: _RoleRecords,
     workflow: WorkflowInstanceRecord,
     step: WorkflowStepRunRecord,
     component: ItemComponentRecord,
     family: str,
-) -> tuple[ArtifactPointer, RoleResultBase]:
+) -> ArtifactPointer:
     pointer = ArtifactPointer.model_validate(step.output_pointer_manifest)
     role = _ROLE_BY_STEP[step.step_key]
     expected_schema = f"{step.step_key}-result@{family}.0"
-    logical = session.get(ArtifactRecord, pointer.logical_artifact_id, populate_existing=True)
-    revision = session.get(ArtifactRevisionRecord, pointer.revision_id, populate_existing=True)
-    job = session.get(JobRecord, pointer.job_id, populate_existing=True)
+    logical = records.logicals.get(pointer.logical_artifact_id)
+    revision = records.revisions.get(pointer.revision_id)
+    job = records.jobs.get(pointer.job_id)
     if logical is None or revision is None or job is None:
         _fail("ROLE_PROVENANCE_INVALID")
     manifest = ArtifactManifest.model_validate(revision.manifest)
@@ -246,12 +480,21 @@ def _role_result(
         or worker_input.upstream_artifacts != _input_pointers(step)
     ):
         _fail("ROLE_PROVENANCE_INVALID")
-    raw = artifacts.load_json_revision(
-        artifact_id=pointer.logical_artifact_id,
-        revision_id=pointer.revision_id,
-        content_hash=pointer.content_hash,
-        max_bytes=MAX_REGISTERED_REVIEW_MEMBER_BYTES,
-    )
+    return pointer
+
+
+def _role_result(
+    records: _RoleRecords,
+    documents: dict[str, dict[str, Any]],
+    workflow: WorkflowInstanceRecord,
+    step: WorkflowStepRunRecord,
+    pointer: ArtifactPointer,
+) -> tuple[ArtifactPointer, RoleResultBase]:
+    revision = records.revisions[pointer.revision_id]
+    job = records.jobs[pointer.job_id]
+    role = _ROLE_BY_STEP[step.step_key]
+    expected_schema = pointer.result_schema
+    raw = documents[pointer.revision_id]
     if raw != revision.result or content_sha256(raw) != pointer.content_hash:
         _fail("ROLE_RESULT_INVALID")
     result = validate_role_result(raw, role, expected_schema)
@@ -296,20 +539,149 @@ def resolve_registered_item_review_solution(
     receipts: MockExamEvidenceUsageReceiptResolver,
     authorize_source: Callable[[ApprovedItemKnowledgeSourceV2], None],
 ) -> ResolvedRegisteredItemReviewSolution:
-    """Resolve ONE source inside its actual-operator-authorized Catalog read.
+    """Preserved scalar API, composed through the same bounded resolution path."""
 
-    The mandatory callback must use the owner's current actor/policy boundary;
-    neither the source DTO nor approved database state supplies permission. No
-    caller is wired to this API yet, especially not population/INDEX processing.
-    """
-    source = ApprovedItemKnowledgeSourceV2.model_validate(raw_similarity_contract_value(source))
-    if source.source_class != "APPROVED_ITEM":
+    def one_receipt(
+        requests: tuple[EvidenceUsagePairRequest, ...],
+    ) -> tuple[EvidenceUsageReceiptPair, ...]:
+        request = requests[0]
+        return (
+            receipts.resolve_mock_exam_pair(
+                workflow_id=request.workflow_id,
+                authoring_step_run_id=request.authoring_step_run_id,
+                authoring=request.authoring,
+                review_step_run_id=request.review_step_run_id,
+                review=request.review,
+                expected_authoring_receipt_sha256=request.expected_authoring_receipt_sha256,
+                expected_review_receipt_sha256=request.expected_review_receipt_sha256,
+            ),
+        )
+
+    return _resolve_sources(session, (source,), artifacts, one_receipt, authorize_source)[0]
+
+
+def resolve_registered_item_review_solutions(
+    session: Session,
+    *,
+    sources: tuple[ApprovedItemKnowledgeSourceV2, ...],
+    artifacts: CatalogArtifactService,
+    receipts: BatchEvidenceUsageReceiptResolver,
+    authorize_source: Callable[[ApprovedItemKnowledgeSourceV2], None],
+) -> tuple[ResolvedRegisteredItemReviewSolution, ...]:
+    """All-or-error batch, retaining exact caller order and current authorization."""
+    return _resolve_sources(
+        session,
+        sources,
+        artifacts,
+        lambda requests: receipts.resolve_pairs_in_session(session, requests),
+        authorize_source,
+    )
+
+
+def _resolve_sources(
+    session: Session,
+    sources: tuple[ApprovedItemKnowledgeSourceV2, ...],
+    artifacts: CatalogArtifactService,
+    receipt_batch: Callable[
+        [tuple[EvidenceUsagePairRequest, ...]], tuple[EvidenceUsageReceiptPair, ...]
+    ],
+    authorize_source: Callable[[ApprovedItemKnowledgeSourceV2], None],
+) -> tuple[ResolvedRegisteredItemReviewSolution, ...]:
+    if not isinstance(sources, tuple) or len(sources) > MAX_REGISTERED_REVIEW_SOURCES:
+        _fail("BATCH_INVALID")
+    checked = tuple(
+        ApprovedItemKnowledgeSourceV2.model_validate(raw_similarity_contract_value(source))
+        for source in sources
+    )
+    if any(source.source_class != "APPROVED_ITEM" for source in checked):
         _fail("SOURCE_INVALID")
-    authorize_source(source)
+    if len({source.item_revision_id for source in checked}) != len(checked):
+        _fail("BATCH_DUPLICATE_SOURCE")
+    if not checked:
+        return ()
+    for source in checked:
+        authorize_source(source)
     if session.new or session.dirty or session.deleted:
         _fail("PENDING_MUTATION")
     try:
-        result = _resolve_one(session, source, artifacts, receipts)
+        prepared = _read_sources(session, checked)
+        pointers = tuple(
+            ArtifactPointer.model_validate(row.steps[key].output_pointer_manifest)
+            for row in prepared
+            for key in _COMPONENT_BY_STEP
+        )
+        records = _RoleRecords(
+            {
+                row.logical_artifact_id: row
+                for row in session.scalars(
+                    select(ArtifactRecord)
+                    .where(
+                        ArtifactRecord.logical_artifact_id.in_(
+                            tuple(pointer.logical_artifact_id for pointer in pointers)
+                        )
+                    )
+                    .execution_options(populate_existing=True)
+                )
+            },
+            {
+                row.revision_id: row
+                for row in session.scalars(
+                    select(ArtifactRevisionRecord)
+                    .where(
+                        ArtifactRevisionRecord.revision_id.in_(
+                            tuple(pointer.revision_id for pointer in pointers)
+                        )
+                    )
+                    .execution_options(populate_existing=True)
+                )
+            },
+            {
+                row.job_id: row
+                for row in session.scalars(
+                    select(JobRecord)
+                    .where(JobRecord.job_id.in_(tuple(pointer.job_id for pointer in pointers)))
+                    .execution_options(populate_existing=True)
+                )
+            },
+        )
+        provenances = {
+            row.steps[key].step_run_id: _role_provenance(
+                records,
+                row.workflow,
+                row.steps[key],
+                _one_component(row.components, kind),
+                row.family,
+            )
+            for row in prepared
+            for key, kind in _COMPONENT_BY_STEP.items()
+        }
+        reader = PinnedArtifactReadContext(session, artifacts.settings)
+        reader.prefetch(
+            tuple(
+                (pointer.artifact_id, pointer.artifact_revision_id)
+                for row in prepared
+                for pointer in (row.manifest, row.content)
+            )
+        )
+        documents = artifacts.load_json_revisions(
+            tuple(
+                CatalogJsonRevisionRequest(
+                    pointer.logical_artifact_id,
+                    pointer.revision_id,
+                    pointer.content_hash,
+                    MAX_REGISTERED_REVIEW_MEMBER_BYTES,
+                )
+                for pointer in pointers
+            )
+        )
+        requests = tuple(_receipt_request(row) for row in prepared)
+        pairs = receipt_batch(requests)
+        if len(pairs) != len(prepared):
+            _fail("RECEIPT_INVALID")
+        result = tuple(
+            _resolve_one(row, records, documents, pair, reader, provenances)
+            for row, pair in zip(prepared, pairs, strict=True)
+        )
     except RegisteredItemReviewSolutionResolutionError:
         raise
     except EvidenceUsageReceiptResolutionError as exc:
@@ -320,18 +692,107 @@ def resolve_registered_item_review_solution(
         raise RegisteredItemReviewSolutionResolutionError(
             "REGISTERED_ITEM_REVIEW_CLOSURE_INVALID"
         ) from exc
-    authorize_source(source)
+    for source in checked:
+        authorize_source(source)
     return result
 
 
-def _resolve_one(
-    session: Session,
+def _read_sources(
+    session: Session, sources: tuple[ApprovedItemKnowledgeSourceV2, ...]
+) -> tuple[_PreparedSource, ...]:
+    count = len(sources)
+    items = {
+        row.item_id: row
+        for row in session.scalars(
+            select(ItemRecord)
+            .where(ItemRecord.item_id.in_(tuple(source.item_id for source in sources)))
+            .execution_options(populate_existing=True)
+        )
+    }
+    revisions = {
+        row.item_revision_id: row
+        for row in session.scalars(
+            select(ItemRevisionRecord)
+            .where(
+                ItemRevisionRecord.item_revision_id.in_(
+                    tuple(source.item_revision_id for source in sources)
+                )
+            )
+            .execution_options(populate_existing=True)
+        )
+    }
+    components: dict[str, list[ItemComponentRecord]] = defaultdict(list)
+    rows = tuple(
+        session.scalars(
+            select(ItemComponentRecord)
+            .where(
+                ItemComponentRecord.item_revision_id.in_(
+                    tuple(source.item_revision_id for source in sources)
+                )
+            )
+            .order_by(
+                ItemComponentRecord.item_revision_id,
+                ItemComponentRecord.component_type,
+                ItemComponentRecord.ordinal,
+            )
+            .limit(100 * count + 1)
+            .execution_options(populate_existing=True)
+        )
+    )
+    if len(rows) > 100 * count:
+        _fail("COMPONENT_INVALID")
+    for component in rows:
+        components[component.item_revision_id].append(component)
+    workflows = {
+        row.workflow_id: row
+        for row in session.scalars(
+            select(WorkflowInstanceRecord)
+            .where(
+                WorkflowInstanceRecord.workflow_id.in_(
+                    tuple(row.workflow_id for row in revisions.values())
+                )
+            )
+            .execution_options(populate_existing=True)
+        )
+    }
+    steps: dict[str, list[WorkflowStepRunRecord]] = defaultdict(list)
+    rows_steps = tuple(
+        session.scalars(
+            select(WorkflowStepRunRecord)
+            .where(
+                WorkflowStepRunRecord.workflow_id.in_(tuple(workflows)),
+                WorkflowStepRunRecord.step_key.in_(tuple(_COMPONENT_BY_STEP)),
+                WorkflowStepRunRecord.superseded_by_step_run_id.is_(None),
+            )
+            .limit(3 * count + 1)
+            .execution_options(populate_existing=True)
+        )
+    )
+    if len(rows_steps) > 3 * count:
+        _fail("FINAL_STEP_INVALID")
+    for step in rows_steps:
+        steps[step.workflow_id].append(step)
+    return tuple(
+        _prepare_source(
+            source,
+            items.get(source.item_id),
+            revisions.get(source.item_revision_id),
+            tuple(components.get(source.item_revision_id, ())),
+            workflows,
+            steps,
+        )
+        for source in sources
+    )
+
+
+def _prepare_source(
     source: ApprovedItemKnowledgeSourceV2,
-    artifacts: CatalogArtifactService,
-    receipts: MockExamEvidenceUsageReceiptResolver,
-) -> ResolvedRegisteredItemReviewSolution:
-    item = session.get(ItemRecord, source.item_id, populate_existing=True)
-    revision = session.get(ItemRevisionRecord, source.item_revision_id, populate_existing=True)
+    item: ItemRecord | None,
+    revision: ItemRevisionRecord | None,
+    components: tuple[ItemComponentRecord, ...],
+    workflows: dict[str, WorkflowInstanceRecord],
+    steps: dict[str, list[WorkflowStepRunRecord]],
+) -> _PreparedSource:
     if (
         item is None
         or revision is None
@@ -344,24 +805,15 @@ def _resolve_one(
         or revision.metadata_sha256 != content_sha256(revision.metadata_json)
     ):
         _fail("SOURCE_INELIGIBLE")
-    components = tuple(
-        session.scalars(
-            select(ItemComponentRecord)
-            .where(ItemComponentRecord.item_revision_id == source.item_revision_id)
-            .order_by(ItemComponentRecord.component_type, ItemComponentRecord.ordinal)
-            .limit(101)
-            .execution_options(populate_existing=True)
-        )
-    )
     if len(components) > 100:
         _fail("COMPONENT_INVALID")
-    content_component = _one_component(components, "ITEM_CONTENT")
-    if content_component.logical_name != ASSESSMENT_ITEM_CONTENT_FILE_NAME:
+    component = _one_component(components, "ITEM_CONTENT")
+    content = _member(component)
+    expected = source.artifact_member
+    if component.logical_name != ASSESSMENT_ITEM_CONTENT_FILE_NAME:
         _fail("COMPONENT_INVALID")
-    content_pointer = _member(content_component)
-    expected_content = source.artifact_member
-    if content_pointer != ArtifactMemberPointer(
-        **expected_content.model_dump(
+    if content != ArtifactMemberPointer(
+        **expected.model_dump(
             include={
                 "artifact_id",
                 "artifact_revision_id",
@@ -373,7 +825,7 @@ def _resolve_one(
         )
     ):
         _fail("SOURCE_POINTER_MISMATCH")
-    manifest_pointer = ArtifactMemberPointer(
+    manifest = ArtifactMemberPointer(
         artifact_id=revision.manifest_artifact_id,
         artifact_revision_id=revision.manifest_artifact_revision_id,
         member_path="item-revision-manifest.json",
@@ -385,8 +837,64 @@ def _resolve_one(
         ),
         media_type="application/json",
     )
+    workflow = workflows.get(revision.workflow_id)
+    if (
+        workflow is None
+        or workflow.definition_key != "generic-item-development"
+        or workflow.definition_version != revision.workflow_definition_version
+        or workflow.state != "COMPLETED"
+    ):
+        _fail("REGISTRATION_INVALID")
+    selected_steps = tuple(steps.get(workflow.workflow_id, ()))
+    by_step = {step.step_key: step for step in selected_steps}
+    if len(selected_steps) != 3 or set(by_step) != set(_COMPONENT_BY_STEP):
+        _fail("FINAL_STEP_INVALID")
+    if by_step["registration"].step_run_id != revision.source_workflow_step_run_id:
+        _fail("REGISTRATION_INVALID")
+    family = {"workflow-role/1.23.0": "11", "workflow-role/1.24.0": "12"}.get(
+        workflow.role_schema_version
+    )
+    if family is None:
+        _fail("UNAVAILABLE")
+    return _PreparedSource(
+        source, item, revision, components, workflow, by_step, family, content, manifest
+    )
+
+
+def _receipt_request(row: _PreparedSource) -> EvidenceUsagePairRequest:
+    expected = tuple(
+        _one_component(row.components, kind).metadata_json.get(
+            "evidence_usage_validation_receipt_sha256"
+        )
+        for kind in ("UPPER_STEM", "REVIEW_REPORT")
+    )
+    if any(not isinstance(value, str) for value in expected):
+        _fail("RECEIPT_INVALID")
+    return EvidenceUsagePairRequest(
+        row.workflow.workflow_id,
+        row.steps["authoring"].step_run_id,
+        ArtifactPointer.model_validate(row.steps["authoring"].output_pointer_manifest),
+        row.steps["review"].step_run_id,
+        ArtifactPointer.model_validate(row.steps["review"].output_pointer_manifest),
+        expected_authoring_receipt_sha256=expected[0],
+        expected_review_receipt_sha256=expected[1],
+    )
+
+
+def _resolve_one(
+    prepared: _PreparedSource,
+    records: _RoleRecords,
+    documents: dict[str, dict[str, Any]],
+    pair: EvidenceUsageReceiptPair,
+    reader: PinnedArtifactReadContext,
+    provenances: dict[str, ArtifactPointer],
+) -> ResolvedRegisteredItemReviewSolution:
+    source, item, revision = prepared.source, prepared.item, prepared.revision
+    components, workflow, by_step = prepared.components, prepared.workflow, prepared.steps
+    content_pointer, manifest_pointer = prepared.content, prepared.manifest
+    content_component = _one_component(components, "ITEM_CONTENT")
     manifest, _manifest_bytes = _read_file_set_member(
-        session, artifacts, manifest_pointer, "item-revision-manifest"
+        reader, manifest_pointer, "item-revision-manifest"
     )
     validate_contract(
         "item-revision-manifest-v2"
@@ -394,7 +902,6 @@ def _resolve_one(
         else "item-revision-manifest",
         manifest,
     )
-    workflow = session.get(WorkflowInstanceRecord, revision.workflow_id, populate_existing=True)
     if (
         workflow is None
         or workflow.definition_key != "generic-item-development"
@@ -414,32 +921,11 @@ def _resolve_one(
         or manifest["components"] != [_component_document(row) for row in components]
     ):
         _fail("REGISTRATION_INVALID")
-    steps = tuple(
-        session.scalars(
-            select(WorkflowStepRunRecord)
-            .where(
-                WorkflowStepRunRecord.workflow_id == workflow.workflow_id,
-                WorkflowStepRunRecord.step_key.in_(tuple(_COMPONENT_BY_STEP)),
-                WorkflowStepRunRecord.superseded_by_step_run_id.is_(None),
-            )
-            .execution_options(populate_existing=True)
-        )
-    )
-    by_step = {step.step_key: step for step in steps}
-    if len(steps) != 3 or set(by_step) != set(_COMPONENT_BY_STEP):
-        _fail("FINAL_STEP_INVALID")
-    if by_step["registration"].step_run_id != revision.source_workflow_step_run_id:
-        _fail("REGISTRATION_INVALID")
-    family = {"workflow-role/1.23.0": "11", "workflow-role/1.24.0": "12"}.get(
-        workflow.role_schema_version
-    )
-    if family is None:
-        _fail("UNAVAILABLE")
     resolved = {
         key: _role_result(
-            session, artifacts, workflow, by_step[key], _one_component(components, kind), family
+            records, documents, workflow, by_step[key], provenances[by_step[key].step_run_id]
         )
-        for key, kind in _COMPONENT_BY_STEP.items()
+        for key in _COMPONENT_BY_STEP
     }
     authoring_pointer, authoring = resolved["authoring"]
     review_pointer, review = resolved["review"]
@@ -471,15 +957,6 @@ def _resolve_one(
     )
     if not isinstance(authoring_receipt_sha, str) or not isinstance(review_receipt_sha, str):
         _fail("RECEIPT_INVALID")
-    pair = receipts.resolve_mock_exam_pair(
-        workflow_id=workflow.workflow_id,
-        authoring_step_run_id=by_step["authoring"].step_run_id,
-        authoring=authoring_pointer,
-        review_step_run_id=by_step["review"].step_run_id,
-        review=review_pointer,
-        expected_authoring_receipt_sha256=authoring_receipt_sha,
-        expected_review_receipt_sha256=review_receipt_sha,
-    )
     report = review.output.independent_review_report
     if (
         not isinstance(
@@ -495,7 +972,7 @@ def _resolve_one(
         _fail("RECEIPT_INVALID")
     validate_independent_review_draft(review, authoring.output.draft.model_dump(mode="json"))
     content_document, content_bytes = _read_file_set_member(
-        session, artifacts, content_pointer, "assessment-item-content"
+        reader, content_pointer, "assessment-item-content"
     )
     content = read_item_content(content_pointer.schema_ref, content_document)
     if (

@@ -15,11 +15,13 @@ from eom_orchestrator.local_embedding_completion_artifacts import (
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.local_embedding_workflow_receipt import (
     MAX_LOCAL_EMBEDDING_WORKFLOW_RECEIPT_BYTES,
-    LocalEmbeddingStepOutput,
-    LocalEmbeddingWorkflowReceipt,
-    parse_local_embedding_step_output,
-    parse_local_embedding_workflow_receipt,
-    validate_local_embedding_step_output,
+)
+from eom_workflow.local_embedding_workflow_receipt_v2 import (
+    SupportedLocalEmbeddingStepOutput,
+    SupportedLocalEmbeddingWorkflowReceipt,
+    parse_supported_local_embedding_step_output,
+    parse_supported_local_embedding_workflow_receipt,
+    validate_supported_local_embedding_step_output,
 )
 from eom_workflow.private_chat_query_workflow import (
     MAX_PRIVATE_CHAT_QUERY_RECEIPT_BYTES,
@@ -44,15 +46,15 @@ from eom_catalog_service.settings import CatalogSettings
 
 
 def resolve_native_embedding_completion(
-    session: Session, settings: CatalogSettings, output: LocalEmbeddingStepOutput
-) -> LocalEmbeddingWorkflowReceipt:
+    session: Session, settings: CatalogSettings, output: SupportedLocalEmbeddingStepOutput
+) -> SupportedLocalEmbeddingWorkflowReceipt:
     """Current Identity/source admission is REQUIRED before calling this read.
 
     A valid carrier or receipt never grants permission. This boundary checks actual
     producer/commit/lifecycle/member/hash; registration and current scope belong to
     the supported Catalog registration-observation use case in the SAME root.
     """
-    output = parse_local_embedding_step_output(output)
+    output = parse_supported_local_embedding_step_output(output)
     materialized = _read_receipt(
         session,
         settings,
@@ -63,10 +65,10 @@ def resolve_native_embedding_completion(
     body = json.loads(materialized.payload)
     if canonical_json_bytes(body) != materialized.payload:
         raise ValueError("LOCAL_EMBEDDING_RECEIPT_NONCANONICAL")
-    receipt = parse_local_embedding_workflow_receipt(body)
+    receipt = parse_supported_local_embedding_workflow_receipt(body)
     if materialized.producer_job_id != receipt.receipt_owner_job_id:
         raise ValueError("LOCAL_EMBEDDING_RECEIPT_PRODUCER_MISMATCH")
-    validate_local_embedding_step_output(output, receipt)
+    validate_supported_local_embedding_step_output(output, receipt)
     return receipt
 
 

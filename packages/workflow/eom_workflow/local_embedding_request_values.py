@@ -23,6 +23,46 @@ from eom_workflow.local_embedding_source_plan import LOCAL_EMBEDDING_SOURCE_PLAN
 from eom_workflow.schemas import NativeEmbeddingContract
 
 
+def validate_local_embedding_request_control_values(
+    *,
+    source_plan: ArtifactMemberPointer,
+    source_plan_schema_ref: str,
+    native_execution_policy: ArtifactMemberPointer,
+    policy_schema_ref: str,
+    graph_snapshot: KnowledgeGraphSnapshotPointer,
+    namespace_space_sha256: str,
+    space: EmbeddingSpace,
+    resource_profile: LocalEmbeddingResourceProfile,
+) -> None:
+    """Shared value closure; concrete wire parsers choose their fixed schema families."""
+    for pointer, member, schema in (
+        (source_plan, "source-plan.json", source_plan_schema_ref),
+        (native_execution_policy, "policy.json", policy_schema_ref),
+    ):
+        if (
+            pointer.member_path != member
+            or pointer.schema_ref != schema
+            or pointer.media_type != "application/json"
+        ):
+            raise ValueError("native request control pointer differs")
+    if (
+        graph_snapshot.manifest_sha256 != graph_snapshot.manifest_artifact.sha256
+        or namespace_space_sha256 != space.space_sha256
+        or space.purpose != "DOCUMENT"
+        or resource_profile.device != space.runtime.device
+    ):
+        raise ValueError("native request Graph, space or device pins differ")
+
+
+def validate_local_embedding_request_hash(
+    value: NativeEmbeddingContract, expected_sha256: str
+) -> None:
+    if len(canonical_json_bytes(value.model_dump(mode="json"))) > 64 * 1024:
+        raise ValueError("native request exceeds its envelope bound")
+    if expected_sha256 != content_sha256(value.model_dump(mode="json", exclude={"request_sha256"})):
+        raise ValueError("native request canonical hash differs")
+
+
 class LocalEmbeddingOperatorAudit(NativeEmbeddingContract):
     kind: Literal["OPERATOR"] = "OPERATOR"
     operator_id: OperatorId
@@ -71,29 +111,17 @@ class LocalEmbeddingWorkflowRequestBody(NativeEmbeddingContract):
 
     @model_validator(mode="after")
     def exact_request(self) -> Self:
-        for pointer, member, schema in (
-            (self.source_plan, "source-plan.json", LOCAL_EMBEDDING_SOURCE_PLAN_SCHEMA_REF),
-            (self.native_execution_policy, "policy.json", self._policy_schema_ref),
-        ):
-            if (
-                pointer.member_path != member
-                or pointer.schema_ref != schema
-                or pointer.media_type != "application/json"
-            ):
-                raise ValueError("native request control pointer differs")
-        if (
-            self.graph_snapshot.manifest_sha256 != self.graph_snapshot.manifest_artifact.sha256
-            or self.namespace.space_sha256 != self.space.space_sha256
-            or self.space.purpose != "DOCUMENT"
-            or self.resource_profile.device != self.space.runtime.device
-        ):
-            raise ValueError("native request Graph, space or device pins differ")
-        if len(canonical_json_bytes(self.model_dump(mode="json"))) > 64 * 1024:
-            raise ValueError("native request exceeds its envelope bound")
-        if self.request_sha256 != content_sha256(
-            self.model_dump(mode="json", exclude={"request_sha256"})
-        ):
-            raise ValueError("native request canonical hash differs")
+        validate_local_embedding_request_control_values(
+            source_plan=self.source_plan,
+            source_plan_schema_ref=LOCAL_EMBEDDING_SOURCE_PLAN_SCHEMA_REF,
+            native_execution_policy=self.native_execution_policy,
+            policy_schema_ref=self._policy_schema_ref,
+            graph_snapshot=self.graph_snapshot,
+            namespace_space_sha256=self.namespace.space_sha256,
+            space=self.space,
+            resource_profile=self.resource_profile,
+        )
+        validate_local_embedding_request_hash(self, self.request_sha256)
         return self
 
 

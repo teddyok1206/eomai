@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
+from eom_catalog_contracts.local_indexing_mixed_policy import SupportedLocalIndexingAccessPolicy
 from eom_catalog_contracts.local_indexing_policy import (
-    LocalIndexingAccessPolicy,
     LocalIndexingPolicyContractError,
     require_local_indexing_source_policy,
 )
@@ -43,7 +43,7 @@ class CatalogLocalIndexingSourceAuthority:
 
     def _current_policy(
         self, session: Session, revision_id: str, sha256: str
-    ) -> LocalIndexingAccessPolicy:
+    ) -> SupportedLocalIndexingAccessPolicy:
         identity = self.service_fence.fence_current_service(session)
         policy = self.retrieval.resolve_local_indexing_access_policy(
             session, revision_id, sha256=sha256
@@ -63,7 +63,7 @@ class CatalogLocalIndexingSourceAuthority:
 
     def current_graph(
         self, session: Session, revision_id: str, sha256: str
-    ) -> tuple[LocalIndexingAccessPolicy, KnowledgeGraphSnapshotPointer | None]:
+    ) -> tuple[SupportedLocalIndexingAccessPolicy, KnowledgeGraphSnapshotPointer | None]:
         """Authenticate before discovering a head; saved work never calls latest."""
         try:
             policy = self._current_policy(session, revision_id, sha256)
@@ -106,7 +106,7 @@ class CatalogLocalIndexingSourceAuthority:
         self,
         session: Session,
         intent: LocalIndexingSourceReadIntent,
-    ) -> LocalIndexingAccessPolicy:
+    ) -> SupportedLocalIndexingAccessPolicy:
         if type(intent) is not LocalIndexingSourceReadIntent:
             raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_SCOPE_INVALID")
         try:

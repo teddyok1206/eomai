@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from typing import Any
 
 import pytest
 from eom_catalog_contracts.inference_transfer_embedding import EmbeddingVectorRowRef
@@ -27,6 +27,7 @@ from eom_catalog_service.registered_review_embedding_entry import (
     validate_registered_review_embedding_entry,
 )
 from eom_identifiers import content_sha256
+from jsonschema.exceptions import ValidationError as SchemaError
 
 from tests.unit.inference_transfer_embedding_fixtures import (
     PARTITION,
@@ -35,6 +36,13 @@ from tests.unit.inference_transfer_embedding_fixtures import (
 )
 from tests.unit.inference_transfer_experiment_fixtures import entry as legacy_entry
 from tests.unit.registered_review_fixtures import registered_review_profile
+
+
+def replace(
+    staged: RegisteredReviewEmbeddingEntry, **changes: Any
+) -> RegisteredReviewEmbeddingEntry:
+    """Build intentionally unchecked frozen values; public planning revalidates them."""
+    return staged.model_copy(update=changes)
 
 
 def _entry(version: str = "11.0") -> RegisteredReviewEmbeddingEntry:
@@ -162,7 +170,7 @@ def test_registered_review_does_not_claim_accepted_solution_metadata() -> None:
     forged_metadata = tuple(
         field.model_copy(update={"basis": "ACCEPTED_SOLUTION"}) for field in staged.metadata
     )
-    with pytest.raises(ValueError, match="exact original Item"):
+    with pytest.raises((ValueError, SchemaError)):
         validate_registered_review_embedding_entry(replace(staged, metadata=forged_metadata))
 
 

@@ -8,7 +8,10 @@ All registry and source metadata is rolled back, not deleted from immutable hist
 from __future__ import annotations
 
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import timedelta
+from threading import Event
 from typing import Any, cast
 from uuid import uuid4
 
@@ -22,7 +25,9 @@ from eom_catalog_service.embedding_registry_models import (
     EmbeddingIndexRevisionRecord,
     EmbeddingSourceBindingRecord,
 )
+from eom_catalog_service.embedding_registry_ports import RegisteredReviewEmbeddingBindingLookupKey
 from eom_catalog_service.embedding_registry_repository import (
+    REGISTERED_REVIEW_ASSOCIATION_COLUMNS,
     EmbeddingRegistryRepository,
     binding_columns,
     binding_origin,
@@ -49,7 +54,7 @@ from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobR
 from eom_orchestrator.repository import ensure_protocol_version
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow_runner.models import WorkflowStepRunRecord
-from sqlalchemy import Engine, delete, event, select, text, update
+from sqlalchemy import Engine, delete, event, func, select, text, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
@@ -62,6 +67,7 @@ from tests.integration.test_preset_model_validation_persistence import (
 from tests.unit.inference_transfer_embedding_fixtures import seal, source_binding
 from tests.unit.inference_transfer_fixtures import NOW, sha
 from tests.unit.test_embedding_registry_models import migration_module
+from tests.unit.test_registered_review_embedding_migration import registered_review_migration
 
 pytestmark = pytest.mark.integration
 
@@ -227,7 +233,11 @@ def _head(session: Session, seed: dict[str, Any]) -> EmbeddingIndexRecord:
 
 
 def _revision(
-    session: Session, seed: dict[str, Any], head: EmbeddingIndexRecord
+    session: Session,
+    seed: dict[str, Any],
+    head: EmbeddingIndexRecord,
+    *,
+    manifest_schema_ref: str = "eom://schemas/knowledge/embedding-index-manifest/1.0",
 ) -> EmbeddingIndexRevisionRecord:
     row = EmbeddingIndexRevisionRecord(
         index_revision_id="embeddingindexrev_" + uuid4().hex,
@@ -240,7 +250,7 @@ def _revision(
         manifest_artifact_id=seed["artifact"],
         manifest_artifact_revision_id=seed["artifact_revision"],
         manifest_member_path="index.json",
-        manifest_schema_ref="eom://schemas/knowledge/embedding-index-manifest/1.0",
+        manifest_schema_ref=manifest_schema_ref,
         manifest_media_type="application/json",
         manifest_sha256=sha(),
         index_sha256=sha(),
@@ -683,7 +693,9 @@ def test_binding_sha_batch_read_refreshes_every_scalar_and_exact_first_origin(
     for key, row in originals.items():
         scalars, origin = expected[key]
         for name, value in scalars.items():
-            set_committed_value(row, name, value + ":forged-local")
+            set_committed_value(
+                row, name, "forged-null" if value is None else value + ":forged-local"
+            )
         for name, value in origin.model_dump(mode="python").items():
             set_committed_value(row, "binding_manifest_" + name, value + ":forged-local")
         assert row.binding_manifest_sha256 != origin.sha256
@@ -751,3 +763,274 @@ def test_revision_append_only_and_nonempty_downgrade_refusal(registry_session: S
         )
         == head.index_id
     )
+
+
+def _registered_review_binding_body(session: Session) -> dict[str, Any]:
+    """Real FK rows only, not proof of accepted V2, a role review or source admission."""
+    seed = _seed(session)
+    item_id, item_revision, base_run, _solution_run = _binding_source_ids(session, seed)
+    encoding = "sha256:" + uuid4().hex * 2
+    session.add(
+        EmbeddingEncodingRecord(
+            encoding_sha256=encoding,
+            storage_partition="synthetic-review",
+            space_sha256=sha(),
+            input_text_sha256="sha256:" + uuid4().hex * 2,
+            shard_artifact_id=seed["artifact"],
+            shard_artifact_revision_id=seed["artifact_revision"],
+            shard_member_path="shard.json",
+            shard_schema_ref="eom://schemas/knowledge/embedding-vector-shard/1.0",
+            shard_media_type="application/json",
+            shard_sha256=sha(),
+            row_index=0,
+            registered_at=NOW,
+        )
+    )
+    session.flush()
+    return {
+        "binding_sha256": "sha256:" + uuid4().hex * 2,
+        "encoding_sha256": encoding,
+        "item_id": item_id,
+        "item_revision_id": item_revision,
+        "source_class": "APPROVED_ITEM",
+        "source_sha256": sha(),
+        "evidence_kind": "REGISTERED_ITEM_REVIEW_SOLUTION",
+        "base_analysis_run_id": base_run,
+        "solution_analysis_run_id": None,
+        "solution_pointer_sha256": None,
+        "review_job_id": seed["job"],
+        "review_evidence_sha256": sha(),
+        "profile_id": "inferenceprofile_" + uuid4().hex,
+        "profile_revision_id": "inferenceprofilerev_" + uuid4().hex,
+        "profile_sha256": sha(),
+        "graph_snapshot_revision_id": seed["snapshot"],
+        "policy_revision_id": seed["policy"],
+        "policy_sha256": sha(),
+        "view": "CONTENT_ONLY",
+        "recipe_sha256": sha(),
+        "projection_version": "registered-item-review-comparison/1.0",
+        "binding_manifest_artifact_id": seed["artifact"],
+        "binding_manifest_artifact_revision_id": seed["artifact_revision"],
+        "binding_manifest_member_path": "index.json",
+        "binding_manifest_schema_ref": "eom://schemas/knowledge/embedding-index-manifest/2.0",
+        "binding_manifest_media_type": "application/json",
+        "binding_manifest_sha256": sha(),
+        "registered_at": NOW,
+    }
+
+
+def test_registered_review_xor_real_foreign_keys_partial_unique_and_history_guards(
+    registry_session: Session,
+) -> None:
+    session = registry_session
+    body = _registered_review_binding_body(session)
+    session.add(EmbeddingSourceBindingRecord(**body))
+    session.flush()
+    row = session.get(EmbeddingSourceBindingRecord, body["binding_sha256"])
+    assert row is not None and row.base_analysis_run_id == body["base_analysis_run_id"]
+    assert row.review_job_id == body["review_job_id"]
+    assert row.solution_analysis_run_id is None and row.solution_pointer_sha256 is None
+    for changed, sqlstate in (
+        ({}, "23505"),
+        ({"review_job_id": "job_" + uuid4().hex}, "23503"),
+        ({"base_analysis_run_id": "analysisrun_" + uuid4().hex}, "23503"),
+        ({"review_job_id": None}, "23514"),
+        ({"review_evidence_sha256": None}, "23514"),
+        ({"review_evidence_sha256": "bad-hash"}, "23514"),
+        ({"solution_analysis_run_id": body["base_analysis_run_id"]}, "23514"),
+        ({"solution_pointer_sha256": sha()}, "23514"),
+        ({"source_class": "PAST_EXAM"}, "23514"),
+        ({"evidence_kind": "ACCEPTED_SOLUTION_ANALYSIS"}, "23514"),
+        ({"projection_version": "accepted-solution-comparison/1.0"}, "23514"),
+        (
+            {"binding_manifest_schema_ref": "eom://schemas/knowledge/embedding-index-manifest/1.0"},
+            "23514",
+        ),
+    ):
+        with pytest.raises(DBAPIError) as rejected, session.begin_nested():
+            session.add(
+                EmbeddingSourceBindingRecord(
+                    **(body | {"binding_sha256": "sha256:" + uuid4().hex * 2} | changed)
+                )
+            )
+            session.flush()
+        assert getattr(rejected.value.orig, "sqlstate", None) == sqlstate
+    for statement in (
+        update(EmbeddingSourceBindingRecord)
+        .where(EmbeddingSourceBindingRecord.binding_sha256 == body["binding_sha256"])
+        .values(review_evidence_sha256=sha("b")),
+        delete(EmbeddingSourceBindingRecord).where(
+            EmbeddingSourceBindingRecord.binding_sha256 == body["binding_sha256"]
+        ),
+    ):
+        with pytest.raises(DBAPIError, match="immutable") as rejected, session.begin_nested():
+            session.execute(statement)
+        assert getattr(rejected.value.orig, "sqlstate", None) == "23514"
+    with (
+        pytest.raises(DBAPIError, match="absent successor history") as refused,
+        session.begin_nested(),
+        Operations.context(MigrationContext.configure(session.connection())),
+    ):
+        registered_review_migration().downgrade()
+    assert getattr(refused.value.orig, "sqlstate", None) == "23514"
+    assert session.get(EmbeddingSourceBindingRecord, body["binding_sha256"]) is row
+
+
+def test_mixed_namespace_and_manifest_successor_do_not_allow_past_exam_scope(
+    registry_session: Session,
+) -> None:
+    session = registry_session
+    seed = _seed(session)
+    body = {
+        "index_id": "embeddingindex_" + uuid4().hex,
+        "corpus_id": seed["corpus"],
+        "storage_partition": "synthetic-review",
+        "space_sha256": sha(),
+        "view": "CONTENT_ONLY",
+        "recipe_sha256": sha(),
+        "projection_version": "mixed-solution-comparison/2.0",
+        "population_scope": "ALL_ADMITTED_GRAPH_ITEMS",
+        "current_index_revision_id": None,
+        "lock_version": 1,
+        "created_at": NOW,
+        "updated_at": NOW,
+    }
+    head = EmbeddingIndexRecord(**body)
+    session.add(head)
+    session.flush()
+    revision = _revision(
+        session,
+        seed,
+        head,
+        manifest_schema_ref="eom://schemas/knowledge/embedding-index-manifest/2.0",
+    )
+    assert revision.manifest_schema_ref.endswith("/2.0")
+    for changed in (
+        {"population_scope": "OCCURRENCE_BACKED_PAST_EXAM"},
+        {"projection_version": "registered-item-review-comparison/1.0"},
+    ):
+        with pytest.raises(DBAPIError) as rejected, session.begin_nested():
+            session.add(
+                EmbeddingIndexRecord(
+                    **(body | {"index_id": "embeddingindex_" + uuid4().hex} | changed)
+                )
+            )
+            session.flush()
+        assert getattr(rejected.value.orig, "sqlstate", None) == "23514"
+
+
+def test_registered_review_partial_indexes_are_real_btree_and_unique(
+    registry_session: Session,
+) -> None:
+    rows = registry_session.execute(
+        text(
+            "SELECT index_class.relname,access_method.amname,indexes.indisunique,"
+            "indexes.indisvalid,pg_get_expr(indexes.indpred,indexes.indrelid) "
+            "FROM pg_index indexes JOIN pg_class relation ON relation.oid=indexes.indrelid "
+            "JOIN pg_namespace namespace ON namespace.oid=relation.relnamespace "
+            "JOIN pg_class index_class ON index_class.oid=indexes.indexrelid "
+            "JOIN pg_am access_method ON access_method.oid=index_class.relam "
+            "WHERE namespace.nspname='app' AND relation.relname='embedding_source_bindings' "
+            "AND index_class.relname IN ('uq_embedding_binding_registered_review',"
+            "'ix_embedding_binding_review_delta')"
+        )
+    ).all()
+    assert len(rows) == 2
+    for name, method, unique, valid, predicate in rows:
+        assert method == "btree" and valid is True
+        assert unique is (name == "uq_embedding_binding_registered_review")
+        assert "REGISTERED_ITEM_REVIEW_SOLUTION" in predicate
+
+
+def test_registered_review_batch_lookup_and_antijoin_use_real_nonnull_keys(
+    registry_session: Session,
+) -> None:
+    session = registry_session
+    body = _registered_review_binding_body(session)
+    session.add(EmbeddingSourceBindingRecord(**body))
+    session.flush()
+    key = RegisteredReviewEmbeddingBindingLookupKey(
+        **{name: body[name] for name in REGISTERED_REVIEW_ASSOCIATION_COLUMNS}
+    )
+    absent = replace(key, review_evidence_sha256=sha("f"))
+    repository = EmbeddingRegistryRepository(session)
+    statements: list[str] = []
+
+    def observe(_connection, _cursor, statement, _parameters, _context, _many):
+        statements.append(statement)
+
+    connection = session.connection()
+    event.listen(connection, "before_cursor_execute", observe)
+    try:
+        assert set(repository.bindings((key, absent))) == {body["binding_sha256"]}
+        assert repository.missing_bindings((absent, key)) == (absent,)
+    finally:
+        event.remove(connection, "before_cursor_execute", observe)
+    assert len(statements) == 2
+    assert " IN (" in statements[0] and "VALUES" in statements[1]
+    assert all("evidence_kind" in statement for statement in statements)
+
+
+def test_registered_review_concurrent_duplicate_uses_the_partial_unique(
+    guarded_engine: Engine,
+) -> None:
+    """Two real transactions, disposable metadata only; no registered review authority."""
+    with Session(guarded_engine) as session, session.begin():
+        body = _registered_review_binding_body(session)
+    first_inserted, second_entered, release_first = Event(), Event(), Event()
+
+    def first() -> str:
+        with Session(guarded_engine) as session, session.begin():
+            session.add(EmbeddingSourceBindingRecord(**body))
+            session.flush()
+            first_inserted.set()
+            assert release_first.wait(15)
+        return "INSERTED"
+
+    def second() -> str:
+        assert first_inserted.wait(15)
+        with guarded_engine.connect() as connection:
+
+            def entering(_connection, _cursor, statement, _parameters, _context, _many):
+                if statement.lstrip().startswith("INSERT INTO embedding_source_bindings"):
+                    second_entered.set()
+
+            event.listen(connection, "before_cursor_execute", entering)
+            try:
+                with Session(bind=connection) as session, session.begin():
+                    session.add(
+                        EmbeddingSourceBindingRecord(
+                            **(body | {"binding_sha256": "sha256:" + uuid4().hex * 2})
+                        )
+                    )
+                    session.flush()
+            except DBAPIError as error:
+                assert getattr(error.orig, "sqlstate", None) == "23505"
+                assert (
+                    getattr(getattr(error.orig, "diag", None), "constraint_name", None)
+                    == "uq_embedding_binding_registered_review"
+                )
+                return "DUPLICATE"
+            finally:
+                event.remove(connection, "before_cursor_execute", entering)
+        raise AssertionError("duplicate registered association was inserted")
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first_result = executor.submit(first)
+        try:
+            assert first_inserted.wait(15)
+            second_result = executor.submit(second)
+            assert second_entered.wait(15)
+        finally:
+            release_first.set()
+        assert first_result.result(timeout=20) == "INSERTED"
+        assert second_result.result(timeout=20) == "DUPLICATE"
+    with Session(guarded_engine) as session:
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(EmbeddingSourceBindingRecord)
+                .where(EmbeddingSourceBindingRecord.item_revision_id == body["item_revision_id"])
+            )
+            == 1
+        )

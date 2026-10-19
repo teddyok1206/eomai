@@ -22,11 +22,15 @@ from eom_orchestrator.embedding_artifact_store import EMBEDDING_RESULT_ARTIFACT_
 from eom_orchestrator.file_set_control_artifacts import CONTROL_FILE_SET_PROTOCOL
 from eom_orchestrator.local_embedding_control_artifacts import OWNED_INPUT_ARTIFACT_TYPE
 from eom_protocol.artifact_members import ArtifactMemberPointer
+from eom_workflow.local_embedding_encoding_dispatch import (
+    SupportedEmbeddingAssociation,
+    SupportedEmbeddingCompletedEvent,
+    parse_supported_embedding_association,
+    parse_supported_embedding_completed,
+    validate_supported_embedding_completions,
+)
 from eom_workflow.local_embedding_encoding_job import (
-    EmbeddingEncodingCompletedEvent,
-    LocalEmbeddingLaunchAssociation,
     LocalEmbeddingOwnedJob,
-    validate_embedding_encoding_completions,
 )
 from sqlalchemy.orm import Session
 
@@ -54,9 +58,9 @@ class CatalogLocalEmbeddingEncodingArtifacts:
         self.reader = PinnedArtifactReadContext(session, settings)
 
     def resolve_input(
-        self, association: LocalEmbeddingLaunchAssociation
+        self, association: SupportedEmbeddingAssociation
     ) -> IncrementalEmbeddingInput:
-        association = LocalEmbeddingLaunchAssociation.model_validate(association)
+        association = parse_supported_embedding_association(association)
         pointer = association.owned_input
         self.reader.prefetch(((pointer.artifact_id, pointer.artifact_revision_id),))
         self.reader.require_file_set(
@@ -84,12 +88,12 @@ class CatalogLocalEmbeddingEncodingArtifacts:
 
     def resolve_result(
         self,
-        association: LocalEmbeddingLaunchAssociation,
-        events: tuple[EmbeddingEncodingCompletedEvent, ...],
+        association: SupportedEmbeddingAssociation,
+        events: tuple[SupportedEmbeddingCompletedEvent, ...],
     ) -> ResolvedLocalEncodingResult:
         if type(events) is not tuple or not 1 <= len(events) <= 1024:
             raise ValueError("LOCAL_EMBEDDING_COMPLETION_BATCH_INVALID")
-        checked = tuple(EmbeddingEncodingCompletedEvent.model_validate(e) for e in events)
+        checked = tuple(parse_supported_embedding_completed(e) for e in events)
         pointers = {
             (e.receipt.result_manifest, e.receipt.shard_manifest, e.receipt.binary_member)
             for e in checked
@@ -99,11 +103,11 @@ class CatalogLocalEmbeddingEncodingArtifacts:
         request = self.resolve_input(association)
         result = self._resolve_file_set(*next(iter(pointers)))
         validate_incremental_embedding_result(request, result)
-        validate_embedding_encoding_completions(checked, association, request, result)
+        validate_supported_embedding_completions(checked, association, request, result)
         return ResolvedLocalEncodingResult(request, result)
 
     def verify_shared_rows(
-        self, rows: tuple[tuple[LocalEmbeddingOwnedJob, EmbeddingEncodingCompletedEvent], ...]
+        self, rows: tuple[tuple[LocalEmbeddingOwnedJob, SupportedEmbeddingCompletedEvent], ...]
     ) -> None:
         """Verify caller-selected rows without reading the winner's input/source plan.
 
@@ -114,7 +118,7 @@ class CatalogLocalEmbeddingEncodingArtifacts:
         self.resolve_shared_row_shards(rows)
 
     def resolve_shared_row_shards(
-        self, rows: tuple[tuple[LocalEmbeddingOwnedJob, EmbeddingEncodingCompletedEvent], ...]
+        self, rows: tuple[tuple[LocalEmbeddingOwnedJob, SupportedEmbeddingCompletedEvent], ...]
     ) -> tuple[tuple[ArtifactMemberPointer, EmbeddingVectorShardManifest], ...]:
         """Trusted index assembly metadata, NEVER a public user/worker disclosure.
 
@@ -127,11 +131,11 @@ class CatalogLocalEmbeddingEncodingArtifacts:
         selected_keys: set[str] = set()
         groups: dict[
             tuple[ArtifactMemberPointer, ArtifactMemberPointer, ArtifactMemberPointer],
-            list[tuple[LocalEmbeddingOwnedJob, EmbeddingEncodingCompletedEvent]],
+            list[tuple[LocalEmbeddingOwnedJob, SupportedEmbeddingCompletedEvent]],
         ] = {}
         for owned, completion in rows:
             owned = LocalEmbeddingOwnedJob.model_validate(owned)
-            completion = EmbeddingEncodingCompletedEvent.model_validate(completion)
+            completion = parse_supported_embedding_completed(completion)
             if owned != completion.owned_job:
                 raise ValueError("LOCAL_EMBEDDING_SHARED_ROW_IDENTITY_INVALID")
             key = owned.request.encoding.encoding_sha256

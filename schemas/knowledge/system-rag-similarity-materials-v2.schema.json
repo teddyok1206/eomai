@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/system-rag-similarity-materials/2.0",
+  "title": "Mixed bounded Item and genuine solution-evidence projections",
+  "description": "Temporary local materialization bound to an exact similarity context; no new source authority, Evidence receipt, PDF quotation or inspected pixels.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_sha256",
+    "context_sha256",
+    "anchor_profile",
+    "entries",
+    "materials_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "system-rag-similarity-materials/2.0"
+    },
+    "request_sha256": {
+      "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+    },
+    "context_sha256": {
+      "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+    },
+    "anchor_profile": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profile"
+        }
+      ]
+    },
+    "entries": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/entry"
+          },
+          {
+            "$ref": "eom://schemas/knowledge/mixed-embedding-index/2.0#/$defs/entry"
+          }
+        ]
+      }
+    },
+    "materials_sha256": {
+      "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+    }
+  }
+}

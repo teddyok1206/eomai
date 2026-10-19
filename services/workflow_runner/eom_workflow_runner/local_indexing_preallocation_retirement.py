@@ -14,7 +14,11 @@ from eom_orchestrator.native_embedding_launch_identity import native_embedding_l
 from eom_workflow.local_embedding_request import (
     LocalEmbeddingServiceWorkflowRequest,
     local_embedding_request_service,
-    parse_local_embedding_executable_request,
+)
+from eom_workflow.local_embedding_request_v2 import (
+    LocalEmbeddingWorkflowRequestV2,
+    local_embedding_request_service_v2,
+    parse_supported_local_embedding_request,
 )
 from eom_workflow.local_indexing_preallocation_retirement import (
     LocalIndexingPreallocationRetirementCommand,
@@ -126,12 +130,19 @@ def _retire(
     )
     if workflow is None:
         raise LocalIndexingRetirementError("LOCAL_INDEXING_RETIREMENT_SCOPE_INVALID")
-    request = parse_local_embedding_executable_request(workflow.initial_request)
-    if not isinstance(request, LocalEmbeddingServiceWorkflowRequest):
+    request = parse_supported_local_embedding_request(workflow.initial_request)
+    if not isinstance(
+        request, LocalEmbeddingServiceWorkflowRequest | LocalEmbeddingWorkflowRequestV2
+    ):
         raise LocalIndexingRetirementError("LOCAL_INDEXING_RETIREMENT_SCOPE_INVALID")
+    service = (
+        local_embedding_request_service_v2(request)
+        if isinstance(request, LocalEmbeddingWorkflowRequestV2)
+        else local_embedding_request_service(request)
+    )
     if (
         request.request_sha256 != command.workflow_request_sha256
-        or local_embedding_request_service(request) != command.service
+        or service != command.service
         or workflow.created_actor_type != "local_indexing_service"
         or workflow.created_actor_id != command.service.service_id
     ):

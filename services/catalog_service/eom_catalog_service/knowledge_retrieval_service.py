@@ -53,7 +53,10 @@ from eom_catalog_contracts import (
     validate_contract,
 )
 from eom_catalog_contracts.embedding_reference_query import similarity_contract_document
-from eom_catalog_contracts.local_indexing_policy import LocalIndexingAccessPolicy
+from eom_catalog_contracts.local_indexing_mixed_policy import (
+    SupportedLocalIndexingAccessPolicy,
+    parse_supported_local_indexing_access_policy,
+)
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_identity_service.models import OperatorRecord
 from eom_orchestrator.database import build_session_factory, transaction
@@ -1277,8 +1280,8 @@ class KnowledgeRetrievalApplicationService:
         revision_id: str,
         *,
         sha256: str,
-    ) -> LocalIndexingAccessPolicy:
-        """Service-only1.1 policy; existing human1.0 readers are unchanged."""
+    ) -> SupportedLocalIndexingAccessPolicy:
+        """Exact service-only1.1/1.2; existing human1.0 readers are unchanged."""
         if (
             type(revision_id) is not str
             or re.fullmatch(r"accessrev_[0-9a-f]{32}", revision_id) is None
@@ -1302,21 +1305,26 @@ class KnowledgeRetrievalApplicationService:
         if (
             record is None
             or record.state != "RELEASED"
-            or record.schema_version != ("education-retrieval-access-policy/1.1")
+            or record.schema_version
+            not in (
+                "education-retrieval-access-policy/1.1",
+                "education-retrieval-access-policy/1.2",
+            )
         ):
             raise KnowledgeRetrievalServiceError(
                 "KNOWLEDGE_RETRIEVAL_POLICY_INVALID",
                 "indexing policy is absent or unsupported",
             )
         try:
-            policy = LocalIndexingAccessPolicy.model_validate(record.canonical_document)
+            policy = parse_supported_local_indexing_access_policy(record.canonical_document)
         except ValueError:
             raise KnowledgeRetrievalServiceError(
                 "KNOWLEDGE_RETRIEVAL_POLICY_INVALID",
                 "indexing policy document is invalid",
             ) from None
         if (
-            policy.access_policy_revision_id != revision_id
+            policy.schema_version != record.schema_version
+            or policy.access_policy_revision_id != revision_id
             or policy.content_sha256 != record.content_sha256
             or policy.content_sha256 != sha256
         ):

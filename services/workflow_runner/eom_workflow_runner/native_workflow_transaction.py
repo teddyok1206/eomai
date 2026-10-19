@@ -8,9 +8,9 @@ from datetime import UTC, datetime
 from typing import Protocol
 
 from eom_orchestrator.database import transaction
-from eom_workflow.local_embedding_request import (
-    LocalEmbeddingExecutableRequest,
-    parse_local_embedding_executable_request,
+from eom_workflow.local_embedding_request_v2 import (
+    SupportedLocalEmbeddingRequest,
+    parse_supported_local_embedding_request,
 )
 from eom_workflow.private_chat_query_execution import PrivateChatQueryWorkflowRequest
 from eom_workflow.reference_query_execution import (
@@ -27,7 +27,7 @@ from eom_workflow_runner.repository import CommandLeaseIdentity, require_command
 from eom_workflow_runner.state_machine import CommandState
 
 type NativeWorkflowRequest = (
-    LocalEmbeddingExecutableRequest
+    SupportedLocalEmbeddingRequest
     | SupportedReferenceQueryWorkflowRequest
     | PrivateChatQueryWorkflowRequest
 )
@@ -77,7 +77,7 @@ def native_fenced_runner_transaction[Request: NativeWorkflowRequest](
             original = parse_supported_reference_query_workflow_request(workflow.initial_request)
             protocol = "reference-query/1.0"
         else:
-            original = parse_local_embedding_executable_request(workflow.initial_request)
+            original = parse_supported_local_embedding_request(workflow.initial_request)
             protocol = "local-embedding/1.0"
         if (
             command.workflow_id != workflow_id

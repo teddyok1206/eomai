@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from eom_catalog_contracts.reference_query_prepare import (
-    ReferenceQueryPrepareReply,
+    SupportedReferenceQueryPrepareReply,
     SupportedReferenceQueryPrepareRequest,
 )
 
@@ -25,7 +25,7 @@ class ReferenceQueryPreparationApplicationService:
         request: SupportedReferenceQueryPrepareRequest,
         *,
         idempotency_key: str,
-    ) -> ReferenceQueryPrepareReply:
+    ) -> SupportedReferenceQueryPrepareReply:
         if request.idempotency_key != idempotency_key:
             raise ApiError(
                 409,

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from datetime import datetime
+from typing import TYPE_CHECKING, Literal
 
 from eom_catalog_contracts.embedding_registry import (
     EmbeddingIndexRegistrationResult,
@@ -20,6 +21,9 @@ from eom_workflow.schemas import (
     NativeEmbeddingContract,
     validate_native_embedding_coordinator_message,
 )
+
+if TYPE_CHECKING:
+    from eom_workflow.local_embedding_workflow_receipt_v2 import LocalEmbeddingStepOutputV2
 
 type NativeCoordinatorPhase = Literal["ALLOCATION", "INDEX_PREPARED", "REGISTERED", "COMPLETED"]
 NATIVE_COORDINATOR_PHASES: tuple[NativeCoordinatorPhase, ...] = (
@@ -128,22 +132,71 @@ def native_coordinator_checkpoint(
     )
 
 
+def validate_native_coordinator_history_identity(
+    frames: tuple[tuple[NativeCoordinatorPhase, str, str], ...],
+    *,
+    native_launch_job_id: str,
+    intent_sha256: str,
+) -> None:
+    """Shared fixed phase/original-intent rule; typed family parsing remains separate."""
+    if (
+        tuple(row[0] for row in frames) != NATIVE_COORDINATOR_PHASES[: len(frames)]
+        or len(frames) > 4
+    ):
+        raise ValueError("native coordinator history is skipped, duplicated or unordered")
+    if any(row[1:] != (native_launch_job_id, intent_sha256) for row in frames):
+        raise ValueError("native coordinator belongs to another original intent")
+
+
+def validate_native_coordinator_index_allocation(
+    allocation: NativeCoordinatorAllocation,
+    *,
+    index_artifact_id: str,
+    index_artifact_revision_id: str,
+    index_created_at: datetime,
+) -> None:
+    if (
+        index_artifact_id != allocation.index_producer.artifact_id
+        or index_artifact_revision_id != allocation.index_producer.artifact_revision_id
+        or index_created_at < allocation.created_at
+    ):
+        raise ValueError("native index preparation differs from original allocation")
+
+
+def validate_native_coordinator_registration_times(
+    *, index_created_at: datetime, registered_at: datetime, registration_observed_at: datetime
+) -> None:
+    if not index_created_at <= registered_at <= registration_observed_at:
+        raise ValueError("native registration observation precedes its actual input")
+
+
+def validate_native_coordinator_completion_producer(
+    allocation: NativeCoordinatorAllocation,
+    output: LocalEmbeddingStepOutput | LocalEmbeddingStepOutputV2,
+    *,
+    workflow_id: str,
+    step_run_id: str,
+) -> None:
+    if (
+        output.workflow_id != workflow_id
+        or output.step_run_id != step_run_id
+        or output.receipt_owner_job_id != allocation.receipt_producer.job_id
+        or output.receipt.artifact_id != allocation.receipt_producer.artifact_id
+        or output.receipt.artifact_revision_id != allocation.receipt_producer.artifact_revision_id
+    ):
+        raise ValueError("native completion differs from its actual allocated producer")
+
+
 def validate_native_coordinator_history(
     records: tuple[NativeEmbeddingCoordinatorCheckpoint, ...], intent: LocalEmbeddingLaunchIntent
 ) -> None:
     """Pure contiguous prefix/producer/registration closure; never actual commit or permission."""
-    if (
-        tuple(row.record_type for row in records) != NATIVE_COORDINATOR_PHASES[: len(records)]
-        or len(records) > 4
-    ):
-        raise ValueError("native coordinator history is skipped, duplicated or unordered")
+    validate_native_coordinator_history_identity(
+        tuple((row.record_type, row.native_launch_job_id, row.intent_sha256) for row in records),
+        native_launch_job_id=intent.native_launch_job_id,
+        intent_sha256=intent.intent_sha256,
+    )
     checked = tuple(parse_native_embedding_coordinator_checkpoint(row) for row in records)
-    if any(
-        row.native_launch_job_id != intent.native_launch_job_id
-        or row.intent_sha256 != intent.intent_sha256
-        for row in checked
-    ):
-        raise ValueError("native coordinator belongs to another original intent")
     if not checked:
         return
     allocation = checked[0].payload
@@ -152,13 +205,12 @@ def validate_native_coordinator_history(
         prepared = checked[1].payload
         assert isinstance(prepared, NativeCoordinatorIndexPrepared)
         command = prepared.registration_command
-        if (
-            command.index_manifest.artifact_id != allocation.index_producer.artifact_id
-            or command.index_manifest.artifact_revision_id
-            != allocation.index_producer.artifact_revision_id
-            or prepared.index_created_at < allocation.created_at
-        ):
-            raise ValueError("native index preparation differs from original allocation")
+        validate_native_coordinator_index_allocation(
+            allocation,
+            index_artifact_id=command.index_manifest.artifact_id,
+            index_artifact_revision_id=command.index_manifest.artifact_revision_id,
+            index_created_at=prepared.index_created_at,
+        )
     if len(checked) >= 3:
         prepared = checked[1].payload
         assert isinstance(prepared, NativeCoordinatorIndexPrepared)
@@ -166,22 +218,17 @@ def validate_native_coordinator_history(
         registered = checked[2].payload
         assert isinstance(registered, NativeCoordinatorRegistered)
         validate_embedding_registration_result(command, registered.registration_result)
-        if not (
-            prepared.index_created_at
-            <= registered.registration_result.registered_at
-            <= registered.registration_observed_at
-        ):
-            raise ValueError("native registration observation precedes its actual input")
+        validate_native_coordinator_registration_times(
+            index_created_at=prepared.index_created_at,
+            registered_at=registered.registration_result.registered_at,
+            registration_observed_at=registered.registration_observed_at,
+        )
     if len(checked) == 4:
         completed = checked[3].payload
         assert isinstance(completed, NativeCoordinatorCompleted)
-        output = completed.output
-        if (
-            output.workflow_id != intent.workflow_id
-            or output.step_run_id != intent.step_run_id
-            or output.receipt_owner_job_id != allocation.receipt_producer.job_id
-            or output.receipt.artifact_id != allocation.receipt_producer.artifact_id
-            or output.receipt.artifact_revision_id
-            != allocation.receipt_producer.artifact_revision_id
-        ):
-            raise ValueError("native completion differs from its actual allocated producer")
+        validate_native_coordinator_completion_producer(
+            allocation,
+            completed.output,
+            workflow_id=intent.workflow_id,
+            step_run_id=intent.step_run_id,
+        )

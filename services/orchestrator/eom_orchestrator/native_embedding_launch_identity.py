@@ -7,11 +7,16 @@ from dataclasses import dataclass
 from eom_identifiers import content_sha256, new_job_id, new_logical_artifact_id, new_revision_id
 from eom_workflow.local_embedding_encoding_job import (
     LocalEmbeddingLaunchAssociation,
-    LocalEmbeddingLaunchIntent,
 )
-from eom_workflow.local_embedding_request import (
-    LocalEmbeddingExecutableRequest,
-    parse_local_embedding_executable_request,
+from eom_workflow.local_embedding_encoding_ownership_v2 import (
+    LocalEmbeddingLaunchAssociationV2,
+    SupportedLocalEmbeddingLaunchIntent,
+    local_embedding_launch_protocol,
+    parse_local_embedding_launch_intent_for_request,
+)
+from eom_workflow.local_embedding_request_v2 import (
+    SupportedLocalEmbeddingRequest,
+    parse_supported_local_embedding_request,
 )
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,7 +26,7 @@ from eom_orchestrator.embedding_encoding_reservation_storage import (
     EmbeddingEncodingReservationError,
     EmbeddingEncodingReservationStorage,
 )
-from eom_orchestrator.models import JobEventRecord, JobRecord
+from eom_orchestrator.models import JobEventRecord, JobRecord, ProtocolVersionRecord
 from eom_orchestrator.repository import submit_structured_job
 from eom_orchestrator.state_machine import JobState, transition_job
 
@@ -38,7 +43,17 @@ def _require_owner_root(session: Session) -> None:
 @dataclass(frozen=True, slots=True)
 class NativeEmbeddingLaunchObservation:
     state: str
-    intent: LocalEmbeddingLaunchIntent
+    intent: SupportedLocalEmbeddingLaunchIntent
+
+
+def _require_launch_protocol(session: Session, request: SupportedLocalEmbeddingRequest) -> None:
+    # Numerical encoding1 remains separately prepared even when launch metadata is2.
+    EmbeddingEncodingReservationStorage.require_protocol(session)
+    version, expected = local_embedding_launch_protocol(request)
+    if version != ENCODING_PROTOCOL_VERSION:
+        record = session.get(ProtocolVersionRecord, version, populate_existing=True)
+        if record is None or record.schema_sha256 != expected:
+            raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_PROTOCOL_UNAVAILABLE")
 
 
 def native_embedding_launch_key(workflow_id: str, step_run_id: str, request_sha256: str) -> str:
@@ -58,14 +73,14 @@ def native_embedding_launch_key(workflow_id: str, step_run_id: str, request_sha2
 def read_native_embedding_launch(
     session: Session,
     *,
-    request: LocalEmbeddingExecutableRequest,
+    request: SupportedLocalEmbeddingRequest,
     workflow_id: str,
     step_run_id: str,
 ) -> NativeEmbeddingLaunchObservation | None:
     """Read one pinned coordinator context; caller fences current authority BEFORE this read."""
     _require_owner_root(session)
-    request = parse_local_embedding_executable_request(request.model_dump(mode="json"))
-    EmbeddingEncodingReservationStorage.require_protocol(session)
+    request = parse_supported_local_embedding_request(request)
+    _require_launch_protocol(session, request)
     row = session.scalar(
         select(JobRecord).where(
             JobRecord.idempotency_key
@@ -83,13 +98,15 @@ def read_native_embedding_launch(
     )
     if len(events) != 1:
         raise EmbeddingEncodingReservationError("EMBEDDING_NATIVE_LAUNCH_INTENT_INVALID")
-    intent = LocalEmbeddingLaunchIntent.model_validate(events[0].data)
+    intent = parse_local_embedding_launch_intent_for_request(events[0].data, request)
     return require_native_embedding_launch(session, intent, request)
 
 
 def read_native_embedding_launch_association(
-    session: Session, intent: LocalEmbeddingLaunchIntent, request: LocalEmbeddingExecutableRequest
-) -> LocalEmbeddingLaunchAssociation | None:
+    session: Session,
+    intent: SupportedLocalEmbeddingLaunchIntent,
+    request: SupportedLocalEmbeddingRequest,
+) -> LocalEmbeddingLaunchAssociation | LocalEmbeddingLaunchAssociationV2 | None:
     """Exact owner association, not a source or current lease grant."""
     require_native_embedding_launch(session, intent, request)
     association = EmbeddingEncodingReservationStorage.association(
@@ -103,7 +120,7 @@ def read_native_embedding_launch_association(
 def create_native_embedding_launch(
     session: Session,
     *,
-    request: LocalEmbeddingExecutableRequest,
+    request: SupportedLocalEmbeddingRequest,
     workflow_id: str,
     step_run_id: str,
     command_id: str,
@@ -117,8 +134,8 @@ def create_native_embedding_launch(
     This primitive grants neither source permission nor permission to start a unit.
     """
     _require_owner_root(session)
-    request = parse_local_embedding_executable_request(request.model_dump(mode="json"))
-    EmbeddingEncodingReservationStorage.require_protocol(session)
+    request = parse_supported_local_embedding_request(request)
+    _require_launch_protocol(session, request)
     key = native_embedding_launch_key(workflow_id, step_run_id, request.request_sha256)
     existing = session.scalar(
         select(JobRecord)
@@ -137,7 +154,7 @@ def create_native_embedding_launch(
         )
         if len(events) != 1:
             raise EmbeddingEncodingReservationError("EMBEDDING_NATIVE_LAUNCH_INTENT_INVALID")
-        intent = LocalEmbeddingLaunchIntent.model_validate(events[0].data)
+        intent = parse_local_embedding_launch_intent_for_request(events[0].data, request)
         return require_native_embedding_launch(session, intent, request)
     body = {
         "workflow_id": workflow_id,
@@ -153,13 +170,14 @@ def create_native_embedding_launch(
         "runner_id": runner_id,
         "lease_generation": lease_generation,
     }
-    intent = LocalEmbeddingLaunchIntent.model_validate(
-        body | {"intent_sha256": content_sha256(body)}
+    intent = parse_local_embedding_launch_intent_for_request(
+        body | {"intent_sha256": content_sha256(body)}, request
     )
+    protocol_version, _schema_hash = local_embedding_launch_protocol(request)
     job, created = submit_structured_job(
         session,
         job_id=intent.native_launch_job_id,
-        protocol_version=ENCODING_PROTOCOL_VERSION,
+        protocol_version=protocol_version,
         idempotency_key=key,
         task_type=NATIVE_LAUNCH_TASK_TYPE,
         request=request.model_dump(mode="json"),
@@ -185,14 +203,15 @@ def create_native_embedding_launch(
 
 def require_native_embedding_launch(
     session: Session,
-    intent: LocalEmbeddingLaunchIntent,
-    request: LocalEmbeddingExecutableRequest,
+    intent: SupportedLocalEmbeddingLaunchIntent,
+    request: SupportedLocalEmbeddingRequest,
 ) -> NativeEmbeddingLaunchObservation:
     """Check owner-selected request/key/task and allocations, never trust Job existence."""
     _require_owner_root(session)
-    intent = LocalEmbeddingLaunchIntent.model_validate(intent)
-    request = parse_local_embedding_executable_request(request.model_dump(mode="json"))
-    EmbeddingEncodingReservationStorage.require_protocol(session)
+    request = parse_supported_local_embedding_request(request)
+    intent = parse_local_embedding_launch_intent_for_request(intent, request)
+    _require_launch_protocol(session, request)
+    protocol_version, _schema_hash = local_embedding_launch_protocol(request)
     row = session.scalar(
         select(JobRecord)
         .where(JobRecord.job_id == intent.native_launch_job_id)
@@ -202,14 +221,14 @@ def require_native_embedding_launch(
     payload = request.model_dump(mode="json")
     expected_hash = content_sha256(
         {
-            "protocol_version": ENCODING_PROTOCOL_VERSION,
+            "protocol_version": protocol_version,
             "task_type": NATIVE_LAUNCH_TASK_TYPE,
             "request": payload,
         }
     )
     if (
         row is None
-        or row.protocol_version != ENCODING_PROTOCOL_VERSION
+        or row.protocol_version != protocol_version
         or row.task_type != NATIVE_LAUNCH_TASK_TYPE
         or row.worker_slot_id is not None
         or row.idempotency_key
@@ -231,6 +250,9 @@ def require_native_embedding_launch(
             .order_by(JobEventRecord.sequence)
         )
     )
-    if len(events) != 1 or LocalEmbeddingLaunchIntent.model_validate(events[0].data) != intent:
+    if (
+        len(events) != 1
+        or parse_local_embedding_launch_intent_for_request(events[0].data, request) != intent
+    ):
         raise EmbeddingEncodingReservationError("EMBEDDING_NATIVE_LAUNCH_INTENT_INVALID")
     return NativeEmbeddingLaunchObservation(row.status, intent)

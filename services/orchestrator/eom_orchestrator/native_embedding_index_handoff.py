@@ -21,10 +21,14 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     validate_incremental_embedding_result,
 )
 from eom_identifiers import canonical_json_bytes, sha256_bytes
+from eom_workflow.local_embedding_encoding_dispatch import (
+    SupportedEmbeddingAssociation,
+    parse_supported_embedding_association,
+)
 from eom_workflow.local_embedding_encoding_job import (
     LocalEmbeddingLaunchAssociation,
-    parse_embedding_encoding_job_message,
 )
+from eom_workflow.local_embedding_encoding_ownership_v2 import LocalEmbeddingLaunchAssociationV2
 
 from eom_orchestrator.inference_transfer_cpu_handoff import (
     CpuHandoffError,
@@ -63,14 +67,16 @@ def _canonical_value(raw: bytes) -> dict[str, Any]:
 
 
 def validate_native_index_original_input(
-    association: LocalEmbeddingLaunchAssociation, request: IncrementalEmbeddingInput
-) -> tuple[LocalEmbeddingLaunchAssociation, IncrementalEmbeddingInput]:
+    association: SupportedEmbeddingAssociation, request: IncrementalEmbeddingInput
+) -> tuple[SupportedEmbeddingAssociation, IncrementalEmbeddingInput]:
     """Revalidate the exact original association/input, without choosing a device."""
-    association_value = parse_embedding_encoding_job_message(
+    association_value = parse_supported_embedding_association(
         raw_similarity_contract_value(association)
     )
     request = parse_incremental_embedding_input(raw_similarity_contract_value(request))
-    if not isinstance(association_value, LocalEmbeddingLaunchAssociation):
+    if not isinstance(
+        association_value, LocalEmbeddingLaunchAssociation | LocalEmbeddingLaunchAssociationV2
+    ):
         raise NativeIndexHandoffError("NATIVE_INDEX_ASSOCIATION_INVALID")
     association = association_value
     if (
@@ -90,8 +96,8 @@ def validate_native_index_original_input(
 
 
 def _checked_batch(
-    association: LocalEmbeddingLaunchAssociation, request: IncrementalEmbeddingInput
-) -> tuple[LocalEmbeddingLaunchAssociation, IncrementalEmbeddingInput]:
+    association: SupportedEmbeddingAssociation, request: IncrementalEmbeddingInput
+) -> tuple[SupportedEmbeddingAssociation, IncrementalEmbeddingInput]:
     association, request = validate_native_index_original_input(association, request)
     if request.space.runtime.device != "CPU":
         raise NativeIndexHandoffError("NATIVE_INDEX_ASSOCIATION_INPUT_MISMATCH")
@@ -103,7 +109,7 @@ class PreparedNativeIndex:
     """Explicit local materialization, not source permission or a launch grant."""
 
     execution_id: str
-    association: LocalEmbeddingLaunchAssociation
+    association: SupportedEmbeddingAssociation
     request: IncrementalEmbeddingInput
 
     def __post_init__(self) -> None:
@@ -172,7 +178,7 @@ def _read_prepared(execution_id: str, owner: CpuHandoffIdentity) -> PreparedNati
                 )
             )
         )
-        association = parse_embedding_encoding_job_message(
+        association = parse_supported_embedding_association(
             _canonical_value(
                 read_protected_cpu_handoff_member(
                     directory,
@@ -183,7 +189,9 @@ def _read_prepared(execution_id: str, owner: CpuHandoffIdentity) -> PreparedNati
                 )
             )
         )
-        if not isinstance(association, LocalEmbeddingLaunchAssociation):
+        if not isinstance(
+            association, LocalEmbeddingLaunchAssociation | LocalEmbeddingLaunchAssociationV2
+        ):
             raise NativeIndexHandoffError("NATIVE_INDEX_ASSOCIATION_INVALID")
     return PreparedNativeIndex(execution_id, association, request)
 

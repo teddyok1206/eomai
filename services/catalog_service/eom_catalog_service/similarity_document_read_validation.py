@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Literal, Protocol
 
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.inference_transfer_embedding import (
@@ -17,7 +17,16 @@ from eom_catalog_contracts.knowledge import (
     KnowledgeGraphSnapshotPointer,
     KnowledgeSolutionEvidencePointer,
 )
+from eom_catalog_contracts.mixed_embedding_index import (
+    RegisteredReviewEmbeddingSourceBinding,
+    parse_supported_embedding_binding,
+)
+from eom_catalog_contracts.registered_item_review_solution import (
+    RegisteredItemReviewSolutionEvidence,
+)
+from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_contracts.similarity_context import SimilarityViewSelection
+from eom_catalog_contracts.similarity_context_v2 import SimilarityViewSelectionV2
 from pydantic import TypeAdapter
 
 from eom_catalog_service.embedding_incremental_plan import RegisteredEmbeddingRow
@@ -44,7 +53,7 @@ class SimilarityDocumentReadScope(Protocol):
     @property
     def policy_sha256(self) -> str: ...
     @property
-    def views(self) -> tuple[SimilarityViewSelection, ...]: ...
+    def views(self) -> tuple[SimilarityViewSelection | SimilarityViewSelectionV2, ...]: ...
 
 
 def validate_prepared_similarity_sources(
@@ -52,6 +61,7 @@ def validate_prepared_similarity_sources(
     *,
     source_classes: tuple[str, ...],
     maximum_sources: int,
+    family: Literal["1.0", "2.0"] = "1.0",
 ) -> dict[str, PreparedSimilaritySource]:
     """The same metadata closure for queries and fixed DOCUMENT cohort observations."""
     if type(values) is not tuple or len(values) > maximum_sources:
@@ -66,10 +76,28 @@ def validate_prepared_similarity_sources(
             source != value.source
             or source.source_class not in source_classes
             or source.item_revision_id in sources
-            or (value.profile is None) != (value.solution_evidence is None)
         ):
             raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
-        if value.profile is not None:
+        if isinstance(value.profile, RegisteredReviewProfilePointer):
+            if (
+                family != "2.0"
+                or value.solution_evidence is not None
+                or value.review_evidence is None
+            ):
+                raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
+            RegisteredReviewProfilePointer.model_validate(
+                raw_similarity_contract_value(value.profile)
+            )
+            evidence = RegisteredItemReviewSolutionEvidence.model_validate(
+                raw_similarity_contract_value(value.review_evidence)
+            )
+            if evidence.source != source:
+                raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
+        elif value.review_evidence is not None or (
+            (value.profile is None) != (value.solution_evidence is None)
+        ):
+            raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
+        elif value.profile is not None:
             InferenceTransferProfilePointer.model_validate(
                 raw_similarity_contract_value(value.profile)
             )
@@ -102,7 +130,9 @@ def validate_similarity_document_reads(
         if not isinstance(value, ResolvedPinnedEmbeddingIndex) or (
             not isinstance(value.intent, EmbeddingRegistryRead)
             or not isinstance(value.intent.scope, EmbeddingRegistryLookup)
-            or not isinstance(value.intent.selection, SimilarityViewSelection)
+            or not isinstance(
+                value.intent.selection, (SimilarityViewSelection, SimilarityViewSelectionV2)
+            )
             or type(value.sources) is not tuple
             or type(value.profiles) is not tuple
             or type(value.bindings) is not tuple
@@ -152,7 +182,12 @@ def validate_similarity_document_reads(
         if len(rows) != len(value.numerical_rows):
             raise SimilarityContextReadError("INDEX_POINTER_INVALID")
         for original in value.bindings:
-            binding = parse_embedding_binding(raw_similarity_contract_value(original))
+            mixed = isinstance(value.intent.selection, SimilarityViewSelectionV2)
+            binding = (
+                parse_supported_embedding_binding(raw_similarity_contract_value(original))
+                if mixed
+                else parse_embedding_binding(raw_similarity_contract_value(original))
+            )
             source = sources.get(binding.source.item_revision_id)
             if (
                 source is None
@@ -160,7 +195,14 @@ def validate_similarity_document_reads(
                 or (
                     binding.source != source.source
                     or binding.profile != source.profile
-                    or binding.solution_evidence != source.solution_evidence
+                    or (
+                        isinstance(binding, RegisteredReviewEmbeddingSourceBinding)
+                        and binding.review_evidence != source.review_evidence
+                    )
+                    or (
+                        not isinstance(binding, RegisteredReviewEmbeddingSourceBinding)
+                        and binding.solution_evidence != source.solution_evidence
+                    )
                     or binding.graph_snapshot != request.graph_snapshot
                     or binding.policy_revision_id != request.policy_revision_id
                     or binding.policy_sha256 != request.policy_sha256

@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Protocol
 
 from eom_catalog_contracts.similarity_context import SimilarityContext, parse_similarity_context
+from eom_catalog_contracts.similarity_context_v2 import (
+    SimilarityContextV2,
+    SupportedSimilarityContext,
+    parse_similarity_context_v2,
+)
 from eom_catalog_contracts.similarity_read import CompletedSimilarityQuerySelection
 from eom_identity_service.tokens import AccessAuthentication
 from eom_operator_identity import PermissionKey
@@ -21,6 +27,10 @@ class SimilarityContextReadPort(Protocol):
     def read(
         self, actor_id: str, selection: CompletedSimilarityQuerySelection
     ) -> SimilarityContext: ...
+
+    def read_v2(
+        self, actor_id: str, selection: CompletedSimilarityQuerySelection
+    ) -> SimilarityContextV2: ...
 
 
 _FAILURE_STATUS = {
@@ -55,6 +65,22 @@ class SimilarityContextReadApplicationService:
     def read(
         self, authentication: AccessAuthentication, selection: CompletedSimilarityQuerySelection
     ) -> SimilarityContext:
+        return self._read(authentication, selection, self.reader.read, parse_similarity_context)
+
+    def read_v2(
+        self, authentication: AccessAuthentication, selection: CompletedSimilarityQuerySelection
+    ) -> SimilarityContextV2:
+        return self._read(
+            authentication, selection, self.reader.read_v2, parse_similarity_context_v2
+        )
+
+    def _read[Context: SupportedSimilarityContext](
+        self,
+        authentication: AccessAuthentication,
+        selection: CompletedSimilarityQuerySelection,
+        read: Callable[[str, CompletedSimilarityQuerySelection], Context],
+        parse: Callable[[object], Context],
+    ) -> Context:
         authorize_inference_transfer_read(authentication)
         # The currently admitted adapter is approved past-exam variation. This
         # additional source permission is not inferred from a model-supplied role.
@@ -65,11 +91,11 @@ class SimilarityContextReadApplicationService:
         except (ValueError, SchemaError):
             raise _unavailable("SIMILARITY_CONTEXT_REQUEST_INVALID") from None
         try:
-            raw = self.reader.read(authentication.operator.operator_id, selection)
+            raw = read(authentication.operator.operator_id, selection)
         except SimilarityContextClientError as error:
             raise _unavailable(error.code) from None
         try:
-            result = parse_similarity_context(raw)
+            result = parse(raw)
             if result.request.request_sha256 != selection.context_request_sha256:
                 raise ValueError("context request differs from exact selection")
         except (ValueError, SchemaError):

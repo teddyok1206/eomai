@@ -10,6 +10,7 @@ from typing import Any, Literal, Self
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
 from eom_catalog_contracts.inference_transfer_experiment import ExperimentViewRecipe
+from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNamespace
 from eom_catalog_contracts.models import Sha256
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
@@ -49,6 +50,12 @@ LOCAL_INDEXING_NATIVE_OWNER_SCHEMA_REF = (
 )
 LOCAL_INDEXING_NATIVE_OWNER_SCHEMA_SHA256 = (
     "sha256:3e1503e14b59e3cc2ea9e8616e11112013c6961170a2dd83a7e7a97e5f45a7a2"
+)
+LOCAL_INDEXING_MIXED_OWNER_SCHEMA_REF = (
+    "eom://schemas/workflow/local-indexing-owner-configuration/4.0"
+)
+LOCAL_INDEXING_MIXED_OWNER_SCHEMA_SHA256 = (
+    "sha256:161027494d7be6b2736c41f1257689a04904282bf1e9e59927ff56c239d22188"
 )
 
 
@@ -151,6 +158,38 @@ def _native_validator() -> Draft202012Validator:
     return Draft202012Validator(schema, registry=registry)
 
 
+@lru_cache(maxsize=1)
+def _mixed_validator() -> Draft202012Validator:
+    with (
+        files("eom_workflow")
+        .joinpath("resources", "local-indexing-owner-configuration-v4.schema.json")
+        .open("rb") as stream
+    ):
+        raw = stream.read(32 * 1024 + 1)
+    if (
+        not 0 < len(raw) <= 32 * 1024
+        or sha256_bytes(raw) != LOCAL_INDEXING_MIXED_OWNER_SCHEMA_SHA256
+    ):
+        raise LocalIndexingOwnerConfigurationError()
+    schema = json.loads(raw)
+    if schema.get("$id") != LOCAL_INDEXING_MIXED_OWNER_SCHEMA_REF:
+        raise LocalIndexingOwnerConfigurationError()
+    Draft202012Validator.check_schema(schema)
+    registry = local_embedding_admission_schema_registry().with_resources(
+        (
+            (
+                LOCAL_INDEXING_OWNER_SCHEMA_REF,
+                Resource.from_contents(local_indexing_owner_configuration_schema()),
+            ),
+            (
+                LOCAL_INDEXING_MULTIVIEW_OWNER_SCHEMA_REF,
+                Resource.from_contents(_multiview_validator().schema),
+            ),
+        )
+    )
+    return Draft202012Validator(schema, registry=registry)
+
+
 def _validate_document(value: object, validator: Draft202012Validator) -> Any:
     try:
         document = raw_similarity_contract_value(value)
@@ -203,7 +242,9 @@ class _OwnerCommonSelectionFields(_OwnerValue):
             raise LocalIndexingOwnerConfigurationError()
         return self
 
-    def _require_matching_namespaces(self, namespaces: tuple[EmbeddingIndexNamespace, ...]) -> None:
+    def _require_matching_namespaces(
+        self, namespaces: tuple[EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace, ...]
+    ) -> None:
         if len({namespace.view for namespace in namespaces}) != len(namespaces):
             raise LocalIndexingOwnerConfigurationError()
         primary = namespaces[0]
@@ -294,12 +335,66 @@ class LocalIndexingNativeOwnerConfiguration(_OwnerCommonSelectionFields):
         return (self.namespace, *self.additional_namespaces)
 
 
+class LocalIndexingMixedOwnerConfiguration(_OwnerSelectionFields):
+    """CPU-only mixed projection selection; no backend or implicit old-schema widening."""
+
+    schema_version: Literal["local-indexing-owner-configuration/4.0"]
+    namespace: MixedEmbeddingIndexNamespace
+    additional_namespaces: tuple[MixedEmbeddingIndexNamespace, ...] = Field(max_length=2)
+    legacy_configuration: (
+        LocalIndexingOwnerConfiguration | LocalIndexingMultiviewOwnerConfiguration | None
+    ) = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def schema_first(cls, value: object) -> Any:
+        return _validate_document(value, _mixed_validator())
+
+    @model_validator(mode="after")
+    def exact_namespaces(self) -> Self:
+        if self.runtime_profile.resource_profile.device != "CPU":
+            raise LocalIndexingOwnerConfigurationError()
+        self._require_matching_namespaces(self.namespaces)
+        legacy = self.legacy_configuration
+        if legacy is not None:
+            shared = (
+                "corpus_id",
+                "recipe",
+                "runtime_profile",
+                "database_owner",
+                "runtime_verifier",
+                "cpu_environment_raw_sha256",
+                "owner_environment_raw_sha256",
+                "poll_interval_seconds",
+            )
+            if any(getattr(legacy, field) != getattr(self, field) for field in shared) or (
+                legacy.namespace.storage_partition != self.namespace.storage_partition
+                or legacy.service_policy_revision_id == self.service_policy_revision_id
+                or legacy.service_policy_sha256 == self.service_policy_sha256
+                or legacy.native_execution_policy_sha256 == self.native_execution_policy_sha256
+            ):
+                raise LocalIndexingOwnerConfigurationError()
+            namespaces = (*self.namespaces, *legacy.namespaces)
+            if len(
+                {canonical_json_bytes(raw_similarity_contract_value(value)) for value in namespaces}
+            ) != len(namespaces):
+                raise LocalIndexingOwnerConfigurationError()
+        return self
+
+    @property
+    def namespaces(self) -> tuple[MixedEmbeddingIndexNamespace, ...]:
+        return (self.namespace, *self.additional_namespaces)
+
+
 LocalIndexingOwnerSelection = (
     LocalIndexingOwnerConfiguration | LocalIndexingMultiviewOwnerConfiguration
 )
 SupportedLocalIndexingOwnerSelection = (
-    LocalIndexingOwnerSelection | LocalIndexingNativeOwnerConfiguration
+    LocalIndexingOwnerSelection
+    | LocalIndexingNativeOwnerConfiguration
+    | LocalIndexingMixedOwnerConfiguration
 )
+CpuLocalIndexingOwnerSelection = LocalIndexingOwnerSelection | LocalIndexingMixedOwnerConfiguration
 
 
 def _parse_value(value: object) -> LocalIndexingOwnerSelection:
@@ -318,13 +413,25 @@ def _parse_supported_value(value: object) -> SupportedLocalIndexingOwnerSelectio
         and document.get("schema_version") == "local-indexing-owner-configuration/3.0"
     ):
         return LocalIndexingNativeOwnerConfiguration.model_validate(document)
+    if (
+        isinstance(document, dict)
+        and document.get("schema_version") == "local-indexing-owner-configuration/4.0"
+    ):
+        return LocalIndexingMixedOwnerConfiguration.model_validate(document)
     return _parse_value(document)
 
 
 def local_indexing_owner_configuration_bytes(value: SupportedLocalIndexingOwnerSelection) -> bytes:
     try:
         checked = _parse_supported_value(value)
-        return canonical_json_bytes(raw_similarity_contract_value(checked))
+        document = raw_similarity_contract_value(checked)
+        if (
+            isinstance(checked, LocalIndexingMixedOwnerConfiguration)
+            and checked.legacy_configuration is None
+        ):
+            # Preserve the already prepared absent-field representation of unreleased4.
+            del document["legacy_configuration"]
+        return canonical_json_bytes(document)
     except Exception:
         raise LocalIndexingOwnerConfigurationError() from None
 
@@ -374,6 +481,14 @@ def parse_supported_local_indexing_owner_configuration(
         return checked
     except Exception:
         raise LocalIndexingOwnerConfigurationError() from None
+
+
+def parse_cpu_local_indexing_owner_configuration(raw: bytes) -> CpuLocalIndexingOwnerSelection:
+    """Executable CPU composition admits exact released CPU values 1, 2 and 4, never 3."""
+    checked = parse_supported_local_indexing_owner_configuration(raw)
+    if isinstance(checked, LocalIndexingNativeOwnerConfiguration):
+        raise LocalIndexingOwnerConfigurationError()
+    return checked
 
 
 def require_native_index_owner_policy(

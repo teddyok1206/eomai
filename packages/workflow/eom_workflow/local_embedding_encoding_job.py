@@ -144,24 +144,7 @@ class LocalEmbeddingLaunchAssociation(NativeEmbeddingContract):
 
     @model_validator(mode="after")
     def exact_owned_subset(self) -> LocalEmbeddingLaunchAssociation:
-        _member(self.owned_input, "input.json", INPUT_SCHEMA_REF)
-        encodings = tuple(job.request.encoding for job in self.owned_jobs)
-        keys = tuple(encoding.encoding_sha256 for encoding in encodings)
-        if keys != tuple(
-            sorted(set(keys))
-        ) or self.owned_input_set_sha256 != embedding_input_set_sha256(encodings):
-            raise ValueError("owned encoding subset must be sorted, unique and exact")
-        for field in ("job_id", "allocated_artifact_id", "allocated_artifact_revision_id"):
-            ids = tuple(getattr(job.job_reference, field) for job in self.owned_jobs)
-            if len(ids) != len(set(ids)):
-                raise ValueError("owned subset repeats existing Job allocations")
-        if (
-            self.intent.native_launch_job_id
-            in {job.job_reference.job_id for job in self.owned_jobs}
-            or len({encoding.storage_partition for encoding in encodings}) != 1
-            or any(job.request.space != self.owned_jobs[0].request.space for job in self.owned_jobs)
-        ):
-            raise ValueError("owned subset mixes launch/reservation Jobs, space or partition")
+        validate_embedding_owned_association_values(self)
         _hash(self, "association_sha256")
         return self
 
@@ -229,17 +212,7 @@ class EmbeddingEncodingCompletedEvent(NativeEmbeddingContract):
 
     @model_validator(mode="after")
     def exact_completion(self) -> EmbeddingEncodingCompletedEvent:
-        reference = self.owned_job.job_reference
-        if (
-            reference.job_id == self.intent.native_launch_job_id
-            or self.receipt.native_launch_job_id != self.intent.native_launch_job_id
-            or self.receipt.row_ref.encoding_sha256
-            != self.owned_job.request.encoding.encoding_sha256
-            or reference.allocated_artifact_id == self.receipt.result_manifest.artifact_id
-            or reference.allocated_artifact_revision_id
-            == self.receipt.result_manifest.artifact_revision_id
-        ):
-            raise ValueError("encoding completion changes Job allocation, launch or row identity")
+        validate_embedding_completed_event_values(self)
         _hash(self, "event_sha256")
         return self
 
@@ -257,17 +230,112 @@ class EmbeddingEncodingReadResult(NativeEmbeddingContract):
 
     @model_validator(mode="after")
     def exact_state_receipt(self) -> EmbeddingEncodingReadResult:
-        if (self.status == "COMPLETED") != (self.completion is not None):
-            raise ValueError("encoding read state and completion differ")
-        if self.completion is not None and (
-            self.completion.owned_job != self.owned_job
-            or self.completion.intent != self.owner_intent
-        ):
-            raise ValueError("encoding read result has a foreign owner or completion")
-        if self.owned_job.job_reference.job_id == self.owner_intent.native_launch_job_id:
-            raise ValueError("encoding read result conflates launch/reservation Job")
+        validate_embedding_encoding_read_values(
+            self.owned_job, self.owner_intent, self.status, self.completion
+        )
         _hash(self, "read_sha256")
         return self
+
+
+class EmbeddingLaunchIntentValues(Protocol):
+    """Neutral value view AFTER concrete-family parsing, never a wire/authority DTO."""
+
+    @property
+    def workflow_request_sha256(self) -> str: ...
+    @property
+    def source_plan_sha256(self) -> str: ...
+    @property
+    def source_plan(self) -> ArtifactMemberPointer: ...
+    @property
+    def resource_profile_sha256(self) -> str: ...
+    @property
+    def native_launch_job_id(self) -> str: ...
+
+
+class EmbeddingLaunchAssociationValues(Protocol):
+    @property
+    def intent(self) -> EmbeddingLaunchIntentValues: ...
+    @property
+    def owned_jobs(self) -> tuple[LocalEmbeddingOwnedJob, ...]: ...
+    @property
+    def owned_input(self) -> ArtifactMemberPointer: ...
+    @property
+    def owned_input_request_sha256(self) -> str: ...
+    @property
+    def owned_input_set_sha256(self) -> str: ...
+    @property
+    def association_sha256(self) -> str: ...
+
+
+class EmbeddingCompletedEventValues(Protocol):
+    @property
+    def intent(self) -> EmbeddingLaunchIntentValues: ...
+    @property
+    def owned_job(self) -> LocalEmbeddingOwnedJob: ...
+    @property
+    def receipt(self) -> EmbeddingSharedRowReceipt: ...
+    @property
+    def launch_association_sha256(self) -> str: ...
+
+
+def validate_embedding_encoding_metadata(value: NativeEmbeddingContract, field: str) -> None:
+    """Canonical encoding metadata hash after exact concrete-family parsing."""
+    _hash(value, field)
+
+
+def validate_embedding_encoding_member(
+    pointer: ArtifactMemberPointer, path: str, schema: str
+) -> None:
+    _member(pointer, path, schema)
+
+
+def validate_embedding_owned_association_values(value: EmbeddingLaunchAssociationValues) -> None:
+    _member(value.owned_input, "input.json", INPUT_SCHEMA_REF)
+    encodings = tuple(job.request.encoding for job in value.owned_jobs)
+    keys = tuple(encoding.encoding_sha256 for encoding in encodings)
+    if keys != tuple(
+        sorted(set(keys))
+    ) or value.owned_input_set_sha256 != embedding_input_set_sha256(encodings):
+        raise ValueError("owned encoding subset must be sorted, unique and exact")
+    for field in ("job_id", "allocated_artifact_id", "allocated_artifact_revision_id"):
+        ids = tuple(getattr(job.job_reference, field) for job in value.owned_jobs)
+        if len(ids) != len(set(ids)):
+            raise ValueError("owned subset repeats existing Job allocations")
+    if (
+        value.intent.native_launch_job_id in {job.job_reference.job_id for job in value.owned_jobs}
+        or len({encoding.storage_partition for encoding in encodings}) != 1
+        or any(job.request.space != value.owned_jobs[0].request.space for job in value.owned_jobs)
+    ):
+        raise ValueError("owned subset mixes launch/reservation Jobs, space or partition")
+
+
+def validate_embedding_completed_event_values(value: EmbeddingCompletedEventValues) -> None:
+    reference = value.owned_job.job_reference
+    if (
+        reference.job_id == value.intent.native_launch_job_id
+        or value.receipt.native_launch_job_id != value.intent.native_launch_job_id
+        or value.receipt.row_ref.encoding_sha256 != value.owned_job.request.encoding.encoding_sha256
+        or reference.allocated_artifact_id == value.receipt.result_manifest.artifact_id
+        or reference.allocated_artifact_revision_id
+        == value.receipt.result_manifest.artifact_revision_id
+    ):
+        raise ValueError("encoding completion changes Job allocation, launch or row identity")
+
+
+def validate_embedding_encoding_read_values(
+    owned_job: LocalEmbeddingOwnedJob,
+    owner_intent: EmbeddingLaunchIntentValues,
+    status: str,
+    completion: EmbeddingCompletedEventValues | None,
+) -> None:
+    if (status == "COMPLETED") != (completion is not None):
+        raise ValueError("encoding read state and completion differ")
+    if completion is not None and (
+        completion.owned_job != owned_job or completion.intent != owner_intent
+    ):
+        raise ValueError("encoding read result has a foreign owner or completion")
+    if owned_job.job_reference.job_id == owner_intent.native_launch_job_id:
+        raise ValueError("encoding read result conflates launch/reservation Job")
 
 
 type EmbeddingEncodingJobMessage = Annotated[
@@ -331,18 +399,46 @@ def build_owned_incremental_embedding_input(
     input-byte hashing and stable encoding order; no worker or storage IO occurs.
     """
     plan = parse_local_embedding_source_plan(plan.model_dump(mode="json"))
+    validate_local_embedding_plan_entries(plan, entries)
+    by_source = {entry.profile.source_basis.source.item_revision_id: entry for entry in entries}
+    return build_owned_embedding_input_values(
+        space=plan.space,
+        planned_encodings=tuple(demand.encoding for demand in plan.demands),
+        encoding_texts=tuple(
+            (
+                demand.encoding,
+                experiment_view_text(by_source[demand.source_revision_id], plan.namespace.view),
+            )
+            for demand in plan.demands
+        ),
+        owned_jobs=owned_jobs,
+        native_launch_job_id=native_launch_job_id,
+        resources=resources,
+    )
+
+
+def build_owned_embedding_input_values(
+    *,
+    space: EmbeddingSpace,
+    planned_encodings: tuple[EmbeddingEncodingIdentity, ...],
+    encoding_texts: tuple[tuple[EmbeddingEncodingIdentity, str | None], ...],
+    owned_jobs: tuple[LocalEmbeddingOwnedJob, ...],
+    native_launch_job_id: str,
+    resources: LocalEmbeddingResourceProfile,
+) -> IncrementalEmbeddingInput:
+    """Shared numeric subset construction AFTER exact source-family validation."""
     resources = LocalEmbeddingResourceProfile.model_validate(resources)
     native_launch_job_id = TypeAdapter(JobId).validate_python(native_launch_job_id, strict=True)
     if type(owned_jobs) is not tuple or not 1 <= len(owned_jobs) <= 1024:
         raise ValueError("owned numerical input requires a nonempty bounded reservation tuple")
     checked = tuple(LocalEmbeddingOwnedJob.model_validate(job) for job in owned_jobs)
     keys = tuple(job.request.encoding.encoding_sha256 for job in checked)
-    planned = {d.encoding.encoding_sha256: d.encoding for d in plan.demands}
+    planned = {encoding.encoding_sha256: encoding for encoding in planned_encodings}
     if (
         keys != tuple(sorted(set(keys)))
-        or resources.device != plan.space.runtime.device
+        or resources.device != space.runtime.device
         or any(
-            job.request.space != plan.space
+            job.request.space != space
             or planned.get(job.request.encoding.encoding_sha256) != job.request.encoding
             or job.job_reference.job_id == native_launch_job_id
             for job in checked
@@ -355,18 +451,15 @@ def build_owned_incremental_embedding_input(
         raise ValueError(
             "owned numerical input differs from plan, space or distinct Job allocations"
         )
-    validate_local_embedding_plan_entries(plan, entries)
-    by_source = {entry.profile.source_basis.source.item_revision_id: entry for entry in entries}
     selected = set(keys)
     by_encoding: dict[str, EmbeddingTextInput] = {}
-    for demand in plan.demands:
-        key = demand.encoding.encoding_sha256
+    for encoding, text in encoding_texts:
+        key = encoding.encoding_sha256
         if key not in selected:
             continue
-        text = experiment_view_text(by_source[demand.source_revision_id], plan.namespace.view)
         if text is None or not text.strip():
             raise ValueError("owned numerical input has no exact materialized view")
-        row = EmbeddingTextInput(encoding=demand.encoding, text=text)
+        row = EmbeddingTextInput(encoding=encoding, text=text)
         prior = by_encoding.get(key)
         if prior is not None and prior != row:
             raise ValueError("owned numerical input has an encoding collision")
@@ -377,7 +470,7 @@ def build_owned_incremental_embedding_input(
     body = {
         "schema_version": "incremental-embedding-input/1.0",
         "job_id": native_launch_job_id,
-        "space": plan.space.model_dump(mode="json"),
+        "space": space.model_dump(mode="json"),
         "rows": [row.model_dump(mode="json") for row in rows],
         "batch_size": resources.batch_size,
         "threads": resources.threads,
@@ -399,13 +492,36 @@ def validate_local_embedding_launch_association(
     plan = parse_local_embedding_source_plan(plan.model_dump(mode="json"))
     owned_input = parse_incremental_embedding_input(owned_input.model_dump(mode="json"))
     resources = LocalEmbeddingResourceProfile.model_validate(resources)
+    validate_local_embedding_launch_values(
+        association,
+        plan_sha256=plan.plan_sha256,
+        plan_raw_sha256=sha256_bytes(canonical_json_bytes(plan.model_dump(mode="json"))),
+        planned_encodings=tuple(demand.encoding for demand in plan.demands),
+        space=plan.space,
+        owned_input=owned_input,
+        resources=resources,
+        workflow_request_sha256=workflow_request_sha256,
+    )
+
+
+def validate_local_embedding_launch_values(
+    association: EmbeddingLaunchAssociationValues,
+    *,
+    plan_sha256: str,
+    plan_raw_sha256: str,
+    planned_encodings: tuple[EmbeddingEncodingIdentity, ...],
+    space: EmbeddingSpace,
+    owned_input: IncrementalEmbeddingInput,
+    resources: LocalEmbeddingResourceProfile,
+    workflow_request_sha256: str,
+) -> None:
+    """Shared exact closure AFTER the caller parses its own released/successor frames."""
     encodings = tuple(job.request.encoding for job in association.owned_jobs)
-    planned = {demand.encoding.encoding_sha256: demand.encoding for demand in plan.demands}
+    planned = {encoding.encoding_sha256: encoding for encoding in planned_encodings}
     if (
         association.intent.workflow_request_sha256 != workflow_request_sha256
-        or association.intent.source_plan_sha256 != plan.plan_sha256
-        or association.intent.source_plan.sha256
-        != sha256_bytes(canonical_json_bytes(plan.model_dump(mode="json")))
+        or association.intent.source_plan_sha256 != plan_sha256
+        or association.intent.source_plan.sha256 != plan_raw_sha256
         or association.intent.resource_profile_sha256 != resources.resource_profile_sha256
         or association.owned_input.sha256
         != sha256_bytes(canonical_json_bytes(owned_input.model_dump(mode="json")))
@@ -414,7 +530,7 @@ def validate_local_embedding_launch_association(
         or association.intent.native_launch_job_id != owned_input.job_id
         or encodings != tuple(row.encoding for row in owned_input.rows)
         or any(planned.get(row.encoding_sha256) != row for row in encodings)
-        or owned_input.space != plan.space
+        or owned_input.space != space
         or owned_input.space != association.owned_jobs[0].request.space
         or resources.device != owned_input.space.runtime.device
         or owned_input.batch_size != resources.batch_size
@@ -426,8 +542,8 @@ def validate_local_embedding_launch_association(
 
 
 @dataclass(frozen=True, slots=True)
-class _CompletionContext:
-    association: LocalEmbeddingLaunchAssociation
+class EmbeddingCompletionContext:
+    association: EmbeddingLaunchAssociationValues
     owned_input: IncrementalEmbeddingInput
     result: IncrementalEmbeddingResult
     by_encoding: dict[str, LocalEmbeddingOwnedJob]
@@ -440,8 +556,17 @@ def _completion_context(
     association: LocalEmbeddingLaunchAssociation,
     owned_input: IncrementalEmbeddingInput,
     result: IncrementalEmbeddingResult,
-) -> _CompletionContext:
+) -> EmbeddingCompletionContext:
     association = LocalEmbeddingLaunchAssociation.model_validate(association)
+    return prepare_embedding_completion_context(association, owned_input, result)
+
+
+def prepare_embedding_completion_context(
+    association: EmbeddingLaunchAssociationValues,
+    owned_input: IncrementalEmbeddingInput,
+    result: IncrementalEmbeddingResult,
+) -> EmbeddingCompletionContext:
+    """One numeric closure AFTER the caller parses its exact association family."""
     owned_input = parse_incremental_embedding_input(owned_input.model_dump(mode="json"))
     result = parse_incremental_embedding_result(result.model_dump(mode="json"))
     # Preserve the existing public Catalog rule and its constant-two parse pipeline.
@@ -453,7 +578,7 @@ def _completion_context(
         raise ValueError(
             "encoding completion differs from exact launch, owned request or shared row"
         )
-    return _CompletionContext(
+    return EmbeddingCompletionContext(
         association=association,
         owned_input=owned_input,
         result=result,
@@ -465,8 +590,8 @@ def _completion_context(
 
 
 def _validate_completion_event(
-    event: EmbeddingEncodingCompletedEvent,
-    context: _CompletionContext,
+    event: EmbeddingCompletedEventValues,
+    context: EmbeddingCompletionContext,
 ) -> None:
     association, owned_input, result = context.association, context.owned_input, context.result
     receipt = event.receipt
@@ -490,6 +615,13 @@ def _validate_completion_event(
         raise ValueError(
             "encoding completion differs from exact launch, owned request or shared row"
         )
+
+
+def validate_embedding_completion_event_context(
+    event: EmbeddingCompletedEventValues, context: EmbeddingCompletionContext
+) -> None:
+    """A previously version-parsed event against one shared numeric batch context."""
+    _validate_completion_event(event, context)
 
 
 def validate_embedding_encoding_completion(

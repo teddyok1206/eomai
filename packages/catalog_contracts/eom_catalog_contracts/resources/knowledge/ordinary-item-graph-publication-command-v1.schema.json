@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/ordinary-item-graph-publication-command/1.0",
+  "title": "Ordinary Approved Item Graph Publication command V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operation",
+    "schema_version",
+    "corpus_key",
+    "sources",
+    "authorized_at",
+    "expected_graph_snapshot",
+    "expected_graph_snapshot_sha256",
+    "access_policy_revision_id",
+    "access_policy_sha256",
+    "requested_by_operator_id",
+    "idempotency_key",
+    "submission_sha256"
+  ],
+  "properties": {
+    "operation": {
+      "const": "PUBLISH_ORDINARY_APPROVED_ITEM_ANALYSES"
+    },
+    "schema_version": {
+      "const": "ordinary-item-graph-publication-command/1.0"
+    },
+    "corpus_key": {
+      "const": "integrated-science-textbooks"
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/source"
+      }
+    },
+    "authorized_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$|\\+00:00$"
+    },
+    "expected_graph_snapshot": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"
+    },
+    "expected_graph_snapshot_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "access_policy_revision_id": {
+      "type": "string",
+      "pattern": "^accessrev_[0-9a-f]{32}$"
+    },
+    "access_policy_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "requested_by_operator_id": {
+      "type": "string",
+      "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 96,
+      "pattern": "^[!-~]+$"
+    },
+    "submission_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "analysis_run_id",
+        "source",
+        "accepted_result",
+        "workflow_id",
+        "expected_curriculum_unit_key",
+        "expected_plan_sha256",
+        "review_evidence_sha256"
+      ],
+      "properties": {
+        "analysis_run_id": {
+          "type": "string",
+          "pattern": "^analysisrun_[0-9a-f]{32}$"
+        },
+        "source": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/approvedItemSource"
+            },
+            {
+              "properties": {
+                "source_class": {
+                  "const": "APPROVED_ITEM"
+                }
+              }
+            }
+          ]
+        },
+        "accepted_result": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"
+            },
+            {
+              "properties": {
+                "schema_ref": {
+                  "const": "eom://schemas/knowledge/knowledge-analysis-result/2.0"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "workflow_id": {
+          "type": "string",
+          "pattern": "^workflow_[0-9a-f]{32}$"
+        },
+        "expected_curriculum_unit_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "expected_plan_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "review_evidence_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

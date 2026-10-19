@@ -15,28 +15,38 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     IncrementalEmbeddingResult,
 )
 from eom_identifiers import content_sha256
+from eom_workflow.local_embedding_encoding_dispatch import (
+    SupportedEmbeddingAssociation,
+    SupportedEmbeddingCompletedEvent,
+    SupportedEmbeddingIntent,
+    SupportedEmbeddingReadResult,
+    parse_supported_embedding_association,
+    parse_supported_embedding_completed,
+    parse_supported_embedding_intent,
+    parse_supported_embedding_message,
+    parse_supported_embedding_read,
+    validate_supported_embedding_association,
+    validate_supported_embedding_completions,
+)
 from eom_workflow.local_embedding_encoding_job import (
-    EmbeddingEncodingCompletedEvent,
     EmbeddingEncodingJobReference,
     EmbeddingEncodingJobRequest,
-    EmbeddingEncodingReadResult,
-    LocalEmbeddingLaunchAssociation,
-    LocalEmbeddingLaunchIntent,
     LocalEmbeddingOwnedJob,
-    parse_embedding_encoding_job_message,
-    validate_embedding_encoding_completions,
-    validate_local_embedding_launch_association,
+)
+from eom_workflow.local_embedding_encoding_ownership_v2 import (
+    LocalEmbeddingLaunchIntentV2,
 )
 from eom_workflow.local_embedding_execution_policy import (
     LocalEmbeddingExecutablePolicy,
     parse_local_embedding_executable_policy,
 )
-from eom_workflow.local_embedding_request import (
-    LocalEmbeddingExecutableRequest,
-    parse_local_embedding_executable_request,
-    validate_local_embedding_request_references,
+from eom_workflow.local_embedding_request_v2 import (
+    SupportedLocalEmbeddingRequest,
+    parse_supported_local_embedding_request,
+    validate_supported_local_embedding_request_references,
 )
 from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
+from eom_workflow.local_embedding_source_plan_v2 import LocalEmbeddingSourcePlanV2
 from eom_workflow.schemas import NativeEmbeddingContract
 from jsonschema import ValidationError as JsonSchemaValidationError
 from sqlalchemy.orm import Session, sessionmaker
@@ -53,8 +63,8 @@ from eom_orchestrator.state_machine import JobState
 
 @dataclass(frozen=True, slots=True)
 class ResolvedEncodingScope:
-    workflow_request: LocalEmbeddingExecutableRequest
-    plan: LocalEmbeddingSourcePlan
+    workflow_request: SupportedLocalEmbeddingRequest
+    plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2
     policy: LocalEmbeddingExecutablePolicy
 
 
@@ -73,15 +83,15 @@ class ResolvedEncodingCompletion:
 @dataclass(frozen=True, slots=True)
 class EncodingReadTarget:
     owned_job: LocalEmbeddingOwnedJob
-    owner_intent: LocalEmbeddingLaunchIntent
-    completion: EmbeddingEncodingCompletedEvent | None
+    owner_intent: SupportedEmbeddingIntent
+    completion: SupportedEmbeddingCompletedEvent | None
 
 
 @dataclass(frozen=True, slots=True)
 class ObservedEncodingReads:
     """Trusted owner observations after fresh read admission, never an authority DTO."""
 
-    current_intent: LocalEmbeddingLaunchIntent | None
+    current_intent: SupportedEmbeddingIntent | None
     uncertain_launch_job_ids: frozenset[str]
 
 
@@ -101,20 +111,20 @@ class EmbeddingEncodingOwnerAdmission(Protocol):
         self,
         session: Session,
         requests: tuple[EmbeddingEncodingJobRequest, ...],
-        intent: LocalEmbeddingLaunchIntent,
+        intent: SupportedEmbeddingIntent,
     ) -> ResolvedEncodingScope: ...
 
     def resolve_launch(
         self,
         session: Session,
-        association: LocalEmbeddingLaunchAssociation,
+        association: SupportedEmbeddingAssociation,
     ) -> ResolvedEncodingLaunch: ...
 
     def resolve_completion(
         self,
         session: Session,
-        association: LocalEmbeddingLaunchAssociation,
-        events: tuple[EmbeddingEncodingCompletedEvent, ...],
+        association: SupportedEmbeddingAssociation,
+        events: tuple[SupportedEmbeddingCompletedEvent, ...],
     ) -> ResolvedEncodingCompletion:
         """Prove committed/approved exact shared file set, raw/semantic pins and finite/L2 rows."""
         ...
@@ -133,13 +143,14 @@ class EmbeddingEncodingOwnerAdmission(Protocol):
         """Fresh caller/explicit selected scope before existence or stale-reference errors."""
         ...
 
-    def fence_mutation(self, session: Session, intent: LocalEmbeddingLaunchIntent) -> None: ...
+    def fence_mutation(self, session: Session, intent: SupportedEmbeddingIntent) -> None: ...
 
 
-def _parse[Record: NativeEmbeddingContract](value: Record, expected: type[Record]) -> Record:
+def _parse[Record: NativeEmbeddingContract](
+    value: object, expected: type[Record] | tuple[type[Record], ...]
+) -> Record:
     try:
-        reparsed = expected.model_validate(value)
-        parsed = parse_embedding_encoding_job_message(reparsed.model_dump(mode="json"))
+        parsed = parse_supported_embedding_message(value)
         if not isinstance(parsed, expected):
             raise ValueError("wrong record")
         return parsed
@@ -152,23 +163,23 @@ def _batch(values: tuple[object, ...]) -> None:
         raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_BATCH_INVALID")
 
 
-def _intent(value: LocalEmbeddingLaunchIntent) -> LocalEmbeddingLaunchIntent:
+def _intent(value: SupportedEmbeddingIntent) -> SupportedEmbeddingIntent:
     try:
-        return LocalEmbeddingLaunchIntent.model_validate(value)
+        return parse_supported_embedding_intent(value)
     except (ValueError, TypeError):
         raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_CONTRACT_INVALID") from None
 
 
 def _scope(
     proof: ResolvedEncodingScope,
-    intent: LocalEmbeddingLaunchIntent,
+    intent: SupportedEmbeddingIntent,
     requests: tuple[EmbeddingEncodingJobRequest, ...],
 ) -> None:
     try:
-        request = parse_local_embedding_executable_request(proof.workflow_request)
-        plan = LocalEmbeddingSourcePlan.model_validate(proof.plan)
+        request = parse_supported_local_embedding_request(proof.workflow_request)
+        plan = proof.plan
         policy = parse_local_embedding_executable_policy(proof.policy)
-        validate_local_embedding_request_references(request, plan, policy)
+        validate_supported_local_embedding_request_references(request, plan, policy)
         planned = {demand.encoding.encoding_sha256: demand.encoding for demand in plan.demands}
         if (
             intent.workflow_request_sha256 != request.request_sha256
@@ -209,7 +220,7 @@ def _targets(records: tuple[EncodingReservation, ...]) -> tuple[EncodingReadTarg
 def _results(
     records: tuple[EncodingReservation, ...],
     observed: ObservedEncodingReads,
-) -> tuple[EmbeddingEncodingReadResult, ...]:
+) -> tuple[SupportedEmbeddingReadResult, ...]:
     if type(
         observed.uncertain_launch_job_ids
     ) is not frozenset or not observed.uncertain_launch_job_ids.issubset(
@@ -228,7 +239,9 @@ def _results(
         else:
             status = "OWNED" if row.owner.intent == current else "BORROWED"
         body = {
-            "schema_version": "embedding-encoding-job/1.0",
+            "schema_version": "embedding-encoding-ownership/2.0"
+            if isinstance(row.owner.intent, LocalEmbeddingLaunchIntentV2)
+            else "embedding-encoding-job/1.0",
             "record_type": "READ_RESULT",
             "owned_job": row.owned_job.model_dump(mode="json"),
             "owner_intent": row.owner.intent.model_dump(mode="json"),
@@ -237,10 +250,7 @@ def _results(
             if row.completion is None
             else row.completion.model_dump(mode="json"),
         }
-        value = EmbeddingEncodingReadResult.model_validate(
-            body | {"read_sha256": content_sha256(body)}
-        )
-        values.append(_parse(value, EmbeddingEncodingReadResult))
+        values.append(parse_supported_embedding_read(body | {"read_sha256": content_sha256(body)}))
     return tuple(values)
 
 
@@ -261,8 +271,8 @@ class EmbeddingEncodingReservations:
     def reserve_and_attach(
         self,
         requests: tuple[EmbeddingEncodingJobRequest, ...],
-        intent: LocalEmbeddingLaunchIntent,
-    ) -> tuple[EmbeddingEncodingReadResult, ...]:
+        intent: SupportedEmbeddingIntent,
+    ) -> tuple[SupportedEmbeddingReadResult, ...]:
         _batch(requests)
         requests = tuple(_parse(row, EmbeddingEncodingJobRequest) for row in requests)
         keys = tuple(row.encoding.encoding_sha256 for row in requests)
@@ -287,8 +297,8 @@ class EmbeddingEncodingReservations:
             self._admission.fence_mutation(session, intent)
             return result
 
-    def bind_launch(self, association: LocalEmbeddingLaunchAssociation) -> None:
-        association = _parse(association, LocalEmbeddingLaunchAssociation)
+    def bind_launch(self, association: SupportedEmbeddingAssociation) -> None:
+        association = parse_supported_embedding_association(association)
         with self._sessions.begin() as session:
             proof = self._admission.resolve_launch(session, association)
             _scope(
@@ -297,7 +307,7 @@ class EmbeddingEncodingReservations:
                 tuple(job.request for job in association.owned_jobs),
             )
             try:
-                validate_local_embedding_launch_association(
+                validate_supported_embedding_association(
                     association,
                     proof.scope.plan,
                     proof.owned_input,
@@ -354,10 +364,10 @@ class EmbeddingEncodingReservations:
 
     def complete(
         self,
-        events: tuple[EmbeddingEncodingCompletedEvent, ...],
-    ) -> tuple[EmbeddingEncodingReadResult, ...]:
+        events: tuple[SupportedEmbeddingCompletedEvent, ...],
+    ) -> tuple[SupportedEmbeddingReadResult, ...]:
         _batch(events)
-        events = tuple(_parse(event, EmbeddingEncodingCompletedEvent) for event in events)
+        events = tuple(parse_supported_embedding_completed(event) for event in events)
         keys = tuple(event.owned_job.request.encoding.encoding_sha256 for event in events)
         if keys != tuple(sorted(set(keys))) or len({event.intent for event in events}) != 1:
             raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_BATCH_INVALID")
@@ -375,7 +385,7 @@ class EmbeddingEncodingReservations:
                 raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_OWNED_SUBSET_MISMATCH")
             proof = self._admission.resolve_completion(session, association, events)
             try:
-                validate_embedding_encoding_completions(
+                validate_supported_embedding_completions(
                     events, association, proof.owned_input, proof.result
                 )
             except (ValueError, TypeError, JsonSchemaValidationError):
@@ -445,14 +455,14 @@ class EmbeddingEncodingReservations:
     def read(
         self,
         references: tuple[EmbeddingEncodingJobReference, ...],
-    ) -> tuple[EmbeddingEncodingReadResult, ...]:
+    ) -> tuple[SupportedEmbeddingReadResult, ...]:
         references = _references(references)
         with self._sessions.begin() as session:
             return self.read_in_session(session, references)
 
     def read_in_session(
         self, session: Session, references: tuple[EmbeddingEncodingJobReference, ...]
-    ) -> tuple[EmbeddingEncodingReadResult, ...]:
+    ) -> tuple[SupportedEmbeddingReadResult, ...]:
         """Supported same-root read for atomic receipt verification; no inference/write."""
         if session.get_transaction() is None or session.in_nested_transaction():
             raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_OWNER_ROOT_REQUIRED")

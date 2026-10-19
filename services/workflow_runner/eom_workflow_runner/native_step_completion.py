@@ -8,7 +8,7 @@ from types import MappingProxyType
 from typing import Literal
 
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
-from eom_workflow.local_embedding_workflow_receipt import LocalEmbeddingStepOutput
+from eom_workflow.local_embedding_workflow_receipt_v2 import SupportedLocalEmbeddingStepOutput
 from eom_workflow.private_chat_query_execution import parse_private_chat_query_workflow_request
 from eom_workflow.private_chat_query_submission_context import (
     parse_private_chat_query_submission_context,
@@ -35,7 +35,7 @@ from eom_workflow_runner.state_machine import (
 
 type NativeStepKey = Literal["encode_batch", "encode_reference_query", "encode_private_chat_query"]
 type NativeStepOutput = (
-    LocalEmbeddingStepOutput | ReferenceQueryStepOutput | PrivateChatQueryStepOutput
+    SupportedLocalEmbeddingStepOutput | ReferenceQueryStepOutput | PrivateChatQueryStepOutput
 )
 type ValidateNativeCompletion = Callable[
     [Session, WorkflowInstanceRecord, WorkflowStepRunRecord], NativeStepOutput

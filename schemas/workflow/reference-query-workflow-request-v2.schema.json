@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/reference-query-workflow-request/2.0",
+  "title": "Mixed-evidence approved-reference QUERY metadata request",
+  "description": "Mixed consumer metadata only. Numerical QUERY input1.1/result1, definition and execution policy remain their exact original families.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_name",
+    "purpose",
+    "workflow_definition_key",
+    "workflow_definition_version",
+    "workflow_definition_sha256",
+    "operator_audit",
+    "context_request",
+    "runtime_bundle",
+    "resource_profile",
+    "native_execution_policy",
+    "native_execution_policy_sha256",
+    "request_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "reference-query-workflow-request/2.0"
+    },
+    "request_name": {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/request/properties/request_name"
+    },
+    "purpose": {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/request/properties/purpose"
+    },
+    "workflow_definition_key": {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/request/properties/workflow_definition_key"
+    },
+    "workflow_definition_version": {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/request/properties/workflow_definition_version"
+    },
+    "workflow_definition_sha256": {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/request/properties/workflow_definition_sha256"
+    },
+    "operator_audit": {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/request/properties/operator_audit"
+    },
+    "context_request": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/knowledge/system-rag-similarity-context/2.0#/$defs/request"
+        },
+        {
+          "properties": {
+            "consumer_purpose": {
+              "enum": [
+                "PAST_EXAM_VARIATION",
+                "ITEM_AUTHORING",
+                "ITEM_REVIEW"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "runtime_bundle": {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/request/properties/runtime_bundle"
+    },
+    "resource_profile": {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/request/properties/resource_profile"
+    },
+    "native_execution_policy": {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/request/properties/native_execution_policy"
+    },
+    "native_execution_policy_sha256": {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/request/properties/native_execution_policy_sha256"
+    },
+    "request_sha256": {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/request/properties/request_sha256"
+    }
+  }
+}

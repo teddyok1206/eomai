@@ -6,8 +6,9 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from eom_catalog_contracts.inference_transfer_experiment import StagedExperimentEntry
-from eom_catalog_contracts.local_indexing_policy import LocalIndexingAccessPolicy
+from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
+from eom_catalog_contracts.local_indexing_mixed_policy import SupportedLocalIndexingAccessPolicy
+from eom_catalog_contracts.mixed_embedding_index import SupportedEmbeddingEntry
 from eom_catalog_contracts.models import Sha256
 from eom_catalog_service.embedding_registry_catalog_adapter import (
     EmbeddingRegistryOwnerConfiguration,
@@ -22,6 +23,7 @@ from eom_catalog_service.embedding_registry_ports import (
     SelectedEmbeddingSources,
 )
 from eom_catalog_service.local_embedding_source_plan import build_local_embedding_source_plan
+from eom_catalog_service.local_embedding_source_plan_v2 import build_local_embedding_source_plan_v2
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.settings import CatalogSettings
 from eom_identifiers import canonical_json_bytes
@@ -47,12 +49,9 @@ from eom_workflow.local_embedding_execution_policy import (
     parse_local_embedding_executable_policy,
     parse_local_embedding_service_execution_policy,
 )
-from eom_workflow.local_embedding_request import (
-    LocalEmbeddingExecutableRequest,
-    local_embedding_request_actor,
-    parse_local_embedding_executable_request,
-)
+from eom_workflow.local_embedding_request_v2 import LocalEmbeddingWorkflowRequestV2
 from eom_workflow.local_embedding_source_plan import parse_local_embedding_source_plan
+from eom_workflow.local_embedding_source_plan_v2 import parse_local_embedding_source_plan_v2
 from pydantic import TypeAdapter
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session, object_session
@@ -63,7 +62,12 @@ from eom_workflow_runner.local_embedding_actor_authority import (
     OperatorLocalEmbeddingActorAuthority,
     ServiceLocalEmbeddingActorAuthority,
 )
-from eom_workflow_runner.local_embedding_admission import ResolvedLocalEmbeddingAdmission
+from eom_workflow_runner.local_embedding_admission import (
+    ResolvedLocalEmbeddingAdmission,
+    SupportedLocalEmbeddingOwnerRequest,
+    local_embedding_owner_request_actor,
+    parse_supported_local_embedding_owner_request,
+)
 from eom_workflow_runner.models import (
     WorkflowCommandRecord,
     WorkflowDefinitionRecord,
@@ -95,7 +99,7 @@ class LocalEmbeddingOwnerConfiguration:
 
     def __post_init__(self) -> None:
         pointer = ArtifactMemberPointer.model_validate(
-            self.native_execution_policy.model_dump(mode="json")
+            raw_similarity_contract_value(self.native_execution_policy)
         )
         if (
             pointer.member_path != "policy.json"
@@ -113,7 +117,7 @@ class ResolvedLocalEmbeddingSources:
     """Current root's values only; every later root must independently reauthorize."""
 
     admission: ResolvedLocalEmbeddingAdmission
-    entries: tuple[StagedExperimentEntry, ...]
+    entries: tuple[SupportedEmbeddingEntry, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,7 +125,7 @@ class ServiceReconciliationControls:
     """Current-root data for request construction, not future source authority."""
 
     caller: EmbeddingRegistryServiceCaller
-    grant: LocalIndexingAccessPolicy
+    grant: SupportedLocalIndexingAccessPolicy
     policy: LocalEmbeddingServiceExecutionPolicy
 
 
@@ -206,11 +210,13 @@ class CatalogLocalEmbeddingOwnerAdmission:
             raise ValueError("LOCAL_EMBEDDING_OPERATOR_UNAVAILABLE")
         return self._actor_authority.identity
 
-    def registry_caller(self, request: LocalEmbeddingExecutableRequest) -> EmbeddingRegistryActor:
+    def registry_caller(
+        self, request: SupportedLocalEmbeddingOwnerRequest
+    ) -> EmbeddingRegistryActor:
         return self._actor_authority.registry_caller(request)
 
     def fence_current_actor(
-        self, session: Session, request: LocalEmbeddingExecutableRequest
+        self, session: Session, request: SupportedLocalEmbeddingOwnerRequest
     ) -> None:
         self._actor_authority.fence(session, request)
 
@@ -268,7 +274,9 @@ class CatalogLocalEmbeddingOwnerAdmission:
                 64 * 1024,
             )
         )
-        profile = LocalEmbeddingRuntimeProfile.model_validate(profile.model_dump(mode="json"))
+        profile = LocalEmbeddingRuntimeProfile.model_validate(
+            raw_similarity_contract_value(profile)
+        )
         if (
             policy.policy_sha256 != config.native_execution_policy_sha256
             or policy.service != caller.service
@@ -280,14 +288,14 @@ class CatalogLocalEmbeddingOwnerAdmission:
         return ServiceReconciliationControls(caller, grant, policy)
 
     def resolve_submission(
-        self, session: Session, request: LocalEmbeddingExecutableRequest
+        self, session: Session, request: SupportedLocalEmbeddingOwnerRequest
     ) -> ResolvedLocalEmbeddingAdmission:
         return self.resolve_sources(session, request).admission
 
     def resolve_sources(
-        self, session: Session, request: LocalEmbeddingExecutableRequest
+        self, session: Session, request: SupportedLocalEmbeddingOwnerRequest
     ) -> ResolvedLocalEmbeddingSources:
-        request = parse_local_embedding_executable_request(request)
+        request = parse_supported_local_embedding_owner_request(request)
         # No control/source bytes are read for a stale capture or a substituted actor.
         self.fence_current_actor(session, request)
         config = self.configuration
@@ -323,8 +331,13 @@ class CatalogLocalEmbeddingOwnerAdmission:
                 reader, request.native_execution_policy, EXECUTION_POLICY_ARTIFACT_TYPE, 64 * 1024
             )
         )
-        plan = parse_local_embedding_source_plan(
-            self._read_control(reader, request.source_plan, SOURCE_PLAN_ARTIFACT_TYPE, 64 * 1024**2)
+        plan_value = self._read_control(
+            reader, request.source_plan, SOURCE_PLAN_ARTIFACT_TYPE, 64 * 1024**2
+        )
+        plan = (
+            parse_local_embedding_source_plan_v2(plan_value)
+            if isinstance(request, LocalEmbeddingWorkflowRequestV2)
+            else parse_local_embedding_source_plan(plan_value)
         )
         scope = ResolvedLocalEmbeddingAdmission(request, plan, policy)
         current = self.catalog.resolve_selected_sources(
@@ -334,10 +347,16 @@ class CatalogLocalEmbeddingOwnerAdmission:
                 query, tuple(source.item_revision_id for source in plan.sources)
             ),
         )
-        rebuilt = build_local_embedding_source_plan(
-            query,
-            current,
-            target_revision_ids=tuple(source.item_revision_id for source in plan.sources),
+        targets = tuple(source.item_revision_id for source in plan.sources)
+        rebuilt = (
+            build_local_embedding_source_plan_v2(
+                query,
+                current,
+                target_revision_ids=targets,
+                base_analysis_run_ids=dict(current.base_analysis_run_ids),
+            )
+            if isinstance(request, LocalEmbeddingWorkflowRequestV2)
+            else build_local_embedding_source_plan(query, current, target_revision_ids=targets)
         )
         if rebuilt != plan:
             raise ValueError("LOCAL_EMBEDDING_SOURCE_PLAN_STALE")
@@ -355,9 +374,9 @@ class CatalogLocalEmbeddingOwnerAdmission:
         session: Session,
         command: WorkflowCommandRecord,
         workflow: WorkflowInstanceRecord,
-        request: LocalEmbeddingExecutableRequest,
+        request: SupportedLocalEmbeddingOwnerRequest,
     ) -> None:
-        actor_type, actor_id = local_embedding_request_actor(request)
+        actor_type, actor_id = local_embedding_owner_request_actor(request)
         definition = session.get(WorkflowDefinitionRecord, workflow.definition_id)
         if (
             object_session(command) is not session
@@ -389,7 +408,7 @@ class CatalogLocalEmbeddingOwnerAdmission:
         *,
         command: WorkflowCommandRecord,
         workflow: WorkflowInstanceRecord,
-        request: LocalEmbeddingExecutableRequest,
+        request: SupportedLocalEmbeddingOwnerRequest,
     ) -> ResolvedLocalEmbeddingAdmission:
         self.fence_current_actor(session, request)
         self._require_rows(session, command, workflow, request)
@@ -470,7 +489,7 @@ class CatalogLocalEmbeddingOwnerAdmission:
     def fence_mutation(
         self,
         session: Session,
-        request: LocalEmbeddingExecutableRequest,
+        request: SupportedLocalEmbeddingOwnerRequest,
         lease: CommandLeaseIdentity,
     ) -> None:
         self.resolve_mutation_sources(session, request, lease)
@@ -478,7 +497,7 @@ class CatalogLocalEmbeddingOwnerAdmission:
     def resolve_mutation_sources(
         self,
         session: Session,
-        request: LocalEmbeddingExecutableRequest,
+        request: SupportedLocalEmbeddingOwnerRequest,
         lease: CommandLeaseIdentity,
     ) -> ResolvedLocalEmbeddingSources:
         self.fence_current_actor(session, request)

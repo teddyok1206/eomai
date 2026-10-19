@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_operator_identity import LocalIndexingServiceReference
@@ -17,6 +17,9 @@ from eom_catalog_contracts.inference_transfer_experiment import ExperimentViewRe
 from eom_catalog_contracts.knowledge import EducationRetrievalAccessPolicy
 from eom_catalog_contracts.models import FrozenModel, Sha256, UtcDatetime
 from eom_catalog_contracts.validation import validate_contract
+
+if TYPE_CHECKING:
+    from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNamespace
 
 LOCAL_INDEXING_ACCESS_POLICY_SCHEMA = "education-retrieval-access-policy-v1.1"
 LOCAL_INDEXING_ACCESS_POLICY_SCHEMA_REF = (
@@ -30,7 +33,7 @@ class LocalIndexingPolicyContractError(ValueError):
         super().__init__("LOCAL_INDEXING_POLICY_CONTRACT_INVALID")
 
 
-def _wire_values(value: object) -> Any:
+def local_indexing_policy_wire_value(value: object) -> Any:
     """Preserve/reject copied-model extras BEFORE serializers can drop them."""
     remaining = 4096
 
@@ -69,6 +72,28 @@ def _wire_values(value: object) -> Any:
     return walk(value, 0)
 
 
+def require_local_indexing_namespace_scope(
+    namespaces: tuple[EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace, ...],
+    *,
+    space: EmbeddingSpace,
+    recipe: ExperimentViewRecipe,
+) -> None:
+    """The two released families share ordering and model/partition closure only."""
+    views = tuple(namespace.view for namespace in namespaces)
+    if (
+        not namespaces
+        or views != tuple(sorted(set(views)))
+        or any(
+            namespace.space_sha256 != space.space_sha256
+            or namespace.recipe_sha256 != recipe.recipe_sha256
+            or namespace.storage_partition != namespaces[0].storage_partition
+            or namespace.population_scope != namespaces[0].population_scope
+            for namespace in namespaces
+        )
+    ):
+        raise LocalIndexingPolicyContractError()
+
+
 class LocalIndexingAccessPolicy(FrozenModel):
     """Small immutable grant scope. A parsed policy is NOT an authenticated caller."""
 
@@ -102,7 +127,7 @@ class LocalIndexingAccessPolicy(FrozenModel):
     @classmethod
     def schema_before_behavior(cls, value: object) -> Any:
         try:
-            raw = _wire_values(value)
+            raw = local_indexing_policy_wire_value(value)
             if type(raw) is not dict or len(canonical_json_bytes(raw)) > (
                 MAX_LOCAL_INDEXING_ACCESS_POLICY_BYTES
             ):
@@ -114,20 +139,14 @@ class LocalIndexingAccessPolicy(FrozenModel):
 
     @model_validator(mode="after")
     def closed_derivation_scope(self) -> LocalIndexingAccessPolicy:
-        views = tuple(namespace.view for namespace in self.namespaces)
+        require_local_indexing_namespace_scope(
+            self.namespaces, space=self.space, recipe=self.recipe
+        )
         common = self.namespaces[0]
         if (
             self.space.purpose != "DOCUMENT"
             or self.access_policy_revision_id == self.source_access_policy_revision_id
             or self.source_classes != tuple(sorted(set(self.source_classes)))
-            or views != tuple(sorted(set(views)))
-            or any(
-                namespace.space_sha256 != self.space.space_sha256
-                or namespace.recipe_sha256 != self.recipe.recipe_sha256
-                or namespace.storage_partition != common.storage_partition
-                or namespace.population_scope != common.population_scope
-                for namespace in self.namespaces
-            )
             or (
                 common.population_scope == "OCCURRENCE_BACKED_PAST_EXAM"
                 and self.source_classes != ("PAST_EXAM",)
@@ -147,21 +166,56 @@ def local_indexing_access_policy_bytes(value: LocalIndexingAccessPolicy) -> byte
 def local_indexing_authorization_audit_sha256(value: LocalIndexingAccessPolicy) -> str:
     """Bind immutable authority provenance only, NOT current authentication/permission."""
     policy = LocalIndexingAccessPolicy.model_validate(value)
+    return local_indexing_authorization_scope_sha256(
+        purpose=policy.purpose,
+        service=policy.service,
+        service_policy_revision_id=policy.access_policy_revision_id,
+        service_policy_sha256=policy.content_sha256,
+        runtime_configuration_sha256=policy.runtime_configuration_sha256,
+        source_access_policy_revision_id=policy.source_access_policy_revision_id,
+        source_access_policy_sha256=policy.source_access_policy_sha256,
+    )
+
+
+def local_indexing_authorization_scope_sha256(
+    *,
+    purpose: str,
+    service: LocalIndexingServiceReference,
+    service_policy_revision_id: str,
+    service_policy_sha256: str,
+    runtime_configuration_sha256: str,
+    source_access_policy_revision_id: str,
+    source_access_policy_sha256: str,
+) -> str:
+    """Pure audit value for already validated policy families; never a data grant."""
     return content_sha256(
         {
-            "purpose": policy.purpose,
-            "service": policy.service.model_dump(mode="json"),
-            "service_policy_revision_id": policy.access_policy_revision_id,
-            "service_policy_sha256": policy.content_sha256,
-            "runtime_configuration_sha256": policy.runtime_configuration_sha256,
-            "source_access_policy_revision_id": policy.source_access_policy_revision_id,
-            "source_access_policy_sha256": policy.source_access_policy_sha256,
+            "purpose": purpose,
+            "service": service.model_dump(mode="json"),
+            "service_policy_revision_id": service_policy_revision_id,
+            "service_policy_sha256": service_policy_sha256,
+            "runtime_configuration_sha256": runtime_configuration_sha256,
+            "source_access_policy_revision_id": source_access_policy_revision_id,
+            "source_access_policy_sha256": source_access_policy_sha256,
         }
     )
 
 
+class LocalIndexingSourcePolicyScope(Protocol):
+    """The small common source-pin value, not an authentication interface."""
+
+    @property
+    def source_access_policy_revision_id(self) -> str: ...
+
+    @property
+    def source_access_policy_sha256(self) -> str: ...
+
+    @property
+    def source_classes(self) -> tuple[str, ...]: ...
+
+
 def require_local_indexing_source_policy(
-    policy: LocalIndexingAccessPolicy,
+    policy: LocalIndexingSourcePolicyScope,
     source: EducationRetrievalAccessPolicy,
 ) -> None:
     """One pure compatibility rule, never runtime identity/permission authentication."""
@@ -189,12 +243,19 @@ def _nonfinite(_value: str) -> object:
     raise LocalIndexingPolicyContractError()
 
 
-def parse_local_indexing_access_policy(raw: bytes) -> LocalIndexingAccessPolicy:
+def local_indexing_policy_json_value(raw: bytes) -> Any:
+    """Bounded duplicate-free JSON decoding shared by exact versioned parsers."""
     if type(raw) is not bytes or not 0 < len(raw) <= MAX_LOCAL_INDEXING_ACCESS_POLICY_BYTES:
         raise LocalIndexingPolicyContractError()
     try:
-        value = json.loads(raw, object_pairs_hook=_unique_object, parse_constant=_nonfinite)
-        policy = LocalIndexingAccessPolicy.model_validate(value)
+        return json.loads(raw, object_pairs_hook=_unique_object, parse_constant=_nonfinite)
+    except Exception:
+        raise LocalIndexingPolicyContractError() from None
+
+
+def parse_local_indexing_access_policy(raw: bytes) -> LocalIndexingAccessPolicy:
+    try:
+        policy = LocalIndexingAccessPolicy.model_validate(local_indexing_policy_json_value(raw))
         if local_indexing_access_policy_bytes(policy) != raw:
             raise LocalIndexingPolicyContractError()
         return policy

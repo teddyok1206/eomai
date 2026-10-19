@@ -4,10 +4,15 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from eom_catalog_contracts.similarity_context import SimilarityContext
+from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNamespace
+from eom_catalog_contracts.similarity_context_v2 import (
+    SimilarityContextRequestV2,
+    SupportedSimilarityContext,
+)
 from eom_catalog_contracts.similarity_read import (
     SimilarityContextReadRequest,
 )
+from eom_catalog_contracts.similarity_read_v2 import SimilarityContextReadRequestV2
 from eom_identity_service import OperatorAuthorizationFenceError
 from eom_orchestrator.database import build_session_factory
 from eom_workflow_runner.errors import WorkflowError
@@ -42,29 +47,60 @@ from eom_catalog_service.similarity_context_ports import (
 class CatalogSimilarityContextReadService:
     """Trusted explicit read owner; no capture, native owner, launch or latest fallback."""
 
-    def __init__(self, owner: ReferenceQuerySourceOwner) -> None:
+    def __init__(
+        self,
+        owner: ReferenceQuerySourceOwner,
+        *,
+        mixed_owner: ReferenceQuerySourceOwner | None = None,
+    ) -> None:
+        if mixed_owner is not None and (
+            mixed_owner.catalog.engine is not owner.catalog.engine
+            or not isinstance(
+                mixed_owner.configuration.registry.namespace, MixedEmbeddingIndexNamespace
+            )
+        ):
+            raise ValueError("mixed similarity reader composition differs")
         self.owner = owner
+        self.mixed_owner = mixed_owner
         self.sessions = build_session_factory(owner.catalog.engine)
 
-    def read(self, request: SimilarityContextReadRequest) -> SimilarityContext:
-        request = SimilarityContextReadRequest.model_validate(request)
+    def read(
+        self, request: SimilarityContextReadRequest | SimilarityContextReadRequestV2
+    ) -> SupportedSimilarityContext:
+        request = (
+            SimilarityContextReadRequestV2.model_validate(request)
+            if isinstance(request, SimilarityContextReadRequestV2)
+            else SimilarityContextReadRequest.model_validate(request)
+        )
+        source_owner = self.owner
+        if isinstance(request, SimilarityContextReadRequestV2):
+            if self.mixed_owner is not None:
+                source_owner = self.mixed_owner
+            elif not isinstance(
+                self.owner.configuration.registry.namespace, MixedEmbeddingIndexNamespace
+            ):
+                raise SimilarityContextReadError("QUERY_RESULT_INVALID")
         caller = EmbeddingRegistryCaller(request.actor_id)
         try:
             with self.sessions.begin() as session:
                 original = select_completed_reference_query_request(
-                    session, self.owner, caller, request.selection
+                    session, source_owner, caller, request.selection
                 )
-                provenance = PinnedArtifactReadContext(session, self.owner.settings)
-                selected = self.owner.catalog.for_pinned_similarity_request_in_session(
+                if isinstance(original.context_request, SimilarityContextRequestV2) != isinstance(
+                    request, SimilarityContextReadRequestV2
+                ):
+                    raise SimilarityContextReadError("QUERY_RESULT_INVALID")
+                provenance = PinnedArtifactReadContext(session, source_owner.settings)
+                selected = source_owner.catalog.for_pinned_similarity_request_in_session(
                     session, caller, original.context_request, artifact_reader=provenance
                 )
-                owner = self.owner
-                if selected.configuration != self.owner.catalog.configuration:
+                owner = source_owner
+                if selected.configuration != source_owner.catalog.configuration:
                     owner = CatalogReferenceQueryReadOwner(
-                        self.owner.catalog.engine,
-                        replace(self.owner.configuration, registry=selected.configuration),
-                        identity_fence=self.owner.identity,
-                        settings=self.owner.settings,
+                        source_owner.catalog.engine,
+                        replace(source_owner.configuration, registry=selected.configuration),
+                        identity_fence=source_owner.identity,
+                        settings=source_owner.settings,
                     )
                 with observe_read_stage(InferenceTransferReadStage.RESOLVE_COMPLETED_BEFORE):
                     current = owner.resolve_completed_sources(

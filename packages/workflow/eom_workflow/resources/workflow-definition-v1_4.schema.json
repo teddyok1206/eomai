@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/workflow/workflow-definition-v1_4.schema.json",
+  "title": "EOM mixed non-Codex local embedding Workflow definition 1.4",
+  "description": "One fixed mixed-source INDEX metadata successor. The numerical application step remains incremental-embedding-result@1.0; no worker role, Content Pack, executable, shell, callable or generic application registry.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "definition_key",
+    "definition_version",
+    "start_step",
+    "limits",
+    "steps"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.4"
+    },
+    "definition_key": {
+      "const": "local-embedding-index"
+    },
+    "definition_version": {
+      "const": "2.0.0"
+    },
+    "start_step": {
+      "const": "encode_batch"
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_rework_cycles",
+        "max_step_attempts"
+      ],
+      "properties": {
+        "max_rework_cycles": {
+          "type": "integer",
+          "const": 0
+        },
+        "max_step_attempts": {
+          "type": "integer",
+          "const": 1
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/localEmbeddingStep"
+        },
+        {
+          "$ref": "#/$defs/terminalStep"
+        }
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "localEmbeddingStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "type",
+        "operation",
+        "result_schema",
+        "on_success"
+      ],
+      "properties": {
+        "key": {
+          "const": "encode_batch"
+        },
+        "type": {
+          "const": "application"
+        },
+        "operation": {
+          "const": "BUILD_LOCAL_EMBEDDINGS"
+        },
+        "result_schema": {
+          "const": "incremental-embedding-result@1.0"
+        },
+        "on_success": {
+          "const": "complete"
+        }
+      }
+    },
+    "terminalStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "type",
+        "terminal_status"
+      ],
+      "properties": {
+        "key": {
+          "const": "complete"
+        },
+        "type": {
+          "const": "terminal"
+        },
+        "terminal_status": {
+          "const": "COMPLETED"
+        }
+      }
+    }
+  }
+}

@@ -233,7 +233,7 @@ def test_operation_declares_fresh_mutation_not_read_only(setup):
     assert any(parameter["name"] == "Idempotency-Key" for parameter in operation["parameters"])
 
 
-def test_openapi_declares_both_exact_inputs_without_reinterpreting_predecessor(setup):
+def test_openapi_declares_exact_inputs_without_reinterpreting_predecessors(setup):
     app, _services, _native, _pair = setup
     schema = app.openapi()
     body = schema["paths"][PATH]["post"]["requestBody"]["content"]["application/json"]["schema"]
@@ -243,15 +243,23 @@ def test_openapi_declares_both_exact_inputs_without_reinterpreting_predecessor(s
         "mapping": {
             "system-rag-reference-query-prepare-request/1.0": prefix,
             "system-rag-reference-query-prepare-request/1.1": prefix + "V11",
+            "system-rag-reference-query-prepare-request/2.0": prefix + "V2",
         },
     }
-    assert len(body["oneOf"]) == 2
+    assert len(body["oneOf"]) == 3
     old = schema["components"]["schemas"]["ReferenceQueryPrepareInput"]
     new = schema["components"]["schemas"]["ReferenceQueryPrepareInputV11"]
+    mixed = schema["components"]["schemas"]["ReferenceQueryPrepareInputV2"]
     assert "consumer_purpose" not in old["properties"]
     assert new["properties"]["consumer_purpose"]["enum"] == ["ITEM_AUTHORING", "ITEM_REVIEW"]
     assert "consumer_purpose" in new["required"]
     assert old["additionalProperties"] is False and new["additionalProperties"] is False
+    assert mixed["properties"]["consumer_purpose"]["enum"] == [
+        "PAST_EXAM_VARIATION",
+        "ITEM_AUTHORING",
+        "ITEM_REVIEW",
+    ]
+    assert "consumer_purpose" in mixed["required"] and mixed["additionalProperties"] is False
 
 
 @pytest.mark.parametrize("purpose", ("ITEM_AUTHORING", "ITEM_REVIEW"))

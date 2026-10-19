@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.item_review import MockExamTrustedEvidenceUsageReceiptPairV1
 from eom_identifiers import content_sha256
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
@@ -34,6 +35,10 @@ from eom_workflow import (
     ReviewEvidenceUsageValidationReceiptV3,
     RoleWorkerInput,
     validate_control_contract,
+)
+from eom_workflow.similarity_control import (
+    POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS,
+    parse_post_registration_grounded_plan,
 )
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import TypeAdapter
@@ -73,6 +78,26 @@ class EvidenceUsageProvenanceExpectation:
     retrieval_request_sha256: str
     graph_snapshot_revision_id: str
     evidence_manifest_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceUsagePairRequest:
+    """One exact internal occurrence, not a wire contract or authority grant."""
+
+    workflow_id: str
+    authoring_step_run_id: str
+    authoring: ArtifactPointer
+    review_step_run_id: str
+    review: ArtifactPointer
+    expected_provenance: EvidenceUsageProvenanceExpectation | None = None
+    expected_authoring_receipt_sha256: str | None = None
+    expected_review_receipt_sha256: str | None = None
+
+
+class BatchEvidenceUsageReceiptResolver(Protocol):
+    def resolve_pairs_in_session(
+        self, session: Session, requests: tuple[EvidenceUsagePairRequest, ...]
+    ) -> tuple[EvidenceUsageReceiptPair, ...]: ...
 
 
 class EvidenceUsageReceiptResolver(Protocol):
@@ -134,6 +159,23 @@ _V11_RESULT_SCHEMAS = frozenset({"authoring-result@11.0", "review-result@11.0"})
 _V12_RESULT_SCHEMAS = frozenset({"authoring-result@12.0", "review-result@12.0"})
 
 
+def _require_pair_pointers(authoring: ArtifactPointer, review: ArtifactPointer) -> None:
+    if (
+        authoring.step_key != "authoring"
+        or review.step_key != "review"
+        or (authoring.result_schema, review.result_schema)
+        not in {
+            ("authoring-result@10.0", "review-result@10.0"),
+            ("authoring-result@11.0", "review-result@11.0"),
+            ("authoring-result@12.0", "review-result@12.0"),
+        }
+        or authoring.job_id == review.job_id
+    ):
+        raise EvidenceUsageReceiptResolutionError(
+            "evidence receipt pointers are not one exact @10/@11/@12 authoring/review family"
+        )
+
+
 class OrchestratorEvidenceUsageReceiptResolver:
     """Resolve trusted receipts from exact terminal orchestrator job events.
 
@@ -165,9 +207,150 @@ class OrchestratorEvidenceUsageReceiptResolver:
         expected_authoring_receipt_sha256: str | None = None,
         expected_review_receipt_sha256: str | None = None,
     ) -> EvidenceUsageReceiptPair:
-        """Resolve one pair and bind it to persisted worker inputs and knowledge plan."""
-
+        """Preserved scalar API; validation is shared with the bounded batch."""
+        request = EvidenceUsagePairRequest(
+            workflow_id,
+            authoring_step_run_id,
+            authoring,
+            review_step_run_id,
+            review,
+            expected_provenance,
+            expected_authoring_receipt_sha256,
+            expected_review_receipt_sha256,
+        )
         pair, jobs = self._resolve_pair_with_jobs(authoring=authoring, review=review)
+        self._validate_occurrence(request, pair, jobs)
+        with self.sessions() as session:
+            plan_record = session.scalar(
+                select(ResolvedExecutionPlanRecord)
+                .where(ResolvedExecutionPlanRecord.workflow_id == workflow_id)
+                .execution_options(populate_existing=True)
+            )
+        self._validate_plan_record(request, pair, plan_record)
+        return pair
+
+    def resolve_pairs_in_session(
+        self, session: Session, requests: tuple[EvidenceUsagePairRequest, ...]
+    ) -> tuple[EvidenceUsageReceiptPair, ...]:
+        """Read at most 1,024 exact pairs in five bounded fresh metadata queries."""
+        if not isinstance(requests, tuple) or len(requests) > 1024:
+            raise EvidenceUsageReceiptResolutionError("evidence receipt batch bound is invalid")
+        if not requests:
+            return ()
+        if session.new or session.dirty or session.deleted:
+            raise EvidenceUsageReceiptResolutionError(
+                "evidence receipt session has pending mutations"
+            )
+        normalized = []
+        for request in requests:
+            if type(request) is not EvidenceUsagePairRequest:
+                raise EvidenceUsageReceiptResolutionError("evidence receipt batch input is invalid")
+            try:
+                checked = EvidenceUsagePairRequest(
+                    request.workflow_id,
+                    request.authoring_step_run_id,
+                    ArtifactPointer.model_validate(
+                        raw_similarity_contract_value(request.authoring)
+                    ),
+                    request.review_step_run_id,
+                    ArtifactPointer.model_validate(raw_similarity_contract_value(request.review)),
+                    request.expected_provenance,
+                    request.expected_authoring_receipt_sha256,
+                    request.expected_review_receipt_sha256,
+                )
+            except (TypeError, ValueError) as exc:
+                raise EvidenceUsageReceiptResolutionError(
+                    "evidence receipt batch pointer is invalid"
+                ) from exc
+            _require_pair_pointers(checked.authoring, checked.review)
+            normalized.append(checked)
+        workflows = tuple(request.workflow_id for request in normalized)
+        pointers = tuple(
+            pointer for request in normalized for pointer in (request.authoring, request.review)
+        )
+        job_ids = tuple(pointer.job_id for pointer in pointers)
+        artifact_ids = tuple(pointer.logical_artifact_id for pointer in pointers)
+        revision_ids = tuple(pointer.revision_id for pointer in pointers)
+        if len(set(workflows)) != len(workflows) or len(set(job_ids)) != len(job_ids):
+            raise EvidenceUsageReceiptResolutionError(
+                "evidence receipt batch contains duplicate occurrences"
+            )
+        jobs = {
+            row.job_id: row
+            for row in session.scalars(
+                select(JobRecord)
+                .where(JobRecord.job_id.in_(job_ids))
+                .execution_options(populate_existing=True)
+            )
+        }
+        artifacts = {
+            row.logical_artifact_id: row
+            for row in session.scalars(
+                select(ArtifactRecord)
+                .where(ArtifactRecord.logical_artifact_id.in_(artifact_ids))
+                .execution_options(populate_existing=True)
+            )
+        }
+        revisions = {
+            row.revision_id: row
+            for row in session.scalars(
+                select(ArtifactRevisionRecord)
+                .where(ArtifactRevisionRecord.revision_id.in_(revision_ids))
+                .execution_options(populate_existing=True)
+            )
+        }
+        events_by_job: dict[str, list[JobEventRecord]] = {job_id: [] for job_id in job_ids}
+        events = tuple(
+            session.scalars(
+                select(JobEventRecord)
+                .where(
+                    JobEventRecord.job_id.in_(job_ids), JobEventRecord.event == "ARTIFACT_COMMITTED"
+                )
+                .limit(len(job_ids) + 1)
+                .execution_options(populate_existing=True)
+            )
+        )
+        if len(events) > len(job_ids):
+            raise EvidenceUsageReceiptResolutionError(
+                "evidence receipt terminal event cardinality differs"
+            )
+        for event in events:
+            events_by_job[event.job_id].append(event)
+        plans = tuple(
+            session.scalars(
+                select(ResolvedExecutionPlanRecord)
+                .where(ResolvedExecutionPlanRecord.workflow_id.in_(workflows))
+                .limit(len(workflows) + 1)
+                .execution_options(populate_existing=True)
+            )
+        )
+        by_workflow = {row.workflow_id: row for row in plans}
+        if len(by_workflow) != len(plans):
+            raise EvidenceUsageReceiptResolutionError("evidence receipt batch has duplicate plans")
+        result = []
+        for request in normalized:
+            pair = self._pair_from_records(
+                (request.authoring, request.review), jobs, artifacts, revisions, events_by_job
+            )
+            self._validate_occurrence(request, pair, jobs)
+            self._validate_plan_record(request, pair, by_workflow.get(request.workflow_id))
+            result.append(pair)
+        return tuple(result)
+
+    @staticmethod
+    def _validate_occurrence(
+        request: EvidenceUsagePairRequest,
+        pair: EvidenceUsageReceiptPair,
+        jobs: dict[str, JobRecord],
+    ) -> None:
+        authoring, review = request.authoring, request.review
+        workflow_id = request.workflow_id
+        authoring_step_run_id, review_step_run_id = (
+            request.authoring_step_run_id,
+            request.review_step_run_id,
+        )
+        expected_authoring_receipt_sha256 = request.expected_authoring_receipt_sha256
+        expected_review_receipt_sha256 = request.expected_review_receipt_sha256
         contexts = (
             (authoring, authoring_step_run_id, pair.authoring, "authoring"),
             (review, review_step_run_id, pair.review, "review"),
@@ -215,19 +398,20 @@ class OrchestratorEvidenceUsageReceiptResolver:
                 "compact evidence receipt hash differs from the canonical terminal receipt"
             )
 
-        with self.sessions() as session:
-            plan_record = session.scalar(
-                select(ResolvedExecutionPlanRecord).where(
-                    ResolvedExecutionPlanRecord.workflow_id == workflow_id
-                )
-            )
+    def _validate_plan_record(
+        self,
+        request: EvidenceUsagePairRequest,
+        pair: EvidenceUsageReceiptPair,
+        plan_record: ResolvedExecutionPlanRecord | None,
+    ) -> None:
+        workflow_id, expected_provenance = request.workflow_id, request.expected_provenance
         try:
             plan = None
             if plan_record is not None:
                 plan = (
-                    ResolvedExecutionPlanV19.model_validate(plan_record.canonical_document)
+                    parse_post_registration_grounded_plan(plan_record.canonical_document)
                     if plan_record.canonical_document.get("schema_version")
-                    == "resolved-execution-plan/19.0"
+                    in POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS
                     else ResolvedExecutionPlanV17.model_validate(plan_record.canonical_document)
                     if plan_record.canonical_document.get("schema_version")
                     == "resolved-execution-plan/17.0"
@@ -257,7 +441,6 @@ class OrchestratorEvidenceUsageReceiptResolver:
         self._validate_plan_binding(pair, plan)
         if expected_provenance is not None:
             self._validate_expected_provenance(plan, expected_provenance)
-        return pair
 
     def verify_mock_exam_pair(
         self,
@@ -284,22 +467,8 @@ class OrchestratorEvidenceUsageReceiptResolver:
         authoring: ArtifactPointer,
         review: ArtifactPointer,
     ) -> tuple[EvidenceUsageReceiptPair, dict[str, JobRecord]]:
+        _require_pair_pointers(authoring, review)
         pointers = (authoring, review)
-        result_family = (authoring.result_schema, review.result_schema)
-        if (
-            authoring.step_key != "authoring"
-            or review.step_key != "review"
-            or result_family
-            not in {
-                ("authoring-result@10.0", "review-result@10.0"),
-                ("authoring-result@11.0", "review-result@11.0"),
-                ("authoring-result@12.0", "review-result@12.0"),
-            }
-            or authoring.job_id == review.job_id
-        ):
-            raise EvidenceUsageReceiptResolutionError(
-                "evidence receipt pointers are not one exact @10/@11/@12 authoring/review family"
-            )
         job_ids = tuple(pointer.job_id for pointer in pointers)
         artifact_ids = tuple(pointer.logical_artifact_id for pointer in pointers)
         revision_ids = tuple(pointer.revision_id for pointer in pointers)
@@ -333,6 +502,17 @@ class OrchestratorEvidenceUsageReceiptResolver:
             ):
                 events_by_job.setdefault(event.job_id, []).append(event)
 
+        pair = self._pair_from_records(pointers, jobs, artifacts, revisions, events_by_job)
+        return pair, jobs
+
+    def _pair_from_records(
+        self,
+        pointers: tuple[ArtifactPointer, ArtifactPointer],
+        jobs: dict[str, JobRecord],
+        artifacts: dict[str, ArtifactRecord],
+        revisions: dict[str, ArtifactRevisionRecord],
+        events_by_job: dict[str, list[JobEventRecord]],
+    ) -> EvidenceUsageReceiptPair:
         resolved = tuple(
             self._validate_receipt_record(
                 pointer=pointer,
@@ -376,7 +556,7 @@ class OrchestratorEvidenceUsageReceiptResolver:
                 "evidence receipts do not match their authoring/review roles"
             )
         self._validate_pair(pair)
-        return pair, jobs
+        return pair
 
     @staticmethod
     def _artifact_pointer(pointer: Any) -> ArtifactPointer:

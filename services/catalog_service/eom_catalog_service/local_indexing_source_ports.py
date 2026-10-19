@@ -6,11 +6,13 @@ import re
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
+from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
 from eom_catalog_contracts.inference_transfer_embedding import EmbeddingSpace
 from eom_catalog_contracts.inference_transfer_experiment import ExperimentViewRecipe
 from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
-from eom_catalog_contracts.local_indexing_policy import LocalIndexingAccessPolicy
+from eom_catalog_contracts.local_indexing_mixed_policy import SupportedLocalIndexingAccessPolicy
+from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNamespace
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.inference_transfer_scope import (
@@ -42,7 +44,7 @@ class LocalIndexingSourceReadIntent:
     service_policy_revision_id: str
     service_policy_sha256: str
     source_classes: tuple[Literal["APPROVED_ITEM", "PAST_EXAM"], ...]
-    namespace: EmbeddingIndexNamespace
+    namespace: EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace
     space: EmbeddingSpace
     recipe: ExperimentViewRecipe
     native_execution_policy_sha256: str
@@ -89,16 +91,22 @@ class LocalIndexingSourceReadIntent:
             or len(self.source_revision_ids) > self.maximum_candidates
         ):
             raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_SCOPE_INVALID")
+        if type(self.namespace) not in (EmbeddingIndexNamespace, MixedEmbeddingIndexNamespace):
+            raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_SCOPE_INVALID")
         for name, model in (
             ("graph_snapshot", KnowledgeGraphSnapshotPointer),
-            ("namespace", EmbeddingIndexNamespace),
+            ("namespace", type(self.namespace)),
             ("space", EmbeddingSpace),
             ("recipe", ExperimentViewRecipe),
         ):
             value = getattr(self, name)
             if type(value) is not model:
                 raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_SCOPE_INVALID")
-            object.__setattr__(self, name, model.model_validate(value.model_dump(mode="json")))
+            try:
+                checked = model.model_validate(raw_similarity_contract_value(value))
+            except ValueError:
+                raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_SCOPE_INVALID") from None
+            object.__setattr__(self, name, checked)
         if (
             self.namespace.space_sha256 != self.space.space_sha256
             or self.namespace.recipe_sha256 != self.recipe.recipe_sha256
@@ -119,6 +127,6 @@ class LocalIndexingSourceAuthorization(Protocol):
         self,
         session: Session,
         intent: LocalIndexingSourceReadIntent,
-    ) -> LocalIndexingAccessPolicy:
+    ) -> SupportedLocalIndexingAccessPolicy:
         """Fence actual runtime/DB identity and resolve the exact current data policy."""
         ...

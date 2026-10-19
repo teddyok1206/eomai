@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from typing import Literal
 
 from eom_catalog_contracts.assessment_item import (
     AssessmentItemContent,
@@ -23,6 +24,7 @@ from eom_catalog_contracts.assessment_item import (
     StatementSetBlock,
     TableBlock,
 )
+from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.inference_transfer_experiment import (
     CanonicalExperimentItemText,
     ExperimentMetadataField,
@@ -214,25 +216,61 @@ def _extract_checked_item_metadata(
     report: KnowledgeAnalysisSolutionReport,
     evidence: KnowledgeSolutionEvidencePointer,
 ) -> EvidenceBoundItemMetadata:
+    fields, limitations = _original_item_metadata(item, source)
+
+    summaries = tuple(
+        link.summary for link in report.concept_assessment_links if link.assessment_pattern_node_ids
+    )
+    if summaries:
+        limitations.add(PATTERN_SUMMARY_LIMITATION)
+        for summary in summaries:
+            _append_metadata(
+                fields,
+                limitations,
+                key="ASSESSMENT_PATTERN",
+                value=summary,
+                basis="ACCEPTED_SOLUTION",
+                source_sha256=evidence.solution_report.sha256,
+            )
+    else:
+        limitations.add("Accepted assessment-pattern link summary is unavailable.")
+    return _bounded_metadata(fields, limitations)
+
+
+def _append_metadata(
+    fields: dict[tuple[str, str, str], ExperimentMetadataField],
+    limitations: set[str],
+    *,
+    key: str,
+    value: str,
+    basis: Literal["ORIGINAL_ITEM", "ACCEPTED_SOLUTION"],
+    source_sha256: str,
+) -> None:
+    if len(value) > _MAXIMUM_METADATA_VALUE_CHARACTERS:
+        limitations.add(f"{key} metadata value exceeds 512 characters and was wholly omitted.")
+        return
+    field = ExperimentMetadataField.model_validate(
+        {"key": key, "value": value, "basis": basis, "source_sha256": source_sha256}
+    )
+    fields[(field.key, field.value, field.basis)] = field
+
+
+def _original_item_metadata(
+    item: AssessmentItemContentContract,
+    source: KnowledgeAnalysisSourceArtifactMemberV2,
+) -> tuple[dict[tuple[str, str, str], ExperimentMetadataField], set[str]]:
     fields: dict[tuple[str, str, str], ExperimentMetadataField] = {}
     limitations = {STRUCTURAL_METADATA_LIMITATION}
 
-    def append(key: str, value: str, *, accepted_solution: bool = False) -> None:
-        if len(value) > _MAXIMUM_METADATA_VALUE_CHARACTERS:
-            limitations.add(f"{key} metadata value exceeds 512 characters and was wholly omitted.")
-            return
-        basis = "ACCEPTED_SOLUTION" if accepted_solution else "ORIGINAL_ITEM"
-        field = ExperimentMetadataField.model_validate(
-            {
-                "key": key,
-                "value": value,
-                "basis": basis,
-                "source_sha256": evidence.solution_report.sha256
-                if accepted_solution
-                else source.sha256,
-            }
+    def append(key: str, value: str) -> None:
+        _append_metadata(
+            fields,
+            limitations,
+            key=key,
+            value=value,
+            basis="ORIGINAL_ITEM",
+            source_sha256=source.sha256,
         )
-        fields[(field.key, field.value, field.basis)] = field
 
     if isinstance(item, AssessmentItemContent):
         for block in item.body:
@@ -252,15 +290,13 @@ def _extract_checked_item_metadata(
             f"statements={len(item.statements)};choices={len(item.choices)}",
         )
 
-    summaries = tuple(
-        link.summary for link in report.concept_assessment_links if link.assessment_pattern_node_ids
-    )
-    if summaries:
-        limitations.add(PATTERN_SUMMARY_LIMITATION)
-        for summary in summaries:
-            append("ASSESSMENT_PATTERN", summary, accepted_solution=True)
-    else:
-        limitations.add("Accepted assessment-pattern link summary is unavailable.")
+    return fields, limitations
+
+
+def _bounded_metadata(
+    fields: dict[tuple[str, str, str], ExperimentMetadataField],
+    limitations: set[str],
+) -> EvidenceBoundItemMetadata:
     if len(fields) > _MAXIMUM_METADATA_FIELDS:
         limitations.add(
             "Metadata field budget exceeds 32; the entire metadata view is unavailable."
@@ -269,6 +305,18 @@ def _extract_checked_item_metadata(
     return EvidenceBoundItemMetadata(
         fields=tuple(fields[key] for key in sorted(fields)), limitations=tuple(sorted(limitations))
     )
+
+
+def extract_original_item_metadata(
+    *,
+    item: AssessmentItemContentContract,
+    original_source: KnowledgeAnalysisSourceArtifactMemberV2,
+) -> EvidenceBoundItemMetadata:
+    """Question-only structural metadata; no fake report or inferred science/DAG."""
+    raw_similarity_contract_value(item)
+    raw_similarity_contract_value(original_source)
+    checked_item, source = _validated_item(item, original_source)
+    return _bounded_metadata(*_original_item_metadata(checked_item, source))
 
 
 def project_staged_item_entry(

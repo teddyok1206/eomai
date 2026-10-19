@@ -26,7 +26,8 @@ def private_step_migration():
 
 def test_private_check_preserves_frozen_0054_and_matches_current_model(monkeypatch):
     module = private_step_migration()
-    assert module.revision == CURRENT_MIGRATION_REVISION == "20261017_0057"
+    assert module.revision == "20261017_0057"
+    assert CURRENT_MIGRATION_REVISION == "20261019_0058"
     assert module.down_revision == "20261017_0056"
     assert module._PREVIOUS_PREDICATE == query_migration()._PREDICATE
     guard = next(

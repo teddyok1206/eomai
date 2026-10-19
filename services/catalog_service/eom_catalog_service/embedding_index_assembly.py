@@ -85,6 +85,51 @@ def assemble_embedding_source_binding(
     return EmbeddingSourceBinding.model_validate(body | {"binding_sha256": content_sha256(body)})
 
 
+def select_embedding_index_rows(
+    demanded_encodings: tuple[EmbeddingEncodingIdentity, ...],
+    available_rows: tuple[RegisteredEmbeddingRow, ...],
+) -> dict[str, RegisteredEmbeddingRow]:
+    """Pure exact encoding lookup shared by released and mixed index assembly."""
+    if type(available_rows) is not tuple or len(available_rows) > MAX_EMBEDDING_ROWS:
+        raise ValueError("EMBEDDING_INDEX_ASSEMBLY_LIMIT")
+    demands = {encoding.encoding_sha256: encoding for encoding in demanded_encodings}
+    rows: dict[str, RegisteredEmbeddingRow] = {}
+    for value in available_rows:
+        encoding = EmbeddingEncodingIdentity.model_validate(value.encoding.model_dump(mode="json"))
+        ref = EmbeddingVectorRowRef.model_validate(value.row_ref.model_dump(mode="json"))
+        key = encoding.encoding_sha256
+        if key in rows or demands.get(key) != encoding or ref.encoding_sha256 != key:
+            raise ValueError("EMBEDDING_INDEX_ASSEMBLY_ROW_INVALID")
+        rows[key] = RegisteredEmbeddingRow(encoding, ref)
+    return rows
+
+
+def select_embedding_index_shards(
+    needed: frozenset[ArtifactMemberPointer],
+    shards: tuple[tuple[ArtifactMemberPointer, EmbeddingVectorShardManifest], ...],
+) -> tuple[tuple[ArtifactMemberPointer, EmbeddingVectorShardManifest], ...]:
+    """Exact required pointer membership with stable order; bytes are verified later."""
+    if type(shards) is not tuple or len(shards) > MAX_EMBEDDING_ROWS:
+        raise ValueError("EMBEDDING_INDEX_ASSEMBLY_LIMIT")
+    by_pointer = {pointer: shard for pointer, shard in shards}
+    if len(by_pointer) != len(shards):
+        raise ValueError("EMBEDDING_INDEX_ASSEMBLY_SHARD_DUPLICATE")
+    if not needed.issubset(by_pointer):
+        raise ValueError("EMBEDDING_INDEX_ASSEMBLY_SHARD_MISSING")
+    return tuple(
+        (pointer, by_pointer[pointer])
+        for pointer in sorted(
+            needed,
+            key=lambda pointer: (
+                pointer.artifact_id,
+                pointer.artifact_revision_id,
+                pointer.member_path,
+                pointer.sha256,
+            ),
+        )
+    )
+
+
 def assemble_embedding_index_revision(
     plan: LocalEmbeddingSourcePlan,
     *,
@@ -111,15 +156,7 @@ def assemble_embedding_index_revision(
         or len(shards) > MAX_EMBEDDING_ROWS
     ):
         raise ValueError("EMBEDDING_INDEX_ASSEMBLY_LIMIT")
-    demands = {d.encoding.encoding_sha256: d.encoding for d in plan.demands}
-    rows: dict[str, RegisteredEmbeddingRow] = {}
-    for value in available_rows:
-        encoding = EmbeddingEncodingIdentity.model_validate(value.encoding.model_dump(mode="json"))
-        ref = EmbeddingVectorRowRef.model_validate(value.row_ref.model_dump(mode="json"))
-        key = encoding.encoding_sha256
-        if key in rows or demands.get(key) != encoding or ref.encoding_sha256 != key:
-            raise ValueError("EMBEDDING_INDEX_ASSEMBLY_ROW_INVALID")
-        rows[key] = RegisteredEmbeddingRow(encoding, ref)
+    rows = select_embedding_index_rows(tuple(d.encoding for d in plan.demands), available_rows)
     sources = {s.item_revision_id: s for s in plan.sources}
     bindings = []
     for demand in plan.demands:
@@ -142,17 +179,8 @@ def assemble_embedding_index_revision(
         )
     if not bindings:
         raise ValueError("EMBEDDING_INDEX_ASSEMBLY_NO_AVAILABLE_BINDING")
-    by_pointer = {pointer: shard for pointer, shard in shards}
-    if len(by_pointer) != len(shards):
-        raise ValueError("EMBEDDING_INDEX_ASSEMBLY_SHARD_DUPLICATE")
-    needed = {binding.row_ref.shard_manifest for binding in bindings}
-    if not needed.issubset(by_pointer):
-        raise ValueError("EMBEDDING_INDEX_ASSEMBLY_SHARD_MISSING")
-    selected = tuple(
-        (p, by_pointer[p])
-        for p in sorted(
-            needed, key=lambda p: (p.artifact_id, p.artifact_revision_id, p.member_path, p.sha256)
-        )
+    selected = select_embedding_index_shards(
+        frozenset(binding.row_ref.shard_manifest for binding in bindings), shards
     )
     body = {
         "schema_version": "embedding-index-manifest/1.0",

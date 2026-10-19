@@ -106,7 +106,8 @@ def published_launch(value, tmp_path, ordinal, *, selected_invocation=None):
         primary_file="worker-result.json",
         artifact_type=BENCHMARK_LAUNCH_ARTIFACT_TYPE,
         manifest_version=CONTROL_FILE_SET_PROTOCOL,
-        idempotency_key=f"synthetic-timing-{ordinal}",
+        # Reusing the disposable DB must not alias independent original launches.
+        idempotency_key=f"synthetic-timing-{invocation.execution_id}-{ordinal}",
         source_commit="a" * 40,
         created_at=NOW,
     )

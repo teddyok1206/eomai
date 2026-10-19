@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/system-rag-similarity-reader-configuration/2.0",
+  "title": "Fixed optional mixed Catalog similarity reader configuration V2; never authority",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "corpus_id", "namespace", "document_space", "recipe", "source_classes", "native_execution_policy", "native_execution_policy_sha256", "runtime_bundle", "database_owner"],
+  "properties": {
+    "schema_version": {"const": "system-rag-similarity-reader-configuration/2.0"},
+    "namespace": {"$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/namespace"},
+    "corpus_id": {"$ref": "eom://schemas/knowledge/system-rag-similarity-reader-configuration/1.0#/properties/corpus_id"},
+    "document_space": {"allOf": [
+      {"$ref": "eom://schemas/knowledge/system-rag-similarity-reader-configuration/1.0#/properties/document_space"},
+      {"properties": {"runtime": {"properties": {"device": {"const": "CPU"}}}}}
+    ]},
+    "recipe": {"$ref": "eom://schemas/knowledge/system-rag-similarity-reader-configuration/1.0#/properties/recipe"},
+    "source_classes": {"$ref": "eom://schemas/knowledge/system-rag-similarity-reader-configuration/1.0#/properties/source_classes"},
+    "native_execution_policy": {"$ref": "eom://schemas/knowledge/system-rag-similarity-reader-configuration/1.0#/properties/native_execution_policy"},
+    "native_execution_policy_sha256": {"$ref": "eom://schemas/knowledge/system-rag-similarity-reader-configuration/1.0#/properties/native_execution_policy_sha256"},
+    "runtime_bundle": {"$ref": "eom://schemas/knowledge/system-rag-similarity-reader-configuration/1.0#/properties/runtime_bundle"},
+    "database_owner": {"$ref": "eom://schemas/knowledge/system-rag-similarity-reader-configuration/1.0#/properties/database_owner"}
+  }
+}

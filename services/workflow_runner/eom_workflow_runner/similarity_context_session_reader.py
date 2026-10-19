@@ -3,8 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import overload
 
 from eom_catalog_contracts.similarity_context import SimilarityContext, SimilarityContextRequest
+from eom_catalog_contracts.similarity_context_v2 import (
+    SimilarityContextRequestV2,
+    SimilarityContextV2,
+    SupportedSimilarityContext,
+    SupportedSimilarityContextRequest,
+)
 from eom_catalog_service.embedding_registry_catalog_adapter import CatalogEmbeddingRegistryVerifier
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
@@ -33,7 +40,7 @@ class _SessionSources:
     population_read_set: InferenceTransferPopulationReadSet | None = None
 
     def prepare_similarity_context(
-        self, caller: EmbeddingRegistryCaller, request: SimilarityContextRequest
+        self, caller: EmbeddingRegistryCaller, request: SupportedSimilarityContextRequest
     ) -> PreparedSimilarityContext:
         if self.artifact_reader is None:
             return self.catalog.prepare_similarity_context_in_session(self.session, caller, request)
@@ -52,7 +59,7 @@ class _SessionSources:
     def read_similarity_views(
         self,
         caller: EmbeddingRegistryCaller,
-        request: SimilarityContextRequest,
+        request: SupportedSimilarityContextRequest,
         prepared: PreparedSimilarityContext,
     ) -> tuple[ResolvedPinnedEmbeddingIndex, ...]:
         if self.artifact_reader is None:
@@ -75,7 +82,7 @@ class _SessionSources:
     def reauthorize_similarity_context(
         self,
         caller: EmbeddingRegistryCaller,
-        request: SimilarityContextRequest,
+        request: SupportedSimilarityContextRequest,
         prepared: PreparedSimilarityContext,
     ) -> None:
         if self.prepare_similarity_context(caller, request) != prepared:
@@ -90,7 +97,7 @@ class _SessionQuery:
     def resolve_reference_query(
         self,
         caller: EmbeddingRegistryCaller,
-        request: SimilarityContextRequest,
+        request: SupportedSimilarityContextRequest,
         prepared: PreparedSimilarityContext,
     ) -> VerifiedReferenceQueryRead:
         return self.query.resolve_reference_query_in_session(
@@ -104,12 +111,28 @@ class CatalogSimilaritySessionContextReader:
     def __init__(self, query: CatalogCompletedReferenceQueryRead) -> None:
         self.query = query
 
+    @overload
     def compose_in_session(
         self,
         session: Session,
         caller: EmbeddingRegistryCaller,
         request: SimilarityContextRequest,
-    ) -> SimilarityContext:
+    ) -> SimilarityContext: ...
+
+    @overload
+    def compose_in_session(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        request: SimilarityContextRequestV2,
+    ) -> SimilarityContextV2: ...
+
+    def compose_in_session(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        request: SupportedSimilarityContextRequest,
+    ) -> SupportedSimilarityContext:
         root = session.get_transaction()
         if root is None or not root.is_active or session.in_nested_transaction():
             raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")

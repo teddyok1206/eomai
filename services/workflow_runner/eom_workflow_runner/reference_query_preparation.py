@@ -5,9 +5,10 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Literal
 
-from eom_catalog_contracts.similarity_context import (
-    SimilarityContextRequest,
-    parse_similarity_context_request,
+from eom_catalog_contracts.similarity_context_v2 import (
+    SimilarityContextRequestV2,
+    SupportedSimilarityContextRequest,
+    parse_supported_similarity_context_request,
 )
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
@@ -151,7 +152,7 @@ def prepare_and_start_reference_query_in_session(
     session: Session,
     *,
     caller: EmbeddingRegistryCaller,
-    context: SimilarityContextRequest,
+    context: SupportedSimilarityContextRequest,
     idempotency_key: str,
     owner: CatalogReferenceQueryOwnerAdmission,
     executor: ReferenceQueryNativeExecutor,
@@ -162,7 +163,7 @@ def prepare_and_start_reference_query_in_session(
     atomic admission. Both preparation entrypoints share this single start path.
     """
     _require_preparation_root(session, owner, caller)
-    context = parse_similarity_context_request(context)
+    context = parse_supported_similarity_context_request(context)
     original = _current_query_request(session, owner, caller, idempotency_key)
     return _start_with_pinned_context(
         session,
@@ -179,7 +180,7 @@ def _start_with_pinned_context(
     session: Session,
     *,
     caller: EmbeddingRegistryCaller,
-    context: SimilarityContextRequest,
+    context: SupportedSimilarityContextRequest,
     original: SupportedReferenceQueryWorkflowRequest | None,
     idempotency_key: str,
     owner: CatalogReferenceQueryOwnerAdmission,
@@ -211,9 +212,13 @@ def _start_with_pinned_context(
             raise ValueError("REFERENCE_QUERY_INITIAL_NAMESPACE_MISMATCH")
         policy, bundle = read_pinned_reference_query_controls(reader, config)
         body = {
-            "schema_version": "reference-query-workflow-request/1.0"
-            if context.consumer_purpose == "PAST_EXAM_VARIATION"
-            else "reference-query-workflow-request/1.1",
+            "schema_version": "reference-query-workflow-request/2.0"
+            if isinstance(context, SimilarityContextRequestV2)
+            else (
+                "reference-query-workflow-request/1.0"
+                if context.consumer_purpose == "PAST_EXAM_VARIATION"
+                else "reference-query-workflow-request/1.1"
+            ),
             "request_name": "REFERENCE_QUERY_WORKFLOW_REQUEST",
             "purpose": "REFERENCE_QUERY",
             "workflow_definition_key": "local-embedding-reference-query",

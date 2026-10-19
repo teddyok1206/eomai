@@ -12,15 +12,24 @@ from eom_identifiers import (
     new_logical_artifact_id,
     new_revision_id,
 )
+from eom_workflow.local_embedding_encoding_dispatch import (
+    SupportedEmbeddingAssociation,
+    SupportedEmbeddingAttachedEvent,
+    SupportedEmbeddingCompletedEvent,
+    SupportedEmbeddingIntent,
+    parse_supported_embedding_association,
+    parse_supported_embedding_attached,
+    parse_supported_embedding_completed,
+    parse_supported_embedding_message,
+)
 from eom_workflow.local_embedding_encoding_job import (
-    EmbeddingEncodingAttachedEvent,
-    EmbeddingEncodingCompletedEvent,
     EmbeddingEncodingJobReference,
     EmbeddingEncodingJobRequest,
-    LocalEmbeddingLaunchAssociation,
-    LocalEmbeddingLaunchIntent,
     LocalEmbeddingOwnedJob,
-    parse_embedding_encoding_job_message,
+)
+from eom_workflow.local_embedding_encoding_ownership_v2 import (
+    EMBEDDING_ENCODING_OWNERSHIP_V2_SCHEMA_SHA256,
+    LocalEmbeddingLaunchIntentV2,
 )
 from eom_workflow.schemas import LOCAL_EMBEDDING_SCHEMA_RESOURCES
 from pydantic import BaseModel
@@ -53,13 +62,15 @@ class EmbeddingEncodingReservationError(RuntimeError):
 class EncodingReservation:
     job: JobRecord
     owned_job: LocalEmbeddingOwnedJob
-    owner: EmbeddingEncodingAttachedEvent
-    completion: EmbeddingEncodingCompletedEvent | None
+    owner: SupportedEmbeddingAttachedEvent
+    completion: SupportedEmbeddingCompletedEvent | None
 
 
-def _message[Message: BaseModel](value: object, expected: type[Message]) -> Message:
+def _message[Message: BaseModel](
+    value: object, expected: type[Message] | tuple[type[Message], ...]
+) -> Message:
     try:
-        parsed = parse_embedding_encoding_job_message(value)
+        parsed = parse_supported_embedding_message(value)
         if not isinstance(parsed, expected):
             raise ValueError("different native record")
         return parsed
@@ -116,6 +127,24 @@ class EmbeddingEncodingReservationStorage:
 
     @staticmethod
     def prepare_protocol(session: Session) -> None:
+        expected = next(
+            row[3] for row in LOCAL_EMBEDDING_SCHEMA_RESOURCES if row[0] == "encoding-job"
+        )
+        EmbeddingEncodingReservationStorage._prepare_protocol(
+            session, ENCODING_PROTOCOL_VERSION, expected
+        )
+
+    @staticmethod
+    def prepare_mixed_ownership_protocol(session: Session) -> None:
+        """Explicit deployment preparation; never called by runtime read or claim."""
+        EmbeddingEncodingReservationStorage._prepare_protocol(
+            session,
+            "embedding-encoding-ownership/2.0",
+            EMBEDDING_ENCODING_OWNERSHIP_V2_SCHEMA_SHA256,
+        )
+
+    @staticmethod
+    def _prepare_protocol(session: Session, version: str, expected: str) -> None:
         """Explicit deployment-owner initialization, NEVER called by runtime reads.
 
         Only the actual table-owner login may prepare the released hash. An
@@ -139,15 +168,14 @@ class EmbeddingEncodingReservationStorage:
         )
         if owner is not True:
             raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_PROTOCOL_OWNER_REQUIRED")
-        expected = next(
-            row[3] for row in LOCAL_EMBEDDING_SCHEMA_RESOURCES if row[0] == "encoding-job"
-        )
         session.execute(
             postgres_insert(ProtocolVersionRecord)
-            .values(version=ENCODING_PROTOCOL_VERSION, schema_sha256=expected)
+            .values(version=version, schema_sha256=expected)
             .on_conflict_do_nothing(index_elements=[ProtocolVersionRecord.version])
         )
-        EmbeddingEncodingReservationStorage.require_protocol(session)
+        record = session.get(ProtocolVersionRecord, version, populate_existing=True)
+        if record is None or record.schema_sha256 != expected:
+            raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_PROTOCOL_UNAVAILABLE")
 
     @staticmethod
     def require_protocol(session: Session) -> None:
@@ -158,6 +186,15 @@ class EmbeddingEncodingReservationStorage:
             ProtocolVersionRecord, ENCODING_PROTOCOL_VERSION, populate_existing=True
         )
         if record is None or record.schema_sha256 != expected:
+            raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_PROTOCOL_UNAVAILABLE")
+
+    @staticmethod
+    def require_mixed_ownership_protocol(session: Session) -> None:
+        """Read-only prerequisite, separate from the unchanged numerical protocol1."""
+        record = session.get(
+            ProtocolVersionRecord, "embedding-encoding-ownership/2.0", populate_existing=True
+        )
+        if record is None or record.schema_sha256 != EMBEDDING_ENCODING_OWNERSHIP_V2_SCHEMA_SHA256:
             raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_PROTOCOL_UNAVAILABLE")
 
     @staticmethod
@@ -270,17 +307,17 @@ class EmbeddingEncodingReservationStorage:
     def reservations(
         cls, session: Session, jobs: tuple[JobRecord, ...]
     ) -> tuple[EncodingReservation, ...]:
-        owners: dict[str, EmbeddingEncodingAttachedEvent] = {}
-        completed: dict[str, EmbeddingEncodingCompletedEvent] = {}
+        owners: dict[str, SupportedEmbeddingAttachedEvent] = {}
+        completed: dict[str, SupportedEmbeddingCompletedEvent] = {}
         for event in cls.events(
             session, tuple(job.job_id for job in jobs), (OWNED_EVENT, COMPLETED_EVENT)
         ):
             if event.job_id in (owners if event.event == OWNED_EVENT else completed):
                 raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_HISTORY_INVALID")
             if event.event == OWNED_EVENT:
-                owners[event.job_id] = _message(event.data, EmbeddingEncodingAttachedEvent)
+                owners[event.job_id] = parse_supported_embedding_attached(event.data)
             else:
-                completed[event.job_id] = _message(event.data, EmbeddingEncodingCompletedEvent)
+                completed[event.job_id] = parse_supported_embedding_completed(event.data)
         records = []
         for job in jobs:
             original = owned_job(job)
@@ -299,15 +336,13 @@ class EmbeddingEncodingReservationStorage:
         return tuple(records)
 
     @classmethod
-    def association(
-        cls, session: Session, launch_id: str
-    ) -> LocalEmbeddingLaunchAssociation | None:
+    def association(cls, session: Session, launch_id: str) -> SupportedEmbeddingAssociation | None:
         events = cls.events(session, (launch_id,), (ASSOCIATION_EVENT,))
         if len(events) > 1:
             raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_HISTORY_INVALID")
         if not events:
             return None
-        return _message(events[0].data, LocalEmbeddingLaunchAssociation)
+        return parse_supported_embedding_association(events[0].data)
 
     @classmethod
     def owned_launch_references(
@@ -325,7 +360,7 @@ class EmbeddingEncodingReservationStorage:
         )
         owners = []
         for event in cls.events(session, job_ids, (OWNED_EVENT,)):
-            attached = _message(event.data, EmbeddingEncodingAttachedEvent)
+            attached = parse_supported_embedding_attached(event.data)
             if attached.intent.native_launch_job_id == launch_id:
                 owners.append(attached.owned_job.job_reference)
         return tuple(owners)
@@ -375,7 +410,7 @@ class EmbeddingEncodingReservationStorage:
         session: Session,
         jobs: tuple[JobRecord, ...],
         created: frozenset[str],
-        intent: LocalEmbeddingLaunchIntent,
+        intent: SupportedEmbeddingIntent,
     ) -> None:
         sequences = cls.sequences(session, jobs)
         attachments = tuple(
@@ -393,9 +428,7 @@ class EmbeddingEncodingReservationStorage:
         attached = {}
         by_id = {job.job_id: job for job in jobs}
         for event in attachments:
-            value: EmbeddingEncodingAttachedEvent = _message(
-                event.data, EmbeddingEncodingAttachedEvent
-            )
+            value: SupportedEmbeddingAttachedEvent = parse_supported_embedding_attached(event.data)
             if (
                 event.job_id in attached
                 or value.intent != intent
@@ -407,13 +440,15 @@ class EmbeddingEncodingReservationStorage:
             if job.job_id in attached:
                 continue
             body = {
-                "schema_version": ENCODING_PROTOCOL_VERSION,
+                "schema_version": "embedding-encoding-ownership/2.0"
+                if isinstance(intent, LocalEmbeddingLaunchIntentV2)
+                else ENCODING_PROTOCOL_VERSION,
                 "record_type": "ATTACHED",
                 "owned_job": owned_job(job).model_dump(mode="json"),
                 "intent": intent.model_dump(mode="json"),
             }
             document = body | {"event_sha256": content_sha256(body)}
-            _message(document, EmbeddingEncodingAttachedEvent)
+            parse_supported_embedding_attached(document)
             if job.job_id in created:
                 cls.append(session, job, sequences, "JOB_CREATED", {})
                 cls.append(

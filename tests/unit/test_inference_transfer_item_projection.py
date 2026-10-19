@@ -27,6 +27,7 @@ from eom_catalog_service.inference_transfer_item_projection import (
     STRUCTURAL_METADATA_LIMITATION,
     ItemProjectionUnavailable,
     extract_evidence_bound_item_metadata,
+    extract_original_item_metadata,
     project_staged_item_entry,
     render_no_solution_item_text,
 )
@@ -648,6 +649,32 @@ def test_source_file_hash_is_not_falsely_recomputed_from_normalized_model_json()
     result = render_no_solution_item_text(item=item, original_source=source, recipe=_recipe())
     assert result.original_source.sha256 == sha("d")
     assert result.text_sha256 == content_sha256(result.text) != source.sha256
+
+
+@pytest.mark.parametrize("version", [1, 2, 3])
+def test_original_only_metadata_reuses_exact_legacy_structural_fields(version: int) -> None:
+    item = _item_v1() if version == 1 else _item_content_team(version)
+    source = _source(item)
+    original = extract_original_item_metadata(item=item, original_source=source)
+    legacy = extract_evidence_bound_item_metadata(
+        item=item,
+        original_source=source,
+        accepted_report=_accepted_report(),
+        solution_evidence=profile().source_basis.solution_evidence,
+    )
+    assert original.fields == tuple(
+        field for field in legacy.fields if field.basis == "ORIGINAL_ITEM"
+    )
+    assert all(field.source_sha256 == source.sha256 for field in original.fields)
+    assert PATTERN_SUMMARY_LIMITATION not in original.limitations
+    assert not any("Accepted assessment-pattern" in row for row in original.limitations)
+
+
+def test_original_only_metadata_rejects_undeclared_frozen_extras() -> None:
+    item = _item_content_team(3)
+    forged = item.model_copy(update={"invented_dag": []})
+    with pytest.raises(ValueError, match="undeclared"):
+        extract_original_item_metadata(item=forged, original_source=_source(item))
 
 
 def test_projection_module_has_no_filesystem_sql_worker_or_runtime_imports() -> None:

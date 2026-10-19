@@ -1,0 +1,16 @@
+schema_version: '1.4'
+definition_key: local-embedding-index
+definition_version: 2.0.0
+start_step: encode_batch
+limits:
+  max_rework_cycles: 0
+  max_step_attempts: 1
+steps:
+  - key: encode_batch
+    type: application
+    operation: BUILD_LOCAL_EMBEDDINGS
+    result_schema: incremental-embedding-result@1.0
+    on_success: complete
+  - key: complete
+    type: terminal
+    terminal_status: COMPLETED

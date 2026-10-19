@@ -190,7 +190,10 @@ def test_required_owner_admission_has_no_default_or_null_fallback() -> None:
 
 
 @pytest.mark.parametrize("fault", ["no_root", "inactive_root", "savepoint", "dialect", "owner"])
-def test_protocol_preparation_refuses_nonowner_or_nonroot_before_insert(fault: str) -> None:
+@pytest.mark.parametrize("mixed", [False, True])
+def test_protocol_preparation_refuses_nonowner_or_nonroot_before_insert(
+    fault: str, mixed: bool
+) -> None:
     session = Mock(spec=Session)
     session.get_transaction.return_value = (
         None if fault == "no_root" else SimpleNamespace(is_active=fault != "inactive_root")
@@ -199,7 +202,10 @@ def test_protocol_preparation_refuses_nonowner_or_nonroot_before_insert(fault: s
     session.get_bind.return_value.dialect.name = "sqlite" if fault == "dialect" else "postgresql"
     session.scalar.return_value = fault != "owner"
     with pytest.raises(EmbeddingEncodingReservationError, match="PROTOCOL_OWNER_REQUIRED"):
-        EmbeddingEncodingReservationStorage.prepare_protocol(session)
+        if mixed:
+            EmbeddingEncodingReservationStorage.prepare_mixed_ownership_protocol(session)
+        else:
+            EmbeddingEncodingReservationStorage.prepare_protocol(session)
     session.execute.assert_not_called()
 
 

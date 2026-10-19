@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import datetime
-from typing import Any, cast
+from typing import Any, cast, overload
 
 from eom_catalog_contracts.embedding_registry import (
     EmbeddingIndexNamespace,
@@ -14,6 +14,11 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingEncodingIdentity,
     EmbeddingSourceBinding,
     EmbeddingVectorRowRef,
+)
+from eom_catalog_contracts.mixed_embedding_index import RegisteredReviewEmbeddingSourceBinding
+from eom_catalog_contracts.mixed_embedding_registry import (
+    MixedEmbeddingIndexNamespace,
+    RegisterEmbeddingIndexCommandV2,
 )
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from sqlalchemy import Select, String, column, exists, select, tuple_, update, values
@@ -33,6 +38,9 @@ from eom_catalog_service.embedding_registry_ports import (
     EmbeddingBindingOrigin,
     EmbeddingRegistryError,
     RegisteredEmbeddingIndexRead,
+    RegisteredReviewEmbeddingBindingLookupKey,
+    SupportedEmbeddingBindingLookupKey,
+    embedding_binding_lookup_sort_key,
 )
 
 ASSOCIATION_COLUMNS = (
@@ -47,6 +55,45 @@ ASSOCIATION_COLUMNS = (
     "solution_analysis_run_id",
     "encoding_sha256",
 )
+REGISTERED_REVIEW_ASSOCIATION_COLUMNS = (
+    "item_revision_id",
+    "graph_snapshot_revision_id",
+    "policy_revision_id",
+    "recipe_sha256",
+    "view",
+    "projection_version",
+    "base_analysis_run_id",
+    "profile_revision_id",
+    "encoding_sha256",
+    "review_job_id",
+    "review_evidence_sha256",
+)
+
+
+def _binding_key_groups(
+    keys: tuple[SupportedEmbeddingBindingLookupKey, ...],
+) -> tuple[tuple[str, tuple[str, ...], tuple[SupportedEmbeddingBindingLookupKey, ...]], ...]:
+    if not isinstance(keys, tuple) or len(keys) > 1024:
+        raise EmbeddingRegistryError("EMBEDDING_REGISTRY_REQUEST_INVALID")
+    legacy: list[SupportedEmbeddingBindingLookupKey] = []
+    registered: list[SupportedEmbeddingBindingLookupKey] = []
+    for key in keys:
+        embedding_binding_lookup_sort_key(key)
+        if type(key) is EmbeddingBindingLookupKey:
+            selected = legacy
+        elif type(key) is RegisteredReviewEmbeddingBindingLookupKey:
+            selected = registered
+        else:
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_REQUEST_INVALID")
+        selected.append(key)
+    return tuple(
+        (kind, columns, tuple(selected))
+        for kind, columns, selected in (
+            ("ACCEPTED_SOLUTION_ANALYSIS", ASSOCIATION_COLUMNS, legacy),
+            ("REGISTERED_ITEM_REVIEW_SOLUTION", REGISTERED_REVIEW_ASSOCIATION_COLUMNS, registered),
+        )
+        if selected
+    )
 
 
 def artifact_member(record: object, prefix: str) -> ArtifactMemberPointer:
@@ -87,18 +134,17 @@ def binding_origin(record: EmbeddingSourceBindingRecord) -> EmbeddingBindingOrig
     )
 
 
-def binding_columns(binding: EmbeddingSourceBinding) -> dict[str, Any]:
+def binding_columns(
+    binding: EmbeddingSourceBinding | RegisteredReviewEmbeddingSourceBinding,
+) -> dict[str, Any]:
     """The one scalar projection stored by registration, not an eligibility decision."""
-    return {
+    result: dict[str, Any] = {
         "binding_sha256": binding.binding_sha256,
         "encoding_sha256": binding.encoding.encoding_sha256,
         "item_id": binding.source.item_id,
         "item_revision_id": binding.source.item_revision_id,
         "source_class": binding.source.source_class,
         "source_sha256": binding.source.artifact_member.sha256,
-        "base_analysis_run_id": binding.solution_evidence.base_analysis_run_id,
-        "solution_analysis_run_id": binding.solution_evidence.solution_analysis_run_id,
-        "solution_pointer_sha256": binding.solution_evidence.pointer_sha256,
         "profile_id": binding.profile.profile_id,
         "profile_revision_id": binding.profile.profile_revision_id,
         "profile_sha256": binding.profile.profile_sha256,
@@ -109,6 +155,25 @@ def binding_columns(binding: EmbeddingSourceBinding) -> dict[str, Any]:
         "recipe_sha256": binding.recipe.recipe_sha256,
         "projection_version": binding.projection_version,
     }
+    if isinstance(binding, RegisteredReviewEmbeddingSourceBinding):
+        result.update(
+            evidence_kind="REGISTERED_ITEM_REVIEW_SOLUTION",
+            base_analysis_run_id=binding.base_analysis_run_id,
+            solution_analysis_run_id=None,
+            solution_pointer_sha256=None,
+            review_job_id=binding.review_evidence.review.job_id,
+            review_evidence_sha256=binding.review_evidence.evidence_sha256,
+        )
+    else:
+        result.update(
+            evidence_kind="ACCEPTED_SOLUTION_ANALYSIS",
+            base_analysis_run_id=binding.solution_evidence.base_analysis_run_id,
+            solution_analysis_run_id=binding.solution_evidence.solution_analysis_run_id,
+            solution_pointer_sha256=binding.solution_evidence.pointer_sha256,
+            review_job_id=None,
+            review_evidence_sha256=None,
+        )
+    return result
 
 
 def _pinned_revision_select() -> Select[Any]:
@@ -139,9 +204,14 @@ def _pinned_revision_select() -> Select[Any]:
 
 
 def _registered_index_read(row: Any) -> RegisteredEmbeddingIndexRead:
+    namespace_model = (
+        MixedEmbeddingIndexNamespace
+        if row.projection_version == "mixed-solution-comparison/2.0"
+        else EmbeddingIndexNamespace
+    )
     return RegisteredEmbeddingIndexRead(
         row.corpus_id,
-        EmbeddingIndexNamespace.model_validate(
+        namespace_model.model_validate(
             {name: getattr(row, name) for name in EmbeddingIndexNamespace.model_fields}
         ),
         row.index_id,
@@ -179,7 +249,7 @@ class EmbeddingRegistryRepository:
         return self.session.get(EmbeddingIndexRevisionRecord, revision_id)
 
     def current_namespace_revision(
-        self, corpus_id: str, namespace: EmbeddingIndexNamespace
+        self, corpus_id: str, namespace: EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace
     ) -> tuple[RegisteredEmbeddingIndexRead, int] | None:
         """One unique-namespace lookup and pinned PK read, no write/current-head lock.
 
@@ -242,7 +312,9 @@ class EmbeddingRegistryRepository:
         return result
 
     def create_head(
-        self, command: RegisterEmbeddingIndexCommand, now: datetime
+        self,
+        command: RegisterEmbeddingIndexCommand | RegisterEmbeddingIndexCommandV2,
+        now: datetime,
     ) -> EmbeddingIndexRecord:
         namespace = command.namespace.model_dump(mode="python")
         row = EmbeddingIndexRecord(
@@ -271,19 +343,27 @@ class EmbeddingRegistryRepository:
         }
 
     def bindings(
-        self, keys: tuple[EmbeddingBindingLookupKey, ...]
+        self, keys: tuple[SupportedEmbeddingBindingLookupKey, ...]
     ) -> dict[str, EmbeddingSourceBindingRecord]:
         if not keys:
             return {}
-        columns = tuple(getattr(EmbeddingSourceBindingRecord, name) for name in ASSOCIATION_COLUMNS)
-        return {
-            row.binding_sha256: row
-            for row in self.session.scalars(
-                select(EmbeddingSourceBindingRecord).where(
-                    tuple_(*columns).in_(tuple(key.columns() for key in keys))
-                )
+        result: dict[str, EmbeddingSourceBindingRecord] = {}
+        for family, names, selected in _binding_key_groups(keys):
+            columns = tuple(getattr(EmbeddingSourceBindingRecord, name) for name in names)
+            result.update(
+                {
+                    row.binding_sha256: row
+                    for row in self.session.scalars(
+                        select(EmbeddingSourceBindingRecord)
+                        .where(
+                            EmbeddingSourceBindingRecord.evidence_kind == family,
+                            tuple_(*columns).in_(tuple(key.columns() for key in selected)),
+                        )
+                        .execution_options(populate_existing=True)
+                    )
+                }
             )
-        }
+        return result
 
     def bindings_by_sha256(self, keys: tuple[str, ...]) -> dict[str, EmbeddingSourceBindingRecord]:
         """Fresh exact immutable ledger rows in one PK batch, never per-origin SQL."""
@@ -298,30 +378,41 @@ class EmbeddingRegistryRepository:
             )
         }
 
+    @overload
     def missing_bindings(
         self, keys: tuple[EmbeddingBindingLookupKey, ...]
-    ) -> tuple[EmbeddingBindingLookupKey, ...]:
+    ) -> tuple[EmbeddingBindingLookupKey, ...]: ...
+
+    @overload
+    def missing_bindings(
+        self, keys: tuple[SupportedEmbeddingBindingLookupKey, ...]
+    ) -> tuple[SupportedEmbeddingBindingLookupKey, ...]: ...
+
+    def missing_bindings(
+        self, keys: tuple[SupportedEmbeddingBindingLookupKey, ...]
+    ) -> tuple[SupportedEmbeddingBindingLookupKey, ...]:
         if not keys:
             return ()
-        candidates = (
-            values(
-                *(column(name, String()) for name in ASSOCIATION_COLUMNS),
-                name="embedding_demands",
+        missing: set[SupportedEmbeddingBindingLookupKey] = set()
+        for family, names, selected in _binding_key_groups(keys):
+            candidates = (
+                values(*(column(name, String()) for name in names), name="embedding_demands")
+                .data(tuple(key.columns() for key in selected))
+                .alias("embedding_demands")
             )
-            .data(tuple(key.columns() for key in keys))
-            .alias("embedding_demands")
-        )
-        predicate = exists(
-            select(1).where(
-                *(
-                    getattr(EmbeddingSourceBindingRecord, name) == candidates.c[name]
-                    for name in ASSOCIATION_COLUMNS
+            predicate = exists(
+                select(1).where(
+                    EmbeddingSourceBindingRecord.evidence_kind == family,
+                    *(
+                        getattr(EmbeddingSourceBindingRecord, name) == candidates.c[name]
+                        for name in names
+                    ),
                 )
             )
-        )
-        found = self.session.execute(select(*candidates.c).where(~predicate)).all()
-        missing = {tuple(str(value) for value in row) for row in found}
-        return tuple(key for key in keys if key.columns() in missing)
+            found = self.session.execute(select(*candidates.c).where(~predicate)).all()
+            absent = {tuple(str(value) for value in row) for row in found}
+            missing.update(key for key in selected if key.columns() in absent)
+        return tuple(key for key in keys if key in missing)
 
     def insert_components(
         self,
@@ -343,7 +434,11 @@ class EmbeddingRegistryRepository:
         self.session.add(row)
         self.session.flush()
 
-    def advance(self, command: RegisterEmbeddingIndexCommand, now: datetime) -> bool:
+    def advance(
+        self,
+        command: RegisterEmbeddingIndexCommand | RegisterEmbeddingIndexCommandV2,
+        now: datetime,
+    ) -> bool:
         result = self.session.execute(
             update(EmbeddingIndexRecord)
             .where(

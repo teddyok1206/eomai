@@ -35,13 +35,14 @@ fi
 if (($# != 2)) || \
   [[ "$1" != "verify" && "$1" != "inspect" && "$1" != "migrate" && "$1" != "hwpx-tests" && \
     "$1" != "embedding-tests" && "$1" != "embedding-encoding-tests" && \
-    "$1" != "embedding-stage-tests" && "$1" != "authenticated-session-tests" && \
+    "$1" != "embedding-stage-tests" && "$1" != "private-chat-context-tests" && \
+    "$1" != "authenticated-session-tests" && \
     "$1" != "local-indexing-service-tests" && \
     "$1" != "pdf-review-tests" && \
     "$1" != "quality-review-tests" && "$1" != "chat-tests" && \
     "$1" != "chat-role-tests" && "$1" != "chat-knowledge-tests" && "$1" != "tests" ]]; then
   printf '%s\n' \
-    "usage: $0 {verify|inspect|migrate|hwpx-tests|embedding-tests|embedding-encoding-tests|embedding-stage-tests|authenticated-session-tests|local-indexing-service-tests|pdf-review-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
+    "usage: $0 {verify|inspect|migrate|hwpx-tests|embedding-tests|embedding-encoding-tests|embedding-stage-tests|private-chat-context-tests|authenticated-session-tests|local-indexing-service-tests|pdf-review-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
   exit 2
 fi
 [[ "$(id -un)" == "eom" ]] || fail "test database execution must run as eom"
@@ -253,6 +254,19 @@ if [[ "${action}" == "local-indexing-service-tests" ]]; then
   exit 0
 fi
 
+if [[ "${action}" == "private-chat-context-tests" ]]; then
+  # Migration round-trip guards intentionally require no private history. Keep
+  # them separate from purpose suites that commit real synthetic Workflow rows;
+  # never erase history or weaken their fixture to make a reused DB pass.
+  export EOM_RUN_INTEGRATION=1
+  export EOM_RUN_API_INTEGRATION=1
+  export EOM_API_TEST_STATE="${state_directory}"
+  export EOM_CHAT_KNOWLEDGE_TEST_STATE="${state_directory}"
+  "${PYTHON}" -m pytest -q tests/integration/test_private_chat_query_context_persistence.py
+  printf 'Disposable fresh private-context migration guards passed.\n'
+  exit 0
+fi
+
 if [[ "${action}" == "embedding-stage-tests" ]]; then
   export EOM_RUN_INTEGRATION=1
   export EOM_RUN_API_INTEGRATION=1
@@ -268,7 +282,6 @@ if [[ "${action}" == "embedding-stage-tests" ]]; then
     tests/integration/test_private_chat_query_job_allocation.py \
     tests/integration/test_private_query_checkpoint_persistence.py \
     tests/integration/test_private_chat_query_native_persistence.py \
-    tests/integration/test_private_chat_query_context_persistence.py \
     tests/integration/test_reference_query_submission.py \
     tests/integration/test_reference_query_prepare_application.py \
     tests/integration/test_local_embedding_runner.py \
@@ -287,6 +300,7 @@ if [[ "${action}" == "embedding-encoding-tests" ]]; then
   export EOM_RUN_AUTHENTICATED_SESSION_INTEGRATION=1
   export EOM_API_TEST_STATE="${state_directory}"
   "${PYTHON}" -m pytest -q tests/integration/test_embedding_encoding_reservations.py \
+    tests/integration/test_mixed_embedding_encoding_reservations.py \
     tests/integration/test_embedding_benchmark_jobs.py
   printf 'Disposable model-free embedding encoding reservation tests passed.\n'
   exit 0

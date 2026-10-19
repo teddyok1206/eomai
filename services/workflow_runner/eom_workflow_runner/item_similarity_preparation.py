@@ -274,6 +274,9 @@ class CatalogItemSimilarityPreparation:
         """May commit an Artifact; a late error never means it was absent/unprocessed."""
         try:
             validate_embedding_registry_actor(caller)
+            context_request = self.query.request.context_request
+            if not isinstance(context_request, SimilarityContextRequest):
+                raise ValueError("ITEM_SIMILARITY_PREPARATION_FAMILY_INVALID")
             query_workflow_id = TypeAdapter(WorkflowId).validate_python(
                 self.query.workflow_id, strict=True
             )
@@ -291,7 +294,7 @@ class CatalogItemSimilarityPreparation:
                 expected_resolution=expected_resolution,
                 evidence=evidence,
                 preset=preset,
-                context_request=self.query.request.context_request,
+                context_request=context_request,
             )
         except (ValueError, TypeError, SchemaError):
             raise ControlPlaneError(
@@ -323,6 +326,8 @@ class CatalogItemSimilarityPreparation:
                 self.query.workflow_id, strict=True
             )
             context_request = self.query.request.context_request
+            if not isinstance(context_request, SimilarityContextRequest):
+                raise ValueError("ITEM_SIMILARITY_PREPARATION_FAMILY_INVALID")
             if type(caller) is not EmbeddingRegistryCaller or (
                 caller.operator_id != self.query.request.operator_audit.operator_id
                 or context_request.consumer_purpose not in {"PAST_EXAM_VARIATION", "ITEM_AUTHORING"}

@@ -329,6 +329,9 @@ class AutomaticItemGraphPublicationService:
             # publication is committed. Retrieval evidence may be reused by an exact retry.
             alignment_validator(ordered_additions)
         requested_at = max(binding.aligned_at for binding in ordered_additions)
+        if publication_authorized_at is not None:
+            # An exact retry may reuse older alignment evidence under fresh authority.
+            requested_at = max(requested_at, publication_authorized_at)
         occurrence_bindings: tuple[AssessmentOccurrenceItemBinding, ...] = ()
         if occurrence_binding_resolver is not None:
             with self.sessions() as session:
@@ -380,9 +383,24 @@ class AutomaticItemGraphPublicationService:
             if origin_scoped
             else PublishKnowledgeGraphSnapshotCommandV5.model_validate(request_value)
         )
+        final_validator: AnalysisValidator | None = None
+        if analysis_validator is not None:
+
+            def validate_candidates(
+                session: Session, published_analyses: tuple[AcceptedAnalysisProposal, ...]
+            ) -> None:
+                by_id = {row.analysis_run_id: row for row in published_analyses}
+                if not set(candidate_ids).issubset(by_id):
+                    raise ValueError("final Graph candidate set is incomplete")
+                analysis_validator(
+                    session, tuple(by_id[candidate_id] for candidate_id in candidate_ids)
+                )
+
+            final_validator = validate_candidates
         graph_publication = self.publication.publish(
             graph_command,
             authorized_at=publication_authorized_at,
+            **({"analysis_validator": final_validator} if final_validator is not None else {}),
         )
         return AutomaticItemGraphPublicationReceipt(
             graph_publication=graph_publication,

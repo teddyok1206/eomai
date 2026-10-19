@@ -13,9 +13,11 @@ from eom_catalog_contracts.reference_query_prepare import (
     MAX_REFERENCE_QUERY_PREPARE_REPLY_BYTES,
     MAX_REFERENCE_QUERY_PREPARE_REQUEST_BYTES,
     ReferenceQueryPrepareReply,
+    ReferenceQueryPrepareReplyV2,
+    ReferenceQueryPrepareRequestV2,
     SupportedReferenceQueryPrepareRequest,
     parse_supported_reference_query_prepare_request,
-    validate_reference_query_prepare_reply,
+    validate_supported_reference_query_prepare_reply,
 )
 from eom_identifiers import canonical_json_bytes
 from eom_identity_service import AuthenticatedOperatorSession
@@ -103,21 +105,25 @@ def handle_reference_query_prepare_connection(
         # UID or syntactically valid response is never passed as authority.
         reply = application(capture).prepare(request)
         del capture
-        validate_reference_query_prepare_reply(request, reply)
+        validate_supported_reference_query_prepare_reply(request, reply)
     except Exception:
         # No response/capture/traceback contents leave this adapter. In particular,
         # database admission may already have committed before a disconnect.
-        reply = ReferenceQueryPrepareReply(
-            schema_version="system-rag-reference-query-prepare-reply/1.0",
-            operation="PREPARE_REFERENCE_QUERY",
-            operation_id=None if request is None else request.operation_id,
-            request_sha256=None if request is None else request.request_sha256,
-            status="FAILED",
-            workflow_id=None,
-            selection=None,
-            error_code="REFERENCE_QUERY_PREPARE_REQUEST_INVALID"
-            if request is None
-            else "REFERENCE_QUERY_PREPARE_UNAVAILABLE",
+        family = "2.0" if isinstance(request, ReferenceQueryPrepareRequestV2) else "1.0"
+        reply_type = ReferenceQueryPrepareReplyV2 if family == "2.0" else ReferenceQueryPrepareReply
+        reply = reply_type.model_validate(
+            dict(
+                schema_version=f"system-rag-reference-query-prepare-reply/{family}",
+                operation="PREPARE_REFERENCE_QUERY",
+                operation_id=None if request is None else request.operation_id,
+                request_sha256=None if request is None else request.request_sha256,
+                status="FAILED",
+                workflow_id=None,
+                selection=None,
+                error_code="REFERENCE_QUERY_PREPARE_REQUEST_INVALID"
+                if request is None
+                else "REFERENCE_QUERY_PREPARE_UNAVAILABLE",
+            )
         )
     # Exactly one final send. A partial/timeout final write must not append a
     # second reply and cannot justify another application invocation.

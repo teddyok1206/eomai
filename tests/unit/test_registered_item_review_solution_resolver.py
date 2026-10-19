@@ -3,13 +3,14 @@ from __future__ import annotations
 from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
 from eom_catalog_contracts import ApprovedItemKnowledgeSourceV2
 from eom_catalog_contracts.inference_transfer_embedding import EmbeddingVectorRowRef
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewSourceBasis
-from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.artifacts import CatalogArtifactService, CatalogJsonRevisionRequest
 from eom_catalog_service.embedding_incremental_plan import (
     RegisteredEmbeddingRow,
     plan_embedding_delta,
@@ -78,6 +79,13 @@ class _Session:
         self.dirty: set[object] = set()
         self.deleted: set[object] = set()
         self.fresh_reads: list[type[Any]] = []
+        self.queries: list[str] = []
+        self.statements: list[Any] = []
+        self.gets: list[tuple[type[Any], str]] = []
+        self.root = SimpleNamespace(is_active=True)
+
+    def get_transaction(self) -> Any:
+        return self.root
 
     def __enter__(self) -> _Session:
         return self
@@ -86,26 +94,65 @@ class _Session:
         pass
 
     def get(self, model: type[Any], key: str, **options: Any) -> Any:
+        self.gets.append((model, key))
         if options.get("populate_existing"):
             self.fresh_reads.append(model)
         return self.records.get((model, key))
 
     def scalar(self, statement: Any) -> Any:
-        model = statement.column_descriptions[0]["entity"]
-        return next(value for (kind, _), value in self.records.items() if kind is model)
+        return next(iter(self.scalars(statement)), None)
+
+    @staticmethod
+    def _matches(row: Any, statement: Any) -> bool:
+        for name, value in statement.compile().params.items():
+            field = name.rsplit("_", 1)[0]
+            if field == "param":
+                if (
+                    isinstance(value, list)
+                    and value
+                    and isinstance(value[0], tuple)
+                    and (row.logical_artifact_id, row.revision_id) not in value
+                ):
+                    return False
+                continue
+            if hasattr(row, field) and getattr(row, field) not in (
+                value if isinstance(value, list | tuple) else (value,)
+            ):
+                return False
+        return True
 
     def scalars(self, statement: Any) -> tuple[Any, ...]:
+        self.statements.append(statement)
         model = statement.column_descriptions[0]["entity"]
+        self.queries.append(model.__name__)
+        if statement.get_execution_options().get("populate_existing"):
+            self.fresh_reads.append(model)
         if model in {ItemComponentRecord, WorkflowStepRunRecord}:
             assert statement.get_execution_options()["populate_existing"] is True
+        rows: list[Any]
         if model is ItemComponentRecord:
-            assert statement.compile().params["param_1"] == 101
-            return tuple(sorted(self.components, key=lambda row: (row.component_type, row.ordinal)))
-        if model is WorkflowStepRunRecord:
-            return tuple(row for row in self.steps if row.superseded_by_step_run_id is None)
-        if model is JobEventRecord:
-            return tuple(self.events)
-        return tuple(value for (kind, _), value in self.records.items() if kind is model)
+            rows = sorted(
+                self.components,
+                key=lambda row: (row.item_revision_id, row.component_type, row.ordinal),
+            )
+        elif model is WorkflowStepRunRecord:
+            rows = [row for row in self.steps if row.superseded_by_step_run_id is None]
+        elif model is JobEventRecord:
+            rows = self.events
+        else:
+            rows = [value for (kind, _), value in self.records.items() if kind is model]
+        return tuple(row for row in rows if self._matches(row, statement))
+
+    def execute(self, statement: Any) -> Any:
+        self.statements.append(statement)
+        self.queries.append("ArtifactJsonJoin")
+        assert statement.get_execution_options()["populate_existing"] is True
+        rows = tuple(
+            (revision, self.records[ArtifactRecord, revision.logical_artifact_id])
+            for (model, _), revision in self.records.items()
+            if model is ArtifactRevisionRecord and self._matches(revision, statement)
+        )
+        return SimpleNamespace(all=lambda: rows)
 
 
 class _Artifacts(CatalogArtifactService):
@@ -114,9 +161,11 @@ class _Artifacts(CatalogArtifactService):
         self.sessions = cast(Any, lambda: session)
         self.reads: list[str] = []
 
-    def load_json_revision(self, **kwargs: Any) -> dict[str, Any]:
-        self.reads.append(kwargs["artifact_id"])
-        return super().load_json_revision(**kwargs)
+    def load_json_revisions(
+        self, requests: tuple[CatalogJsonRevisionRequest, ...]
+    ) -> dict[str, dict[str, Any]]:
+        self.reads.extend(request.artifact_id for request in requests)
+        return super().load_json_revisions(requests)
 
 
 def _stage_file_set(
@@ -130,9 +179,8 @@ def _stage_file_set(
     metadata: bool = True,
 ) -> tuple[str, str, str]:
     session: _Session = fixture["session"]
-    artifact_id, revision_id, job_id = (
-        prefix + marker * 32 for prefix in ("artifact_", "rev_", "job_")
-    )
+    suffix = marker if len(marker) == 32 else marker * 32
+    artifact_id, revision_id, job_id = (prefix + suffix for prefix in ("artifact_", "rev_", "job_"))
     payload = canonical_json_bytes(document)
     root = fixture["root"] / artifact_id / revision_id
     root.mkdir(parents=True)
@@ -228,7 +276,7 @@ def _persist_role(
         {
             "protocol_version": fixture["protocol"],
             "job_id": pointer.job_id,
-            "workflow_id": WORKFLOW_ID,
+            "workflow_id": fixture["workflow_id"],
             "step_run_id": result.step_run_id,
             "attempt": 1,
             "role": role,
@@ -279,7 +327,7 @@ def _persist_role(
     )
     step = WorkflowStepRunRecord(
         step_run_id=result.step_run_id,
-        workflow_id=WORKFLOW_ID,
+        workflow_id=fixture["workflow_id"],
         step_key=key,
         step_type="agent",
         worker_role=role,
@@ -295,7 +343,7 @@ def _persist_role(
     )
     session.steps.append(step)
     component = ItemComponentRecord(
-        item_revision_id=ITEM_REVISION,
+        item_revision_id=fixture["item_revision_id"],
         component_type={
             "authoring": "UPPER_STEM",
             "review": "REVIEW_REPORT",
@@ -324,19 +372,31 @@ def _fixture(
     *,
     family: int = 11,
     microseconds: int = 0,
+    ordinal: int = 0,
+    knowledge_fixture: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    (tmp_path / "knowledge").mkdir()
-    knowledge = _knowledge_fixture(
-        tmp_path / "knowledge",
-        monkeypatch,
-        manifest_schema_version="5.0",
-        workflow_definition_version="1.11.0",
-    )
-    if family == 12:
-        _upgrade_fixture_plan_to_v12(knowledge)
+    def identity(prefix: str, marker: int) -> str:
+        return prefix + (f"{ordinal * 16 + marker:032x}" if ordinal else f"{marker:x}" * 32)
+
+    item_id, item_revision_id = identity("item_", 1), identity("itemrev_", 2)
+    workflow_id = identity("workflow_", 8)
+    if knowledge_fixture is None:
+        (tmp_path / "knowledge").mkdir()
+        knowledge = _knowledge_fixture(
+            tmp_path / "knowledge",
+            monkeypatch,
+            manifest_schema_version="5.0",
+            workflow_definition_version="1.11.0",
+        )
+        if family == 12:
+            _upgrade_fixture_plan_to_v12(knowledge)
+    else:
+        knowledge = knowledge_fixture
     plan = knowledge["session"].records[ResolvedExecutionPlanRecord, str(knowledge["plan_id"])]
     document = deepcopy(plan.canonical_document)
-    document["workflow_id"] = WORKFLOW_ID
+    document["workflow_id"] = workflow_id
+    if ordinal:
+        document["plan_id"] = identity("execplan_", 12)
     document["plan_sha256"] = content_sha256(
         {k: v for k, v in document.items() if k != "plan_sha256"}
     )
@@ -362,6 +422,9 @@ def _fixture(
     session.records[ResolvedExecutionPlanRecord, plan.plan_id] = plan
     fixture: dict[str, Any] = {
         "session": session,
+        "item_id": item_id,
+        "item_revision_id": item_revision_id,
+        "workflow_id": workflow_id,
         "root": tmp_path / "artifacts",
         "family": family,
         "manifest_at": NOW.replace(microsecond=microseconds),
@@ -370,8 +433,21 @@ def _fixture(
     }
     authoring = _authoring_result(knowledge).model_dump(mode="json")
     authoring["protocol_version"] = fixture["protocol"]
+
+    def rebind_role(raw: dict[str, Any], marker: int) -> None:
+        raw.update(
+            workflow_id=workflow_id,
+            job_id=identity("job_", marker),
+            step_run_id=identity("steprun_", marker),
+        )
+        raw["artifact"].update(
+            logical_artifact_id=identity("artifact_", marker), revision_id=identity("rev_", marker)
+        )
+
+    rebind_role(authoring, 7)
     authoring_pointer = _persist_role(fixture, "authoring", authoring, ())
     review = _v12_review_document(knowledge) if family == 12 else _review_document(knowledge)
+    rebind_role(review, 8)
     review["output"]["evidence_usage_attestation"]["authoring_artifact"] = {
         "logical_artifact_id": authoring_pointer.logical_artifact_id,
         "revision_id": authoring_pointer.revision_id,
@@ -384,13 +460,13 @@ def _fixture(
         "registration",
         {
             "protocol_version": fixture["protocol"],
-            "job_id": "job_" + "9" * 32,
-            "workflow_id": WORKFLOW_ID,
-            "step_run_id": "steprun_" + "9" * 32,
+            "job_id": identity("job_", 9),
+            "workflow_id": workflow_id,
+            "step_run_id": identity("steprun_", 9),
             "role": "item_management",
             "artifact": {
-                "logical_artifact_id": "artifact_" + "9" * 32,
-                "revision_id": "rev_" + "9" * 32,
+                "logical_artifact_id": identity("artifact_", 9),
+                "revision_id": identity("rev_", 9),
             },
             "completed_at": NOW.isoformat(),
             "output": {
@@ -491,7 +567,7 @@ def _fixture(
     content = canonical_content_team_item_materialization(fixture["authoring"].output.draft)
     content_id, content_rev, content_sha = _stage_file_set(
         fixture,
-        marker="a",
+        marker=identity("", 10),
         name="assessment-item-content.json",
         kind="assessment-item-content",
         schema="eom.assessment.item-content/3.0",
@@ -499,7 +575,7 @@ def _fixture(
     )
     session.components.append(
         ItemComponentRecord(
-            item_revision_id=ITEM_REVISION,
+            item_revision_id=item_revision_id,
             component_type="ITEM_CONTENT",
             ordinal=0,
             schema_ref="eom.assessment.item-content/3.0",
@@ -514,8 +590,8 @@ def _fixture(
     )
     manifest = {
         "schema_version": "1.0",
-        "item_id": ITEM_ID,
-        "item_revision_id": ITEM_REVISION,
+        "item_id": item_id,
+        "item_revision_id": item_revision_id,
         "revision_number": 1,
         "content_pack": {
             "release_id": "packrel_" + "1" * 32,
@@ -525,7 +601,7 @@ def _fixture(
         },
         "source_intake": {"batch_ids": []},
         "workflow": {
-            "workflow_id": WORKFLOW_ID,
+            "workflow_id": workflow_id,
             "definition_key": "generic-item-development",
             "definition_version": document["workflow_definition_version"],
         },
@@ -555,22 +631,22 @@ def _fixture(
     }
     manifest_id, manifest_rev, manifest_sha = _stage_file_set(
         fixture,
-        marker="b",
+        marker=identity("", 11),
         name="item-revision-manifest.json",
         kind="item-revision-manifest",
         schema="eom://schemas/item-registry/item-revision-manifest-v1",
         document=manifest,
         metadata=False,
     )
-    session.records[ItemRecord, ITEM_ID] = ItemRecord(
-        item_id=ITEM_ID, lifecycle_state="ACTIVE", current_revision_id=ITEM_REVISION
+    session.records[ItemRecord, item_id] = ItemRecord(
+        item_id=item_id, lifecycle_state="ACTIVE", current_revision_id=item_revision_id
     )
-    session.records[ItemRevisionRecord, ITEM_REVISION] = ItemRevisionRecord(
-        item_id=ITEM_ID,
-        item_revision_id=ITEM_REVISION,
+    session.records[ItemRevisionRecord, item_revision_id] = ItemRevisionRecord(
+        item_id=item_id,
+        item_revision_id=item_revision_id,
         revision_number=1,
         revision_state="APPROVED",
-        workflow_id=WORKFLOW_ID,
+        workflow_id=workflow_id,
         workflow_definition_version=document["workflow_definition_version"],
         content_pack_release_id="packrel_" + "1" * 32,
         source_workflow_step_run_id=fixture["registration_step"].step_run_id,
@@ -582,8 +658,8 @@ def _fixture(
         approved_at=NOW,
         approved_by="operator",
     )
-    session.records[WorkflowInstanceRecord, WORKFLOW_ID] = WorkflowInstanceRecord(
-        workflow_id=WORKFLOW_ID,
+    session.records[WorkflowInstanceRecord, workflow_id] = WorkflowInstanceRecord(
+        workflow_id=workflow_id,
         definition_key="generic-item-development",
         definition_version=document["workflow_definition_version"],
         role_schema_version=fixture["protocol"],
@@ -599,8 +675,8 @@ def _fixture(
     fixture["source"] = ApprovedItemKnowledgeSourceV2.model_validate(
         {
             "source_class": "APPROVED_ITEM",
-            "item_id": ITEM_ID,
-            "item_revision_id": ITEM_REVISION,
+            "item_id": item_id,
+            "item_revision_id": item_revision_id,
             "artifact_member": {
                 "artifact_id": content_id,
                 "artifact_revision_id": content_rev,
@@ -667,8 +743,9 @@ def test_resolved_envelopes_compose_into_delta_and_replay_without_second_io(
     for method in ("get", "scalar", "scalars"):
         monkeypatch.setattr(fixture["session"], method, no_io)
     monkeypatch.setattr(fixture["artifacts"], "load_json_revision", no_io)
+    monkeypatch.setattr(fixture["artifacts"], "load_json_revisions", no_io)
     monkeypatch.setattr(
-        "eom_catalog_service.registered_item_review_solution_resolver.resolve_pinned_artifact_member",
+        "eom_catalog_service.registered_item_review_solution_resolver.PinnedArtifactReadContext.read_pinned",
         no_io,
     )
     profile = project_registered_review_solution(

@@ -19,7 +19,14 @@ from eom_catalog_service.embedding_registry_models import (
     EmbeddingSourceBindingRecord,
 )
 from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
-from sqlalchemy import CheckConstraint, ForeignKeyConstraint, String, Table, UniqueConstraint
+from sqlalchemy import (
+    CheckConstraint,
+    ForeignKeyConstraint,
+    MetaData,
+    String,
+    Table,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql.base import PGDialect
 from sqlalchemy.engine import Dialect
 from sqlalchemy.schema import CreateIndex, CreateTable
@@ -148,7 +155,54 @@ def test_key_uniques_and_delta_indexes_are_not_json_scans() -> None:
 def test_frozen_migration_matches_current_ddl_without_runtime_model_imports() -> None:
     module = migration_module()
     normalized = {"".join(statement.split()) for statement in module._DDL}
-    for table in TABLES:
+    successor_path = ROOT / "migrations/versions/20261019_0058_registered_review_embedding.py"
+    spec = importlib.util.spec_from_file_location("embedding_registry_0058", successor_path)
+    assert spec is not None and spec.loader is not None
+    successor = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(successor)
+    # Compare every original table/index, not just unchanged tables. Project only
+    # the explicitly additive 0058 changes back to their frozen 0052 definitions.
+    baseline = MetaData()
+    for current in TABLES[0].metadata.tables.values():
+        copied = current.to_metadata(baseline)
+        original_order = {
+            (type(value), value.name, tuple(value.columns.keys())): value._creation_order
+            for value in current.constraints
+        }
+        # to_metadata copies a set of constraints; keep original DDL ordering so
+        # this remains the exact frozen-byte projection rather than a loose set.
+        for value in copied.constraints:
+            value._creation_order = original_order[
+                (type(value), value.name, tuple(value.columns.keys()))
+            ]
+    changed = {(owner, name) for owner, name, _predicate in successor._CHECKS}
+    for owner in ("embedding_source_bindings", "embedding_indexes", "embedding_index_revisions"):
+        table = baseline.tables[owner]
+        orders = {constraint.name: constraint._creation_order for constraint in table.constraints}
+        for constraint in tuple(table.constraints):
+            if (
+                owner,
+                constraint.name,
+            ) in changed or constraint.name == "fk_embedding_binding_review_job":
+                table.constraints.remove(constraint)
+        for original_owner, name, predicate in successor._PREVIOUS_CHECKS:
+            if owner == original_owner:
+                restored = CheckConstraint(predicate, name=name)
+                restored._creation_order = orders[name]
+                table.append_constraint(restored)
+    binding = baseline.tables["embedding_source_bindings"]
+    for index in tuple(binding.indexes):
+        if index.name in {
+            "uq_embedding_binding_registered_review",
+            "ix_embedding_binding_review_delta",
+        }:
+            binding.indexes.remove(index)
+    for name in ("evidence_kind", "review_job_id", "review_evidence_sha256"):
+        binding._columns.remove(binding.c[name])
+    binding.c.solution_analysis_run_id.nullable = False
+    binding.c.solution_pointer_sha256.nullable = False
+    for model in MODELS:
+        table = baseline.tables[model.__tablename__]
         statement = str(CreateTable(table).compile(dialect=POSTGRES_DIALECT))
         assert "".join(statement.split()) in normalized
         for index in table.indexes:

@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal
+from collections.abc import Sequence
+from typing import Annotated, Any, Literal, Protocol
 
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_protocol.models import JobId
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
+from eom_catalog_contracts.embedding_contract_values import raw_similarity_contract_value
 from eom_catalog_contracts.inference_transfer_experiment import (
     ExperimentView,
     ExperimentViewRecipe,
@@ -22,8 +24,10 @@ from eom_catalog_contracts.item_inference_transfer import (
     TransferText,
 )
 from eom_catalog_contracts.knowledge import (
+    ApprovedItemKnowledgeSourceV2,
     KnowledgeGraphSnapshotPointer,
     KnowledgeSolutionEvidencePointer,
+    same_approved_item_source_identity,
 )
 from eom_catalog_contracts.models import FrozenModel, Sha256, UtcDatetime
 from eom_catalog_contracts.validation import validate_contract
@@ -55,8 +59,10 @@ def _pointer_key(value: ArtifactMemberPointer) -> tuple[str, str, str, str]:
     return value.artifact_id, value.artifact_revision_id, value.member_path, value.sha256
 
 
-def _manifest_pointer(value: ArtifactMemberPointer, schema: str, member: str) -> None:
-    checked = ArtifactMemberPointer.model_validate(value.model_dump(mode="json"))
+def validate_embedding_manifest_pointer(
+    value: ArtifactMemberPointer, schema: str, member: str
+) -> None:
+    checked = ArtifactMemberPointer.model_validate(raw_similarity_contract_value(value))
     if (
         checked.schema_ref != schema
         or checked.media_type != "application/json"
@@ -171,8 +177,101 @@ class EmbeddingVectorRowRef(_EmbeddingContract):
 
     @model_validator(mode="after")
     def exact_shard_pointer(self) -> EmbeddingVectorRowRef:
-        _manifest_pointer(self.shard_manifest, SHARD_SCHEMA_REF, "shard.json")
+        validate_embedding_manifest_pointer(self.shard_manifest, SHARD_SCHEMA_REF, "shard.json")
         return self
+
+
+class EmbeddingIndexBindingShape(Protocol):
+    """Read-only layout shared by released binding1 and registered-review binding2."""
+
+    @property
+    def source(self) -> ApprovedItemKnowledgeSourceV2: ...
+
+    @property
+    def encoding(self) -> EmbeddingEncodingIdentity: ...
+
+    @property
+    def row_ref(self) -> EmbeddingVectorRowRef: ...
+
+    @property
+    def view(self) -> ExperimentView: ...
+
+    @property
+    def recipe(self) -> ExperimentViewRecipe: ...
+
+
+class EmbeddingIndexReferenceShape(Protocol):
+    """Schema-validated reference layout shared by the two released index families."""
+
+    @property
+    def index_id(self) -> str: ...
+
+    @property
+    def index_revision_id(self) -> str: ...
+
+    @property
+    def previous_manifest(self) -> ArtifactMemberPointer | None: ...
+
+    @property
+    def storage_partition(self) -> str: ...
+
+    @property
+    def space(self) -> EmbeddingSpace: ...
+
+    @property
+    def view(self) -> ExperimentView: ...
+
+    @property
+    def recipe(self) -> ExperimentViewRecipe: ...
+
+    @property
+    def shards(self) -> tuple[ArtifactMemberPointer, ...]: ...
+
+    @property
+    def bindings(self) -> Sequence[EmbeddingIndexBindingShape]: ...
+
+    def model_dump(self, *, mode: Literal["json"]) -> dict[str, Any]: ...
+
+
+def validate_embedding_index_layout(
+    *,
+    previous_manifest: ArtifactMemberPointer | None,
+    previous_schema_refs: tuple[str, ...],
+    storage_partition: str,
+    space: EmbeddingSpace,
+    view: ExperimentView,
+    recipe: ExperimentViewRecipe,
+    shards: tuple[ArtifactMemberPointer, ...],
+    bindings: Sequence[EmbeddingIndexBindingShape],
+) -> None:
+    """One authoritative pure layout rule, after each owner's schema validation."""
+    ExperimentViewRecipe.model_validate(recipe.model_dump(mode="json"))
+    if space.purpose != "DOCUMENT":
+        raise ValueError("a corpus index requires document vectors")
+    if previous_manifest is not None:
+        if previous_manifest.schema_ref not in previous_schema_refs:
+            raise ValueError("index predecessor schema is not supported by this version")
+        validate_embedding_manifest_pointer(
+            previous_manifest, previous_manifest.schema_ref, "index.json"
+        )
+    keys = tuple(_pointer_key(pointer) for pointer in shards)
+    if keys != tuple(sorted(set(keys))):
+        raise ValueError("index shard pointers must be sorted and unique")
+    for pointer in shards:
+        validate_embedding_manifest_pointer(pointer, SHARD_SCHEMA_REF, "shard.json")
+    revisions = tuple(binding.source.item_revision_id for binding in bindings)
+    if revisions != tuple(sorted(set(revisions))):
+        raise ValueError("index bindings must be sorted by unique source revision")
+    if {binding.row_ref.shard_manifest for binding in bindings} != set(shards):
+        raise ValueError("index shards differ from its source binding references")
+    if any(
+        binding.encoding.storage_partition != storage_partition
+        or binding.encoding.space_sha256 != space.space_sha256
+        or binding.view != view
+        or binding.recipe != recipe
+        for binding in bindings
+    ):
+        raise ValueError("index binding space, partition, view or recipe differs")
 
 
 class EmbeddingSourceBinding(_EmbeddingContract):
@@ -227,29 +326,16 @@ class EmbeddingIndexManifest(_EmbeddingContract):
 
     @model_validator(mode="after")
     def exact_index_namespace(self) -> EmbeddingIndexManifest:
-        ExperimentViewRecipe.model_validate(self.recipe.model_dump(mode="json"))
-        if self.space.purpose != "DOCUMENT":
-            raise ValueError("a corpus index requires document vectors")
-        if self.previous_manifest is not None:
-            _manifest_pointer(self.previous_manifest, INDEX_SCHEMA_REF, "index.json")
-        keys = tuple(_pointer_key(pointer) for pointer in self.shards)
-        if keys != tuple(sorted(set(keys))):
-            raise ValueError("index shard pointers must be sorted and unique")
-        for pointer in self.shards:
-            _manifest_pointer(pointer, SHARD_SCHEMA_REF, "shard.json")
-        revisions = tuple(binding.source.item_revision_id for binding in self.bindings)
-        if revisions != tuple(sorted(set(revisions))):
-            raise ValueError("index bindings must be sorted by unique source revision")
-        if {binding.row_ref.shard_manifest for binding in self.bindings} != set(self.shards):
-            raise ValueError("index shards differ from its source binding references")
-        if any(
-            binding.encoding.storage_partition != self.storage_partition
-            or binding.encoding.space_sha256 != self.space.space_sha256
-            or binding.view != self.view
-            or binding.recipe != self.recipe
-            for binding in self.bindings
-        ):
-            raise ValueError("index binding space, partition, view or recipe differs")
+        validate_embedding_index_layout(
+            previous_manifest=self.previous_manifest,
+            previous_schema_refs=(INDEX_SCHEMA_REF,),
+            storage_partition=self.storage_partition,
+            space=self.space,
+            view=self.view,
+            recipe=self.recipe,
+            shards=self.shards,
+            bindings=self.bindings,
+        )
         _hash(self, "index_sha256")
         return self
 
@@ -355,7 +441,7 @@ def validate_embedding_source_binding(
     entry = StagedExperimentEntry.model_validate(entry.model_dump(mode="json"))
     shard = parse_embedding_shard(shard.model_dump(mode="json"))
     shard_pointer = ArtifactMemberPointer.model_validate(shard_pointer.model_dump(mode="json"))
-    _manifest_pointer(shard_pointer, SHARD_SCHEMA_REF, "shard.json")
+    validate_embedding_manifest_pointer(shard_pointer, SHARD_SCHEMA_REF, "shard.json")
     _validate_binding_source_and_row(
         binding, entry, shard_pointer, shard, content_sha256(shard.model_dump(mode="json"))
     )
@@ -370,16 +456,8 @@ def _validate_binding_source_and_row(
 ) -> None:
     """One semantic leaf, called only after public validators revalidate each input."""
     basis = entry.profile.source_basis
-    core = (
-        "source_kind",
-        "source_class",
-        "item_id",
-        "item_revision_id",
-        "lifecycle_state",
-        "artifact_member",
-    )
     if (
-        any(getattr(binding.source, name) != getattr(basis.source, name) for name in core)
+        not same_approved_item_source_identity(binding.source, basis.source)
         or binding.profile != InferenceTransferProfilePointer.from_profile(entry.profile)
         or binding.solution_evidence != basis.solution_evidence
         or binding.graph_snapshot != basis.graph_snapshot
@@ -432,7 +510,7 @@ def validate_embedding_source_bindings(
         raise ValueError("index shard pointers must be sorted and unique")
     for original_pointer, original_shard in shards:
         pointer = ArtifactMemberPointer.model_validate(original_pointer.model_dump(mode="json"))
-        _manifest_pointer(pointer, SHARD_SCHEMA_REF, "shard.json")
+        validate_embedding_manifest_pointer(pointer, SHARD_SCHEMA_REF, "shard.json")
         if pointer in by_pointer:
             raise ValueError("index references duplicate, foreign or changed shard content")
         shard = parse_embedding_shard(original_shard.model_dump(mode="json"))
@@ -466,12 +544,30 @@ def validate_embedding_index_references(
 ) -> None:
     """Resolve supplied exact manifests, never guess a row or substitute a current revision."""
     index = parse_embedding_index(index.model_dump(mode="json"))
+    parent = (
+        None
+        if previous is None
+        else (previous[0], parse_embedding_index(previous[1].model_dump(mode="json")))
+    )
+    validate_embedding_index_reference_layout(index, shards, parent)
+
+
+def validate_embedding_index_reference_layout(
+    index: EmbeddingIndexReferenceShape,
+    shards: tuple[tuple[ArtifactMemberPointer, EmbeddingVectorShardManifest], ...],
+    previous: tuple[ArtifactMemberPointer, EmbeddingIndexReferenceShape] | None = None,
+) -> None:
+    """One shared reference rule, AFTER each public boundary validates its index schema.
+
+    This pure helper validates supplied values, not canonical bytes or authority.
+    Neither family can use it to admit a different family's raw wire document.
+    """
     by_pointer: dict[ArtifactMemberPointer, EmbeddingVectorShardManifest] = {}
     encodings: set[str] = set()
     for pointer, shard in shards:
-        pointer = ArtifactMemberPointer.model_validate(pointer.model_dump(mode="json"))
-        shard = parse_embedding_shard(shard.model_dump(mode="json"))
-        _manifest_pointer(pointer, SHARD_SCHEMA_REF, "shard.json")
+        pointer = ArtifactMemberPointer.model_validate(raw_similarity_contract_value(pointer))
+        shard = parse_embedding_shard(raw_similarity_contract_value(shard))
+        validate_embedding_manifest_pointer(pointer, SHARD_SCHEMA_REF, "shard.json")
         if (
             pointer in by_pointer
             or pointer.sha256 != content_sha256(shard.model_dump(mode="json"))
@@ -500,8 +596,7 @@ def validate_embedding_index_references(
     if previous is None:
         raise ValueError("the exact index predecessor must be resolved")
     pointer, parent = previous
-    pointer = ArtifactMemberPointer.model_validate(pointer.model_dump(mode="json"))
-    parent = parse_embedding_index(parent.model_dump(mode="json"))
+    pointer = ArtifactMemberPointer.model_validate(raw_similarity_contract_value(pointer))
     if (
         pointer != index.previous_manifest
         or pointer.sha256 != content_sha256(parent.model_dump(mode="json"))

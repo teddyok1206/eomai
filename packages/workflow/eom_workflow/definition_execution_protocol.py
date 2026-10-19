@@ -9,6 +9,10 @@ from eom_workflow.local_embedding_workflow import (
     LOCAL_EMBEDDING_EXECUTION_PROTOCOL,
     LocalEmbeddingWorkflowDefinition,
 )
+from eom_workflow.local_embedding_workflow_v2 import (
+    LocalEmbeddingWorkflowDefinitionV2,
+    parse_local_embedding_workflow_definition_v2,
+)
 from eom_workflow.models import AgentStep, WorkflowDefinition
 from eom_workflow.private_chat_query_workflow import (
     PRIVATE_CHAT_QUERY_EXECUTION_PROTOCOL,
@@ -24,6 +28,7 @@ from eom_workflow.schemas import result_schema_protocol
 type ExecutionWorkflowDefinition = (
     WorkflowDefinition
     | LocalEmbeddingWorkflowDefinition
+    | LocalEmbeddingWorkflowDefinitionV2
     | ReferenceQueryWorkflowDefinition
     | PrivateChatQueryWorkflowDefinition
 )
@@ -40,6 +45,14 @@ def definition_execution_protocol(definition: ExecutionWorkflowDefinition) -> st
     Revalidation also protects repository callers from a forged frozen copy. Old
     definitions keep their exact single-agent-family rule and meaning.
     """
+    if isinstance(definition, LocalEmbeddingWorkflowDefinitionV2):
+        try:
+            parse_local_embedding_workflow_definition_v2(definition)
+        except ValueError:
+            raise DefinitionExecutionProtocolError(
+                "mixed local embedding definition execution protocol is invalid"
+            ) from None
+        return LOCAL_EMBEDDING_EXECUTION_PROTOCOL
     if isinstance(definition, PrivateChatQueryWorkflowDefinition):
         try:
             PrivateChatQueryWorkflowDefinition.model_validate(

@@ -1,0 +1,345 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/system-rag-reference-query-prepare/2.0",
+  "title": "Explicit mixed reference QUERY preparation and exact reply",
+  "description": "Closed pointer-only operation; actor/session/key/bundle/space/recipe/resource/paths are not caller inputs. Genuine Identity capture is a separate existing 1.1 challenge exchange. PENDING is original durable work, never a completed selection or execution grant.",
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "workflowId": {
+      "type": "string",
+      "pattern": "^workflow_[0-9a-f]{32}$"
+    },
+    "operationId": {
+      "type": "string",
+      "pattern": "^queryprepare_[0-9a-f]{32}$"
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "operation",
+        "operation_id",
+        "idempotency_key",
+        "source_item_revision_id",
+        "graph_snapshot",
+        "policy_revision_id",
+        "policy_sha256",
+        "request_sha256",
+        "consumer_purpose"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "system-rag-reference-query-prepare-request/2.0"
+        },
+        "operation": {
+          "const": "PREPARE_REFERENCE_QUERY"
+        },
+        "operation_id": {
+          "$ref": "#/$defs/operationId"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_.:-]{8,128}$"
+        },
+        "source_item_revision_id": {
+          "type": "string",
+          "pattern": "^itemrev_[0-9a-f]{32}$"
+        },
+        "graph_snapshot": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"
+        },
+        "policy_revision_id": {
+          "type": "string",
+          "pattern": "^accessrev_[0-9a-f]{32}$"
+        },
+        "policy_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "consumer_purpose": {
+          "enum": [
+            "PAST_EXAM_VARIATION",
+            "ITEM_AUTHORING",
+            "ITEM_REVIEW"
+          ]
+        }
+      }
+    },
+    "reply": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "operation",
+        "operation_id",
+        "request_sha256",
+        "status",
+        "workflow_id",
+        "selection",
+        "error_code"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "system-rag-reference-query-prepare-reply/2.0"
+        },
+        "operation": {
+          "const": "PREPARE_REFERENCE_QUERY"
+        },
+        "operation_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/operationId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "request_sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "enum": [
+            "PENDING",
+            "READY",
+            "UNAVAILABLE",
+            "FAILED"
+          ]
+        },
+        "workflow_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/workflowId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "selection": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/knowledge/system-rag-similarity-read/1.0#/$defs/selection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "SOURCE_ACCESS_DENIED",
+                "SOURCE_REVOKED",
+                "SOURCE_POINTER_INVALID",
+                "SOURCE_HASH_MISMATCH",
+                "INDEX_POINTER_INVALID",
+                "INDEX_HASH_MISMATCH",
+                "QUERY_RESULT_INVALID",
+                "AUTHORITY_UNAVAILABLE",
+                "REFERENCE_QUERY_PREPARE_REQUEST_INVALID",
+                "REFERENCE_QUERY_PREPARE_UNAVAILABLE",
+                "REFERENCE_QUERY_PREPARE_CONFLICT",
+                "REFERENCE_QUERY_EXECUTION_FAILED",
+                "ANCHOR_REPORT_MISSING",
+                "INDEX_NOT_PREPARED"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "PENDING"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "operation_id": {
+                "$ref": "#/$defs/operationId"
+              },
+              "request_sha256": {
+                "$ref": "#/$defs/hash"
+              },
+              "workflow_id": {
+                "$ref": "#/$defs/workflowId"
+              },
+              "selection": {
+                "type": "null"
+              },
+              "error_code": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "READY"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "operation_id": {
+                "$ref": "#/$defs/operationId"
+              },
+              "request_sha256": {
+                "$ref": "#/$defs/hash"
+              },
+              "workflow_id": {
+                "$ref": "#/$defs/workflowId"
+              },
+              "selection": {
+                "$ref": "eom://schemas/knowledge/system-rag-similarity-read/1.0#/$defs/selection"
+              },
+              "error_code": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "UNAVAILABLE"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "operation_id": {
+                "$ref": "#/$defs/operationId"
+              },
+              "request_sha256": {
+                "$ref": "#/$defs/hash"
+              },
+              "workflow_id": {
+                "type": "null"
+              },
+              "selection": {
+                "type": "null"
+              },
+              "error_code": {
+                "enum": [
+                  "ANCHOR_REPORT_MISSING",
+                  "INDEX_NOT_PREPARED"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "FAILED"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "selection": {
+                "type": "null"
+              },
+              "error_code": {
+                "enum": [
+                  "SOURCE_ACCESS_DENIED",
+                  "SOURCE_REVOKED",
+                  "SOURCE_POINTER_INVALID",
+                  "SOURCE_HASH_MISMATCH",
+                  "INDEX_POINTER_INVALID",
+                  "INDEX_HASH_MISMATCH",
+                  "QUERY_RESULT_INVALID",
+                  "AUTHORITY_UNAVAILABLE",
+                  "REFERENCE_QUERY_PREPARE_REQUEST_INVALID",
+                  "REFERENCE_QUERY_PREPARE_UNAVAILABLE",
+                  "REFERENCE_QUERY_PREPARE_CONFLICT",
+                  "REFERENCE_QUERY_EXECUTION_FAILED"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "operation_id": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "operation_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "const": "FAILED"
+              },
+              "request_sha256": {
+                "type": "null"
+              },
+              "workflow_id": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "request_sha256": {
+                "$ref": "#/$defs/hash"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/reply"
+    }
+  ]
+}

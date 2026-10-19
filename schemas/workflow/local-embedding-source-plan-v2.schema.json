@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/local-embedding-source-plan/2.0",
+  "title": "Metadata-only mixed accepted-solution and registered-review source plan V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "corpus_id", "graph_snapshot", "access_policy_revision_id", "access_policy_sha256", "namespace", "space", "recipe", "sources", "demands", "missing_solution_report_revision_ids", "unavailable_views", "source_set_sha256", "encoding_set_sha256", "plan_sha256"],
+  "properties": {
+    "schema_version": {"const": "local-embedding-source-plan/2.0"},
+    "corpus_id": {"type": "string", "pattern": "^corpus_[0-9a-f]{32}$"},
+    "graph_snapshot": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"},
+    "access_policy_revision_id": {"type": "string", "pattern": "^accessrev_[0-9a-f]{32}$"},
+    "access_policy_sha256": {"$ref": "#/$defs/hash"},
+    "namespace": {"$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/namespace"},
+    "space": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/space"},
+    "recipe": {"$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/recipe"},
+    "sources": {"type": "array", "minItems": 1, "maxItems": 1024, "uniqueItems": true, "items": {"$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/source"}},
+    "demands": {"type": "array", "maxItems": 1024, "uniqueItems": true, "items": {"oneOf": [{"$ref": "#/$defs/acceptedDemand"}, {"$ref": "#/$defs/reviewDemand"}]}},
+    "missing_solution_report_revision_ids": {"type": "array", "maxItems": 1024, "uniqueItems": true, "items": {"$ref": "#/$defs/sourceRevision"}},
+    "unavailable_views": {"type": "array", "maxItems": 1024, "uniqueItems": true, "items": {"$ref": "#/$defs/unavailableView"}},
+    "source_set_sha256": {"$ref": "#/$defs/hash"},
+    "encoding_set_sha256": {"$ref": "#/$defs/hash"},
+    "plan_sha256": {"$ref": "#/$defs/hash"}
+  },
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "sourceRevision": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+    "baseRun": {"type": "string", "pattern": "^analysisrun_[0-9a-f]{32}$"},
+    "acceptedDemand": {
+      "type": "object", "additionalProperties": false,
+      "required": ["evidence_kind", "source_revision_id", "base_analysis_run_id", "profile", "solution_evidence", "encoding"],
+      "properties": {
+        "evidence_kind": {"const": "ACCEPTED_SOLUTION_ANALYSIS"},
+        "source_revision_id": {"$ref": "#/$defs/sourceRevision"},
+        "base_analysis_run_id": {"$ref": "#/$defs/baseRun"},
+        "profile": {"$ref": "eom://schemas/knowledge/item-inference-transfer/1.0#/$defs/profilePointer"},
+        "solution_evidence": {"$ref": "eom://schemas/knowledge/evidence-bundle-manifest/5.0#/$defs/solutionEvidence"},
+        "encoding": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/encoding"}
+      }
+    },
+    "reviewDemand": {
+      "type": "object", "additionalProperties": false,
+      "required": ["evidence_kind", "source_revision_id", "base_analysis_run_id", "profile", "review_evidence", "encoding"],
+      "properties": {
+        "evidence_kind": {"const": "REGISTERED_ITEM_REVIEW_SOLUTION"},
+        "source_revision_id": {"$ref": "#/$defs/sourceRevision"},
+        "base_analysis_run_id": {"$ref": "#/$defs/baseRun"},
+        "profile": {"$ref": "eom://schemas/knowledge/item-inference-transfer/2.0#/$defs/profilePointer"},
+        "review_evidence": {"$ref": "eom://schemas/knowledge/registered-item-review-solution-evidence/1.0"},
+        "encoding": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/encoding"}
+      }
+    },
+    "unavailableView": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_revision_id", "reason"],
+      "properties": {
+        "source_revision_id": {"$ref": "#/$defs/sourceRevision"},
+        "reason": {"enum": ["VIEW_NOT_MATERIALIZED", "EMPTY_VIEW"]}
+      }
+    }
+  }
+}

@@ -9,7 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar
 
-from eom_catalog_contracts.local_indexing_policy import local_indexing_authorization_audit_sha256
+from eom_catalog_contracts.local_indexing_mixed_policy import (
+    LocalIndexingMixedAccessPolicy,
+    supported_local_indexing_authorization_audit_sha256,
+)
 from eom_catalog_service.embedding_registry_catalog_adapter import CatalogEmbeddingRegistryVerifier
 from eom_catalog_service.embedding_registry_indexing_authority import (
     CatalogIndexingRegistrySourceAuthority,
@@ -28,15 +31,22 @@ from eom_workflow.local_embedding_execution_policy import (
     LOCAL_EMBEDDING_SERVICE_POLICY_SCHEMA_REF,
 )
 from eom_workflow.local_embedding_request import (
-    LocalEmbeddingExecutableRequest,
     LocalEmbeddingServiceWorkflowRequest,
     LocalEmbeddingWorkflowRequestV11,
     local_embedding_request_service,
-    parse_local_embedding_executable_request,
     require_local_embedding_operator_seed,
+)
+from eom_workflow.local_embedding_request_v2 import (
+    LocalEmbeddingWorkflowRequestV2,
+    local_embedding_request_service_v2,
 )
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
+
+from eom_workflow_runner.local_embedding_admission import (
+    SupportedLocalEmbeddingOwnerRequest,
+    parse_supported_local_embedding_owner_request,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,13 +54,15 @@ class OperatorLocalEmbeddingActorAuthority:
     identity: CapturedOperatorAuthorizationFence
     policy_schema_ref: ClassVar[str] = LOCAL_EMBEDDING_POLICY_SCHEMA_REF
 
-    def registry_caller(self, request: LocalEmbeddingExecutableRequest) -> EmbeddingRegistryCaller:
-        request = parse_local_embedding_executable_request(request)
+    def registry_caller(
+        self, request: SupportedLocalEmbeddingOwnerRequest
+    ) -> EmbeddingRegistryCaller:
+        request = parse_supported_local_embedding_owner_request(request)
         if not isinstance(request, LocalEmbeddingWorkflowRequestV11):
             raise ValueError("LOCAL_EMBEDDING_OPERATOR_UNAVAILABLE")
         return EmbeddingRegistryCaller(require_local_embedding_operator_seed(request).operator_id)
 
-    def fence(self, session: Session, request: LocalEmbeddingExecutableRequest) -> None:
+    def fence(self, session: Session, request: SupportedLocalEmbeddingOwnerRequest) -> None:
         self.identity.fence_current_operator(session, self.registry_caller(request).operator_id)
 
     def catalog(
@@ -76,13 +88,20 @@ class ServiceLocalEmbeddingActorAuthority:
         self.source_authority.__post_init__()
 
     def registry_caller(
-        self, request: LocalEmbeddingExecutableRequest
+        self, request: SupportedLocalEmbeddingOwnerRequest
     ) -> EmbeddingRegistryServiceCaller:
-        checked = parse_local_embedding_executable_request(request)
-        if not isinstance(checked, LocalEmbeddingServiceWorkflowRequest):
+        checked = parse_supported_local_embedding_owner_request(request)
+        if not isinstance(
+            checked, LocalEmbeddingServiceWorkflowRequest | LocalEmbeddingWorkflowRequestV2
+        ):
             raise ValueError("LOCAL_EMBEDDING_SERVICE_UNAVAILABLE")
         gate, audit = self.source_authority, checked.actor_context
-        caller = EmbeddingRegistryServiceCaller(local_embedding_request_service(checked))
+        service = (
+            local_embedding_request_service_v2(checked)
+            if isinstance(checked, LocalEmbeddingWorkflowRequestV2)
+            else local_embedding_request_service(checked)
+        )
+        caller = EmbeddingRegistryServiceCaller(service)
         if (
             caller.service != gate.authority.service_fence.pin.service
             or audit.service_policy_revision_id != gate.service_policy_revision_id
@@ -93,8 +112,8 @@ class ServiceLocalEmbeddingActorAuthority:
             raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_FORBIDDEN")
         return caller
 
-    def fence(self, session: Session, request: LocalEmbeddingExecutableRequest) -> None:
-        request = parse_local_embedding_executable_request(request)
+    def fence(self, session: Session, request: SupportedLocalEmbeddingOwnerRequest) -> None:
+        request = parse_supported_local_embedding_owner_request(request)
         caller = self.registry_caller(request)
         policy = self.source_authority.authorize_scope(
             session,
@@ -109,9 +128,18 @@ class ServiceLocalEmbeddingActorAuthority:
             ),
             self.registry,
         )
-        if not isinstance(request, LocalEmbeddingServiceWorkflowRequest) or (
-            request.actor_context.authorization_audit_sha256
-            != local_indexing_authorization_audit_sha256(policy)
+        if (
+            not isinstance(
+                request, LocalEmbeddingServiceWorkflowRequest | LocalEmbeddingWorkflowRequestV2
+            )
+            or (
+                isinstance(request, LocalEmbeddingWorkflowRequestV2)
+                != isinstance(policy, LocalIndexingMixedAccessPolicy)
+            )
+            or (
+                request.actor_context.authorization_audit_sha256
+                != supported_local_indexing_authorization_audit_sha256(policy)
+            )
         ):
             raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_FORBIDDEN")
 

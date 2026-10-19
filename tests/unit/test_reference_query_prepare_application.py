@@ -10,11 +10,15 @@ from unittest.mock import Mock
 
 import pytest
 from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
+from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNamespace
 from eom_catalog_contracts.reference_query_prepare import (
     ReferenceQueryPrepareReply,
+    ReferenceQueryPrepareReplyV2,
     parse_supported_reference_query_prepare_request,
     validate_reference_query_prepare_reply,
+    validate_supported_reference_query_prepare_reply,
 )
+from eom_catalog_contracts.similarity_context_v2 import parse_similarity_context_request_v2
 from eom_catalog_service.embedding_registry_models import EmbeddingEncodingRecord
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
@@ -32,7 +36,7 @@ from eom_workflow_runner.actor_authorization_adapters import (
     SqlAlchemyOperatorActorSource,
 )
 from eom_workflow_runner.engine import WorkflowRunner
-from eom_workflow_runner.models import WorkflowCommandRecord
+from eom_workflow_runner.models import WorkflowCommandRecord, WorkflowInstanceRecord
 from eom_workflow_runner.readiness import (
     ReadinessStatus,
     RuntimeReadinessCheck,
@@ -240,6 +244,91 @@ def test_known_absence_rolls_back_and_never_offers_work(application, monkeypatch
     reply = value.app.prepare(wire_request(value.source))
     assert reply.status == "UNAVAILABLE" and reply.error_code == code
     assert reply.workflow_id is None and reply.selection is None and value.offers == []
+
+
+@pytest.mark.parametrize("code", ("ANCHOR_REPORT_MISSING", "INDEX_NOT_PREPARED"))
+def test_actual_mixed_absence_preserves_reply2_and_never_submits_or_drives(
+    application, monkeypatch, code
+):
+    from eom_workflow_runner.reference_query_preparation import (
+        prepare_and_start_reference_query_selection_in_session,
+    )
+
+    value = application
+    catalog = value.source.owner.catalog
+    namespace = MixedEmbeddingIndexNamespace.model_validate(
+        catalog.configuration.namespace.model_dump(mode="json")
+        | {
+            "population_scope": "ALL_ADMITTED_GRAPH_ITEMS",
+            "projection_version": "mixed-solution-comparison/2.0",
+        }
+    )
+    catalog.configuration = replace(catalog.configuration, namespace=namespace)
+    value.source.owner.configuration = replace(
+        value.source.owner.configuration, registry=catalog.configuration
+    )
+    request = parse_supported_reference_query_prepare_request(
+        seal(
+            wire_request(value.source).model_dump(mode="json")
+            | {
+                "schema_version": "system-rag-reference-query-prepare-request/2.0",
+                "consumer_purpose": "PAST_EXAM_VARIATION",
+            },
+            "request_sha256",
+        )
+    )
+    # Retain the real preparation/absence rules, with synthetic initial source
+    # observation and no existing Workflow in the isolated fixture's metadata.
+    original_scalar = value.app.sessions.class_.scalar
+    observed = []
+
+    def scalar(session, statement, *args, **kwargs):
+        if statement.column_descriptions[0]["entity"] is WorkflowInstanceRecord:
+            return None
+        return original_scalar(session, statement, *args, **kwargs)
+
+    def initial(session, caller, preparation):
+        assert session.get_transaction().is_active
+        assert caller.operator_id == value.source.owner.identity.capture.operator_id
+        body = value.source.request.context_request.model_dump(mode="json")
+        body.update(
+            schema_version="system-rag-similarity-request/2.0",
+            request_id=preparation.request_id,
+            consumer_purpose=preparation.consumer_purpose,
+            source_classes=list(catalog.configuration.source_classes),
+            vector_mode=preparation.vector_mode,
+            maximum_sources=preparation.selection.scope.maximum_sources,
+            top_k=preparation.top_k,
+        )
+        body["views"] = [body["views"][0] | {"view": view} for view in preparation.views]
+        for index, view in enumerate(body["views"]):
+            if index > 0 or code == "INDEX_NOT_PREPARED":
+                view["index"] = None
+            else:
+                view["index"]["index_manifest"]["schema_ref"] = (
+                    "eom://schemas/knowledge/embedding-index-manifest/2.0"
+                )
+        if code == "ANCHOR_REPORT_MISSING":
+            body["anchor"].update(profile=None, solution_evidence=None)
+        observed.append(parse_similarity_context_request_v2(seal(body, "request_sha256")))
+        return observed[-1]
+
+    monkeypatch.setattr(value.app.sessions.class_, "scalar", scalar)
+    monkeypatch.setattr(catalog, "prepare_reference_query_context_in_session", initial)
+    monkeypatch.setattr(
+        module,
+        "prepare_and_start_reference_query_selection_in_session",
+        prepare_and_start_reference_query_selection_in_session,
+    )
+    reply = value.app.prepare(request)
+    assert len(observed) == 1 and value.source.calls[0][0] == "identity"
+    assert type(reply) is ReferenceQueryPrepareReplyV2
+    validate_supported_reference_query_prepare_reply(request, reply)
+    assert reply.status == "UNAVAILABLE" and reply.error_code == code
+    assert reply.workflow_id is None and reply.selection is None
+    assert value.admitted == [] and value.offers == []
+    value.executor.execute.assert_not_called()
+    value.executor.allocate_execution.assert_not_called()
 
 
 @pytest.mark.parametrize(

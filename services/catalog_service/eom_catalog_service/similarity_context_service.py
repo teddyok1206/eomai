@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from typing import overload
 
 from eom_catalog_contracts.embedding_reference_query import (
     REFERENCE_QUERY_RESULT_REF,
@@ -20,7 +21,7 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingVectorRowRef,
 )
 from eom_catalog_contracts.inference_transfer_experiment import ExperimentView
-from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
+from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_contracts.similarity_context import (
     SimilarityCandidate,
     SimilarityContext,
@@ -34,8 +35,22 @@ from eom_catalog_contracts.similarity_context import (
     SimilarityVectorObservation,
     SimilarityViewCoverage,
     parse_similarity_context,
-    parse_similarity_context_request,
     validate_similarity_query_execution,
+)
+from eom_catalog_contracts.similarity_context_v2 import (
+    AcceptedSimilarityCandidateV2,
+    MixedSimilarityProfilePointer,
+    RegisteredReviewSimilarityCandidateV2,
+    SimilarityCandidateV2,
+    SimilarityContextRequestV2,
+    SimilarityContextV2,
+    SimilarityLimitationV2,
+    SimilarityPopulationV2,
+    SupportedSimilarityContext,
+    SupportedSimilarityContextRequest,
+    parse_similarity_context_v2,
+    parse_supported_similarity_context_request,
+    validate_similarity_query_execution_v2,
 )
 from eom_identifiers import content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
@@ -47,7 +62,7 @@ from eom_catalog_service.embedding_registry_ports import (
     ResolvedPinnedEmbeddingIndex,
 )
 from eom_catalog_service.inference_transfer_service import bounded_profile_channel_union
-from eom_catalog_service.inference_transfer_vectors import rank_normalized_vectors
+from eom_catalog_service.inference_transfer_vectors import rank_normalized_values
 from eom_catalog_service.similarity_context_ports import (
     PreparedSimilarityContext,
     PreparedSimilaritySource,
@@ -64,7 +79,7 @@ from eom_catalog_service.similarity_document_read_validation import (
 
 
 def validate_similarity_preparation(
-    request: SimilarityContextRequest, prepared: PreparedSimilarityContext
+    request: SupportedSimilarityContextRequest, prepared: PreparedSimilarityContext
 ) -> dict[str, PreparedSimilaritySource]:
     if not isinstance(prepared, PreparedSimilarityContext) or (
         prepared.request_sha256 != request.request_sha256
@@ -85,6 +100,7 @@ def validate_similarity_preparation(
         prepared.sources,
         source_classes=request.source_classes,
         maximum_sources=request.maximum_sources,
+        family="2.0" if isinstance(request, SimilarityContextRequestV2) else "1.0",
     )
     anchor = sources.get(request.anchor.source.item_revision_id)
     if anchor is None or (
@@ -115,7 +131,7 @@ def validate_similarity_preparation(
 
 
 def _validate_query(
-    request: SimilarityContextRequest,
+    request: SupportedSimilarityContextRequest,
     prepared: PreparedSimilarityContext,
     query: VerifiedReferenceQueryRead,
 ) -> tuple[tuple[float, ...], ...]:
@@ -168,18 +184,20 @@ def _validate_query(
 
 
 def _context(
-    request: SimilarityContextRequest,
+    request: SupportedSimilarityContextRequest,
     *,
     status: str,
-    population: SimilarityPopulation | None,
+    population: SimilarityPopulation | SimilarityPopulationV2 | None,
     execution: ReferenceQueryExecutionPointer | None,
     prepared: PreparedSimilarityContext | None,
-    candidates: tuple[SimilarityCandidate, ...],
-    limitations: tuple[SimilarityLimitation, ...],
+    candidates: tuple[SimilarityCandidate, ...] | tuple[SimilarityCandidateV2, ...],
+    limitations: tuple[SimilarityLimitation | SimilarityLimitationV2, ...],
     error: SimilarityFailureCode | None = None,
-) -> SimilarityContext:
+) -> SupportedSimilarityContext:
     document = {
-        "schema_version": "system-rag-similarity-context/1.0",
+        "schema_version": "system-rag-similarity-context/2.0"
+        if isinstance(request, SimilarityContextRequestV2)
+        else "system-rag-similarity-context/1.0",
         "request": request.model_dump(mode="json"),
         "status": status,
         "population": None if population is None else population.model_dump(mode="json"),
@@ -191,7 +209,12 @@ def _context(
         "limitations": limitations,
         "error_code": error,
     }
-    return parse_similarity_context(document | {"context_sha256": content_sha256(document)})
+    sealed = document | {"context_sha256": content_sha256(document)}
+    return (
+        parse_similarity_context_v2(sealed)
+        if isinstance(request, SimilarityContextRequestV2)
+        else parse_similarity_context(sealed)
+    )
 
 
 class SimilarityContextApplicationService:
@@ -205,10 +228,20 @@ class SimilarityContextApplicationService:
         self.sources = sources
         self.query_reads = query_reads
 
+    @overload
     def compose(
         self, caller: EmbeddingRegistryCaller, request: SimilarityContextRequest
-    ) -> SimilarityContext:
-        request = parse_similarity_context_request(request)
+    ) -> SimilarityContext: ...
+
+    @overload
+    def compose(
+        self, caller: EmbeddingRegistryCaller, request: SimilarityContextRequestV2
+    ) -> SimilarityContextV2: ...
+
+    def compose(
+        self, caller: EmbeddingRegistryCaller, request: SupportedSimilarityContextRequest
+    ) -> SupportedSimilarityContext:
+        request = parse_supported_similarity_context_request(request)
         try:
             if (
                 not isinstance(caller, EmbeddingRegistryCaller)
@@ -292,17 +325,17 @@ class SimilarityContextApplicationService:
 
     @staticmethod
     def _compose(
-        request: SimilarityContextRequest,
+        request: SupportedSimilarityContextRequest,
         prepared: PreparedSimilarityContext,
         sources: dict[str, PreparedSimilaritySource],
         query: VerifiedReferenceQueryRead | None,
         vectors: tuple[tuple[float, ...], ...],
         reads: dict[ExperimentView, ResolvedPinnedEmbeddingIndex],
         unavailable: SimilarityUnavailableReason,
-    ) -> SimilarityContext:
+    ) -> SupportedSimilarityContext:
         profiles = {value.profile: value for value in sources.values() if value.profile is not None}
-        observations: dict[InferenceTransferProfilePointer, list[SimilarityObservation]] = {}
-        channels: list[tuple[InferenceTransferProfilePointer, ...]] = []
+        observations: dict[MixedSimilarityProfilePointer, list[SimilarityObservation]] = {}
+        channels: list[tuple[MixedSimilarityProfilePointer, ...]] = []
         coverage: list[SimilarityViewCoverage] = []
         query_rows = {} if query is None else {row.view: row for row in query.result.view_rows}
         query_views = {view for view, _text in prepared.query_texts}
@@ -339,25 +372,25 @@ class SimilarityContextApplicationService:
                 for binding in document.bindings
                 if binding.source.item_revision_id != request.anchor.source.item_revision_id
             )
-            ranked = rank_normalized_vectors(
+            ranked = rank_normalized_values(
                 vectors[query_row.row_index], eligible, top_k=request.top_k
             )
             by_profile = {binding.profile: binding for binding in document.bindings}
-            for rank, value in enumerate(ranked, 1):
-                observations.setdefault(value.profile, []).append(
+            for rank, (pointer, score) in enumerate(ranked, 1):
+                observations.setdefault(pointer, []).append(
                     SimilarityVectorObservation(
                         view=selection.view,
                         rank=rank,
-                        cosine_millionths=round(value.cosine_similarity * 1_000_000),
+                        cosine_millionths=round(score * 1_000_000),
                         query_row=EmbeddingVectorRowRef(
                             shard_manifest=query.shard_member,
                             row_index=query_row.row_index,
                             encoding_sha256=query_row.encoding_sha256,
                         ),
-                        document_row=by_profile[value.profile].row_ref,
+                        document_row=by_profile[pointer].row_ref,
                     )
                 )
-            channels.append(tuple(value.profile for value in ranked))
+            channels.append(tuple(pointer for pointer, _score in ranked))
             count = len(document.bindings)
             missing = len(profiles) - count
             coverage.append(
@@ -382,37 +415,75 @@ class SimilarityContextApplicationService:
             and revision != request.anchor.source.item_revision_id
         )[: request.top_k]
         graph_channel = []
-        for rank, (pointer, score) in enumerate(graph_values, 1):
-            assert pointer is not None
-            observations.setdefault(pointer, []).append(
+        for rank, (graph_pointer, score) in enumerate(graph_values, 1):
+            assert graph_pointer is not None
+            observations.setdefault(graph_pointer, []).append(
                 SimilarityGraphObservation(rank=rank, graph_relevance_milli=score)
             )
-            graph_channel.append(pointer)
+            graph_channel.append(graph_pointer)
         channels.append(tuple(graph_channel))
         ordered = bounded_profile_channel_union(tuple(channels), top_k=request.top_k)
         unavailable_view = any(value.status == "UNAVAILABLE" for value in coverage)
         if request.vector_mode == "REQUIRED" and unavailable_view:
             ordered = ()
-        candidate_values = []
+        candidate_values: list[SimilarityCandidate] = []
+        mixed_candidates: list[SimilarityCandidateV2] = []
         for pointer in ordered:
             candidate_source = profiles[pointer]
-            assert candidate_source.solution_evidence is not None
-            candidate_values.append(
-                SimilarityCandidate(
-                    source=candidate_source.source,
-                    profile=pointer,
-                    solution_evidence=candidate_source.solution_evidence,
-                    observations=tuple(observations[pointer]),
-                    explanation=None,
+            if isinstance(pointer, RegisteredReviewProfilePointer):
+                if (
+                    not isinstance(request, SimilarityContextRequestV2)
+                    or candidate_source.review_evidence is None
+                ):
+                    raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
+                mixed_candidates.append(
+                    RegisteredReviewSimilarityCandidateV2(
+                        source=candidate_source.source,
+                        profile=pointer,
+                        review_evidence=candidate_source.review_evidence,
+                        observations=tuple(observations[pointer]),
+                        explanation=None,
+                    )
                 )
-            )
-        candidates = tuple(candidate_values)
+            elif isinstance(request, SimilarityContextRequestV2):
+                assert candidate_source.solution_evidence is not None
+                mixed_candidates.append(
+                    AcceptedSimilarityCandidateV2(
+                        source=candidate_source.source,
+                        profile=pointer,
+                        solution_evidence=candidate_source.solution_evidence,
+                        observations=tuple(observations[pointer]),
+                        explanation=None,
+                    )
+                )
+            else:
+                assert candidate_source.solution_evidence is not None
+                candidate_values.append(
+                    SimilarityCandidate(
+                        source=candidate_source.source,
+                        profile=pointer,
+                        solution_evidence=candidate_source.solution_evidence,
+                        observations=tuple(observations[pointer]),
+                        explanation=None,
+                    )
+                )
+        candidates = (
+            tuple(mixed_candidates)
+            if isinstance(request, SimilarityContextRequestV2)
+            else tuple(candidate_values)
+        )
         missing_reports = len(sources) - len(profiles)
-        limitations: list[SimilarityLimitation] = ["REFERENCE_ANCHOR_NOT_PRIVATE_INTENT"]
+        limitations: list[SimilarityLimitation | SimilarityLimitationV2] = [
+            "REFERENCE_ANCHOR_NOT_PRIVATE_INTENT"
+        ]
         if unavailable_view:
             limitations.append("VECTOR_NOT_AVAILABLE")
         if missing_reports:
-            limitations.append("PARTIAL_REPORT_COVERAGE")
+            limitations.append(
+                "PARTIAL_EVIDENCE_COVERAGE"
+                if isinstance(request, SimilarityContextRequestV2)
+                else "PARTIAL_REPORT_COVERAGE"
+            )
         if any(value.missing_view_count for value in coverage):
             limitations.append("PARTIAL_VIEW_COVERAGE")
         if prepared.truncated:
@@ -435,13 +506,13 @@ class SimilarityContextApplicationService:
                 result_member=query.result_member,
                 result_sha256=query.result.result_sha256,
             )
-        population = SimilarityPopulation(
+        population_values = dict(
             authorized_source_count=len(sources),
             authorized_source_set_sha256=content_sha256(
                 [sources[key].source.model_dump(mode="json") for key in sorted(sources)]
             ),
-            accepted_profile_count=len(profiles),
-            accepted_profile_set_sha256=content_sha256(
+            available_profile_count=len(profiles),
+            available_profile_set_sha256=content_sha256(
                 [
                     pointer.model_dump(mode="json")
                     for pointer in sorted(
@@ -454,10 +525,24 @@ class SimilarityContextApplicationService:
                     )
                 ]
             ),
-            missing_report_count=missing_reports,
+            missing_evidence_count=missing_reports,
             truncated=prepared.truncated,
             views=tuple(coverage),
         )
+        population: SimilarityPopulation | SimilarityPopulationV2
+        if isinstance(request, SimilarityContextRequestV2):
+            population = SimilarityPopulationV2.model_validate(population_values)
+        else:
+            population_values["accepted_profile_count"] = population_values.pop(
+                "available_profile_count"
+            )
+            population_values["accepted_profile_set_sha256"] = population_values.pop(
+                "available_profile_set_sha256"
+            )
+            population_values["missing_report_count"] = population_values.pop(
+                "missing_evidence_count"
+            )
+            population = SimilarityPopulation.model_validate(population_values)
         context = _context(
             request,
             status=status,
@@ -468,7 +553,12 @@ class SimilarityContextApplicationService:
             limitations=tuple(limitations),
         )
         if query is not None and execution is not None:
-            validate_similarity_query_execution(
-                context, query.request, query.result, query.result_member, query.shard_member
-            )
+            if isinstance(context, SimilarityContextV2):
+                validate_similarity_query_execution_v2(
+                    context, query.request, query.result, query.result_member, query.shard_member
+                )
+            else:
+                validate_similarity_query_execution(
+                    context, query.request, query.result, query.result_member, query.shard_member
+                )
         return context

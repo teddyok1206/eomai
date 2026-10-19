@@ -1,8 +1,8 @@
 """Pure initial/replay intent closure; actual source/index authority stays with Catalog."""
 
-from eom_catalog_contracts.similarity_context import (
-    SimilarityContextRequest,
-    parse_similarity_context_request,
+from eom_catalog_contracts.similarity_context_v2 import (
+    SupportedSimilarityContextRequest,
+    parse_supported_similarity_context_request,
 )
 
 from eom_catalog_service.embedding_registry_ports import (
@@ -15,7 +15,7 @@ from eom_catalog_service.embedding_registry_ports import (
 def validate_reference_query_context_preparation(
     preparation: ReferenceQueryContextPreparation,
     configuration: EmbeddingRegistryOwnerConfiguration,
-    request: SimilarityContextRequest | None = None,
+    request: SupportedSimilarityContextRequest | None = None,
 ) -> None:
     """Replay compares intent, never a newly selected head/profile or new audit."""
     if type(preparation) is not ReferenceQueryContextPreparation:
@@ -30,7 +30,7 @@ def validate_reference_query_context_preparation(
         raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
     if request is None:
         return
-    request = parse_similarity_context_request(request)
+    request = parse_supported_similarity_context_request(request)
     if (
         request.request_id != preparation.request_id
         or request.consumer_purpose != preparation.consumer_purpose

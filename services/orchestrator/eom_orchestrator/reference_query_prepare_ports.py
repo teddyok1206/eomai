@@ -3,7 +3,7 @@
 from typing import Protocol
 
 from eom_catalog_contracts.reference_query_prepare import (
-    ReferenceQueryPrepareReply,
+    SupportedReferenceQueryPrepareReply,
     SupportedReferenceQueryPrepareRequest,
 )
 
@@ -13,4 +13,4 @@ class ReferenceQueryPreparationPort(Protocol):
 
     def prepare(
         self, request: SupportedReferenceQueryPrepareRequest
-    ) -> ReferenceQueryPrepareReply: ...
+    ) -> SupportedReferenceQueryPrepareReply: ...

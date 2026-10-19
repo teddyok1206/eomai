@@ -534,6 +534,11 @@ REFERENCE_QUERY_REQUEST_V11_SCHEMA_RESOURCE = (
     "eom://schemas/workflow/reference-query-workflow-request/1.1",
     "sha256:4b52a34d7970189de9d6447a5ebdd2b073b1999059f5e2a9c9263b0f9e890ae3",
 )
+REFERENCE_QUERY_REQUEST_V2_SCHEMA_RESOURCE = (
+    "reference-query-workflow-request-v2.schema.json",
+    "eom://schemas/workflow/reference-query-workflow-request/2.0",
+    "sha256:2239f158e9aebd5495e57b12751cf63b1302259a19ce229e35c7de0a579ac20a",
+)
 type ReferenceQueryMessageName = Literal[
     "definition", "request", "policy", "launch", "receipt", "step-output"
 ]
@@ -572,8 +577,17 @@ def _reference_query_request_v11_schema() -> dict[str, Any]:
     return _load_pinned_reference_query_schema(REFERENCE_QUERY_REQUEST_V11_SCHEMA_RESOURCE)
 
 
+@cache
+def _reference_query_request_v2_schema() -> dict[str, Any]:
+    return _load_pinned_reference_query_schema(REFERENCE_QUERY_REQUEST_V2_SCHEMA_RESOURCE)
+
+
 def load_reference_query_request_v11_schema() -> dict[str, Any]:
     return copy.deepcopy(_reference_query_request_v11_schema())
+
+
+def load_reference_query_request_v2_schema() -> dict[str, Any]:
+    return copy.deepcopy(_reference_query_request_v2_schema())
 
 
 def load_reference_query_execution_schema() -> dict[str, Any]:
@@ -642,14 +656,31 @@ def _reference_query_request_v11_registry() -> Registry[Any]:
 
 def validate_reference_query_request_v11(value: object) -> None:
     """Literal input1.1 only; existing request1.0 and other frames stay unchanged."""
+    _validate_reference_query_request_successor(value, REFERENCE_QUERY_REQUEST_V11_SCHEMA_RESOURCE)
+
+
+def validate_reference_query_request_v2(value: object) -> None:
+    """Mixed context metadata only; numerical QUERY protocol stays exact1.1."""
+    _validate_reference_query_request_successor(value, REFERENCE_QUERY_REQUEST_V2_SCHEMA_RESOURCE)
+
+
+def _validate_reference_query_request_successor(
+    value: object, resource: tuple[str, str, str]
+) -> None:
     try:
         document = raw_similarity_contract_value(value)
         if len(canonical_json_bytes(document)) > 64 * 1024:
             raise ValueError("QUERY request exceeds its bound")
-        _reference_query_request_v11_schema()
+        schema = (
+            _reference_query_request_v2_schema()
+            if resource == REFERENCE_QUERY_REQUEST_V2_SCHEMA_RESOURCE
+            else _reference_query_request_v11_schema()
+        )
         Draft202012Validator(
-            {"$ref": REFERENCE_QUERY_REQUEST_V11_SCHEMA_RESOURCE[1]},
-            registry=_reference_query_request_v11_registry(),
+            {"$ref": resource[1]},
+            registry=_reference_query_execution_registry().with_resource(
+                resource[1], Resource.from_contents(schema)
+            ),
             format_checker=FormatChecker(),
         ).validate(document)
     except ReferenceQueryContractError:
@@ -683,6 +714,41 @@ LOCAL_EMBEDDING_SCHEMA_RESOURCES = (
         "eom://schemas/workflow/local-embedding-execution-policy/1.0",
         "sha256:07f1a6abc3635a927900149f949ade9dad28690b3948a0a7370bfc291c6d0963",
     ),
+)
+
+MIXED_EMBEDDING_SOURCE_PLAN_SCHEMA_RESOURCE = (
+    "mixed-source-plan",
+    "local-embedding-source-plan-v2.schema.json",
+    "eom://schemas/workflow/local-embedding-source-plan/2.0",
+    "sha256:cbf7c6647484bc59efa1a857669ebb67aa6cf49a2a1bfaa28a326bca364f88d0",
+)
+
+MIXED_NATIVE_WORKFLOW_SCHEMA_RESOURCES = (
+    (
+        "mixed-request",
+        "local-embedding-workflow-request-v2.schema.json",
+        "eom://schemas/workflow/local-embedding-workflow-request/2.0",
+        "sha256:014f00be34d03ce80a1913339a8b21e00baff445cad71ea77c7e2257c17589a5",
+    ),
+    (
+        "mixed-ownership",
+        "embedding-encoding-ownership-v2.schema.json",
+        "eom://schemas/workflow/embedding-encoding-ownership/2.0",
+        "sha256:9bd1fe4ce7b097681ae8195ec1b3f7a365400ca6f917c47eb2ea3218116c1db1",
+    ),
+    (
+        "mixed-completion",
+        "local-embedding-completion-v2.schema.json",
+        "eom://schemas/workflow/local-embedding-completion/2.0",
+        "sha256:543283984d92ef61d59d044c396e2001267c6f15532081f71f45c0034200b5b1",
+    ),
+)
+
+WORKFLOW_DEFINITION_V1_4_SCHEMA_RESOURCE = (
+    "definition-v2",
+    "workflow-definition-v1_4.schema.json",
+    "https://eom.local/schemas/workflow/workflow-definition-v1_4.schema.json",
+    "sha256:64fe5bbf63c7c2ee4e3b7994b2eb4293610bd82dee569a809def0ceb4910cb67",
 )
 
 LOCAL_EMBEDDING_SERVICE_SCHEMA_RESOURCES = (
@@ -737,6 +803,11 @@ type LocalEmbeddingSchemaName = Literal[
     "benchmark-launch-control",
     "request",
     "source-plan",
+    "mixed-source-plan",
+    "mixed-request",
+    "mixed-ownership",
+    "mixed-completion",
+    "definition-v2",
     "encoding-job",
     "execution-policy",
     "service-request",
@@ -788,6 +859,9 @@ def _local_embedding_admission_schema(name: LocalEmbeddingSchemaName) -> dict[st
             entry
             for entry in (
                 *LOCAL_EMBEDDING_SCHEMA_RESOURCES,
+                MIXED_EMBEDDING_SOURCE_PLAN_SCHEMA_RESOURCE,
+                *MIXED_NATIVE_WORKFLOW_SCHEMA_RESOURCES,
+                WORKFLOW_DEFINITION_V1_4_SCHEMA_RESOURCE,
                 *LOCAL_EMBEDDING_SERVICE_SCHEMA_RESOURCES,
                 PRIVATE_CHAT_QUERY_EXECUTION_SCHEMA_RESOURCE,
                 PRIVATE_CHAT_QUERY_PUBLICATION_SCHEMA_RESOURCE,
@@ -827,6 +901,9 @@ def _local_embedding_admission_schema_registry() -> Registry[Any]:
         )
         for name, _, schema_id, _ in (
             *LOCAL_EMBEDDING_SCHEMA_RESOURCES,
+            MIXED_EMBEDDING_SOURCE_PLAN_SCHEMA_RESOURCE,
+            *MIXED_NATIVE_WORKFLOW_SCHEMA_RESOURCES,
+            WORKFLOW_DEFINITION_V1_4_SCHEMA_RESOURCE,
             *LOCAL_EMBEDDING_SERVICE_SCHEMA_RESOURCES,
             PRIVATE_CHAT_QUERY_EXECUTION_SCHEMA_RESOURCE,
             PRIVATE_CHAT_QUERY_PUBLICATION_SCHEMA_RESOURCE,
@@ -848,6 +925,9 @@ def local_embedding_admission_schema_registry() -> Registry[Any]:
         )
         for name, _, schema_id, _ in (
             *LOCAL_EMBEDDING_SCHEMA_RESOURCES,
+            MIXED_EMBEDDING_SOURCE_PLAN_SCHEMA_RESOURCE,
+            *MIXED_NATIVE_WORKFLOW_SCHEMA_RESOURCES,
+            WORKFLOW_DEFINITION_V1_4_SCHEMA_RESOURCE,
             *LOCAL_EMBEDDING_SERVICE_SCHEMA_RESOURCES,
             PRIVATE_CHAT_QUERY_EXECUTION_SCHEMA_RESOURCE,
             PRIVATE_CHAT_QUERY_PUBLICATION_SCHEMA_RESOURCE,
@@ -868,6 +948,9 @@ def validate_local_embedding_admission_message(
             if name
             in {
                 "request",
+                "mixed-request",
+                "mixed-completion",
+                "definition-v2",
                 "execution-policy",
                 "service-request",
                 "service-execution-policy",
@@ -988,11 +1071,18 @@ NATIVE_EMBEDDING_COORDINATOR_SCHEMA_RESOURCE = (
     "eom://schemas/workflow/native-embedding-coordinator/1.0",
     "sha256:796268d09fb8004b3f1ce17e16c8d44e19e151d3434c5288324bf1292707fd08",
 )
+NATIVE_EMBEDDING_COORDINATOR_V2_SCHEMA_RESOURCE = (
+    "native-embedding-coordinator-v2.schema.json",
+    "eom://schemas/workflow/native-embedding-coordinator/2.0",
+    "sha256:5f099421f63b83c8d6847a232c4235d8e3708fd4241a61b8341984c8826a6249",
+)
 
 
 @cache
-def _native_embedding_coordinator_schema() -> dict[str, Any]:
-    filename, schema_id, expected = NATIVE_EMBEDDING_COORDINATOR_SCHEMA_RESOURCE
+def _native_embedding_coordinator_schema(
+    resource: tuple[str, str, str] = NATIVE_EMBEDDING_COORDINATOR_SCHEMA_RESOURCE,
+) -> dict[str, Any]:
+    filename, schema_id, expected = resource
     try:
         with WORKFLOW_RESOURCE_ROOT.joinpath(filename).open("rb") as stream:
             raw = stream.read(64 * 1024 + 1)
@@ -1011,17 +1101,38 @@ def load_native_embedding_coordinator_schema() -> dict[str, Any]:
     return copy.deepcopy(_native_embedding_coordinator_schema())
 
 
+def load_native_embedding_coordinator_v2_schema() -> dict[str, Any]:
+    return copy.deepcopy(
+        _native_embedding_coordinator_schema(NATIVE_EMBEDDING_COORDINATOR_V2_SCHEMA_RESOURCE)
+    )
+
+
 def validate_native_embedding_coordinator_message(value: object) -> None:
     """One separate owner-only frame; released encoding/receipt/role schemas stay exact."""
+    _validate_native_embedding_coordinator_message(
+        value, NATIVE_EMBEDDING_COORDINATOR_SCHEMA_RESOURCE
+    )
+
+
+def validate_native_embedding_coordinator_v2_message(value: object) -> None:
+    """Mixed checkpoint metadata only; never retag or widen an original checkpoint1."""
+    _validate_native_embedding_coordinator_message(
+        value, NATIVE_EMBEDDING_COORDINATOR_V2_SCHEMA_RESOURCE
+    )
+
+
+def _validate_native_embedding_coordinator_message(
+    value: object, resource: tuple[str, str, str]
+) -> None:
     try:
         document = _native_contract_values(value)
         if len(canonical_json_bytes(document)) > 16 * 1024:
             raise ValueError("coordinator metadata exceeds its bound")
-        schema = _native_embedding_coordinator_schema()
+        schema = _native_embedding_coordinator_schema(resource)
         Draft202012Validator(
             schema,
             registry=_local_embedding_receipt_schema_registry().with_resource(
-                NATIVE_EMBEDDING_COORDINATOR_SCHEMA_RESOURCE[1], Resource.from_contents(schema)
+                resource[1], Resource.from_contents(schema)
             ),
             format_checker=FormatChecker(),
         ).validate(document)

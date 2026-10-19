@@ -330,8 +330,8 @@ def test_actual_index_decoder_reuses_each_view_model_in_one_reader_not_another(
     owner: tuple[Any, ...], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     verifier, session, command, index, *_rest = owner
-    parse = Mock(wraps=owner_module.parse_embedding_index)
-    monkeypatch.setattr(owner_module, "parse_embedding_index", parse)
+    parse = Mock(wraps=owner_module.parse_supported_embedding_index)
+    monkeypatch.setattr(owner_module, "parse_supported_embedding_index", parse)
     reader = PinnedArtifactReadContext(cast(Session, session), verifier.settings)
     models = tuple(verifier._read_index(reader, command.index_manifest) for _ in range(10))
     assert models[0] == index and all(value is models[0] for value in models)
@@ -350,8 +350,8 @@ def test_warm_index_model_never_bypasses_pointer_or_current_provenance(
     owner: tuple[Any, ...], monkeypatch: pytest.MonkeyPatch, fault: str
 ) -> None:
     verifier, session, command, index, *_rest = owner
-    parse = Mock(wraps=owner_module.parse_embedding_index)
-    monkeypatch.setattr(owner_module, "parse_embedding_index", parse)
+    parse = Mock(wraps=owner_module.parse_supported_embedding_index)
+    monkeypatch.setattr(owner_module, "parse_supported_embedding_index", parse)
     reader = PinnedArtifactReadContext(cast(Session, session), verifier.settings)
     pointer = command.index_manifest
     assert verifier._read_index(reader, pointer) == index
@@ -391,8 +391,8 @@ def test_retained_index_model_after_raw_eviction_still_requires_exact_physical_m
     ).read_bytes()
     reader = PinnedArtifactReadContext(cast(Session, session), verifier.settings)
     reader.MAX_RETAINED_BYTES = max(len(index_path.read_bytes()), len(shard_raw))
-    parse = Mock(wraps=owner_module.parse_embedding_index)
-    monkeypatch.setattr(owner_module, "parse_embedding_index", parse)
+    parse = Mock(wraps=owner_module.parse_supported_embedding_index)
+    monkeypatch.setattr(owner_module, "parse_supported_embedding_index", parse)
     first = verifier._read_index(reader, pointer)
     reader.prefetch(((shard.artifact_id, shard.artifact_revision_id),))
     reader.read_member(
@@ -422,8 +422,8 @@ def test_synthetic_index_interpretation_counts_repeated_parse_not_authority_or_l
     owner: tuple[Any, ...], monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
 ) -> None:
     verifier, session, command, index, *_rest = owner
-    parse = Mock(wraps=owner_module.parse_embedding_index)
-    monkeypatch.setattr(owner_module, "parse_embedding_index", parse)
+    parse = Mock(wraps=owner_module.parse_supported_embedding_index)
+    monkeypatch.setattr(owner_module, "parse_supported_embedding_index", parse)
     measured = []
     for retained in (False, True):
         reader = PinnedArtifactReadContext(cast(Session, session), verifier.settings)

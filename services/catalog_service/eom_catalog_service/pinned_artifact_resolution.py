@@ -782,6 +782,7 @@ class PinnedArtifactReadContext:
         expected_primary_file: str,
         max_bytes: int,
         expected_manifest_artifact_types: Collection[str] | None = None,
+        historical_metadata_compatibility: bool = False,
     ) -> PinnedArtifactMember:
         self.require_session(self._session)
         captured = self._current_metadata((artifact_id, artifact_revision_id))
@@ -816,6 +817,7 @@ class PinnedArtifactReadContext:
             expected_primary_file=expected_primary_file,
             max_bytes=max_bytes,
             expected_manifest_artifact_types=expected_manifest_artifact_types,
+            historical_metadata_compatibility=historical_metadata_compatibility,
             captured=captured,
             materialized=cached,
         )

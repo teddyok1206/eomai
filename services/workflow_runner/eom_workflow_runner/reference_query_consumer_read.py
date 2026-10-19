@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from eom_catalog_contracts.similarity_context import (
-    SimilarityContextRequest,
-    parse_similarity_context_request,
+from eom_catalog_contracts.similarity_context_v2 import (
+    SupportedSimilarityContextRequest,
+    parse_supported_similarity_context_request,
 )
 from eom_catalog_contracts.similarity_read import CompletedSimilarityQuerySelection
 from eom_catalog_service.embedding_registry_ports import (
@@ -130,7 +130,7 @@ class CatalogCompletedReferenceQueryRead:
     def resolve_reference_query(
         self,
         caller: EmbeddingRegistryCaller,
-        request: SimilarityContextRequest,
+        request: SupportedSimilarityContextRequest,
         prepared: PreparedSimilarityContext,
     ) -> VerifiedReferenceQueryRead:
         with self.sessions.begin() as session:
@@ -140,14 +140,14 @@ class CatalogCompletedReferenceQueryRead:
         self,
         session: Session,
         caller: EmbeddingRegistryCaller,
-        request: SimilarityContextRequest,
+        request: SupportedSimilarityContextRequest,
         prepared: PreparedSimilarityContext,
     ) -> VerifiedReferenceQueryRead:
         """Same caller-owned root through Identity/source/history/member and late checks."""
         root = session.get_transaction()
         if root is None or not root.is_active or session.in_nested_transaction():
             raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
-        request = parse_similarity_context_request(request)
+        request = parse_supported_similarity_context_request(request)
         consumer_sources = validate_similarity_preparation(request, prepared)
         if (
             not isinstance(caller, EmbeddingRegistryCaller)

@@ -40,3 +40,32 @@ identity. Fake DB/child ports test command intent only. Real privileged executio
 installed/archive operational acceptance and live DB effects remain separate gates.
 Changing the original 1.0 target would be simpler but would reinterpret released
 history; a bounded 1.1 successor preserves that evidence without broadening authority.
+
+## Exact0058 registered-review migration delta — 2026-10-19 UTC
+
+1. Boundary: extend the same closed release operator; this note does not execute a
+   migration, install, credential read or production action.
+2. Canonical source: reviewed0058 Alembic source and the three admitted release
+   wheels; source/build-only/installed evidence remain distinct.
+3. Identity: additive context/admission1.7 pins literal `20261019_0058`; all released
+   1.0–1.6 bytes and their historical targets remain unchanged.
+4. Resolution: canonical schema and operator-local mirror have identical SHA;
+   existing protected path, single-link, bounded read, context/runtime/source/wheel
+   hashes and immutable admission epochs remain mandatory.
+5. Access: exact callback lookup and single schema-version dispatch, not arbitrary
+   migration strings, commands, roles, paths or `head`.
+6. Structure: append the two0058 literals to the existing enum, immutable callback
+   map and both shell allowlists; no registry, queue or new persistence.
+7. Cost: O(1) dispatch and the existing bounded schema/metadata reads; unchanged
+   source/wheel admission scans and native migration cost.
+8. Transaction: the existing real database-owner/search-path preflight permits
+   upgrade only0057→0058; verify or replay at0058 performs no upgrade.
+9. Ownership: the public `load_context` owns schema dispatch; native Alembic owns
+   the migration. The shell remains a fixed presentation/admission boundary.
+10. Failure: wrong source head, context target, predecessor, owner or receipt fails
+    closed; timeout is uncertain without retry. Existing0057 callbacks are not aliases
+    for0058, and `migrate_release.sh` remains the historical0051 wrapper.
+11. Alternative: changing context1.6 or using old callbacks would reinterpret
+    history. A separate1.7 resource preserves prior acceptance and supports the
+    required0058 installation. Tests prove intent with fake ports only; actual
+    migration and compatible forward recovery remain explicit operating gates.

@@ -23,6 +23,7 @@ from eom_catalog_contracts.knowledge import (
     ApprovedPastExamItemKnowledgeSourceV3,
     KnowledgeGraphSnapshotPointer,
     KnowledgeSolutionEvidencePointer,
+    same_approved_item_source_identity,
 )
 from eom_catalog_contracts.models import Sha256
 from eom_identifiers import canonical_json_bytes, content_sha256
@@ -133,16 +134,8 @@ def validate_local_embedding_entry_source(
     current source, report or Graph; that remains the Catalog owner's boundary.
     """
     basis = entry.profile.source_basis
-    core = (
-        "source_kind",
-        "source_class",
-        "item_id",
-        "item_revision_id",
-        "lifecycle_state",
-        "artifact_member",
-    )
     if (
-        any(getattr(source, name) != getattr(basis.source, name) for name in core)
+        not same_approved_item_source_identity(source, basis.source)
         or basis.graph_snapshot != graph_snapshot
         or entry.profile.extraction.method != "DETERMINISTIC_REPORT_PROJECTION"
         or entry.profile.extraction.extractor_version != projection_version

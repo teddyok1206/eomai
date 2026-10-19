@@ -76,6 +76,7 @@ from eom_workflow.inference_transfer import (
 )
 from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
 from eom_workflow.local_embedding_workflow import LocalEmbeddingWorkflowDefinition
+from eom_workflow.local_embedding_workflow_v2 import LocalEmbeddingWorkflowDefinitionV2
 from eom_workflow.private_chat_query_execution import (
     PrivateChatQueryWorkflowRequest,
     parse_private_chat_query_workflow_request,
@@ -848,7 +849,11 @@ class WorkflowRunner:
         _workflow, compiled = self._load_workflow(workflow_id)
         if isinstance(
             compiled.definition,
-            (LocalEmbeddingWorkflowDefinition, ReferenceQueryWorkflowDefinition),
+            (
+                LocalEmbeddingWorkflowDefinition,
+                LocalEmbeddingWorkflowDefinitionV2,
+                ReferenceQueryWorkflowDefinition,
+            ),
         ):
             raise WorkflowError(
                 WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
@@ -934,7 +939,10 @@ class WorkflowRunner:
     ) -> None:
         for _ in range(128):
             workflow, compiled = self._load_workflow(workflow_id)
-            if isinstance(compiled.definition, LocalEmbeddingWorkflowDefinition):
+            if isinstance(
+                compiled.definition,
+                LocalEmbeddingWorkflowDefinition | LocalEmbeddingWorkflowDefinitionV2,
+            ):
                 self._advance_local_embedding(workflow, compiled, command_id, actor_type, actor_id)
                 return
             if isinstance(compiled.definition, ReferenceQueryWorkflowDefinition):
@@ -1050,7 +1058,10 @@ class WorkflowRunner:
             or native[0] != workflow.workflow_id
             or self.local_embedding_owner is None
             or self.local_embedding_executor is None
-            or not isinstance(compiled.definition, LocalEmbeddingWorkflowDefinition)
+            or not isinstance(
+                compiled.definition,
+                LocalEmbeddingWorkflowDefinition | LocalEmbeddingWorkflowDefinitionV2,
+            )
         ):
             raise WorkflowError(
                 WorkflowErrorCode.LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE,
@@ -3287,6 +3298,7 @@ class WorkflowRunner:
                 compiled.definition,
                 (
                     LocalEmbeddingWorkflowDefinition,
+                    LocalEmbeddingWorkflowDefinitionV2,
                     ReferenceQueryWorkflowDefinition,
                     PrivateChatQueryWorkflowDefinition,
                 ),

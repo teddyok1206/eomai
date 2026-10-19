@@ -27,12 +27,82 @@ class _RegistryContract(FrozenModel):
     model_config = ConfigDict(revalidate_instances="always")
 
 
-def _exact_hash(value: FrozenModel, field: str) -> None:
+def validate_embedding_registration_hash(value: FrozenModel, field: str) -> None:
     document = value.model_dump(mode="json")
     if len(canonical_json_bytes(document)) > MAX_EMBEDDING_REGISTRATION_BYTES:
         raise ValueError("embedding registration exceeds its metadata byte bound")
     if getattr(value, field) != content_sha256(value.model_dump(mode="json", exclude={field})):
         raise ValueError("embedding registration canonical hash differs")
+
+
+def validate_embedding_registration_head(
+    *,
+    graph_snapshot: KnowledgeGraphSnapshotPointer,
+    index_revision_id: str,
+    expected_current_index_revision_id: str | None,
+    expected_lock_version: int,
+    binding_count: int,
+    eligible_source_count: int,
+) -> None:
+    """Common immutable Graph, coverage and CAS intent rules after schema validation."""
+    graph = KnowledgeGraphSnapshotPointer.model_validate(graph_snapshot.model_dump(mode="json"))
+    if graph.manifest_artifact.sha256 != graph.manifest_sha256:
+        raise ValueError("embedding registration Graph manifest hash differs")
+    if expected_current_index_revision_id == index_revision_id:
+        raise ValueError("embedding registration cannot advance to its predecessor")
+    if (expected_current_index_revision_id is None and expected_lock_version != 1) or (
+        expected_current_index_revision_id is not None and expected_lock_version < 2
+    ):
+        raise ValueError("embedding registration current pointer/version differ")
+    if binding_count > eligible_source_count:
+        raise ValueError("embedding registration coverage exceeds its denominator")
+
+
+def validate_embedding_registration_receipt_head(
+    *,
+    index_revision_id: str,
+    previous_index_revision_id: str | None,
+    current_index_revision_id: str,
+    registered_lock_version: int,
+    current_lock_version: int,
+    replayed: bool,
+    is_current: bool,
+) -> None:
+    """Common new/replayed receipt rules; never authorize or roll back a head."""
+    if previous_index_revision_id == index_revision_id:
+        raise ValueError("embedding registration receipt predecessor is self")
+    if is_current != (current_index_revision_id == index_revision_id):
+        raise ValueError("embedding registration receipt current selection differs")
+    if current_lock_version < registered_lock_version:
+        raise ValueError("embedding registration receipt version moved backwards")
+    if is_current and current_lock_version != registered_lock_version:
+        raise ValueError("current embedding registration receipt has a different generation")
+    if not is_current and (not replayed or current_lock_version <= registered_lock_version):
+        raise ValueError("historical embedding registration receipt requires a newer head")
+    if not replayed and (not is_current or current_lock_version != registered_lock_version):
+        raise ValueError("new embedding registration receipt must identify its current head")
+
+
+def validate_embedding_registration_receipt_binding(
+    command: FrozenModel, result: FrozenModel
+) -> None:
+    """Shared exact identity closure after each caller validates its released family."""
+    request_values = command.model_dump(mode="python")
+    receipt_values = result.model_dump(mode="python")
+    fields = (
+        "operation_key",
+        "request_sha256",
+        "index_id",
+        "index_revision_id",
+        "index_manifest",
+        "index_sha256",
+    )
+    if any(receipt_values[field] != request_values[field] for field in fields) or (
+        receipt_values["previous_index_revision_id"]
+        != request_values["expected_current_index_revision_id"]
+        or receipt_values["registered_lock_version"] != request_values["expected_lock_version"] + 1
+    ):
+        raise ValueError("embedding registration receipt differs from its exact command")
 
 
 def _index_pointer(value: ArtifactMemberPointer) -> None:
@@ -56,6 +126,9 @@ class EmbeddingIndexNamespace(_RegistryContract):
         "accepted-solution-comparison/1.0"
     )
     population_scope: Literal["ALL_ADMITTED_GRAPH_ITEMS", "OCCURRENCE_BACKED_PAST_EXAM"]
+
+    def accepts_projection(self, projection_version: str) -> bool:
+        return projection_version == self.projection_version
 
 
 class RegisterEmbeddingIndexCommand(_RegistryContract):
@@ -87,23 +160,16 @@ class RegisterEmbeddingIndexCommand(_RegistryContract):
     @model_validator(mode="after")
     def exact_registration_intent(self) -> RegisterEmbeddingIndexCommand:
         EmbeddingIndexNamespace.model_validate(self.namespace.model_dump(mode="json"))
-        graph = KnowledgeGraphSnapshotPointer.model_validate(
-            self.graph_snapshot.model_dump(mode="json")
-        )
         _index_pointer(self.index_manifest)
-        if graph.manifest_artifact.sha256 != graph.manifest_sha256:
-            raise ValueError("embedding registration Graph manifest hash differs")
-        if self.expected_current_index_revision_id == self.index_revision_id:
-            raise ValueError("embedding registration cannot advance to its predecessor")
-        if (
-            self.expected_current_index_revision_id is None and self.expected_lock_version != 1
-        ) or (
-            self.expected_current_index_revision_id is not None and self.expected_lock_version < 2
-        ):
-            raise ValueError("embedding registration current pointer/version differ")
-        if self.binding_count > self.eligible_source_count:
-            raise ValueError("embedding registration coverage exceeds its denominator")
-        _exact_hash(self, "request_sha256")
+        validate_embedding_registration_head(
+            graph_snapshot=self.graph_snapshot,
+            index_revision_id=self.index_revision_id,
+            expected_current_index_revision_id=self.expected_current_index_revision_id,
+            expected_lock_version=self.expected_lock_version,
+            binding_count=self.binding_count,
+            eligible_source_count=self.eligible_source_count,
+        )
+        validate_embedding_registration_hash(self, "request_sha256")
         return self
 
 
@@ -131,23 +197,16 @@ class EmbeddingIndexRegistrationResult(_RegistryContract):
     @model_validator(mode="after")
     def exact_registration_receipt(self) -> EmbeddingIndexRegistrationResult:
         _index_pointer(self.index_manifest)
-        if self.previous_index_revision_id == self.index_revision_id:
-            raise ValueError("embedding registration receipt predecessor is self")
-        if self.is_current != (self.current_index_revision_id == self.index_revision_id):
-            raise ValueError("embedding registration receipt current selection differs")
-        if self.current_lock_version < self.registered_lock_version:
-            raise ValueError("embedding registration receipt version moved backwards")
-        if self.is_current and self.current_lock_version != self.registered_lock_version:
-            raise ValueError("current embedding registration receipt has a different generation")
-        if not self.is_current and (
-            not self.replayed or self.current_lock_version <= self.registered_lock_version
-        ):
-            raise ValueError("historical embedding registration receipt requires a newer head")
-        if not self.replayed and (
-            not self.is_current or self.current_lock_version != self.registered_lock_version
-        ):
-            raise ValueError("new embedding registration receipt must identify its current head")
-        _exact_hash(self, "result_sha256")
+        validate_embedding_registration_receipt_head(
+            index_revision_id=self.index_revision_id,
+            previous_index_revision_id=self.previous_index_revision_id,
+            current_index_revision_id=self.current_index_revision_id,
+            registered_lock_version=self.registered_lock_version,
+            current_lock_version=self.current_lock_version,
+            replayed=self.replayed,
+            is_current=self.is_current,
+        )
+        validate_embedding_registration_hash(self, "result_sha256")
         return self
 
 
@@ -167,17 +226,5 @@ def validate_embedding_registration_result(
     """Verify exact immutable request/receipt closure, never actual source authority."""
     command = parse_embedding_registration_command(command.model_dump(mode="json"))
     result = parse_embedding_registration_result(result.model_dump(mode="json"))
-    fields = (
-        "operation_key",
-        "request_sha256",
-        "index_id",
-        "index_revision_id",
-        "index_manifest",
-        "index_sha256",
-    )
-    if any(getattr(result, field) != getattr(command, field) for field in fields) or (
-        result.previous_index_revision_id != command.expected_current_index_revision_id
-        or result.registered_lock_version != command.expected_lock_version + 1
-    ):
-        raise ValueError("embedding registration receipt differs from its exact command")
+    validate_embedding_registration_receipt_binding(command, result)
     return result

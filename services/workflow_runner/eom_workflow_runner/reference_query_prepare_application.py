@@ -7,10 +7,14 @@ from typing import Literal, Protocol
 
 from eom_catalog_contracts.embedding_reference_query import ReferenceQuerySpaces
 from eom_catalog_contracts.inference_transfer_experiment import VIEWS
+from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNamespace
 from eom_catalog_contracts.reference_query_prepare import (
     ReferenceQueryPrepareErrorCode,
     ReferenceQueryPrepareReply,
+    ReferenceQueryPrepareReplyV2,
+    ReferenceQueryPrepareRequestV2,
     ReferenceQueryPrepareRequestV11,
+    SupportedReferenceQueryPrepareReply,
     SupportedReferenceQueryPrepareRequest,
     parse_supported_reference_query_prepare_request,
 )
@@ -68,20 +72,35 @@ def reference_query_prepare_identity(operator_id: str, original_key: str) -> tup
     )
 
 
+def _reply(
+    request: SupportedReferenceQueryPrepareRequest,
+    *,
+    status: Literal["READY", "FAILED", "PENDING", "UNAVAILABLE"],
+    workflow_id: str | None = None,
+    selection: CompletedSimilarityQuerySelection | None = None,
+    error_code: ReferenceQueryPrepareErrorCode | None = None,
+) -> SupportedReferenceQueryPrepareReply:
+    family = "2.0" if isinstance(request, ReferenceQueryPrepareRequestV2) else "1.0"
+    reply_type = ReferenceQueryPrepareReplyV2 if family == "2.0" else ReferenceQueryPrepareReply
+    return reply_type.model_validate(
+        dict(
+            schema_version=f"system-rag-reference-query-prepare-reply/{family}",
+            operation="PREPARE_REFERENCE_QUERY",
+            operation_id=request.operation_id,
+            request_sha256=request.request_sha256,
+            status=status,
+            workflow_id=workflow_id,
+            selection=selection,
+            error_code=error_code,
+        )
+    )
+
+
 def _failure(
     request: SupportedReferenceQueryPrepareRequest,
     code: ReferenceQueryPrepareErrorCode,
-) -> ReferenceQueryPrepareReply:
-    return ReferenceQueryPrepareReply(
-        schema_version="system-rag-reference-query-prepare-reply/1.0",
-        operation="PREPARE_REFERENCE_QUERY",
-        operation_id=request.operation_id,
-        request_sha256=request.request_sha256,
-        status="FAILED",
-        workflow_id=None,
-        selection=None,
-        error_code=code,
-    )
+) -> SupportedReferenceQueryPrepareReply:
+    return _reply(request, status="FAILED", error_code=code)
 
 
 class NativeReferenceQueryPreparation:
@@ -113,13 +132,19 @@ class NativeReferenceQueryPreparation:
         self.driver, self.spaces = driver, spaces
         self.sessions = build_session_factory(owner.catalog.engine)
 
-    def prepare(self, request: SupportedReferenceQueryPrepareRequest) -> ReferenceQueryPrepareReply:
+    def prepare(
+        self, request: SupportedReferenceQueryPrepareRequest
+    ) -> SupportedReferenceQueryPrepareReply:
         request = parse_supported_reference_query_prepare_request(request)
         caller = EmbeddingRegistryCaller(self.owner.identity.capture.operator_id)
         key, context_id = reference_query_prepare_identity(
             caller.operator_id, request.idempotency_key
         )
         config = self.owner.configuration.registry
+        if isinstance(request, ReferenceQueryPrepareRequestV2) != isinstance(
+            config.namespace, MixedEmbeddingIndexNamespace
+        ):
+            return _failure(request, "AUTHORITY_UNAVAILABLE")
         preparation = ReferenceQueryContextPreparation(
             context_id,
             SelectedEmbeddingSources(
@@ -139,7 +164,9 @@ class NativeReferenceQueryPreparation:
             8,
             consumer_purpose=(
                 request.consumer_purpose
-                if isinstance(request, ReferenceQueryPrepareRequestV11)
+                if isinstance(
+                    request, (ReferenceQueryPrepareRequestV11, ReferenceQueryPrepareRequestV2)
+                )
                 else "PAST_EXAM_VARIATION"
             ),
         )
@@ -195,11 +222,8 @@ class NativeReferenceQueryPreparation:
                     status, error_code = "FAILED", "REFERENCE_QUERY_EXECUTION_FAILED"
                 else:
                     status = "PENDING"
-                reply = ReferenceQueryPrepareReply(
-                    schema_version="system-rag-reference-query-prepare-reply/1.0",
-                    operation="PREPARE_REFERENCE_QUERY",
-                    operation_id=request.operation_id,
-                    request_sha256=request.request_sha256,
+                reply = _reply(
+                    request,
                     status=status,
                     workflow_id=workflow.workflow_id,
                     selection=selection,
@@ -212,14 +236,9 @@ class NativeReferenceQueryPreparation:
                 self.driver.offer(reply.workflow_id, self.runner)
             return reply
         except ReferenceQueryPreparationUnavailable as absent:
-            return ReferenceQueryPrepareReply(
-                schema_version="system-rag-reference-query-prepare-reply/1.0",
-                operation="PREPARE_REFERENCE_QUERY",
-                operation_id=request.operation_id,
-                request_sha256=request.request_sha256,
+            return _reply(
+                request,
                 status="UNAVAILABLE",
-                workflow_id=None,
-                selection=None,
                 error_code=absent.code,
             )
         except SimilarityContextReadError as error:

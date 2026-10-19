@@ -13,8 +13,9 @@ from sqlalchemy import create_engine
 
 @pytest.mark.parametrize("mode", ("DISABLED", "ENABLED", "INVALID"))
 @pytest.mark.parametrize("exam_mode", ("DISABLED", "ENABLED", "INVALID"))
+@pytest.mark.parametrize("mixed_hash", (None, "sha256:" + "c" * 64))
 def test_actual_runner_passes_explicit_read_service_or_fails_before_socket(
-    monkeypatch, capsys, mode, exam_mode
+    monkeypatch, capsys, mode, exam_mode, mixed_hash
 ):
     engine = create_engine("sqlite+pysqlite:///:memory:")
     monkeypatch.setattr(entry, "build_engine", lambda: engine)
@@ -25,6 +26,10 @@ def test_actual_runner_passes_explicit_read_service_or_fails_before_socket(
     monkeypatch.setenv("EOM_EXAM_SIMILARITY_READ_MODE", exam_mode)
     monkeypatch.setenv("EOM_ITEM_SIMILARITY_PUBLICATION_MODE", "DISABLED")
     monkeypatch.setenv("EOM_WORKFLOW_SIMILARITY_READ_MODE", "DISABLED")
+    if mixed_hash is None:
+        monkeypatch.delenv("EOM_MIXED_SIMILARITY_READ_CONFIG_SHA256", raising=False)
+    else:
+        monkeypatch.setenv("EOM_MIXED_SIMILARITY_READ_CONFIG_SHA256", mixed_hash)
     exam_hash = "sha256:" + "b" * 64 if exam_mode == "ENABLED" else None
     if exam_hash is None:
         monkeypatch.delenv("EOM_EXAM_SIMILARITY_READ_CONFIG_SHA256", raising=False)
@@ -79,10 +84,12 @@ def test_actual_runner_passes_explicit_read_service_or_fails_before_socket(
     )
     invalid = mode == "INVALID" or exam_mode == "INVALID"
     assert entry.serve() == (1 if invalid else 0)
+    mixed_args = {} if mixed_hash is None else {"mixed_configuration_raw_sha256": mixed_hash}
     build.assert_called_once_with(
         engine,
         mode=mode,
         configuration_raw_sha256="sha256:" + "a" * 64 if mode == "ENABLED" else None,
+        **mixed_args,
     )
     if mode == "INVALID":
         exam_build.assert_not_called()

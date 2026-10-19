@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -801,6 +802,8 @@ class KnowledgeGraphPublicationService:
         command: KnowledgeGraphPublicationCommand,
         *,
         authorized_at: datetime | None = None,
+        analysis_validator: Callable[[Session, tuple[AcceptedAnalysisProposal, ...]], None]
+        | None = None,
     ) -> KnowledgeGraphPublicationResult:
         effective_authorized_at = authorized_at or command.requested_at
         if effective_authorized_at.tzinfo is None or effective_authorized_at.utcoffset() is None:
@@ -812,6 +815,7 @@ class KnowledgeGraphPublicationService:
         existing = self._existing_publication(
             command,
             authorized_at=effective_authorized_at,
+            analysis_validator=analysis_validator,
         )
         if existing is not None:
             return existing
@@ -1009,6 +1013,7 @@ class KnowledgeGraphPublicationService:
             manifest_artifact=manifest_artifact,
             structure=structure,
             authorized_at=effective_authorized_at,
+            analysis_validator=analysis_validator,
         )
 
     def _existing_publication(
@@ -1016,6 +1021,8 @@ class KnowledgeGraphPublicationService:
         command: KnowledgeGraphPublicationCommand,
         *,
         authorized_at: datetime,
+        analysis_validator: Callable[[Session, tuple[AcceptedAnalysisProposal, ...]], None]
+        | None = None,
     ) -> KnowledgeGraphPublicationResult | None:
         with self.sessions() as session:
             publication = session.scalar(
@@ -1032,6 +1039,14 @@ class KnowledgeGraphPublicationService:
                 raise KnowledgeGraphPublicationError(
                     "KNOWLEDGE_GRAPH_IDEMPOTENCY_CONFLICT",
                     "graph publication idempotency key has different input",
+                )
+            if analysis_validator is not None:
+                analysis_validator(
+                    session,
+                    tuple(
+                        self._load_accepted_analysis(session, run_id)
+                        for run_id in command.accepted_analysis_run_ids
+                    ),
                 )
             return self._result(session, publication)
 
@@ -2657,6 +2672,8 @@ class KnowledgeGraphPublicationService:
         manifest_artifact: CatalogArtifact,
         structure: KnowledgeGraphStructureContract | None,
         authorized_at: datetime,
+        analysis_validator: Callable[[Session, tuple[AcceptedAnalysisProposal, ...]], None]
+        | None = None,
     ) -> KnowledgeGraphPublicationResult:
         with transaction(self.sessions) as session:
             session.execute(
@@ -2677,6 +2694,8 @@ class KnowledgeGraphPublicationService:
                         "KNOWLEDGE_GRAPH_IDEMPOTENCY_CONFLICT",
                         "graph publication idempotency key has different input",
                     )
+                if analysis_validator is not None:
+                    analysis_validator(session, projection.analyses)
                 return self._result(session, existing)
             publisher = session.get(OperatorRecord, command.published_by_operator_id)
             if publisher is None or publisher.status != "ACTIVE":
@@ -2739,6 +2758,10 @@ class KnowledgeGraphPublicationService:
                     "knowledge corpus changed during Artifact publication",
                 )
 
+            if analysis_validator is not None:
+                # NAS preparation is complete. Caller-owned current-source fences run
+                # inside the same transaction as the corpus CAS, before any Graph rows.
+                analysis_validator(session, projection.analyses)
             source_set_sha256 = content_sha256(
                 [
                     {

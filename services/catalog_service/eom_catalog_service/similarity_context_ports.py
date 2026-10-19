@@ -12,11 +12,17 @@ from eom_catalog_contracts.embedding_reference_query_v11 import SupportedReferen
 from eom_catalog_contracts.inference_transfer_experiment import ExperimentView, PopulationSource
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
 from eom_catalog_contracts.knowledge import KnowledgeSolutionEvidencePointer
+from eom_catalog_contracts.registered_item_review_solution import (
+    RegisteredItemReviewSolutionEvidence,
+)
+from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_contracts.similarity_context import (
-    SimilarityContext,
-    SimilarityContextRequest,
     SimilarityFailureCode,
     SimilarityUnavailableReason,
+)
+from eom_catalog_contracts.similarity_context_v2 import (
+    SupportedSimilarityContext,
+    SupportedSimilarityContextRequest,
 )
 from eom_protocol.artifact_members import ArtifactMemberPointer
 
@@ -47,8 +53,9 @@ def similarity_context_error_from_registry(
 @dataclass(frozen=True, slots=True)
 class PreparedSimilaritySource:
     source: PopulationSource
-    profile: InferenceTransferProfilePointer | None
+    profile: InferenceTransferProfilePointer | RegisteredReviewProfilePointer | None
     solution_evidence: KnowledgeSolutionEvidencePointer | None
+    review_evidence: RegisteredItemReviewSolutionEvidence | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,20 +95,20 @@ class SimilarityContextSourceReadPort(Protocol):
     """Existing Catalog owner operations; each call uses actual current read authority."""
 
     def prepare_similarity_context(
-        self, caller: EmbeddingRegistryCaller, request: SimilarityContextRequest
+        self, caller: EmbeddingRegistryCaller, request: SupportedSimilarityContextRequest
     ) -> PreparedSimilarityContext: ...
 
     def read_similarity_views(
         self,
         caller: EmbeddingRegistryCaller,
-        request: SimilarityContextRequest,
+        request: SupportedSimilarityContextRequest,
         prepared: PreparedSimilarityContext,
     ) -> tuple[ResolvedPinnedEmbeddingIndex, ...]: ...
 
     def reauthorize_similarity_context(
         self,
         caller: EmbeddingRegistryCaller,
-        request: SimilarityContextRequest,
+        request: SupportedSimilarityContextRequest,
         prepared: PreparedSimilarityContext,
     ) -> None:
         """Recheck the full exact population, including unselected/no-report sources."""
@@ -112,7 +119,7 @@ class SimilarityReferenceQueryReadPort(Protocol):
     def resolve_reference_query(
         self,
         caller: EmbeddingRegistryCaller,
-        request: SimilarityContextRequest,
+        request: SupportedSimilarityContextRequest,
         prepared: PreparedSimilarityContext,
     ) -> VerifiedReferenceQueryRead | SimilarityQueryUnavailable:
         """Only admitted committed QUERY; never benchmark replay or DOCUMENT relabeling."""
@@ -123,5 +130,5 @@ class SimilarityContextReadPort(Protocol):
     """Existing common application's public read operation, not a new source authority."""
 
     def compose(
-        self, caller: EmbeddingRegistryCaller, request: SimilarityContextRequest
-    ) -> SimilarityContext: ...
+        self, caller: EmbeddingRegistryCaller, request: SupportedSimilarityContextRequest
+    ) -> SupportedSimilarityContext: ...

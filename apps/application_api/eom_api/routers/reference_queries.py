@@ -6,7 +6,7 @@ from eom_api_contracts import SingleResponse
 from eom_api_contracts.reference_queries import SupportedReferenceQueryPrepareInput
 from eom_catalog_contracts.reference_query_prepare import (
     MAX_REFERENCE_QUERY_PREPARE_REQUEST_BYTES,
-    ReferenceQueryPrepareReply,
+    SupportedReferenceQueryPrepareReply,
 )
 from eom_operator_identity import PermissionKey
 from fastapi import APIRouter, Depends, Request, Response
@@ -28,10 +28,10 @@ router = APIRouter(prefix="/knowledge/reference-queries", tags=["reference-queri
 @router.post(
     "/preparation",
     operation_id="reference_query_prepare",
-    response_model=SingleResponse[ReferenceQueryPrepareReply],
+    response_model=SingleResponse[SupportedReferenceQueryPrepareReply],
     responses={
         202: {
-            "model": SingleResponse[ReferenceQueryPrepareReply],
+            "model": SingleResponse[SupportedReferenceQueryPrepareReply],
             "description": "Original preparation admitted or still pending",
         }
     },
@@ -43,7 +43,7 @@ async def prepare(
     response: Response,
     authentication: Auth,
     idempotency_key: IdempotencyKey,
-) -> SingleResponse[ReferenceQueryPrepareReply]:
+) -> SingleResponse[SupportedReferenceQueryPrepareReply]:
     del authentication
     if len(await request.body()) > MAX_REFERENCE_QUERY_PREPARE_REQUEST_BYTES:
         raise ApiError(

@@ -12,10 +12,11 @@ from eom_catalog_contracts.reference_query_prepare import (
     MAX_REFERENCE_QUERY_PREPARE_REPLY_BYTES,
     MAX_REFERENCE_QUERY_PREPARE_REQUEST_BYTES,
     REFERENCE_QUERY_PREPARE_SOCKET,
-    ReferenceQueryPrepareReply,
+    SupportedReferenceQueryPrepareReply,
     SupportedReferenceQueryPrepareRequest,
+    parse_supported_reference_query_prepare_reply,
     parse_supported_reference_query_prepare_request,
-    validate_reference_query_prepare_reply,
+    validate_supported_reference_query_prepare_reply,
 )
 from eom_identifiers import canonical_json_bytes
 from eom_identity_service.owner_session_transport import (
@@ -58,7 +59,7 @@ class NativeReferenceQueryPrepareClient:
         self,
         context: RequestContext,
         request: SupportedReferenceQueryPrepareRequest,
-    ) -> ReferenceQueryPrepareReply:
+    ) -> SupportedReferenceQueryPrepareReply:
         try:
             request = parse_supported_reference_query_prepare_request(request)
             if type(context) is not RequestContext:
@@ -114,10 +115,10 @@ class NativeReferenceQueryPrepareClient:
                     deadline=deadline,
                     limit=MAX_REFERENCE_QUERY_PREPARE_REPLY_BYTES,
                 )
-                reply = ReferenceQueryPrepareReply.model_validate(decode_chat_frame(raw))
+                reply = parse_supported_reference_query_prepare_reply(decode_chat_frame(raw))
                 if canonical_json_bytes(reply.model_dump(mode="json")) != raw:
                     raise ValueError("noncanonical reply")
-                validate_reference_query_prepare_reply(request, reply)
+                validate_supported_reference_query_prepare_reply(request, reply)
                 return reply
         except Exception:
             # The owner may already have committed the original QUERY. Do not

@@ -121,7 +121,7 @@ def test_deploy_release_uses_only_noninteractive_sudo() -> None:
     assert "prepare_runtime_dependencies\n    build_release" in source
     assert "eom-codex-auth identity must be deployed before the API unit" in source
     assert 'source "${RELEASE_OPERATOR_LIBRARY}"' in source
-    assert 'run_release_operator MIGRATION_VERIFY_0056 "${COMMIT}"' in source
+    assert 'run_release_operator MIGRATION_VERIFY_0058 "${COMMIT}"' in source
     catalog = _catalog_resource_inventory(source)
     assert catalog["legacy-assessment/legacy-item-extraction-batch-v2.schema.json"] == (
         "schemas/legacy-assessment/legacy-item-extraction-batch-v2.schema.json"
@@ -559,9 +559,9 @@ def test_release_migration_wrapper_pins_source_and_database_owner() -> None:
         "engine = build_engine()"
     )
     assert 'MIGRATION_REVISION = "20261010_0051"' in operator
-    # Current releases retain the independently admitted 0052-0056 successors;
+    # Current releases retain the independently admitted 0052-0058 successors;
     # the legacy standalone wrapper still cannot turn into an implicit head upgrade.
-    assert CURRENT_MIGRATION_REVISION == "20261017_0056"
+    assert CURRENT_MIGRATION_REVISION == "20261019_0058"
     assert "target_revision != CURRENT_MIGRATION_REVISION" in operator
     assert 'owner[0] != owner[1] or owner[2] is not True or "app" not in owner[3]' in operator
     assert 'Callback.MIGRATION_UPGRADE_0051: (MIGRATION_REVISION, "20261009_0050")' in operator
@@ -602,6 +602,10 @@ def test_release_operator_boundary_requires_explicit_pins_without_unsafe_fallbac
         "MIGRATION_UPGRADE_0055",
         "MIGRATION_VERIFY_0056",
         "MIGRATION_UPGRADE_0056",
+        "MIGRATION_VERIFY_0057",
+        "MIGRATION_UPGRADE_0057",
+        "MIGRATION_VERIFY_0058",
+        "MIGRATION_UPGRADE_0058",
         "API_ROLE_BOOTSTRAP",
         "CATALOG_ROLE_RECONCILE",
         "HWPX_ROLE_RECONCILE",

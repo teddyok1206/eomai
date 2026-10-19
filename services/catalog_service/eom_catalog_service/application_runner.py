@@ -263,11 +263,20 @@ def serve() -> int:
         from eom_catalog_service.chat_knowledge_resolution import ChatKnowledgeResolutionService
         from eom_catalog_service.chat_rag_resolution import ChatRagResolutionService
 
-        similarity_reads = build_catalog_similarity_context_reads(
-            engine,
-            mode=os.environ.get("EOM_SIMILARITY_READ_MODE", "DISABLED"),
-            configuration_raw_sha256=os.environ.get("EOM_SIMILARITY_READ_CONFIG_SHA256"),
-        )
+        mixed_read_pin = os.environ.get("EOM_MIXED_SIMILARITY_READ_CONFIG_SHA256")
+        if mixed_read_pin is None:
+            similarity_reads = build_catalog_similarity_context_reads(
+                engine,
+                mode=os.environ.get("EOM_SIMILARITY_READ_MODE", "DISABLED"),
+                configuration_raw_sha256=os.environ.get("EOM_SIMILARITY_READ_CONFIG_SHA256"),
+            )
+        else:
+            similarity_reads = build_catalog_similarity_context_reads(
+                engine,
+                mode=os.environ.get("EOM_SIMILARITY_READ_MODE", "DISABLED"),
+                configuration_raw_sha256=os.environ.get("EOM_SIMILARITY_READ_CONFIG_SHA256"),
+                mixed_configuration_raw_sha256=mixed_read_pin,
+            )
         server = CatalogApplicationServer(
             StructuredItemContentImportService(engine),
             RegistryService(engine),

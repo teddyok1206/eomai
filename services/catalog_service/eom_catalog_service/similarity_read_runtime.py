@@ -11,7 +11,10 @@ from eom_catalog_contracts.models import Sha256
 from eom_catalog_contracts.similarity_reader_configuration import (
     MAX_SIMILARITY_READER_CONFIGURATION_BYTES,
     SimilarityReaderConfiguration,
+    SupportedSimilarityReaderConfiguration,
     parse_similarity_reader_configuration,
+    parse_similarity_reader_configuration_v2,
+    require_mixed_similarity_reader_cohost,
 )
 from eom_identifiers import sha256_bytes
 from eom_identity_service import (
@@ -44,6 +47,7 @@ from eom_catalog_service.workflow_similarity_read_service import (
 )
 
 SIMILARITY_READER_CONFIGURATION_PATH = Path("/etc/eom/catalog-similarity-read.json")
+MIXED_SIMILARITY_READER_CONFIGURATION_PATH = Path("/etc/eom/catalog-mixed-similarity-read.json")
 EXAM_SIMILARITY_READER_CONFIGURATION_PATH = Path("/etc/eom/catalog-exam-similarity-read.json")
 
 
@@ -169,6 +173,13 @@ def read_exam_similarity_reader_configuration(expected_raw_sha256: str) -> bytes
     )
 
 
+def read_mixed_similarity_reader_configuration(expected_raw_sha256: str) -> bytes:
+    """Separate protected opt-in; neither primary nor exam selection is a fallback."""
+    return _read_reader_configuration(
+        MIXED_SIMILARITY_READER_CONFIGURATION_PATH, expected_raw_sha256
+    )
+
+
 def _read_reader_configuration(path: Path, expected_raw_sha256: str) -> bytes:
     TypeAdapter(Sha256).validate_python(expected_raw_sha256)
     directories: list[tuple[int, int | None, str, tuple[int, ...]]] = []
@@ -233,6 +244,13 @@ def _admitted_reader_inputs(
     PostgresOperatorAuthorizationFence,
 ]:
     selection = parse_similarity_reader_configuration(raw)
+    registry, identity = _admit_reader_selection(engine, selection)
+    return selection, registry, identity
+
+
+def _admit_reader_selection(
+    engine: Engine, selection: SupportedSimilarityReaderConfiguration
+) -> tuple[EmbeddingRegistryOwnerConfiguration, PostgresOperatorAuthorizationFence]:
     pin = OperatorAuthorizationFenceOwnerPin(
         selection.database_owner.role_name, selection.database_owner.role_oid
     )
@@ -252,7 +270,7 @@ def _admitted_reader_inputs(
         selection.recipe,
         selection.source_classes,
     )
-    return selection, registry, PostgresOperatorAuthorizationFence(pin)
+    return registry, PostgresOperatorAuthorizationFence(pin)
 
 
 def build_catalog_similarity_context_reads(
@@ -260,6 +278,7 @@ def build_catalog_similarity_context_reads(
     *,
     mode: str,
     configuration_raw_sha256: str | None = None,
+    mixed_configuration_raw_sha256: str | None = None,
     settings: CatalogSettings | None = None,
 ) -> CatalogSimilarityContextReadService | None:
     if mode == "DISABLED":
@@ -281,6 +300,24 @@ def build_catalog_similarity_context_reads(
             identity_fence=identity,
             settings=settings,
         )
-        return CatalogSimilarityContextReadService(owner)
+        mixed_owner = None
+        if mixed_configuration_raw_sha256 is not None:
+            mixed = parse_similarity_reader_configuration_v2(
+                read_mixed_similarity_reader_configuration(mixed_configuration_raw_sha256)
+            )
+            require_mixed_similarity_reader_cohost(selection, mixed)
+            mixed_registry, mixed_identity = _admit_reader_selection(engine, mixed)
+            mixed_owner = CatalogReferenceQueryReadOwner(
+                engine,
+                ReferenceQueryOwnerConfiguration(
+                    mixed_registry,
+                    mixed.native_execution_policy,
+                    mixed.native_execution_policy_sha256,
+                    mixed.runtime_bundle,
+                ),
+                identity_fence=mixed_identity,
+                settings=settings,
+            )
+        return CatalogSimilarityContextReadService(owner, mixed_owner=mixed_owner)
     except Exception:
         raise SimilarityReaderRuntimeError() from None

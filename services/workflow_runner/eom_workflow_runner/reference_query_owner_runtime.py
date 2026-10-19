@@ -30,7 +30,10 @@ from eom_orchestrator.native_embedding_cpu_execution import validate_fixed_nativ
 from eom_orchestrator.native_embedding_query_systemd import FixedNativeQueryLauncher
 from eom_orchestrator.settings import Settings
 from eom_workflow.local_indexing_owner_configuration import LocalIndexingOwnerDatabasePin
-from eom_workflow.reference_query_owner_configuration import ReferenceQueryServiceConfiguration
+from eom_workflow.reference_query_owner_configuration import (
+    SupportedReferenceQueryServiceConfiguration,
+    validate_supported_reference_query_service_configuration,
+)
 from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session
 
@@ -94,7 +97,7 @@ class ReferenceQueryRoleExecutionDisabled:
 
 def require_current_reference_query_provider(
     admission: ProtectedInstalledIdentityProviderAdmission,
-    configuration: ReferenceQueryServiceConfiguration,
+    configuration: SupportedReferenceQueryServiceConfiguration,
 ) -> None:
     if type(admission) is not ProtectedInstalledIdentityProviderAdmission:
         raise ValueError("REFERENCE_QUERY_OWNER_PROVIDER_UNAVAILABLE")
@@ -121,7 +124,7 @@ def require_current_reference_query_provider(
 @dataclass(frozen=True, slots=True)
 class ReferenceQueryOwnerRuntime:
     engine: Engine
-    configuration: ReferenceQueryServiceConfiguration
+    configuration: SupportedReferenceQueryServiceConfiguration
     publisher: ControlFileSetPublisher
     catalog_settings: CatalogSettings
     owner_configuration: ReferenceQueryOwnerConfiguration
@@ -185,11 +188,11 @@ class ReferenceQueryOwnerRuntime:
 
 
 def build_reference_query_owner_runtime(
-    configuration: ReferenceQueryServiceConfiguration,
+    configuration: SupportedReferenceQueryServiceConfiguration,
     admission: ProtectedInstalledIdentityProviderAdmission,
 ) -> ReferenceQueryOwnerRuntime:
     """Installed child preflight. No operator capture, queue work, native run or NAS commit."""
-    configuration = ReferenceQueryServiceConfiguration.model_validate(configuration)
+    configuration = validate_supported_reference_query_service_configuration(configuration)
     require_current_reference_query_provider(admission, configuration)
     identity = fixed_owner_identity()
     if (os.geteuid(), os.getegid()) != (identity.owner_uid, identity.owner_gid) or os.getgroups():

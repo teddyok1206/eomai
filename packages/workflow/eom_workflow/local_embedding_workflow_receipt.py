@@ -69,7 +69,10 @@ class ResolvedNativeIndexCoverage:
     previous: tuple[ArtifactMemberPointer, EmbeddingIndexManifest] | None = None
 
 
-def _hash(value: NativeEmbeddingContract, field: str, maximum: int) -> None:
+def validate_local_embedding_completion_metadata(
+    value: NativeEmbeddingContract, field: str, maximum: int
+) -> None:
+    """Shared canonical size/hash rule, not a completion or source authority result."""
     if len(canonical_json_bytes(value.model_dump(mode="json"))) > maximum:
         raise ValueError("native completion metadata exceeds its byte bound")
     if getattr(value, field) != content_sha256(value.model_dump(mode="json", exclude={field})):
@@ -104,7 +107,9 @@ class LocalEmbeddingStepOutput(NativeEmbeddingContract):
             or self.receipt.media_type != "application/json"
         ):
             raise ValueError("native completion receipt member differs")
-        _hash(self, "output_sha256", MAX_LOCAL_EMBEDDING_STEP_OUTPUT_BYTES)
+        validate_local_embedding_completion_metadata(
+            self, "output_sha256", MAX_LOCAL_EMBEDDING_STEP_OUTPUT_BYTES
+        )
         return self
 
 
@@ -150,7 +155,9 @@ class LocalEmbeddingWorkflowReceipt(NativeEmbeddingContract):
             <= self.registration_observed_at
         ):
             raise ValueError("native registration observation time precedes its provenance")
-        _hash(self, "receipt_sha256", MAX_LOCAL_EMBEDDING_WORKFLOW_RECEIPT_BYTES)
+        validate_local_embedding_completion_metadata(
+            self, "receipt_sha256", MAX_LOCAL_EMBEDDING_WORKFLOW_RECEIPT_BYTES
+        )
         return self
 
 

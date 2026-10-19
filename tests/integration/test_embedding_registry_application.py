@@ -605,16 +605,19 @@ def test_historical_namespace_uses_one_registered_pk_batch_and_real_artifact(
     with guarded_engine.connect() as connection, connection.begin():
         connection.execute(text("SET LOCAL enable_seqscan=off"))
         explained = connection.scalar(text("EXPLAIN (FORMAT JSON) " + sql))
-    pending, indexes = [explained[0]["Plan"]], []
+    pending, indexes = [(explained[0]["Plan"], None)], []
     while pending:
-        node = pending.pop()
-        if node.get("Relation Name") == "embedding_index_revisions":
+        node, parent_relation = pending.pop()
+        relation = node.get("Relation Name", parent_relation)
+        # Bitmap Index Scan records its index on a child without Relation Name;
+        # inherit ONLY that exact relation, not indexes from the joined head.
+        if relation == "embedding_index_revisions" and node.get("Index Name"):
             indexes.append(node.get("Index Name", ""))
-        pending.extend(node.get("Plans", ()))
+        pending.extend((child, relation) for child in node.get("Plans", ()))
     assert any(
         name in {"embedding_index_revisions_pkey", "uq_embedding_index_revision_identity"}
         for name in indexes
-    )
+    ), explained
 
 
 def test_atomic_registration_historical_replay_and_stale_identity_map(

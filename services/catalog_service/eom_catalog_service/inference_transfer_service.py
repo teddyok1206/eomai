@@ -11,6 +11,7 @@ from eom_catalog_contracts.item_inference_transfer import (
     InferenceTransferProfilePointer,
     InferenceTransferSourceBasis,
 )
+from eom_catalog_contracts.knowledge import same_approved_item_source_identity
 from eom_identifiers import content_sha256
 
 from eom_catalog_service.inference_transfer_ports import (
@@ -112,9 +113,9 @@ class InferenceTransferSearchResult:
     eligible_profile_set_sha256: str
 
 
-def bounded_profile_channel_union(
-    channels: tuple[tuple[InferenceTransferProfilePointer, ...], ...], *, top_k: int
-) -> tuple[InferenceTransferProfilePointer, ...]:
+def bounded_profile_channel_union[Profile](
+    channels: tuple[tuple[Profile, ...], ...], *, top_k: int
+) -> tuple[Profile, ...]:
     """Interleave independent ranked channels without comparing their different scores."""
     if (
         type(top_k) is not int
@@ -126,8 +127,8 @@ def bounded_profile_channel_union(
         )
     ):
         raise ValueError("INFERENCE_TRANSFER_CHANNEL_BUDGET_INVALID")
-    ordered: list[InferenceTransferProfilePointer] = []
-    seen: set[InferenceTransferProfilePointer] = set()
+    ordered: list[Profile] = []
+    seen: set[Profile] = set()
     for index in range(max((len(channel) for channel in channels), default=0)):
         for channel in channels:
             if index < len(channel) and channel[index] not in seen:
@@ -144,32 +145,6 @@ def _profile_pointer(profile: InferenceTransferProfile) -> InferenceTransferProf
         profile_id=profile.profile_id,
         profile_revision_id=profile.profile_revision_id,
         profile_sha256=profile.profile_sha256,
-    )
-
-
-def _same_approved_source_identity(
-    left: ApprovedItemKnowledgeSourceV2, right: ApprovedItemKnowledgeSourceV2
-) -> bool:
-    """Compare the report's core pointer with an admitted visual-source subtype.
-
-    The source adapter separately retains and reauthorizes every full canonical
-    source value. ApprovedPastExam V3 adds page lineage that V10 reports do not
-    copy; subclass equality must not reject the exact inherited Item/member pin.
-    """
-    return (
-        left.source_kind,
-        left.source_class,
-        left.item_id,
-        left.item_revision_id,
-        left.lifecycle_state,
-        left.artifact_member,
-    ) == (
-        right.source_kind,
-        right.source_class,
-        right.item_id,
-        right.item_revision_id,
-        right.lifecycle_state,
-        right.artifact_member,
     )
 
 
@@ -216,7 +191,7 @@ class InferenceTransferApplicationService:
             if profile.source_basis.source.source_class not in command.source_classes:
                 raise InferenceTransferServiceError("INFERENCE_TRANSFER_UNADMITTED_PROFILE")
             source = sources_by_run.get(profile.source_basis.solution_evidence.base_analysis_run_id)
-            if source is None or not _same_approved_source_identity(
+            if source is None or not same_approved_item_source_identity(
                 source, profile.source_basis.source
             ):
                 raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH")

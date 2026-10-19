@@ -9,10 +9,23 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from enum import StrEnum
 
-from eom_catalog_contracts.local_indexing_policy import local_indexing_authorization_audit_sha256
-from eom_catalog_service.embedding_index_refresh_plan import plan_index_membership_refresh
+from eom_catalog_contracts.inference_transfer_embedding import (
+    EmbeddingIndexManifest,
+    EmbeddingSourceBinding,
+)
+from eom_catalog_contracts.local_indexing_mixed_policy import (
+    LocalIndexingMixedAccessPolicy,
+    supported_local_indexing_authorization_audit_sha256,
+)
+from eom_catalog_contracts.mixed_embedding_index import MixedEmbeddingIndexManifest
+from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNamespace
+from eom_catalog_service.embedding_index_refresh_plan import (
+    mixed_index_membership_refresh_reason,
+    plan_index_membership_refresh,
+)
 from eom_catalog_service.embedding_registry_application import prepare_missing_embedding_bindings
 from eom_catalog_service.local_embedding_source_plan import build_local_embedding_source_plan
+from eom_catalog_service.local_embedding_source_plan_v2 import build_local_embedding_source_plan_v2
 from eom_identifiers import content_sha256
 from eom_orchestrator.local_embedding_control_artifacts import (
     LocalEmbeddingControlArtifactPublisher,
@@ -20,14 +33,16 @@ from eom_orchestrator.local_embedding_control_artifacts import (
 from eom_workflow.local_embedding_index_refresh import (
     IndexMembershipRefreshBasis,
 )
-from eom_workflow.local_embedding_request import (
-    local_embedding_request_actor,
-    parse_local_embedding_executable_request,
+from eom_workflow.local_embedding_request_v2 import (
+    parse_supported_local_embedding_request,
+    supported_local_embedding_request_actor,
 )
+from eom_workflow.local_embedding_source_plan_v2 import LocalEmbeddingSourcePlanV2
 from eom_workflow.local_embedding_workflow import (
     LOCAL_EMBEDDING_WORKFLOW_KEY,
     LOCAL_EMBEDDING_WORKFLOW_VERSION,
 )
+from eom_workflow.local_embedding_workflow_v2 import LOCAL_EMBEDDING_WORKFLOW_V2_VERSION
 
 from eom_workflow_runner.local_embedding_native_executor import CatalogNativeEmbeddingExecutor
 from eom_workflow_runner.local_embedding_owner_admission import CatalogLocalEmbeddingOwnerAdmission
@@ -97,6 +112,9 @@ class LocalEmbeddingServiceReconciliation:
             controls = owner.resolve_reconciliation_controls(
                 session, query, executor.runtime_profile
             )
+            mixed = isinstance(query.namespace, MixedEmbeddingIndexNamespace)
+            if mixed != isinstance(controls.grant, LocalIndexingMixedAccessPolicy):
+                raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_SOURCE_MISMATCH")
             prepared = prepare_missing_embedding_bindings(
                 session, controls.caller, query, owner.catalog
             )
@@ -118,15 +136,48 @@ class LocalEmbeddingServiceReconciliation:
             ):
                 raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_SOURCE_MISMATCH")
             refresh: IndexMembershipRefreshBasis | None = None
+            refresh_reason: str | None = None
             if prepared.bindings:
                 previous = owner.catalog.resolve_indexing_namespace_predecessor(
                     session, controls.caller, query
                 )
-                refresh = plan_index_membership_refresh(
-                    eligible_sources=resolved.sources,
-                    available_bindings=prepared.bindings,
-                    previous=previous,
-                )
+                if mixed:
+                    mixed_previous = None
+                    if previous is not None:
+                        pointer, prior_index = previous
+                        if not isinstance(prior_index, MixedEmbeddingIndexManifest):
+                            raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_SOURCE_MISMATCH")
+                        mixed_previous = pointer, prior_index
+                    refresh_reason = mixed_index_membership_refresh_reason(
+                        eligible_sources=resolved.sources,
+                        available_bindings=prepared.bindings,
+                        previous=mixed_previous,
+                    )
+                    if refresh_reason is not None:
+                        # Metadata-only work reuses the entire currently available
+                        # subset (<=1024), not newly missing rows. maximum_targets
+                        # remains the bound for new numerical work, not this read.
+                        targets = tuple(
+                            sorted(b.source.item_revision_id for b in prepared.bindings)
+                        )
+                else:
+                    legacy_bindings = tuple(
+                        b for b in prepared.bindings if isinstance(b, EmbeddingSourceBinding)
+                    )
+                    if len(legacy_bindings) != len(prepared.bindings):
+                        raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_SOURCE_MISMATCH")
+                    legacy_previous = None
+                    if previous is not None:
+                        legacy_pointer, legacy_index = previous
+                        if not isinstance(legacy_index, EmbeddingIndexManifest):
+                            raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_SOURCE_MISMATCH")
+                        legacy_previous = legacy_pointer, legacy_index
+                    refresh = plan_index_membership_refresh(
+                        eligible_sources=resolved.sources,
+                        available_bindings=legacy_bindings,
+                        previous=legacy_previous,
+                    )
+                    refresh_reason = None if refresh is None else refresh.reason
                 if refresh is not None:
                     # One already available source witnesses this metadata-only
                     # request, even while more sources need vectors. Publish
@@ -141,7 +192,7 @@ class LocalEmbeddingServiceReconciliation:
                 missing_binding_count=len(missing.missing),
                 selected_target_count=len(targets),
                 reusable_encoding_count=len(missing.reusable_rows),
-                index_refresh_reason=None if refresh is None else refresh.reason,
+                index_refresh_reason=refresh_reason,
             )
             # Fresh current checks also apply to no-op/report-wait observations.
             late = owner.resolve_reconciliation_controls(session, query, executor.runtime_profile)
@@ -158,39 +209,60 @@ class LocalEmbeddingServiceReconciliation:
                     else ReconciliationState.UP_TO_DATE
                 )
                 return replace(observed, state=state)
+            definition_version = (
+                LOCAL_EMBEDDING_WORKFLOW_V2_VERSION if mixed else LOCAL_EMBEDDING_WORKFLOW_VERSION
+            )
             definition = admitted_workflow_definition(
                 session,
                 definition_key=LOCAL_EMBEDDING_WORKFLOW_KEY,
-                definition_version=LOCAL_EMBEDDING_WORKFLOW_VERSION,
+                definition_version=definition_version,
             )
             if definition is None or definition.definition_hash != (
                 controls.policy.workflow_definition_sha256
             ):
                 raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_DEFINITION_UNAVAILABLE")
-            plan = build_local_embedding_source_plan(query, resolved, target_revision_ids=targets)
+            plan = (
+                build_local_embedding_source_plan_v2(
+                    query,
+                    resolved,
+                    target_revision_ids=targets,
+                    base_analysis_run_ids=dict(resolved.base_analysis_run_ids),
+                )
+                if mixed
+                else build_local_embedding_source_plan(query, resolved, target_revision_ids=targets)
+            )
             plan_key = content_sha256(
                 {"plan": plan.plan_sha256, "source_commit": self.controls.source_commit}
             )
             # Only Orchestrator publishes; retained source/service locks protect
             # this preparation root. No model/claim happens while locks are held.
-            saved = self.controls.publish_observed_source_plan(
-                plan, idempotency_key="local-embedding-plan:" + plan_key.removeprefix("sha256:")
+            plan_publication_key = "local-embedding-plan:" + plan_key.removeprefix("sha256:")
+            if isinstance(plan, LocalEmbeddingSourcePlanV2):
+                saved = self.controls.publish_observed_source_plan_v2(
+                    plan, idempotency_key=plan_publication_key
+                )
+            else:
+                saved = self.controls.publish_observed_source_plan(
+                    plan, idempotency_key=plan_publication_key
+                )
+            authorization_audit = supported_local_indexing_authorization_audit_sha256(
+                controls.grant
             )
             body = {
-                "schema_version": "local-embedding-workflow-request/1.2",
+                "schema_version": "local-embedding-workflow-request/2.0"
+                if mixed
+                else "local-embedding-workflow-request/1.2",
                 "request_name": "LOCAL_EMBEDDING_WORKFLOW_REQUEST",
                 "purpose": "LOCAL_EMBEDDING",
                 "workflow_definition_key": LOCAL_EMBEDDING_WORKFLOW_KEY,
-                "workflow_definition_version": LOCAL_EMBEDDING_WORKFLOW_VERSION,
+                "workflow_definition_version": definition_version,
                 "workflow_definition_sha256": definition.definition_hash,
                 "actor_context": {
                     "kind": "LOCAL_INDEXING_SERVICE",
                     **controls.caller.service.model_dump(mode="json"),
                     "service_policy_revision_id": controls.grant.access_policy_revision_id,
                     "service_policy_sha256": controls.grant.content_sha256,
-                    "authorization_audit_sha256": local_indexing_authorization_audit_sha256(
-                        controls.grant
-                    ),
+                    "authorization_audit_sha256": authorization_audit,
                 },
                 "corpus_id": query.corpus_id,
                 "graph_snapshot": query.graph_snapshot.model_dump(mode="json"),
@@ -214,10 +286,10 @@ class LocalEmbeddingServiceReconciliation:
                     "schema_version": "local-embedding-workflow-request/1.3",
                     "reconciliation_basis": refresh.model_dump(mode="json"),
                 }
-            request = parse_local_embedding_executable_request(
+            request = parse_supported_local_embedding_request(
                 body | {"request_sha256": content_sha256(body)}
             )
-            actor_type, actor_id = local_embedding_request_actor(request)
+            actor_type, actor_id = supported_local_embedding_request_actor(request)
             started = start_local_embedding_in_session(
                 session,
                 definition=definition,

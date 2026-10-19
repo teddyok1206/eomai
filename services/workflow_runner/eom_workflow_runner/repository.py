@@ -11,6 +11,7 @@ from typing import Any, Literal
 
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
+from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNamespace
 from eom_identifiers import content_sha256
 from eom_operator_identity.contracts import OperatorId
 from eom_operator_identity.local_indexing_service import ServiceId
@@ -34,10 +35,13 @@ from eom_workflow.identifiers import (
 from eom_workflow.inference_transfer import TRANSFER_PAIR_WORKFLOW_KEY
 from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
 from eom_workflow.local_embedding_request import (
-    LocalEmbeddingExecutableRequest,
     LocalEmbeddingServiceWorkflowRequest,
     LocalEmbeddingWorkflowRequestV11,
-    parse_local_embedding_executable_request,
+)
+from eom_workflow.local_embedding_request_v2 import (
+    LocalEmbeddingWorkflowRequestV2,
+    SupportedLocalEmbeddingRequest,
+    parse_supported_local_embedding_request,
 )
 from eom_workflow.local_embedding_workflow import (
     LOCAL_EMBEDDING_EXECUTION_PROTOCOL,
@@ -178,7 +182,7 @@ class NativeCommandActorSelection:
 
     actor_type: Literal["human", "local_indexing_service"]
     actor_id: str
-    namespace: EmbeddingIndexNamespace | None = None
+    namespace: EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace | None = None
 
     def __post_init__(self) -> None:
         if self.actor_type == "human":
@@ -190,7 +194,9 @@ class NativeCommandActorSelection:
         if self.namespace is not None:
             if self.actor_type != "local_indexing_service":
                 raise ValueError("NATIVE_COMMAND_ACTOR_SELECTION_INVALID")
-            EmbeddingIndexNamespace.model_validate(raw_similarity_contract_value(self.namespace))
+            if type(self.namespace) not in (EmbeddingIndexNamespace, MixedEmbeddingIndexNamespace):
+                raise ValueError("NATIVE_COMMAND_ACTOR_SELECTION_INVALID")
+            type(self.namespace).model_validate(raw_similarity_contract_value(self.namespace))
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,7 +223,7 @@ class CommandCandidate:
     workflow_state: str
     workflow_lock_version: int
     native_request: (
-        LocalEmbeddingExecutableRequest
+        SupportedLocalEmbeddingRequest
         | SupportedReferenceQueryWorkflowRequest
         | PrivateChatQueryWorkflowRequest
         | None
@@ -231,6 +237,7 @@ def _native_workflow_filter() -> ColumnElement[bool]:
         "local-embedding-workflow-request/1.1",
         "local-embedding-workflow-request/1.2",
         "local-embedding-workflow-request/1.3",
+        "local-embedding-workflow-request/2.0",
         *REFERENCE_QUERY_REQUEST_VERSIONS,
         "private-chat-query-workflow-request/1.0",
     )
@@ -411,7 +418,7 @@ def _command_candidate(
     family: CommandExecutionFamily,
 ) -> CommandCandidate:
     native_request: (
-        LocalEmbeddingExecutableRequest
+        SupportedLocalEmbeddingRequest
         | SupportedReferenceQueryWorkflowRequest
         | PrivateChatQueryWorkflowRequest
         | None
@@ -678,7 +685,7 @@ def workflow_request_storage_document(
     request: (
         WorkflowRequest
         | InferenceTransferWorkflowRequest
-        | LocalEmbeddingExecutableRequest
+        | SupportedLocalEmbeddingRequest
         | SupportedReferenceQueryWorkflowRequest
         | PrivateChatQueryWorkflowRequest
     ),
@@ -689,9 +696,14 @@ def workflow_request_storage_document(
     if isinstance(request, SupportedReferenceQueryWorkflowRequest):
         return parse_supported_reference_query_workflow_request(request).model_dump(mode="json")
     if isinstance(
-        request, (LocalEmbeddingWorkflowRequestV11, LocalEmbeddingServiceWorkflowRequest)
+        request,
+        (
+            LocalEmbeddingWorkflowRequestV11,
+            LocalEmbeddingServiceWorkflowRequest,
+            LocalEmbeddingWorkflowRequestV2,
+        ),
     ):
-        checked = parse_local_embedding_executable_request(request)
+        checked = parse_supported_local_embedding_request(request)
         return checked.model_dump(mode="json")
     if isinstance(request, InferenceTransferWorkflowRequest):
         # Profiles' canonical hashes include explicit extraction/source nulls. This
@@ -844,14 +856,14 @@ def inference_transfer_business_fingerprint(
 
 def load_persisted_local_embedding_workflow_request(
     document: dict[str, Any],
-) -> LocalEmbeddingExecutableRequest:
-    """Read exact supported1.1/1.2; never upgrade history, repair nulls or use latest."""
-    return parse_local_embedding_executable_request(document)
+) -> SupportedLocalEmbeddingRequest:
+    """Read an exact supported version; never upgrade history, repair nulls or use latest."""
+    return parse_supported_local_embedding_request(document)
 
 
 def local_embedding_business_fingerprint(
     definition: WorkflowDefinitionRecord,
-    request: LocalEmbeddingExecutableRequest,
+    request: SupportedLocalEmbeddingRequest,
     *,
     actor_type: str,
     actor_id: str,
@@ -873,7 +885,7 @@ def validate_local_embedding_workflow_submission(
     workflow: WorkflowInstanceRecord,
     *,
     definition: WorkflowDefinitionRecord,
-    request: LocalEmbeddingExecutableRequest,
+    request: SupportedLocalEmbeddingRequest,
     actor_type: str,
     actor_id: str,
 ) -> WorkflowInstanceRecord:
@@ -886,6 +898,9 @@ def validate_local_embedding_workflow_submission(
     expected_request = workflow_request_storage_document(request)
     if current is None or (
         current.definition_id != definition.definition_id
+        or request.workflow_definition_key != definition.definition_key
+        or request.workflow_definition_version != definition.definition_version
+        or request.workflow_definition_sha256 != definition.definition_hash
         or current.definition_key != definition.definition_key
         or current.definition_version != definition.definition_version
         or current.definition_hash != definition.definition_hash
@@ -1037,7 +1052,7 @@ def create_workflow_instance(
     request: (
         WorkflowRequest
         | InferenceTransferWorkflowRequest
-        | LocalEmbeddingExecutableRequest
+        | SupportedLocalEmbeddingRequest
         | SupportedReferenceQueryWorkflowRequest
         | PrivateChatQueryWorkflowRequest
     ),
@@ -1214,13 +1229,23 @@ def create_workflow_instance(
         )
     if (
         isinstance(
-            request, (LocalEmbeddingWorkflowRequestV11, LocalEmbeddingServiceWorkflowRequest)
+            request,
+            (
+                LocalEmbeddingWorkflowRequestV11,
+                LocalEmbeddingServiceWorkflowRequest,
+                LocalEmbeddingWorkflowRequestV2,
+            ),
         )
         or definition.definition_key == LOCAL_EMBEDDING_WORKFLOW_KEY
     ):
         if (
             not isinstance(
-                request, (LocalEmbeddingWorkflowRequestV11, LocalEmbeddingServiceWorkflowRequest)
+                request,
+                (
+                    LocalEmbeddingWorkflowRequestV11,
+                    LocalEmbeddingServiceWorkflowRequest,
+                    LocalEmbeddingWorkflowRequestV2,
+                ),
             )
             or definition.definition_key != LOCAL_EMBEDDING_WORKFLOW_KEY
         ):
@@ -1319,7 +1344,7 @@ def _persist_workflow_instance(
     request: (
         WorkflowRequest
         | InferenceTransferWorkflowRequest
-        | LocalEmbeddingExecutableRequest
+        | SupportedLocalEmbeddingRequest
         | SupportedReferenceQueryWorkflowRequest
         | PrivateChatQueryWorkflowRequest
     ),
@@ -1354,7 +1379,12 @@ def _persist_workflow_instance(
                 definition, request, actor_type=actor_type, actor_id=actor_id
             )
             if isinstance(
-                request, (LocalEmbeddingWorkflowRequestV11, LocalEmbeddingServiceWorkflowRequest)
+                request,
+                (
+                    LocalEmbeddingWorkflowRequestV11,
+                    LocalEmbeddingServiceWorkflowRequest,
+                    LocalEmbeddingWorkflowRequestV2,
+                ),
             )
             else inference_transfer_business_fingerprint(
                 definition, request, actor_type=actor_type, actor_id=actor_id
@@ -1391,6 +1421,7 @@ def _persist_workflow_instance(
         (
             LocalEmbeddingWorkflowRequestV11,
             LocalEmbeddingServiceWorkflowRequest,
+            LocalEmbeddingWorkflowRequestV2,
             SupportedReferenceQueryWorkflowRequest,
             PrivateChatQueryWorkflowRequest,
         ),
@@ -1430,6 +1461,7 @@ def _persist_workflow_instance(
                 (
                     LocalEmbeddingWorkflowRequestV11,
                     LocalEmbeddingServiceWorkflowRequest,
+                    LocalEmbeddingWorkflowRequestV2,
                     SupportedReferenceQueryWorkflowRequest,
                     PrivateChatQueryWorkflowRequest,
                 ),
@@ -1874,7 +1906,11 @@ def claim_command_candidate(
             assert local_embedding_owner is not None
             assert isinstance(
                 candidate.native_request,
-                (LocalEmbeddingWorkflowRequestV11, LocalEmbeddingServiceWorkflowRequest),
+                (
+                    LocalEmbeddingWorkflowRequestV11,
+                    LocalEmbeddingServiceWorkflowRequest,
+                    LocalEmbeddingWorkflowRequestV2,
+                ),
             )
             local_embedding_owner.fence_mutation(
                 session, candidate.native_request, command_lease_identity(command)
@@ -1889,7 +1925,7 @@ def _validate_local_embedding_claim(
     command: WorkflowCommandRecord,
     workflow: WorkflowInstanceRecord,
     definition: WorkflowDefinitionRecord,
-    request: LocalEmbeddingExecutableRequest,
+    request: SupportedLocalEmbeddingRequest,
     owner: LocalEmbeddingOwnerAdmission,
 ) -> None:
     if (

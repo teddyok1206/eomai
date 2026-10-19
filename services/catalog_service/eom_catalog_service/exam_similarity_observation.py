@@ -15,6 +15,7 @@ from eom_catalog_contracts.exam_similarity_observation import (
     ExamViewObservation,
     parse_exam_observation_request,
 )
+from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
 from eom_catalog_contracts.similarity_context import ApprovedReferenceItemAnchor
 from eom_identifiers import content_sha256
 
@@ -49,17 +50,23 @@ def compose_exam_similarity_observation(
         reads,
         {selection.view for selection in request.views if selection.index is not None},
     )
-    members = tuple(
-        ExamObservationMember(
-            position=member.position,
-            reference=ApprovedReferenceItemAnchor(
-                source=sources[member.item_revision_id].source,
-                profile=sources[member.item_revision_id].profile,
-                solution_evidence=sources[member.item_revision_id].solution_evidence,
-            ),
+    members = []
+    for member in request.cohort.members:
+        source = sources[member.item_revision_id]
+        if source.profile is not None and not isinstance(
+            source.profile, InferenceTransferProfilePointer
+        ):
+            raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
+        members.append(
+            ExamObservationMember(
+                position=member.position,
+                reference=ApprovedReferenceItemAnchor(
+                    source=source.source,
+                    profile=source.profile,
+                    solution_evidence=source.solution_evidence,
+                ),
+            )
         )
-        for member in request.cohort.members
-    )
     observations = []
     for selection in request.views:
         read = resolved.get(selection.view)

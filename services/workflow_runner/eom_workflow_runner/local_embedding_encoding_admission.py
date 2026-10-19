@@ -19,19 +19,25 @@ from eom_orchestrator.embedding_encoding_reservations import (
 )
 from eom_orchestrator.native_embedding_index_systemd import FixedNativeIndexLauncher
 from eom_orchestrator.native_embedding_launch_identity import require_native_embedding_launch
+from eom_workflow.local_embedding_encoding_dispatch import (
+    SupportedEmbeddingAssociation,
+    SupportedEmbeddingCompletedEvent,
+    SupportedEmbeddingIntent,
+    validate_supported_embedding_association,
+)
 from eom_workflow.local_embedding_encoding_job import (
-    EmbeddingEncodingCompletedEvent,
     EmbeddingEncodingJobReference,
     EmbeddingEncodingJobRequest,
-    LocalEmbeddingLaunchAssociation,
-    LocalEmbeddingLaunchIntent,
-    validate_local_embedding_launch_association,
 )
-from eom_workflow.local_embedding_request import (
-    LocalEmbeddingExecutableRequest,
-    parse_local_embedding_executable_request,
+from eom_workflow.local_embedding_encoding_ownership_v2 import (
+    parse_local_embedding_launch_intent_for_request,
+)
+from eom_workflow.local_embedding_request_v2 import (
+    SupportedLocalEmbeddingRequest,
+    parse_supported_local_embedding_request,
 )
 from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
+from eom_workflow.local_embedding_source_plan_v2 import LocalEmbeddingSourcePlanV2
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -48,13 +54,13 @@ from eom_workflow_runner.repository import CommandLeaseIdentity, require_command
 class CurrentEncodingExecution:
     """Trusted composition values; intent is audit, not current lease/authentication."""
 
-    request: LocalEmbeddingExecutableRequest
-    intent: LocalEmbeddingLaunchIntent
+    request: SupportedLocalEmbeddingRequest
+    intent: SupportedEmbeddingIntent
     command_lease: CommandLeaseIdentity
 
     def __post_init__(self) -> None:
-        request = parse_local_embedding_executable_request(self.request)
-        intent = LocalEmbeddingLaunchIntent.model_validate(self.intent)
+        request = parse_supported_local_embedding_request(self.request)
+        intent = parse_local_embedding_launch_intent_for_request(self.intent, request)
         if (
             intent.workflow_request_sha256 != request.request_sha256
             or intent.source_plan != request.source_plan
@@ -72,7 +78,9 @@ def _scope(value: ResolvedLocalEmbeddingSources) -> ResolvedEncodingScope:
     )
 
 
-def _keys(plan: LocalEmbeddingSourcePlan) -> dict[str, EmbeddingEncodingJobRequest]:
+def _keys(
+    plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2,
+) -> dict[str, EmbeddingEncodingJobRequest]:
     # Derive the exact small request identities, not source data or permission.
     from eom_identifiers import content_sha256
 
@@ -106,7 +114,7 @@ class CatalogEncodingOwnerAdmission:
         self.owner, self.execution, self.launcher = owner, execution, launcher
 
     def _current_mutation(
-        self, session: Session, intent: LocalEmbeddingLaunchIntent
+        self, session: Session, intent: SupportedEmbeddingIntent
     ) -> ResolvedLocalEmbeddingSources:
         context = self.execution
         # Fence actual caller before even revealing Workflow/launch existence.
@@ -158,7 +166,7 @@ class CatalogEncodingOwnerAdmission:
         self,
         session: Session,
         requests: tuple[EmbeddingEncodingJobRequest, ...],
-        intent: LocalEmbeddingLaunchIntent,
+        intent: SupportedEmbeddingIntent,
     ) -> ResolvedEncodingScope:
         current = self._current_mutation(session, intent)
         allowed = _keys(current.admission.plan)
@@ -167,14 +175,14 @@ class CatalogEncodingOwnerAdmission:
         return _scope(current)
 
     def resolve_launch(
-        self, session: Session, association: LocalEmbeddingLaunchAssociation
+        self, session: Session, association: SupportedEmbeddingAssociation
     ) -> ResolvedEncodingLaunch:
         current = self._current_mutation(session, association.intent)
         request = CatalogLocalEmbeddingEncodingArtifacts(
             session, self.owner.settings
         ).resolve_input(association)
         scope = _scope(current)
-        validate_local_embedding_launch_association(
+        validate_supported_embedding_association(
             association,
             scope.plan,
             request,
@@ -186,14 +194,14 @@ class CatalogEncodingOwnerAdmission:
     def resolve_completion(
         self,
         session: Session,
-        association: LocalEmbeddingLaunchAssociation,
-        events: tuple[EmbeddingEncodingCompletedEvent, ...],
+        association: SupportedEmbeddingAssociation,
+        events: tuple[SupportedEmbeddingCompletedEvent, ...],
     ) -> ResolvedEncodingCompletion:
         current = self._current_mutation(session, association.intent)
         resolved = CatalogLocalEmbeddingEncodingArtifacts(
             session, self.owner.settings
         ).resolve_result(association, events)
-        validate_local_embedding_launch_association(
+        validate_supported_embedding_association(
             association,
             current.admission.plan,
             resolved.request,
@@ -202,7 +210,7 @@ class CatalogEncodingOwnerAdmission:
         )
         return ResolvedEncodingCompletion(resolved.request, resolved.result)
 
-    def fence_mutation(self, session: Session, intent: LocalEmbeddingLaunchIntent) -> None:
+    def fence_mutation(self, session: Session, intent: SupportedEmbeddingIntent) -> None:
         self._current_mutation(session, intent)
 
     def fence_read_scope(

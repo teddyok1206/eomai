@@ -15,6 +15,7 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -81,7 +82,10 @@ class EmbeddingSourceBindingRecord(Base):
         CheckConstraint(
             "binding_sha256 ~ '^sha256:[0-9a-f]{64}$' AND "
             "source_sha256 ~ '^sha256:[0-9a-f]{64}$' AND "
-            "solution_pointer_sha256 ~ '^sha256:[0-9a-f]{64}$' AND "
+            "(solution_pointer_sha256 IS NULL OR "
+            "solution_pointer_sha256 ~ '^sha256:[0-9a-f]{64}$') AND "
+            "(review_evidence_sha256 IS NULL OR "
+            "review_evidence_sha256 ~ '^sha256:[0-9a-f]{64}$') AND "
             "profile_sha256 ~ '^sha256:[0-9a-f]{64}$' AND "
             "policy_sha256 ~ '^sha256:[0-9a-f]{64}$' AND "
             "recipe_sha256 ~ '^sha256:[0-9a-f]{64}$' AND "
@@ -96,11 +100,26 @@ class EmbeddingSourceBindingRecord(Base):
             name="ck_embedding_binding_view",
         ),
         CheckConstraint(
-            "projection_version = 'accepted-solution-comparison/1.0'",
+            "projection_version IN ('accepted-solution-comparison/1.0',"
+            "'registered-item-review-comparison/1.0')",
             name="ck_embedding_binding_projection",
         ),
         CheckConstraint(
-            "base_analysis_run_id <> solution_analysis_run_id", name="ck_embedding_binding_runs"
+            "solution_analysis_run_id IS NULL OR base_analysis_run_id <> solution_analysis_run_id",
+            name="ck_embedding_binding_runs",
+        ),
+        CheckConstraint(
+            "(evidence_kind = 'ACCEPTED_SOLUTION_ANALYSIS' AND "
+            "solution_analysis_run_id IS NOT NULL AND solution_pointer_sha256 IS NOT NULL AND "
+            "review_job_id IS NULL AND review_evidence_sha256 IS NULL AND "
+            "projection_version = 'accepted-solution-comparison/1.0' AND "
+            "base_analysis_run_id <> solution_analysis_run_id) OR "
+            "(evidence_kind = 'REGISTERED_ITEM_REVIEW_SOLUTION' AND "
+            "solution_analysis_run_id IS NULL AND solution_pointer_sha256 IS NULL AND "
+            "review_job_id IS NOT NULL AND review_evidence_sha256 IS NOT NULL AND "
+            "source_class = 'APPROVED_ITEM' AND "
+            "projection_version = 'registered-item-review-comparison/1.0')",
+            name="ck_embedding_binding_evidence",
         ),
         CheckConstraint(
             "profile_id ~ '^inferenceprofile_[0-9a-f]{32}$' AND "
@@ -109,8 +128,12 @@ class EmbeddingSourceBindingRecord(Base):
         ),
         CheckConstraint(
             "binding_manifest_member_path = 'index.json' AND "
-            "binding_manifest_schema_ref = 'eom://schemas/knowledge/embedding-index-manifest/1.0' "
-            "AND binding_manifest_media_type = 'application/json'",
+            "binding_manifest_schema_ref IN "
+            "('eom://schemas/knowledge/embedding-index-manifest/1.0',"
+            "'eom://schemas/knowledge/embedding-index-manifest/2.0') AND "
+            "binding_manifest_media_type = 'application/json' AND "
+            "(evidence_kind = 'ACCEPTED_SOLUTION_ANALYSIS' OR "
+            "binding_manifest_schema_ref = 'eom://schemas/knowledge/embedding-index-manifest/2.0')",
             name="ck_embedding_binding_member",
         ),
         ForeignKeyConstraint(
@@ -151,6 +174,35 @@ class EmbeddingSourceBindingRecord(Base):
         ),
         Index("ix_embedding_binding_encoding", "encoding_sha256"),
         Index("ix_embedding_binding_source", "item_id", "item_revision_id"),
+        Index(
+            "uq_embedding_binding_registered_review",
+            "item_revision_id",
+            "graph_snapshot_revision_id",
+            "policy_revision_id",
+            "recipe_sha256",
+            "view",
+            "projection_version",
+            "base_analysis_run_id",
+            "profile_revision_id",
+            "encoding_sha256",
+            "review_job_id",
+            "review_evidence_sha256",
+            unique=True,
+            postgresql_where=text("evidence_kind = 'REGISTERED_ITEM_REVIEW_SOLUTION'"),
+        ),
+        Index(
+            "ix_embedding_binding_review_delta",
+            "graph_snapshot_revision_id",
+            "policy_revision_id",
+            "recipe_sha256",
+            "view",
+            "projection_version",
+            "item_revision_id",
+            "base_analysis_run_id",
+            "review_job_id",
+            "review_evidence_sha256",
+            postgresql_where=text("evidence_kind = 'REGISTERED_ITEM_REVIEW_SOLUTION'"),
+        ),
     )
 
     binding_sha256: Mapped[str] = mapped_column(String(71), primary_key=True)
@@ -161,13 +213,21 @@ class EmbeddingSourceBindingRecord(Base):
     item_revision_id: Mapped[str] = mapped_column(String(40), nullable=False)
     source_class: Mapped[str] = mapped_column(String(16), nullable=False)
     source_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    evidence_kind: Mapped[str] = mapped_column(
+        String(40), nullable=False, server_default="ACCEPTED_SOLUTION_ANALYSIS"
+    )
     base_analysis_run_id: Mapped[str] = mapped_column(
         ForeignKey("knowledge_analysis_runs.analysis_run_id", ondelete="RESTRICT"), nullable=False
     )
-    solution_analysis_run_id: Mapped[str] = mapped_column(
-        ForeignKey("knowledge_analysis_runs.analysis_run_id", ondelete="RESTRICT"), nullable=False
+    solution_analysis_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("knowledge_analysis_runs.analysis_run_id", ondelete="RESTRICT"), nullable=True
     )
-    solution_pointer_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    solution_pointer_sha256: Mapped[str | None] = mapped_column(String(71), nullable=True)
+    review_job_id: Mapped[str | None] = mapped_column(
+        ForeignKey("jobs.job_id", name="fk_embedding_binding_review_job", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    review_evidence_sha256: Mapped[str | None] = mapped_column(String(71), nullable=True)
     profile_id: Mapped[str] = mapped_column(String(49), nullable=False)
     profile_revision_id: Mapped[str] = mapped_column(String(52), nullable=False)
     profile_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
@@ -207,8 +267,10 @@ class EmbeddingIndexRecord(Base):
         ),
         CheckConstraint(
             "view IN ('CONTENT_ONLY','CONCRETE_FACETS','METADATA_ONLY') AND "
-            "projection_version = 'accepted-solution-comparison/1.0' AND "
-            "population_scope IN ('ALL_ADMITTED_GRAPH_ITEMS','OCCURRENCE_BACKED_PAST_EXAM')",
+            "((projection_version = 'accepted-solution-comparison/1.0' AND "
+            "population_scope IN ('ALL_ADMITTED_GRAPH_ITEMS','OCCURRENCE_BACKED_PAST_EXAM')) OR "
+            "(projection_version = 'mixed-solution-comparison/2.0' AND "
+            "population_scope = 'ALL_ADMITTED_GRAPH_ITEMS'))",
             name="ck_embedding_index_namespace",
         ),
         CheckConstraint(
@@ -280,7 +342,8 @@ class EmbeddingIndexRevisionRecord(Base):
         ),
         CheckConstraint(
             "manifest_member_path = 'index.json' AND "
-            "manifest_schema_ref = 'eom://schemas/knowledge/embedding-index-manifest/1.0' AND "
+            "manifest_schema_ref IN ('eom://schemas/knowledge/embedding-index-manifest/1.0',"
+            "'eom://schemas/knowledge/embedding-index-manifest/2.0') AND "
             "manifest_media_type = 'application/json'",
             name="ck_embedding_index_revision_member",
         ),

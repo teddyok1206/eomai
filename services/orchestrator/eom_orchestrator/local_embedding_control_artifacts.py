@@ -37,6 +37,11 @@ from eom_workflow.local_embedding_source_plan import (
     LocalEmbeddingSourcePlan,
     parse_local_embedding_source_plan,
 )
+from eom_workflow.local_embedding_source_plan_v2 import (
+    LOCAL_EMBEDDING_SOURCE_PLAN_V2_SCHEMA_REF,
+    LocalEmbeddingSourcePlanV2,
+    parse_local_embedding_source_plan_v2,
+)
 from eom_workflow.private_chat_query_execution import (
     PRIVATE_CHAT_QUERY_POLICY_REF,
     PrivateChatQueryExecutionPolicy,
@@ -113,6 +118,40 @@ class LocalEmbeddingControlArtifactPublisher:
             semantic_sha256=checked.plan_sha256,
             member="source-plan.json",
             schema=LOCAL_EMBEDDING_SOURCE_PLAN_SCHEMA_REF,
+            artifact_type=SOURCE_PLAN_ARTIFACT_TYPE,
+            idempotency_key=idempotency_key,
+            created_at=ControlPublicationTime.FIRST_OBSERVATION,
+        )
+
+    def publish_source_plan_v2(
+        self,
+        plan: LocalEmbeddingSourcePlanV2,
+        *,
+        idempotency_key: str,
+        created_at: datetime,
+    ) -> PublishedLocalEmbeddingControl:
+        """Explicit mixed family over the same immutable file-set publication owner."""
+        checked = parse_local_embedding_source_plan_v2(plan)
+        return self._publish(
+            raw=canonical_json_bytes(checked.model_dump(mode="json")),
+            semantic_sha256=checked.plan_sha256,
+            member="source-plan.json",
+            schema=LOCAL_EMBEDDING_SOURCE_PLAN_V2_SCHEMA_REF,
+            artifact_type=SOURCE_PLAN_ARTIFACT_TYPE,
+            idempotency_key=idempotency_key,
+            created_at=created_at,
+        )
+
+    def publish_observed_source_plan_v2(
+        self, plan: LocalEmbeddingSourcePlanV2, *, idempotency_key: str
+    ) -> PublishedLocalEmbeddingControl:
+        """Retain the first observed publication time for exact unattended plan2 replay."""
+        checked = parse_local_embedding_source_plan_v2(plan)
+        return self._publish(
+            raw=canonical_json_bytes(checked.model_dump(mode="json")),
+            semantic_sha256=checked.plan_sha256,
+            member="source-plan.json",
+            schema=LOCAL_EMBEDDING_SOURCE_PLAN_V2_SCHEMA_REF,
             artifact_type=SOURCE_PLAN_ARTIFACT_TYPE,
             idempotency_key=idempotency_key,
             created_at=ControlPublicationTime.FIRST_OBSERVATION,

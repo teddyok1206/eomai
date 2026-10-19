@@ -6,7 +6,8 @@ import re
 from dataclasses import dataclass
 
 from eom_catalog_contracts.embedding_registry import RegisterEmbeddingIndexCommand
-from eom_catalog_contracts.local_indexing_policy import LocalIndexingAccessPolicy
+from eom_catalog_contracts.local_indexing_mixed_policy import SupportedLocalIndexingAccessPolicy
+from eom_catalog_contracts.mixed_embedding_registry import RegisterEmbeddingIndexCommandV2
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.embedding_registry_ports import (
@@ -14,6 +15,7 @@ from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryLookup,
     EmbeddingRegistryOwnerConfiguration,
     EmbeddingRegistryServiceCaller,
+    SupportedEmbeddingRegistrationCommand,
     validate_embedding_registry_actor,
 )
 from eom_catalog_service.inference_transfer_snapshot_catalog_adapter import (
@@ -65,7 +67,7 @@ class CatalogIndexingRegistrySourceAuthority:
     def source_intent(
         self,
         caller: EmbeddingRegistryServiceCaller,
-        intent: RegisterEmbeddingIndexCommand | EmbeddingRegistryLookup,
+        intent: SupportedEmbeddingRegistrationCommand | EmbeddingRegistryLookup,
         configuration: EmbeddingRegistryOwnerConfiguration,
         *,
         source_revision_ids: tuple[str, ...] = (),
@@ -74,7 +76,9 @@ class CatalogIndexingRegistrySourceAuthority:
         validate_embedding_registry_actor(caller)
         if caller.service != self.authority.service_fence.pin.service:
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN")
-        if source_revision_ids and isinstance(intent, RegisterEmbeddingIndexCommand):
+        if source_revision_ids and isinstance(
+            intent, RegisterEmbeddingIndexCommand | RegisterEmbeddingIndexCommandV2
+        ):
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
         selection = LocalIndexingSourceReadIntent(
             corpus_id=intent.corpus_id,
@@ -90,7 +94,7 @@ class CatalogIndexingRegistrySourceAuthority:
             native_execution_policy_sha256=self.native_execution_policy_sha256,
             resource_profile_sha256=self.resource_profile_sha256,
             maximum_candidates=self.maximum_sources
-            if isinstance(intent, RegisterEmbeddingIndexCommand)
+            if isinstance(intent, RegisterEmbeddingIndexCommand | RegisterEmbeddingIndexCommandV2)
             else intent.maximum_sources,
             source_revision_ids=source_revision_ids,
         )
@@ -102,9 +106,9 @@ class CatalogIndexingRegistrySourceAuthority:
         self,
         session: Session,
         caller: EmbeddingRegistryServiceCaller,
-        intent: RegisterEmbeddingIndexCommand | EmbeddingRegistryLookup,
+        intent: SupportedEmbeddingRegistrationCommand | EmbeddingRegistryLookup,
         configuration: EmbeddingRegistryOwnerConfiguration,
-    ) -> LocalIndexingAccessPolicy:
+    ) -> SupportedLocalIndexingAccessPolicy:
         """Fresh actual service/data fence, no population/file materialization."""
         return self.authority.authorize_scope(
             session, self.source_intent(caller, intent, configuration)
@@ -146,7 +150,7 @@ class CatalogIndexingRegistrySourceAuthority:
         self,
         session: Session,
         caller: EmbeddingRegistryServiceCaller,
-        intent: RegisterEmbeddingIndexCommand | EmbeddingRegistryLookup,
+        intent: SupportedEmbeddingRegistrationCommand | EmbeddingRegistryLookup,
         configuration: EmbeddingRegistryOwnerConfiguration,
         *,
         sources: CatalogInferenceTransferSnapshotSourceAdapter,

@@ -1,0 +1,273 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/embedding-registry/2.0",
+  "title": "Pointer-only mixed embedding registry registration V2",
+  "description": "Additive mixed-index registration intent and receipt, not source authority or runtime admission. The exact index manifest2 and ALL_ADMITTED_GRAPH_ITEMS mixed namespace are required.",
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "indexId": {
+      "type": "string",
+      "pattern": "^embeddingindex_[0-9a-f]{32}$"
+    },
+    "revisionId": {
+      "type": "string",
+      "pattern": "^embeddingindexrev_[0-9a-f]{32}$"
+    },
+    "nullableRevision": {
+      "oneOf": [
+        {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/revisionId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "operationKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "namespace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "storage_partition",
+        "space_sha256",
+        "view",
+        "recipe_sha256",
+        "projection_version",
+        "population_scope"
+      ],
+      "properties": {
+        "storage_partition": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+        },
+        "space_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/hash"
+        },
+        "view": {
+          "enum": [
+            "CONTENT_ONLY",
+            "CONCRETE_FACETS",
+            "METADATA_ONLY"
+          ]
+        },
+        "recipe_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/hash"
+        },
+        "projection_version": {
+          "const": "mixed-solution-comparison/2.0"
+        },
+        "population_scope": {
+          "const": "ALL_ADMITTED_GRAPH_ITEMS"
+        }
+      }
+    },
+    "indexMember": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "member_path": {
+              "const": "index.json"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/knowledge/embedding-index-manifest/2.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            }
+          }
+        }
+      ]
+    },
+    "command": {
+      "$id": "eom://schemas/knowledge/embedding-registry-registration-command/2.0",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "operation",
+        "operation_key",
+        "corpus_id",
+        "namespace",
+        "index_id",
+        "index_revision_id",
+        "index_manifest",
+        "index_sha256",
+        "graph_snapshot",
+        "policy_revision_id",
+        "policy_sha256",
+        "expected_current_index_revision_id",
+        "expected_lock_version",
+        "source_set_sha256",
+        "binding_set_sha256",
+        "eligible_source_count",
+        "binding_count",
+        "requested_at",
+        "request_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-registry-registration-command/2.0"
+        },
+        "operation": {
+          "const": "REGISTER_EMBEDDING_INDEX"
+        },
+        "operation_key": {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/operationKey"
+        },
+        "corpus_id": {
+          "type": "string",
+          "pattern": "^corpus_[0-9a-f]{32}$"
+        },
+        "namespace": {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/namespace"
+        },
+        "index_id": {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/indexId"
+        },
+        "index_revision_id": {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/revisionId"
+        },
+        "index_manifest": {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/indexMember"
+        },
+        "index_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/hash"
+        },
+        "graph_snapshot": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"
+        },
+        "policy_revision_id": {
+          "type": "string",
+          "pattern": "^accessrev_[0-9a-f]{32}$"
+        },
+        "policy_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/hash"
+        },
+        "expected_current_index_revision_id": {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/nullableRevision"
+        },
+        "expected_lock_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "source_set_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/hash"
+        },
+        "binding_set_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/hash"
+        },
+        "eligible_source_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
+        },
+        "binding_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
+        },
+        "requested_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$|\\+00:00$"
+        },
+        "request_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/hash"
+        }
+      }
+    },
+    "result": {
+      "$id": "eom://schemas/knowledge/embedding-registry-registration-result/2.0",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "operation_key",
+        "request_sha256",
+        "index_id",
+        "index_revision_id",
+        "previous_index_revision_id",
+        "index_manifest",
+        "index_sha256",
+        "registered_lock_version",
+        "current_index_revision_id",
+        "current_lock_version",
+        "replayed",
+        "is_current",
+        "registered_at",
+        "result_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-registry-registration-result/2.0"
+        },
+        "operation_key": {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/operationKey"
+        },
+        "request_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/hash"
+        },
+        "index_id": {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/indexId"
+        },
+        "index_revision_id": {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/revisionId"
+        },
+        "previous_index_revision_id": {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/nullableRevision"
+        },
+        "index_manifest": {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/indexMember"
+        },
+        "index_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/hash"
+        },
+        "registered_lock_version": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "current_index_revision_id": {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/revisionId"
+        },
+        "current_lock_version": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "replayed": {
+          "type": "boolean"
+        },
+        "is_current": {
+          "type": "boolean"
+        },
+        "registered_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$|\\+00:00$"
+        },
+        "result_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-registry/2.0#/$defs/hash"
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "eom://schemas/knowledge/embedding-registry-registration-command/2.0"
+    },
+    {
+      "$ref": "eom://schemas/knowledge/embedding-registry-registration-result/2.0"
+    }
+  ]
+}

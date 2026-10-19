@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, datetime
-from typing import Any, NoReturn
+from typing import Any, NoReturn, overload
 
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.embedding_registry import (
@@ -25,10 +25,7 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingIndexManifest,
     EmbeddingSourceBinding,
     EmbeddingVectorRowRef,
-    parse_embedding_binding,
-    parse_embedding_index,
     validate_embedding_index_references,
-    validate_embedding_source_bindings,
 )
 from eom_catalog_contracts.inference_transfer_experiment import (
     StagedExperimentEntry,
@@ -39,8 +36,29 @@ from eom_catalog_contracts.knowledge import (
     ApprovedItemKnowledgeSourceV2,
     KnowledgeGraphSnapshotPointer,
 )
+from eom_catalog_contracts.mixed_embedding_index import (
+    MixedEmbeddingIndexManifest,
+    MixedEmbeddingSourceBinding,
+    RegisteredReviewEmbeddingEntry,
+    RegisteredReviewEmbeddingSourceBinding,
+    parse_supported_embedding_binding,
+    parse_supported_embedding_entry,
+    parse_supported_embedding_index,
+    validate_mixed_embedding_index_references,
+    validate_mixed_embedding_source_bindings,
+)
+from eom_catalog_contracts.mixed_embedding_registry import (
+    EmbeddingIndexRegistrationResultV2,
+    MixedEmbeddingIndexNamespace,
+    RegisterEmbeddingIndexCommandV2,
+    parse_embedding_registration_command_v2,
+    parse_embedding_registration_result_v2,
+    validate_embedding_registration_result_v2,
+)
 from eom_catalog_contracts.models import Sha256, UtcDatetime
+from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_contracts.similarity_context import SimilarityViewSelection
+from eom_catalog_contracts.similarity_context_v2 import SimilarityViewSelectionV2
 from eom_catalog_contracts.validation import catalog_schema_registry
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
@@ -60,7 +78,6 @@ from eom_catalog_service.embedding_registry_models import (
 )
 from eom_catalog_service.embedding_registry_ports import (
     AuthorizedEmbeddingReadProfile,
-    EmbeddingBindingLookupKey,
     EmbeddingRegistryActor,
     EmbeddingRegistryCaller,
     EmbeddingRegistryError,
@@ -73,6 +90,8 @@ from eom_catalog_service.embedding_registry_ports import (
     RegisteredEmbeddingIndexRead,
     ResolvedEmbeddingRegistration,
     ResolvedPinnedEmbeddingIndex,
+    SupportedEmbeddingBindingLookupKey,
+    SupportedEmbeddingRegistrationCommand,
     validate_embedding_registry_actor,
 )
 from eom_catalog_service.embedding_registry_repository import (
@@ -84,6 +103,11 @@ from eom_catalog_service.embedding_registry_repository import (
 from eom_catalog_service.embedding_registry_repository import (
     binding_columns as _binding_columns,
 )
+from eom_catalog_service.embedding_source_associations import (
+    embedding_binding_lookup_key,
+    embedding_entry_lookup_key,
+    validated_embedding_base_associations,
+)
 
 
 def _fail(code: str) -> NoReturn:
@@ -94,29 +118,32 @@ def _pointer_columns(prefix: str, pointer: ArtifactMemberPointer) -> dict[str, s
     return {prefix + name: value for name, value in pointer.model_dump(mode="python").items()}
 
 
-def _key(binding: EmbeddingSourceBinding) -> EmbeddingBindingLookupKey:
-    return EmbeddingBindingLookupKey(
-        binding.source.item_revision_id,
-        binding.graph_snapshot.graph_snapshot_revision_id,
-        binding.policy_revision_id,
-        binding.recipe.recipe_sha256,
-        binding.view,
-        binding.projection_version,
-        binding.solution_evidence.base_analysis_run_id,
-        binding.profile.profile_revision_id,
-        binding.solution_evidence.solution_analysis_run_id,
-        binding.encoding.encoding_sha256,
-    )
+type SupportedRegistrationResult = (
+    EmbeddingIndexRegistrationResult | EmbeddingIndexRegistrationResultV2
+)
+
+
+def _command(value: SupportedEmbeddingRegistrationCommand) -> SupportedEmbeddingRegistrationCommand:
+    if isinstance(value, RegisterEmbeddingIndexCommandV2):
+        return parse_embedding_registration_command_v2(value)
+    return parse_embedding_registration_command(raw_similarity_contract_value(value))
+
+
+def _key(binding: MixedEmbeddingSourceBinding) -> SupportedEmbeddingBindingLookupKey:
+    return embedding_binding_lookup_key(binding)
 
 
 def validate_resolved_embedding_registration(
-    command: RegisterEmbeddingIndexCommand,
+    command: SupportedEmbeddingRegistrationCommand,
     resolved: ResolvedEmbeddingRegistration,
 ) -> ResolvedEmbeddingRegistration:
     """Pure closure validation after the trusted owner resolves and reauthorizes bytes."""
     try:
-        command = parse_embedding_registration_command(command.model_dump(mode="json"))
-        index = parse_embedding_index(resolved.index.model_dump(mode="json"))
+        command = _command(command)
+        index = parse_supported_embedding_index(resolved.index)
+        mixed = isinstance(command, RegisterEmbeddingIndexCommandV2)
+        if mixed != isinstance(index, MixedEmbeddingIndexManifest):
+            _fail("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
         if (
             resolved.truncated
             or not 1 <= len(resolved.sources) <= MAX_EMBEDDING_ROWS
@@ -124,12 +151,16 @@ def validate_resolved_embedding_registration(
         ):
             _fail("EMBEDDING_REGISTRY_SCOPE_LIMIT")
         sources = {
-            source.item_revision_id: type(source).model_validate(source.model_dump(mode="json"))
+            source.item_revision_id: type(source).model_validate(
+                raw_similarity_contract_value(source)
+            )
             for source in resolved.sources
         }
         entries = {}
         for original in resolved.entries:
-            entry = StagedExperimentEntry.model_validate(original.model_dump(mode="json"))
+            entry = parse_supported_embedding_entry(original)
+            if not mixed and not isinstance(entry, StagedExperimentEntry):
+                _fail("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
             entries[entry.profile.source_basis.source.item_revision_id] = entry
         if (
             len(sources) != len(resolved.sources)
@@ -155,7 +186,21 @@ def validate_resolved_embedding_registration(
             or command.binding_count != len(index.bindings)
         ):
             _fail("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
-        validate_embedding_index_references(index, resolved.shards, resolved.previous)
+        base_ids = validated_embedding_base_associations(
+            resolved.sources,
+            resolved.entries,
+            resolved.base_analysis_run_ids,
+            require_explicit=mixed,
+        )
+        if isinstance(index, MixedEmbeddingIndexManifest):
+            validate_mixed_embedding_index_references(index, resolved.shards, resolved.previous)
+        else:
+            previous = None
+            if resolved.previous is not None:
+                if not isinstance(resolved.previous[1], EmbeddingIndexManifest):
+                    _fail("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+                previous = (resolved.previous[0], resolved.previous[1])
+            validate_embedding_index_references(index, resolved.shards, previous)
         if (resolved.previous is None) != (command.expected_current_index_revision_id is None) or (
             resolved.previous is not None
             and resolved.previous[1].index_revision_id != command.expected_current_index_revision_id
@@ -169,10 +214,15 @@ def validate_resolved_embedding_registration(
                 or binding.graph_snapshot != command.graph_snapshot
                 or binding.policy_revision_id != command.policy_revision_id
                 or binding.policy_sha256 != command.policy_sha256
-                or binding.projection_version != namespace.projection_version
+                or not namespace.accepts_projection(binding.projection_version)
+                or (
+                    isinstance(binding, RegisteredReviewEmbeddingSourceBinding)
+                    and binding.base_analysis_run_id
+                    != base_ids.get(binding.source.item_revision_id)
+                )
             ):
                 _fail("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
-        validate_embedding_source_bindings(index.bindings, resolved.entries, resolved.shards)
+        validate_mixed_embedding_source_bindings(index.bindings, resolved.entries, resolved.shards)
         return resolved
     except EmbeddingRegistryError:
         raise
@@ -201,7 +251,7 @@ def _matches(row: object, expected: dict[str, Any]) -> bool:
 def _components(
     session: Session,
     caller: EmbeddingRegistryActor,
-    command: RegisterEmbeddingIndexCommand,
+    command: SupportedEmbeddingRegistrationCommand,
     resolved: ResolvedEmbeddingRegistration,
     repository: EmbeddingRegistryRepository,
     verification: EmbeddingRegistryVerificationPort,
@@ -233,26 +283,31 @@ def _components(
         origins
     ):
         _fail("EMBEDDING_REGISTRY_POINTER_INVALID")
-    validate_embedding_source_bindings(
+    validate_mixed_embedding_source_bindings(
         tuple(value.binding for value in verified.origins), resolved.entries, verified.shards
     )
     for value in verified.origins:
-        binding = parse_embedding_binding(value.binding.model_dump(mode="json"))
+        binding = parse_supported_embedding_binding(value.binding)
         if binding != expected_bindings.get(value.origin.binding_sha256):
             _fail("EMBEDDING_REGISTRY_POINTER_INVALID")
     return encodings, bindings
 
 
 def _receipt(
-    command: RegisterEmbeddingIndexCommand,
+    command: SupportedEmbeddingRegistrationCommand,
     row: EmbeddingIndexRevisionRecord,
     head: EmbeddingIndexRecord,
     *,
     replayed: bool,
-) -> EmbeddingIndexRegistrationResult:
+) -> SupportedRegistrationResult:
     if head.current_index_revision_id is None:
         _fail("EMBEDDING_REGISTRY_POINTER_INVALID")
-    body = EmbeddingIndexRegistrationResult.model_construct(
+    result_type = (
+        EmbeddingIndexRegistrationResultV2
+        if isinstance(command, RegisterEmbeddingIndexCommandV2)
+        else EmbeddingIndexRegistrationResult
+    )
+    body = result_type.model_construct(
         operation_key=row.operation_key,
         request_sha256=row.registration_request_sha256,
         index_id=row.index_id,
@@ -267,17 +322,19 @@ def _receipt(
         is_current=head.current_index_revision_id == row.index_revision_id,
         registered_at=row.created_at,
     ).model_dump(mode="json", exclude={"result_sha256"})
-    result = EmbeddingIndexRegistrationResult.model_validate(
-        body | {"result_sha256": content_sha256(body)}
-    )
+    result = result_type.model_validate(body | {"result_sha256": content_sha256(body)})
+    if isinstance(command, RegisterEmbeddingIndexCommandV2):
+        assert isinstance(result, EmbeddingIndexRegistrationResultV2)
+        return validate_embedding_registration_result_v2(command, result)
+    assert isinstance(result, EmbeddingIndexRegistrationResult)
     return validate_embedding_registration_result(command, result)
 
 
 def verify_embedding_index_registration_observation(
     session: Session,
     caller: EmbeddingRegistryActor,
-    command: RegisterEmbeddingIndexCommand,
-    result: EmbeddingIndexRegistrationResult,
+    command: SupportedEmbeddingRegistrationCommand,
+    result: SupportedRegistrationResult,
     verification: EmbeddingRegistryVerificationPort | None,
 ) -> ResolvedEmbeddingRegistration:
     """Reauthorize exact committed history, with NO registration, CAS or head rewrite.
@@ -288,9 +345,13 @@ def verify_embedding_index_registration_observation(
     agree. Returning resolved values permits receipt coverage checks in the same root.
     """
     try:
-        command = parse_embedding_registration_command(command.model_dump(mode="json"))
-        result = parse_embedding_registration_result(result.model_dump(mode="json"))
-        validate_embedding_registration_result(command, result)
+        command = _command(command)
+        if isinstance(command, RegisterEmbeddingIndexCommandV2):
+            result = parse_embedding_registration_result_v2(result)
+            validate_embedding_registration_result_v2(command, result)
+        else:
+            result = parse_embedding_registration_result(raw_similarity_contract_value(result))
+            validate_embedding_registration_result(command, result)
     except (JsonSchemaError, ValueError, TypeError):
         raise EmbeddingRegistryError("EMBEDDING_REGISTRY_REQUEST_INVALID") from None
     owner = _context(session, caller, verification)
@@ -340,10 +401,10 @@ def verify_embedding_index_registration_observation(
 def _registration(
     session: Session,
     caller: EmbeddingRegistryActor,
-    command: RegisterEmbeddingIndexCommand,
+    command: SupportedEmbeddingRegistrationCommand,
     verification: EmbeddingRegistryVerificationPort,
     now: datetime,
-) -> EmbeddingIndexRegistrationResult:
+) -> SupportedRegistrationResult:
     repository = EmbeddingRegistryRepository(session)
     operation = repository.operation(command.operation_key)
     if operation is not None and operation.registration_request_sha256 != command.request_sha256:
@@ -464,6 +525,7 @@ def _registration(
     return _receipt(command, row, head, replayed=False)
 
 
+@overload
 def register_embedding_index(
     session: Session,
     caller: EmbeddingRegistryActor,
@@ -471,10 +533,31 @@ def register_embedding_index(
     verification: EmbeddingRegistryVerificationPort | None,
     *,
     now: datetime | None = None,
-) -> EmbeddingIndexRegistrationResult:
+) -> EmbeddingIndexRegistrationResult: ...
+
+
+@overload
+def register_embedding_index(
+    session: Session,
+    caller: EmbeddingRegistryActor,
+    command: RegisterEmbeddingIndexCommandV2,
+    verification: EmbeddingRegistryVerificationPort | None,
+    *,
+    now: datetime | None = None,
+) -> EmbeddingIndexRegistrationResultV2: ...
+
+
+def register_embedding_index(
+    session: Session,
+    caller: EmbeddingRegistryActor,
+    command: SupportedEmbeddingRegistrationCommand,
+    verification: EmbeddingRegistryVerificationPort | None,
+    *,
+    now: datetime | None = None,
+) -> SupportedRegistrationResult:
     """Register metadata only; caller retains transaction commit/rollback ownership."""
     try:
-        command = parse_embedding_registration_command(command.model_dump(mode="json"))
+        command = _command(command)
     except (JsonSchemaError, ValueError, TypeError):
         raise EmbeddingRegistryError("EMBEDDING_REGISTRY_REQUEST_INVALID") from None
     owner = _context(session, caller, verification)
@@ -515,7 +598,12 @@ def _prepare_missing_embedding_bindings(
     """Exact bounded lookup after official owner admission; never corpus discovery."""
     owner = _context(session, caller, verification)
     try:
-        EmbeddingIndexNamespace.model_validate(query.namespace.model_dump(mode="json"))
+        namespace_type = (
+            MixedEmbeddingIndexNamespace
+            if isinstance(query.namespace, MixedEmbeddingIndexNamespace)
+            else EmbeddingIndexNamespace
+        )
+        namespace_type.model_validate(query.namespace.model_dump(mode="json"))
         KnowledgeGraphSnapshotPointer.model_validate(query.graph_snapshot.model_dump(mode="json"))
         TypeAdapter(Sha256).validate_python(query.policy_sha256)
         if (
@@ -541,13 +629,10 @@ def _prepare_missing_embedding_bindings(
     ):
         _fail("EMBEDDING_REGISTRY_SCOPE_LIMIT")
     sources = {
-        value.item_revision_id: type(value).model_validate(value.model_dump(mode="json"))
+        value.item_revision_id: type(value).model_validate(raw_similarity_contract_value(value))
         for value in resolved.sources
     }
-    checked_entries = tuple(
-        StagedExperimentEntry.model_validate(value.model_dump(mode="json"))
-        for value in resolved.entries
-    )
+    checked_entries = tuple(parse_supported_embedding_entry(value) for value in resolved.entries)
     entries = {
         value.profile.source_basis.source.item_revision_id: value for value in checked_entries
     }
@@ -557,12 +642,24 @@ def _prepare_missing_embedding_bindings(
         or not set(entries).issubset(sources)
     ):
         _fail("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
-    if any(
-        entry.profile.extraction.method != "DETERMINISTIC_REPORT_PROJECTION"
-        or entry.profile.extraction.extractor_version != query.namespace.projection_version
-        for entry in resolved.entries
-    ):
-        _fail("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+    for entry in checked_entries:
+        projection: str
+        if isinstance(entry, RegisteredReviewEmbeddingEntry):
+            if not isinstance(query.namespace, MixedEmbeddingIndexNamespace):
+                _fail("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+            projection = entry.profile.extractor_version
+        else:
+            if entry.profile.extraction.method != "DETERMINISTIC_REPORT_PROJECTION":
+                _fail("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+            projection = entry.profile.extraction.extractor_version
+        if not query.namespace.accepts_projection(projection):
+            _fail("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+    base_ids = validated_embedding_base_associations(
+        resolved.sources,
+        checked_entries,
+        resolved.base_analysis_run_ids,
+        require_explicit=isinstance(query.namespace, MixedEmbeddingIndexNamespace),
+    )
     plan = plan_embedding_delta(
         resolved.entries,
         space=resolved.space,
@@ -575,17 +672,11 @@ def _prepare_missing_embedding_bindings(
         if basis.graph_snapshot != query.graph_snapshot:
             _fail("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
         keys.append(
-            EmbeddingBindingLookupKey(
-                demand.source_revision_id,
-                query.graph_snapshot.graph_snapshot_revision_id,
-                query.policy_revision_id,
-                query.namespace.recipe_sha256,
-                query.namespace.view,
-                query.namespace.projection_version,
-                basis.solution_evidence.base_analysis_run_id,
-                demand.profile.profile_revision_id,
-                basis.solution_evidence.solution_analysis_run_id,
-                demand.encoding.encoding_sha256,
+            embedding_entry_lookup_key(
+                entries[demand.source_revision_id],
+                demand.encoding,
+                query,
+                base_ids[demand.source_revision_id],
             )
         )
     selected = tuple(keys)
@@ -606,13 +697,13 @@ def _prepare_missing_embedding_bindings(
         origins
     ):
         _fail("EMBEDDING_REGISTRY_POINTER_INVALID")
-    validate_embedding_source_bindings(
+    validate_mixed_embedding_source_bindings(
         tuple(value.binding for value in verified.origins), checked_entries, verified.shards
     )
     selected_set = set(selected)
-    bound_keys: set[EmbeddingBindingLookupKey] = set()
+    bound_keys: set[SupportedEmbeddingBindingLookupKey] = set()
     for value in verified.origins:
-        binding = parse_embedding_binding(value.binding.model_dump(mode="json"))
+        binding = parse_supported_embedding_binding(value.binding)
         record = bindings.get(binding.binding_sha256)
         if (
             record is None
@@ -678,19 +769,31 @@ def _validate_pinned_read_intent(intent: EmbeddingRegistryRead) -> EmbeddingRegi
     ):
         _fail("EMBEDDING_REGISTRY_REQUEST_INVALID")
     scope = intent.scope
-    namespace = EmbeddingIndexNamespace.model_validate(
-        raw_similarity_contract_value(scope.namespace)
+    mixed = isinstance(scope.namespace, MixedEmbeddingIndexNamespace)
+    namespace = (
+        MixedEmbeddingIndexNamespace.model_validate(raw_similarity_contract_value(scope.namespace))
+        if mixed
+        else EmbeddingIndexNamespace.model_validate(raw_similarity_contract_value(scope.namespace))
     )
     graph = KnowledgeGraphSnapshotPointer.model_validate(
         raw_similarity_contract_value(scope.graph_snapshot)
     )
     selection_values = raw_similarity_contract_value(intent.selection)
     canonical_json_bytes(selection_values)
+    if mixed != isinstance(intent.selection, SimilarityViewSelectionV2):
+        _fail("EMBEDDING_REGISTRY_REQUEST_INVALID")
+    family = "2.0" if mixed else "1.0"
     Draft202012Validator(
-        {"$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/viewSelection"},
+        {
+            "$ref": f"eom://schemas/knowledge/system-rag-similarity-context/{family}#/$defs/viewSelection"
+        },
         registry=catalog_schema_registry(),
     ).validate(selection_values)
-    selection = SimilarityViewSelection.model_validate(selection_values)
+    selection = (
+        SimilarityViewSelectionV2.model_validate(selection_values)
+        if mixed
+        else SimilarityViewSelection.model_validate(selection_values)
+    )
     pin = selection.index
     if pin is None or (
         type(scope.maximum_sources) is not int
@@ -733,7 +836,8 @@ def validate_registered_embedding_index_read(
 
 
 def validate_registered_embedding_index_manifest(
-    registered: RegisteredEmbeddingIndexRead, index: EmbeddingIndexManifest
+    registered: RegisteredEmbeddingIndexRead,
+    index: EmbeddingIndexManifest | MixedEmbeddingIndexManifest,
 ) -> None:
     """Pure registered/member closure shared by initial, pinned and predecessor reads.
 
@@ -742,7 +846,9 @@ def validate_registered_embedding_index_manifest(
     """
     namespace = registered.namespace
     if (
-        index.index_id != registered.index_id
+        isinstance(namespace, MixedEmbeddingIndexNamespace)
+        != isinstance(index, MixedEmbeddingIndexManifest)
+        or index.index_id != registered.index_id
         or index.index_revision_id != registered.index_revision_id
         or index.index_sha256 != registered.index_sha256
         or index.storage_partition != namespace.storage_partition
@@ -757,7 +863,7 @@ def validate_registered_embedding_index_manifest(
             != registered.graph_snapshot_revision_id
             or binding.policy_revision_id != registered.policy_revision_id
             or binding.policy_sha256 != registered.policy_sha256
-            or binding.projection_version != namespace.projection_version
+            or not namespace.accepts_projection(binding.projection_version)
             for binding in index.bindings
         )
     ):
@@ -767,6 +873,7 @@ def validate_registered_embedding_index_manifest(
 def _validate_resolved_pinned_read(
     intent: EmbeddingRegistryRead, resolved: ResolvedPinnedEmbeddingIndex
 ) -> ResolvedPinnedEmbeddingIndex:
+    mixed = isinstance(intent.scope.namespace, MixedEmbeddingIndexNamespace)
     if (
         not isinstance(resolved, ResolvedPinnedEmbeddingIndex)
         or resolved.intent != intent
@@ -785,7 +892,11 @@ def _validate_resolved_pinned_read(
     if (
         any(not isinstance(value, ApprovedItemKnowledgeSourceV2) for value in resolved.sources)
         or any(not isinstance(value, AuthorizedEmbeddingReadProfile) for value in resolved.profiles)
-        or any(not isinstance(value, EmbeddingSourceBinding) for value in resolved.bindings)
+        or any(
+            not isinstance(value, (EmbeddingSourceBinding, RegisteredReviewEmbeddingSourceBinding))
+            or (not mixed and not isinstance(value, EmbeddingSourceBinding))
+            for value in resolved.bindings
+        )
         or any(
             not isinstance(value, MaterializedEmbeddingReadRow) for value in resolved.numerical_rows
         )
@@ -794,11 +905,11 @@ def _validate_resolved_pinned_read(
     for source in resolved.sources:
         type(source).model_validate(raw_similarity_contract_value(source))
     for profile in resolved.profiles:
-        if not isinstance(profile.profile, InferenceTransferProfilePointer):
+        if not isinstance(
+            profile.profile, (InferenceTransferProfilePointer, RegisteredReviewProfilePointer)
+        ) or (not mixed and not isinstance(profile.profile, InferenceTransferProfilePointer)):
             _fail("EMBEDDING_REGISTRY_POINTER_INVALID")
-        InferenceTransferProfilePointer.model_validate(
-            raw_similarity_contract_value(profile.profile)
-        )
+        type(profile.profile).model_validate(raw_similarity_contract_value(profile.profile))
     for value in resolved.numerical_rows:
         if not isinstance(value.row, RegisteredEmbeddingRow) or (
             not isinstance(value.row.encoding, EmbeddingEncodingIdentity)
@@ -824,7 +935,7 @@ def _validate_resolved_pinned_read(
     pin = intent.selection.index
     assert pin is not None
     for original in resolved.bindings:
-        binding = parse_embedding_binding(raw_similarity_contract_value(original))
+        binding = parse_supported_embedding_binding(raw_similarity_contract_value(original))
         if (
             binding.source != sources.get(binding.source.item_revision_id)
             or binding.profile != profiles.get(binding.source.item_revision_id)
@@ -833,7 +944,7 @@ def _validate_resolved_pinned_read(
             or binding.policy_sha256 != intent.scope.policy_sha256
             or binding.view != intent.selection.view
             or binding.recipe != intent.selection.recipe
-            or binding.projection_version != intent.scope.namespace.projection_version
+            or not intent.scope.namespace.accepts_projection(binding.projection_version)
             or binding.encoding.storage_partition != pin.storage_partition
             or binding.encoding.space_sha256 != pin.spaces.document.space_sha256
             or rows[binding.encoding.encoding_sha256].encoding != binding.encoding

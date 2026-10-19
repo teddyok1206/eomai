@@ -11,7 +11,10 @@ from eom_catalog_contracts.embedding_private_chat_query import (
 )
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.embedding_vector_binary import read_unit_vectors
-from eom_catalog_contracts.inference_transfer_embedding import EmbeddingVectorRowRef
+from eom_catalog_contracts.inference_transfer_embedding import (
+    EmbeddingSourceBinding,
+    EmbeddingVectorRowRef,
+)
 from eom_catalog_contracts.private_chat_query_basis import private_chat_query_text_sha256
 from eom_catalog_contracts.private_chat_similarity import (
     PRIVATE_CHAT_LIMITATION_ORDER,
@@ -162,12 +165,18 @@ def _compose(
         )
     else:
         assert query is not None
+        if any(not isinstance(value, EmbeddingSourceBinding) for value in document.bindings):
+            raise ValueError("private context1 cannot reinterpret mixed source bindings")
         rows = {v.row.encoding.encoding_sha256: v.values for v in document.numerical_rows}
         by_profile = {v.profile: v for v in document.bindings}
         # Unlike approved-reference lookup, a private question has no self Item to remove.
         ranked = rank_normalized_vectors(
             vector,
-            tuple((v.profile, rows[v.encoding.encoding_sha256]) for v in document.bindings),
+            tuple(
+                (v.profile, rows[v.encoding.encoding_sha256])
+                for v in document.bindings
+                if isinstance(v, EmbeddingSourceBinding)
+            ),
             top_k=request.top_k,
         )
         for rank, scored in enumerate(ranked, 1):

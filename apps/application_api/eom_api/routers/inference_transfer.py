@@ -14,7 +14,10 @@ from eom_api_contracts.inference_transfer import (
     InferenceTransferWorkflowReadResult,
     InferenceTransferWorkflowReadResultV11,
 )
-from eom_api_contracts.similarity_context import SimilarityContextReadSelection
+from eom_api_contracts.similarity_context import (
+    SimilarityContextReadSelection,
+    SimilarityContextReadSelectionV2,
+)
 from eom_catalog_contracts.inference_transfer_invocation import InferenceTransferWorkflowReadMode
 from eom_catalog_contracts.inference_transfer_metadata import (
     MAX_METADATA_FRAME_BYTES,
@@ -25,7 +28,7 @@ from eom_catalog_contracts.inference_transfer_snapshot import (
     InferenceTransferSnapshotRequest,
     InferenceTransferSnapshotResult,
 )
-from eom_catalog_contracts.similarity_context import SimilarityContext
+from eom_catalog_contracts.similarity_context_v2 import SupportedSimilarityContext
 from eom_identifiers import content_sha256
 from eom_operator_identity import PermissionKey
 from fastapi import APIRouter, Depends, Path, Query, Request, Response
@@ -42,7 +45,7 @@ router = APIRouter(tags=["inference-transfer"])
 @router.post(
     "/knowledge/inference-transfer/similarity-context",
     operation_id="inference_transfer_similarity_context_read",
-    response_model=SingleResponse[SimilarityContext],
+    response_model=SingleResponse[SupportedSimilarityContext],
     dependencies=[Depends(require_permission(PermissionKey.KNOWLEDGE_GRAPH_RETRIEVE))],
     openapi_extra={
         "x-eom-read-only": True,
@@ -56,10 +59,10 @@ router = APIRouter(tags=["inference-transfer"])
 )
 async def read_similarity_context(
     request: Request,
-    body: SimilarityContextReadSelection,
+    body: SimilarityContextReadSelection | SimilarityContextReadSelectionV2,
     response: Response,
     authentication: Auth,
-) -> SingleResponse[SimilarityContext]:
+) -> SingleResponse[SupportedSimilarityContext]:
     if len(await request.body()) > MAX_PUBLIC_SIMILARITY_SELECTOR_BYTES:
         raise ApiError(
             422,
@@ -68,8 +71,12 @@ async def read_similarity_context(
             "The exact selector exceeds its fixed public byte budget.",
         )
     response.headers["Cache-Control"] = "no-store"
+    reads = request.app.state.services.similarity_context_reads
     return one(
-        request, request.app.state.services.similarity_context_reads.read(authentication, body)
+        request,
+        reads.read_v2(authentication, body.exact_selection())
+        if isinstance(body, SimilarityContextReadSelectionV2)
+        else reads.read(authentication, body),
     )
 
 

@@ -6,6 +6,7 @@ from typing import Annotated, Self
 
 from eom_catalog_contracts.reference_query_prepare import (
     ReferenceQueryPrepareRequest,
+    ReferenceQueryPrepareRequestV2,
     ReferenceQueryPrepareRequestV11,
 )
 from jsonschema.exceptions import ValidationError as SchemaError
@@ -37,7 +38,16 @@ class ReferenceQueryPrepareInputV11(ReferenceQueryPrepareRequestV11):
         return _http_validation_errors(value, handler)
 
 
+class ReferenceQueryPrepareInputV2(ReferenceQueryPrepareRequestV2):
+    @model_validator(mode="wrap")
+    @classmethod
+    def http_validation_errors(
+        cls, value: object, handler: ModelWrapValidatorHandler[Self]
+    ) -> Self:
+        return _http_validation_errors(value, handler)
+
+
 type SupportedReferenceQueryPrepareInput = Annotated[
-    ReferenceQueryPrepareInput | ReferenceQueryPrepareInputV11,
+    ReferenceQueryPrepareInput | ReferenceQueryPrepareInputV11 | ReferenceQueryPrepareInputV2,
     Field(discriminator="schema_version"),
 ]

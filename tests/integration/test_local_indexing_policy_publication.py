@@ -13,10 +13,15 @@ from threading import Barrier
 from uuid import uuid4
 
 import pytest
+from eom_catalog_contracts.local_indexing_mixed_policy import LocalIndexingMixedAccessPolicy
 from eom_catalog_contracts.local_indexing_policy import LocalIndexingAccessPolicy
 from eom_catalog_service.knowledge_graph_models import (
     EducationRetrievalAccessPolicyRevisionRecord,
     KnowledgeCorpusRecord,
+)
+from eom_catalog_service.knowledge_retrieval_service import (
+    KnowledgeRetrievalApplicationService,
+    KnowledgeRetrievalServiceError,
 )
 from eom_catalog_service.local_indexing_policy_publication import (
     LocalIndexingPolicyPublicationError,
@@ -142,6 +147,44 @@ def test_actual_owner_publication_replay_and_principal_audit(case: Case) -> None
     with Session(case.engine) as session:
         row = session.get(EducationRetrievalAccessPolicyRevisionRecord, first.policy_revision_id)
         assert row.canonical_document == case.policy.model_dump(mode="json")
+
+
+def test_actual_mixed_policy_publication_replay_and_exact_versioned_read(case: Case) -> None:
+    """New policy retains real owner/source locks; no runtime or source activation."""
+    values = case.policy.model_dump(mode="json", exclude={"content_sha256"})
+    values.update(
+        schema_version="education-retrieval-access-policy/1.2",
+        access_policy_revision_id="accessrev_" + uuid4().hex,
+        answer_bearing_use="ACCEPTED_SOLUTION_OR_REGISTERED_REVIEW_PROJECTION_ONLY",
+    )
+    for namespace in values["namespaces"]:
+        namespace["projection_version"] = "mixed-solution-comparison/2.0"
+        namespace["population_scope"] = "ALL_ADMITTED_GRAPH_ITEMS"
+    policy = LocalIndexingMixedAccessPolicy.model_validate(
+        values | {"content_sha256": content_sha256(values)}
+    )
+    results = []
+    for _ in range(2):
+        with Session(case.engine) as session, session.begin():
+            results.append(publish_local_indexing_access_policy(session, policy))
+    assert [result.created for result in results] == [True, False]
+    assert {result.policy_sha256 for result in results} == {policy.content_sha256}
+    assert {result.published_by for result in results} == {case.engine.url.username}
+    with Session(case.engine) as session, session.begin():
+        resolved = KnowledgeRetrievalApplicationService.resolve_local_indexing_access_policy(
+            session, policy.access_policy_revision_id, sha256=policy.content_sha256
+        )
+        assert type(resolved) is LocalIndexingMixedAccessPolicy and resolved == policy
+        with pytest.raises(KnowledgeRetrievalServiceError) as caught:
+            KnowledgeRetrievalApplicationService.resolve_local_indexing_access_policy(
+                session, policy.access_policy_revision_id, sha256="sha256:" + "f" * 64
+            )
+        assert caught.value.code == "KNOWLEDGE_RETRIEVAL_POLICY_STALE"
+        row = session.get(
+            EducationRetrievalAccessPolicyRevisionRecord, policy.access_policy_revision_id
+        )
+        assert row.schema_version == policy.schema_version
+        assert row.canonical_document == policy.model_dump(mode="json")
 
 
 def test_actual_conflicting_revision_never_updates_original(case: Case) -> None:

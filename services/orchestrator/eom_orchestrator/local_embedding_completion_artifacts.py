@@ -10,12 +10,15 @@ from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.local_embedding_workflow_receipt import (
     LOCAL_EMBEDDING_WORKFLOW_RECEIPT_SCHEMA_REF,
-    LocalEmbeddingStepOutput,
-    LocalEmbeddingWorkflowReceipt,
-    local_embedding_workflow_receipt_bytes,
-    parse_local_embedding_step_output,
-    parse_local_embedding_workflow_receipt,
-    validate_local_embedding_step_output,
+)
+from eom_workflow.local_embedding_workflow_receipt_v2 import (
+    LOCAL_EMBEDDING_WORKFLOW_RECEIPT_V2_SCHEMA_REF,
+    LocalEmbeddingWorkflowReceiptV2,
+    SupportedLocalEmbeddingStepOutput,
+    SupportedLocalEmbeddingWorkflowReceipt,
+    parse_supported_local_embedding_step_output,
+    parse_supported_local_embedding_workflow_receipt,
+    validate_supported_local_embedding_step_output,
 )
 from eom_workflow.private_chat_query_workflow import (
     PRIVATE_CHAT_QUERY_RECEIPT_REF,
@@ -51,15 +54,21 @@ class NativeEmbeddingCompletionPublisher:
         self.publisher, self.source_commit = publisher, source_commit
 
     def publish(
-        self, receipt: LocalEmbeddingWorkflowReceipt, *, identity: ControlFileSetIdentity
-    ) -> LocalEmbeddingStepOutput:
-        receipt = parse_local_embedding_workflow_receipt(receipt)
+        self, receipt: SupportedLocalEmbeddingWorkflowReceipt, *, identity: ControlFileSetIdentity
+    ) -> SupportedLocalEmbeddingStepOutput:
+        receipt = parse_supported_local_embedding_workflow_receipt(receipt)
+        mixed = isinstance(receipt, LocalEmbeddingWorkflowReceiptV2)
+        schema_ref = (
+            LOCAL_EMBEDDING_WORKFLOW_RECEIPT_V2_SCHEMA_REF
+            if mixed
+            else LOCAL_EMBEDDING_WORKFLOW_RECEIPT_SCHEMA_REF
+        )
         identity = ControlFileSetIdentity(
             identity.job_id, identity.artifact_id, identity.artifact_revision_id
         )
         if receipt.receipt_owner_job_id != identity.job_id:
             raise ValueError("LOCAL_EMBEDDING_RECEIPT_PRODUCER_MISMATCH")
-        raw = local_embedding_workflow_receipt_bytes(receipt)
+        raw = canonical_json_bytes(receipt.model_dump(mode="json"))
         key = "native-embedding-receipt:" + content_sha256(
             {
                 "workflow_id": receipt.workflow_id,
@@ -73,12 +82,14 @@ class NativeEmbeddingCompletionPublisher:
             identity=identity,
             key=key,
             artifact_type=NATIVE_COMPLETION_ARTIFACT_TYPE,
-            schema_ref=LOCAL_EMBEDDING_WORKFLOW_RECEIPT_SCHEMA_REF,
+            schema_ref=schema_ref,
             created_at=receipt.registration_observed_at,
             mismatch_code="LOCAL_EMBEDDING_RECEIPT_PUBLICATION_MISMATCH",
         )
         body = {
-            "schema_version": "local-embedding-step-output/1.0",
+            "schema_version": "local-embedding-step-output/2.0"
+            if mixed
+            else "local-embedding-step-output/1.0",
             "purpose": "LOCAL_EMBEDDING",
             **{
                 field: getattr(receipt, field)
@@ -92,11 +103,13 @@ class NativeEmbeddingCompletionPublisher:
                     "receipt_sha256",
                 )
             },
-            "receipt_schema": LOCAL_EMBEDDING_WORKFLOW_RECEIPT_SCHEMA_REF,
+            "receipt_schema": schema_ref,
             "receipt": pointer.model_dump(mode="json"),
         }
-        output = parse_local_embedding_step_output(body | {"output_sha256": content_sha256(body)})
-        return validate_local_embedding_step_output(output, receipt)
+        output = parse_supported_local_embedding_step_output(
+            body | {"output_sha256": content_sha256(body)}
+        )
+        return validate_supported_local_embedding_step_output(output, receipt)
 
     def publish_reference_query(
         self, receipt: ReferenceQueryWorkflowReceipt, *, identity: ControlFileSetIdentity

@@ -786,7 +786,7 @@ verify_mock_exam_deployment_admission() {
 prepare_runtime_dependencies() {
   getent group eom-codex-auth >/dev/null || \
     fail "eom-codex-auth identity must be deployed before the API unit"
-  run_release_operator MIGRATION_VERIFY_0057 "${COMMIT}"
+  run_release_operator MIGRATION_VERIFY_0058 "${COMMIT}"
   run_release_operator API_ROLE_BOOTSTRAP "${COMMIT}"
 }
 
@@ -1849,6 +1849,13 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
             / "config/workflows/local-embedding-index.v1.yaml"
         ).read_bytes()
     )
+    local_embedding_definition_v2 = root / "local-embedding-index.v2.yaml"
+    local_embedding_definition_v2.write_bytes(
+        (
+            Path(os.environ["REPOSITORY_ROOT"])
+            / "config/workflows/local-embedding-index.v2.yaml"
+        ).read_bytes()
+    )
     reference_query_definition = root / "local-embedding-reference-query.v1.yaml"
     reference_query_definition.write_bytes(
         (
@@ -1913,7 +1920,7 @@ from pathlib import Path
 from pydantic import TypeAdapter
 
 installed_root = Path(sys.argv[1]).resolve()
-repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, definition_v1_11, definition_v1_12, definition_v1_13, definition_v1_14, definition_v1_15, definition_v1_16, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, legacy_definition, editorial_definition, customer_support_definition, pdf_document_review_definition_v1, pdf_document_review_definition_v1_1, pdf_document_review_definition_v1_2, pdf_document_review_definition_v1_3, inference_transfer_definition, inference_transfer_definition_v1_1, local_embedding_definition, reference_query_definition, private_chat_query_definition, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256, expected_catalog_resources_json = sys.argv[2:]
+repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, definition_v1_11, definition_v1_12, definition_v1_13, definition_v1_14, definition_v1_15, definition_v1_16, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, legacy_definition, editorial_definition, customer_support_definition, pdf_document_review_definition_v1, pdf_document_review_definition_v1_1, pdf_document_review_definition_v1_2, pdf_document_review_definition_v1_3, inference_transfer_definition, inference_transfer_definition_v1_1, local_embedding_definition, local_embedding_definition_v2, reference_query_definition, private_chat_query_definition, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256, expected_catalog_resources_json = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
 os.environ["EOM_STAGING_ROOT"] = staging
@@ -2103,7 +2110,7 @@ if any(
     )
 ):
     raise SystemExit("mock-exam retirement contract package exports are incomplete")
-if CURRENT_MIGRATION_REVISION != "20261017_0057":
+if CURRENT_MIGRATION_REVISION != "20261019_0058":
     raise SystemExit("installed runtime migration admission head mismatch")
 settings = Settings.from_environment()
 if settings.worker_config != Path(worker_config).resolve():
@@ -2317,6 +2324,7 @@ admitted_definitions = (
     compile_definition(Path(inference_transfer_definition), {"support"}),
     compile_definition(Path(inference_transfer_definition_v1_1), {"support"}),
     compile_definition(Path(local_embedding_definition), set()),
+    compile_definition(Path(local_embedding_definition_v2), set()),
     compile_definition(Path(reference_query_definition), set()),
     compile_definition(Path(private_chat_query_definition), set()),
 )
@@ -2386,6 +2394,7 @@ validate_contract(
             str(inference_transfer_definition),
             str(inference_transfer_definition_v1_1),
             str(local_embedding_definition),
+            str(local_embedding_definition_v2),
             str(reference_query_definition),
             str(private_chat_query_definition),
             str(worker_config),

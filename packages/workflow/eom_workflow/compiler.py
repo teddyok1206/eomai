@@ -21,6 +21,10 @@ from eom_workflow.local_embedding_workflow import (
     LocalEmbeddingWorkflowDefinition,
     parse_local_embedding_workflow_definition,
 )
+from eom_workflow.local_embedding_workflow_v2 import (
+    LocalEmbeddingWorkflowDefinitionV2,
+    parse_local_embedding_workflow_definition_v2,
+)
 from eom_workflow.models import (
     AgentStep,
     AutomaticReviewReworkPolicy,
@@ -126,6 +130,8 @@ def compile_definition_data(
             definition = parse_reference_query_workflow_definition(raw)
         elif raw.get("schema_version") == "1.3":
             definition = PrivateChatQueryWorkflowDefinition.model_validate(raw)
+        elif raw.get("schema_version") == "1.4":
+            definition = parse_local_embedding_workflow_definition_v2(raw)
         else:
             validate_schema_message(load_definition_schema(), raw, "workflow-definition")
             definition = WorkflowDefinition.model_validate(raw)
@@ -135,6 +141,7 @@ def compile_definition_data(
         definition,
         (
             LocalEmbeddingWorkflowDefinition,
+            LocalEmbeddingWorkflowDefinitionV2,
             ReferenceQueryWorkflowDefinition,
             PrivateChatQueryWorkflowDefinition,
         ),

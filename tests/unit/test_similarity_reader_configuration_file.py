@@ -18,7 +18,7 @@ from eom_identifiers import canonical_json_bytes, sha256_bytes
 from tests.unit.test_similarity_reader_configuration import document
 
 
-@pytest.fixture(params=("REFERENCE", "EXAM"))
+@pytest.fixture(params=("REFERENCE", "EXAM", "MIXED"))
 def protected(tmp_path, monkeypatch, request):
     path = tmp_path / "configuration.json"
     raw = canonical_json_bytes(document())
@@ -75,16 +75,20 @@ def protected(tmp_path, monkeypatch, request):
     io.fstat = lambda fd: metadata(os.fstat(fd))
     io.stat = lambda *a, **kw: metadata(os.stat(*a, **kw))
     monkeypatch.setattr(module, "os", io)
-    constant = (
-        "SIMILARITY_READER_CONFIGURATION_PATH"
-        if request.param == "REFERENCE"
-        else "EXAM_SIMILARITY_READER_CONFIGURATION_PATH"
-    )
-    read = (
-        module.read_similarity_reader_configuration
-        if request.param == "REFERENCE"
-        else module.read_exam_similarity_reader_configuration
-    )
+    constant, read = {
+        "REFERENCE": (
+            "SIMILARITY_READER_CONFIGURATION_PATH",
+            module.read_similarity_reader_configuration,
+        ),
+        "EXAM": (
+            "EXAM_SIMILARITY_READER_CONFIGURATION_PATH",
+            module.read_exam_similarity_reader_configuration,
+        ),
+        "MIXED": (
+            "MIXED_SIMILARITY_READER_CONFIGURATION_PATH",
+            module.read_mixed_similarity_reader_configuration,
+        ),
+    }[request.param]
     monkeypatch.setattr(module, constant, path)
     return SimpleNamespace(
         path=path,

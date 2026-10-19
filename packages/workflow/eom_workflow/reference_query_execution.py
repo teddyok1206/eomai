@@ -24,6 +24,10 @@ from eom_catalog_contracts.embedding_runtime_bundle import (
 from eom_catalog_contracts.inference_transfer_embedding import SHARD_SCHEMA_REF
 from eom_catalog_contracts.models import FrozenModel, Sha256, UtcDatetime
 from eom_catalog_contracts.similarity_context import SimilarityContextRequest
+from eom_catalog_contracts.similarity_context_v2 import (
+    SimilarityContextRequestV2,
+    SupportedSimilarityContextRequest,
+)
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from pydantic import ConfigDict, Field, TypeAdapter, ValidationError, model_validator
@@ -37,6 +41,7 @@ from eom_workflow.models import JobId, StepRunId, WorkflowId
 from eom_workflow.schemas import (
     ReferenceQueryContractError,
     validate_reference_query_message,
+    validate_reference_query_request_v2,
     validate_reference_query_request_v11,
 )
 
@@ -45,6 +50,7 @@ REFERENCE_QUERY_RECEIPT_REF: Final = "eom://schemas/workflow/reference-query-wor
 REFERENCE_QUERY_REQUEST_VERSIONS: Final = (
     "reference-query-workflow-request/1.0",
     "reference-query-workflow-request/1.1",
+    "reference-query-workflow-request/2.0",
 )
 _BINARY_REF = "eom://schemas/knowledge/embedding-f32le-l2-row-major/1.0"
 
@@ -59,6 +65,21 @@ def _member(
 ) -> None:
     if value.member_path != path or value.schema_ref != schema or value.media_type != media:
         raise ValueError("reference QUERY member closure differs")
+
+
+def _validate_reference_query_context_controls(
+    context: SupportedSimilarityContextRequest,
+    resources: LocalEmbeddingResourceProfile,
+    policy: ArtifactMemberPointer,
+) -> None:
+    _member(policy, "policy.json", REFERENCE_QUERY_POLICY_REF)
+    indexes = tuple(view.index for view in context.views if view.index is not None)
+    if (
+        not indexes
+        or any(index.spaces.query.runtime.device != resources.device for index in indexes)
+        or len({view.recipe.recipe_sha256 for view in context.views}) != 1
+    ):
+        raise ValueError("reference QUERY context lacks a single pinned runtime/recipe")
 
 
 class _ReferenceQueryRequestFields(FrozenModel):
@@ -80,17 +101,9 @@ class _ReferenceQueryRequestFields(FrozenModel):
 
     @model_validator(mode="after")
     def exact_request(self) -> Self:
-        _member(self.native_execution_policy, "policy.json", REFERENCE_QUERY_POLICY_REF)
-        indexes = tuple(view.index for view in self.context_request.views if view.index is not None)
-        if (
-            not indexes
-            or any(
-                index.spaces.query.runtime.device != self.resource_profile.device
-                for index in indexes
-            )
-            or len({view.recipe.recipe_sha256 for view in self.context_request.views}) != 1
-        ):
-            raise ValueError("reference QUERY context lacks a single pinned runtime/recipe")
+        _validate_reference_query_context_controls(
+            self.context_request, self.resource_profile, self.native_execution_policy
+        )
         _hash(self, "request_sha256")
         return self
 
@@ -119,10 +132,45 @@ class ReferenceQueryWorkflowRequestV11(_ReferenceQueryRequestFields):
         return raw_similarity_contract_value(value)
 
 
+class ReferenceQueryWorkflowRequestV2(FrozenModel):
+    """Independent mixed metadata frame; never a subtype of a released request1."""
+
+    model_config = ConfigDict(revalidate_instances="always")
+    schema_version: Literal["reference-query-workflow-request/2.0"]
+    request_name: Literal["REFERENCE_QUERY_WORKFLOW_REQUEST"]
+    purpose: Literal["REFERENCE_QUERY"]
+    workflow_definition_key: Literal["local-embedding-reference-query"]
+    workflow_definition_version: Literal["1.0.0"]
+    workflow_definition_sha256: Sha256
+    operator_audit: LocalEmbeddingOperatorAudit
+    context_request: SimilarityContextRequestV2
+    runtime_bundle: EmbeddingRuntimeBundlePointer
+    resource_profile: LocalEmbeddingResourceProfile
+    native_execution_policy: ArtifactMemberPointer
+    native_execution_policy_sha256: Sha256
+    request_sha256: Sha256
+
+    @model_validator(mode="before")
+    @classmethod
+    def schema_first(cls, value: object) -> object:
+        validate_reference_query_request_v2(value)
+        return raw_similarity_contract_value(value)
+
+    @model_validator(mode="after")
+    def exact_request(self) -> ReferenceQueryWorkflowRequestV2:
+        _validate_reference_query_context_controls(
+            self.context_request, self.resource_profile, self.native_execution_policy
+        )
+        _hash(self, "request_sha256")
+        return self
+
+
 # Keep a runtime union: the fixed Runner dispatch uses isinstance as well as typing.
 # PEP695's TypeAliasType cannot serve that runtime boundary.
 SupportedReferenceQueryWorkflowRequest: TypeAlias = (  # noqa: UP040 -- used by runtime isinstance
-    ReferenceQueryWorkflowRequest | ReferenceQueryWorkflowRequestV11
+    ReferenceQueryWorkflowRequest
+    | ReferenceQueryWorkflowRequestV11
+    | ReferenceQueryWorkflowRequestV2
 )
 
 
@@ -303,7 +351,17 @@ def parse_supported_reference_query_workflow_request(
                 return parse_reference_query_workflow_request(document)
             case "reference-query-workflow-request/1.1":
                 return parse_reference_query_workflow_request_v11(document)
+            case "reference-query-workflow-request/2.0":
+                return parse_reference_query_workflow_request_v2(document)
     raise ReferenceQueryContractError("REFERENCE_QUERY_CONTRACT_INVALID")
+
+
+def parse_reference_query_workflow_request_v2(value: object) -> ReferenceQueryWorkflowRequestV2:
+    validate_reference_query_request_v2(value)
+    try:
+        return ReferenceQueryWorkflowRequestV2.model_validate(value)
+    except ValidationError:
+        raise ReferenceQueryContractError("REFERENCE_QUERY_CONTRACT_INVALID") from None
 
 
 def parse_reference_query_execution_policy(value: object) -> ReferenceQueryExecutionPolicy:

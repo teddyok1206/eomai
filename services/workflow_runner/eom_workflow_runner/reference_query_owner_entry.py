@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 
 _RELEASES = Path("/opt/eom/embedding-owner-releases")
 _CONFIGURATION = Path("/etc/eom/reference-query-owner.json")
+_MIXED_CONFIGURATION = Path("/etc/eom/mixed-reference-query-owner.json")
 _SOCKET_PARENT = Path("/run/eom-reference-query-owner")
 _PRIVATE_CONFIGURATION = Path("/etc/eom/private-chat-query-owner.json")
 _PRIVATE_SOCKET_PARENT = Path("/run/eom-private-chat-query-owner")
@@ -120,6 +121,19 @@ def _private_configuration_bytes() -> bytes | None:
     )
 
 
+def _mixed_configuration_bytes() -> bytes | None:
+    expected = os.environ.get("EOM_MIXED_REFERENCE_QUERY_CONFIGURATION_SHA256")
+    if expected is None:
+        return None
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", expected) is None:
+        raise ValueError("REFERENCE_QUERY_MIXED_CONFIGURATION_UNAVAILABLE")
+    from eom_catalog_service.embedding_runtime_files import NumericalRuntimeFileSnapshots
+
+    return NumericalRuntimeFileSnapshots().read(
+        _MIXED_CONFIGURATION, sha256=expected, maximum=64 * 1024
+    )
+
+
 def _provision_query_socket_parent(parent: Path, group_name: str) -> None:
     owner, group = pwd.getpwnam("eom-workflow-runner"), grp.getgrnam(group_name)
     if owner.pw_uid <= 0 or group.gr_gid <= 0:
@@ -190,6 +204,7 @@ def _serve_child(
     restore_mask: set[int | signal.Signals],
     *,
     private_raw: bytes | None = None,
+    mixed_raw: bytes | None = None,
 ) -> int:
     owner = pwd.getpwnam("eom-workflow-runner")
     api = pwd.getpwnam("eom-api")
@@ -218,6 +233,7 @@ def _serve_child(
     stop = Event()
     server = None
     runtime = None
+    mixed_runtime = None
 
     def stop_child(_signum: int, _frame: FrameType | None) -> None:
         stop.set()
@@ -233,6 +249,25 @@ def _serve_child(
         snapshots.read(_CONFIGURATION, sha256=raw_sha256, maximum=64 * 1024)
         admission = ProtectedInstalledIdentityProviderAdmission(observation)
         runtime = build_reference_query_owner_runtime(configuration, admission)
+        mixed_snapshots = None
+        if mixed_raw is not None:
+            from eom_workflow.reference_query_owner_configuration import (
+                ReferenceQueryServiceConfigurationV2,
+                parse_supported_reference_query_service_configuration,
+                require_mixed_reference_query_cohost,
+            )
+
+            mixed_snapshots = NumericalRuntimeFileSnapshots()
+            current_mixed = mixed_snapshots.read(
+                _MIXED_CONFIGURATION,
+                sha256="sha256:" + hashlib.sha256(mixed_raw).hexdigest(),
+                maximum=64 * 1024,
+            )
+            mixed_selection = parse_supported_reference_query_service_configuration(current_mixed)
+            if not isinstance(mixed_selection, ReferenceQueryServiceConfigurationV2):
+                raise ValueError("REFERENCE_QUERY_MIXED_CONFIGURATION_UNAVAILABLE")
+            require_mixed_reference_query_cohost(configuration, mixed_selection)
+            mixed_runtime = build_reference_query_owner_runtime(mixed_selection, admission)
         private_listener = None
         if private_raw is not None:
             from eom_orchestrator.private_chat_query_prepare_client import (
@@ -267,7 +302,27 @@ def _serve_child(
         def application(capture: AuthenticatedOperatorSession) -> ReferenceQueryPreparationPort:
             snapshots.assert_unchanged()
             assert runtime is not None
-            return runtime.application(capture)
+            if mixed_runtime is None:
+                # The family router still rejects2 explicitly when not activated;
+                # it must never send a new-family request to the primary owner.
+                from eom_workflow_runner.reference_query_family_selection import (
+                    ReferenceQueryFamilyPreparation,
+                )
+
+                return ReferenceQueryFamilyPreparation(lambda: runtime.application(capture), None)
+
+            from eom_workflow_runner.reference_query_family_selection import (
+                ReferenceQueryFamilyPreparation,
+            )
+
+            def mixed_application() -> ReferenceQueryPreparationPort:
+                assert mixed_snapshots is not None and mixed_runtime is not None
+                mixed_snapshots.assert_unchanged()
+                return mixed_runtime.application(capture)
+
+            return ReferenceQueryFamilyPreparation(
+                lambda: runtime.application(capture), mixed_application
+            )
 
         server = ReferenceQueryOwnerServer(
             endpoint=ChatSocketEndpoint(
@@ -289,6 +344,8 @@ def _serve_child(
             server.close()
         if runtime is not None:
             runtime.close()
+        if mixed_runtime is not None:
+            mixed_runtime.close()
 
 
 def _require_dropped_identity(uid: int, gid: int) -> None:
@@ -353,6 +410,18 @@ def main() -> int:
         configuration = parse_reference_query_service_configuration(raw)
         if configuration.owner_source_commit != site.parent.name:
             raise ValueError("REFERENCE_QUERY_OWNER_SOURCE_MISMATCH")
+        mixed_raw = _mixed_configuration_bytes()
+        if mixed_raw is not None:
+            from eom_workflow.reference_query_owner_configuration import (
+                ReferenceQueryServiceConfigurationV2,
+                parse_supported_reference_query_service_configuration,
+                require_mixed_reference_query_cohost,
+            )
+
+            mixed_selection = parse_supported_reference_query_service_configuration(mixed_raw)
+            if not isinstance(mixed_selection, ReferenceQueryServiceConfigurationV2):
+                raise ValueError("REFERENCE_QUERY_MIXED_CONFIGURATION_UNAVAILABLE")
+            require_mixed_reference_query_cohost(configuration, mixed_selection)
         private_raw = _private_configuration_bytes()
         if private_raw is not None:
             from eom_workflow.private_chat_query_owner_configuration import (
@@ -383,6 +452,7 @@ def main() -> int:
                     "sha256:" + hashlib.sha256(raw).hexdigest(),
                     restore_mask,
                     private_raw=private_raw,
+                    mixed_raw=mixed_raw,
                 )
                 sys.stdout.flush()
                 os._exit(status)
