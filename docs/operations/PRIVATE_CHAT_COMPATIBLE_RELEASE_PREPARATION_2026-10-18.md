@@ -1422,3 +1422,83 @@ disabled so an anticipated password cannot accidentally become a shell command.
 Any next finite preparation is distinct and must preserve the original eight inputs,
 six allocation, C1/C5 pins, consumer keys and provider release set. There is no new
 authentication prompt at this checkpoint and the overall goal remains incomplete.
+
+## Actual C1/C5 acceptance; benchmark preparation remains unresolved — 2026-10-19 10:59 UTC
+
+Distinct finite `eom-system-rag-goal-ee97239d-881584aa-query052-productunit1.service`,
+invocation `edfa34dcac5a43db9c5518adb2ca37c5`, used the unit-key corrected client.
+Its27 closure/plan tests completed before either outer DRAFT flag was cleared;
+Ruff/format/compile and independent exact eight-file/hash-chain review passed.
+Original eight runtime members, C1 request/reply, C5 selector, six allocation/order,
+consumer keys and API881/QUERY052/benchmarkEE release set remain pinned. Root stage
+preparation completed exit0 at10:25:58.560518. The previous INDEX18 invocation
+received one main-only SIGTERM and drained normally, exit0/PID0/empty cgroup,
+at10:28:31. No forced kill or reset of history was used.
+
+The actual protected PTY prompt was observed before requesting input. Genuine
+login and current operator validated at10:44:33.726143/10:44:33.731308 UTC.
+Two original completed C1 reads passed at10:45:33.628943 with eight candidates,
+unchanged context SHA and zero new keys/preparations. Exact original same-key
+PREP replay passed at10:45:41.176204. Authorized discovery and the reviewed plan
+then succeeded; plan SHA is
+`sha256:b6a4a3956397f1877417d6194262525a515ba4c83edc9bc5b22ba4b0e6a5c4b2`.
+These are actual acceptance of both local discovery hash-kind and product-key fixes.
+
+At10:45:46.836897 the existing ordered25 C5 read passed for the original Assembly
+Revision. State is `EMPTY`, result SHA
+`sha256:24d5b9f07ec48bed7dd2725f3bd302a97528b3f185652ae02e235482cc0f08dc`.
+No new Assembly,25-item generation or HWPX was created. EMPTY is preserved as an
+availability/coverage limitation, not interpreted as no similar items or useful
+full-cohort comparison. The generated Item solution-evidence limitation below is
+source evidence, not a reconstructed explanation of every field of that response.
+
+At10:45:48.151318 benchmark preparation stopped with generic
+`VALIDATION_OR_TRANSPORT_FAILED`/`Exception`. The client had collapsed distinct
+typed capacity, session-transport, source/fence and preparation failures; the
+exact failing boundary cannot be reconstructed from that event. API metadata
+confirms the extra system-info and owner-session-capture routes were called, not
+their response status or successful capture. Do not label this a password failure,
+specific provider/DB defect, performance failure or successful numerical run.
+The fixed original tokenizer reservation directory is absent under a traversable
+root-owned0711 parent, and its exact token unit is not found. In this fixed
+supervisor it precedes the numerical request/series. All six numerical executions
+remain unstarted; new C2/C3/C4 submissions remain zero.
+
+The finite unit remains failed/exit1/MainPID0/empty cgroup and its memory-only
+session closed. After native quiescence, normal INDEX18 resumed at10:48:11,
+PID3697151/invocation `a28e5d2a857849f597fb3641da1bb890`. API LIVE/READY passed at10:57:40.
+Terminal/restoration metadata is retained at
+`/tmp/eom-finite-881-query052-productunit1.r1vVmvE7/terminal-and-restoration.json`.
+No failed history, token, credential, policy or original selection was rewritten.
+
+A separate diagnostic-only phase copy retains the business AST and rethrows the
+original exception, with22 fixed checkpoints and48 closed content-free codes.
+SQL errors emit a fixed band without inspecting SQL/args; sink failures do not
+change business outcome. Synthetic84, Ruff/format/compile, independent review and
+no-effect import/frozen-selection validation in the actual installed EE SDK pass.
+Local candidate `/tmp/eom-benchmark-phase-diagnostics.4IAOCNov/benchmark_goal_phase.py`,
+SHA `31d74a8d91e12d5b97b9510714d7d7b05b6757b81cbeec62b0ef9c9b61be5858`.
+It is not deployed, a new finite launch or a fix of the unknown underlying failure.
+No further authentication was requested. Full goal, six finalization, conditional
+GPU defaults and genuine post-seed automatic arrival remain incomplete.
+
+### Generated Item solution-evidence gap — source-only finding
+
+Current indexing resolves accepted `knowledge-analysis-request/10.0` solution
+successors. That request accepts a past-exam source with an accepted V9 base;
+ordinary `APPROVED_ITEM` analysis currently produces V2. Author/review records and
+an approved Item alone therefore do not provide the required accepted solution
+evidence. Source modules: `catalog_contracts/knowledge.py`,
+`knowledge_analysis_service.py`, `solution_evidence_resolution.py` and
+`inference_transfer_catalog_adapter.py`. No new source or operator grant was made
+to discover this limitation.
+
+An additive successor must preserve released V9/V10/pointer bytes, explicitly
+distinguish generated/past-exam source classes and validate the accepted base,
+source revision, report Artifact/revision/schema/hash and unique successor. Only
+actual pointer-carrying profile/binding/source-plan boundaries need compatible
+successors; vector codecs, ranking, queue and canonical storage should be reused.
+This is remaining original-goal implementation, not permission to relabel generated
+content as PAST_EXAM, reinterpret review as V10, create a parallel framework or
+claim old520 backfill/scope expansion as a new-arrival witness. A detailed protocol-
+first design and tests are required before changing those contracts.
