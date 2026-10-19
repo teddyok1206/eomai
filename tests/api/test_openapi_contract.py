@@ -106,6 +106,42 @@ def test_committed_openapi_matches_current_application_contract() -> None:
     assert generated == json.loads(CONTRACT.read_text(encoding="utf-8"))
 
 
+def test_committed_mixed_similarity_entry_preserves_explicit_wire_families() -> None:
+    contract = json.loads(CONTRACT.read_bytes())
+    paths, schemas = contract["paths"], contract["components"]["schemas"]
+    prepare = paths["/api/v1/knowledge/reference-queries/preparation"]["post"]
+    request = prepare["requestBody"]["content"]["application/json"]["schema"]
+    assert request["discriminator"] == {
+        "propertyName": "schema_version",
+        "mapping": {
+            "system-rag-reference-query-prepare-request/1.0": (
+                "#/components/schemas/ReferenceQueryPrepareInput"
+            ),
+            "system-rag-reference-query-prepare-request/1.1": (
+                "#/components/schemas/ReferenceQueryPrepareInputV11"
+            ),
+            "system-rag-reference-query-prepare-request/2.0": (
+                "#/components/schemas/ReferenceQueryPrepareInputV2"
+            ),
+        },
+    }
+    assert "consumer_purpose" not in schemas["ReferenceQueryPrepareInput"]["properties"]
+    read = paths["/api/v1/knowledge/inference-transfer/similarity-context"]["post"]
+    selection = read["requestBody"]["content"]["application/json"]["schema"]
+    assert selection["anyOf"] == [
+        {"$ref": "#/components/schemas/SimilarityContextReadSelection"},
+        {"$ref": "#/components/schemas/SimilarityContextReadSelectionV2"},
+    ]
+    assert read["x-eom-read-only"] is True
+    review = schemas["RegisteredReviewSimilarityCandidateV2"]["properties"]
+    assert review["evidence_kind"]["const"] == "REGISTERED_ITEM_REVIEW_SOLUTION"
+    assert review["profile"] == {"$ref": "#/components/schemas/RegisteredReviewProfilePointer"}
+    assert review["review_evidence"] == {
+        "$ref": "#/components/schemas/RegisteredItemReviewSolutionEvidence"
+    }
+    assert "solution_evidence" not in review
+
+
 def test_operator_deletion_is_a_fresh_admin_only_permission_boundary() -> None:
     contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
     operation = contract["paths"]["/api/v1/operators/{operator_id}"]["delete"]

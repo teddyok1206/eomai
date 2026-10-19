@@ -212,3 +212,29 @@ Catalog의 새 Workflow provenance adapter는 명시적 mixed runtime compositio
 따른다. 0058 적용 후에는 DB를58로 보존하고 같은58-compatible binary/새identity19의
 legacy-only warm baseline으로 feature recovery한다. 옛881 binary를 다시 설치하면
 DB58에서 READY가 된다고 주장하지 않는다. 실제 운영 migration/설치/활성화는 아직 수행 전이다.
+
+## 커밋·공식 build와 입력 사전 관측
+
+소스는 `a8f9965bfb2ccc018787d5fa07c753c36f674b00`으로 main/origin에 반영했다.
+공식 build-only의 RECORD 검사는 통과했지만 installed OpenAPI와 정적 리소스의 exact
+비교에서 실패했다. 새 PREP2/READ2의 공개 schema가 정적 파일에 아직 반영되지 않은
+원인이었다. 비교를 완화하지 않고 기존 공식 export로 JSON·checksum을 갱신했다.
+수정 후5 suite117 PASS/33.41초이며 기존 동일성 RED와 GREEN XML을 보존했다.
+이 시점까지 실제 설치·migration은 하지 않았다.
+
+13:48:41–42 UTC에 기존 installed881 API의 공개 QueryAdapter를 실제 eom-api UID의
+단발 격리 진단에서 사용했다. 모든 DB transaction은 READ ONLY와10초 statement 한도였다.
+Nas/모델/문항 내용은 읽지 않았고 사용자 인증·자료 권한·V2/receipt 자격을 승인하지 않았다.
+최초 명령의 mount namespace 인자 오류는 interpreter 실행 전에226/NAMESPACE로 실패했고
+그 이력을 보존했다. 수정된 진단은 별도 unit으로 한 번 실행해 다음 metadata를 관측했다.
+
+- accepted 분석1870, 그중 approved-Item-revision source metadata1311.
+- active Item631, current APPROVED626, accepted metadata가 있는 current revision545.
+- 최신32개 교집합의 상세는 옛 production25개(@10 Review)와 legacy7개였다.
+  두 목록은 끝까지 조회했지만 상세는32개 제한이므로 전체 ordinary eligible0이라고
+  결론내리지 않는다. 실제 새 source 존재 여부는 후속 bounded metadata와 공식 resolver로 확인한다.
+
+또한 현재 공개 API에는 source1개만 철회·복구하는 ACL이 없다. Item retirement는
+restore 전이가 없고 immutable policy 새 발행은 기존 pinned query 철회가 아니다.
+guiadmin의 ADMIN 전체 권한을 검증 편의로 떼지 않는다. 실제 좁은 철회/복구 검증은
+미수행으로 남기며 단위 검증을 그 증거로 대체하지 않는다.
