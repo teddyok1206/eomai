@@ -502,7 +502,9 @@ class OrchestratorEvidenceUsageReceiptResolver:
             or revision.logical_artifact_id != pointer.logical_artifact_id
             or revision.job_id != pointer.job_id
             or revision.content_hash != pointer.content_hash
-            or revision.manifest_hash != content_sha256(revision.manifest)
+            # stage_structured_artifact hashes the typed manifest, whose UTC
+            # datetime encoding preserves six microsecond digits even at zero.
+            or revision.manifest_hash != content_sha256(artifact_manifest)
             or revision.content_bytes != artifact_manifest.content_bytes
             or not revision.approved
             or artifact_manifest.job_id != pointer.job_id

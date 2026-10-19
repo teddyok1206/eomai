@@ -1962,6 +1962,9 @@ class CatalogEmbeddingRegistryVerifier:
             by_encoding = {row.encoding.encoding_sha256: row for row in checked_rows}
             rebuilt: dict[str, EmbeddingSourceBinding] = {}
             for demand in plan.demands:
+                # The installed index1 owner cannot publish a profile2 binding.
+                if not isinstance(demand.profile, InferenceTransferProfilePointer):
+                    raise ValueError("index1 does not support the selected profile family")
                 row = by_encoding.get(demand.encoding.encoding_sha256)
                 if row is None:
                     continue

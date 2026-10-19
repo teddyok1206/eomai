@@ -34,6 +34,18 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "item-inference-transfer-v2": CatalogSchemaResource(
+            "schemas/knowledge/item-inference-transfer-v2.schema.json",
+            "resources/knowledge/item-inference-transfer-v2.schema.json",
+            "2.0",
+            "sha256:0d43afea255a7ecaac1877f2108ca075ef868622e037e81faf2f95c5c4017d54",
+        ),
+        "registered-item-review-solution-evidence": CatalogSchemaResource(
+            "schemas/knowledge/registered-item-review-solution-evidence-v1.schema.json",
+            "resources/knowledge/registered-item-review-solution-evidence-v1.schema.json",
+            "1.0",
+            "sha256:db934703765b4462f3ff4e8bbf9cff27f1f2900e2851b311cd5b2297a5cd24d5",
+        ),
         "general-chat-similarity-observation": CatalogSchemaResource(
             "schemas/knowledge/general-chat-similarity-observation-v1.schema.json",
             "resources/knowledge/general-chat-similarity-observation-v1.schema.json",

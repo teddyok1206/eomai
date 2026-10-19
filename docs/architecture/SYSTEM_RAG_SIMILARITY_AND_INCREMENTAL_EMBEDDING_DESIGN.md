@@ -145,6 +145,12 @@ RAG·vector 검색 자격으로 확대하지 않는다.
 
 ## 5. source 종류별 표현과 eligibility
 
+2026-10-19 보충: 생성 문항은 기출 전용 accepted V10으로 위장하거나 같은 풀이를
+추가 실행하지 않고, 이미 등록된 독립 REVIEW 결론을 별도 evidence/profile successor로
+재사용하는 방향을 확정했다. 계약·검증·운영 활성화는 구분한다. 상세 설계와 순서는
+[`REGISTERED_ITEM_REVIEW_SOLUTION_EVIDENCE_DESIGN.md`](REGISTERED_ITEM_REVIEW_SOLUTION_EVIDENCE_DESIGN.md)를 따른다.
+아래 accepted-V10 제한은 기존 구현 경계이며, 새 생성 문항 경로의 완료 선언이 아니다.
+
 | 자료 | 표현 단위 | 기본 gate |
 |---|---|---|
 | 기출 | 정본 Item question text, 승인 report의 조건·관계·추론·오개념, metadata | exact occurrence/source, 승인 분석·report, Graph membership·현재 정책 |

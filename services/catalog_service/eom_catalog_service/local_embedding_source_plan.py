@@ -7,6 +7,7 @@ from eom_catalog_contracts.inference_transfer_experiment import (
     StagedExperimentEntry,
     population_sha256,
 )
+from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
 from eom_identifiers import content_sha256
 from eom_workflow.local_embedding_source_plan import (
     LocalEmbeddingEncodingDemand,
@@ -81,17 +82,23 @@ def build_local_embedding_source_plan(
         storage_partition=query.namespace.storage_partition,
         views=(query.namespace.view,),
     )
-    demands = tuple(
-        LocalEmbeddingEncodingDemand(
-            source_revision_id=demand.source_revision_id,
-            profile=demand.profile,
-            solution_evidence=entries[
-                demand.source_revision_id
-            ].profile.source_basis.solution_evidence,
-            encoding=demand.encoding,
+    demands_list: list[LocalEmbeddingEncodingDemand] = []
+    for demand in delta.demands:
+        # Source-plan1 is a released accepted-V10 closure. Supporting a new
+        # profile in the pure numerical planner does not activate that protocol.
+        if not isinstance(demand.profile, InferenceTransferProfilePointer):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+        demands_list.append(
+            LocalEmbeddingEncodingDemand(
+                source_revision_id=demand.source_revision_id,
+                profile=demand.profile,
+                solution_evidence=entries[
+                    demand.source_revision_id
+                ].profile.source_basis.solution_evidence,
+                encoding=demand.encoding,
+            )
         )
-        for demand in delta.demands
-    )
+    demands = tuple(demands_list)
     value = {
         "schema_version": "local-embedding-source-plan/1.0",
         "corpus_id": query.corpus_id,

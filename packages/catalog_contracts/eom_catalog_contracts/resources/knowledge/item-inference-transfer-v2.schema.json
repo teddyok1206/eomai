@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/item-inference-transfer/2.0",
+  "title": "Registered Item independent-review comparison profile V2",
+  "$ref": "#/$defs/profile",
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "jsonPointer": {
+      "type": "string", "minLength": 1, "maxLength": 256,
+      "pattern": "^/(?:[^~/]|~0|~1)+(?:/(?:[^~/]|~0|~1)+)*$"
+    },
+    "sourceBasis": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "source": {
+          "allOf": [
+            {"$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/approvedItemSource"},
+            {"properties": {"source_class": {"const": "APPROVED_ITEM"}}}
+          ]
+        },
+        "graph_snapshot": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"
+        },
+        "review_evidence": {
+          "$ref": "eom://schemas/knowledge/registered-item-review-solution-evidence/1.0"
+        }
+      },
+      "required": ["source", "graph_snapshot", "review_evidence"]
+    },
+    "claim": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "claim_id": {"type": "string", "pattern": "^reviewclaim_[0-9a-f]{32}$"},
+        "kind": {"enum": ["ANSWER_SUMMARY", "ANSWER_CLAIM", "CHOICE_DIAGNOSTIC", "STATEMENT_DIAGNOSTIC"]},
+        "subject": {"type": "string", "minLength": 1, "maxLength": 64},
+        "verdict": {"enum": [null, "MATCH", "MISMATCH", "CORRECT", "DISTRACTOR", "TRUE", "FALSE"]},
+        "text": {"type": "string", "minLength": 1, "maxLength": 4000},
+        "review_json_pointers": {
+          "type": "array", "minItems": 1, "maxItems": 4, "uniqueItems": true,
+          "items": {
+            "allOf": [
+              {"$ref": "#/$defs/jsonPointer"},
+              {"pattern": "^/output/independent_review_report/"}
+            ]
+          }
+        },
+        "draft_json_paths": {
+          "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true,
+          "items": {"$ref": "#/$defs/jsonPointer"}
+        },
+        "evidence_ids": {
+          "type": "array", "maxItems": 16, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^evidenceitem_[0-9a-f]{32}$"}
+        }
+      },
+      "required": ["claim_id", "kind", "subject", "verdict", "text", "review_json_pointers", "draft_json_paths", "evidence_ids"],
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"const": "ANSWER_SUMMARY"}}},
+          "then": {"properties": {"subject": {"enum": ["①", "②", "③", "④", "⑤"]}, "verdict": {"enum": ["MATCH", "MISMATCH"]}}}
+        },
+        {
+          "if": {"properties": {"kind": {"const": "ANSWER_CLAIM"}}},
+          "then": {"properties": {"subject": {"pattern": "^claim_[a-z0-9][a-z0-9_]{0,31}$"}, "verdict": {"type": "null"}, "text": {"maxLength": 2000}}}
+        },
+        {
+          "if": {"properties": {"kind": {"const": "CHOICE_DIAGNOSTIC"}}},
+          "then": {"properties": {"subject": {"enum": ["①", "②", "③", "④", "⑤"]}, "verdict": {"enum": ["CORRECT", "DISTRACTOR"]}, "text": {"maxLength": 2000}}}
+        },
+        {
+          "if": {"properties": {"kind": {"const": "STATEMENT_DIAGNOSTIC"}}},
+          "then": {"properties": {"subject": {"enum": ["ㄱ", "ㄴ", "ㄷ"]}, "verdict": {"enum": ["TRUE", "FALSE"]}, "text": {"maxLength": 2000}}}
+        }
+      ]
+    },
+    "profile": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "schema_version": {"const": "item-inference-transfer-profile/2.0"},
+        "profile_id": {"type": "string", "pattern": "^inferenceprofile_[0-9a-f]{32}$"},
+        "profile_revision_id": {"type": "string", "pattern": "^inferenceprofilerev_[0-9a-f]{32}$"},
+        "source_basis": {"$ref": "#/$defs/sourceBasis"},
+        "claims": {"type": "array", "minItems": 7, "maxItems": 25, "items": {"$ref": "#/$defs/claim"}},
+        "limitations": {
+          "type": "array", "minItems": 2, "maxItems": 8, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 1000},
+          "allOf": [
+            {"contains": {"const": "원 독립 검토의 공개 결론만 재사용하며 전체 풀이 DAG나 핵심 착상을 확정하지 않습니다."}},
+            {"contains": {"const": "이 결정적 텍스트 투영은 원 PDF/PNG 이미지의 픽셀을 검사하지 않았습니다."}}
+          ]
+        },
+        "extractor_version": {"const": "registered-item-review-comparison/1.0"},
+        "created_at": {"type": "string", "format": "date-time"},
+        "profile_sha256": {"$ref": "#/$defs/sha256"}
+      },
+      "required": ["schema_version", "profile_id", "profile_revision_id", "source_basis", "claims", "limitations", "extractor_version", "created_at", "profile_sha256"]
+    },
+    "profilePointer": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "profile_id": {"type": "string", "pattern": "^inferenceprofile_[0-9a-f]{32}$"},
+        "profile_revision_id": {"type": "string", "pattern": "^inferenceprofilerev_[0-9a-f]{32}$"},
+        "profile_sha256": {"$ref": "#/$defs/sha256"},
+        "schema_ref": {"const": "eom://schemas/knowledge/item-inference-transfer/2.0"}
+      },
+      "required": ["profile_id", "profile_revision_id", "profile_sha256", "schema_ref"]
+    }
+  }
+}

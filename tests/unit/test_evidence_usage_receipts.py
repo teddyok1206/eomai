@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, NoReturn, cast
 
@@ -19,12 +20,14 @@ from eom_catalog_service.evidence_usage_receipts import (
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
 from eom_identifiers import content_sha256
 from eom_item_registry import ComponentPointer, RegistrationRequest
+from eom_orchestrator.artifacts import stage_structured_artifact
 from eom_orchestrator.models import (
     ArtifactRecord,
     ArtifactRevisionRecord,
     JobEventRecord,
     JobRecord,
 )
+from eom_protocol import ArtifactManifest
 from eom_workflow import (
     ArtifactPointer,
     AuthoringEvidenceUsageValidationReceipt,
@@ -282,19 +285,22 @@ def _record_set(
         | ReviewEvidenceUsageValidationReceiptV3
     ),
 ) -> tuple[JobRecord, ArtifactRecord, ArtifactRevisionRecord, JobEventRecord]:
-    manifest = {
-        "protocol_version": "1.0.1",
-        "manifest_version": "1.0.0",
-        "job_id": pointer.job_id,
-        "logical_artifact_id": pointer.logical_artifact_id,
-        "revision_id": pointer.revision_id,
-        "content_hash": pointer.content_hash,
-        "content_bytes": 100,
-        "file_name": "result.json",
-        "media_type": "application/json",
-        "worker_slot": "01",
-        "created_at": NOW.isoformat(),
-    }
+    manifest_model = ArtifactManifest.model_validate(
+        {
+            "protocol_version": "1.0.1",
+            "manifest_version": "1.0.0",
+            "job_id": pointer.job_id,
+            "logical_artifact_id": pointer.logical_artifact_id,
+            "revision_id": pointer.revision_id,
+            "content_hash": pointer.content_hash,
+            "content_bytes": 100,
+            "file_name": "result.json",
+            "media_type": "application/json",
+            "worker_slot": "01",
+            "created_at": NOW.isoformat(),
+        }
+    )
+    manifest = manifest_model.model_dump(mode="json")
     job = JobRecord(
         job_id=pointer.job_id,
         protocol_version={
@@ -325,7 +331,7 @@ def _record_set(
         logical_artifact_id=pointer.logical_artifact_id,
         job_id=pointer.job_id,
         content_hash=pointer.content_hash,
-        manifest_hash=content_sha256(manifest),
+        manifest_hash=content_sha256(manifest_model),
         content_bytes=100,
         nas_path="/not-read-by-unit-test",
         manifest=manifest,
@@ -400,6 +406,39 @@ def test_trusted_receipt_record_and_pair_bind_exact_artifacts_and_plan() -> None
 
     assert resolved.authoring.result_artifact.revision_id == AUTHORING.revision_id
     assert resolved.review.authoring_artifact == resolved.authoring.result_artifact
+
+
+@pytest.mark.parametrize("microsecond", (0, 123456))
+def test_actual_producer_manifest_hash_survives_json_database_projection(
+    tmp_path: Path, microsecond: int
+) -> None:
+    staged = stage_structured_artifact(
+        result={"synthetic": "producer serialization, no production content"},
+        job_id=AUTHORING.job_id,
+        logical_artifact_id=AUTHORING.logical_artifact_id,
+        revision_id=AUTHORING.revision_id,
+        staging=tmp_path / "producer",
+        worker_slot="01",
+        created_at=NOW.replace(microsecond=microsecond),
+    )
+    pointer = AUTHORING.model_copy(update={"content_hash": staged.content_hash})
+    receipt_body = _receipts().authoring.model_dump(mode="json", exclude={"receipt_sha256"})
+    receipt_body["result_artifact"]["content_hash"] = staged.content_hash
+    receipt = AuthoringEvidenceUsageValidationReceipt.model_validate(
+        receipt_body | {"receipt_sha256": content_sha256(receipt_body)}
+    )
+    job, artifact, revision, event = _record_set(pointer, receipt)
+    revision.manifest = staged.manifest.model_dump(mode="json")
+    revision.manifest_hash = staged.manifest_hash
+    revision.content_bytes = staged.manifest.content_bytes
+    if microsecond == 0:
+        # Raw producer hashes the typed timestamp with six fractional digits;
+        # JSON-mode database metadata omits the all-zero fractional component.
+        assert staged.manifest_hash != content_sha256(revision.manifest)
+    resolved = OrchestratorEvidenceUsageReceiptResolver._validate_receipt_record(
+        pointer=pointer, job=job, artifact=artifact, revision=revision, events=(event,)
+    )
+    assert resolved == receipt
 
 
 def test_v2_receipt_record_binds_independent_review_hashes_and_v5_manifest() -> None:
@@ -539,7 +578,7 @@ def test_trusted_receipt_record_rejects_missing_stale_or_untrusted_state(case: s
         revision.manifest_hash = "sha256:" + "0" * 64
     elif case == "manifest_identity":
         revision.manifest["revision_id"] = "rev_" + "0" * 32
-        revision.manifest_hash = content_sha256(revision.manifest)
+        revision.manifest_hash = content_sha256(ArtifactManifest.model_validate(revision.manifest))
     elif case == "manifest_bytes":
         revision.content_bytes = 101
     elif case == "receipt_self_hash":

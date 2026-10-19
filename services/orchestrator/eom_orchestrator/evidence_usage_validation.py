@@ -1021,7 +1021,7 @@ def _validate_independent_review_report(
             context_ids=context_ids,
         )
 
-    _validate_independent_review_draft(result, draft)
+    validate_independent_review_draft(result, draft)
 
 
 def _validate_v12_verification_plan(
@@ -1079,11 +1079,16 @@ def _validate_v12_verification_plan(
             _resolve_semantic_leaf(draft, pointer)
 
 
-def _validate_independent_review_draft(
+def validate_independent_review_draft(
     result: ContentTeamReviewRoleResultV11 | ContentTeamReviewRoleResultV12,
     draft: Mapping[str, Any],
 ) -> None:
-    """Bind the bounded independent report to one exact authored draft."""
+    """Bind a validated independent report to one exact authored draft.
+
+    Public pure-value boundary shared with registered-review provenance reads.
+    Callers validate role envelopes and Artifact identity before this check; it
+    neither resolves source permissions nor replaces trusted receipt validation.
+    """
 
     report = result.output.independent_review_report
     answer = draft.get("answer")
@@ -1191,7 +1196,7 @@ def _validate_ungrounded_review_result_v11(
             "EVIDENCE_AUTHORING_RESULT_INVALID",
             "general-knowledge review requires an exact ungrounded @11 authoring result",
         )
-    _validate_independent_review_draft(
+    validate_independent_review_draft(
         result,
         authoring.output.draft.model_dump(mode="json"),
     )
@@ -1232,7 +1237,7 @@ def _validate_ungrounded_review_result_v12(
             "EVIDENCE_AUTHORING_RESULT_INVALID",
             "general-knowledge review requires an exact ungrounded @12 authoring result",
         )
-    _validate_independent_review_draft(
+    validate_independent_review_draft(
         result,
         authoring.output.draft.model_dump(mode="json"),
     )

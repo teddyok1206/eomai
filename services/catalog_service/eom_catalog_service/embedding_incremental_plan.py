@@ -19,7 +19,17 @@ from eom_catalog_contracts.inference_transfer_experiment import (
     experiment_view_text,
 )
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
+from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_identifiers import content_sha256
+
+from eom_catalog_service.registered_review_embedding_entry import (
+    RegisteredReviewEmbeddingEntry,
+    registered_review_embedding_view_text,
+    validate_registered_review_embedding_entry,
+)
+
+type EmbeddingProfilePointer = InferenceTransferProfilePointer | RegisteredReviewProfilePointer
+type IncrementalEmbeddingEntry = StagedExperimentEntry | RegisteredReviewEmbeddingEntry
 
 
 class EmbeddingDeltaError(ValueError):
@@ -39,7 +49,7 @@ class RegisteredEmbeddingRow:
 @dataclass(frozen=True, slots=True)
 class EmbeddingBindingDemand:
     source_revision_id: str
-    profile: InferenceTransferProfilePointer
+    profile: EmbeddingProfilePointer
     view: ExperimentView
     encoding: EmbeddingEncodingIdentity
 
@@ -47,7 +57,7 @@ class EmbeddingBindingDemand:
 @dataclass(frozen=True, slots=True)
 class UnavailableEmbeddingView:
     source_revision_id: str
-    profile: InferenceTransferProfilePointer
+    profile: EmbeddingProfilePointer
     view: ExperimentView
     reason: Literal["VIEW_NOT_MATERIALIZED", "EMPTY_VIEW"]
 
@@ -63,7 +73,7 @@ class EmbeddingDeltaPlan:
 
 
 def plan_embedding_delta(
-    entries: tuple[StagedExperimentEntry, ...],
+    entries: tuple[IncrementalEmbeddingEntry, ...],
     *,
     space: EmbeddingSpace,
     storage_partition: str,
@@ -119,14 +129,24 @@ def plan_embedding_delta(
     demands: list[EmbeddingBindingDemand] = []
     unavailable: list[UnavailableEmbeddingView] = []
     for original in entries:
-        entry = StagedExperimentEntry.model_validate(original.model_dump(mode="json"))
+        entry: IncrementalEmbeddingEntry
+        profile: EmbeddingProfilePointer
+        if isinstance(original, RegisteredReviewEmbeddingEntry):
+            entry = validate_registered_review_embedding_entry(original)
+            profile = RegisteredReviewProfilePointer.from_profile(entry.profile)
+        else:
+            entry = StagedExperimentEntry.model_validate(original.model_dump(mode="json"))
+            profile = InferenceTransferProfilePointer.from_profile(entry.profile)
         revision = entry.profile.source_basis.source.item_revision_id
         if revision in source_revisions:
             raise EmbeddingDeltaError("EMBEDDING_DELTA_DUPLICATE_SOURCE")
         source_revisions.add(revision)
-        profile = InferenceTransferProfilePointer.from_profile(entry.profile)
         for view in views:
-            text = experiment_view_text(entry, view)
+            text = (
+                registered_review_embedding_view_text(entry, view)
+                if isinstance(entry, RegisteredReviewEmbeddingEntry)
+                else experiment_view_text(entry, view)
+            )
             if text is None or not text.strip():
                 reason: Literal["VIEW_NOT_MATERIALIZED", "EMPTY_VIEW"] = (
                     "VIEW_NOT_MATERIALIZED" if text is None else "EMPTY_VIEW"

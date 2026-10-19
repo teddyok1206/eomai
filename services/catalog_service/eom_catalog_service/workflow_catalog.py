@@ -36,8 +36,6 @@ from eom_content_pack import ContentPackError, ContentPackErrorCode, render_prom
 from eom_hwpx_contracts import (
     ContentTeamEditorialDraft,
     ContentTeamEditorialDraftV2,
-    derive_content_team_equation_sources,
-    normalize_content_team_stem,
     serialize_content_team_markdown,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes, sha256_file
@@ -165,6 +163,7 @@ from eom_catalog_service.generated_stimulus import (
     render_generated_style_reference_stimulus,
     render_generated_vector_stimulus,
 )
+from eom_catalog_service.item_content_contract import canonical_content_team_item_materialization
 from eom_catalog_service.knowledge_stimulus import KnowledgeStimulusService
 from eom_catalog_service.local_image_adapter import (
     FixedLocalImageProviderAdapter,
@@ -2739,7 +2738,6 @@ class WorkflowCatalogService:
                     content=content,
                     authoring_difficulty=parsed.output.metadata.difficulty,
                 )
-        content_model = AssessmentItemContentV3 if is_v3 else AssessmentItemContentV2
         editorial_model = ContentTeamEditorialDraftV2 if is_v3 else ContentTeamEditorialDraft
         schema_name = "assessment-item-content-v3" if is_v3 else "assessment-item-content-v2"
         schema_ref = (
@@ -2761,12 +2759,7 @@ class WorkflowCatalogService:
         protocol_hash = (
             CATALOG_ITEM_CONTENT_V3_SCHEMA_HASH if is_v3 else CATALOG_ITEM_CONTENT_V2_SCHEMA_HASH
         )
-        content_data = content.model_dump(mode="json")
-        content_data["stem"] = normalize_content_team_stem(content.item_number, content.stem)
-        content_data["equation_sources"] = []
-        content = content_model.model_validate(content_data)
-        content_data["equation_sources"] = list(derive_content_team_equation_sources(content))
-        content = content_model.model_validate(content_data)
+        content = canonical_content_team_item_materialization(content)
         content_data = content.model_dump(mode="json")
         validate_contract(schema_name, content_data)
         editorial_data = dict(content_data)

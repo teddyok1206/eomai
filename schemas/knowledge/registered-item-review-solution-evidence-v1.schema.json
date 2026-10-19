@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/registered-item-review-solution-evidence/1.0",
+  "title": "Registered generated Item independent review solution evidence",
+  "description": "Immutable references to registered generated Item and original authoring/review results. This value grants no source authorization and does not assert a complete solution DAG.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "evidence_kind", "source", "workflow_id", "registration_step_run_id", "registration_manifest", "item_content", "authoring", "review", "authoring_receipt_sha256", "review_receipt_sha256", "evidence_sha256"],
+  "properties": {
+    "schema_version": {"const": "registered-item-review-solution-evidence/1.0"},
+    "evidence_kind": {"const": "REGISTERED_ITEM_REVIEW_SOLUTION"},
+    "source": {
+      "allOf": [
+        {"$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/approvedItemSource"},
+        {"properties": {"source_class": {"const": "APPROVED_ITEM"}, "artifact_member": {"properties": {"schema_ref": {"type": "string"}, "media_type": {"const": "application/json"}}}}}
+      ]
+    },
+    "workflow_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+    "registration_step_run_id": {"$ref": "#/$defs/stepRunId"},
+    "registration_manifest": {
+      "allOf": [
+        {"$ref": "#/$defs/jsonMember"},
+        {"properties": {"member_path": {"const": "item-revision-manifest.json"}, "schema_ref": {"enum": ["eom://schemas/item-registry/item-revision-manifest-v1", "eom://schemas/item-registry/item-revision-manifest-v2"]}}}
+      ]
+    },
+    "item_content": {"$ref": "#/$defs/jsonMember"},
+    "authoring": {
+      "allOf": [
+        {"$ref": "#/$defs/roleReference"},
+        {"properties": {"step_key": {"const": "authoring"}, "artifact": {"properties": {"schema_ref": {"enum": ["authoring-result@11.0", "authoring-result@12.0"]}}}}}
+      ]
+    },
+    "review": {
+      "allOf": [
+        {"$ref": "#/$defs/roleReference"},
+        {"properties": {"step_key": {"const": "review"}, "artifact": {"properties": {"schema_ref": {"enum": ["review-result@11.0", "review-result@12.0"]}}}}}
+      ]
+    },
+    "authoring_receipt_sha256": {"$ref": "#/$defs/sha256"},
+    "review_receipt_sha256": {"$ref": "#/$defs/sha256"},
+    "evidence_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "oneOf": [
+    {"properties": {"authoring": {"properties": {"artifact": {"properties": {"schema_ref": {"const": "authoring-result@11.0"}}}}}, "review": {"properties": {"artifact": {"properties": {"schema_ref": {"const": "review-result@11.0"}}}}}}},
+    {"properties": {"authoring": {"properties": {"artifact": {"properties": {"schema_ref": {"const": "authoring-result@12.0"}}}}}, "review": {"properties": {"artifact": {"properties": {"schema_ref": {"const": "review-result@12.0"}}}}}}}
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "stepRunId": {"type": "string", "pattern": "^steprun_[0-9a-f]{32}$"},
+    "jsonMember": {
+      "allOf": [
+        {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"},
+        {"properties": {"media_type": {"const": "application/json"}}}
+      ]
+    },
+    "roleReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["step_run_id", "step_key", "attempt", "job_id", "artifact"],
+      "properties": {
+        "step_run_id": {"$ref": "#/$defs/stepRunId"},
+        "step_key": {"type": "string", "pattern": "^[a-z][a-z0-9_]{1,63}$"},
+        "attempt": {"type": "integer", "minimum": 1},
+        "job_id": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+        "artifact": {
+          "allOf": [
+            {"$ref": "#/$defs/jsonMember"},
+            {"properties": {"member_path": {"const": "result.json"}, "schema_ref": {"enum": ["authoring-result@11.0", "authoring-result@12.0", "review-result@11.0", "review-result@12.0"]}}}
+          ]
+        }
+      }
+    }
+  }
+}
