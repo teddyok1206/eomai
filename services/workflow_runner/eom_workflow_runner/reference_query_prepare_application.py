@@ -27,6 +27,7 @@ from eom_catalog_service.embedding_registry_ports import (
     SelectedEmbeddingSources,
     validate_embedding_registry_actor,
 )
+from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.similarity_context_ports import (
     SimilarityContextReadError,
     similarity_context_error_from_registry,
@@ -188,14 +189,18 @@ class NativeReferenceQueryPreparation:
                 error_code: ReferenceQueryPrepareErrorCode | None = None
                 status: Literal["READY", "FAILED", "PENDING"]
                 if workflow.state == "COMPLETED":
+                    reader = PinnedArtifactReadContext.for_session(session, self.owner.settings)
                     catalog = self.owner.catalog.for_pinned_similarity_request_in_session(
-                        session, caller, original.context_request
+                        session, caller, original.context_request, artifact_reader=reader
                     )
                     prepared = catalog.prepare_reference_query_anchor_in_session(
-                        session, caller, original.context_request
+                        session, caller, original.context_request, artifact_reader=reader
                     )
                     CatalogCompletedReferenceQueryRead(
-                        self.owner, workflow_id=workflow.workflow_id, request=original
+                        self.owner,
+                        workflow_id=workflow.workflow_id,
+                        request=original,
+                        artifact_reader=reader,
                     ).resolve_reference_query_in_session(
                         session, caller, original.context_request, prepared
                     )

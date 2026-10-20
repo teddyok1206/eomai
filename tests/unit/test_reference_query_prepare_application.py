@@ -493,10 +493,11 @@ def completed_occurrence_replay(application, pinned, monkeypatch):
     monkeypatch.setattr(EmbeddingRegistryRepository, "encodings", encodings)
 
     class CompletedPublication:
-        def __init__(self, actual_owner, *, workflow_id, request):
+        def __init__(self, actual_owner, *, workflow_id, request, artifact_reader):
             assert actual_owner is value.source.owner
             assert workflow_id == "workflow_" + "c" * 32
             assert request == value.source.request
+            artifact_reader.require_session(session)
 
         def resolve_reference_query_in_session(self, actual_session, caller, request, prepared):
             assert actual_session is session

@@ -67,6 +67,10 @@ INDEX·QUERY 연결의 Codex 풀이 호출은0이며 외부 LLM API는 사용하
   QUERY도 COMPLETED입니다. 다만 준비 POST가30초 뒤503을 먼저 반환해 대상 VECTOR
   검색·읽기·HTTP 같은-key replay, 원 V1 역사 요청의 prepare-replay·읽기는 아직 PENDING입니다.
   새 검색을 만들지 않고 원 완료 요청으로 API 경계를 진단합니다.
+  실제 frame 관측 뒤 동일 transaction 안의 bounded Artifact 해석 재사용과
+  V1/V2 공통 pin 비교를 수정했습니다. 공개 raw/schema/hash 검증·현재 권한·late fence는
+  유지합니다. 소스 집중342개·별도145개(중복 있음), 최대1024-binding 순수 비교,
+  strict type6개가 통과했으며, 아직 운영 설치나 실제 HTTP PASS를 뜻하지 않습니다.
   [제한시간 진단 기록](docs/operations/REFERENCE_QUERY_PREPARATION_TIMEOUT_2026-10-20.md)을
   참고하세요. 사용하지 않는 fresh primary V1-on-new-Graph는 NOT_RUN이며 이번
   종료 범위가 아닙니다. 전체 V1·Chat 호환성으로 확대하지 않습니다. 상세 이력과 정본

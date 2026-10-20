@@ -493,6 +493,29 @@ class PinnedArtifactReadContext:
         )
         self._decoded_bytes = 0
 
+    @classmethod
+    def for_session(cls, session: Session, settings: CatalogSettings) -> PinnedArtifactReadContext:
+        """Explicit root-local reuse, not a grant or a cache across transactions.
+
+        Session owns the bounded reader. Current member/provenance and source/IAM
+        fences still execute at their original boundaries on every dereference.
+        """
+        root = session.get_transaction()
+        if root is None or not root.is_active:
+            raise PinnedArtifactResolutionError("pinned Artifact read transaction is invalid")
+        previous = session.info.get(cls)
+        if previous is not None:
+            if type(previous) is not cls:
+                raise PinnedArtifactResolutionError("pinned Artifact read context is invalid")
+            if previous._root is root:
+                previous.require_session(session)
+                if previous.settings != settings:
+                    raise PinnedArtifactResolutionError("pinned Artifact read settings differ")
+                return previous
+        reader = cls(session, settings)
+        session.info[cls] = reader
+        return reader
+
     def require_session(self, session: Session) -> None:
         if (
             session is not self._session

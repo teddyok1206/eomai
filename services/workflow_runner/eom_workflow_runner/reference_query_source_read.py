@@ -383,7 +383,7 @@ def resolve_reference_query_sources(
         ),
     )
     reader = (
-        PinnedArtifactReadContext(session, owner.settings)
+        PinnedArtifactReadContext.for_session(session, owner.settings)
         if artifact_reader is None
         else artifact_reader
     )

@@ -76,6 +76,7 @@ def member_stream_counts(monkeypatch: pytest.MonkeyPatch, paths: set[Path]) -> S
 
 class MetadataSession:
     def __init__(self, *records: object) -> None:
+        self.info: dict[object, object] = {}
         self.records = {(type(record), _primary_key(record)): record for record in records}
         self.root = SimpleNamespace(is_active=True)
         self.statements: list[Any] = []
@@ -92,6 +93,48 @@ class MetadataSession:
         self.statements.append(statement)
         model = statement.column_descriptions[0]["entity"]
         return [value for (kind, _key), value in self.records.items() if kind is model]
+
+
+def test_root_reader_reuses_only_same_session_root_settings_and_thread(tmp_path: Path) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+    from dataclasses import replace
+
+    original, settings, _arguments = _fixture(tmp_path)
+    session = MetadataSession(*original.records.values())
+    first = PinnedArtifactReadContext.for_session(cast(Session, session), settings)
+    assert PinnedArtifactReadContext.for_session(cast(Session, session), settings) is first
+    other_settings = replace(settings, nas_artifact_root=tmp_path / "other")
+    with pytest.raises(PinnedArtifactResolutionError, match="settings"):
+        PinnedArtifactReadContext.for_session(cast(Session, session), other_settings)
+    with (
+        ThreadPoolExecutor(max_workers=1) as pool,
+        pytest.raises(PinnedArtifactResolutionError, match="transaction"),
+    ):
+        pool.submit(PinnedArtifactReadContext.for_session, session, settings).result()
+    session.root.is_active = False
+    with pytest.raises(PinnedArtifactResolutionError, match="transaction"):
+        PinnedArtifactReadContext.for_session(cast(Session, session), settings)
+    session.root = SimpleNamespace(is_active=True)
+    second = PinnedArtifactReadContext.for_session(cast(Session, session), settings)
+    assert second is not first
+    other_session = MetadataSession(*original.records.values())
+    assert (
+        PinnedArtifactReadContext.for_session(cast(Session, other_session), settings) is not second
+    )
+
+
+def test_root_reader_retains_current_provenance_checks(tmp_path: Path) -> None:
+    original, settings, arguments = _fixture(tmp_path)
+    session = MetadataSession(*original.records.values())
+    context = PinnedArtifactReadContext.for_session(cast(Session, session), settings)
+    context.prefetch(((str(arguments["artifact_id"]), str(arguments["artifact_revision_id"])),))
+    context.read_pinned(**arguments)
+    revision = original.get(ArtifactRevisionRecord, str(arguments["artifact_revision_id"]))
+    revision.approved = False
+    same = PinnedArtifactReadContext.for_session(cast(Session, session), settings)
+    assert same is context
+    with pytest.raises(PinnedArtifactResolutionError, match="provenance"):
+        same.read_pinned(**arguments)
 
 
 def test_prefetch_exact_three_queries_and_no_lazy_sql_on_read(

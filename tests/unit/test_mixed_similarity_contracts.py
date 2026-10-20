@@ -255,6 +255,73 @@ def test_read2_requires_exact_actor_selection_and_original_result_family() -> No
         )
 
 
+def test_raw_pin_validator_rejects_copied_corrupt_binding_with_identical_header() -> None:
+    from eom_catalog_contracts.mixed_embedding_index import MixedEmbeddingIndexManifest
+
+    index = mixed_embedding_case("CONTENT_ONLY")[-1]
+    body = mixed_context_body()["request"]
+    pin = body["views"][0]["index"]
+    pin.update(
+        index_id=index.index_id,
+        index_revision_id=index.index_revision_id,
+        index_manifest=pointer(index).model_dump(mode="json"),
+        index_sha256=index.index_sha256,
+    )
+    request = parse_similarity_context_request_v2(seal(body, "request_sha256"))
+    corrupt = index.bindings[0].model_copy(update={"binding_sha256": "sha256:" + "f" * 64})
+    forged = index.model_copy(update={"bindings": (corrupt, *index.bindings[1:])})
+    assert isinstance(forged, MixedEmbeddingIndexManifest)
+    with pytest.raises(ERRORS):
+        validate_similarity_index_pin_v2(request.views[0], pointer(index), forged)
+
+
+def test_synthetic_1024_binding_pin_comparison_benchmark(request: pytest.FixtureRequest) -> None:
+    """Measure pure repeated decode cost only; no source grants, IO or live timing claim."""
+    from time import perf_counter
+
+    from eom_catalog_contracts.mixed_embedding_index import MixedEmbeddingIndexManifest
+    from eom_catalog_contracts.similarity_context import similarity_index_matches_pin
+
+    original = mixed_embedding_case("CONTENT_ONLY")[-1]
+    legacy = next(
+        value
+        for value in original.bindings
+        if value.schema_version == "embedding-source-binding/1.0"
+    ).model_dump(mode="json")
+    bindings = []
+    for number in range(1024):
+        row = copy.deepcopy(legacy)
+        row["source"]["item_revision_id"] = f"itemrev_{number:032x}"
+        bindings.append(seal(row, "binding_sha256"))
+    index_body = original.model_dump(mode="json") | {"bindings": bindings}
+    index = MixedEmbeddingIndexManifest.model_validate(seal(index_body, "index_sha256"))
+    member = pointer(index)
+    body = mixed_context_body()["request"]
+    body["views"][0]["index"].update(
+        index_id=index.index_id,
+        index_revision_id=index.index_revision_id,
+        index_manifest=member.model_dump(mode="json"),
+        index_sha256=index.index_sha256,
+    )
+    selection = parse_similarity_context_request_v2(seal(body, "request_sha256")).views[0]
+    start = perf_counter()
+    for _ in range(3):
+        validate_similarity_index_pin_v2(selection, member, index)
+    full_parse_seconds = perf_counter() - start
+    start = perf_counter()
+    for _ in range(3):
+        assert similarity_index_matches_pin(selection, member, index)
+    decoded_match_seconds = perf_counter() - start
+    request.node.user_properties.extend(
+        (
+            ("synthetic_bindings", 1024),
+            ("repeated_raw_validations", 3),
+            ("repeated_full_parse_seconds", full_parse_seconds),
+            ("repeated_decoded_match_seconds", decoded_match_seconds),
+        )
+    )
+
+
 def test_materialization_keeps_original_review_envelope_projection_without_second_source() -> None:
     context = parse_similarity_context_v2(mixed_context_body())
     entry = mixed_embedding_case()[0]

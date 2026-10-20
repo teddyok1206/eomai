@@ -91,3 +91,59 @@ Workflow와 command의 완료를 따로 확인했다.
 
 이 시점에는 운영 source·protocol·DB·unit·제한시간을 수정하지 않았다. 실제 VECTOR
 검색/read 및 HTTP 같은-key replay는 여전히 PENDING이며 전체 목표를 완료로 표시하지 않는다.
+
+## 02:49 실제 frame 관측과 수정 설계
+
+같은 실제 로그인 process를 재개한 뒤 원 key를 재조회했다. 5초 sample은
+`for_pinned_similarity_request_in_session → _validate_similarity_manifest →
+validate_similarity_index_pin_v2 → MixedEmbeddingIndexManifest.model_validate` 안의
+기존 binding hash 재계산이었다. 다음 sample은 JSON Schema 검증이었다. Catalog는
+이 sample에서 대기 중이었다. 동일 POST는 다시30초503으로 종료됐다. 이는 전체 지연의
+정밀 비율은 아니지만, canonical member를 이미 decode한 직후 다시 전체 index를
+파싱하는 실제 중복 경로의 증거다. 실패한 세션은 종료됐으며 복구하거나 재사용하지 않는다.
+
+수정 범위는 다음과 같다.
+
+1. 책임: 기존 Catalog Artifact reader의 root-local immutable 해석 재사용과 순수 index-pin
+   일치 규칙. API, worker, 새 검색 엔진이나 queue를 추가하지 않는다.
+2. 정본: 승인된 canonical Artifact bytes와 기존 JSON Schema2020-12/Pydantic decoder다.
+3. 논리 entity/revision/hash 및 V1/V2 wire/schema bytes는 변경하지 않는다.
+4. 초기 decode는 모든 raw scalar/extra/hash를 검증한다. 이후 이미 decode된 값의 pin
+   비교는 작은 순수 규칙을 공유한다. 외부 공개 validator는 full raw 검증을 계속 수행한다.
+5. 주요 접근은 동일 transaction root에서 동일 immutable pointer/decoder의 반복 lookup이다.
+6. 기존 bounded reader를 Session.info의 명시적 root-local factory로 재사용한다. 새 root,
+   다른 settings/thread/Session에는 이전 reader를 전달하지 않는다. 전역 cache는 없다.
+7. lookup은 O(1), 각 root의 retained bytes/decoded entries는 기존128/32MiB·2048 한도다.
+   중복 O(index bytes) parse/hash를 없애며 공개 입력 검증 비용은 그대로 남는다.
+8. 트랜잭션·권한·원본·numeric·late provenance fence는 매번 기존 owner에서 실행한다.
+   reader 재사용은 권한 또는 성공 결과 cache가 아니다.
+9. 의존 방향은 application/adapter → 기존 Catalog reader/contracts다. domain에 DB/IO를
+   추가하지 않는다. 중복 pin 규칙은 V1/V2 공개 validator와 owner가 함께 사용한다.
+10. 실패/replay/key/deadline/원 Workflow는 바꾸지 않는다. 변경은 호환 package 배포로만
+    반영하고 실행 중 source를 hotpatch하지 않는다.
+11. 더 단순한 제한시간 증가만으로는 반복 parse 비용이 남는다. 반대로 validation을
+    생략하면 forged pointer/input을 허용하므로, raw 검증과 이미 해석된 값 비교를 분리한다.
+
+검증은 reader의 root/settings/thread 경계, provenance 변경·파일 손상 거부, V1/V2 raw
+forged/extra/hash negatives와 pin mismatch, decode 횟수 및 합성 최대 규모 benchmark를
+포함한다. 실제 HTTP PASS는 이후 같은 원 key·진짜 사용자 인증으로 별도로 확인한다.
+
+### 소스 검증
+
+- 기존/추가 집중8 suites342 PASS /64.32초. reader와 현재 provenance, index/index2,
+  V1/V2 raw negatives, 실제 임시 파일·수치 참조, original completed replay를 포함한다.
+- 별도6 suites145 PASS /117.28초(위 묶음과 reader suite가 겹치므로 합산하지 않는다).
+- 원 실제 pin read를 두 번 실행하는 새 검사는 decoder1회이면서 current source capture는
+  다시 발생하고, 그 뒤 Artifact 승인 철회는 거부함을 확인했다.
+- 최대1024-binding 합성 index의3회 공개 raw 재검증은3.577087초,
+  canonical decode 후 동일3회 pin 비교는0.000035초였다. 순수 연산의 중복 제거
+  측정이며 HTTP 전체 지연·실제 source 권한·검색 품질 개선 수치가 아니다.
+- Ruff/format, strict mypy6 source files, 의존 방향6 checks PASS다. 새 dependency,
+  migration, schema bytes, source/Graph/policy/index pins, numerical runtime 변경은 없다.
+- 최초 신규 factory tests2개는 구현 전 AttributeError로 실패했다. settings fixture명과
+  completed-reader test seam 보정 뒤 최종342 PASS였으며 중간 실패를 숨기지 않는다.
+  별도 suite 호출의 존재하지 않는 파일 경로 오류도 수정 후145 PASS로 재실행했다.
+
+공식 disposable DB `20261020025629_f20dc47a`의0058 migrate/down/up 및 runtime role
+reconcile을 통과했다. 실제 native stage/replay/concurrency suite는 별도 실행 중이다.
+운영0058이나 기존 history를 pytest 대상으로 사용하지 않는다.

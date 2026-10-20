@@ -7,6 +7,7 @@ from unittest.mock import Mock
 import pytest
 from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
 from eom_catalog_contracts.similarity_context import parse_similarity_context_request
+from eom_catalog_service import embedding_registry_catalog_adapter as catalog_module
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
     EmbeddingRegistryError,
@@ -83,6 +84,23 @@ def select(value):
     return value.verifier.for_pinned_similarity_request_in_session(
         value.session, EmbeddingRegistryCaller("operator_" + "1" * 32), value.request
     )
+
+
+def test_repeated_actual_pinned_reads_decode_once_but_recheck_current_authority(
+    pinned, monkeypatch
+):
+    value = pinned
+    parse = Mock(wraps=catalog_module.parse_supported_embedding_index)
+    monkeypatch.setattr(catalog_module, "parse_supported_embedding_index", parse)
+    first = select(value)
+    before = value.verifier.sources.capture_in_session.call_count
+    assert select(value) is first
+    assert parse.call_count == 1
+    assert value.verifier.sources.capture_in_session.call_count > before
+    value.session.get(ArtifactRecord, value.registered.index_manifest.artifact_id).approved = False
+    with pytest.raises(EmbeddingRegistryError):
+        select(value)
+    assert parse.call_count == 1
 
 
 def test_stored_no_vector_request_preserves_absence_and_never_selects_a_head(pinned):

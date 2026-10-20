@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
 from eom_identifiers import content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
@@ -41,6 +41,10 @@ from eom_catalog_contracts.knowledge import (
     KnowledgeSolutionEvidencePointer,
 )
 from eom_catalog_contracts.models import FrozenModel, Sha256
+
+if TYPE_CHECKING:
+    from eom_catalog_contracts.mixed_embedding_index import MixedEmbeddingIndexManifest
+    from eom_catalog_contracts.similarity_context_v2 import SimilarityViewSelectionV2
 
 SIMILARITY_CONTEXT_SCHEMA = "system-rag-similarity-context"
 SIMILARITY_CONTEXT_REF = "eom://schemas/knowledge/system-rag-similarity-context/1.0"
@@ -198,8 +202,22 @@ def validate_similarity_index_pin(
     selection = SimilarityViewSelection.model_validate(raw_similarity_contract_value(selection))
     pointer = ArtifactMemberPointer.model_validate(raw_similarity_contract_value(pointer))
     manifest = parse_embedding_index(raw_similarity_contract_value(manifest))
+    if not similarity_index_matches_pin(selection, pointer, manifest):
+        raise ValueError("resolved immutable index differs from its view/recipe/space/revision pin")
+
+
+def similarity_index_matches_pin(
+    selection: SimilarityViewSelection | SimilarityViewSelectionV2,
+    pointer: ArtifactMemberPointer,
+    manifest: EmbeddingIndexManifest | MixedEmbeddingIndexManifest,
+) -> bool:
+    """Compare already decoded values; never validate raw input or grant authority.
+
+    Public validators parse all inputs first. Catalog uses the same rule only
+    after its canonical member decoder, avoiding a second full binding parse.
+    """
     pin = selection.index
-    if pin is None or (
+    return pin is not None and not (
         pointer != pin.index_manifest
         or manifest.index_id != pin.index_id
         or manifest.index_revision_id != pin.index_revision_id
@@ -208,8 +226,7 @@ def validate_similarity_index_pin(
         or manifest.space != pin.spaces.document
         or manifest.view != selection.view
         or manifest.recipe != selection.recipe
-    ):
-        raise ValueError("resolved immutable index differs from its view/recipe/space/revision pin")
+    )
 
 
 class SimilarityViewCoverage(_ContextValue):

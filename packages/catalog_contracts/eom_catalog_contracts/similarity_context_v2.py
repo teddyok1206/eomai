@@ -56,6 +56,7 @@ from eom_catalog_contracts.similarity_context import (
     SimilarityViewCoverage,
     parse_similarity_context,
     parse_similarity_context_request,
+    similarity_index_matches_pin,
 )
 
 SIMILARITY_CONTEXT_V2_REF = "eom://schemas/knowledge/system-rag-similarity-context/2.0"
@@ -423,17 +424,7 @@ def validate_similarity_index_pin_v2(
     selection = SimilarityViewSelectionV2.model_validate(raw_similarity_contract_value(selection))
     pointer = ArtifactMemberPointer.model_validate(raw_similarity_contract_value(pointer))
     manifest = MixedEmbeddingIndexManifest.model_validate(raw_similarity_contract_value(manifest))
-    pin = selection.index
-    if pin is None or (
-        pointer != pin.index_manifest
-        or manifest.index_id != pin.index_id
-        or manifest.index_revision_id != pin.index_revision_id
-        or manifest.index_sha256 != pin.index_sha256
-        or manifest.storage_partition != pin.storage_partition
-        or manifest.space != pin.spaces.document
-        or manifest.view != selection.view
-        or manifest.recipe != selection.recipe
-    ):
+    if not similarity_index_matches_pin(selection, pointer, manifest):
         raise ValueError("SIMILARITY_INDEX_V2_PIN_MISMATCH")
 
 

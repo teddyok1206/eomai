@@ -62,7 +62,7 @@ from eom_catalog_contracts.similarity_context import (
     SimilarityContext,
     SimilarityIndexPin,
     SimilarityViewSelection,
-    validate_similarity_index_pin,
+    similarity_index_matches_pin,
 )
 from eom_catalog_contracts.similarity_context_v2 import (
     SimilarityContextRequestV2,
@@ -74,7 +74,6 @@ from eom_catalog_contracts.similarity_context_v2 import (
     parse_supported_similarity_context,
     parse_supported_similarity_context_request,
     validate_deliverable_similarity_context_v2,
-    validate_similarity_index_pin_v2,
 )
 from eom_catalog_contracts.similarity_delivery import validate_deliverable_similarity_context
 from eom_catalog_contracts.similarity_materials import (
@@ -234,11 +233,11 @@ def _validate_similarity_manifest(
     if isinstance(selection, SimilarityViewSelectionV2):
         if not isinstance(index, MixedEmbeddingIndexManifest):
             raise ValueError("similarity request2 requires an actual index2")
-        validate_similarity_index_pin_v2(selection, pointer, index)
     else:
         if not isinstance(index, EmbeddingIndexManifest):
             raise ValueError("similarity request1 cannot reinterpret an index2")
-        validate_similarity_index_pin(selection, pointer, index)
+    if not similarity_index_matches_pin(selection, pointer, index):
+        raise ValueError("resolved immutable index differs from its view/recipe/space/revision pin")
 
 
 def _reject_constant(_value: str) -> Any:
@@ -1515,7 +1514,7 @@ class CatalogEmbeddingRegistryVerifier:
                         graph_snapshot=scope.graph_snapshot,
                         projection_version=scope.namespace.projection_version,
                     )
-            reader = PinnedArtifactReadContext(session, self.settings)
+            reader = PinnedArtifactReadContext.for_session(session, self.settings)
             views = self._initial_similarity_views(
                 session, scope, spaces, preparation.views, reader
             )
@@ -1619,7 +1618,7 @@ class CatalogEmbeddingRegistryVerifier:
             if set(registered) != set(identities):
                 raise EmbeddingRegistryError("EMBEDDING_REGISTRY_POINTER_INVALID")
             reader = (
-                PinnedArtifactReadContext(session, self.settings)
+                PinnedArtifactReadContext.for_session(session, self.settings)
                 if artifact_reader is None
                 else artifact_reader
             )
