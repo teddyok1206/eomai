@@ -194,3 +194,21 @@
   기존 owner/root/mode 및 종료 시 named inode 재검사, O(depth) FD/time, leaf의 fsync/read,
   symlink·writable ancestor·rename 거부는 유지한다. 새 schema/DB/queue/Artifact identity는 없다.
   read 권한 확대보다 통과용 FD를 사용하는 것이 작고 정확한 수정이다.
+- Main 수정 commit `a63f8786`. 관련 source52 PASS, strict type/formatter/linter PASS.
+  현재 보호된 owner SDK의 원 base `ee97239d`에 이 adapter와 회귀만 backport한 source는
+  `933017f7ecc5bbc37094bdf97c7c71fd19ef36f8`이며 다른 기능 변경을 섞지 않았다.
+  설치는 기존 owner installer/RECORD 검증을 사용했고 compatible API contracts wheel은
+  그대로 재사용했다. 수치 CPU/CUDA prefix·모델·API/INDEX/QUERY 서비스는 바꾸지 않았다.
+- 실제 root/owner UID 분리·NoNewPrivs 환경의 listener 경로/상호 SO_PEERCRED/start-ticks 검증:
+  원 EE SDK는 FAIL, 설치된933 SDK는 PASS. 두 probe 모두 모델 import/run·로그인0,
+  자기 socket 제거를 확인했다. 실행 전 소유자 검사와 namespace 검사이지 측정 PASS는 아니다.
+  초기 새-SDK 설치 전 probe는 source provenance를 보장하지 못해 증거에서 제외했고,
+  실제 import origin을 검사하는 `listener-*-validated.jsonl`만 위 판정의 근거로 사용한다.
+- read-only Job inventory는 새 input `job_3c9f76226bb54b7286fd890bc5084c67`,
+  policy `job_fcc3873936284ccaa1fb82b59f1c2886`의 SUCCEEDED와 measurement Job 없음을 확인했다.
+  원 producer source EE/publication keys·time·bytes·Artifact pointers는 보존하며 idempotent
+  publication replay만 한다. 새 controller release933은 실행 provenance로 별도 기록한다.
+  root owner-request/configuration 파일도 정확한 hash replay만 허용하고 덮어쓰지 않는다.
+- SDK RECORD에는 변경된 adapter를 포함해 실제9개 owner 경계 member를 검사한다.
+  wrapper 회귀38 PASS에 기존 root recovery bytes의 충돌 거부/재작성 금지와9번째 member
+  누락 거부를 추가했다. 모델6회는 여전히 시작 전이며 기본 CPU를 유지한다.
