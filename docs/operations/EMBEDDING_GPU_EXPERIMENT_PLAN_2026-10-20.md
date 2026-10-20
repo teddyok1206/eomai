@@ -270,3 +270,54 @@
   installed RECORD `1ed34a60936d251c878a800ad507638a89ba4f492433df37862bd10769bef87b`.
   새 helper/benchmark admission을 포함한11개 경계 member의 실제 bytes를 시작 시 검증한다.
   v6 준비는 source admission 수정의 운영 적용이며, 실제 비교 PASS나 GPU 기본값 변경은 아니다.
+
+### 17:42 UTC 실제 최초 CPU 예약 후 root staging 권한 결함
+
+- source admission 수정 후 원 measurement Job `job_324b59d7fde242bca60437cdacdf5def`가
+  RUNNING이 되고 CPU1 `9b37158957804beeb4be83a8fd04f118`이 한 번 예약됐다.
+  root는 `prepare_benchmark_environment`의 OSError 경계에서 실패했다. owner의
+  `BENCHMARK_OWNER_EXECUTION_UNCERTAIN`은 이 오류 이후의 안전한 정지다.
+- 실제 handoff output16개는 native UID978/GID1000의0640 빈 파일이다. `launch.env`와
+  root-prepared/completion은 생성 전이고 `root-uncertain.json`은 원 handoff 아래 보존됐다.
+  read-only indexed event 조회에서 RESERVED1개/RECORDED0개다. 현재 native unit은 없지만
+  이 사실만으로 never-started 증명이나 재시작 승인을 만들지 않는다.
+- root는 제한된 cap 집합에 DAC_READ_SEARCH만 있고 DAC_OVERRIDE는 없다. root preparation이
+  worker writer adapter를 재사용해 검증 중 native 소유 output을 O_WRONLY로 여는 것이
+  첫 실패 후보이다. 같은 권한의 실제 kernel probe로 읽기 허용/쓰기 거부를 확인한다.
+  기존 합성 테스트는 native UID를 test UID로 바꿔 이 경계를 놓쳤다.
+- 수정 책임은 기존 benchmark local-file adapter와 root handoff preparation이다. canonical
+  source는 이미 봉인된 invocation/input과 실제 inode/ACL/UID/mode/empty-output snapshot이다.
+  root에는 필요한 read-only staged-layout capture만 제공하고 native writer는 기존 역할을
+  유지한다. 같은 검증 규칙·retained epochs·closed member set·inode uniqueness를 재사용한다.
+  root의 쓰기 capability, worker 권한, ACL/mode, DB/schema/queue를 바꾸지 않는다.
+  작은 read-only view의 O(member_count+depth) FD/검증 비용은 기존 capture와 같다.
+- 단순 DAC_OVERRIDE 추가나 validator 우회보다 좁은 read-only adapter를 사용한다. 실패한
+  원 execution 디렉터리·예약·불확실 기록은 고치거나 삭제하지 않는다. 현재 구현에는 이
+  pre-launch reservation의 같은-ID resume가 없으므로 수정 후 `run_launches` 재호출이나
+  새 execution ID로의 자동 우회는 금지한다. 재개는 별도 지원된 복구 설계/판정 전 PENDING이다.
+  추가 로그인은 이 경계를 닫기 전 요청하지 않는다.
+- 실제 제한된 root capability fixture에서 읽기 open은 성공하고 native output의 쓰기 open은
+  EACCES로 거부되는 것을 확인했다. `restricted-root-capture.jsonl`의 PASS는 정확한 DAC
+  재현이며 source/DB/native/model 작업은0이다. 권한을 늘리거나 운영 파일을 만지지 않았다.
+- `BenchmarkRootStagedFiles`를 기존 capture 모듈 안에 추가해 validation/retained epochs는
+  공유하고 output FD만 O_RDONLY로 연다. public write API는 native writer에만 남겨 root view는
+  노출하지 않는다. 생성·context 진입 때 root를 확인하며 정본/member/hash/ACL/mode/empty 및
+  inode uniqueness/변경 감지 검증은 유지한다. parent 코드 검토와 독립 검토를 거쳤다.
+- 회귀: capture/environment/handoff128 PASS + opt-in12 SKIP, 별도 worker/entrypoint/CPU/CUDA/
+  root/series210 PASS(앞 cohort와20개 겹치므로 단순 합산하지 않는다). Ruff/format, core2개
+  strict mypy, diff checks PASS. 새 environment 회귀는 수정 전 원469행에서 FAIL했다.
+- 더 중요한 실제 OS gate는 root/root·supplementary group 없음·NoNewPrivs1·DAC_READ_SEARCH
+  있음/DAC_OVERRIDE 없음·실제 native/workflow UID 분리에서 full environment preparation
+  1 PASS/2.31초다. 자체 private /run fixture만 사용했고 실제 owner proc 출생 확인,
+  native output write 거부·readonly root capture·launch.env0600 생성·output16개가 끝까지
+  비어 있음을 확인했다. unit `eom-gpu-root-read-capture-source-gate-20261020`, invocation
+  `f4807d20198d49da98ecfdc5396e9550`. 실제 모델/운영 원 execution을 재실행한 것은 아니다.
+- 원 execution의 CPU service/socket은 inactive/dead, InvocationID 없음, start/exit monotonic0,
+  MainPID0·cgroup/pending Job 없음이었다. root failure가 driver 전에 발생한 코드/기록과
+  함께 해석한다. 이것만으로 지원되지 않는 resume 권한이나 성공 receipt를 만들지 않는다.
+  원 Job은 여전히 RUNNING+unresolved reservation으로 보존돼 있고 새 키로 우회하지 않았다.
+- 감사 결과 generic eomctl/public Job cancel/fail 경로도 없다. private `_fail`/직접 state
+  transition은 benchmark 인가·근거 검증 use case가 아니므로 사용하지 않는다. 향후 복구는
+  frozen series의 재시작 금지를 묵시적으로 바꾸지 말고, 사전 실패 증거와 fresh actor를
+  검증하는 명시적 supported application/append-only 판정부터 설계해야 한다.
+  이번 source 수정은 그 복구 기능이나 실제 CPU/GPU 측정 완료를 뜻하지 않으며 아직 미배포다.

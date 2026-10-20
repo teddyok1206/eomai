@@ -9,9 +9,10 @@ import pwd
 import re
 import stat
 from dataclasses import dataclass
+from enum import IntEnum
 from pathlib import Path
 from types import TracebackType
-from typing import TYPE_CHECKING, Literal, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol, Self
 
 from eom_catalog_contracts.embedding_device_benchmark import (
     EMBEDDING_DEVICE_BENCHMARK_SCHEMA_REF,
@@ -107,12 +108,13 @@ class _Member:
     digest: _Digest | None = None
 
 
-class BenchmarkWorkerLocalFiles:
-    """One captured file set, not a grant; production uses only fixed accounts/root.
+class _OutputAccess(IntEnum):
+    READ_ONLY = os.O_RDONLY
+    WRITE_ONLY = os.O_WRONLY
 
-    Caller retains its original invocation FD. This context owns a close-on-exec duplicate
-    and all FDs it opens. No file creation, truncation, delete or path override is provided.
-    """
+
+class _BenchmarkLocalFileCapture:
+    """Shared fixed-layout identity/epoch checks; public views select exact FD access."""
 
     def __init__(
         self,
@@ -121,6 +123,7 @@ class BenchmarkWorkerLocalFiles:
         profile: EmbeddingRuntimeProfile,
         execution_id: str,
         invocation_raw_sha256: str,
+        output_access: _OutputAccess,
     ) -> None:
         fixed = fixed_native_embedding_profile(profile)
         _require(type(invocation_fd) is int and invocation_fd >= 0)
@@ -145,6 +148,7 @@ class BenchmarkWorkerLocalFiles:
             invocation_raw_sha256,
         )
         self._native_uid, self._owner_gid = native.pw_uid, owner.pw_gid
+        self._output_access = output_access
         self._borrowed = invocation_fd
         self._input = -1
         self._directories: list[tuple[int, int | None, str, tuple[int, ...]]] = []
@@ -183,7 +187,7 @@ class BenchmarkWorkerLocalFiles:
     def owner_gid(self) -> int:
         return self._owner_gid
 
-    def __enter__(self) -> BenchmarkWorkerLocalFiles:
+    def __enter__(self) -> Self:
         try:
             _require(not self._closed and self._input == -1)
             self._execution_directory = self._open_directory(
@@ -305,12 +309,17 @@ class BenchmarkWorkerLocalFiles:
         for name in benchmark_local_output_members(invocation.launch_ordinal):
             descriptor = os.open(
                 name,
-                os.O_WRONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
+                self._output_access | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
                 dir_fd=self._output_directory,
             )
             initial = os.fstat(descriptor)
             self._members[name] = _Member(
-                name, descriptor, _epoch(initial), digest=hashlib.sha256()
+                name,
+                descriptor,
+                _epoch(initial),
+                digest=hashlib.sha256()
+                if self._output_access == _OutputAccess.WRITE_ONLY
+                else None,
             )
             _require(
                 stat.S_ISREG(initial.st_mode)
@@ -319,7 +328,7 @@ class BenchmarkWorkerLocalFiles:
                 and stat.S_IMODE(initial.st_mode) == 0o640
                 and initial.st_nlink == 1
                 and initial.st_size == 0
-                and self._flags(descriptor) == os.O_WRONLY
+                and self._flags(descriptor) == self._output_access
                 and os.lseek(descriptor, 0, os.SEEK_CUR) == 0
                 and (initial.st_dev, initial.st_ino) not in inodes
             )
@@ -432,10 +441,98 @@ class BenchmarkWorkerLocalFiles:
                 _require(
                     not os.get_inheritable(member.descriptor)
                     and _epoch(os.fstat(member.descriptor)) == member.epoch
-                    and self._flags(member.descriptor) == os.O_WRONLY
+                    and self._flags(member.descriptor) == self._output_access
                     and os.lseek(member.descriptor, 0, os.SEEK_CUR) == member.byte_count
                 )
                 _no_acl(member.descriptor)
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        failed = False
+        descriptors = [
+            member.descriptor for member in self._members.values() if member.descriptor >= 0
+        ]
+        for member in self._members.values():
+            member.descriptor = -1
+        descriptors.extend(value for value in (self._input_member, self._input) if value >= 0)
+        descriptors.extend(descriptor for descriptor, *_rest in reversed(self._directories))
+        self._input_member = self._input = -1
+        self._directories.clear()
+        for descriptor in descriptors:
+            try:
+                os.close(descriptor)
+            except OSError:
+                failed = True
+        if failed:
+            raise BenchmarkFilesError("BENCHMARK_FILES_CLOSE_UNCERTAIN")
+
+    def __exit__(
+        self,
+        kind: type[BaseException] | None,
+        value: BaseException | None,
+        trace: TracebackType | None,
+    ) -> None:
+        self.close()
+
+
+class BenchmarkRootStagedFiles(_BenchmarkLocalFileCapture):
+    """Root-only read view of unchanged staged files, never a native output writer.
+
+    Native-owned outputs remain mode0640. Root validation needs read/search access,
+    not a write bypass capability. Retained FDs fence the same layout across preparation.
+    """
+
+    def __init__(
+        self,
+        invocation_fd: int,
+        *,
+        profile: EmbeddingRuntimeProfile,
+        execution_id: str,
+        invocation_raw_sha256: str,
+    ) -> None:
+        self._require_root()
+        super().__init__(
+            invocation_fd,
+            profile=profile,
+            execution_id=execution_id,
+            invocation_raw_sha256=invocation_raw_sha256,
+            output_access=_OutputAccess.READ_ONLY,
+        )
+
+    @staticmethod
+    def _require_root() -> None:
+        if os.geteuid() != _ROOT_UID:
+            raise BenchmarkFilesError("BENCHMARK_FILES_ROOT_REQUIRED")
+
+    def __enter__(self) -> Self:
+        self._require_root()
+        return super().__enter__()
+
+
+class BenchmarkWorkerLocalFiles(_BenchmarkLocalFileCapture):
+    """Native writer for one captured file set, not a grant.
+
+    Caller retains its original invocation FD. This context owns a close-on-exec duplicate
+    and all FDs it opens. No file creation, truncation, delete or path override is provided.
+    """
+
+    def __init__(
+        self,
+        invocation_fd: int,
+        *,
+        profile: EmbeddingRuntimeProfile,
+        execution_id: str,
+        invocation_raw_sha256: str,
+    ) -> None:
+        super().__init__(
+            invocation_fd,
+            profile=profile,
+            execution_id=execution_id,
+            invocation_raw_sha256=invocation_raw_sha256,
+            output_access=_OutputAccess.WRITE_ONLY,
+        )
 
     def write_cuda_ready(self, ready: BenchmarkCudaReady) -> None:
         """Seal one precreated operational member; never alter numerical output/budget."""
@@ -604,33 +701,3 @@ class BenchmarkWorkerLocalFiles:
                 "schema_ref": f"{EMBEDDING_DEVICE_BENCHMARK_SCHEMA_REF}#/$defs/{definition}",
             }
         )
-
-    def close(self) -> None:
-        if self._closed:
-            return
-        self._closed = True
-        failed = False
-        descriptors = [
-            member.descriptor for member in self._members.values() if member.descriptor >= 0
-        ]
-        for member in self._members.values():
-            member.descriptor = -1
-        descriptors.extend(value for value in (self._input_member, self._input) if value >= 0)
-        descriptors.extend(descriptor for descriptor, *_rest in reversed(self._directories))
-        self._input_member = self._input = -1
-        self._directories.clear()
-        for descriptor in descriptors:
-            try:
-                os.close(descriptor)
-            except OSError:
-                failed = True
-        if failed:
-            raise BenchmarkFilesError("BENCHMARK_FILES_CLOSE_UNCERTAIN")
-
-    def __exit__(
-        self,
-        kind: type[BaseException] | None,
-        value: BaseException | None,
-        trace: TracebackType | None,
-    ) -> None:
-        self.close()
