@@ -59,13 +59,16 @@ INDEX·QUERY 연결의 Codex 풀이 호출은0이며 외부 LLM API는 사용하
   대기 중 원 요청5건도 보존했습니다. 순수 테스트14 PASS와 실제 설정 선택은 구분해 기록합니다.
 - **실제 CONTENT 등록(20:53–20:58 UTC):** current mixed CONTENT는 PAST_EXAM520개와
   대상1개, 총521개이며 대상 binding1의 origin은 같은 current manifest입니다. native와
-  step은 SUCCEEDED이고 완료 receipt도 등록됐지만 Workflow는 아직 RUNNING입니다.
-  CONCRETE457 / METADATA425를 포함한 세 view 모두의520개 coverage나 전체 목표 완료를
-  주장하지 않습니다. legacy CONTENT479는 새 Graph, 나머지 두 legacy view는 원 Graph입니다.
-- **남은 실제 검증(21:00 UTC):** Workflow terminal 확인과 새 Graph mixed 경로의 대상
-  VECTOR 검색·읽기·같은-key replay, 원 V1 역사 요청의 prepare-replay·읽기가 남았습니다.
-  최종 클라이언트의 실제 사용자 로그인 입력을 요청한 상태이며 아직 HTTP 인증·prepare
-  성공 증거는 없습니다. 사용하지 않는 fresh primary V1-on-new-Graph는 NOT_RUN이며 이번
+  step과 Workflow가 모두 완료됐으며 원 command도 SUCCEEDED로 확인했습니다.
+  후속02:17 관측에서는 mixed METADATA도521개이고 CONCRETE는457개입니다. 세 view 모두의
+  520개 coverage나 전체 목표 완료를 주장하지 않습니다. legacy는520/457/520개이며
+  모두 새 Graph를 가리키고 원 immutable history는 보존됩니다.
+- **남은 실제 검증(10월20일02:24 UTC):** 실제 사용자 로그인과 원 QUERY 실행은 성공했고
+  QUERY도 COMPLETED입니다. 다만 준비 POST가30초 뒤503을 먼저 반환해 대상 VECTOR
+  검색·읽기·HTTP 같은-key replay, 원 V1 역사 요청의 prepare-replay·읽기는 아직 PENDING입니다.
+  새 검색을 만들지 않고 원 완료 요청으로 API 경계를 진단합니다.
+  [제한시간 진단 기록](docs/operations/REFERENCE_QUERY_PREPARATION_TIMEOUT_2026-10-20.md)을
+  참고하세요. 사용하지 않는 fresh primary V1-on-new-Graph는 NOT_RUN이며 이번
   종료 범위가 아닙니다. 전체 V1·Chat 호환성으로 확대하지 않습니다. 상세 이력과 정본
   Artifact pointer는 아래 운영 기록에 보존합니다.
 
