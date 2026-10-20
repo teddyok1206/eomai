@@ -235,3 +235,64 @@ API/provider66·Catalog66·INDEX e013을 유지하는 compatible set이며 새 G
 tmux `EOM:2 rag-incremental`에서 원 client SHA22ca49…와 plan SHAfb3f3e…를 그대로
 실행했다. 초기 진단용 self-pause bootstrap 대신 원 검증 client를 사용한다. 로그인 입력
 전 no-auth gate는 성공했고, 실제 로그인은 원600초/인증 freshness를 바꾸지 않는다.
+
+## 03:36 실제 HTTP: 준비 replay 성공, Catalog read 별도 지연
+
+다음 실제 사용자 로그인은 성공했다. 원 mixed QUERY prepare가 두 번 모두200/READY이며
+동일 reply를 반환했다. 원 key/Workflow/context/hash는 유지됐다. 다음 full context READ는
+Catalog66의30초 제한에서503 `SIMILARITY_CONTEXT_UNAVAILABLE`였다. client는 이를
+성공으로 바꾸거나 새 key로 우회하지 않았으며 finally에서 메모리 세션을 닫았다.
+
+이 실제 READ의 Catalog stage에는 completed-query before7.476초, full population의
+admit5.390초·solution profiles7.984초·materialize3.237초 등이 기록됐다. 이는 전체 source
+읽기의 실제 비용이며 이전 QUERY 준비 병목과 구분한다. Catalog66에서는 이미 수정한
+index 재검증 경로도 아직 그대로다. 결과 VECTOR/read/replay는 여전히 PENDING이다.
+
+### Catalog 한정 compatible SDK 연결 설계
+
+1. 책임/경계: 이미 설치·검증한 root-owned cold SDK2eef를 Catalog 프로세스의 명시적
+   package 경로로 선택한다. API/provider66·QUERY2eef·INDEX e013은 유지한다.
+2. 정본: 원 published Artifact/Graph/registry/DB0058과 immutable release wheel이다.
+3. entity/revision/hash, V1/V2 schema/wire, 원 QUERY/INDEX 및 기존520개는 바꾸지 않는다.
+4. 실행 전 실제 Catalog UID로 module/distribution source closure와 wheel RECORD를
+   확인한다. 원 source/Graph/policy/access/member/numeric 검증은 새 SDK에서도 동일하다.
+5. 주요 접근은 동일 root의 pin/decoder map lookup과 bounded population 읽기다.
+6. 기존 reader의 root-local cache를 재사용하며 전역 권한/result cache를 추가하지 않는다.
+7. 시간/공간 한도는 위 수정과 동일하다. 전체 HTTP30초 안의 성공은 실제 호출로 확인한다.
+8. application transaction/unique/claim/lease/idempotency 경계는 변경하지 않는다.
+9. 기존 service의 명시적 Conda console entry에 protected installed SDK PYTHONPATH를
+   선택한다. checkout/runtime Git, 외부 API, 별도 service/queue/framework는 추가하지 않는다.
+10. 기존 source/reader 설정을 소유하는40-drop-in 한 파일만 epoch/hash CAS로 변경한다.
+    원본을 별도 보존하고 정상 Catalog stop/PID0 뒤 선택한다. 실패하면 원 파일 복원이며
+    API/worker/DB/history는 되돌리지 않는다. secret/env credential은 읽거나 옮기지 않는다.
+11. 전체 shared-prefix 재설치는 변경하지 않은 API/provider까지 교체한다. 이번에는 이미
+    검증한 같은 SDK를 Catalog에만 연결해 변경 경계를 제한한다. 새 wire successor는 없다.
+
+선택은 기존40-drop-in의 source pin, 명시적 installed SDK PYTHONPATH와 bytecode-off
+설정만 변경하며 reader/operation opt-in/hash는 보존한다. 추가 drop-in을 누적하지 않는다.
+이 component 선택은 API prefix 자체를 새 버전으로 설치했다는 뜻이 아니다. 다음 공용
+platform 배포에서는 이 override를 반드시 inventory하고, 동일/후속 수정이 포함된 공용
+release로 정렬한 뒤 PYTHONPATH 선택을 제거한다. 이전 component 선택을 묵시적으로
+남겨 최신 공용 source인 것처럼 주장하지 않는다.
+
+### Catalog SDK 선택과 제한 검증
+
+실제 Catalog 계정으로 import한 EOM module487개가 모두 설치 SDK2eef 아래에서
+해석됐고 eom-platform distribution도 같은 위치였다. DB/model 호출0, torch/transformers
+미수입이다. 관련 runtime/registry/pinned-read 소스68 PASS /9.13초 및 순수 설정 변환과
+predecessor drift 거부4 PASS다. 운영 데이터에 pytest를 실행하지 않았다.
+
+기존40-drop-in raw188f2960…를 정상 stop/PID0 후 epoch/hash CAS로
+raw `b2e5573a672fa9a62491e862ed35295ea573f263dd0dc2decec2d493ece79c94`로 선택했다.
+원본·successor·manifest·rollback을 root-owned `/var/lib/eom-catalog-sdk-2eef9b20/`에
+보존했다. 추가 drop-in이나 새 service를 만들지 않았다. Catalog 새 PID353401 /
+invocation `af236f6b12774b6eb5a7d4c44f1236dc`, Result=success / NRestarts0이고 API
+LIVE/READY다. API4172613·QUERY332030·INDEX89255와 각 InvocationID는 그대로다.
+
+최종 검증 도구는 원 client bytes22ca49…와 plan fb3f3e…를 hash로 고정한 local wrapper다.
+로그인 직후 우리 client만 잠시 job-control pause하여 실제 Catalog 함수-frame 진단을
+준비한다. 지정 transport-unavailable 한정으로 같은 메모리 세션·같은 계획을 보존하고
+명시적 재개를 최대1회 허용한다. 권한 철회/hash/결과 불일치/목표 후보 부재/freshness는
+즉시 실패한다. 원600초는 계속 흐르며 남은60초 미만에는 pause하지 않는다. 두 번째
+실패를 반복하지 않는다. 순수 경계11 PASS와 설치API66 no-auth plan(HTTP0/login0)을
+통과했다. 토큰·password 파일/전달, 새 key/model/DB 쓰기, 인증 만료 연장은 없다.

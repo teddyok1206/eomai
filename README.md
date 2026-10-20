@@ -43,7 +43,7 @@ INDEX·QUERY 연결의 Codex 풀이 호출은0이며 외부 LLM API는 사용하
   기존 실행기의 claim·lease·checkpoint·완료 연결을 구현했습니다.
 - **임시 DB 검증:** 새0058 migration 설치·되돌리기·재설치, 기반131개, 실행 회귀241개,
   동시 요청·재전송·protocol25개가 통과했습니다. 테스트 묶음은 겹치므로 합산하지 않습니다.
-- **실제 운영 구성:** API/Catalog·Chat은 `66f387bf`/DB0058을 유지합니다. QUERY만
+- **실제 운영 구성:** API·Chat은 `66f387bf`/DB0058을 유지합니다. QUERY와 Catalog는
   중복 해석·종료 신호 결함을 수정한 호환 cold SDK `2eef9b20`으로 선택했습니다.
   API provider66·원 Graph/policy/model·INDEX e013은 바꾸지 않았습니다.
   Graph 출판은 별도 SDK `a67fa784`의 공개 Identity fence로 성공했습니다. 원 요청과
@@ -77,6 +77,10 @@ INDEX·QUERY 연결의 Codex 풀이 호출은0이며 외부 LLM API는 사용하
   실제 READY 및 정상 stop 성공을 확인했습니다. 원66의 종료 잠금과 남은 임시 socket은
   별도 운영 복구했으며, 이 사실을 정상 drain PASS로 바꾸지 않습니다. 최종 실제 사용자
   HTTP VECTOR/read/replay는 계속 별도 PENDING입니다.
+  후속 실제 로그인에서는 mixed prepare가 원 key로 두 번200/READY였지만, Catalog66의
+  full READ가30초503이었습니다. Catalog도 같은 검증 SDK로 연결했고 실제 서비스 계정의
+  module closure487개와 회귀68개, 설정 변환4개를 통과했습니다. API·QUERY·INDEX의
+  PID/선택은 보존했습니다. 최종 사용자 READ 성공을 아직 주장하지 않습니다.
   [제한시간 진단 기록](docs/operations/REFERENCE_QUERY_PREPARATION_TIMEOUT_2026-10-20.md)을
   참고하세요. 사용하지 않는 fresh primary V1-on-new-Graph는 NOT_RUN이며 이번
   종료 범위가 아닙니다. 전체 V1·Chat 호환성으로 확대하지 않습니다. 상세 이력과 정본
