@@ -142,6 +142,70 @@ def test_directory_checks_private_mode_symlink_and_named_identity(tmp_path: Path
         private.mkdir(mode=0o700)
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="kernel read denial requires an unprivileged caller")
+def test_traversal_only_ancestor_does_not_require_directory_listing(tmp_path: Path) -> None:
+    ancestor = tmp_path / "traversal-only"
+    ancestor.mkdir(mode=0o700)
+    leaf = ancestor / "leaf"
+    leaf.mkdir(mode=0o700)
+    member(leaf / "value", b"synthetic", mode=0o600)
+    ancestor.chmod(0o111)
+    try:
+        with pytest.raises(PermissionError):
+            os.open(ancestor, os.O_RDONLY | os.O_DIRECTORY)
+        with handoff._directory(leaf, owner=owner(), uid=os.geteuid(), mode=0o700) as directory:
+            descriptor = os.open("value", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory)
+            try:
+                assert os.read(descriptor, 32) == b"synthetic"
+            finally:
+                os.close(descriptor)
+            assert sorted(os.listdir(directory)) == ["value"]
+            os.fsync(directory)
+        assert ancestor.stat().st_mode & 0o777 == 0o111
+    finally:
+        ancestor.chmod(0o700)
+
+
+def test_traversal_only_ancestor_symlink_is_still_rejected(tmp_path: Path) -> None:
+    ancestor = tmp_path / "ancestor"
+    ancestor.mkdir(mode=0o700)
+    leaf = ancestor / "leaf"
+    leaf.mkdir(mode=0o700)
+    alias = tmp_path / "alias"
+    alias.symlink_to(ancestor, target_is_directory=True)
+    with (
+        pytest.raises(handoff.CpuHandoffError, match="DIRECTORY_INVALID"),
+        handoff._directory(alias / "leaf", owner=owner(), uid=os.geteuid(), mode=0o700),
+    ):
+        pass
+
+
+def test_retained_ancestor_inode_still_rejects_name_replacement(tmp_path: Path) -> None:
+    ancestor = tmp_path / "ancestor"
+    ancestor.mkdir(mode=0o700)
+    leaf = ancestor / "leaf"
+    leaf.mkdir(mode=0o700)
+    with (
+        pytest.raises(handoff.CpuHandoffError, match="DIRECTORY_CHANGED"),
+        handoff._directory(leaf, owner=owner(), uid=os.geteuid(), mode=0o700),
+    ):
+        ancestor.rename(tmp_path / "old-ancestor")
+        ancestor.mkdir(mode=0o700)
+
+
+def test_path_only_open_does_not_admit_writable_ancestors(tmp_path: Path) -> None:
+    ancestor = tmp_path / "writable-ancestor"
+    ancestor.mkdir(mode=0o777)
+    ancestor.chmod(0o777)
+    leaf = ancestor / "leaf"
+    leaf.mkdir(mode=0o700)
+    with (
+        pytest.raises(handoff.CpuHandoffError, match="DIRECTORY_INVALID"),
+        handoff._directory(leaf, owner=owner(), uid=os.geteuid(), mode=0o700),
+    ):
+        pass
+
+
 def fake_root_boundary(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> tuple[Path, Path, LocalExperimentInput]:
