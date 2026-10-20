@@ -153,3 +153,29 @@
   기출6개·원 source/Graph/policy·모델 payload·FP32 recipe·실행 순서·수치/성능/메모리 gate는
   변경하지 않는 범위다. 승인 전 원 revision의 내용을 덮거나 새 모델 실행을 시작하지 않는다.
   다음 로그인은 이 입력 검증과 남은 실행 준비를 먼저 닫은 뒤 요청한다.
+
+### 사용자 승인 반영: capacity fixture successor 준비
+
+- 사용자가 “그래 진행해”로 준비 버전 변경을 승인했다. 동일 logical benchmark
+  `embeddingbenchmark_7255032ecfa2447d817d436ac141026b`의 새 immutable revision
+  `embeddingbenchmarkrev_8e2d9b251b184a4fbfc39836a2221bb4`를 준비한다.
+  원 `c6f434d8` revision과 실패 기록은 보존한다. 새 publication key로 revision을 구분하며
+  알려지지 않은 실행을 우회하거나 모델 실패를 재시도하기 위한 identity 변경이 아니다.
+- canonical source는 원 pin된6개 source/Graph/policy와 같은 모델 bundle이며, 준비 결과는
+  재인가가 필요한 파생 local cache다. public capacity 문장만 `a `2045회로 수정한다.
+  나머지28행과 source 선택/수치·성능·메모리 기준/모델·설치는 동일해야 한다.
+- typed 기존 selection/token request와 JSON Schema 검증 후 local tokenizer를1회 실행하고,
+  정확2048과 나머지28행의 원 token hash 일치를 확인·봉인한다. 현재 source 재인가를 통과한
+  동일 request raw hash에만 결과를 재사용하며, 준비 cache가 사용자 권한을 대신하지 않는다.
+  root의 고정 dispatcher와 기존 isolated native tokenizer를 재사용하고 DB/schema/queue는
+  바꾸지 않는다. failure/retry는 독립 기록하며 모델6회는 새 revision에서 최초1회씩만 수행한다.
+- 새 준비는 기존 native CPU capacity lock을 실제 owner UID로 획득한 뒤 실행했다.
+  실제 tokenizer exit0,29행·capacity2048·다른28행의 원 token hash 일치를 검증했다.
+  새 selection raw SHA `bcc22a6c8e1a7b4f98abfa9268d88643f3915573bc189cafc05a34277fa70f5f`,
+  준비 receipt raw SHA `98ee009b9f11d716ace7c586d669357992fab918332b970fb03668356c19beb4`.
+  실제 모델 forward0; 권한 재인가는 여전히 별도 필수다.
+- controller는 root 소유 receipt/result/token bytes를 pin하고, 새로 재인가된 request raw SHA가
+  정확히 같을 때만 읽는다. tokenizer 성공 상태를 덮어쓰거나 다시 실행하지 않는다.
+  소스 재인가·여섯 실행·실제 token witness/수치·성능 판정은 기존 owner/worker가 그대로 맡는다.
+- 새 준비/replay/identity/root6회 제어 비교 회귀31 PASS. 실험 wrapper의 Ruff·format·mypy
+  검증과 실제 모델 비교는 분리한다. source PASS만으로 GPU 우수나 기본값 전환을 승인하지 않는다.
