@@ -212,3 +212,29 @@
 - SDK RECORD에는 변경된 adapter를 포함해 실제9개 owner 경계 member를 검사한다.
   wrapper 회귀38 PASS에 기존 root recovery bytes의 충돌 거부/재작성 금지와9번째 member
   누락 거부를 추가했다. 모델6회는 여전히 시작 전이며 기본 CPU를 유지한다.
+
+### 17:00 UTC 재인가 성공 후 SERIES 사전 진입 오류
+
+- 실제 Studio 인증과 source 재인가, 원 input/policy의 정확한 publication replay가 성공했다.
+  수정한 owner SDK933의 listener 확인도 통과했으므로 앞선 경로 결함은 재발하지 않았다.
+  `SERIES` 진입 약1초 뒤 owner가 종료했다. root의 종료 중 proc 검사 오류는 이후의 2차 증상이다.
+  첫 원인은 아직 미확정이며 source pin 결함이나 모델 실행 실패라고 단정하지 않는다.
+- 17:04 UTC read-only indexed Job inventory에서 input/policy만 SUCCEEDED이고 measurement Job은
+  없었다. 실제 native unit/launch는 시작 전이다. 새 Job/원 identity 우회, 실패 성공 재해석,
+  root 보호 완화나 수치/성능 기준 변경은 하지 않았다. v4 실패 unit·frozen inputs는 보존했다.
+- 재로그인을 요청하기 전, 같은 전체 unit sandbox와 실제 root/owner UID 분리 아래
+  `STAGED_INPUT_PURE_CLOSURE`, `ACTUAL_OWNER_INSTALLATION_PREFLIGHT`,
+  `ROOT_OWNER_LISTENER_NAMESPACE`를 모두 PASS했다. 실제 public policy도 지원된
+  PinnedArtifactReadContext로 read-only 검증 PASS했다. 이 진단은 원문 근거 접근권한이나
+  모델 실행 승인이 아니다. 모델 import/run·새 source 인가·DB 쓰기는 모두0이다.
+- 설치된 owner 코드의 파일/줄 번호만 남기는 임시 진단을 추가했다. exception message,
+  source line, frame locals, 문항 내용, credential은 기록하지 않고 SQL 오류는 frame도 생략한다.
+  실제 최신 권한을 필요로 하는 남은 read admission은 가짜 사용자/DB state로 재현하지 않는다.
+  source 수정 없이 exact 원 request를 재인가할 v5 finite controller를 별도 고정한다.
+  wrapper40 PASS, Ruff/format 및 실제 의존성을 해석하는 strict mypy PASS다.
+  최초 follow-imports=skip invocation의6건 타입 오류는 import 환경 문제로 별도 구분한다.
+- v5 phase raw SHA `d23bd36552b8e76b268e8db77aa3130531f431c73f25534a186a28e1a5071f97`,
+  pins `44c916022b0b738027b72fdfe738028838c28fe9c6a08e48624bef8580628207`,
+  supervisor `70393f7e22efce8a3fc2381e575ac98823275f3293756319120c0cc7f0c43ee0`.
+  원 benchmark/revision/input/policy/publication time와 모델·실행 기준은 그대로다.
+  실제6회·수치/속도/메모리·공존·기본값 판정은 아직 PENDING이며 기본 CPU는 유지한다.
