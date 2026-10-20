@@ -197,3 +197,30 @@ QUERY0을 확인한 뒤 해당 child PID4174473만 SIGKILL로 복구 종료했�
 강제 종료하지 않았고**, DB/status/history를 수정하지 않았다. source92의5파일 PREPARE와
 cold SDK는 선택하지 않은 채 보존하며, 신호 수정까지 포함한 새 candidate로만 재기동한다.
 API/Catalog/INDEX는 여전히 동일 PID/Invocation이며 API LIVE/READY다.
+
+신호 수정까지 포함한 candidate는 `2eef9b20bbd9f1394efc8d1566fada8d37769f66`이며
+공식 build/RECORD와 별도 cold two-wheel 설치, 동일5파일 변환6 PASS 뒤 선택했다.
+QUERY API provider는 원66을 유지한다. 새 SELECT receipt의 raw SHA는
+`3b17031a659e0288385736a6d5916b7f7cd2672ba72dc80b84a12c03724b75e7`다.
+
+첫 새 기동은 기존 socket pathname이 남아 있어 fail-closed `ChatTransportError`로
+종료됐다. 자동 unlink를 허용하지 않았다. controller PID0/failed 상태, 정확한 두 socket의
+종류·UID/GID/mode·inode와 ECONNREFUSED를 확인한 후 같은 디렉터리의
+`.stale-108bcc8d` 이름으로 이동해 보존했다. 데이터/DB/Artifact 삭제0이며 이 endpoint
+metadata는 복구 가능하다. 새 기동은 이 명시적 정리 이후 별도로 수행한다. 기존 실패
+journal을 성공으로 바꾸지 않는다.
+
+03:14:11.963544 UTC 실제 `REFERENCE_QUERY_OWNER_READY`를 확인했다. QUERY owner는
+root parent330733 / child330795(uid990), invocation `c2e67715235e44069793d79e0929d652`였다.
+신호 수정의 실제 검증으로 이 유휴 owner만 normal stop했고3.7초 이내 PID0 / inactive /
+Result=success 및 `Deactivated successfully`를 확인했다. 두 번째 강제 종료는 없었고
+native/model/DB 작업은0이다. 이후 같은5파일 선택 그대로 재기동했다.
+
+API4172613·Catalog4172610·INDEX89255와 각 InvocationID는 그대로 유지됐고 API
+`/api/v1/health/live`, `/api/v1/health/ready`는 정상이다. 잘못된 prefix `/health/...`의
+초기404를 서비스 장애로 해석하지 않았으며 정식 API_PREFIX 경로로 재확인했다.
+설치API66의 원 최종 HTTP client/plan no-auth 검사도 PASS(HTTP0/login0)다.
+
+기존 사용자 로그인은 실제 성공했지만30초503 뒤 원 client finally에서 메모리 세션을
+종료했다. 새 실제 로그인 전에는 source·서비스 검증을 HTTP 사용자 검증이나 전체 목표
+완료로 확대하지 않는다. 실제 준비·검색·두 번 read·원 key replay 및 V1 역사 요청만 남는다.
