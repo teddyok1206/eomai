@@ -74,6 +74,17 @@ def test_real_host_uses_existing_current_capture_exchange_and_removes_own_socket
         assert not thread.is_alive() and not server.endpoint.path.exists()
 
 
+def test_signal_stop_flag_exits_accept_loop_without_event_or_handler_calls(observation):
+    with tempfile.TemporaryDirectory(prefix="eom-query-stop-") as directory:
+        server = host(directory, observation, lambda _: None)
+        try:
+            server.serve(stop_requested=lambda: True)
+            assert not server.stopped.is_set()
+        finally:
+            server.close()
+        assert not server.endpoint.path.exists()
+
+
 def test_request_saturation_closes_extra_connection_without_memory_backlog(
     observation, monkeypatch
 ):

@@ -11,6 +11,23 @@ import pytest
 from eom_workflow_runner import reference_query_owner_entry as module
 
 
+def test_child_signal_handler_uses_only_a_lock_free_stop_flag():
+    child = ast.parse(inspect.getsource(module._serve_child))
+    handler = next(
+        node
+        for node in ast.walk(child)
+        if isinstance(node, ast.FunctionDef) and node.name == "stop_child"
+    )
+    assert not any(isinstance(node, ast.Call) for node in ast.walk(handler))
+    outer = ast.parse("def outer():\n    stop = False\n").body[0]
+    outer.body.append(handler)
+    outer.body.extend(ast.parse("stop_child(15, None)\nstop_child(15, None)\nreturn stop\n").body)
+    tree = ast.fix_missing_locations(ast.Module(body=[outer], type_ignores=[]))
+    namespace = {"FrameType": object}
+    exec(compile(tree, "synthetic-signal-handler", "exec"), namespace)
+    assert namespace["outer"]() is True
+
+
 def test_checkout_entry_is_not_an_installed_bootstrap():
     with pytest.raises(ValueError, match="INSTALLATION_UNAVAILABLE"):
         module._installed_site()

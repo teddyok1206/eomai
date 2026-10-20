@@ -141,13 +141,13 @@ class ReferenceQueryOwnerServer:
         finally:
             self.capacity.release()
 
-    def serve(self) -> None:
+    def serve(self, *, stop_requested: Callable[[], bool] = lambda: False) -> None:
         listeners = (
             (self.listener,)
             if self.private_listener is None
             else (self.listener, self.private_listener)
         )
-        while not self.stopped.is_set():
+        while not self.stopped.is_set() and not stop_requested():
             try:
                 ready, _, _ = select(listeners, (), (), 0.25)
             except (OSError, ValueError):

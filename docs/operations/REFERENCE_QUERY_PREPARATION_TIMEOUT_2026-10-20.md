@@ -145,5 +145,55 @@ forged/extra/hash negatives와 pin mismatch, decode 횟수 및 합성 최대 규
   별도 suite 호출의 존재하지 않는 파일 경로 오류도 수정 후145 PASS로 재실행했다.
 
 공식 disposable DB `20261020025629_f20dc47a`의0058 migrate/down/up 및 runtime role
-reconcile을 통과했다. 실제 native stage/replay/concurrency suite는 별도 실행 중이다.
-운영0058이나 기존 history를 pytest 대상으로 사용하지 않는다.
+reconcile을 통과했다. 실제 native stage/replay/concurrency suite241 PASS /266.06초,
+공식 cleanup PASS(임시 DB·전용 역할·임시 credential 제거)다. 운영0058이나 기존 history를
+pytest 대상으로 사용하지 않았다. 테스트 XML/로그는 별도 checkpoint에 보존한다.
+
+### 호환 배포 범위
+
+수정은 `92cf9b4e757ac3977d8282483421966e96a11e9f`로 commit/push했다. 공식
+build-only·wheel RECORD가 통과했다. 우선 실제 느린 준비 호출을 소유하는 QUERY의
+cold SDK만 새 source로 선택한다. API/Catalog66과 INDEX e013은 유지한다. wire/schema,
+API provider의 실제 source/wheel/code/config pin, source/Graph/policy/index, 수치
+runtime/model과 원 완료 Workflow는 바꾸지 않는다. 따라서 이 선택은 모든 component를
+최신 source로 배포했다는 뜻이 아니며, 뒤의 실제 public READ는 별도 검증 대상이다.
+
+기존 protected owner installer로 새 platform/API-contracts 두 wheel을 별도 cold release에
+설치했다. 실행 권한 없는 기존 installer의 최초 직접 호출은 command-not-found로 실행
+전에 중단됐고, 실제 target 없음 확인 뒤 명시적 Bash로 실행했다. 실패 output은 보존한다.
+
+QUERY source 선택은 기존 owner configuration schema를 그대로 사용한다. 원 API66
+file-only provider observer를 다시 실행하고 정확히 대조한다. primary/mixed의
+`owner_source_commit`과 owner environment hash만 바꾸고, private의 참조 config hash 및
+관련 systemd config hash/entrypoint를 함께 갱신하는 정확히5개 파일이다. 현재 namespace,
+권한, corpus, policy, model, socket, source classes와 provider는 동일하다. 일회성 pure
+transformation/negative tests6 PASS다.
+
+PREPARE는 root-owned 별도 stage에 원본과 successor·파일 epoch·hash를 보관한다.
+SELECT 전에는 QUERY만 정상 drain하고 PID0/empty cgroup 및 관련 active native QUERY
+없음을 확인한다. 각 파일의 원 epoch/hash CAS, exclusive intent와 fsync/원자 교체를
+사용한다. 새 queue/자동 재시도/DB 쓰기/모델 실행은 없다. 부분 상태가 불명확하면 추가
+교체·시작을 멈춘다. rollback은 QUERY inactive 상태에서 보존한 원66의 정확한5개 bytes를
+동일 CAS로 복원하는 것이며 다른 service나 immutable 결과를 되돌리지 않는다.
+
+### 정상 drain 중 발견한 별도 종료 결함
+
+03:05:01 UTC에 원66 QUERY만 정상 stop했다. SELECT는 실행하지 않았다. 이후 frame은
+request worker가 유휴 `_worker`에서 대기하고, main thread의 중첩된 두
+`stop_child → Event.set → Condition.__enter__`를 보였다. unit의 control-group 신호와
+parent의 child 전달이 중복되면서 비재진입 잠금에 갇힌 것이다. 처리 중 모델·native QUERY
+unit은 없었으며 이 현상을 현재 원 QUERY의 처리 실패나 DB 손상으로 해석하지 않았다.
+
+신호 handler는 이제 lock/IO 호출 없이 local bool만 설정한다. 기존 socket loop는
+0.25초마다 그 flag를 확인하고 normal cleanup/ThreadPool drain은 handler 밖에서
+실행한다. 기존 Event·단일 thread pool·원 socket ownership와 KillMode는 유지한다.
+새 queue, DB/schema/protocol, 권한 변경은 없다. RED1 FAIL 후 entry/server/transport/runtime
+63 PASS /8.28초, strict type2 files와 Ruff/format을 통과했다. 수치·worker 검증이 아니라
+control-plane 신호 처리의 회귀다.
+
+잠긴 원66 controller는 frame·고정 PID/parent/UID/cgroup/InvocationID와 관련 active native
+QUERY0을 확인한 뒤 해당 child PID4174473만 SIGKILL로 복구 종료했다. parent는 원 child를
+회수했다. 이는 정상 drain PASS가 아니며 실패 journal을 보존한다. **native 모델/worker를
+강제 종료하지 않았고**, DB/status/history를 수정하지 않았다. source92의5파일 PREPARE와
+cold SDK는 선택하지 않은 채 보존하며, 신호 수정까지 포함한 새 candidate로만 재기동한다.
+API/Catalog/INDEX는 여전히 동일 PID/Invocation이며 API LIVE/READY다.

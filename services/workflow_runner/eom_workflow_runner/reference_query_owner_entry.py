@@ -17,7 +17,6 @@ from collections.abc import Sequence
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
-from threading import Event
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -230,15 +229,16 @@ def _serve_child(
         build_reference_query_owner_runtime,
     )
 
-    stop = Event()
+    stop = False
     server = None
     runtime = None
     mixed_runtime = None
 
     def stop_child(_signum: int, _frame: FrameType | None) -> None:
-        stop.set()
-        if server is not None:
-            server.stop()
+        # Parent forwarding and cgroup delivery may reenter this handler. Do not
+        # acquire Event/socket locks from a Python signal handler.
+        nonlocal stop
+        stop = True
 
     signal.signal(signal.SIGTERM, stop_child)
     signal.signal(signal.SIGINT, stop_child)
@@ -296,7 +296,7 @@ def _serve_child(
                 pwd.getpwnam("eom-general-chat").pw_uid,
                 private_factory,
             )
-        if stop.is_set():
+        if stop:
             return 0
 
         def application(capture: AuthenticatedOperatorSession) -> ReferenceQueryPreparationPort:
@@ -334,7 +334,7 @@ def _serve_child(
             private_queries=private_listener,
         )
         _emit("REFERENCE_QUERY_OWNER_READY")
-        server.serve()
+        server.serve(stop_requested=lambda: stop)
         return 0
     except Exception as error:
         _emit("REFERENCE_QUERY_OWNER_STOPPED", error=error)
