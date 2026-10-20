@@ -18,6 +18,10 @@ from eom_catalog_contracts.inference_transfer_experiment import (
     profile_key,
 )
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
+from eom_catalog_contracts.knowledge import (
+    ApprovedPastExamItemKnowledgeSourceV3,
+    same_approved_item_source_identity,
+)
 from eom_identifiers import content_sha256
 from eom_identity_service import (
     AuthenticatedOperatorSession,
@@ -169,7 +173,14 @@ class CatalogBenchmarkSourceAdmission:
             basis = entry.profile.source_basis
             _require(
                 entry.profile == profiles[key]
-                and admitted.source == selection.source == basis.source
+                # Accepted report bases pin core Item/member identity; a reauthorized
+                # Graph source can additionally carry the complete V3 visual lineage.
+                and same_approved_item_source_identity(admitted.source, selection.source)
+                and same_approved_item_source_identity(selection.source, basis.source)
+                and (
+                    not isinstance(selection.source, ApprovedPastExamItemKnowledgeSourceV3)
+                    or admitted.source == selection.source
+                )
                 and admitted.analysis_run_id == selection.solution_evidence.base_analysis_run_id
                 and basis.solution_evidence == selection.solution_evidence
                 and basis.graph_snapshot == request.graph_snapshot

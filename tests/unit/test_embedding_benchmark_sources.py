@@ -13,6 +13,11 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     embedding_device_benchmark_bytes,
 )
 from eom_catalog_contracts.inference_transfer_experiment import experiment_view_text, profile_key
+from eom_catalog_contracts.item_inference_transfer import (
+    InferenceTransferProfile,
+    InferenceTransferProfilePointer,
+)
+from eom_catalog_contracts.knowledge import ApprovedPastExamItemKnowledgeSourceV3
 from eom_catalog_service import embedding_benchmark_sources as module
 from eom_catalog_service.embedding_benchmark_sources import CatalogBenchmarkSourceAdmission
 from eom_catalog_service.inference_transfer_service import (
@@ -27,6 +32,7 @@ from eom_identifiers import content_sha256, sha256_bytes
 from tests.unit.embedding_device_benchmark_fixtures import owner_request, staged_inputs
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.inference_transfer_experiment_fixtures import entry
+from tests.unit.inference_transfer_snapshot_fixtures import snapshot_v3_record
 
 ACTOR = "operator_" + "1" * 32
 
@@ -34,21 +40,44 @@ ACTOR = "operator_" + "1" * 32
 @pytest.fixture
 def admitted(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     entries = tuple(entry(seed) for seed in "abcdef")
-    by_profile = {profile_key(source.profile): source for source in owner_request().sources}
-    entries_by_key = {
-        (
-            value.profile.profile_id,
-            value.profile.profile_revision_id,
-            value.profile.profile_sha256,
-        ): value
+    # Real past-exam sources use this member naming; the profile still pins V2 core identity.
+    normalized = []
+    for value in entries:
+        body = value.profile.model_dump(mode="json")
+        body["source_basis"]["source"]["artifact_member"].update(
+            materialized_path="source/item-content.json", logical_name="item-content.json"
+        )
+        profile = InferenceTransferProfile.model_validate(seal(body, "profile_sha256"))
+        content = value.content.model_copy(
+            update={"original_source": profile.source_basis.source.artifact_member}
+        )
+        normalized.append(value.model_copy(update={"profile": profile, "content": content}))
+    entries = tuple(normalized)
+    source_by_revision = {
+        source.source.item_revision_id: source for source in owner_request().sources
+    }
+    by_profile = {
+        profile_key(
+            InferenceTransferProfilePointer.from_profile(value.profile)
+        ): source_by_revision[value.profile.source_basis.source.item_revision_id].model_copy(
+            update={
+                "profile": InferenceTransferProfilePointer.from_profile(value.profile),
+                "source": value.profile.source_basis.source,
+            }
+        )
         for value in entries
     }
+    entries_by_id = {value.profile.profile_id: value for value in entries}
 
     def projected(row: BenchmarkTextRow) -> dict[str, object]:
-        text = experiment_view_text(entries_by_key[profile_key(row.row.profile)], row.row.view)
+        value = entries_by_id[row.row.profile.profile_id]
+        text = experiment_view_text(value, row.row.view)
         assert text is not None and text.strip()
         body = row.model_dump(mode="json")
         body["text"] = text
+        body["row"]["profile"] = InferenceTransferProfilePointer.from_profile(
+            value.profile
+        ).model_dump(mode="json")
         body["row"]["input_text_sha256"] = content_sha256(text)
         body["row"] = seal(body["row"], "row_sha256")
         return body
@@ -66,6 +95,7 @@ def admitted(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     request_body = owner_request().model_dump(mode="json")
     request_body.update(
         operator_audit_id=ACTOR,
+        sources=[by_profile[key].model_dump(mode="json") for key in sorted(by_profile)],
         document_rows=[row.row.model_dump(mode="json") for row in documents],
         query_rows=[row.row.model_dump(mode="json") for row in queries],
         input_set_sha256=inputs.input_set_sha256,
@@ -108,6 +138,105 @@ def admitted(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         request=request,
         inputs=inputs,
     )
+
+
+def _with_visual_admitted_source(value, *, pin_visual=False):
+    selected = value.request.sources[0]
+    source = ApprovedPastExamItemKnowledgeSourceV3.model_validate(
+        snapshot_v3_record().source.model_dump(mode="json")
+        | selected.source.model_dump(mode="json")
+    )
+    sources = tuple(
+        replace(row, source=source)
+        if row.source.item_revision_id == source.item_revision_id
+        else row
+        for row in value.capture.corpus.sources
+    )
+    corpus = replace(value.capture.corpus, sources=sources)
+    value.capture = replace(value.capture, corpus=corpus)
+    value.owner._sources.capture_in_session.return_value = value.capture
+    if pin_visual:
+        body = value.request.model_dump(mode="json")
+        body["sources"][0]["source"] = source.model_dump(mode="json")
+        value.request = BenchmarkOwnerRequest.model_validate(seal(body, "request_sha256"))
+    return source
+
+
+@pytest.mark.parametrize("pin_visual", (False, True))
+def test_reauthorized_visual_source_matches_core_report_without_dropping_visual_pin(
+    admitted, pin_visual
+):
+    value = admitted
+    source = _with_visual_admitted_source(value, pin_visual=pin_visual)
+    assert value.owner.resolve_in_session(value.session, value.request) == value.inputs
+    assert value.owner._sources.capture_in_session.return_value.corpus.sources[0].source is source
+
+
+@pytest.mark.parametrize("fault", ("acceptance", "layout", "page", "missing_visual"))
+def test_explicit_visual_pin_still_requires_exact_lineage(admitted, fault):
+    value = admitted
+    source = _with_visual_admitted_source(value, pin_visual=True)
+    body = source.model_dump(mode="json")
+    if fault == "acceptance":
+        body["extraction_acceptance_sha256"] = "sha256:" + "0" * 64
+    elif fault == "layout":
+        body["layout_observation"]["observation_sha256"] = "sha256:" + "0" * 64
+    elif fault == "page":
+        body["page_inputs"][0]["image"]["sha256"] = "sha256:" + "0" * 64
+    if fault == "missing_visual":
+        changed = value.capture.entries[0].profile.source_basis.source
+    else:
+        changed = ApprovedPastExamItemKnowledgeSourceV3.model_validate(body)
+    sources = tuple(
+        replace(row, source=changed)
+        if row.source.item_revision_id == source.item_revision_id
+        else row
+        for row in value.capture.corpus.sources
+    )
+    value.owner._sources.capture_in_session.return_value = replace(
+        value.capture, corpus=replace(value.capture.corpus, sources=sources)
+    )
+    with pytest.raises(ValueError, match="SOURCE_PIN_MISMATCH"):
+        value.owner.resolve_in_session(value.session, value.request)
+    value.reader.read_member.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "fault", ("item", "revision", "artifact", "artifact_revision", "hash", "analysis_run")
+)
+def test_core_only_pin_rejects_different_authorized_member_or_analysis(admitted, fault):
+    value = admitted
+    source = _with_visual_admitted_source(value)
+    body = source.model_dump(mode="json")
+    if fault == "item":
+        body["item_id"] = "item_" + "0" * 32
+    elif fault == "revision":
+        body["item_revision_id"] = "itemrev_" + "0" * 32
+    elif fault == "artifact":
+        body["artifact_member"]["artifact_id"] = "artifact_" + "0" * 32
+    elif fault == "artifact_revision":
+        body["artifact_member"]["artifact_revision_id"] = "rev_" + "0" * 32
+    elif fault == "hash":
+        body["artifact_member"]["sha256"] = "sha256:" + "0" * 64
+    changed = ApprovedPastExamItemKnowledgeSourceV3.model_validate(body)
+    sources = tuple(
+        replace(
+            row,
+            source=changed,
+            analysis_run_id="analysisrun_" + "0" * 32
+            if fault == "analysis_run"
+            else row.analysis_run_id,
+        )
+        if row.source.item_revision_id == source.item_revision_id
+        else row
+        for row in value.capture.corpus.sources
+    )
+    value.owner._sources.capture_in_session.return_value = replace(
+        value.capture, corpus=replace(value.capture.corpus, sources=sources)
+    )
+    with pytest.raises(ValueError, match="SOURCE_PIN_MISMATCH"):
+        value.owner.resolve_in_session(value.session, value.request)
+    value.reader.read_member.assert_not_called()
 
 
 def test_exact_six_sources_and_committed_input_share_the_official_root_reader(admitted):

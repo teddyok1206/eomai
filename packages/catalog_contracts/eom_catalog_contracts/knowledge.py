@@ -633,6 +633,33 @@ class ApprovedItemKnowledgeSourceV2(FrozenModel):
     artifact_member: KnowledgeAnalysisSourceArtifactMemberV2
 
 
+def same_approved_item_source_identity(
+    left: ApprovedItemKnowledgeSourceV2, right: ApprovedItemKnowledgeSourceV2
+) -> bool:
+    """Compare the immutable Item/member core, NOT full source lineage or authority.
+
+    Accepted reports preserve this core. An admitted past-exam subtype additionally
+    carries page/occurrence evidence that its owner must independently reauthorize;
+    that extra lineage is neither discarded nor inferred by this comparison.
+    Callers validate both source contracts before using this pure value rule.
+    """
+    return (
+        left.source_kind,
+        left.source_class,
+        left.item_id,
+        left.item_revision_id,
+        left.lifecycle_state,
+        left.artifact_member,
+    ) == (
+        right.source_kind,
+        right.source_class,
+        right.item_id,
+        right.item_revision_id,
+        right.lifecycle_state,
+        right.artifact_member,
+    )
+
+
 class ApprovedPastExamItemKnowledgeSourceV3(ApprovedItemKnowledgeSourceV2):
     """One approved past-exam Item plus its exact visually reviewed source pages."""
 
