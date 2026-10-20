@@ -1,8 +1,11 @@
 # 생성 문항 검토 기록의 증분 연결 — 개발 중간 검증
 
 최초 기록: 2026-10-19 12:43 UTC. 후속 기록: 13:34 UTC.
-사용자 요청으로 활성화한 목표는 **진행 중**이다.
-이 문서는 개발 중간 증거이며 최종 release 또는 운영 acceptance가 아니다.
+이 문서는 당시 중간 증거와 실패 이력을 보존한다. 본문의 시각별 PENDING과 component
+선택은 당시 관측이며 현재 상태로 읽지 않는다. 목표는 후속 실제 검증으로
+2026-10-20 04:37 UTC 완료했다.
+[최종 운영 acceptance와 명시적 한계](REGISTERED_REVIEW_INCREMENTAL_ACCEPTANCE_2026-10-20.md)를
+현재 결론으로 사용한다. 이 중간 기록 자체를 소급해 성공으로 바꾸지는 않는다.
 설계: [통합 설계](../architecture/REGISTERED_REVIEW_INCREMENTAL_INTEGRATION_DESIGN.md),
 [원 검토 기록의 의미](../architecture/REGISTERED_ITEM_REVIEW_SOLUTION_EVIDENCE_DESIGN.md).
 

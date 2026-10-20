@@ -31,13 +31,20 @@ logical Item
 - 승인 문항, HWPX build, RAG 학습 현황과 Codex slot 사용 상태 조회
 - 25문항 모의고사 생산 계획·실행·검토·퇴역을 불변 checkpoint와 영수증으로 관리
 
-## 증분 RAG 목표의 현재 상태 — 2026-10-19 UTC
+## 생성 문항 검토 근거의 증분 RAG 연결 — 2026-10-20 UTC 완료
 
 생성 문항의 **기존 독립 검토 풀이 기록**을 GraphRAG와 로컬 임베딩 자동 증분,
-실제 유사도 검색에 연결하는 목표를 진행 중입니다. 검토 기록을 기출 V10 분석으로
+실제 유사도 검색에 연결하고 운영 검증까지 완료했습니다. 검토 기록을 기출 V10 분석으로
 위장하지 않으며, 기존 기출520개·벡터·불변 이력을 보존합니다. 별도 승인된 Graph용 V2
 분석1건은 수행했지만, 생성 문항의 기존 검토 풀이를 다시 모델로 풀지 않습니다.
 INDEX·QUERY 연결의 Codex 풀이 호출은0이며 외부 LLM API는 사용하지 않습니다.
+
+**최종 실제 사용자 검증:** 같은 guiadmin 세션에서 대상 생성 문항 자체가 내용 VECTOR
+검색1위로 반환됐고, mixed context 두 번 읽기·원 key 준비 재전송·기존 V1 역사 요청의
+저장 reply/두 번 읽기가 모두 통과했습니다. 내용 cosine0.849387은 풀이 동일 확률이 아닙니다.
+아래는 시각별 개발 이력이며, 당시 PENDING을 현재 미완료로 읽지 않습니다.
+[최종 운영 acceptance·원 기획 대조·남은 한계](docs/operations/REGISTERED_REVIEW_INCREMENTAL_ACCEPTANCE_2026-10-20.md)를
+현재 결론으로 사용합니다.
 
 - **소스 구현:** 혼합 source-plan/index/registry, 원 검토 근거를 구분하는 검색·읽기 계약,
   기존 실행기의 claim·lease·checkpoint·완료 연결을 구현했습니다.
@@ -67,7 +74,7 @@ INDEX·QUERY 연결의 Codex 풀이 호출은0이며 외부 LLM API는 사용하
   후속02:17 관측에서는 mixed METADATA도521개이고 CONCRETE는457개입니다. 세 view 모두의
   520개 coverage나 전체 목표 완료를 주장하지 않습니다. legacy는520/457/520개이며
   모두 새 Graph를 가리키고 원 immutable history는 보존됩니다.
-- **남은 실제 검증(10월20일02:24 UTC):** 실제 사용자 로그인과 원 QUERY 실행은 성공했고
+- **진단 이력(10월20일02:24–04:26 UTC):** 실제 사용자 로그인과 원 QUERY 실행은 성공했고
   QUERY도 COMPLETED입니다. 다만 준비 POST가30초 뒤503을 먼저 반환해 대상 VECTOR
   검색·읽기·HTTP 같은-key replay, 원 V1 역사 요청의 prepare-replay·읽기는 아직 PENDING입니다.
   새 검색을 만들지 않고 원 완료 요청으로 API 경계를 진단합니다.
@@ -87,16 +94,18 @@ INDEX·QUERY 연결의 Codex 풀이 호출은0이며 외부 LLM API는 사용하
   조회 adapter에만90초의 유한 budget을 적용한 App60af9e5d가 관련132개 회귀를 통과해
   실제 선택됐습니다. App wheel만 교체했고 platform/contracts·Catalog·INDEX·Chat은
   보존했습니다. API LIVE/READY 및 QUERY READY, 원 key/plan을 유지한 최종 도구55개가
-  통과했습니다. 이는 속도 향상이나 실제 사용자 조회 PASS가 아니며, 새 로그인 후
-  최종 READ/VECTOR/역사 replay는 별도 검증합니다.
+  통과했습니다. 이 시점의 배포 증거를 사용자 조회 PASS로 대신하지 않았고,
+  **04:37 UTC 후속 실제 로그인에서 최종 READ/VECTOR/역사 replay를 모두 통과했습니다.**
+  조회 속도 향상은 주장하지 않습니다. mixed 전체 compose는 약58초이며90초의 유한
+  READ budget을 사용합니다. 같은 세션의 실제 결과와 성능 한계는 최종 acceptance에서 구분합니다.
   [제한시간 진단 기록](docs/operations/REFERENCE_QUERY_PREPARATION_TIMEOUT_2026-10-20.md)을
   참고하세요. 사용하지 않는 fresh primary V1-on-new-Graph는 NOT_RUN이며 이번
   종료 범위가 아닙니다. 전체 V1·Chat 호환성으로 확대하지 않습니다. 상세 이력과 정본
   Artifact pointer는 아래 운영 기록에 보존합니다.
 
 [현재 통합 설계](docs/architecture/REGISTERED_REVIEW_INCREMENTAL_INTEGRATION_DESIGN.md)와
-[이번 검증·남은 조건](docs/operations/REGISTERED_REVIEW_INCREMENTAL_INTEGRATION_2026-10-19.md)을
-기준으로 진행합니다. 최초 근거 모델은
+[중간 검증·실패 보존 기록](docs/operations/REGISTERED_REVIEW_INCREMENTAL_INTEGRATION_2026-10-19.md)을
+함께 보존합니다. 최초 근거 모델은
 [원 검토 풀이 기록 설계](docs/architecture/REGISTERED_ITEM_REVIEW_SOLUTION_EVIDENCE_DESIGN.md)에 있습니다.
 
 앞선 GPU 준비 실패와 인증된 기존 검색 성공은

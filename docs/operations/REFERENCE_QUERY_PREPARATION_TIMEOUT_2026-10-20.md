@@ -420,3 +420,25 @@ AST로 검증했다. 최종 successor10개+기존 적용 가능한45개는55 PAS
 명시적 deselect다. core132 PASS와 합산하지 않는다. 설치 API60에서 실제 no-auth plan
 검사도 PASS(HTTP0/login0)다. 현재 tmux EOM:2의 원 요청 검증이 실제 로그인 입력을
 기다린다. 성공한 새 READ/VECTOR/역사 replay 증거 전에는 전체 목표를 완료로 표시하지 않는다.
+
+## 04:37 실제 HTTP 종료 — 목표 완료
+
+실제 사용자 로그인 후 원 plan/key 그대로 준비를 두 번200/READY로 확인했고, mixed READ
+두 번도200 및 전체 typed 값 equality를 통과했다. 대상 생성 문항 자체의 CONTENT_ONLY
+VECTOR observation은 rank1/cosine 표시0.849387이다. 이어 원 V1 준비 reply가 저장된
+원 reply와 정확히 같고 V1 READ 두 번도200/equality임을 확인했다.
+FINITE_HTTP_CANARY_COMPLETED로 끝났고 해당 실제 세션의 failure event는0이다.
+중간 승인·추가 로그인·진단 pause는 없었으며 client는 finally에서 메모리 세션을 닫고 종료했다.
+
+mixed compose 단계는58.287/58.742초, V1은28.352/28.686초다.90초 READ budget 안의
+실제 성공이지 속도 향상이나 일반 SLO 달성이 아니다. 앞선30초503과 운영 복구 이력은
+그대로 보존한다. 원 QUERY를 새 key로 다시 만들거나 model/Item/Graph/index를 바꾸지 않았다.
+04:37 API LIVE/READY 및 API/QUERY/Catalog/INDEX/Chat owner/worker6개 active와
+Result=success/NRestarts0를 확인했다.
+
+최종 sanitized event10개 raw SHA는
+`ef4744ccc1a0935c310794f1b1d5105a2bf3a888a59226aee4bcd38e44cab778`다.
+정확한 source/request/context/Artifact pins, 최초 설계와의 대조 및 의미적 한계는
+[최종 운영 acceptance](REGISTERED_REVIEW_INCREMENTAL_ACCEPTANCE_2026-10-20.md)에 기록했다.
+이 후속 증거로 이번 source 연결 목표를 종료하며 원 CPU/CUDA 여섯 비교와 fresh V1/Chat
+신규 호환성 범위를 소급해 PASS로 바꾸지 않는다.
