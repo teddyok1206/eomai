@@ -117,3 +117,39 @@
   (`fork-identity-proof-v3.jsonl`): proc 소유자0→990, 기존 identity validator PASS,
   잘못된 UID/GID 거부. 합성 operator 회귀15 PASS에는 root/capability 보유 상태의
   조정 금지, 실제 read-back 요구와 로그인 전 identity 검사 순서를 포함한다.
+
+### 15:00 UTC tokenizer 입장 진단과 복구 범위
+
+- 두 번째 실제 로그인·원 자료 재인가와 수정된 proc identity 검사는 성공했다.
+  tokenizer unit은 시작 직후 exit1, output0byte로 종료했다. 모델 실행 전 실패다.
+- 동일 sandbox의 읽기 전용 진단에서 native UID/GID978/975,
+  supplementary groups `[975]`, prefix·보호 경로·phase import PASS를 확인했다.
+  기본 GID가 그룹 목록에도 들어오는 systemd 동작을 임시 entry의 `not groups`가
+  잘못 거부했다. 같은 기본 GID만 허용하고, root/다른 추가 그룹·혼합 UID/GID는 거부한다.
+- 원 unit/입력/intent/빈 output은 변경하지 않는다. terminal failure와 invocation을 확인한
+  명시적 tokenizer 복구1회만 별도 attempt unit/output으로 수행한다. 모델 forward0,
+  동일 원 input pointer를 읽고, 기존 schema·canonical bytes·bundle·row count를 검증한다.
+  완료 결과는 root 소유 sealed 임시 파일과 hash receipt로 고정한다.
+- 후속 controller는 재인가된 요청의 정확한 raw hash가 원 입력과 같은 경우에만 이 준비
+  결과를 재사용한다. 재토큰화·재표본화·새 benchmark identity·여섯 모델 실행 재시도는 없다.
+  worker에 DB/NAS/인증 접근을 추가하지 않고 기본 그룹 이외의 권한은 늘리지 않는다.
+- 추가 그룹/혼합 UID·GID 거부 테스트7 PASS. 실제 tokenizer 복구 unit은 exit0,
+  MainPID0/active-exited로 종료했다. 기록을 유지하는 oneshot에 `--wait`를 사용한
+  CLI 관찰자는135초에 timeout했지만, 이것을 native 실행 실패로 재해석하지 않았다.
+  같은 성공 invocation `64929c8d3b4d441dba973c331007bb4d`의 원 output을
+  재실행 없이 검증·봉인했다. 기존 실패/intent/빈 output과 관찰자 timeout도 보존했다.
+- tokenizer 결과29행의 schema/canonical/bundle 검증은 PASS이며 모델 forward0이다.
+  sealed receipt raw SHA는 `be46ad0f4353ecaf22371308e806ebdab5b156b5a54cd7dd63581ee5d3870170`.
+  이는 benchmark 입력·성능·GPU 입장 PASS가 아니다.
+
+### 실제 토큰 수 사전 검증: 최대 길이 fixture 수정 필요
+
+- 원29행은 DOCUMENT18/QUERY2/공개9행이다. 기출 문장의 실제 token count는 모두2048 이하다.
+  공개 overflow는2050, capacity 후보는2049로 관찰됐다. 이 encoder의 prefix/special token을
+  고려하면 기존 임시 fixture의 반복 횟수가 잘못됐으며, capacity 계약은 정확히2048을 요구한다.
+- 잘못된 capacity를2048이라고 선언하거나, truncation하거나, 한도를2049로 높이지 않는다.
+  원 입력/hash/benchmark allocation/실패는 그대로 보존한다. 실제6회는 여전히0이다.
+- 사용자에게 정확한2048-token fixture를 사용하는 새 준비 버전 승인을 요청했다.
+  기출6개·원 source/Graph/policy·모델 payload·FP32 recipe·실행 순서·수치/성능/메모리 gate는
+  변경하지 않는 범위다. 승인 전 원 revision의 내용을 덮거나 새 모델 실행을 시작하지 않는다.
+  다음 로그인은 이 입력 검증과 남은 실행 준비를 먼저 닫은 뒤 요청한다.
