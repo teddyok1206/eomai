@@ -296,3 +296,65 @@ LIVE/READY다. API4172613·QUERY332030·INDEX89255와 각 InvocationID는 그대
 즉시 실패한다. 원600초는 계속 흐르며 남은60초 미만에는 pause하지 않는다. 두 번째
 실패를 반복하지 않는다. 순수 경계11 PASS와 설치API66 no-auth plan(HTTP0/login0)을
 통과했다. 토큰·password 파일/전달, 새 key/model/DB 쓰기, 인증 만료 연장은 없다.
+
+## 04:00–04:05 실제 읽기와 조회 deadline 정렬 결정
+
+실제 로그인 뒤 mixed 원 key의 준비가 다시 두 번200/READY였다. full READ는 두 번 모두
+30초503이었다. 첫 READ는 COMPOSE_CONTEXT57.973초, 전후 completed-source 검증
+각1.111/1.242초 및 최종 provenance73ms를 수행했다. 같은 메모리 세션의 명시적1회
+재검증 후 client는 정상 finally에서 종료됐다. 새 로그인·key·QUERY·모델 실행은 없었다.
+
+85초 frame-only sampling은1,692개 sample과892개 sampling error를 남겼다. 함수 이름과
+파일/행만 기록했고 locals/토큰/원 결과는 수집하지 않았다. 비차단 sampling의 누락과 중첩
+stack 때문에 sample 수를 정확한 단계별 소요시간으로 환산하지 않는다. 전체 population의
+자료 읽기·profile 검증, index/binding JSON Schema·Pydantic·수치 검증이 실제 경로에 있었다.
+이는 잘못된 인증이나 새 QUERY의 미완료가 아니다. synthetic registry crawl 비교의 개선은
+작았으므로 전역 registry/validator cache 변경을 성급하게 추가하지 않는다.
+
+### 측정 기반 유한 조회 budget — 기존30초 목표의 명시적 변경
+
+1. 책임은 API의 기존 READ_SIMILARITY_CONTEXT Unix adapter다. 모델/준비/일반 RPC나
+   전체 서버 timeout을 바꾸지 않는다.
+2. 정본은 같은 원 완료 QUERY와 exact Graph/policy/Item/Artifact/encoding이다.
+3. 논리 ID/revision/hash, 공개 JSON Schema bytes·V1/V2 의미는 변경하지 않는다.
+4. actor/peer, source/current IAM, schema/media/hash, native numeric 및 late fence를 유지한다.
+5. 접근은 최대1,024개 source의 bounded 전체 population 읽기와 최대3개 index 검증이다.
+6. 기존 map/set·indexed repository·transaction-local reader만 사용한다. 새 cache/queue/index는 없다.
+7. 기존 O(n+bytes) 검증 비용을 유지한다. 실측 약1분인 경로에90초의 유한 transport budget을
+   둔다. 이것을 성능 개선이나90초 미만의 일반 SLO 달성으로 주장하지 않는다.
+8. 같은 root transaction과 현재 권한 재검증을 보존한다. 동시성·server worker 수는 늘리지 않는다.
+9. transport adapter가 단일 명시 상수를 소유한다. domain/계약에 운영 timeout이나 filesystem
+   동작을 넣지 않는다. 새 dependency는 없다.
+10. 기존 monotonic 전체 connect/send/receive deadline을 사용한다. 무제한 대기·자동 retry·
+    timeout 후 새 key가 없다. 오류 코드는 그대로다. rollback은 이전 API wheel 선택이다.
+11.30초를 유지하려고 필수 검사나 전체 corpus를 줄이는 대안은 결과·권한 의미를 바꾼다.
+    측정 없이 여러 cache/최적화를 덧붙이는 대신 이 조회의 budget만 실제 작업에 맞춘다.
+
+따라서 앞 절의 ‘전체 HTTP30초 안 성공’은 달성한 것으로 기록하지 않는다. 변경된90초
+budget의 실제 READ 두 번·같은-key replay·target 자체 VECTOR·원 V1 history는 다시
+검증해야 한다. 검증 client도 READ 호출에만120초 outer budget을 명시하고, 준비/로그인
+45초·전체600초·인증 freshness900초는 유지한다. 입력 내용·원 plan/key/hash는 바꾸지 않는다.
+
+신규4개 회귀는 변경 전30초에서 모두 RED, 변경 뒤 관련132개가 PASS(33.11초)다.
+strict type1개·Ruff/format도 통과했다. 운영 DB pytest나 모델 실행은 없다. JSON Schema와
+DB 변경이 없으므로 migration/수치 모델 재실행은 하지 않는다.
+
+### 배포 범위
+
+API 코드와 API contracts는66 이후 이 수정 전까지 diff가 없다. 새 Application API wheel의
+실제 member diff가 조회 client와 build-info뿐인지 먼저 확인한다. 맞으면 명시적 Conda의
+Application API package 하나만 교체하고 platform66·API contracts66, Catalog2eef,
+QUERY SDK2eef·INDEX e013을 보존한다. 전체 공용 prefix 설치·migration·권한 재조정은
+불필요하다. component별 source/wheel/RECORD를 기존 deployment 기록에 구분해 남긴다.
+
+API 교체 전 API와 해당 API의 실제 PID/code/config FD를 관측 중인 QUERY owner를 정상
+drain한다. 원 API wheel과 QUERY 설정 bytes를 먼저 보존한다. 설치 후 실제 component
+wheel/RECORD에서 provider source·wheel·고정12 code pin·동일 api.yaml hash를 확인해,
+기존 QUERY의 세 공개 설정과 unit/env의 설정 hash만 successor로 선택한다. API provider
+identity를 구버전으로 위장하거나 code/hash 검증을 생략하지 않는다. Catalog/INDEX/Chat
+설정과 worker 인증은 변경하지 않는다. 부분 결과 불명·기존 file drift는 추가 mutation STOP이다.
+
+rollback은 같은 두 service를 정상 중지한 뒤 이전 API wheel 및 보존한 QUERY 설정의 정확한
+bytes를 복구하고 검증하는 절차다. Item/Graph/index/QUERY 출력·session DB는 삭제하거나
+성공으로 보정하지 않는다. 새 API 실제 source로 최종 검증 client의 예상 installed source만
+고정하고, 원 historical/mixed request bytes·key·hash와600/900초 제한은 그대로 유지한다.

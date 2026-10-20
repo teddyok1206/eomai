@@ -32,6 +32,11 @@ from eom_orchestrator.general_chat_socket import (
 )
 from jsonschema.exceptions import ValidationError as SchemaError
 
+# Full-population source/schema/numeric fences measured about 60s at 521 Items.
+# Keep one finite monotonic RPC budget, not a retry or a general API timeout.
+# Measurement and rollback: REFERENCE_QUERY_PREPARATION_TIMEOUT_2026-10-20.md.
+_CONTEXT_READ_DEADLINE_SECONDS = 90.0
+
 
 class SimilarityContextClientError(ValueError):
     def __init__(self, code: SimilarityReadErrorCode) -> None:
@@ -93,7 +98,7 @@ class CatalogSimilarityContextClient:
                 request.model_dump(mode="json"),
                 request_limit=MAX_SIMILARITY_READ_FRAME_BYTES,
                 reply_limit=MAX_SIMILARITY_READ_FRAME_BYTES,
-                timeout=30.0,
+                timeout=_CONTEXT_READ_DEADLINE_SECONDS,
             )
             reply: SimilarityContextReadReply | SimilarityContextReadReplyV2
             if isinstance(request, SimilarityContextReadRequestV2):

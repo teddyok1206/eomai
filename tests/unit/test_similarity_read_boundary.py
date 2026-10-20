@@ -21,7 +21,7 @@ from eom_catalog_contracts.similarity_read import (
 )
 from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
 from eom_catalog_service.similarity_read_dispatch import dispatch_similarity_read_frame
-from eom_identifiers import canonical_json_bytes
+from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_orchestrator.general_chat_socket import ChatSocketEndpoint, ChatTransportError
 
 from tests.unit.test_catalog_application_boundary import _server
@@ -188,3 +188,43 @@ def test_invalid_actual_actor_or_forged_selection_fails_before_transport(monkeyp
             CatalogSimilarityContextClient().read(actor, selection)
         assert caught.value.code == "SIMILARITY_CONTEXT_REQUEST_INVALID"
     exchange.assert_not_called()
+
+
+@pytest.mark.parametrize("family", ("1.0", "2.0"))
+@pytest.mark.parametrize("failure", ("SOURCE_REVOKED", "transport"))
+def test_full_population_read_has_one_finite_scoped_deadline(
+    monkeypatch, tmp_path, family, failure
+):
+    request, _reply = pair()
+
+    def exchange(_endpoint, document, **limits):
+        # A complete population read is not the short QUERY preparation RPC.
+        assert limits == {
+            "request_limit": MAX_SIMILARITY_READ_FRAME_BYTES,
+            "reply_limit": MAX_SIMILARITY_READ_FRAME_BYTES,
+            "timeout": 90.0,
+        }
+        if failure == "transport":
+            raise ChatTransportError("finite deadline expired")
+        return {
+            "schema_version": f"system-rag-similarity-read-reply/{family}",
+            "operation": "READ_SIMILARITY_CONTEXT",
+            "status": "FAILED",
+            "actor_id": document["actor_id"],
+            "request_sha256": content_sha256(document),
+            "result": None,
+            "error_code": failure,
+        }
+
+    transport = Mock(side_effect=exchange)
+    monkeypatch.setattr(client_module, "exchange_chat_frame", transport)
+    client = CatalogSimilarityContextClient(
+        ChatSocketEndpoint(tmp_path / "unused.sock", os.getuid(), os.getgid())
+    )
+    read = client.read if family == "1.0" else client.read_v2
+    with pytest.raises(SimilarityContextClientError) as caught:
+        read(request.actor_id, request.selection)
+    assert caught.value.code == (
+        "SIMILARITY_CONTEXT_UNAVAILABLE" if failure == "transport" else failure
+    )
+    transport.assert_called_once()
