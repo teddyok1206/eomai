@@ -82,13 +82,20 @@ def _directory(
     if not path.is_absolute() or ".." in path.parts or Path("/mnt/nas") in (path, *path.parents):
         raise CpuHandoffError("INFERENCE_CPU_DIRECTORY_INVALID")
     opened: list[tuple[int, int | None, str, os.stat_result]] = []
-    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    leaf_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    # Ancestors need traversal, not listing. Preserve 0711 namespace privacy;
+    # the yielded leaf remains readable for existing fsync/scandir callers.
+    ancestor_flags = os.O_PATH | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
     try:
-        descriptor = os.open(path.root, flags)
+        descriptor = os.open(path.root, leaf_flags if len(path.parts) == 1 else ancestor_flags)
         opened.append((descriptor, None, path.root, os.fstat(descriptor)))
-        for member in path.parts[1:]:
+        for index, member in enumerate(path.parts[1:], 1):
             parent = descriptor
-            descriptor = os.open(member, flags, dir_fd=parent)
+            descriptor = os.open(
+                member,
+                leaf_flags if index == len(path.parts) - 1 else ancestor_flags,
+                dir_fd=parent,
+            )
             opened.append((descriptor, parent, member, os.fstat(descriptor)))
         for _fd, _parent, _member, value in opened:
             sticky_root = value.st_uid == _ROOT_UID and bool(value.st_mode & stat.S_ISVTX)

@@ -179,3 +179,18 @@
   소스 재인가·여섯 실행·실제 token witness/수치·성능 판정은 기존 owner/worker가 그대로 맡는다.
 - 새 준비/replay/identity/root6회 제어 비교 회귀31 PASS. 실험 wrapper의 Ruff·format·mypy
   검증과 실제 모델 비교는 분리한다. source PASS만으로 GPU 우수나 기본값 전환을 승인하지 않는다.
+
+### 16:24 UTC 원 publication 완료 후 연결 경로 결함
+
+- 실제 새 인증·source 재인가, 준비 cache 재사용과 input/policy publication이 성공했다.
+  owner는 root listener의 read-only 사전 검사에서60초 뒤 종료했고, 그 후 root가 이미 종료 중인
+  owner의 proc 메타데이터를 검사하며 출력한 오류는 2차 증상이다. native 모델 unit은 시작 전이다.
+- `/run/eom-incremental-embeddings`는 의도된 root0711이다. owner는 통과할 수 있지만 목록을
+  읽을 수 없다. 공통 protected-directory adapter가 모든 ancestor를 `O_RDONLY`로 열어,
+  정상적인 통과 전용 ancestor에서 실패하는 결함을 조사한다. 접근 권한이나 validator를
+  완화하지 않고 ancestor만 `O_PATH|O_DIRECTORY|O_NOFOLLOW`로 열고 실제 leaf는 기존
+  `O_RDONLY`를 유지하는 수정과 커널 회귀가 필요하다.
+- 책임은 Orchestrator filesystem adapter이며 source는 실제 열린 directory FD와 inode다.
+  기존 owner/root/mode 및 종료 시 named inode 재검사, O(depth) FD/time, leaf의 fsync/read,
+  symlink·writable ancestor·rename 거부는 유지한다. 새 schema/DB/queue/Artifact identity는 없다.
+  read 권한 확대보다 통과용 FD를 사용하는 것이 작고 정확한 수정이다.
