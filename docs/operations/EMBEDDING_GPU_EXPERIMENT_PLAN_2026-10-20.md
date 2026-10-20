@@ -238,3 +238,35 @@
   supervisor `70393f7e22efce8a3fc2381e575ac98823275f3293756319120c0cc7f0c43ee0`.
   원 benchmark/revision/input/policy/publication time와 모델·실행 기준은 그대로다.
   실제6회·수치/속도/메모리·공존·기본값 판정은 아직 PENDING이며 기본 CPU는 유지한다.
+
+### 17:33 UTC 최초 오류 위치 및 source identity 호환 수정 설계
+
+- 실제 v5 로그의 최초 frame은 Catalog `embedding_benchmark_sources.py:170`이다.
+  로그인·source capture·publication replay·listener 모두 성공했고, 실행 Job을 배정하기 전
+  report basis와 재인가된 Graph source를 비교하다 거부했다. 이후 root proc 오류와 구분한다.
+- 실제 Graph는 원문 페이지/검수 acceptance를 포함한 V3 subtype을 재인가하지만, 기존 accepted
+  solution profile은 같은 Item/member의 V2 core source를 pin한다. 전체 Pydantic 객체 동등성은
+  같은 immutable Item/member라도 subtype/추가 lineage 때문에 false다. 두 형태를 주는 새
+  회귀2건이 실제와 같은170행에서 실패했고, 나머지 기존/거부 회귀28건은 PASS했다.
+- 책임은 Catalog benchmark source admission이다. canonical source는 기존 GraphRAG resolver의
+  현재 실제 actor에 대한 완전한 source 인가이며 profile은 accepted report의 파생 pointer다.
+  Item ID/revision/member의 schema/media/hash와 lifecycle core는 기존 공통
+  `same_approved_item_source_identity`로 비교한다. request가 V3를 pin했다면 admitted V3의
+  모든 page/acceptance/layout/bundle도 반드시 객체 전체가 같아야 한다. V3를 V2로 낮춰서
+  바뀐 lineage를 허용하지 않는다. V2-only predecessor는 본래 계약에 담은 core를 비교하고
+  실제 V3의 권한/lineage 검증은 기존 공식 resolver에서 그대로 수행한다.
+- 새 schema·DB·queue·request/input/policy bytes·역사적 Artifact 변경은 없다. 기존 map lookup과
+  O(6) source closure, 짧은 root transaction/종료 재인가/동일 요청 replay를 유지한다.
+  단순 equality를 제거하거나 전체 source를 무조건 V2로 변환하는 대안은 V3 pin을 잃으므로
+  사용하지 않는다. 실제 운영 재실행 전 source/negative lineage 회귀를 먼저 닫는다.
+- Main source 회귀86 PASS. 동일 변경만 이전933 owner SDK에 backport한
+  `c535b50bae8fe4dd209da1884724f84b49485e6e`도 호환 SDK import로86 PASS했다.
+  최초 backport pytest의 ambient 최신 workflow/과거 contracts 혼합 collection 실패는
+  source-only 변경이 아니라 test import 환경 불일치였고, 전체 compatible SDK를 지정해 해소했다.
+  Ruff/format 및 두 source의 strict mypy PASS; 임시 wrapper40 PASS다.
+- 기존 installer로 backport를 별도 root-owned release에 설치했다. 원 numerical CPU/CUDA,
+  API/INDEX/QUERY, frozen source/input/policy/실패 이력은 그대로다.
+  platform wheel SHA `344aa230a12c5f6f996cc5714757bad862ed28d34d872689c3948a285c21f8ae`,
+  installed RECORD `1ed34a60936d251c878a800ad507638a89ba4f492433df37862bd10769bef87b`.
+  새 helper/benchmark admission을 포함한11개 경계 member의 실제 bytes를 시작 시 검증한다.
+  v6 준비는 source admission 수정의 운영 적용이며, 실제 비교 PASS나 GPU 기본값 변경은 아니다.
