@@ -43,9 +43,11 @@ INDEX·QUERY 연결의 Codex 풀이 호출은0이며 외부 LLM API는 사용하
   기존 실행기의 claim·lease·checkpoint·완료 연결을 구현했습니다.
 - **임시 DB 검증:** 새0058 migration 설치·되돌리기·재설치, 기반131개, 실행 회귀241개,
   동시 요청·재전송·protocol25개가 통과했습니다. 테스트 묶음은 겹치므로 합산하지 않습니다.
-- **실제 운영 구성:** API·Chat은 `66f387bf`/DB0058을 유지합니다. QUERY와 Catalog는
+- **실제 운영 구성:** API application은 `60af9e5d`, 공유 platform/API contracts와 Chat은
+  `66f387bf`/DB0058입니다. QUERY와 Catalog는
   중복 해석·종료 신호 결함을 수정한 호환 cold SDK `2eef9b20`으로 선택했습니다.
-  API provider66·원 Graph/policy/model·INDEX e013은 바꾸지 않았습니다.
+  QUERY의 실제 API provider pin도 App60af9e5d에 맞췄고, 원 Graph/policy/model·INDEX e013은
+  바꾸지 않았습니다. 서로 다른 component source를 동일 commit으로 표시하지 않습니다.
   Graph 출판은 별도 SDK `a67fa784`의 공개 Identity fence로 성공했습니다. 원 요청과
   승인된 분석/검토 근거를 유지하며 새 Graph `graphrev_8f3ff9…`를 등록했습니다.
 - **최신 색인 실행기:** 혼합 완료 결과의 계열 검사 결함을 수정한 `e013d350`을
@@ -82,8 +84,11 @@ INDEX·QUERY 연결의 Codex 풀이 호출은0이며 외부 LLM API는 사용하
   module closure487개와 회귀68개, 설정 변환4개를 통과했습니다. API·QUERY·INDEX의
   PID/선택은 보존했습니다. 최종 사용자 READ 성공을 아직 주장하지 않습니다.
   Catalog2eef에서도 전체 READ가 약1분으로 측정돼30초 연결 제한을 넘었습니다.
-  조회 adapter에만90초의 유한 budget을 적용하는 후보가 관련132개 회귀를 통과했습니다.
-  이는 속도 향상이나 실제 조회 PASS가 아니며 component 배포·최종 읽기는 별도 검증합니다.
+  조회 adapter에만90초의 유한 budget을 적용한 App60af9e5d가 관련132개 회귀를 통과해
+  실제 선택됐습니다. App wheel만 교체했고 platform/contracts·Catalog·INDEX·Chat은
+  보존했습니다. API LIVE/READY 및 QUERY READY, 원 key/plan을 유지한 최종 도구55개가
+  통과했습니다. 이는 속도 향상이나 실제 사용자 조회 PASS가 아니며, 새 로그인 후
+  최종 READ/VECTOR/역사 replay는 별도 검증합니다.
   [제한시간 진단 기록](docs/operations/REFERENCE_QUERY_PREPARATION_TIMEOUT_2026-10-20.md)을
   참고하세요. 사용하지 않는 fresh primary V1-on-new-Graph는 NOT_RUN이며 이번
   종료 범위가 아닙니다. 전체 V1·Chat 호환성으로 확대하지 않습니다. 상세 이력과 정본

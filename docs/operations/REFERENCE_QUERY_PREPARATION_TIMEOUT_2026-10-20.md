@@ -358,3 +358,65 @@ rollback은 같은 두 service를 정상 중지한 뒤 이전 API wheel 및 보�
 bytes를 복구하고 검증하는 절차다. Item/Graph/index/QUERY 출력·session DB는 삭제하거나
 성공으로 보정하지 않는다. 새 API 실제 source로 최종 검증 client의 예상 installed source만
 고정하고, 원 historical/mixed request bytes·key·hash와600/900초 제한은 그대로 유지한다.
+
+## 04:22–04:26 API component 선택과 운영 복구
+
+실제 candidate는 `60af9e5dd498c48fb6d6e701a47b85507a9cf402`다. 공식 build-only의
+RECORD 검증과 설치66 App wheel의 member diff를 확인했다. 차이는
+`eom_api/services/similarity_context_client.py`, `eom_api/build-info.json`, wheel RECORD
+세 개뿐이다. 새 App wheel raw SHA는
+`d35f836b1df16f71d4b4bf5fedd3128878fe00c46010d0e4251f8f9fd8eca7e2`다.
+기존 App wheel `27270fda…` 및 네 provider 파일의 before/after bytes와 manifest를
+root-owned `/var/lib/eom-api-deadline-60af9e5d-v2/`에 보존했다.
+
+운영 helper의 최초 read-only 사전검사는 기존 Conda/build 폴더의0775와 맞지 않아
+package 교체 전에 거부됐다. 서버 ACL을 바꾸지 않았다. 입력 파일은 독립 wheel/hash로
+확인하고 전체 parent를 O_NOFOLLOW descriptor로 걷도록 사전검사를 바로잡았다.
+symlink parent/member·hardlink·크기 초과와 설정 drift를 포함한 최종7개 테스트가 PASS다.
+앞선 거부 기록과 helper bytes도 별도로 보존했다.
+
+04:22:09 UTC API와 유휴 QUERY만 정상 stop하여 PID0/inactive/Result=success를 확인했다.
+실제 실행 중 native QUERY unit은0이었다. 강제 종료·INDEX/모델 중단은 없다. 명시적 Conda에
+App package 하나만 `--no-index --no-deps --no-compile`로 교체했다. 첫 pip은 주변 umask002를
+이어받아 새 App member가0664였다. 설치 source/바이트와 비활성 상태를 확인한 뒤 동일
+고정 wheel을 umask022로 한 번 더 설치해 기존0644/0755를 복구했다. 두 설치는 구분해
+보존하며 이를 모델/Workflow 재실행이나 첫 설치의 검증 PASS로 표현하지 않는다.
+
+provider selection은 네 공개 파일을 모두 선택한 뒤, 마지막 audit 작성에서 기존 deployment
+record의 소유자가 helper 가정과 달라 거부됐다. 소비한 select.intent를 재실행하지 않았다.
+네 실제 파일의 after SHA가 모두 manifest와 일치함을 확인했고 API를 기동했다. 이후 고정
+App wheel/전체 정적 member/RECORD와 불변 platform·contracts receipts, 동일12 code pin,
+동일 api.yaml hash를 별도 재확인해 **audit metadata만** 마무리했다. 원 deployment record는
+수정하지 않았다. 새 `component-deployment.json`의 raw SHA는
+`1a360c3b67b3ca094ff40ed03a72d060c0c666475518b51c5a9951db3d8e606c`다.
+
+| Component | 실제 선택 / 관측 |
+|---|---|
+| API application |60af9e5d, PID382502, invocation4eac1e7b0a284ce48355bf9b4ed0692f|
+| 공유 platform / API contracts |원66f387bf, 두 RECORD/direct_url SHA 그대로|
+| QUERY owner / API provider |SDK2eef9b20 / 실제 App60af9e5d, PID382903, invocationc9821117de944932b6e7ea4e348e2443|
+| Catalog |SDK2eef9b20, PID353401 / invocationaf236f6b12774b6eb5a7d4c44f1236dc 그대로|
+| INDEX21 |e013d350, PID89255 / invocation1ad76d6abfd6491f91b68b832025d5b5 그대로|
+| Chat owner / worker |66f387bf, PID4173499/4173498와 invocation 그대로|
+
+API는04:23:19 UTC 재기동했고 LIVE/READY다. QUERY도04:24:34.239268 UTC 실제 READY,
+NRestarts0 / Result=success다. DB0058·Graph/policy/model/기출520·벡터·원 QUERY output은
+변경하지 않았다. 새 grant/schema/migration·외부 API·worker 인증 복사도 없다. 이후 공용
+release를 설치할 때는 이 App-only component receipt와 Catalog의 PYTHONPATH 선택을
+반드시 inventory하고 각각의 source를 묵시적으로 동일 commit으로 표시하지 않는다.
+
+### 새 실제 사용자 검증 준비 — 아직 전체 완료 아님
+
+원 client SHA22ca49…와 plan SHAfb3f3e…는 그대로다. local successor wrapper는
+현재 설치/HTTP source 확인 두 곳만60af9e5d로, READ의 outer HTTP budget만120초로
+선택한다. 원 plan의 source66, mixed/history 요청·key·hash, auth/refresh,600초,
+target 자체 VECTOR 및 read_twice equality는 바꾸지 않는다. wrapper SHA는
+`753dab1378ac3ad24f63ee36a840e4915bc0cf452749d416bb59be339384b2b0`다.
+
+이전48개 도구 테스트 중3개는 승인 전 DRAFT=true를 전제로 하므로 현재 승인된 원 client에
+그대로 적용하면3 FAIL/나머지45 PASS다. 이 결과를 보존한다. successor에서는 DRAFT를
+명시한 fixture와 원 plan/hash 검사를 추가했고, 변경된 함수가 exchange/main/run뿐임을
+AST로 검증했다. 최종 successor10개+기존 적용 가능한45개는55 PASS, 승인 전 전용3개는
+명시적 deselect다. core132 PASS와 합산하지 않는다. 설치 API60에서 실제 no-auth plan
+검사도 PASS(HTTP0/login0)다. 현재 tmux EOM:2의 원 요청 검증이 실제 로그인 입력을
+기다린다. 성공한 새 READ/VECTOR/역사 replay 증거 전에는 전체 목표를 완료로 표시하지 않는다.
