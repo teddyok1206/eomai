@@ -224,3 +224,14 @@ API4172613·Catalog4172610·INDEX89255와 각 InvocationID는 그대로 유지�
 기존 사용자 로그인은 실제 성공했지만30초503 뒤 원 client finally에서 메모리 세션을
 종료했다. 새 실제 로그인 전에는 source·서비스 검증을 HTTP 사용자 검증이나 전체 목표
 완료로 확대하지 않는다. 실제 준비·검색·두 번 read·원 key replay 및 V1 역사 요청만 남는다.
+
+두 번째 기동도03:16:19.788691 UTC READY다. 현재 parent332030,
+invocation `0fac6053d0a947909d19ed71dffe14d0`, source2eef, NRestarts0 / Result=success다.
+API/provider66·Catalog66·INDEX e013을 유지하는 compatible set이며 새 Graph/model 실행은
+없다. Slack RECOVERED `devreport_82eb83b8e0e04d38a988fd6d3b742fb5`로 실제 복구 및
+남은 사용자 HTTP gate를 보고했다. 선행 report에서 cleanup PASS 표기가 실제 확인보다
+앞섰던 항목은 후속 공식 cleanup receipt(`fead9c55…`)로 확인해 정정한다.
+
+tmux `EOM:2 rag-incremental`에서 원 client SHA22ca49…와 plan SHAfb3f3e…를 그대로
+실행했다. 초기 진단용 self-pause bootstrap 대신 원 검증 client를 사용한다. 로그인 입력
+전 no-auth gate는 성공했고, 실제 로그인은 원600초/인증 freshness를 바꾸지 않는다.
