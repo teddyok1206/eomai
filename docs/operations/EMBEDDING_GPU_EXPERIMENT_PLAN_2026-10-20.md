@@ -81,3 +81,39 @@
   6회 제어 순서가 동일하다는 AST 회귀를 포함했다. 새 production service는 추가하지 않는다.
 - 준비 진단·검사 기록: `/tmp/eom-gpu-experiment-20261020.9jWy7rO3`.
   아직 실제6회와 GPU 기본값 전환은 수행하지 않았다.
+
+### 14:33 UTC 재개 전 확인
+
+- 추가 측정/수치/최종화/driver/relay 소스 회귀140개가 모두 통과했다
+  (`measurement-source-gate.xml`, failures/errors/skips=0). 실제 장치 측정 증거는 아니다.
+- 첫 controller는 Studio 비밀번호 입력을 기다리다 한 시간 제한으로 종료됐다
+  (`Result=timeout`, 원 invocation `b0a53293f8044c42a2757ca04e85b054`).
+  실패 이력을 유지하며 성공으로 바꾸거나 해당 unit을 초기화하지 않는다.
+- 재개 시 read-only inventory에서 원 input/policy/measurement Job은 여전히0건,
+  원 CPU 설치와 API provider12개 바이트 대조는 PASS였다. GPU 사용2MiB/0%,
+  compute process 없음; tokenizer unit은 not-found, 원 controller MainPID=0이다.
+- 보호된 원 selection/operator 바이트는 그대로 사용하고, terminal controller와
+  구별되는 새 controller invocation만 준비한다. 원 benchmark/revision/publication key,
+  모델·표본·여섯 실행 순서와 수치/시간 제한은 변경하지 않는다.
+- 현재 `SIX_MODEL_RUNS=NOT_STARTED`, `DEFAULT_DEVICE=CPU`다.
+
+### 14:41 UTC 실제 로그인 후 bootstrap 오류
+
+- 실제 로그인·Identity FD capture·원 source 재인가는 성공했다. tokenizer 입장 전에
+  root가 child의 `/proc/<pid>/stat` 소유자를 검사하다 `INSTALLED_RUNTIME_FILE_UNPROTECTED`로
+  중단했다. 기존 validator를 완화하거나 원 Job을 성공 처리하지 않는다.
+- 별도 무인증 커널 재현에서 원인을 확인했다: 이 호스트 `fs.suid_dumpable=2`이며 root에서
+  UID990으로 내린 fork child의 proc 파일은 UID0으로 남는다. UID/GID/capability를 내린 뒤
+  해당 child만 일반 비특권 exec와 같은 dumpability1로 설정하면 proc 소유자990과 기존
+  identity validator가 일치하고, 잘못된 UID/GID는 계속 거부된다. 모델·DB·로그인 실행0.
+- 수정 책임은 임시 finite operator의 privilege-drop bootstrap이다. 정본 데이터,
+  설치된 production validator/SDK/native worker, 전역 sysctl이나 접근 정책은 변경하지 않는다.
+  child의 실제 nonroot UID/GID·groups·NoNewPrivs·capabilities를 확인한 뒤에만 설정하며,
+  실제 자기 identity 검사를 로그인 **이전**에 수행한다. core dump limit0은 유지한다.
+- dumpability1은 같은 OS identity의 일반 서비스와 동일한 관찰 가능성을 갖는다.
+  현재 Yama ptrace_scope1과 사용자 분리, NoNewPrivs, capability 제거 및 기존 sandbox는
+  유지한다. 이 조정은 root/worker 권한 추가 또는 credential 저장/복사 허가가 아니다.
+- 수정된 보호 operator 자체를 호출한 무인증 커널 재현도 PASS였다
+  (`fork-identity-proof-v3.jsonl`): proc 소유자0→990, 기존 identity validator PASS,
+  잘못된 UID/GID 거부. 합성 operator 회귀15 PASS에는 root/capability 보유 상태의
+  조정 금지, 실제 read-back 요구와 로그인 전 identity 검사 순서를 포함한다.
