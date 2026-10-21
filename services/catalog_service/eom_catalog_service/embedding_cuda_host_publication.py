@@ -506,6 +506,218 @@ def _reused(request: CudaHostPublicationRequest, final: Path) -> capture.CudaHos
     return pointer
 
 
+def _retained_stat(path: Path, mode: int, *, kind: Literal["FILE", "DIRECTORY"]) -> os.stat_result:
+    value = path.lstat()
+    _require(
+        (stat.S_ISREG(value.st_mode) if kind == "FILE" else stat.S_ISDIR(value.st_mode))
+        and value.st_uid == _ROOT_UID
+        and stat.S_IMODE(value.st_mode) == mode
+        and (kind == "DIRECTORY" or value.st_nlink == 1)
+        and not {
+            "system.posix_acl_access",
+            "system.posix_acl_default",
+            "security.capability",
+        }.intersection(os.listxattr(path, follow_symlinks=False)),
+        "RETAINED_PERMISSION_INVALID",
+    )
+    return value
+
+
+def _capture_retained_publication(
+    request: CudaHostPublicationRequest,
+    pointer: capture.CudaHostExtensionPin,
+    base: base_capture.CapturedHostConfiguration,
+    workspace: Path,
+    final: Path,
+) -> NumericalRuntimeFileSnapshots:
+    """Verify only the existing fixed builder tree; never rebuild or read source libraries."""
+    recipe = capture.cuda_host_library_recipe(request.schema_ref)
+    stage = workspace / "revision"
+    files = NumericalRuntimeFileSnapshots(_ROOT_UID)
+    _retained_stat(stage / "snapshot.json", 0o444, kind="FILE")
+    raw = files.read(
+        stage / "snapshot.json",
+        sha256=pointer.manifest_raw_sha256,
+        size=pointer.manifest_byte_count,
+        maximum=8192,
+    )
+    manifest = capture._manifest(raw, pointer)
+    _require(
+        manifest.base_pin == request.base_configuration
+        and manifest.base_seed == base.host_seed_sha256
+        and manifest.driver_release == _DRIVER,
+        "RETAINED_REVISION_CONFLICT",
+    )
+    modes = {stage / "snapshot.json": 0o444, stage / "ld.so.cache": 0o444}
+    for library, (_role, name, maximum) in zip(manifest.libraries, recipe.libraries, strict=True):
+        _physical, size, sha = _SOURCES[library.role]
+        _require(
+            library.byte_count == size and library.sha256 == "sha256:" + sha,
+            "RETAINED_REVISION_CONFLICT",
+        )
+        path = stage / name
+        modes[path] = 0o444
+        _retained_stat(path, 0o444, kind="FILE")
+        files.verify(path, sha256="sha256:" + sha, size=size, maximum=maximum)
+    _retained_stat(stage / "ld.so.cache", 0o444, kind="FILE")
+    cache = files.read(
+        stage / "ld.so.cache",
+        sha256=manifest.cache_sha256,
+        size=manifest.cache_byte_count,
+        maximum=128 * 1024,
+    )
+    capture.validate_cuda_host_loader_cache(cache, final, schema_ref=request.schema_ref)
+
+    build = workspace / "build"
+    placeholders = {
+        build / Path(route).relative_to("/")
+        for _name, route in host.embedding_host_loader_cache_routes()
+    }
+    placeholders.update(
+        build / (final / name).relative_to("/") for _role, name, _maximum in recipe.libraries
+    )
+    modes.update(dict.fromkeys(placeholders, 0o444))
+    modes.update(
+        {
+            workspace / "ldconfig.real": 0o500,
+            workspace / "unit-name": 0o600,
+            workspace / "cache-unit-outcome.json": 0o600,
+            workspace / "cache-unit.stderr": 0o600,
+            build / "etc/ld.so.conf": 0o444,
+            build / "etc/ld.so.cache": 0o644,
+            build / "var/cache/ldconfig/aux-cache": 0o600,
+        }
+    )
+    directories = {workspace, stage, build / "lib", build / "usr/lib"}
+    for member in modes.keys() | directories:
+        parent = member.parent
+        while parent.is_relative_to(workspace):
+            directories.add(parent)
+            if parent == workspace:
+                break
+            parent = parent.parent
+    children: dict[Path, set[Path]] = {path: set() for path in directories}
+    for member in modes.keys() | directories:
+        if member != workspace:
+            children[member.parent].add(member)
+    initial_directories = {}
+    for directory, expected in children.items():
+        initial_directories[directory] = _identity(
+            _retained_stat(directory, 0o700, kind="DIRECTORY")
+        )
+        observed: set[Path] = set()
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                member = directory / entry.name
+                _require(member in expected and len(observed) < len(expected), "MEMBER_SET_INVALID")
+                observed.add(member)
+        _require(observed == expected, "MEMBER_SET_INVALID")
+    initial_members = {
+        path: _identity(_retained_stat(path, mode, kind="FILE")) for path, mode in modes.items()
+    }
+    for path in placeholders:
+        files.read(path, sha256=_hash(b""), size=0, maximum=1)
+    _tool, size, sha = _TOOL
+    files.verify(
+        workspace / "ldconfig.real", sha256="sha256:" + sha, size=size, maximum=8 * 1024**2
+    )
+    metadata = {
+        workspace / "unit-name": (_UNIT + "\n").encode(),
+        workspace / "cache-unit-outcome.json": _canonical(
+            {
+                "unit": _UNIT,
+                "scope": "CACHE_ONLY_NOT_NATIVE_ADMISSION",
+                "returncode": 0,
+                "state": "SUCCEEDED",
+            }
+        ),
+        build / "etc/ld.so.conf": ("/lib/x86_64-linux-gnu\n" + str(final) + "\n").encode(),
+        build / "etc/ld.so.cache": cache,
+    }
+    for path, expected_raw in metadata.items():
+        files.verify(path, sha256=_hash(expected_raw), size=len(expected_raw), maximum=128 * 1024)
+    # Diagnostics and the unused auxiliary cache are bounded retained evidence,
+    # not publication authority. Neither is interpreted or rewritten here.
+    for path in (workspace / "cache-unit.stderr", build / "var/cache/ldconfig/aux-cache"):
+        _require(path.lstat().st_size <= 128 * 1024, "RETAINED_EVIDENCE_SIZE_INVALID")
+        files.observe_protected_member_identity(path)
+    files.require_closed_namespaces({workspace}, set(modes))
+    for path, initial in initial_directories.items() | initial_members.items():
+        _require(_identity(path.lstat()) == initial, "RETAINED_CHANGED")
+    files.assert_unchanged()
+    return files
+
+
+def _commit_revision(stage: Path, final: Path) -> None:
+    os.rename(stage, final)
+    # Cross-parent rename needs write access to its '..' update until the move.
+    final.chmod(0o555)
+    for directory in (final, stage.parent, final.parent):
+        descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+
+def complete_cuda_host_extension_publication(
+    request: CudaHostPublicationRequest, expected_pointer: capture.CudaHostExtensionPin
+) -> CudaHostPublicationResult:
+    """Commit an exact retained complete stage, without rerunning its failed process."""
+    _require(os.geteuid() == _ROOT_UID, "OWNER_REQUIRED")
+    _require(
+        type(request) is CudaHostPublicationRequest
+        and type(expected_pointer) is capture.CudaHostExtensionPin,
+        "INPUT_INVALID",
+    )
+    request.__post_init__()
+    expected_pointer.__post_init__()
+    _require(
+        (
+            expected_pointer.schema_ref,
+            expected_pointer.configuration_id,
+            expected_pointer.configuration_revision_id,
+        )
+        == (request.schema_ref, request.configuration_id, request.configuration_revision_id),
+        "INPUT_INVALID",
+    )
+    with _lock():
+        _directory(_ROOT)
+        logical = _ROOT / request.configuration_id
+        final = logical / request.configuration_revision_id
+        _require_cache_unit_quiescent()
+        base = base_capture.resolve_host_configuration_snapshot(request.base_configuration)
+        if final.exists() or final.is_symlink():
+            pointer = _reused(request, final)
+            _require(pointer == expected_pointer, "EXISTING_REVISION_CONFLICT")
+            base.assert_unchanged()
+            return CudaHostPublicationResult(pointer, "REUSED")
+        publication = _ROOT / ".publication"
+        private_logical = publication / request.configuration_id
+        workspace = private_logical / request.configuration_revision_id
+        boundaries = {
+            path: _identity(_retained_stat(path, mode, kind="DIRECTORY"))
+            for path, mode in (
+                (_ROOT, 0o755),
+                (logical, 0o755),
+                (publication, 0o700),
+                (private_logical, 0o700),
+            )
+        }
+        files = _capture_retained_publication(request, expected_pointer, base, workspace, final)
+        _require_cache_unit_quiescent()
+        base.assert_unchanged()
+        files.assert_unchanged()
+        for path, initial in boundaries.items():
+            _require(_identity(path.lstat()) == initial, "DIRECTORY_CHANGED")
+        _require(not final.exists() and not final.is_symlink(), "EXISTING_REVISION_CONFLICT")
+        _commit_revision(workspace / "revision", final)
+        # Stage-path epochs necessarily changed at the commit boundary. Resolve
+        # the immutable final namespace afresh instead of laundering those epochs.
+        capture.resolve_cuda_host_extension(expected_pointer).assert_unchanged()
+        return CudaHostPublicationResult(expected_pointer, "CREATED")
+
+
 def publish_cuda_host_extension(
     request: CudaHostPublicationRequest,
 ) -> CudaHostPublicationResult:
@@ -601,15 +813,7 @@ def publish_cuda_host_extension(
         _write(stage / "snapshot.json", raw)
         base.assert_unchanged()
         _require(len(tuple(stage.iterdir())) == len(recipe.libraries) + 2, "MEMBER_SET_INVALID")
-        os.rename(stage, final)
-        # Cross-parent directory rename needs write access to its '..' update.
-        # Keep it private0700 until the complete immutable file set has moved.
-        final.chmod(0o555)
-        parent = os.open(logical, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
-        try:
-            os.fsync(parent)
-        finally:
-            os.close(parent)
+        _commit_revision(stage, final)
         capture.resolve_cuda_host_extension(pointer).assert_unchanged()
         return CudaHostPublicationResult(pointer, "CREATED")
 

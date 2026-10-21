@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import errno
 import fcntl
 import hashlib
+import json
 import os
 import subprocess
 from dataclasses import replace
@@ -461,3 +463,385 @@ def test_late_base_snapshot_drift_preserves_workspace_without_publishing(tmp_pat
     assert (
         root / ".publication" / request.configuration_id / request.configuration_revision_id
     ).is_dir()
+
+
+def retained_fixture(tmp_path, monkeypatch, *, schema_ref=capture.CUDA_HOST_NVML_SCHEMA_REF):
+    request, root, source, generated = fixture(
+        tmp_path, monkeypatch, schema_ref=schema_ref, reviewed=True
+    )
+    generate = publication._generate_cache
+
+    def complete_cache(workspace, final, stage, cpu_files, **kwargs):
+        raw = generate(workspace, final, stage, cpu_files, **kwargs)
+        build = workspace / "build"
+        for relative in ("etc", "var/cache/ldconfig", "lib", "usr/lib"):
+            publication._private_parents(workspace, build / relative)
+        publication._write(
+            build / "etc/ld.so.conf", ("/lib/x86_64-linux-gnu\n" + str(final) + "\n").encode()
+        )
+        recipe = capture.cuda_host_library_recipe(request.schema_ref)
+        bindings = tuple(
+            (source / "not-read", Path(route))
+            for _name, route in host.embedding_host_loader_cache_routes()
+        ) + tuple((stage / name, final / name) for _role, name, _maximum in recipe.libraries)
+        publication._prepare_cache_command(workspace, final, bindings)
+        publication._write(build / "etc/ld.so.cache", raw, mode=0o644)
+        publication._write(build / "var/cache/ldconfig/aux-cache", b"unused auxiliary", mode=0o600)
+        publication._write(workspace / "unit-name", (publication._UNIT + "\n").encode(), mode=0o600)
+        publication._write(workspace / "cache-unit.stderr", b"", mode=0o600)
+        publication._write(
+            workspace / "cache-unit-outcome.json",
+            publication._canonical(
+                {
+                    "unit": publication._UNIT,
+                    "scope": "CACHE_ONLY_NOT_NATIVE_ADMISSION",
+                    "returncode": 0,
+                    "state": "SUCCEEDED",
+                }
+            ),
+            mode=0o600,
+        )
+        return raw
+
+    monkeypatch.setattr(publication, "_generate_cache", complete_cache)
+
+    def cross_mount(*args):
+        raise OSError(errno.EXDEV, "synthetic mount boundary")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(publication.os, "rename", cross_mount)
+        with pytest.raises(OSError) as error:
+            publication.publish_cuda_host_extension(request)
+        assert error.value.errno == errno.EXDEV
+    workspace = root / ".publication" / request.configuration_id / request.configuration_revision_id
+    pointer = publication._pointer_from_raw(
+        request, (workspace / "revision/snapshot.json").read_bytes()
+    )
+    return request, pointer, workspace, root, source, generated
+
+
+def rewrite_retained(path, raw, mode):
+    _write(path, raw)
+    path.chmod(mode)
+
+
+@pytest.mark.parametrize(
+    "schema_ref", (capture.CUDA_HOST_SCHEMA_REF, capture.CUDA_HOST_NVML_SCHEMA_REF)
+)
+def test_explicit_completion_commits_same_identity_without_rebuilding_or_sources(
+    tmp_path, monkeypatch, schema_ref
+):
+    request, pointer, workspace, root, source, generated = retained_fixture(
+        tmp_path, monkeypatch, schema_ref=schema_ref
+    )
+    final = root / request.configuration_id / request.configuration_revision_id
+    original = {path.name: path.read_bytes() for path in (workspace / "revision").iterdir()}
+    evidence = (workspace / "cache-unit-outcome.json").read_bytes()
+    for path in source.iterdir():
+        path.unlink()
+    with pytest.raises(publication.CudaHostPublicationError, match="REQUIRES_RECONCILIATION"):
+        publication.publish_cuda_host_extension(request)
+    completed = publication.complete_cuda_host_extension_publication(request, pointer)
+    assert completed == publication.CudaHostPublicationResult(pointer, "CREATED")
+    assert len(generated) == 1 and not (workspace / "revision").exists()
+    assert final.stat().st_mode & 0o777 == 0o555
+    assert {path.name: path.read_bytes() for path in final.iterdir()} == original
+    assert (workspace / "cache-unit-outcome.json").read_bytes() == evidence
+    before = {path: publication._identity(path.lstat()) for path in final.iterdir()}
+    replay = publication.complete_cuda_host_extension_publication(request, pointer)
+    assert replay == publication.CudaHostPublicationResult(pointer, "REUSED")
+    assert {path: publication._identity(path.lstat()) for path in final.iterdir()} == before
+    assert len(generated) == 1
+
+
+@pytest.mark.parametrize("fault", ("raw", "semantic", "size", "revision", "schema", "untyped"))
+def test_completion_requires_exact_typed_snapshot_pointer(tmp_path, monkeypatch, fault):
+    request, pointer, workspace, root, _source, generated = retained_fixture(tmp_path, monkeypatch)
+    if fault == "raw":
+        pointer = replace(pointer, manifest_raw_sha256="sha256:" + "0" * 64)
+    elif fault == "semantic":
+        pointer = replace(pointer, snapshot_sha256="sha256:" + "0" * 64)
+    elif fault == "size":
+        pointer = replace(pointer, manifest_byte_count=pointer.manifest_byte_count - 1)
+    elif fault == "revision":
+        pointer = replace(pointer, configuration_revision_id="embeddingcudahostrev_" + "3" * 32)
+    elif fault == "schema":
+        pointer = replace(pointer, schema_ref=capture.CUDA_HOST_SCHEMA_REF)
+    else:
+        pointer = SimpleNamespace(**{name: getattr(pointer, name) for name in pointer.__slots__})
+    with pytest.raises(ValueError):
+        publication.complete_cuda_host_extension_publication(request, pointer)
+    assert (workspace / "revision").is_dir() and len(generated) == 1
+    assert not (root / request.configuration_id / request.configuration_revision_id).exists()
+
+
+@pytest.mark.parametrize(
+    "fault",
+    (
+        "missing",
+        "extra-file",
+        "extra-directory",
+        "payload",
+        "payload-mode",
+        "payload-link",
+        "payload-hardlink",
+        "directory-mode",
+        "tool",
+        "outcome",
+        "outcome-extra",
+        "outcome-bool",
+        "unit",
+        "builder-cache",
+        "builder-config",
+        "placeholder",
+        "aux-mode",
+        "diagnostic-size",
+    ),
+)
+def test_completion_rejects_partial_changed_or_unsafe_retained_tree(tmp_path, monkeypatch, fault):
+    request, pointer, workspace, root, _source, generated = retained_fixture(tmp_path, monkeypatch)
+    payload = workspace / "revision/libcuda.so.1"
+    if fault == "missing":
+        payload.unlink()
+    elif fault == "extra-file":
+        publication._write(workspace / "unexpected", b"extra")
+    elif fault == "extra-directory":
+        (workspace / "unexpected").mkdir(mode=0o700)
+    elif fault == "payload":
+        _write(payload, b"x" + payload.read_bytes()[1:])
+    elif fault == "payload-mode":
+        payload.chmod(0o644)
+    elif fault == "payload-link":
+        payload.unlink()
+        payload.symlink_to("libibverbs.so.1")
+    elif fault == "payload-hardlink":
+        (tmp_path / "second-link").hardlink_to(payload)
+    elif fault == "directory-mode":
+        (workspace / "revision").chmod(0o755)
+    elif fault == "tool":
+        rewrite_retained(workspace / "ldconfig.real", b"changed", 0o500)
+    elif fault.startswith("outcome"):
+        raw = (workspace / "cache-unit-outcome.json").read_bytes()
+        raw = (
+            raw.replace(b"SUCCEEDED", b"OUTCOME_UNKNOWN")
+            if fault == "outcome"
+            else raw.replace(b'"returncode":0', b'"returncode":false')
+            if fault == "outcome-bool"
+            else raw[:-1] + b',"extra":0}'
+        )
+        rewrite_retained(workspace / "cache-unit-outcome.json", raw, 0o600)
+    elif fault == "unit":
+        rewrite_retained(workspace / "unit-name", b"other.service\n", 0o600)
+    elif fault == "builder-cache":
+        rewrite_retained(workspace / "build/etc/ld.so.cache", b"changed", 0o644)
+    elif fault == "builder-config":
+        _write(workspace / "build/etc/ld.so.conf", b"other route")
+    elif fault == "placeholder":
+        path = workspace / "build/lib/x86_64-linux-gnu/libc.so.6"
+        _write(path, b"not empty")
+    elif fault == "aux-mode":
+        (workspace / "build/var/cache/ldconfig/aux-cache").chmod(0o644)
+    else:
+        rewrite_retained(workspace / "cache-unit.stderr", b"x" * (128 * 1024 + 1), 0o600)
+    with pytest.raises((ValueError, OSError)):
+        publication.complete_cuda_host_extension_publication(request, pointer)
+    assert (workspace / "revision").is_dir() and len(generated) == 1
+    assert not (root / request.configuration_id / request.configuration_revision_id).exists()
+
+
+@pytest.mark.parametrize(
+    "fault",
+    (
+        "request-base",
+        "compiled-library",
+        "driver",
+        "late-base",
+        "late-payload",
+        "active",
+        "late-active",
+    ),
+)
+def test_completion_rechecks_base_recipe_unit_and_late_epochs(tmp_path, monkeypatch, fault):
+    request, pointer, workspace, root, _source, generated = retained_fixture(tmp_path, monkeypatch)
+    calls = []
+
+    def quiescent():
+        calls.append(True)
+        if fault == "active" or (fault == "late-active" and len(calls) == 2):
+            raise publication.CudaHostPublicationError("CUDA_HOST_PUBLICATION_UNIT_NOT_QUIESCENT")
+        if len(calls) == 2 and fault == "late-payload":
+            _write(workspace / "revision/libcuda.so.1", b"late drift")
+        if len(calls) == 2 and fault == "late-base":
+            selected = base_capture.resolve_host_configuration_snapshot(request.base_configuration)
+            _write(selected.cache_path, b"late drift")
+
+    monkeypatch.setattr(publication, "_require_cache_unit_quiescent", quiescent)
+    if fault == "request-base":
+        request = replace(
+            request,
+            base_configuration=replace(
+                request.base_configuration, manifest_raw_sha256="sha256:" + "0" * 64
+            ),
+        )
+    elif fault == "compiled-library":
+        specs = dict(publication._SOURCES)
+        path, size, _sha = specs["CUDA_DRIVER"]
+        specs["CUDA_DRIVER"] = (path, size, "0" * 64)
+        monkeypatch.setattr(publication, "_SOURCES", specs)
+    elif fault == "driver":
+        monkeypatch.setattr(publication, "_DRIVER", "0.0.0")
+    with pytest.raises(ValueError):
+        publication.complete_cuda_host_extension_publication(request, pointer)
+    assert not (root / request.configuration_id / request.configuration_revision_id).exists()
+    assert (workspace / "revision").is_dir() and len(generated) == 1
+
+
+def test_completion_replay_rejects_conflicting_or_unsealed_final_without_repair(
+    tmp_path, monkeypatch
+):
+    request, pointer, workspace, root, _source, _generated = retained_fixture(tmp_path, monkeypatch)
+    publication.complete_cuda_host_extension_publication(request, pointer)
+    final = root / request.configuration_id / request.configuration_revision_id
+    with pytest.raises(publication.CudaHostPublicationError, match="EXISTING_REVISION_CONFLICT"):
+        publication.complete_cuda_host_extension_publication(
+            request, replace(pointer, manifest_raw_sha256="sha256:" + "0" * 64)
+        )
+    final.chmod(0o700)
+    with pytest.raises(publication.CudaHostPublicationError, match="EXISTING_REVISION_INCOMPLETE"):
+        publication.complete_cuda_host_extension_publication(request, pointer)
+    assert final.stat().st_mode & 0o777 == 0o700 and not (workspace / "revision").exists()
+
+
+def test_completion_uses_the_original_publication_lock(tmp_path, monkeypatch):
+    request, pointer, workspace, _root, _source, generated = retained_fixture(tmp_path, monkeypatch)
+    fd = os.open(publication._LOCK, os.O_RDWR | os.O_CLOEXEC)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with pytest.raises(publication.CudaHostPublicationError, match="BUSY"):
+            publication.complete_cuda_host_extension_publication(request, pointer)
+    finally:
+        os.close(fd)
+    assert (workspace / "revision").is_dir() and len(generated) == 1
+
+
+def test_completion_rename_failure_retains_same_stage_and_never_regenerates(tmp_path, monkeypatch):
+    request, pointer, workspace, root, _source, generated = retained_fixture(tmp_path, monkeypatch)
+    raw = (workspace / "revision/snapshot.json").read_bytes()
+
+    def cross_mount(*args):
+        raise OSError(errno.EXDEV, "synthetic mount boundary")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(publication.os, "rename", cross_mount)
+        with pytest.raises(OSError) as error:
+            publication.complete_cuda_host_extension_publication(request, pointer)
+        assert error.value.errno == errno.EXDEV
+    assert (workspace / "revision/snapshot.json").read_bytes() == raw
+    assert not (root / request.configuration_id / request.configuration_revision_id).exists()
+    assert publication.complete_cuda_host_extension_publication(request, pointer).pointer == pointer
+    assert len(generated) == 1
+
+
+def test_completion_rejects_valid_but_different_base_snapshot_selection(tmp_path, monkeypatch):
+    request, pointer, workspace, _root, _source, _generated = retained_fixture(
+        tmp_path, monkeypatch
+    )
+    base = base_capture.resolve_host_configuration_snapshot(request.base_configuration)
+    document = json.loads(base.snapshot_raw)
+    document["configuration_revision_id"] = "embeddinghostconfigrev_" + "3" * 32
+    document["snapshot_sha256"] = publication._hash(
+        publication._canonical(
+            {key: value for key, value in document.items() if key != "snapshot_sha256"}
+        )
+    )
+    raw = publication._canonical(document)
+    directory = base.cache_path.parent.parent / document["configuration_revision_id"]
+    directory.mkdir(mode=0o700)
+    _write(directory / "snapshot.json", raw)
+    _write(directory / "ld.so.cache", base.cache_path.read_bytes())
+    different = replace(
+        request.base_configuration,
+        configuration_revision_id=document["configuration_revision_id"],
+        manifest_byte_count=len(raw),
+        manifest_raw_sha256=publication._hash(raw),
+        snapshot_sha256=document["snapshot_sha256"],
+    )
+    base_capture.resolve_host_configuration_snapshot(different).assert_unchanged()
+    with pytest.raises(publication.CudaHostPublicationError, match="RETAINED_REVISION_CONFLICT"):
+        publication.complete_cuda_host_extension_publication(
+            replace(request, base_configuration=different), pointer
+        )
+    assert (workspace / "revision").is_dir()
+
+
+@pytest.mark.parametrize("fault", ("library", "cache-routes", "base-seed"))
+def test_completion_does_not_trust_internally_consistent_forged_stage_metadata(
+    tmp_path, monkeypatch, fault
+):
+    request, _pointer, workspace, _root, _source, _generated = retained_fixture(
+        tmp_path, monkeypatch
+    )
+    stage = workspace / "revision"
+    document = json.loads((stage / "snapshot.json").read_bytes())
+    if fault == "library":
+        raw = b"same-role-but-not-the-compiled-library"
+        _write(stage / "libcuda.so.1", raw)
+        document["libraries"][0].update(byte_count=len(raw), sha256=publication._hash(raw))
+    elif fault == "base-seed":
+        document["base_host_seed_sha256"] = "sha256:" + "0" * 64
+    else:
+        recipe = capture.cuda_host_library_recipe(request.schema_ref)
+        raw = _cache(
+            tuple(
+                (name, path, 0x303, 0, 0)
+                for name, path in (
+                    *host.embedding_host_loader_cache_routes(),
+                    *((name, str(stage / name)) for _role, name, _maximum in recipe.libraries),
+                )
+            )
+        )
+        _write(stage / "ld.so.cache", raw)
+        rewrite_retained(workspace / "build/etc/ld.so.cache", raw, 0o644)
+        document["loader_cache"].update(byte_count=len(raw), sha256=publication._hash(raw))
+    document["host_seed_sha256"] = publication._hash(
+        publication._canonical(
+            {
+                key: document[key]
+                for key in ("base_host_seed_sha256", "driver_release", "libraries", "loader_cache")
+            }
+        )
+    )
+    document["snapshot_sha256"] = publication._hash(
+        publication._canonical(
+            {key: value for key, value in document.items() if key != "snapshot_sha256"}
+        )
+    )
+    raw = publication._canonical(document)
+    _write(stage / "snapshot.json", raw)
+    pointer = publication._pointer_from_raw(request, raw)
+    capture._manifest(raw, pointer)
+    with pytest.raises(ValueError):
+        publication.complete_cuda_host_extension_publication(request, pointer)
+    assert stage.is_dir()
+
+
+@pytest.mark.parametrize("fault", ("metadata-mode", "directory-mode"))
+def test_completion_brackets_exact_permissions_before_first_metadata_epoch_capture(
+    tmp_path, monkeypatch, fault
+):
+    request, pointer, workspace, root, _source, _generated = retained_fixture(tmp_path, monkeypatch)
+    verify = publication.NumericalRuntimeFileSnapshots.verify
+    changed = []
+
+    def changed_before_capture(self, path, **kwargs):
+        if path == workspace / "unit-name":
+            target = path if fault == "metadata-mode" else workspace / "build/usr/lib"
+            target.chmod(0o644 if fault == "metadata-mode" else 0o755)
+            changed.append(target)
+        return verify(self, path, **kwargs)
+
+    monkeypatch.setattr(publication.NumericalRuntimeFileSnapshots, "verify", changed_before_capture)
+    with pytest.raises(publication.CudaHostPublicationError, match="RETAINED_CHANGED"):
+        publication.complete_cuda_host_extension_publication(request, pointer)
+    assert len(changed) == 1 and (workspace / "revision").is_dir()
+    assert not (root / request.configuration_id / request.configuration_revision_id).exists()

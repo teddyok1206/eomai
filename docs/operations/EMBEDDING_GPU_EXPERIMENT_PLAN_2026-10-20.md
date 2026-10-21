@@ -568,3 +568,35 @@
   상태를, `devreport_63624820801c405888336c32a00552b0`에는 복구 완료를 한국어 요약 먼저
   보고했다. 다음 실제 CUDA 단계용 SDK072도 별도로 설치했지만 native prefix/GPU device/
   backend/default는 활성화하지 않았다. GPU 비교를 위해 Studio 재로그인을 아직 요구하지 않았다.
+
+### CUDA host34ed — retained complete stage, final rename recovery pending
+
+- 기존 source와 같은 일곱 library/driver580.126.09/tool을 실제 해시로 확인하고,072 SDK의
+  stdlib publication owner를 설치했다. original RDMA 파일의 private0700 부모/UID1000/
+  0444/단일 링크는 유지했다. root view는 원자적인 mkdir로 새로 예약하고 PID1 단일 파일
+  read-only bind로 제공했다. 실제 bound source device64512/inode9576921도 고정 검사했다.
+  root publication은 model/device/NAS/DB/secrets에 접근하지 않는다.
+- 실제 unit invocation `98588123156e4dc2b0f1df4e790bae19`는 일곱 payload, 새 cache,
+  snapshot을 완성했지만 마지막 `os.rename(stage, final)`에서 EXDEV로 실패했다.
+  원인은 outer unit의 두 별도 ReadWritePaths bind mount였다. underlying device가 같아도
+  mount 경계가 갈리면 atomic rename이 거부된다. CPU 두 서비스는 같은 PID/invocation으로
+  계속 active/READY이며 실제 Catalog 조회도 진행됐다. GPU/model forward는0이다.
+- complete stage와 failed unit을 그대로 보존했다. 새 ID로 우회하거나 publish를 반복하지
+  않는다. 기존 publication owner에 exact typed pointer를 받는 explicit completion 경로를
+  설계한 뒤 구현·회귀 검증한다. 후속 namespace는 common CUDA root 한 mount와 lock만
+  writable로 지정하고, 같은 revision의 검증된 stage를 한 번 atomic commit한다.
+- root read-only 관찰에서 staged manifest는2325 bytes,
+  raw `34b9427d01f5d9cdeb956147cbe4809fd2c39578510982fa9dc82972559eb482`, semantic
+  `486dd1ca5de50596ea7f9252ec9aae5fac85c93e74af0ab78bcf8a50ab6b529f`다.
+  새 loader cache는2319 bytes,
+  `65171e487533d81862e3e56df880e600a683517b72aae2364179cd8a1810097c`, CUDA host seed는
+  `8d9e9e5befeb5ec2a322ae2444ea3ec70800762b15595b122ce63f6c2bbc1330`다.
+  base는 정확한 c126이고, 일곱 library/driver는 기존 값과 같다. 이 값은 **STAGED_ONLY**며
+  아직 published pointer나 native admission이 아니다. 후속 audit generator는 DRAFT를 유지한다.
+- 기존 publication adapter에 public `complete_cuda_host_extension_publication(request,
+  expected_pointer)`를 추가했다. typed pin/manifest/base/compiled recipe, 전체 retained tree,
+  modes/ACL/link/hash/cache outcome/late epochs와 같은 lock을 확인한 뒤 기존 ID의 rename만
+  수행한다. 원 publish의 partial-workspace 거부는 유지했다. shared commit은 최종 디렉터리와
+  양쪽 변경 부모를 fsync한다. builder/모델/worker는 다시 실행하지 않는다.
+  focused80 PASS, 관련 cohort379 PASS/known registry-count assertion1건만 명시적 제외,
+  Ruff/format/strict mypy/diff check PASS다. source PASS는 아직 실제 completion PASS가 아니다.

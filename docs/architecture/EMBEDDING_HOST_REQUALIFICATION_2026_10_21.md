@@ -145,6 +145,47 @@ CPU/GPU timing, correctness, physical lease/cleanup and coexistence remain separ
 gates. A source or host admission PASS does not activate GPU default. If numerical
 identity, driver, resources or authority differs, stop and report that actual delta.
 
+## Completing a retained CUDA host publication
+
+The actual34ed operation completed its root-private payload/cache/manifest but
+failed at the final directory rename with EXDEV. Separate `ReadWritePaths` bind
+mounts for workspace and final parent split the rename's mount boundary, even on
+one underlying device. Keep that failed unit and complete stage. A subsequent
+operator namespace must expose their common CUDA root as one writable mount plus
+the existing CUDA lock file; do not copy files around the atomic commit boundary.
+
+1. **Owner/boundary:** add one explicit completion function to the existing CUDA
+   host publication adapter. It is root administration, never worker dispatch,
+   device admission, DB repair, or a retry of the old process.
+2. **Canonical input:** the existing protected complete stage and actual pinned
+   snapshot bytes. Current OS sources do not replace the retained payload.
+3. **Identity:** reuse the same logical CUDA host and34ed revision. No successor
+   ID is minted to evade the retained operation, and old published revisions stay.
+4. **Pointers:** accept the existing frozen publication request and exact typed
+   `CudaHostExtensionPin`. Check identity, schema, raw size/hash, semantic hash,
+   base pointer/seed, driver, closed seven-library recipe and final-path cache.
+5. **Access:** fixed-key revision lookup and bounded ordered nine-member traversal.
+   No corpus search or model/worker invocation belongs here.
+6. **Structures:** reuse root workspace, manifest, fixed recipe and file snapshots.
+   No registry, journal, schema version, DB table/index or worker protocol is added.
+7. **Cost:** O(fixed payload bytes) streamed verification, O(member count) epochs,
+   bounded small metadata. Do not rematerialize driver bytes or regenerate cache.
+8. **Concurrency:** hold the same CUDA publication lock; cache builder must be
+   quiescent. Validate all retained bytes and epochs before one same-mount rename,
+   then0555 final directory, parent fsync and existing public resolver readback.
+9. **Dependencies:** public completion stays in the current infrastructure owner
+   and returns the existing result. Finite operator code uses that public API,
+   not private table updates or an independent file mover.
+10. **Failure/replay:** partial/mismatched stage, unknown cache outcome, active unit,
+    changed base or incompatible final deny completion and preserve evidence.
+    Exact already-published pointer replay may return REUSED only after ordinary
+    full validation; never relabel the original failed invocation as success.
+    Existing publish still rejects a retained partial operation; completion is
+    explicit and does not run ldconfig again.
+11. **Simpler alternatives:** rerunning publish/new IDs would hide the failure;
+    unvalidated mv/cp would bypass the existing owner. Removing filesystem guards
+    is unnecessary: correct the mount scope and validate the retained commit.
+
 ## Source validation — 2026-10-21 UTC
 
 - Host/snapshot/capture/CUDA closure/publication/native-snapshot admission cohort:
@@ -163,5 +204,6 @@ identity, driver, resources or authority differs, stop and report that actual de
   `sha256:e896af20bceb93494f9dd0b724dd0ef01d3ba718c64836b8c4546f4a8a8d7960`.
   With the exact admitted CPU cache, its derived target seed is
   `sha256:9823448841e94d0bc3b599bb572508ad5dd0d4bc1b6683eb295ef73c709a1bc0`.
-  These are source-derived candidate identities, not proof of installation or
-  host admission. Runtime activation, INDEX recovery and GPU forward remain pending.
+  These are source-derived identities, not proof of installation or host
+  admission. Later actual CPU qualification and INDEX/QUERY recovery are recorded
+  in the operations plan; GPU qualification/forward remain separate pending gates.
