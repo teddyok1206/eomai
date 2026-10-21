@@ -287,6 +287,158 @@ def test_configuration_seed_replaces_only_cache_and_preserves_fixed_host_seed() 
     assert not hasattr(host, "NativeEmbeddingInstallationAdmission")
 
 
+def test_reviewed_host_baselines_are_closed_immutable_and_change_only_liblzma() -> None:
+    legacy = host.FIXED_EMBEDDING_HOST_SEED_SHA256
+    successor = host.UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256
+    assert legacy == "sha256:fd1fc7c52afd572b04c818925a47d23d14ef15f87c842931584ae83e6a761a40"
+    assert successor == "sha256:e896af20bceb93494f9dd0b724dd0ef01d3ba718c64836b8c4546f4a8a8d7960"
+    assert set(host._REVIEWED_HOST_BASELINES) == {legacy, successor}
+    assert host._REVIEWED_HOST_BASELINES[legacy] is host._FILES
+    previous = host._REVIEWED_HOST_BASELINES[legacy]
+    current = host._REVIEWED_HOST_BASELINES[successor]
+    assert type(previous) is tuple and type(current) is tuple
+    assert len(previous) == len(current) == 23
+    assert [(old, new) for old, new in zip(previous, current, strict=True) if old != new] == [
+        (
+            (
+                Path("/usr/lib/x86_64-linux-gnu/liblzma.so.5.4.5"),
+                202904,
+                "696e868dd0700a19a6d65fc01608ec2d70d3cb91f65710e89180cd2e688f30cb",
+            ),
+            (
+                Path("/usr/lib/x86_64-linux-gnu/liblzma.so.5.4.5"),
+                202904,
+                "26b37d25f7ca2a2d348de8ecabacda12e921cd933b21fa069a179760db77219d",
+            ),
+        )
+    ]
+    assert _hash(host._seed_bytes(previous)) == legacy
+    assert _hash(host._seed_bytes(current)) == successor
+    with pytest.raises(TypeError):
+        cast(dict[str, tuple[tuple[Path, int, str], ...]], host._REVIEWED_HOST_BASELINES)[
+            "sha256:" + "f" * 64
+        ] = previous
+
+
+@pytest.mark.parametrize("byte_count", [48, 45467, 128 * 1024])
+def test_reviewed_profile_replaces_only_cache_and_keeps_predecessor_target_distinct(
+    byte_count: int,
+) -> None:
+    targets = set()
+    for baseline, fixed in host._REVIEWED_HOST_BASELINES.items():
+        selected = host.reviewed_embedding_host_files(
+            baseline_host_seed_sha256=baseline,
+            cache_byte_count=byte_count,
+            cache_sha256="sha256:" + "e" * 64,
+        )
+        assert [row for row in selected if row[0] != host._CACHE] == [
+            row for row in fixed if row[0] != host._CACHE
+        ]
+        assert [row for row in selected if row[0] == host._CACHE] == [
+            (host._CACHE, byte_count, "e" * 64)
+        ]
+        derived = host.reviewed_embedding_host_configuration_seed(
+            baseline_host_seed_sha256=baseline,
+            cache_byte_count=byte_count,
+            cache_sha256="sha256:" + "e" * 64,
+        )
+        assert derived == _hash(host._seed_bytes(selected))
+        targets.add(derived)
+        if baseline == host.FIXED_EMBEDDING_HOST_SEED_SHA256:
+            assert derived == host.embedding_host_configuration_seed(
+                cache_byte_count=byte_count, cache_sha256="sha256:" + "e" * 64
+            )
+    assert len(targets) == 2
+
+
+def test_reviewed_legacy_dispatch_preserves_existing_fixed_fixture_behavior(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path, monkeypatch)
+    monkeypatch.setattr(host, "FIXED_EMBEDDING_HOST_SEED_SHA256", fixture.expected)
+    raw = fixture.cache.read_bytes()
+    selected = host.reviewed_embedding_host_files(
+        baseline_host_seed_sha256=host.FIXED_EMBEDDING_HOST_SEED_SHA256,
+        cache_byte_count=len(raw),
+        cache_sha256=_hash(raw),
+    )
+    assert selected == host._FILES
+    assert (
+        host.reviewed_embedding_host_configuration_seed(
+            baseline_host_seed_sha256=host.FIXED_EMBEDDING_HOST_SEED_SHA256,
+            cache_byte_count=len(raw),
+            cache_sha256=_hash(raw),
+        )
+        == fixture.expected
+    )
+    with fixture.capture() as captured:
+        captured.assert_current()
+
+
+@pytest.mark.parametrize("baseline", [None, True, 1, [], {}, "bad", "sha256:" + "f" * 64])
+def test_reviewed_unknown_baseline_denies_before_cache_resolution_or_io(
+    monkeypatch: pytest.MonkeyPatch, baseline: Any
+) -> None:
+    monkeypatch.setattr(host, "_replace_loader_cache", _deny)
+    monkeypatch.setattr(os, "open", _deny)
+    monkeypatch.setattr(subprocess, "Popen", _deny)
+    with pytest.raises(InstalledRuntimeProofError, match="HOST_SEED_PIN_INVALID"):
+        host.reviewed_embedding_host_files(
+            baseline_host_seed_sha256=baseline,
+            cache_byte_count=45467,
+            cache_sha256="sha256:" + "e" * 64,
+        )
+    with pytest.raises(InstalledRuntimeProofError, match="HOST_SEED_PIN_INVALID"):
+        host.reviewed_embedding_host_configuration_seed(
+            baseline_host_seed_sha256=baseline,
+            cache_byte_count=45467,
+            cache_sha256="sha256:" + "e" * 64,
+        )
+
+
+@pytest.mark.parametrize(
+    "baseline",
+    [host.FIXED_EMBEDDING_HOST_SEED_SHA256, host.UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256],
+)
+@pytest.mark.parametrize(
+    ("size", "sha"),
+    [
+        (True, "sha256:" + "e" * 64),
+        (48.0, "sha256:" + "e" * 64),
+        ("48", "sha256:" + "e" * 64),
+        (47, "sha256:" + "e" * 64),
+        (128 * 1024 + 1, "sha256:" + "e" * 64),
+        (100, True),
+        (100, b"sha256:" + b"e" * 64),
+        (100, "e" * 64),
+        (100, "sha256:" + "E" * 64),
+        (100, "sha256:" + "e" * 63),
+        (100, "sha256:" + "e" * 65),
+    ],
+)
+def test_reviewed_profiles_never_coerce_cache_metadata(baseline: str, size: Any, sha: Any) -> None:
+    with pytest.raises(InstalledRuntimeProofError, match="HOST_SEED_INVALID"):
+        host.reviewed_embedding_host_files(
+            baseline_host_seed_sha256=baseline, cache_byte_count=size, cache_sha256=sha
+        )
+    with pytest.raises(InstalledRuntimeProofError, match="HOST_SEED_INVALID"):
+        host.reviewed_embedding_host_configuration_seed(
+            baseline_host_seed_sha256=baseline, cache_byte_count=size, cache_sha256=sha
+        )
+
+
+def test_successor_baseline_does_not_widen_legacy_capture(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(os, "open", _deny)
+    monkeypatch.setattr(subprocess, "Popen", _deny)
+    with pytest.raises(InstalledRuntimeProofError, match="HOST_SEED_PIN_INVALID"):
+        host.capture_protected_embedding_host(
+            expected_seed_sha256=host.UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256,
+            files=NumericalRuntimeFileSnapshots(os.geteuid()),
+        )
+
+
 def test_complete_synthetic_seed_retains_fd_routes_bytes_and_closes_once(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -881,6 +1033,10 @@ for forbidden in ('pydantic','jsonschema','eom_catalog_contracts','eom_identifie
                   'torch','transformers','numpy','safetensors','tokenizers'):
  assert not any(n==forbidden or n.startswith(forbidden+'.') for n in sys.modules)
 assert len(host._FILES)==23 and hasattr(conda.CondaArchiveToolAdmission,'open_zstd')
+assert len(host._REVIEWED_HOST_BASELINES)==2
+assert host.reviewed_embedding_host_configuration_seed(
+ baseline_host_seed_sha256=host.UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256,
+ cache_byte_count=48,cache_sha256='sha256:'+'e'*64).startswith('sha256:')
 assert hasattr(files.NumericalRuntimeFileSnapshots,'observe_protected_member_bytes')
 print('STDLIB_HOST_IMPORT_PASS')
 """
