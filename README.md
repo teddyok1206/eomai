@@ -274,6 +274,12 @@ DB migration·새 queue·권한 확대는 없습니다. 역사적 suite와 이 �
 격리·자원 경합 검증을 통과하면 운영 기본값 전환까지 진행합니다. 아직 비교 결과나
 GPU 기본값 활성화가 완료됐다는 뜻은 아닙니다.
 
+2026-10-21에는 OS 라이브러리 갱신을 별도 host revision으로 재검증하고 CPU INDEX·QUERY를
+정상 복구했습니다. CUDA 환경도 전체 파일 검사, 실제 no-forward probe, 봉인된 설치 증거와
+GPU 사용권 반납 검증을 통과했습니다. 현재 고정 입력의 여섯 비교 실행은 실제 사용자 인증을
+기다리고 있으며, 모델 실행·성능 판정·GPU 기본값 전환은 아직 완료되지 않았습니다.
+[실제 검증과 원 실패 보존 기록](docs/operations/EMBEDDING_GPU_EXPERIMENT_PLAN_2026-10-20.md).
+
 증분 인덱스의 입력·결과/float32 shard, pointer-only Catalog registry, 동일 payload의
 CPU/CUDA encoder와 기존 Orchestrator의 Artifact 게시 경로를 구현·소스 검증했습니다.
 같은 요청은 원래 작업을 재사용하고, 신규 입력이 없으면 Workflow를 만들지 않습니다.
